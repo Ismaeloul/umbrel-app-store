@@ -18,8 +18,6 @@ services:
     image: nginx:alpine
     container_name: ismaeloul-ace-player_nginx_1
     restart: unless-stopped
-    ports:
-      - "7777:80"
     depends_on:
       - acestream
     command: >
