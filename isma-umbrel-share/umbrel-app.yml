@@ -1,0 +1,21 @@
+manifestVersion: 1.1
+id: isma-umbrel-share
+category: files
+name: Umbrel Share
+version: "1.0.0"
+tagline: Sube archivos de tu Umbrel a GoFile y comparte el enlace
+description: >-
+  Umbrel Share te permite explorar los archivos de tu Umbrel y subirlos
+  a GoFile con un solo clic para obtener un enlace de descarga compartible.
+  Incluye historial de archivos compartidos con contador de caducidad,
+  subida desde tu PC por drag & drop, y autenticación por contraseña.
+developer: Ismaeloul
+website: https://github.com/Ismaeloul/umbrel-share
+dependencies: []
+repo: https://github.com/Ismaeloul/umbrel-share
+support: https://github.com/Ismaeloul/umbrel-share/issues
+port: 3005
+gallery: []
+path: ""
+defaultUsername: ""
+defaultPassword: "umbrel"

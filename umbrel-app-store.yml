@@ -1,0 +1,9 @@
+id: ismaeloul-app-store
+name: Ismaeloul App Store
+tagline: Apps personalizadas para Umbrel
+description: Tienda comunitaria con apps desarrolladas por Ismaeloul.
+developer: Ismaeloul
+website: https://github.com/Ismaeloul/umbrel-app-store
+repo: https://github.com/Ismaeloul/umbrel-app-store
+support: https://github.com/Ismaeloul/umbrel-app-store/issues
+version: "1"

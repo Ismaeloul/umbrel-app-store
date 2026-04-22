@@ -1,0 +1,20 @@
+manifestVersion: 1.1
+id: isma-ace-player
+category: media
+name: Ace Player
+version: "1.0.0"
+tagline: Reproduce streams AceStream directamente en tu navegador
+description: >-
+  Ace Player convierte tu Umbrel en un servidor AceStream personal.
+  Pega un hash o enlace acestream:// y reproduce el stream en tu navegador
+  sin instalar nada. Incluye favoritos, historial y reproductor HLS integrado.
+developer: Ismaeloul
+website: https://github.com/Ismaeloul
+dependencies: []
+repo: https://github.com/Ismaeloul
+support: https://github.com/Ismaeloul
+port: 7777
+gallery: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
