@@ -3,14 +3,14 @@ version: "3.8"
 services:
   acestream:
     image: wafy80/acestream:latest
-    container_name: isma-ace-player_acestream_1
+    container_name: ismaeloul-ace-player_acestream_1
     restart: unless-stopped
     ports:
       - "6878:6878"
 
   nginx:
     image: nginx:alpine
-    container_name: isma-ace-player_nginx_1
+    container_name: ismaeloul-ace-player_nginx_1
     restart: unless-stopped
     ports:
       - "7777:80"
@@ -20,6 +20,6 @@ services:
       sh -c "
         mkdir -p /www &&
         wget -q -O /www/index.html https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/isma-ace-player/index.html &&
-        printf 'events{}\\nhttp{server{listen 80;location /{root /www;index index.html;}location /ace/{proxy_pass http://isma-ace-player_acestream_1:6878/ace/;add_header Access-Control-Allow-Origin *;}location /webui/{proxy_pass http://isma-ace-player_acestream_1:6878/webui/;add_header Access-Control-Allow-Origin *;}}}' > /etc/nginx/nginx.conf &&
+        printf 'events{}\\nhttp{server{listen 80;location /{root /www;index index.html;}location /ace/{proxy_pass http://ismaeloul-ace-player_acestream_1:6878/ace/;add_header Access-Control-Allow-Origin *;}location /webui/{proxy_pass http://ismaeloul-ace-player_acestream_1:6878/webui/;add_header Access-Control-Allow-Origin *;}}}' > /etc/nginx/nginx.conf &&
         nginx -g 'daemon off;'
       "
