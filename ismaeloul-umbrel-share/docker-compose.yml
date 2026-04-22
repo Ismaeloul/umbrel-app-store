@@ -1,6 +1,12 @@
-version: "3.8"
+version: "3.7"
 
 services:
+  app_proxy:
+    environment:
+      APP_HOST: ismaeloul-umbrel-share_web_1
+      APP_PORT: "3005"
+      PROXY_AUTH_ADD: "false"
+
   web:
     image: python:3.12-slim
     container_name: ismaeloul-umbrel-share_web_1

@@ -1,6 +1,7 @@
 manifestVersion: 1
 id: ismaeloul-ace-player
 category: media
+icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/icon.webp"
 name: Ace Player
 version: "1.0.0"
 tagline: Reproduce streams AceStream directamente en tu navegador

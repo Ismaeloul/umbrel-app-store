@@ -1,6 +1,12 @@
-version: "3.8"
+version: "3.7"
 
 services:
+  app_proxy:
+    environment:
+      APP_HOST: ismaeloul-ace-player_nginx_1
+      APP_PORT: "80"
+      PROXY_AUTH_ADD: "false"
+
   acestream:
     image: wafy80/acestream:latest
     container_name: ismaeloul-ace-player_acestream_1
@@ -19,7 +25,7 @@ services:
     command: >
       sh -c "
         mkdir -p /www &&
-        wget -q -O /www/index.html https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/isma-ace-player/index.html &&
-        printf 'events{}\\nhttp{server{listen 80;location /{root /www;index index.html;}location /ace/{proxy_pass http://ismaeloul-ace-player_acestream_1:6878/ace/;add_header Access-Control-Allow-Origin *;}location /webui/{proxy_pass http://ismaeloul-ace-player_acestream_1:6878/webui/;add_header Access-Control-Allow-Origin *;}}}' > /etc/nginx/nginx.conf &&
+        wget -q -O /www/index.html https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/index.html &&
+        printf 'events{}\nhttp{server{listen 80;location /{root /www;index index.html;}location /ace/{proxy_pass http://ismaeloul-ace-player_acestream_1:6878/ace/;add_header Access-Control-Allow-Origin *;}location /webui/{proxy_pass http://ismaeloul-ace-player_acestream_1:6878/webui/;add_header Access-Control-Allow-Origin *;}}}' > /etc/nginx/nginx.conf &&
         nginx -g 'daemon off;'
       "

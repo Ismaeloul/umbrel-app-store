@@ -1,6 +1,7 @@
 manifestVersion: 1
 id: ismaeloul-umbrel-share
 category: files
+icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-umbrel-share/icon.svg"
 name: Umbrel Share
 version: "1.0.0"
 tagline: Sube archivos de tu Umbrel a GoFile y comparte el enlace
