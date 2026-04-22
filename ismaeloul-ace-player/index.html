@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AceStream NAS</title>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;800&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0a; --surface: #111111; --border: #222222;
+      --accent: #e63946; --accent2: #ff6b6b; --text: #f0f0f0;
+      --muted: #555; --green: #2ecc71; --yellow: #f39c12;
+    }
+    body { background: var(--bg); color: var(--text); font-family: 'Syne', sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
+    header { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid var(--border); background: var(--surface); }
+    .logo { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 800; }
+    .logo-dot { width: 10px; height: 10px; background: var(--accent); border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(230,57,70,0.4)} 50%{box-shadow:0 0 0 6px rgba(230,57,70,0)} }
+    .status-pill { display: flex; align-items: center; gap: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 6px 14px; border-radius: 20px; background: var(--bg); border: 1px solid var(--border); cursor: pointer; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--yellow); transition: background 0.3s; }
+    .status-dot.online { background: var(--green); }
+    .status-dot.offline { background: var(--accent); }
+    main { flex: 1; display: grid; grid-template-columns: 1fr 340px; gap: 20px; max-width: 1400px; width: 100%; margin: 0 auto; padding: 24px; }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+    .video-area { display: flex; flex-direction: column; gap: 16px; }
+    .video-wrapper { position: relative; aspect-ratio: 16/9; background: #000; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); }
+    video { width: 100%; height: 100%; display: block; }
+    .video-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: #000; }
+    .overlay-icon { font-size: 48px; opacity: 0.2; }
+    .overlay-text { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--muted); }
+    .controls { display: flex; gap: 10px; align-items: stretch; }
+    .hash-input { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 13px; outline: none; transition: border-color 0.2s; }
+    .hash-input:focus { border-color: var(--accent); }
+    .hash-input::placeholder { color: var(--muted); }
+    .play-btn { background: var(--accent); border: none; border-radius: 10px; padding: 12px 24px; color: white; font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700; cursor: pointer; transition: background 0.2s; white-space: nowrap; }
+    .play-btn:hover { background: var(--accent2); }
+    .save-btn { background: transparent; border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; color: var(--muted); font-size: 18px; cursor: pointer; transition: all 0.2s; }
+    .save-btn:hover { border-color: #f39c12; color: #f39c12; }
+    .status-msg { font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 10px 14px; border-radius: 8px; display: none; }
+    .status-msg.error { background: rgba(230,57,70,0.1); border: 1px solid rgba(230,57,70,0.3); color: #ff8a94; }
+    .status-msg.success { background: rgba(46,204,113,0.1); border: 1px solid rgba(46,204,113,0.3); color: #5ddd8b; }
+    .status-msg.info { background: rgba(243,156,18,0.1); border: 1px solid rgba(243,156,18,0.3); color: #f5c46a; }
+    .sidebar { display: flex; flex-direction: column; gap: 16px; }
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .panel-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; }
+    .clear-btn { background: none; border: none; color: var(--muted); font-size: 11px; cursor: pointer; font-family: 'JetBrains Mono', monospace; }
+    .clear-btn:hover { color: var(--accent); }
+    .panel-list { max-height: 220px; overflow-y: auto; padding: 8px; }
+    .panel-list::-webkit-scrollbar { width: 4px; }
+    .panel-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .empty-msg { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); text-align: center; padding: 20px; }
+    .channel-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; cursor: pointer; transition: background 0.15s; }
+    .channel-item:hover { background: var(--bg); }
+    .channel-info { flex: 1; min-width: 0; }
+    .channel-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .channel-hash { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .channel-date { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); }
+    .item-btns { display: flex; gap: 4px; flex-shrink: 0; }
+    .icon-btn { background: none; border: none; color: var(--muted); cursor: pointer; padding: 4px; border-radius: 4px; font-size: 14px; transition: color 0.15s, background 0.15s; line-height: 1; }
+    .icon-btn:hover { color: var(--text); background: var(--border); }
+    .icon-btn.del:hover { color: var(--accent); }
+    .icon-btn.play:hover { color: #74b9ff; }
+    .icon-btn.star:hover { color: #f39c12; }
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; width: 100%; max-width: 420px; }
+    .modal h3 { font-size: 18px; font-weight: 800; margin-bottom: 6px; }
+    .modal p { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+    .modal input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 11px 14px; color: var(--text); font-family: 'Syne', sans-serif; font-size: 14px; outline: none; margin-bottom: 16px; }
+    .modal input:focus { border-color: var(--accent); }
+    .modal-btns { display: flex; justify-content: flex-end; gap: 10px; }
+    .btn-cancel { background: none; border: 1px solid var(--border); border-radius: 8px; padding: 9px 18px; color: var(--muted); font-family: 'Syne', sans-serif; font-size: 13px; cursor: pointer; }
+    .btn-save { background: #f39c12; border: none; border-radius: 8px; padding: 9px 18px; color: #000; font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; cursor: pointer; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo"><div class="logo-dot"></div>AceStream NAS</div>
+    <div class="status-pill" onclick="testConnection()">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Conectando...</span>
+    </div>
+  </header>
+  <main>
+    <div class="video-area">
+      <div class="video-wrapper">
+        <div class="video-overlay" id="overlay">
+          <div class="overlay-icon">📡</div>
+          <div class="overlay-text">introduce un hash para comenzar</div>
+        </div>
+        <video id="player" playsinline></video>
+      </div>
+      <div class="controls">
+        <input class="hash-input" id="hashInput" type="text" placeholder="hash o acestream://...">
+        <button class="save-btn" id="saveBtn" title="Guardar en favoritos">☆</button>
+        <button class="play-btn" id="playBtn">▶ Conectar</button>
+      </div>
+      <div class="status-msg" id="statusMsg"></div>
+    </div>
+    <div class="sidebar">
+      <div class="panel">
+        <div class="panel-header"><span>⭐ Favoritos</span></div>
+        <div class="panel-list" id="favList"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header">
+          <span>🕐 Historial</span>
+          <button class="clear-btn" onclick="clearHistory()">limpiar</button>
+        </div>
+        <div class="panel-list" id="histList"></div>
+      </div>
+    </div>
+  </main>
+  <div class="modal-backdrop" id="favModal" style="display:none">
+    <div class="modal">
+      <h3>Guardar canal</h3>
+      <p>Ponle un nombre para encontrarlo fácil</p>
+      <input id="favNameInput" placeholder="Ej: Teledeporte HD">
+      <div class="modal-btns">
+        <button class="btn-cancel" onclick="closeFavModal()">Cancelar</button>
+        <button class="btn-save" onclick="saveFav()">Guardar</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    const SERVER = '';
+    const HASH_RE = /^[a-fA-F0-9]{40}$/;
+    const MAX_HIST = 20;
+    let hls = null;
+    let currentHash = null;
+    const player = document.getElementById('player');
+    const overlay = document.getElementById('overlay');
+    const hashInput = document.getElementById('hashInput');
+    const statusMsg = document.getElementById('statusMsg');
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const favList = document.getElementById('favList');
+    const histList = document.getElementById('histList');
+    const getFavs = () => JSON.parse(localStorage.getItem('ace_favs') || '[]');
+    const getHist = () => JSON.parse(localStorage.getItem('ace_hist') || '[]');
+    const setFavs = v => { localStorage.setItem('ace_favs', JSON.stringify(v)); renderFavs(); };
+    const setHist = v => { localStorage.setItem('ace_hist', JSON.stringify(v)); renderHist(); };
+    function addToHist(hash) {
+      let h = getHist().filter(x => x.hash !== hash);
+      h.unshift({ hash, date: new Date().toLocaleDateString('es-ES') });
+      if (h.length > MAX_HIST) h.pop();
+      setHist(h);
+    }
+    function clearHistory() { setHist([]); }
+    async function testConnection() {
+      statusDot.className = 'status-dot';
+      statusText.textContent = 'Conectando...';
+      try {
+        const r = await fetch(`${SERVER}/webui/api/service?method=get_version`, { signal: AbortSignal.timeout(4000) });
+        if (r.ok) { statusDot.className = 'status-dot online'; statusText.textContent = 'Engine activo'; }
+        else throw new Error();
+      } catch { statusDot.className = 'status-dot offline'; statusText.textContent = 'Sin conexión'; }
+    }
+    function showMsg(text, type = 'error') {
+      statusMsg.textContent = text;
+      statusMsg.className = `status-msg ${type}`;
+      statusMsg.style.display = 'block';
+      setTimeout(() => statusMsg.style.display = 'none', 5000);
+    }
+    function startPlayback(hash) {
+      hash = hash || hashInput.value.trim();
+      if (hash.startsWith('acestream://')) hash = hash.replace('acestream://', '');
+      if (!HASH_RE.test(hash)) return showMsg('Hash inválido — debe ser 40 caracteres hex');
+      hashInput.value = hash;
+      currentHash = hash;
+      addToHist(hash);
+      overlay.style.display = 'flex';
+      overlay.innerHTML = '<div class="spinner"></div><div class="overlay-text" style="margin-top:12px">cargando stream...</div>';
+      if (hls) { hls.destroy(); hls = null; }
+      const url = `${SERVER}/ace/manifest.m3u8?id=${hash}`;
+      if (Hls.isSupported()) {
+        hls = new Hls({ maxBufferLength: 10, maxMaxBufferLength: 20, liveSyncDurationCount: 2, liveMaxLatencyDurationCount: 5, manifestLoadingTimeOut: 12000, manifestLoadingMaxRetry: 5, fragLoadingTimeOut: 20000, fragLoadingMaxRetry: 8 });
+        hls.loadSource(url);
+        hls.attachMedia(player);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => { overlay.style.display = 'none'; player.play().catch(() => showMsg('Haz clic en el vídeo para reproducir', 'info')); });
+        hls.on(Hls.Events.ERROR, (_, data) => {
+          if (data.fatal) {
+            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
+            else { overlay.style.display = 'flex'; overlay.innerHTML = '<div class="overlay-icon">⚠️</div><div class="overlay-text">error de reproducción</div>'; }
+          }
+        });
+      } else if (player.canPlayType('application/vnd.apple.mpegurl')) {
+        player.src = url; player.play(); overlay.style.display = 'none';
+      }
+    }
+    document.getElementById('saveBtn').onclick = () => {
+      let h = hashInput.value.trim().replace('acestream://', '');
+      if (!HASH_RE.test(h)) return showMsg('Introduce un hash válido primero');
+      document.getElementById('favModal').style.display = 'flex';
+      document.getElementById('favNameInput').value = '';
+      setTimeout(() => document.getElementById('favNameInput').focus(), 50);
+    };
+    function closeFavModal() { document.getElementById('favModal').style.display = 'none'; }
+    function saveFav() {
+      let hash = hashInput.value.trim().replace('acestream://', '');
+      let name = document.getElementById('favNameInput').value.trim() || 'Canal ' + hash.slice(0,8);
+      const favs = getFavs();
+      if (!favs.find(f => f.hash === hash)) { favs.push({ hash, name }); setFavs(favs); }
+      closeFavModal();
+      showMsg(`"${name}" guardado en favoritos`, 'success');
+    }
+    function renderFavs() {
+      const favs = getFavs();
+      if (!favs.length) { favList.innerHTML = '<div class="empty-msg">sin favoritos aún</div>'; return; }
+      favList.innerHTML = '';
+      favs.forEach(f => {
+        const el = document.createElement('div'); el.className = 'channel-item';
+        el.innerHTML = `<div class="channel-info" onclick="startPlayback('${f.hash}')"><div class="channel-name">${f.name}</div><div class="channel-hash">${f.hash}</div></div><div class="item-btns"><button class="icon-btn play" onclick="startPlayback('${f.hash}')">▶</button><button class="icon-btn del" onclick="delFav('${f.hash}')">✕</button></div>`;
+        favList.appendChild(el);
+      });
+    }
+    function delFav(hash) { setFavs(getFavs().filter(f => f.hash !== hash)); }
+    function renderHist() {
+      const hist = getHist();
+      if (!hist.length) { histList.innerHTML = '<div class="empty-msg">historial vacío</div>'; return; }
+      histList.innerHTML = '';
+      hist.forEach(h => {
+        const el = document.createElement('div'); el.className = 'channel-item';
+        el.innerHTML = `<div class="channel-info" onclick="startPlayback('${h.hash}')"><div class="channel-hash" style="font-size:11px;color:#aaa">${h.hash}</div><div class="channel-date">${h.date}</div></div><div class="item-btns"><button class="icon-btn play" onclick="startPlayback('${h.hash}')">▶</button><button class="icon-btn star" onclick="openFavFromHash('${h.hash}')">☆</button><button class="icon-btn del" onclick="delHist('${h.hash}')">✕</button></div>`;
+        histList.appendChild(el);
+      });
+    }
+    function delHist(hash) { setHist(getHist().filter(h => h.hash !== hash)); }
+    function openFavFromHash(hash) { hashInput.value = hash; document.getElementById('saveBtn').click(); }
+    document.getElementById('playBtn').onclick = () => startPlayback();
+    hashInput.addEventListener('keydown', e => e.key === 'Enter' && startPlayback());
+    document.getElementById('favModal').onclick = e => { if (e.target === document.getElementById('favModal')) closeFavModal(); };
+    renderFavs(); renderHist(); testConnection();
+  </script>
+</body>
+</html>
