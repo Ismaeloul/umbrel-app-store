@@ -20,10 +20,10 @@ services:
     restart: unless-stopped
     depends_on:
       - acestream
-    command: >
+    command: |
       sh -c "
         mkdir -p /www &&
         wget -q -O /www/index.html https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/index.html &&
-        printf 'events{}\nhttp{server{listen 80;location /{root /www;index index.html;}location /ace/{proxy_pass http://ismaeloul-ace-player_acestream_1:6878/ace/;add_header Access-Control-Allow-Origin *;}location /webui/{proxy_pass http://ismaeloul-ace-player_acestream_1:6878/webui/;add_header Access-Control-Allow-Origin *;}}}' > /etc/nginx/nginx.conf &&
+        printf 'events{}\\nhttp{server{listen 80;location /{root /www;index index.html;}location /ace/{proxy_pass http://ismaeloul-ace-player_acestream_1:6878/ace/;add_header Access-Control-Allow-Origin *;}location /webui/{proxy_pass http://ismaeloul-ace-player_acestream_1:6878/webui/;add_header Access-Control-Allow-Origin *;}}}' > /etc/nginx/nginx.conf &&
         nginx -g 'daemon off;'
       "
