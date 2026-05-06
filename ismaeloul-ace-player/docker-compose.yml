@@ -18,12 +18,14 @@ services:
     image: nginx:alpine
     container_name: ismaeloul-ace-player_nginx_1
     restart: unless-stopped
+    volumes:
+      - ${APP_DATA_DIR}/index.html:/app/index.html:ro
     depends_on:
       - acestream
     command: |
       sh -c "
         mkdir -p /www &&
-        wget -q -O /www/index.html https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/index.html &&
-        printf 'events{}\\nhttp{server{listen 80;location /{root /www;index index.html;}location /ace/{proxy_pass http://ismaeloul-ace-player_acestream_1:6878/ace/;add_header Access-Control-Allow-Origin *;}location /webui/{proxy_pass http://ismaeloul-ace-player_acestream_1:6878/webui/;add_header Access-Control-Allow-Origin *;}}}' > /etc/nginx/nginx.conf &&
+        cp /app/index.html /www/index.html &&
+        printf 'events{}\\nhttp{server{listen 80;location /{root /www;index index.html;}location /ace/{proxy_pass http://ismaeloul-ace-player_acestream_1:6878/ace/;proxy_set_header Host $$http_host;proxy_redirect off;add_header Access-Control-Allow-Origin *;}location /webui/{proxy_pass http://ismaeloul-ace-player_acestream_1:6878/webui/;proxy_set_header Host $$http_host;proxy_redirect off;add_header Access-Control-Allow-Origin *;}}}' > /etc/nginx/nginx.conf &&
         nginx -g 'daemon off;'
       "
