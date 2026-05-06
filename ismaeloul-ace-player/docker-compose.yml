@@ -19,24 +19,25 @@ services:
     container_name: ismaeloul-ace-player_storage_1
     restart: unless-stopped
     working_dir: /app
-    command: node /app/server.js
+    command: |
+      sh -c "
+        wget -q -O /app/server.js https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/server.js &&
+        node /app/server.js
+      "
     volumes:
-      - ${APP_DATA_DIR}/server.js:/app/server.js:ro
       - ${APP_DATA_DIR}/data:/data
 
   nginx:
     image: nginx:alpine
     container_name: ismaeloul-ace-player_nginx_1
     restart: unless-stopped
-    volumes:
-      - ${APP_DATA_DIR}/index.html:/app/index.html:ro
     depends_on:
       - acestream
       - storage
     command: |
       sh -c "
         mkdir -p /www &&
-        cp /app/index.html /www/index.html &&
+        wget -q -O /www/index.html https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/index.html &&
         printf 'events{}\\nhttp{server{listen 80;location /{root /www;index index.html;}location /api/{proxy_pass http://ismaeloul-ace-player_storage_1:3000/api/;}location /ace/{proxy_pass http://ismaeloul-ace-player_acestream_1:6878/ace/;proxy_set_header Host $$http_host;proxy_redirect off;add_header Access-Control-Allow-Origin *;}location /webui/{proxy_pass http://ismaeloul-ace-player_acestream_1:6878/webui/;proxy_set_header Host $$http_host;proxy_redirect off;add_header Access-Control-Allow-Origin *;}}}' > /etc/nginx/nginx.conf &&
         nginx -g 'daemon off;'
       "
