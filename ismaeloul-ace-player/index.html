@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ace Player</title>
-  <link rel="icon" type="image/webp" href="https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/icon.webp">
-  <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/icon.webp">
+  <link rel="icon" type="image/svg+xml" href="https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/icon.svg">
+  <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/icon.svg">
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.6.10/dist/hls.min.js"></script>
   <style>
     :root {
@@ -409,7 +409,7 @@
   <main class="app">
     <header class="topbar">
       <div class="brand">
-        <div class="mark"><img src="https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/icon.webp" alt=""></div>
+        <div class="mark"><img src="https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/icon.svg" alt=""></div>
         <div>
           <h1>Ace Player</h1>
           <p>Reproductor AceStream para Umbrel</p>
@@ -637,6 +637,14 @@
       player.play().catch(() => setMessage("Pulsa play en el video.", ""));
     }
 
+    function keepNearLiveEdge() {
+      if (!currentHash || player.paused || !player.seekable || !player.seekable.length) return;
+      const liveEdge = player.seekable.end(player.seekable.length - 1);
+      if (Number.isFinite(liveEdge) && liveEdge - player.currentTime > 8) {
+        player.currentTime = Math.max(liveEdge - 2, 0);
+      }
+    }
+
     async function requestPictureInPicture() {
       if (!isMobilePiPContext()) return;
       if (!currentHash || player.readyState < 2) return;
@@ -677,13 +685,14 @@
       if (window.Hls && Hls.isSupported()) {
         hls = new Hls({
           enableWorker: true,
-          lowLatencyMode: false,
+          lowLatencyMode: true,
           liveDurationInfinity: true,
-          liveSyncDurationCount: 3,
-          liveMaxLatencyDurationCount: 8,
-          maxBufferLength: 30,
-          maxMaxBufferLength: 60,
-          backBufferLength: 30,
+          liveSyncDurationCount: 1,
+          liveMaxLatencyDurationCount: 3,
+          maxLiveSyncPlaybackRate: 1.5,
+          maxBufferLength: 12,
+          maxMaxBufferLength: 24,
+          backBufferLength: 10,
           manifestLoadingTimeOut: 18000,
           manifestLoadingMaxRetry: 8,
           levelLoadingTimeOut: 18000,
@@ -697,6 +706,7 @@
           seekLiveEdge();
           setMessage("Stream cargado.", "success");
         });
+        hls.on(Hls.Events.LEVEL_UPDATED, keepNearLiveEdge);
         hls.on(Hls.Events.ERROR, (_, data) => {
           if (!data.fatal) return;
           if (data.type === Hls.ErrorTypes.NETWORK_ERROR && retryCount < 5) {
