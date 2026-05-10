@@ -7,6 +7,7 @@ const PORT = process.env.PORT || 3000;
 const DATA_DIR = process.env.DATA_DIR || "/data";
 const DATA_FILE = path.join(DATA_DIR, "nutritrack-state.json");
 const INDEX_FILE = path.join(__dirname, "index.html");
+const BEDCA_FILE = path.join(__dirname, "bedca-foods.json");
 
 const defaultState = {
   history: {},
@@ -39,6 +40,77 @@ const fallbackFoods = [
   { name: "Proteina whey", brands: "Generico", proteins: 80, carbs: 8, unitName: "scoop", servingGrams: 30 },
   { name: "Oreo", brands: "Generico", proteins: 5, carbs: 70 }
 ];
+
+function loadBedcaFoods() {
+  try {
+    return JSON.parse(fs.readFileSync(BEDCA_FILE, "utf8"));
+  } catch (error) {
+    console.warn("Could not load BEDCA foods:", error.message);
+    return [];
+  }
+}
+
+const bedcaFoods = loadBedcaFoods();
+
+function normalizeText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9ñ]+/g, " ")
+    .trim();
+}
+
+function normalizeToken(token) {
+  if (token.length > 4 && token.endsWith("es")) return token.slice(0, -2);
+  if (token.length > 3 && token.endsWith("s")) return token.slice(0, -1);
+  return token;
+}
+
+function searchTokens(value) {
+  const stopWords = new Set(["de", "del", "la", "el", "los", "las", "y", "con", "para", "en"]);
+  return normalizeText(value)
+    .split(/\s+/)
+    .map(normalizeToken)
+    .filter((token) => token && !stopWords.has(token));
+}
+
+function scoreFood(food, query) {
+  const queryText = normalizeText(query);
+  const nameText = normalizeText(food.name);
+  const searchText = normalizeText(`${food.name} ${food.brands || ""}`);
+  const queryParts = searchTokens(query);
+  const nameParts = searchTokens(food.name);
+  if (!queryText || queryParts.length === 0) return 0;
+  if (nameText === queryText) return 1000;
+  if (nameText.startsWith(queryText)) return 900 - nameText.length / 100;
+  const allTokensMatch = queryParts.every((queryPart) =>
+    nameParts.some((namePart) => namePart === queryPart || namePart.startsWith(queryPart))
+  );
+  if (allTokensMatch) return 750 - nameText.length / 100;
+  const searchTokensValue = searchTokens(searchText);
+  const looseMatchCount = queryParts.filter((queryPart) =>
+    searchTokensValue.some((part) => part === queryPart || part.startsWith(queryPart))
+  ).length;
+  if (looseMatchCount > 0) return 300 + looseMatchCount * 50 - nameText.length / 100;
+  return 0;
+}
+
+function rankedSearch(foods, query, limit, minimumScore = 1) {
+  const seen = new Set();
+  return foods
+    .map((food) => ({ ...food, score: scoreFood(food, query) }))
+    .filter((food) => food.score >= minimumScore && food.name && (food.proteins || food.carbs))
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, "es"))
+    .filter((food) => {
+      const key = normalizeText(food.name);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, limit)
+    .map(({ score, ...food }) => food);
+}
 
 function ensureDataDir() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -144,13 +216,15 @@ function normalizeFood(product) {
 }
 
 function fallbackSearch(query, limit) {
-  const normalizedQuery = query.toLowerCase();
-  return fallbackFoods
-    .filter((food) => food.name.toLowerCase().includes(normalizedQuery))
-    .slice(0, limit);
+  return rankedSearch([...fallbackFoods, ...bedcaFoods], query, limit);
 }
 
 async function collectFoodSearch(query, limit) {
+  const genericProducts = fallbackSearch(query, limit);
+  if (genericProducts.length > 0) {
+    return { source: "bedca", products: genericProducts };
+  }
+
   const params = new URLSearchParams({
     search_terms: query,
     search_simple: "1",
@@ -174,6 +248,10 @@ async function collectFoodSearch(query, limit) {
       const products = (data.products || [])
         .map(normalizeFood)
         .filter((food) => food.name && (food.proteins || food.carbs))
+        .map((food) => ({ ...food, score: scoreFood(food, query) }))
+        .filter((food) => food.score >= 250)
+        .sort((a, b) => b.score - a.score)
+        .map(({ score, ...food }) => food)
         .slice(0, limit);
       if (products.length > 0) {
         return {
