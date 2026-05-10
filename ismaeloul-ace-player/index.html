@@ -108,9 +108,10 @@
 
     .grid {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 300px;
+      grid-template-columns: 1fr;
       gap: 18px;
       align-items: start;
+      justify-items: center;
     }
     .card {
       background: var(--card);
@@ -120,12 +121,13 @@
     }
     .player-card {
       overflow: hidden;
+      width: min(100%, 1320px);
     }
     .stage {
       position: relative;
       background: #020617;
       aspect-ratio: 16 / 9;
-      min-height: min(76vh, 760px);
+      min-height: 0;
     }
     video {
       width: 100%;
@@ -200,7 +202,7 @@
     }
     .actions {
       display: grid;
-      grid-template-columns: 1fr auto auto;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
       gap: 10px;
     }
     .btn {
@@ -226,6 +228,11 @@
     }
     .btn.primary:hover { background: var(--primary-dark); }
     .btn.icon { width: 48px; padding: 0; }
+    .btn.warning {
+      border-color: #fed7aa;
+      color: #b45309;
+      background: #fff7ed;
+    }
     .message {
       min-height: 18px;
       color: var(--muted);
@@ -236,7 +243,9 @@
     .message.success { color: var(--green); }
 
     .side {
+      width: min(100%, 1320px);
       display: grid;
+      grid-template-columns: 1fr 1fr;
       gap: 14px;
     }
     .panel {
@@ -366,7 +375,7 @@
     }
 
     @media (max-width: 900px) {
-      .grid { grid-template-columns: 1fr; }
+      .side { grid-template-columns: 1fr; }
       .topbar { align-items: flex-start; }
       .brand h1 { font-size: 23px; }
     }
@@ -414,6 +423,7 @@
             <button class="btn" id="liveBtn" type="button">Directo</button>
             <button class="btn icon" id="saveBtn" type="button" title="Guardar favorito">+</button>
             <button class="btn icon" id="stopBtn" type="button" title="Detener">×</button>
+            <button class="btn warning" id="restartEngineBtn" type="button">Reiniciar motor</button>
           </div>
           <div class="message" id="message"></div>
         </div>
@@ -566,6 +576,10 @@
       }
     }
 
+    function delay(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
     function destroyPlayer() {
       if (hls) {
         hls.destroy();
@@ -671,6 +685,23 @@
       setOverlay("ACE", "Pega un enlace acestream:// o un hash para comenzar.");
     }
 
+    async function restartEngine() {
+      stopPlayback();
+      setOverlay("Reiniciando", "Cerrando streams activos y levantando el motor...", true);
+      setMessage("Reiniciando motor AceStream...");
+      try {
+        const response = await fetch(`${SERVER}/api/restart-engine`, { method: "POST" });
+        if (!response.ok) throw new Error("restart failed");
+        await delay(6500);
+        await testConnection();
+        setOverlay("Motor reiniciado", "Pega un hash para volver a reproducir.");
+        setMessage("Motor reiniciado.", "success");
+      } catch {
+        setOverlay("No se pudo reiniciar", "Prueba a reiniciar la app desde Umbrel.");
+        setMessage("No se pudo reiniciar el motor.", "error");
+      }
+    }
+
     function renderList(container, items, type) {
       if (!items.length) {
         container.innerHTML = `<div class="empty">${type === "fav" ? "Sin favoritos" : "Sin recientes"}</div>`;
@@ -757,6 +788,7 @@
     document.getElementById("saveBtn").onclick = () => openFavoriteModal();
     document.getElementById("liveBtn").onclick = seekLiveEdge;
     document.getElementById("stopBtn").onclick = stopPlayback;
+    document.getElementById("restartEngineBtn").onclick = restartEngine;
     document.getElementById("clearHistoryBtn").onclick = clearHistory;
     document.getElementById("cancelFavBtn").onclick = closeFavoriteModal;
     document.getElementById("confirmFavBtn").onclick = saveFavorite;

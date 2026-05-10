@@ -4,6 +4,8 @@ const path = require("path");
 
 const DATA_DIR = process.env.DATA_DIR || "/data";
 const STATE_FILE = path.join(DATA_DIR, "state.json");
+const DOCKER_SOCKET = "/var/run/docker.sock";
+const ACESTREAM_CONTAINER = "ismaeloul-ace-player_acestream_1";
 const MAX_HISTORY = 50;
 const HASH_RE = /^[a-fA-F0-9]{40}$/;
 
@@ -76,16 +78,46 @@ function send(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
+function restartAceStream() {
+  return new Promise((resolve, reject) => {
+    const req = http.request({
+      socketPath: DOCKER_SOCKET,
+      path: `/containers/${ACESTREAM_CONTAINER}/restart?t=2`,
+      method: "POST",
+    }, (dockerRes) => {
+      let body = "";
+      dockerRes.on("data", (chunk) => { body += chunk; });
+      dockerRes.on("end", () => {
+        if (dockerRes.statusCode >= 200 && dockerRes.statusCode < 300) {
+          resolve({ restarted: true });
+        } else {
+          reject(new Error(`Docker restart failed ${dockerRes.statusCode}: ${body}`));
+        }
+      });
+    });
+    req.on("error", reject);
+    req.end();
+  });
+}
+
 const server = http.createServer(async (req, res) => {
   if (req.method === "OPTIONS") return send(res, 204, {});
-  if (req.url !== "/api/state") return send(res, 404, { error: "not_found" });
 
   try {
-    if (req.method === "GET") return send(res, 200, readState());
-    if (req.method === "PUT") return send(res, 200, writeState(await readBody(req)));
-    return send(res, 405, { error: "method_not_allowed" });
+    if (req.url === "/api/state") {
+      if (req.method === "GET") return send(res, 200, readState());
+      if (req.method === "PUT") return send(res, 200, writeState(await readBody(req)));
+      return send(res, 405, { error: "method_not_allowed" });
+    }
+
+    if (req.url === "/api/restart-engine") {
+      if (req.method !== "POST") return send(res, 405, { error: "method_not_allowed" });
+      return send(res, 200, await restartAceStream());
+    }
+
+    return send(res, 404, { error: "not_found" });
   } catch (error) {
-    return send(res, 400, { error: "bad_request" });
+    return send(res, 400, { error: "bad_request", message: error.message });
   }
 });
 
