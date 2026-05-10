@@ -283,9 +283,19 @@
                     </div>
                     <div class="mb-3">
                         <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1 ml-1">Cantidad aprox.</label>
-                        <div class="relative">
-                            <input type="number" id="quickCustomQuantity" min="1" step="1" value="100" class="w-full h-11 text-center rounded-xl border border-emerald-100 bg-white font-black text-slate-800 outline-none pr-7">
-                            <span class="absolute right-3 top-3 text-xs font-bold text-slate-400">g</span>
+                        <div class="grid grid-cols-[1fr_auto] gap-2">
+                            <div class="relative">
+                                <input type="number" id="quickCustomQuantity" min="0.1" step="0.1" value="100" class="w-full h-11 text-center rounded-xl border border-emerald-100 bg-white font-black text-slate-800 outline-none pr-7">
+                                <span id="quickQuantitySuffix" class="absolute right-3 top-3 text-xs font-bold text-slate-400">g</span>
+                            </div>
+                            <select id="quickQuantityMode" class="h-11 rounded-xl border border-emerald-100 bg-white px-3 text-xs font-black text-slate-700 outline-none">
+                                <option value="grams">g</option>
+                                <option value="units">uds</option>
+                            </select>
+                        </div>
+                        <div id="quickUnitRow" class="hidden mt-2 grid grid-cols-[1fr_auto] gap-2 items-center">
+                            <input type="number" id="quickUnitGrams" min="1" step="1" value="100" class="h-10 text-center rounded-xl border border-emerald-100 bg-white font-bold text-slate-800 outline-none">
+                            <span id="quickUnitLabel" class="text-[10px] font-bold text-slate-400 uppercase">g por unidad</span>
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-3 mb-3">
@@ -298,7 +308,22 @@
                             <input type="number" id="quickCustomCarbs" min="0" step="0.1" placeholder="0" class="w-full h-11 text-center rounded-xl border border-emerald-100 bg-white font-black text-slate-800 outline-none">
                         </div>
                     </div>
-                    <button type="button" id="addQuickCustomBtn" class="w-full py-3 rounded-xl bg-emerald-500 text-white text-sm font-bold active:scale-95 transition-transform">Anadir rapido</button>
+                    <div class="grid grid-cols-2 gap-3">
+                        <button type="button" id="addQuickCustomBtn" class="py-3 rounded-xl bg-emerald-500 text-white text-sm font-bold active:scale-95 transition-transform">Anadir</button>
+                        <button type="button" id="addQuickToPlateBtn" class="py-3 rounded-xl bg-white border border-emerald-200 text-emerald-700 text-sm font-bold active:scale-95 transition-transform">Al plato</button>
+                    </div>
+                    <div id="plateBuilder" class="hidden mt-4 rounded-2xl bg-white border border-emerald-100 p-3">
+                        <div class="flex items-center justify-between gap-3 mb-3">
+                            <div>
+                                <h4 class="text-sm font-black text-slate-800">Plato en curso</h4>
+                                <p id="plateSummary" class="text-xs text-slate-400">0 alimentos</p>
+                            </div>
+                            <button type="button" id="clearPlateBtn" class="text-xs font-bold text-slate-400">Vaciar</button>
+                        </div>
+                        <div id="plateItems" class="space-y-2 mb-3"></div>
+                        <input type="text" id="plateNameInput" placeholder="Nombre del plato" class="w-full h-10 rounded-xl border border-emerald-100 bg-emerald-50/40 px-3 text-sm font-bold text-slate-800 outline-none mb-3">
+                        <button type="button" id="savePlateBtn" class="w-full py-3 rounded-xl bg-slate-900 text-white text-sm font-bold active:scale-95 transition-transform">Guardar plato</button>
+                    </div>
                 </div>
             </div>
         </section>
@@ -540,6 +565,7 @@
         let searchTimeout = null;
         let quickSearchTimeout = null;
         let quickSelectedFoodBase = null;
+        let plateBasket = [];
 
         async function searchFoods(query, pageSize = 8) {
             const params = new URLSearchParams({ q: query, limit: String(pageSize) });
@@ -725,6 +751,16 @@
             setupQuickFoodSearch();
             document.getElementById('addProteinScoopsBtn').addEventListener('click', addProteinScoops);
             document.getElementById('addQuickCustomBtn').addEventListener('click', addQuickCustom);
+            document.getElementById('addQuickToPlateBtn').addEventListener('click', addQuickToPlate);
+            document.getElementById('savePlateBtn').addEventListener('click', savePlate);
+            document.getElementById('clearPlateBtn').addEventListener('click', () => {
+                plateBasket = [];
+                renderPlate();
+            });
+            document.getElementById('quickQuantityMode').addEventListener('change', () => {
+                syncQuickQuantityMode();
+                updateQuickMacros();
+            });
         }
 
         function setupQuickFoodSearch() {
@@ -753,6 +789,8 @@
                             quickSelectedFoodBase = food;
                             inputEl.value = food.name;
                             dropdown.classList.add('hidden');
+                            document.getElementById('quickUnitGrams').value = Math.round(food.servingGrams || 100);
+                            document.getElementById('quickUnitLabel').textContent = `g por ${food.unitName || 'unidad'}`;
                             updateQuickMacros();
                         });
                     } catch (error) {
@@ -772,9 +810,36 @@
             });
         }
 
+        function syncQuickQuantityMode() {
+            const mode = document.getElementById('quickQuantityMode').value;
+            const qtyEl = document.getElementById('quickCustomQuantity');
+            const suffixEl = document.getElementById('quickQuantitySuffix');
+            const unitRow = document.getElementById('quickUnitRow');
+            if (mode === 'units') {
+                suffixEl.textContent = 'uds';
+                unitRow.classList.remove('hidden');
+                if (parseFloat(qtyEl.value) > 20) qtyEl.value = 1;
+            } else {
+                suffixEl.textContent = 'g';
+                unitRow.classList.add('hidden');
+                if (parseFloat(qtyEl.value) <= 20) qtyEl.value = 100;
+            }
+        }
+
+        function getQuickAmount() {
+            const mode = document.getElementById('quickQuantityMode').value;
+            const amount = Math.max(0.1, parseFloat(document.getElementById('quickCustomQuantity').value) || 1);
+            const gramsPerUnit = Math.max(1, parseFloat(document.getElementById('quickUnitGrams').value) || quickSelectedFoodBase?.servingGrams || 100);
+            return {
+                mode,
+                amount,
+                grams: mode === 'units' ? amount * gramsPerUnit : amount
+            };
+        }
+
         function updateQuickMacros() {
             if (!quickSelectedFoodBase) return;
-            const qty = Math.max(1, parseFloat(document.getElementById('quickCustomQuantity').value) || 100);
+            const qty = getQuickAmount().grams;
             const multiplier = qty / 100;
             document.getElementById('quickCustomProtein').value = roundMacro(quickSelectedFoodBase.proteins * multiplier).toFixed(1);
             document.getElementById('quickCustomCarbs').value = roundMacro(quickSelectedFoodBase.carbs * multiplier).toFixed(1);
@@ -803,14 +868,14 @@
             const name = nameEl.value.trim() || 'Comida rapida';
             const proteins = roundMacro(parseFloat(proteinEl.value) || 0);
             const carbs = roundMacro(parseFloat(carbEl.value) || 0);
-            const qty = Math.max(1, parseFloat(qtyEl.value) || 100);
+            const qtyInfo = getQuickAmount();
             if (proteins === 0 && carbs === 0) {
                 showToast('Pon proteina o carbos', 'error');
                 return;
             }
             addEntry({
                 name,
-                qty,
+                qty: roundMacro(qtyInfo.grams),
                 proteins,
                 carbs,
                 estimated: true,
@@ -822,6 +887,91 @@
             carbEl.value = '';
             quickSelectedFoodBase = null;
             showToast('Comida rapida anadida', 'success');
+        }
+
+        function quickEntryFromForm() {
+            const name = document.getElementById('quickCustomName').value.trim();
+            const proteins = roundMacro(parseFloat(document.getElementById('quickCustomProtein').value) || 0);
+            const carbs = roundMacro(parseFloat(document.getElementById('quickCustomCarbs').value) || 0);
+            const qtyInfo = getQuickAmount();
+            if (!name || (proteins === 0 && carbs === 0)) return null;
+            return {
+                name,
+                qty: roundMacro(qtyInfo.grams),
+                proteins,
+                carbs,
+                amountLabel: qtyInfo.mode === 'units' ? `${formatAmount(qtyInfo.amount)} uds` : `${formatAmount(qtyInfo.grams)}g`
+            };
+        }
+
+        function addQuickToPlate() {
+            const entry = quickEntryFromForm();
+            if (!entry) {
+                showToast('Busca o escribe un alimento con macros', 'error');
+                return;
+            }
+            plateBasket.push(entry);
+            renderPlate();
+            document.getElementById('quickCustomName').value = '';
+            document.getElementById('quickCustomQuantity').value = 100;
+            document.getElementById('quickCustomProtein').value = '';
+            document.getElementById('quickCustomCarbs').value = '';
+            quickSelectedFoodBase = null;
+            showToast('Alimento anadido al plato', 'success');
+        }
+
+        function renderPlate() {
+            const panel = document.getElementById('plateBuilder');
+            const itemsEl = document.getElementById('plateItems');
+            const summaryEl = document.getElementById('plateSummary');
+            if (plateBasket.length === 0) {
+                panel.classList.add('hidden');
+                itemsEl.innerHTML = '';
+                return;
+            }
+            panel.classList.remove('hidden');
+            const totals = plateBasket.reduce((acc, item) => ({ p: acc.p + item.proteins, c: acc.c + item.carbs }), { p: 0, c: 0 });
+            summaryEl.textContent = `${plateBasket.length} alimentos - ${totals.p.toFixed(1)}g proteina / ${totals.c.toFixed(1)}g carbos`;
+            itemsEl.innerHTML = '';
+            plateBasket.forEach((item, index) => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center justify-between gap-3 rounded-xl bg-emerald-50/60 px-3 py-2';
+                row.innerHTML = `
+                    <div class="min-w-0">
+                        <div class="text-xs font-black text-slate-800 truncate">${item.name}</div>
+                        <div class="text-[10px] text-slate-400">${item.amountLabel} · ${item.proteins.toFixed(1)}P / ${item.carbs.toFixed(1)}C</div>
+                    </div>
+                    <button type="button" class="text-slate-300 hover:text-red-500" aria-label="Quitar"><i class="fas fa-times"></i></button>
+                `;
+                row.querySelector('button').addEventListener('click', () => {
+                    plateBasket.splice(index, 1);
+                    renderPlate();
+                });
+                itemsEl.appendChild(row);
+            });
+        }
+
+        function savePlate() {
+            if (plateBasket.length === 0) return;
+            const totals = plateBasket.reduce((acc, item) => ({
+                p: acc.p + item.proteins,
+                c: acc.c + item.carbs,
+                qty: acc.qty + item.qty
+            }), { p: 0, c: 0, qty: 0 });
+            const name = document.getElementById('plateNameInput').value.trim() || `Plato (${plateBasket.length} alimentos)`;
+            addEntry({
+                name,
+                qty: roundMacro(totals.qty),
+                proteins: roundMacro(totals.p),
+                carbs: roundMacro(totals.c),
+                estimated: true,
+                items: plateBasket,
+                time: currentTime()
+            });
+            plateBasket = [];
+            document.getElementById('plateNameInput').value = '';
+            renderPlate();
+            showToast('Plato guardado', 'success');
         }
 
         function addEntry(entry) {

@@ -14,7 +14,7 @@ const defaultState = {
 };
 
 const fallbackFoods = [
-  { name: "Pechuga de pollo", brands: "Generico", proteins: 31, carbs: 0 },
+  { name: "Pechuga de pollo", brands: "Generico", proteins: 31, carbs: 0, unitName: "filete", servingGrams: 125 },
   { name: "Arroz blanco cocido", brands: "Generico", proteins: 2.7, carbs: 28 },
   { name: "Arroz integral cocido", brands: "Generico", proteins: 2.6, carbs: 23 },
   { name: "Pasta cocida", brands: "Generico", proteins: 5.8, carbs: 30.9 },
@@ -22,19 +22,19 @@ const fallbackFoods = [
   { name: "Pan integral", brands: "Generico", proteins: 13, carbs: 41 },
   { name: "Patata cocida", brands: "Generico", proteins: 1.9, carbs: 20 },
   { name: "Avena", brands: "Generico", proteins: 16.9, carbs: 66.3 },
-  { name: "Platano", brands: "Generico", proteins: 1.1, carbs: 22.8 },
-  { name: "Manzana", brands: "Generico", proteins: 0.3, carbs: 13.8 },
+  { name: "Platano", brands: "Generico", proteins: 1.1, carbs: 22.8, unitName: "unidad", servingGrams: 120 },
+  { name: "Manzana", brands: "Generico", proteins: 0.3, carbs: 13.8, unitName: "unidad", servingGrams: 180 },
   { name: "Yogur griego natural", brands: "Generico", proteins: 10, carbs: 3.6 },
   { name: "Leche semidesnatada", brands: "Generico", proteins: 3.4, carbs: 4.8 },
-  { name: "Atun al natural", brands: "Generico", proteins: 24, carbs: 0 },
-  { name: "Salmon", brands: "Generico", proteins: 20, carbs: 0 },
+  { name: "Atun al natural", brands: "Generico", proteins: 24, carbs: 0, unitName: "lata", servingGrams: 80 },
+  { name: "Salmon", brands: "Generico", proteins: 20, carbs: 0, unitName: "filete", servingGrams: 150 },
   { name: "Ternera magra", brands: "Generico", proteins: 26, carbs: 0 },
-  { name: "Huevo", brands: "Generico", proteins: 12.6, carbs: 1.1 },
+  { name: "Huevo", brands: "Generico", proteins: 12.6, carbs: 1.1, unitName: "unidad", servingGrams: 60 },
   { name: "Clara de huevo", brands: "Generico", proteins: 10.9, carbs: 0.7 },
   { name: "Lentejas cocidas", brands: "Generico", proteins: 9, carbs: 20 },
   { name: "Garbanzos cocidos", brands: "Generico", proteins: 8.9, carbs: 27.4 },
   { name: "Queso fresco batido", brands: "Generico", proteins: 8, carbs: 4 },
-  { name: "Proteina whey", brands: "Generico", proteins: 80, carbs: 8 },
+  { name: "Proteina whey", brands: "Generico", proteins: 80, carbs: 8, unitName: "scoop", servingGrams: 30 },
   { name: "Oreo", brands: "Generico", proteins: 5, carbs: 70 }
 ];
 
@@ -95,7 +95,7 @@ function fetchJson(url) {
     const req = https.request(url, {
       timeout: 8000,
       headers: {
-        "User-Agent": "NutriTrack/1.4.0 (contact: https://github.com/Ismaeloul/umbrel-app-store)",
+        "User-Agent": "NutriTrack/1.5.0 (contact: https://github.com/Ismaeloul/umbrel-app-store)",
         "Accept": "application/json",
         "Accept-Language": "es-ES,es;q=0.9,en;q=0.5"
       }
@@ -131,7 +131,9 @@ function normalizeFood(product) {
     name: product.product_name_es || product.product_name || product.generic_name_es || product.generic_name || "",
     brands: product.brands || "",
     proteins: Number.isFinite(proteins) ? proteins : 0,
-    carbs: Number.isFinite(carbs) ? carbs : 0
+    carbs: Number.isFinite(carbs) ? carbs : 0,
+    unitName: product.serving_quantity ? "porcion" : "unidad",
+    servingGrams: Number(product.serving_quantity) || 100
   };
 }
 
@@ -152,7 +154,7 @@ async function collectFoodSearch(query, limit) {
     lc: "es",
     cc: "es",
     lang: "es",
-    fields: "product_name_es,product_name,generic_name_es,generic_name,brands,nutriments"
+    fields: "product_name_es,product_name,generic_name_es,generic_name,brands,nutriments,serving_quantity"
   });
 
   const urls = [
@@ -209,7 +211,8 @@ async function legacyFoodSearch(req, res) {
       nutriments: {
         proteins_100g: food.proteins,
         carbohydrates_100g: food.carbs
-      }
+      },
+      serving_quantity: food.servingGrams || 100
     }))
   });
 }
@@ -223,7 +226,7 @@ function proxyOpenFoodFacts(req, res) {
   const proxyReq = https.request(target, {
     headers: {
       "Host": "es.openfoodfacts.org",
-      "User-Agent": "NutriTrack/1.3.0 (https://github.com/Ismaeloul/umbrel-app-store)",
+      "User-Agent": "NutriTrack/1.5.0 (https://github.com/Ismaeloul/umbrel-app-store)",
       "Accept": "application/json"
     }
   }, (proxyRes) => {
