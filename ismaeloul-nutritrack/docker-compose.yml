@@ -1,0 +1,19 @@
+version: "3.7"
+
+services:
+  app_proxy:
+    environment:
+      APP_HOST: ismaeloul-nutritrack_nginx_1
+      APP_PORT: "80"
+      PROXY_AUTH_ADD: "false"
+
+  nginx:
+    image: nginx:alpine
+    container_name: ismaeloul-nutritrack_nginx_1
+    restart: unless-stopped
+    command: |
+      sh -c "
+        mkdir -p /usr/share/nginx/html &&
+        wget -q -O /usr/share/nginx/html/index.html https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-nutritrack/index.html &&
+        nginx -g 'daemon off;'
+      "

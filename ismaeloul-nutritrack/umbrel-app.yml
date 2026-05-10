@@ -1,0 +1,22 @@
+manifestVersion: 1
+id: ismaeloul-nutritrack
+category: productivity
+icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-nutritrack/icon.svg"
+name: NutriTrack
+version: "1.0.0"
+tagline: Control diario de proteinas y carbohidratos
+description: >-
+  NutriTrack es una app sencilla para registrar comidas y medir tus macros
+  diarios desde Umbrel. Guarda el historial por fecha en el navegador,
+  permite introducir macros manualmente y busca alimentos mediante
+  Open Food Facts para calcular proteinas y carbohidratos segun la cantidad.
+developer: Ismaeloul
+website: https://github.com/Ismaeloul/umbrel-app-store
+dependencies: []
+repo: https://github.com/Ismaeloul/umbrel-app-store
+support: https://github.com/Ismaeloul/umbrel-app-store/issues
+port: 7788
+gallery: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
