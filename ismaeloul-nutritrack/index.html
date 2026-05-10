@@ -142,6 +142,60 @@
             </div>
         </section>
 
+        <!-- Registro Rapido -->
+        <section class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 mb-8">
+            <div class="flex items-start justify-between gap-3 mb-4">
+                <div>
+                    <h2 class="text-lg font-bold text-dark flex items-center gap-2">
+                        <i class="fas fa-bolt text-slate-300"></i> Registro rapido
+                    </h2>
+                    <p class="text-xs text-slate-400 mt-1">Para dias normales, sin pesar todo al gramo.</p>
+                </div>
+                <span class="text-[10px] font-bold text-slate-400 bg-slate-50 border border-slate-100 px-2 py-1 rounded-full">Estimado</span>
+            </div>
+
+            <div class="space-y-4">
+                <div class="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                    <div class="flex items-center justify-between gap-3 mb-3">
+                        <div>
+                            <h3 class="font-bold text-sm text-slate-800">Huevos fritos</h3>
+                            <p class="text-xs text-slate-400">Aprox. 6.3g proteina y 0.4g carbos por huevo grande.</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button type="button" id="eggMinusBtn" class="w-9 h-9 rounded-xl bg-white border border-slate-200 text-slate-500 font-black">-</button>
+                            <input type="number" id="eggCountInput" min="1" value="2" class="w-14 h-9 text-center rounded-xl border border-slate-200 bg-white font-black text-slate-800 outline-none">
+                            <button type="button" id="eggPlusBtn" class="w-9 h-9 rounded-xl bg-white border border-slate-200 text-slate-500 font-black">+</button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <button type="button" id="addTwoEggsBtn" class="py-3 rounded-xl bg-slate-900 text-white text-sm font-bold active:scale-95 transition-transform">Anadir 2 huevos</button>
+                        <button type="button" id="addEggsBtn" class="py-3 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-bold active:scale-95 transition-transform">Anadir cantidad</button>
+                    </div>
+                </div>
+
+                <div class="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
+                    <div class="mb-3">
+                        <h3 class="font-bold text-sm text-slate-800">Proteina en polvo</h3>
+                        <p class="text-xs text-slate-400">Ajusta tus scoops y la proteina que trae cada scoop.</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-3">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1 ml-1">Scoops</label>
+                            <input type="number" id="scoopCountInput" min="0.25" step="0.25" value="1" class="w-full h-11 text-center rounded-xl border border-blue-100 bg-white font-black text-slate-800 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1 ml-1">Proteina / scoop</label>
+                            <div class="relative">
+                                <input type="number" id="proteinPerScoopInput" min="1" step="0.5" value="24" class="w-full h-11 text-center rounded-xl border border-blue-100 bg-white font-black text-slate-800 outline-none pr-7">
+                                <span class="absolute right-3 top-3 text-xs font-bold text-slate-400">g</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" id="addProteinScoopsBtn" class="w-full py-3 rounded-xl bg-protein text-white text-sm font-bold active:scale-95 transition-transform">Anadir proteina</button>
+                </div>
+            </div>
+        </section>
+
         <!-- Formulario Inteligente -->
         <section class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 mb-8 relative z-20">
             <h2 class="text-lg font-bold text-dark mb-4 flex items-center gap-2">
@@ -266,6 +320,7 @@
             setupCalendar();
             setupAutocomplete();
             setupFormMath();
+            setupQuickAdd();
             setupEventListeners();
             
             // Forzar renderizado inicial
@@ -472,6 +527,78 @@
             document.getElementById('inputCarbs').value = totalC;
         }
 
+        // --- REGISTRO RAPIDO POR PORCIONES ---
+        const QUICK_FOODS = {
+            friedEgg: {
+                nameSingular: 'Huevo frito',
+                namePlural: 'Huevos fritos',
+                protein: 6.3,
+                carbs: 0.4,
+                grams: 50
+            }
+        };
+
+        function setupQuickAdd() {
+            const eggInput = document.getElementById('eggCountInput');
+            document.getElementById('eggMinusBtn').addEventListener('click', () => {
+                eggInput.value = Math.max(1, (parseInt(eggInput.value, 10) || 1) - 1);
+            });
+            document.getElementById('eggPlusBtn').addEventListener('click', () => {
+                eggInput.value = (parseInt(eggInput.value, 10) || 1) + 1;
+            });
+            document.getElementById('addTwoEggsBtn').addEventListener('click', () => addFriedEggs(2));
+            document.getElementById('addEggsBtn').addEventListener('click', () => addFriedEggs(parseInt(eggInput.value, 10) || 1));
+            document.getElementById('addProteinScoopsBtn').addEventListener('click', addProteinScoops);
+        }
+
+        function addFriedEggs(count) {
+            const food = QUICK_FOODS.friedEgg;
+            const safeCount = Math.max(1, count);
+            addEntry({
+                name: `${safeCount} ${safeCount === 1 ? food.nameSingular.toLowerCase() : food.namePlural.toLowerCase()}`,
+                qty: safeCount * food.grams,
+                proteins: roundMacro(food.protein * safeCount),
+                carbs: roundMacro(food.carbs * safeCount),
+                estimated: true,
+                time: currentTime()
+            });
+            showToast(`Anadido: ${safeCount} ${safeCount === 1 ? 'huevo' : 'huevos'}`, 'success');
+        }
+
+        function addProteinScoops() {
+            const scoops = Math.max(0.25, parseFloat(document.getElementById('scoopCountInput').value) || 1);
+            const proteinPerScoop = Math.max(1, parseFloat(document.getElementById('proteinPerScoopInput').value) || 24);
+            const protein = roundMacro(scoops * proteinPerScoop);
+            addEntry({
+                name: `Proteina en polvo (${formatAmount(scoops)} scoop${scoops === 1 ? '' : 's'})`,
+                qty: null,
+                proteins: protein,
+                carbs: 0,
+                estimated: true,
+                time: currentTime()
+            });
+            showToast(`Proteina anadida: ${protein.toFixed(1)}g`, 'success');
+        }
+
+        function addEntry(entry) {
+            if (!appState.history[selectedDateStr]) appState.history[selectedDateStr] = [];
+            appState.history[selectedDateStr].push(entry);
+            saveData();
+            renderUI();
+        }
+
+        function roundMacro(value) {
+            return Math.round(value * 10) / 10;
+        }
+
+        function formatAmount(value) {
+            return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+        }
+
+        function currentTime() {
+            return new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+        }
+
         // --- ACTUALIZACIÓN DE INTERFAZ ---
         function renderUI() {
             const dailyEntries = appState.history[selectedDateStr] || [];
@@ -516,7 +643,8 @@
                 itemEl.className = 'food-item bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center group transition-all hover:border-slate-200';
                 
                 // Formatear display del nombre (añadir gramos si existe)
-                const nameDisplay = entry.qty ? `${entry.name} <span class="text-slate-400 font-normal">(${entry.qty}g)</span>` : entry.name;
+                const estimateBadge = entry.estimated ? '<span class="ml-1 text-[9px] font-black text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded-full align-middle">APROX</span>' : '';
+                const nameDisplay = entry.qty ? `${entry.name} <span class="text-slate-400 font-normal">(${entry.qty}g)</span>${estimateBadge}` : `${entry.name}${estimateBadge}`;
 
                 itemEl.innerHTML = `
                     <div class="flex-1 pr-4">
@@ -567,17 +695,14 @@
                     return;
                 }
 
-                const newEntry = {
+                addEntry({
                     name: nameInput.value.trim(),
                     qty: parseFloat(qtyInput.value) || null,
                     proteins: pVal,
                     carbs: cVal,
-                    time: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
-                };
-
-                appState.history[selectedDateStr].push(newEntry);
-                saveData();
-                renderUI();
+                    estimated: false,
+                    time: currentTime()
+                });
                 
                 showToast(`¡Añadido!`, 'success');
                 

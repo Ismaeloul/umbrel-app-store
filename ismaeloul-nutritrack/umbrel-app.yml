@@ -3,7 +3,7 @@ id: ismaeloul-nutritrack
 category: productivity
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-nutritrack/icon.svg"
 name: NutriTrack
-version: "1.0.1"
+version: "1.1.0"
 tagline: Control diario de proteinas y carbohidratos
 description: >-
   NutriTrack es una app sencilla para registrar comidas y medir tus macros
