@@ -4,14 +4,8 @@ const path = require("path");
 
 const DATA_DIR = process.env.DATA_DIR || "/data";
 const STATE_FILE = path.join(DATA_DIR, "state.json");
-const DOCKER_SOCKET = "/var/run/docker.sock";
-const ACESTREAM_CONTAINER = "ismaeloul-ace-player_acestream_1";
 const MAX_HISTORY = 50;
 const HASH_RE = /^[a-fA-F0-9]{40}$/;
-const RESTART_HEADER = "x-ace-action";
-const RESTART_HEADER_VALUE = "restart-engine";
-const RESTART_COOLDOWN_MS = 15000;
-let lastRestartAt = 0;
 
 function ensureState() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -107,38 +101,6 @@ function requireTrustedWrite(req) {
   }
 }
 
-function restartAceStream() {
-  return new Promise((resolve, reject) => {
-    const now = Date.now();
-    if (now - lastRestartAt < RESTART_COOLDOWN_MS) {
-      const error = new Error("restart_cooldown");
-      error.statusCode = 429;
-      reject(error);
-      return;
-    }
-    lastRestartAt = now;
-    const req = http.request({
-      socketPath: DOCKER_SOCKET,
-      path: `/containers/${ACESTREAM_CONTAINER}/restart?t=2`,
-      method: "POST",
-    }, (dockerRes) => {
-      let body = "";
-      dockerRes.on("data", (chunk) => { body += chunk; });
-      dockerRes.on("end", () => {
-        if (dockerRes.statusCode >= 200 && dockerRes.statusCode < 300) {
-          resolve({ restarted: true });
-        } else {
-          const error = new Error("restart_failed");
-          error.statusCode = 502;
-          reject(error);
-        }
-      });
-    });
-    req.on("error", reject);
-    req.end();
-  });
-}
-
 const server = http.createServer(async (req, res) => {
   if (req.method === "OPTIONS") return send(res, 204, {});
 
@@ -152,17 +114,11 @@ const server = http.createServer(async (req, res) => {
       return send(res, 405, { error: "method_not_allowed" });
     }
 
-    if (req.url === "/api/restart-engine") {
-      if (req.method !== "POST") return send(res, 405, { error: "method_not_allowed" });
-      requireTrustedWrite(req);
-      if (req.headers[RESTART_HEADER] !== RESTART_HEADER_VALUE) return send(res, 403, { error: "forbidden" });
-      return send(res, 200, await restartAceStream());
-    }
-
     return send(res, 404, { error: "not_found" });
   } catch (error) {
     const status = error.statusCode || 400;
-    return send(res, status, { error: error.message || "bad_request" });
+    const safeErrors = new Set(["forbidden", "method_not_allowed"]);
+    return send(res, status, { error: safeErrors.has(error.message) ? error.message : "bad_request" });
   }
 });
 

@@ -442,7 +442,6 @@
             <button class="btn icon" id="saveBtn" type="button" title="Guardar favorito">+</button>
             <button class="btn icon" id="stopBtn" type="button" title="Detener">×</button>
             <button class="btn pip-control" id="pipBtn" type="button">PiP</button>
-            <button class="btn warning" id="restartEngineBtn" type="button">Reiniciar motor</button>
           </div>
           <div class="message" id="message"></div>
         </div>
@@ -730,26 +729,6 @@
       setOverlay("ACE", "Pega un enlace acestream:// o un hash para comenzar.");
     }
 
-    async function restartEngine() {
-      stopPlayback();
-      setOverlay("Reiniciando", "Cerrando streams activos y levantando el motor...", true);
-      setMessage("Reiniciando motor AceStream...");
-      try {
-        const response = await fetch(`${SERVER}/api/restart-engine`, {
-          method: "POST",
-          headers: { "X-Ace-Action": "restart-engine" },
-        });
-        if (!response.ok) throw new Error("restart failed");
-        await delay(6500);
-        await testConnection();
-        setOverlay("Motor reiniciado", "Pega un hash para volver a reproducir.");
-        setMessage("Motor reiniciado.", "success");
-      } catch {
-        setOverlay("No se pudo reiniciar", "Prueba a reiniciar la app desde Umbrel.");
-        setMessage("No se pudo reiniciar el motor.", "error");
-      }
-    }
-
     async function enterPictureInPicture() {
       if (!isMobilePiPContext()) {
         setMessage("PiP solo se activa en movil.", "error");
@@ -877,7 +856,6 @@
     document.getElementById("liveBtn").onclick = seekLiveEdge;
     document.getElementById("stopBtn").onclick = stopPlayback;
     document.getElementById("pipBtn").onclick = enterPictureInPicture;
-    document.getElementById("restartEngineBtn").onclick = restartEngine;
     document.getElementById("clearHistoryBtn").onclick = clearHistory;
     document.getElementById("cancelFavBtn").onclick = closeFavoriteModal;
     document.getElementById("confirmFavBtn").onclick = saveFavorite;
