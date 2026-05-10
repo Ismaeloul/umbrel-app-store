@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ace Player</title>
+  <link rel="icon" type="image/webp" href="https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/icon.webp">
+  <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/icon.webp">
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
   <style>
     :root {
@@ -33,7 +35,7 @@
     button { cursor: pointer; }
 
     .app {
-      width: min(1120px, 100%);
+      width: min(1520px, 100%);
       margin: 0 auto;
       padding: 24px 16px 44px;
     }
@@ -54,12 +56,20 @@
       width: 42px;
       height: 42px;
       border-radius: 14px;
-      background: linear-gradient(135deg, var(--primary), var(--green));
+      background: #fff;
       color: #fff;
       display: grid;
       place-items: center;
       font-weight: 900;
+      overflow: hidden;
+      border: 1px solid var(--line);
       box-shadow: 0 12px 28px rgba(37, 99, 235, 0.22);
+    }
+    .mark img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
     }
     .brand h1 {
       margin: 0;
@@ -98,7 +108,7 @@
 
     .grid {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 320px;
+      grid-template-columns: minmax(0, 1fr) 300px;
       gap: 18px;
       align-items: start;
     }
@@ -115,6 +125,7 @@
       position: relative;
       background: #020617;
       aspect-ratio: 16 / 9;
+      min-height: min(76vh, 760px);
     }
     video {
       width: 100%;
@@ -269,7 +280,7 @@
     }
     .item {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-columns: minmax(0, 1fr) auto auto;
       gap: 8px;
       align-items: center;
       padding: 10px;
@@ -311,6 +322,7 @@
       font-weight: 900;
     }
     .mini:hover { color: var(--danger); }
+    .mini.star:hover { color: var(--warn); }
 
     .modal-backdrop {
       position: fixed;
@@ -370,7 +382,7 @@
   <main class="app">
     <header class="topbar">
       <div class="brand">
-        <div class="mark">ACE</div>
+        <div class="mark"><img src="https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/icon.webp" alt=""></div>
         <div>
           <h1>Ace Player</h1>
           <p>Reproductor AceStream para Umbrel</p>
@@ -573,6 +585,17 @@
       player.play().catch(() => setMessage("Pulsa play en el video.", ""));
     }
 
+    async function requestPictureInPicture() {
+      if (!currentHash || player.paused || player.readyState < 2) return;
+      if (!document.pictureInPictureEnabled || player.disablePictureInPicture) return;
+      if (document.pictureInPictureElement) return;
+      try {
+        await player.requestPictureInPicture();
+      } catch {
+        // Algunos navegadores moviles solo permiten PiP con gesto directo del usuario.
+      }
+    }
+
     function manifestUrl(hash) {
       return `${SERVER}/ace/manifest.m3u8?id=${hash}&_=${Date.now()}`;
     }
@@ -666,6 +689,16 @@
         main.querySelector(".item-name").textContent = item.name || `Canal ${item.hash.slice(0, 8)}`;
         main.querySelector(".item-hash").textContent = item.hash;
 
+        if (type === "hist") {
+          const star = document.createElement("button");
+          star.type = "button";
+          star.className = "mini star";
+          star.textContent = "★";
+          star.title = "Guardar favorito";
+          star.onclick = () => openFavoriteModal(item.hash);
+          row.appendChild(star);
+        }
+
         const del = document.createElement("button");
         del.type = "button";
         del.className = "mini";
@@ -736,6 +769,9 @@
     });
     player.addEventListener("playing", () => {
       if (currentHash) setMessage("Reproduciendo.", "success");
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) requestPictureInPicture();
     });
     favModal.addEventListener("click", (event) => {
       if (event.target === favModal) closeFavoriteModal();
