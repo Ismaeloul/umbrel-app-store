@@ -10,7 +10,9 @@ const INDEX_FILE = path.join(__dirname, "index.html");
 
 const defaultState = {
   history: {},
-  profile: null
+  profile: null,
+  savedFoods: [],
+  savedPlates: []
 };
 
 const fallbackFoods = [
@@ -49,7 +51,9 @@ function readState() {
     const parsed = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
     return {
       history: parsed.history || {},
-      profile: "profile" in parsed ? parsed.profile : null
+      profile: "profile" in parsed ? parsed.profile : null,
+      savedFoods: Array.isArray(parsed.savedFoods) ? parsed.savedFoods : [],
+      savedPlates: Array.isArray(parsed.savedPlates) ? parsed.savedPlates : []
     };
   } catch (error) {
     console.error("Could not read state:", error);
@@ -61,7 +65,9 @@ function writeState(state) {
   ensureDataDir();
   const cleanState = {
     history: state && state.history ? state.history : {},
-    profile: state && "profile" in state ? state.profile : null
+    profile: state && "profile" in state ? state.profile : null,
+    savedFoods: state && Array.isArray(state.savedFoods) ? state.savedFoods : [],
+    savedPlates: state && Array.isArray(state.savedPlates) ? state.savedPlates : []
   };
   fs.writeFileSync(DATA_FILE, JSON.stringify(cleanState, null, 2));
   return cleanState;
@@ -95,7 +101,7 @@ function fetchJson(url) {
     const req = https.request(url, {
       timeout: 8000,
       headers: {
-        "User-Agent": "NutriTrack/1.5.0 (contact: https://github.com/Ismaeloul/umbrel-app-store)",
+        "User-Agent": "NutriTrack/1.6.0 (contact: https://github.com/Ismaeloul/umbrel-app-store)",
         "Accept": "application/json",
         "Accept-Language": "es-ES,es;q=0.9,en;q=0.5"
       }
@@ -226,7 +232,7 @@ function proxyOpenFoodFacts(req, res) {
   const proxyReq = https.request(target, {
     headers: {
       "Host": "es.openfoodfacts.org",
-      "User-Agent": "NutriTrack/1.5.0 (https://github.com/Ismaeloul/umbrel-app-store)",
+      "User-Agent": "NutriTrack/1.6.0 (https://github.com/Ismaeloul/umbrel-app-store)",
       "Accept": "application/json"
     }
   }, (proxyRes) => {

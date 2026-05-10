@@ -324,6 +324,13 @@
                         <input type="text" id="plateNameInput" placeholder="Nombre del plato" class="w-full h-10 rounded-xl border border-emerald-100 bg-emerald-50/40 px-3 text-sm font-bold text-slate-800 outline-none mb-3">
                         <button type="button" id="savePlateBtn" class="w-full py-3 rounded-xl bg-slate-900 text-white text-sm font-bold active:scale-95 transition-transform">Guardar plato</button>
                     </div>
+                    <div id="savedShortcutsCard" class="hidden mt-4 rounded-2xl bg-white border border-emerald-100 p-3">
+                        <div class="flex items-center justify-between gap-3 mb-3">
+                            <h4 class="text-sm font-black text-slate-800">Guardados</h4>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase">Un toque</span>
+                        </div>
+                        <div id="savedShortcutsList" class="space-y-2"></div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -388,9 +395,14 @@
                     </div>
                 </div>
 
-                <button type="submit" class="w-full mt-4 bg-dark hover:bg-slate-800 text-white font-bold rounded-2xl text-sm px-5 py-4 text-center shadow-lg shadow-slate-900/20 transition-transform active:scale-95 flex justify-center items-center gap-2">
-                    <i class="fas fa-plus"></i> Guardar Alimento
-                </button>
+                <div class="grid grid-cols-2 gap-3 mt-4">
+                    <button type="submit" id="macroSubmitBtn" class="bg-dark hover:bg-slate-800 text-white font-bold rounded-2xl text-sm px-5 py-4 text-center shadow-lg shadow-slate-900/20 transition-transform active:scale-95 flex justify-center items-center gap-2">
+                        <i class="fas fa-plus"></i> Guardar
+                    </button>
+                    <button type="button" id="saveFoodShortcutBtn" class="bg-white border border-slate-200 text-slate-700 font-bold rounded-2xl text-sm px-4 py-4 text-center transition-transform active:scale-95 flex justify-center items-center gap-2">
+                        <i class="fas fa-star text-yellow-400"></i> Favorito
+                    </button>
+                </div>
             </form>
         </section>
 
@@ -429,6 +441,7 @@
         
         let selectedDateStr = getLocalIsoDate(new Date()); // Formato YYYY-MM-DD
         let currentSelectedFoodBase = null; // Guarda el alimento seleccionado del buscador
+        let editingEntryIndex = null;
 
         // --- UTILIDADES DE FECHA ---
         function getLocalIsoDate(dateObj) {
@@ -481,6 +494,8 @@
             }
             if (!appState.history) appState.history = {};
             if (!('profile' in appState)) appState.profile = null;
+            if (!Array.isArray(appState.savedFoods)) appState.savedFoods = [];
+            if (!Array.isArray(appState.savedPlates)) appState.savedPlates = [];
 
             try {
                 const response = await fetch('/api/state', { cache: 'no-store' });
@@ -494,7 +509,9 @@
                         } else {
                             appState = {
                                 history: serverState.history || {},
-                                profile: 'profile' in serverState ? serverState.profile : null
+                                profile: 'profile' in serverState ? serverState.profile : null,
+                                savedFoods: Array.isArray(serverState.savedFoods) ? serverState.savedFoods : [],
+                                savedPlates: Array.isArray(serverState.savedPlates) ? serverState.savedPlates : []
                             };
                             localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
                         }
@@ -753,6 +770,7 @@
             document.getElementById('addQuickCustomBtn').addEventListener('click', addQuickCustom);
             document.getElementById('addQuickToPlateBtn').addEventListener('click', addQuickToPlate);
             document.getElementById('savePlateBtn').addEventListener('click', savePlate);
+            document.getElementById('saveFoodShortcutBtn').addEventListener('click', saveFoodShortcut);
             document.getElementById('clearPlateBtn').addEventListener('click', () => {
                 plateBasket = [];
                 renderPlate();
@@ -959,19 +977,110 @@
                 qty: acc.qty + item.qty
             }), { p: 0, c: 0, qty: 0 });
             const name = document.getElementById('plateNameInput').value.trim() || `Plato (${plateBasket.length} alimentos)`;
-            addEntry({
+            const plateEntry = {
                 name,
                 qty: roundMacro(totals.qty),
                 proteins: roundMacro(totals.p),
                 carbs: roundMacro(totals.c),
                 estimated: true,
-                items: plateBasket,
+                items: [...plateBasket],
                 time: currentTime()
-            });
+            };
+            addEntry(plateEntry);
+            savePlateShortcut(plateEntry);
             plateBasket = [];
             document.getElementById('plateNameInput').value = '';
             renderPlate();
             showToast('Plato guardado', 'success');
+        }
+
+        function saveFoodShortcut() {
+            const name = document.getElementById('inputName').value.trim();
+            const qty = parseFloat(document.getElementById('inputQuantity').value) || 100;
+            const proteins = roundMacro(parseFloat(document.getElementById('inputProteins').value) || 0);
+            const carbs = roundMacro(parseFloat(document.getElementById('inputCarbs').value) || 0);
+            if (!name || (proteins === 0 && carbs === 0)) {
+                showToast('Busca o rellena un alimento primero', 'error');
+                return;
+            }
+            const base = {
+                id: Date.now(),
+                name,
+                qty: roundMacro(qty),
+                proteins,
+                carbs
+            };
+            appState.savedFoods = [base, ...(appState.savedFoods || []).filter((item) => item.name.toLowerCase() !== name.toLowerCase())].slice(0, 12);
+            saveData();
+            renderSavedShortcuts();
+            showToast('Favorito guardado', 'success');
+        }
+
+        function savePlateShortcut(entry) {
+            appState.savedPlates = [
+                {
+                    id: Date.now(),
+                    name: entry.name,
+                    qty: entry.qty,
+                    proteins: entry.proteins,
+                    carbs: entry.carbs,
+                    items: entry.items || []
+                },
+                ...(appState.savedPlates || []).filter((item) => item.name.toLowerCase() !== entry.name.toLowerCase())
+            ].slice(0, 8);
+            saveData();
+        }
+
+        function renderSavedShortcuts() {
+            const card = document.getElementById('savedShortcutsCard');
+            const list = document.getElementById('savedShortcutsList');
+            if (!card || !list) return;
+            const savedFoods = appState.savedFoods || [];
+            const savedPlates = appState.savedPlates || [];
+            if (savedFoods.length === 0 && savedPlates.length === 0) {
+                card.classList.add('hidden');
+                list.innerHTML = '';
+                return;
+            }
+            card.classList.remove('hidden');
+            list.innerHTML = '';
+            [...savedPlates.map((item) => ({ ...item, type: 'plate' })), ...savedFoods.map((item) => ({ ...item, type: 'food' }))].forEach((item) => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center justify-between gap-2 rounded-xl bg-emerald-50/60 px-3 py-2';
+                row.innerHTML = `
+                    <button type="button" class="min-w-0 flex-1 text-left">
+                        <span class="block text-xs font-black text-slate-800 truncate">${item.type === 'plate' ? 'Plato: ' : ''}${item.name}</span>
+                        <span class="block text-[10px] text-slate-400">${item.proteins.toFixed(1)}P / ${item.carbs.toFixed(1)}C</span>
+                    </button>
+                    <button type="button" class="w-8 h-8 rounded-full bg-white text-slate-300 hover:text-red-500"><i class="fas fa-trash-alt text-xs"></i></button>
+                `;
+                row.querySelector('button').addEventListener('click', () => addSavedShortcut(item));
+                row.querySelectorAll('button')[1].addEventListener('click', () => removeSavedShortcut(item));
+                list.appendChild(row);
+            });
+        }
+
+        function addSavedShortcut(item) {
+            addEntry({
+                name: item.name,
+                qty: item.qty || null,
+                proteins: roundMacro(item.proteins),
+                carbs: roundMacro(item.carbs),
+                estimated: true,
+                items: item.items || undefined,
+                time: currentTime()
+            });
+            showToast('Guardado anadido', 'success');
+        }
+
+        function removeSavedShortcut(item) {
+            if (item.type === 'plate') {
+                appState.savedPlates = (appState.savedPlates || []).filter((saved) => saved.id !== item.id);
+            } else {
+                appState.savedFoods = (appState.savedFoods || []).filter((saved) => saved.id !== item.id);
+            }
+            saveData();
+            renderSavedShortcuts();
         }
 
         function addEntry(entry) {
@@ -1120,6 +1229,7 @@
             
             updateDashboard(dailyEntries);
             renderGoals(dailyEntries);
+            renderSavedShortcuts();
             renderList(dailyEntries);
             
             const clearBtn = document.getElementById('btnOpenClearModal');
@@ -1182,6 +1292,9 @@
                             </div>
                         </div>
                         
+                        <button onclick="editEntry(${realIndex})" class="w-8 h-8 rounded-full bg-slate-50 text-slate-300 hover:bg-blue-50 hover:text-protein flex items-center justify-center transition-colors focus:outline-none">
+                            <i class="fas fa-pen text-sm"></i>
+                        </button>
                         <button onclick="deleteEntry(${realIndex})" class="w-8 h-8 rounded-full bg-slate-50 text-slate-300 hover:bg-red-50 hover:text-red-500 flex items-center justify-center transition-colors focus:outline-none">
                             <i class="fas fa-trash-alt text-sm"></i>
                         </button>
@@ -1211,14 +1324,27 @@
                     return;
                 }
 
-                addEntry({
+                const entry = {
                     name: nameInput.value.trim(),
                     qty: parseFloat(qtyInput.value) || null,
                     proteins: pVal,
                     carbs: cVal,
                     estimated: false,
                     time: currentTime()
-                });
+                };
+                if (editingEntryIndex !== null) {
+                    appState.history[selectedDateStr][editingEntryIndex] = {
+                        ...appState.history[selectedDateStr][editingEntryIndex],
+                        ...entry,
+                        time: appState.history[selectedDateStr][editingEntryIndex].time || currentTime()
+                    };
+                    editingEntryIndex = null;
+                    saveData();
+                    renderUI();
+                    document.getElementById('macroSubmitBtn').innerHTML = '<i class="fas fa-plus"></i> Guardar';
+                } else {
+                    addEntry(entry);
+                }
                 
                 showToast(`¡Añadido!`, 'success');
                 
@@ -1259,8 +1385,23 @@
             });
         }
 
+        window.editEntry = function(index) {
+            const entry = appState.history[selectedDateStr]?.[index];
+            if (!entry) return;
+            editingEntryIndex = index;
+            document.getElementById('inputName').value = entry.name || '';
+            document.getElementById('inputQuantity').value = entry.qty || 100;
+            document.getElementById('inputProteins').value = roundMacro(entry.proteins || 0).toFixed(1);
+            document.getElementById('inputCarbs').value = roundMacro(entry.carbs || 0).toFixed(1);
+            document.getElementById('macroSubmitBtn').innerHTML = '<i class="fas fa-check"></i> Actualizar';
+            document.getElementById('calcHint').classList.add('hidden');
+            document.getElementById('inputName').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            showToast('Editando comida', 'info');
+        };
+
         window.deleteEntry = function(index) {
             appState.history[selectedDateStr].splice(index, 1);
+            if (editingEntryIndex === index) editingEntryIndex = null;
             saveData();
             renderUI();
             showToast('Alimento eliminado', 'info');
