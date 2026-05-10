@@ -589,8 +589,14 @@
     }
 
     async function addHistory(hash) {
+      const favorite = favoriteForHash(hash);
+      const playedAt = new Date().toISOString();
+      if (favorite) {
+        state.favorites = state.favorites.filter((item) => item.hash !== hash);
+        state.favorites.unshift({ ...favorite, date: playedAt });
+      }
       state.history = state.history.filter((item) => item.hash !== hash);
-      state.history.unshift({ hash, name: displayNameForHash(hash), date: new Date().toISOString() });
+      state.history.unshift({ hash, name: displayNameForHash(hash), date: playedAt });
       await saveState();
     }
 
