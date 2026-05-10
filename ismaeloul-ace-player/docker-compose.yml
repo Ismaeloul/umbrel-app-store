@@ -35,7 +35,7 @@ services:
     command: |
       sh -c "
         mkdir -p /www &&
-        wget -q -O /www/index.html 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/d7653c734e7cf93ebeb4c276517d217c52acd52d/ismaeloul-ace-player/index.html' &&
+        wget -q -O /www/index.html 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/a9864b25f0e9aeb83faa905bcab9055cf7a0bcee/ismaeloul-ace-player/index.html' &&
         printf 'events{}\\nhttp{server{listen 80;client_max_body_size 1m;add_header X-Content-Type-Options nosniff always;add_header Referrer-Policy same-origin always;add_header X-Robots-Tag noindex always;location /{root /www;index index.html;}location /api/{proxy_pass http://ismaeloul-ace-player_storage_1:3000/api/;proxy_set_header Host $$http_host;}location /ace/{proxy_pass http://ismaeloul-ace-player_acestream_1:6878/ace/;proxy_set_header Host $$http_host;proxy_redirect off;}location /webui/{proxy_pass http://ismaeloul-ace-player_acestream_1:6878/webui/;proxy_set_header Host $$http_host;proxy_redirect off;}}}' > /etc/nginx/nginx.conf &&
         nginx -g 'daemon off;'
       "
