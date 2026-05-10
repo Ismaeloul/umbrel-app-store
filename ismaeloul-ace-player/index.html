@@ -7,18 +7,18 @@
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
   <style>
     :root {
-      --bg: #0b0d10;
-      --panel: #14181d;
-      --panel-soft: #1b2027;
-      --line: #2a313a;
-      --text: #eef3f8;
-      --muted: #8a96a3;
-      --accent: #2f9bff;
-      --accent-2: #20c997;
-      --danger: #ff5c77;
-      --warn: #ffca5f;
-      --ok: #43d17d;
-      --shadow: 0 18px 55px rgba(0, 0, 0, 0.34);
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --line: #dfe6ef;
+      --soft: #eef4fb;
+      --text: #0f172a;
+      --muted: #7b8797;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --green: #10b981;
+      --danger: #ef4444;
+      --warn: #f59e0b;
+      --shadow: 0 18px 45px rgba(15, 23, 42, 0.10);
     }
 
     * { box-sizing: border-box; }
@@ -33,19 +33,16 @@
     button { cursor: pointer; }
 
     .app {
-      min-height: 100vh;
-      display: grid;
-      grid-template-rows: auto 1fr;
+      width: min(1120px, 100%);
+      margin: 0 auto;
+      padding: 24px 16px 44px;
     }
     .topbar {
-      height: 64px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 16px;
-      padding: 0 24px;
-      border-bottom: 1px solid var(--line);
-      background: rgba(20, 24, 29, 0.95);
+      gap: 14px;
+      margin-bottom: 20px;
     }
     .brand {
       display: flex;
@@ -54,202 +51,232 @@
       min-width: 0;
     }
     .mark {
-      width: 30px;
-      height: 30px;
-      border-radius: 8px;
-      background: linear-gradient(135deg, var(--accent), var(--accent-2));
-      box-shadow: 0 0 28px rgba(47, 155, 255, 0.25);
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--primary), var(--green));
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+      box-shadow: 0 12px 28px rgba(37, 99, 235, 0.22);
     }
-    .brand-title {
-      font-size: 16px;
-      font-weight: 760;
+    .brand h1 {
+      margin: 0;
+      font-size: 26px;
+      line-height: 1;
       letter-spacing: 0;
-      white-space: nowrap;
+    }
+    .brand p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
     }
     .status {
+      border: 1px solid var(--line);
+      background: var(--card);
+      color: var(--muted);
+      min-height: 40px;
+      border-radius: 999px;
+      padding: 0 14px;
       display: inline-flex;
       align-items: center;
       gap: 9px;
-      min-height: 34px;
-      padding: 0 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel-soft);
-      color: var(--muted);
       font-size: 13px;
+      font-weight: 800;
+      box-shadow: 0 6px 16px rgba(15, 23, 42, 0.04);
     }
-    .status-dot {
-      width: 8px;
-      height: 8px;
+    .dot {
+      width: 9px;
+      height: 9px;
       border-radius: 999px;
       background: var(--warn);
     }
-    .status.online .status-dot { background: var(--ok); }
-    .status.offline .status-dot { background: var(--danger); }
+    .status.online .dot { background: var(--green); }
+    .status.offline .dot { background: var(--danger); }
 
-    .layout {
+    .grid {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 360px;
-      gap: 20px;
-      width: min(1480px, 100%);
-      margin: 0 auto;
-      padding: 20px;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      gap: 18px;
+      align-items: start;
     }
-    .player-column {
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+    }
+    .player-card {
+      overflow: hidden;
     }
     .stage {
       position: relative;
-      overflow: hidden;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #000;
-      box-shadow: var(--shadow);
+      background: #020617;
       aspect-ratio: 16 / 9;
     }
     video {
       width: 100%;
       height: 100%;
       display: block;
-      background: #000;
+      background: #020617;
     }
     .overlay {
       position: absolute;
       inset: 0;
       display: grid;
       place-items: center;
-      background: radial-gradient(circle at center, rgba(47, 155, 255, 0.10), rgba(0, 0, 0, 0.88) 58%);
-      color: var(--muted);
+      padding: 28px;
       text-align: center;
-      padding: 24px;
+      background: radial-gradient(circle at center, rgba(37, 99, 235, 0.18), rgba(2, 6, 23, 0.92) 58%);
+      color: #cbd5e1;
       pointer-events: none;
     }
-    .overlay-content {
+    .overlay-box {
       display: grid;
       gap: 12px;
       justify-items: center;
+      max-width: 360px;
+    }
+    .overlay-title {
+      color: #fff;
+      font-size: 18px;
+      font-weight: 900;
+    }
+    .overlay-text {
+      color: #94a3b8;
+      font-size: 13px;
+      line-height: 1.5;
     }
     .spinner {
-      width: 36px;
-      height: 36px;
-      border: 3px solid rgba(255, 255, 255, 0.16);
-      border-top-color: var(--accent);
+      width: 34px;
+      height: 34px;
+      border: 3px solid rgba(255, 255, 255, 0.18);
+      border-top-color: #fff;
       border-radius: 999px;
       animation: spin 0.85s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    .control-strip {
+    .controls {
+      padding: 16px;
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto auto auto;
+      gap: 12px;
+    }
+    .input-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
       gap: 10px;
-      align-items: center;
-      padding: 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
     }
     .hash-input {
       width: 100%;
-      height: 42px;
-      min-width: 0;
+      height: 50px;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 16px;
+      background: #f8fafc;
+      color: var(--text);
       outline: none;
-      background: #0f1216;
-      color: var(--text);
-      padding: 0 13px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 13px;
-    }
-    .hash-input:focus { border-color: var(--accent); }
-    .button {
-      height: 42px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel-soft);
-      color: var(--text);
       padding: 0 14px;
+      font-size: 14px;
+      font-weight: 650;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    .hash-input:focus {
+      border-color: var(--primary);
+      background: #fff;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.10);
+    }
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 10px;
+    }
+    .btn {
+      min-height: 46px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #fff;
+      color: var(--text);
+      padding: 0 16px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
+      font-size: 14px;
+      font-weight: 850;
       white-space: nowrap;
     }
-    .button.primary {
-      border-color: transparent;
-      background: var(--accent);
-      color: #06111f;
-      font-weight: 760;
+    .btn.primary {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 12px 24px rgba(37, 99, 235, 0.20);
     }
-    .button.icon { width: 42px; padding: 0; }
-    .button:hover { filter: brightness(1.08); }
-
+    .btn.primary:hover { background: var(--primary-dark); }
+    .btn.icon { width: 48px; padding: 0; }
     .message {
       min-height: 18px;
       color: var(--muted);
       font-size: 13px;
-      padding: 0 2px;
+      font-weight: 650;
     }
     .message.error { color: var(--danger); }
-    .message.success { color: var(--ok); }
+    .message.success { color: var(--green); }
 
     .side {
-      min-width: 0;
       display: grid;
       gap: 14px;
-      align-content: start;
     }
     .panel {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
-      overflow: hidden;
+      padding: 14px;
     }
     .panel-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 10px;
-      padding: 13px 14px;
-      border-bottom: 1px solid var(--line);
+      margin-bottom: 12px;
     }
     .panel-title {
-      font-size: 13px;
-      font-weight: 760;
-      color: var(--text);
+      margin: 0;
+      font-size: 15px;
+      font-weight: 900;
     }
-    .text-button {
+    .subtle {
       border: 0;
       background: transparent;
       color: var(--muted);
       padding: 4px 0;
       font-size: 12px;
+      font-weight: 800;
     }
-    .text-button:hover { color: var(--text); }
     .list {
-      max-height: 284px;
+      display: grid;
+      gap: 8px;
+      max-height: 330px;
       overflow: auto;
-      padding: 8px;
     }
     .empty {
+      border: 1px dashed var(--line);
+      border-radius: 18px;
       color: var(--muted);
       font-size: 13px;
-      padding: 18px 8px;
+      font-weight: 650;
       text-align: center;
+      padding: 22px 12px;
+      background: #f8fafc;
     }
     .item {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
       gap: 8px;
       align-items: center;
-      padding: 9px;
-      border-radius: 8px;
+      padding: 10px;
+      border: 1px solid #edf2f7;
+      border-radius: 16px;
+      background: #f8fafc;
     }
-    .item:hover { background: var(--panel-soft); }
     .item-main {
       min-width: 0;
       border: 0;
@@ -263,32 +290,27 @@
       text-overflow: ellipsis;
       white-space: nowrap;
       font-size: 13px;
-      font-weight: 680;
+      font-weight: 900;
     }
     .item-hash {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       color: var(--muted);
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       font-size: 11px;
-      margin-top: 3px;
-    }
-    .item-actions {
-      display: flex;
-      align-items: center;
-      gap: 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      margin-top: 4px;
     }
     .mini {
-      width: 30px;
-      height: 30px;
-      border: 0;
-      border-radius: 7px;
-      background: transparent;
+      width: 34px;
+      height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
       color: var(--muted);
+      font-weight: 900;
     }
-    .mini:hover { background: #242b34; color: var(--text); }
-    .mini.danger:hover { color: var(--danger); }
+    .mini:hover { color: var(--danger); }
 
     .modal-backdrop {
       position: fixed;
@@ -297,106 +319,120 @@
       align-items: center;
       justify-content: center;
       padding: 20px;
-      background: rgba(0, 0, 0, 0.68);
+      background: rgba(15, 23, 42, 0.48);
+      backdrop-filter: blur(6px);
       z-index: 10;
     }
     .modal {
       width: min(420px, 100%);
+      background: #fff;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
+      border-radius: 24px;
       box-shadow: var(--shadow);
-      padding: 18px;
+      padding: 20px;
     }
     .modal h2 {
-      margin: 0 0 14px;
-      font-size: 17px;
+      margin: 0 0 12px;
+      font-size: 20px;
     }
     .modal input {
       width: 100%;
-      height: 42px;
+      height: 48px;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #0f1216;
+      border-radius: 16px;
+      background: #f8fafc;
       color: var(--text);
       outline: none;
-      padding: 0 12px;
+      padding: 0 14px;
       margin-bottom: 14px;
+      font-weight: 700;
     }
     .modal-actions {
-      display: flex;
-      justify-content: flex-end;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
       gap: 10px;
     }
 
-    @media (max-width: 980px) {
-      .layout { grid-template-columns: 1fr; padding: 14px; }
-      .topbar { padding: 0 14px; }
-      .control-strip { grid-template-columns: 1fr auto; }
-      .control-strip .button.primary { grid-column: span 2; }
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+      .topbar { align-items: flex-start; }
+      .brand h1 { font-size: 23px; }
+    }
+    @media (max-width: 560px) {
+      .app { padding: 16px 12px 32px; }
+      .input-row, .actions { grid-template-columns: 1fr; }
+      .actions .btn.icon { width: 100%; }
+      .status { max-width: 155px; }
     }
   </style>
 </head>
 <body>
-  <div class="app">
+  <main class="app">
     <header class="topbar">
       <div class="brand">
-        <div class="mark"></div>
-        <div class="brand-title">Ace Player</div>
+        <div class="mark">ACE</div>
+        <div>
+          <h1>Ace Player</h1>
+          <p>Reproductor AceStream para Umbrel</p>
+        </div>
       </div>
       <button class="status" id="statusButton" type="button">
-        <span class="status-dot"></span>
+        <span class="dot"></span>
         <span id="statusText">Conectando...</span>
       </button>
     </header>
 
-    <main class="layout">
-      <section class="player-column">
+    <div class="grid">
+      <section class="card player-card">
         <div class="stage">
           <video id="player" playsinline controls></video>
           <div class="overlay" id="overlay">
-            <div class="overlay-content">
-              <div id="overlayIcon">ACE</div>
-              <div id="overlayText">Introduce un hash para comenzar</div>
+            <div class="overlay-box">
+              <div id="overlayIcon" class="overlay-title">ACE</div>
+              <div id="overlayText" class="overlay-text">Pega un enlace acestream:// o un hash para comenzar.</div>
             </div>
           </div>
         </div>
-
-        <div class="control-strip">
-          <input class="hash-input" id="hashInput" type="text" autocomplete="off" spellcheck="false" placeholder="hash o acestream://...">
-          <button class="button icon" id="liveBtn" type="button" title="Volver al directo">LIVE</button>
-          <button class="button icon" id="saveBtn" type="button" title="Guardar favorito">+</button>
-          <button class="button primary" id="playBtn" type="button">Conectar</button>
+        <div class="controls">
+          <div class="input-row">
+            <input class="hash-input" id="hashInput" type="text" autocomplete="off" spellcheck="false" placeholder="acestream://... o hash">
+            <button class="btn primary" id="playBtn" type="button">Reproducir</button>
+          </div>
+          <div class="actions">
+            <button class="btn" id="liveBtn" type="button">Directo</button>
+            <button class="btn icon" id="saveBtn" type="button" title="Guardar favorito">+</button>
+            <button class="btn icon" id="stopBtn" type="button" title="Detener">×</button>
+          </div>
+          <div class="message" id="message"></div>
         </div>
-        <div class="message" id="message"></div>
       </section>
 
       <aside class="side">
-        <section class="panel">
+        <section class="card panel">
           <div class="panel-head">
-            <div class="panel-title">Favoritos</div>
+            <h2 class="panel-title">Favoritos</h2>
           </div>
           <div class="list" id="favList"></div>
         </section>
 
-        <section class="panel">
+        <section class="card panel">
           <div class="panel-head">
-            <div class="panel-title">Historial</div>
-            <button class="text-button" id="clearHistoryBtn" type="button">Limpiar</button>
+            <h2 class="panel-title">Recientes</h2>
+            <button class="subtle" id="clearHistoryBtn" type="button">Limpiar</button>
           </div>
           <div class="list" id="histList"></div>
         </section>
       </aside>
-    </main>
-  </div>
+    </div>
+  </main>
 
   <div class="modal-backdrop" id="favModal">
     <div class="modal">
       <h2>Guardar favorito</h2>
-      <input id="favNameInput" placeholder="Nombre">
+      <input id="favNameInput" placeholder="Nombre del canal">
       <div class="modal-actions">
-        <button class="button" id="cancelFavBtn" type="button">Cancelar</button>
-        <button class="button primary" id="confirmFavBtn" type="button">Guardar</button>
+        <button class="btn" id="cancelFavBtn" type="button">Cancelar</button>
+        <button class="btn primary" id="confirmFavBtn" type="button">Guardar</button>
       </div>
     </div>
   </div>
@@ -404,7 +440,7 @@
   <script>
     const SERVER = "";
     const HASH_RE = /^[a-fA-F0-9]{40}$/;
-    const MAX_HIST = 50;
+    const MAX_HIST = 30;
     const player = document.getElementById("player");
     const overlay = document.getElementById("overlay");
     const overlayText = document.getElementById("overlayText");
@@ -422,21 +458,23 @@
     let currentHash = null;
     let state = { favorites: [], history: [] };
     let storageMode = "server";
-    let overlayVisible = true;
+    let retryCount = 0;
 
     function sanitizeHash(value) {
-      return String(value || "").trim().replace(/^acestream:\/\//i, "");
+      return String(value || "")
+        .trim()
+        .replace(/^acestream:\/\//i, "")
+        .replace(/^.*[?&]id=/i, "")
+        .trim();
     }
 
-    function setOverlay(text, loading = false) {
-      overlayVisible = true;
+    function setOverlay(title, text = "", loading = false) {
       overlay.style.display = "grid";
-      overlayIcon.innerHTML = loading ? '<div class="spinner"></div>' : "ACE";
-      overlayText.textContent = text;
+      overlayIcon.innerHTML = loading ? '<div class="spinner"></div>' : title;
+      overlayText.textContent = text || title;
     }
 
     function hideOverlay() {
-      overlayVisible = false;
       overlay.style.display = "none";
     }
 
@@ -496,17 +534,17 @@
       if (render) renderAll();
     }
 
-    function addHistory(hash) {
+    async function addHistory(hash) {
       state.history = state.history.filter((item) => item.hash !== hash);
       state.history.unshift({ hash, name: `Canal ${hash.slice(0, 8)}`, date: new Date().toISOString() });
-      return saveState();
+      await saveState();
     }
 
     async function testConnection() {
       statusButton.className = "status";
       statusText.textContent = "Conectando...";
       try {
-        const response = await fetch(`${SERVER}/webui/api/service?method=get_version`, { signal: AbortSignal.timeout(4000) });
+        const response = await fetch(`${SERVER}/webui/api/service?method=get_version`, { signal: AbortSignal.timeout(4500) });
         if (!response.ok) throw new Error("engine offline");
         statusButton.className = "status online";
         statusText.textContent = "Engine activo";
@@ -521,6 +559,7 @@
         hls.destroy();
         hls = null;
       }
+      player.pause();
       player.removeAttribute("src");
       player.load();
     }
@@ -531,14 +570,11 @@
       } else if (player.seekable && player.seekable.length) {
         player.currentTime = player.seekable.end(player.seekable.length - 1);
       }
-      player.play().catch(() => setMessage("Pulsa reproducir en el video", ""));
+      player.play().catch(() => setMessage("Pulsa play en el video.", ""));
     }
 
-    function keepNearLive() {
-      if (!player.seekable || !player.seekable.length || player.paused) return;
-      const liveEdge = player.seekable.end(player.seekable.length - 1);
-      const latency = liveEdge - player.currentTime;
-      if (latency > 30) seekLiveEdge();
+    function manifestUrl(hash) {
+      return `${SERVER}/ace/manifest.m3u8?id=${hash}&_=${Date.now()}`;
     }
 
     async function startPlayback(value) {
@@ -550,24 +586,27 @@
 
       currentHash = hash;
       hashInput.value = hash;
+      retryCount = 0;
       await addHistory(hash);
       destroyPlayer();
       setMessage("");
-      setOverlay("Cargando stream...", true);
+      setOverlay("Conectando", "Preparando AceStream...", true);
 
-      const url = `${SERVER}/ace/manifest.m3u8?id=${hash}`;
-      if (Hls.isSupported()) {
+      const url = manifestUrl(hash);
+      if (window.Hls && Hls.isSupported()) {
         hls = new Hls({
-          lowLatencyMode: true,
+          enableWorker: true,
+          lowLatencyMode: false,
           liveDurationInfinity: true,
-          liveSyncDurationCount: 2,
-          liveMaxLatencyDurationCount: 5,
-          maxLiveSyncPlaybackRate: 1.5,
-          maxBufferLength: 12,
-          maxMaxBufferLength: 24,
-          manifestLoadingTimeOut: 14000,
-          manifestLoadingMaxRetry: 5,
-          fragLoadingTimeOut: 22000,
+          liveSyncDurationCount: 3,
+          liveMaxLatencyDurationCount: 8,
+          maxBufferLength: 30,
+          maxMaxBufferLength: 60,
+          backBufferLength: 30,
+          manifestLoadingTimeOut: 18000,
+          manifestLoadingMaxRetry: 8,
+          levelLoadingTimeOut: 18000,
+          fragLoadingTimeOut: 26000,
           fragLoadingMaxRetry: 8,
         });
         hls.loadSource(url);
@@ -575,31 +614,43 @@
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           hideOverlay();
           seekLiveEdge();
+          setMessage("Stream cargado.", "success");
         });
         hls.on(Hls.Events.ERROR, (_, data) => {
           if (!data.fatal) return;
-          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-            hls.startLoad();
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR && retryCount < 5) {
+            retryCount += 1;
+            setOverlay("Reconectando", `Reintento ${retryCount}/5...`, true);
+            setTimeout(() => hls && hls.startLoad(), 1200 * retryCount);
             return;
           }
-          if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          if (data.type === Hls.ErrorTypes.MEDIA_ERROR && retryCount < 3) {
+            retryCount += 1;
             hls.recoverMediaError();
             return;
           }
-          setOverlay("Error de reproduccion");
+          setOverlay("No se pudo reproducir", "Prueba de nuevo en unos segundos o revisa el hash.");
+          setMessage("Error de reproduccion.", "error");
         });
       } else if (player.canPlayType("application/vnd.apple.mpegurl")) {
         player.src = url;
         hideOverlay();
-        player.play().catch(() => setMessage("Pulsa reproducir en el video", ""));
+        player.play().catch(() => setMessage("Pulsa play en el video.", ""));
       } else {
-        setOverlay("HLS no esta soportado en este navegador");
+        setOverlay("HLS no soportado", "Este navegador no puede reproducir HLS.");
       }
+    }
+
+    function stopPlayback() {
+      currentHash = null;
+      destroyPlayer();
+      setMessage("");
+      setOverlay("ACE", "Pega un enlace acestream:// o un hash para comenzar.");
     }
 
     function renderList(container, items, type) {
       if (!items.length) {
-        container.innerHTML = `<div class="empty">${type === "fav" ? "Sin favoritos" : "Sin historial"}</div>`;
+        container.innerHTML = `<div class="empty">${type === "fav" ? "Sin favoritos" : "Sin recientes"}</div>`;
         return;
       }
       container.innerHTML = "";
@@ -611,36 +662,17 @@
         main.type = "button";
         main.className = "item-main";
         main.onclick = () => startPlayback(item.hash);
-        main.innerHTML = `<div class="item-name"></div><div class="item-hash"></div>`;
+        main.innerHTML = '<div class="item-name"></div><div class="item-hash"></div>';
         main.querySelector(".item-name").textContent = item.name || `Canal ${item.hash.slice(0, 8)}`;
         main.querySelector(".item-hash").textContent = item.hash;
 
-        const actions = document.createElement("div");
-        actions.className = "item-actions";
-        const play = document.createElement("button");
-        play.type = "button";
-        play.className = "mini";
-        play.textContent = ">";
-        play.onclick = () => startPlayback(item.hash);
-        actions.appendChild(play);
-
-        if (type === "hist") {
-          const star = document.createElement("button");
-          star.type = "button";
-          star.className = "mini";
-          star.textContent = "+";
-          star.onclick = () => openFavoriteModal(item.hash);
-          actions.appendChild(star);
-        }
-
         const del = document.createElement("button");
         del.type = "button";
-        del.className = "mini danger";
-        del.textContent = "x";
+        del.className = "mini";
+        del.textContent = "×";
         del.onclick = () => removeItem(type, item.hash);
-        actions.appendChild(del);
 
-        row.append(main, actions);
+        row.append(main, del);
         container.appendChild(row);
       });
     }
@@ -674,7 +706,7 @@
       state.favorites.unshift({ hash, name, date: new Date().toISOString() });
       await saveState();
       closeFavoriteModal();
-      setMessage("Favorito guardado en Umbrel.", "success");
+      setMessage("Favorito guardado.", "success");
     }
 
     async function removeItem(type, hash) {
@@ -691,6 +723,7 @@
     document.getElementById("playBtn").onclick = () => startPlayback();
     document.getElementById("saveBtn").onclick = () => openFavoriteModal();
     document.getElementById("liveBtn").onclick = seekLiveEdge;
+    document.getElementById("stopBtn").onclick = stopPlayback;
     document.getElementById("clearHistoryBtn").onclick = clearHistory;
     document.getElementById("cancelFavBtn").onclick = closeFavoriteModal;
     document.getElementById("confirmFavBtn").onclick = saveFavorite;
@@ -698,21 +731,17 @@
     hashInput.addEventListener("keydown", (event) => {
       if (event.key === "Enter") startPlayback();
     });
-    player.addEventListener("play", () => {
-      if (!overlayVisible) seekLiveEdge();
+    player.addEventListener("waiting", () => {
+      if (currentHash) setMessage("Buffering...");
     });
-    player.addEventListener("pause", () => {
-      setTimeout(() => {
-        if (currentHash && !player.ended && document.visibilityState === "visible") player.play().catch(() => {});
-      }, 1500);
+    player.addEventListener("playing", () => {
+      if (currentHash) setMessage("Reproduciendo.", "success");
     });
-    player.addEventListener("waiting", keepNearLive);
-    player.addEventListener("timeupdate", keepNearLive);
     favModal.addEventListener("click", (event) => {
       if (event.target === favModal) closeFavoriteModal();
     });
 
-    setOverlay("Introduce un hash para comenzar");
+    setOverlay("ACE", "Pega un enlace acestream:// o un hash para comenzar.");
     loadState();
     testConnection();
   </script>
