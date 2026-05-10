@@ -203,7 +203,7 @@
     .actions {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 10px;
+      gap: 8px;
     }
     .btn {
       min-height: 46px;
@@ -287,10 +287,13 @@
       padding: 22px 12px;
       background: #f8fafc;
     }
+    .pip-control {
+      display: none;
+    }
     .item {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto auto;
-      gap: 8px;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
       align-items: center;
       padding: 10px;
       border: 1px solid #edf2f7;
@@ -305,9 +308,6 @@
     #histList .item-hash {
       text-align: left;
     }
-    .item.fav {
-      grid-template-columns: minmax(0, 1fr) auto auto;
-    }
     .item-main {
       min-width: 0;
       border: 0;
@@ -315,6 +315,12 @@
       color: inherit;
       text-align: left;
       padding: 0;
+    }
+    .item-actions {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
     }
     .item-name {
       overflow: hidden;
@@ -333,8 +339,8 @@
       margin-top: 4px;
     }
     .mini {
-      width: 34px;
-      height: 34px;
+      width: 32px;
+      height: 32px;
       border: 1px solid var(--line);
       border-radius: 12px;
       background: #fff;
@@ -394,6 +400,7 @@
       .app { padding: 16px 12px 32px; }
       .input-row, .actions { grid-template-columns: 1fr; }
       .actions .btn.icon { width: 100%; }
+      .pip-control { display: inline-flex; }
       .status { max-width: 155px; }
     }
   </style>
@@ -434,7 +441,7 @@
             <button class="btn" id="liveBtn" type="button">Directo</button>
             <button class="btn icon" id="saveBtn" type="button" title="Guardar favorito">+</button>
             <button class="btn icon" id="stopBtn" type="button" title="Detener">×</button>
-            <button class="btn" id="pipBtn" type="button">PiP</button>
+            <button class="btn pip-control" id="pipBtn" type="button">PiP</button>
             <button class="btn warning" id="restartEngineBtn" type="button">Reiniciar motor</button>
           </div>
           <div class="message" id="message"></div>
@@ -618,6 +625,7 @@
     }
 
     async function requestPictureInPicture() {
+      if (!isMobilePiPContext()) return;
       if (!currentHash || player.paused || player.readyState < 2) return;
       if (!document.pictureInPictureEnabled || player.disablePictureInPicture) return;
       if (document.pictureInPictureElement) return;
@@ -630,6 +638,10 @@
 
     function manifestUrl(hash) {
       return `${SERVER}/ace/manifest.m3u8?id=${hash}&_=${Date.now()}`;
+    }
+
+    function isMobilePiPContext() {
+      return window.matchMedia("(max-width: 760px), (pointer: coarse)").matches;
     }
 
     async function startPlayback(value) {
@@ -721,6 +733,10 @@
     }
 
     async function enterPictureInPicture() {
+      if (!isMobilePiPContext()) {
+        setMessage("PiP solo se activa en movil.", "error");
+        return;
+      }
       if (!currentHash || player.readyState < 2) {
         setMessage("Primero reproduce un stream.", "error");
         return;
@@ -756,6 +772,9 @@
         main.querySelector(".item-name").textContent = item.name || `Canal ${item.hash.slice(0, 8)}`;
         main.querySelector(".item-hash").textContent = item.hash;
 
+        const itemActions = document.createElement("div");
+        itemActions.className = "item-actions";
+
         if (type === "hist") {
           const star = document.createElement("button");
           star.type = "button";
@@ -763,7 +782,7 @@
           star.textContent = "★";
           star.title = "Guardar favorito";
           star.onclick = () => openFavoriteModal(item.hash);
-          row.appendChild(star);
+          itemActions.appendChild(star);
         } else {
           const edit = document.createElement("button");
           edit.type = "button";
@@ -771,7 +790,7 @@
           edit.textContent = "✎";
           edit.title = "Renombrar";
           edit.onclick = () => openFavoriteModal(item.hash);
-          row.appendChild(edit);
+          itemActions.appendChild(edit);
         }
 
         const del = document.createElement("button");
@@ -779,8 +798,9 @@
         del.className = "mini";
         del.textContent = "×";
         del.onclick = () => removeItem(type, item.hash);
+        itemActions.appendChild(del);
 
-        row.append(main, del);
+        row.append(main, itemActions);
         container.appendChild(row);
       });
     }
@@ -850,7 +870,7 @@
       if (currentHash) setMessage("Reproduciendo.", "success");
     });
     document.addEventListener("visibilitychange", () => {
-      if (document.hidden) requestPictureInPicture();
+      if (document.hidden && isMobilePiPContext()) requestPictureInPicture();
     });
     favModal.addEventListener("click", (event) => {
       if (event.target === favModal) closeFavoriteModal();
