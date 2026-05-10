@@ -1,9 +1,9 @@
 manifestVersion: 1
 id: ismaeloul-ace-player
 category: media
-icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/icon.svg"
+icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/icon.png"
 name: Ace Player
-version: "1.3.8"
+version: "1.3.9"
 tagline: Reproduce streams AceStream directamente en tu navegador
 description: >-
   Ace Player convierte tu Umbrel en un servidor AceStream personal.

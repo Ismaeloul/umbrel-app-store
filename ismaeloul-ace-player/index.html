@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ace Player</title>
-  <link rel="icon" type="image/svg+xml" href="https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/icon.svg">
-  <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/icon.svg">
+  <link rel="icon" type="image/png" href="/icon.png">
+  <link rel="apple-touch-icon" href="/icon.png">
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.6.10/dist/hls.min.js"></script>
   <style>
     :root {
@@ -409,7 +409,7 @@
   <main class="app">
     <header class="topbar">
       <div class="brand">
-        <div class="mark"><img src="https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/icon.svg" alt=""></div>
+        <div class="mark"><img src="/icon.png" alt=""></div>
         <div>
           <h1>Ace Player</h1>
           <p>Reproductor AceStream para Umbrel</p>
@@ -640,8 +640,8 @@
     function keepNearLiveEdge() {
       if (!currentHash || player.paused || !player.seekable || !player.seekable.length) return;
       const liveEdge = player.seekable.end(player.seekable.length - 1);
-      if (Number.isFinite(liveEdge) && liveEdge - player.currentTime > 8) {
-        player.currentTime = Math.max(liveEdge - 2, 0);
+      if (Number.isFinite(liveEdge) && liveEdge - player.currentTime > 12) {
+        player.currentTime = Math.max(liveEdge - 3, 0);
       }
     }
 
@@ -687,12 +687,12 @@
           enableWorker: true,
           lowLatencyMode: true,
           liveDurationInfinity: true,
-          liveSyncDurationCount: 1,
-          liveMaxLatencyDurationCount: 3,
-          maxLiveSyncPlaybackRate: 1.5,
-          maxBufferLength: 12,
-          maxMaxBufferLength: 24,
-          backBufferLength: 10,
+          liveSyncDuration: 3,
+          liveMaxLatencyDuration: 8,
+          maxLiveSyncPlaybackRate: 1.15,
+          maxBufferLength: 18,
+          maxMaxBufferLength: 36,
+          backBufferLength: 12,
           manifestLoadingTimeOut: 18000,
           manifestLoadingMaxRetry: 8,
           levelLoadingTimeOut: 18000,
