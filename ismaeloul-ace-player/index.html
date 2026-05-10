@@ -626,11 +626,12 @@
 
     async function requestPictureInPicture() {
       if (!isMobilePiPContext()) return;
-      if (!currentHash || player.paused || player.readyState < 2) return;
+      if (!currentHash || player.readyState < 2) return;
       if (!document.pictureInPictureEnabled || player.disablePictureInPicture) return;
       if (document.pictureInPictureElement) return;
       try {
         await player.requestPictureInPicture();
+        player.play().catch(() => {});
       } catch {
         // Algunos navegadores moviles solo permiten PiP con gesto directo del usuario.
       }
@@ -747,7 +748,10 @@
       }
       try {
         if (document.pictureInPictureElement) await document.exitPictureInPicture();
-        else await player.requestPictureInPicture();
+        else {
+          await player.requestPictureInPicture();
+          player.play().catch(() => {});
+        }
       } catch {
         setMessage("El navegador ha bloqueado PiP.", "error");
       }
@@ -871,6 +875,9 @@
     });
     document.addEventListener("visibilitychange", () => {
       if (document.hidden && isMobilePiPContext()) requestPictureInPicture();
+    });
+    window.addEventListener("pagehide", () => {
+      if (isMobilePiPContext()) requestPictureInPicture();
     });
     favModal.addEventListener("click", (event) => {
       if (event.target === favModal) closeFavoriteModal();
