@@ -56,6 +56,10 @@
         }
         .toast-enter { animation: slideInDown 0.3s ease forwards; }
         .toast-exit { animation: slideOutUp 0.3s ease forwards; }
+        .calendar-chip[aria-disabled="true"] {
+            opacity: 0.35;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased min-h-screen pb-20 selection:bg-protein selection:text-white relative">
@@ -154,7 +158,7 @@
             
             <!-- Date Picker Button -->
             <div class="relative">
-                <div class="bg-white px-4 py-2 rounded-full shadow-sm border border-slate-200 flex items-center gap-2 cursor-pointer hover:bg-slate-50 transition-colors">
+                <div class="bg-white px-4 py-2 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-2 cursor-pointer hover:bg-slate-50 transition-colors">
                     <i class="far fa-calendar-alt text-slate-400 text-sm"></i>
                     <span class="text-xs font-bold text-slate-700 uppercase tracking-wider" id="dateDisplayLabel">Hoy</span>
                     <i class="fas fa-chevron-down text-[10px] text-slate-400 ml-1"></i>
@@ -168,7 +172,7 @@
         <div class="flex justify-between items-center mb-6 px-1">
             <button id="prevDayBtn" class="p-2 text-slate-400 hover:text-protein transition-colors"><i class="fas fa-chevron-left"></i></button>
             <span id="fullDateText" class="text-sm font-semibold text-slate-500 capitalize">Cargando...</span>
-            <button id="nextDayBtn" class="p-2 text-slate-400 hover:text-protein transition-colors"><i class="fas fa-chevron-right"></i></button>
+            <button id="nextDayBtn" class="calendar-chip p-2 text-slate-400 hover:text-protein transition-colors"><i class="fas fa-chevron-right"></i></button>
         </div>
 
         <!-- Tarjetas de Macros -->
@@ -247,24 +251,6 @@
             </div>
 
             <div class="space-y-4">
-                <div class="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                    <div class="flex items-center justify-between gap-3 mb-3">
-                        <div>
-                            <h3 class="font-bold text-sm text-slate-800">Huevos fritos</h3>
-                            <p class="text-xs text-slate-400">Aprox. 6.3g proteina y 0.4g carbos por huevo grande.</p>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <button type="button" id="eggMinusBtn" class="w-9 h-9 rounded-xl bg-white border border-slate-200 text-slate-500 font-black">-</button>
-                            <input type="number" id="eggCountInput" min="1" value="2" class="w-14 h-9 text-center rounded-xl border border-slate-200 bg-white font-black text-slate-800 outline-none">
-                            <button type="button" id="eggPlusBtn" class="w-9 h-9 rounded-xl bg-white border border-slate-200 text-slate-500 font-black">+</button>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <button type="button" id="addTwoEggsBtn" class="py-3 rounded-xl bg-slate-900 text-white text-sm font-bold active:scale-95 transition-transform">Anadir 2 huevos</button>
-                        <button type="button" id="addEggsBtn" class="py-3 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-bold active:scale-95 transition-transform">Anadir cantidad</button>
-                    </div>
-                </div>
-
                 <div class="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
                     <div class="mb-3">
                         <h3 class="font-bold text-sm text-slate-800">Proteina en polvo</h3>
@@ -289,9 +275,19 @@
                 <div class="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
                     <div class="mb-3">
                         <h3 class="font-bold text-sm text-slate-800">Algo rapido</h3>
-                        <p class="text-xs text-slate-400">Para repetir una comida conocida sin buscarla.</p>
+                        <p class="text-xs text-slate-400">Busca un alimento, ajusta macros si quieres y anadelo.</p>
                     </div>
-                    <input type="text" id="quickCustomName" placeholder="Ej. Yogur, bocata, cena rapida" class="w-full h-11 rounded-xl border border-emerald-100 bg-white px-3 text-sm font-bold text-slate-800 outline-none mb-3">
+                    <div class="relative mb-3">
+                        <input type="text" id="quickCustomName" autocomplete="off" placeholder="Ej. yogur, arroz, pollo..." class="w-full h-11 rounded-xl border border-emerald-100 bg-white px-3 text-sm font-bold text-slate-800 outline-none">
+                        <div id="quickAutocompleteDropdown" class="absolute z-50 w-full mt-1 bg-white border border-emerald-100 rounded-xl shadow-xl hidden dropdown-scroll"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1 ml-1">Cantidad aprox.</label>
+                        <div class="relative">
+                            <input type="number" id="quickCustomQuantity" min="1" step="1" value="100" class="w-full h-11 text-center rounded-xl border border-emerald-100 bg-white font-black text-slate-800 outline-none pr-7">
+                            <span class="absolute right-3 top-3 text-xs font-bold text-slate-400">g</span>
+                        </div>
+                    </div>
                     <div class="grid grid-cols-2 gap-3 mb-3">
                         <div>
                             <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1 ml-1">Proteina</label>
@@ -427,8 +423,8 @@
         }
 
         // --- INICIALIZACIÓN ---
-        function initApp() {
-            loadData();
+        async function initApp() {
+            await loadData();
             setupCalendar();
             setupAutocomplete();
             setupFormMath();
@@ -440,7 +436,7 @@
             changeSelectedDate(getLocalIsoDate(new Date()));
         }
 
-        function loadData() {
+        async function loadData() {
             const saved = localStorage.getItem(STORAGE_KEY);
             if (saved) {
                 try {
@@ -460,16 +456,48 @@
             }
             if (!appState.history) appState.history = {};
             if (!('profile' in appState)) appState.profile = null;
+
+            try {
+                const response = await fetch('/api/state', { cache: 'no-store' });
+                if (response.ok) {
+                    const serverState = await response.json();
+                    if (serverState && serverState.history) {
+                        const localHasData = Object.values(appState.history || {}).some((entries) => Array.isArray(entries) && entries.length);
+                        const serverHasData = Object.values(serverState.history || {}).some((entries) => Array.isArray(entries) && entries.length);
+                        if (!serverHasData && localHasData) {
+                            await saveData();
+                        } else {
+                            appState = {
+                                history: serverState.history || {},
+                                profile: 'profile' in serverState ? serverState.profile : null
+                            };
+                            localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+                        }
+                    }
+                }
+            } catch (error) {
+                console.warn('No se pudo sincronizar con Umbrel, usando datos locales', error);
+            }
         }
 
-        function saveData() {
+        async function saveData() {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+            try {
+                await fetch('/api/state', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(appState)
+                });
+            } catch (error) {
+                console.warn('No se pudo guardar en Umbrel, queda guardado localmente', error);
+            }
         }
 
         // --- LÓGICA DEL CALENDARIO ---
         function setupCalendar() {
             const calInput = document.getElementById('calendarInput');
             calInput.value = selectedDateStr;
+            calInput.max = getLocalIsoDate(new Date());
             
             calInput.addEventListener('change', (e) => {
                 if (e.target.value) changeSelectedDate(e.target.value);
@@ -486,6 +514,11 @@
         }
 
         function changeSelectedDate(newIsoDate) {
+            const today = getLocalIsoDate(new Date());
+            if (newIsoDate > today) {
+                showToast('Ese dia todavia no existe', 'info');
+                newIsoDate = today;
+            }
             selectedDateStr = newIsoDate;
             document.getElementById('calendarInput').value = newIsoDate;
             
@@ -493,6 +526,7 @@
             const isItToday = isToday(selectedDateStr);
             document.getElementById('dateDisplayLabel').textContent = isItToday ? 'Hoy' : selectedDateStr.split('-').reverse().slice(0,2).join('/');
             document.getElementById('fullDateText').textContent = isItToday ? 'Hoy' : formatDateForDisplay(selectedDateStr);
+            document.getElementById('nextDayBtn').setAttribute('aria-disabled', isItToday ? 'true' : 'false');
             
             // Asegurar que el día exista en la BD
             if (!appState.history[selectedDateStr]) {
@@ -504,6 +538,69 @@
 
         // --- BUSCADOR Y AUTOCOMPLETADO (API OPEN FOOD FACTS) ---
         let searchTimeout = null;
+        let quickSearchTimeout = null;
+        let quickSelectedFoodBase = null;
+
+        async function searchFoods(query, pageSize = 8) {
+            const params = new URLSearchParams({
+                search_terms: query,
+                search_simple: '1',
+                action: 'process',
+                json: '1',
+                page_size: String(pageSize),
+                lc: 'es',
+                cc: 'es',
+                lang: 'es',
+                fields: 'product_name_es,product_name,brands,nutriments'
+            });
+            const response = await fetch(`/off/cgi/search.pl?${params.toString()}`);
+            if (!response.ok) throw new Error(`Open Food Facts HTTP ${response.status}`);
+            const data = await response.json();
+            return (data.products || [])
+                .map((food) => ({
+                    name: food.product_name_es || food.product_name || 'Producto desconocido',
+                    brands: food.brands || '',
+                    proteins: Number(food.nutriments?.proteins_100g || 0),
+                    carbs: Number(food.nutriments?.carbohydrates_100g || 0)
+                }))
+                .filter((food) => food.name && (food.proteins || food.carbs));
+        }
+
+        function renderFoodDropdown(dropdown, matches, onSelect) {
+            if (matches.length === 0) {
+                dropdown.innerHTML = `<div class="px-4 py-4 text-sm text-slate-500 text-center">
+                    <i class="fas fa-search block text-2xl text-slate-300 mb-2"></i>
+                    No se encontraron resultados exactos.<br><span class="text-xs text-slate-400 mt-1 block">Prueba con otras palabras o mete los macros a mano.</span>
+                </div>`;
+                return;
+            }
+
+            dropdown.innerHTML = '';
+            matches.forEach((food) => {
+                const item = document.createElement('button');
+                item.type = 'button';
+                item.className = 'w-full text-left px-4 py-3 hover:bg-slate-50 border-b border-slate-100 last:border-0 flex justify-between items-center transition-colors';
+                const brand = food.brands ? `<span class="text-[10px] text-slate-400 block mt-0.5 truncate max-w-[200px]"><i class="fas fa-tag mr-1 text-slate-300"></i>${food.brands.split(',')[0]}</span>` : '';
+                item.innerHTML = `
+                    <div class="pr-3 flex-1 overflow-hidden">
+                        <span class="font-semibold text-sm text-slate-800 line-clamp-1">${food.name}</span>
+                        ${brand}
+                    </div>
+                    <div class="flex gap-1.5 whitespace-nowrap">
+                        <div class="bg-blue-50/50 border border-blue-100 px-2 py-1 rounded-lg text-center min-w-[50px]">
+                            <span class="block text-[10px] text-blue-400 font-bold leading-none mb-0.5">PRO</span>
+                            <span class="text-xs font-black text-protein leading-none">${food.proteins.toFixed(1)}g</span>
+                        </div>
+                        <div class="bg-yellow-50/50 border border-yellow-100 px-2 py-1 rounded-lg text-center min-w-[50px]">
+                            <span class="block text-[10px] text-yellow-500 font-bold leading-none mb-0.5">CAR</span>
+                            <span class="text-xs font-black text-carb leading-none">${food.carbs.toFixed(1)}g</span>
+                        </div>
+                    </div>
+                `;
+                item.addEventListener('click', () => onSelect(food));
+                dropdown.appendChild(item);
+            });
+        }
 
         function setupAutocomplete() {
             const inputEl = document.getElementById('inputName');
@@ -535,7 +632,7 @@
                 searchTimeout = setTimeout(async () => {
                     try {
                         // Conexión a la API pública mundial de Open Food Facts
-                        const response = await fetch(`/off/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=8&fields=product_name,brands,nutriments`);
+                        const response = await fetch(`/off/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=8&lc=es&cc=es&lang=es&fields=product_name_es,product_name,brands,nutriments`);
                         const data = await response.json();
                         
                         // Filtrar productos que devuelvan valores reales de macros
@@ -543,7 +640,7 @@
 
                         if (matches.length > 0) {
                             dropdown.innerHTML = matches.map(food => {
-                                const rawName = food.product_name || 'Producto desconocido';
+                                const rawName = food.product_name_es || food.product_name || 'Producto desconocido';
                                 // Escapar comillas para evitar errores en el evento onclick
                                 const safeName = rawName.replace(/'/g, "\\'").replace(/"/g, '&quot;');
                                 const brand = food.brands ? `<span class="text-[10px] text-slate-400 block mt-0.5 truncate max-w-[200px]"><i class="fas fa-tag mr-1 text-slate-300"></i>${food.brands.split(',')[0]}</span>` : '';
@@ -641,43 +738,63 @@
             document.getElementById('inputCarbs').value = totalC;
         }
 
-        // --- REGISTRO RAPIDO POR PORCIONES ---
-        const QUICK_FOODS = {
-            friedEgg: {
-                nameSingular: 'Huevo frito',
-                namePlural: 'Huevos fritos',
-                protein: 6.3,
-                carbs: 0.4,
-                grams: 50
-            }
-        };
-
         function setupQuickAdd() {
-            const eggInput = document.getElementById('eggCountInput');
-            document.getElementById('eggMinusBtn').addEventListener('click', () => {
-                eggInput.value = Math.max(1, (parseInt(eggInput.value, 10) || 1) - 1);
-            });
-            document.getElementById('eggPlusBtn').addEventListener('click', () => {
-                eggInput.value = (parseInt(eggInput.value, 10) || 1) + 1;
-            });
-            document.getElementById('addTwoEggsBtn').addEventListener('click', () => addFriedEggs(2));
-            document.getElementById('addEggsBtn').addEventListener('click', () => addFriedEggs(parseInt(eggInput.value, 10) || 1));
+            setupQuickFoodSearch();
             document.getElementById('addProteinScoopsBtn').addEventListener('click', addProteinScoops);
             document.getElementById('addQuickCustomBtn').addEventListener('click', addQuickCustom);
         }
 
-        function addFriedEggs(count) {
-            const food = QUICK_FOODS.friedEgg;
-            const safeCount = Math.max(1, count);
-            addEntry({
-                name: `${safeCount} ${safeCount === 1 ? food.nameSingular.toLowerCase() : food.namePlural.toLowerCase()}`,
-                qty: safeCount * food.grams,
-                proteins: roundMacro(food.protein * safeCount),
-                carbs: roundMacro(food.carbs * safeCount),
-                estimated: true,
-                time: currentTime()
+        function setupQuickFoodSearch() {
+            const inputEl = document.getElementById('quickCustomName');
+            const dropdown = document.getElementById('quickAutocompleteDropdown');
+            const qtyEl = document.getElementById('quickCustomQuantity');
+
+            inputEl.addEventListener('input', () => {
+                const query = inputEl.value.trim();
+                quickSelectedFoodBase = null;
+                if (quickSearchTimeout) clearTimeout(quickSearchTimeout);
+                if (query.length < 3) {
+                    dropdown.classList.add('hidden');
+                    return;
+                }
+
+                dropdown.innerHTML = `<div class="px-4 py-4 text-sm text-slate-500 flex items-center justify-center gap-3 font-medium">
+                    <i class="fas fa-circle-notch fa-spin text-emerald-500 text-lg"></i> Buscando...
+                </div>`;
+                dropdown.classList.remove('hidden');
+
+                quickSearchTimeout = setTimeout(async () => {
+                    try {
+                        const matches = await searchFoods(query, 6);
+                        renderFoodDropdown(dropdown, matches, (food) => {
+                            quickSelectedFoodBase = food;
+                            inputEl.value = food.name;
+                            dropdown.classList.add('hidden');
+                            updateQuickMacros();
+                        });
+                    } catch (error) {
+                        console.error('Error API OpenFoodFacts quick:', error);
+                        dropdown.innerHTML = `<div class="px-4 py-3 text-sm text-red-500 flex items-center gap-2">
+                            <i class="fas fa-wifi"></i> Error al buscar.
+                        </div>`;
+                    }
+                }, 450);
             });
-            showToast(`Anadido: ${safeCount} ${safeCount === 1 ? 'huevo' : 'huevos'}`, 'success');
+
+            qtyEl.addEventListener('input', updateQuickMacros);
+            document.addEventListener('click', (event) => {
+                if (!inputEl.contains(event.target) && !dropdown.contains(event.target)) {
+                    dropdown.classList.add('hidden');
+                }
+            });
+        }
+
+        function updateQuickMacros() {
+            if (!quickSelectedFoodBase) return;
+            const qty = Math.max(1, parseFloat(document.getElementById('quickCustomQuantity').value) || 100);
+            const multiplier = qty / 100;
+            document.getElementById('quickCustomProtein').value = roundMacro(quickSelectedFoodBase.proteins * multiplier).toFixed(1);
+            document.getElementById('quickCustomCarbs').value = roundMacro(quickSelectedFoodBase.carbs * multiplier).toFixed(1);
         }
 
         function addProteinScoops() {
@@ -699,24 +816,28 @@
             const nameEl = document.getElementById('quickCustomName');
             const proteinEl = document.getElementById('quickCustomProtein');
             const carbEl = document.getElementById('quickCustomCarbs');
+            const qtyEl = document.getElementById('quickCustomQuantity');
             const name = nameEl.value.trim() || 'Comida rapida';
             const proteins = roundMacro(parseFloat(proteinEl.value) || 0);
             const carbs = roundMacro(parseFloat(carbEl.value) || 0);
+            const qty = Math.max(1, parseFloat(qtyEl.value) || 100);
             if (proteins === 0 && carbs === 0) {
                 showToast('Pon proteina o carbos', 'error');
                 return;
             }
             addEntry({
                 name,
-                qty: null,
+                qty,
                 proteins,
                 carbs,
                 estimated: true,
                 time: currentTime()
             });
             nameEl.value = '';
+            qtyEl.value = 100;
             proteinEl.value = '';
             carbEl.value = '';
+            quickSelectedFoodBase = null;
             showToast('Comida rapida anadida', 'success');
         }
 
