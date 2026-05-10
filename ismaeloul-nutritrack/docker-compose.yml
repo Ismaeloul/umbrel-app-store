@@ -15,5 +15,6 @@ services:
       sh -c "
         mkdir -p /usr/share/nginx/html &&
         wget -q -O /usr/share/nginx/html/index.html https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-nutritrack/index.html &&
+        printf 'events{}\\nhttp{server{listen 80;location /{root /usr/share/nginx/html;index index.html;}location /off/{proxy_pass https://world.openfoodfacts.org/;proxy_ssl_server_name on;proxy_set_header Host world.openfoodfacts.org;proxy_set_header User-Agent \"NutriTrack/1.0.1 (https://github.com/Ismaeloul/umbrel-app-store)\";proxy_set_header Accept \"application/json\";add_header Access-Control-Allow-Origin *;}}}' > /etc/nginx/nginx.conf &&
         nginx -g 'daemon off;'
       "

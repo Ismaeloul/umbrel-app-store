@@ -366,7 +366,7 @@
                 searchTimeout = setTimeout(async () => {
                     try {
                         // Conexión a la API pública mundial de Open Food Facts
-                        const response = await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=8&fields=product_name,brands,nutriments`);
+                        const response = await fetch(`/off/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=8&fields=product_name,brands,nutriments`);
                         const data = await response.json();
                         
                         // Filtrar productos que devuelvan valores reales de macros
