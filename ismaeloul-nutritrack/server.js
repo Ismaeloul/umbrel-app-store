@@ -13,6 +13,31 @@ const defaultState = {
   profile: null
 };
 
+const fallbackFoods = [
+  { name: "Pechuga de pollo", brands: "Generico", proteins: 31, carbs: 0 },
+  { name: "Arroz blanco cocido", brands: "Generico", proteins: 2.7, carbs: 28 },
+  { name: "Arroz integral cocido", brands: "Generico", proteins: 2.6, carbs: 23 },
+  { name: "Pasta cocida", brands: "Generico", proteins: 5.8, carbs: 30.9 },
+  { name: "Pan blanco", brands: "Generico", proteins: 8.9, carbs: 49 },
+  { name: "Pan integral", brands: "Generico", proteins: 13, carbs: 41 },
+  { name: "Patata cocida", brands: "Generico", proteins: 1.9, carbs: 20 },
+  { name: "Avena", brands: "Generico", proteins: 16.9, carbs: 66.3 },
+  { name: "Platano", brands: "Generico", proteins: 1.1, carbs: 22.8 },
+  { name: "Manzana", brands: "Generico", proteins: 0.3, carbs: 13.8 },
+  { name: "Yogur griego natural", brands: "Generico", proteins: 10, carbs: 3.6 },
+  { name: "Leche semidesnatada", brands: "Generico", proteins: 3.4, carbs: 4.8 },
+  { name: "Atun al natural", brands: "Generico", proteins: 24, carbs: 0 },
+  { name: "Salmon", brands: "Generico", proteins: 20, carbs: 0 },
+  { name: "Ternera magra", brands: "Generico", proteins: 26, carbs: 0 },
+  { name: "Huevo", brands: "Generico", proteins: 12.6, carbs: 1.1 },
+  { name: "Clara de huevo", brands: "Generico", proteins: 10.9, carbs: 0.7 },
+  { name: "Lentejas cocidas", brands: "Generico", proteins: 9, carbs: 20 },
+  { name: "Garbanzos cocidos", brands: "Generico", proteins: 8.9, carbs: 27.4 },
+  { name: "Queso fresco batido", brands: "Generico", proteins: 8, carbs: 4 },
+  { name: "Proteina whey", brands: "Generico", proteins: 80, carbs: 8 },
+  { name: "Oreo", brands: "Generico", proteins: 5, carbs: 70 }
+];
+
 function ensureDataDir() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
@@ -65,6 +90,130 @@ function readBody(req) {
   });
 }
 
+function fetchJson(url) {
+  return new Promise((resolve, reject) => {
+    const req = https.request(url, {
+      timeout: 8000,
+      headers: {
+        "User-Agent": "NutriTrack/1.4.0 (contact: https://github.com/Ismaeloul/umbrel-app-store)",
+        "Accept": "application/json",
+        "Accept-Language": "es-ES,es;q=0.9,en;q=0.5"
+      }
+    }, (response) => {
+      let body = "";
+      response.on("data", (chunk) => {
+        body += chunk;
+        if (body.length > 4_000_000) req.destroy(new Error("Response too large"));
+      });
+      response.on("end", () => {
+        if ((response.statusCode || 500) >= 400) {
+          reject(new Error(`HTTP ${response.statusCode}`));
+          return;
+        }
+        try {
+          resolve(JSON.parse(body));
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+    req.on("timeout", () => req.destroy(new Error("Request timed out")));
+    req.on("error", reject);
+    req.end();
+  });
+}
+
+function normalizeFood(product) {
+  const nutriments = product.nutriments || {};
+  const proteins = Number(nutriments.proteins_100g ?? nutriments["proteins"] ?? 0);
+  const carbs = Number(nutriments.carbohydrates_100g ?? nutriments["carbohydrates"] ?? 0);
+  return {
+    name: product.product_name_es || product.product_name || product.generic_name_es || product.generic_name || "",
+    brands: product.brands || "",
+    proteins: Number.isFinite(proteins) ? proteins : 0,
+    carbs: Number.isFinite(carbs) ? carbs : 0
+  };
+}
+
+function fallbackSearch(query, limit) {
+  const normalizedQuery = query.toLowerCase();
+  return fallbackFoods
+    .filter((food) => food.name.toLowerCase().includes(normalizedQuery))
+    .slice(0, limit);
+}
+
+async function collectFoodSearch(query, limit) {
+  const params = new URLSearchParams({
+    search_terms: query,
+    search_simple: "1",
+    action: "process",
+    json: "1",
+    page_size: String(limit),
+    lc: "es",
+    cc: "es",
+    lang: "es",
+    fields: "product_name_es,product_name,generic_name_es,generic_name,brands,nutriments"
+  });
+
+  const urls = [
+    `https://es.openfoodfacts.org/cgi/search.pl?${params.toString()}`,
+    `https://world.openfoodfacts.org/cgi/search.pl?${params.toString()}`
+  ];
+
+  for (const sourceUrl of urls) {
+    try {
+      const data = await fetchJson(sourceUrl);
+      const products = (data.products || [])
+        .map(normalizeFood)
+        .filter((food) => food.name && (food.proteins || food.carbs))
+        .slice(0, limit);
+      if (products.length > 0) {
+        return {
+          source: sourceUrl.includes("es.") ? "openfoodfacts-es" : "openfoodfacts-world",
+          products
+        };
+      }
+    } catch (error) {
+      console.warn(`Food search failed for ${sourceUrl}:`, error.message);
+    }
+  }
+
+  return { source: "fallback", products: fallbackSearch(query, limit) };
+}
+
+async function searchFoods(req, res) {
+  const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+  const query = (url.searchParams.get("q") || "").trim();
+  const limit = Math.min(12, Math.max(1, Number(url.searchParams.get("limit") || 8)));
+  if (query.length < 2) return sendJson(res, 200, { source: "empty", products: [] });
+
+  sendJson(res, 200, await collectFoodSearch(query, limit));
+}
+
+async function legacyFoodSearch(req, res) {
+  const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+  const query = (url.searchParams.get("search_terms") || url.searchParams.get("q") || "").trim();
+  const limit = Math.min(12, Math.max(1, Number(url.searchParams.get("page_size") || 8)));
+  if (query.length < 2) return sendJson(res, 200, { count: 0, products: [] });
+
+  const result = await collectFoodSearch(query, limit);
+  sendJson(res, 200, {
+    count: result.products.length,
+    page: 1,
+    page_size: limit,
+    source: result.source,
+    products: result.products.map((food) => ({
+      product_name_es: food.name,
+      product_name: food.name,
+      brands: food.brands,
+      nutriments: {
+        proteins_100g: food.proteins,
+        carbohydrates_100g: food.carbs
+      }
+    }))
+  });
+}
+
 function proxyOpenFoodFacts(req, res) {
   const target = new URL(req.url.replace(/^\/off/, ""), "https://es.openfoodfacts.org");
   if (!target.searchParams.has("lc")) target.searchParams.set("lc", "es");
@@ -102,6 +251,14 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "PUT" && req.url === "/api/state") {
       const body = await readBody(req);
       return sendJson(res, 200, writeState(JSON.parse(body || "{}")));
+    }
+
+    if (req.method === "GET" && req.url.startsWith("/api/foods/search")) {
+      return searchFoods(req, res);
+    }
+
+    if (req.method === "GET" && req.url.startsWith("/off/cgi/search.pl")) {
+      return legacyFoodSearch(req, res);
     }
 
     if (req.url.startsWith("/off/")) {

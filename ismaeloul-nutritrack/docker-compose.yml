@@ -16,8 +16,8 @@ services:
     command: |
       sh -c "
         mkdir -p /app /data &&
-        wget -q -O /app/index.html 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-nutritrack/index.html?v=1.3.0' &&
-        wget -q -O /app/server.js 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-nutritrack/server.js?v=1.3.0' &&
+        wget -q -O /app/index.html 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-nutritrack/index.html?v=1.4.0' &&
+        wget -q -O /app/server.js 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-nutritrack/server.js?v=1.4.0' &&
         cd /app &&
         DATA_DIR=/data PORT=3000 node server.js
       "

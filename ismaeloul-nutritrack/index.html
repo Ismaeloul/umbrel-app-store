@@ -542,28 +542,11 @@
         let quickSelectedFoodBase = null;
 
         async function searchFoods(query, pageSize = 8) {
-            const params = new URLSearchParams({
-                search_terms: query,
-                search_simple: '1',
-                action: 'process',
-                json: '1',
-                page_size: String(pageSize),
-                lc: 'es',
-                cc: 'es',
-                lang: 'es',
-                fields: 'product_name_es,product_name,brands,nutriments'
-            });
-            const response = await fetch(`/off/cgi/search.pl?${params.toString()}`);
-            if (!response.ok) throw new Error(`Open Food Facts HTTP ${response.status}`);
+            const params = new URLSearchParams({ q: query, limit: String(pageSize) });
+            const response = await fetch(`/api/foods/search?${params.toString()}`, { cache: 'no-store' });
+            if (!response.ok) throw new Error(`Food search HTTP ${response.status}`);
             const data = await response.json();
-            return (data.products || [])
-                .map((food) => ({
-                    name: food.product_name_es || food.product_name || 'Producto desconocido',
-                    brands: food.brands || '',
-                    proteins: Number(food.nutriments?.proteins_100g || 0),
-                    carbs: Number(food.nutriments?.carbohydrates_100g || 0)
-                }))
-                .filter((food) => food.name && (food.proteins || food.carbs));
+            return data.products || [];
         }
 
         function renderFoodDropdown(dropdown, matches, onSelect) {
