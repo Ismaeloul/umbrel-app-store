@@ -39,30 +39,6 @@
       margin: 0 auto;
       padding: 24px 16px 44px;
     }
-    body.cinema .topbar,
-    body.cinema .side,
-    body.cinema .controls {
-      display: none;
-    }
-    body.cinema .app {
-      width: 100%;
-      min-height: 100vh;
-      padding: 0;
-      display: grid;
-      place-items: center;
-      background: #020617;
-    }
-    body.cinema .player-card {
-      width: 100%;
-      min-height: 100vh;
-      border: 0;
-      border-radius: 0;
-      box-shadow: none;
-    }
-    body.cinema .stage {
-      min-height: 100vh;
-      border-radius: 0;
-    }
     .topbar {
       display: flex;
       align-items: center;
@@ -226,7 +202,7 @@
     }
     .actions {
       display: grid;
-      grid-template-columns: repeat(6, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 10px;
     }
     .btn {
@@ -257,11 +233,6 @@
       color: #b45309;
       background: #fff7ed;
     }
-    .btn.active {
-      border-color: var(--primary);
-      color: var(--primary);
-      background: #eff6ff;
-    }
     .message {
       min-height: 18px;
       color: var(--muted);
@@ -291,31 +262,6 @@
       margin: 0;
       font-size: 15px;
       font-weight: 900;
-    }
-    .diagnostics {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 10px;
-      margin-top: 10px;
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 750;
-    }
-    .diag-pill {
-      border: 1px solid #edf2f7;
-      border-radius: 14px;
-      background: #f8fafc;
-      padding: 10px;
-      min-width: 0;
-    }
-    .diag-pill span {
-      display: block;
-      color: var(--text);
-      font-size: 13px;
-      margin-top: 3px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
     }
     .subtle {
       border: 0;
@@ -350,6 +296,14 @@
       border: 1px solid #edf2f7;
       border-radius: 16px;
       background: #f8fafc;
+    }
+    #histList .item-main {
+      padding-left: 0;
+      margin-left: 0;
+    }
+    #histList .item-name,
+    #histList .item-hash {
+      text-align: left;
     }
     .item.fav {
       grid-template-columns: minmax(0, 1fr) auto auto;
@@ -441,7 +395,6 @@
       .input-row, .actions { grid-template-columns: 1fr; }
       .actions .btn.icon { width: 100%; }
       .status { max-width: 155px; }
-      .diagnostics { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -482,8 +435,6 @@
             <button class="btn icon" id="saveBtn" type="button" title="Guardar favorito">+</button>
             <button class="btn icon" id="stopBtn" type="button" title="Detener">×</button>
             <button class="btn" id="pipBtn" type="button">PiP</button>
-            <button class="btn" id="fullscreenBtn" type="button">Pantalla</button>
-            <button class="btn" id="cinemaBtn" type="button">Cine</button>
             <button class="btn warning" id="restartEngineBtn" type="button">Reiniciar motor</button>
           </div>
           <div class="message" id="message"></div>
@@ -496,11 +447,6 @@
             <h2 class="panel-title">Favoritos</h2>
           </div>
           <div class="list" id="favList"></div>
-          <div class="diagnostics">
-            <div class="diag-pill">Engine<span id="diagEngine">...</span></div>
-            <div class="diag-pill">Stream<span id="diagStream">Sin stream</span></div>
-            <div class="diag-pill">Hash<span id="diagHash">-</span></div>
-          </div>
         </section>
 
         <section class="card panel">
@@ -541,9 +487,6 @@
     const histList = document.getElementById("histList");
     const favModal = document.getElementById("favModal");
     const favNameInput = document.getElementById("favNameInput");
-    const diagEngine = document.getElementById("diagEngine");
-    const diagStream = document.getElementById("diagStream");
-    const diagHash = document.getElementById("diagHash");
 
     let hls = null;
     let currentHash = null;
@@ -575,13 +518,8 @@
       message.className = `message ${type}`;
     }
 
-    function setStreamState(text) {
-      diagStream.textContent = text;
-    }
-
     function setCurrentHash(hash) {
       currentHash = hash;
-      diagHash.textContent = hash ? `${hash.slice(0, 10)}...${hash.slice(-6)}` : "-";
     }
 
     function localState() {
@@ -649,12 +587,10 @@
         if (!response.ok) throw new Error("engine offline");
         const data = await response.json();
         statusButton.className = "status online";
-        statusText.textContent = "Engine activo";
-        diagEngine.textContent = data?.result?.version ? `v${data.result.version}` : "Activo";
+        statusText.textContent = data?.result?.version ? `Engine activo · v${data.result.version}` : "Engine activo";
       } catch {
         statusButton.className = "status offline";
         statusText.textContent = "Sin conexion";
-        diagEngine.textContent = "Sin conexion";
       }
     }
 
@@ -709,7 +645,6 @@
       await addHistory(hash);
       destroyPlayer();
       setMessage("");
-      setStreamState("Conectando");
       setOverlay("Conectando", "Preparando AceStream...", true);
 
       const url = manifestUrl(hash);
@@ -734,25 +669,21 @@
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           hideOverlay();
           seekLiveEdge();
-          setStreamState("Reproduciendo");
           setMessage("Stream cargado.", "success");
         });
         hls.on(Hls.Events.ERROR, (_, data) => {
           if (!data.fatal) return;
           if (data.type === Hls.ErrorTypes.NETWORK_ERROR && retryCount < 5) {
             retryCount += 1;
-            setStreamState(`Reintentando ${retryCount}/5`);
             setOverlay("Reconectando", `Reintento ${retryCount}/5...`, true);
             setTimeout(() => hls && hls.startLoad(), 1200 * retryCount);
             return;
           }
           if (data.type === Hls.ErrorTypes.MEDIA_ERROR && retryCount < 3) {
             retryCount += 1;
-            setStreamState("Recuperando video");
             hls.recoverMediaError();
             return;
           }
-          setStreamState("Error");
           setOverlay("No se pudo reproducir", "Prueba de nuevo en unos segundos o revisa el hash.");
           setMessage("Error de reproduccion.", "error");
         });
@@ -769,7 +700,6 @@
       setCurrentHash(null);
       destroyPlayer();
       setMessage("");
-      setStreamState("Sin stream");
       setOverlay("ACE", "Pega un enlace acestream:// o un hash para comenzar.");
     }
 
@@ -807,19 +737,6 @@
       }
     }
 
-    function toggleFullscreen() {
-      const target = document.querySelector(".stage");
-      if (!document.fullscreenElement) {
-        target.requestFullscreen?.().catch(() => setMessage("Pantalla completa no disponible.", "error"));
-      } else {
-        document.exitFullscreen?.();
-      }
-    }
-
-    function toggleCinema() {
-      document.body.classList.toggle("cinema");
-      document.getElementById("cinemaBtn").classList.toggle("active", document.body.classList.contains("cinema"));
-    }
 
     function renderList(container, items, type) {
       if (!items.length) {
@@ -918,8 +835,6 @@
     document.getElementById("liveBtn").onclick = seekLiveEdge;
     document.getElementById("stopBtn").onclick = stopPlayback;
     document.getElementById("pipBtn").onclick = enterPictureInPicture;
-    document.getElementById("fullscreenBtn").onclick = toggleFullscreen;
-    document.getElementById("cinemaBtn").onclick = toggleCinema;
     document.getElementById("restartEngineBtn").onclick = restartEngine;
     document.getElementById("clearHistoryBtn").onclick = clearHistory;
     document.getElementById("cancelFavBtn").onclick = closeFavoriteModal;
@@ -930,14 +845,9 @@
     });
     player.addEventListener("waiting", () => {
       if (currentHash) setMessage("Buffering...");
-      if (currentHash) setStreamState("Buffering");
     });
     player.addEventListener("playing", () => {
       if (currentHash) setMessage("Reproduciendo.", "success");
-      if (currentHash) setStreamState("Reproduciendo");
-    });
-    player.addEventListener("stalled", () => {
-      if (currentHash) setStreamState("Sin datos");
     });
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) requestPictureInPicture();
