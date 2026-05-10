@@ -580,9 +580,17 @@
       if (render) renderAll();
     }
 
+    function favoriteForHash(hash) {
+      return state.favorites.find((item) => item.hash === hash);
+    }
+
+    function displayNameForHash(hash, fallbackName) {
+      return favoriteForHash(hash)?.name || fallbackName || `Canal ${hash.slice(0, 8)}`;
+    }
+
     async function addHistory(hash) {
       state.history = state.history.filter((item) => item.hash !== hash);
-      state.history.unshift({ hash, name: `Canal ${hash.slice(0, 8)}`, date: new Date().toISOString() });
+      state.history.unshift({ hash, name: displayNameForHash(hash), date: new Date().toISOString() });
       await saveState();
     }
 
@@ -773,7 +781,7 @@
         main.className = "item-main";
         main.onclick = () => startPlayback(item.hash);
         main.innerHTML = '<div class="item-name"></div><div class="item-hash"></div>';
-        main.querySelector(".item-name").textContent = item.name || `Canal ${item.hash.slice(0, 8)}`;
+        main.querySelector(".item-name").textContent = displayNameForHash(item.hash, item.name);
         main.querySelector(".item-hash").textContent = item.hash;
 
         const itemActions = document.createElement("div");
@@ -838,6 +846,7 @@
       const name = favNameInput.value.trim() || `Canal ${hash.slice(0, 8)}`;
       state.favorites = state.favorites.filter((item) => item.hash !== hash);
       state.favorites.unshift({ hash, name, date: new Date().toISOString() });
+      state.history = state.history.map((item) => item.hash === hash ? { ...item, name } : item);
       await saveState();
       closeFavoriteModal();
       setMessage("Favorito guardado.", "success");
