@@ -8,6 +8,10 @@ const DOCKER_SOCKET = "/var/run/docker.sock";
 const ACESTREAM_CONTAINER = "ismaeloul-ace-player_acestream_1";
 const MAX_HISTORY = 50;
 const HASH_RE = /^[a-fA-F0-9]{40}$/;
+const RESTART_HEADER = "x-ace-action";
+const RESTART_HEADER_VALUE = "restart-engine";
+const RESTART_COOLDOWN_MS = 15000;
+let lastRestartAt = 0;
 
 function ensureState() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -74,12 +78,45 @@ function send(res, status, payload) {
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff",
   });
   res.end(JSON.stringify(payload));
 }
 
+function hostFromUrl(value) {
+  try {
+    return new URL(value).host;
+  } catch {
+    return "";
+  }
+}
+
+function hasTrustedOrigin(req) {
+  const host = req.headers.host;
+  const originHost = hostFromUrl(req.headers.origin || "");
+  const refererHost = hostFromUrl(req.headers.referer || "");
+  if (!originHost && !refererHost) return true;
+  return Boolean(host && (!originHost || originHost === host) && (!refererHost || refererHost === host));
+}
+
+function requireTrustedWrite(req) {
+  if (!hasTrustedOrigin(req)) {
+    const error = new Error("forbidden");
+    error.statusCode = 403;
+    throw error;
+  }
+}
+
 function restartAceStream() {
   return new Promise((resolve, reject) => {
+    const now = Date.now();
+    if (now - lastRestartAt < RESTART_COOLDOWN_MS) {
+      const error = new Error("restart_cooldown");
+      error.statusCode = 429;
+      reject(error);
+      return;
+    }
+    lastRestartAt = now;
     const req = http.request({
       socketPath: DOCKER_SOCKET,
       path: `/containers/${ACESTREAM_CONTAINER}/restart?t=2`,
@@ -91,7 +128,9 @@ function restartAceStream() {
         if (dockerRes.statusCode >= 200 && dockerRes.statusCode < 300) {
           resolve({ restarted: true });
         } else {
-          reject(new Error(`Docker restart failed ${dockerRes.statusCode}: ${body}`));
+          const error = new Error("restart_failed");
+          error.statusCode = 502;
+          reject(error);
         }
       });
     });
@@ -106,18 +145,24 @@ const server = http.createServer(async (req, res) => {
   try {
     if (req.url === "/api/state") {
       if (req.method === "GET") return send(res, 200, readState());
-      if (req.method === "PUT") return send(res, 200, writeState(await readBody(req)));
+      if (req.method === "PUT") {
+        requireTrustedWrite(req);
+        return send(res, 200, writeState(await readBody(req)));
+      }
       return send(res, 405, { error: "method_not_allowed" });
     }
 
     if (req.url === "/api/restart-engine") {
       if (req.method !== "POST") return send(res, 405, { error: "method_not_allowed" });
+      requireTrustedWrite(req);
+      if (req.headers[RESTART_HEADER] !== RESTART_HEADER_VALUE) return send(res, 403, { error: "forbidden" });
       return send(res, 200, await restartAceStream());
     }
 
     return send(res, 404, { error: "not_found" });
   } catch (error) {
-    return send(res, 400, { error: "bad_request", message: error.message });
+    const status = error.statusCode || 400;
+    return send(res, status, { error: error.message || "bad_request" });
   }
 });
 

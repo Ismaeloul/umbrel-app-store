@@ -6,7 +6,7 @@
   <title>Ace Player</title>
   <link rel="icon" type="image/webp" href="https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/icon.webp">
   <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/icon.webp">
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.6.10/dist/hls.min.js"></script>
   <style>
     :root {
       --bg: #f5f7fb;
@@ -735,7 +735,10 @@
       setOverlay("Reiniciando", "Cerrando streams activos y levantando el motor...", true);
       setMessage("Reiniciando motor AceStream...");
       try {
-        const response = await fetch(`${SERVER}/api/restart-engine`, { method: "POST" });
+        const response = await fetch(`${SERVER}/api/restart-engine`, {
+          method: "POST",
+          headers: { "X-Ace-Action": "restart-engine" },
+        });
         if (!response.ok) throw new Error("restart failed");
         await delay(6500);
         await testConnection();
