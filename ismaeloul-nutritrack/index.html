@@ -83,6 +83,64 @@
         </div>
     </div>
 
+    <!-- Profile Modal -->
+    <div id="profileModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200">
+        <div class="bg-white rounded-3xl p-6 w-11/12 max-w-sm shadow-2xl transform scale-95 transition-transform duration-200 max-h-[92vh] overflow-y-auto" id="profileBox">
+            <div class="w-12 h-12 rounded-full bg-blue-100 text-protein flex items-center justify-center text-xl mb-4 mx-auto">
+                <i class="fas fa-user-check"></i>
+            </div>
+            <h3 id="profileModalTitle" class="text-xl font-bold text-center mb-2">Quick start</h3>
+            <p id="profileModalText" class="text-slate-500 text-center text-sm mb-5">Pon tus datos y NutriTrack estimara tus objetivos diarios.</p>
+            <form id="profileForm" class="space-y-3">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1 ml-1">Peso</label>
+                        <input type="number" id="profileWeight" min="30" step="0.1" required class="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-center font-bold outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1 ml-1">Altura</label>
+                        <input type="number" id="profileHeight" min="120" step="1" required class="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-center font-bold outline-none">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1 ml-1">Edad</label>
+                        <input type="number" id="profileAge" min="12" step="1" required class="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-center font-bold outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1 ml-1">Sexo</label>
+                        <select id="profileSex" class="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold outline-none">
+                            <option value="male">Hombre</option>
+                            <option value="female">Mujer</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1 ml-1">Actividad</label>
+                    <select id="profileActivity" class="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold outline-none">
+                        <option value="1.2">Baja</option>
+                        <option value="1.375">Ligera</option>
+                        <option value="1.55" selected>Media</option>
+                        <option value="1.725">Alta</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1 ml-1">Objetivo</label>
+                    <select id="profileGoal" class="w-full h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold outline-none">
+                        <option value="lose">Perder grasa</option>
+                        <option value="maintain" selected>Mantener</option>
+                        <option value="gain">Ganar musculo</option>
+                    </select>
+                </div>
+                <div id="profilePreview" class="rounded-2xl bg-slate-50 border border-slate-100 p-3 text-center text-sm text-slate-500">Calcularemos tus objetivos al guardar.</div>
+                <div class="flex gap-3 pt-2">
+                    <button id="cancelProfileBtn" type="button" class="flex-1 py-3 rounded-xl font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors">Luego</button>
+                    <button type="submit" class="flex-1 py-3 rounded-xl font-semibold text-white bg-protein hover:brightness-105 transition-colors">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <main class="w-full max-w-md mx-auto pt-6 px-4">
         
         <!-- Header con Calendario Integrado -->
@@ -142,6 +200,40 @@
             </div>
         </section>
 
+        <!-- Objetivos -->
+        <section id="goalsCard" class="bg-white rounded-3xl p-5 shadow-sm border border-slate-200 mb-8 hidden">
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <div>
+                    <h2 class="text-lg font-bold text-dark flex items-center gap-2">
+                        <i class="fas fa-bullseye text-slate-300"></i> Objetivos de hoy
+                    </h2>
+                    <p id="goalSummaryText" class="text-xs text-slate-400 mt-1">Basado en tus datos actuales.</p>
+                </div>
+                <button type="button" id="editProfileBtn" class="text-xs font-bold text-protein bg-blue-50 px-3 py-2 rounded-full">Editar</button>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div class="rounded-2xl bg-blue-50/70 border border-blue-100 p-4">
+                    <div class="flex justify-between items-baseline mb-2">
+                        <span class="text-xs font-black text-blue-500 uppercase">Proteina</span>
+                        <span id="proteinGoalText" class="text-xs font-bold text-slate-400">0 / 0g</span>
+                    </div>
+                    <div class="h-2 rounded-full bg-white overflow-hidden">
+                        <div id="proteinGoalBar" class="h-full bg-protein rounded-full" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div class="rounded-2xl bg-yellow-50/70 border border-yellow-100 p-4">
+                    <div class="flex justify-between items-baseline mb-2">
+                        <span class="text-xs font-black text-yellow-600 uppercase">Carbos</span>
+                        <span id="carbGoalText" class="text-xs font-bold text-slate-400">0 / 0g</span>
+                    </div>
+                    <div class="h-2 rounded-full bg-white overflow-hidden">
+                        <div id="carbGoalBar" class="h-full bg-carb rounded-full" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+            <button type="button" id="weeklyWeightBtn" class="w-full mt-4 py-3 rounded-xl bg-slate-50 border border-slate-100 text-slate-600 text-sm font-bold">Actualizar peso semanal</button>
+        </section>
+
         <!-- Registro Rapido -->
         <section class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 mb-8">
             <div class="flex items-start justify-between gap-3 mb-4">
@@ -192,6 +284,25 @@
                         </div>
                     </div>
                     <button type="button" id="addProteinScoopsBtn" class="w-full py-3 rounded-xl bg-protein text-white text-sm font-bold active:scale-95 transition-transform">Anadir proteina</button>
+                </div>
+
+                <div class="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
+                    <div class="mb-3">
+                        <h3 class="font-bold text-sm text-slate-800">Algo rapido</h3>
+                        <p class="text-xs text-slate-400">Para repetir una comida conocida sin buscarla.</p>
+                    </div>
+                    <input type="text" id="quickCustomName" placeholder="Ej. Yogur, bocata, cena rapida" class="w-full h-11 rounded-xl border border-emerald-100 bg-white px-3 text-sm font-bold text-slate-800 outline-none mb-3">
+                    <div class="grid grid-cols-2 gap-3 mb-3">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1 ml-1">Proteina</label>
+                            <input type="number" id="quickCustomProtein" min="0" step="0.1" placeholder="0" class="w-full h-11 text-center rounded-xl border border-emerald-100 bg-white font-black text-slate-800 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1 ml-1">Carbos</label>
+                            <input type="number" id="quickCustomCarbs" min="0" step="0.1" placeholder="0" class="w-full h-11 text-center rounded-xl border border-emerald-100 bg-white font-black text-slate-800 outline-none">
+                        </div>
+                    </div>
+                    <button type="button" id="addQuickCustomBtn" class="w-full py-3 rounded-xl bg-emerald-500 text-white text-sm font-bold active:scale-95 transition-transform">Anadir rapido</button>
                 </div>
             </div>
         </section>
@@ -291,7 +402,8 @@
         // Estado Global de la App
         let appState = {
             // Estructura: { "YYYY-MM-DD": [ {name, p, c, qty, time}, ... ] }
-            history: {} 
+            history: {},
+            profile: null
         };
         
         let selectedDateStr = getLocalIsoDate(new Date()); // Formato YYYY-MM-DD
@@ -321,6 +433,7 @@
             setupAutocomplete();
             setupFormMath();
             setupQuickAdd();
+            setupProfile();
             setupEventListeners();
             
             // Forzar renderizado inicial
@@ -346,6 +459,7 @@
                 }
             }
             if (!appState.history) appState.history = {};
+            if (!('profile' in appState)) appState.profile = null;
         }
 
         function saveData() {
@@ -549,6 +663,7 @@
             document.getElementById('addTwoEggsBtn').addEventListener('click', () => addFriedEggs(2));
             document.getElementById('addEggsBtn').addEventListener('click', () => addFriedEggs(parseInt(eggInput.value, 10) || 1));
             document.getElementById('addProteinScoopsBtn').addEventListener('click', addProteinScoops);
+            document.getElementById('addQuickCustomBtn').addEventListener('click', addQuickCustom);
         }
 
         function addFriedEggs(count) {
@@ -580,6 +695,31 @@
             showToast(`Proteina anadida: ${protein.toFixed(1)}g`, 'success');
         }
 
+        function addQuickCustom() {
+            const nameEl = document.getElementById('quickCustomName');
+            const proteinEl = document.getElementById('quickCustomProtein');
+            const carbEl = document.getElementById('quickCustomCarbs');
+            const name = nameEl.value.trim() || 'Comida rapida';
+            const proteins = roundMacro(parseFloat(proteinEl.value) || 0);
+            const carbs = roundMacro(parseFloat(carbEl.value) || 0);
+            if (proteins === 0 && carbs === 0) {
+                showToast('Pon proteina o carbos', 'error');
+                return;
+            }
+            addEntry({
+                name,
+                qty: null,
+                proteins,
+                carbs,
+                estimated: true,
+                time: currentTime()
+            });
+            nameEl.value = '';
+            proteinEl.value = '';
+            carbEl.value = '';
+            showToast('Comida rapida anadida', 'success');
+        }
+
         function addEntry(entry) {
             if (!appState.history[selectedDateStr]) appState.history[selectedDateStr] = [];
             appState.history[selectedDateStr].push(entry);
@@ -599,11 +739,133 @@
             return new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
         }
 
+        function setupProfile() {
+            const form = document.getElementById('profileForm');
+            const ids = ['profileWeight', 'profileHeight', 'profileAge', 'profileSex', 'profileActivity', 'profileGoal'];
+            ids.forEach((id) => {
+                document.getElementById(id).addEventListener('input', updateProfilePreview);
+                document.getElementById(id).addEventListener('change', updateProfilePreview);
+            });
+            form.addEventListener('submit', (event) => {
+                event.preventDefault();
+                saveProfileFromForm();
+            });
+            document.getElementById('cancelProfileBtn').addEventListener('click', closeProfileModal);
+            document.getElementById('editProfileBtn').addEventListener('click', () => openProfileModal('edit'));
+            document.getElementById('weeklyWeightBtn').addEventListener('click', () => openProfileModal('weekly'));
+            if (appState.profile) hydrateProfileForm(appState.profile);
+            else setTimeout(() => openProfileModal('start'), 450);
+            maybeAskWeeklyWeight();
+        }
+
+        function calculateGoals(profile) {
+            const weight = parseFloat(profile.weight) || 70;
+            const height = parseFloat(profile.height) || 175;
+            const age = parseFloat(profile.age) || 30;
+            const activity = parseFloat(profile.activity) || 1.55;
+            const sexOffset = profile.sex === 'female' ? -161 : 5;
+            const bmr = 10 * weight + 6.25 * height - 5 * age + sexOffset;
+            const goalMultiplier = profile.goal === 'lose' ? 0.85 : profile.goal === 'gain' ? 1.08 : 1;
+            const calories = Math.round(bmr * activity * goalMultiplier);
+            const proteinPerKg = profile.goal === 'gain' ? 2.1 : profile.goal === 'lose' ? 2.0 : 1.8;
+            const protein = Math.round(weight * proteinPerKg);
+            const assumedFatCalories = Math.round(weight * 0.8 * 9);
+            const carbs = Math.max(80, Math.round((calories - protein * 4 - assumedFatCalories) / 4));
+            return { protein, carbs, calories };
+        }
+
+        function hydrateProfileForm(profile) {
+            document.getElementById('profileWeight').value = profile.weight || '';
+            document.getElementById('profileHeight').value = profile.height || '';
+            document.getElementById('profileAge').value = profile.age || '';
+            document.getElementById('profileSex').value = profile.sex || 'male';
+            document.getElementById('profileActivity').value = profile.activity || '1.55';
+            document.getElementById('profileGoal').value = profile.goal || 'maintain';
+            updateProfilePreview();
+        }
+
+        function profileFromForm() {
+            return {
+                ...(appState.profile || {}),
+                weight: parseFloat(document.getElementById('profileWeight').value),
+                height: parseFloat(document.getElementById('profileHeight').value),
+                age: parseInt(document.getElementById('profileAge').value, 10),
+                sex: document.getElementById('profileSex').value,
+                activity: document.getElementById('profileActivity').value,
+                goal: document.getElementById('profileGoal').value,
+                lastWeightDate: getLocalIsoDate(new Date())
+            };
+        }
+
+        function updateProfilePreview() {
+            const weight = parseFloat(document.getElementById('profileWeight').value);
+            const height = parseFloat(document.getElementById('profileHeight').value);
+            const age = parseInt(document.getElementById('profileAge').value, 10);
+            if (!weight || !height || !age) {
+                document.getElementById('profilePreview').textContent = 'Calcularemos tus objetivos al guardar.';
+                return;
+            }
+            const goals = calculateGoals(profileFromForm());
+            document.getElementById('profilePreview').textContent = `${goals.protein}g proteina / ${goals.carbs}g carbos al dia`;
+        }
+
+        function saveProfileFromForm() {
+            const nextProfile = profileFromForm();
+            nextProfile.goals = calculateGoals(nextProfile);
+            appState.profile = nextProfile;
+            saveData();
+            closeProfileModal();
+            renderUI();
+            showToast('Objetivos actualizados', 'success');
+        }
+
+        function openProfileModal(mode = 'edit') {
+            const modal = document.getElementById('profileModal');
+            const box = document.getElementById('profileBox');
+            document.getElementById('profileModalTitle').textContent = mode === 'weekly' ? 'Peso semanal' : mode === 'start' ? 'Quick start' : 'Tus objetivos';
+            document.getElementById('profileModalText').textContent = mode === 'weekly' ? 'Actualiza tu peso y recalculamos proteina y carbos.' : 'Pon tus datos y NutriTrack estimara tus objetivos diarios.';
+            if (appState.profile) hydrateProfileForm(appState.profile);
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            box.classList.remove('scale-95');
+            box.classList.add('scale-100');
+        }
+
+        function closeProfileModal() {
+            const modal = document.getElementById('profileModal');
+            const box = document.getElementById('profileBox');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            box.classList.remove('scale-100');
+            box.classList.add('scale-95');
+        }
+
+        function maybeAskWeeklyWeight() {
+            if (!appState.profile?.lastWeightDate) return;
+            const days = Math.floor((new Date() - new Date(appState.profile.lastWeightDate)) / 86400000);
+            if (days >= 7) setTimeout(() => openProfileModal('weekly'), 700);
+        }
+
+        function renderGoals(entries) {
+            const card = document.getElementById('goalsCard');
+            if (!appState.profile?.goals) {
+                card.classList.add('hidden');
+                return;
+            }
+            card.classList.remove('hidden');
+            const totals = entries.reduce((acc, curr) => ({ p: acc.p + curr.proteins, c: acc.c + curr.carbs }), { p: 0, c: 0 });
+            const goals = appState.profile.goals;
+            document.getElementById('proteinGoalText').textContent = `${totals.p.toFixed(1)} / ${goals.protein}g`;
+            document.getElementById('carbGoalText').textContent = `${totals.c.toFixed(1)} / ${goals.carbs}g`;
+            document.getElementById('proteinGoalBar').style.width = `${Math.min(100, Math.round((totals.p / goals.protein) * 100))}%`;
+            document.getElementById('carbGoalBar').style.width = `${Math.min(100, Math.round((totals.c / goals.carbs) * 100))}%`;
+            document.getElementById('goalSummaryText').textContent = `${goals.calories} kcal estimadas. Peso actual: ${appState.profile.weight}kg.`;
+        }
+
         // --- ACTUALIZACIÓN DE INTERFAZ ---
         function renderUI() {
             const dailyEntries = appState.history[selectedDateStr] || [];
             
             updateDashboard(dailyEntries);
+            renderGoals(dailyEntries);
             renderList(dailyEntries);
             
             const clearBtn = document.getElementById('btnOpenClearModal');
