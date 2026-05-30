@@ -632,7 +632,8 @@
       if (hls && hls.liveSyncPosition) {
         player.currentTime = hls.liveSyncPosition;
       } else if (player.seekable && player.seekable.length) {
-        player.currentTime = player.seekable.end(player.seekable.length - 1);
+        const liveEdge = player.seekable.end(player.seekable.length - 1);
+        player.currentTime = Math.max(liveEdge - 12, 0);
       }
       player.play().catch(() => setMessage("Pulsa play en el video.", ""));
     }
@@ -640,8 +641,8 @@
     function keepNearLiveEdge() {
       if (!currentHash || player.paused || !player.seekable || !player.seekable.length) return;
       const liveEdge = player.seekable.end(player.seekable.length - 1);
-      if (Number.isFinite(liveEdge) && liveEdge - player.currentTime > 12) {
-        player.currentTime = Math.max(liveEdge - 3, 0);
+      if (Number.isFinite(liveEdge) && liveEdge - player.currentTime > 45) {
+        player.currentTime = Math.max(liveEdge - 15, 0);
       }
     }
 
@@ -685,18 +686,19 @@
       if (window.Hls && Hls.isSupported()) {
         hls = new Hls({
           enableWorker: true,
-          lowLatencyMode: true,
+          lowLatencyMode: false,
           liveDurationInfinity: true,
-          liveSyncDuration: 3,
-          liveMaxLatencyDuration: 8,
-          maxLiveSyncPlaybackRate: 1.15,
-          maxBufferLength: 18,
-          maxMaxBufferLength: 36,
-          backBufferLength: 12,
-          manifestLoadingTimeOut: 18000,
+          liveSyncDuration: 15,
+          liveMaxLatencyDuration: 45,
+          maxLiveSyncPlaybackRate: 1.05,
+          maxBufferLength: 60,
+          maxMaxBufferLength: 120,
+          backBufferLength: 30,
+          maxBufferHole: 1.5,
+          manifestLoadingTimeOut: 30000,
           manifestLoadingMaxRetry: 8,
-          levelLoadingTimeOut: 18000,
-          fragLoadingTimeOut: 26000,
+          levelLoadingTimeOut: 30000,
+          fragLoadingTimeOut: 45000,
           fragLoadingMaxRetry: 8,
         });
         hls.loadSource(url);
