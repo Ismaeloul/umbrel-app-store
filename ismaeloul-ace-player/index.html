@@ -6,6 +6,7 @@
   <title>Ace Player</title>
   <link rel="icon" type="image/png" href="/icon.png">
   <link rel="apple-touch-icon" href="/icon.png">
+  <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.6.10/dist/hls.min.js"></script>
   <style>
     :root {
@@ -516,6 +517,7 @@
     const retryMetric = document.getElementById("retryMetric");
 
     let hls = null;
+    let tsPlayer = null;
     let currentHash = null;
     let state = { favorites: [], history: [] };
     let storageMode = "server";
@@ -636,7 +638,17 @@
       return `${SERVER}/ace/manifest.m3u8?id=${hash}&_=${Date.now()}`;
     }
 
+    function streamUrl(hash) {
+      return `${SERVER}/ace/getstream?id=${hash}&_=${Date.now()}`;
+    }
+
     function destroyPlayer() {
+      if (tsPlayer) {
+        tsPlayer.unload();
+        tsPlayer.detachMediaElement();
+        tsPlayer.destroy();
+        tsPlayer = null;
+      }
       if (hls) {
         hls.destroy();
         hls = null;
@@ -711,6 +723,48 @@
       setMessage("");
       setOverlay("Conectando", "Abriendo stream AceStream...", true);
 
+      if (window.mpegts && mpegts.isSupported()) {
+        tsPlayer = mpegts.createPlayer({
+          type: "mpegts",
+          isLive: true,
+          url: streamUrl(hash),
+        }, {
+          enableWorker: true,
+          liveBufferLatencyChasing: false,
+          liveSync: false,
+          lazyLoad: false,
+          stashInitialSize: 384 * 1024,
+          autoCleanupSourceBuffer: true,
+          autoCleanupMaxBackwardDuration: 90,
+          autoCleanupMinBackwardDuration: 45,
+        });
+        tsPlayer.attachMediaElement(player);
+        tsPlayer.load();
+        tsPlayer.on(mpegts.Events.ERROR, () => {
+          retryCount += 1;
+          updateMetrics();
+          setMessage("El stream directo se ha cortado. Probando HLS...", "error");
+          if (tsPlayer) {
+            tsPlayer.unload();
+            tsPlayer.detachMediaElement();
+            tsPlayer.destroy();
+            tsPlayer = null;
+          }
+          startHlsPlayback(hash);
+        });
+        player.addEventListener("loadedmetadata", () => {
+          hideOverlay();
+          startMetrics();
+        }, { once: true });
+        player.play().catch(() => setMessage("Pulsa play en el video.", ""));
+        setMessage("Usando stream directo. Es mas estable que HLS para AceStream.", "ok");
+        return;
+      }
+
+      startHlsPlayback(hash);
+    }
+
+    function startHlsPlayback(hash) {
       const url = manifestUrl(hash);
       if (window.Hls && Hls.isSupported()) {
         hls = new Hls({
