@@ -10,26 +10,28 @@
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.6.10/dist/hls.min.js"></script>
   <style>
     :root {
-      --bg: #f4f6f8;
-      --panel: #ffffff;
-      --panel-2: #f8fafc;
-      --text: #101828;
-      --muted: #667085;
-      --line: #d9e0ea;
-      --strong: #14532d;
-      --accent: #1f7a4d;
-      --accent-dark: #17603c;
-      --warn: #b45309;
-      --danger: #c2410c;
-      --blue: #2563eb;
-      --shadow: 0 16px 44px rgba(16, 24, 40, 0.10);
+      --bg: #111318;
+      --panel: #1c2028;
+      --panel-2: #141820;
+      --text: #f3f4f6;
+      --muted: #aab2c0;
+      --line: #2d3442;
+      --strong: #86efac;
+      --accent: #7c3aed;
+      --accent-dark: #6d28d9;
+      --warn: #f59e0b;
+      --danger: #fb7185;
+      --blue: #60a5fa;
+      --shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
     }
 
     * { box-sizing: border-box; }
     html, body { min-height: 100%; }
     body {
       margin: 0;
-      background: var(--bg);
+      background:
+        radial-gradient(circle at top left, rgba(124, 58, 237, 0.16), transparent 30%),
+        var(--bg);
       color: var(--text);
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
@@ -59,7 +61,7 @@
       height: 44px;
       border-radius: 8px;
       border: 1px solid var(--line);
-      background: #fff;
+      background: #ffffff;
     }
     h1 {
       margin: 0;
@@ -77,7 +79,7 @@
       min-height: 40px;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: #fff;
+      background: var(--panel);
       color: var(--muted);
       display: inline-flex;
       align-items: center;
@@ -185,8 +187,8 @@
     }
     .hash-input:focus {
       border-color: var(--accent);
-      background: #fff;
-      box-shadow: 0 0 0 3px rgba(31, 122, 77, 0.12);
+      background: #111827;
+      box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18);
     }
     .button-row {
       display: grid;
@@ -197,7 +199,7 @@
       min-height: 42px;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: #fff;
+      background: #242a35;
       color: var(--text);
       display: inline-flex;
       align-items: center;
@@ -217,12 +219,12 @@
     .btn.danger {
       border-color: #fed7aa;
       color: var(--danger);
-      background: #fff7ed;
+      background: rgba(251, 113, 133, 0.10);
     }
     .btn.blue {
       border-color: #bfdbfe;
       color: var(--blue);
-      background: #eff6ff;
+      background: rgba(96, 165, 250, 0.10);
     }
     .message {
       min-height: 18px;
@@ -369,7 +371,7 @@
     }
     .modal {
       width: min(420px, 100%);
-      background: #fff;
+      background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 8px;
       box-shadow: var(--shadow);
@@ -415,8 +417,8 @@
       <div class="brand">
         <img src="/icon.png" alt="">
         <div>
-          <h1>Ace Player</h1>
-          <p>AceStream estable para Umbrel</p>
+          <h1>AceStream Web</h1>
+          <p>Reproductor AceStream para Umbrel</p>
         </div>
       </div>
       <button class="status" id="statusButton" type="button">
@@ -439,7 +441,7 @@
 
         <div class="controls">
           <div class="input-row">
-            <input class="hash-input" id="hashInput" type="text" autocomplete="off" spellcheck="false" placeholder="acestream://... o hash de 40 caracteres">
+            <input class="hash-input" id="hashInput" type="text" autocomplete="off" spellcheck="false" placeholder="Pega un hash, acestream://... o enlace con ?id=...">
             <button class="btn primary" id="playBtn" type="button">Reproducir</button>
           </div>
           <div class="button-row">
@@ -447,7 +449,7 @@
             <button class="btn" id="saveBtn" type="button">Favorito</button>
             <button class="btn" id="stopBtn" type="button">Parar</button>
             <button class="btn" id="pipBtn" type="button">PiP</button>
-            <button class="btn danger" id="restartBtn" type="button">Reiniciar motor</button>
+            <button class="btn danger" id="restartBtn" type="button">Reiniciar Motor</button>
           </div>
           <div class="message" id="message"></div>
         </div>
@@ -526,11 +528,18 @@
     let metricsTimer = null;
 
     function sanitizeHash(value) {
-      return String(value || "")
-        .trim()
-        .replace(/^acestream:\/\//i, "")
-        .replace(/^.*[?&]id=/i, "")
-        .trim();
+      const raw = String(value || "").trim();
+      const decoded = (() => {
+        try {
+          return decodeURIComponent(raw);
+        } catch {
+          return raw;
+        }
+      })();
+      const queryMatch = decoded.match(/[?&](?:id|content_id|hash)=([a-fA-F0-9]{40})/);
+      const uriMatch = decoded.match(/acestream:\/\/([a-fA-F0-9]{40})/i);
+      const hashMatch = decoded.match(/[a-fA-F0-9]{40}/);
+      return (queryMatch?.[1] || uriMatch?.[1] || hashMatch?.[0] || "").trim();
     }
 
     function setOverlay(title, text = "", loading = false) {
