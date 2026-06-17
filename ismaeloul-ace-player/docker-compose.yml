@@ -19,7 +19,7 @@ services:
     working_dir: /app
     command: |
       sh -c "
-        wget -q -O /app/server.js 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/server.js?v=1.6.2' &&
+        wget -q -O /app/server.js 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/server.js?v=1.6.3' &&
         node /app/server.js
       "
     volumes:
@@ -36,8 +36,8 @@ services:
     command: |
       sh -c "
         mkdir -p /www &&
-        wget -q -O /www/index.html 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/index.html?v=1.6.2' &&
-        wget -q -O /www/icon.png 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/icon.png?v=1.6.2' &&
-        printf 'events{}\\nhttp{server{listen 80;client_max_body_size 1m;add_header X-Content-Type-Options nosniff always;add_header Referrer-Policy same-origin always;add_header X-Robots-Tag noindex always;location /{root /www;index index.html;}location /api/{proxy_pass http://ismaeloul-ace-player_storage_1:3000/api/;proxy_set_header Host $$host;}location /ace/{proxy_pass http://ismaeloul-ace-player_acestream_1:6878/ace/;proxy_http_version 1.1;proxy_set_header Host $$host;proxy_set_header Connection "";proxy_buffering off;proxy_request_buffering off;proxy_read_timeout 3600s;proxy_send_timeout 3600s;proxy_redirect off;}location /webui/{proxy_pass http://ismaeloul-ace-player_acestream_1:6878/webui/;proxy_set_header Host $$host;proxy_redirect off;}}}' > /etc/nginx/nginx.conf &&
+        wget -q -O /www/index.html 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/index.html?v=1.6.3' &&
+        wget -q -O /www/icon.png 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/icon.png?v=1.6.3' &&
+        printf 'events{}\\nhttp{server{listen 80;client_max_body_size 1m;add_header X-Content-Type-Options nosniff always;add_header Referrer-Policy same-origin always;add_header X-Robots-Tag noindex always;location /{root /www;index index.html;}location /api/{proxy_pass http://storage:3000/api/;proxy_set_header Host $$host;}location /ace/{proxy_pass http://acestream:6878/ace/;proxy_http_version 1.1;proxy_set_header Host $$host;proxy_set_header Connection "";proxy_buffering off;proxy_request_buffering off;proxy_read_timeout 3600s;proxy_send_timeout 3600s;proxy_redirect off;}location /webui/{proxy_pass http://acestream:6878/webui/;proxy_set_header Host $$host;proxy_redirect off;}}}' > /etc/nginx/nginx.conf &&
         nginx -g 'daemon off;'
       "
