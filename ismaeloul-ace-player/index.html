@@ -776,7 +776,10 @@
       setOverlay("Reiniciando", "Esperando al motor AceStream...", true);
       setMessage("Reiniciando motor...");
       try {
-        const response = await fetch(`${SERVER}/api/restart-engine`, { method: "POST" });
+        const response = await fetch(`${SERVER}/api/restart-engine`, {
+          method: "POST",
+          headers: { "X-Ace-Action": "restart-engine" },
+        });
         if (!response.ok) throw new Error("restart");
         setTimeout(testConnection, 4000);
         setMessage("Motor reiniciado.", "ok");

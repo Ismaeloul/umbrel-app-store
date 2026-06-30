@@ -19,7 +19,7 @@ services:
     working_dir: /app
     command: |
       sh -c "
-        wget -q -O /app/server.js 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/server.js?v=2.0.0' &&
+        wget -q -O /app/server.js 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/server.js?v=2.0.1' &&
         node /app/server.js
       "
     volumes:
@@ -36,8 +36,8 @@ services:
     command: |
       sh -c "
         mkdir -p /www &&
-        wget -q -O /www/index.html 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/index.html?v=2.0.0' &&
-        wget -q -O /www/icon.svg 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/icon.svg?v=2.0.0' &&
+        wget -q -O /www/index.html 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/index.html?v=2.0.1' &&
+        wget -q -O /www/icon.svg 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/icon.svg?v=2.0.1' &&
         cat > /etc/nginx/nginx.conf <<'EOF'
         events {}
         http {
