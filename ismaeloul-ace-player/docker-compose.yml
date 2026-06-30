@@ -55,20 +55,20 @@ services:
 
             location /api/ {
               proxy_pass http://storage:3000/api/;
-              proxy_set_header Host $$host;
+              proxy_set_header Host $$http_host;
             }
 
             location /ace/ {
               proxy_pass http://acestream:6878/ace/;
               proxy_http_version 1.1;
-              proxy_set_header Host $$host;
+              proxy_set_header Host $$http_host;
               proxy_set_header Connection '';
               proxy_set_header Accept-Encoding '';
               proxy_buffering off;
               proxy_request_buffering off;
               proxy_read_timeout 3600s;
               proxy_send_timeout 3600s;
-              proxy_redirect ~^http://[^/]+/(ace|content)/(.*)$$ /$$1/$$2;
+              proxy_redirect ~^http://[^/]+/(ace|content)/(.*)$$ $$scheme://$$http_host/$$1/$$2;
               sub_filter_types application/vnd.apple.mpegurl application/x-mpegURL audio/mpegurl text/plain;
               sub_filter_once off;
               sub_filter http://127.0.0.1:6878/ace/ /ace/;
@@ -78,7 +78,7 @@ services:
             location /content/ {
               proxy_pass http://acestream:6878/content/;
               proxy_http_version 1.1;
-              proxy_set_header Host $$host;
+              proxy_set_header Host $$http_host;
               proxy_set_header Connection '';
               proxy_buffering off;
               proxy_request_buffering off;
@@ -88,7 +88,7 @@ services:
 
             location /webui/ {
               proxy_pass http://acestream:6878/webui/;
-              proxy_set_header Host $$host;
+              proxy_set_header Host $$http_host;
               proxy_redirect off;
             }
           }
