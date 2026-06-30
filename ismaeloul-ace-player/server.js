@@ -6,10 +6,8 @@ const DATA_DIR = process.env.DATA_DIR || "/data";
 const STATE_FILE = path.join(DATA_DIR, "state.json");
 const DOCKER_SOCKET = "/var/run/docker.sock";
 const ACESTREAM_CONTAINER = "ismaeloul-ace-player_acestream_1";
-const MAX_HISTORY = 50;
 const HASH_RE = /^[a-fA-F0-9]{40}$/;
-const RESTART_HEADER = "x-ace-action";
-const RESTART_HEADER_VALUE = "restart-engine";
+const MAX_HISTORY = 40;
 const RESTART_COOLDOWN_MS = 15000;
 let lastRestartAt = 0;
 
@@ -21,7 +19,7 @@ function ensureState() {
 }
 
 function normalizeItem(item) {
-  const hash = String(item?.hash || "").trim().replace(/^acestream:\/\//i, "");
+  const hash = String(item?.hash || "").trim();
   if (!HASH_RE.test(hash)) return null;
   return {
     hash,
@@ -60,15 +58,15 @@ function readBody(req) {
     req.on("data", (chunk) => {
       body += chunk;
       if (body.length > 1024 * 1024) {
+        reject(new Error("body_too_large"));
         req.destroy();
-        reject(new Error("Body too large"));
       }
     });
     req.on("end", () => {
       try {
         resolve(body ? JSON.parse(body) : {});
-      } catch (error) {
-        reject(error);
+      } catch {
+        reject(new Error("bad_json"));
       }
     });
   });
@@ -144,8 +142,6 @@ function restartAceStream() {
 }
 
 const server = http.createServer(async (req, res) => {
-  if (req.method === "OPTIONS") return send(res, 204, {});
-
   try {
     if (req.url === "/api/state") {
       if (req.method === "GET") return send(res, 200, readState());
@@ -159,7 +155,6 @@ const server = http.createServer(async (req, res) => {
     if (req.url === "/api/restart-engine") {
       if (req.method !== "POST") return send(res, 405, { error: "method_not_allowed" });
       requireTrustedWrite(req);
-      if (req.headers[RESTART_HEADER] !== RESTART_HEADER_VALUE) return send(res, 403, { error: "forbidden" });
       return send(res, 200, await restartAceStream());
     }
 
