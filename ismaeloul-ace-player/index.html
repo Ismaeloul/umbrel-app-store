@@ -778,6 +778,9 @@
       setMessage("");
       setOverlay("Conectando", "Abriendo stream AceStream...", true);
 
+      startHlsPlayback(hash);
+      return;
+
       if (window.mpegts && mpegts.isSupported()) {
         tsPlayer = mpegts.createPlayer({
           type: "mpegts",
