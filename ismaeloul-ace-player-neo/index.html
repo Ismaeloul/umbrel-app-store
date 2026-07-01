@@ -316,7 +316,14 @@
 
                 const player = mpegts.createPlayer(
                     { type: 'mpegts', isLive: true, url: source },
-                    { enableStashBuffer: false, liveBufferLatencyChasing: true, liveSync: true }
+                    {
+                        enableStashBuffer: true,
+                        stashInitialSize: 128 * 1024,
+                        liveBufferLatencyChasing: true,
+                        liveSync: true,
+                        liveSyncMaxLatency: 3,
+                        liveSyncTargetLatency: 1.5,
+                    }
                 );
                 mpegtsRef.current = player;
                 player.attachMediaElement(video);
