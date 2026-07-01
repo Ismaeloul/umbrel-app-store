@@ -84,6 +84,12 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
+        const formatSpeed = (kbps) => {
+            if (typeof kbps !== 'number' || Number.isNaN(kbps)) return '-';
+            if (kbps >= 1024) return `${(kbps / 1024).toFixed(1)} MB/s`;
+            return `${kbps.toFixed(0)} KB/s`;
+        };
+
         const toPascalCase = (name) => name.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join('');
         const Icon = ({ name, className }) => {
             const Component = window.LucideReact && window.LucideReact[toPascalCase(name)];
@@ -135,7 +141,7 @@
             );
         };
 
-        const ContentCard = ({ title, id, type = 'recent', category, onClick, onOptionsClick, hideCategory = false }) => {
+        const ContentCard = ({ title, id, type = 'recent', category, onClick, onOptionsClick, hideCategory = false, isFavorited = false, onToggleFavorite }) => {
             const categoryColors = {
                 'Deportes': 'bg-orange-500/10 text-orange-400 border-orange-500/20',
                 'Cine': 'bg-purple-500/10 text-purple-400 border-purple-500/20',
@@ -159,12 +165,21 @@
                                 </span>
                             )}
                         </div>
-                        <button
-                            onClick={(e) => { e.stopPropagation(); onOptionsClick(); }}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg relative z-10 active:scale-95"
-                        >
-                            <Icon name="more-vertical" className="w-5 h-5" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                            <button
+                                onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
+                                className={`p-1.5 rounded-lg relative z-10 active:scale-95 transition-colors ${isFavorited ? 'text-yellow-400 hover:text-yellow-300' : 'text-gray-500 hover:text-white hover:bg-white/10'}`}
+                                title={isFavorited ? 'Quitar de favoritos' : 'Anadir a favoritos'}
+                            >
+                                <Icon name="star" className={`w-5 h-5 ${isFavorited ? 'fill-yellow-400/30' : ''}`} />
+                            </button>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); onOptionsClick(); }}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg relative z-10 active:scale-95"
+                            >
+                                <Icon name="more-vertical" className="w-5 h-5" />
+                            </button>
+                        </div>
                     </div>
                     <div>
                         <h4 className="font-medium text-gray-100 truncate pr-4">{title}</h4>
@@ -179,6 +194,8 @@
             const videoRef = useRef(null);
             const hlsRef = useRef(null);
             const mpegtsRef = useRef(null);
+            const statUrlRef = useRef(null);
+            const statsIntervalRef = useRef(null);
 
             const [engineStatus, setEngineStatus] = useState('offline');
             const [isRestarting, setIsRestarting] = useState(false);
@@ -189,6 +206,7 @@
             const [message, setMessage] = useState('Introduce un ID para comenzar a transmitir');
             const [error, setError] = useState('');
             const [needsTap, setNeedsTap] = useState(false);
+            const [streamStats, setStreamStats] = useState(null);
             const [activeTabMobile, setActiveTabMobile] = useState('player');
             const [libraryFilter, setLibraryFilter] = useState('fav');
             const [showNerdStats, setShowNerdStats] = useState(false);
@@ -209,6 +227,7 @@
             const [remoteStreams, setRemoteStreams] = useState([]);
             const [webSyncedAt, setWebSyncedAt] = useState(null);
             const [openCategories, setOpenCategories] = useState({});
+            const [searchQuery, setSearchQuery] = useState('');
 
             const [localLibrary, setLocalLibrary] = useState([]);
 
@@ -281,6 +300,28 @@
                 }
             };
 
+            const stopStatsPolling = () => {
+                if (statsIntervalRef.current) {
+                    clearInterval(statsIntervalRef.current);
+                    statsIntervalRef.current = null;
+                }
+                statUrlRef.current = null;
+                setStreamStats(null);
+            };
+
+            const startStatsPolling = () => {
+                if (statsIntervalRef.current) clearInterval(statsIntervalRef.current);
+                statsIntervalRef.current = setInterval(async () => {
+                    if (!statUrlRef.current) return;
+                    try {
+                        const res = await fetch(statUrlRef.current);
+                        const data = await res.json();
+                        const r = data.response;
+                        if (r) setStreamStats({ peers: r.peers, speedDown: r.speed_down, speedUp: r.speed_up, status: r.status });
+                    } catch {}
+                }, 2000);
+            };
+
             const destroyPlayer = () => {
                 if (hlsRef.current) {
                     hlsRef.current.destroy();
@@ -290,6 +331,7 @@
                     mpegtsRef.current.destroy();
                     mpegtsRef.current = null;
                 }
+                stopStatsPolling();
                 const video = videoRef.current;
                 if (video) {
                     video.pause();
@@ -298,11 +340,10 @@
                 }
             };
 
-            const playMpegts = (id) => {
+            const playMpegts = async (id) => {
                 const video = videoRef.current;
                 if (!video) return;
                 destroyPlayer();
-                const source = `/ace/getstream?id=${id}&_=${Date.now()}`;
                 setIsConnecting(true);
                 setError('');
                 setNeedsTap(false);
@@ -313,6 +354,17 @@
                     setError('Este navegador no soporta reproduccion MPEG-TS.');
                     return;
                 }
+
+                let source = `/ace/getstream?id=${id}&_=${Date.now()}`;
+                try {
+                    const metaRes = await fetch(`/ace/getstream?id=${id}&format=json&_=${Date.now()}`);
+                    const meta = await metaRes.json();
+                    if (meta?.response?.playback_url) source = meta.response.playback_url;
+                    if (meta?.response?.stat_url) {
+                        statUrlRef.current = meta.response.stat_url;
+                        startStatsPolling();
+                    }
+                } catch {}
 
                 const player = mpegts.createPlayer(
                     { type: 'mpegts', isLive: true, url: source },
@@ -547,8 +599,21 @@
                 if (libraryFilter === 'fav') return item.type === 'fav';
                 if (libraryFilter === 'web') return item.type === 'web';
                 return true;
+            }).filter(item => {
+                if (!searchQuery.trim()) return true;
+                const q = searchQuery.trim().toLowerCase();
+                return item.title.toLowerCase().includes(q) || (item.category || '').toLowerCase().includes(q);
             });
             const isFavorite = localLibrary.some(item => item.id === aceId && item.type === 'fav');
+            const isFavoritedId = (id) => localLibrary.some(item => item.id === id && item.type === 'fav');
+            const toggleCardFavorite = (item) => {
+                const already = isFavoritedId(item.id);
+                const nextLocal = already
+                    ? localLibrary.filter(i => !(i.id === item.id && i.type === 'fav'))
+                    : [{ title: item.title, id: item.id, type: 'fav', category: item.category || 'Guardado', date: new Date().toISOString() }, ...localLibrary];
+                setLocalLibrary(nextLocal);
+                persistState(nextLocal);
+            };
 
             const LibraryGrid = ({ mobile = false }) => (
                 <div className={mobile ? "grid grid-cols-1 sm:grid-cols-2 gap-3" : "grid grid-cols-1 gap-2"}>
@@ -556,6 +621,8 @@
                         <ContentCard
                             key={`${mobile ? 'mob-' : ''}${item.type}-${item.id}-${idx}`}
                             {...item}
+                            isFavorited={isFavoritedId(item.id)}
+                            onToggleFavorite={() => toggleCardFavorite(item)}
                             onClick={() => handlePlay(item.id, item.title)}
                             onOptionsClick={() => setActionItem(item)}
                         />
@@ -628,7 +695,7 @@
                 return (
                     <div className="flex flex-col gap-2">
                         {categories.map(cat => {
-                            const isOpen = !!openCategories[cat];
+                            const isOpen = searchQuery.trim() ? true : !!openCategories[cat];
                             return (
                                 <div key={cat} className="rounded-2xl border border-border bg-surface overflow-hidden">
                                     <button
@@ -648,6 +715,8 @@
                                                     key={`${mobile ? 'mob-' : ''}${item.type}-${item.id}-${idx}`}
                                                     {...item}
                                                     hideCategory
+                                                    isFavorited={isFavoritedId(item.id)}
+                                                    onToggleFavorite={() => toggleCardFavorite(item)}
                                                     onClick={() => handlePlay(item.id, item.title)}
                                                     onOptionsClick={() => setActionItem(item)}
                                                 />
@@ -807,6 +876,22 @@
                                 ))}
                             </div>
 
+                            <div className="relative shrink-0">
+                                <Icon name="search" className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                                <input
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full bg-background border border-border text-gray-100 text-sm rounded-xl pl-9 pr-8 py-2 outline-none focus:border-brand-500"
+                                    placeholder="Buscar canal..."
+                                />
+                                {searchQuery && (
+                                    <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
+                                        <Icon name="x" className="w-4 h-4" />
+                                    </button>
+                                )}
+                            </div>
+
                             {libraryFilter === 'web' ? <CategoryAccordion items={filteredLibrary} /> : <LibraryGrid />}
                         </div>
 
@@ -864,8 +949,16 @@
                                                 <div className="absolute top-16 right-4 glass-panel p-4 rounded-xl w-64 text-xs font-mono text-gray-300 shadow-2xl animate-fade-in z-20 border-white/10">
                                                     <h4 className="text-white font-sans font-medium mb-3 border-b border-white/10 pb-2">Motor AceStream</h4>
                                                     <div className="flex justify-between mb-2"><span>Estado:</span><span className="text-emerald-400 capitalize">{engineStatus}</span></div>
+                                                    {streamStats ? (
+                                                        <>
+                                                            <div className="flex justify-between mb-2"><span>Pares:</span><span>{streamStats.peers}</span></div>
+                                                            <div className="flex justify-between mb-2"><span>Descarga:</span><span className="text-emerald-400">{formatSpeed(streamStats.speedDown)}</span></div>
+                                                            <div className="flex justify-between mb-2"><span>Subida:</span><span className="text-blue-400">{formatSpeed(streamStats.speedUp)}</span></div>
+                                                        </>
+                                                    ) : (
+                                                        <p className="mb-2 text-gray-500">Cargando estadisticas...</p>
+                                                    )}
                                                     <div className="mt-3 pt-2 border-t border-white/10 truncate text-[10px] text-gray-500">{aceId}</div>
-                                                    <p className="mt-2 text-[10px] text-gray-500">Estadisticas de red por stream: proximamente.</p>
                                                 </div>
                                             )}
 
@@ -978,6 +1071,22 @@
                                                     {filter === 'fav' ? 'Favs' : filter === 'local' ? 'Recientes' : 'Web'}
                                                 </button>
                                             ))}
+                                        </div>
+
+                                        <div className="relative shrink-0">
+                                            <Icon name="search" className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                                            <input
+                                                type="text"
+                                                value={searchQuery}
+                                                onChange={(e) => setSearchQuery(e.target.value)}
+                                                className="w-full bg-background border border-border text-gray-100 text-sm rounded-xl pl-9 pr-8 py-2.5 outline-none focus:border-brand-500"
+                                                placeholder="Buscar canal..."
+                                            />
+                                            {searchQuery && (
+                                                <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
+                                                    <Icon name="x" className="w-4 h-4" />
+                                                </button>
+                                            )}
                                         </div>
 
                                         {libraryFilter === 'web' ? <CategoryAccordion items={filteredLibrary} mobile /> : <LibraryGrid mobile />}
