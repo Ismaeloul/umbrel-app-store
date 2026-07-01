@@ -56,6 +56,7 @@
     <script src="https://cdn.jsdelivr.net/npm/lucide-react@0.263.1/dist/umd/lucide-react.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@1.6.10/dist/hls.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mpegts.js@latest/dist/mpegts.js"></script>
 
     <style>
         body {
@@ -177,6 +178,7 @@
             const HASH_RE = /^[a-fA-F0-9]{40}$/;
             const videoRef = useRef(null);
             const hlsRef = useRef(null);
+            const mpegtsRef = useRef(null);
 
             const [engineStatus, setEngineStatus] = useState('offline');
             const [isRestarting, setIsRestarting] = useState(false);
@@ -284,12 +286,54 @@
                     hlsRef.current.destroy();
                     hlsRef.current = null;
                 }
+                if (mpegtsRef.current) {
+                    mpegtsRef.current.destroy();
+                    mpegtsRef.current = null;
+                }
                 const video = videoRef.current;
                 if (video) {
                     video.pause();
                     video.removeAttribute('src');
                     video.load();
                 }
+            };
+
+            const playMpegts = (id) => {
+                const video = videoRef.current;
+                if (!video) return;
+                destroyPlayer();
+                const source = `/ace/getstream?id=${id}&_=${Date.now()}`;
+                setIsConnecting(true);
+                setError('');
+                setNeedsTap(false);
+                setMessage('Conectando con AceStream...');
+
+                if (!window.mpegts || !mpegts.isSupported()) {
+                    setIsConnecting(false);
+                    setError('Este navegador no soporta reproduccion MPEG-TS.');
+                    return;
+                }
+
+                const player = mpegts.createPlayer(
+                    { type: 'mpegts', isLive: true, url: source },
+                    { enableStashBuffer: false, liveBufferLatencyChasing: true, liveSync: true }
+                );
+                mpegtsRef.current = player;
+                player.attachMediaElement(video);
+                player.on(mpegts.Events.ERROR, () => {
+                    setIsConnecting(false);
+                    setIsPlaying(false);
+                    setError('No se pudo cargar el stream. Comprueba el ID o espera a que AceStream encuentre pares.');
+                    setMessage('');
+                });
+                player.on(mpegts.Events.MEDIA_INFO, () => {
+                    setIsConnecting(false);
+                    setIsPlaying(true);
+                    setEngineStatus('online');
+                    setMessage('');
+                    video.play().catch(() => setNeedsTap(true));
+                });
+                player.load();
             };
 
             const playHls = (id) => {
@@ -367,7 +411,7 @@
                 const nextLocal = [recent, ...localLibrary.filter(item => !(item.id === id && item.type === 'recent'))];
                 setLocalLibrary(nextLocal);
                 persistState(nextLocal);
-                playHls(id);
+                playMpegts(id);
             };
 
             const handleStop = () => {
