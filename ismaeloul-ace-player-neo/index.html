@@ -134,7 +134,7 @@
             );
         };
 
-        const ContentCard = ({ title, id, type = 'recent', category, onClick, onOptionsClick }) => {
+        const ContentCard = ({ title, id, type = 'recent', category, onClick, onOptionsClick, hideCategory = false }) => {
             const categoryColors = {
                 'Deportes': 'bg-orange-500/10 text-orange-400 border-orange-500/20',
                 'Cine': 'bg-purple-500/10 text-purple-400 border-purple-500/20',
@@ -152,7 +152,7 @@
                             <div className={`p-2 rounded-lg ${type === 'fav' ? 'bg-yellow-500/10 text-yellow-500' : type === 'web' ? 'bg-brand-500/10 text-brand-400' : 'bg-brand-500/10 text-brand-400'}`}>
                                 <Icon name={type === 'fav' ? 'star' : type === 'web' ? 'globe' : 'clock'} className={`w-4 h-4 ${type === 'fav' ? 'fill-yellow-500/20' : ''}`} />
                             </div>
-                            {category && (
+                            {category && !hideCategory && (
                                 <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-md border ${catColor} flex items-center`}>
                                     {category}
                                 </span>
@@ -206,6 +206,7 @@
             const [syncError, setSyncError] = useState('');
             const [remoteStreams, setRemoteStreams] = useState([]);
             const [webSyncedAt, setWebSyncedAt] = useState(null);
+            const [openCategories, setOpenCategories] = useState({});
 
             const [localLibrary, setLocalLibrary] = useState([]);
 
@@ -516,12 +517,9 @@
                 </div>
             );
 
-            const WebSyncPanel = ({ mobile = false }) => (
-                <div className={`bg-brand-500/10 border border-brand-500/20 rounded-2xl p-4 shrink-0 ${mobile ? 'mb-2' : 'mb-2 relative overflow-hidden'}`}>
-                    {!mobile && <div className="absolute inset-0 bg-gradient-to-br from-brand-500/5 to-transparent pointer-events-none"></div>}
-                    {!mobile && isSyncing && <div className="absolute inset-0 bg-brand-500/20 animate-pulse pointer-events-none"></div>}
-
-                    <h3 className={`text-sm font-semibold text-brand-400 mb-3 flex items-center gap-2 ${mobile ? '' : 'relative z-10'}`}>
+            const WebSyncPanel = () => (
+                <div className="relative">
+                    <h3 className="text-sm font-semibold text-brand-400 mb-3 flex items-center gap-2">
                         <Icon name="globe" className="w-4 h-4" /> Directorio Remoto
                     </h3>
 
@@ -529,15 +527,15 @@
                         type="text"
                         value={syncUrl}
                         onChange={(e) => setSyncUrl(e.target.value)}
-                        className={`w-full bg-background/50 border border-brand-500/20 text-white text-xs rounded-lg outline-none focus:border-brand-500 font-mono mb-3 ${mobile ? 'p-3' : 'p-2 relative z-10'}`}
+                        className="w-full bg-background border border-border text-white text-xs rounded-lg outline-none focus:border-brand-500 font-mono mb-3 p-2.5"
                         placeholder="URL de web o archivo .m3u/.m3u8"
                     />
 
-                    <div className={mobile ? "flex flex-col gap-2" : "flex gap-2 relative z-10"}>
+                    <div className="flex gap-2">
                         <button
                             onClick={() => syncWebDirectory('html')}
                             disabled={isSyncing || !syncUrl}
-                            className={`bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-medium rounded-lg transition-all active:scale-95 flex justify-center items-center gap-2 shadow-lg shadow-brand-500/20 ${mobile ? 'w-full text-sm py-3 rounded-xl' : 'flex-1 text-xs py-2'}`}
+                            className="flex-1 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-medium py-2 rounded-lg transition-all active:scale-95 flex justify-center items-center gap-2 shadow-lg shadow-brand-500/20"
                         >
                             {isSyncing ? <Icon name="loader-2" className="w-3.5 h-3.5 animate-spin" /> : <Icon name="search" className="w-3.5 h-3.5" />}
                             Scraping HTML
@@ -545,20 +543,71 @@
                         <button
                             onClick={() => syncWebDirectory('m3u')}
                             disabled={isSyncing || !syncUrl}
-                            className={`bg-surface hover:bg-surfaceHover border border-border disabled:opacity-50 text-white font-medium rounded-lg transition-all active:scale-95 flex justify-center items-center gap-2 ${mobile ? 'w-full text-sm py-3 rounded-xl' : 'flex-1 text-xs py-2'}`}
+                            className="flex-1 bg-surfaceHover hover:bg-white/10 border border-border disabled:opacity-50 text-white text-xs font-medium py-2 rounded-lg transition-all active:scale-95 flex justify-center items-center gap-2"
                         >
                             <Icon name="file-text" className="w-3.5 h-3.5" />
                             Importar M3U
                         </button>
                     </div>
-                    {syncError && <p className="mt-2 text-xs text-red-400 relative z-10">{syncError}</p>}
+                    {syncError && <p className="mt-2 text-xs text-red-400">{syncError}</p>}
                     {!syncError && remoteStreams.length > 0 && (
-                        <p className="mt-2 text-xs text-gray-500 relative z-10">
+                        <p className="mt-2 text-xs text-gray-500">
                             {remoteStreams.length} canales. Se actualiza solo cada 3h{webSyncedAt ? ` (ultima vez: ${new Date(webSyncedAt).toLocaleString('es-ES')})` : ''}.
                         </p>
                     )}
                 </div>
             );
+
+            const CategoryAccordion = ({ items, mobile = false }) => {
+                const groups = {};
+                for (const item of items) {
+                    const cat = item.category || 'General';
+                    (groups[cat] = groups[cat] || []).push(item);
+                }
+                const categories = Object.keys(groups).sort();
+                if (categories.length === 0) {
+                    return (
+                        <div className={mobile ? "text-center py-12 text-gray-500 text-sm col-span-full" : "text-center py-8 text-gray-500 text-sm flex flex-col items-center gap-3"}>
+                            <Icon name="ghost" className={mobile ? "w-12 h-12 opacity-20 mx-auto mb-3" : "w-8 h-8 opacity-20"} />
+                            <p>{mobile ? 'Lista vacia' : 'No hay canales en esta seccion'}</p>
+                        </div>
+                    );
+                }
+                return (
+                    <div className="flex flex-col gap-2">
+                        {categories.map(cat => {
+                            const isOpen = !!openCategories[cat];
+                            return (
+                                <div key={cat} className="rounded-2xl border border-border bg-surface overflow-hidden">
+                                    <button
+                                        onClick={() => setOpenCategories(prev => ({ ...prev, [cat]: !prev[cat] }))}
+                                        className="w-full flex items-center justify-between p-3 text-left hover:bg-white/5 transition-colors"
+                                    >
+                                        <span className="text-sm font-semibold text-gray-200">{cat}</span>
+                                        <span className="flex items-center gap-2 text-xs text-gray-500">
+                                            {groups[cat].length}
+                                            <Icon name={isOpen ? 'chevron-up' : 'chevron-down'} className="w-4 h-4" />
+                                        </span>
+                                    </button>
+                                    {isOpen && (
+                                        <div className={`p-3 pt-0 ${mobile ? "grid grid-cols-1 sm:grid-cols-2 gap-3" : "grid grid-cols-1 gap-2"}`}>
+                                            {groups[cat].map((item, idx) => (
+                                                <ContentCard
+                                                    key={`${mobile ? 'mob-' : ''}${item.type}-${item.id}-${idx}`}
+                                                    {...item}
+                                                    hideCategory
+                                                    onClick={() => handlePlay(item.id, item.title)}
+                                                    onOptionsClick={() => setActionItem(item)}
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                );
+            };
 
             return (
                 <div className="flex h-[100dvh] w-full overflow-hidden bg-background relative">
@@ -580,6 +629,9 @@
                                 <div>
                                     <label className="text-xs text-gray-500 mb-1 block">Puerto interno del motor (Umbrel)</label>
                                     <input type="text" value="6878" readOnly className="w-full bg-background border border-border text-gray-400 rounded-lg p-2.5 outline-none font-mono" />
+                                </div>
+                                <div className="pt-4 border-t border-border">
+                                    <WebSyncPanel />
                                 </div>
                                 <div className="pt-2 border-t border-border mt-2">
                                     <button onClick={handleRestartEngine} className="w-full bg-surfaceHover hover:bg-white/10 text-white font-medium py-2.5 rounded-lg transition-all flex justify-center items-center gap-2 border border-border">
@@ -703,9 +755,7 @@
                                 ))}
                             </div>
 
-                            {libraryFilter === 'web' && <WebSyncPanel />}
-
-                            <LibraryGrid />
+                            {libraryFilter === 'web' ? <CategoryAccordion items={filteredLibrary} /> : <LibraryGrid />}
                         </div>
 
                         <div className="p-5 border-t border-border bg-surface/30 shrink-0">
@@ -878,9 +928,7 @@
                                             ))}
                                         </div>
 
-                                        {libraryFilter === 'web' && <WebSyncPanel mobile />}
-
-                                        <LibraryGrid mobile />
+                                        {libraryFilter === 'web' ? <CategoryAccordion items={filteredLibrary} mobile /> : <LibraryGrid mobile />}
                                     </div>
                                 </div>
                             </div>
