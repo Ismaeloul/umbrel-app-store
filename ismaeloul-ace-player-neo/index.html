@@ -205,15 +205,18 @@
             const [isSyncing, setIsSyncing] = useState(false);
             const [syncError, setSyncError] = useState('');
             const [remoteStreams, setRemoteStreams] = useState([]);
+            const [webSyncedAt, setWebSyncedAt] = useState(null);
 
             const [localLibrary, setLocalLibrary] = useState([]);
 
             useEffect(() => {
                 loadState();
                 checkEngine();
-                const interval = setInterval(checkEngine, 20000);
+                const engineInterval = setInterval(checkEngine, 20000);
+                const stateInterval = setInterval(loadState, 5 * 60 * 1000);
                 return () => {
-                    clearInterval(interval);
+                    clearInterval(engineInterval);
+                    clearInterval(stateInterval);
                     destroyPlayer();
                 };
             }, []);
@@ -259,6 +262,7 @@
                     const web = (state.web || []).map(item => ({ ...item, type: 'web' }));
                     setLocalLibrary([...favorites, ...history]);
                     setRemoteStreams(web);
+                    setWebSyncedAt(state.webSyncedAt || null);
                 } catch {
                     setError('Backend no disponible. Revisa que Ace Player Neo haya arrancado en Umbrel.');
                 }
@@ -475,6 +479,7 @@
                     const data = await response.json();
                     if (!response.ok || !data.success) throw new Error(data.error || 'sync');
                     setRemoteStreams(data.streams || []);
+                    setWebSyncedAt(data.webSyncedAt || null);
                     setLibraryFilter('web');
                 } catch {
                     setSyncError('No se pudo importar esa URL. Comprueba que sea accesible y contenga enlaces acestream:// o un M3U valido.');
@@ -512,7 +517,7 @@
             );
 
             const WebSyncPanel = ({ mobile = false }) => (
-                <div className={`bg-brand-500/10 border border-brand-500/20 rounded-2xl p-4 ${mobile ? 'mb-2' : 'mb-2 relative overflow-hidden'}`}>
+                <div className={`bg-brand-500/10 border border-brand-500/20 rounded-2xl p-4 shrink-0 ${mobile ? 'mb-2' : 'mb-2 relative overflow-hidden'}`}>
                     {!mobile && <div className="absolute inset-0 bg-gradient-to-br from-brand-500/5 to-transparent pointer-events-none"></div>}
                     {!mobile && isSyncing && <div className="absolute inset-0 bg-brand-500/20 animate-pulse pointer-events-none"></div>}
 
@@ -547,8 +552,10 @@
                         </button>
                     </div>
                     {syncError && <p className="mt-2 text-xs text-red-400 relative z-10">{syncError}</p>}
-                    {!syncError && remoteStreams.length > 0 && libraryFilter === 'web' && (
-                        <p className="mt-2 text-xs text-gray-500 relative z-10">{remoteStreams.length} canales importados. Vuelve a sincronizar cuando la pagina se actualice.</p>
+                    {!syncError && remoteStreams.length > 0 && (
+                        <p className="mt-2 text-xs text-gray-500 relative z-10">
+                            {remoteStreams.length} canales. Se actualiza solo cada 3h{webSyncedAt ? ` (ultima vez: ${new Date(webSyncedAt).toLocaleString('es-ES')})` : ''}.
+                        </p>
                     )}
                 </div>
             );
@@ -684,7 +691,7 @@
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-                            <div className="flex bg-background rounded-xl p-1 border border-border">
+                            <div className="flex bg-background rounded-xl p-1 border border-border shrink-0">
                                 {['fav', 'local', 'web'].map(filter => (
                                     <button
                                         key={filter}
@@ -859,7 +866,7 @@
                                 {/* VISTA MOVIL LIBRERIA (Reutilizada del sidebar) */}
                                 <div className={`md:hidden h-full pb-24 overflow-y-auto ${activeTabMobile === 'library' ? 'block animate-fade-in' : 'hidden'}`}>
                                     <div className="flex flex-col gap-4">
-                                        <div className="flex bg-background rounded-xl p-1 border border-border">
+                                        <div className="flex bg-background rounded-xl p-1 border border-border shrink-0">
                                             {['fav', 'local', 'web'].map(filter => (
                                                 <button
                                                     key={filter}

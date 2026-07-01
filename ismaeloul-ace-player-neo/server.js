@@ -12,13 +12,15 @@ const MAX_BODY = 2 * 1024 * 1024;
 const MAX_HISTORY = 60;
 const MAX_WEB_STREAMS = 300;
 const RESTART_COOLDOWN_MS = 15000;
+const DEFAULT_WEB_SYNC_URL = "https://ipfs.io/ipns/k51qzi5uqu5di462t7j4vu4akwfhvtjhy88qbupktvoacqfqe9uforjvhyi4wr/hashes_acestream.m3u";
+const WEB_SYNC_INTERVAL_MS = 3 * 60 * 60 * 1000;
 
 let lastRestartAt = 0;
 
 function ensureState() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   if (!fs.existsSync(STATE_FILE)) {
-    fs.writeFileSync(STATE_FILE, JSON.stringify({ favorites: [], history: [], web: [] }, null, 2));
+    fs.writeFileSync(STATE_FILE, JSON.stringify({ favorites: [], history: [], web: [], webSyncedAt: null }, null, 2));
   }
 }
 
@@ -58,9 +60,10 @@ function readState() {
       favorites: Array.isArray(parsed.favorites) ? parsed.favorites.map((i) => normalizeItem(i, "fav")).filter(Boolean) : [],
       history: Array.isArray(parsed.history) ? parsed.history.map((i) => normalizeItem(i, "recent")).filter(Boolean).slice(0, MAX_HISTORY) : [],
       web: Array.isArray(parsed.web) ? parsed.web.map((i) => normalizeItem(i, "web")).filter(Boolean).slice(0, MAX_WEB_STREAMS) : [],
+      webSyncedAt: typeof parsed.webSyncedAt === "string" ? parsed.webSyncedAt : null,
     };
   } catch {
-    return { favorites: [], history: [], web: [] };
+    return { favorites: [], history: [], web: [], webSyncedAt: null };
   }
 }
 
@@ -81,6 +84,7 @@ function writeState(nextState) {
     favorites: unique(nextState.favorites, "fav", MAX_HISTORY),
     history: unique(nextState.history, "recent", MAX_HISTORY),
     web: unique(nextState.web, "web", MAX_WEB_STREAMS),
+    webSyncedAt: typeof nextState.webSyncedAt === "string" ? nextState.webSyncedAt : null,
   };
   const tempFile = `${STATE_FILE}.tmp`;
   fs.writeFileSync(tempFile, JSON.stringify(state, null, 2));
@@ -278,7 +282,11 @@ const server = http.createServer(async (req, res) => {
   try {
     if (req.url === "/api/state") {
       if (req.method === "GET") return send(res, 200, readState());
-      if (req.method === "PUT") return send(res, 200, writeState(await readBody(req)));
+      if (req.method === "PUT") {
+        const body = await readBody(req);
+        const current = readState();
+        return send(res, 200, writeState({ webSyncedAt: current.webSyncedAt, ...body }));
+      }
       return send(res, 405, { error: "method_not_allowed" });
     }
 
@@ -299,8 +307,8 @@ const server = http.createServer(async (req, res) => {
       const text = await fetchText(body.url);
       const streams = (body.type === "m3u" ? parseM3u(text) : parseHtml(text)).slice(0, MAX_WEB_STREAMS);
       const state = readState();
-      const nextState = writeState({ ...state, web: streams });
-      return send(res, 200, { success: true, streams: nextState.web });
+      const nextState = writeState({ ...state, web: streams, webSyncedAt: new Date().toISOString() });
+      return send(res, 200, { success: true, streams: nextState.web, webSyncedAt: nextState.webSyncedAt });
     }
 
     return send(res, 404, { error: "not_found" });
@@ -321,5 +329,19 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+async function autoSyncWeb() {
+  try {
+    const text = await fetchText(DEFAULT_WEB_SYNC_URL);
+    const streams = parseM3u(text).slice(0, MAX_WEB_STREAMS);
+    const state = readState();
+    writeState({ ...state, web: streams, webSyncedAt: new Date().toISOString() });
+    console.log(`[auto-sync] refreshed ${streams.length} web streams`);
+  } catch (error) {
+    console.error(`[auto-sync] failed: ${error.message}`);
+  }
+}
+
 ensureState();
 server.listen(3000, "0.0.0.0");
+autoSyncWeb();
+setInterval(autoSyncWeb, WEB_SYNC_INTERVAL_MS);
