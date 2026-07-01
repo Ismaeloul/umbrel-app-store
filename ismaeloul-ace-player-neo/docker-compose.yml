@@ -1,0 +1,36 @@
+version: "3.7"
+
+services:
+  app_proxy:
+    environment:
+      APP_HOST: ismaeloul-ace-player-neo_nginx_1
+      APP_PORT: "80"
+      PROXY_AUTH_ADD: "true"
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: ismaeloul-ace-player-neo_nginx_1
+    restart: unless-stopped
+    command: |
+      sh -c "
+        mkdir -p /www &&
+        wget -q -O /www/index.html 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/index.html?v=0.1.0' &&
+        wget -q -O /www/icon.svg 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg?v=0.1.0' &&
+        printf '%s\n' \
+          'events {}' \
+          'http {' \
+          '  server {' \
+          '    listen 80;' \
+          '    client_max_body_size 1m;' \
+          '    add_header X-Content-Type-Options nosniff always;' \
+          '    add_header Referrer-Policy same-origin always;' \
+          '    add_header X-Robots-Tag noindex always;' \
+          '    location / {' \
+          '      root /www;' \
+          '      index index.html;' \
+          '      try_files $$uri $$uri/ /index.html;' \
+          '    }' \
+          '  }' \
+          '}' > /etc/nginx/nginx.conf &&
+        nginx -g 'daemon off;'
+      "
