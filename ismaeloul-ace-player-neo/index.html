@@ -6,7 +6,7 @@
     <title>Ace Player Neo - Umbrel</title>
     <link rel="icon" type="image/svg+xml" href="/icon.svg">
     <link rel="apple-touch-icon" href="/icon.svg">
-    
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -48,7 +48,7 @@
             }
         }
     </script>
-    
+
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -57,8 +57,8 @@
     <script src="https://unpkg.com/lucide@latest"></script>
 
     <style>
-        body { 
-            font-family: 'Inter', sans-serif; 
+        body {
+            font-family: 'Inter', sans-serif;
             background-color: #09090b;
             color: #fafafa;
             -webkit-tap-highlight-color: transparent;
@@ -73,6 +73,7 @@
             -webkit-backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.05);
         }
+        video::-webkit-media-controls-panel { background: rgba(9,9,11,0.7); }
     </style>
 </head>
 <body>
@@ -99,11 +100,11 @@
         const EngineStatus = ({ status, onRestart, isRestarting }) => {
             const isOnline = status === 'online';
             const isConnecting = status === 'connecting';
-            
+
             return (
                 <div className="flex items-center gap-2">
                     <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border ${
-                        isOnline ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
+                        isOnline ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
                         isConnecting ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
                         'bg-red-500/10 text-red-400 border-red-500/20'
                     }`}>
@@ -113,7 +114,7 @@
                         </span>
                         <span className="capitalize">{status}</span>
                     </div>
-                    <button 
+                    <button
                         onClick={onRestart}
                         disabled={isRestarting}
                         className="p-1.5 rounded-full hover:bg-surfaceHover text-gray-400 hover:text-white transition-colors disabled:opacity-50"
@@ -134,14 +135,14 @@
             const catColor = categoryColors[category] || categoryColors['General'];
 
             return (
-                <div 
+                <div
                     onClick={onClick}
                     className="group relative overflow-hidden rounded-2xl bg-surface border border-border p-4 hover:border-brand-500/50 hover:shadow-[0_0_15px_rgba(14,165,233,0.15)] transition-all duration-300 cursor-pointer flex flex-col gap-3"
                 >
                     <div className="flex justify-between items-start">
                         <div className="flex gap-2 items-center">
-                            <div className={`p-2 rounded-lg ${type === 'fav' ? 'bg-yellow-500/10 text-yellow-500' : 'bg-brand-500/10 text-brand-400'}`}>
-                                <i data-lucide={type === 'fav' ? 'star' : 'clock'} className={`w-4 h-4 ${type === 'fav' ? 'fill-yellow-500/20' : ''}`}></i>
+                            <div className={`p-2 rounded-lg ${type === 'fav' ? 'bg-yellow-500/10 text-yellow-500' : type === 'web' ? 'bg-brand-500/10 text-brand-400' : 'bg-brand-500/10 text-brand-400'}`}>
+                                <i data-lucide={type === 'fav' ? 'star' : type === 'web' ? 'globe' : 'clock'} className={`w-4 h-4 ${type === 'fav' ? 'fill-yellow-500/20' : ''}`}></i>
                             </div>
                             {category && (
                                 <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-md border ${catColor} flex items-center`}>
@@ -149,7 +150,7 @@
                                 </span>
                             )}
                         </div>
-                        <button 
+                        <button
                             onClick={(e) => { e.stopPropagation(); onOptionsClick(); }}
                             className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg relative z-10 active:scale-95"
                         >
@@ -168,23 +169,34 @@
             const HASH_RE = /^[a-fA-F0-9]{40}$/;
             const videoRef = useRef(null);
             const hlsRef = useRef(null);
+
             const [engineStatus, setEngineStatus] = useState('offline');
+            const [isRestarting, setIsRestarting] = useState(false);
             const [aceId, setAceId] = useState('');
+            const [currentTitle, setCurrentTitle] = useState('');
             const [isPlaying, setIsPlaying] = useState(false);
             const [isConnecting, setIsConnecting] = useState(false);
-            const [message, setMessage] = useState('Pega un hash AceStream o un enlace acestream:// para empezar.');
+            const [message, setMessage] = useState('Introduce un ID para comenzar a transmitir');
             const [error, setError] = useState('');
             const [activeTabMobile, setActiveTabMobile] = useState('player');
             const [libraryFilter, setLibraryFilter] = useState('fav');
-            const [localLibrary, setLocalLibrary] = useState([]);
-            const [remoteStreams, setRemoteStreams] = useState([]);
-            const [syncUrl, setSyncUrl] = useState('');
+            const [showNerdStats, setShowNerdStats] = useState(false);
+
+            // Modales
+            const [showSettingsModal, setShowSettingsModal] = useState(false);
+            const [saveModalOpen, setSaveModalOpen] = useState(false);
+            const [customTitle, setCustomTitle] = useState('');
+            const [actionItem, setActionItem] = useState(null);
+            const [editModalOpen, setEditModalOpen] = useState(false);
+            const [editTitle, setEditTitle] = useState('');
+
+            // Web Syncing
+            const [syncUrl, setSyncUrl] = useState('https://ipfs.io/ipns/k51qzi5uqu5di462t7j4vu4akwfhvtjhy88qbupktvoacqfqe9uforjvhyi4wr/hashes_acestream.m3u');
             const [isSyncing, setIsSyncing] = useState(false);
             const [syncError, setSyncError] = useState('');
-            const [currentTitle, setCurrentTitle] = useState('');
-            const [showSaveModal, setShowSaveModal] = useState(false);
-            const [saveTitle, setSaveTitle] = useState('');
-            const [isRestarting, setIsRestarting] = useState(false);
+            const [remoteStreams, setRemoteStreams] = useState([]);
+
+            const [localLibrary, setLocalLibrary] = useState([]);
 
             useEffect(() => {
                 lucide.createIcons();
@@ -193,7 +205,11 @@
             useEffect(() => {
                 loadState();
                 checkEngine();
-                return () => destroyPlayer();
+                const interval = setInterval(checkEngine, 20000);
+                return () => {
+                    clearInterval(interval);
+                    destroyPlayer();
+                };
             }, []);
 
             const normalizeAceId = (value) => {
@@ -271,6 +287,7 @@
                 destroyPlayer();
                 const source = `/ace/manifest.m3u8?id=${id}&_=${Date.now()}`;
                 setIsConnecting(true);
+                setError('');
                 setMessage('Conectando con AceStream...');
 
                 if (window.Hls && Hls.isSupported()) {
@@ -296,7 +313,8 @@
                             return;
                         }
                         setIsConnecting(false);
-                        setError('No se pudo cargar el stream. Comprueba el hash o espera a que AceStream encuentre pares.');
+                        setIsPlaying(false);
+                        setError('No se pudo cargar el stream. Comprueba el ID o espera a que AceStream encuentre pares.');
                         setMessage('');
                     });
                     return;
@@ -317,22 +335,24 @@
                 setError('Este navegador no soporta HLS y no pudo cargar HLS.js.');
             };
 
-            const handlePlay = (value = aceId, title = '') => {
+            const handlePlay = (value = aceId, titleHint = '') => {
                 const id = normalizeAceId(value);
                 if (!id) {
-                    setError('Pega un hash AceStream valido de 40 caracteres o un enlace acestream://.');
+                    setError('Pega un ID AceStream valido de 40 caracteres o un enlace acestream://.');
                     return;
                 }
-                const displayTitle = title || localLibrary.find(item => item.id === id)?.title || remoteStreams.find(item => item.id === id)?.title || `Stream ${id.substring(0, 8)}`;
+                const displayTitle = titleHint
+                    || localLibrary.find(item => item.id === id)?.title
+                    || remoteStreams.find(item => item.id === id)?.title
+                    || `Stream ${id.substring(0, 8)}`;
+
                 setAceId(id);
                 setCurrentTitle(displayTitle);
                 setError('');
                 setActiveTabMobile('player');
 
-                const favoriteCount = localLibrary.filter(item => item.type === 'fav').length;
                 const recent = { title: displayTitle, id, type: 'recent', category: 'General', date: new Date().toISOString() };
-                const nextLocal = localLibrary.filter(item => !(item.id === id && item.type === 'recent'));
-                nextLocal.splice(favoriteCount, 0, recent);
+                const nextLocal = [recent, ...localLibrary.filter(item => !(item.id === id && item.type === 'recent'))];
                 setLocalLibrary(nextLocal);
                 persistState(nextLocal);
                 playHls(id);
@@ -342,13 +362,14 @@
                 destroyPlayer();
                 setIsPlaying(false);
                 setIsConnecting(false);
+                setShowNerdStats(false);
                 setMessage('Reproduccion detenida.');
             };
 
             const handleRestartEngine = async () => {
                 setIsRestarting(true);
                 handleStop();
-                setEngineStatus('offline');
+                setEngineStatus('connecting');
                 try {
                     const response = await fetch('/api/restart-engine', { method: 'POST' });
                     if (!response.ok) throw new Error('restart');
@@ -356,47 +377,76 @@
                     setTimeout(checkEngine, 2500);
                 } catch {
                     setError('No se pudo reiniciar el motor AceStream.');
+                    setEngineStatus('offline');
                 } finally {
                     setIsRestarting(false);
                 }
             };
 
-            const toggleFavorite = () => {
+            const handleSaveClick = () => {
                 if (!aceId) return;
-                const exists = localLibrary.some(item => item.id === aceId && item.type === 'fav');
-                if (exists) {
+                const isAlreadyFav = localLibrary.some(item => item.id === aceId && item.type === 'fav');
+
+                if (isAlreadyFav) {
                     const nextLocal = localLibrary.filter(item => !(item.id === aceId && item.type === 'fav'));
                     setLocalLibrary(nextLocal);
                     persistState(nextLocal);
-                    return;
+                } else {
+                    setCustomTitle(currentTitle || `Canal ${aceId.substring(0, 6)}`);
+                    setSaveModalOpen(true);
                 }
-                setSaveTitle(currentTitle || `Canal ${aceId.substring(0, 6)}`);
-                setShowSaveModal(true);
             };
 
-            const saveFavorite = (event) => {
-                event.preventDefault();
-                const favorite = { title: saveTitle || `Canal ${aceId.substring(0, 6)}`, id: aceId, type: 'fav', category: 'Guardado', date: new Date().toISOString() };
-                const nextLocal = [favorite, ...localLibrary.filter(item => !(item.id === aceId && item.type === 'fav'))];
+            const confirmSaveFavorite = (e) => {
+                e.preventDefault();
+                const newFav = {
+                    title: customTitle || `Canal ${aceId.substring(0, 6)}`,
+                    id: aceId,
+                    type: 'fav',
+                    category: 'Guardado',
+                    date: new Date().toISOString()
+                };
+                const nextLocal = [newFav, ...localLibrary.filter(item => !(item.id === aceId && item.type === 'fav'))];
                 setLocalLibrary(nextLocal);
                 persistState(nextLocal);
-                setShowSaveModal(false);
+                setSaveModalOpen(false);
                 setLibraryFilter('fav');
             };
 
-            const deleteItem = (item) => {
-                if (item.type === 'web') {
-                    const nextRemote = remoteStreams.filter(stream => stream.id !== item.id);
+            const confirmEditChannel = (e) => {
+                e.preventDefault();
+                if (actionItem?.type === 'web') {
+                    const nextRemote = remoteStreams.map(item => item.id === actionItem.id ? { ...item, title: editTitle } : item);
                     setRemoteStreams(nextRemote);
                     persistState(localLibrary, nextRemote);
-                    return;
+                } else {
+                    const nextLocal = localLibrary.map(item =>
+                        item.id === actionItem?.id && item.type === actionItem?.type
+                            ? { ...item, title: editTitle }
+                            : item
+                    );
+                    setLocalLibrary(nextLocal);
+                    persistState(nextLocal);
                 }
-                const nextLocal = localLibrary.filter(stream => !(stream.id === item.id && stream.type === item.type));
-                setLocalLibrary(nextLocal);
-                persistState(nextLocal);
+                setEditModalOpen(false);
+                setTimeout(() => setActionItem(null), 300);
+            };
+
+            const deleteChannel = () => {
+                if (actionItem?.type === 'web') {
+                    const nextRemote = remoteStreams.filter(item => item.id !== actionItem.id);
+                    setRemoteStreams(nextRemote);
+                    persistState(localLibrary, nextRemote);
+                } else {
+                    const nextLocal = localLibrary.filter(item => !(item.id === actionItem?.id && item.type === actionItem?.type));
+                    setLocalLibrary(nextLocal);
+                    persistState(nextLocal);
+                }
+                setActionItem(null);
             };
 
             const syncWebDirectory = async (type = 'html') => {
+                if (!syncUrl) return;
                 setIsSyncing(true);
                 setSyncError('');
                 try {
@@ -410,7 +460,7 @@
                     setRemoteStreams(data.streams || []);
                     setLibraryFilter('web');
                 } catch {
-                    setSyncError('No se pudo importar esa URL.');
+                    setSyncError('No se pudo importar esa URL. Comprueba que sea accesible y contenga enlaces acestream:// o un M3U valido.');
                 } finally {
                     setIsSyncing(false);
                 }
@@ -425,52 +475,184 @@
             });
             const isFavorite = localLibrary.some(item => item.id === aceId && item.type === 'fav');
 
-            const LibraryList = () => (
-                <div className="grid grid-cols-1 gap-2">
-                    {filteredLibrary.map(item => (
-                        <div key={`${item.type}-${item.id}`} className="group rounded-2xl bg-surface border border-border p-4 hover:border-brand-500/50 transition-all flex items-center gap-3">
-                            <button onClick={() => handlePlay(item.id, item.title)} className="min-w-0 flex-1 text-left">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <span className={`p-1.5 rounded-lg ${item.type === 'fav' ? 'bg-yellow-500/10 text-yellow-400' : item.type === 'web' ? 'bg-brand-500/10 text-brand-400' : 'bg-white/5 text-gray-400'}`}>
-                                        <i data-lucide={item.type === 'fav' ? 'star' : item.type === 'web' ? 'globe' : 'clock'} className="w-4 h-4"></i>
-                                    </span>
-                                    <span className="text-xs text-gray-500 uppercase font-bold">{item.category || 'General'}</span>
-                                </div>
-                                <h4 className="font-medium text-gray-100 truncate">{item.title}</h4>
-                                <p className="text-xs text-gray-500 font-mono truncate mt-1">{item.id}</p>
-                            </button>
-                            <button onClick={() => deleteItem(item)} className="p-2 rounded-xl text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Eliminar">
-                                <i data-lucide="trash-2" className="w-4 h-4"></i>
-                            </button>
-                        </div>
+            const LibraryGrid = ({ mobile = false }) => (
+                <div className={mobile ? "grid grid-cols-1 sm:grid-cols-2 gap-3" : "grid grid-cols-1 gap-2"}>
+                    {filteredLibrary.map((item, idx) => (
+                        <ContentCard
+                            key={`${mobile ? 'mob-' : ''}${item.type}-${item.id}-${idx}`}
+                            {...item}
+                            onClick={() => handlePlay(item.id, item.title)}
+                            onOptionsClick={() => setActionItem(item)}
+                        />
                     ))}
                     {filteredLibrary.length === 0 && (
-                        <div className="text-center py-10 text-gray-500 text-sm border border-dashed border-border rounded-2xl">
-                            <i data-lucide="folder-open" className="w-8 h-8 mx-auto mb-3 opacity-40"></i>
-                            <p>No hay canales en esta seccion</p>
+                        <div className={mobile ? "text-center py-12 text-gray-500 text-sm col-span-full" : "text-center py-8 text-gray-500 text-sm flex flex-col items-center gap-3"}>
+                            <i data-lucide="ghost" className={mobile ? "w-12 h-12 opacity-20 mx-auto mb-3" : "w-8 h-8 opacity-20"}></i>
+                            <p>{mobile ? 'Lista vacia' : 'No hay canales en esta seccion'}</p>
                         </div>
+                    )}
+                </div>
+            );
+
+            const WebSyncPanel = ({ mobile = false }) => (
+                <div className={`bg-brand-500/10 border border-brand-500/20 rounded-2xl p-4 ${mobile ? 'mb-2' : 'mb-2 relative overflow-hidden'}`}>
+                    {!mobile && <div className="absolute inset-0 bg-gradient-to-br from-brand-500/5 to-transparent pointer-events-none"></div>}
+                    {!mobile && isSyncing && <div className="absolute inset-0 bg-brand-500/20 animate-pulse pointer-events-none"></div>}
+
+                    <h3 className={`text-sm font-semibold text-brand-400 mb-3 flex items-center gap-2 ${mobile ? '' : 'relative z-10'}`}>
+                        <i data-lucide="globe" className="w-4 h-4"></i> Directorio Remoto
+                    </h3>
+
+                    <input
+                        type="text"
+                        value={syncUrl}
+                        onChange={(e) => setSyncUrl(e.target.value)}
+                        className={`w-full bg-background/50 border border-brand-500/20 text-white text-xs rounded-lg outline-none focus:border-brand-500 font-mono mb-3 ${mobile ? 'p-3' : 'p-2 relative z-10'}`}
+                        placeholder="URL de web o archivo .m3u/.m3u8"
+                    />
+
+                    <div className={mobile ? "flex flex-col gap-2" : "flex gap-2 relative z-10"}>
+                        <button
+                            onClick={() => syncWebDirectory('html')}
+                            disabled={isSyncing || !syncUrl}
+                            className={`bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-medium rounded-lg transition-all active:scale-95 flex justify-center items-center gap-2 shadow-lg shadow-brand-500/20 ${mobile ? 'w-full text-sm py-3 rounded-xl' : 'flex-1 text-xs py-2'}`}
+                        >
+                            {isSyncing ? <i data-lucide="loader-2" className="w-3.5 h-3.5 animate-spin"></i> : <i data-lucide="search" className="w-3.5 h-3.5"></i>}
+                            Scraping HTML
+                        </button>
+                        <button
+                            onClick={() => syncWebDirectory('m3u')}
+                            disabled={isSyncing || !syncUrl}
+                            className={`bg-surface hover:bg-surfaceHover border border-border disabled:opacity-50 text-white font-medium rounded-lg transition-all active:scale-95 flex justify-center items-center gap-2 ${mobile ? 'w-full text-sm py-3 rounded-xl' : 'flex-1 text-xs py-2'}`}
+                        >
+                            <i data-lucide="file-text" className="w-3.5 h-3.5"></i>
+                            Importar M3U
+                        </button>
+                    </div>
+                    {syncError && <p className="mt-2 text-xs text-red-400 relative z-10">{syncError}</p>}
+                    {!syncError && remoteStreams.length > 0 && libraryFilter === 'web' && (
+                        <p className="mt-2 text-xs text-gray-500 relative z-10">{remoteStreams.length} canales importados. Vuelve a sincronizar cuando la pagina se actualice.</p>
                     )}
                 </div>
             );
 
             return (
                 <div className="flex h-[100dvh] w-full overflow-hidden bg-background relative">
-                    {showSaveModal && (
-                        <div className="fixed inset-0 z-[120] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm">
-                            <form onSubmit={saveFavorite} className="bg-surface border border-border w-full max-w-sm rounded-2xl shadow-2xl p-5 flex flex-col gap-4">
+
+                    {/* MODALES ABSOLUTOS */}
+
+                    {/* 1. Modal Ajustes */}
+                    <div className={`fixed inset-0 z-[120] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm transition-all duration-300 ${showSettingsModal ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                        <div className={`bg-surface border border-border w-full max-w-md rounded-2xl shadow-2xl transform transition-all duration-300 ${showSettingsModal ? 'scale-100 translate-y-0' : 'scale-95 translate-y-8'}`}>
+                            <div className="p-4 border-b border-border flex justify-between items-center bg-white/5 rounded-t-2xl">
                                 <h3 className="font-semibold text-white flex items-center gap-2">
-                                    <i data-lucide="star" className="w-5 h-5 text-yellow-400"></i> Guardar favorito
+                                    <i data-lucide="settings" className="w-5 h-5 text-gray-400"></i> Ajustes AceStream
                                 </h3>
-                                <input autoFocus value={saveTitle} onChange={(e) => setSaveTitle(e.target.value)} className="w-full bg-background border border-border text-white text-sm rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 p-3 outline-none" placeholder="Nombre del canal" />
-                                <div className="text-xs text-gray-500 font-mono break-all bg-black/30 p-2 rounded-lg border border-white/5">ID: {aceId}</div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button type="button" onClick={() => setShowSaveModal(false)} className="bg-surfaceHover hover:bg-white/10 text-white font-medium py-3 rounded-xl transition-all">Cancelar</button>
-                                    <button type="submit" className="bg-brand-500 hover:bg-brand-600 text-white font-medium py-3 rounded-xl transition-all">Guardar</button>
+                                <button onClick={() => setShowSettingsModal(false)} className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors">
+                                    <i data-lucide="x" className="w-5 h-5"></i>
+                                </button>
+                            </div>
+                            <div className="p-5 flex flex-col gap-4 text-sm text-gray-300">
+                                <div>
+                                    <label className="text-xs text-gray-500 mb-1 block">Puerto interno del motor (Umbrel)</label>
+                                    <input type="text" value="6878" readOnly className="w-full bg-background border border-border text-gray-400 rounded-lg p-2.5 outline-none font-mono" />
                                 </div>
+                                <div className="pt-2 border-t border-border mt-2">
+                                    <button onClick={handleRestartEngine} className="w-full bg-surfaceHover hover:bg-white/10 text-white font-medium py-2.5 rounded-lg transition-all flex justify-center items-center gap-2 border border-border">
+                                        <i data-lucide="refresh-cw" className={`w-4 h-4 ${isRestarting ? 'animate-spin text-brand-400' : ''}`}></i>
+                                        Forzar Reinicio del Motor
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 2. Modal Guardar Favorito */}
+                    <div className={`fixed inset-0 z-[110] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm transition-all duration-300 ${saveModalOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                        <div className={`bg-surface border border-border w-full max-w-sm rounded-2xl shadow-2xl transform transition-all duration-300 ${saveModalOpen ? 'scale-100 translate-y-0' : 'scale-95 translate-y-8'}`}>
+                            <div className="p-4 border-b border-border flex justify-between items-center bg-white/5 rounded-t-2xl">
+                                <h3 className="font-semibold text-white flex items-center gap-2">
+                                    <i data-lucide="star" className="w-5 h-5 text-yellow-400 fill-yellow-400/20"></i> Anadir a Favoritos
+                                </h3>
+                                <button onClick={() => setSaveModalOpen(false)} className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors">
+                                    <i data-lucide="x" className="w-5 h-5"></i>
+                                </button>
+                            </div>
+                            <form onSubmit={confirmSaveFavorite} className="p-5 flex flex-col gap-4">
+                                <div>
+                                    <label className="text-xs text-gray-400 mb-1 block">Titulo personalizado</label>
+                                    <input
+                                        autoFocus
+                                        type="text"
+                                        value={customTitle}
+                                        onChange={(e) => setCustomTitle(e.target.value)}
+                                        className="w-full bg-background border border-border text-white text-sm rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 p-3 outline-none"
+                                        placeholder="Ej: Movistar Deportes"
+                                    />
+                                </div>
+                                <div className="text-xs text-gray-500 font-mono break-all bg-black/30 p-2 rounded-lg border border-white/5">
+                                    ID: {aceId}
+                                </div>
+                                <button type="submit" className="w-full bg-brand-500 hover:bg-brand-600 text-white font-medium py-3 rounded-xl transition-all active:scale-95 flex justify-center items-center gap-2">
+                                    <i data-lucide="check" className="w-4 h-4"></i> Guardar
+                                </button>
                             </form>
                         </div>
-                    )}
+                    </div>
 
+                    {/* 3. Modal Editar Canal */}
+                    <div className={`fixed inset-0 z-[120] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm transition-all duration-300 ${editModalOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                        <div className={`bg-surface border border-border w-full max-w-sm rounded-2xl shadow-2xl transform transition-all duration-300 ${editModalOpen ? 'scale-100 translate-y-0' : 'scale-95 translate-y-8'}`}>
+                            <div className="p-4 border-b border-border flex justify-between items-center bg-white/5 rounded-t-2xl">
+                                <h3 className="font-semibold text-white flex items-center gap-2">
+                                    <i data-lucide="edit-2" className="w-5 h-5 text-gray-400"></i> Editar Canal
+                                </h3>
+                                <button onClick={() => { setEditModalOpen(false); setTimeout(() => setActionItem(null), 300); }} className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors">
+                                    <i data-lucide="x" className="w-5 h-5"></i>
+                                </button>
+                            </div>
+                            <form onSubmit={confirmEditChannel} className="p-5 flex flex-col gap-4">
+                                <div>
+                                    <label className="text-xs text-gray-400 mb-1 block">Nuevo titulo</label>
+                                    <input
+                                        autoFocus
+                                        type="text"
+                                        value={editTitle}
+                                        onChange={(e) => setEditTitle(e.target.value)}
+                                        className="w-full bg-background border border-border text-white text-sm rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 p-3 outline-none"
+                                    />
+                                </div>
+                                <button type="submit" className="w-full bg-brand-500 hover:bg-brand-600 text-white font-medium py-3 rounded-xl transition-all active:scale-95 flex justify-center items-center gap-2">
+                                    <i data-lucide="check" className="w-4 h-4"></i> Guardar Cambios
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    {/* 4. Action Sheet (3 Puntitos) */}
+                    <div className={`fixed inset-0 z-[110] flex items-end md:items-center justify-center px-4 pb-4 md:pb-0 bg-black/60 backdrop-blur-sm transition-all duration-300 ${actionItem ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setActionItem(null)}>
+                        <div className={`bg-surface border border-border w-full max-w-sm rounded-2xl shadow-2xl transform transition-all duration-300 ${actionItem ? 'scale-100 translate-y-0' : 'scale-95 translate-y-8'}`} onClick={e => e.stopPropagation()}>
+                            <div className="p-4 border-b border-border flex flex-col gap-1 bg-white/5 rounded-t-2xl">
+                                <h3 className="font-medium text-white truncate pr-4">{actionItem?.title}</h3>
+                                <p className="text-xs text-gray-500 font-mono truncate">{actionItem?.id}</p>
+                            </div>
+                            <div className="p-2 flex flex-col gap-1">
+                                <button onClick={() => { handlePlay(actionItem.id, actionItem.title); setActionItem(null); }} className="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-xl text-left text-white transition-colors active:scale-95">
+                                    <i data-lucide="play" className="w-5 h-5 text-brand-400"></i> Reproducir ahora
+                                </button>
+                                <button onClick={() => { setEditTitle(actionItem.title); setEditModalOpen(true); }} className="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-xl text-left text-white transition-colors active:scale-95">
+                                    <i data-lucide="edit-2" className="w-5 h-5 text-gray-400"></i> Editar titulo
+                                </button>
+                                <div className="h-px bg-border my-1 mx-2"></div>
+                                <button onClick={deleteChannel} className="flex items-center gap-3 w-full p-3 hover:bg-red-500/10 rounded-xl text-left text-red-500 transition-colors active:scale-95">
+                                    <i data-lucide="trash-2" className="w-5 h-5"></i> Eliminar de la lista
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    {/* --- SIDEBAR (Solo Desktop) --- */}
                     <aside className="w-[300px] lg:w-[340px] bg-surface/50 border-r border-border hidden md:flex flex-col shrink-0 z-10">
                         <div className="h-20 flex items-center justify-between px-6 border-b border-border shrink-0">
                             <div className="flex items-center gap-3">
@@ -483,77 +665,136 @@
                                 </div>
                             </div>
                         </div>
+
                         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
                             <div className="flex bg-background rounded-xl p-1 border border-border">
                                 {['fav', 'local', 'web'].map(filter => (
-                                    <button key={filter} onClick={() => setLibraryFilter(filter)} className={`flex-1 text-xs font-medium py-2 rounded-lg transition-all ${libraryFilter === filter ? 'bg-surface text-white shadow-sm border border-border' : 'text-gray-500 hover:text-gray-300'}`}>
+                                    <button
+                                        key={filter}
+                                        onClick={() => setLibraryFilter(filter)}
+                                        className={`flex-1 text-xs font-medium py-2 rounded-lg transition-all ${libraryFilter === filter ? 'bg-surface text-white shadow-sm border border-border' : 'text-gray-500 hover:text-gray-300'}`}
+                                    >
                                         {filter === 'fav' ? 'Favs' : filter === 'local' ? 'Recientes' : 'Web'}
                                     </button>
                                 ))}
                             </div>
-                            {libraryFilter === 'web' && (
-                                <div className="bg-brand-500/10 border border-brand-500/20 rounded-2xl p-4">
-                                    <h3 className="text-sm font-semibold text-brand-400 mb-3 flex items-center gap-2"><i data-lucide="globe" className="w-4 h-4"></i> Directorio remoto</h3>
-                                    <input value={syncUrl} onChange={(e) => setSyncUrl(e.target.value)} className="w-full bg-background/50 border border-brand-500/20 text-white text-xs rounded-lg p-2 mb-3 outline-none focus:border-brand-500 font-mono" placeholder="URL de web o archivo .m3u" />
-                                    <div className="flex gap-2">
-                                        <button onClick={() => syncWebDirectory('html')} disabled={isSyncing || !syncUrl} className="flex-1 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-medium py-2 rounded-lg transition-all flex justify-center items-center gap-2">
-                                            {isSyncing ? <i data-lucide="loader-2" className="w-3.5 h-3.5 animate-spin"></i> : <i data-lucide="search" className="w-3.5 h-3.5"></i>} HTML
-                                        </button>
-                                        <button onClick={() => syncWebDirectory('m3u')} disabled={isSyncing || !syncUrl} className="flex-1 bg-surface hover:bg-surfaceHover border border-border disabled:opacity-50 text-white text-xs font-medium py-2 rounded-lg transition-all flex justify-center items-center gap-2">
-                                            <i data-lucide="file-text" className="w-3.5 h-3.5"></i> M3U
-                                        </button>
-                                    </div>
-                                    {syncError && <p className="mt-2 text-xs text-red-400">{syncError}</p>}
-                                </div>
-                            )}
-                            <LibraryList />
+
+                            {libraryFilter === 'web' && <WebSyncPanel />}
+
+                            <LibraryGrid />
                         </div>
+
                         <div className="p-5 border-t border-border bg-surface/30 shrink-0">
-                            <div className="flex justify-between items-center">
+                            <div className="flex justify-between items-center mb-1">
                                 <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Ace Engine</span>
                                 <EngineStatus status={engineStatus} onRestart={handleRestartEngine} isRestarting={isRestarting} />
                             </div>
                         </div>
                     </aside>
 
+
+                    {/* --- MAIN CONTENT --- */}
                     <main className="flex-1 flex flex-col min-w-0 relative z-0">
                         <header className="h-16 md:h-20 flex items-center justify-between px-4 md:px-8 border-b border-border/50 shrink-0 bg-background/80 backdrop-blur-md z-20">
-                            <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 bg-gradient-to-br from-brand-400 to-blue-600 rounded-lg flex items-center justify-center md:hidden">
+                            <div className="flex md:hidden items-center gap-2.5">
+                                <div className="w-8 h-8 bg-gradient-to-br from-brand-400 to-blue-600 rounded-lg flex items-center justify-center">
                                     <i data-lucide="play" className="w-4 h-4 text-white fill-white ml-0.5"></i>
                                 </div>
-                                <div>
-                                    <h1 className="font-bold text-white tracking-tight md:hidden">AceNeo</h1>
-                                    <p className="hidden md:block text-sm font-medium text-gray-400">{isPlaying ? `Reproduciendo ${currentTitle}` : 'Sistema listo para transmision'}</p>
-                                </div>
+                                <h1 className="font-bold text-white tracking-tight">AceNeo</h1>
                             </div>
-                            <div className="md:hidden">
-                                <EngineStatus status={engineStatus} onRestart={handleRestartEngine} isRestarting={isRestarting} />
+                            <div className="hidden md:flex items-center text-sm font-medium text-gray-400">
+                                {isPlaying ? (
+                                    <span className="flex items-center gap-2"><i data-lucide="radio" className="w-4 h-4 text-brand-500 animate-pulse"></i> Reproduciendo {currentTitle}</span>
+                                ) : (
+                                    <span>Sistema listo para transmision</span>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="md:hidden">
+                                    <EngineStatus status={engineStatus} onRestart={handleRestartEngine} isRestarting={isRestarting} />
+                                </div>
+                                <IconButton icon="settings" onClick={() => setShowSettingsModal(true)} className="hidden md:flex" />
                             </div>
                         </header>
 
-                        <div className="flex-1 overflow-y-auto p-4 md:p-8">
+                        <div className="flex-1 overflow-y-auto p-4 md:p-8 relative">
                             <div className="max-w-[1200px] mx-auto h-full flex flex-col">
+
+                                {/* VISTA DE REPRODUCTOR */}
                                 <div className={`md:block h-full ${activeTabMobile === 'player' ? 'block' : 'hidden md:block'}`}>
                                     <div className="flex flex-col gap-4 md:gap-6 h-full animate-fade-in">
                                         <div className="relative w-full aspect-video md:aspect-[21/9] lg:aspect-[16/9] bg-black rounded-2xl md:rounded-3xl overflow-hidden shadow-2xl border border-white/5 ring-1 ring-white/10 group">
                                             <video ref={videoRef} className="absolute inset-0 w-full h-full bg-black" playsInline controls />
+
+                                            {isPlaying && !isConnecting && !error && (
+                                                <div className="absolute top-4 right-4 flex items-center gap-3 pointer-events-none">
+                                                    <button onClick={() => setShowNerdStats(!showNerdStats)} className="glass-panel p-2 rounded-full hover:bg-white/10 transition-colors text-white active:scale-95 pointer-events-auto">
+                                                        <i data-lucide="bar-chart-2" className="w-4 h-4"></i>
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            {showNerdStats && isPlaying && (
+                                                <div className="absolute top-16 right-4 glass-panel p-4 rounded-xl w-64 text-xs font-mono text-gray-300 shadow-2xl animate-fade-in z-20 border-white/10">
+                                                    <h4 className="text-white font-sans font-medium mb-3 border-b border-white/10 pb-2">Motor AceStream</h4>
+                                                    <div className="flex justify-between mb-2"><span>Estado:</span><span className="text-emerald-400 capitalize">{engineStatus}</span></div>
+                                                    <div className="mt-3 pt-2 border-t border-white/10 truncate text-[10px] text-gray-500">{aceId}</div>
+                                                    <p className="mt-2 text-[10px] text-gray-500">Estadisticas de red por stream: proximamente.</p>
+                                                </div>
+                                            )}
+
                                             {(!isPlaying || isConnecting || message || error) && (
-                                                <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center text-center px-6">
-                                                    {isConnecting ? <i data-lucide="loader-2" className="w-12 h-12 text-brand-500 animate-spin mb-4"></i> : <i data-lucide={error ? 'triangle-alert' : 'radio'} className={`w-12 h-12 mb-4 ${error ? 'text-red-400' : 'text-gray-500'}`}></i>}
-                                                    <p className={`text-sm md:text-base font-medium ${error ? 'text-red-300' : 'text-gray-300'}`}>{error || message}</p>
-                                                    {aceId && <p className="mt-3 max-w-lg text-[11px] text-gray-500 font-mono break-all">{aceId}</p>}
+                                                <div className="absolute inset-0 bg-surface/70 flex flex-col items-center justify-center relative overflow-hidden pointer-events-none">
+                                                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[150%] h-[150%] bg-brand-500/5 blur-[120px] rounded-full"></div>
+                                                    {isConnecting ? (
+                                                        <div className="relative z-10 flex flex-col items-center gap-4 px-6 text-center">
+                                                            <div className="relative">
+                                                                <div className="absolute inset-0 border-4 border-brand-500/30 rounded-full animate-ping"></div>
+                                                                <i data-lucide="loader-2" className="w-12 h-12 text-brand-500 animate-spin relative z-10"></i>
+                                                            </div>
+                                                            <p className="text-brand-400 font-medium animate-pulse">{message || 'Iniciando motor AceStream...'}</p>
+                                                        </div>
+                                                    ) : error ? (
+                                                        <div className="relative z-10 flex flex-col items-center text-center gap-4 px-6">
+                                                            <div className="w-20 h-20 rounded-full bg-surface border border-red-500/30 flex items-center justify-center shadow-lg">
+                                                                <i data-lucide="triangle-alert" className="w-10 h-10 text-red-400"></i>
+                                                            </div>
+                                                            <p className="text-sm text-red-300 max-w-sm">{error}</p>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="relative z-10 flex flex-col items-center text-gray-500 gap-4 px-6 text-center">
+                                                            <div className="w-20 h-20 rounded-full bg-surface border border-border flex items-center justify-center shadow-lg">
+                                                                <i data-lucide="radio" className="w-10 h-10 opacity-50"></i>
+                                                            </div>
+                                                            <p className="text-sm">{message || 'Introduce un ID para comenzar a transmitir'}</p>
+                                                        </div>
+                                                    )}
+                                                    {aceId && !isPlaying && <p className="mt-3 max-w-lg text-[11px] text-gray-500 font-mono break-all relative z-10">{aceId}</p>}
                                                 </div>
                                             )}
                                         </div>
 
+                                        {/* Input Box */}
                                         <div className="bg-surface border border-border rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-xl relative overflow-hidden">
+                                            <div className="absolute top-0 right-0 w-64 h-64 bg-brand-500/5 blur-[80px] rounded-full pointer-events-none"></div>
                                             <div className="relative z-10 flex flex-col md:flex-row gap-4">
                                                 <div className="flex-1 relative group">
                                                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                                                         <i data-lucide="hash" className="w-5 h-5 text-gray-500 group-focus-within:text-brand-400 transition-colors"></i>
                                                     </div>
-                                                    <input type="text" value={aceId} onChange={(e) => setAceId(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handlePlay(aceId); }} className="w-full bg-background border border-border text-gray-100 text-sm md:text-base rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 block pl-11 pr-4 py-3.5 transition-all outline-none font-mono placeholder:font-sans placeholder:text-gray-600" placeholder="Pegar Content ID, acestream://... o URL con ?id=..." />
+                                                    <input
+                                                        type="text"
+                                                        value={aceId}
+                                                        onChange={(e) => setAceId(e.target.value)}
+                                                        onKeyDown={(e) => { if (e.key === 'Enter') handlePlay(aceId); }}
+                                                        className="w-full bg-background border border-border text-gray-100 text-sm md:text-base rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 block w-full pl-11 pr-4 py-3.5 transition-all outline-none font-mono placeholder:font-sans placeholder:text-gray-600"
+                                                        placeholder="Pegar Content ID, acestream://... o URL con ?id=..."
+                                                    />
+                                                    {aceId && (
+                                                        <button onClick={() => setAceId('')} className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-500 hover:text-white">
+                                                            <i data-lucide="x" className="w-4 h-4"></i>
+                                                        </button>
+                                                    )}
                                                 </div>
                                                 <div className="flex items-center gap-2 md:gap-3">
                                                     {isPlaying ? (
@@ -561,53 +802,87 @@
                                                             <button onClick={handleStop} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 px-6 py-3.5 rounded-xl font-medium transition-all active:scale-95">
                                                                 <i data-lucide="square" className="w-4 h-4 fill-current"></i> Parar
                                                             </button>
-                                                            <IconButton icon="star" onClick={toggleFavorite} className={isFavorite ? "text-yellow-400 hover:text-yellow-300" : "text-gray-400 hover:text-white"} title="Favorito" />
+                                                            <div className="flex items-center gap-2 border-l border-border pl-3 ml-1">
+                                                                <IconButton
+                                                                    icon="star"
+                                                                    onClick={handleSaveClick}
+                                                                    className={isFavorite ? "text-yellow-400 hover:text-yellow-300" : "text-gray-400 hover:text-white"}
+                                                                    title="Anadir a favoritos"
+                                                                />
+                                                            </div>
                                                         </>
                                                     ) : (
-                                                        <button onClick={() => handlePlay(aceId)} disabled={!aceId || isConnecting} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:hover:bg-brand-500 text-white px-8 py-3.5 rounded-xl font-medium shadow-lg shadow-brand-500/20 transition-all active:scale-95">
-                                                            <i data-lucide="play" className="w-5 h-5 fill-current"></i><span>Reproducir</span>
+                                                        <button
+                                                            onClick={() => handlePlay(aceId)}
+                                                            disabled={!aceId || isConnecting}
+                                                            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:hover:bg-brand-500 text-white px-8 py-3.5 rounded-xl font-medium shadow-lg shadow-brand-500/20 transition-all active:scale-95"
+                                                        >
+                                                            <i data-lucide="play" className="w-5 h-5 fill-current"></i>
+                                                            <span>Reproducir</span>
                                                         </button>
                                                     )}
                                                 </div>
                                             </div>
                                         </div>
+                                    </div>
+                                </div>
 
-                                        <div className={`md:hidden h-full pb-24 overflow-y-auto ${activeTabMobile === 'library' ? 'block animate-fade-in' : 'hidden'}`}>
-                                            <div className="flex flex-col gap-4">
-                                                <div className="flex bg-background rounded-xl p-1 border border-border">
-                                                    {['fav', 'local', 'web'].map(filter => (
-                                                        <button key={filter} onClick={() => setLibraryFilter(filter)} className={`flex-1 text-xs font-medium py-2.5 rounded-lg transition-all ${libraryFilter === filter ? 'bg-surface text-white shadow-sm border border-border' : 'text-gray-500'}`}>
-                                                            {filter === 'fav' ? 'Favs' : filter === 'local' ? 'Recientes' : 'Web'}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                                {libraryFilter === 'web' && (
-                                                    <div className="bg-brand-500/10 border border-brand-500/20 rounded-2xl p-4">
-                                                        <input value={syncUrl} onChange={(e) => setSyncUrl(e.target.value)} className="w-full bg-background/50 border border-brand-500/20 text-white text-xs rounded-lg p-3 mb-3 outline-none focus:border-brand-500 font-mono" placeholder="URL de web o archivo .m3u" />
-                                                        <div className="flex flex-col gap-2">
-                                                            <button onClick={() => syncWebDirectory('html')} disabled={isSyncing || !syncUrl} className="w-full bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-medium py-3 rounded-xl transition-all flex justify-center items-center gap-2">Scraping HTML</button>
-                                                            <button onClick={() => syncWebDirectory('m3u')} disabled={isSyncing || !syncUrl} className="w-full bg-surface border border-border disabled:opacity-50 text-white text-sm font-medium py-3 rounded-xl transition-all flex justify-center items-center gap-2">Importar M3U</button>
-                                                        </div>
-                                                        {syncError && <p className="mt-2 text-xs text-red-400">{syncError}</p>}
-                                                    </div>
-                                                )}
-                                                <LibraryList />
-                                            </div>
+                                {/* VISTA MOVIL LIBRERIA (Reutilizada del sidebar) */}
+                                <div className={`md:hidden h-full pb-24 overflow-y-auto ${activeTabMobile === 'library' ? 'block animate-fade-in' : 'hidden'}`}>
+                                    <div className="flex flex-col gap-4">
+                                        <div className="flex bg-background rounded-xl p-1 border border-border">
+                                            {['fav', 'local', 'web'].map(filter => (
+                                                <button
+                                                    key={filter}
+                                                    onClick={() => setLibraryFilter(filter)}
+                                                    className={`flex-1 text-xs font-medium py-2.5 rounded-lg transition-all ${libraryFilter === filter ? 'bg-surface text-white shadow-sm border border-border' : 'text-gray-500'}`}
+                                                >
+                                                    {filter === 'fav' ? 'Favs' : filter === 'local' ? 'Recientes' : 'Web'}
+                                                </button>
+                                            ))}
                                         </div>
+
+                                        {libraryFilter === 'web' && <WebSyncPanel mobile />}
+
+                                        <LibraryGrid mobile />
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </main>
 
-                    <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-surface/90 backdrop-blur-xl border-t border-border z-50 px-6 flex items-center justify-around">
-                        <button onClick={() => setActiveTabMobile('player')} className={`flex flex-col items-center justify-center w-16 h-full gap-1 transition-colors ${activeTabMobile === 'player' ? 'text-brand-400' : 'text-gray-500 hover:text-gray-300'}`}>
-                            <i data-lucide="play-square" className="w-5 h-5"></i><span className="text-[10px] font-medium">Player</span>
+                    {/* --- BOTTOM NAVIGATION (Solo Mobile) --- */}
+                    <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-surface/90 backdrop-blur-xl border-t border-border z-50 px-6 flex items-center justify-around pb-safe">
+                        <button
+                            onClick={() => setActiveTabMobile('player')}
+                            className={`flex flex-col items-center justify-center w-16 h-full gap-1 transition-colors ${activeTabMobile === 'player' ? 'text-brand-400' : 'text-gray-500 hover:text-gray-300'}`}
+                        >
+                            <div className={`relative ${activeTabMobile === 'player' ? 'scale-110' : ''} transition-transform`}>
+                                <i data-lucide="play-square" className="w-5 h-5"></i>
+                                {isPlaying && activeTabMobile !== 'player' && (
+                                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-brand-500 rounded-full border-2 border-surface"></span>
+                                )}
+                            </div>
+                            <span className="text-[10px] font-medium">Player</span>
                         </button>
-                        <button onClick={() => setActiveTabMobile('library')} className={`flex flex-col items-center justify-center w-16 h-full gap-1 transition-colors ${activeTabMobile === 'library' ? 'text-brand-400' : 'text-gray-500 hover:text-gray-300'}`}>
-                            <i data-lucide="library" className="w-5 h-5"></i><span className="text-[10px] font-medium">Biblioteca</span>
+
+                        <button
+                            onClick={() => setActiveTabMobile('library')}
+                            className={`flex flex-col items-center justify-center w-16 h-full gap-1 transition-colors ${activeTabMobile === 'library' ? 'text-brand-400' : 'text-gray-500 hover:text-gray-300'}`}
+                        >
+                            <i data-lucide="library" className={`w-5 h-5 ${activeTabMobile === 'library' ? 'scale-110' : ''} transition-transform`}></i>
+                            <span className="text-[10px] font-medium">Libreria</span>
+                        </button>
+
+                        <button
+                            onClick={() => setShowSettingsModal(true)}
+                            className="flex flex-col items-center justify-center w-16 h-full gap-1 transition-colors text-gray-500 hover:text-gray-300"
+                        >
+                            <i data-lucide="settings" className="w-5 h-5"></i>
+                            <span className="text-[10px] font-medium">Ajustes</span>
                         </button>
                     </nav>
+
                 </div>
             );
         };

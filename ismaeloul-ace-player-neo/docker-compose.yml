@@ -17,12 +17,9 @@ services:
     container_name: ismaeloul-ace-player-neo_storage_1
     restart: unless-stopped
     working_dir: /app
-    command: |
-      sh -c "
-        wget -q -O /app/server.js 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/server.js?v=0.2.2' &&
-        node /app/server.js
-      "
+    command: node /app/server.js
     volumes:
+      - ${APP_DATA_DIR}/server.js:/app/server.js:ro
       - ${APP_DATA_DIR}/data:/data
       - /var/run/docker.sock:/var/run/docker.sock
 
@@ -33,10 +30,8 @@ services:
     depends_on:
       - acestream
       - storage
-    command: |
-      sh -c "
-        wget -q -O /usr/share/nginx/html/index.html 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/index.html?v=0.2.2' &&
-        wget -q -O /usr/share/nginx/html/icon.svg 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg?v=0.2.2' &&
-        wget -q -O /etc/nginx/conf.d/default.conf 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/nginx.conf?v=0.2.2' &&
-        nginx -g 'daemon off;'
-      "
+    volumes:
+      - ${APP_DATA_DIR}/index.html:/usr/share/nginx/html/index.html:ro
+      - ${APP_DATA_DIR}/icon.svg:/usr/share/nginx/html/icon.svg:ro
+      - ${APP_DATA_DIR}/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    command: nginx -g 'daemon off;'
