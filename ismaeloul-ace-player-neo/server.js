@@ -224,7 +224,7 @@ function parseHtml(text) {
 function aceRequest(pathname) {
   return new Promise((resolve, reject) => {
     const req = http.get({
-      hostname: "acestream",
+      hostname: "ismaeloul-ace-player-neo_acestream_1",
       port: 6878,
       path: pathname,
       timeout: 5000,
