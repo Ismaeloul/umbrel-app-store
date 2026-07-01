@@ -267,6 +267,20 @@
       font-size: 14px;
       font-weight: 900;
     }
+    .count {
+      min-width: 28px;
+      height: 24px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .05);
+      color: var(--muted);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 8px;
+      font-size: 11px;
+      font-weight: 900;
+    }
     .link-btn {
       border: 0;
       background: transparent;
@@ -302,6 +316,102 @@
       white-space: nowrap;
       font-size: 13px;
     }
+    .search-panel {
+      position: relative;
+      overflow: hidden;
+    }
+    .search-panel::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(135deg, rgba(45, 224, 127, .16), transparent 44%),
+        radial-gradient(circle at 88% 18%, rgba(95, 180, 255, .18), transparent 30%);
+      opacity: .7;
+      pointer-events: none;
+    }
+    .search-box {
+      position: relative;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 9px;
+      min-height: 48px;
+      border: 1px solid rgba(255, 255, 255, .14);
+      border-radius: 15px;
+      background: rgba(8, 9, 11, .52);
+      padding: 0 10px 0 13px;
+      transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+    }
+    .search-box:focus-within {
+      border-color: rgba(45, 224, 127, .62);
+      box-shadow: 0 0 0 4px rgba(45, 224, 127, .1);
+      transform: translateY(-1px);
+    }
+    .search-icon {
+      position: relative;
+      width: 15px;
+      height: 15px;
+      display: block;
+      border: 2px solid var(--green);
+      border-radius: 50%;
+      opacity: .95;
+    }
+    .search-icon::after {
+      content: "";
+      position: absolute;
+      width: 7px;
+      height: 2px;
+      right: -5px;
+      bottom: -2px;
+      border-radius: 999px;
+      background: var(--green);
+      transform: rotate(45deg);
+      transform-origin: left center;
+    }
+    .search-input {
+      width: 100%;
+      min-width: 0;
+      height: 46px;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 800;
+      padding: 0;
+    }
+    .search-input::placeholder {
+      color: var(--muted);
+      opacity: .86;
+    }
+    .clear-search {
+      width: 30px;
+      height: 30px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, .06);
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 900;
+      opacity: 0;
+      pointer-events: none;
+      transform: scale(.86);
+      transition: opacity .16s ease, transform .16s ease, color .16s ease;
+    }
+    .clear-search.visible {
+      opacity: 1;
+      pointer-events: auto;
+      transform: scale(1);
+    }
+    .search-summary {
+      position: relative;
+      min-height: 17px;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 850;
+    }
     .list {
       display: grid;
       gap: 8px;
@@ -328,6 +438,13 @@
       align-items: center;
       gap: 8px;
       padding: 10px;
+      animation: itemIn .22s ease both;
+      transition: border-color .16s ease, background .16s ease, transform .16s ease;
+    }
+    .item:hover {
+      border-color: rgba(45, 224, 127, .32);
+      background: #1a2027;
+      transform: translateY(-1px);
     }
     .item-main {
       min-width: 0;
@@ -365,6 +482,31 @@
       background: var(--surface-3);
       color: var(--muted);
       font-weight: 900;
+      transition: border-color .16s ease, color .16s ease, transform .16s ease;
+    }
+    .mini:hover {
+      border-color: rgba(95, 180, 255, .38);
+      color: var(--text);
+      transform: translateY(-1px);
+    }
+    @keyframes itemIn {
+      from {
+        opacity: 0;
+        transform: translateY(6px) scale(.985);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .item,
+      .mini,
+      .search-box,
+      .clear-search {
+        animation: none;
+        transition: none;
+      }
     }
     .modal-backdrop {
       position: fixed;
@@ -487,9 +629,22 @@
           </div>
         </section>
 
+        <section class="panel search-panel">
+          <div class="panel-head">
+            <h2 class="panel-title">Busqueda</h2>
+          </div>
+          <div class="search-box">
+            <span class="search-icon" aria-hidden="true"></span>
+            <input class="search-input" id="librarySearch" type="search" autocomplete="off" spellcheck="false" placeholder="Buscar nombre o hash">
+            <button class="clear-search" id="clearSearchBtn" type="button" aria-label="Limpiar busqueda">x</button>
+          </div>
+          <div class="search-summary" id="searchSummary">Busca entre favoritos y recientes.</div>
+        </section>
+
         <section class="panel">
           <div class="panel-head">
             <h2 class="panel-title">Favoritos</h2>
+            <span class="count" id="favCount">0</span>
           </div>
           <div class="list" id="favList"></div>
         </section>
@@ -497,7 +652,10 @@
         <section class="panel">
           <div class="panel-head">
             <h2 class="panel-title">Recientes</h2>
-            <button class="link-btn" id="clearHistoryBtn" type="button">Limpiar</button>
+            <div>
+              <span class="count" id="histCount">0</span>
+              <button class="link-btn" id="clearHistoryBtn" type="button">Limpiar</button>
+            </div>
           </div>
           <div class="list" id="histList"></div>
         </section>
@@ -532,8 +690,13 @@
     const engineMetric = document.getElementById("engineMetric");
     const manifestMetric = document.getElementById("manifestMetric");
     const segmentMetric = document.getElementById("segmentMetric");
+    const librarySearch = document.getElementById("librarySearch");
+    const clearSearchBtn = document.getElementById("clearSearchBtn");
+    const searchSummary = document.getElementById("searchSummary");
     const favList = document.getElementById("favList");
     const histList = document.getElementById("histList");
+    const favCount = document.getElementById("favCount");
+    const histCount = document.getElementById("histCount");
     const favModal = document.getElementById("favModal");
     const favNameInput = document.getElementById("favNameInput");
 
@@ -542,6 +705,7 @@
     let favoriteModalHash = null;
     let state = { favorites: [], history: [] };
     let retryCount = 0;
+    let searchTerm = "";
 
     function sanitizeHash(value) {
       const raw = String(value || "").trim();
@@ -611,6 +775,23 @@
 
     function displayNameForHash(hash, fallbackName) {
       return favoriteForHash(hash)?.name || fallbackName || `Canal ${hash.slice(0, 8)}`;
+    }
+
+    function itemMatchesSearch(item) {
+      if (!searchTerm) return true;
+      const name = displayNameForHash(item.hash, item.name).toLowerCase();
+      const hash = String(item.hash || "").toLowerCase();
+      return name.includes(searchTerm) || hash.includes(searchTerm);
+    }
+
+    function updateSearchSummary(favorites, history) {
+      clearSearchBtn.classList.toggle("visible", Boolean(searchTerm));
+      if (!searchTerm) {
+        searchSummary.textContent = "Busca entre favoritos y recientes.";
+        return;
+      }
+      const total = favorites.length + history.length;
+      searchSummary.textContent = total === 1 ? "1 resultado encontrado." : `${total} resultados encontrados.`;
     }
 
     async function addHistory(hash) {
@@ -792,7 +973,10 @@
 
     function renderList(container, items, type) {
       if (!items.length) {
-        container.innerHTML = `<div class="empty">${type === "fav" ? "Sin favoritos" : "Sin recientes"}</div>`;
+        const emptyText = searchTerm
+          ? (type === "fav" ? "Sin favoritos que coincidan" : "Sin recientes que coincidan")
+          : (type === "fav" ? "Sin favoritos" : "Sin recientes");
+        container.innerHTML = `<div class="empty">${emptyText}</div>`;
         return;
       }
       container.innerHTML = "";
@@ -833,8 +1017,13 @@
     }
 
     function renderAll() {
-      renderList(favList, state.favorites, "fav");
-      renderList(histList, state.history, "hist");
+      const favorites = state.favorites.filter(itemMatchesSearch);
+      const history = state.history.filter(itemMatchesSearch);
+      favCount.textContent = favorites.length;
+      histCount.textContent = history.length;
+      updateSearchSummary(favorites, history);
+      renderList(favList, favorites, "fav");
+      renderList(histList, history, "hist");
     }
 
     function openFavoriteModal(hash) {
@@ -887,6 +1076,16 @@
     document.getElementById("clearHistoryBtn").onclick = clearHistory;
     document.getElementById("cancelFavBtn").onclick = closeFavoriteModal;
     document.getElementById("confirmFavBtn").onclick = saveFavorite;
+    librarySearch.addEventListener("input", () => {
+      searchTerm = librarySearch.value.trim().toLowerCase();
+      renderAll();
+    });
+    clearSearchBtn.onclick = () => {
+      librarySearch.value = "";
+      searchTerm = "";
+      librarySearch.focus();
+      renderAll();
+    };
     statusButton.onclick = testConnection;
     hashInput.addEventListener("keydown", (event) => {
       if (event.key === "Enter") startPlayback();
