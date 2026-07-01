@@ -1,14 +1,14 @@
 manifestVersion: 1
 id: ismaeloul-ace-player
 category: media
-icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/icon.png"
+icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/icon.svg"
 name: Ace Player
-version: "1.6.10"
-tagline: Reproduce streams AceStream directamente en tu navegador
+version: "2.0.3"
+tagline: Reproduce streams AceStream desde Umbrel
 description: >-
-  Ace Player convierte tu Umbrel en un servidor AceStream personal.
-  Pega un hash o enlace acestream:// y reproduce el stream en tu navegador
-  sin instalar nada. Incluye una interfaz simple, favoritos, recientes y reproductor HLS integrado.
+  Ace Player convierte tu Umbrel en un reproductor AceStream web.
+  Pega un hash o enlace acestream://, guarda favoritos y reproduce el stream
+  desde el navegador usando HLS.
 developer: Ismaeloul
 website: https://github.com/Ismaeloul
 dependencies: []

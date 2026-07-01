@@ -2,53 +2,58 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Ace Player</title>
-  <link rel="icon" type="image/png" href="/icon.png">
-  <link rel="apple-touch-icon" href="/icon.png">
-  <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.min.js"></script>
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="apple-touch-icon" href="/icon.svg">
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.6.10/dist/hls.min.js"></script>
   <style>
     :root {
-      --bg: #111318;
-      --panel: #1c2028;
-      --panel-2: #141820;
-      --text: #f3f4f6;
-      --muted: #aab2c0;
-      --line: #2d3442;
-      --strong: #86efac;
-      --accent: #7c3aed;
-      --accent-dark: #6d28d9;
-      --warn: #f59e0b;
-      --danger: #fb7185;
-      --blue: #60a5fa;
-      --shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+      color-scheme: dark;
+      --bg: #08090b;
+      --surface: #111418;
+      --surface-2: #171c22;
+      --surface-3: #20262e;
+      --text: #f7f7f4;
+      --muted: #9aa5ae;
+      --line: rgba(255, 255, 255, 0.1);
+      --green: #2de07f;
+      --blue: #5fb4ff;
+      --amber: #ffc857;
+      --red: #ff5d75;
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
     }
 
     * { box-sizing: border-box; }
-    html, body { min-height: 100%; }
+    html, body { min-height: 100%; background: var(--bg); }
     body {
       margin: 0;
-      background:
-        radial-gradient(circle at top left, rgba(124, 58, 237, 0.16), transparent 30%),
-        var(--bg);
       color: var(--text);
+      background: linear-gradient(180deg, #101318 0%, #08090b 48%);
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
     }
     button, input { font: inherit; }
-    button { cursor: pointer; }
-
-    .shell {
-      width: min(1440px, 100%);
-      margin: 0 auto;
-      padding: 18px 14px 34px;
+    button {
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
     }
-    .top {
+    button:disabled {
+      cursor: not-allowed;
+      opacity: .55;
+    }
+
+    .app {
+      width: min(1120px, 100%);
+      min-height: 100vh;
+      margin: 0 auto;
+      padding: max(14px, env(safe-area-inset-top)) 12px max(24px, env(safe-area-inset-bottom));
+    }
+    .topbar {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-columns: minmax(0, 1fr);
       gap: 12px;
-      align-items: center;
-      margin-bottom: 14px;
+      margin-bottom: 12px;
     }
     .brand {
       min-width: 0;
@@ -57,205 +62,223 @@
       gap: 12px;
     }
     .brand img {
-      width: 44px;
-      height: 44px;
-      border-radius: 8px;
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
       border: 1px solid var(--line);
-      background: #ffffff;
+      background: #0b0d10;
     }
     h1 {
       margin: 0;
-      font-size: 24px;
-      line-height: 1.05;
+      font-size: 22px;
+      line-height: 1;
       letter-spacing: 0;
     }
     .brand p {
       margin: 4px 0 0;
       color: var(--muted);
-      font-size: 13px;
-      font-weight: 650;
+      font-size: 12px;
+      font-weight: 700;
     }
     .status {
-      min-height: 40px;
+      min-height: 42px;
+      width: 100%;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.04);
       color: var(--muted);
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
-      padding: 0 12px;
-      font-size: 13px;
-      font-weight: 800;
+      padding: 0 14px;
+      font-size: 12px;
+      font-weight: 850;
       white-space: nowrap;
     }
     .dot {
       width: 9px;
       height: 9px;
       border-radius: 50%;
-      background: var(--warn);
+      background: var(--amber);
+      box-shadow: 0 0 0 4px rgba(255, 200, 87, .12);
     }
-    .status.online .dot { background: #16a34a; }
-    .status.offline .dot { background: var(--danger); }
+    .status.online { color: #d8ffe9; border-color: rgba(45, 224, 127, .32); }
+    .status.online .dot { background: var(--green); box-shadow: 0 0 0 4px rgba(45, 224, 127, .15); }
+    .status.offline { color: #ffd6de; border-color: rgba(255, 93, 117, .32); }
+    .status.offline .dot { background: var(--red); box-shadow: 0 0 0 4px rgba(255, 93, 117, .15); }
 
     .layout {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 360px;
-      gap: 14px;
-      align-items: start;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 12px;
     }
+    .player-card,
     .panel {
-      background: var(--panel);
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 18px;
+      background: var(--surface);
       box-shadow: var(--shadow);
       overflow: hidden;
     }
-    .player-wrap {
-      background: #05070b;
+    .stage {
       position: relative;
+      min-height: 206px;
       aspect-ratio: 16 / 9;
+      background: #020304;
     }
     video {
       width: 100%;
       height: 100%;
       display: block;
-      background: #05070b;
+      background: #020304;
     }
     .overlay {
       position: absolute;
       inset: 0;
       display: grid;
       place-items: center;
-      background: rgba(5, 7, 11, 0.84);
-      color: #e5e7eb;
-      padding: 24px;
+      padding: 22px;
       text-align: center;
+      color: var(--muted);
+      background: linear-gradient(180deg, rgba(2, 3, 4, .36), rgba(2, 3, 4, .9));
       pointer-events: none;
     }
-    .overlay-card {
-      width: min(390px, 100%);
+    .overlay-inner {
+      width: min(340px, 100%);
       display: grid;
       gap: 10px;
       justify-items: center;
     }
     .overlay-title {
       color: #fff;
-      font-size: 20px;
-      font-weight: 900;
+      font-size: 24px;
+      font-weight: 950;
     }
     .overlay-text {
-      color: #aab2c0;
-      font-size: 14px;
+      font-size: 13px;
       line-height: 1.45;
     }
     .spinner {
       width: 34px;
       height: 34px;
-      border: 3px solid rgba(255, 255, 255, 0.18);
+      border: 3px solid rgba(255, 255, 255, .18);
       border-top-color: #fff;
       border-radius: 50%;
-      animation: spin 0.85s linear infinite;
+      animation: spin .85s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
     .controls {
       display: grid;
-      gap: 12px;
-      padding: 14px;
+      gap: 10px;
+      padding: 12px;
       border-top: 1px solid var(--line);
-      background: var(--panel);
     }
     .input-row {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 10px;
+      grid-template-columns: 1fr;
+      gap: 8px;
     }
     .hash-input {
       width: 100%;
-      min-height: 48px;
+      min-height: 52px;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel-2);
+      border-radius: 14px;
+      background: var(--surface-2);
       color: var(--text);
       outline: none;
-      padding: 0 12px;
-      font-size: 14px;
-      font-weight: 650;
+      padding: 0 14px;
+      font-size: 13px;
+      font-weight: 700;
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     }
     .hash-input:focus {
-      border-color: var(--accent);
-      background: #111827;
-      box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18);
+      border-color: rgba(45, 224, 127, .72);
+      box-shadow: 0 0 0 4px rgba(45, 224, 127, .1);
     }
-    .button-row {
+    .actions {
       display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
     }
     .btn {
-      min-height: 42px;
+      min-height: 46px;
+      min-width: 0;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #242a35;
+      border-radius: 14px;
+      background: var(--surface-3);
       color: var(--text);
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 7px;
+      gap: 8px;
       padding: 0 12px;
-      font-size: 13px;
-      font-weight: 850;
+      font-size: 12px;
+      font-weight: 900;
       white-space: nowrap;
     }
     .btn.primary {
-      border-color: var(--accent);
-      background: var(--accent);
-      color: #fff;
-    }
-    .btn.primary:hover { background: var(--accent-dark); }
-    .btn.danger {
-      border-color: #fed7aa;
-      color: var(--danger);
-      background: rgba(251, 113, 133, 0.10);
+      border-color: var(--green);
+      background: var(--green);
+      color: #03130a;
     }
     .btn.blue {
-      border-color: #bfdbfe;
+      border-color: rgba(95, 180, 255, .3);
       color: var(--blue);
-      background: rgba(96, 165, 250, 0.10);
+      background: rgba(95, 180, 255, .1);
+    }
+    .btn.warning {
+      border-color: rgba(255, 200, 87, .32);
+      color: var(--amber);
+      background: rgba(255, 200, 87, .1);
+    }
+    .btn.danger {
+      border-color: rgba(255, 93, 117, .32);
+      color: var(--red);
+      background: rgba(255, 93, 117, .1);
     }
     .message {
       min-height: 18px;
       color: var(--muted);
-      font-size: 13px;
-      font-weight: 650;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.35;
     }
-    .message.ok { color: var(--strong); }
-    .message.error { color: var(--danger); }
+    .message.ok { color: var(--green); }
+    .message.error { color: var(--red); }
 
     .side {
       display: grid;
-      gap: 14px;
+      gap: 12px;
     }
-    .box {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      box-shadow: var(--shadow);
+    .panel {
       padding: 12px;
     }
-    .box-head {
+    .panel-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
+      gap: 10px;
       margin-bottom: 10px;
     }
-    .box-title {
+    .panel-title {
       margin: 0;
       font-size: 14px;
+      font-weight: 900;
+    }
+    .count {
+      min-width: 28px;
+      height: 24px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .05);
+      color: var(--muted);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 8px;
+      font-size: 11px;
       font-weight: 900;
     }
     .link-btn {
@@ -264,116 +287,241 @@
       color: var(--muted);
       padding: 4px 0;
       font-size: 12px;
-      font-weight: 800;
+      font-weight: 850;
     }
-    .meter {
+    .health {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 8px;
     }
     .metric {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel-2);
-      padding: 10px;
       min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface-2);
+      padding: 10px;
     }
     .metric span {
       display: block;
       color: var(--muted);
-      font-size: 11px;
-      font-weight: 800;
+      font-size: 10px;
+      font-weight: 900;
       text-transform: uppercase;
     }
     .metric strong {
       display: block;
       margin-top: 4px;
-      font-size: 14px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      font-size: 13px;
+    }
+    .search-panel {
+      position: relative;
+      overflow: hidden;
+    }
+    .search-panel::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(135deg, rgba(45, 224, 127, .16), transparent 44%),
+        radial-gradient(circle at 88% 18%, rgba(95, 180, 255, .18), transparent 30%);
+      opacity: .7;
+      pointer-events: none;
+    }
+    .search-box {
+      position: relative;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 9px;
+      min-height: 48px;
+      border: 1px solid rgba(255, 255, 255, .14);
+      border-radius: 15px;
+      background: rgba(8, 9, 11, .52);
+      padding: 0 10px 0 13px;
+      transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+    }
+    .search-box:focus-within {
+      border-color: rgba(45, 224, 127, .62);
+      box-shadow: 0 0 0 4px rgba(45, 224, 127, .1);
+      transform: translateY(-1px);
+    }
+    .search-icon {
+      position: relative;
+      width: 15px;
+      height: 15px;
+      display: block;
+      border: 2px solid var(--green);
+      border-radius: 50%;
+      opacity: .95;
+    }
+    .search-icon::after {
+      content: "";
+      position: absolute;
+      width: 7px;
+      height: 2px;
+      right: -5px;
+      bottom: -2px;
+      border-radius: 999px;
+      background: var(--green);
+      transform: rotate(45deg);
+      transform-origin: left center;
+    }
+    .search-input {
+      width: 100%;
+      min-width: 0;
+      height: 46px;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 800;
+      padding: 0;
+    }
+    .search-input::placeholder {
+      color: var(--muted);
+      opacity: .86;
+    }
+    .clear-search {
+      width: 30px;
+      height: 30px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, .06);
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 900;
+      opacity: 0;
+      pointer-events: none;
+      transform: scale(.86);
+      transition: opacity .16s ease, transform .16s ease, color .16s ease;
+    }
+    .clear-search.visible {
+      opacity: 1;
+      pointer-events: auto;
+      transform: scale(1);
+    }
+    .search-summary {
+      position: relative;
+      min-height: 17px;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 850;
     }
     .list {
       display: grid;
       gap: 8px;
-      max-height: 310px;
+      max-height: 300px;
       overflow: auto;
     }
+    .empty,
+    .item {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface-2);
+    }
     .empty {
-      border: 1px dashed var(--line);
-      border-radius: 8px;
-      background: var(--panel-2);
       color: var(--muted);
       padding: 18px 10px;
       text-align: center;
       font-size: 13px;
-      font-weight: 650;
+      font-weight: 700;
+      border-style: dashed;
     }
     .item {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
       align-items: center;
       gap: 8px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel-2);
-      padding: 9px;
+      padding: 10px;
+      animation: itemIn .22s ease both;
+      transition: border-color .16s ease, background .16s ease, transform .16s ease;
+    }
+    .item:hover {
+      border-color: rgba(45, 224, 127, .32);
+      background: #1a2027;
+      transform: translateY(-1px);
     }
     .item-main {
       min-width: 0;
       border: 0;
       background: transparent;
-      text-align: left;
       color: inherit;
+      text-align: left;
       padding: 0;
     }
-    .item-name {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      font-size: 13px;
-      font-weight: 900;
-    }
+    .item-name,
     .item-hash {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    .item-name {
+      font-size: 13px;
+      font-weight: 900;
+    }
+    .item-hash {
       margin-top: 3px;
       color: var(--muted);
       font-size: 11px;
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     }
-    .mini-row {
+    .item-actions {
       display: inline-flex;
       gap: 5px;
     }
     .mini {
-      width: 32px;
-      height: 32px;
+      width: 34px;
+      height: 34px;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #fff;
+      border-radius: 12px;
+      background: var(--surface-3);
       color: var(--muted);
-      font-size: 14px;
       font-weight: 900;
+      transition: border-color .16s ease, color .16s ease, transform .16s ease;
     }
-    .mini:hover { color: var(--accent); }
-    .mini.delete:hover { color: var(--danger); }
-
+    .mini:hover {
+      border-color: rgba(95, 180, 255, .38);
+      color: var(--text);
+      transform: translateY(-1px);
+    }
+    @keyframes itemIn {
+      from {
+        opacity: 0;
+        transform: translateY(6px) scale(.985);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .item,
+      .mini,
+      .search-box,
+      .clear-search {
+        animation: none;
+        transition: none;
+      }
+    }
     .modal-backdrop {
       position: fixed;
       inset: 0;
       display: none;
       place-items: center;
       padding: 16px;
-      background: rgba(16, 24, 40, 0.50);
-      z-index: 20;
+      background: rgba(0, 0, 0, .58);
+      z-index: 10;
     }
     .modal {
       width: min(420px, 100%);
-      background: var(--panel);
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 18px;
+      background: var(--surface);
       box-shadow: var(--shadow);
       padding: 16px;
     }
@@ -383,15 +531,15 @@
     }
     .modal input {
       width: 100%;
-      min-height: 46px;
+      min-height: 48px;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel-2);
+      border-radius: 14px;
+      background: var(--surface-2);
       color: var(--text);
       outline: none;
       padding: 0 12px;
       margin-bottom: 12px;
-      font-weight: 700;
+      font-weight: 800;
     }
     .modal-actions {
       display: grid;
@@ -399,26 +547,40 @@
       gap: 8px;
     }
 
-    @media (max-width: 980px) {
-      .layout { grid-template-columns: 1fr; }
-      .side { grid-template-columns: 1fr 1fr; }
+    @media (min-width: 720px) {
+      .app { padding: 20px 18px 38px; }
+      .topbar {
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+      .status { width: auto; min-width: 210px; }
+      .input-row { grid-template-columns: minmax(0, 1fr) 150px; }
+      .actions { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+      .stage { min-height: 0; }
     }
-    @media (max-width: 720px) {
-      .top, .input-row, .button-row, .side { grid-template-columns: 1fr; }
-      .status { justify-self: stretch; }
-      .brand h1 { font-size: 22px; }
-      .meter { grid-template-columns: 1fr; }
+    @media (min-width: 1040px) {
+      .layout { grid-template-columns: minmax(0, 1fr) 330px; gap: 14px; }
+      .side { gap: 14px; }
+      .health { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 430px) {
+      .brand img { width: 38px; height: 38px; }
+      h1 { font-size: 20px; }
+      .brand p { font-size: 11px; }
+      .stage { min-height: 196px; }
+      .health { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
-  <main class="shell">
-    <header class="top">
+  <main class="app">
+    <header class="topbar">
       <div class="brand">
-        <img src="/icon.png" alt="">
+        <img src="/icon.svg" alt="">
         <div>
-          <h1>AceStream Web</h1>
-          <p>Reproductor AceStream para Umbrel</p>
+          <h1>Ace Player</h1>
+          <p>AceStream en Umbrel</p>
         </div>
       </div>
       <button class="status" id="statusButton" type="button">
@@ -428,12 +590,12 @@
     </header>
 
     <div class="layout">
-      <section class="panel">
-        <div class="player-wrap">
+      <section class="player-card">
+        <div class="stage">
           <video id="player" playsinline controls></video>
           <div class="overlay" id="overlay">
-            <div class="overlay-card">
-              <div id="overlayIcon" class="overlay-title">ACE</div>
+            <div class="overlay-inner">
+              <div id="overlayIcon" class="overlay-title">Ace</div>
               <div id="overlayText" class="overlay-text">Pega un hash o enlace acestream:// para empezar.</div>
             </div>
           </div>
@@ -441,44 +603,59 @@
 
         <div class="controls">
           <div class="input-row">
-            <input class="hash-input" id="hashInput" type="text" autocomplete="off" spellcheck="false" placeholder="Pega un hash, acestream://... o enlace con ?id=...">
+            <input class="hash-input" id="hashInput" type="text" autocomplete="off" spellcheck="false" placeholder="Hash, acestream://... o URL con ?id=...">
             <button class="btn primary" id="playBtn" type="button">Reproducir</button>
           </div>
-          <div class="button-row">
+          <div class="actions">
             <button class="btn blue" id="liveBtn" type="button">Directo</button>
-            <button class="btn" id="saveBtn" type="button">Favorito</button>
+            <button class="btn" id="saveBtn" type="button">Guardar</button>
+            <button class="btn" id="testBtn" type="button">Test</button>
             <button class="btn" id="stopBtn" type="button">Parar</button>
-            <button class="btn" id="pipBtn" type="button">PiP</button>
-            <button class="btn danger" id="restartBtn" type="button">Reiniciar Motor</button>
+            <button class="btn danger" id="restartBtn" type="button">Reiniciar</button>
           </div>
           <div class="message" id="message"></div>
         </div>
       </section>
 
       <aside class="side">
-        <section class="box">
-          <div class="box-head">
-            <h2 class="box-title">Estado</h2>
+        <section class="panel">
+          <div class="panel-head">
+            <h2 class="panel-title">Diagnostico</h2>
           </div>
-          <div class="meter">
-            <div class="metric"><span>Stream</span><strong id="streamMetric">Sin cargar</strong></div>
-            <div class="metric"><span>Buffer</span><strong id="bufferMetric">0s</strong></div>
-            <div class="metric"><span>Latencia</span><strong id="latencyMetric">--</strong></div>
-            <div class="metric"><span>Reintentos</span><strong id="retryMetric">0</strong></div>
+          <div class="health">
+            <div class="metric"><span>Motor</span><strong id="engineMetric">--</strong></div>
+            <div class="metric"><span>Manifest</span><strong id="manifestMetric">--</strong></div>
+            <div class="metric"><span>Segmento</span><strong id="segmentMetric">--</strong></div>
           </div>
         </section>
 
-        <section class="box">
-          <div class="box-head">
-            <h2 class="box-title">Favoritos</h2>
+        <section class="panel search-panel">
+          <div class="panel-head">
+            <h2 class="panel-title">Busqueda</h2>
+          </div>
+          <div class="search-box">
+            <span class="search-icon" aria-hidden="true"></span>
+            <input class="search-input" id="librarySearch" type="search" autocomplete="off" spellcheck="false" placeholder="Buscar nombre o hash">
+            <button class="clear-search" id="clearSearchBtn" type="button" aria-label="Limpiar busqueda">x</button>
+          </div>
+          <div class="search-summary" id="searchSummary">Busca entre favoritos y recientes.</div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2 class="panel-title">Favoritos</h2>
+            <span class="count" id="favCount">0</span>
           </div>
           <div class="list" id="favList"></div>
         </section>
 
-        <section class="box">
-          <div class="box-head">
-            <h2 class="box-title">Recientes</h2>
-            <button class="link-btn" id="clearHistoryBtn" type="button">Limpiar</button>
+        <section class="panel">
+          <div class="panel-head">
+            <h2 class="panel-title">Recientes</h2>
+            <div>
+              <span class="count" id="histCount">0</span>
+              <button class="link-btn" id="clearHistoryBtn" type="button">Limpiar</button>
+            </div>
           </div>
           <div class="list" id="histList"></div>
         </section>
@@ -500,7 +677,8 @@
   <script>
     const SERVER = "";
     const HASH_RE = /^[a-fA-F0-9]{40}$/;
-    const MAX_HIST = 30;
+    const MAX_HIST = 40;
+
     const player = document.getElementById("player");
     const overlay = document.getElementById("overlay");
     const overlayIcon = document.getElementById("overlayIcon");
@@ -509,37 +687,40 @@
     const message = document.getElementById("message");
     const statusButton = document.getElementById("statusButton");
     const statusText = document.getElementById("statusText");
+    const engineMetric = document.getElementById("engineMetric");
+    const manifestMetric = document.getElementById("manifestMetric");
+    const segmentMetric = document.getElementById("segmentMetric");
+    const librarySearch = document.getElementById("librarySearch");
+    const clearSearchBtn = document.getElementById("clearSearchBtn");
+    const searchSummary = document.getElementById("searchSummary");
     const favList = document.getElementById("favList");
     const histList = document.getElementById("histList");
+    const favCount = document.getElementById("favCount");
+    const histCount = document.getElementById("histCount");
     const favModal = document.getElementById("favModal");
     const favNameInput = document.getElementById("favNameInput");
-    const streamMetric = document.getElementById("streamMetric");
-    const bufferMetric = document.getElementById("bufferMetric");
-    const latencyMetric = document.getElementById("latencyMetric");
-    const retryMetric = document.getElementById("retryMetric");
 
     let hls = null;
-    let tsPlayer = null;
     let currentHash = null;
-    let state = { favorites: [], history: [] };
-    let storageMode = "server";
-    let retryCount = 0;
     let favoriteModalHash = null;
-    let metricsTimer = null;
+    let state = { favorites: [], history: [] };
+    let retryCount = 0;
+    let searchTerm = "";
 
     function sanitizeHash(value) {
       const raw = String(value || "").trim();
-      const decoded = (() => {
-        try {
-          return decodeURIComponent(raw);
-        } catch {
-          return raw;
-        }
-      })();
-      const queryMatch = decoded.match(/[?&](?:id|content_id|hash)=([a-fA-F0-9]{40})/);
-      const uriMatch = decoded.match(/acestream:\/\/([a-fA-F0-9]{40})/i);
-      const hashMatch = decoded.match(/[a-fA-F0-9]{40}/);
-      return (queryMatch?.[1] || uriMatch?.[1] || hashMatch?.[0] || "").trim();
+      let decoded = raw;
+      try { decoded = decodeURIComponent(raw); } catch {}
+      return (
+        decoded.match(/[?&](?:id|content_id|hash)=([a-fA-F0-9]{40})/)?.[1] ||
+        decoded.match(/acestream:\/\/([a-fA-F0-9]{40})/i)?.[1] ||
+        decoded.match(/[a-fA-F0-9]{40}/)?.[0] ||
+        ""
+      ).trim();
+    }
+
+    function manifestUrl(hash) {
+      return `${SERVER}/ace/manifest.m3u8?id=${hash}&_=${Date.now()}`;
     }
 
     function setOverlay(title, text = "", loading = false) {
@@ -557,18 +738,6 @@
       message.className = `message ${type}`;
     }
 
-    function localState() {
-      return {
-        favorites: JSON.parse(localStorage.getItem("ace_favs") || "[]"),
-        history: JSON.parse(localStorage.getItem("ace_hist") || "[]"),
-      };
-    }
-
-    function writeLocal(next) {
-      localStorage.setItem("ace_favs", JSON.stringify(next.favorites || []));
-      localStorage.setItem("ace_hist", JSON.stringify(next.history || []));
-    }
-
     async function apiState(method = "GET", payload) {
       const options = { method, headers: { "Content-Type": "application/json" } };
       if (payload) options.body = JSON.stringify(payload);
@@ -580,32 +749,24 @@
     async function loadState() {
       try {
         state = await apiState();
-        storageMode = "server";
-        const legacy = localState();
-        if (!state.favorites.length && legacy.favorites.length) {
-          state.favorites = legacy.favorites;
-          await saveState(false);
-        }
       } catch {
-        storageMode = "local";
-        state = localState();
+        state = {
+          favorites: JSON.parse(localStorage.getItem("ace_favs") || "[]"),
+          history: JSON.parse(localStorage.getItem("ace_hist") || "[]"),
+        };
       }
       renderAll();
     }
 
-    async function saveState(render = true) {
+    async function saveState() {
       state.history = state.history.slice(0, MAX_HIST);
-      if (storageMode === "server") {
-        try {
-          state = await apiState("PUT", state);
-        } catch {
-          storageMode = "local";
-          writeLocal(state);
-        }
-      } else {
-        writeLocal(state);
+      try {
+        state = await apiState("PUT", state);
+      } catch {
+        localStorage.setItem("ace_favs", JSON.stringify(state.favorites));
+        localStorage.setItem("ace_hist", JSON.stringify(state.history));
       }
-      if (render) renderAll();
+      renderAll();
     }
 
     function favoriteForHash(hash) {
@@ -616,13 +777,25 @@
       return favoriteForHash(hash)?.name || fallbackName || `Canal ${hash.slice(0, 8)}`;
     }
 
-    async function addHistory(hash) {
-      const favorite = favoriteForHash(hash);
-      const playedAt = new Date().toISOString();
-      if (favorite) {
-        state.favorites = state.favorites.filter((item) => item.hash !== hash);
-        state.favorites.unshift({ ...favorite, date: playedAt });
+    function itemMatchesSearch(item) {
+      if (!searchTerm) return true;
+      const name = displayNameForHash(item.hash, item.name).toLowerCase();
+      const hash = String(item.hash || "").toLowerCase();
+      return name.includes(searchTerm) || hash.includes(searchTerm);
+    }
+
+    function updateSearchSummary(favorites, history) {
+      clearSearchBtn.classList.toggle("visible", Boolean(searchTerm));
+      if (!searchTerm) {
+        searchSummary.textContent = "Busca entre favoritos y recientes.";
+        return;
       }
+      const total = favorites.length + history.length;
+      searchSummary.textContent = total === 1 ? "1 resultado encontrado." : `${total} resultados encontrados.`;
+    }
+
+    async function addHistory(hash) {
+      const playedAt = new Date().toISOString();
       state.history = state.history.filter((item) => item.hash !== hash);
       state.history.unshift({ hash, name: displayNameForHash(hash), date: playedAt });
       await saveState();
@@ -631,33 +804,61 @@
     async function testConnection() {
       statusButton.className = "status";
       statusText.textContent = "Comprobando motor...";
+      engineMetric.textContent = "--";
       try {
         const response = await fetch(`${SERVER}/webui/api/service?method=get_version`, { signal: AbortSignal.timeout(5000) });
-        if (!response.ok) throw new Error("engine offline");
+        if (!response.ok) throw new Error("offline");
         const data = await response.json();
+        const version = data?.result?.version || "activo";
         statusButton.className = "status online";
-        statusText.textContent = data?.result?.version ? `Motor activo v${data.result.version}` : "Motor activo";
+        statusText.textContent = `Motor ${version}`;
+        engineMetric.textContent = version;
+        return true;
       } catch {
         statusButton.className = "status offline";
         statusText.textContent = "Motor sin respuesta";
+        engineMetric.textContent = "offline";
+        return false;
       }
     }
 
-    function manifestUrl(hash) {
-      return `${SERVER}/ace/manifest.m3u8?id=${hash}&_=${Date.now()}`;
-    }
+    async function testStream(value) {
+      const hash = sanitizeHash(value || hashInput.value || currentHash);
+      if (!HASH_RE.test(hash)) {
+        setMessage("Introduce un hash valido para probar.", "error");
+        return false;
+      }
 
-    function streamUrl(hash) {
-      return `${SERVER}/ace/getstream?id=${hash}&_=${Date.now()}`;
+      manifestMetric.textContent = "probando";
+      segmentMetric.textContent = "--";
+      setMessage("Probando manifest HLS...");
+      try {
+        const response = await fetch(manifestUrl(hash), { cache: "no-store", signal: AbortSignal.timeout(18000) });
+        const text = await response.text();
+        if (!response.ok || !text.includes("#EXTM3U")) throw new Error("manifest");
+        manifestMetric.textContent = "OK";
+        const segment = text.split("\n").map((line) => line.trim()).find((line) => line && !line.startsWith("#"));
+        if (!segment) {
+          segmentMetric.textContent = "sin segmento";
+          setMessage("Manifest OK, esperando segmentos.", "ok");
+          return true;
+        }
+        const segmentUrl = segment.startsWith("http") ? segment : new URL(segment, window.location.origin).toString();
+        const segResponse = await fetch(segmentUrl, { cache: "no-store", signal: AbortSignal.timeout(18000) });
+        if (!segResponse.ok) throw new Error("segment");
+        await segResponse.body?.cancel?.();
+        segmentMetric.textContent = "OK";
+        setMessage("Manifest y segmento OK.", "ok");
+        return true;
+      } catch {
+        if (manifestMetric.textContent !== "OK") manifestMetric.textContent = "error";
+        else segmentMetric.textContent = "error";
+        setMessage("El test del stream fallo.", "error");
+        return false;
+      }
     }
 
     function destroyPlayer() {
-      if (tsPlayer) {
-        tsPlayer.unload();
-        tsPlayer.detachMediaElement();
-        tsPlayer.destroy();
-        tsPlayer = null;
-      }
       if (hls) {
         hls.destroy();
         hls = null;
@@ -665,55 +866,15 @@
       player.pause();
       player.removeAttribute("src");
       player.load();
-      stopMetrics();
-    }
-
-    function liveEdge() {
-      if (!player.seekable || !player.seekable.length) return null;
-      const value = player.seekable.end(player.seekable.length - 1);
-      return Number.isFinite(value) ? value : null;
-    }
-
-    function bufferAhead() {
-      if (!player.buffered || !player.buffered.length) return 0;
-      for (let i = 0; i < player.buffered.length; i += 1) {
-        if (player.currentTime >= player.buffered.start(i) && player.currentTime <= player.buffered.end(i)) {
-          return Math.max(player.buffered.end(i) - player.currentTime, 0);
-        }
-      }
-      return 0;
-    }
-
-    function updateMetrics() {
-      const buffer = bufferAhead();
-      const edge = liveEdge();
-      bufferMetric.textContent = `${Math.round(buffer)}s`;
-      latencyMetric.textContent = edge ? `${Math.max(Math.round(edge - player.currentTime), 0)}s` : "--";
-      retryMetric.textContent = String(retryCount);
-      streamMetric.textContent = currentHash ? displayNameForHash(currentHash) : "Sin cargar";
-    }
-
-    function startMetrics() {
-      stopMetrics();
-      updateMetrics();
-      metricsTimer = setInterval(updateMetrics, 1000);
-    }
-
-    function stopMetrics() {
-      if (metricsTimer) clearInterval(metricsTimer);
-      metricsTimer = null;
-      updateMetrics();
     }
 
     function seekLiveEdge() {
-      const edge = liveEdge();
-      if (edge === null) {
-        setMessage("Todavia no hay borde directo disponible.", "error");
-        return;
+      if (hls?.liveSyncPosition) {
+        player.currentTime = hls.liveSyncPosition;
+      } else if (player.seekable?.length) {
+        player.currentTime = Math.max(player.seekable.end(player.seekable.length - 1) - 3, 0);
       }
-      player.currentTime = Math.max(edge - 18, 0);
       player.play().catch(() => setMessage("Pulsa play en el video.", ""));
-      setMessage("Saltando cerca del directo.", "ok");
     }
 
     async function startPlayback(value) {
@@ -726,108 +887,60 @@
       currentHash = hash;
       hashInput.value = hash;
       retryCount = 0;
-      retryMetric.textContent = "0";
       await addHistory(hash);
       destroyPlayer();
       setMessage("");
-      setOverlay("Conectando", "Abriendo stream AceStream...", true);
+      setOverlay("Conectando", "Preparando AceStream...", true);
 
-      if (window.mpegts && mpegts.isSupported()) {
-        tsPlayer = mpegts.createPlayer({
-          type: "mpegts",
-          isLive: true,
-          url: streamUrl(hash),
-        }, {
-          enableWorker: true,
-          liveBufferLatencyChasing: false,
-          liveSync: false,
-          lazyLoad: false,
-          stashInitialSize: 384 * 1024,
-          autoCleanupSourceBuffer: true,
-          autoCleanupMaxBackwardDuration: 90,
-          autoCleanupMinBackwardDuration: 45,
-        });
-        tsPlayer.attachMediaElement(player);
-        tsPlayer.load();
-        tsPlayer.on(mpegts.Events.ERROR, () => {
-          retryCount += 1;
-          updateMetrics();
-          setMessage("El stream directo se ha cortado. Probando HLS...", "error");
-          if (tsPlayer) {
-            tsPlayer.unload();
-            tsPlayer.detachMediaElement();
-            tsPlayer.destroy();
-            tsPlayer = null;
-          }
-          startHlsPlayback(hash);
-        });
-        player.addEventListener("loadedmetadata", () => {
-          hideOverlay();
-          startMetrics();
-        }, { once: true });
-        player.play().catch(() => setMessage("Pulsa play en el video.", ""));
-        setMessage("Usando stream directo. Es mas estable que HLS para AceStream.", "ok");
-        return;
-      }
-
-      startHlsPlayback(hash);
-    }
-
-    function startHlsPlayback(hash) {
       const url = manifestUrl(hash);
       if (window.Hls && Hls.isSupported()) {
         hls = new Hls({
           enableWorker: true,
           lowLatencyMode: false,
           liveDurationInfinity: true,
-          liveSyncDuration: 22,
-          liveMaxLatencyDuration: 75,
-          maxLiveSyncPlaybackRate: 1.02,
-          maxBufferLength: 90,
-          maxMaxBufferLength: 180,
-          backBufferLength: 45,
-          maxBufferHole: 2,
-          manifestLoadingTimeOut: 35000,
-          manifestLoadingMaxRetry: 10,
-          manifestLoadingRetryDelay: 1500,
-          levelLoadingTimeOut: 35000,
-          levelLoadingMaxRetry: 10,
-          fragLoadingTimeOut: 60000,
-          fragLoadingMaxRetry: 10,
-          fragLoadingRetryDelay: 1500,
+          liveSyncDuration: 18,
+          liveMaxLatencyDuration: 60,
+          maxBufferLength: 75,
+          backBufferLength: 30,
+          manifestLoadingTimeOut: 30000,
+          manifestLoadingMaxRetry: 8,
+          levelLoadingTimeOut: 30000,
+          fragLoadingTimeOut: 45000,
+          fragLoadingMaxRetry: 8,
         });
         hls.loadSource(url);
         hls.attachMedia(player);
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           hideOverlay();
-          startMetrics();
+          manifestMetric.textContent = "OK";
           player.play().catch(() => setMessage("Pulsa play en el video.", ""));
-          setMessage("Stream cargado. Si se queda sin buffer, espera unos segundos.", "ok");
+          setMessage("Stream cargado.", "ok");
+        });
+        hls.on(Hls.Events.FRAG_LOADED, () => {
+          segmentMetric.textContent = "OK";
         });
         hls.on(Hls.Events.ERROR, (_, data) => {
           if (!data.fatal) return;
-          retryCount += 1;
-          updateMetrics();
-          if (data.type === Hls.ErrorTypes.NETWORK_ERROR && retryCount <= 8) {
-            setMessage(`Reconectando segmento (${retryCount}/8)...`);
-            setTimeout(() => hls && hls.startLoad(), Math.min(1200 * retryCount, 6000));
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR && retryCount < 6) {
+            retryCount += 1;
+            setOverlay("Reconectando", `Reintento ${retryCount}/6...`, true);
+            setTimeout(() => hls && hls.startLoad(), Math.min(1400 * retryCount, 7000));
             return;
           }
-          if (data.type === Hls.ErrorTypes.MEDIA_ERROR && retryCount <= 4) {
-            setMessage("Recuperando el reproductor...");
+          if (data.type === Hls.ErrorTypes.MEDIA_ERROR && retryCount < 3) {
+            retryCount += 1;
             hls.recoverMediaError();
             return;
           }
-          setOverlay("Stream detenido", "Reinicia el motor o prueba de nuevo en unos segundos.");
-          setMessage("El reproductor no pudo recuperar el stream.", "error");
+          setOverlay("No se pudo reproducir", "Usa Test para ver si falla manifest o segmento.");
+          setMessage("Error de reproduccion.", "error");
         });
       } else if (player.canPlayType("application/vnd.apple.mpegurl")) {
         player.src = url;
         hideOverlay();
-        startMetrics();
         player.play().catch(() => setMessage("Pulsa play en el video.", ""));
       } else {
-        setOverlay("HLS no soportado", "Este navegador no puede reproducir este stream.");
+        setOverlay("HLS no soportado", "Este navegador no puede reproducir HLS.");
       }
     }
 
@@ -835,53 +948,35 @@
       currentHash = null;
       destroyPlayer();
       setMessage("");
-      setOverlay("ACE", "Pega un hash o enlace acestream:// para empezar.");
+      setOverlay("Ace", "Pega un hash o enlace acestream:// para empezar.");
     }
 
     async function restartEngine() {
-      const previousHash = currentHash;
       document.getElementById("restartBtn").disabled = true;
-      setMessage("Reiniciando motor AceStream...");
+      stopPlayback();
+      setOverlay("Reiniciando", "Esperando al motor AceStream...", true);
+      setMessage("Reiniciando motor...");
       try {
         const response = await fetch(`${SERVER}/api/restart-engine`, {
           method: "POST",
           headers: { "X-Ace-Action": "restart-engine" },
         });
-        if (!response.ok) throw new Error(response.status === 429 ? "cooldown" : "failed");
-        setMessage("Motor reiniciado. Esperando a que vuelva...", "ok");
-        destroyPlayer();
-        setOverlay("Motor reiniciado", "Espera unos segundos antes de reproducir.");
-        setTimeout(testConnection, 3500);
-        if (previousHash) setTimeout(() => startPlayback(previousHash), 7000);
-      } catch (error) {
-        setMessage(error.message === "cooldown" ? "Espera unos segundos antes de reiniciar otra vez." : "No se pudo reiniciar el motor.", "error");
-      } finally {
-        setTimeout(() => {
-          document.getElementById("restartBtn").disabled = false;
-        }, 3000);
-      }
-    }
-
-    async function enterPictureInPicture() {
-      if (!currentHash || player.readyState < 2) {
-        setMessage("Primero reproduce un stream.", "error");
-        return;
-      }
-      if (!document.pictureInPictureEnabled || player.disablePictureInPicture) {
-        setMessage("PiP no esta disponible en este navegador.", "error");
-        return;
-      }
-      try {
-        if (document.pictureInPictureElement) await document.exitPictureInPicture();
-        else await player.requestPictureInPicture();
+        if (!response.ok) throw new Error("restart");
+        setTimeout(testConnection, 4000);
+        setMessage("Motor reiniciado.", "ok");
       } catch {
-        setMessage("El navegador ha bloqueado PiP.", "error");
+        setMessage("No se pudo reiniciar el motor.", "error");
+      } finally {
+        setTimeout(() => { document.getElementById("restartBtn").disabled = false; }, 3000);
       }
     }
 
     function renderList(container, items, type) {
       if (!items.length) {
-        container.innerHTML = `<div class="empty">${type === "fav" ? "Sin favoritos" : "Sin recientes"}</div>`;
+        const emptyText = searchTerm
+          ? (type === "fav" ? "Sin favoritos que coincidan" : "Sin recientes que coincidan")
+          : (type === "fav" ? "Sin favoritos" : "Sin recientes");
+        container.innerHTML = `<div class="empty">${emptyText}</div>`;
         return;
       }
       container.innerHTML = "";
@@ -898,19 +993,19 @@
         main.querySelector(".item-hash").textContent = item.hash;
 
         const actions = document.createElement("div");
-        actions.className = "mini-row";
+        actions.className = "item-actions";
 
-        const fav = document.createElement("button");
-        fav.type = "button";
-        fav.className = "mini";
-        fav.textContent = type === "fav" ? "E" : "+";
-        fav.title = type === "fav" ? "Renombrar" : "Guardar favorito";
-        fav.onclick = () => openFavoriteModal(item.hash);
-        actions.appendChild(fav);
+        const save = document.createElement("button");
+        save.type = "button";
+        save.className = "mini";
+        save.textContent = type === "fav" ? "E" : "+";
+        save.title = type === "fav" ? "Renombrar" : "Guardar favorito";
+        save.onclick = () => openFavoriteModal(item.hash);
+        actions.appendChild(save);
 
         const del = document.createElement("button");
         del.type = "button";
-        del.className = "mini delete";
+        del.className = "mini";
         del.textContent = "x";
         del.title = "Eliminar";
         del.onclick = () => removeItem(type, item.hash);
@@ -922,9 +1017,13 @@
     }
 
     function renderAll() {
-      renderList(favList, state.favorites, "fav");
-      renderList(histList, state.history, "hist");
-      updateMetrics();
+      const favorites = state.favorites.filter(itemMatchesSearch);
+      const history = state.history.filter(itemMatchesSearch);
+      favCount.textContent = favorites.length;
+      histCount.textContent = history.length;
+      updateSearchSummary(favorites, history);
+      renderList(favList, favorites, "fav");
+      renderList(histList, history, "hist");
     }
 
     function openFavoriteModal(hash) {
@@ -933,16 +1032,16 @@
         setMessage("Introduce un hash valido primero.", "error");
         return;
       }
-      hashInput.value = cleanHash;
       favoriteModalHash = cleanHash;
+      hashInput.value = cleanHash;
       favNameInput.value = state.favorites.find((item) => item.hash === cleanHash)?.name || "";
       favModal.style.display = "grid";
       setTimeout(() => favNameInput.focus(), 50);
     }
 
     function closeFavoriteModal() {
-      favModal.style.display = "none";
       favoriteModalHash = null;
+      favModal.style.display = "none";
     }
 
     async function saveFavorite() {
@@ -971,18 +1070,28 @@
     document.getElementById("playBtn").onclick = () => startPlayback();
     document.getElementById("liveBtn").onclick = seekLiveEdge;
     document.getElementById("saveBtn").onclick = () => openFavoriteModal();
+    document.getElementById("testBtn").onclick = () => testStream();
     document.getElementById("stopBtn").onclick = stopPlayback;
-    document.getElementById("pipBtn").onclick = enterPictureInPicture;
     document.getElementById("restartBtn").onclick = restartEngine;
     document.getElementById("clearHistoryBtn").onclick = clearHistory;
     document.getElementById("cancelFavBtn").onclick = closeFavoriteModal;
     document.getElementById("confirmFavBtn").onclick = saveFavorite;
+    librarySearch.addEventListener("input", () => {
+      searchTerm = librarySearch.value.trim().toLowerCase();
+      renderAll();
+    });
+    clearSearchBtn.onclick = () => {
+      librarySearch.value = "";
+      searchTerm = "";
+      librarySearch.focus();
+      renderAll();
+    };
     statusButton.onclick = testConnection;
     hashInput.addEventListener("keydown", (event) => {
       if (event.key === "Enter") startPlayback();
     });
     player.addEventListener("waiting", () => {
-      if (currentHash) setMessage("Buffering... no salto al directo automaticamente.");
+      if (currentHash) setMessage("Buffering...");
     });
     player.addEventListener("playing", () => {
       if (currentHash) setMessage("Reproduciendo.", "ok");
@@ -991,8 +1100,7 @@
       if (event.target === favModal) closeFavoriteModal();
     });
 
-    setOverlay("ACE", "Pega un hash o enlace acestream:// para empezar.");
-    updateMetrics();
+    setOverlay("Ace", "Pega un hash o enlace acestream:// para empezar.");
     loadState();
     testConnection();
     setInterval(testConnection, 30000);
