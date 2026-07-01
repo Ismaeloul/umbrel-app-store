@@ -49,6 +49,7 @@ function normalizeItem(item, fallbackType = "recent") {
     type,
     category,
     date: item?.date || new Date().toISOString(),
+    fromWebSync: item?.fromWebSync === true,
   };
 }
 

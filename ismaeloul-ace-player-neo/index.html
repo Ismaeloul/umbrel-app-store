@@ -141,7 +141,7 @@
             );
         };
 
-        const ContentCard = ({ title, id, type = 'recent', category, onClick, onOptionsClick, hideCategory = false, isFavorited = false, onToggleFavorite }) => {
+        const ContentCard = ({ title, id, type = 'recent', category, onClick, onOptionsClick, hideCategory = false, isFavorited = false, onToggleFavorite, isPotentiallyDead = false }) => {
             const categoryColors = {
                 'Deportes': 'bg-orange-500/10 text-orange-400 border-orange-500/20',
                 'Cine': 'bg-purple-500/10 text-purple-400 border-purple-500/20',
@@ -162,6 +162,14 @@
                             {category && !hideCategory && (
                                 <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-md border ${catColor} flex items-center`}>
                                     {category}
+                                </span>
+                            )}
+                            {isPotentiallyDead && (
+                                <span
+                                    title="Este canal ya no aparece en la ultima sincronizacion; puede que el ID haya cambiado"
+                                    className="p-1 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center"
+                                >
+                                    <Icon name="alert-triangle" className="w-3.5 h-3.5" />
                                 </span>
                             )}
                         </div>
@@ -188,6 +196,47 @@
                 </div>
             );
         };
+
+        const WebSyncPanel = ({ syncUrl, setSyncUrl, isSyncing, syncError, remoteStreams, webSyncedAt, onSyncHtml, onSyncM3u }) => (
+            <div className="relative">
+                <h3 className="text-sm font-semibold text-brand-400 mb-3 flex items-center gap-2">
+                    <Icon name="globe" className="w-4 h-4" /> Directorio Remoto
+                </h3>
+
+                <input
+                    type="text"
+                    value={syncUrl}
+                    onChange={(e) => setSyncUrl(e.target.value)}
+                    className="w-full bg-background border border-border text-white text-xs rounded-lg outline-none focus:border-brand-500 font-mono mb-3 p-2.5"
+                    placeholder="URL de web o archivo .m3u/.m3u8"
+                />
+
+                <div className="flex gap-2">
+                    <button
+                        onClick={onSyncHtml}
+                        disabled={isSyncing || !syncUrl}
+                        className="flex-1 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-medium py-2 rounded-lg transition-all active:scale-95 flex justify-center items-center gap-2 shadow-lg shadow-brand-500/20"
+                    >
+                        {isSyncing ? <Icon name="loader-2" className="w-3.5 h-3.5 animate-spin" /> : <Icon name="search" className="w-3.5 h-3.5" />}
+                        Scraping HTML
+                    </button>
+                    <button
+                        onClick={onSyncM3u}
+                        disabled={isSyncing || !syncUrl}
+                        className="flex-1 bg-surfaceHover hover:bg-white/10 border border-border disabled:opacity-50 text-white text-xs font-medium py-2 rounded-lg transition-all active:scale-95 flex justify-center items-center gap-2"
+                    >
+                        <Icon name="file-text" className="w-3.5 h-3.5" />
+                        Importar M3U
+                    </button>
+                </div>
+                {syncError && <p className="mt-2 text-xs text-red-400">{syncError}</p>}
+                {!syncError && remoteStreams.length > 0 && (
+                    <p className="mt-2 text-xs text-gray-500">
+                        {remoteStreams.length} canales. Se actualiza solo cada 3h{webSyncedAt ? ` (ultima vez: ${new Date(webSyncedAt).toLocaleString('es-ES')})` : ''}.
+                    </p>
+                )}
+            </div>
+        );
 
         const AppNeo = () => {
             const HASH_RE = /^[a-fA-F0-9]{40}$/;
@@ -530,7 +579,8 @@
                     id: aceId,
                     type: 'fav',
                     category: 'Guardado',
-                    date: new Date().toISOString()
+                    date: new Date().toISOString(),
+                    fromWebSync: remoteStreams.some(w => w.id === aceId),
                 };
                 const nextLocal = [newFav, ...localLibrary.filter(item => !(item.id === aceId && item.type === 'fav'))];
                 setLocalLibrary(nextLocal);
@@ -610,10 +660,12 @@
                 const already = isFavoritedId(item.id);
                 const nextLocal = already
                     ? localLibrary.filter(i => !(i.id === item.id && i.type === 'fav'))
-                    : [{ title: item.title, id: item.id, type: 'fav', category: item.category || 'Guardado', date: new Date().toISOString() }, ...localLibrary];
+                    : [{ title: item.title, id: item.id, type: 'fav', category: item.category || 'Guardado', date: new Date().toISOString(), fromWebSync: remoteStreams.some(w => w.id === item.id) }, ...localLibrary];
                 setLocalLibrary(nextLocal);
                 persistState(nextLocal);
             };
+
+            const isPotentiallyDead = (item) => item.type === 'fav' && item.fromWebSync && !remoteStreams.some(w => w.id === item.id);
 
             const LibraryGrid = ({ mobile = false }) => (
                 <div className={mobile ? "grid grid-cols-1 sm:grid-cols-2 gap-3" : "grid grid-cols-1 gap-2"}>
@@ -623,6 +675,7 @@
                             {...item}
                             isFavorited={isFavoritedId(item.id)}
                             onToggleFavorite={() => toggleCardFavorite(item)}
+                            isPotentiallyDead={isPotentiallyDead(item)}
                             onClick={() => handlePlay(item.id, item.title)}
                             onOptionsClick={() => setActionItem(item)}
                         />
@@ -632,47 +685,6 @@
                             <Icon name="ghost" className={mobile ? "w-12 h-12 opacity-20 mx-auto mb-3" : "w-8 h-8 opacity-20"} />
                             <p>{mobile ? 'Lista vacia' : 'No hay canales en esta seccion'}</p>
                         </div>
-                    )}
-                </div>
-            );
-
-            const WebSyncPanel = () => (
-                <div className="relative">
-                    <h3 className="text-sm font-semibold text-brand-400 mb-3 flex items-center gap-2">
-                        <Icon name="globe" className="w-4 h-4" /> Directorio Remoto
-                    </h3>
-
-                    <input
-                        type="text"
-                        value={syncUrl}
-                        onChange={(e) => setSyncUrl(e.target.value)}
-                        className="w-full bg-background border border-border text-white text-xs rounded-lg outline-none focus:border-brand-500 font-mono mb-3 p-2.5"
-                        placeholder="URL de web o archivo .m3u/.m3u8"
-                    />
-
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => syncWebDirectory('html')}
-                            disabled={isSyncing || !syncUrl}
-                            className="flex-1 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-medium py-2 rounded-lg transition-all active:scale-95 flex justify-center items-center gap-2 shadow-lg shadow-brand-500/20"
-                        >
-                            {isSyncing ? <Icon name="loader-2" className="w-3.5 h-3.5 animate-spin" /> : <Icon name="search" className="w-3.5 h-3.5" />}
-                            Scraping HTML
-                        </button>
-                        <button
-                            onClick={() => syncWebDirectory('m3u')}
-                            disabled={isSyncing || !syncUrl}
-                            className="flex-1 bg-surfaceHover hover:bg-white/10 border border-border disabled:opacity-50 text-white text-xs font-medium py-2 rounded-lg transition-all active:scale-95 flex justify-center items-center gap-2"
-                        >
-                            <Icon name="file-text" className="w-3.5 h-3.5" />
-                            Importar M3U
-                        </button>
-                    </div>
-                    {syncError && <p className="mt-2 text-xs text-red-400">{syncError}</p>}
-                    {!syncError && remoteStreams.length > 0 && (
-                        <p className="mt-2 text-xs text-gray-500">
-                            {remoteStreams.length} canales. Se actualiza solo cada 3h{webSyncedAt ? ` (ultima vez: ${new Date(webSyncedAt).toLocaleString('es-ES')})` : ''}.
-                        </p>
                     )}
                 </div>
             );
@@ -752,7 +764,16 @@
                                     <input type="text" value="6878" readOnly className="w-full bg-background border border-border text-gray-400 rounded-lg p-2.5 outline-none font-mono" />
                                 </div>
                                 <div className="pt-4 border-t border-border">
-                                    <WebSyncPanel />
+                                    <WebSyncPanel
+                                        syncUrl={syncUrl}
+                                        setSyncUrl={setSyncUrl}
+                                        isSyncing={isSyncing}
+                                        syncError={syncError}
+                                        remoteStreams={remoteStreams}
+                                        webSyncedAt={webSyncedAt}
+                                        onSyncHtml={() => syncWebDirectory('html')}
+                                        onSyncM3u={() => syncWebDirectory('m3u')}
+                                    />
                                 </div>
                                 <div className="pt-2 border-t border-border mt-2">
                                     <button onClick={handleRestartEngine} className="w-full bg-surfaceHover hover:bg-white/10 text-white font-medium py-2.5 rounded-lg transition-all flex justify-center items-center gap-2 border border-border">
@@ -802,7 +823,7 @@
                         <div className={`bg-surface border border-border w-full max-w-sm rounded-2xl shadow-2xl transform transition-all duration-300 ${editModalOpen ? 'scale-100 translate-y-0' : 'scale-95 translate-y-8'}`}>
                             <div className="p-4 border-b border-border flex justify-between items-center bg-white/5 rounded-t-2xl">
                                 <h3 className="font-semibold text-white flex items-center gap-2">
-                                    <Icon name="edit-2" className="w-5 h-5 text-gray-400" /> Editar Canal
+                                    <Icon name="pencil-line" className="w-5 h-5 text-gray-400" /> Editar Canal
                                 </h3>
                                 <button onClick={() => { setEditModalOpen(false); setTimeout(() => setActionItem(null), 300); }} className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors">
                                     <Icon name="x" className="w-5 h-5" />
@@ -838,7 +859,7 @@
                                     <Icon name="play" className="w-5 h-5 text-brand-400" /> Reproducir ahora
                                 </button>
                                 <button onClick={() => { setEditTitle(actionItem.title); setEditTarget({ id: actionItem.id, type: actionItem.type }); setEditModalOpen(true); setActionItem(null); }} className="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-xl text-left text-white transition-colors active:scale-95">
-                                    <Icon name="edit-2" className="w-5 h-5 text-gray-400" /> Editar titulo
+                                    <Icon name="pencil-line" className="w-5 h-5 text-gray-400" /> Editar titulo
                                 </button>
                                 <div className="h-px bg-border my-1 mx-2"></div>
                                 <button onClick={deleteChannel} className="flex items-center gap-3 w-full p-3 hover:bg-red-500/10 rounded-xl text-left text-red-500 transition-colors active:scale-95">
@@ -988,7 +1009,7 @@
                                                     ) : error ? (
                                                         <div className="relative z-10 flex flex-col items-center text-center gap-4 px-6">
                                                             <div className="w-20 h-20 rounded-full bg-surface border border-red-500/30 flex items-center justify-center shadow-lg">
-                                                                <Icon name="triangle-alert" className="w-10 h-10 text-red-400" />
+                                                                <Icon name="alert-triangle" className="w-10 h-10 text-red-400" />
                                                             </div>
                                                             <p className="text-sm text-red-300 max-w-sm">{error}</p>
                                                         </div>
