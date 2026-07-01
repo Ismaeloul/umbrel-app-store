@@ -178,6 +178,7 @@
             const [isConnecting, setIsConnecting] = useState(false);
             const [message, setMessage] = useState('Introduce un ID para comenzar a transmitir');
             const [error, setError] = useState('');
+            const [needsTap, setNeedsTap] = useState(false);
             const [activeTabMobile, setActiveTabMobile] = useState('player');
             const [libraryFilter, setLibraryFilter] = useState('fav');
             const [showNerdStats, setShowNerdStats] = useState(false);
@@ -288,6 +289,7 @@
                 const source = `/ace/manifest.m3u8?id=${id}&_=${Date.now()}`;
                 setIsConnecting(true);
                 setError('');
+                setNeedsTap(false);
                 setMessage('Conectando con AceStream...');
 
                 if (window.Hls && Hls.isSupported()) {
@@ -304,7 +306,7 @@
                         setIsPlaying(true);
                         setEngineStatus('online');
                         setMessage('');
-                        video.play().catch(() => setMessage('Pulsa play en el video.'));
+                        video.play().catch(() => setNeedsTap(true));
                     });
                     hls.on(Hls.Events.ERROR, (_, data) => {
                         if (!data.fatal) return;
@@ -327,7 +329,7 @@
                         setIsPlaying(true);
                         setEngineStatus('online');
                         setMessage('');
-                    }).catch(() => setMessage('Pulsa play en el video.'));
+                    }).catch(() => setNeedsTap(true));
                     return;
                 }
 
@@ -362,8 +364,15 @@
                 destroyPlayer();
                 setIsPlaying(false);
                 setIsConnecting(false);
+                setNeedsTap(false);
                 setShowNerdStats(false);
                 setMessage('Reproduccion detenida.');
+            };
+
+            const resumePlayback = () => {
+                const video = videoRef.current;
+                if (!video) return;
+                video.play().then(() => setNeedsTap(false)).catch(() => {});
             };
 
             const handleRestartEngine = async () => {
@@ -743,7 +752,19 @@
                                                 </div>
                                             )}
 
-                                            {(!isPlaying || isConnecting || message || error) && (
+                                            {isPlaying && needsTap && !isConnecting && !error && (
+                                                <button
+                                                    onClick={resumePlayback}
+                                                    className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60 text-white z-10"
+                                                >
+                                                    <div className="w-16 h-16 rounded-full bg-brand-500 flex items-center justify-center shadow-lg">
+                                                        <i data-lucide="play" className="w-7 h-7 fill-current ml-1"></i>
+                                                    </div>
+                                                    <p className="text-sm font-medium">Toca para reproducir</p>
+                                                </button>
+                                            )}
+
+                                            {(!isPlaying || isConnecting || error) && (
                                                 <div className="absolute inset-0 bg-surface/70 flex flex-col items-center justify-center relative overflow-hidden pointer-events-none">
                                                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[150%] h-[150%] bg-brand-500/5 blur-[120px] rounded-full"></div>
                                                     {isConnecting ? (
