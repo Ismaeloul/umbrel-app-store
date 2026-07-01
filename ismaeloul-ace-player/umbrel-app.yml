@@ -3,7 +3,7 @@ id: ismaeloul-ace-player
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/icon.svg"
 name: Ace Player
-version: "2.0.3"
+version: "2.0.4"
 tagline: Reproduce streams AceStream desde Umbrel
 description: >-
   Ace Player convierte tu Umbrel en un reproductor AceStream web.

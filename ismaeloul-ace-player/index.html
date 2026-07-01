@@ -6,6 +6,7 @@
   <title>Ace Player</title>
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
   <link rel="apple-touch-icon" href="/icon.svg">
+  <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.6.10/dist/hls.min.js"></script>
   <style>
     :root {
@@ -701,6 +702,7 @@
     const favNameInput = document.getElementById("favNameInput");
 
     let hls = null;
+    let tsPlayer = null;
     let currentHash = null;
     let favoriteModalHash = null;
     let state = { favorites: [], history: [] };
@@ -721,6 +723,10 @@
 
     function manifestUrl(hash) {
       return `${SERVER}/ace/manifest.m3u8?id=${hash}&_=${Date.now()}`;
+    }
+
+    function streamUrl(hash) {
+      return `${SERVER}/ace/getstream?id=${hash}&_=${Date.now()}`;
     }
 
     function setOverlay(title, text = "", loading = false) {
@@ -859,6 +865,12 @@
     }
 
     function destroyPlayer() {
+      if (tsPlayer) {
+        tsPlayer.unload();
+        tsPlayer.detachMediaElement();
+        tsPlayer.destroy();
+        tsPlayer = null;
+      }
       if (hls) {
         hls.destroy();
         hls = null;
@@ -892,6 +904,44 @@
       setMessage("");
       setOverlay("Conectando", "Preparando AceStream...", true);
 
+      if (window.mpegts && mpegts.isSupported()) {
+        tsPlayer = mpegts.createPlayer({
+          type: "mpegts",
+          isLive: true,
+          url: streamUrl(hash),
+        }, {
+          enableWorker: true,
+          lazyLoad: false,
+          stashInitialSize: 384 * 1024,
+          autoCleanupSourceBuffer: true,
+          autoCleanupMaxBackwardDuration: 90,
+          autoCleanupMinBackwardDuration: 45,
+        });
+        tsPlayer.attachMediaElement(player);
+        tsPlayer.load();
+        tsPlayer.on(mpegts.Events.ERROR, () => {
+          retryCount += 1;
+          setMessage("El stream directo fallo. Probando HLS...", "error");
+          if (tsPlayer) {
+            tsPlayer.unload();
+            tsPlayer.detachMediaElement();
+            tsPlayer.destroy();
+            tsPlayer = null;
+          }
+          startHlsPlayback(hash);
+        });
+        player.addEventListener("loadedmetadata", () => {
+          hideOverlay();
+          setMessage("Stream directo cargado.", "ok");
+        }, { once: true });
+        player.play().catch(() => setMessage("Pulsa play en el video.", ""));
+        return;
+      }
+
+      startHlsPlayback(hash);
+    }
+
+    function startHlsPlayback(hash) {
       const url = manifestUrl(hash);
       if (window.Hls && Hls.isSupported()) {
         hls = new Hls({

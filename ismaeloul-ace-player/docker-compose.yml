@@ -19,7 +19,7 @@ services:
     working_dir: /app
     command: |
       sh -c "
-        wget -q -O /app/server.js 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/server.js?v=2.0.3' &&
+        wget -q -O /app/server.js 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/server.js?v=2.0.4' &&
         node /app/server.js
       "
     volumes:
@@ -36,8 +36,8 @@ services:
     command: |
       sh -c "
         mkdir -p /www &&
-        wget -q -O /www/index.html 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/index.html?v=2.0.3' &&
-        wget -q -O /www/icon.svg 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/icon.svg?v=2.0.3' &&
+        wget -q -O /www/index.html 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/index.html?v=2.0.4' &&
+        wget -q -O /www/icon.svg 'https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player/icon.svg?v=2.0.4' &&
         printf '%s\n' \
           'events {}' \
           'http {' \
@@ -70,6 +70,10 @@ services:
           '      sub_filter_once off;' \
           '      sub_filter http://127.0.0.1:6878/ace/ /ace/;' \
           '      sub_filter http://localhost:6878/ace/ /ace/;' \
+          '      sub_filter http://acestream:6878/ace/ /ace/;' \
+          '      sub_filter http://127.0.0.1:6878/content/ /content/;' \
+          '      sub_filter http://localhost:6878/content/ /content/;' \
+          '      sub_filter http://acestream:6878/content/ /content/;' \
           '    }' \
           '    location /content/ {' \
           '      proxy_pass http://acestream:6878/content/;' \
@@ -80,6 +84,7 @@ services:
           '      proxy_request_buffering off;' \
           '      proxy_read_timeout 3600s;' \
           '      proxy_send_timeout 3600s;' \
+          '      proxy_redirect ~^http://[^/]+/content/(.*)$$ $$scheme://$$http_host/content/$$1;' \
           '    }' \
           '    location /webui/ {' \
           '      proxy_pass http://acestream:6878/webui/;' \
