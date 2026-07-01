@@ -52,9 +52,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script>window.react = window.React;</script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide-react@0.263.1/dist/umd/lucide-react.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@1.6.10/dist/hls.min.js"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
 
     <style>
         body {
@@ -82,6 +83,13 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
+        const toPascalCase = (name) => name.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join('');
+        const Icon = ({ name, className }) => {
+            const Component = window.LucideReact && window.LucideReact[toPascalCase(name)];
+            if (!Component) return null;
+            return <Component className={className} />;
+        };
+
         const IconButton = ({ icon, onClick, active, variant = 'ghost', className = "", title, disabled }) => {
             const base = "p-2.5 rounded-xl flex items-center justify-center transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:pointer-events-none";
             const variants = {
@@ -92,7 +100,7 @@
             };
             return (
                 <button className={`${base} ${variants[variant]} ${className}`} onClick={onClick} title={title} disabled={disabled}>
-                    <i data-lucide={icon} className="w-5 h-5"></i>
+                    <Icon name={icon} className="w-5 h-5" />
                 </button>
             );
         };
@@ -120,7 +128,7 @@
                         className="p-1.5 rounded-full hover:bg-surfaceHover text-gray-400 hover:text-white transition-colors disabled:opacity-50"
                         title="Reiniciar Motor"
                     >
-                        <i data-lucide="refresh-cw" className={`w-4 h-4 ${isRestarting ? 'animate-spin text-brand-400' : ''}`}></i>
+                        <Icon name="refresh-cw" className={`w-4 h-4 ${isRestarting ? 'animate-spin text-brand-400' : ''}`} />
                     </button>
                 </div>
             );
@@ -142,7 +150,7 @@
                     <div className="flex justify-between items-start">
                         <div className="flex gap-2 items-center">
                             <div className={`p-2 rounded-lg ${type === 'fav' ? 'bg-yellow-500/10 text-yellow-500' : type === 'web' ? 'bg-brand-500/10 text-brand-400' : 'bg-brand-500/10 text-brand-400'}`}>
-                                <i data-lucide={type === 'fav' ? 'star' : type === 'web' ? 'globe' : 'clock'} className={`w-4 h-4 ${type === 'fav' ? 'fill-yellow-500/20' : ''}`}></i>
+                                <Icon name={type === 'fav' ? 'star' : type === 'web' ? 'globe' : 'clock'} className={`w-4 h-4 ${type === 'fav' ? 'fill-yellow-500/20' : ''}`} />
                             </div>
                             {category && (
                                 <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-md border ${catColor} flex items-center`}>
@@ -154,7 +162,7 @@
                             onClick={(e) => { e.stopPropagation(); onOptionsClick(); }}
                             className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg relative z-10 active:scale-95"
                         >
-                            <i data-lucide="more-vertical" className="w-5 h-5"></i>
+                            <Icon name="more-vertical" className="w-5 h-5" />
                         </button>
                     </div>
                     <div>
@@ -190,6 +198,7 @@
             const [actionItem, setActionItem] = useState(null);
             const [editModalOpen, setEditModalOpen] = useState(false);
             const [editTitle, setEditTitle] = useState('');
+            const [editTarget, setEditTarget] = useState(null);
 
             // Web Syncing
             const [syncUrl, setSyncUrl] = useState('https://ipfs.io/ipns/k51qzi5uqu5di462t7j4vu4akwfhvtjhy88qbupktvoacqfqe9uforjvhyi4wr/hashes_acestream.m3u');
@@ -198,10 +207,6 @@
             const [remoteStreams, setRemoteStreams] = useState([]);
 
             const [localLibrary, setLocalLibrary] = useState([]);
-
-            useEffect(() => {
-                lucide.createIcons();
-            });
 
             useEffect(() => {
                 loadState();
@@ -402,6 +407,9 @@
                     persistState(nextLocal);
                 } else {
                     setCustomTitle(currentTitle || `Canal ${aceId.substring(0, 6)}`);
+                    setActionItem(null);
+                    setShowSettingsModal(false);
+                    setEditModalOpen(false);
                     setSaveModalOpen(true);
                 }
             };
@@ -424,13 +432,13 @@
 
             const confirmEditChannel = (e) => {
                 e.preventDefault();
-                if (actionItem?.type === 'web') {
-                    const nextRemote = remoteStreams.map(item => item.id === actionItem.id ? { ...item, title: editTitle } : item);
+                if (editTarget?.type === 'web') {
+                    const nextRemote = remoteStreams.map(item => item.id === editTarget.id ? { ...item, title: editTitle } : item);
                     setRemoteStreams(nextRemote);
                     persistState(localLibrary, nextRemote);
                 } else {
                     const nextLocal = localLibrary.map(item =>
-                        item.id === actionItem?.id && item.type === actionItem?.type
+                        item.id === editTarget?.id && item.type === editTarget?.type
                             ? { ...item, title: editTitle }
                             : item
                     );
@@ -438,7 +446,7 @@
                     persistState(nextLocal);
                 }
                 setEditModalOpen(false);
-                setTimeout(() => setActionItem(null), 300);
+                setEditTarget(null);
             };
 
             const deleteChannel = () => {
@@ -496,7 +504,7 @@
                     ))}
                     {filteredLibrary.length === 0 && (
                         <div className={mobile ? "text-center py-12 text-gray-500 text-sm col-span-full" : "text-center py-8 text-gray-500 text-sm flex flex-col items-center gap-3"}>
-                            <i data-lucide="ghost" className={mobile ? "w-12 h-12 opacity-20 mx-auto mb-3" : "w-8 h-8 opacity-20"}></i>
+                            <Icon name="ghost" className={mobile ? "w-12 h-12 opacity-20 mx-auto mb-3" : "w-8 h-8 opacity-20"} />
                             <p>{mobile ? 'Lista vacia' : 'No hay canales en esta seccion'}</p>
                         </div>
                     )}
@@ -509,7 +517,7 @@
                     {!mobile && isSyncing && <div className="absolute inset-0 bg-brand-500/20 animate-pulse pointer-events-none"></div>}
 
                     <h3 className={`text-sm font-semibold text-brand-400 mb-3 flex items-center gap-2 ${mobile ? '' : 'relative z-10'}`}>
-                        <i data-lucide="globe" className="w-4 h-4"></i> Directorio Remoto
+                        <Icon name="globe" className="w-4 h-4" /> Directorio Remoto
                     </h3>
 
                     <input
@@ -526,7 +534,7 @@
                             disabled={isSyncing || !syncUrl}
                             className={`bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-medium rounded-lg transition-all active:scale-95 flex justify-center items-center gap-2 shadow-lg shadow-brand-500/20 ${mobile ? 'w-full text-sm py-3 rounded-xl' : 'flex-1 text-xs py-2'}`}
                         >
-                            {isSyncing ? <i data-lucide="loader-2" className="w-3.5 h-3.5 animate-spin"></i> : <i data-lucide="search" className="w-3.5 h-3.5"></i>}
+                            {isSyncing ? <Icon name="loader-2" className="w-3.5 h-3.5 animate-spin" /> : <Icon name="search" className="w-3.5 h-3.5" />}
                             Scraping HTML
                         </button>
                         <button
@@ -534,7 +542,7 @@
                             disabled={isSyncing || !syncUrl}
                             className={`bg-surface hover:bg-surfaceHover border border-border disabled:opacity-50 text-white font-medium rounded-lg transition-all active:scale-95 flex justify-center items-center gap-2 ${mobile ? 'w-full text-sm py-3 rounded-xl' : 'flex-1 text-xs py-2'}`}
                         >
-                            <i data-lucide="file-text" className="w-3.5 h-3.5"></i>
+                            <Icon name="file-text" className="w-3.5 h-3.5" />
                             Importar M3U
                         </button>
                     </div>
@@ -555,10 +563,10 @@
                         <div className={`bg-surface border border-border w-full max-w-md rounded-2xl shadow-2xl transform transition-all duration-300 ${showSettingsModal ? 'scale-100 translate-y-0' : 'scale-95 translate-y-8'}`}>
                             <div className="p-4 border-b border-border flex justify-between items-center bg-white/5 rounded-t-2xl">
                                 <h3 className="font-semibold text-white flex items-center gap-2">
-                                    <i data-lucide="settings" className="w-5 h-5 text-gray-400"></i> Ajustes AceStream
+                                    <Icon name="settings" className="w-5 h-5 text-gray-400" /> Ajustes AceStream
                                 </h3>
                                 <button onClick={() => setShowSettingsModal(false)} className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors">
-                                    <i data-lucide="x" className="w-5 h-5"></i>
+                                    <Icon name="x" className="w-5 h-5" />
                                 </button>
                             </div>
                             <div className="p-5 flex flex-col gap-4 text-sm text-gray-300">
@@ -568,7 +576,7 @@
                                 </div>
                                 <div className="pt-2 border-t border-border mt-2">
                                     <button onClick={handleRestartEngine} className="w-full bg-surfaceHover hover:bg-white/10 text-white font-medium py-2.5 rounded-lg transition-all flex justify-center items-center gap-2 border border-border">
-                                        <i data-lucide="refresh-cw" className={`w-4 h-4 ${isRestarting ? 'animate-spin text-brand-400' : ''}`}></i>
+                                        <Icon name="refresh-cw" className={`w-4 h-4 ${isRestarting ? 'animate-spin text-brand-400' : ''}`} />
                                         Forzar Reinicio del Motor
                                     </button>
                                 </div>
@@ -581,10 +589,10 @@
                         <div className={`bg-surface border border-border w-full max-w-sm rounded-2xl shadow-2xl transform transition-all duration-300 ${saveModalOpen ? 'scale-100 translate-y-0' : 'scale-95 translate-y-8'}`}>
                             <div className="p-4 border-b border-border flex justify-between items-center bg-white/5 rounded-t-2xl">
                                 <h3 className="font-semibold text-white flex items-center gap-2">
-                                    <i data-lucide="star" className="w-5 h-5 text-yellow-400 fill-yellow-400/20"></i> Anadir a Favoritos
+                                    <Icon name="star" className="w-5 h-5 text-yellow-400 fill-yellow-400/20" /> Anadir a Favoritos
                                 </h3>
                                 <button onClick={() => setSaveModalOpen(false)} className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors">
-                                    <i data-lucide="x" className="w-5 h-5"></i>
+                                    <Icon name="x" className="w-5 h-5" />
                                 </button>
                             </div>
                             <form onSubmit={confirmSaveFavorite} className="p-5 flex flex-col gap-4">
@@ -603,7 +611,7 @@
                                     ID: {aceId}
                                 </div>
                                 <button type="submit" className="w-full bg-brand-500 hover:bg-brand-600 text-white font-medium py-3 rounded-xl transition-all active:scale-95 flex justify-center items-center gap-2">
-                                    <i data-lucide="check" className="w-4 h-4"></i> Guardar
+                                    <Icon name="check" className="w-4 h-4" /> Guardar
                                 </button>
                             </form>
                         </div>
@@ -614,10 +622,10 @@
                         <div className={`bg-surface border border-border w-full max-w-sm rounded-2xl shadow-2xl transform transition-all duration-300 ${editModalOpen ? 'scale-100 translate-y-0' : 'scale-95 translate-y-8'}`}>
                             <div className="p-4 border-b border-border flex justify-between items-center bg-white/5 rounded-t-2xl">
                                 <h3 className="font-semibold text-white flex items-center gap-2">
-                                    <i data-lucide="edit-2" className="w-5 h-5 text-gray-400"></i> Editar Canal
+                                    <Icon name="edit-2" className="w-5 h-5 text-gray-400" /> Editar Canal
                                 </h3>
                                 <button onClick={() => { setEditModalOpen(false); setTimeout(() => setActionItem(null), 300); }} className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors">
-                                    <i data-lucide="x" className="w-5 h-5"></i>
+                                    <Icon name="x" className="w-5 h-5" />
                                 </button>
                             </div>
                             <form onSubmit={confirmEditChannel} className="p-5 flex flex-col gap-4">
@@ -632,7 +640,7 @@
                                     />
                                 </div>
                                 <button type="submit" className="w-full bg-brand-500 hover:bg-brand-600 text-white font-medium py-3 rounded-xl transition-all active:scale-95 flex justify-center items-center gap-2">
-                                    <i data-lucide="check" className="w-4 h-4"></i> Guardar Cambios
+                                    <Icon name="check" className="w-4 h-4" /> Guardar Cambios
                                 </button>
                             </form>
                         </div>
@@ -647,14 +655,14 @@
                             </div>
                             <div className="p-2 flex flex-col gap-1">
                                 <button onClick={() => { handlePlay(actionItem.id, actionItem.title); setActionItem(null); }} className="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-xl text-left text-white transition-colors active:scale-95">
-                                    <i data-lucide="play" className="w-5 h-5 text-brand-400"></i> Reproducir ahora
+                                    <Icon name="play" className="w-5 h-5 text-brand-400" /> Reproducir ahora
                                 </button>
-                                <button onClick={() => { setEditTitle(actionItem.title); setEditModalOpen(true); }} className="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-xl text-left text-white transition-colors active:scale-95">
-                                    <i data-lucide="edit-2" className="w-5 h-5 text-gray-400"></i> Editar titulo
+                                <button onClick={() => { setEditTitle(actionItem.title); setEditTarget({ id: actionItem.id, type: actionItem.type }); setEditModalOpen(true); setActionItem(null); }} className="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-xl text-left text-white transition-colors active:scale-95">
+                                    <Icon name="edit-2" className="w-5 h-5 text-gray-400" /> Editar titulo
                                 </button>
                                 <div className="h-px bg-border my-1 mx-2"></div>
                                 <button onClick={deleteChannel} className="flex items-center gap-3 w-full p-3 hover:bg-red-500/10 rounded-xl text-left text-red-500 transition-colors active:scale-95">
-                                    <i data-lucide="trash-2" className="w-5 h-5"></i> Eliminar de la lista
+                                    <Icon name="trash-2" className="w-5 h-5" /> Eliminar de la lista
                                 </button>
                             </div>
                         </div>
@@ -666,7 +674,7 @@
                         <div className="h-20 flex items-center justify-between px-6 border-b border-border shrink-0">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 bg-gradient-to-br from-brand-400 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-brand-500/20">
-                                    <i data-lucide="play" className="w-5 h-5 text-white fill-white ml-0.5"></i>
+                                    <Icon name="play" className="w-5 h-5 text-white fill-white ml-0.5" />
                                 </div>
                                 <div>
                                     <h1 className="font-bold text-lg leading-tight tracking-tight text-white">AceNeo</h1>
@@ -707,13 +715,13 @@
                         <header className="h-16 md:h-20 flex items-center justify-between px-4 md:px-8 border-b border-border/50 shrink-0 bg-background/80 backdrop-blur-md z-20">
                             <div className="flex md:hidden items-center gap-2.5">
                                 <div className="w-8 h-8 bg-gradient-to-br from-brand-400 to-blue-600 rounded-lg flex items-center justify-center">
-                                    <i data-lucide="play" className="w-4 h-4 text-white fill-white ml-0.5"></i>
+                                    <Icon name="play" className="w-4 h-4 text-white fill-white ml-0.5" />
                                 </div>
                                 <h1 className="font-bold text-white tracking-tight">AceNeo</h1>
                             </div>
                             <div className="hidden md:flex items-center text-sm font-medium text-gray-400">
                                 {isPlaying ? (
-                                    <span className="flex items-center gap-2"><i data-lucide="radio" className="w-4 h-4 text-brand-500 animate-pulse"></i> Reproduciendo {currentTitle}</span>
+                                    <span className="flex items-center gap-2"><Icon name="radio" className="w-4 h-4 text-brand-500 animate-pulse" /> Reproduciendo {currentTitle}</span>
                                 ) : (
                                     <span>Sistema listo para transmision</span>
                                 )}
@@ -722,7 +730,7 @@
                                 <div className="md:hidden">
                                     <EngineStatus status={engineStatus} onRestart={handleRestartEngine} isRestarting={isRestarting} />
                                 </div>
-                                <IconButton icon="settings" onClick={() => setShowSettingsModal(true)} className="hidden md:flex" />
+                                <IconButton icon="settings" onClick={() => { setActionItem(null); setSaveModalOpen(false); setEditModalOpen(false); setShowSettingsModal(true); }} className="hidden md:flex" />
                             </div>
                         </header>
 
@@ -738,7 +746,7 @@
                                             {isPlaying && !isConnecting && !error && (
                                                 <div className="absolute top-4 right-4 flex items-center gap-3 pointer-events-none">
                                                     <button onClick={() => setShowNerdStats(!showNerdStats)} className="glass-panel p-2 rounded-full hover:bg-white/10 transition-colors text-white active:scale-95 pointer-events-auto">
-                                                        <i data-lucide="bar-chart-2" className="w-4 h-4"></i>
+                                                        <Icon name="bar-chart-2" className="w-4 h-4" />
                                                     </button>
                                                 </div>
                                             )}
@@ -758,7 +766,7 @@
                                                     className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60 text-white z-10"
                                                 >
                                                     <div className="w-16 h-16 rounded-full bg-brand-500 flex items-center justify-center shadow-lg">
-                                                        <i data-lucide="play" className="w-7 h-7 fill-current ml-1"></i>
+                                                        <Icon name="play" className="w-7 h-7 fill-current ml-1" />
                                                     </div>
                                                     <p className="text-sm font-medium">Toca para reproducir</p>
                                                 </button>
@@ -771,21 +779,21 @@
                                                         <div className="relative z-10 flex flex-col items-center gap-4 px-6 text-center">
                                                             <div className="relative">
                                                                 <div className="absolute inset-0 border-4 border-brand-500/30 rounded-full animate-ping"></div>
-                                                                <i data-lucide="loader-2" className="w-12 h-12 text-brand-500 animate-spin relative z-10"></i>
+                                                                <Icon name="loader-2" className="w-12 h-12 text-brand-500 animate-spin relative z-10" />
                                                             </div>
                                                             <p className="text-brand-400 font-medium animate-pulse">{message || 'Iniciando motor AceStream...'}</p>
                                                         </div>
                                                     ) : error ? (
                                                         <div className="relative z-10 flex flex-col items-center text-center gap-4 px-6">
                                                             <div className="w-20 h-20 rounded-full bg-surface border border-red-500/30 flex items-center justify-center shadow-lg">
-                                                                <i data-lucide="triangle-alert" className="w-10 h-10 text-red-400"></i>
+                                                                <Icon name="triangle-alert" className="w-10 h-10 text-red-400" />
                                                             </div>
                                                             <p className="text-sm text-red-300 max-w-sm">{error}</p>
                                                         </div>
                                                     ) : (
                                                         <div className="relative z-10 flex flex-col items-center text-gray-500 gap-4 px-6 text-center">
                                                             <div className="w-20 h-20 rounded-full bg-surface border border-border flex items-center justify-center shadow-lg">
-                                                                <i data-lucide="radio" className="w-10 h-10 opacity-50"></i>
+                                                                <Icon name="radio" className="w-10 h-10 opacity-50" />
                                                             </div>
                                                             <p className="text-sm">{message || 'Introduce un ID para comenzar a transmitir'}</p>
                                                         </div>
@@ -801,7 +809,7 @@
                                             <div className="relative z-10 flex flex-col md:flex-row gap-4">
                                                 <div className="flex-1 relative group">
                                                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                                        <i data-lucide="hash" className="w-5 h-5 text-gray-500 group-focus-within:text-brand-400 transition-colors"></i>
+                                                        <Icon name="hash" className="w-5 h-5 text-gray-500 group-focus-within:text-brand-400 transition-colors" />
                                                     </div>
                                                     <input
                                                         type="text"
@@ -813,7 +821,7 @@
                                                     />
                                                     {aceId && (
                                                         <button onClick={() => setAceId('')} className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-500 hover:text-white">
-                                                            <i data-lucide="x" className="w-4 h-4"></i>
+                                                            <Icon name="x" className="w-4 h-4" />
                                                         </button>
                                                     )}
                                                 </div>
@@ -821,7 +829,7 @@
                                                     {isPlaying ? (
                                                         <>
                                                             <button onClick={handleStop} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 px-6 py-3.5 rounded-xl font-medium transition-all active:scale-95">
-                                                                <i data-lucide="square" className="w-4 h-4 fill-current"></i> Parar
+                                                                <Icon name="square" className="w-4 h-4 fill-current" /> Parar
                                                             </button>
                                                             <div className="flex items-center gap-2 border-l border-border pl-3 ml-1">
                                                                 <IconButton
@@ -838,7 +846,7 @@
                                                             disabled={!aceId || isConnecting}
                                                             className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:hover:bg-brand-500 text-white px-8 py-3.5 rounded-xl font-medium shadow-lg shadow-brand-500/20 transition-all active:scale-95"
                                                         >
-                                                            <i data-lucide="play" className="w-5 h-5 fill-current"></i>
+                                                            <Icon name="play" className="w-5 h-5 fill-current" />
                                                             <span>Reproducir</span>
                                                         </button>
                                                     )}
@@ -879,7 +887,7 @@
                             className={`flex flex-col items-center justify-center w-16 h-full gap-1 transition-colors ${activeTabMobile === 'player' ? 'text-brand-400' : 'text-gray-500 hover:text-gray-300'}`}
                         >
                             <div className={`relative ${activeTabMobile === 'player' ? 'scale-110' : ''} transition-transform`}>
-                                <i data-lucide="play-square" className="w-5 h-5"></i>
+                                <Icon name="play-square" className="w-5 h-5" />
                                 {isPlaying && activeTabMobile !== 'player' && (
                                     <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-brand-500 rounded-full border-2 border-surface"></span>
                                 )}
@@ -891,15 +899,15 @@
                             onClick={() => setActiveTabMobile('library')}
                             className={`flex flex-col items-center justify-center w-16 h-full gap-1 transition-colors ${activeTabMobile === 'library' ? 'text-brand-400' : 'text-gray-500 hover:text-gray-300'}`}
                         >
-                            <i data-lucide="library" className={`w-5 h-5 ${activeTabMobile === 'library' ? 'scale-110' : ''} transition-transform`}></i>
+                            <Icon name="library" className={`w-5 h-5 ${activeTabMobile === 'library' ? 'scale-110' : ''} transition-transform`} />
                             <span className="text-[10px] font-medium">Libreria</span>
                         </button>
 
                         <button
-                            onClick={() => setShowSettingsModal(true)}
+                            onClick={() => { setActionItem(null); setSaveModalOpen(false); setEditModalOpen(false); setShowSettingsModal(true); }}
                             className="flex flex-col items-center justify-center w-16 h-full gap-1 transition-colors text-gray-500 hover:text-gray-300"
                         >
-                            <i data-lucide="settings" className="w-5 h-5"></i>
+                            <Icon name="settings" className="w-5 h-5" />
                             <span className="text-[10px] font-medium">Ajustes</span>
                         </button>
                     </nav>
