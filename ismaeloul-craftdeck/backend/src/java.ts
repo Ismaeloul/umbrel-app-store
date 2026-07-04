@@ -5,10 +5,8 @@ import { fetchJson, download, run } from './util.js';
 
 /** Adoptium publica LTS: mapeamos el Java mínimo que pide MC al LTS que lo cubre. */
 export function pickJavaMajor(required: number): number {
-  if (required <= 8) return 8;
-  if (required <= 11) return 11;
-  if (required <= 17) return 17;
-  return 21;
+  for (const lts of [8, 11, 17, 21, 25]) if (required <= lts) return lts;
+  return required; // majors futuros: Adoptium suele publicarlos también
 }
 
 function platform(): { os: string; arch: string; exe: string } {

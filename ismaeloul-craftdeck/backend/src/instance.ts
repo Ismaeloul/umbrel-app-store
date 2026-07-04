@@ -1,8 +1,9 @@
 import { spawn, ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import pidusage from 'pidusage';
-import { ServerMeta, getServer, serverDir, audit } from './store.js';
-import { ensureJre } from './java.js';
+import { ServerMeta, getServer, updateServer, serverDir, audit } from './store.js';
+import { ensureJre, pickJavaMajor } from './java.js';
+import { getVanillaVersionInfo } from './catalog/vanilla.js';
 
 export type RunStatus = 'offline' | 'starting' | 'online' | 'stopping';
 type Broadcast = (type: string, payload: unknown) => void;
@@ -83,7 +84,17 @@ export async function startServer(id: string): Promise<void> {
   const i = inst(id);
   if (i.proc) throw new Error('El servidor ya está en marcha');
 
-  const java = await ensureJre(meta.javaMajor, (m) => pushLine(id, i, `[CraftDeck] ${m}`));
+  // recalcular el Java requerido en cada arranque: corrige metas antiguas con un major insuficiente
+  let javaMajor = meta.javaMajor;
+  try {
+    const wanted = pickJavaMajor((await getVanillaVersionInfo(meta.mcVersion)).javaMajor);
+    if (wanted !== javaMajor) {
+      javaMajor = wanted;
+      meta.javaMajor = wanted;
+      await updateServer(id, { javaMajor: wanted });
+    }
+  } catch { /* sin red: usar el guardado */ }
+  const java = await ensureJre(javaMajor, (m) => pushLine(id, i, `[CraftDeck] ${m}`));
   i.status = 'starting';
   i.startedAt = Date.now();
   i.players = [];
