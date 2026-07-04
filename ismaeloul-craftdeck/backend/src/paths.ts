@@ -2,6 +2,8 @@ import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
+export const APP_VERSION = '0.1.2';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // en dev vive en backend/src (../../frontend); en la imagen Docker, dist/ está junto a frontend/

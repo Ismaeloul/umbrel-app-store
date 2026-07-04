@@ -2,7 +2,7 @@ manifestVersion: 1
 id: ismaeloul-craftdeck
 category: networking
 name: CraftDeck
-version: "0.1.1"
+version: "0.1.2"
 tagline: Crea y modera tu servidor de Minecraft desde el navegador
 description: >-
   Panel de control de servidores de Minecraft para umbrelOS. Crea servidores
@@ -28,5 +28,6 @@ defaultPassword: ""
 submitter: Ismaeloul
 submission: https://github.com/Ismaeloul/craftdeck
 releaseNotes: >-
-  Corrige el arranque de Minecraft 26.x: ahora se descarga Java 25 cuando la
-  versión lo requiere, y el Java necesario se recalcula en cada arranque.
+  Corrige el arranque de Minecraft 26.x (Java 25) y añade la Zona peligrosa en
+  Mundo: borrar el mundo o eliminar el servidor completo. La consola muestra
+  ahora la versión del panel y el Java usado al arrancar.

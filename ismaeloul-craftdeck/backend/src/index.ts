@@ -3,7 +3,8 @@ import { createServer } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { rm } from 'node:fs/promises';
 import crypto from 'node:crypto';
-import { FRONTEND_DIR } from './paths.js';
+import path from 'node:path';
+import { FRONTEND_DIR, BACKUPS_DIR, APP_VERSION } from './paths.js';
 import { listVanillaVersions } from './catalog/vanilla.js';
 import { listFabricGameVersions } from './catalog/fabric.js';
 import { listForgeVersions } from './catalog/forge.js';
@@ -48,7 +49,7 @@ const asyncRoute = (fn: (req: express.Request, res: express.Response) => Promise
   };
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, name: 'craftdeck', version: '0.1.0' });
+  res.json({ ok: true, name: 'craftdeck', version: APP_VERSION });
 });
 
 // ---- catálogo de versiones ----
@@ -154,10 +155,24 @@ app.post('/api/servers', asyncRoute(async (req, res) => {
 app.delete('/api/servers/:id', asyncRoute(async (req, res) => {
   const meta = await getServer(req.params.id!);
   if (!meta) { res.status(404).json({ error: 'Servidor no encontrado' }); return; }
+  await stopServer(meta.id);
   await removeServer(meta.id);
   await rm(serverDir(meta.id), { recursive: true, force: true });
+  await rm(path.join(BACKUPS_DIR, meta.id), { recursive: true, force: true });
   await audit('trash', `Eliminó el servidor ${meta.name}`, 'warn');
   broadcast('servers', {});
+  res.json({ ok: true });
+}));
+
+app.delete('/api/servers/:id/world', asyncRoute(async (req, res) => {
+  const id = req.params.id!;
+  const meta = await getServer(id);
+  if (!meta) { res.status(404).json({ error: 'Servidor no encontrado' }); return; }
+  if (runtimeOf(id).status !== 'offline') { res.status(400).json({ error: 'Detén el servidor antes de borrar el mundo' }); return; }
+  for (const d of ['world', 'world_nether', 'world_the_end']) {
+    await rm(path.join(serverDir(id), d), { recursive: true, force: true });
+  }
+  await audit('trash', `Borró el mundo de ${meta.name}`, 'warn');
   res.json({ ok: true });
 }));
 

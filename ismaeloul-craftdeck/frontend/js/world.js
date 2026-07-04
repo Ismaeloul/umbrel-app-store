@@ -39,6 +39,24 @@ async function saveWorld(){
   } catch(err){ toast('alert', err.message, 'err'); }
 }
 
+/* =================== ZONA PELIGROSA =================== */
+async function deleteWorld(){
+  try {
+    await API.del(`/servers/${curServerId()}/world`);
+    toast('trash','Mundo borrado. Al arrancar se generará uno nuevo.','warn');
+  } catch(err){ toast('alert', err.message, 'err'); }
+}
+async function deleteServerUI(){
+  try {
+    await API.del(`/servers/${curServerId()}`);
+    toast('trash','Servidor eliminado por completo','warn');
+    state.currentServer = 0;
+    await refreshServers();
+    onServerSwitched();
+    go('dashboard');
+  } catch(err){ toast('alert', err.message, 'err'); }
+}
+
 async function ruleChanged(input){
   if(input.dataset.ruletype !== 'gamerule') return; // las de server.properties se guardan con «Guardar»
   const rule = input.dataset.rule, value = input.checked;

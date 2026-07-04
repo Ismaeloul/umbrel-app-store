@@ -1,6 +1,7 @@
 import { spawn, ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import pidusage from 'pidusage';
+import { APP_VERSION } from './paths.js';
 import { ServerMeta, getServer, updateServer, serverDir, audit } from './store.js';
 import { ensureJre, pickJavaMajor } from './java.js';
 import { getVanillaVersionInfo } from './catalog/vanilla.js';
@@ -93,13 +94,15 @@ export async function startServer(id: string): Promise<void> {
       meta.javaMajor = wanted;
       await updateServer(id, { javaMajor: wanted });
     }
-  } catch { /* sin red: usar el guardado */ }
+  } catch (err) {
+    pushLine(id, i, `[CraftDeck] Aviso: no pude verificar el Java requerido (${err instanceof Error ? err.message : err}); uso Java ${javaMajor}`);
+  }
   const java = await ensureJre(javaMajor, (m) => pushLine(id, i, `[CraftDeck] ${m}`));
   i.status = 'starting';
   i.startedAt = Date.now();
   i.players = [];
   broadcastFn('status', { id, status: 'starting' });
-  pushLine(id, i, `[CraftDeck] Arrancando ${meta.name} (${meta.loader} ${meta.mcVersion}, ${meta.memoryMb} MB)…`);
+  pushLine(id, i, `[CraftDeck v${APP_VERSION}] Arrancando ${meta.name} (${meta.loader} ${meta.mcVersion}, ${meta.memoryMb} MB, Java ${javaMajor})…`);
 
   const proc = spawn(java, launchArgs(meta), { cwd: serverDir(id), stdio: ['pipe', 'pipe', 'pipe'] });
   i.proc = proc;
