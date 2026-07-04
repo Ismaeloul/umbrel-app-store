@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CraftDeck — Panel de Control Minecraft</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="layout">
+
+  <!-- ================= SIDEBAR ================= -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="mark" id="logoMark"></div>
+      <div><b>CraftDeck</b><small>UMBREL EDITION</small></div>
+    </div>
+
+    <div class="server-switch" id="serverSwitch">
+      <div class="current" onclick="toggleServerMenu(event)">
+        <span class="ss-dot" id="ssDot" style="background:var(--accent)"></span>
+        <div style="flex:1">
+          <div class="ss-name" id="ssName">Survival</div>
+          <div class="ss-sub" id="ssSub">Fabric 1.21.1 · :25565</div>
+        </div>
+        <span id="ssChevron" style="color:var(--muted);display:flex"></span>
+      </div>
+      <div class="ss-menu" id="ssMenu"></div>
+    </div>
+
+    <div id="navContainer"></div>
+
+    <div class="spacer"></div>
+    <div class="umbrel-tag"><span id="umbrelIcon" style="display:flex;color:var(--violet)"></span> Corriendo en <b>umbrelOS</b></div>
+  </aside>
+
+  <!-- ================= MAIN ================= -->
+  <main class="main">
+    <div class="topbar">
+      <h1 id="pageTitle">Dashboard</h1>
+      <div class="pill"><span class="dot online" id="statusDot"></span> <span id="statusText">En línea</span></div>
+      <div class="actions">
+        <button class="btn danger" id="btnStop"></button>
+        <button class="btn" id="btnRestart"></button>
+        <button class="btn primary" id="btnStart" disabled></button>
+      </div>
+    </div>
+
+    <!-- ========== DASHBOARD ========== -->
+    <section class="section visible" id="sec-dashboard">
+      <div class="grid cols-4" style="margin-bottom:14px;">
+        <div class="card">
+          <div class="stat-label"><i data-icon="users" data-size="13"></i> Jugadores</div>
+          <div class="stat-value"><span id="statPlayers">4</span><span class="unit"> / 20</span></div>
+          <div class="stat-sub up">Récord hoy: 7</div>
+        </div>
+        <div class="card">
+          <div class="stat-label"><i data-icon="zap" data-size="13"></i> TPS</div>
+          <div class="stat-value" id="statTps" style="color:var(--accent)">19.9</div>
+          <div class="stat-sub">Ticks por segundo · ideal 20</div>
+        </div>
+        <div class="card">
+          <div class="stat-label"><i data-icon="cpu" data-size="13"></i> Memoria</div>
+          <div class="stat-value"><span id="statRam">0</span><span class="unit" id="statRamMax"> / — GB</span></div>
+          <div class="progress-track"><div class="progress-fill" id="ramBar" style="width:0%"></div></div>
+        </div>
+        <div class="card">
+          <div class="stat-label"><i data-icon="clock" data-size="13"></i> Uptime</div>
+          <div class="stat-value" id="statUptime">02:14:36</div>
+          <div class="stat-sub">Desde el último reinicio</div>
+        </div>
+      </div>
+
+      <div class="grid cols-2" style="margin-bottom:14px;">
+        <div class="card">
+          <h3><i data-icon="activity" data-size="15"></i> Rendimiento TPS <span class="hint">últimos 90 s</span></h3>
+          <canvas class="chart" id="tpsChart"></canvas>
+        </div>
+        <div class="card">
+          <h3><i data-icon="cpu" data-size="15"></i> CPU · RAM <span class="hint">tiempo real</span></h3>
+          <canvas class="chart" id="cpuChart"></canvas>
+        </div>
+      </div>
+
+      <div class="grid cols-2">
+        <div class="card">
+          <h3><i data-icon="bell" data-size="15"></i> Actividad reciente</h3>
+          <div id="activityFeed"></div>
+        </div>
+        <div class="card">
+          <h3><i data-icon="calendar" data-size="15"></i> Próximas tareas <span class="hint">automatización</span></h3>
+          <div id="dashTasks"></div>
+          <button class="btn small ghost" style="margin-top:12px;" onclick="go('events')">Ver programador completo →</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== CONSOLE ========== -->
+    <section class="section" id="sec-console">
+      <div class="console-wrap">
+        <div class="console-head">
+          <span class="live"><span class="dot online" style="width:7px;height:7px"></span> Consola en vivo</span>
+          <span style="font-family:var(--mono)">latest.log</span>
+          <span style="margin-left:auto;display:flex;gap:7px;">
+            <button class="btn small ghost" onclick="clearConsole()">Limpiar</button>
+            <button class="btn small ghost" id="btnAutoscroll" onclick="toggleAutoscroll()">Auto-scroll: ON</button>
+          </span>
+        </div>
+        <div class="console-body" id="consoleBody"></div>
+        <div class="console-input">
+          <input type="text" id="cmdInput" placeholder="Comando… prueba: say hola · time set day · list · weather clear" autocomplete="off">
+          <button class="btn primary small" onclick="sendCommand()" style="padding:9px 14px"><i data-icon="send" data-size="14"></i></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== PLAYERS ========== -->
+    <section class="section" id="sec-players">
+      <div class="section-head">
+        <h2>Jugadores</h2>
+        <p id="playersSubtitle"></p>
+        <div class="right">
+          <button class="btn small" onclick="showWhitelist()"><i data-icon="shield" data-size="13"></i> Whitelist</button>
+          <button class="btn small" onclick="showBanned()"><i data-icon="ban" data-size="13"></i> Baneados</button>
+        </div>
+      </div>
+      <div class="card" style="padding:10px;"><div id="playerList"></div></div>
+    </section>
+
+    <!-- ========== STATS ========== -->
+    <section class="section" id="sec-stats">
+      <div class="section-head">
+        <h2>Estadísticas de jugadores</h2>
+        <p>Datos leídos de world/stats · actualizados al guardar</p>
+      </div>
+      <div class="card" style="padding:8px 6px;">
+        <table class="stats">
+          <thead><tr><th style="width:50px">#</th><th>Jugador</th><th>Tiempo jugado</th><th>Muertes</th><th>Bloques minados</th><th>Mobs eliminados</th><th>Logros</th></tr></thead>
+          <tbody id="statsBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ========== MAP ========== -->
+    <section class="section" id="sec-map">
+      <div class="section-head">
+        <h2>Mapa en vivo</h2>
+        <p>Overworld · render tipo BlueMap · jugadores en tiempo real</p>
+        <div class="right">
+          <button class="btn small" onclick="toast('map','Render del Nether no disponible en la demo','warn')">Nether</button>
+          <button class="btn small" onclick="toast('map','Render del End no disponible en la demo','warn')">End</button>
+        </div>
+      </div>
+      <div class="map-wrap">
+        <canvas id="mapCanvas"></canvas>
+        <div class="map-overlay">
+          <div class="map-chip"><i data-icon="users" data-size="13" style="color:var(--accent)"></i> <span id="mapPlayerCount">4</span> jugadores visibles</div>
+          <div class="map-chip"><i data-icon="crosshair" data-size="13" style="color:var(--muted)"></i> <span id="mapCoords" style="font-family:var(--mono)">0, 0</span></div>
+        </div>
+        <div class="map-legend">
+          <span><i style="background:#2563eb"></i>Océano</span>
+          <span><i style="background:#d4c27a"></i>Playa</span>
+          <span><i style="background:#4d7c3a"></i>Llanura</span>
+          <span><i style="background:#2d5426"></i>Bosque</span>
+          <span><i style="background:#6b7280"></i>Montaña</span>
+          <span><i style="background:#e5e7eb"></i>Nieve</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== MODS ========== -->
+    <section class="section" id="sec-mods">
+      <div class="section-head">
+        <h2>Contenido</h2>
+        <p>Loader: <span class="chip blue">FABRIC 1.21.1</span> · fuente: Modrinth · resolución de dependencias activa</p>
+      </div>
+      <div class="tabs">
+        <div class="tab active" data-modtab="mods" onclick="switchModTab('mods')">Mods</div>
+        <div class="tab" data-modtab="packs" onclick="switchModTab('packs')">Modpacks</div>
+      </div>
+
+      <div id="modtab-mods">
+        <div class="search-bar">
+          <div class="search-wrap">
+            <i data-icon="search" data-size="15"></i>
+            <input type="text" id="modSearch" placeholder="Buscar en Modrinth (API real)… prueba: sodium, create, voice chat" oninput="onModSearchInput()">
+          </div>
+          <button class="btn" onclick="checkUpdates()"><i data-icon="refresh" data-size="14"></i> Actualizaciones</button>
+          <button class="btn primary" onclick="downloadAllForFriends()"><i data-icon="download" data-size="14"></i> Pack para amigos</button>
+        </div>
+        <div class="grid cols-2" id="modGrid"></div>
+      </div>
+
+      <div id="modtab-packs" style="display:none">
+        <div class="grid cols-3" id="packGrid"></div>
+        <div class="card" style="margin-top:14px;">
+          <h3><i data-icon="upload" data-size="15"></i> Exportar tu combinación actual</h3>
+          <p style="font-size:12.5px;color:var(--muted2);line-height:1.6;">Genera un archivo <span style="font-family:var(--mono);color:var(--text)">.mrpack</span> con tus 3 mods instalados para que tus amigos repliquen el cliente exacto en un click.</p>
+          <button class="btn small primary" style="margin-top:12px;" onclick="toast('download','Exportado: craftdeck-survival.mrpack (3 mods)','ok'); addAudit('download','Exportó el modpack del servidor','info')"><i data-icon="download" data-size="13"></i> Exportar .mrpack</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== WORLD ========== -->
+    <section class="section" id="sec-world">
+      <div class="section-head">
+        <h2>Mundo</h2>
+        <p>Edición visual de server.properties · se aplica al reiniciar</p>
+        <div class="right"><button class="btn primary" onclick="saveWorld()"><i data-icon="save" data-size="14"></i> Guardar</button></div>
+      </div>
+      <div class="grid cols-2">
+        <div class="card">
+          <h3><i data-icon="settings" data-size="15"></i> General</h3>
+          <div class="form-grid">
+            <div class="field"><label>MOTD</label><input type="text" id="wMotd"></div>
+            <div class="field"><label>Semilla <span style="color:var(--muted);font-weight:400">(solo mundos nuevos)</span></label><input type="text" id="wSeed"></div>
+            <div class="field"><label>Dificultad</label>
+              <select id="wDifficulty"><option value="peaceful">Pacífico</option><option value="easy">Fácil</option><option value="normal" selected>Normal</option><option value="hard">Difícil</option></select>
+            </div>
+            <div class="field"><label>Modo de juego</label>
+              <select id="wGamemode"><option value="survival" selected>Supervivencia</option><option value="creative">Creativo</option><option value="adventure">Aventura</option><option value="spectator">Espectador</option></select>
+            </div>
+          </div>
+          <div style="margin-top:16px;">
+            <div class="field"><label>Máximo de jugadores · <span class="slider-val" id="maxPlayersVal">20</span></label>
+              <div class="slider-row"><input type="range" id="wMaxPlayers" min="2" max="100" value="20" oninput="maxPlayersVal.textContent=this.value"></div>
+            </div>
+            <div class="field" style="margin-top:13px;"><label>Distancia de renderizado · <span class="slider-val" id="viewDistVal">10</span> chunks</label>
+              <div class="slider-row"><input type="range" id="wViewDist" min="3" max="32" value="10" oninput="viewDistVal.textContent=this.value"></div>
+            </div>
+            <div class="field" style="margin-top:13px;"><label>Protección del spawn · <span class="slider-val" id="spawnProtVal">16</span> bloques</label>
+              <div class="slider-row"><input type="range" id="wSpawnProt" min="0" max="64" value="16" oninput="spawnProtVal.textContent=this.value"></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h3><i data-icon="sliders" data-size="15"></i> Reglas del juego</h3>
+          <div id="gameRules"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== FILES ========== -->
+    <section class="section" id="sec-files">
+      <div class="section-head">
+        <h2>Archivos</h2>
+        <p>Editor integrado · configs del servidor y de mods</p>
+        <div class="right"><button class="btn primary" onclick="saveFile()"><i data-icon="save" data-size="14"></i> Guardar archivo</button></div>
+      </div>
+      <div class="files-layout">
+        <div class="card file-tree" id="fileTree"></div>
+        <div class="card editor-wrap" style="padding:0;">
+          <div class="editor-head"><i data-icon="fileCode" data-size="14"></i> <span id="editorFile">server.properties</span><span class="chip gray" style="margin-left:auto" id="editorLang">PROPERTIES</span></div>
+          <textarea id="editorArea" spellcheck="false"></textarea>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== EVENTS ========== -->
+    <section class="section" id="sec-events">
+      <div class="section-head">
+        <h2>Programador de eventos</h2>
+        <p>Tareas automáticas · viven en el backend, no dependen del panel</p>
+        <div class="right"><button class="btn primary" onclick="addEvent()"><i data-icon="plus" data-size="14"></i> Nueva tarea</button></div>
+      </div>
+      <div class="card" style="padding:10px;"><div id="eventList"></div></div>
+    </section>
+
+    <!-- ========== BACKUPS ========== -->
+    <section class="section" id="sec-backups">
+      <div class="section-head">
+        <h2>Backups</h2>
+        <p id="backupsSubtitle">Snapshots del servidor</p>
+        <div class="right"><button class="btn primary" id="btnBackup" onclick="makeBackup()"><i data-icon="database" data-size="14"></i> Crear backup</button></div>
+      </div>
+      <div class="card" style="margin-bottom:14px;">
+        <div class="toggle-row"><div><div class="t-label">Backup automático diario</div><div class="t-sub">Cada día a las 04:00 · conserva los últimos 7</div></div><label class="switch"><input type="checkbox" id="bkAuto" checked onchange="toggleBackupAuto(this.checked)"><span class="track"></span><span class="thumb"></span></label></div>
+      </div>
+      <div class="card" style="padding:10px;"><div id="backupList"></div></div>
+    </section>
+
+    <!-- ========== CRASHES ========== -->
+    <section class="section" id="sec-crashes">
+      <div class="section-head">
+        <h2>Diagnóstico</h2>
+        <p>Analizador de crash reports · te dice el culpable en cristiano</p>
+      </div>
+      <div class="grid cols-2" style="grid-template-columns:340px 1fr; align-items:start;">
+        <div class="card" style="padding:10px;" id="crashList"></div>
+        <div class="card" id="crashDetail"></div>
+      </div>
+    </section>
+
+    <!-- ========== INTEGRATIONS ========== -->
+    <section class="section" id="sec-integrations">
+      <div class="section-head">
+        <h2>Integraciones</h2>
+        <p>Conecta el servidor con el mundo exterior</p>
+      </div>
+      <div class="grid cols-2">
+
+        <div class="card">
+          <div class="int-head">
+            <div class="int-icon" style="background:rgba(88,101,242,.12); color:#8b9cf9"><i data-icon="message" data-size="20"></i></div>
+            <div style="flex:1">
+              <div class="int-title">Discord <span class="chip green">CONECTADO</span></div>
+              <div class="int-sub">Espejo del chat, avisos de conexión y alertas de crash</div>
+            </div>
+            <label class="switch"><input type="checkbox" checked onchange="toast('message', this.checked?'Integración con Discord activada':'Integración con Discord desactivada', this.checked?'ok':'warn')"><span class="track"></span><span class="thumb"></span></label>
+          </div>
+          <div class="copy-field"><span>https://discord.com/api/webhooks/1123…a8f2</span><button class="icon-btn" onclick="copied()"><i data-icon="copy" data-size="13"></i></button></div>
+          <button class="btn small" style="margin-top:12px;" onclick="toast('check','Mensaje de prueba enviado a #minecraft','ok')">Enviar prueba</button>
+        </div>
+
+        <div class="card">
+          <div class="int-head">
+            <div class="int-icon" style="background:var(--violet-dim); color:var(--violet)"><i data-icon="shield" data-size="20"></i></div>
+            <div style="flex:1">
+              <div class="int-title">Tailscale <span class="chip green">ACTIVO</span></div>
+              <div class="int-sub">Acceso remoto seguro al panel sin abrir puertos · viene con Umbrel</div>
+            </div>
+          </div>
+          <div class="copy-field"><span>https://umbrel.tail8a3f.ts.net:8443/craftdeck</span><button class="icon-btn" onclick="copied()"><i data-icon="copy" data-size="13"></i></button></div>
+          <p style="font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.5;">Entra al panel desde el móvil o desde fuera de casa con tu red privada Tailscale.</p>
+        </div>
+
+        <div class="card">
+          <div class="int-head">
+            <div class="int-icon" style="background:var(--info-dim); color:var(--info)"><i data-icon="wifi" data-size="20"></i></div>
+            <div style="flex:1">
+              <div class="int-title">Túnel playit.gg <span class="chip green">TÚNEL ABIERTO</span></div>
+              <div class="int-sub">Tus amigos se conectan sin que abras puertos en el router</div>
+            </div>
+            <label class="switch"><input type="checkbox" checked onchange="toast('wifi', this.checked?'Túnel abierto':'Túnel cerrado', this.checked?'ok':'warn')"><span class="track"></span><span class="thumb"></span></label>
+          </div>
+          <div class="copy-field"><span>craftdeck-isma.playit.gg:25565</span><button class="icon-btn" onclick="copied()"><i data-icon="copy" data-size="13"></i></button></div>
+          <p style="font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.5;">Comparte esta dirección: funciona aunque tu IP cambie.</p>
+        </div>
+
+        <div class="card">
+          <div class="int-head">
+            <div class="int-icon" style="background:var(--warn-dim); color:var(--warn)"><i data-icon="eye" data-size="20"></i></div>
+            <div style="flex:1">
+              <div class="int-title">Modo espectador web</div>
+              <div class="int-sub">Enlace de solo lectura: estado, jugadores y mapa, sin poder tocar nada</div>
+            </div>
+            <label class="switch"><input type="checkbox" onchange="toast('eye', this.checked?'Enlace de espectador activado':'Enlace desactivado', this.checked?'ok':'warn')"><span class="track"></span><span class="thumb"></span></label>
+          </div>
+          <div class="copy-field"><span>https://umbrel.local/craftdeck/view/kX9m2…</span><button class="icon-btn" onclick="copied()"><i data-icon="copy" data-size="13"></i></button></div>
+          <button class="btn small" style="margin-top:12px;" onclick="toast('refresh','Enlace regenerado — el anterior queda invalidado','ok')">Regenerar enlace</button>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ========== AUDIT ========== -->
+    <section class="section" id="sec-audit">
+      <div class="section-head">
+        <h2>Auditoría</h2>
+        <p>Quién hizo qué desde el panel · útil si compartes el admin</p>
+        <div class="right"><button class="btn small" onclick="toast('download','audit-log.csv exportado','ok')"><i data-icon="download" data-size="13"></i> Exportar CSV</button></div>
+      </div>
+      <div class="card" style="padding:8px 6px;"><div id="auditList"></div></div>
+    </section>
+
+  </main>
+</div>
+
+<div class="toast-zone" id="toastZone"></div>
+
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script src="js/live.js"></script>
+<script src="js/world.js"></script>
+<script src="js/wizard.js"></script>
+</body>
+</html>

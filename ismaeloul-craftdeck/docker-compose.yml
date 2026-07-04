@@ -1,18 +1,24 @@
+version: "3.7"
+
 services:
   app_proxy:
     environment:
       APP_HOST: ismaeloul-craftdeck_web_1
-      APP_PORT: 8449
+      APP_PORT: "8449"
 
   web:
-    image: ghcr.io/ismaeloul/craftdeck:0.1.0
+    image: node:22-bookworm-slim
     container_name: ismaeloul-craftdeck_web_1
-    restart: on-failure
-    stop_grace_period: 1m
+    restart: unless-stopped
+    working_dir: /app/backend
+    # primer arranque: npm install (queda cacheado en APP_DATA_DIR); luego arranca al momento
+    command: sh -c "npm install --no-audit --no-fund && npm start"
     environment:
       - PORT=8449
       - CRAFTDECK_DATA=/data
     volumes:
+      - ${APP_DATA_DIR}/backend:/app/backend
+      - ${APP_DATA_DIR}/frontend:/app/frontend
       - ${APP_DATA_DIR}/data:/data
     ports:
       # puertos de juego: los clientes de Minecraft se conectan directo a estos
