@@ -1,0 +1,19 @@
+services:
+  app_proxy:
+    environment:
+      APP_HOST: ismaeloul-craftdeck_web_1
+      APP_PORT: 8449
+
+  web:
+    image: ghcr.io/ismaeloul/craftdeck:0.1.0
+    container_name: ismaeloul-craftdeck_web_1
+    restart: on-failure
+    stop_grace_period: 1m
+    environment:
+      - PORT=8449
+      - CRAFTDECK_DATA=/data
+    volumes:
+      - ${APP_DATA_DIR}/data:/data
+    ports:
+      # puertos de juego: los clientes de Minecraft se conectan directo a estos
+      - "25565-25574:25565-25574"
