@@ -34,21 +34,29 @@ async function saveWorld(){
   };
   document.querySelectorAll('#gameRules input[data-ruletype="prop"]').forEach(i=>{ patch[i.dataset.rule] = String(i.checked); });
   try {
-    await API.put(`/servers/${id}/properties`, patch);
-    toast('check', state.online ? 'Guardado. Se aplicará al reiniciar el servidor.' : 'Configuración guardada.', 'ok');
+    const r = await API.put(`/servers/${id}/properties`, patch);
+    if (r.appliedLive.length && r.needsRestart.length)
+      toast('check', `Aplicado al momento: ${r.appliedLive.join(', ')} · Al reiniciar: ${r.needsRestart.join(', ')}`, 'ok');
+    else if (r.appliedLive.length)
+      toast('check', `Aplicado al momento: ${r.appliedLive.join(', ')}`, 'ok');
+    else if (r.needsRestart.length)
+      toast('refresh', `Guardado. Se aplicará al reiniciar: ${r.needsRestart.join(', ')}`, 'warn');
+    else
+      toast('check', 'Configuración guardada.', 'ok');
   } catch(err){ toast('alert', err.message, 'err'); }
 }
 
 /* =================== ZONA PELIGROSA =================== */
+function curServerName(){ return state.servers[state.currentServer]?.name || ''; }
 async function deleteWorld(){
   try {
-    await API.del(`/servers/${curServerId()}/world`);
+    await API.del(`/servers/${curServerId()}/world?confirm=${encodeURIComponent(curServerName())}`);
     toast('trash','Mundo borrado. Al arrancar se generará uno nuevo.','warn');
   } catch(err){ toast('alert', err.message, 'err'); }
 }
 async function deleteServerUI(){
   try {
-    await API.del(`/servers/${curServerId()}`);
+    await API.del(`/servers/${curServerId()}?confirm=${encodeURIComponent(curServerName())}`);
     toast('trash','Servidor eliminado por completo','warn');
     state.currentServer = 0;
     await refreshServers();
@@ -60,9 +68,10 @@ async function deleteServerUI(){
 async function ruleChanged(input){
   if(input.dataset.ruletype !== 'gamerule') return; // las de server.properties se guardan con «Guardar»
   const rule = input.dataset.rule, value = input.checked;
+  const label = RULES.find(r=>r.key===rule)?.label || rule;
   try {
-    await API.post(`/servers/${curServerId()}/command`, { command: `gamerule ${rule} ${value}` });
-    toast('check', `gamerule ${rule} = ${value}`, 'ok');
+    await API.post(`/servers/${curServerId()}/gamerule`, { rule, value, label });
+    toast('check', `${label} ${value?'activado':'desactivado'} · anunciado en el chat`, 'ok');
   } catch {
     input.checked = !value;
     toast('alert', 'El servidor debe estar encendido para cambiar esta regla', 'warn');

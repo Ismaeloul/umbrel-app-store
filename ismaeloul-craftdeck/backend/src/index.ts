@@ -155,6 +155,10 @@ app.post('/api/servers', asyncRoute(async (req, res) => {
 app.delete('/api/servers/:id', asyncRoute(async (req, res) => {
   const meta = await getServer(req.params.id!);
   if (!meta) { res.status(404).json({ error: 'Servidor no encontrado' }); return; }
+  if (String(req.query.confirm ?? '') !== meta.name) {
+    res.status(400).json({ error: 'Confirmación requerida: pasa ?confirm=<nombre del servidor>' });
+    return;
+  }
   await stopServer(meta.id);
   await removeServer(meta.id);
   await rm(serverDir(meta.id), { recursive: true, force: true });
@@ -168,6 +172,10 @@ app.delete('/api/servers/:id/world', asyncRoute(async (req, res) => {
   const id = req.params.id!;
   const meta = await getServer(id);
   if (!meta) { res.status(404).json({ error: 'Servidor no encontrado' }); return; }
+  if (String(req.query.confirm ?? '') !== meta.name) {
+    res.status(400).json({ error: 'Confirmación requerida: pasa ?confirm=<nombre del servidor>' });
+    return;
+  }
   if (runtimeOf(id).status !== 'offline') { res.status(400).json({ error: 'Detén el servidor antes de borrar el mundo' }); return; }
   for (const d of ['world', 'world_nether', 'world_the_end']) {
     await rm(path.join(serverDir(id), d), { recursive: true, force: true });
@@ -181,7 +189,31 @@ app.get('/api/servers/:id/properties', asyncRoute(async (req, res) => {
   res.json(await readProperties(req.params.id!));
 }));
 
+// props que vanilla permite cambiar en caliente con comandos
+const LIVE_APPLY: Record<string, (v: string) => string[]> = {
+  difficulty: (v) => [`difficulty ${v}`],
+  gamemode: (v) => [`defaultgamemode ${v}`],
+  'white-list': (v) => [v === 'true' ? 'whitelist on' : 'whitelist off'],
+};
+const PROP_LABELS: Record<string, string> = {
+  difficulty: 'Dificultad', gamemode: 'Modo de juego', 'white-list': 'Whitelist', motd: 'MOTD',
+  'max-players': 'Máximo de jugadores', 'view-distance': 'Distancia de renderizado',
+  'spawn-protection': 'Protección del spawn', pvp: 'PvP', hardcore: 'Hardcore',
+  'generate-structures': 'Generar estructuras', 'spawn-monsters': 'Mobs hostiles', 'level-seed': 'Semilla',
+};
+const VALUE_LABELS: Record<string, string> = {
+  peaceful: 'Pacífico', easy: 'Fácil', normal: 'Normal', hard: 'Difícil',
+  survival: 'Supervivencia', creative: 'Creativo', adventure: 'Aventura', spectator: 'Espectador',
+  true: 'activado', false: 'desactivado',
+};
+
+/** Anuncio visible para todos los jugadores en el chat del juego. */
+export function announceInGame(id: string, text: string): void {
+  sendCommand(id, `tellraw @a ["",{"text":"⚙ CraftDeck · ","color":"aqua"},{"text":${JSON.stringify(text)},"color":"yellow"}]`);
+}
+
 app.put('/api/servers/:id/properties', asyncRoute(async (req, res) => {
+  const id = req.params.id!;
   const patch = req.body as Record<string, unknown>;
   if (!patch || typeof patch !== 'object') { res.status(400).json({ error: 'Body inválido' }); return; }
   const clean: Record<string, string> = {};
@@ -189,8 +221,34 @@ app.put('/api/servers/:id/properties', asyncRoute(async (req, res) => {
     if (!/^[a-z0-9.-]+$/i.test(k) || /[\r\n]/.test(String(v))) { res.status(400).json({ error: `Clave o valor inválido: ${k}` }); return; }
     clean[k] = String(v);
   }
-  await writeProperties(req.params.id!, clean);
-  await audit('save', 'Modificó server.properties', 'info');
+  const before = await readProperties(id);
+  const changed = Object.entries(clean).filter(([k, v]) => (before[k] ?? '') !== v);
+  await writeProperties(id, clean);
+
+  const online = runtimeOf(id).status === 'online';
+  const appliedLive: string[] = [];
+  const needsRestart: string[] = [];
+  for (const [k, v] of changed) {
+    const label = PROP_LABELS[k] ?? k;
+    const vLabel = VALUE_LABELS[v] ?? v;
+    if (online && LIVE_APPLY[k]) {
+      for (const cmd of LIVE_APPLY[k]!(v)) sendCommand(id, cmd);
+      announceInGame(id, `${label}: ahora ${vLabel}`);
+      appliedLive.push(`${label} → ${vLabel}`);
+    } else if (online) {
+      needsRestart.push(label);
+    }
+  }
+  if (changed.length) await audit('save', `Modificó server.properties (${changed.map(([k]) => PROP_LABELS[k] ?? k).join(', ')})`, 'info');
+  res.json({ ok: true, online, appliedLive, needsRestart });
+}));
+
+app.post('/api/servers/:id/gamerule', asyncRoute(async (req, res) => {
+  const { rule, value, label } = req.body as { rule?: string; value?: boolean; label?: string };
+  if (!rule || !/^[A-Za-z]+$/.test(rule) || typeof value !== 'boolean') { res.status(400).json({ error: 'Regla inválida' }); return; }
+  sendCommand(req.params.id!, `gamerule ${rule} ${value}`);
+  announceInGame(req.params.id!, `${label && /^[\wÁÉÍÓÚáéíóúñÑ /]+$/.test(label) ? label : rule} ${value ? 'activado' : 'desactivado'}`);
+  await audit('save', `Cambió la regla ${rule} a ${value}`, 'info');
   res.json({ ok: true });
 }));
 

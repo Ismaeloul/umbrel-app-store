@@ -1,16 +1,16 @@
-manifestVersion: 1
+﻿manifestVersion: 1
 id: ismaeloul-craftdeck
 category: networking
 name: CraftDeck
-version: "0.1.2"
+version: "0.1.3"
 tagline: Crea y modera tu servidor de Minecraft desde el navegador
 description: >-
   Panel de control de servidores de Minecraft para umbrelOS. Crea servidores
-  Vanilla, Fabric, Forge o NeoForge eligiendo la versión de una lista (CraftDeck
-  descarga Java y el servidor por ti), arráncalos y páralos desde el navegador,
+  Vanilla, Fabric, Forge o NeoForge eligiendo la versiÃ³n de una lista (CraftDeck
+  descarga Java y el servidor por ti), arrÃ¡ncalos y pÃ¡ralos desde el navegador,
   mira la consola en vivo, ejecuta comandos, gestiona jugadores (OP, kick, ban,
   whitelist), edita server.properties de forma visual y haz backups del mundo
-  con un click o automáticos cada día.
+  con un click o automÃ¡ticos cada dÃ­a.
 
 
   Tus amigos se conectan a la IP de tu Umbrel por el puerto de cada servidor
@@ -28,6 +28,7 @@ defaultPassword: ""
 submitter: Ismaeloul
 submission: https://github.com/Ismaeloul/craftdeck
 releaseNotes: >-
-  Corrige el arranque de Minecraft 26.x (Java 25) y añade la Zona peligrosa en
-  Mundo: borrar el mundo o eliminar el servidor completo. La consola muestra
-  ahora la versión del panel y el Java usado al arrancar.
+  Cambios en tiempo real: dificultad, modo de juego y whitelist se aplican al
+  momento con el servidor encendido y se anuncian en el chat del juego para
+  todos los jugadores. Lo que requiere reinicio ahora se indica claramente.
+
