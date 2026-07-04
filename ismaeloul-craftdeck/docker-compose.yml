@@ -10,6 +10,8 @@ services:
     image: node:22-bookworm-slim
     container_name: ismaeloul-craftdeck_web_1
     restart: unless-stopped
+    # el backend detiene los servidores de Minecraft con orden 'stop' antes de salir
+    stop_grace_period: 1m
     working_dir: /app/backend
     # primer arranque: npm install (queda cacheado en APP_DATA_DIR); luego arranca al momento
     command: sh -c "npm install --no-audit --no-fund && npm start"
