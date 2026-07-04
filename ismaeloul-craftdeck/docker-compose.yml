@@ -1,5 +1,9 @@
 version: "3.7"
 
+# IMPORTANTE: umbrelOS solo re-copia docker-compose.yml (y umbrel-app.yml) al actualizar
+# una app. Por eso este compose es autosuficiente: lleva la versión y un bootstrap que
+# descarga el código de ese tag desde GitHub. Subir versión aquí = actualización real.
+
 services:
   app_proxy:
     environment:
@@ -12,16 +16,44 @@ services:
     restart: unless-stopped
     # el backend detiene los servidores de Minecraft con orden 'stop' antes de salir
     stop_grace_period: 1m
-    working_dir: /app/backend
-    # primer arranque: npm install (queda cacheado en APP_DATA_DIR); luego arranca al momento
-    command: sh -c "npm install --no-audit --no-fund && npm start"
     environment:
+      - CRAFTDECK_VERSION=0.1.4
+      - CRAFTDECK_REPO=Ismaeloul/craftdeck
       - PORT=8449
       - CRAFTDECK_DATA=/data
     volumes:
-      - ${APP_DATA_DIR}/backend:/app/backend
-      - ${APP_DATA_DIR}/frontend:/app/frontend
+      - ${APP_DATA_DIR}/code:/app/code
       - ${APP_DATA_DIR}/data:/data
     ports:
       # puertos de juego: los clientes de Minecraft se conectan directo a estos
       - "25565-25574:25565-25574"
+    command:
+      - node
+      - -e
+      - |
+        const {execSync, spawn} = require('child_process');
+        const fs = require('fs');
+        const V = process.env.CRAFTDECK_VERSION;
+        const REPO = process.env.CRAFTDECK_REPO;
+        const DIR = '/app/code';
+        const marker = DIR + '/.version';
+        (async () => {
+          const cur = fs.existsSync(marker) ? fs.readFileSync(marker, 'utf8').trim() : '';
+          if (cur !== V) {
+            console.log('[bootstrap] Descargando CraftDeck v' + V + ' desde GitHub…');
+            fs.mkdirSync(DIR, {recursive: true});
+            const res = await fetch('https://codeload.github.com/' + REPO + '/tar.gz/refs/tags/v' + V);
+            if (!res.ok) throw new Error('HTTP ' + res.status + ' descargando v' + V);
+            fs.writeFileSync('/tmp/code.tgz', Buffer.from(await res.arrayBuffer()));
+            fs.rmSync(DIR + '/backend', {recursive: true, force: true});
+            fs.rmSync(DIR + '/frontend', {recursive: true, force: true});
+            execSync('tar -xzf /tmp/code.tgz -C ' + DIR + ' --strip-components=1');
+            fs.writeFileSync(marker, V);
+            console.log('[bootstrap] v' + V + ' lista.');
+          }
+          console.log('[bootstrap] npm install…');
+          execSync('npm install --no-audit --no-fund', {cwd: DIR + '/backend', stdio: 'inherit'});
+          const child = spawn('npm', ['start'], {cwd: DIR + '/backend', stdio: 'inherit'});
+          ['SIGTERM', 'SIGINT'].forEach((s) => process.on(s, () => child.kill(s)));
+          child.on('exit', (c) => process.exit(c === null ? 1 : c));
+        })().catch((e) => { console.error('[bootstrap]', e); process.exit(1); });
