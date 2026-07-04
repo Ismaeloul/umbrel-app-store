@@ -1,8 +1,8 @@
 version: "3.7"
 
 # IMPORTANTE: umbrelOS solo re-copia docker-compose.yml (y umbrel-app.yml) al actualizar
-# una app. Por eso este compose es autosuficiente: lleva la versión y un bootstrap que
-# descarga el código de ese tag desde GitHub. Subir versión aquí = actualización real.
+# una app. Por eso este compose es autosuficiente: lleva la version y un bootstrap que
+# descarga el codigo de ese tag desde GitHub. Subir version aqui = actualizacion real.
 
 services:
   app_proxy:
@@ -17,7 +17,7 @@ services:
     # el backend detiene los servidores de Minecraft con orden 'stop' antes de salir
     stop_grace_period: 1m
     environment:
-      - CRAFTDECK_VERSION=0.1.4
+      - CRAFTDECK_VERSION=0.1.5
       - CRAFTDECK_REPO=Ismaeloul/craftdeck
       - PORT=8449
       - CRAFTDECK_DATA=/data
@@ -40,7 +40,7 @@ services:
         (async () => {
           const cur = fs.existsSync(marker) ? fs.readFileSync(marker, 'utf8').trim() : '';
           if (cur !== V) {
-            console.log('[bootstrap] Descargando CraftDeck v' + V + ' desde GitHub…');
+            console.log('[bootstrap] Descargando CraftDeck v' + V + ' desde GitHub...');
             fs.mkdirSync(DIR, {recursive: true});
             const res = await fetch('https://codeload.github.com/' + REPO + '/tar.gz/refs/tags/v' + V);
             if (!res.ok) throw new Error('HTTP ' + res.status + ' descargando v' + V);
@@ -51,7 +51,7 @@ services:
             fs.writeFileSync(marker, V);
             console.log('[bootstrap] v' + V + ' lista.');
           }
-          console.log('[bootstrap] npm install…');
+          console.log('[bootstrap] npm install...');
           execSync('npm install --no-audit --no-fund', {cwd: DIR + '/backend', stdio: 'inherit'});
           const child = spawn('npm', ['start'], {cwd: DIR + '/backend', stdio: 'inherit'});
           ['SIGTERM', 'SIGINT'].forEach((s) => process.on(s, () => child.kill(s)));
