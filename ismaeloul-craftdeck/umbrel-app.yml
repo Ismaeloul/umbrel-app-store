@@ -2,7 +2,7 @@ manifestVersion: 1
 id: ismaeloul-craftdeck
 category: networking
 name: CraftDeck
-version: "0.2.1"
+version: "0.2.2"
 tagline: Crea y modera tu servidor de Minecraft desde el navegador
 description: >-
   Panel de control de servidores de Minecraft para umbrelOS. Crea servidores
