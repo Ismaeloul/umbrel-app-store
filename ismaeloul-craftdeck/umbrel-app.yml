@@ -2,7 +2,7 @@ manifestVersion: 1
 id: ismaeloul-craftdeck
 category: networking
 name: CraftDeck
-version: "0.1.6"
+version: "0.2.0"
 tagline: Crea y modera tu servidor de Minecraft desde el navegador
 description: >-
   Panel de control de servidores de Minecraft para umbrelOS. Crea servidores
@@ -29,7 +29,8 @@ defaultPassword: ""
 submitter: Ismaeloul
 submission: https://github.com/Ismaeloul/craftdeck
 releaseNotes: >-
-  Explorador de mods renovado: paginación completa del catálogo de Modrinth,
-  filtros por categoría, orden configurable, filtro «solo compatibles con
-  servidor» y ocultado de librerías. El pack para amigos ahora se descarga
-  como un único .zip con todos los mods activos.
+  Programador de eventos real: reinicios con cuenta atrás en el chat, anuncios
+  periódicos, comandos con horario y encendido/apagado programado del servidor,
+  todo ejecutado por el backend aunque cierres el panel. Nuevas integraciones:
+  avisos a Discord por webhook (estado, crash, jugadores, backups y espejo del
+  chat) y túnel playit.gg para que tus amigos entren sin abrir puertos.
