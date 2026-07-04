@@ -17,7 +17,7 @@ services:
     # el backend detiene los servidores de Minecraft con orden 'stop' antes de salir
     stop_grace_period: 1m
     environment:
-      - CRAFTDECK_VERSION=0.1.5
+      - CRAFTDECK_VERSION=0.1.6
       - CRAFTDECK_REPO=Ismaeloul/craftdeck
       - PORT=8449
       - CRAFTDECK_DATA=/data
