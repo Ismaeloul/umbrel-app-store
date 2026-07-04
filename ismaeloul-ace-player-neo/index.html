@@ -837,6 +837,14 @@ function setPlayingUI(on){
   $('nerdPanel').classList.remove('on');
   updateFavBtn(); renderStatsBar(); renderLibrary();
 }
+/* Solo enseña la capa "toca para reproducir" si el navegador bloqueó el
+   autoplay (NotAllowedError). Un AbortError (arranque interrumpido por un
+   rebuffer) no significa que no se esté reproduciendo. */
+function tryPlay(){
+  const v = $('video');
+  v.play().then(()=>$('tapLayer').classList.remove('on'))
+    .catch(err=>{ if(err && err.name==='NotAllowedError') $('tapLayer').classList.add('on'); });
+}
 function updateFavBtn(){
   const isFav = S.favorites.some(f=>f.id===S.currentId);
   const b = $('btnFav');
@@ -899,7 +907,7 @@ async function playMpegts(id){
   });
   p.on(mpegts.Events.MEDIA_INFO, ()=>{
     S.connecting=false; hideIdle(); setPlayingUI(true); setEngine('online');
-    v.play().catch(()=>$('tapLayer').classList.add('on'));
+    tryPlay();
   });
   p.load();
 }
@@ -911,7 +919,7 @@ function playHls(id){
     S.hls = h; h.loadSource(source); h.attachMedia(v);
     h.on(Hls.Events.MANIFEST_PARSED, ()=>{
       S.connecting=false; hideIdle(); setPlayingUI(true); setEngine('online');
-      v.play().catch(()=>$('tapLayer').classList.add('on'));
+      tryPlay();
     });
     h.on(Hls.Events.ERROR, (_,d)=>{
       if(!d.fatal) return;
@@ -924,7 +932,7 @@ function playHls(id){
   if(v.canPlayType('application/vnd.apple.mpegurl')){
     v.src = source;
     v.play().then(()=>{ S.connecting=false; hideIdle(); setPlayingUI(true); })
-      .catch(()=>$('tapLayer').classList.add('on'));
+      .catch(err=>{ if(err && err.name==='NotAllowedError') $('tapLayer').classList.add('on'); });
     return;
   }
   S.connecting=false;
@@ -996,6 +1004,9 @@ setInterval(()=>{
   badge.classList.toggle('behind', isBehind);
   $('liveBadgeText').textContent = isBehind ? `IR AL DIRECTO ${behind>6?'· −'+Math.round(behind)+'s':''}` : 'LIVE';
 },1000);
+
+/* red de seguridad: en cuanto el vídeo reproduce de verdad, fuera capa de tap */
+$('video').addEventListener('playing', ()=>$('tapLayer').classList.remove('on'));
 
 /* auto-recuperación: si el vídeo se queda sin datos (P2P lento), en vez de
    tartamudear pausamos y esperamos a acumular unos segundos de buffer */
