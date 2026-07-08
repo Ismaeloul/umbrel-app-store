@@ -14,13 +14,15 @@ services:
     image: node:22-bookworm-slim
     container_name: ismaeloul-craftdeck_web_1
     restart: unless-stopped
-    # el backend detiene los servidores de Minecraft con orden 'stop' antes de salir
-    stop_grace_period: 1m
+    # el backend detiene los servers con 'stop' y escala a SIGKILL a los 75 s: darle margen
+    stop_grace_period: 90s
     environment:
-      - CRAFTDECK_VERSION=0.3.0
+      - CRAFTDECK_VERSION=0.4.0
       - CRAFTDECK_REPO=Ismaeloul/craftdeck
       - PORT=8449
       - CRAFTDECK_DATA=/data
+      # backups de las 04:00 y eventos programados en hora local, no UTC
+      - TZ=${TZ:-Europe/Madrid}
     volumes:
       - ${APP_DATA_DIR}/code:/app/code
       - ${APP_DATA_DIR}/data:/data
@@ -37,6 +39,7 @@ services:
         const REPO = process.env.CRAFTDECK_REPO;
         const DIR = '/app/code';
         const marker = DIR + '/.version';
+        const install = () => execSync('npm install --no-audit --no-fund', {cwd: DIR + '/backend', stdio: 'inherit'});
         (async () => {
           const cur = fs.existsSync(marker) ? fs.readFileSync(marker, 'utf8').trim() : '';
           if (cur !== V) {
@@ -48,11 +51,15 @@ services:
             fs.rmSync(DIR + '/backend', {recursive: true, force: true});
             fs.rmSync(DIR + '/frontend', {recursive: true, force: true});
             execSync('tar -xzf /tmp/code.tgz -C ' + DIR + ' --strip-components=1');
-            fs.writeFileSync(marker, V);
+            console.log('[bootstrap] npm install...');
+            install();
+            fs.writeFileSync(marker, V); // marcar DESPUES de instalar: si algo falla, se reintenta al proximo arranque
             console.log('[bootstrap] v' + V + ' lista.');
+          } else if (!fs.existsSync(DIR + '/backend/node_modules')) {
+            console.log('[bootstrap] npm install (node_modules ausente)...');
+            install();
           }
-          console.log('[bootstrap] npm install...');
-          execSync('npm install --no-audit --no-fund', {cwd: DIR + '/backend', stdio: 'inherit'});
+          // sin cambios de version: arranca directo, sin depender de que npm/GitHub esten accesibles
           const child = spawn('npm', ['start'], {cwd: DIR + '/backend', stdio: 'inherit'});
           ['SIGTERM', 'SIGINT'].forEach((s) => process.on(s, () => child.kill(s)));
           child.on('exit', (c) => process.exit(c === null ? 1 : c));

@@ -2,7 +2,7 @@ manifestVersion: 1
 id: ismaeloul-craftdeck
 category: networking
 name: CraftDeck
-version: "0.3.0"
+version: "0.4.0"
 tagline: Crea y modera tu servidor de Minecraft desde el navegador
 description: >-
   Panel de control de servidores de Minecraft para umbrelOS. Crea servidores
@@ -29,8 +29,12 @@ defaultPassword: ""
 submitter: Ismaeloul
 submission: https://github.com/Ismaeloul/craftdeck
 releaseNotes: >-
-  Whitelist gestionable desde Jugadores (añadir y quitar nicks, activar con un
-  interruptor, funciona con el server apagado), modo no premium para launchers
-  no oficiales, ajustes de RAM y núcleos de CPU por servidor en la sección
-  Mundo, y el analizador de crashes ahora identifica al mod culpable leyendo
-  la traza del error en vez de adivinar.
+  Reinicio automático tras crash: si el servidor se cae, CraftDeck lo levanta
+  solo (máximo 3 veces en 10 minutos para no entrar en bucle) y te dice en
+  Discord y en el panel qué mod tiene la culpa, con un botón para desactivarlo
+  desde Diagnóstico. Sección de Mods rediseñada con pestañas Explorar e
+  Instalados (buscador siempre arriba, filtro de instalados y «Actualizar
+  todo»). Restaurar backups ahora funciona en umbrelOS, el guardado del mundo
+  se espera de verdad antes de comprimir y los horarios (backup de las 04:00,
+  eventos) corren en hora local en vez de UTC. Parada más segura para mundos
+  grandes y varios arreglos de robustez más.
