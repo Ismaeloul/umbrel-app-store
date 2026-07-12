@@ -1102,7 +1102,9 @@ function playHls(id, ih=false){
   (async ()=>{ try { applySessionMeta(await fetchSessionMeta(idParam, id)); } catch{}
     if(!S.statUrl) scheduleStatsRetry(idParam, id); })();
   const source = `/ace/manifest.m3u8?${idParam}=${id}&_=${Date.now()}`;
-  if(window.Hls && Hls.isSupported()){
+  // en iOS el reproductor nativo es el que va fino; hls.js sobre
+  // ManagedMediaSource provoca ciclos de pausa/reanudar
+  if(!IS_IOS && window.Hls && Hls.isSupported()){
     const h = new Hls({ manifestLoadingTimeOut:20000, fragLoadingTimeOut:20000, ...PB[S.pbMode].hls });
     S.hls = h; h.loadSource(source); h.attachMedia(v);
     h.on(Hls.Events.MANIFEST_PARSED, ()=>{
@@ -1258,6 +1260,9 @@ $('video').addEventListener('playing', ()=>$('tapLayer').classList.remove('on'))
 /* auto-recuperación: si el vídeo se queda sin datos (P2P lento), en vez de
    tartamudear pausamos y esperamos a acumular unos segundos de buffer */
 $('video').addEventListener('waiting', ()=>{
+  // en iOS 'waiting' salta constantemente con HLS nativo: pausar aquí
+  // provocaba el parpadeo pausa/reanudar. El nativo gestiona su buffer.
+  if(IS_IOS) return;
   if(!S.playing || S.demo || S.rebuilding || S.connecting) return;
   const v = $('video');
   S.rebuilding = true;
