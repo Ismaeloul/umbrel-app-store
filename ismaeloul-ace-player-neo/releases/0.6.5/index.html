@@ -912,6 +912,9 @@ setInterval(async ()=>{
     const np = d.nowPlaying;
     // la marca de inicio es inmutable: manda quien pulso play MAS TARDE
     if(np && np.dev && np.dev !== DEV_ID && np.at > (S.playStartedAt||0)){
+      // si es EL MISMO canal, la sesion del motor ahora es del otro
+      // dispositivo: no mandarle stop al apartarnos
+      if(np.id === S.currentId) S.cmdUrl = null;
       stopPlayback();
       toast('tv','La reproducción ha pasado a otro dispositivo','info');
     }
@@ -1192,9 +1195,27 @@ function goLive(){
 
 /* vigilante anti-parón: si el vídeo se estanca ~4,5 s salta al directo solo;
    si a los ~10 s sigue clavado, reengancha la sesión (máx. 3 intentos) */
-let wdLastPos=0, wdStuck=0, wdRetries=0, wdHold=0;
+let wdLastPos=0, wdStuck=0, wdRetries=0, wdHold=0, wdConn=0;
 setInterval(()=>{
-  if(S.demo || !S.playing){ wdStuck=0; return; }
+  if(S.demo){ wdStuck=0; wdConn=0; return; }
+  // atascado en "Conectando…" (p. ej. la sesion murio en un traspaso): reintentar
+  if(S.connecting && !S.playing && S.currentId){
+    wdConn++;
+    if(wdConn>=10){
+      wdConn=0;
+      if(wdRetries>=3){
+        wdRetries=0; stopPlayback();
+        showIdle('No se pudo conectar con el canal. Pocos pares o emisión caída.','err');
+        return;
+      }
+      wdRetries++;
+      toast('refresh',`Sin señal aún: reintentando (${wdRetries}/3)…`,'info');
+      playChannel(S.currentId, S.currentTitle);
+    }
+    return;
+  }
+  wdConn=0;
+  if(!S.playing){ wdStuck=0; return; }
   const v = $('video');
   if(v.paused){ wdStuck=0; return; }
   if(wdHold>0){ wdHold--; return; }
