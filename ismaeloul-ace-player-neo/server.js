@@ -226,13 +226,13 @@ function parseHtml(text) {
   return streams;
 }
 
-function aceRequest(pathname) {
+function aceRequest(pathname, timeoutMs = 5000) {
   return new Promise((resolve, reject) => {
     const req = http.get({
       hostname: ACESTREAM_CONTAINER,
       port: 6878,
       path: pathname,
-      timeout: 5000,
+      timeout: timeoutMs,
     }, (response) => {
       let body = "";
       response.setEncoding("utf8");
@@ -291,6 +291,50 @@ const server = http.createServer(async (req, res) => {
       return send(res, 405, { error: "method_not_allowed" });
     }
 
+    if (req.url.startsWith("/api/search")) {
+      if (req.method !== "GET") return send(res, 405, { error: "method_not_allowed" });
+      const query = new URL(req.url, "http://internal").searchParams.get("q") || "";
+      const q = query.replace(/\s+/g, " ").trim().slice(0, 80);
+      if (q.length < 2) return send(res, 400, { error: "empty_query" });
+
+      const result = await aceRequest(`/search?query=${encodeURIComponent(q)}&page_size=60`, 12000);
+      let parsed;
+      try {
+        parsed = JSON.parse(result.body);
+      } catch {
+        const error = new Error("engine_bad_response");
+        error.statusCode = 502;
+        throw error;
+      }
+
+      // El motor puede devolver los resultados planos o agrupados por canal
+      // ({ items: [...] }); se aceptan ambas formas.
+      const rawResults = Array.isArray(parsed?.result?.results) ? parsed.result.results
+        : Array.isArray(parsed?.result) ? parsed.result
+        : Array.isArray(parsed?.results) ? parsed.results : [];
+      const seen = new Set();
+      const items = [];
+      for (const entry of rawResults) {
+        const candidates = Array.isArray(entry?.items) ? entry.items : [entry];
+        for (const candidate of candidates) {
+          const id = normalizeHash(candidate?.infohash || candidate?.content_id || candidate?.url);
+          if (!id || seen.has(id)) continue;
+          seen.add(id);
+          items.push({
+            id,
+            title: cleanTitle(candidate?.name || entry?.name, `Stream ${id.slice(0, 8)}`),
+            category: cleanTitle(Array.isArray(candidate?.categories) ? candidate.categories[0] : "", "Busqueda"),
+            availability: typeof candidate?.availability === "number" ? candidate.availability : null,
+            bitrate: typeof candidate?.bitrate === "number" ? candidate.bitrate : null,
+          });
+          if (items.length >= 100) break;
+        }
+        if (items.length >= 100) break;
+      }
+      items.sort((a, b) => (b.availability ?? -1) - (a.availability ?? -1));
+      return send(res, 200, { query: q, results: items });
+    }
+
     if (req.url === "/api/engine/status") {
       if (req.method !== "GET") return send(res, 405, { error: "method_not_allowed" });
       const result = await aceRequest("/webui/api/service?method=get_version");
@@ -316,9 +360,12 @@ const server = http.createServer(async (req, res) => {
   } catch (error) {
     const status = error.statusCode || 400;
     const safeErrors = new Set([
+      "ace_timeout",
       "bad_json",
       "bad_url",
       "body_too_large",
+      "empty_query",
+      "engine_bad_response",
       "fetch_failed",
       "fetch_timeout",
       "method_not_allowed",

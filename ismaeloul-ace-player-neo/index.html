@@ -293,9 +293,10 @@
     border-radius:11px; padding:4px; gap:3px;
   }
   .ltab {
-    flex:1; padding:8px 4px; text-align:center; border:none; background:none; cursor:pointer;
-    border-radius:8px; font-size:12px; font-weight:600; color:var(--muted);
-    display:flex; align-items:center; justify-content:center; gap:6px; transition:all .18s;
+    flex:1; padding:8px 2px; text-align:center; border:none; background:none; cursor:pointer;
+    border-radius:8px; font-size:12px; font-weight:600; color:var(--muted); min-width:0;
+    display:flex; align-items:center; justify-content:center; gap:4px; transition:all .18s;
+    white-space:nowrap;
   }
   .ltab:hover { color:var(--muted2); }
   .ltab.active { background:var(--amber-dim); color:var(--amber-hi); }
@@ -678,6 +679,7 @@ const S = {
   demo:false, engine:'offline',
   favorites:[], history:[], web:[], webSyncedAt:null,
   filter:'fav', search:'', openCats:{},
+  searchResults:[], searchBusy:false,
   currentId:null, currentTitle:'', playing:false, connecting:false,
   stats:null, statUrl:null, statsTimer:null,
   hls:null, mpegts:null, demoStatsTimer:null,
@@ -1106,29 +1108,40 @@ function copyLink(id){
 }
 
 /* ---------- library render ---------- */
-const TABS = [ ['fav','star','Favs'], ['recent','clock','Recientes'], ['web','globe','Directorio'] ];
+const TABS = [ ['fav','star','Favs'], ['recent','clock','Recientes'], ['web','globe','Directorio'], ['search','search','Buscar'] ];
 function renderTabs(){
   $('libTabs').innerHTML = TABS.map(([k,icn,label])=>{
-    const n = k==='fav'?S.favorites.length:k==='recent'?S.history.length:S.web.length;
+    const n = k==='fav'?S.favorites.length:k==='recent'?S.history.length:k==='web'?S.web.length:S.searchResults.length;
     return `<button class="ltab${S.filter===k?' active':''}" data-tab="${k}">${ic(icn,13)} ${label} <span class="cnt">${n}</span></button>`;
   }).join('');
-  document.querySelectorAll('.ltab').forEach(b=>b.onclick = ()=>{ S.filter=b.dataset.tab; renderTabs(); renderLibrary(); });
+  document.querySelectorAll('.ltab').forEach(b=>b.onclick = ()=>{
+    S.filter=b.dataset.tab;
+    updateSearchPlaceholder();
+    if(S.filter==='search' && S.search.trim().length>=2) scheduleEngineSearch();
+    renderTabs(); renderLibrary();
+    if(S.filter==='search') $('libSearch').focus();
+  });
 }
 function chRow(item, delay){
+  const isSearch = item.type==='search';
   const dead = item.type==='fav' && item.fromWebSync && !S.web.some(w=>w.id===item.id);
   const playing = item.id===S.currentId && (S.playing||S.connecting);
   const isFav = S.favorites.some(f=>f.id===item.id);
+  const av = isSearch && typeof item.availability==='number' ? Math.max(0,Math.min(100,Math.round(item.availability*100))) : null;
+  const sub = isSearch
+    ? `${esc(item.category||'Búsqueda')}${av!==null?` · disponibilidad ${av}%`:''}`
+    : `${item.id.slice(0,20)}…`;
   return `<div class="ch-row${playing?' playing':''}" data-id="${item.id}" data-type="${item.type}" data-title="${esc(item.title)}" style="animation-delay:${Math.min(delay*0.03,.35)}s">
     <span class="ch-ico">${playing?ic('activity',15):esc(item.title[0]||'?').toUpperCase()}</span>
     <span class="ch-main">
       <span class="ch-name">${esc(item.title)} ${dead?'<span class="dead-dot" title="Este canal ya no aparece en la última sincronización"></span>':''}</span>
-      <span class="ch-sub">${item.id.slice(0,20)}…</span>
+      <span class="ch-sub">${sub}</span>
     </span>
     <span class="ch-acts">
       <button class="cbtn ${isFav?'gold':''}" data-act="fav" title="Favorito">${ic('star',13)}</button>
       <button class="cbtn" data-act="copy" title="Copiar enlace">${ic('copy',13)}</button>
-      <button class="cbtn" data-act="edit" title="Renombrar">${ic('pencil',13)}</button>
-      <button class="cbtn del" data-act="del" title="Eliminar">${ic('trash',13)}</button>
+      ${isSearch?'':`<button class="cbtn" data-act="edit" title="Renombrar">${ic('pencil',13)}</button>
+      <button class="cbtn del" data-act="del" title="Eliminar">${ic('trash',13)}</button>`}
     </span>
   </div>`;
 }
@@ -1137,6 +1150,12 @@ function renderLibrary(){
   const match = (i)=>!q || i.title.toLowerCase().includes(q) || (i.category||'').toLowerCase().includes(q);
   const body = $('libBody');
   let html = '';
+  if(S.filter==='search'){
+    body.innerHTML = renderSearchBody();
+    wireLibraryRows(body);
+    renderLibFoot();
+    return;
+  }
   if(S.filter==='web'){
     const groups = {};
     for(const w of S.web.filter(match)){ (groups[w.category||'General']=groups[w.category||'General']||[]).push(w); }
@@ -1159,7 +1178,10 @@ function renderLibrary(){
     const chev = b.querySelector('svg'); chev.classList.add('chev');
     b.onclick = ()=>{ S.openCats[b.dataset.cat] = !S.openCats[b.dataset.cat]; renderLibrary(); };
   });
-  // wire rows
+  wireLibraryRows(body);
+  renderLibFoot();
+}
+function wireLibraryRows(body){
   body.querySelectorAll('.ch-row').forEach(row=>{
     row.onclick = (e)=>{
       const act = e.target.closest('[data-act]')?.dataset.act;
@@ -1171,6 +1193,8 @@ function renderLibrary(){
       playChannel(id,title);
     };
   });
+}
+function renderLibFoot(){
   const total = S.favorites.length + S.history.length + S.web.length;
   $('libFoot').innerHTML = ic('list',12)+` ${total} canales en biblioteca`+
     (S.webSyncedAt?` · directorio sincronizado ${new Date(S.webSyncedAt).toLocaleDateString('es-ES',{day:'numeric',month:'short'})}`:'')+
@@ -1178,6 +1202,56 @@ function renderLibrary(){
 }
 function emptyLib(){
   return `<div class="lib-empty">${ic('ghost',34)}<br>No hay canales aquí todavía.<br>${S.filter==='web'?'Sincroniza el directorio desde Ajustes.':'Reproduce algo y guárdalo.'}</div>`;
+}
+
+/* ---------- búsqueda en el motor ---------- */
+let searchTimer = null, searchSeq = 0;
+function updateSearchPlaceholder(){
+  $('libSearch').placeholder = S.filter==='search' ? 'Buscar en el motor AceStream…' : 'Buscar canal…';
+}
+function renderSearchBody(){
+  const q = S.search.trim();
+  if(q.length<2) return `<div class="lib-empty">${ic('search',34)}<br>Busca canales publicados en el motor AceStream.<br>Escribe al menos 2 letras.</div>`;
+  if(S.searchBusy) return `<div class="lib-empty">${ic('activity',34)}<br>Buscando «${esc(q)}» en el motor…</div>`;
+  if(!S.searchResults.length) return `<div class="lib-empty">${ic('ghost',34)}<br>Sin resultados para «${esc(q)}».<br>Prueba con otro nombre o menos palabras.</div>`;
+  return S.searchResults.map((i,x)=>chRow(i,x)).join('');
+}
+function scheduleEngineSearch(){
+  clearTimeout(searchTimer);
+  const q = S.search.trim();
+  if(q.length<2){ searchSeq++; S.searchResults=[]; S.searchBusy=false; renderTabs(); return; }
+  S.searchBusy = true;
+  searchTimer = setTimeout(runEngineSearch, 450);
+}
+async function runEngineSearch(){
+  const q = S.search.trim();
+  if(q.length<2) return;
+  const seq = ++searchSeq;
+  S.searchBusy = true;
+  if(S.filter==='search') renderLibrary();
+  try {
+    let results;
+    if(S.demo){
+      await new Promise(r=>setTimeout(r,400));
+      results = DEMO_CHANNELS
+        .filter(([,title])=>title.toLowerCase().includes(q.toLowerCase()))
+        .map(([cat,title],i)=>({ id:demoHash(i+101), title, category:cat, availability:0.35+((i*13)%60)/100 }));
+    } else {
+      const r = await fetch('/api/search?q='+encodeURIComponent(q), {cache:'no-store'});
+      const d = await r.json().catch(()=>({}));
+      if(!r.ok) throw new Error(d.error||'search_failed');
+      results = d.results||[];
+    }
+    if(seq!==searchSeq) return;
+    S.searchResults = results.map(i=>({ ...i, type:'search' }));
+    S.searchBusy = false;
+    renderTabs(); if(S.filter==='search') renderLibrary();
+  } catch {
+    if(seq!==searchSeq) return;
+    S.searchResults = []; S.searchBusy = false;
+    renderTabs(); if(S.filter==='search') renderLibrary();
+    toast('alert','La búsqueda falló. ¿Está el motor AceStream en línea?','err');
+  }
 }
 
 /* ---------- sync ---------- */
@@ -1299,7 +1373,14 @@ aceInput.addEventListener('input', ()=>{
 aceInput.addEventListener('keydown', e=>{ if(e.key==='Enter' && aceInput.value.trim()) playChannel(aceInput.value); });
 $('cmdClear').onclick = ()=>{ aceInput.value=''; $('cmdClear').classList.remove('on'); if(!S.playing) $('playCta').disabled=true; };
 $('playCta').onclick = ()=>{ if(S.playing) stopPlayback(); else playChannel(aceInput.value); };
-$('libSearch').addEventListener('input', e=>{ S.search = e.target.value; renderLibrary(); });
+$('libSearch').addEventListener('input', e=>{
+  S.search = e.target.value;
+  if(S.filter==='search') scheduleEngineSearch();
+  renderLibrary();
+});
+$('libSearch').addEventListener('keydown', e=>{
+  if(e.key==='Enter' && S.filter==='search' && S.search.trim().length>=2){ clearTimeout(searchTimer); runEngineSearch(); }
+});
 
 /* ---------- keyboard shortcuts ---------- */
 document.addEventListener('keydown', e=>{
