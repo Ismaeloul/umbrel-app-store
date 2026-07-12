@@ -3,19 +3,16 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.5.1"
+version: "0.5.2"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas y proxy local para
   reproducir los streams desde el navegador.
 releaseNotes: >-
-  Corrige el aviso "toca para reproducir" que aparecia aunque el canal ya
-  estuviera reproduciendose (solo se muestra ya si el navegador bloquea el
-  autoplay, y desaparece solo al arrancar el video). Incluye el rework 0.5.0:
-  diseno violeta, reproductor 16:9, boton LIVE para volver al directo,
-  estadisticas visibles, zapping, PiP, atajos y modos Estable/Baja latencia
-  con auto-recuperacion de buffer.
+  Las librerias de reproduccion (hls.js y mpegts.js) ahora van incluidas en la
+  app en vez de cargarse de un CDN externo: la app funciona 100% autoalojada
+  y ya no depende de internet para reproducir. Sin cambios visuales.
 developer: Ismaeloul
 website: https://github.com/Ismaeloul
 dependencies: []

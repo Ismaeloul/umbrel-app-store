@@ -33,5 +33,6 @@ services:
     volumes:
       - ${APP_DATA_DIR}/index.html:/usr/share/nginx/html/index.html:ro
       - ${APP_DATA_DIR}/icon.svg:/usr/share/nginx/html/icon.svg:ro
+      - ${APP_DATA_DIR}/vendor:/usr/share/nginx/html/vendor:ro
       - ${APP_DATA_DIR}/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     command: nginx -g 'daemon off;'
