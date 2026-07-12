@@ -910,14 +910,15 @@ function applySessionMeta(meta){
   if(meta.command_url) S.cmdUrl = toAcePath(meta.command_url);
   if(meta.stat_url && !S.statUrl){ S.statUrl = toAcePath(meta.stat_url); startStatsPolling(); }
 }
-/* el motor a veces no devuelve stat_url a la primera: reintentar en segundo plano */
+/* el motor a veces tarda en dar stat_url (arranque frío, prebuffering):
+   reintentar con paciencia en segundo plano */
 function scheduleStatsRetry(idParam, id, attempt=1){
-  if(attempt>5) return;
+  if(attempt>10) return;
   setTimeout(async ()=>{
     if(S.currentId!==id || S.demo || S.statUrl) return;
     try { applySessionMeta(await fetchSessionMeta(idParam, id)); } catch{}
     if(!S.statUrl) scheduleStatsRetry(idParam, id, attempt+1);
-  }, 4000);
+  }, 5000);
 }
 /* avisar al motor de que pare la sesión: sin esto quedan descargas zombis
    que compiten por ancho de banda y RAM con el canal que estás viendo */
@@ -957,6 +958,7 @@ async function playMpegts(id, ih=false){
   });
   p.on(mpegts.Events.MEDIA_INFO, ()=>{
     S.connecting=false; hideIdle(); setPlayingUI(true); setEngine('online');
+    if(!S.statUrl) scheduleStatsRetry(idParam, id);
     tryPlay();
   });
   p.load();
