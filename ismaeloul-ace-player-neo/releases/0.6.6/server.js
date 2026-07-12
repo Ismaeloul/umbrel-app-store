@@ -47,16 +47,21 @@ function ensureRemux(idParam, id) {
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
   fs.mkdirSync(dir, { recursive: true });
   const src = `http://${ACESTREAM_CONTAINER}:6878/ace/getstream?${idParam}=${id}`;
+  const logFd = fs.openSync(path.join(dir, "ffmpeg.log"), "w");
   const proc = spawn("ffmpeg", [
-    "-hide_banner", "-loglevel", "error",
+    "-hide_banner", "-loglevel", "warning", "-nostdin",
+    "-probesize", "5000000", "-analyzeduration", "5000000",
     "-i", src,
     "-map", "0:v:0", "-map", "0:a:0?",
-    "-c", "copy",
+    // video sin transcodificar; audio SIEMPRE recodificado a AAC estandar:
+    // arregla el ADTS de los TS y los canales con MP2/AC-3 que iOS no decodifica
+    "-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-ac", "2",
     "-f", "hls", "-hls_time", "4", "-hls_list_size", "8",
     "-hls_flags", "delete_segments+independent_segments",
     "-hls_segment_type", "fmp4", "-hls_fmp4_init_filename", "init.mp4",
     path.join(dir, "index.m3u8"),
-  ], { stdio: "ignore" });
+  ], { stdio: ["ignore", "ignore", logFd] });
+  try { fs.closeSync(logFd); } catch {}
   s = { proc, dir, lastAccess: Date.now() };
   proc.on("error", () => { if (remuxSessions.get(key) === s) remuxCleanup(key); });
   proc.on("exit", () => { if (remuxSessions.get(key) === s) remuxSessions.delete(key); });
