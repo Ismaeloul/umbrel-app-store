@@ -906,19 +906,16 @@ async function persist(){
    el anterior se detiene solo con un aviso. */
 setInterval(async ()=>{
   if(S.demo || !(S.playing || S.connecting)) return;
-  if(S.myPlayback) S.myPlayback.at = Date.now();
   try {
     const r = await fetch('/api/state',{cache:'no-store'});
     const d = await r.json();
     const np = d.nowPlaying;
+    // la marca de inicio es inmutable: manda quien pulso play MAS TARDE
     if(np && np.dev && np.dev !== DEV_ID && np.at > (S.playStartedAt||0)){
       stopPlayback();
-      S.myPlayback = null;
       toast('tv','La reproducción ha pasado a otro dispositivo','info');
-      return;
     }
   } catch{}
-  persist(); // heartbeat: renueva nuestro nowPlaying
 }, 5000);
 
 /* ---------- engine ---------- */
