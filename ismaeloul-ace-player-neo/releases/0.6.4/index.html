@@ -1281,10 +1281,27 @@ function deleteChannel(id,type){
   persist(); renderLibrary();
   toast('trash','Canal eliminado de la lista','warn');
 }
+/* navigator.clipboard solo existe en HTTPS/localhost; la app se sirve por
+   HTTP en la LAN, asi que hace falta el metodo clasico de respaldo */
+function legacyCopy(text){
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.focus(); ta.select(); ta.setSelectionRange(0, 99999);
+  let done = false;
+  try { done = document.execCommand('copy'); } catch {}
+  ta.remove();
+  return done;
+}
 function copyLink(id){
-  navigator.clipboard?.writeText('acestream://'+id)
-    .then(()=>toast('copy','Enlace acestream:// copiado','ok'))
-    .catch(()=>toast('alert','No se pudo copiar','err'));
+  const text = 'acestream://'+id;
+  const ok = ()=>toast('copy','Enlace acestream:// copiado','ok');
+  const fail = ()=>toast('alert','No se pudo copiar','err');
+  if(navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(text).then(ok).catch(()=>{ legacyCopy(text) ? ok() : fail(); });
+  } else {
+    legacyCopy(text) ? ok() : fail();
+  }
 }
 
 /* ---------- library render ---------- */
