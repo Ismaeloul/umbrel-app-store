@@ -1,5 +1,12 @@
 version: "3.7"
 
+# IMPORTANTE: al actualizar una app, umbrelOS re-copia docker-compose.yml y
+# umbrel-app.yml, y AÑADE archivos nuevos a APP_DATA_DIR, pero NUNCA sobreescribe
+# los existentes. Por eso cada version vive en releases/<version>/ (carpeta nueva
+# = se copia siempre) y este compose apunta a ella. Para publicar una release:
+# copiar releases/<vieja> a releases/<nueva>, editar alli, y cambiar la version
+# en las DOS rutas de abajo y en umbrel-app.yml.
+
 services:
   app_proxy:
     environment:
@@ -17,9 +24,9 @@ services:
     container_name: ismaeloul-ace-player-neo_storage_1
     restart: unless-stopped
     working_dir: /app
-    command: node /app/server.js
+    command: node /releases/0.6.1/server.js
     volumes:
-      - ${APP_DATA_DIR}/server.js:/app/server.js:ro
+      - ${APP_DATA_DIR}/releases:/releases:ro
       - ${APP_DATA_DIR}/data:/data
       - /var/run/docker.sock:/var/run/docker.sock
 
@@ -31,8 +38,9 @@ services:
       - acestream
       - storage
     volumes:
-      - ${APP_DATA_DIR}/index.html:/usr/share/nginx/html/index.html:ro
-      - ${APP_DATA_DIR}/icon.svg:/usr/share/nginx/html/icon.svg:ro
-      - ${APP_DATA_DIR}/vendor:/usr/share/nginx/html/vendor:ro
-      - ${APP_DATA_DIR}/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    command: nginx -g 'daemon off;'
+      - ${APP_DATA_DIR}/releases:/releases:ro
+    command: >
+      sh -c "rm -rf /www && mkdir -p /www &&
+             cp -r /releases/0.6.1/. /www/ &&
+             cp /www/nginx.conf /etc/nginx/conf.d/default.conf &&
+             exec nginx -g 'daemon off;'"
