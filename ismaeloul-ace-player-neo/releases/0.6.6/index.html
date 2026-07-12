@@ -1104,9 +1104,38 @@ async function playMpegts(id, ih=false){
 function playHls(id, ih=false){
   const v = $('video');
   const idParam = ih ? 'infohash' : 'id';
+
+  /* iOS: SIEMPRE por el adaptador fMP4. El HLS del motor (segmentos TS) le da
+     mil problemas al player de Apple incluso con códecs buenos (H.264+AAC):
+     ffmpeg re-segmenta limpio con -c copy y el iPhone recibe HLS de libro.
+     La meta va en modo progresivo (hls=false) porque ffmpeg consume getstream. */
+  if(IS_IOS){
+    const onPlayingIos = ()=>{ S.connecting=false; hideIdle(); setPlayingUI(true); setEngine('online'); };
+    (async ()=>{
+      try { applySessionMeta(await fetchSessionMeta(idParam, id, false)); } catch{}
+      if(!S.statUrl) scheduleStatsRetry(idParam, id, 1, false);
+      try {
+        const r = await fetch(`/api/remux?${idParam}=${id}`);
+        const d = await r.json().catch(()=>({}));
+        if(S.currentId!==id) return;
+        if(r.ok && d.url){
+          v.addEventListener('playing', onPlayingIos, { once:true });
+          v.src = d.url;
+          v.play().catch(err=>{ if(err && err.name==='NotAllowedError') $('tapLayer').classList.add('on'); });
+          return;
+        }
+      } catch{}
+      if(S.currentId===id && !S.playing){
+        S.connecting=false; setPlayingUI(false);
+        showIdle('No se pudo preparar el canal para este dispositivo. Prueba de nuevo o mira si emite (a veces tarda en encontrar pares).','err');
+      }
+    })();
+    return;
+  }
+
   // meta de sesión en segundo plano: stats, stop limpio y reintentos también en
-  // HLS/móvil — SIEMPRE con la variante manifest.m3u8 (hls=true) para no
-  // registrar la sesión como progresiva
+  // HLS — con la variante manifest.m3u8 (hls=true) para no registrar la sesión
+  // como progresiva
   (async ()=>{ try { applySessionMeta(await fetchSessionMeta(idParam, id, true)); } catch{}
     if(!S.statUrl) scheduleStatsRetry(idParam, id, 1, true); })();
   const source = `/ace/manifest.m3u8?${idParam}=${id}&_=${Date.now()}`;

@@ -379,7 +379,7 @@ const server = http.createServer(async (req, res) => {
       const t0 = Date.now();
       while (!fs.existsSync(manifest)) {
         if (!remuxSessions.has(id.toLowerCase())) return send(res, 502, { error: "remux_died" });
-        if (Date.now() - t0 > 25000) return send(res, 504, { error: "remux_timeout" });
+        if (Date.now() - t0 > 40000) return send(res, 504, { error: "remux_timeout" });
         await new Promise((r) => setTimeout(r, 500));
       }
       return send(res, 200, { url: `/remux/${id.toLowerCase()}/index.m3u8` });
