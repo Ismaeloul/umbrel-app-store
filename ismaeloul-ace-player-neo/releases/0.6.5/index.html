@@ -1032,8 +1032,14 @@ function renderStatsBar(){
 
 /* --- sesión del motor: meta (stats/stop/comandos) --- */
 const toAcePath = (u)=>{ const i = String(u||'').indexOf('/ace/'); return i>=0 ? String(u).slice(i) : String(u||''); };
-async function fetchSessionMeta(idParam, id){
-  const r = await fetch(`/ace/getstream?${idParam}=${id}&format=json&_=${Date.now()}`);
+/* hls=true usa manifest.m3u8?format=json: pedir la meta por getstream registra
+   la sesión como PROGRESIVA y el motor deja de servir segmentos HLS — eso
+   rompía el iPhone (reproductor nativo HLS) */
+async function fetchSessionMeta(idParam, id, hls=false){
+  const base = hls
+    ? `/ace/manifest.m3u8?${idParam}=${id}&format=json`
+    : `/ace/getstream?${idParam}=${id}&format=json`;
+  const r = await fetch(`${base}&_=${Date.now()}`);
   const d = await r.json();
   return d?.response || null;
 }
@@ -1044,12 +1050,12 @@ function applySessionMeta(meta){
 }
 /* el motor a veces tarda en dar stat_url (arranque frío, prebuffering):
    reintentar con paciencia en segundo plano */
-function scheduleStatsRetry(idParam, id, attempt=1){
+function scheduleStatsRetry(idParam, id, attempt=1, hls=false){
   if(attempt>10) return;
   setTimeout(async ()=>{
     if(S.currentId!==id || S.demo || S.statUrl) return;
-    try { applySessionMeta(await fetchSessionMeta(idParam, id)); } catch{}
-    if(!S.statUrl) scheduleStatsRetry(idParam, id, attempt+1);
+    try { applySessionMeta(await fetchSessionMeta(idParam, id, hls)); } catch{}
+    if(!S.statUrl) scheduleStatsRetry(idParam, id, attempt+1, hls);
   }, 5000);
 }
 /* avisar al motor de que pare la sesión: sin esto quedan descargas zombis
@@ -1098,9 +1104,11 @@ async function playMpegts(id, ih=false){
 function playHls(id, ih=false){
   const v = $('video');
   const idParam = ih ? 'infohash' : 'id';
-  // meta de sesión en segundo plano: stats, stop limpio y reintentos también en HLS/móvil
-  (async ()=>{ try { applySessionMeta(await fetchSessionMeta(idParam, id)); } catch{}
-    if(!S.statUrl) scheduleStatsRetry(idParam, id); })();
+  // meta de sesión en segundo plano: stats, stop limpio y reintentos también en
+  // HLS/móvil — SIEMPRE con la variante manifest.m3u8 (hls=true) para no
+  // registrar la sesión como progresiva
+  (async ()=>{ try { applySessionMeta(await fetchSessionMeta(idParam, id, true)); } catch{}
+    if(!S.statUrl) scheduleStatsRetry(idParam, id, 1, true); })();
   const source = `/ace/manifest.m3u8?${idParam}=${id}&_=${Date.now()}`;
   // en iOS el reproductor nativo es el que va fino; hls.js sobre
   // ManagedMediaSource provoca ciclos de pausa/reanudar
