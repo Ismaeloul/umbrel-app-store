@@ -3,21 +3,21 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.4"
+version: "0.6.5"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas y proxy local para
   reproducir los streams desde el navegador.
 releaseNotes: >-
-  Rediseno completo "sala de cine": pagina vertical con el reproductor
-  como protagonista, barra superior flotante, y la biblioteca como
-  parrilla de tarjetas grandes por canal (con acciones al pasar el raton
-  y categoria desplegable en el directorio). Paleta fria premium con
-  acento cian. Movil de verdad: controles del player debajo del video
-  (compatibles con los controles nativos de iOS), navegacion inferior
-  por scroll, tarjetas a dos columnas y pantalla despejada. Fuentes
-  autoalojadas: ya no queda ninguna dependencia de CDN.
+  Arregla la reproduccion en iPhone/iPad: iOS ahora usa siempre la ruta
+  HLS correcta (mpegts no funciona en iOS aunque diga que si), con
+  estadisticas, cierre limpio de sesion y mensajes de error detallados
+  tambien en movil. Nuevo traspaso de reproduccion entre dispositivos
+  estilo Spotify: si le das al play en el movil mientras el PC reproduce,
+  el PC se detiene solo con un aviso (el motor AceStream solo alimenta a
+  un dispositivo a la vez). Incluye el rediseno 0.6.4 y el arreglo del
+  boton de copiar en HTTP.
 developer: Ismaeloul
 website: https://github.com/Ismaeloul
 dependencies: []
