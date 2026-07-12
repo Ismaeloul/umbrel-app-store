@@ -1198,9 +1198,13 @@ function goLive(){
 let wdLastPos=0, wdStuck=0, wdRetries=0, wdHold=0, wdConn=0;
 setInterval(()=>{
   if(S.demo){ wdStuck=0; wdConn=0; return; }
-  // atascado en "Conectando…" (p. ej. la sesion murio en un traspaso): reintentar
+  // atascado en "Conectando…" (p. ej. la sesion murio en un traspaso): reintentar.
+  // Si la sesion esta descargando (prebuffering real) se le da hasta ~60 s antes
+  // de resetearla; si esta muerta (sin bajada), reintento a los ~15 s.
   if(S.connecting && !S.playing && S.currentId){
     wdConn++;
+    const descargando = S.stats && S.stats.down > 50;
+    if(descargando && wdConn < 40) return;
     if(wdConn>=10){
       wdConn=0;
       if(wdRetries>=3){
