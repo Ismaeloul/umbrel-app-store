@@ -474,6 +474,17 @@
   }
   .mnote { font-size:11.5px; color:var(--muted); line-height:1.6; }
   .mnote.err { color:#f8a9ab; }
+  .source-list { display:flex; flex-direction:column; gap:8px; max-height:240px; overflow:auto; }
+  .source-card { padding:10px 11px; border:1px solid var(--border); border-radius:12px; background:var(--bg2); }
+  .source-card.active { border-color:rgba(77,184,232,.55); box-shadow:inset 3px 0 0 var(--amber); }
+  .source-head { display:flex; align-items:center; gap:7px; }
+  .source-name { min-width:0; flex:1; font-size:12.5px; font-weight:700; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .source-badge { font:700 9px var(--mono); color:var(--amber-hi); background:var(--amber-dim); padding:3px 6px; border-radius:999px; }
+  .source-url { margin-top:4px; font:10px var(--mono); color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .source-meta { margin-top:5px; font-size:10.5px; color:var(--muted2); }
+  .source-actions { display:flex; gap:6px; margin-top:8px; }
+  .source-actions .mbtn { width:auto; flex:1; padding:7px 8px; border-radius:9px; font-size:11px; }
+  .source-actions .delete { flex:0 0 34px; color:#f8a9ab; }
 
   /* ============ TOASTS ============ */
   .toasts { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); z-index:200; display:flex; flex-direction:column; gap:8px; align-items:center; }
@@ -678,13 +689,18 @@
     <div class="modal-h" id="mhSettings"><span></span> Ajustes <button class="x" data-close="veilSettings"></button></div>
     <div class="modal-b">
       <div>
-        <label>Directorio remoto (web o M3U)</label>
-        <input type="text" id="syncUrlInput">
+        <label>Guardar un directorio remoto</label>
+        <input type="text" id="syncNameInput" placeholder="Nombre, por ejemplo: Principal">
+        <input type="text" id="syncUrlInput" style="margin-top:8px" placeholder="https://…/lista.m3u">
         <div class="mrow2" style="margin-top:10px">
-          <button class="mbtn gold" id="btnSyncM3u">Importar M3U</button>
-          <button class="mbtn flat" id="btnSyncHtml">Scraping HTML</button>
+          <button class="mbtn gold" id="btnSyncM3u">Guardar M3U</button>
+          <button class="mbtn flat" id="btnSyncHtml">Guardar HTML</button>
         </div>
-        <p class="mnote" id="syncNote" style="margin-top:8px"></p>
+        <p class="mnote" id="syncNote" style="margin-top:8px">Hasta 8 fuentes; cada una conserva su propia lista y se actualiza cada 3 h.</p>
+      </div>
+      <div style="border-top:1px solid var(--border); padding-top:14px;">
+        <label>Directorios guardados</label>
+        <div class="source-list" id="sourceList"></div>
       </div>
       <div style="border-top:1px solid var(--border); padding-top:14px;">
         <label>Modo de reproducción</label>
@@ -788,6 +804,7 @@ const DEFAULT_SYNC = 'https://ipfs.io/ipns/k51qzi5uqu5di462t7j4vu4akwfhvtjhy88qb
 const S = {
   demo:false, engine:'offline',
   favorites:[], history:[], web:[], webSyncedAt:null,
+  webSources:[], activeWebSourceId:null,
   filter:'fav', search:'', openCats:{},
   searchResults:[], searchBusy:false,
   cmdUrl:null, pendingResume:null,
@@ -846,6 +863,9 @@ function demoSeedState(){
       { id:web[7].id, title:'M+ Estrenos', type:'recent', category:'General', date:new Date().toISOString() },
     ],
     web, webSyncedAt:new Date().toISOString(),
+    webSources:[{ id:'demo-principal', name:'Directorio de muestra', url:DEFAULT_SYNC,
+      type:'m3u', count:web.length, syncedAt:new Date().toISOString(), lastErrorAt:null }],
+    activeWebSourceId:'demo-principal',
   };
 }
 
@@ -877,13 +897,25 @@ function toast(iconName,msg,type='ok'){
 }
 
 /* ---------- persistence ---------- */
+function applyDirectoryState(st){
+  S.web = (st.web||st.streams||[]).map(i=>({...i,type:'web'}));
+  S.webSyncedAt = st.webSyncedAt||null;
+  S.webSources = Array.isArray(st.webSources) && st.webSources.length
+    ? st.webSources
+    : [{ id:'principal', name:'Directorio principal', url:DEFAULT_SYNC, type:'m3u',
+        count:S.web.length, syncedAt:S.webSyncedAt, lastErrorAt:null }];
+  S.activeWebSourceId = st.activeWebSourceId || S.webSources[0]?.id || null;
+}
 async function loadState(){
   if(S.demo){
     try {
       const raw = localStorage.getItem('aceneo-demo');
       const st = raw ? JSON.parse(raw) : demoSeedState();
-      Object.assign(S,{ favorites:st.favorites||[], history:st.history||[], web:st.web||[], webSyncedAt:st.webSyncedAt||null });
-    } catch { Object.assign(S, demoSeedState()); }
+      Object.assign(S,{ favorites:st.favorites||[], history:st.history||[] });
+      applyDirectoryState(st);
+    } catch {
+      const st=demoSeedState(); Object.assign(S,{favorites:st.favorites,history:st.history}); applyDirectoryState(st);
+    }
     return;
   }
   try {
@@ -892,13 +924,13 @@ async function loadState(){
     const st = await r.json();
     S.favorites = (st.favorites||[]).map(i=>({...i,type:'fav'}));
     S.history = (st.history||[]).map(i=>({...i,type:'recent'}));
-    S.web = (st.web||[]).map(i=>({...i,type:'web'}));
-    S.webSyncedAt = st.webSyncedAt||null;
+    applyDirectoryState(st);
   } catch { toast('alert','No se pudo cargar la biblioteca del backend','err'); }
 }
 async function persist(){
   if(S.demo){
-    localStorage.setItem('aceneo-demo', JSON.stringify({ favorites:S.favorites, history:S.history, web:S.web, webSyncedAt:S.webSyncedAt }));
+    localStorage.setItem('aceneo-demo', JSON.stringify({ favorites:S.favorites, history:S.history,
+      web:S.web, webSyncedAt:S.webSyncedAt, webSources:S.webSources, activeWebSourceId:S.activeWebSourceId }));
     return;
   }
   try {
@@ -1651,30 +1683,108 @@ async function runEngineSearch(){
   }
 }
 
-/* ---------- sync ---------- */
-async function syncDirectory(type){
-  const url = $('syncUrlInput').value.trim();
-  if(!url) return;
-  const note = $('syncNote');
-  note.className='mnote'; note.textContent='Sincronizando…';
+/* ---------- fuentes de directorio ---------- */
+function sourceDate(value){
+  if(!value) return 'sin sincronizar';
+  return new Date(value).toLocaleString('es-ES',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+}
+function renderDirectorySources(){
+  const box=$('sourceList');
+  if(!box) return;
+  if(!S.webSources.length){ box.innerHTML='<p class="mnote">Todavía no hay directorios guardados.</p>'; return; }
+  box.innerHTML=S.webSources.map(source=>{
+    const active=source.id===S.activeWebSourceId;
+    const failed=!!source.lastErrorAt;
+    return `<div class="source-card${active?' active':''}">
+      <div class="source-head">
+        <span class="source-name">${esc(source.name)}</span>
+        ${active?'<span class="source-badge">EN USO</span>':''}
+      </div>
+      <div class="source-url" title="${esc(source.url)}">${esc(source.url)}</div>
+      <div class="source-meta">${String(source.type||'m3u').toUpperCase()} · ${source.count||0} canales · ${failed?'falló la última actualización; caché conservada':sourceDate(source.syncedAt)}</div>
+      <div class="source-actions">
+        <button class="mbtn ${active?'gold':'flat'}" data-source-act="use" data-source-id="${source.id}" ${active?'disabled':''}>${active?'Activo':'Usar'}</button>
+        <button class="mbtn flat" data-source-act="refresh" data-source-id="${source.id}">Actualizar</button>
+        <button class="mbtn flat delete" data-source-act="delete" data-source-id="${source.id}" title="Eliminar">${ic('trash',13)}</button>
+      </div>
+    </div>`;
+  }).join('');
+  box.querySelectorAll('[data-source-act]').forEach(button=>{
+    button.onclick=()=>{
+      const source=S.webSources.find(item=>item.id===button.dataset.sourceId);
+      if(!source) return;
+      if(button.dataset.sourceAct==='use') activateDirectory(source.id);
+      else if(button.dataset.sourceAct==='refresh') syncDirectory(source.type,source.id);
+      else deleteDirectory(source.id);
+    };
+  });
+}
+function directoryError(error){
+  if(error==='source_limit') return 'Ya tienes 8 directorios. Elimina uno antes de añadir otro.';
+  if(error==='empty_directory') return 'La fuente respondió, pero no contenía enlaces AceStream válidos.';
+  if(error==='last_source') return 'Debe quedar al menos un directorio guardado.';
+  return 'No se pudo importar esa URL. La lista anterior no se ha modificado.';
+}
+function applyDirectoryResponse(data){
+  applyDirectoryState(data);
+  renderDirectorySources(); renderTabs(); renderLibrary();
+}
+async function syncDirectory(type,sourceId=null){
+  const source=sourceId ? S.webSources.find(item=>item.id===sourceId) : null;
+  const url=source?.url || $('syncUrlInput').value.trim();
+  const name=source?.name || $('syncNameInput').value.trim();
+  if(!url){ toast('alert','Escribe la URL del directorio','warn'); return; }
+  const note=$('syncNote');
+  note.className='mnote'; note.textContent=source?'Actualizando «'+source.name+'»…':'Guardando y sincronizando el directorio…';
   if(S.demo){
     setTimeout(()=>{ note.textContent='En modo demo no hay backend: esta acción funcionará en el Umbrel.'; },600);
     return;
   }
   try {
-    const r = await fetch('/api/streams/sync',{ method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ url, type }) });
-    const d = await r.json();
-    if(!r.ok||!d.success) throw 0;
-    S.web = (d.streams||[]).map(i=>({...i,type:'web'}));
-    S.webSyncedAt = d.webSyncedAt||null;
+    const r=await fetch('/api/streams/sync',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({sourceId:source?.id,name,url,type})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok||!d.success) throw new Error(d.error||'sync_failed');
+    applyDirectoryResponse(d);
     S.filter='web'; renderTabs(); renderLibrary();
-    note.textContent = `${S.web.length} canales importados. Se refresca solo cada 3 h.`;
-    toast('check',`Directorio sincronizado: ${S.web.length} canales`,'ok');
-  } catch {
-    note.className='mnote err';
-    note.textContent='No se pudo importar esa URL. Comprueba que sea accesible y tenga enlaces acestream:// o un M3U válido.';
+    note.textContent=`«${S.webSources.find(item=>item.id===S.activeWebSourceId)?.name||'Directorio'}»: ${S.web.length} canales. Actualización automática cada 3 h.`;
+    if(!source) $('syncNameInput').value='';
+    toast('check',`Directorio guardado: ${S.web.length} canales`,'ok');
+  } catch(error) {
+    note.className='mnote err'; note.textContent=directoryError(error.message);
   }
+}
+async function activateDirectory(sourceId){
+  if(S.demo) return;
+  try {
+    const r=await fetch('/api/streams/activate',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({sourceId})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok||!d.success) throw 0;
+    applyDirectoryResponse(d); S.filter='web'; renderTabs(); renderLibrary();
+    toast('check',`Directorio activo: ${S.webSources.find(item=>item.id===sourceId)?.name||''}`,'ok');
+  } catch { toast('alert','No se pudo cambiar de directorio','err'); }
+}
+async function deleteDirectory(sourceId){
+  const source=S.webSources.find(item=>item.id===sourceId);
+  if(!source || !confirm(`¿Eliminar el directorio «${source.name}»? Su lista guardada también se eliminará.`)) return;
+  if(S.demo) return;
+  try {
+    const r=await fetch('/api/streams/delete',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({sourceId})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok||!d.success) throw new Error(d.error||'delete_failed');
+    applyDirectoryResponse(d);
+    toast('check','Directorio eliminado','ok');
+  } catch(error) { toast('alert',directoryError(error.message),'err'); }
+}
+async function refreshDirectoryState(){
+  if(S.demo) return renderDirectorySources();
+  try {
+    const r=await fetch('/api/state',{cache:'no-store'}); if(!r.ok) return;
+    const d=await r.json(); applyDirectoryState(d);
+    renderDirectorySources(); renderTabs(); renderLibrary();
+  } catch{}
 }
 
 /* ---------- modals ---------- */
@@ -1721,7 +1831,7 @@ document.querySelector('.cmd-input').insertAdjacentHTML('afterbegin',`<span styl
 updateFavBtn();
 $('syncUrlInput').value = DEFAULT_SYNC;
 
-$('btnSettings').onclick = ()=>openModal('veilSettings');
+$('btnSettings').onclick = ()=>{ openModal('veilSettings'); refreshDirectoryState(); };
 $('liveBadge').onclick = goLive;
 function renderPbButtons(){
   $('pbStable').className = 'mbtn '+(S.pbMode==='stable'?'gold':'flat');
@@ -1827,9 +1937,12 @@ async function detectDemo(){
   S.demo = await detectDemo();
   $('demoFlag').classList.toggle('on', S.demo);
   await loadState();
-  renderTabs(); renderLibrary();
+  renderTabs(); renderLibrary(); renderDirectorySources();
   checkEngine();
-  if(!S.demo) setInterval(checkEngine,20000);
+  if(!S.demo){
+    setInterval(checkEngine,20000);
+    setInterval(refreshDirectoryState,5*60*1000);
+  }
   setPlayingUI(false);
   toast(S.demo?'tv':'check', S.demo
     ? 'Modo demo: sin backend, canales de muestra cargados'

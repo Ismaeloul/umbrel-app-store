@@ -13,7 +13,8 @@ releaseNotes: >-
   Reproduccion P2P mas estable y con menos cortes: nuevos perfiles
   Equilibrado, Estable y Baja latencia, precarga real antes de arrancar,
   recuperacion de buffer sin saltar al directo ni reiniciar la sesion
-  demasiado pronto, buffering interno del motor y puerto P2P dedicado.
+  demasiado pronto, buffering interno del motor, puerto P2P dedicado y una
+  biblioteca de directorios que conserva varias fuentes y sus listas.
 developer: Ismaeloul
 website: https://github.com/Ismaeloul
 dependencies: []

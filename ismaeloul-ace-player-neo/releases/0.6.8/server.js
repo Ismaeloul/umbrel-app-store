@@ -12,8 +12,10 @@ const HASH_RE = /^[a-fA-F0-9]{40}$/;
 const MAX_BODY = 2 * 1024 * 1024;
 const MAX_HISTORY = 60;
 const MAX_WEB_STREAMS = 300;
+const MAX_WEB_SOURCES = 8;
 const RESTART_COOLDOWN_MS = 15000;
-const DEFAULT_WEB_SYNC_URL = "https://ipfs.io/ipns/k51qzi5uqu5di462t7j4vu4akwfhvtjhy88qbupktvoacqfqe9uforjvhyi4wr/hashes_acestream.m3u";
+const DEFAULT_WEB_SYNC_URL = process.env.DEFAULT_WEB_SYNC_URL || "https://ipfs.io/ipns/k51qzi5uqu5di462t7j4vu4akwfhvtjhy88qbupktvoacqfqe9uforjvhyi4wr/hashes_acestream.m3u";
+const DEFAULT_WEB_SOURCE_ID = "principal";
 const WEB_SYNC_INTERVAL_MS = 3 * 60 * 60 * 1000;
 
 let lastRestartAt = 0;
@@ -84,7 +86,10 @@ const REMUX_TYPES = {
 function ensureState() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   if (!fs.existsSync(STATE_FILE)) {
-    fs.writeFileSync(STATE_FILE, JSON.stringify({ favorites: [], history: [], web: [], webSyncedAt: null }, null, 2));
+    fs.writeFileSync(STATE_FILE, JSON.stringify({
+      favorites: [], history: [], web: [], webSyncedAt: null,
+      webSources: [], activeWebSourceId: null,
+    }, null, 2));
   }
 }
 
@@ -119,6 +124,73 @@ function normalizeItem(item, fallbackType = "recent") {
   };
 }
 
+function normalizeItems(items, type, max) {
+  const output = [];
+  const seen = new Set();
+  for (const item of Array.isArray(items) ? items : []) {
+    const normalized = normalizeItem({ ...item, type }, type);
+    if (!normalized || seen.has(normalized.id)) continue;
+    seen.add(normalized.id);
+    output.push(normalized);
+    if (output.length >= max) break;
+  }
+  return output;
+}
+
+function normalizeWebUrl(value) {
+  try {
+    const parsed = new URL(String(value || "").trim());
+    if (!["http:", "https:"].includes(parsed.protocol)) return "";
+    parsed.username = "";
+    parsed.password = "";
+    return parsed.toString();
+  } catch {
+    return "";
+  }
+}
+
+function normalizeWebSource(source, index = 0, fallbackStreams = [], fallbackSyncedAt = null) {
+  const url = normalizeWebUrl(source?.url || (index === 0 ? DEFAULT_WEB_SYNC_URL : ""));
+  if (!url) return null;
+  const type = source?.type === "html" ? "html" : "m3u";
+  let id = String(source?.id || "").trim().replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 48);
+  if (!id) id = index === 0 ? DEFAULT_WEB_SOURCE_ID : `directorio-${index + 1}`;
+  let fallbackName = `Directorio ${index + 1}`;
+  try { fallbackName = new URL(url).hostname.replace(/^www\./, "") || fallbackName; } catch {}
+  const name = String(source?.name || fallbackName).replace(/\s+/g, " ").trim().slice(0, 60) || fallbackName;
+  return {
+    id,
+    name,
+    url,
+    type,
+    streams: normalizeItems(source?.streams || fallbackStreams, "web", MAX_WEB_STREAMS),
+    syncedAt: typeof source?.syncedAt === "string" ? source.syncedAt
+      : typeof fallbackSyncedAt === "string" ? fallbackSyncedAt : null,
+    lastErrorAt: typeof source?.lastErrorAt === "string" ? source.lastErrorAt : null,
+  };
+}
+
+function sourceSummaries(sources) {
+  return sources.map(({ id, name, url, type, streams, syncedAt, lastErrorAt }) => ({
+    id, name, url, type, count: streams.length, syncedAt, lastErrorAt,
+  }));
+}
+
+function publicState(state) {
+  return { ...state, webSources: sourceSummaries(state.webSources) };
+}
+
+function directoryResponse(state) {
+  return {
+    success: true,
+    web: state.web,
+    streams: state.web,
+    webSyncedAt: state.webSyncedAt,
+    webSources: sourceSummaries(state.webSources),
+    activeWebSourceId: state.activeWebSourceId,
+  };
+}
+
 // quién está reproduciendo ahora (traspaso de mando entre dispositivos)
 function normalizeNowPlaying(np) {
   if (!np || typeof np !== "object") return null;
@@ -137,36 +209,74 @@ function readState() {
   ensureState();
   try {
     const parsed = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
+    const legacyWeb = normalizeItems(parsed.web, "web", MAX_WEB_STREAMS);
+    let webSources = Array.isArray(parsed.webSources)
+      ? parsed.webSources.map((source, index) => normalizeWebSource(source, index)).filter(Boolean).slice(0, MAX_WEB_SOURCES)
+      : [];
+    if (!webSources.length) {
+      webSources = [normalizeWebSource({
+        id: DEFAULT_WEB_SOURCE_ID,
+        name: "Directorio principal",
+        url: DEFAULT_WEB_SYNC_URL,
+        type: "m3u",
+      }, 0, legacyWeb, parsed.webSyncedAt)].filter(Boolean);
+    }
+    const ids = new Set();
+    webSources = webSources.filter((source) => {
+      if (ids.has(source.id)) return false;
+      ids.add(source.id);
+      return true;
+    });
+    const activeWebSourceId = webSources.some((source) => source.id === parsed.activeWebSourceId)
+      ? parsed.activeWebSourceId : webSources[0].id;
+    const activeSource = webSources.find((source) => source.id === activeWebSourceId) || webSources[0];
     return {
-      favorites: Array.isArray(parsed.favorites) ? parsed.favorites.map((i) => normalizeItem(i, "fav")).filter(Boolean) : [],
-      history: Array.isArray(parsed.history) ? parsed.history.map((i) => normalizeItem(i, "recent")).filter(Boolean).slice(0, MAX_HISTORY) : [],
-      web: Array.isArray(parsed.web) ? parsed.web.map((i) => normalizeItem(i, "web")).filter(Boolean).slice(0, MAX_WEB_STREAMS) : [],
-      webSyncedAt: typeof parsed.webSyncedAt === "string" ? parsed.webSyncedAt : null,
+      favorites: normalizeItems(parsed.favorites, "fav", MAX_HISTORY),
+      history: normalizeItems(parsed.history, "recent", MAX_HISTORY),
+      web: activeSource.streams,
+      webSyncedAt: activeSource.syncedAt,
+      webSources,
+      activeWebSourceId,
       nowPlaying: normalizeNowPlaying(parsed.nowPlaying),
     };
   } catch {
-    return { favorites: [], history: [], web: [], webSyncedAt: null, nowPlaying: null };
+    const source = normalizeWebSource({ id: DEFAULT_WEB_SOURCE_ID, name: "Directorio principal", url: DEFAULT_WEB_SYNC_URL }, 0);
+    return {
+      favorites: [], history: [], web: [], webSyncedAt: null,
+      webSources: source ? [source] : [], activeWebSourceId: source?.id || null,
+      nowPlaying: null,
+    };
   }
 }
 
 function writeState(nextState) {
-  const seen = new Set();
-  const unique = (items, type, max) => {
-    const output = [];
-    for (const item of Array.isArray(items) ? items : []) {
-      const normalized = normalizeItem({ ...item, type }, type);
-      if (!normalized || seen.has(`${type}:${normalized.id}`)) continue;
-      seen.add(`${type}:${normalized.id}`);
-      output.push(normalized);
-      if (output.length >= max) break;
-    }
-    return output;
-  };
+  let webSources = Array.isArray(nextState.webSources)
+    ? nextState.webSources.map((source, index) => normalizeWebSource(source, index)).filter(Boolean).slice(0, MAX_WEB_SOURCES)
+    : [];
+  if (!webSources.length) {
+    webSources = [normalizeWebSource({
+      id: DEFAULT_WEB_SOURCE_ID,
+      name: "Directorio principal",
+      url: DEFAULT_WEB_SYNC_URL,
+      type: "m3u",
+    }, 0, nextState.web, nextState.webSyncedAt)].filter(Boolean);
+  }
+  const ids = new Set();
+  webSources = webSources.filter((source) => {
+    if (ids.has(source.id)) return false;
+    ids.add(source.id);
+    return true;
+  });
+  const activeWebSourceId = webSources.some((source) => source.id === nextState.activeWebSourceId)
+    ? nextState.activeWebSourceId : webSources[0].id;
+  const activeSource = webSources.find((source) => source.id === activeWebSourceId) || webSources[0];
   const state = {
-    favorites: unique(nextState.favorites, "fav", MAX_HISTORY),
-    history: unique(nextState.history, "recent", MAX_HISTORY),
-    web: unique(nextState.web, "web", MAX_WEB_STREAMS),
-    webSyncedAt: typeof nextState.webSyncedAt === "string" ? nextState.webSyncedAt : null,
+    favorites: normalizeItems(nextState.favorites, "fav", MAX_HISTORY),
+    history: normalizeItems(nextState.history, "recent", MAX_HISTORY),
+    web: activeSource.streams,
+    webSyncedAt: activeSource.syncedAt,
+    webSources,
+    activeWebSourceId,
     nowPlaying: normalizeNowPlaying(nextState.nowPlaying),
   };
   const tempFile = `${STATE_FILE}.tmp`;
@@ -364,7 +474,7 @@ function restartAceStream() {
 const server = http.createServer(async (req, res) => {
   try {
     if (req.url === "/api/state") {
-      if (req.method === "GET") return send(res, 200, readState());
+      if (req.method === "GET") return send(res, 200, publicState(readState()));
       if (req.method === "PUT") {
         const body = await readBody(req);
         const current = readState();
@@ -373,7 +483,7 @@ const server = http.createServer(async (req, res) => {
         body.nowPlaying = (incoming && (!current.nowPlaying || incoming.at >= current.nowPlaying.at))
           ? incoming
           : current.nowPlaying;
-        return send(res, 200, writeState({ webSyncedAt: current.webSyncedAt, ...body }));
+        return send(res, 200, publicState(writeState({ ...current, ...body })));
       }
       return send(res, 405, { error: "method_not_allowed" });
     }
@@ -470,11 +580,50 @@ const server = http.createServer(async (req, res) => {
     if (req.url === "/api/streams/sync") {
       if (req.method !== "POST") return send(res, 405, { error: "method_not_allowed" });
       const body = await readBody(req);
-      const text = await fetchText(body.url);
-      const streams = (body.type === "m3u" ? parseM3u(text) : parseHtml(text)).slice(0, MAX_WEB_STREAMS);
       const state = readState();
-      const nextState = writeState({ ...state, web: streams, webSyncedAt: new Date().toISOString() });
-      return send(res, 200, { success: true, streams: nextState.web, webSyncedAt: nextState.webSyncedAt });
+      const type = body.type === "html" ? "html" : "m3u";
+      const url = normalizeWebUrl(body.url);
+      if (!url) throw new Error("bad_url");
+      const source = state.webSources.find((item) => item.id === body.sourceId)
+        || state.webSources.find((item) => item.url === url && item.type === type);
+      if (!source && state.webSources.length >= MAX_WEB_SOURCES) throw new Error("source_limit");
+      const text = await fetchText(url);
+      const streams = (type === "m3u" ? parseM3u(text) : parseHtml(text)).slice(0, MAX_WEB_STREAMS);
+      if (!streams.length) throw new Error("empty_directory");
+      const id = source?.id || `directorio-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+      const synced = normalizeWebSource({
+        id,
+        name: body.name || source?.name,
+        url,
+        type,
+        streams,
+        syncedAt: new Date().toISOString(),
+        lastErrorAt: null,
+      }, state.webSources.length);
+      const webSources = source
+        ? state.webSources.map((item) => item.id === source.id ? synced : item)
+        : [...state.webSources, synced];
+      const nextState = writeState({ ...state, webSources, activeWebSourceId: id });
+      return send(res, 200, directoryResponse(nextState));
+    }
+
+    if (req.url === "/api/streams/activate") {
+      if (req.method !== "POST") return send(res, 405, { error: "method_not_allowed" });
+      const body = await readBody(req);
+      const state = readState();
+      if (!state.webSources.some((source) => source.id === body.sourceId)) throw new Error("source_not_found");
+      return send(res, 200, directoryResponse(writeState({ ...state, activeWebSourceId: body.sourceId })));
+    }
+
+    if (req.url === "/api/streams/delete") {
+      if (req.method !== "POST") return send(res, 405, { error: "method_not_allowed" });
+      const body = await readBody(req);
+      const state = readState();
+      if (!state.webSources.some((source) => source.id === body.sourceId)) throw new Error("source_not_found");
+      if (state.webSources.length <= 1) throw new Error("last_source");
+      const webSources = state.webSources.filter((source) => source.id !== body.sourceId);
+      const activeWebSourceId = state.activeWebSourceId === body.sourceId ? webSources[0].id : state.activeWebSourceId;
+      return send(res, 200, directoryResponse(writeState({ ...state, webSources, activeWebSourceId })));
     }
 
     return send(res, 404, { error: "not_found" });
@@ -485,32 +634,42 @@ const server = http.createServer(async (req, res) => {
       "bad_json",
       "bad_url",
       "body_too_large",
+      "empty_directory",
       "empty_query",
       "engine_bad_response",
       "fetch_failed",
       "fetch_timeout",
+      "last_source",
       "method_not_allowed",
       "restart_cooldown",
       "restart_failed",
       "response_too_large",
+      "source_limit",
+      "source_not_found",
     ]);
     send(res, status, { error: safeErrors.has(error.message) ? error.message : "bad_request" });
   }
 });
 
 async function autoSyncWeb() {
-  try {
-    const text = await fetchText(DEFAULT_WEB_SYNC_URL);
-    const streams = parseM3u(text).slice(0, MAX_WEB_STREAMS);
-    const state = readState();
-    writeState({ ...state, web: streams, webSyncedAt: new Date().toISOString() });
-    console.log(`[auto-sync] refreshed ${streams.length} web streams`);
-  } catch (error) {
-    console.error(`[auto-sync] failed: ${error.message}`);
+  const state = readState();
+  const webSources = [];
+  for (const source of state.webSources) {
+    try {
+      const text = await fetchText(source.url);
+      const streams = (source.type === "html" ? parseHtml(text) : parseM3u(text)).slice(0, MAX_WEB_STREAMS);
+      if (!streams.length) throw new Error("empty_directory");
+      webSources.push({ ...source, streams, syncedAt: new Date().toISOString(), lastErrorAt: null });
+      console.log(`[auto-sync] ${source.name}: refreshed ${streams.length} web streams`);
+    } catch (error) {
+      webSources.push({ ...source, lastErrorAt: new Date().toISOString() });
+      console.error(`[auto-sync] ${source.name}: failed: ${error.message}`);
+    }
   }
+  writeState({ ...state, webSources });
 }
 
 ensureState();
-server.listen(3000, "0.0.0.0");
+server.listen(Number(process.env.PORT) || 3000, "0.0.0.0");
 autoSyncWeb();
 setInterval(autoSyncWeb, WEB_SYNC_INTERVAL_MS);
