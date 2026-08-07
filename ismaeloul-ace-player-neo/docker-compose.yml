@@ -20,7 +20,12 @@ services:
     restart: unless-stopped
     # cache en disco (no en RAM) y subida P2P acotada: evita que el motor
     # muera por OOM y que sature la conexion sirviendo a otros espectadores
-    command: --client-console --bind-all --live-cache-type disk --live-cache-size 536870912 --upload-limit 2000
+    # El puerto P2P fijo permite aceptar conexiones entrantes; el buffering
+    # interno acerca el comportamiento al reproductor de escritorio.
+    command: --client-console --bind-all --port 8621 --use-internal-buffering true --live-cache-type disk --live-cache-size 536870912 --upload-limit 2000
+    ports:
+      - "8621:8621/tcp"
+      - "8621:8621/udp"
     mem_limit: 2g
 
   storage:
@@ -31,7 +36,7 @@ services:
     # ffmpeg: re-empaqueta HEVC de TS a fMP4 para iOS (sin transcodificar).
     # Si no hay internet al recrear el contenedor, la app funciona igual
     # (solo se pierde la adaptacion para iPhone de canales HEVC).
-    command: sh -c "apk add --no-cache ffmpeg >/dev/null 2>&1 || echo 'sin ffmpeg, remux iOS desactivado'; exec node /releases/0.6.7/server.js"
+    command: sh -c "apk add --no-cache ffmpeg >/dev/null 2>&1 || echo 'sin ffmpeg, remux iOS desactivado'; exec node /releases/0.6.8/server.js"
     volumes:
       - ${APP_DATA_DIR}/releases:/releases:ro
       - ${APP_DATA_DIR}/data:/data
@@ -48,6 +53,6 @@ services:
       - ${APP_DATA_DIR}/releases:/releases:ro
     command: >
       sh -c "rm -rf /www && mkdir -p /www &&
-             cp -r /releases/0.6.7/. /www/ &&
+             cp -r /releases/0.6.8/. /www/ &&
              cp /www/nginx.conf /etc/nginx/conf.d/default.conf &&
              exec nginx -g 'daemon off;'"
