@@ -22,7 +22,7 @@ services:
     # muera por OOM y que sature la conexion sirviendo a otros espectadores
     # El puerto P2P fijo permite aceptar conexiones entrantes; el buffering
     # interno acerca el comportamiento al reproductor de escritorio.
-    command: --client-console --bind-all --port 8621 --use-internal-buffering true --live-cache-type disk --live-cache-size 536870912 --upload-limit 2000
+    command: --client-console --bind-all --port 8621 --use-internal-buffering 1 --live-cache-type disk --live-cache-size 536870912 --upload-limit 2000
     ports:
       - "8621:8621/tcp"
       - "8621:8621/udp"
