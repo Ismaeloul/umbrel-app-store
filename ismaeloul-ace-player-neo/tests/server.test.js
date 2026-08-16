@@ -11,7 +11,10 @@ process.env.DATA_DIR = testDataDir;
 process.env.DEFAULT_WEB_SYNC_URL = "https://example.com/default.m3u";
 process.env.FOOTBALL_DEMO_ONLY = "true";
 
-const app = require("../releases/0.6.9/server.js");
+const manifest = fs.readFileSync(path.join(__dirname, "../umbrel-app.yml"), "utf8");
+const releaseVersion = manifest.match(/^version:\s*"([^"]+)"/m)?.[1];
+assert.ok(releaseVersion, "umbrel-app.yml debe declarar una version");
+const app = require(path.join(__dirname, "../releases", releaseVersion, "server.js"));
 
 const ID_A = "a".repeat(40);
 const ID_B = "b".repeat(40);

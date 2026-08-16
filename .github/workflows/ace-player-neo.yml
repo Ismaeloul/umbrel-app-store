@@ -22,16 +22,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
+      - name: Resolve release version
+        shell: bash
+        run: |
+          VERSION="$(sed -n 's/^version: "\([^"]*\)"/\1/p' ismaeloul-ace-player-neo/umbrel-app.yml)"
+          test -n "$VERSION"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
       - name: Check JavaScript syntax
         run: |
-          node --check ismaeloul-ace-player-neo/releases/0.6.9/server.js
-          node --check ismaeloul-ace-player-neo/releases/0.6.9/engine-control.js
-          node -e "const fs=require('fs');const s=fs.readFileSync('ismaeloul-ace-player-neo/releases/0.6.9/index.html','utf8');new Function(s.slice(s.lastIndexOf('<script>')+8,s.lastIndexOf('</script>')));"
+          node --check "ismaeloul-ace-player-neo/releases/${VERSION}/server.js"
+          node --check "ismaeloul-ace-player-neo/releases/${VERSION}/engine-control.js"
+          node -e "const fs=require('fs');const v=process.env.VERSION;const s=fs.readFileSync('ismaeloul-ace-player-neo/releases/'+v+'/index.html','utf8');new Function(s.slice(s.lastIndexOf('<script>')+8,s.lastIndexOf('</script>')));"
 
       - name: Run backend tests
         run: node --test ismaeloul-ace-player-neo/tests/server.test.js
 
       - name: Check release references
         run: |
-          node -e "const fs=require('fs');const c=fs.readFileSync('ismaeloul-ace-player-neo/docker-compose.yml','utf8');if(!c.includes('/releases/0.6.9/server.js')||!c.includes('/releases/0.6.9/engine-control.js')||!c.includes('/releases/0.6.9/.'))process.exit(1);"
-          node -e "const fs=require('fs');const m=fs.readFileSync('ismaeloul-ace-player-neo/umbrel-app.yml','utf8');if(!m.includes('version: '+String.fromCharCode(34)+'0.6.9'+String.fromCharCode(34)))process.exit(1);"
+          node -e "const fs=require('fs');const v=process.env.VERSION;const c=fs.readFileSync('ismaeloul-ace-player-neo/docker-compose.yml','utf8');const refs=['/releases/'+v+'/server.js','/releases/'+v+'/engine-control.js','/releases/'+v+'/.','ace-player-neo-v'+v];if(refs.some(ref=>!c.includes(ref)))process.exit(1);"
+          node -e "const fs=require('fs');const v=process.env.VERSION;const m=fs.readFileSync('ismaeloul-ace-player-neo/umbrel-app.yml','utf8');if(!m.includes('version: '+String.fromCharCode(34)+v+String.fromCharCode(34)))process.exit(1);"
+          node -e "const fs=require('fs');const v=process.env.VERSION;const root='ismaeloul-ace-player-neo/releases/'+v;const files=['server.js','engine-control.js','index.html','nginx.conf','icon.svg','vendor/hls.min.js','vendor/mpegts.js','vendor/fonts/inter-var.woff2','vendor/fonts/jetbrains-mono-var.woff2','vendor/fonts/outfit-var.woff2'];if(files.some(file=>!fs.statSync(root+'/'+file).size))process.exit(1);"
