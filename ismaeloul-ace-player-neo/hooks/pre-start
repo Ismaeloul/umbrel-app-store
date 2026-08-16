@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly VERSION="0.6.12"
+readonly TAG="ace-player-neo-v${VERSION}"
+readonly ARCHIVE_ROOT="umbrel-app-store-ace-player-neo-v${VERSION}"
+readonly ARCHIVE_URL="https://github.com/Ismaeloul/umbrel-app-store/archive/refs/tags/${TAG}.tar.gz"
+readonly TARGET="${APP_DATA_DIR}/releases/${VERSION}"
+readonly -a REQUIRED_FILES=(
+  "engine-control.js"
+  "icon.svg"
+  "index.html"
+  "nginx.conf"
+  "server.js"
+  "vendor/hls.min.js"
+  "vendor/mpegts.js"
+  "vendor/fonts/inter-var.woff2"
+  "vendor/fonts/jetbrains-mono-var.woff2"
+  "vendor/fonts/outfit-var.woff2"
+)
+
+release_is_complete() {
+  local root="${1}"
+  local relative_path
+  for relative_path in "${REQUIRED_FILES[@]}"; do
+    [[ -s "${root}/${relative_path}" ]] || return 1
+  done
+}
+
+if release_is_complete "${TARGET}"; then
+  touch "${TARGET}/.complete"
+  echo "Ace Player Neo ${VERSION}: release local verificada"
+  exit 0
+fi
+
+readonly STORE_RELEASE="${SCRIPT_APP_REPO_DIR:-}/releases/${VERSION}"
+
+# umbrelOS conserva el checkout completo de la tienda aunque solo copie una
+# lista blanca a APP_DATA_DIR. Usarlo primero evita depender de internet.
+if [[ -n "${SCRIPT_APP_REPO_DIR:-}" ]] && release_is_complete "${STORE_RELEASE}"; then
+  mkdir -p "${TARGET}"
+  cp -a "${STORE_RELEASE}/." "${TARGET}/"
+  release_is_complete "${TARGET}"
+  touch "${TARGET}/.complete"
+  echo "Ace Player Neo ${VERSION}: release restaurada desde la tienda local"
+  exit 0
+fi
+
+STAGING_ROOT="$(mktemp -d "${APP_DATA_DIR}/.ace-player-neo-${VERSION}.XXXXXX")"
+readonly STAGING_ROOT
+readonly ARCHIVE_FILE="${STAGING_ROOT}/release.tar.gz"
+readonly EXTRACT_ROOT="${STAGING_ROOT}/release"
+
+cleanup() {
+  rm -rf -- "${STAGING_ROOT}"
+}
+trap cleanup EXIT
+
+mkdir -p "${EXTRACT_ROOT}"
+echo "Ace Player Neo ${VERSION}: descargando release inmutable en el NAS"
+
+if command -v curl >/dev/null 2>&1; then
+  curl --fail --location --silent --show-error --retry 3 \
+    --connect-timeout 15 --max-time 180 \
+    --output "${ARCHIVE_FILE}" "${ARCHIVE_URL}"
+else
+  wget -qO "${ARCHIVE_FILE}" "${ARCHIVE_URL}"
+fi
+
+tar -xzf "${ARCHIVE_FILE}" \
+  -C "${EXTRACT_ROOT}" \
+  --strip-components=4 \
+  "${ARCHIVE_ROOT}/ismaeloul-ace-player-neo/releases/${VERSION}"
+
+for relative_path in "${REQUIRED_FILES[@]}"; do
+  test -s "${EXTRACT_ROOT}/${relative_path}"
+done
+
+mkdir -p "${TARGET}"
+cp -a "${EXTRACT_ROOT}/." "${TARGET}/"
+
+release_is_complete "${TARGET}"
+touch "${TARGET}/.complete"
+echo "Ace Player Neo ${VERSION}: release lista"

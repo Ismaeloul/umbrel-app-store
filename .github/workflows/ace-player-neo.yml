@@ -40,6 +40,8 @@ jobs:
 
       - name: Check release references
         run: |
-          node -e "const fs=require('fs');const v=process.env.VERSION;const c=fs.readFileSync('ismaeloul-ace-player-neo/docker-compose.yml','utf8');const refs=['/releases/'+v+'/server.js','/releases/'+v+'/engine-control.js','/releases/'+v+'/.','ace-player-neo-v'+v];if(refs.some(ref=>!c.includes(ref))||/--strip-components=4[^\n]*\n[^\n]*umbrel-app-store-/.test(c))process.exit(1);"
+          bash -n ismaeloul-ace-player-neo/hooks/pre-start
+          test -x ismaeloul-ace-player-neo/hooks/pre-start
+          node -e "const fs=require('fs');const v=process.env.VERSION;const c=fs.readFileSync('ismaeloul-ace-player-neo/docker-compose.yml','utf8');const h=fs.readFileSync('ismaeloul-ace-player-neo/hooks/pre-start','utf8');const refs=['/releases/'+v+'/server.js','/releases/'+v+'/engine-control.js','/releases/'+v+'/.'];if(refs.some(ref=>!c.includes(ref))||c.includes('release_sync')||!h.includes('VERSION='+String.fromCharCode(34)+v+String.fromCharCode(34))||!h.includes('SCRIPT_APP_REPO_DIR')||!h.includes('ace-player-neo-v${VERSION}'))process.exit(1);"
           node -e "const fs=require('fs');const v=process.env.VERSION;const m=fs.readFileSync('ismaeloul-ace-player-neo/umbrel-app.yml','utf8');if(!m.includes('version: '+String.fromCharCode(34)+v+String.fromCharCode(34)))process.exit(1);"
           node -e "const fs=require('fs');const v=process.env.VERSION;const root='ismaeloul-ace-player-neo/releases/'+v;const files=['server.js','engine-control.js','index.html','nginx.conf','icon.svg','vendor/hls.min.js','vendor/mpegts.js','vendor/fonts/inter-var.woff2','vendor/fonts/jetbrains-mono-var.woff2','vendor/fonts/outfit-var.woff2'];if(files.some(file=>!fs.statSync(root+'/'+file).size))process.exit(1);"
