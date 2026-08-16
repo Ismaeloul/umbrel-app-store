@@ -3,18 +3,17 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.11"
+version: "0.6.12"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
-  Corrige el arranque de reparacion introducido en la 0.6.10: la descarga y la
-  extraccion de la release se ejecutan ahora como una unica orden antes de
-  iniciar el backend y Nginx. Si umbrelOS no copia la carpeta 0.6.11 durante la
-  actualizacion, Ace Player Neo la restaura desde su tag inmutable sin tocar la
-  biblioteca, las preferencias ni el historial.
+  Hace permanente la reparacion de actualizaciones mediante el hook nativo de
+  pre-arranque de Umbrel. El NAS verifica la release 0.6.12, la restaura desde
+  la tienda local y usa su tag inmutable como respaldo, sin cronjobs y sin tocar
+  la biblioteca, las preferencias ni el historial.
 developer: Ismaeloul
 website: https://github.com/Ismaeloul
 dependencies: []
