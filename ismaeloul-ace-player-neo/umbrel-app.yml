@@ -3,14 +3,20 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.15"
+version: "0.6.16"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
-  Nueva disposicion en pantallas anchas: la agenda pasa a una columna fija a la
+  La agenda pasa a leerse de la EPG publica de Movistar+ en vez de TheSportsDB.
+  Es la parrilla real de lo que se emite en España, asi que aparecen todos los
+  partidos y no uno al dia: medido, 33 partidos en cinco dias frente a 5. Cada
+  partido trae su canal exacto -que coincide con el nombre de las listas M3U-,
+  la hora peninsular y la competicion de verdad. Si la EPG falla, la agenda cae
+  automaticamente a TheSportsDB como antes.
+  Ademas, nueva disposicion en pantallas anchas: la agenda pasa a una columna fija a la
   derecha del video, con su propio scroll, asi se lee sin perder de vista la
   reproduccion. Las filas de partido se compactan segun el ancho disponible, de
   modo que la misma vista sirve para el movil y para la columna lateral. Por
