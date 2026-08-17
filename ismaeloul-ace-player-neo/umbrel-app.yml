@@ -3,14 +3,20 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.14"
+version: "0.6.15"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
-  Arregla la agenda de futbol. Las horas se mostraban en UTC bajo la etiqueta
+  Nueva disposicion en pantallas anchas: la agenda pasa a una columna fija a la
+  derecha del video, con su propio scroll, asi se lee sin perder de vista la
+  reproduccion. Las filas de partido se compactan segun el ancho disponible, de
+  modo que la misma vista sirve para el movil y para la columna lateral. Por
+  debajo de 1200 px todo se apila como antes.
+  Incluye los arreglos previos de la agenda de futbol: las horas se mostraban
+  en UTC bajo la etiqueta
   "horario peninsular", asi que todos los partidos salian 2 h antes en verano y
   1 h en invierno; ahora se convierten a hora de Madrid y los de madrugada ya
   aparecen en el dia correcto. La competicion ya no es siempre "Futbol", asi que
