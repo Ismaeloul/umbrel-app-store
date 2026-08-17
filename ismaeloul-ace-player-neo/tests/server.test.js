@@ -105,6 +105,55 @@ test("agrupa las emisiones de un partido y normaliza sus canales", () => {
   assert.deepEqual(matches[0].channels.map((channel) => channel.name), ["DAZN LaLiga", "DAZN LaLiga 2"]);
 });
 
+test("separa los equipos del titulo de la EPG", () => {
+  assert.deepEqual(app.epgSplitTeams("Sevilla - Rayo"), { home: "Sevilla", away: "Rayo" });
+  assert.deepEqual(app.epgSplitTeams("Atlético Madrid - Málaga"), { home: "Atlético Madrid", away: "Málaga" });
+  // guion largo, que Movistar usa a veces
+  assert.deepEqual(app.epgSplitTeams("Espanyol – Real Madrid"), { home: "Espanyol", away: "Real Madrid" });
+  // sin separador no hay partido identificable
+  assert.equal(app.epgSplitTeams("LALIGA EA SPORTS"), null);
+  // los guiones del nombre no deben partir el equipo
+  assert.equal(app.epgSplitTeams("Real Sociedad B"), null);
+  assert.equal(app.epgSplitTeams(""), null);
+});
+
+test("agrupa una emision repetida en varias cadenas en un solo partido", () => {
+  const cadena = (id, name) => ({ id, name });
+  const emision = (canal, start, teams, competition, showId) => ({
+    channel: canal, start, date: "2026-08-22",
+    time: new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Madrid", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(start)),
+    row: { ShowId: showId, Titulo: "LALIGA EA SPORTS" },
+    detail: { teams, competition },
+  });
+  const base = Date.UTC(2026, 7, 22, 18, 55);
+  const matches = app.normalizeEpgAirings([
+    emision(cadena("VAMOSD", "M+ Vamos"), base + 120000, "Fluminense - Remo", "Brasileirao", 1),
+    emision(cadena("CHAPIO", "M+ Liga de Campeones"), base, "Fluminense - Remo", "Brasileirao", 2),
+    emision(cadena("MLIGA", "M+ LALIGA"), Date.UTC(2026, 7, 22, 14, 54), "Athletic - Sevilla", "LALIGA EA SPORTS", 3),
+  ]);
+
+  assert.equal(matches.length, 2, "el partido repetido no debe duplicarse");
+  const fluminense = matches.find((match) => match.home === "Fluminense");
+  assert.deepEqual(fluminense.channels.map((channel) => channel.name).sort(), ["M+ Liga de Campeones", "M+ Vamos"]);
+  // se conserva la hora mas temprana de las dos emisiones
+  assert.equal(fluminense.time, "20:55");
+  assert.equal(fluminense.away, "Remo");
+  assert.equal(fluminense.competition, "Brasileirao");
+  // y quedan ordenados por hora
+  assert.deepEqual(matches.map((match) => match.time), ["16:54", "20:55"]);
+});
+
+test("una emision sin ficha conserva el titulo generico y no rompe la agenda", () => {
+  const matches = app.normalizeEpgAirings([
+    { channel: { id: "MLIGA", name: "M+ LALIGA" }, start: Date.UTC(2026, 7, 22, 18, 0),
+      date: "2026-08-22", time: "20:00", row: { ShowId: 9, Titulo: "LALIGA EA SPORTS" } },
+  ]);
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0].title, "LALIGA EA SPORTS");
+  assert.equal(matches[0].away, "", "sin equipos la UI cae al titulo");
+  assert.deepEqual(matches[0].channels.map((channel) => channel.name), ["M+ LALIGA"]);
+});
+
 test("pasa la hora de TheSportsDB (UTC) al horario peninsular", () => {
   // verano: CEST = UTC+2
   assert.deepEqual(app.madridDateTime("2026-08-17", "19:30:00"), { date: "2026-08-17", time: "21:30" });
