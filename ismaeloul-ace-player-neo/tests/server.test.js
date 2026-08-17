@@ -100,8 +100,66 @@ test("agrupa las emisiones de un partido y normaliza sus canales", () => {
   assert.equal(matches.length, 1);
   assert.equal(matches[0].home, "Barcelona");
   assert.equal(matches[0].away, "Valencia");
-  assert.equal(matches[0].time, "21:30");
+  // 21:30 UTC en agosto son las 23:30 en Madrid
+  assert.equal(matches[0].time, "23:30");
   assert.deepEqual(matches[0].channels.map((channel) => channel.name), ["DAZN LaLiga", "DAZN LaLiga 2"]);
+});
+
+test("pasa la hora de TheSportsDB (UTC) al horario peninsular", () => {
+  // verano: CEST = UTC+2
+  assert.deepEqual(app.madridDateTime("2026-08-17", "19:30:00"), { date: "2026-08-17", time: "21:30" });
+  // invierno: CET = UTC+1
+  assert.deepEqual(app.madridDateTime("2026-01-17", "19:30:00"), { date: "2026-01-17", time: "20:30" });
+  // de madrugada en Madrid: el partido salta al dia siguiente
+  assert.deepEqual(app.madridDateTime("2026-08-17", "22:30:00"), { date: "2026-08-18", time: "00:30" });
+  // sin hora utilizable se conserva el dia y se marca por confirmar
+  assert.deepEqual(app.madridDateTime("2026-08-17", ""), { date: "2026-08-17", time: "Por confirmar" });
+  assert.equal(app.madridDateTime("no-es-fecha", "19:30:00"), null);
+});
+
+test("no confunde canales de la misma familia que solo cambian una palabra", () => {
+  const RECOMENDADO = 70;
+  const ELEGIBLE = 58;
+  // el fallo reportado: Segunda no puede presentarse como Primera.
+  // Sigue siendo elegible a mano, pero nunca recomendada ni automatica.
+  for (const [a, b] of [
+    ["LaLiga TV Hypermotion", "LaLiga TV"],
+    ["LaLiga TV", "LaLiga TV Hypermotion"],
+    ["LaLiga TV", "LaLiga TV Bar"],
+    ["Movistar LaLiga", "Movistar LaLiga Hypermotion"],
+  ]) {
+    const score = app.channelMatchScore(a, b);
+    assert.ok(score < RECOMENDADO, `${a} vs ${b} no deberia recomendarse (score ${score})`);
+    assert.ok(score <= ELEGIBLE, `${a} vs ${b} deberia quedar topado (score ${score})`);
+  }
+  // el guardia numerico que ya existia sigue en pie
+  assert.equal(app.channelMatchScore("Eurosport 1", "Eurosport 2"), 0);
+  // y lo que si es el mismo canal se sigue reconociendo
+  assert.equal(app.channelMatchScore("GOL Play", "GOL Play HD"), 100);
+  assert.equal(app.channelMatchScore("M+ LaLiga TV", "Movistar LaLiga TV"), 100);
+  assert.ok(app.channelMatchScore("Movistar Liga de Campeones", "Movistar Liga Campeones") >= RECOMENDADO);
+});
+
+test("completa la competicion por evento y aguanta que el servicio falle", async () => {
+  const matches = [
+    { id: "9001", competition: "Fútbol" },
+    { id: "9002", competition: "Fútbol" },
+    { id: "9003", competition: "LaLiga" },
+    { id: "sin-id-numerico", competition: "Fútbol" },
+  ];
+  const asked = [];
+  await app.enrichFootballLeagues(matches, async (id) => {
+    asked.push(id);
+    if (id === "9002") throw new Error("thesportsdb_down");
+    return "Spanish La Liga 2";
+  });
+  // solo se pregunta por los que no tienen liga y traen idEvent numerico
+  assert.deepEqual(asked.sort(), ["9001", "9002"]);
+  assert.equal(matches[0].competition, "Spanish La Liga 2");
+  // el que falla se queda con el valor generico, no rompe la agenda
+  assert.equal(matches[1].competition, "Fútbol");
+  assert.equal(matches[2].competition, "LaLiga");
+  assert.equal(matches[3].competition, "Fútbol");
 });
 
 test("sirve una agenda de desarrollo completa sin consultar servicios externos", async () => {
