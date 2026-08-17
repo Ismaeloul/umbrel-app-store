@@ -3,19 +3,22 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.13"
+version: "0.6.14"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
-  Repara la reproduccion en ordenador. Desde la 0.6.9 el reproductor recibia la
-  URL del stream en forma relativa, y el worker de mpegts.js (blob:) no puede
-  resolverla: la descarga fallaba al instante y el canal acababa en "pocos pares
-  o emision caida" tras tres reenganches. Ahora al reproductor siempre se le
-  pasa la URL absoluta. El iPhone no estaba afectado porque usa el adaptador
-  fMP4. No cambia la biblioteca, las preferencias ni el historial.
+  Arregla la agenda de futbol. Las horas se mostraban en UTC bajo la etiqueta
+  "horario peninsular", asi que todos los partidos salian 2 h antes en verano y
+  1 h en invierno; ahora se convierten a hora de Madrid y los de madrugada ya
+  aparecen en el dia correcto. La competicion ya no es siempre "Futbol", asi que
+  el filtro por liga de las preferencias vuelve a funcionar. Y un canal que solo
+  cambia una palabra deja de recomendarse por otro: LaLiga TV Hypermotion ya no
+  se confunde con LaLiga TV, aunque sigue pudiendo elegirse a mano. Incluye la
+  reparacion de la reproduccion en ordenador de la 0.6.13. No cambia la
+  biblioteca, las preferencias ni el historial.
 developer: Ismaeloul
 website: https://github.com/Ismaeloul
 dependencies: []
