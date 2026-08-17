@@ -3,17 +3,19 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.12"
+version: "0.6.13"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
-  Hace permanente la reparacion de actualizaciones mediante el hook nativo de
-  pre-arranque de Umbrel. El NAS verifica la release 0.6.12, la restaura desde
-  la tienda local y usa su tag inmutable como respaldo, sin cronjobs y sin tocar
-  la biblioteca, las preferencias ni el historial.
+  Repara la reproduccion en ordenador. Desde la 0.6.9 el reproductor recibia la
+  URL del stream en forma relativa, y el worker de mpegts.js (blob:) no puede
+  resolverla: la descarga fallaba al instante y el canal acababa en "pocos pares
+  o emision caida" tras tres reenganches. Ahora al reproductor siempre se le
+  pasa la URL absoluta. El iPhone no estaba afectado porque usa el adaptador
+  fMP4. No cambia la biblioteca, las preferencias ni el historial.
 developer: Ismaeloul
 website: https://github.com/Ismaeloul
 dependencies: []
