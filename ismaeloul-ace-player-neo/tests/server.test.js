@@ -192,8 +192,9 @@ test("reune fuentes de todas las capas aunque la biblioteca ya acierte", async (
   assert.ok(result.candidates.length >= 3, "se devuelven todas para poder saltar");
 });
 
-test("si empatan canales DISTINTOS sigue preguntando", async () => {
-  // un partido anunciado en dos canales: ahi el usuario debe elegir
+test("con dos canales del mismo partido reproduce el mejor y ofrece los dos", async () => {
+  // Antes preguntaba. Ahora reproduce directamente y el selector de fuentes
+  // deja cambiar: para el usuario es un clic en vez de dos.
   const state = seedState();
   state.webSources = [{
     id: "m3u", url: "https://example.com/l.m3u", name: "Lista", renames: {}, hidden: [],
@@ -205,11 +206,29 @@ test("si empatan canales DISTINTOS sigue preguntando", async () => {
   state.web = state.webSources[0].streams;
   const result = await app.resolveFootballChannel(
     state, ["M+ Liga de Campeones", "LaLiga TV Bar"], async () => []);
-  assert.equal(result.status, "choices");
-  assert.equal(result.candidate, undefined, "no se elige por el usuario");
-  assert.equal(result.candidates.length, 2);
+  assert.equal(result.status, "found", "no debe pedir que elijas");
+  assert.ok(result.candidate, "se elige uno para empezar");
+  assert.equal(result.candidates.length, 2, "y los dos quedan como fuentes");
 });
 
+test("un canal de otra competicion no entra como fuente del partido", async () => {
+  // el fallo reportado: en un partido de Champions aparecia LaLiga TV
+  // Hypermotion, que es Segunda. Puntua 58 -el techo de variante- y el
+  // umbral de la biblioteca estaba justo ahi.
+  const state = seedState();
+  state.webSources = [{
+    id: "m3u", url: "https://example.com/l.m3u", name: "Lista", renames: {}, hidden: [],
+    streams: [
+      { id: ID_A, title: "LIGA DE CAMPEONES --> SPORT TV", alias: "M+ Liga de Campeones HD", type: "web" },
+      { id: ID_B, title: "HYPERMOTION --> ELCANO", alias: "LaLiga TV Hypermotion HD", type: "web" },
+    ],
+  }];
+  state.web = state.webSources[0].streams;
+  const result = await app.resolveFootballChannel(state, ["M+ Liga de Campeones"], async () => []);
+  const titulos = result.candidates.map((c) => c.title);
+  assert.ok(titulos.some((t) => /CAMPEONES/.test(t)), "el de Champions si");
+  assert.ok(!titulos.some((t) => /HYPERMOTION/i.test(t)), "el de Segunda no");
+});
 test("separa los equipos del titulo de la EPG", () => {
   assert.deepEqual(app.epgSplitTeams("Sevilla - Rayo"), { home: "Sevilla", away: "Rayo" });
   assert.deepEqual(app.epgSplitTeams("Atlético Madrid - Málaga"), { home: "Atlético Madrid", away: "Málaga" });
