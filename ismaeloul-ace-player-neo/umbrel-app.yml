@@ -3,14 +3,17 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.22"
+version: "0.6.23"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
-  Corrige que la lista de fuentes se encogiera sola: bastaba un reintento
+  Se retira el cambio automatico de fuente: el salto lo decides tu desde el
+  selector. Si una señal no arranca, la app te avisa y te dice cuantas
+  alternativas tienes para ese canal, pero no cambia nada por su cuenta.
+  Historico: corrige que la lista de fuentes se encogiera sola: bastaba un reintento
   automatico para que las señales encontradas por la agenda se redujeran a las
   del M3U. Ahora la lista solo se recalcula al cambiar de canal de verdad.
   Ademas el motor sube a 4 GB de limite y 1,5 GB de buffer en vivo, que hay
