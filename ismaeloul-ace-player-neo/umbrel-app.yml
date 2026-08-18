@@ -3,14 +3,25 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.28"
+version: "0.6.29"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
-  Se acaba el parpadeo. Al elegir un canal, la biblioteca entera desaparecia y
+  Muchos mas partidos con canal. La agenda anuncia el canal a secas -"DAZN" en
+  151 de 661 partidos- y eso no casaba con ninguno de tus DAZN 1, DAZN 2 o
+  DAZN 1 720p: la guarda que impide confundir DAZN 1 con DAZN 2 descartaba
+  tambien la familia entera, asi que el partido salia como si no hubiera canal.
+  Ahora pedir el canal a secas ofrece toda su familia numerada. Medido sobre
+  catorce dias: los partidos con canal reconocido pasan de 63 a 177, y las
+  señales ofrecidas por partido de 7,1 a 15,8.
+  Se ofrecen, pero no se reproduce ninguna a ciegas: eliges tu desde el
+  selector. Y lo que ya estaba protegido sigue igual: DAZN 1 no casa con
+  DAZN 2, y LaLiga TV no trae Hypermotion, porque ahi lo que sobra es una
+  palabra y no un numero de canal.
+  Historico: se acaba el parpadeo. Al elegir un canal, la biblioteca entera desaparecia y
   volvia con su animacion de entrada; al dar a reproducir un partido, igual con
   la agenda. Era porque la marca de "en pantalla" y el estado "buscando" iban
   cocidos en el html, asi que cambiarlos obligaba a rehacer la lista completa.
