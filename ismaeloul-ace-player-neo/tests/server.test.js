@@ -164,6 +164,52 @@ test("la ventana de futbolenlatv descarta lo que cae fuera de rango", () => {
   assert.equal(app.parseFutbolEnLaTv(html, null).length, 2);
 });
 
+test("reune fuentes de todas las capas aunque la biblioteca ya acierte", async () => {
+  // antes se cortaba al encontrar una coincidencia buena en la biblioteca y
+  // no se llegaba a preguntar al motor: si ese hash estaba muerto, no habia
+  // alternativas. Los hashes de AceStream caducan, asi que interesan todas.
+  const state = seedState();
+  state.webSources = [{
+    id: "m3u", url: "https://example.com/l.m3u", name: "Lista", renames: {}, hidden: [],
+    streams: [
+      { id: ID_A, title: "DAZN LaLiga 1080p", type: "web" },
+      { id: ID_B, title: "DAZN LaLiga 720p", type: "web" },
+    ],
+  }];
+  state.web = state.webSources[0].streams;
+
+  let consultado = false;
+  const result = await app.resolveFootballChannel(state, ["DAZN LaLiga"], async () => {
+    consultado = true;
+    return [{ id: ID_C, title: "DAZN LaLiga", ih: true, availability: 40 }];
+  });
+
+  assert.equal(consultado, true, "debe preguntar al buscador aunque la biblioteca acierte");
+  assert.equal(result.status, "found", "varias señales del MISMO canal no son ambiguas");
+  const ids = result.candidates.map((c) => c.id);
+  assert.ok(ids.includes(ID_A) && ids.includes(ID_B), "las dos de la lista estan");
+  assert.ok(ids.includes(ID_C), "y tambien la del motor");
+  assert.ok(result.candidates.length >= 3, "se devuelven todas para poder saltar");
+});
+
+test("si empatan canales DISTINTOS sigue preguntando", async () => {
+  // un partido anunciado en dos canales: ahi el usuario debe elegir
+  const state = seedState();
+  state.webSources = [{
+    id: "m3u", url: "https://example.com/l.m3u", name: "Lista", renames: {}, hidden: [],
+    streams: [
+      { id: ID_A, title: "M+ Liga de Campeones 1080p", type: "web" },
+      { id: ID_B, title: "LaLiga TV Bar 1080p", type: "web" },
+    ],
+  }];
+  state.web = state.webSources[0].streams;
+  const result = await app.resolveFootballChannel(
+    state, ["M+ Liga de Campeones", "LaLiga TV Bar"], async () => []);
+  assert.equal(result.status, "choices");
+  assert.equal(result.candidate, undefined, "no se elige por el usuario");
+  assert.equal(result.candidates.length, 2);
+});
+
 test("separa los equipos del titulo de la EPG", () => {
   assert.deepEqual(app.epgSplitTeams("Sevilla - Rayo"), { home: "Sevilla", away: "Rayo" });
   assert.deepEqual(app.epgSplitTeams("Atlético Madrid - Málaga"), { home: "Atlético Madrid", away: "Málaga" });
@@ -301,7 +347,7 @@ test("guarda y normaliza las preferencias de fútbol entre dispositivos", async 
   assert.deepEqual(state.preferences.nationalities, ["España", "Argentina"]);
 });
 
-test("resuelve primero un canal exacto del M3U sin consultar el motor", async () => {
+test("elige el canal exacto del M3U, pero ya SI consulta tambien el motor", async () => {
   const state = seedState();
   state.webSources[0].streams = [
     { id: ID_C, title: "DAZN LaLiga 1080p", type: "web", category: "Deportes" },
@@ -314,8 +360,10 @@ test("resuelve primero un canal exacto del M3U sin consultar el motor", async ()
   });
   assert.equal(result.status, "found");
   assert.equal(result.candidate.id, ID_C);
+  // el contrato cambio: los hashes de AceStream caducan, asi que se reunen
+  // alternativas del motor aunque la biblioteca ya tenga una coincidencia
+  assert.equal(searched, true, "ahora tambien se pregunta al motor");
   assert.equal(result.candidate.source, "m3u");
-  assert.equal(searched, false);
 });
 
 test("recuerda una vinculación manual y la usa antes que la búsqueda", async () => {
