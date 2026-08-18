@@ -683,3 +683,64 @@ test("las coletillas de calidad no rompen la coincidencia exacta", () => {
   assert.equal(app.channelMatchScore("LaLiga TV Bar", "LaLiga TV Bar HD"), 100);
   assert.equal(app.channelMatchScore("DAZN 1", "DAZN 1 720p"), 100);
 });
+
+/* ---------- señales muertas y vivas ---------- */
+
+const señal = (id, extra = {}) => ({
+  id, title: "DAZN 1", score: 100, source: "m3u", availability: null, bitrate: null, ...extra,
+});
+
+test("una señal que el motor da por muerta no se ofrece", () => {
+  const salida = app.mergeResolutionCandidates([
+    señal("a".repeat(40), { source: "acestream", availability: 0 }),
+    señal("b".repeat(40), { source: "acestream", availability: 0.9 }),
+  ]);
+  assert.equal(salida.length, 1);
+  assert.equal(salida[0].id, "b".repeat(40));
+});
+
+test("entre dos igual de buenas de nombre, primero la que esta viva", () => {
+  const salida = app.mergeResolutionCandidates([
+    señal("a".repeat(40), { score: 100, availability: null }),
+    señal("b".repeat(40), { score: 100, source: "acestream", availability: 0.8 }),
+  ]);
+  assert.equal(salida[0].id, "b".repeat(40), "la disponible va primero");
+  assert.equal(salida.length, 2, "la otra sigue ofreciendose");
+});
+
+test("estar disponible no cuela un canal que no es", () => {
+  // 100 es coincidencia exacta; 72 es solo "probablemente". Aunque la segunda
+  // este al 100% de disponibilidad, no puede adelantar a la que si es el canal
+  const salida = app.mergeResolutionCandidates([
+    señal("a".repeat(40), { score: 100, availability: null }),
+    señal("b".repeat(40), { score: 72, source: "acestream", availability: 1 }),
+  ]);
+  assert.equal(salida[0].id, "a".repeat(40));
+});
+
+test("un hash que llega por dos vias conserva su disponibilidad", () => {
+  // el mismo hash en la lista M3U y en el buscador: la lista gana por origen,
+  // pero la unica pista de si sigue vivo la trae el buscador y no debe perderse
+  const salida = app.mergeResolutionCandidates([
+    señal("c".repeat(40), { source: "m3u", availability: null }),
+    señal("c".repeat(40), { source: "acestream", availability: 0.6, bitrate: 3500 }),
+  ]);
+  assert.equal(salida.length, 1);
+  assert.equal(salida[0].source, "m3u");
+  assert.equal(salida[0].availability, 0.6, "la disponibilidad sobrevive a la fusion");
+  assert.equal(salida[0].bitrate, 3500);
+});
+
+test("un hash duplicado que el motor da por muerto se descarta entero", () => {
+  const salida = app.mergeResolutionCandidates([
+    señal("d".repeat(40), { source: "m3u", availability: null }),
+    señal("d".repeat(40), { source: "acestream", availability: 0 }),
+  ]);
+  assert.equal(salida.length, 0, "aunque venga de tu lista, sin pares no tira");
+});
+
+test("se ofrecen hasta doce señales, no ocho", () => {
+  const muchas = Array.from({ length: 20 }, (_, i) =>
+    señal(String(i).padStart(40, "0"), { availability: 1 - i / 100 }));
+  assert.equal(app.mergeResolutionCandidates(muchas).length, 12);
+});
