@@ -3,13 +3,24 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.37"
+version: "0.6.38"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
+  Los canales de la agenda ahora se emparejan como equivalentes aunque las
+  listas escriban M+, M., Movistar o no indiquen operador, y se reconocen las
+  coletillas de proveedor con flechas ASCII o Unicode sin confundirlas con el
+  nombre del canal. Los numeros se conservan para no mezclar Champions 1, 2 y
+  3. La prioridad pasa a ser estricta: vinculo guardado, todos los M3U,
+  favoritos, historial y solo al final el buscador AceStream.
+  Bajo el reproductor cada alternativa muestra ya su origen y proveedor, hash
+  corto y disponibilidad, en vez de ser un boton numerado sin contexto. Al
+  cambiar a un resultado alternativo del buscador tambien se conserva si es un
+  infohash, evitando el falso error de stream que provocaba tratarlo como ID.
+  Historico:
   Se retira el tope de fuentes: ahora se ofrecen TODAS las que superen el
   umbral, no doce. Medido sobre tus listas, un partido de Champions pasa de 12
   a 23 señales y DAZN a 22.

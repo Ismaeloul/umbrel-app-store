@@ -192,6 +192,33 @@ test("reune fuentes de todas las capas aunque la biblioteca ya acierte", async (
   assert.ok(result.candidates.length >= 3, "se devuelven todas para poder saltar");
 });
 
+test("resuelve todas las grafias reales de Champions y deja AceStream al final", async () => {
+  const state = seedState();
+  const ahora = new Date().toISOString();
+  state.webSources = [
+    { id: "principal", name: "Directorio principal", url: "https://example.com/a.m3u", syncedAt: ahora,
+      streams: [{ id: "d".repeat(40), title: "M+ Liga de Campeones 1080p *", type: "web" }] },
+    { id: "new-era", name: "NEW ERA", url: "https://example.com/b.m3u", syncedAt: ahora,
+      streams: [{ id: "e".repeat(40), title: "LIGA DE CAMPEONES FHD → NEW ERA", type: "web" }] },
+    { id: "elcano", name: "EL CANO", url: "https://example.com/c.m3u", syncedAt: ahora,
+      streams: [{ id: "f".repeat(40), title: "M. Liga de Campeones -> ELCANO", type: "web" }] },
+  ];
+  state.web = state.webSources[0].streams;
+  state.favorites = [{ id: "1".repeat(40), title: "Liga de Campeones", type: "fav" }];
+  state.history = [{ id: "2".repeat(40), title: "Movistar Plus Liga de Campeones", type: "recent" }];
+
+  const result = await app.resolveFootballChannel(state, ["M+ Liga de Campeones"], async () => [
+    { id: "3".repeat(40), title: "LIGA DE CAMPEONES => NEW ERA", ih: true, availability: 0.82 },
+  ]);
+
+  assert.equal(result.status, "found");
+  assert.deepEqual(result.candidates.map((candidate) => candidate.source), [
+    "m3u", "m3u", "m3u", "favorites", "history", "acestream",
+  ]);
+  assert.ok(result.candidates.every((candidate) => candidate.score === 100));
+  assert.equal(result.candidate.source, "m3u", "el partido arranca desde una lista propia");
+});
+
 test("con dos canales del mismo partido reproduce el mejor y ofrece los dos", async () => {
   // Antes preguntaba. Ahora reproduce directamente y el selector de fuentes
   // deja cambiar: para el usuario es un clic en vez de dos.
@@ -796,14 +823,17 @@ test("la coletilla del proveedor no forma parte del nombre", () => {
   // las listas grandes son agregadores y rotulan quien sirve cada señal
   assert.equal(app.normalizeChannelKey("LIGA DE CAMPEONES --> ELCANO"), "liga de campeones");
   assert.equal(app.normalizeChannelKey("LIGA DE CAMPEONES FHD --> NEW ERA II"), "liga de campeones");
+  assert.equal(app.normalizeChannelKey("LIGA DE CAMPEONES → NEW ERA"), "liga de campeones");
+  assert.equal(app.normalizeChannelKey("LIGA DE CAMPEONES => SPORT TV"), "liga de campeones");
   assert.equal(app.normalizeChannelKey("DAZN 1 720p **"), "dazn 1");
 });
 
 test("el operador dice por donde llega, no que canal es", () => {
   // "M+ Liga de Campeones" y "LIGA DE CAMPEONES" son el mismo canal
-  assert.ok(app.channelMatchScore("M+ Liga de Campeones", "LIGA DE CAMPEONES --> ELCANO") >= 70);
-  assert.ok(app.channelMatchScore("M+ Liga de Campeones", "M. Liga de Campeones") >= 70);
-  assert.ok(app.channelMatchScore("M+ Liga de Campeones", "LIGA DE CAMPEONES --> SPORT TV") >= 70);
+  assert.equal(app.channelMatchScore("M+ Liga de Campeones", "LIGA DE CAMPEONES --> ELCANO"), 100);
+  assert.equal(app.channelMatchScore("M+ Liga de Campeones", "M. Liga de Campeones"), 100);
+  assert.equal(app.channelMatchScore("M+ Liga de Campeones", "Movistar Plus Liga de Campeones"), 100);
+  assert.equal(app.channelMatchScore("M+ Liga de Campeones", "LIGA DE CAMPEONES → SPORT TV"), 100);
 });
 
 test("quitar la decoracion no borra el numero de canal", () => {
@@ -816,6 +846,7 @@ test("quitar la decoracion no borra el numero de canal", () => {
 test("se reconoce de que proveedor es cada señal", () => {
   assert.equal(app.proveedorDeSeñal({ title: "LIGA DE CAMPEONES --> ELCANO" }), "elcano");
   assert.equal(app.proveedorDeSeñal({ title: "LIGA DE CAMPEONES FHD --> NEW ERA II" }), "new era ii");
+  assert.equal(app.proveedorDeSeñal({ title: "LIGA DE CAMPEONES → SPORT TV" }), "sport tv");
   assert.equal(app.proveedorDeSeñal({ title: "M+ Liga de Campeones", listaId: "principal" }), "principal");
 });
 
@@ -848,6 +879,20 @@ test("las listas importadas van por delante del buscador del motor", () => {
   ]);
   assert.equal(salida[0].source, "m3u", "lo tuyo primero aunque no sepamos si esta vivo");
   assert.equal(salida[1].source, "acestream");
+});
+
+test("la prioridad completa es guardada, M3U, favorito, historial y buscador", () => {
+  const salida = app.mergeResolutionCandidates([
+    cand(1, "history"),
+    cand(2, "acestream", { availability: 1 }),
+    cand(3, "favorites"),
+    cand(4, "m3u", { listaId: "new-era" }),
+    cand(5, "saved"),
+    cand(6, "m3u", { listaId: "elcano" }),
+  ]);
+  assert.deepEqual(salida.map((candidate) => candidate.source), [
+    "saved", "m3u", "m3u", "favorites", "history", "acestream",
+  ]);
 });
 
 test("un vinculo confirmado a mano manda sobre todo lo demas", () => {
