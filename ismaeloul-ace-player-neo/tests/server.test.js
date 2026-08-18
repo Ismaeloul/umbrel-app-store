@@ -650,3 +650,36 @@ test("un evento sin los dos equipos se descarta en vez de romper", () => {
   assert.equal(app.readEspnEvent({ competitions: [{ competitors: [] }] }), null);
   assert.equal(app.readEspnEvent({}), null);
 });
+
+/* ---------- familias de canal ---------- */
+
+test("pedir un canal a secas ofrece toda su familia numerada", () => {
+  // la agenda anuncia "DAZN" en 151 de 661 partidos; antes eso puntuaba 0
+  // contra los 59 canales DAZN de la biblioteca y el partido salia sin canal
+  assert.ok(app.channelMatchScore("DAZN", "DAZN 1") >= 70);
+  assert.ok(app.channelMatchScore("DAZN", "DAZN 1 720p *") >= 70);
+  assert.ok(app.channelMatchScore("M+ LALIGA", "M+ LALIGA 2") >= 70);
+});
+
+test("la familia se ofrece pero nunca se reproduce a ciegas", () => {
+  // por encima del umbral de recomendado (70) y por debajo del de arrancar
+  // solo (92): se listan todos y el salto lo decide el usuario
+  const puntos = app.channelMatchScore("DAZN", "DAZN 3");
+  assert.ok(puntos >= 70 && puntos < 92, `esperaba entre 70 y 92, fue ${puntos}`);
+});
+
+test("dos canales numerados distintos siguen sin confundirse", () => {
+  assert.equal(app.channelMatchScore("DAZN 1", "DAZN 2"), 0);
+  assert.equal(app.channelMatchScore("M+ LALIGA 2", "M+ LALIGA 3"), 0);
+});
+
+test("una palabra de mas no es familia: sigue siendo otra competicion", () => {
+  // este es el fallo original: LaLiga TV (Primera) no puede traer Hypermotion
+  const puntos = app.channelMatchScore("LaLiga TV", "LALIGA TV Hypermotion");
+  assert.ok(puntos < 70, `Hypermotion no debe recomendarse, fue ${puntos}`);
+});
+
+test("las coletillas de calidad no rompen la coincidencia exacta", () => {
+  assert.equal(app.channelMatchScore("LaLiga TV Bar", "LaLiga TV Bar HD"), 100);
+  assert.equal(app.channelMatchScore("DAZN 1", "DAZN 1 720p"), 100);
+});
