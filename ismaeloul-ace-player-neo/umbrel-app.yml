@@ -3,14 +3,24 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.16"
+version: "0.6.17"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
-  La agenda pasa a leerse de la EPG publica de Movistar+ en vez de TheSportsDB.
+  La agenda pasa a futbolenlatv.com, que cubre todos los operadores y no solo
+  la parrilla de Movistar: 639 partidos en catorce dias. El calendario se amplia
+  de 5 a 14 dias y la barra de fechas gana flechas, porque los ultimos dias
+  quedaban fuera de alcance. Las competiciones que eliges ahora deciden que
+  partidos se listan y tus equipos favoritos ya no filtran: resaltan su partido
+  dentro de esa lista. Se corrige de paso que elegir "LaLiga" trajera Segunda en
+  vez de Primera. Las listas M3U se emparejan tambien por tvg-id, asi que las
+  que rotulan el canal con coletilla del proveedor vuelven a reproducirse solas.
+  Se añade LaLiga Hypermotion como competicion elegible. Si futbolenlatv falla,
+  la agenda cae a la EPG de Movistar+ y luego a TheSportsDB.
+  Historico: la EPG publica de Movistar+ sustituyo a TheSportsDB.
   Es la parrilla real de lo que se emite en España, asi que aparecen todos los
   partidos y no uno al dia: medido, 33 partidos en cinco dias frente a 5. Cada
   partido trae su canal exacto -que coincide con el nombre de las listas M3U-,

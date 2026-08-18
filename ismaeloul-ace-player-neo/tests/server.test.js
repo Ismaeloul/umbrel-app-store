@@ -105,6 +105,65 @@ test("agrupa las emisiones de un partido y normaliza sus canales", () => {
   assert.deepEqual(matches[0].channels.map((channel) => channel.name), ["DAZN LaLiga", "DAZN LaLiga 2"]);
 });
 
+test("lee futbolenlatv con sus dos formatos de cabecera de competicion", () => {
+  // en la web unas competiciones van enlazadas y otras son texto suelto tras
+  // el <img>; anclarse solo al enlace dejaba la mayoria heredando la anterior
+  const html = `
+    <tr class="cabeceraCompericion"><td colspan="5">
+      <img alt="Champions League" title="Champions League" />
+      <a class="internalLink" href="/competicion/liga-campeones"> Champions League </a>
+    </td></tr>
+    <tr><td class="hora "> 21:00 </td>
+      <td class="local"><a><span title="Fenerbah&#231;e">Fenerbah&#231;e</span></a></td>
+      <td class="visitante"><span title="O. Lyonnais">O. Lyonnais</span></td>
+      <td class="canales"><meta itemprop="startDate" content="2026-08-18T19:00:00" />
+        <ul><li title="M+ Liga de Campeones (M60 O115)">M+ Liga de Campeones</li></ul>
+      </td></tr>
+    <tr class="cabeceraCompericion"><td colspan="5">
+      <img alt="Torneo BetPlay DIMAYOR" title="Torneo BetPlay DIMAYOR" />Torneo BetPlay DIMAYOR
+    </td></tr>
+    <tr><td class="hora "> 02:00 </td>
+      <td class="local"><span title="Atl&#233;tico Nacional">Atl&#233;tico Nacional</span></td>
+      <td class="visitante"><span title="Mill&#243;n">Mill&#243;n</span></td>
+      <td class="canales"><meta itemprop="startDate" content="2026-08-19T00:00:00" />
+        <ul><li class="canal-sin-enlace" title="Zapping Internacional">Zapping</li></ul>
+      </td></tr>`;
+
+  const airings = app.parseFutbolEnLaTv(html, null);
+  assert.equal(airings.length, 2);
+
+  const [champions, dimayor] = airings;
+  assert.equal(champions.competition, "Champions League", "cabecera con enlace");
+  assert.equal(champions.home, "Fenerbahçe", "las entidades HTML se decodifican");
+  assert.equal(champions.away, "O. Lyonnais");
+  // 19:00 UTC en agosto son las 21:00 en Madrid
+  assert.equal(champions.time, "21:00");
+  assert.equal(champions.date, "2026-08-18");
+  // el dial "(M60 O115)" se recorta para que case con las listas M3U
+  assert.deepEqual(champions.channels, ["M+ Liga de Campeones"]);
+
+  // la que va sin enlace no debe heredar "Champions League"
+  assert.equal(dimayor.competition, "Torneo BetPlay DIMAYOR", "cabecera sin enlace");
+  assert.equal(dimayor.home, "Atlético Nacional");
+  assert.deepEqual(dimayor.channels, ["Zapping Internacional"]);
+});
+
+test("la ventana de futbolenlatv descarta lo que cae fuera de rango", () => {
+  const fila = (fecha) => `
+    <tr class="cabeceraCompericion"><td><img title="La Liga EA Sports" /></td></tr>
+    <tr><td class="hora "> 21:00 </td>
+      <td class="local"><span title="Sevilla">Sevilla</span></td>
+      <td class="visitante"><span title="Rayo">Rayo</span></td>
+      <td class="canales"><meta itemprop="startDate" content="${fecha}T19:00:00" />
+        <ul><li title="M+ LALIGA">M+ LALIGA</li></ul></td></tr>`;
+  const html = fila("2026-08-18") + fila("2026-09-30");
+  const dentro = app.parseFutbolEnLaTv(html, new Set(["2026-08-18"]));
+  assert.equal(dentro.length, 1);
+  assert.equal(dentro[0].date, "2026-08-18");
+  // sin ventana entran los dos
+  assert.equal(app.parseFutbolEnLaTv(html, null).length, 2);
+});
+
 test("separa los equipos del titulo de la EPG", () => {
   assert.deepEqual(app.epgSplitTeams("Sevilla - Rayo"), { home: "Sevilla", away: "Rayo" });
   assert.deepEqual(app.epgSplitTeams("Atlético Madrid - Málaga"), { home: "Atlético Madrid", away: "Málaga" });
