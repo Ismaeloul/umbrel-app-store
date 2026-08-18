@@ -3,14 +3,25 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.26"
+version: "0.6.27"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
-  El canal que suena se ve siempre. Su nombre estaba solo en la capa flotante
+  Se acaba el spam de avisos. Una señal inestable encadenaba baches y cada uno
+  soltaba su propio aviso: llegaban a apilarse catorce iguales tapando medio
+  video. Ahora un mensaje repetido no se apila, se le renueva el tiempo y se le
+  pone un contador, y nunca hay mas de tres avisos a la vez. Ademas el aviso de
+  buffer se da una vez por canal en lugar de en cada bache, que la barra de
+  estado ya dice "rellenando" todo el rato.
+  La competicion y la etiqueta de tiempo pasan a compartir linea, en vez de
+  gastar la insignia una linea entera para ella sola. La fila baja de 115 a 111
+  px y caben 5,3 partidos en vez de 5,1. Si no cabe -en el movil con nombres de
+  competicion largos- la insignia baja de linea, antes que recortar la
+  competicion y dejarla en "UEFA Champio...".
+  Historico: el canal que suena se ve siempre. Su nombre estaba solo en la capa flotante
   del video, que aparece al pasar el raton: en el movil no se veia nunca y en
   el ordenador solo si movias el raton. Ahora hay una barra fija justo debajo
   del video con el nombre del canal, y el selector de fuentes vive dentro de
