@@ -3,14 +3,25 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.33"
+version: "0.6.34"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
-  Menos señales muertas al dar a ver un partido. La busqueda ya se rehacia
+  Se acabo que un partido de Liga de Campeones ofreciera señales del 2, del 3 y
+  del 4, que son otros partidos. Venia del arreglo que permitio que pedir
+  "DAZN" ofreciera todos los DAZN: al no distinguir los dos casos, tambien
+  ofrecia las hermanas numeradas de un canal que existe tal cual.
+  La diferencia esta en si el canal exacto existe en tu biblioteca. "M+ Liga de
+  Campeones" existe, asi que el 2 y el 3 sobran; "DAZN" a secas no existe como
+  canal, asi que alli las numeradas son lo unico que hay. Ahora la familia solo
+  se ofrece cuando no aparece el canal exacto. Medido sobre tus listas: de 38
+  señales de otro canal se pasa a ninguna, y DAZN conserva las suyas.
+  Las coletillas de calidad no cuentan como numero: 1080p o 720p no convierten
+  un canal en otro distinto.
+  Historico: menos señales muertas al dar a ver un partido. La busqueda ya se rehacia
   entera en cada pulsacion, pero mandaba solo el parecido del nombre: un hash
   caido con el nombre clavado se ofrecia por delante de uno vivo. Ahora, dentro
   de cada grupo de nombres igual de buenos, primero va lo que el motor dice que
