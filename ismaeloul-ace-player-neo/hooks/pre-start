@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="0.6.26"
+readonly VERSION="0.6.27"
 readonly TAG="ace-player-neo-v${VERSION}"
 readonly ARCHIVE_ROOT="umbrel-app-store-ace-player-neo-v${VERSION}"
 readonly ARCHIVE_URL="https://github.com/Ismaeloul/umbrel-app-store/archive/refs/tags/${TAG}.tar.gz"
