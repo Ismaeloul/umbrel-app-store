@@ -3,14 +3,20 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.27"
+version: "0.6.28"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
-  Se acaba el spam de avisos. Una señal inestable encadenaba baches y cada uno
+  Se acaba el parpadeo. Al elegir un canal, la biblioteca entera desaparecia y
+  volvia con su animacion de entrada; al dar a reproducir un partido, igual con
+  la agenda. Era porque la marca de "en pantalla" y el estado "buscando" iban
+  cocidos en el html, asi que cambiarlos obligaba a rehacer la lista completa.
+  Ahora esas dos cosas son solo una clase: la lista no se toca. Medido: cero
+  reconstrucciones donde antes habia una por cada cambio de estado.
+  Historico: se acaba el spam de avisos. Una señal inestable encadenaba baches y cada uno
   soltaba su propio aviso: llegaban a apilarse catorce iguales tapando medio
   video. Ahora un mensaje repetido no se apila, se le renueva el tiempo y se le
   pone un contador, y nunca hay mas de tres avisos a la vez. Ademas el aviso de
