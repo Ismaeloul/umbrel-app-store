@@ -583,3 +583,70 @@ test("una liberación adelantada no resucita un claim tardío", async () => {
   assert.equal(delayedRelease.data.released, false);
   assert.equal(app.readState().nowPlaying.token, "movil-new");
 });
+
+/* ---------- marcadores en vivo ---------- */
+
+test("las competiciones de la agenda se mapean a ligas de ESPN", () => {
+  assert.deepEqual(app.espnLeaguesFor("La Liga EA Sports"), ["esp.1"]);
+  assert.deepEqual(app.espnLeaguesFor("LaLiga Hypermotion"), ["esp.2"]);
+  // se rotula con tildes y espacios de sobra segun el dia
+  assert.deepEqual(app.espnLeaguesFor("  Serie A Italiana  "), ["ita.1"]);
+  // la Champions puede estar en fase previa o en el cuadro final
+  assert.deepEqual(app.espnLeaguesFor("Champions League"), ["uefa.champions", "uefa.champions_qual"]);
+  // lo que ESPN no cubre no se consulta
+  assert.equal(app.espnLeaguesFor("Torneo Proyección"), null);
+  assert.equal(app.espnLeaguesFor("MLS Next Pro"), null);
+});
+
+test("los nombres de equipo casan pese a escribirse distinto", () => {
+  assert.equal(app.teamSimilarity("Fenerbahçe", "Fenerbahce"), 1);
+  assert.equal(app.teamSimilarity("Atlético de Madrid", "Atlético Madrid"), 1);
+  assert.equal(app.teamSimilarity("GNK Dinamo Zagreb", "Dinamo Zagreb"), 1);
+  // sin alias no comparten ni una palabra
+  assert.equal(app.teamSimilarity("O. Lyonnais", "Lyon"), 1);
+  assert.equal(app.teamSimilarity("B. Dortmund", "Borussia Dortmund"), 1);
+  assert.equal(app.teamSimilarity("Inter de Milán", "Internazionale"), 1);
+});
+
+test("dos equipos distintos no se confunden por compartir una palabra", () => {
+  // este es el fallo que hay que evitar: 'Real' lo llevan los dos
+  assert.ok(app.teamSimilarity("Real Madrid", "Real Sociedad") < 0.6);
+  assert.equal(app.teamSimilarity("Levski Sofia", "AEK Athens"), 0);
+  assert.equal(app.teamSimilarity("Athletic Club", "Atlético Madrid"), 0);
+});
+
+test("solo se consulta el marcador dentro de la ventana del partido", () => {
+  const saque = Date.UTC(2026, 7, 18, 19, 0, 0);
+  const MIN = 60 * 1000;
+  assert.equal(app.matchIsInScoreWindow({ start: saque }, saque - 60 * MIN), false, "una hora antes todavia no");
+  assert.equal(app.matchIsInScoreWindow({ start: saque }, saque - 10 * MIN), true, "diez minutos antes ya");
+  assert.equal(app.matchIsInScoreWindow({ start: saque }, saque + 60 * MIN), true, "en pleno partido");
+  assert.equal(app.matchIsInScoreWindow({ start: saque }, saque + 200 * MIN), true, "recien acabado todavia interesa");
+  assert.equal(app.matchIsInScoreWindow({ start: saque }, saque + 300 * MIN), false, "cinco horas despues ya no");
+  // un partido sin hora de saque no puede buscarse
+  assert.equal(app.matchIsInScoreWindow({ start: undefined }, saque), false);
+});
+
+test("se leen marcador, estado y reloj de un evento de ESPN", () => {
+  const evento = {
+    date: "2026-08-18T19:00Z",
+    status: { displayClock: "63'", type: { state: "in", shortDetail: "63'" } },
+    competitions: [{
+      competitors: [
+        { homeAway: "home", score: "2", team: { displayName: "Fenerbahce", shortDisplayName: "Fenerbahce" } },
+        { homeAway: "away", score: "1", team: { displayName: "Lyon", shortDisplayName: "Lyon" } },
+      ],
+    }],
+  };
+  const leido = app.readEspnEvent(evento);
+  assert.equal(leido.homeScore, 2);
+  assert.equal(leido.awayScore, 1);
+  assert.equal(leido.state, "in");
+  assert.equal(leido.clock, "63'");
+  assert.equal(leido.start, Date.parse("2026-08-18T19:00Z"));
+});
+
+test("un evento sin los dos equipos se descarta en vez de romper", () => {
+  assert.equal(app.readEspnEvent({ competitions: [{ competitors: [] }] }), null);
+  assert.equal(app.readEspnEvent({}), null);
+});

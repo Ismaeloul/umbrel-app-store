@@ -3,14 +3,29 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.24"
+version: "0.6.25"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
-  Arregla el desplazamiento de la portada. La agenda y la biblioteca crecian
+  Marcadores en vivo en la agenda. Los partidos que se estan jugando muestran
+  el resultado y el minuto, y los que acaban de terminar su resultado final.
+  Los datos salen de ESPN, que sirve con menos de ocho segundos de caché, asi
+  que el marcador va practicamente en directo: se consulta cada ocho segundos
+  mientras haya algo en juego y cada cuarenta y cinco cuando solo quedan
+  partidos por empezar.
+  El partido que estas VIENDO sale tapado a proposito, con un "ver marcador"
+  que lo destapa al tocarlo. AceStream va por detras de la emision real, asi
+  que un marcador instantaneo te cantaria el gol antes de que lo vieras en
+  pantalla. Al cambiar de canal vuelve a taparse.
+  El cruce entre la agenda y los marcadores se hace por hora de saque y nombre
+  de equipo, con alias para los clubes que cada web escribe distinto -"O.
+  Lyonnais" frente a "Lyon"-. Medido sobre los partidos de un dia: cruzan todos
+  los que ESPN cubre. Las competiciones que no cubre siguen apareciendo en la
+  agenda, simplemente sin marcador.
+  Historico: arregla el desplazamiento de la portada. La agenda y la biblioteca crecian
   hasta el alto de todo su contenido, asi que la rueda del raton sobre una caja
   no hacia nada: lo que se desplazaba era la pagina entera, kilometros hacia
   abajo al elegir "Todos". Ahora cada caja mide lo que la pantalla, muestra unos
