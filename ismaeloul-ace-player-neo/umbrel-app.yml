@@ -3,14 +3,25 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.29"
+version: "0.6.30"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
-  Muchos mas partidos con canal. La agenda anuncia el canal a secas -"DAZN" en
+  Arregla el audio desincronizado en el iPhone. Solo pasaba alli porque el
+  iPhone es el unico que reproduce a traves del reempaquetado del servidor; en
+  el ordenador el video va directo y por eso iba bien.
+  El sincronizador de audio estaba puesto en "async=1", que segun la propia
+  documentacion de ffmpeg solo rellena o recorta muestras, y ademas solo cuando
+  el desfase ya supera una decima de segundo. Con una señal P2P, que llega con
+  saltos continuos, eso significa que la deriva pequeña no se corregia nunca y
+  al acumularse se arreglaba de golpe: de ahi que el audio se adelantara y se
+  atrasara respecto a los labios. Ahora va en 1000, que permite estirar y
+  encoger el audio de forma continua -un 2% como maximo, inaudible- para seguir
+  la deriva segun aparece.
+  Historico: muchos mas partidos con canal. La agenda anuncia el canal a secas -"DAZN" en
   151 de 661 partidos- y eso no casaba con ninguno de tus DAZN 1, DAZN 2 o
   DAZN 1 720p: la guarda que impide confundir DAZN 1 con DAZN 2 descartaba
   tambien la familia entera, asi que el partido salia como si no hubiera canal.
