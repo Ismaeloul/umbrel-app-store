@@ -742,10 +742,12 @@ test("un hash duplicado que el motor da por muerto se descarta entero", () => {
   assert.equal(salida.length, 0, "aunque venga de tu lista, sin pares no tira");
 });
 
-test("se ofrecen hasta doce señales, no ocho", () => {
-  const muchas = Array.from({ length: 20 }, (_, i) =>
+test("se ofrecen TODAS las señales, sin tope", () => {
+  // recortar la lista era quitar alternativas justo cuando mas falta hacen:
+  // los hashes caducan solos y un proveedor caido se cae entero
+  const muchas = Array.from({ length: 40 }, (_, i) =>
     señal(String(i).padStart(40, "0"), { availability: 1 - i / 100 }));
-  assert.equal(app.mergeResolutionCandidates(muchas).length, 12);
+  assert.equal(app.mergeResolutionCandidates(muchas).length, 40);
 });
 
 /* ---------- la familia es un recurso, no un añadido ---------- */
@@ -855,18 +857,24 @@ test("un vinculo confirmado a mano manda sobre todo lo demas", () => {
   assert.equal(salida[0].source, "saved");
 });
 
-test("el buscador conserva dos plazas por si tus hashes han caducado", () => {
+test("van todas: las tuyas primero y las del buscador detras", () => {
   const mias = Array.from({ length: 20 }, (_, i) => cand(i + 1, "m3u"));
   const suyas = Array.from({ length: 5 }, (_, i) => cand(100 + i, "acestream", { availability: 0.9 }));
   const salida = app.mergeResolutionCandidates([...mias, ...suyas]);
-  assert.equal(salida.length, 12);
-  assert.equal(salida.filter((c) => c.source !== "acestream").length, 10);
-  assert.equal(salida.filter((c) => c.source === "acestream").length, 2);
+  assert.equal(salida.length, 25, "no se pierde ninguna");
+  assert.ok(salida.slice(0, 20).every((c) => c.source === "m3u"), "las tuyas van delante");
+  assert.ok(salida.slice(20).every((c) => c.source === "acestream"));
 });
 
-test("sin nada del buscador, las doce plazas son para tus listas", () => {
-  const mias = Array.from({ length: 20 }, (_, i) => cand(i + 1, "m3u"));
-  const salida = app.mergeResolutionCandidates(mias);
-  assert.equal(salida.length, 12);
-  assert.ok(salida.every((c) => c.source === "m3u"), "no se desperdician plazas");
+test("un vinculo guardado no borra la familia del canal", () => {
+  /* El vinculo esta archivado con el mismo nombre que pides, asi que casa
+     consigo mismo al 100%. Contarlo como prueba de que el canal exacto existe
+     hacia que tener un vinculo de "DAZN" borrase los DAZN de la biblioteca. */
+  const candidatos = [
+    { ...cand(1, "saved"), title: "DAZN", score: 100, soloFamilia: false },
+    { ...cand(2, "m3u"), title: "DAZN 1", score: 78, soloFamilia: true },
+    { ...cand(3, "m3u"), title: "DAZN 2", score: 78, soloFamilia: true },
+  ];
+  const salida = app.mergeResolutionCandidates(candidatos);
+  assert.equal(salida.length, 3, "las de la familia siguen ofreciendose");
 });
