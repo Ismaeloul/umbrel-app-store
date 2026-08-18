@@ -3,14 +3,27 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.32"
+version: "0.6.33"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
-  "Ir al directo" vuelve a funcionar en el iPhone. Daba un microcorte y te
+  Menos señales muertas al dar a ver un partido. La busqueda ya se rehacia
+  entera en cada pulsacion, pero mandaba solo el parecido del nombre: un hash
+  caido con el nombre clavado se ofrecia por delante de uno vivo. Ahora, dentro
+  de cada grupo de nombres igual de buenos, primero va lo que el motor dice que
+  esta vivo, y lo que da por muerto -sin nadie compartiendo- ni se ofrece.
+  Un mismo hash puede llegar por tu lista M3U y por el buscador del motor. Al
+  fusionarlos se perdia el dato de disponibilidad, que solo trae el buscador;
+  ahora se conserva venga de donde venga, asi que tambien se sabe si los de tus
+  listas siguen vivos. Se ofrecen hasta doce señales en vez de ocho.
+  El selector marca cada fuente con un punto: verde si tiene pares de sobra,
+  ambar si va justa, y al pasar por encima dice el porcentaje. Ademas, al ir a
+  ver un partido se refrescan en segundo plano las listas que lleven mas de
+  media hora sin actualizarse, sin hacerte esperar.
+  Historico: "ir al directo" vuelve a funcionar en el iPhone. Daba un microcorte y te
   dejaba donde estabas porque preguntaba a la parte equivocada del reproductor:
   miraba lo que llevaba descargado por delante del cabezal -un par de segundos-
   en vez del borde real de la emision. Con 158 s de retraso saltaba 0,8 s.
