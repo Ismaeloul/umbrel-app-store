@@ -3,14 +3,25 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.35"
+version: "0.6.36"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
-  Cambia como se identifican los canales, y con eso aparecen muchas mas
+  Primero tus listas, despues el buscador del motor. Habia un fallo tonto y
+  gordo: la disponibilidad solo la traen los resultados del buscador, y al
+  ordenarlo todo junto los de tus listas -que valen "no se sabe"- perdian
+  siempre. Asi que la señal que arrancaba sola era casi siempre un hash suelto
+  del buscador, teniendo tus canales importados, que estan curados y funcionan
+  mucho mejor.
+  El orden pasa a ser: los vinculos que has confirmado a mano, luego tus listas
+  M3U con favoritos e historial, y por ultimo el buscador. Dentro de cada grupo
+  se sigue repartiendo entre proveedores. Al buscador se le guardan las dos
+  ultimas plazas por si tus hashes hubieran caducado todos a la vez, y si no
+  hay nada que poner ahi esas plazas vuelven a tus listas.
+  Historico: cambia como se identifican los canales, y con eso aparecen muchas mas
   señales. Tus listas grandes son agregadores: la de NEW ERA trae dentro ocho
   proveedores -SPORT TV, NEW LOOP, ELCANO, NEW ERA...- y lo rotula en el propio
   titulo, "LIGA DE CAMPEONES --> ELCANO". La app trataba esa coletilla como

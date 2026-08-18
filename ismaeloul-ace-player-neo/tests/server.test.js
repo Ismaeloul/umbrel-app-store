@@ -699,12 +699,15 @@ test("una señal que el motor da por muerta no se ofrece", () => {
   assert.equal(salida[0].id, "b".repeat(40));
 });
 
-test("entre dos igual de buenas de nombre, primero la que esta viva", () => {
+test("entre dos de la MISMA procedencia, primero la que esta viva", () => {
+  /* La disponibilidad desempata dentro de cada grupo, no entre grupos: solo la
+     traen los resultados del buscador, asi que compararla entre una del
+     buscador y una de tus listas hacia ganar siempre al buscador. */
   const salida = app.mergeResolutionCandidates([
-    señal("a".repeat(40), { score: 100, availability: null }),
+    señal("a".repeat(40), { score: 100, source: "acestream", availability: 0.2 }),
     señal("b".repeat(40), { score: 100, source: "acestream", availability: 0.8 }),
   ]);
-  assert.equal(salida[0].id, "b".repeat(40), "la disponible va primero");
+  assert.equal(salida[0].id, "b".repeat(40), "la mas disponible va primero");
   assert.equal(salida.length, 2, "la otra sigue ofreciendose");
 });
 
@@ -825,4 +828,45 @@ test("la lista se reparte entre proveedores en vez de copar uno", () => {
   const salida = app.repartirEntreProveedores(entrada).map((c) => app.proveedorDeSeñal(c));
   assert.deepEqual(salida.slice(0, 3), ["alfa", "beta", "gamma"], "primero uno de cada");
   assert.equal(salida.length, 6, "no se pierde ninguna");
+});
+
+/* ---------- primero lo tuyo, luego el buscador ---------- */
+
+const cand = (id, source, extra = {}) => ({
+  id: String(id).padStart(40, "0"), title: "Liga de Campeones",
+  score: 100, source, availability: null, bitrate: null, soloFamilia: false, ...extra,
+});
+
+test("las listas importadas van por delante del buscador del motor", () => {
+  // la disponibilidad solo la traen los del buscador; comparandolas juntas,
+  // el null de las listas contaba como -1 y el buscador ganaba siempre
+  const salida = app.mergeResolutionCandidates([
+    cand(1, "acestream", { availability: 1 }),
+    cand(2, "m3u"),
+  ]);
+  assert.equal(salida[0].source, "m3u", "lo tuyo primero aunque no sepamos si esta vivo");
+  assert.equal(salida[1].source, "acestream");
+});
+
+test("un vinculo confirmado a mano manda sobre todo lo demas", () => {
+  const salida = app.mergeResolutionCandidates([
+    cand(1, "m3u"), cand(2, "acestream", { availability: 1 }), cand(3, "saved"),
+  ]);
+  assert.equal(salida[0].source, "saved");
+});
+
+test("el buscador conserva dos plazas por si tus hashes han caducado", () => {
+  const mias = Array.from({ length: 20 }, (_, i) => cand(i + 1, "m3u"));
+  const suyas = Array.from({ length: 5 }, (_, i) => cand(100 + i, "acestream", { availability: 0.9 }));
+  const salida = app.mergeResolutionCandidates([...mias, ...suyas]);
+  assert.equal(salida.length, 12);
+  assert.equal(salida.filter((c) => c.source !== "acestream").length, 10);
+  assert.equal(salida.filter((c) => c.source === "acestream").length, 2);
+});
+
+test("sin nada del buscador, las doce plazas son para tus listas", () => {
+  const mias = Array.from({ length: 20 }, (_, i) => cand(i + 1, "m3u"));
+  const salida = app.mergeResolutionCandidates(mias);
+  assert.equal(salida.length, 12);
+  assert.ok(salida.every((c) => c.source === "m3u"), "no se desperdician plazas");
 });
