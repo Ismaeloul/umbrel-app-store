@@ -2489,10 +2489,20 @@ async function bindFootballChannel(channel,candidate){
    habia que volver a buscar. Ahora se conservan todos y se puede saltar. */
 function setFuentes(lista, actualId, titulo=''){
   const vistos=new Set();
-  S.fuentes = (lista||[])
+  const limpia = (lista||[])
     .filter(item=>{ const id=normalizeAceId(item?.id); if(!id||vistos.has(id)) return false; vistos.add(id); return true; })
     .map(item=>({ id:normalizeAceId(item.id), title:item.title||titulo||'Fuente', ih:item.ih===true }));
-  S.fuenteActual = normalizeAceId(actualId);
+
+  /* SOLO son fuentes alternativas las del MISMO canal. La resolucion devuelve
+     candidatos para que elijas tu, e incluye coincidencias flojas: mezclarlas
+     ofrecia "LaLiga TV Hypermotion" (Segunda) como alternativa de "M+ Liga de
+     Campeones" (Champions), que no tienen nada que ver. Se comparan por
+     nombre normalizado, que ya ignora calidad, asteriscos y proveedor. */
+  const actual = normalizeAceId(actualId);
+  const referencia = limpia.find(f=>f.id===actual);
+  const clave = normalizeChannelLabel(referencia?.title || titulo);
+  S.fuentes = clave ? limpia.filter(f=>normalizeChannelLabel(f.title)===clave) : limpia;
+  S.fuenteActual = actual;
   renderFuentes();
 }
 /* Al reproducir un canal de la biblioteca, sus hermanos son las demas
