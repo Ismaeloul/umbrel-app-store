@@ -3,14 +3,23 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.31"
+version: "0.6.32"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
-  El audio deja de ir por delante de la imagen en el iPhone, y sin añadir ni un
+  "Ir al directo" vuelve a funcionar en el iPhone. Daba un microcorte y te
+  dejaba donde estabas porque preguntaba a la parte equivocada del reproductor:
+  miraba lo que llevaba descargado por delante del cabezal -un par de segundos-
+  en vez del borde real de la emision. Con 158 s de retraso saltaba 0,8 s.
+  Ahora usa la ventana en vivo que publica la lista, asi que el salto llega de
+  verdad al directo. El indicador tambien se arregla: antes decia 0 s de
+  retraso llevando dos minutos y medio. Si ya estas en el directo te lo dice en
+  vez de dar el tiron, y si la señal no deja saltar mas adelante, avisa en
+  lugar de dejar el boton encendido para siempre.
+  Historico: el audio deja de ir por delante de la imagen en el iPhone, y sin añadir ni un
   milisegundo de latencia.
   Al engancharse a un directo casi nunca caes justo en un fotograma clave. El
   reempaquetado tiraba los fotogramas de video hasta el siguiente clave pero
