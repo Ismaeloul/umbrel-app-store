@@ -3,14 +3,31 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.34"
+version: "0.6.35"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
-  Se acabo que un partido de Liga de Campeones ofreciera señales del 2, del 3 y
+  Cambia como se identifican los canales, y con eso aparecen muchas mas
+  señales. Tus listas grandes son agregadores: la de NEW ERA trae dentro ocho
+  proveedores -SPORT TV, NEW LOOP, ELCANO, NEW ERA...- y lo rotula en el propio
+  titulo, "LIGA DE CAMPEONES --> ELCANO". La app trataba esa coletilla como
+  parte del nombre del canal, asi que el proveedor contaba como palabra propia
+  y hundia la puntuacion. Lo mismo con el operador: "M+ Liga de Campeones" y
+  "LIGA DE CAMPEONES" son el mismo canal, pero "movistar" contaba como palabra
+  distintiva. Ahora ambas cosas se tratan como lo que son, decoracion. Medido:
+  de 53 canales de Champions en tus listas se reconocian 26 y ahora 33.
+  Y las señales se reparten entre proveedores en vez de dejar que uno copo la
+  lista: antes salian cinco del mismo sitio seguidas y las alternativas
+  quedaban del octavo puesto en adelante, asi que si ese proveedor estaba caido
+  la que arrancaba sola estaba muerta. Ahora los primeros puestos llevan uno de
+  cada proveedor.
+  El numero de canal se conserva intacto, que es lo unico que de verdad
+  distingue un partido de otro: Liga de Campeones 2 sigue sin colarse en un
+  partido del 1.
+  Historico: se acabo que un partido de Liga de Campeones ofreciera señales del 2, del 3 y
   del 4, que son otros partidos. Venia del arreglo que permitio que pedir
   "DAZN" ofreciera todos los DAZN: al no distinguir los dos casos, tambien
   ofrecia las hermanas numeradas de un canal que existe tal cual.

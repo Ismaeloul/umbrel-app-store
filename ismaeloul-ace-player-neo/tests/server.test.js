@@ -784,3 +784,45 @@ test("las coletillas de calidad no cuentan como numero de canal", () => {
   assert.equal(app.esFamiliaDe("DAZN", "DAZN 1"), true);
   assert.equal(app.esFamiliaDe("LaLiga TV", "LALIGA TV Hypermotion"), false);
 });
+
+/* ---------- el proveedor no es el canal ---------- */
+
+test("la coletilla del proveedor no forma parte del nombre", () => {
+  // las listas grandes son agregadores y rotulan quien sirve cada señal
+  assert.equal(app.normalizeChannelKey("LIGA DE CAMPEONES --> ELCANO"), "liga de campeones");
+  assert.equal(app.normalizeChannelKey("LIGA DE CAMPEONES FHD --> NEW ERA II"), "liga de campeones");
+  assert.equal(app.normalizeChannelKey("DAZN 1 720p **"), "dazn 1");
+});
+
+test("el operador dice por donde llega, no que canal es", () => {
+  // "M+ Liga de Campeones" y "LIGA DE CAMPEONES" son el mismo canal
+  assert.ok(app.channelMatchScore("M+ Liga de Campeones", "LIGA DE CAMPEONES --> ELCANO") >= 70);
+  assert.ok(app.channelMatchScore("M+ Liga de Campeones", "M. Liga de Campeones") >= 70);
+  assert.ok(app.channelMatchScore("M+ Liga de Campeones", "LIGA DE CAMPEONES --> SPORT TV") >= 70);
+});
+
+test("quitar la decoracion no borra el numero de canal", () => {
+  // es lo unico que de verdad distingue un partido de otro
+  assert.equal(app.normalizeChannelKey("LIGA DE CAMPEONES 2 --> ELCANO"), "liga de campeones 2");
+  assert.ok(app.channelMatchScore("M+ Liga de Campeones", "LIGA DE CAMPEONES 2 --> ELCANO") < 70);
+  assert.ok(app.channelMatchScore("M+ Liga de Campeones", "LIGA DE CAMPEONES 3 --> SPORT TV") < 70);
+});
+
+test("se reconoce de que proveedor es cada señal", () => {
+  assert.equal(app.proveedorDeSeñal({ title: "LIGA DE CAMPEONES --> ELCANO" }), "elcano");
+  assert.equal(app.proveedorDeSeñal({ title: "LIGA DE CAMPEONES FHD --> NEW ERA II" }), "new era ii");
+  assert.equal(app.proveedorDeSeñal({ title: "M+ Liga de Campeones", listaId: "principal" }), "principal");
+});
+
+test("la lista se reparte entre proveedores en vez de copar uno", () => {
+  // si un proveedor se cae, se caen todas sus señales a la vez: no pueden
+  // ocupar los primeros puestos y dejar las alternativas fuera de vista
+  const entrada = [
+    { title: "C --> alfa" }, { title: "C --> alfa" }, { title: "C --> alfa" },
+    { title: "C --> beta" }, { title: "C --> beta" },
+    { title: "C --> gamma" },
+  ];
+  const salida = app.repartirEntreProveedores(entrada).map((c) => app.proveedorDeSeñal(c));
+  assert.deepEqual(salida.slice(0, 3), ["alfa", "beta", "gamma"], "primero uno de cada");
+  assert.equal(salida.length, 6, "no se pierde ninguna");
+});
