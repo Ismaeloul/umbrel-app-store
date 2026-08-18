@@ -744,3 +744,43 @@ test("se ofrecen hasta doce señales, no ocho", () => {
     señal(String(i).padStart(40, "0"), { availability: 1 - i / 100 }));
   assert.equal(app.mergeResolutionCandidates(muchas).length, 12);
 });
+
+/* ---------- la familia es un recurso, no un añadido ---------- */
+
+test("si existe el canal exacto, no se ofrecen sus hermanas numeradas", () => {
+  // "M+ Liga de Campeones" existe tal cual: el 2 y el 3 son OTROS partidos
+  const biblioteca = [
+    { id: "1".repeat(40), title: "M+ Liga de Campeones 1080p" },
+    { id: "2".repeat(40), title: "M+ Liga de Campeones 2 1080p" },
+    { id: "3".repeat(40), title: "M+ Liga de Campeones 3 1080p" },
+  ];
+  const candidatos = biblioteca
+    .map((item) => app.scoreResolutionCandidate(["M+ Liga de Campeones"], item, "m3u"))
+    .filter((c) => c.score >= 70);
+  const ofrecidas = app.mergeResolutionCandidates(candidatos);
+  assert.equal(ofrecidas.length, 1);
+  assert.equal(ofrecidas[0].title, "M+ Liga de Campeones 1080p");
+});
+
+test("si NO existe el canal exacto, la familia es lo unico que hay", () => {
+  // la agenda anuncia "DAZN" a secas y no hay ningun canal llamado asi
+  const biblioteca = [
+    { id: "1".repeat(40), title: "DAZN 1 720p" },
+    { id: "2".repeat(40), title: "DAZN 2 720p" },
+    { id: "3".repeat(40), title: "DAZN 3 720p" },
+  ];
+  const candidatos = biblioteca
+    .map((item) => app.scoreResolutionCandidate(["DAZN"], item, "m3u"))
+    .filter((c) => c.score >= 70);
+  const ofrecidas = app.mergeResolutionCandidates(candidatos);
+  assert.equal(ofrecidas.length, 3, "sin exacto se ofrecen las tres");
+  assert.ok(ofrecidas.every((c) => c.soloFamilia));
+});
+
+test("las coletillas de calidad no cuentan como numero de canal", () => {
+  // 1080p o 720p no convierten el canal en otro distinto
+  assert.equal(app.esFamiliaDe("M+ Liga de Campeones", "M+ Liga de Campeones 1080p"), false);
+  assert.equal(app.esFamiliaDe("DAZN 1", "DAZN 1 720p"), false);
+  assert.equal(app.esFamiliaDe("DAZN", "DAZN 1"), true);
+  assert.equal(app.esFamiliaDe("LaLiga TV", "LALIGA TV Hypermotion"), false);
+});
