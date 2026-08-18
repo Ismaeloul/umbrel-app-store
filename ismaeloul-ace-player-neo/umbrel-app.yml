@@ -3,14 +3,26 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.30"
+version: "0.6.31"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
-  Arregla el audio desincronizado en el iPhone. Solo pasaba alli porque el
+  El audio deja de ir por delante de la imagen en el iPhone, y sin añadir ni un
+  milisegundo de latencia.
+  Al engancharse a un directo casi nunca caes justo en un fotograma clave. El
+  reempaquetado tiraba los fotogramas de video hasta el siguiente clave pero
+  conservaba el audio de ese tramo, asi que la reproduccion arrancaba con
+  sonido a solas y el audio quedaba adelantado el resto de la sesion, tanto
+  como durase el grupo de imagenes. Medido con un enganche a mitad de grupo:
+  2,111 s de adelanto. Ahora se conservan esos fotogramas iniciales y las dos
+  pistas empiezan juntas: 0,071 s, por debajo de lo perceptible.
+  No es un cambio de tiempos ni de buffer: la latencia y los modos de
+  reproduccion se quedan exactamente como estaban, y el video se sigue copiando
+  sin recodificar, asi que tampoco sube el consumo del NAS.
+  Historico: arregla el audio desincronizado en el iPhone. Solo pasaba alli porque el
   iPhone es el unico que reproduce a traves del reempaquetado del servidor; en
   el ordenador el video va directo y por eso iba bien.
   El sincronizador de audio estaba puesto en "async=1", que segun la propia
