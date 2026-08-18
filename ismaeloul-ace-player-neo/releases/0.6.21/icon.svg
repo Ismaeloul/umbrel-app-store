@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Ace Player Neo">
+  <defs>
+    <linearGradient id="bg" x1="72" x2="440" y1="52" y2="460" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0f172a"/>
+      <stop offset=".55" stop-color="#09090b"/>
+      <stop offset="1" stop-color="#020617"/>
+    </linearGradient>
+    <linearGradient id="neo" x1="156" x2="366" y1="146" y2="366" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#0ea5e9"/>
+    </linearGradient>
+    <filter id="glow" x="-35%" y="-35%" width="170%" height="170%">
+      <feGaussianBlur stdDeviation="18" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="158" fill="none" stroke="#1e293b" stroke-width="28"/>
+  <path d="M256 98a158 158 0 0 1 158 158" fill="none" stroke="#38bdf8" stroke-linecap="round" stroke-width="28" filter="url(#glow)"/>
+  <path d="M256 414A158 158 0 0 1 98 256" fill="none" stroke="#0ea5e9" stroke-linecap="round" stroke-width="28"/>
+  <circle cx="256" cy="256" r="78" fill="#f8fafc"/>
+  <path d="M235 214l75 42-75 42z" fill="url(#neo)"/>
+</svg>
