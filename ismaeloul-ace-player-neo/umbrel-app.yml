@@ -3,14 +3,26 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.17"
+version: "0.6.18"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
-  La agenda pasa a futbolenlatv.com, que cubre todos los operadores y no solo
+  Rediseño completo y app instalable en el movil. La aplicacion pasa a tener
+  dos pantallas: al entrar ves la agenda y la biblioteca en paralelo para
+  decidir que ver, y al reproducir saltas al visionado con el video y el panel
+  al lado. Nuevo lenguaje visual de terminal: rejilla rigida, monoespaciada y
+  un unico acento rojo. Se puede añadir a la pantalla de inicio del movil y
+  abrir como una app, con icono propio y sin barra del navegador. Los partidos
+  avisan de si estan en directo o cuanto falta, y el reproductor en reposo dice
+  si el motor esta listo. Al volver al inicio se libera el motor, que solo
+  admite una reproduccion a la vez. Corrige que el modal de ajustes se saliera
+  de la pantalla, que los ajustes pudieran quedarse sin salida si fallaba el
+  guardado, una fuga de temporizadores al zapear y que la agenda no detectara
+  los canales renombrados. Sube a 500 el limite de canales por lista.
+  Historico: la agenda paso a futbolenlatv.com, que cubre todos los operadores y no solo
   la parrilla de Movistar: 639 partidos en catorce dias. El calendario se amplia
   de 5 a 14 dias y la barra de fechas gana flechas, porque los ultimos dias
   quedaban fuera de alcance. Las competiciones que eliges ahora deciden que

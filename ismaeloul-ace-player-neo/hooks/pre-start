@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="0.6.17"
+readonly VERSION="0.6.18"
 readonly TAG="ace-player-neo-v${VERSION}"
 readonly ARCHIVE_ROOT="umbrel-app-store-ace-player-neo-v${VERSION}"
 readonly ARCHIVE_URL="https://github.com/Ismaeloul/umbrel-app-store/archive/refs/tags/${TAG}.tar.gz"
@@ -12,6 +12,12 @@ readonly -a REQUIRED_FILES=(
   "index.html"
   "nginx.conf"
   "server.js"
+  "manifest.webmanifest"
+  "sw.js"
+  "icon-180.png"
+  "icon-192.png"
+  "icon-512.png"
+  "icon-maskable-512.png"
   "vendor/hls.min.js"
   "vendor/mpegts.js"
   "vendor/fonts/inter-var.woff2"
