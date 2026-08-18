@@ -3,14 +3,25 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.36"
+version: "0.6.37"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
-  Primero tus listas, despues el buscador del motor. Habia un fallo tonto y
+  Se retira el tope de fuentes: ahora se ofrecen TODAS las que superen el
+  umbral, no doce. Medido sobre tus listas, un partido de Champions pasa de 12
+  a 23 señales y DAZN a 22.
+  Y con el tope fuera salio a la luz un fallo que tapaba: un vinculo guardado
+  contaba como prueba de que el canal exacto existe, y como el vinculo esta
+  archivado con el mismo nombre que pides, casa consigo mismo siempre. Tener un
+  vinculo de "DAZN" borraba de golpe los 22 DAZN de la biblioteca y dejaba una
+  sola señal. Ahora esa prueba solo la da la biblioteca.
+  El selector aguanta la lista larga: el nombre del canal tiene sitio
+  garantizado y los botones ruedan en horizontal empezando por el primero, que
+  es el mejor colocado.
+  Historico: primero tus listas, despues el buscador del motor. Habia un fallo tonto y
   gordo: la disponibilidad solo la traen los resultados del buscador, y al
   ordenarlo todo junto los de tus listas -que valen "no se sabe"- perdian
   siempre. Asi que la señal que arrancaba sola era casi siempre un hash suelto
