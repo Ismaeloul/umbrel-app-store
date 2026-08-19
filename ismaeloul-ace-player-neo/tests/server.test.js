@@ -14,6 +14,9 @@ process.env.FOOTBALL_DEMO_ONLY = "true";
 const manifest = fs.readFileSync(path.join(__dirname, "../umbrel-app.yml"), "utf8");
 const releaseVersion = manifest.match(/^version:\s*"([^"]+)"/m)?.[1];
 assert.ok(releaseVersion, "umbrel-app.yml debe declarar una version");
+const compose = fs.readFileSync(path.join(__dirname, "../docker-compose.yml"), "utf8");
+const composeReleaseVersions = [...compose.matchAll(/\/releases\/(\d+\.\d+\.\d+)\//g)].map((match) => match[1]);
+const preStart = fs.readFileSync(path.join(__dirname, "../hooks/pre-start"), "utf8");
 const app = require(path.join(__dirname, "../releases", releaseVersion, "server.js"));
 
 const ID_A = "a".repeat(40);
@@ -40,6 +43,14 @@ function seedState() {
     nowPlaying: null,
   });
 }
+
+test("la release de Umbrel es coherente y el hook no fija una version manual", () => {
+  assert.deepEqual([...new Set(composeReleaseVersions)], [releaseVersion]);
+  assert.doesNotMatch(preStart, /readonly VERSION="\d+\.\d+\.\d+"/);
+  assert.match(preStart, /docker-compose\.yml/);
+  assert.match(preStart, /MANIFEST_VERSION/);
+  assert.ok(fs.existsSync(path.join(__dirname, "../releases", releaseVersion, "server.js")));
+});
 
 async function semanticTestEmbed(texts) {
   return texts.map((text) => {
