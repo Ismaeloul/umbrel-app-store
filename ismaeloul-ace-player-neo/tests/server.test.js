@@ -52,6 +52,25 @@ test("la release de Umbrel es coherente y el hook no fija una version manual", (
   assert.ok(fs.existsSync(path.join(__dirname, "../releases", releaseVersion, "server.js")));
 });
 
+test("la interfaz 0.6.41 incluye centro de partido, salud, reporte y controles NEO validos", () => {
+  const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
+  for (const id of ["neoControls", "matchCenter", "sourceInspector", "veilHealth", "veilReport"]) {
+    assert.match(html, new RegExp(`id=["']${id}["']`));
+  }
+  assert.match(html, /\.source-pick\.comprobando::after\s*\{\s*background:var\(--ok\)/);
+  assert.match(html, /\.mc-kicker\s*\{\s*color:var\(--live\)/);
+  assert.match(html, /\.source-pick\.on\s*\{[\s\S]{0,180}border-color:var\(--live\)/);
+  assert.match(html, /class="source-picks-track"/);
+  assert.match(html, /data-source-favorite/);
+  assert.match(html, /data-source-copy/);
+  assert.doesNotMatch(html, /data-source-wrong/);
+  assert.match(html, /\$\('video'\)\.controls=!desktop;/);
+  const start = html.lastIndexOf("<script>") + "<script>".length;
+  const end = html.lastIndexOf("</script>");
+  assert.ok(start >= "<script>".length && end > start);
+  assert.doesNotThrow(() => new Function(html.slice(start, end)));
+});
+
 async function semanticTestEmbed(texts) {
   return texts.map((text) => {
     if (/campeones|champions|\bucl\b/i.test(text)) return [1, 0, 0];
@@ -1066,9 +1085,14 @@ test("las URLs que devuelve el escaner se fuerzan al motor interno", () => {
   assert.equal(app.scannerEnginePath("http://servidor-ajeno.invalid/otra/ruta"), "");
 });
 
-test("una fuente solo se da por viva cuando entrega datos reales", () => {
-  assert.equal(app.classifyScannerEvidence({ statusCode: 200, bytes: 131072 }).state, "working");
-  assert.equal(app.classifyScannerEvidence({ statusCode: 200, bytes: 20000 }).state, "weak");
+test("una fuente solo se da por viva cuando entrega video H.264 reproducible", () => {
+  const playable = { mediaValid: true, browserCompatible: true, videoCodec: "h264" };
+  assert.equal(app.classifyScannerEvidence({ statusCode: 200, bytes: 131072, ...playable }).state, "working");
+  assert.equal(app.classifyScannerEvidence({ statusCode: 200, bytes: 20000, ...playable }).state, "weak");
+  assert.equal(app.classifyScannerEvidence({ statusCode: 200, bytes: 131072 }).state, "failed", "los bytes sin video validado no bastan");
+  const hevc = app.classifyScannerEvidence({ statusCode: 200, bytes: 131072, mediaValid: true, browserCompatible: false, videoCodec: "hevc", mediaReason: "unsupported_codec" });
+  assert.equal(hevc.state, "failed");
+  assert.equal(hevc.reason, "unsupported_codec");
   assert.equal(app.classifyScannerEvidence({ statusCode: 200, bytes: 0, peers: 4, speedDown: 0 }).state, "failed");
   assert.equal(app.classifyScannerEvidence({ statusCode: 200, bytes: 200000, contentType: "application/json" }).state, "failed");
   assert.equal(app.classifyScannerEvidence({ statusCode: 502, bytes: 200000 }).state, "failed");
@@ -1111,8 +1135,98 @@ test("el segundo motor prueba un infohash y siempre cierra su sesion", async () 
       assert.match(pathname, /^\/ace\/getstream\?infohash=/);
       return { statusCode: 200, bytes: 64 * 1024, reason: "enough_data", durationMs: 80 };
     },
+    inspect: async (pathname) => {
+      assert.match(pathname, /^\/ace\/getstream\?infohash=/);
+      return { mediaValid: true, browserCompatible: true, videoCodec: "h264", audioCodecs: ["aac"], mediaReason: "playable_media" };
+    },
   });
   assert.equal(result.state, "working");
+  assert.equal(result.videoCodec, "h264");
   assert.match(calls[0], new RegExp(`infohash=${ID_A}`));
   assert.ok(calls.some((pathname) => pathname.includes("method=stop")), "la sesion de prueba se detiene");
+});
+
+test("normaliza reportes y correcciones locales sin aceptar motivos arbitrarios", () => {
+  const report = app.normalizeSourceReport({
+    id: ID_A, title: "M+ Liga de Campeones", channel: "Movistar Liga de Campeones",
+    reason: "wrong_channel", state: "checking", quarantineUntil: new Date(Date.now() + 60000).toISOString(),
+  });
+  assert.equal(report.id, ID_A);
+  assert.equal(report.reason, "wrong_channel");
+  assert.equal(report.channelKey, app.normalizeChannelKey("Movistar Liga de Campeones"));
+  const fallback = app.normalizeSourceReport({ id: ID_B, reason: "inventado" });
+  assert.equal(fallback.reason, "not_starting");
+
+  const feedback = app.normalizeChannelFeedback({
+    id: ID_A, channel: "M+ Liga de Campeones", verdict: "correct",
+  });
+  assert.equal(feedback.verdict, "correct");
+  assert.equal(app.normalizeChannelFeedback({ id: ID_A, channel: "M+", verdict: "quizas" }), null);
+});
+
+test("la correccion humana manda sobre la IA y la cuarentena", () => {
+  const now = Date.now();
+  const channel = "M+ Liga de Campeones";
+  const state = {
+    channelFeedback: [
+      app.normalizeChannelFeedback({ id: ID_A, channel, verdict: "incorrect" }),
+      app.normalizeChannelFeedback({ id: ID_B, channel, verdict: "correct" }),
+    ],
+    sourceReports: [app.normalizeSourceReport({
+      id: ID_C, channel, reason: "not_starting", state: "failed",
+      quarantineUntil: new Date(now + 60000).toISOString(),
+    })],
+  };
+  const candidates = app.applyLearnedSourceRules(state, [channel], [
+    { id: ID_A, title: channel, score: 100 },
+    { id: ID_B, title: "Rotulo raro ELCANO", score: 12 },
+    { id: ID_C, title: channel, score: 100 },
+  ], now);
+  assert.deepEqual(candidates.map((item) => item.id), [ID_B]);
+  assert.equal(candidates[0].score, 98);
+  assert.equal(candidates[0].learned, "correct");
+});
+
+test("el precalentamiento avanza por descubrimiento, escaneo, saque y directo", () => {
+  const kickoff = Date.now() + 60 * 60 * 1000;
+  assert.equal(app.footballPreheatStage(kickoff, kickoff - 46 * 60 * 1000), null);
+  assert.equal(app.footballPreheatStage(kickoff, kickoff - 40 * 60 * 1000), "discovery");
+  assert.equal(app.footballPreheatStage(kickoff, kickoff - 10 * 60 * 1000), "scan");
+  assert.equal(app.footballPreheatStage(kickoff, kickoff - 2 * 60 * 1000), "kickoff");
+  assert.equal(app.footballPreheatStage(kickoff, kickoff + 10 * 60 * 1000), "live");
+  assert.equal(app.footballPreheatStage(kickoff, kickoff + 121 * 60 * 1000), null);
+});
+
+test("reportar una fuente la pone en cuarentena y canal incorrecto se aprende", async () => {
+  seedState();
+  const { response, data } = await post("/api/sources/report", {
+    id: ID_A,
+    title: "M+ Liga de Campeones --> ELCANO",
+    channel: "M+ Liga de Campeones",
+    reason: "wrong_channel",
+    matchId: "partido-1",
+  });
+  assert.equal(response.status, 200);
+  assert.equal(data.success, true);
+  assert.equal(data.report.reason, "wrong_channel");
+  assert.equal(data.scan, null);
+  const state = app.readState();
+  assert.equal(state.sourceReports[0].id, ID_A);
+  assert.ok(Date.parse(state.sourceReports[0].quarantineUntil) > Date.now());
+  assert.equal(state.channelFeedback[0].verdict, "incorrect");
+});
+
+test("confirmar una fuente corrige el aprendizaje y levanta su veto de canal", async () => {
+  const { response, data } = await post("/api/sources/feedback", {
+    id: ID_A,
+    title: "M+ Liga de Campeones --> ELCANO",
+    channel: "M+ Liga de Campeones",
+    verdict: "correct",
+  });
+  assert.equal(response.status, 200);
+  assert.equal(data.feedback.verdict, "correct");
+  const state = app.readState();
+  assert.equal(state.channelFeedback[0].verdict, "correct");
+  const wrongReport = state.sourceReports.find((item) => item.id === ID_A && item.reason === "wrong_channel");
+  assert.equal(wrongReport.quarantineUntil, null);
 });
