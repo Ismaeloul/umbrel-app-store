@@ -28,6 +28,19 @@ services:
     # el enjambre va justo de pares.
     mem_limit: 4g
 
+  # Motor independiente para probar hashes en segundo plano. No se publica a
+  # nginx ni al navegador: el backend abre una fuente cada vez, lee una muestra
+  # corta y cierra siempre la sesion. Asi nunca interfiere con el canal visible.
+  acestream_scanner:
+    image: wafy80/acestream@sha256:8ffbc03916d8e33d321430f9ca1731ef3b058e72eeb9d9f7b322e9f7de654edc
+    container_name: ismaeloul-ace-player-neo_acestream_scanner_1
+    restart: unless-stopped
+    command: --client-console --bind-all --port 8622 --use-internal-buffering 1 --live-cache-type disk --live-cache-size 536870912 --upload-limit 1000
+    ports:
+      - "8622:8622/tcp"
+      - "8622:8622/udp"
+    mem_limit: 3g
+
   # Un proxy minimo y no expuesto conserva el socket de Docker fuera del
   # backend web. Solo acepta reiniciar el contenedor AceStream concreto.
   engine_control:
@@ -38,7 +51,7 @@ services:
     read_only: true
     security_opt:
       - no-new-privileges:true
-    command: node /releases/0.6.38/engine-control.js
+    command: node /releases/0.6.39/engine-control.js
     volumes:
       - ${APP_DATA_DIR}/releases:/releases:ro
       - /var/run/docker.sock:/var/run/docker.sock
@@ -63,10 +76,21 @@ services:
       THESPORTSDB_API_KEY: "${THESPORTSDB_API_KEY:-123}"
       FOOTBALL_COUNTRY: "Spain"
       FOOTBALL_DAYS: "14"
+      ACESTREAM_SCANNER_HOST: "acestream_scanner"
+      ACESTREAM_SCANNER_PORT: "6878"
+      ACESTREAM_SCANNER_TIMEOUT_MS: "18000"
+      ACESTREAM_SCANNER_SAMPLE_BYTES: "131072"
+      # Ollama vive como otra app de Umbrel. Solo el backend recibe esta ruta:
+      # el navegador nunca habla directamente con el modelo.
+      OLLAMA_BASE_URL: "http://host.docker.internal:11434"
+      OLLAMA_EMBED_MODEL: "embeddinggemma:300m-qat-q4_0"
+      OLLAMA_TIMEOUT_MS: "6500"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     # ffmpeg: re-empaqueta HEVC de TS a fMP4 para iOS (sin transcodificar).
     # Si no hay internet al recrear el contenedor, la app funciona igual
     # (solo se pierde la adaptacion para iPhone de canales HEVC).
-    command: sh -c "apk add --no-cache ffmpeg >/dev/null 2>&1 || echo 'sin ffmpeg, remux iOS desactivado'; exec node /releases/0.6.38/server.js"
+    command: sh -c "apk add --no-cache ffmpeg >/dev/null 2>&1 || echo 'sin ffmpeg, remux iOS desactivado'; exec node /releases/0.6.39/server.js"
     volumes:
       - ${APP_DATA_DIR}/releases:/releases:ro
       - ${APP_DATA_DIR}/data:/data
@@ -86,6 +110,6 @@ services:
       - ${APP_DATA_DIR}/releases:/releases:ro
     command: >
       sh -c "rm -rf /www && mkdir -p /www &&
-             cp -r /releases/0.6.38/. /www/ &&
+             cp -r /releases/0.6.39/. /www/ &&
              cp /www/nginx.conf /etc/nginx/conf.d/default.conf &&
              exec nginx -g 'daemon off;'"

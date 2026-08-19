@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+
+set -u
+
+PATH="/usr/local/bin:/usr/bin:/bin"
+
+APP_ID="ismaeloul-ace-player-neo"
+APP_DIR="${HOME}/umbrel/app-data/${APP_ID}"
+STATE_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/${APP_ID}-monitor"
+STATUS_FILE="${STATE_DIR}/status.json"
+LOG_FILE="${STATE_DIR}/health.log"
+LOCK_FILE="${STATE_DIR}/health.lock"
+
+mkdir -p "${STATE_DIR}"
+chmod 700 "${STATE_DIR}"
+
+if command -v flock >/dev/null 2>&1; then
+  exec 9>"${LOCK_FILE}"
+  flock -n 9 || exit 0
+fi
+
+checked_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+version="$(awk '/^version:/ { gsub(/["[:space:]]/, "", $2); print $2; exit }' "${APP_DIR}/umbrel-app.yml" 2>/dev/null)"
+version="${version:-unknown}"
+overall="ok"
+
+mark_failed() {
+  overall="failed"
+}
+
+http_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 8 http://127.0.0.1:7792/ 2>/dev/null || true)"
+case "${http_code}" in
+  200|301|302|303|307|308) app_proxy="ok:${http_code}" ;;
+  *) app_proxy="failed:${http_code:-000}"; mark_failed ;;
+esac
+
+if python3 -m json.tool "${APP_DIR}/data/state.json" >/dev/null 2>&1; then
+  app_state="ok"
+else
+  app_state="failed"
+  mark_failed
+fi
+
+port_open() {
+  timeout 3 bash -c "exec 3<>/dev/tcp/127.0.0.1/$1" >/dev/null 2>&1
+}
+
+if port_open 8621; then
+  acestream="ok"
+else
+  acestream="failed"
+  mark_failed
+fi
+
+if grep -q '^[[:space:]]*acestream_scanner:' "${APP_DIR}/docker-compose.yml" 2>/dev/null; then
+  if port_open 8622; then
+    scanner="ok"
+  else
+    scanner="failed"
+    mark_failed
+  fi
+else
+  scanner="not-installed"
+fi
+
+if [ -d "${HOME}/umbrel/app-data/ollama" ]; then
+  ollama_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 8 http://127.0.0.1:11434/api/tags 2>/dev/null || true)"
+  if [ "${ollama_code}" = "200" ]; then
+    ollama="ok"
+  else
+    ollama="failed:${ollama_code:-000}"
+    mark_failed
+  fi
+else
+  ollama="not-installed"
+fi
+
+status_tmp="${STATUS_FILE}.tmp"
+printf '{"checkedAt":"%s","overall":"%s","version":"%s","checks":{"appProxy":"%s","appState":"%s","aceStream":"%s","scanner":"%s","ollama":"%s"}}\n' \
+  "${checked_at}" "${overall}" "${version}" "${app_proxy}" "${app_state}" \
+  "${acestream}" "${scanner}" "${ollama}" >"${status_tmp}"
+mv "${status_tmp}" "${STATUS_FILE}"
+
+printf '%s overall=%s version=%s app_proxy=%s app_state=%s acestream=%s scanner=%s ollama=%s\n' \
+  "${checked_at}" "${overall}" "${version}" "${app_proxy}" "${app_state}" \
+  "${acestream}" "${scanner}" "${ollama}" >>"${LOG_FILE}"
+
+if [ "$(wc -c <"${LOG_FILE}")" -gt 1048576 ]; then
+  tail -n 1000 "${LOG_FILE}" >"${LOG_FILE}.tmp"
+  mv "${LOG_FILE}.tmp" "${LOG_FILE}"
+fi
+
+if [ "${overall}" != "ok" ]; then
+  exit 1
+fi
