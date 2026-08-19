@@ -52,7 +52,7 @@ test("la release de Umbrel es coherente y el hook no fija una version manual", (
   assert.ok(fs.existsSync(path.join(__dirname, "../releases", releaseVersion, "server.js")));
 });
 
-test("la interfaz 0.6.42 incluye centro de partido, salud, reporte y un reproductor NEO propio", () => {
+test("la interfaz 0.6.43 incluye agenda por todos los gustos y un reproductor NEO propio", () => {
   const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
   for (const id of ["neoControls", "neoPlayerMenu", "matchCenter", "sourceInspector", "veilHealth", "veilReport"]) {
     assert.match(html, new RegExp(`id=["']${id}["']`));
@@ -77,6 +77,12 @@ test("la interfaz 0.6.42 incluye centro de partido, salud, reporte y un reproduc
   assert.match(html, /event\.preventDefault\(\); event\.stopPropagation\(\);/);
   assert.match(html, /document\.querySelector\('\[data-neo-menu-icon\]'\)\.innerHTML/);
   assert.doesNotMatch(html, /\$\('\[data-neo-menu-/);
+  assert.match(html, /function hasScopePreferences\(\)\{ return hasFootballPreferences\(\); \}/);
+  assert.match(html, /\|\|footballMatchHasFavoriteTeam\(match\)/);
+  assert.match(html, /function footballTeamNameMatches\(preference,candidate\)/);
+  assert.match(html, /'fc barcelona':'barcelona'/);
+  assert.match(html, /No hay partidos de tus ligas, equipos o selecciones favoritas/);
+  assert.doesNotMatch(html, /los equipos favoritos NO filtran/);
   const start = html.lastIndexOf("<script>") + "<script>".length;
   const end = html.lastIndexOf("</script>");
   assert.ok(start >= "<script>".length && end > start);
@@ -425,7 +431,10 @@ test("la agenda completa queda disponible para clasificar las fuentes de cada pa
   const channels = app.footballProgramChannelNames(schedule);
   assert.ok(channels.includes("M+ Liga de Campeones"));
   assert.ok(channels.includes("DAZN LaLiga 2"));
-  const match = app.footballProgramMatch("demo-2");
+  const programmed = schedule.days.flatMap((day) => day.matches)
+    .find((item) => item.home === "Real Madrid" && item.away === "Manchester City");
+  assert.ok(programmed);
+  const match = app.footballProgramMatch(programmed.id);
   assert.equal(match.competition, "Champions League");
   assert.deepEqual(match.channels, ["M+ Liga de Campeones"]);
 });
@@ -515,6 +524,10 @@ test("sirve una agenda de desarrollo completa sin consultar servicios externos",
   assert.ok(data.days.length >= 3);
   assert.ok(data.days.some((day) => day.matches.length > 0));
   assert.ok(data.days.some((day) => day.matches.some((match) => match.home === "España" && match.away === "Portugal")));
+  assert.ok(data.days.some((day) => day.matches.some((match) =>
+    match.home === "FC Barcelona" && match.competition === "Amistoso")));
+  assert.ok(data.days.some((day) => day.matches.some((match) =>
+    match.home === "Barcelona SC" && match.competition === "Amistoso")));
 });
 
 test("guarda y normaliza las preferencias de fútbol entre dispositivos", async () => {

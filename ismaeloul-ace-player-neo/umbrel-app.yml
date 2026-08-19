@@ -3,13 +3,20 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.42"
+version: "0.6.43"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
+  La agenda Para ti ahora combina todos tus gustos: muestra un partido cuando
+  coincide con una liga, un equipo o una seleccion o pais favorito. Los
+  amistosos y torneos especiales de tus equipos dejan de desaparecer por no
+  pertenecer a una liga marcada. Tambien reconoce variantes habituales como
+  Barcelona, FC Barcelona y Barca sin mezclar el club con Barcelona SC o sus
+  filiales.
+  Historico:
   Las fuentes que fallan dejan de ocupar hueco en el selector, salvo la señal
   que siga activa, y ya no se vuelven a comprobar unos segundos despues. El
   segundo motor aplaza diez minutos su siguiente intento y mantiene el hash
