@@ -1,10 +1,39 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="0.6.38"
+readonly COMPOSE_FILE="${APP_DATA_DIR}/docker-compose.yml"
+readonly MANIFEST_FILE="${APP_DATA_DIR}/umbrel-app.yml"
+
+if [[ ! -s "${COMPOSE_FILE}" || ! -s "${MANIFEST_FILE}" ]]; then
+  echo "Ace Player Neo: faltan docker-compose.yml o umbrel-app.yml en APP_DATA_DIR" >&2
+  exit 1
+fi
+
+# La version de ejecucion vive en Compose. Extraerla evita que el hook se quede
+# apuntando a la release anterior cuando se publica una actualizacion nueva.
+mapfile -t compose_versions < <(
+  sed -nE 's#.*\/releases\/([0-9]+\.[0-9]+\.[0-9]+)\/.*#\1#p' "${COMPOSE_FILE}" | sort -u
+)
+
+if (( ${#compose_versions[@]} != 1 )); then
+  echo "Ace Player Neo: Compose debe apuntar a una unica release; detectadas: ${compose_versions[*]:-ninguna}" >&2
+  exit 1
+fi
+
+readonly VERSION="${compose_versions[0]}"
+MANIFEST_VERSION="$(sed -nE 's/^[[:space:]]*version:[[:space:]]*"([^"]+)".*$/\1/p' "${MANIFEST_FILE}" | head -n 1)"
+readonly MANIFEST_VERSION
+
+if [[ "${MANIFEST_VERSION}" != "${VERSION}" ]]; then
+  echo "Ace Player Neo: la version del manifiesto (${MANIFEST_VERSION:-ausente}) no coincide con Compose (${VERSION})" >&2
+  exit 1
+fi
+
 readonly TAG="ace-player-neo-v${VERSION}"
-readonly ARCHIVE_ROOT="umbrel-app-store-ace-player-neo-v${VERSION}"
-readonly ARCHIVE_URL="https://github.com/Ismaeloul/umbrel-app-store/archive/refs/tags/${TAG}.tar.gz"
+readonly TAG_ARCHIVE_ROOT="umbrel-app-store-ace-player-neo-v${VERSION}"
+readonly TAG_ARCHIVE_URL="https://github.com/Ismaeloul/umbrel-app-store/archive/refs/tags/${TAG}.tar.gz"
+readonly MAIN_ARCHIVE_ROOT="umbrel-app-store-main"
+readonly MAIN_ARCHIVE_URL="https://github.com/Ismaeloul/umbrel-app-store/archive/refs/heads/main.tar.gz"
 readonly TARGET="${APP_DATA_DIR}/releases/${VERSION}"
 readonly -a REQUIRED_FILES=(
   "engine-control.js"
@@ -54,36 +83,58 @@ fi
 
 STAGING_ROOT="$(mktemp -d "${APP_DATA_DIR}/.ace-player-neo-${VERSION}.XXXXXX")"
 readonly STAGING_ROOT
-readonly ARCHIVE_FILE="${STAGING_ROOT}/release.tar.gz"
-readonly EXTRACT_ROOT="${STAGING_ROOT}/release"
+readonly TAG_ARCHIVE_FILE="${STAGING_ROOT}/tag.tar.gz"
+readonly TAG_EXTRACT_ROOT="${STAGING_ROOT}/tag"
+readonly MAIN_ARCHIVE_FILE="${STAGING_ROOT}/main.tar.gz"
+readonly MAIN_EXTRACT_ROOT="${STAGING_ROOT}/main"
 
 cleanup() {
   rm -rf -- "${STAGING_ROOT}"
 }
 trap cleanup EXIT
 
-mkdir -p "${EXTRACT_ROOT}"
+download_release() {
+  local archive_url="${1}"
+  local archive_root="${2}"
+  local archive_file="${3}"
+  local extract_root="${4}"
+
+  mkdir -p "${extract_root}"
+  if command -v curl >/dev/null 2>&1; then
+    curl --fail --location --silent --show-error --retry 3 \
+      --connect-timeout 15 --max-time 180 \
+      --output "${archive_file}" "${archive_url}" || return 1
+  else
+    wget -qO "${archive_file}" "${archive_url}" || return 1
+  fi
+
+  tar -xzf "${archive_file}" \
+    -C "${extract_root}" \
+    --strip-components=4 \
+    "${archive_root}/ismaeloul-ace-player-neo/releases/${VERSION}" || return 1
+
+  release_is_complete "${extract_root}"
+}
+
 echo "Ace Player Neo ${VERSION}: descargando release inmutable en el NAS"
-
-if command -v curl >/dev/null 2>&1; then
-  curl --fail --location --silent --show-error --retry 3 \
-    --connect-timeout 15 --max-time 180 \
-    --output "${ARCHIVE_FILE}" "${ARCHIVE_URL}"
+release_root=""
+if download_release "${TAG_ARCHIVE_URL}" "${TAG_ARCHIVE_ROOT}" "${TAG_ARCHIVE_FILE}" "${TAG_EXTRACT_ROOT}"; then
+  release_root="${TAG_EXTRACT_ROOT}"
 else
-  wget -qO "${ARCHIVE_FILE}" "${ARCHIVE_URL}"
+  # Una etiqueta olvidada no debe dejar la aplicacion inaccesible. main es una
+  # recuperacion secundaria; la tienda local y la etiqueta siguen teniendo
+  # prioridad porque son las fuentes reproducibles e inmutables.
+  echo "Ace Player Neo ${VERSION}: la etiqueta ${TAG} no esta disponible; usando main como recuperacion" >&2
+  if ! download_release "${MAIN_ARCHIVE_URL}" "${MAIN_ARCHIVE_ROOT}" "${MAIN_ARCHIVE_FILE}" "${MAIN_EXTRACT_ROOT}"; then
+    echo "Ace Player Neo ${VERSION}: no se pudo recuperar la release desde la etiqueta ni desde main" >&2
+    exit 1
+  fi
+  release_root="${MAIN_EXTRACT_ROOT}"
 fi
-
-tar -xzf "${ARCHIVE_FILE}" \
-  -C "${EXTRACT_ROOT}" \
-  --strip-components=4 \
-  "${ARCHIVE_ROOT}/ismaeloul-ace-player-neo/releases/${VERSION}"
-
-for relative_path in "${REQUIRED_FILES[@]}"; do
-  test -s "${EXTRACT_ROOT}/${relative_path}"
-done
+readonly RELEASE_ROOT="${release_root}"
 
 mkdir -p "${TARGET}"
-cp -a "${EXTRACT_ROOT}/." "${TARGET}/"
+cp -a "${RELEASE_ROOT}/." "${TARGET}/"
 
 release_is_complete "${TARGET}"
 touch "${TARGET}/.complete"

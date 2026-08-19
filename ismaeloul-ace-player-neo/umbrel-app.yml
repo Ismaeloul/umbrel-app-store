@@ -3,13 +3,27 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.39"
+version: "0.6.40"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
+  Corrige el fallo que podia dejar la aplicacion inaccesible justo despues de
+  actualizarla. Compose arrancaba la version nueva, pero el hook de Umbrel
+  seguia comprobando la anterior y terminaba sin copiar los archivos nuevos al
+  NAS. En la 0.6.39, por ejemplo, los servicios buscaron releases/0.6.39 aunque
+  el hook dio por buena releases/0.6.38.
+  El hook ya obtiene automaticamente la version unica usada por Compose y la
+  contrasta con el manifiesto antes de detener o recrear nada. Si falta la
+  release, la restaura primero desde el checkout local de la tienda, despues
+  desde su etiqueta inmutable y, como ultimo salvavidas, desde main. Asi una
+  version olvidada en el hook o una etiqueta pendiente no vuelve a tumbar la
+  aplicacion. Se anade ademas una prueba de consistencia para que cualquier
+  diferencia entre manifiesto, Compose, hook y carpeta de release falle antes
+  de publicar.
+  Historico:
   Nueva capa de IA local para resolver los canales de cada partido. El backend
   entrega a embeddinggemma la programacion completa de futbolenlatv junto con
   los nombres de tus M3U, favoritos, historial y resultados del buscador; asi
