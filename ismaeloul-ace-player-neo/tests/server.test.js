@@ -52,9 +52,9 @@ test("la release de Umbrel es coherente y el hook no fija una version manual", (
   assert.ok(fs.existsSync(path.join(__dirname, "../releases", releaseVersion, "server.js")));
 });
 
-test("la interfaz 0.6.41 incluye centro de partido, salud, reporte y controles NEO validos", () => {
+test("la interfaz 0.6.42 incluye centro de partido, salud, reporte y un reproductor NEO propio", () => {
   const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
-  for (const id of ["neoControls", "matchCenter", "sourceInspector", "veilHealth", "veilReport"]) {
+  for (const id of ["neoControls", "neoPlayerMenu", "matchCenter", "sourceInspector", "veilHealth", "veilReport"]) {
     assert.match(html, new RegExp(`id=["']${id}["']`));
   }
   assert.match(html, /\.source-pick\.comprobando::after\s*\{\s*background:var\(--ok\)/);
@@ -64,7 +64,19 @@ test("la interfaz 0.6.41 incluye centro de partido, salud, reporte y controles N
   assert.match(html, /data-source-favorite/);
   assert.match(html, /data-source-copy/);
   assert.doesNotMatch(html, /data-source-wrong/);
-  assert.match(html, /\$\('video'\)\.controls=!desktop;/);
+  assert.match(html, /function maybeAutoPlayFirstVerifiedSource\(\)/);
+  assert.match(html, /source\.probeInitial&&Number\(source\.probeAttempts\|\|0\)===0/);
+  assert.doesNotMatch(html, /source\.probeInitial&&\['queued','checking','failed',''\]/);
+  assert.match(html, /S\.sourceAutoSwitchArmed=false;\s*S\.sourceAutoSwitchDone=true;/);
+  assert.doesNotMatch(html, /<video[^>]*\scontrols(?:\s|>)/i);
+  assert.match(html, /\.neo-desktop #video::\-webkit-media-controls/);
+  assert.match(html, /function enforceNeoPlayerMode\(\)/);
+  assert.match(html, /else if\(!v\.controls\) v\.controls=true;/);
+  assert.match(html, /new MutationObserver\(enforceNeoPlayerMode\)/);
+  assert.match(html, /playerShell\.addEventListener\('contextmenu',openNeoPlayerMenu\)/);
+  assert.match(html, /event\.preventDefault\(\); event\.stopPropagation\(\);/);
+  assert.match(html, /document\.querySelector\('\[data-neo-menu-icon\]'\)\.innerHTML/);
+  assert.doesNotMatch(html, /\$\('\[data-neo-menu-/);
   const start = html.lastIndexOf("<script>") + "<script>".length;
   const end = html.lastIndexOf("</script>");
   assert.ok(start >= "<script>".length && end > start);
@@ -1096,6 +1108,34 @@ test("una fuente solo se da por viva cuando entrega video H.264 reproducible", (
   assert.equal(app.classifyScannerEvidence({ statusCode: 200, bytes: 0, peers: 4, speedDown: 0 }).state, "failed");
   assert.equal(app.classifyScannerEvidence({ statusCode: 200, bytes: 200000, contentType: "application/json" }).state, "failed");
   assert.equal(app.classifyScannerEvidence({ statusCode: 502, bytes: 200000 }).state, "failed");
+});
+
+test("un fallo espera mucho antes del unico segundo intento", () => {
+  const now = Date.now();
+  const retry = app.scannerRetryPlan({ state: "failed", reason: "no_media" }, 1, now, 10 * 60 * 1000);
+  assert.deepEqual(retry, {
+    state: "retry_wait",
+    reason: "no_media",
+    retryAt: now + 10 * 60 * 1000,
+  });
+  assert.equal(app.scannerRetryPlan({ state: "failed", reason: "no_media" }, 2, now), null);
+  assert.equal(app.scannerRetryPlan({ state: "failed", reason: "unsupported_codec" }, 1, now), null);
+  assert.equal(app.scannerRetryPlan({ state: "working", reason: "playable_media" }, 1, now), null);
+
+  const payload = app.scannerJobPayload({
+    id: "scan-aplazado",
+    kind: "interactive",
+    status: "waiting",
+    createdAt: now,
+    updatedAt: now,
+    candidates: [{ id: ID_A, state: retry.state, reason: retry.reason, retryAt: retry.retryAt, attempts: 1 }],
+  });
+  assert.equal(payload.status, "waiting");
+  assert.equal(payload.candidates[0].state, "failed", "el frontend la oculta mientras espera");
+  assert.equal(payload.waiting, 1);
+  assert.equal(payload.retryAt, new Date(retry.retryAt).toISOString());
+  assert.equal(payload.checked, 1);
+  assert.equal(payload.playable, 0);
 });
 
 test("el segundo motor prueba un infohash y siempre cierra su sesion", async () => {

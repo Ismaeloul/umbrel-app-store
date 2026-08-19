@@ -53,7 +53,7 @@ services:
       - no-new-privileges:true
     environment:
       ACESTREAM_CONTAINER: "ismaeloul-ace-player-neo_acestream_1"
-    command: node /releases/0.6.41/engine-control.js
+    command: node /releases/0.6.42/engine-control.js
     volumes:
       - ${APP_DATA_DIR}/releases:/releases:ro
       - /var/run/docker.sock:/var/run/docker.sock
@@ -83,6 +83,9 @@ services:
       ACESTREAM_SCANNER_PORT: "6878"
       ACESTREAM_SCANNER_TIMEOUT_MS: "18000"
       ACESTREAM_SCANNER_SAMPLE_BYTES: "131072"
+      # Un fallo no cambia unos segundos despues: la segunda comprobacion se
+      # aplaza diez minutos para dejar libre el motor para otras fuentes.
+      ACESTREAM_SCANNER_RETRY_DELAY_MS: "600000"
       ENGINE_CONTROL_HOST: "ismaeloul-ace-player-neo_engine_control_1"
       # Ollama vive como otra app de Umbrel. Solo el backend recibe esta ruta:
       # el navegador nunca habla directamente con el modelo.
@@ -94,7 +97,7 @@ services:
     # ffmpeg: re-empaqueta HEVC de TS a fMP4 para iOS (sin transcodificar).
     # Si no hay internet al recrear el contenedor, la app funciona igual
     # (solo se pierde la adaptacion para iPhone de canales HEVC).
-    command: sh -c "apk add --no-cache ffmpeg >/dev/null 2>&1 || echo 'sin ffmpeg, remux iOS desactivado'; exec node /releases/0.6.41/server.js"
+    command: sh -c "apk add --no-cache ffmpeg >/dev/null 2>&1 || echo 'sin ffmpeg, remux iOS desactivado'; exec node /releases/0.6.42/server.js"
     volumes:
       - ${APP_DATA_DIR}/releases:/releases:ro
       - ${APP_DATA_DIR}/data:/data
@@ -114,6 +117,6 @@ services:
       - ${APP_DATA_DIR}/releases:/releases:ro
     command: >
       sh -c "rm -rf /www && mkdir -p /www &&
-             cp -r /releases/0.6.41/. /www/ &&
+             cp -r /releases/0.6.42/. /www/ &&
              cp /www/nginx.conf /etc/nginx/conf.d/default.conf &&
              exec nginx -g 'daemon off;'"
