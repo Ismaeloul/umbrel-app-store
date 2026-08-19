@@ -3,13 +3,45 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.38"
+version: "0.6.39"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
+  Nueva capa de IA local para resolver los canales de cada partido. El backend
+  entrega a embeddinggemma la programacion completa de futbolenlatv junto con
+  los nombres de tus M3U, favoritos, historial y resultados del buscador; asi
+  puede recuperar rotulos raros como "MOVISTAR CHAMPIONS --> SPORT TV" sin
+  mandar ningun dato fuera del NAS. El identificador del partido hace que el
+  servidor tome los canales de la agenda real y no confie en un nombre enviado
+  por el navegador. La IA compara cada fuente con todos los canales programados
+  y solo suma coincidencias claras; las reglas exactas siguen mandando sobre
+  los diales, por lo que Champions 2 o 3 nunca sustituyen al canal principal ni
+  Hypermotion se cuela en LaLiga o Champions. Si Ollama no responde, la busqueda
+  clasica sigue funcionando. Tambien se busca sin el prefijo de operador para
+  que el buscador encuentre variantes ELCANO, NEW ERA y similares.
+  Nuevo comprobador de fuentes en segundo plano. Un segundo motor AceStream,
+  aislado del reproductor, recibe todas las coincidencias de un partido y las
+  prueba de una en una descargando una muestra real. Las tres primeras siguen
+  apareciendo al instante para que puedas entrar sin esperar; despues, el
+  selector se actualiza solo y añade las señales verificadas, marca las lentas
+  y retira las que no entregan video. El progreso indica cuantas se han
+  comprobado y cuantas son reproducibles. Los resultados buenos se reutilizan
+  durante tres minutos y los fallos se vuelven a intentar pronto, porque los
+  enjambres P2P cambian continuamente. El escaner tiene puerto, memoria y cache
+  propios, no se expone al navegador y cierra cada sesion al terminar para no
+  competir con el canal que estas viendo.
+  La prueba real en Umbrel descubrio y corrigio un falso negativo del cliente
+  HTTP interno: el motor devolvia una sesion valida pero no empezaba a servir
+  el video. Con la peticion corregida, un hash activo paso de 0 bytes tras 18 s
+  a entregar 166 KB en 1,36 s y queda marcado como verificado.
+  Ademas, un cero del buscador ya no elimina un hash que tambien venga de tus
+  listas o favoritos: se conserva para que decida el segundo motor con datos
+  reales. Los resultados muertos que solo aporta el buscador se siguen
+  descartando sin gastar tiempo de prueba.
+  Historico:
   Los canales de la agenda ahora se emparejan como equivalentes aunque las
   listas escriban M+, M., Movistar o no indiquen operador, y se reconocen las
   coletillas de proveedor con flechas ASCII o Unicode sin confundirlas con el

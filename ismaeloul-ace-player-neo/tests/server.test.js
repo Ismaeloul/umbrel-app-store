@@ -41,6 +41,14 @@ function seedState() {
   });
 }
 
+async function semanticTestEmbed(texts) {
+  return texts.map((text) => {
+    if (/campeones|champions|\bucl\b/i.test(text)) return [1, 0, 0];
+    if (/hypermotion|laliga|segunda/i.test(text)) return [0, 1, 0];
+    return [0, 0, 1];
+  });
+}
+
 async function post(route, body) {
   const response = await fetch(baseUrl + route, {
     method: "POST",
@@ -340,6 +348,100 @@ test("no confunde canales de la misma familia que solo cambian una palabra", () 
   assert.ok(app.channelMatchScore("Movistar Liga de Campeones", "Movistar Liga Campeones") >= RECOMENDADO);
 });
 
+test("la IA limpia proveedor y calidad pero deja los diales bajo reglas estrictas", () => {
+  assert.equal(
+    app.semanticChannelText("M+ LIGA DE CAMPEONES 3 FHD --> ELCANO"),
+    "liga campeones",
+  );
+  assert.equal(app.semanticNumbersCompatible("M+ Liga de Campeones", "LIGA DE CAMPEONES 3 --> ELCANO"), false);
+  assert.equal(app.semanticNumbersCompatible("M+ Liga de Campeones 3", "LIGA DE CAMPEONES 3 --> ELCANO"), true);
+  assert.equal(app.semanticNumbersCompatible("M+ Liga de Campeones 1", "LIGA DE CAMPEONES --> ELCANO"), true);
+});
+
+test("la IA compara una fuente contra toda la programacion y no contra un canal aislado", async () => {
+  const candidates = [
+    { id: ID_A, title: "UCL Principal --> ELCANO", alias: null, source: "m3u", score: 0, soloFamilia: false },
+    { id: ID_B, title: "M+ LALIGA --> NEW ERA", alias: null, source: "m3u", score: 0, soloFamilia: false },
+    { id: ID_C, title: "UCL Principal 3 --> SPORT TV", alias: null, source: "acestream", score: 0, soloFamilia: false },
+  ];
+  const result = await app.applySemanticCandidateScores(
+    ["M+ Liga de Campeones"],
+    candidates,
+    ["M+ Liga de Campeones", "M+ LALIGA", "LaLiga TV Hypermotion"],
+    { enabled: true, embed: semanticTestEmbed, cache: new Map() },
+  );
+  assert.equal(result.used, true);
+  assert.ok(result.candidates[0].score >= 92, "UCL/Elcano se recupera como Champions");
+  assert.equal(result.candidates[0].semantic, true);
+  assert.equal(result.candidates[1].score, 0, "M+ LALIGA pertenece a otro canal programado");
+  assert.equal(result.candidates[2].score, 0, "el dial 3 no puede convertirse en el canal principal");
+});
+
+test("la agenda completa queda disponible para clasificar las fuentes de cada partido", () => {
+  const schedule = app.buildFootballDemoSchedule("2026-08-19");
+  app.rememberFootballProgramming(schedule);
+  const channels = app.footballProgramChannelNames(schedule);
+  assert.ok(channels.includes("M+ Liga de Campeones"));
+  assert.ok(channels.includes("DAZN LaLiga 2"));
+  const match = app.footballProgramMatch("demo-2");
+  assert.equal(match.competition, "Champions League");
+  assert.deepEqual(match.channels, ["M+ Liga de Campeones"]);
+});
+
+test("el resolver usa la IA para rescatar nombres raros y amplia la consulta de AceStream", async () => {
+  const state = seedState();
+  state.webSources = [{
+    id: "m3u", name: "Lista", url: "https://example.com/list.m3u", renames: {}, hidden: [],
+    streams: [
+      { id: ID_A, title: "UCL Principal --> ELCANO", type: "web" },
+      { id: ID_B, title: "HYPERMOTION --> NEW ERA", type: "web" },
+    ],
+  }];
+  state.web = state.webSources[0].streams;
+  const queries = [];
+  const result = await app.resolveFootballChannel(
+    state,
+    ["M+ Liga de Campeones"],
+    async (query) => { queries.push(query); return []; },
+    {
+      programChannels: ["M+ Liga de Campeones", "M+ LALIGA", "LaLiga TV Hypermotion"],
+      semantic: { enabled: true, embed: semanticTestEmbed, cache: new Map() },
+    },
+  );
+  assert.equal(result.status, "found");
+  assert.deepEqual(result.candidates.map((candidate) => candidate.id), [ID_A]);
+  assert.equal(result.candidates[0].semantic, true);
+  assert.ok(queries.includes("M+ Liga de Campeones"));
+  assert.ok(queries.includes("liga de campeones"), "tambien busca el nombre sin operador");
+  assert.equal(result.ai.used, true);
+});
+
+test("si Ollama falla la busqueda clasica sigue funcionando", async () => {
+  const state = seedState();
+  state.webSources = [{
+    id: "m3u", name: "Lista", url: "https://example.com/list.m3u", renames: {}, hidden: [],
+    streams: [{ id: ID_A, title: "M+ Liga de Campeones FHD", type: "web" }],
+  }];
+  state.web = state.webSources[0].streams;
+  const result = await app.resolveFootballChannel(
+    state,
+    ["M+ Liga de Campeones"],
+    async () => [],
+    {
+      programChannels: ["M+ Liga de Campeones"],
+      semantic: {
+        enabled: true,
+        embed: async () => { throw new Error("ollama_offline"); },
+        cache: new Map(),
+      },
+    },
+  );
+  assert.equal(result.status, "found");
+  assert.equal(result.candidate.id, ID_A);
+  assert.equal(result.ai.used, false);
+  assert.equal(result.ai.error, "ollama_offline");
+});
+
 test("completa la competicion por evento y aguanta que el servicio falle", async () => {
   const matches = [
     { id: "9001", competition: "Fútbol" },
@@ -498,6 +600,10 @@ test("bloquea mutaciones iniciadas desde otro origen", async () => {
     headers: { "Sec-Fetch-Site": "cross-site" },
   });
   assert.equal(remux.status, 403);
+  const resolve = await fetch(`${baseUrl}/api/football/resolve?channel=DAZN`, {
+    headers: { "Sec-Fetch-Site": "cross-site" },
+  });
+  assert.equal(resolve.status, 403, "una web externa no puede llenar la cola del escaner");
 });
 
 test("un cliente 0.6.8 obsoleto no puede borrar datos actuales", async () => {
@@ -761,12 +867,14 @@ test("un hash que llega por dos vias conserva su disponibilidad", () => {
   assert.equal(salida[0].bitrate, 3500);
 });
 
-test("un hash duplicado que el motor da por muerto se descarta entero", () => {
+test("un hash de tus listas llega al segundo motor aunque el buscador diga cero", () => {
   const salida = app.mergeResolutionCandidates([
     señal("d".repeat(40), { source: "m3u", availability: null }),
     señal("d".repeat(40), { source: "acestream", availability: 0 }),
   ]);
-  assert.equal(salida.length, 0, "aunque venga de tu lista, sin pares no tira");
+  assert.equal(salida.length, 1, "el buscador no veta una fuente curada antes de probarla");
+  assert.equal(salida[0].source, "m3u");
+  assert.equal(salida[0].availability, 0, "se conserva la pista, pero decide el escaner real");
 });
 
 test("se ofrecen TODAS las señales, sin tope", () => {
@@ -792,6 +900,19 @@ test("si existe el canal exacto, no se ofrecen sus hermanas numeradas", () => {
   const ofrecidas = app.mergeResolutionCandidates(candidatos);
   assert.equal(ofrecidas.length, 1);
   assert.equal(ofrecidas[0].title, "M+ Liga de Campeones 1080p");
+});
+
+test("un dial distinto no sustituye al canal principal aunque este no aparezca", () => {
+  const biblioteca = [
+    { id: "2".repeat(40), title: "M+ Liga de Campeones 2 1080p" },
+    { id: "3".repeat(40), title: "M+ Liga de Campeones 3 1080p" },
+    { id: "4".repeat(40), title: "M+ LALIGA 2 FHD" },
+  ];
+  const candidatos = biblioteca.flatMap((item) => [
+    app.scoreResolutionCandidate(["M+ Liga de Campeones"], item, "m3u"),
+    app.scoreResolutionCandidate(["M+ LALIGA"], item, "m3u"),
+  ]).filter((candidate) => candidate.score >= 70);
+  assert.deepEqual(app.mergeResolutionCandidates(candidatos), []);
 });
 
 test("si NO existe el canal exacto, la familia es lo unico que hay", () => {
@@ -922,4 +1043,65 @@ test("un vinculo guardado no borra la familia del canal", () => {
   ];
   const salida = app.mergeResolutionCandidates(candidatos);
   assert.equal(salida.length, 3, "las de la familia siguen ofreciendose");
+});
+
+/* ---------- segundo motor de comprobacion ---------- */
+
+test("las URLs que devuelve el escaner se fuerzan al motor interno", () => {
+  assert.equal(
+    app.scannerEnginePath("http://127.0.0.1:6878/ace/getstream?id=abc"),
+    "/ace/getstream?id=abc",
+  );
+  assert.equal(app.scannerEnginePath("http://servidor-ajeno.invalid/otra/ruta"), "");
+});
+
+test("una fuente solo se da por viva cuando entrega datos reales", () => {
+  assert.equal(app.classifyScannerEvidence({ statusCode: 200, bytes: 131072 }).state, "working");
+  assert.equal(app.classifyScannerEvidence({ statusCode: 200, bytes: 20000 }).state, "weak");
+  assert.equal(app.classifyScannerEvidence({ statusCode: 200, bytes: 0, peers: 4, speedDown: 0 }).state, "failed");
+  assert.equal(app.classifyScannerEvidence({ statusCode: 200, bytes: 200000, contentType: "application/json" }).state, "failed");
+  assert.equal(app.classifyScannerEvidence({ statusCode: 502, bytes: 200000 }).state, "failed");
+});
+
+test("el segundo motor prueba un infohash y siempre cierra su sesion", async () => {
+  const calls = [];
+  let statCall = 0;
+  const result = await app.probeAceCandidate({ id: ID_A, ih: true }, {
+    timeoutMs: 3000,
+    minBytes: 64 * 1024,
+    request: async (pathname) => {
+      calls.push(pathname);
+      if (pathname.includes("format=json")) {
+        return {
+          statusCode: 200,
+          body: JSON.stringify({ response: {
+            playback_url: `http://127.0.0.1:6878/ace/getstream?infohash=${ID_A}`,
+            stat_url: "http://127.0.0.1:6878/ace/stat?token=prueba",
+            command_url: "http://127.0.0.1:6878/ace/cmd?token=prueba",
+          } }),
+        };
+      }
+      if (pathname.startsWith("/ace/stat")) {
+        statCall += 1;
+        return {
+          statusCode: 200,
+          body: JSON.stringify({ response: {
+            peers: 7,
+            speed_down: 4200,
+            downloaded: statCall === 1 ? 1000 : 90000,
+            status: "dl",
+          } }),
+        };
+      }
+      if (pathname.includes("method=stop")) return { statusCode: 200, body: "{}" };
+      throw new Error(`peticion inesperada: ${pathname}`);
+    },
+    sample: async (pathname) => {
+      assert.match(pathname, /^\/ace\/getstream\?infohash=/);
+      return { statusCode: 200, bytes: 64 * 1024, reason: "enough_data", durationMs: 80 };
+    },
+  });
+  assert.equal(result.state, "working");
+  assert.match(calls[0], new RegExp(`infohash=${ID_A}`));
+  assert.ok(calls.some((pathname) => pathname.includes("method=stop")), "la sesion de prueba se detiene");
 });

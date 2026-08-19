@@ -1,0 +1,11 @@
+[Unit]
+Description=Ace Player Neo local health check
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/ace-player-neo-healthcheck
+TimeoutStartSec=45
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=true

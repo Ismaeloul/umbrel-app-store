@@ -1,0 +1,12 @@
+[Unit]
+Description=Check Ace Player Neo every five minutes
+
+[Timer]
+OnCalendar=*:0/5
+AccuracySec=30s
+RandomizedDelaySec=15s
+Persistent=true
+Unit=ace-player-neo-healthcheck.service
+
+[Install]
+WantedBy=timers.target
