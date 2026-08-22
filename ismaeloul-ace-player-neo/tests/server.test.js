@@ -50,9 +50,10 @@ test("la release de Umbrel es coherente y el hook no fija una version manual", (
   assert.match(preStart, /docker-compose\.yml/);
   assert.match(preStart, /MANIFEST_VERSION/);
   assert.ok(fs.existsSync(path.join(__dirname, "../releases", releaseVersion, "server.js")));
+  assert.ok(fs.existsSync(path.join(__dirname, "../releases", releaseVersion, "player-controller.js")));
 });
 
-test("la interfaz 0.6.43 incluye agenda por todos los gustos y un reproductor NEO propio", () => {
+test("la interfaz 0.6.44 incluye agenda por todos los gustos y un reproductor NEO propio", () => {
   const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
   for (const id of ["neoControls", "neoPlayerMenu", "matchCenter", "sourceInspector", "veilHealth", "veilReport"]) {
     assert.match(html, new RegExp(`id=["']${id}["']`));
@@ -73,6 +74,18 @@ test("la interfaz 0.6.43 incluye agenda por todos los gustos y un reproductor NE
   assert.match(html, /function enforceNeoPlayerMode\(\)/);
   assert.match(html, /else if\(!v\.controls\) v\.controls=true;/);
   assert.match(html, /new MutationObserver\(enforceNeoPlayerMode\)/);
+  assert.match(html, /new NeoPlayerCore\.NeoPlayerController\(playerVideo/);
+  assert.match(html, /neoPlayerController\.goLive\(\(\)=>playerLivePosition\(\)\)/);
+  assert.match(html, /neoPlayerController\?\.setHold\('rebuffer',true\)/);
+  assert.match(html, /id=["']neoTimeline["']/);
+  assert.doesNotMatch(html, /id=["']neoBuffer["']/);
+  assert.doesNotMatch(html, /id=["']liveBadge(?:Text)?["']/);
+  assert.doesNotMatch(html, /id=["']neoFeedback(?:Text)?["']/);
+  assert.equal((html.match(/id=["']neoLive["']/g) || []).length, 1);
+  assert.match(html, /\.neo-control\.primary\s*\{[^}]*background:var\(--live\)/);
+  assert.match(html, /\.neo-volume\s*\{[^}]*accent-color:var\(--live\)/);
+  assert.match(html, /\.neo-live\s*\{[^}]*background:var\(--live-dim\)[^}]*color:var\(--live\)/);
+  assert.doesNotMatch(html, /setInterval\(updateNeoControls,500\)/);
   assert.match(html, /playerShell\.addEventListener\('contextmenu',openNeoPlayerMenu\)/);
   assert.match(html, /event\.preventDefault\(\); event\.stopPropagation\(\);/);
   assert.match(html, /document\.querySelector\('\[data-neo-menu-icon\]'\)\.innerHTML/);
