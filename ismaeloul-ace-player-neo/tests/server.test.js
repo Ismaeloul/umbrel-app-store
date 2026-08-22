@@ -53,7 +53,7 @@ test("la release de Umbrel es coherente y el hook no fija una version manual", (
   assert.ok(fs.existsSync(path.join(__dirname, "../releases", releaseVersion, "player-controller.js")));
 });
 
-test("la interfaz 0.6.45 incluye agenda por todos los gustos y un reproductor NEO propio", () => {
+test("la interfaz actual incluye agenda por todos los gustos y un reproductor NEO propio", () => {
   const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
   for (const id of ["neoControls", "neoPlayerMenu", "matchCenter", "sourceInspector", "veilHealth", "veilReport"]) {
     assert.match(html, new RegExp(`id=["']${id}["']`));
@@ -63,12 +63,15 @@ test("la interfaz 0.6.45 incluye agenda por todos los gustos y un reproductor NE
   assert.match(html, /\.source-pick\.on\s*\{[\s\S]{0,180}border-color:var\(--live\)/);
   assert.match(html, /class="source-picks-track"/);
   assert.match(html, /data-source-favorite/);
+  assert.match(html, /data-source-research/);
   assert.match(html, /data-source-copy/);
   assert.doesNotMatch(html, /data-source-wrong/);
   assert.match(html, /function maybeAutoPlayFirstVerifiedSource\(\)/);
   assert.match(html, /source\.probeInitial&&Number\(source\.probeAttempts\|\|0\)===0/);
   assert.doesNotMatch(html, /source\.probeInitial&&\['queued','checking','failed',''\]/);
   assert.match(html, /S\.sourceAutoSwitchArmed=false;\s*S\.sourceAutoSwitchDone=true;/);
+  assert.match(html, /params\.set\('research','1'\)/);
+  assert.match(html, /setFuentes\(combined,currentId,[\s\S]{0,120}true,data\.scan\)/);
   assert.doesNotMatch(html, /<video[^>]*\scontrols(?:\s|>)/i);
   assert.match(html, /\.neo-desktop #video::\-webkit-media-controls/);
   assert.match(html, /function enforceNeoPlayerMode\(\)/);
@@ -1087,6 +1090,47 @@ test("la prioridad completa es guardada, M3U, favorito, historial y buscador", (
   assert.deepEqual(salida.map((candidate) => candidate.source), [
     "saved", "m3u", "m3u", "favorites", "history", "acestream",
   ]);
+});
+
+test("Rebuscar prioriza favorito, directorio y buscador publico", async () => {
+  const state = seedState();
+  const remoteId = "e".repeat(40);
+  state.channelBindings = [{
+    channel: "M+ Liga de Campeones", id: ID_C, title: "Vinculo antiguo", ih: false,
+  }];
+  state.favorites = [{ id: ID_A, title: "M+ Liga de Campeones", type: "fav" }];
+  state.webSources = [{
+    id: "directorio", name: "Directorio", url: "https://example.com/list.m3u", renames: {}, hidden: [],
+    streams: [{ id: ID_B, title: "LIGA DE CAMPEONES --> ELCANO", type: "web" }],
+  }];
+  state.web = state.webSources[0].streams;
+  state.history = [{ id: "d".repeat(40), title: "M+ Liga de Campeones", type: "recent" }];
+  const queries = [];
+  const result = await app.resolveFootballChannel(
+    state,
+    ["M+ Liga de Campeones"],
+    async (query) => {
+      queries.push(query);
+      return [{ id: remoteId, title: "MOVISTAR LIGA DE CAMPEONES → PUBLIC ACE", ih: true, availability: .8 }];
+    },
+    { mode: "research", semantic: { enabled: false } },
+  );
+
+  assert.ok(queries.length > 0, "tambien consulta el indice publico");
+  assert.deepEqual(result.checked, ["favorites", "m3u", "acestream"]);
+  assert.deepEqual(result.candidates.map((candidate) => candidate.source), [
+    "favorites", "m3u", "acestream",
+  ]);
+  assert.equal(result.candidate.source, "favorites");
+  assert.ok(!result.candidates.some((candidate) => [ID_C, "d".repeat(40)].includes(candidate.id)),
+    "los vinculos viejos y el historial no contaminan una busqueda forzada");
+});
+
+test("la prioridad de Rebuscar conserva Favoritos si un hash tambien esta en el M3U", () => {
+  const salida = app.mergeResolutionCandidates([
+    cand(1, "m3u"), cand(1, "favorites"), cand(2, "acestream", { availability: .9 }),
+  ], { sourceOrder: ["favorites", "m3u", "acestream"] });
+  assert.deepEqual(salida.map((candidate) => candidate.source), ["favorites", "acestream"]);
 });
 
 test("un vinculo confirmado a mano manda sobre todo lo demas", () => {
