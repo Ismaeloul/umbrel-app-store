@@ -53,7 +53,7 @@ test("la release de Umbrel es coherente y el hook no fija una version manual", (
   assert.ok(fs.existsSync(path.join(__dirname, "../releases", releaseVersion, "player-controller.js")));
 });
 
-test("la interfaz 0.6.44 incluye agenda por todos los gustos y un reproductor NEO propio", () => {
+test("la interfaz 0.6.45 incluye agenda por todos los gustos y un reproductor NEO propio", () => {
   const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
   for (const id of ["neoControls", "neoPlayerMenu", "matchCenter", "sourceInspector", "veilHealth", "veilReport"]) {
     assert.match(html, new RegExp(`id=["']${id}["']`));
@@ -77,7 +77,12 @@ test("la interfaz 0.6.44 incluye agenda por todos los gustos y un reproductor NE
   assert.match(html, /new NeoPlayerCore\.NeoPlayerController\(playerVideo/);
   assert.match(html, /neoPlayerController\.goLive\(\(\)=>playerLivePosition\(\)\)/);
   assert.match(html, /neoPlayerController\?\.setHold\('rebuffer',true\)/);
-  assert.match(html, /id=["']neoTimeline["']/);
+  assert.match(html, /id=["']neoLiveRail["']/);
+  assert.doesNotMatch(html, /id=["']neoTimeline["']/);
+  assert.doesNotMatch(html, /neo-timeline-(?:progress|head|live-mark)/);
+  assert.doesNotMatch(html, /neoScrubbing|neoPreviewRatio/);
+  assert.match(html, /resolveLiveTarget\(range,preferredTarget,bufferSafety\)/);
+  assert.match(html, /snapshot\.followingLiveEdge\|\|visibleBehind<=1\.25/);
   assert.doesNotMatch(html, /id=["']neoBuffer["']/);
   assert.doesNotMatch(html, /id=["']liveBadge(?:Text)?["']/);
   assert.doesNotMatch(html, /id=["']neoFeedback(?:Text)?["']/);
