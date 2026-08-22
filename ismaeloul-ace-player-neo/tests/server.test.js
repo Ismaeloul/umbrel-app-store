@@ -55,7 +55,7 @@ test("la release de Umbrel es coherente y el hook no fija una version manual", (
 
 test("la interfaz actual incluye agenda por todos los gustos y un reproductor NEO propio", () => {
   const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
-  for (const id of ["neoControls", "neoPlayerMenu", "matchCenter", "sourceInspector", "veilHealth", "veilReport"]) {
+  for (const id of ["neoControls", "neoPlayerMenu", "matchCenter", "sourceInspector", "veilHealth", "veilReport", "veilExternalHash"]) {
     assert.match(html, new RegExp(`id=["']${id}["']`));
   }
   assert.match(html, /\.source-pick\.comprobando::after\s*\{\s*background:var\(--ok\)/);
@@ -64,6 +64,7 @@ test("la interfaz actual incluye agenda por todos los gustos y un reproductor NE
   assert.match(html, /class="source-picks-track"/);
   assert.match(html, /data-source-favorite/);
   assert.match(html, /data-source-research/);
+  assert.match(html, /data-source-external/);
   assert.match(html, /data-source-copy/);
   assert.doesNotMatch(html, /data-source-wrong/);
   assert.match(html, /function maybeAutoPlayFirstVerifiedSource\(\)/);
@@ -72,6 +73,9 @@ test("la interfaz actual incluye agenda por todos los gustos y un reproductor NE
   assert.match(html, /S\.sourceAutoSwitchArmed=false;\s*S\.sourceAutoSwitchDone=true;/);
   assert.match(html, /params\.set\('research','1'\)/);
   assert.match(html, /setFuentes\(combined,currentId,[\s\S]{0,120}true,data\.scan\)/);
+  assert.match(html, /function playExternalHash\(\)/);
+  assert.match(html, /playChannel\(id,source\.title\|\|title,false,true,false\)/);
+  assert.match(html, /if\(recordHistory\)\s*\{/);
   assert.doesNotMatch(html, /<video[^>]*\scontrols(?:\s|>)/i);
   assert.match(html, /\.neo-desktop #video::\-webkit-media-controls/);
   assert.match(html, /function enforceNeoPlayerMode\(\)/);

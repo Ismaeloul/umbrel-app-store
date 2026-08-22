@@ -3,13 +3,20 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.46"
+version: "0.6.47"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
+  Nuevo boton Pegar hash durante la reproduccion. Permite introducir un Content
+  ID de 40 caracteres, un enlace acestream:// o una URL que contenga el ID y
+  reproducirlo como una fuente externa sin salir del partido. La fuente se
+  incorpora al selector de la sesion actual, no crea ninguna asociacion ni se
+  guarda automaticamente en favoritos. Si funciona, se puede conservar despues
+  con el boton Favorito habitual.
+  Historico:
   Nuevo boton Rebuscar en el centro de partido. Sin detener la señal que estas
   viendo, hace una pasada nueva por Favoritos, todo el directorio M3U y el
   indice publico de AceStream, en ese orden. La IA local contrasta el conjunto
