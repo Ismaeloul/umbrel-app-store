@@ -74,6 +74,8 @@ test("la interfaz actual incluye agenda por todos los gustos y un reproductor NE
   assert.match(html, /params\.set\('research','1'\)/);
   assert.match(html, /setFuentes\(combined,currentId,[\s\S]{0,120}true,data\.scan\)/);
   assert.match(html, /function playExternalHash\(\)/);
+  assert.match(html, /function matchIsLaLigaHypermotion\(match\)/);
+  assert.match(html, /item=>matchLeagueMatches\(item,match\)/);
   assert.match(html, /playChannel\(id,source\.title\|\|title,false,true,false\)/);
   assert.match(html, /if\(recordHistory\)\s*\{/);
   assert.doesNotMatch(html, /<video[^>]*\scontrols(?:\s|>)/i);

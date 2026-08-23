@@ -3,13 +3,18 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.47"
+version: "0.6.48"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
+  El filtro Para ti separa estrictamente LaLiga de LaLiga Hypermotion, incluso
+  cuando la agenda rotula el partido como LaLiga y la referencia a Hypermotion
+  solo aparece en el canal de emision. Elegir LaLiga ya no muestra encuentros
+  de Segunda Division, y elegir Hypermotion sigue encontrando sus partidos.
+  Historico:
   Nuevo boton Pegar hash durante la reproduccion. Permite introducir un Content
   ID de 40 caracteres, un enlace acestream:// o una URL que contenga el ID y
   reproducirlo como una fuente externa sin salir del partido. La fuente se
