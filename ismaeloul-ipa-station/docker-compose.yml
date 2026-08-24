@@ -16,11 +16,12 @@ services:
       PROXY_AUTH_ADD: "true"
 
   anisette:
-    image: ipa-station/anisette-v3-server:0.1.0
-    # Las imagenes se compilan en el propio NAS con scripts/build-on-umbrel.sh
-    # y no viven en ningun registro. Sin esta linea Umbrel intenta descargarlas
-    # e instalar falla con "denied" (comprobado en el NAS).
-    pull_policy: never
+    image: localhost:5000/ipa-station/anisette-v3-server:0.1.0
+    # Las imagenes las compila y publica scripts/build-on-umbrel.sh en un
+    # registro local del propio NAS, atado a 127.0.0.1. Umbrel hace un
+    # `docker pull` de cada image: antes de arrancar nada, y ese pull ignora
+    # pull_policy, asi que la imagen tiene que poder descargarse de algun
+    # sitio. El registro local es ese sitio.
     container_name: ismaeloul-ipa-station_anisette_1
     restart: unless-stopped
     volumes:
@@ -31,8 +32,7 @@ services:
     mem_limit: 512m
 
   jas:
-    image: ipa-station/jas:0.1.0
-    pull_policy: never
+    image: localhost:5000/ipa-station/jas:0.1.0
     container_name: ismaeloul-ipa-station_jas_1
     restart: unless-stopped
     depends_on:
