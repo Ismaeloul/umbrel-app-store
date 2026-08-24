@@ -1,0 +1,48 @@
+manifestVersion: 1
+id: ismaeloul-ipa-station
+category: developer
+icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ipa-station/icon.svg"
+name: IPA Station
+version: "0.1.0"
+tagline: Instala y refirma apps de iPhone desde tu Umbrel
+description: >-
+  IPA Station convierte el Umbrel en el servidor que firma e instala apps en
+  tu iPhone. Arrastras un IPA al panel, eliges el dispositivo y la app aparece
+  en el telefono unos minutos despues, firmada con tu propio Apple ID
+  gratuito. Sin cable, sin ordenador y sin cuenta de desarrollador de pago.
+
+  Apple caduca los certificados gratuitos a los 7 dias. Como el Umbrel esta
+  siempre encendido, un temporizador revisa cada dos horas que apps estan a
+  punto de caducar y las vuelve a firmar solas con tres dias de margen. No
+  hay nada que recordar ni ninguna app que abrir para refrescar.
+
+  El iPhone no necesita instalar nada: el servidor le habla por la red local.
+  Eso deja libre uno de los tres huecos de apps que permite Apple, y desde la
+  pagina de cuentas puedes exportar el certificado para LiveContainer y
+  saltarte ese limite de tres del todo.
+
+  Incluye su propio servidor anisette, asi que la autenticacion contra Apple
+  no depende de ningun servidor publico de terceros.
+
+  Requiere emparejar el iPhone una sola vez desde un ordenador con cable,
+  usando idevice_pair. El Apple ID se introduce en el panel y su contrasena
+  nunca se guarda: solo queda el token de sesion, cifrado.
+releaseNotes: >-
+  Primera version. Panel web con dashboard de dispositivos y caducidades,
+  subida de IPAs con progreso en vivo, alta de Apple ID con 2FA integrado,
+  refresco automatico programado y exportacion del certificado para
+  LiveContainer. El servidor anisette se compila desde el codigo fuente,
+  porque la imagen publica de Docker Hub lleva desde abril de 2025 sin
+  actualizarse y le faltan los arreglos del provisioning.
+developer: Ismaeloul
+website: https://github.com/Ismaeloul
+dependencies: []
+repo: https://github.com/Ismaeloul/umbrel-app-store
+support: https://github.com/Ismaeloul/umbrel-app-store/issues
+port: 7795
+gallery: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
+submitter: Ismaeloul
+submission: https://github.com/Ismaeloul/umbrel-app-store

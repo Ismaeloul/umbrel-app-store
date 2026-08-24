@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="IPA Station">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2B3440"/>
+      <stop offset="100%" stop-color="#12171D"/>
+    </linearGradient>
+    <linearGradient id="arrow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7DE2C3"/>
+      <stop offset="100%" stop-color="#3BB08F"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
+
+  <!-- Cuerpo del telefono -->
+  <rect x="78" y="40" width="100" height="176" rx="18"
+        fill="none" stroke="#F2F5F7" stroke-width="9"/>
+  <!-- Notch -->
+  <rect x="112" y="50" width="32" height="7" rx="3.5" fill="#F2F5F7"/>
+  <!-- Barra inferior -->
+  <rect x="112" y="199" width="32" height="6" rx="3" fill="#F2F5F7" opacity="0.55"/>
+
+  <!-- Flecha de instalacion -->
+  <g fill="url(#arrow)">
+    <rect x="119" y="82" width="18" height="52" rx="9"/>
+    <path d="M128 172 L96 132 h64 Z"/>
+  </g>
+</svg>

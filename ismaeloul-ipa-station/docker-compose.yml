@@ -1,0 +1,66 @@
+version: "3.7"
+
+# IPA Station - instala y refirma apps de iPhone desde el Umbrel.
+#
+# Dos servicios: el panel (jas) y el servidor anisette que autentica contra
+# Apple. El iPhone no necesita ninguna app instalada, ni VPN, ni cable: el
+# servidor le habla por la red al puerto 49152.
+
+services:
+  app_proxy:
+    environment:
+      APP_HOST: ismaeloul-ipa-station_jas_1
+      APP_PORT: "3000"
+      # jas no trae autenticacion propia (upstream lo dice: esta pensado para
+      # vivir detras de un NAT). El proxy de Umbrel le pone el login delante.
+      PROXY_AUTH_ADD: "true"
+
+  anisette:
+    image: ipa-station/anisette-v3-server:0.1.0
+    # Las imagenes se compilan en el propio NAS con scripts/build-on-umbrel.sh
+    # y no viven en ningun registro. Sin esta linea Umbrel intenta descargarlas
+    # e instalar falla con "denied" (comprobado en el NAS).
+    pull_policy: never
+    container_name: ismaeloul-ipa-station_anisette_1
+    restart: unless-stopped
+    volumes:
+      # Volumen con nombre, no bind: el proceso corre como usuario sin
+      # privilegios y una carpeta de APP_DATA_DIR llegaria como root.
+      # Si este estado se pierde, hay que volver a provisionar contra Apple.
+      - anisette_data:/home/Alcoholic/.config/anisette-v3/lib/
+    mem_limit: 512m
+
+  jas:
+    image: ipa-station/jas:0.1.0
+    pull_policy: never
+    container_name: ismaeloul-ipa-station_jas_1
+    restart: unless-stopped
+    depends_on:
+      # service_started, no service_healthy: jas solo habla con el anisette
+      # cuando inicias sesion o firmas, nunca al arrancar. Con service_healthy,
+      # un anisette que no levante dejaria el panel sin arrancar y sin forma de
+      # diagnosticar nada. Asi al menos entras y ves el error.
+      anisette:
+        condition: service_started
+    environment:
+      ANISETTE_URL: "http://ismaeloul-ipa-station_anisette_1:6969"
+      # Vacio a proposito: el entrypoint genera una clave en el primer
+      # arranque y la guarda junto a la base de datos, en el mismo volumen.
+      JAS_SECRET_KEY: "${JAS_SECRET_KEY:-}"
+      # Apple da 7 dias de certificado. Revisar cada 2 horas y refirmar con 3
+      # dias de margen deja varios intentos aunque el NAS pase un dia apagado.
+      JAS_INTERVAL_HOURS: "2"
+      JAS_REFRESH_WINDOW_DAYS: "3"
+      JAS_WORKER_THREADS: "2"
+      # mDNS necesita multicast, que no cruza la red bridge de Umbrel. El
+      # iPhone se registra con IP fija (reserva DHCP en el router) y jas
+      # conecta al 49152, que es fijo: el descubrimiento no hace falta.
+      JAS_MDNS_ENABLED: "false"
+    volumes:
+      # Base de datos, clave de cifrado e IPAs guardados para el refresco.
+      # Bind mount para poder verlo y copiarlo desde el NAS.
+      - ${APP_DATA_DIR}/data:/data
+    mem_limit: 1g
+
+volumes:
+  anisette_data:
