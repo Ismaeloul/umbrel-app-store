@@ -1351,3 +1351,55 @@ test("confirmar una fuente corrige el aprendizaje y levanta su veto de canal", a
   const wrongReport = state.sourceReports.find((item) => item.id === ID_A && item.reason === "wrong_channel");
   assert.equal(wrongReport.quarantineUntil, null);
 });
+
+/* ---------- 0.6.49: cuatro correcciones ---------- */
+
+test("la IA no promociona a ciegas cuando no hay rival con quien contrastar", async () => {
+  /* Medido contra el modelo instalado, "liga campeones" y "laliga" -que son
+     competiciones distintas- dan 0,8154. Con el suelo antiguo en 0,82 y sin
+     ningun otro canal en la parrilla, cualquier parecido flojo se colaba. */
+  const vector = (angulo) => [Math.cos(angulo), Math.sin(angulo)];
+  const conSimilitud = (valor) => vector(Math.acos(Math.min(1, valor)));
+  const embed = (mapa) => async (textos) => textos.map((t) => mapa[t] || vector(1.2));
+
+  const flojo = await app.applySemanticCandidateScores(
+    ["M+ Liga de Campeones"],
+    [{ id: "a".repeat(40), title: "algo parecido", score: 0, source: "m3u", soloFamilia: true }],
+    [],
+    { enabled: true, cache: new Map(), embed: embed({ "liga campeones": vector(0), "algo parecido": conSimilitud(0.84) }) },
+  );
+  assert.equal(flojo.candidates[0].score, 0, "0,84 sin rival ya no basta");
+  assert.ok(!flojo.candidates[0].semantic);
+
+  const identico = await app.applySemanticCandidateScores(
+    ["M+ Liga de Campeones"],
+    [{ id: "b".repeat(40), title: "liga campeones elcano", score: 0, source: "m3u", soloFamilia: true }],
+    [],
+    { enabled: true, cache: new Map(), embed: embed({ "liga campeones": vector(0), "liga campeones elcano": conSimilitud(0.99) }) },
+  );
+  assert.ok(identico.candidates[0].semantic, "casi identico si se promociona");
+});
+
+test("la IA nunca convierte el canal principal en el 2", async () => {
+  const vector = (angulo) => [Math.cos(angulo), Math.sin(angulo)];
+  const salida = await app.applySemanticCandidateScores(
+    ["M+ Liga de Campeones"],
+    [{ id: "c".repeat(40), title: "LIGA DE CAMPEONES 2", score: 0, source: "m3u", soloFamilia: true }],
+    [],
+    { enabled: true, cache: new Map(), embed: async (t) => t.map(() => vector(0)) },
+  );
+  assert.equal(salida.candidates[0].score, 0);
+  assert.ok(!salida.candidates[0].semantic);
+});
+
+test("la interfaz corrige el hash externo, Hypermotion y el boton de pegar", () => {
+  const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
+  // el tipo de un hash pegado no se puede saber mirandolo: se marca desconocido
+  assert.match(html, /ih:null,source:'manual'/);
+  assert.match(html, /function reintentarComoInfohash\(id\)/);
+  assert.match(html, /if\(reintentarComoInfohash\(id\)\) return;/);
+  // los canales de un partido son objetos {id,name}, no cadenas
+  assert.match(html, /const canales=\(Array\.isArray\(match\?\.channels\)\?match\.channels:\[\]\)\.map\(c=>c\?\.name\|\|c\);/);
+  // el boton de pegar sobrevive cuando el partido no tiene ninguna fuente
+  assert.match(html, /box\.hidden=!enPartido;/);
+});
