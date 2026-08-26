@@ -3,13 +3,30 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.48"
+version: "0.6.49"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
+  Cuatro correcciones sobre lo ultimo que se añadio.
+  El hash que pegas a mano ya no se manda siempre como Content ID. Un hash de
+  40 caracteres puede ser un Content ID o un infohash y mirandolo no hay forma
+  de saberlo, asi que se marca como desconocido: se prueba primero como Content
+  ID -que es lo que llevan los enlaces acestream://- y si el motor no arranca
+  se reintenta una sola vez como infohash antes de darlo por muerto. Las
+  señales de tus listas no se ven afectadas, que esas si saben lo que son.
+  El boton de pegar hash ya esta disponible cuando un partido no encuentra
+  ninguna fuente, que es justo cuando hace falta. Antes el panel entero se
+  ocultaba y se iba con el.
+  La deteccion de Hypermotion vuelve a mirar el canal. Los canales de un
+  partido son objetos, no texto, asi que esa comprobacion no detectaba nada y
+  solo funcionaba cuando la propia fuente rotulaba bien la competicion.
+  Y la busqueda inteligente se vuelve mas prudente: el listón sube de 0,82 a
+  0,86 -medido, dos competiciones distintas llegaban a rozar 0,8154- y cuando
+  no hay ningun otro canal con el que contrastar se exige practicamente
+  identidad en vez de dar el visto bueno por defecto.
   El filtro Para ti separa estrictamente LaLiga de LaLiga Hypermotion, incluso
   cuando la agenda rotula el partido como LaLiga y la referencia a Hypermotion
   solo aparece en el canal de emision. Elegir LaLiga ya no muestra encuentros
