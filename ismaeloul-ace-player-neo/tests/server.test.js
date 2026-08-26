@@ -1403,3 +1403,108 @@ test("la interfaz corrige el hash externo, Hypermotion y el boton de pegar", () 
   // el boton de pegar sobrevive cuando el partido no tiene ninguna fuente
   assert.match(html, /box\.hidden=!enPartido;/);
 });
+
+/* ---------- 0.6.50: el acoplamiento entre la IA y "canal exacto" ---------- */
+
+test("una promocion de la IA cuenta como canal exacto, y es a proposito", () => {
+  /* semanticScore llega a SEMANTIC_MAX_SCORE, que esta POR ENCIMA del umbral
+     de canal exacto. La consecuencia es que un acierto semantico activa la
+     regla de "existe el exacto" y descarta las hermanas numeradas.
+
+     Hoy se quiere asi: si la IA confirma que "LIGA DE CAMPEONES --> ELCANO" es
+     el canal pedido, es el canal. Este test existe para que, si alguien toca
+     semanticScore o el umbral, se entere aqui en vez de descubrirlo porque la
+     familia de un canal desaparece en silencio. */
+  assert.ok(app.SEMANTIC_MAX_SCORE >= app.RESOLUTION_EXACT_SCORE,
+    `si la IA deja de alcanzar ${app.RESOLUTION_EXACT_SCORE}, sus aciertos dejan de suprimir la familia`);
+  assert.equal(app.semanticScore(0.99), app.SEMANTIC_MAX_SCORE);
+  assert.ok(app.semanticScore(0.91) < app.RESOLUTION_EXACT_SCORE,
+    "una similitud solo buena no debe declarar canal exacto");
+});
+
+test("un acierto de la IA descarta la familia; uno flojo no", () => {
+  const base = (id, extra) => ({
+    id: String(id).repeat(40).slice(0, 40), title: "Canal", source: "m3u",
+    availability: null, bitrate: null, soloFamilia: false, ...extra,
+  });
+  const familia = base("f", { soloFamilia: true, score: 78 });
+
+  const conAcierto = app.mergeResolutionCandidates([
+    base("a", { score: app.SEMANTIC_MAX_SCORE, semantic: true }), familia,
+  ]);
+  assert.ok(!conAcierto.some((c) => c.soloFamilia), "el acierto semantico suprime la familia");
+
+  const conFlojo = app.mergeResolutionCandidates([
+    base("b", { score: 88, semantic: true }), familia,
+  ]);
+  assert.ok(conFlojo.some((c) => c.soloFamilia), "una promocion floja no la suprime");
+});
+
+test("la marca paraguas conserva su familia aunque la IA este activa", async () => {
+  /* El caso DAZN: no existe ningun canal llamado "DAZN" a secas, asi que la
+     familia numerada es lo unico que hay. La guarda de numeros descarta las
+     hermanas ANTES de comparar, de modo que la IA no puede promocionar una a
+     canal exacto y borrar el resto. */
+  const vector = (angulo) => [Math.cos(angulo), Math.sin(angulo)];
+  const candidatos = ["DAZN 1 720p", "DAZN 2 720p", "DAZN 3 720p"].map((title, i) => ({
+    id: String(i + 1).repeat(40).slice(0, 40), title, score: 78, source: "m3u",
+    availability: null, bitrate: null, soloFamilia: true,
+  }));
+  const salida = await app.applySemanticCandidateScores(
+    ["DAZN"], candidatos, [],
+    { enabled: true, cache: new Map(), embed: async (t) => t.map(() => vector(0)) },
+  );
+  assert.ok(salida.candidates.every((c) => !c.semantic), "ninguna hermana se promociona");
+  assert.equal(app.mergeResolutionCandidates(salida.candidates).length, 3, "las tres se siguen ofreciendo");
+});
+
+test("el umbral de canal exacto esta nombrado, no repetido a mano", () => {
+  /* Estaba escrito a pelo en siete sitios que significan lo mismo. Cambiar uno
+     y dejar los otros seis en silencio es un fallo esperando su turno. */
+  const server = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "server.js"), "utf8");
+  assert.doesNotMatch(server, /score >= 92\b/, "quedan comparaciones con el 92 a pelo");
+  assert.ok(server.split("RESOLUTION_EXACT_SCORE").length - 1 >= 8, "la constante debe usarse en todos los sitios");
+});
+
+test("el emparejador del cliente y el del servidor dicen lo mismo", () => {
+  /* Hay dos implementaciones de channelMatchScore, una en el servidor y otra
+     en index.html. Si divergen, el boton dice "Buscar canal" mientras el
+     servidor si encuentra el canal: un fallo mudo y muy molesto de perseguir.
+     Ya paso una vez. Este test compara las dos sobre nombres reales. */
+  const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
+  const bloque = (re) => { const m = re.exec(html); return m ? m[0] : ""; };
+  const funcion = (nombre) => {
+    const inicio = html.indexOf(`function ${nombre}(`);
+    if (inicio < 0) return "";
+    let abiertas = 0;
+    for (let i = html.indexOf("{", inicio); i < html.length; i += 1) {
+      if (html[i] === "{") abiertas += 1;
+      if (html[i] === "}") { abiertas -= 1; if (!abiertas) return html.slice(inicio, i + 1); }
+    }
+    return "";
+  };
+  const piezas = [
+    bloque(/const CHANNEL_FILLER_TOKENS = new Set\(\[[\s\S]*?\]\);/),
+    bloque(/const CHANNEL_VARIANT_MAX_SCORE\s*=\s*\d+;/),
+    bloque(/const CHANNEL_FAMILY_SCORE\s*=\s*\d+;/),
+    funcion("normalizeChannelLabel"), funcion("distinctiveTokens"), funcion("channelMatchScore"),
+  ];
+  // si la extraccion falla, el test debe caerse, no pasar de vacio
+  piezas.forEach((pieza, indice) => assert.ok(pieza, `no se pudo extraer la pieza ${indice} del cliente`));
+
+  const clienteScore = new Function(`${piezas.join("\n")}\nreturn channelMatchScore;`)();
+  const nombres = [
+    "M+ Liga de Campeones", "LIGA DE CAMPEONES --> ELCANO", "LIGA DE CAMPEONES 2 --> ELCANO",
+    "M. Liga de Campeones", "DAZN", "DAZN 1", "DAZN 1 720p **", "LaLiga TV",
+    "LALIGA TV Hypermotion", "M+ LALIGA", "M+ LALIGA 2", "LaLiga TV Bar",
+    "LaLiga TV Bar HD", "Eurosport 1", "Eurosport 2", "GOL Play",
+  ];
+  const discrepancias = [];
+  for (const a of nombres) {
+    for (const b of nombres) {
+      const cliente = clienteScore(a, b), servidor = app.channelMatchScore(a, b);
+      if (cliente !== servidor) discrepancias.push(`"${a}" / "${b}": cliente ${cliente}, servidor ${servidor}`);
+    }
+  }
+  assert.deepEqual(discrepancias, [], `los dos emparejadores han divergido:\n${discrepancias.join("\n")}`);
+});
