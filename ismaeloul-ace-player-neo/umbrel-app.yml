@@ -3,13 +3,27 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.49"
+version: "0.6.50"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
+  Blindaje interno, sin cambios visibles. El umbral que decide "es ese canal,
+  sin duda" estaba escrito a mano en siete sitios distintos que significan lo
+  mismo: cambiar uno y dejar los otros seis en silencio era un fallo esperando
+  su turno. Ahora tiene nombre y se usa en todos.
+  Ademas quedan sujetos por tests dos acoplamientos que hasta ahora solo vivian
+  en la cabeza de quien escribio el codigo: que una promocion de la busqueda
+  inteligente cuenta como canal exacto -y por tanto descarta las hermanas
+  numeradas, que es lo que se quiere- y que las marcas paraguas como DAZN
+  conservan su familia aunque la IA este activa.
+  Y uno nuevo que ya nos costo un rato en su dia: el emparejador de canales
+  existe por duplicado, en el servidor y en la pagina, y si divergen el boton
+  dice "buscar canal" mientras el servidor si lo encuentra. Ahora un test
+  compara las dos implementaciones sobre nombres reales y salta si dejan de
+  coincidir.
   Cuatro correcciones sobre lo ultimo que se añadio.
   El hash que pegas a mano ya no se manda siempre como Content ID. Un hash de
   40 caracteres puede ser un Content ID o un infohash y mirandolo no hay forma
