@@ -3,13 +3,26 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.51"
+version: "0.6.52"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
+  Arregla que al dar a un partido se abriera otro canal. La agenda lista varios
+  canales por partido y NO son equivalentes: para el Barcelona-Athletic anuncia
+  "DAZN LaLiga", "DAZN" y "LaLiga TV Bar", donde "DAZN" es la marca y
+  "DAZN LaLiga" es el canal donde de verdad dan el partido. La app los trataba
+  igual, asi que un vinculo guardado sobre la marca se ponia el primero y abria
+  DAZN 1, con otro deporte.
+  Ahora un canal cuyas palabras caben dentro de las de otro canal pedido se
+  reconoce como la marca y se aparta detras del canal concreto. No se descarta:
+  sigue estando en el selector por si acaso. Y si un partido solo se anuncia
+  por la marca, la marca es lo unico que hay y no se toca nada.
+  Comprobado sobre sesenta partidos de la agenda real: cambia la señal que
+  arranca sola en nueve, y los nueve son exactamente este fallo. Ninguno pierde
+  fuentes.
   La app aprende sola que señales aguantan. Hasta ahora solo aprendia si
   pulsabas "es el canal correcto", asi que en la practica no aprendia nada.
   Ahora cada reproduccion deja un veredicto por su cuenta -arranco, no arranco,
