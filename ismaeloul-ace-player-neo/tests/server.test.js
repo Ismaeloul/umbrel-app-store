@@ -1600,3 +1600,49 @@ test("el veredicto de una reproduccion se guarda por hash y por proveedor", () =
   assert.equal(resultado.proveedor.exitos, 1, "tambien aprende de quien la sirve");
   assert.throws(() => app.registrarResultadoDeFuente(app.readState(), { id: "9".repeat(40), resultado: "loquesea" }));
 });
+
+/* ---------- 0.6.52: la marca no es el canal ---------- */
+
+test("un canal pedido es generico si sus palabras caben dentro de otro", () => {
+  /* La agenda anuncia el Barcelona-Athletic en ["DAZN LaLiga","DAZN",
+     "LaLiga TV Bar"]: "DAZN" es la marca, "DAZN LaLiga" es donde dan el
+     partido. No vale contar palabras -"LaLiga TV Bar" y "DAZN" no compiten
+     entre si-, hace falta la relacion de subconjunto estricto. */
+  const pedidos = ["DAZN LaLiga", "DAZN", "LaLiga TV Bar"];
+  assert.equal(app.canalEsGenerico("DAZN", pedidos), true);
+  assert.equal(app.canalEsGenerico("DAZN LaLiga", pedidos), false);
+  assert.equal(app.canalEsGenerico("LaLiga TV Bar", pedidos), false);
+  // sin alternativa mas concreta, la marca es lo unico que hay y no es generica
+  assert.equal(app.canalEsGenerico("DAZN", ["DAZN"]), false);
+  assert.equal(app.canalEsGenerico("DAZN", ["DAZN", "LaLiga TV Bar"]), false);
+});
+
+test("un vinculo sobre la marca no adelanta al canal concreto", () => {
+  /* Este era el fallo: el vinculo "DAZN" -> "DAZN 1" iba primero por ser
+     vinculo, y al dar a reproducir abria DAZN 1, que emite otra cosa. La
+     especificidad del canal manda sobre la procedencia, porque esto es
+     identidad de canal y no preferencia. */
+  const pedidos = ["DAZN LaLiga", "DAZN", "LaLiga TV Bar"];
+  const fuente = (id, title, matchedChannel, source) => ({
+    id: String(id).repeat(40).slice(0, 40), title, matchedChannel, source,
+    score: 100, availability: null, bitrate: null, soloFamilia: false,
+  });
+  const salida = app.mergeResolutionCandidates([
+    fuente(1, "DAZN 1 720p", "DAZN", "saved"),
+    fuente(2, "DAZN LaLiga 720p", "DAZN LaLiga", "m3u"),
+  ], { requestedChannels: pedidos });
+  assert.equal(salida[0].title, "DAZN LaLiga 720p", "primero el canal donde dan el partido");
+  assert.equal(salida.length, 2, "la de la marca se aparta, no se tira");
+});
+
+test("si el partido solo se anuncia por la marca, la marca vale", () => {
+  const fuente = (id, title) => ({
+    id: String(id).repeat(40).slice(0, 40), title, matchedChannel: "DAZN", source: "m3u",
+    score: 100, availability: null, bitrate: null, soloFamilia: false,
+  });
+  const salida = app.mergeResolutionCandidates(
+    [fuente(1, "DAZN 1 720p"), fuente(2, "DAZN 2 720p")],
+    { requestedChannels: ["DAZN"] },
+  );
+  assert.equal(salida.length, 2, "no se aparta nada cuando no hay alternativa concreta");
+});
