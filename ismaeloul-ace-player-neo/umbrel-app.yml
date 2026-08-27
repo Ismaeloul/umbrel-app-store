@@ -3,13 +3,29 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.50"
+version: "0.6.51"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
+  La app aprende sola que señales aguantan. Hasta ahora solo aprendia si
+  pulsabas "es el canal correcto", asi que en la practica no aprendia nada.
+  Ahora cada reproduccion deja un veredicto por su cuenta -arranco, no arranco,
+  o arranco y se cayo- y con eso ordena las fuentes la proxima vez.
+  Aprende en dos niveles, y los dos hacen falta. Por enlace, porque uno
+  concreto puede morir y no volver. Y por proveedor, que es lo que de verdad
+  cambia las cosas: cuando un proveedor se cae, se caen todas sus señales a la
+  vez, asi que la leccion sirve tambien para enlaces suyos que nunca has
+  probado. Es exactamente el diagnostico que hacias a mano.
+  Arrancar y morirse en menos de un minuto no cuenta como que funcionara, y la
+  fama vieja se desgasta: lo que iba bien hace un mes deja de pesar si ahora se
+  cae. Con pocos intentos la app no se precipita; hacen falta varios aciertos
+  para que una fuente adelante a una desconocida.
+  Lo aprendido solo ordena entre fuentes igual de validas: nunca decide que
+  canal es. Eso lo siguen resolviendo el nombre y el numero de canal.
+  El historial de aprendizaje arranca vacio a proposito.
   Blindaje interno, sin cambios visibles. El umbral que decide "es ese canal,
   sin duda" estaba escrito a mano en siete sitios distintos que significan lo
   mismo: cambiar uno y dejar los otros seis en silencio era un fallo esperando

@@ -1508,3 +1508,95 @@ test("el emparejador del cliente y el del servidor dicen lo mismo", () => {
   }
   assert.deepEqual(discrepancias, [], `los dos emparejadores han divergido:\n${discrepancias.join("\n")}`);
 });
+
+/* ---------- 0.6.51: la app aprende sola que fuentes aguantan ---------- */
+
+const señalDe = (id, title, extra = {}) => ({
+  id: String(id).repeat(40).slice(0, 40), title, score: 100, source: "m3u",
+  availability: null, bitrate: null, soloFamilia: false, ...extra,
+});
+
+test("pocos aciertos no valen lo mismo que muchos", () => {
+  /* Cota inferior de Wilson: con un solo intento la confianza se queda baja
+     sola, sin reglas especiales, y por eso un 1 de 1 no adelanta a lo
+     desconocido pero un 5 de 5 si. */
+  const tasa = (intentos, exitos) => app.tasaFiable({ intentos, exitos });
+  assert.ok(tasa(1, 1) < app.STATS_NEUTRAL, "un acierto suelto no basta");
+  assert.ok(tasa(5, 5) > app.STATS_NEUTRAL, "cinco de cinco si");
+  assert.ok(tasa(20, 20) > tasa(5, 5), "mas evidencia, mas confianza");
+  assert.ok(tasa(5, 1) < app.STATS_NEUTRAL, "lo que suele fallar cae por debajo");
+  assert.equal(app.tasaFiable({ intentos: 0, exitos: 0 }), null, "sin datos no se opina");
+});
+
+test("arrancar y morirse enseguida no cuenta como que funciono", () => {
+  const ahora = Date.now();
+  const arrancada = app.anotarResultado(null, "arranco", 0, ahora);
+  assert.equal(arrancada.exitos, 1);
+  const rapida = app.anotarResultado(arrancada, "cayo", 12, ahora);
+  assert.equal(rapida.exitos, 0, "doce segundos no es funcionar");
+  assert.equal(rapida.caidas, 1);
+  const larga = app.anotarResultado(arrancada, "cayo", 3000, ahora);
+  assert.equal(larga.exitos, 1, "cincuenta minutos si");
+});
+
+test("la fama vieja se desgasta", () => {
+  const ahora = Date.now(), DIA = 86400000;
+  const antiguo = { intentos: 10, exitos: 10, caidas: 0, segundos: 0, ultimo: ahora - 28 * DIA };
+  const reciente = { intentos: 10, exitos: 10, caidas: 0, segundos: 0, ultimo: ahora };
+  const trasFalloAntiguo = app.anotarResultado(antiguo, "fallo", 0, ahora);
+  const trasFalloReciente = app.anotarResultado(reciente, "fallo", 0, ahora);
+  assert.ok(app.tasaFiable(trasFalloAntiguo) < app.tasaFiable(trasFalloReciente),
+    "un fallo de hoy pesa mas sobre historial viejo que sobre historial fresco");
+});
+
+test("lo aprendido de un proveedor sirve para hashes nunca probados", () => {
+  /* Es el caso real: las señales "--> NEW ERA" fallaban y las "--> ELCANO"
+     aguantaban. Cuando un proveedor se cae, se caen todas sus señales, asi
+     que la leccion vale tambien para un enlace suyo que aun no se ha usado. */
+  const ahora = Date.now();
+  let stats = app.normalizeSourceStats(null);
+  for (let i = 0; i < 8; i += 1) {
+    stats.proveedores["new era"] = app.anotarResultado(stats.proveedores["new era"], "fallo", 0, ahora);
+    stats.proveedores.elcano = app.anotarResultado(stats.proveedores.elcano, "arranco", 0, ahora);
+  }
+  const lista = [
+    señalDe(1, "LIGA DE CAMPEONES --> NEW ERA"),
+    señalDe(2, "LIGA DE CAMPEONES --> ELCANO"),
+    señalDe(3, "LIGA DE CAMPEONES --> SPORT TV"),
+  ];
+  const sinAprender = app.mergeResolutionCandidates(lista, {}).map((c) => c.title);
+  const aprendido = app.mergeResolutionCandidates(lista, { sourceStats: stats }).map((c) => c.title);
+  assert.match(aprendido[0], /ELCANO/, "lo que aguanta sube al primer puesto");
+  assert.match(aprendido[2], /NEW ERA/, "lo que se cae baja al ultimo");
+  assert.match(aprendido[1], /SPORT TV/, "lo desconocido se queda en medio");
+  assert.notDeepEqual(sinAprender, aprendido, "sin datos el orden es el de siempre");
+});
+
+test("lo aprendido ordena, pero NUNCA decide que canal es", () => {
+  /* La invariante que no se puede romper: la identidad del canal la deciden
+     el nombre y el numero. Una fuente con fama estupenda no puede adelantar a
+     otra que es mejor coincidencia de canal. */
+  const ahora = Date.now();
+  let stats = app.normalizeSourceStats(null);
+  for (let i = 0; i < 20; i += 1) {
+    stats.hashes["2".repeat(40)] = app.anotarResultado(stats.hashes["2".repeat(40)], "arranco", 0, ahora);
+  }
+  const salida = app.mergeResolutionCandidates([
+    señalDe(1, "El canal exacto", { score: 100 }),
+    señalDe(2, "Solo se le parece", { score: 74 }),
+  ], { sourceStats: stats });
+  assert.equal(salida[0].title, "El canal exacto",
+    "la coincidencia de canal manda sobre la fama");
+});
+
+test("el veredicto de una reproduccion se guarda por hash y por proveedor", () => {
+  const estado = app.readState();
+  const resultado = app.registrarResultadoDeFuente(estado, {
+    id: "9".repeat(40), title: "LIGA DE CAMPEONES --> ELCANO", resultado: "arranco", segundos: 0,
+  });
+  assert.equal(resultado.success, true);
+  assert.equal(resultado.hash.intentos, 1);
+  assert.equal(resultado.hash.exitos, 1);
+  assert.equal(resultado.proveedor.exitos, 1, "tambien aprende de quien la sirve");
+  assert.throws(() => app.registrarResultadoDeFuente(app.readState(), { id: "9".repeat(40), resultado: "loquesea" }));
+});
