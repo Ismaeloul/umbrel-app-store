@@ -3,7 +3,7 @@ id: ismaeloul-trajet
 category: automation
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-trajet/icon.svg"
 name: Trajet
-version: "0.2.0"
+version: "0.3.0"
 tagline: Tus trayectos de Île-de-France en tiempo real
 description: >-
   Trajet muestra los próximos pasos de tus trayectos habituales en transporte
@@ -30,33 +30,21 @@ description: >-
   arrancar la app.
 
 releaseNotes: >-
-  Buscador puerta a puerta. Escribes una dirección postal (o una parada) de
-  origen y otra de destino, la hora a la que sales, y salen varias opciones con
-  su duración, los transbordos, los minutos andando y las líneas. Eliges la que
-  usas de verdad y se guarda como ruta vigilada. Cubre metro, RER, Transilien,
-  TER, tranvía y bus.
+  Instalable en la pantalla de inicio. Trajet se añade como una app más: con su
+  icono, a pantalla completa y sin barra de navegador. En el iPhone, desde
+  Safari: Compartir → Añadir a pantalla de inicio. En Android, Chrome →
+  Instalar aplicación. Sin pasar por ningún store de móvil.
 
-  Previsión del andén. La app aprende de qué vía sale cada tren y, mientras
-  todavía no hay andén oficial, enseña una vía probable en gris. Sólo estudia
-  las estaciones de tus rutas y sólo se fía cuando ha visto el mismo tren
-  varias veces con mayoría clara; si no, se calla. En la pantalla de historial
-  puedes ver cuánto acierta, calculado sin mirar los datos del día en curso.
+  Arranca sin cobertura. La interfaz se guarda en el propio móvil, así que al
+  tocar el icono en el metro sale el tablero con el último dato conocido y el
+  aviso de «sin conexión», en vez de la pantalla de error del navegador. Los
+  datos en tiempo real no se guardan nunca: un tablero cacheado sería un tren
+  que ya se ha ido, y además cada consulta cuenta contra la cuota diaria. Esto
+  pide entrar a la app por HTTPS; con Tailscale el certificado sale gratis.
 
-  Avisos traducidos al español con el LLM local, si tienes Ollama instalado.
-  Se traducen enteros, sin resumir, y el francés original sigue a un toque.
-  Sin Ollama, los avisos salen en francés y todo lo demás funciona igual.
-
-  Arreglos medidos contra la API real. Una línea cortada se marcaba sólo como
-  "perturbada" porque IDFM escribe "le trafic EST interrompu" y el detector no
-  admitía la cópula. En Saint-Lazare, al montar un tramo, parecía que sólo
-  hubiera buses: la API devuelve las 38 líneas pero se ordenaban alfabéticamente
-  por modo y el metro quedaba 30 filas más abajo. Y con rutas de muchos tramos
-  las filas se pintaban unas encima de otras; ahora la densidad se adapta al
-  número de tramos y las esperas largas salen como 2h45 en vez de 165 min.
-
-  El andén, medido: sólo aparece en el 17 % de los trenes y con 7,7 minutos de
-  antelación mediana. Nunca en metro, bus ni tranvía, así que en esos tramos la
-  columna ya no ocupa sitio.
+  Más pantalla útil. Instalada, sin las dos barras del navegador, entra una
+  fila más de salidas. Y se ha corregido un hueco muerto sobre el indicador de
+  inicio del iPhone: el margen de seguridad se estaba contando dos veces.
 
 developer: Ismaeloul
 website: https://github.com/Ismaeloul/umbrel-app-store

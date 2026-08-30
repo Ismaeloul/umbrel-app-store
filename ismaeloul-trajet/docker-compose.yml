@@ -14,7 +14,7 @@ services:
       PROXY_AUTH_ADD: "false"
 
   web:
-    image: localhost:5000/ismaeloul-trajet/trajet:0.2.0
+    image: localhost:5000/ismaeloul-trajet/trajet:0.3.0
     container_name: ismaeloul-trajet_web_1
     restart: unless-stopped
     init: true
