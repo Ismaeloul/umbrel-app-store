@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b2432"/>
+      <stop offset="1" stop-color="#0a0e14"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+
+  <!-- La linea del trayecto, con su transbordo -->
+  <path d="M136 372 L136 244 Q136 196 184 196 L300 196 Q348 196 348 148 L348 128"
+        fill="none" stroke="#ffd629" stroke-width="30"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Parada de origen -->
+  <circle cx="136" cy="372" r="34" fill="#0a0e14" stroke="#ffd629" stroke-width="24"/>
+
+  <!-- Transbordo -->
+  <circle cx="242" cy="196" r="22" fill="#0a0e14" stroke="#8b9bb0" stroke-width="18"/>
+
+  <!-- Destino -->
+  <circle cx="348" cy="128" r="30" fill="#ffd629"/>
+</svg>

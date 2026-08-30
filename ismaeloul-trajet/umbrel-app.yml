@@ -1,0 +1,72 @@
+manifestVersion: 1
+id: ismaeloul-trajet
+category: automation
+icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-trajet/icon.svg"
+name: Trajet
+version: "0.2.0"
+tagline: Tus trayectos de Île-de-France en tiempo real
+description: >-
+  Trajet muestra los próximos pasos de tus trayectos habituales en transporte
+  público de Île-de-France, con los datos en tiempo real del portal PRIM de
+  Île-de-France Mobilités.
+
+  Guardas tus rutas (Casa → Trabajo, la vuelta desde clase…) con sus tramos y
+  transbordos, y la app enseña sola la que toca según el día de la semana y la
+  hora. Por cada tramo verás los próximos cuatro pasos con los minutos que
+  faltan en grande, el destino, el andén cuando la red lo publica y el retraso
+  en minutos. Se refresca cada 30 segundos y siempre dice de cuándo es el dato
+  que estás viendo.
+
+  Si una de tus líneas está perturbada o interrumpida, calcula rutas
+  alternativas evitándola y comprueba que las líneas de la alternativa tampoco
+  estén caídas. Guarda además un historial para saber qué línea te falla más y
+  cuántos días al mes tienes incidencias.
+
+  Pensada para el móvil y para usarla de pie: números grandes, alto contraste
+  y sin scroll en la pantalla principal.
+
+  Necesitas una clave gratuita del portal PRIM
+  (https://prim.iledefrance-mobilites.fr). Métela en PRIM_API_KEY antes de
+  arrancar la app.
+
+releaseNotes: >-
+  Buscador puerta a puerta. Escribes una dirección postal (o una parada) de
+  origen y otra de destino, la hora a la que sales, y salen varias opciones con
+  su duración, los transbordos, los minutos andando y las líneas. Eliges la que
+  usas de verdad y se guarda como ruta vigilada. Cubre metro, RER, Transilien,
+  TER, tranvía y bus.
+
+  Previsión del andén. La app aprende de qué vía sale cada tren y, mientras
+  todavía no hay andén oficial, enseña una vía probable en gris. Sólo estudia
+  las estaciones de tus rutas y sólo se fía cuando ha visto el mismo tren
+  varias veces con mayoría clara; si no, se calla. En la pantalla de historial
+  puedes ver cuánto acierta, calculado sin mirar los datos del día en curso.
+
+  Avisos traducidos al español con el LLM local, si tienes Ollama instalado.
+  Se traducen enteros, sin resumir, y el francés original sigue a un toque.
+  Sin Ollama, los avisos salen en francés y todo lo demás funciona igual.
+
+  Arreglos medidos contra la API real. Una línea cortada se marcaba sólo como
+  "perturbada" porque IDFM escribe "le trafic EST interrompu" y el detector no
+  admitía la cópula. En Saint-Lazare, al montar un tramo, parecía que sólo
+  hubiera buses: la API devuelve las 38 líneas pero se ordenaban alfabéticamente
+  por modo y el metro quedaba 30 filas más abajo. Y con rutas de muchos tramos
+  las filas se pintaban unas encima de otras; ahora la densidad se adapta al
+  número de tramos y las esperas largas salen como 2h45 en vez de 165 min.
+
+  El andén, medido: sólo aparece en el 17 % de los trenes y con 7,7 minutos de
+  antelación mediana. Nunca en metro, bus ni tranvía, así que en esos tramos la
+  columna ya no ocupa sitio.
+
+developer: Ismaeloul
+website: https://github.com/Ismaeloul/umbrel-app-store
+dependencies: []
+repo: https://github.com/Ismaeloul/umbrel-app-store
+support: https://github.com/Ismaeloul/umbrel-app-store/issues
+port: 7796
+gallery: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
+submitter: Ismaeloul
+submission: https://github.com/Ismaeloul/umbrel-app-store

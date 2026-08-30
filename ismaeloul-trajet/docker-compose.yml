@@ -1,0 +1,39 @@
+version: "3.7"
+
+# La imagen se sirve desde el registro local del NAS, igual que ace-player-neo
+# e ipa-station: umbreld ignora pull_policy, asi que una imagen construida a
+# mano con docker build no le vale, tiene que poder resolverla contra un
+# registro. Se publica con scripts/publish.sh del repo de Trajet.
+
+services:
+  app_proxy:
+    environment:
+      APP_HOST: ismaeloul-trajet_web_1
+      APP_PORT: "8000"
+      # Es una app personal en la red privada: sin login extra por delante.
+      PROXY_AUTH_ADD: "false"
+
+  web:
+    image: localhost:5000/ismaeloul-trajet/trajet:0.2.0
+    container_name: ismaeloul-trajet_web_1
+    restart: unless-stopped
+    init: true
+    environment:
+      # Clave del portal PRIM. Sin ella la app arranca pero no consulta nada.
+      PRIM_API_KEY: "${PRIM_API_KEY:-}"
+      TZ: "Europe/Paris"
+      TRAJET_DB: "/data/trajet.db"
+      # Traduccion de los avisos de perturbacion al espanol con el LLM local.
+      # Todas las apps de Umbrel comparten umbrel_main_network, asi que el
+      # contenedor de Ollama se resuelve por su nombre. Si Ollama no esta
+      # instalado, los avisos salen en frances y la app funciona igual.
+      OLLAMA_URL: "${OLLAMA_URL:-http://ollama_ollama_1:11434}"
+      OLLAMA_MODEL: "${OLLAMA_MODEL:-gemma3:4b}"
+      # Aprendizaje del anden en segundo plano. TRAJET_COLLECT=0 lo apaga.
+      TRAJET_COLLECT: "${TRAJET_COLLECT:-1}"
+    volumes:
+      # Rutas guardadas, historial y andenes aprendidos. Sobrevive a las
+      # actualizaciones de la app.
+      - ${APP_DATA_DIR}/data:/data
+    mem_limit: 384m
+    pids_limit: 128
