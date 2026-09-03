@@ -15,6 +15,14 @@ import { Campo } from './ui'
 
 type Errores = Record<string, string>
 
+/**
+ * Un campo corto que ya viene relleno hay que poder sobrescribirlo de una
+ * pasada. Sin esto, "Region" (con maxLength 2 y "ES" dentro) no admite ni
+ * una tecla hasta que borras a mano, y el saldo inicial se queda en "050,00".
+ */
+const seleccionarTodo = (e: { target: EventTarget | null }) =>
+  (e.target as HTMLInputElement | null)?.select()
+
 function useEnvio(alTerminar: () => void) {
   const [errores, setErrores] = useState<Errores>({})
   const [enviando, setEnviando] = useState(false)
@@ -136,6 +144,7 @@ export function FormularioCuenta({
               className="campo uppercase"
               value={region}
               maxLength={2}
+              onFocus={seleccionarTodo}
               onChange={(e) => setRegion(e.target.value.toUpperCase())}
               placeholder="ES"
             />
@@ -183,6 +192,7 @@ export function FormularioCuenta({
               className="campo cifras"
               inputMode="decimal"
               value={saldo}
+              onFocus={seleccionarTodo}
               onChange={(e) => setSaldo(e.target.value)}
             />
           )}
@@ -452,6 +462,7 @@ export function FormularioRecarga({
             {...props}
             className="campo"
             value={concepto}
+            onFocus={seleccionarTodo}
             onChange={(e) => setConcepto(e.target.value)}
             placeholder="Tarjeta regalo"
           />

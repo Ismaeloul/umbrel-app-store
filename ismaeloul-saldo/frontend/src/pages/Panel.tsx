@@ -1,17 +1,22 @@
+import { motion } from 'framer-motion'
 import { useState } from 'react'
 
 import { api } from '../api/cliente'
 import type { CuentaResumen } from '../api/tipos'
-import { FormularioCuenta } from '../components/formularios'
 import { TarjetaCuenta } from '../components/TarjetaCuenta'
+import { FormularioCuenta } from '../components/formularios'
 import { Dialogo, Esqueleto, Vacio } from '../components/ui'
+import { listaEscalonada, pagina } from '../lib/animacion'
 import { useRecurso } from '../lib/hooks'
 
 function EsqueletoTarjeta() {
   return (
-    <div className="tarjeta space-y-4 p-5">
-      <Esqueleto className="h-4 w-40" />
-      <Esqueleto className="h-10 w-48" />
+    <div className="tarjeta space-y-5 p-5">
+      <div className="space-y-2">
+        <Esqueleto className="h-3.5 w-44" />
+        <Esqueleto className="h-3 w-28" />
+      </div>
+      <Esqueleto className="h-10 w-52" />
       <Esqueleto className="h-1.5 w-full" />
       <div className="grid grid-cols-2 gap-3">
         <Esqueleto className="h-8" />
@@ -29,19 +34,20 @@ export function Panel() {
   )
 
   return (
-    <div className="mx-auto max-w-2xl px-4 pb-16 pt-6">
-      <header className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Saldo</h1>
-          <p className="text-sm text-tenue">Tus cuentas prepago</p>
-        </div>
-        <button
-          type="button"
-          className="boton-principal"
-          onClick={() => setNueva(true)}
-        >
-          Nueva cuenta
-        </button>
+    <motion.div
+      variants={pagina}
+      initial="oculto"
+      animate="visible"
+      exit="salida"
+      className="mx-auto max-w-2xl px-4 pb-28 pt-8"
+    >
+      <header className="mb-7">
+        <h1 className="text-[1.75rem] font-semibold leading-none tracking-tight">
+          Saldo
+        </h1>
+        <p className="mt-1.5 text-sm text-tenue">
+          Cuanto te dura el prepago de cada cuenta
+        </p>
       </header>
 
       {error && (
@@ -63,23 +69,41 @@ export function Panel() {
       {datos && datos.length === 0 && (
         <Vacio titulo="Todavia no hay ninguna cuenta">
           Crea la primera con su divisa y su saldo, y anade lo que tengas
-          suscrito.
+          suscrito. La app te dira cuando recargar antes de que falle un cobro.
         </Vacio>
       )}
 
       {datos && datos.length > 0 && (
-        <div className="space-y-4">
+        <motion.div
+          variants={listaEscalonada}
+          initial="oculto"
+          animate="visible"
+          className="space-y-4"
+        >
           {datos.map((resumen) => (
             <TarjetaCuenta key={resumen.cuenta.id} resumen={resumen} />
           ))}
-        </div>
+        </motion.div>
       )}
 
-      <Dialogo
-        titulo="Nueva cuenta"
-        abierto={nueva}
-        onCerrar={() => setNueva(false)}
+      {/* Boton flotante abajo: se llega con el pulgar sin cambiar de mano. */}
+      <div
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-40
+                   bg-gradient-to-t from-fondo via-fondo/90 to-transparent pt-8"
+        style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
       >
+        <div className="mx-auto max-w-2xl px-4">
+          <button
+            type="button"
+            className="boton-principal pointer-events-auto w-full shadow-lg shadow-black/40"
+            onClick={() => setNueva(true)}
+          >
+            Nueva cuenta
+          </button>
+        </div>
+      </div>
+
+      <Dialogo titulo="Nueva cuenta" abierto={nueva} onCerrar={() => setNueva(false)}>
         <FormularioCuenta
           onHecho={() => {
             setNueva(false)
@@ -88,6 +112,6 @@ export function Panel() {
           onCancelar={() => setNueva(false)}
         />
       </Dialogo>
-    </div>
+    </motion.div>
   )
 }

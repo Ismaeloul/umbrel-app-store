@@ -79,31 +79,36 @@ export function LineaTemporal({
               {grupo.cargos.map((cargo) => (
                 <li
                   key={`${cargo.subscription_id}-${cargo.fecha}`}
-                  className="flex items-center gap-3 px-5 py-3"
+                  // Dos lineas en vez de cuatro columnas: en 390 px un nombre
+                  // como "YouTube Premium" no cabe en una columna estrecha, y
+                  // truncarlo es justo perder el dato que se viene a mirar.
+                  className="flex items-center justify-between gap-3 px-5 py-3"
                 >
-                  <span className="cifras w-14 shrink-0 text-xs text-apagado">
-                    {formatearFecha(cargo.fecha).replace(/ \d{4}$/, '')}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-sm">
-                    {cargo.nombre}
-                  </span>
-                  <span className="cifras shrink-0 text-sm text-tenue">
-                    -
-                    {formatearImporte(
-                      cargo.amount_minor,
-                      cuenta.currency,
-                      cuenta.exponente,
-                      { conSimbolo: false },
-                    )}
-                  </span>
-                  <span className="cifras w-20 shrink-0 text-right text-sm font-medium">
-                    {formatearImporte(
-                      cargo.saldo_restante_minor,
-                      cuenta.currency,
-                      cuenta.exponente,
-                      { conSimbolo: false },
-                    )}
-                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm">{cargo.nombre}</p>
+                    <p className="cifras mt-0.5 text-xs text-apagado">
+                      {formatearFecha(cargo.fecha).replace(/ \d{4}$/, '')}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="cifras text-sm font-medium">
+                      {formatearImporte(
+                        cargo.saldo_restante_minor,
+                        cuenta.currency,
+                        cuenta.exponente,
+                        { conSimbolo: false },
+                      )}
+                    </p>
+                    <p className="cifras mt-0.5 text-xs text-apagado">
+                      -
+                      {formatearImporte(
+                        cargo.amount_minor,
+                        cuenta.currency,
+                        cuenta.exponente,
+                        { conSimbolo: false },
+                      )}
+                    </p>
+                  </div>
                 </li>
               ))}
             </ul>

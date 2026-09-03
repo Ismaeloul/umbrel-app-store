@@ -1,13 +1,16 @@
+import { motion } from 'framer-motion'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { api } from '../api/cliente'
 import type { CuentaDetalle, Suscripcion } from '../api/tipos'
+import { BarraMargen } from '../components/BarraMargen'
 import { Historial } from '../components/Historial'
 import { LineaTemporal } from '../components/LineaTemporal'
 import { ListaSuscripciones } from '../components/ListaSuscripciones'
 import { PanelNotas } from '../components/PanelNotas'
 import { Saldo } from '../components/Saldo'
+import { tiempoRestante } from '../components/TarjetaCuenta'
 import {
   FormularioCuenta,
   FormularioPrecio,
@@ -17,10 +20,12 @@ import {
   FormularioSuscripcion,
 } from '../components/formularios'
 import { Aviso, Dialogo, Esqueleto } from '../components/ui'
+import { listaEscalonada, elementoDeLista, pagina } from '../lib/animacion'
 import { formatearImporte } from '../lib/dinero'
 import { formatearFecha } from '../lib/fechas'
 import { useRecurso } from '../lib/hooks'
-import { PALETA, llenadoDeMargen, urgenciaDe } from '../lib/urgencia'
+import { banderaDe } from '../lib/region'
+import { PALETA, urgenciaDe } from '../lib/urgencia'
 
 type Panel =
   | { tipo: 'ninguno' }
@@ -34,16 +39,23 @@ type Panel =
 function Metrica({
   etiqueta,
   valor,
-  tono = '',
+  tono = 'text-texto',
 }: {
   etiqueta: string
   valor: string
   tono?: string
 }) {
   return (
-    <div className="tarjeta p-4">
-      <p className="text-[11px] uppercase tracking-wide text-apagado">{etiqueta}</p>
-      <p className={`cifras mt-1 text-lg font-semibold ${tono}`}>{valor}</p>
+    <div className="tarjeta px-3 py-3.5">
+      <p className="text-[10px] uppercase tracking-[0.08em] text-apagado">
+        {etiqueta}
+      </p>
+      {/* 15px: "23 nov 2026" cabe en una linea en un tercio de 390 px. */}
+      <p
+        className={`cifras mt-1.5 text-[0.9375rem] font-semibold leading-tight ${tono}`}
+      >
+        {valor}
+      </p>
     </div>
   )
 }
@@ -77,15 +89,17 @@ export function Cuenta() {
 
   if (cargando && !datos) {
     return (
-      <div className="mx-auto max-w-2xl space-y-4 px-4 pt-6">
-        <Esqueleto className="h-4 w-24" />
-        <Esqueleto className="h-20 w-64" />
+      <div className="mx-auto max-w-2xl space-y-5 px-4 pt-8">
+        <Esqueleto className="h-3.5 w-24" />
+        <Esqueleto className="h-4 w-48" />
+        <Esqueleto className="h-16 w-64" />
+        <Esqueleto className="h-2 w-full" />
         <div className="grid grid-cols-3 gap-3">
           <Esqueleto className="h-20" />
           <Esqueleto className="h-20" />
           <Esqueleto className="h-20" />
         </div>
-        <Esqueleto className="h-56" />
+        <Esqueleto className="h-64" />
       </div>
     )
   }
@@ -93,25 +107,39 @@ export function Cuenta() {
   if (!datos) return null
 
   const { cuenta, metricas, suscripciones, proyeccion, transacciones } = datos
-  const urgencia = urgenciaDe(metricas.dias_restantes)
-  const paleta = PALETA[urgencia]
+  const paleta = PALETA[urgenciaDe(metricas.dias_restantes)]
   const riesgoPorId = Object.fromEntries(
     metricas.en_riesgo.map((r) => [r.subscription_id, r.fecha_perdida_prevista]),
   )
   const prueba = metricas.proxima_prueba
+  const importe = (minor: number) =>
+    formatearImporte(minor, cuenta.currency, cuenta.exponente)
 
   return (
-    <div className="mx-auto max-w-2xl px-4 pb-16 pt-6">
-      <header className="mb-6">
-        <Link to="/" className="text-sm text-tenue hover:text-texto">
-          &larr; Cuentas
+    <motion.div
+      variants={pagina}
+      initial="oculto"
+      animate="visible"
+      exit="salida"
+      className="mx-auto max-w-2xl px-4 pb-32 pt-6"
+    >
+      <header>
+        <Link
+          to="/"
+          className="-ml-1 inline-flex items-center gap-1 rounded-lg px-1 py-1
+                     text-sm text-tenue transition-colors hover:text-texto"
+        >
+          <span aria-hidden>&larr;</span> Cuentas
         </Link>
 
-        <div className="mt-4 flex items-start justify-between gap-3">
+        <div className="mt-5 flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate text-sm text-tenue">{cuenta.email}</p>
-            <p className="mt-0.5 text-xs text-apagado">
-              {cuenta.region} · {cuenta.currency}
+            <p className="mt-1 flex items-center gap-1.5 text-xs text-apagado">
+              <span aria-label={`Region ${cuenta.region}`}>
+                {banderaDe(cuenta.region)}
+              </span>
+              <span>{cuenta.currency}</span>
             </p>
           </div>
           <button
@@ -123,90 +151,83 @@ export function Cuenta() {
           </button>
         </div>
 
-        <div className="mt-3">
-          <Saldo
-            minor={cuenta.balance_minor}
-            divisa={cuenta.currency}
-            exponente={cuenta.exponente}
-            tamano="gigante"
-          />
-          <p className="mt-2 text-xs text-apagado">
-            Actualizado el {formatearFecha(cuenta.balance_updated_on)}
-          </p>
-        </div>
-
-        <div className="mt-4 h-2 overflow-hidden rounded-full bg-elevada">
+        {/* El saldo domina la pantalla, con un halo del color del margen. */}
+        <div className="relative mt-5">
           <div
-            className={`h-full rounded-full ${paleta.barra}`}
-            style={{ width: `${llenadoDeMargen(metricas.dias_restantes) * 100}%` }}
+            aria-hidden
+            className={`pointer-events-none absolute -left-6 -top-8 h-32 w-56 rounded-full
+                        opacity-[0.07] blur-3xl ${paleta.barra}`}
           />
+          <div className="relative">
+            <Saldo
+              minor={cuenta.balance_minor}
+              divisa={cuenta.currency}
+              exponente={cuenta.exponente}
+              tamano="gigante"
+            />
+            <p className="mt-2.5 text-xs text-apagado">
+              Actualizado el {formatearFecha(cuenta.balance_updated_on)}
+            </p>
+          </div>
         </div>
 
-        <div className="mt-4 flex gap-2">
-          <button
-            type="button"
-            className="boton-principal flex-1"
-            onClick={() => setPanel({ tipo: 'recarga' })}
-          >
-            Recargar
-          </button>
-          <button
-            type="button"
-            className="boton-secundario flex-1"
-            onClick={() => setPanel({ tipo: 'reconciliar' })}
-          >
-            Reconciliar
-          </button>
+        <div className="mt-5">
+          <BarraMargen
+            gruesa
+            diasRestantes={metricas.dias_restantes}
+            etiqueta={`Margen restante: ${tiempoRestante(
+              metricas.meses_restantes,
+              metricas.dias_restantes,
+            )}`}
+          />
         </div>
       </header>
 
-      <div className="space-y-4">
-        {/* Los avisos de prueba mandan sobre el de recarga. */}
+      <motion.div
+        variants={listaEscalonada}
+        initial="oculto"
+        animate="visible"
+        className="mt-6 space-y-4"
+      >
+        {/* El aviso de prueba en riesgo manda sobre el de recarga. */}
         {prueba && !prueba.saldo_alcanza && (
-          <Aviso tono="rojo" titulo={`Riesgo de perder ${prueba.nombre}`}>
-            La prueba pasa a cobro el {formatearFecha(prueba.fecha)} por{' '}
-            {formatearImporte(
-              prueba.amount_minor,
-              cuenta.currency,
-              cuenta.exponente,
-            )}{' '}
-            y el saldo proyectado no llega. Recarga antes de esa fecha.
-          </Aviso>
+          <motion.div variants={elementoDeLista}>
+            <Aviso tono="rojo" titulo={`Riesgo de perder ${prueba.nombre}`}>
+              La prueba pasa a cobro el {formatearFecha(prueba.fecha)} por{' '}
+              {importe(prueba.amount_minor)} y el saldo proyectado no llega.
+              Recarga antes de esa fecha.
+            </Aviso>
+          </motion.div>
         )}
 
         {prueba && prueba.saldo_alcanza && (
-          <Aviso tono="menta" titulo={`${prueba.nombre} esta en prueba`}>
-            Pasa a cobro el {formatearFecha(prueba.fecha)} por{' '}
-            {formatearImporte(
-              prueba.amount_minor,
-              cuenta.currency,
-              cuenta.exponente,
-            )}
-            . El saldo alcanza.
-          </Aviso>
+          <motion.div variants={elementoDeLista}>
+            <Aviso tono="menta" titulo={`${prueba.nombre} esta en prueba`}>
+              Pasa a cobro el {formatearFecha(prueba.fecha)} por{' '}
+              {importe(prueba.amount_minor)}. El saldo alcanza.
+            </Aviso>
+          </motion.div>
         )}
 
         {metricas.estado_recarga === 'recarga_ya' && (
-          <Aviso tono="ambar" titulo="Recarga ya">
-            {metricas.fecha_agotamiento
-              ? `El primer cobro que no se podra pagar cae el ${formatearFecha(
-                  metricas.fecha_agotamiento,
-                )}.`
-              : 'El saldo se queda corto.'}
-          </Aviso>
+          <motion.div variants={elementoDeLista}>
+            <Aviso tono="ambar" titulo="Recarga ya">
+              {metricas.fecha_agotamiento
+                ? `El primer cobro que no se podra pagar cae el ${formatearFecha(
+                    metricas.fecha_agotamiento,
+                  )}.`
+                : 'El saldo se queda corto.'}
+            </Aviso>
+          </motion.div>
         )}
 
-        <div className="grid grid-cols-3 gap-3">
+        <motion.div variants={elementoDeLista} className="grid grid-cols-3 gap-3">
           <Metrica
             etiqueta="Te queda"
             valor={
               metricas.meses_restantes === null
                 ? '24+ meses'
-                : metricas.meses_restantes === 0
-                  ? `${metricas.dias_restantes} dias`
-                  : `${metricas.meses_restantes} ${
-                      metricas.meses_restantes === 1 ? 'mes' : 'meses'
-                    }`
+                : tiempoRestante(metricas.meses_restantes, metricas.dias_restantes)
             }
             tono={paleta.texto}
           />
@@ -228,41 +249,73 @@ export function Cuenta() {
                   : '—'
             }
           />
-        </div>
+        </motion.div>
 
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-tenue">Suscripciones</h2>
+        <motion.div variants={elementoDeLista}>
+          <div className="mb-3 mt-2 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-tenue">Suscripciones</h2>
+            <button
+              type="button"
+              className="boton-secundario px-3 py-1.5 text-xs"
+              onClick={() => setPanel({ tipo: 'suscripcion' })}
+            >
+              Anadir
+            </button>
+          </div>
+
+          <ListaSuscripciones
+            cuenta={cuenta}
+            suscripciones={suscripciones}
+            riesgoPorId={riesgoPorId}
+            onCambiarPrecio={(s) => setPanel({ tipo: 'precio', suscripcion: s })}
+            onReactivar={(s) => setPanel({ tipo: 'reactivar', suscripcion: s })}
+            onCancelar={async (s) => {
+              await api.cancelarSuscripcion(s.id)
+              recargar()
+            }}
+          />
+        </motion.div>
+
+        <motion.div variants={elementoDeLista}>
+          <LineaTemporal
+            cuenta={cuenta}
+            metricas={metricas}
+            proyeccion={proyeccion}
+            horizonteMeses={datos.horizonte_meses}
+          />
+        </motion.div>
+
+        <motion.div variants={elementoDeLista}>
+          <PanelNotas cuenta={cuenta} />
+        </motion.div>
+
+        <motion.div variants={elementoDeLista}>
+          <Historial cuenta={cuenta} transacciones={transacciones} />
+        </motion.div>
+      </motion.div>
+
+      {/* Acciones principales fijas abajo: se llega con una mano. */}
+      <div
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-40
+                   bg-gradient-to-t from-fondo via-fondo/90 to-transparent pt-8"
+        style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+      >
+        <div className="mx-auto flex max-w-2xl gap-2 px-4">
           <button
             type="button"
-            className="boton-secundario px-3 py-1.5 text-xs"
-            onClick={() => setPanel({ tipo: 'suscripcion' })}
+            className="boton-principal pointer-events-auto flex-1 shadow-lg shadow-black/40"
+            onClick={() => setPanel({ tipo: 'recarga' })}
           >
-            Anadir
+            Recargar
+          </button>
+          <button
+            type="button"
+            className="boton-secundario pointer-events-auto flex-1 shadow-lg shadow-black/40"
+            onClick={() => setPanel({ tipo: 'reconciliar' })}
+          >
+            Reconciliar
           </button>
         </div>
-
-        <ListaSuscripciones
-          cuenta={cuenta}
-          suscripciones={suscripciones}
-          riesgoPorId={riesgoPorId}
-          onCambiarPrecio={(s) => setPanel({ tipo: 'precio', suscripcion: s })}
-          onReactivar={(s) => setPanel({ tipo: 'reactivar', suscripcion: s })}
-          onCancelar={async (s) => {
-            await api.cancelarSuscripcion(s.id)
-            recargar()
-          }}
-        />
-
-        <LineaTemporal
-          cuenta={cuenta}
-          metricas={metricas}
-          proyeccion={proyeccion}
-          horizonteMeses={datos.horizonte_meses}
-        />
-
-        <PanelNotas cuenta={cuenta} />
-
-        <Historial cuenta={cuenta} transacciones={transacciones} />
       </div>
 
       <Dialogo
@@ -290,11 +343,7 @@ export function Cuenta() {
         abierto={panel.tipo === 'suscripcion'}
         onCerrar={cerrar}
       >
-        <FormularioSuscripcion
-          cuenta={cuenta}
-          onHecho={hecho}
-          onCancelar={cerrar}
-        />
+        <FormularioSuscripcion cuenta={cuenta} onHecho={hecho} onCancelar={cerrar} />
       </Dialogo>
 
       <Dialogo
@@ -333,6 +382,6 @@ export function Cuenta() {
           />
         )}
       </Dialogo>
-    </div>
+    </motion.div>
   )
 }

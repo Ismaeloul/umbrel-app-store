@@ -1,7 +1,10 @@
 // Piezas de interfaz compartidas.
 
+import { AnimatePresence, motion } from 'framer-motion'
 import type { ReactNode } from 'react'
 import { useEffect, useId, useRef } from 'react'
+
+import { hoja, velo } from '../lib/animacion'
 
 export function Etiqueta({
   children,
@@ -75,38 +78,49 @@ export function Dialogo({
     }
   }, [abierto, onCerrar])
 
-  if (!abierto) return null
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onCerrar()
-      }}
-    >
-      <div
-        ref={panel}
-        role="dialog"
-        aria-modal="true"
-        aria-label={titulo}
-        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-3xl border
-                   border-borde bg-superficie p-5 sm:rounded-3xl"
-        style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{titulo}</h2>
-          <button
-            type="button"
-            onClick={onCerrar}
-            className="boton-fantasma -mr-2 px-2 py-1"
-            aria-label="Cerrar"
+    <AnimatePresence>
+      {abierto && (
+        <motion.div
+          key="velo"
+          variants={velo}
+          initial="oculto"
+          animate="visible"
+          exit="salida"
+          // Sube desde abajo en el movil, donde se llega con el pulgar; en
+          // pantalla ancha aparece centrado.
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70
+                     backdrop-blur-sm sm:items-center sm:p-4"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) onCerrar()
+          }}
+        >
+          <motion.div
+            ref={panel}
+            variants={hoja}
+            role="dialog"
+            aria-modal="true"
+            aria-label={titulo}
+            className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-3xl
+                       border border-borde bg-superficie p-5 sm:rounded-3xl"
+            style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
           >
-            Cerrar
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-lg font-semibold tracking-tight">{titulo}</h2>
+              <button
+                type="button"
+                onClick={onCerrar}
+                className="boton-fantasma -mr-2 px-2 py-1"
+                aria-label="Cerrar"
+              >
+                Cerrar
+              </button>
+            </div>
+            {children}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }
 
