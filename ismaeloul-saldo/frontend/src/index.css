@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    color-scheme: dark;
+    /* Sin rebote elastico al llegar al final: la app se lee como una app. */
+    overscroll-behavior-y: none;
+  }
+
+  body {
+    @apply bg-fondo text-texto font-sans antialiased;
+    /* Instalada en el movil, el contenido no se mete bajo la barra ni bajo
+       el indicador de inicio. */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Foco visible siempre, tambien con teclado. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-menta/70 ring-offset-2 ring-offset-fondo;
+  }
+}
+
+@layer components {
+  /* Cifras de ancho fijo: al animar un saldo los digitos no bailan. */
+  .cifras {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+
+  .tarjeta {
+    @apply rounded-tarjeta border border-borde bg-superficie;
+  }
+
+  .boton {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3
+           text-sm font-medium transition-colors disabled:opacity-50
+           disabled:pointer-events-none;
+  }
+
+  .boton-principal {
+    @apply boton bg-menta text-fondo hover:bg-menta/90;
+  }
+
+  .boton-secundario {
+    @apply boton border border-borde bg-elevada text-texto hover:border-apagado;
+  }
+
+  .boton-fantasma {
+    @apply boton text-tenue hover:text-texto;
+  }
+
+  .campo {
+    @apply w-full rounded-xl border border-borde bg-fondo px-3 py-3 text-base
+           text-texto placeholder:text-apagado
+           focus:border-menta focus:outline-none;
+  }
+
+  .etiqueta {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1
+           text-xs font-medium;
+  }
+}
+
+/* Nadie tiene por que marearse por una animacion nuestra. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
