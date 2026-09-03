@@ -3,3 +3,6 @@ uvicorn[standard]==0.34.0
 SQLAlchemy==2.0.36
 pydantic==2.10.4
 APScheduler==3.11.0
+# zoneinfo necesita la base de datos de husos: no la damos por
+# supuesta en la imagen base.
+tzdata==2024.2

@@ -24,11 +24,14 @@ Sin libreria de estado global: un cliente `fetch` propio y hooks.
 ismaeloul-saldo/
   CLAUDE.md              este fichero
   README.md              arranque, instalacion en Umbrel, copia de seguridad
-  Dockerfile             multi-stage: Vite -> Python
+  Dockerfile             multi-stage: Vite compila, Python sirve
   docker-compose.yml     desarrollo/local, publica el puerto y monta ./data
+  umbrel-app.yml         manifiesto de la app de Umbrel (id ismaeloul-saldo)
   umbrel/
-    docker-compose.yml   formato de app de Umbrel (servicio app_proxy)
-  umbrel-app.yml         manifiesto de la app de Umbrel
+    docker-compose.yml   formato de app de Umbrel (app_proxy). Para instalar
+                         la app hay que copiarlo sobre el de la raiz: son dos
+                         formatos incompatibles y solo cabe uno.
+    publicar.sh          construye, pasa los tests y publica al registro
   icon.svg
   backend/
     requirements.txt     dependencias de produccion
@@ -41,6 +44,11 @@ ismaeloul-saldo/
       db.py              engine, sesiones, creacion idempotente del esquema
       models.py          esquema SQLAlchemy
       schemas.py         modelos Pydantic de entrada/salida
+      mapping.py         puente filas -> motor (un solo lector de precios)
+      operations.py      operaciones de dominio (reactivar, cancelar)
+      presenter.py       filas y metricas -> modelos de salida
+      deps.py            dependencias de FastAPI (sesion, "hoy", 404)
+      errors.py          errores 422 con la forma de FastAPI (loc/msg/type)
       money.py           exponentes ISO 4217, formateo y parseo
       dates.py           reglas de fechas de cobro (anchors)
       projection.py      MOTOR DE PROYECCION: Python puro, sin BD ni FastAPI
@@ -115,8 +123,12 @@ pytest
 Dentro del contenedor:
 
 ```sh
-docker compose run --rm saldo sh -c "pip install -r requirements-dev.txt && pytest"
+docker compose run --rm saldo pytest -q
 ```
+
+Los tests viajan dentro de la imagen a proposito: pasar pytest dentro del
+contenedor es un criterio de aceptacion de la app, y asi no hace falta ni red
+ni instalar nada.
 
 Los tests congelan "hoy" con una fecha fija. Si escribes logica nueva que
 necesita saber que dia es, recibe la fecha por parametro; no llames al reloj.

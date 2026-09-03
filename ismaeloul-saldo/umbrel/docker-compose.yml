@@ -1,0 +1,36 @@
+version: "3.7"
+
+# Este es el docker-compose con el formato de app de Umbrel. Para instalar la
+# app hay que COPIARLO a la raiz de ismaeloul-saldo/, encima del
+# docker-compose.yml de desarrollo (que es el que construye la imagen y
+# publica el puerto en local). Lo explica el README.
+#
+# umbreld ignora pull_policy: no le vale una imagen construida a mano con
+# docker build, tiene que poder resolverla contra un registro. Por eso la
+# imagen se publica antes en el registro local del NAS, igual que hacen
+# ace-player-neo, ipa-station y trajet.
+
+services:
+  app_proxy:
+    environment:
+      APP_HOST: ismaeloul-saldo_web_1
+      APP_PORT: "8080"
+      # App personal en la red privada: sin login extra por delante.
+      PROXY_AUTH_ADD: "false"
+
+  web:
+    image: localhost:5000/ismaeloul-saldo/saldo:0.1.0
+    container_name: ismaeloul-saldo_web_1
+    restart: unless-stopped
+    init: true
+    environment:
+      PORT: "8080"
+      TZ: "Europe/Paris"
+      # Hora a la que corre la tarea diaria, en Europe/Paris.
+      SALDO_HORA_TAREA: "3"
+    volumes:
+      # Aqui vive saldo.db. Es lo unico que hay que respaldar, y sobrevive a
+      # las actualizaciones de la app.
+      - ${APP_DATA_DIR}/data:/app/data
+    mem_limit: 512m
+    pids_limit: 128

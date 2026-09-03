@@ -1,0 +1,64 @@
+manifestVersion: 1
+id: ismaeloul-saldo
+category: finance
+icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-saldo/icon.svg"
+name: Saldo
+version: "0.1.0"
+tagline: Cuánto te dura el saldo prepago de tus cuentas de tiendas de apps
+description: >-
+  Saldo lleva la cuenta del prepago y las suscripciones de tus cuentas de App
+  Store, Google Play y demás tiendas, cuando no quieres meter la tarjeta y
+  recargas con saldo.
+
+  De un vistazo sabes cuántos meses te dura cada cuenta, qué día se agota y
+  qué día tienes que recargar para que no falle un cobro. El cálculo no es una
+  media: la app simula cobro a cobro los próximos 24 meses con las fechas
+  reales de cada suscripción, así que una anual que cae dentro de tres meses
+  te deja el margen en tres meses aunque «de media» el saldo diera para ocho.
+
+  Si empiezas una suscripción con prueba gratuita, la marca con el día en que
+  pasa a cobro y te avisa con prioridad si el saldo proyectado no va a llegar
+  a ese día, que es justo cuando se pierde la prueba.
+
+  Cada cuenta tiene su región y su divisa, con los decimales que le tocan por
+  la norma ISO 4217: euros con dos, yenes sin ninguno, dinares con tres. Nunca
+  se mezclan divisas ni se convierte nada.
+
+  Todos los datos los metes tú a mano. La app no habla con Apple ni con
+  Google, no pide credenciales de ninguna tienda y no sale a internet: es un
+  simulador de saldo, no un lector. Sin usuarios ni contraseñas, pensada para
+  entrar por la red privada.
+
+releaseNotes: >-
+  Primera versión.
+
+  El panel ordena las cuentas por la que antes se queda sin saldo, con el
+  saldo en grande y una barra de margen en rojo si quedan 30 días o menos, en
+  ámbar si 60 o menos y en verde por encima.
+
+  El detalle de cada cuenta trae la línea temporal de los próximos 24 meses
+  con el saldo que queda tras cada cobro y una marca en el cargo que provoca
+  la primera pérdida, la tabla de suscripciones con las perdidas separadas y
+  su botón de reactivar, el historial de movimientos y un panel de notas que
+  se guarda solo.
+
+  Puedes registrar recargas y reconciliar: escribes el saldo real que ves en
+  la tienda y la app anota la diferencia como ajuste con su motivo.
+
+  Los cobros vencidos se aplican solos al arrancar y una vez al día. Si el NAS
+  ha estado apagado, se pone al día en orden cronológico estricto; y si un
+  cobro no cabe, esa suscripción se marca como perdida y las demás siguen su
+  curso, sin que el saldo baje nunca de cero.
+
+developer: Ismaeloul
+website: https://github.com/Ismaeloul/umbrel-app-store
+dependencies: []
+repo: https://github.com/Ismaeloul/umbrel-app-store
+support: https://github.com/Ismaeloul/umbrel-app-store/issues
+port: 7797
+gallery: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
+submitter: Ismaeloul
+submission: https://github.com/Ismaeloul/umbrel-app-store
