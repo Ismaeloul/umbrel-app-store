@@ -189,3 +189,22 @@ def parsear(texto: str, divisa: str) -> int:
 def a_unidad_mayor(minor: int, divisa: str) -> float:
     """Solo para mostrar o serializar. Nunca para calcular."""
     return minor / (10 ** exponente(divisa))
+
+
+def divisas_conocidas() -> list[dict[str, object]]:
+    """Catalogo para el selector de divisa del frontend.
+
+    No es exhaustivo ni pretende serlo: cualquier codigo ISO de tres letras
+    vale, y el que no este aqui usa el exponente por defecto.
+    """
+    codigos = (
+        set(_SIMBOLOS)
+        | _EXPONENTE_0
+        | _EXPONENTE_3
+        | _EXPONENTE_4
+        | {"EUR", "USD", "GBP", "MAD", "ARS", "COP", "PEN", "ZAR", "AED", "SAR"}
+    )
+    return [
+        {"codigo": codigo, "exponente": exponente(codigo), "simbolo": simbolo(codigo)}
+        for codigo in sorted(codigos)
+    ]
