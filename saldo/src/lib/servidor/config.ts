@@ -32,6 +32,8 @@ export const config = {
   avisoDias: numero('SALDO_AVISO_DIAS', 30),
   /** Avisa cuando una prueba gratuita pasa a cobro dentro de estos dias. */
   avisoPruebaDias: numero('SALDO_AVISO_PRUEBA_DIAS', 7),
+  /** Cada cuantos dias insistir con el aviso de poco saldo. 1 = todos los dias. */
+  recordarCada: numero('SALDO_RECORDAR_CADA', 1),
 
   correo: {
     servidor: texto('SALDO_SMTP_HOST', ''),

@@ -19,8 +19,8 @@ falle un cobro**. Eso es lo que responde esta app.
   comparan importes de divisas distintas, y no hay conversión.
 - **Te avisa por correo.** Un solo correo al día como mucho, con todo junto: las
   cuentas con poco margen, las pruebas gratuitas a punto de pasar a cobro y lo
-  que se haya perdido. El de poco saldo **insiste una vez por semana** hasta que
-  recargues; los demás se dicen una vez y se callan.
+  que se haya perdido. El de poco saldo **insiste todos los días** hasta que
+  recargues (se puede espaciar en Ajustes); los demás se dicen una vez.
 - **Una cuenta, una tarjeta.** Cada cuenta se da de alta de un tirón con su
   correo, su tienda, su región, su saldo, sus suscripciones y sus notas.
 - **Los datos los metes tú.** La app no habla con Apple ni con Google y no pide
@@ -79,6 +79,7 @@ las variables son solo el valor de partida.
 | `SALDO_CORREO_DE` · `SALDO_CORREO_PARA` | Remitente y destinatario |
 | `SALDO_AVISO_DIAS` | Avisar con estos días de margen o menos (30) |
 | `SALDO_AVISO_PRUEBA_DIAS` | Avisar si una prueba pasa a cobro dentro de tantos días (7) |
+| `SALDO_RECORDAR_CADA` | Cada cuántos días repetir el aviso de poco saldo (1) |
 | `SALDO_HORA_TAREA` | Hora local de la pasada diaria (3) |
 | `SALDO_TAREAS_DE_FONDO` | A `0` se apagan la pasada diaria y la de arranque |
 | `SALDO_DATA_DIR` · `TZ` | Dónde vive la base y con qué huso se decide qué día es hoy |

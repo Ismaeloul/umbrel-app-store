@@ -41,8 +41,7 @@
     <form method="POST" action="?/guardar" class="tarjeta caja formulario" bind:this={formulario} use:enhance>
       <p class="ayuda">
         Un solo correo al día como mucho, con todo junto: las cuentas con poco margen, las
-        pruebas que pasan a cobro y lo que se haya perdido. El de poco saldo te lo recuerda
-        una vez por semana hasta que recargues.
+        pruebas que pasan a cobro y lo que se haya perdido.
       </p>
 
       <div class="atajo">
@@ -131,6 +130,15 @@
           />
         </label>
       </div>
+
+      <label class="campo">
+        <span>Recordármelo cada… (días)</span>
+        <input name="recordarCada" type="number" value={data.recordarCada} min="1" max="90" />
+        <small>
+          Mientras a una cuenta le quede poco saldo, te lo repite con esta frecuencia hasta
+          que recargues. A 1, todos los días.
+        </small>
+      </label>
 
       <div class="acciones">
         <button class="boton" type="submit">Guardar</button>

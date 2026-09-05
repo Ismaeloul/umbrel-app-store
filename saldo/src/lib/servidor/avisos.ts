@@ -14,13 +14,12 @@ export interface Aviso {
   detalle: string;
   /**
    * Cada cuantos dias volver a insistir mientras la cosa siga igual. `null` es
-   * avisar una sola vez y callarse.
+   * avisar una sola vez y callarse. Lo de «poco saldo» insiste hasta que
+   * recargues, al ritmo que digan los ajustes.
    */
   repetirCada: number | null;
 }
 
-/** Lo de «poco saldo» se recuerda una vez por semana hasta que recargues. */
-const RECORDAR_MARGEN = 7;
 
 /**
  * Que hay que mirar hoy. Devuelve TODO lo que pasa, sin filtrar por lo ya
@@ -62,7 +61,7 @@ export function revisar(conn: DatabaseSync, hoy: string, aplicados: Aplicado[] =
       avisos.push({
         clave: `margen:${cuenta.id}:${proyeccion.seAgotaEl}`,
         prioridad: 1,
-        repetirCada: RECORDAR_MARGEN,
+        repetirCada: prefs.recordarCada,
         titulo: `A ${nombre} le quedan ${proyeccion.diasRestantes} días de saldo`,
         detalle: `Se queda sin saldo el ${fechaLarga(proyeccion.seAgotaEl!, hoy)}, en el cobro de ${proyeccion.primerFallo.nombre} (${formatear(proyeccion.primerFallo.importe, cuenta.divisa, cuenta.locale)}). Ahora mismo tiene ${formatear(cuenta.saldo, cuenta.divisa, cuenta.locale)}.`
       });

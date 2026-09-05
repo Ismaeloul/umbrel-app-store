@@ -25,7 +25,8 @@ export const load: PageServerLoad = async () => {
     tieneClave: p.correo.clave !== '',
     configurado: correoConfigurado(p),
     avisoDias: p.avisoDias,
-    avisoPruebaDias: p.avisoPruebaDias
+    avisoPruebaDias: p.avisoPruebaDias,
+    recordarCada: p.recordarCada
   };
 };
 
@@ -33,6 +34,7 @@ function delFormulario(datos: FormData) {
   const puerto = Number(datos.get('puerto'));
   const dias = Number(datos.get('avisoDias'));
   const diasPrueba = Number(datos.get('avisoPruebaDias'));
+  const recordar = Number(datos.get('recordarCada'));
 
   return {
     servidor: String(datos.get('servidor') ?? ''),
@@ -44,7 +46,8 @@ function delFormulario(datos: FormData) {
     de: String(datos.get('de') ?? ''),
     para: String(datos.get('para') ?? ''),
     avisoDias: Number.isFinite(dias) && dias > 0 ? dias : 30,
-    avisoPruebaDias: Number.isFinite(diasPrueba) && diasPrueba > 0 ? diasPrueba : 7
+    avisoPruebaDias: Number.isFinite(diasPrueba) && diasPrueba > 0 ? diasPrueba : 7,
+    recordarCada: Number.isFinite(recordar) && recordar > 0 ? recordar : 1
   };
 }
 

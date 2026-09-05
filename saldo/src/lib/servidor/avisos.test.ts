@@ -68,32 +68,32 @@ describe('aviso de poco saldo', () => {
     expect(revisar(conn, HOY).filter((a) => a.clave.startsWith('margen:'))).toHaveLength(1);
   });
 
-  it('no repite el mismo aviso al dia siguiente', () => {
-    mensualQueVacia(HOY);
-
-    const primera = sinRepetir(conn, revisar(conn, HOY), HOY);
-    expect(primera).toHaveLength(1);
-    marcarEnviados(conn, primera, HOY);
-
-    // Al dia siguiente sigue estando igual de mal, pero ya te lo dijo.
-    expect(sinRepetir(conn, revisar(conn, '2026-09-06'), '2026-09-06')).toHaveLength(0);
-  });
-
-  it('insiste una vez por semana mientras no recargues', () => {
+  it('por defecto insiste TODOS los dias hasta que recargues', () => {
     mensualQueVacia(HOY);
     marcarEnviados(conn, sinRepetir(conn, revisar(conn, HOY), HOY), HOY);
 
-    // A los seis dias todavia se calla.
+    for (const dia of ['2026-09-06', '2026-09-07', '2026-09-08']) {
+      const hoy = sinRepetir(conn, revisar(conn, dia), dia);
+      expect(hoy).toHaveLength(1);
+      marcarEnviados(conn, hoy, dia);
+    }
+  });
+
+  it('pero no repite dentro del mismo dia, aunque reinicies la app', () => {
+    mensualQueVacia(HOY);
+    marcarEnviados(conn, sinRepetir(conn, revisar(conn, HOY), HOY), HOY);
+
+    expect(sinRepetir(conn, revisar(conn, HOY), HOY)).toHaveLength(0);
+  });
+
+  it('el ritmo se puede espaciar desde los ajustes', () => {
+    guardarPreferencias(conn, { recordarCada: 7 });
+    mensualQueVacia(HOY);
+    marcarEnviados(conn, sinRepetir(conn, revisar(conn, HOY), HOY), HOY);
+
+    // A los seis dias se calla; al septimo vuelve.
     expect(sinRepetir(conn, revisar(conn, '2026-09-11'), '2026-09-11')).toHaveLength(0);
-
-    // Al septimo vuelve a avisar, y se anota la nueva fecha.
-    const semana = sinRepetir(conn, revisar(conn, '2026-09-12'), '2026-09-12');
-    expect(semana).toHaveLength(1);
-    marcarEnviados(conn, semana, '2026-09-12');
-
-    // Y a partir de ahi, otra semana de silencio.
-    expect(sinRepetir(conn, revisar(conn, '2026-09-13'), '2026-09-13')).toHaveLength(0);
-    expect(sinRepetir(conn, revisar(conn, '2026-09-19'), '2026-09-19')).toHaveLength(1);
+    expect(sinRepetir(conn, revisar(conn, '2026-09-12'), '2026-09-12')).toHaveLength(1);
   });
 
   it('el aviso de fin de prueba NO se repite: la ventana es corta', () => {

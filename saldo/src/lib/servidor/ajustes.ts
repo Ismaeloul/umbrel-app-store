@@ -20,6 +20,8 @@ export interface Preferencias {
   correo: Correo;
   avisoDias: number;
   avisoPruebaDias: number;
+  /** Cada cuantos dias repetir el aviso de poco saldo. 1 = todos los dias. */
+  recordarCada: number;
 }
 
 /** Lo que se guarda en la tabla. La clave es texto plano, sin anidar. */
@@ -32,7 +34,8 @@ type Clave =
   | 'correo.de'
   | 'correo.para'
   | 'avisoDias'
-  | 'avisoPruebaDias';
+  | 'avisoPruebaDias'
+  | 'recordarCada';
 
 function leer(conn: DatabaseSync, clave: Clave): string | null {
   const fila = conn.prepare('SELECT valor FROM ajustes WHERE clave = ?').get(clave) as
@@ -65,7 +68,9 @@ export function preferencias(conn: DatabaseSync): Preferencias {
       para: texto('correo.para', config.correo.para)
     },
     avisoDias: numero('avisoDias', config.avisoDias),
-    avisoPruebaDias: numero('avisoPruebaDias', config.avisoPruebaDias)
+    avisoPruebaDias: numero('avisoPruebaDias', config.avisoPruebaDias),
+    // Nunca menos de un dia: si no, cada reinicio de la app seria un correo.
+    recordarCada: Math.max(1, numero('recordarCada', config.recordarCada))
   };
 }
 
@@ -80,6 +85,7 @@ export function guardarPreferencias(
     clave?: string;
     avisoDias?: number;
     avisoPruebaDias?: number;
+    recordarCada?: number;
   }
 ): void {
   if (datos.servidor !== undefined) escribir(conn, 'correo.servidor', datos.servidor.trim());
@@ -92,6 +98,8 @@ export function guardarPreferencias(
   if (datos.avisoDias !== undefined) escribir(conn, 'avisoDias', String(datos.avisoDias));
   if (datos.avisoPruebaDias !== undefined)
     escribir(conn, 'avisoPruebaDias', String(datos.avisoPruebaDias));
+  if (datos.recordarCada !== undefined)
+    escribir(conn, 'recordarCada', String(Math.max(1, datos.recordarCada)));
 }
 
 export function olvidarClave(conn: DatabaseSync): void {
