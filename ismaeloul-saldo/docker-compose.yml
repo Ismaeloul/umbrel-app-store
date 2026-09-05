@@ -2,9 +2,11 @@ version: "3.7"
 
 # Formato de app de Umbrel. Este es el UNICO compose de la carpeta: umbreld
 # hace `docker pull` de cada `image:` antes de arrancar nada e ignora
-# `pull_policy`, asi que aqui jamas puede haber un `build:`. La imagen se
-# construye fuera (ver ../saldo/) y se publica en el registro local del NAS,
-# igual que en ace-player-neo e ipa-station.
+# `pull_policy`, asi que aqui jamas puede haber un `build:`.
+#
+# La imagen la construye y la publica GitHub Actions en cada push que toque
+# `saldo/`, y vive en ghcr.io, que es publico: el NAS se la baja sin
+# credenciales y sin tener que construir nada a mano.
 
 services:
   app_proxy:
@@ -15,13 +17,13 @@ services:
       PROXY_AUTH_ADD: "false"
 
   web:
-    image: localhost:5000/ismaeloul-saldo/saldo:0.1.0
+    image: ghcr.io/ismaeloul/saldo:0.1.0
     container_name: ismaeloul-saldo_web_1
     restart: unless-stopped
     init: true
     environment:
       PORT: "3000"
-      TZ: "Europe/Paris"
+      TZ: "Europe/Madrid"
       SALDO_DATA_DIR: "/app/data"
     volumes:
       # Aqui vivira saldo.db. Es lo unico que habra que respaldar, y sobrevive

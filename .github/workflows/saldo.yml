@@ -1,0 +1,66 @@
+name: Saldo
+
+# Construye la imagen de Saldo y la publica en ghcr.io, que es publico, para que
+# el Umbrel se la pueda bajar al instalar la app sin credenciales ni registros
+# locales. Los tests corren dentro de la construccion (ver saldo/Dockerfile):
+# si fallan, no hay imagen que publicar.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'saldo/**'
+      - 'ismaeloul-saldo/umbrel-app.yml'
+      - '.github/workflows/saldo.yml'
+  workflow_dispatch:
+
+jobs:
+  imagen:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # La version sale de umbrel-app.yml, que es la que ve el usuario en la
+      # tienda: asi la etiqueta de la imagen no se puede desincronizar del
+      # manifiesto.
+      - name: Leer la version del manifiesto
+        id: version
+        run: |
+          v=$(sed -n 's/^version: *"\(.*\)"/\1/p' ismaeloul-saldo/umbrel-app.yml)
+          if [ -z "$v" ]; then echo "No se encuentra la version" >&2; exit 1; fi
+          echo "v=$v" >> "$GITHUB_OUTPUT"
+          echo "Publicando la version $v"
+
+      - name: Comprobar que el compose apunta a esa misma version
+        run: |
+          v='${{ steps.version.outputs.v }}'
+          grep -q "image: ghcr.io/ismaeloul/saldo:$v" ismaeloul-saldo/docker-compose.yml || {
+            echo "docker-compose.yml no apunta a la version $v de umbrel-app.yml" >&2
+            exit 1
+          }
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Solo amd64: el Umbrel Pro lleva un Intel. Si algun dia la app tiene que
+      # correr en un Raspberry Pi, aqui se anade linux/arm64.
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./saldo
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: |
+            ghcr.io/ismaeloul/saldo:${{ steps.version.outputs.v }}
+            ghcr.io/ismaeloul/saldo:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

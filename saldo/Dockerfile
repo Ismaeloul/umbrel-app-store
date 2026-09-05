@@ -4,6 +4,8 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
+# Los tests son criterio de aceptacion de la imagen: si fallan, no hay imagen.
+RUN npm test
 RUN npm run build
 
 FROM node:24-alpine

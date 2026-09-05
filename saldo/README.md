@@ -175,6 +175,22 @@ ficheros**: el `docker-compose.yml` en formato Umbrel (con `app_proxy` y una
 `image:` del registro local), `umbrel-app.yml` e `icon.svg`. Aquí no hay ningún
 paso de copiar ficheros a mano: umbreld hace `docker pull` de la imagen y punto.
 
+La imagen la construye y la publica **GitHub solo**, en cada `push` que toque
+`saldo/` (ver `.github/workflows/saldo.yml`). Sale a `ghcr.io/ismaeloul/saldo`,
+que es público, así que el Umbrel se la baja sin credenciales ni registros
+locales: nada que construir a mano en el NAS.
+
+Instalarla es entonces lo de siempre: en umbrelOS, actualizar la tienda para que
+vea el commit nuevo e instalar Saldo.
+
+Para sacar una versión nueva: subir el número en `umbrel-app.yml` **y** en su
+`docker-compose.yml`, y empujar. El workflow etiqueta la imagen con esa misma
+versión, así que los dos ficheros y la imagen no se pueden desincronizar.
+
+Los ajustes (la cuenta de correo, los umbrales) viven en `saldo.db`, así que en el
+Umbrel hay que rellenarlos otra vez desde la pantalla de Ajustes — o copiar allí
+el fichero de la base de datos.
+
 El aviso honesto: el service worker solo se registra en `localhost` o por
 HTTPS. Entrando por `http://umbrel.local` la app funciona, pero sin la parte de
 abrir offline; por Tailscale con HTTPS, sí.
