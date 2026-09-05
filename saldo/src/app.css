@@ -1,0 +1,159 @@
+:root {
+  --papel: #f6f2ea;
+  --tarjeta: #ffffff;
+  --borde: #e7dfcf;
+  --borde-fuerte: #d8cdb6;
+  --separador: #f0e9da;
+  --pista: #efe7d8;
+  --tinta: #1f1b16;
+  --tinta-media: #564f45;
+  --tinta-suave: #7a7065;
+  --tinta-tenue: #9a8f80;
+  --rojo: #c0442c;
+  --rojo-fondo: #faeae5;
+  --ambar: #b07a16;
+  --verde: #4a7c3f;
+  --radio: 16px;
+  --radio-chico: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--papel);
+}
+
+body {
+  margin: 0;
+  background: var(--papel);
+  color: var(--tinta);
+  font-family: 'Roboto', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mono {
+  font-family: 'Roboto Mono', ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.rotulo {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tinta-tenue);
+}
+
+.tarjeta {
+  background: var(--tarjeta);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+}
+
+.barra {
+  height: 5px;
+  border-radius: 99px;
+  background: var(--pista);
+  overflow: hidden;
+}
+
+.barra > div {
+  height: 100%;
+  transition: width 0.35s ease;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ------------------------------------------------------------ formularios */
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.campo > span {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tinta-media);
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  min-height: 46px;
+  padding: 11px 13px;
+  background: var(--tarjeta);
+  border: 1px solid var(--borde-fuerte);
+  border-radius: 11px;
+  color: var(--tinta);
+  font-family: inherit;
+  font-size: 15px;
+}
+
+textarea {
+  min-height: 92px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid var(--tinta);
+  outline-offset: -1px;
+}
+
+.boton {
+  min-height: 48px;
+  padding: 0 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  background: var(--tinta);
+  border: 1px solid var(--tinta);
+  border-radius: 12px;
+  color: var(--papel);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.boton.suave {
+  background: none;
+  border-color: var(--borde-fuerte);
+  color: var(--tinta);
+}
+
+.boton.suave:hover {
+  background: var(--tarjeta);
+}
+
+.boton.peligro {
+  background: none;
+  border-color: transparent;
+  color: var(--rojo);
+  min-height: 40px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.boton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.error {
+  padding: 12px 14px;
+  background: var(--rojo-fondo);
+  border-radius: 11px;
+  color: var(--rojo);
+  font-size: 13.5px;
+}

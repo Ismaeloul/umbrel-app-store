@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Saldo">
+  <!-- Version «maskable»: el dibujo cabe dentro del circulo seguro del 80 %,
+       para que Android pueda recortarlo con la forma que le de la gana. -->
+  <rect width="512" height="512" fill="#F6F2EA"/>
+  <g fill="none" stroke-width="45" stroke-linecap="round" transform="rotate(-90 256 256)">
+    <circle cx="256" cy="256" r="118" stroke="#E7DFCF"/>
+    <circle cx="256" cy="256" r="118" stroke="#C0442C" stroke-dasharray="459.7 281.4"/>
+  </g>
+</svg>

@@ -1,0 +1,28 @@
+# Compose de desarrollo: construye la imagen aqui mismo y publica el puerto.
+# NO es el de Umbrel — ese vive en ../ismaeloul-saldo/docker-compose.yml y
+# tiene otro formato (app_proxy + imagen del registro). No los mezcles.
+#
+#   docker compose up --build      →  http://localhost:7797
+
+services:
+  saldo:
+    build: .
+    image: localhost:5000/ismaeloul-saldo/saldo:0.1.0
+    container_name: saldo
+    restart: unless-stopped
+    init: true
+    ports:
+      - '7797:3000'
+    environment:
+      TZ: Europe/Madrid
+      SALDO_DATA_DIR: /app/data
+    # Las credenciales del correo van aqui, fuera de git. Sin este fichero la
+    # app arranca igual: simplemente no manda correos.
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      # saldo.db vive aqui. Es lo unico que hay que respaldar.
+      - ./data:/app/data
+    mem_limit: 512m
+    pids_limit: 128

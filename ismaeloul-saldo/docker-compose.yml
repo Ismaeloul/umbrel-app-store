@@ -1,20 +1,31 @@
-# Compose de desarrollo y de prueba en local: construye la imagen y publica
-# el puerto directamente. El compose con el formato de app de Umbrel (con el
-# servicio app_proxy) esta en umbrel/docker-compose.yml y se explica en el
-# README.
+version: "3.7"
+
+# Formato de app de Umbrel. Este es el UNICO compose de la carpeta: umbreld
+# hace `docker pull` de cada `image:` antes de arrancar nada e ignora
+# `pull_policy`, asi que aqui jamas puede haber un `build:`. La imagen se
+# construye fuera (ver ../saldo/) y se publica en el registro local del NAS,
+# igual que en ace-player-neo e ipa-station.
+
 services:
-  saldo:
-    build: .
-    container_name: saldo
+  app_proxy:
+    environment:
+      APP_HOST: ismaeloul-saldo_web_1
+      APP_PORT: "3000"
+      # App personal en la red privada: sin login extra por delante.
+      PROXY_AUTH_ADD: "false"
+
+  web:
+    image: localhost:5000/ismaeloul-saldo/saldo:0.1.0
+    container_name: ismaeloul-saldo_web_1
     restart: unless-stopped
     init: true
     environment:
-      PORT: "${PORT:-8080}"
+      PORT: "3000"
       TZ: "Europe/Paris"
-    ports:
-      - "${PORT:-8080}:${PORT:-8080}"
+      SALDO_DATA_DIR: "/app/data"
     volumes:
-      # La base de datos vive aqui. Es lo unico que hay que respaldar.
-      - ./data:/app/data
+      # Aqui vivira saldo.db. Es lo unico que habra que respaldar, y sobrevive
+      # a las actualizaciones de la app.
+      - ${APP_DATA_DIR}/data:/app/data
     mem_limit: 512m
     pids_limit: 128

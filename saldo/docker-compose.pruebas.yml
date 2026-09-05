@@ -1,0 +1,29 @@
+# Buzon de mentira para probar los avisos SIN tocar una cuenta de correo real.
+# Mailpit se traga todo lo que le mandes y lo enseña en una web.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.pruebas.yml up -d --build
+#
+# La app queda en http://localhost:7797 y el buzon en http://localhost:8025.
+
+services:
+  buzon:
+    image: axllent/mailpit:v1.21
+    container_name: saldo-buzon
+    restart: unless-stopped
+    ports:
+      - '8025:8025'
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: '1'
+      MP_SMTP_AUTH_ALLOW_INSECURE: '1'
+
+  saldo:
+    depends_on:
+      - buzon
+    environment:
+      TZ: Europe/Madrid
+      SALDO_DATA_DIR: /app/data
+      SALDO_SMTP_HOST: buzon
+      SALDO_SMTP_PUERTO: '1025'
+      SALDO_SMTP_SEGURO: '0'
+      SALDO_CORREO_DE: Saldo <saldo@umbrel.local>
+      SALDO_CORREO_PARA: yo@ejemplo.local
