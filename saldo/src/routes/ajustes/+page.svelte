@@ -97,6 +97,9 @@
       <label class="campo">
         <span>Nombre del remitente</span>
         <input name="de" value={data.correo.de} placeholder="Saldo &lt;tucuenta@gmail.com&gt;" autocomplete="off" />
+        <small>
+          Si lo dejas vacío o pones solo la dirección, el correo llega firmado como «Saldo».
+        </small>
       </label>
 
       <label class="campo">
