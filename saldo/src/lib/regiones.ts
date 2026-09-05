@@ -25,6 +25,7 @@ export const REGIONES: Region[] = [
   { id: 'ca', nombre: 'Canadá', divisa: 'CAD', locale: 'en-CA' },
   { id: 'ch', nombre: 'Suiza', divisa: 'CHF', locale: 'de-CH' },
   { id: 'ma', nombre: 'Marruecos', divisa: 'MAD', locale: 'ar-MA' },
+  { id: 'ng', nombre: 'Nigeria', divisa: 'NGN', locale: 'en-NG' },
   { id: 'tr', nombre: 'Turquía', divisa: 'TRY', locale: 'tr-TR' },
   { id: 'in', nombre: 'India', divisa: 'INR', locale: 'hi-IN' }
 ];

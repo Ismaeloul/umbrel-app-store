@@ -3,7 +3,7 @@ id: ismaeloul-saldo
 category: finance
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-saldo/icon.svg"
 name: Saldo
-version: "0.1.0"
+version: "0.1.1"
 tagline: Cuánto te dura el saldo prepago de tus cuentas de tiendas de apps
 description: >-
   Saldo lleva la cuenta del prepago y las suscripciones de tus cuentas de App
@@ -26,10 +26,8 @@ description: >-
   privada.
 
 releaseNotes: >-
-  Primera versión instalable. El panel ordena las cuentas por la que antes se
-  queda sin saldo, con los días que quedan en grande y una barra de margen en
-  rojo si quedan 30 días o menos, en ámbar si 60 o menos y en verde por
-  encima.
+  Se añade Nigeria a las regiones, con el naira: ₦12,345.50, con sus dos
+  decimales y con los separadores que usa allí, no los de aquí.
 
 developer: Ismaeloul
 website: https://github.com/Ismaeloul/umbrel-app-store

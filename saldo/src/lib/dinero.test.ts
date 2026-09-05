@@ -30,6 +30,10 @@ describe('formatear', () => {
     expect(formatear(3200, 'JPY', 'ja-JP')).toContain('3,200');
   });
 
+  it('el naira nigeriano lleva su simbolo y los separadores de alli', () => {
+    expect(formatear(1234550, 'NGN', 'en-NG')).toBe('₦12,345.50');
+  });
+
   it('el dinar lleva tres', () => {
     expect(formatear(1234, 'KWD', 'es-ES')).toContain('1,234');
   });
