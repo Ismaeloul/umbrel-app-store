@@ -3,22 +3,23 @@ id: ismaeloul-craftdeck
 category: networking
 name: CraftDeck
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-craftdeck/icon.svg"
-version: "0.5.2"
+version: "0.6.0"
 tagline: Crea y modera tu servidor de Minecraft desde el navegador
 description: >-
   Panel de control de servidores de Minecraft para umbrelOS. Crea servidores
-  Vanilla, Fabric, Forge o NeoForge eligiendo la versión de una lista (CraftDeck
-  descarga Java y el servidor por ti), arráncalos y páralos desde el navegador,
-  mira la consola en vivo, ejecuta comandos, gestiona jugadores (OP, kick, ban,
-  whitelist), instala mods de Modrinth con sus dependencias, edita
-  server.properties de forma visual y haz backups del mundo con un click o
-  automáticos cada día.
+  Vanilla, Paper (plugins), Fabric, Forge o NeoForge eligiendo la versión de una
+  lista, o directamente desde un modpack de Modrinth; CraftDeck descarga Java y
+  el servidor por ti. Arráncalos y páralos desde el navegador (también desde el
+  móvil), mira la consola en vivo, ejecuta comandos, gestiona jugadores (OP,
+  kick, ban, whitelist, historial de conexiones), instala mods y plugins de
+  Modrinth con sus dependencias, mira tu mundo en 3D con BlueMap, edita
+  server.properties de forma visual y haz backups con un click o automáticos a
+  la hora que quieras.
 
 
-  Tus amigos se conectan a la IP de tu Umbrel por el puerto de cada servidor
-  (25565 en adelante); el Dashboard te enseña la dirección lista para copiar,
-  también la pública si entran por una redirección del router.
-  Si el Umbrel se reinicia, los servidores que estaban encendidos vuelven solos.
+  Tus amigos se conectan a la dirección que te enseña el Dashboard (la de casa o
+  la pública, si entran por una redirección del router). Si el Umbrel se
+  reinicia, los servidores que estaban encendidos vuelven solos.
 developer: Ismaeloul
 website: https://github.com/Ismaeloul/craftdeck
 dependencies: []
@@ -32,21 +33,18 @@ defaultPassword: ""
 submitter: Ismaeloul
 submission: https://github.com/Ismaeloul/craftdeck
 releaseNotes: >-
-  Dirección pública por servidor: si tus amigos entran por una redirección del
-  router o un túnel, pon dominio:puerto en la tarjeta del Dashboard y esa es la
-  que se enseña y se copia. Selector de cuántas copias automáticas conservar
-  (las más antiguas se borran solas). La pestaña de mods instalados va por
-  páginas de 15, con filtro por nombre.
-
-
-  Los servidores vuelven a arrancar solos tras reiniciar el Umbrel o actualizar
-  CraftDeck (se recuerda cuáles estaban encendidos; se puede desactivar por
-  servidor en Mundo → Rendimiento). Panel usable desde el móvil, con menú
-  lateral plegable. Flags de JVM de Aikar por defecto: menos tirones de lag con
-  la misma RAM. El túnel de playit.gg puede arrancar solo con CraftDeck. Aviso
-  de RAM al crear o ajustar un servidor, comparando con la memoria libre real
-  del Umbrel. Si la creación de un servidor falla, ahora se ve el error y hay
-  botón de reintentar. Consola con historial de comandos (flecha arriba), hora
-  real de cada línea y las últimas líneas de latest.log al abrir el panel.
-  Icono en la tienda, arreglo del guardado de archivos grandes en el editor y
-  de la «próxima ejecución» de las tareas de cada 2 h o más.
+  Servidores Paper (plugins de Modrinth, sin que tus amigos instalen nada) y
+  cambio de versión de Minecraft conservando el mundo: se hace un backup, se
+  reinstala el servidor y los mods se pasan a una versión compatible (los que no
+  la tienen se desactivan y te lo dice). Un servidor vanilla se puede pasar a
+  Paper con el mismo mundo. Crear un servidor desde un modpack de Modrinth
+  (.mrpack) en un clic, y exportar el pack de amigos también como .mrpack para
+  que Prism, Modrinth App o ATLauncher monten el cliente solos. Mapa en vivo con
+  BlueMap: se instala, se configura y se ve dentro del panel. Subir al servidor
+  un mundo, un backup o un .jar arrastrándolo. Restaurar un backup ahora devuelve
+  solo el mundo por defecto (o todo, si lo eliges). Hora y días del backup
+  automático a tu gusto. Página «Todos los servidores» para arrancar y parar
+  cualquiera. Jugadores con su cara, historial de entradas y salidas y última
+  vez visto. Consola con filtro de avisos/errores y buscador. Si usas playit, el
+  túnel detectado se puede poner como dirección pública con un botón. Los crash
+  reports viejos se borran solos y el tiempo en línea de cada jugador avanza.
