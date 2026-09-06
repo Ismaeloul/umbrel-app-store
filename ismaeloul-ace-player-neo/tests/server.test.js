@@ -1646,3 +1646,112 @@ test("si el partido solo se anuncia por la marca, la marca vale", () => {
   );
   assert.equal(salida.length, 2, "no se aparta nada cuando no hay alternativa concreta");
 });
+
+/* ---------- 0.6.53: la marca no decide si hay canal concreto ---------- */
+
+test("las coletillas de calidad no convierten un canal en la marca", () => {
+  /* "M+ LALIGA" y "M+ LALIGA HDR" son el mismo canal en otra calidad. Contar
+     HDR como palabra hacia que "M+ LALIGA" pareciera generica y anulaba la
+     regla de marca justo en el partido donde mas falta hacia. */
+  assert.equal(app.canalEsGenerico("M+ LALIGA", ["M+ LALIGA", "M+ LALIGA HDR"]), false);
+  assert.equal(app.canalEsGenerico("DAZN 1", ["DAZN 1", "DAZN 1 Bar"]), false);
+  assert.equal(app.canalEsGenerico("LaLiga TV", ["LaLiga TV", "LaLiga TV Bar"]), false);
+  // la marca de verdad sigue siendo generica
+  assert.equal(app.canalEsGenerico("DAZN", ["DAZN", "DAZN LaLiga"]), true);
+  assert.equal(app.canalEsGenerico("DAZN", ["DAZN", "DAZN 1"]), true);
+});
+
+test("un vinculo sobre la marca no decide el canal cuando otro anunciado tiene señal exacta", async () => {
+  /* Espanyol-Sevilla se anuncia en M+ LALIGA, M+ LALIGA HDR, DAZN y DAZN App
+     Gratis. Con un vinculo "DAZN" -> "DAZN 1" la app abria DAZN 1, con otro
+     deporte, teniendo once señales exactas de M+ LALIGA. */
+  app.writeState({
+    favorites: [], history: [],
+    webSources: [{
+      id: "principal", name: "Principal", url: "https://example.com/list.m3u", type: "m3u",
+      streams: [
+        { id: ID_B, title: "M+ LALIGA --> ELCANO", type: "web", category: "TV" },
+        { id: ID_C, title: "DAZN 1 --> ELCANO", type: "web", category: "TV" },
+      ],
+    }],
+    activeWebSourceId: "principal",
+    channelBindings: [{ channel: "DAZN", channelKey: "dazn", id: ID_A, title: "DAZN 1 720p", ih: false }],
+    nowPlaying: null,
+  });
+  const estado = app.readState();
+  const sinBuscador = async () => [];
+  const laliga = await app.resolveFootballChannel(estado,
+    ["M+ LALIGA", "M+ LALIGA HDR", "DAZN", "DAZN App Gratis"], sinBuscador, { semantic: { enabled: false } });
+  assert.equal(laliga.status, "found");
+  assert.equal(laliga.candidate.id, ID_B, "arranca el canal donde dan el partido, no el vinculo de la marca");
+  assert.equal(laliga.candidates[0].id, ID_B);
+  assert.ok(laliga.candidates.some((c) => c.id === ID_A), "el vinculo se aparta, no se tira");
+
+  // si el partido solo se anuncia por la marca, el vinculo sigue mandando
+  const soloMarca = await app.resolveFootballChannel(estado, ["DAZN", "LaLiga TV M3"], sinBuscador, { semantic: { enabled: false } });
+  assert.equal(soloMarca.candidate.id, ID_A, "sin canal concreto la marca es lo unico que hay");
+
+  // y si el canal del vinculo esta anunciado tal cual, tambien
+  const anunciado = await app.resolveFootballChannel(estado, ["DAZN 1", "DAZN"], sinBuscador, { semantic: { enabled: false } });
+  assert.equal(anunciado.candidates[0].matchedChannel, "DAZN 1");
+  seedState();
+});
+
+test("calentar el indice de IA tolera un lote fallido", async () => {
+  /* Medido en el NAS: 100 nombres tardan 6,9 s y el tope era 6,5 s, asi que
+     el primer lote se pasaba y se tiraba el trabajo entero. Ahora un lote
+     fallido deja solo ese lote para la siguiente vez. */
+  const cache = new Map();
+  let llamadas = 0;
+  const embed = async (batch) => {
+    llamadas += 1;
+    if (llamadas === 1) throw new Error("ollama_timeout");
+    return batch.map(() => [1, 0, 0]);
+  };
+  const resultado = await app.semanticWarmEmbeddings(["a", "b", "c", "d", "e"], { cache, embed, batchSize: 2 });
+  assert.equal(resultado.requested, 5);
+  assert.equal(resultado.failed, 2, "solo se pierde el lote que fallo");
+  assert.equal(resultado.error, "ollama_timeout");
+  assert.equal(cache.size, 3, "lo demas queda en cache");
+  const segunda = await app.semanticWarmEmbeddings(["a", "b", "c", "d", "e"], { cache, embed, batchSize: 2 });
+  assert.equal(segunda.requested, 2, "la siguiente vez solo pide lo que falta");
+  assert.equal(segunda.failed, 0);
+});
+
+test("Para ti: la seleccion España no cuela LaLiga Hypermotion", () => {
+  /* La regla de competiciones nacionales miraba si la liga "incluye" laliga,
+     y "laliga hypermotion" la incluye: Segunda se colaba en Para ti sin
+     tenerla marcada. Se prueba la funcion real de la pagina. */
+  const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
+  const bloque = (re) => { const m = re.exec(html); return m ? m[0] : ""; };
+  const funcion = (nombre) => {
+    const inicio = html.indexOf(`function ${nombre}(`);
+    if (inicio < 0) return "";
+    let abiertas = 0;
+    for (let i = html.indexOf("{", inicio); i < html.length; i += 1) {
+      if (html[i] === "{") abiertas += 1;
+      if (html[i] === "}") { abiertas -= 1; if (!abiertas) return html.slice(inicio, i + 1); }
+    }
+    return "";
+  };
+  const piezas = [
+    bloque(/const competitionKey=\(value\)=>[\s\S]*?;\r?\n/),
+    bloque(/const LEAGUE_ALIASES=\{[\s\S]*?\r?\n\};/),
+    bloque(/const NATIONALITY_RULES=\{[\s\S]*?\r?\n\};/),
+    funcion("normalizePreferenceKey"), funcion("leagueMatches"), funcion("matchIsLaLigaHypermotion"),
+    funcion("matchLeagueMatches"), funcion("footballMatchInScope"),
+  ];
+  piezas.forEach((pieza, indice) => assert.ok(pieza, `no se pudo extraer la pieza ${indice} del cliente`));
+  const enAlcance = new Function(`
+    const S={preferences:{leagues:[],teams:[],nationalities:['España']}};
+    const hasScopePreferences=()=>true;
+    const footballMatchHasFavoriteTeam=()=>false;
+    ${piezas.join("\n")}
+    return footballMatchInScope;`)();
+  const partido = (competition, title, canal) => ({ competition, title, home: title.split(" - ")[0], away: title.split(" - ")[1], channels: [{ name: canal }] });
+  assert.equal(enAlcance(partido("La Liga EA Sports", "Espanyol - Sevilla FC", "M+ LALIGA")), true, "Primera entra por ser española");
+  assert.equal(enAlcance(partido("Copa del Rey", "Alcorcón - Getafe", "M+ LALIGA")), true);
+  assert.equal(enAlcance(partido("LaLiga Hypermotion", "Eibar - Granada CF", "LALIGA TV Hypermotion")), false, "Segunda no entra por la seleccion");
+  assert.equal(enAlcance(partido("LaLiga", "Almería - Cádiz", "LALIGA TV Hypermotion")), false, "ni aunque la agenda la rotule como LaLiga");
+  assert.equal(enAlcance(partido("Premier League", "Arsenal - Chelsea", "DAZN 1")), false);
+});
