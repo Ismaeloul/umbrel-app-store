@@ -2,7 +2,8 @@ manifestVersion: 1
 id: ismaeloul-craftdeck
 category: networking
 name: CraftDeck
-version: "0.4.0"
+icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-craftdeck/icon.svg"
+version: "0.5.0"
 tagline: Crea y modera tu servidor de Minecraft desde el navegador
 description: >-
   Panel de control de servidores de Minecraft para umbrelOS. Crea servidores
@@ -15,7 +16,8 @@ description: >-
 
 
   Tus amigos se conectan a la IP de tu Umbrel por el puerto de cada servidor
-  (25565 en adelante).
+  (25565 en adelante); el Dashboard te enseña la dirección lista para copiar.
+  Si el Umbrel se reinicia, los servidores que estaban encendidos vuelven solos.
 developer: Ismaeloul
 website: https://github.com/Ismaeloul/craftdeck
 dependencies: []
@@ -29,12 +31,15 @@ defaultPassword: ""
 submitter: Ismaeloul
 submission: https://github.com/Ismaeloul/craftdeck
 releaseNotes: >-
-  Reinicio automático tras crash: si el servidor se cae, CraftDeck lo levanta
-  solo (máximo 3 veces en 10 minutos para no entrar en bucle) y te dice en
-  Discord y en el panel qué mod tiene la culpa, con un botón para desactivarlo
-  desde Diagnóstico. Sección de Mods rediseñada con pestañas Explorar e
-  Instalados (buscador siempre arriba, filtro de instalados y «Actualizar
-  todo»). Restaurar backups ahora funciona en umbrelOS, el guardado del mundo
-  se espera de verdad antes de comprimir y los horarios (backup de las 04:00,
-  eventos) corren en hora local en vez de UTC. Parada más segura para mundos
-  grandes y varios arreglos de robustez más.
+  Los servidores vuelven a arrancar solos tras reiniciar el Umbrel o actualizar
+  CraftDeck (se recuerda cuáles estaban encendidos; se puede desactivar por
+  servidor en Mundo → Rendimiento). Panel usable desde el móvil, con menú
+  lateral plegable. Tarjeta «Dirección para tus amigos» en el Dashboard con
+  botón de copiar. Flags de JVM de Aikar por defecto: menos tirones de lag con
+  la misma RAM. El túnel de playit.gg puede arrancar solo con CraftDeck. Aviso
+  de RAM al crear o ajustar un servidor, comparando con la memoria libre real
+  del Umbrel. Si la creación de un servidor falla, ahora se ve el error y hay
+  botón de reintentar. Consola con historial de comandos (flecha arriba), hora
+  real de cada línea y las últimas líneas de latest.log al abrir el panel.
+  Icono en la tienda, arreglo del guardado de archivos grandes en el editor y
+  de la «próxima ejecución» de las tareas de cada 2 h o más.
