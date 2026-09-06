@@ -3,7 +3,7 @@ id: ismaeloul-craftdeck
 category: networking
 name: CraftDeck
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-craftdeck/icon.svg"
-version: "0.5.0"
+version: "0.5.1"
 tagline: Crea y modera tu servidor de Minecraft desde el navegador
 description: >-
   Panel de control de servidores de Minecraft para umbrelOS. Crea servidores
@@ -16,7 +16,8 @@ description: >-
 
 
   Tus amigos se conectan a la IP de tu Umbrel por el puerto de cada servidor
-  (25565 en adelante); el Dashboard te enseña la dirección lista para copiar.
+  (25565 en adelante); el Dashboard te enseña la dirección lista para copiar,
+  también la pública si entran por una redirección del router.
   Si el Umbrel se reinicia, los servidores que estaban encendidos vuelven solos.
 developer: Ismaeloul
 website: https://github.com/Ismaeloul/craftdeck
@@ -31,11 +32,16 @@ defaultPassword: ""
 submitter: Ismaeloul
 submission: https://github.com/Ismaeloul/craftdeck
 releaseNotes: >-
+  Dirección pública por servidor: si tus amigos entran por una redirección del
+  router o un túnel, pon dominio:puerto en la tarjeta del Dashboard y esa es la
+  que se enseña y se copia. Selector de cuántas copias automáticas conservar
+  (las más antiguas se borran solas).
+
+
   Los servidores vuelven a arrancar solos tras reiniciar el Umbrel o actualizar
   CraftDeck (se recuerda cuáles estaban encendidos; se puede desactivar por
   servidor en Mundo → Rendimiento). Panel usable desde el móvil, con menú
-  lateral plegable. Tarjeta «Dirección para tus amigos» en el Dashboard con
-  botón de copiar. Flags de JVM de Aikar por defecto: menos tirones de lag con
+  lateral plegable. Flags de JVM de Aikar por defecto: menos tirones de lag con
   la misma RAM. El túnel de playit.gg puede arrancar solo con CraftDeck. Aviso
   de RAM al crear o ajustar un servidor, comparando con la memoria libre real
   del Umbrel. Si la creación de un servidor falla, ahora se ve el error y hay
