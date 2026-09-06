@@ -1755,3 +1755,15 @@ test("Para ti: la seleccion España no cuela LaLiga Hypermotion", () => {
   assert.equal(enAlcance(partido("LaLiga", "Almería - Cádiz", "LALIGA TV Hypermotion")), false, "ni aunque la agenda la rotule como LaLiga");
   assert.equal(enAlcance(partido("Premier League", "Arsenal - Chelsea", "DAZN 1")), false);
 });
+
+test("servidor y service worker declaran la version del manifiesto", () => {
+  /* La 0.6.53 seguia diciendo 0.6.52 en /api/health y en la cache del movil:
+     el numero estaba escrito a mano en dos sitios que ninguna release tocaba.
+     Con la cache del service worker sin renovar, el telefono conservaba el
+     player-controller de la version anterior. */
+  const server = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "server.js"), "utf8");
+  const sw = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "sw.js"), "utf8");
+  assert.match(server, new RegExp(`^const APP_VERSION = "${releaseVersion.replace(/\./g, "\.")}";`, "m"));
+  assert.match(server, new RegExp(`"User-Agent": "AcePlayerNeo/${releaseVersion.replace(/\./g, "\.")}"`));
+  assert.match(sw, new RegExp(`^const VERSION = "aceneo-${releaseVersion.replace(/\./g, "\.")}";`, "m"));
+});
