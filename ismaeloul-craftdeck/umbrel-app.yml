@@ -3,7 +3,7 @@ id: ismaeloul-craftdeck
 category: networking
 name: CraftDeck
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-craftdeck/icon.svg"
-version: "0.6.0"
+version: "0.7.0"
 tagline: Crea y modera tu servidor de Minecraft desde el navegador
 description: >-
   Panel de control de servidores de Minecraft para umbrelOS. Crea servidores
@@ -11,40 +11,51 @@ description: >-
   lista, o directamente desde un modpack de Modrinth; CraftDeck descarga Java y
   el servidor por ti. Arráncalos y páralos desde el navegador (también desde el
   móvil), mira la consola en vivo, ejecuta comandos, gestiona jugadores (OP,
-  kick, ban, whitelist, historial de conexiones), instala mods y plugins de
-  Modrinth con sus dependencias, mira tu mundo en 3D con BlueMap, edita
-  server.properties de forma visual y haz backups con un click o automáticos a
-  la hora que quieras.
+  kick, ban, whitelist, historial de conexiones), instala mods, plugins y
+  datapacks de Modrinth con sus dependencias, mira tu mundo en 3D con BlueMap,
+  edita server.properties de forma visual y haz backups con un click o
+  automáticos a la hora que quieras.
 
 
-  Tus amigos se conectan a la dirección que te enseña el Dashboard (la de casa o
-  la pública, si entran por una redirección del router). Si el Umbrel se
-  reinicia, los servidores que estaban encendidos vuelven solos.
+  Modo dormido: si nadie juega, el servidor se apaga y libera la RAM del Umbrel;
+  cuando un amigo intenta entrar, se arranca solo. Tus amigos se conectan a la
+  dirección que te enseña el Dashboard (la de casa o la pública, si entran por
+  una redirección del router). Si el Umbrel se reinicia, los servidores que
+  estaban encendidos vuelven solos.
 developer: Ismaeloul
 website: https://github.com/Ismaeloul/craftdeck
 dependencies: []
 repo: https://github.com/Ismaeloul/craftdeck
 support: https://github.com/Ismaeloul/craftdeck/issues
 port: 8449
-gallery: []
+gallery:
+  - https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-craftdeck/gallery/1.png
+  - https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-craftdeck/gallery/2.png
+  - https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-craftdeck/gallery/3.png
+  - https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-craftdeck/gallery/4.png
+  - https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-craftdeck/gallery/5.png
+  - https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-craftdeck/gallery/6.png
 path: ""
 defaultUsername: ""
 defaultPassword: ""
 submitter: Ismaeloul
 submission: https://github.com/Ismaeloul/craftdeck
 releaseNotes: >-
-  Servidores Paper (plugins de Modrinth, sin que tus amigos instalen nada) y
-  cambio de versión de Minecraft conservando el mundo: se hace un backup, se
-  reinstala el servidor y los mods se pasan a una versión compatible (los que no
-  la tienen se desactivan y te lo dice). Un servidor vanilla se puede pasar a
-  Paper con el mismo mundo. Crear un servidor desde un modpack de Modrinth
-  (.mrpack) en un clic, y exportar el pack de amigos también como .mrpack para
-  que Prism, Modrinth App o ATLauncher monten el cliente solos. Mapa en vivo con
-  BlueMap: se instala, se configura y se ve dentro del panel. Subir al servidor
-  un mundo, un backup o un .jar arrastrándolo. Restaurar un backup ahora devuelve
-  solo el mundo por defecto (o todo, si lo eliges). Hora y días del backup
-  automático a tu gusto. Página «Todos los servidores» para arrancar y parar
-  cualquiera. Jugadores con su cara, historial de entradas y salidas y última
-  vez visto. Consola con filtro de avisos/errores y buscador. Si usas playit, el
-  túnel detectado se puede poner como dirección pública con un botón. Los crash
-  reports viejos se borran solos y el tiempo en línea de cada jugador avanza.
+  Modo dormido: si el servidor lleva un rato sin nadie se apaga y libera la RAM
+  del Umbrel; mientras duerme, en la lista de servidores de tus amigos sale
+  «dormido» y, cuando alguien intenta entrar, se arranca solo. Pack de amigos
+  con solo los mods que hacen falta para entrar (los de solo servidor se quedan
+  fuera; los opcionales, a elegir), y los mods instalados con su icono.
+  Datapacks desde Modrinth (también para servidores vanilla). Pregenerar el
+  mundo con Chunky. Desbanear y dar OP o banear sin que el jugador esté
+  conectado. Acciones rápidas en la consola (día, noche, sol, lluvia…). Icono
+  del servidor y MOTD con colores y vista previa. TPS en el Dashboard (Paper) y
+  gráficas de 1 h y 24 h. Almacenamiento que ocupa CraftDeck en el disco. Clonar
+  un servidor a otro puerto. Descargar los logs desde Diagnóstico. Capturas en
+  la tienda.
+
+
+  De la 0.6: servidores Paper, cambio de versión conservando el mundo, modpacks
+  .mrpack, mapa en vivo con BlueMap, subir mundos, backups y .jar, restaurar
+  solo el mundo, horario del backup, página «Todos los servidores», historial de
+  jugadores y filtro de consola.

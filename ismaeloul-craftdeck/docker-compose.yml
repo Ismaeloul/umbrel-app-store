@@ -17,7 +17,7 @@ services:
     # el backend detiene los servers con 'stop' y escala a SIGKILL a los 75 s: darle margen
     stop_grace_period: 90s
     environment:
-      - CRAFTDECK_VERSION=0.6.0
+      - CRAFTDECK_VERSION=0.7.0
       - CRAFTDECK_REPO=Ismaeloul/craftdeck
       - PORT=8449
       - CRAFTDECK_DATA=/data
