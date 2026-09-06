@@ -1244,7 +1244,11 @@ async function fetchText(url, redirects = 0, visited = new Set(), deadline = Dat
       }
       if (response.statusCode < 200 || response.statusCode >= 300) {
         response.resume();
-        finish(reject, new Error("fetch_failed"));
+        /* El codigo viaja aparte: statusCode decide la respuesta de la API y
+           un 403 de la pasarela no puede convertirse en un 403 nuestro. */
+        const failure = new Error("fetch_failed");
+        failure.httpStatus = response.statusCode;
+        finish(reject, failure);
         return;
       }
       const encoding = String(response.headers["content-encoding"] || "identity").toLowerCase();
@@ -4167,7 +4171,7 @@ async function handleRequest(req, res) {
         : snapshot.webSources.find((item) => item.url === url && item.type === type);
       if (requestedSourceId && !snapshotSource) throw new Error("source_not_found");
       if (!snapshotSource && snapshot.webSources.length >= MAX_WEB_SOURCES) throw new Error("source_limit");
-      const text = await fetchText(url);
+      const { text } = await fetchListText(url);
       const streams = (type === "m3u" ? parseM3u(text) : parseHtml(text)).slice(0, MAX_WEB_STREAMS);
       if (!streams.length) throw new Error("empty_directory");
       // La descarga puede tardar varios segundos. Relee antes de escribir para
@@ -4254,13 +4258,55 @@ async function handleRequest(req, res) {
   }
 }
 
+/* Las listas suelen vivir en IPFS detras de una pasarela publica (ipfs.io),
+   que limita peticiones y a ratos falla horas seguidas: en el registro del
+   NAS las tres listas caian a la vez y volvian a la vez. La misma ruta
+   /ipns/... o /ipfs/... la sirve cualquier otra pasarela, asi que cuando la
+   primera falla se prueba la siguiente dentro del mismo plazo total. Un
+   fallo que no sea de red -URL privada, bucle de redirecciones- no se
+   reintenta. */
+const IPFS_GATEWAYS = ["ipfs.io", "dweb.link"];
+
+function alternativasDeLista(url) {
+  let parsed;
+  try { parsed = new URL(url); } catch { return []; }
+  if (!IPFS_GATEWAYS.includes(parsed.hostname) || !/^\/(ipns|ipfs)\//.test(parsed.pathname)) return [];
+  return IPFS_GATEWAYS.filter((host) => host !== parsed.hostname).map((host) => {
+    const copia = new URL(parsed);
+    copia.protocol = "https:";
+    copia.hostname = host;
+    return copia.toString();
+  });
+}
+
+function describirFallo(error) {
+  const status = Number(error?.httpStatus) || 0;
+  return status ? `${error.message} (HTTP ${status})` : String(error?.message || "fetch_failed");
+}
+
+async function fetchListText(url, fetcher = fetchText) {
+  const deadline = Date.now() + FETCH_TOTAL_TIMEOUT_MS;
+  const intentos = [url, ...alternativasDeLista(url)];
+  let ultimo = null;
+  for (const [indice, candidata] of intentos.entries()) {
+    try {
+      const text = await fetcher(candidata, 0, new Set(), deadline);
+      return { text, url: candidata, fallback: indice > 0 };
+    } catch (error) {
+      ultimo = error;
+      if (!["fetch_failed", "fetch_timeout"].includes(error?.message)) break;
+    }
+  }
+  throw ultimo || new Error("fetch_failed");
+}
+
 async function autoSyncWeb() {
   const snapshot = readState();
   const updates = new Map();
   for (const source of snapshot.webSources) {
     try {
-      const text = await fetchText(source.url);
-      const streams = (source.type === "html" ? parseHtml(text) : parseM3u(text)).slice(0, MAX_WEB_STREAMS);
+      const descarga = await fetchListText(source.url);
+      const streams = (source.type === "html" ? parseHtml(descarga.text) : parseM3u(descarga.text)).slice(0, MAX_WEB_STREAMS);
       if (!streams.length) throw new Error("empty_directory");
       updates.set(source.id, {
         url: source.url,
@@ -4269,14 +4315,15 @@ async function autoSyncWeb() {
         syncedAt: new Date().toISOString(),
         lastErrorAt: null,
       });
-      console.log(`[auto-sync] ${source.name}: refreshed ${streams.length} web streams`);
+      const via = descarga.fallback ? ` (via ${new URL(descarga.url).hostname})` : "";
+      console.log(`[auto-sync] ${source.name}: refreshed ${streams.length} web streams${via}`);
     } catch (error) {
       updates.set(source.id, {
         url: source.url,
         type: source.type,
         lastErrorAt: new Date().toISOString(),
       });
-      console.error(`[auto-sync] ${source.name}: failed: ${error.message}`);
+      console.error(`[auto-sync] ${source.name}: failed: ${describirFallo(error)}`);
     }
   }
   const latest = readState();
@@ -4403,6 +4450,9 @@ module.exports = {
   saveSourceFeedback,
   systemHealth,
   fetchText,
+  fetchListText,
+  alternativasDeLista,
+  describirFallo,
   isPrivateAddress,
   isPrivateHostname,
   mutateLibrary,

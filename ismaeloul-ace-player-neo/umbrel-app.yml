@@ -41,6 +41,13 @@ releaseNotes: >-
   tiraba el trabajo entero y se repetia cada media hora (era el
   "ollama_timeout" del registro). Ahora va en lotes de 24 con 12 s de
   margen, y un lote fallido no tira los demas.
+  Las listas dejan de caerse en bloque. Las tres viven en IPFS detras de la
+  pasarela publica ipfs.io, que limita peticiones y a ratos falla horas
+  seguidas: en el registro del NAS fallaban las tres a la vez y volvian a la
+  vez, y mientras tanto se ofrecian hashes caducados. Ahora, si la pasarela
+  falla, se prueba dweb.link con la misma ruta dentro del mismo plazo, y el
+  registro dice que codigo HTTP devolvio el fallo en vez de un "fetch_failed"
+  a secas.
   Historico:
   Arregla que al dar a un partido se abriera otro canal. La agenda lista varios
   canales por partido y NO son equivalentes: para el Barcelona-Athletic anuncia

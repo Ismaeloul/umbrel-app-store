@@ -1755,3 +1755,35 @@ test("Para ti: la seleccion España no cuela LaLiga Hypermotion", () => {
   assert.equal(enAlcance(partido("LaLiga", "Almería - Cádiz", "LALIGA TV Hypermotion")), false, "ni aunque la agenda la rotule como LaLiga");
   assert.equal(enAlcance(partido("Premier League", "Arsenal - Chelsea", "DAZN 1")), false);
 });
+
+test("las listas de IPFS prueban otra pasarela cuando la primera falla", async () => {
+  /* En el registro del NAS las tres listas fallaban a la vez durante horas:
+     era la pasarela ipfs.io, no las listas. La misma ruta la sirve dweb.link. */
+  assert.deepEqual(app.alternativasDeLista("https://ipfs.io/ipns/k51abc/hashes_acestream.m3u"),
+    ["https://dweb.link/ipns/k51abc/hashes_acestream.m3u"]);
+  assert.deepEqual(app.alternativasDeLista("https://dweb.link/ipfs/bafy123/lista.m3u"),
+    ["https://ipfs.io/ipfs/bafy123/lista.m3u"]);
+  assert.deepEqual(app.alternativasDeLista("https://example.com/lista.m3u"), [], "sin pasarela no hay alternativa");
+  assert.deepEqual(app.alternativasDeLista("https://ipfs.io/otra/cosa.m3u"), [], "solo rutas /ipns o /ipfs");
+
+  const pedidas = [];
+  const fetcher = async (url) => {
+    pedidas.push(url);
+    if (url.includes("ipfs.io")) { const e = new Error("fetch_failed"); e.httpStatus = 429; throw e; }
+    return "#EXTM3U";
+  };
+  const descarga = await app.fetchListText("https://ipfs.io/ipns/k51abc/hashes_acestream.m3u", fetcher);
+  assert.equal(descarga.text, "#EXTM3U");
+  assert.equal(descarga.fallback, true);
+  assert.equal(descarga.url, "https://dweb.link/ipns/k51abc/hashes_acestream.m3u");
+  assert.equal(pedidas.length, 2);
+
+  // un fallo que no es de red no se reintenta en otra pasarela
+  const privada = async () => { throw new Error("private_url"); };
+  await assert.rejects(app.fetchListText("https://ipfs.io/ipns/k51abc/x.m3u", privada), { message: "private_url" });
+
+  // el codigo HTTP se ve en el registro
+  const fallo = new Error("fetch_failed"); fallo.httpStatus = 403;
+  assert.equal(app.describirFallo(fallo), "fetch_failed (HTTP 403)");
+  assert.equal(app.describirFallo(new Error("fetch_timeout")), "fetch_timeout");
+});
