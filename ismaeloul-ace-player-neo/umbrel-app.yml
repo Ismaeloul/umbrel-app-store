@@ -3,13 +3,45 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.52"
+version: "0.6.53"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
+  Arregla que un partido de LaLiga arrancara solo en DAZN 1. La agenda
+  anuncia Espanyol-Sevilla en "M+ LALIGA", "M+ LALIGA HDR", "DAZN" y "DAZN
+  App Gratis", y hay un vinculo guardado de "DAZN" hacia DAZN 1: la app lo
+  ponia el primero y lo reproducia sola, con otro deporte, por delante de
+  las once señales de M+ LALIGA que tenias en las listas.
+  La regla de la 0.6.52 -la marca se aparta detras del canal concreto- no
+  saltaba aqui porque "M+ LALIGA" tambien parecia generica al lado de "M+
+  LALIGA HDR". Las coletillas HDR, Bar o UHD son el mismo canal en otra
+  calidad o para otro local, no un canal mas concreto: ya no cuentan. Y se
+  añade una segunda pista con datos y no con palabras: si de otro canal
+  anunciado hay señales exactas en tus listas y de este solo hay familia o
+  un vinculo, este es la marca y se aparta. Un vinculo solo decide si sigue
+  en cabeza tras ese orden; cuando el partido solo se anuncia por la marca,
+  como Juventus-Milan en "DAZN", el vinculo manda igual que antes.
+  Comprobado con tu biblioteca real: Espanyol-Sevilla pasa de abrir DAZN 1 a
+  abrir M+ LALIGA, Arsenal-Chelsea abre DAZN 1 -que si esta anunciado- y
+  Juventus-Milan no cambia.
+  Rebuscar deja de decir que no hay nada y sacar siete fuentes despues. El
+  aviso salia en cuanto se reunian las señales, pero quien decide cuales
+  funcionan es el comprobador, segundos mas tarde, y las fallidas ni se
+  pintan. Ahora anuncia cuantas señales reune y da el veredicto -cuantas
+  nuevas funcionan de verdad- cuando el comprobador termina.
+  Para ti ya no cuela LaLiga Hypermotion. Venia de la seleccion "España": su
+  regla de competiciones nacionales miraba si la liga "incluye" laliga, y
+  "laliga hypermotion" la incluye. Quien quiera Segunda la marca como liga,
+  como hasta ahora.
+  La IA local se calentaba en lotes de 96 nombres con 6,5 s de tope. Medido
+  en el NAS, 100 nombres tardan 6,9 s: el primer lote se pasaba siempre, se
+  tiraba el trabajo entero y se repetia cada media hora (era el
+  "ollama_timeout" del registro). Ahora va en lotes de 24 con 12 s de
+  margen, y un lote fallido no tira los demas.
+  Historico:
   Arregla que al dar a un partido se abriera otro canal. La agenda lista varios
   canales por partido y NO son equivalentes: para el Barcelona-Athletic anuncia
   "DAZN LaLiga", "DAZN" y "LaLiga TV Bar", donde "DAZN" es la marca y
