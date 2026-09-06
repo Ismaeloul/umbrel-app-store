@@ -3,7 +3,7 @@ id: ismaeloul-craftdeck
 category: networking
 name: CraftDeck
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-craftdeck/icon.svg"
-version: "0.5.1"
+version: "0.5.2"
 tagline: Crea y modera tu servidor de Minecraft desde el navegador
 description: >-
   Panel de control de servidores de Minecraft para umbrelOS. Crea servidores
@@ -35,7 +35,8 @@ releaseNotes: >-
   Dirección pública por servidor: si tus amigos entran por una redirección del
   router o un túnel, pon dominio:puerto en la tarjeta del Dashboard y esa es la
   que se enseña y se copia. Selector de cuántas copias automáticas conservar
-  (las más antiguas se borran solas).
+  (las más antiguas se borran solas). La pestaña de mods instalados va por
+  páginas de 15, con filtro por nombre.
 
 
   Los servidores vuelven a arrancar solos tras reiniciar el Umbrel o actualizar
