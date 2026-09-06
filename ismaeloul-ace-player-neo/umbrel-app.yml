@@ -3,13 +3,21 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.53"
+version: "0.6.54"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
+  La version que declara la app vuelve a ser la real. La 0.6.53 seguia
+  diciendo 0.6.52 en el panel de salud y en la cache del movil, porque el
+  numero estaba escrito a mano en dos sitios que ninguna release tocaba. Ahora
+  un test exige que servidor y service worker lleven la version del
+  manifiesto, asi que no puede volver a quedarse atras. Con la cache del
+  movil renovada, el telefono descarga el reproductor de esta version en
+  vez de conservar el anterior.
+  Historico:
   Arregla que un partido de LaLiga arrancara solo en DAZN 1. La agenda
   anuncia Espanyol-Sevilla en "M+ LALIGA", "M+ LALIGA HDR", "DAZN" y "DAZN
   App Gratis", y hay un vinculo guardado de "DAZN" hacia DAZN 1: la app lo
