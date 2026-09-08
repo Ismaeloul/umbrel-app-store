@@ -3,13 +3,23 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.55"
+version: "0.6.56"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
+  Los avisos dejan de tapar el video. Lo que le pasa a la señal -fuente
+  verificada, reintento, buffer, zapping, rebusqueda, directo- no es una
+  notificacion sino el estado del reproductor, y ahora se lee en una linea
+  discreta justo debajo del video, de una en una, sin apilarse. Los avisos
+  emergentes quedan solo para lo que haces tu -favorito, copiar, guardar- y
+  para errores que piden atencion: mas pequeños, dos como maximo, menos
+  tiempo en pantalla y en la esquina inferior derecha del ordenador, nunca
+  encima de la imagen. En el movil siguen centrados sobre la barra inferior,
+  donde no hay video debajo.
+  Historico:
   Al entrar a un partido arranca la primera fuente que funciona de verdad.
   Hasta ahora se reproducia la mejor colocada sin esperar al comprobador, y
   si no iba, un unico salto a otra. Ahora la app espera al comprobador y

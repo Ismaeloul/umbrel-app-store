@@ -1860,3 +1860,16 @@ test("la pagina arranca la primera fuente verificada y salta a la siguiente si f
   // elegir a mano apaga el automatismo
   assert.match(html, /S\.autoPlayVerified=false;\s*S\.fuenteActual=id;/);
 });
+
+test("los avisos de la señal van bajo el reproductor y los toasts quedan pequeños en la esquina", () => {
+  /* Los toasts de 14 px apilados de tres en tres en el centro de la pantalla
+     tapaban el video justo cuando la señal daba guerra. */
+  const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
+  assert.match(html, /id="playerNotice"/);
+  assert.match(html, /function avisoReproductor\(/);
+  assert.match(html, /if\(esAvisoDeReproductor\(iconName,type\)\)\{ avisoReproductor\(iconName,msg,type\); return; \}/);
+  assert.match(html, /const TOAST_MAX = 2;/);
+  assert.match(html, /\.toasts \{ position:fixed; bottom:18px; right:18px;/);
+  // en el movil no hay video debajo: siguen centrados sobre la barra inferior
+  assert.match(html, /bottom:calc\(94px \+ env\(safe-area-inset-bottom\)\); right:auto; left:50%;/);
+});
