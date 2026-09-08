@@ -3,13 +3,34 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.54"
+version: "0.6.55"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
+  Al entrar a un partido arranca la primera fuente que funciona de verdad.
+  Hasta ahora se reproducia la mejor colocada sin esperar al comprobador, y
+  si no iba, un unico salto a otra. Ahora la app espera al comprobador y
+  arranca la primera verificada; si esa se cae, pasa a la siguiente
+  verificada, y asi hasta agotarlas. En cuanto eliges una a mano, el
+  automatismo se apaga. Con la precarga de la agenda la espera suele ser de
+  segundos, y el resultado bueno vale diez minutos en vez de tres.
+  El comprobador ya no se deja engañar por el arranque. MOVISTAR PLUS de
+  ELCANO daba 3 MB en medio segundo -la cache del motor- y despues medio
+  megabit con un par: el comprobador la ponia en verde y el reproductor se
+  quedaba a los pocos segundos. Ahora mantiene la prueba doce segundos y
+  mide, con el propio contador del motor, lo que entra del enjambre en la
+  segunda mitad -pasada la rafaga- contra el bitrate del canal, que sale de
+  los PCR del transport stream. Si no llega al 85%, la fuente es floja y no
+  verde. Medido con esa señal: canal de 2,2 Mbit/s y entrada de 1,5, ahora
+  marcada como floja; y otra pasada dio 2,7 y verde, que es justo lo que le
+  pasa a esa señal: unas veces va y otras no. Cada boton del selector dice
+  ahora esos dos numeros al pasar por encima.
+  De paso, el codec sale de la PMT del propio flujo: ffprobe solo se lanza
+  cuando el flujo no lo dice, y cada comprobacion tarda menos.
+  Historico:
   La version que declara la app vuelve a ser la real. La 0.6.53 seguia
   diciendo 0.6.52 en el panel de salud y en la cache del movil, porque el
   numero estaba escrito a mano en dos sitios que ninguna release tocaba. Ahora

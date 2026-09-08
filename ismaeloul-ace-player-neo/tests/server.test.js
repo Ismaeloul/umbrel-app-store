@@ -1767,3 +1767,96 @@ test("servidor y service worker declaran la version del manifiesto", () => {
   assert.match(server, new RegExp(`"User-Agent": "AcePlayerNeo/${releaseVersion.replace(/\./g, "\.")}"`));
   assert.match(sw, new RegExp(`^const VERSION = "aceneo-${releaseVersion.replace(/\./g, "\.")}";`, "m"));
 });
+
+/* ---------- 0.6.55: la primera fuente que funcione de verdad ---------- */
+
+function paqueteTs(pid, payload, { pusi = true, pcr = null } = {}) {
+  const buf = Buffer.alloc(188, 0xff);
+  buf[0] = 0x47; buf[1] = (pusi ? 0x40 : 0) | (pid >> 8); buf[2] = pid & 0xff;
+  let offset = 4;
+  if (pcr !== null) {
+    const base = Math.floor(pcr / 300), ext = pcr % 300;
+    buf[3] = 0x30; buf[4] = 7; buf[5] = 0x10;
+    buf.writeUIntBE(Math.floor(base / 2), 6, 4); buf[10] = ((base & 1) << 7) | 0x7e | (ext >> 8); buf[11] = ext & 0xff;
+    offset = 12;
+  } else buf[3] = 0x10;
+  payload.copy(buf, offset);
+  return buf;
+}
+function seccionPat(pmtPid) {
+  return Buffer.from([0x00, 0x00, 0xb0, 0x0d, 0x00, 0x01, 0xc1, 0x00, 0x00, 0x00, 0x01, 0xe0 | (pmtPid >> 8), pmtPid & 0xff, 0, 0, 0, 0]);
+}
+function seccionPmt(videoType) {
+  return Buffer.from([0x00, 0x02, 0xb0, 0x17, 0x00, 0x01, 0xc1, 0x00, 0x00, 0xe1, 0x00, 0xf0, 0x00,
+    videoType, 0xe1, 0x00, 0xf0, 0x00, 0x03, 0xe1, 0x01, 0xf0, 0x00, 0, 0, 0, 0]);
+}
+
+test("el comprobador lee codec y bitrate del propio transport stream", () => {
+  /* Dos PCR separados 2 s con N paquetes entre medias dan el bitrate real del
+     canal sin ffprobe; la PMT da el codec. */
+  const paquetes = [paqueteTs(0, seccionPat(0x100)), paqueteTs(0x100, seccionPmt(0x1b))];
+  const relleno = Buffer.alloc(180, 0);
+  paquetes.push(paqueteTs(0x100 + 0, relleno, { pusi: false, pcr: 27000000 }));      // t=1 s
+  for (let i = 0; i < 1000; i += 1) paquetes.push(paqueteTs(0x101, relleno, { pusi: false }));
+  paquetes.push(paqueteTs(0x100 + 0, relleno, { pusi: false, pcr: 27000000 * 3 })); // t=3 s
+  const analisis = app.analyzeTransportStream(Buffer.concat(paquetes));
+  assert.equal(analisis.videoCodec, "h264");
+  assert.deepEqual(analisis.audioCodecs, ["mp2"]);
+  assert.equal(analisis.pcrSpanMs, 2000);
+  assert.equal(analisis.streamKbps, Math.round((1001 * 188 * 8) / 2000), "bytes entre PCR / tiempo entre PCR");
+  const hevc = app.analyzeTransportStream(Buffer.concat([paqueteTs(0, seccionPat(0x100)), paqueteTs(0x100, seccionPmt(0x24)), paqueteTs(0x101, relleno)]));
+  assert.equal(hevc.videoCodec, "hevc");
+  assert.equal(app.analyzeTransportStream(Buffer.from("no es un ts")).videoCodec, "");
+});
+
+test("sin caudal sostenido no hay verde aunque lleguen bytes", () => {
+  /* MOVISTAR PLUS de ELCANO: 3 MB en medio segundo desde la cache y luego
+     medio megabit con un par. Se para al rato: no puede ser verde. */
+  const base = { statusCode: 200, bytes: 131072, mediaValid: true, browserCompatible: true, videoCodec: "h264", mediaReason: "playable_media" };
+  assert.equal(app.classifyScannerEvidence({ ...base, intakeKbps: 1400, streamKbps: 2200 }).state, "weak");
+  assert.equal(app.classifyScannerEvidence({ ...base, intakeKbps: 1400, streamKbps: 2200 }).reason, "starved");
+  assert.equal(app.classifyScannerEvidence({ ...base, intakeKbps: 8400, streamKbps: 6700 }).state, "working");
+  assert.equal(app.classifyScannerEvidence({ ...base, intakeKbps: 1900, streamKbps: 2200 }).state, "working", "un 85% del bitrate basta");
+  assert.equal(app.classifyScannerEvidence({ ...base, intakeKbps: 600, streamKbps: 0 }).state, "weak", "sin bitrate conocido, menos de 1 Mbit/s es floja");
+  assert.equal(app.classifyScannerEvidence({ ...base, intakeKbps: 1500, streamKbps: 0 }).state, "working");
+  assert.equal(app.classifyScannerEvidence({ ...base, rateKbps: 0, streamKbps: 6700 }).state, "working", "la lectura HTTP sale a rafagas y no decide");
+  assert.equal(app.classifyScannerEvidence({ ...base }).state, "working", "sin medida de caudal se mantiene el criterio anterior");
+});
+
+test("si el TS ya dice el codec, el comprobador no lanza ffprobe", async () => {
+  let inspecciones = 0;
+  const result = await app.probeAceCandidate({ id: ID_A, ih: false }, {
+    timeoutMs: 3000,
+    minBytes: 64 * 1024,
+    request: async (pathname) => {
+      if (pathname.includes("format=json")) {
+        return { statusCode: 200, body: JSON.stringify({ response: {
+          playback_url: `http://127.0.0.1:6878/ace/getstream?id=${ID_A}`,
+          stat_url: "http://127.0.0.1:6878/ace/stat?token=p", command_url: "http://127.0.0.1:6878/ace/cmd?token=p",
+        } }) };
+      }
+      if (pathname.startsWith("/ace/stat")) return { statusCode: 200, body: JSON.stringify({ response: { peers: 2, speed_down: 500, downloaded: 5000000, status: "dl" } }) };
+      return { statusCode: 200, body: "{}" };
+    },
+    sample: async () => ({ statusCode: 200, bytes: 3000000, reason: "enough_data", durationMs: 6000, rateKbps: 700, streamKbps: 4500, videoCodec: "h264", audioCodecs: ["mp2"] }),
+    inspect: async () => { inspecciones += 1; return { mediaValid: true, browserCompatible: true, videoCodec: "h264", audioCodecs: [], mediaReason: "playable_media" }; },
+  });
+  assert.equal(inspecciones, 0, "ffprobe sobra cuando la PMT ya ha hablado");
+  assert.equal(result.state, "working", "sin ventana de entrada medible se mantiene el criterio anterior");
+  assert.equal(result.rateKbps, 700);
+  assert.equal(result.streamKbps, 4500);
+  assert.equal(result.videoCodec, "h264");
+});
+
+test("la pagina arranca la primera fuente verificada y salta a la siguiente si falla", () => {
+  const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
+  assert.match(html, /function esperarFuenteVerificada\(/);
+  assert.match(html, /function arrancarPrimeraVerificada\(/);
+  // al entrar a un partido con comprobador ya no se reproduce a ciegas
+  assert.match(html, /if\(S\.sourceScanId\) esperarFuenteVerificada\(item\);/);
+  // y una caida pasa a la siguiente verificada antes de rendirse
+  const caida = html.indexOf("function failCurrentSourcePlayback(");
+  assert.ok(html.slice(caida, caida + 1600).includes("if(arrancarPrimeraVerificada()) return;"));
+  // elegir a mano apaga el automatismo
+  assert.match(html, /S\.autoPlayVerified=false;\s*S\.fuenteActual=id;/);
+});
