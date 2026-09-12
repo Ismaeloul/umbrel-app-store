@@ -51,7 +51,11 @@ services:
       # dias de margen deja varios intentos aunque el NAS pase un dia apagado.
       JAS_INTERVAL_HOURS: "2"
       JAS_REFRESH_WINDOW_DAYS: "3"
-      JAS_WORKER_THREADS: "2"
+      # Un solo trabajo de firma a la vez. Cada firma descomprime la app en
+      # /tmp, carga los binarios en RAM y vuelve a montar el zip entero en
+      # memoria; dos IPAs grandes en paralelo se comen el limite del
+      # contenedor y el kernel mata el proceso a mitad de la instalacion.
+      JAS_WORKER_THREADS: "1"
       # mDNS necesita multicast, que no cruza la red bridge de Umbrel. El
       # iPhone se registra con IP fija (reserva DHCP en el router) y jas
       # conecta al 49152, que es fijo: el descubrimiento no hace falta.
@@ -60,7 +64,11 @@ services:
       # Base de datos, clave de cifrado e IPAs guardados para el refresco.
       # Bind mount para poder verlo y copiarlo desde el NAS.
       - ${APP_DATA_DIR}/data:/data
-    mem_limit: 1g
+    # Con 1g el kernel mataba a jas firmando Pokemon GO (IPA de 170 MB): el
+    # IPA viaja en base64 dentro de la peticion, se decodifica en memoria y
+    # la firma vuelve a construir el zip completo en RAM. Un IPA grande
+    # necesita varias veces su tamano solo para una instalacion.
+    mem_limit: 4g
 
 volumes:
   anisette_data:
