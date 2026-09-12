@@ -6,6 +6,16 @@ import { preferencias } from './ajustes';
 import { listarCuentas, resumenDe, suscripcionesDe } from './consultas';
 import type { Aplicado } from './materializador';
 
+/**
+ * Como se llama la cuenta en un correo. Con tres App Store de la India, «App
+ * Store · India» no dice cual es: la direccion con la que entras si. Si la
+ * cuenta no tiene correo apuntado, se queda con tienda y region.
+ */
+export function nombreDe(cuenta: { correo: string; tienda: string; region: string }): string {
+  const tienda = `${cuenta.tienda} · ${cuenta.region}`;
+  return cuenta.correo ? `${cuenta.correo} (${tienda})` : tienda;
+}
+
 export interface Aviso {
   clave: string;
   /** 0 lo mas urgente. Una prueba a punto de perderse manda sobre el resto. */
@@ -30,7 +40,7 @@ export function revisar(conn: DatabaseSync, hoy: string, aplicados: Aplicado[] =
   const prefs = preferencias(conn);
 
   for (const cuenta of listarCuentas(conn)) {
-    const nombre = `${cuenta.tienda} · ${cuenta.region}`;
+    const nombre = nombreDe(cuenta);
     const { proyeccion } = resumenDe(conn, cuenta, hoy);
 
     // 1. Pruebas gratuitas que pasan a cobro pronto. Si ademas el saldo no va
@@ -77,7 +87,7 @@ export function revisar(conn: DatabaseSync, hoy: string, aplicados: Aplicado[] =
       prioridad: 0,
       repetirCada: null,
       titulo: `Se ha perdido ${a.nombre}`,
-      detalle: `${cuenta.tienda} · ${cuenta.region}: el cobro del ${fechaLarga(a.fecha, hoy)} por ${formatear(a.importe, cuenta.divisa, cuenta.locale)} no cabía en el saldo.`
+      detalle: `${nombreDe(cuenta)}: el cobro del ${fechaLarga(a.fecha, hoy)} por ${formatear(a.importe, cuenta.divisa, cuenta.locale)} no cabía en el saldo.`
     });
   }
 

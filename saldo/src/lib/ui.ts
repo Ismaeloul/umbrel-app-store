@@ -1,5 +1,8 @@
 // Como se traduce a pantalla lo que dice el motor.
 
+import { factor } from './dinero';
+import type { SuscripcionProyectable } from './motor/proyeccion';
+
 /** Rojo si quedan 30 dias o menos, ambar si 60 o menos, verde por encima. */
 export function color(dias: number): string {
   if (dias <= 30) return 'var(--rojo)';
@@ -47,4 +50,29 @@ export function fechaLarga(iso: string, hoy?: string): string {
 
 export function diaDelMes(iso: string): number {
   return Number(iso.slice(8, 10));
+}
+
+/** Lo que cobra la cuenta al mes, en unidad menor: las anuales, a doceavos. */
+export function gastoMensual(subs: { importe: number; periodo: 'mensual' | 'anual' }[]): number {
+  return subs.reduce((t, s) => t + (s.periodo === 'anual' ? s.importe / 12 : s.importe), 0);
+}
+
+const PASOS = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000];
+
+/**
+ * Hasta donde llega la barra de «si recargo…», en unidades de la moneda de la
+ * cuenta. Da para unos seis meses de cobros, con un paso redondo que deje la
+ * barra en unas 50 posiciones: 2.500 ₹ de 50 en 50 para YouTube en la India,
+ * 100 € de 2 en 2 para una cuenta europea. Sin cobros, un tope fijo.
+ */
+export function escalaRecarga(
+  gastoMensualMenor: number,
+  divisa: string
+): { max: number; paso: number } {
+  const alMes = gastoMensualMenor / factor(divisa);
+  if (alMes <= 0) return { max: 120, paso: 5 };
+
+  const objetivo = alMes * 6;
+  const paso = PASOS.find((p) => objetivo / p <= 50) ?? PASOS[PASOS.length - 1];
+  return { max: Math.ceil(objetivo / paso) * paso, paso };
 }

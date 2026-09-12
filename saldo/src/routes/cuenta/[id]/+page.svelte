@@ -2,7 +2,7 @@
   import { enhance } from '$app/forms';
   import { formatear, factor } from '$lib/dinero';
   import { proyectar } from '$lib/motor/proyeccion';
-  import { color, diaDelMes, fechaCorta, fechaLarga, llenado, margen } from '$lib/ui';
+  import { color, diaDelMes, escalaRecarga, fechaCorta, fechaLarga, gastoMensual, llenado, margen } from '$lib/ui';
 
   let { data, form } = $props();
 
@@ -16,6 +16,10 @@
   // la fecha se recalcula sin pedirle nada a nadie.
   let unidades = $state(0);
   const extra = $derived(Math.round(unidades * factor(c.divisa)));
+  // La barra va en la moneda de la cuenta: 120 € dan para meses de Netflix,
+  // pero 120 ₹ no llegan ni a una mensualidad de YouTube. El tope sale de lo
+  // que cobra la cuenta al mes.
+  const escala = $derived(escalaRecarga(gastoMensual(data.proyectables), c.divisa));
   const simulada = $derived(
     proyectar({
       saldo: c.saldo + extra,
@@ -24,6 +28,13 @@
     })
   );
   const ganados = $derived(simulada.diasRestantes - data.proyeccion.diasRestantes);
+  // Cuantos cobros mas cubres con esa recarga: es lo que explica por que 70 ₹
+  // pueden valer un mes entero (si ya tenias casi el importe del cobro) y
+  // 300 ₹ no valer nada (si con ellos sigues sin llegar al siguiente).
+  const cubiertos = $derived(
+    simulada.cobros.filter((x) => x.cabe).length - data.proyeccion.cobros.filter((x) => x.cabe).length
+  );
+  const sobra = $derived(simulada.primerFallo ? simulada.primerFallo.saldoDespues : null);
 
   const proximos = $derived(data.proyeccion.cobros.slice(0, 8));
 </script>
@@ -87,8 +98,8 @@
             class="deslizador"
             type="range"
             min="0"
-            max="120"
-            step="5"
+            max={escala.max}
+            step={escala.paso}
             bind:value={unidades}
             aria-label="Cuánto recargar"
           />
@@ -99,12 +110,23 @@
             <p class="resultado">
               Con eso <strong>aguantas más de dos años</strong>.
             </p>
+          {:else if cubiertos === 0}
+            <p class="resultado">
+              Con eso <strong>no llegas a ningún cobro más</strong>: sigues hasta el
+              {fechaLarga(simulada.seAgotaEl!, data.hoy)}.
+            </p>
+            <p class="mono apunte tenue">
+              te faltarían {formatear(simulada.primerFallo!.importe - sobra!, c.divisa, c.locale)}
+              para el de {simulada.primerFallo!.nombre}
+            </p>
           {:else}
             <p class="resultado">
-              Aguantas hasta el <strong>{fechaLarga(simulada.seAgotaEl!, data.hoy)}</strong>.
+              Cubres <strong>{cubiertos} {cubiertos === 1 ? 'cobro' : 'cobros'} más</strong> y
+              aguantas hasta el <strong>{fechaLarga(simulada.seAgotaEl!, data.hoy)}</strong>.
             </p>
             <p class="mono apunte" style="color: var(--verde)">
-              {simulada.diasRestantes} días · +{ganados} respecto de ahora
+              {margen(simulada.diasRestantes)} · +{ganados} días respecto de ahora
+              {#if sobra}· sobran {formatear(sobra, c.divisa, c.locale)}{/if}
             </p>
           {/if}
         </div>
@@ -283,6 +305,10 @@
     <section class="bloque">
       <span class="rotulo">Datos de la cuenta</span>
       <form method="POST" action="?/datos" class="tarjeta caja formulario" use:enhance>
+        <label class="campo">
+          <span>Tienda</span>
+          <input name="tienda" value={c.tienda} placeholder="App Store" required autocomplete="off" />
+        </label>
         <label class="campo">
           <span>Correo de la cuenta</span>
           <input name="correo" type="email" value={c.correo} placeholder="lacuenta@ejemplo.com" autocomplete="off" />

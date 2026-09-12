@@ -49,10 +49,20 @@ describe('aviso de poco saldo', () => {
     // (duro o fino, segun la version de ICU). Se normaliza cualquiera.
     const detalle = (margen?.detalle ?? '').replace(/\s/g, ' ');
 
-    expect(margen?.titulo).toBe('A App Store · España le quedan 30 días de saldo');
+    expect(margen?.titulo).toBe(
+      'A la-mia@ejemplo.com (App Store · España) le quedan 30 días de saldo'
+    );
     expect(detalle).toContain('Se queda sin saldo el 5 de octubre');
     expect(detalle).toContain('en el cobro de Filmin (10,00 €)');
     expect(detalle).toContain('Ahora mismo tiene 10,00 €');
+  });
+
+  it('sin correo apuntado, la cuenta se llama por tienda y region', () => {
+    conn.prepare('UPDATE cuentas SET correo = ?').run('');
+    mensualQueVacia(HOY);
+
+    const margen = revisar(conn, HOY).find((a) => a.clave.startsWith('margen:'));
+    expect(margen?.titulo).toBe('A App Store · España le quedan 30 días de saldo');
   });
 
   it('con 31 dias todavia no molesta', () => {

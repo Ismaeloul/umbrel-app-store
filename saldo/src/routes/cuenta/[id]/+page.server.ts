@@ -162,8 +162,10 @@ export const actions: Actions = {
     const c = cuentaDe(params);
     const datos = await request.formData();
     const correo = String(datos.get('correo') ?? '').trim();
+    // Si el campo no viene (formularios viejos), la tienda se queda como esta.
+    const tienda = String(datos.get('tienda') ?? c.tienda).trim() || c.tienda;
 
-    db().prepare('UPDATE cuentas SET correo = ? WHERE id = ?').run(correo, c.id);
+    db().prepare('UPDATE cuentas SET correo = ?, tienda = ? WHERE id = ?').run(correo, tienda, c.id);
     guardarNotas(db(), c.id, String(datos.get('notas') ?? ''));
     return { hecho: 'Guardado.' };
   },

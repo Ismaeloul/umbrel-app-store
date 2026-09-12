@@ -3,7 +3,7 @@ id: ismaeloul-saldo
 category: finance
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-saldo/icon.svg"
 name: Saldo
-version: "0.1.3"
+version: "0.1.4"
 tagline: Cuánto te dura el saldo prepago de tus cuentas de tiendas de apps
 description: >-
   Saldo lleva la cuenta del prepago y las suscripciones de tus cuentas de App
@@ -26,9 +26,16 @@ description: >-
   privada.
 
 releaseNotes: >-
-  El aviso de poco saldo ahora insiste TODOS los días hasta que recargues, en
-  vez de decírtelo una vez y callarse. En Ajustes hay un campo nuevo,
-  «Recordármelo cada… (días)», por si prefieres que no sea tan pesado.
+  El correo de aviso dice ya de qué cuenta habla: con tres App Store de la
+  India, «App Store · India» no distinguía nada, así que ahora va con la
+  dirección de la cuenta delante.
+
+  La barra de «si recargo…» se escala a la moneda de la cuenta (antes se
+  paraba en 120 unidades, que en rupias no daban ni para un cobro) y explica
+  el resultado: cuántos cobros más cubres, cuánto te sobra o cuánto te falta
+  para el siguiente.
+
+  El nombre de la tienda se puede corregir desde la ficha de la cuenta.
 
 developer: Ismaeloul
 website: https://github.com/Ismaeloul/umbrel-app-store
