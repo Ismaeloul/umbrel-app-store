@@ -3,13 +3,29 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.6.56"
+version: "0.6.57"
 tagline: Nuevo reproductor AceStream para Umbrel
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream web con
   biblioteca, favoritos, recientes, importacion de listas, agenda de futbol y
   proxy local para reproducir los streams desde el navegador.
 releaseNotes: >-
+  Los carruseles del movil ya no vuelven solos al principio. El selector de
+  fuentes se repintaba cada segundo y medio mientras el comprobador trabajaba,
+  y cada repintado rehacia el carril entero: al deslizarlo con el dedo volvia
+  a la primera fuente y cortaba la inercia. Ahora, si las fuentes son las
+  mismas, solo cambian el color y el estado de cada boton sin tocar el carril,
+  y cuando entra o sale una fuente se conserva la posicion. Solo se mueve solo
+  la primera vez que aparece y cuando cambia la fuente activa, lo justo para
+  que se vea. Lo mismo para la tira de dias de la agenda, que se recentraba en
+  hoy con cada repintado: ahora solo se reconstruye si cambia algo y solo se
+  centra al elegir otro dia; y si la tocas mientras se esta centrando, manda
+  el dedo. La fila de acciones de la fuente (favorito, rebuscar, pegar hash,
+  reportar), que en el movil tambien se desplaza en horizontal, deja de
+  rehacerse con cada refresco; y ademas ya se puede deslizar entera: estaba
+  alineada al final y los primeros botones desbordaban por la izquierda,
+  fuera del alcance del dedo.
+  Historico:
   Los avisos dejan de tapar el video. Lo que le pasa a la señal -fuente
   verificada, reintento, buffer, zapping, rebusqueda, directo- no es una
   notificacion sino el estado del reproductor, y ahora se lee en una linea
