@@ -62,8 +62,26 @@ release_is_complete() {
   done
 }
 
+# Releases anteriores en el NAS: cada actualizacion deja la carpeta de la
+# version previa. No pesan (1,5 MB) pero confunden al depurar; las de mas de
+# 30 dias se retiran. Nunca la actual, y un fallo aqui no impide arrancar.
+prune_old_releases() {
+  find "${APP_DATA_DIR}/releases" -mindepth 1 -maxdepth 1 -type d \
+    ! -name "${VERSION}" -mtime +30 -exec rm -rf {} + 2>/dev/null || true
+}
+
+# .complete es un atajo: si esta y los ficheros siguen ahi, no hay nada que
+# restaurar. Se comprueba igualmente la lista para no fiarse de un marcador
+# huerfano.
+if [[ -f "${TARGET}/.complete" ]] && release_is_complete "${TARGET}"; then
+  prune_old_releases
+  echo "Ace Player Neo ${VERSION}: release local ya verificada"
+  exit 0
+fi
+
 if release_is_complete "${TARGET}"; then
   touch "${TARGET}/.complete"
+  prune_old_releases
   echo "Ace Player Neo ${VERSION}: release local verificada"
   exit 0
 fi
@@ -77,6 +95,7 @@ if [[ -n "${SCRIPT_APP_REPO_DIR:-}" ]] && release_is_complete "${STORE_RELEASE}"
   cp -a "${STORE_RELEASE}/." "${TARGET}/"
   release_is_complete "${TARGET}"
   touch "${TARGET}/.complete"
+  prune_old_releases
   echo "Ace Player Neo ${VERSION}: release restaurada desde la tienda local"
   exit 0
 fi
@@ -138,4 +157,5 @@ cp -a "${RELEASE_ROOT}/." "${TARGET}/"
 
 release_is_complete "${TARGET}"
 touch "${TARGET}/.complete"
+prune_old_releases
 echo "Ace Player Neo ${VERSION}: release lista"
