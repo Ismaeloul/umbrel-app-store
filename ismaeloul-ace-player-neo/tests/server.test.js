@@ -1873,3 +1873,27 @@ test("los avisos de la seÃ±al van bajo el reproductor y los toasts quedan pequeÃ
   // en el movil no hay video debajo: siguen centrados sobre la barra inferior
   assert.match(html, /bottom:calc\(94px \+ env\(safe-area-inset-bottom\)\); right:auto; left:50%;/);
 });
+
+test("los carruseles del movil no vuelven al principio con cada repintado", () => {
+  /* El selector de fuentes se repinta cada 1,5 s durante el escaneo y la tira
+     de dias con cada renderFootball(): rehacer el innerHTML devolvia el
+     scroll horizontal al principio mientras se deslizaba con el dedo. */
+  const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
+  // el selector de fuentes actualiza los botones en sitio cuando la lista no cambia
+  assert.match(html, /const mismaEstructura=Boolean\(label&&viewport\)&&existentes\.length===buttons\.length/);
+  assert.match(html, /if\(boton\.className!==b\.clase\) boton\.className=b\.clase;/);
+  // y si se reconstruye, conserva la posicion en vez de saltar al final
+  assert.match(html, /if\(nuevo&&previousCount>0\) nuevo\.scrollLeft=scrollPrevio;/);
+  assert.doesNotMatch(html, /viewport\.scrollLeft=viewport\.scrollWidth/);
+  // solo se asoma la fuente activa al aparecer o al cambiar de fuente
+  assert.match(html, /if\(previousCount===0\|\|caja\.dataset\.fuenteActiva!==activaAhora\)\{/);
+  assert.match(html, /function asomarFuenteActiva\(caja\)/);
+  // la tira de dias solo se rehace si cambia y solo se centra al cambiar de dia
+  assert.match(html, /if\(box\.dataset\.firma!==pintado\)\{\s*const scrollPrevio=box\.scrollLeft;/);
+  assert.match(html, /if\(activeButton&&box\.dataset\.diaCentrado!==diaActivo\)\{/);
+  assert.match(html, /box\.addEventListener\('touchstart',\(\)=>clearTimeout\(animScroll\),\{passive:true\}\);/);
+  // la fila de acciones de la fuente tampoco se rehace si no cambia
+  assert.match(html, /const firma=`\$\{source\.id\}\|\$\{acciones\}`;\s*if\(box\.dataset\.firma===firma\) return;/);
+  // y alineada al principio: con flex-end lo que desborda queda fuera del alcance del scroll
+  assert.match(html, /\.si-actions \{ width:100%; overflow-x:auto; justify-content:flex-start;/);
+});
