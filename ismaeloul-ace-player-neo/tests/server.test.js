@@ -10,6 +10,10 @@ const testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "ace-player-neo-"));
 process.env.DATA_DIR = testDataDir;
 process.env.DEFAULT_WEB_SYNC_URL = "https://example.com/default.m3u";
 process.env.FOOTBALL_DEMO_ONLY = "true";
+// los tests no salen a internet: sin sincronizacion periodica de directorios
+process.env.AUTO_SYNC = "false";
+// secreto compartido backend <-> engine-control, como lo pone el compose
+process.env.ENGINE_CONTROL_TOKEN = "prueba-token";
 
 const manifest = fs.readFileSync(path.join(__dirname, "../umbrel-app.yml"), "utf8");
 const releaseVersion = manifest.match(/^version:\s*"([^"]+)"/m)?.[1];
@@ -1867,9 +1871,212 @@ test("los avisos de la señal van bajo el reproductor y los toasts quedan peque�
   const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
   assert.match(html, /id="playerNotice"/);
   assert.match(html, /function avisoReproductor\(/);
-  assert.match(html, /if\(esAvisoDeReproductor\(iconName,type\)\)\{ avisoReproductor\(iconName,msg,type\); return; \}/);
+  assert.match(html, /if\(!opciones\.action&&esAvisoDeReproductor\(iconName,type\)\)\{ avisoReproductor\(iconName,msg,type\); return; \}/);
   assert.match(html, /const TOAST_MAX = 2;/);
   assert.match(html, /\.toasts \{ position:fixed; bottom:18px; right:18px;/);
   // en el movil no hay video debajo: siguen centrados sobre la barra inferior
   assert.match(html, /bottom:calc\(94px \+ env\(safe-area-inset-bottom\)\); right:auto; left:50%;/);
+});
+
+/* ---------- 0.6.57: repaso de robustez del backend ---------- */
+
+const serverSource = () => fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "server.js"), "utf8");
+
+test("el cuerpo se lee antes que el estado: una peticion lenta no pisa a la rapida", async () => {
+  /* Con fn(readState(), await readBody(req)) el estado se leia al llegar las
+     cabeceras. Si el cuerpo tardaba, lo que otra peticion escribiera entre
+     medias quedaba pisado por esa copia vieja. */
+  seedState();
+  const http = require("node:http");
+  const { port } = server.address();
+  const cuerpo = Buffer.from(JSON.stringify({ channel: "DAZN 1", id: ID_A, title: "DAZN 1", ih: false }));
+  const lenta = http.request({
+    host: "127.0.0.1", port, method: "POST", path: "/api/football/bind",
+    headers: { "Content-Type": "application/json", "Content-Length": cuerpo.length },
+  });
+  const respuestaLenta = new Promise((resolve, reject) => {
+    lenta.on("response", (res) => { let d = ""; res.on("data", (c) => { d += c; }); res.on("end", () => resolve({ status: res.statusCode, data: JSON.parse(d) })); });
+    lenta.on("error", reject);
+  });
+  lenta.flushHeaders();               // cabeceras ya; el cuerpo, despues
+  await new Promise((r) => setTimeout(r, 120));
+  const rapida = await post("/api/preferences", { onboardingComplete: true, country: "Spain", leagues: ["LaLiga"], teams: [], nationalities: [] });
+  assert.equal(rapida.response.status, 200);
+  lenta.end(cuerpo);
+  const { status } = await respuestaLenta;
+  assert.equal(status, 200);
+  const estado = app.readState();
+  assert.deepEqual(estado.preferences.leagues, ["LaLiga"], "la escritura rapida sigue ahi");
+  assert.equal(estado.channelBindings[0]?.id, ID_A, "y la lenta tambien");
+});
+
+test("un state.json ilegible se aparta y se recupera la copia de la escritura anterior", () => {
+  /* Antes, un JSON roto devolvia el estado vacio y la siguiente escritura lo
+     hacia definitivo: favoritos, historial y aprendizaje a cero sin aviso. */
+  seedState();
+  app.writeState({ ...app.readState(), favorites: [{ id: ID_C, title: "Segundo", type: "fav" }] });
+  const stateFile = path.join(testDataDir, "state.json");
+  fs.writeFileSync(stateFile, "{ esto no es json");
+  const recuperado = app.readState();
+  assert.equal(recuperado.favorites[0].id, ID_A, "vuelve la copia anterior (.bak)");
+  const apartados = () => fs.readdirSync(testDataDir).filter((name) => name.startsWith("state.json.corrupt-"));
+  assert.equal(apartados().length, 1, "el fichero roto queda apartado para mirarlo");
+  assert.equal(app.readState().favorites[0].id, ID_A, "la recuperacion queda escrita en state.json");
+  // sin copia de seguridad: estado por defecto, pero el roto sigue apartado
+  fs.writeFileSync(stateFile, "tampoco");
+  fs.rmSync(app.STATE_BACKUP_FILE, { force: true });
+  const vacio = app.readState();
+  assert.deepEqual(vacio.favorites, []);
+  assert.equal(apartados().length, 2);
+  for (const name of apartados()) fs.rmSync(path.join(testDataDir, name), { force: true });
+});
+
+test("un fallo interno responde 500 con rastro en el log, no un 400 disfrazado", async () => {
+  seedState();
+  const tmp = path.join(testDataDir, "state.json.tmp");
+  fs.mkdirSync(tmp);                      // writeFileSync sobre un directorio revienta
+  try {
+    const { response, data } = await post("/api/preferences", { country: "Spain" });
+    assert.equal(response.status, 500);
+    assert.equal(data.error, "internal_error");
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+  const conocido = await post("/api/library", { action: "nada" });
+  assert.equal(conocido.response.status, 400);
+  assert.equal(conocido.data.error, "bad_action", "los errores de entrada siguen siendo 400 con su nombre");
+});
+
+test("el drenador del comprobador y el proceso sobreviven a una promesa sin capturar", () => {
+  /* drainScannerQueue se lanzaba desde setImmediate sin catch: un fallo al
+     anotar un informe tumbaba el proceso entero en Node 24. */
+  const server = serverSource();
+  assert.doesNotMatch(server, /setImmediate\(drainScannerQueue\)/);
+  assert.match(server, /drainScannerQueue\(\)\.catch\(/);
+  assert.match(server, /process\.on\("unhandledRejection"/);
+  assert.match(server, /process\.once\("SIGTERM"/);
+  assert.match(server, /process\.once\("SIGINT"/);
+});
+
+test("el remux desaloja la sesion sin espectadores y avisa si todas estan vivas", () => {
+  /* Con tres sesiones ocupadas, un cuarto iPhone mataba la mas antigua aunque
+     alguien la estuviera viendo. */
+  const sesion = (lastAccess, clients, exited = false) => ({ lastAccess, clients: new Set(clients), exited });
+  const vivas = new Map([["a", sesion(1, ["iphone"])], ["b", sesion(2, ["ipad"])], ["c", sesion(3, ["mac"])]]);
+  assert.equal(app.elegirSesionRemuxADesalojar(vivas), null, "nadie pierde la imagen: el que llega espera");
+  const conLibres = new Map([["a", sesion(1, ["iphone"])], ["b", sesion(3, [])], ["c", sesion(2, ["tv"], true)]]);
+  assert.equal(app.elegirSesionRemuxADesalojar(conLibres), "c", "la libre mas antigua (ffmpeg terminado), no la mas antigua sin mas");
+  assert.match(serverSource(), /new Error\("remux_busy"\)/);
+});
+
+test("los rotulos de calidad no gastan el tope de canales por partido", () => {
+  /* futbolenlatv anuncia cinco o seis rotulos; con tope 4 y contando "M+
+     LALIGA HDR" aparte, el sexto -a veces el unico en tu biblioteca- se caia. */
+  const canales = app.resolutionChannels(["M+ LALIGA HDR", "M+ LALIGA", "DAZN", "DAZN App Gratis", "LaLiga TV Bar", "Gol Play"]);
+  assert.deepEqual(canales, ["M+ LALIGA", "DAZN", "DAZN App Gratis", "LaLiga TV Bar", "Gol Play"]);
+  assert.equal(app.resolutionChannels(Array.from({ length: 12 }, (_, i) => `Canal ${i + 1}`)).length, 8);
+});
+
+test("la cache de marcadores se poda y lo aprendido se aplica una sola vez", async () => {
+  app.scoresCache.set("liga@viejo", { payload: [], expiresAt: Date.now() - 2 * 24 * 3600 * 1000, pending: null });
+  app.scoresCache.set("liga@hoy", { payload: [], expiresAt: Date.now() + 60000, pending: null });
+  app.pruneScoresCache();
+  assert.ok(!app.scoresCache.has("liga@viejo"));
+  assert.ok(app.scoresCache.has("liga@hoy"));
+  app.scoresCache.delete("liga@hoy");
+
+  // un vinculo guardado en cuarentena tampoco pasa, aunque ya solo haya una pasada
+  const state = seedState();
+  state.channelBindings = [app.normalizeChannelBinding({ channel: "DAZN", id: ID_A, title: "DAZN 1 720p", ih: false })];
+  state.sourceReports = [app.normalizeSourceReport({
+    id: ID_A, channel: "DAZN", reason: "not_starting", state: "failed",
+    quarantineUntil: new Date(Date.now() + 60000).toISOString(),
+  })];
+  const result = await app.resolveFootballChannel(state, ["DAZN"], async () => [], { semantic: { enabled: false } });
+  assert.ok(!result.candidates.some((c) => c.id === ID_A), "la cuarentena se respeta en los vinculos guardados");
+  const cuerpo = serverSource();
+  const dentro = cuerpo.slice(cuerpo.indexOf("async function resolveFootballChannel("), cuerpo.indexOf("async function resolveFootballChannel(") + 6000);
+  assert.equal(dentro.split("applyLearnedSourceRules(").length - 1, 1);
+});
+
+test("/api/playback devuelve solo el mando, no el estado entero", async () => {
+  /* El reproductor lo consulta cada pocos segundos; bajar /api/state con el
+     directorio completo eran ~100 KB por tiron en el movil. */
+  const state = seedState();
+  app.writeState({ ...state, nowPlaying: { id: ID_A, title: "Canal", dev: "tv-salon", token: "abc123", at: Date.now() } });
+  const ligero = await (await fetch(baseUrl + "/api/playback")).json();
+  const completo = await (await fetch(baseUrl + "/api/state")).json();
+  assert.deepEqual(Object.keys(ligero).sort(), ["learningCount", "nowPlaying", "serverTime"]);
+  assert.deepEqual(ligero.nowPlaying, completo.nowPlaying);
+  assert.equal(ligero.learningCount, completo.learningCount);
+  assert.equal(typeof ligero.serverTime, "number");
+  const metodo = await fetch(baseUrl + "/api/playback", { method: "POST", headers: { "Sec-Fetch-Site": "same-origin" } });
+  assert.equal(metodo.status, 405);
+});
+
+test("el directorio guarda por que fallo la ultima actualizacion", async () => {
+  /* La tarjeta decia "fallo la ultima actualizacion" sin mas; con ipfs.io
+     devolviendo 429 parecia un fallo de la app. */
+  const state = seedState();
+  app.writeState({ ...state, webSources: [{ ...state.webSources[0], lastErrorAt: new Date().toISOString(), lastError: "HTTP_429!" }] });
+  assert.equal(app.readState().webSources[0].lastError, "http_429");
+  assert.equal((await (await fetch(baseUrl + "/api/state")).json()).webSources[0].lastError, "http_429");
+  app.writeState({ ...state, webSources: [{ ...state.webSources[0], lastErrorAt: null, lastError: "http_429" }] });
+  assert.equal((await (await fetch(baseUrl + "/api/state")).json()).webSources[0].lastError, null, "sin fecha de fallo no se enseña un motivo viejo");
+  assert.equal(app.motivoDeFallo(new Error("http_429")), "http_429");
+  assert.equal(app.motivoDeFallo(new Error("getaddrinfo ENOTFOUND x")), "fetch_failed");
+
+  // la actualizacion manual de un directorio guardado tambien lo anota y conserva la cache
+  seedState();
+  const { response, data } = await post("/api/streams/sync", { sourceId: "principal", url: "https://no-existe.invalid/list.m3u", type: "m3u" });
+  assert.equal(response.status, 400);
+  assert.equal(data.error, "dns_failed");
+  const fuente = app.readState().webSources[0];
+  assert.equal(fuente.lastError, "dns_failed");
+  assert.ok(fuente.lastErrorAt);
+  assert.equal(fuente.streams.length, 2, "la cache de canales no se toca");
+  assert.ok(serverSource().includes("new Error(" + String.fromCharCode(96) + "http_${response.statusCode}" + String.fromCharCode(96) + ")"), "fetchText lleva el codigo HTTP en el error");
+});
+
+test("si ipfs.io se satura se prueba la misma ruta en dweb.link, y a la inversa", () => {
+  assert.equal(app.alternateGatewayUrl("https://ipfs.io/ipns/k51abc/hashes.m3u"), "https://dweb.link/ipns/k51abc/hashes.m3u");
+  assert.equal(app.alternateGatewayUrl("https://dweb.link/ipfs/Qm123/lista.m3u"), "https://ipfs.io/ipfs/Qm123/lista.m3u");
+  assert.equal(app.alternateGatewayUrl("https://example.com/ipns/x"), null);
+  assert.equal(app.alternateGatewayUrl("https://ipfs.io/otra/cosa"), null);
+  assert.equal(app.alternateGatewayUrl("http://ipfs.io/ipns/x"), null, "solo https");
+  assert.equal(typeof app.fetchDirectoryText, "function");
+  assert.match(serverSource(), /const text = await fetchDirectoryText\(source\.url\);/);
+});
+
+test("engine-control exige el token compartido y el backend lo envia", async () => {
+  /* Todos los contenedores del NAS comparten red: sin token, cualquier app
+     podia reiniciar el motor a media emision. */
+  const control = require(path.join(__dirname, "../releases", releaseVersion, "engine-control.js"));
+  const srv = control.createServer();
+  await new Promise((resolve) => srv.listen(0, "127.0.0.1", resolve));
+  const base = `http://127.0.0.1:${srv.address().port}`;
+  try {
+    const sin = await fetch(base + "/restart", { method: "POST" });
+    assert.equal(sin.status, 401);
+    const mal = await fetch(base + "/restart", { method: "POST", headers: { "x-engine-token": "otro" } });
+    assert.equal(mal.status, 401);
+    const otra = await fetch(base + "/otra", { method: "POST", headers: { "x-engine-token": "prueba-token" } });
+    assert.equal(otra.status, 404);
+    // con el token correcto llega hasta Docker; aqui no hay socket, asi que
+    // lo que falla es el reinicio, no la autorizacion
+    const bien = await fetch(base + "/restart", { method: "POST", headers: { "x-engine-token": "prueba-token" } });
+    assert.equal(bien.status, 502);
+    assert.equal((await bien.json()).error, "restart_failed");
+  } finally {
+    await new Promise((resolve) => srv.close(resolve));
+  }
+  assert.match(serverSource(), /"x-engine-token": ENGINE_CONTROL_TOKEN/);
+});
+
+test("con AUTO_SYNC=false la sincronizacion periodica no sale a internet", async () => {
+  seedState();
+  await app.autoSyncWeb();
+  const fuente = app.readState().webSources[0];
+  assert.equal(fuente.lastErrorAt, null, "no ha intentado descargar nada");
+  assert.equal(fuente.syncedAt, null);
 });

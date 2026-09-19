@@ -1,0 +1,35 @@
+name: Ace Player Neo
+
+# Corre los tests de la app en cada PR y en cada push a main que la toque.
+# Hasta ahora solo se ejecutaban a mano en el PC: 114 tests que vigilan que
+# manifiesto, compose, hook, servidor y service worker vayan a la par.
+
+on:
+  pull_request:
+    paths:
+      - 'ismaeloul-ace-player-neo/**'
+      - '.github/workflows/ace-player-neo.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ismaeloul-ace-player-neo/**'
+      - '.github/workflows/ace-player-neo.yml'
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ismaeloul-ace-player-neo
+    env:
+      # El servidor arranca la sincronizacion de listas al cargarse; en CI no
+      # hay que salir a internet.
+      AUTO_SYNC: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Tests del servidor y del reproductor
+        run: node --test tests/server.test.js tests/player-controller.test.js
