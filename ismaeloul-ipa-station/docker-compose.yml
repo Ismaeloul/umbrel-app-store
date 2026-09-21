@@ -16,7 +16,9 @@ services:
       PROXY_AUTH_ADD: "true"
 
   anisette:
-    image: localhost:5000/ipa-station/anisette-v3-server:0.1.0
+    # 0.1.1 = upstream ae48fa1: el client info deja de decir com.apple.dt.Xcode,
+    # que es lo que Apple contesta con un 503 desde septiembre de 2026.
+    image: localhost:5000/ipa-station/anisette-v3-server:0.1.1
     # Las imagenes las compila y publica scripts/build-on-umbrel.sh en un
     # registro local del propio NAS, atado a 127.0.0.1. Umbrel hace un
     # `docker pull` de cada image: antes de arrancar nada, y ese pull ignora
