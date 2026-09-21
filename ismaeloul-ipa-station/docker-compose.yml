@@ -27,10 +27,18 @@ services:
     container_name: ismaeloul-ipa-station_anisette_1
     restart: unless-stopped
     volumes:
+      # La carpeta ENTERA de configuracion, no solo lib/. En lib/ estan las
+      # librerias que el servidor baja de Apple, pero la identidad de la
+      # maquina (device.json y adi.pb) se guarda un nivel mas arriba, en
+      # ~/.config/anisette-v3/. Montando solo lib/, cada vez que se recreaba
+      # el contenedor el servidor arrancaba con "Creating machine..." y
+      # provisionaba de cero contra Apple: identidad nueva en cada
+      # actualizacion de la app, y la sesion guardada del Apple ID podia
+      # quedarse invalida sin motivo aparente.
+      #
       # Volumen con nombre, no bind: el proceso corre como usuario sin
       # privilegios y una carpeta de APP_DATA_DIR llegaria como root.
-      # Si este estado se pierde, hay que volver a provisionar contra Apple.
-      - anisette_data:/home/Alcoholic/.config/anisette-v3/lib/
+      - anisette_state:/home/Alcoholic/.config/anisette-v3/
     mem_limit: 512m
 
   jas:
@@ -73,4 +81,7 @@ services:
     mem_limit: 4g
 
 volumes:
-  anisette_data:
+  # Nombre nuevo a proposito: el volumen viejo solo tenia las librerias, que
+  # el servidor vuelve a bajar solo. Empezar limpio evita mezclar una
+  # identidad a medias con el client info antiguo.
+  anisette_state:
