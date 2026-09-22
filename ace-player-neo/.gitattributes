@@ -1,0 +1,8 @@
+# Todo el monorepo con finales de línea LF (Swift, shell, YAML y TS).
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.gif binary
+*.webp binary
+*.woff2 binary
+*.ipa binary

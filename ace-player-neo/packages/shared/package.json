@@ -1,0 +1,18 @@
+{
+  "name": "@ace/shared",
+  "private": true,
+  "version": "0.7.0",
+  "type": "module",
+  "description": "Esquemas zod y tipos compartidos entre servidor, web e iOS",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "openapi": "tsx scripts/openapi.ts"
+  },
+  "dependencies": {
+    "zod": "4.6.5"
+  }
+}
