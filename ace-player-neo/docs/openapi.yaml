@@ -1,0 +1,2717 @@
+openapi: 3.1.0
+info:
+  title: Ace Player Neo - API HTTP actual
+  version: "0.6.59"
+  summary: API del backend Node de Ace Player Neo 0.6.59, documentada tal y como está.
+  description: |
+    Especificación de la API que sirve hoy `ismaeloul-ace-player-neo/releases/0.6.59/server.js`
+    (función `handleRequest`, líneas 4713-5078). Se genera leyendo el código; no describe la v2.
+    La explicación detallada, con citas `server.js:línea`, está en `docs/api.md`.
+
+    Reglas comunes (ver `docs/api.md`, sección 2):
+
+    - Enrutado por comparación EXACTA de `req.url`, query incluida. Solo aceptan query
+      `/api/football`, `/api/football/resolve`, `/api/football/scan`, `/api/football/preheat`,
+      `/api/remux` y `/api/search`; el prefijo `/remux/` la ignora. Cualquier otra URL con query
+      es `404 not_found`.
+    - Método incorrecto: `405 {"error":"method_not_allowed"}`. Sin soporte de OPTIONS ni CORS.
+    - Protección de origen (`isAllowedMutation`, server.js:1257-1274) para todo método que no sea
+      GET, HEAD u OPTIONS y para `GET /api/remux` y `GET /api/football/resolve`:
+      `Sec-Fetch-Site: cross-site` o un `Origin` cuyo host no coincide con `Host`/`X-Forwarded-Host`
+      dan `403 {"error":"cross_origin"}`. Se evalúa antes de enrutar, así que también afecta a
+      rutas inexistentes.
+    - Cuerpo JSON sin mirar `Content-Type`, vacío = `{}`, máximo 2 MiB (`413 body_too_large`),
+      JSON inválido `400 bad_json`.
+    - Respuestas JSON con `Content-Type: application/json; charset=utf-8`,
+      `Cache-Control: no-store` y `X-Content-Type-Options: nosniff`. No hay ETag.
+    - Errores con forma `{"error": "<codigo>"}`. Un error sin statusCode sale como 400; uno fuera de
+      la lista blanca, como `500 internal_error`.
+    - Sin autenticación en Node: la pone el app_proxy de Umbrel (PROXY_AUTH_ADD, docker-compose.yml:7-11).
+servers:
+  - url: /
+    description: Mismo origen. nginx reenvía /api/ y /remux/ al contenedor storage:3000.
+tags:
+  - name: estado
+    description: Estado persistido en state.json.
+  - name: biblioteca
+    description: Favoritos, historial y canales de los directorios.
+  - name: mando
+    description: Quién está reproduciendo (traspaso entre dispositivos).
+  - name: futbol
+    description: Agenda, resolución de canales, comprobador y marcadores.
+  - name: fuentes
+    description: Reportes, resultados y correcciones sobre fuentes.
+  - name: sistema
+    description: Salud, motor AceStream y buscador.
+  - name: remux
+    description: Adaptación HEVC a fMP4/HLS para iOS con ffmpeg.
+  - name: directorios
+    description: Listas M3U/HTML/IPFS importadas.
+
+paths:
+  /api/state:
+    get:
+      operationId: getState
+      tags: [estado]
+      summary: Estado completo
+      description: >-
+        Devuelve publicState(readState()). Solo lectura, salvo que state.json no exista (se crea)
+        o esté roto (se aparta y se recupera state.json.bak). No admite query. Sin campo success.
+      x-source: "server.js:4825-4826"
+      responses:
+        "200":
+          description: Estado público.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicState"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      operationId: putLegacyState
+      tags: [estado]
+      deprecated: true
+      summary: Compatibilidad con clientes 0.6.8
+      description: >-
+        Fusiona favoritos e historial añadiendo SOLO ids nuevos (no renombra ni borra) y actualiza el
+        mando si nowPlaying es válido. Siempre reescribe state.json. El cliente actual no la usa.
+        Un cuerpo JSON null provoca 500.
+      x-source: "server.js:4827-4851"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LegacyStateInput"
+      responses:
+        "200":
+          description: Estado público tras escribir.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicState"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/CrossOrigin"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/library:
+    post:
+      operationId: mutateLibrary
+      tags: [biblioteca]
+      summary: Alta, renombre o borrado en favoritos, historial o directorio
+      description: >-
+        mutateLibrary (server.js:1123-1175). Con collection=web el renombre y el borrado se guardan en
+        renames/hidden del directorio para sobrevivir a la siguiente sincronización. Renombrar o borrar
+        un id que no existe en favoritos/historial responde 200 sin cambios.
+        Errores 400: bad_request, bad_action, bad_collection, bad_title, source_not_found, bad_json.
+      x-source: "server.js:4855-4859"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LibraryMutationInput"
+      responses:
+        "200":
+          description: Colección afectada tras escribir.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/FavoritesResponse"
+                  - $ref: "#/components/schemas/HistoryResponse"
+                  - $ref: "#/components/schemas/DirectoryResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/CrossOrigin"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/playback:
+    get:
+      operationId: getPlayback
+      tags: [mando]
+      summary: Mando actual (sondeo ligero)
+      description: Solo tres claves y sin campo success. URL exacta.
+      x-source: "server.js:4864-4872"
+      responses:
+        "200":
+          description: Mando actual.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaybackResponse"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/playback/claim:
+    post:
+      operationId: claimPlayback
+      tags: [mando]
+      summary: Tomar el mando
+      description: >-
+        claimPlayback (server.js:1177-1198). at = max(ahora, at_anterior + 1). Si el token fue liberado
+        hace menos de 60 s responde ignored=true sin escribir. Error 400: bad_request.
+      x-source: "server.js:4874-4878"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClaimInput"
+      responses:
+        "200":
+          description: Mando guardado o petición ignorada.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClaimResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/CrossOrigin"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/playback/release:
+    post:
+      operationId: releasePlayback
+      tags: [mando]
+      summary: Soltar el mando
+      description: >-
+        releasePlayback (server.js:1200-1213). Si llega token, se apunta como liberado 60 s aunque no
+        coincida. Solo suelta si coinciden id, dev y (si ambos existen) token. Error 400: bad_request.
+      x-source: "server.js:4880-4884"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReleaseInput"
+      responses:
+        "200":
+          description: Resultado de la liberación.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReleaseResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/CrossOrigin"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/preferences:
+    post:
+      operationId: updatePreferences
+      tags: [futbol]
+      summary: Guardar preferencias de fútbol
+      description: >-
+        normalizePreferences (server.js:486-494). SUSTITUYE las preferencias enteras: lo que no llegue
+        vuelve al valor por defecto. Escribe state.json.
+      x-source: "server.js:4720-4724"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PreferencesInput"
+      responses:
+        "200":
+          description: Preferencias guardadas.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PreferencesResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/CrossOrigin"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/football:
+    get:
+      operationId: getFootballSchedule
+      tags: [futbol]
+      summary: Agenda de partidos
+      description: >-
+        getFootballSchedule (server.js:2723-2749). Caché en memoria de 30 min. Fuentes en cascada
+        futbolenlatv, EPG de Movistar+ y TheSportsDB; con FOOTBALL_DEMO_ONLY=true, datos de muestra.
+        Si todo falla y hay una agenda anterior, la devuelve con stale=true. La query se acepta pero
+        se ignora. Puede calentar embeddings en Ollama en segundo plano.
+      x-source: "server.js:4820-4823"
+      responses:
+        "200":
+          description: Agenda.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FootballSchedule"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "502":
+          description: "Todas las fuentes fallaron y no hay caché (error football_unavailable)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: football_unavailable
+
+  /api/football/resolve:
+    get:
+      operationId: resolveFootballChannel
+      tags: [futbol]
+      summary: Buscar fuentes para un partido y lanzar su comprobación
+      description: >-
+        resolveFootballChannel (server.js:4227-4335). GET con efectos (protección de origen): consulta
+        el buscador del motor, Ollama si está configurado, puede lanzar autoSyncWeb en segundo plano e
+        intenta crear un trabajo del comprobador (scan=null si no hay comprobador o candidatos). Si
+        match corresponde a un partido conocido con canales, se ignoran los parámetros channel. Sin
+        research reutiliza una precarga de menos de 20 min (server.js:4781-4790); en esa rama el status
+        solo puede ser found o not_found (nunca choices), candidate puede tener menos de 92 y no hay
+        error channel_required.
+      x-source: "server.js:4768-4813"
+      parameters:
+        - name: channel
+          in: query
+          required: false
+          description: Canal anunciado. Repetible. Se fusionan variantes de calidad; tope 8.
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+        - name: match
+          in: query
+          required: false
+          description: Id del partido de /api/football.
+          schema:
+            type: string
+        - name: research
+          in: query
+          required: false
+          description: "\"1\" activa el modo Rebuscar."
+          schema:
+            type: string
+            enum: ["1"]
+        - name: current
+          in: query
+          required: false
+          description: Solo con research=1. Hash de la fuente actual, que se añade a la comprobación.
+          schema:
+            type: string
+        - name: current_ih
+          in: query
+          required: false
+          description: "\"1\" si current es un infohash."
+          schema:
+            type: string
+        - name: client
+          in: query
+          required: false
+          description: >-
+            Clave del dispositivo. No se rechaza: se filtra a [a-zA-Z0-9_-] y se corta a 40
+            (server.js:3550). Un trabajo nuevo del mismo cliente cancela el anterior.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Resultado de la resolución.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResolveResponse"
+        "400":
+          description: "Sin canales tras limpiar (error channel_required)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: channel_required
+        "403":
+          $ref: "#/components/responses/CrossOrigin"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/football/scan:
+    get:
+      operationId: getScanJob
+      tags: [futbol]
+      summary: Estado de un trabajo del comprobador
+      description: >-
+        readScannerJob (server.js:3591-3597) y scannerJobPayload (server.js:3376-3418). Un trabajo se
+        borra 25 min después de su última actualización.
+      x-source: "server.js:4761-4766"
+      parameters:
+        - name: id
+          in: query
+          required: true
+          description: Id del trabajo (24 hex).
+          schema:
+            type: string
+            pattern: "^[a-fA-F0-9]{24}$"
+      responses:
+        "200":
+          description: Estado del trabajo.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanJob"
+        "404":
+          description: "Sin id, id con formato inválido o trabajo inexistente (error scan_not_found)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: scan_not_found
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/football/preheat:
+    get:
+      operationId: getPreheat
+      tags: [futbol]
+      summary: Estado de la precarga de un partido
+      description: El cliente actual no la usa. preheat es null si no hay precarga de ese partido.
+      x-source: "server.js:4755-4759"
+      parameters:
+        - name: match
+          in: query
+          required: false
+          description: Id del partido de /api/football.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Registro público de la precarga.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PreheatResponse"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/football/bind:
+    post:
+      operationId: bindChannel
+      tags: [futbol]
+      summary: Vincular a mano un canal con un hash
+      description: >-
+        saveChannelBinding (server.js:4463-4469). Sustituye el vínculo de la misma channelKey y lo pone
+        el primero; tope 120. Error 400: bad_binding.
+      x-source: "server.js:4726-4730"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BindInput"
+      responses:
+        "200":
+          description: Vínculo guardado.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BindResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/CrossOrigin"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/scores:
+    get:
+      operationId: getLiveScores
+      tags: [futbol]
+      summary: Marcadores en vivo (ESPN)
+      description: >-
+        getLiveScores (server.js:2276-2337). Tres formas, todas con 200: normal; sin partidos en
+        ventana (leagues=0, sin attribution); sin agenda (success=false, error=sin_agenda). Solo
+        encuentra partidos que tengan start, es decir, de futbolenlatv. URL exacta.
+      x-source: "server.js:4815-4818"
+      responses:
+        "200":
+          description: Marcadores.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScoresResponse"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/sources/report:
+    post:
+      operationId: reportSource
+      tags: [fuentes]
+      summary: Reportar una fuente
+      description: >-
+        reportSource (server.js:4509-4565). Cuarentena de 30 días (wrong_channel), 10 min
+        (stuttering, bad_quality, audio) o 30 min (el resto). wrong_channel añade una corrección
+        incorrect si hay canal. Lanza una comprobación forzada y prioritaria; scan es null si no hay comprobador.
+        Error 400: bad_request.
+      x-source: "server.js:4732-4736"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportInput"
+      responses:
+        "200":
+          description: Reporte guardado.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/CrossOrigin"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/sources/outcome:
+    post:
+      operationId: recordSourceOutcome
+      tags: [fuentes]
+      summary: Resultado real de reproducir una fuente
+      description: >-
+        registrarResultadoDeFuente (server.js:3939-3966). Siempre apunta en memoria un veredicto del
+        reproductor (3 min de prioridad sobre el comprobador). Con resultado=sigue no escribe y devuelve
+        hash y proveedor a null. Error 400: bad_outcome.
+      x-source: "server.js:4738-4742"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OutcomeInput"
+      responses:
+        "200":
+          description: Estadísticas actualizadas.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OutcomeResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/CrossOrigin"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/sources/feedback:
+    post:
+      operationId: saveSourceFeedback
+      tags: [fuentes]
+      summary: Confirmar o rechazar que una fuente es el canal
+      description: >-
+        saveSourceFeedback (server.js:4487-4507). corrections y updatedAt los calcula el servidor. Con
+        verdict=correct levanta la cuarentena de los reportes wrong_channel de ese id y canal.
+        Error 400: bad_feedback.
+      x-source: "server.js:4744-4748"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackInput"
+      responses:
+        "200":
+          description: Corrección guardada.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/CrossOrigin"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/health:
+    get:
+      operationId: getHealth
+      tags: [sistema]
+      summary: Salud del sistema
+      description: >-
+        systemHealth (server.js:4612-4671). Consulta a la vez el motor, el comprobador (3 s cada uno) y
+        Ollama (3,5 s como máximo); sus fallos se convierten en offline. La usa el healthcheck de Docker.
+        URL exacta.
+      x-source: "server.js:4750-4753"
+      responses:
+        "200":
+          description: Estado de los componentes.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/engine/status:
+    get:
+      operationId: getEngineStatus
+      tags: [sistema]
+      summary: Comprobar el motor principal
+      description: >-
+        Llama a /webui/api/service?method=get_version del motor (5 s). Sin campo success. Si el motor
+        tarda, 400 ace_timeout; si no responde (conexión rechazada, DNS), 500 internal_error.
+      x-source: "server.js:4949-4953"
+      responses:
+        "200":
+          description: Respuesta del motor.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngineStatusResponse"
+        "400":
+          description: "El motor no respondió en 5 s (error ace_timeout)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: ace_timeout
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/restart-engine:
+    post:
+      operationId: restartEngine
+      tags: [sistema]
+      summary: Reiniciar el contenedor del motor
+      description: >-
+        restartAceStream (server.js:4673-4711). No lee el cuerpo. Llama a engine-control
+        (POST :3001/restart con x-engine-token). La espera de 15 s entre intentos cuenta también los
+        fallidos.
+      x-source: "server.js:4955-4958"
+      responses:
+        "200":
+          description: Reinicio aceptado por engine-control.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestartResponse"
+        "403":
+          $ref: "#/components/responses/CrossOrigin"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "429":
+          description: "Hubo otro intento hace menos de 15 s (error restart_cooldown)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: restart_cooldown
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "502":
+          description: "engine-control falló, respondió fuera de 2xx o se pasó de tiempo (error restart_failed)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: restart_failed
+
+  /api/search:
+    get:
+      operationId: searchAceStreams
+      tags: [sistema]
+      summary: Buscador del motor AceStream
+      description: >-
+        searchAceStreams (server.js:3634-3656). Llama a /search?query=...&page_size=60 del motor (12 s).
+        Sin campo success. Errores 400 empty_query y ace_timeout; 502 engine_bad_response; 503
+        engine_unavailable.
+      x-source: "server.js:4941-4947"
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: >-
+            Texto a buscar. Se colapsan espacios, se recorta y se corta a 80 (lo más largo no se
+            rechaza); si quedan menos de 2 caracteres, 400 empty_query.
+          schema:
+            type: string
+            minLength: 2
+      responses:
+        "200":
+          description: Resultados del motor.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "502":
+          description: "El motor devolvió JSON inválido (error engine_bad_response)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: engine_bad_response
+        "503":
+          description: "El motor no responde o responde fuera de 2xx (error engine_unavailable)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: engine_unavailable
+
+  /api/remux:
+    get:
+      operationId: startRemux
+      tags: [remux]
+      summary: Arrancar o reutilizar el remux para iOS
+      description: >-
+        ensureRemux (server.js:237-337). GET con efectos (protección de origen). Lanza ffmpeg sobre el
+        motor principal y espera hasta tener 2 segmentos y 6 s de vídeo (o 1 segmento pasados 20 s), 45 s
+        como máximo. Máximo 3 sesiones. La espera no se corta si el cliente se va. Sin campo success.
+        Si llega infohash no vacío, manda sobre id.
+      x-source: "server.js:4906-4926"
+      parameters:
+        - name: id
+          in: query
+          required: false
+          description: Content ID (cualquier forma que acepte normalizeHash). Obligatorio si no hay infohash.
+          schema:
+            type: string
+        - name: infohash
+          in: query
+          required: false
+          description: Infohash. Si llega, el motor se llama con ?infohash=.
+          schema:
+            type: string
+        - name: dev
+          in: query
+          required: false
+          description: "Id del dispositivo. No se rechaza: se filtra a [a-zA-Z0-9_-] y se corta a 40 (server.js:4912)."
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lista HLS lista para pedir.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemuxResponse"
+        "400":
+          description: "Sin hash válido (error bad_request)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: bad_request
+        "403":
+          $ref: "#/components/responses/CrossOrigin"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "502":
+          description: "ffmpeg terminó, no existe o la sesión fue sustituida (error remux_died)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: remux_died
+        "503":
+          description: "Las 3 sesiones tienen espectadores (error remux_busy)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: remux_busy
+        "504":
+          description: "45 s sin lista suficiente (error remux_timeout)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: remux_timeout
+
+  /api/remux/stop:
+    post:
+      operationId: stopRemux
+      tags: [remux]
+      summary: Desengancharse o parar un remux
+      description: >-
+        Si dev y token llegan y el token de ese dispositivo es otro, responde stale=true sin tocar nada.
+        Si no, quita el dispositivo y para ffmpeg cuando no quedan dispositivos (salvo keepAlive=true).
+        Un cuerpo JSON null provoca 500.
+      x-source: "server.js:4886-4904"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RemuxStopInput"
+      responses:
+        "200":
+          description: Resultado de la parada.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemuxStopResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/CrossOrigin"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /remux/{hash}/{file}:
+    parameters:
+      - name: hash
+        in: path
+        required: true
+        description: Hash de la sesión (40 hex). Tiene que ir en minúsculas para encontrar el fichero en disco.
+        schema:
+          type: string
+          pattern: "^[a-fA-F0-9]{40}$"
+      - name: file
+        in: path
+        required: true
+        description: >-
+          Fichero dentro de la sesión: index.m3u8, init.mp4 o index<N>.m4s. También se sirve
+          ffmpeg.log (server.js:260), que vive en el mismo directorio. El código admite subrutas
+          mientras queden dentro de DATA_DIR/remux.
+        schema:
+          type: string
+    get:
+      operationId: getRemuxFile
+      tags: [remux]
+      summary: Servir la lista o un segmento HLS
+      description: >-
+        serveRemuxFile (server.js:367-409). Admite una sola franja Range. Renueva lastAccess de la
+        sesión. Las respuestas 403, 404, 405 y 416 van sin cuerpo; un % mal formado en la URL da 500 JSON.
+      x-source: "server.js:4928-4939"
+      parameters:
+        - name: Range
+          in: header
+          required: false
+          description: "bytes=a-b, bytes=a- o bytes=-n (una sola franja)."
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Fichero completo.
+          headers:
+            Content-Length:
+              $ref: "#/components/headers/ContentLength"
+            Accept-Ranges:
+              $ref: "#/components/headers/AcceptRanges"
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/vnd.apple.mpegurl:
+              schema:
+                type: string
+            video/iso.segment: {}
+            video/mp4: {}
+            video/mp2t: {}
+            application/octet-stream: {}
+        "206":
+          description: Franja pedida.
+          headers:
+            Content-Range:
+              $ref: "#/components/headers/ContentRange"
+            Content-Length:
+              $ref: "#/components/headers/ContentLength"
+            Accept-Ranges:
+              $ref: "#/components/headers/AcceptRanges"
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/octet-stream:
+              schema:
+                description: Mismo Content-Type que el fichero completo; aquí se simplifica.
+        "403":
+          description: Ruta no válida o fuera de DATA_DIR/remux. Sin cuerpo.
+        "404":
+          description: El fichero no existe. Sin cuerpo, con Cache-Control no-store.
+        "405":
+          description: Método distinto de GET o HEAD. Sin cuerpo.
+        "416":
+          description: Franja inválida, múltiple o fuera de rango. Sin cuerpo.
+          headers:
+            Content-Range:
+              $ref: "#/components/headers/ContentRangeUnsatisfied"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    head:
+      operationId: headRemuxFile
+      tags: [remux]
+      summary: Cabeceras de la lista o de un segmento HLS
+      description: Igual que GET pero sin cuerpo.
+      x-source: "server.js:4928-4939"
+      parameters:
+        - name: Range
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Cabeceras del fichero completo.
+          headers:
+            Content-Length:
+              $ref: "#/components/headers/ContentLength"
+            Accept-Ranges:
+              $ref: "#/components/headers/AcceptRanges"
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+        "206":
+          description: Cabeceras de la franja.
+          headers:
+            Content-Range:
+              $ref: "#/components/headers/ContentRange"
+            Content-Length:
+              $ref: "#/components/headers/ContentLength"
+        "403":
+          description: Ruta no válida.
+        "404":
+          description: El fichero no existe.
+        "416":
+          description: Franja no satisfacible.
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/streams/sync:
+    post:
+      operationId: syncDirectory
+      tags: [directorios]
+      summary: Añadir o refrescar un directorio
+      description: >-
+        Descarga (IPFS sin pasarela y, si falla, la URL tal cual; protección SSRF; 45 s; 2 MiB;
+        5 redirecciones), analiza M3U o HTML (500 canales como máximo) y deja el directorio como activo.
+        Si falla un directorio ya guardado, apunta lastErrorAt y lastError sin tocar sus canales.
+        Errores 400: bad_url, source_not_found, source_limit, empty_directory, private_url, dns_failed,
+        fetch_timeout, redirect_limit, redirect_loop, response_too_large, unsupported_encoding, http_NNN.
+        Los errores ipfs_*, los de red de Node y un cuerpo null dan 500. Con una URL IPFS, si fallan
+        los dos caminos, se devuelve el error del camino IPFS y no el de la pasarela (server.js:1780-1781).
+      x-source: "server.js:4960-5008"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StreamsSyncInput"
+      responses:
+        "200":
+          description: Directorios tras sincronizar.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DirectoryResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/CrossOrigin"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/streams/activate:
+    post:
+      operationId: activateDirectory
+      tags: [directorios]
+      summary: Elegir el directorio activo
+      description: "Error 400: source_not_found. Un cuerpo JSON null provoca 500."
+      x-source: "server.js:5010-5016"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SourceIdInput"
+      responses:
+        "200":
+          description: Directorios con el nuevo activo.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DirectoryResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/CrossOrigin"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/streams/delete:
+    post:
+      operationId: deleteDirectory
+      tags: [directorios]
+      summary: Borrar un directorio
+      description: >-
+        Errores 400: source_not_found y last_source (no se puede borrar el único). Si se borra el
+        activo, pasa a activo el primero que quede. Un cuerpo JSON null provoca 500.
+      x-source: "server.js:5018-5027"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SourceIdInput"
+      responses:
+        "200":
+          description: Directorios tras borrar.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DirectoryResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/CrossOrigin"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+components:
+  headers:
+    CacheControl:
+      description: Siempre no-store en las respuestas de Node.
+      schema:
+        type: string
+        const: no-store
+    NoSniff:
+      description: Siempre nosniff.
+      schema:
+        type: string
+        const: nosniff
+    ContentLength:
+      schema:
+        type: string
+    AcceptRanges:
+      schema:
+        type: string
+        const: bytes
+    ContentRange:
+      description: "bytes inicio-fin/total"
+      schema:
+        type: string
+    ContentRangeUnsatisfied:
+      description: "bytes */total"
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: >-
+        Error de entrada (o error lanzado sin statusCode). El campo error lleva el código; ver la
+        descripción de la operación y docs/api.md, sección 2.6.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: bad_request
+    CrossOrigin:
+      description: Rechazado por la protección de origen (isAllowedMutation).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: cross_origin
+    MethodNotAllowed:
+      description: Método no admitido en esta ruta.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: method_not_allowed
+    BodyTooLarge:
+      description: Cuerpo mayor de 2 MiB (detrás de nginx el 413 puede venir en HTML de nginx).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: body_too_large
+    InternalError:
+      description: Error no previsto; queda traza en el log del contenedor.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: internal_error
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: Código corto en snake_case (o http_NNN).
+      additionalProperties: false
+
+    Hash:
+      type: string
+      description: Content ID o infohash de AceStream, 40 hex en minúsculas.
+      pattern: "^[a-f0-9]{40}$"
+
+    HashInput:
+      type: string
+      description: >-
+        Lo que acepta normalizeHash (server.js:423-434) - acestream://<40 hex>, una URL con ?id= o
+        ?content_id=, o cualquier texto que contenga 40 hex seguidos.
+
+    NullableString:
+      type: ["string", "null"]
+
+    NullableDateTime:
+      type: ["string", "null"]
+      format: date-time
+
+    LibraryItem:
+      type: object
+      description: normalizeItem (server.js:436-457).
+      required: [id, title, type, category, date, fromWebSync, ih]
+      properties:
+        id:
+          $ref: "#/components/schemas/Hash"
+        title:
+          type: string
+          maxLength: 120
+        alias:
+          type: string
+          maxLength: 120
+          description: tvg-id del M3U; solo si existe y es distinto de title.
+        type:
+          type: string
+          enum: [fav, recent, web]
+        category:
+          type: string
+          maxLength: 48
+        date:
+          type: string
+          format: date-time
+        fromWebSync:
+          type: boolean
+        ih:
+          type: boolean
+          description: true si el id es un infohash.
+
+    LibraryItemInput:
+      type: object
+      description: Entrada de normalizeItem; el id sale de id, hash o url (en ese orden).
+      properties:
+        id:
+          $ref: "#/components/schemas/HashInput"
+        hash:
+          $ref: "#/components/schemas/HashInput"
+        url:
+          $ref: "#/components/schemas/HashInput"
+        title:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+        date:
+          type: string
+          format: date-time
+        alias:
+          type: string
+        fromWebSync:
+          type: boolean
+        ih:
+          type: boolean
+
+    WebSourceSummary:
+      type: object
+      description: sourceSummaries (server.js:948-952).
+      required: [id, name, url, type, count, syncedAt, lastErrorAt, lastError]
+      properties:
+        id:
+          type: string
+          maxLength: 48
+        name:
+          type: string
+          maxLength: 60
+        url:
+          type: string
+          format: uri
+        type:
+          type: string
+          enum: [m3u, html]
+        count:
+          type: integer
+          minimum: 0
+          maximum: 500
+        syncedAt:
+          $ref: "#/components/schemas/NullableString"
+        lastErrorAt:
+          $ref: "#/components/schemas/NullableString"
+        lastError:
+          type: ["string", "null"]
+          maxLength: 40
+          description: null si lastErrorAt es null.
+
+    DirectoryResponse:
+      type: object
+      description: directoryResponse (server.js:963-972). web y streams son el mismo array.
+      required: [success, web, streams, webSyncedAt, webSources, activeWebSourceId]
+      properties:
+        success:
+          type: boolean
+          const: true
+        web:
+          type: array
+          items:
+            $ref: "#/components/schemas/LibraryItem"
+        streams:
+          type: array
+          items:
+            $ref: "#/components/schemas/LibraryItem"
+        webSyncedAt:
+          $ref: "#/components/schemas/NullableString"
+        webSources:
+          type: array
+          maxItems: 8
+          items:
+            $ref: "#/components/schemas/WebSourceSummary"
+        activeWebSourceId:
+          type: string
+
+    FavoritesResponse:
+      type: object
+      required: [success, favorites]
+      properties:
+        success:
+          type: boolean
+          const: true
+        favorites:
+          type: array
+          maxItems: 60
+          items:
+            $ref: "#/components/schemas/LibraryItem"
+
+    HistoryResponse:
+      type: object
+      required: [success, history]
+      properties:
+        success:
+          type: boolean
+          const: true
+        history:
+          type: array
+          maxItems: 60
+          items:
+            $ref: "#/components/schemas/LibraryItem"
+
+    Preferences:
+      type: object
+      description: normalizePreferences (server.js:486-494).
+      required: [onboardingComplete, country, leagues, teams, nationalities]
+      properties:
+        onboardingComplete:
+          type: boolean
+        country:
+          type: string
+          maxLength: 40
+        leagues:
+          type: array
+          maxItems: 12
+          items:
+            type: string
+            maxLength: 60
+        teams:
+          type: array
+          maxItems: 24
+          items:
+            type: string
+            maxLength: 80
+        nationalities:
+          type: array
+          maxItems: 24
+          items:
+            type: string
+            maxLength: 60
+
+    PreferencesInput:
+      type: object
+      description: >-
+        Todo opcional, pero lo que no llegue vuelve al valor por defecto. Las listas se limpian con
+        cleanTitle, se cortan y se quitan duplicados sin distinguir mayúsculas ni tildes.
+      properties:
+        onboardingComplete:
+          type: boolean
+        country:
+          type: string
+        leagues:
+          type: array
+          items:
+            type: string
+        teams:
+          type: array
+          items:
+            type: string
+        nationalities:
+          type: array
+          items:
+            type: string
+
+    PreferencesResponse:
+      type: object
+      required: [success, preferences]
+      properties:
+        success:
+          type: boolean
+          const: true
+        preferences:
+          $ref: "#/components/schemas/Preferences"
+
+    ChannelBinding:
+      type: object
+      description: normalizeChannelBinding (server.js:839-853).
+      required: [channel, channelKey, id, title, ih, updatedAt]
+      properties:
+        channel:
+          type: string
+          maxLength: 120
+        channelKey:
+          type: string
+        id:
+          $ref: "#/components/schemas/Hash"
+        title:
+          type: string
+          maxLength: 120
+        ih:
+          type: boolean
+        updatedAt:
+          type: string
+          format: date-time
+
+    ReportReason:
+      type: string
+      enum: [not_starting, stuttering, wrong_channel, bad_quality, audio]
+
+    SourceReport:
+      type: object
+      description: normalizeSourceReport (server.js:2588-2615). Es el que sale en /api/state.
+      required: [reportId, id, title, ih, source, channel, channelKey, matchId, reason, state,
+                 checkReason, reportCount, reportedAt, lastCheckedAt, quarantineUntil]
+      properties:
+        reportId:
+          type: string
+          maxLength: 40
+        id:
+          $ref: "#/components/schemas/Hash"
+        title:
+          type: string
+        ih:
+          type: boolean
+        source:
+          type: string
+          maxLength: 30
+        channel:
+          type: string
+        channelKey:
+          type: string
+        matchId:
+          type: string
+          maxLength: 100
+        reason:
+          $ref: "#/components/schemas/ReportReason"
+        state:
+          type: string
+          enum: [reported, checking, working, weak, failed]
+        checkReason:
+          type: string
+          maxLength: 40
+        reportCount:
+          type: integer
+          minimum: 1
+          maximum: 999
+        reportedAt:
+          type: string
+          format: date-time
+        lastCheckedAt:
+          $ref: "#/components/schemas/NullableDateTime"
+        quarantineUntil:
+          $ref: "#/components/schemas/NullableDateTime"
+
+    PublicSourceReport:
+      type: object
+      description: publicSourceReport (server.js:4471-4485).
+      required: [reportId, id, channel, matchId, reason, state, checkReason, reportedAt,
+                 lastCheckedAt, quarantineUntil]
+      properties:
+        reportId:
+          type: string
+        id:
+          $ref: "#/components/schemas/Hash"
+        channel:
+          type: string
+        matchId:
+          type: string
+        reason:
+          $ref: "#/components/schemas/ReportReason"
+        state:
+          type: string
+          enum: [reported, checking, working, weak, failed]
+        checkReason:
+          type: string
+        reportedAt:
+          type: string
+          format: date-time
+        lastCheckedAt:
+          $ref: "#/components/schemas/NullableDateTime"
+        quarantineUntil:
+          $ref: "#/components/schemas/NullableDateTime"
+
+    ChannelFeedback:
+      type: object
+      description: normalizeChannelFeedback (server.js:2632-2649).
+      required: [id, title, channel, channelKey, verdict, reason, corrections, updatedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/Hash"
+        title:
+          type: string
+        channel:
+          type: string
+        channelKey:
+          type: string
+        verdict:
+          type: string
+          enum: [correct, incorrect]
+        reason:
+          $ref: "#/components/schemas/ReportReason"
+        corrections:
+          type: integer
+          minimum: 1
+          maximum: 999
+        updatedAt:
+          type: string
+          format: date-time
+
+    StatEntry:
+      type: object
+      description: >-
+        normalizeSourceStatEntry (server.js:3841-3853). Pueden ser decimales porque se desgastan con
+        vida media de 14 días.
+      required: [intentos, exitos, caidas, segundos, ultimo]
+      properties:
+        intentos:
+          type: number
+          minimum: 0
+        exitos:
+          type: number
+          minimum: 0
+        caidas:
+          type: number
+          minimum: 0
+        segundos:
+          type: number
+          minimum: 0
+        ultimo:
+          type: number
+          description: Epoch en milisegundos.
+
+    SourceStats:
+      type: object
+      description: normalizeSourceStats (server.js:3868-3873). Como mucho 600 claves por grupo.
+      required: [hashes, proveedores]
+      properties:
+        hashes:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/StatEntry"
+        proveedores:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/StatEntry"
+
+    NowPlaying:
+      type: object
+      description: normalizeNowPlaying (server.js:975-987).
+      required: [id, title, dev, token, at]
+      properties:
+        id:
+          $ref: "#/components/schemas/Hash"
+        title:
+          type: string
+          maxLength: 120
+        dev:
+          type: string
+          maxLength: 40
+        token:
+          type: string
+          maxLength: 64
+          pattern: "^[a-zA-Z0-9_-]*$"
+        at:
+          type: number
+          description: Epoch en milisegundos; crece siempre.
+
+    NullableNowPlaying:
+      oneOf:
+        - $ref: "#/components/schemas/NowPlaying"
+        - type: "null"
+
+    PublicState:
+      type: object
+      description: publicState (server.js:954-961). No incluye channelFeedback, solo learningCount.
+      required: [favorites, history, web, webSyncedAt, webSources, activeWebSourceId, preferences,
+                 channelBindings, sourceReports, sourceStats, nowPlaying, learningCount]
+      properties:
+        favorites:
+          type: array
+          maxItems: 60
+          items:
+            $ref: "#/components/schemas/LibraryItem"
+        history:
+          type: array
+          maxItems: 60
+          items:
+            $ref: "#/components/schemas/LibraryItem"
+        web:
+          type: array
+          maxItems: 500
+          items:
+            $ref: "#/components/schemas/LibraryItem"
+        webSyncedAt:
+          $ref: "#/components/schemas/NullableString"
+        webSources:
+          type: array
+          maxItems: 8
+          items:
+            $ref: "#/components/schemas/WebSourceSummary"
+        activeWebSourceId:
+          type: string
+        preferences:
+          $ref: "#/components/schemas/Preferences"
+        channelBindings:
+          type: array
+          maxItems: 120
+          items:
+            $ref: "#/components/schemas/ChannelBinding"
+        sourceReports:
+          type: array
+          maxItems: 300
+          items:
+            $ref: "#/components/schemas/SourceReport"
+        sourceStats:
+          $ref: "#/components/schemas/SourceStats"
+        nowPlaying:
+          $ref: "#/components/schemas/NullableNowPlaying"
+        learningCount:
+          type: integer
+          minimum: 0
+
+    LegacyStateInput:
+      type: object
+      description: Cuerpo de PUT /api/state. Cualquier otro campo se ignora.
+      properties:
+        favorites:
+          type: array
+          items:
+            $ref: "#/components/schemas/LibraryItemInput"
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/LibraryItemInput"
+        nowPlaying:
+          type: object
+          description: Solo cuenta si id es un hash válido y at es un número distinto de 0.
+          properties:
+            id:
+              $ref: "#/components/schemas/HashInput"
+            title:
+              type: string
+            dev:
+              type: string
+            token:
+              type: string
+            at:
+              type: number
+
+    LibraryMutationInput:
+      description: Cuerpo de POST /api/library; lo decide el campo action.
+      oneOf:
+        - $ref: "#/components/schemas/LibraryUpsertInput"
+        - $ref: "#/components/schemas/LibraryRenameInput"
+        - $ref: "#/components/schemas/LibraryDeleteInput"
+
+    LibraryUpsertInput:
+      type: object
+      required: [action, item]
+      properties:
+        action:
+          type: string
+          enum: [favorite-upsert, history-upsert]
+        item:
+          $ref: "#/components/schemas/LibraryItemInput"
+
+    LibraryRenameInput:
+      type: object
+      required: [action, collection, id, title]
+      properties:
+        action:
+          type: string
+          const: rename
+        collection:
+          type: string
+          enum: [favorites, history, web]
+        id:
+          $ref: "#/components/schemas/HashInput"
+        title:
+          type: string
+          description: Se limpia con cleanTitle (120 como máximo); vacío da bad_title.
+        sourceId:
+          type: string
+          description: Solo con collection=web; por defecto el directorio activo.
+
+    LibraryDeleteInput:
+      type: object
+      required: [action, collection, id]
+      properties:
+        action:
+          type: string
+          const: delete
+        collection:
+          type: string
+          enum: [favorites, history, web]
+        id:
+          $ref: "#/components/schemas/HashInput"
+        sourceId:
+          type: string
+          description: Solo con collection=web; por defecto el directorio activo.
+
+    PlaybackResponse:
+      type: object
+      required: [nowPlaying, learningCount, serverTime]
+      additionalProperties: false
+      properties:
+        nowPlaying:
+          $ref: "#/components/schemas/NullableNowPlaying"
+        learningCount:
+          type: integer
+          minimum: 0
+        serverTime:
+          type: number
+          description: Date.now() del servidor.
+
+    ClaimInput:
+      type: object
+      required: [id, dev]
+      properties:
+        id:
+          $ref: "#/components/schemas/HashInput"
+        dev:
+          type: string
+          description: Se recorta y se corta a 40; no se filtran caracteres.
+        title:
+          type: string
+        token:
+          type: string
+          description: "Se filtra a [a-zA-Z0-9_-] y se corta a 64; si falta, lo genera el servidor."
+
+    ClaimResponse:
+      type: object
+      required: [success, nowPlaying]
+      properties:
+        success:
+          type: boolean
+          const: true
+        nowPlaying:
+          $ref: "#/components/schemas/NullableNowPlaying"
+        ignored:
+          type: boolean
+          const: true
+          description: Solo si el token se liberó hace menos de 60 s; entonces nowPlaying es null.
+
+    ReleaseInput:
+      type: object
+      required: [id, dev]
+      properties:
+        id:
+          $ref: "#/components/schemas/HashInput"
+        dev:
+          type: string
+        token:
+          type: string
+
+    ReleaseResponse:
+      type: object
+      required: [success, released]
+      properties:
+        success:
+          type: boolean
+          const: true
+        released:
+          type: boolean
+
+    FootballChannel:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+
+    FootballMatch:
+      type: object
+      description: >-
+        Partido de la agenda. start solo existe con source=futbolenlatv; time puede ser
+        "Por confirmar" con TheSportsDB.
+      required: [id, date, time, title, home, away, competition, country, channels]
+      properties:
+        id:
+          type: string
+        date:
+          type: string
+          format: date
+        time:
+          type: string
+        start:
+          type: number
+          description: Epoch en milisegundos del saque.
+        title:
+          type: string
+        home:
+          type: string
+        away:
+          type: string
+        competition:
+          type: string
+        country:
+          type: string
+        channels:
+          type: array
+          items:
+            $ref: "#/components/schemas/FootballChannel"
+
+    FootballDay:
+      type: object
+      required: [date, matches]
+      properties:
+        date:
+          type: string
+          format: date
+        matches:
+          type: array
+          items:
+            $ref: "#/components/schemas/FootballMatch"
+
+    FootballSchedule:
+      type: object
+      required: [success, generatedAt, timezone, country, source, attribution, demo, limited,
+                 partial, days]
+      properties:
+        success:
+          type: boolean
+          const: true
+        generatedAt:
+          type: string
+          format: date-time
+        timezone:
+          type: string
+          const: Europe/Madrid
+        country:
+          type: string
+        source:
+          type: string
+          enum: [futbolenlatv, movistarplus, thesportsdb, demo]
+        attribution:
+          type: string
+        demo:
+          type: boolean
+        limited:
+          type: boolean
+        partial:
+          type: boolean
+        days:
+          type: array
+          minItems: 3
+          maxItems: 14
+          items:
+            $ref: "#/components/schemas/FootballDay"
+        stale:
+          type: boolean
+          const: true
+          description: Solo si falló el refresco y se sirve la última agenda buena.
+
+    LiveScore:
+      type: object
+      required: [home, away, state, clock, detail, confidence]
+      properties:
+        home:
+          type: integer
+        away:
+          type: integer
+        state:
+          type: string
+          description: "pre, in, post o cadena vacía (lo que dé ESPN)."
+        clock:
+          type: string
+        detail:
+          type: string
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+
+    ScoresResponse:
+      type: object
+      description: >-
+        Tres formas. Normal con attribution y leagues >= 1; sin partidos en ventana con leagues=0 y
+        sin attribution; sin agenda con success=false, error=sin_agenda y solo scores.
+      required: [success, scores]
+      properties:
+        success:
+          type: boolean
+        error:
+          type: string
+          const: sin_agenda
+        generatedAt:
+          type: string
+          format: date-time
+        source:
+          type: string
+          const: espn
+        attribution:
+          type: string
+          const: ESPN
+        leagues:
+          type: integer
+          minimum: 0
+          maximum: 8
+        scores:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/LiveScore"
+
+    ResolutionCandidate:
+      type: object
+      description: >-
+        scoreResolutionCandidate (server.js:3687-3718) más applyLearnedSourceRules
+        (server.js:4209-4224) y, si la IA lo promociona, semantic y semanticSimilarity. En la
+        práctica rejectedByLearning y quarantined son siempre false, y reported siempre null.
+      required: [id, title, alias, ih, source, score, matchedChannel, soloFamilia,
+                 familyFallbackAllowed, listaId, availability, bitrate, learned, reported,
+                 rejectedByLearning, quarantined]
+      properties:
+        id:
+          $ref: "#/components/schemas/Hash"
+        title:
+          type: string
+        alias:
+          $ref: "#/components/schemas/NullableString"
+        ih:
+          type: boolean
+        source:
+          type: string
+          enum: [saved, m3u, favorites, history, acestream]
+        score:
+          type: number
+          minimum: 0
+          maximum: 100
+        matchedChannel:
+          type: string
+        soloFamilia:
+          type: boolean
+        familyFallbackAllowed:
+          type: boolean
+        listaId:
+          $ref: "#/components/schemas/NullableString"
+        availability:
+          type: ["number", "null"]
+        bitrate:
+          type: ["number", "null"]
+        learned:
+          type: ["string", "null"]
+          enum: [correct, incorrect, null]
+        reported:
+          type: ["object", "null"]
+          properties:
+            reason:
+              type: string
+            state:
+              type: string
+            quarantineUntil:
+              $ref: "#/components/schemas/NullableString"
+        rejectedByLearning:
+          type: boolean
+        quarantined:
+          type: boolean
+        semantic:
+          type: boolean
+          const: true
+        semanticSimilarity:
+          type: number
+
+    AiInfo:
+      type: object
+      required: [enabled, used, model, catalogSize, error]
+      properties:
+        enabled:
+          type: boolean
+        used:
+          type: boolean
+        model:
+          $ref: "#/components/schemas/NullableString"
+        catalogSize:
+          type: integer
+          minimum: 0
+        error:
+          $ref: "#/components/schemas/NullableString"
+
+    ProgramMatch:
+      type: object
+      description: >-
+        footballProgramMatch (server.js:2686-2697). En la rama precargada llega en su lugar el
+        FootballMatch completo con channels como lista de nombres.
+      required: [id, channels]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        home:
+          type: string
+        away:
+          type: string
+        competition:
+          type: string
+        date:
+          type: string
+        time:
+          type: string
+        start:
+          type: ["number", "null"]
+        country:
+          type: string
+        channels:
+          type: array
+          items:
+            type: string
+
+    ScanRef:
+      type: object
+      description: createScannerJob (server.js:3583-3588).
+      required: [id, statusUrl, total, initialCount]
+      properties:
+        id:
+          type: string
+          pattern: "^[a-f0-9]{24}$"
+        statusUrl:
+          type: string
+          description: "/api/football/scan?id=<id>"
+        total:
+          type: integer
+          minimum: 1
+          maximum: 100
+        initialCount:
+          type: integer
+          minimum: 1
+          maximum: 3
+
+    NullableScanRef:
+      oneOf:
+        - $ref: "#/components/schemas/ScanRef"
+        - type: "null"
+
+    ResolveResponse:
+      type: object
+      required: [success, status, channels, checked, candidates, engineAvailable, ai, program,
+                 research, preheat, scan]
+      properties:
+        success:
+          type: boolean
+          const: true
+        status:
+          type: string
+          enum: [found, choices, not_found]
+          description: >-
+            Sin precarga, found exige un candidato de 92 o más (o un vínculo guardado en cabeza).
+            Con precarga (preheated=true) solo hay found (cualquier candidato) o not_found.
+        channels:
+          type: array
+          maxItems: 8
+          items:
+            type: string
+        checked:
+          type: array
+          items:
+            type: string
+            enum: [saved, m3u, library, acestream, favorites, ai-programming]
+        candidate:
+          description: Solo con status=found (null posible en la rama precargada con not_found).
+          oneOf:
+            - $ref: "#/components/schemas/ResolutionCandidate"
+            - type: "null"
+        candidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResolutionCandidate"
+        engineAvailable:
+          type: boolean
+        ai:
+          $ref: "#/components/schemas/AiInfo"
+        program:
+          oneOf:
+            - $ref: "#/components/schemas/ProgramMatch"
+            - type: "null"
+        research:
+          type: boolean
+        preheated:
+          type: boolean
+          const: true
+        preheat:
+          oneOf:
+            - $ref: "#/components/schemas/PreheatPublic"
+            - type: "null"
+        scan:
+          $ref: "#/components/schemas/NullableScanRef"
+
+    ScanCandidate:
+      type: object
+      description: Elemento de scannerJobPayload (server.js:3377-3396).
+      required: [id, state, checkedAt, retryAt, durationMs, bytes, peers, speedDown, rateKbps,
+                 intakeKbps, streamKbps, reason, mediaValid, browserCompatible, videoCodec,
+                 audioCodecs, cached, attempts]
+      properties:
+        id:
+          $ref: "#/components/schemas/Hash"
+        state:
+          type: string
+          enum: [queued, checking, working, weak, failed]
+        checkedAt:
+          $ref: "#/components/schemas/NullableString"
+        retryAt:
+          $ref: "#/components/schemas/NullableDateTime"
+        durationMs:
+          type: number
+        bytes:
+          type: number
+        peers:
+          type: number
+        speedDown:
+          type: number
+        rateKbps:
+          type: ["number", "null"]
+        intakeKbps:
+          type: ["number", "null"]
+        streamKbps:
+          type: number
+        reason:
+          type: string
+          description: >-
+            Uno de playable_media, unverified_media, starved, slow_data, timeout, no_media, no_video,
+            unsupported_codec, probe_timeout, probe_error, probe_unavailable, engine_error,
+            intermittent, player_ok, player_dropped, player_failed, delayed_retry, failed o vacío.
+        mediaValid:
+          type: boolean
+        browserCompatible:
+          type: boolean
+        videoCodec:
+          type: string
+        audioCodecs:
+          type: array
+          items:
+            type: string
+        cached:
+          type: boolean
+        attempts:
+          type: integer
+          minimum: 0
+
+    ScanJob:
+      type: object
+      description: scannerJobPayload (server.js:3376-3418).
+      required: [success, id, kind, status, createdAt, updatedAt, total, checked, playable, failed,
+                 waiting, retryAt, initialCount, candidates]
+      properties:
+        success:
+          type: boolean
+          const: true
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [interactive, research, preheat, report]
+        status:
+          type: string
+          enum: [queued, running, waiting, complete, cancelled]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        total:
+          type: integer
+        checked:
+          type: integer
+        playable:
+          type: integer
+        failed:
+          type: integer
+        waiting:
+          type: integer
+        retryAt:
+          $ref: "#/components/schemas/NullableDateTime"
+        initialCount:
+          type: integer
+          minimum: 0
+          maximum: 3
+        candidates:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/ScanCandidate"
+
+    PreheatPublic:
+      type: object
+      description: publicPreheatRecord (server.js:4348-4361).
+      required: [matchId, stage, status, updatedAt, candidateCount, checked, playable, total, error]
+      properties:
+        matchId:
+          type: string
+        stage:
+          type: string
+          enum: [discovery, scan, kickoff, live]
+        status:
+          type: string
+          enum: [resolving, discovered, no_sources, scanning, scanner_offline, ready, failed]
+        updatedAt:
+          $ref: "#/components/schemas/NullableDateTime"
+        candidateCount:
+          type: integer
+        checked:
+          type: integer
+        playable:
+          type: integer
+        total:
+          type: integer
+        error:
+          type: string
+          maxLength: 80
+
+    PreheatResponse:
+      type: object
+      required: [success, preheat]
+      properties:
+        success:
+          type: boolean
+          const: true
+        preheat:
+          oneOf:
+            - $ref: "#/components/schemas/PreheatPublic"
+            - type: "null"
+
+    BindInput:
+      type: object
+      required: [channel, id]
+      properties:
+        channel:
+          type: string
+          description: Su clave normalizada no puede quedar vacía.
+        id:
+          $ref: "#/components/schemas/HashInput"
+        title:
+          type: string
+          description: Por defecto channel.
+        ih:
+          type: boolean
+
+    BindResponse:
+      type: object
+      required: [success, binding, channelBindings]
+      properties:
+        success:
+          type: boolean
+          const: true
+        binding:
+          $ref: "#/components/schemas/ChannelBinding"
+        channelBindings:
+          type: array
+          maxItems: 120
+          items:
+            $ref: "#/components/schemas/ChannelBinding"
+
+    ReportInput:
+      type: object
+      required: [id]
+      properties:
+        id:
+          $ref: "#/components/schemas/HashInput"
+        reason:
+          type: string
+          description: Un valor fuera de ReportReason pasa a not_starting.
+        channel:
+          type: string
+          description: Si falta, el primer canal del partido matchId de la agenda en memoria.
+        matchId:
+          type: string
+        title:
+          type: string
+        source:
+          type: string
+        ih:
+          type: boolean
+
+    ReportResponse:
+      type: object
+      required: [success, report, scan]
+      properties:
+        success:
+          type: boolean
+          const: true
+        report:
+          $ref: "#/components/schemas/PublicSourceReport"
+        scan:
+          $ref: "#/components/schemas/NullableScanRef"
+
+    OutcomeInput:
+      type: object
+      required: [id, resultado]
+      properties:
+        id:
+          $ref: "#/components/schemas/HashInput"
+        resultado:
+          type: string
+          enum: [arranco, fallo, cayo, sigue]
+        segundos:
+          type: number
+          minimum: 0
+          maximum: 86400
+        title:
+          type: string
+          description: Sirve para deducir el proveedor (lo que va tras la flecha).
+        listaId:
+          type: string
+        source:
+          type: string
+
+    OutcomeResponse:
+      type: object
+      required: [success, hash, proveedor]
+      properties:
+        success:
+          type: boolean
+          const: true
+        hash:
+          oneOf:
+            - $ref: "#/components/schemas/StatEntry"
+            - type: "null"
+        proveedor:
+          oneOf:
+            - $ref: "#/components/schemas/StatEntry"
+            - type: "null"
+
+    FeedbackInput:
+      type: object
+      required: [id, verdict]
+      description: Hace falta channel o channelKey (uno de los dos).
+      properties:
+        id:
+          $ref: "#/components/schemas/HashInput"
+        verdict:
+          type: string
+          enum: [correct, incorrect]
+        channel:
+          type: string
+        channelKey:
+          type: string
+        title:
+          type: string
+        reason:
+          type: string
+          description: Un valor fuera de ReportReason pasa a wrong_channel.
+
+    FeedbackResponse:
+      type: object
+      required: [success, feedback, learningCount]
+      properties:
+        success:
+          type: boolean
+          const: true
+        feedback:
+          $ref: "#/components/schemas/ChannelFeedback"
+        learningCount:
+          type: integer
+          minimum: 0
+
+    ServiceStatus:
+      type: object
+      required: [status, online]
+      properties:
+        status:
+          type: string
+          enum: [ready, offline]
+        online:
+          type: boolean
+
+    HealthResponse:
+      type: object
+      description: systemHealth (server.js:4612-4671).
+      required: [success, version, checkedAt, uptimeSeconds, components, reports]
+      properties:
+        success:
+          type: boolean
+          const: true
+        version:
+          type: string
+          const: "0.6.59"
+        checkedAt:
+          type: string
+          format: date-time
+        uptimeSeconds:
+          type: integer
+          minimum: 0
+        components:
+          type: object
+          required: [backend, engine, scanner, ai, agenda, directories]
+          properties:
+            backend:
+              type: object
+              required: [status, online]
+              properties:
+                status:
+                  type: string
+                  const: ready
+                online:
+                  type: boolean
+                  const: true
+            engine:
+              $ref: "#/components/schemas/ServiceStatus"
+            scanner:
+              type: object
+              required: [status, online, busy, queue, activeJobs, cachedSources]
+              properties:
+                status:
+                  type: string
+                  enum: [ready, offline, disabled]
+                online:
+                  type: boolean
+                busy:
+                  type: boolean
+                queue:
+                  type: integer
+                activeJobs:
+                  type: integer
+                cachedSources:
+                  type: integer
+            ai:
+              type: object
+              required: [status, online, model]
+              properties:
+                status:
+                  type: string
+                  enum: [disabled, ready, model_missing, offline]
+                online:
+                  type: boolean
+                model:
+                  type: string
+                modelReady:
+                  type: boolean
+                  description: No aparece si status=disabled.
+            agenda:
+              type: object
+              required: [status, generatedAt, matches, preheated]
+              properties:
+                status:
+                  type: string
+                  enum: [ready, stale, warming]
+                  description: stale no llega a darse con el código actual (docs/api.md, sección 6, punto 11).
+                generatedAt:
+                  $ref: "#/components/schemas/NullableString"
+                matches:
+                  type: integer
+                preheated:
+                  type: integer
+            directories:
+              type: object
+              required: [status, total, channels, sources]
+              properties:
+                status:
+                  type: string
+                  enum: [ready, degraded, empty]
+                total:
+                  type: integer
+                channels:
+                  type: integer
+                sources:
+                  type: array
+                  items:
+                    type: object
+                    required: [id, name, count, syncedAt, lastErrorAt, stale]
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
+                      count:
+                        type: integer
+                      syncedAt:
+                        $ref: "#/components/schemas/NullableString"
+                      lastErrorAt:
+                        $ref: "#/components/schemas/NullableString"
+                      stale:
+                        type: boolean
+        reports:
+          type: object
+          required: [total, quarantined, learningCount]
+          properties:
+            total:
+              type: integer
+            quarantined:
+              type: integer
+            learningCount:
+              type: integer
+
+    EngineStatusResponse:
+      type: object
+      required: [online, raw]
+      additionalProperties: false
+      properties:
+        online:
+          type: boolean
+        raw:
+          type: string
+          maxLength: 300
+          description: Primeros 300 caracteres de la respuesta del motor.
+
+    RestartResponse:
+      type: object
+      required: [restarted]
+      additionalProperties: false
+      properties:
+        restarted:
+          type: boolean
+          const: true
+
+    SearchResult:
+      type: object
+      description: parseAceSearchResults (server.js:3599-3632).
+      required: [id, title, category, availability, bitrate, ih]
+      properties:
+        id:
+          $ref: "#/components/schemas/Hash"
+        title:
+          type: string
+        category:
+          type: string
+        availability:
+          type: ["number", "null"]
+        bitrate:
+          type: ["number", "null"]
+        ih:
+          type: boolean
+          const: true
+
+    SearchResponse:
+      type: object
+      required: [query, results]
+      additionalProperties: false
+      properties:
+        query:
+          type: string
+        results:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/SearchResult"
+
+    RemuxResponse:
+      type: object
+      required: [url, token]
+      additionalProperties: false
+      properties:
+        url:
+          type: string
+          pattern: "^/remux/[a-f0-9]{40}/index\\.m3u8$"
+        token:
+          type: string
+          pattern: "^[a-f0-9]{16}$"
+          description: Nuevo en cada petición; se usa en /api/remux/stop.
+
+    RemuxStopInput:
+      type: object
+      required: [id]
+      properties:
+        id:
+          $ref: "#/components/schemas/HashInput"
+        dev:
+          type: string
+          description: "Se filtra a [a-zA-Z0-9_-] y se corta a 40."
+        token:
+          type: string
+          description: "Se filtra a [a-f0-9] y se corta a 32."
+        keepAlive:
+          type: boolean
+          description: true = solo desengancharse, nunca parar ffmpeg.
+
+    RemuxStopResponse:
+      type: object
+      required: [success, stopped, detached]
+      properties:
+        success:
+          type: boolean
+          const: true
+        stopped:
+          type: boolean
+        detached:
+          type: boolean
+        stale:
+          type: boolean
+          const: true
+          description: Stop atrasado de un enganche anterior; no se ha tocado nada.
+
+    StreamsSyncInput:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: Solo http o https; se quitan usuario y contraseña.
+        type:
+          type: string
+          enum: [m3u, html]
+          description: Cualquier valor distinto de html cuenta como m3u.
+        sourceId:
+          type: string
+          description: Refrescar ese directorio (puede cambiarle la url y el tipo).
+        name:
+          type: string
+          description: >-
+            No se rechaza: se colapsan espacios y se corta a 60 (sin quitar HTML). Si falta, se
+            conserva el nombre o se usa el hostname.
+
+    SourceIdInput:
+      type: object
+      required: [sourceId]
+      properties:
+        sourceId:
+          type: string
+          description: Tiene que ser idéntico al id de un directorio existente.
