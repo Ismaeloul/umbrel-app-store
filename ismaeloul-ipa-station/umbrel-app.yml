@@ -3,7 +3,7 @@ id: ismaeloul-ipa-station
 category: developer
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ipa-station/icon.svg"
 name: IPA Station
-version: "0.1.4"
+version: "0.1.5"
 tagline: Instala y refirma apps de iPhone desde tu Umbrel
 description: >-
   IPA Station convierte el Umbrel en el servidor que firma e instala apps en
@@ -28,12 +28,11 @@ description: >-
   usando idevice_pair. El Apple ID se introduce en el panel y su contrasena
   nunca se guarda: solo queda el token de sesion, cifrado.
 releaseNotes: >-
-  Iniciar sesion con el Apple ID fallaba casi siempre con un error 429.
-  Apple rechaza al azar una parte de las peticiones de inicio de sesion
-  desde septiembre, sin importar la cuenta, y el panel se rendia al primer
-  rechazo. Ahora reintenta solo, esperando unos segundos, en el inicio de
-  sesion y en el codigo de verificacion. Hay que recompilar la imagen de
-  jas en el NAS.
+  El inicio de sesion podia acabar bien en Apple y aun asi no guardarse: si
+  Apple tardaba mas de 30 segundos tras el codigo de verificacion, el panel
+  decia "Login timed out" y la cuenta no aparecia. Ahora se guarda siempre
+  que el login termine, tarde lo que tarde, y el panel ya no pide un codigo
+  cuando Apple no lo ha pedido. Hay que recompilar la imagen de jas en el NAS.
 developer: Ismaeloul
 website: https://github.com/Ismaeloul
 dependencies: []
