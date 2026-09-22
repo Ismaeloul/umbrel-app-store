@@ -42,7 +42,9 @@ services:
     mem_limit: 512m
 
   jas:
-    image: localhost:5000/ipa-station/jas:0.1.0
+    # 0.1.1 = isideload con reintentos ante el 429 que Apple devuelve al azar
+    # en el login desde septiembre de 2026 (docker/jas/patches del repo).
+    image: localhost:5000/ipa-station/jas:0.1.1
     container_name: ismaeloul-ipa-station_jas_1
     restart: unless-stopped
     depends_on:
