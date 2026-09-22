@@ -2,6 +2,53 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual conserva solo sus propias notas en `umbrel-app.yml`; todo lo anterior vive aqui.
 
+## 0.6.58 (2026-09-19)
+
+Repaso general de la interfaz y del servidor.
+
+Reproductor: volver a la portada ya no apaga el canal. Sigue sonando y una
+barra permite volver al video o detenerlo. Los controles de escritorio
+ganan un boton de Detener y un retroceso de 30 segundos para repetir la
+jugada (tecla J). La pantalla completa funciona en iPhone. Las flechas
+del teclado solo zapean cuando estas viendo algo, no mientras navegas por
+la agenda. Al saltar a un canal de la biblioteca se cierra el centro de
+partido en vez de quedarse pegado al anterior.
+
+Fuentes: cada boton del selector dice el proveedor y su estado en una
+palabra, no solo un numero. La señal floja se pinta en ambar y la fallida
+en rojo; antes eran el mismo color, tambien en el panel de salud.
+
+Primer uso: la agenda sale completa y una tarjeta invita a personalizarla;
+desaparece el modal bloqueante del arranque. La biblioteca abre en la
+pestaña que tiene contenido, cada estado vacio lleva el boton que lo
+resuelve, y desde cualquier pestaña se puede saltar a buscar en el motor.
+
+Legibilidad: ningun texto por debajo de 11 px y los grises secundarios
+con contraste suficiente. Los avisos hablan de la señal, no de buffers ni
+de infohashes.
+
+Sin sustos: borrar un canal se puede deshacer durante seis segundos;
+borrar un directorio y reiniciar el motor piden un segundo toque, y el
+reinicio sale de la cabecera. Un Content ID se pega desde un boton fijo de
+la cabecera, tambien sin partido en marcha.
+
+Servidor: cuatro rutas leian el estado antes que el cuerpo de la peticion
+y podian pisar escrituras de otro dispositivo. Un state.json ilegible se
+aparta y se recupera de la copia anterior en vez de arrancar sin
+favoritos. Los errores internos salen como 500 con rastro en el log. El
+remux para iPhone ya no expulsa a un espectador activo. Hasta ocho
+rotulos por partido sin contar variantes HDR o Bar. El reproductor
+consulta un endpoint ligero en vez de bajar el estado entero cada cinco
+segundos. Reiniciar el motor exige un secreto que solo conoce el backend.
+
+Directorios: la tarjeta dice por que fallo la ultima actualizacion (ipfs.io
+lleva dias respondiendo 429) y se prueba dweb.link como alternativa.
+
+Empaquetado: nginx espera a que el servidor este sano, comprime HTML y
+JSON, el escaner deja de publicar su puerto en la red local, ffmpeg queda
+en cache para instalarse sin internet, los tests corren en GitHub Actions
+y el historico de notas pasa a CHANGELOG.md.
+
 ## 0.6.57 (2026-09-19)
 
 Los carruseles del movil ya no vuelven solos al principio. El selector de
