@@ -52,8 +52,11 @@ else
   mark_failed
 fi
 
+# Desde la 0.6.58 el comprobador no publica puerto (8622): se pregunta al
+# backend, que es quien habla con el. Mirar el puerto daba "failed" siempre.
 if grep -q '^[[:space:]]*acestream_scanner:' "${APP_DIR}/docker-compose.yml" 2>/dev/null; then
-  if port_open 8622; then
+  health_json="$(curl -sS --max-time 8 http://127.0.0.1:7792/api/health 2>/dev/null || true)"
+  if printf '%s' "${health_json}" | python3 -c 'import json, sys; sys.exit(0 if json.load(sys.stdin)["components"]["scanner"]["online"] else 1)' 2>/dev/null; then
     scanner="ok"
   else
     scanner="failed"

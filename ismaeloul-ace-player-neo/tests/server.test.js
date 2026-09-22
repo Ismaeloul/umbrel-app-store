@@ -2106,3 +2106,207 @@ test("los carruseles del movil no vuelven al principio con cada repintado", () =
   // 0.6.58: el chip con proveedor y estado tambien se actualiza en sitio
   assert.match(html, /if\(boton\.dataset\.chip!==huella\)\{/);
 });
+
+/* ---------- 0.6.59 ---------- */
+
+// Codificadores minimos para fabricar en el test un CAR de IPFS, sin red
+function varintDe(numero) {
+  const out = [];
+  let n = numero;
+  while (n >= 0x80) {
+    out.push((n & 0x7f) | 0x80);
+    n = Math.floor(n / 128);
+  }
+  out.push(n);
+  return Buffer.from(out);
+}
+function campoPb(numero, valor) {
+  if (typeof valor === "number") return Buffer.concat([varintDe(numero * 8), varintDe(valor)]);
+  return Buffer.concat([varintDe(numero * 8 + 2), varintDe(valor.length), valor]);
+}
+function cidDe(codec, bloque) {
+  const digest = require("node:crypto").createHash("sha256").update(bloque).digest();
+  return Buffer.concat([varintDe(1), varintDe(codec), varintDe(0x12), varintDe(32), digest]);
+}
+function nodoPb(enlaces, tipo) {
+  const unixfs = campoPb(1, tipo);
+  return Buffer.concat([
+    ...enlaces.map((e) => campoPb(2, Buffer.concat([campoPb(1, e.cid), campoPb(2, Buffer.from(e.name || ""))]))),
+    campoPb(1, unixfs),
+  ]);
+}
+function carDe(bloques) {
+  // la cabecera CBOR solo se salta: basta con que ocupe lo que dice
+  const cabecera = Buffer.from([0xa0]);
+  return Buffer.concat([varintDe(cabecera.length), cabecera,
+    ...bloques.map(({ cid, bloque }) => Buffer.concat([varintDe(cid.length + bloque.length), cid, bloque]))]);
+}
+function base32De(bytes) {
+  const alfabeto = "abcdefghijklmnopqrstuvwxyz234567";
+  let bits = 0;
+  let valor = 0;
+  let out = "";
+  for (const byte of bytes) {
+    valor = (valor << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      out += alfabeto[(valor >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+    valor &= (1 << bits) - 1;
+  }
+  if (bits > 0) out += alfabeto[(valor << (5 - bits)) & 31];
+  return out;
+}
+function directorioIpfsDePrueba() {
+  // un fichero en dos trozos, dentro de data/, como las listas de NEW ERA
+  const trozoA = Buffer.from("#EXTM3U\n#EXTINF:-1,Canal A\nacestream://");
+  const trozoB = Buffer.from(`${"a".repeat(40)}\n`);
+  const cidA = cidDe(0x55, trozoA);
+  const cidB = cidDe(0x55, trozoB);
+  const fichero = nodoPb([{ cid: cidA }, { cid: cidB }], 2);
+  const cidFichero = cidDe(0x70, fichero);
+  const carpeta = nodoPb([{ cid: cidFichero, name: "lista.m3u" }], 1);
+  const cidCarpeta = cidDe(0x70, carpeta);
+  const raiz = nodoPb([{ cid: cidCarpeta, name: "data" }], 1);
+  const cidRaiz = cidDe(0x70, raiz);
+  return {
+    esperado: Buffer.concat([trozoA, trozoB]).toString("utf8"),
+    raiz: cidRaiz,
+    bloques: [
+      { cid: cidRaiz, bloque: raiz },
+      { cid: cidCarpeta, bloque: carpeta },
+      { cid: cidFichero, bloque: fichero },
+      { cid: cidA, bloque: trozoA },
+      { cid: cidB, bloque: trozoB },
+    ],
+  };
+}
+
+test("los directorios de IPFS se bajan sin pasarela publica y cada bloque se comprueba", () => {
+  /* Desde septiembre de 2026 ipfs.io y dweb.link contestan 429 a todo: los
+     tres directorios se quedaban con la copia del dia 20. */
+  const { esperado, raiz, bloques } = directorioIpfsDePrueba();
+  const mapa = app.ipfsCarBlocks(carDe(bloques));
+  const raizCid = app.ipfsCidFromText(`b${base32De(raiz)}`);
+  assert.equal(raizCid.codec, 0x70);
+  const fichero = app.ipfsWalk(mapa, raizCid, ["data", "lista.m3u"]);
+  assert.equal(app.ipfsReadFile(mapa, fichero, 1024 * 1024).toString("utf8"), esperado);
+  assert.throws(() => app.ipfsWalk(mapa, raizCid, ["data", "otra.m3u"]), /ipfs_not_found/);
+  assert.throws(() => app.ipfsReadFile(mapa, fichero, 10), /response_too_large/);
+  // un bloque alterado no cuela
+  const alterados = bloques.map((b, i) => (i === 3 ? { ...b, bloque: Buffer.from("otra cosa") } : b));
+  assert.throws(() => app.ipfsCarBlocks(carDe(alterados)), /ipfs_bad_block/);
+  // CIDv0 (Qm...) y CIDv1 (bafy...) reales
+  const v0 = app.ipfsCidFromText("QmUwSbXZoAgFyZmN9vUmAwxKb4JUwR5EtFpQF2z77XBLGH");
+  assert.deepEqual([v0.codec, v0.hash, v0.digest.length], [0x70, 0x12, 32]);
+  const v1 = app.ipfsCidFromText("bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+  assert.deepEqual([v1.codec, v1.hash, v1.digest.length], [0x70, 0x12, 32]);
+  assert.throws(() => app.ipfsCidFromText("no-es-un-cid"), /ipfs_bad_cid/);
+  // registro IPNS v2: el valor viaja en un mapa CBOR
+  const valor = Buffer.from("/ipfs/QmUwSbXZoAgFyZmN9vUmAwxKb4JUwR5EtFpQF2z77XBLGH");
+  const cbor = Buffer.concat([
+    Buffer.from([0xa2, 0x65]), Buffer.from("Value"), Buffer.from([0x58, valor.length]), valor,
+    Buffer.from([0x68]), Buffer.from("Sequence"), Buffer.from([0x05]),
+  ]);
+  const datos = app.ipfsCbor(cbor);
+  assert.equal(datos.Value.toString("utf8"), valor.toString("utf8"));
+  assert.equal(datos.Sequence, 5);
+  // que URLs se tratan como IPFS
+  assert.deepEqual(app.ipfsUrlParts("https://ipfs.io/ipns/k51abc/data/lista%20x.m3u"),
+    { kind: "ipns", name: "k51abc", segments: ["data", "lista x.m3u"] });
+  assert.deepEqual(app.ipfsUrlParts("https://k51abc.ipns.dweb.link/hashes.m3u"),
+    { kind: "ipns", name: "k51abc", segments: ["hashes.m3u"] });
+  assert.equal(app.ipfsUrlParts("https://example.com/lista.m3u"), null);
+  assert.equal(app.ipfsUrlParts("http://ipfs.io/ipns/k51abc/x"), null, "solo https");
+  // el directorio prueba IPFS primero y la pasarela queda de respaldo
+  const src = serverSource();
+  assert.match(src, /if \(!ipfsUrlParts\(url\)\) return fetchDirectoryFromGateway\(url\);/);
+  assert.match(src, /return await fetchIpfsDirectory\(url\);/);
+  const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
+  assert.match(html, /if\(error==='ipfs_not_found'\) return 'la lista ya no está en esa dirección de IPFS';/);
+});
+
+test("una fuente verificada que falla una prueba queda floja y lo que ve el reproductor manda", () => {
+  const t0 = Date.now();
+  const id = "d".repeat(40);
+  app.recordScannerVerdict(id, { state: "working", reason: "playable_media" }, t0);
+  let veredicto = app.recordScannerVerdict(id, { state: "failed", reason: "timeout" }, t0 + 1000);
+  assert.deepEqual([veredicto.state, veredicto.reason], ["weak", "intermittent"]);
+  veredicto = app.recordScannerVerdict(id, { state: "failed", reason: "timeout" }, t0 + 2000);
+  assert.equal(veredicto.state, "failed", "el segundo fallo seguido si la da por muerta");
+  // lo que habla del video, no de la red, no se suaviza
+  const hevc = "e".repeat(40);
+  app.recordScannerVerdict(hevc, { state: "working", reason: "playable_media" }, t0);
+  assert.equal(app.recordScannerVerdict(hevc, { state: "failed", reason: "unsupported_codec" }, t0 + 1000).state, "failed");
+  // el reproductor manda durante unos minutos sobre el comprobador
+  const vista = "f".repeat(40);
+  app.recordScannerVerdict(vista, { state: "working", reason: "player_ok", by: "player" }, t0);
+  assert.equal(app.playerVerdictHeld(vista, t0 + 60 * 1000), true);
+  assert.equal(app.recordScannerVerdict(vista, { state: "failed", reason: "timeout" }, t0 + 60 * 1000).state, "working");
+  assert.equal(app.playerVerdictHeld(vista, t0 + 4 * 60 * 1000), false);
+  // traduccion de lo que cuenta el reproductor
+  assert.deepEqual(app.veredictoDelReproductor("arranco", 0), { state: "working", reason: "player_ok" });
+  assert.deepEqual(app.veredictoDelReproductor("sigue", 0), { state: "working", reason: "player_ok" });
+  assert.deepEqual(app.veredictoDelReproductor("cayo", 600), { state: "weak", reason: "player_dropped" });
+  assert.deepEqual(app.veredictoDelReproductor("cayo", 10), { state: "failed", reason: "player_failed" });
+  assert.deepEqual(app.veredictoDelReproductor("fallo", 0), { state: "failed", reason: "player_failed" });
+  // la fuente que se esta viendo no se vuelve a probar aunque se fuerce
+  assert.match(serverSource(), /candidate\.force === true && !playerVerdictHeld\(candidate\.id\) \? null : scannerCacheHit\(candidate\.id\)/);
+});
+
+test("el aviso de que un canal sigue renueva el veredicto sin contar como intento", async () => {
+  const id = "9".repeat(40);
+  const antes = JSON.stringify(app.readState().sourceStats?.hashes?.[id] ?? null);
+  const { response, data } = await post("/api/sources/outcome", { id, resultado: "sigue" });
+  assert.equal(response.status, 200);
+  assert.equal(data.success, true);
+  assert.equal(JSON.stringify(app.readState().sourceStats?.hashes?.[id] ?? null), antes);
+  assert.equal(app.playerVerdictHeld(id), true);
+  const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
+  assert.match(html, /body:JSON\.stringify\(\{id:intento\.id,resultado:'sigue'\}\)/);
+});
+
+test("la pagina no deja que el sondeo pise lo que vio el reproductor", () => {
+  const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
+  assert.match(html, /const visto=playerConfirms\|\|playerChecking\?null:veredictoDelReproductor\(source\);/);
+  assert.match(html, /source\.playerVerdict=\{state:source\.probeState,reason:motivo,at:Date\.now\(\)\};/);
+  // una fuente que ya se veia tiene tres reconexiones tambien en automatico
+  assert.match(html, /const maxReintentos=S\.autoPlayVerified&&!S\.intentoFuente\?\.arranco\?1:3;/);
+  // con reintentos pendientes se espera en vez de rendirse
+  assert.match(html, /Ninguna de las \$\{total\} fuentes da señal todavía/);
+  // un solo silencio del motor no lo da por apagado
+  assert.match(html, /function motorSinRespuesta\(\)\{/);
+});
+
+test("el iPhone arranca con colchon y el adaptador sobrevive a los cortes del motor", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "remux-lista-"));
+  const lista = path.join(dir, "index.m3u8");
+  fs.writeFileSync(lista, "#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXTINF:2.002,\nindex0.m4s\n#EXTINF:1.968,\nindex1.m4s\n#EXTINF:2.1,\nindex2.m4s\n");
+  const stats = app.remuxPlaylistStats(lista);
+  assert.equal(stats.segments, 3);
+  assert.ok(Math.abs(stats.seconds - 6.07) < 0.01);
+  assert.equal(app.remuxPlaylistStats(path.join(dir, "no-existe.m3u8")), null);
+  fs.rmSync(dir, { recursive: true, force: true });
+  const src = serverSource();
+  assert.match(src, /"-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_at_eof", "1"/);
+  assert.match(src, /"-rw_timeout", "20000000"/);
+  assert.match(src, /"-hls_time", "2", "-hls_list_size", "15"/);
+  assert.match(src, /delete_segments\+independent_segments\+temp_file\+omit_endlist/);
+  assert.match(src, /ready\.segments >= 2 && ready\.seconds >= REMUX_READY_SECONDS/);
+  // un stop con la ficha de un enganche anterior no tumba la sesion nueva
+  assert.match(src, /session\.clients\.get\(deviceId\) !== token\) \{\s*return send\(res, 200, \{ success: true, stopped: false, detached: false, stale: true \}\);/);
+  const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
+  assert.match(html, /body:JSON\.stringify\(\{id,dev:DEV_ID,keepAlive,token\}\)/);
+  assert.match(html, /\$\('video'\)\.addEventListener\('error', cortePlayerIos\);/);
+  assert.match(html, /\$\('video'\)\.addEventListener\('ended', cortePlayerIos\);/);
+  assert.match(html, /if\(IS_IOS && wdStuck===4 && empujarAlDirectoIos\(\)\) return;/);
+  assert.match(html, /const limit=IS_IOS\?36:downloading\?40:20;/);
+  assert.match(html, /document\.addEventListener\('visibilitychange',\(\)=>\{\s*if\(document\.visibilityState!=='visible'\|\|!IS_IOS/);
+});
+
+test("detras del HTTPS de Umbrel las redirecciones del motor no llevan a http://", () => {
+  const nginx = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "nginx.conf"), "utf8");
+  assert.doesNotMatch(nginx, /proxy_redirect[^;]*\$scheme/);
+  assert.match(nginx, /proxy_redirect ~\^http:\/\/\[\^\/\]\+\/\(ace\|content\)\/\(\.\*\)\$ \/\$1\/\$2;/);
+});
