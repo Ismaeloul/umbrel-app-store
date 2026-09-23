@@ -112,7 +112,9 @@ final class APIClientTests: XCTestCase {
             XCTAssertEqual(codigo, "engine_unavailable")
             XCTAssertEqual(estado, 502)
             XCTAssertEqual(requestId, "req-7f3a9c")
-            XCTAssertEqual(error.localizedDescription, "El motor AceStream no responde. Prueba a reiniciarlo desde Ajustes.")
+            // El texto es el del catálogo común (el mismo que ve la web), no el que venga en la respuesta.
+            XCTAssertEqual(error.localizedDescription, ErrorCatalog.mensaje(para: "engine_unavailable"))
+            XCTAssertTrue(error.localizedDescription.hasPrefix("El motor AceStream no responde."))
         }
     }
 
