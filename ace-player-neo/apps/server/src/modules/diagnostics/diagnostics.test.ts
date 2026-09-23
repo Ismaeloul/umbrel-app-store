@@ -216,6 +216,21 @@ describe('diagnostics · consultar (GET /api/v1/diagnostics?cause=&since=)', () 
       state: 0,
     });
   });
+
+  it('el resumen de métricas al terminar una reproducción (player_session) no es un fallo', () => {
+    const ctx = setup();
+    // La web lo manda al parar, al cambiar de canal y al cerrar la página.
+    ctx.diagnostics.record({
+      cause: 'client',
+      code: 'player_session',
+      message: 'Fin de la reproducción (página cerrada)',
+    });
+    ctx.diagnostics.record({ cause: 'client', code: 'autoplay_blocked', message: '' });
+    expect(ctx.diagnostics.counts24h()).toMatchObject({ client: 1 });
+    const listed = ctx.diagnostics.list({});
+    expect(listed.entries.map((entry) => entry.code)).toEqual(['autoplay_blocked']);
+    expect(listed.total).toBe(1);
+  });
 });
 
 describe('diagnostics · informes de clientes (POST /api/v1/diagnostics)', () => {

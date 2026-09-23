@@ -123,6 +123,14 @@ export function createDiagnostics(
   };
   let seq = 0;
   let started = false;
+
+  /**
+   * Códigos que no son fallos sino métricas: la web manda un resumen
+   * (`player_session`: primera imagen, rellenos, reconexiones) al terminar cada
+   * reproducción, también al cerrar la página. Se guardan para medir, pero no
+   * cuentan en el recuento de fallos ni salen en la lista del panel de salud.
+   */
+  const isMetricsOnly = (entry: DiagnosticEntry): boolean => entry.code === 'player_session';
   let starting: Promise<void> | null = null;
   /** Líneas anotadas antes de arrancar (se escriben en `start`). */
   let pendingLines: string[] = [];
@@ -204,7 +212,7 @@ export function createDiagnostics(
   function add(entry: DiagnosticEntry): DiagnosticEntry {
     entries.push(entry);
     if (entries.length > memoryEntries) entries.shift();
-    addTime(entry.cause, Date.parse(entry.at));
+    if (!isMetricsOnly(entry)) addTime(entry.cause, Date.parse(entry.at));
     persist(entry);
     bus.emit('diagnostics.new', entry);
     return entry;
@@ -251,7 +259,7 @@ export function createDiagnostics(
       for (const cause of DIAGNOSTIC_CAUSES) causeTimes[cause] = [];
       for (const entry of [...loaded, ...entries]) {
         const at = Date.parse(entry.at);
-        if (at >= cutoff) {
+        if (at >= cutoff && !isMetricsOnly(entry)) {
           addTime(entry.cause, at);
           fresh[entry.cause] += 1;
         }
@@ -358,6 +366,7 @@ export function createDiagnostics(
       const matching = entries
         .filter(
           (entry) =>
+            !isMetricsOnly(entry) &&
             (!query.cause || entry.cause === query.cause) &&
             (since === null || Date.parse(entry.at) > since),
         )
