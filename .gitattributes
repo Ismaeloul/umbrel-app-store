@@ -1,2 +1,13 @@
 *.sh text eol=lf
 ismaeloul-ace-player-neo/hooks/* text eol=lf
+
+# Ace Player Neo: las releases se sirven y se verifican byte a byte
+# (SHA256SUMS y el hook pre-start). git no toca sus finales de linea: con
+# core.autocrlf=true un checkout en Windows les meteria CRLF y los hashes no
+# cuadrarian con los del NAS.
+ismaeloul-ace-player-neo/releases/** -text
+
+# Lo que se copia a mano al NAS (vigilante) y el paquete de la 0.6.59 que
+# sirve para volver atras: siempre LF.
+ismaeloul-ace-player-neo/monitoring/* text eol=lf
+ismaeloul-ace-player-neo/tests/legacy-0.6.59/paquete/** text eol=lf

@@ -2,15 +2,17 @@ name: Ace Player Neo · CI
 
 # CI del monorepo de la v2 (ace-player-neo/: backend, web, contratos y
 # empaquetado). La app iOS se compila y se prueba en ios.yml (macOS); aquí solo
-# pasa SwiftLint. Los tests de la 0.6.59 (la carpeta de la app de Umbrel,
-# ismaeloul-ace-player-neo/) siguen en ace-player-neo.yml.
+# pasa SwiftLint. Los tests de la carpeta de la app de Umbrel
+# (ismaeloul-ace-player-neo/: el paquete de la 0.7.0 y la 0.6.59 de vuelta
+# atrás) van en ace-player-neo.yml.
 #
 # Jobs (en paralelo):
 #   calidad    lint (ESLint + Prettier) y typecheck de todo el monorepo
 #   tests      Vitest: shared, servidor (unidad + integración), motor falso,
 #              empaquetado (deploy/ y scripts/) y web
-#   web        build de la web, presupuesto de tamaño y prueba de humo del
-#              backend empaquetado (server.js contra el motor falso)
+#   web        build de la web, presupuesto de tamaño, prueba de humo del
+#              backend empaquetado (server.js contra el motor falso) y que la
+#              release commiteada es la que sale del código (check:release)
 #   e2e        Playwright (Chrome + WebKit) contra la pila local con motor falso
 #   docker     nginx real y shellcheck del hook en Docker, y build de la imagen
 #   swiftlint  estilo de apps/ios: solo los errores rompen la CI
@@ -19,10 +21,12 @@ on:
   push:
     paths:
       - 'ace-player-neo/**'
+      - 'ismaeloul-ace-player-neo/releases/**'
       - '.github/workflows/ci.yml'
   pull_request:
     paths:
       - 'ace-player-neo/**'
+      - 'ismaeloul-ace-player-neo/releases/**'
       - '.github/workflows/ci.yml'
   workflow_dispatch:
 
@@ -122,6 +126,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          # check:release necesita la historia: RELEASE.json lleva el último
+          # commit que tocó las fuentes.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -142,6 +150,11 @@ jobs:
         run: pnpm --filter @ace/server build
       - name: Prueba de humo del backend empaquetado
         run: node scripts/smoke-bundle.mjs
+      # La release commiteada en ismaeloul-ace-player-neo/releases/<v> es la que
+      # sale de este código (empaquetado §7.10). Si falla tras tocar el backend
+      # o la web: pnpm --filter @ace/web build && pnpm release, y commitearla.
+      - name: La release commiteada es la que sale del código
+        run: pnpm check:release
 
   e2e:
     name: E2E (Playwright)

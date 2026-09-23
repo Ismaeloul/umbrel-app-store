@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
+# Hook pre-start de Ace Player Neo (0.7.0 en adelante).
+#
+# umbreld lo ejecuta antes de cada arranque (instalar, actualizar, reiniciar la
+# app o el NAS) y con "|| true": un fallo aqui no impide arrancar. Por eso el
+# hook no tiene que dejar nunca una release a medias: se monta aparte, se
+# verifica entera por hash y solo entonces ocupa su sitio.
 set -euo pipefail
 
 readonly COMPOSE_FILE="${APP_DATA_DIR}/docker-compose.yml"
 readonly MANIFEST_FILE="${APP_DATA_DIR}/umbrel-app.yml"
 
-if [[ ! -s "${COMPOSE_FILE}" || ! -s "${MANIFEST_FILE}" ]]; then
-  echo "Ace Player Neo: faltan docker-compose.yml o umbrel-app.yml en APP_DATA_DIR" >&2
+if [[ ! -s "${COMPOSE_FILE}" ]]; then
+  echo "Ace Player Neo: falta docker-compose.yml en APP_DATA_DIR" >&2
   exit 1
 fi
 
@@ -21,12 +27,14 @@ if (( ${#compose_versions[@]} != 1 )); then
 fi
 
 readonly VERSION="${compose_versions[0]}"
-MANIFEST_VERSION="$(sed -nE 's/^[[:space:]]*version:[[:space:]]*"([^"]+)".*$/\1/p' "${MANIFEST_FILE}" | head -n 1)"
+MANIFEST_VERSION="$(sed -nE 's/^[[:space:]]*version:[[:space:]]*"([^"]+)".*$/\1/p' "${MANIFEST_FILE}" 2>/dev/null | head -n 1 || true)"
 readonly MANIFEST_VERSION
 
+# Hasta la 0.6.59 una diferencia abortaba el hook antes de restaurar nada. La
+# version que arranca es la de Compose, asi que esa es la que hay que dejar
+# lista: se avisa y se sigue. La coherencia al publicar la vigilan los tests.
 if [[ "${MANIFEST_VERSION}" != "${VERSION}" ]]; then
-  echo "Ace Player Neo: la version del manifiesto (${MANIFEST_VERSION:-ausente}) no coincide con Compose (${VERSION})" >&2
-  exit 1
+  echo "Ace Player Neo: aviso: la version del manifiesto (${MANIFEST_VERSION:-ausente}) no coincide con Compose (${VERSION}); se prepara la de Compose, que es la que arranca" >&2
 fi
 
 readonly TAG="ace-player-neo-v${VERSION}"
@@ -34,56 +42,129 @@ readonly TAG_ARCHIVE_ROOT="umbrel-app-store-ace-player-neo-v${VERSION}"
 readonly TAG_ARCHIVE_URL="https://github.com/Ismaeloul/umbrel-app-store/archive/refs/tags/${TAG}.tar.gz"
 readonly MAIN_ARCHIVE_ROOT="umbrel-app-store-main"
 readonly MAIN_ARCHIVE_URL="https://github.com/Ismaeloul/umbrel-app-store/archive/refs/heads/main.tar.gz"
-readonly TARGET="${APP_DATA_DIR}/releases/${VERSION}"
+readonly RELEASES_DIR="${APP_DATA_DIR}/releases"
+readonly TARGET="${RELEASES_DIR}/${VERSION}"
+
+# Lo que Compose, nginx y el navegador necesitan si o si. Los assets de Vite
+# llevan un hash en el nombre y cambian en cada build: esos los cubre
+# SHA256SUMS, que ademas detecta ficheros truncados o cambiados.
 readonly -a REQUIRED_FILES=(
-  "engine-control.js"
-  "icon.svg"
-  "index.html"
-  "nginx.conf"
+  "SHA256SUMS"
+  "RELEASE.json"
   "server.js"
-  "manifest.webmanifest"
-  "sw.js"
-  "icon-180.png"
-  "icon-192.png"
-  "icon-512.png"
-  "icon-maskable-512.png"
-  "vendor/hls.min.js"
-  "vendor/mpegts.js"
-  "vendor/fonts/inter-var.woff2"
-  "vendor/fonts/jetbrains-mono-var.woff2"
-  "vendor/fonts/outfit-var.woff2"
+  "engine-control.js"
+  "nginx.conf"
+  "web/index.html"
+  "web/sw.js"
+  "web/manifest.webmanifest"
+  "web/icon-180.png"
+  "web/icon-192.png"
+  "web/icon-512.png"
+  "web/icon-maskable-512.png"
 )
+
+# Temporales que hay que borrar al salir, pase lo que pase.
+TEMP_PATHS=()
+# shellcheck disable=SC2329 # la llama el trap EXIT, no el codigo
+cleanup() {
+  if (( ${#TEMP_PATHS[@]} > 0 )); then
+    rm -rf -- "${TEMP_PATHS[@]}"
+  fi
+  return 0
+}
+trap cleanup EXIT
 
 release_is_complete() {
   local root="${1}"
   local relative_path
+  [[ -d "${root}" ]] || return 1
   for relative_path in "${REQUIRED_FILES[@]}"; do
-    [[ -s "${root}/${relative_path}" ]] || return 1
+    # -f ademas de -s: si falta el origen de un montaje, Docker crea una
+    # carpeta con ese nombre, y -s la daba por buena.
+    [[ -f "${root}/${relative_path}" && -s "${root}/${relative_path}" ]] || return 1
   done
+  # Cada fichero obligatorio tiene que figurar en SHA256SUMS: un SHA256SUMS
+  # cortado justo al final de una linea seguiria pasando --check.
+  for relative_path in "${REQUIRED_FILES[@]}"; do
+    [[ "${relative_path}" == "SHA256SUMS" ]] && continue
+    awk -v wanted="${relative_path}" '$2 == wanted { found = 1 } END { exit found ? 0 : 1 }' \
+      "${root}/SHA256SUMS" || return 1
+  done
+  if ! command -v sha256sum >/dev/null 2>&1; then
+    echo "Ace Player Neo ${VERSION}: aviso: sin sha256sum, solo se comprueba la lista de ficheros" >&2
+    return 0
+  fi
+  # umbrelOS trae el sha256sum de GNU; el de BusyBox no conoce --strict y
+  # daria por rota una release buena.
+  if sha256sum --version >/dev/null 2>&1; then
+    (cd "${root}" && sha256sum --check --strict --quiet SHA256SUMS) >/dev/null 2>&1 || return 1
+  else
+    (cd "${root}" && sha256sum -c -s SHA256SUMS) >/dev/null 2>&1 || return 1
+  fi
+}
+
+# nginx corre con otro usuario: carpetas 755 y ficheros 644 como minimo. Ya
+# paso una release con permisos 700 que nginx no podia leer.
+fix_permissions() {
+  chmod -R u+rwX,go+rX "${1}" 2>/dev/null || true
 }
 
 # Releases anteriores en el NAS: cada actualizacion deja la carpeta de la
-# version previa. No pesan (1,5 MB) pero confunden al depurar; las de mas de
-# 30 dias se retiran. Nunca la actual, y un fallo aqui no impide arrancar.
+# version previa. Las de mas de 30 dias se retiran (tambien restos de
+# restauraciones cortadas). Nunca la actual, y un fallo aqui no impide arrancar.
 prune_old_releases() {
-  find "${APP_DATA_DIR}/releases" -mindepth 1 -maxdepth 1 -type d \
+  find "${RELEASES_DIR}" -mindepth 1 -maxdepth 1 -type d \
     ! -name "${VERSION}" -mtime +30 -exec rm -rf {} + 2>/dev/null || true
 }
 
-# .complete es un atajo: si esta y los ficheros siguen ahi, no hay nada que
-# restaurar. Se comprueba igualmente la lista para no fiarse de un marcador
-# huerfano.
+finish() {
+  touch "${TARGET}/.complete"
+  fix_permissions "${TARGET}"
+  prune_old_releases
+  echo "Ace Player Neo ${VERSION}: ${1}"
+  exit 0
+}
+
+# Copia la release a una carpeta temporal junto a TARGET, la verifica alli y
+# solo entonces la pone en su sitio con dos renombrados. Nunca se escribe
+# encima de TARGET: una copia cortada no deja una release a medio montar.
+install_release() {
+  local source_root="${1}"
+  local staging=""
+  local previous=""
+  # Dentro de un "if" bash no aplica set -e: cada paso comprueba su error. Sin
+  # esto, un mktemp fallido dejaria staging vacio y el cp iria a "/".
+  mkdir -p "${RELEASES_DIR}" || return 1
+  staging="$(mktemp -d "${RELEASES_DIR}/.${VERSION}.tmp.XXXXXX")" || return 1
+  [[ -n "${staging}" && -d "${staging}" ]] || return 1
+  TEMP_PATHS+=("${staging}")
+  cp -a "${source_root}/." "${staging}/" || return 1
+  rm -f "${staging}/.complete" || return 1
+  release_is_complete "${staging}" || return 1
+  fix_permissions "${staging}"
+  if [[ -e "${TARGET}" || -L "${TARGET}" ]]; then
+    previous="${staging}.old"
+    TEMP_PATHS+=("${previous}")
+    mv "${TARGET}" "${previous}" || return 1
+  fi
+  if ! mv "${staging}" "${TARGET}"; then
+    # Se deja lo que habia, aunque estuviera incompleto: mejor que nada.
+    [[ -n "${previous}" ]] && mv "${previous}" "${TARGET}"
+    return 1
+  fi
+}
+
+# .complete es un atajo, pero no se fia de el: se vuelve a verificar todo. Es
+# barato (la release pesa alrededor de 1 MB) y pilla marcadores huerfanos.
 if [[ -f "${TARGET}/.complete" ]] && release_is_complete "${TARGET}"; then
+  fix_permissions "${TARGET}"
   prune_old_releases
   echo "Ace Player Neo ${VERSION}: release local ya verificada"
   exit 0
 fi
 
 if release_is_complete "${TARGET}"; then
-  touch "${TARGET}/.complete"
-  prune_old_releases
-  echo "Ace Player Neo ${VERSION}: release local verificada"
-  exit 0
+  finish "release local verificada"
 fi
 
 readonly STORE_RELEASE="${SCRIPT_APP_REPO_DIR:-}/releases/${VERSION}"
@@ -91,26 +172,19 @@ readonly STORE_RELEASE="${SCRIPT_APP_REPO_DIR:-}/releases/${VERSION}"
 # umbrelOS conserva el checkout completo de la tienda aunque solo copie una
 # lista blanca a APP_DATA_DIR. Usarlo primero evita depender de internet.
 if [[ -n "${SCRIPT_APP_REPO_DIR:-}" ]] && release_is_complete "${STORE_RELEASE}"; then
-  mkdir -p "${TARGET}"
-  cp -a "${STORE_RELEASE}/." "${TARGET}/"
-  release_is_complete "${TARGET}"
-  touch "${TARGET}/.complete"
-  prune_old_releases
-  echo "Ace Player Neo ${VERSION}: release restaurada desde la tienda local"
-  exit 0
+  if install_release "${STORE_RELEASE}"; then
+    finish "release restaurada desde la tienda local"
+  fi
+  echo "Ace Player Neo ${VERSION}: la copia desde la tienda local no se pudo verificar; se prueba a descargarla" >&2
 fi
 
 STAGING_ROOT="$(mktemp -d "${APP_DATA_DIR}/.ace-player-neo-${VERSION}.XXXXXX")"
 readonly STAGING_ROOT
+TEMP_PATHS+=("${STAGING_ROOT}")
 readonly TAG_ARCHIVE_FILE="${STAGING_ROOT}/tag.tar.gz"
 readonly TAG_EXTRACT_ROOT="${STAGING_ROOT}/tag"
 readonly MAIN_ARCHIVE_FILE="${STAGING_ROOT}/main.tar.gz"
 readonly MAIN_EXTRACT_ROOT="${STAGING_ROOT}/main"
-
-cleanup() {
-  rm -rf -- "${STAGING_ROOT}"
-}
-trap cleanup EXIT
 
 download_release() {
   local archive_url="${1}"
@@ -124,7 +198,8 @@ download_release() {
       --connect-timeout 15 --max-time 180 \
       --output "${archive_file}" "${archive_url}" || return 1
   else
-    wget -qO "${archive_file}" "${archive_url}" || return 1
+    # -T: sin plazo, un wget colgado dejaba el arranque esperando para siempre.
+    wget -q -T 30 -O "${archive_file}" "${archive_url}" || return 1
   fi
 
   tar -xzf "${archive_file}" \
@@ -143,7 +218,7 @@ else
   # Una etiqueta olvidada no debe dejar la aplicacion inaccesible. main es una
   # recuperacion secundaria; la tienda local y la etiqueta siguen teniendo
   # prioridad porque son las fuentes reproducibles e inmutables.
-  echo "Ace Player Neo ${VERSION}: la etiqueta ${TAG} no esta disponible; usando main como recuperacion" >&2
+  echo "Ace Player Neo ${VERSION}: la etiqueta ${TAG} no esta disponible o no se pudo verificar; usando main como recuperacion" >&2
   if ! download_release "${MAIN_ARCHIVE_URL}" "${MAIN_ARCHIVE_ROOT}" "${MAIN_ARCHIVE_FILE}" "${MAIN_EXTRACT_ROOT}"; then
     echo "Ace Player Neo ${VERSION}: no se pudo recuperar la release desde la etiqueta ni desde main" >&2
     exit 1
@@ -152,10 +227,8 @@ else
 fi
 readonly RELEASE_ROOT="${release_root}"
 
-mkdir -p "${TARGET}"
-cp -a "${RELEASE_ROOT}/." "${TARGET}/"
-
-release_is_complete "${TARGET}"
-touch "${TARGET}/.complete"
-prune_old_releases
-echo "Ace Player Neo ${VERSION}: release lista"
+if ! install_release "${RELEASE_ROOT}"; then
+  echo "Ace Player Neo ${VERSION}: la release descargada no se pudo instalar" >&2
+  exit 1
+fi
+finish "release lista"

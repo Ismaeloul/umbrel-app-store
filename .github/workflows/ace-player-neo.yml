@@ -1,45 +1,72 @@
-name: Ace Player Neo · 0.6.59
+name: Ace Player Neo · carpeta de la app (0.7.0 y 0.6.59)
 
-# Corre los tests de la app en cada PR y en cada push a main que la toque.
-# Hasta ahora solo se ejecutaban a mano en el PC: 114 tests que vigilan que
-# manifiesto, compose, hook, servidor y service worker vayan a la par.
+# Tests de la carpeta de la app de Umbrel (ismaeloul-ace-player-neo/), sin
+# dependencias (node --test):
 #
-# Solo mira la carpeta de la app de Umbrel (ismaeloul-ace-player-neo/), que
-# sigue en la 0.6.59. La v2 (ace-player-neo/) tiene su propia CI en ci.yml y
-# no se pisan. Cuando la carpeta pase a la 0.7.0 y ya no tenga tests/, el job
-# lo avisa y pasa en vez de fallar; entonces se puede retirar este fichero.
+#   tests/release.test.js     coherencia del paquete que se publica: manifiesto,
+#                             Compose, hook, releases/<versión actual>
+#                             (REQUIRED_FILES, SHA256SUMS, service worker),
+#                             imágenes por digest, /native/* en la lista blanca,
+#                             límites y el vigilante de monitoring/.
+#   tests/legacy-0.6.59/      los 133 tests de la 0.6.59 contra releases/0.6.59,
+#                             que se queda en el repo como plan de vuelta atrás
+#                             (ace-player-neo/docs/despliegue.md), con su Compose y
+#                             su hook guardados en legacy-0.6.59/paquete/.
+#
+# Que la release commiteada sea exactamente la que sale del código lo comprueba
+# ci.yml (job "Build, tamaño y humo", pnpm check:release). La v2 (ace-player-neo/)
+# tiene allí el resto de su CI.
 
 on:
   pull_request:
     paths:
       - 'ismaeloul-ace-player-neo/**'
+      - 'ace-player-neo/deploy/umbrel/**'
+      - '.gitattributes'
       - '.github/workflows/ace-player-neo.yml'
   push:
-    branches: [main]
     paths:
       - 'ismaeloul-ace-player-neo/**'
+      - 'ace-player-neo/deploy/umbrel/**'
+      - '.gitattributes'
       - '.github/workflows/ace-player-neo.yml'
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: ismaeloul-ace-player-neo
     env:
-      # El servidor arranca la sincronizacion de listas al cargarse; en CI no
-      # hay que salir a internet.
+      # El servidor de la 0.6.59 arranca la sincronizacion de listas al
+      # cargarse; en CI no hay que salir a internet.
       AUTO_SYNC: "false"
     steps:
       - uses: actions/checkout@v4
+        with:
+          # La historia hace falta para comparar con el commit de la 0.6.59.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Tests del servidor y del reproductor
+      - name: Coherencia del paquete de Umbrel (versión actual)
+        if: ${{ !cancelled() }}
+        run: node --test tests/release.test.js
+      - name: 0.6.59 (vuelta atrás) — servidor y reproductor
+        if: ${{ !cancelled() }}
+        run: node --test tests/legacy-0.6.59/server.test.js tests/legacy-0.6.59/player-controller.test.js
+      - name: La 0.6.59 de vuelta atrás sigue siendo la publicada
+        if: ${{ !cancelled() }}
         run: |
-          if [ ! -f tests/server.test.js ]; then
-            echo "::notice::La carpeta de la app ya no es la 0.6.59 (sin tests/): nada que probar aquí."
-            exit 0
-          fi
-          node --test tests/server.test.js tests/player-controller.test.js
+          # Es lo que se copia para una 0.7.1 de vuelta atrás: release, Compose
+          # y hook tienen que seguir siendo, byte a byte, los del commit que
+          # publicó la 0.6.59 en main.
+          base=22de27100749f2c02badd655e32f9bddeb1a0cf1
+          git diff --exit-code "${base}" HEAD -- releases/0.6.59
+          git show "${base}:ismaeloul-ace-player-neo/docker-compose.yml" | cmp - tests/legacy-0.6.59/paquete/docker-compose.yml
+          git show "${base}:ismaeloul-ace-player-neo/hooks/pre-start" | cmp - tests/legacy-0.6.59/paquete/hooks/pre-start

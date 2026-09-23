@@ -5,12 +5,14 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { test } = require("node:test");
 
-const manifest = fs.readFileSync(path.join(__dirname, "../umbrel-app.yml"), "utf8");
-const releaseVersion = manifest.match(/^version:\s*"([^"]+)"/m)?.[1];
+/* Siempre la release de la 0.6.59, que se queda en el repo como plan de
+   vuelta atras (ver server.test.js). ACE_LEGACY_VERSION=0.7.1 prueba la
+   0.7.1 de vuelta atras. */
+const releaseVersion = process.env.ACE_LEGACY_VERSION || "0.6.59";
+const releaseDir = path.join(__dirname, "..", "..", "releases", releaseVersion);
+assert.ok(fs.existsSync(releaseDir), `falta ${releaseDir}`);
 const { NeoPlayerController, readSeekWindow, resolveLiveTarget } = require(path.join(
-  __dirname,
-  "../releases",
-  releaseVersion,
+  releaseDir,
   "player-controller.js"
 ));
 

@@ -20,6 +20,12 @@ export const REPO_DIR = path.resolve(MONOREPO_DIR, '..');
 export const APP_DIR = path.join(REPO_DIR, 'ismaeloul-ace-player-neo');
 export const LEGACY_VERSION = '0.6.59';
 export const LEGACY_RELEASE_DIR = path.join(APP_DIR, 'releases', LEGACY_VERSION);
+/**
+ * Compose y hook de la 0.6.59 tal cual. Desde la 0.7.0 la carpeta de la app
+ * lleva los nuevos; estos se guardan junto a sus tests para el plan de vuelta
+ * atrás (docs/despliegue.md).
+ */
+export const LEGACY_PACKAGE_DIR = path.join(APP_DIR, 'tests', 'legacy-0.6.59', 'paquete');
 export const UMBREL_DIR = path.join(MONOREPO_DIR, 'deploy', 'umbrel');
 export const COMPOSE_TEMPLATE = path.join(UMBREL_DIR, 'docker-compose.yml');
 export const NGINX_TEMPLATE = path.join(UMBREL_DIR, 'nginx.conf');

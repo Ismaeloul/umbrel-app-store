@@ -1,14 +1,18 @@
 // Compose de la 0.7.0 (deploy/umbrel/docker-compose.yml) frente al de la
-// 0.6.59, que es lo que hoy corre en el Umbrel: solo puede cambiar lo que dicen
-// arquitectura §11.2 y empaquetado §7.3. También la pila local, el Dockerfile y
-// sus ignores, que tienen que usar las mismas imágenes.
+// 0.6.59 (guardado en ismaeloul-ace-player-neo/tests/legacy-0.6.59/paquete para
+// volver atrás): solo puede cambiar lo que dicen arquitectura §11.2 y
+// empaquetado §7.3. También la pila local, el Dockerfile y sus ignores, que
+// tienen que usar las mismas imágenes, y que la carpeta de la app publica la
+// plantilla tal cual.
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseNginx, findAll } from '../../scripts/lib/nginx-conf.mjs';
 import {
   APP_DIR,
+  LEGACY_PACKAGE_DIR,
   COMPOSE_TEMPLATE,
+  HOOK_TEMPLATE,
   MONOREPO_DIR,
   NGINX_TEMPLATE,
   monorepoVersion,
@@ -20,7 +24,9 @@ import {
 const VERSION = monorepoVersion();
 const RAW = readText(COMPOSE_TEMPLATE);
 const COMPOSE = readCompose(COMPOSE_TEMPLATE);
-const LEGACY = readCompose(path.join(APP_DIR, 'docker-compose.yml'));
+const LEGACY = readCompose(path.join(LEGACY_PACKAGE_DIR, 'docker-compose.yml'));
+/** Lo que se publica: la carpeta de la app lleva la plantilla tal cual. */
+const PUBLISHED = readText(path.join(APP_DIR, 'docker-compose.yml'));
 const LOCAL_FILE = path.join(MONOREPO_DIR, 'deploy', 'local', 'compose.local.yml');
 const LOCAL = readCompose(LOCAL_FILE);
 const DOCKERFILE = readText(path.join(MONOREPO_DIR, 'apps', 'server', 'Dockerfile'));
@@ -170,6 +176,13 @@ describe('Compose de Umbrel (plantilla 0.7.0)', () => {
   it('texto con LF y sin secretos ni IPs privadas escritas', () => {
     expect(RAW).not.toContain('\r');
     expect(RAW).not.toMatch(/\b(10|192\.168|172\.(1[6-9]|2\d|3[01]))\.\d+\.\d+/);
+  });
+
+  it('la carpeta de la app publica esta plantilla y este hook tal cual', () => {
+    expect(PUBLISHED).toBe(RAW);
+    expect(readText(path.join(APP_DIR, 'hooks', 'pre-start'))).toBe(readText(HOOK_TEMPLATE));
+    const manifest = readText(path.join(APP_DIR, 'umbrel-app.yml'));
+    expect(/^version: "([^"]+)"$/m.exec(manifest)?.[1]).toBe(VERSION);
   });
 });
 

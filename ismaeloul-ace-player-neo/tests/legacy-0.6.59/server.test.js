@@ -15,13 +15,27 @@ process.env.AUTO_SYNC = "false";
 // secreto compartido backend <-> engine-control, como lo pone el compose
 process.env.ENGINE_CONTROL_TOKEN = "prueba-token";
 
-const manifest = fs.readFileSync(path.join(__dirname, "../umbrel-app.yml"), "utf8");
-const releaseVersion = manifest.match(/^version:\s*"([^"]+)"/m)?.[1];
-assert.ok(releaseVersion, "umbrel-app.yml debe declarar una version");
-const compose = fs.readFileSync(path.join(__dirname, "../docker-compose.yml"), "utf8");
+/* Tests de la 0.6.59. Desde la 0.7.0 la carpeta de la app lleva otra version,
+   pero releases/0.6.59 se queda en el repo como plan de vuelta atras
+   (ace-player-neo/docs/despliegue.md): estos tests prueban SIEMPRE esa
+   release, con el Compose y el hook de la 0.6.59 guardados tal cual en
+   paquete/, nunca los de la version actual.
+   Para probar la 0.7.1 de vuelta atras (la 0.6.59 con otro numero), desde la
+   raiz del repo:
+     ACE_LEGACY_VERSION=0.7.1 ACE_LEGACY_PACKAGE_DIR=ismaeloul-ace-player-neo \
+       node --test ismaeloul-ace-player-neo/tests/legacy-0.6.59/*.test.js */
+const APP_DIR = path.join(__dirname, "..", "..");
+const releaseVersion = process.env.ACE_LEGACY_VERSION || "0.6.59";
+const packageDir = path.resolve(process.env.ACE_LEGACY_PACKAGE_DIR || path.join(__dirname, "paquete"));
+const releaseDir = path.join(APP_DIR, "releases", releaseVersion);
+const manifestFile = path.join(packageDir, "umbrel-app.yml");
+const manifestVersion = fs.existsSync(manifestFile)
+  ? fs.readFileSync(manifestFile, "utf8").match(/^version:\s*"([^"]+)"/m)?.[1]
+  : releaseVersion;
+const compose = fs.readFileSync(path.join(packageDir, "docker-compose.yml"), "utf8");
 const composeReleaseVersions = [...compose.matchAll(/\/releases\/(\d+\.\d+\.\d+)\//g)].map((match) => match[1]);
-const preStart = fs.readFileSync(path.join(__dirname, "../hooks/pre-start"), "utf8");
-const app = require(path.join(__dirname, "../releases", releaseVersion, "server.js"));
+const preStart = fs.readFileSync(path.join(packageDir, "hooks/pre-start"), "utf8");
+const app = require(path.join(releaseDir, "server.js"));
 
 const ID_A = "a".repeat(40);
 const ID_B = "b".repeat(40);
@@ -49,16 +63,17 @@ function seedState() {
 }
 
 test("la release de Umbrel es coherente y el hook no fija una version manual", () => {
+  assert.equal(manifestVersion, releaseVersion);
   assert.deepEqual([...new Set(composeReleaseVersions)], [releaseVersion]);
   assert.doesNotMatch(preStart, /readonly VERSION="\d+\.\d+\.\d+"/);
   assert.match(preStart, /docker-compose\.yml/);
   assert.match(preStart, /MANIFEST_VERSION/);
-  assert.ok(fs.existsSync(path.join(__dirname, "../releases", releaseVersion, "server.js")));
-  assert.ok(fs.existsSync(path.join(__dirname, "../releases", releaseVersion, "player-controller.js")));
+  assert.ok(fs.existsSync(path.join(releaseDir, "server.js")));
+  assert.ok(fs.existsSync(path.join(releaseDir, "player-controller.js")));
 });
 
 test("la interfaz actual incluye agenda por todos los gustos y un reproductor NEO propio", () => {
-  const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
+  const html = fs.readFileSync(path.join(releaseDir, "index.html"), "utf8");
   for (const id of ["neoControls", "neoPlayerMenu", "matchCenter", "sourceInspector", "veilHealth", "veilReport", "veilExternalHash"]) {
     assert.match(html, new RegExp(`id=["']${id}["']`));
   }
@@ -1397,7 +1412,7 @@ test("la IA nunca convierte el canal principal en el 2", async () => {
 });
 
 test("la interfaz corrige el hash externo, Hypermotion y el boton de pegar", () => {
-  const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
+  const html = fs.readFileSync(path.join(releaseDir, "index.html"), "utf8");
   // el tipo de un hash pegado no se puede saber mirandolo: se marca desconocido
   assert.match(html, /ih:null,source:'manual'/);
   assert.match(html, /function reintentarComoInfohash\(id\)/);
@@ -1465,7 +1480,7 @@ test("la marca paraguas conserva su familia aunque la IA este activa", async () 
 test("el umbral de canal exacto esta nombrado, no repetido a mano", () => {
   /* Estaba escrito a pelo en siete sitios que significan lo mismo. Cambiar uno
      y dejar los otros seis en silencio es un fallo esperando su turno. */
-  const server = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "server.js"), "utf8");
+  const server = fs.readFileSync(path.join(releaseDir, "server.js"), "utf8");
   assert.doesNotMatch(server, /score >= 92\b/, "quedan comparaciones con el 92 a pelo");
   assert.ok(server.split("RESOLUTION_EXACT_SCORE").length - 1 >= 8, "la constante debe usarse en todos los sitios");
 });
@@ -1475,7 +1490,7 @@ test("el emparejador del cliente y el del servidor dicen lo mismo", () => {
      en index.html. Si divergen, el boton dice "Buscar canal" mientras el
      servidor si encuentra el canal: un fallo mudo y muy molesto de perseguir.
      Ya paso una vez. Este test compara las dos sobre nombres reales. */
-  const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
+  const html = fs.readFileSync(path.join(releaseDir, "index.html"), "utf8");
   const bloque = (re) => { const m = re.exec(html); return m ? m[0] : ""; };
   const funcion = (nombre) => {
     const inicio = html.indexOf(`function ${nombre}(`);
@@ -1726,7 +1741,7 @@ test("Para ti: la seleccion España no cuela LaLiga Hypermotion", () => {
   /* La regla de competiciones nacionales miraba si la liga "incluye" laliga,
      y "laliga hypermotion" la incluye: Segunda se colaba en Para ti sin
      tenerla marcada. Se prueba la funcion real de la pagina. */
-  const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
+  const html = fs.readFileSync(path.join(releaseDir, "index.html"), "utf8");
   const bloque = (re) => { const m = re.exec(html); return m ? m[0] : ""; };
   const funcion = (nombre) => {
     const inicio = html.indexOf(`function ${nombre}(`);
@@ -1765,8 +1780,8 @@ test("servidor y service worker declaran la version del manifiesto", () => {
      el numero estaba escrito a mano en dos sitios que ninguna release tocaba.
      Con la cache del service worker sin renovar, el telefono conservaba el
      player-controller de la version anterior. */
-  const server = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "server.js"), "utf8");
-  const sw = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "sw.js"), "utf8");
+  const server = fs.readFileSync(path.join(releaseDir, "server.js"), "utf8");
+  const sw = fs.readFileSync(path.join(releaseDir, "sw.js"), "utf8");
   assert.match(server, new RegExp(`^const APP_VERSION = "${releaseVersion.replace(/\./g, "\.")}";`, "m"));
   assert.match(server, new RegExp(`"User-Agent": "AcePlayerNeo/${releaseVersion.replace(/\./g, "\.")}"`));
   assert.match(sw, new RegExp(`^const VERSION = "aceneo-${releaseVersion.replace(/\./g, "\.")}";`, "m"));
@@ -1853,7 +1868,7 @@ test("si el TS ya dice el codec, el comprobador no lanza ffprobe", async () => {
 });
 
 test("la pagina arranca la primera fuente verificada y salta a la siguiente si falla", () => {
-  const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
+  const html = fs.readFileSync(path.join(releaseDir, "index.html"), "utf8");
   assert.match(html, /function esperarFuenteVerificada\(/);
   assert.match(html, /function arrancarPrimeraVerificada\(/);
   // al entrar a un partido con comprobador ya no se reproduce a ciegas
@@ -1868,7 +1883,7 @@ test("la pagina arranca la primera fuente verificada y salta a la siguiente si f
 test("los avisos de la señal van bajo el reproductor y los toasts quedan pequeños en la esquina", () => {
   /* Los toasts de 14 px apilados de tres en tres en el centro de la pantalla
      tapaban el video justo cuando la señal daba guerra. */
-  const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
+  const html = fs.readFileSync(path.join(releaseDir, "index.html"), "utf8");
   assert.match(html, /id="playerNotice"/);
   assert.match(html, /function avisoReproductor\(/);
   assert.match(html, /if\(!opciones\.action&&esAvisoDeReproductor\(iconName,type\)\)\{ avisoReproductor\(iconName,msg,type\); return; \}/);
@@ -1880,7 +1895,7 @@ test("los avisos de la señal van bajo el reproductor y los toasts quedan peque�
 
 /* ---------- 0.6.57: repaso de robustez del backend ---------- */
 
-const serverSource = () => fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "server.js"), "utf8");
+const serverSource = () => fs.readFileSync(path.join(releaseDir, "server.js"), "utf8");
 
 test("el cuerpo se lee antes que el estado: una peticion lenta no pisa a la rapida", async () => {
   /* Con fn(readState(), await readBody(req)) el estado se leia al llegar las
@@ -2051,7 +2066,7 @@ test("si ipfs.io se satura se prueba la misma ruta en dweb.link, y a la inversa"
 test("engine-control exige el token compartido y el backend lo envia", async () => {
   /* Todos los contenedores del NAS comparten red: sin token, cualquier app
      podia reiniciar el motor a media emision. */
-  const control = require(path.join(__dirname, "../releases", releaseVersion, "engine-control.js"));
+  const control = require(path.join(releaseDir, "engine-control.js"));
   const srv = control.createServer();
   await new Promise((resolve) => srv.listen(0, "127.0.0.1", resolve));
   const base = `http://127.0.0.1:${srv.address().port}`;
@@ -2085,7 +2100,7 @@ test("los carruseles del movil no vuelven al principio con cada repintado", () =
   /* El selector de fuentes se repinta cada 1,5 s durante el escaneo y la tira
      de dias con cada renderFootball(): rehacer el innerHTML devolvia el
      scroll horizontal al principio mientras se deslizaba con el dedo. */
-  const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
+  const html = fs.readFileSync(path.join(releaseDir, "index.html"), "utf8");
   // el selector de fuentes actualiza los botones en sitio cuando la lista no cambia
   assert.match(html, /const mismaEstructura=Boolean\(label&&viewport\)&&existentes\.length===buttons\.length/);
   assert.match(html, /if\(boton\.className!==b\.clase\) boton\.className=b\.clase;/);
@@ -2223,7 +2238,7 @@ test("los directorios de IPFS se bajan sin pasarela publica y cada bloque se com
   const src = serverSource();
   assert.match(src, /if \(!ipfsUrlParts\(url\)\) return fetchDirectoryFromGateway\(url\);/);
   assert.match(src, /return await fetchIpfsDirectory\(url\);/);
-  const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
+  const html = fs.readFileSync(path.join(releaseDir, "index.html"), "utf8");
   assert.match(html, /if\(error==='ipfs_not_found'\) return 'la lista ya no está en esa dirección de IPFS';/);
 });
 
@@ -2263,12 +2278,12 @@ test("el aviso de que un canal sigue renueva el veredicto sin contar como intent
   assert.equal(data.success, true);
   assert.equal(JSON.stringify(app.readState().sourceStats?.hashes?.[id] ?? null), antes);
   assert.equal(app.playerVerdictHeld(id), true);
-  const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
+  const html = fs.readFileSync(path.join(releaseDir, "index.html"), "utf8");
   assert.match(html, /body:JSON\.stringify\(\{id:intento\.id,resultado:'sigue'\}\)/);
 });
 
 test("la pagina no deja que el sondeo pise lo que vio el reproductor", () => {
-  const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
+  const html = fs.readFileSync(path.join(releaseDir, "index.html"), "utf8");
   assert.match(html, /const visto=playerConfirms\|\|playerChecking\?null:veredictoDelReproductor\(source\);/);
   assert.match(html, /source\.playerVerdict=\{state:source\.probeState,reason:motivo,at:Date\.now\(\)\};/);
   // una fuente que ya se veia tiene tres reconexiones tambien en automatico
@@ -2296,7 +2311,7 @@ test("el iPhone arranca con colchon y el adaptador sobrevive a los cortes del mo
   assert.match(src, /ready\.segments >= 2 && ready\.seconds >= REMUX_READY_SECONDS/);
   // un stop con la ficha de un enganche anterior no tumba la sesion nueva
   assert.match(src, /session\.clients\.get\(deviceId\) !== token\) \{\s*return send\(res, 200, \{ success: true, stopped: false, detached: false, stale: true \}\);/);
-  const html = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "index.html"), "utf8");
+  const html = fs.readFileSync(path.join(releaseDir, "index.html"), "utf8");
   assert.match(html, /body:JSON\.stringify\(\{id,dev:DEV_ID,keepAlive,token\}\)/);
   assert.match(html, /\$\('video'\)\.addEventListener\('error', cortePlayerIos\);/);
   assert.match(html, /\$\('video'\)\.addEventListener\('ended', cortePlayerIos\);/);
@@ -2306,7 +2321,7 @@ test("el iPhone arranca con colchon y el adaptador sobrevive a los cortes del mo
 });
 
 test("detras del HTTPS de Umbrel las redirecciones del motor no llevan a http://", () => {
-  const nginx = fs.readFileSync(path.join(__dirname, "../releases", releaseVersion, "nginx.conf"), "utf8");
+  const nginx = fs.readFileSync(path.join(releaseDir, "nginx.conf"), "utf8");
   assert.doesNotMatch(nginx, /proxy_redirect[^;]*\$scheme/);
   assert.match(nginx, /proxy_redirect ~\^http:\/\/\[\^\/\]\+\/\(ace\|content\)\/\(\.\*\)\$ \/\$1\/\$2;/);
 });
