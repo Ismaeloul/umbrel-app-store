@@ -159,3 +159,21 @@ Además, yo (orquestador): pruebas contra el motor real en Docker local
 - 07:45: Isma ve las capturas de A, B y C y **confirma la A «Luz de focos»**.
 
 - 09:13: cuota reiniciada. Relanzo el workflow como reanudación (`wf_ad883ce2-ded`): los 2 verificadores del backend y el armazón B0 retoman lo que dejaron sin commitear; después las 5 vistas, 3 a la vez.
+- 10:45: FASE 2 construida (8/8 agentes): verificadores del backend
+  (seguridad: 2 medios y 2 leves arreglados; comportamientos: 0 reglas mal
+  portadas) y web completa. Comprobado por mí: servidor 1293, shared 66, web
+  609, build, JS inicial 103 KB gzip. Commit `0314bdc`.
+- 10:50: la web v2 abierta en el Chrome de Isma ("Browser 1", elegido por
+  él) y **probada contra el motor AceStream real** (pila local
+  `deploy/local`, perfil `real`, con una copia de su `state.json` en la
+  carpeta de trabajo ignorada): migración en vivo, agenda real, reproducción
+  de MOVISTAR PLUS en < 5 s, reconexiones 1-2-3 de 3, mini-reproductor,
+  cierre de todas las sesiones y 0 errores de consola. GIF en
+  `docs/capturas/gifs/`. Detalle en `analisis/motor-real.md` §8.
+- 10:55: workflow `wf_f395aad0-30d` (cierre de la FASE 2: E2E, visual +
+  axe + Lighthouse, verificador del inventario) y **soak real de 30 min**
+  con `scripts/soak-real.mjs` (en segundo plano).
+- 11:05: FASE 3 (iOS) lanzada en paralelo (workflow `wf_8855d478-21f`,
+  agentes en serie: núcleo + CI, reproductor + pantallas, pruebas +
+  documentación). Hacen commit y push SOLO de `apps/ios` y
+  `.github/workflows/ios.yml` a `rewrite-v2` para compilar en GitHub Actions.

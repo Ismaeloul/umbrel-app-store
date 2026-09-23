@@ -84,3 +84,26 @@ Node lo rechaza con `HPE_INVALID_HEADER_TOKEN`).
 Android, y la entrada actual del remux de iOS) es de un solo consumidor. Para
 que dos dispositivos vean el mismo canal a la vez, la sesión tiene que ser
 HLS. Ver la decisión D5 en `docs/decisiones.md`.
+
+## 9. Soak real de 30 minutos (23-sep-2026, 11:06-11:36)
+
+`node scripts/soak-real.mjs --id <MOVISTAR PLUS FHD> --min 30` contra la pila
+local con el motor real (cliente web: `/api/v1/channels/:id/stream`, vídeo por
+nginx, latido cada 15 s, release al final):
+
+| Medida | Resultado |
+|---|---|
+| Duración | 30 min (180 ventanas de 10 s) |
+| Aperturas de sesión | 1 (ninguna reapertura) |
+| Cortes | **0** |
+| Ventanas sin datos | 0 |
+| Primer byte | 608 ms |
+| Datos recibidos | 851 MB |
+| Caudal medio / mínimo / máximo | 3,8 / 1,7 / 10,1 Mbit/s |
+| Sesión del motor | abierta a las 09:06:28 Z y cerrada a las 09:36:29 Z al soltarla |
+
+Hallazgo anotado: el motor real responde 500 ("download not found" o "start
+timeout") en `/ace/r/…` durante la precarga de una sesión recién abierta; el
+reproductor web y el script reintentan hasta que entrega. Una fuente que ya
+no tiene pares se queda en ese 500 (lo que se vio con la otra fuente de
+MOVISTAR PLUS, que dejó de emitir tras la prueba en el navegador).
