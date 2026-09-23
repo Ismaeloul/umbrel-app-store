@@ -1,0 +1,16 @@
+{
+  "hash": {
+    "intentos": 3.5,
+    "exitos": 2.8,
+    "caidas": 0.4,
+    "segundos": 5400,
+    "ultimo": 1790188200000
+  },
+  "proveedor": {
+    "intentos": 10,
+    "exitos": 8,
+    "caidas": 0.4,
+    "segundos": 5400,
+    "ultimo": 1790188200000
+  }
+}

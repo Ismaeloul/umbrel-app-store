@@ -1,0 +1,12 @@
+{
+  "type": "playback.handoff",
+  "data": {
+    "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+    "viewerIds": ["viewer_tab01"],
+    "byDeviceId": "dev_iphone01",
+    "byClient": "ios",
+    "hash": "b2c3d4e5f60718293a4b5c6d7e8f901234567890",
+    "title": "M+ LaLiga",
+    "reason": "other_channel"
+  }
+}

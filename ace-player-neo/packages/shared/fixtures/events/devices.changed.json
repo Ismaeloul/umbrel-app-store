@@ -1,0 +1,1 @@
+{ "type": "devices.changed", "data": { "reason": "paired", "deviceId": "dev_iphone01" } }

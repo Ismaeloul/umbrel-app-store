@@ -1,0 +1,9 @@
+{
+  "//": "Typecheck propio del motor falso: apps/server/tsconfig.json es de otro módulo y el motor falso tiene que poder comprobarse solo (npx tsc --noEmit -p apps/server/test/fake-engine).",
+  "extends": "../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["./**/*.ts"]
+}

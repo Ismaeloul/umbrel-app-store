@@ -1,0 +1,19 @@
+# Contexto de apps/server/Dockerfile. OJO: la imagen se construye desde la raiz
+# del monorepo con -f apps/server/Dockerfile, y en ese caso BuildKit NO lee este
+# fichero sino apps/server/Dockerfile.dockerignore. Este queda para quien
+# construya con otra herramienta que solo conozca .dockerignore; las reglas
+# tienen que ser las mismas que alli (lo comprueba un test).
+**/node_modules
+**/dist
+**/coverage
+**/test-results
+**/playwright-report
+**/*.tsbuildinfo
+**/.vite
+**/.cache
+**/.data
+**/.env
+.git
+apps/ios
+docs
+deploy/local/.work

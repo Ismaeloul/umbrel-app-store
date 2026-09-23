@@ -1,0 +1,10 @@
+{
+  "device": {
+    "id": "dev_iphone01",
+    "name": "iPhone de prueba",
+    "platform": "ios",
+    "createdAt": "2026-09-23T18:30:00.000Z",
+    "lastSeenAt": "2026-09-23T18:30:00.000Z",
+    "revokedAt": "2026-09-23T18:30:00.000Z"
+  }
+}

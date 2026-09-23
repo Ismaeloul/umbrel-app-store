@@ -1,0 +1,9 @@
+{
+  "preferences": {
+    "onboardingComplete": true,
+    "country": "Spain",
+    "leagues": ["LaLiga", "Champions League"],
+    "teams": ["Real Madrid"],
+    "nationalities": ["España"]
+  }
+}

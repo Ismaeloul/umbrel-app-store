@@ -1,0 +1,21 @@
+# Contexto de apps/server/Dockerfile (se construye desde la raiz del monorepo).
+# BuildKit lee ESTE fichero porque se llama como el Dockerfile; tiene que
+# coincidir con apps/server/.dockerignore (lo comprueba un test).
+#
+# Fuera todo lo que no hace falta para compilar: los node_modules del PC (en
+# Windows son enlaces a rutas locales que Linux no puede seguir), salidas de
+# build, la app de iOS, la documentacion y los datos de la pila local.
+**/node_modules
+**/dist
+**/coverage
+**/test-results
+**/playwright-report
+**/*.tsbuildinfo
+**/.vite
+**/.cache
+**/.data
+**/.env
+.git
+apps/ios
+docs
+deploy/local/.work

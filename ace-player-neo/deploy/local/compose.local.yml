@@ -1,0 +1,212 @@
+# Pila local de pruebas de Ace Player Neo. NO es el Compose de Umbrel
+# (deploy/umbrel/docker-compose.yml): aquí no hay app_proxy de umbreld, así que
+# una pasarela falsa hace su papel, y el motor puede ser el real o uno falso.
+#
+# Antes de levantarla: node deploy/local/prepare.mjs (monta la release en
+# deploy/local/.work/releases y empaqueta el motor falso).
+#
+#   docker compose -f deploy/local/compose.local.yml --profile falso up
+#   docker compose -f deploy/local/compose.local.yml --profile real up
+#
+# Siempre hace falta uno de los dos perfiles: nginx resuelve el nombre del motor
+# al arrancar. Mismos digests que producción. Los nombres de contenedor de
+# producción van como alias de red (la nginx.conf y el servidor los usan tal
+# cual), así que esta pila no choca con contenedores que se llamen así.
+#
+# Puertos, solo en 127.0.0.1:
+#   17792  pasarela falsa (como el 7792 de Umbrel; login en /__pasarela/login)
+#   17793  nginx directo, sin pasarela (para depurar)
+#   17794  la imagen del Dockerfile (perfil test)
+name: aceneo-local
+
+x-node-image: &node-image node:24.19.0-alpine3.24@sha256:d32cdf619f63fe0471182d08996dd516c6275bb5fd31ae06e55a570bd9e1ad43
+x-nginx-image: &nginx-image nginx:1.30.4-alpine3.24@sha256:97d490c12ba55b4946b01546d1c3ed324e8d41ab1c9fcb2a616aa470620e5b46
+x-ace-image: &ace-image wafy80/acestream@sha256:8ffbc03916d8e33d321430f9ca1731ef3b058e72eeb9d9f7b322e9f7de654edc
+
+services:
+  # Imita la pasarela de umbreld: lista blanca /native/* decidida con la ruta
+  # normalizada y reenvío de la URL cruda (fake-gateway/gateway.mjs).
+  pasarela:
+    image: *node-image
+    init: true
+    command: ["node", "/pasarela/gateway.mjs"]
+    environment:
+      APP_HOST: ismaeloul-ace-player-neo_nginx_1
+      APP_PORT: "80"
+      PROXY_AUTH_ADD: "true"
+      PROXY_AUTH_WHITELIST: "/native/*"
+      FAKE_GATEWAY_SESSION: "${FAKE_GATEWAY_SESSION:-sesion-local-de-pruebas}"
+    volumes:
+      - ./fake-gateway:/pasarela:ro
+    ports:
+      - "127.0.0.1:17792:7792"
+    depends_on:
+      - nginx
+
+  nginx:
+    image: *nginx-image
+    networks:
+      default:
+        aliases: [ismaeloul-ace-player-neo_nginx_1]
+    depends_on:
+      storage:
+        condition: service_healthy
+      acestream:
+        condition: service_started
+        required: false
+      motor_falso:
+        condition: service_started
+        required: false
+    volumes:
+      - ./.work/releases:/releases:ro
+    ports:
+      - "127.0.0.1:17793:80"
+    # El mismo comando que en producción.
+    command: >
+      sh -c "rm -rf /www && mkdir -p /www &&
+             cp -r /releases/${ACE_VERSION:-0.7.0}/web/. /www/ &&
+             cp /releases/${ACE_VERSION:-0.7.0}/nginx.conf /etc/nginx/conf.d/default.conf &&
+             exec nginx -g 'daemon off;'"
+
+  storage:
+    image: *node-image
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    working_dir: /app
+    networks:
+      default:
+        aliases: [ismaeloul-ace-player-neo_storage_1]
+    environment: &storage-env
+      NODE_ENV: production
+      ALLOW_PRIVATE_SYNC_URLS: "false"
+      THESPORTSDB_API_KEY: "${THESPORTSDB_API_KEY:-123}"
+      FOOTBALL_COUNTRY: "Spain"
+      FOOTBALL_DAYS: "14"
+      ACESTREAM_HOST: "ismaeloul-ace-player-neo_acestream_1"
+      ACESTREAM_SCANNER_HOST: "ismaeloul-ace-player-neo_acestream_scanner_1"
+      ACESTREAM_SCANNER_PORT: "6878"
+      ACESTREAM_SCANNER_TIMEOUT_MS: "24000"
+      ACESTREAM_SCANNER_SAMPLE_BYTES: "131072"
+      ACESTREAM_SCANNER_RETRY_DELAY_MS: "600000"
+      ENGINE_CONTROL_HOST: "ismaeloul-ace-player-neo_engine_control_1"
+      # Semilla de pruebas: la de verdad solo existe en el Umbrel. Se puede
+      # cambiar con APP_SEED en deploy/local/.env (ignorado por git).
+      ENGINE_CONTROL_TOKEN: "${APP_SEED:-semilla-local-solo-para-pruebas}"
+      ACE_SEED: "${APP_SEED:-semilla-local-solo-para-pruebas}"
+      OLLAMA_BASE_URL: "http://host.docker.internal:11434"
+      OLLAMA_EMBED_MODEL: "embeddinggemma:300m-qat-q4_0"
+      OLLAMA_TIMEOUT_MS: "12000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: sh -c "timeout 60 apk add ffmpeg >/dev/null 2>&1 || echo 'sin ffmpeg, remux iOS desactivado'; exec node /releases/${ACE_VERSION:-0.7.0}/server.js"
+    volumes:
+      - ./.work/releases:/releases:ro
+      - ./.work/data:/data
+      - ./.work/apk-cache:/etc/apk/cache
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/v1/health/live >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 8s
+      retries: 3
+      start_period: 90s
+    # Los mismos límites que en el NAS: así se mide lo que de verdad cabe.
+    mem_limit: 768m
+    pids_limit: 128
+
+  # --- Perfil "test": la imagen de apps/server/Dockerfile (arquitectura §11.4),
+  # corriendo como lo haria si algun dia sustituye a la release montada: sin
+  # root, disco de solo lectura y /tmp en memoria. nginx no la usa; se prueba
+  # directamente en 127.0.0.1:17794.
+  #   docker compose -f deploy/local/compose.local.yml --profile test up --build servidor_imagen
+  servidor_imagen:
+    profiles: [test]
+    build:
+      context: ../..
+      dockerfile: apps/server/Dockerfile
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    environment: *storage-env
+    volumes:
+      # Volumen con nombre: hereda el dueño (node) de /data de la imagen; una
+      # carpeta del PC montada aqui seria de root y el backend no podria escribir.
+      - datos-imagen:/data
+    ports:
+      - "127.0.0.1:17794:3000"
+    mem_limit: 768m
+    pids_limit: 128
+
+  # --- Perfil "falso": motor AceStream simulado (apps/server/test/fake-engine).
+  # Hace de motor y de comprobador a la vez. prepare.mjs lo empaqueta en
+  # .work/motor-falso/fake-engine.mjs; mientras no exista (cli.ts lo está
+  # escribiendo otro módulo), el contenedor espera y lo dice en su log.
+  motor_falso:
+    profiles: [falso]
+    image: *node-image
+    init: true
+    networks:
+      default:
+        aliases:
+          - ismaeloul-ace-player-neo_acestream_1
+          - ismaeloul-ace-player-neo_acestream_scanner_1
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "6878"
+      FAKE_ENGINE_HOST: "0.0.0.0"
+      FAKE_ENGINE_PORT: "6878"
+    volumes:
+      - ./.work/motor-falso:/motor:ro
+    command: >
+      sh -c "until [ -f /motor/fake-engine.mjs ]; do
+               echo 'motor falso: falta .work/motor-falso/fake-engine.mjs; ejecuta node deploy/local/prepare.mjs';
+               sleep 10;
+             done;
+             exec node /motor/fake-engine.mjs ${FAKE_ENGINE_ARGS:-}"
+
+  # --- Perfil "real": el motor de producción por el mismo digest. El P2P no se
+  # publica en el PC: con conexiones salientes basta.
+  acestream:
+    profiles: [real]
+    image: *ace-image
+    networks:
+      default:
+        aliases: [ismaeloul-ace-player-neo_acestream_1]
+    command: --client-console --bind-all --port 8621 --use-internal-buffering 1 --live-cache-type disk --live-cache-size 1610612736 --upload-limit 2000
+    mem_limit: 4g
+
+  acestream_scanner:
+    profiles: [real]
+    image: *ace-image
+    networks:
+      default:
+        aliases: [ismaeloul-ace-player-neo_acestream_scanner_1]
+    command: --client-console --bind-all --port 8622 --use-internal-buffering 1 --live-cache-type disk --live-cache-size 536870912 --upload-limit 1000
+    mem_limit: 3g
+
+  engine_control:
+    profiles: [real]
+    image: *node-image
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      default:
+        aliases: [ismaeloul-ace-player-neo_engine_control_1]
+    environment:
+      # El contenedor del motor de esta pila (proyecto aceneo-local).
+      ACESTREAM_CONTAINER: "aceneo-local-acestream-1"
+      ENGINE_CONTROL_TOKEN: "${APP_SEED:-semilla-local-solo-para-pruebas}"
+    command: node /releases/${ACE_VERSION:-0.7.0}/engine-control.js
+    volumes:
+      - ./.work/releases:/releases:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    mem_limit: 128m
+    pids_limit: 64
+
+volumes:
+  datos-imagen:

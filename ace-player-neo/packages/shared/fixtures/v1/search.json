@@ -1,0 +1,13 @@
+{
+  "query": "dazn",
+  "results": [
+    {
+      "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+      "title": "DAZN 1 HD",
+      "category": "Busqueda",
+      "availability": 0.9,
+      "bitrate": 450000,
+      "ih": true
+    }
+  ]
+}

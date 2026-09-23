@@ -1,0 +1,16 @@
+{
+  "session": { "id": "s_Q2FuYWxEZVBydWViYQ", "heartbeatMs": 15000, "expiresAfterMs": 45000 },
+  "url": "/native/api/v1/video/s_Q2FuYWxEZVBydWViYQ/index.m3u8?t=eyJzaWQiOiJzX1EyRnVZV3cifQ.firma",
+  "protocol": "hls-fmp4",
+  "remux": true,
+  "codec": { "video": "hevc", "audio": "aac", "source": "ffprobe" },
+  "latency": {
+    "mode": "balanced",
+    "initialBufferS": 6,
+    "rebuildS": 8,
+    "liveSync": null,
+    "ios": { "preferredForwardBufferDuration": 8, "liveEdgeOffsetS": 8 }
+  },
+  "stats": { "via": "sse" },
+  "handoff": false
+}

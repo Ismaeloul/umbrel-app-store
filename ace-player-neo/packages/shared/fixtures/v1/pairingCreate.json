@@ -1,0 +1,7 @@
+{
+  "code": "482913",
+  "expiresAt": "2026-09-23T18:35:00.000Z",
+  "ttlMs": 300000,
+  "pairUri": "aceneo://pair?u=http%3A%2F%2Fumbrel.local%3A7792&c=482913",
+  "qrSvg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 29 29\"></svg>"
+}

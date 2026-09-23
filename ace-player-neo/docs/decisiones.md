@@ -116,3 +116,17 @@ Probado contra el motor real (`docs/analisis/motor-real.md`):
   las tres copias de siempre.
 - **Por qué**: no quita nada y cumple el inventario. No se usa `vlc://`
   porque no está bien soportado en iOS ni en escritorio.
+
+## D8. La exploración visual (paso 2.0) se adelanta y corre a la vez que el backend
+
+- **Decisión**: la investigación de referencias y las 3 maquetas estáticas
+  (paso 2.0 y Parada 2.5) se hacen mientras los agentes escriben el backend.
+  Las vistas de verdad (FASE 2 propiamente dicha) siguen esperando a que el
+  backend tenga los tests en verde.
+- **Por qué**: las maquetas no dependen del backend, no son código de
+  producto y no pueden romper ningún test; hacerlas antes ahorra horas de una
+  noche que no da para todo en serie. Así se respeta la regla de no empezar
+  una fase con la anterior en rojo: lo que se adelanta es solo diseño.
+- **Navegador**: la extensión Claude in Chrome está bloqueada por AdGuard
+  (ver `pendiente.md`), así que las capturas se hacen con Playwright sobre tu
+  Chrome instalado (`channel: "chrome"`), que renderiza igual.

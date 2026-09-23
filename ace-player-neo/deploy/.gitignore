@@ -1,0 +1,4 @@
+# Lo que genera deploy/local/prepare.mjs (release, motor falso, datos y caché
+# de apk de la pila local) y la semilla local: nada de esto se sube.
+local/.work/
+local/.env

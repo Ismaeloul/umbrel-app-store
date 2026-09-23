@@ -1,0 +1,13 @@
+{
+  "type": "stream.stats",
+  "data": {
+    "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+    "viewerIds": ["viewer_tab01"],
+    "status": "dl",
+    "peers": 14,
+    "speedDown": 820,
+    "speedUp": 95,
+    "downloaded": 52428800,
+    "at": "2026-09-23T18:30:00.000Z"
+  }
+}

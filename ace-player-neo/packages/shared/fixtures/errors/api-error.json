@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "engine_unavailable",
+    "message": "El motor AceStream no responde. Prueba a reiniciarlo desde Ajustes.",
+    "requestId": "req-7f3a9c"
+  }
+}

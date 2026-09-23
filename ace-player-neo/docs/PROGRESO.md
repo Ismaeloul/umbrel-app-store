@@ -53,6 +53,22 @@
 - 22:47-23:00: 0.6.59 en local contra el motor real y pruebas de sesiones
   (`analisis/motor-real.md`); decisiones D3-D5.
 - 23:35: FASE 0 terminada (Parada 1 en `PARADAS.md`). Decisiones D6-D7.
+- 23:40: FASE 1, paso 1.0 lanzado (workflow `wf_8a9e75d2-b4f`): A0
+  contratos + esqueleto del servidor, FE motor AceStream falso y A7
+  empaquetado, cada uno con su verificador independiente.
+- 23:50: la extensión Claude in Chrome falla por AdGuard (`pendiente.md`);
+  las capturas se hacen con Playwright sobre el Chrome instalado
+  (`@playwright/test` 1.63.0 en la raíz, sin descargar navegadores).
+- 23:55: exploración visual adelantada (D8, workflow `wf_12c8280b-696`):
+  referencias, 3 direcciones con maquetas y capturas, 3 jurados y elección.
+- ~00:00: **límite de uso alcanzado** (14 agentes a la vez en dos
+  workflows). Murieron todos menos el de referencias
+  (`docs/diseno/referencias.md`, completo). Los demás dejaron ficheros
+  parciales en disco (shared/src, fake-engine, deploy, scripts, build.mjs).
+- 01:38: Isma reactiva. Relanzo el paso 1.0 como **reanudación** sobre lo
+  parcial (workflow `wf_75432a9b-19d`, 3 agentes, sin verificadores aparte:
+  los tests los paso yo). Las maquetas esperan a que termine para no volver
+  a quemar la cuota con muchos agentes a la vez.
 
 ## Agentes y workflows lanzados
 

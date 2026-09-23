@@ -1,0 +1,12 @@
+{
+  "deviceId": "dev_iphone01",
+  "token": "dev_iphone01.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  "device": {
+    "id": "dev_iphone01",
+    "name": "iPhone de prueba",
+    "platform": "ios",
+    "createdAt": "2026-09-23T18:30:00.000Z",
+    "lastSeenAt": "2026-09-23T18:30:00.000Z",
+    "revokedAt": null
+  }
+}
