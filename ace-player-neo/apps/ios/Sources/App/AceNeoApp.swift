@@ -13,6 +13,15 @@ struct AceNeoApp: App {
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
     }
 
+    /// Claro u oscuro a la fuerza solo para las capturas de la CI (nil: el del sistema).
+    private static var esquemaForzado: ColorScheme? {
+        switch ModoEjecucion.aparienciaForzada {
+        case "oscuro": ColorScheme.dark
+        case "claro": ColorScheme.light
+        default: nil
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             if ModoEjecucion.testsUnitarios {
@@ -22,6 +31,7 @@ struct AceNeoApp: App {
                 RootView()
                     .environment(modelo)
                     .tint(Tinta.acentoTinta)
+                    .preferredColorScheme(Self.esquemaForzado)
             }
         }
         .onChange(of: fase) { _, nueva in

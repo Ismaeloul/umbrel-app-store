@@ -46,9 +46,22 @@ public struct Entorno: Sendable {
     public static func actual() -> Entorno {
         #if DEBUG
             if ModoEjecucion.servidorSimulado { return ServidorSimulado.entorno() }
+            if ModoEjecucion.empezarDeCero { olvidarTodo() }
         #endif
         return real()
     }
+
+    #if DEBUG
+        /// Prueba contra el backend de verdad (`-AceNeoEmpezarDeCero`): sin
+        /// token, sin direcciones y sin caché, como recién instalada.
+        private static func olvidarTodo() {
+            try? KeychainTokenStore().borrarToken()
+            ServerConfigStore().borrar()
+            let cache = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("AceNeo", isDirectory: true)
+            try? FileManager.default.removeItem(at: cache)
+        }
+    #endif
 }
 
 /// Cómo se ha lanzado el proceso.
@@ -62,5 +75,22 @@ public enum ModoEjecucion {
     /// Pruebas de interfaz: servidor simulado y nada persistente.
     public static var servidorSimulado: Bool {
         ProcessInfo.processInfo.arguments.contains("-AceNeoServidorSimulado")
+    }
+
+    /// Prueba de interfaz contra el backend de verdad (pila E2E de la CI): la
+    /// app de siempre, pero arrancando sin emparejar. Solo cuenta en Debug.
+    public static var empezarDeCero: Bool {
+        ProcessInfo.processInfo.arguments.contains("-AceNeoEmpezarDeCero")
+    }
+
+    /// Apariencia forzada para las capturas (`-AceNeoApariencia claro|oscuro`,
+    /// que el sistema deja en el dominio de argumentos de `UserDefaults`).
+    /// Solo en Debug: en la IPA manda siempre la del sistema.
+    public static var aparienciaForzada: String? {
+        #if DEBUG
+            return UserDefaults.standard.string(forKey: "AceNeoApariencia")
+        #else
+            return nil
+        #endif
     }
 }

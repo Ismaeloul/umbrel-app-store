@@ -46,18 +46,22 @@ public final class AppModel {
     @ObservationIgnored private var monitorRed: NWPathMonitor?
     @ObservationIgnored private var estuvoEnSegundoPlano = false
 
-    public init(entorno: Entorno, motor: (any MotorVideo)? = nil) {
+    /// - Parameter reproductor: solo en los tests (uno sin vigilante ni esperas
+    ///   reales); si falta, se crea el de verdad con `motor` o con AVPlayer.
+    public init(entorno: Entorno, motor: (any MotorVideo)? = nil, reproductor: Reproductor? = nil) {
         self.entorno = entorno
         let tieneToken = ((try? entorno.tokens.leerToken()) ?? nil) != nil
         fase = tieneToken && !entorno.configuracion.leer().vacia ? .lista : .emparejar
-        let motorElegido: any MotorVideo = motor ?? Self.motorPorDefecto()
-        reproductor = Reproductor(
-            motor: motorElegido, servicio: ServicioReproduccionAPI(api: entorno.api), visor: IdentidadVisor.id(),
-            preferencias: .standard)
+        let elegido =
+            reproductor
+            ?? Reproductor(
+                motor: motor ?? Self.motorPorDefecto(), servicio: ServicioReproduccionAPI(api: entorno.api),
+                visor: IdentidadVisor.id(), preferencias: .standard)
+        self.reproductor = elegido
         pip = GestorPiP()
         avisos = Avisos()
         controles = ControlesSistema()
-        controles.conectar(reproductor)
+        controles.conectar(elegido)
         pip.alRestaurar = { [weak self] in self?.restaurarDesdePiP() }
         tareaAccesoPerdido = Task { [weak self] in
             for await _ in entorno.accesoPerdido {

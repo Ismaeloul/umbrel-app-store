@@ -27,12 +27,14 @@ apps/ios/
 │   ├── Design/              # tokens «Luz de focos», muelles, cristal y componentes
 │   └── Debug/               # servidor y motor de vídeo simulados para XCUITest (solo Debug)
 ├── Tests/
-│   ├── AceNeoTests/         # XCTest: núcleo, reproductor, reglas de fuentes y HLS real
-│   └── AceNeoUITests/       # XCUITest: emparejar, partido → mini → volver, borrar → deshacer
+│   ├── AceNeoTests/         # XCTest: núcleo, reproductor, centro de partido, reglas de fuentes y HLS real
+│   └── AceNeoUITests/       # XCUITest: emparejar, partido → mini → volver, borrar → deshacer,
+│                            #   capturas claro/oscuro y E2E contra el backend de verdad
 └── scripts/
     ├── build-ipa.sh                 # IPA sin firmar en un Mac (lo usa también la CI)
     ├── generar-recursos.mjs         # iconos PNG (Chrome + Playwright) y colores
-    └── generar-catalogo-errores.mjs # ErrorCatalog.swift desde packages/shared/src/errors.ts
+    ├── generar-catalogo-errores.mjs # ErrorCatalog.swift desde packages/shared/src/errors.ts
+    └── pila-e2e.mjs                 # motor falso + backend de verdad para el E2E (CI)
 ```
 
 ## Cómo se habla con el servidor
@@ -187,7 +189,19 @@ tal cual.
   Los de interfaz lanzan la app con `-AceNeoServidorSimulado` (servidor falso
   dentro de la app, solo en Debug; código válido `482913`), y con
   `-AceNeoEmparejado` ya emparejada; el vídeo lo pone `MotorSimulado`.
-- **Capturas**: los XCUITest guardan capturas (agenda, centro de partido,
-  mini-reproductor, pantalla completa, biblioteca, deshacer) y la CI las sube
-  como artefacto `AceNeo-capturas`, junto al detalle de cualquier test que
-  falle en el paso «Resumen de los tests».
+- **E2E contra el backend de verdad** (`ServidorRealUITests`): la CI levanta en
+  el propio runner `scripts/pila-e2e.mjs` (motor AceStream falso + backend del
+  monorepo con ffmpeg, las mismas piezas que el E2E de la web) y la app, lanzada
+  con `-AceNeoEmpezarDeCero` (Llavero y direcciones de verdad, vacíos), se
+  empareja con `localhost:18790` y un código recién creado, abre un partido de
+  la agenda de demostración, **AVPlayer reproduce el HLS fMP4 que el backend
+  saca con ffmpeg del motor falso**, se revoca el dispositivo (vuelve a
+  emparejar con el aviso) y se empareja otra vez con el enlace del QR. Fuera de
+  la CI (sin `ACE_E2E_PUERTO`) se salta. En local:
+  `node scripts/pila-e2e.mjs` y `TEST_RUNNER_ACE_E2E_PUERTO=18790 xcodebuild test …`.
+- **Capturas**: `CapturasUITests` recorre las pantallas principales en claro y
+  en oscuro (`-AceNeoApariencia claro|oscuro`, solo Debug) y el E2E añade las
+  suyas con vídeo real. La CI las saca del `.xcresult` con su nombre
+  (`claro-02-agenda.png`, `e2e-03-reproduciendo-video-real.png`…) al artefacto
+  `AceNeo-capturas`; los logs de la pila van a `AceNeo-pila-e2e-logs` y el
+  detalle de cualquier test que falle, al paso «Resumen de los tests».

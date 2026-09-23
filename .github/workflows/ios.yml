@@ -4,9 +4,13 @@ name: iOS (Ace Neo)
 # compila y se prueba aquí, en el runner de macOS (el repo es público, así que
 # los minutos de macOS no cuestan).
 #   1. XcodeGen genera el .xcodeproj desde project.yml.
-#   2. Tests unitarios y de interfaz en un simulador de iPhone.
-#   3. Archive en Release SIN FIRMAR y AceNeo-unsigned-<versión>.ipa como artefacto.
-#   4. En un tag ios-v*, la IPA se adjunta a la Release de GitHub.
+#   2. Tests unitarios y de interfaz en un simulador de iPhone. Las de interfaz
+#      van contra el servidor simulado de la app y, además, contra el backend
+#      DE VERDAD: la pila E2E (motor AceStream falso + backend del monorepo +
+#      ffmpeg) corre en este mismo runner (apps/ios/scripts/pila-e2e.mjs).
+#   3. Capturas del simulador (claro, oscuro y E2E) sacadas del .xcresult.
+#   4. Archive en Release SIN FIRMAR y AceNeo-unsigned-<versión>.ipa como artefacto.
+#   5. En un tag ios-v*, la IPA se adjunta a la Release de GitHub.
 
 on:
   push:
@@ -65,8 +69,35 @@ jobs:
           xcodebuild -version
           xcodebuild -showsdks | grep -i -E 'ios|simulator' || true
 
-      - name: Instalar XcodeGen
-        run: brew install xcodegen
+      - name: Instalar XcodeGen (y ffmpeg en segundo plano, para el remux de la pila E2E)
+        run: |
+          set -euo pipefail
+          brew install xcodegen
+          # ffmpeg tarda: se instala mientras compila Xcode. El paso de la pila
+          # espera al fichero .fin (con el código de salida de brew).
+          if command -v ffmpeg >/dev/null && command -v ffprobe >/dev/null; then
+            echo 0 > "$RUNNER_TEMP/brew-ffmpeg.fin"
+          else
+            nohup bash -c 'brew install ffmpeg > "$RUNNER_TEMP/brew-ffmpeg.log" 2>&1; echo $? > "$RUNNER_TEMP/brew-ffmpeg.fin"' > /dev/null 2>&1 &
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: pnpm (corepack, versión de packageManager)
+        working-directory: ace-player-neo
+        run: corepack enable && pnpm --version && echo "STORE=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('ace-player-neo/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Instalar el monorepo (para la pila E2E)
+        working-directory: ace-player-neo
+        run: pnpm install --frozen-lockfile
 
       - name: Comprobar el catálogo de errores (mismo que packages/shared)
         run: node scripts/generar-catalogo-errores.mjs --check
@@ -122,12 +153,45 @@ jobs:
           mkdir -p build
           xcodebuild build-for-testing             -project AceNeo.xcodeproj             -scheme AceNeo             -destination "id=${{ steps.simulador.outputs.id }}"             -derivedDataPath build/DerivedData             -quiet             CURRENT_PROJECT_VERSION=${{ github.run_number }}
 
+      - name: Arrancar la pila E2E (motor falso + backend de verdad + ffmpeg)
+        id: pila
+        env:
+          ACE_E2E_PUERTO: '18790'
+          ACE_E2E_DIR: ${{ runner.temp }}/pila-e2e
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 300); do
+            [ -f "$RUNNER_TEMP/brew-ffmpeg.fin" ] && break
+            sleep 2
+          done
+          if [ "$(cat "$RUNNER_TEMP/brew-ffmpeg.fin" 2>/dev/null || echo x)" != "0" ]; then
+            tail -n 60 "$RUNNER_TEMP/brew-ffmpeg.log" || true
+            echo "::error::No se pudo instalar ffmpeg: sin él el backend no prepara el vídeo del iPhone"
+            exit 1
+          fi
+          ffmpeg -hide_banner -version | head -n 1
+          ffprobe -hide_banner -version | head -n 1
+          mkdir -p "$ACE_E2E_DIR"
+          nohup node scripts/pila-e2e.mjs > "$ACE_E2E_DIR/pila.log" 2>&1 &
+          for i in $(seq 1 90); do
+            if curl -sf "http://127.0.0.1:$ACE_E2E_PUERTO/native/api/v1/ping" > /dev/null; then break; fi
+            sleep 2
+          done
+          cat "$ACE_E2E_DIR/pila.log"
+          curl -sf "http://127.0.0.1:$ACE_E2E_PUERTO/native/api/v1/ping"
+          echo
+          echo "puerto=$ACE_E2E_PUERTO" >> "$GITHUB_OUTPUT"
+
       - name: Esperar al simulador
         run: |
           cat "$RUNNER_TEMP/arranque-simulador.log" || true
           xcrun simctl bootstatus "${{ steps.simulador.outputs.id }}" -b
 
       - name: Tests unitarios y de interfaz
+        env:
+          # xcodebuild quita el prefijo TEST_RUNNER_ y se lo pasa al ejecutor de
+          # las pruebas: ServidorRealUITests habla con la pila por ese puerto.
+          TEST_RUNNER_ACE_E2E_PUERTO: ${{ steps.pila.outputs.puerto }}
         run: |
           set -o pipefail
           xcodebuild test-without-building             -project AceNeo.xcodeproj             -scheme AceNeo             -destination "id=${{ steps.simulador.outputs.id }}"             -derivedDataPath build/DerivedData             -resultBundlePath build/AceNeo-tests.xcresult             -retry-tests-on-failure -test-iterations 2             -quiet
@@ -156,6 +220,29 @@ jobs:
             # Capturas de las pruebas de interfaz (y las de los fallos).
             mkdir -p build/capturas
             xcrun xcresulttool export attachments --path "$RESULTADO" --output-path build/capturas || true
+            # Cada captura con el nombre que le dio el test (claro-02-agenda.png…).
+            python3 - <<'PY' || true
+          import json, os, re
+          base = "build/capturas"
+          try:
+              manifiesto = json.load(open(os.path.join(base, "manifest.json")))
+          except Exception:
+              manifiesto = []
+          for prueba in manifiesto:
+              for adjunto in prueba.get("attachments", []):
+                  origen = os.path.join(base, adjunto.get("exportedFileName", ""))
+                  nombre = adjunto.get("suggestedHumanReadableName") or os.path.basename(origen)
+                  nombre = re.sub(r"_\d+_[0-9A-Fa-f-]{36}(\.\w+)$", r"\1", nombre)
+                  if adjunto.get("isAssociatedWithFailure"):
+                      nombre = "fallo-" + nombre
+                  repeticion = adjunto.get("repetitionNumber") or 1
+                  if repeticion > 1:
+                      raiz, ext = os.path.splitext(nombre)
+                      nombre = "%s-intento%d%s" % (raiz, repeticion, ext)
+                  destino = os.path.join(base, nombre)
+                  if os.path.isfile(origen) and not os.path.exists(destino):
+                      os.rename(origen, destino)
+          PY
             ls -la build/capturas || true
           fi
 
@@ -165,6 +252,16 @@ jobs:
         with:
           name: AceNeo-capturas
           path: ace-player-neo/apps/ios/build/capturas
+          if-no-files-found: ignore
+
+      - name: Subir los logs de la pila E2E
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AceNeo-pila-e2e-logs
+          path: |
+            ${{ runner.temp }}/pila-e2e/*.log
+            ${{ runner.temp }}/brew-ffmpeg.log
           if-no-files-found: ignore
 
       - name: Archive sin firmar e IPA
