@@ -82,7 +82,7 @@ corta a los demás. Eventos (`DomainEvents`):
 |---|---|---|
 | `scan.verdict`, `scan.progress`, `scan.jobDone` | scanner | sources, football (precalentado), playback, events |
 | `engine.status` (solo al cambiar) | engine | playback (reabrir), events, health |
-| `playback.nowPlaying`, `playback.handoff`, `stream.*` | playback | events |
+| `playback.nowPlaying`, `playback.handoff`, `playback.sessions`, `stream.*` | playback | events |
 | `playback.activity` (`watching`, `hashes`) | playback | engine (histéresis 2/3), scanner (ritmo lento, nunca el hash visto), football y search (`via: 'auto'`). Desde el paso 1.3 cuenta también quien espera a que se abra su canal |
 | `state.changed` | state (tras persistir) | events |
 | `diagnostics.report` → `diagnostics.new` | cualquiera → diagnostics | diagnostics → events |

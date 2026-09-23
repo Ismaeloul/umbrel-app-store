@@ -23,7 +23,7 @@ import {
 } from './api/common.js';
 import { EngineStatusSchema } from './api/v1/engine.js';
 import { DiagnosticEntrySchema } from './api/v1/diagnostics.js';
-import { StreamProtocolSchema } from './api/v1/playback.js';
+import { SessionSummarySchema, StreamProtocolSchema } from './api/v1/playback.js';
 
 // --- Reproducción ---
 
@@ -50,6 +50,20 @@ export const PlaybackHandoffEventSchema = z.strictObject({
     title: z.string(),
     /** `other_channel`: canales distintos, siempre traspaso. `same_channel`: política `handoff`. */
     reason: z.enum(['other_channel', 'same_channel']),
+  }),
+});
+
+/**
+ * «Dónde se está reproduciendo»: la lista entera de sesiones (la misma forma
+ * que `sessions` de GET /api/v1/playback) cada vez que cambia: se abre o se
+ * cierra una sesión, entra o sale un visor o cambia su `playing`. No se
+ * emite por cada latido (`lastBeatAt` va al día solo en el GET). Va a todas
+ * las conexiones, web e iOS.
+ */
+export const PlaybackSessionsEventSchema = z.strictObject({
+  type: z.literal('playback.sessions'),
+  data: z.strictObject({
+    sessions: z.array(SessionSummarySchema),
   }),
 });
 
@@ -215,6 +229,7 @@ export const ResyncEventSchema = z.strictObject({
 export const SseEventSchema = z.discriminatedUnion('type', [
   PlaybackNowPlayingEventSchema,
   PlaybackHandoffEventSchema,
+  PlaybackSessionsEventSchema,
   StreamReadyEventSchema,
   StreamReopenedEventSchema,
   StreamModeChangedEventSchema,

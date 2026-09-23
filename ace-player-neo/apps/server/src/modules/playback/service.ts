@@ -26,9 +26,11 @@
 import { createHash, randomBytes } from 'node:crypto';
 import {
   DEFAULT_PLAYBACK_MODE,
+  LEGACY_DEVICE_NAME,
   SHUTDOWN_TIMINGS,
   SSE_TIMINGS,
   TIMEOUTS,
+  UNKNOWN_BROWSER_NAME,
   cleanTitle,
   normalizeHash,
   type ClientKind,
@@ -40,6 +42,7 @@ import {
   type PlaybackMode,
   type PlaybackStatus,
   type SameChannelPolicy,
+  type SessionSummary,
   type StreamGrant,
   type StreamProtocol,
 } from '@ace/shared';
@@ -50,6 +53,7 @@ import type { EngineSessionMeta } from '../engine/types.js';
 import { SerialLock } from '../remux/lock.js';
 import type { RemuxCloseReason, RemuxHandle, RemuxSource } from '../remux/types.js';
 import { codecFor, directProtocol, latencyFor, legacyVideoPath, nativeVideoPath } from './grant.js';
+import { cleanDeviceName } from './device-name.js';
 import { decideClaim, decideRelease, type Tombstones } from './mando.js';
 import type { PlaybackDeps, PlaybackService, ViewerIdentity } from './types.js';
 
@@ -87,6 +91,10 @@ interface ViewerRec {
   readonly sessionId: string | null;
   readonly hash: string;
   title: string;
+  /** Título conocido (de la petición o de la biblioteca) para «Dónde se está reproduciendo»; "" si no se sabe. */
+  label: string;
+  /** Nombre legible del dispositivo (device-name.ts). */
+  deviceName: string;
   mode: PlaybackMode;
   lastBeat: number;
   playing: boolean | null;
@@ -118,6 +126,8 @@ interface AcquireRequest {
   readonly heartbeat: boolean;
   readonly native: boolean;
   readonly title: string;
+  readonly label: string;
+  readonly deviceName: string;
   readonly mode: PlaybackMode;
   readonly signal: AbortSignal;
   /** `dev` de un `/api/remux` 0.6.x (ficha del remux). */
@@ -175,6 +185,14 @@ function foreignViewer(viewer: ViewerRec, identity: ViewerIdentity): boolean {
 
 function superseded(detail: string): AppError {
   return new AppError('session_expired', { detail });
+}
+
+/** Nombre legible del visor: el que trae la identidad, el del emparejado o "Navegador". */
+function deviceNameOf(identity: ViewerIdentity): string {
+  return cleanDeviceName(
+    identity.deviceName ?? identity.device?.device.name,
+    identity.device ? 'iPhone' : UNKNOWN_BROWSER_NAME,
+  );
 }
 
 export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
@@ -240,6 +258,18 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     }
   }
 
+  /** Título del canal en la biblioteca (favoritos, historial y la lista activa); "" si no está. */
+  function libraryTitle(hash: string): string {
+    try {
+      const current = state.get();
+      for (const list of [current.favorites, current.history, current.web]) {
+        const item = list.find((entry) => entry.id === hash && entry.title.trim() !== '');
+        if (item) return cleanTitle(item.title, '');
+      }
+    } catch {}
+    return '';
+  }
+
   function remuxViewers(session: SessionRec): ViewerRec[] {
     return [...session.viewers.values()].filter((viewer) => viewer.consumes === 'remux');
   }
@@ -294,7 +324,55 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
    */
   const waiting = new Map<string, string>();
 
+  /** Clave de la última lista publicada en `playback.sessions` (sin `lastBeatAt`). */
+  let lastSessionsKey = '';
+
+  function summarize(session: SessionRec): SessionSummary {
+    const list = [...session.viewers.values()];
+    /* El título del visor que llegó el último y lo sabía. */
+    const known = list.findLast((viewer) => viewer.label !== '');
+    const direct = list.some((viewer) => viewer.consumes !== 'remux');
+    return {
+      id: session.id,
+      hash: session.hash,
+      mode: session.mode,
+      openedAt: new Date(session.openedAt).toISOString(),
+      viewers: list.map((viewer) => ({
+        client: viewer.client,
+        deviceId: viewer.deviceId,
+        lastBeatAt: new Date(viewer.lastBeat).toISOString(),
+        viewerId: viewer.viewerId,
+        deviceName: viewer.deviceName,
+        platform: viewer.client,
+        playing: viewer.playing,
+      })),
+      title: known?.label ?? '',
+      /* Solo apps de iOS (remux): hls-fmp4. Si no, lo que da el motor. */
+      protocol: !direct && list.length > 0 ? 'hls-fmp4' : directProtocol(session.mode),
+    };
+  }
+
+  function summaries(): SessionSummary[] {
+    return [...sessions.values()].map(summarize);
+  }
+
+  /**
+   * «Dónde se está reproduciendo» (`playback.sessions`): la lista entera,
+   * solo si ha cambiado algo que se ve (sesiones, visores, nombres, título,
+   * modo o `playing`); los latidos, que solo mueven `lastBeatAt`, no cuentan.
+   */
+  function emitSessions(): void {
+    const list = summaries();
+    const key = JSON.stringify(list, (name, value: unknown) =>
+      name === 'lastBeatAt' ? undefined : value,
+    );
+    if (key === lastSessionsKey) return;
+    lastSessionsKey = key;
+    bus.emit('playback.sessions', { sessions: list });
+  }
+
   function emitActivity(): void {
+    emitSessions();
     const hashes = [
       ...new Set([...[...viewers.values()].map((viewer) => viewer.hash), ...waiting.values()]),
     ].sort();
@@ -750,6 +828,8 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       sessionId: session.id,
       hash: request.hash,
       title: request.title,
+      label: request.label,
+      deviceName: request.deviceName,
       mode: request.mode,
       lastBeat: clock.now(),
       playing: null,
@@ -757,6 +837,8 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     };
     viewer.lastBeat = clock.now();
     viewer.title = request.title;
+    viewer.label = request.label;
+    viewer.deviceName = request.deviceName;
     viewer.mode = request.mode;
     /* D5.3: el progresivo solo admite un consumidor. */
     if (session.mode === 'progressive' && consumers(session, viewer) > 1) {
@@ -1078,6 +1160,8 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
         sessionId: null,
         hash: nowPlaying.id,
         title: nowPlaying.title,
+        label: cleanTitle(nowPlaying.title, ''),
+        deviceName: LEGACY_DEVICE_NAME,
         mode: DEFAULT_PLAYBACK_MODE,
         lastBeat: clock.now(),
         playing: null,
@@ -1136,6 +1220,8 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       const client = query.client;
       const deviceId = identity.device?.deviceId ?? identity.deviceId ?? query.device ?? null;
       const mode = query.mode ?? DEFAULT_PLAYBACK_MODE;
+      /* Sin título en la petición, el de la biblioteca (favoritos, historial o la lista activa). */
+      const label = cleanTitle(query.title, '') || libraryTitle(hash);
       const placed = await acquireInternal({
         hash,
         kind: query.kind ?? 'auto',
@@ -1145,7 +1231,9 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
         consumes: client === 'ios' ? 'remux' : 'direct',
         heartbeat: true,
         native: identity.device !== null,
-        title: cleanTitle(query.title, `Stream ${hash.slice(0, 8)}`),
+        title: label || `Stream ${hash.slice(0, 8)}`,
+        label,
+        deviceName: deviceNameOf(identity),
         mode,
         signal,
         writeNowPlaying: true,
@@ -1185,6 +1273,10 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       }
       viewer.lastBeat = clock.now();
       if (body.playing !== undefined) viewer.playing = body.playing;
+      /* Un iPhone renombrado se ve con su nombre nuevo al siguiente latido. En la
+         web el nombre sale del User-Agent de la petición del canal: no se toca. */
+      if (identity.device) viewer.deviceName = deviceNameOf(identity);
+      emitSessions();
       return {
         session: sessionInfo(session),
         url: urlFor(session, viewer),
@@ -1211,17 +1303,7 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
         nowPlaying: state.get().nowPlaying,
         learningCount: state.learningCount(),
         serverTime: clock.now(),
-        sessions: [...sessions.values()].map((session) => ({
-          id: session.id,
-          hash: session.hash,
-          mode: session.mode,
-          openedAt: new Date(session.openedAt).toISOString(),
-          viewers: [...session.viewers.values()].map((viewer) => ({
-            client: viewer.client,
-            deviceId: viewer.deviceId,
-            lastBeatAt: new Date(viewer.lastBeat).toISOString(),
-          })),
-        })),
+        sessions: summaries(),
       };
     },
 
@@ -1331,6 +1413,8 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
           heartbeat: false,
           native: false,
           title: `Stream ${id.slice(0, 8)}`,
+          label: libraryTitle(id),
+          deviceName: LEGACY_DEVICE_NAME,
           mode: DEFAULT_PLAYBACK_MODE,
           signal,
           legacyDevice: dev,

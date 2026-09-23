@@ -143,19 +143,47 @@ export const ReleaseResponseSchema = z.strictObject({
 });
 export type ReleaseResponse = z.infer<typeof ReleaseResponseSchema>;
 
-/** Resumen de una sesión abierta en el motor, para la web y la salud. */
+/** Nombre que se enseña para un dispositivo que no se reconoce (web sin User-Agent útil). */
+export const UNKNOWN_BROWSER_NAME = 'Navegador';
+/** Nombre de los visores de las apps 0.6.x (su `claim` o su `/api/remux`). */
+export const LEGACY_DEVICE_NAME = 'App antigua (0.6)';
+/** Tope del nombre legible de un visor (el de un dispositivo emparejado es de 60). */
+export const DEVICE_NAME_MAX = 80;
+
+/**
+ * Un visor de una sesión («Dónde se está reproduciendo»). `client` y
+ * `deviceId` son los de siempre; lo demás llegó en la 0.7.1.
+ */
+export const SessionViewerSchema = z.strictObject({
+  client: ClientKindSchema,
+  /** El de la web (localStorage) o el del dispositivo emparejado: la app lo compara con el suyo para marcar «Este dispositivo». */
+  deviceId: z.string().nullable(),
+  lastBeatAt: IsoDateTimeSchema,
+  viewerId: z.string(),
+  /**
+   * Legible: el nombre del dispositivo emparejado (iOS), uno sacado del
+   * User-Agent en la web ("Chrome · Windows", "Safari · iPhone"; "Navegador"
+   * si no se sabe) o "App antigua (0.6)".
+   */
+  deviceName: z.string().max(DEVICE_NAME_MAX),
+  /** Igual que `client`: `web`, `ios` o `legacy`. */
+  platform: ClientKindSchema,
+  /** Del último latido: reproduciendo, en pausa o `null` si aún no lo ha dicho. */
+  playing: z.boolean().nullable(),
+});
+export type SessionViewer = z.infer<typeof SessionViewerSchema>;
+
+/** Resumen de una sesión abierta en el motor, para la web, la app y la salud. */
 export const SessionSummarySchema = z.strictObject({
   id: SessionIdSchema,
   hash: HashSchema,
   mode: EngineSessionModeSchema,
   openedAt: IsoDateTimeSchema,
-  viewers: z.array(
-    z.strictObject({
-      client: ClientKindSchema,
-      deviceId: z.string().nullable(),
-      lastBeatAt: IsoDateTimeSchema,
-    }),
-  ),
+  viewers: z.array(SessionViewerSchema),
+  /** Título del canal que se ve (el del mando y el historial); "" si no se sabe. */
+  title: z.string().max(200),
+  /** Cómo lo recibe: `hls-fmp4` si solo lo ven apps de iOS (remux); si no, el del motor. */
+  protocol: StreamProtocolSchema,
 });
 export type SessionSummary = z.infer<typeof SessionSummarySchema>;
 

@@ -26,11 +26,13 @@ const ID_B = 'b'.repeat(40);
 const X = demoContentId(1);
 const Y = demoContentId(2);
 const TOKEN = 'dispositivo-1.secreto';
+const CHROME_WINDOWS =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
 
 function fakeAuth(): AuthService {
   const device = {
     deviceId: 'iphone-1',
-    device: { id: 'iphone-1' },
+    device: { id: 'iphone-1', name: 'iPhone de Isma' },
     via: 'bearer',
   } as unknown as AuthenticatedDevice;
   return {
@@ -400,7 +402,7 @@ describe('rutas v1 de reproducción (arquitectura §6.2-6.3)', () => {
     const res = await app.inject({
       method: 'GET',
       url: `/api/v1/channels/${X}/stream?client=web&viewer=visor-web-1&device=pc-salon&title=Canal%201`,
-      headers: web(),
+      headers: web({ 'user-agent': CHROME_WINDOWS }),
     });
     expect(res.statusCode).toBe(200);
     const grant = StreamGrantSchema.parse(res.json());
@@ -426,7 +428,19 @@ describe('rutas v1 de reproducción (arquitectura §6.2-6.3)', () => {
         id: sid,
         hash: X,
         mode: 'progressive',
-        viewers: [expect.objectContaining({ client: 'web', deviceId: 'pc-salon' })],
+        /* «Dónde se está reproduciendo»: canal, protocolo y quién lo ve (nombre sacado del User-Agent). */
+        title: 'Canal 1',
+        protocol: 'mpegts',
+        viewers: [
+          expect.objectContaining({
+            client: 'web',
+            deviceId: 'pc-salon',
+            viewerId: 'visor-web-1',
+            deviceName: 'Chrome · Windows',
+            platform: 'web',
+            playing: true,
+          }),
+        ],
       }),
     ]);
     expect(status.nowPlaying).toMatchObject({ id: X, title: 'Canal 1', dev: 'pc-salon' });
@@ -481,6 +495,29 @@ describe('rutas v1 de reproducción (arquitectura §6.2-6.3)', () => {
     });
     expect(beat.json().url).toBe(grant.url);
     expect(setup.runtime.service.isViewerAlive(sid, 'iphone-1')).toBe(true);
+    /* El iPhone también ve «Dónde se está reproduciendo», con el nombre del emparejado. */
+    const status = PlaybackStatusSchema.parse(
+      (
+        await app.inject({ method: 'GET', url: '/native/api/v1/playback', headers: native(TOKEN) })
+      ).json(),
+    );
+    expect(status.sessions).toEqual([
+      expect.objectContaining({
+        id: sid,
+        protocol: 'hls-fmp4',
+        title: '',
+        viewers: [
+          expect.objectContaining({
+            client: 'ios',
+            deviceId: 'iphone-1',
+            viewerId: 'visor-ios-1',
+            deviceName: 'iPhone de Isma',
+            platform: 'ios',
+            playing: null,
+          }),
+        ],
+      }),
+    ]);
     const release = await app.inject({
       method: 'POST',
       url: `/native/api/v1/sessions/${sid}/release`,

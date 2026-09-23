@@ -15,9 +15,27 @@
       "mode": "hls",
       "openedAt": "2026-09-23T18:30:00.000Z",
       "viewers": [
-        { "client": "web", "deviceId": "web_salon01", "lastBeatAt": "2026-09-23T18:30:00.000Z" },
-        { "client": "ios", "deviceId": "dev_iphone01", "lastBeatAt": "2026-09-23T18:30:00.000Z" }
-      ]
+        {
+          "client": "web",
+          "deviceId": "web_salon01",
+          "lastBeatAt": "2026-09-23T18:30:00.000Z",
+          "viewerId": "viewer_tab01",
+          "deviceName": "Chrome · Windows",
+          "platform": "web",
+          "playing": true
+        },
+        {
+          "client": "ios",
+          "deviceId": "dev_iphone01",
+          "lastBeatAt": "2026-09-23T18:30:00.000Z",
+          "viewerId": "viewer_iphone01",
+          "deviceName": "iPhone de Isma",
+          "platform": "ios",
+          "playing": false
+        }
+      ],
+      "title": "DAZN 1",
+      "protocol": "hls"
     }
   ]
 }

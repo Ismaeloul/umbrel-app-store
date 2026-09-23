@@ -24,6 +24,7 @@ import type { ApiResponse, JsonRouteId } from './routes.ts';
 export const SSE_TYPES = [
   'playback.nowPlaying',
   'playback.handoff',
+  'playback.sessions',
   'stream.ready',
   'stream.reopened',
   'stream.modeChanged',
@@ -123,6 +124,14 @@ export function applyToCache(client: QueryClient, type: SseEventType, data: unkn
       const next = data as SseEventData<'playback.nowPlaying'>;
       client.setQueryData<ApiResponse<'playbackStatus'>>(routeKey('playbackStatus'), (old) =>
         old ? { ...old, nowPlaying: next.nowPlaying, learningCount: next.learningCount } : old,
+      );
+      break;
+    }
+    case 'playback.sessions': {
+      // «Dónde se está reproduciendo»: la lista entera, tal cual la da GET /api/v1/playback.
+      const { sessions } = data as SseEventData<'playback.sessions'>;
+      client.setQueryData<ApiResponse<'playbackStatus'>>(routeKey('playbackStatus'), (old) =>
+        old ? { ...old, sessions } : old,
       );
       break;
     }

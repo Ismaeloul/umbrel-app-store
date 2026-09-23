@@ -203,6 +203,35 @@ const scanJob: ScanJob = {
 const statEntry = { intentos: 3.5, exitos: 2.8, caidas: 0.4, segundos: 5400, ultimo: AT_MS };
 const counts = { engine: 1, source: 3, network: 0, codec: 1, client: 2, state: 0 };
 const streamSession = { id: SID, heartbeatMs: 15000, expiresAfterMs: 45000 };
+/** Una sesión compartida por la web y el iPhone («Dónde se está reproduciendo»). */
+const sessionSummary = {
+  id: SID,
+  hash: HASH_A,
+  mode: 'hls' as const,
+  openedAt: AT,
+  viewers: [
+    {
+      client: 'web' as const,
+      deviceId: 'web_salon01',
+      lastBeatAt: AT,
+      viewerId: VIEWER,
+      deviceName: 'Chrome · Windows',
+      platform: 'web' as const,
+      playing: true,
+    },
+    {
+      client: 'ios' as const,
+      deviceId: DEVICE_ID,
+      lastBeatAt: AT,
+      viewerId: 'viewer_iphone01',
+      deviceName: 'iPhone de Isma',
+      platform: 'ios' as const,
+      playing: false,
+    },
+  ],
+  title: 'DAZN 1',
+  protocol: 'hls' as const,
+};
 const diagnostic = {
   id: 'diag_000001',
   at: AT,
@@ -286,18 +315,7 @@ export const V1_FIXTURES = {
     nowPlaying: { id: HASH_A, title: 'DAZN 1', dev: 'salon', token: 'tok_abc123', at: AT_MS },
     learningCount: 4,
     serverTime: AT_MS,
-    sessions: [
-      {
-        id: SID,
-        hash: HASH_A,
-        mode: 'hls',
-        openedAt: AT,
-        viewers: [
-          { client: 'web', deviceId: 'web_salon01', lastBeatAt: AT },
-          { client: 'ios', deviceId: DEVICE_ID, lastBeatAt: AT },
-        ],
-      },
-    ],
+    sessions: [sessionSummary],
   },
   settingsGet: { settings: { sameChannelPolicy: 'share' }, source: 'environment' },
   settingsUpdate: { settings: { sameChannelPolicy: 'handoff' }, source: 'saved' },
@@ -481,6 +499,7 @@ export const EVENT_FIXTURES = {
     nowPlaying: { id: HASH_A, title: 'DAZN 1', dev: 'salon', token: 'tok_abc123', at: AT_MS },
     learningCount: 4,
   },
+  'playback.sessions': { sessions: [sessionSummary] },
   'playback.handoff': {
     sessionId: SID,
     viewerIds: [VIEWER],

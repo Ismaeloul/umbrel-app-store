@@ -60,6 +60,7 @@ export type CloseReason = 'client' | 'backpressure' | 'error' | 'revoked' | 'shu
 export const FORWARDED_EVENTS = [
   'playback.nowPlaying',
   'playback.handoff',
+  'playback.sessions',
   'stream.ready',
   'stream.reopened',
   'stream.modeChanged',

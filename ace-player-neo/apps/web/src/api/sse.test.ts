@@ -101,6 +101,15 @@ describe('SSE', () => {
     expect(client.getQueryState(routeKey('settingsGet'))?.isInvalidated).toBe(false);
   });
 
+  it('playback.sessions cambia las sesiones del estado de reproducción sin tocar el mando', () => {
+    stop = startRealtime({ client, EventSourceImpl: ES });
+    last().open();
+    const status = fixture<{ nowPlaying: unknown; sessions: unknown[] }>('playbackStatus');
+    client.setQueryData(routeKey('playbackStatus'), status);
+    last().emit('playback.sessions', { sessions: [] });
+    expect(client.getQueryData(routeKey('playbackStatus'))).toEqual({ ...status, sessions: [] });
+  });
+
   it('los eventos dirigidos solo llegan si son de un visor de esta pestaña', () => {
     stop = startRealtime({ client, EventSourceImpl: ES });
     last().open();

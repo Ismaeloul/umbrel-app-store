@@ -1,0 +1,35 @@
+{
+  "type": "playback.sessions",
+  "data": {
+    "sessions": [
+      {
+        "id": "s_Q2FuYWxEZVBydWViYQ",
+        "hash": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+        "mode": "hls",
+        "openedAt": "2026-09-23T18:30:00.000Z",
+        "viewers": [
+          {
+            "client": "web",
+            "deviceId": "web_salon01",
+            "lastBeatAt": "2026-09-23T18:30:00.000Z",
+            "viewerId": "viewer_tab01",
+            "deviceName": "Chrome · Windows",
+            "platform": "web",
+            "playing": true
+          },
+          {
+            "client": "ios",
+            "deviceId": "dev_iphone01",
+            "lastBeatAt": "2026-09-23T18:30:00.000Z",
+            "viewerId": "viewer_iphone01",
+            "deviceName": "iPhone de Isma",
+            "platform": "ios",
+            "playing": false
+          }
+        ],
+        "title": "DAZN 1",
+        "protocol": "hls"
+      }
+    ]
+  }
+}
