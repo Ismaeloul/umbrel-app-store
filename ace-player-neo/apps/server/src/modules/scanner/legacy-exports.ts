@@ -1,89 +1,139 @@
 /* Exportaciones de server.js (0.6.59) que corresponden al módulo
-   `scanner`, con los mismos nombres (comportamientos-tests.md §3.1-3.2).
+   `scanner`, con los mismos nombres, entradas y salidas
+   (comportamientos-tests.md §3.1-3.2). Las usan los tests portados y el
+   contraste con la 0.6.59; el código nuevo usa el servicio.
 
-   Para qué: los tests portados y el contraste con la 0.6.59 (plan E1.4)
-   llaman a estas funciones por su nombre de siempre. En el esqueleto lanzan
-   `not_implemented`; el agente del módulo las implementa o las reexporta de
-   su servicio (mismas entradas y salidas que la 0.6.59). Las firmas son las
-   de server.js con tipos de @ace/shared donde se conocen. */
+   Diferencias inevitables, porque la v2 no tiene globales:
+   - `recordScannerVerdict`, `playerVerdictHeld` y `scannerCacheHit` trabajan
+     sobre una caché propia de esta fachada (la `scannerCache` global de
+     server.js:161), no sobre la de ningún servicio.
+   - Sin configuración, la fachada se porta como la 0.6.59 SIN comprobador
+     (`ACESTREAM_SCANNER_HOST` vacío, que es como corren sus tests):
+     `inspectScannerMedia` da `probe_unavailable` y `probeAceCandidate` sin
+     `request` falla con `engine_error`. */
 
-import { notImplemented } from '../../core/errors.js';
 import type { ScanJob, VerdictState } from '@ace/shared';
+import { AppError } from '../../core/errors.js';
+import { LEGACY_SCANNER_DEFAULTS } from './constants.js';
+import {
+  analyzeTransportStream as analyze,
+  classifyScannerEvidence as classify,
+  parseScannerStats as parseStats,
+  scannerEnginePath as enginePath,
+  scannerRetryPlan as retryPlan,
+  type Classification,
+  type RetryPlan,
+  type ScannerStats,
+  type TransportAnalysis,
+} from './evidence.js';
+import { jobPayload, type JobLike } from './jobs.js';
+import { probeAceCandidate as probe, type ProbeCandidate } from './probe.js';
+import {
+  mediaUnavailable,
+  type ScannerMediaResult,
+  type ScannerRequestResult,
+  type ScannerSampleResult,
+  type ScannerTransport,
+} from './transport.js';
+import type { Verdict, VerdictInput } from './verdicts.js';
+import { legacySystemClock as systemClock, legacyVerdictCache as cache } from './legacy-cache.js';
 
 /** `scannerEnginePath` (server.js:2842): `/ace/…`, `/content/…` o "". T-072. */
-export function scannerEnginePath(_url: string): string {
-  throw notImplemented('scannerEnginePath');
+export function scannerEnginePath(url: unknown): string {
+  return enginePath(url);
 }
 
 /** `parseScannerStats` (server.js:3136). */
-export function parseScannerStats(_body: string): Record<string, unknown> | null {
-  throw notImplemented('parseScannerStats');
+export function parseScannerStats(body: unknown): ScannerStats {
+  return parseStats(body);
 }
 
-/** `inspectScannerMedia` (server.js:3065): ffprobe sobre el comprobador. */
+/** `inspectScannerMedia` (server.js:3065). Sin comprobador configurado: `probe_unavailable`. */
 export async function inspectScannerMedia(
   _pathname: string,
-  _timeoutMs?: number,
-): Promise<Record<string, unknown>> {
-  throw notImplemented('inspectScannerMedia');
+  _timeoutMs: number = LEGACY_SCANNER_DEFAULTS.mediaProbeMs,
+): Promise<ScannerMediaResult> {
+  return mediaUnavailable('probe_unavailable');
 }
 
 /** `analyzeTransportStream` (server.js:2913). T-103. */
-export function analyzeTransportStream(_buffer: Buffer): {
-  videoCodec: string;
-  audioCodecs: string[];
-  pcrSpanMs: number;
-  streamKbps: number;
-} {
-  throw notImplemented('analyzeTransportStream');
+export function analyzeTransportStream(buffer: unknown): TransportAnalysis {
+  return analyze(buffer);
 }
 
 /** `classifyScannerEvidence` (server.js:3151). T-073, T-104. */
 export function classifyScannerEvidence(
-  _evidence: Record<string, unknown>,
-  _minBytes?: number,
-): { state: VerdictState; reason: string } {
-  throw notImplemented('classifyScannerEvidence');
+  evidence: Readonly<Record<string, unknown>> | null | undefined,
+  minBytes: number = LEGACY_SCANNER_DEFAULTS.sampleBytes,
+): Classification {
+  return classify(evidence, minBytes);
 }
 
-/** `probeAceCandidate` (server.js:3187) con request, sample e inspect inyectados. T-075, T-105. */
+export interface LegacyProbeOptions {
+  readonly request?: (pathname: string, timeoutMs: number) => Promise<ScannerRequestResult>;
+  readonly sample?: (
+    pathname: string,
+    timeoutMs: number,
+    minBytes: number,
+  ) => Promise<ScannerSampleResult>;
+  readonly inspect?: (pathname: string, timeoutMs: number) => Promise<ScannerMediaResult>;
+  readonly timeoutMs?: number;
+  readonly minBytes?: number;
+}
+
+/* Sin comprobador: server.js:2863 y 3018-3019. */
+const unavailable: ScannerTransport = {
+  request: () => Promise.reject(new AppError('scanner_unavailable')),
+  sample: () => Promise.resolve({ bytes: 0, statusCode: 0, reason: 'scanner_unavailable' }),
+  inspect: () => Promise.resolve(mediaUnavailable('probe_unavailable')),
+};
+
+/** `probeAceCandidate` (server.js:3187) con `request`, `sample` e `inspect` inyectados. T-075, T-105. */
 export async function probeAceCandidate(
-  _candidate: { id: string; ih?: boolean },
-  _options: Record<string, unknown>,
+  candidate: ProbeCandidate | null | undefined,
+  options: LegacyProbeOptions = {},
 ): Promise<Record<string, unknown>> {
-  throw notImplemented('probeAceCandidate');
+  const { playableOn: _playableOn, ...result } = await probe(candidate, {
+    clock: systemClock,
+    request: options.request ?? unavailable.request,
+    sample: options.sample ?? unavailable.sample,
+    inspect: options.inspect ?? unavailable.inspect,
+    ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+    ...(options.minBytes === undefined ? {} : { minBytes: options.minBytes }),
+  });
+  return result;
 }
 
 /** `scannerRetryPlan` (server.js:3437): reintento único. T-074. */
 export function scannerRetryPlan(
-  _result: unknown,
-  _attempts: number,
-  _now: number,
-  _delayMs: number,
-): { state: 'retry_wait'; reason: string; retryAt: number } | null {
-  throw notImplemented('scannerRetryPlan');
+  result: unknown,
+  attempts: number,
+  now: number = systemClock.now(),
+  delayMs: number = LEGACY_SCANNER_DEFAULTS.retryDelayMs,
+): RetryPlan | null {
+  return retryPlan(result, attempts, now, delayMs);
 }
 
 /** `scannerJobPayload` (server.js:3376). T-074. */
-export function scannerJobPayload(_job: unknown): ScanJob & { success: true } {
-  throw notImplemented('scannerJobPayload');
+export function scannerJobPayload(job: JobLike): ScanJob & { success: true } {
+  return { success: true, ...jobPayload(job, systemClock.now()) };
 }
 
 /** `recordScannerVerdict` (server.js:3330): el del reproductor manda 3 min. T-122. */
 export function recordScannerVerdict(
-  _id: string,
-  _result: { state: VerdictState; reason: string; by?: string; checkedAt?: number },
-  _now?: number,
-): unknown {
-  throw notImplemented('recordScannerVerdict');
+  id: string,
+  result: { state: VerdictState; reason: string; by?: string; checkedAt?: string | null },
+  now: number = systemClock.now(),
+): Verdict {
+  return cache().record(id, result as VerdictInput, now).verdict;
 }
 
 /** `playerVerdictHeld` (server.js:3315). T-122, T-123. */
-export function playerVerdictHeld(_id: string, _now?: number): boolean {
-  throw notImplemented('playerVerdictHeld');
+export function playerVerdictHeld(id: string, now: number = systemClock.now()): boolean {
+  return cache().held(id, now);
 }
 
 /** `scannerCacheHit` (server.js:3304). */
-export function scannerCacheHit(_id: string, _now?: number): unknown {
-  throw notImplemented('scannerCacheHit');
+export function scannerCacheHit(id: string, now: number = systemClock.now()): Verdict | null {
+  return cache().hit(id, now);
 }

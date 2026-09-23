@@ -1,17 +1,63 @@
-/* Fábrica del módulo `net` (cliente saliente a internet con protección anti-SSRF).
+/* Fábrica del módulo `net` (cliente saliente a internet con protección anti-SSRF,
+   arquitectura §5.11).
 
-   ESQUELETO (paso 1.0 de la Fase 1): devuelve un servicio cuyos métodos
-   lanzan `AppError('not_implemented')`, para que `createServices()` monte el
-   árbol entero y cada ruta responda 501 con el formato correcto. El agente
-   del módulo sustituye esto por la implementación real SIN cambiar la firma
-   de la fábrica ni la interfaz de types.ts (si hace falta cambiarla, se
-   cambia aquí y en docs/contratos.md a la vez). */
+   `createNetClient(deps)` junta el filtro (ssrf.ts), el bucle de descarga
+   (client.ts) y el transporte (transport.ts). DNS y conexiones son
+   inyectables (`deps.resolver`, `deps.transport`) para que los tests no
+   toquen ni DNS ni red; sin ellos, los del sistema. */
 
-import { notImplementedService } from '../../core/stub.js';
-import type { NetDeps, NetClient } from './types.js';
+import { TIMEOUTS } from '@ace/shared';
+import { createFetcher, NetBadResponseError, type FetchBytesOptions } from './client.js';
+import { isPrivateAddress, isPrivateHostname } from './ssrf.js';
+import { nodeTransport, systemResolver } from './transport.js';
+import type { FetchOptions, FetchedResponse, NetClient, NetDeps } from './types.js';
 
 export type * from './types.js';
+export { NetBadResponseError } from './client.js';
 
-export function createNetClient(_deps: NetDeps): NetClient {
-  return notImplementedService<NetClient>('net');
+export function createNetClient(deps: NetDeps): NetClient {
+  const fetchBytes = createFetcher({
+    clock: deps.clock,
+    resolver: deps.resolver ?? systemResolver,
+    transport: deps.transport ?? nodeTransport,
+    allowPrivateUrls: deps.config.sync.allowPrivateUrls,
+    userAgent: `AcePlayerNeo/${deps.config.appVersion}`,
+  });
+
+  const toBytesOptions = (options: FetchOptions = {}): FetchBytesOptions => ({
+    deadline: deps.clock.now() + (options.totalTimeoutMs ?? TIMEOUTS.directoryTotalMs),
+    ...(options.maxBytes === undefined ? {} : { maxBytes: options.maxBytes }),
+    ...(options.idleTimeoutMs === undefined ? {} : { idleTimeoutMs: options.idleTimeoutMs }),
+    ...(options.accept === undefined ? {} : { accept: options.accept }),
+    ...(options.headers === undefined ? {} : { headers: options.headers }),
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
+  });
+
+  const fetchBuffer = (url: string, options?: FetchOptions): Promise<FetchedResponse<Buffer>> =>
+    fetchBytes(url, toBytesOptions(options));
+
+  const fetchText = async (
+    url: string,
+    options?: FetchOptions,
+  ): Promise<FetchedResponse<string>> => {
+    const response = await fetchBuffer(url, options);
+    return { ...response, body: response.body.toString('utf8') };
+  };
+
+  return {
+    fetchBuffer,
+    fetchText,
+    async fetchJson(url, options) {
+      const response = await fetchText(url, options);
+      let body: unknown;
+      try {
+        body = JSON.parse(response.body);
+      } catch (error) {
+        throw new NetBadResponseError(error);
+      }
+      return { ...response, body };
+    },
+    isPrivateAddress: (ip) => isPrivateAddress(ip),
+    isPrivateHostname: (hostname) => isPrivateHostname(hostname),
+  };
 }

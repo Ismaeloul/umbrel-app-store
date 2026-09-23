@@ -24,8 +24,14 @@ export interface SearchDeps extends CoreDeps {
 }
 
 export interface SearchOptions {
-  /** `main` = motor principal (por defecto); `scanner` = comprobador (resolución con reproducción activa). */
-  readonly via?: 'main' | 'scanner';
+  /**
+   * `main` = motor principal (por defecto); `scanner` = comprobador
+   * (resolución con reproducción activa); `auto` = el comprobador si hay
+   * alguien viendo (`playback.activity`) y existe, y si no el principal (lo
+   * que debe pedir la resolución, arquitectura §5.10). Sin comprobador, o si
+   * falla, se busca en el principal.
+   */
+  readonly via?: 'main' | 'scanner' | 'auto';
   readonly signal?: AbortSignal;
 }
 

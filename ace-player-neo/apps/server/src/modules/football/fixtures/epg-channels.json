@@ -1,0 +1,7 @@
+[
+  { "CodCadenaTv": "MLIGA", "Nombre": "M+ LaLiga" },
+  { "CodCadenaTv": "CHAPIO", "Nombre": "M+ Liga de Campeones" },
+  { "CodCadenaTv": "LA1", "Nombre": "La 1" },
+  { "CodCadenaTv": "DAZNL", "Nombre": "DAZN LaLiga" },
+  { "CodCadenaTv": "", "Nombre": "M+ Deportes sin código" }
+]

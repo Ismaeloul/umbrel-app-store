@@ -1,17 +1,19 @@
 /* Fábrica del módulo `football` (agenda, marcadores, resolución, IA y precalentado).
 
-   ESQUELETO (paso 1.0 de la Fase 1): devuelve un servicio cuyos métodos
-   lanzan `AppError('not_implemented')`, para que `createServices()` monte el
-   árbol entero y cada ruta responda 501 con el formato correcto. El agente
-   del módulo sustituye esto por la implementación real SIN cambiar la firma
-   de la fábrica ni la interfaz de types.ts (si hace falta cambiarla, se
-   cambia aquí y en docs/contratos.md a la vez). */
+   La implementación vive en service.ts (estado por instancia y enchufes con
+   los demás módulos); la lógica portada de la 0.6.59, en agenda-sources.ts
+   (futbolenlatv, EPG, TheSportsDB y demo), programming.ts (catálogo de
+   programación), scores.ts (ESPN), ai.ts (Ollama y LRU de vectores),
+   resolution.ts, preheat.ts y bindings.ts. El orden final de candidatos es
+   el de sources (`mergeResolutionCandidates`), y el emparejado de nombres,
+   el de @ace/shared. */
 
-import { notImplementedService } from '../../core/stub.js';
+import { FootballServiceImpl } from './service.js';
 import type { FootballDeps, FootballService } from './types.js';
 
 export type * from './types.js';
+export { FootballServiceImpl } from './service.js';
 
-export function createFootballService(_deps: FootballDeps): FootballService {
-  return notImplementedService<FootballService>('football');
+export function createFootballService(deps: FootballDeps): FootballService {
+  return new FootballServiceImpl(deps);
 }

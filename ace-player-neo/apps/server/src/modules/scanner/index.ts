@@ -1,17 +1,15 @@
 /* Fábrica del módulo `scanner` (comprobador de fuentes con el segundo motor).
 
-   ESQUELETO (paso 1.0 de la Fase 1): devuelve un servicio cuyos métodos
-   lanzan `AppError('not_implemented')`, para que `createServices()` monte el
-   árbol entero y cada ruta responda 501 con el formato correcto. El agente
-   del módulo sustituye esto por la implementación real SIN cambiar la firma
-   de la fábrica ni la interfaz de types.ts (si hace falta cambiarla, se
-   cambia aquí y en docs/contratos.md a la vez). */
+   La implementación vive en service.ts (trabajos, cola y veredictos),
+   probe.ts (la sonda), transport.ts (HTTP, muestra y ffprobe), evidence.ts
+   (funciones puras portadas) y verdicts.ts (caché y máquina de estados). */
 
-import { notImplementedService } from '../../core/stub.js';
+import { ScannerServiceImpl } from './service.js';
 import type { ScannerDeps, ScannerService } from './types.js';
 
 export type * from './types.js';
+export { v1ScanRef } from './jobs.js';
 
-export function createScannerService(_deps: ScannerDeps): ScannerService {
-  return notImplementedService<ScannerService>('scanner');
+export function createScannerService(deps: ScannerDeps): ScannerService {
+  return new ScannerServiceImpl(deps);
 }

@@ -1,17 +1,13 @@
-/* Fábrica del módulo `events` (hub SSE).
+/* Fábrica del módulo `events` (hub SSE, arquitectura §5.13). La
+   implementación está en hub.ts; `createHub` devuelve además lo que miran
+   los tests (`attach`, ids y búfer). */
 
-   ESQUELETO (paso 1.0 de la Fase 1): devuelve un servicio cuyos métodos
-   lanzan `AppError('not_implemented')`, para que `createServices()` monte el
-   árbol entero y cada ruta responda 501 con el formato correcto. El agente
-   del módulo sustituye esto por la implementación real SIN cambiar la firma
-   de la fábrica ni la interfaz de types.ts (si hace falta cambiarla, se
-   cambia aquí y en docs/contratos.md a la vez). */
-
-import { notImplementedService } from '../../core/stub.js';
+import { createHub } from './hub.js';
 import type { EventsDeps, EventsHub } from './types.js';
 
 export type * from './types.js';
+export { FORWARDED_EVENTS, SSE_HEADERS, createHub } from './hub.js';
 
-export function createEventsHub(_deps: EventsDeps): EventsHub {
-  return notImplementedService<EventsHub>('events');
+export function createEventsHub(deps: EventsDeps): EventsHub {
+  return createHub(deps);
 }

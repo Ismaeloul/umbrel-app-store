@@ -1,0 +1,38 @@
+[
+  {
+    "ShowId": 11,
+    "Titulo": "LALIGA EA SPORTS",
+    "Directo": true,
+    "GeneroComAntena": "Fútbol",
+    "FechaHoraInicio": 1767294120000,
+    "Ficha": "https://ottcache.dof6.com/movistarplus/webplayer/contents/501/details"
+  },
+  {
+    "ShowId": 12,
+    "Titulo": "LALIGA EA SPORTS (R)",
+    "Directo": false,
+    "GeneroComAntena": "Fútbol",
+    "FechaHoraInicio": 1767297600000
+  },
+  {
+    "ShowId": 13,
+    "Titulo": "ACB",
+    "Directo": true,
+    "GeneroComAntena": "Baloncesto",
+    "FechaHoraInicio": 1767297600000
+  },
+  {
+    "ShowId": 14,
+    "Titulo": "SIN HORA",
+    "Directo": true,
+    "GeneroComAntena": "Futbol",
+    "FechaHoraInicio": "mañana"
+  },
+  {
+    "ShowId": 15,
+    "Titulo": "FUERA DE LA VENTANA",
+    "Directo": true,
+    "GeneroComAntena": "Fútbol",
+    "FechaHoraInicio": 1799999999000
+  }
+]

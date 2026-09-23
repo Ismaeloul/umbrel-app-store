@@ -1,17 +1,15 @@
-/* Fábrica del módulo `playback` (sesiones del motor, visores y mando).
+/* Fábrica del módulo `playback` (sesiones del motor, visores y mando;
+   arquitectura §5.6). La implementación está en service.ts (SessionManager),
+   mando.ts (claim/release de la 0.6.59) y grant.ts (latencia, códec y URL de
+   la respuesta de §6.3). No abre nada ni programa temporizadores hasta que
+   alguien pide un canal; las suscripciones (motor, remux, dispositivos)
+   empiezan con `start()`. */
 
-   ESQUELETO (paso 1.0 de la Fase 1): devuelve un servicio cuyos métodos
-   lanzan `AppError('not_implemented')`, para que `createServices()` monte el
-   árbol entero y cada ruta responda 501 con el formato correcto. El agente
-   del módulo sustituye esto por la implementación real SIN cambiar la firma
-   de la fábrica ni la interfaz de types.ts (si hace falta cambiarla, se
-   cambia aquí y en docs/contratos.md a la vez). */
-
-import { notImplementedService } from '../../core/stub.js';
+import { createPlaybackRuntime } from './service.js';
 import type { PlaybackDeps, PlaybackService } from './types.js';
 
 export type * from './types.js';
 
-export function createPlaybackService(_deps: PlaybackDeps): PlaybackService {
-  return notImplementedService<PlaybackService>('playback');
+export function createPlaybackService(deps: PlaybackDeps): PlaybackService {
+  return createPlaybackRuntime(deps).service;
 }

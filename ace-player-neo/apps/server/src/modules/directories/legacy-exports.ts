@@ -2,86 +2,88 @@
    `directories`, con los mismos nombres (comportamientos-tests.md §3.1-3.2).
 
    Para qué: los tests portados y el contraste con la 0.6.59 (plan E1.4)
-   llaman a estas funciones por su nombre de siempre. En el esqueleto lanzan
-   `not_implemented`; el agente del módulo las implementa o las reexporta de
-   su servicio (mismas entradas y salidas que la 0.6.59). Las firmas son las
-   de server.js con tipos de @ace/shared donde se conocen. */
+   llaman a estas funciones por su nombre de siempre, con sus mismas entradas
+   y salidas. Las puras son las del módulo; las que descargan
+   (`fetchDirectoryText`, `fetchIpfsDirectory`) usan el cliente saliente con
+   el filtro anti-SSRF siempre puesto y los extremos IPFS por defecto (la v2
+   no lee el entorno fuera de config/). `autoSyncWeb` necesita el servicio:
+   sin estado global, se le pasa. */
 
+import { promises as dns } from 'node:dns';
+import { DEFAULTS } from '../../config/index.js';
+import { createSilentLogger } from '../../core/logger.js';
 import { notImplemented } from '../../core/errors.js';
-import type { Item } from '@ace/shared';
+import { fetchText as legacyFetchText } from '../net/legacy-exports.js';
+import type { FetchedResponse, NetClient } from '../net/types.js';
+import { createDirectoryFetcher, type DirectoryFetcher } from './fetcher.js';
+import type { DirectoriesService } from './types.js';
 
-/** `parseM3u` (server.js:2751). */
-export function parseM3u(_text: string): Item[] {
-  throw notImplemented('parseM3u');
+export { parseHtml, parseM3u } from './parsers.js';
+export { alternateGatewayUrl } from './fetcher.js';
+export {
+  ipfsCarBlocks,
+  ipfsCbor,
+  ipfsCidFromText,
+  ipfsProtobuf,
+  ipfsReadFile,
+  ipfsUrlParts,
+  ipfsWalk,
+} from './ipfs.js';
+
+/* El `fetchText` antiguo con la forma del NetClient (solo lo que usa el descargador). */
+function legacyNet(): NetClient {
+  const wrap = async <T extends string | Buffer>(
+    url: string,
+    maxBytes: number | undefined,
+    options: { binary?: boolean; accept?: string },
+  ): Promise<FetchedResponse<T>> => {
+    const body = (await legacyFetchText(url, 0, new Set(), undefined, maxBytes, options)) as T;
+    return { body, url, status: 200, contentType: null };
+  };
+  return {
+    fetchText: (url, options) =>
+      wrap<string>(url, options?.maxBytes, options?.accept ? { accept: options.accept } : {}),
+    fetchBuffer: (url, options) =>
+      wrap<Buffer>(url, options?.maxBytes, {
+        binary: true,
+        ...(options?.accept ? { accept: options.accept } : {}),
+      }),
+    fetchJson: () => Promise.reject(notImplemented('fetchJson antiguo')),
+    isPrivateAddress: () => {
+      throw notImplemented('isPrivateAddress antiguo');
+    },
+    isPrivateHostname: () => {
+      throw notImplemented('isPrivateHostname antiguo');
+    },
+  };
 }
 
-/** `parseHtml` (server.js:2787). */
-export function parseHtml(_text: string): Item[] {
-  throw notImplemented('parseHtml');
+function legacyFetcher(): DirectoryFetcher {
+  return createDirectoryFetcher({
+    net: legacyNet(),
+    logger: createSilentLogger(),
+    resolveTxt: (hostname) => dns.resolveTxt(hostname),
+    delegatedRouting: DEFAULTS.ipfsDelegatedRouting,
+    trustlessGateway: DEFAULTS.ipfsTrustlessGateway,
+  });
 }
 
-/** `alternateGatewayUrl` (server.js:1426): ipfs.io ↔ dweb.link. T-117. */
-export function alternateGatewayUrl(_url: string): string | null {
-  throw notImplemented('alternateGatewayUrl');
-}
-
-/** `fetchDirectoryText` (server.js:1774). T-117. */
-export async function fetchDirectoryText(_url: string): Promise<string> {
-  throw notImplemented('fetchDirectoryText');
+/** `fetchDirectoryText` (server.js:1774): IPFS directo y, si falla, la pasarela. T-117. */
+export function fetchDirectoryText(url: string): Promise<string> {
+  return legacyFetcher().fetchDirectoryText(url);
 }
 
 /** `fetchIpfsDirectory` (server.js:1748). */
-export async function fetchIpfsDirectory(_url: string): Promise<string> {
-  throw notImplemented('fetchIpfsDirectory');
+export function fetchIpfsDirectory(url: string): Promise<string> {
+  return legacyFetcher().fetchIpfsDirectory(url);
 }
 
-/** `ipfsUrlParts` (server.js:1703). T-121. */
-export function ipfsUrlParts(
-  _url: string,
-): { kind: 'ipfs' | 'ipns'; name: string; segments: string[] } | null {
-  throw notImplemented('ipfsUrlParts');
-}
-
-/** `ipfsCidFromText` (server.js:1603): lanza `ipfs_bad_cid`. T-121. */
-export function ipfsCidFromText(_text: string): { codec: number; hash: number; digest: Buffer } {
-  throw notImplemented('ipfsCidFromText');
-}
-
-/** `ipfsCarBlocks` (server.js:1613): bloques comprobados; lanza `ipfs_bad_block`. T-121. */
-export function ipfsCarBlocks(_car: Buffer): Map<string, Buffer> {
-  throw notImplemented('ipfsCarBlocks');
-}
-
-/** `ipfsWalk` (server.js:1667): lanza `ipfs_not_found`. T-121. */
-export function ipfsWalk(
-  _blocks: Map<string, Buffer>,
-  _rootCid: unknown,
-  _segments: string[],
-): unknown {
-  throw notImplemented('ipfsWalk');
-}
-
-/** `ipfsReadFile` (server.js:1682): lanza `response_too_large`. T-121. */
-export function ipfsReadFile(
-  _blocks: Map<string, Buffer>,
-  _cid: unknown,
-  _limit: number,
-  _depth?: number,
-): Buffer {
-  throw notImplemented('ipfsReadFile');
-}
-
-/** `ipfsCbor` (server.js:1497): registro IPNS v2. T-121. */
-export function ipfsCbor(_buffer: Buffer): unknown {
-  throw notImplemented('ipfsCbor');
-}
-
-/** `ipfsProtobuf` (server.js:1467). */
-export function ipfsProtobuf(_buffer: Buffer): unknown {
-  throw notImplemented('ipfsProtobuf');
-}
-
-/** `autoSyncWeb` (server.js:5091): con `AUTO_SYNC=false` no sale a internet. T-119. */
-export async function autoSyncWeb(): Promise<void> {
-  throw notImplemented('autoSyncWeb');
+/**
+ * `autoSyncWeb` (server.js:5091). En la 0.6.59 no recibía nada porque leía
+ * globales; aquí se le pasa el servicio (con `AUTO_SYNC=false` no sale a
+ * internet, T-119). Sin servicio, `not_implemented`.
+ */
+export async function autoSyncWeb(service?: Pick<DirectoriesService, 'autoSync'>): Promise<void> {
+  if (!service) throw notImplemented('autoSyncWeb sin el servicio de directorios');
+  await service.autoSync('periodic');
 }

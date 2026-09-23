@@ -1,22 +1,68 @@
 /* Exportaciones de server.js (0.6.59) que corresponden al módulo
-   `football`, con los mismos nombres (comportamientos-tests.md §3.1-3.2).
+   `football`, con los mismos nombres, entradas y salidas
+   (comportamientos-tests.md §3.1-3.2). Las usan los tests portados y el
+   contraste con la 0.6.59; el código nuevo usa el servicio.
 
-   Para qué: los tests portados y el contraste con la 0.6.59 (plan E1.4)
-   llaman a estas funciones por su nombre de siempre. En el esqueleto lanzan
-   `not_implemented`; el agente del módulo las implementa o las reexporta de
-   su servicio (mismas entradas y salidas que la 0.6.59). Las firmas son las
-   de server.js con tipos de @ace/shared donde se conocen. */
+   Fidelidad: estas funciones reproducen la 0.6.59, no la v2. Por eso
+   `fetchFutbolEnLaTvSchedule` da ids posicionales y la EPG y TheSportsDB no
+   traen `start`: los cambios de la v2 (ids estables, `start` en todas las
+   fuentes, plazo global) están en el servicio y en docs/compat.md.
 
-import { notImplemented } from '../../core/errors.js';
-import type {
-  FootballMatch,
-  FootballSchedule,
-  LiveScore,
-  PreheatPublic,
-  Resolution,
-  ResolutionCandidate,
-  StateV1,
-} from '@ace/shared';
+   Lo que en la 0.6.59 eran globales (`footballProgramming`, `scoresCache`,
+   `preheatMatches`, `semanticEmbeddingCache`) es aquí una copia propia de la
+   fachada. Lo que leía el entorno usa los valores por defecto (sin Ollama:
+   la IA solo se activa con `semantic.enabled`, como en los tests antiguos).
+   Lo que necesita la agenda o el buscador real recibe el servicio o lanza
+   `not_implemented`; la fachada no tiene comprobador (`scanner_offline`). */
+
+import { FETCH_MAX_BYTES, type FootballSchedule } from '@ace/shared';
+import { DEFAULTS } from '../../config/index.js';
+import { createSystemClock } from '../../core/clock.js';
+import { AppError, notImplemented } from '../../core/errors.js';
+import { fetchText as legacyNetFetchText } from '../net/legacy-exports.js';
+import { applyLearnedSourceRules } from '../sources/legacy-exports.js';
+import {
+  buildFootballDemoSchedule as buildDemo,
+  enrichFootballLeagues as enrichLeagues,
+  fetchEpgFootballSchedule as fetchEpg,
+  fetchFutbolEnLaTvSchedule as fetchFltv,
+  lookupFootballLeague,
+  normalizeEpgAirings as normalizeEpg,
+  normalizeFootballRows as normalizeRows,
+  type AgendaContext,
+  type EpgAiring,
+  type TextFetcher,
+} from './agenda-sources.js';
+import {
+  applySemanticCandidateScores as applySemantic,
+  asVectorStore,
+  semanticWarmEmbeddings as warmEmbeddings,
+  unavailableEmbedder,
+  type EmbedFunction,
+  type SemanticCandidate,
+  type VectorStore,
+  type WarmResult,
+} from './ai.js';
+import { AGENDA_FETCH_MS, LEGACY_FOOTBALL_DAYS } from './constants.js';
+import {
+  footballPreheatStage as preheatStage,
+  preheatFootballMatch as preheatMatch,
+  runPreheatRound,
+  type PreheatContext,
+  type PreheatRecord,
+  type PreheatStage,
+} from './preheat.js';
+import { ProgrammingCatalog, type ProgramEntry } from './programming.js';
+import {
+  resolveFootballChannel as resolveCore,
+  type BaseCandidate,
+  type ResolutionCore,
+  type ResolutionState,
+  type ResolvableItem,
+} from './resolution.js';
+import { pruneScoresCache as pruneScores, type LegacyScores, type ScoresCache } from './scores.js';
+import { isoDateInMadrid } from './time.js';
+import type { FootballService } from './types.js';
 
 /* El emparejado de nombres ya está portado en @ace/shared (T-017, T-045 a
    T-049, T-059 a T-062, T-088): aquí se reexporta el de verdad. */
@@ -30,244 +76,309 @@ export {
   semanticNumbersCompatible,
 } from '@ace/shared';
 
-/** `cosineSimilarity` (server.js:641). */
-export function cosineSimilarity(_left: number[], _right: number[]): number {
-  throw notImplemented('cosineSimilarity');
+/* El orden final de candidatos es de sources (una sola implementación). */
+export {
+  canalEsGenerico,
+  mergeResolutionCandidates,
+  repartirEntreProveedores,
+  resolutionTier,
+} from '../sources/index.js';
+
+export { cosineSimilarity, semanticScore } from './ai.js';
+export { decodeHtml, epgSplitTeams, parseFutbolEnLaTv } from './agenda-sources.js';
+export { footballProgramChannelNames } from './programming.js';
+export { aceSearchQueries, resolutionChannels, scoreResolutionCandidate } from './resolution.js';
+export {
+  bestTeamSimilarity,
+  canonicalTeam,
+  espnLeaguesFor,
+  matchIsInScoreWindow,
+  readEspnEvent,
+  teamSimilarity,
+} from './scores.js';
+export { madridDateTime } from './time.js';
+
+// --- Estado propio de la fachada (los globales de server.js:158-173, 2143) ---
+
+const legacyClock = createSystemClock();
+const legacyProgramming = new ProgrammingCatalog();
+const legacyScores: ScoresCache = new Map();
+const legacyPreheats = new Map<string, PreheatRecord>();
+const legacyVectors = new Map<string, unknown>();
+let legacyPreheatBusy = false;
+
+/** `fetchText` de la fachada de net (filtro anti-SSRF siempre puesto). */
+const legacyFetchText: TextFetcher = async (url, options = {}) =>
+  String(
+    await legacyNetFetchText(
+      url,
+      0,
+      new Set(),
+      legacyClock.now() + (options.totalTimeoutMs ?? AGENDA_FETCH_MS),
+      options.maxBytes ?? FETCH_MAX_BYTES,
+    ),
+  );
+
+function legacyAgendaContext(): AgendaContext {
+  return {
+    now: legacyClock.now(),
+    generatedAt: () => legacyClock.date().toISOString(),
+    days: LEGACY_FOOTBALL_DAYS,
+    country: DEFAULTS.footballCountry,
+    apiKey: DEFAULTS.footballApiKey,
+    flavor: 'legacy',
+  };
+}
+
+type LegacySchedule = FootballSchedule & { success: true };
+
+function withSuccess(schedule: FootballSchedule): LegacySchedule {
+  return { success: true, ...schedule };
+}
+
+// --- IA ---
+
+interface LegacyEmbeddingOptions {
+  readonly cache?: VectorStore | Map<string, unknown>;
+  readonly embed?: EmbedFunction;
+  readonly batchSize?: number;
+  readonly enabled?: boolean;
 }
 
 /** `semanticWarmEmbeddings` (server.js:725). T-100. */
-export async function semanticWarmEmbeddings(
-  _values: string[],
-  _options?: Record<string, unknown>,
-): Promise<{ total: number; requested: number; failed: number; error: string | null }> {
-  throw notImplemented('semanticWarmEmbeddings');
+export function semanticWarmEmbeddings(
+  values: unknown,
+  options: LegacyEmbeddingOptions = {},
+): Promise<WarmResult> {
+  return warmEmbeddings(values, {
+    cache: asVectorStore(options.cache ?? legacyVectors),
+    embed: options.embed ?? unavailableEmbedder,
+    ...(options.batchSize === undefined ? {} : { batchSize: options.batchSize }),
+  });
 }
 
 /** `applySemanticCandidateScores` (server.js:778). T-019, T-081, T-082, T-086. */
-export async function applySemanticCandidateScores(
-  _requested: string[],
-  _candidates: ResolutionCandidate[],
-  _programChannels: string[],
-  _options?: Record<string, unknown>,
-): Promise<{
-  candidates: ResolutionCandidate[];
-  used: boolean;
-  error: string | null;
-  catalogSize: number;
-}> {
-  throw notImplemented('applySemanticCandidateScores');
+export function applySemanticCandidateScores<T extends SemanticCandidate>(
+  requested: string[],
+  candidates: T[],
+  programChannels: unknown,
+  options: LegacyEmbeddingOptions = {},
+) {
+  return applySemantic(requested, candidates, programChannels, {
+    enabled: options.enabled ?? false,
+    cache: asVectorStore(options.cache ?? legacyVectors),
+    embed: options.embed ?? unavailableEmbedder,
+  });
 }
 
-/** `semanticScore` (server.js:767). T-084. */
-export function semanticScore(_similarity: number): number {
-  throw notImplemented('semanticScore');
-}
+// --- Agenda ---
 
 /** `normalizeFootballRows` (server.js:1872): filas de TheSportsDB. T-006. */
-export function normalizeFootballRows(_rows: unknown[]): FootballMatch[] {
-  throw notImplemented('normalizeFootballRows');
+export function normalizeFootballRows(rows: unknown) {
+  return normalizeRows(rows, { country: DEFAULTS.footballCountry });
 }
 
-/** `normalizeEpgAirings` (server.js:2430). T-014, T-015. */
-export function normalizeEpgAirings(_airings: unknown[]): FootballMatch[] {
-  throw notImplemented('normalizeEpgAirings');
+/** `normalizeEpgAirings` (server.js:2430): sin `start`, como la 0.6.59. T-014, T-015. */
+export function normalizeEpgAirings(airings: readonly EpgAiring[]) {
+  return normalizeEpg(airings);
 }
 
-/** `parseFutbolEnLaTv` (server.js:2016). T-007, T-008. */
-export function parseFutbolEnLaTv(_html: string, _window: Set<string> | null): unknown[] {
-  throw notImplemented('parseFutbolEnLaTv');
+/** `fetchFutbolEnLaTvSchedule` (server.js:2052): sale a internet. */
+export async function fetchFutbolEnLaTvSchedule(): Promise<LegacySchedule> {
+  return withSuccess(await fetchFltv(legacyFetchText, legacyAgendaContext()));
 }
 
-/** `espnLeaguesFor` (server.js:2145). T-039. */
-export function espnLeaguesFor(_competition: string): string[] | null {
-  throw notImplemented('espnLeaguesFor');
-}
-
-/** `teamSimilarity` (server.js:2185). T-040, T-041. */
-export function teamSimilarity(_a: string, _b: string): number {
-  throw notImplemented('teamSimilarity');
-}
-
-/** `bestTeamSimilarity` (server.js:2201). */
-export function bestTeamSimilarity(_mine: string, _side: unknown): number {
-  throw notImplemented('bestTeamSimilarity');
-}
-
-/** `canonicalTeam` (server.js:2177). */
-export function canonicalTeam(_value: string): string {
-  throw notImplemented('canonicalTeam');
-}
-
-/** `readEspnEvent` (server.js:2242). T-043, T-044. */
-export function readEspnEvent(
-  _event: unknown,
-): { homeScore: number; awayScore: number; state: string; clock: string; start: number } | null {
-  throw notImplemented('readEspnEvent');
-}
-
-/** `matchIsInScoreWindow` (server.js:2267). T-042. */
-export function matchIsInScoreWindow(_match: { start?: number }, _now: number): boolean {
-  throw notImplemented('matchIsInScoreWindow');
-}
-
-/** `getLiveScores` (server.js:2276). */
-export async function getLiveScores(): Promise<{
-  success: boolean;
-  scores: Record<string, LiveScore>;
-}> {
-  throw notImplemented('getLiveScores');
-}
-
-/** `fetchFutbolEnLaTvSchedule` (server.js:2052). */
-export async function fetchFutbolEnLaTvSchedule(): Promise<FootballSchedule> {
-  throw notImplemented('fetchFutbolEnLaTvSchedule');
-}
-
-/** `decodeHtml` (server.js:2001). */
-export function decodeHtml(_value: string): string {
-  throw notImplemented('decodeHtml');
-}
-
-/** `epgSplitTeams` (server.js:2384). T-013. */
-export function epgSplitTeams(_title: string): { home: string; away: string } | null {
-  throw notImplemented('epgSplitTeams');
-}
-
-/** `fetchEpgFootballSchedule` (server.js:2467). */
-export async function fetchEpgFootballSchedule(): Promise<FootballSchedule> {
-  throw notImplemented('fetchEpgFootballSchedule');
-}
-
-/** `madridDateTime` (server.js:1841): hora UTC de TheSportsDB a Madrid. T-016. */
-export function madridDateTime(
-  _dateEvent: string,
-  _strTime: string,
-): { date: string; time: string } | null {
-  throw notImplemented('madridDateTime');
+/** `fetchEpgFootballSchedule` (server.js:2467): sale a internet. */
+export async function fetchEpgFootballSchedule(): Promise<LegacySchedule> {
+  return withSuccess(await fetchEpg(legacyFetchText, legacyAgendaContext()));
 }
 
 /** `enrichFootballLeagues` (server.js:1970). T-023. */
-export async function enrichFootballLeagues(
-  _matches: FootballMatch[],
-  _lookup?: (idEvent: string) => Promise<string>,
-): Promise<void> {
-  throw notImplemented('enrichFootballLeagues');
+export function enrichFootballLeagues<T extends { id: string; competition: string }>(
+  matches: T[],
+  lookup: (idEvent: string) => Promise<string> = (idEvent) =>
+    lookupFootballLeague(legacyFetchText, DEFAULTS.footballApiKey, idEvent),
+): Promise<T[]> {
+  return enrichLeagues(matches, lookup);
 }
 
 /** `buildFootballDemoSchedule` (server.js:1917). T-020, T-024. */
-export function buildFootballDemoSchedule(_start?: string): FootballSchedule {
-  throw notImplemented('buildFootballDemoSchedule');
+export function buildFootballDemoSchedule(
+  startDate: string = isoDateInMadrid(legacyClock.now()),
+): LegacySchedule {
+  return withSuccess(
+    buildDemo(startDate, {
+      generatedAt: () => legacyClock.date().toISOString(),
+      days: LEGACY_FOOTBALL_DAYS,
+    }),
+  );
 }
 
-/** `getFootballSchedule` (server.js:2723). T-024. */
-export async function getFootballSchedule(): Promise<FootballSchedule> {
-  throw notImplemented('getFootballSchedule');
+/**
+ * `getFootballSchedule` (server.js:2723). En la 0.6.59 leía la caché global;
+ * aquí se le pasa el servicio (sin él, `not_implemented`). T-024.
+ */
+export async function getFootballSchedule(
+  service?: Pick<FootballService, 'schedule'>,
+): Promise<LegacySchedule> {
+  if (!service) throw notImplemented('getFootballSchedule sin el servicio de fútbol');
+  return withSuccess(await service.schedule());
 }
 
-/** `footballProgramChannelNames` (server.js:2564). T-020. */
-export function footballProgramChannelNames(_schedule: FootballSchedule): string[] {
-  throw notImplemented('footballProgramChannelNames');
+/** `rememberFootballProgramming` (server.js:2682), sobre el catálogo de la fachada. T-020. */
+export function rememberFootballProgramming(schedule: unknown): void {
+  legacyProgramming.remember(schedule);
 }
 
-/** `rememberFootballProgramming` (server.js:2682). T-020. */
-export function rememberFootballProgramming(_schedule: FootballSchedule): void {
-  throw notImplemented('rememberFootballProgramming');
+/** `footballProgramMatch` (server.js:2719), del catálogo de la fachada. T-020. */
+export function footballProgramMatch(id: unknown): ProgramEntry | null {
+  return legacyProgramming.match(id);
 }
 
-/** `footballProgramMatch` (server.js:2719). T-020. */
-export function footballProgramMatch(_id: string): Record<string, unknown> | null {
-  throw notImplemented('footballProgramMatch');
+// --- Marcadores ---
+
+/** `getLiveScores` (server.js:2276): necesita el servicio (agenda y ESPN). */
+export async function getLiveScores(
+  service?: Pick<FootballService, 'legacyScores'>,
+): Promise<LegacyScores> {
+  if (!service) throw notImplemented('getLiveScores sin el servicio de fútbol');
+  return (await service.legacyScores()) as LegacyScores;
 }
 
-/** `footballPreheatStage` (server.js:4337). T-078. */
-export function footballPreheatStage(
-  _start: number,
-  _now?: number,
-): 'discovery' | 'scan' | 'kickoff' | 'live' | null {
-  throw notImplemented('footballPreheatStage');
-}
-
-/** `preheatFootballMatch` (server.js:4372). */
-export async function preheatFootballMatch(
-  _match: FootballMatch,
-  _stage: string,
-  _options?: Record<string, unknown>,
-): Promise<PreheatPublic | null> {
-  throw notImplemented('preheatFootballMatch');
-}
-
-/** `runFootballPreheat` (server.js:4431). */
-export async function runFootballPreheat(_options?: Record<string, unknown>): Promise<void> {
-  throw notImplemented('runFootballPreheat');
-}
-
-/** `repartirEntreProveedores` (server.js:3786). T-064. */
-export function repartirEntreProveedores(
-  _candidates: ResolutionCandidate[],
-): ResolutionCandidate[] {
-  throw notImplemented('repartirEntreProveedores');
-}
-
-/** `scoreResolutionCandidate` (server.js:3687). T-056 a T-058. */
-export function scoreResolutionCandidate(
-  _channels: string[],
-  _item: Record<string, unknown>,
-  _source: string,
-): ResolutionCandidate {
-  throw notImplemented('scoreResolutionCandidate');
-}
-
-/** `mergeResolutionCandidates` (server.js:4004). T-050 a T-058, T-065, T-066, T-068 a T-071, T-085, T-086, T-092, T-093, T-096, T-097. */
-export function mergeResolutionCandidates(
-  _candidates: ResolutionCandidate[],
-  _options?: Record<string, unknown>,
-): ResolutionCandidate[] {
-  throw notImplemented('mergeResolutionCandidates');
-}
-
-/** `canalEsGenerico` (server.js:3989). T-095, T-098. */
-export function canalEsGenerico(_canal: string, _pedidos: string[]): boolean {
-  throw notImplemented('canalEsGenerico');
-}
-
-/** `resolutionTier` (server.js:3762). */
-export function resolutionTier(_candidate: ResolutionCandidate): number {
-  throw notImplemented('resolutionTier');
-}
-
-/** `aceSearchQueries` (server.js:4159). T-021. */
-export function aceSearchQueries(_channels: string[], _semanticEnabled?: boolean): string[] {
-  throw notImplemented('aceSearchQueries');
-}
-
-/** `resolveFootballChannel` (server.js:4227): lanza `channel_required`. T-009 a T-012, T-021, T-022, T-026, T-028, T-029, T-067, T-099, T-114. */
-export async function resolveFootballChannel(
-  _state: StateV1,
-  _channels: string[],
-  _search?: (query: string) => Promise<unknown[]>,
-  _options?: Record<string, unknown>,
-): Promise<Resolution & { success: true }> {
-  throw notImplemented('resolveFootballChannel');
-}
-
-/** `resolutionChannels` (server.js:3667): hasta 8. T-113. */
-export function resolutionChannels(_values: unknown[]): string[] {
-  throw notImplemented('resolutionChannels');
-}
-
-/** `pruneScoresCache` (server.js:3355). T-114. */
-export function pruneScoresCache(_now?: number): void {
-  throw notImplemented('pruneScoresCache');
+/** `pruneScoresCache` (server.js:3355) sobre la caché de la fachada. T-114. */
+export function pruneScoresCache(now: number = legacyClock.now()): void {
+  pruneScores(legacyScores, now);
 }
 
 /**
  * `scoresCache` (server.js:2143). En la 0.6.59 es un `Map` global; en la v2
- * no hay globales, así que es una función que devuelve la caché del servicio
- * (T-114 la usará así).
+ * no hay globales, así que es una función que devuelve la caché de la
+ * fachada (la del servicio es `FootballServiceImpl.scoresCacheMap()`). T-114.
  */
-export function scoresCache(): Map<
-  string,
-  { payload: unknown; expiresAt: number; pending: unknown }
-> {
-  throw notImplemented('scoresCache');
+export function scoresCache(): ScoresCache {
+  return legacyScores;
+}
+
+// --- Resolución ---
+
+type LegacySearch = (query: string) => Promise<readonly ResolvableItem[]>;
+
+/* Sin motor en la fachada: la búsqueda falla como contra el host por
+   defecto en los tests de la 0.6.59 (comportamientos-tests §1.4). */
+const engineUnavailable: LegacySearch = async () => {
+  throw new AppError('engine_unavailable');
+};
+
+interface LegacyResolveOptions {
+  readonly mode?: 'research' | 'default';
+  readonly program?: Readonly<Record<string, unknown>> | null;
+  readonly programChannels?: readonly unknown[];
+  readonly semantic?: LegacyEmbeddingOptions;
+}
+
+/**
+ * `resolveFootballChannel` (server.js:4227): lanza `channel_required`.
+ * T-009 a T-012, T-021, T-022, T-026, T-028, T-029, T-067, T-099, T-114.
+ */
+export async function resolveFootballChannel(
+  state: unknown,
+  channels: unknown,
+  search: LegacySearch = engineUnavailable,
+  options: LegacyResolveOptions = {},
+): Promise<ResolutionCore & { success: true }> {
+  const current = (state && typeof state === 'object' ? state : {}) as ResolutionState;
+  const semantic = options.semantic ?? {};
+  const result = await resolveCore(
+    current,
+    channels,
+    {
+      search,
+      applyLearned: (requested, candidates: readonly BaseCandidate[]) =>
+        applyLearnedSourceRules(
+          current as Parameters<typeof applyLearnedSourceRules>[0],
+          requested,
+          candidates,
+        ),
+      refreshLists: () => {},
+      semantic: {
+        enabled: semantic.enabled ?? false,
+        embed: semantic.embed ?? unavailableEmbedder,
+        cache: asVectorStore(semantic.cache ?? legacyVectors),
+      },
+      model: DEFAULTS.ollamaEmbedModel,
+      programChannels: legacyProgramming.channels,
+    },
+    {
+      mode: options.mode ?? 'default',
+      program: options.program ?? null,
+      ...(options.programChannels ? { programChannels: options.programChannels } : {}),
+    },
+  );
+  return { success: true, ...result };
+}
+
+// --- Precalentado ---
+
+/** `footballPreheatStage` (server.js:4337). T-078. */
+export function footballPreheatStage(
+  start: unknown,
+  now: number = legacyClock.now(),
+): PreheatStage | null {
+  return preheatStage(start, now);
+}
+
+interface LegacyPreheatOptions {
+  readonly now?: number;
+  readonly state?: unknown;
+  readonly search?: LegacySearch;
+  readonly payload?: unknown;
+  readonly resolve?: (
+    state: unknown,
+    channels: string[],
+    search: LegacySearch,
+    options: { readonly program: Readonly<Record<string, unknown>> },
+  ) => Promise<ResolutionCore>;
+}
+
+function legacyPreheatContext(options: LegacyPreheatOptions): PreheatContext {
+  const search = options.search ?? engineUnavailable;
+  const resolve = options.resolve ?? resolveFootballChannel;
+  return {
+    records: legacyPreheats,
+    now: () => legacyClock.now(),
+    state: () => (options.state ?? {}) as ResolutionState,
+    refreshLists: () => {},
+    resolve: (state, channels, resolveOptions) => resolve(state, channels, search, resolveOptions),
+    enqueue: () => null,
+  };
+}
+
+/** `preheatFootballMatch` (server.js:4372): sin comprobador en la fachada, `scanner_offline`. */
+export function preheatFootballMatch(
+  match: unknown,
+  stage: PreheatStage,
+  options: LegacyPreheatOptions = {},
+): Promise<PreheatRecord | null> {
+  return preheatMatch(
+    legacyPreheatContext(options),
+    match,
+    stage,
+    Number(options.now) || legacyClock.now(),
+  );
+}
+
+/** `runFootballPreheat` (server.js:4431): con `payload` (la fachada no tiene agenda propia). */
+export async function runFootballPreheat(options: LegacyPreheatOptions = {}): Promise<void> {
+  if (options.payload === undefined) throw notImplemented('runFootballPreheat sin agenda');
+  if (legacyPreheatBusy) return;
+  legacyPreheatBusy = true;
+  try {
+    await runPreheatRound(
+      legacyPreheatContext(options),
+      options.payload,
+      Number(options.now) || legacyClock.now(),
+    );
+  } finally {
+    legacyPreheatBusy = false;
+  }
 }

@@ -68,3 +68,12 @@ export interface AuthService extends Lifecycle {
   /** DELETE /api/v1/devices/:id: lanza `device_not_found`. Emite `devices.changed` (`revoked`). */
   revokeDevice(deviceId: string): Promise<DeviceRevokeResponse>;
 }
+
+/**
+ * Lo único de auth que necesitan las URLs de vídeo de iOS (añadido en la
+ * Fase 1.1): firmar el `?t=` al dar la URL (la ruta `channelStream`, con
+ * `services.auth`) y comprobarlo en /api/v1/video (lo hace app.ts antes del
+ * manejador, con `playback.isViewerAlive`). Al reescribir cada m3u8, remux
+ * reutiliza el `t` que le ha llegado: no hace falta volver a firmar.
+ */
+export type VideoUrlSigner = Pick<AuthService, 'signVideoToken' | 'verifyVideoToken'>;

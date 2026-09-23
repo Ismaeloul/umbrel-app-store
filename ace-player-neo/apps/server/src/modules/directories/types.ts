@@ -13,7 +13,19 @@
      dweb.link si se satura (T-117, B-197).
 
    Tests a portar: T-116 (B-195), T-117 (B-197), T-119 (B-194),
-   T-121 (B-196), y T-036 (B-185, renombres que sobreviven a la sincronización). */
+   T-121 (B-196), y T-036 (B-185, renombres que sobreviven a la sincronización).
+
+   Decisiones del paso 1.1 (docs/cobertura/directories.md):
+   - `AUTO_SYNC=false` apaga TODA sincronización automática (arranque,
+     periódica y la de la resolución), como la 0.6.59 (`autoSyncWeb` volvía
+     sin hacer nada, server.js:5092, también desde `refrescarListasSiTocan`).
+     Solo `autoSync('manual')` y `sync()` salen a internet con él.
+   - El cerrojo es una cola FIFO por directorio: la periódica suelta el
+     cerrojo entre un directorio y el siguiente, así que una sincronización
+     manual espera como mucho a que termine el directorio en curso.
+   - La espera exponencial (5 min, 10, 20… hasta 3 h) solo frena a la
+     sincronización que lanza la resolución, y esta solo refresca los
+     directorios que tocan (más de 30 min y sin espera pendiente). */
 
 import type { DirectorySyncBody, DirectoryView, Item, LegacyDirectoryResponse } from '@ace/shared';
 import type { CoreDeps, Lifecycle } from '../../core/module.js';
@@ -23,7 +35,14 @@ import type { StateService } from '../state/types.js';
 export interface DirectoriesDeps extends CoreDeps {
   readonly net: NetClient;
   readonly state: StateService;
+  /** DNSLink: registros TXT (por defecto, `dns.promises.resolveTxt`). Los tests lo sustituyen. */
+  readonly resolveTxt?: (hostname: string) => Promise<string[][]>;
+  /** Aleatorio de los ids nuevos `directorio-<base36>-<5>` (por defecto, `Math.random`). */
+  readonly random?: () => number;
 }
+
+/** Canal tal y como lo devuelven los parsers de la 0.6.59, antes de normalizar. */
+export type { ParsedStream } from './parsers.js';
 
 /** Por qué se sincroniza (para el log y para decidir la espera exponencial). */
 export type SyncReason = 'manual' | 'startup' | 'periodic' | 'resolution';
@@ -44,16 +63,21 @@ export interface DirectoriesService extends Lifecycle {
   remove(sourceId: string): Promise<LegacyDirectoryResponse>;
   /**
    * `autoSyncWeb` (server.js:5091): sincroniza en serie los directorios que
-   * tocan. Con `AUTO_SYNC=false` la periódica y la de arranque no salen a
-   * internet (T-119); la de la resolución sí, en segundo plano.
+   * tocan. Con `AUTO_SYNC=false` no sale a internet salvo con `manual`
+   * (T-119). Si ya hay una en marcha, devuelve esa.
    */
   autoSync(reason: SyncReason): Promise<void>;
   /** La resolución la llama sin esperar: refresca lo que lleve más de 30 min (B-193). */
   refreshStaleInBackground(): void;
 
   // --- Funciones puras (sin red), expuestas para sus tests ---
-  /** `parseM3u` (server.js:2751): `#EXTINF` con `tvg-id` como alias y `group-title` como categoría. */
+  /**
+   * `parseM3u` (server.js:2751): `#EXTINF` con `tvg-id` como alias y
+   * `group-title` como categoría. Devuelve los canales YA normalizados como
+   * se guardarían (tope de 500, sin duplicados, con fecha del reloj); la forma
+   * cruda de la 0.6.59 está en legacy-exports.ts.
+   */
   parseM3u(text: string): Item[];
-  /** `parseHtml` (server.js:2787): enlaces `acestream://` y `?id=` de una página. */
+  /** `parseHtml` (server.js:2787): enlaces `acestream://` y `?id=` de una página (normalizados). */
   parseHtml(text: string): Item[];
 }

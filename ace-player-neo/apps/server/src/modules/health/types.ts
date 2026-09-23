@@ -40,6 +40,31 @@ export interface HealthDeps extends CoreDeps {
   readonly football: FootballService;
   readonly diagnostics: DiagnosticsService;
   readonly events: EventsHub;
+  /**
+   * Sondas de lo que ningún servicio guarda todavía en caché (Ollama y, si
+   * el comprobador no expone `online`, su `get_version`). Opcional: sin ella
+   * se usan las reales (fetch con plazo). Los tests pasan unas falsas.
+   */
+  readonly probes?: HealthProbes;
+}
+
+/** Resultado de preguntar a Ollama por sus modelos (`/api/tags`). */
+export interface OllamaTags {
+  /** El HTTP fue 2xx. */
+  readonly ok: boolean;
+  /** Nombres de los modelos (`name` o `model` de cada entrada). */
+  readonly models: readonly string[];
+}
+
+/**
+ * Peticiones de red que hace la salud. Se cachean (HEALTH_PROBE_TTL_MS): nunca
+ * se hace una por cada GET /api/health (backend-modulos §8.7.37).
+ */
+export interface HealthProbes {
+  /** `GET <OLLAMA_BASE_URL>/api/tags`. Lanza si no responde. */
+  ollamaTags(signal: AbortSignal): Promise<OllamaTags>;
+  /** `get_version` del motor comprobador: true si responde 2xx. */
+  scannerVersion(signal: AbortSignal): Promise<boolean>;
 }
 
 export interface HealthService {

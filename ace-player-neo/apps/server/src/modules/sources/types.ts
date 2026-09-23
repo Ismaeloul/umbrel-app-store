@@ -42,13 +42,25 @@ export interface SourcesDeps extends CoreDeps {
   readonly scanner: ScannerService;
 }
 
+/** Lo que el informe necesita de fuera y sources no puede pedir (football depende de sources). */
+export interface ReportOptions {
+  /**
+   * Canales anunciados del partido `matchId` en la agenda (`footballProgramMatch`):
+   * si el cuerpo no trae `channel`, el informe usa el primero (api.md §4.14).
+   */
+  readonly programChannels?: (matchId: string) => readonly string[];
+}
+
 export interface SourcesService extends Lifecycle {
   /**
    * `reportSource` (server.js:4509): cuarentena, corrección si es
    * `wrong_channel` y recomprobación prioritaria (T-079; B-015, B-052, B-053).
    * Acepta el cuerpo antiguo sin validar.
    */
-  report(body: ReportBody | Record<string, unknown>): Promise<ReportResponse>;
+  report(
+    body: ReportBody | Record<string, unknown>,
+    options?: ReportOptions,
+  ): Promise<ReportResponse>;
   /**
    * `registrarResultadoDeFuente` (server.js:3939): resultado real de
    * reproducir. `arranco`, `fallo` y `cayo` suman; `sigue` solo renueva el

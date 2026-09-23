@@ -69,6 +69,19 @@
   parcial (workflow `wf_75432a9b-19d`, 3 agentes, sin verificadores aparte:
   los tests los paso yo). Las maquetas esperan a que termine para no volver
   a quemar la cuota con muchos agentes a la vez.
+- 02:25: paso 1.0 terminado y verificado por mí (typecheck, shared 65,
+  server 107, motor falso 86, deploy 108 tests; ESLint limpio). Commit
+  `ff107c8`. Aviso del agente del motor falso: en este PC `127.0.0.1` corta
+  ~1 de cada 6 conexiones (NordVPN/AdGuard); los tests escuchan en `::1`.
+- 02:30: paso 1.1 lanzado (workflow `wf_1bee92ed-1e4`): 7 agentes de
+  módulo (estado+salud, motor+búsqueda+engine-control, comprobador+fuentes,
+  red+directorios, fútbol, reproducción+remux, acceso+eventos+diagnóstico),
+  como mucho 4 a la vez. Si se corta por la cuota, relanzar con
+  `resumeFromRunId` (los terminados se reutilizan) y a los cortados
+  pedirles que retomen lo que haya en disco.
+- 02:35: Isma desactiva AdGuard; la extensión Claude in Chrome ya navega
+  (probado con la 0.6.59 local). Las pruebas en su navegador se hacen con
+  ella; Playwright sigue para CI y para las capturas en serie.
 
 ## Agentes y workflows lanzados
 

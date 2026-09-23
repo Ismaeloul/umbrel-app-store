@@ -29,6 +29,55 @@ import type { EngineService } from '../engine/types.js';
 
 export interface RemuxDeps extends CoreDeps {
   readonly engine: EngineService;
+  /** Quién lanza ffmpeg. Por defecto `spawn('ffmpeg')`; en los tests, un ffmpeg falso. */
+  readonly launcher?: ProcessLauncher;
+  /**
+   * Raíz de /proc para buscar ffmpeg huérfanos con `ace_session=`. Por defecto
+   * `/proc` en Linux y nada en otros sistemas; `null` lo desactiva.
+   */
+  readonly procRoot?: string | null;
+  /** Cómo se mata un huérfano (tests). Por defecto, `kill(-pid)` y si no `kill(pid)`. */
+  readonly killPid?: (pid: number) => void;
+  /** Vigilar la carpeta con `fs.watch` para enterarse antes de los segmentos nuevos. Por defecto sí. */
+  readonly watchFiles?: boolean;
+}
+
+/** Proceso ffmpeg lanzado (el real o el falso de los tests). */
+export interface RemuxProcess {
+  readonly pid: number | undefined;
+  onExit(listener: (code: number | null, signal: string | null) => void): void;
+  /** `ENOENT` = no hay ffmpeg (el remux se desactiva sin romper nada: `ffmpeg_missing`). */
+  onError(listener: (error: Error & { code?: string }) => void): void;
+  onStderr(listener: (chunk: Buffer) => void): void;
+  /** Mata el proceso (y su grupo en POSIX). Nunca lanza. */
+  kill(): void;
+}
+
+export interface ProcessLauncher {
+  spawn(args: readonly string[]): RemuxProcess;
+}
+
+/** Por qué una sesión del remux deja sin vídeo a sus visores. */
+export type RemuxCloseReason = 'idle' | 'stopped' | 'died' | 'evicted' | 'shutdown';
+
+/**
+ * Avisos del remux a quien lo usa (playback) sin bus ni dependencia al revés
+ * (playback depende de remux, no al contrario).
+ */
+export interface RemuxListener {
+  /** Se ha servido un fichero de la sesión: cuenta como latido (arquitectura §5.6). */
+  onAccess?(sessionId: string, deviceId: string | null): void;
+  /** Visores que se quedan sin remux: un `stop` antiguo, el recolector, ffmpeg muerto o un desalojo. */
+  onDetached?(sessionId: string, viewerIds: readonly string[], reason: RemuxCloseReason): void;
+}
+
+export interface RemuxEnsureOptions {
+  /**
+   * Enganche de un cliente 0.6.x por `/api/remux`: cada petición estrena
+   * ficha (`legacyToken`) y `device` (vacío si no llegó `dev`) queda como
+   * cliente de la sesión, como en `ensureRemux` (server.js:237-245, B-222).
+   */
+  readonly legacy?: { readonly device: string };
 }
 
 /** Lo que necesita el remux de la sesión del motor que le da playback. */
@@ -49,11 +98,15 @@ export interface RemuxHandle {
   readonly startedAt: number;
   /** Lista lista para reproducir (arranque completado). */
   readonly ready: boolean;
+  /** Ficha de 16 hex del enganche antiguo (solo con `options.legacy`). */
+  readonly legacyToken?: string;
 }
 
 export interface RemuxStats {
   readonly sessions: number;
   readonly max: number;
+  /** No hay ffmpeg: el remux está desactivado (`ffmpeg_missing`). */
+  readonly ffmpegMissing?: boolean;
 }
 
 /** Rango HTTP ya interpretado (`parseByteRange`, server.js:346). */
@@ -68,7 +121,18 @@ export interface RemuxService extends Lifecycle {
    * tenga colchón. Lanza `remux_busy`, `remux_timeout`, `remux_died`,
    * `ffmpeg_missing`. Con la señal abortada, deja de esperar.
    */
-  ensure(source: RemuxSource, viewerId: string, signal?: AbortSignal): Promise<RemuxHandle>;
+  ensure(
+    source: RemuxSource,
+    viewerId: string,
+    signal?: AbortSignal,
+    options?: RemuxEnsureOptions,
+  ): Promise<RemuxHandle>;
+  /**
+   * La sesión del motor ha cambiado de URL (pasa a HLS o se ha reabierto tras
+   * un reinicio): relanza ffmpeg sobre la nueva con los mismos visores y
+   * fichas, y espera a que haya colchón. `null` si la sesión no tenía remux.
+   */
+  retarget(source: RemuxSource, signal?: AbortSignal): Promise<RemuxHandle | null>;
   /** Un visor deja la sesión; sin visores, ffmpeg se para. */
   detach(sessionId: string, viewerId: string): Promise<void>;
   /** Sirve un fichero de la sesión con Range (206/416) y `no-store`; en m3u8, reescribe las URI con `?t=`. */
@@ -80,8 +144,14 @@ export interface RemuxService extends Lifecycle {
       readonly rangeHeader?: string;
       readonly head?: boolean;
       readonly videoToken?: string;
+      /** Dispositivo del token de vídeo: la petición cuenta como su latido. */
+      readonly deviceId?: string | null;
     },
   ): Promise<void>;
+  /** Suscribe a los avisos del remux (playback). Devuelve la baja. */
+  subscribe(listener: RemuxListener): () => void;
+  /** Visores con remux de una sesión (vacío si no tiene). */
+  viewersOf(sessionId: string): readonly string[];
   /** Compatibilidad: `/remux/<hash>/<fichero>` de la 0.6.59 (T-035). 403 sin cuerpo si la ruta no vale. */
   serveLegacyFile(
     reply: FastifyReply,

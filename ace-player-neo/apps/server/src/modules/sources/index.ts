@@ -1,17 +1,21 @@
 /* Fábrica del módulo `sources` (informes, cuarentenas, correcciones y fiabilidad de las fuentes).
 
-   ESQUELETO (paso 1.0 de la Fase 1): devuelve un servicio cuyos métodos
-   lanzan `AppError('not_implemented')`, para que `createServices()` monte el
-   árbol entero y cada ruta responda 501 con el formato correcto. El agente
-   del módulo sustituye esto por la implementación real SIN cambiar la firma
-   de la fábrica ni la interfaz de types.ts (si hace falta cambiarla, se
-   cambia aquí y en docs/contratos.md a la vez). */
+   La implementación vive en service.ts; las funciones puras en stats.ts
+   (fiabilidad), ranking.ts (orden y reparto, que usa la resolución de
+   football), reports.ts (informes y correcciones) y state-machine.ts (las
+   dos máquinas de estados). */
 
-import { notImplementedService } from '../../core/stub.js';
+import { SourcesServiceImpl } from './service.js';
 import type { SourcesDeps, SourcesService } from './types.js';
 
 export type * from './types.js';
+export {
+  canalEsGenerico,
+  mergeResolutionCandidates,
+  repartirEntreProveedores,
+  resolutionTier,
+} from './ranking.js';
 
-export function createSourcesService(_deps: SourcesDeps): SourcesService {
-  return notImplementedService<SourcesService>('sources');
+export function createSourcesService(deps: SourcesDeps): SourcesService {
+  return new SourcesServiceImpl(deps);
 }

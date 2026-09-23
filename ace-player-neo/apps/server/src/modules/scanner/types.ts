@@ -19,9 +19,22 @@
 import type { ScanJob, ScanJobKind, ScanRef, VerdictState } from '@ace/shared';
 import type { CoreDeps, Lifecycle } from '../../core/module.js';
 import type { EngineService } from '../engine/types.js';
+import type { PlayableOn } from './evidence.js';
+import type { ScannerTransport } from './transport.js';
+
+export type { PlayableOn } from './evidence.js';
+export type { ScannerTransport } from './transport.js';
 
 export interface ScannerDeps extends CoreDeps {
   readonly engine: EngineService;
+  /**
+   * Transporte hacia el motor comprobador. Por defecto, HTTP a
+   * `config.scanner.host:port`; los tests pasan el del motor falso en `::1`
+   * (el saneado de ACESTREAM_SCANNER_HOST quita los `:`) o uno de mentira.
+   */
+  readonly transport?: ScannerTransport;
+  /** Ids de trabajo (tests deterministas). Por defecto, 12 bytes aleatorios en hex. */
+  readonly jobId?: () => string;
 }
 
 export interface ScanCandidateInput {
@@ -41,6 +54,12 @@ export interface ScanJobRequest {
   readonly reportKey?: string | null;
   /** Salta la caché de veredictos (informe del usuario, "Rebuscar"). */
   readonly force?: boolean;
+  /**
+   * Entra por delante en la cola. Por defecto, todo lo que no es precalentado
+   * (en la 0.6.59, `priority: true` en resolución e informes, server.js:4410,
+   * 4562, 4808).
+   */
+  readonly priority?: boolean;
 }
 
 /** Veredicto guardado de una fuente (`scannerCache`, backend-modulos §7.3). */
@@ -52,6 +71,17 @@ export interface SourceVerdict {
   readonly checkedAt: number;
   readonly videoCodec: string | null;
   readonly audioCodecs: readonly string[];
+  /**
+   * D6: dónde se puede reproducir. HEVC es `failed` `unsupported_codec` para
+   * la web (como hoy) y reproducible en iOS (el remux lo pasa a fMP4).
+   */
+  readonly playableOn: PlayableOn;
+}
+
+/** Estado del motor comprobador para la salud (server.js:4618-4622). */
+export interface ScannerHealth {
+  readonly status: 'ready' | 'offline' | 'disabled';
+  readonly online: boolean;
 }
 
 export interface ScannerStats {
@@ -94,6 +124,8 @@ export interface ScannerService extends Lifecycle {
   /** Olvida el veredicto de una fuente (un informe la vuelve a poner en cola). */
   forget(hash: string): void;
   stats(): ScannerStats;
+  /** `get_version` del motor comprobador (3 s), como `systemHealth` (server.js:4618-4622). */
+  ping(signal?: AbortSignal): Promise<ScannerHealth>;
   /** Búsqueda en el motor comprobador (la resolución la usa si hay reproducción activa, §5.10). */
   searchRaw(query: string, signal?: AbortSignal): Promise<string>;
 }

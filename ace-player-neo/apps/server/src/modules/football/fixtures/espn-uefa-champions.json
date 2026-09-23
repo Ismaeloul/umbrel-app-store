@@ -1,0 +1,45 @@
+{
+  "events": [
+    {
+      "date": "2026-01-01T20:00Z",
+      "status": { "displayClock": "63'", "type": { "state": "in", "shortDetail": "63'" } },
+      "competitions": [
+        {
+          "competitors": [
+            {
+              "homeAway": "home",
+              "score": "2",
+              "team": {
+                "displayName": "Real Madrid",
+                "shortDisplayName": "Real Madrid",
+                "name": "Madrid"
+              }
+            },
+            {
+              "homeAway": "away",
+              "score": "1",
+              "team": {
+                "displayName": "Manchester City",
+                "shortDisplayName": "Man City",
+                "name": "City"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "date": "2026-01-03T20:00Z",
+      "status": { "displayClock": "0'", "type": { "state": "pre", "shortDetail": "Sat" } },
+      "competitions": [
+        {
+          "competitors": [
+            { "homeAway": "home", "score": "0", "team": { "displayName": "Real Madrid" } },
+            { "homeAway": "away", "score": "0", "team": { "displayName": "Manchester City" } }
+          ]
+        }
+      ]
+    },
+    { "date": "2026-01-01T20:00Z", "competitions": [{ "competitors": [] }] }
+  ]
+}

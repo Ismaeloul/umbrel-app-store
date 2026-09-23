@@ -16,12 +16,14 @@
      las fuentes, §9.6).
    - IA opcional: sin `OLLAMA_BASE_URL` todo igual (T-022, T-028).
    - Con reproducción activa, las hasta 8 búsquedas de la resolución van al
-     comprobador (`search.search(q, { via: 'scanner' })`, §9.11).
+     comprobador (`search.search(q, { via: 'auto' })`: search sabe si hay
+     alguien viendo y si el comprobador existe, §9.11).
    - El precalentado refresca la agenda si ha caducado (§8.2.13) y no fuerza
      sondas del partido que se está viendo (§5.8).
 
-   Tests a portar: T-006 a T-030, T-039 a T-071, T-078, T-081 a T-087,
-   T-095 a T-100, T-113 y T-114. */
+   Tests portados (docs/cobertura/football.md): T-006 a T-016, T-018 a T-024,
+   T-026 a T-029, T-039 a T-044, T-056 a T-058, T-065 a T-071, T-078,
+   T-081, T-082, T-084 a T-087, T-095 a T-100, T-113 y T-114. */
 
 import type {
   BindBody,
@@ -51,6 +53,14 @@ export interface FootballDeps extends CoreDeps {
   readonly search: SearchService;
   readonly sources: SourcesService;
   readonly directories: DirectoriesService;
+  /**
+   * Embeddings de un lote de textos (paso 1.1). Por defecto, `POST
+   * <OLLAMA_BASE_URL>/api/embed` con `ollamaFetch`; los tests pasan uno falso.
+   * Solo se usa si `config.ai.enabled`.
+   */
+  readonly embed?: (texts: string[]) => Promise<unknown>;
+  /** `fetch` del cliente de Ollama (paso 1.1; por defecto, el global de Node). */
+  readonly ollamaFetch?: typeof fetch;
 }
 
 export interface ResolveOptions {
@@ -87,6 +97,18 @@ export interface FootballService extends Lifecycle {
   legacyScores(options?: {
     readonly signal?: AbortSignal;
   }): Promise<z.infer<typeof LegacyScoresResponseSchema>>;
+  /**
+   * Canales anunciados de un partido de la agenda (`footballProgramMatch(id).channels`),
+   * o [] si no está. Lo pide `sources` para el informe sin canal (api.md §4.14;
+   * añadido en el paso 1.1, docs/cobertura/sources.md).
+   */
+  programChannels(matchId: string): string[];
+  /**
+   * Una vuelta del precalentado (`runFootballPreheat`, server.js:4431): la
+   * lanza el temporizador cada 60 s; se expone para los tests y la fachada
+   * (paso 1.1). Sin `payload`, pide la agenda (refrescándola si caducó).
+   */
+  runPreheat(options?: { readonly now?: number; readonly payload?: unknown }): Promise<void>;
   /** Estado para la salud: agenda, partidos y precalentados. */
   healthInfo(): {
     readonly status: 'ready' | 'stale' | 'warming';

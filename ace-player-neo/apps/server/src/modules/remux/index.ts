@@ -1,17 +1,14 @@
-/* Fábrica del módulo `remux` (ffmpeg a HLS fMP4 para iPhone).
+/* Fábrica del módulo `remux` (ffmpeg a HLS fMP4 para iPhone; arquitectura
+   §5.7). La implementación está en service.ts (registro, espera, recolector
+   y servido), args.ts (línea de ffmpeg), files.ts (rangos y listas),
+   eviction.ts (desalojo) y process.ts (lanzador, log y huérfanos). No lanza
+   nada ni programa temporizadores hasta `start()`/`ensure()`. */
 
-   ESQUELETO (paso 1.0 de la Fase 1): devuelve un servicio cuyos métodos
-   lanzan `AppError('not_implemented')`, para que `createServices()` monte el
-   árbol entero y cada ruta responda 501 con el formato correcto. El agente
-   del módulo sustituye esto por la implementación real SIN cambiar la firma
-   de la fábrica ni la interfaz de types.ts (si hace falta cambiarla, se
-   cambia aquí y en docs/contratos.md a la vez). */
-
-import { notImplementedService } from '../../core/stub.js';
+import { createRemuxRuntime } from './service.js';
 import type { RemuxDeps, RemuxService } from './types.js';
 
 export type * from './types.js';
 
-export function createRemuxService(_deps: RemuxDeps): RemuxService {
-  return notImplementedService<RemuxService>('remux');
+export function createRemuxService(deps: RemuxDeps): RemuxService {
+  return createRemuxRuntime(deps).service;
 }

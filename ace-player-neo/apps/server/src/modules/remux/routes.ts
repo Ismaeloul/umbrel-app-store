@@ -1,19 +1,15 @@
 /* Rutas del módulo `remux`.
 
-   Antiguas (forma exacta de la 0.6.59, api.md §4):
-   - POST /api/remux/stop
-   - GET /remux/
-   - HEAD /remux/
+   Antiguas (forma exacta de la 0.6.59, api.md §4.22-4.23):
+   - POST /api/remux/stop → `{success, stopped, detached}` o `{…, stale: true}` (B-222).
+   - GET y HEAD /remux/<hash>/<fichero> → el fichero con Range, 206/416 y
+     `no-store`; 403 sin cuerpo si la ruta no vale; 404 sin cuerpo si no está
+     (T-035, B-221). `ffmpeg.log` ya no existe: el log vive en memoria.
 
-   v1 (tabla de @ace/shared/routes.ts; se registran solas en /api/v1 y
-   /native/api/v1 con acceso, validación y errores ya resueltos):
-   - video: GET /api/v1/video/:sid/:file
-
-   ESQUELETO: todavía no se registra ningún manejador y app.ts responde 501
-   `not_implemented` en todas. Para portar una ruta:
-     router.handle('GET', '/api/…', (req, ctx) => services.remux.…);   // antiguas
-     router.handle('<id>', (input, ctx) => services.remux.…);          // v1
-   Ver docs/contratos.md §7. */
+   v1 (tabla de @ace/shared/routes.ts):
+   - video: GET /api/v1/video/:sid/:file (solo native, con `?t=` ya
+     comprobado por app.ts): la lista reescrita con `?t=` en cada URI y los
+     segmentos con Range. Cada petición cuenta como latido del visor. */
 
 import type { LegacyRouter, V1Router } from '../../core/router.js';
 import type { Services } from '../../services.js';
@@ -28,6 +24,27 @@ export const LEGACY_ROUTES: readonly string[] = [
 /** Ids de /api/v1 de este módulo (su `module` en la tabla). */
 export const V1_ROUTE_IDS: readonly string[] = ['video'];
 
-export function registerLegacyRoutes(_router: LegacyRouter, _services: Services): void {}
+export function registerLegacyRoutes(router: LegacyRouter, services: Services): void {
+  router.handle('POST', '/api/remux/stop', (req) =>
+    services.remux.legacyStop(req.body as Record<string, unknown>),
+  );
+  for (const method of ['GET', 'HEAD'] as const) {
+    router.handle(method, '/remux/', async (req, ctx) => {
+      await services.remux.serveLegacyFile(ctx.reply, req.url, {
+        rangeHeader: ctx.request.headers.range,
+        head: method === 'HEAD',
+      });
+      return undefined;
+    });
+  }
+}
 
-export function registerV1Routes(_router: V1Router, _services: Services): void {}
+export function registerV1Routes(router: V1Router, services: Services): void {
+  router.handle('video', async (input, ctx) => {
+    await services.remux.serveFile(ctx.reply, input.params.sid, input.params.file, {
+      rangeHeader: ctx.request.headers.range,
+      videoToken: input.query.t,
+      deviceId: ctx.device?.deviceId ?? null,
+    });
+  });
+}
