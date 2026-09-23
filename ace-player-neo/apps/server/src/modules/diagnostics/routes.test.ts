@@ -68,7 +68,14 @@ describe('diagnostics · rutas v1', () => {
     expect(list.statusCode).toBe(200);
     const body = DiagnosticsListResponseSchema.parse(list.json());
     expect(body.total).toBe(2);
-    expect(body.counts24h).toEqual({ engine: 0, source: 0, network: 0, codec: 1, client: 1 });
+    expect(body.counts24h).toEqual({
+      engine: 0,
+      source: 0,
+      network: 0,
+      codec: 1,
+      client: 1,
+      state: 0,
+    });
     expect(body.entries[0]).toMatchObject({
       cause: 'codec',
       code: 'audio_decode',

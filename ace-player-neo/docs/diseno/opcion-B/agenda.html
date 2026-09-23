@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#eff0f2">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1a1f24">
+<title>Agenda · Ace Player Neo</title>
+<link rel="icon" href="icono.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Azeret+Mono:wght@400..700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="comun.css">
+<style>
+  body { padding-block-end: calc(58px + env(safe-area-inset-bottom, 0px)); }
+  .agenda { padding-block-end: 24px; min-inline-size: 0; }
+
+  .ag-cab { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 16px 10px; }
+  .titulo { font-size: var(--t-24); font-weight: 800; font-stretch: var(--w-ancha); line-height: 1; letter-spacing: -0.01em; }
+  .ag-cab-der { display: grid; justify-items: end; gap: 10px; }
+  .ag-cab-der .directo-tag { min-block-size: 32px; padding-inline: 10px; }
+  .ag-fecha { display: block; margin-block-start: 6px; font-size: var(--t-12); font-weight: 600; color: var(--tinta-2); }
+
+  .ag-barra { position: sticky; inset-block-start: 0; z-index: 20; background: var(--fondo); border-block-end: 1px solid var(--linea); }
+  .dias { display: flex; overflow-x: auto; scrollbar-width: none; padding-inline: 6px; scroll-snap-type: x proximity; }
+  .dias::-webkit-scrollbar { display: none; }
+  .dias button {
+    flex: none; display: grid; align-content: center; gap: 3px; scroll-snap-align: start;
+    min-inline-size: 68px; min-block-size: 56px; padding: 0 10px; text-align: start;
+    color: var(--tinta-2); box-shadow: inset 0 -3px 0 transparent;
+    transition: box-shadow var(--m-rapido) var(--curva-corte), color var(--m-rapido);
+  }
+  .dias button[aria-pressed="true"] { color: var(--tinta); box-shadow: inset 0 -3px 0 var(--tinta); }
+  .dia-n { display: flex; align-items: baseline; gap: 6px; font-size: var(--t-14); font-weight: 750; font-stretch: 112%; line-height: 1.1; }
+  .dia-f { font-size: var(--t-12); font-weight: 500; line-height: 1.1; }
+  .dias button[aria-pressed="true"] .cuenta { color: var(--tinta); }
+  .ag-filtros { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px 8px 16px; border-block-start: 1px solid var(--linea); }
+  .girando .ic { animation: vuelta 700ms var(--curva-corte); }
+  @keyframes vuelta { to { transform: rotate(360deg); } }
+
+  .comp { display: flex; align-items: baseline; gap: 10px; padding: 22px 16px 10px; }
+  .comp-nombre { font-size: var(--t-14); font-weight: 800; font-stretch: var(--w-ancha); white-space: nowrap; }
+  .comp-ronda { font-size: var(--t-12); font-weight: 500; color: var(--tinta-2); white-space: nowrap; }
+  .comp::after { content: ""; flex: 1; block-size: 1px; background: var(--linea); align-self: center; min-inline-size: 12px; }
+
+  .parrilla-cab { display: none; }
+  .parrilla > li { position: relative; }
+  .parrilla > li + li { border-block-start: 1px solid var(--linea); }
+  .fila-a {
+    display: grid;
+    grid-template-columns: 62px minmax(0, 1fr);
+    grid-template-areas: "hora bug" "hora bar" "hora pie";
+    column-gap: 10px; padding: 12px 16px 14px;
+    transition: background var(--m-rapido);
+  }
+  .fila-a:hover { background: color-mix(in oklch, var(--superficie) 45%, transparent); }
+  .fila-hora { grid-area: hora; display: grid; align-content: start; gap: 5px; min-block-size: 62px; }
+  .fila:not(.directo) .fila-hora { block-size: 62px; align-content: center; }
+  .hora-sonando {
+    display: inline-flex; align-items: center; justify-content: center; gap: 4px; margin-block-start: 3px;
+    font-size: var(--t-11); font-weight: 750; line-height: 1; padding: 5px 0;
+    border: 1px solid var(--tinta); border-radius: var(--r-1); color: var(--tinta);
+  }
+  .hora { font-size: var(--t-24); }
+  .hora-sub { font-size: var(--t-12); font-weight: 600; color: var(--tinta-2); line-height: 1.1; }
+  .hora-fin { font-size: var(--t-14); font-weight: 750; font-stretch: 112%; color: var(--tinta-2); line-height: 1; }
+  .hora-directo {
+    display: grid; align-content: space-between; block-size: 62px; padding: 7px 7px 6px;
+    background: var(--inv-fondo); color: var(--inv-tinta); border-radius: var(--r-1);
+  }
+  .hd-top { display: flex; align-items: center; gap: 5px; font-size: var(--t-11); font-weight: 750; font-stretch: 112%; line-height: 1; }
+  .hd-min { font-size: var(--t-36); line-height: 0.8; letter-spacing: -0.01em; }
+  .fila-a .bug { grid-area: bug; }
+  .fila-bar { grid-area: bar; margin-block-start: 7px; margin-inline-end: var(--punta); }
+  .fila-pie { grid-area: pie; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-block-start: 10px; min-inline-size: 0; }
+  .fila-senal { order: -1; }
+  .fila-canales { min-inline-size: 0; max-inline-size: 100%; }
+  .fila-canales .canal { display: inline-block; max-inline-size: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .fila-canales .tag-sonando { display: none; }
+  .tag-sonando {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: var(--t-12); font-weight: 700; line-height: 1.1;
+    padding: 4px 7px; border-radius: var(--r-1);
+    background: var(--inv-fondo); color: var(--inv-tinta);
+  }
+  .tag-sonando .ic { inline-size: 13px; block-size: 13px; stroke-width: 2; }
+
+  .fila.tuyo::before {
+    content: ""; position: absolute; inset-inline-start: 0; inset-block-start: 12px;
+    inline-size: 4px; block-size: 62px; background: var(--tuyo);
+  }
+  .fila.terminado .bug-eq { background: color-mix(in oklch, var(--superficie) 45%, var(--fondo)); color: var(--tinta-2); }
+  .fila.terminado .canal { color: var(--tinta-2); }
+
+  main[data-filtro="para-ti"] .solo-todos { display: none; }
+  main[data-filtro="para-ti"] .parrilla > li.primera-visible { border-block-start: 0; }
+
+  .ag-pie { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; padding: 24px 16px 8px; font-size: var(--t-12); color: var(--tinta-2); }
+
+  .detalle { display: none; }
+
+  @media (min-width: 1024px) {
+    body { padding-block-end: 0; }
+    .shell { display: grid; grid-template-columns: 84px minmax(0, 1fr) 380px; align-items: start; }
+    .agenda { padding: 0 32px 40px; }
+    .ag-cab { padding: 26px 0 14px; }
+    .titulo { font-size: var(--t-36); }
+    .ag-barra { position: static; display: flex; align-items: end; justify-content: space-between; gap: 24px; }
+    .dias { padding-inline: 0; }
+    .ag-filtros { border: 0; padding: 0 0 8px; gap: 8px; }
+    .comp { padding: 28px 0 10px; }
+    .comp-nombre { font-size: var(--t-16); }
+    #motor-movil, .ag-cab-der .directo-tag { display: none; }
+    .parrilla-cab {
+      display: grid; grid-template-columns: 88px minmax(280px, 360px) minmax(0, 1fr) 190px; column-gap: 24px;
+      padding: 18px 16px 0; font-size: var(--t-11); font-weight: 650; color: var(--tinta-2);
+    }
+    .fila-a {
+      grid-template-columns: 88px minmax(280px, 360px) minmax(0, 1fr) 190px;
+      grid-template-areas: "hora bug can sen" ". bar can sen";
+      column-gap: 24px; padding: 12px 16px;
+    }
+    .fila-pie { display: contents; }
+    .fila-canales { grid-area: can; align-self: center; }
+    .fila-senal { grid-area: sen; align-self: center; order: 0; }
+    .fila-canales .tag-sonando { display: inline-flex; }
+    .hora-sonando { display: none; }
+    .hora { font-size: var(--t-36); }
+    .hora-directo { padding: 7px 9px 6px; }
+    .ag-pie { padding-inline: 0; }
+
+    .detalle {
+      display: block; position: sticky; inset-block-start: 48px; block-size: calc(100dvh - 48px); overflow-y: auto;
+      background: var(--superficie); border-inline-start: 1px solid var(--linea); padding: 24px 24px 32px;
+    }
+  }
+
+  /* ---- Panel del partido elegido (escritorio) ---- */
+  .det-cab { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .det-sonando { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-12); font-weight: 650; color: var(--tinta-2); }
+  .det-sonando .ic { inline-size: 16px; block-size: 16px; }
+  .det-comp { margin-block: 16px 12px; font-size: var(--t-14); color: var(--tinta-2); }
+  .det-comp strong { color: var(--tinta); font-weight: 700; }
+  .bug-g { --punta: 24px; row-gap: 3px; }
+  .bug-g .bug-eq { min-block-size: 48px; background: var(--superficie-2); column-gap: 12px; padding-inline-start: 12px; }
+  .bug-g .eq-nombre { font-size: var(--t-21); font-weight: 700; }
+  .bug-g .gol { font-size: var(--t-36); }
+  .det-reloj { display: flex; align-items: baseline; gap: 10px; margin-block: 16px 10px; }
+  .det-reloj .num { font-size: var(--t-36); }
+  .det-reloj span:last-child { font-size: var(--t-14); color: var(--tinta-2); font-weight: 600; }
+  .det-hechos { display: grid; gap: 8px; margin-block: 14px 24px; font-size: var(--t-14); }
+  .det-hechos li { display: flex; align-items: center; gap: 10px; }
+  .det-hechos .num { font-size: var(--t-18); min-inline-size: 30px; }
+  .det-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-block: 8px 10px; font-size: var(--t-14); font-weight: 800; font-stretch: var(--w-ancha); }
+  .det-h .senal-sub { font-size: var(--t-12); font-stretch: var(--w-normal); font-weight: 600; }
+  .detalle .rack { margin-inline: -12px; }
+  .det-canales { margin-block: 22px 24px; }
+  .det-acciones { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+</style>
+</head>
+<body>
+<script src="comun.js"></script>
+<a class="saltar" href="#contenido">Saltar al contenido</a>
+
+<!-- Tira de directo (escritorio): los marcadores vivos siempre a la vista -->
+<header class="tira" aria-label="Marcadores en directo">
+  <span class="tira-directo"><span class="tally" aria-hidden="true"></span>Directo</span>
+  <ul class="tira-lista">
+    <li><a href="partido.html" class="mbug" aria-label="Sevilla 1, Real Betis 1, minuto 76">
+      <span class="chapa k-sev"></span><span class="eq-sigla">SEV</span>
+      <span class="marcador"><span class="num">1</span><span class="num">1</span></span>
+      <span class="eq-sigla">BET</span><span class="chapa k-bet"></span><span class="num min">76'</span></a></li>
+    <li><a href="partido.html" class="mbug" aria-label="Girona 0, Villarreal 2, minuto 78">
+      <span class="chapa k-gir"></span><span class="eq-sigla">GIR</span>
+      <span class="marcador"><span class="num">0</span><span class="num">2</span></span>
+      <span class="eq-sigla">VIL</span><span class="chapa k-vil"></span><span class="num min">78'</span></a></li>
+    <li class="tira-grupo">Luego</li>
+    <li><a href="partido.html" class="mbug"><span class="num tira-hora">21:00</span><span class="chapa k-atm"></span><span class="eq-sigla">ATM</span><span class="eq-sigla">ARS</span><span class="chapa k-ars"></span></a></li>
+    <li><a href="partido.html" class="mbug"><span class="num tira-hora">21:00</span><span class="chapa k-liv"></span><span class="eq-sigla">LIV</span><span class="eq-sigla">INT</span><span class="chapa k-int"></span></a></li>
+    <li><a href="partido.html" class="mbug"><span class="num tira-hora">21:30</span><span class="chapa k-rma"></span><span class="eq-sigla">RMA</span><span class="eq-sigla">RSO</span><span class="chapa k-rso"></span></a></li>
+  </ul>
+  <div class="tira-der">
+    <span class="motor">Motor listo</span>
+    <time class="num reloj" datetime="2026-09-23T20:45">20:45</time>
+  </div>
+</header>
+
+<div class="shell">
+  <nav class="carril" aria-label="Secciones">
+    <a class="carril-marca" href="agenda.html" aria-label="Ace Player Neo"><svg class="ic" style="inline-size:30px;block-size:30px"><use href="#i-marca"/></svg></a>
+    <a href="agenda.html" aria-current="page"><svg class="ic"><use href="#i-agenda"/></svg>Agenda</a>
+    <a href="biblioteca.html"><svg class="ic"><use href="#i-biblioteca"/></svg>Biblioteca</a>
+    <a href="#"><svg class="ic"><use href="#i-buscar"/></svg>Buscar</a>
+    <a href="#"><svg class="ic"><use href="#i-ajustes"/></svg>Ajustes</a>
+    <div class="carril-pie">
+      <button type="button"><svg class="ic"><use href="#i-hash"/></svg>Pegar hash</button>
+      <button type="button"><svg class="ic"><use href="#i-salud"/></svg>Salud</button>
+    </div>
+  </nav>
+
+  <main id="contenido" class="agenda" data-filtro="para-ti">
+    <header class="ag-cab">
+      <h1 class="titulo">Agenda<span class="ag-fecha">Miércoles 23 de septiembre</span></h1>
+      <div class="ag-cab-der">
+        <span class="directo-tag"><span class="tally" aria-hidden="true"></span>2 en directo</span>
+        <span class="motor" id="motor-movil">Motor listo</span>
+      </div>
+    </header>
+
+    <div class="ag-barra">
+      <nav class="dias" aria-label="Elegir día" data-grupo="dias">
+        <button type="button" data-opcion="22" aria-pressed="false"><span class="dia-n">Ayer <span class="cuenta">7</span></span><span class="dia-f">22 sep</span></button>
+        <button type="button" data-opcion="23" aria-pressed="true"><span class="dia-n">Hoy <span class="cuenta" id="cuenta-hoy">6</span></span><span class="dia-f">23 sep</span></button>
+        <button type="button" data-opcion="24" aria-pressed="false"><span class="dia-n">Mañana <span class="cuenta">4</span></span><span class="dia-f">24 sep</span></button>
+        <button type="button" data-opcion="25" aria-pressed="false"><span class="dia-n">Vie <span class="cuenta">2</span></span><span class="dia-f">25 sep</span></button>
+        <button type="button" data-opcion="26" aria-pressed="false"><span class="dia-n">Sáb <span class="cuenta">9</span></span><span class="dia-f">26 sep</span></button>
+        <button type="button" data-opcion="27" aria-pressed="false"><span class="dia-n">Dom <span class="cuenta">8</span></span><span class="dia-f">27 sep</span></button>
+        <button type="button" data-opcion="28" aria-pressed="false"><span class="dia-n">Lun <span class="cuenta">1</span></span><span class="dia-f">28 sep</span></button>
+      </nav>
+      <div class="ag-filtros">
+        <div class="conmutador" data-grupo="filtro" role="group" aria-label="Qué partidos ver">
+          <button type="button" data-opcion="para-ti" aria-pressed="true">Para ti <span class="cuenta">6</span></button>
+          <button type="button" data-opcion="todos" aria-pressed="false">Todos <span class="cuenta">9</span></button>
+        </div>
+        <button type="button" class="btn-ico" id="actualizar" aria-label="Actualizar la agenda"><svg class="ic"><use href="#i-refrescar"/></svg></button>
+      </div>
+    </div>
+
+    <div class="parrilla-cab" aria-hidden="true"><span>Hora</span><span>Partido</span><span>Canales</span><span>Señal</span></div>
+
+    <!-- LaLiga -->
+    <section aria-labelledby="c-laliga">
+      <h2 class="comp" id="c-laliga"><span class="comp-nombre">LaLiga EA Sports</span><span class="comp-ronda">Jornada 6</span></h2>
+      <ol class="parrilla">
+        <li class="fila directo">
+          <a class="fila-a" href="partido.html">
+            <div class="fila-hora"><span class="hora-directo"><span class="hd-top"><span class="tally" aria-hidden="true"></span>Directo</span><span class="num hd-min">76'</span></span><span class="hora-sonando">Sonando</span></div>
+            <div class="bug entra" style="--i:0">
+              <div class="bug-eq"><span class="chapa k-sev"></span><span class="eq-nombre">Sevilla</span><span class="num gol">1</span></div>
+              <div class="bug-eq"><span class="chapa k-bet"></span><span class="eq-nombre">Real Betis</span><span class="num gol">1</span></div>
+            </div>
+            <div class="minbar fila-bar" style="--p:.84" aria-hidden="true"><i></i><b style="--en:.5"></b></div>
+            <div class="fila-pie">
+              <ul class="canales fila-canales">
+                <li class="tag-sonando"><svg class="ic"><use href="#i-vol"/></svg>Sonando</li>
+                <li class="canal">DAZN LaLiga</li>
+              </ul>
+              <div class="fila-senal"><span class="senal" data-e="ok"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Con señal <span class="senal-sub">3 fuentes</span></span></div>
+            </div>
+          </a>
+        </li>
+        <li class="fila directo">
+          <a class="fila-a" href="partido.html">
+            <div class="fila-hora"><span class="hora-directo"><span class="hd-top"><span class="tally" aria-hidden="true"></span>Directo</span><span class="num hd-min">78'</span></span></div>
+            <div class="bug entra" style="--i:1">
+              <div class="bug-eq"><span class="chapa k-gir"></span><span class="eq-nombre">Girona</span><span class="num gol">0</span></div>
+              <div class="bug-eq"><span class="chapa k-vil"></span><span class="eq-nombre">Villarreal</span><span class="num gol">2</span></div>
+            </div>
+            <div class="minbar fila-bar" style="--p:.87" aria-hidden="true"><i></i><b style="--en:.5"></b></div>
+            <div class="fila-pie">
+              <ul class="canales fila-canales"><li class="canal se-buscara" title="Se buscará al reproducir">M+ LaLiga 2</li></ul>
+              <div class="fila-senal"><span class="senal" data-e="fallo"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Sin señal <span class="senal-sub">reintento 20:51</span></span></div>
+            </div>
+          </a>
+        </li>
+        <li class="fila">
+          <a class="fila-a" href="partido.html">
+            <div class="fila-hora"><span class="num hora">21:30</span><span class="hora-sub">En 45 min</span></div>
+            <div class="bug entra" style="--i:2">
+              <div class="bug-eq"><span class="chapa k-rma"></span><span class="eq-nombre">Real Madrid</span><span class="gol"></span></div>
+              <div class="bug-eq"><span class="chapa k-rso"></span><span class="eq-nombre">Real Sociedad</span><span class="gol"></span></div>
+            </div>
+            <div class="fila-pie">
+              <ul class="canales fila-canales"><li class="canal">M+ LaLiga</li><li class="canal se-buscara" title="Se buscará al reproducir">M+ LaLiga UHD</li></ul>
+              <div class="fila-senal"><span class="senal" data-e="pendiente"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Sin comprobar</span></div>
+            </div>
+          </a>
+        </li>
+      </ol>
+    </section>
+
+    <!-- Champions -->
+    <section aria-labelledby="c-champions">
+      <h2 class="comp" id="c-champions"><span class="comp-nombre">Champions League</span><span class="comp-ronda">Fase de liga, jornada 1</span></h2>
+      <ol class="parrilla">
+        <li class="fila terminado tuyo primera-visible" style="--tuyo:#ee2523">
+          <a class="fila-a" href="partido.html">
+            <div class="fila-hora"><span class="hora-fin">Final</span><span class="hora-sub">18:45</span></div>
+            <div class="bug entra" style="--i:3">
+              <div class="bug-eq"><span class="chapa k-ath"></span><span class="eq-nombre">Athletic Club<span class="vh">, tu equipo</span></span><span class="num gol">2</span></div>
+              <div class="bug-eq"><span class="chapa k-psv"></span><span class="eq-nombre">PSV Eindhoven</span><span class="num gol">0</span></div>
+            </div>
+            <div class="fila-pie">
+              <ul class="canales fila-canales"><li class="canal">M+ Liga de Campeones 3</li></ul>
+            </div>
+          </a>
+        </li>
+        <li class="fila terminado solo-todos">
+          <a class="fila-a" href="partido.html">
+            <div class="fila-hora"><span class="hora-fin">Final</span><span class="hora-sub">18:45</span></div>
+            <div class="bug entra" style="--i:4">
+              <div class="bug-eq"><span class="chapa k-cbr"></span><span class="eq-nombre">Club Brujas</span><span class="num gol">1</span></div>
+              <div class="bug-eq"><span class="chapa k-lev"></span><span class="eq-nombre">Bayer Leverkusen</span><span class="num gol">2</span></div>
+            </div>
+            <div class="fila-pie">
+              <ul class="canales fila-canales"><li class="canal se-buscara">M+ Liga de Campeones 4</li></ul>
+            </div>
+          </a>
+        </li>
+        <li class="fila tuyo" style="--tuyo:#cb3524">
+          <a class="fila-a" href="partido.html">
+            <div class="fila-hora"><span class="num hora">21:00</span><span class="hora-sub">En 15 min</span></div>
+            <div class="bug entra" style="--i:5">
+              <div class="bug-eq"><span class="chapa k-atm"></span><span class="eq-nombre">Atlético de Madrid<span class="vh">, tu equipo</span></span><span class="gol"></span></div>
+              <div class="bug-eq"><span class="chapa k-ars"></span><span class="eq-nombre">Arsenal</span><span class="gol"></span></div>
+            </div>
+            <div class="fila-pie">
+              <ul class="canales fila-canales"><li class="canal">M+ Liga de Campeones</li></ul>
+              <div class="fila-senal"><span class="senal" data-e="floja"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Señal floja <span class="senal-sub">1 de 4</span></span></div>
+            </div>
+          </a>
+        </li>
+        <li class="fila solo-todos">
+          <a class="fila-a" href="partido.html">
+            <div class="fila-hora"><span class="num hora">21:00</span><span class="hora-sub">En 15 min</span></div>
+            <div class="bug entra" style="--i:6">
+              <div class="bug-eq"><span class="chapa k-bay"></span><span class="eq-nombre">Bayern de Múnich</span><span class="gol"></span></div>
+              <div class="bug-eq"><span class="chapa k-psg"></span><span class="eq-nombre">Paris Saint-Germain</span><span class="gol"></span></div>
+            </div>
+            <div class="fila-pie">
+              <ul class="canales fila-canales"><li class="canal">M+ Liga de Campeones 2</li></ul>
+              <div class="fila-senal"><span class="senal" data-e="ok"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Con señal <span class="senal-sub">2 fuentes</span></span></div>
+            </div>
+          </a>
+        </li>
+        <li class="fila tuyo" style="--tuyo:#c8102e">
+          <a class="fila-a" href="partido.html">
+            <div class="fila-hora"><span class="num hora">21:00</span><span class="hora-sub">En 15 min</span></div>
+            <div class="bug entra" style="--i:7">
+              <div class="bug-eq"><span class="chapa k-liv"></span><span class="eq-nombre">Liverpool<span class="vh">, tu equipo</span></span><span class="gol"></span></div>
+              <div class="bug-eq"><span class="chapa k-int"></span><span class="eq-nombre">Inter de Milán</span><span class="gol"></span></div>
+            </div>
+            <div class="fila-pie">
+              <ul class="canales fila-canales"><li class="canal se-buscara">M+ Liga de Campeones 3</li></ul>
+              <div class="fila-senal"><span class="senal" data-e="comprobando"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Comprobando <span class="senal-sub">2 de 5</span></span></div>
+            </div>
+          </a>
+        </li>
+        <li class="fila solo-todos">
+          <a class="fila-a" href="partido.html">
+            <div class="fila-hora"><span class="num hora">21:00</span><span class="hora-sub">En 15 min</span></div>
+            <div class="bug entra" style="--i:8">
+              <div class="bug-eq"><span class="chapa k-mon"></span><span class="eq-nombre">Mónaco</span><span class="gol"></span></div>
+              <div class="bug-eq"><span class="chapa k-cel"></span><span class="eq-nombre">Celtic</span><span class="gol"></span></div>
+            </div>
+            <div class="fila-pie">
+              <ul class="canales fila-canales"><li class="canal se-buscara">M+ Liga de Campeones 4</li></ul>
+              <div class="fila-senal"><span class="senal" data-e="pendiente"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Sin comprobar</span></div>
+            </div>
+          </a>
+        </li>
+      </ol>
+    </section>
+
+    <footer class="ag-pie">
+      <span>Datos de futbolenlatv, Movistar+ y TheSportsDB. Horario peninsular.</span>
+      <span>Actualizada a las 20:44</span>
+    </footer>
+  </main>
+
+  <!-- Escritorio: el partido elegido, con sus fuentes, sin salir de la agenda -->
+  <aside class="detalle" aria-labelledby="det-titulo">
+    <div class="det-cab">
+      <span class="directo-tag"><span class="tally" aria-hidden="true"></span>Directo</span>
+      <span class="det-sonando"><svg class="ic"><use href="#i-vol"/></svg>Sonando en este dispositivo</span>
+    </div>
+    <h2 class="vh" id="det-titulo">Sevilla contra Real Betis</h2>
+    <p class="det-comp"><strong>LaLiga EA Sports</strong>, jornada 6. Estadio Ramón Sánchez-Pizjuán.</p>
+    <div class="bug bug-g">
+      <div class="bug-eq"><span class="chapa g k-sev"></span><span class="eq-nombre">Sevilla</span><span class="num gol">1</span></div>
+      <div class="bug-eq"><span class="chapa g k-bet"></span><span class="eq-nombre">Real Betis</span><span class="num gol">1</span></div>
+    </div>
+    <div class="det-reloj"><span class="num">76'</span><span>Segunda parte</span></div>
+    <div class="minbar" style="--p:.84" aria-hidden="true"><i></i><b style="--en:.5"></b><b class="gol-marca" style="--en:.2556"></b><b class="gol-marca" style="--en:.6778"></b></div>
+    <ol class="det-hechos">
+      <li><span class="num">23'</span><span class="chapa k-sev"></span>Gol del Sevilla</li>
+      <li><span class="num">61'</span><span class="chapa k-bet"></span>Gol del Betis</li>
+    </ol>
+
+    <h3 class="det-h">Fuentes <span class="senal-sub">3 de 6 con señal</span></h3>
+    <ol class="rack" data-grupo="fuentes-det">
+      <li><button type="button" class="rack-fila" data-opcion="1" aria-pressed="true"><span class="num rack-n">1</span><span class="rack-prov"><span>Faro</span><span class="en-antena"><span class="tally fijo"></span>En antena</span></span><span class="senal" data-e="ok"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Verificada</span></button></li>
+      <li><button type="button" class="rack-fila" data-opcion="2" aria-pressed="false"><span class="num rack-n">2</span><span class="rack-prov"><span>Norte</span></span><span class="senal" data-e="ok"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Verificada</span></button></li>
+      <li><button type="button" class="rack-fila" data-opcion="3" aria-pressed="false"><span class="num rack-n">3</span><span class="rack-prov"><span>Lince</span></span><span class="senal" data-e="floja"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Floja</span></button></li>
+      <li><button type="button" class="rack-fila" data-opcion="4" aria-pressed="false"><span class="num rack-n">4</span><span class="rack-prov"><span>Tauro</span></span><span class="senal" data-e="comprobando"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Comprobando</span></button></li>
+      <li><button type="button" class="rack-fila" data-opcion="5" aria-pressed="false"><span class="num rack-n">5</span><span class="rack-prov"><span>Delta</span></span><span class="senal" data-e="fallo"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Fallida</span></button></li>
+    </ol>
+
+    <ul class="canales det-canales"><li class="canal">DAZN LaLiga</li><li class="canal se-buscara">DAZN LaLiga 2</li></ul>
+
+    <div class="det-acciones">
+      <a class="btn btn-inv" href="partido.html"><svg class="ic"><use href="#i-play"/></svg>Volver al partido</a>
+      <button type="button" class="btn"><svg class="ic"><use href="#i-copiar"/></svg>Copiar enlace</button>
+    </div>
+  </aside>
+</div>
+
+<nav class="barra-nav" aria-label="Secciones">
+  <a href="agenda.html" aria-current="page"><svg class="ic"><use href="#i-agenda"/></svg>Agenda</a>
+  <a href="biblioteca.html"><svg class="ic"><use href="#i-biblioteca"/></svg>Biblioteca</a>
+  <a href="#"><svg class="ic"><use href="#i-buscar"/></svg>Buscar</a>
+  <a href="#"><svg class="ic"><use href="#i-ajustes"/></svg>Ajustes</a>
+</nav>
+
+<script>
+  (function () {
+    var main = document.getElementById('contenido');
+    var hoy = document.getElementById('cuenta-hoy');
+    main.addEventListener('elegido', function (e) {
+      if (e.target.getAttribute('data-grupo') !== 'filtro') return;
+      main.setAttribute('data-filtro', e.detail);
+      hoy.textContent = e.detail === 'todos' ? '9' : '6';
+    });
+    var act = document.getElementById('actualizar');
+    act.addEventListener('click', function () {
+      act.classList.remove('girando'); void act.offsetWidth; act.classList.add('girando');
+    });
+  })();
+</script>
+</body>
+</html>

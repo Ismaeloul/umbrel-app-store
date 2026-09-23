@@ -130,3 +130,108 @@ Probado contra el motor real (`docs/analisis/motor-real.md`):
 - **Navegador**: la extensión Claude in Chrome está bloqueada por AdGuard
   (ver `pendiente.md`), así que las capturas se hacen con Playwright sobre tu
   Chrome instalado (`channel: "chrome"`), que renderiza igual.
+
+---
+
+Decisiones del paso 1.3 (integración del backend, modo autónomo y criterio
+conservador). Todas se pueden revertir.
+
+## D9. Con el motor sin contestar, playback no suelta la sesión: espera al vigilante
+
+- **Decisión**: si leer la estadística de una sesión falla porque el motor no
+  contesta (sin conexión o sin respuesta a tiempo), playback ya no cuenta ese
+  fallo para dar la sesión por perdida. Solo reabre por su cuenta cuando el
+  motor SÍ contesta (dice que no conoce la sesión o responde algo raro) y el
+  vigilante no lo da por caído o reiniciando. Al volver el motor, reabre
+  quien lo vea primero y solo si la sesión ya no existe (una sola reapertura).
+- **Por qué**: al integrar salió que, con el motor caído, 3 fallos de
+  estadística en 6 s cerraban la sesión del visor antes de que el vigilante
+  (20 s) viera el motor offline; así el reinicio automático no encontraba a
+  nadie esperando y B-013 no se cumplía. Y tras un reinicio la sesión se
+  reabría dos veces (el visor se cortaba dos).
+- **Además**: un visor que espera a que se abra su canal cuenta ya como
+  "alguien viendo" en `playback.activity` (y su hash entre los vistos). Sin
+  eso, un visor que no conseguía abrir no existía para el vigilante y el
+  reinicio por "3 aperturas fallidas seguidas con un visor esperando" no
+  podía darse nunca.
+- **Tests**: `test/integration/engine-recovery.test.ts` (4 tests) y el soak.
+
+## D10. La salud no pregunta a nadie: el comprobador y football cuentan lo suyo
+
+- **Decisión**: el comprobador pregunta su propio `get_version` cada 30 s
+  mientras está arrancado (`stats().online`, `TIMEOUTS.scannerPingMs`); football
+  dice que la IA está `ready` si Ollama respondió bien en los últimos 5 min
+  (`healthInfo().ai`). Si alguno aún no lo sabe (`null`), la salud usa su
+  sonda cacheada 30 s, ahora a través de `scanner.ping()`.
+- **Alternativa**: que la salud siguiera sondeando (lo pedía como provisional).
+- **Por qué**: lo pidió health en su informe; una petición cada 30 s al
+  comprobador es menos que la de cada GET /api/health de la 0.6.59.
+
+## D11. Causa `state` en el registro de fallos y códigos solo de registro en el catálogo
+
+- **Decisión**: `DIAGNOSTIC_CAUSES` gana `state` (y `counts24h.state`); un
+  `state.json` o documento de `v2/` ilegible se anota con `state_unreadable`.
+  Los códigos que solo viajan al registro (`engine_stalled`,
+  `engine_auto_restart*`, `engine_not_ready`, `engine_stop_failed`,
+  `scanner_session_leak`) entran en el catálogo como NO públicos.
+- **Por qué**: arquitectura §5.4 pide anotar el estado ilegible y no había
+  causa válida; el panel de salud (Fase 2) necesita un mensaje para cada código.
+- **Efecto en la web/iOS**: un campo más en `counts24h` (OpenAPI y fixtures
+  regenerados).
+
+## D12. Un fallo de socket al descargar un directorio sigue siendo 500 también en v1
+
+- **Decisión**: no se traduce a 502 `fetch_failed` en `/api/v1`.
+- **Por qué**: `fetch_failed` tiene `legacyStatus` 400, así que traducirlo en
+  el cliente de red cambiaría la ruta antigua (hoy 500). Se puede hacer solo
+  en v1 más adelante si la web lo necesita para su mensaje.
+
+## D13. El bus admite `targetDeviceIds`, pero playback aún no lo rellena
+
+- **Decisión**: el tipo está en `DomainEvents` (`stream.*`,
+  `playback.handoff`) y el hub ya lo usa como destino; playback sigue
+  mandando los eventos de visor a todas las conexiones (cada cliente filtra
+  por `viewerIds`).
+- **Por qué**: dirigirlos exige que la web mande el mismo `device` al abrir el
+  SSE que al pedir el canal; eso lo decide la Fase 2. Mandarlos a todos no
+  rompe nada (solo son ids de visor y rutas sin firmar).
+
+## D14. Prueba de humo: motor falso en el 6878, sin variable nueva de puerto
+
+- **Decisión**: `scripts/smoke-bundle.mjs` levanta el motor falso en
+  `[::1]:6878` (el puerto del motor es fijo, como en la 0.6.59) con
+  `ACESTREAM_HOST=localhost`, y el comprobador en un puerto libre
+  (`ACESTREAM_SCANNER_PORT` ya existía). No se añade `ACESTREAM_PORT`.
+- **Apagado en Windows**: como allí no se puede mandar un SIGTERM que el
+  proceso capture, `main.ts` acepta también el mensaje IPC `shutdown` si el
+  proceso tiene canal IPC (solo con `fork`; en el NAS no lo hay). Hace el
+  mismo apagado que SIGTERM.
+
+## D15. `playableOn` (D6) solo en /api/v1 y opcional
+
+- **Decisión**: `ScanCandidateSchema.playableOn` y `scan.verdict.playableOn`
+  son opcionales; el comprobador los pone siempre en el evento y, en
+  `GET /api/v1/football/scans/:id`, en los candidatos con veredicto. La ruta
+  antigua `/api/football/scan` conserva la forma exacta de la 0.6.59.
+
+## D16. Los normalizadores de directorios siguen duplicados en `state` y `directories`
+
+- **Decisión**: no se mueven a `@ace/shared` en este paso.
+- **Por qué**: las dos copias tienen firmas distintas (`NormalizeContext`
+  frente a `now`) y cada una está contrastada con la 0.6.59 en su módulo;
+  unificarlas es un cambio con riesgo y sin beneficio para el backend. Se
+  hará cuando la web (Fase 2) los necesite.
+
+## D17. Contraste con la 0.6.59: dos diferencias nuevas se aceptan, no se corrigen
+
+- **Contexto**: `scripts/contraste.mjs` (plan E1.4) encontró dos diferencias
+  con la 0.6.59 que no estaban en `compat.md`
+  (`docs/analisis/contraste-0659.md`).
+- **Decisión**: se quedan y van a `compat.md`: la `version` de `/api/health`
+  es la de la release que corre (fila 8.10), y las respuestas sin cuerpo de
+  `/remux/` (403, 404, 405, 416) llevan también `no-store` y `nosniff` porque
+  el gancho `onSend` de `app.ts` las pone en todas (fila 1.8).
+- **Por qué**: código y cuerpo son iguales y ningún cliente lo nota; quitar
+  las cabeceras obligaría a una excepción en el gancho solo para imitar una
+  ausencia. El script solo da por explicada una diferencia si el paso, el
+  campo y los dos valores encajan con la fila.

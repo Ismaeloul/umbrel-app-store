@@ -6,6 +6,7 @@
     "state": "working",
     "reason": "playable_media",
     "by": "scanner",
-    "checkedAt": "2026-09-23T18:30:00.000Z"
+    "checkedAt": "2026-09-23T18:30:00.000Z",
+    "playableOn": { "web": true, "ios": true }
   }
 }

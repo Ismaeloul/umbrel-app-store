@@ -107,6 +107,18 @@ export function createStateService(deps: StateDeps): StateService & {
   let pending = 0;
   let lastRotationAt: number | null = null;
 
+  /* "Estado ilegible" va también al registro de fallos (arquitectura §5.4;
+     causa `state` añadida en el paso 1.3). */
+  const reportUnreadable = (file: string, moved: string | null): void => {
+    bus.emit('diagnostics.report', {
+      cause: 'state',
+      code: 'state_unreadable',
+      message: moved
+        ? `${file} no se podía leer; se ha apartado como ${path.basename(moved)}.`
+        : `${file} no se podía leer.`,
+    });
+  };
+
   const devicesStore = createDocumentStore<DevicesFile>({
     name: 'devices',
     file: paths.devicesFile,
@@ -114,6 +126,7 @@ export function createStateService(deps: StateDeps): StateService & {
     defaults: () => ({ schemaVersion: SCHEMA_VERSION, devices: [] }),
     clock,
     logger,
+    onUnreadable: reportUnreadable,
   });
   const sessionsStore = createDocumentStore<SessionsFile>({
     name: 'sessions',
@@ -122,6 +135,7 @@ export function createStateService(deps: StateDeps): StateService & {
     defaults: () => ({ schemaVersion: SCHEMA_VERSION, sessions: [] }),
     clock,
     logger,
+    onUnreadable: reportUnreadable,
   });
   const settingsStore = createDocumentStore<SettingsFile>({
     name: 'settings',
@@ -134,6 +148,7 @@ export function createStateService(deps: StateDeps): StateService & {
     }),
     clock,
     logger,
+    onUnreadable: reportUnreadable,
   });
 
   // --- Carga y recuperación ---
@@ -187,6 +202,7 @@ export function createStateService(deps: StateDeps): StateService & {
         { file: candidate.label, apartado: moved, errorCode: 'state_unreadable' },
         'estado ilegible: apartado para mirarlo a mano',
       );
+      reportUnreadable(candidate.label, moved);
       return null;
     };
 

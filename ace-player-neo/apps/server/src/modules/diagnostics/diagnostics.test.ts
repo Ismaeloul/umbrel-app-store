@@ -172,7 +172,14 @@ describe('diagnostics · consultar (GET /api/v1/diagnostics?cause=&since=)', () 
     const limited = ctx.diagnostics.list({ limit: 1 });
     expect(limited.entries).toHaveLength(1);
     expect(limited.total).toBe(3);
-    expect(limited.counts24h).toEqual({ engine: 2, source: 1, network: 0, codec: 0, client: 0 });
+    expect(limited.counts24h).toEqual({
+      engine: 2,
+      source: 1,
+      network: 0,
+      codec: 0,
+      client: 0,
+      state: 0,
+    });
   });
 
   it(`sin limit da ${DEFAULT_LIST_LIMIT}`, () => {
@@ -195,6 +202,7 @@ describe('diagnostics · consultar (GET /api/v1/diagnostics?cause=&since=)', () 
       network: 0,
       codec: 1,
       client: 0,
+      state: 0,
     });
     ctx.core.clock.advance(HOUR + 1);
     expect(ctx.diagnostics.counts24h()).toMatchObject({ engine: 1, codec: 1 });
@@ -205,6 +213,7 @@ describe('diagnostics · consultar (GET /api/v1/diagnostics?cause=&since=)', () 
       network: 0,
       codec: 0,
       client: 0,
+      state: 0,
     });
   });
 });
@@ -334,7 +343,14 @@ describe('diagnostics · v2/diagnostics.jsonl', () => {
       'viejo',
       'rotado',
     ]);
-    expect(second.counts24h()).toEqual({ engine: 1, source: 1, network: 0, codec: 0, client: 1 });
+    expect(second.counts24h()).toEqual({
+      engine: 1,
+      source: 1,
+      network: 0,
+      codec: 0,
+      client: 1,
+      state: 0,
+    });
     await second.flush();
     const lastLine = readFileSync(first.file, 'utf8').trim().split('\n').at(-1) ?? '';
     expect(JSON.parse(lastLine)).toMatchObject({ code: 'durante_arranque' });

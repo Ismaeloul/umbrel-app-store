@@ -43,18 +43,13 @@ const HOUR_MS = 60 * 60 * 1000;
 
 /**
  * Ritmo de sondeo mientras se espera a que el motor vuelva (tras un reinicio
- * o con un visor esperando). No está en `ENGINE_WATCHDOG` (@ace/shared, de
- * A0): pedido como `ENGINE_WATCHDOG.readyPollMs` en docs/cobertura/engine.md.
- * Con los 10 s normales, las 2 respuestas buenas tardarían 20 s en llegar.
+ * o con un visor esperando). Con los 10 s normales, las 2 respuestas buenas
+ * tardarían 20 s en llegar. Vive en @ace/shared desde el paso 1.3.
  */
-export const READY_POLL_MS = 2_000;
+export const READY_POLL_MS = ENGINE_WATCHDOG.readyPollMs;
 
-/**
- * Cuánto tiempo sin entregar datos se da por motor colgado. Mismo valor que
- * el de "60 s offline" (`autoRestartAfterOfflineMs`); pedido como constante
- * propia en docs/cobertura/engine.md.
- */
-export const STALL_AFTER_MS = ENGINE_WATCHDOG.autoRestartAfterOfflineMs;
+/** Cuánto tiempo sin entregar datos se da por motor colgado (@ace/shared desde el paso 1.3). */
+export const STALL_AFTER_MS = ENGINE_WATCHDOG.stalledAfterMs;
 
 /** Sesiones cuyo `downloaded` se recuerda para ver si crece. */
 const MAX_TRACKED_STATS = 32;

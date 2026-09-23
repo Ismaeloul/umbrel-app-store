@@ -18,6 +18,8 @@
     "test:deploy": "vitest run --config vitest.config.ts",
     "test:nginx": "node scripts/test-nginx-docker.mjs",
     "test:shellcheck": "node scripts/test-shellcheck-docker.mjs",
+    "test:contraste": "node scripts/contraste.mjs",
+    "test:compose": "node scripts/test-compose-local.mjs",
     "typecheck:deploy": "tsc -p deploy/tsconfig.json",
     "local:prepare": "node deploy/local/prepare.mjs",
     "release": "node scripts/release.mjs"

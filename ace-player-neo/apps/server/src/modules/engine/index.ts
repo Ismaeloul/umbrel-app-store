@@ -7,6 +7,7 @@ import { createEngineRuntime } from './service.js';
 import type { EngineDeps, EngineService } from './types.js';
 
 export type * from './types.js';
+export { isEngineUnreachable } from './client.js';
 
 export function createEngineService(deps: EngineDeps): EngineService {
   return createEngineRuntime(deps).service;

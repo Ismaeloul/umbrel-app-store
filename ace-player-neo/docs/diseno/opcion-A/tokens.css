@@ -1,0 +1,135 @@
+/* ==========================================================================
+   Ace Player Neo v2 · Opción A «Luz de focos» (territorio Cristal)
+   Tokens semánticos. Un solo juego de nombres; cada valor lleva su versión
+   clara y oscura con light-dark(), que sigue a prefers-color-scheme y a
+   [data-theme] (el interruptor propio de Ajustes).
+   Los hex de referencia están en README.md, calculados desde OKLCH.
+   ========================================================================== */
+
+:root {
+  color-scheme: light dark;
+
+  /* ---- Superficies (azul abismo / hielo) -------------------------------- */
+  --bg:          light-dark(oklch(0.972 0.010 235), oklch(0.205 0.040 252)); /* #f0f7fc | #081829 */
+  --bg-sunk:     light-dark(oklch(0.945 0.014 235), oklch(0.180 0.038 252)); /* #e4eff5 | #051222 */
+  --surface:     light-dark(oklch(0.995 0.004 235), oklch(0.265 0.040 250)); /* #fbfeff | #152738 */
+  --surface-2:   light-dark(oklch(0.955 0.014 235), oklch(0.305 0.042 250)); /* #e8f2f8 | #1e3144 */
+  --line:        light-dark(oklch(0.860 0.015 240), oklch(0.400 0.040 248)); /* #c9d3da | #364a5c */
+  --line-soft:   light-dark(oklch(0.24 0.04 252 / 0.08), oklch(0.97 0.01 240 / 0.07));
+
+  /* ---- Texto ------------------------------------------------------------- */
+  --text:        light-dark(oklch(0.240 0.040 252), oklch(0.970 0.008 240)); /* #102032 | #f0f6fa */
+  --text-2:      light-dark(oklch(0.480 0.035 250), oklch(0.780 0.030 240)); /* #4f5f71 | #a7bac9 */
+  --text-3:      light-dark(oklch(0.530 0.030 250), oklch(0.700 0.030 240)); /* #5f6d7d | #8ea1b0 */
+
+  /* ---- Acento «cielo»: foco, acción principal y «en directo» ------------ */
+  --accent:      oklch(0.830 0.120 222);                                      /* #5fd9ff, relleno en los dos temas */
+  --on-accent:   oklch(0.220 0.050 250);                                      /* #061c31, texto sobre el relleno */
+  --accent-ink:  light-dark(oklch(0.500 0.130 245), oklch(0.830 0.120 222)); /* #0068a7 | #5fd9ff, acento como texto */
+  --accent-edge: light-dark(oklch(0.620 0.120 232), oklch(0.830 0.120 222)); /* #1b92c2 | #5fd9ff, bordes a 3:1 */
+  --accent-wash: light-dark(oklch(0.830 0.120 222 / 0.22), oklch(0.830 0.120 222 / 0.16));
+  --live:        var(--accent-ink);
+
+  /* ---- Estados de señal (base común de los tres territorios) ------------ */
+  --ok:          light-dark(oklch(0.600 0.160 150), oklch(0.800 0.190 150)); /* #139948 | #49de78 */
+  --ok-ink:      light-dark(oklch(0.470 0.130 150), oklch(0.800 0.190 150)); /* #006e30 | #49de78 */
+  --weak:        light-dark(oklch(0.640 0.140 66),  oklch(0.840 0.160 80));  /* #c4780b | #ffbd34 */
+  --weak-ink:    light-dark(oklch(0.500 0.110 62),  oklch(0.840 0.160 80));  /* #8f520d | #ffbd34 */
+  --fail:        light-dark(oklch(0.560 0.200 27),  oklch(0.700 0.200 27));  /* #d02c2a | #ff6056 */
+  --fail-ink:    light-dark(oklch(0.500 0.190 27),  oklch(0.730 0.180 27));  /* #b7191c | #ff7367: el texto sube un punto para dar 5:1 sobre la superficie elevada */
+  --idle:        var(--text-3);
+
+  /* ---- Cristal ------------------------------------------------------------ */
+  /* Regular: capas que flotan sobre contenido (barra, mini-reproductor).     */
+  --glass:        light-dark(oklch(0.990 0.004 235 / 0.66), oklch(0.300 0.040 250 / 0.58));
+  /* Casi opaco: cuando debajo pasa una lista (regla de rendimiento §3.2).    */
+  --glass-dense:  light-dark(oklch(0.990 0.004 235 / 0.90), oklch(0.285 0.040 250 / 0.92));
+  /* Respaldo opaco (Reducir transparencia o sin backdrop-filter).            */
+  --glass-solid:  light-dark(oklch(0.985 0.006 235), oklch(0.300 0.040 250)); /* #f6fbfe | #1e2f41 */
+  --glass-hi:     light-dark(oklch(1 0 0 / 0.95), oklch(1 0 0 / 0.16));      /* brillo del borde superior */
+  --glass-rim:    light-dark(oklch(0.24 0.04 252 / 0.14), oklch(0.08 0.03 252 / 0.55)); /* borde oscurecido iOS 27 */
+  --glass-shadow: light-dark(0 18px 40px -18px oklch(0.30 0.06 250 / 0.35), 0 18px 40px -16px oklch(0.05 0.03 252 / 0.75));
+  /* Clear: solo sobre vídeo; siempre oscuro porque debajo hay imagen.        */
+  --glass-video:  oklch(0.180 0.030 250 / 0.36);
+  --glass-video-solid: oklch(0.220 0.035 250);
+  --blur:         blur(22px) saturate(1.7);
+  --blur-video:   blur(16px) saturate(1.4);
+
+  /* ---- Colores de equipo, normalizados por tema (se usan como luz) ------ */
+  /* Nunca en indicadores pequeños junto a un estado: solo superficies.     */
+  --t-atm: light-dark(oklch(0.64 0.17 29),  oklch(0.60 0.20 29));
+  --t-tot: light-dark(oklch(0.58 0.09 268), oklch(0.93 0.01 265));  /* blanco: en claro se usa su marino */
+  --t-gal: light-dark(oklch(0.74 0.15 75),  oklch(0.72 0.16 72));
+  --t-vil: light-dark(oklch(0.84 0.14 100), oklch(0.86 0.15 100));
+  --t-rma: light-dark(oklch(0.60 0.07 268), oklch(0.94 0.01 265));
+  --t-bay: light-dark(oklch(0.62 0.20 20),  oklch(0.58 0.21 20));
+  --t-int: light-dark(oklch(0.62 0.13 245), oklch(0.58 0.14 245));
+  --t-bar: light-dark(oklch(0.58 0.17 5),   oklch(0.52 0.18 5));
+  --t-ben: light-dark(oklch(0.62 0.21 27),  oklch(0.58 0.21 27));
+  --t-ath: light-dark(oklch(0.63 0.20 28),  oklch(0.60 0.21 28));
+  --t-gir: light-dark(oklch(0.62 0.19 22),  oklch(0.58 0.20 22));
+  --t-rso: light-dark(oklch(0.62 0.13 250), oklch(0.60 0.14 250));
+  --t-bet: light-dark(oklch(0.70 0.15 155), oklch(0.66 0.16 155));
+  --t-val: light-dark(oklch(0.72 0.15 55),  oklch(0.70 0.16 55));
+  --t-juv: light-dark(oklch(0.55 0.00 0),   oklch(0.90 0.00 0));
+  --t-rom: light-dark(oklch(0.55 0.14 15),  oklch(0.50 0.14 15));
+
+  /* ---- Tipografía --------------------------------------------------------- */
+  --font: "Mona Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Martian Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* Escala: 11 · 12 · 13 · 15 · 17 · 22 · 30 · 44 · 64 · 96 */
+  --fs-11: 0.6875rem;
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-15: 0.9375rem;
+  --fs-17: 1.0625rem;
+  --fs-22: 1.375rem;
+  --fs-30: 1.875rem;
+  --fs-44: 2.75rem;
+  --fs-64: 4rem;
+  --fs-96: 6rem;
+  /* Anchuras del eje wdth de Mona Sans */
+  --w-num: 75%;      /* marcador, minuto, horas */
+  --w-tight: 88%;    /* rótulos que tienen que caber */
+  --w-text: 100%;
+  --w-head: 112%;    /* titulares de página */
+
+  /* ---- Formas concéntricas (radio interior = exterior - margen) --------- */
+  --r-xl: 28px;
+  --r-l: 20px;
+  --r-m: 14px;
+  --r-s: 10px;
+  --r-pill: 999px;
+
+  /* ---- Espacio (base 4) --------------------------------------------------- */
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px;
+  --s-6: 24px; --s-8: 32px; --s-10: 40px; --s-12: 48px;
+  --gutter: 16px;
+  --tap: 44px;
+
+  /* ---- Movimiento: la misma tabla que SwiftUI (duración percibida + rebote) */
+  /* rápido 0,25 s / 0 · estándar 0,4 s / 0,15 · héroe 0,55 s / 0,3.
+     Curvas muestreadas de un muelle amortiguado; la duración CSS es el
+     tiempo de asentamiento real.                                           */
+  --ease-rapido: linear(0, 0.049, 0.158, 0.286, 0.412, 0.527, 0.625, 0.707, 0.773, 0.826, 0.867, 0.899, 0.924, 0.943, 0.958, 0.968, 0.977, 0.983, 0.987, 0.991, 0.993, 0.995, 0.996, 0.997, 1);
+  --dur-rapido: 340ms;
+  --ease-estandar: linear(0, 0.029, 0.101, 0.196, 0.301, 0.406, 0.506, 0.598, 0.678, 0.747, 0.806, 0.854, 0.892, 0.923, 0.947, 0.965, 0.979, 0.989, 0.996, 1.001, 1.004, 1.005, 1.006, 1.006, 1.006, 1.006, 1.005, 1.004, 1.004, 1.003, 1.002, 1);
+  --dur-estandar: 520ms;
+  --ease-heroe: linear(0, 0.017, 0.061, 0.124, 0.201, 0.285, 0.372, 0.459, 0.543, 0.621, 0.694, 0.759, 0.816, 0.866, 0.909, 0.944, 0.973, 0.996, 1.014, 1.027, 1.036, 1.042, 1.045, 1.046, 1.045, 1.043, 1.04, 1.037, 1.033, 1.029, 1.025, 1.021, 1.018, 1.014, 1.011, 1.009, 1.006, 1.004, 1.003, 1.001, 1, 0.999, 0.999, 0.998, 0.998, 0.998, 0.998, 0.998, 1);
+  --dur-heroe: 800ms;
+}
+
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"]  { color-scheme: dark; }
+
+/* Movimiento reducido: fundidos cortos y ningún pulso. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-rapido: 120ms;
+    --dur-estandar: 150ms;
+    --dur-heroe: 150ms;
+    --ease-rapido: ease-out;
+    --ease-estandar: ease-out;
+    --ease-heroe: ease-out;
+  }
+}

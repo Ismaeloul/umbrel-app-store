@@ -35,6 +35,8 @@ export interface DocumentStoreOptions<T> {
   readonly defaults: () => T;
   readonly clock: Clock;
   readonly logger: Logger;
+  /** Aviso de documento ilegible y apartado (el servicio lo manda a diagnóstico, paso 1.3). */
+  readonly onUnreadable?: (document: string, moved: string | null) => void;
 }
 
 export interface ManagedDocumentStore<T> extends JsonDocumentStore<T> {
@@ -109,6 +111,7 @@ export function createDocumentStore<T>(options: DocumentStoreOptions<T>): Manage
         { document: name, apartado: moved, errorCode: 'state_unreadable' },
         'documento v2 ilegible o fuera de esquema: apartado',
       );
+      options.onUnreadable?.(name, moved);
     }
     const value = options.defaults();
     current = deepFreeze(value);

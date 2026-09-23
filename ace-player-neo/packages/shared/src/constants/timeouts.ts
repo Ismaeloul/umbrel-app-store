@@ -28,6 +28,13 @@ export const TIMEOUTS = {
   remuxStartNginxMs: 60 * SECOND,
   /** Sonda completa del comprobador, con estadística final, ffprobe y stop (backend-modulos §9.7). */
   scannerProbeTotalMs: 30 * SECOND,
+  /** Con alguien viendo, el comprobador lanza como mucho una sonda cada este rato (arquitectura §5.8). */
+  scannerWatchingGapMs: 20 * SECOND,
+  /**
+   * Cada cuánto el comprobador pregunta su propio `get_version` para la salud
+   * (`ScannerStats.online`). En la 0.6.59 lo hacía cada GET /api/health.
+   */
+  scannerPingMs: 30 * SECOND,
   /** Descarga de un directorio: plazo total (server.js:43). */
   directoryTotalMs: 45 * SECOND,
   /** Descarga de un directorio: inactividad del socket (server.js:1371). */
@@ -69,6 +76,35 @@ export const ENGINE_WATCHDOG = {
   readyMaxWaitMs: 90 * SECOND,
   /** Enfriamiento del reinicio manual (server.js:40, engine-control.js:8). */
   manualRestartCooldownMs: 15 * SECOND,
+  /** Mientras el motor reinicia o alguien espera a que vuelva, se le pregunta con este ritmo. */
+  readyPollMs: 2 * SECOND,
+  /**
+   * "Responde pero no entrega": este rato con alguien viendo y las
+   * estadísticas sin contestar o a velocidad 0 sin avanzar.
+   */
+  stalledAfterMs: 60 * SECOND,
+} as const;
+
+/** Sincronización de directorios (server.js:55; arquitectura §5.11). */
+export const DIRECTORY_SYNC = {
+  /** Sincronización automática de todos los directorios (`WEB_SYNC_INTERVAL_MS` de la 0.6.59). */
+  intervalMs: 3 * HOUR,
+  /** La resolución de un partido solo refresca los directorios más viejos que esto. */
+  onResolveMs: 30 * MINUTE,
+  /** Espera tras un fallo: empieza en 5 min y se dobla hasta 3 h (solo la sincronización por resolución). */
+  retryBaseMs: 5 * MINUTE,
+  retryMaxMs: 3 * HOUR,
+} as const;
+
+/** `WEB_SYNC_INTERVAL_MS` de la 0.6.59 (server.js:55): lo usan directories y health. */
+export const WEB_SYNC_INTERVAL_MS = DIRECTORY_SYNC.intervalMs;
+
+/** Emparejamiento y dispositivos (arquitectura §5.12). */
+export const AUTH_TIMINGS = {
+  /** `lastSeenAt` de un dispositivo se guarda como mucho una vez por este rato. */
+  lastSeenThrottleMs: 60 * SECOND,
+  /** Ventana del límite de canjes de código (`PAIRING_ATTEMPTS_PER_MINUTE`). */
+  pairingWindowMs: 60 * SECOND,
 } as const;
 
 /** Tiempo real (arquitectura §5.13). */

@@ -33,6 +33,16 @@ export interface DiagnosticReport {
   readonly requestId?: string;
 }
 
+/**
+ * Destino opcional de un evento de visor (paso 1.3, lo pidió events): si
+ * viene, el hub solo lo manda a las conexiones de esos dispositivos y lo
+ * quita antes de validar el esquema SSE. Sin él, va a todas y cada cliente
+ * filtra por sus `viewerIds`.
+ */
+export interface DeviceTargeted {
+  readonly targetDeviceIds?: readonly string[];
+}
+
 /** Mapa evento → carga. Los que van a los clientes reutilizan el esquema SSE. */
 export interface DomainEvents {
   /** Veredicto de una fuente (comprobador o reproductor). Lo consumen fuentes, precalentado, playback y SSE. */
@@ -55,7 +65,7 @@ export interface DomainEvents {
   /** Cambió quién tiene el mando (`nowPlaying`) o el aprendizaje. */
   'playback.nowPlaying': SseEventData<'playback.nowPlaying'>;
   /** Un visor pierde el canal: otro dispositivo se lo ha quedado. */
-  'playback.handoff': SseEventData<'playback.handoff'>;
+  'playback.handoff': SseEventData<'playback.handoff'> & DeviceTargeted;
   /**
    * Hay o no hay alguien viendo, y qué. Lo usan el vigilante del motor
    * (histéresis de 2 o 3 fallos) y el comprobador (ritmo lento y nunca el
@@ -66,11 +76,11 @@ export interface DomainEvents {
     readonly hashes: readonly string[];
     readonly viewers: number;
   };
-  'stream.ready': SseEventData<'stream.ready'>;
-  'stream.reopened': SseEventData<'stream.reopened'>;
-  'stream.modeChanged': SseEventData<'stream.modeChanged'>;
-  'stream.closed': SseEventData<'stream.closed'>;
-  'stream.stats': SseEventData<'stream.stats'>;
+  'stream.ready': SseEventData<'stream.ready'> & DeviceTargeted;
+  'stream.reopened': SseEventData<'stream.reopened'> & DeviceTargeted;
+  'stream.modeChanged': SseEventData<'stream.modeChanged'> & DeviceTargeted;
+  'stream.closed': SseEventData<'stream.closed'> & DeviceTargeted;
+  'stream.stats': SseEventData<'stream.stats'> & DeviceTargeted;
   /** Algo guardado cambió (lo emite state tras persistir). */
   'state.changed': SseEventData<'state.changed'>;
   /** Petición de anotar un fallo: la atiende diagnostics y luego emite `diagnostics.new`. */

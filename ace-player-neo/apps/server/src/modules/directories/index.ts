@@ -18,6 +18,7 @@
 
 import { promises as dns } from 'node:dns';
 import {
+  DIRECTORY_SYNC,
   MAX_WEB_SOURCES,
   MAX_WEB_STREAMS,
   errorMessage,
@@ -37,16 +38,17 @@ import type { DirectoriesDeps, DirectoriesService, SyncReason } from './types.js
 
 export type * from './types.js';
 
-const MINUTE = 60 * 1000;
+/* Los plazos viven en @ace/shared (`DIRECTORY_SYNC`) desde el paso 1.3; los
+   nombres de aquí se conservan porque los usan los tests del módulo. */
 
 /** Sincronización periódica (server.js:55). */
-export const WEB_SYNC_INTERVAL_MS = 3 * 60 * MINUTE;
+export const WEB_SYNC_INTERVAL_MS = DIRECTORY_SYNC.intervalMs;
 /** Una lista más vieja que esto se refresca al resolver un partido (server.js:4143). */
-export const WEB_SYNC_ON_RESOLVE_MS = 30 * MINUTE;
+export const WEB_SYNC_ON_RESOLVE_MS = DIRECTORY_SYNC.onResolveMs;
 /** Espera exponencial de un directorio que falla: 5 min, 10, 20… (nuevo, §8.2.7). */
-export const DIRECTORY_RETRY_BASE_MS = 5 * MINUTE;
+export const DIRECTORY_RETRY_BASE_MS = DIRECTORY_SYNC.retryBaseMs;
 /** ...hasta 3 h, la misma cadencia que la periódica. */
-export const DIRECTORY_RETRY_MAX_MS = WEB_SYNC_INTERVAL_MS;
+export const DIRECTORY_RETRY_MAX_MS = DIRECTORY_SYNC.retryMaxMs;
 
 const SCOPES = { scopes: ['directories'] as const };
 

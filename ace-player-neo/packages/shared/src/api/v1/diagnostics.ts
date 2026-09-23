@@ -18,8 +18,17 @@ import {
  * - `network`: plazos, DNS, 5xx de terceros.
  * - `codec`: `unsupported_codec`, audio que no decodifica, ffmpeg que muere por códec.
  * - `client`: errores del reproductor, autoplay bloqueado, latido perdido.
+ * - `state`: lo guardado en disco (state.json, v2/*.json) no se pudo leer y
+ *   se apartó ("estado ilegible", arquitectura §5.4). Añadida en el paso 1.3.
  */
-export const DIAGNOSTIC_CAUSES = ['engine', 'source', 'network', 'codec', 'client'] as const;
+export const DIAGNOSTIC_CAUSES = [
+  'engine',
+  'source',
+  'network',
+  'codec',
+  'client',
+  'state',
+] as const;
 export const DiagnosticCauseSchema = z.enum(DIAGNOSTIC_CAUSES);
 export type DiagnosticCause = z.infer<typeof DiagnosticCauseSchema>;
 
@@ -66,6 +75,7 @@ export const DiagnosticCountsSchema = z.strictObject({
   network: z.number().int().nonnegative(),
   codec: z.number().int().nonnegative(),
   client: z.number().int().nonnegative(),
+  state: z.number().int().nonnegative(),
 });
 
 export const DiagnosticsListResponseSchema = z.strictObject({

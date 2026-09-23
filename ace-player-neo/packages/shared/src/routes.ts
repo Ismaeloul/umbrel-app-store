@@ -172,11 +172,16 @@ export const COMMON_V1_ERRORS = [
   'internal_error',
 ] as const satisfies readonly ErrorCode[];
 
+/* Además de estos, `directoriesSync` puede devolver `http_NNN` (502 en v1: el
+   servidor de la lista respondió con ese error), que no es un código fijo del
+   catálogo y por eso no se lista aquí. Los `ipfs_*` y `fetch_failed` se
+   añadieron en el paso 1.3 (los devuelve la descarga por IPFS y el socket). */
 const DIRECTORY_FETCH_ERRORS = [
   'bad_url',
   'private_url',
   'dns_failed',
   'fetch_timeout',
+  'fetch_failed',
   'redirect_limit',
   'redirect_loop',
   'response_too_large',
@@ -184,6 +189,16 @@ const DIRECTORY_FETCH_ERRORS = [
   'empty_directory',
   'source_not_found',
   'source_limit',
+  'ipfs_not_found',
+  'ipfs_bad_cid',
+  'ipfs_bad_block',
+  'ipfs_bad_data',
+  'ipfs_bad_record',
+  'ipfs_hamt_unsupported',
+  'ipfs_missing_block',
+  'ipfs_not_file',
+  'ipfs_unsupported_codec',
+  'ipfs_unsupported_hash',
 ] as const satisfies readonly ErrorCode[];
 
 export const V1_ROUTES = {

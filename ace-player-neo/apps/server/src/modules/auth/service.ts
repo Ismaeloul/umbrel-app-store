@@ -24,6 +24,7 @@ import { randomBytes as nodeRandomBytes, randomInt as nodeRandomInt } from 'node
 import QRCode from 'qrcode';
 import { z } from 'zod';
 import {
+  AUTH_TIMINGS,
   DEVICE_SECRET_BYTES,
   DeviceIdSchema,
   PAIRING_ATTEMPTS_PER_CODE,
@@ -48,9 +49,9 @@ import { BASE64URL_RE, equalDigests, equalStrings, hmac, sha256, sha256Hex } fro
 import type { AuthDeps, AuthService, VideoTokenInput } from './types.js';
 
 /** `lastSeenAt` se guarda como mucho una vez por este intervalo (arquitectura §5.12). */
-export const LAST_SEEN_THROTTLE_MS = 60_000;
+export const LAST_SEEN_THROTTLE_MS = AUTH_TIMINGS.lastSeenThrottleMs;
 /** Ventana del límite global de canjes (10 por minuto). */
-export const PAIRING_WINDOW_MS = 60_000;
+export const PAIRING_WINDOW_MS = AUTH_TIMINGS.pairingWindowMs;
 /** Bytes aleatorios del id de un dispositivo (`dev_` + 16 caracteres base64url). */
 const DEVICE_ID_BYTES = 12;
 /** Longitud del secreto en base64url (32 bytes → 43 caracteres). */

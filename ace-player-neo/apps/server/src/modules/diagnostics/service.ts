@@ -20,8 +20,11 @@ import { randomBytes } from 'node:crypto';
 import { appendFile, mkdir, readFile, rename, stat } from 'node:fs/promises';
 import path from 'node:path';
 import {
+  DIAGNOSTICS_CLIENT_REPORTS_PER_MINUTE,
+  DIAGNOSTICS_DEFAULT_LIST_LIMIT,
   DIAGNOSTICS_FILE_BYTES,
   DIAGNOSTICS_MEMORY_ENTRIES,
+  DIAGNOSTICS_TOTAL_REPORTS_PER_MINUTE,
   DIAGNOSTIC_CAUSES,
   DeviceIdSchema,
   DiagnosticCauseSchema,
@@ -46,10 +49,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
 
 /** Informes de clientes por minuto: por cliente y en total (arquitectura §5.14: "con límite"). */
-export const CLIENT_REPORTS_PER_MINUTE = 30;
-export const TOTAL_REPORTS_PER_MINUTE = 120;
+export const CLIENT_REPORTS_PER_MINUTE = DIAGNOSTICS_CLIENT_REPORTS_PER_MINUTE;
+export const TOTAL_REPORTS_PER_MINUTE = DIAGNOSTICS_TOTAL_REPORTS_PER_MINUTE;
 /** Entradas de GET /api/v1/diagnostics si no se pide `limit`. */
-export const DEFAULT_LIST_LIMIT = 100;
+export const DEFAULT_LIST_LIMIT = DIAGNOSTICS_DEFAULT_LIST_LIMIT;
 /** Tope de marcas por causa para el recuento de 24 h (memoria acotada aunque haya una avalancha). */
 const MAX_TIMES_PER_CAUSE = 100_000;
 
@@ -92,7 +95,7 @@ function optionalMatch<T>(
 }
 
 function emptyCounts(): Record<DiagnosticCause, number> {
-  return { engine: 0, source: 0, network: 0, codec: 0, client: 0 };
+  return { engine: 0, source: 0, network: 0, codec: 0, client: 0, state: 0 };
 }
 
 export function createDiagnostics(
@@ -116,6 +119,7 @@ export function createDiagnostics(
     network: [],
     codec: [],
     client: [],
+    state: [],
   };
   let seq = 0;
   let started = false;

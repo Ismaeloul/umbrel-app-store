@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Biblioteca · Ace Player Neo (opción A)</title>
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#081829">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f0f7fc">
+<link rel="icon" href="icono.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112.5,100..800&family=Mona+Sans:wdth,wght@75..125,200..900&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="base.css">
+<style>
+  .lib { display: grid; gap: 16px; align-content: start; max-width: 680px; margin: 0 auto; padding: calc(env(safe-area-inset-top) + 14px) var(--gutter) 196px; }
+  .head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 48px; }
+  .head h1 { font-size: var(--fs-30); font-weight: 760; font-stretch: var(--w-head); letter-spacing: -0.02em; line-height: 1.05; }
+  .head-tools { display: flex; align-items: center; margin-right: -8px; }
+
+  .search {
+    display: flex; align-items: center; gap: 10px; min-height: 50px; padding: 0 8px 0 16px;
+    border-radius: var(--r-pill); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-soft);
+    color: var(--text-2);
+  }
+  .search:focus-within { box-shadow: inset 0 0 0 1.5px var(--accent-edge); }
+  .search input { flex: 1; min-width: 0; height: 48px; border: 0; outline: 0; background: none; font-size: var(--fs-15); color: var(--text); }
+  .search input::placeholder { color: var(--text-3); }
+  .search kbd { font-family: var(--mono); font-stretch: 87.5%; font-size: var(--fs-11); min-width: 24px; height: 24px; display: inline-grid; place-items: center; border-radius: 7px; background: var(--bg); color: var(--text-2); box-shadow: inset 0 0 0 1px var(--line); margin-right: 8px; }
+  @media (hover: none) { .search kbd { display: none; } }
+
+  .tabs { --n: 3; }
+  .tabs button { min-height: 40px; }
+
+  /* ---- Tarjetas de canal ------------------------------------------------- */
+  .chl { border-radius: var(--r-xl); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-soft); overflow: hidden; }
+  .chl > li + li .ch { box-shadow: inset 0 1px 0 var(--line-soft); }
+  .ch { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; transition: background-color var(--dur-rapido) var(--ease-rapido); }
+  .ch:hover { background: color-mix(in oklch, var(--surface-2) 55%, transparent); }
+  .ch[aria-current="true"] { background: var(--surface-2); }
+  .ch[aria-current="true"]::before { content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent-edge); }
+  .ch-main { display: grid; grid-template-columns: 52px minmax(0, 1fr); align-items: center; gap: 14px; padding: 14px 4px 14px 16px; min-height: 76px; }
+  .ch-body { display: grid; gap: 4px; min-width: 0; }
+  .ch-name { font-size: var(--fs-17); font-weight: 680; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ch-line { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--fs-13); color: var(--text-2); }
+  .ch-line .txt { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ch-line .crests { display: inline-flex; flex: none; }
+  .ch-line .crests .crest { --s: 18px; }
+  .ch-line .crests .crest + .crest { margin-left: -5px; }
+  .ch-line .min { flex: none; display: inline-flex; align-items: center; gap: 7px; color: var(--live); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .ch-line .sc { font-stretch: var(--w-num); font-weight: 780; color: var(--text); font-variant-numeric: tabular-nums; }
+  .ch-line.is-live .txt { color: var(--text); font-weight: 560; }
+  .ch-meta { display: flex; align-items: center; gap: 8px; min-height: 22px; font-size: var(--fs-12); color: var(--text-3); white-space: nowrap; }
+  .ch-meta .min { display: inline-flex; align-items: center; gap: 7px; color: var(--live); font-weight: 700; font-size: var(--fs-13); font-variant-numeric: tabular-nums; }
+  .ch-meta .min + span { color: var(--live); font-weight: 600; }
+  .ch-meta .onair + .min + span { color: var(--text-2); font-weight: 500; }
+  .ch-acts { display: flex; align-items: center; padding-right: 6px; }
+  .ch-acts .fav { display: none; }
+  .onair { display: inline-flex; align-items: center; gap: 6px; min-height: 22px; padding: 0 8px; border-radius: 7px; background: var(--accent-wash); color: var(--accent-ink); font-size: var(--fs-11); font-weight: 700; font-stretch: var(--w-tight); white-space: nowrap; flex: none; }
+
+  .tile-ch {
+    --h: 250;
+    width: 52px; height: 52px; border-radius: 15px; flex: none; display: grid; place-items: center;
+    background: light-dark(oklch(0.90 0.055 var(--h)), oklch(0.40 0.085 var(--h)));
+    color: light-dark(oklch(0.32 0.08 var(--h)), oklch(0.95 0.03 var(--h)));
+    font-stretch: var(--w-num); font-weight: 820; font-size: var(--fs-17); letter-spacing: 0.01em;
+    box-shadow: inset 0 0 0 1px light-dark(oklch(0.3 0.05 var(--h) / 0.14), oklch(1 0 0 / 0.08));
+  }
+
+  .panel[hidden] { display: none; }
+  .foot { font-size: var(--fs-12); color: var(--text-3); padding: 0 4px; }
+
+  /* ---- Recientes --------------------------------------------------------- */
+  .when-h { font-size: var(--fs-13); font-weight: 700; color: var(--text-2); padding: 0 4px; margin-bottom: -6px; }
+
+  /* ---- Estado vacío ------------------------------------------------------- */
+  .empty { display: grid; justify-items: center; text-align: center; gap: 14px; padding: 36px 20px 32px; border-radius: var(--r-xl); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-soft); }
+  .empty svg.art { width: 112px; height: 112px; color: var(--text-3); }
+  .empty h2 { font-size: var(--fs-22); font-weight: 740; font-stretch: var(--w-head); line-height: 1.2; letter-spacing: -0.01em; }
+  .empty p { max-width: 34ch; color: var(--text-2); font-size: var(--fs-15); }
+  .empty-acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 6px; }
+
+  /* ---- Detalle del canal (escritorio) -------------------------------------- */
+  .detail { display: none; }
+
+  @media (min-width: 1024px) {
+    .app { display: flex; min-height: 100dvh; }
+    .lib-wrap { flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 28px; padding: 26px 28px 40px 32px; align-items: start; }
+    .lib { max-width: 760px; width: 100%; margin: 0; padding: 0 0 140px; }
+    .head-tools .engine { display: none; }
+    .ch-acts .fav { display: inline-grid; }
+    .ch-acts .fav, .ch-acts .more { opacity: 0; transition: opacity var(--dur-rapido) var(--ease-rapido); }
+    .ch:hover .ch-acts .fav, .ch:hover .ch-acts .more, .ch:focus-within .ch-acts .fav, .ch:focus-within .ch-acts .more, .ch[aria-current="true"] .ch-acts > * { opacity: 1; }
+    .detail { display: block; position: sticky; top: 26px; }
+    .mini { left: calc(84px + 32px); right: auto; width: 460px; bottom: 24px; }
+  }
+
+  .dcard { position: relative; isolation: isolate; overflow: hidden; border-radius: var(--r-xl); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-soft); display: grid; gap: 18px; padding: 22px; }
+  .d-head { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center; }
+  .d-head .tile-ch { width: 76px; height: 76px; border-radius: 21px; font-size: var(--fs-22); }
+  .d-head h2 { font-size: var(--fs-22); font-weight: 740; font-stretch: var(--w-head); line-height: 1.15; letter-spacing: -0.01em; }
+  .d-head p { font-size: var(--fs-13); color: var(--text-2); margin-top: 4px; }
+  .d-acts { display: flex; gap: 8px; align-items: center; }
+  .d-acts .btn--primary { flex: 1; min-height: 50px; }
+  .d-acts .icon-btn { background: var(--surface-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-soft); width: 50px; height: 50px; }
+  .d-sec { display: grid; gap: 10px; }
+  .d-sec h3 { font-size: var(--fs-15); font-weight: 720; font-stretch: var(--w-head); }
+  .d-now { --ta: transparent; --tb: transparent; position: relative; overflow: hidden; border-radius: var(--r-l); padding: 14px 16px; display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center;
+    background:
+      radial-gradient(60% 120% at 0% 50%, color-mix(in oklch, var(--ta) 22%, transparent), transparent 70%),
+      radial-gradient(60% 120% at 100% 50%, color-mix(in oklch, var(--tb) 18%, transparent), transparent 70%),
+      var(--bg);
+    box-shadow: inset 0 0 0 1px var(--line-soft); }
+  .d-now .teams { display: grid; gap: 6px; min-width: 0; }
+  .d-now .t { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; font-weight: 620; }
+  .d-now .t .crest { --s: 22px; }
+  .d-now .t .num { font-size: var(--fs-17); }
+  .d-now .f-ring { --d: 46px; font-size: var(--fs-15); }
+  .d-list { display: grid; border-radius: var(--r-l); background: var(--bg); box-shadow: inset 0 0 0 1px var(--line-soft); overflow: hidden; }
+  .d-list li { display: grid; grid-template-columns: 52px 1fr auto; gap: 10px; align-items: center; min-height: 44px; padding: 0 14px; font-size: var(--fs-13); }
+  .d-list li + li { box-shadow: inset 0 1px 0 var(--line-soft); }
+  .d-list .h { font-stretch: var(--w-num); font-weight: 760; font-variant-numeric: tabular-nums; color: var(--text-2); font-size: var(--fs-15); }
+  .d-hash { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-family: var(--mono); font-stretch: 87.5%; font-size: var(--fs-12); color: var(--text-2); }
+</style>
+</head>
+<body>
+<script src="iconos.js"></script>
+
+<div class="app">
+  <aside class="rail">
+    <img class="brand" src="icono.svg" alt="Ace Player Neo">
+    <nav aria-label="Principal">
+      <a href="agenda.html"><svg class="i"><use href="#i-agenda"/></svg>Agenda</a>
+      <a href="biblioteca.html" aria-current="page"><svg class="i"><use href="#i-biblio"/></svg>Biblioteca</a>
+      <a href="#"><svg class="i"><use href="#i-buscar"/></svg>Buscar</a>
+      <a href="#"><svg class="i"><use href="#i-ajustes"/></svg>Ajustes</a>
+    </nav>
+    <button class="engine" data-state="ok" title="Motor AceStream en línea"><svg class="i"><use href="#i-motor"/></svg><span>Motor</span><span>en línea</span></button>
+  </aside>
+
+  <div class="lib-wrap">
+    <main class="lib">
+      <header class="head">
+        <h1>Biblioteca</h1>
+        <div class="head-tools">
+          <button class="engine" data-state="ok" aria-label="Motor AceStream en línea. Ver la salud del sistema"><svg class="i"><use href="#i-motor"/></svg><span>Motor en línea</span></button>
+          <button class="icon-btn press" aria-label="Pegar un Content ID o enlace acestream://" title="Pegar hash"><svg class="i"><use href="#i-paste"/></svg></button>
+        </div>
+      </header>
+
+      <label class="search">
+        <svg class="i s20"><use href="#i-buscar"/></svg>
+        <input type="search" placeholder="Buscar canal…" aria-label="Buscar canal">
+        <kbd>/</kbd>
+      </label>
+
+      <div class="seg tabs" id="tabs" style="--i:0" role="tablist" aria-label="Secciones de la biblioteca">
+        <button role="tab" aria-selected="true" aria-controls="p-fav" data-p="favoritos">Favoritos <span class="count">8</span></button>
+        <button role="tab" aria-selected="false" aria-controls="p-rec" data-p="recientes">Recientes <span class="count">12</span></button>
+        <button role="tab" aria-selected="false" aria-controls="p-lis" data-p="listas">Listas <span class="count">0</span></button>
+      </div>
+
+      <!-- Favoritos -->
+      <section class="panel" id="p-fav" role="tabpanel" aria-label="Favoritos">
+        <ol class="chl" id="favs">
+          <li><article class="ch" data-id="mlc">
+            <a class="ch-main" href="partido.html">
+              <span class="tile-ch" style="--h:250">M+</span>
+              <span class="ch-body">
+                <span class="ch-name">M+ Liga de Campeones</span>
+                <span class="ch-line is-live lit"><span class="crests"><span class="crest" data-team="atm"></span><span class="crest" data-team="tot"></span></span><span class="txt">Atlético – Tottenham</span></span>
+                <span class="ch-meta"><span class="onair"><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>En pantalla</span><span class="min"><span class="live-dot"></span>72'</span><span>Marcador oculto</span></span>
+              </span>
+            </a>
+            <div class="ch-acts"><button class="icon-btn fav" aria-label="Quitar de favoritos"><svg class="i s20" style="color:var(--accent-ink)"><use href="#i-star-f"/></svg></button><button class="icon-btn more" aria-label="Más acciones para M+ Liga de Campeones"><svg class="i s20"><use href="#i-more"/></svg></button></div>
+          </article></li>
+          <li><article class="ch" data-id="dzl" aria-current="true">
+            <a class="ch-main" href="partido.html">
+              <span class="tile-ch" style="--h:165">DL</span>
+              <span class="ch-body">
+                <span class="ch-name">DAZN LaLiga</span>
+                <span class="ch-line is-live lit"><span class="crests"><span class="crest" data-team="gir"></span><span class="crest" data-team="rso"></span></span><span class="txt">Girona <span class="sc">1–1</span> Real Sociedad</span></span>
+                <span class="ch-meta"><span class="min"><span class="live-dot"></span>58'</span><span>En directo</span></span>
+              </span>
+            </a>
+            <div class="ch-acts"><button class="icon-btn fav" aria-label="Quitar de favoritos"><svg class="i s20" style="color:var(--accent-ink)"><use href="#i-star-f"/></svg></button><button class="icon-btn more" aria-label="Más acciones para DAZN LaLiga"><svg class="i s20"><use href="#i-more"/></svg></button></div>
+          </article></li>
+          <li><article class="ch" data-id="ml">
+            <a class="ch-main" href="partido.html">
+              <span class="tile-ch" style="--h:15">M+</span>
+              <span class="ch-body">
+                <span class="ch-name">M+ LaLiga</span>
+                <span class="ch-line"><span class="crests"><span class="crest" data-team="bet"></span><span class="crest" data-team="val"></span></span><span class="txt">A las 21:30, Real Betis – Valencia</span></span>
+                <span class="ch-meta">Deportes</span>
+              </span>
+            </a>
+            <div class="ch-acts"><button class="icon-btn fav" aria-label="Quitar de favoritos"><svg class="i s20" style="color:var(--accent-ink)"><use href="#i-star-f"/></svg></button><button class="icon-btn more" aria-label="Más acciones para M+ LaLiga"><svg class="i s20"><use href="#i-more"/></svg></button></div>
+          </article></li>
+          <li><article class="ch" data-id="mlc2">
+            <a class="ch-main" href="partido.html">
+              <span class="tile-ch" style="--h:215">M2</span>
+              <span class="ch-body">
+                <span class="ch-name">M+ Liga de Campeones 2</span>
+                <span class="ch-line is-live lit"><span class="crests"><span class="crest" data-team="gal"></span><span class="crest" data-team="vil"></span></span><span class="txt">Galatasaray <span class="sc">0–0</span> Villarreal</span></span>
+                <span class="ch-meta"><span class="min"><span class="live-dot"></span>72'</span><span>En directo</span></span>
+              </span>
+            </a>
+            <div class="ch-acts"><button class="icon-btn fav" aria-label="Quitar de favoritos"><svg class="i s20" style="color:var(--accent-ink)"><use href="#i-star-f"/></svg></button><button class="icon-btn more" aria-label="Más acciones para M+ Liga de Campeones 2"><svg class="i s20"><use href="#i-more"/></svg></button></div>
+          </article></li>
+          <li><article class="ch" data-id="dz1">
+            <a class="ch-main" href="partido.html">
+              <span class="tile-ch" style="--h:135">D1</span>
+              <span class="ch-body">
+                <span class="ch-name">DAZN 1</span>
+                <span class="ch-line"><span class="crests"><span class="crest" data-team="juv"></span><span class="crest" data-team="rom"></span></span><span class="txt">A las 20:45, Juventus – Roma</span></span>
+                <span class="ch-meta">Deportes</span>
+              </span>
+            </a>
+            <div class="ch-acts"><button class="icon-btn fav" aria-label="Quitar de favoritos"><svg class="i s20" style="color:var(--accent-ink)"><use href="#i-star-f"/></svg></button><button class="icon-btn more" aria-label="Más acciones para DAZN 1"><svg class="i s20"><use href="#i-more"/></svg></button></div>
+          </article></li>
+          <li><article class="ch" data-id="eu1">
+            <a class="ch-main" href="partido.html">
+              <span class="tile-ch" style="--h:195">E1</span>
+              <span class="ch-body">
+                <span class="ch-name">Eurosport 1</span>
+                <span class="ch-line"><span class="txt">Ahora: ciclismo, Mundial en ruta</span></span>
+                <span class="ch-meta">Deportes</span>
+              </span>
+            </a>
+            <div class="ch-acts"><button class="icon-btn fav" aria-label="Quitar de favoritos"><svg class="i s20" style="color:var(--accent-ink)"><use href="#i-star-f"/></svg></button><button class="icon-btn more" aria-label="Más acciones para Eurosport 1"><svg class="i s20"><use href="#i-more"/></svg></button></div>
+          </article></li>
+          <li><article class="ch" data-id="tdp">
+            <a class="ch-main" href="partido.html">
+              <span class="tile-ch" style="--h:232">TD</span>
+              <span class="ch-body">
+                <span class="ch-name">Teledeporte</span>
+                <span class="ch-line"><span class="txt">Sin emisión anunciada</span></span>
+                <span class="ch-meta">Generalistas</span>
+              </span>
+            </a>
+            <div class="ch-acts"><button class="icon-btn fav" aria-label="Quitar de favoritos"><svg class="i s20" style="color:var(--accent-ink)"><use href="#i-star-f"/></svg></button><button class="icon-btn more" aria-label="Más acciones para Teledeporte"><svg class="i s20"><use href="#i-more"/></svg></button></div>
+          </article></li>
+          <li><article class="ch" data-id="mpd">
+            <a class="ch-main" href="partido.html">
+              <span class="tile-ch" style="--h:350">MD</span>
+              <span class="ch-body">
+                <span class="ch-name">M+ Deportes</span>
+                <span class="ch-line"><span class="txt">Ahora: baloncesto, Euroliga</span></span>
+                <span class="ch-meta">Deportes</span>
+              </span>
+            </a>
+            <div class="ch-acts"><button class="icon-btn fav" aria-label="Quitar de favoritos"><svg class="i s20" style="color:var(--accent-ink)"><use href="#i-star-f"/></svg></button><button class="icon-btn more" aria-label="Más acciones para M+ Deportes"><svg class="i s20"><use href="#i-more"/></svg></button></div>
+          </article></li>
+        </ol>
+      </section>
+
+      <!-- Recientes -->
+      <section class="panel" id="p-rec" role="tabpanel" aria-label="Recientes" hidden>
+        <div style="display:grid; gap:14px">
+          <h2 class="when-h">Hoy</h2>
+          <ol class="chl">
+            <li><article class="ch"><a class="ch-main" href="partido.html"><span class="tile-ch" style="--h:250">M+</span><span class="ch-body"><span class="ch-name">M+ Liga de Campeones</span><span class="ch-line"><span class="txt">20:05, sigue sonando</span></span></span></a><div class="ch-acts"><button class="icon-btn more" aria-label="Más acciones"><svg class="i s20"><use href="#i-more"/></svg></button></div></article></li>
+            <li><article class="ch"><a class="ch-main" href="partido.html"><span class="tile-ch" style="--h:165">DL</span><span class="ch-body"><span class="ch-name">DAZN LaLiga</span><span class="ch-line"><span class="txt">19:02, 58 min</span></span></span></a><div class="ch-acts"><button class="icon-btn more" aria-label="Más acciones"><svg class="i s20"><use href="#i-more"/></svg></button></div></article></li>
+          </ol>
+          <h2 class="when-h">Ayer</h2>
+          <ol class="chl">
+            <li><article class="ch"><a class="ch-main" href="partido.html"><span class="tile-ch" style="--h:215">M2</span><span class="ch-body"><span class="ch-name">M+ Liga de Campeones 2</span><span class="ch-line"><span class="txt">21:00, 1 h 52 min</span></span></span></a><div class="ch-acts"><button class="icon-btn more" aria-label="Más acciones"><svg class="i s20"><use href="#i-more"/></svg></button></div></article></li>
+            <li><article class="ch"><a class="ch-main" href="partido.html"><span class="tile-ch" style="--h:135">D1</span><span class="ch-body"><span class="ch-name">DAZN 1</span><span class="ch-line"><span class="txt">18:30, 45 min</span></span></span></a><div class="ch-acts"><button class="icon-btn more" aria-label="Más acciones"><svg class="i s20"><use href="#i-more"/></svg></button></div></article></li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- Listas: estado vacío -->
+      <section class="panel" id="p-lis" role="tabpanel" aria-label="Listas" hidden>
+        <div class="empty">
+          <svg class="art" viewBox="0 0 112 112" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M56 4V30M56 82V108" stroke-linecap="round"/>
+            <circle cx="56" cy="56" r="26"/>
+            <circle cx="56" cy="56" r="20" fill="currentColor" fill-opacity="0.12" stroke="none"/>
+            <path d="M51 47.5v17l14-8.5z" fill="currentColor" stroke="none"/>
+            <path d="M12 26h18M12 34h12M82 78h18M88 86h12" stroke-linecap="round" opacity="0.6"/>
+          </svg>
+          <h2>Aún no hay ninguna lista cargada</h2>
+          <p>Añade la dirección de una lista M3U o HTML y sus canales aparecerán aquí, por categorías. Se actualiza sola cada 3 horas.</p>
+          <div class="empty-acts">
+            <button class="btn btn--primary press"><svg class="i s20"><use href="#i-plus"/></svg>Añadir una lista</button>
+            <button class="btn btn--quiet press"><svg class="i s20"><use href="#i-paste"/></svg>Pegar un hash</button>
+          </div>
+        </div>
+      </section>
+
+      <p class="foot" id="foot">8 favoritos y 12 recientes.</p>
+    </main>
+
+    <!-- Detalle del canal elegido (escritorio) -->
+    <aside class="detail" aria-label="Canal seleccionado">
+      <article class="dcard" id="dcard"></article>
+    </aside>
+  </div>
+</div>
+
+<!-- Mini-reproductor «Sonando» -->
+<section class="mini glass glass--dense" aria-label="Sonando" style="--ta: var(--t-atm); --tb: var(--t-tot)">
+  <a class="thumb" href="partido.html" aria-label="Volver al vídeo"><img src="campo.svg" alt=""></a>
+  <a class="txt" href="partido.html">
+    <span class="k"><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>Sonando</span>
+    <span class="t">M+ Liga de Campeones</span>
+    <span class="d">Atlético – Tottenham, 72'</span>
+  </a>
+  <button class="icon-btn press" id="mini-play" aria-label="Pausar" aria-pressed="true"><svg class="i fill s20"><use href="#i-pause"/></svg></button>
+  <button class="icon-btn press" aria-label="Detener la reproducción"><svg class="i fill s20"><use href="#i-stop"/></svg></button>
+</section>
+
+<nav class="tabbar glass glass--dense" aria-label="Principal" style="--i:1">
+  <a href="agenda.html" class="press"><svg class="i"><use href="#i-agenda"/></svg>Agenda</a>
+  <a href="biblioteca.html" aria-current="page" class="press"><svg class="i"><use href="#i-biblio"/></svg>Biblioteca</a>
+  <a href="#" class="press"><svg class="i"><use href="#i-buscar"/></svg>Buscar</a>
+  <a href="#" class="press"><svg class="i"><use href="#i-ajustes"/></svg>Ajustes</a>
+</nav>
+
+<script>
+  /* ---- Pestañas (también por #favoritos, #recientes, #listas) ------------- */
+  const tabs = document.getElementById('tabs');
+  const panels = { favoritos: 'p-fav', recientes: 'p-rec', listas: 'p-lis' };
+  const pies = { favoritos: '8 favoritos y 12 recientes.', recientes: 'Lo último que has visto, de más nuevo a más antiguo.', listas: '' };
+  function show(p) {
+    const btns = [...tabs.querySelectorAll('button')];
+    btns.forEach((b, i) => { const on = b.dataset.p === p; b.setAttribute('aria-selected', on); if (on) tabs.style.setProperty('--i', i); });
+    Object.entries(panels).forEach(([k, id]) => document.getElementById(id).hidden = k !== p);
+    document.getElementById('foot').textContent = pies[p];
+  }
+  tabs.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { show(b.dataset.p); history.replaceState(null, '', '#' + b.dataset.p); }));
+  if (panels[location.hash.slice(1)]) show(location.hash.slice(1));
+
+  /* ---- Detalle del canal (escritorio) ------------------------------------- */
+  const C = {
+    mlc:  { n: 'M+ Liga de Campeones', m: 'M+', h: 250, cat: 'Deportes', now: { a: 'atm', b: 'tot', an: 'Atlético', bn: 'Tottenham', min: "72'", p: 0.8, oculto: true }, next: [['21:00', 'Real Madrid – Bayern'], ['23:00', 'Resumen de la jornada']], src: [[1, 'Elcano', 'ok', 'Verificada'], [2, 'Faro', 'ok', 'Verificada']], hash: '3f9a0c21…e84b7d10', playing: true },
+    dzl:  { n: 'DAZN LaLiga', m: 'DL', h: 165, cat: 'Deportes', now: { a: 'gir', b: 'rso', an: 'Girona', bn: 'Real Sociedad', sa: 1, sb: 1, min: "58'", p: 0.644 }, next: [['21:00', 'Previa: Real Betis – Valencia'], ['23:30', 'Resumen de la jornada']], src: [[1, 'Faro', 'fail', 'Sin señal'], [2, 'Norte', 'fail', 'Sin señal'], [3, 'Elcano', 'check', 'Comprobando']], hash: 'b71e44d0…0c9f2a31' },
+    ml:   { n: 'M+ LaLiga', m: 'M+', h: 15, cat: 'Deportes', now: null, nowTxt: 'Previa del partido de las 21:30', next: [['21:30', 'Real Betis – Valencia'], ['23:30', 'El día después']], src: [[1, 'Vega', 'ok', 'Verificada']], hash: '09c3d5e7…71aa4b2f' },
+    mlc2: { n: 'M+ Liga de Campeones 2', m: 'M2', h: 215, cat: 'Deportes', now: { a: 'gal', b: 'vil', an: 'Galatasaray', bn: 'Villarreal', sa: 0, sb: 0, min: "72'", p: 0.8 }, next: [['21:00', 'Inter – Barcelona']], src: [[1, 'Vega', 'weak', 'Floja'], [2, 'Sur', 'check', 'Comprobando']], hash: '5d02b8aa…c4e61f09' },
+    dz1:  { n: 'DAZN 1', m: 'D1', h: 135, cat: 'Deportes', now: null, nowTxt: 'Previa de la Serie A', next: [['20:45', 'Juventus – Roma'], ['22:45', 'Resumen de la Serie A']], src: [[1, 'Vega', 'ok', 'Verificada']], hash: 'e2f7a9c1…3b0d8e55' },
+    eu1:  { n: 'Eurosport 1', m: 'E1', h: 195, cat: 'Deportes', now: null, nowTxt: 'Ciclismo, Mundial en ruta', next: [['22:00', 'Tenis, torneo de Pekín']], src: [[1, 'Norte', 'ok', 'Verificada']], hash: '7a1c0e93…92fd6b04' },
+    tdp:  { n: 'Teledeporte', m: 'TD', h: 232, cat: 'Generalistas', now: null, nowTxt: 'Sin emisión anunciada', next: [], src: [[1, 'Sur', 'idle', 'Pendiente']], hash: '1c8b3f60…ae27d913' },
+    mpd:  { n: 'M+ Deportes', m: 'MD', h: 350, cat: 'Deportes', now: null, nowTxt: 'Baloncesto, Euroliga', next: [['22:30', 'Directo al gol']], src: [[1, 'Faro', 'ok', 'Verificada']], hash: '44e0b5d2…6c19f7a8' }
+  };
+  const bars = '<span class="bars"><i></i><i></i><i></i></span>';
+  function detail(id) {
+    const c = C[id], d = document.getElementById('dcard');
+    const now = c.now ? `
+      <div class="d-now lit" style="--ta: var(--t-${c.now.a}); --tb: var(--t-${c.now.b})">
+        <span class="f-ring num" style="--p:${c.now.p}"><span class="onda" aria-hidden="true"></span>${c.now.min}</span>
+        <div class="teams">
+          <div class="t"><span class="crest" data-team="${c.now.a}"></span><span>${c.now.an}</span><span class="num">${c.now.oculto ? '' : c.now.sa}</span></div>
+          <div class="t"><span class="crest" data-team="${c.now.b}"></span><span>${c.now.bn}</span><span class="num">${c.now.oculto ? '' : c.now.sb}</span></div>
+        </div>
+        ${c.now.oculto ? '<span class="tag tag--soft">Marcador oculto</span>' : ''}
+      </div>` : `<p style="color:var(--text-2)">${c.nowTxt}</p>`;
+    d.innerHTML = `
+      <div class="d-head"><span class="tile-ch" style="--h:${c.h}">${c.m}</span><div><h2>${c.n}</h2><p>${c.cat}${c.playing ? '. En pantalla ahora.' : ''}</p></div></div>
+      <div class="d-acts">
+        <a class="btn btn--primary press" href="partido.html"><svg class="i fill s20"><use href="#i-play"/></svg>${c.playing ? 'Volver al vídeo' : 'Ver canal'}</a>
+        <button class="icon-btn press" aria-label="Quitar de favoritos" title="Favorito (G)"><svg class="i s20" style="color:var(--accent-ink)"><use href="#i-star-f"/></svg></button>
+        <button class="icon-btn press" aria-label="Copiar enlace" title="Copiar enlace"><svg class="i s20"><use href="#i-link"/></svg></button>
+        <button class="icon-btn press" aria-label="Renombrar" title="Renombrar"><svg class="i s20"><use href="#i-pencil"/></svg></button>
+        <button class="icon-btn press" aria-label="Eliminar" title="Eliminar (se puede deshacer)"><svg class="i s20"><use href="#i-trash"/></svg></button>
+      </div>
+      <section class="d-sec"><h3>Ahora</h3>${now}</section>
+      ${c.next.length ? `<section class="d-sec"><h3>Después</h3><ul class="d-list">${c.next.map(n => `<li><span class="h">${n[0]}</span><span>${n[1]}</span><span></span></li>`).join('')}</ul></section>` : ''}
+      <section class="d-sec"><h3>Fuentes de este canal</h3><ul class="d-list">${c.src.map(s => `<li><span class="h">${s[0]}</span><span style="font-weight:620">${s[1]}</span><span class="sig sig--sm sig--${s[2]}">${bars}${s[3]}</span></li>`).join('')}</ul>
+        <p class="d-hash"><span>Hash ${c.hash}</span><button class="icon-btn press" aria-label="Copiar hash"><svg class="i s18"><use href="#i-copy"/></svg></button></p>
+      </section>`;
+  }
+  const desk = matchMedia('(min-width: 1024px)');
+  document.querySelectorAll('#favs .ch').forEach(ch => ch.querySelector('.ch-main').addEventListener('click', e => {
+    if (!desk.matches) return;
+    e.preventDefault();
+    document.querySelectorAll('#favs .ch[aria-current]').forEach(x => x.removeAttribute('aria-current'));
+    ch.setAttribute('aria-current', 'true');
+    detail(ch.dataset.id);
+  }));
+  function inicial() {
+    const ch = document.querySelector('#favs .ch[data-id="dzl"]');
+    if (desk.matches) { ch.setAttribute('aria-current', 'true'); detail('dzl'); } else ch.removeAttribute('aria-current');
+  }
+  inicial();
+  desk.addEventListener('change', inicial);
+
+  /* ---- Mini-reproductor ---------------------------------------------------- */
+  document.getElementById('mini-play').addEventListener('click', e => {
+    const b = e.currentTarget, on = b.getAttribute('aria-pressed') !== 'true';
+    b.setAttribute('aria-pressed', on); b.setAttribute('aria-label', on ? 'Pausar' : 'Reproducir');
+    b.querySelector('use').setAttribute('href', on ? '#i-pause' : '#i-play');
+  });
+  addEventListener('keydown', e => { if (e.key === '/' && !e.target.closest('input')) { e.preventDefault(); document.querySelector('.search input').focus(); } });
+</script>
+</body>
+</html>

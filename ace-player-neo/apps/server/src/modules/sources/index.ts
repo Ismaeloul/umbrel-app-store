@@ -10,6 +10,7 @@ import type { SourcesDeps, SourcesService } from './types.js';
 
 export type * from './types.js';
 export {
+  CHANNEL_VARIANT_TOKENS,
   canalEsGenerico,
   mergeResolutionCandidates,
   repartirEntreProveedores,

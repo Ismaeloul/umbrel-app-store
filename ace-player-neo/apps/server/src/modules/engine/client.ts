@@ -23,7 +23,7 @@
 import { ENGINE_MAX_BODY_BYTES, HASH_RE, TIMEOUTS, type AnyErrorCode } from '@ace/shared';
 import type { DomainBus } from '../../core/bus.js';
 import type { Clock } from '../../core/clock.js';
-import { AppError } from '../../core/errors.js';
+import { AppError, isAppError } from '../../core/errors.js';
 import type { Logger } from '../../core/logger.js';
 import { EngineHttpError, engineHttp, type EngineHttpResponse } from './http.js';
 import { engineRelativePath, engineStopPath } from './paths.js';
@@ -90,6 +90,18 @@ function transportError(error: unknown, timeoutCode: AnyErrorCode, what: string)
     default:
       return new AppError('engine_unavailable', { detail: `${what}: sin conexión`, cause: error });
   }
+}
+
+/**
+ * El motor NO ha contestado (sin conexión o sin respuesta a tiempo), a
+ * diferencia de "ha contestado que esa sesión no existe" o "ha contestado
+ * algo raro". Playback lo usa para no dar por perdida una sesión mientras el
+ * motor está caído o colgado: eso lo decide el vigilante (paso 1.3).
+ */
+export function isEngineUnreachable(error: unknown): boolean {
+  if (!isAppError(error)) return false;
+  if (error.code === 'engine_timeout') return true;
+  return error.code === 'engine_unavailable' && error.cause instanceof EngineHttpError;
 }
 
 function expectOk(response: EngineHttpResponse, what: string): void {

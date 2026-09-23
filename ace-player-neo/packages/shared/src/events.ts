@@ -15,7 +15,12 @@ import {
   ViewerIdSchema,
 } from './primitives.js';
 import { NowPlayingSchema } from './state/v1.js';
-import { ScanJobKindSchema, ScanJobStatusSchema, VerdictStateSchema } from './api/common.js';
+import {
+  PlayableOnSchema,
+  ScanJobKindSchema,
+  ScanJobStatusSchema,
+  VerdictStateSchema,
+} from './api/common.js';
 import { EngineStatusSchema } from './api/v1/engine.js';
 import { DiagnosticEntrySchema } from './api/v1/diagnostics.js';
 import { StreamProtocolSchema } from './api/v1/playback.js';
@@ -157,6 +162,8 @@ export const ScanVerdictEventSchema = z.strictObject({
     /** El reproductor manda 3 min sobre cualquier sonda (server.js:107). */
     by: z.enum(['scanner', 'player']),
     checkedAt: IsoDateTimeSchema,
+    /** D6: dónde se puede reproducir (añadido en el paso 1.3; el comprobador siempre lo pone). */
+    playableOn: PlayableOnSchema.optional(),
   }),
 });
 

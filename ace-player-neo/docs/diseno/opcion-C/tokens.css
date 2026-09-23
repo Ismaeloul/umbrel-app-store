@@ -1,0 +1,455 @@
+/* ==========================================================================
+   Ace Player Neo v2 · Opción C «Grada»
+   Tokens y componentes compartidos por agenda.html, partido.html y biblioteca.html
+   Claro por defecto; oscuro con prefers-color-scheme. Colores en OKLCH
+   (los hex equivalentes y los contrastes están en README.md).
+   ========================================================================== */
+
+/* ---------- 1. Tokens ---------- */
+:root {
+  color-scheme: light dark;
+
+  /* Cal (claro) */
+  --bg: oklch(0.965 0.01 15);            /* #faf1f1 */
+  --bg-deep: oklch(0.94 0.013 15);       /* #f3e7e7 */
+  --surface: oklch(0.995 0.003 15);      /* #fffdfd */
+  --surface-2: oklch(0.935 0.012 15);    /* #f1e6e7 */
+  --line: oklch(0.87 0.012 15);          /* separadores decorativos */
+  --line-strong: oklch(0.60 0.016 15);   /* bordes de control, 3,9:1 */
+  --ink: oklch(0.22 0.014 15);           /* #211818 · 17,1:1 */
+  --ink-2: oklch(0.47 0.016 15);         /* #645758 · 6,8:1 */
+  --ink-3: oklch(0.51 0.016 15);         /* #6f6363 · 5,2:1 */
+
+  --accent: oklch(0.57 0.23 350);        /* fucsia bengala, relleno #d0138a */
+  --on-accent: oklch(1 0 0);             /* 5,1:1 */
+  --accent-ink: oklch(0.53 0.21 350);    /* fucsia como texto #bb167c · 5,9:1 */
+  --accent-soft: oklch(0.57 0.23 350 / 0.12);
+  --glow: oklch(0.62 0.25 350 / 0.55);
+
+  /* Estados de señal (base común de los tres territorios) */
+  --ok: oklch(0.60 0.16 150);            /* punto #139948 */
+  --ok-ink: oklch(0.47 0.13 150);        /* texto #006e30 */
+  --weak: oklch(0.64 0.14 66);           /* #c4780b */
+  --weak-ink: oklch(0.50 0.11 62);       /* #8f520d */
+  --fail: oklch(0.56 0.20 27);           /* #d02c2a */
+  --fail-ink: oklch(0.50 0.19 27);       /* #b7191c */
+  --check: var(--ink-2);
+
+  /* Vidrio (solo capas flotantes) */
+  --glass: oklch(0.995 0.003 15 / 0.78);
+  --glass-solid: oklch(0.99 0.004 15);
+  --glass-dark: oklch(0.2 0.012 15 / 0.55); /* sobre el vídeo, en los dos temas */
+  --glass-edge: oklch(1 0 0 / 0.6);
+  --dim-edge: oklch(0.22 0.014 15 / 0.10);
+
+  --shadow-float: 0 1px 0 oklch(1 0 0 / .7) inset, 0 10px 30px -12px oklch(0.3 0.05 15 / .35);
+  --dot: oklch(0.2 0.02 15 / 0.16);      /* trama del tifo */
+
+  /* Tipografía */
+  --f-display: "Anybody", "Arial Narrow", system-ui, sans-serif;
+  --f-text: "Onest", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "Spline Sans Mono", ui-monospace, "Cascadia Mono", monospace;
+
+  /* Escala (Bringhurst): 11 · 12 · 14 · 16 · 18 · 21 · 24 · 36 · 48 · 72 */
+  --t-11: 0.6875rem; --t-12: 0.75rem; --t-14: 0.875rem; --t-16: 1rem;
+  --t-18: 1.125rem; --t-21: 1.3125rem; --t-24: 1.5rem; --t-36: 2.25rem;
+  --t-48: 3rem; --t-72: 4.5rem;
+
+  /* Formas: redondo por defecto; el «squircle» marca lo elegido */
+  --r-pill: 999px;
+  --r-sel: 16px;
+  --r-card: 28px;
+  --r-inner: 18px;
+
+  /* Muelles (misma tabla que SwiftUI: duración + rebote) */
+  --spring-fast: linear(0, 0.029, 0.099, 0.189, 0.286, 0.381, 0.471, 0.553, 0.625, 0.688, 0.742, 0.787, 0.826, 0.858, 0.884, 0.906, 0.924, 0.939, 0.951, 0.961, 0.968, 0.975, 0.98, 0.984, 0.987, 0.99, 0.992, 0.994, 0.995, 0.996, 0.997, 0.997, 1);
+  --spring-std: linear(0, 0.028, 0.096, 0.186, 0.288, 0.39, 0.488, 0.579, 0.659, 0.729, 0.788, 0.838, 0.879, 0.912, 0.937, 0.957, 0.973, 0.984, 0.992, 0.998, 1.002, 1.004, 1.006, 1.006, 1.006, 1.006, 1.005, 1.005, 1.004, 1.004, 1.003, 1.002, 1);
+  --spring-hero: linear(0, 0.036, 0.124, 0.243, 0.372, 0.502, 0.621, 0.727, 0.816, 0.888, 0.944, 0.985, 1.014, 1.032, 1.042, 1.046, 1.045, 1.042, 1.037, 1.031, 1.025, 1.019, 1.014, 1.01, 1.006, 1.003, 1.001, 1, 0.999, 0.998, 0.998, 0.998, 1);
+  --d-fast: 340ms; --d-std: 510ms; --d-hero: 800ms;
+
+  --gutter: 16px;
+  --nav-h: 68px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Hormigón de noche (oscuro) */
+    --bg: oklch(0.225 0.012 15);         /* #211a1a */
+    --bg-deep: oklch(0.195 0.011 15);    /* #1a1414 */
+    --surface: oklch(0.275 0.014 15);    /* #2e2525 */
+    --surface-2: oklch(0.315 0.016 15);  /* #392e2f */
+    --line: oklch(0.36 0.016 15);
+    --line-strong: oklch(0.58 0.018 15); /* 3,5:1 */
+    --ink: oklch(0.97 0.008 15);         /* #faf3f3 · 15,7:1 */
+    --ink-2: oklch(0.78 0.014 15);       /* #c0b4b4 · 8,5:1 */
+    --ink-3: oklch(0.70 0.014 15);       /* #a79b9b · 6,4:1 */
+
+    --accent: oklch(0.70 0.23 350);      /* #ff4fb2 */
+    --on-accent: oklch(0.2 0.02 350);    /* #1d1217 · 6,1:1 */
+    --accent-ink: oklch(0.78 0.17 350);  /* #ff85c7 · 7,7:1 */
+    --accent-soft: oklch(0.70 0.23 350 / 0.16);
+    --glow: oklch(0.70 0.25 350 / 0.6);
+
+    --ok: oklch(0.80 0.19 150);          /* #49de78 */
+    --ok-ink: oklch(0.80 0.19 150);
+    --weak: oklch(0.84 0.16 80);         /* #ffbd34 */
+    --weak-ink: oklch(0.84 0.16 80);
+    --fail: oklch(0.70 0.20 27);         /* #ff6056 */
+    --fail-ink: oklch(0.72 0.19 27);
+
+    --glass: oklch(0.275 0.014 15 / 0.8);
+    --glass-solid: oklch(0.29 0.015 15);
+    --glass-edge: oklch(1 0 0 / 0.1);
+    --dim-edge: oklch(0 0 0 / 0.35);
+    --shadow-float: 0 1px 0 oklch(1 0 0 / .08) inset, 0 12px 32px -10px oklch(0 0 0 / .6);
+    --dot: oklch(0.1 0.02 15 / 0.2);
+  }
+}
+
+/* ---------- 2. Base ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--f-text);
+  font-size: var(--t-16);
+  line-height: 1.45;
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+img, svg { display: block; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; background: none; border: 0; padding: 0; }
+a { color: inherit; text-decoration: none; }
+h1, h2, h3, h4, p, ul, ol, figure { margin: 0; }
+ul, ol { padding: 0; list-style: none; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 12px;
+}
+
+.ico { width: 24px; height: 24px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ico.fill { fill: currentColor; stroke: none; }
+.ico.sm { width: 18px; height: 18px; }
+.ico.xs { width: 16px; height: 16px; }
+
+/* Números: Anybody comprimida y negra, cifras tabulares */
+.num {
+  font-family: var(--f-display);
+  font-stretch: 55%;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: 0;
+  line-height: 0.9;
+}
+.display {
+  font-family: var(--f-display);
+  font-weight: 850;
+  line-height: 0.92;
+}
+.wide { font-stretch: 140%; }
+.narrow { font-stretch: 62%; }
+
+/* ---------- 3. Colores de los equipos ----------
+   --c1 principal, --c2 secundario, --on texto encima de --c1.
+   Normalizados a mano en OKLCH para que ningún color de club
+   coincida con un estado (el verde del Betis y el rojo del Atleti viven
+   solo en superficies grandes, nunca como punto junto a un estado). */
+.k-bar { --c1: oklch(0.45 0.16 258); --c2: oklch(0.42 0.17 8); --on: #fff; --kit: stripes; }
+.k-vil { --c1: oklch(0.91 0.17 100); --c2: oklch(0.36 0.12 262); --on: oklch(0.22 0.014 15); }
+.k-rma { --c1: oklch(0.99 0 0); --c2: oklch(0.36 0.12 265); --on: oklch(0.22 0.014 15); }
+.k-om  { --c1: oklch(0.99 0 0); --c2: oklch(0.72 0.12 230); --on: oklch(0.22 0.014 15); }
+.k-psv { --c1: oklch(0.58 0.21 27); --c2: oklch(0.99 0 0); --on: #fff; }
+.k-ath { --c1: oklch(0.58 0.21 27); --c2: oklch(0.99 0 0); --on: #fff; }
+.k-bru { --c1: oklch(0.52 0.15 250); --c2: oklch(0.2 0.01 250); --on: #fff; }
+.k-atm { --c1: oklch(0.55 0.18 32); --c2: oklch(0.99 0 0); --c3: oklch(0.3 0.08 275); --on: #fff; }
+.k-get { --c1: oklch(0.5 0.18 264); --c2: oklch(0.99 0 0); --on: #fff; }
+.k-osa { --c1: oklch(0.5 0.19 22); --c2: oklch(0.3 0.09 262); --on: #fff; }
+.k-cel { --c1: oklch(0.8 0.08 238); --c2: oklch(0.99 0 0); --on: oklch(0.22 0.014 15); }
+.k-ray { --c1: oklch(0.99 0 0); --c2: oklch(0.58 0.2 29); --on: oklch(0.22 0.014 15); }
+.k-bet { --c1: oklch(0.55 0.14 150); --c2: oklch(0.99 0 0); --on: #fff; }
+.k-sev { --c1: oklch(0.99 0 0); --c2: oklch(0.55 0.2 27); --on: oklch(0.22 0.014 15); }
+
+/* ---------- 4. Chapas de equipo (sustituyen a los escudos) ----------
+   Una chapa de solapa: el dibujo de la camiseta dentro de un círculo con aro.
+   Tamaño con --s. Por debajo de 48 px no lleva monograma (el nombre va al lado). */
+.chapa {
+  --s: 28px;
+  position: relative;
+  width: var(--s); height: var(--s);
+  flex: none;
+  border-radius: 50%;
+  background: var(--c1);
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px var(--dim-edge);
+  overflow: hidden;
+  display: grid; place-items: center;
+}
+.chapa[data-kit="rayas"] {
+  background: repeating-linear-gradient(90deg, var(--c1) 0 calc(var(--s) / 7), var(--c2) calc(var(--s) / 7) calc(var(--s) / 3.5));
+}
+.chapa[data-kit="mitad"] { background: linear-gradient(90deg, var(--c1) 50%, var(--c2) 50%); }
+.chapa[data-kit="banda"] { background: linear-gradient(180deg, var(--c1) 0 36%, var(--c2) 36% 64%, var(--c1) 64%); }
+.chapa[data-kit="franja"] { background: linear-gradient(135deg, var(--c1) 0 38%, var(--c2) 38% 62%, var(--c1) 62%); }
+.chapa[data-kit="liso"] { background: radial-gradient(circle, var(--c1) 0 58%, var(--c2) 58% 100%); }
+.chapa b {
+  font-family: var(--f-display);
+  font-stretch: 60%;
+  font-weight: 900;
+  font-size: calc(var(--s) * 0.24);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  background: var(--surface);
+  padding: 0.28em 0.5em 0.22em;
+  border-radius: 999px;
+  box-shadow: 0 1px 0 var(--dim-edge);
+}
+.chapa.s { --s: 22px; }
+.chapa.m { --s: 32px; }
+.chapa.l { --s: 56px; }
+.chapa.xl { --s: 96px; }
+.chapa.xxl { --s: 128px; }
+.done .chapa, .chapa.apagada { filter: saturate(0.35); }
+
+/* ---------- 5. Estado de señal: forma + palabra + color ---------- */
+.sig {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: var(--t-14);
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.sig .g { width: 12px; height: 12px; flex: none; position: relative; }
+.sig[data-s="ok"] { color: var(--ok-ink); }
+.sig[data-s="ok"] .g { border-radius: 50%; background: var(--ok); }
+.sig[data-s="weak"] { color: var(--weak-ink); }
+.sig[data-s="weak"] .g { background: var(--weak); clip-path: polygon(50% 4%, 100% 94%, 0 94%); }
+.sig[data-s="fail"] { color: var(--fail-ink); }
+.sig[data-s="fail"] .g::before, .sig[data-s="fail"] .g::after {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 14px; height: 3px; border-radius: 2px;
+  background: var(--fail); transform: translate(-50%, -50%) rotate(45deg);
+}
+.sig[data-s="fail"] .g::after { transform: translate(-50%, -50%) rotate(-45deg); }
+.sig[data-s="check"] { color: var(--ink-2); }
+.sig[data-s="check"] .g { border-radius: 50%; border: 2.5px solid var(--check); }
+.sig[data-s="check"] .g::after {
+  content: ""; position: absolute; inset: -2.5px; border-radius: 50%;
+  border: 2px solid var(--check);
+  animation: latido 1.6s cubic-bezier(.2,.7,.2,1) infinite;
+}
+.sig[data-s="pend"] { color: var(--ink-3); }
+.sig[data-s="pend"] .g { border-radius: 50%; border: 2px dashed var(--ink-3); }
+.sig small { font-weight: 500; color: var(--ink-2); font-size: inherit; }
+
+@keyframes latido {
+  0% { transform: scale(1); opacity: .9; }
+  100% { transform: scale(2.1); opacity: 0; }
+}
+
+/* Barras de señal (solo en cápsulas de fuente) */
+.bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 16px; }
+.bars i { width: 4px; border-radius: 2px; background: var(--line); }
+.bars i:nth-child(1) { height: 5px; } .bars i:nth-child(2) { height: 8px; }
+.bars i:nth-child(3) { height: 12px; } .bars i:nth-child(4) { height: 16px; }
+.bars[data-n="4"] i, .bars[data-n="3"] i:nth-child(-n+3), .bars[data-n="2"] i:nth-child(-n+2), .bars[data-n="1"] i:nth-child(1) { background: currentColor; }
+
+/* ---------- 6. «En directo»: bengala fucsia que respira ---------- */
+.live {
+  position: relative;
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 30px; padding: 0 12px 0 10px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: var(--f-display);
+  font-stretch: 120%;
+  font-weight: 800;
+  font-size: var(--t-14);
+  line-height: 1;
+  isolation: isolate;
+  white-space: nowrap;
+}
+.live::before {                     /* la bengala */
+  content: ""; position: absolute; inset: -6px; z-index: -1; border-radius: inherit;
+  background: var(--glow); filter: blur(10px);
+  animation: bengala 2.4s ease-in-out infinite;
+}
+.live .punto { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+@keyframes bengala { 0%, 100% { opacity: .35; transform: scale(.92); } 50% { opacity: 1; transform: scale(1.06); } }
+
+.minuto { color: var(--accent-ink); }
+.pulso { position: relative; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
+.pulso::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--accent); animation: latido 1.8s ease-out infinite; }
+
+/* ---------- 7. Botones y controles ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 48px; padding: 0 20px;
+  border-radius: var(--r-pill);
+  font-weight: 650; font-size: var(--t-16);
+  white-space: nowrap;
+  transition: transform var(--d-fast) var(--spring-fast), border-radius var(--d-std) var(--spring-std), background-color 150ms;
+}
+.btn:active { transform: scale(0.96); }
+.btn.primary { background: var(--accent); color: var(--on-accent); }
+.btn.ink { background: var(--ink); color: var(--bg); }
+.btn.quiet { background: var(--surface-2); color: var(--ink); }
+.btn.line { box-shadow: inset 0 0 0 1.5px var(--line-strong); }
+
+.icon-btn {
+  display: inline-grid; place-items: center;
+  width: 44px; height: 44px; flex: none;
+  border-radius: 50%;
+  color: var(--ink);
+  transition: transform var(--d-fast) var(--spring-fast), background-color 150ms;
+}
+.icon-btn:hover { background: var(--surface-2); }
+.icon-btn:active { transform: scale(0.92); }
+.icon-btn.filled { background: var(--surface-2); }
+
+/* Chips: píldora que se vuelve squircle al elegirla */
+.chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 44px; padding: 0 16px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-weight: 600; font-size: var(--t-14);
+  white-space: nowrap;
+  transition: border-radius var(--d-std) var(--spring-std), background-color 180ms, color 180ms, transform var(--d-fast) var(--spring-fast);
+}
+.chip[aria-selected="true"], .chip[aria-pressed="true"], .chip.on {
+  border-radius: var(--r-sel);
+  background: var(--ink); color: var(--bg);
+}
+.chip .n { font-variant-numeric: tabular-nums; font-weight: 700; opacity: .8; }
+
+/* Conmutador segmentado */
+.seg {
+  display: inline-flex; padding: 4px; gap: 2px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+}
+.seg button {
+  min-height: 44px; min-width: 44px; padding: 0 16px; white-space: nowrap;
+  border-radius: var(--r-pill);
+  font-weight: 650; font-size: var(--t-14);
+  color: var(--ink-2);
+  transition: border-radius var(--d-std) var(--spring-std), background-color 180ms, color 180ms;
+}
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-radius: 14px; }
+
+/* ---------- 8. Navegación: barra inferior (móvil) / carril (escritorio) ---------- */
+.nav {
+  position: fixed; z-index: 40;
+  left: 0; right: 0; bottom: 0;
+  height: calc(var(--nav-h) + var(--safe-b));
+  padding: 6px 8px var(--safe-b);
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  background: color-mix(in oklch, var(--surface) 94%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+  border-top: 1px solid var(--line);
+}
+.nav a {
+  display: grid; justify-items: center; align-content: center; gap: 3px;
+  min-height: 56px;
+  font-size: var(--t-12); font-weight: 600; color: var(--ink-2);
+}
+.nav a .pill {
+  display: grid; place-items: center;
+  width: 56px; height: 32px; border-radius: var(--r-pill);
+  transition: border-radius var(--d-std) var(--spring-std), background-color 180ms;
+}
+.nav a[aria-current="page"] { color: var(--ink); }
+.nav a[aria-current="page"] .pill { background: var(--ink); color: var(--bg); border-radius: 12px; }
+.nav .solo-escritorio, .nav .marca, .nav .motor-rail, .nav hr { display: none; }
+
+@media (min-width: 1024px) {
+  .nav {
+    top: 0; right: auto; bottom: 0;
+    width: 88px; height: auto;
+    padding: 18px 8px;
+    grid-template-columns: 1fr; grid-auto-rows: min-content; align-content: start; gap: 6px;
+    border-top: 0; border-right: 1px solid var(--line);
+    background: var(--bg-deep);
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+  .nav .marca { display: grid; place-items: center; height: 56px; margin-bottom: 14px; }
+  .nav .marca img { width: 44px; height: 44px; border-radius: 12px; }
+  .nav a { min-height: 64px; }
+  .nav .solo-escritorio { display: grid; }
+  .nav hr { display: block; width: 40px; border: 0; border-top: 1px solid var(--line); margin: 8px auto; }
+  .nav .motor-rail {
+    display: grid; justify-items: center; gap: 4px;
+    position: absolute; left: 8px; right: 8px; bottom: 18px;
+    font-size: var(--t-11); font-weight: 600; color: var(--ink-2); text-align: center; line-height: 1.2;
+  }
+}
+
+/* Estado del motor, discreto */
+.motor { display: inline-flex; align-items: center; gap: 7px; font-size: var(--t-12); font-weight: 600; color: var(--ink-2); min-height: 44px; }
+.motor .g { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px color-mix(in oklch, var(--ok) 22%, transparent); }
+
+/* ---------- 9. Vidrio: solo capas que flotan ---------- */
+.glass {
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(22px) saturate(1.7);
+  backdrop-filter: blur(22px) saturate(1.7);
+  box-shadow: var(--shadow-float), 0 0 0 1px var(--glass-edge) inset, 0 0 0 1px var(--dim-edge);
+}
+.glass-video {
+  background: var(--glass-dark);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  backdrop-filter: blur(18px) saturate(1.5);
+  box-shadow: 0 0 0 1px oklch(1 0 0 / .14) inset, 0 0 0 1px oklch(0 0 0 / .25);
+  color: #fff;
+}
+
+/* ---------- 10. Tifo: bloques de color partidos en diagonal + trama de cartulinas ---------- */
+.tifo { position: absolute; inset: 0; overflow: hidden; }
+.tifo > i { position: absolute; inset: 0; }
+.tifo > i::after {   /* cada punto es una cartulina levantada en la grada */
+  content: ""; position: absolute; inset: 0;
+  background-image: radial-gradient(circle at 50% 50%, var(--dot) 0 1.6px, transparent 2.2px);
+  background-size: 8px 8px;
+}
+.tifo .a { background: var(--c1); clip-path: polygon(0 0, 58% 0, 42% 100%, 0 100%); }
+.tifo .b { background: var(--c1); clip-path: polygon(calc(58% + 10px) 0, 100% 0, 100% 100%, calc(42% + 10px) 100%); }
+.tifo .a[data-kit="rayas"], .tifo .b[data-kit="rayas"] {
+  background: repeating-linear-gradient(90deg, var(--c1) 0 34px, var(--c2) 34px 68px);
+}
+.tifo .b[data-kit="liso"] { background: var(--c1); }
+
+/* ---------- 12. Forma «corona» (tapón de botella, 9 festones) ----------
+   Estilo M3 Expressive: solo para la acción principal del reproductor
+   y para lo que está elegido. */
+.corona { clip-path: polygon(50.00% 0.40%, 52.86% 0.97%, 55.55% 2.52%, 57.99% 4.70%, 60.19% 6.99%, 62.30% 8.92%, 64.50% 10.16%, 66.98% 10.62%, 69.84% 10.50%, 73.00% 10.16%, 76.27% 10.06%, 79.33% 10.60%, 81.88% 12.00%, 83.71% 14.27%, 84.77% 17.20%, 85.24% 20.43%, 85.45% 23.61%, 85.83% 26.44%, 86.72% 28.80%, 88.32% 30.75%, 90.59% 32.49%, 93.23% 34.27%, 95.79% 36.29%, 97.79% 38.67%, 98.85% 41.39%, 98.79% 44.30%, 97.72% 47.22%, 96.00% 50.00%, 94.13% 52.57%, 92.59% 54.98%, 91.76% 57.36%, 91.73% 59.89%, 92.34% 62.68%, 93.23% 65.73%, 93.89% 68.93%, 93.89% 72.04%, 92.95% 74.80%, 91.04% 76.99%, 88.34% 78.54%, 85.24% 79.57%, 82.15% 80.33%, 79.43% 81.19%, 77.25% 82.48%, 75.61% 84.40%, 74.29% 86.93%, 73.00% 89.84%, 71.45% 92.72%, 69.45% 95.10%, 66.96% 96.61%, 64.09% 97.05%, 61.02% 96.51%, 57.99% 95.30%, 55.13% 93.90%, 52.49% 92.81%, 50.00% 92.40%, 47.51% 92.81%, 44.87% 93.90%, 42.01% 95.30%, 38.98% 96.51%, 35.91% 97.05%, 33.04% 96.61%, 30.55% 95.10%, 28.55% 92.72%, 27.00% 89.84%, 25.71% 86.93%, 24.39% 84.40%, 22.75% 82.48%, 20.57% 81.19%, 17.85% 80.33%, 14.76% 79.57%, 11.66% 78.54%, 8.96% 76.99%, 7.05% 74.80%, 6.11% 72.04%, 6.11% 68.93%, 6.77% 65.73%, 7.66% 62.68%, 8.27% 59.89%, 8.24% 57.36%, 7.41% 54.98%, 5.87% 52.57%, 4.00% 50.00%, 2.28% 47.22%, 1.21% 44.30%, 1.15% 41.39%, 2.21% 38.67%, 4.21% 36.29%, 6.77% 34.27%, 9.41% 32.49%, 11.68% 30.75%, 13.28% 28.80%, 14.17% 26.44%, 14.55% 23.61%, 14.76% 20.43%, 15.23% 17.20%, 16.29% 14.27%, 18.12% 12.00%, 20.67% 10.60%, 23.73% 10.06%, 27.00% 10.16%, 30.16% 10.50%, 33.02% 10.62%, 35.50% 10.16%, 37.70% 8.92%, 39.81% 6.99%, 42.01% 4.70%, 44.45% 2.52%, 47.14% 0.97%); }
+
+/* ---------- 11. Movimiento reducido y transparencia reducida ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 120ms !important;
+    transition-timing-function: ease-out !important;
+  }
+  .live::before { opacity: .55; transform: none; }
+  .pulso::after, .sig[data-s="check"] .g::after { display: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass, .nav { background: var(--glass-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .glass-video { background: oklch(0.2 0.012 15 / 0.92); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass, .nav { background: var(--glass-solid); }
+  .glass-video { background: oklch(0.2 0.012 15 / 0.92); }
+}

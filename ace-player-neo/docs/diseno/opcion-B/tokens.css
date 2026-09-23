@@ -1,0 +1,152 @@
+/* ==========================================================================
+   Ace Player Neo v2 · Opción B «Rótulo» · tokens
+   Pizarra y papel. Sin color de marca: el color lo ponen los equipos y los
+   estados de la señal. Valores en OKLCH con su hex calculado al lado.
+   ========================================================================== */
+
+:root {
+  color-scheme: light dark;
+
+  /* ---- Papel (tema claro, el de pleno sol) ---- */
+  --fondo: oklch(0.955 0.003 250);        /* #eff0f2 */
+  --superficie: oklch(1 0 0);             /* #ffffff */
+  --superficie-2: oklch(0.925 0.004 250); /* #e4e6e9 */
+  --linea: oklch(0.86 0.004 250);         /* #cfd1d3  solo decorativa */
+  --linea-fuerte: oklch(0.6 0.008 250);   /* #7d8185  bordes de controles, 3,4:1 */
+  --tinta: oklch(0.18 0.01 250);          /* #0e1216  16,5:1 sobre fondo */
+  --tinta-2: oklch(0.44 0.012 250);       /* #4e5359  6,8:1 sobre fondo */
+  --tinta-3: oklch(0.6 0.01 250);         /* #7c8186  solo lo que no es texto */
+
+  /* Inversión: el único «acento» del sistema. Bloque de tinta con letra de papel. */
+  --inv-fondo: var(--tinta);
+  --inv-tinta: oklch(0.975 0.002 250);    /* #f6f7f8 */
+  --inv-tinta-2: oklch(0.8 0.008 250);    /* #babec3 */
+
+  /* Estados de la señal (base común de los tres territorios, §8 de referencias).
+     En claro el punto y el texto tienen tonos distintos para llegar a 3:1 y 4,5:1. */
+  --ok: oklch(0.58 0.155 150);            /* #119245  punto */
+  --floja: oklch(0.61 0.135 62);          /* #bb6d12  punto */
+  --fallo: oklch(0.56 0.2 27);            /* #d02c2a  punto */
+  --ok-texto: oklch(0.47 0.13 150);       /* #006e30 */
+  --floja-texto: oklch(0.5 0.11 62);      /* #8f520d */
+  --fallo-texto: oklch(0.5 0.19 27);      /* #b7191c */
+  --comprobando: var(--tinta-2);
+
+  /* Sobre el vídeo: placas de pizarra en los dos temas (el vídeo manda). */
+  --placa: oklch(0.2 0.012 250 / 0.72);
+  --placa-opaca: oklch(0.24 0.012 250);
+  --placa-tinta: oklch(0.975 0.002 250);
+  --placa-tinta-2: oklch(0.82 0.008 250);
+
+  --foco: var(--tinta);
+  --sombra-flotante: 0 10px 30px oklch(0.2 0.02 250 / 0.18), 0 1px 0 oklch(0.2 0.02 250 / 0.08);
+
+  /* ---- Tipografía ---- */
+  --f-sans: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  --f-mono: "Azeret Mono", ui-monospace, "Cascadia Mono", monospace;
+  /* Anchuras del eje wdth de Archivo */
+  --w-comprimida: 62%;   /* marcador, minuto, horas */
+  --w-estrecha: 80%;
+  --w-normal: 100%;
+  --w-ancha: 125%;       /* rótulos de competición, títulos */
+
+  /* Escala de Bringhurst (Elements of Typographic Style): 11 12 14 16 18 21 24 36 48 60 72 */
+  --t-11: 0.6875rem;
+  --t-12: 0.75rem;
+  --t-14: 0.875rem;
+  --t-16: 1rem;
+  --t-18: 1.125rem;
+  --t-21: 1.3125rem;
+  --t-24: 1.5rem;
+  --t-36: 2.25rem;
+  --t-48: 3rem;
+  --t-60: 3.75rem;
+
+  /* ---- Espacio y forma ---- */
+  --e-1: 4px;
+  --e-2: 8px;
+  --e-3: 12px;
+  --e-4: 16px;
+  --e-5: 20px;
+  --e-6: 24px;
+  --e-8: 32px;
+  --r-1: 2px;
+  --r-2: 4px;
+  --toque: 44px;
+  --punta: 16px;         /* la punta del rótulo: el triángulo de reproducir */
+
+  /* ---- Movimiento: cortes de realización, sin rebote ---- */
+  --m-rapido: 180ms;     /* estados, conmutadores */
+  --m-barrido: 220ms;    /* barridos y revelados con máscara */
+  --m-panel: 260ms;      /* paneles que entran desde su borde */
+  --curva-corte: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* Muelle «estándar» común web ↔ iOS (0,4 s · rebote 0,15), por si hace falta */
+  --muelle-estandar: linear(0, 0.069, 0.218, 0.388, 0.547, 0.681, 0.786, 0.864, 0.919, 0.956, 0.98, 0.994, 1.002, 1.005, 1.006, 1.006, 1.005, 1.004, 1.003, 1.002, 1.001, 1.001, 1.001, 1, 1); /* dura 640 ms */
+}
+
+/* ---- Pizarra (tema oscuro) ---- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --fondo: oklch(0.235 0.012 250);        /* #1a1f24 */
+    --superficie: oklch(0.28 0.012 250);    /* #25292f */
+    --superficie-2: oklch(0.325 0.012 250); /* #30353a */
+    --linea: oklch(0.4 0.012 250);          /* #43484e */
+    --linea-fuerte: oklch(0.58 0.012 250);  /* #757b81  3,4:1 sobre superficie */
+    --tinta: oklch(0.975 0.002 250);        /* #f6f7f8  15,5:1 */
+    --tinta-2: oklch(0.78 0.01 250);        /* #b3b8be  8,3:1 */
+    --tinta-3: oklch(0.64 0.01 250);        /* #888d92 */
+    --inv-fondo: oklch(0.975 0.002 250);
+    --inv-tinta: oklch(0.235 0.012 250);
+    --inv-tinta-2: oklch(0.42 0.012 250);
+    --ok: oklch(0.8 0.19 150);              /* #49de78 */
+    --floja: oklch(0.84 0.16 80);           /* #ffbd34 */
+    --fallo: oklch(0.7 0.2 27);             /* #ff6056 */
+    --ok-texto: var(--ok);
+    --floja-texto: var(--floja);
+    --fallo-texto: var(--fallo);
+    --sombra-flotante: 0 12px 32px oklch(0.1 0.01 250 / 0.55), 0 0 0 1px oklch(0.45 0.012 250);
+  }
+}
+:root[data-theme="dark"] {
+  --fondo: oklch(0.235 0.012 250);
+  --superficie: oklch(0.28 0.012 250);
+  --superficie-2: oklch(0.325 0.012 250);
+  --linea: oklch(0.4 0.012 250);
+  --linea-fuerte: oklch(0.58 0.012 250);
+  --tinta: oklch(0.975 0.002 250);
+  --tinta-2: oklch(0.78 0.01 250);
+  --tinta-3: oklch(0.64 0.01 250);
+  --inv-fondo: oklch(0.975 0.002 250);
+  --inv-tinta: oklch(0.235 0.012 250);
+  --inv-tinta-2: oklch(0.42 0.012 250);
+  --ok: oklch(0.8 0.19 150);
+  --floja: oklch(0.84 0.16 80);
+  --fallo: oklch(0.7 0.2 27);
+  --ok-texto: var(--ok);
+  --floja-texto: var(--floja);
+  --fallo-texto: var(--fallo);
+  --sombra-flotante: 0 12px 32px oklch(0.1 0.01 250 / 0.55), 0 0 0 1px oklch(0.45 0.012 250);
+}
+
+/* ---- Colores de club (contenido, no marca). Cada chapa dibuja la camiseta. ----
+   --k1 es el color principal, el que se usa en la franja de «tu equipo». */
+.k-sev { --k1: #d4001f; --kit: linear-gradient(180deg, #d4001f 0 22%, #ffffff 22%); }
+.k-bet { --k1: #00954c; --kit: linear-gradient(90deg, #00954c 0 20%, #fff 20% 40%, #00954c 40% 60%, #fff 60% 80%, #00954c 80%); }
+.k-gir { --k1: #cd2534; --kit: linear-gradient(90deg, #cd2534 0 20%, #fff 20% 40%, #cd2534 40% 60%, #fff 60% 80%, #cd2534 80%); }
+.k-vil { --k1: #ffe114; --kit: linear-gradient(180deg, #ffe114 0 78%, #005187 78%); }
+.k-rma { --k1: #1b2a5c; --kit: linear-gradient(180deg, #ffffff 0 80%, #1b2a5c 80%); }
+.k-rso { --k1: #0067b1; --kit: linear-gradient(90deg, #0067b1 0 20%, #fff 20% 40%, #0067b1 40% 60%, #fff 60% 80%, #0067b1 80%); }
+.k-ath { --k1: #ee2523; --kit: linear-gradient(90deg, #ee2523 0 20%, #fff 20% 40%, #ee2523 40% 60%, #fff 60% 80%, #ee2523 80%); }
+.k-psv { --k1: #e1001a; --kit: linear-gradient(90deg, #e1001a 0 50%, #ffffff 50%); }
+.k-atm { --k1: #cb3524; --kit: linear-gradient(180deg, transparent 0 76%, #272e61 76%), linear-gradient(90deg, #cb3524 0 20%, #fff 20% 40%, #cb3524 40% 60%, #fff 60% 80%, #cb3524 80%); }
+.k-ars { --k1: #ef0107; --kit: linear-gradient(90deg, #ffffff 0 22%, #ef0107 22% 78%, #ffffff 78%); }
+.k-liv { --k1: #c8102e; --kit: #c8102e; }
+.k-int { --k1: #0068a8; --kit: linear-gradient(90deg, #0068a8 0 20%, #111 20% 40%, #0068a8 40% 60%, #111 60% 80%, #0068a8 80%); }
+.k-bay { --k1: #dc052d; --kit: linear-gradient(180deg, #dc052d 0 80%, #0f1d44 80%); }
+.k-psg { --k1: #0a2d5e; --kit: linear-gradient(90deg, #0a2d5e 0 34%, #fff 34% 40%, #da291c 40% 60%, #fff 60% 66%, #0a2d5e 66%); }
+.k-juv { --k1: #111111; --kit: linear-gradient(90deg, #111 0 20%, #fff 20% 40%, #111 40% 60%, #fff 60% 80%, #111 80%); }
+.k-ben { --k1: #e2211c; --kit: linear-gradient(180deg, #e2211c 0 80%, #ffffff 80%); }
+.k-cbr { --k1: #0055a4; --kit: linear-gradient(90deg, #0055a4 0 20%, #111 20% 40%, #0055a4 40% 60%, #111 60% 80%, #0055a4 80%); }
+.k-lev { --k1: #e32221; --kit: linear-gradient(180deg, #e32221 0 24%, #111 24%); }
+.k-mon { --k1: #e7001f; --kit: linear-gradient(135deg, #e7001f 0 50%, #ffffff 50%); }
+.k-cel { --k1: #018749; --kit: linear-gradient(180deg, #018749 0 20%, #fff 20% 40%, #018749 40% 60%, #fff 60% 80%, #018749 80%); }

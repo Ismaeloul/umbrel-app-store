@@ -24,7 +24,9 @@ import {
   type SourceStats,
 } from '@ace/shared';
 import { AppError } from '../../core/errors.js';
-import { mergeResolutionCandidates } from '../sources/index.js';
+/* HDR, Bar o UHD son el MISMO canal en otra calidad o para otro local
+   (server.js:3982): el conjunto es el de sources (una sola copia desde el paso 1.3). */
+import { CHANNEL_VARIANT_TOKENS, mergeResolutionCandidates } from '../sources/index.js';
 import { applySemanticCandidateScores, type SemanticOptions } from './ai.js';
 import {
   MAX_RESOLUTION_CHANNELS,
@@ -32,21 +34,6 @@ import {
   REMOTE_MIN_SCORE_WITHOUT_AI,
   SEARCH_QUERY_CHARS,
 } from './constants.js';
-
-/**
- * HDR, Bar o UHD son el MISMO canal en otra calidad o para otro local
- * (server.js:3982). Es el mismo conjunto que usa `canalEsGenerico` en
- * sources/ranking.ts; no está exportado desde sources/index.ts (pedido en
- * docs/cobertura/football.md, "Cambios de contrato pedidos").
- */
-const CHANNEL_VARIANT_TOKENS: ReadonlySet<string> = new Set([
-  'hdr',
-  'bar',
-  'uhd',
-  '4k',
-  'fhd',
-  'hd',
-]);
 
 /** Candidato antes de aplicar lo aprendido (`scoreResolutionCandidate`, api.md §3.13). */
 export type BaseCandidate = Omit<

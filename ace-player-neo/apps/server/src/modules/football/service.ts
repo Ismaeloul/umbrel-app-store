@@ -83,7 +83,7 @@ import {
   type ScoresCache,
 } from './scores.js';
 import { isoDateInMadrid } from './time.js';
-import type { FootballDeps, FootballService, ResolveOptions } from './types.js';
+import type { FootballAiHealth, FootballDeps, FootballService, ResolveOptions } from './types.js';
 
 type Loose = Record<string, unknown>;
 
@@ -135,9 +135,12 @@ export class FootballServiceImpl implements FootballService {
   private subscriptions: Unsubscribe[] = [];
   private started = false;
 
+  /** Última vez que Ollama respondió bien a un `embed` (para `healthInfo().ai`, paso 1.3). */
+  private aiReadyAt: number | null = null;
+
   constructor(private readonly deps: FootballDeps) {
     const { ai } = deps.config;
-    this.embed =
+    const embed =
       deps.embed ??
       (ai.enabled
         ? createOllamaEmbedder({
@@ -148,6 +151,19 @@ export class FootballServiceImpl implements FootballService {
             fetch: deps.ollamaFetch ?? globalThis.fetch,
           })
         : unavailableEmbedder);
+    /* Cada respuesta buena de Ollama dice a la salud que la IA está lista sin
+       que tenga que preguntar a /api/tags; un fallo lo borra (la salud vuelve
+       a preguntar y distingue "sin modelo" de "caído"). */
+    this.embed = async (texts) => {
+      try {
+        const vectors = await embed(texts);
+        this.aiReadyAt = deps.clock.now();
+        return vectors;
+      } catch (error) {
+        this.aiReadyAt = null;
+        throw error;
+      }
+    };
   }
 
   // --- Ciclo de vida ---
@@ -602,6 +618,24 @@ export class FootballServiceImpl implements FootballService {
       matches: footballScheduleMatches(payload).length,
       preheated,
       aiEnabled: config.ai.enabled,
+      ai: this.aiHealth(),
     };
   }
+
+  /**
+   * `ai` de la salud (paso 1.3): `disabled` sin Ollama configurado, `ready`
+   * si respondió bien hace menos de AI_HEALTH_FRESH_MS; si no, `null` y la
+   * salud pregunta a `/api/tags` (cacheado 30 s).
+   */
+  private aiHealth(): FootballAiHealth | null {
+    if (!this.deps.config.ai.enabled) return { status: 'disabled', modelReady: false };
+    const at = this.aiReadyAt;
+    if (at !== null && this.deps.clock.now() - at < AI_HEALTH_FRESH_MS) {
+      return { status: 'ready', modelReady: true };
+    }
+    return null;
+  }
 }
+
+/** Una respuesta buena de Ollama vale para la salud durante este rato. */
+export const AI_HEALTH_FRESH_MS = 5 * 60 * 1000;

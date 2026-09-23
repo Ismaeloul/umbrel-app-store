@@ -16,6 +16,7 @@
 import {
   ENGINE_MAX_AUTO_RESTARTS_PER_HOUR,
   TIMEOUTS,
+  WEB_SYNC_INTERVAL_MS as SHARED_WEB_SYNC_INTERVAL_MS,
   type DiagnosticCause,
   type EngineStatus,
   type HealthLiveResponse,
@@ -32,7 +33,7 @@ import type { HealthDeps, HealthProbes, HealthService, OllamaTags } from './type
 /** Cada cuánto se repite una sonda de red como mucho. */
 export const HEALTH_PROBE_TTL_MS = 30 * 1000;
 /** `WEB_SYNC_INTERVAL_MS` (server.js:55): un directorio está rancio pasadas 1,5 veces (4 h 30 min). */
-export const WEB_SYNC_INTERVAL_MS = 3 * 60 * 60 * 1000;
+export const WEB_SYNC_INTERVAL_MS = SHARED_WEB_SYNC_INTERVAL_MS;
 const STALE_FACTOR = 1.5;
 
 type AiStatus = 'disabled' | 'ready' | 'model_missing' | 'offline';
@@ -40,9 +41,10 @@ type LegacyAi = LegacyHealthResponse['components']['ai'];
 type Agenda = LegacyHealthResponse['components']['agenda'];
 type Warning = HealthResponse['warnings'][number];
 
-/* Lo que football y scanner pueden exponer en el futuro (contrato pedido en
-   docs/cobertura/health.md): si está, se usa y no se sondea nada. */
-type ScannerStatsWithOnline = ScannerStats & { readonly online?: boolean | null };
+/* Lo que exponen scanner (`online`) y football (`ai`) desde el paso 1.3: si
+   está (no `null`), se usa y no se sondea nada. Los tipos admiten que falten
+   para los fakes de los tests. */
+type ScannerStatsWithOnline = Omit<ScannerStats, 'online'> & { readonly online?: boolean | null };
 type FootballHealthWithAi = ReturnType<FootballService['healthInfo']> & {
   readonly ai?: { readonly status: AiStatus; readonly modelReady?: boolean } | null;
 };
@@ -96,8 +98,15 @@ export function cachedProbe<T>(
 
 // --- Sondas reales ---
 
-export function defaultProbes(deps: Pick<HealthDeps, 'config'>): HealthProbes {
-  const { config } = deps;
+/**
+ * Sondas de verdad. Con `scanner` (lo normal desde el paso 1.3), el
+ * `get_version` del comprobador lo hace el propio comprobador con su
+ * transporte (`scanner.ping()`); sin él, un `fetch` directo (tests).
+ */
+export function defaultProbes(
+  deps: Pick<HealthDeps, 'config'> & Partial<Pick<HealthDeps, 'scanner'>>,
+): HealthProbes {
+  const { config, scanner } = deps;
   return {
     async ollamaTags(signal) {
       const response = await fetch(`${config.ai.ollamaBaseUrl}/api/tags`, { signal });
@@ -111,6 +120,7 @@ export function defaultProbes(deps: Pick<HealthDeps, 'config'>): HealthProbes {
       return { ok: response.ok, models };
     },
     async scannerVersion(signal) {
+      if (scanner) return (await scanner.ping(signal)).online;
       const url = `http://${config.scanner.host}:${config.scanner.port}/webui/api/service?method=get_version`;
       const response = await fetch(url, { signal });
       await response.body?.cancel().catch(() => undefined);
@@ -210,6 +220,7 @@ const ZERO_COUNTS: Readonly<Record<DiagnosticCause, number>> = {
   network: 0,
   codec: 0,
   client: 0,
+  state: 0,
 };
 
 export function createHealthService(deps: HealthDeps): HealthService {

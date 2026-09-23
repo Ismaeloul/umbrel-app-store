@@ -175,6 +175,7 @@ const scanJob: ScanJob = {
       audioCodecs: ['aac'],
       cached: false,
       attempts: 1,
+      playableOn: { web: true, ios: true },
     },
     {
       id: HASH_C,
@@ -200,7 +201,7 @@ const scanJob: ScanJob = {
 };
 
 const statEntry = { intentos: 3.5, exitos: 2.8, caidas: 0.4, segundos: 5400, ultimo: AT_MS };
-const counts = { engine: 1, source: 3, network: 0, codec: 1, client: 2 };
+const counts = { engine: 1, source: 3, network: 0, codec: 1, client: 2, state: 0 };
 const streamSession = { id: SID, heartbeatMs: 15000, expiresAfterMs: 45000 };
 const diagnostic = {
   id: 'diag_000001',
@@ -546,6 +547,7 @@ export const EVENT_FIXTURES = {
     reason: 'playable_media',
     by: 'scanner',
     checkedAt: AT,
+    playableOn: { web: true, ios: true },
   },
   'state.changed': { scopes: ['library', 'nowPlaying'], at: AT },
   'diagnostics.new': diagnostic,

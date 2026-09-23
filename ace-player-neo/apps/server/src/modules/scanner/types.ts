@@ -91,6 +91,12 @@ export interface ScannerStats {
   readonly activeJobs: number;
   readonly cachedSources: number;
   readonly leakedSessionsLastHour: number;
+  /**
+   * Resultado del último `get_version` del comprobador (paso 1.3, lo pedía
+   * health): lo pregunta él mismo cada 30 s mientras está arrancado. `null`
+   * si todavía no se ha preguntado; `false` si está apagado.
+   */
+  readonly online: boolean | null;
 }
 
 export interface ScannerService extends Lifecycle {
@@ -103,7 +109,7 @@ export interface ScannerService extends Lifecycle {
    */
   enqueue(request: ScanJobRequest): ScanRef | null;
   /** `scannerJobPayload` de un trabajo (GET /api/football/scan); lanza `scan_not_found`. */
-  job(id: string): ScanJob;
+  job(id: string, options?: { readonly playableOn?: boolean }): ScanJob;
   /** Veredicto vigente de una fuente, si lo hay (la caché de 10 min, o el del reproductor 3 min). */
   verdict(hash: string): SourceVerdict | null;
   /**

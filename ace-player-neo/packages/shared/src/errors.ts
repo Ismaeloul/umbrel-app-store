@@ -531,6 +531,44 @@ export const ERROR_CATALOG = {
     public: false,
     message: 'No es un fichero.',
   },
+
+  // --- Solo para el registro de fallos (nunca llegan a una respuesta HTTP) ---
+  engine_stalled: {
+    status: 503,
+    legacyStatus: null,
+    public: false,
+    message: 'El motor responde pero no entrega vídeo a quien está viendo.',
+  },
+  engine_auto_restart: {
+    status: 503,
+    legacyStatus: null,
+    public: false,
+    message: 'El motor no respondía con alguien esperando y se ha reiniciado solo.',
+  },
+  engine_auto_restart_exhausted: {
+    status: 503,
+    legacyStatus: null,
+    public: false,
+    message: 'El motor ya se ha reiniciado solo 3 veces en la última hora; no se reinicia más.',
+  },
+  engine_not_ready: {
+    status: 503,
+    legacyStatus: null,
+    public: false,
+    message: 'El motor no ha vuelto a responder a tiempo después de reiniciarse.',
+  },
+  engine_stop_failed: {
+    status: 502,
+    legacyStatus: null,
+    public: false,
+    message: 'El motor no ha confirmado el cierre de una sesión.',
+  },
+  scanner_session_leak: {
+    status: 502,
+    legacyStatus: null,
+    public: false,
+    message: 'El comprobador puede haber dejado sesiones abiertas en su motor.',
+  },
 } as const satisfies Record<string, ErrorDefinition>;
 
 export type ErrorCode = keyof typeof ERROR_CATALOG;

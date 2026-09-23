@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#eff0f2">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1a1f24">
+<title>Sevilla – Real Betis · Ace Player Neo</title>
+<link rel="icon" href="icono.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Azeret+Mono:wght@400..700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="comun.css">
+<style>
+  body { padding-block-end: calc(58px + env(safe-area-inset-bottom, 0px)); }
+  .shell { display: block; }
+  .col-agenda { display: none; }
+  .escenario { display: contents; }
+
+  /* ---- Móvil: cabecera + vídeo fijos arriba; todo lo demás se desplaza debajo ---- */
+  .pt-fijo { position: sticky; inset-block-start: 0; z-index: 25; background: var(--fondo); }
+  .pt-cab { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; block-size: 48px; padding-inline: 2px; }
+  .pt-cab h1 { font-size: var(--t-14); font-weight: 800; font-stretch: 112%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pt-cab .btn-ico { color: var(--tinta); }
+  .volver { display: inline-flex; align-items: center; gap: 2px; min-block-size: var(--toque); padding-inline: 8px 12px; font-size: var(--t-14); font-weight: 650; }
+
+  /* ---- Reproductor ---- */
+  .reproductor { position: relative; aspect-ratio: 16 / 9; background: #0b0e11; overflow: hidden; isolation: isolate; }
+  .reproductor .video { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; }
+  .placa { background: var(--placa); -webkit-backdrop-filter: blur(14px) saturate(1.3); backdrop-filter: blur(14px) saturate(1.3); color: var(--placa-tinta); }
+  .ov-arriba { position: absolute; inset: 8px 8px auto 8px; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .ov-bug { display: inline-flex; align-items: stretch; border-radius: var(--r-1); overflow: hidden; block-size: 34px; }
+  .ov-bug .lado { display: inline-flex; align-items: center; gap: 6px; padding-inline: 8px; font-size: var(--t-14); font-weight: 750; letter-spacing: 0.02em; }
+  .ov-bug .res { display: inline-flex; align-items: center; gap: 1px; background: var(--placa-tinta); color: #1a1f24; }
+  .ov-bug .res .num { font-size: var(--t-24); padding-inline: 6px; min-inline-size: 22px; text-align: center; }
+  .ov-bug .res .num + .num { border-inline-start: 1px solid #b9bdc2; }
+  .ov-bug .min { display: inline-flex; align-items: center; padding-inline: 8px; font-size: var(--t-18); color: var(--placa-tinta); border-inline-start: 1px solid oklch(1 0 0 / 0.18); }
+  .ov-grupo { display: inline-flex; border-radius: var(--r-1); overflow: hidden; }
+  .ctl {
+    display: inline-grid; place-items: center; flex: none;
+    inline-size: var(--toque); block-size: var(--toque); color: var(--placa-tinta);
+    transition: background var(--m-rapido);
+  }
+  .ctl:hover { background: oklch(1 0 0 / 0.1); }
+  .ctl:focus-visible { outline-color: var(--placa-tinta); outline-offset: -3px; }
+  .ctl .ic { inline-size: 22px; block-size: 22px; }
+  .ctl-30 { font-size: var(--t-18); font-weight: 800; font-stretch: var(--w-comprimida); font-variant-numeric: tabular-nums; }
+  .controles { position: absolute; inset-inline: 0; inset-block-end: 0; display: flex; align-items: center; gap: 0; padding: 4px 6px; }
+  .controles .hueco { flex: 1; }
+  .vol { display: inline-flex; align-items: center; }
+  .vol input { inline-size: 64px; }
+  input[type="range"] { -webkit-appearance: none; appearance: none; background: none; block-size: var(--toque); margin: 0 6px 0 0; cursor: pointer; }
+  input[type="range"]::-webkit-slider-runnable-track { block-size: 3px; background: linear-gradient(90deg, var(--placa-tinta) var(--v, 70%), oklch(1 0 0 / 0.3) var(--v, 70%)); }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; inline-size: 14px; block-size: 14px; margin-block-start: -5.5px; background: var(--placa-tinta); border-radius: 1px; }
+  input[type="range"]::-moz-range-track { block-size: 3px; background: oklch(1 0 0 / 0.3); }
+  input[type="range"]::-moz-range-progress { block-size: 3px; background: var(--placa-tinta); }
+  input[type="range"]::-moz-range-thumb { inline-size: 14px; block-size: 14px; border: 0; border-radius: 1px; background: var(--placa-tinta); }
+  .ctl-directo {
+    display: inline-flex; align-items: center; gap: 7px; min-block-size: 36px; margin-inline: 4px; padding-inline: 12px;
+    border-radius: var(--r-1); font-size: var(--t-14); font-weight: 750; font-stretch: 112%; white-space: nowrap;
+    background: var(--placa-tinta); color: #1a1f24; position: relative;
+  }
+  .ctl-directo::after { content: ""; position: absolute; inset: -4px 0; } /* 44 px de toque */
+  .ctl-directo[data-detras="true"] { background: transparent; color: var(--placa-tinta); box-shadow: inset 0 0 0 1.5px var(--placa-tinta); }
+  .ctl-directo[data-detras="true"] .tally { animation: none; opacity: 0.35; }
+  .retraso { font-size: var(--t-16); color: var(--placa-tinta-2); padding-inline: 4px 8px; font-weight: 800; }
+  .solo-escritorio { display: none; }
+
+  /* ---- Línea de estado bajo el vídeo: una sola línea, nunca un toast encima ---- */
+  .estado {
+    display: flex; align-items: center; gap: 10px; min-block-size: 40px; padding: 8px 16px 8px 13px;
+    font-size: 0.8125rem; font-weight: 550; color: var(--tinta);
+    background: var(--superficie); border-inline-start: 3px solid var(--ok);
+    border-block-end: 1px solid var(--linea);
+  }
+  .estado span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .estado .ic { inline-size: 16px; block-size: 16px; color: var(--ok-texto); stroke-width: 2.25; }
+  .estado.cambia span { animation: barrido var(--m-barrido) var(--curva-corte); }
+
+  /* ---- Cabecera del partido ---- */
+  .pt-marcador { padding: 16px 16px 4px; }
+  .pm-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-block-end: 12px; }
+  .pm-comp { font-size: var(--t-12); font-weight: 600; color: var(--tinta-2); }
+  .pm-comp strong { color: var(--tinta); font-weight: 750; }
+  .btn-tapar { flex: none; white-space: nowrap; min-block-size: var(--toque); display: inline-flex; align-items: center; gap: 6px; padding-inline: 10px; margin-inline-end: -10px; font-size: var(--t-12); font-weight: 650; color: var(--tinta-2); border-radius: var(--r-1); }
+  .btn-tapar:hover { background: var(--superficie-2); color: var(--tinta); }
+  .btn-tapar .ic { inline-size: 18px; block-size: 18px; }
+  .pm-rejilla { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .bug-pm { --punta: 22px; row-gap: 3px; }
+  .bug-pm .bug-eq { min-block-size: 44px; column-gap: 12px; padding-inline-start: 10px; }
+  .bug-pm .eq-nombre { font-size: var(--t-18); font-weight: 700; }
+  .bug-pm .gol { font-size: var(--t-36); }
+  .tapado .bug-pm .gol, .tapado .ov-bug .res .num { color: transparent; position: relative; }
+  .tapado .bug-pm .gol::after { content: ""; position: absolute; inset: 6px 0 6px -4px; background: var(--linea); }
+  .tapado .ov-bug .res .num::after { content: ""; position: absolute; inset: 7px 5px; background: #b9bdc2; }
+  .pm-reloj { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 12px; row-gap: 10px; }
+  .pm-min { font-size: var(--t-36); }
+  .pm-parte { font-size: var(--t-14); font-weight: 600; color: var(--tinta-2); }
+  .pm-reloj .minbar { grid-column: 1 / -1; }
+  .pm-hechos { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-block-start: 12px; font-size: var(--t-14); }
+  .pm-hechos li { display: inline-flex; align-items: center; gap: 8px; }
+  .pm-hechos .num { font-size: var(--t-18); }
+  .tapado .pm-hechos { visibility: hidden; }
+
+  /* ---- Lateral: fuentes, acciones y panel técnico ---- */
+  .lateral { padding: 20px 16px 24px; display: grid; gap: 20px; min-inline-size: 0; }
+  .sec-cab { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-block-end: 10px; }
+  .sec-t { font-size: var(--t-14); font-weight: 800; font-stretch: var(--w-ancha); }
+  .sec-t small { display: block; margin-block-start: 3px; font-size: var(--t-12); font-weight: 600; font-stretch: var(--w-normal); color: var(--tinta-2); }
+  .btn-sm { min-block-size: var(--toque); padding-inline: 12px; font-size: var(--t-12); }
+  .lateral .rack { margin-inline: -16px; }
+  .rack-fila[aria-pressed="true"] .rack-n { background: var(--inv-fondo); color: var(--inv-tinta); }
+  .rack-n { display: inline-grid; place-items: center; inline-size: 26px; block-size: 26px; border-radius: var(--r-1); }
+  .rack-prov { display: grid; gap: 1px; }
+  .rack-prov small { font-size: var(--t-11); font-weight: 650; color: var(--tinta-2); }
+  .rack-extra { display: none; }
+
+  .acciones { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin-inline: -16px; padding-inline: 16px; }
+  .acciones::-webkit-scrollbar { display: none; }
+  .acciones .btn { flex: none; padding-inline: 12px; font-size: var(--t-12); }
+  .acciones .btn .ic { inline-size: 18px; block-size: 18px; }
+  .acciones .corto { display: none; }
+
+  .nerd { border: 1px solid var(--linea); border-radius: var(--r-2); background: var(--superficie); }
+  .nerd summary {
+    display: flex; align-items: center; gap: 10px; min-block-size: 52px; padding-inline: 14px; cursor: pointer; list-style: none;
+  }
+  .nerd summary::-webkit-details-marker { display: none; }
+  .nerd summary .ic { color: var(--tinta-2); }
+  .nerd-t { font-size: var(--t-14); font-weight: 800; font-stretch: var(--w-ancha); white-space: nowrap; }
+  .nerd summary .tecla { display: none; }
+  .nerd-res { margin-inline-start: auto; font-family: var(--f-mono); font-size: var(--t-11); color: var(--tinta-2); white-space: nowrap; }
+  .tecla { display: inline-grid; place-items: center; min-inline-size: 22px; block-size: 22px; padding-inline: 5px; border: 1px solid var(--linea-fuerte); border-radius: var(--r-1); font-family: var(--f-mono); font-size: var(--t-11); color: var(--tinta-2); }
+  .nerd[open] .nerd-res { display: none; }
+  .nerd-cuerpo { padding: 2px 14px 14px; }
+  .nerd[open] .nerd-cuerpo { animation: panel-entra var(--m-panel) var(--curva-corte); }
+  @keyframes panel-entra { from { clip-path: inset(0 0 100% 0); transform: translateY(-6px); } to { clip-path: inset(0); transform: none; } }
+  .nerd dl { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 7px 12px; margin: 0; font-family: var(--f-mono); font-size: var(--t-12); line-height: 1.35; }
+  .nerd dt { color: var(--tinta-2); }
+  .nerd dd { margin: 0; color: var(--tinta); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .nerd dd .ok { color: var(--ok-texto); }
+  .tendencia { margin-block-start: 14px; }
+  .tendencia-cab { display: flex; justify-content: space-between; font-family: var(--f-mono); font-size: var(--t-11); color: var(--tinta-2); margin-block-end: 6px; }
+  .tendencia svg { inline-size: 100%; block-size: 64px; }
+  .tendencia .area { fill: color-mix(in oklch, var(--tinta) 10%, transparent); }
+  .tendencia .traza { fill: none; stroke: var(--tinta); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+  .tendencia .corte { stroke: var(--tinta-2); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+  .tendencia-pie { display: flex; justify-content: space-between; font-family: var(--f-mono); font-size: var(--t-11); color: var(--tinta-2); margin-block-start: 4px; }
+  .hash { display: flex; align-items: center; gap: 8px; }
+  .hash .btn-ico { inline-size: var(--toque); block-size: var(--toque); margin-block: -12px; }
+
+  .tira-lista a[aria-current="page"] { background: var(--superficie-2); box-shadow: inset 0 -3px 0 var(--tinta); }
+
+  /* ---- Bajo el vídeo en escritorio: canales y atajos (principio 11) ---- */
+  .pt-info { display: none; order: 4; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 16px; margin-block-start: 16px; }
+  .info-t { font-size: var(--t-12); font-weight: 800; font-stretch: var(--w-ancha); margin-block-end: 10px; }
+  .info-caja { border-block-start: 1px solid var(--linea); padding-block-start: 12px; }
+  .info-caja p { font-size: var(--t-12); color: var(--tinta-2); margin-block-start: 10px; }
+  .atajos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; font-size: var(--t-12); color: var(--tinta-2); }
+  .atajos li { display: flex; align-items: center; gap: 8px; }
+
+  /* ---- Columna de agenda (escritorio) ---- */
+  .ca-cab { display: flex; align-items: baseline; justify-content: space-between; padding: 22px 16px 8px; }
+  .ca-cab h2 { font-size: var(--t-18); font-weight: 800; font-stretch: var(--w-ancha); }
+  .ca-cab span { font-size: var(--t-12); color: var(--tinta-2); font-weight: 600; }
+  .ca-comp { display: flex; align-items: center; gap: 8px; padding: 16px 16px 6px; font-size: var(--t-12); font-weight: 800; font-stretch: var(--w-ancha); }
+  .ca-comp::after { content: ""; flex: 1; block-size: 1px; background: var(--linea); }
+  .ca-fila { display: grid; grid-template-columns: 60px minmax(0, 1fr); column-gap: 8px; row-gap: 6px; padding: 8px 16px 10px; position: relative; }
+  .ca-fila:hover { background: var(--superficie-2); }
+  .ca-fila[aria-current="true"] { background: var(--superficie-2); box-shadow: inset 3px 0 0 var(--tinta); }
+  .ca-fila .bug { --punta: 12px; }
+  .ca-fila .bug-eq { min-block-size: 24px; column-gap: 8px; padding-inline-start: 6px; }
+  .ca-fila .eq-nombre { font-size: var(--t-14); }
+  .ca-fila .gol { font-size: var(--t-18); }
+  .ca-fila .chapa { inline-size: 12px; block-size: 15px; }
+  .ca-hora { display: grid; align-content: center; gap: 3px; block-size: 50px; }
+  .ca-hora .num { font-size: var(--t-21); }
+  .ca-hora small { font-size: var(--t-11); color: var(--tinta-2); font-weight: 600; white-space: nowrap; }
+  .ca-directo { display: grid; align-content: space-between; block-size: 50px; padding: 5px 6px; background: var(--inv-fondo); color: var(--inv-tinta); border-radius: var(--r-1); }
+  .ca-directo .hd-top { display: flex; align-items: center; gap: 4px; font-size: var(--t-11); font-weight: 750; line-height: 1; white-space: nowrap; }
+  .ca-directo .tally { inline-size: 6px; block-size: 6px; }
+  .ca-directo .num { font-size: var(--t-24); line-height: 0.8; }
+  .ca-fila .senal { grid-column: 2; }
+  .ca-fila.terminado .bug-eq { background: color-mix(in oklch, var(--superficie) 45%, var(--fondo)); color: var(--tinta-2); }
+
+  @media (min-width: 1024px) {
+    body { padding-block-end: 0; }
+    .shell { display: grid; grid-template-columns: 84px 300px minmax(0, 1fr) 380px; align-items: start; }
+    .col-agenda {
+      display: block; position: sticky; inset-block-start: 48px; block-size: calc(100dvh - 48px); overflow-y: auto;
+      border-inline-end: 1px solid var(--linea); padding-block-end: 24px;
+    }
+    .escenario { display: flex; flex-direction: column; gap: 0; padding: 20px 20px 32px; min-inline-size: 0; }
+    .pt-fijo { position: static; order: 2; background: none; }
+    .pt-cab { display: none; }
+    .pt-marcador { order: 1; padding: 0 0 16px; }
+    .estado { order: 3; }
+    .pm-rejilla { grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 24px; align-items: center; }
+    .pm-reloj { align-self: stretch; align-content: center; }
+    .pm-hechos { margin-block-start: 0; }
+    .pm-min { font-size: var(--t-48); }
+    .marco { position: relative; }
+    .marco::before, .marco::after { content: ""; position: absolute; inline-size: 14px; block-size: 14px; border-color: var(--linea-fuerte); border-style: solid; pointer-events: none; }
+    .marco::before { inset: -7px auto auto -7px; border-width: 1px 0 0 1px; }
+    .marco::after { inset: auto -7px -7px auto; border-width: 0 1px 1px 0; }
+    .estado { margin-block-start: 0; }
+    .solo-escritorio { display: inline-flex; }
+    .solo-movil { display: none !important; }
+    .vol input { inline-size: 96px; }
+    .controles { padding: 6px 10px; }
+    .lateral {
+      position: sticky; inset-block-start: 48px; block-size: calc(100dvh - 48px); overflow-y: auto;
+      background: var(--superficie); border-inline-start: 1px solid var(--linea); padding: 20px 20px 28px; gap: 18px; align-content: start;
+    }
+    .lateral .rack { margin-inline: -20px; --rack-cols: 28px minmax(0, 1fr) 112px 34px 40px; }
+    .lateral .rack-cab, .lateral .rack-fila { padding-inline: 20px 16px; }
+    .rack-extra { display: block; }
+    .rack-fila .senal { font-size: var(--t-12); }
+    .acciones { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; margin: 0; padding: 0; overflow: visible; border: 1px solid var(--linea-fuerte); border-radius: var(--r-1); }
+    .acciones .btn { flex-direction: column; gap: 5px; min-block-size: 60px; padding: 6px 2px; white-space: normal; text-align: center; font-size: var(--t-11); line-height: 1.15; border: 0; border-radius: 0; }
+    .acciones .btn + .btn { border-inline-start: 1px solid var(--linea); }
+    .acciones .corto { display: inline; }
+    .acciones .largo { display: none; }
+    .nerd dl { gap: 5px 12px; }
+    .nerd summary .tecla { display: inline-grid; }
+    .tendencia { margin-block-start: 10px; }
+    .pt-info { display: grid; }
+  }
+</style>
+</head>
+<body>
+<script src="comun.js"></script>
+<a class="saltar" href="#reproductor">Saltar al reproductor</a>
+
+<header class="tira" aria-label="Marcadores en directo">
+  <span class="tira-directo"><span class="tally" aria-hidden="true"></span>Directo</span>
+  <ul class="tira-lista">
+    <li><a href="partido.html" class="mbug" aria-current="page" aria-label="Sevilla 1, Real Betis 1, minuto 76">
+      <span class="chapa k-sev"></span><span class="eq-sigla">SEV</span>
+      <span class="marcador"><span class="num">1</span><span class="num">1</span></span>
+      <span class="eq-sigla">BET</span><span class="chapa k-bet"></span><span class="num min">76'</span></a></li>
+    <li><a href="partido.html" class="mbug" aria-label="Girona 0, Villarreal 2, minuto 78">
+      <span class="chapa k-gir"></span><span class="eq-sigla">GIR</span>
+      <span class="marcador"><span class="num">0</span><span class="num">2</span></span>
+      <span class="eq-sigla">VIL</span><span class="chapa k-vil"></span><span class="num min">78'</span></a></li>
+    <li class="tira-grupo">Luego</li>
+    <li><a href="partido.html" class="mbug"><span class="num tira-hora">21:00</span><span class="chapa k-atm"></span><span class="eq-sigla">ATM</span><span class="eq-sigla">ARS</span><span class="chapa k-ars"></span></a></li>
+    <li><a href="partido.html" class="mbug"><span class="num tira-hora">21:00</span><span class="chapa k-liv"></span><span class="eq-sigla">LIV</span><span class="eq-sigla">INT</span><span class="chapa k-int"></span></a></li>
+    <li><a href="partido.html" class="mbug"><span class="num tira-hora">21:30</span><span class="chapa k-rma"></span><span class="eq-sigla">RMA</span><span class="eq-sigla">RSO</span><span class="chapa k-rso"></span></a></li>
+  </ul>
+  <div class="tira-der">
+    <span class="motor">Motor listo</span>
+    <time class="num reloj" datetime="2026-09-23T20:45">20:45</time>
+  </div>
+</header>
+
+<div class="shell">
+  <nav class="carril" aria-label="Secciones">
+    <a class="carril-marca" href="agenda.html" aria-label="Ace Player Neo"><svg class="ic" style="inline-size:30px;block-size:30px"><use href="#i-marca"/></svg></a>
+    <a href="agenda.html" aria-current="page"><svg class="ic"><use href="#i-agenda"/></svg>Agenda</a>
+    <a href="biblioteca.html"><svg class="ic"><use href="#i-biblioteca"/></svg>Biblioteca</a>
+    <a href="#"><svg class="ic"><use href="#i-buscar"/></svg>Buscar</a>
+    <a href="#"><svg class="ic"><use href="#i-ajustes"/></svg>Ajustes</a>
+    <div class="carril-pie">
+      <button type="button"><svg class="ic"><use href="#i-hash"/></svg>Pegar hash</button>
+      <button type="button"><svg class="ic"><use href="#i-salud"/></svg>Salud</button>
+    </div>
+  </nav>
+
+  <!-- Escritorio: la agenda sigue a la vista mientras ves -->
+  <aside class="col-agenda" aria-label="Agenda de hoy">
+    <div class="ca-cab"><h2>Hoy</h2><span>Miércoles 23 sep</span></div>
+    <p class="ca-comp">LaLiga EA Sports</p>
+    <ol>
+      <li><a class="ca-fila" href="partido.html" aria-current="true">
+        <span class="ca-directo"><span class="hd-top"><span class="tally" aria-hidden="true"></span>Directo</span><span class="num">76'</span></span>
+        <span class="bug"><span class="bug-eq"><span class="chapa k-sev"></span><span class="eq-nombre">Sevilla</span><span class="num gol">1</span></span><span class="bug-eq"><span class="chapa k-bet"></span><span class="eq-nombre">Real Betis</span><span class="num gol">1</span></span></span>
+        <span class="senal" data-e="ok"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Con señal <span class="senal-sub">sonando aquí</span></span>
+      </a></li>
+      <li><a class="ca-fila" href="partido.html">
+        <span class="ca-directo"><span class="hd-top"><span class="tally" aria-hidden="true"></span>Directo</span><span class="num">78'</span></span>
+        <span class="bug"><span class="bug-eq"><span class="chapa k-gir"></span><span class="eq-nombre">Girona</span><span class="num gol">0</span></span><span class="bug-eq"><span class="chapa k-vil"></span><span class="eq-nombre">Villarreal</span><span class="num gol">2</span></span></span>
+        <span class="senal" data-e="fallo"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Sin señal <span class="senal-sub">reintento 20:51</span></span>
+      </a></li>
+      <li><a class="ca-fila" href="partido.html">
+        <span class="ca-hora"><span class="num">21:30</span><small>En 45 min</small></span>
+        <span class="bug"><span class="bug-eq"><span class="chapa k-rma"></span><span class="eq-nombre">Real Madrid</span><span class="gol"></span></span><span class="bug-eq"><span class="chapa k-rso"></span><span class="eq-nombre">Real Sociedad</span><span class="gol"></span></span></span>
+        <span class="senal" data-e="pendiente"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Sin comprobar</span>
+      </a></li>
+    </ol>
+    <p class="ca-comp">Champions League</p>
+    <ol>
+      <li><a class="ca-fila terminado" href="partido.html">
+        <span class="ca-hora"><span class="hora-fin" style="font-size:var(--t-14);font-weight:750;color:var(--tinta-2)">Final</span><small>18:45</small></span>
+        <span class="bug"><span class="bug-eq"><span class="chapa k-ath"></span><span class="eq-nombre">Athletic Club</span><span class="num gol">2</span></span><span class="bug-eq"><span class="chapa k-psv"></span><span class="eq-nombre">PSV Eindhoven</span><span class="num gol">0</span></span></span>
+      </a></li>
+      <li><a class="ca-fila" href="partido.html">
+        <span class="ca-hora"><span class="num">21:00</span><small>En 15 min</small></span>
+        <span class="bug"><span class="bug-eq"><span class="chapa k-atm"></span><span class="eq-nombre">Atlético de Madrid</span><span class="gol"></span></span><span class="bug-eq"><span class="chapa k-ars"></span><span class="eq-nombre">Arsenal</span><span class="gol"></span></span></span>
+        <span class="senal" data-e="floja"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Señal floja</span>
+      </a></li>
+      <li><a class="ca-fila" href="partido.html">
+        <span class="ca-hora"><span class="num">21:00</span><small>En 15 min</small></span>
+        <span class="bug"><span class="bug-eq"><span class="chapa k-liv"></span><span class="eq-nombre">Liverpool</span><span class="gol"></span></span><span class="bug-eq"><span class="chapa k-int"></span><span class="eq-nombre">Inter de Milán</span><span class="gol"></span></span></span>
+        <span class="senal" data-e="comprobando"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Comprobando</span>
+      </a></li>
+    </ol>
+  </aside>
+
+  <main class="escenario" id="escenario">
+    <div class="pt-fijo">
+      <header class="pt-cab">
+        <a class="volver" href="agenda.html"><svg class="ic"><use href="#i-atras"/></svg>Agenda</a>
+        <h1>Sevilla – Real Betis</h1>
+        <button type="button" class="btn-ico" aria-label="Más opciones del partido"><svg class="ic"><use href="#i-mas"/></svg></button>
+      </header>
+
+      <div class="marco">
+        <div class="reproductor" id="reproductor" tabindex="-1" aria-label="Reproductor: DAZN LaLiga">
+          <svg class="video" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Imagen simulada del partido: plano general del campo">
+<defs>
+<pattern id="v-grada" width="16" height="13" patternUnits="userSpaceOnUse"><rect width="16" height="13" fill="#161c22"/><circle cx="4" cy="4" r="3.2" fill="#2b343d"/><circle cx="12" cy="10" r="3.2" fill="#3a3236"/><circle cx="12" cy="3" r="2" fill="#20272e"/></pattern>
+<pattern id="v-grada-sev" width="16" height="13" patternUnits="userSpaceOnUse"><rect width="16" height="13" fill="#1a1a1e"/><circle cx="4" cy="4" r="3.2" fill="#5a2a2e"/><circle cx="12" cy="10" r="3.2" fill="#8d8f93"/></pattern>
+<pattern id="v-grada-bet" width="16" height="13" patternUnits="userSpaceOnUse"><rect width="16" height="13" fill="#161c1a"/><circle cx="4" cy="4" r="3.2" fill="#2d5a3f"/><circle cx="12" cy="10" r="3.2" fill="#8d938f"/></pattern>
+<pattern id="v-vallas" width="220" height="34" patternUnits="userSpaceOnUse"><rect width="220" height="34" fill="#10233b"/><rect x="18" y="10" width="120" height="14" fill="#2c5fa0"/><rect x="150" y="10" width="44" height="14" fill="#e8eef5" opacity=".75"/></pattern>
+<pattern id="v-betis" width="8" height="10" patternUnits="userSpaceOnUse"><rect width="4" height="10" fill="#0a9a52"/><rect x="4" width="4" height="10" fill="#f2f2f2"/></pattern>
+<radialGradient id="v-vineta" cx="50%" cy="55%" r="75%"><stop offset="60%" stop-color="#000" stop-opacity="0"/><stop offset="100%" stop-color="#000" stop-opacity=".45"/></radialGradient>
+<linearGradient id="v-luz" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".06"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient>
+</defs>
+<rect width="1600" height="272" fill="url(#v-grada)"/>
+<rect x="0" y="0" width="520" height="235" fill="url(#v-grada-sev)" opacity=".85"/>
+<rect x="1180" y="0" width="420" height="235" fill="url(#v-grada-bet)" opacity=".7"/>
+<rect x="0" y="235" width="1600" height="34" fill="url(#v-vallas)"/>
+<rect x="0" y="269" width="1600" height="3" fill="#0b1a10"/>
+<polygon points="0,272 100,272 -670,900 -880,900" fill="#2f6d37"/>
+<polygon points="100,272 200,272 -460,900 -670,900" fill="#28602f"/>
+<polygon points="200,272 300,272 -250,900 -460,900" fill="#2f6d37"/>
+<polygon points="300,272 400,272 -40,900 -250,900" fill="#28602f"/>
+<polygon points="400,272 500,272 170,900 -40,900" fill="#2f6d37"/>
+<polygon points="500,272 600,272 380,900 170,900" fill="#28602f"/>
+<polygon points="600,272 700,272 590,900 380,900" fill="#2f6d37"/>
+<polygon points="700,272 800,272 800,900 590,900" fill="#28602f"/>
+<polygon points="800,272 900,272 1010,900 800,900" fill="#2f6d37"/>
+<polygon points="900,272 1000,272 1220,900 1010,900" fill="#28602f"/>
+<polygon points="1000,272 1100,272 1430,900 1220,900" fill="#2f6d37"/>
+<polygon points="1100,272 1200,272 1640,900 1430,900" fill="#28602f"/>
+<polygon points="1200,272 1300,272 1850,900 1640,900" fill="#2f6d37"/>
+<polygon points="1300,272 1400,272 2060,900 1850,900" fill="#28602f"/>
+<polygon points="1400,272 1500,272 2270,900 2060,900" fill="#2f6d37"/>
+<polygon points="1500,272 1600,272 2480,900 2270,900" fill="#28602f"/>
+<rect x="0" y="272" width="1600" height="628" fill="url(#v-luz)"/>
+<line x1="0" y1="278" x2="1600" y2="278" stroke="#e9f2ea" stroke-opacity=".82" fill="none" stroke-width="3"/>
+<line x1="800" y1="278" x2="800" y2="900" stroke="#e9f2ea" stroke-opacity=".82" fill="none" stroke-width="4"/>
+<ellipse cx="800" cy="560" rx="265" ry="108" stroke="#e9f2ea" stroke-opacity=".82" fill="none" stroke-width="4"/>
+<circle cx="800" cy="560" r="6" fill="#e9f2ea" fill-opacity=".85"/>
+<polyline points="0,332 210,332 60,900" stroke="#e9f2ea" stroke-opacity=".82" fill="none" stroke-width="3.5"/>
+<ellipse cx="1010" cy="374" rx="9.1" ry="2.8" fill="#000" opacity=".35"/><rect x="1005.8" y="360.8" width="2.8" height="11.2" fill="#111"/><rect x="1011.4" y="360.8" width="2.8" height="11.2" fill="#111"/><rect x="1003.7" y="353.8" width="12.6" height="7.0" fill="#111"/><rect x="1003.7" y="336.9" width="12.6" height="16.8" fill="#f3d21b"/><circle cx="1010.0" cy="332.7" r="4.2" fill="#c9a07e"/>
+<ellipse cx="700" cy="392" rx="9.5" ry="2.9" fill="#000" opacity=".35"/><rect x="695.6" y="378.3" width="2.9" height="11.7" fill="#f1f1f1"/><rect x="701.5" y="378.3" width="2.9" height="11.7" fill="#f1f1f1"/><rect x="693.4" y="371.1" width="13.1" height="7.3" fill="#f4f4f4"/><rect x="693.4" y="353.6" width="13.1" height="17.5" fill="url(#v-betis)"/><circle cx="700.0" cy="349.2" r="4.4" fill="#c9a07e"/>
+<ellipse cx="620" cy="422" rx="10.1" ry="3.1" fill="#000" opacity=".35"/><rect x="615.4" y="407.6" width="3.1" height="12.4" fill="#f1f1f1"/><rect x="621.5" y="407.6" width="3.1" height="12.4" fill="#f1f1f1"/><rect x="613.0" y="399.9" width="13.9" height="7.7" fill="#f4f4f4"/><rect x="613.0" y="381.3" width="13.9" height="18.6" fill="#f7f7f7"/><rect x="613.0" y="381.3" width="13.9" height="3.1" fill="#d4001f"/><circle cx="620.0" cy="376.7" r="4.6" fill="#c9a07e"/>
+<ellipse cx="1320" cy="442" rx="10.5" ry="3.2" fill="#000" opacity=".35"/><rect x="1315.2" y="427.1" width="3.2" height="12.9" fill="#f1f1f1"/><rect x="1321.6" y="427.1" width="3.2" height="12.9" fill="#f1f1f1"/><rect x="1312.8" y="419.1" width="14.5" height="8.0" fill="#f4f4f4"/><rect x="1312.8" y="399.8" width="14.5" height="19.3" fill="url(#v-betis)"/><circle cx="1320.0" cy="395.0" r="4.8" fill="#c9a07e"/>
+<ellipse cx="980" cy="472" rx="11.0" ry="3.4" fill="#000" opacity=".35"/><rect x="974.9" y="456.4" width="3.4" height="13.6" fill="#f1f1f1"/><rect x="981.7" y="456.4" width="3.4" height="13.6" fill="#f1f1f1"/><rect x="972.4" y="447.9" width="15.3" height="8.5" fill="#f4f4f4"/><rect x="972.4" y="427.5" width="15.3" height="20.4" fill="#f7f7f7"/><rect x="972.4" y="427.5" width="15.3" height="3.4" fill="#d4001f"/><circle cx="980.0" cy="422.4" r="5.1" fill="#c9a07e"/>
+<ellipse cx="760" cy="522" rx="12.0" ry="3.7" fill="#000" opacity=".35"/><rect x="754.4" y="505.2" width="3.7" height="14.8" fill="#f1f1f1"/><rect x="761.9" y="505.2" width="3.7" height="14.8" fill="#f1f1f1"/><rect x="751.7" y="495.9" width="16.7" height="9.3" fill="#f4f4f4"/><rect x="751.7" y="473.7" width="16.7" height="22.2" fill="#f7f7f7"/><rect x="751.7" y="473.7" width="16.7" height="3.7" fill="#d4001f"/><circle cx="760.0" cy="468.2" r="5.6" fill="#c9a07e"/>
+<ellipse cx="1060" cy="542" rx="12.4" ry="3.8" fill="#000" opacity=".35"/><rect x="1054.3" y="524.7" width="3.8" height="15.3" fill="#f1f1f1"/><rect x="1061.9" y="524.7" width="3.8" height="15.3" fill="#f1f1f1"/><rect x="1051.4" y="515.2" width="17.2" height="9.6" fill="#f4f4f4"/><rect x="1051.4" y="492.2" width="17.2" height="22.9" fill="url(#v-betis)"/><circle cx="1060.0" cy="486.5" r="5.7" fill="#c9a07e"/>
+<ellipse cx="430" cy="562" rx="12.8" ry="3.9" fill="#000" opacity=".35"/><rect x="424.1" y="544.2" width="3.9" height="15.8" fill="#f1f1f1"/><rect x="432.0" y="544.2" width="3.9" height="15.8" fill="#f1f1f1"/><rect x="421.1" y="534.4" width="17.7" height="9.9" fill="#f4f4f4"/><rect x="421.1" y="510.7" width="17.7" height="23.7" fill="url(#v-betis)"/><circle cx="430.0" cy="504.8" r="5.9" fill="#c9a07e"/>
+<ellipse cx="930" cy="602" rx="13.6" ry="4.2" fill="#000" opacity=".35"/><rect x="923.7" y="583.3" width="4.2" height="16.7" fill="#f1f1f1"/><rect x="932.1" y="583.3" width="4.2" height="16.7" fill="#f1f1f1"/><rect x="920.6" y="572.8" width="18.8" height="10.5" fill="#f4f4f4"/><rect x="920.6" y="547.7" width="18.8" height="25.1" fill="url(#v-betis)"/><circle cx="930.0" cy="541.4" r="6.3" fill="#c9a07e"/>
+<ellipse cx="1180" cy="612" rx="13.8" ry="4.2" fill="#000" opacity=".35"/><rect x="1173.6" y="593.0" width="4.2" height="17.0" fill="#f1f1f1"/><rect x="1182.1" y="593.0" width="4.2" height="17.0" fill="#f1f1f1"/><rect x="1170.4" y="582.4" width="19.1" height="10.6" fill="#f4f4f4"/><rect x="1170.4" y="556.9" width="19.1" height="25.5" fill="#f7f7f7"/><rect x="1170.4" y="556.9" width="19.1" height="4.2" fill="#d4001f"/><circle cx="1180.0" cy="550.6" r="6.4" fill="#c9a07e"/>
+<ellipse cx="520" cy="702" rx="15.6" ry="4.8" fill="#000" opacity=".35"/><rect x="512.8" y="680.8" width="4.8" height="19.2" fill="#f1f1f1"/><rect x="522.4" y="680.8" width="4.8" height="19.2" fill="#f1f1f1"/><rect x="509.2" y="668.9" width="21.6" height="12.0" fill="#f4f4f4"/><rect x="509.2" y="640.1" width="21.6" height="28.7" fill="#f7f7f7"/><rect x="509.2" y="640.1" width="21.6" height="4.8" fill="#d4001f"/><circle cx="520.0" cy="632.9" r="7.2" fill="#c9a07e"/>
+<ellipse cx="1140" cy="737" rx="16.3" ry="5.0" fill="#000" opacity=".35"/><rect x="1132.5" y="715.0" width="5.0" height="20.0" fill="#f1f1f1"/><rect x="1142.5" y="715.0" width="5.0" height="20.0" fill="#f1f1f1"/><rect x="1128.7" y="702.5" width="22.5" height="12.5" fill="#f4f4f4"/><rect x="1128.7" y="672.5" width="22.5" height="30.0" fill="url(#v-betis)"/><circle cx="1140.0" cy="665.0" r="7.5" fill="#c9a07e"/>
+<ellipse cx="860" cy="782" rx="17.1" ry="5.3" fill="#000" opacity=".35"/><rect x="852.1" y="758.9" width="5.3" height="21.1" fill="#f1f1f1"/><rect x="862.6" y="758.9" width="5.3" height="21.1" fill="#f1f1f1"/><rect x="848.1" y="745.7" width="23.7" height="13.2" fill="#f4f4f4"/><rect x="848.1" y="714.1" width="23.7" height="31.6" fill="#f7f7f7"/><rect x="848.1" y="714.1" width="23.7" height="5.3" fill="#d4001f"/><circle cx="860.0" cy="706.2" r="7.9" fill="#c9a07e"/>
+<ellipse cx="905" cy="652" rx="7" ry="2.5" fill="#000" opacity=".4"/><circle cx="902" cy="642" r="7" fill="#fafafa"/>
+<rect width="1600" height="900" fill="url(#v-vineta)"/>
+</svg>
+          <div class="ov-arriba">
+            <div class="ov-bug placa" aria-hidden="true">
+              <span class="lado"><span class="chapa k-sev"></span>SEV</span>
+              <span class="res"><span class="num" data-gol="l">1</span><span class="num" data-gol="v">1</span></span>
+              <span class="lado">BET<span class="chapa k-bet"></span></span>
+              <span class="num min">76'</span>
+            </div>
+            <div class="ov-grupo placa solo-movil">
+              <button type="button" class="ctl" aria-label="Imagen dentro de imagen (P)"><svg class="ic"><use href="#i-pip"/></svg></button>
+              <button type="button" class="ctl" aria-label="Más opciones del reproductor"><svg class="ic"><use href="#i-mas"/></svg></button>
+            </div>
+          </div>
+          <div class="controles placa" role="group" aria-label="Controles del reproductor">
+            <button type="button" class="ctl" id="b-play" aria-pressed="true" aria-label="Pausar (K)"><svg class="ic"><use href="#i-pausa"/></svg></button>
+            <button type="button" class="ctl ctl-30" id="b-atras" aria-label="Retroceder 30 segundos (J)">−30</button>
+            <span class="vol">
+              <button type="button" class="ctl" id="b-mudo" aria-pressed="false" aria-label="Silenciar (M)"><svg class="ic"><use href="#i-vol"/></svg></button>
+              <input type="range" id="volumen" min="0" max="100" value="70" aria-label="Volumen">
+            </span>
+            <span class="hueco"></span>
+            <span class="num retraso" id="retraso" hidden>−30 s</span>
+            <button type="button" class="ctl-directo" id="b-directo" data-detras="false" aria-label="Ya en directo"><span class="tally fijo" aria-hidden="true"></span><span id="t-directo">Directo</span></button>
+            <button type="button" class="ctl solo-escritorio" aria-label="Imagen dentro de imagen (P)"><svg class="ic"><use href="#i-pip"/></svg></button>
+            <button type="button" class="ctl" aria-label="Pantalla completa (F)"><svg class="ic"><use href="#i-completa"/></svg></button>
+            <button type="button" class="ctl solo-escritorio" aria-label="Más opciones del reproductor"><svg class="ic"><use href="#i-mas"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="estado" id="estado" role="status" aria-live="polite"><svg class="ic"><use href="#i-check"/></svg><span id="estado-t">Faro en antena. Vas 34 s por detrás del directo.</span></p>
+
+    <section class="pt-marcador" aria-labelledby="pm-t">
+      <div class="pm-top">
+        <p class="pm-comp"><strong>LaLiga EA Sports</strong>, jornada 6. Ramón Sánchez-Pizjuán.</p>
+        <button type="button" class="btn-tapar" id="b-tapar" aria-pressed="false"><svg class="ic"><use href="#i-ojo-no"/></svg><span>Tapar marcador</span></button>
+      </div>
+      <h2 class="vh" id="pm-t">Marcador: Sevilla contra Real Betis</h2>
+      <div class="pm-rejilla">
+        <div class="bug bug-pm">
+          <div class="bug-eq k-sev"><span class="chapa g k-sev"></span><span class="eq-nombre">Sevilla</span><span class="num gol" data-gol="l">1</span></div>
+          <div class="bug-eq k-bet"><span class="chapa g k-bet"></span><span class="eq-nombre">Real Betis</span><span class="num gol" data-gol="v">1</span></div>
+        </div>
+        <div class="pm-reloj">
+          <span class="num pm-min">76'</span>
+          <span class="pm-parte">Segunda parte<br><span class="directo-tag" style="margin-block-start:6px"><span class="tally" aria-hidden="true"></span>Directo</span></span>
+          <div class="minbar" style="--p:.84" aria-hidden="true"><i></i><b style="--en:.5"></b><b class="gol-marca" style="--en:.2556"></b><b class="gol-marca" style="--en:.6778"></b></div>
+          <ol class="pm-hechos" style="grid-column:1/-1">
+            <li><span class="num">23'</span><span class="chapa k-sev"></span>Gol del Sevilla</li>
+            <li><span class="num">61'</span><span class="chapa k-bet"></span>Gol del Betis</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <section class="pt-info" aria-label="Canales y atajos">
+      <div class="info-caja">
+        <h3 class="info-t">Canales del partido</h3>
+        <ul class="canales"><li class="canal">DAZN LaLiga</li><li class="canal se-buscara">DAZN LaLiga 2</li></ul>
+        <p>El de borde continuo está en tu biblioteca; el discontinuo se buscará al reproducir.</p>
+      </div>
+      <div class="info-caja">
+        <h3 class="info-t">Atajos</h3>
+        <ul class="atajos">
+          <li><span class="tecla">K</span>Pausa y sigue</li>
+          <li><span class="tecla">J</span>Atrás 30 s</li>
+          <li><span class="tecla">S</span>Panel técnico</li>
+          <li><span class="tecla">G</span>Favorito</li>
+          <li><span class="tecla">F</span>Pantalla completa</li>
+          <li><span class="tecla">P</span>Imagen en imagen</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <aside class="lateral" aria-label="Fuentes y datos técnicos">
+    <section aria-labelledby="f-t">
+      <div class="sec-cab">
+        <h2 class="sec-t" id="f-t">Fuentes<small>3 de 6 con señal, 1 comprobándose</small></h2>
+        <button type="button" class="btn btn-sm"><svg class="ic"><use href="#i-rebuscar"/></svg>Rebuscar</button>
+      </div>
+      <ol class="rack" id="rack" data-grupo="fuentes">
+        <li class="rack-cab-li" aria-hidden="true"><div class="rack-cab"><span>Nº</span><span>Proveedor</span><span>Estado</span><span class="rack-extra" style="text-align:end">Pares</span><span class="rack-extra" style="text-align:end">Mbit/s</span></div></li>
+        <li><button type="button" class="rack-fila" data-opcion="1" data-prov="Faro" data-e="ok" aria-pressed="true"><span class="num rack-n">1</span><span class="rack-prov"><span>Faro</span><small class="antena">En antena</small></span><span class="senal" data-e="ok"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Verificada</span><span class="num rack-dato rack-extra">214</span><span class="num rack-dato rack-extra">6,1</span></button></li>
+        <li><button type="button" class="rack-fila" data-opcion="2" data-prov="Norte" data-e="ok" aria-pressed="false"><span class="num rack-n">2</span><span class="rack-prov"><span>Norte</span></span><span class="senal" data-e="ok"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Verificada</span><span class="num rack-dato rack-extra">98</span><span class="num rack-dato rack-extra">5,4</span></button></li>
+        <li><button type="button" class="rack-fila" data-opcion="3" data-prov="Lince" data-e="floja" aria-pressed="false"><span class="num rack-n">3</span><span class="rack-prov"><span>Lince</span></span><span class="senal" data-e="floja"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Floja</span><span class="num rack-dato rack-extra">12</span><span class="num rack-dato rack-extra">2,1</span></button></li>
+        <li><button type="button" class="rack-fila" data-opcion="4" data-prov="Tauro" data-e="comprobando" aria-pressed="false"><span class="num rack-n">4</span><span class="rack-prov"><span>Tauro</span></span><span class="senal" data-e="comprobando"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Comprobando</span><span class="num rack-dato rack-extra">—</span><span class="num rack-dato rack-extra">—</span></button></li>
+        <li><button type="button" class="rack-fila" data-opcion="5" data-prov="Delta" data-e="fallo" aria-pressed="false"><span class="num rack-n">5</span><span class="rack-prov"><span>Delta</span></span><span class="senal" data-e="fallo"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Fallida</span><span class="num rack-dato rack-extra">0</span><span class="num rack-dato rack-extra">0,0</span></button></li>
+        <li><button type="button" class="rack-fila" data-opcion="6" data-prov="Arrebato" data-e="pendiente" aria-pressed="false"><span class="num rack-n">6</span><span class="rack-prov"><span>Arrebato</span></span><span class="senal" data-e="pendiente"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Pendiente</span><span class="num rack-dato rack-extra">—</span><span class="num rack-dato rack-extra">—</span></button></li>
+      </ol>
+    </section>
+
+    <div class="acciones" role="group" aria-label="Acciones de la fuente en antena">
+      <button type="button" class="btn" data-conmuta aria-pressed="false" data-l-on="Quitar de favoritos (G)" data-l-off="Añadir a favoritos (G)" aria-label="Añadir a favoritos (G)"><svg class="ic"><use href="#i-estrella"/></svg>Favorito</button>
+      <button type="button" class="btn"><svg class="ic"><use href="#i-copiar"/></svg><span>Copiar hash</span></button>
+      <button type="button" class="btn"><svg class="ic"><use href="#i-hash"/></svg><span>Pegar hash</span></button>
+      <button type="button" class="btn" aria-label="Es el canal correcto"><svg class="ic"><use href="#i-check"/></svg><span class="largo">Es el canal correcto</span><span class="corto">Canal correcto</span></button>
+      <button type="button" class="btn"><svg class="ic"><use href="#i-reportar"/></svg>Reportar</button>
+      <button type="button" class="btn"><svg class="ic"><use href="#i-enlace"/></svg>Abrir en…</button>
+    </div>
+
+    <details class="nerd" id="nerd">
+      <summary><svg class="ic"><use href="#i-nerd"/></svg><span class="nerd-t">Panel técnico</span><span class="nerd-res">214 pares  6,1 Mbit/s</span><span class="tecla" title="Atajo de teclado">S</span></summary>
+      <div class="nerd-cuerpo">
+        <dl>
+          <dt>Motor</dt><dd><span class="ok">en línea</span>, 3.2.11</dd>
+          <dt>Entrega</dt><dd>progresiva (mpegts.js)</dd>
+          <dt>Pares</dt><dd>214</dd>
+          <dt>Bajada</dt><dd>812 KB/s</dd>
+          <dt>Subida</dt><dd>96 KB/s</dd>
+          <dt>Vídeo</dt><dd>H.264 1920×1080 25p</dd>
+          <dt>Audio</dt><dd>AAC 48 kHz estéreo</dd>
+          <dt>Retraso</dt><dd>34,2 s tras la tele</dd>
+          <dt>Colchón</dt><dd>8,2 s</dd>
+          <dt>Hash</dt><dd class="hash"><span>9f3c81ab22e0…c07d41</span><button type="button" class="btn-ico" aria-label="Copiar hash"><svg class="ic" style="inline-size:16px;block-size:16px"><use href="#i-copiar"/></svg></button></dd>
+        </dl>
+        <div class="tendencia">
+          <div class="tendencia-cab"><span>Pares, últimos 5 min</span><span>máx 231</span></div>
+          <svg viewBox="0 0 300 60" preserveAspectRatio="none" aria-label="Pares en los últimos cinco minutos: bajan a 40 en el corte de las 20:41 y se recuperan hasta 214 tras cambiar a Faro">
+            <path class="area" d="M0 60 L0 24 L20 22 L40 26 L60 21 L80 25 L100 30 L115 44 L125 52 L135 55 L150 50 L160 20 L180 14 L200 12 L220 9 L240 11 L260 8 L280 10 L300 9 L300 60 Z"/>
+            <path class="traza" d="M0 24 L20 22 L40 26 L60 21 L80 25 L100 30 L115 44 L125 52 L135 55 L150 50 L160 20 L180 14 L200 12 L220 9 L240 11 L260 8 L280 10 L300 9"/>
+            <line class="corte" x1="152" y1="0" x2="152" y2="60"/>
+          </svg>
+          <div class="tendencia-pie"><span>20:40</span><span>cambio a Faro</span><span>20:45</span></div>
+        </div>
+      </div>
+    </details>
+  </aside>
+</div>
+
+<nav class="barra-nav" aria-label="Secciones">
+  <a href="agenda.html" aria-current="page"><svg class="ic"><use href="#i-agenda"/></svg>Agenda</a>
+  <a href="biblioteca.html"><svg class="ic"><use href="#i-biblioteca"/></svg>Biblioteca</a>
+  <a href="#"><svg class="ic"><use href="#i-buscar"/></svg>Buscar</a>
+  <a href="#"><svg class="ic"><use href="#i-ajustes"/></svg>Ajustes</a>
+</nav>
+
+<script>
+  (function () {
+    var $ = function (id) { return document.getElementById(id); };
+    var escritorio = matchMedia('(min-width: 1024px)');
+    var nerd = $('nerd');
+    if (escritorio.matches) nerd.open = true;
+
+    function estado(texto, tipo) {
+      var e = $('estado'), t = $('estado-t');
+      t.textContent = texto;
+      e.style.borderInlineStartColor = tipo === 'info' ? 'var(--tinta-2)' : 'var(--' + (tipo || 'ok') + ')';
+      e.classList.remove('cambia'); void e.offsetWidth; e.classList.add('cambia');
+    }
+
+    // Play / pausa
+    var play = $('b-play');
+    play.addEventListener('click', function () {
+      var sonando = play.getAttribute('aria-pressed') !== 'true';
+      play.setAttribute('aria-pressed', String(sonando));
+      play.setAttribute('aria-label', sonando ? 'Pausar (K)' : 'Reproducir (K)');
+      play.querySelector('use').setAttribute('href', sonando ? '#i-pausa' : '#i-play');
+      if (!sonando) marcarDetras(true, 'Pausado');
+      estado(sonando ? 'Reanudado. Pulsa Directo para volver al borde.' : 'En pausa. La señal sigue llegando.', 'info');
+    });
+
+    // Silencio y volumen
+    var mudo = $('b-mudo'), vol = $('volumen');
+    function pintaVol() { vol.style.setProperty('--v', (mudo.getAttribute('aria-pressed') === 'true' ? 0 : vol.value) + '%'); }
+    mudo.addEventListener('click', function () {
+      var on = mudo.getAttribute('aria-pressed') !== 'true';
+      mudo.setAttribute('aria-pressed', String(on));
+      mudo.setAttribute('aria-label', on ? 'Activar sonido (M)' : 'Silenciar (M)');
+      mudo.querySelector('use').setAttribute('href', on ? '#i-mudo' : '#i-vol');
+      pintaVol();
+    });
+    vol.addEventListener('input', pintaVol); pintaVol();
+
+    // -30 s y Directo
+    var directo = $('b-directo'), retraso = $('retraso'), detras = 0;
+    function marcarDetras(si, texto) {
+      directo.setAttribute('data-detras', String(si));
+      $('t-directo').textContent = si ? 'Ir al directo' : 'Directo';
+      directo.setAttribute('aria-label', si ? 'Ir al directo' : 'Ya en directo');
+      retraso.hidden = !si || !detras;
+      if (detras) retraso.textContent = '−' + detras + ' s';
+    }
+    $('b-atras').addEventListener('click', function () {
+      detras = Math.min(detras + 30, 90); marcarDetras(true);
+      estado('Retrocedido ' + detras + ' s. Pulsa Directo para volver.', 'info');
+    });
+    directo.addEventListener('click', function () {
+      if (directo.getAttribute('data-detras') !== 'true') { estado('Ya estabas en el directo.', 'info'); return; }
+      detras = 0; marcarDetras(false);
+      if (play.getAttribute('aria-pressed') !== 'true') play.click();
+      estado('De vuelta al directo.', 'ok');
+    });
+
+    // Tapar / destapar el marcador (tu emisión va por detrás)
+    var tapar = $('b-tapar');
+    tapar.addEventListener('click', function () {
+      var tapado = document.body.classList.toggle('tapado');
+      tapar.setAttribute('aria-pressed', String(tapado));
+      tapar.querySelector('span').textContent = tapado ? 'Ver marcador' : 'Tapar marcador';
+      tapar.querySelector('use').setAttribute('href', tapado ? '#i-ojo' : '#i-ojo-no');
+      if (!tapado) document.querySelectorAll('[data-gol]').forEach(function (n) { window.paleta(n, n.textContent); });
+    });
+
+    // Elegir fuente en el rack
+    var rack = $('rack');
+    rack.addEventListener('elegido', function (e) {
+      var b = rack.querySelector('[data-opcion="' + e.detail + '"]');
+      rack.querySelectorAll('.antena').forEach(function (n) { n.remove(); });
+      var s = document.createElement('small'); s.className = 'antena'; s.textContent = 'Conectando…';
+      b.querySelector('.rack-prov').appendChild(s);
+      var prov = b.getAttribute('data-prov'), est = b.getAttribute('data-e');
+      estado('Fuente ' + e.detail + ', ' + prov + ': conectando…', 'info');
+      setTimeout(function () {
+        if (est === 'fallo') { s.textContent = 'No arrancó'; estado(prov + ' no responde. Prueba otra fuente.', 'fallo'); return; }
+        s.textContent = 'En antena';
+        estado(prov + ' en antena' + (est === 'floja' ? ', con señal floja.' : '.'), est === 'floja' ? 'floja' : 'ok');
+      }, 900);
+    });
+
+    // Atajos: S panel técnico, K pausa, J -30, M silencio
+    document.addEventListener('keydown', function (e) {
+      if (e.target.closest('input, textarea')) return;
+      var k = e.key.toLowerCase();
+      if (k === 's') nerd.open = !nerd.open;
+      else if (k === 'k' || k === ' ') { e.preventDefault(); play.click(); }
+      else if (k === 'j') $('b-atras').click();
+      else if (k === 'm') mudo.click();
+    });
+  })();
+</script>
+</body>
+</html>

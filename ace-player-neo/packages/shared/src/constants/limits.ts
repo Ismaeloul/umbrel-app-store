@@ -47,6 +47,13 @@ export const SSE_MAX_BUFFERED_BYTES = 256 * 1024;
 export const DIAGNOSTICS_MEMORY_ENTRIES = 500;
 export const DIAGNOSTICS_FILE_BYTES = 1024 * 1024;
 
+/** Registro de fallos: informes por minuto de un mismo cliente y de todos juntos (arquitectura §5.14). */
+export const DIAGNOSTICS_CLIENT_REPORTS_PER_MINUTE = 30;
+export const DIAGNOSTICS_TOTAL_REPORTS_PER_MINUTE = 120;
+
+/** Registro de fallos: entradas que devuelve GET /api/v1/diagnostics sin `limit`. */
+export const DIAGNOSTICS_DEFAULT_LIST_LIMIT = 100;
+
 /** Emparejamiento: intentos por código y por minuto en total (arquitectura §5.12). */
 export const PAIRING_ATTEMPTS_PER_CODE = 5;
 export const PAIRING_ATTEMPTS_PER_MINUTE = 10;

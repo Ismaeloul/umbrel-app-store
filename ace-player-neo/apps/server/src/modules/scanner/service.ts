@@ -39,6 +39,7 @@ import { AppError } from '../../core/errors.js';
 import {
   SCANNER_LEAK_ALERT,
   SCANNER_LEAK_WINDOW_MS,
+  SCANNER_PING_INTERVAL_MS,
   SCANNER_PRUNE_INTERVAL_MS,
   SCANNER_WATCHING_GAP_MS,
 } from './constants.js';
@@ -88,6 +89,10 @@ export class ScannerServiceImpl implements ScannerService {
   private life = new AbortController();
   private pace: AbortController | null = null;
   private pruneTimer: TimerHandle | null = null;
+  /* get_version propio para la salud (`stats().online`, paso 1.3). */
+  private pingTimer: TimerHandle | null = null;
+  private pingInFlight: Promise<ScannerHealth> | null = null;
+  private lastOnline: boolean | null = null;
   private unsubscribe: Unsubscribe | null = null;
   private watching = false;
   private watched = new Set<string>();
@@ -121,6 +126,16 @@ export class ScannerServiceImpl implements ScannerService {
       SCANNER_PRUNE_INTERVAL_MS,
       { unref: true },
     );
+    /* La salud ya no pregunta al comprobador en cada GET /api/health: lo hace
+       él cada 30 s (antes lo hacía systemHealth, server.js:4618-4622). */
+    if (this.transport) {
+      void this.refreshOnline();
+      this.pingTimer = this.deps.clock.setInterval(
+        () => void this.refreshOnline(),
+        SCANNER_PING_INTERVAL_MS,
+        { unref: true },
+      );
+    }
   }
 
   async stop(): Promise<void> {
@@ -131,6 +146,8 @@ export class ScannerServiceImpl implements ScannerService {
     this.unsubscribe = null;
     this.deps.clock.clearInterval(this.pruneTimer);
     this.pruneTimer = null;
+    this.deps.clock.clearInterval(this.pingTimer);
+    this.pingTimer = null;
     this.life.abort();
     this.pace?.abort();
     this.queue.length = 0;
@@ -146,7 +163,7 @@ export class ScannerServiceImpl implements ScannerService {
     return this.deps.config.scanner.enabled;
   }
 
-  job(id: string): ScanJob {
+  job(id: string, options: { readonly playableOn?: boolean } = {}): ScanJob {
     const now = this.deps.clock.now();
     this.prune(now);
     const key = String(id || '')
@@ -154,7 +171,7 @@ export class ScannerServiceImpl implements ScannerService {
       .toLowerCase();
     const job = JOB_ID_RE.test(key) ? this.jobs.get(key) : undefined;
     if (!job) throw new AppError('scan_not_found');
-    return jobPayload(job, now);
+    return jobPayload(job, now, options);
   }
 
   verdict(hash: string): SourceVerdict | null {
@@ -184,7 +201,18 @@ export class ScannerServiceImpl implements ScannerService {
       activeJobs: [...this.jobs.values()].filter(isLive).length,
       cachedSources: this.verdicts.size,
       leakedSessionsLastHour: this.leaks.length,
+      online: this.transport ? this.lastOnline : false,
     };
+  }
+
+  /** Un solo `get_version` a la vez; al apagar, la señal de vida lo corta. */
+  private refreshOnline(): Promise<ScannerHealth> {
+    if (!this.pingInFlight) {
+      this.pingInFlight = this.ping(this.life.signal).finally(() => {
+        this.pingInFlight = null;
+      });
+    }
+    return this.pingInFlight;
   }
 
   async ping(signal?: AbortSignal): Promise<ScannerHealth> {
@@ -196,8 +224,11 @@ export class ScannerServiceImpl implements ScannerService {
         signal,
       );
       const online = result.statusCode >= 200 && result.statusCode < 300;
+      this.lastOnline = online;
       return { status: online ? 'ready' : 'offline', online };
     } catch {
+      /* Un corte por el apagado no es "comprobador caído". */
+      if (!this.stopped) this.lastOnline = false;
       return { status: 'offline', online: false };
     }
   }
@@ -264,6 +295,7 @@ export class ScannerServiceImpl implements ScannerService {
         reason: entry.reason,
         by: entry.by,
         checkedAt: isoOr(entry.checkedAt, new Date(now).toISOString()),
+        playableOn: this.toSourceVerdict(id, entry).playableOn,
       });
       if (entry.by === 'player') this.copyPlayerVerdict(id, entry, now);
     }

@@ -116,5 +116,16 @@ export interface FootballService extends Lifecycle {
     readonly matches: number;
     readonly preheated: number;
     readonly aiEnabled: boolean;
+    /**
+     * IA local vista por football (paso 1.3, lo pedía health): `null` si no
+     * lo sabe (health pregunta entonces a `/api/tags`).
+     */
+    readonly ai: FootballAiHealth | null;
   };
+}
+
+/** Estado de la IA que football conoce por su propio uso de Ollama. */
+export interface FootballAiHealth {
+  readonly status: 'disabled' | 'ready' | 'model_missing' | 'offline';
+  readonly modelReady: boolean;
 }

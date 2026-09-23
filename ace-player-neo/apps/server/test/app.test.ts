@@ -1,14 +1,19 @@
-/* Capa HTTP del esqueleto (arquitectura §5.15, §5.12 y §6.4): enrutado
-   exacto de las rutas antiguas, origen web/native, credencial de la app iOS,
-   anti-CSRF (T-033), límite de 2 MiB (T-032), formatos de error y
-   X-Request-Id. Los módulos aún no tienen manejadores: donde hace falta uno,
-   el test lo registra con `register`. */
+/* Capa HTTP (arquitectura §5.15, §5.12 y §6.4): enrutado exacto de las
+   rutas antiguas, origen web/native, credencial de la app iOS, anti-CSRF
+   (T-033), límite de 2 MiB (T-032), formatos de error y X-Request-Id.
+
+   Lo que se prueba es app.ts, no los módulos. Donde hace falta un manejador
+   concreto (o una ruta sin manejador, 501), el test monta la app con
+   `CORE_ONLY` (`moduleRoutes: false`: sin las rutas de los módulos) y
+   registra el suyo con `register`. Donde no importa quién conteste, se
+   usan los módulos reales (paso 1.3: ya no quedan esqueletos). */
 
 import { describe, expect, it, vi } from 'vitest';
 import type { DeviceRecord, PingResponse } from '@ace/shared';
 import { AppError } from '../src/core/errors.js';
 import type { AuthenticatedDevice } from '../src/core/module.js';
 import type { AuthService } from '../src/modules/auth/types.js';
+import type { EngineService } from '../src/modules/engine/types.js';
 import { createTestApp, native, web } from './helpers/index.js';
 
 const HASH = 'a'.repeat(40);
@@ -33,6 +38,9 @@ function fakeAuth(): AuthService {
     }),
   } as unknown as AuthService;
 }
+
+/** La app sin las rutas de los módulos: solo lo que registre el test. */
+const CORE_ONLY = { moduleRoutes: false } as const;
 
 const PING: PingResponse = {
   ok: true,
@@ -91,7 +99,7 @@ describe('rutas antiguas: enrutado exacto de la 0.6.59 (api.md §2.1-2.2)', () =
     ['GET', `/remux/${HASH}/index.m3u8`],
     ['HEAD', `/remux/${HASH}/index.m3u8`],
   ])('%s %s existe y, sin manejador, responde 501 not_implemented', async (method, url) => {
-    const { app } = await createTestApp();
+    const { app } = await createTestApp(CORE_ONLY);
     const res = await app.inject({ method: method as 'GET', url, headers: web() });
     expect(res.statusCode).toBe(501);
     if (method !== 'HEAD') expect(res.json()).toEqual({ error: 'not_implemented' });
@@ -100,6 +108,7 @@ describe('rutas antiguas: enrutado exacto de la 0.6.59 (api.md §2.1-2.2)', () =
   it('un manejador registrado recibe la query cruda y responde con las cabeceras de send()', async () => {
     const seen: string[] = [];
     const { app } = await createTestApp({
+      ...CORE_ONLY,
       register: ({ legacy }) =>
         legacy.handle('GET', '/api/football', (req) => {
           seen.push(`${req.url} ${req.query.get('date')}`);
@@ -118,6 +127,7 @@ describe('rutas antiguas: enrutado exacto de la 0.6.59 (api.md §2.1-2.2)', () =
   it('la ruta exacta no llama al manejador si la URL lleva query de más', async () => {
     const handler = vi.fn(() => ({ ok: true }));
     const { app } = await createTestApp({
+      ...CORE_ONLY,
       register: ({ legacy }) => legacy.handle('GET', '/api/health', handler),
     });
     expect(
@@ -132,6 +142,7 @@ describe('rutas antiguas: enrutado exacto de la 0.6.59 (api.md §2.1-2.2)', () =
   it('cualquier cuerpo es JSON: vacío = {}, roto = 400 bad_json (api.md §2.4)', async () => {
     const bodies: unknown[] = [];
     const { app } = await createTestApp({
+      ...CORE_ONLY,
       register: ({ legacy }) =>
         legacy.handle('POST', '/api/library', (req) => {
           bodies.push(req.body);
@@ -207,6 +218,7 @@ describe('origen native (arquitectura §5.12)', () => {
 
   it('ping y el canje del código no piden token', async () => {
     const { app } = await createTestApp({
+      ...CORE_ONLY,
       services: { auth: fakeAuth() },
       register: ({ v1 }) => v1.handle('ping', () => PING),
     });
@@ -228,6 +240,7 @@ describe('origen native (arquitectura §5.12)', () => {
     const auth = fakeAuth();
     const devices: (string | null)[] = [];
     const { app } = await createTestApp({
+      ...CORE_ONLY,
       services: { auth },
       register: ({ v1 }) =>
         v1.handle('ping', (_input, ctx) => {
@@ -326,6 +339,7 @@ describe('T-032 · cuerpos de más de 2 MiB → 413 body_too_large (B-204)', () 
 describe('formatos de error (arquitectura §6.4)', () => {
   it('antiguas: { error } con el HTTP de la 0.6.59, y lo desconocido como 500 internal_error', async () => {
     const { app } = await createTestApp({
+      ...CORE_ONLY,
       register: ({ legacy }) => {
         legacy.handle('POST', '/api/streams/activate', () => {
           throw new AppError('source_not_found');
@@ -355,6 +369,7 @@ describe('formatos de error (arquitectura §6.4)', () => {
 
   it('v1: { error: { code, message, requestId } } con el HTTP correcto', async () => {
     const { app } = await createTestApp({
+      ...CORE_ONLY,
       register: ({ v1 }) => {
         v1.handle('search', () => {
           throw new AppError('engine_timeout');
@@ -387,6 +402,7 @@ describe('formatos de error (arquitectura §6.4)', () => {
 
   it('v1 valida la entrada (400 validation_error) y la salida (500 si el manejador no cumple)', async () => {
     const { app } = await createTestApp({
+      ...CORE_ONLY,
       register: ({ v1 }) => {
         v1.handle('channelStream', () => {
           throw new Error('no debería llegar');
@@ -434,7 +450,10 @@ describe('T-033 · bloquea mutaciones iniciadas desde otro origen (B-230)', () =
   });
 
   it('los GET sin efectos, same-origin, sin Origin o con el mismo host pasan', async () => {
-    const { app } = await createTestApp({ register: ({ v1 }) => v1.handle('ping', () => PING) });
+    const { app } = await createTestApp({
+      ...CORE_ONLY,
+      register: ({ v1 }) => v1.handle('ping', () => PING),
+    });
     const ping = await app.inject({ method: 'GET', url: '/api/v1/ping', headers: crossSite });
     expect(ping.statusCode).toBe(200);
     const variants = [
@@ -450,7 +469,7 @@ describe('T-033 · bloquea mutaciones iniciadas desde otro origen (B-230)', () =
   });
 
   it('a la app iOS no se le aplica (va con token, no con cookies)', async () => {
-    const { app } = await createTestApp({ services: { auth: fakeAuth() } });
+    const { app } = await createTestApp({ ...CORE_ONLY, services: { auth: fakeAuth() } });
     const res = await app.inject({
       method: 'POST',
       url: '/native/api/v1/engine/restart',
@@ -472,7 +491,7 @@ describe('X-Request-Id (arquitectura §5.15)', () => {
   });
 
   it('si falta o no vale, se genera uno', async () => {
-    const { app } = await createTestApp();
+    const { app } = await createTestApp(CORE_ONLY);
     const sin = await app.inject({ method: 'GET', url: '/no-existe', headers: web() });
     const malo = await app.inject({
       method: 'GET',
@@ -482,5 +501,56 @@ describe('X-Request-Id (arquitectura §5.15)', () => {
     expect(sin.headers['x-request-id']).toMatch(/^[0-9a-f-]{36}$/);
     expect(malo.headers['x-request-id']).toMatch(/^[0-9a-f-]{36}$/);
     expect(malo.json().error.requestId).toBe(malo.headers['x-request-id']);
+  });
+});
+
+describe('con los módulos reales (paso 1.3: ya no queda ningún esqueleto)', () => {
+  it('las rutas que antes daban 501 las atiende su módulo con la forma de la 0.6.59', async () => {
+    const { app } = await createTestApp();
+    const state = await app.inject({ method: 'GET', url: '/api/state', headers: web() });
+    expect(state.statusCode).toBe(200);
+    expect(state.json()).toMatchObject({ favorites: [], history: [] });
+    const scan = await app.inject({
+      method: 'GET',
+      url: `/api/football/scan?id=${'0'.repeat(24)}`,
+      headers: web(),
+    });
+    expect([scan.statusCode, scan.json()]).toEqual([404, { error: 'scan_not_found' }]);
+    for (const method of ['GET', 'HEAD'] as const) {
+      const remux = await app.inject({ method, url: `/remux/${HASH}/index.m3u8`, headers: web() });
+      /* Sin sesión de remux: 404 sin cuerpo, como la 0.6.59 (T-035). */
+      expect([remux.statusCode, remux.body]).toEqual([404, '']);
+    }
+  });
+
+  it('T-033 con los módulos reales: el anti-CSRF no se aplica a la app iOS y la ruta llega al motor', async () => {
+    /* El reinicio de verdad va a engine_control por red: el motor, falso. */
+    const restartManual = vi.fn(async () => ({ restarted: true as const }));
+    const engine = { restartManual } as unknown as EngineService;
+    const { app } = await createTestApp({ services: { auth: fakeAuth(), engine } });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/native/api/v1/engine/restart',
+      headers: native(TOKEN, { 'sec-fetch-site': 'cross-site', origin: 'https://malo.example' }),
+    });
+    expect([res.statusCode, res.json()]).toEqual([200, { restarted: true }]);
+    expect(restartManual).toHaveBeenCalledTimes(1);
+  });
+
+  it('X-Request-Id también en las respuestas y errores de los módulos', async () => {
+    const { app } = await createTestApp();
+    const ok = await app.inject({
+      method: 'GET',
+      url: '/api/v1/ping',
+      headers: web({ 'x-request-id': 'req-real-1' }),
+    });
+    expect([ok.statusCode, ok.headers['x-request-id']]).toEqual([200, 'req-real-1']);
+    const bad = await app.inject({
+      method: 'GET',
+      url: `/api/v1/football/scans/${'0'.repeat(24)}`,
+      headers: web({ 'x-request-id': 'req-real-2' }),
+    });
+    expect(bad.statusCode).toBe(404);
+    expect(bad.json().error).toMatchObject({ code: 'scan_not_found', requestId: 'req-real-2' });
   });
 });

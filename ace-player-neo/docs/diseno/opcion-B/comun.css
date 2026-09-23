@@ -1,0 +1,362 @@
+/* ==========================================================================
+   Ace Player Neo v2 · Opción B «Rótulo» · componentes comunes
+   El rótulo (scorebug) es el componente madre: dos barras apiladas cuya punta
+   derecha forma el triángulo de reproducir. Es el mismo dibujo que el icono.
+   ========================================================================== */
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  min-block-size: 100dvh;
+  background: var(--fondo);
+  color: var(--tinta);
+  font-family: var(--f-sans);
+  font-size: var(--t-16);
+  font-stretch: var(--w-normal);
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  font-kerning: normal;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, p, ol, ul, figure { margin: 0; }
+ol, ul { padding: 0; list-style: none; }
+a { color: inherit; text-decoration: none; }
+button, input { font: inherit; color: inherit; }
+button { background: none; border: 0; padding: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+svg { display: block; }
+
+:focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; }
+
+.vh {
+  position: absolute !important;
+  inline-size: 1px; block-size: 1px;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+
+.saltar {
+  position: absolute; inset-inline-start: 8px; inset-block-start: -60px; z-index: 100;
+  background: var(--inv-fondo); color: var(--inv-tinta);
+  padding: 12px 16px; font-weight: 700; border-radius: var(--r-1);
+}
+.saltar:focus { inset-block-start: 8px; }
+
+/* ---- Iconos: trazo recto, esquinas en inglete ---- */
+.ic {
+  inline-size: 20px; block-size: 20px; flex: none;
+  fill: none; stroke: currentColor; stroke-width: 1.75;
+  stroke-linecap: square; stroke-linejoin: miter;
+}
+.ic-lleno { fill: currentColor; stroke: none; }
+
+/* ---- Números: la tipografía de primera ---- */
+.num {
+  font-stretch: var(--w-comprimida);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums lining-nums;
+  line-height: 1;
+}
+
+/* ---- Chapa: la camiseta del club con cuello de pico. Nunca un escudo oficial ---- */
+.chapa {
+  --cuello: polygon(0 0, 33% 0, 50% 22%, 67% 0, 100% 0, 100% 100%, 0 100%);
+  position: relative; display: inline-block; flex: none;
+  inline-size: 16px; block-size: 20px;
+  background: var(--linea-fuerte);
+  clip-path: var(--cuello);
+}
+.chapa::before {
+  content: ""; position: absolute; inset: 1px;
+  background: var(--kit, var(--tinta-3));
+  clip-path: var(--cuello);
+}
+.chapa.g { inline-size: 28px; block-size: 34px; }
+.chapa.xg { inline-size: 40px; block-size: 48px; }
+
+/* ---- El rótulo (scorebug) ---- */
+.bug { display: grid; row-gap: 2px; min-inline-size: 0; }
+.bug-eq {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 10px;
+  min-block-size: 30px;
+  padding-inline: 8px calc(var(--punta) + 8px);
+  background: var(--superficie);
+}
+.bug-eq:first-child { clip-path: polygon(0 0, calc(100% - var(--punta)) 0, 100% 100%, 0 100%); }
+.bug-eq:last-child { clip-path: polygon(0 0, 100% 0, calc(100% - var(--punta)) 100%, 0 100%); }
+.eq-nombre {
+  font-size: var(--t-16); font-weight: 600; line-height: 1.1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.eq-sigla { font-size: var(--t-14); font-weight: 700; font-stretch: var(--w-normal); letter-spacing: 0.02em; }
+.gol { font-size: var(--t-24); min-inline-size: 0.6em; text-align: end; }
+.gol.va-ganando { box-shadow: inset 0 -3px 0 var(--tinta); }
+
+/* Carga: el rótulo entra con un barrido de izquierda a derecha, una sola vez */
+@keyframes barrido { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+.entra { animation: barrido var(--m-barrido) var(--curva-corte) backwards; animation-delay: calc(var(--i, 0) * 28ms); }
+
+/* ---- Barra del minuto: se llena con el partido. Ni pulso ni bucle ---- */
+.minbar { position: relative; block-size: 3px; background: var(--linea); overflow: visible; }
+.minbar > i {
+  position: absolute; inset: 0; background: var(--tinta);
+  transform-origin: left center; transform: scaleX(var(--p, 0));
+}
+.minbar > b { /* marcas: descanso y goles */
+  position: absolute; inset-block: -3px; inline-size: 2px;
+  inset-inline-start: calc(var(--en) * 100%); background: var(--tinta-2);
+}
+.minbar > b.gol-marca { inset-block: -5px; inline-size: 3px; background: var(--tinta); }
+
+/* ---- Directo: inversión + piloto cuadrado que late (tally de realización) ---- */
+.tally { display: inline-block; inline-size: 8px; block-size: 8px; background: currentColor; flex: none; animation: tally 1.6s ease-in-out infinite; }
+.tally.fijo { animation: none; }
+@keyframes tally { 0%, 50% { opacity: 1; } 72% { opacity: 0.18; } 100% { opacity: 1; } }
+
+.directo-tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--inv-fondo); color: var(--inv-tinta);
+  font-size: var(--t-12); font-weight: 700; font-stretch: var(--w-ancha);
+  padding: 4px 8px; border-radius: var(--r-1); line-height: 1.1; white-space: nowrap;
+}
+
+/* ---- Señal: medidor LED de 3 segmentos + palabra + color. Lenguaje fijo ---- */
+.senal {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: var(--t-12); font-weight: 600; color: var(--tinta-2);
+  white-space: nowrap; line-height: 1.2;
+}
+.led { display: inline-grid; grid-auto-flow: column; gap: 2px; flex: none; }
+.led i { display: block; inline-size: 6px; block-size: 13px; border: 1.5px solid var(--tinta-3); border-radius: 1px; }
+.senal[data-e="ok"] { color: var(--ok-texto); }
+.senal[data-e="ok"] .led i { background: var(--ok); border-color: var(--ok); }
+.senal[data-e="floja"] { color: var(--floja-texto); }
+.senal[data-e="floja"] .led i:nth-child(-n + 2) { background: var(--floja); border-color: var(--floja); }
+.senal[data-e="fallo"] { color: var(--fallo-texto); }
+.senal[data-e="fallo"] .led i:first-child { background: var(--fallo); border-color: var(--fallo); }
+.senal[data-e="comprobando"] { color: var(--tinta-2); }
+.senal[data-e="comprobando"] .led i { border-color: var(--comprobando); animation: escaneo 1.2s linear infinite; }
+.senal[data-e="comprobando"] .led i:nth-child(2) { animation-delay: 0.2s; }
+.senal[data-e="comprobando"] .led i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes escaneo { 0%, 45%, 100% { background: transparent; } 12%, 30% { background: var(--comprobando); } }
+.senal-sub { font-weight: 500; color: var(--tinta-2); }
+
+/* ---- Pestañas subrayadas (no cápsulas) ---- */
+.pestanas { display: flex; gap: 4px; border-block-end: 1px solid var(--linea); }
+.pestana {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-block-size: var(--toque); padding-inline: 12px;
+  font-size: var(--t-14); font-weight: 600; color: var(--tinta-2);
+  box-shadow: inset 0 -3px 0 transparent;
+  transition: box-shadow var(--m-rapido) var(--curva-corte), color var(--m-rapido);
+}
+.pestana[aria-selected="true"] { color: var(--tinta); box-shadow: inset 0 -3px 0 var(--tinta); }
+.cuenta { font-size: var(--t-12); font-weight: 700; font-stretch: var(--w-comprimida); font-variant-numeric: tabular-nums; color: var(--tinta-2); }
+
+/* ---- Conmutador «Para ti / Todos»: lo elegido va invertido ---- */
+.conmutador { display: inline-grid; grid-auto-flow: column; border: 1px solid var(--linea-fuerte); border-radius: var(--r-1); padding: 0; gap: 0; }
+.conmutador button {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-block-size: var(--toque); padding-inline: 14px; border-radius: 1px;
+  font-size: var(--t-14); font-weight: 600; color: var(--tinta-2);
+  transition: background var(--m-rapido), color var(--m-rapido);
+}
+.conmutador button[aria-pressed="true"] { background: var(--inv-fondo); color: var(--inv-tinta); }
+.conmutador button[aria-pressed="true"] .cuenta { color: var(--inv-tinta-2); }
+
+/* ---- Botones ---- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-block-size: var(--toque); padding-inline: 16px;
+  border: 1px solid var(--linea-fuerte); border-radius: var(--r-1);
+  font-size: var(--t-14); font-weight: 650; line-height: 1.1; white-space: nowrap;
+  transition: background var(--m-rapido), transform var(--m-rapido) var(--curva-corte);
+}
+.btn:hover { background: var(--superficie-2); }
+.btn:active { transform: translateY(1px); }
+.btn-inv { background: var(--inv-fondo); color: var(--inv-tinta); border-color: var(--inv-fondo); }
+.btn-inv:hover { background: var(--inv-fondo); opacity: 0.9; }
+.btn-ico {
+  display: inline-grid; place-items: center; flex: none;
+  inline-size: var(--toque); block-size: var(--toque); border-radius: var(--r-1);
+  color: var(--tinta-2); transition: background var(--m-rapido), color var(--m-rapido);
+}
+.btn-ico:hover { background: var(--superficie-2); color: var(--tinta); }
+.btn-ico[aria-pressed="true"] { color: var(--tinta); }
+.btn-ico[aria-pressed="true"] .ic { fill: currentColor; }
+
+/* ---- Rótulos de canal ---- */
+.canales { display: flex; flex-wrap: wrap; gap: 4px; min-inline-size: 0; }
+.canal {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: var(--t-12); font-weight: 600; line-height: 1.1; color: var(--tinta);
+  padding: 4px 7px; border: 1px solid var(--linea-fuerte); border-radius: var(--r-1); white-space: nowrap;
+}
+.canal.se-buscara { border-style: dashed; color: var(--tinta-2); }
+.canal .ic { inline-size: 12px; block-size: 12px; stroke-width: 2; }
+
+/* ---- Motor: discreto. Solo se hace notar si se cae ---- */
+.motor { display: inline-flex; align-items: center; gap: 7px; font-size: var(--t-12); font-weight: 600; color: var(--tinta-2); white-space: nowrap; }
+.motor::before { content: ""; inline-size: 7px; block-size: 7px; background: var(--tinta-2); flex: none; }
+.motor[data-e="fallo"] { color: var(--fallo-texto); }
+.motor[data-e="fallo"]::before { background: var(--fallo); }
+
+/* ---- Mini rótulo con siglas (tira de directo, mini-reproductor, superposición) ---- */
+.mbug { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.mbug .eq-sigla { font-size: var(--t-14); }
+.mbug .marcador {
+  display: inline-flex; gap: 2px; align-items: stretch;
+}
+.mbug .marcador .num {
+  display: inline-grid; place-items: center; min-inline-size: 20px; block-size: 26px; padding-inline: 3px;
+  font-size: var(--t-21); background: var(--superficie-2);
+}
+.mbug .min { font-size: var(--t-18); color: var(--tinta-2); font-weight: 800; }
+
+/* ---- Tira de directo (escritorio): los marcadores vivos, se desplaza a mano ---- */
+.tira {
+  display: none;
+  position: sticky; inset-block-start: 0; z-index: 30;
+  block-size: 48px; align-items: center; gap: 0;
+  background: var(--superficie); border-block-end: 1px solid var(--linea);
+}
+.tira-directo {
+  align-self: stretch; display: inline-flex; align-items: center; gap: 8px;
+  padding-inline: 16px; background: var(--inv-fondo); color: var(--inv-tinta);
+  font-size: var(--t-14); font-weight: 750; font-stretch: var(--w-ancha); white-space: nowrap;
+}
+.tira-lista { display: flex; align-items: stretch; flex: 1; min-inline-size: 0; overflow-x: auto; scrollbar-width: none; align-self: stretch; }
+.tira-lista::-webkit-scrollbar { display: none; }
+.tira-lista > li { display: flex; align-items: center; border-inline-end: 1px solid var(--linea); }
+.tira-lista a { display: flex; align-items: center; gap: 8px; padding-inline: 16px; min-block-size: 47px; }
+.tira-lista a:hover { background: var(--superficie-2); }
+.tira-grupo { padding-inline: 16px 4px; font-size: var(--t-12); font-weight: 700; color: var(--tinta-2); border-inline-end: 0 !important; white-space: nowrap; }
+.tira-hora { font-size: var(--t-18); }
+.tira-der { display: flex; align-items: center; gap: 16px; padding-inline: 16px; border-inline-start: 1px solid var(--linea); align-self: stretch; }
+.reloj { font-size: var(--t-24); letter-spacing: 0.01em; }
+
+/* ---- Navegación: carril lateral (escritorio) y barra inferior (móvil) ---- */
+.carril { display: none; }
+.barra-nav {
+  position: fixed; inset-inline: 0; inset-block-end: 0; z-index: 40;
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  padding-block-end: env(safe-area-inset-bottom, 0px);
+  background: color-mix(in oklch, var(--superficie) 96%, transparent);
+  border-block-start: 1px solid var(--linea);
+}
+.barra-nav a {
+  display: grid; justify-items: center; align-content: center; gap: 3px;
+  min-block-size: 58px; font-size: var(--t-11); font-weight: 650; color: var(--tinta-2);
+  box-shadow: inset 0 3px 0 transparent;
+}
+.barra-nav a[aria-current="page"] { color: var(--tinta); box-shadow: inset 0 3px 0 var(--tinta); }
+.barra-nav .ic { inline-size: 22px; block-size: 22px; }
+
+@media (min-width: 1024px) {
+  .barra-nav { display: none; }
+  .tira { display: flex; }
+  .carril {
+    display: flex; flex-direction: column; align-items: stretch;
+    position: sticky; inset-block-start: 48px; block-size: calc(100dvh - 48px);
+    background: var(--superficie); border-inline-end: 1px solid var(--linea);
+    padding-block: 12px;
+  }
+  .carril a, .carril button {
+    display: grid; justify-items: center; align-content: center; gap: 4px;
+    min-block-size: 64px; font-size: var(--t-11); font-weight: 650; color: var(--tinta-2);
+    box-shadow: inset 3px 0 0 transparent;
+  }
+  .carril a:hover, .carril button:hover { color: var(--tinta); background: var(--superficie-2); }
+  .carril a[aria-current="page"] { color: var(--tinta); box-shadow: inset 3px 0 0 var(--tinta); }
+  .carril .ic { inline-size: 22px; block-size: 22px; }
+  .carril-pie { margin-block-start: auto; display: grid; }
+  .carril-marca { display: grid; place-items: center; min-block-size: 56px; margin-block-end: 8px; }
+}
+
+/* ---- Mini-reproductor «Sonando»: una tira de rótulo ---- */
+.sonando {
+  position: fixed; z-index: 35;
+  inset-inline: 8px; inset-block-end: calc(58px + env(safe-area-inset-bottom, 0px) + 8px);
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center;
+  background: var(--superficie); border-radius: var(--r-2);
+  box-shadow: var(--sombra-flotante);
+  overflow: hidden;
+}
+.sonando .minbar { position: absolute; inset-inline: 0; inset-block-start: 0; }
+.sonando-cuerpo { display: grid; gap: 4px; padding: 10px 4px 8px 12px; min-inline-size: 0; }
+.sonando-que { display: flex; align-items: center; gap: 8px; font-size: var(--t-12); font-weight: 600; color: var(--tinta-2); min-inline-size: 0; }
+.sonando-que span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sonando .btn-ico { color: var(--tinta); }
+.sonando .btn-play {
+  inline-size: 52px; block-size: 56px; border-radius: 0;
+  background: var(--inv-fondo); color: var(--inv-tinta);
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%);
+  margin-inline-end: 4px;
+}
+.sonando .btn-play:hover { background: var(--inv-fondo); color: var(--inv-tinta); }
+
+/* ---- Movimiento reducido: fundidos cortos, nada late ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 120ms !important;
+    scroll-behavior: auto !important;
+  }
+  .tally { animation: none !important; }
+  .senal[data-e="comprobando"] .led i { animation: none !important; border-style: dashed; }
+}
+
+/* ---- Transparencia reducida: placas opacas sobre el vídeo ---- */
+@media (prefers-reduced-transparency: reduce) {
+  :root { --placa: var(--placa-opaca); }
+  .placa { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+}
+:root[data-transparencia="reducida"] { --placa: var(--placa-opaca); }
+:root[data-transparencia="reducida"] .placa { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root { --placa: var(--placa-opaca); }
+}
+
+/* ---- Paleta giratoria (split-flap): una cifra que cambia gira una vez ---- */
+.gira { display: inline-block; animation: paleta 320ms var(--curva-corte) both; transform-origin: 50% 0; }
+@keyframes paleta {
+  0% { transform: perspective(200px) rotateX(-88deg); opacity: 0.2; }
+  60% { transform: perspective(200px) rotateX(8deg); opacity: 1; }
+  100% { transform: none; }
+}
+.gira-subrayado { box-shadow: inset 0 -3px 0 var(--k1, var(--tinta)); transition: box-shadow 1s steps(1, end); }
+
+/* ---- Rack de fuentes: tabla densa y alineada, como una mesa de realización ---- */
+.rack { --rack-cols: 28px minmax(0, 1fr) 132px; display: grid; }
+.rack-cab {
+  display: grid; grid-template-columns: var(--rack-cols); align-items: end; column-gap: 8px;
+  padding: 0 12px 6px; font-size: var(--t-11); font-weight: 650; color: var(--tinta-2);
+}
+.rack-fila {
+  display: grid; grid-template-columns: var(--rack-cols); align-items: center; column-gap: 8px;
+  inline-size: 100%; min-block-size: var(--toque); padding: 0 12px; text-align: start;
+  border-block-start: 1px solid var(--linea);
+  transition: background var(--m-rapido);
+}
+.rack > li:last-child .rack-fila { border-block-end: 1px solid var(--linea); }
+.rack-fila:hover { background: var(--superficie-2); }
+.rack-fila[aria-pressed="true"] { background: var(--superficie-2); box-shadow: inset 4px 0 0 var(--tinta); }
+.rack-n { font-size: var(--t-18); color: var(--tinta-2); }
+.rack-fila[aria-pressed="true"] .rack-n { color: var(--tinta); }
+.rack-prov { display: flex; align-items: center; gap: 8px; min-inline-size: 0; font-size: var(--t-14); font-weight: 650; }
+.rack-prov > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rack-dato { font-size: var(--t-16); text-align: end; color: var(--tinta-2); font-weight: 700; }
+.en-antena {
+  display: inline-flex; align-items: center; gap: 5px; flex: none;
+  font-size: var(--t-11); font-weight: 700; font-stretch: var(--w-ancha);
+  padding: 3px 6px; background: var(--inv-fondo); color: var(--inv-tinta); border-radius: var(--r-1);
+}
+.en-antena .tally { inline-size: 6px; block-size: 6px; }

@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Partido · Grada</title>
+<meta name="description" content="Ace Player Neo v2, opción C «Grada»: centro de partido con reproductor y fuentes.">
+<meta name="theme-color" content="#faf1f1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#211a1a" media="(prefers-color-scheme: dark)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anybody:wdth,wght@50..150,100..900&family=Onest:wght@400..800&family=Spline+Sans+Mono:wght@400..600&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="icon" href="icono.svg">
+<style>
+  .pt { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 24px); }
+  .col-agenda, .cab-esc, .escenario > .tifo, .bento { display: none; }
+  .centro { min-width: 0; display: contents; }
+  .escenario { display: contents; }
+
+  /* ---------- Vídeo simulado ---------- */
+  .video {
+    position: sticky; top: 0; z-index: 20;
+    aspect-ratio: 16 / 9; width: 100%;
+    background: #1e3d22; overflow: hidden; isolation: isolate;
+    color: #fff;
+  }
+  .cesped { position: absolute; inset: 0; overflow: hidden; }
+  .cesped::before {             /* franjas de corte del césped en perspectiva */
+    content: ""; position: absolute; left: -40%; right: -40%; top: 26%; bottom: -60%;
+    background: repeating-linear-gradient(90deg, #2f7a36 0 7%, #286c2f 7% 14%);
+    transform: perspective(300px) rotateX(48deg); transform-origin: 50% 0;
+  }
+  .cesped::after {              /* líneas del campo */
+    content: ""; position: absolute; left: 50%; top: 44%; width: 34%; aspect-ratio: 2.6; transform: translateX(-50%);
+    border: 2px solid oklch(1 0 0 / .55); border-radius: 50%;
+    box-shadow: 0 0 0 999px transparent;
+  }
+  .grada-video {                /* la grada del fondo, con su tifo de cartulinas */
+    position: absolute; left: 0; right: 0; top: 0; height: 30%;
+    background:
+      radial-gradient(circle, oklch(0.45 0.16 258) 0 1.5px, transparent 2px) 0 0 / 6px 6px,
+      radial-gradient(circle, oklch(0.42 0.17 8) 0 1.5px, transparent 2px) 3px 3px / 6px 6px,
+      #231c20;
+    filter: blur(0.6px) saturate(1.1);
+  }
+  .grada-video::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 18%; background: #e9e4dc; opacity: .8; }
+  .linea-medio { position: absolute; left: 50%; top: 30%; bottom: 0; width: 2px; background: oklch(1 0 0 / .5); transform: translateX(-50%) perspective(300px) rotateX(48deg); transform-origin: 50% 0; }
+  .jug { position: absolute; width: 1.4%; aspect-ratio: .45; border-radius: 3px 3px 1px 1px; box-shadow: 2px 3px 0 oklch(0 0 0 / .25); }
+  .jug.a { background: linear-gradient(90deg, oklch(0.45 0.16 258) 50%, oklch(0.42 0.17 8) 50%); }
+  .jug.b { background: oklch(0.91 0.17 100); }
+  .balon { position: absolute; width: .8%; aspect-ratio: 1; border-radius: 50%; background: #fff; }
+  .scrim { position: absolute; inset: 0; background: linear-gradient(180deg, oklch(0 0 0 / .35), transparent 30%, transparent 62%, oklch(0 0 0 / .45)); }
+
+  /* Controles sobre el vídeo: cápsulas de vidrio */
+  .ctl { position: absolute; z-index: 3; display: flex; align-items: center; gap: 2px; }
+  .ctl .icon-btn { color: #fff; }
+  .ctl .icon-btn:hover { background: oklch(1 0 0 / .14); }
+  .ctl-top-l { top: 10px; left: 10px; }
+  .ctl-top-r { top: 10px; right: 10px; }
+  .ctl-b-l { left: 10px; bottom: 10px; border-radius: 999px; padding: 2px 10px 2px 2px; }
+  .ctl-b-r { right: 10px; bottom: 10px; border-radius: 999px; padding: 2px; }
+  .burbuja { border-radius: 50%; }
+  .centro-ctl { position: absolute; z-index: 3; left: 50%; top: 50%; transform: translate(-50%, -52%); display: flex; align-items: center; gap: 18px; }
+  .play-grande { width: 68px; height: 68px; display: grid; place-items: center; background: oklch(1 0 0 / .94); color: oklch(0.22 0.014 15); transition: transform var(--d-fast) var(--spring-fast); }
+  .play-grande:active { transform: scale(.9) rotate(-12deg); }
+  .play-grande .ico { width: 30px; height: 30px; }
+  .atras { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; font-family: var(--f-display); font-stretch: 70%; font-weight: 800; font-size: var(--t-14); }
+  .titulo-video { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px 0 12px; border-radius: 999px; font-size: var(--t-12); font-weight: 650; }
+  .directo { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 0 14px; border-radius: 999px; font-family: var(--f-display); font-stretch: 115%; font-weight: 800; font-size: var(--t-14); color: #fff; }
+  .directo .pulso { background: oklch(0.70 0.23 350); }
+  .directo .pulso::after { background: oklch(0.70 0.23 350); }
+  .vol { -webkit-appearance: none; appearance: none; width: 64px; height: 44px; background: transparent; margin: 0; }
+  .vol::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(90deg, #fff 0 70%, oklch(1 0 0 / .3) 70%); }
+  .vol::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px oklch(0 0 0 / .4); }
+  .vol::-moz-range-track { height: 4px; border-radius: 2px; background: oklch(1 0 0 / .3); }
+  .vol::-moz-range-progress { height: 4px; border-radius: 2px; background: #fff; }
+  .vol::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: #fff; }
+  .solo-esc { display: none !important; }
+
+  /* Línea de estado bajo el vídeo */
+  .linea-estado { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 8px var(--gutter); font-size: var(--t-14); color: var(--ink-2); background: var(--bg); border-bottom: 1px solid var(--line); }
+  .linea-estado .sig { flex: none; }
+  .linea-estado span.txt { min-width: 0; line-height: 1.35; }
+  .linea-estado b { color: var(--ink); font-weight: 650; }
+
+  /* ---------- Cabecera del partido (móvil) ---------- */
+  .cab-movil { margin: 14px var(--gutter) 0; border-radius: var(--r-card); overflow: hidden; background: var(--surface); box-shadow: 0 0 0 1px var(--line); }
+  .cm-escena { position: relative; height: 128px; }
+  .cm-mid { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; justify-items: center; }
+  .cm-mid .chapa { --s: 60px; box-shadow: 0 0 0 3px var(--surface), 0 10px 20px -8px oklch(0 0 0 / .5); }
+  .marcador-btn { display: grid; justify-items: center; gap: 4px; min-width: 112px; padding: 10px 14px 9px; border-radius: 22px; background: var(--surface); color: var(--ink); box-shadow: 0 12px 28px -12px oklch(0 0 0 / .55); }
+  .marcador-btn .goles { display: flex; align-items: center; gap: 7px; }
+  .marcador-btn .goles .num { font-size: var(--t-48); }
+  .marcador-btn .guion { width: 12px; height: 5px; border-radius: 3px; background: var(--ink-3); }
+  .marcador-btn .min { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-18); }
+  .tapar { flex: none; margin: -8px 0; background: var(--surface-2); }
+  .cm-info { padding: 12px 16px 14px; display: grid; gap: 10px; }
+  .nombres { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-family: var(--f-display); font-stretch: 108%; font-weight: 800; font-size: var(--t-18); line-height: 1.1; }
+  .nombres span:last-child { text-align: right; }
+  .progreso { position: relative; height: 22px; }
+  .progreso .riel { position: absolute; left: 0; right: 0; top: 9px; height: 4px; border-radius: 2px; background: var(--surface-2); }
+  .progreso .hecho { position: absolute; left: 0; top: 9px; height: 4px; width: var(--p); border-radius: 2px; background: var(--accent); }
+  .progreso .ahora { position: absolute; top: 5px; left: var(--p); width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--surface); }
+  .progreso .gol { position: absolute; top: 3px; left: var(--m); margin-left: -8px; }
+  .progreso .gol .chapa { --s: 16px; box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px var(--dim-edge); }
+  .progreso .desc { position: absolute; left: 50%; top: 5px; width: 2px; height: 12px; background: var(--line-strong); border-radius: 1px; }
+  .goleadores { display: flex; justify-content: space-between; gap: 12px; font-size: var(--t-12); color: var(--ink-2); line-height: 1.35; }
+  .goleadores span:last-child { text-align: right; }
+  .escala { display: flex; justify-content: space-between; font-size: var(--t-11); color: var(--ink-3); font-variant-numeric: tabular-nums; margin-top: -6px; }
+
+  /* ---------- Panel: fuentes, acciones y datos técnicos ---------- */
+  .panel { padding: 22px 0 0; }
+  .panel-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 0 var(--gutter); }
+  .panel-h h2 { font-family: var(--f-display); font-stretch: 128%; font-weight: 800; font-size: var(--t-21); }
+  .panel-h .cuenta { font-size: var(--t-12); color: var(--ink-2); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .comprobador { margin: 10px var(--gutter) 0; height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+  .comprobador i { display: block; height: 100%; width: 82%; border-radius: 2px; background: var(--ink-2); }
+  .fuentes { display: flex; gap: 10px; overflow-x: auto; padding: 14px var(--gutter) 6px; scroll-snap-type: x proximity; scroll-padding-inline: var(--gutter); scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent); mask-image: linear-gradient(90deg, #000 88%, transparent); }
+  .fuentes::-webkit-scrollbar { display: none; }
+  .fuente {
+    scroll-snap-align: start; flex: none;
+    position: relative; display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto auto; column-gap: 10px; row-gap: 4px; align-items: center;
+    min-width: 168px; min-height: 76px; padding: 12px 14px 12px 12px; text-align: left;
+    border-radius: 22px; background: var(--surface); box-shadow: 0 0 0 1px var(--line);
+    transition: border-radius var(--d-std) var(--spring-std), transform var(--d-fast) var(--spring-fast);
+  }
+  .fuente:active { transform: scale(.97); }
+  .fuente .nro { grid-row: 1 / 3; font-size: 2.25rem; width: 24px; text-align: center; color: var(--ink); }
+  .fuente .prov { font-weight: 700; font-size: var(--t-16); line-height: 1.2; }
+  .fuente .sig { grid-column: 2 / 4; font-size: var(--t-12); }
+  .fuente .bars { justify-self: end; }
+  .fuente[data-s="ok"] .bars { color: var(--ok); }
+  .fuente[data-s="weak"] .bars { color: var(--weak); }
+  .fuente[aria-pressed="true"] { border-radius: var(--r-sel); background: var(--accent-soft); box-shadow: 0 0 0 2.5px var(--accent); }
+  .fuente .sonando { position: absolute; top: -9px; right: 12px; height: 20px; padding: 0 8px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-size: var(--t-11); font-weight: 750; display: inline-flex; align-items: center; }
+  .fuente[data-s="fail"] .prov, .fuente[data-s="pend"] .prov { color: var(--ink-2); }
+
+  .acciones { display: flex; gap: 4px; margin: 10px var(--gutter) 0; padding: 4px; border-radius: 999px; background: var(--surface-2); overflow-x: auto; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
+  .acciones::-webkit-scrollbar { display: none; }
+  .acciones button { flex: none; display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 0 14px 0 12px; border-radius: 999px; font-size: var(--t-14); font-weight: 600; white-space: nowrap; color: var(--ink); }
+  .acciones button:hover { background: var(--surface); }
+  .acciones .ico { width: 20px; height: 20px; }
+
+  .nerd { margin: 16px var(--gutter) 0; border-radius: 24px; background: var(--surface); box-shadow: 0 0 0 1px var(--line); overflow: hidden; }
+  .nerd-h { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px 12px 8px 16px; text-align: left; }
+  .nerd-h .t { display: grid; flex: 1; min-width: 0; }
+  .nerd-h b { font-weight: 700; font-size: var(--t-16); }
+  .nerd-h small { font-size: var(--t-12); color: var(--ink-2); }
+  .nerd-h .spark { width: 72px; height: 28px; color: var(--ink-2); }
+  .tecla { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 7px; box-shadow: inset 0 0 0 1.5px var(--line-strong); font-family: var(--f-mono); font-size: var(--t-12); font-weight: 600; color: var(--ink-2); }
+  .nerd-body { display: none; padding: 4px 16px 16px; font-family: var(--f-mono); font-size: var(--t-12); line-height: 1.5; }
+  .nerd[open-panel] .nerd-body { display: block; }
+  .nerd dl { display: grid; grid-template-columns: auto 1fr; column-gap: 16px; row-gap: 6px; margin: 0; }
+  .nerd dt { color: var(--ink-2); }
+  .nerd dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; min-width: 0; overflow-wrap: anywhere; }
+  .nerd .grafico { margin: 12px 0 4px; padding: 10px 12px; border-radius: 14px; background: var(--surface-2); }
+  .nerd .grafico svg { width: 100%; height: 44px; color: var(--ok); }
+  .nerd .grafico p { display: flex; justify-content: space-between; color: var(--ink-2); font-size: var(--t-11); }
+
+  /* ---------- Escritorio: agenda + escenario + panel, a la vez ---------- */
+  @media (min-width: 1024px) {
+    .pt { padding: 0 0 0 88px; display: grid; grid-template-columns: 320px minmax(0, 1fr) 352px; height: 100dvh; overflow: hidden; }
+    .col-agenda, .centro, .panel { height: 100dvh; overflow-y: auto; scrollbar-width: thin; }
+    .col-agenda { display: block; border-right: 1px solid var(--line); padding: 22px 16px 24px; background: var(--bg); }
+    .centro { display: block; padding: 20px 24px 24px; }
+    .panel { border-left: 1px solid var(--line); padding: 22px 0 24px; background: var(--bg-deep); }
+    .solo-esc { display: inline-grid !important; }
+    .titulo-video.solo-esc { display: inline-flex !important; }
+    .solo-mov, .cab-movil { display: none !important; }
+
+    .escenario { display: block; position: relative; border-radius: 30px; padding: 12px; overflow: hidden; isolation: isolate; }
+    .escenario > .tifo { display: block; z-index: -1; }
+    .cab-esc { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 14px; padding: 4px 4px 14px; }
+    .cab-esc .lado { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .cab-esc .lado.der { flex-direction: row-reverse; }
+    .cab-esc .chapa { --s: 56px; box-shadow: 0 0 0 3px var(--surface), 0 10px 20px -8px oklch(0 0 0 / .5); }
+    .cab-esc .eqn { display: inline-flex; align-items: center; min-height: 40px; min-width: 0; padding: 4px 14px; border-radius: 999px; background: var(--surface); font-family: var(--f-display); font-stretch: 100%; font-weight: 800; font-size: var(--t-18); line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cab-esc .marcador-btn { min-width: 132px; }
+    .cab-esc .marcador-btn .goles .num { font-size: 3.5rem; }
+    .video { position: relative; border-radius: 18px; box-shadow: 0 18px 40px -18px oklch(0 0 0 / .7); }
+    .linea-estado { margin-top: 12px; border-radius: 16px; border: 0; background: var(--surface); box-shadow: 0 0 0 1px var(--line); padding: 8px 12px 8px 14px; }
+    .play-grande { width: 76px; height: 76px; }
+
+    .bento { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 12px; margin-top: 12px; }
+    .tesela { border-radius: 24px; background: var(--surface); box-shadow: 0 0 0 1px var(--line); padding: 16px 18px; min-width: 0; }
+    .tesela h3 { font-family: var(--f-display); font-stretch: 118%; font-weight: 800; font-size: var(--t-16); margin-bottom: 12px; }
+    .tesela .progreso { margin-top: 2px; }
+    .emision li { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 30px; font-size: var(--t-14); }
+    .emision li span:first-child { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; min-width: 0; }
+    .emision small { color: var(--ink-2); font-size: var(--t-12); }
+    .emision .ico { width: 18px; height: 18px; color: var(--ink-2); flex: none; }
+    .emision .retraso { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); font-size: var(--t-12); color: var(--ink-2); }
+    .emision .retraso b { font-family: var(--f-display); font-stretch: 60%; font-weight: 900; font-size: var(--t-21); color: var(--ink); font-variant-numeric: tabular-nums; margin-right: 4px; }
+
+    .fuentes { flex-direction: column; overflow: visible; padding: 14px 16px 4px; gap: 8px; }
+    .fuente { min-width: 0; min-height: 60px; grid-template-columns: 28px minmax(0, 1fr) auto auto; grid-template-rows: auto; padding: 8px 14px 8px 12px; border-radius: 18px; }
+    .fuente .nro { grid-row: 1; font-size: 1.75rem; }
+    .fuente .sig { grid-column: 3; grid-row: 1; font-size: var(--t-12); }
+    .fuente .bars { grid-column: 4; grid-row: 1; }
+    .fuente .sonando { top: -8px; right: 14px; }
+    .panel-h, .comprobador { padding: 0 16px; margin-left: 0; margin-right: 0; }
+    .comprobador { margin: 10px 16px 0; padding: 0; }
+    .acciones { margin: 12px 16px 0; gap: 0; justify-content: space-between; overflow: visible; -webkit-mask-image: none; mask-image: none; }
+    .acciones button { padding: 0; width: 44px; justify-content: center; }
+    .acciones button span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .nerd { margin: 14px 16px 0; }
+  }
+
+  /* Agenda compacta (columna izquierda en escritorio) */
+  .ca-h { display: grid; gap: 14px; }
+  .ca-h .seg { display: flex; }
+  .ca-h .seg button { flex: 1; }
+  .ca-h h2 { font-family: var(--f-display); font-stretch: 150%; font-weight: 900; font-size: var(--t-36); line-height: .85; letter-spacing: -0.02em; }
+  .ca-h p { font-size: var(--t-12); color: var(--ink-2); margin-top: 6px; }
+  .ca-grupo { margin-top: 20px; }
+  .ca-grupo h3 { display: flex; align-items: center; gap: 8px; font-family: var(--f-display); font-stretch: 125%; font-weight: 800; font-size: var(--t-16); margin: 0 4px 8px; }
+  .ca-grupo h3 .ico { width: 16px; height: 16px; }
+  .mini { display: grid; grid-template-columns: 44px minmax(0, 1fr); column-gap: 10px; row-gap: 6px; padding: 10px 10px 10px 12px; border-radius: 18px; position: relative; }
+  .mini + .mini { margin-top: 2px; }
+  .mini:hover { background: var(--surface); }
+  .mini .hora { font-size: var(--t-18); padding-top: 2px; }
+  .mini .hora.vivo { color: var(--accent-ink); }
+  .mini .eqs { display: grid; gap: 5px; min-width: 0; }
+  .mini .eq { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--t-14); font-weight: 600; }
+  .mini .eq .nom { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mini .eq .g { font-size: var(--t-18); }
+  .mini .sig { grid-column: 2; font-size: var(--t-12); }
+  .mini.viendo { background: var(--surface); box-shadow: 0 0 0 2.5px var(--accent); border-radius: var(--r-sel); }
+  .mini .viendo-tag { position: absolute; top: 10px; right: 10px; font-size: var(--t-11); font-weight: 750; color: var(--accent-ink); }
+  .mini.done { color: var(--ink-2); }
+
+  /* Gol (demostración: pulsa el marcador) */
+  .inunda { position: absolute; inset: 0; z-index: 0; transform: translateX(-101%); pointer-events: none; }
+  .gol .inunda { animation: inunda 1.4s var(--spring-std) both; }
+  @keyframes inunda { 0% { transform: translateX(-101%); } 30%, 70% { transform: none; } 100% { transform: translateX(-101%); } }
+  .gol .marcador-btn .goles .num:first-child { animation: estampa var(--d-hero) var(--spring-hero) 250ms both; }
+  @keyframes estampa { from { transform: scale(1.35); } }
+</style>
+</head>
+<body>
+<!--SPRITE-->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+  <symbol id="i-agenda" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="4"/><path d="M3.5 10h17M8.5 3v4M15.5 3v4"/><circle cx="12" cy="15.2" r="2.2"/></symbol>
+  <symbol id="i-lib" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="3.5"/><path d="M8 3l4 4 4-4"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7.5h16M4 16.5h16"/><circle cx="9" cy="7.5" r="2.6" fill="var(--pill-bg, var(--bg))"/><circle cx="15" cy="16.5" r="2.6" fill="var(--pill-bg, var(--bg))"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.2v13.6a1 1 0 0 0 1.52.85l10.6-6.8a1 1 0 0 0 0-1.7L9.52 4.35A1 1 0 0 0 8 5.2z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4.5" width="4.2" height="15" rx="1.6"/><rect x="13.8" y="4.5" width="4.2" height="15" rx="1.6"/></symbol>
+  <symbol id="i-vol" viewBox="0 0 24 24"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5H4z"/><path d="M15.5 9.2a4 4 0 0 1 0 5.6M18.2 6.6a7.6 7.6 0 0 1 0 10.8"/></symbol>
+  <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.3-5.4"/><path d="M4.5 4.5v4.2h4.2"/></symbol>
+  <symbol id="i-full" viewBox="0 0 24 24"><path d="M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15"/></symbol>
+  <symbol id="i-pip" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3.5"/><rect x="12" y="11" width="6.5" height="5.5" rx="1.5" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.8" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.6l2.55 5.2 5.7.83-4.13 4.03.98 5.68L12 16.66l-5.1 2.68.98-5.68L3.75 9.63l5.7-.83z"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11.5" height="11.5" rx="3"/><path d="M15.5 8.5V6.5a2.5 2.5 0 0 0-2.5-2.5H6.5A2.5 2.5 0 0 0 4 6.5V13a2.5 2.5 0 0 0 2.5 2.5h2"/></symbol>
+  <symbol id="i-paste" viewBox="0 0 24 24"><rect x="5" y="4.5" width="14" height="16.5" rx="3"/><rect x="9" y="2.8" width="6" height="3.6" rx="1.2"/><path d="M9 12h6M9 16h4"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4.5H15"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5.5 21V4M5.5 4.5h11l-2.2 4 2.2 4h-11"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+  <symbol id="i-tv" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="12" rx="3"/><path d="M9 20.5h6"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2.2-5.5 4.6 11 2.2-5.5h5"/></symbol>
+  <symbol id="i-hash" viewBox="0 0 24 24"><path d="M9.5 4L7.5 20M16.5 4l-2 16M4.5 9h15.5M4 15h15.5"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4 20h4.2L19.5 8.7a2.1 2.1 0 0 0 0-3L18.3 4.5a2.1 2.1 0 0 0-3 0L4 15.8z"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.8h5V7M6.5 7l.9 12.2a1.5 1.5 0 0 0 1.5 1.3h6.2a1.5 1.5 0 0 0 1.5-1.3L17.5 7"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></symbol>
+  <symbol id="i-eyeoff" viewBox="0 0 24 24"><path d="M9.9 5.8A9.6 9.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-2.6 3.4M6.6 7.1C4 8.9 2.5 12 2.5 12S6 18.5 12 18.5a9.3 9.3 0 0 0 4.9-1.4M4 4l16 16"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 4.5v15h16"/><path d="M7.5 15l3.5-4.5 3 2.5 4.5-6"/></symbol>
+  <symbol id="i-open" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8.5 8.5"/><path d="M18 14v3.5A2.5 2.5 0 0 1 15.5 20h-9A2.5 2.5 0 0 1 4 17.5v-9A2.5 2.5 0 0 1 6.5 6H10"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6.5h11M9 12h11M9 17.5h11"/><circle cx="4.8" cy="6.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="4.8" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="4.8" cy="17.5" r="1.3" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-ucl" viewBox="0 0 24 24"><path d="M12 2.8l2.1 4.3 4.6-1.3-1.3 4.6 4.3 2.1-4.3 2.1 1.3 4.6-4.6-1.3L12 21.2l-2.1-4.3-4.6 1.3 1.3-4.6-4.3-2.1 4.3-2.1-1.3-4.6 4.6 1.3z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-liga" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="8" fill="currentColor" stroke="none"/><path d="M4 12h16" stroke="var(--pill-bg, var(--bg))" stroke-width="2.2"/></symbol>
+  <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="3"/><path d="M6.5 10h1M10.5 10h1M14.5 10h1M8 14h8"/></symbol>
+
+</svg>
+<!--/SPRITE-->
+
+<nav class="nav" aria-label="Principal">
+  <span class="marca"><picture><source srcset="icono-oscuro.svg" media="(prefers-color-scheme: dark)"><img src="icono.svg" alt="Ace Player Neo"></picture></span>
+  <a href="agenda.html" aria-current="page"><span class="pill" style="--pill-bg: var(--ink)"><svg class="ico"><use href="#i-agenda"/></svg></span>Agenda</a>
+  <a href="biblioteca.html"><span class="pill"><svg class="ico"><use href="#i-lib"/></svg></span>Biblioteca</a>
+  <a href="#buscar"><span class="pill"><svg class="ico"><use href="#i-search"/></svg></span>Buscar</a>
+  <a href="#ajustes"><span class="pill"><svg class="ico"><use href="#i-settings"/></svg></span>Ajustes</a>
+  <hr>
+  <a class="solo-escritorio" href="#pegar"><span class="pill"><svg class="ico"><use href="#i-paste"/></svg></span>Pegar hash</a>
+  <a class="solo-escritorio" href="#salud"><span class="pill"><svg class="ico"><use href="#i-pulse"/></svg></span>Salud</a>
+  <div class="motor-rail" role="status"><span class="motor" style="min-height:0"><span class="g"></span></span>Motor listo</div>
+</nav>
+
+<div class="pt">
+  <!-- Columna 1 (escritorio): la jornada sigue a la vista -->
+  <aside class="col-agenda" aria-label="Agenda de hoy">
+    <div class="ca-h">
+      <div><h2>Hoy</h2><p>miércoles 23 de septiembre</p></div>
+      <div class="seg" role="group" aria-label="Filtrar partidos"><button type="button" aria-pressed="true">Para ti</button><button type="button" aria-pressed="false">Todos</button></div>
+    </div>
+    <div class="ca-grupo">
+      <h3><svg class="ico"><use href="#i-liga"/></svg>LaLiga</h3>
+      <a class="mini viendo" href="#" aria-current="true">
+        <span class="hora num vivo">83'</span>
+        <span class="eqs">
+          <span class="eq"><span class="chapa s k-bar" data-kit="rayas"></span><span class="nom">FC Barcelona</span><span class="g num">2</span></span>
+          <span class="eq"><span class="chapa s k-vil" data-kit="liso"></span><span class="nom">Villarreal</span><span class="g num">1</span></span>
+        </span>
+        <span class="sig" data-s="ok"><span class="g"></span>Viendo, fuente 1</span>
+      </a>
+      <a class="mini" href="#">
+        <span class="hora num vivo">82'</span>
+        <span class="eqs">
+          <span class="eq"><span class="chapa s k-get" data-kit="liso"></span><span class="nom">Getafe</span><span class="g num">0</span></span>
+          <span class="eq"><span class="chapa s k-osa" data-kit="liso"></span><span class="nom">Osasuna</span><span class="g num">0</span></span>
+        </span>
+        <span class="sig" data-s="weak"><span class="g"></span>Señal floja</span>
+      </a>
+      <a class="mini" href="#">
+        <span class="hora num vivo">84'</span>
+        <span class="eqs">
+          <span class="eq"><span class="chapa s k-cel" data-kit="liso"></span><span class="nom">Celta</span><span class="g num">1</span></span>
+          <span class="eq"><span class="chapa s k-ray" data-kit="franja"></span><span class="nom">Rayo Vallecano</span><span class="g num">1</span></span>
+        </span>
+        <span class="sig" data-s="ok"><span class="g"></span>2 verificadas</span>
+      </a>
+      <a class="mini" href="#">
+        <span class="hora num">21:30</span>
+        <span class="eqs">
+          <span class="eq"><span class="chapa s k-bet" data-kit="rayas"></span><span class="nom">Real Betis</span></span>
+          <span class="eq"><span class="chapa s k-sev" data-kit="liso"></span><span class="nom">Sevilla</span></span>
+        </span>
+        <span class="sig" data-s="fail"><span class="g"></span>Sin señal <small>reintento 20:55</small></span>
+      </a>
+    </div>
+    <div class="ca-grupo">
+      <h3><svg class="ico"><use href="#i-ucl"/></svg>Champions</h3>
+      <a class="mini" href="#">
+        <span class="hora num">21:00</span>
+        <span class="eqs">
+          <span class="eq"><span class="chapa s k-rma" data-kit="liso"></span><span class="nom">Real Madrid</span></span>
+          <span class="eq"><span class="chapa s k-om" data-kit="banda"></span><span class="nom">Olympique de Marsella</span></span>
+        </span>
+        <span class="sig" data-s="ok"><span class="g"></span>2 verificadas</span>
+      </a>
+      <a class="mini" href="#">
+        <span class="hora num">21:00</span>
+        <span class="eqs">
+          <span class="eq"><span class="chapa s k-psv" data-kit="mitad"></span><span class="nom">PSV</span></span>
+          <span class="eq"><span class="chapa s k-ath" data-kit="rayas"></span><span class="nom">Athletic Club</span></span>
+        </span>
+        <span class="sig" data-s="check"><span class="g"></span>Comprobando <small>4 de 9</small></span>
+      </a>
+      <a class="mini done" href="#">
+        <span class="hora num">Final</span>
+        <span class="eqs">
+          <span class="eq"><span class="chapa s k-bru apagada" data-kit="rayas"></span><span class="nom">Club Brujas</span><span class="g num">1</span></span>
+          <span class="eq"><span class="chapa s k-atm apagada" data-kit="rayas"></span><span class="nom">Atlético de Madrid</span><span class="g num">2</span></span>
+        </span>
+      </a>
+    </div>
+  </aside>
+
+  <!-- Columna 2: escenario con marco de tifo -->
+  <main class="centro">
+    <section class="escenario" id="escenario" aria-label="FC Barcelona contra Villarreal">
+      <div class="tifo" aria-hidden="true"><i class="a k-bar" data-kit="rayas"></i><i class="b k-vil"></i><i class="inunda k-bar" style="background: repeating-linear-gradient(90deg, var(--c1) 0 34px, var(--c2) 34px 68px)"></i></div>
+
+      <header class="cab-esc">
+        <span class="lado"><span class="chapa k-bar" data-kit="rayas" aria-hidden="true"><b>FCB</b></span><span class="eqn">FC Barcelona</span></span>
+        <button class="marcador-btn" type="button" aria-label="FC Barcelona 2, Villarreal 1, minuto 83. Pulsa para ver la animación de gol">
+          <span class="goles"><span class="num">2</span><span class="guion"></span><span class="num">1</span></span>
+          <span class="min num minuto"><span class="pulso"></span>83'</span>
+        </button>
+        <span class="lado der"><span class="chapa k-vil" data-kit="liso" aria-hidden="true"><b>VIL</b></span><span class="eqn">Villarreal</span></span>
+      </header>
+
+      <div class="video" role="region" aria-label="Reproductor">
+        <div class="grada-video"></div>
+        <div class="cesped"></div>
+        <div class="linea-medio"></div>
+        <span class="jug a" style="left:31%; top:52%"></span><span class="jug a" style="left:44%; top:61%"></span><span class="jug a" style="left:58%; top:47%"></span><span class="jug a" style="left:52%; top:72%"></span>
+        <span class="jug b" style="left:39%; top:57%"></span><span class="jug b" style="left:63%; top:58%"></span><span class="jug b" style="left:70%; top:49%"></span><span class="jug b" style="left:48%; top:48%"></span>
+        <span class="balon" style="left:50.5%; top:63%"></span>
+        <div class="scrim"></div>
+
+        <div class="ctl ctl-top-l">
+          <button class="icon-btn glass-video burbuja solo-mov" type="button" aria-label="Minimizar el vídeo"><svg class="ico"><use href="#i-down"/></svg></button>
+          <span class="titulo-video glass-video solo-esc"><svg class="ico xs"><use href="#i-tv"/></svg>M+ LaLiga, fuente 1</span>
+        </div>
+        <div class="ctl ctl-top-r">
+          <button class="icon-btn glass-video burbuja solo-mov" type="button" aria-label="Imagen en imagen"><svg class="ico"><use href="#i-pip"/></svg></button>
+          <button class="icon-btn glass-video burbuja" type="button" aria-label="Más opciones"><svg class="ico"><use href="#i-more"/></svg></button>
+        </div>
+        <div class="centro-ctl">
+          <button class="atras glass-video" type="button" aria-label="Retroceder 30 segundos (J)">−30</button>
+          <button class="play-grande corona" type="button" aria-label="Pausar (espacio)" aria-pressed="false" id="playBtn"><svg class="ico fill"><use href="#i-pause"/></svg></button>
+          <span style="width:48px" aria-hidden="true"></span>
+        </div>
+        <div class="ctl ctl-b-l glass-video">
+          <button class="icon-btn" type="button" aria-label="Silenciar"><svg class="ico"><use href="#i-vol"/></svg></button>
+          <input class="vol" type="range" min="0" max="1" step="0.05" value="0.7" aria-label="Volumen">
+        </div>
+        <div class="ctl ctl-b-r glass-video">
+          <button class="directo" type="button" aria-label="Ya en directo"><span class="pulso"></span>Directo</button>
+          <button class="icon-btn solo-esc" type="button" aria-label="Imagen en imagen (P)"><svg class="ico"><use href="#i-pip"/></svg></button>
+          <button class="icon-btn" type="button" aria-label="Pantalla completa (F)"><svg class="ico"><use href="#i-full"/></svg></button>
+        </div>
+      </div>
+    </section>
+
+    <p class="linea-estado" role="status" aria-live="polite">
+      <span class="sig" data-s="ok"><span class="g"></span><span class="sr-only">Verificada.</span></span>
+      <span class="txt"><b>Señal buena en la fuente 1.</b> Estás en directo, 3 s por detrás de la tele.</span>
+    </p>
+
+    <!-- Cabecera del partido (móvil) -->
+    <section class="cab-movil" id="cabMovil" aria-label="Marcador">
+      <div class="cm-escena">
+        <div class="tifo" aria-hidden="true"><i class="a k-bar" data-kit="rayas"></i><i class="b k-vil"></i><i class="inunda k-bar" style="background: repeating-linear-gradient(90deg, var(--c1) 0 34px, var(--c2) 34px 68px)"></i></div>
+        <div class="cm-mid">
+          <span class="chapa k-bar" data-kit="rayas" aria-hidden="true"><b>FCB</b></span>
+          <button class="marcador-btn" type="button" aria-label="FC Barcelona 2, Villarreal 1, minuto 83">
+            <span class="goles"><span class="num">2</span><span class="guion"></span><span class="num">1</span></span>
+            <span class="min num minuto"><span class="pulso"></span>83'</span>
+          </button>
+          <span class="chapa k-vil" data-kit="liso" aria-hidden="true"><b>VIL</b></span>
+        </div>
+      </div>
+      <div class="cm-info">
+        <div class="nombres"><span>FC Barcelona</span><button class="icon-btn tapar" type="button" aria-label="Tapar el marcador (tu emisión va por detrás)" title="Tapar el marcador"><svg class="ico sm"><use href="#i-eyeoff"/></svg></button><span>Villarreal</span></div>
+        <div class="progreso" style="--p: 92%" aria-label="Minuto 83 de 90">
+          <span class="riel"></span><span class="hecho"></span><span class="desc"></span>
+          <span class="gol" style="--m: 13%"><span class="chapa k-bar" data-kit="rayas"></span></span>
+          <span class="gol" style="--m: 64%"><span class="chapa k-bar" data-kit="rayas"></span></span>
+          <span class="gol" style="--m: 79%"><span class="chapa k-vil" data-kit="liso"></span></span>
+          <span class="ahora"></span>
+        </div>
+        <p class="goleadores"><span>Lamine Yamal 12', Raphinha 58'</span><span>Gerard Moreno 71'</span></p>
+      </div>
+    </section>
+
+    <!-- Bento (escritorio) -->
+    <div class="bento">
+      <section class="tesela" aria-labelledby="tProg">
+        <h3 id="tProg">Minuto 83 de 90</h3>
+        <div class="progreso" style="--p: 92%">
+          <span class="riel"></span><span class="hecho"></span><span class="desc"></span>
+          <span class="gol" style="--m: 13%"><span class="chapa k-bar" data-kit="rayas"></span></span>
+          <span class="gol" style="--m: 64%"><span class="chapa k-bar" data-kit="rayas"></span></span>
+          <span class="gol" style="--m: 79%"><span class="chapa k-vil" data-kit="liso"></span></span>
+          <span class="ahora"></span>
+        </div>
+        <p class="escala" aria-hidden="true"><span>0'</span><span>Descanso</span><span>90'</span></p>
+        <p class="goleadores" style="margin-top:10px"><span>Lamine Yamal 12'<br>Raphinha 58'</span><span>Gerard Moreno 71'</span></p>
+      </section>
+      <section class="tesela emision" aria-labelledby="tEmi">
+        <h3 id="tEmi">Dónde se emite</h3>
+        <ul>
+          <li><span><svg class="ico"><use href="#i-tv"/></svg>M+ LaLiga</span><small>En tu biblioteca</small></li>
+          <li><span><svg class="ico"><use href="#i-tv"/></svg>DAZN LaLiga</span><small>6 fuentes</small></li>
+        </ul>
+        <p class="retraso"><b>3 s</b>por detrás de la tele</p>
+      </section>
+    </div>
+  </main>
+
+  <!-- Columna 3: fuentes, acciones y datos técnicos -->
+  <aside class="panel" aria-label="Fuentes">
+    <div class="panel-h"><h2>Fuentes</h2><span class="cuenta">9 de 11 comprobadas</span></div>
+    <div class="comprobador" role="progressbar" aria-valuemin="0" aria-valuemax="11" aria-valuenow="9" aria-label="Comprobación de fuentes"><i></i></div>
+
+    <div class="fuentes" role="group" aria-label="Elige una fuente">
+      <button class="fuente" data-s="ok" aria-pressed="true"><span class="sonando">Sonando</span><span class="nro num">1</span><span class="prov">Elcano</span><span class="bars" data-n="4" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="sig" data-s="ok"><span class="g"></span>Verificada</span></button>
+      <button class="fuente" data-s="ok" aria-pressed="false"><span class="nro num">2</span><span class="prov">Faro</span><span class="bars" data-n="3" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="sig" data-s="ok"><span class="g"></span>Verificada</span></button>
+      <button class="fuente" data-s="weak" aria-pressed="false"><span class="nro num">3</span><span class="prov">Norte</span><span class="bars" data-n="2" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="sig" data-s="weak"><span class="g"></span>Floja</span></button>
+      <button class="fuente" data-s="check" aria-pressed="false"><span class="nro num">4</span><span class="prov">Kaiser</span><span class="bars" data-n="0" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="sig" data-s="check"><span class="g"></span>Comprobando</span></button>
+      <button class="fuente" data-s="fail" aria-pressed="false"><span class="nro num">5</span><span class="prov">Tempo</span><span class="bars" data-n="0" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="sig" data-s="fail"><span class="g"></span>Sin señal</span></button>
+      <button class="fuente" data-s="pend" aria-pressed="false"><span class="nro num">6</span><span class="prov">Zenit</span><span class="bars" data-n="0" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="sig" data-s="pend"><span class="g"></span>Pendiente</span></button>
+    </div>
+
+    <div class="acciones" role="toolbar" aria-label="Acciones de la fuente 1">
+      <button type="button" title="Favorito (G)"><svg class="ico"><use href="#i-star"/></svg><span>Favorito</span></button>
+      <button type="button" title="Copiar hash"><svg class="ico"><use href="#i-copy"/></svg><span>Copiar hash</span></button>
+      <button type="button" title="Pegar hash"><svg class="ico"><use href="#i-paste"/></svg><span>Pegar hash</span></button>
+      <button type="button" title="Rebuscar fuentes"><svg class="ico"><use href="#i-refresh"/></svg><span>Rebuscar</span></button>
+      <button type="button" title="Es el canal correcto"><svg class="ico"><use href="#i-check"/></svg><span>Es el canal correcto</span></button>
+      <button type="button" title="Abrir en otra app"><svg class="ico"><use href="#i-open"/></svg><span>Abrir en…</span></button>
+      <button type="button" title="Reportar esta fuente"><svg class="ico"><use href="#i-flag"/></svg><span>Reportar</span></button>
+    </div>
+
+    <section class="nerd" id="nerd">
+      <button class="nerd-h" type="button" aria-expanded="false" aria-controls="nerdBody" id="nerdBtn">
+        <svg class="ico" style="color:var(--ink-2)"><use href="#i-chart"/></svg>
+        <span class="t"><b>Datos técnicos</b><small>184 pares, 6,1 Mbit/s</small></span>
+        <svg class="spark" viewBox="0 0 120 32" aria-hidden="true"><polyline points="0.0,28.2 6.3,23.7 12.6,21.1 18.9,22.4 25.3,18.6 31.6,15.4 37.9,16.6 44.2,13.4 50.5,10.9 56.8,12.2 63.2,9.0 69.5,10.2 75.8,7.0 82.1,4.5 88.4,7.7 94.7,5.8 101.1,7.0 107.4,3.2 113.7,5.1 120.0,7.0" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/></svg>
+        <span class="tecla solo-esc" title="Atajo de teclado">S</span>
+      </button>
+      <div class="nerd-body" id="nerdBody">
+        <div class="grafico">
+          <svg viewBox="0 0 120 32" preserveAspectRatio="none" aria-label="Pares en los últimos 60 segundos, de 151 a 184"><polyline points="0.0,28.2 6.3,23.7 12.6,21.1 18.9,22.4 25.3,18.6 31.6,15.4 37.9,16.6 44.2,13.4 50.5,10.9 56.8,12.2 63.2,9.0 69.5,10.2 75.8,7.0 82.1,4.5 88.4,7.7 94.7,5.8 101.1,7.0 107.4,3.2 113.7,5.1 120.0,7.0" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>
+          <p><span>pares, últimos 60 s</span><span>151 → 184</span></p>
+        </div>
+        <dl>
+          <dt>Motor</dt><dd>en línea, v3.2.11</dd>
+          <dt>Sesión</dt><dd>progresiva, mpegts.js</dd>
+          <dt>Bajada</dt><dd>1,24 MB/s</dd>
+          <dt>Subida</dt><dd>310 KB/s</dd>
+          <dt>Vídeo</dt><dd>H.264 1080p50, 6,1 Mbit/s</dd>
+          <dt>Audio</dt><dd>AAC 48 kHz estéreo</dd>
+          <dt>Búfer</dt><dd>4,8 s</dd>
+          <dt>Hash</dt><dd>9f3c1a7be04d52c8a1e6f09b3d7c2e5a8f41e21a</dd>
+        </dl>
+      </div>
+    </section>
+  </aside>
+</div>
+
+<script>
+  // Pausa / reproducción
+  const play = document.getElementById('playBtn');
+  play.addEventListener('click', () => {
+    const pausado = play.getAttribute('aria-pressed') === 'true';
+    play.setAttribute('aria-pressed', String(!pausado));
+    play.setAttribute('aria-label', pausado ? 'Pausar (espacio)' : 'Reproducir (espacio)');
+    play.querySelector('use').setAttribute('href', pausado ? '#i-pause' : '#i-play');
+  });
+  // Elegir fuente: la cápsula elegida pasa a squircle
+  document.querySelector('.fuentes').addEventListener('click', e => {
+    const f = e.target.closest('.fuente'); if (!f) return;
+    document.querySelectorAll('.fuente').forEach(x => x.setAttribute('aria-pressed', String(x === f)));
+    const s = document.querySelector('.sonando'); f.prepend(s);
+  });
+  // Panel de datos técnicos (tecla S)
+  const nerd = document.getElementById('nerd'), nb = document.getElementById('nerdBtn');
+  const abrir = v => { nerd.toggleAttribute('open-panel', v); nb.setAttribute('aria-expanded', String(v)); };
+  nb.addEventListener('click', () => abrir(!nerd.hasAttribute('open-panel')));
+  if (matchMedia('(min-width: 1024px)').matches) abrir(true);
+  addEventListener('keydown', e => { if (e.key.toLowerCase() === 's' && !e.target.closest('input')) abrir(!nerd.hasAttribute('open-panel')); });
+  // Gol (demostración): el tifo se inunda del color del que marca y la cifra se estampa
+  document.querySelectorAll('.marcador-btn').forEach(b => b.addEventListener('click', () => {
+    const cont = b.closest('.escenario, .cab-movil');
+    cont.classList.remove('gol'); void cont.offsetWidth; cont.classList.add('gol');
+    setTimeout(() => cont.classList.remove('gol'), 1500);
+  }));
+</script>
+</body>
+</html>

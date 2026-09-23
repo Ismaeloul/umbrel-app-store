@@ -56,12 +56,11 @@ export const SCANNER_STOP_MS = TIMEOUTS.engineStopMs;
 /** Tope duro de una sonda con estadística final, ffprobe y `stop` dentro (arquitectura §5.8). */
 export const SCANNER_PROBE_HARD_MS = TIMEOUTS.scannerProbeTotalMs;
 
-/**
- * Con alguien viendo, como mucho una sonda cada 20 s (arquitectura §5.8).
- * NUEVO en la 0.7.0; no está en TIMEOUTS de @ace/shared (pedido en
- * docs/cobertura/scanner.md, "Cambios de contrato pedidos").
- */
-export const SCANNER_WATCHING_GAP_MS = 20 * SECOND;
+/** Con alguien viendo, como mucho una sonda cada 20 s (arquitectura §5.8; NUEVO en la 0.7.0). */
+export const SCANNER_WATCHING_GAP_MS = TIMEOUTS.scannerWatchingGapMs;
+
+/** Cada cuánto el comprobador pregunta su `get_version` para `stats().online` (paso 1.3). */
+export const SCANNER_PING_INTERVAL_MS = TIMEOUTS.scannerPingMs;
 
 /** Poda de trabajos y veredictos caducados (server.js:5140). */
 export const SCANNER_PRUNE_INTERVAL_MS = MINUTE;

@@ -62,6 +62,14 @@ export interface JobLike {
   readonly candidates: readonly Readonly<Record<string, unknown>>[];
 }
 
+/** `playableOn` de un candidato con veredicto (`retry_wait` sale como `failed`). */
+function playableOnOf(item: Readonly<Record<string, unknown>>): { playableOn?: PlayableOn } {
+  if (!['working', 'weak', 'failed', 'retry_wait'].includes(String(item.state))) return {};
+  const value = item.playableOn as Partial<PlayableOn> | undefined;
+  if (!value || typeof value.web !== 'boolean' || typeof value.ios !== 'boolean') return {};
+  return { playableOn: { web: value.web, ios: value.ios } };
+}
+
 function nullableNumber(value: unknown): number | null {
   return Number.isFinite(Number(value)) && value !== null && value !== undefined
     ? Number(value)
@@ -74,7 +82,11 @@ function nullableNumber(value: unknown): number | null {
  * reproducibles `working` y `weak`. `now` decide qué reintentos siguen
  * pendientes. T-074.
  */
-export function jobPayload(job: JobLike, now: number): ScanJob {
+export function jobPayload(
+  job: JobLike,
+  now: number,
+  options: { readonly playableOn?: boolean } = {},
+): ScanJob {
   const candidates = job.candidates.map((item) => ({
     id: String(item.id),
     state: (item.state === 'retry_wait'
@@ -96,6 +108,8 @@ export function jobPayload(job: JobLike, now: number): ScanJob {
     audioCodecs: Array.isArray(item.audioCodecs) ? (item.audioCodecs as string[]) : [],
     cached: item.cached === true,
     attempts: Number(item.attempts) || 0,
+    /* D6, solo en /api/v1 (la ruta antigua conserva la forma exacta de la 0.6.59). */
+    ...(options.playableOn ? playableOnOf(item) : {}),
   }));
   const checked = candidates.filter((item) =>
     ['working', 'weak', 'failed'].includes(item.state),

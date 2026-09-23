@@ -30,7 +30,15 @@ corepack pnpm@10.18.2 typecheck:deploy   # tsc de deploy/ y scripts/
 corepack pnpm@10.18.2 lint               # eslint + prettier de todo el monorepo
 corepack pnpm@10.18.2 test:nginx         # nginx real en Docker (hace falta Docker arrancado)
 corepack pnpm@10.18.2 test:shellcheck    # shellcheck del hook (Docker)
+corepack pnpm@10.18.2 test:contraste     # E1.4: rutas antiguas contra el server.js de la 0.6.59 (sin Docker)
+corepack pnpm@10.18.2 test:compose       # pila local con motor falso de punta a punta + E1.12 con Chrome (Docker)
 ```
+
+`test:compose` monta su propia release en una carpeta temporal y usa el
+proyecto `aceneo-contraste` con puertos que elige Docker: no choca con la pila
+de abajo ni con una 0.6.59 levantada en el 17792, y la baja al terminar
+(`--keep` la deja arriba, `--navegador no` se salta Playwright). Resultados e
+informe en `docs/analisis/contraste-0659.md`.
 
 En Windows los tests del hook usan el bash de Git (`Git/usr/bin/bash.exe`) y
 un `curl` falso delante del PATH: ningún test sale a internet.
@@ -80,8 +88,9 @@ Puertos (solo 127.0.0.1): 17792 pasarela falsa (login en `/__pasarela/login`),
 
 - Prueba de humo del `server.js` real y de la imagen en cuanto exista
   `apps/server/src/main.ts` (hoy se prueba con un servidor mínimo de Fastify).
-- Casos de §8.3 que dependen del backend (401 sin token, 403 a rutas antiguas
-  con origen `native`, URL de vídeo caducada): con el backend de A0/A5.
+- Casos de §8.3 que dependen del backend: el 401 sin token y el 403 a rutas
+  antiguas con origen `native` ya los prueba `test:compose` con el backend
+  real; falta la URL de vídeo caducada.
 - Probar la pasarela real de umbreld en un Umbrel (plan §8.3); si se comporta
   distinto, plan B de arquitectura §8.4 (puerto aparte).
 - CI (plan E4.1): `test:deploy`, `test:nginx`, `test:shellcheck`, release

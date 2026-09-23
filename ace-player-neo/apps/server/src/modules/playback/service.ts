@@ -45,6 +45,7 @@ import {
 } from '@ace/shared';
 import type { TimerHandle } from '../../core/clock.js';
 import { AppError, errorCodeOf, isAppError } from '../../core/errors.js';
+import { isEngineUnreachable } from '../engine/index.js';
 import type { EngineSessionMeta } from '../engine/types.js';
 import { SerialLock } from '../remux/lock.js';
 import type { RemuxCloseReason, RemuxHandle, RemuxSource } from '../remux/types.js';
@@ -55,7 +56,10 @@ import type { PlaybackDeps, PlaybackService, ViewerIdentity } from './types.js';
 /** Aperturas por estadística fallida permitidas por sesión en esta ventana. */
 const REOPEN_WINDOW_MS = 5 * 60 * 1000;
 const REOPEN_MAX = 3;
-/** Fallos seguidos de `stat_url` con el motor `online` para dar la sesión por perdida. */
+/**
+ * Fallos seguidos de `stat_url` con el motor `online` y CONTESTANDO (HTTP de
+ * error o respuesta rara) para dar la sesión por perdida.
+ */
 const STAT_FAILURES_TO_REOPEN = 3;
 /** Ids de sesiones cerradas que se recuerdan (410 en vez de 404). */
 const RECENTLY_CLOSED_MAX = 256;
@@ -267,9 +271,25 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
 
   // --- Eventos ---
 
+  /**
+   * Visores esperando a que se abra su canal (id del visor → hash). Cuentan
+   * como "alguien viendo" en `playback.activity`: así el vigilante del motor
+   * cuenta sus aperturas fallidas para el reinicio automático (3 seguidas con
+   * un visor esperando, arquitectura §5.5) y el comprobador no prueba ese
+   * hash mientras se abre. Sin esto, un visor que no conseguía abrir nunca
+   * contaba como esperando (encontrado en la integración, paso 1.3).
+   */
+  const waiting = new Map<string, string>();
+
   function emitActivity(): void {
-    const hashes = [...new Set([...viewers.values()].map((viewer) => viewer.hash))].sort();
-    const payload = { watching: viewers.size > 0, hashes, viewers: viewers.size };
+    const hashes = [
+      ...new Set([...[...viewers.values()].map((viewer) => viewer.hash), ...waiting.values()]),
+    ].sort();
+    const payload = {
+      watching: viewers.size > 0 || waiting.size > 0,
+      hashes,
+      viewers: viewers.size,
+    };
     const key = JSON.stringify(payload);
     if (key === lastActivity) return;
     lastActivity = key;
@@ -661,6 +681,17 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
   /** Coloca al visor en la sesión de su canal (cola del motor tomada). */
   async function placeLocked(request: AcquireRequest): Promise<Omit<Placement, 'remux'>> {
     if (stopped) throw new AppError('engine_unavailable', { detail: 'apagando' });
+    waiting.set(request.viewerId, request.hash);
+    emitActivity();
+    try {
+      return await placeWaitingLocked(request);
+    } finally {
+      waiting.delete(request.viewerId);
+      emitActivity();
+    }
+  }
+
+  async function placeWaitingLocked(request: AcquireRequest): Promise<Omit<Placement, 'remux'>> {
     const by = {
       deviceId: request.deviceId,
       client: request.client,
@@ -858,14 +889,25 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
         .catch((error: unknown) => {
           if (controller.signal.aborted || session.closed || session.meta.statUrl !== statUrl)
             return;
+          /* Motor sin contestar (caído o colgado): la sesión no se da por
+             perdida; lo decide el vigilante y, al volver el motor, se reabre
+             (onEngineStatus). Si no, en los 20 s que tarda el vigilante en
+             verlo offline, 3 fallos de estadística cerraban la sesión del
+             visor que estaba esperando (encontrado en la integración, paso 1.3). */
+          if (isEngineUnreachable(error)) return;
           session.statFailures += 1;
           const gone = errorCodeOf(error) === 'session_expired';
           let online = false;
           try {
-            online = engine.status().status === 'online';
+            const state = engine.status().status;
+            /* `unknown`: el vigilante aún no ha preguntado (o no está arrancado). */
+            online = state === 'online' || state === 'unknown';
           } catch {}
-          if (gone || (online && session.statFailures >= STAT_FAILURES_TO_REOPEN)) {
-            scheduleReopen(session);
+          /* Solo si el vigilante no dice que el motor está reiniciando o
+             caído: la reapertura la hace onEngineStatus cuando vuelva (abrir en un
+             motor a medio arrancar fallaría y cerraría la sesión del visor). */
+          if (online && (gone || session.statFailures >= STAT_FAILURES_TO_REOPEN)) {
+            scheduleReopen(session, statUrl);
           }
         })
         .finally(() => {
@@ -876,10 +918,12 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
   }
 
   /** El motor ya no tiene la sesión: se reabre, con un tope para no pelearse con nadie. */
-  function scheduleReopen(session: SessionRec): void {
+  function scheduleReopen(session: SessionRec, failedStatUrl: string): void {
     track(
       engineLock.run(async () => {
         if (session.closed || !session.viewers.size) return;
+        /* Otra vía (la vuelta del motor) ya la ha reabierto mientras esperaba. */
+        if (session.meta.statUrl !== failedStatUrl) return;
         const now = clock.now();
         const recent = session.reopens.filter((at) => now - at < REOPEN_WINDOW_MS);
         if (recent.length >= REOPEN_MAX) {
@@ -912,18 +956,19 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       engineLock.run(async () => {
         for (const session of [...sessions.values()]) {
           if (session.closed || !session.viewers.size) continue;
-          /* Tras un bache sin reinicio la sesión puede seguir viva: reabrirla
-             cortaría a quien la está viendo. Solo se reabre si ya no existe. */
-          if (reason === 'engine_recovered') {
-            const alive = await engine
-              .client()
-              .getStat(session.meta.statUrl)
-              .then(
-                () => true,
-                () => false,
-              );
-            if (alive) continue;
-          }
+          /* Solo se reabre si la sesión ya no existe en el motor. Tras un bache
+             sin reinicio puede seguir viva (reabrirla cortaría a quien la ve);
+             y tras un reinicio puede que ya la haya reabierto la vía de las
+             estadísticas (una segunda reapertura cortaba al visor otra vez:
+             encontrado en la integración, paso 1.3). */
+          const alive = await engine
+            .client()
+            .getStat(session.meta.statUrl)
+            .then(
+              () => true,
+              () => false,
+            );
+          if (alive || session.closed || !session.viewers.size) continue;
           await reopenLocked(session, reason, false);
         }
       }),

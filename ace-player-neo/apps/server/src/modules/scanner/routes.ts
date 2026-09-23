@@ -25,5 +25,7 @@ export function registerLegacyRoutes(router: LegacyRouter, services: Services): 
 }
 
 export function registerV1Routes(router: V1Router, services: Services): void {
-  router.handle('footballScan', (input) => services.scanner.job(input.params.id));
+  router.handle('footballScan', (input) =>
+    services.scanner.job(input.params.id, { playableOn: true }),
+  );
 }

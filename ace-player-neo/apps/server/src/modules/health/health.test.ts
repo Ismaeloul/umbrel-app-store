@@ -63,6 +63,8 @@ const SCANNER_STATS: ScannerStats = {
   activeJobs: 1,
   cachedSources: 7,
   leakedSessionsLastHour: 0,
+  /* Recién arrancado el comprobador aún no ha preguntado su get_version. */
+  online: null,
 };
 
 const AGENDA = {
@@ -172,7 +174,7 @@ describe('GET /api/health: la forma exacta de la 0.6.59 sin red por petición (B
     });
     /* Sin IA configurada no lleva modelReady (api.md §4.17). */
     expect('modelReady' in result.components.ai).toBe(false);
-    /* El comprobador no expone `online` todavía: una sonda, y cacheada. */
+    /* El comprobador aún no sabe si está en línea (`online: null`): una sonda, y cacheada. */
     await health.legacyHealth();
     await health.legacyHealth();
     expect(probes.scannerVersion).toHaveBeenCalledTimes(1);
@@ -415,6 +417,7 @@ describe('/api/v1/health, /health/live y /ping', () => {
       network: 0,
       codec: 0,
       client: 5,
+      state: 0,
     });
     expect(result.warnings.map((warning) => warning.code)).toEqual([
       'engine_restart_quota',

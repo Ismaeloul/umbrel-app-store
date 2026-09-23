@@ -34,7 +34,7 @@
   },
   "reports": { "total": 2, "quarantined": 1, "learningCount": 4 },
   "diagnostics": {
-    "counts24h": { "engine": 1, "source": 3, "network": 0, "codec": 1, "client": 2 }
+    "counts24h": { "engine": 1, "source": 3, "network": 0, "codec": 1, "client": 2, "state": 0 }
   },
   "warnings": []
 }

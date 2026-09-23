@@ -232,6 +232,17 @@ export type ScanCandidateState = z.infer<typeof ScanCandidateStateSchema>;
 export const VerdictStateSchema = z.enum(['working', 'weak', 'failed']);
 export type VerdictState = z.infer<typeof VerdictStateSchema>;
 
+/**
+ * Dónde se puede reproducir una fuente (D6): una HEVC es `unsupported_codec`
+ * para la web pero reproducible en iOS (el remux la pasa a fMP4 sin
+ * transcodificar). Añadido en el paso 1.3.
+ */
+export const PlayableOnSchema = z.strictObject({
+  web: z.boolean(),
+  ios: z.boolean(),
+});
+export type PlayableOn = z.infer<typeof PlayableOnSchema>;
+
 export const ScanCandidateSchema = z.strictObject({
   id: HashSchema,
   state: ScanCandidateStateSchema,
@@ -252,6 +263,11 @@ export const ScanCandidateSchema = z.strictObject({
   audioCodecs: z.array(z.string()),
   cached: z.boolean(),
   attempts: z.number().int().nonnegative(),
+  /**
+   * D6. Solo en /api/v1 y solo cuando ya hay veredicto (`working`, `weak` o
+   * `failed`); la ruta antigua `/api/football/scan` no lo lleva.
+   */
+  playableOn: PlayableOnSchema.optional(),
 });
 export type ScanCandidate = z.infer<typeof ScanCandidateSchema>;
 

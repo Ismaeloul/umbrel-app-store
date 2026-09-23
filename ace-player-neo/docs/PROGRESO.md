@@ -82,6 +82,17 @@
 - 02:35: Isma desactiva AdGuard; la extensión Claude in Chrome ya navega
   (probado con la 0.6.59 local). Las pruebas en su navegador se hacen con
   ella; Playwright sigue para CI y para las capturas en serie.
+- 03:55: paso 1.1 terminado (7/7 agentes, 3,49 M tokens, 87 min).
+  Typecheck limpio, 1102 tests en verde, 18 del esqueleto de A0 por ajustar
+  (esperaban módulos vacíos). Informes literales en
+  `docs/cobertura/informes-paso-1.1.md`; cobertura por módulo en
+  `docs/cobertura/<módulo>.md`. Migración contra la copia de producción:
+  las 12 claves v1 idénticas, idempotente, y la 0.6.59 la lee igual. Commit
+  `4e25a91`.
+- 04:00: lanzado el workflow `wf_5096d575-3c2`: integrador (contratos
+  pedidos, 18 tests, cableado, humo del bundle, soak de 2 h simulado,
+  compat.md, comportamientos.md) → contraste con la 0.6.59 y Docker local;
+  en paralelo, las 3 maquetas visuales y un jurado que elige.
 
 ## Agentes y workflows lanzados
 

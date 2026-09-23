@@ -36,7 +36,10 @@ apps/server/                     @ace/server
 └── test/
     ├── helpers/index.ts         createTestApp, createTestCore, FakeClock, tempDir, web(), native()
     ├── app.test.ts              capa HTTP
+    ├── integration/             backend entero + motor falso: flujos, cableado y soak (paso 1.3)
     └── fake-engine/             motor AceStream falso (agente FE)
+
+scripts/smoke-bundle.mjs         prueba de humo del server.js empaquetado (paso 1.3)
 ```
 
 Módulos: `state`, `net`, `directories`, `engine`, `playback`, `remux`,
@@ -80,7 +83,7 @@ corta a los demás. Eventos (`DomainEvents`):
 | `scan.verdict`, `scan.progress`, `scan.jobDone` | scanner | sources, football (precalentado), playback, events |
 | `engine.status` (solo al cambiar) | engine | playback (reabrir), events, health |
 | `playback.nowPlaying`, `playback.handoff`, `stream.*` | playback | events |
-| `playback.activity` (`watching`, `hashes`) | playback | engine (histéresis 2/3), scanner (ritmo lento, nunca el hash visto) |
+| `playback.activity` (`watching`, `hashes`) | playback | engine (histéresis 2/3), scanner (ritmo lento, nunca el hash visto), football y search (`via: 'auto'`). Desde el paso 1.3 cuenta también quien espera a que se abra su canal |
 | `state.changed` | state (tras persistir) | events |
 | `diagnostics.report` → `diagnostics.new` | cualquiera → diagnostics | diagnostics → events |
 | `devices.changed` | auth | events (cierra SSE), playback (suelta visores) |
@@ -221,15 +224,23 @@ la Fase 2 o de empaquetado; T-131 y T-132 ya están en `@ace/shared`.
 
 ## 10. Comprobaciones
 
-Desde `ace-player-neo/`:
+Desde `ace-player-neo/` (lista del paso 1.3; todo en verde y sin tests saltados):
 
 ```sh
 corepack pnpm@10.18.2 -r typecheck
 corepack pnpm@10.18.2 --filter @ace/shared test
-corepack pnpm@10.18.2 --filter @ace/server exec vitest run test/app.test.ts src
-npx eslint packages apps/server/src apps/server/test/helpers apps/server/test/app.test.ts
+corepack pnpm@10.18.2 --filter @ace/server exec vitest run --exclude "test/fake-engine/**"
+corepack pnpm@10.18.2 --filter @ace/server exec vitest run --config test/fake-engine/vitest.config.ts
+npx vitest run --config vitest.config.ts        # deploy/ y scripts/
+npx eslint .
 npx prettier --check packages apps/server/src
+node scripts/smoke-bundle.mjs                   # bundle + motores falsos (paso 1.3)
 ```
+
+La suite del servidor incluye `test/integration/` (backend entero con
+`createServices`, motor falso por HTTP y FakeClock) y el soak de 2 h simuladas
+(`test/integration/soak.test.ts`, unos 7 s; con `SOAK_LOG=<fichero>` deja el
+resumen).
 
 ## 11. Pendiente y dudas de este paso
 
@@ -246,3 +257,76 @@ npx prettier --check packages apps/server/src
 - `STATE_BACKUP_FILE` y `scoresCache` cambian de forma en la fachada (ruta
   relativa y función), porque la v2 no tiene globales ni lee el entorno al
   importar.
+
+## 12. Cambios del paso 1.3 (integración)
+
+Lo que se ha cambiado en los contratos al juntar los módulos. Tras tocar
+`@ace/shared` se regeneraron `docs/openapi-v2.yaml` y `fixtures/`
+(`health`, `diagnosticsList`, `footballScan` y el evento `scan.verdict`).
+Motivos en `decisiones.md` (D9-D16); lo que ve un cliente, en `compat.md`.
+
+### 12.1 `@ace/shared`
+
+| Dónde | Cambio | Lo pidió |
+|---|---|---|
+| `constants/timeouts.ts` | `ENGINE_WATCHDOG.readyPollMs` (2 s) y `.stalledAfterMs` (60 s) | engine |
+| `constants/timeouts.ts` | `TIMEOUTS.scannerWatchingGapMs` (20 s) y `TIMEOUTS.scannerPingMs` (30 s, nuevo) | scanner, health |
+| `constants/timeouts.ts` | `DIRECTORY_SYNC` { `intervalMs` 3 h, `onResolveMs` 30 min, `retryBaseMs` 5 min, `retryMaxMs` 3 h } y `WEB_SYNC_INTERVAL_MS` | directories, state, health |
+| `constants/timeouts.ts` | `AUTH_TIMINGS` { `lastSeenThrottleMs` 60 s, `pairingWindowMs` 60 s } | auth |
+| `constants/limits.ts` | `DIAGNOSTICS_CLIENT_REPORTS_PER_MINUTE` (30), `DIAGNOSTICS_TOTAL_REPORTS_PER_MINUTE` (120), `DIAGNOSTICS_DEFAULT_LIST_LIMIT` (100) | diagnostics |
+| `api/v1/diagnostics.ts` | causa `state` en `DIAGNOSTIC_CAUSES` y `counts24h.state` | state (D11) |
+| `errors.ts` | códigos solo de registro, no públicos: `engine_stalled`, `engine_auto_restart`, `engine_auto_restart_exhausted`, `engine_not_ready`, `engine_stop_failed`, `scanner_session_leak` | engine, scanner (D11) |
+| `api/common.ts` | `PlayableOnSchema` y `ScanCandidateSchema.playableOn?` | scanner (D6, D15) |
+| `events.ts` | `scan.verdict.playableOn?` | scanner (D15) |
+| `routes.ts` | `DIRECTORY_FETCH_ERRORS` con `fetch_failed` y los `ipfs_*` (los `http_NNN` van en un comentario: no son un código fijo) | directories |
+
+Las constantes locales de los módulos (`READY_POLL_MS`, `SCANNER_WATCHING_GAP_MS`,
+`WEB_SYNC_INTERVAL_MS`, `LAST_SEEN_THROTTLE_MS`, `CLIENT_REPORTS_PER_MINUTE`…)
+siguen existiendo con el mismo nombre, pero ahora valen lo de `@ace/shared`.
+
+### 12.2 Backend (`core/`, `services.ts`, `main.ts`, `types.ts` de los módulos)
+
+| Dónde | Cambio |
+|---|---|
+| `core/bus.ts` | `DeviceTargeted` (`targetDeviceIds?`) en `playback.handoff` y `stream.*` (lo pidió events; playback aún no lo rellena, D13) |
+| `main.ts` | exporta `startServices`, `stopServices` y `startServer` (el mismo arranque y apagado para `main`, los tests de integración y la prueba de humo); el apagado nunca lanza y acepta el mensaje IPC `shutdown` si hay canal IPC (D14) |
+| `scanner/types.ts` | `ScannerStats.online: boolean \| null`; `job(id, { playableOn? })` (D10, D15) |
+| `football/types.ts` | `healthInfo().ai: FootballAiHealth \| null` (D10) |
+| `engine/index.ts` | exporta `isEngineUnreachable(error)` (lo usa playback, D9) |
+| `playback` (sin cambio de interfaz) | un visor esperando a que se abra su canal cuenta en `playback.activity`; los fallos de estadística con el motor sin contestar no cierran la sesión; una sola reapertura por vuelta del motor (D9) |
+| `sources/index.ts` | exporta `CHANNEL_VARIANT_TOKENS` (football ya no lleva su copia) |
+| `state/documents.ts` | `DocumentStoreOptions.onUnreadable?` (el servicio lo manda a diagnóstico) |
+| `health/service.ts` | `defaultProbes({ config, scanner })`: el `get_version` del comprobador lo hace `scanner.ping()` |
+
+Añadidos que hicieron los agentes de módulos en el paso 1.1 (solo se
+añadió, nada se rompió) y quedan anotados aquí:
+
+- `net/types.ts`: `NetDeps` es una interfaz con `resolver?` y `transport?`.
+- `directories/types.ts`: `DirectoriesDeps.resolveTxt?` y `random?`; `ParsedStream`.
+- `engine`: sin cambios de interfaz (`getSessionMeta` de arquitectura §5.5 es `openSession`; `search` es `searchRaw`).
+- `search/types.ts`: `SearchOptions.via` admite `'auto'`.
+- `scanner/types.ts`: `ScannerDeps.transport?` y `jobId?`, `ScanJobRequest.priority?`, `SourceVerdict.playableOn`, `ScannerService.ping()`.
+- `sources/types.ts`: `ReportOptions` y `report(body, options?)`.
+- `football/types.ts`: `programChannels(matchId)`, `runPreheat(options?)`, `FootballDeps.embed?` y `ollamaFetch?`.
+- `remux/types.ts`: `retarget`, `subscribe`, `viewersOf`, `ensure(…, { legacy })`, `serveFile(…, { deviceId })`, `RemuxHandle.legacyToken?`, `RemuxStats.ffmpegMissing?`, `RemuxDeps.launcher?`/`procRoot?`/`killPid?`/`watchFiles?`.
+- `auth/types.ts`: `VideoUrlSigner`.
+- `health/types.ts`: `HealthDeps.probes?`.
+- `football` usa `config.ai.timeoutMs` (`OLLAMA_TIMEOUT_MS`, 6,5 s como la 0.6.59) y no `TIMEOUTS.ollamaMs` (12 s del Compose): sin cambio.
+
+### 12.3 Tests del esqueleto
+
+`test/app.test.ts` y `src/services.test.ts` ya no dependen de que los
+módulos sean esqueletos: los casos que necesitan una ruta sin manejador (501)
+o registrar la suya montan la app con `moduleRoutes: false` (`CORE_ONLY`), y
+hay casos nuevos con los módulos reales (las rutas que daban 501, T-033 con el
+motor sustituido, `X-Request-Id` en errores de módulos) y la comprobación de
+que TODA operación antigua y ruta v1 tiene manejador.
+
+### 12.4 Pendiente
+
+- Unificar los normalizadores de directorios de `state` y `directories` en
+  `@ace/shared/domain` (D16).
+- `playableOn` en el selector de iOS: decidir con la Fase 3 si se filtran las
+  fuentes con `ios: false`.
+- Dirigir los eventos de visor por dispositivo (`targetDeviceIds`, D13) cuando
+  la web fije su `device`.

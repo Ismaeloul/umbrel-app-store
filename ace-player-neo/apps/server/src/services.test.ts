@@ -1,12 +1,13 @@
 /* Composición de servicios y reparto de rutas entre módulos. */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LEGACY_OPERATIONS, V1_ROUTES, V1_ROUTE_IDS, SERVER_MODULES } from '@ace/shared';
 import { describe, expect, it } from 'vitest';
 import { MODULE_ROUTES } from './app.js';
 import { legacyOperationKey } from './core/legacy-routing.js';
+import { createRouteCollector } from './core/router.js';
 import { SERVICE_ORDER, createServices } from './services.js';
 import * as legacyFacade from './legacy/exports.js';
 import { createTestCore } from '../test/helpers/index.js';
@@ -14,15 +15,22 @@ import { createTestCore } from '../test/helpers/index.js';
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 describe('createServices', () => {
-  it('monta los 14 servicios sin ciclos y cada método del esqueleto dice not_implemented', () => {
+  it('monta los 14 servicios sin ciclos y ninguno es ya un esqueleto (paso 1.3)', () => {
     const services = createServices(createTestCore());
     expect([...SERVICE_ORDER].sort()).toEqual([...SERVER_MODULES].sort());
     for (const name of SERVICE_ORDER) {
-      const service = services[name] as unknown as Record<string, () => unknown>;
-      expect(() => service.cualquierMetodo?.(), name).toThrowError(
-        expect.objectContaining({ code: 'not_implemented' }),
-      );
+      const service = services[name] as unknown as Record<string, unknown>;
+      expect(typeof service, name).toBe('object');
+      /* El esqueleto (core/stub.ts) devolvía una función para CUALQUIER nombre. */
+      expect(service.cualquierMetodo, name).toBeUndefined();
     }
+  });
+
+  it('crearlo no hace red, no programa temporizadores ni escribe en disco (eso es start())', () => {
+    const core = createTestCore();
+    createServices(core);
+    expect(core.clock.pendingTimers()).toBe(0);
+    expect(readdirSync(core.config.dataDir)).toEqual([]);
   });
 
   it('un servicio sustituido llega a los que dependen de él', () => {
@@ -49,6 +57,21 @@ describe('createServices', () => {
 });
 
 describe('reparto de rutas', () => {
+  it('con los módulos reales, TODAS las operaciones antiguas y rutas v1 tienen manejador', () => {
+    const services = createServices(createTestCore());
+    const collector = createRouteCollector();
+    for (const module of MODULE_ROUTES) {
+      module.registerLegacyRoutes(collector.legacy, services);
+      module.registerV1Routes(collector.v1, services);
+    }
+    const missingLegacy = LEGACY_OPERATIONS.map(legacyOperationKey).filter(
+      (key) => !collector.legacyHandlers.has(key),
+    );
+    const missingV1 = V1_ROUTE_IDS.filter((id) => !collector.v1Handlers.has(id));
+    expect(missingLegacy).toEqual([]);
+    expect(missingV1).toEqual([]);
+  });
+
   it('cada operación antigua es de exactamente un módulo', () => {
     const owners = new Map<string, number>();
     for (const module of MODULE_ROUTES) {

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-labelledby="t">
+  <title id="t">Ace Player Neo · icono claro</title>
+  <defs>
+    <linearGradient id="fondo" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f7fbfe"/>
+      <stop offset="1" stop-color="#e2eef6"/>
+    </linearGradient>
+    <radialGradient id="foco" cx="0.5" cy="0.02" r="0.75">
+      <stop offset="0" stop-color="#5fd9ff" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#5fd9ff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="lente" cx="0.38" cy="0.3" r="0.85">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.9"/>
+      <stop offset="0.6" stop-color="#5fd9ff" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#1b92c2" stop-opacity="0.42"/>
+    </radialGradient>
+    <linearGradient id="brillo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="1"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="dentro"><circle cx="512" cy="512" r="236"/></clipPath>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#fondo)"/>
+  <rect width="1024" height="1024" fill="url(#foco)"/>
+  <g stroke="#102032" stroke-opacity="0.9" fill="none" stroke-width="22">
+    <path d="M512 0V250M512 774V1024"/>
+    <circle cx="512" cy="512" r="286"/>
+  </g>
+  <circle cx="512" cy="512" r="236" fill="url(#lente)"/>
+  <g clip-path="url(#dentro)">
+    <path d="M478 250V774" stroke="#102032" stroke-opacity="0.22" stroke-width="30"/>
+  </g>
+  <path d="M452 394c0-19 21-31 37-21l186 118c15 9 15 31 0 40L489 649c-16 10-37-2-37-21z" fill="#102032"/>
+  <circle cx="512" cy="512" r="236" fill="none" stroke="#102032" stroke-opacity="0.18" stroke-width="6"/>
+  <path d="M330 420a196 196 0 0 1 150-138" fill="none" stroke="url(#brillo)" stroke-width="16" stroke-linecap="round"/>
+</svg>
