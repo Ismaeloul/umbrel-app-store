@@ -55,7 +55,7 @@ Wi-Fi **apagado**, datos móviles, **Tailscale encendido** en el iPhone.
 | 3.3 | Toca el vídeo. | Salen los controles con cristal: pausa, −30 s, **Directo** (con el retraso real, p. ej. «−8 s»), PiP, AirPlay y pantalla completa. Se esconden solos a los ~3 s. | [ ] |
 | 3.4 | Pulsa **−30 s** y luego **Directo**. | Retrocede 30 s (el botón Directo enseña el retraso); al pulsar Directo vuelve al borde del directo (punto rojo). | [ ] |
 | 3.5 | Pausa 1 minuto y reanuda. | Reanuda desde donde estaba (con retraso); Directo lo lleva al directo. | [ ] |
-| 3.6 | Vuelve atrás a la Agenda sin parar. | Aparece el **mini-reproductor** sobre la barra de pestañas y sigue sonando. Tocarlo abre la pantalla completa. | [ ] |
+| 3.6 | Vuelve atrás a la Agenda sin parar. | Aparece el **mini-reproductor** justo encima de la barra de pestañas y sigue sonando. Tocarlo abre el **reproductor grande** (el vídeo crece desde el mini). | [ ] |
 | 3.7 | Cambia de pestaña (Biblioteca, Buscar, Ajustes). | El mini sigue ahí y el audio no se corta. | [ ] |
 | 3.8 | Ajustes → Modo de reproducción → cambia entre Estable / Equilibrado / Baja latencia con algo sonando. | Cambia sin cortar ni reconectar (solo cambia el colchón). | [ ] |
 | 3.9 | En la web, abre el mismo canal en el PC mientras suena en el iPhone. | El iPhone sigue sonando (la sesión del motor se comparte). Si la web «toma el mando», el iPhone lo dice en la línea de estado. | [ ] |
@@ -67,10 +67,12 @@ Wi-Fi **apagado**, datos móviles, **Tailscale encendido** en el iPhone.
 | 4.1 | Con el vídeo sonando en el centro de partido, sube al inicio (desliza desde abajo). | El vídeo sigue en una **ventana flotante (PiP)** sin cortes, con sonido. | [ ] |
 | 4.2 | Mueve la ventana, hazla grande/pequeña, escóndela en el borde. | Todo funciona; el audio sigue incluso escondida. | [ ] |
 | 4.3 | Pausa y reanuda desde los controles del PiP. | Pausa/reanuda; la app también lo refleja al volver. | [ ] |
-| 4.4 | Pulsa el botón de «volver a la app» del PiP. | Se abre Ace Neo en el reproductor (el centro de partido o la pantalla completa), sin reconectar. | [ ] |
+| 4.4 | Pulsa el botón de «volver a la app» del PiP. | Se abre Ace Neo con el **reproductor grande** (o el centro de partido, si estabas en él) y el vídeo vuelve a su sitio, sin reconectar y **una sola imagen**. | [ ] |
 | 4.5 | En la app, pulsa el botón **PiP** de los controles. | Entra en PiP sin salir de la app. | [ ] |
 | 4.6 | Cierra el PiP con la X. | Se para el vídeo (o queda el mini en la app, según iOS), sin quedarse la sesión colgada: en la web, la sesión desaparece en menos de 1 min. | [ ] |
 | 4.7 | Con el PiP abierto, deja el iPhone 10 min usando otras apps. | Sigue sonando; si la señal se cae, se reengancha sola. | [ ] |
+| 4.8 | Con el PiP abierto, vuelve a Ace Neo **tocando su icono** (no el botón del PiP). | La ventanita del PiP se cierra sola y el vídeo vuelve al reproductor grande. **Nunca se ve doble** (antes salía la ventanita arriba y el reproductor debajo). | [ ] |
+| 4.9 | Desde el reproductor grande, pulsa **PiP**. | El grande se minimiza al mini (con el icono de PiP en su vídeo) y puedes seguir usando la app. En el mini/partido pone «Se está viendo en imagen en imagen» con «Volver aquí», que cierra el PiP. | [ ] |
 
 ## 5. Audio en segundo plano
 
@@ -127,11 +129,11 @@ Con el **bloqueo de rotación desactivado** en el Centro de Control.
 
 | # | Paso | Resultado esperado | ✔ |
 |---|---|---|---|
-| 10.1 | Con el partido sonando en el centro de partido, gira el iPhone a horizontal. | Pasa a **pantalla completa en horizontal**, sin cortar el vídeo. | [ ] |
+| 10.1 | Con el partido sonando en el centro de partido, gira el iPhone a horizontal. | Se abre el reproductor grande a **pantalla completa en horizontal**, sin cortar el vídeo. | [ ] |
 | 10.2 | Toca el vídeo en pantalla completa. | Salen los controles, incluido el botón de cerrar, todos alcanzables (no quedan bajo la isla ni en los bordes redondeados). | [ ] |
-| 10.3 | Vuelve a vertical (o pulsa cerrar). | Vuelve al centro de partido, sonando. | [ ] |
+| 10.3 | Vuelve a vertical, o pulsa la flecha (o desliza hacia abajo) para minimizar. | En vertical, el reproductor grande con el vídeo arriba; al minimizar, vuelve al centro de partido (o al mini), sonando. | [ ] |
 | 10.4 | Gira a horizontal en la Agenda, la Biblioteca y Ajustes. | Las pantallas se ven bien en horizontal (nada cortado), o se quedan en vertical si así está pensado. | [ ] |
-| 10.5 | Pulsa el botón de pantalla completa en vertical. | Abre la pantalla completa; al girar se adapta. | [ ] |
+| 10.5 | Pulsa el botón de pantalla completa en vertical (en el partido o en el reproductor grande). | Gira a horizontal con el vídeo a pantalla completa; el mismo botón lo devuelve a vertical. | [ ] |
 
 ## 11. Volver a la app y cortes de red
 
@@ -160,6 +162,28 @@ Con el **bloqueo de rotación desactivado** en el Centro de Control.
 | 13.2 | Ajustes → Accesibilidad → Texto más grande al máximo. | Se lee todo; nada se corta ni se solapa en Agenda, centro de partido y Ajustes. | [ ] |
 | 13.3 | VoiceOver: recorre la Agenda y el reproductor. | Cada partido y cada botón se anuncia en español con sentido («Reproducir», «Directo, 8 segundos de retraso»…). | [ ] |
 | 13.4 | Reducir movimiento activado. | Sin animaciones de muelle ni zoom grandes; todo sigue funcionando. | [ ] |
+
+## 14. La vuelta de hoja (lo que Isma vio mal en el iPhone)
+
+| # | Paso | Resultado esperado | ✔ |
+|---|---|---|---|
+| 14.1 | Abre la **Agenda** y la **Biblioteca** en claro y en oscuro. | El título grande va **arriba** (como en cualquier app de iOS) y debajo, dentro de lo que se desplaza, la tira de días / el selector Favoritos · Recientes · Listas. **Ninguna banda vacía** (ni blanca ni del color del fondo) encima ni debajo del título. | [ ] |
+| 14.2 | Agenda: toca varios días de la tira. | Cada píldora dice «Hoy 23 · 5», «Mañana 24 · 2»…; la elegida se rellena de azul y se desliza; los partidos cambian. | [ ] |
+| 14.3 | Agenda con tus gustos guardados (los de la web). | Se abre en **«Para ti»** y solo salen tus ligas, equipos y selecciones (las **reservas argentinas ya no salen primero**, ni salen). «Todos» enseña todo. Los partidos de tu equipo llevan una estrella. Los que van en directo, arriba; los terminados, al final. | [ ] |
+| 14.4 | Toca el botón de ajustes junto a «Para ti» (o Ajustes → Tu fútbol). | «¿Qué fútbol te mueve?» con chips de ligas, equipos y nacionalidades (con bandera) y un hueco para añadir otros. Marca o quita uno y **Guardar**: la agenda cambia al momento y la web ve los mismos gustos. | [ ] |
+| 14.5 | Sin gustos (bórralos todos y guarda). | La agenda enseña todos los partidos; «Para ti» no sale y queda el botón «Personalizar». Con un servidor recién instalado (sin personalizar nunca) sale la tarjeta «Personaliza tu agenda» con «Ahora no». | [ ] |
+| 14.6 | Biblioteca → **Listas**. | Las categorías de la lista (DEPORTES, GENERALISTAS…) salen **agrupadas y plegadas**, con su número de canales, como en la web. Tocar una la despliega; otra vez, la pliega. Arriba, la lista activa y «Cambiar» para elegir otra. | [ ] |
+| 14.7 | Biblioteca → Listas → escribe en el buscador. | Filtra dentro de la lista y despliega solas las categorías con resultados. | [ ] |
+| 14.8 | Biblioteca → **Favoritos**. | Cada canal con su dorsal (número o inicial) y, si la agenda lo anuncia hoy, «● En directo…» o «A las 21:00, Local – Visitante». Recientes, por Hoy / Ayer / Esta semana / Antes. | [ ] |
+| 14.9 | Toca un canal de la biblioteca (p. ej. BOING). | Empieza a sonar y se abre el **reproductor grande** (vídeo arriba, título, estado, favorito, PiP, «Más» y otros canales de la lista). | [ ] |
+| 14.10 | En el reproductor grande, **desliza hacia abajo** desde el vídeo o la cabecera. | El reproductor baja siguiendo el dedo (se encoge un poco); al soltar pasado el umbral (o con un golpe rápido) se minimiza al mini con un muelle; si sueltas antes, vuelve arriba. | [ ] |
+| 14.11 | En el mini, **desliza hacia arriba**. | Se abre otra vez el reproductor grande. Tocarlo también. **Siempre se puede volver** una vez minimizado. | [ ] |
+| 14.12 | En el mini, desliza **hacia un lado** (o la X). | Se va por ese lado y se detiene la reproducción. | [ ] |
+| 14.13 | Con algo sonando en el iPhone y otra cosa en el PC, Ajustes → **Dónde se está reproduciendo**. | Cada sesión con su canal y sus dispositivos: el iPhone (icono de móvil, su nombre, «Este dispositivo», Reproduciendo) y el PC (icono de ordenador, «Chrome · Windows» o similar). Pausa en el PC: en menos de 15 s (su siguiente latido) pasa a «En pausa». Para en el PC: desaparece. | [ ] |
+| 14.14 | En esa sección, «Ver aquí» en la sesión del PC. | El iPhone se une a ese canal y abre el reproductor grande (la sesión del motor se comparte). | [ ] |
+| 14.15 | Buscar → escribe «dazn». | Arriba, «En tu biblioteca» con tus canales al instante (y lo que emiten hoy); debajo, «En el motor AceStream» con la disponibilidad. Tocar uno lo pone a sonar en el reproductor grande. | [ ] |
+| 14.16 | Ajustes → Listas. | Tus listas guardadas con la activa marcada; tocar otra la activa (la Biblioteca cambia). Deslizar: Actualizar / Borrar. Guardar una lista nueva con su dirección M3U. | [ ] |
+| 14.17 | Abre la app sin red (modo avión) tras haberla usado. | Agenda, biblioteca y «Para ti» salen al instante con lo guardado (los gustos también se guardan), con el aviso «Sin conexión». | [ ] |
 
 ## Cuando algo falla
 

@@ -141,7 +141,8 @@ struct FilaSesion: View {
                     Text(detalle)
                         .font(.caption)
                         .foregroundStyle(Tinta.texto2)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 4)
                 if !aqui {

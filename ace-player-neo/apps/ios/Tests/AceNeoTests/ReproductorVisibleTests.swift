@@ -216,6 +216,7 @@ final class PiPTests: XCTestCase {
         // Vuelve a la app tocando su icono: se cierra el PiP…
         app.volvioAPrimerPlano()
         XCTAssertEqual(falso.parados, 1, "Al volver a la app, el PiP se cierra (nunca dos vídeos)")
+        XCTAssertEqual(app.reproductor.vista, .grande, "El vídeo vuelve al reproductor grande")
 
         // …y AVKit pide restaurar la interfaz: se enseña el reproductor ANTES de devolver la imagen.
         var grandeAlCompletar: Bool?

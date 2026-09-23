@@ -117,6 +117,8 @@ final class CapturasUITests: XCTestCase {
         buscador.tap()
         buscador.typeText("dazn\n")
         XCTAssertTrue(conTextoUI(app, "DAZN 1 HD").waitForExistence(timeout: 15), "Sin resultados")
+        XCTAssertTrue(conTextoUI(app, "En tu biblioteca").exists, "Buscar no enseña lo de tu biblioteca")
+        XCTAssertTrue(conTextoUI(app, "DAZN LaLiga FHD").exists, "Buscar no encuentra en tu biblioteca")
         captura(app, "\(modo)-11-buscar")
 
         // Ajustes con «Dónde se está reproduciendo» (este iPhone y el ordenador).
@@ -125,6 +127,15 @@ final class CapturasUITests: XCTestCase {
         XCTAssertTrue(elementoUI(app, "visor-este-dispositivo").waitForExistence(timeout: 20), "Sin «Este dispositivo»")
         captura(app, "\(modo)-12-ajustes")
         elementoUI(app, "mini-detener").tap()
+
+        // Ajustes → Listas.
+        let listasAjustes = elementoUI(app, "enlace-listas")
+        if listasAjustes.waitForExistence(timeout: 5) {
+            if !listasAjustes.isHittable { app.swipeUp() }
+            listasAjustes.tap()
+            XCTAssertTrue(app.navigationBars["Listas"].waitForExistence(timeout: 10), "No abre las listas")
+            captura(app, "\(modo)-13-ajustes-listas")
+        }
         app.terminate()
     }
 }

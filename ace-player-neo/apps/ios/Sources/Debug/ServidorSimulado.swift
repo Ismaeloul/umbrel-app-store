@@ -43,6 +43,18 @@
             /// Canal que suena en este iPhone (entre `stream` y `release`).
             var sonando: String?
             var sonandoTitulo = ""
+            /// Listas guardadas (Ajustes → Listas) y la activa.
+            var listas: [ListaSimulada] = [
+                ListaSimulada(id: "principal", nombre: "Lista de Isma", url: "https://example.com/lista.m3u"),
+                ListaSimulada(id: "respaldo", nombre: "Respaldo", url: "https://example.com/respaldo.m3u"),
+            ]
+            var listaActiva = "principal"
+        }
+
+        struct ListaSimulada: Sendable {
+            var id: String
+            var nombre: String
+            var url: String
         }
 
         static let estado = OSAllocatedUnfairLock(initialState: Estado())
@@ -123,6 +135,11 @@
             case ("POST", "library"):
                 mutarBiblioteca(leerCuerpo(peticion))
                 return (200, json, Data(biblioteca().utf8))
+            case ("POST", _) where resto.hasPrefix("directories/"), ("DELETE", _) where resto.hasPrefix("directories/"):
+                mutarListas(metodo, resto, leerCuerpo(peticion))
+                return (200, json, Data(directorio().utf8))
+            case ("GET", "directories"):
+                return (200, json, Data(directorio().utf8))
             case ("GET", "search"):
                 return (200, json, Data(busqueda.utf8))
             case ("GET", "preferences"):
@@ -230,15 +247,44 @@
                     "a3a3a3a3e5f60718293a4b5c6d7e8f9012345678", "Antena 3 HD", tipo: "recent", categoria: "Generalistas",
                     fecha: .now.addingTimeInterval(-4 * dia)),
             ]
+            return "{" + directorioCampos(web: web) + #","favorites":["# + items.joined(separator: ",") + "],"
+                + #""history":["# + recientes.joined(separator: ",") + "]}"
+        }
+
+        /// Los campos de `DirectoryView` (sin llaves): canales de la activa, listas y la activa.
+        static func directorioCampos(web: [String]? = nil) -> String {
+            let (listas, activa) = estado.withLock { ($0.listas, $0.listaActiva) }
+            let canales = web ?? canalesLista.map { itemJSON($0.0, $0.1, tipo: "web", categoria: $0.2, lista: true) }
             let sincronizada = FechaISO.texto(.now.addingTimeInterval(-3600))
-            return [
-                #"{"web":["#, web.joined(separator: ","), "],",
-                #""webSyncedAt":"\#(sincronizada)","webSources":["#,
-                #"{"id":"principal","name":"Lista de Isma","url":"https://example.com/lista.m3u","type":"m3u","count":8,"syncedAt":"\#(sincronizada)","lastErrorAt":null,"lastError":null},"#,
-                #"{"id":"respaldo","name":"Respaldo","url":"https://example.com/respaldo.m3u","type":"m3u","count":3,"syncedAt":"\#(sincronizada)","lastErrorAt":null,"lastError":null}],"#,
-                #""activeWebSourceId":"principal","favorites":["#, items.joined(separator: ","), "],",
-                #""history":["#, recientes.joined(separator: ","), "]}",
-            ].joined()
+            let fuentes = listas.map { lista -> String in
+                let cuenta = lista.id == "principal" ? canalesLista.count : 3
+                return #"{"id":"\#(lista.id)","name":\#(texto(lista.nombre)),"url":\#(texto(lista.url)),"type":"m3u","count":\#(cuenta),"syncedAt":"\#(sincronizada)","lastErrorAt":null,"lastError":null}"#
+            }
+            return #""web":["# + canales.joined(separator: ",") + #"],"webSyncedAt":"\#(sincronizada)","webSources":["#
+                + fuentes.joined(separator: ",") + #"],"activeWebSourceId":"\#(activa)""#
+        }
+
+        static func directorio() -> String { "{" + directorioCampos() + "}" }
+
+        /// Activar, borrar y guardar listas (Ajustes → Listas).
+        private static func mutarListas(_ metodo: String, _ resto: String, _ cuerpo: Data) {
+            let partes = resto.split(separator: "/").map(String.init)
+            let entrada = try? JSONDecoder().decode(DirectorySyncBody.self, from: cuerpo)
+            let nombre = entrada?.name
+            let url = entrada?.url
+            let nueva = entrada != nil && entrada?.sourceId == nil
+            estado.withLock { estado in
+                if metodo == "POST", partes.count == 3, partes[2] == "activate" {
+                    estado.listaActiva = partes[1]
+                } else if metodo == "DELETE", partes.count == 2, estado.listas.count > 1 {
+                    estado.listas.removeAll { $0.id == partes[1] }
+                    if estado.listaActiva == partes[1] { estado.listaActiva = estado.listas.first?.id ?? "principal" }
+                } else if metodo == "POST", resto == "directories/sync", nueva, let url {
+                    let id = "lista-\(estado.listas.count + 1)"
+                    estado.listas.append(ListaSimulada(id: id, nombre: nombre ?? "Lista nueva", url: url))
+                    estado.listaActiva = id
+                }
+            }
         }
 
         // MARK: Gustos

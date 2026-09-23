@@ -133,6 +133,9 @@ public final class AppModel {
         if biblioteca == nil, let guardada = await entorno.cache.leer(LibraryView.self, de: .biblioteca) {
             biblioteca = guardada.valor
         }
+        if preferencias == nil, let guardadas = await entorno.cache.leer(Preferences.self, de: .preferencias) {
+            preferencias = guardadas.valor
+        }
         vigilarRed()
         arrancarTiempoReal()
         await refrescarArranque()
@@ -151,6 +154,7 @@ public final class AppModel {
             reproductor.dispositivoId = arranque.device?.id
             if let activo = await entorno.servidores.conocido() { conexion = .conectado(activo) }
             try? await entorno.cache.guardar(arranque.library, en: .biblioteca)
+            try? await entorno.cache.guardar(arranque.preferences, en: .preferencias)
         } catch let error as APIError {
             if case .necesitaEmparejar = error { return }
             conexion = .sinConexion(error.mensaje)
@@ -235,6 +239,12 @@ public final class AppModel {
     /// PiP, se cierra y el vídeo vuelve al reproductor (nunca dos a la vez);
     /// después se comprueba la señal y se reconecta si hacía falta.
     public func volvioAPrimerPlano() {
+        // Con el PiP abierto, el vídeo vuelve al reproductor grande (salvo que
+        // se vea el del partido). Se abre YA: AVKit no siempre pide restaurar
+        // la interfaz cuando el PiP se cierra desde la app.
+        if pip.activo, reproductor.canal != nil, reproductor.superficiesGrandes == 0, !reproductor.expandido {
+            reproductor.expandir()
+        }
         pip.volvioAPrimerPlano()
         guard fase == .lista, estuvoEnSegundoPlano else { return }
         estuvoEnSegundoPlano = false
@@ -327,6 +337,7 @@ public final class AppModel {
         do {
             let respuesta = try await entorno.api.enviar(API.guardarPreferencias(cuerpo))
             preferencias = respuesta.preferences
+            try? await entorno.cache.guardar(respuesta.preferences, en: .preferencias)
             return true
         } catch {
             let convertido = APIError.desde(error)
@@ -429,17 +440,47 @@ public final class AppModel {
     /// Cambia la lista (directorio) activa.
     public func activarLista(_ id: String) async {
         do {
-            let directorio = try await entorno.api.enviar(API.activarDirectorio(id: id))
-            if var actual = biblioteca {
-                actual.web = directorio.web
-                actual.webSources = directorio.webSources
-                actual.activeWebSourceId = directorio.activeWebSourceId
-                actual.webSyncedAt = directorio.webSyncedAt
-                aplicarBiblioteca(actual)
-            }
+            aplicarDirectorio(try await entorno.api.enviar(API.activarDirectorio(id: id)))
         } catch {
             avisos.mostrar(APIError.desde(error).mensaje, tono: .error)
         }
+    }
+
+    /// Guarda (o vuelve a descargar, con `id`) una lista remota M3U o HTML.
+    @discardableResult
+    public func sincronizarLista(url: String, nombre: String? = nil, tipo: WebSourceType = .m3u, id: String? = nil)
+        async -> Bool
+    {
+        do {
+            let cuerpo = DirectorySyncBody(url: url, type: tipo, sourceId: id, name: nombre)
+            aplicarDirectorio(try await entorno.api.enviar(API.sincronizarDirectorio(cuerpo)))
+            avisos.mostrar(id == nil ? "Lista guardada" : "Lista actualizada", tono: .ok)
+            return true
+        } catch {
+            let convertido = APIError.desde(error)
+            if case .cancelado = convertido { return false }
+            avisos.mostrar(convertido.mensaje, tono: .error)
+            return false
+        }
+    }
+
+    /// Borra una lista guardada (el servidor no deja borrar la última).
+    public func borrarLista(_ id: String) async {
+        do {
+            aplicarDirectorio(try await entorno.api.enviar(API.borrarDirectorio(id: id)))
+            avisos.mostrar("Lista borrada", tono: .ok)
+        } catch {
+            avisos.mostrar(APIError.desde(error).mensaje, tono: .error)
+        }
+    }
+
+    private func aplicarDirectorio(_ directorio: DirectoryView) {
+        guard var actual = biblioteca else { return }
+        actual.web = directorio.web
+        actual.webSources = directorio.webSources
+        actual.activeWebSourceId = directorio.activeWebSourceId
+        actual.webSyncedAt = directorio.webSyncedAt
+        aplicarBiblioteca(actual)
     }
 
     // MARK: Motor

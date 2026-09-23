@@ -47,11 +47,14 @@ final class BuscarModelo {
     }
 }
 
-/// Buscar: canales del motor AceStream por nombre.
+/// Buscar, como la web: mientras se escribe, lo que ya tienes («En tu
+/// biblioteca», al instante, con lo que emite cada canal hoy) y, debajo, lo
+/// que encuentra el motor («En el motor AceStream», con su disponibilidad).
 struct BuscarView: View {
     @Environment(AppModel.self) private var app
     @State private var vm: BuscarModelo
     @State private var texto = ""
+    @State private var antena = IndiceAntena.vacio
 
     init(entorno: Entorno) {
         _vm = State(initialValue: BuscarModelo(entorno: entorno))
@@ -61,55 +64,54 @@ struct BuscarView: View {
         NavigationStack {
             contenido
                 .navigationTitle("Buscar")
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) { IndicadorMotor() }
+                }
                 .background(Tinta.fondo.ignoresSafeArea())
                 .scrollContentBackground(.hidden)
-                .searchable(text: $texto, placement: .navigationBarDrawer(displayMode: .always), prompt: "Canal, partido o competición")
+                .searchable(
+                    text: $texto, placement: .navigationBarDrawer(displayMode: .always),
+                    prompt: "Canal, partido o competición")
                 .onSubmit(of: .search) { Task { await vm.buscar(texto, esperar: false) } }
                 .task(id: texto) { await vm.buscar(texto) }
+                .task(id: app.agenda?.generatedAt) {
+                    await app.cargarAgendaGuardada()
+                    antena = IndiceAntena(agenda: app.agenda, reloj: RelojMadrid(.now))
+                }
         }
         .reservaMini()
     }
 
+    /// Lo de tu biblioteca que casa con lo escrito (sin repetir un mismo canal).
+    private var locales: [Item] {
+        let consulta = texto.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !consulta.isEmpty, let biblioteca = app.biblioteca else { return [] }
+        var vistos = Set<String>()
+        let todos = (biblioteca.favorites + biblioteca.history + biblioteca.web).filter {
+            vistos.insert($0.id.lowercased()).inserted
+        }
+        return Array(ReglasBiblioteca.filtrar(todos, texto: consulta).prefix(25))
+    }
+
     @ViewBuilder private var contenido: some View {
-        if vm.buscando && vm.resultados.isEmpty {
-            List {
-                ForEach(0..<5, id: \.self) { _ in
-                    FilaResultado(resultado: SearchResult.muestra)
-                        .listRowBackground(Tinta.superficie)
-                }
-            }
-            .redacted(reason: .placeholder)
-            .disabled(true)
-        } else if let fallo = vm.fallo {
-            ContentUnavailableView {
-                Label("No se ha podido buscar", systemImage: "exclamationmark.magnifyingglass")
-            } description: {
-                Text(fallo)
-            } actions: {
-                Button("Reintentar") { Task { await vm.buscar(texto, esperar: false) } }
-                    .buttonStyle(.borderedProminent)
-            }
-        } else if vm.buscado.isEmpty {
+        let propios = locales
+        if texto.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && vm.buscado.isEmpty {
             ContentUnavailableView(
-                "Busca en el motor", systemImage: "magnifyingglass",
-                description: Text("Escribe el nombre de un canal para buscarlo en la red AceStream."))
-        } else if vm.resultados.isEmpty {
-            ContentUnavailableView.search(text: vm.buscado)
+                "Busca un canal", systemImage: "magnifyingglass",
+                description: Text("En tu biblioteca, al instante, y en la red AceStream."))
         } else {
-            List(vm.resultados) { resultado in
-                Button {
-                    abrir(resultado)
-                } label: {
-                    FilaResultado(resultado: resultado)
-                }
-                .foregroundStyle(Tinta.texto)
-                .listRowBackground(Tinta.superficie)
-                .contextMenu {
-                    Button {
-                        Task { await app.alternarFavorito(id: resultado.id, titulo: resultado.title, ih: resultado.ih) }
-                    } label: {
-                        Label(app.esFavorito(resultado.id) ? "Quitar de favoritos" : "Añadir a favoritos", systemImage: "star")
+            List {
+                if !propios.isEmpty {
+                    Section {
+                        ForEach(propios) { item in filaLocal(item, en: propios) }
+                    } header: {
+                        cabecera("En tu biblioteca", cuenta: propios.count)
                     }
+                }
+                Section {
+                    motor
+                } header: {
+                    cabecera("En el motor AceStream", cuenta: vm.resultados.isEmpty ? nil : vm.resultados.count)
                 }
             }
             .listStyle(.insetGrouped)
@@ -117,14 +119,112 @@ struct BuscarView: View {
         }
     }
 
-    private func canal(_ resultado: SearchResult) -> CanalReproducible {
+    private func cabecera(_ titulo: String, cuenta: Int?) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(titulo)
+                .font(.headline)
+                .foregroundStyle(Tinta.texto)
+            if let cuenta {
+                Text("\(cuenta)")
+                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(Tinta.texto3)
+            }
+        }
+        .textCase(nil)
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    @ViewBuilder private var motor: some View {
+        if vm.buscando && vm.resultados.isEmpty {
+            ForEach(0..<3, id: \.self) { _ in
+                FilaResultado(resultado: SearchResult.muestra)
+                    .listRowBackground(Tinta.superficie)
+                    .redacted(reason: .placeholder)
+            }
+        } else if let fallo = vm.fallo {
+            VStack(alignment: .leading, spacing: 8) {
+                Label(fallo, systemImage: "exclamationmark.triangle")
+                    .font(.subheadline)
+                    .foregroundStyle(Tinta.falloTinta)
+                Button("Reintentar") { Task { await vm.buscar(texto, esperar: false) } }
+                    .buttonStyle(.bordered)
+            }
+            .padding(.vertical, 4)
+            .listRowBackground(Tinta.superficie)
+        } else if vm.buscado.isEmpty {
+            Text("Escribe al menos 2 letras para buscar en la red AceStream.")
+                .font(.subheadline)
+                .foregroundStyle(Tinta.texto2)
+                .listRowBackground(Tinta.superficie)
+        } else if vm.resultados.isEmpty {
+            Text("El motor no encuentra nada con «\(vm.buscado)».")
+                .font(.subheadline)
+                .foregroundStyle(Tinta.texto2)
+                .listRowBackground(Tinta.superficie)
+        } else {
+            ForEach(vm.resultados) { resultado in
+                Button {
+                    abrir(resultado)
+                } label: {
+                    FilaResultado(resultado: resultado)
+                }
+                .foregroundStyle(Tinta.texto)
+                .listRowBackground(Tinta.superficie)
+                .swipeActions(edge: .leading) {
+                    Button {
+                        Task { await app.alternarFavorito(id: resultado.id, titulo: resultado.title, ih: resultado.ih) }
+                    } label: {
+                        Label(app.esFavorito(resultado.id) ? "Quitar" : "Favorito", systemImage: "star")
+                    }
+                    .tint(Tinta.acento)
+                }
+                .contextMenu {
+                    Button {
+                        Task { await app.alternarFavorito(id: resultado.id, titulo: resultado.title, ih: resultado.ih) }
+                    } label: {
+                        Label(
+                            app.esFavorito(resultado.id) ? "Quitar de favoritos" : "Añadir a favoritos",
+                            systemImage: "star")
+                    }
+                }
+            }
+        }
+    }
+
+    private func filaLocal(_ item: Item, en lista: [Item]) -> some View {
+        Button {
+            abrirLocal(item, en: lista)
+        } label: {
+            FilaCanal(
+                item: item,
+                favorito: app.esFavorito(item.id),
+                antena: antena.para(titulo: item.title, alias: item.alias, marcadores: app.marcadores),
+                subtitulo: ReglasBiblioteca.subtitulo(item, seccion: item.type == .web ? .listas : .favoritos),
+                caido: false)
+        }
+        .foregroundStyle(Tinta.texto)
+        .listRowBackground(Tinta.superficie)
+    }
+
+    private func canalDe(resultado: SearchResult) -> CanalReproducible {
         CanalReproducible(id: resultado.id, titulo: resultado.title, ih: resultado.ih, origen: "acestream")
+    }
+
+    private func canalDe(item: Item) -> CanalReproducible {
+        CanalReproducible(
+            id: item.id, titulo: item.title, ih: item.ih,
+            listaId: item.type == .web ? app.biblioteca?.activeWebSourceId : nil,
+            origen: item.type == .web ? "m3u" : (item.type == .fav ? "favorites" : "history"))
     }
 
     /// Reproduce y abre el reproductor grande (deslizando hacia abajo se queda en el mini).
     private func abrir(_ resultado: SearchResult) {
-        let elegido = canal(resultado)
-        app.reproducirCanal(elegido, lista: vm.resultados.map(canal))
+        app.reproducirCanal(canalDe(resultado: resultado), lista: vm.resultados.map { canalDe(resultado: $0) })
+        withAnimation(Muelle.heroe) { app.reproductor.expandir() }
+    }
+
+    private func abrirLocal(_ item: Item, en lista: [Item]) {
+        app.reproducirCanal(canalDe(item: item), lista: lista.map { canalDe(item: $0) })
         withAnimation(Muelle.heroe) { app.reproductor.expandir() }
     }
 }

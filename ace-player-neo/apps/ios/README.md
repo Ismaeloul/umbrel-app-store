@@ -18,6 +18,7 @@ apps/ios/
 ├── Sources/
 │   ├── App/                 # AceNeoApp, AppModel (estado global), Entorno (dependencias)
 │   ├── Core/
+│   │   ├── Dominio/         # reglas portadas de @ace/shared: «Para ti» (for-you.ts) y canales (channels.ts)
 │   │   ├── Models/          # Codable que reflejan @ace/shared (v1, eventos SSE, errores)
 │   │   ├── Networking/      # APIClient, rutas, errores + catálogo, ServerResolver, SSE
 │   │   ├── Auth/            # Llavero, direcciones (Tailscale/LAN), enlace QR, emparejar
@@ -27,14 +28,59 @@ apps/ios/
 │   ├── Design/              # tokens «Luz de focos», muelles, cristal y componentes
 │   └── Debug/               # servidor y motor de vídeo simulados para XCUITest (solo Debug)
 ├── Tests/
-│   ├── AceNeoTests/         # XCTest: núcleo, reproductor, centro de partido, reglas de fuentes y HLS real
-│   └── AceNeoUITests/       # XCUITest: emparejar, partido → mini → volver, borrar → deshacer,
-│                            #   capturas claro/oscuro y E2E contra el backend de verdad
+│   ├── AceNeoTests/         # XCTest: núcleo, reproductor, PiP y gestos (con dobles), centro de partido,
+│   │   │                    #   reglas de fuentes, agenda, biblioteca, HLS real y…
+│   │   └── Vectores/        #   …los vectores de «Para ti» y de canales generados desde TypeScript
+│   └── AceNeoUITests/       # XCUITest: emparejar, tira de días, partido → mini → grande (tocando y
+│                            #   deslizando) → minimizar deslizando, listas agrupadas, «Dónde se está
+│                            #   reproduciendo», borrar → deshacer, capturas claro/oscuro y E2E real
 └── scripts/
     ├── build-ipa.sh                 # IPA sin firmar en un Mac (lo usa también la CI)
     ├── generar-recursos.mjs         # iconos PNG (Chrome + Playwright) y colores
     ├── generar-catalogo-errores.mjs # ErrorCatalog.swift desde packages/shared/src/errors.ts
+    ├── generar-vectores.mjs         # vectores de «Para ti» y canales ejecutando el TypeScript de verdad
     └── pila-e2e.mjs                 # motor falso + backend de verdad para el E2E (CI)
+
+## Pantallas (lo mismo que la web en el móvil, en nativo)
+
+- **Sin franjas propias arriba.** Nada de `safeAreaInset(edge: .top)` ni barras
+  de sistema hechas a mano: en el iPhone real (iOS 26.6) la tira de días y el
+  selector de la biblioteca metidos ahí salían como bandas VACÍAS. El título
+  grande del sistema va arriba y lo demás, dentro del contenido que se desplaza.
+- **Agenda**: tira de días en píldoras (con el número de partidos del filtro),
+  **«Para ti · n / Todos · n»** con los gustos guardados en el servidor y las
+  MISMAS reglas que la web (`Core/Dominio/ParaTi.swift`, port de
+  `packages/shared/src/domain/for-you.ts`: alias de ligas, guarda de
+  Hypermotion, reglas de nacionalidad, alias de equipos). Por defecto «Para
+  ti» si hay gustos; sin ellos, la tarjeta «Personaliza tu agenda». Partidos
+  por competición en tarjetas (primero lo que va en directo, los terminados al
+  final, como `groupByCompetition` de la web), con «En 3 h 16 min», el anillo
+  del minuto, los canales y la estrella de «tu equipo».
+- **Tus gustos** (desde la agenda y desde Ajustes): chips de ligas, equipos y
+  nacionalidades con bandera, añadir a mano (misma clave = mismo chip), topes
+  del servidor. Se guardan con `PUT preferences` y la agenda cambia al momento.
+- **Biblioteca**: «Favoritos n / Recientes n / Listas n» como primera fila de
+  la lista (bajo el título y el buscador). **Listas agrupadas por categoría**
+  en secciones plegables con su recuento (orden alfabético, «General» para las
+  vacías), selector de la lista activa y buscador que filtra dentro (y
+  despliega lo que encuentra). Favoritos con el dorsal del canal y **lo que
+  emite hoy** («● Real Madrid 1–0 Getafe» / «A las 21:00, …», con el
+  emparejado de canales de la web portado en `Core/Dominio/Canales.swift`) y
+  «Ya no está en tu lista»; Recientes por tramos (Hoy, Ayer, Esta semana, Antes).
+- **Buscar** como la web: mientras escribes, «En tu biblioteca» (al
+  instante, con lo que emite cada canal) y, debajo, «En el motor AceStream»
+  con su disponibilidad. Tocar un resultado lo pone a sonar y abre el
+  reproductor grande.
+- **Centro de partido**: el vídeo arriba (como la web), luego el partido, las
+  acciones y las fuentes.
+- **Ajustes → Listas**: las listas guardadas (tocar activa; deslizar para
+  actualizar o borrar) y guardar una M3U/HTML nueva, como en la web.
+- **Ajustes → «Dónde se está reproduciendo»**: cada sesión abierta en el motor
+  con su canal y sus dispositivos (ordenador o móvil, nombre, «Este
+  dispositivo», reproduciendo o en pausa), en tiempo real (evento SSE
+  `playback.sessions` y, de respaldo, `GET playback` cada 20 s mientras se ve),
+  y «Ver aquí» para unirse desde el iPhone. Los campos nuevos del contrato se
+  decodifican como opcionales (un servidor anterior no rompe nada).
 ```
 
 ## Cómo se habla con el servidor
@@ -69,9 +115,24 @@ apps/ios/
 ## Reproductor
 
 Reproductor propio sobre `AVPlayerLayer` (no `AVPlayerViewController`): los
-controles son los de «Luz de focos» con cristal (Liquid Glass en iOS 26), el
-botón «Directo» enseña el retraso real y el mini-reproductor y la pantalla
-completa comparten el mismo `AVPlayer`.
+controles son los de «Luz de focos» con cristal (Liquid Glass en iOS 26) y el
+botón «Directo» enseña el retraso real.
+
+- **Una sola capa de vídeo** (`SuperficieVideo`): las pantallas ponen huecos
+  (`VistaVideo`) y la única `AVPlayerLayer` va al de más prioridad que esté en
+  pantalla: reproductor grande > centro de partido > mini. Nunca hay dos
+  imágenes del vídeo (antes, al volver del PiP se veía doble).
+- **Mini y grande** (`CapaReproductor`, por encima de las pestañas, con
+  `matchedGeometryEffect` del vídeo y del fondo): tocar el mini o
+  **deslizarlo hacia arriba** abre el reproductor grande; en el grande,
+  **deslizar hacia abajo** lo minimiza (sigue al dedo, se encoge y suelta con
+  muelle; por distancia o por velocidad) y la flecha también; deslizar el mini
+  **de lado** o su X lo detiene. Siempre se puede volver: el mini sigue ahí.
+  Las decisiones de los gestos son funciones puras (`GestosReproductor`) con
+  sus tests. El grande enseña qué suena, la línea de estado, favorito/PiP/más
+  y las **fuentes del partido** (el mismo selector del centro de partido) u
+  otros canales de la lista; en horizontal, solo el vídeo a pantalla completa.
+  Reproducir desde la biblioteca o la búsqueda abre el grande directamente.
 
 - `Reproductor` es `runtime.ts` de la web portado sobre la misma máquina de
   estados (`MaquinaConexion`): pide `channels/:id/stream?client=ios` (URL del
@@ -93,9 +154,19 @@ completa comparten el mismo `AVPlayer`.
   reconexiones, retraso).
 - Sistema: `AVAudioSession` `.playback` con interrupciones y auriculares
   desconectados → pausa; `MPNowPlayingInfoCenter` + `MPRemoteCommandCenter`
-  (reproducir/pausa, canal anterior/siguiente); PiP con
-  `canStartPictureInPictureAutomaticallyFromInline` y restauración de la
-  interfaz; AirPlay (`AVRoutePickerView`); pantalla completa en horizontal.
+  (reproducir/pausa, canal anterior/siguiente); AirPlay (`AVRoutePickerView`);
+  pantalla completa en horizontal.
+- **PiP** (`GestorPiP`, un único `AVPictureInPictureController` sobre la
+  única capa, con `canStartPictureInPictureAutomaticallyFromInline`): al salir
+  de la app arranca solo (AVKit avisa con `willStart` y la capa no se suelta);
+  sin PiP, la capa suelta el `AVPlayer` para que siga el audio. **Al volver a
+  la app con el PiP abierto se cierra** y AVKit pide restaurar: se abre el
+  reproductor grande (o se usa el del partido si está en pantalla) y SOLO
+  después se completa con `true`, así el vídeo vuelve a su sitio. Mientras el
+  PiP está abierto, los huecos enseñan «Se está viendo en imagen en imagen»
+  (con «Volver aquí»), nunca otra imagen. Abrir el PiP desde el grande lo
+  minimiza. El controlador va detrás de un protocolo (`ControladorPiP`) para
+  probar todo esto con un doble.
 - `MotorVideo` es el protocolo detrás del que está AVPlayer: los tests usan uno
   falso y las pruebas de interfaz uno simulado (`Debug/MotorSimulado.swift`).
   `MotorAVPlayerTests` reproduce de verdad el HLS de prueba de Apple en el
@@ -199,9 +270,21 @@ tal cual.
   emparejar con el aviso) y se empareja otra vez con el enlace del QR. Fuera de
   la CI (sin `ACE_E2E_PUERTO`) se salta. En local:
   `node scripts/pila-e2e.mjs` y `TEST_RUNNER_ACE_E2E_PUERTO=18790 xcodebuild test …`.
-- **Capturas**: `CapturasUITests` recorre las pantallas principales en claro y
-  en oscuro (`-AceNeoApariencia claro|oscuro`, solo Debug) y el E2E añade las
-  suyas con vídeo real. La CI las saca del `.xcresult` con su nombre
-  (`claro-02-agenda.png`, `e2e-03-reproduciendo-video-real.png`…) al artefacto
-  `AceNeo-capturas`; los logs de la pila van a `AceNeo-pila-e2e-logs` y el
-  detalle de cualquier test que falle, al paso «Resumen de los tests».
+- **Vectores de las reglas**: `node scripts/generar-vectores.mjs` ejecuta
+  `for-you.ts` y `channels.ts` de verdad (Node 23.6+ quita los tipos solo) con
+  una batería de entradas y escribe `Tests/AceNeoTests/Vectores/vectores-dominio.json`;
+  `VectoresDominioTests` exige que el port de Swift dé lo mismo y la CI
+  comprueba que el JSON está al día (`--check`): si la web cambia las reglas
+  y la app no, la CI de iOS falla.
+- **Capturas**: `CapturasUITests` recorre TODAS las pantallas en claro y en
+  oscuro (`-AceNeoApariencia claro|oscuro`, solo Debug): emparejar, agenda
+  «Para ti» y «Todos», tus gustos, centro de partido, mini, reproductor
+  grande, biblioteca (favoritos, recientes y listas agrupadas), buscar y
+  ajustes con «Dónde se está reproduciendo»; el E2E añade las suyas con vídeo
+  real. La CI las saca del `.xcresult` con su nombre (`claro-02-agenda-para-ti.png`,
+  `e2e-04-donde-se-esta-reproduciendo.png`…) al artefacto `AceNeo-capturas`;
+  los logs de la pila van a `AceNeo-pila-e2e-logs` y el detalle de cualquier
+  test que falle, al paso «Resumen de los tests». La CI usa el Xcode y el
+  simulador de iOS más recientes del runner (hoy Xcode 26.6 e iOS 26.5, iPhone
+  17 Pro); aun así, lo que pinta el iPhone real manda: las bandas vacías de la
+  0.7.0 no salían en el simulador.

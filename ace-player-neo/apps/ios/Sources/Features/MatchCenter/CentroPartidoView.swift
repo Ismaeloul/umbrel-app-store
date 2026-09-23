@@ -15,9 +15,10 @@ struct CentroPartidoView: View {
 
     var body: some View {
         ScrollView {
+            // Como la web: el vídeo arriba (con su línea de estado), luego el partido.
             VStack(alignment: .leading, spacing: 18) {
-                CabeceraPartido(partido: modelo.partido, marcador: marcador)
                 zonaReproductor
+                CabeceraPartido(partido: modelo.partido, marcador: marcador)
                 AccionesPartido(modelo: modelo, pegando: $pegando)
                 SelectorFuentes(modelo: modelo)
             }

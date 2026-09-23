@@ -21,6 +21,7 @@ struct AjustesView: View {
                 Group {
                     SeccionDondeSuena()
                     seccionFutbol
+                    seccionListas
                     seccionReproduccion
                     seccionServidor
                     seccionMotor
@@ -106,6 +107,34 @@ struct AjustesView: View {
             Text("Tu fútbol")
         } footer: {
             Text("La agenda «Para ti» enseña los partidos de tus ligas, equipos y selecciones, con las mismas reglas que la web.")
+        }
+    }
+
+    // MARK: Listas
+
+    private var seccionListas: some View {
+        let biblioteca = modelo.biblioteca
+        let activa = biblioteca?.webSources.first { $0.id == biblioteca?.activeWebSourceId }
+        return Section {
+            NavigationLink {
+                ListasView()
+            } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("Listas de canales", systemImage: "list.bullet.rectangle")
+                        .foregroundStyle(Tinta.texto)
+                    Text(
+                        activa.map { "Activa: \($0.name) · \($0.count) canales · \(biblioteca?.webSources.count ?? 0) guardadas" }
+                            ?? "Sin listas: guarda una M3U o HTML."
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(Tinta.texto2)
+                    .lineLimit(2)
+                }
+                .padding(.vertical, 2)
+            }
+            .accessibilityIdentifier("enlace-listas")
+        } header: {
+            Text("Listas")
         }
     }
 

@@ -180,8 +180,17 @@ struct PairingView: View {
         .buttonStyle(.borderedProminent)
         .disabled(!vm.puedeEnviar)
         .padding(.horizontal, Medida.margen)
-        .padding(.vertical, 10)
-        .background(.bar)
+        .padding(.top, 18)
+        .padding(.bottom, 8)
+        // Sin barra de material (en oscuro salía como una franja gris): el
+        // contenido se funde con el fondo por detrás del botón.
+        .background(
+            LinearGradient(
+                colors: [Tinta.fondo.opacity(0), Tinta.fondo.opacity(0.92), Tinta.fondo],
+                startPoint: .top, endPoint: .bottom
+            )
+            .ignoresSafeArea()
+        )
         .accessibilityIdentifier("boton-emparejar")
     }
 
