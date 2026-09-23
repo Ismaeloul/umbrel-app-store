@@ -79,14 +79,11 @@ final class CapturasUITests: XCTestCase {
         mini.tap()
         let completo = elemento(app, "reproductor-completo")
         XCTAssertTrue(completo.waitForExistence(timeout: 10), "No abre la pantalla completa")
-        let cerrar = elemento(app, "boton-cerrar-completa")
-        if !cerrar.waitForExistence(timeout: 2) {
-            completo.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap()
-        }
-        XCTAssertTrue(cerrar.waitForExistence(timeout: 5))
+        XCTAssertNotNil(botonCerrarCompleta(app), "Sin controles en la pantalla completa")
         captura(app, "\(modo)-05-reproductor-completo")
+        let cerrar = try XCTUnwrap(botonCerrarCompleta(app), "El botón de cerrar se ha escondido")
         cerrar.tap()
-        XCTAssertTrue(mini.waitForExistence(timeout: 10))
+        XCTAssertTrue(mini.waitForExistence(timeout: 10), "Al cerrar no vuelve el mini")
         elemento(app, "mini-detener").tap()
 
         // Biblioteca.

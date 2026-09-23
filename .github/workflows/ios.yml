@@ -19,13 +19,23 @@ on:
     paths:
       - 'ace-player-neo/apps/ios/**'
       - 'ace-player-neo/packages/shared/fixtures/**'
-      - 'ace-player-neo/packages/shared/src/errors.ts'
+      - 'ace-player-neo/packages/shared/src/**'
+      # El E2E de la app corre contra el backend y el motor falso del monorepo.
+      - 'ace-player-neo/apps/server/src/**'
+      - 'ace-player-neo/apps/server/test/fake-engine/**'
+      - 'ace-player-neo/apps/web/e2e/support/**'
+      - 'ace-player-neo/pnpm-lock.yaml'
       - '.github/workflows/ios.yml'
   pull_request:
     paths:
       - 'ace-player-neo/apps/ios/**'
       - 'ace-player-neo/packages/shared/fixtures/**'
-      - 'ace-player-neo/packages/shared/src/errors.ts'
+      - 'ace-player-neo/packages/shared/src/**'
+      # El E2E de la app corre contra el backend y el motor falso del monorepo.
+      - 'ace-player-neo/apps/server/src/**'
+      - 'ace-player-neo/apps/server/test/fake-engine/**'
+      - 'ace-player-neo/apps/web/e2e/support/**'
+      - 'ace-player-neo/pnpm-lock.yaml'
       - '.github/workflows/ios.yml'
   workflow_dispatch:
 
@@ -233,6 +243,8 @@ jobs:
                   origen = os.path.join(base, adjunto.get("exportedFileName", ""))
                   nombre = adjunto.get("suggestedHumanReadableName") or os.path.basename(origen)
                   nombre = re.sub(r"_\d+_[0-9A-Fa-f-]{36}(\.\w+)$", r"\1", nombre)
+                  # upload-artifact no admite " : < > | * ? ni saltos de línea.
+                  nombre = re.sub(r'[\\/"<>:|*?\r\n]', "_", nombre)
                   if adjunto.get("isAssociatedWithFailure"):
                       nombre = "fallo-" + nombre
                   repeticion = adjunto.get("repetitionNumber") or 1
