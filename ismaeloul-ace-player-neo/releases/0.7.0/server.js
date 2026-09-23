@@ -66583,6 +66583,7 @@ function createDiagnostics(deps, options = {}) {
   };
   let seq = 0;
   let started = false;
+  const isMetricsOnly = (entry2) => entry2.code === "player_session";
   let starting = null;
   let pendingLines = [];
   let writeChain = Promise.resolve();
@@ -66653,7 +66654,7 @@ function createDiagnostics(deps, options = {}) {
   function add(entry2) {
     entries.push(entry2);
     if (entries.length > memoryEntries) entries.shift();
-    addTime(entry2.cause, Date.parse(entry2.at));
+    if (!isMetricsOnly(entry2)) addTime(entry2.cause, Date.parse(entry2.at));
     persist(entry2);
     bus.emit("diagnostics.new", entry2);
     return entry2;
@@ -66698,7 +66699,7 @@ function createDiagnostics(deps, options = {}) {
       for (const cause of DIAGNOSTIC_CAUSES) causeTimes[cause] = [];
       for (const entry2 of [...loaded, ...entries]) {
         const at = Date.parse(entry2.at);
-        if (at >= cutoff) {
+        if (at >= cutoff && !isMetricsOnly(entry2)) {
           addTime(entry2.cause, at);
           fresh[entry2.cause] += 1;
         }
@@ -66789,7 +66790,7 @@ function createDiagnostics(deps, options = {}) {
     list(query) {
       const since = query.since ? Date.parse(query.since) : null;
       const matching = entries.filter(
-        (entry2) => (!query.cause || entry2.cause === query.cause) && (since === null || Date.parse(entry2.at) > since)
+        (entry2) => !isMetricsOnly(entry2) && (!query.cause || entry2.cause === query.cause) && (since === null || Date.parse(entry2.at) > since)
       ).reverse();
       return {
         entries: matching.slice(0, query.limit ?? DEFAULT_LIST_LIMIT),
