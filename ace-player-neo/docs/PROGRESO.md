@@ -105,6 +105,28 @@
   (agenda, biblioteca, reproductor, partido y fuentes, salud/dispositivos/PWA).
   Parada 2 escrita (se completa con los verificadores).
 
+- **07:29: PAUSA POR CUOTA.** Isma avisa de que lleva el 96 % usado y se
+  reinicia a las 9:00. Paro a mano el workflow `wf_c97519e8-c5f` para que
+  no le pille a medias. Quedan **sin commitear** (a propósito: están a medias
+  y sin verificar) los cambios de sus 3 agentes:
+  - verificador de seguridad: `core/csrf.ts`, `main.ts`,
+    `playback/service.ts`, `deploy/umbrel/nginx.conf`,
+    `scripts/lib/blindaje.mjs`, tests nuevos (`test/security.test.ts`,
+    `playback/security.test.ts`, `test/process-handlers.test.ts`...);
+  - verificador de comportamientos: `test/numeros-0659.test.ts`,
+    `test/integration/escrituras.test.ts`, retoques de tests y de
+    `comportamientos.md`/`compat.md`;
+  - armazón web (B0): todo lo nuevo de `apps/web/` (src, index.html,
+    vite.config.ts, public, scripts, README).
+
+  **Cómo retomar a partir de las 9:00**: relanzar esos tres encargos como
+  REANUDACIÓN (que cada agente haga inventario de lo que hay en disco, lo
+  termine y pase sus comprobaciones), con el script del workflow
+  `wf_c97519e8-c5f` cambiando los prompts a "retoma"; después las 5 vistas
+  (3 a la vez), la integración de la web, E2E/axe/Lighthouse y capturas
+  (también con Claude in Chrome, que ya funciona), la prueba contra el motor
+  real y las FASES 3 y 4. Lo último commiteado y en verde es `a4fdbcf`.
+
 | Fase | Estado |
 |---|---|
 | 0 | hecha |
@@ -133,3 +155,5 @@
 
 Además, yo (orquestador): pruebas contra el motor real en Docker local
 (`analisis/motor-real.md`) y decisiones D1-D7.
+
+- 07:45: Isma ve las capturas de A, B y C y **confirma la A «Luz de focos»**.

@@ -376,3 +376,5 @@ Capturas:
 - **Cómo pedirlo:** «cambia la dirección a la B» (o a la C, o a la mezcla que
   quieras). Para comparar lado a lado, las capturas de las tres están en
   `opcion-*/capturas/` con los mismos nombres de pantalla, tamaño y tema.
+
+> **Confirmado por Isma** (23-sep-2026, 07:45, tras ver las capturas de A, B y C): se queda la **A «Luz de focos»**.
