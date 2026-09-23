@@ -185,3 +185,11 @@ Además, yo (orquestador): pruebas contra el motor real en Docker local
   `11bccfe`) con la **CI de iOS en verde** (run 35846082521).
 - 14:15: relanzo como reanudación el cierre de la FASE 2 (`wf_301f9bba-f18`)
   y la FASE 3 desde el reproductor y las pantallas (`wf_5c66a79d-00e`).
+- 15:45: cierre de la FASE 2 terminado (E2E 40/40 dos veces, revisión
+  visual 270/270, axe limpio, Lighthouse 95 en vistas sin vídeo, inventario
+  completo). FASE 4 parte A (CI del monorepo, README, acceso remoto) hecha
+  por otro agente; arreglados por mí Prettier y dos tests de temporizadores
+  que fallaban en la CI de GitHub. Commit `3607286` subido. Parada 3 escrita.
+- 15:50: FASE 4 parte B lanzada (`wf_dae75a47-bff`): cortar la release
+  0.7.0 en la carpeta de la app (solo en `rewrite-v2`), tests de
+  empaquetado, monitoring y `docs/despliegue.md`. iOS sigue en su workflow.

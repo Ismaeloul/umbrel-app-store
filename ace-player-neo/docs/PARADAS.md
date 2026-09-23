@@ -155,3 +155,65 @@ el vigilante decide si el motor ha caído (D9), la salud responde desde caché
   segundo dispositivo, y un soak real de 30 min (se hace con la web nueva).
 - Contrastar los parsers de la agenda con el HTML real de futbolenlatv.
 - Normalizadores de directorios duplicados en dos módulos (D16).
+
+### Verificación independiente del backend (añadido a la parada 2)
+
+- **Seguridad** (`seguridad.md`): 0 graves, 2 medios y 2 leves, todos
+  arreglados con su test: un salto del login de Umbrel con URLs que empiezan
+  por `//` (cerrado en nginx; 188/188 casos contra nginx real), un iPhone
+  emparejado que podía soltar la sesión de otro dispositivo, GET con efectos
+  lanzados desde otra app del NAS y una IP de la LAN en un documento.
+- **Comportamientos** (`verificacion-backend.md`): 0 reglas mal portadas, 0
+  tests que no prueben su regla y 0 funcionalidades perdidas; las 202
+  funciones de la 0.6.59 localizadas en la v2 y los 118 tests del servidor
+  portados.
+
+---
+
+## Parada 3 — FASE 2: web (23-sep-2026, ~15:45)
+
+### Qué se hizo
+
+- **Dirección visual**: 3 propuestas con maquetas y capturas, elegida la A
+  «Luz de focos» con injertos de B y C y **confirmada por ti**.
+- **Web** (`apps/web`, Vite + React 19 + TanStack Query + SSE): armazón con
+  el sistema de diseño (tokens OKLCH, Mona Sans y Martian Mono locales,
+  cristal con respaldo opaco, oscuro y claro), agenda, preferencias, centro
+  de partido y fuentes, reproductor (máquina de estados, mpegts.js y hls.js
+  bajo demanda, directo real, reconexiones con backoff, Media Session, PiP,
+  mini-reproductor), biblioteca, listas, buscar, ajustes, salud y
+  diagnóstico, dispositivos (emparejar con código + QR), ayuda de atajos y
+  PWA.
+
+### Resultados
+
+| Prueba | Resultado |
+|---|---|
+| Vitest + Testing Library | 668/668 |
+| E2E Playwright (Chrome y WebKit, escritorio e iPhone) | 40/40, dos veces seguidas |
+| Revisión visual automática (12 tamaños, 2 temas, 15 vistas) | 270/270 limpias; 273 capturas (selección en `docs/capturas/fase2/`) |
+| axe | 0 problemas serios o críticos en 60 pasadas |
+| Lighthouse móvil (4G) | rendimiento 95 en agenda, biblioteca, buscar y ajustes; 87-88 en las vistas con vídeo; accesibilidad 100; CLS < 0,05 |
+| JS inicial | 107 KB gzip (límite 150) |
+| Tiempo hasta la primera imagen | 0,45 s de mediana con el motor falso; < 5 s con el motor real |
+| Inventario de la 0.6.59 | todo presente (`verificacion-web.md`) |
+| En tu Chrome contra el motor real | reproducción, reconexiones, mini-reproductor, 0 errores de consola (GIF) |
+| Soak real de 30 min | 0 cortes, 851 MB, sesión cerrada al final |
+
+### Lo que no llega al objetivo
+
+- **LCP en 4G lento: 2,7 s** frente a 2,0 s. Antes de pintar se descargan
+  ~250 KB, de los que 98 KB son la tipografía Mona Sans del diseño. Bajar de
+  2 s pediría cambiar la tipografía o renderizar en el servidor. Sin
+  estrangular la red son ~0,4 s. Lo dejo anotado para que decidas.
+- **Vistas con vídeo: Lighthouse 87-88**, porque Chrome cuenta el primer
+  fotograma del vídeo como LCP.
+- **WebKit de Playwright en Windows no reproduce vídeo**: esos recorridos se
+  prueban en Chrome; en WebKit se comprueba que la app lo explica y no deja
+  sesiones abiertas. Falta probarlo en un iPhone real.
+
+### Decisiones
+
+D18-D21 en `decisiones.md` (verificación en paralelo, inventario con
+diferencias deliberadas en D20, y solo una selección de capturas en git
+porque el Umbrel clona el repo entero).

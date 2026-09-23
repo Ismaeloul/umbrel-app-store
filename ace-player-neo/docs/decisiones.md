@@ -308,3 +308,13 @@ conservador). Todas se pueden revertir.
 - **Por qué**: son lo que pedía el prompt (diseño nuevo, SSE sin sondeos,
   sesiones compartidas) o lo que ya fijan `arquitectura.md` y los README de
   cada vista. Revertir cualquiera es un cambio de diseño, no un arreglo.
+
+## D21. En git solo va una selección de capturas
+
+- **Decisión**: de las ~480 capturas de la revisión visual (≈45 MB) se sube
+  una por vista y tema en 390x844 y 1440x900, más las de `vivo/`
+  (≈6 MB). El resto se queda en el PC (`docs/capturas/fase2/<vista>/`,
+  ignorado por git) y se regenera con `apps/web/scripts/revision-visual.mjs`.
+- **Por qué**: el Umbrel clona el repositorio entero de la tienda al
+  actualizar, así que 45 MB de PNG harían cada actualización más lenta sin
+  aportar nada a la app.
