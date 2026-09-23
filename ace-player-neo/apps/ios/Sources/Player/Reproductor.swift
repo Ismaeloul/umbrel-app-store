@@ -80,8 +80,9 @@ public final class Reproductor {
     public private(set) var cambiosDeFuente = 0
     /// Veces que el vigilante saltó al directo por imagen congelada.
     public private(set) var saltosAlDirecto = 0
-    /// Reproductor a pantalla completa (horizontal).
-    public var pantallaCompleta = false
+    /// El reproductor grande está abierto (se abre desde el mini tocándolo o
+    /// deslizándolo hacia arriba, y se minimiza deslizándolo hacia abajo).
+    public private(set) var expandido = false
     /// Superficies de vídeo grandes en pantalla (el centro de partido); con
     /// alguna, el mini-reproductor se esconde.
     public private(set) var superficiesGrandes = 0
@@ -93,7 +94,24 @@ public final class Reproductor {
     /// El mini-reproductor se ve si hay algo que no se ha parado a propósito
     /// y no se está viendo ya en grande.
     public var visibleEnMini: Bool {
-        canal != nil && motivoParada != .usuario && superficiesGrandes == 0 && !pantallaCompleta
+        canal != nil && motivoParada != .usuario && superficiesGrandes == 0 && !expandido
+    }
+
+    /// Qué se ve del reproductor fuera de las pantallas de partido y canal.
+    public var vista: VistaReproductor {
+        if expandido && canal != nil { return .grande }
+        return visibleEnMini ? .mini : .ninguna
+    }
+
+    /// Abre el reproductor grande (desde el mini, el botón de pantalla completa o al volver del PiP).
+    public func expandir() {
+        guard canal != nil else { return }
+        expandido = true
+    }
+
+    /// Vuelve al mini-reproductor (deslizar hacia abajo o el botón de cerrar).
+    public func minimizar() {
+        expandido = false
     }
 
     // MARK: Dependencias
@@ -230,7 +248,7 @@ public final class Reproductor {
         intento = nil
         medio = .idle
         quiereReproducir = false
-        pantallaCompleta = false
+        expandido = false
         tareaVigilante?.cancel()
         tareaVigilante = nil
         sistema?.termino()

@@ -11,6 +11,7 @@ final class SistemaTests: XCTestCase {
     func testElDelegadoDelPiPRespondeATodosLosAvisos() {
         let delegado = DelegadoPiP()
         let selectores = [
+            "pictureInPictureControllerWillStartPictureInPicture:",
             "pictureInPictureControllerDidStartPictureInPicture:",
             "pictureInPictureControllerDidStopPictureInPicture:",
             "pictureInPictureController:failedToStartPictureInPictureWithError:",
@@ -22,18 +23,17 @@ final class SistemaTests: XCTestCase {
     }
 
     @MainActor
-    func testElPiPSeApuntaALaUltimaSuperficieViva() {
+    func testElPiPDeVerdadSinReproductorNoRompeNada() {
         let gestor = GestorPiP()
         XCTAssertFalse(gestor.activo)
-        let grande = AVPlayerLayer()
-        let mini = AVPlayerLayer()
-        gestor.registrar(grande)
-        gestor.registrar(mini)
-        gestor.olvidar(mini)
+        gestor.conectar(nil)
         // Sin reproducción no se puede abrir, pero no debe romper nada.
         XCTAssertFalse(gestor.posible)
         gestor.alternar()
-        gestor.olvidar(grande)
+        gestor.cerrar()
+        gestor.pasoASegundoPlano()
+        gestor.volvioAPrimerPlano()
+        XCTAssertFalse(gestor.activo)
     }
 
     @MainActor

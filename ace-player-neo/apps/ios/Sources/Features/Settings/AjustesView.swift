@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Ajustes: servidor (Tailscale y red local, con cambio automático),
-/// emparejamiento (código o QR), estado y reinicio del motor, modo de
-/// reproducción, preferencias de fútbol y «Acerca de».
+/// Ajustes: dónde se está reproduciendo (en tiempo real), tu fútbol, modo
+/// de reproducción, servidor (Tailscale y red local, con cambio
+/// automático), emparejamiento (código o QR), estado y reinicio del motor y
+/// «Acerca de».
 struct AjustesView: View {
     @Environment(AppModel.self) private var modelo
     @State private var config = ServerConfig()
@@ -12,24 +13,17 @@ struct AjustesView: View {
     @State private var confirmarReinicio = false
     @State private var confirmarEmparejar = false
     @State private var reiniciando = false
-    @Namespace private var mini
 
     var body: some View {
         NavigationStack {
             Form {
                 // Los colores de «Luz de focos» (fondo y tarjetas), como el resto de pestañas.
                 Group {
+                    SeccionDondeSuena()
+                    seccionFutbol
+                    seccionReproduccion
                     seccionServidor
                     seccionMotor
-                    seccionReproduccion
-                    Section("Fútbol") {
-                        NavigationLink {
-                            PreferenciasView()
-                        } label: {
-                            Label("Equipos, ligas y nacionalidades", systemImage: "heart.text.square")
-                        }
-                        .accessibilityIdentifier("enlace-preferencias")
-                    }
                     seccionAcercaDe
                     Section {
                         Button("Olvidar este servidor", role: .destructive) { confirmarOlvidar = true }
@@ -43,7 +37,16 @@ struct AjustesView: View {
             .scrollContentBackground(.hidden)
             .background(Tinta.fondo.ignoresSafeArea())
             .navigationTitle("Ajustes")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) { IndicadorMotor() }
+            }
+            .refreshable {
+                await modelo.refrescarArranque()
+                await modelo.refrescarSesiones()
+            }
             .task { await cargarConfig() }
+            // «Dónde se está reproduciendo» al día mientras se ven los ajustes.
+            .task { await modelo.vigilarSesiones() }
             .confirmationDialog(
                 "¿Olvidar este servidor?", isPresented: $confirmarOlvidar, titleVisibility: .visible
             ) {
@@ -77,7 +80,40 @@ struct AjustesView: View {
                 Text("Se olvidará este servidor y podrás emparejar con un código o escaneando el QR de la web.")
             }
         }
-        .conMiniReproductor(modelo, espacio: mini)
+        .reservaMini()
+    }
+
+    // MARK: Tu fútbol
+
+    private var seccionFutbol: some View {
+        let gustos = modelo.gustos
+        return Section {
+            NavigationLink {
+                GustosView()
+            } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("Ligas, equipos y nacionalidades", systemImage: "star")
+                        .foregroundStyle(Tinta.texto)
+                    Text(resumen(gustos))
+                        .font(.footnote)
+                        .foregroundStyle(Tinta.texto2)
+                        .lineLimit(2)
+                }
+                .padding(.vertical, 2)
+            }
+            .accessibilityIdentifier("enlace-preferencias")
+        } header: {
+            Text("Tu fútbol")
+        } footer: {
+            Text("La agenda «Para ti» enseña los partidos de tus ligas, equipos y selecciones, con las mismas reglas que la web.")
+        }
+    }
+
+    private func resumen(_ gustos: GustosFutbol) -> String {
+        guard ParaTi.tieneGustos(gustos) else { return "Sin elegir: la agenda enseña todos los partidos." }
+        let todos = gustos.leagues + gustos.teams + gustos.nationalities
+        let primeros = todos.prefix(4).joined(separator: ", ")
+        return todos.count > 4 ? "\(primeros) y \(todos.count - 4) más" : primeros
     }
 
     // MARK: Servidor
@@ -277,138 +313,5 @@ struct AjustesView: View {
 
     static var compilacion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
-    }
-}
-
-// MARK: - Preferencias
-
-/// Gustos de fútbol: país, ligas, equipos y nacionalidades (PUT sustituye lo que se manda).
-struct PreferenciasView: View {
-    @Environment(AppModel.self) private var modelo
-    @State private var preferencias: Preferences?
-    @State private var fallo: String?
-    @State private var guardando = false
-    @State private var cambiado = false
-
-    var body: some View {
-        Group {
-            if let preferencias {
-                formulario(preferencias)
-            } else if let fallo {
-                ContentUnavailableView {
-                    Label("No se pueden cargar", systemImage: "exclamationmark.triangle")
-                } description: {
-                    Text(fallo)
-                } actions: {
-                    Button("Reintentar") { Task { await cargar() } }
-                }
-            } else {
-                ProgressView()
-            }
-        }
-        .navigationTitle("Preferencias")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Guardar") { Task { await guardar() } }
-                    .disabled(!cambiado || guardando)
-            }
-        }
-        .task { await cargar() }
-    }
-
-    private func formulario(_ actuales: Preferences) -> some View {
-        Form {
-            Group {
-                Section("País") {
-                    TextField(
-                        "País", text: Binding(get: { actuales.country }, set: { cambiar(\.country, $0) }))
-                }
-                ListaEditable(
-                    titulo: "Ligas", marcador: "Añadir liga", valores: actuales.leagues
-                ) { cambiar(\.leagues, $0) }
-                ListaEditable(
-                    titulo: "Equipos", marcador: "Añadir equipo", valores: actuales.teams
-                ) { cambiar(\.teams, $0) }
-                ListaEditable(
-                    titulo: "Nacionalidades", marcador: "Añadir nacionalidad", valores: actuales.nationalities
-                ) { cambiar(\.nationalities, $0) }
-            }
-            .listRowBackground(Tinta.superficie)
-        }
-        .scrollContentBackground(.hidden)
-        .background(Tinta.fondo.ignoresSafeArea())
-    }
-
-    private func cambiar<Valor>(_ campo: WritableKeyPath<Preferences, Valor>, _ valor: Valor) {
-        preferencias?[keyPath: campo] = valor
-        cambiado = true
-    }
-
-    private func cargar() async {
-        do {
-            preferencias = try await modelo.entorno.api.enviar(API.preferencias).preferences
-            fallo = nil
-        } catch {
-            fallo = APIError.desde(error).mensaje
-        }
-    }
-
-    private func guardar() async {
-        guard let preferencias else { return }
-        guardando = true
-        defer { guardando = false }
-        do {
-            let respuesta = try await modelo.entorno.api.enviar(
-                API.guardarPreferencias(
-                    PreferencesInput(
-                        country: preferencias.country, leagues: preferencias.leagues, teams: preferencias.teams,
-                        nationalities: preferencias.nationalities)))
-            self.preferencias = respuesta.preferences
-            cambiado = false
-            modelo.avisos.mostrar("Preferencias guardadas", tono: .ok)
-        } catch {
-            modelo.avisos.mostrar(APIError.desde(error).mensaje, tono: .error)
-        }
-    }
-}
-
-/// Una lista de textos con «añadir» y deslizar para borrar.
-struct ListaEditable: View {
-    let titulo: String
-    let marcador: String
-    let valores: [String]
-    let alCambiar: ([String]) -> Void
-    @State private var nuevo = ""
-
-    var body: some View {
-        Section(titulo) {
-            ForEach(valores, id: \.self) { valor in
-                Text(valor)
-            }
-            .onDelete { indices in
-                var copia = valores
-                copia.remove(atOffsets: indices)
-                alCambiar(copia)
-            }
-            HStack {
-                TextField(marcador, text: $nuevo)
-                    .onSubmit(anadir)
-                Button {
-                    anadir()
-                } label: {
-                    Image(systemName: "plus.circle.fill")
-                }
-                .disabled(nuevo.trimmingCharacters(in: .whitespaces).isEmpty)
-                .accessibilityLabel(marcador)
-            }
-        }
-    }
-
-    private func anadir() {
-        let limpio = nuevo.trimmingCharacters(in: .whitespaces)
-        guard !limpio.isEmpty, !valores.contains(limpio) else { return }
-        alCambiar(valores + [limpio])
-        nuevo = ""
     }
 }

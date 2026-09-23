@@ -33,9 +33,16 @@
                 configuracion: configuracion, cache: DiskCache(directorio: cache))
         }
 
-        /// Lo que cambia mientras dura la prueba (la biblioteca).
+        /// Lo que cambia mientras dura la prueba (biblioteca, gustos y lo que suena).
         struct Estado: Sendable {
-            var favoritos: [String] = [ServidorSimulado.favoritoInicial]
+            var favoritos: [String] = [ServidorSimulado.favoritoInicial, ServidorSimulado.canalDaznLaLiga]
+            var ligas: [String] = ["LaLiga"]
+            var equipos: [String] = ["Real Madrid"]
+            var nacionalidades: [String] = ["España"]
+            var personalizada = true
+            /// Canal que suena en este iPhone (entre `stream` y `release`).
+            var sonando: String?
+            var sonandoTitulo = ""
         }
 
         static let estado = OSAllocatedUnfairLock(initialState: Estado())
@@ -81,16 +88,31 @@
             case ("GET", "scores"):
                 return (200, json, Data(marcadores.utf8))
             case ("GET", "events"):
-                return (200, "text/event-stream", Data(": ping\n\n".utf8))
+                // Lo que vería la app por SSE: «Dónde se está reproduciendo» al
+                // conectar (y cada 5 s, al reconectar) y el latido.
+                let trama = "retry: 5000\nid: 1\nevent: playback.sessions\ndata: {\"sessions\":\(sesiones())}\n\n: ping\n\n"
+                return (200, "text/event-stream", Data(trama.utf8))
+            case ("GET", "playback"):
+                return (200, json, Data(estadoReproduccion().utf8))
             case ("GET", "football/resolve"):
                 return (200, json, Data(resolucion.utf8))
             case ("GET", _) where resto.hasPrefix("football/scans/"):
                 return (200, json, Data(comprobacion.utf8))
             case ("GET", _) where resto.hasPrefix("channels/"):
+                let partes = resto.split(separator: "/")
+                let id = partes.count > 1 ? String(partes[1]) : ""
+                let titulo =
+                    peticion.url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }?
+                    .queryItems?.first { $0.name == "title" }?.value ?? ""
+                estado.withLock { estado in
+                    estado.sonando = id
+                    estado.sonandoTitulo = titulo
+                }
                 return (200, json, Data(concesion.utf8))
             case ("POST", _) where resto.hasSuffix("/heartbeat"):
                 return (200, json, Data(latido.utf8))
             case ("POST", _) where resto.hasSuffix("/release"):
+                estado.withLock { $0.sonando = nil }
                 return (200, json, Data(#"{"released":true,"sessionClosed":true}"#.utf8))
             case ("POST", "sources/outcome"):
                 return (200, json, Data("{}".utf8))
@@ -104,9 +126,10 @@
             case ("GET", "search"):
                 return (200, json, Data(busqueda.utf8))
             case ("GET", "preferences"):
-                return (200, json, Data(preferencias.utf8))
+                return (200, json, Data(#"{"preferences":\#(preferencias())}"#.utf8))
             case ("PUT", "preferences"):
-                return (200, json, Data(preferencias.utf8))
+                guardarPreferencias(leerCuerpo(peticion))
+                return (200, json, Data(#"{"preferences":\#(preferencias())}"#.utf8))
             case ("GET", "engine/status"):
                 return (200, json, Data(motor.utf8))
             case ("POST", "engine/restart"):
@@ -159,18 +182,105 @@
             }
         }
 
+        /// Un «DAZN LaLiga FHD» de la lista que también es favorito (emite a las 22:00 en la agenda).
+        static let canalDaznLaLiga = "d2d2d2d2e5f60718293a4b5c6d7e8f9012345678"
+
+        /// Texto JSON (con sus comillas y escapes).
+        static func texto(_ valor: String) -> String {
+            guard let datos = try? JSONEncoder().encode(valor) else { return "\"\"" }
+            return String(decoding: datos, as: UTF8.self)
+        }
+
+        static func itemJSON(
+            _ id: String, _ titulo: String, tipo: String, categoria: String = "", fecha: Date = .now, lista: Bool = false,
+            ih: Bool = false
+        ) -> String {
+            #"{"id":"\#(id)","title":\#(texto(titulo)),"type":"\#(tipo)","category":\#(texto(categoria)),"date":"\#(FechaISO.texto(fecha))","fromWebSync":\#(lista),"ih":\#(ih)}"#
+        }
+
+        /// La lista activa: ocho canales en tres categorías (como la de Isma, agrupada en la app).
+        static let canalesLista: [(String, String, String)] = [
+            ("b2c3d4e5f60718293a4b5c6d7e8f901234567890", "M+ LaLiga", "Deportes"),
+            ("d1d1d1d1e5f60718293a4b5c6d7e8f9012345678", "DAZN 1 FHD --> NEW ERA", "Deportes"),
+            (canalDaznLaLiga, "DAZN LaLiga FHD", "Deportes"),
+            ("e1e1e1e1e5f60718293a4b5c6d7e8f9012345678", "Eurosport 1 HD", "Deportes"),
+            ("f1f1f1f1e5f60718293a4b5c6d7e8f9012345678", "M+ Liga de Campeones 1080p", "Deportes"),
+            ("a1a1a1a1e5f60718293a4b5c6d7e8f9012345678", "La 1 HD", "Generalistas"),
+            ("a3a3a3a3e5f60718293a4b5c6d7e8f9012345678", "Antena 3 HD", "Generalistas"),
+            ("c1c1c1c1e5f60718293a4b5c6d7e8f9012345678", "Clan TVE", "Infantil"),
+        ]
+
         static func biblioteca() -> String {
             let favoritos = estado.withLock { $0.favoritos }
             let items = favoritos.map { id -> String in
-                let titulo = id == favoritoInicial ? "Canal Favorito" : "Canal " + String(id.prefix(4))
-                return #"{"id":"\#(id)","title":"\#(titulo)","type":"fav","category":"","date":"2026-09-23T18:30:00.000Z","fromWebSync":false,"ih":false}"#
+                if id == favoritoInicial { return itemJSON(id, "Canal Favorito", tipo: "fav") }
+                if let deLista = canalesLista.first(where: { $0.0 == id }) {
+                    return itemJSON(id, deLista.1, tipo: "fav", categoria: deLista.2, lista: true)
+                }
+                return itemJSON(id, "Canal " + String(id.prefix(4)), tipo: "fav")
             }
+            let web = canalesLista.map { itemJSON($0.0, $0.1, tipo: "web", categoria: $0.2, lista: true) }
+            let dia: TimeInterval = 86_400
+            let recientes = [
+                itemJSON("c3d4e5f60718293a4b5c6d7e8f9012345678901a", "Canal Reciente", tipo: "recent"),
+                itemJSON(
+                    "b0b0b0b0e5f60718293a4b5c6d7e8f9012345678", "BOING", tipo: "recent", fecha: .now.addingTimeInterval(-dia),
+                    ih: true),
+                itemJSON(
+                    "a3a3a3a3e5f60718293a4b5c6d7e8f9012345678", "Antena 3 HD", tipo: "recent", categoria: "Generalistas",
+                    fecha: .now.addingTimeInterval(-4 * dia)),
+            ]
+            let sincronizada = FechaISO.texto(.now.addingTimeInterval(-3600))
             return [
-                #"{"web":[{"id":"b2c3d4e5f60718293a4b5c6d7e8f901234567890","title":"M+ LaLiga","type":"web","category":"Deportes","date":"2026-09-23T18:30:00.000Z","fromWebSync":true,"ih":false}],"#,
-                #""webSyncedAt":"2026-09-23T18:30:00.000Z","webSources":[{"id":"principal","name":"Principal","url":"https://example.com/lista.m3u","type":"m3u","count":1,"syncedAt":"2026-09-23T18:30:00.000Z","lastErrorAt":null,"lastError":null}],"#,
+                #"{"web":["#, web.joined(separator: ","), "],",
+                #""webSyncedAt":"\#(sincronizada)","webSources":["#,
+                #"{"id":"principal","name":"Lista de Isma","url":"https://example.com/lista.m3u","type":"m3u","count":8,"syncedAt":"\#(sincronizada)","lastErrorAt":null,"lastError":null},"#,
+                #"{"id":"respaldo","name":"Respaldo","url":"https://example.com/respaldo.m3u","type":"m3u","count":3,"syncedAt":"\#(sincronizada)","lastErrorAt":null,"lastError":null}],"#,
                 #""activeWebSourceId":"principal","favorites":["#, items.joined(separator: ","), "],",
-                #""history":[{"id":"c3d4e5f60718293a4b5c6d7e8f9012345678901a","title":"Canal Reciente","type":"recent","category":"","date":"2026-09-23T18:30:00.000Z","fromWebSync":false,"ih":false}]}"#,
+                #""history":["#, recientes.joined(separator: ","), "]}",
             ].joined()
+        }
+
+        // MARK: Gustos
+
+        static func preferencias() -> String {
+            let (ligas, equipos, nacionalidades, hecho) = estado.withLock {
+                ($0.ligas, $0.equipos, $0.nacionalidades, $0.personalizada)
+            }
+            let lista: ([String]) -> String = { "[" + $0.map(texto).joined(separator: ",") + "]" }
+            return #"{"onboardingComplete":\#(hecho),"country":"Spain","leagues":\#(lista(ligas)),"teams":\#(lista(equipos)),"nationalities":\#(lista(nacionalidades))}"#
+        }
+
+        private static func guardarPreferencias(_ cuerpo: Data) {
+            guard let entrada = try? JSONDecoder().decode(PreferencesInput.self, from: cuerpo) else { return }
+            estado.withLock { estado in
+                if let ligas = entrada.leagues { estado.ligas = ligas }
+                if let equipos = entrada.teams { estado.equipos = equipos }
+                if let nacionalidades = entrada.nationalities { estado.nacionalidades = nacionalidades }
+                if let hecho = entrada.onboardingComplete { estado.personalizada = hecho }
+            }
+        }
+
+        // MARK: Dónde se está reproduciendo
+
+        /// Un ordenador que ve DAZN 1 y, si suena algo en este iPhone, su sesión.
+        static func sesiones() -> String {
+            let (sonando, titulo) = estado.withLock { ($0.sonando, $0.sonandoTitulo) }
+            let ahora = FechaISO.texto(.now)
+            let desde = FechaISO.texto(.now.addingTimeInterval(-25 * 60))
+            var lista = [
+                #"{"id":"s_salon","hash":"d1d1d1d1e5f60718293a4b5c6d7e8f9012345678","mode":"hls","openedAt":"\#(desde)","title":"DAZN 1 FHD","protocol":"hls","viewers":[{"client":"web","deviceId":"web_salon","lastBeatAt":"\#(ahora)","viewerId":"web_v1","deviceName":"Chrome · Windows","platform":"web","playing":true}]}"#
+            ]
+            if let sonando, !sonando.isEmpty {
+                lista.insert(
+                    #"{"id":"s_simulada","hash":"\#(sonando)","mode":"hls","openedAt":"\#(ahora)","title":\#(texto(titulo)),"protocol":"hls-fmp4","viewers":[{"client":"ios","deviceId":"dev_simulado","lastBeatAt":"\#(ahora)","deviceName":"iPhone de pruebas","platform":"ios","playing":true}]}"#,
+                    at: 0)
+            }
+            return "[" + lista.joined(separator: ",") + "]"
+        }
+
+        static func estadoReproduccion() -> String {
+            #"{"nowPlaying":null,"learningCount":0,"serverTime":1790188200000,"sessions":\#(sesiones())}"#
         }
 
         // MARK: Respuestas fijas
@@ -190,9 +300,9 @@
         static func arranque() -> String {
             [
                 #"{"version":"0.7.0","serverTime":1790188200000,"origin":"native","device":"#, dispositivo,
-                #","preferences":{"onboardingComplete":true,"country":"Spain","leagues":[],"teams":[],"nationalities":[]},"#,
+                #","preferences":"#, preferencias(), ",",
                 #""library":"#, biblioteca(), ",",
-                #""playback":{"nowPlaying":null,"learningCount":0,"serverTime":1790188200000,"sessions":[]},"#,
+                #""playback":"#, estadoReproduccion(), ",",
                 #""engine":"#, motor, ",",
                 #""settings":{"sameChannelPolicy":"share"},"features":{"scanner":true,"ai":false,"demoSchedule":false}}"#,
             ].joined()
@@ -205,7 +315,13 @@
             // Unos cuantos más hoy: la lista tiene que desplazarse, como con la agenda real.
             #"{"id":"sim-5","date":"HOY","time":"19:00","title":"Tercer Local - Tercer Visitante","home":"Tercer Local","away":"Tercer Visitante","competition":"LaLiga","country":"Spain","channels":[{"id":"m-laliga","name":"M+ LaLiga"}]},"#,
             #"{"id":"sim-6","date":"HOY","time":"20:00","title":"Cuarto Local - Cuarto Visitante","home":"Cuarto Local","away":"Cuarto Visitante","competition":"Premier League","country":"England","channels":[{"id":"dazn","name":"DAZN"}]},"#,
-            #"{"id":"sim-7","date":"HOY","time":"22:00","title":"Quinto Local - Quinto Visitante","home":"Quinto Local","away":"Quinto Visitante","competition":"Amistoso","country":"Spain","channels":[{"id":"la1","name":"La 1 HD"}]}"#,
+            #"{"id":"sim-7","date":"HOY","time":"22:00","title":"Quinto Local - Quinto Visitante","home":"Quinto Local","away":"Quinto Visitante","competition":"Amistoso","country":"Spain","channels":[{"id":"la1","name":"La 1 HD"}]},"#,
+            // «Tu equipo» (sale en «Para ti» por el equipo aunque la copa no esté elegida)…
+            #"{"id":"sim-8","date":"HOY","time":"21:30","title":"Real Madrid - Getafe","home":"Real Madrid","away":"Getafe","competition":"Copa del Rey","country":"Spain","channels":[{"id":"vamos","name":"M+ Vamos"}]},"#,
+            // …un LaLiga que da un canal de la biblioteca (favorito: «A las 22:00, …»)…
+            #"{"id":"sim-10","date":"HOY","time":"22:00","title":"Villarreal - Real Sociedad","home":"Villarreal","away":"Real Sociedad","competition":"LaLiga","country":"Spain","channels":[{"id":"dazn-laliga","name":"DAZN LaLiga"}]},"#,
+            // …y las reservas argentinas que Isma veía primero: fuera de «Para ti».
+            #"{"id":"sim-9","date":"HOY","time":"20:00","title":"Central Córdoba Reserva - Atlético Tucumán Reserva","home":"Central Córdoba Reserva","away":"Atlético Tucumán Reserva","competition":"Torneo Proyección","country":"Argentina","channels":[{"id":"lpf","name":"LPF Play"}]}"#,
             "]},",
             // Más días (como la agenda real): la tira de días tiene varios.
             #"{"date":"MANANA","matches":[{"id":"sim-3","date":"MANANA","time":"20:00","title":"Local Mañana - Visitante Mañana","home":"Local Mañana","away":"Visitante Mañana","competition":"LaLiga","country":"Spain","channels":[{"id":"m-laliga","name":"M+ LaLiga"}]}]},"#,
@@ -253,9 +369,6 @@
 
         static let busqueda =
             #"{"query":"dazn","results":[{"id":"d4e5f60718293a4b5c6d7e8f9012345678901a2b","title":"DAZN 1 HD","category":"Deportes","availability":0.9,"bitrate":450000,"ih":true}]}"#
-
-        static let preferencias =
-            #"{"preferences":{"onboardingComplete":true,"country":"Spain","leagues":["LaLiga"],"teams":["Real Madrid"],"nationalities":["España"]}}"#
     }
 
     /// `URLProtocol` que contesta con `ServidorSimulado` sin salir a la red.

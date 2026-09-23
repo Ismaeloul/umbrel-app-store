@@ -1,26 +1,73 @@
 import UIKit
 import XCTest
 
-/// El botón de cerrar de la pantalla completa, a mano para tocarlo.
-///
-/// Los controles se esconden solos a los 3,2 s, un toque en el vídeo los
-/// alterna y, al abrirse, la pantalla completa pide girar a horizontal (el
-/// árbol de accesibilidad cambia mientras gira). Un solo toque «a ciegas»
-/// podía esconderlos justo cuando aparecían; aquí se comprueba y se vuelve a
-/// tocar (lejos de los botones del centro) hasta que el de cerrar se puede
-/// pulsar. Devuelve nil si en `plazo` segundos no aparece.
+/// Un elemento por su identificador de accesibilidad, sea del tipo que sea.
 @MainActor
-func botonCerrarCompleta(_ app: XCUIApplication, plazo: TimeInterval = 20) -> XCUIElement? {
-    let completo = app.descendants(matching: .any).matching(identifier: "reproductor-completo").firstMatch
-    let cerrar = app.descendants(matching: .any).matching(identifier: "boton-cerrar-completa").firstMatch
+func elementoUI(_ app: XCUIApplication, _ identificador: String) -> XCUIElement {
+    app.descendants(matching: .any).matching(identifier: identificador).firstMatch
+}
+
+/// Un elemento cuya etiqueta contiene un texto.
+@MainActor
+func conTextoUI(_ app: XCUIApplication, _ texto: String) -> XCUIElement {
+    app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", texto)).firstMatch
+}
+
+/// Espera a que un elemento desaparezca.
+@MainActor
+func esperarQueDesaparezca(_ elemento: XCUIElement, plazo: TimeInterval = 10) -> Bool {
     let limite = Date().addingTimeInterval(plazo)
     while Date() < limite {
-        if cerrar.waitForExistence(timeout: 1.5), cerrar.isHittable { return cerrar }
-        if completo.exists {
-            completo.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.28)).tap()
-        }
+        if !elemento.exists { return true }
+        Thread.sleep(forTimeInterval: 0.25)
     }
-    return nil
+    return !elemento.exists
+}
+
+/// Arrastra con el dedo desde un punto relativo del elemento hasta otro
+/// (`dy` en altos del elemento; negativo, hacia arriba). Más fiable que
+/// `swipeUp()`/`swipeDown()`, cuyo recorrido depende del tamaño del elemento.
+@MainActor
+func arrastrar(_ elemento: XCUIElement, desde: CGVector, hasta: CGVector) {
+    let inicio = elemento.coordinate(withNormalizedOffset: desde)
+    let fin = elemento.coordinate(withNormalizedOffset: hasta)
+    inicio.press(forDuration: 0.05, thenDragTo: fin)
+}
+
+/// Los días de la tira de la agenda.
+@MainActor
+func diasDeLaAgenda(_ app: XCUIApplication) -> XCUIElementQuery {
+    app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "dia-"))
+}
+
+/// La tira de días NO está vacía: hay días, todos se pueden pulsar y el
+/// elegido se pinta de verdad (en el iPhone real la tira salía como una banda
+/// blanca vacía aunque sus botones «existían»). Devuelve el motivo si falla.
+@MainActor
+func comprobarTiraDeDias(_ app: XCUIApplication, plazo: TimeInterval = 15) -> String? {
+    let dias = diasDeLaAgenda(app)
+    let limite = Date().addingTimeInterval(plazo)
+    var motivo = "no hay días"
+    while Date() < limite {
+        let total = dias.count
+        if total > 0 {
+            let visibles = (0..<total).map { dias.element(boundBy: $0) }.filter { $0.frame.minX < app.frame.maxX }
+            let elegido = dias.matching(NSPredicate(format: "selected == true")).firstMatch
+            if visibles.isEmpty {
+                motivo = "ningún día a la vista"
+            } else if let fuera = visibles.first(where: { !$0.isHittable }) {
+                motivo = "el día \(fuera.identifier) no se puede pulsar (marco: \(fuera.frame))"
+            } else if !elegido.exists {
+                motivo = "ningún día elegido"
+            } else if !sePinta(app, elegido) {
+                motivo = "el día elegido no se pinta (marco: \(elegido.frame))"
+            } else {
+                return nil
+            }
+        }
+        Thread.sleep(forTimeInterval: 0.5)
+    }
+    return motivo
 }
 
 /// ¿Se PINTA de verdad el elemento? XCUITest da por «hittable» un botón que

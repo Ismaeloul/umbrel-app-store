@@ -52,15 +52,13 @@ struct BuscarView: View {
     @Environment(AppModel.self) private var app
     @State private var vm: BuscarModelo
     @State private var texto = ""
-    @State private var ruta: [CanalReproducible] = []
-    @Namespace private var mini
 
     init(entorno: Entorno) {
         _vm = State(initialValue: BuscarModelo(entorno: entorno))
     }
 
     var body: some View {
-        NavigationStack(path: $ruta) {
+        NavigationStack {
             contenido
                 .navigationTitle("Buscar")
                 .background(Tinta.fondo.ignoresSafeArea())
@@ -68,11 +66,8 @@ struct BuscarView: View {
                 .searchable(text: $texto, placement: .navigationBarDrawer(displayMode: .always), prompt: "Canal, partido o competición")
                 .onSubmit(of: .search) { Task { await vm.buscar(texto, esperar: false) } }
                 .task(id: texto) { await vm.buscar(texto) }
-                .navigationDestination(for: CanalReproducible.self) { canal in
-                    CanalView(canal: canal)
-                }
         }
-        .conMiniReproductor(app, espacio: mini)
+        .reservaMini()
     }
 
     @ViewBuilder private var contenido: some View {
@@ -126,10 +121,11 @@ struct BuscarView: View {
         CanalReproducible(id: resultado.id, titulo: resultado.title, ih: resultado.ih, origen: "acestream")
     }
 
+    /// Reproduce y abre el reproductor grande (deslizando hacia abajo se queda en el mini).
     private func abrir(_ resultado: SearchResult) {
         let elegido = canal(resultado)
         app.reproducirCanal(elegido, lista: vm.resultados.map(canal))
-        ruta.append(elegido)
+        withAnimation(Muelle.heroe) { app.reproductor.expandir() }
     }
 }
 
@@ -140,6 +136,7 @@ struct FilaResultado: View {
     var body: some View {
         let porcentaje = ReglasFuentes.porcentaje(resultado.availability)
         HStack(spacing: 12) {
+            LogoCanal(titulo: resultado.title, tamano: 40)
             VStack(alignment: .leading, spacing: 3) {
                 Text(resultado.title)
                     .font(.body.weight(.semibold))

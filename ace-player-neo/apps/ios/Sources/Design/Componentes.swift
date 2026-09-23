@@ -209,6 +209,166 @@ public enum ColorEquipo {
     }
 }
 
+// MARK: - Dorsal del canal
+
+/// El «dorsal» del canal (el `ChannelMark` de la web): su número o su
+/// inicial, grande y recortado por la esquina, sobre un tono sacado del nombre.
+public struct LogoCanal: View {
+    let titulo: String
+    var tamano: CGFloat = 52
+    @Environment(\.colorScheme) private var esquema
+
+    public init(titulo: String, tamano: CGFloat = 52) {
+        self.titulo = titulo
+        self.tamano = tamano
+    }
+
+    /// «DAZN 1» → «1», «M+ Liga de Campeones 2» → «2», «Eurosport» → «E»
+    /// (sin lo que va tras la flecha: el proveedor no es el canal).
+    public static func dorsal(_ titulo: String) -> String {
+        let nombre = ReglasFuentes.parteCanal(titulo)
+        var numeros: [String] = []
+        var actual = ""
+        for caracter in nombre {
+            if caracter.isASCII, caracter.isNumber {
+                actual.append(caracter)
+            } else if !actual.isEmpty {
+                numeros.append(actual)
+                actual = ""
+            }
+        }
+        if !actual.isEmpty { numeros.append(actual) }
+        if let ultimo = numeros.last { return String(ultimo.prefix(3)) }
+        let letra = ParaTi.sinMarcas(nombre).first { $0.isASCII && $0.isLetter }
+        return letra.map { String($0).uppercased() } ?? "·"
+    }
+
+    public var body: some View {
+        let dorsal = Self.dorsal(titulo)
+        let esLetra = !(dorsal.first?.isNumber ?? false)
+        let tono = ColorEquipo.tono(titulo)
+        let base = Color(hue: tono, saturation: esquema == .dark ? 0.5 : 0.55, brightness: esquema == .dark ? 0.62 : 0.58)
+        let claro = Color(hue: tono, saturation: 0.45, brightness: esquema == .dark ? 0.8 : 0.78)
+        RoundedRectangle(cornerRadius: tamano * 0.26, style: .continuous)
+            .fill(LinearGradient(colors: [claro, base], startPoint: .topLeading, endPoint: .bottomTrailing))
+            .overlay(alignment: esLetra ? .trailing : .bottomTrailing) {
+                Text(dorsal)
+                    .font(.system(size: tamano * (dorsal.count > 1 ? 0.62 : 0.86), weight: .black).width(.compressed))
+                    .foregroundStyle(.white.opacity(0.95))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .offset(x: esLetra ? tamano * 0.1 : tamano * 0.04, y: esLetra ? 0 : tamano * 0.14)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: tamano * 0.26, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: tamano * 0.26, style: .continuous)
+                    .strokeBorder(.white.opacity(0.18), lineWidth: 1)
+            )
+            .frame(width: tamano, height: tamano)
+            .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Filas y chips
+
+/// Fila que se ilumina al pulsarla (listas hechas a mano dentro de tarjetas).
+public struct EstiloFilaPulsada: ButtonStyle {
+    public init() {}
+
+    public func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(configuration.isPressed ? Tinta.superficie2 : Color.clear)
+            .animation(Muelle.rapido, value: configuration.isPressed)
+    }
+}
+
+/// Coloca los hijos en filas, saltando de línea cuando no caben (los chips de las preferencias).
+public struct DisposicionFlujo: Layout {
+    var espacio: CGFloat = 8
+    var interlineado: CGFloat = 8
+
+    public init(espacio: CGFloat = 8, interlineado: CGFloat = 8) {
+        self.espacio = espacio
+        self.interlineado = interlineado
+    }
+
+    public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let ancho = proposal.width ?? .infinity
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var altoFila: CGFloat = 0
+        var anchoMaximo: CGFloat = 0
+        for vista in subviews {
+            let medida = vista.sizeThatFits(ProposedViewSize(width: ancho, height: nil))
+            if x > 0 && x + medida.width > ancho {
+                y += altoFila + interlineado
+                x = 0
+                altoFila = 0
+            }
+            x += medida.width + espacio
+            altoFila = max(altoFila, medida.height)
+            anchoMaximo = max(anchoMaximo, x - espacio)
+        }
+        return CGSize(width: ancho.isFinite ? ancho : anchoMaximo, height: y + altoFila)
+    }
+
+    public func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var altoFila: CGFloat = 0
+        for vista in subviews {
+            let medida = vista.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
+            if x > bounds.minX && x + medida.width > bounds.maxX {
+                y += altoFila + interlineado
+                x = bounds.minX
+                altoFila = 0
+            }
+            vista.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(medida))
+            x += medida.width + espacio
+            altoFila = max(altoFila, medida.height)
+        }
+    }
+}
+
+/// Chip que se marca y desmarca (ligas, equipos y nacionalidades).
+public struct ChipSeleccionable: View {
+    let texto: String
+    let marcado: Bool
+    let accion: () -> Void
+
+    public init(_ texto: String, marcado: Bool, accion: @escaping () -> Void) {
+        self.texto = texto
+        self.marcado = marcado
+        self.accion = accion
+    }
+
+    public var body: some View {
+        Button(action: accion) {
+            HStack(spacing: 5) {
+                if marcado {
+                    Image(systemName: "checkmark")
+                        .font(.caption.weight(.bold))
+                        .transition(.scale.combined(with: .opacity))
+                }
+                Text(texto)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(marcado ? Tinta.sobreAcento : Tinta.texto)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 38)
+            .background(marcado ? Tinta.acento : Tinta.superficie2, in: Capsule())
+            .overlay(Capsule().strokeBorder(marcado ? Tinta.acentoBorde : Tinta.linea, lineWidth: 1))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .animation(Muelle.rapido, value: marcado)
+        .sensoryFeedback(.selection, trigger: marcado)
+        .accessibilityLabel(texto)
+        .accessibilityAddTraits(marcado ? [.isSelected] : [])
+    }
+}
+
 // MARK: - Avisos
 
 /// Un aviso breve (toast), con acción opcional («Deshacer»).

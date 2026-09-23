@@ -165,6 +165,8 @@ public struct ResyncData: Codable, Sendable, Hashable {
 public enum SSEEvent: Sendable, Hashable {
     case playbackNowPlaying(PlaybackNowPlayingData)
     case playbackHandoff(PlaybackHandoffData)
+    /// La lista de sesiones abiertas cambió («Dónde se está reproduciendo»).
+    case playbackSessions(PlaybackSessionsData)
     case streamReady(StreamReadyData)
     case streamReopened(StreamReopenedData)
     case streamModeChanged(StreamModeChangedData)
@@ -182,7 +184,7 @@ public enum SSEEvent: Sendable, Hashable {
 
     /// Todos los tipos que conoce la app (los de `SSE_EVENT_TYPES`).
     public static let tiposConocidos: [String] = [
-        "playback.nowPlaying", "playback.handoff", "stream.ready", "stream.reopened",
+        "playback.nowPlaying", "playback.handoff", "playback.sessions", "stream.ready", "stream.reopened",
         "stream.modeChanged", "stream.closed", "stream.stats", "engine.status", "scan.progress",
         "scan.verdict", "state.changed", "diagnostics.new", "devices.changed", "resync",
     ]
@@ -192,6 +194,7 @@ public enum SSEEvent: Sendable, Hashable {
         switch self {
         case .playbackNowPlaying: "playback.nowPlaying"
         case .playbackHandoff: "playback.handoff"
+        case .playbackSessions: "playback.sessions"
         case .streamReady: "stream.ready"
         case .streamReopened: "stream.reopened"
         case .streamModeChanged: "stream.modeChanged"
@@ -214,6 +217,7 @@ public enum SSEEvent: Sendable, Hashable {
         switch type {
         case "playback.nowPlaying": return .playbackNowPlaying(try d.decode(PlaybackNowPlayingData.self, from: data))
         case "playback.handoff": return .playbackHandoff(try d.decode(PlaybackHandoffData.self, from: data))
+        case "playback.sessions": return .playbackSessions(try d.decode(PlaybackSessionsData.self, from: data))
         case "stream.ready": return .streamReady(try d.decode(StreamReadyData.self, from: data))
         case "stream.reopened": return .streamReopened(try d.decode(StreamReopenedData.self, from: data))
         case "stream.modeChanged": return .streamModeChanged(try d.decode(StreamModeChangedData.self, from: data))
@@ -243,6 +247,7 @@ extension SSEEvent: Codable {
         switch type {
         case "playback.nowPlaying": self = .playbackNowPlaying(try c.decode(PlaybackNowPlayingData.self, forKey: .data))
         case "playback.handoff": self = .playbackHandoff(try c.decode(PlaybackHandoffData.self, forKey: .data))
+        case "playback.sessions": self = .playbackSessions(try c.decode(PlaybackSessionsData.self, forKey: .data))
         case "stream.ready": self = .streamReady(try c.decode(StreamReadyData.self, forKey: .data))
         case "stream.reopened": self = .streamReopened(try c.decode(StreamReopenedData.self, forKey: .data))
         case "stream.modeChanged": self = .streamModeChanged(try c.decode(StreamModeChangedData.self, forKey: .data))
@@ -265,6 +270,7 @@ extension SSEEvent: Codable {
         switch self {
         case .playbackNowPlaying(let v): try c.encode(v, forKey: .data)
         case .playbackHandoff(let v): try c.encode(v, forKey: .data)
+        case .playbackSessions(let v): try c.encode(v, forKey: .data)
         case .streamReady(let v): try c.encode(v, forKey: .data)
         case .streamReopened(let v): try c.encode(v, forKey: .data)
         case .streamModeChanged(let v): try c.encode(v, forKey: .data)

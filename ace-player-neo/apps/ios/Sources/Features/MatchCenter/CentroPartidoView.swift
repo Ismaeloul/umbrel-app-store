@@ -37,8 +37,8 @@ struct CentroPartidoView: View {
         }
         .onChange(of: claseVertical) { _, clase in
             // Girar a horizontal con el partido sonando: pantalla completa.
-            if clase == .compact, modelo.suenaAqui, reproductor.conexion.enMarcha {
-                reproductor.pantallaCompleta = true
+            if clase == .compact, modelo.suenaAqui, reproductor.conexion.enMarcha, !reproductor.expandido {
+                withAnimation(Muelle.heroe) { reproductor.expandir() }
             }
         }
         .sheet(isPresented: $pegando) {

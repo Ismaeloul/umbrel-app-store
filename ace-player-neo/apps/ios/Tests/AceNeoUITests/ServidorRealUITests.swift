@@ -9,9 +9,11 @@ import XCTest
 /// 2. abrir un partido → el comprobador verifica las fuentes del motor falso →
 ///    arranque automático → el backend prepara el HLS fMP4 con ffmpeg →
 ///    AVPlayer lo reproduce en el simulador (primer fotograma real);
-/// 3. revocar el dispositivo desde «la web» → la app vuelve a emparejar y
+/// 3. Ajustes → «Dónde se está reproduciendo» enseña la sesión de este iPhone
+///    («Este dispositivo») con los datos del backend de verdad;
+/// 4. revocar el dispositivo desde «la web» → la app vuelve a emparejar y
 ///    explica por qué;
-/// 4. volver a emparejar con el enlace del QR (`aceneo://pair?u=…&c=…`).
+/// 5. volver a emparejar con el enlace del QR (`aceneo://pair?u=…&c=…`).
 ///
 /// Fuera de la CI (sin `ACE_E2E_PUERTO`) se salta.
 final class ServidorRealUITests: XCTestCase {
@@ -92,27 +94,27 @@ final class ServidorRealUITests: XCTestCase {
         let emparejada = await esperar(45) { agenda.exists }
         XCTAssertTrue(emparejada, "No llega a la agenda tras emparejar con el backend real. \(estado(app))")
 
-        // La tira de días con la agenda real (varios días): el primero (hoy) se ve.
-        // Si no, se sigue igualmente para probar el resto y el fallo queda anotado.
-        let primerDia = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "dia-")).firstMatch
-        let tiraVisible = await esperar(15) {
-            primerDia.exists && primerDia.isHittable && sePinta(app, primerDia)
-        }
-        if !tiraVisible { captura(app, "e2e-02-fallo-tira-de-dias") }
+        // La tira de días con la agenda real (varios días): hay días, se pueden
+        // pulsar y el elegido se pinta. Si no, se sigue igualmente para probar
+        // el resto y el fallo queda anotado.
+        let falloTira = comprobarTiraDeDias(app)
+        if falloTira != nil { captura(app, "e2e-02-fallo-tira-de-dias") }
         continueAfterFailure = true
-        XCTAssertTrue(
-            tiraVisible,
-            "La tira de días no enseña el primer día (existe: \(primerDia.exists), tocable: \(primerDia.isHittable), "
-                + "se pinta: \(sePinta(app, primerDia)), marco: \(primerDia.frame))")
+        XCTAssertNil(falloTira, "La tira de días no está bien con la agenda real")
         continueAfterFailure = false
-        // Cambiar de día con la tira y volver a hoy.
-        let dias = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "dia-"))
-        if dias.count > 1, dias.element(boundBy: 1).isHittable {
-            dias.element(boundBy: 1).tap()
-            try await Task.sleep(for: .seconds(1.5))
-            captura(app, "e2e-02-agenda-otro-dia")
-            primerDia.tap()
-            try await Task.sleep(for: .seconds(1.5))
+        // Cambiar de día con la tira y volver al de antes.
+        let dias = diasDeLaAgenda(app)
+        let elegidoAntes = dias.matching(NSPredicate(format: "selected == true")).firstMatch.identifier
+        if dias.count > 1 {
+            let otro = dias.element(boundBy: dias.element(boundBy: 0).identifier == elegidoAntes ? 1 : 0)
+            if otro.isHittable {
+                otro.tap()
+                try await Task.sleep(for: .seconds(1.5))
+                captura(app, "e2e-02-agenda-otro-dia")
+                let antes = elemento(app, elegidoAntes)
+                if antes.exists, antes.isHittable { antes.tap() }
+                try await Task.sleep(for: .seconds(1.5))
+            }
         }
 
         // La agenda de demostración del backend: un partido con fuentes en el motor falso.
@@ -155,16 +157,31 @@ final class ServidorRealUITests: XCTestCase {
             reproductor.label.contains("Reproduciendo"), "La reproducción no se sostiene. \(estado(app))")
         captura(app, "e2e-03-reproduciendo-video-real")
 
-        // 3. Revocar desde «la web»: la app pierde el acceso y lo explica.
+        // 3. «Dónde se está reproduciendo» con el backend de verdad (GET
+        //    /native/api/v1/playback y el evento playback.sessions): la sesión
+        //    de este iPhone, con su canal, y «Este dispositivo».
+        app.tabBars.buttons["Ajustes"].tap()
+        let este = elemento(app, "visor-este-dispositivo")
+        let visto = await esperar(30) { este.exists }
+        captura(app, "e2e-04-donde-se-esta-reproduciendo")
+        XCTAssertTrue(visto, "Ajustes no enseña este iPhone en «Dónde se está reproduciendo». \(estado(app))")
+        let sesion = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "sesion-"))
+            .firstMatch
+        XCTAssertTrue(sesion.exists, "Falta la sesión en «Dónde se está reproduciendo»")
+        // El vídeo sigue en el mini mientras tanto.
+        XCTAssertTrue(elemento(app, "mini-reproductor").waitForExistence(timeout: 10), "Fuera del partido sale el mini")
+        app.tabBars.buttons["Agenda"].tap()
+
+        // 4. Revocar desde «la web»: la app pierde el acceso y lo explica.
         let revocados = try await servidor.revocarTodos()
         // Uno (o dos si es el reintento de la CI y el primer intento no llegó a revocar).
         XCTAssertGreaterThanOrEqual(revocados, 1, "No había ningún iPhone emparejado")
         let aviso = conTexto(app, "retirado el acceso")
         let fuera = await esperar(60) { app.textFields["campo-codigo"].exists && aviso.exists }
         XCTAssertTrue(fuera, "Tras revocar no vuelve a la pantalla de emparejar con el aviso. \(estado(app))")
-        captura(app, "e2e-04-acceso-retirado")
+        captura(app, "e2e-05-acceso-retirado")
 
-        // 4. Volver a emparejar con el enlace del QR (lo que abre la Cámara).
+        // 5. Volver a emparejar con el enlace del QR (lo que abre la Cámara).
         let otro = try await servidor.crearCodigo()
         let enlace = try XCTUnwrap(URL(string: otro.enlace), "Enlace del QR no válido: \(otro.enlace)")
         app.open(enlace)
@@ -175,6 +192,6 @@ final class ServidorRealUITests: XCTestCase {
         app.buttons["boton-emparejar"].tap()
         let otraVez = await esperar(45) { app.navigationBars["Agenda"].exists }
         XCTAssertTrue(otraVez, "No vuelve a la agenda tras emparejar por el QR. \(estado(app))")
-        captura(app, "e2e-05-emparejada-por-qr")
+        captura(app, "e2e-06-emparejada-por-qr")
     }
 }

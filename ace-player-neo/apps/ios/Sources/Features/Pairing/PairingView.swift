@@ -58,10 +58,9 @@ struct PairingView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .background(Tinta.fondo.ignoresSafeArea())
-            // Con el teclado el formulario sube: que no pase por debajo de la hora sin fondo.
-            .safeAreaInset(edge: .top, spacing: 0) {
-                Color.clear.frame(height: 0).background(.bar, ignoresSafeAreaEdges: .top)
-            }
+            // Título grande del sistema arriba (se encoge al desplazar, con su
+            // propio fondo): nada de franjas propias encima del contenido.
+            .navigationTitle("Emparejar")
             .safeAreaInset(edge: .bottom) { botonEmparejar }
             .sheet(isPresented: $vm.mostrandoEscaner) { escaner }
             .onChange(of: enlace, initial: true) { _, nuevo in
@@ -81,8 +80,9 @@ struct PairingView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 17, style: .continuous))
                 .accessibilityHidden(true)
             Text("Ace Neo")
-                .font(.titular())
+                .font(.titular(.title))
                 .foregroundStyle(Tinta.texto)
+                .accessibilityAddTraits(.isHeader)
             Text("Empareja este iPhone con tu Ace Player Neo. En la web, abre Ajustes → Dispositivos → Emparejar un dispositivo.")
                 .font(.body)
                 .foregroundStyle(Tinta.texto2)

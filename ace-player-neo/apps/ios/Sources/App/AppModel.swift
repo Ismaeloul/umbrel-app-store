@@ -2,6 +2,7 @@ import Foundation
 import Network
 import Observation
 import os
+import UIKit
 
 /// Estado global de la app: si está emparejada, con qué servidor habla, el
 /// estado del motor y la conexión de tiempo real.
@@ -34,6 +35,20 @@ public final class AppModel {
     /// Marcadores en vivo (ESPN) por id de partido.
     public private(set) var marcadores: [String: LiveScore] = [:]
 
+    /// Gustos de fútbol guardados en el servidor (los mismos que usa la web).
+    public private(set) var preferencias: Preferences?
+    /// La última agenda cargada (la biblioteca la usa para «Emitiendo» / «A las…»).
+    public private(set) var agenda: FootballSchedule?
+    /// Sesiones abiertas en el motor: «Dónde se está reproduciendo».
+    public private(set) var sesiones: [SessionSummary] = []
+    /// Ya se ha preguntado al servidor por las sesiones (para no enseñar «nada» antes de saberlo).
+    public private(set) var sesionesCargadas = false
+    /// Id de este iPhone en el servidor (del arranque).
+    public private(set) var dispositivoId: String?
+
+    /// Los gustos para las reglas de «Para ti».
+    public var gustos: GustosFutbol { GustosFutbol(preferencias) }
+
     public let entorno: Entorno
     /// El reproductor de toda la app (sigue sonando al salir del partido).
     public let reproductor: Reproductor
@@ -48,7 +63,10 @@ public final class AppModel {
 
     /// - Parameter reproductor: solo en los tests (uno sin vigilante ni esperas
     ///   reales); si falta, se crea el de verdad con `motor` o con AVPlayer.
-    public init(entorno: Entorno, motor: (any MotorVideo)? = nil, reproductor: Reproductor? = nil) {
+    ///   `pip`: solo en los tests (con un controlador de PiP de mentira).
+    public init(
+        entorno: Entorno, motor: (any MotorVideo)? = nil, reproductor: Reproductor? = nil, pip: GestorPiP? = nil
+    ) {
         self.entorno = entorno
         let tieneToken = ((try? entorno.tokens.leerToken()) ?? nil) != nil
         fase = tieneToken && !entorno.configuracion.leer().vacia ? .lista : .emparejar
@@ -58,11 +76,15 @@ public final class AppModel {
                 motor: motor ?? Self.motorPorDefecto(), servicio: ServicioReproduccionAPI(api: entorno.api),
                 visor: IdentidadVisor.id(), preferencias: .standard)
         self.reproductor = elegido
-        pip = GestorPiP()
+        let gestor = pip ?? GestorPiP()
+        self.pip = gestor
         avisos = Avisos()
         controles = ControlesSistema()
         controles.conectar(elegido)
-        pip.alRestaurar = { [weak self] in self?.restaurarDesdePiP() }
+        // Una sola capa de vídeo para toda la app, con su PiP.
+        gestor.conectar(elegido.motor.avPlayer)
+        gestor.alRestaurar = { [weak self] in await self?.restaurarDesdePiP() }
+        gestor.alEmpezar = { [weak self] in self?.empezoElPiP() }
         tareaAccesoPerdido = Task { [weak self] in
             for await _ in entorno.accesoPerdido {
                 self?.accesoRetirado()
@@ -89,6 +111,10 @@ public final class AppModel {
         await entorno.cache.borrarTodo()
         motor = nil
         biblioteca = nil
+        preferencias = nil
+        agenda = nil
+        sesiones = []
+        sesionesCargadas = false
         fase = .emparejar
     }
 
@@ -118,6 +144,10 @@ public final class AppModel {
             motor = arranque.engine
             biblioteca = arranque.library
             versionServidor = arranque.version
+            if preferencias != arranque.preferences { preferencias = arranque.preferences }
+            if sesiones != arranque.playback.sessions { sesiones = arranque.playback.sessions }
+            if !sesionesCargadas { sesionesCargadas = true }
+            dispositivoId = arranque.device?.id
             reproductor.dispositivoId = arranque.device?.id
             if let activo = await entorno.servidores.conocido() { conexion = .conectado(activo) }
             try? await entorno.cache.guardar(arranque.library, en: .biblioteca)
@@ -159,7 +189,15 @@ public final class AppModel {
             switch sobre.event {
             case .engineStatus(let estado):
                 motor = estado
-            case .stateChanged(let datos) where datos.scopes.contains(.library) || datos.scopes.contains(.directories):
+            case .playbackSessions(let datos):
+                if sesiones != datos.sessions { sesiones = datos.sessions }
+                if !sesionesCargadas { sesionesCargadas = true }
+            case .streamClosed, .playbackNowPlaying:
+                // Servidores sin `playback.sessions`: la lista se pide otra vez.
+                Task { await self.refrescarSesiones() }
+            case .stateChanged(let datos)
+            where datos.scopes.contains(.library) || datos.scopes.contains(.directories)
+                || datos.scopes.contains(.preferences):
                 Task { await self.refrescarArranque() }
             case .resync:
                 recargas += 1
@@ -193,9 +231,11 @@ public final class AppModel {
         }
     }
 
-    /// Al volver a primer plano: comprobar la señal y reconectar si hacía falta.
+    /// Al volver a primer plano: la capa recupera el vídeo y, si seguía el
+    /// PiP, se cierra y el vídeo vuelve al reproductor (nunca dos a la vez);
+    /// después se comprueba la señal y se reconecta si hacía falta.
     public func volvioAPrimerPlano() {
-        pip.soltarCapas(false, player: reproductor.motor.avPlayer)
+        pip.volvioAPrimerPlano()
         guard fase == .lista, estuvoEnSegundoPlano else { return }
         estuvoEnSegundoPlano = false
         arrancarTiempoReal()
@@ -209,16 +249,109 @@ public final class AppModel {
         estuvoEnSegundoPlano = true
         pararTiempoReal()
         if reproductor.canal != nil && reproductor.quiereReproducir {
-            pip.soltarCapas(true, player: reproductor.motor.avPlayer)
+            pip.pasoASegundoPlano()
         }
     }
 
-    /// Al volver del PiP: si no se está viendo el partido, el reproductor a pantalla completa.
-    private func restaurarDesdePiP() {
-        if reproductor.superficiesGrandes == 0 { reproductor.pantallaCompleta = true }
+    /// AVKit va a devolver el vídeo del PiP: se enseña el reproductor grande
+    /// (salvo que ya se vea el del partido) y se espera a que esté en su sitio.
+    func restaurarDesdePiP() async {
+        if reproductor.canal != nil && reproductor.superficiesGrandes == 0 && !reproductor.expandido {
+            reproductor.expandir()
+        }
+        // Que el reproductor grande entre en pantalla y la capa pase a su hueco.
+        try? await Task.sleep(for: .milliseconds(450))
+        pip.superficie.recolocar()
+    }
+
+    /// Al abrirse el PiP con el reproductor grande delante, se minimiza: se
+    /// sigue usando la app con el vídeo en la ventanita.
+    private func empezoElPiP() {
+        guard reproductor.expandido else { return }
+        Orientacion.pedir(.portrait)
+        reproductor.minimizar()
+    }
+
+    // MARK: Dónde se está reproduciendo
+
+    /// Pide la lista de sesiones abiertas (respaldo del evento `playback.sessions`).
+    public func refrescarSesiones() async {
+        guard fase == .lista else { return }
+        do {
+            let estado = try await entorno.api.enviar(API.estadoReproduccion)
+            if sesiones != estado.sessions { sesiones = estado.sessions }
+            if !sesionesCargadas { sesionesCargadas = true }
+        } catch {
+            // Sin red se queda la última lista: la sección lo dice con su estado de conexión.
+        }
+    }
+
+    /// Mientras la sección está en pantalla: la lista al entrar y un repaso
+    /// cada 20 s por si el servidor no manda el evento.
+    public func vigilarSesiones() async {
+        while !Task.isCancelled {
+            await refrescarSesiones()
+            try? await Task.sleep(for: .seconds(20))
+        }
+    }
+
+    /// Título conocido de un canal por su hash (biblioteca o lo que suena).
+    public func tituloConocido(_ hash: String) -> String? {
+        let id = hash.lowercased()
+        if let canal = reproductor.canal, canal.id.lowercased() == id { return canal.partido?.titulo ?? canal.titulo }
+        guard let biblioteca else { return nil }
+        let todos = biblioteca.favorites + biblioteca.history + biblioteca.web
+        return todos.first { $0.id.lowercased() == id }?.title
+    }
+
+    // MARK: Agenda y gustos
+
+    /// La agenda que acaba de cargar la pantalla de la agenda.
+    public func agendaCargada(_ nueva: FootballSchedule?) {
+        guard let nueva else { return }
+        agenda = nueva
+    }
+
+    /// Si aún no hay agenda en memoria, la guardada en disco (para la biblioteca).
+    public func cargarAgendaGuardada() async {
+        guard agenda == nil, let guardada = await entorno.cache.leer(FootballSchedule.self, de: .agenda) else { return }
+        agenda = guardada.valor
+    }
+
+    /// Guarda los gustos (PUT sustituye lo que se manda) y los aplica ya.
+    @discardableResult
+    public func guardarGustos(_ gustos: GustosFutbol, completar: Bool = true) async -> Bool {
+        let cuerpo = PreferencesInput(
+            onboardingComplete: completar ? true : nil, country: preferencias?.country, leagues: gustos.leagues,
+            teams: gustos.teams, nationalities: gustos.nationalities)
+        do {
+            let respuesta = try await entorno.api.enviar(API.guardarPreferencias(cuerpo))
+            preferencias = respuesta.preferences
+            return true
+        } catch {
+            let convertido = APIError.desde(error)
+            if case .cancelado = convertido { return false }
+            avisos.mostrar(convertido.mensaje, tono: .error)
+            return false
+        }
+    }
+
+    /// Si todavía no se sabe nada de los gustos (arranque sin red), se piden.
+    public func cargarPreferencias() async {
+        guard preferencias == nil else { return }
+        if let respuesta = try? await entorno.api.enviar(API.preferencias) {
+            preferencias = respuesta.preferences
+        }
     }
 
     // MARK: Partidos
+
+    /// El centro de partido de lo que suena (si suena un partido): el
+    /// reproductor grande enseña sus fuentes.
+    public var centroSonando: CentroPartidoModelo? {
+        guard let id = reproductor.canal?.partido?.id else { return nil }
+        return centros[id]
+    }
 
     /// El modelo de fuentes de un partido (el mismo mientras suene o esté abierto).
     public func centro(para partido: FootballMatch) -> CentroPartidoModelo {
