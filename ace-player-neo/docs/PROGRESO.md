@@ -193,3 +193,18 @@ Además, yo (orquestador): pruebas contra el motor real en Docker local
 - 15:50: FASE 4 parte B lanzada (`wf_dae75a47-bff`): cortar la release
   0.7.0 en la carpeta de la app (solo en `rewrite-v2`), tests de
   empaquetado, monitoring y `docs/despliegue.md`. iOS sigue en su workflow.
+- 16:00-19:10: arreglo del diagnóstico (métricas que contaban como fallos) y
+  release re-montada en Linux (`158af6e`); release 0.7.0 cortada por su
+  agente con las dos CI en verde; iOS: reproductor y pantallas en verde, y
+  la tira de días de iOS 26 arreglada tras 5 compilaciones. Tercer corte de
+  cuota a las ~18:30 (se reinicia a las 19:10) en el último agente de iOS.
+- 19:15: **FASES 0-4 TERMINADAS.** Informe final (`INFORME.md`), resumen
+  (`RESUMEN-MAÑANA.md`) y paradas 3, 4 y final escritos.
+
+| Fase | Estado final |
+|---|---|
+| 0 | hecha |
+| 1 | hecha y verificada (seguridad y comportamientos) |
+| 2 | hecha y verificada (E2E, visual, accesibilidad, inventario) |
+| 3 | hecha: CI de iOS en verde con IPA; falta probar en el iPhone real |
+| 4 | hecha: CI en verde, release 0.7.0 cortada sin publicar, documentación |

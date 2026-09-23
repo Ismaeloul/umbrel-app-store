@@ -217,3 +217,66 @@ el vigilante decide si el motor ha caído (D9), la salud responde desde caché
 D18-D21 en `decisiones.md` (verificación en paralelo, inventario con
 diferencias deliberadas en D20, y solo una selección de capturas en git
 porque el Umbrel clona el repo entero).
+
+---
+
+## Parada 4 — FASE 3: app iOS (23-sep-2026, ~19:15)
+
+### Qué se hizo
+
+App nativa **"Ace Neo"** (`apps/ios`, SwiftUI, iOS 17+, Swift 6 con
+concurrencia estricta, sin dependencias) generada con XcodeGen y compilada
+**solo en GitHub Actions** (no hay Mac):
+- **Núcleo**: cliente de `/native/api/v1` con Bearer, token en el Llavero,
+  servidores de Tailscale y LAN con cambio automático, emparejamiento por
+  código o QR (AVFoundation), SSE con reconexión y caché local para arrancar
+  al instante. ATS acotado a Tailscale y la LAN (sin `NSAllowsArbitraryLoads`).
+- **Reproductor**: AVPlayer con controles propios, PiP (también automático
+  al salir), audio en segundo plano con interrupciones y auriculares, Now
+  Playing con canal anterior/siguiente, AirPlay, pantalla completa en
+  horizontal y la misma máquina de estados que la web (salto al directo si
+  se congela, 3 reconexiones con espera y cambio a la siguiente verificada).
+- **Pantallas**: agenda, centro de partido con fuentes, biblioteca (deslizar
+  para borrar con deshacer), buscar, ajustes y mini-reproductor, con Liquid
+  Glass (y respaldo de material), modo claro y oscuro, Dynamic Type,
+  VoiceOver, reducir movimiento y háptica.
+- **CI** (`.github/workflows/ios.yml`): genera el proyecto, pasa los tests
+  en el simulador y deja la **IPA sin firmar** como artefacto (y en una
+  Release si algún día se crea una etiqueta `ios-v*`).
+
+### Resultados
+
+| Prueba | Resultado |
+|---|---|
+| XCTest + XCUITest en el simulador | 120+ tests, 0 fallos, 0 saltados |
+| E2E en CI contra el backend y el motor falso de verdad | emparejar, agenda, **reproducir vídeo real**, revocar y emparejar por QR |
+| Última ejecución en verde | https://github.com/Ismaeloul/umbrel-app-store/actions/runs/35886091911 |
+| Capturas del simulador | 30 en `docs/capturas/fase3/` (claro y oscuro) |
+
+### Problemas
+
+- **Tira de días en iOS 26** (Liquid Glass): salía como una franja en
+  blanco. Hicieron falta 5 compilaciones para dar con ello; arreglado y con
+  una comprobación visual en la CI.
+- El agente de pruebas se cortó dos veces por el límite de uso; su trabajo
+  estaba empujado y se completó en la siguiente ventana.
+- **Sin probar en un iPhone real**: PiP (el simulador de la CI no lo tiene),
+  audio en segundo plano, rotación, AirPlay y ATS con IPs. Todo eso está en
+  `pruebas-iphone.md` para ti.
+
+---
+
+## Parada final — FASE 4: CI, documentación y entrega
+
+- **CI del monorepo** (`.github/workflows/ci.yml`): lint, typecheck, tests
+  del servidor, shared, motor falso, empaquetado y web, build y tamaño, humo
+  del bundle, E2E, nginx y shellcheck en Docker, `docker build` y SwiftLint.
+  En verde. El workflow de la 0.6.59 sigue corriendo sus 133 tests.
+- **Release 0.7.0** cortada en `ismaeloul-ace-player-neo/` (montada en Linux,
+  reproducible, con SHA256SUMS), `releaseNotes` en español, CHANGELOG,
+  vigilante del NAS que ya no miente y `despliegue.md` con la vuelta atrás.
+  **Sin publicar.**
+- **Documentación**: `README.md`, `INFORME.md`, `RESUMEN-MAÑANA.md`,
+  `acceso-remoto.md`, `ios.md`, `pruebas-iphone.md`, `rendimiento.md`,
+  `accesibilidad.md`, `seguridad.md` y `comportamientos.md` (259 de 278 con
+  test; los que faltan son de iOS en un iPhone real, de CI o no aplican).

@@ -38,3 +38,22 @@ Pregunta de Isma (23-sep-2026). Viable sobre la arquitectura v2:
 - Opcional: EPG XMLTV de la lista para mejorar la agenda.
 - Credenciales Xtream solo en el servidor, nunca al navegador ni a los logs;
   se mantiene el bloqueo SSRF salvo `ALLOW_PRIVATE_SYNC_URLS`.
+
+## 4. Motor AceStream del propio PC en la web (con el Umbrel de respaldo)
+
+Idea de Isma (23-sep-2026): en el PC, reproducir con el motor de AceStream
+instalado en el propio equipo (`127.0.0.1:6878`; la extensión de navegador
+solo hace de puente) y dejar el motor del Umbrel para el iPhone y lo que no
+tenga motor.
+- La web detecta el motor local (`/webui/api/service?method=get_version`,
+  CORS `*` en el motor) y, si responde, reproduce desde él con mpegts.js; si
+  no hay motor o el canal no arranca en X s, usa el Umbrel como ahora.
+  Interruptor en Ajustes ("Usar el motor de este equipo cuando esté
+  disponible").
+- Agenda, fuentes, comprobador, biblioteca y reportes siguen en el Umbrel;
+  los outcome/feedback se siguen mandando para el aprendizaje.
+- A tener en cuenta: hay que tener AceStream abierto en cada PC; Chrome pide
+  una vez el permiso de acceso a la red local; esa reproducción no entra en
+  la sesión compartida (D5) ni en el vigilante del Umbrel.
+- Medir antes de darlo por bueno: TTFF y cortes con motor local frente al
+  Umbrel (el cuello de botella suele ser el enjambre, no el salto de red).
