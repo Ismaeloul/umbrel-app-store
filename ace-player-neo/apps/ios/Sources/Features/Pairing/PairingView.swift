@@ -169,7 +169,11 @@ struct PairingView: View {
         // teclado y XCUITest (y VoiceOver) lo tocaban fuera.
         .background {
             LinearGradient(
-                colors: [Tinta.fondo.opacity(0), Tinta.fondo.opacity(0.92), Tinta.fondo],
+                stops: [
+                    .init(color: Tinta.fondo.opacity(0), location: 0),
+                    .init(color: Tinta.fondo, location: 0.28),
+                    .init(color: Tinta.fondo, location: 1),
+                ],
                 startPoint: .top, endPoint: .bottom
             )
             .ignoresSafeArea(.container, edges: .bottom)
