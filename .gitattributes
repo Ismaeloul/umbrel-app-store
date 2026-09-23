@@ -11,3 +11,5 @@ ismaeloul-ace-player-neo/releases/** -text
 # sirve para volver atras: siempre LF.
 ismaeloul-ace-player-neo/monitoring/* text eol=lf
 ismaeloul-ace-player-neo/tests/legacy-0.6.59/paquete/** text eol=lf
+ismaeloul-ace-player-neo/docker-compose.yml text eol=lf
+ismaeloul-ace-player-neo/umbrel-app.yml text eol=lf
