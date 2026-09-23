@@ -355,6 +355,8 @@ struct SelectorFuentes: View {
             }
         }
         .animation(Muelle.estandar, value: activa)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Fuentes")
         .accessibilityIdentifier("selector-fuentes")
     }
 

@@ -22,12 +22,13 @@ apps/ios/
 │   │   ├── Networking/      # APIClient, rutas, errores + catálogo, ServerResolver, SSE
 │   │   ├── Auth/            # Llavero, direcciones (Tailscale/LAN), enlace QR, emparejar
 │   │   └── Cache/           # caché en disco de agenda y biblioteca
-│   ├── Features/            # Pairing (código + QR), Agenda, Settings
-│   ├── Design/              # tokens «Luz de focos», muelles y cristal (Liquid Glass)
-│   └── Debug/               # servidor simulado para XCUITest (solo Debug)
+│   ├── Player/              # Reproductor (máquina de estados), AVPlayer, PiP, Now Playing, vistas
+│   ├── Features/            # Pairing, Agenda, MatchCenter, Sources (reglas), Library, Search, Settings
+│   ├── Design/              # tokens «Luz de focos», muelles, cristal y componentes
+│   └── Debug/               # servidor y motor de vídeo simulados para XCUITest (solo Debug)
 ├── Tests/
-│   ├── AceNeoTests/         # XCTest del núcleo
-│   └── AceNeoUITests/       # XCUITest del emparejamiento
+│   ├── AceNeoTests/         # XCTest: núcleo, reproductor, reglas de fuentes y HLS real
+│   └── AceNeoUITests/       # XCUITest: emparejar, partido → mini → volver, borrar → deshacer
 └── scripts/
     ├── build-ipa.sh                 # IPA sin firmar en un Mac (lo usa también la CI)
     ├── generar-recursos.mjs         # iconos PNG (Chrome + Playwright) y colores
@@ -62,6 +63,44 @@ apps/ios/
   muerta (el servidor manda `: ping` cada 15 s).
 - **Caché**: la agenda y la biblioteca se guardan en `Caches/AceNeo/`; al abrir
   se pinta lo guardado y se refresca después (arranque en frío < 1 s).
+
+## Reproductor
+
+Reproductor propio sobre `AVPlayerLayer` (no `AVPlayerViewController`): los
+controles son los de «Luz de focos» con cristal (Liquid Glass en iOS 26), el
+botón «Directo» enseña el retraso real y el mini-reproductor y la pantalla
+completa comparten el mismo `AVPlayer`.
+
+- `Reproductor` es `runtime.ts` de la web portado sobre la misma máquina de
+  estados (`MaquinaConexion`): pide `channels/:id/stream?client=ios` (URL del
+  remux firmada), latido cada 15 s (la firma cambia en cada latido: solo cuenta
+  la ruta) y `release` al parar o cambiar de canal.
+- Colchón según el modo: `preferredForwardBufferDuration` y
+  `configuredTimeOffsetFromLive` de `IOS_PLAYBACK_PROFILES`; cambiar de modo no
+  reconecta.
+- Vigilante cada 1,5 s: imagen parada 6 s con vídeo por delante → **salta al
+  directo**; 24 s → reconecta. Reconexión con espera 1, 2, 4 s y presupuesto de
+  3 en 3 min (1 en el arranque automático antes de la imagen); agotado, el
+  centro de partido pasa a la siguiente verificada (solo en «automático», como
+  la web).
+- `stream.reopened` reengancha solo; `playback.handoff` y un latido 410 con
+  otro dispositivo en el mando paran sin soltar; al volver a primer plano se
+  comprueba la sesión y se vuelve al directo si hace falta.
+- `outcome` (`arranco` una vez por fuente, `sigue` cada 2 min, `fallo`/`cayo`) y
+  el registro de fallos con métricas (tiempo hasta la imagen, rebuffers,
+  reconexiones, retraso).
+- Sistema: `AVAudioSession` `.playback` con interrupciones y auriculares
+  desconectados → pausa; `MPNowPlayingInfoCenter` + `MPRemoteCommandCenter`
+  (reproducir/pausa, canal anterior/siguiente); PiP con
+  `canStartPictureInPictureAutomaticallyFromInline` y restauración de la
+  interfaz; AirPlay (`AVRoutePickerView`); pantalla completa en horizontal.
+- `MotorVideo` es el protocolo detrás del que está AVPlayer: los tests usan uno
+  falso y las pruebas de interfaz uno simulado (`Debug/MotorSimulado.swift`).
+  `MotorAVPlayerTests` reproduce de verdad el HLS de prueba de Apple en el
+  simulador (se salta si el runner no tiene salida a Internet).
+- Sin KVO: en Swift 6 los cierres de KVO heredan el actor principal y
+  AVFoundation los llama desde otros hilos; el motor sondea su estado cada
+  250-500 ms en el actor principal.
 
 ## Decisión: modelos Codable a mano, no generados del OpenAPI
 

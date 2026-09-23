@@ -61,6 +61,7 @@ enum Pestana: Hashable {
 struct PrincipalView: View {
     @Environment(AppModel.self) private var modelo
     @State private var pestana: Pestana = .agenda
+    @Namespace private var espacioReproductor
 
     var body: some View {
         @Bindable var reproductor = modelo.reproductor
@@ -78,10 +79,12 @@ struct PrincipalView: View {
                 .tabItem { Label("Ajustes", systemImage: "gearshape") }
                 .tag(Pestana.ajustes)
         }
+        .environment(\.espacioReproductor, espacioReproductor)
         .avisos(modelo.avisos, margenInferior: 110)
         .fullScreenCover(isPresented: $reproductor.pantallaCompleta) {
             ReproductorCompleto()
                 .environment(modelo)
+                .destinoZoom("mini", en: espacioReproductor)
         }
         .sensoryFeedback(.selection, trigger: reproductor.cambiosDeFuente)
         .sensoryFeedback(.error, trigger: reproductor.errores)

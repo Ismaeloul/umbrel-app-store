@@ -339,6 +339,7 @@ struct ReproductorCompleto: View {
 /// abre a pantalla completa.
 struct MiniReproductor: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.espacioReproductor) private var espacioCompartido
     let espacio: Namespace.ID
 
     var body: some View {
@@ -396,7 +397,7 @@ struct MiniReproductor: View {
         .shadow(color: .black.opacity(0.15), radius: 16, y: 6)
         .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .onTapGesture { reproductor.pantallaCompleta = true }
-        .origenZoom("mini", en: espacio)
+        .origenZoom("mini", en: espacioCompartido ?? espacio)
         .padding(.horizontal, Medida.margen)
         .padding(.bottom, 8)
         .accessibilityElement(children: .contain)
@@ -409,6 +410,18 @@ struct MiniReproductor: View {
         if let mensaje = reproductor.mensaje, reproductor.fase != .reproduciendo { return mensaje }
         if reproductor.canal?.partido != nil, let titulo = reproductor.canal?.titulo { return titulo }
         return reproductor.fase.etiqueta
+    }
+}
+
+/// Espacio de nombres del reproductor (el mini hace zoom al reproductor completo).
+private struct ClaveEspacioReproductor: EnvironmentKey {
+    static var defaultValue: Namespace.ID? { nil }
+}
+
+extension EnvironmentValues {
+    var espacioReproductor: Namespace.ID? {
+        get { self[ClaveEspacioReproductor.self] }
+        set { self[ClaveEspacioReproductor.self] = newValue }
     }
 }
 

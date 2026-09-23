@@ -214,6 +214,7 @@ public final class Reproductor {
         cambiosDeFuente += 1
         transicion(.solicitar)
         sistema?.empezo(nuevo)
+        sistema?.cambio(self)
         conectar(recuperacion: false)
         arrancarVigilante()
     }
