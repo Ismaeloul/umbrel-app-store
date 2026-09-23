@@ -17,25 +17,31 @@ struct AjustesView: View {
     var body: some View {
         NavigationStack {
             Form {
-                seccionServidor
-                seccionMotor
-                seccionReproduccion
-                Section("Fútbol") {
-                    NavigationLink {
-                        PreferenciasView()
-                    } label: {
-                        Label("Equipos, ligas y nacionalidades", systemImage: "heart.text.square")
+                // Los colores de «Luz de focos» (fondo y tarjetas), como el resto de pestañas.
+                Group {
+                    seccionServidor
+                    seccionMotor
+                    seccionReproduccion
+                    Section("Fútbol") {
+                        NavigationLink {
+                            PreferenciasView()
+                        } label: {
+                            Label("Equipos, ligas y nacionalidades", systemImage: "heart.text.square")
+                        }
+                        .accessibilityIdentifier("enlace-preferencias")
                     }
-                    .accessibilityIdentifier("enlace-preferencias")
+                    seccionAcercaDe
+                    Section {
+                        Button("Olvidar este servidor", role: .destructive) { confirmarOlvidar = true }
+                            .accessibilityIdentifier("boton-olvidar")
+                    } footer: {
+                        Text("Borra el token del Llavero y las direcciones. Para volver a usar la app habrá que emparejarla otra vez.")
+                    }
                 }
-                seccionAcercaDe
-                Section {
-                    Button("Olvidar este servidor", role: .destructive) { confirmarOlvidar = true }
-                        .accessibilityIdentifier("boton-olvidar")
-                } footer: {
-                    Text("Borra el token del Llavero y las direcciones. Para volver a usar la app habrá que emparejarla otra vez.")
-                }
+                .listRowBackground(Tinta.superficie)
             }
+            .scrollContentBackground(.hidden)
+            .background(Tinta.fondo.ignoresSafeArea())
             .navigationTitle("Ajustes")
             .task { await cargarConfig() }
             .confirmationDialog(
@@ -313,20 +319,25 @@ struct PreferenciasView: View {
 
     private func formulario(_ actuales: Preferences) -> some View {
         Form {
-            Section("País") {
-                TextField(
-                    "País", text: Binding(get: { actuales.country }, set: { cambiar(\.country, $0) }))
+            Group {
+                Section("País") {
+                    TextField(
+                        "País", text: Binding(get: { actuales.country }, set: { cambiar(\.country, $0) }))
+                }
+                ListaEditable(
+                    titulo: "Ligas", marcador: "Añadir liga", valores: actuales.leagues
+                ) { cambiar(\.leagues, $0) }
+                ListaEditable(
+                    titulo: "Equipos", marcador: "Añadir equipo", valores: actuales.teams
+                ) { cambiar(\.teams, $0) }
+                ListaEditable(
+                    titulo: "Nacionalidades", marcador: "Añadir nacionalidad", valores: actuales.nationalities
+                ) { cambiar(\.nationalities, $0) }
             }
-            ListaEditable(
-                titulo: "Ligas", marcador: "Añadir liga", valores: actuales.leagues
-            ) { cambiar(\.leagues, $0) }
-            ListaEditable(
-                titulo: "Equipos", marcador: "Añadir equipo", valores: actuales.teams
-            ) { cambiar(\.teams, $0) }
-            ListaEditable(
-                titulo: "Nacionalidades", marcador: "Añadir nacionalidad", valores: actuales.nationalities
-            ) { cambiar(\.nationalities, $0) }
+            .listRowBackground(Tinta.superficie)
         }
+        .scrollContentBackground(.hidden)
+        .background(Tinta.fondo.ignoresSafeArea())
     }
 
     private func cambiar<Valor>(_ campo: WritableKeyPath<Preferences, Valor>, _ valor: Valor) {

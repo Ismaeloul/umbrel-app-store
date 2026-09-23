@@ -92,6 +92,17 @@ final class ServidorRealUITests: XCTestCase {
         let emparejada = await esperar(45) { agenda.exists }
         XCTAssertTrue(emparejada, "No llega a la agenda tras emparejar con el backend real. \(estado(app))")
 
+        // La tira de días con la agenda real (varios días): el primero (hoy) se ve.
+        // Si no, se sigue igualmente para probar el resto y el fallo queda anotado.
+        let primerDia = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "dia-")).firstMatch
+        let tiraVisible = await esperar(15) { primerDia.exists && primerDia.isHittable }
+        if !tiraVisible { captura(app, "e2e-02-fallo-tira-de-dias") }
+        continueAfterFailure = true
+        XCTAssertTrue(
+            tiraVisible,
+            "La tira de días no enseña el primer día (existe: \(primerDia.exists), marco: \(primerDia.frame))")
+        continueAfterFailure = false
+
         // La agenda de demostración del backend: un partido con fuentes en el motor falso.
         var partido: XCUIElement?
         let lista = elemento(app, "lista-agenda")

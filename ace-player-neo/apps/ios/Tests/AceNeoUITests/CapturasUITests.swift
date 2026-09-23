@@ -61,6 +61,13 @@ final class CapturasUITests: XCTestCase {
         app = lanzar(modo, emparejada: true)
         let partido = conTexto(app, "Equipo Local")
         XCTAssertTrue(partido.waitForExistence(timeout: 60), "No aparece la agenda")
+        // Tira de días (hoy, mañana y pasado): el primero se ve. Si no, se anota y se sigue.
+        let primerDia = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "dia-")).firstMatch
+        continueAfterFailure = true
+        XCTAssertTrue(
+            primerDia.waitForExistence(timeout: 10) && primerDia.isHittable,
+            "La tira de días no enseña el primer día (marco: \(primerDia.frame))")
+        continueAfterFailure = false
         captura(app, "\(modo)-02-agenda")
 
         // Centro de partido con la verificada sonando.

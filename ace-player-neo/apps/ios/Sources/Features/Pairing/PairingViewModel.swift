@@ -56,7 +56,7 @@ final class PairingViewModel {
     /// Texto leído por el escáner: solo vale un enlace de emparejamiento.
     func leido(_ texto: String) -> Bool {
         guard let enlace = PairingLink(texto: texto) else {
-            estado = .error("Ese código QR no es de Ace Player Neo. Ábrelo desde Ajustes → Emparejar iPhone en la web.")
+            estado = .error("Ese código QR no es de Ace Player Neo. Sácalo en la web: Ajustes → Dispositivos → Emparejar un dispositivo.")
             return false
         }
         aplicar(enlace)

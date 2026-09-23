@@ -146,10 +146,23 @@ struct TiraDias: View {
                 .padding(.horizontal, Medida.margen)
                 .padding(.vertical, 8)
             }
-            .onAppear { if let elegido { lector.scrollTo(elegido, anchor: .center) } }
+            .onAppear {
+                // Solo si el día elegido no cabe a la vista (hoy suele ser el
+                // primero). Con la agenda real (varios días) un scrollTo
+                // centrado nada más aparecer, con la tira aún sin medir, la
+                // dejaba en blanco: se espera a la primera maquetación.
+                guard let elegido, let indice = dias.firstIndex(where: { $0.date == elegido }), indice > 3 else {
+                    return
+                }
+                Task { @MainActor in
+                    await Task.yield()
+                    lector.scrollTo(elegido, anchor: .center)
+                }
+            }
             .onChange(of: elegido) { _, nuevo in
                 guard let nuevo else { return }
-                withAnimation(Muelle.estandar) { lector.scrollTo(nuevo, anchor: .center) }
+                // Lo justo para que se vea (sin ancla): el que se toca ya está a la vista.
+                withAnimation(Muelle.estandar) { lector.scrollTo(nuevo) }
             }
         }
         // Solo detrás de la tira: si se extendiera hacia arriba taparía el título grande.

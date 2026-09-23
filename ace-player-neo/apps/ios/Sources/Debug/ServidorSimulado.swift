@@ -41,10 +41,14 @@
         static let estado = OSAllocatedUnfairLock(initialState: Estado())
 
         /// Hoy en Madrid, `YYYY-MM-DD`.
-        static var hoy: String {
+        static var hoy: String { dia(0) }
+
+        /// Hoy más `masDias` en Madrid, `YYYY-MM-DD`.
+        static func dia(_ masDias: Int) -> String {
             var calendario = Calendar(identifier: .gregorian)
             calendario.timeZone = TimeZone(identifier: "Europe/Madrid") ?? .current
-            let c = calendario.dateComponents([.year, .month, .day], from: .now)
+            let fecha = calendario.date(byAdding: .day, value: masDias, to: .now) ?? .now
+            let c = calendario.dateComponents([.year, .month, .day], from: fecha)
             return String(format: "%04d-%02d-%02d", c.year ?? 2026, c.month ?? 1, c.day ?? 1)
         }
 
@@ -70,7 +74,10 @@
             case ("GET", "bootstrap"):
                 return (200, json, Data(arranque().utf8))
             case ("GET", "football"):
-                return (200, json, Data(agenda.replacingOccurrences(of: "HOY", with: hoy).utf8))
+                let dias = agenda.replacingOccurrences(of: "HOY", with: hoy)
+                    .replacingOccurrences(of: "MANANA", with: dia(1))
+                    .replacingOccurrences(of: "PASADO", with: dia(2))
+                return (200, json, Data(dias.utf8))
             case ("GET", "scores"):
                 return (200, json, Data(marcadores.utf8))
             case ("GET", "events"):
@@ -195,7 +202,11 @@
             #"{"generatedAt":"2026-09-23T18:30:00.000Z","timezone":"Europe/Madrid","country":"Spain","source":"demo","attribution":"Datos de muestra","demo":true,"limited":false,"partial":false,"days":[{"date":"HOY","matches":["#,
             #"{"id":"sim-1","date":"HOY","time":"18:30","title":"Equipo Local - Equipo Visitante","home":"Equipo Local","away":"Equipo Visitante","competition":"LaLiga","country":"Spain","channels":[{"id":"m-laliga","name":"M+ LaLiga"}]},"#,
             #"{"id":"sim-2","date":"HOY","time":"21:00","title":"Otro Local - Otro Visitante","home":"Otro Local","away":"Otro Visitante","competition":"Champions League","country":"Europe","channels":[{"id":"m-lc","name":"M+ Liga de Campeones"}]}"#,
-            "]}]}",
+            "]},",
+            // Más días (como la agenda real): la tira de días tiene varios.
+            #"{"date":"MANANA","matches":[{"id":"sim-3","date":"MANANA","time":"20:00","title":"Local Mañana - Visitante Mañana","home":"Local Mañana","away":"Visitante Mañana","competition":"LaLiga","country":"Spain","channels":[{"id":"m-laliga","name":"M+ LaLiga"}]}]},"#,
+            #"{"date":"PASADO","matches":[{"id":"sim-4","date":"PASADO","time":"21:00","title":"Local Pasado - Visitante Pasado","home":"Local Pasado","away":"Visitante Pasado","competition":"Premier League","country":"England","channels":[{"id":"dazn","name":"DAZN"}]}]}"#,
+            "]}",
         ].joined()
 
         static let marcadores =

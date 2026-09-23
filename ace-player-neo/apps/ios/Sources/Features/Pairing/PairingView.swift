@@ -58,6 +58,10 @@ struct PairingView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .background(Tinta.fondo.ignoresSafeArea())
+            // Con el teclado el formulario sube: que no pase por debajo de la hora sin fondo.
+            .safeAreaInset(edge: .top, spacing: 0) {
+                Color.clear.frame(height: 0).background(.bar, ignoresSafeAreaEdges: .top)
+            }
             .safeAreaInset(edge: .bottom) { botonEmparejar }
             .sheet(isPresented: $vm.mostrandoEscaner) { escaner }
             .onChange(of: enlace, initial: true) { _, nuevo in
@@ -79,7 +83,7 @@ struct PairingView: View {
             Text("Ace Neo")
                 .font(.titular())
                 .foregroundStyle(Tinta.texto)
-            Text("Empareja este iPhone con tu Ace Player Neo. En la web, abre Ajustes → Emparejar iPhone.")
+            Text("Empareja este iPhone con tu Ace Player Neo. En la web, abre Ajustes → Dispositivos → Emparejar un dispositivo.")
                 .font(.body)
                 .foregroundStyle(Tinta.texto2)
         }
