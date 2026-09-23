@@ -235,3 +235,17 @@ conservador). Todas se pueden revertir.
   las cabeceras obligaría a una excepción en el gancho solo para imitar una
   ausencia. El script solo da por explicada una diferencia si el paso, el
   campo y los dos valores encajan con la fila.
+
+## D18. Los verificadores del backend corren a la vez que el armazón de la web
+
+- **Decisión**: el cierre de la FASE 1 (verificador de seguridad y
+  verificador de comportamientos) corre en paralelo con el armazón y las
+  vistas de la FASE 2. La parada 2 se escribe con los tests en verde y se
+  completa con lo que encuentren los verificadores.
+- **Por qué**: todos los tests del backend están en verde y la web solo
+  depende de la API v1 (fijada en `@ace/shared`), no de detalles internos
+  que puedan corregir los verificadores. Esperarlos en serie costaría casi
+  una hora de una noche corta, que ya perdió dos horas por el límite de uso.
+- **Riesgo**: si un verificador cambia un contrato de la API, las vistas se
+  ajustan en la integración de la FASE 2. Los verificadores tienen prohibido
+  tocar `apps/web`.

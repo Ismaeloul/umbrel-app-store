@@ -28,8 +28,8 @@
 | Fase | Estado | Notas |
 |---|---|---|
 | 0. Análisis y plan | **hecha** (22-sep 23:35) | informe en PARADAS.md |
-| 1. Backend | en curso | |
-| 2. Web | pendiente | |
+| 1. Backend | **hecha** (23-sep 05:40, tests en verde; verificación independiente en curso) | Parada 2 |
+| 2. Web | en curso (diseño elegido; armazón y vistas) | |
 | 3. iOS | pendiente | |
 | 4. CI, docs y entrega | pendiente | |
 
@@ -93,6 +93,25 @@
   pedidos, 18 tests, cableado, humo del bundle, soak de 2 h simulado,
   compat.md, comportamientos.md) → contraste con la 0.6.59 y Docker local;
   en paralelo, las 3 maquetas visuales y un jurado que elige.
+- 05:20: integración y contraste terminados (6/6 agentes, 2,44 M tokens).
+  Comprobado por mí: typecheck limpio, shared 65, servidor 1143 (con el
+  cierre intermitente de Windows en 1 de 4 ejecuciones, ver `pendiente.md`),
+  motor falso 86, deploy 108, humo 18/18. Diseño elegido: A «Luz de focos»
+  con injertos de B y C (`docs/diseno/eleccion.md`). Commits `e35184a` y
+  `d9dbaf3` (dependencias de la web).
+- 05:40: workflow `wf_c97519e8-c5f`: verificadores independientes del
+  backend (seguridad; comportamientos e inventario) a la vez que la FASE 2
+  (D18): armazón + sistema de diseño (B0) y después 5 vistas, 3 a la vez
+  (agenda, biblioteca, reproductor, partido y fuentes, salud/dispositivos/PWA).
+  Parada 2 escrita (se completa con los verificadores).
+
+| Fase | Estado |
+|---|---|
+| 0 | hecha |
+| 1 | hecha (tests en verde); verificación independiente en curso |
+| 2 | en curso: armazón y vistas |
+| 3 | pendiente |
+| 4 | pendiente |
 
 ## Agentes y workflows lanzados
 

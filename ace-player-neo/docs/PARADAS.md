@@ -69,3 +69,89 @@ tiene que igualar). En esta fase no hay código de producto.
 
 - Al reiniciar el PC se cortaron los agentes; no habían escrito nada y se
   relanzó la fase entera.
+
+---
+
+## Parada 2 — FASE 1: backend (23-sep-2026, ~05:45)
+
+### Qué se hizo
+
+- **Contratos** (`packages/shared`): esquemas zod del estado v1/v2, de las 27
+  operaciones antiguas y de las 37 rutas v1, eventos SSE, catálogo de errores
+  con mensaje en español, perfiles de reproducción y funciones puras portadas
+  de la 0.6.59 (contrastadas con el código original). OpenAPI generado en
+  `docs/openapi-v2.yaml`.
+- **Backend** (`apps/server`, Fastify + TypeScript estricto): 14 módulos
+  (`state`, `net`, `directories`, `engine`, `playback`, `remux`, `scanner`,
+  `sources`, `football`, `auth`, `events`, `diagnostics`, `health`,
+  `search`) más el sidecar `engine-control`. Lo principal de lo nuevo:
+  - el backend es el **dueño de las sesiones del motor**: una por contenido,
+    latido cada 15 s, stop siempre (sin zombis), cambio de canal sin
+    carreras, mismo canal compartido por HLS (D5);
+  - **vigilante del motor** con histéresis, backoff y como mucho 3
+    reinicios por hora, que recupera solo el canal tras un reinicio;
+  - el **comprobador** nunca prueba el canal que estás viendo y baja el ritmo
+    si hay reproducción;
+  - **estado** con escritura atómica (tmp + fsync + rename), copias rotadas,
+    recuperación de un `state.json` corrupto y migración 1→2 que la 0.6.59
+    sigue pudiendo leer;
+  - **app de iOS**: emparejamiento con código de 6 dígitos + QR, tokens de
+    256 bits guardados solo como hash, URLs de vídeo firmadas, límites contra
+    fuerza bruta, `/native/` blindado en nginx;
+  - **SSE** (`/api/v1/events`), registro de diagnóstico por causa y salud
+    desde caché.
+- **Motor AceStream falso** fiel al real (sesión única por contenido, HLS
+  compartible, progresivo de un solo consumidor, modos de fallo) para tests,
+  soak y E2E.
+- **Empaquetado 0.7.0** (en `deploy/`, todavía sin copiar a la carpeta de la
+  app): compose, hook `pre-start` con verificación por SHA256 y restauración
+  atómica, nginx.conf blindado, build de un solo `server.js`, release
+  reproducible y Dockerfile sin root.
+
+### Resultados de los tests
+
+| Batería | Resultado |
+|---|---|
+| `@ace/shared` | 65/65 |
+| Servidor (unidad + integración) | 1143/1143 (ver nota) |
+| Motor falso | 86/86 |
+| Empaquetado (compose, nginx, hook, release) | 108/108 |
+| nginx real en Docker, blindaje de `/native/` | 125/125 |
+| Compose local con pasarela falsa | 39/39 |
+| Humo del `server.js` empaquetado | 18/18, arranque en ~200 ms, apagado en 13 ms |
+| Soak de 2 h simuladas con 11 fallos aleatorios | se recupera siempre, 0 sesiones y 0 temporizadores al final, +0,22 MiB |
+| Estrés de 200 reproducciones | sin fugas |
+| Contraste con la 0.6.59 (27 operaciones antiguas) | 195 comparaciones, 0 diferencias sin explicar |
+| Front 0.6.59 contra el backend nuevo | carga, agenda, biblioteca, reproducción y traspaso funcionan |
+| Migración de tu `state.json` real (copia) | 12 claves idénticas, idempotente, la 0.6.59 lo lee igual |
+
+Nota: en este PC, 1 de cada 4 ejecuciones completas del servidor pierde un
+worker de Vitest por un cierre de Windows en las conexiones locales
+(`0xC0000409`), ajeno al código (ver `pendiente.md`). Repetida, la batería
+pasa entera. La referencia será CI en Linux.
+
+### Cobertura de comportamientos (`comportamientos.md`)
+
+De 278: 133 cubiertos del todo, 38 con la parte del servidor cubierta y la
+de la web pendiente, 2 con la parte de iOS pendiente, 93 solo de la web
+(FASE 2), 9 solo de iOS (FASE 3), 2 de CI (FASE 4) y 1 que no aplica. Cero
+rotos. Las diferencias con la 0.6.59 están en `compat.md` (114, de las que
+35 afectan a rutas antiguas, todas justificadas).
+
+### Verificación independiente
+
+En curso a la vez que la web (D18): un verificador de seguridad y otro de
+comportamientos e inventario. Su resultado se añade aquí debajo.
+
+### Decisiones de la fase
+
+D9-D17 en `decisiones.md`: sobre todo, playback no suelta una sesión mientras
+el vigilante decide si el motor ha caído (D9), la salud responde desde caché
+(D10) y dos diferencias con la 0.6.59 aceptadas tras el contraste (D17).
+
+### Pendiente de esta fase
+
+- Probar contra el motor real el paso de progresivo a HLS al unirse un
+  segundo dispositivo, y un soak real de 30 min (se hace con la web nueva).
+- Contrastar los parsers de la agenda con el HTML real de futbolenlatv.
+- Normalizadores de directorios duplicados en dos módulos (D16).
