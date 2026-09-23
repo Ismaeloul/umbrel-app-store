@@ -177,3 +177,11 @@ Además, yo (orquestador): pruebas contra el motor real en Docker local
   agentes en serie: núcleo + CI, reproductor + pantallas, pruebas +
   documentación). Hacen commit y push SOLO de `apps/ios` y
   `.github/workflows/ios.yml` a `rewrite-v2` para compilar en GitHub Actions.
+- 11:36: soak real de 30 min: 0 cortes, 851 MB, primer byte en 608 ms
+  (`analisis/motor-real.md` §9). Commit `86562ff`.
+- ~12:00: **límite de uso otra vez** (se reinicia a las 14:10). Mueren los 3
+  agentes del cierre de la FASE 2 (dejan ~66 ficheros sin commitear) y los
+  de iOS; el del núcleo de iOS ya había hecho commit y push (`7d65115`,
+  `11bccfe`) con la **CI de iOS en verde** (run 35846082521).
+- 14:15: relanzo como reanudación el cierre de la FASE 2 (`wf_301f9bba-f18`)
+  y la FASE 3 desde el reproductor y las pantallas (`wf_5c66a79d-00e`).

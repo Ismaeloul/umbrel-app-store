@@ -66,7 +66,12 @@ describe('qué da cada canal', () => {
     const m = match('a', '21:00', ['DAZN']);
     expect(broadcastsMatch({ title: 'DAZN' }, m)).toBe(true);
     expect(broadcastsMatch({ title: 'DAZN 1' }, m)).toBe(false);
-    expect(broadcastsMatch({ title: 'M. LaLiga', alias: 'M+ LaLiga' }, match('b', '21:00', ['M+ LaLiga']))).toBe(true);
+    expect(
+      broadcastsMatch(
+        { title: 'M. LaLiga', alias: 'M+ LaLiga' },
+        match('b', '21:00', ['M+ LaLiga']),
+      ),
+    ).toBe(true);
   });
 
   it('en directo, siguiente y después, en orden de hora', () => {
@@ -92,12 +97,22 @@ describe('qué da cada canal', () => {
   it('partidos de hoy (y los de ayer que siguen) y la ventana de marcadores', () => {
     const clock = { date: '2026-09-23', minutes: 30 };
     const days = [
-      { date: '2026-09-22', matches: [match('ayer-tarde', '22:45', ['X'], '2026-09-22'), match('ayer', '18:00', ['X'], '2026-09-22')] },
+      {
+        date: '2026-09-22',
+        matches: [
+          match('ayer-tarde', '22:45', ['X'], '2026-09-22'),
+          match('ayer', '18:00', ['X'], '2026-09-22'),
+        ],
+      },
       { date: '2026-09-23', matches: [match('hoy', '21:00', ['X'])] },
     ];
     expect(todaysMatches(days, clock).map((m) => m.id)).toEqual(['ayer-tarde', 'hoy']);
-    expect(needsScores([match('hoy', '21:00', ['X'])], { date: '2026-09-23', minutes: 20 * 60 + 50 })).toBe(true);
-    expect(needsScores([match('hoy', '21:00', ['X'])], { date: '2026-09-23', minutes: 18 * 60 })).toBe(false);
+    expect(
+      needsScores([match('hoy', '21:00', ['X'])], { date: '2026-09-23', minutes: 20 * 60 + 50 }),
+    ).toBe(true);
+    expect(
+      needsScores([match('hoy', '21:00', ['X'])], { date: '2026-09-23', minutes: 18 * 60 }),
+    ).toBe(false);
   });
 
   it('minuto y descanso del reloj de ESPN', () => {

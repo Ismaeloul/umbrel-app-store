@@ -33,9 +33,18 @@ function entry(over: Partial<DiagnosticEntry>): DiagnosticEntry {
 describe('palabras y formas de cada estado', () => {
   it('las diez etiquetas de la 0.6.59 (index.html:4271) y las nuevas', () => {
     expect(
-      ['ready', 'warming', 'discovered', 'scanning', 'degraded', 'stale', 'model_missing', 'offline', 'disabled', 'empty'].map(
-        statusLabel,
-      ),
+      [
+        'ready',
+        'warming',
+        'discovered',
+        'scanning',
+        'degraded',
+        'stale',
+        'model_missing',
+        'offline',
+        'disabled',
+        'empty',
+      ].map(statusLabel),
     ).toEqual([
       'Listo',
       'Preparando',
@@ -108,12 +117,19 @@ describe('cuadrícula por servicio', () => {
       { autoRestarts: { lastHour: 3, max: 3, nextAllowedAt: next.toISOString(), exhausted: true } },
       NOW,
     );
-    expect(note).toMatch(/^Ya se ha reiniciado solo 3 veces en una hora: no lo volverá a hacer hasta las \d\d:\d\d\.$/);
+    expect(note).toMatch(
+      /^Ya se ha reiniciado solo 3 veces en una hora: no lo volverá a hacer hasta las \d\d:\d\d\.$/,
+    );
   });
 
   it('segundo motor con fugas, IA sin modelo, agenda vieja y datos recuperados', () => {
     const h = health();
-    h.components.scanner = { ...h.components.scanner, leakedSessionsLastHour: 2, activeJobs: 1, queue: 4 };
+    h.components.scanner = {
+      ...h.components.scanner,
+      leakedSessionsLastHour: 2,
+      activeJobs: 1,
+      queue: 4,
+    };
     h.components.ai = { status: 'model_missing', model: 'embeddinggemma' };
     h.components.agenda = { ...h.components.agenda, status: 'stale' };
     h.components.state = { status: 'recovered', recoveredFrom: 'state.json.bak' };
@@ -123,7 +139,10 @@ describe('cuadrícula por servicio', () => {
     expect(by.ai?.detail).toBe('Falta embeddinggemma');
     expect(by.agenda?.label).toBe('Copia anterior');
     expect(by.agenda?.detail).toMatch(/ · de las \d\d:\d\d$/);
-    expect(by.state).toMatchObject({ label: 'Recuperado', detail: 'Se usó una copia (state.json.bak)' });
+    expect(by.state).toMatchObject({
+      label: 'Recuperado',
+      detail: 'Se usó una copia (state.json.bak)',
+    });
   });
 });
 
@@ -149,7 +168,9 @@ describe('resumen', () => {
       headline: 'Motor principal: sin conexión.',
     });
     h.components.directories = { status: 'empty', total: 0, channels: 0 };
-    expect(healthSummary(h, serviceRows(h, offline, NOW)).headline).toBe('Hay 2 servicios con problemas.');
+    expect(healthSummary(h, serviceRows(h, offline, NOW)).headline).toBe(
+      'Hay 2 servicios con problemas.',
+    );
   });
 });
 
@@ -164,7 +185,9 @@ describe('tiempos en claro', () => {
     expect(formatWhen(at(10_000), NOW).relative).toBe('ahora mismo');
     expect(formatWhen(at(5 * 60_000), NOW).relative).toBe('hace 5 min');
     expect(formatWhen(at(30 * 3600_000), NOW).relative).toMatch(/^(ayer|\d+ \w+)$/);
-    expect(formatWhen(at(5 * 86400_000), NOW).relative).toMatch(/^\d+ (ene|feb|mar|abr|may|jun|jul|ago|sept|oct|nov|dic)$/);
+    expect(formatWhen(at(5 * 86400_000), NOW).relative).toMatch(
+      /^\d+ (ene|feb|mar|abr|may|jun|jul|ago|sept|oct|nov|dic)$/,
+    );
     expect(formatWhen('no-es-fecha', NOW)).toEqual({ time: '—', relative: '' });
   });
 });
@@ -179,28 +202,45 @@ describe('registro de diagnóstico', () => {
     expect(describeEntry(entry({ message: 'el comprobador pudo dejar una sesión abierta' }))).toBe(
       'El comprobador pudo dejar una sesión abierta',
     );
-    expect(describeEntry(entry({ message: '', code: 'engine_unavailable', cause: 'engine' }))).not.toBe('');
+    expect(
+      describeEntry(entry({ message: '', code: 'engine_unavailable', cause: 'engine' })),
+    ).not.toBe('');
     expect(describeEntry(entry({ message: '', code: 'raro', cause: 'client' }))).toMatch(
       /^Lo avisa un dispositivo/,
     );
     // Un informe de métricas no es un fallo.
     expect(
-      describeEntry(entry({ message: '', code: 'player_metrics', cause: 'client', metrics: { rebuffers: 0 } })),
+      describeEntry(
+        entry({ message: '', code: 'player_metrics', cause: 'client', metrics: { rebuffers: 0 } }),
+      ),
     ).toBe('Resumen de una reproducción en un dispositivo.');
   });
 
   it('métricas del reproductor en claro', () => {
     expect(metricsSentence(undefined)).toBeNull();
     expect(
-      metricsSentence({ timeToFirstFrameMs: 2300, rebuffers: 2, rebufferMs: 4100, reconnects: 1, liveLatencyS: 14.2 }),
-    ).toBe('Imagen en 2,3 s · 2 cortes (4,1 s en total) · 1 reconexión · 14 s por detrás del directo');
+      metricsSentence({
+        timeToFirstFrameMs: 2300,
+        rebuffers: 2,
+        rebufferMs: 4100,
+        reconnects: 1,
+        liveLatencyS: 14.2,
+      }),
+    ).toBe(
+      'Imagen en 2,3 s · 2 cortes (4,1 s en total) · 1 reconexión · 14 s por detrás del directo',
+    );
   });
 
   it('por fuente: agrupa por hash (o canal), solo 24 h, de la que más falla a la que menos', () => {
     const groups = groupBySource(
       [
         entry({ hash: 'a'.repeat(40), channel: 'DAZN 1' }),
-        entry({ hash: 'a'.repeat(40), channel: 'DAZN 1 HD', cause: 'client', at: new Date(NOW - 30_000).toISOString() }),
+        entry({
+          hash: 'a'.repeat(40),
+          channel: 'DAZN 1 HD',
+          cause: 'client',
+          at: new Date(NOW - 30_000).toISOString(),
+        }),
         entry({ channel: 'Teledeporte' }),
         entry({ hash: 'b'.repeat(40), at: new Date(NOW - 25 * 3600_000).toISOString() }),
         entry({ cause: 'engine' }),

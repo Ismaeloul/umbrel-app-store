@@ -75,6 +75,11 @@ export function RouterProvider({ children, onBeforeChange, initialSearch }: Rout
   // cambiar (el armazón guarda ahí el scroll de la vista que se deja).
   const routeRef = useRef(state.route);
   routeRef.current = state.route;
+  // La ruta a la que se va, aunque la transición aún no la haya confirmado:
+  // un doble clic llama dos veces a navigate antes del render y, comparando
+  // solo con la confirmada, apilaba dos entradas iguales en el historial
+  // («atrás» volvía al mismo partido).
+  const targetRef = useRef(state.route);
   const beforeChange = useRef(onBeforeChange);
   beforeChange.current = onBeforeChange;
 
@@ -89,8 +94,9 @@ export function RouterProvider({ children, onBeforeChange, initialSearch }: Rout
   const navigate = useCallback<Navigate>(
     (to, options = {}) => {
       const next = typeof to === 'string' ? parseVista(to) : to;
-      const current = routeRef.current;
+      const current = targetRef.current;
       if (sameRoute(current, next) && !options.replace) return;
+      targetRef.current = next;
       const search = searchFor(next, globalThis.location?.search ?? '');
       const url = `${globalThis.location?.pathname ?? '/'}${search}${globalThis.location?.hash ?? ''}`;
       try {
@@ -129,6 +135,7 @@ export function RouterProvider({ children, onBeforeChange, initialSearch }: Rout
     } catch {}
     const onPop = () => {
       const next = parseRoute(location.search);
+      targetRef.current = next;
       startTransition(() => commit(next, 'atras'));
     };
     window.addEventListener('popstate', onPop);

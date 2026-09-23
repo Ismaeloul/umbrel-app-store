@@ -151,6 +151,14 @@
 .agenda-days--tiles .agenda-day__count {
   font-size: var(--fs-label);
 }
+/* Pastillas vacías mientras carga (DayStrip): mismo alto que las de verdad. */
+.agenda-day--pending {
+  background: color-mix(in oklab, var(--text-3) 12%, transparent);
+  box-shadow: none;
+}
+.agenda-days--line .agenda-day--pending {
+  width: 92px;
+}
 .agenda-days.has-arrows .agenda-days__track {
   padding-inline: 2px;
 }
@@ -378,6 +386,16 @@
     inset -1px 0 0 var(--line-soft),
     inset 0 1px 0 var(--line-soft);
 }
+/* Móvil estrecho (360): con la señal al lado, a los nombres les faltaban
+   unos píxeles («Real Socie…»). La hora (22 px) cabe en 54 y «En 4 h 12 min»
+   ya parte en dos líneas; los huecos, algo más justos (revisión visual de la
+   Fase 2). */
+@media (max-width: 380px) {
+  .agenda-row:not(.agenda-row--compact) {
+    grid-template-columns: 54px minmax(0, 1fr) 88px;
+    column-gap: var(--s-2);
+  }
+}
 .agenda-row--first {
   border-radius: var(--r-xl) var(--r-xl) 0 0;
 }
@@ -560,6 +578,16 @@
   font-size: var(--fs-22);
   line-height: 1;
   text-align: right;
+}
+/* Sin marcador (partido por jugar) la columna vacía del marcador no se queda
+   con su hueco: esos 7-9 px son del nombre. Con la señal al lado, «Real
+   Sociedad» salía «Real Socie…» en la columna del partido y en el móvil de
+   360 px (revisión visual de la Fase 2). */
+.agenda-team:has(> .agenda-team__score:empty) {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+.agenda-team__score:empty {
+  display: none;
 }
 .agenda-team.is-lead .agenda-team__name {
   font-weight: 700;
@@ -754,7 +782,7 @@
    huecos van justos (la maqueta de la opción A usa medidas parecidas). */
 .agenda-col .agenda-row--compact {
   grid-template-columns: 50px minmax(0, 1fr) 66px;
-  column-gap: 8px;
+  column-gap: 6px;
   padding-inline: 10px;
 }
 .agenda-row--compact.agenda-row--first {

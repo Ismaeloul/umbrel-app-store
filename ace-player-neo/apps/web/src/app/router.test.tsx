@@ -25,6 +25,15 @@ function Probe() {
         partido
       </button>
       <button onClick={() => navigate('biblioteca')}>biblioteca</button>
+      <button
+        onClick={() => {
+          // Un doble clic: el segundo llega antes de que la transición confirme la ruta.
+          navigate({ vista: 'partido', id: 'm-2', canal: null });
+          navigate({ vista: 'partido', id: 'm-2', canal: null });
+        }}
+      >
+        doble
+      </button>
       <button onClick={() => setQ('dazn')}>buscar</button>
       <button onClick={() => back()}>atrás</button>
     </div>
@@ -56,6 +65,19 @@ describe('router', () => {
       { vista: 'agenda' },
       { vista: 'partido', id: 'm-1', canal: null },
     );
+  });
+
+  it('ir dos veces seguidas al mismo sitio apila UNA entrada (atrás vuelve a donde estabas)', () => {
+    render(
+      <RouterProvider>
+        <Probe />
+      </RouterProvider>,
+    );
+    const length = history.length;
+    fireEvent.click(screen.getByText('doble'));
+    expect(screen.getByTestId('ruta')).toHaveTextContent('partido/m-2');
+    expect(history.length).toBe(length + 1);
+    expect(history.state).toMatchObject({ aceDepth: 1 });
   });
 
   it('el botón atrás del navegador (popstate) vuelve', () => {

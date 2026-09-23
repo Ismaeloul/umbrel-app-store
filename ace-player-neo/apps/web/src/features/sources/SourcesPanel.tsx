@@ -38,10 +38,16 @@ function NowBar({
   const active = rows.find((row) => row.entry.id === activeHash);
   const canStep = ids.length > 1;
   const move = (dx: number) => {
-    if (textRef.current) textRef.current.style.transform = dx ? `translateX(${Math.max(-60, Math.min(60, dx / 3))}px)` : '';
+    if (textRef.current)
+      textRef.current.style.transform = dx
+        ? `translateX(${Math.max(-60, Math.min(60, dx / 3))}px)`
+        : '';
   };
   useSwipe(ref, {
-    enabled: canStep,
+    /* Solo con la barra pintada: al entrar al partido todavía no suena nada
+       (sin barra) y useSwipe se engancha al elemento cuando `enabled` cambia;
+       si ya valía true antes de que existiera, el gesto no llegaba nunca. */
+    enabled: canStep && active !== undefined && title !== null,
     onMove: (dx) => move(dx),
     onCancel: () => move(0),
     onSwipe: (direction) => {
@@ -78,7 +84,11 @@ function NowBar({
  * activa CAMBIA y queda fuera, se desplaza ese panel (nunca la página, y
  * nunca con scrollIntoView). Repintar con la misma activa no mueve nada.
  */
-function useKeepActiveInPanel(root: RefObject<HTMLElement | null>, activeHash: string | null, enabled: boolean) {
+function useKeepActiveInPanel(
+  root: RefObject<HTMLElement | null>,
+  activeHash: string | null,
+  enabled: boolean,
+) {
   const last = useRef<string | null>(null);
   useLayoutEffect(() => {
     if (!enabled || !activeHash || last.current === activeHash) return;
@@ -93,7 +103,10 @@ function useKeepActiveInPanel(root: RefObject<HTMLElement | null>, activeHash: s
     if (item.top < box.top + 12) delta = item.top - box.top - 12;
     else if (item.bottom > box.bottom - 12) delta = item.bottom - box.bottom + 12;
     if (Math.abs(delta) < 1) return;
-    panel.scrollTo({ top: panel.scrollTop + delta, behavior: first || prefersReducedMotion() ? 'auto' : 'smooth' });
+    panel.scrollTo({
+      top: panel.scrollTop + delta,
+      behavior: first || prefersReducedMotion() ? 'auto' : 'smooth',
+    });
   });
 }
 
@@ -106,7 +119,12 @@ export interface SourcesPanelProps {
   className?: string;
 }
 
-export function SourcesPanel({ variant, headerExtra, channelFallback = null, className }: SourcesPanelProps) {
+export function SourcesPanel({
+  variant,
+  headerExtra,
+  channelFallback = null,
+  className,
+}: SourcesPanelProps) {
   const view = useSourcesView();
   const { state, rows, shown, tucked } = view;
   const headingId = useId();
@@ -147,8 +165,15 @@ export function SourcesPanel({ variant, headerExtra, channelFallback = null, cla
       }
     : channelFallback;
 
-  const checking = shown.find((row) => row.effective.state === 'checking' && row.effective.reason !== 'player_check');
-  const progressText = scanProgressText(state.scan, state.entries, view.effectiveById, state.preheat);
+  const checking = shown.find(
+    (row) => row.effective.state === 'checking' && row.effective.reason !== 'player_check',
+  );
+  const progressText = scanProgressText(
+    state.scan,
+    state.entries,
+    view.effectiveById,
+    state.preheat,
+  );
   const showProgress = inMatch && (state.entries.length > 0 || state.phase === 'resolving');
 
   let body: ReactNode;
@@ -164,13 +189,18 @@ export function SourcesPanel({ variant, headerExtra, channelFallback = null, cla
           </Button>
         }
       >
-        Este partido todavía no tiene canal anunciado. Si lo encuentras por tu cuenta, pega su Content ID.
+        Este partido todavía no tiene canal anunciado. Si lo encuentras por tu cuenta, pega su
+        Content ID.
       </EmptyState>
     );
   } else if ((state.phase === 'choices' || state.phase === 'not_found') && !state.entries.length) {
     body = (
       <EmptyState
-        title={state.phase === 'choices' ? 'Elige la señal que quieres usar' : 'No hemos encontrado el canal'}
+        title={
+          state.phase === 'choices'
+            ? 'Elige la señal que quieres usar'
+            : 'No hemos encontrado el canal'
+        }
         actions={
           <>
             <Button size="sm" variant="primary" icon="buscar" onClick={() => openResolver(true)}>
@@ -262,7 +292,12 @@ export function SourcesPanel({ variant, headerExtra, channelFallback = null, cla
         <div className="src__failure" role="status">
           <p>{state.failureText}</p>
           <div className="src__failure-actions">
-            <Button size="sm" icon="refresh" busy={state.researching} onClick={() => void research()}>
+            <Button
+              size="sm"
+              icon="refresh"
+              busy={state.researching}
+              onClick={() => void research()}
+            >
               {state.researching ? 'Rebuscando…' : 'Rebuscar'}
             </Button>
             <Button size="sm" icon="paste" onClick={() => openPaste(true)}>

@@ -55,8 +55,17 @@ describe('Ajustes', () => {
   it('secciones con su índice; sin Salud ni Dispositivos si nadie los aporta', async () => {
     setup();
     const index = screen.getByRole('navigation', { name: 'Secciones de Ajustes' });
-    const names = within(index).getAllByRole('link').map((a) => a.textContent);
-    expect(names).toEqual(['Listas', 'Tu fútbol', 'Reproducción', 'Apariencia', 'Motor AceStream', 'Acerca de']);
+    const names = within(index)
+      .getAllByRole('link')
+      .map((a) => a.textContent);
+    expect(names).toEqual([
+      'Listas',
+      'Tu fútbol',
+      'Reproducción',
+      'Apariencia',
+      'Motor AceStream',
+      'Acerca de',
+    ]);
     expect(await screen.findByRole('heading', { name: 'Listas', level: 2 })).toBeInTheDocument();
     fireEvent.click(within(index).getByRole('link', { name: 'Motor AceStream' }));
     await waitFor(() => expect(screen.getByTestId('ruta')).toHaveTextContent('ajustes/motor'));
@@ -65,21 +74,32 @@ describe('Ajustes', () => {
   it('«ajustes/salud» sin panel de salud lleva a la sección del motor', async () => {
     setup('?vista=ajustes/salud');
     const index = screen.getByRole('navigation', { name: 'Secciones de Ajustes' });
-    expect(within(index).getByRole('link', { name: 'Motor AceStream' })).toHaveAttribute('aria-current', 'location');
+    expect(within(index).getByRole('link', { name: 'Motor AceStream' })).toHaveAttribute(
+      'aria-current',
+      'location',
+    );
     await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled());
   });
 
   it('modo de reproducción: lo guarda el reproductor por visor y avisa', async () => {
     setup();
     const group = screen.getByRole('radiogroup', { name: 'Modo de reproducción' });
-    expect(within(group).getByRole('radio', { name: /Equilibrado/ })).toHaveAttribute('aria-checked', 'true');
+    expect(within(group).getByRole('radio', { name: /Equilibrado/ })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
     fireEvent.click(within(group).getByRole('radio', { name: /Baja latencia/ }));
     expect(getPlaybackMode()).toBe('low');
     expect(localStorage.getItem('aceneo-pb')).toBe('low');
-    expect(within(group).getByRole('radio', { name: /Baja latencia/ })).toHaveAttribute('aria-checked', 'true');
+    expect(within(group).getByRole('radio', { name: /Baja latencia/ })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
     expect(toastStore.get().at(-1)?.text).toBe('Modo «Baja latencia» activado');
     // Flechas: el patrón ARIA del grupo de radios (y el foco va con la selección).
-    fireEvent.keyDown(within(group).getByRole('radio', { name: /Baja latencia/ }), { key: 'ArrowRight' });
+    fireEvent.keyDown(within(group).getByRole('radio', { name: /Baja latencia/ }), {
+      key: 'ArrowRight',
+    });
     expect(getPlaybackMode()).toBe('balanced');
     expect(within(group).getByRole('radio', { name: /Equilibrado/ })).toHaveFocus();
     fireEvent.keyDown(within(group).getByRole('radio', { name: /Equilibrado/ }), { key: 'End' });
@@ -93,7 +113,9 @@ describe('Ajustes', () => {
     expect(toggle).toHaveAttribute('aria-checked', 'false');
     fireEvent.click(toggle);
     await waitFor(() =>
-      expect(net.calls.find((c) => c.method === 'PUT')?.body).toEqual({ sameChannelPolicy: 'handoff' }),
+      expect(net.calls.find((c) => c.method === 'PUT')?.body).toEqual({
+        sameChannelPolicy: 'handoff',
+      }),
     );
     await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'true'));
     expect(toastStore.get().at(-1)?.text).toBe('Un solo dispositivo a la vez: activado');
@@ -114,25 +136,35 @@ describe('Ajustes', () => {
     setup();
     const button = screen.getByRole('button', { name: 'Reiniciar el motor' });
     fireEvent.click(button);
-    expect(screen.getByRole('button', { name: '¿Seguro? Pulsa otra vez para reiniciar' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: '¿Seguro? Pulsa otra vez para reiniciar' }),
+    ).toBeInTheDocument();
     await act(() => vi.advanceTimersByTimeAsync(6100));
     expect(screen.getByRole('button', { name: 'Reiniciar el motor' })).toBeInTheDocument();
     expect(net.calls.some((c) => c.url === '/api/v1/engine/restart')).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Reiniciar el motor' }));
     fireEvent.click(screen.getByRole('button', { name: '¿Seguro? Pulsa otra vez para reiniciar' }));
-    await waitFor(() => expect(net.calls.some((c) => c.url === '/api/v1/engine/restart')).toBe(true));
-    await waitFor(() => expect(toastStore.get().at(-1)?.text).toBe('Reiniciando el motor AceStream…'));
+    await waitFor(() =>
+      expect(net.calls.some((c) => c.url === '/api/v1/engine/restart')).toBe(true),
+    );
+    await waitFor(() =>
+      expect(toastStore.get().at(-1)?.text).toBe('Reiniciando el motor AceStream…'),
+    );
     const before = net.calls.filter((c) => c.url === '/api/v1/engine/status').length;
     await act(() => vi.advanceTimersByTimeAsync(2600));
     await waitFor(() =>
-      expect(net.calls.filter((c) => c.url === '/api/v1/engine/status').length).toBeGreaterThan(before),
+      expect(net.calls.filter((c) => c.url === '/api/v1/engine/status').length).toBeGreaterThan(
+        before,
+      ),
     );
   });
 
   it('«Acerca de» con la versión y «Tu fútbol» con el resumen', async () => {
     setup();
     expect(await screen.findByText('0.7.0')).toBeInTheDocument();
-    expect(await screen.findByText(/^Tu agenda prioriza 2 ligas, 1 equipo y 1 nacionalidad\.$/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/^Tu agenda prioriza 2 ligas, 1 equipo y 1 nacionalidad\.$/),
+    ).toBeInTheDocument();
     expect(preferenceSummary({ leagues: [], teams: [], nationalities: [] })).toBe(
       'Personaliza la agenda con tus ligas, equipos y nacionalidades.',
     );

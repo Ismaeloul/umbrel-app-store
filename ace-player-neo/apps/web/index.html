@@ -62,6 +62,31 @@
         if (r === 'reducida') d.setAttribute('data-transparency', 'reduced');
       })();
     </script>
+    <!-- El arranque de la API (/api/v1/bootstrap) se pide YA, en paralelo con
+         el JS: src/api/mode.ts recoge esta misma petición (y la repite si
+         falló). Antes salía cuando el JS ya estaba bajado y ejecutado, y todo
+         dato esperaba por él (revisión de rendimiento de la Fase 2).
+         src/api/client.ts acepta más peticiones adelantadas así
+         (window.__acePrefetch), pero adelantar también la agenda empeoraba el
+         LCP (2,7 → 2,9 s): con HTTP/1.1 le quitaba la conexión al JS de la
+         vista (docs/rendimiento.md). -->
+    <script>
+      (function () {
+        try {
+          if (location.protocol === 'file:' || /[?&]demo=1(&|$)/.test(location.search)) return;
+          var get = function (url) {
+            var p = fetch(url, {
+              headers: { Accept: 'application/json' },
+              cache: 'no-cache',
+              credentials: 'same-origin',
+            });
+            p.catch(function () {});
+            return p;
+          };
+          window.__aceBootstrap = get('/api/v1/bootstrap');
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

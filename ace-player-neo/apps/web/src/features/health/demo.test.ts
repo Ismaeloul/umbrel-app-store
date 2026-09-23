@@ -1,7 +1,4 @@
-import {
-  DiagnosticsListResponseSchema,
-  HealthResponseSchema,
-} from '@ace/shared';
+import { DiagnosticsListResponseSchema, HealthResponseSchema } from '@ace/shared';
 import { afterEach, describe, expect, it } from 'vitest';
 import { api } from '../../api/client.ts';
 import { resetMode, setMode } from '../../api/mode.ts';

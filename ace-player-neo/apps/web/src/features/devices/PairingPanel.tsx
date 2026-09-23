@@ -70,7 +70,12 @@ function PanelBody({ pairing, pairedName, demo }: PairingPanelProps) {
   if (state.phase === 'idle' || state.phase === 'creating') {
     return (
       <div className="disp-pair-start">
-        <Button variant="primary" icon="qr" busy={state.phase === 'creating'} onClick={() => void create()}>
+        <Button
+          variant="primary"
+          icon="qr"
+          busy={state.phase === 'creating'}
+          onClick={() => void create()}
+        >
           {state.phase === 'creating' ? 'Creando el código…' : 'Emparejar un dispositivo'}
         </Button>
       </div>
@@ -99,7 +104,9 @@ function PanelBody({ pairing, pairedName, demo }: PairingPanelProps) {
           <p className="disp-pair__title">
             {pairedName ? `«${pairedName}» ya está emparejado` : 'Dispositivo emparejado'}
           </p>
-          <p className="disp-help">Ya puede ver la agenda y tus canales. Si lo pierdes, revócalo desde la lista.</p>
+          <p className="disp-help">
+            Ya puede ver la agenda y tus canales. Si lo pierdes, revócalo desde la lista.
+          </p>
           <div className="disp-row">
             <Button variant="quiet" icon="qr" onClick={() => void create()}>
               Emparejar otro
@@ -118,7 +125,9 @@ function PanelBody({ pairing, pairedName, demo }: PairingPanelProps) {
       <div className="disp-pair disp-pair--expired" role="group" aria-label="Emparejamiento">
         <div className="disp-pair__done-text">
           <p className="disp-pair__title">El código ha caducado</p>
-          <p className="disp-help">Duran 5 minutos y solo sirven una vez. Crea otro cuando tengas el iPhone a mano.</p>
+          <p className="disp-help">
+            Duran 5 minutos y solo sirven una vez. Crea otro cuando tengas el iPhone a mano.
+          </p>
           <div className="disp-row">
             <Button variant="primary" icon="refresh" onClick={() => void create()}>
               Crear otro código

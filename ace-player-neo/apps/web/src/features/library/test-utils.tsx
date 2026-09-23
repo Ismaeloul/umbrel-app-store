@@ -19,7 +19,7 @@ import { resetPlayGuard } from './play.ts';
 
 export function makeItem(title: string, type: Item['type'], extra: Partial<Item> = {}): Item {
   const id = Array.from(title)
-    .reduce((h, ch) => (Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0) || 1, 2166136261)
+    .reduce((h, ch) => Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0 || 1, 2166136261)
     .toString(16)
     .padStart(8, '0')
     .repeat(5)
@@ -58,7 +58,10 @@ export function makeLibrary(overrides: Partial<LibraryView> = {}): LibraryView {
       },
     ],
     activeWebSourceId: 'principal',
-    favorites: [makeItem('DAZN 1', 'fav', { category: 'Deportes' }), makeItem('Eurosport 1', 'fav')],
+    favorites: [
+      makeItem('DAZN 1', 'fav', { category: 'Deportes' }),
+      makeItem('Eurosport 1', 'fav'),
+    ],
     history: [makeItem('Canal de prueba', 'recent')],
     ...overrides,
   };
@@ -91,7 +94,10 @@ const DEFAULT_LAYOUT: LayoutValue = {
 
 export function renderWithApp(
   ui: ReactNode,
-  { search = '?vista=biblioteca', layout = {} }: { search?: string; layout?: Partial<LayoutValue> } = {},
+  {
+    search = '?vista=biblioteca',
+    layout = {},
+  }: { search?: string; layout?: Partial<LayoutValue> } = {},
 ) {
   history.replaceState(null, '', `/${search}`);
   const client = createQueryClient();

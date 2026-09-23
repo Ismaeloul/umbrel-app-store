@@ -2,7 +2,13 @@
    respuestas de la API con la forma exacta de @ace/shared (el cliente las
    valida con zod en los tests). Solo lo importan los *.test.ts(x). */
 
-import type { FootballMatch, Resolution, ResolutionCandidate, ScanCandidate, ScanJob } from '@ace/shared';
+import type {
+  FootballMatch,
+  Resolution,
+  ResolutionCandidate,
+  ScanCandidate,
+  ScanJob,
+} from '@ace/shared';
 
 export const JOB = '0123456789abcdef01234567';
 export const REPORT_JOB = 'abcdefabcdefabcdefabcdef';
@@ -27,7 +33,10 @@ export function testMatch(extra: Partial<FootballMatch> = {}): FootballMatch {
 
 const PROVIDERS = ['Elcano', 'Faro', 'Norte', 'Vega', 'Tarifa', 'Sur'];
 
-export function candidate(n: number, extra: Partial<ResolutionCandidate> = {}): ResolutionCandidate {
+export function candidate(
+  n: number,
+  extra: Partial<ResolutionCandidate> = {},
+): ResolutionCandidate {
   return {
     id: hash(n),
     title: `M+ Liga de Campeones --> ${PROVIDERS[(n - 1) % PROVIDERS.length]}`,
@@ -85,7 +94,14 @@ export function scanCandidate(
     rateKbps: null,
     intakeKbps: null,
     streamKbps: 0,
-    reason: state === 'working' ? 'playable_media' : state === 'weak' ? 'starved' : state === 'failed' ? 'no_media' : '',
+    reason:
+      state === 'working'
+        ? 'playable_media'
+        : state === 'weak'
+          ? 'starved'
+          : state === 'failed'
+            ? 'no_media'
+            : '',
     mediaValid: alive,
     browserCompatible: alive,
     videoCodec: '',
@@ -102,7 +118,9 @@ export function scanJob(
   id = JOB,
 ): ScanJob {
   const candidates = states.map((state, i) => scanCandidate(i + 1, state));
-  const decided = candidates.filter((c) => c.state === 'working' || c.state === 'weak' || c.state === 'failed');
+  const decided = candidates.filter(
+    (c) => c.state === 'working' || c.state === 'weak' || c.state === 'failed',
+  );
   const playable = candidates.filter((c) => c.state === 'working' || c.state === 'weak').length;
   return {
     id,

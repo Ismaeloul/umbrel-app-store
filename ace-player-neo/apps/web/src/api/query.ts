@@ -23,6 +23,7 @@ import {
   queryOptions,
   useMutation,
   useQuery,
+  useQueryClient,
   type QueryKey,
   type UseMutationOptions,
   type UseQueryOptions,
@@ -85,13 +86,18 @@ export function useApiQuery<Id extends JsonRouteId, TData = ApiResponse<Id>>(
   input?: ApiInput<Id>,
   options?: QueryExtras<Id, TData>,
 ) {
+  const client = useQueryClient();
+  const base = apiQuery(id, ...([input] as ApiArgs<Id>));
+  /* La petición arranca YA, en el render, si nadie la ha pedido todavía: las
+     vistas van dentro de <ViewTransition> y React deja los efectos (y con
+     ellos el fetch de useQuery) para cuando acaba la animación. Medido en la
+     Fase 2: la agenda pedía /api/v1/football 520 ms tarde en la primera
+     carga y en cada cambio de vista. Igual que usePrefetchQuery de TanStack,
+     pero sin pedir nada si la consulta está desactivada. */
+  if ((options?.enabled ?? true) === true && !client.getQueryState(base.queryKey))
+    void client.prefetchQuery(base);
   return useQuery({
-    ...(apiQuery(id, ...([input] as ApiArgs<Id>)) as unknown as UseQueryOptions<
-      ApiResponse<Id>,
-      Error,
-      TData,
-      RouteKey
-    >),
+    ...(base as unknown as UseQueryOptions<ApiResponse<Id>, Error, TData, RouteKey>),
     ...options,
   });
 }

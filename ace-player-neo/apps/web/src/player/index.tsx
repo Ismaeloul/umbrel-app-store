@@ -28,6 +28,7 @@ import { Sheet } from '../ui/Sheet.tsx';
 import {
   connectRuntime,
   INITIAL_PLAYER_STATE,
+  kindFromIh,
   play,
   playerStore,
   setNerdOpen,
@@ -241,7 +242,8 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
     notify(`Zapping: ${target.title}`, { kind: 'signal', icon: 'tv' });
     const next = { vista: 'partido' as const, id: null, canal: target.id };
     play(
-      { hash: target.id, title: target.title, kind: target.ih ? 'infohash' : 'auto' },
+      // Favoritos y lista declaran su tipo (B-010): sin el doble intento de `auto`.
+      { hash: target.id, title: target.title, kind: kindFromIh(target.ih ?? false) },
       { origin: 'zapping', route: next },
     );
     navigate(next);

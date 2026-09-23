@@ -26,11 +26,27 @@ export interface GestureHelp {
 
 export const TOUCH_GESTURES: readonly GestureHelp[] = [
   { id: 'agenda-dia', gesture: 'Desliza a los lados', label: 'Agenda: cambia de día' },
-  { id: 'biblioteca-pestana', gesture: 'Desliza a los lados', label: 'Biblioteca: cambia de pestaña' },
-  { id: 'video-abajo', gesture: 'Desliza hacia abajo', label: 'Vídeo: lo minimiza y sigue sonando' },
+  {
+    id: 'biblioteca-pestana',
+    gesture: 'Desliza a los lados',
+    label: 'Biblioteca: cambia de pestaña',
+  },
+  {
+    id: 'video-abajo',
+    gesture: 'Desliza hacia abajo',
+    label: 'Vídeo: lo minimiza y sigue sonando',
+  },
   { id: 'video-toque', gesture: 'Toca el vídeo', label: 'Enseña u oculta los controles' },
-  { id: 'mini-arriba', gesture: 'Desliza hacia arriba', label: 'Mini-reproductor: lo abre en grande' },
-  { id: 'mini-lado', gesture: 'Desliza a un lado', label: 'Mini-reproductor: lo detiene (con «Deshacer»)' },
+  {
+    id: 'mini-arriba',
+    gesture: 'Desliza hacia arriba',
+    label: 'Mini-reproductor: lo abre en grande',
+  },
+  {
+    id: 'mini-lado',
+    gesture: 'Desliza a un lado',
+    label: 'Mini-reproductor: lo detiene (con «Deshacer»)',
+  },
   {
     id: 'pulsacion-larga',
     gesture: 'Mantén pulsado',
@@ -46,7 +62,11 @@ export const MOUSE_GESTURES: readonly GestureHelp[] = [
     gesture: 'Clic derecho',
     label: 'Un partido, un canal, un dispositivo o el vídeo: sus opciones',
   },
-  { id: 'partido-doble', gesture: 'Doble clic en un partido', label: 'Lo abre en el centro de partido' },
+  {
+    id: 'partido-doble',
+    gesture: 'Doble clic en un partido',
+    label: 'Lo abre en el centro de partido',
+  },
   {
     id: 'rueda',
     gesture: 'Rueda del ratón',

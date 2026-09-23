@@ -275,3 +275,36 @@ conservador). Todas se pueden revertir.
   criterio para 14 números más que ningún test miraba (topes de ESPN, Ollama
   y ffprobe, esperas del comprobador, podas, 3 h del precalentado, 25 min de
   los trabajos…). Solo tests y documentación: no cambia código de producción.
+
+## D20. Cierre de la Fase 2: lo que la web v2 hace distinto de la 0.6.59, a propósito
+
+- **Contexto**: el verificador del inventario (23-09-2026,
+  `docs/verificacion-web.md`) recorrió `analisis/inventario-front.md` entero
+  contra la web v2. Toda la funcionalidad está; estas diferencias son
+  decisiones (del diseño A que confirmó Isma, de la arquitectura o de los
+  README de cada vista), no huecos. Cinco filas de `comportamientos.md` pasan a
+  `no aplica` por ellas y otras citan esta entrada.
+- **Aspecto y navegación** (diseño A, `diseno/eleccion.md` y `sistema.md`):
+  - B-250: fuera el lenguaje de terminal (monoespaciada y acento rojo único);
+  - B-252: en el móvil hay barra inferior de 4 destinos (Agenda, Biblioteca,
+    Buscar, Ajustes), que es el `TabView` de iOS;
+  - B-251, B-260 y B-261: las dos pantallas «inicio»/«viendo» son vistas con
+    el reproductor persistente (grande en el partido, mini fuera); ya no hay
+    portada con dos listas encadenadas ni sus cajas;
+  - B-134: la competición va en la cabecera de su bloque, no en la fila
+    (`features/agenda/README.md`);
+  - las fuentes van en lista vertical (móvil) o en rack (escritorio), no en
+    carril horizontal; el mini-reproductor lleva imagen; los controles propios
+    van también en el móvil.
+- **Lo que ahora hace el servidor**:
+  - B-009: el doble intento Content ID → infohash lo hace el servidor dentro de
+    la misma petición (`kind: auto`, P6); la web no lo ve, así que no da el
+    aviso «…probando de otra manera…»;
+  - B-012: reiniciar el motor no para antes la reproducción de este
+    dispositivo: el reproductor espera al motor y se reengancha solo (P13, D9);
+    el aviso de que corta en todos los dispositivos se mantiene;
+  - las estadísticas llegan por SSE (`stream.stats`) y el mando por SSE con
+    respaldo de latido: la web no sondea `stat_url` ni `/api/playback`.
+- **Por qué**: son lo que pedía el prompt (diseño nuevo, SSE sin sondeos,
+  sesiones compartidas) o lo que ya fijan `arquitectura.md` y los README de
+  cada vista. Revertir cualquiera es un cambio de diseño, no un arreglo.

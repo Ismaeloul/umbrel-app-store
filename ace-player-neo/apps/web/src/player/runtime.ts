@@ -432,7 +432,8 @@ export class PlayerRuntime {
       demo: this.demo(),
     });
     this.setPresence({ active: true, route });
-    this.recordHistory(channel);
+    // Un hash pegado a mano no entra en Recientes (B-187).
+    if (options.record !== false) this.recordHistory(channel);
     this.connect({ recovery: false });
   }
 

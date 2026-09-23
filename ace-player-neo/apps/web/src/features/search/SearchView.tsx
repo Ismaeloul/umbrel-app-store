@@ -187,7 +187,7 @@ export default function SearchView({ active }: ViewProps) {
         {phase.kind === 'loading'
           ? `Buscando «${phase.query}» en el motor…`
           : phase.kind === 'results'
-            ? `${phase.count} resultados para «${phase.query}».`
+            ? `${phase.count} ${phase.count === 1 ? 'resultado' : 'resultados'} para «${phase.query}».`
             : phase.kind === 'empty'
               ? `Sin resultados para «${phase.query}».`
               : ''}

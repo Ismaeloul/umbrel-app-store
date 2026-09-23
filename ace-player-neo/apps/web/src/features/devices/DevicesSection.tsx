@@ -115,8 +115,8 @@ function OriginNote({ origin, hostname }: { origin: string; hostname: string }) 
         <Icon name="aviso" size={18} />
         <span>
           Has abierto esta página como <strong>{origin}</strong> y esa dirección solo existe en este
-          ordenador. Ábrela con la del Umbrel (por ejemplo, <strong>http://umbrel.local:7792</strong>) antes
-          de crear el código.
+          ordenador. Ábrela con la del Umbrel (por ejemplo,{' '}
+          <strong>http://umbrel.local:7792</strong>) antes de crear el código.
         </span>
       </p>
     );
@@ -200,7 +200,9 @@ export function DevicesSection() {
     listBody = (
       <p className="disp-inline">
         <Icon name="movil" size={18} />
-        <span>Aún no hay ningún dispositivo emparejado. Empieza con «Emparejar un dispositivo».</span>
+        <span>
+          Aún no hay ningún dispositivo emparejado. Empieza con «Emparejar un dispositivo».
+        </span>
       </p>
     );
   } else {
@@ -223,15 +225,11 @@ export function DevicesSection() {
   return (
     <div className="disp">
       <p className="disp-intro">
-        Empareja la app de iPhone o iPad con este Ace Player Neo: ve la agenda y tus canales y reproduce
-        desde el propio dispositivo. El código dura 5 minutos y solo sirve una vez.
+        Empareja la app de iPhone o iPad con este Ace Player Neo: ve la agenda y tus canales y
+        reproduce desde el propio dispositivo. El código dura 5 minutos y solo sirve una vez.
       </p>
 
-      <PairingPanel
-        pairing={pairing}
-        pairedName={pairedName}
-        demo={mode === 'demo'}
-      />
+      <PairingPanel pairing={pairing} pairedName={pairedName} demo={mode === 'demo'} />
       <OriginNote origin={origin} hostname={hostname} />
 
       <section className="disp-block" aria-labelledby="disp-lista">
@@ -255,7 +253,11 @@ export function DevicesSection() {
               {showRevoked ? 'Ocultar los revocados' : `Ver los revocados (${revoked.length})`}
             </Button>
             {showRevoked ? (
-              <ul id="disp-revocados" className="disp-list disp-list--revoked" aria-label="Dispositivos revocados">
+              <ul
+                id="disp-revocados"
+                className="disp-list disp-list--revoked"
+                aria-label="Dispositivos revocados"
+              >
                 {revoked.map((device) => (
                   <li key={device.id} className="disp-dev disp-dev--revoked">
                     <span className="disp-dev__icon" aria-hidden="true">

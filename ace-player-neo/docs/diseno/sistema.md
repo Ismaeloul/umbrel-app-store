@@ -35,7 +35,7 @@ respaldo en hex, que es la conversión exacta (lo comprueba
 | `--line-strong` | Bordes de control (≥ 3:1, injerto B6) | `oklch(0.58 0.03 245)` | `oklch(0.6 0.035 245)` |
 | `--text` / `--text-2` / `--text-3` | Texto (≥ 4,5:1 sobre los 4 fondos) | | |
 | `--accent` | Cielo de relleno (acción principal) | `oklch(0.83 0.12 222)` | igual |
-| `--accent-ink` | Cielo como texto y «en directo» (`--live`) | `oklch(0.5 0.13 245)` | `oklch(0.83 0.12 222)` |
+| `--accent-ink` | Cielo como texto y «en directo» (`--live`) | `oklch(0.48 0.13 245)` (0,5 hasta la revisión visual de la Fase 2: 4,37:1 sobre `--accent-wash` en el carril claro) | `oklch(0.83 0.12 222)` |
 | `--accent-edge` | Bordes de selección y foco | | |
 | `--ok` / `--ok-ink` | Verificada (medidor / palabra) | | |
 | `--weak` / `--weak-ink` | Floja | | |

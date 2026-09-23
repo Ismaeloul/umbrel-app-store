@@ -46,7 +46,10 @@ describe('borrar con deshacer (regla 31)', () => {
     const client = clientWith(library);
     removeWithUndo({ client, kind: 'delete', collection: 'history', item: target });
     expect(pendingStore.get().has(`history:${target.id}`)).toBe(true);
-    expect(toastStore.get().at(-1)).toMatchObject({ text: '«Canal de prueba» eliminado', tone: 'warn' });
+    expect(toastStore.get().at(-1)).toMatchObject({
+      text: '«Canal de prueba» eliminado',
+      tone: 'warn',
+    });
     expect(toastStore.get().at(-1)?.action?.label).toBe('Deshacer');
     await vi.advanceTimersByTimeAsync(UNDO_MS - 100);
     expect(net.calls).toHaveLength(0);
@@ -61,7 +64,12 @@ describe('borrar con deshacer (regla 31)', () => {
     const library = makeLibrary();
     net = mockFetch({});
     const client = clientWith(library);
-    removeWithUndo({ client, kind: 'unfavorite', collection: 'favorites', item: library.favorites[0]! });
+    removeWithUndo({
+      client,
+      kind: 'unfavorite',
+      collection: 'favorites',
+      item: library.favorites[0]!,
+    });
     expect(toastStore.get().at(-1)?.text).toBe('«DAZN 1» quitado de favoritos');
     toastStore.get().at(-1)?.action?.onAction();
     expect(pendingStore.get().size).toBe(0);
@@ -77,7 +85,13 @@ describe('borrar con deshacer (regla 31)', () => {
         json({ error: { code: 'internal_error', message: 'Algo falló.', requestId: 'r' } }, 500),
     });
     const client = clientWith(library);
-    removeWithUndo({ client, kind: 'delete', collection: 'web', item: library.web[0]!, sourceId: 'principal' });
+    removeWithUndo({
+      client,
+      kind: 'delete',
+      collection: 'web',
+      item: library.web[0]!,
+      sourceId: 'principal',
+    });
     await vi.advanceTimersByTimeAsync(UNDO_MS + 10);
     expect(net.calls[0]?.body).toMatchObject({ collection: 'web', sourceId: 'principal' });
     expect(pendingStore.get().size).toBe(0);
@@ -114,17 +128,28 @@ describe('renombrar y favoritos', () => {
     const client = clientWith(library);
     const fav = library.favorites[0]!;
     const promise = renameChannel(client, 'favorites', fav, '  Nuevo   nombre ');
-    expect(client.getQueryData<LibraryView>(routeKey('libraryGet'))?.favorites[0]?.title).toBe('Nuevo nombre');
+    expect(client.getQueryData<LibraryView>(routeKey('libraryGet'))?.favorites[0]?.title).toBe(
+      'Nuevo nombre',
+    );
     await expect(promise).resolves.toBe(false);
-    expect(net.calls[0]?.body).toEqual({ action: 'rename', collection: 'favorites', id: fav.id, title: 'Nuevo nombre' });
-    expect(client.getQueryData<LibraryView>(routeKey('libraryGet'))?.favorites[0]?.title).toBe('DAZN 1');
+    expect(net.calls[0]?.body).toEqual({
+      action: 'rename',
+      collection: 'favorites',
+      id: fav.id,
+      title: 'Nuevo nombre',
+    });
+    expect(client.getQueryData<LibraryView>(routeKey('libraryGet'))?.favorites[0]?.title).toBe(
+      'DAZN 1',
+    );
     expect(toastStore.get().at(-1)?.text).toBe('No se pudo renombrar el canal');
   });
 
   it('un nombre vacío se ignora (sin llamada)', async () => {
     net = mockFetch({});
     const library = makeLibrary();
-    await expect(renameChannel(clientWith(library), 'history', library.history[0]!, '   ')).resolves.toBe(false);
+    await expect(
+      renameChannel(clientWith(library), 'history', library.history[0]!, '   '),
+    ).resolves.toBe(false);
     expect(net.calls).toHaveLength(0);
   });
 
@@ -136,8 +161,16 @@ describe('renombrar y favoritos', () => {
     expect(ok).toBe(true);
     expect(net.calls[0]?.body).toEqual({
       action: 'favorite-upsert',
-      item: { id: web.id, title: defaultFavoriteTitle(web.id), category: 'Guardado', fromWebSync: true, ih: false },
+      item: {
+        id: web.id,
+        title: defaultFavoriteTitle(web.id),
+        category: 'Guardado',
+        fromWebSync: true,
+        ih: false,
+      },
     });
-    expect(toastStore.get().at(-1)?.text).toBe(`«Canal ${web.id.slice(0, 6)}» guardado en favoritos`);
+    expect(toastStore.get().at(-1)?.text).toBe(
+      `«Canal ${web.id.slice(0, 6)}» guardado en favoritos`,
+    );
   });
 });

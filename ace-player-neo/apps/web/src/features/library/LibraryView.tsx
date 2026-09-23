@@ -188,19 +188,27 @@ export default function LibraryView({ active }: ViewProps) {
     const exists = (collection: LibraryCollection, id: string) =>
       itemsFor(
         visible,
-        collection === 'favorites' ? 'favoritos' : collection === 'history' ? 'recientes' : 'listas',
+        collection === 'favorites'
+          ? 'favoritos'
+          : collection === 'history'
+            ? 'recientes'
+            : 'listas',
       ).some((item) => item.id === id);
     if (selection && exists(selection.collection, selection.id)) return;
     const playing = onScreen
-      ? LIBRARY_TABS.map((t) => ({ t, found: itemsFor(visible, t).find((i) => i.id === onScreen) }))
-          .find((entry) => entry.found)
+      ? LIBRARY_TABS.map((t) => ({
+          t,
+          found: itemsFor(visible, t).find((i) => i.id === onScreen),
+        })).find((entry) => entry.found)
       : undefined;
     if (playing?.found) {
       selectChannel({ collection: TAB_COLLECTION[playing.t], id: playing.found.id });
       return;
     }
     const first = rows.find((row) => row.type === 'channel');
-    selectChannel(first?.type === 'channel' ? { collection: first.collection, id: first.item.id } : null);
+    selectChannel(
+      first?.type === 'channel' ? { collection: first.collection, id: first.item.id } : null,
+    );
   }, [selectOnClick, active, visible, selection, rows, onScreen]);
 
   // Deslizar a los lados cambia de pestaña en el móvil (como los días de la agenda).
@@ -218,17 +226,15 @@ export default function LibraryView({ active }: ViewProps) {
   // con las mismas filas no relanza la animación).
   const enter = useRef({ key: '', until: 0 });
   const enterKey = `${tab}|${data ? 1 : 0}`;
-  if (enter.current.key !== enterKey) enter.current = { key: enterKey, until: Date.now() + ENTER_MS };
+  if (enter.current.key !== enterKey)
+    enter.current = { key: enterKey, until: Date.now() + ENTER_MS };
   const entering = Date.now() < enter.current.until;
 
   const yours = useMemo(
     () => (visible ? [...visible.favorites, ...visible.history] : []),
     [visible],
   );
-  const onAirNow = useMemo(
-    () => (onAir.ready ? onAirEntries(yours, onAir) : []),
-    [onAir, yours],
-  );
+  const onAirNow = useMemo(() => (onAir.ready ? onAirEntries(yours, onAir) : []), [onAir, yours]);
 
   const toggleCategory = (category: string) =>
     setOpenCats((current) => {
@@ -239,7 +245,8 @@ export default function LibraryView({ active }: ViewProps) {
     });
 
   const renderRow = (row: Row, index: number) => {
-    if (row.type === 'heading') return <h3 className="lib-when">{row.label}</h3>;
+    // h2: cuelga directamente del h1 de la vista (axe «heading-order» con h3).
+    if (row.type === 'heading') return <h2 className="lib-when">{row.label}</h2>;
     if (row.type === 'category')
       return (
         <button
@@ -251,7 +258,11 @@ export default function LibraryView({ active }: ViewProps) {
         >
           <span className="lib-cat__chev" aria-hidden="true" />
           <span className="lib-cat__name">{row.category}</span>
-          <Num className="lib-cat__count" value={row.count} label={`${row.count} canales`} />
+          <Num
+            className="lib-cat__count"
+            value={row.count}
+            label={`${row.count} ${row.count === 1 ? 'canal' : 'canales'}`}
+          />
         </button>
       );
     const { item, collection } = row;
@@ -266,9 +277,7 @@ export default function LibraryView({ active }: ViewProps) {
         fallen={collection === 'favorites' && isFallenFavorite(item, webIds)}
         onScreen={watching}
         onAir={onAir(item)}
-        selected={
-          selectOnClick && selection?.collection === collection && selection.id === item.id
-        }
+        selected={selectOnClick && selection?.collection === collection && selection.id === item.id}
         selectOnClick={selectOnClick}
         onPlay={() => actions.play(item)}
         onSelect={() => selectChannel({ collection, id: item.id })}
@@ -293,7 +302,9 @@ export default function LibraryView({ active }: ViewProps) {
           {layout.asideAvailable ? (
             <IconButton
               icon="panel"
-              label={layout.asideVisible ? 'Ocultar la ficha del canal' : 'Enseñar la ficha del canal'}
+              label={
+                layout.asideVisible ? 'Ocultar la ficha del canal' : 'Enseñar la ficha del canal'
+              }
               pressed={layout.asideVisible}
               onClick={() => layout.setAsideOpen(!layout.asideVisible)}
             />
@@ -443,15 +454,14 @@ export default function LibraryView({ active }: ViewProps) {
       const name = view.webSources.find((source) => source.id === id)?.name ?? '';
       notify(`Lista activa: ${name}`, { tone: 'ok' });
     } catch (error) {
-      notify(
-        mode === 'demo' ? directoryErrorMessage(error) : 'No se pudo cambiar de lista',
-        { tone: 'err' },
-      );
+      notify(mode === 'demo' ? directoryErrorMessage(error) : 'No se pudo cambiar de lista', {
+        tone: 'err',
+      });
     }
   };
   const listMenu: MenuItem[] = data.webSources.map((source) => ({
     id: source.id,
-    label: `${source.name} · ${source.count} canales`,
+    label: `${source.name} · ${source.count} ${source.count === 1 ? 'canal' : 'canales'}`,
     checked: source.id === data.activeWebSourceId,
     onSelect: () => {
       if (source.id !== data.activeWebSourceId) void switchList(source.id);
@@ -463,11 +473,7 @@ export default function LibraryView({ active }: ViewProps) {
       {header}
       {search}
       {q ? null : (
-        <OnAirStrip
-          entries={onAirNow}
-          onScreen={onScreen}
-          onPlay={(item) => actions.play(item)}
-        />
+        <OnAirStrip entries={onAirNow} onScreen={onScreen} onPlay={(item) => actions.play(item)} />
       )}
       <Tabs
         label="Secciones de la biblioteca"

@@ -21,12 +21,7 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import { useMemo, type CSSProperties } from 'react';
-import {
-  invalidateRoute,
-  useApiQuery,
-  useAppMode,
-  useEngineStatus,
-} from '../../api/index.ts';
+import { invalidateRoute, useApiQuery, useAppMode, useEngineStatus } from '../../api/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { Button } from '../../ui/Button.tsx';
 import { EmptyState } from '../../ui/EmptyState.tsx';
@@ -92,7 +87,13 @@ function Tile({ row, index }: { row: ServiceRow; index: number }) {
           <Icon name={row.icon} size={18} />
         </span>
         <h3 className="salud-tile__name">{row.name}</h3>
-        <SignalBadge compact size="sm" state={row.signal} label={row.label} className="salud-tile__state" />
+        <SignalBadge
+          compact
+          size="sm"
+          state={row.signal}
+          label={row.label}
+          className="salud-tile__state"
+        />
       </div>
       <p className="salud-tile__detail">{row.detail}</p>
       {row.note ? (
@@ -212,10 +213,18 @@ export function HealthSection() {
               </div>
             </>
           ) : (
-            <p className="salud-sum__facts salud-sum__facts--pulse">Comprobando el NAS y los servicios…</p>
+            <p className="salud-sum__facts salud-sum__facts--pulse">
+              Comprobando el NAS y los servicios…
+            </p>
           )}
         </div>
-        <Button variant="quiet" icon="refresh" busy={refreshing} onClick={refresh} className="salud-top__btn">
+        <Button
+          variant="quiet"
+          icon="refresh"
+          busy={refreshing}
+          onClick={refresh}
+          className="salud-top__btn"
+        >
           Volver a comprobar
         </Button>
       </div>
@@ -256,7 +265,11 @@ export function HealthSection() {
           </ul>
           {health.data ? (
             <p className="salud-help">
-              {plural(health.data.components.scanner.cachedSources, 'fuente comprobada', 'fuentes comprobadas')}{' '}
+              {plural(
+                health.data.components.scanner.cachedSources,
+                'fuente comprobada',
+                'fuentes comprobadas',
+              )}{' '}
               en caché del segundo motor.
             </p>
           ) : null}

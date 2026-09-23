@@ -78,13 +78,19 @@ describe('tira de días', () => {
     expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
   });
 
-  it('en escritorio, teselas con «n partidos»; sin días no pinta nada', () => {
+  it('en escritorio, teselas con «n partidos»; sin días solo guarda el hueco (sin pestañas)', () => {
     const { rerender, container } = render(
       <DayStrip days={DAYS} selected={TODAY} today={TODAY} onSelect={() => {}} variant="tiles" />,
     );
     expect(container.querySelector('.agenda-days--tiles')).not.toBeNull();
     expect(screen.getByText('8 partidos')).toBeInTheDocument();
     rerender(<DayStrip days={[]} selected={null} today={TODAY} onSelect={() => {}} />);
-    expect(container.querySelector('.agenda-days')).toBeNull();
+    // Mientras carga la agenda, pastillas vacías del mismo alto (sin saltos
+    // al llegar los días), escondidas a los lectores y sin nada que pulsar.
+    const pending = container.querySelector('.agenda-days--pending');
+    expect(pending).not.toBeNull();
+    expect(pending).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.queryByRole('tablist')).toBeNull();
+    expect(container.querySelectorAll('button')).toHaveLength(0);
   });
 });

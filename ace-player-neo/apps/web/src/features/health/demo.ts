@@ -18,7 +18,15 @@ import { CAUSES, DAY_MS } from './model.ts';
 const MIN = 60_000;
 
 /** [minutos atrás, causa, código, mensaje, canal, hash, métricas] */
-type Sample = [number, DiagnosticCause, string, string, string?, string?, DiagnosticEntry['metrics']?];
+type Sample = [
+  number,
+  DiagnosticCause,
+  string,
+  string,
+  string?,
+  string?,
+  DiagnosticEntry['metrics']?,
+];
 
 const DAZN = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
 const LALIGA = '0f1e2d3c4b5a69788796a5b4c3d2e1f001234567';
@@ -35,10 +43,28 @@ const SAMPLES: readonly Sample[] = [
     { timeToFirstFrameMs: 2300, rebuffers: 2, rebufferMs: 4100, reconnects: 1, liveLatencyS: 14 },
   ],
   [26, 'source', 'source_no_peers', 'La fuente no tiene pares.', 'DAZN 1', DAZN],
-  [48, 'codec', 'unsupported_codec', 'El audio viene en AC-3 y este navegador no lo descodifica.', 'M+ LaLiga TV', LALIGA],
+  [
+    48,
+    'codec',
+    'unsupported_codec',
+    'El audio viene en AC-3 y este navegador no lo descodifica.',
+    'M+ LaLiga TV',
+    LALIGA,
+  ],
   [95, 'engine', 'engine_auto_restart', 'Reinicio automático del motor: no respondía.'],
-  [140, 'network', 'http_503', 'Directorio «Deportes extra»: El servidor respondió con un error 503.'],
-  [310, 'client', 'autoplay_blocked', 'El navegador bloqueó la reproducción automática.', 'Teledeporte'],
+  [
+    140,
+    'network',
+    'http_503',
+    'Directorio «Deportes extra»: El servidor respondió con un error 503.',
+  ],
+  [
+    310,
+    'client',
+    'autoplay_blocked',
+    'El navegador bloqueó la reproducción automática.',
+    'Teledeporte',
+  ],
   [
     600,
     'source',
@@ -64,7 +90,10 @@ function demoEntries(now = Date.now()): DiagnosticEntry[] {
 }
 
 function counts24h(entries: readonly DiagnosticEntry[], now: number) {
-  const counts = Object.fromEntries(CAUSES.map((cause) => [cause, 0])) as Record<DiagnosticCause, number>;
+  const counts = Object.fromEntries(CAUSES.map((cause) => [cause, 0])) as Record<
+    DiagnosticCause,
+    number
+  >;
   for (const entry of entries) {
     if (now - Date.parse(entry.at) <= DAY_MS) counts[entry.cause] += 1;
   }

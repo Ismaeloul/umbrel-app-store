@@ -368,6 +368,33 @@
     column-gap: 12px;
   }
 }
+/* Rack estrecho (el panel lateral de 320 px, hasta 1600 de ancho): con las
+   cuatro columnas fijas al nombre le quedaban ~70 px y salía «Lista d…»
+   (revisión visual de la Fase 2). Por debajo de 360 px el nombre va solo en
+   la primera línea, a lo ancho; el estado, los pares y los Mbit/s bajan a la
+   segunda, alineados con la cabecera, y la frase a la tercera. */
+.src-list--rack {
+  container-type: inline-size;
+}
+@container (max-width: 359px) {
+  .src-row--rack {
+    grid-template-rows: auto auto auto;
+  }
+  .src-row--rack .src-row__num {
+    grid-row: 1 / span 3;
+  }
+  .src-row--rack .src-row__name {
+    grid-column: 2 / -1;
+  }
+  .src-row--rack .src-row__sig,
+  .src-row--rack .src-row__peers,
+  .src-row--rack .src-row__mbit {
+    grid-row: 2;
+  }
+  .src-row--rack .src-row__detail {
+    grid-row: 3;
+  }
+}
 
 /* ---- Inspector: una cápsula con las acciones ----------------------------------- */
 .src-inspector {
@@ -405,8 +432,20 @@
   mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
 }
 .src-inspector--row[data-edge='middle'] {
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
-  mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 36px,
+    #000 calc(100% - 36px),
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 36px,
+    #000 calc(100% - 36px),
+    transparent
+  );
 }
 .src-inspector--row[data-edge='end'] {
   -webkit-mask-image: linear-gradient(to right, transparent, #000 36px);

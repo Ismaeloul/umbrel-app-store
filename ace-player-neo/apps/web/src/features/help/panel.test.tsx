@@ -28,7 +28,13 @@ afterEach(() => {
 
 function register() {
   offs.push(
-    registerShortcut({ id: 'app.ayuda', keys: ['?'], label: 'Enseña esta ayuda', group: 'General', handler: () => {} }),
+    registerShortcut({
+      id: 'app.ayuda',
+      keys: ['?'],
+      label: 'Enseña esta ayuda',
+      group: 'General',
+      handler: () => {},
+    }),
     registerShortcut({
       id: 'reproductor.pausa',
       keys: [' ', 'k'],
@@ -51,11 +57,21 @@ describe('panel de ayuda', () => {
     expect(within(keyboard).getByText('Pausa y reanuda')).toBeInTheDocument();
     act(() => {
       offs.push(
-        registerShortcut({ id: 'agenda.hoy', keys: ['h'], label: 'Vuelve a hoy', group: 'Agenda', handler: () => {} }),
+        registerShortcut({
+          id: 'agenda.hoy',
+          keys: ['h'],
+          label: 'Vuelve a hoy',
+          group: 'Agenda',
+          handler: () => {},
+        }),
       );
     });
     expect(within(keyboard).getByText('Vuelve a hoy')).toBeInTheDocument();
-    expect(within(keyboard).getByText('Los atajos no funcionan mientras escribes en un campo (salvo Esc).')).toBeInTheDocument();
+    expect(
+      within(keyboard).getByText(
+        'Los atajos no funcionan mientras escribes en un campo (salvo Esc).',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('gestos y ratón: los que existen, con qué hacen', () => {

@@ -112,7 +112,12 @@ export function originKind(hostname: string): OriginKind {
     if (a === 10 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31)) return 'lan';
     return 'other';
   }
-  if (host.endsWith('.local') || host.endsWith('.lan') || host.endsWith('.home') || !host.includes('.'))
+  if (
+    host.endsWith('.local') ||
+    host.endsWith('.lan') ||
+    host.endsWith('.home') ||
+    !host.includes('.')
+  )
     return 'lan';
   return 'other';
 }

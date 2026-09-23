@@ -55,10 +55,36 @@ export const FOUND_MODULES = {
 
 const viewCache = new Map<Vista, LazyExoticComponent<ComponentType<ViewProps>>>();
 
+/* Vistas ya descargadas (preloadView o una visita). React.lazy recibe su
+   módulo con un thenable que resuelve EN EL ACTO: así una vista precargada se
+   pinta en la MISMA transición que la navegación, sin esqueleto, y la
+   transición compartida franja → centro de partido funciona también la
+   primera vez (con una promesa normal, lazy suspendía, salía el esqueleto y
+   el partido llegaba en otra transición, sin elemento compartido). */
+const loadedViews = new Map<Vista, ViewModule>();
+
+function resolvedThenable<T>(value: T): Promise<T> {
+  const thenable = {
+    then(onFulfilled?: ((result: T) => unknown) | null) {
+      onFulfilled?.(value);
+      return thenable;
+    },
+  };
+  return thenable as unknown as Promise<T>;
+}
+
 export function viewComponent(vista: Vista): LazyExoticComponent<ComponentType<ViewProps>> {
   const cached = viewCache.get(vista);
   if (cached) return cached;
-  const component = lazy(viewLoader(vista));
+  const load = viewLoader(vista);
+  const component = lazy(() => {
+    const ready = loadedViews.get(vista);
+    if (ready) return resolvedThenable(ready);
+    return load().then((module) => {
+      loadedViews.set(vista, module);
+      return module;
+    });
+  });
   viewCache.set(vista, component);
   return component;
 }
@@ -85,6 +111,18 @@ export const PlayerDock = playerLoader ? lazy(playerLoader) : null;
 
 /** Descarga por adelantado el JS de una vista (al pasar por encima de su enlace). */
 export function preloadView(vista: Vista): void {
-  if (vista === 'sistema') return;
-  void find(VIEWS, `../features/${FEATURE_FOLDER[vista]}/index.tsx`)?.();
+  if (vista === 'sistema' || loadedViews.has(vista)) return;
+  const load = find(VIEWS, `../features/${FEATURE_FOLDER[vista]}/index.tsx`);
+  if (!load) return;
+  load().then(
+    (module) => loadedViews.set(vista, module),
+    () => {
+      // Sin red: ya se intentará al abrirla (con su esqueleto y su ErrorBoundary).
+    },
+  );
+}
+
+/** ¿Está ya descargada? (para los tests). */
+export function isViewLoaded(vista: Vista): boolean {
+  return loadedViews.has(vista);
 }

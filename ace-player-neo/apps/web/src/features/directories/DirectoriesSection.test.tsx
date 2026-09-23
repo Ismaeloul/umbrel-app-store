@@ -53,17 +53,23 @@ describe('textos de las listas (§14)', () => {
     expect(syncFailureReason('fetch_timeout')).toBe('el servidor no respondió a tiempo');
     expect(syncFailureReason('empty_directory')).toBe('la lista llegó vacía');
     expect(syncFailureReason('dns_failed')).toBe('no se resolvió el dominio');
-    expect(syncFailureReason('ipfs_not_found')).toBe('la lista ya no está en esa dirección de IPFS');
+    expect(syncFailureReason('ipfs_not_found')).toBe(
+      'la lista ya no está en esa dirección de IPFS',
+    );
     expect(syncFailureReason('ipfs_bad_block')).toBe('la red IPFS no entregó la lista');
     expect(syncFailureReason('raro')).toBe('no se pudo descargar la lista');
   });
 
   it('línea de la tarjeta, normal y con fallo', () => {
-    expect(sourceMeta({ ...second, lastErrorAt: null })).toMatch(/^HTML · 12 canales · \d+ \S+, \d{2}:\d{2}$/);
+    expect(sourceMeta({ ...second, lastErrorAt: null })).toMatch(
+      /^HTML · 12 canales · \d+ \S+, \d{2}:\d{2}$/,
+    );
     expect(sourceMeta(second)).toMatch(
       /^HTML · 12 canales · el servidor limita las descargas \(429\) · se conserva la copia de /,
     );
-    expect(sourceMeta({ ...second, syncedAt: null, lastErrorAt: null })).toBe('HTML · 12 canales · sin sincronizar');
+    expect(sourceMeta({ ...second, syncedAt: null, lastErrorAt: null })).toBe(
+      'HTML · 12 canales · sin sincronizar',
+    );
   });
 
   it('errores del catálogo de @ace/shared, demo y respaldo', () => {
@@ -79,13 +85,23 @@ describe('textos de las listas (§14)', () => {
     expect(directoryErrorMessage(new ApiError({ code: 'ipfs_bad_cid', status: 502 }))).toBe(
       'La red IPFS no entregó la lista. Vuelve a intentarlo en un rato.',
     );
-    expect(directoryErrorMessage(new ApiError({ code: 'demo_unsupported', status: 409 }))).toBe(DEMO_DIRECTORY_MESSAGE);
-    expect(directoryErrorMessage(new ApiError({ code: 'internal_error', status: 500 }))).toBe(DIRECTORY_FALLBACK_ERROR);
+    expect(directoryErrorMessage(new ApiError({ code: 'demo_unsupported', status: 409 }))).toBe(
+      DEMO_DIRECTORY_MESSAGE,
+    );
+    expect(directoryErrorMessage(new ApiError({ code: 'internal_error', status: 500 }))).toBe(
+      DIRECTORY_FALLBACK_ERROR,
+    );
     expect(directoryErrorMessage(new Error('x'))).toBe(DIRECTORY_FALLBACK_ERROR);
   });
 
   it('pista de dirección de la red local (solo pista: decide el servidor)', () => {
-    for (const url of ['http://192.168.1.10/l.m3u', 'http://umbrel.local/x', 'http://10.0.0.2', 'http://[::1]:8080/', 'http://nas/lista'])
+    for (const url of [
+      'http://192.168.1.10/l.m3u',
+      'http://umbrel.local/x',
+      'http://10.0.0.2',
+      'http://[::1]:8080/',
+      'http://nas/lista',
+    ])
       expect(looksPrivateUrl(url)).toBe(true);
     for (const url of ['https://example.com/lista.m3u', 'https://ipfs.io/ipns/abc', 'no es url'])
       expect(looksPrivateUrl(url)).toBe(false);
@@ -97,7 +113,8 @@ describe('Ajustes → Listas', () => {
     let release: (value: Response) => void = () => {};
     net = mockFetch({
       'GET /api/v1/directories': view(),
-      'POST /api/v1/directories/sync': () => new Promise<Response>((resolve) => (release = resolve)),
+      'POST /api/v1/directories/sync': () =>
+        new Promise<Response>((resolve) => (release = resolve)),
     });
     renderWithApp(<DirectoriesSection />);
     const url = await screen.findByRole('textbox', { name: 'Dirección de la lista' });
@@ -115,7 +132,9 @@ describe('Ajustes → Listas', () => {
       name: 'Mía',
     });
     await act(async () => release(json(view())));
-    expect(await screen.findByText('«Principal»: 3 canales. Actualización automática cada 3 h.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('«Principal»: 3 canales. Actualización automática cada 3 h.'),
+    ).toBeInTheDocument();
     expect(toastStore.get().at(-1)?.text).toBe('Lista guardada: 3 canales');
     expect(new URLSearchParams(location.search).get('pestana')).toBe('listas');
   });
@@ -124,18 +143,34 @@ describe('Ajustes → Listas', () => {
     net = mockFetch({
       'GET /api/v1/directories': view(),
       'POST /api/v1/directories/sync': () =>
-        json({ error: { code: 'private_url', message: 'Por seguridad, las direcciones de tu red local están bloqueadas. Usa una lista publicada en internet.', requestId: 'r' } }, 400),
+        json(
+          {
+            error: {
+              code: 'private_url',
+              message:
+                'Por seguridad, las direcciones de tu red local están bloqueadas. Usa una lista publicada en internet.',
+              requestId: 'r',
+            },
+          },
+          400,
+        ),
     });
     renderWithApp(<DirectoriesSection />);
     const url = await screen.findByRole('textbox', { name: 'Dirección de la lista' });
     fireEvent.change(url, { target: { value: 'ftp://lista' } });
     fireEvent.click(screen.getByRole('button', { name: 'Guardar HTML' }));
-    expect(await screen.findByText('La dirección no es válida: tiene que empezar por http:// o https://.')).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'La dirección no es válida: tiene que empezar por http:// o https://.',
+      ),
+    ).toBeInTheDocument();
     expect(net.calls.filter((c) => c.method === 'POST')).toHaveLength(0);
     fireEvent.change(url, { target: { value: 'http://192.168.1.5/lista.html' } });
     expect(screen.getByText(/Parece una dirección de tu red local/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Guardar HTML' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(/las direcciones de tu red local están bloqueadas/);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /las direcciones de tu red local están bloqueadas/,
+    );
     expect(net.calls.find((c) => c.method === 'POST')?.body).toMatchObject({ type: 'html' });
   });
 
@@ -150,8 +185,16 @@ describe('Ajustes → Listas', () => {
     const cards = await screen.findAllByRole('listitem');
     expect(within(cards[0]!).getByText('En uso')).toBeInTheDocument();
     expect(within(cards[0]!).getByRole('button', { name: 'Activo' })).toBeDisabled();
-    expect(within(cards[1]!).getByText(/el servidor limita las descargas \(429\) · se conserva la copia de/)).toBeInTheDocument();
-    expect(within(cards[1]!).getByText('Ese servidor limita las descargas (429). Vuelve a intentarlo en unos minutos.')).toBeInTheDocument();
+    expect(
+      within(cards[1]!).getByText(
+        /el servidor limita las descargas \(429\) · se conserva la copia de/,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(cards[1]!).getByText(
+        'Ese servidor limita las descargas (429). Vuelve a intentarlo en unos minutos.',
+      ),
+    ).toBeInTheDocument();
     fireEvent.click(within(cards[1]!).getByRole('button', { name: 'Actualizar' }));
     await waitFor(() =>
       expect(net.calls.find((c) => c.url === '/api/v1/directories/sync')?.body).toEqual({
@@ -161,7 +204,9 @@ describe('Ajustes → Listas', () => {
         sourceId: 'extra',
       }),
     );
-    await waitFor(() => expect(within(cards[1]!).getByRole('button', { name: 'Usar' })).toBeEnabled());
+    await waitFor(() =>
+      expect(within(cards[1]!).getByRole('button', { name: 'Usar' })).toBeEnabled(),
+    );
     fireEvent.click(within(cards[1]!).getByRole('button', { name: 'Usar' }));
     await waitFor(() => expect(toastStore.get().at(-1)?.text).toBe('Lista activa: Extra'));
   });
@@ -188,10 +233,20 @@ describe('Ajustes → Listas', () => {
   });
 
   it('con 8 listas no deja añadir otra', async () => {
-    const sources = Array.from({ length: 8 }, (_, i) => ({ ...second, id: `l${i}`, name: `Lista ${i}`, lastErrorAt: null, lastError: null }));
-    net = mockFetch({ 'GET /api/v1/directories': view({ webSources: sources, activeWebSourceId: 'l0' }) });
+    const sources = Array.from({ length: 8 }, (_, i) => ({
+      ...second,
+      id: `l${i}`,
+      name: `Lista ${i}`,
+      lastErrorAt: null,
+      lastError: null,
+    }));
+    net = mockFetch({
+      'GET /api/v1/directories': view({ webSources: sources, activeWebSourceId: 'l0' }),
+    });
     renderWithApp(<DirectoriesSection />);
-    expect(await screen.findByText('Ya tienes 8 directorios. Elimina uno antes de añadir otro.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Ya tienes 8 directorios. Elimina uno antes de añadir otro.'),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Guardar M3U' })).toBeDisabled();
   });
 });

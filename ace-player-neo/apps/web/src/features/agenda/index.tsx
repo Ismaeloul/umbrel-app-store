@@ -22,13 +22,14 @@ import './demo.ts';
 import './agenda.css';
 
 import { hasFootballPreferences, type FootballMatch } from '@ace/shared';
-import { lazy, Suspense, useCallback, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { describeFailure, useAppMode } from '../../api/index.ts';
 import type { ViewProps } from '../../app/contracts.ts';
 import { useLayout } from '../../app/layout.tsx';
 import { useNavigate } from '../../app/router.tsx';
 import { useShortcut } from '../../app/shortcuts.ts';
 import { partidoTransitionName } from '../../app/transitions.ts';
+import { preloadView } from '../../app/views.tsx';
 import { ViewHeader } from '../../app/ViewHeader.tsx';
 import { useSwipe } from '../../lib/gestures.ts';
 import { notify } from '../../notices/index.ts';
@@ -157,6 +158,20 @@ export default function Agenda({ active }: ViewProps) {
       featuredMatch(matches, now, scores, preferences))
     : null;
   const later = stageVisible ? laterMatches(matches, now, scores, selected?.id ?? null) : [];
+
+  /* El centro de partido se descarga en un rato libre con la agenda a la
+     vista: abrir un partido lo pinta en la misma transición y la franja viaja
+     hasta el marcador también la primera vez (views.tsx). */
+  useEffect(() => {
+    if (!active) return;
+    const idle = globalThis.requestIdleCallback;
+    if (typeof idle === 'function') {
+      const handle = idle(() => preloadView('partido'), { timeout: 3000 });
+      return () => globalThis.cancelIdleCallback?.(handle);
+    }
+    const timer = setTimeout(() => preloadView('partido'), 1500);
+    return () => clearTimeout(timer);
+  }, [active]);
 
   // ---- Acciones -------------------------------------------------------------------
 

@@ -87,7 +87,11 @@ vi.mock('./views.tsx', async () => {
     },
     asideComponent: (vista: string) => {
       if (vista !== 'biblioteca') return null;
-      if (!cache.has('aside')) cache.set('aside', lazy(async () => ({ default: StubAside })));
+      if (!cache.has('aside'))
+        cache.set(
+          'aside',
+          lazy(async () => ({ default: StubAside })),
+        );
       return cache.get('aside');
     },
     AgendaColumn: lazy(async () => ({ default: StubColumn })),

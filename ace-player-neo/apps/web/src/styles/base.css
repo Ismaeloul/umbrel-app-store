@@ -133,7 +133,10 @@ video {
   background: var(--accent);
   color: var(--on-accent);
   font-weight: var(--wght-strong);
-  transform: translateY(calc(-100% - 24px));
+  /* Escondido del todo también con muesca: sube lo que baja `top` (zona
+     segura + 8 px) y un poco más. Sin restar la zona segura, en un iPhone
+     con muesca (PWA) asomaba media píldora bajo la barra de estado. */
+  transform: translateY(calc(-100% - var(--safe-top) - 24px));
   transition: transform var(--dur-rapido) var(--ease-rapido);
 }
 .skip-link:focus-visible {

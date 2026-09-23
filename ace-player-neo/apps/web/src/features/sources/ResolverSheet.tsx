@@ -17,8 +17,19 @@ import { useId, useRef, useState, type FormEvent } from 'react';
 import { notify } from '../../notices/index.ts';
 import { copyText } from '../../player/clipboard.ts';
 import { Button, Icon, IconButton, Sheet, TextField } from '../../ui/index.ts';
-import { availabilityPercent, checkedLabel, INVALID_HASH_TEXT, resolutionSourceLabel } from './model.ts';
-import { bindManual, chooseCandidate, openResolver, resolverChannel, useSession } from './session.ts';
+import {
+  availabilityPercent,
+  checkedLabel,
+  INVALID_HASH_TEXT,
+  resolutionSourceLabel,
+} from './model.ts';
+import {
+  bindManual,
+  chooseCandidate,
+  openResolver,
+  resolverChannel,
+  useSession,
+} from './session.ts';
 
 export function ResolverSheet() {
   const open = useSession((state) => state.resolverOpen);
@@ -145,9 +156,16 @@ export function ResolverSheet() {
             </label>
           </>
         ) : null}
-        <form id={formId} className="src-resolve__manual" onSubmit={(event) => void submitManual(event)} noValidate>
+        <form
+          id={formId}
+          className="src-resolve__manual"
+          onSubmit={(event) => void submitManual(event)}
+          noValidate
+        >
           <h4>¿Lo has encontrado por tu cuenta?</h4>
-          <p>Pega el Content ID o enlace AceStream. Lo vincularemos a este canal para la próxima vez.</p>
+          <p>
+            Pega el Content ID o enlace AceStream. Lo vincularemos a este canal para la próxima vez.
+          </p>
           <div className="src-resolve__channel">
             <code>{channel}</code>
             <IconButton

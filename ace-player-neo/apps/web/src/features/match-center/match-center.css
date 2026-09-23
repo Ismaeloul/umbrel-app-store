@@ -91,8 +91,16 @@
   z-index: -1;
   inset: 0;
   background:
-    radial-gradient(60% 75% at 14% 58%, color-mix(in oklab, var(--ta) 30%, transparent), transparent 70%),
-    radial-gradient(60% 75% at 86% 58%, color-mix(in oklab, var(--tb) 24%, transparent), transparent 70%);
+    radial-gradient(
+      60% 75% at 14% 58%,
+      color-mix(in oklab, var(--ta) 30%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      60% 75% at 86% 58%,
+      color-mix(in oklab, var(--tb) 24%, transparent),
+      transparent 70%
+    );
   opacity: 0;
   transition: opacity var(--dur-heroe) var(--ease-estandar);
   pointer-events: none;
@@ -426,6 +434,26 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* En el móvil «14 pares · 503 KB/s» se quedaba en «503 KB…»: la mono más
+   estrecha que tiene (wdth 75) y huecos más justos (revisión visual de la
+   Fase 2). */
+@media (max-width: 430px) {
+  .mc-nerd__summary {
+    gap: 8px;
+  }
+  .mc-nerd__brief {
+    font-stretch: 75%;
+  }
+}
+@media (max-width: 380px) {
+  .mc-nerd__summary {
+    gap: 6px;
+    padding-inline: 12px 10px;
+  }
+  .mc-nerd__brief {
+    font-size: var(--fs-11);
+  }
 }
 .mc-nerd[open] .mc-nerd__brief {
   display: none;

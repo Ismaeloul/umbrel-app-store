@@ -82,7 +82,9 @@ describe('Dispositivos', () => {
     expect(screen.getByText('Código 4 8 2 9 1 3')).toBeInTheDocument();
     const qr = screen.getByRole('img', { name: /Código QR para emparejar/ });
     expect(qr.getAttribute('src')).toMatch(/^data:image\/svg\+xml;charset=utf-8,/);
-    expect(screen.getByRole('timer').getAttribute('aria-label')).toMatch(/^Caduca en (5:00|4:5\d)$/);
+    expect(screen.getByRole('timer').getAttribute('aria-label')).toMatch(
+      /^Caduca en (5:00|4:5\d)$/,
+    );
     expect(screen.getByText('Código listo. Caduca en 5 minutos.')).toBeInTheDocument();
   });
 
@@ -92,12 +94,24 @@ describe('Dispositivos', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     fireEvent.click(screen.getByRole('button', { name: 'Emparejar un dispositivo' }));
     await screen.findByText('Código para emparejar');
+    // El título sale antes de que llegue el código: hay que esperar al código
+    // (y a su caducidad) antes de adelantar el reloj, o en una máquina lenta la
+    // cuenta atrás empieza DESPUÉS del avance y sigue en 5:00 (CI de GitHub).
+    await screen.findByText('Código 4 8 2 9 1 3');
     act(() => vi.advanceTimersByTime(60_000));
     // Con shouldAdvanceTime el reloj real también corre: con la máquina cargada
     // pueden pasar unos segundos más.
-    expect(screen.getByRole('timer').getAttribute('aria-label')).toMatch(/^Caduca en (4:00|3:[45]\d)$/);
+    // Con la máquina muy cargada el efecto de la cuenta atrás puede engancharse
+    // después del avance: su primer tic ya lee la hora avanzada (waitFor).
+    await waitFor(() =>
+      expect(screen.getByRole('timer').getAttribute('aria-label')).toMatch(
+        /^Caduca en (4:00|3:[45]\d)$/,
+      ),
+    );
     act(() => vi.advanceTimersByTime(4 * 60_000 + 1000));
-    expect(screen.getByText('El código ha caducado', { selector: 'p.disp-pair__title' })).toBeInTheDocument();
+    expect(
+      screen.getByText('El código ha caducado', { selector: 'p.disp-pair__title' }),
+    ).toBeInTheDocument();
     expect(screen.queryByRole('img', { name: /Código QR/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Crear otro código' }));
     await screen.findByText('Código para emparejar');
@@ -111,11 +125,17 @@ describe('Dispositivos', () => {
     await screen.findByText('Código para emparejar');
     devices = [IPHONE(), NEW_IPAD];
     act(() => {
-      dispatchSse('devices.changed', { reason: 'paired', deviceId: NEW_IPAD.id }, { id: '9', synthetic: false });
+      dispatchSse(
+        'devices.changed',
+        { reason: 'paired', deviceId: NEW_IPAD.id },
+        { id: '9', synthetic: false },
+      );
       void client.invalidateQueries({ queryKey: ['v1', 'devicesList'] });
     });
     expect(await screen.findByText('«iPad del salón» ya está emparejado')).toBeInTheDocument();
-    await waitFor(() => expect(toastStore.get().at(-1)?.text).toBe('«iPad del salón» se ha emparejado'));
+    await waitFor(() =>
+      expect(toastStore.get().at(-1)?.text).toBe('«iPad del salón» se ha emparejado'),
+    );
     const list = screen.getByRole('list', { name: 'Dispositivos emparejados' });
     expect(within(list).getAllByRole('listitem')).toHaveLength(2);
     fireEvent.click(screen.getByRole('button', { name: 'Hecho' }));
@@ -126,7 +146,8 @@ describe('Dispositivos', () => {
     realtimeStore.set({ status: 'fallback', lastEventId: null, attempts: 3 });
     setup();
     await screen.findByRole('list', { name: 'Dispositivos emparejados' });
-    const lists = () => net.calls.filter((c) => c.method === 'GET' && c.url === '/api/v1/devices').length;
+    const lists = () =>
+      net.calls.filter((c) => c.method === 'GET' && c.url === '/api/v1/devices').length;
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const idle = lists();
     await act(async () => {
@@ -135,11 +156,17 @@ describe('Dispositivos', () => {
     expect(lists()).toBe(idle);
     fireEvent.click(screen.getByRole('button', { name: 'Emparejar un dispositivo' }));
     await screen.findByText('Código para emparejar');
+    // Mismo motivo que arriba: el sondeo solo empieza con el código ya en pantalla.
+    await screen.findByText('Código 4 8 2 9 1 3');
     const start = lists();
     devices = [IPHONE(), NEW_IPAD];
-    await act(async () => {
-      vi.advanceTimersByTime(PAIRING_POLL_MS + 50);
-    });
+    // Con la máquina muy cargada el sondeo (refetchInterval) puede engancharse
+    // después del primer avance: se avanza de 5 en 5 s hasta que llega.
+    for (let i = 0; i < 4 && lists() <= start; i++) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(PAIRING_POLL_MS + 50);
+      });
+    }
     await waitFor(() => expect(lists()).toBeGreaterThan(start));
     // El dispositivo nuevo aparece en la lista: emparejado, y deja de sondear.
     expect(await screen.findByText('«iPad del salón» ya está emparejado')).toBeInTheDocument();
@@ -179,14 +206,25 @@ describe('Dispositivos', () => {
     fireEvent.contextMenu(within(list).getByRole('listitem'), { clientX: 20, clientY: 20 });
     const menu = await screen.findByRole('menu', { name: 'Opciones de iPhone de prueba' });
     fireEvent.click(within(menu).getByRole('menuitem', { name: 'Revocar el acceso' }));
-    expect(await screen.findByRole('button', { name: /^¿Revocar\? Pulsa otra vez/ })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: /^¿Revocar\? Pulsa otra vez/ }),
+    ).toBeInTheDocument();
     expect(net.calls.some((c) => c.method === 'DELETE')).toBe(false);
   });
 
   it('si no se puede crear el código: el motivo y «Volver a intentarlo»', async () => {
     setup({
       'POST /api/v1/pairing': () =>
-        json({ error: { code: 'internal_error', message: 'Algo falló en el servidor.', requestId: 'r' } }, 500),
+        json(
+          {
+            error: {
+              code: 'internal_error',
+              message: 'Algo falló en el servidor.',
+              requestId: 'r',
+            },
+          },
+          500,
+        ),
     });
     await screen.findByRole('list', { name: 'Dispositivos emparejados' });
     fireEvent.click(screen.getByRole('button', { name: 'Emparejar un dispositivo' }));
@@ -201,7 +239,8 @@ describe('Dispositivos', () => {
     expect(await screen.findByText(/Aún no hay ningún dispositivo emparejado/)).toBeInTheDocument();
     net.restore();
     mock({
-      'GET /api/v1/devices': () => json({ error: { code: 'internal_error', message: 'Uy.', requestId: 'r' } }, 500),
+      'GET /api/v1/devices': () =>
+        json({ error: { code: 'internal_error', message: 'Uy.', requestId: 'r' } }, 500),
     });
     renderSection(<DevicesSettings route={{ vista: 'ajustes', seccion: 'dispositivos' }} active />);
     const alert = await screen.findByRole('alert');

@@ -13,7 +13,14 @@
    - Clic derecho o pulsación larga: menú contextual de la fuente.
    - Flechas ↑ ↓ para moverse entre filas; Intro o Espacio la eligen. */
 
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type RefObject } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type RefObject,
+} from 'react';
 import { cx } from '../../lib/cx.ts';
 import { acestreamLink, copyText, openExternal } from '../../player/clipboard.ts';
 import { notify } from '../../notices/index.ts';
@@ -39,7 +46,10 @@ function rowMenu(row: SourceRow, inMatch: boolean): MenuItem[] {
       icon: 'hash',
       onSelect: () =>
         void copyText(row.entry.id).then((ok) =>
-          notify(ok ? 'Hash copiado' : 'No se pudo copiar el hash', { tone: ok ? 'ok' : 'err', icon: 'copy' }),
+          notify(ok ? 'Hash copiado' : 'No se pudo copiar el hash', {
+            tone: ok ? 'ok' : 'err',
+            icon: 'copy',
+          }),
         ),
     },
     {
@@ -68,7 +78,10 @@ function rowMenu(row: SourceRow, inMatch: boolean): MenuItem[] {
   return items;
 }
 
-function focusSibling(event: KeyboardEvent<HTMLButtonElement>, listRef: RefObject<HTMLElement | null>) {
+function focusSibling(
+  event: KeyboardEvent<HTMLButtonElement>,
+  listRef: RefObject<HTMLElement | null>,
+) {
   if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
   const buttons = [...(listRef.current?.querySelectorAll<HTMLButtonElement>('.src-row') ?? [])];
   const index = buttons.indexOf(event.currentTarget);
@@ -218,7 +231,10 @@ export function SourceList({ shown, tucked, variant, inMatch, label }: SourceLis
                 }`}
           </button>
           {showTucked ? (
-            <ol className="src-list__rows src-list__rows--tucked" aria-label={`${label}: sin señal o en cola`}>
+            <ol
+              className="src-list__rows src-list__rows--tucked"
+              aria-label={`${label}: sin señal o en cola`}
+            >
               {tucked.map((row, index) => (
                 <SourceRowView
                   key={row.entry.id}

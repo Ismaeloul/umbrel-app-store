@@ -5,7 +5,8 @@
    dejar una pantalla en blanco en producción. */
 
 import { QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import { Suspense } from 'react';
 import { describe, expect, it } from 'vitest';
 import { createQueryClient } from '../api/query.ts';
 import type { ViewModule } from './contracts.ts';
@@ -14,6 +15,8 @@ import {
   asideComponent,
   FEATURE_FOLDER,
   FOUND_MODULES,
+  isViewLoaded,
+  preloadView,
   viewComponent,
   viewLoader,
 } from './views.tsx';
@@ -52,10 +55,30 @@ describe('views (registro por carpetas)', () => {
     ]);
   });
 
+  it('una vista precargada se pinta sin suspender (misma transición: franja → partido)', async () => {
+    preloadView('ajustes');
+    await waitFor(() => expect(isViewLoaded('ajustes')).toBe(true));
+    const Settings = viewComponent('ajustes');
+    render(
+      <QueryClientProvider client={createQueryClient()}>
+        <RouterProvider initialSearch="?vista=ajustes">
+          <Suspense fallback={<p>esqueleto</p>}>
+            <Settings route={{ vista: 'ajustes', seccion: null }} active />
+          </Suspense>
+        </RouterProvider>
+      </QueryClientProvider>,
+    );
+    // Sin pasar por el esqueleto: el primer render ya es la vista.
+    expect(screen.queryByText('esqueleto')).toBeNull();
+    expect(screen.getByRole('heading', { level: 1, name: 'Ajustes' })).toBeInTheDocument();
+  });
+
   it('contrato: todo lo que existe exporta por defecto un componente', async () => {
     const groups = Object.entries(FOUND_MODULES);
     for (const [group, modules] of groups) {
-      for (const [file, load] of Object.entries(modules as Record<string, () => Promise<unknown>>)) {
+      for (const [file, load] of Object.entries(
+        modules as Record<string, () => Promise<unknown>>,
+      )) {
         const mod = (await load()) as { default?: unknown };
         expect(isComponent(mod.default), `${group}: ${file} sin export default`).toBe(true);
       }

@@ -1,0 +1,2644 @@
+[
+  {
+    "view": "agenda",
+    "size": "1024x1366",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "agenda/agenda-1024x1366-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "agenda",
+    "size": "1280x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "agenda/agenda-1280x800-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "agenda",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "agenda/agenda-1440x900-claro.png",
+    "avisos": []
+  },
+  {
+    "view": "agenda",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "agenda/agenda-1440x900-claro-transparencia-reducida.png",
+    "avisos": []
+  },
+  {
+    "view": "agenda",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "agenda/agenda-1440x900-oscuro.png",
+    "avisos": [],
+    "tabStops": 23
+  },
+  {
+    "view": "agenda",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "agenda/agenda-1440x900-oscuro-movimiento-reducido.png",
+    "avisos": []
+  },
+  {
+    "view": "agenda",
+    "size": "1920x1080",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "agenda/agenda-1920x1080-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "agenda",
+    "size": "2560x1440",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "agenda/agenda-2560x1440-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "agenda",
+    "size": "360x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "agenda/agenda-360x800-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "agenda",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "agenda/agenda-390x844-claro.png",
+    "avisos": []
+  },
+  {
+    "view": "agenda",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "agenda/agenda-390x844-claro-transparencia-reducida.png",
+    "avisos": []
+  },
+  {
+    "view": "agenda",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "agenda/agenda-390x844-oscuro.png",
+    "avisos": [],
+    "tabStops": 17
+  },
+  {
+    "view": "agenda",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "agenda/agenda-390x844-oscuro-movimiento-reducido.png",
+    "avisos": []
+  },
+  {
+    "view": "agenda",
+    "size": "430x932",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "agenda/agenda-430x932-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "agenda",
+    "size": "768x1024",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "agenda/agenda-768x1024-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "agenda",
+    "size": "800x360",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "agenda/agenda-800x360-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "agenda",
+    "size": "844x390",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "agenda/agenda-844x390-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "agenda",
+    "size": "932x430",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "agenda/agenda-932x430-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "ajustes",
+    "size": "1024x1366",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "ajustes/ajustes-1024x1366-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "ajustes",
+    "size": "1280x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "ajustes/ajustes-1280x800-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "ajustes",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "ajustes/ajustes-1440x900-claro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "ajustes",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "ajustes/ajustes-1440x900-claro-transparencia-reducida.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "ajustes",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "ajustes/ajustes-1440x900-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ],
+    "tabStops": 36
+  },
+  {
+    "view": "ajustes",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "ajustes/ajustes-1440x900-oscuro-movimiento-reducido.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "ajustes",
+    "size": "1920x1080",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "ajustes/ajustes-1920x1080-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "ajustes",
+    "size": "2560x1440",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "ajustes/ajustes-2560x1440-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "ajustes",
+    "size": "360x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "ajustes/ajustes-360x800-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "ajustes",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "ajustes/ajustes-390x844-claro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "ajustes",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "ajustes/ajustes-390x844-claro-transparencia-reducida.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "ajustes",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "ajustes/ajustes-390x844-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ],
+    "tabStops": 32
+  },
+  {
+    "view": "ajustes",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "ajustes/ajustes-390x844-oscuro-movimiento-reducido.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "ajustes",
+    "size": "430x932",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "ajustes/ajustes-430x932-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "ajustes",
+    "size": "768x1024",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "ajustes/ajustes-768x1024-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "ajustes",
+    "size": "800x360",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "ajustes/ajustes-800x360-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "ajustes",
+    "size": "844x390",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "ajustes/ajustes-844x390-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "ajustes",
+    "size": "932x430",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "ajustes/ajustes-932x430-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "ayuda",
+    "size": "1024x1366",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "ayuda/ayuda-1024x1366-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "ayuda",
+    "size": "1280x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "ayuda/ayuda-1280x800-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "ayuda",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "ayuda/ayuda-1440x900-claro.png",
+    "avisos": []
+  },
+  {
+    "view": "ayuda",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "ayuda/ayuda-1440x900-claro-transparencia-reducida.png",
+    "avisos": []
+  },
+  {
+    "view": "ayuda",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "ayuda/ayuda-1440x900-oscuro.png",
+    "avisos": [],
+    "tabStops": 2
+  },
+  {
+    "view": "ayuda",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "ayuda/ayuda-1440x900-oscuro-movimiento-reducido.png",
+    "avisos": []
+  },
+  {
+    "view": "ayuda",
+    "size": "1920x1080",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "ayuda/ayuda-1920x1080-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "ayuda",
+    "size": "2560x1440",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "ayuda/ayuda-2560x1440-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "ayuda",
+    "size": "360x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "ayuda/ayuda-360x800-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "ayuda",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "ayuda/ayuda-390x844-claro.png",
+    "avisos": []
+  },
+  {
+    "view": "ayuda",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "ayuda/ayuda-390x844-claro-transparencia-reducida.png",
+    "avisos": []
+  },
+  {
+    "view": "ayuda",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "ayuda/ayuda-390x844-oscuro.png",
+    "avisos": [],
+    "tabStops": 2
+  },
+  {
+    "view": "ayuda",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "ayuda/ayuda-390x844-oscuro-movimiento-reducido.png",
+    "avisos": []
+  },
+  {
+    "view": "ayuda",
+    "size": "430x932",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "ayuda/ayuda-430x932-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "ayuda",
+    "size": "768x1024",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "ayuda/ayuda-768x1024-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "ayuda",
+    "size": "800x360",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "ayuda/ayuda-800x360-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "ayuda",
+    "size": "844x390",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "ayuda/ayuda-844x390-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "ayuda",
+    "size": "932x430",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "ayuda/ayuda-932x430-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-favoritos",
+    "size": "1024x1366",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-favoritos/biblioteca-favoritos-1024x1366-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-favoritos",
+    "size": "1280x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-favoritos/biblioteca-favoritos-1280x800-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-favoritos",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-favoritos/biblioteca-favoritos-1440x900-claro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-favoritos",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "biblioteca-favoritos/biblioteca-favoritos-1440x900-claro-transparencia-reducida.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-favoritos",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-favoritos/biblioteca-favoritos-1440x900-oscuro.png",
+    "avisos": [],
+    "tabStops": 26
+  },
+  {
+    "view": "biblioteca-favoritos",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "biblioteca-favoritos/biblioteca-favoritos-1440x900-oscuro-movimiento-reducido.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-favoritos",
+    "size": "1920x1080",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-favoritos/biblioteca-favoritos-1920x1080-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-favoritos",
+    "size": "2560x1440",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-favoritos/biblioteca-favoritos-2560x1440-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-favoritos",
+    "size": "360x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-favoritos/biblioteca-favoritos-360x800-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: span.ch__txt «A las 22:00, España – Marruecos»",
+      "con puntos suspensivos: span.ch__txt «A las 18:30, Real Sociedad – Vil»"
+    ]
+  },
+  {
+    "view": "biblioteca-favoritos",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-favoritos/biblioteca-favoritos-390x844-claro.png",
+    "avisos": [
+      "con puntos suspensivos: span.ch__txt «A las 22:00, España – Marruecos»",
+      "con puntos suspensivos: span.ch__txt «A las 18:30, Real Sociedad – Vil»"
+    ]
+  },
+  {
+    "view": "biblioteca-favoritos",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "biblioteca-favoritos/biblioteca-favoritos-390x844-claro-transparencia-reducida.png",
+    "avisos": [
+      "con puntos suspensivos: span.ch__txt «A las 22:00, España – Marruecos»",
+      "con puntos suspensivos: span.ch__txt «A las 18:30, Real Sociedad – Vil»"
+    ]
+  },
+  {
+    "view": "biblioteca-favoritos",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-favoritos/biblioteca-favoritos-390x844-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: span.ch__txt «A las 22:00, España – Marruecos»",
+      "con puntos suspensivos: span.ch__txt «A las 18:30, Real Sociedad – Vil»"
+    ],
+    "tabStops": 16
+  },
+  {
+    "view": "biblioteca-favoritos",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "biblioteca-favoritos/biblioteca-favoritos-390x844-oscuro-movimiento-reducido.png",
+    "avisos": [
+      "con puntos suspensivos: span.ch__txt «A las 22:00, España – Marruecos»",
+      "con puntos suspensivos: span.ch__txt «A las 18:30, Real Sociedad – Vil»"
+    ]
+  },
+  {
+    "view": "biblioteca-favoritos",
+    "size": "430x932",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-favoritos/biblioteca-favoritos-430x932-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: span.ch__txt «A las 18:30, Real Sociedad – Vil»"
+    ]
+  },
+  {
+    "view": "biblioteca-favoritos",
+    "size": "768x1024",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-favoritos/biblioteca-favoritos-768x1024-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-favoritos",
+    "size": "800x360",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-favoritos/biblioteca-favoritos-800x360-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-favoritos",
+    "size": "844x390",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-favoritos/biblioteca-favoritos-844x390-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-favoritos",
+    "size": "932x430",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-favoritos/biblioteca-favoritos-932x430-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-listas",
+    "size": "1024x1366",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-listas/biblioteca-listas-1024x1366-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-listas",
+    "size": "1280x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-listas/biblioteca-listas-1280x800-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-listas",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-listas/biblioteca-listas-1440x900-claro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-listas",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "biblioteca-listas/biblioteca-listas-1440x900-claro-transparencia-reducida.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-listas",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-listas/biblioteca-listas-1440x900-oscuro.png",
+    "avisos": [],
+    "tabStops": 16
+  },
+  {
+    "view": "biblioteca-listas",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "biblioteca-listas/biblioteca-listas-1440x900-oscuro-movimiento-reducido.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-listas",
+    "size": "1920x1080",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-listas/biblioteca-listas-1920x1080-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-listas",
+    "size": "2560x1440",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-listas/biblioteca-listas-2560x1440-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-listas",
+    "size": "360x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-listas/biblioteca-listas-360x800-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-listas",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-listas/biblioteca-listas-390x844-claro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-listas",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "biblioteca-listas/biblioteca-listas-390x844-claro-transparencia-reducida.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-listas",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-listas/biblioteca-listas-390x844-oscuro.png",
+    "avisos": [],
+    "tabStops": 14
+  },
+  {
+    "view": "biblioteca-listas",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "biblioteca-listas/biblioteca-listas-390x844-oscuro-movimiento-reducido.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-listas",
+    "size": "430x932",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-listas/biblioteca-listas-430x932-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-listas",
+    "size": "768x1024",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-listas/biblioteca-listas-768x1024-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-listas",
+    "size": "800x360",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-listas/biblioteca-listas-800x360-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-listas",
+    "size": "844x390",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-listas/biblioteca-listas-844x390-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-listas",
+    "size": "932x430",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-listas/biblioteca-listas-932x430-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-recientes",
+    "size": "1024x1366",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-recientes/biblioteca-recientes-1024x1366-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-recientes",
+    "size": "1280x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-recientes/biblioteca-recientes-1280x800-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-recientes",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-recientes/biblioteca-recientes-1440x900-claro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-recientes",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "biblioteca-recientes/biblioteca-recientes-1440x900-claro-transparencia-reducida.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-recientes",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-recientes/biblioteca-recientes-1440x900-oscuro.png",
+    "avisos": [],
+    "tabStops": 20
+  },
+  {
+    "view": "biblioteca-recientes",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "biblioteca-recientes/biblioteca-recientes-1440x900-oscuro-movimiento-reducido.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-recientes",
+    "size": "1920x1080",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-recientes/biblioteca-recientes-1920x1080-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-recientes",
+    "size": "2560x1440",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-recientes/biblioteca-recientes-2560x1440-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-recientes",
+    "size": "360x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-recientes/biblioteca-recientes-360x800-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: span.ch__txt «A las 18:30, Real Sociedad – Vil»"
+    ]
+  },
+  {
+    "view": "biblioteca-recientes",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-recientes/biblioteca-recientes-390x844-claro.png",
+    "avisos": [
+      "con puntos suspensivos: span.ch__txt «A las 18:30, Real Sociedad – Vil»"
+    ]
+  },
+  {
+    "view": "biblioteca-recientes",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "biblioteca-recientes/biblioteca-recientes-390x844-claro-transparencia-reducida.png",
+    "avisos": [
+      "con puntos suspensivos: span.ch__txt «A las 18:30, Real Sociedad – Vil»"
+    ]
+  },
+  {
+    "view": "biblioteca-recientes",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-recientes/biblioteca-recientes-390x844-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: span.ch__txt «A las 18:30, Real Sociedad – Vil»"
+    ],
+    "tabStops": 12
+  },
+  {
+    "view": "biblioteca-recientes",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "biblioteca-recientes/biblioteca-recientes-390x844-oscuro-movimiento-reducido.png",
+    "avisos": [
+      "con puntos suspensivos: span.ch__txt «A las 18:30, Real Sociedad – Vil»"
+    ]
+  },
+  {
+    "view": "biblioteca-recientes",
+    "size": "430x932",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-recientes/biblioteca-recientes-430x932-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: span.ch__txt «A las 18:30, Real Sociedad – Vil»"
+    ]
+  },
+  {
+    "view": "biblioteca-recientes",
+    "size": "768x1024",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-recientes/biblioteca-recientes-768x1024-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-recientes",
+    "size": "800x360",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-recientes/biblioteca-recientes-800x360-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-recientes",
+    "size": "844x390",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-recientes/biblioteca-recientes-844x390-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-recientes",
+    "size": "932x430",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-recientes/biblioteca-recientes-932x430-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-vacia",
+    "size": "1024x1366",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-vacia/biblioteca-vacia-1024x1366-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-vacia",
+    "size": "1280x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-vacia/biblioteca-vacia-1280x800-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-vacia",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-vacia/biblioteca-vacia-1440x900-claro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-vacia",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "biblioteca-vacia/biblioteca-vacia-1440x900-claro-transparencia-reducida.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-vacia",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-vacia/biblioteca-vacia-1440x900-oscuro.png",
+    "avisos": [],
+    "tabStops": 13
+  },
+  {
+    "view": "biblioteca-vacia",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "biblioteca-vacia/biblioteca-vacia-1440x900-oscuro-movimiento-reducido.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-vacia",
+    "size": "1920x1080",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-vacia/biblioteca-vacia-1920x1080-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-vacia",
+    "size": "2560x1440",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-vacia/biblioteca-vacia-2560x1440-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-vacia",
+    "size": "360x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-vacia/biblioteca-vacia-360x800-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-vacia",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-vacia/biblioteca-vacia-390x844-claro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-vacia",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "biblioteca-vacia/biblioteca-vacia-390x844-claro-transparencia-reducida.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-vacia",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-vacia/biblioteca-vacia-390x844-oscuro.png",
+    "avisos": [],
+    "tabStops": 11
+  },
+  {
+    "view": "biblioteca-vacia",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "biblioteca-vacia/biblioteca-vacia-390x844-oscuro-movimiento-reducido.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-vacia",
+    "size": "430x932",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-vacia/biblioteca-vacia-430x932-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-vacia",
+    "size": "768x1024",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-vacia/biblioteca-vacia-768x1024-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-vacia",
+    "size": "800x360",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-vacia/biblioteca-vacia-800x360-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-vacia",
+    "size": "844x390",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-vacia/biblioteca-vacia-844x390-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "biblioteca-vacia",
+    "size": "932x430",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "biblioteca-vacia/biblioteca-vacia-932x430-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "buscar",
+    "size": "1024x1366",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "buscar/buscar-1024x1366-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "buscar",
+    "size": "1280x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "buscar/buscar-1280x800-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "buscar",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "buscar/buscar-1440x900-claro.png",
+    "avisos": []
+  },
+  {
+    "view": "buscar",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "buscar/buscar-1440x900-claro-transparencia-reducida.png",
+    "avisos": []
+  },
+  {
+    "view": "buscar",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "buscar/buscar-1440x900-oscuro.png",
+    "avisos": [],
+    "tabStops": 27
+  },
+  {
+    "view": "buscar",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "buscar/buscar-1440x900-oscuro-movimiento-reducido.png",
+    "avisos": []
+  },
+  {
+    "view": "buscar",
+    "size": "1920x1080",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "buscar/buscar-1920x1080-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "buscar",
+    "size": "2560x1440",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "buscar/buscar-2560x1440-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "buscar",
+    "size": "360x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "buscar/buscar-360x800-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: span.ch__txt «A las 22:00, España – Marruecos»",
+      "con puntos suspensivos: span.ch__txt «A las 18:30, Real Sociedad – Vil»"
+    ]
+  },
+  {
+    "view": "buscar",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "buscar/buscar-390x844-claro.png",
+    "avisos": [
+      "con puntos suspensivos: span.ch__txt «A las 22:00, España – Marruecos»",
+      "con puntos suspensivos: span.ch__txt «A las 18:30, Real Sociedad – Vil»"
+    ]
+  },
+  {
+    "view": "buscar",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "buscar/buscar-390x844-claro-transparencia-reducida.png",
+    "avisos": [
+      "con puntos suspensivos: span.ch__txt «A las 22:00, España – Marruecos»",
+      "con puntos suspensivos: span.ch__txt «A las 18:30, Real Sociedad – Vil»"
+    ]
+  },
+  {
+    "view": "buscar",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "buscar/buscar-390x844-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: span.ch__txt «A las 22:00, España – Marruecos»",
+      "con puntos suspensivos: span.ch__txt «A las 18:30, Real Sociedad – Vil»"
+    ],
+    "tabStops": 20
+  },
+  {
+    "view": "buscar",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "buscar/buscar-390x844-oscuro-movimiento-reducido.png",
+    "avisos": [
+      "con puntos suspensivos: span.ch__txt «A las 22:00, España – Marruecos»",
+      "con puntos suspensivos: span.ch__txt «A las 18:30, Real Sociedad – Vil»"
+    ]
+  },
+  {
+    "view": "buscar",
+    "size": "430x932",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "buscar/buscar-430x932-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: span.ch__txt «A las 18:30, Real Sociedad – Vil»"
+    ]
+  },
+  {
+    "view": "buscar",
+    "size": "768x1024",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "buscar/buscar-768x1024-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "buscar",
+    "size": "800x360",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "buscar/buscar-800x360-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "buscar",
+    "size": "844x390",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "buscar/buscar-844x390-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "buscar",
+    "size": "932x430",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "buscar/buscar-932x430-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "dispositivos",
+    "size": "1024x1366",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "dispositivos/dispositivos-1024x1366-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "dispositivos",
+    "size": "1280x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "dispositivos/dispositivos-1280x800-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "dispositivos",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "dispositivos/dispositivos-1440x900-claro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "dispositivos",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "dispositivos/dispositivos-1440x900-claro-transparencia-reducida.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "dispositivos",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "dispositivos/dispositivos-1440x900-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ],
+    "tabStops": 38
+  },
+  {
+    "view": "dispositivos",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "dispositivos/dispositivos-1440x900-oscuro-movimiento-reducido.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "dispositivos",
+    "size": "1920x1080",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "dispositivos/dispositivos-1920x1080-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "dispositivos",
+    "size": "2560x1440",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "dispositivos/dispositivos-2560x1440-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "dispositivos",
+    "size": "360x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "dispositivos/dispositivos-360x800-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "dispositivos",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "dispositivos/dispositivos-390x844-claro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "dispositivos",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "dispositivos/dispositivos-390x844-claro-transparencia-reducida.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "dispositivos",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "dispositivos/dispositivos-390x844-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ],
+    "tabStops": 37
+  },
+  {
+    "view": "dispositivos",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "dispositivos/dispositivos-390x844-oscuro-movimiento-reducido.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "dispositivos",
+    "size": "430x932",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "dispositivos/dispositivos-430x932-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "dispositivos",
+    "size": "768x1024",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "dispositivos/dispositivos-768x1024-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "dispositivos",
+    "size": "800x360",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "dispositivos/dispositivos-800x360-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "dispositivos",
+    "size": "844x390",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "dispositivos/dispositivos-844x390-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "dispositivos",
+    "size": "932x430",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "dispositivos/dispositivos-932x430-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "mini-reproductor",
+    "size": "1024x1366",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "mini-reproductor/mini-reproductor-1024x1366-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "mini-reproductor",
+    "size": "1280x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "mini-reproductor/mini-reproductor-1280x800-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "mini-reproductor",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "mini-reproductor/mini-reproductor-1440x900-claro.png",
+    "avisos": []
+  },
+  {
+    "view": "mini-reproductor",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "mini-reproductor/mini-reproductor-1440x900-claro-transparencia-reducida.png",
+    "avisos": []
+  },
+  {
+    "view": "mini-reproductor",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "mini-reproductor/mini-reproductor-1440x900-oscuro.png",
+    "avisos": [],
+    "tabStops": 26
+  },
+  {
+    "view": "mini-reproductor",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "mini-reproductor/mini-reproductor-1440x900-oscuro-movimiento-reducido.png",
+    "avisos": []
+  },
+  {
+    "view": "mini-reproductor",
+    "size": "1920x1080",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "mini-reproductor/mini-reproductor-1920x1080-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "mini-reproductor",
+    "size": "2560x1440",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "mini-reproductor/mini-reproductor-2560x1440-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "mini-reproductor",
+    "size": "360x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "mini-reproductor/mini-reproductor-360x800-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "mini-reproductor",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "mini-reproductor/mini-reproductor-390x844-claro.png",
+    "avisos": []
+  },
+  {
+    "view": "mini-reproductor",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "mini-reproductor/mini-reproductor-390x844-claro-transparencia-reducida.png",
+    "avisos": []
+  },
+  {
+    "view": "mini-reproductor",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "mini-reproductor/mini-reproductor-390x844-oscuro.png",
+    "avisos": [],
+    "tabStops": 20
+  },
+  {
+    "view": "mini-reproductor",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "mini-reproductor/mini-reproductor-390x844-oscuro-movimiento-reducido.png",
+    "avisos": []
+  },
+  {
+    "view": "mini-reproductor",
+    "size": "430x932",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "mini-reproductor/mini-reproductor-430x932-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "mini-reproductor",
+    "size": "768x1024",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "mini-reproductor/mini-reproductor-768x1024-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "mini-reproductor",
+    "size": "800x360",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "mini-reproductor/mini-reproductor-800x360-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "mini-reproductor",
+    "size": "844x390",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "mini-reproductor/mini-reproductor-844x390-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "mini-reproductor",
+    "size": "932x430",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "mini-reproductor/mini-reproductor-932x430-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "partido",
+    "size": "1024x1366",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "partido/partido-1024x1366-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "partido",
+    "size": "1280x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "partido/partido-1280x800-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: small.player-now__sub «Fuente 1, Lista de prueba»"
+    ]
+  },
+  {
+    "view": "partido",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "partido/partido-1440x900-claro.png",
+    "avisos": []
+  },
+  {
+    "view": "partido",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "partido/partido-1440x900-claro-transparencia-reducida.png",
+    "avisos": []
+  },
+  {
+    "view": "partido",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "partido/partido-1440x900-oscuro.png",
+    "avisos": [],
+    "tabStops": 39
+  },
+  {
+    "view": "partido",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "partido/partido-1440x900-oscuro-movimiento-reducido.png",
+    "avisos": []
+  },
+  {
+    "view": "partido",
+    "size": "1920x1080",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "partido/partido-1920x1080-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "partido",
+    "size": "2560x1440",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "partido/partido-2560x1440-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "partido",
+    "size": "360x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "partido/partido-360x800-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.status-line__text «Otro dispositivo se ha unido: pa»"
+    ]
+  },
+  {
+    "view": "partido",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "partido/partido-390x844-claro.png",
+    "avisos": []
+  },
+  {
+    "view": "partido",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "partido/partido-390x844-claro-transparencia-reducida.png",
+    "avisos": []
+  },
+  {
+    "view": "partido",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "partido/partido-390x844-oscuro.png",
+    "avisos": [],
+    "tabStops": 27
+  },
+  {
+    "view": "partido",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "partido/partido-390x844-oscuro-movimiento-reducido.png",
+    "avisos": []
+  },
+  {
+    "view": "partido",
+    "size": "430x932",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "partido/partido-430x932-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "partido",
+    "size": "768x1024",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "partido/partido-768x1024-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "partido",
+    "size": "800x360",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "partido/partido-800x360-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "partido",
+    "size": "844x390",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "partido/partido-844x390-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "partido",
+    "size": "932x430",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "partido/partido-932x430-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "preferencias",
+    "size": "1024x1366",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "preferencias/preferencias-1024x1366-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "preferencias",
+    "size": "1280x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "preferencias/preferencias-1280x800-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "preferencias",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "preferencias/preferencias-1440x900-claro.png",
+    "avisos": []
+  },
+  {
+    "view": "preferencias",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "preferencias/preferencias-1440x900-claro-transparencia-reducida.png",
+    "avisos": []
+  },
+  {
+    "view": "preferencias",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "preferencias/preferencias-1440x900-oscuro.png",
+    "avisos": [],
+    "tabStops": 44
+  },
+  {
+    "view": "preferencias",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "preferencias/preferencias-1440x900-oscuro-movimiento-reducido.png",
+    "avisos": []
+  },
+  {
+    "view": "preferencias",
+    "size": "1920x1080",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "preferencias/preferencias-1920x1080-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "preferencias",
+    "size": "2560x1440",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "preferencias/preferencias-2560x1440-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "preferencias",
+    "size": "360x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "preferencias/preferencias-360x800-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "preferencias",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "preferencias/preferencias-390x844-claro.png",
+    "avisos": []
+  },
+  {
+    "view": "preferencias",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "preferencias/preferencias-390x844-claro-transparencia-reducida.png",
+    "avisos": []
+  },
+  {
+    "view": "preferencias",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "preferencias/preferencias-390x844-oscuro.png",
+    "avisos": [],
+    "tabStops": 44
+  },
+  {
+    "view": "preferencias",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "preferencias/preferencias-390x844-oscuro-movimiento-reducido.png",
+    "avisos": []
+  },
+  {
+    "view": "preferencias",
+    "size": "430x932",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "preferencias/preferencias-430x932-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "preferencias",
+    "size": "768x1024",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "preferencias/preferencias-768x1024-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "preferencias",
+    "size": "800x360",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "preferencias/preferencias-800x360-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "preferencias",
+    "size": "844x390",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "preferencias/preferencias-844x390-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "preferencias",
+    "size": "932x430",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "preferencias/preferencias-932x430-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "reproductor",
+    "size": "1024x1366",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "reproductor/reproductor-1024x1366-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "reproductor",
+    "size": "1280x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "reproductor/reproductor-1280x800-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "reproductor",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "reproductor/reproductor-1440x900-claro.png",
+    "avisos": []
+  },
+  {
+    "view": "reproductor",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "reproductor/reproductor-1440x900-claro-transparencia-reducida.png",
+    "avisos": []
+  },
+  {
+    "view": "reproductor",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "reproductor/reproductor-1440x900-oscuro.png",
+    "avisos": [],
+    "tabStops": 32
+  },
+  {
+    "view": "reproductor",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "reproductor/reproductor-1440x900-oscuro-movimiento-reducido.png",
+    "avisos": []
+  },
+  {
+    "view": "reproductor",
+    "size": "1920x1080",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "reproductor/reproductor-1920x1080-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "reproductor",
+    "size": "2560x1440",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "reproductor/reproductor-2560x1440-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "reproductor",
+    "size": "360x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "reproductor/reproductor-360x800-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "reproductor",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "reproductor/reproductor-390x844-claro.png",
+    "avisos": []
+  },
+  {
+    "view": "reproductor",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "reproductor/reproductor-390x844-claro-transparencia-reducida.png",
+    "avisos": [
+      "con puntos suspensivos: p.status-line__text «Otro dispositivo se ha unido: pa»"
+    ]
+  },
+  {
+    "view": "reproductor",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "reproductor/reproductor-390x844-oscuro.png",
+    "avisos": [],
+    "tabStops": 20
+  },
+  {
+    "view": "reproductor",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "reproductor/reproductor-390x844-oscuro-movimiento-reducido.png",
+    "avisos": [
+      "con puntos suspensivos: p.status-line__text «Otro dispositivo se ha unido: pa»"
+    ]
+  },
+  {
+    "view": "reproductor",
+    "size": "430x932",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "reproductor/reproductor-430x932-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "reproductor",
+    "size": "768x1024",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "reproductor/reproductor-768x1024-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "reproductor",
+    "size": "800x360",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "reproductor/reproductor-800x360-oscuro.png",
+    "avisos": [],
+    "hiddenControlsFile": "reproductor/reproductor-800x360-oscuro-controles-ocultos.png"
+  },
+  {
+    "view": "reproductor",
+    "size": "844x390",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "reproductor/reproductor-844x390-oscuro.png",
+    "avisos": [],
+    "hiddenControlsFile": "reproductor/reproductor-844x390-oscuro-controles-ocultos.png"
+  },
+  {
+    "view": "reproductor",
+    "size": "932x430",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "reproductor/reproductor-932x430-oscuro.png",
+    "avisos": [],
+    "hiddenControlsFile": "reproductor/reproductor-932x430-oscuro-controles-ocultos.png"
+  },
+  {
+    "view": "salud",
+    "size": "1024x1366",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "salud/salud-1024x1366-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "salud",
+    "size": "1280x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "salud/salud-1280x800-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "salud",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "salud/salud-1440x900-claro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "salud",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "salud/salud-1440x900-claro-transparencia-reducida.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "salud",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "salud/salud-1440x900-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ],
+    "tabStops": 37
+  },
+  {
+    "view": "salud",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "salud/salud-1440x900-oscuro-movimiento-reducido.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "salud",
+    "size": "1920x1080",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "salud/salud-1920x1080-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "salud",
+    "size": "2560x1440",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "salud/salud-2560x1440-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "salud",
+    "size": "360x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "salud/salud-360x800-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "salud",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "salud/salud-390x844-claro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "salud",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "salud/salud-390x844-claro-transparencia-reducida.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "salud",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "salud/salud-390x844-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ],
+    "tabStops": 36
+  },
+  {
+    "view": "salud",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "salud/salud-390x844-oscuro-movimiento-reducido.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "salud",
+    "size": "430x932",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "salud/salud-430x932-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "salud",
+    "size": "768x1024",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "salud/salud-768x1024-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "salud",
+    "size": "800x360",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "salud/salud-800x360-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "salud",
+    "size": "844x390",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "salud/salud-844x390-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "salud",
+    "size": "932x430",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "salud/salud-932x430-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.dir-card__url «https://ipfs.io/ipns/k51qzi5uqu5»"
+    ]
+  },
+  {
+    "view": "sistema",
+    "size": "1024x1366",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "sistema/sistema-1024x1366-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "sistema",
+    "size": "1280x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "sistema/sistema-1280x800-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "sistema",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "sistema/sistema-1440x900-claro.png",
+    "avisos": []
+  },
+  {
+    "view": "sistema",
+    "size": "1440x900",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "sistema/sistema-1440x900-claro-transparencia-reducida.png",
+    "avisos": []
+  },
+  {
+    "view": "sistema",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "sistema/sistema-1440x900-oscuro.png",
+    "avisos": [],
+    "tabStops": 38
+  },
+  {
+    "view": "sistema",
+    "size": "1440x900",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "sistema/sistema-1440x900-oscuro-movimiento-reducido.png",
+    "avisos": []
+  },
+  {
+    "view": "sistema",
+    "size": "1920x1080",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "sistema/sistema-1920x1080-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "sistema",
+    "size": "2560x1440",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "sistema/sistema-2560x1440-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "sistema",
+    "size": "360x800",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "sistema/sistema-360x800-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.status-line__text «Fuente 1 verificada. Vas en dire»",
+      "con puntos suspensivos: p.status-line__text «Sin señal en la fuente 3. Proban»"
+    ]
+  },
+  {
+    "view": "sistema",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "",
+    "problems": [],
+    "file": "sistema/sistema-390x844-claro.png",
+    "avisos": [
+      "con puntos suspensivos: p.status-line__text «Fuente 1 verificada. Vas en dire»",
+      "con puntos suspensivos: p.status-line__text «Sin señal en la fuente 3. Proban»"
+    ]
+  },
+  {
+    "view": "sistema",
+    "size": "390x844",
+    "tema": "claro",
+    "extra": "-transparencia-reducida",
+    "problems": [],
+    "file": "sistema/sistema-390x844-claro-transparencia-reducida.png",
+    "avisos": [
+      "con puntos suspensivos: p.status-line__text «Fuente 1 verificada. Vas en dire»",
+      "con puntos suspensivos: p.status-line__text «Sin señal en la fuente 3. Proban»"
+    ]
+  },
+  {
+    "view": "sistema",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "sistema/sistema-390x844-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.status-line__text «Fuente 1 verificada. Vas en dire»",
+      "con puntos suspensivos: p.status-line__text «Sin señal en la fuente 3. Proban»"
+    ],
+    "tabStops": 37
+  },
+  {
+    "view": "sistema",
+    "size": "390x844",
+    "tema": "oscuro",
+    "extra": "-movimiento-reducido",
+    "problems": [],
+    "file": "sistema/sistema-390x844-oscuro-movimiento-reducido.png",
+    "avisos": [
+      "con puntos suspensivos: p.status-line__text «Fuente 1 verificada. Vas en dire»",
+      "con puntos suspensivos: p.status-line__text «Sin señal en la fuente 3. Proban»"
+    ]
+  },
+  {
+    "view": "sistema",
+    "size": "430x932",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "sistema/sistema-430x932-oscuro.png",
+    "avisos": [
+      "con puntos suspensivos: p.status-line__text «Sin señal en la fuente 3. Proban»"
+    ]
+  },
+  {
+    "view": "sistema",
+    "size": "768x1024",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "sistema/sistema-768x1024-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "sistema",
+    "size": "800x360",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "sistema/sistema-800x360-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "sistema",
+    "size": "844x390",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "sistema/sistema-844x390-oscuro.png",
+    "avisos": []
+  },
+  {
+    "view": "sistema",
+    "size": "932x430",
+    "tema": "oscuro",
+    "extra": "",
+    "problems": [],
+    "file": "sistema/sistema-932x430-oscuro.png",
+    "avisos": []
+  }
+]

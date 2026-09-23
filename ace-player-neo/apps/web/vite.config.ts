@@ -17,7 +17,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv } from 'vite';
-import { aceRoutes, fontPreload, gzipAssets } from './build/plugins.ts';
+import { aceRoutes, fontPreload, gzipAssets, viewPreload } from './build/plugins.ts';
 
 const WEB_DIR = path.dirname(fileURLToPath(import.meta.url));
 const SHARED_DIR = path.resolve(WEB_DIR, '../../packages/shared');
@@ -28,9 +28,15 @@ const env = loadEnv(
   '',
 );
 const BACKEND = env.VITE_BACKEND || 'http://[::1]:3000';
+/* En producción nginx manda /ace/ y /content/ directos al motor (deploy/umbrel/
+   nginx.conf). Con VITE_ENGINE (p. ej. http://127.0.0.9:6878, el motor falso)
+   el proxy hace lo mismo; sin él, todo va al backend como antes. */
+const ENGINE = env.VITE_ENGINE || BACKEND;
+const ENGINE_PREFIXES = new Set(['/ace', '/content']);
 
 /** Todo lo que el backend (o nginx en producción) sirve y Vite no debe tocar. */
 const PROXIED = ['/api', '/ace', '/content', '/remux', '/native'];
+const targetFor = (prefix: string): string => (ENGINE_PREFIXES.has(prefix) ? ENGINE : BACKEND);
 
 /* Módulos de @ace/shared: esquemas y funciones puras sin efectos al cargarse.
    Declararlo deja al empaquetador quitar lo que la web no usa (por ejemplo,
@@ -40,7 +46,13 @@ const SHARED_SRC = '/packages/shared/src/';
 export default defineConfig({
   root: WEB_DIR,
   base: '/',
-  plugins: [react(), aceRoutes({ sharedDir: SHARED_DIR }), fontPreload(), gzipAssets()],
+  plugins: [
+    react(),
+    aceRoutes({ sharedDir: SHARED_DIR }),
+    fontPreload(),
+    viewPreload(),
+    gzipAssets(),
+  ],
   resolve: {
     alias: {
       // Ejemplos de cada respuesta de la API: los usa el modo demo y los tests.
@@ -54,7 +66,7 @@ export default defineConfig({
       PROXIED.map((prefix) => [
         prefix,
         {
-          target: BACKEND,
+          target: targetFor(prefix),
           changeOrigin: false,
           // El vídeo y el SSE son flujos largos: sin límite de tiempo en el proxy.
           timeout: 0,
@@ -71,7 +83,7 @@ export default defineConfig({
   preview: {
     port: 4173,
     proxy: Object.fromEntries(
-      PROXIED.map((prefix) => [prefix, { target: BACKEND, changeOrigin: false }]),
+      PROXIED.map((prefix) => [prefix, { target: targetFor(prefix), changeOrigin: false }]),
     ),
   },
   build: {
@@ -112,16 +124,110 @@ export default defineConfig({
             // entra: solo lo usan las vistas con listas largas (diferidas).
             {
               name: 'vendor',
+              priority: 30,
               test: /[\\/]node_modules[\\/](?:\.pnpm[\\/][^\\/]+[\\/]node_modules[\\/])?(?:react|react-dom|scheduler|@tanstack[\\/]query-core|@tanstack[\\/]react-query)[\\/]/,
+            },
+            // La base de la web en UN trozo: armazón (src/app, sin la página de
+            // sistema), componentes (src/ui), utilidades (src/lib), avisos
+            // (src/notices) y el cliente de la API (src/api, sin la demo). Sin
+            // este grupo rolldown los partía en ~25 trozos de 0,1-2 KB y cada
+            // vista pedía 15-30 ficheros; por HTTP/1.1 (el Umbrel sirve la web
+            // sin TLS: sin HTTP/2) son 6 conexiones y cada ronda cuesta un RTT
+            // (150 ms en el 4G de Lighthouse). El JS inicial crece unos KB y
+            // cada vista baja muchos menos ficheros (revisión de rendimiento de
+            // la Fase 2, docs/rendimiento.md). @ace/shared NO entra: algunos de
+            // sus módulos arrastran zod.
+            {
+              name: 'base',
+              priority: 20,
+              test: /[\\/]apps[\\/]web[\\/]src[\\/](?:ui|lib|notices|app(?![\\/]sistema[\\/])|api(?![\\/]demo[\\/]))[\\/]/,
+            },
+            // Las vistas, por familias (las que se importan entre sí), en vez de
+            // un trozo de 0,3-2 KB por componente compartido:
+            // - agenda: la agenda, su columna y las preferencias;
+            // - canales: biblioteca, búsqueda y pegar hash;
+            // - fuentes: las fuentes y el centro de partido (usan la biblioteca,
+            //   pero la biblioteca y la búsqueda no las necesitan: ~18 KB gzip
+            //   menos al abrirlas);
+            // - ajustes: ajustes, dispositivos y salud (la ayuda «?» no: se abre
+            //   desde cualquier vista y bajaría la familia entera).
+            // El reproductor (src/player) va aparte: solo al reproducir.
+            //
+            // Lo que comparten dos familias va en su propio trozo, para que una
+            // vista no baje la familia entera de la otra (revisión de
+            // rendimiento de la Fase 2: la biblioteca y la búsqueda bajaban la
+            // agenda entera por score-reveal y domain, y Ajustes bajaba canales
+            // y agenda por las listas y VirtualList: ~70 KB gzip de más antes
+            // del LCP en el 4G de Lighthouse):
+            // - comun: lo de @ace/shared que no está ya en la base (si no, se lo
+            //   quedaba el primer grupo que lo importara y las demás familias
+            //   bajaban ese grupo entero);
+            // - mando: la API del reproductor (estado, modo de reproducción,
+            //   copiar hash, datos técnicos) que usan canales y Ajustes sin
+            //   necesitar el reproductor;
+            // - virtual: @tanstack/react-virtual y la lista virtual (agenda,
+            //   biblioteca, búsqueda y el registro de Salud);
+            // - partidos: el dominio de la agenda que usan canales y fuentes (y
+            //   el registro de su demo, que importan la biblioteca y el partido);
+            // - listas: las listas M3U (Ajustes y la biblioteca) y el «pulsa otra
+            //   vez para confirmar» que usan las dos.
+            {
+              name: 'comun',
+              priority: 16,
+              test: /[\\/]packages[\\/]shared[\\/]src[\\/]/,
+            },
+            {
+              name: 'mando',
+              priority: 15,
+              test: /[\\/]apps[\\/]web[\\/]src[\\/]player[\\/](?:api|clipboard|NerdPanel)\.tsx?$/,
+            },
+            {
+              name: 'virtual',
+              priority: 15,
+              test: /(?:[\\/]apps[\\/]web[\\/]src[\\/]features[\\/]library[\\/]VirtualList\.tsx$)|(?:[\\/]node_modules[\\/](?:\.pnpm[\\/][^\\/]+[\\/]node_modules[\\/])?@tanstack[\\/](?:react-virtual|virtual-core)[\\/])/,
+            },
+            {
+              name: 'partidos',
+              priority: 14,
+              test: /[\\/]apps[\\/]web[\\/]src[\\/]features[\\/]agenda[\\/](?:domain|data|score-reveal|state|MatchRow|demo)\.tsx?$/,
+            },
+            {
+              name: 'listas',
+              priority: 14,
+              test: /[\\/]apps[\\/]web[\\/]src[\\/]features[\\/](?:directories[\\/]|settings[\\/]second-tap\.ts$)/,
+            },
+            {
+              name: 'agenda',
+              priority: 12,
+              // Sin demo-data.ts: son los datos de la demo, que demo.ts pide con import().
+              test: /[\\/]apps[\\/]web[\\/]src[\\/]features[\\/](?:agenda[\\/](?!demo-data\.ts$)|preferences[\\/])/,
+            },
+            {
+              name: 'fuentes',
+              // Después de canales: si fuera antes, se quedaría con lo de la biblioteca que usa.
+              priority: 10,
+              test: /[\\/]apps[\\/]web[\\/]src[\\/]features[\\/](?:sources|match-center|partido)[\\/]/,
+            },
+            {
+              name: 'canales',
+              priority: 11,
+              test: /[\\/]apps[\\/]web[\\/]src[\\/]features[\\/](?:library|biblioteca|search|buscar|paste-hash)[\\/]/,
+            },
+            {
+              name: 'ajustes',
+              priority: 10,
+              test: /[\\/]apps[\\/]web[\\/]src[\\/]features[\\/](?:settings|ajustes|devices|health)[\\/]/,
             },
             // Los motores de vídeo, cada uno en su trozo: solo los pide el
             // reproductor con import() al abrirse (arquitectura §9).
             {
               name: 'hls',
+              priority: 30,
               test: /[\\/]node_modules[\\/](?:\.pnpm[\\/][^\\/]+[\\/]node_modules[\\/])?hls\.js[\\/]/,
             },
             {
               name: 'mpegts',
+              priority: 30,
               test: /[\\/]node_modules[\\/](?:\.pnpm[\\/][^\\/]+[\\/]node_modules[\\/])?mpegts\.js[\\/]/,
             },
           ],

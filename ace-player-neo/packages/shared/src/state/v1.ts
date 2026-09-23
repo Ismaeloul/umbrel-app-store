@@ -12,46 +12,35 @@
 import { z } from 'zod';
 import { HashSchema, IsoDateTimeSchema } from '../primitives.js';
 
-// --- Topes (server.js:30-38 y 3833) ---
+// --- Topes (server.js:30-38 y 3833): en ./limits.ts, sin zod ---
 
-/** Favoritos y recientes (MAX_HISTORY). */
-export const MAX_HISTORY = 60;
-/** Canales por directorio, y también renombres y ocultos por directorio. */
-export const MAX_WEB_STREAMS = 500;
-/** Directorios guardados. */
-export const MAX_WEB_SOURCES = 8;
-export const MAX_FOOTBALL_LEAGUES = 12;
-export const MAX_FOOTBALL_TEAMS = 24;
-export const MAX_FOOTBALL_NATIONALITIES = 24;
-export const MAX_CHANNEL_BINDINGS = 120;
-export const MAX_SOURCE_REPORTS = 300;
-export const MAX_CHANNEL_FEEDBACK = 300;
-/** Claves por grupo de `sourceStats` (hashes y proveedores): se quedan las más recientes. */
-export const STATS_MAX_KEYS = 600;
+import {
+  MAX_HISTORY,
+  MAX_WEB_STREAMS,
+  MAX_WEB_SOURCES,
+  MAX_FOOTBALL_LEAGUES,
+  MAX_FOOTBALL_TEAMS,
+  MAX_FOOTBALL_NATIONALITIES,
+  MAX_CHANNEL_BINDINGS,
+  MAX_SOURCE_REPORTS,
+  MAX_CHANNEL_FEEDBACK,
+  TEXT_LIMITS,
+} from './limits.js';
 
-/** Longitudes de texto que aplican los normalizadores. */
-export const TEXT_LIMITS = {
-  itemTitle: 120,
-  itemAlias: 120,
-  itemCategory: 48,
-  webSourceId: 48,
-  webSourceName: 60,
-  webSourceLastError: 40,
-  preferenceCountry: 40,
-  preferenceLeague: 60,
-  preferenceTeam: 80,
-  preferenceNationality: 60,
-  reportId: 40,
-  reportSource: 30,
-  reportMatchId: 100,
-  reportCheckReason: 40,
-  nowPlayingDev: 40,
-  nowPlayingToken: 64,
-  statKey: 120,
-} as const;
-
-/** Id del directorio que se crea si no hay ninguno (server.js:54). */
-export const DEFAULT_WEB_SOURCE_ID = 'principal';
+export {
+  MAX_HISTORY,
+  MAX_WEB_STREAMS,
+  MAX_WEB_SOURCES,
+  MAX_FOOTBALL_LEAGUES,
+  MAX_FOOTBALL_TEAMS,
+  MAX_FOOTBALL_NATIONALITIES,
+  MAX_CHANNEL_BINDINGS,
+  MAX_SOURCE_REPORTS,
+  MAX_CHANNEL_FEEDBACK,
+  STATS_MAX_KEYS,
+  TEXT_LIMITS,
+  DEFAULT_WEB_SOURCE_ID,
+} from './limits.js';
 
 // --- Subesquemas ---
 

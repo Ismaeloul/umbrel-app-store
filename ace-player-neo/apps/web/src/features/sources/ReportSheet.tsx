@@ -49,7 +49,8 @@ export function ReportSheet() {
           ¿Qué ocurre con esta señal?
           {entry ? (
             <span className="src-report__which">
-              Fuente {index + 1} · {entry.title} · <code className="mono">{entry.id.slice(0, 12)}</code>
+              Fuente {index + 1} · {entry.title} ·{' '}
+              <code className="mono">{entry.id.slice(0, 12)}</code>
             </span>
           ) : null}
         </p>

@@ -31,12 +31,12 @@ describe('dispositivos', () => {
     expect(lastSeenText(device({ lastSeenAt: new Date(NOW - 60_000).toISOString() }), NOW)).toBe(
       'Conectado ahora mismo',
     );
-    expect(lastSeenText(device({ lastSeenAt: new Date(NOW - 12 * 60_000).toISOString() }), NOW)).toBe(
-      'Visto hace 12 min',
-    );
-    expect(lastSeenText(device({ lastSeenAt: new Date(NOW - 5 * 86400_000).toISOString() }), NOW)).toMatch(
-      /^Visto el \d+ \w+, a las \d\d:\d\d$/,
-    );
+    expect(
+      lastSeenText(device({ lastSeenAt: new Date(NOW - 12 * 60_000).toISOString() }), NOW),
+    ).toBe('Visto hace 12 min');
+    expect(
+      lastSeenText(device({ lastSeenAt: new Date(NOW - 5 * 86400_000).toISOString() }), NOW),
+    ).toMatch(/^Visto el \d+ \w+, a las \d\d:\d\d$/);
     expect(pairedText(device({}))).toMatch(/^Emparejado el 1 sept 2026$/);
   });
 
@@ -74,7 +74,9 @@ describe('dispositivos', () => {
   });
 
   it('el QR se pinta como imagen (data:), nunca como HTML', () => {
-    const src = qrImageSrc('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
+    const src = qrImageSrc(
+      '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
+    );
     expect(src.startsWith('data:image/svg+xml;charset=utf-8,')).toBe(true);
     expect(src).not.toContain('<');
   });

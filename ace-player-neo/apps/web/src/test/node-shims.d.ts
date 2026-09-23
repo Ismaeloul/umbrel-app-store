@@ -6,6 +6,10 @@
 declare module 'node:fs' {
   export function readFileSync(path: string, encoding: 'utf8'): string;
   export function readdirSync(path: string, options: { recursive: true }): string[];
+  export function readdirSync(
+    path: string,
+    options: { withFileTypes: true },
+  ): { name: string; isDirectory(): boolean }[];
 }
 
 declare module 'node:path' {
@@ -13,6 +17,7 @@ declare module 'node:path' {
     dirname(path: string): string;
     join(...parts: string[]): string;
     resolve(...parts: string[]): string;
+    relative(from: string, to: string): string;
   };
   export default path;
 }

@@ -61,7 +61,11 @@ function candidate(n: number, extra: Partial<ResolutionCandidate> = {}): Resolut
   };
 }
 
-function probe(n: number, state: ScanCandidate['state'], extra: Partial<ScanCandidate> = {}): ScanCandidate {
+function probe(
+  n: number,
+  state: ScanCandidate['state'],
+  extra: Partial<ScanCandidate> = {},
+): ScanCandidate {
   return {
     id: hash(n),
     state,
@@ -115,7 +119,9 @@ describe('presentación de la fuente', () => {
     });
     const plain = entryFromCandidate(candidate(2, { title: 'DAZN 1' }));
     expect(presentationOf(plain, lists)).toMatchObject({ short: 'Elcano', label: 'M3U · Elcano' });
-    const bare = entryFromCandidate(candidate(3, { title: 'DAZN 1', listaId: null, source: 'saved' }));
+    const bare = entryFromCandidate(
+      candidate(3, { title: 'DAZN 1', listaId: null, source: 'saved' }),
+    );
     expect(presentationOf(bare, lists).short).toBe('Guardada');
     expect(presentationOf(manualEntry(hash(9), 'Stream', '')).short).toBe('Externa');
   });
@@ -129,14 +135,33 @@ describe('presentación de la fuente', () => {
 
   it('title y aria con todos los datos (§7.1)', () => {
     const [entry] = applyScan(startScan([entryFromCandidate(candidate(1))], 3), {
-      candidates: [probe(1, 'working', { peers: 48, intakeKbps: 6200, streamKbps: 4800, reason: 'playable_media' })],
+      candidates: [
+        probe(1, 'working', {
+          peers: 48,
+          intakeKbps: 6200,
+          streamKbps: 4800,
+          reason: 'playable_media',
+        }),
+      ],
     });
-    const text = describeSource(entry!, 1, effectiveOf(entry!, NOTHING_ON_SCREEN, NOW), presentationOf(entry!), true);
+    const text = describeSource(
+      entry!,
+      1,
+      effectiveOf(entry!, NOTHING_ON_SCREEN, NOW),
+      presentationOf(entry!),
+      true,
+    );
     expect(text).toContain('Fuente 1:');
     expect(text).toContain(`Hash ${hash(1)}`);
     expect(text).toContain('48 pares en la prueba');
     expect(text).toContain('6,2 Mbit/s del enjambre para un canal de 4,8');
-    const loose = describeSource(entry!, 1, effectiveOf(entry!, NOTHING_ON_SCREEN, NOW), presentationOf(entry!), false);
+    const loose = describeSource(
+      entry!,
+      1,
+      effectiveOf(entry!, NOTHING_ON_SCREEN, NOW),
+      presentationOf(entry!),
+      false,
+    );
     expect(loose).toContain('Disponibilidad sin medir');
   });
 
@@ -165,7 +190,10 @@ describe('estado efectivo (regla 20 y 3 min del reproductor)', () => {
 
   it('lo que vio el reproductor manda 3 minutos; luego vuelve el comprobador', () => {
     const [base] = scanned(['working']);
-    const entry = { ...base!, playerVerdict: { state: 'failed' as const, reason: 'player_failed', at: NOW } };
+    const entry = {
+      ...base!,
+      playerVerdict: { state: 'failed' as const, reason: 'player_failed', at: NOW },
+    };
     expect(effectiveOf(entry, NOTHING_ON_SCREEN, NOW + PLAYER_VERDICT_MS - 1).state).toBe('failed');
     expect(effectiveOf(entry, NOTHING_ON_SCREEN, NOW + PLAYER_VERDICT_MS).state).toBe('working');
   });
@@ -179,6 +207,38 @@ describe('estado efectivo (regla 20 y 3 min del reproductor)', () => {
     expect(detailOf(eff, entry)).toBe('apartada por tu reporte (canal incorrecto)');
     // Pasada la cuarentena ya no cuenta.
     expect(effectiveOf(entry, NOTHING_ON_SCREEN, NOW + 2000).reported).toBe(false);
+  });
+
+  it('B-066: la que ya venía reportada del servidor sale marcada al montar la lista', () => {
+    // El servidor decide para qué canal cuenta (un «canal incorrecto» solo en el suyo) y la manda así.
+    const reportada = entryFromCandidate(
+      candidate(1, {
+        reported: {
+          reason: 'wrong_channel',
+          state: 'failed',
+          quarantineUntil: new Date(NOW + 60_000).toISOString(),
+        },
+      }),
+      NOW,
+    );
+    expect(reportada.reported).toEqual({ reason: 'wrong_channel', until: NOW + 60_000 });
+    expect(signalOf(effectiveOf(reportada, NOTHING_ON_SCREEN, NOW), reportada).word).toBe(
+      'Reportada',
+    );
+    // En cuarentena sin fecha: la local de 30 min (index.html:4035).
+    expect(entryFromCandidate(candidate(2, { quarantined: true }), NOW).reported).toEqual({
+      reason: 'not_starting',
+      until: NOW + 30 * 60_000,
+    });
+    // Con la cuarentena ya vencida, no.
+    const vencida = candidate(3, {
+      reported: {
+        reason: 'audio',
+        state: 'working',
+        quarantineUntil: new Date(NOW - 1).toISOString(),
+      },
+    });
+    expect(entryFromCandidate(vencida, NOW).reported).toBeNull();
   });
 
   it('las frases de la prueba (§7.2) y el reintento con su hora (B7)', () => {
@@ -228,7 +288,9 @@ describe('qué se ve y qué arranca solo', () => {
   it('con comprobador: la activa, las vivas y las iniciales sin probar; las caídas no ocupan sitio (regla 22)', () => {
     const entries = scanned(['failed', 'queued', 'working', 'queued', 'weak', 'failed']);
     const eff = effects(entries);
-    const shown = entries.filter((e) => isShownWhileScanning(e, eff.get(e.id)!, null)).map((e) => e.id);
+    const shown = entries
+      .filter((e) => isShownWhileScanning(e, eff.get(e.id)!, null))
+      .map((e) => e.id);
     expect(shown).toEqual([hash(2), hash(3), hash(5)]);
     // La activa se ve aunque haya caído.
     expect(isShownWhileScanning(entries[0]!, eff.get(hash(1))!, hash(1))).toBe(true);
@@ -250,7 +312,11 @@ describe('qué se ve y qué arranca solo', () => {
 
   it('nunca repite una probada ni una reportada', () => {
     const entries = scanned(['working', 'working', 'working']).map((entry, i) =>
-      i === 0 ? { ...entry, autoTried: true } : i === 1 ? { ...entry, reported: { reason: 'audio' as const, until: NOW + 1e6 } } : entry,
+      i === 0
+        ? { ...entry, autoTried: true }
+        : i === 1
+          ? { ...entry, reported: { reason: 'audio' as const, until: NOW + 1e6 } }
+          : entry,
     );
     expect(pickAutoSource(entries, effects(entries), true)?.id).toBe(hash(3));
   });
@@ -258,12 +324,19 @@ describe('qué se ve y qué arranca solo', () => {
   it('salto de entrada: si la elegida sale fallida y no se ve, la primera otra viva', () => {
     const entries = scanned(['failed', 'queued', 'weak']);
     expect(pickInitialSwitch(entries, hash(1), NOTHING_ON_SCREEN, NOW)?.id).toBe(hash(3));
-    expect(pickInitialSwitch(entries, hash(1), { hash: hash(1), playing: true, connecting: false }, NOW)).toBeNull();
-    expect(pickInitialSwitch(scanned(['working', 'weak']), hash(1), NOTHING_ON_SCREEN, NOW)).toBeNull();
+    expect(
+      pickInitialSwitch(entries, hash(1), { hash: hash(1), playing: true, connecting: false }, NOW),
+    ).toBeNull();
+    expect(
+      pickInitialSwitch(scanned(['working', 'weak']), hash(1), NOTHING_ON_SCREEN, NOW),
+    ).toBeNull();
   });
 
   it('startScan marca en cola y las iniciales; clearScan lo olvida', () => {
-    const entries = startScan([1, 2, 3, 4].map((n) => entryFromCandidate(candidate(n))), 2);
+    const entries = startScan(
+      [1, 2, 3, 4].map((n) => entryFromCandidate(candidate(n))),
+      2,
+    );
     expect(entries.map((e) => e.initial)).toEqual([true, true, false, false]);
     expect(entries.every((e) => e.probe?.state === 'queued')).toBe(true);
     expect(clearScan(entries).every((e) => e.probe === null && !e.initial)).toBe(true);
@@ -271,7 +344,11 @@ describe('qué se ve y qué arranca solo', () => {
 
   it('un veredicto por SSE cambia la fuente al momento; lo que no cambia no crea objetos nuevos', () => {
     const entries = scanned(['checking', 'queued']);
-    const next = applyVerdict(entries, { hash: hash(2), state: 'working', reason: 'playable_media' });
+    const next = applyVerdict(entries, {
+      hash: hash(2),
+      state: 'working',
+      reason: 'playable_media',
+    });
     expect(next[1]?.probe?.state).toBe('working');
     expect(next[0]).toBe(entries[0]);
     expect(applyScan(entries, { candidates: [probe(1, 'checking')] })).toBe(entries);
@@ -291,9 +368,20 @@ describe('progreso del comprobador (§6)', () => {
 
   it('textos según el estado', () => {
     expect(scanProgressText(null, [], eff, null)).toBe('Preparando fuentes');
-    expect(scanProgressText(view('complete'), entries, eff, null)).toBe('2 verificadas · 4 comprobadas');
-    expect(scanProgressText(view('waiting'), entries, eff, null)).toBe('2 verificadas · fallidas en reposo');
-    expect(scanProgressText(view('running'), entries, eff, null)).toBe('3/4 · buscando señales vivas');
+    expect(scanProgressText(view('complete'), entries, eff, null)).toBe(
+      '2 verificadas · 4 comprobadas',
+    );
+    expect(scanProgressText(view('waiting'), entries, eff, null)).toBe(
+      '2 verificadas · fallidas en reposo',
+    );
+    expect(scanProgressText(view('running'), entries, eff, null)).toBe(
+      '3/4 · buscando señales vivas',
+    );
+    // Singular con una sola.
+    const one = scanned(['working']);
+    expect(scanProgressText({ ...view('complete'), total: 1 }, one, effects(one), null)).toBe(
+      '1 verificada · 1 comprobada',
+    );
     expect(scanProgressText(null, entries, eff, null)).toBe('4 fuentes disponibles');
     expect(
       scanProgressText(null, entries, eff, {
@@ -359,7 +447,13 @@ describe('hermanas de la biblioteca (regla 23)', () => {
   });
 
   it('del directorio se lee como M3U de la lista activa', () => {
-    expect(entryFromItem(item(1, 'DAZN 1'), 'principal')).toMatchObject({ origin: 'm3u', listaId: 'principal' });
-    expect(entryFromItem(item(1, 'DAZN 1', 'fav'), 'principal')).toMatchObject({ origin: 'favorites', listaId: null });
+    expect(entryFromItem(item(1, 'DAZN 1'), 'principal')).toMatchObject({
+      origin: 'm3u',
+      listaId: 'principal',
+    });
+    expect(entryFromItem(item(1, 'DAZN 1', 'fav'), 'principal')).toMatchObject({
+      origin: 'favorites',
+      listaId: null,
+    });
   });
 });

@@ -29,7 +29,11 @@ function KeyboardGroups({ groups }: { groups: ShortcutGroup[] }) {
       </h3>
       {groups.length === 0 ? <p className="texto-2">Aquí no hay atajos.</p> : null}
       {groups.map((group) => (
-        <section key={group.group} className="help__group" aria-labelledby={`atajos-${group.group}`}>
+        <section
+          key={group.group}
+          className="help__group"
+          aria-labelledby={`atajos-${group.group}`}
+        >
           <h4 id={`atajos-${group.group}`} className="help__title">
             {group.group}
           </h4>
@@ -50,7 +54,9 @@ function KeyboardGroups({ groups }: { groups: ShortcutGroup[] }) {
           </dl>
         </section>
       ))}
-      <p className="help__note">Los atajos no funcionan mientras escribes en un campo (salvo Esc).</p>
+      <p className="help__note">
+        Los atajos no funcionan mientras escribes en un campo (salvo Esc).
+      </p>
     </section>
   );
 }
@@ -94,5 +100,7 @@ export default function HelpPanel() {
   const mouse = (
     <Gestures key="raton" id="ayuda-raton" title="Ratón" icon="pantalla" items={MOUSE_GESTURES} />
   );
-  return <div className="help ayuda">{fine ? [keyboard, mouse, touch] : [touch, keyboard, mouse]}</div>;
+  return (
+    <div className="help ayuda">{fine ? [keyboard, mouse, touch] : [touch, keyboard, mouse]}</div>
+  );
 }

@@ -61,11 +61,26 @@ export function clock(date: Date): string {
   return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic'];
+const MONTHS = [
+  'ene',
+  'feb',
+  'mar',
+  'abr',
+  'may',
+  'jun',
+  'jul',
+  'ago',
+  'sept',
+  'oct',
+  'nov',
+  'dic',
+];
 
 function sameDay(a: Date, b: Date): boolean {
   return (
-    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
   );
 }
 
@@ -164,14 +179,7 @@ export function statusSignal(status: string): SignalState {
 }
 
 export type ServiceId =
-  | 'backend'
-  | 'engine'
-  | 'scanner'
-  | 'ai'
-  | 'agenda'
-  | 'directories'
-  | 'state'
-  | 'playback';
+  'backend' | 'engine' | 'scanner' | 'ai' | 'agenda' | 'directories' | 'state' | 'playback';
 
 export interface ServiceRow {
   id: ServiceId;
@@ -226,7 +234,10 @@ export function engineDetail(engine: Pick<EngineStatus, 'status' | 'engineVersio
 }
 
 /** Aviso del cupo de reinicios automáticos (como mucho 3 por hora, arquitectura §5.5). */
-export function engineNote(engine: Pick<EngineStatus, 'autoRestarts'>, now: number = Date.now()): string | null {
+export function engineNote(
+  engine: Pick<EngineStatus, 'autoRestarts'>,
+  now: number = Date.now(),
+): string | null {
   const auto = engine.autoRestarts;
   if (auto.exhausted) {
     const next = auto.nextAllowedAt ? Date.parse(auto.nextAllowedAt) : Number.NaN;
@@ -270,16 +281,21 @@ export function serviceRows(
       c.backend.status,
       `v${health.version} · ${formatUptime(health.uptimeSeconds)} activo`,
     ),
-    row('engine', 'Motor principal', 'motor', engine.status, engineDetail(engine), engineNote(engine, now)),
+    row(
+      'engine',
+      'Motor principal',
+      'motor',
+      engine.status,
+      engineDetail(engine),
+      engineNote(engine, now),
+    ),
     row(
       'scanner',
       'Segundo motor',
       'senal',
       scanner.status,
       `${plural(scanner.activeJobs, 'trabajo', 'trabajos')} · ${scanner.queue} en cola`,
-      leaked > 0
-        ? `${plural(leaked, 'sesión', 'sesiones')} sin cerrar en la última hora.`
-        : null,
+      leaked > 0 ? `${plural(leaked, 'sesión', 'sesiones')} sin cerrar en la última hora.` : null,
     ),
     row(
       'ai',
@@ -352,7 +368,9 @@ export function healthSummary(health: HealthResponse, rows: readonly ServiceRow[
     tone = 'fail';
     const only = failing[0] as ServiceRow;
     headline =
-      only.status === 'empty' ? `${only.name}: no hay nada guardado.` : `${only.name}: sin conexión.`;
+      only.status === 'empty'
+        ? `${only.name}: no hay nada guardado.`
+        : `${only.name}: sin conexión.`;
   } else if (failing.length > 1) {
     tone = 'fail';
     headline = `Hay ${failing.length} servicios con problemas.`;
@@ -430,7 +448,8 @@ export const CAUSE_INFO: Record<DiagnosticCause, CauseInfo> = {
  * se dice que es el resumen de una reproducción y las cifras van debajo.
  */
 export function describeEntry(
-  entry: Pick<DiagnosticEntry, 'message' | 'code' | 'cause'> & Partial<Pick<DiagnosticEntry, 'metrics'>>,
+  entry: Pick<DiagnosticEntry, 'message' | 'code' | 'cause'> &
+    Partial<Pick<DiagnosticEntry, 'metrics'>>,
 ): string {
   const message = sentence(entry.message);
   if (message) return message;
@@ -444,13 +463,16 @@ export function describeEntry(
 export function metricsSentence(metrics: PlayerMetrics | undefined): string | null {
   if (!metrics) return null;
   const parts: string[] = [];
-  if (metrics.timeToFirstFrameMs !== undefined) parts.push(`imagen en ${seconds(metrics.timeToFirstFrameMs)}`);
-  if (metrics.remuxStartMs !== undefined) parts.push(`remux listo en ${seconds(metrics.remuxStartMs)}`);
+  if (metrics.timeToFirstFrameMs !== undefined)
+    parts.push(`imagen en ${seconds(metrics.timeToFirstFrameMs)}`);
+  if (metrics.remuxStartMs !== undefined)
+    parts.push(`remux listo en ${seconds(metrics.remuxStartMs)}`);
   if (metrics.rebuffers !== undefined) {
     const total = metrics.rebufferMs ? ` (${seconds(metrics.rebufferMs)} en total)` : '';
     parts.push(`${plural(metrics.rebuffers, 'corte', 'cortes')}${total}`);
   }
-  if (metrics.reconnects !== undefined) parts.push(plural(metrics.reconnects, 'reconexión', 'reconexiones'));
+  if (metrics.reconnects !== undefined)
+    parts.push(plural(metrics.reconnects, 'reconexión', 'reconexiones'));
   if (metrics.liveLatencyS !== undefined) {
     parts.push(`${Math.round(metrics.liveLatencyS)} s por detrás del directo`);
   }

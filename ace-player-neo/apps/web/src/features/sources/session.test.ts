@@ -8,7 +8,13 @@ import { resetMode, setMode } from '../../api/mode.ts';
 import { realtimeStore } from '../../api/realtime-store.ts';
 import { dispatchSse } from '../../api/sse.ts';
 import { resetToasts, toastStore } from '../../notices/toasts.ts';
-import { getPlayer, notifySourceFailed, resetPlayerApi, stop } from '../../player/api.ts';
+import {
+  getPlayer,
+  notifySourceFailed,
+  playerStore,
+  resetPlayerApi,
+  stop,
+} from '../../player/api.ts';
 import { json, mockFetch, type MockCall } from '../../test/fetch.ts';
 import {
   addManualSource,
@@ -99,7 +105,9 @@ describe('entrar al partido', () => {
     scan = scanJob(['failed', 'weak', 'failed']);
     await vi.advanceTimersByTimeAsync(1500);
     expect(getPlayer().channel?.hash).toBe(hash(2));
-    expect(toasts()).toContain('Ninguna verificada del todo; probamos la fuente 2, que da señal floja');
+    expect(toasts()).toContain(
+      'Ninguna verificada del todo; probamos la fuente 2, que da señal floja',
+    );
   });
 
   it('en reposo sin ninguna viva dice a qué hora reintenta; terminado sin ninguna, lo dice', async () => {
@@ -139,7 +147,10 @@ describe('entrar al partido', () => {
   });
 
   it('varias coincidencias o ninguna: «Encontrar canal»; sin red, como no encontrado y sin buscador', async () => {
-    install({ 'GET /api/v1/football/resolve': () => json(resolution(2, { status: 'choices', candidate: null, scan: null })) });
+    install({
+      'GET /api/v1/football/resolve': () =>
+        json(resolution(2, { status: 'choices', candidate: null, scan: null })),
+    });
     enterMatch(testMatch());
     await flush();
     expect(getSession()).toMatchObject({ phase: 'choices', resolverOpen: true });
@@ -186,7 +197,18 @@ describe('comprobador: SSE y respaldo de sondeo', () => {
     scan = scanJob(['working', 'checking', 'queued']);
     dispatchSse(
       'scan.progress',
-      { jobId: JOB, kind: 'interactive', status: 'running', total: 3, checked: 1, playable: 1, failed: 0, waiting: 0, retryAt: null, matchId: 'm1' },
+      {
+        jobId: JOB,
+        kind: 'interactive',
+        status: 'running',
+        total: 3,
+        checked: 1,
+        playable: 1,
+        failed: 0,
+        waiting: 0,
+        retryAt: null,
+        matchId: 'm1',
+      },
       { id: '1', synthetic: false },
     );
     await flush();
@@ -200,14 +222,24 @@ describe('comprobador: SSE y respaldo de sondeo', () => {
     await flush();
     dispatchSse(
       'scan.verdict',
-      { jobId: JOB, hash: hash(3), state: 'weak', reason: 'starved', by: 'scanner', checkedAt: '2026-09-23T18:30:00.000Z' },
+      {
+        jobId: JOB,
+        hash: hash(3),
+        state: 'weak',
+        reason: 'starved',
+        by: 'scanner',
+        checkedAt: '2026-09-23T18:30:00.000Z',
+      },
       { id: '2', synthetic: false },
     );
     expect(getSession().entries[2]?.probe).toMatchObject({ state: 'weak', reason: 'starved' });
   });
 
   it('tres fallos seguidos: «El comprobador no responde» y se enseñan todas', async () => {
-    install({ [`GET /api/v1/football/scans/${JOB}`]: () => json({ error: { code: 'scan_not_found', message: 'No', requestId: 'r' } }, 404) });
+    install({
+      [`GET /api/v1/football/scans/${JOB}`]: () =>
+        json({ error: { code: 'scan_not_found', message: 'No', requestId: 'r' } }, 404),
+    });
     enterMatch(testMatch());
     await flush();
     await vi.advanceTimersByTimeAsync(3100);
@@ -240,28 +272,56 @@ describe('política única de cambio de fuente (P16)', () => {
     expect(reply.next).toBe(true);
     expect(getPlayer().channel?.hash).toBe(hash(2));
     // Se vio 90 s: queda floja y visible (regla 21).
-    expect(getSession().entries[0]?.playerVerdict).toMatchObject({ state: 'weak', reason: 'player_dropped' });
+    expect(getSession().entries[0]?.playerVerdict).toMatchObject({
+      state: 'weak',
+      reason: 'player_dropped',
+    });
   });
 
   it('agotadas mientras sigue comprobando: espera a la siguiente', async () => {
     await playingAuto();
-    notifySourceFailed({ channel: getPlayer().channel!, origin: 'auto', outcome: 'fallo', seconds: 0, reason: 'x' });
-    const reply = notifySourceFailed({ channel: getPlayer().channel!, origin: 'auto', outcome: 'fallo', seconds: 0, reason: 'x' });
+    notifySourceFailed({
+      channel: getPlayer().channel!,
+      origin: 'auto',
+      outcome: 'fallo',
+      seconds: 0,
+      reason: 'x',
+    });
+    const reply = notifySourceFailed({
+      channel: getPlayer().channel!,
+      origin: 'auto',
+      outcome: 'fallo',
+      seconds: 0,
+      reason: 'x',
+    });
     expect(reply).toEqual({
       next: false,
-      message: 'Esta fuente no responde. Sigo comprobando las demás y arranco la primera que funcione.',
+      message:
+        'Esta fuente no responde. Sigo comprobando las demás y arranco la primera que funcione.',
     });
   });
 
   it('en cuanto eliges una, todo es manual: nunca salta sola', async () => {
     await playingAuto();
     selectSource(hash(2));
-    expect(getSession()).toMatchObject({ autoVerified: false, manualChosen: true, activeHash: hash(2) });
+    expect(getSession()).toMatchObject({
+      autoVerified: false,
+      manualChosen: true,
+      activeHash: hash(2),
+    });
     expect(getPlayer().origin).toBe('user');
-    const reply = notifySourceFailed({ channel: getPlayer().channel!, origin: 'user', outcome: 'fallo', seconds: 0, reason: 'x' });
+    const reply = notifySourceFailed({
+      channel: getPlayer().channel!,
+      origin: 'user',
+      outcome: 'fallo',
+      seconds: 0,
+      reason: 'x',
+    });
     expect(reply.next).toBe(false);
     // Cuentan las que no han fallado (la 1 verificada y la 3, que aún se comprueba).
-    expect(reply.message).toBe('Esta señal no responde. Tienes 2 fuentes más para este partido: prueba otra en el selector.');
+    expect(reply.message).toBe(
+      'Esta señal no responde. Tienes 2 fuentes más para este partido: prueba otra en el selector.',
+    );
     expect(getPlayer().channel?.hash).toBe(hash(2));
   });
 
@@ -301,7 +361,11 @@ describe('acciones', () => {
     expect(addManualSource(`acestream://${hash(42)}`)).toBe(true);
     const entry = getSession().entries.at(-1);
     expect(entry).toMatchObject({ id: hash(42), origin: 'manual', ih: null });
-    expect(getPlayer().channel).toMatchObject({ hash: hash(42), title: 'M+ Liga de Campeones', kind: 'auto' });
+    expect(getPlayer().channel).toMatchObject({
+      hash: hash(42),
+      title: 'M+ Liga de Campeones',
+      kind: 'auto',
+    });
     expect(getSession().autoVerified).toBe(false);
     expect(toasts()).toContain('Hash externo añadido y reproduciendo');
   });
@@ -321,7 +385,9 @@ describe('acciones', () => {
     expect(query.get('research')).toBe('1');
     expect(query.get('current')).toBe(hash(1));
     expect(query.get('currentIh')).toBe('0');
-    expect(toasts()).toContain('Rebúsqueda: 4 señales reunidas, 1 sin probar antes · comprobándolas…');
+    expect(toasts()).toContain(
+      'Rebúsqueda: 4 señales reunidas, 1 sin probar antes · comprobándolas…',
+    );
     scan = scanJob(['working', 'failed', 'failed', 'working']);
     await vi.advanceTimersByTimeAsync(1500);
     expect(toasts()).toContain('Rebúsqueda terminada · 1 fuente nueva que funciona');
@@ -330,7 +396,9 @@ describe('acciones', () => {
   it('rebuscar: sin nada nuevo y con plazo agotado', async () => {
     enterMatch(testMatch());
     await flush();
-    install({ 'GET /api/v1/football/resolve': () => json(resolution(0, { candidate: null, scan: null })) });
+    install({
+      'GET /api/v1/football/resolve': () => json(resolution(0, { candidate: null, scan: null })),
+    });
     await research();
     expect(toasts()).toContain('No han aparecido fuentes nuevas para este partido');
     // Un servidor que no contesta: solo acaba cuando el cliente aborta por plazo.
@@ -364,7 +432,12 @@ describe('acciones', () => {
             lastCheckedAt: null,
             quarantineUntil: '2099-01-01T00:00:00.000Z',
           },
-          scan: { id: REPORT_JOB, statusUrl: `/api/v1/football/scans/${REPORT_JOB}`, total: 1, initialCount: 1 },
+          scan: {
+            id: REPORT_JOB,
+            statusUrl: `/api/v1/football/scans/${REPORT_JOB}`,
+            total: 1,
+            initialCount: 1,
+          },
         }),
       [`GET /api/v1/football/scans/${REPORT_JOB}`]: () => json(report),
     });
@@ -374,7 +447,14 @@ describe('acciones', () => {
     await vi.advanceTimersByTimeAsync(1500);
     expect(await reportSource(hash(1), 'not_starting')).toBe(true);
     const [call] = calls('/api/v1/sources/report');
-    expect(call!.body).toMatchObject({ id: hash(1), reason: 'not_starting', matchId: 'm1', channel: 'M+ Liga de Campeones', source: 'Elcano', ih: false });
+    expect(call!.body).toMatchObject({
+      id: hash(1),
+      reason: 'not_starting',
+      matchId: 'm1',
+      channel: 'M+ Liga de Campeones',
+      source: 'Elcano',
+      ih: false,
+    });
     expect(getSession().entries[0]?.reported?.reason).toBe('not_starting');
     expect(getPlayer().channel?.hash).toBe(hash(1));
     expect(toasts()).toContain('Fuente apartada; el segundo motor ya la está comprobando');
@@ -385,7 +465,10 @@ describe('acciones', () => {
   });
 
   it('si el reporte falla, lo dice', async () => {
-    install({ 'POST /api/v1/sources/report': () => json({ error: { code: 'bad_request', message: 'No', requestId: 'r' } }, 400) });
+    install({
+      'POST /api/v1/sources/report': () =>
+        json({ error: { code: 'bad_request', message: 'No', requestId: 'r' } }, 400),
+    });
     enterMatch(testMatch());
     await flush();
     expect(await reportSource(hash(2), 'audio')).toBe(false);
@@ -393,11 +476,31 @@ describe('acciones', () => {
   });
 
   it('«Es el canal correcto» manda el aprendizaje con el canal del partido', async () => {
-    install({ 'POST /api/v1/sources/feedback': () => json({ feedback: { id: hash(1), title: 'x', channel: 'M+ Liga de Campeones', channelKey: 'liga campeones', verdict: 'correct', reason: 'not_starting', corrections: 1, updatedAt: '2026-09-23T18:30:00.000Z' }, learningCount: 1 }) });
+    install({
+      'POST /api/v1/sources/feedback': () =>
+        json({
+          feedback: {
+            id: hash(1),
+            title: 'x',
+            channel: 'M+ Liga de Campeones',
+            channelKey: 'liga campeones',
+            verdict: 'correct',
+            reason: 'not_starting',
+            corrections: 1,
+            updatedAt: '2026-09-23T18:30:00.000Z',
+          },
+          learningCount: 1,
+        }),
+    });
     enterMatch(testMatch());
     await flush();
     expect(await confirmSource(hash(1))).toBe(true);
-    expect(calls('/api/v1/sources/feedback')[0]?.body).toMatchObject({ id: hash(1), verdict: 'correct', channel: 'M+ Liga de Campeones', reason: 'not_starting' });
+    expect(calls('/api/v1/sources/feedback')[0]?.body).toMatchObject({
+      id: hash(1),
+      verdict: 'correct',
+      channel: 'M+ Liga de Campeones',
+      reason: 'not_starting',
+    });
     expect(getSession().entries[0]?.learned).toBe('correct');
     expect(toasts()).toContain('La asociación queda aprendida en el NAS');
   });
@@ -406,10 +509,15 @@ describe('acciones', () => {
 describe('«Encontrar canal»', () => {
   beforeEach(async () => {
     install({
-      'GET /api/v1/football/resolve': () => json(resolution(2, { status: 'choices', candidate: null, scan: null })),
+      'GET /api/v1/football/resolve': () =>
+        json(resolution(2, { status: 'choices', candidate: null, scan: null })),
       'POST /api/v1/football/bindings': (call: MockCall) => {
         const body = call.body as { channel: string; id: string; title: string; ih: boolean };
-        const binding = { ...body, channelKey: 'liga campeones', updatedAt: '2026-09-23T18:30:00.000Z' };
+        const binding = {
+          ...body,
+          channelKey: 'liga campeones',
+          updatedAt: '2026-09-23T18:30:00.000Z',
+        };
         return json({ binding, channelBindings: [binding] });
       },
     });
@@ -418,8 +526,15 @@ describe('«Encontrar canal»', () => {
   });
 
   it('elegir con «Recordar» vincula y reproduce directamente', async () => {
-    await chooseCandidate({ id: hash(2), title: 'M+ Liga de Campeones --> Faro', ih: false, source: 'm3u' }, true);
-    expect(calls('/api/v1/football/bindings')[0]?.body).toMatchObject({ channel: 'M+ Liga de Campeones', id: hash(2), ih: false });
+    await chooseCandidate(
+      { id: hash(2), title: 'M+ Liga de Campeones --> Faro', ih: false, source: 'm3u' },
+      true,
+    );
+    expect(calls('/api/v1/football/bindings')[0]?.body).toMatchObject({
+      channel: 'M+ Liga de Campeones',
+      id: hash(2),
+      ih: false,
+    });
     expect(getPlayer().channel?.hash).toBe(hash(2));
     expect(getSession()).toMatchObject({ resolverOpen: false, phase: 'ready' });
   });
@@ -452,7 +567,12 @@ describe('canal de la biblioteca', () => {
   });
 
   it('abre sus hermanas y, si nada suena, lo reproduce; tras detener no lo relanza', async () => {
-    enterChannel({ hash: hash(1), title: 'DAZN 1', siblings: [item(1, 'DAZN 1'), item(2, 'DAZN 1 FHD')], activeListId: 'principal' });
+    enterChannel({
+      hash: hash(1),
+      title: 'DAZN 1',
+      siblings: [item(1, 'DAZN 1'), item(2, 'DAZN 1 FHD')],
+      activeListId: 'principal',
+    });
     expect(getSession()).toMatchObject({ kind: 'channel', activeHash: hash(1) });
     expect(getSession().entries).toHaveLength(2);
     expect(getPlayer()).toMatchObject({ origin: 'library' });
@@ -466,9 +586,131 @@ describe('canal de la biblioteca', () => {
   });
 
   it('en un canal nunca se salta de fuente sola', async () => {
-    enterChannel({ hash: hash(1), title: 'DAZN 1', siblings: [item(1, 'DAZN 1'), item(2, 'DAZN 1 FHD')], activeListId: null });
-    const reply = notifySourceFailed({ channel: getPlayer().channel!, origin: 'library', outcome: 'fallo', seconds: 0, reason: 'x' });
+    enterChannel({
+      hash: hash(1),
+      title: 'DAZN 1',
+      siblings: [item(1, 'DAZN 1'), item(2, 'DAZN 1 FHD')],
+      activeListId: null,
+    });
+    const reply = notifySourceFailed({
+      channel: getPlayer().channel!,
+      origin: 'library',
+      outcome: 'fallo',
+      seconds: 0,
+      reason: 'x',
+    });
     expect(reply.next).toBe(false);
     expect(reply.message).toContain('para este canal');
+  });
+});
+
+/* Lo que faltaba por probar del inventario §7.3, §7.6 y §7.8 (verificación
+   del inventario, docs/verificacion-web.md). */
+describe('inventario: salto de entrada, rebúsqueda con IA y fallos de las acciones', () => {
+  it('salto de entrada (B-080): la elegida en «Encontrar canal» sale fallida y no suena → UNA vez a la primera viva', async () => {
+    install({
+      'GET /api/v1/football/resolve': () =>
+        json(resolution(3, { status: 'choices', candidate: null })),
+    });
+    enterMatch(testMatch());
+    await flush();
+    expect(getSession().resolverOpen).toBe(true);
+    await chooseCandidate(
+      { id: hash(1), title: 'M+ Liga de Campeones --> Elcano', ih: false, source: 'm3u' },
+      false,
+    );
+    expect(getPlayer().channel?.hash).toBe(hash(1));
+    // Se reproduce directamente, sin esperar al comprobador (§5.2).
+    expect(getSession().autoVerified).toBe(false);
+    scan = scanJob(['failed', 'working', 'checking']);
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(getPlayer().channel?.hash).toBe(hash(2));
+    expect(getPlayer().origin).toBe('auto');
+    expect(toasts()).toContain(
+      'La señal inicial no responde; probamos automáticamente la fuente 2',
+    );
+    expect(getSession().switchArmed).toBe(false);
+    // Solo una vez: si la segunda también sale fallida, ya no salta sola.
+    scan = scanJob(['failed', 'failed', 'working']);
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(getPlayer().channel?.hash).toBe(hash(2));
+  });
+
+  it('salto de entrada: si la elegida ya suena, no salta aunque el comprobador la dé por caída', async () => {
+    install({
+      'GET /api/v1/football/resolve': () =>
+        json(resolution(3, { status: 'choices', candidate: null })),
+    });
+    enterMatch(testMatch());
+    await flush();
+    await chooseCandidate({ id: hash(1), title: 'x', ih: false, source: 'm3u' }, false);
+    // El reproductor da la primera imagen: el salto se desarma.
+    playerStore.set((state) => ({ ...state, phase: 'reproduciendo', started: true }));
+    await flush();
+    expect(getSession().switchArmed).toBe(false);
+    scan = scanJob(['failed', 'working', 'checking']);
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(getPlayer().channel?.hash).toBe(hash(1));
+    expect(toasts()).not.toContain(
+      'La señal inicial no responde; probamos automáticamente la fuente 2',
+    );
+  });
+
+  it('rebuscar con la IA (B-215): «· revisadas por la IA» al reunir y en el veredicto', async () => {
+    enterMatch(testMatch());
+    await flush();
+    scan = scanJob(['working', 'failed', 'failed']);
+    await vi.advanceTimersByTimeAsync(1500);
+    install({
+      'GET /api/v1/football/resolve': () =>
+        json(
+          resolution(4, {
+            research: true,
+            ai: { enabled: true, used: true, model: 'qwen2.5:3b', catalogSize: 40, error: null },
+          }),
+        ),
+    });
+    scan = scanJob(['working', 'failed', 'failed', 'checking']);
+    await research();
+    expect(toasts()).toContain(
+      'Rebúsqueda: 4 señales reunidas, 1 sin probar antes · comprobándolas… · revisadas por la IA',
+    );
+    scan = scanJob(['working', 'failed', 'failed', 'failed']);
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(toasts()).toContain(
+      'Rebúsqueda terminada · ninguna fuente nueva funciona · revisadas por la IA',
+    );
+  });
+
+  it('rebuscar sin canales anunciados no pregunta nada', async () => {
+    enterMatch(testMatch({ channels: [] }));
+    await flush();
+    await research();
+    expect(calls('/api/v1/football/resolve')).toHaveLength(0);
+    expect(toasts()).toContain('Este partido todavía no tiene canales anunciados');
+  });
+
+  it('rebuscar con otro fallo: «No se pudo completar la rebúsqueda ahora mismo»', async () => {
+    enterMatch(testMatch());
+    await flush();
+    install({
+      'GET /api/v1/football/resolve': () =>
+        json({ error: { code: 'internal', message: 'x', requestId: 'r' } }, 500),
+    });
+    await research();
+    expect(toasts()).toContain('No se pudo completar la rebúsqueda ahora mismo');
+    expect(getSession().researching).toBe(false);
+  });
+
+  it('«Es el canal correcto» que falla lo dice y no marca nada', async () => {
+    install({
+      'POST /api/v1/sources/feedback': () =>
+        json({ error: { code: 'internal', message: 'x', requestId: 'r' } }, 500),
+    });
+    enterMatch(testMatch());
+    await flush();
+    expect(await confirmSource(hash(1))).toBe(false);
+    expect(toasts()).toContain('No se pudo guardar esta corrección');
+    expect(getSession().entries[0]?.learned ?? null).toBeNull();
   });
 });

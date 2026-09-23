@@ -126,6 +126,26 @@ describe('vista Agenda', () => {
     expect(screen.getByText(/horario peninsular/)).toBeInTheDocument();
   });
 
+  it('pie: la frescura de la agenda (última copia, parcial o limitada) y la atribución (B-146)', async () => {
+    const cases: Array<[Record<string, unknown>, string]> = [
+      [{ stale: true }, 'Última copia disponible'],
+      [{ partial: true }, 'Cobertura parcial'],
+      [{ limited: true }, 'Cobertura gratuita limitada'],
+    ];
+    for (const [extra, text] of cases) {
+      net?.restore();
+      net = mockFetch(
+        routes({
+          'GET /api/v1/football': scheduleOf({ [TODAY]: [LIVE, SOON] }, extra),
+        }),
+      );
+      const view = renderAgenda();
+      expect(await screen.findByText(text)).toBeInTheDocument();
+      expect(screen.getByText('Datos: futbolenlatv.com')).toBeInTheDocument();
+      view.unmount();
+    }
+  });
+
   it('«Todos» enseña todo; «Ver canal» si está en tu biblioteca y «Buscar canal» si no', async () => {
     net = mockFetch(routes());
     renderAgenda();

@@ -72,7 +72,10 @@
     content: '';
     position: absolute;
     z-index: -1;
-    inset: -28px -24px -34px;
+    /* A los lados, nunca más que el margen de la vista: en la tableta (768,
+       margen de 16 px) 24 px se salían de la pantalla y la página se
+       ensanchaba a 776 (revisión visual de la Fase 2). */
+    inset: -28px calc(-1 * min(24px, var(--gutter))) -34px;
     background:
       radial-gradient(
         50% 60% at 18% 40%,
@@ -561,6 +564,18 @@
 @container (max-width: 419px) {
   .player-live__prefix {
     display: none;
+  }
+}
+/* Vídeo estrecho con ratón (la columna central a 1280, ~510 px): con el
+   deslizador de volumen y «Ir al directo · −5 s» no cabía la barra y el botón
+   de pantalla completa se salía del marco (revisión visual de la Fase 2).
+   Detener se queda en «Más opciones» y el deslizador encoge. */
+@container (max-width: 579px) {
+  .player-stop {
+    display: none;
+  }
+  .player-vol input {
+    width: 64px;
   }
 }
 

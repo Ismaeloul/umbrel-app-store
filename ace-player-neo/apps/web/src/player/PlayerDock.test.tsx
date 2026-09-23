@@ -15,6 +15,7 @@ import { playerPresence } from '../app/player-presence.ts';
 import { RouterProvider } from '../app/router.tsx';
 import { installShortcutListener, shortcutStore } from '../app/shortcuts.ts';
 import { clearStatus, statusStore } from '../notices/statusLine.ts';
+import { toastStore } from '../notices/toasts.ts';
 import { fixture, mockFetch } from '../test/fetch.ts';
 import {
   hostNerdPanel,
@@ -24,7 +25,7 @@ import {
   resetPlayerApi,
   type PlayerState,
 } from './api.ts';
-import PlayerDock from './index.tsx';
+import PlayerDock, { sharedRuntimeForTests } from './index.tsx';
 import { madridToday } from './PlayerSurface.tsx';
 
 const HASH = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
@@ -185,6 +186,59 @@ describe('reproductor en grande', () => {
     });
   });
 
+  it('ratón: controles que se esconden a los 3,2 s solo si suena, clic que pausa a los 190 ms y doble clic a pantalla completa (B-102, B-088)', async () => {
+    const requestFullscreen = vi.fn(async () => {});
+    Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true });
+    Object.defineProperty(document.documentElement, 'requestFullscreen', {
+      configurable: true,
+      value: requestFullscreen,
+    });
+    const { container } = renderDock();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const chrome = container.querySelector<HTMLElement>('.player-chrome')!;
+      const hit = container.querySelector<HTMLElement>('.player-hit')!;
+      // Pausado (con canal) no se esconden nunca.
+      setPlayer(playing({ phase: 'pausado', desiredPlaying: false }));
+      act(() => vi.advanceTimersByTime(10_000));
+      expect(chrome).toHaveAttribute('data-visible', 'true');
+      // Sonando de verdad: a los 3,2 s sin mover el ratón, fuera.
+      setPlayer(playing());
+      act(() => vi.advanceTimersByTime(3_100));
+      expect(chrome).toHaveAttribute('data-visible', 'true');
+      act(() => vi.advanceTimersByTime(200));
+      expect(chrome).toHaveAttribute('data-visible', 'false');
+      // Mover el ratón los despierta.
+      fireEvent.pointerMove(hit, { pointerType: 'mouse' });
+      expect(chrome).toHaveAttribute('data-visible', 'true');
+
+      const toggle = vi
+        .spyOn(sharedRuntimeForTests()!, 'toggle')
+        .mockResolvedValue(undefined as never);
+      fireEvent.pointerDown(hit, { pointerType: 'mouse', button: 0 });
+      fireEvent.click(hit);
+      act(() => vi.advanceTimersByTime(150));
+      expect(toggle).not.toHaveBeenCalled();
+      act(() => vi.advanceTimersByTime(60));
+      expect(toggle).toHaveBeenCalledTimes(1);
+      // Doble clic: no pausa (se cancela el clic pendiente) y pone pantalla completa.
+      fireEvent.pointerDown(hit, { pointerType: 'mouse', button: 0 });
+      fireEvent.click(hit);
+      fireEvent.doubleClick(hit);
+      act(() => vi.advanceTimersByTime(400));
+      expect(toggle).toHaveBeenCalledTimes(1);
+      expect(requestFullscreen).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+      Reflect.deleteProperty(document, 'fullscreenEnabled');
+      Reflect.deleteProperty(document.documentElement, 'requestFullscreen');
+    }
+    // Un solo reproductor visible: si alguien le pone controles nativos al <video>, se quitan.
+    const video = container.querySelector('video')!;
+    video.setAttribute('controls', '');
+    await waitFor(() => expect(video).not.toHaveAttribute('controls'));
+  });
+
   it('autoplay bloqueado: «Toca para reproducir»', () => {
     renderDock();
     setPlayer(playing({ phase: 'bloqueado', started: false, conn: 'arrancando' }));
@@ -285,6 +339,17 @@ describe('reproductor en grande', () => {
     expect(playerStore.get().nerdOpen).toBe(true);
   });
 
+  it('P sin Picture-in-Picture en el navegador: lo dice (B-093)', async () => {
+    renderDock();
+    setPlayer(playing());
+    fireEvent.keyDown(window, { key: 'p' });
+    await waitFor(() =>
+      expect(toastStore.get().map((item) => item.text)).toContain(
+        'PiP no disponible en este navegador',
+      ),
+    );
+  });
+
   it('Media Session con título, portada y acciones', () => {
     const setActionHandler = vi.fn();
     const mediaSession = { metadata: null as unknown, playbackState: 'none', setActionHandler };
@@ -323,6 +388,34 @@ describe('mini-reproductor «Sonando»', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Detener la reproducción' }));
     expect(playerStore.get().phase).toBe('idle');
     expect(playerPresence.get().active).toBe(false);
+  });
+
+  it('con el dedo se arrastra: hacia arriba vuelve al vídeo; a un lado detiene con «Deshacer»', async () => {
+    const { container, handlers } = renderDock('mini');
+    act(() => playerPresence.set({ active: true, route: ROUTE, immersive: false }));
+    setPlayer(playing());
+    const mini = container.querySelector<HTMLElement>('.player[data-presentation="mini"]')!;
+    const drag = (dx: number, dy: number) => {
+      const finger = { pointerId: 9, pointerType: 'touch' };
+      fireEvent.pointerDown(mini, { ...finger, clientX: 200, clientY: 600 });
+      fireEvent.pointerMove(mini, { ...finger, clientX: 200 + dx / 2, clientY: 600 + dy / 2 });
+      fireEvent.pointerUp(mini, { ...finger, clientX: 200 + dx, clientY: 600 + dy });
+    };
+    // El dedo manda: la cápsula no deja el scroll al navegador.
+    expect(mini.style.touchAction).toBe('none');
+    drag(0, -120);
+    expect(handlers.onExpand).toHaveBeenCalledTimes(1);
+    expect(playerStore.get().phase).toBe('reproduciendo');
+
+    drag(200, 0);
+    // Sale por el lado (220 ms) y entonces se detiene.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 260)));
+    expect(playerStore.get().phase).toBe('idle');
+    const aviso = toastStore.get().find((item) => item.text === 'Reproducción detenida');
+    expect(aviso?.action?.label).toBe('Deshacer');
+    // «Deshacer» vuelve a pedir el mismo canal.
+    act(() => aviso!.action!.onAction());
+    expect(playerStore.get().channel?.hash).toBe(HASH);
   });
 });
 

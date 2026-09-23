@@ -20,7 +20,12 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { cx } from '../../lib/cx.ts';
 import { externalStreamUrl } from '../../player/clipboard.ts';
 import { Button, Menu, type MenuItem } from '../../ui/index.ts';
-import { copyAcestreamLink, copyHash, copyStreamUrl, openInAceStream } from '../library/clipboard.ts';
+import {
+  copyAcestreamLink,
+  copyHash,
+  copyStreamUrl,
+  openInAceStream,
+} from '../library/clipboard.ts';
 import { useChannelActions } from '../library/useChannelActions.tsx';
 import { confirmSource, openPaste, openReport, research } from './session.ts';
 
@@ -44,14 +49,24 @@ export interface SourceInspectorProps {
 function OpenElsewhere({ hash, ih }: { hash: string; ih: boolean }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const items: MenuItem[] = [
-    { id: 'app', label: 'Abrir en la app de AceStream', icon: 'externo', onSelect: () => openInAceStream(hash) },
+    {
+      id: 'app',
+      label: 'Abrir en la app de AceStream',
+      icon: 'externo',
+      onSelect: () => openInAceStream(hash),
+    },
     {
       id: 'vlc',
       label: 'Copiar URL del stream (VLC)',
       icon: 'link',
       onSelect: () => void copyStreamUrl(externalStreamUrl(hash, ih ? 'infohash' : 'auto')),
     },
-    { id: 'enlace', label: 'Copiar enlace acestream://', icon: 'copy', onSelect: () => void copyAcestreamLink(hash) },
+    {
+      id: 'enlace',
+      label: 'Copiar enlace acestream://',
+      icon: 'copy',
+      onSelect: () => void copyAcestreamLink(hash),
+    },
   ];
   return (
     <>
@@ -64,7 +79,13 @@ function OpenElsewhere({ hash, ih }: { hash: string; ih: boolean }) {
       >
         Abrir en…
       </Button>
-      <Menu open={anchor !== null} anchor={anchor} onClose={() => setAnchor(null)} label="Abrir en otra app" items={items} />
+      <Menu
+        open={anchor !== null}
+        anchor={anchor}
+        onClose={() => setAnchor(null)}
+        label="Abrir en otra app"
+        items={items}
+      />
     </>
   );
 }
@@ -80,7 +101,15 @@ function useScrollEdge(enabled: boolean) {
     const el = ref.current;
     if (!el || !enabled) return;
     const max = el.scrollWidth - el.clientWidth;
-    setEdge(max <= 1 ? 'none' : el.scrollLeft >= max - 1 ? 'end' : el.scrollLeft <= 1 ? 'start' : 'middle');
+    setEdge(
+      max <= 1
+        ? 'none'
+        : el.scrollLeft >= max - 1
+          ? 'end'
+          : el.scrollLeft <= 1
+            ? 'start'
+            : 'middle',
+    );
   }, [enabled]);
   useLayoutEffect(() => {
     measure();
@@ -93,7 +122,13 @@ function useScrollEdge(enabled: boolean) {
   return { ref, edge, onScroll: measure };
 }
 
-export function SourceInspector({ target, inMatch, researching, layout, className }: SourceInspectorProps) {
+export function SourceInspector({
+  target,
+  inMatch,
+  researching,
+  layout,
+  className,
+}: SourceInspectorProps) {
   const actions = useChannelActions();
   const scroll = useScrollEdge(layout === 'row');
   if (!target) {
@@ -126,13 +161,24 @@ export function SourceInspector({ target, inMatch, researching, layout, classNam
         pressed={isFavorite}
         className={cx(isFavorite && 'is-on')}
         onClick={() =>
-          actions.toggleFavorite({ id: target.hash, title: target.title, category: 'Fútbol', ih: target.ih })
+          actions.toggleFavorite({
+            id: target.hash,
+            title: target.title,
+            category: 'Fútbol',
+            ih: target.ih,
+          })
         }
       >
         {isFavorite ? 'En favoritos' : 'Favorito'}
       </Button>
       {inMatch ? (
-        <Button size="sm" icon="refresh" busy={researching} className="src-inspector__research" onClick={() => void research()}>
+        <Button
+          size="sm"
+          icon="refresh"
+          busy={researching}
+          className="src-inspector__research"
+          onClick={() => void research()}
+        >
           {researching ? 'Rebuscando…' : 'Rebuscar'}
         </Button>
       ) : null}

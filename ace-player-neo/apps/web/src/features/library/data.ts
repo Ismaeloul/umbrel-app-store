@@ -86,7 +86,9 @@ async function commit(key: string, keepalive = false): Promise<void> {
     // Sin cambios en los datos: al soltar la baja, la fila vuelve a su sitio.
     dropPending(key);
     notify(
-      entry.kind === 'unfavorite' ? 'No se pudo quitar el favorito' : 'No se pudo eliminar el canal',
+      entry.kind === 'unfavorite'
+        ? 'No se pudo quitar el favorito'
+        : 'No se pudo eliminar el canal',
       { tone: 'err' },
     );
   }

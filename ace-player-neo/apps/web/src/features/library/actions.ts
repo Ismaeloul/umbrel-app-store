@@ -58,7 +58,7 @@ export function channelMenuItems({
   });
   items.push({
     id: 'abrir-acestream',
-    label: 'Abrir en la app AceStream',
+    label: 'Abrir en la app de AceStream',
     icon: 'externo',
     separated: true,
     onSelect: () => openInAceStream(hash),

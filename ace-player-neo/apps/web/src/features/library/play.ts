@@ -10,7 +10,7 @@
    ESTE dispositivo: lo dice el propio reproductor (`channel.hash`). */
 
 import type { Navigate } from '../../app/router.tsx';
-import { play, usePlayerSelector } from '../../player/api.ts';
+import { kindFromIh, play, usePlayerSelector } from '../../player/api.ts';
 
 export type PlayOrigin = 'biblioteca' | 'buscar' | 'pegado';
 
@@ -20,10 +20,7 @@ export interface PlayRequest {
   /** true: infohash del buscador; false: Content ID; null: no se sabe (hash pegado). */
   ih: boolean | null;
   category?: string;
-  /**
-   * Apuntarlo en Recientes (false para un hash pegado, index.html:3962). El
-   * reproductor todavía no deja elegirlo: pendiente en su API (`PlayOptions`).
-   */
+  /** Apuntarlo en Recientes (false para un hash pegado, index.html:3962; B-187). */
   record: boolean;
   origin: PlayOrigin;
 }
@@ -40,9 +37,10 @@ export function playChannel(navigate: Navigate, request: PlayRequest): void {
   const now = Date.now();
   if (lastPlay.hash === request.hash && now - lastPlay.at < REPEAT_GUARD_MS) return;
   lastPlay = { hash: request.hash, at: now };
+  // El tipo que declara la lista o el buscador (B-010); solo el pegado va en `auto`.
   play(
-    { hash: request.hash, title: request.title, kind: request.ih === true ? 'infohash' : 'auto' },
-    { origin: 'library' },
+    { hash: request.hash, title: request.title, kind: kindFromIh(request.ih) },
+    { origin: 'library', record: request.record },
   );
   navigate({ vista: 'partido', id: null, canal: request.hash });
 }

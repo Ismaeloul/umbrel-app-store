@@ -39,14 +39,23 @@ describe('ficha del canal (panel lateral)', () => {
     renderWithApp(<ChannelDetail />);
     expect(await screen.findByRole('heading', { name: 'DAZN 1' })).toBeInTheDocument();
     expect(screen.getByText('En tus favoritos · Deportes')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Quitar de favoritos' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Quitar de favoritos' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     expect(screen.getByText(/Sin partido anunciado|Cargando la agenda/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Ver canal' }));
     await waitFor(() =>
-      expect(screen.getByTestId('ruta')).toHaveTextContent(`partido/canal/${library.favorites[0]!.id}`),
+      expect(screen.getByTestId('ruta')).toHaveTextContent(
+        `partido/canal/${library.favorites[0]!.id}`,
+      ),
     );
-    // Se lo pide al reproductor con su título (API de src/player).
-    expect(getPlayer().channel).toMatchObject({ hash: library.favorites[0]!.id, title: 'DAZN 1', kind: 'auto' });
+    // Se lo pide al reproductor con su título y el tipo que declara (ih: false → id, B-010).
+    expect(getPlayer().channel).toMatchObject({
+      hash: library.favorites[0]!.id,
+      title: 'DAZN 1',
+      kind: 'id',
+    });
   });
 });
 
@@ -80,8 +89,12 @@ describe('menú de la tarjeta («Abrir en…», D7)', () => {
         return true;
       },
     });
-    channelMenuItems(base).find((item) => item.id === 'copiar-stream')?.onSelect();
-    channelMenuItems({ ...base, ih: true }).find((item) => item.id === 'copiar-stream')?.onSelect();
+    channelMenuItems(base)
+      .find((item) => item.id === 'copiar-stream')
+      ?.onSelect();
+    channelMenuItems({ ...base, ih: true })
+      .find((item) => item.id === 'copiar-stream')
+      ?.onSelect();
     await waitFor(() => expect(copied).toHaveLength(2));
     expect(copied[0]).toBe(`${location.origin}/ace/getstream?id=${HASH}`);
     expect(copied[1]).toBe(`${location.origin}/ace/getstream?infohash=${HASH}`);
@@ -111,7 +124,9 @@ describe('menú de la tarjeta («Abrir en…», D7)', () => {
     expect(screen.getByText('En pantalla')).toBeInTheDocument();
     fireEvent.contextMenu(link, { clientX: 10, clientY: 10 });
     expect(await screen.findByRole('menu', { name: 'Acciones de DAZN 1' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Abrir en la app AceStream' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: 'Abrir en la app de AceStream' }),
+    ).toBeInTheDocument();
     fireEvent.click(link);
     expect(played).toBe(0);
   });

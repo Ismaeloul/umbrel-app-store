@@ -178,7 +178,11 @@ export function demoResolve(query: {
   channel?: string | string[] | undefined;
   research?: '0' | '1' | undefined;
 }): Resolution {
-  const channels = Array.isArray(query.channel) ? query.channel : query.channel ? [query.channel] : [];
+  const channels = Array.isArray(query.channel)
+    ? query.channel
+    : query.channel
+      ? [query.channel]
+      : [];
   const channel = channels[0] ?? 'Canal';
   const plan = planFor(query.match);
   const research = query.research === '1';
@@ -215,15 +219,20 @@ function stepsOf(item: PlanItem, index: number): { start: number; end: number } 
   return { start, end: start + (item.slow ?? 2) };
 }
 
-function probeOf(item: PlanItem & { hash: string }, index: number, step: number, now: number): ScanCandidate {
+function probeOf(
+  item: PlanItem & { hash: string },
+  index: number,
+  step: number,
+  now: number,
+): ScanCandidate {
   const { start, end } = stepsOf(item, index);
   const done = step >= end;
   const checking = !done && step >= start;
-  const final: ScanCandidate['state'] =
-    item.outcome === 'retry' ? 'failed' : item.outcome;
+  const final: ScanCandidate['state'] = item.outcome === 'retry' ? 'failed' : item.outcome;
   const state: ScanCandidate['state'] = done ? final : checking ? 'checking' : 'queued';
   const alive = done && (final === 'working' || final === 'weak');
-  const retryAt = done && item.outcome === 'retry' ? new Date(now + 6 * 60_000).toISOString() : null;
+  const retryAt =
+    done && item.outcome === 'retry' ? new Date(now + 6 * 60_000).toISOString() : null;
   return {
     id: item.hash,
     state,
@@ -277,11 +286,17 @@ export function demoScan(id: string, now = Date.now()): ScanJob {
   }
   const step = Math.floor((now - job.createdAt) / DEMO_STEP_MS);
   const candidates = job.items.map((item, index) => probeOf(item, index, step, now));
-  const decided = candidates.filter((c) => c.state === 'working' || c.state === 'weak' || c.state === 'failed');
+  const decided = candidates.filter(
+    (c) => c.state === 'working' || c.state === 'weak' || c.state === 'failed',
+  );
   const playable = candidates.filter((c) => c.state === 'working' || c.state === 'weak').length;
   const waiting = candidates.filter((c) => c.retryAt).length;
   const all = decided.length === candidates.length;
-  const status: ScanJob['status'] = !all ? 'running' : waiting && !playable ? 'waiting' : 'complete';
+  const status: ScanJob['status'] = !all
+    ? 'running'
+    : waiting && !playable
+      ? 'waiting'
+      : 'complete';
   const retryAt = candidates.map((c) => c.retryAt).find(Boolean) ?? null;
   return {
     id: job.id,
@@ -309,12 +324,20 @@ export function demoReport(body: {
   const now = Date.now();
   const reason = body.reason ?? 'not_starting';
   // El comprobador vuelve a mirar la fuente reportada: si iba bien, sigue viva.
-  const previous = [...jobs.values()].flatMap((job) => job.items).find((item) => item.hash === body.id);
+  const previous = [...jobs.values()]
+    .flatMap((job) => job.items)
+    .find((item) => item.hash === body.id);
   const job: DemoJob = {
     id: newJobId(),
     kind: 'report',
     createdAt: now,
-    items: [{ provider: previous?.provider ?? 'Externa', outcome: previous?.outcome ?? 'failed', hash: body.id }],
+    items: [
+      {
+        provider: previous?.provider ?? 'Externa',
+        outcome: previous?.outcome ?? 'failed',
+        hash: body.id,
+      },
+    ],
   };
   jobs.set(job.id, job);
   return {
@@ -334,7 +357,12 @@ export function demoReport(body: {
   };
 }
 
-export function demoBind(body: { channel: string; id: string; title?: string | undefined; ih?: boolean | undefined }): BindResponse {
+export function demoBind(body: {
+  channel: string;
+  id: string;
+  title?: string | undefined;
+  ih?: boolean | undefined;
+}): BindResponse {
   const binding = {
     channel: body.channel.slice(0, 120),
     channelKey: normalizeChannelKey(body.channel) || 'canal',

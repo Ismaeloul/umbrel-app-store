@@ -153,6 +153,38 @@
   }
 }
 
+/* ---- Pantallas bajas (móvil en horizontal, ≤ 540 px de alto) ----------------
+   Con el título, la descripción y la botonera fijos, la lista se quedaba en
+   una rendija (en 800×360 las preferencias dejaban ~70 px). Aquí se desplaza
+   la hoja entera: el título y la botonera siguen pegados arriba y abajo y la
+   descripción se va con el contenido (revisión visual de la Fase 2). */
+@media (max-height: 540px) {
+  .sheet-layer--auto {
+    padding: var(--s-2) var(--s-4);
+  }
+  .sheet,
+  .sheet-layer--auto .sheet {
+    display: block;
+    max-height: calc(100dvh - var(--safe-top) - var(--s-4) - var(--kb));
+    overflow-y: auto;
+  }
+  .sheet__head {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--glass-solid);
+  }
+  .sheet__body {
+    overflow: visible;
+  }
+  .sheet__foot {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    background: var(--glass-solid);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sheet,
   .sheet-layer--auto .sheet,

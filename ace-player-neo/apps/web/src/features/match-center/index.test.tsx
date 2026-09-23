@@ -40,7 +40,14 @@ beforeEach(() => {
   net = mockFetch({
     'GET /api/v1/football': scheduleOf({ [TODAY]: [match] }),
     'GET /api/v1/library': fixture('libraryGet'),
-    'GET /api/v1/scores': { available: false, generatedAt: null, source: 'espn', attribution: null, leagues: 0, scores: {} },
+    'GET /api/v1/scores': {
+      available: false,
+      generatedAt: null,
+      source: 'espn',
+      attribution: null,
+      leagues: 0,
+      scores: {},
+    },
     'GET /api/v1/football/resolve': () => json(resolution(3)),
     [`GET /api/v1/football/scans/${JOB}`]: () => json(scanJob(['working', 'checking', 'queued'])),
   });
@@ -62,9 +69,13 @@ describe('centro de partido', () => {
 
   it('pinta el marcador, dónde se emite y las fuentes, y arranca la primera verificada', async () => {
     renderWithApp(<MatchCenter route={{ vista: 'partido', id: 'mc-1', canal: null }} active />);
-    expect(await screen.findByRole('heading', { level: 1, name: 'Atlético de Madrid vs Tottenham' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Atlético de Madrid vs Tottenham' }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Dónde se emite' })).toBeInTheDocument();
-    expect(screen.getByText('M+ Liga de Campeones', { selector: '.mc-where .chip__label' })).toBeInTheDocument();
+    expect(
+      screen.getByText('M+ Liga de Campeones', { selector: '.mc-where .chip__label' }),
+    ).toBeInTheDocument();
     await waitFor(() => expect(getPlayer().channel?.hash).toBe(hash(1)));
     expect(getSession().key).toBe('m:mc-1');
     expect(screen.getByRole('heading', { name: /Fuentes/ })).toBeInTheDocument();
@@ -73,7 +84,9 @@ describe('centro de partido', () => {
   });
 
   it('sin el partido en la agenda: vacío con salidas', async () => {
-    renderWithApp(<MatchCenter route={{ vista: 'partido', id: 'no-existe', canal: null }} active />);
+    renderWithApp(
+      <MatchCenter route={{ vista: 'partido', id: 'no-existe', canal: null }} active />,
+    );
     expect(await screen.findByText('Este partido ya no está en la agenda')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Ir a la agenda' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Pegar hash' })).toBeInTheDocument();
@@ -81,7 +94,9 @@ describe('centro de partido', () => {
   });
 
   it('oculta no entra al partido (sus efectos no viven)', async () => {
-    renderWithApp(<MatchCenter route={{ vista: 'partido', id: 'mc-1', canal: null }} active={false} />);
+    renderWithApp(
+      <MatchCenter route={{ vista: 'partido', id: 'mc-1', canal: null }} active={false} />,
+    );
     await screen.findByRole('heading', { level: 1, name: 'Atlético de Madrid vs Tottenham' });
     expect(net.calls.some((call) => call.url.startsWith('/api/v1/football/resolve'))).toBe(false);
   });
@@ -102,7 +117,13 @@ describe('centro de partido', () => {
   it('con el panel lateral a la vista, las fuentes van en el panel (rack) y no en la vista', async () => {
     const client = createQueryClient();
     client.setDefaultOptions({ queries: { retry: false } });
-    const layout = { kind: 'wide' as const, asideVisible: true, asideAvailable: true, setAsideOpen: () => {}, columnVisible: true };
+    const layout = {
+      kind: 'wide' as const,
+      asideVisible: true,
+      asideAvailable: true,
+      setAsideOpen: () => {},
+      columnVisible: true,
+    };
     const route = { vista: 'partido' as const, id: 'mc-1', canal: null };
     render(
       <QueryClientProvider client={client}>
@@ -122,7 +143,9 @@ describe('centro de partido', () => {
     const panel = screen.getByTestId('panel');
     const view = screen.getByTestId('vista');
     expect(within(panel).getByText('Mbit/s')).toBeInTheDocument();
-    expect(within(panel).getByRole('button', { name: 'Plegar el panel lateral' })).toBeInTheDocument();
+    expect(
+      within(panel).getByRole('button', { name: 'Plegar el panel lateral' }),
+    ).toBeInTheDocument();
     expect(within(panel).getByRole('heading', { name: 'Datos técnicos' })).toBeInTheDocument();
     expect(within(view).queryByRole('group', { name: 'Acciones de la fuente' })).toBeNull();
   });

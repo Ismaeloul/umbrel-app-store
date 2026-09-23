@@ -14,17 +14,27 @@ let net: ReturnType<typeof mockFetch>;
 
 function result(title: string, availability: number) {
   const r = demoSearch(title).results[0];
-  return { ...(r ?? { id: 'b'.repeat(40), title, category: 'Deportes', bitrate: null, ih: true as const }), title, availability };
+  return {
+    ...(r ?? { id: 'b'.repeat(40), title, category: 'Deportes', bitrate: null, ih: true as const }),
+    title,
+    availability,
+  };
 }
 
-function setup(search = '?vista=buscar', searchHandler?: (call: MockCall) => Response | Promise<Response>) {
+function setup(
+  search = '?vista=buscar',
+  searchHandler?: (call: MockCall) => Response | Promise<Response>,
+) {
   net = mockFetch({
     'GET /api/v1/library': makeLibrary(),
     'GET /api/v1/search':
       searchHandler ??
       ((call) => {
         const q = new URL(call.url, 'http://x').searchParams.get('q') ?? '';
-        return json({ query: q, results: q.startsWith('daz') ? [result('DAZN 1 HD', 0.92), result('DAZN 2', 0.4)] : [] });
+        return json({
+          query: q,
+          results: q.startsWith('daz') ? [result('DAZN 1 HD', 0.92), result('DAZN 2', 0.4)] : [],
+        });
       }),
   });
   return renderWithApp(<SearchView route={{ vista: 'buscar' }} active />, { search });
@@ -50,10 +60,20 @@ describe('reglas del buscador (§15)', () => {
     expect(cleanQuery('  da   zn ')).toBe('da zn');
     expect(canSearch('d')).toBe(false);
     expect(canSearch('dz')).toBe(true);
-    expect(searchPhase({ typed: '', committed: '', loading: false, error: false, count: null }).kind).toBe('idle');
-    expect(searchPhase({ typed: 'd', committed: '', loading: false, error: false, count: null }).kind).toBe('short');
-    expect(searchPhase({ typed: 'dazn', committed: 'dazn', loading: true, error: false, count: null }).kind).toBe('loading');
-    expect(searchPhase({ typed: 'dazn', committed: 'dazn', loading: false, error: false, count: 0 }).kind).toBe('empty');
+    expect(
+      searchPhase({ typed: '', committed: '', loading: false, error: false, count: null }).kind,
+    ).toBe('idle');
+    expect(
+      searchPhase({ typed: 'd', committed: '', loading: false, error: false, count: null }).kind,
+    ).toBe('short');
+    expect(
+      searchPhase({ typed: 'dazn', committed: 'dazn', loading: true, error: false, count: null })
+        .kind,
+    ).toBe('loading');
+    expect(
+      searchPhase({ typed: 'dazn', committed: 'dazn', loading: false, error: false, count: 0 })
+        .kind,
+    ).toBe('empty');
   });
 
   it('pide 2 letras y espera 450 ms tras la última tecla', async () => {
@@ -77,11 +97,32 @@ describe('reglas del buscador (§15)', () => {
     expect(new URLSearchParams(location.search).get('q')).toBe('daz');
   });
 
+  it('el recuento dice «1 resultado» y «2 resultados»', async () => {
+    setup('?vista=buscar', (call) => {
+      const q = new URL(call.url, 'http://x').searchParams.get('q') ?? '';
+      return json({
+        query: q,
+        results:
+          q === 'uno'
+            ? [result('DAZN 1 HD', 0.92)]
+            : [result('DAZN 1 HD', 0.92), result('DAZN 2', 0.4)],
+      });
+    });
+    fireEvent.change(field(), { target: { value: 'uno' } });
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    expect(await screen.findByText('1 resultado para «uno».')).toBeInTheDocument();
+    fireEvent.change(field(), { target: { value: 'dos' } });
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    expect(await screen.findByText('2 resultados para «dos».')).toBeInTheDocument();
+  });
+
   it('Intro busca al momento; sin resultados lo dice', async () => {
     setup();
     fireEvent.change(field(), { target: { value: 'nada' } });
     fireEvent.keyDown(field(), { key: 'Enter' });
-    expect(await screen.findByRole('heading', { name: 'Sin resultados para «nada».' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Sin resultados para «nada».' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Prueba con otro nombre o menos palabras.')).toBeInTheDocument();
   });
 
@@ -91,7 +132,9 @@ describe('reglas del buscador (§15)', () => {
       const q = new URL(call.url, 'http://x').searchParams.get('q') ?? '';
       if (q === 'eu')
         return new Promise<Response>((resolve) =>
-          pending.push(() => resolve(json({ query: 'eu', results: [result('Eurosport viejo', 0.5)] }))),
+          pending.push(() =>
+            resolve(json({ query: 'eu', results: [result('Eurosport viejo', 0.5)] })),
+          ),
         );
       return json({ query: q, results: [result('DAZN 1 HD', 0.9)] });
     });
@@ -108,7 +151,16 @@ describe('reglas del buscador (§15)', () => {
 
   it('si el motor falla: aviso de la 0.6.59 y «Reintentar»', async () => {
     setup('?vista=buscar', () =>
-      json({ error: { code: 'engine_unavailable', message: 'El motor AceStream no responde.', requestId: 'r' } }, 503),
+      json(
+        {
+          error: {
+            code: 'engine_unavailable',
+            message: 'El motor AceStream no responde.',
+            requestId: 'r',
+          },
+        },
+        503,
+      ),
     );
     fireEvent.change(field(), { target: { value: 'dazn' } });
     fireEvent.keyDown(field(), { key: 'Enter' });
@@ -139,7 +191,9 @@ describe('reglas del buscador (§15)', () => {
       }),
     );
     fireEvent.click(link);
-    await waitFor(() => expect(screen.getByTestId('ruta').textContent).toMatch(/^partido\/canal\/[0-9a-f]{40}$/));
+    await waitFor(() =>
+      expect(screen.getByTestId('ruta').textContent).toMatch(/^partido\/canal\/[0-9a-f]{40}$/),
+    );
     // Los resultados del motor son infohashes: se piden como tales (P6).
     expect(getPlayer().channel).toMatchObject({ title: 'DAZN 2', kind: 'infohash' });
   });
@@ -169,8 +223,14 @@ describe('demo del buscador', () => {
   it('filtra el catálogo de muestra por el texto, de más a menos disponible', () => {
     const { results } = demoSearch('dazn');
     expect(results.length).toBeGreaterThan(2);
-    expect(results.every((r) => r.title.toLowerCase().includes('dazn') && r.ih && /^[0-9a-f]{40}$/.test(r.id))).toBe(true);
-    expect(results.map((r) => r.availability)).toEqual([...results.map((r) => r.availability)].sort((a, b) => (b ?? 0) - (a ?? 0)));
+    expect(
+      results.every(
+        (r) => r.title.toLowerCase().includes('dazn') && r.ih && /^[0-9a-f]{40}$/.test(r.id),
+      ),
+    ).toBe(true);
+    expect(results.map((r) => r.availability)).toEqual(
+      [...results.map((r) => r.availability)].sort((a, b) => (b ?? 0) - (a ?? 0)),
+    );
     expect(demoSearch('nada de nada').results).toEqual([]);
   });
 });

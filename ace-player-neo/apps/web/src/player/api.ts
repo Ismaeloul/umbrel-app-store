@@ -71,6 +71,23 @@ export interface PlayOptions {
   origin?: PlayOrigin;
   /** A dónde vuelve el mini-reproductor. Por defecto, `partido/canal/<hash>`. */
   route?: Route;
+  /**
+   * Apuntarlo en Recientes (por defecto sí). Un hash pegado a mano no entra
+   * (`recordHistory = false`, index.html:3962; B-187).
+   */
+  record?: boolean;
+}
+
+/**
+ * `kind` de una señal según lo que declara su lista o el buscador (B-010):
+ * `ih: true` → infohash, `ih: false` → Content ID (sin el doble intento) y
+ * solo lo de tipo desconocido (`ih: null`, un hash pegado) va en `auto`, que
+ * prueba `id` y, si el motor no abre, una vez `infohash` (B-009).
+ */
+export function kindFromIh(ih: boolean | null | undefined): 'id' | 'infohash' | 'auto' {
+  if (ih === true) return 'infohash';
+  if (ih === false) return 'id';
+  return 'auto';
 }
 
 export interface PlayerStats {

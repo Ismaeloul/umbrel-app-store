@@ -85,3 +85,12 @@
     color: var(--text);
   }
 }
+/* Móvil estrecho (360): con icono, «Sistema» no cabía en su tercio y salía
+   «Siste…» (revisión visual de la Fase 2). Menos aire a los lados y entre el
+   icono y el rótulo. */
+@media (max-width: 380px) {
+  .seg__item {
+    gap: 4px;
+    padding-inline: 6px;
+  }
+}

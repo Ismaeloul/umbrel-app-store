@@ -103,6 +103,31 @@ describe('tokens: contraste AA', () => {
     });
   }
 
+  /* Lo activo (carril, pestañas, chips) pinta --accent-ink sobre --accent-wash:
+     el velo oscurece el fondo, así que se mide sobre la mezcla. La revisión
+     visual de la Fase 2 lo pilló en el carril claro (4,37:1 sobre --bg-sunk). */
+  it('texto de acento ≥ 4,5:1 sobre el velo de acento en los cuatro fondos', () => {
+    const washAlpha: Record<Theme, number> = { light: 0.22, dark: 0.16 };
+    const mix = (top: Rgb, under: Rgb, alpha: number): Rgb => ({
+      r: top.r * alpha + under.r * (1 - alpha),
+      g: top.g * alpha + under.g * (1 - alpha),
+      b: top.b * alpha + under.b * (1 - alpha),
+    });
+    expect(tokensCss).toContain(
+      '--accent-wash: light-dark(oklch(0.83 0.12 222 / 0.22), oklch(0.83 0.12 222 / 0.16))',
+    );
+    for (const theme of ['light', 'dark'] as const) {
+      for (const bg of BACKGROUNDS) {
+        const under = mix(tokens['--accent']![theme], tokens[bg]![theme], washAlpha[theme]);
+        const ratio = contrastRatio(tokens['--accent-ink']![theme], under);
+        expect(
+          ratio,
+          `--accent-ink sobre --accent-wash + ${bg} en ${theme}: ${ratio.toFixed(2)}`,
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
   it('texto sobre el cielo ≥ 4,5:1', () => {
     expect(
       contrastRatio(tokens['--on-accent']!.light, tokens['--accent']!.light),

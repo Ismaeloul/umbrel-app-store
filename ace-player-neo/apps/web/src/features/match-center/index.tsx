@@ -123,7 +123,11 @@ function MatchView({ id, active }: { id: string; active: boolean }) {
       className="mc-sources"
       headerExtra={
         layout.asideAvailable ? (
-          <IconButton icon="panel" label="Mostrar el panel lateral" onClick={() => layout.setAsideOpen(true)} />
+          <IconButton
+            icon="panel"
+            label="Mostrar el panel lateral"
+            onClick={() => layout.setAsideOpen(true)}
+          />
         ) : null
       }
     />
@@ -136,7 +140,11 @@ function MatchView({ id, active }: { id: string; active: boolean }) {
           Partido
         </h1>
         <EmptyState
-          title={schedule.isError ? 'No se pudo cargar la agenda' : 'Este partido ya no está en la agenda'}
+          title={
+            schedule.isError
+              ? 'No se pudo cargar la agenda'
+              : 'Este partido ya no está en la agenda'
+          }
           tone={schedule.isError ? 'error' : 'empty'}
           actions={
             <>
@@ -166,7 +174,11 @@ function MatchView({ id, active }: { id: string; active: boolean }) {
 
   const channelNames = channels.map((channel) => channel.name);
   return (
-    <div className="mc" data-layout={layout.kind} data-aside={layout.asideVisible ? 'true' : 'false'}>
+    <div
+      className="mc"
+      data-layout={layout.kind}
+      data-aside={layout.asideVisible ? 'true' : 'false'}
+    >
       <Scoreboard match={match} score={score} now={now} channels={channelNames} />
       {sources}
       <WhereAired match={match} channels={channels} today={today} />

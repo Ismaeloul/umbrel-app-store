@@ -93,7 +93,8 @@ export function DiagnosticsLog({ all, fallbackCounts, deviceNames, now }: Diagno
   const entries = source.data?.entries ?? [];
   const visibleCauses = CAUSES.filter((c) => c === cause || (counts?.[c] ?? 0) > 0);
 
-  const toggle = (next: DiagnosticCause | null) => setCause((current) => (current === next ? null : next));
+  const toggle = (next: DiagnosticCause | null) =>
+    setCause((current) => (current === next ? null : next));
   const rowFor = (entry: DiagnosticEntry) => (
     <EntryRow
       entry={entry}
@@ -185,7 +186,8 @@ export function DiagnosticsLog({ all, fallbackCounts, deviceNames, now }: Diagno
       {body}
       {!source.isPending && !source.isError && stored > shown ? (
         <p className={cx('salud-help', 'salud-help--foot')}>
-          {shown === 1 ? 'Sale el más reciente' : `Salen los ${shown} más recientes`} de {stored} guardados.
+          {shown === 1 ? 'Sale el más reciente' : `Salen los ${shown} más recientes`} de {stored}{' '}
+          guardados.
         </p>
       ) : null}
     </section>

@@ -388,7 +388,13 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
                 onClick={actions.toggle}
               />
               {ctx.compact ? null : (
-                <IconButton icon="stop" label="Detener" variant="video" onClick={actions.stop} />
+                <IconButton
+                  icon="stop"
+                  label="Detener"
+                  variant="video"
+                  className="player-stop"
+                  onClick={actions.stop}
+                />
               )}
               <button
                 type="button"

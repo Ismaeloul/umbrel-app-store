@@ -15,10 +15,18 @@ let net: ReturnType<typeof mockFetch>;
 
 function setup(
   library: LibraryData = makeLibrary(),
-  { search = '?vista=biblioteca', routes = {}, layout = {} }: {
+  {
+    search = '?vista=biblioteca',
+    routes = {},
+    layout = {},
+  }: {
     search?: string;
     routes?: Parameters<typeof mockFetch>[0];
-    layout?: Parameters<typeof renderWithApp>[1] extends infer O ? O extends { layout?: infer L } ? L : never : never;
+    layout?: Parameters<typeof renderWithApp>[1] extends infer O
+      ? O extends { layout?: infer L }
+        ? L
+        : never
+      : never;
   } = {},
 ) {
   net = mockFetch({ 'GET /api/v1/library': library, 'POST /api/v1/library': library, ...routes });
@@ -27,7 +35,10 @@ function setup(
 
 const route = () => screen.getByTestId('ruta').textContent;
 const rowNames = () =>
-  screen.queryAllByRole('link').map((a) => a.getAttribute('aria-label')).filter(Boolean);
+  screen
+    .queryAllByRole('link')
+    .map((a) => a.getAttribute('aria-label'))
+    .filter(Boolean);
 
 beforeEach(() => {
   resetMode();
@@ -56,7 +67,10 @@ describe('pestañas (§13.1 y regla 32)', () => {
 
   it('sin favoritos abre en Recientes y la pestaña elegida va a la URL', async () => {
     setup(makeLibrary({ favorites: [] }));
-    expect(await screen.findByRole('tab', { name: /Recientes/ })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('tab', { name: /Recientes/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
     fireEvent.click(screen.getByRole('tab', { name: /Listas/ }));
     expect(new URLSearchParams(location.search).get('pestana')).toBe('listas');
     expect(screen.getByRole('tab', { name: /Listas/ })).toHaveAttribute('aria-selected', 'true');
@@ -64,8 +78,21 @@ describe('pestañas (§13.1 y regla 32)', () => {
 
   it('la pestaña de la URL manda', async () => {
     setup(makeLibrary(), { search: '?vista=biblioteca&pestana=recientes' });
-    expect(await screen.findByRole('tab', { name: /Recientes/ })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('tab', { name: /Recientes/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
     expect(await screen.findByRole('heading', { name: 'Hoy' })).toBeInTheDocument();
+  });
+});
+
+describe('«Pegar hash» siempre a mano (B-064)', () => {
+  it('la cabecera de la biblioteca lo abre sin nada sonando ni partido en marcha', async () => {
+    setup();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Pegar un Content ID o enlace acestream://' }),
+    );
+    expect(await screen.findByRole('dialog', { name: 'Reproducir otro hash' })).toBeInTheDocument();
   });
 });
 
@@ -94,7 +121,9 @@ describe('buscador local (140 ms) y salto al motor', () => {
       target: { value: 'zzz' },
     });
     await act(() => vi.advanceTimersByTimeAsync(150));
-    expect(screen.getByRole('heading', { name: 'Nada en esta pestaña con «zzz».' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Nada en esta pestaña con «zzz».' }),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Buscar «zzz» en el motor' }));
     await waitFor(() => expect(route()).toBe('buscar'));
   });
@@ -103,7 +132,9 @@ describe('buscador local (140 ms) y salto al motor', () => {
 describe('estados vacíos con su salida', () => {
   it('sin listas: «Añadir una lista» lleva a Ajustes → Listas', async () => {
     setup(makeLibrary({ web: [], favorites: [], history: [] }));
-    expect(await screen.findByRole('heading', { name: 'Aún no hay ninguna lista cargada' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Aún no hay ninguna lista cargada' }),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Añadir una lista' }));
     await waitFor(() => expect(route()).toBe('ajustes/listas'));
   });
@@ -112,7 +143,9 @@ describe('estados vacíos con su salida', () => {
     setup(makeLibrary({ favorites: [], history: [] }), {
       search: '?vista=biblioteca&pestana=favoritos',
     });
-    expect(await screen.findByText('Guarda un canal con la estrella y aparecerá aquí.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Guarda un canal con la estrella y aparecerá aquí.'),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Ver las listas' }));
     expect(screen.getByRole('tab', { name: /Listas/ })).toHaveAttribute('aria-selected', 'true');
   });
@@ -129,7 +162,9 @@ describe('estados vacíos con su salida', () => {
   it('si la biblioteca no carga, error con «Reintentar»', async () => {
     net = mockFetch({});
     renderWithApp(<LibraryView route={{ vista: 'biblioteca' }} active />);
-    expect(await screen.findByRole('heading', { name: 'No se pudo cargar la biblioteca' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'No se pudo cargar la biblioteca' }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
   });
 });
@@ -140,6 +175,11 @@ describe('listas por categorías', () => {
     setup(makeLibrary(), { search: '?vista=biblioteca&pestana=listas' });
     const deportes = await screen.findByRole('button', { name: /Deportes/ });
     expect(deportes).toHaveAttribute('aria-expanded', 'false');
+    // El recuento se lee en singular o plural («1 canal», no «1 canales»).
+    expect(deportes).toHaveAccessibleName(/Deportes\s*2 canales/);
+    expect(screen.getByRole('button', { name: /Generalistas/ })).toHaveAccessibleName(
+      /Generalistas\s*1 canal$/,
+    );
     expect(rowNames()).toEqual([]);
     fireEvent.click(deportes);
     expect(deportes).toHaveAttribute('aria-expanded', 'true');
@@ -149,6 +189,25 @@ describe('listas por categorías', () => {
     });
     await act(() => vi.advanceTimersByTimeAsync(150));
     expect(rowNames()).toEqual(['M+ LaLiga', 'La 1']);
+  });
+});
+
+describe('«En pantalla» sin reconstruir la lista (B-273, regla 3)', () => {
+  it('cambiar el canal que suena solo marca la tarjeta: los nodos de la lista son los mismos', async () => {
+    const library = makeLibrary();
+    setup(library);
+    const eurosport = await screen.findByRole('link', { name: 'Eurosport 1' });
+    const dazn = screen.getByRole('link', { name: 'DAZN 1' });
+    const card = (link: HTMLElement) => link.closest('li') ?? (link.parentElement as HTMLElement);
+    expect(within(card(eurosport)).queryByText('En pantalla')).toBeNull();
+    act(() => {
+      play({ hash: library.favorites[1]!.id, title: 'Eurosport 1' }, { origin: 'library' });
+    });
+    expect(within(card(eurosport)).getByText('En pantalla')).toBeInTheDocument();
+    // Las mismas tarjetas (no se ha vuelto a pintar la lista): ni se relanzan animaciones.
+    expect(screen.getByRole('link', { name: 'Eurosport 1, en pantalla' })).toBe(eurosport);
+    expect(screen.getByRole('link', { name: 'DAZN 1' })).toBe(dazn);
+    expect(within(card(dazn)).queryByText('En pantalla')).toBeNull();
   });
 });
 
@@ -162,7 +221,9 @@ describe('tarjetas: reproducir, borrar con deshacer, favorito y renombrar', () =
 
   it('eliminar desde «Más» quita la fila con «Deshacer» durante 6 s', async () => {
     setup(makeLibrary(), { search: '?vista=biblioteca&pestana=recientes' });
-    fireEvent.click(await screen.findByRole('button', { name: 'Más acciones para Canal de prueba' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Más acciones para Canal de prueba' }),
+    );
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Quitar de recientes' }));
     await waitFor(() => expect(rowNames()).toEqual([]));
     expect(screen.getByRole('tab', { name: /Recientes/ })).toHaveTextContent('0');
@@ -188,9 +249,13 @@ describe('tarjetas: reproducir, borrar con deshacer, favorito y renombrar', () =
   it('la estrella en un canal que no es favorito abre «Guardar favorito» y pasa a Favoritos', async () => {
     const library = makeLibrary();
     setup(library, { search: '?vista=biblioteca&pestana=recientes' });
-    fireEvent.click(await screen.findByRole('button', { name: 'Añadir Canal de prueba a favoritos' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Añadir Canal de prueba a favoritos' }),
+    );
     const dialog = await screen.findByRole('dialog', { name: 'Guardar favorito' });
-    expect(within(dialog).getByRole('textbox', { name: 'Nombre del canal' })).toHaveValue('Canal de prueba');
+    expect(within(dialog).getByRole('textbox', { name: 'Nombre del canal' })).toHaveValue(
+      'Canal de prueba',
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Guardar en favoritos' }));
     await waitFor(() =>
       expect(net.calls.find((c) => c.method === 'POST')?.body).toMatchObject({
@@ -198,7 +263,9 @@ describe('tarjetas: reproducir, borrar con deshacer, favorito y renombrar', () =
         item: { id: library.history[0]!.id, title: 'Canal de prueba' },
       }),
     );
-    await waitFor(() => expect(new URLSearchParams(location.search).get('pestana')).toBe('favoritos'));
+    await waitFor(() =>
+      expect(new URLSearchParams(location.search).get('pestana')).toBe('favoritos'),
+    );
   });
 
   it('renombrar desde el menú manda la colección y el título', async () => {
@@ -222,7 +289,9 @@ describe('tarjetas: reproducir, borrar con deshacer, favorito y renombrar', () =
   it('marca el favorito que ya no está en la lista activa', async () => {
     setup(makeLibrary({ favorites: [makeItem('Canal viejo', 'fav', { fromWebSync: true })] }));
     expect(
-      await screen.findByRole('img', { name: 'Este canal ya no aparece en la última sincronización' }),
+      await screen.findByRole('img', {
+        name: 'Este canal ya no aparece en la última sincronización',
+      }),
     ).toBeInTheDocument();
   });
 
@@ -232,7 +301,10 @@ describe('tarjetas: reproducir, borrar con deshacer, favorito y renombrar', () =
     const link = await screen.findByRole('link', { name: 'Eurosport 1' });
     fireEvent.click(link);
     await waitFor(() =>
-      expect(selectionStore.get()).toEqual({ collection: 'favorites', id: library.favorites[1]!.id }),
+      expect(selectionStore.get()).toEqual({
+        collection: 'favorites',
+        id: library.favorites[1]!.id,
+      }),
     );
     expect(route()).toBe('biblioteca');
     fireEvent.click(screen.getByRole('link', { name: 'Eurosport 1' }));
@@ -308,8 +380,8 @@ describe('«Emitiendo ahora» (C1) y lo que da cada canal', () => {
     expect(within(strip).getByText('En directo')).toBeInTheDocument();
     await waitFor(() => expect(within(strip).getByText('1 a 1')).toBeInTheDocument());
     // La tarjeta de Eurosport 1 dice a qué hora da su partido.
-    const line = await screen.findByText(
-      (_, el) => Boolean(el?.classList.contains('ch__txt') && el.textContent?.includes('Betis')),
+    const line = await screen.findByText((_, el) =>
+      Boolean(el?.classList.contains('ch__txt') && el.textContent?.includes('Betis')),
     );
     expect(line).toHaveTextContent('A las 23:00, Betis – Valencia');
 

@@ -28,8 +28,10 @@ export function ModePicker({
     const index = PLAYBACK_MODE_ORDER.indexOf(value);
     const last = PLAYBACK_MODE_ORDER.length - 1;
     let next: number | null = null;
-    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = index >= last ? 0 : index + 1;
-    else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = index <= 0 ? last : index - 1;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown')
+      next = index >= last ? 0 : index + 1;
+    else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp')
+      next = index <= 0 ? last : index - 1;
     else if (event.key === 'Home') next = 0;
     else if (event.key === 'End') next = last;
     if (next === null) return;

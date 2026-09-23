@@ -137,3 +137,45 @@ describe('api()', () => {
     expect(timeoutFor('libraryMutate')).toBe(12_000);
   });
 });
+
+/* index.html adelanta la agenda de la portada (window.__acePrefetch): api()
+   usa esa respuesta una vez y, si falló por la red, pide otra. */
+describe('api() con peticiones adelantadas por index.html', () => {
+  const holder = globalThis as { __acePrefetch?: Record<string, Promise<Response> | undefined> };
+  afterEach(() => {
+    delete holder.__acePrefetch;
+  });
+
+  it('usa la adelantada una sola vez; la siguiente va a la red', async () => {
+    const net = mockFetch({ 'GET /api/v1/football': fixture('footballSchedule') });
+    holder.__acePrefetch = {
+      '/api/v1/football': Promise.resolve(json(fixture('footballSchedule'))),
+    };
+    await api('footballSchedule');
+    expect(net.calls).toHaveLength(0);
+    await api('footballSchedule');
+    expect(net.calls).toHaveLength(1);
+    net.restore();
+  });
+
+  it('si la adelantada falló, la repite en la red', async () => {
+    const net = mockFetch({ 'GET /api/v1/football': fixture('footballSchedule') });
+    const failed = Promise.reject(new TypeError('Failed to fetch'));
+    failed.catch(() => {});
+    holder.__acePrefetch = { '/api/v1/football': failed };
+    await expect(api('footballSchedule')).resolves.toBeTruthy();
+    expect(net.calls).toHaveLength(1);
+    net.restore();
+  });
+
+  it('cancelada por quien llama mientras espera la adelantada: AbortError, sin repetir', async () => {
+    const net = mockFetch({ 'GET /api/v1/football': fixture('footballSchedule') });
+    holder.__acePrefetch = { '/api/v1/football': new Promise<Response>(() => {}) };
+    const controller = new AbortController();
+    const pending = api('footballSchedule', { signal: controller.signal });
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(net.calls).toHaveLength(0);
+    net.restore();
+  });
+});

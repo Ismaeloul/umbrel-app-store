@@ -336,7 +336,10 @@
 .lib-cat:disabled {
   cursor: default;
 }
-.lib-cat:focus-visible {
+/* También en la 2.ª cabecera y siguientes: la regla del separador (más
+   específica) se comía el borde de foco (revisión de teclado de la Fase 2). */
+.lib-cat:focus-visible,
+.lib-row + .lib-row .lib-cat:focus-visible {
   outline: none;
   box-shadow: inset 0 0 0 2px var(--accent-edge);
 }
@@ -412,7 +415,8 @@
   padding-inline: calc(var(--gutter) + var(--safe-left)) calc(var(--gutter) + var(--safe-right));
   /* Sin esto, el imán (`scroll-snap-align: start`) pega la primera tarjeta
      al borde de la pantalla ignorando el relleno y la deja cortada. */
-  scroll-padding-inline: calc(var(--gutter) + var(--safe-left)) calc(var(--gutter) + var(--safe-right));
+  scroll-padding-inline: calc(var(--gutter) + var(--safe-left))
+    calc(var(--gutter) + var(--safe-right));
   padding-block: 2px;
 }
 .onair__rail::-webkit-scrollbar {

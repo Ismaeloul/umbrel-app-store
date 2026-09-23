@@ -38,7 +38,9 @@ function env(over: Partial<SwEnvironment> = {}, container = new FakeContainer())
     isSecureContext: true,
     hostname: 'umbrel.tail1234.ts.net',
     serviceWorker: container as unknown as ServiceWorkerContainer,
-    fetch: vi.fn(async () => new Response('', { status: 200, headers: { 'content-type': 'text/javascript' } })),
+    fetch: vi.fn(
+      async () => new Response('', { status: 200, headers: { 'content-type': 'text/javascript' } }),
+    ),
     ...over,
   };
 }
@@ -67,12 +69,16 @@ describe('registro del service worker', () => {
   });
 
   it('en localhost solo registra si /sw.js es JavaScript de verdad (no el index de vite preview)', async () => {
-    const html = vi.fn(async () => new Response('<html>', { headers: { 'content-type': 'text/html' } }));
+    const html = vi.fn(
+      async () => new Response('<html>', { headers: { 'content-type': 'text/html' } }),
+    );
     expect(await swAvailable(html)).toBe(false);
     expect(await swAvailable(vi.fn(async () => new Response('', { status: 404 })))).toBe(false);
     expect(await swAvailable(vi.fn(async () => Promise.reject(new TypeError('red'))))).toBe(false);
     const container = new FakeContainer();
-    expect(await registerServiceWorker(env({ hostname: 'localhost', fetch: html }, container))).toBeNull();
+    expect(
+      await registerServiceWorker(env({ hostname: 'localhost', fetch: html }, container)),
+    ).toBeNull();
     expect(container.register).not.toHaveBeenCalled();
     const ok = new FakeContainer();
     await registerServiceWorker(env({ hostname: 'localhost' }, ok));
@@ -171,7 +177,13 @@ describe('versión del servidor', () => {
     const doc = Object.defineProperty(new EventTarget(), 'visibilityState', {
       get: () => visibility,
     }) as unknown as Document;
-    const stop = watchServerVersion({ client, fetchVersion, onUpdate: vi.fn(), now: () => clock, doc });
+    const stop = watchServerVersion({
+      client,
+      fetchVersion,
+      onUpdate: vi.fn(),
+      now: () => clock,
+      doc,
+    });
     realtimeStore.set({ status: 'connecting', lastEventId: null, attempts: 1 });
     realtimeStore.set({ status: 'open', lastEventId: null, attempts: 0 });
     await vi.waitFor(() => expect(fetchVersion).toHaveBeenCalledTimes(1));
@@ -205,7 +217,11 @@ describe('versión del servidor', () => {
 
     setMode('demo', 'param');
     const demoFetch = vi.fn(async () => '9.9.9');
-    const stopDemo = watchServerVersion({ client: createQueryClient(), fetchVersion: demoFetch, onUpdate });
+    const stopDemo = watchServerVersion({
+      client: createQueryClient(),
+      fetchVersion: demoFetch,
+      onUpdate,
+    });
     dispatchSse('resync', { reason: 'server_restart' }, { id: null, synthetic: false });
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(demoFetch).not.toHaveBeenCalled();
@@ -215,7 +231,9 @@ describe('versión del servidor', () => {
 
 describe('manifiesto y accesos directos', () => {
   it('«Agenda» y «Biblioteca» del icono abren esas vistas (?vista=…)', () => {
-    const manifest = JSON.parse(readFileSync(path.join(WEB, 'public', 'manifest.webmanifest'), 'utf8')) as {
+    const manifest = JSON.parse(
+      readFileSync(path.join(WEB, 'public', 'manifest.webmanifest'), 'utf8'),
+    ) as {
       id: string;
       start_url: string;
       shortcuts: Array<{ name: string; url: string }>;
@@ -227,7 +245,40 @@ describe('manifiesto y accesos directos', () => {
     expect(byName.Biblioteca).toBe('/?vista=biblioteca');
     for (const shortcut of manifest.shortcuts) {
       const search = new URL(shortcut.url, 'http://umbrel.local:7792').search;
-      expect(parseRoute(search).vista).toBe(shortcut.url.endsWith('biblioteca') ? 'biblioteca' : 'agenda');
+      expect(parseRoute(search).vista).toBe(
+        shortcut.url.endsWith('biblioteca') ? 'biblioteca' : 'agenda',
+      );
     }
+  });
+
+  it('se instala como app (B-253): standalone, iconos 192, 512 y 512 maskable, y los de iOS en el HTML', () => {
+    const manifest = JSON.parse(
+      readFileSync(path.join(WEB, 'public', 'manifest.webmanifest'), 'utf8'),
+    ) as {
+      display: string;
+      scope: string;
+      name: string;
+      short_name: string;
+      icons: Array<{ src: string; sizes: string; purpose?: string }>;
+    };
+    expect(manifest).toMatchObject({ display: 'standalone', scope: '/', name: 'Ace Player Neo' });
+    const icons = manifest.icons.map((icon) => `${icon.sizes} ${icon.purpose ?? 'any'}`);
+    expect(icons).toEqual(
+      expect.arrayContaining(['192x192 any', '512x512 any', '512x512 maskable']),
+    );
+    // Cada icono que cita el manifiesto existe en public/.
+    for (const icon of manifest.icons)
+      expect(() => readFileSync(path.join(WEB, 'public', icon.src), 'utf8')).not.toThrow();
+    const html = readFileSync(path.join(WEB, 'index.html'), 'utf8');
+    expect(html).toContain('<link rel="manifest" href="/manifest.webmanifest" />');
+    expect(html).toContain('<link rel="apple-touch-icon" href="/icon-180.png" />');
+    expect(html).toMatch(/name="apple-mobile-web-app-capable" content="yes"/);
+    expect(html).toMatch(/viewport-fit=cover/);
+    // Teclado en pantalla: en Android encoge la página en vez de tapar los campos
+    // (en iOS lo mide src/lib/viewport.ts con visualViewport).
+    expect(html).toMatch(/interactive-widget=resizes-content/);
+    expect(readFileSync(path.join(WEB, 'public', 'icon-180.png'), 'utf8').length).toBeGreaterThan(
+      0,
+    );
   });
 });

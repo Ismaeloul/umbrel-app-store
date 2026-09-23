@@ -19,12 +19,27 @@ function ChannelFallback({ hash }: { hash: string }) {
 
 function Fold() {
   const layout = useLayout();
-  return <IconButton icon="panel" label="Plegar el panel lateral" onClick={() => layout.setAsideOpen(false)} />;
+  return (
+    <IconButton
+      icon="panel"
+      label="Plegar el panel lateral"
+      onClick={() => layout.setAsideOpen(false)}
+    />
+  );
 }
 
 export default function MatchAside({ route }: ViewProps) {
-  const lonelyChannel = useSession((state) => state.kind === 'channel' && state.entries.length === 0);
+  const lonelyChannel = useSession(
+    (state) => state.kind === 'channel' && state.entries.length === 0,
+  );
   const hash = route.vista === 'partido' ? route.canal : null;
+  /* Con un partido, el panel se llena cuando su sesión ya existe (la abre la
+     vista al entrar). Antes pintaba primero el panel vacío con «Datos
+     técnicos» arriba del todo y, al llegar las fuentes, lo empujaba 400 px
+     hacia abajo (CLS en escritorio; revisión de rendimiento de la Fase 2). */
+  const matchId = route.vista === 'partido' && !hash ? route.id : null;
+  const waiting = useSession((state) => matchId !== null && state.key !== `m:${matchId}`);
+  if (waiting) return <div className="mc-aside" />;
   return (
     <div className="mc-aside">
       {lonelyChannel ? (
@@ -34,7 +49,11 @@ export default function MatchAside({ route }: ViewProps) {
           <Fold />
         </div>
       ) : null}
-      {hash ? <ChannelFallback hash={hash} /> : <SourcesPanel variant="rack" headerExtra={<Fold />} />}
+      {hash ? (
+        <ChannelFallback hash={hash} />
+      ) : (
+        <SourcesPanel variant="rack" headerExtra={<Fold />} />
+      )}
       <NerdSection variant="panel" />
     </div>
   );

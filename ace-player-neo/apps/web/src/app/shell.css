@@ -58,6 +58,10 @@
   background: var(--bg);
 }
 .stage__status {
+  /* El hueco de la línea (44 px) se guarda desde el principio: aparece en
+     cuanto el reproductor fija su estado y, sin reserva, empujaba el partido
+     hacia abajo (CLS 0,25 en el móvil; revisión de rendimiento de la Fase 2). */
+  min-height: 44px;
   padding-inline: calc(var(--gutter) + var(--safe-left)) calc(var(--gutter) + var(--safe-right));
 }
 .dock[data-presentation='stage'] {

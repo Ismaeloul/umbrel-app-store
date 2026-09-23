@@ -63,11 +63,16 @@ describe('Pegar hash (§7.5)', () => {
   it('Intro reproduce: va al canal con título «Stream …» y el servidor decide id o infohash', async () => {
     net = mockFetch({ 'GET /api/v1/library': makeLibrary() });
     renderWithApp(<Harness />);
-    fireEvent.change(await screen.findByRole('textbox', { name: 'Content ID o enlace AceStream' }), {
-      target: { value: `acestream://${HASH}` },
-    });
+    fireEvent.change(
+      await screen.findByRole('textbox', { name: 'Content ID o enlace AceStream' }),
+      {
+        target: { value: `acestream://${HASH}` },
+      },
+    );
     fireEvent.submit(input().closest('form') as HTMLFormElement);
-    await waitFor(() => expect(screen.getByTestId('ruta')).toHaveTextContent(`partido/canal/${HASH}`));
+    await waitFor(() =>
+      expect(screen.getByTestId('ruta')).toHaveTextContent(`partido/canal/${HASH}`),
+    );
     expect(getPlayer().channel).toMatchObject({
       hash: HASH,
       title: `Stream ${HASH.slice(0, 8)}`,
@@ -82,9 +87,12 @@ describe('Pegar hash (§7.5)', () => {
     net = mockFetch({ 'GET /api/v1/library': library });
     renderWithApp(<Harness />);
     await waitFor(() => expect(net.calls.length).toBeGreaterThan(0));
-    fireEvent.change(await screen.findByRole('textbox', { name: 'Content ID o enlace AceStream' }), {
-      target: { value: known.id },
-    });
+    fireEvent.change(
+      await screen.findByRole('textbox', { name: 'Content ID o enlace AceStream' }),
+      {
+        target: { value: known.id },
+      },
+    );
     await new Promise((resolve) => setTimeout(resolve, 20));
     fireEvent.click(play());
     await waitFor(() => expect(getPlayer().channel?.title).toBe('Eurosport 1'));
@@ -95,9 +103,12 @@ describe('Pegar hash (§7.5)', () => {
     net = mockFetch({});
     const got: string[] = [];
     renderWithApp(<Harness onSubmit={(hash) => got.push(hash)} />);
-    fireEvent.change(await screen.findByRole('textbox', { name: 'Content ID o enlace AceStream' }), {
-      target: { value: HASH },
-    });
+    fireEvent.change(
+      await screen.findByRole('textbox', { name: 'Content ID o enlace AceStream' }),
+      {
+        target: { value: HASH },
+      },
+    );
     fireEvent.click(play());
     expect(got).toEqual([HASH]);
     expect(screen.getByTestId('ruta')).toHaveTextContent('biblioteca');

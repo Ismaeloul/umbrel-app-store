@@ -43,7 +43,8 @@ function findSelected(
   id: string,
 ): Item | null {
   if (!library) return null;
-  const tab = collection === 'favorites' ? 'favoritos' : collection === 'history' ? 'recientes' : 'listas';
+  const tab =
+    collection === 'favorites' ? 'favoritos' : collection === 'history' ? 'recientes' : 'listas';
   return itemsFor(library, tab).find((item) => item.id === id) ?? null;
 }
 
@@ -87,7 +88,12 @@ export function ChannelDetail({ active = true }: { active?: boolean }) {
         </div>
       </header>
       <div className="lib-detail__acts">
-        <Button variant="primary" icon="play" className="lib-detail__play" onClick={() => actions.play(item)}>
+        <Button
+          variant="primary"
+          icon="play"
+          className="lib-detail__play"
+          onClick={() => actions.play(item)}
+        >
           Ver canal
         </Button>
         <IconButton
@@ -163,7 +169,10 @@ export function ChannelDetail({ active = true }: { active?: boolean }) {
           <ol className="lib-later">
             {later.slice(0, 6).map(({ match }) => (
               <li key={match.id} className="lib-later__row">
-                <Num className="lib-later__time" value={/^\d{2}:\d{2}$/.test(match.time) ? match.time : '--:--'} />
+                <Num
+                  className="lib-later__time"
+                  value={/^\d{2}:\d{2}$/.test(match.time) ? match.time : '--:--'}
+                />
                 <span className="lib-later__title">
                   {match.away ? `${match.home} – ${match.away}` : match.title}
                 </span>

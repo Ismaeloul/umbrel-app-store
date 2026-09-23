@@ -29,7 +29,15 @@ import { resetScoreReveal, revealScore, useScoreHidden } from '../agenda/score-r
 export const GOAL_MS = 1200;
 
 /** Cifra que gira al CAMBIAR (un gol) o al destaparse; al pintarse la primera vez, quieta. */
-export function FlipDigit({ value, spin, label }: { value: number; spin: boolean; label?: string }) {
+export function FlipDigit({
+  value,
+  spin,
+  label,
+}: {
+  value: number;
+  spin: boolean;
+  label?: string;
+}) {
   const previous = useRef(value);
   const [turn, setTurn] = useState(spin ? 1 : 0);
   useEffect(() => {
@@ -37,7 +45,14 @@ export function FlipDigit({ value, spin, label }: { value: number; spin: boolean
     previous.current = value;
     setTurn((n) => n + 1);
   }, [value]);
-  return <Num key={turn} value={value} label={label} className={cx('mc-flip', turn > 0 && 'is-turning')} />;
+  return (
+    <Num
+      key={turn}
+      value={value}
+      label={label}
+      className={cx('mc-flip', turn > 0 && 'is-turning')}
+    />
+  );
 }
 
 /** Quién acaba de marcar (compara con el marcador anterior que se VIO destapado). */
@@ -125,7 +140,13 @@ export function Scoreboard({ match, score: rawScore, now, channels }: Scoreboard
       </span>
     );
   } else if (/^\d{2}:\d{2}$/.test(match.time)) {
-    mid = <Num className="mc-score__big mc-score__big--time" value={match.time} label={`A las ${match.time}`} />;
+    mid = (
+      <Num
+        className="mc-score__big mc-score__big--time"
+        value={match.time}
+        label={`A las ${match.time}`}
+      />
+    );
   } else {
     mid = <span className="mc-score__tbc">{match.time || 'Programado'}</span>;
   }
@@ -145,13 +166,24 @@ export function Scoreboard({ match, score: rawScore, now, channels }: Scoreboard
     </span>
   ) : (
     <span className="mc-score__when">
-      {done ? 'Final' : status ? keepUnitsTogether(status.text) : score || hidden ? '' : 'Programado'}
+      {done
+        ? 'Final'
+        : status
+          ? keepUnitsTogether(status.text)
+          : score || hidden
+            ? ''
+            : 'Programado'}
     </span>
   );
 
   return (
     <section
-      className={cx('mc-score', live && 'is-live', done && 'is-done', scorer && `is-goal-${scorer}`)}
+      className={cx(
+        'mc-score',
+        live && 'is-live',
+        done && 'is-done',
+        scorer && `is-goal-${scorer}`,
+      )}
       style={style}
       aria-labelledby={`mc-title-${match.id}`}
     >
@@ -207,7 +239,13 @@ export function Scoreboard({ match, score: rawScore, now, channels }: Scoreboard
         <div className="mc-score__timeline">
           <ProgressBar
             value={matchProgressAt(match, now, rawScore)}
-            label={done ? 'Partido terminado' : minute ? `Minuto ${minute.minute} de 90` : 'Partido en juego'}
+            label={
+              done
+                ? 'Partido terminado'
+                : minute
+                  ? `Minuto ${minute.minute} de 90`
+                  : 'Partido en juego'
+            }
             tone="live"
             marks={[0.5]}
           />

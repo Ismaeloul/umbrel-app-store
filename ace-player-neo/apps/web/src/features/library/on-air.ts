@@ -116,7 +116,9 @@ export function broadcastsMatch(
   return match.channels.some(
     (ref) =>
       channelMatchScore(channel.title, ref.name) >= RESOLUTION_EXACT_SCORE ||
-      (channel.alias ? channelMatchScore(channel.alias, ref.name) >= RESOLUTION_EXACT_SCORE : false),
+      (channel.alias
+        ? channelMatchScore(channel.alias, ref.name) >= RESOLUTION_EXACT_SCORE
+        : false),
   );
 }
 

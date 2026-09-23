@@ -27,8 +27,12 @@ export function WhereAired({
   today: string;
 }) {
   const day = dayLabel(match.date, today);
-  const dayText = ['Hoy', 'Mañana', 'Ayer'].includes(day.primary) ? day.primary : `${day.primary} ${day.secondary}`;
-  const when = /^\d{2}:\d{2}$/.test(match.time) ? `${dayText}, ${match.time}` : `${dayText}, hora por confirmar`;
+  const dayText = ['Hoy', 'Mañana', 'Ayer'].includes(day.primary)
+    ? day.primary
+    : `${day.primary} ${day.secondary}`;
+  const when = /^\d{2}:\d{2}$/.test(match.time)
+    ? `${dayText}, ${match.time}`
+    : `${dayText}, hora por confirmar`;
   return (
     <section className="mc-where" aria-labelledby={`mc-where-${match.id}`}>
       <h2 id={`mc-where-${match.id}`} className="mc-where__title">
@@ -41,7 +45,9 @@ export function WhereAired({
               <Chip
                 icon="tv"
                 outline={channel.inLibrary ? 'solid' : 'dashed'}
-                title={channel.inLibrary ? 'Disponible en tu biblioteca' : 'Se buscará al reproducir'}
+                title={
+                  channel.inLibrary ? 'Disponible en tu biblioteca' : 'Se buscará al reproducir'
+                }
               >
                 {channel.name}
               </Chip>
@@ -51,9 +57,7 @@ export function WhereAired({
       ) : (
         <p className="mc-where__muted">Canal por confirmar</p>
       )}
-      <p className="mc-where__meta">
-        {[match.competition, when].filter(Boolean).join(' · ')}
-      </p>
+      <p className="mc-where__meta">{[match.competition, when].filter(Boolean).join(' · ')}</p>
       <dl className="mc-where__keys" aria-label="Atajos de teclado">
         {HINTS.map(([key, label]) => (
           <div key={key} className="mc-where__key">

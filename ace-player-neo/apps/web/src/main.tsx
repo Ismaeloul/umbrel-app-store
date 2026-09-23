@@ -33,8 +33,13 @@ void bootApi(queryClient).then((result) => {
 // PWA (src/features/pwa/install.ts): el service worker (solo en producción y
 // en contexto seguro, como la 0.6.59; en localhost, solo si hay un sw.js de
 // verdad) y el aviso de versión nueva. Va en su propio trozo con import() y
-// se pide al terminar de cargar la página: no pesa en el JS inicial ni
-// compite con el primer pintado.
+// se pide cuando la página ya ha cargado Y está quieta (PWA_DELAY_MS después
+// de `load`, en un hueco libre): no pesa en el JS inicial ni compite con el
+// primer pintado ni con los datos de la vista. Pedido nada más cargar, la
+// cadena install-*.js → sw.js → /api/v1/ping entraba entera antes del LCP
+// (revisión de rendimiento de la Fase 2, docs/rendimiento.md). El worker y
+// el aviso de versión no tienen prisa.
+const PWA_DELAY_MS = 3000;
 const startPwa = () => {
   void import('./features/pwa/install.ts')
     .then((pwa) => pwa.installPwa({ client: queryClient }))
@@ -42,5 +47,11 @@ const startPwa = () => {
       // Si el trozo no llega, la app funciona igual (sin worker ni aviso).
     });
 };
-if (document.readyState === 'complete') startPwa();
-else window.addEventListener('load', startPwa, { once: true });
+const schedulePwa = () => {
+  setTimeout(() => {
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(startPwa, { timeout: 2000 });
+    else startPwa();
+  }, PWA_DELAY_MS);
+};
+if (document.readyState === 'complete') schedulePwa();
+else window.addEventListener('load', schedulePwa, { once: true });

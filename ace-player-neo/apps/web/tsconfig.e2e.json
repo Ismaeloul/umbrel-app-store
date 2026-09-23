@@ -1,0 +1,14 @@
+{
+  "//": "Typecheck de las pruebas E2E (Playwright, en Node). El código de pruebas corre en Node, pero los page.evaluate() tocan el DOM: de ahí la lib DOM.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "noEmit": true,
+    "sourceMap": false,
+    "types": ["node"]
+  },
+  "include": ["playwright.config.ts", "e2e"]
+}

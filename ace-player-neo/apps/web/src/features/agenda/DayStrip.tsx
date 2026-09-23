@@ -108,7 +108,22 @@ export function DayStrip({
     buttons.current.get(day.date)?.focus({ preventScroll: true });
   };
 
-  if (days.length === 0) return null;
+  // Mientras llega la agenda, el hueco de la tira con sus pastillas vacías:
+  // sin él, al llegar los días todo lo de debajo bajaba de golpe (CLS 0,47
+  // en el móvil; revisión de rendimiento de la Fase 2).
+  if (days.length === 0)
+    return (
+      <div
+        className={cx('agenda-days', `agenda-days--${variant}`, 'agenda-days--pending')}
+        aria-hidden="true"
+      >
+        <div className="agenda-days__track">
+          {Array.from({ length: 7 }, (_, index) => (
+            <span key={index} className="agenda-day agenda-day--pending" />
+          ))}
+        </div>
+      </div>
+    );
   const arrows = fine && edges.overflow;
 
   return (

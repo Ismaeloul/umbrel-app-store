@@ -63,7 +63,10 @@ describe('sideEffects de package.json', () => {
       for (const match of code.matchAll(BARE_IMPORT)) {
         const spec = match[1] as string;
         const target = path.resolve(path.dirname(full), spec);
-        const relative = `./${path.join('src', target.slice(SRC.length + 1)).split('\\').join('/')}`;
+        const relative = `./${path
+          .join('src', target.slice(SRC.length + 1))
+          .split('\\')
+          .join('/')}`;
         if (!patterns.some((re) => re.test(relative)))
           missing.push(`${file.split('\\').join('/')} → ${spec}`);
       }

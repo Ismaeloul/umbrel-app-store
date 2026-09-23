@@ -130,6 +130,87 @@ export function fontPreload(): Plugin {
   };
 }
 
+/** Lo que necesita de un trozo del build viewPreload (subconjunto de OutputChunk). */
+export interface ChunkLike {
+  type: 'chunk' | 'asset';
+  fileName: string;
+  isEntry?: boolean;
+  facadeModuleId?: string | null;
+  moduleIds?: readonly string[];
+  imports?: readonly string[];
+  viteMetadata?: { importedCss?: Set<string> };
+}
+
+const VIEW_MODULE = /[\\/]src[\\/](?:features[\\/]([\w-]+)[\\/]index|player[\\/]index)\.tsx$/;
+
+/**
+ * Para cada vista (carpeta de src/features con index.tsx), los ficheros que
+ * baja al abrirse y que NO están ya en el JS inicial: su trozo, sus imports
+ * estáticos y su CSS. «partido» lleva además el reproductor.
+ */
+export function viewPreloadMap(bundle: Record<string, ChunkLike>): Record<string, string[]> {
+  const chunks = Object.values(bundle).filter((item) => item.type === 'chunk');
+  const byFile = new Map(chunks.map((chunk) => [chunk.fileName, chunk]));
+  const closure = (start: string, into = new Set<string>()) => {
+    if (into.has(start)) return into;
+    into.add(start);
+    for (const next of byFile.get(start)?.imports ?? []) closure(next, into);
+    return into;
+  };
+  const initial = new Set<string>();
+  for (const chunk of chunks) if (chunk.isEntry) closure(chunk.fileName, initial);
+  const views = new Map<string, string>();
+  let player: string | null = null;
+  for (const chunk of chunks) {
+    for (const id of [chunk.facadeModuleId ?? '', ...(chunk.moduleIds ?? [])]) {
+      const match = VIEW_MODULE.exec(id);
+      if (!match) continue;
+      if (match[1]) views.set(match[1], chunk.fileName);
+      else player = chunk.fileName;
+    }
+  }
+  const filesFor = (roots: string[]) => {
+    const js = new Set<string>();
+    for (const root of roots) closure(root, js);
+    const out: string[] = [];
+    for (const file of js) {
+      if (initial.has(file)) continue;
+      out.push(`/${file}`);
+      for (const css of byFile.get(file)?.viteMetadata?.importedCss ?? []) out.push(`/${css}`);
+    }
+    return [...new Set(out)];
+  };
+  const map: Record<string, string[]> = {};
+  for (const [view, file] of views) {
+    map[view] = filesFor(view === 'partido' && player ? [file, player] : [file]);
+  }
+  return map;
+}
+
+/**
+ * Precarga en index.html lo que va a pedir la vista de la URL (?vista=…; sin
+ * ella, la agenda) EN PARALELO con el JS inicial. Sin esto el trozo de la
+ * vista se descubría cuando React ya había pintado el armazón: una ida y
+ * vuelta más antes del contenido (revisión de rendimiento de la Fase 2). Los
+ * nombres llevan hash, así que el mapa se escribe en cada build.
+ */
+export function viewPreload(): Plugin {
+  return {
+    name: 'ace-view-preload',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler(_html, ctx) {
+        if (!ctx.bundle) return [];
+        const map = viewPreloadMap(ctx.bundle as unknown as Record<string, ChunkLike>);
+        if (Object.keys(map).length === 0) return [];
+        const code = `(function(m){try{var v=(new URLSearchParams(location.search).get('vista')||'agenda').split('/')[0].toLowerCase();var f=m[v];if(!f)return;for(var i=0;i<f.length;i++){var l=document.createElement('link');if(/\\.css$/.test(f[i])){l.rel='preload';l.as='style'}else{l.rel='modulepreload'}l.crossOrigin='';l.href=f[i];document.head.appendChild(l)}}catch(e){}})(${JSON.stringify(map)});`;
+        return [{ tag: 'script', children: code, injectTo: 'head' }];
+      },
+    },
+  };
+}
+
 const COMPRESSIBLE = /\.(js|mjs|css|svg|json|webmanifest|txt)$/i;
 
 export function gzipAssets(): Plugin {

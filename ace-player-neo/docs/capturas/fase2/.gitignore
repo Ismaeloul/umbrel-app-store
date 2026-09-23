@@ -1,0 +1,11 @@
+# Solo se sube una selección (móvil 390x844 y escritorio 1440x900, oscuro y
+# claro, y la carpeta "vivo"): el repo de la tienda lo clona el Umbrel en cada
+# actualización y las ~480 capturas pesan ~45 MB. El resto se queda en el PC
+# de Isma (docs/capturas/fase2/<vista>/) y se regenera con
+# apps/web/scripts/revision-visual.mjs.
+*/*.png
+!*/*-390x844-oscuro.png
+!*/*-390x844-claro.png
+!*/*-1440x900-oscuro.png
+!*/*-1440x900-claro.png
+!vivo/*.png

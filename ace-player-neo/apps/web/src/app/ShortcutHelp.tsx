@@ -18,7 +18,10 @@ const panelLoader = PANELS['../features/help/panel.tsx'];
 const HelpPanel = panelLoader ? lazy(panelLoader) : null;
 
 /** Si el panel ampliado falla (trozo que no se descarga), la lista de siempre. */
-class PanelBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { failed: boolean }> {
+class PanelBoundary extends Component<
+  { children: ReactNode; fallback: ReactNode },
+  { failed: boolean }
+> {
   override state = { failed: false };
   static getDerivedStateFromError() {
     return { failed: true };
@@ -69,15 +72,20 @@ function ShortcutList() {
 export function ShortcutHelp({ open, onClose }: { open: boolean; onClose(): void }) {
   return (
     <Sheet open={open} onClose={onClose} title="Atajos de teclado" size="md">
-      {HelpPanel ? (
-        <PanelBoundary fallback={<ShortcutList />}>
-          <Suspense fallback={<ShortcutList />}>
-            <HelpPanel />
-          </Suspense>
-        </PanelBoundary>
-      ) : (
-        <ShortcutList />
-      )}
+      {/* Todo es texto: sin nada enfocable dentro, la hoja no se podría bajar
+          con el teclado (WCAG 2.1.1; axe «scrollable-region-focusable»). Con
+          el foco aquí, las flechas y Av Pág desplazan la hoja. */}
+      <div className="help-scroll" tabIndex={0} role="group" aria-label="Atajos y gestos">
+        {HelpPanel ? (
+          <PanelBoundary fallback={<ShortcutList />}>
+            <Suspense fallback={<ShortcutList />}>
+              <HelpPanel />
+            </Suspense>
+          </PanelBoundary>
+        ) : (
+          <ShortcutList />
+        )}
+      </div>
     </Sheet>
   );
 }

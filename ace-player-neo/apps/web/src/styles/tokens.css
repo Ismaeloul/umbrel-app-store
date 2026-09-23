@@ -287,7 +287,7 @@
   --text-3: #576574;
   --accent: #5fd9ff;
   --on-accent: #061c31;
-  --accent-ink: #0068a7;
+  --accent-ink: #0062a1;
   --accent-edge: #1b8abd;
   --accent-wash: rgb(95 217 255 / 0.22);
   --ok: #009342;
@@ -378,7 +378,7 @@
        dorado ni violeta: el ámbar solo existe como «floja». */
     --accent: oklch(0.83 0.12 222);
     --on-accent: oklch(0.22 0.05 250);
-    --accent-ink: light-dark(oklch(0.5 0.13 245), oklch(0.83 0.12 222));
+    --accent-ink: light-dark(oklch(0.48 0.13 245), oklch(0.83 0.12 222));
     --accent-edge: light-dark(oklch(0.6 0.12 235), oklch(0.83 0.12 222));
     --accent-wash: light-dark(oklch(0.83 0.12 222 / 0.22), oklch(0.83 0.12 222 / 0.16));
 

@@ -52,6 +52,7 @@ import { createStore, useStore } from '../../lib/store.ts';
 import { notify, toast } from '../../notices/index.ts';
 import {
   getPlayer,
+  kindFromIh,
   onSourceFailed,
   play,
   playerStore,
@@ -173,7 +174,10 @@ const EMPTY: SessionState = {
 
 export const sessionStore = createStore<SessionState>(EMPTY);
 
-export function useSession<S>(selector: (state: SessionState) => S, isEqual?: (a: S, b: S) => boolean): S {
+export function useSession<S>(
+  selector: (state: SessionState) => S,
+  isEqual?: (a: S, b: S) => boolean,
+): S {
   return useStore(sessionStore, selector, isEqual);
 }
 
@@ -236,8 +240,10 @@ function matchChannelFor(state: SessionState, entry: SourceEntry | undefined): s
 }
 
 function routeFor(state: SessionState): Route | undefined {
-  if (state.kind === 'match' && state.match) return { vista: 'partido', id: state.match.id, canal: null };
-  if (state.kind === 'channel' && state.key) return { vista: 'partido', id: null, canal: state.key.slice(2) };
+  if (state.kind === 'match' && state.match)
+    return { vista: 'partido', id: state.match.id, canal: null };
+  if (state.kind === 'channel' && state.key)
+    return { vista: 'partido', id: null, canal: state.key.slice(2) };
   return undefined;
 }
 
@@ -246,7 +252,11 @@ function glow(name: string): string {
 }
 
 /** Frase de la fuente para la línea de estado: «Fuente 1 verificada.» */
-function leadFor(number: number, effective: Effective | undefined, state: SessionState): string | undefined {
+function leadFor(
+  number: number,
+  effective: Effective | undefined,
+  state: SessionState,
+): string | undefined {
   if (state.kind !== 'match') return undefined;
   if (effective?.state === 'working' && !effective.reported) return `Fuente ${number} verificada.`;
   if (effective?.state === 'weak') return `Fuente ${number}, señal floja.`;
@@ -320,7 +330,11 @@ export function leaveSession(): void {
   stopScanWatch?.();
   stopScanWatch = null;
   setWaitingMessage(null);
-  patch({ autoVerified: false, switchArmed: false, phase: state.phase === 'resolving' ? 'idle' : state.phase });
+  patch({
+    autoVerified: false,
+    switchArmed: false,
+    phase: state.phase === 'resolving' ? 'idle' : state.phase,
+  });
 }
 
 function belongsOnScreen(state: SessionState, screen: OnScreen): boolean {
@@ -423,8 +437,15 @@ function applyEntryResolution(data: Resolution): void {
   const list = data.candidates.length ? data.candidates : [data.candidate];
   const entries = dedupeEntries(list.map((candidate) => entryFromCandidate(candidate, now)));
   const screen = screenNow();
-  const playingOne = screen.hash && entries.some((entry) => entry.id === screen.hash) ? screen.hash : null;
-  patch({ phase: 'ready', resolution: data, preheat: data.preheat, entries, activeHash: playingOne });
+  const playingOne =
+    screen.hash && entries.some((entry) => entry.id === screen.hash) ? screen.hash : null;
+  patch({
+    phase: 'ready',
+    resolution: data,
+    preheat: data.preheat,
+    entries,
+    activeHash: playingOne,
+  });
   if (data.scan) configureScan(data.scan);
   if (playingOne) {
     // Ya suena una fuente de este partido (se recargó la vista): nada que arrancar.
@@ -460,7 +481,9 @@ export interface ChannelEntry {
 export function enterChannel({ hash, title, siblings, activeListId }: ChannelEntry): void {
   const key = `c:${hash}`;
   const entries =
-    siblings.length > 1 ? dedupeEntries(siblings.map((item) => entryFromItem(item, activeListId))) : [];
+    siblings.length > 1
+      ? dedupeEntries(siblings.map((item) => entryFromItem(item, activeListId)))
+      : [];
   const current = sessionStore.get();
   if (current.key === key) {
     // La biblioteca llegó o cambió: se rehacen las hermanas conservando lo visto.
@@ -483,7 +506,11 @@ export function enterChannel({ hash, title, siblings, activeListId }: ChannelEnt
   begin({ key, kind: 'channel', channelTitle: title, entries, activeHash: hash, phase: 'ready' });
   const player = getPlayer();
   const idle = player.phase === 'idle' || player.phase === 'error';
-  if (player.channel?.hash !== hash && idle && (player.idleReason === 'inicio' || player.idleReason === null)) {
+  if (
+    player.channel?.hash !== hash &&
+    idle &&
+    (player.idleReason === 'inicio' || player.idleReason === null)
+  ) {
     play(
       { hash, title: title || `Canal ${hash.slice(0, 8)}` },
       { origin: 'library', route: { vista: 'partido', id: null, canal: hash } },
@@ -496,7 +523,12 @@ export function enterChannel({ hash, title, siblings, activeListId }: ChannelEnt
 interface WatchOptions {
   onJob(job: ScanJob): void;
   onError(error: unknown): void;
-  onVerdict?(data: { hash: string; state: 'working' | 'weak' | 'failed'; reason: string; playableOn?: { web: boolean; ios: boolean } }): void;
+  onVerdict?(data: {
+    hash: string;
+    state: 'working' | 'weak' | 'failed';
+    reason: string;
+    playableOn?: { web: boolean; ios: boolean };
+  }): void;
 }
 
 /**
@@ -637,11 +669,19 @@ function onMainScanError(): void {
   stopScanWatch = null;
   const state = sessionStore.get();
   patch({ entries: clearScan(state.entries), scan: null, autoVerified: false, switchArmed: false });
-  toast('El comprobador no responde; se muestran todas las fuentes', { tone: 'warn', icon: 'aviso' });
+  toast('El comprobador no responde; se muestran todas las fuentes', {
+    tone: 'warn',
+    icon: 'aviso',
+  });
   // Sin comprobador y sin nada en pantalla: la mejor colocada, como si no
   // hubiera comprobador desde el principio (la 0.6.59 se quedaba esperando).
   const after = sessionStore.get();
-  if (after.kind === 'match' && !after.manualChosen && !after.stopped && !belongsOnScreen(after, screenNow())) {
+  if (
+    after.kind === 'match' &&
+    !after.manualChosen &&
+    !after.stopped &&
+    !belongsOnScreen(after, screenNow())
+  ) {
     const best = after.entries.find((entry) => !isReported(entry, clock()));
     setWaitingMessage(null);
     if (best) playEntry(best, 'user');
@@ -711,7 +751,9 @@ function tryAutoStart(): boolean {
 function markAutoTried(hash: string): void {
   sessionStore.set((state) => ({
     ...state,
-    entries: state.entries.map((entry) => (entry.id === hash ? { ...entry, autoTried: true } : entry)),
+    entries: state.entries.map((entry) =>
+      entry.id === hash ? { ...entry, autoTried: true } : entry,
+    ),
   }));
 }
 
@@ -721,10 +763,13 @@ function maybeInitialSwitch(): void {
   const next = pickInitialSwitch(state.entries, state.activeHash, screenNow(), clock());
   if (!next) return;
   patch({ switchArmed: false });
-  notify(`La señal inicial no responde; probamos automáticamente la fuente ${numberOf(state, next.id)}`, {
-    kind: 'signal',
-    icon: 'tv',
-  });
+  notify(
+    `La señal inicial no responde; probamos automáticamente la fuente ${numberOf(state, next.id)}`,
+    {
+      kind: 'signal',
+      icon: 'tv',
+    },
+  );
   playEntry(next, 'auto');
 }
 
@@ -777,14 +822,20 @@ function playEntry(entry: SourceEntry, origin: PlayOrigin): void {
     {
       hash: entry.id,
       title: channelTitleFor(state, entry),
-      kind: entry.ih === true ? 'infohash' : 'auto',
+      // El tipo que declara la lista o el buscador (B-010); el pegado, `auto` (B-009).
+      kind: kindFromIh(entry.ih),
       ...(subtitle ? { subtitle } : {}),
       ...(leadFor(number, effective, state) ? { lead: leadFor(number, effective, state) } : {}),
       source: presentation.short.slice(0, 60),
       ...(entry.listaId ? { listaId: entry.listaId } : {}),
       ...(match ? { colors: [glow(match.home), glow(match.away || match.home)] as const } : {}),
     },
-    { origin, ...(routeFor(state) ? { route: routeFor(state) } : {}) },
+    {
+      origin,
+      ...(routeFor(state) ? { route: routeFor(state) } : {}),
+      // Un hash pegado a mano no entra en Recientes (B-187).
+      ...(entry.origin === 'manual' ? { record: false } : {}),
+    },
   );
   patch({ activeHash: entry.id, stopped: false, failureText: null });
 }
@@ -812,7 +863,11 @@ function onPlayerChange(): void {
   }
 
   // Suena otra cosa que no es de esta sesión (zapping, biblioteca): se acaba.
-  if (hash && hash !== previous.channel?.hash && !state.entries.some((entry) => entry.id === hash)) {
+  if (
+    hash &&
+    hash !== previous.channel?.hash &&
+    !state.entries.some((entry) => entry.id === hash)
+  ) {
     if (state.kind === 'channel' && state.key === `c:${hash}`) return;
     endSession();
     return;
@@ -862,7 +917,8 @@ function handleSourceFailed(failure: SourceFailure): SourceFailedReply {
     }
     if (!scanFinished(state.scan))
       return {
-        message: 'Esta fuente no responde. Sigo comprobando las demás y arranco la primera que funcione.',
+        message:
+          'Esta fuente no responde. Sigo comprobando las demás y arranco la primera que funcione.',
       };
     const total = entries.length;
     const text = `Ninguna de las ${total} fuentes da señal ahora mismo. Prueba "Rebuscar" o pega un Content ID.`;
@@ -872,7 +928,10 @@ function handleSourceFailed(failure: SourceFailure): SourceFailedReply {
 
   // Manual: se dice cuántas quedan y se deja elegir (regla 19).
   const others = entries.filter(
-    (entry, i) => i !== index && !effective.get(entry.id)?.reported && effective.get(entry.id)?.state !== 'failed',
+    (entry, i) =>
+      i !== index &&
+      !effective.get(entry.id)?.reported &&
+      effective.get(entry.id)?.state !== 'failed',
   ).length;
   const what = state.kind === 'match' ? 'partido' : 'canal';
   return {
@@ -905,7 +964,11 @@ export function stepSource(direction: 1 | -1, visible: readonly string[]): void 
   if (!visible.length) return;
   const current = state.activeHash ? visible.indexOf(state.activeHash) : -1;
   const index =
-    current < 0 ? (direction > 0 ? 0 : visible.length - 1) : (current + direction + visible.length) % visible.length;
+    current < 0
+      ? direction > 0
+        ? 0
+        : visible.length - 1
+      : (current + direction + visible.length) % visible.length;
   const hash = visible[index];
   if (hash && hash !== state.activeHash) selectSource(hash);
 }
@@ -919,7 +982,10 @@ export function addManualSource(raw: string): boolean {
   if (!hash) return false;
   const state = sessionStore.get();
   const title =
-    state.match?.channels[0] || getPlayer().channel?.title || state.channelTitle || `Stream ${hash.slice(0, 8)}`;
+    state.match?.channels[0] ||
+    getPlayer().channel?.title ||
+    state.channelTitle ||
+    `Stream ${hash.slice(0, 8)}`;
   const existed = state.entries.some((entry) => entry.id === hash);
   const entries = existed
     ? state.entries
@@ -930,7 +996,9 @@ export function addManualSource(raw: string): boolean {
     switchArmed: false,
     manualChosen: true,
     pasteOpen: false,
-    ...(state.scan ? { scan: { ...state.scan, total: Math.max(state.scan.total, entries.length) } } : {}),
+    ...(state.scan
+      ? { scan: { ...state.scan, total: Math.max(state.scan.total, entries.length) } }
+      : {}),
   });
   setWaitingMessage(null);
   const entry = entries.find((item) => item.id === hash);
@@ -961,7 +1029,8 @@ export async function research(): Promise<void> {
     state.entries
       .filter(
         (entry) =>
-          !state.scan || isShownWhileScanning(entry, effective.get(entry.id) as Effective, state.activeHash),
+          !state.scan ||
+          isShownWhileScanning(entry, effective.get(entry.id) as Effective, state.activeHash),
       )
       .map((entry) => entry.id),
   );
@@ -992,7 +1061,9 @@ export async function research(): Promise<void> {
         const entry = entryFromCandidate(candidate, clock());
         const seen = old.get(entry.id);
         // Lo que vio el reproductor sigue valiendo sus 3 minutos.
-        return seen ? { ...entry, playerVerdict: seen.playerVerdict, autoTried: seen.autoTried } : entry;
+        return seen
+          ? { ...entry, playerVerdict: seen.playerVerdict, autoTried: seen.autoTried }
+          : entry;
       }),
     );
     if (current && !combined.some((entry) => entry.id === current.id))
@@ -1048,7 +1119,9 @@ export async function reportSource(hash: string, reason: SourceReportReason): Pr
         title: entry.title.slice(0, 200),
         source: (presentation.short || presentation.type).slice(0, 60),
         ih: entry.ih === true,
-        ...(matchChannelFor(state, entry) ? { channel: matchChannelFor(state, entry).slice(0, 200) } : {}),
+        ...(matchChannelFor(state, entry)
+          ? { channel: matchChannelFor(state, entry).slice(0, 200) }
+          : {}),
         ...(state.match ? { matchId: state.match.id } : {}),
       },
     });
@@ -1065,7 +1138,9 @@ export async function reportSource(hash: string, reason: SourceReportReason): Pr
         ? latest.entries.find((item) => {
             if (item.id === hash) return false;
             const effective = effectiveOf(item, screenNow(), clock());
-            return !effective.reported && (effective.state === 'working' || effective.state === 'weak');
+            return (
+              !effective.reported && (effective.state === 'working' || effective.state === 'weak')
+            );
           })
         : undefined;
     // Reportar no cambia de fuente sola (index.html:4034-4038); se ofrece hacerlo.
@@ -1073,7 +1148,12 @@ export async function reportSource(hash: string, reason: SourceReportReason): Pr
       tone: 'info',
       icon: 'refresh',
       ...(alternative
-        ? { action: { label: `Ver la ${numberOf(latest, alternative.id)}`, onAction: () => selectSource(alternative.id) } }
+        ? {
+            action: {
+              label: `Ver la ${numberOf(latest, alternative.id)}`,
+              onAction: () => selectSource(alternative.id),
+            },
+          }
         : {}),
     });
     if (result.scan) followReport(hash, reason, result.scan.id);
@@ -1085,10 +1165,15 @@ export async function reportSource(hash: string, reason: SourceReportReason): Pr
   }
 }
 
-function markReported(hash: string, report: { reason: SourceReportReason; until: number } | null): void {
+function markReported(
+  hash: string,
+  report: { reason: SourceReportReason; until: number } | null,
+): void {
   sessionStore.set((state) => ({
     ...state,
-    entries: state.entries.map((entry) => (entry.id === hash ? { ...entry, reported: report } : entry)),
+    entries: state.entries.map((entry) =>
+      entry.id === hash ? { ...entry, reported: report } : entry,
+    ),
   }));
 }
 
@@ -1113,7 +1198,10 @@ function followReport(hash: string, reason: SourceReportReason, jobId: string): 
         polls += 1;
         const result = job.candidates.find((candidate) => candidate.id === hash);
         if (result) {
-          sessionStore.set((state) => ({ ...state, entries: applyScan(state.entries, { candidates: [result] }) }));
+          sessionStore.set((state) => ({
+            ...state,
+            entries: applyScan(state.entries, { candidates: [result] }),
+          }));
         }
         if (job.status === 'waiting' && job.retryAt) {
           // Hasta la hora del reintento no hay nada nuevo: se deja de preguntar.
@@ -1137,7 +1225,10 @@ function followReport(hash: string, reason: SourceReportReason, jobId: string): 
           if (!outcome.stillReported) markReported(hash, null);
           else if (current && !current.reported)
             markReported(hash, { reason, until: clock() + LOCAL_QUARANTINE_MS });
-          toast(outcome.message, { tone: outcome.tone, icon: outcome.tone === 'ok' ? 'check' : 'aviso' });
+          toast(outcome.message, {
+            tone: outcome.tone,
+            icon: outcome.tone === 'ok' ? 'check' : 'aviso',
+          });
           return;
         }
         if (polls >= REPORT_MAX_POLLS && realtimeStore.get().status !== 'open') finish();
@@ -1170,7 +1261,9 @@ export async function confirmSource(hash: string): Promise<boolean> {
     });
     sessionStore.set((current) => ({
       ...current,
-      entries: current.entries.map((item) => (item.id === hash ? { ...item, learned: 'correct' } : item)),
+      entries: current.entries.map((item) =>
+        item.id === hash ? { ...item, learned: 'correct' } : item,
+      ),
     }));
     toast('La asociación queda aprendida en el NAS', { tone: 'ok', icon: 'learn' });
     return true;
@@ -1207,7 +1300,12 @@ export async function chooseCandidate(choice: Choice, remember: boolean): Promis
   if (remember) {
     try {
       await api('footballBind', {
-        body: { channel: channel.slice(0, 200), id: choice.id, title: (choice.title || channel).slice(0, 200), ih: choice.ih },
+        body: {
+          channel: channel.slice(0, 200),
+          id: choice.id,
+          title: (choice.title || channel).slice(0, 200),
+          ih: choice.ih,
+        },
       });
     } catch {
       bindingFailed = true;
@@ -1244,7 +1342,10 @@ export async function chooseCandidate(choice: Choice, remember: boolean): Promis
   const entry = sessionStore.get().entries.find((item) => item.id === choice.id);
   if (entry) playEntry(entry, 'user');
   if (bindingFailed)
-    toast('El canal se reproduce, pero no pudimos recordar la asociación', { tone: 'warn', icon: 'aviso' });
+    toast('El canal se reproduce, pero no pudimos recordar la asociación', {
+      tone: 'warn',
+      icon: 'aviso',
+    });
 }
 
 /** «Vincular y reproducir» (`manualBindAndPlay`, index.html:4061-4065). Devuelve el error, o null. */

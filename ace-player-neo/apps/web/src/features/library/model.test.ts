@@ -44,7 +44,12 @@ describe('agrupados', () => {
       makeItem('C', 'web', { category: 'Deportes' }),
       makeItem('D', 'web', { category: 'deportes extra' }),
     ]);
-    expect(groups.map((g) => g.category)).toEqual(['Deportes', 'deportes extra', 'General', 'Música']);
+    expect(groups.map((g) => g.category)).toEqual([
+      'Deportes',
+      'deportes extra',
+      'General',
+      'Música',
+    ]);
   });
 
   it('recientes con cabeceras de Hoy, Ayer, Esta semana y Antes sin reordenar', () => {
@@ -71,7 +76,9 @@ describe('agrupados', () => {
 describe('subtítulos de la tarjeta', () => {
   const item = makeItem('X', 'fav', { category: 'Guardado' });
   it('búsqueda con disponibilidad; lista con categoría; si no, 14 del hash', () => {
-    expect(subtitleFor({ ...item, category: 'Deportes' }, 'search', 0.914)).toBe('Deportes · disp. 91%');
+    expect(subtitleFor({ ...item, category: 'Deportes' }, 'search', 0.914)).toBe(
+      'Deportes · disp. 91%',
+    );
     expect(subtitleFor({ ...item, category: '' }, 'search', null)).toBe('Búsqueda');
     expect(subtitleFor({ ...item, category: 'Cine' }, 'web')).toBe('Cine');
     expect(subtitleFor(item, 'favorites')).toBe(`${item.id.slice(0, 14)}…`);

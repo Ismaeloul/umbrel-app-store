@@ -38,10 +38,7 @@ import './directories.css';
 
 registerDirectoriesDemo();
 
-type Busy =
-  | { kind: 'add' }
-  | { kind: 'refresh' | 'activate' | 'delete'; id: string }
-  | null;
+type Busy = { kind: 'add' } | { kind: 'refresh' | 'activate' | 'delete'; id: string } | null;
 
 type Note = { tone: 'info' | 'ok' | 'err'; text: string } | null;
 
@@ -77,7 +74,8 @@ export function DirectoriesSection() {
   // que ya la tengas guardada (así no se duplica al darle a «Guardar»).
   useEffect(() => {
     if (!data || urlTouched) return;
-    if (!data.webSources.some((source) => source.url === DEFAULT_SYNC_URL)) setUrl(DEFAULT_SYNC_URL);
+    if (!data.webSources.some((source) => source.url === DEFAULT_SYNC_URL))
+      setUrl(DEFAULT_SYNC_URL);
   }, [data, urlTouched]);
 
   const sync = async (type: 'm3u' | 'html', source: WebSourceSummary | null) => {
@@ -217,9 +215,7 @@ export function DirectoriesSection() {
             Guardar HTML
           </Button>
         </div>
-        <p className="dir-note">
-          {full ? errorMessage('source_limit') : DIRECTORY_NOTE}
-        </p>
+        <p className="dir-note">{full ? errorMessage('source_limit') : DIRECTORY_NOTE}</p>
         <p
           className={cx('dir-status', note && `dir-status--${note.tone}`)}
           role={note?.tone === 'err' ? 'alert' : 'status'}
@@ -239,7 +235,8 @@ export function DirectoriesSection() {
 
       <div className="dir-saved">
         <h3 className="dir-form__title">
-          Listas guardadas <span className="dir-count">{`${sources.length} de ${MAX_WEB_SOURCES}`}</span>
+          Listas guardadas{' '}
+          <span className="dir-count">{`${sources.length} de ${MAX_WEB_SOURCES}`}</span>
         </h3>
         {!data ? (
           directories.isError ? (

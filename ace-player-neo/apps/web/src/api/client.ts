@@ -106,6 +106,36 @@ function withTimeout(
   };
 }
 
+/** Peticiones GET que index.html lanza antes de que llegue el JS
+    (`window.__acePrefetch`, por ruta: hoy la agenda de la portada). Cada una
+    se usa UNA vez, la primera vez que se pide esa URL. */
+function takeEarly(url: string): Promise<Response> | null {
+  const holder = globalThis as { __acePrefetch?: Record<string, Promise<Response> | undefined> };
+  const early = holder.__acePrefetch?.[url] ?? null;
+  if (early && holder.__acePrefetch) delete holder.__acePrefetch[url];
+  return early;
+}
+
+/** Espera la petición adelantada con el mismo plazo y cancelación que una
+    normal; si falló por la red, la repite (`again`). */
+async function awaitEarly(
+  early: Promise<Response>,
+  signal: AbortSignal,
+  again: () => Promise<Response>,
+): Promise<Response> {
+  try {
+    return await new Promise<Response>((resolve, reject) => {
+      const onAbort = () => reject(signal.reason ?? new DOMException('Cancelado', 'AbortError'));
+      if (signal.aborted) return onAbort();
+      signal.addEventListener('abort', onAbort, { once: true });
+      early.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+    });
+  } catch (error) {
+    if (signal.aborted) throw error;
+    return again();
+  }
+}
+
 let fetchImpl: typeof fetch = (...args) => globalThis.fetch(...args);
 
 /** Solo para los tests: un fetch simulado (src/test/fetch.ts). */
@@ -157,8 +187,8 @@ export async function api<Id extends JsonRouteId>(
   const hasBody = options.body !== undefined;
   const timeout = withTimeout(options.signal, options.timeoutMs ?? timeoutFor(id));
   let response: Response;
-  try {
-    response = await fetchImpl(url, {
+  const request = () =>
+    fetchImpl(url, {
       method: route.method,
       headers: hasBody
         ? { Accept: 'application/json', 'Content-Type': 'application/json' }
@@ -169,6 +199,10 @@ export async function api<Id extends JsonRouteId>(
       credentials: 'same-origin',
       keepalive: options.keepalive,
     });
+  // Si index.html ya la pidió (revisión de rendimiento de la Fase 2), se usa esa.
+  const early = route.method === 'GET' && !hasBody ? takeEarly(url) : null;
+  try {
+    response = early ? await awaitEarly(early, timeout.signal, request) : await request();
   } catch (error) {
     timeout.done();
     if (timeout.timedOut()) throw new ApiError({ code: 'timeout', route: id, cause: error });

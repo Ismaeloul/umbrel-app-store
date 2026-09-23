@@ -105,7 +105,12 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <Card as="section" className="set-sec" id={`ajustes-${def.id}`} aria-labelledby={`ajustes-${def.id}-t`}>
+    <Card
+      as="section"
+      className="set-sec"
+      id={`ajustes-${def.id}`}
+      aria-labelledby={`ajustes-${def.id}-t`}
+    >
       <header className="set-sec__head">
         <span className="set-sec__icon" aria-hidden="true">
           <Icon name={def.icon} size={20} />
@@ -137,11 +142,14 @@ const listFormat = (() => {
 })();
 
 export function preferenceSummary(
-  prefs: {
-    leagues?: readonly string[];
-    teams?: readonly string[];
-    nationalities?: readonly string[];
-  } | null | undefined,
+  prefs:
+    | {
+        leagues?: readonly string[];
+        teams?: readonly string[];
+        nationalities?: readonly string[];
+      }
+    | null
+    | undefined,
 ): string {
   const parts: string[] = [];
   const n = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
@@ -307,7 +315,9 @@ function EngineSection({ onHealth }: { onHealth: (() => void) | null }) {
     setBusy(true);
     // Se ve al momento que el motor está arrancando (index.html:4262).
     client.setQueryData(routeKey('engineStatus'), (old: unknown) =>
-      old && typeof old === 'object' ? { ...(old as object), status: 'restarting', online: false } : old,
+      old && typeof old === 'object'
+        ? { ...(old as object), status: 'restarting', online: false }
+        : old,
     );
     try {
       await api('engineRestart');
@@ -362,7 +372,10 @@ function AboutSection() {
         </div>
         <div>
           <dt>Versión</dt>
-          <dd>{boot.data?.version ?? '…'}{mode === 'demo' ? ' · modo demo' : ''}</dd>
+          <dd>
+            {boot.data?.version ?? '…'}
+            {mode === 'demo' ? ' · modo demo' : ''}
+          </dd>
         </div>
       </dl>
       <p className="set-help">
@@ -372,7 +385,9 @@ function AboutSection() {
         <Button
           variant="quiet"
           icon="kbd"
-          onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }))}
+          onClick={() =>
+            window.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }))
+          }
         >
           Atajos de teclado
         </Button>
@@ -385,6 +400,44 @@ function AboutSection() {
 }
 
 /* ---- Vista --------------------------------------------------------------- */
+
+/* Lo de abajo del todo no hace falta para pintar Ajustes y es lo que más
+   pesa: Salud (el registro de fallos, GET /api/v1/diagnostics: ~40 KB) y la
+   fuente mono (39 KB) que piden sus cifras y la tecla de «Acerca de». Se
+   monta cuando la sección se acerca a la pantalla o cuando se pide ella o una
+   de las de debajo (así su sitio no cambia de alto mientras se va a ellas).
+   Montado todo de golpe, en el 4G de Lighthouse entraba antes del LCP
+   (revisión de rendimiento de la Fase 2, docs/rendimiento.md). Sin
+   IntersectionObserver (jsdom), se monta a la primera. */
+const NEAR_MARGIN = '800px 0px';
+
+function WhenNear({ eager, children }: { eager: boolean; children: ReactNode }) {
+  const holder = useRef<HTMLDivElement>(null);
+  const [near, setNear] = useState(eager || typeof IntersectionObserver !== 'function');
+  useEffect(() => {
+    if (near) return;
+    if (eager) {
+      setNear(true);
+      return;
+    }
+    const el = holder.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) setNear(true);
+      },
+      { rootMargin: NEAR_MARGIN },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [near, eager]);
+  if (near) return children;
+  return (
+    <div ref={holder}>
+      <SkeletonRows rows={3} label="Cargando…" />
+    </div>
+  );
+}
 
 function External({ section, route, active }: { section: ExternalSection } & ViewProps) {
   const Component = externalSection(section);
@@ -431,7 +484,9 @@ export default function SettingsView({ route, active }: ViewProps) {
   // historial. Si ya es la actual, basta con volver a llevarla arriba.
   const go = (id: SectionId) => {
     if (id === current) {
-      document.getElementById(`ajustes-${id}`)?.scrollIntoView({ block: 'start', behavior: smooth() });
+      document
+        .getElementById(`ajustes-${id}`)
+        ?.scrollIntoView({ block: 'start', behavior: smooth() });
       return;
     }
     navigate({ vista: 'ajustes', seccion: id }, { replace: true, instant: true });
@@ -442,7 +497,11 @@ export default function SettingsView({ route, active }: ViewProps) {
     switch (def.id) {
       case 'listas':
         return (
-          <Section key={def.id} def={def} description="Los canales de la lista activa salen en la biblioteca, en «Listas».">
+          <Section
+            key={def.id}
+            def={def}
+            description="Los canales de la lista activa salen en la biblioteca, en «Listas»."
+          >
             <DirectoriesSection />
           </Section>
         );
@@ -473,7 +532,9 @@ export default function SettingsView({ route, active }: ViewProps) {
       case 'salud':
         return (
           <Section key={def.id} def={{ ...def, title: 'Salud del sistema' }}>
-            <External section="salud" route={route} active={active} />
+            <WhenNear eager={current === 'salud' || current === 'motor' || current === 'acerca'}>
+              <External section="salud" route={route} active={active} />
+            </WhenNear>
           </Section>
         );
       case 'motor':
@@ -485,7 +546,10 @@ export default function SettingsView({ route, active }: ViewProps) {
       case 'acerca':
         return (
           <Section key={def.id} def={def}>
-            <AboutSection />
+            {/* Su tecla «?» va en la fuente mono (39 KB): que no se pida al abrir Ajustes. */}
+            <WhenNear eager={current === 'acerca'}>
+              <AboutSection />
+            </WhenNear>
           </Section>
         );
     }

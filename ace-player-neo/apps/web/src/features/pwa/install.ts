@@ -97,7 +97,9 @@ export const LOCAL_HOST = /^(localhost|127\.\d+\.\d+\.\d+|\[::1\]|::1)$/;
 export type SwDecision = 'register' | 'probe' | 'skip';
 
 /** ¿Se registra el worker aquí? */
-export function swDecision(env: Pick<SwEnvironment, 'prod' | 'isSecureContext' | 'hostname' | 'serviceWorker'>): SwDecision {
+export function swDecision(
+  env: Pick<SwEnvironment, 'prod' | 'isSecureContext' | 'hostname' | 'serviceWorker'>,
+): SwDecision {
   if (!env.prod || !env.serviceWorker || !env.isSecureContext) return 'skip';
   return LOCAL_HOST.test(env.hostname) ? 'probe' : 'register';
 }

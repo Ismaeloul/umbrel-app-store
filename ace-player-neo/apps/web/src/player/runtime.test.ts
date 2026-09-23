@@ -246,6 +246,20 @@ describe('arranque', () => {
     });
   });
 
+  it('una señal de lista pide kind=id (B-010); un hash pegado (record: false) no entra en Recientes (B-187)', async () => {
+    const t = setup();
+    t.runtime.play({ hash: HASH, title: 'DAZN 1', kind: 'id' });
+    await flush();
+    expect(t.callsTo('channelStream')[0]?.input.query).toMatchObject({ kind: 'id' });
+    expect(t.callsTo('libraryMutate')).toHaveLength(1);
+    t.runtime.play({ hash: OTHER, title: 'Stream b2c3d4e5', kind: 'auto' }, { record: false });
+    await flush();
+    expect(t.callsTo('channelStream')[1]?.input.query).toMatchObject({ kind: 'auto' });
+    // Sigue habiendo UN solo history-upsert: el del canal de la lista.
+    expect(t.callsTo('libraryMutate')).toHaveLength(1);
+    expect(t.callsTo('libraryMutate')[0]?.input.body).toMatchObject({ item: { id: HASH } });
+  });
+
   it('pedir otra vez el mismo canal no reinicia nada', async () => {
     const t = setup();
     await startPlaying(t);
@@ -478,6 +492,8 @@ describe('reconexiones y paso de fuente', () => {
     t.engines.last().args.callbacks.onFatal('La señal se ha cortado: reconectando');
     await vi.advanceTimersByTimeAsync(4_000);
     expect(t.callsTo('channelStream')).toHaveLength(4);
+    // B-008: una reconexión no vuelve a apuntar el canal en Recientes.
+    expect(t.callsTo('libraryMutate')).toHaveLength(1);
 
     t.engines.last().args.callbacks.onFatal('La señal se ha cortado: reconectando');
     expect(t.state.phase).toBe('error');
@@ -628,6 +644,39 @@ describe('reconexiones y paso de fuente', () => {
     await flush();
     expect(t.callsTo('channelStream')).toHaveLength(2);
     expect(t.state.conn).toBe('conectando');
+    // B-013: lo dice con el nombre del canal.
+    expect(t.notices).toContain('Motor de vuelta: reconectando «Canal»…');
+  });
+
+  it('detener mientras espera al motor olvida el canal: cuando vuelve, no se reengancha (B-013)', async () => {
+    const t = setup();
+    t.handlers.channelStream = () => {
+      throw new ApiError({
+        code: 'engine_unavailable',
+        status: 503,
+        message: 'El motor AceStream no responde.',
+      });
+    };
+    t.runtime.play({ hash: HASH, title: 'Canal' });
+    await flush();
+    expect(t.state.idleReason).toBe('sin-motor');
+    t.runtime.stop();
+    t.handlers.channelStream = () => grant();
+    dispatchSse(
+      'engine.status',
+      {
+        status: 'online',
+        online: true,
+        since: '2026-09-23T18:30:00.000Z',
+        checkedAt: '2026-09-23T18:30:00.000Z',
+        engineVersion: '3.2.3',
+        autoRestarts: { lastHour: 0, max: 3, nextAllowedAt: null, exhausted: false },
+      } as never,
+      META,
+    );
+    await flush();
+    expect(t.callsTo('channelStream')).toHaveLength(1);
+    expect(t.notices.some((n) => n.startsWith('Motor de vuelta'))).toBe(false);
   });
 });
 

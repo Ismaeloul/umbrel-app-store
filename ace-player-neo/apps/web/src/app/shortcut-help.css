@@ -47,3 +47,10 @@
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
+
+/* Envoltorio enfocable de la ayuda (ShortcutHelp.tsx): el borde de foco va por
+   dentro, que la hoja recorta lo que sale de su cuerpo con scroll. */
+.help-scroll:focus-visible {
+  outline-offset: -2px;
+  border-radius: var(--r-m);
+}

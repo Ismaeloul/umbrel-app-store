@@ -11,6 +11,9 @@ corepack pnpm@10.18.2 --filter @ace/web build      # dist/ (assets con hash, .gz
 corepack pnpm@10.18.2 --filter @ace/web size       # falla si el JS inicial pasa de 150 KB gzip
 corepack pnpm@10.18.2 --filter @ace/web capturas   # capturas + revisión de 11 tamaños
 corepack pnpm@10.18.2 --filter @ace/web icons      # PNG de la app desde public/icon.svg
+corepack pnpm@10.18.2 --filter @ace/web revision   # 15 vistas × 12 tamaños: desbordes, 11 px, 44 px, axe, teclado (docs/accesibilidad.md)
+corepack pnpm@10.18.2 --filter @ace/web rendimiento # Lighthouse 13 por vista + latencia de interacción (docs/rendimiento.md)
+corepack pnpm@10.18.2 --filter @ace/web e2e        # Playwright contra la pila local (motor falso + backend): e2e/README.md
 ```
 
 Sin backend en `localhost` la app entra sola en **modo demo** (o con `?demo=1`).

@@ -22,13 +22,24 @@ beforeEach(() => resetScoreRevealForTests());
 afterEach(() => vi.useRealTimers());
 
 describe('Scoreboard', () => {
-  const live = matchAt(-72, { id: 'm-live', home: 'Atlético de Madrid', away: 'Tottenham', competition: 'Champions League' });
+  const live = matchAt(-72, {
+    id: 'm-live',
+    home: 'Atlético de Madrid',
+    away: 'Tottenham',
+    competition: 'Champions League',
+  });
 
   it('en directo: antetítulo, meta, marcador TAPADO y el minuto', () => {
-    render(<Scoreboard match={live} score={score(2, 1)} now={NOW} channels={['M+ Liga de Campeones']} />);
+    render(
+      <Scoreboard match={live} score={score(2, 1)} now={NOW} channels={['M+ Liga de Campeones']} />,
+    );
     expect(screen.getByText(/En directo · Centro de partido/)).toBeInTheDocument();
-    expect(screen.getByText(`Champions League · ${live.time} · M+ Liga de Campeones`)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 1, name: 'Atlético de Madrid vs Tottenham' })).toBeInTheDocument();
+    expect(
+      screen.getByText(`Champions League · ${live.time} · M+ Liga de Campeones`),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Atlético de Madrid vs Tottenham' }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Ver marcador' })).toBeInTheDocument();
     expect(screen.queryByLabelText(/Atlético de Madrid 2/)).toBeNull();
     // Num se lee entero con su texto oculto («Minuto 72»).
@@ -55,14 +66,18 @@ describe('Scoreboard', () => {
 
   it('terminado: «Final» y sin luces', () => {
     const done = matchAt(-200, { id: 'm-done' });
-    const { container } = render(<Scoreboard match={done} score={score(1, 0, 'post', 'FT')} now={NOW} channels={[]} />);
+    const { container } = render(
+      <Scoreboard match={done} score={score(1, 0, 'post', 'FT')} now={NOW} channels={[]} />,
+    );
     expect(screen.getByText('Final')).toBeInTheDocument();
     expect(container.querySelector('.mc-score')).toHaveClass('is-done');
   });
 
   it('un gol con el marcador destapado ilumina al que marca 1,2 s (C3)', () => {
     vi.useFakeTimers();
-    const { container, rerender } = render(<Scoreboard match={live} score={score(1, 1)} now={NOW} channels={[]} />);
+    const { container, rerender } = render(
+      <Scoreboard match={live} score={score(1, 1)} now={NOW} channels={[]} />,
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Ver marcador' }));
     rerender(<Scoreboard match={live} score={score(2, 1)} now={NOW} channels={[]} />);
     expect(container.querySelector('.mc-score')).toHaveClass('is-goal-home');
@@ -73,7 +88,9 @@ describe('Scoreboard', () => {
   });
 
   it('tapado no se celebra nada', () => {
-    const { container, rerender } = render(<Scoreboard match={live} score={score(1, 1)} now={NOW} channels={[]} />);
+    const { container, rerender } = render(
+      <Scoreboard match={live} score={score(1, 1)} now={NOW} channels={[]} />,
+    );
     rerender(<Scoreboard match={live} score={score(1, 2)} now={NOW} channels={[]} />);
     expect(container.querySelector('.mc-score')).not.toHaveClass('is-goal-away');
   });

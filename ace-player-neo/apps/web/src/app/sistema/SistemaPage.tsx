@@ -351,7 +351,9 @@ export default function SistemaPage(_props: ViewProps) {
         </div>
       </Section>
 
-      <Section id="avisos" title="Avisos">
+      {/* «Avisos» a secas ya es la región de los toasts (Toaster): dos
+          regiones con el mismo nombre no se distinguen (axe «landmark-unique»). */}
+      <Section id="avisos" title="Avisos y línea de estado">
         <div className="sis-row">
           <Button
             variant="quiet"
@@ -394,7 +396,7 @@ export default function SistemaPage(_props: ViewProps) {
           <Button
             variant="quiet"
             onClick={() =>
-              notify('Fuente floja: rellenando el búfer', { kind: 'signal', tone: 'warn' })
+              notify('Fuente floja: rellenando el colchón', { kind: 'signal', tone: 'warn' })
             }
           >
             notify() de señal

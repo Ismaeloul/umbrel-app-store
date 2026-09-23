@@ -1,7 +1,7 @@
 /* Topes que comparten servidor, web e iOS y que no son de state.json.
    Los de state.json (60, 500, 8, 12/24/24, 120/300/300, 600) viven en
-   state/v1.ts, junto al esquema que los aplica, para que no haya dos sitios
-   donde cambiarlos. */
+   state/limits.ts (sin zod, para la web), que importa y reexporta el esquema
+   de state/v1.ts: un solo sitio donde cambiarlos. */
 
 /** Cuerpo máximo de una petición a la API (server.js:29, nginx `client_max_body_size 2m`). */
 export const MAX_BODY_BYTES = 2 * 1024 * 1024;

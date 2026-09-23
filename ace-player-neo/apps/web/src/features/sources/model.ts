@@ -92,7 +92,10 @@ function reportOf(candidate: ResolutionCandidate, now: number): SourceReport | n
   if (candidate.reported && Number.isFinite(until) && until > now)
     return { reason: candidate.reported.reason, until };
   if (candidate.quarantined)
-    return { reason: candidate.reported?.reason ?? 'not_starting', until: now + LOCAL_QUARANTINE_MS };
+    return {
+      reason: candidate.reported?.reason ?? 'not_starting',
+      until: now + LOCAL_QUARANTINE_MS,
+    };
   return null;
 }
 
@@ -288,10 +291,9 @@ export const NOTHING_ON_SCREEN: OnScreen = { hash: null, playing: false, connect
 const PLAYING_PHASES = new Set(['reproduciendo', 'pausado', 'buffer', 'buscando']);
 const CONNECTING_PHASES = new Set(['cargando', 'reconectando', 'bloqueado', 'buffer']);
 
-export function onScreenOf(
-  state: Pick<PlayerState, 'phase' | 'channel' | 'started'>,
-): OnScreen {
-  const hash = state.phase === 'idle' || state.phase === 'error' ? null : (state.channel?.hash ?? null);
+export function onScreenOf(state: Pick<PlayerState, 'phase' | 'channel' | 'started'>): OnScreen {
+  const hash =
+    state.phase === 'idle' || state.phase === 'error' ? null : (state.channel?.hash ?? null);
   if (!hash) return NOTHING_ON_SCREEN;
   const playing = state.started && PLAYING_PHASES.has(state.phase);
   return { hash, playing, connecting: !playing && CONNECTING_PHASES.has(state.phase) };
@@ -478,7 +480,10 @@ export function presentationOf(
 }
 
 function mbit(kbps: number): string {
-  return (kbps / 1000).toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  return (kbps / 1000).toLocaleString('es-ES', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
 }
 
 /** Mbit/s del enjambre en la prueba (para el rack): null si no se midió. */
@@ -569,7 +574,9 @@ export function pickAutoSource(
   );
   const working = pool.find((entry) => effectiveById.get(entry.id)?.state === 'working');
   if (working) return working;
-  return finished ? (pool.find((entry) => effectiveById.get(entry.id)?.state === 'weak') ?? null) : null;
+  return finished
+    ? (pool.find((entry) => effectiveById.get(entry.id)?.state === 'weak') ?? null)
+    : null;
 }
 
 /**
@@ -626,10 +633,17 @@ export function scanProgressText(
   const total = Math.max(scan?.total ?? 0, entries.length);
   const playable = entries.filter((entry) => {
     const effective = effectiveById.get(entry.id);
-    return effective && !effective.reported && (effective.state === 'working' || effective.state === 'weak');
+    return (
+      effective &&
+      !effective.reported &&
+      (effective.state === 'working' || effective.state === 'weak')
+    );
   }).length;
-  if (scan?.status === 'complete') return `${playable} verificadas · ${total} comprobadas`;
-  if (scan?.status === 'waiting') return `${playable} verificadas · fallidas en reposo`;
+  // «1 verificada», no «1 verificadas» (los textos de la 0.6.59, con su singular).
+  const verified = `${playable} ${playable === 1 ? 'verificada' : 'verificadas'}`;
+  if (scan?.status === 'complete')
+    return `${verified} · ${total} ${total === 1 ? 'comprobada' : 'comprobadas'}`;
+  if (scan?.status === 'waiting') return `${verified} · fallidas en reposo`;
   if (scan) return `${scan.checked}/${total} · buscando señales vivas`;
   if (preheat && preheat.status !== 'failed')
     return `${preheat.candidateCount || entries.length} fuentes precalentadas`;
@@ -656,8 +670,16 @@ export function reportFollowUp(
       tone: 'err',
     };
   return stays
-    ? { stillReported: true, message: 'La señal está viva, pero queda apartada por tu reporte', tone: 'ok' }
-    : { stillReported: false, message: 'El segundo motor confirma que la fuente vuelve a funcionar', tone: 'ok' };
+    ? {
+        stillReported: true,
+        message: 'La señal está viva, pero queda apartada por tu reporte',
+        tone: 'ok',
+      }
+    : {
+        stillReported: false,
+        message: 'El segundo motor confirma que la fuente vuelve a funcionar',
+        tone: 'ok',
+      };
 }
 
 // ---- Biblioteca: fuentes hermanas del mismo canal (regla 23) ---------------------------------
@@ -666,10 +688,17 @@ export function reportFollowUp(
  * Desde la biblioteca, solo las señales del MISMO canal: puntuación ≥ 92 por
  * nombre normalizado (`fuentesHermanas`, index.html:3494-3500).
  */
-export function librarySiblings(library: Partial<LibraryView> | null | undefined, hash: string): Item[] {
+export function librarySiblings(
+  library: Partial<LibraryView> | null | undefined,
+  hash: string,
+): Item[] {
   const seen = new Set<string>();
   const all: Item[] = [];
-  for (const item of [...(library?.web ?? []), ...(library?.favorites ?? []), ...(library?.history ?? [])]) {
+  for (const item of [
+    ...(library?.web ?? []),
+    ...(library?.favorites ?? []),
+    ...(library?.history ?? []),
+  ]) {
     if (!item?.id || seen.has(item.id)) continue;
     seen.add(item.id);
     all.push(item);
@@ -679,7 +708,9 @@ export function librarySiblings(library: Partial<LibraryView> | null | undefined
   const name = current.alias || current.title;
   if (!normalizeChannelKey(name)) return [current];
   return all.filter(
-    (item) => item.id === hash || channelMatchScore(name, item.alias || item.title) >= RESOLUTION_EXACT_SCORE,
+    (item) =>
+      item.id === hash ||
+      channelMatchScore(name, item.alias || item.title) >= RESOLUTION_EXACT_SCORE,
   );
 }
 
@@ -716,4 +747,5 @@ export function checkedLabel(value: string): string {
   );
 }
 
-export const INVALID_HASH_TEXT = 'Introduce un Content ID o enlace AceStream válido de 40 caracteres.';
+export const INVALID_HASH_TEXT =
+  'Introduce un Content ID o enlace AceStream válido de 40 caracteres.';

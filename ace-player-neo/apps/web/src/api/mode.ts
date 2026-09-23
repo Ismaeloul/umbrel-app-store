@@ -62,9 +62,18 @@ export interface DetectResult {
   bootstrap: BootstrapResponse | null;
 }
 
+/** La petición de arranque que lanza index.html antes de que llegue el JS
+    (`window.__aceBootstrap`): se recoge UNA vez. */
+function takeEarlyBootstrap(): Promise<Response> | null {
+  const holder = globalThis as { __aceBootstrap?: Promise<Response> };
+  const early = holder.__aceBootstrap ?? null;
+  delete holder.__aceBootstrap;
+  return early;
+}
+
 export async function detectMode({
   location = globalThis.location,
-  fetchImpl = globalThis.fetch.bind(globalThis),
+  fetchImpl,
   timeoutMs = DEMO_DETECT_TIMEOUT_MS,
 }: DetectOptions = {}): Promise<DetectResult> {
   const params = new URLSearchParams(location.search);
@@ -72,13 +81,28 @@ export async function detectMode({
   if (location.protocol === 'file:') return { mode: 'demo', reason: 'file', bootstrap: null };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetchImpl('/api/v1/bootstrap', {
+  const request = () =>
+    (fetchImpl ?? globalThis.fetch.bind(globalThis))('/api/v1/bootstrap', {
       headers: { Accept: 'application/json' },
       cache: 'no-cache',
       credentials: 'same-origin',
       signal: controller.signal,
     });
+  /* index.html la pide en paralelo con el JS (revisión de rendimiento de la
+     Fase 2: ahorra una ida y vuelta antes de pedir ningún dato). Si esa falla
+     (un corte de red), se repite aquí como siempre, dentro del mismo plazo. */
+  const early = fetchImpl ? null : takeEarlyBootstrap();
+  const timeout = new Promise<never>((_, reject) => {
+    controller.signal.addEventListener('abort', () => reject(new Error('timeout')), { once: true });
+  });
+  timeout.catch(() => {});
+  try {
+    const response = early
+      ? await Promise.race([early, timeout]).catch((error: unknown) => {
+          if (controller.signal.aborted) throw error;
+          return request();
+        })
+      : await request();
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const bootstrap = (await response.json()) as BootstrapResponse;
     return { mode: 'live', reason: 'bootstrap', bootstrap };
