@@ -63,12 +63,21 @@ jobs:
           key: pnpm-${{ runner.os }}-${{ hashFiles('ace-player-neo/pnpm-lock.yaml') }}
           restore-keys: pnpm-${{ runner.os }}-
       - name: Instalar
+        id: instalar
         run: pnpm install --frozen-lockfile
-      - name: ESLint + Prettier
-        run: pnpm lint
+      # Lo mismo que `pnpm lint`, en pasos sueltos: un fallo de formato no
+      # esconde los de ESLint ni los de tipos.
+      - name: ESLint
+        if: ${{ !cancelled() && steps.instalar.outcome == 'success' }}
+        run: pnpm exec eslint .
+      - name: Prettier (--check)
+        if: ${{ !cancelled() && steps.instalar.outcome == 'success' }}
+        run: pnpm exec prettier --check .
       - name: Typecheck de los paquetes
+        if: ${{ !cancelled() && steps.instalar.outcome == 'success' }}
         run: pnpm typecheck
       - name: Typecheck de deploy/ y scripts/
+        if: ${{ !cancelled() && steps.instalar.outcome == 'success' }}
         run: pnpm typecheck:deploy
 
   tests:
@@ -88,16 +97,23 @@ jobs:
           key: pnpm-${{ runner.os }}-${{ hashFiles('ace-player-neo/pnpm-lock.yaml') }}
           restore-keys: pnpm-${{ runner.os }}-
       - name: Instalar
+        id: instalar
         run: pnpm install --frozen-lockfile
+      # Cada batería corre aunque falle la anterior.
       - name: packages/shared
+        if: ${{ !cancelled() && steps.instalar.outcome == 'success' }}
         run: pnpm --filter @ace/shared test
       - name: apps/server (unidad + integración)
+        if: ${{ !cancelled() && steps.instalar.outcome == 'success' }}
         run: pnpm --filter @ace/server test
       - name: Motor AceStream falso
+        if: ${{ !cancelled() && steps.instalar.outcome == 'success' }}
         run: pnpm --filter @ace/server exec vitest run --config test/fake-engine/vitest.config.ts
       - name: Empaquetado (deploy/ y scripts/)
+        if: ${{ !cancelled() && steps.instalar.outcome == 'success' }}
         run: pnpm test:deploy
       - name: apps/web
+        if: ${{ !cancelled() && steps.instalar.outcome == 'success' }}
         run: pnpm --filter @ace/web test
 
   web:
