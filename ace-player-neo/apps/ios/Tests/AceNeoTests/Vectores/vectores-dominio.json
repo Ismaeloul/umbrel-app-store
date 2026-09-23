@@ -1,0 +1,7268 @@
+{
+  "aviso": "Generado por apps/ios/scripts/generar-vectores.mjs desde packages/shared/src/domain. No se edita a mano.",
+  "claves": [
+    {
+      "texto": "",
+      "preferencia": "",
+      "competicion": "",
+      "equipo": "",
+      "canal": ""
+    },
+    {
+      "texto": "LaLiga",
+      "preferencia": "laliga",
+      "competicion": "laliga",
+      "equipo": "laliga",
+      "canal": "laliga"
+    },
+    {
+      "texto": "  LaLiga EA Sports ",
+      "preferencia": "laliga ea sports",
+      "competicion": "laligaeasports",
+      "equipo": "laliga ea sports",
+      "canal": "laliga ea sports"
+    },
+    {
+      "texto": "La Liga EA Sports",
+      "preferencia": "la liga ea sports",
+      "competicion": "laligaeasports",
+      "equipo": "la liga ea sports",
+      "canal": "la liga ea sports"
+    },
+    {
+      "texto": "LaLiga Hypermotion",
+      "preferencia": "laliga hypermotion",
+      "competicion": "laligahypermotion",
+      "equipo": "laliga hypermotion",
+      "canal": "laliga hypermotion"
+    },
+    {
+      "texto": "Segunda División",
+      "preferencia": "segunda division",
+      "competicion": "segundadivision",
+      "equipo": "segunda division",
+      "canal": "segunda division"
+    },
+    {
+      "texto": "Atlético de Madrid",
+      "preferencia": "atletico de madrid",
+      "competicion": "atleticodemadrid",
+      "equipo": "atletico madrid",
+      "canal": "atletico de madrid"
+    },
+    {
+      "texto": "Atlético Madrid",
+      "preferencia": "atletico madrid",
+      "competicion": "atleticomadrid",
+      "equipo": "atletico madrid",
+      "canal": "atletico madrid"
+    },
+    {
+      "texto": "At. Madrid",
+      "preferencia": "at madrid",
+      "competicion": "atmadrid",
+      "equipo": "atletico madrid",
+      "canal": "at madrid"
+    },
+    {
+      "texto": "FC Barcelona",
+      "preferencia": "fc barcelona",
+      "competicion": "fcbarcelona",
+      "equipo": "barcelona",
+      "canal": "fc barcelona"
+    },
+    {
+      "texto": "Barça",
+      "preferencia": "barca",
+      "competicion": "barca",
+      "equipo": "barcelona",
+      "canal": "barca"
+    },
+    {
+      "texto": "Barcelona SC",
+      "preferencia": "barcelona sc",
+      "competicion": "barcelonasc",
+      "equipo": "barcelona sc",
+      "canal": "barcelona sc"
+    },
+    {
+      "texto": "CF Montréal",
+      "preferencia": "cf montreal",
+      "competicion": "cfmontreal",
+      "equipo": "montreal",
+      "canal": "cf montreal"
+    },
+    {
+      "texto": "Real Madrid CF",
+      "preferencia": "real madrid cf",
+      "competicion": "realmadridcf",
+      "equipo": "real madrid",
+      "canal": "real madrid cf"
+    },
+    {
+      "texto": "Inter de Milán",
+      "preferencia": "inter de milan",
+      "competicion": "interdemilan",
+      "equipo": "inter",
+      "canal": "inter de milan"
+    },
+    {
+      "texto": "FC Internazionale",
+      "preferencia": "fc internazionale",
+      "competicion": "fcinternazionale",
+      "equipo": "inter",
+      "canal": "fc internazionale"
+    },
+    {
+      "texto": "Borussia Mönchengladbach",
+      "preferencia": "borussia monchengladbach",
+      "competicion": "borussiamonchengladbach",
+      "equipo": "borussia monchengladbach",
+      "canal": "borussia monchengladbach"
+    },
+    {
+      "texto": "São Paulo",
+      "preferencia": "sao paulo",
+      "competicion": "saopaulo",
+      "equipo": "sao paulo",
+      "canal": "sao paulo"
+    },
+    {
+      "texto": "Ñandú FC",
+      "preferencia": "nandu fc",
+      "competicion": "nandufc",
+      "equipo": "nandu",
+      "canal": "nandu fc"
+    },
+    {
+      "texto": "Países Bajos",
+      "preferencia": "paises bajos",
+      "competicion": "paisesbajos",
+      "equipo": "paises bajos",
+      "canal": "paises bajos"
+    },
+    {
+      "texto": "U.S.A.",
+      "preferencia": "u s a",
+      "competicion": "usa",
+      "equipo": "u s a",
+      "canal": "u s a"
+    },
+    {
+      "texto": "2. Bundesliga",
+      "preferencia": "2 bundesliga",
+      "competicion": "2bundesliga",
+      "equipo": "2 bundesliga",
+      "canal": "2 bundesliga"
+    },
+    {
+      "texto": "Man. City",
+      "preferencia": "man city",
+      "competicion": "mancity",
+      "equipo": "man city",
+      "canal": "man city"
+    },
+    {
+      "texto": "Émile—Zola",
+      "preferencia": "emile zola",
+      "competicion": "emilezola",
+      "equipo": "emile zola",
+      "canal": "emile zola"
+    },
+    {
+      "texto": "İstanbul Başakşehir",
+      "preferencia": "istanbul basaksehir",
+      "competicion": "istanbulbasaksehir",
+      "equipo": "istanbul basaksehir",
+      "canal": "istanbul basaksehir"
+    },
+    {
+      "texto": "Ωmega Σport",
+      "preferencia": "mega port",
+      "competicion": "megaport",
+      "equipo": "mega port",
+      "canal": "mega port"
+    },
+    {
+      "texto": "東京 FC",
+      "preferencia": "fc",
+      "competicion": "fc",
+      "equipo": "fc",
+      "canal": "fc"
+    },
+    {
+      "texto": "fc",
+      "preferencia": "fc",
+      "competicion": "fc",
+      "equipo": "fc",
+      "canal": "fc"
+    },
+    {
+      "texto": "FC CF",
+      "preferencia": "fc cf",
+      "competicion": "fccf",
+      "equipo": "cf",
+      "canal": "fc cf"
+    },
+    {
+      "texto": "DAZN 1 FHD --> NEW ERA",
+      "preferencia": "dazn 1 fhd new era",
+      "competicion": "dazn1fhdnewera",
+      "equipo": "dazn 1 fhd new era",
+      "canal": "dazn 1"
+    },
+    {
+      "texto": "M+ LaLiga TV",
+      "preferencia": "m laliga tv",
+      "competicion": "mlaligatv",
+      "equipo": "m laliga tv",
+      "canal": "movistar laliga tv"
+    },
+    {
+      "texto": "MOVISTAR PLUS+ 2 FHD",
+      "preferencia": "movistar plus 2 fhd",
+      "competicion": "movistarplus2fhd",
+      "equipo": "movistar plus 2 fhd",
+      "canal": "movistar 2"
+    },
+    {
+      "texto": "Movistar Plus+",
+      "preferencia": "movistar plus",
+      "competicion": "movistarplus",
+      "equipo": "movistar plus",
+      "canal": "movistar"
+    },
+    {
+      "texto": "LIGA DE CAMPEONES --> ELCANO",
+      "preferencia": "liga de campeones elcano",
+      "competicion": "ligadecampeoneselcano",
+      "equipo": "liga de campeones elcano",
+      "canal": "liga de campeones"
+    },
+    {
+      "texto": "***DAZN 1***",
+      "preferencia": "dazn 1",
+      "competicion": "dazn1",
+      "equipo": "dazn 1",
+      "canal": "dazn 1"
+    },
+    {
+      "texto": "Fox Sports 2 ⟶ Proveedor",
+      "preferencia": "fox sports 2 proveedor",
+      "competicion": "foxsports2proveedor",
+      "equipo": "fox sports 2 proveedor",
+      "canal": "fox sports 2"
+    },
+    {
+      "texto": "La 1 HD España",
+      "preferencia": "la 1 hd espana",
+      "competicion": "la1hdespana",
+      "equipo": "la 1 hd espana",
+      "canal": "la 1"
+    },
+    {
+      "texto": "beIN SPORTS 1 HD",
+      "preferencia": "bein sports 1 hd",
+      "competicion": "beinsports1hd",
+      "equipo": "bein sports 1 hd",
+      "canal": "bein sports 1"
+    },
+    {
+      "texto": "Canal+ Foot",
+      "preferencia": "canal foot",
+      "competicion": "canalfoot",
+      "equipo": "canal foot",
+      "canal": "canal foot"
+    },
+    {
+      "texto": "Sky Sports 1080p",
+      "preferencia": "sky sports 1080p",
+      "competicion": "skysports1080p",
+      "equipo": "sky sports 1080p",
+      "canal": "sky sports"
+    },
+    {
+      "texto": "Real Madrid TV 4K",
+      "preferencia": "real madrid tv 4k",
+      "competicion": "realmadridtv4k",
+      "equipo": "real madrid tv 4k",
+      "canal": "real madrid tv"
+    },
+    {
+      "texto": "Gol Play => Otro",
+      "preferencia": "gol play otro",
+      "competicion": "golplayotro",
+      "equipo": "gol play otro",
+      "canal": "gol play"
+    },
+    {
+      "texto": "Teledeporte == > x",
+      "preferencia": "teledeporte x",
+      "competicion": "teledeportex",
+      "equipo": "teledeporte x",
+      "canal": "teledeporte x"
+    }
+  ],
+  "ligas": [
+    {
+      "preferencia": "LaLiga",
+      "competicion": "LaLiga",
+      "coincide": true
+    },
+    {
+      "preferencia": "LaLiga",
+      "competicion": "LaLiga EA Sports",
+      "coincide": true
+    },
+    {
+      "preferencia": "LaLiga",
+      "competicion": "La Liga EA Sports",
+      "coincide": true
+    },
+    {
+      "preferencia": "LaLiga",
+      "competicion": "Primera División",
+      "coincide": true
+    },
+    {
+      "preferencia": "LaLiga",
+      "competicion": "LaLiga Hypermotion",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga",
+      "competicion": "LaLiga SmartBank",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga",
+      "competicion": "Segunda División",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga",
+      "competicion": "UEFA Champions League",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga",
+      "competicion": "Liga de Campeones",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga",
+      "competicion": "Premier League",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga",
+      "competicion": "Premier League Ucrania",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga",
+      "competicion": "Serie A",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga",
+      "competicion": "Serie A Brasil",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga",
+      "competicion": "Bundesliga",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga",
+      "competicion": "2. Bundesliga",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga",
+      "competicion": "Francia Ligue 1",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga",
+      "competicion": "Copa del Rey",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga",
+      "competicion": "Liga MX",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga",
+      "competicion": "Torneo Proyección",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga",
+      "competicion": "",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga Hypermotion",
+      "competicion": "LaLiga",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga Hypermotion",
+      "competicion": "LaLiga EA Sports",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga Hypermotion",
+      "competicion": "La Liga EA Sports",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga Hypermotion",
+      "competicion": "Primera División",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga Hypermotion",
+      "competicion": "LaLiga Hypermotion",
+      "coincide": true
+    },
+    {
+      "preferencia": "LaLiga Hypermotion",
+      "competicion": "LaLiga SmartBank",
+      "coincide": true
+    },
+    {
+      "preferencia": "LaLiga Hypermotion",
+      "competicion": "Segunda División",
+      "coincide": true
+    },
+    {
+      "preferencia": "LaLiga Hypermotion",
+      "competicion": "UEFA Champions League",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga Hypermotion",
+      "competicion": "Liga de Campeones",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga Hypermotion",
+      "competicion": "Premier League",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga Hypermotion",
+      "competicion": "Premier League Ucrania",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga Hypermotion",
+      "competicion": "Serie A",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga Hypermotion",
+      "competicion": "Serie A Brasil",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga Hypermotion",
+      "competicion": "Bundesliga",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga Hypermotion",
+      "competicion": "2. Bundesliga",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga Hypermotion",
+      "competicion": "Francia Ligue 1",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga Hypermotion",
+      "competicion": "Copa del Rey",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga Hypermotion",
+      "competicion": "Liga MX",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga Hypermotion",
+      "competicion": "Torneo Proyección",
+      "coincide": false
+    },
+    {
+      "preferencia": "LaLiga Hypermotion",
+      "competicion": "",
+      "coincide": false
+    },
+    {
+      "preferencia": "Champions League",
+      "competicion": "LaLiga",
+      "coincide": false
+    },
+    {
+      "preferencia": "Champions League",
+      "competicion": "LaLiga EA Sports",
+      "coincide": false
+    },
+    {
+      "preferencia": "Champions League",
+      "competicion": "La Liga EA Sports",
+      "coincide": false
+    },
+    {
+      "preferencia": "Champions League",
+      "competicion": "Primera División",
+      "coincide": false
+    },
+    {
+      "preferencia": "Champions League",
+      "competicion": "LaLiga Hypermotion",
+      "coincide": false
+    },
+    {
+      "preferencia": "Champions League",
+      "competicion": "LaLiga SmartBank",
+      "coincide": false
+    },
+    {
+      "preferencia": "Champions League",
+      "competicion": "Segunda División",
+      "coincide": false
+    },
+    {
+      "preferencia": "Champions League",
+      "competicion": "UEFA Champions League",
+      "coincide": true
+    },
+    {
+      "preferencia": "Champions League",
+      "competicion": "Liga de Campeones",
+      "coincide": true
+    },
+    {
+      "preferencia": "Champions League",
+      "competicion": "Premier League",
+      "coincide": false
+    },
+    {
+      "preferencia": "Champions League",
+      "competicion": "Premier League Ucrania",
+      "coincide": false
+    },
+    {
+      "preferencia": "Champions League",
+      "competicion": "Serie A",
+      "coincide": false
+    },
+    {
+      "preferencia": "Champions League",
+      "competicion": "Serie A Brasil",
+      "coincide": false
+    },
+    {
+      "preferencia": "Champions League",
+      "competicion": "Bundesliga",
+      "coincide": false
+    },
+    {
+      "preferencia": "Champions League",
+      "competicion": "2. Bundesliga",
+      "coincide": false
+    },
+    {
+      "preferencia": "Champions League",
+      "competicion": "Francia Ligue 1",
+      "coincide": false
+    },
+    {
+      "preferencia": "Champions League",
+      "competicion": "Copa del Rey",
+      "coincide": false
+    },
+    {
+      "preferencia": "Champions League",
+      "competicion": "Liga MX",
+      "coincide": false
+    },
+    {
+      "preferencia": "Champions League",
+      "competicion": "Torneo Proyección",
+      "coincide": false
+    },
+    {
+      "preferencia": "Champions League",
+      "competicion": "",
+      "coincide": false
+    },
+    {
+      "preferencia": "Premier League",
+      "competicion": "LaLiga",
+      "coincide": false
+    },
+    {
+      "preferencia": "Premier League",
+      "competicion": "LaLiga EA Sports",
+      "coincide": false
+    },
+    {
+      "preferencia": "Premier League",
+      "competicion": "La Liga EA Sports",
+      "coincide": false
+    },
+    {
+      "preferencia": "Premier League",
+      "competicion": "Primera División",
+      "coincide": false
+    },
+    {
+      "preferencia": "Premier League",
+      "competicion": "LaLiga Hypermotion",
+      "coincide": false
+    },
+    {
+      "preferencia": "Premier League",
+      "competicion": "LaLiga SmartBank",
+      "coincide": false
+    },
+    {
+      "preferencia": "Premier League",
+      "competicion": "Segunda División",
+      "coincide": false
+    },
+    {
+      "preferencia": "Premier League",
+      "competicion": "UEFA Champions League",
+      "coincide": false
+    },
+    {
+      "preferencia": "Premier League",
+      "competicion": "Liga de Campeones",
+      "coincide": false
+    },
+    {
+      "preferencia": "Premier League",
+      "competicion": "Premier League",
+      "coincide": true
+    },
+    {
+      "preferencia": "Premier League",
+      "competicion": "Premier League Ucrania",
+      "coincide": false
+    },
+    {
+      "preferencia": "Premier League",
+      "competicion": "Serie A",
+      "coincide": false
+    },
+    {
+      "preferencia": "Premier League",
+      "competicion": "Serie A Brasil",
+      "coincide": false
+    },
+    {
+      "preferencia": "Premier League",
+      "competicion": "Bundesliga",
+      "coincide": false
+    },
+    {
+      "preferencia": "Premier League",
+      "competicion": "2. Bundesliga",
+      "coincide": false
+    },
+    {
+      "preferencia": "Premier League",
+      "competicion": "Francia Ligue 1",
+      "coincide": false
+    },
+    {
+      "preferencia": "Premier League",
+      "competicion": "Copa del Rey",
+      "coincide": false
+    },
+    {
+      "preferencia": "Premier League",
+      "competicion": "Liga MX",
+      "coincide": false
+    },
+    {
+      "preferencia": "Premier League",
+      "competicion": "Torneo Proyección",
+      "coincide": false
+    },
+    {
+      "preferencia": "Premier League",
+      "competicion": "",
+      "coincide": false
+    },
+    {
+      "preferencia": "Serie A",
+      "competicion": "LaLiga",
+      "coincide": false
+    },
+    {
+      "preferencia": "Serie A",
+      "competicion": "LaLiga EA Sports",
+      "coincide": false
+    },
+    {
+      "preferencia": "Serie A",
+      "competicion": "La Liga EA Sports",
+      "coincide": false
+    },
+    {
+      "preferencia": "Serie A",
+      "competicion": "Primera División",
+      "coincide": false
+    },
+    {
+      "preferencia": "Serie A",
+      "competicion": "LaLiga Hypermotion",
+      "coincide": false
+    },
+    {
+      "preferencia": "Serie A",
+      "competicion": "LaLiga SmartBank",
+      "coincide": false
+    },
+    {
+      "preferencia": "Serie A",
+      "competicion": "Segunda División",
+      "coincide": false
+    },
+    {
+      "preferencia": "Serie A",
+      "competicion": "UEFA Champions League",
+      "coincide": false
+    },
+    {
+      "preferencia": "Serie A",
+      "competicion": "Liga de Campeones",
+      "coincide": false
+    },
+    {
+      "preferencia": "Serie A",
+      "competicion": "Premier League",
+      "coincide": false
+    },
+    {
+      "preferencia": "Serie A",
+      "competicion": "Premier League Ucrania",
+      "coincide": false
+    },
+    {
+      "preferencia": "Serie A",
+      "competicion": "Serie A",
+      "coincide": true
+    },
+    {
+      "preferencia": "Serie A",
+      "competicion": "Serie A Brasil",
+      "coincide": false
+    },
+    {
+      "preferencia": "Serie A",
+      "competicion": "Bundesliga",
+      "coincide": false
+    },
+    {
+      "preferencia": "Serie A",
+      "competicion": "2. Bundesliga",
+      "coincide": false
+    },
+    {
+      "preferencia": "Serie A",
+      "competicion": "Francia Ligue 1",
+      "coincide": false
+    },
+    {
+      "preferencia": "Serie A",
+      "competicion": "Copa del Rey",
+      "coincide": false
+    },
+    {
+      "preferencia": "Serie A",
+      "competicion": "Liga MX",
+      "coincide": false
+    },
+    {
+      "preferencia": "Serie A",
+      "competicion": "Torneo Proyección",
+      "coincide": false
+    },
+    {
+      "preferencia": "Serie A",
+      "competicion": "",
+      "coincide": false
+    },
+    {
+      "preferencia": "Bundesliga",
+      "competicion": "LaLiga",
+      "coincide": false
+    },
+    {
+      "preferencia": "Bundesliga",
+      "competicion": "LaLiga EA Sports",
+      "coincide": false
+    },
+    {
+      "preferencia": "Bundesliga",
+      "competicion": "La Liga EA Sports",
+      "coincide": false
+    },
+    {
+      "preferencia": "Bundesliga",
+      "competicion": "Primera División",
+      "coincide": false
+    },
+    {
+      "preferencia": "Bundesliga",
+      "competicion": "LaLiga Hypermotion",
+      "coincide": false
+    },
+    {
+      "preferencia": "Bundesliga",
+      "competicion": "LaLiga SmartBank",
+      "coincide": false
+    },
+    {
+      "preferencia": "Bundesliga",
+      "competicion": "Segunda División",
+      "coincide": false
+    },
+    {
+      "preferencia": "Bundesliga",
+      "competicion": "UEFA Champions League",
+      "coincide": false
+    },
+    {
+      "preferencia": "Bundesliga",
+      "competicion": "Liga de Campeones",
+      "coincide": false
+    },
+    {
+      "preferencia": "Bundesliga",
+      "competicion": "Premier League",
+      "coincide": false
+    },
+    {
+      "preferencia": "Bundesliga",
+      "competicion": "Premier League Ucrania",
+      "coincide": false
+    },
+    {
+      "preferencia": "Bundesliga",
+      "competicion": "Serie A",
+      "coincide": false
+    },
+    {
+      "preferencia": "Bundesliga",
+      "competicion": "Serie A Brasil",
+      "coincide": false
+    },
+    {
+      "preferencia": "Bundesliga",
+      "competicion": "Bundesliga",
+      "coincide": true
+    },
+    {
+      "preferencia": "Bundesliga",
+      "competicion": "2. Bundesliga",
+      "coincide": false
+    },
+    {
+      "preferencia": "Bundesliga",
+      "competicion": "Francia Ligue 1",
+      "coincide": false
+    },
+    {
+      "preferencia": "Bundesliga",
+      "competicion": "Copa del Rey",
+      "coincide": false
+    },
+    {
+      "preferencia": "Bundesliga",
+      "competicion": "Liga MX",
+      "coincide": false
+    },
+    {
+      "preferencia": "Bundesliga",
+      "competicion": "Torneo Proyección",
+      "coincide": false
+    },
+    {
+      "preferencia": "Bundesliga",
+      "competicion": "",
+      "coincide": false
+    },
+    {
+      "preferencia": "Ligue 1",
+      "competicion": "LaLiga",
+      "coincide": false
+    },
+    {
+      "preferencia": "Ligue 1",
+      "competicion": "LaLiga EA Sports",
+      "coincide": false
+    },
+    {
+      "preferencia": "Ligue 1",
+      "competicion": "La Liga EA Sports",
+      "coincide": false
+    },
+    {
+      "preferencia": "Ligue 1",
+      "competicion": "Primera División",
+      "coincide": false
+    },
+    {
+      "preferencia": "Ligue 1",
+      "competicion": "LaLiga Hypermotion",
+      "coincide": false
+    },
+    {
+      "preferencia": "Ligue 1",
+      "competicion": "LaLiga SmartBank",
+      "coincide": false
+    },
+    {
+      "preferencia": "Ligue 1",
+      "competicion": "Segunda División",
+      "coincide": false
+    },
+    {
+      "preferencia": "Ligue 1",
+      "competicion": "UEFA Champions League",
+      "coincide": false
+    },
+    {
+      "preferencia": "Ligue 1",
+      "competicion": "Liga de Campeones",
+      "coincide": false
+    },
+    {
+      "preferencia": "Ligue 1",
+      "competicion": "Premier League",
+      "coincide": false
+    },
+    {
+      "preferencia": "Ligue 1",
+      "competicion": "Premier League Ucrania",
+      "coincide": false
+    },
+    {
+      "preferencia": "Ligue 1",
+      "competicion": "Serie A",
+      "coincide": false
+    },
+    {
+      "preferencia": "Ligue 1",
+      "competicion": "Serie A Brasil",
+      "coincide": false
+    },
+    {
+      "preferencia": "Ligue 1",
+      "competicion": "Bundesliga",
+      "coincide": false
+    },
+    {
+      "preferencia": "Ligue 1",
+      "competicion": "2. Bundesliga",
+      "coincide": false
+    },
+    {
+      "preferencia": "Ligue 1",
+      "competicion": "Francia Ligue 1",
+      "coincide": true
+    },
+    {
+      "preferencia": "Ligue 1",
+      "competicion": "Copa del Rey",
+      "coincide": false
+    },
+    {
+      "preferencia": "Ligue 1",
+      "competicion": "Liga MX",
+      "coincide": false
+    },
+    {
+      "preferencia": "Ligue 1",
+      "competicion": "Torneo Proyección",
+      "coincide": false
+    },
+    {
+      "preferencia": "Ligue 1",
+      "competicion": "",
+      "coincide": false
+    },
+    {
+      "preferencia": "Copa del Rey",
+      "competicion": "LaLiga",
+      "coincide": false
+    },
+    {
+      "preferencia": "Copa del Rey",
+      "competicion": "LaLiga EA Sports",
+      "coincide": false
+    },
+    {
+      "preferencia": "Copa del Rey",
+      "competicion": "La Liga EA Sports",
+      "coincide": false
+    },
+    {
+      "preferencia": "Copa del Rey",
+      "competicion": "Primera División",
+      "coincide": false
+    },
+    {
+      "preferencia": "Copa del Rey",
+      "competicion": "LaLiga Hypermotion",
+      "coincide": false
+    },
+    {
+      "preferencia": "Copa del Rey",
+      "competicion": "LaLiga SmartBank",
+      "coincide": false
+    },
+    {
+      "preferencia": "Copa del Rey",
+      "competicion": "Segunda División",
+      "coincide": false
+    },
+    {
+      "preferencia": "Copa del Rey",
+      "competicion": "UEFA Champions League",
+      "coincide": false
+    },
+    {
+      "preferencia": "Copa del Rey",
+      "competicion": "Liga de Campeones",
+      "coincide": false
+    },
+    {
+      "preferencia": "Copa del Rey",
+      "competicion": "Premier League",
+      "coincide": false
+    },
+    {
+      "preferencia": "Copa del Rey",
+      "competicion": "Premier League Ucrania",
+      "coincide": false
+    },
+    {
+      "preferencia": "Copa del Rey",
+      "competicion": "Serie A",
+      "coincide": false
+    },
+    {
+      "preferencia": "Copa del Rey",
+      "competicion": "Serie A Brasil",
+      "coincide": false
+    },
+    {
+      "preferencia": "Copa del Rey",
+      "competicion": "Bundesliga",
+      "coincide": false
+    },
+    {
+      "preferencia": "Copa del Rey",
+      "competicion": "2. Bundesliga",
+      "coincide": false
+    },
+    {
+      "preferencia": "Copa del Rey",
+      "competicion": "Francia Ligue 1",
+      "coincide": false
+    },
+    {
+      "preferencia": "Copa del Rey",
+      "competicion": "Copa del Rey",
+      "coincide": true
+    },
+    {
+      "preferencia": "Copa del Rey",
+      "competicion": "Liga MX",
+      "coincide": false
+    },
+    {
+      "preferencia": "Copa del Rey",
+      "competicion": "Torneo Proyección",
+      "coincide": false
+    },
+    {
+      "preferencia": "Copa del Rey",
+      "competicion": "",
+      "coincide": false
+    },
+    {
+      "preferencia": "Europa League",
+      "competicion": "LaLiga",
+      "coincide": false
+    },
+    {
+      "preferencia": "Europa League",
+      "competicion": "LaLiga EA Sports",
+      "coincide": false
+    },
+    {
+      "preferencia": "Europa League",
+      "competicion": "La Liga EA Sports",
+      "coincide": false
+    },
+    {
+      "preferencia": "Europa League",
+      "competicion": "Primera División",
+      "coincide": false
+    },
+    {
+      "preferencia": "Europa League",
+      "competicion": "LaLiga Hypermotion",
+      "coincide": false
+    },
+    {
+      "preferencia": "Europa League",
+      "competicion": "LaLiga SmartBank",
+      "coincide": false
+    },
+    {
+      "preferencia": "Europa League",
+      "competicion": "Segunda División",
+      "coincide": false
+    },
+    {
+      "preferencia": "Europa League",
+      "competicion": "UEFA Champions League",
+      "coincide": false
+    },
+    {
+      "preferencia": "Europa League",
+      "competicion": "Liga de Campeones",
+      "coincide": false
+    },
+    {
+      "preferencia": "Europa League",
+      "competicion": "Premier League",
+      "coincide": false
+    },
+    {
+      "preferencia": "Europa League",
+      "competicion": "Premier League Ucrania",
+      "coincide": false
+    },
+    {
+      "preferencia": "Europa League",
+      "competicion": "Serie A",
+      "coincide": false
+    },
+    {
+      "preferencia": "Europa League",
+      "competicion": "Serie A Brasil",
+      "coincide": false
+    },
+    {
+      "preferencia": "Europa League",
+      "competicion": "Bundesliga",
+      "coincide": false
+    },
+    {
+      "preferencia": "Europa League",
+      "competicion": "2. Bundesliga",
+      "coincide": false
+    },
+    {
+      "preferencia": "Europa League",
+      "competicion": "Francia Ligue 1",
+      "coincide": false
+    },
+    {
+      "preferencia": "Europa League",
+      "competicion": "Copa del Rey",
+      "coincide": false
+    },
+    {
+      "preferencia": "Europa League",
+      "competicion": "Liga MX",
+      "coincide": false
+    },
+    {
+      "preferencia": "Europa League",
+      "competicion": "Torneo Proyección",
+      "coincide": false
+    },
+    {
+      "preferencia": "Europa League",
+      "competicion": "",
+      "coincide": false
+    },
+    {
+      "preferencia": "Liga MX",
+      "competicion": "LaLiga",
+      "coincide": false
+    },
+    {
+      "preferencia": "Liga MX",
+      "competicion": "LaLiga EA Sports",
+      "coincide": false
+    },
+    {
+      "preferencia": "Liga MX",
+      "competicion": "La Liga EA Sports",
+      "coincide": false
+    },
+    {
+      "preferencia": "Liga MX",
+      "competicion": "Primera División",
+      "coincide": false
+    },
+    {
+      "preferencia": "Liga MX",
+      "competicion": "LaLiga Hypermotion",
+      "coincide": false
+    },
+    {
+      "preferencia": "Liga MX",
+      "competicion": "LaLiga SmartBank",
+      "coincide": false
+    },
+    {
+      "preferencia": "Liga MX",
+      "competicion": "Segunda División",
+      "coincide": false
+    },
+    {
+      "preferencia": "Liga MX",
+      "competicion": "UEFA Champions League",
+      "coincide": false
+    },
+    {
+      "preferencia": "Liga MX",
+      "competicion": "Liga de Campeones",
+      "coincide": false
+    },
+    {
+      "preferencia": "Liga MX",
+      "competicion": "Premier League",
+      "coincide": false
+    },
+    {
+      "preferencia": "Liga MX",
+      "competicion": "Premier League Ucrania",
+      "coincide": false
+    },
+    {
+      "preferencia": "Liga MX",
+      "competicion": "Serie A",
+      "coincide": false
+    },
+    {
+      "preferencia": "Liga MX",
+      "competicion": "Serie A Brasil",
+      "coincide": false
+    },
+    {
+      "preferencia": "Liga MX",
+      "competicion": "Bundesliga",
+      "coincide": false
+    },
+    {
+      "preferencia": "Liga MX",
+      "competicion": "2. Bundesliga",
+      "coincide": false
+    },
+    {
+      "preferencia": "Liga MX",
+      "competicion": "Francia Ligue 1",
+      "coincide": false
+    },
+    {
+      "preferencia": "Liga MX",
+      "competicion": "Copa del Rey",
+      "coincide": false
+    },
+    {
+      "preferencia": "Liga MX",
+      "competicion": "Liga MX",
+      "coincide": true
+    },
+    {
+      "preferencia": "Liga MX",
+      "competicion": "Torneo Proyección",
+      "coincide": false
+    },
+    {
+      "preferencia": "Liga MX",
+      "competicion": "",
+      "coincide": false
+    },
+    {
+      "preferencia": "",
+      "competicion": "LaLiga",
+      "coincide": false
+    },
+    {
+      "preferencia": "",
+      "competicion": "LaLiga EA Sports",
+      "coincide": false
+    },
+    {
+      "preferencia": "",
+      "competicion": "La Liga EA Sports",
+      "coincide": false
+    },
+    {
+      "preferencia": "",
+      "competicion": "Primera División",
+      "coincide": false
+    },
+    {
+      "preferencia": "",
+      "competicion": "LaLiga Hypermotion",
+      "coincide": false
+    },
+    {
+      "preferencia": "",
+      "competicion": "LaLiga SmartBank",
+      "coincide": false
+    },
+    {
+      "preferencia": "",
+      "competicion": "Segunda División",
+      "coincide": false
+    },
+    {
+      "preferencia": "",
+      "competicion": "UEFA Champions League",
+      "coincide": false
+    },
+    {
+      "preferencia": "",
+      "competicion": "Liga de Campeones",
+      "coincide": false
+    },
+    {
+      "preferencia": "",
+      "competicion": "Premier League",
+      "coincide": false
+    },
+    {
+      "preferencia": "",
+      "competicion": "Premier League Ucrania",
+      "coincide": false
+    },
+    {
+      "preferencia": "",
+      "competicion": "Serie A",
+      "coincide": false
+    },
+    {
+      "preferencia": "",
+      "competicion": "Serie A Brasil",
+      "coincide": false
+    },
+    {
+      "preferencia": "",
+      "competicion": "Bundesliga",
+      "coincide": false
+    },
+    {
+      "preferencia": "",
+      "competicion": "2. Bundesliga",
+      "coincide": false
+    },
+    {
+      "preferencia": "",
+      "competicion": "Francia Ligue 1",
+      "coincide": false
+    },
+    {
+      "preferencia": "",
+      "competicion": "Copa del Rey",
+      "coincide": false
+    },
+    {
+      "preferencia": "",
+      "competicion": "Liga MX",
+      "coincide": false
+    },
+    {
+      "preferencia": "",
+      "competicion": "Torneo Proyección",
+      "coincide": false
+    },
+    {
+      "preferencia": "",
+      "competicion": "",
+      "coincide": false
+    }
+  ],
+  "casosParaTi": [
+    {
+      "partido": {
+        "competition": "LaLiga EA Sports",
+        "title": "Real Madrid - Getafe",
+        "home": "Real Madrid",
+        "away": "Getafe",
+        "channels": [
+          "M+ LaLiga TV",
+          "DAZN LaLiga"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga EA Sports",
+        "title": "Real Madrid - Getafe",
+        "home": "Real Madrid",
+        "away": "Getafe",
+        "channels": [
+          "M+ LaLiga TV",
+          "DAZN LaLiga"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga EA Sports",
+        "title": "Real Madrid - Getafe",
+        "home": "Real Madrid",
+        "away": "Getafe",
+        "channels": [
+          "M+ LaLiga TV",
+          "DAZN LaLiga"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga Hypermotion"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga EA Sports",
+        "title": "Real Madrid - Getafe",
+        "home": "Real Madrid",
+        "away": "Getafe",
+        "channels": [
+          "M+ LaLiga TV",
+          "DAZN LaLiga"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Barcelona"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga EA Sports",
+        "title": "Real Madrid - Getafe",
+        "home": "Real Madrid",
+        "away": "Getafe",
+        "channels": [
+          "M+ LaLiga TV",
+          "DAZN LaLiga"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Atlético de Madrid",
+          "Inter"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga EA Sports",
+        "title": "Real Madrid - Getafe",
+        "home": "Real Madrid",
+        "away": "Getafe",
+        "channels": [
+          "M+ LaLiga TV",
+          "DAZN LaLiga"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga EA Sports",
+        "title": "Real Madrid - Getafe",
+        "home": "Real Madrid",
+        "away": "Getafe",
+        "channels": [
+          "M+ LaLiga TV",
+          "DAZN LaLiga"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Argentina",
+          "Brasil"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga EA Sports",
+        "title": "Real Madrid - Getafe",
+        "home": "Real Madrid",
+        "away": "Getafe",
+        "channels": [
+          "M+ LaLiga TV",
+          "DAZN LaLiga"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Marruecos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga EA Sports",
+        "title": "Real Madrid - Getafe",
+        "home": "Real Madrid",
+        "away": "Getafe",
+        "channels": [
+          "M+ LaLiga TV",
+          "DAZN LaLiga"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga",
+          "Champions League",
+          "Premier League",
+          "Serie A",
+          "Bundesliga"
+        ],
+        "teams": [
+          "Real Madrid"
+        ],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": true
+    },
+    {
+      "partido": {
+        "competition": "LaLiga EA Sports",
+        "title": "Real Madrid - Getafe",
+        "home": "Real Madrid",
+        "away": "Getafe",
+        "channels": [
+          "M+ LaLiga TV",
+          "DAZN LaLiga"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Japón"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga EA Sports",
+        "title": "Real Madrid - Getafe",
+        "home": "Real Madrid",
+        "away": "Getafe",
+        "channels": [
+          "M+ LaLiga TV",
+          "DAZN LaLiga"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "Liga MX"
+        ],
+        "teams": [],
+        "nationalities": [
+          "Estados Unidos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga EA Sports",
+        "title": "Real Madrid - Getafe",
+        "home": "Real Madrid",
+        "away": "Getafe",
+        "channels": [
+          "M+ LaLiga TV",
+          "DAZN LaLiga"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "FC Porto",
+          "Benfica"
+        ],
+        "nationalities": [
+          "Portugal"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga EA Sports",
+        "title": "Real Madrid - Getafe",
+        "home": "Real Madrid",
+        "away": "Getafe",
+        "channels": [
+          "M+ LaLiga TV",
+          "DAZN LaLiga"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "??"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga",
+        "title": "Racing de Santander - Sporting de Gijón",
+        "home": "Racing de Santander",
+        "away": "Sporting de Gijón",
+        "channels": [
+          "LaLiga TV Hypermotion"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": true,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga",
+        "title": "Racing de Santander - Sporting de Gijón",
+        "home": "Racing de Santander",
+        "away": "Sporting de Gijón",
+        "channels": [
+          "LaLiga TV Hypermotion"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": true,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga",
+        "title": "Racing de Santander - Sporting de Gijón",
+        "home": "Racing de Santander",
+        "away": "Sporting de Gijón",
+        "channels": [
+          "LaLiga TV Hypermotion"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga Hypermotion"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": true,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga",
+        "title": "Racing de Santander - Sporting de Gijón",
+        "home": "Racing de Santander",
+        "away": "Sporting de Gijón",
+        "channels": [
+          "LaLiga TV Hypermotion"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Barcelona"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": true,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga",
+        "title": "Racing de Santander - Sporting de Gijón",
+        "home": "Racing de Santander",
+        "away": "Sporting de Gijón",
+        "channels": [
+          "LaLiga TV Hypermotion"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Atlético de Madrid",
+          "Inter"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": true,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga",
+        "title": "Racing de Santander - Sporting de Gijón",
+        "home": "Racing de Santander",
+        "away": "Sporting de Gijón",
+        "channels": [
+          "LaLiga TV Hypermotion"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": true,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga",
+        "title": "Racing de Santander - Sporting de Gijón",
+        "home": "Racing de Santander",
+        "away": "Sporting de Gijón",
+        "channels": [
+          "LaLiga TV Hypermotion"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Argentina",
+          "Brasil"
+        ]
+      },
+      "hypermotion": true,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga",
+        "title": "Racing de Santander - Sporting de Gijón",
+        "home": "Racing de Santander",
+        "away": "Sporting de Gijón",
+        "channels": [
+          "LaLiga TV Hypermotion"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Marruecos"
+        ]
+      },
+      "hypermotion": true,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga",
+        "title": "Racing de Santander - Sporting de Gijón",
+        "home": "Racing de Santander",
+        "away": "Sporting de Gijón",
+        "channels": [
+          "LaLiga TV Hypermotion"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga",
+          "Champions League",
+          "Premier League",
+          "Serie A",
+          "Bundesliga"
+        ],
+        "teams": [
+          "Real Madrid"
+        ],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": true,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga",
+        "title": "Racing de Santander - Sporting de Gijón",
+        "home": "Racing de Santander",
+        "away": "Sporting de Gijón",
+        "channels": [
+          "LaLiga TV Hypermotion"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Japón"
+        ]
+      },
+      "hypermotion": true,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga",
+        "title": "Racing de Santander - Sporting de Gijón",
+        "home": "Racing de Santander",
+        "away": "Sporting de Gijón",
+        "channels": [
+          "LaLiga TV Hypermotion"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "Liga MX"
+        ],
+        "teams": [],
+        "nationalities": [
+          "Estados Unidos"
+        ]
+      },
+      "hypermotion": true,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga",
+        "title": "Racing de Santander - Sporting de Gijón",
+        "home": "Racing de Santander",
+        "away": "Sporting de Gijón",
+        "channels": [
+          "LaLiga TV Hypermotion"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "FC Porto",
+          "Benfica"
+        ],
+        "nationalities": [
+          "Portugal"
+        ]
+      },
+      "hypermotion": true,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga",
+        "title": "Racing de Santander - Sporting de Gijón",
+        "home": "Racing de Santander",
+        "away": "Sporting de Gijón",
+        "channels": [
+          "LaLiga TV Hypermotion"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "??"
+        ]
+      },
+      "hypermotion": true,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga Hypermotion",
+        "title": "Real Zaragoza - Huesca",
+        "home": "Real Zaragoza",
+        "away": "Huesca",
+        "channels": [
+          "LaLiga TV Hypermotion 2"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": true,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga Hypermotion",
+        "title": "Real Zaragoza - Huesca",
+        "home": "Real Zaragoza",
+        "away": "Huesca",
+        "channels": [
+          "LaLiga TV Hypermotion 2"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": true,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga Hypermotion",
+        "title": "Real Zaragoza - Huesca",
+        "home": "Real Zaragoza",
+        "away": "Huesca",
+        "channels": [
+          "LaLiga TV Hypermotion 2"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga Hypermotion"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": true,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga Hypermotion",
+        "title": "Real Zaragoza - Huesca",
+        "home": "Real Zaragoza",
+        "away": "Huesca",
+        "channels": [
+          "LaLiga TV Hypermotion 2"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Barcelona"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": true,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga Hypermotion",
+        "title": "Real Zaragoza - Huesca",
+        "home": "Real Zaragoza",
+        "away": "Huesca",
+        "channels": [
+          "LaLiga TV Hypermotion 2"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Atlético de Madrid",
+          "Inter"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": true,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga Hypermotion",
+        "title": "Real Zaragoza - Huesca",
+        "home": "Real Zaragoza",
+        "away": "Huesca",
+        "channels": [
+          "LaLiga TV Hypermotion 2"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": true,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga Hypermotion",
+        "title": "Real Zaragoza - Huesca",
+        "home": "Real Zaragoza",
+        "away": "Huesca",
+        "channels": [
+          "LaLiga TV Hypermotion 2"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Argentina",
+          "Brasil"
+        ]
+      },
+      "hypermotion": true,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga Hypermotion",
+        "title": "Real Zaragoza - Huesca",
+        "home": "Real Zaragoza",
+        "away": "Huesca",
+        "channels": [
+          "LaLiga TV Hypermotion 2"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Marruecos"
+        ]
+      },
+      "hypermotion": true,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga Hypermotion",
+        "title": "Real Zaragoza - Huesca",
+        "home": "Real Zaragoza",
+        "away": "Huesca",
+        "channels": [
+          "LaLiga TV Hypermotion 2"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga",
+          "Champions League",
+          "Premier League",
+          "Serie A",
+          "Bundesliga"
+        ],
+        "teams": [
+          "Real Madrid"
+        ],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": true,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga Hypermotion",
+        "title": "Real Zaragoza - Huesca",
+        "home": "Real Zaragoza",
+        "away": "Huesca",
+        "channels": [
+          "LaLiga TV Hypermotion 2"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Japón"
+        ]
+      },
+      "hypermotion": true,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga Hypermotion",
+        "title": "Real Zaragoza - Huesca",
+        "home": "Real Zaragoza",
+        "away": "Huesca",
+        "channels": [
+          "LaLiga TV Hypermotion 2"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "Liga MX"
+        ],
+        "teams": [],
+        "nationalities": [
+          "Estados Unidos"
+        ]
+      },
+      "hypermotion": true,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga Hypermotion",
+        "title": "Real Zaragoza - Huesca",
+        "home": "Real Zaragoza",
+        "away": "Huesca",
+        "channels": [
+          "LaLiga TV Hypermotion 2"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "FC Porto",
+          "Benfica"
+        ],
+        "nationalities": [
+          "Portugal"
+        ]
+      },
+      "hypermotion": true,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "LaLiga Hypermotion",
+        "title": "Real Zaragoza - Huesca",
+        "home": "Real Zaragoza",
+        "away": "Huesca",
+        "channels": [
+          "LaLiga TV Hypermotion 2"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "??"
+        ]
+      },
+      "hypermotion": true,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Amistoso",
+        "title": "España - Marruecos",
+        "home": "España",
+        "away": "Marruecos",
+        "channels": [
+          "La 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Amistoso",
+        "title": "España - Marruecos",
+        "home": "España",
+        "away": "Marruecos",
+        "channels": [
+          "La 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Amistoso",
+        "title": "España - Marruecos",
+        "home": "España",
+        "away": "Marruecos",
+        "channels": [
+          "La 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga Hypermotion"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Amistoso",
+        "title": "España - Marruecos",
+        "home": "España",
+        "away": "Marruecos",
+        "channels": [
+          "La 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Barcelona"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Amistoso",
+        "title": "España - Marruecos",
+        "home": "España",
+        "away": "Marruecos",
+        "channels": [
+          "La 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Atlético de Madrid",
+          "Inter"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Amistoso",
+        "title": "España - Marruecos",
+        "home": "España",
+        "away": "Marruecos",
+        "channels": [
+          "La 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Amistoso",
+        "title": "España - Marruecos",
+        "home": "España",
+        "away": "Marruecos",
+        "channels": [
+          "La 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Argentina",
+          "Brasil"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Amistoso",
+        "title": "España - Marruecos",
+        "home": "España",
+        "away": "Marruecos",
+        "channels": [
+          "La 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Marruecos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Amistoso",
+        "title": "España - Marruecos",
+        "home": "España",
+        "away": "Marruecos",
+        "channels": [
+          "La 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga",
+          "Champions League",
+          "Premier League",
+          "Serie A",
+          "Bundesliga"
+        ],
+        "teams": [
+          "Real Madrid"
+        ],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Amistoso",
+        "title": "España - Marruecos",
+        "home": "España",
+        "away": "Marruecos",
+        "channels": [
+          "La 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Japón"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Amistoso",
+        "title": "España - Marruecos",
+        "home": "España",
+        "away": "Marruecos",
+        "channels": [
+          "La 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "Liga MX"
+        ],
+        "teams": [],
+        "nationalities": [
+          "Estados Unidos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Amistoso",
+        "title": "España - Marruecos",
+        "home": "España",
+        "away": "Marruecos",
+        "channels": [
+          "La 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "FC Porto",
+          "Benfica"
+        ],
+        "nationalities": [
+          "Portugal"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Amistoso",
+        "title": "España - Marruecos",
+        "home": "España",
+        "away": "Marruecos",
+        "channels": [
+          "La 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "??"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Amistoso",
+        "title": "Marruecos Sub-23 - Egipto Sub-23",
+        "home": "Marruecos Sub-23",
+        "away": "Egipto Sub-23",
+        "channels": [
+          "beIN Sports"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Amistoso",
+        "title": "Marruecos Sub-23 - Egipto Sub-23",
+        "home": "Marruecos Sub-23",
+        "away": "Egipto Sub-23",
+        "channels": [
+          "beIN Sports"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Amistoso",
+        "title": "Marruecos Sub-23 - Egipto Sub-23",
+        "home": "Marruecos Sub-23",
+        "away": "Egipto Sub-23",
+        "channels": [
+          "beIN Sports"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga Hypermotion"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Amistoso",
+        "title": "Marruecos Sub-23 - Egipto Sub-23",
+        "home": "Marruecos Sub-23",
+        "away": "Egipto Sub-23",
+        "channels": [
+          "beIN Sports"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Barcelona"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Amistoso",
+        "title": "Marruecos Sub-23 - Egipto Sub-23",
+        "home": "Marruecos Sub-23",
+        "away": "Egipto Sub-23",
+        "channels": [
+          "beIN Sports"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Atlético de Madrid",
+          "Inter"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Amistoso",
+        "title": "Marruecos Sub-23 - Egipto Sub-23",
+        "home": "Marruecos Sub-23",
+        "away": "Egipto Sub-23",
+        "channels": [
+          "beIN Sports"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Amistoso",
+        "title": "Marruecos Sub-23 - Egipto Sub-23",
+        "home": "Marruecos Sub-23",
+        "away": "Egipto Sub-23",
+        "channels": [
+          "beIN Sports"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Argentina",
+          "Brasil"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Amistoso",
+        "title": "Marruecos Sub-23 - Egipto Sub-23",
+        "home": "Marruecos Sub-23",
+        "away": "Egipto Sub-23",
+        "channels": [
+          "beIN Sports"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Marruecos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Amistoso",
+        "title": "Marruecos Sub-23 - Egipto Sub-23",
+        "home": "Marruecos Sub-23",
+        "away": "Egipto Sub-23",
+        "channels": [
+          "beIN Sports"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga",
+          "Champions League",
+          "Premier League",
+          "Serie A",
+          "Bundesliga"
+        ],
+        "teams": [
+          "Real Madrid"
+        ],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Amistoso",
+        "title": "Marruecos Sub-23 - Egipto Sub-23",
+        "home": "Marruecos Sub-23",
+        "away": "Egipto Sub-23",
+        "channels": [
+          "beIN Sports"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Japón"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Amistoso",
+        "title": "Marruecos Sub-23 - Egipto Sub-23",
+        "home": "Marruecos Sub-23",
+        "away": "Egipto Sub-23",
+        "channels": [
+          "beIN Sports"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "Liga MX"
+        ],
+        "teams": [],
+        "nationalities": [
+          "Estados Unidos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Amistoso",
+        "title": "Marruecos Sub-23 - Egipto Sub-23",
+        "home": "Marruecos Sub-23",
+        "away": "Egipto Sub-23",
+        "channels": [
+          "beIN Sports"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "FC Porto",
+          "Benfica"
+        ],
+        "nationalities": [
+          "Portugal"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Amistoso",
+        "title": "Marruecos Sub-23 - Egipto Sub-23",
+        "home": "Marruecos Sub-23",
+        "away": "Egipto Sub-23",
+        "channels": [
+          "beIN Sports"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "??"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Copa del Rey",
+        "title": "FC Barcelona - Barcelona SC",
+        "home": "FC Barcelona",
+        "away": "Barcelona SC",
+        "channels": [
+          "M+ Vamos"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Copa del Rey",
+        "title": "FC Barcelona - Barcelona SC",
+        "home": "FC Barcelona",
+        "away": "Barcelona SC",
+        "channels": [
+          "M+ Vamos"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Copa del Rey",
+        "title": "FC Barcelona - Barcelona SC",
+        "home": "FC Barcelona",
+        "away": "Barcelona SC",
+        "channels": [
+          "M+ Vamos"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga Hypermotion"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Copa del Rey",
+        "title": "FC Barcelona - Barcelona SC",
+        "home": "FC Barcelona",
+        "away": "Barcelona SC",
+        "channels": [
+          "M+ Vamos"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Barcelona"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": true
+    },
+    {
+      "partido": {
+        "competition": "Copa del Rey",
+        "title": "FC Barcelona - Barcelona SC",
+        "home": "FC Barcelona",
+        "away": "Barcelona SC",
+        "channels": [
+          "M+ Vamos"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Atlético de Madrid",
+          "Inter"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Copa del Rey",
+        "title": "FC Barcelona - Barcelona SC",
+        "home": "FC Barcelona",
+        "away": "Barcelona SC",
+        "channels": [
+          "M+ Vamos"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Copa del Rey",
+        "title": "FC Barcelona - Barcelona SC",
+        "home": "FC Barcelona",
+        "away": "Barcelona SC",
+        "channels": [
+          "M+ Vamos"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Argentina",
+          "Brasil"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Copa del Rey",
+        "title": "FC Barcelona - Barcelona SC",
+        "home": "FC Barcelona",
+        "away": "Barcelona SC",
+        "channels": [
+          "M+ Vamos"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Marruecos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Copa del Rey",
+        "title": "FC Barcelona - Barcelona SC",
+        "home": "FC Barcelona",
+        "away": "Barcelona SC",
+        "channels": [
+          "M+ Vamos"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga",
+          "Champions League",
+          "Premier League",
+          "Serie A",
+          "Bundesliga"
+        ],
+        "teams": [
+          "Real Madrid"
+        ],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Copa del Rey",
+        "title": "FC Barcelona - Barcelona SC",
+        "home": "FC Barcelona",
+        "away": "Barcelona SC",
+        "channels": [
+          "M+ Vamos"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Japón"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Copa del Rey",
+        "title": "FC Barcelona - Barcelona SC",
+        "home": "FC Barcelona",
+        "away": "Barcelona SC",
+        "channels": [
+          "M+ Vamos"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "Liga MX"
+        ],
+        "teams": [],
+        "nationalities": [
+          "Estados Unidos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Copa del Rey",
+        "title": "FC Barcelona - Barcelona SC",
+        "home": "FC Barcelona",
+        "away": "Barcelona SC",
+        "channels": [
+          "M+ Vamos"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "FC Porto",
+          "Benfica"
+        ],
+        "nationalities": [
+          "Portugal"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Copa del Rey",
+        "title": "FC Barcelona - Barcelona SC",
+        "home": "FC Barcelona",
+        "away": "Barcelona SC",
+        "channels": [
+          "M+ Vamos"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "??"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Liga Profesional Argentina",
+        "title": "Boca Juniors - River Plate",
+        "home": "Boca Juniors",
+        "away": "River Plate",
+        "channels": [
+          "ESPN Premium"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Liga Profesional Argentina",
+        "title": "Boca Juniors - River Plate",
+        "home": "Boca Juniors",
+        "away": "River Plate",
+        "channels": [
+          "ESPN Premium"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Liga Profesional Argentina",
+        "title": "Boca Juniors - River Plate",
+        "home": "Boca Juniors",
+        "away": "River Plate",
+        "channels": [
+          "ESPN Premium"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga Hypermotion"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Liga Profesional Argentina",
+        "title": "Boca Juniors - River Plate",
+        "home": "Boca Juniors",
+        "away": "River Plate",
+        "channels": [
+          "ESPN Premium"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Barcelona"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Liga Profesional Argentina",
+        "title": "Boca Juniors - River Plate",
+        "home": "Boca Juniors",
+        "away": "River Plate",
+        "channels": [
+          "ESPN Premium"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Atlético de Madrid",
+          "Inter"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Liga Profesional Argentina",
+        "title": "Boca Juniors - River Plate",
+        "home": "Boca Juniors",
+        "away": "River Plate",
+        "channels": [
+          "ESPN Premium"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Liga Profesional Argentina",
+        "title": "Boca Juniors - River Plate",
+        "home": "Boca Juniors",
+        "away": "River Plate",
+        "channels": [
+          "ESPN Premium"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Argentina",
+          "Brasil"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Liga Profesional Argentina",
+        "title": "Boca Juniors - River Plate",
+        "home": "Boca Juniors",
+        "away": "River Plate",
+        "channels": [
+          "ESPN Premium"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Marruecos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Liga Profesional Argentina",
+        "title": "Boca Juniors - River Plate",
+        "home": "Boca Juniors",
+        "away": "River Plate",
+        "channels": [
+          "ESPN Premium"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga",
+          "Champions League",
+          "Premier League",
+          "Serie A",
+          "Bundesliga"
+        ],
+        "teams": [
+          "Real Madrid"
+        ],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Liga Profesional Argentina",
+        "title": "Boca Juniors - River Plate",
+        "home": "Boca Juniors",
+        "away": "River Plate",
+        "channels": [
+          "ESPN Premium"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Japón"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Liga Profesional Argentina",
+        "title": "Boca Juniors - River Plate",
+        "home": "Boca Juniors",
+        "away": "River Plate",
+        "channels": [
+          "ESPN Premium"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "Liga MX"
+        ],
+        "teams": [],
+        "nationalities": [
+          "Estados Unidos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Liga Profesional Argentina",
+        "title": "Boca Juniors - River Plate",
+        "home": "Boca Juniors",
+        "away": "River Plate",
+        "channels": [
+          "ESPN Premium"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "FC Porto",
+          "Benfica"
+        ],
+        "nationalities": [
+          "Portugal"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Liga Profesional Argentina",
+        "title": "Boca Juniors - River Plate",
+        "home": "Boca Juniors",
+        "away": "River Plate",
+        "channels": [
+          "ESPN Premium"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "??"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Torneo Proyección",
+        "title": "Central Córdoba Reserva - Atlético Tucumán Reserva",
+        "home": "Central Córdoba Reserva",
+        "away": "Atlético Tucumán Reserva",
+        "channels": [
+          "LPF Play"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Torneo Proyección",
+        "title": "Central Córdoba Reserva - Atlético Tucumán Reserva",
+        "home": "Central Córdoba Reserva",
+        "away": "Atlético Tucumán Reserva",
+        "channels": [
+          "LPF Play"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Torneo Proyección",
+        "title": "Central Córdoba Reserva - Atlético Tucumán Reserva",
+        "home": "Central Córdoba Reserva",
+        "away": "Atlético Tucumán Reserva",
+        "channels": [
+          "LPF Play"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga Hypermotion"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Torneo Proyección",
+        "title": "Central Córdoba Reserva - Atlético Tucumán Reserva",
+        "home": "Central Córdoba Reserva",
+        "away": "Atlético Tucumán Reserva",
+        "channels": [
+          "LPF Play"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Barcelona"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Torneo Proyección",
+        "title": "Central Córdoba Reserva - Atlético Tucumán Reserva",
+        "home": "Central Córdoba Reserva",
+        "away": "Atlético Tucumán Reserva",
+        "channels": [
+          "LPF Play"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Atlético de Madrid",
+          "Inter"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Torneo Proyección",
+        "title": "Central Córdoba Reserva - Atlético Tucumán Reserva",
+        "home": "Central Córdoba Reserva",
+        "away": "Atlético Tucumán Reserva",
+        "channels": [
+          "LPF Play"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Torneo Proyección",
+        "title": "Central Córdoba Reserva - Atlético Tucumán Reserva",
+        "home": "Central Córdoba Reserva",
+        "away": "Atlético Tucumán Reserva",
+        "channels": [
+          "LPF Play"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Argentina",
+          "Brasil"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Torneo Proyección",
+        "title": "Central Córdoba Reserva - Atlético Tucumán Reserva",
+        "home": "Central Córdoba Reserva",
+        "away": "Atlético Tucumán Reserva",
+        "channels": [
+          "LPF Play"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Marruecos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Torneo Proyección",
+        "title": "Central Córdoba Reserva - Atlético Tucumán Reserva",
+        "home": "Central Córdoba Reserva",
+        "away": "Atlético Tucumán Reserva",
+        "channels": [
+          "LPF Play"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga",
+          "Champions League",
+          "Premier League",
+          "Serie A",
+          "Bundesliga"
+        ],
+        "teams": [
+          "Real Madrid"
+        ],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Torneo Proyección",
+        "title": "Central Córdoba Reserva - Atlético Tucumán Reserva",
+        "home": "Central Córdoba Reserva",
+        "away": "Atlético Tucumán Reserva",
+        "channels": [
+          "LPF Play"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Japón"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Torneo Proyección",
+        "title": "Central Córdoba Reserva - Atlético Tucumán Reserva",
+        "home": "Central Córdoba Reserva",
+        "away": "Atlético Tucumán Reserva",
+        "channels": [
+          "LPF Play"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "Liga MX"
+        ],
+        "teams": [],
+        "nationalities": [
+          "Estados Unidos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Torneo Proyección",
+        "title": "Central Córdoba Reserva - Atlético Tucumán Reserva",
+        "home": "Central Córdoba Reserva",
+        "away": "Atlético Tucumán Reserva",
+        "channels": [
+          "LPF Play"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "FC Porto",
+          "Benfica"
+        ],
+        "nationalities": [
+          "Portugal"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Torneo Proyección",
+        "title": "Central Córdoba Reserva - Atlético Tucumán Reserva",
+        "home": "Central Córdoba Reserva",
+        "away": "Atlético Tucumán Reserva",
+        "channels": [
+          "LPF Play"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "??"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Serie A Brazil",
+        "title": "Flamengo - Palmeiras",
+        "home": "Flamengo",
+        "away": "Palmeiras",
+        "channels": [
+          "Premiere"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Serie A Brazil",
+        "title": "Flamengo - Palmeiras",
+        "home": "Flamengo",
+        "away": "Palmeiras",
+        "channels": [
+          "Premiere"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Serie A Brazil",
+        "title": "Flamengo - Palmeiras",
+        "home": "Flamengo",
+        "away": "Palmeiras",
+        "channels": [
+          "Premiere"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga Hypermotion"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Serie A Brazil",
+        "title": "Flamengo - Palmeiras",
+        "home": "Flamengo",
+        "away": "Palmeiras",
+        "channels": [
+          "Premiere"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Barcelona"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Serie A Brazil",
+        "title": "Flamengo - Palmeiras",
+        "home": "Flamengo",
+        "away": "Palmeiras",
+        "channels": [
+          "Premiere"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Atlético de Madrid",
+          "Inter"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Serie A Brazil",
+        "title": "Flamengo - Palmeiras",
+        "home": "Flamengo",
+        "away": "Palmeiras",
+        "channels": [
+          "Premiere"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Serie A Brazil",
+        "title": "Flamengo - Palmeiras",
+        "home": "Flamengo",
+        "away": "Palmeiras",
+        "channels": [
+          "Premiere"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Argentina",
+          "Brasil"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Serie A Brazil",
+        "title": "Flamengo - Palmeiras",
+        "home": "Flamengo",
+        "away": "Palmeiras",
+        "channels": [
+          "Premiere"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Marruecos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Serie A Brazil",
+        "title": "Flamengo - Palmeiras",
+        "home": "Flamengo",
+        "away": "Palmeiras",
+        "channels": [
+          "Premiere"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga",
+          "Champions League",
+          "Premier League",
+          "Serie A",
+          "Bundesliga"
+        ],
+        "teams": [
+          "Real Madrid"
+        ],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Serie A Brazil",
+        "title": "Flamengo - Palmeiras",
+        "home": "Flamengo",
+        "away": "Palmeiras",
+        "channels": [
+          "Premiere"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Japón"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Serie A Brazil",
+        "title": "Flamengo - Palmeiras",
+        "home": "Flamengo",
+        "away": "Palmeiras",
+        "channels": [
+          "Premiere"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "Liga MX"
+        ],
+        "teams": [],
+        "nationalities": [
+          "Estados Unidos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Serie A Brazil",
+        "title": "Flamengo - Palmeiras",
+        "home": "Flamengo",
+        "away": "Palmeiras",
+        "channels": [
+          "Premiere"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "FC Porto",
+          "Benfica"
+        ],
+        "nationalities": [
+          "Portugal"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Serie A Brazil",
+        "title": "Flamengo - Palmeiras",
+        "home": "Flamengo",
+        "away": "Palmeiras",
+        "channels": [
+          "Premiere"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "??"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Premier League",
+        "title": "Arsenal - Chelsea",
+        "home": "Arsenal",
+        "away": "Chelsea",
+        "channels": [
+          "DAZN 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Premier League",
+        "title": "Arsenal - Chelsea",
+        "home": "Arsenal",
+        "away": "Chelsea",
+        "channels": [
+          "DAZN 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Premier League",
+        "title": "Arsenal - Chelsea",
+        "home": "Arsenal",
+        "away": "Chelsea",
+        "channels": [
+          "DAZN 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga Hypermotion"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Premier League",
+        "title": "Arsenal - Chelsea",
+        "home": "Arsenal",
+        "away": "Chelsea",
+        "channels": [
+          "DAZN 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Barcelona"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Premier League",
+        "title": "Arsenal - Chelsea",
+        "home": "Arsenal",
+        "away": "Chelsea",
+        "channels": [
+          "DAZN 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Atlético de Madrid",
+          "Inter"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Premier League",
+        "title": "Arsenal - Chelsea",
+        "home": "Arsenal",
+        "away": "Chelsea",
+        "channels": [
+          "DAZN 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Premier League",
+        "title": "Arsenal - Chelsea",
+        "home": "Arsenal",
+        "away": "Chelsea",
+        "channels": [
+          "DAZN 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Argentina",
+          "Brasil"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Premier League",
+        "title": "Arsenal - Chelsea",
+        "home": "Arsenal",
+        "away": "Chelsea",
+        "channels": [
+          "DAZN 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Marruecos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Premier League",
+        "title": "Arsenal - Chelsea",
+        "home": "Arsenal",
+        "away": "Chelsea",
+        "channels": [
+          "DAZN 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga",
+          "Champions League",
+          "Premier League",
+          "Serie A",
+          "Bundesliga"
+        ],
+        "teams": [
+          "Real Madrid"
+        ],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Premier League",
+        "title": "Arsenal - Chelsea",
+        "home": "Arsenal",
+        "away": "Chelsea",
+        "channels": [
+          "DAZN 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Japón"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Premier League",
+        "title": "Arsenal - Chelsea",
+        "home": "Arsenal",
+        "away": "Chelsea",
+        "channels": [
+          "DAZN 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "Liga MX"
+        ],
+        "teams": [],
+        "nationalities": [
+          "Estados Unidos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Premier League",
+        "title": "Arsenal - Chelsea",
+        "home": "Arsenal",
+        "away": "Chelsea",
+        "channels": [
+          "DAZN 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "FC Porto",
+          "Benfica"
+        ],
+        "nationalities": [
+          "Portugal"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Premier League",
+        "title": "Arsenal - Chelsea",
+        "home": "Arsenal",
+        "away": "Chelsea",
+        "channels": [
+          "DAZN 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "??"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "UEFA Champions League",
+        "title": "Inter de Milán - Barça",
+        "home": "Inter de Milán",
+        "away": "Barça",
+        "channels": [
+          "M+ Liga de Campeones"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "UEFA Champions League",
+        "title": "Inter de Milán - Barça",
+        "home": "Inter de Milán",
+        "away": "Barça",
+        "channels": [
+          "M+ Liga de Campeones"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "UEFA Champions League",
+        "title": "Inter de Milán - Barça",
+        "home": "Inter de Milán",
+        "away": "Barça",
+        "channels": [
+          "M+ Liga de Campeones"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga Hypermotion"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "UEFA Champions League",
+        "title": "Inter de Milán - Barça",
+        "home": "Inter de Milán",
+        "away": "Barça",
+        "channels": [
+          "M+ Liga de Campeones"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Barcelona"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": true
+    },
+    {
+      "partido": {
+        "competition": "UEFA Champions League",
+        "title": "Inter de Milán - Barça",
+        "home": "Inter de Milán",
+        "away": "Barça",
+        "channels": [
+          "M+ Liga de Campeones"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Atlético de Madrid",
+          "Inter"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": true
+    },
+    {
+      "partido": {
+        "competition": "UEFA Champions League",
+        "title": "Inter de Milán - Barça",
+        "home": "Inter de Milán",
+        "away": "Barça",
+        "channels": [
+          "M+ Liga de Campeones"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "UEFA Champions League",
+        "title": "Inter de Milán - Barça",
+        "home": "Inter de Milán",
+        "away": "Barça",
+        "channels": [
+          "M+ Liga de Campeones"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Argentina",
+          "Brasil"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "UEFA Champions League",
+        "title": "Inter de Milán - Barça",
+        "home": "Inter de Milán",
+        "away": "Barça",
+        "channels": [
+          "M+ Liga de Campeones"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Marruecos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "UEFA Champions League",
+        "title": "Inter de Milán - Barça",
+        "home": "Inter de Milán",
+        "away": "Barça",
+        "channels": [
+          "M+ Liga de Campeones"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga",
+          "Champions League",
+          "Premier League",
+          "Serie A",
+          "Bundesliga"
+        ],
+        "teams": [
+          "Real Madrid"
+        ],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "UEFA Champions League",
+        "title": "Inter de Milán - Barça",
+        "home": "Inter de Milán",
+        "away": "Barça",
+        "channels": [
+          "M+ Liga de Campeones"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Japón"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "UEFA Champions League",
+        "title": "Inter de Milán - Barça",
+        "home": "Inter de Milán",
+        "away": "Barça",
+        "channels": [
+          "M+ Liga de Campeones"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "Liga MX"
+        ],
+        "teams": [],
+        "nationalities": [
+          "Estados Unidos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "UEFA Champions League",
+        "title": "Inter de Milán - Barça",
+        "home": "Inter de Milán",
+        "away": "Barça",
+        "channels": [
+          "M+ Liga de Campeones"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "FC Porto",
+          "Benfica"
+        ],
+        "nationalities": [
+          "Portugal"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "UEFA Champions League",
+        "title": "Inter de Milán - Barça",
+        "home": "Inter de Milán",
+        "away": "Barça",
+        "channels": [
+          "M+ Liga de Campeones"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "??"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Eurocopa Sub-21",
+        "title": "Portugal Sub 21 - Italia Sub 21",
+        "home": "Portugal Sub 21",
+        "away": "Italia Sub 21",
+        "channels": [
+          "Teledeporte"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Eurocopa Sub-21",
+        "title": "Portugal Sub 21 - Italia Sub 21",
+        "home": "Portugal Sub 21",
+        "away": "Italia Sub 21",
+        "channels": [
+          "Teledeporte"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Eurocopa Sub-21",
+        "title": "Portugal Sub 21 - Italia Sub 21",
+        "home": "Portugal Sub 21",
+        "away": "Italia Sub 21",
+        "channels": [
+          "Teledeporte"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga Hypermotion"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Eurocopa Sub-21",
+        "title": "Portugal Sub 21 - Italia Sub 21",
+        "home": "Portugal Sub 21",
+        "away": "Italia Sub 21",
+        "channels": [
+          "Teledeporte"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Barcelona"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Eurocopa Sub-21",
+        "title": "Portugal Sub 21 - Italia Sub 21",
+        "home": "Portugal Sub 21",
+        "away": "Italia Sub 21",
+        "channels": [
+          "Teledeporte"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Atlético de Madrid",
+          "Inter"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Eurocopa Sub-21",
+        "title": "Portugal Sub 21 - Italia Sub 21",
+        "home": "Portugal Sub 21",
+        "away": "Italia Sub 21",
+        "channels": [
+          "Teledeporte"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Eurocopa Sub-21",
+        "title": "Portugal Sub 21 - Italia Sub 21",
+        "home": "Portugal Sub 21",
+        "away": "Italia Sub 21",
+        "channels": [
+          "Teledeporte"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Argentina",
+          "Brasil"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Eurocopa Sub-21",
+        "title": "Portugal Sub 21 - Italia Sub 21",
+        "home": "Portugal Sub 21",
+        "away": "Italia Sub 21",
+        "channels": [
+          "Teledeporte"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Marruecos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Eurocopa Sub-21",
+        "title": "Portugal Sub 21 - Italia Sub 21",
+        "home": "Portugal Sub 21",
+        "away": "Italia Sub 21",
+        "channels": [
+          "Teledeporte"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga",
+          "Champions League",
+          "Premier League",
+          "Serie A",
+          "Bundesliga"
+        ],
+        "teams": [
+          "Real Madrid"
+        ],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Eurocopa Sub-21",
+        "title": "Portugal Sub 21 - Italia Sub 21",
+        "home": "Portugal Sub 21",
+        "away": "Italia Sub 21",
+        "channels": [
+          "Teledeporte"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Japón"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Eurocopa Sub-21",
+        "title": "Portugal Sub 21 - Italia Sub 21",
+        "home": "Portugal Sub 21",
+        "away": "Italia Sub 21",
+        "channels": [
+          "Teledeporte"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "Liga MX"
+        ],
+        "teams": [],
+        "nationalities": [
+          "Estados Unidos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Eurocopa Sub-21",
+        "title": "Portugal Sub 21 - Italia Sub 21",
+        "home": "Portugal Sub 21",
+        "away": "Italia Sub 21",
+        "channels": [
+          "Teledeporte"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "FC Porto",
+          "Benfica"
+        ],
+        "nationalities": [
+          "Portugal"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Eurocopa Sub-21",
+        "title": "Portugal Sub 21 - Italia Sub 21",
+        "home": "Portugal Sub 21",
+        "away": "Italia Sub 21",
+        "channels": [
+          "Teledeporte"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "??"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Fórmula 1",
+        "title": "Gran Premio de España",
+        "home": "Gran Premio de España",
+        "away": "",
+        "channels": [
+          "DAZN F1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Fórmula 1",
+        "title": "Gran Premio de España",
+        "home": "Gran Premio de España",
+        "away": "",
+        "channels": [
+          "DAZN F1"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Fórmula 1",
+        "title": "Gran Premio de España",
+        "home": "Gran Premio de España",
+        "away": "",
+        "channels": [
+          "DAZN F1"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga Hypermotion"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Fórmula 1",
+        "title": "Gran Premio de España",
+        "home": "Gran Premio de España",
+        "away": "",
+        "channels": [
+          "DAZN F1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Barcelona"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Fórmula 1",
+        "title": "Gran Premio de España",
+        "home": "Gran Premio de España",
+        "away": "",
+        "channels": [
+          "DAZN F1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Atlético de Madrid",
+          "Inter"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Fórmula 1",
+        "title": "Gran Premio de España",
+        "home": "Gran Premio de España",
+        "away": "",
+        "channels": [
+          "DAZN F1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Fórmula 1",
+        "title": "Gran Premio de España",
+        "home": "Gran Premio de España",
+        "away": "",
+        "channels": [
+          "DAZN F1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Argentina",
+          "Brasil"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Fórmula 1",
+        "title": "Gran Premio de España",
+        "home": "Gran Premio de España",
+        "away": "",
+        "channels": [
+          "DAZN F1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Marruecos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Fórmula 1",
+        "title": "Gran Premio de España",
+        "home": "Gran Premio de España",
+        "away": "",
+        "channels": [
+          "DAZN F1"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga",
+          "Champions League",
+          "Premier League",
+          "Serie A",
+          "Bundesliga"
+        ],
+        "teams": [
+          "Real Madrid"
+        ],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Fórmula 1",
+        "title": "Gran Premio de España",
+        "home": "Gran Premio de España",
+        "away": "",
+        "channels": [
+          "DAZN F1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Japón"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Fórmula 1",
+        "title": "Gran Premio de España",
+        "home": "Gran Premio de España",
+        "away": "",
+        "channels": [
+          "DAZN F1"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "Liga MX"
+        ],
+        "teams": [],
+        "nationalities": [
+          "Estados Unidos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Fórmula 1",
+        "title": "Gran Premio de España",
+        "home": "Gran Premio de España",
+        "away": "",
+        "channels": [
+          "DAZN F1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "FC Porto",
+          "Benfica"
+        ],
+        "nationalities": [
+          "Portugal"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Fórmula 1",
+        "title": "Gran Premio de España",
+        "home": "Gran Premio de España",
+        "away": "",
+        "channels": [
+          "DAZN F1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "??"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "2. Bundesliga",
+        "title": "Hamburgo - Schalke 04",
+        "home": "Hamburgo",
+        "away": "Schalke 04",
+        "channels": [
+          "DAZN 2"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "2. Bundesliga",
+        "title": "Hamburgo - Schalke 04",
+        "home": "Hamburgo",
+        "away": "Schalke 04",
+        "channels": [
+          "DAZN 2"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "2. Bundesliga",
+        "title": "Hamburgo - Schalke 04",
+        "home": "Hamburgo",
+        "away": "Schalke 04",
+        "channels": [
+          "DAZN 2"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga Hypermotion"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "2. Bundesliga",
+        "title": "Hamburgo - Schalke 04",
+        "home": "Hamburgo",
+        "away": "Schalke 04",
+        "channels": [
+          "DAZN 2"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Barcelona"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "2. Bundesliga",
+        "title": "Hamburgo - Schalke 04",
+        "home": "Hamburgo",
+        "away": "Schalke 04",
+        "channels": [
+          "DAZN 2"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Atlético de Madrid",
+          "Inter"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "2. Bundesliga",
+        "title": "Hamburgo - Schalke 04",
+        "home": "Hamburgo",
+        "away": "Schalke 04",
+        "channels": [
+          "DAZN 2"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "2. Bundesliga",
+        "title": "Hamburgo - Schalke 04",
+        "home": "Hamburgo",
+        "away": "Schalke 04",
+        "channels": [
+          "DAZN 2"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Argentina",
+          "Brasil"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "2. Bundesliga",
+        "title": "Hamburgo - Schalke 04",
+        "home": "Hamburgo",
+        "away": "Schalke 04",
+        "channels": [
+          "DAZN 2"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Marruecos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "2. Bundesliga",
+        "title": "Hamburgo - Schalke 04",
+        "home": "Hamburgo",
+        "away": "Schalke 04",
+        "channels": [
+          "DAZN 2"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga",
+          "Champions League",
+          "Premier League",
+          "Serie A",
+          "Bundesliga"
+        ],
+        "teams": [
+          "Real Madrid"
+        ],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "2. Bundesliga",
+        "title": "Hamburgo - Schalke 04",
+        "home": "Hamburgo",
+        "away": "Schalke 04",
+        "channels": [
+          "DAZN 2"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Japón"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "2. Bundesliga",
+        "title": "Hamburgo - Schalke 04",
+        "home": "Hamburgo",
+        "away": "Schalke 04",
+        "channels": [
+          "DAZN 2"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "Liga MX"
+        ],
+        "teams": [],
+        "nationalities": [
+          "Estados Unidos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "2. Bundesliga",
+        "title": "Hamburgo - Schalke 04",
+        "home": "Hamburgo",
+        "away": "Schalke 04",
+        "channels": [
+          "DAZN 2"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "FC Porto",
+          "Benfica"
+        ],
+        "nationalities": [
+          "Portugal"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "2. Bundesliga",
+        "title": "Hamburgo - Schalke 04",
+        "home": "Hamburgo",
+        "away": "Schalke 04",
+        "channels": [
+          "DAZN 2"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "??"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "MLS",
+        "title": "Inter Miami - LA Galaxy",
+        "home": "Inter Miami",
+        "away": "LA Galaxy",
+        "channels": [
+          "Apple TV"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "MLS",
+        "title": "Inter Miami - LA Galaxy",
+        "home": "Inter Miami",
+        "away": "LA Galaxy",
+        "channels": [
+          "Apple TV"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "MLS",
+        "title": "Inter Miami - LA Galaxy",
+        "home": "Inter Miami",
+        "away": "LA Galaxy",
+        "channels": [
+          "Apple TV"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga Hypermotion"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "MLS",
+        "title": "Inter Miami - LA Galaxy",
+        "home": "Inter Miami",
+        "away": "LA Galaxy",
+        "channels": [
+          "Apple TV"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Barcelona"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "MLS",
+        "title": "Inter Miami - LA Galaxy",
+        "home": "Inter Miami",
+        "away": "LA Galaxy",
+        "channels": [
+          "Apple TV"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Atlético de Madrid",
+          "Inter"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "MLS",
+        "title": "Inter Miami - LA Galaxy",
+        "home": "Inter Miami",
+        "away": "LA Galaxy",
+        "channels": [
+          "Apple TV"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "MLS",
+        "title": "Inter Miami - LA Galaxy",
+        "home": "Inter Miami",
+        "away": "LA Galaxy",
+        "channels": [
+          "Apple TV"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Argentina",
+          "Brasil"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "MLS",
+        "title": "Inter Miami - LA Galaxy",
+        "home": "Inter Miami",
+        "away": "LA Galaxy",
+        "channels": [
+          "Apple TV"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Marruecos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "MLS",
+        "title": "Inter Miami - LA Galaxy",
+        "home": "Inter Miami",
+        "away": "LA Galaxy",
+        "channels": [
+          "Apple TV"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga",
+          "Champions League",
+          "Premier League",
+          "Serie A",
+          "Bundesliga"
+        ],
+        "teams": [
+          "Real Madrid"
+        ],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "MLS",
+        "title": "Inter Miami - LA Galaxy",
+        "home": "Inter Miami",
+        "away": "LA Galaxy",
+        "channels": [
+          "Apple TV"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Japón"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "MLS",
+        "title": "Inter Miami - LA Galaxy",
+        "home": "Inter Miami",
+        "away": "LA Galaxy",
+        "channels": [
+          "Apple TV"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "Liga MX"
+        ],
+        "teams": [],
+        "nationalities": [
+          "Estados Unidos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "MLS",
+        "title": "Inter Miami - LA Galaxy",
+        "home": "Inter Miami",
+        "away": "LA Galaxy",
+        "channels": [
+          "Apple TV"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "FC Porto",
+          "Benfica"
+        ],
+        "nationalities": [
+          "Portugal"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "MLS",
+        "title": "Inter Miami - LA Galaxy",
+        "home": "Inter Miami",
+        "away": "LA Galaxy",
+        "channels": [
+          "Apple TV"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "??"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "",
+        "title": "Estados Unidos - México",
+        "home": "Estados Unidos",
+        "away": "México",
+        "channels": [
+          "TUDN"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "",
+        "title": "Estados Unidos - México",
+        "home": "Estados Unidos",
+        "away": "México",
+        "channels": [
+          "TUDN"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "",
+        "title": "Estados Unidos - México",
+        "home": "Estados Unidos",
+        "away": "México",
+        "channels": [
+          "TUDN"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga Hypermotion"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "",
+        "title": "Estados Unidos - México",
+        "home": "Estados Unidos",
+        "away": "México",
+        "channels": [
+          "TUDN"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Barcelona"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "",
+        "title": "Estados Unidos - México",
+        "home": "Estados Unidos",
+        "away": "México",
+        "channels": [
+          "TUDN"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Atlético de Madrid",
+          "Inter"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "",
+        "title": "Estados Unidos - México",
+        "home": "Estados Unidos",
+        "away": "México",
+        "channels": [
+          "TUDN"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "",
+        "title": "Estados Unidos - México",
+        "home": "Estados Unidos",
+        "away": "México",
+        "channels": [
+          "TUDN"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Argentina",
+          "Brasil"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "",
+        "title": "Estados Unidos - México",
+        "home": "Estados Unidos",
+        "away": "México",
+        "channels": [
+          "TUDN"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Marruecos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "",
+        "title": "Estados Unidos - México",
+        "home": "Estados Unidos",
+        "away": "México",
+        "channels": [
+          "TUDN"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga",
+          "Champions League",
+          "Premier League",
+          "Serie A",
+          "Bundesliga"
+        ],
+        "teams": [
+          "Real Madrid"
+        ],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "",
+        "title": "Estados Unidos - México",
+        "home": "Estados Unidos",
+        "away": "México",
+        "channels": [
+          "TUDN"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Japón"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "",
+        "title": "Estados Unidos - México",
+        "home": "Estados Unidos",
+        "away": "México",
+        "channels": [
+          "TUDN"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "Liga MX"
+        ],
+        "teams": [],
+        "nationalities": [
+          "Estados Unidos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "",
+        "title": "Estados Unidos - México",
+        "home": "Estados Unidos",
+        "away": "México",
+        "channels": [
+          "TUDN"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "FC Porto",
+          "Benfica"
+        ],
+        "nationalities": [
+          "Portugal"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "",
+        "title": "Estados Unidos - México",
+        "home": "Estados Unidos",
+        "away": "México",
+        "channels": [
+          "TUDN"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "??"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Supercopa de España",
+        "title": "Atlético de Madrid - Athletic Club",
+        "home": "Atlético de Madrid",
+        "away": "Athletic Club",
+        "channels": [
+          "Movistar Plus+"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Supercopa de España",
+        "title": "Atlético de Madrid - Athletic Club",
+        "home": "Atlético de Madrid",
+        "away": "Athletic Club",
+        "channels": [
+          "Movistar Plus+"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Supercopa de España",
+        "title": "Atlético de Madrid - Athletic Club",
+        "home": "Atlético de Madrid",
+        "away": "Athletic Club",
+        "channels": [
+          "Movistar Plus+"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga Hypermotion"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Supercopa de España",
+        "title": "Atlético de Madrid - Athletic Club",
+        "home": "Atlético de Madrid",
+        "away": "Athletic Club",
+        "channels": [
+          "Movistar Plus+"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Barcelona"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Supercopa de España",
+        "title": "Atlético de Madrid - Athletic Club",
+        "home": "Atlético de Madrid",
+        "away": "Athletic Club",
+        "channels": [
+          "Movistar Plus+"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Atlético de Madrid",
+          "Inter"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": true
+    },
+    {
+      "partido": {
+        "competition": "Supercopa de España",
+        "title": "Atlético de Madrid - Athletic Club",
+        "home": "Atlético de Madrid",
+        "away": "Athletic Club",
+        "channels": [
+          "Movistar Plus+"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Supercopa de España",
+        "title": "Atlético de Madrid - Athletic Club",
+        "home": "Atlético de Madrid",
+        "away": "Athletic Club",
+        "channels": [
+          "Movistar Plus+"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Argentina",
+          "Brasil"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Supercopa de España",
+        "title": "Atlético de Madrid - Athletic Club",
+        "home": "Atlético de Madrid",
+        "away": "Athletic Club",
+        "channels": [
+          "Movistar Plus+"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Marruecos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Supercopa de España",
+        "title": "Atlético de Madrid - Athletic Club",
+        "home": "Atlético de Madrid",
+        "away": "Athletic Club",
+        "channels": [
+          "Movistar Plus+"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga",
+          "Champions League",
+          "Premier League",
+          "Serie A",
+          "Bundesliga"
+        ],
+        "teams": [
+          "Real Madrid"
+        ],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Supercopa de España",
+        "title": "Atlético de Madrid - Athletic Club",
+        "home": "Atlético de Madrid",
+        "away": "Athletic Club",
+        "channels": [
+          "Movistar Plus+"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Japón"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Supercopa de España",
+        "title": "Atlético de Madrid - Athletic Club",
+        "home": "Atlético de Madrid",
+        "away": "Athletic Club",
+        "channels": [
+          "Movistar Plus+"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "Liga MX"
+        ],
+        "teams": [],
+        "nationalities": [
+          "Estados Unidos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Supercopa de España",
+        "title": "Atlético de Madrid - Athletic Club",
+        "home": "Atlético de Madrid",
+        "away": "Athletic Club",
+        "channels": [
+          "Movistar Plus+"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "FC Porto",
+          "Benfica"
+        ],
+        "nationalities": [
+          "Portugal"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Supercopa de España",
+        "title": "Atlético de Madrid - Athletic Club",
+        "home": "Atlético de Madrid",
+        "away": "Athletic Club",
+        "channels": [
+          "Movistar Plus+"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "??"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Liga MX",
+        "title": "América - Chivas",
+        "home": "América",
+        "away": "Chivas",
+        "channels": []
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Liga MX",
+        "title": "América - Chivas",
+        "home": "América",
+        "away": "Chivas",
+        "channels": []
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Liga MX",
+        "title": "América - Chivas",
+        "home": "América",
+        "away": "Chivas",
+        "channels": []
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga Hypermotion"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Liga MX",
+        "title": "América - Chivas",
+        "home": "América",
+        "away": "Chivas",
+        "channels": []
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Barcelona"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Liga MX",
+        "title": "América - Chivas",
+        "home": "América",
+        "away": "Chivas",
+        "channels": []
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Atlético de Madrid",
+          "Inter"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Liga MX",
+        "title": "América - Chivas",
+        "home": "América",
+        "away": "Chivas",
+        "channels": []
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Liga MX",
+        "title": "América - Chivas",
+        "home": "América",
+        "away": "Chivas",
+        "channels": []
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Argentina",
+          "Brasil"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Liga MX",
+        "title": "América - Chivas",
+        "home": "América",
+        "away": "Chivas",
+        "channels": []
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Marruecos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Liga MX",
+        "title": "América - Chivas",
+        "home": "América",
+        "away": "Chivas",
+        "channels": []
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga",
+          "Champions League",
+          "Premier League",
+          "Serie A",
+          "Bundesliga"
+        ],
+        "teams": [
+          "Real Madrid"
+        ],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Liga MX",
+        "title": "América - Chivas",
+        "home": "América",
+        "away": "Chivas",
+        "channels": []
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Japón"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Liga MX",
+        "title": "América - Chivas",
+        "home": "América",
+        "away": "Chivas",
+        "channels": []
+      },
+      "gustos": {
+        "leagues": [
+          "Liga MX"
+        ],
+        "teams": [],
+        "nationalities": [
+          "Estados Unidos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Liga MX",
+        "title": "América - Chivas",
+        "home": "América",
+        "away": "Chivas",
+        "channels": []
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "FC Porto",
+          "Benfica"
+        ],
+        "nationalities": [
+          "Portugal"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Liga MX",
+        "title": "América - Chivas",
+        "home": "América",
+        "away": "Chivas",
+        "channels": []
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "??"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Primeira Liga",
+        "title": "Benfica - FC Porto",
+        "home": "Benfica",
+        "away": "FC Porto",
+        "channels": [
+          "Sport TV 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Primeira Liga",
+        "title": "Benfica - FC Porto",
+        "home": "Benfica",
+        "away": "FC Porto",
+        "channels": [
+          "Sport TV 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Primeira Liga",
+        "title": "Benfica - FC Porto",
+        "home": "Benfica",
+        "away": "FC Porto",
+        "channels": [
+          "Sport TV 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga Hypermotion"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Primeira Liga",
+        "title": "Benfica - FC Porto",
+        "home": "Benfica",
+        "away": "FC Porto",
+        "channels": [
+          "Sport TV 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Barcelona"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Primeira Liga",
+        "title": "Benfica - FC Porto",
+        "home": "Benfica",
+        "away": "FC Porto",
+        "channels": [
+          "Sport TV 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Atlético de Madrid",
+          "Inter"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Primeira Liga",
+        "title": "Benfica - FC Porto",
+        "home": "Benfica",
+        "away": "FC Porto",
+        "channels": [
+          "Sport TV 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Primeira Liga",
+        "title": "Benfica - FC Porto",
+        "home": "Benfica",
+        "away": "FC Porto",
+        "channels": [
+          "Sport TV 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Argentina",
+          "Brasil"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Primeira Liga",
+        "title": "Benfica - FC Porto",
+        "home": "Benfica",
+        "away": "FC Porto",
+        "channels": [
+          "Sport TV 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Marruecos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Primeira Liga",
+        "title": "Benfica - FC Porto",
+        "home": "Benfica",
+        "away": "FC Porto",
+        "channels": [
+          "Sport TV 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga",
+          "Champions League",
+          "Premier League",
+          "Serie A",
+          "Bundesliga"
+        ],
+        "teams": [
+          "Real Madrid"
+        ],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Primeira Liga",
+        "title": "Benfica - FC Porto",
+        "home": "Benfica",
+        "away": "FC Porto",
+        "channels": [
+          "Sport TV 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Japón"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Primeira Liga",
+        "title": "Benfica - FC Porto",
+        "home": "Benfica",
+        "away": "FC Porto",
+        "channels": [
+          "Sport TV 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [
+          "Liga MX"
+        ],
+        "teams": [],
+        "nationalities": [
+          "Estados Unidos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Primeira Liga",
+        "title": "Benfica - FC Porto",
+        "home": "Benfica",
+        "away": "FC Porto",
+        "channels": [
+          "Sport TV 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "FC Porto",
+          "Benfica"
+        ],
+        "nationalities": [
+          "Portugal"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": true
+    },
+    {
+      "partido": {
+        "competition": "Primeira Liga",
+        "title": "Benfica - FC Porto",
+        "home": "Benfica",
+        "away": "FC Porto",
+        "channels": [
+          "Sport TV 1"
+        ]
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "??"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Botola Pro",
+        "title": "Wydad - Raja",
+        "home": "Wydad",
+        "away": "Raja",
+        "channels": []
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Botola Pro",
+        "title": "Wydad - Raja",
+        "home": "Wydad",
+        "away": "Raja",
+        "channels": []
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Botola Pro",
+        "title": "Wydad - Raja",
+        "home": "Wydad",
+        "away": "Raja",
+        "channels": []
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga Hypermotion"
+        ],
+        "teams": [],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Botola Pro",
+        "title": "Wydad - Raja",
+        "home": "Wydad",
+        "away": "Raja",
+        "channels": []
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Barcelona"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Botola Pro",
+        "title": "Wydad - Raja",
+        "home": "Wydad",
+        "away": "Raja",
+        "channels": []
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "Atlético de Madrid",
+          "Inter"
+        ],
+        "nationalities": []
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Botola Pro",
+        "title": "Wydad - Raja",
+        "home": "Wydad",
+        "away": "Raja",
+        "channels": []
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Botola Pro",
+        "title": "Wydad - Raja",
+        "home": "Wydad",
+        "away": "Raja",
+        "channels": []
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Argentina",
+          "Brasil"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Botola Pro",
+        "title": "Wydad - Raja",
+        "home": "Wydad",
+        "away": "Raja",
+        "channels": []
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Marruecos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": true,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Botola Pro",
+        "title": "Wydad - Raja",
+        "home": "Wydad",
+        "away": "Raja",
+        "channels": []
+      },
+      "gustos": {
+        "leagues": [
+          "LaLiga",
+          "Champions League",
+          "Premier League",
+          "Serie A",
+          "Bundesliga"
+        ],
+        "teams": [
+          "Real Madrid"
+        ],
+        "nationalities": [
+          "España"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Botola Pro",
+        "title": "Wydad - Raja",
+        "home": "Wydad",
+        "away": "Raja",
+        "channels": []
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "Japón"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Botola Pro",
+        "title": "Wydad - Raja",
+        "home": "Wydad",
+        "away": "Raja",
+        "channels": []
+      },
+      "gustos": {
+        "leagues": [
+          "Liga MX"
+        ],
+        "teams": [],
+        "nationalities": [
+          "Estados Unidos"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Botola Pro",
+        "title": "Wydad - Raja",
+        "home": "Wydad",
+        "away": "Raja",
+        "channels": []
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [
+          "FC Porto",
+          "Benfica"
+        ],
+        "nationalities": [
+          "Portugal"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    },
+    {
+      "partido": {
+        "competition": "Botola Pro",
+        "title": "Wydad - Raja",
+        "home": "Wydad",
+        "away": "Raja",
+        "channels": []
+      },
+      "gustos": {
+        "leagues": [],
+        "teams": [],
+        "nationalities": [
+          "??"
+        ]
+      },
+      "hypermotion": false,
+      "paraTi": false,
+      "destacado": false
+    }
+  ],
+  "puntuaciones": [
+    {
+      "a": "DAZN",
+      "b": "DAZN 1",
+      "puntuacion": 78
+    },
+    {
+      "a": "DAZN 1",
+      "b": "DAZN 2",
+      "puntuacion": 0
+    },
+    {
+      "a": "DAZN 1 FHD --> NEW ERA",
+      "b": "DAZN 1",
+      "puntuacion": 100
+    },
+    {
+      "a": "M+ LaLiga TV",
+      "b": "Movistar LaLiga",
+      "puntuacion": 100
+    },
+    {
+      "a": "M+ Liga de Campeones",
+      "b": "LIGA DE CAMPEONES --> ELCANO",
+      "puntuacion": 100
+    },
+    {
+      "a": "LaLiga TV Hypermotion",
+      "b": "LaLiga TV",
+      "puntuacion": 58
+    },
+    {
+      "a": "Movistar Plus+",
+      "b": "M+",
+      "puntuacion": 100
+    },
+    {
+      "a": "La 1 HD",
+      "b": "La 1",
+      "puntuacion": 100
+    },
+    {
+      "a": "TVE La 1",
+      "b": "La 1",
+      "puntuacion": 58
+    },
+    {
+      "a": "DAZN LaLiga",
+      "b": "DAZN LaLiga FHD",
+      "puntuacion": 100
+    },
+    {
+      "a": "beIN Sports",
+      "b": "BeIN SPORTS 1 HD",
+      "puntuacion": 78
+    },
+    {
+      "a": "Eurosport 1",
+      "b": "Eurosport 2",
+      "puntuacion": 0
+    },
+    {
+      "a": "Canal+ Foot",
+      "b": "Canal Plus Foot",
+      "puntuacion": 100
+    },
+    {
+      "a": "ESPN Premium",
+      "b": "ESPN",
+      "puntuacion": 58
+    },
+    {
+      "a": "Sky Sports Arena",
+      "b": "SKY SPORTS ARENA --> SPORT TV",
+      "puntuacion": 100
+    },
+    {
+      "a": "",
+      "b": "DAZN",
+      "puntuacion": 0
+    },
+    {
+      "a": "***DAZN 1***",
+      "b": "dazn 1",
+      "puntuacion": 100
+    },
+    {
+      "a": "Gol Play",
+      "b": "GOL PLAY España",
+      "puntuacion": 100
+    },
+    {
+      "a": "Movistar Plus+ 2",
+      "b": "M+ #2",
+      "puntuacion": 100
+    },
+    {
+      "a": "M+ Vamos",
+      "b": "Vamos",
+      "puntuacion": 100
+    },
+    {
+      "a": "DAZN F1",
+      "b": "DAZN 1",
+      "puntuacion": 0
+    },
+    {
+      "a": "Real Madrid TV",
+      "b": "Real Madrid TV 4K",
+      "puntuacion": 100
+    },
+    {
+      "a": "M. Liga de Campeones 2",
+      "b": "Liga de Campeones 2",
+      "puntuacion": 100
+    },
+    {
+      "a": "TNT Sports 1",
+      "b": "TNT Sports",
+      "puntuacion": 78
+    },
+    {
+      "a": "Fox Sports 2 ⟶ Proveedor",
+      "b": "Fox Sports",
+      "puntuacion": 78
+    },
+    {
+      "a": "Teledeporte",
+      "b": "Tele Deporte",
+      "puntuacion": 0
+    },
+    {
+      "a": "Movistar Liga de Campeones 1080p",
+      "b": "M+ Liga De Campeones",
+      "puntuacion": 100
+    },
+    {
+      "a": "Movistar Deportes 2",
+      "b": "M+ Deportes 2 HD",
+      "puntuacion": 100
+    },
+    {
+      "a": "DAZN LaLiga 2",
+      "b": "DAZN LaLiga",
+      "puntuacion": 78
+    },
+    {
+      "a": "Premier Sports Uno",
+      "b": "Premier Sports",
+      "puntuacion": 58
+    },
+    {
+      "a": "Sport TV 1",
+      "b": "Sport TV 1 Portugal",
+      "puntuacion": 58
+    },
+    {
+      "a": "LaLiga TV Hypermotion 2",
+      "b": "LaLiga TV Hypermotion",
+      "puntuacion": 78
+    },
+    {
+      "a": "Canal Sur Andalucía",
+      "b": "Canal Sur",
+      "puntuacion": 58
+    },
+    {
+      "a": "Movistar Plus+ Fútbol",
+      "b": "M+ Futbol",
+      "puntuacion": 100
+    },
+    {
+      "a": "Eurosport",
+      "b": "Eurosport 1 HD --> ACE",
+      "puntuacion": 78
+    }
+  ]
+}

@@ -385,6 +385,12 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
           separated: !canZap,
           onSelect: actions.toggleNerd,
         },
+        {
+          id: 'donde',
+          label: 'Dónde se está reproduciendo',
+          icon: 'tv',
+          onSelect: () => navigate({ vista: 'ajustes', seccion: 'donde' }),
+        },
         ...(abilities.fullscreen
           ? [
               {

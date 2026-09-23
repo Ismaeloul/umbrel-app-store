@@ -17,6 +17,7 @@
 import type { RequestContext } from '../../core/module.js';
 import type { LegacyRouter, V1Router } from '../../core/router.js';
 import type { Services } from '../../services.js';
+import { browserDeviceName } from './device-name.js';
 import type { ViewerIdentity } from './types.js';
 
 /** Operaciones antiguas de este módulo (`MÉTODO ruta` como en LEGACY_OPERATIONS). */
@@ -57,6 +58,9 @@ function identity(
     viewerId,
     deviceId: ctx.device?.deviceId ?? deviceHint ?? null,
     device: ctx.device,
+    deviceName: ctx.device
+      ? ctx.device.device.name
+      : browserDeviceName(ctx.request.headers['user-agent']),
   };
 }
 

@@ -2,7 +2,7 @@
 openapi: 3.1.0
 info:
   title: Ace Player Neo · API v1
-  version: 0.7.0
+  version: 0.7.1
   description: "Generado desde packages/shared/src/routes.ts con scripts/openapi.ts: no editar a mano. Cada ruta existe también bajo /native (la entrada de la app iOS, D4), con origen native. Las rutas antiguas /api/* están en docs/openapi.yaml."
 servers:
   - url: /
@@ -472,17 +472,47 @@ paths:
                                     type: string
                                     format: date-time
                                     pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                  viewerId:
+                                    type: string
+                                  deviceName:
+                                    type: string
+                                    maxLength: 80
+                                  platform:
+                                    type: string
+                                    enum:
+                                      - web
+                                      - ios
+                                      - legacy
+                                  playing:
+                                    type:
+                                      - boolean
+                                      - "null"
                                 required:
                                   - client
                                   - deviceId
                                   - lastBeatAt
+                                  - viewerId
+                                  - deviceName
+                                  - platform
+                                  - playing
                                 additionalProperties: false
+                            title:
+                              type: string
+                              maxLength: 200
+                            protocol:
+                              type: string
+                              enum:
+                                - mpegts
+                                - hls
+                                - hls-fmp4
                           required:
                             - id
                             - hash
                             - mode
                             - openedAt
                             - viewers
+                            - title
+                            - protocol
                           additionalProperties: false
                     required:
                       - nowPlaying
@@ -1912,17 +1942,47 @@ paths:
                                 type: string
                                 format: date-time
                                 pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                              viewerId:
+                                type: string
+                              deviceName:
+                                type: string
+                                maxLength: 80
+                              platform:
+                                type: string
+                                enum:
+                                  - web
+                                  - ios
+                                  - legacy
+                              playing:
+                                type:
+                                  - boolean
+                                  - "null"
                             required:
                               - client
                               - deviceId
                               - lastBeatAt
+                              - viewerId
+                              - deviceName
+                              - platform
+                              - playing
                             additionalProperties: false
+                        title:
+                          type: string
+                          maxLength: 200
+                        protocol:
+                          type: string
+                          enum:
+                            - mpegts
+                            - hls
+                            - hls-fmp4
                       required:
                         - id
                         - hash
                         - mode
                         - openedAt
                         - viewers
+                        - title
+                        - protocol
                       additionalProperties: false
                 required:
                   - nowPlaying
@@ -6657,6 +6717,102 @@ components:
                 - hash
                 - title
                 - reason
+              additionalProperties: false
+          required:
+            - type
+            - data
+          additionalProperties: false
+        - type: object
+          properties:
+            type:
+              type: string
+              const: playback.sessions
+            data:
+              type: object
+              properties:
+                sessions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        pattern: ^s_[A-Za-z0-9_-]{8,64}$
+                      hash:
+                        type: string
+                        pattern: ^[a-f0-9]{40}$
+                      mode:
+                        type: string
+                        enum:
+                          - progressive
+                          - hls
+                      openedAt:
+                        type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      viewers:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            client:
+                              type: string
+                              enum:
+                                - web
+                                - ios
+                                - legacy
+                            deviceId:
+                              type:
+                                - string
+                                - "null"
+                            lastBeatAt:
+                              type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                            viewerId:
+                              type: string
+                            deviceName:
+                              type: string
+                              maxLength: 80
+                            platform:
+                              type: string
+                              enum:
+                                - web
+                                - ios
+                                - legacy
+                            playing:
+                              type:
+                                - boolean
+                                - "null"
+                          required:
+                            - client
+                            - deviceId
+                            - lastBeatAt
+                            - viewerId
+                            - deviceName
+                            - platform
+                            - playing
+                          additionalProperties: false
+                      title:
+                        type: string
+                        maxLength: 200
+                      protocol:
+                        type: string
+                        enum:
+                          - mpegts
+                          - hls
+                          - hls-fmp4
+                    required:
+                      - id
+                      - hash
+                      - mode
+                      - openedAt
+                      - viewers
+                      - title
+                      - protocol
+                    additionalProperties: false
+              required:
+                - sessions
               additionalProperties: false
           required:
             - type

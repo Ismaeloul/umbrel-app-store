@@ -30,6 +30,7 @@ function setup(search = '?vista=ajustes', extra: Parameters<typeof mockFetch>[0]
     'GET /api/v1/engine/status': fixture('engineStatus'),
     'POST /api/v1/engine/restart': { restarted: true },
     'GET /api/v1/bootstrap': fixture('bootstrap'),
+    'GET /api/v1/playback': fixture('playbackStatus'),
     ...extra,
   });
   const seccion = new URLSearchParams(search).get('vista')?.split('/')[1] ?? null;
@@ -62,6 +63,7 @@ describe('Ajustes', () => {
       'Listas',
       'Tu fútbol',
       'Reproducción',
+      'Dónde se está reproduciendo',
       'Apariencia',
       'Motor AceStream',
       'Acerca de',

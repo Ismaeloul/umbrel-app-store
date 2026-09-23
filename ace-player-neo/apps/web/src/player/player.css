@@ -713,7 +713,9 @@
 }
 .player-mini {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-columns: auto;
+  grid-auto-flow: column;
   align-items: center;
   min-width: 0;
 }
@@ -751,6 +753,18 @@
 }
 .player-mini__btn {
   color: var(--text);
+}
+/* «Dónde se está reproduciendo»: en el móvil solo si otro dispositivo ve lo mismo. */
+.player-mini__where:not([data-shared='true']) {
+  display: none;
+}
+.player-mini__where[data-shared='true'] {
+  color: var(--accent-ink);
+}
+@media (min-width: 768px) {
+  .player-mini__where:not([data-shared='true']) {
+    display: inline-grid;
+  }
 }
 @media (min-width: 768px) {
   .player[data-presentation='mini'] .player-frame {

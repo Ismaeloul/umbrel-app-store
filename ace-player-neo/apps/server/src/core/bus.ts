@@ -66,6 +66,8 @@ export interface DomainEvents {
   'playback.nowPlaying': SseEventData<'playback.nowPlaying'>;
   /** Un visor pierde el canal: otro dispositivo se lo ha quedado. */
   'playback.handoff': SseEventData<'playback.handoff'> & DeviceTargeted;
+  /** «Dónde se está reproduciendo»: la lista de sesiones cada vez que cambia (a web e iOS). */
+  'playback.sessions': SseEventData<'playback.sessions'>;
   /**
    * Hay o no hay alguien viendo, y qué. Lo usan el vigilante del motor
    * (histéresis de 2 o 3 fallos) y el comprobador (ritmo lento y nunca el

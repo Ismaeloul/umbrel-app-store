@@ -5,10 +5,12 @@
    play() de la API pública que acaba en el panel de error de este navegador
    (jsdom no tiene MSE ni HLS). Sin red: fetch simulado. */
 
+import type { PlaybackStatus, SessionSummary } from '@ace/shared';
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getDeviceId, getViewerId } from '../api/identity.ts';
 import { createQueryClient, routeKey } from '../api/query.ts';
 import { resetMode, setMode } from '../api/mode.ts';
 import { playerPresence } from '../app/player-presence.ts';
@@ -388,6 +390,38 @@ describe('mini-reproductor «Sonando»', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Detener la reproducción' }));
     expect(playerStore.get().phase).toBe('idle');
     expect(playerPresence.get().active).toBe(false);
+  });
+
+  it('lleva a «Dónde se está reproduciendo» y avisa si otro dispositivo ve lo mismo', async () => {
+    const client = createQueryClient();
+    renderDock('mini', undefined, client);
+    setPlayer(playing());
+    const plain = screen.getByRole('button', { name: 'Dónde se está reproduciendo' });
+    expect(plain).not.toHaveAttribute('data-shared');
+    /* Llega por SSE (playback.sessions): este visor y un iPhone en la misma sesión. */
+    const status = fixture<PlaybackStatus>('playbackStatus');
+    const session = status.sessions[0] as SessionSummary;
+    act(() => {
+      client.setQueryData(routeKey('playbackStatus'), {
+        ...status,
+        sessions: [
+          {
+            ...session,
+            viewers: session.viewers.map((viewer) =>
+              viewer.platform === 'web'
+                ? { ...viewer, viewerId: getViewerId(), deviceId: getDeviceId() }
+                : viewer,
+            ),
+          },
+        ],
+      });
+    });
+    const shared = await screen.findByRole('button', {
+      name: 'Dónde se está reproduciendo (también en otro dispositivo)',
+    });
+    expect(shared).toHaveAttribute('data-shared', 'true');
+    fireEvent.click(shared);
+    await waitFor(() => expect(decodeURIComponent(location.search)).toContain('ajustes/donde'));
   });
 
   it('con el dedo se arrastra: hacia arriba vuelve al vídeo; a un lado detiene con «Deshacer»', async () => {

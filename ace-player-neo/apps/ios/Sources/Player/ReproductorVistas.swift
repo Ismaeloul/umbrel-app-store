@@ -3,18 +3,29 @@ import SwiftUI
 
 // MARK: - Controles sobre el vídeo
 
+/// Dónde están los controles: cambia qué botones salen y qué hace «pantalla completa».
+enum ContextoControles: Equatable {
+    /// Dentro del centro de partido o de canal.
+    case integrado
+    /// Reproductor grande en vertical.
+    case grande
+    /// Reproductor grande en horizontal (pantalla completa).
+    case completa
+}
+
 /// Controles propios sobre el vídeo, con cristal (Liquid Glass en iOS 26):
 /// reproducir/pausa, −30 s, «Directo» con el retraso real, PiP, AirPlay y
 /// pantalla completa. Se esconden a los 3,2 s si suena de verdad.
 struct ControlesVideo: View {
     @Environment(AppModel.self) private var app
-    let completa: Bool
-    var alCerrar: (() -> Void)?
+    let contexto: ContextoControles
+    var alMinimizar: (() -> Void)?
     @State private var visibles = true
     @State private var toques = 0
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
 
     private var reproductor: Reproductor { app.reproductor }
+    private var completa: Bool { contexto == .completa }
 
     var body: some View {
         ZStack {
@@ -22,7 +33,10 @@ struct ControlesVideo: View {
             Color.clear
                 .contentShape(Rectangle())
                 .onTapGesture(count: 2) { alternarPantallaCompleta() }
-                .onTapGesture { withAnimation(Muelle.rapido) { visibles.toggle() }; toques += 1 }
+                .onTapGesture {
+                    withAnimation(Muelle.rapido) { visibles.toggle() }
+                    toques += 1
+                }
                 .accessibilityHidden(true)
 
             if visibles || voiceOver || reproductor.fase != .reproduciendo {
@@ -60,13 +74,13 @@ struct ControlesVideo: View {
     private var barraSuperior: some View {
         HStack(spacing: 12) {
             Button {
-                alCerrar?()
+                alMinimizar?()
             } label: {
                 Image(systemName: "chevron.down")
                     .font(.headline)
             }
             .botonCristal()
-            .accessibilityLabel("Cerrar pantalla completa")
+            .accessibilityLabel("Minimizar el reproductor")
             .accessibilityIdentifier("boton-cerrar-completa")
             VStack(alignment: .leading, spacing: 2) {
                 Text(reproductor.canal?.partido?.titulo ?? reproductor.canal?.titulo ?? "")
@@ -129,6 +143,7 @@ struct ControlesVideo: View {
                         .contentTransition(.symbolEffect(.replace))
                 }
                 .botonCristal(diametro: 72)
+                .sensoryFeedback(.impact(weight: .light), trigger: reproductor.quiereReproducir)
                 .accessibilityLabel(reproductor.quiereReproducir ? "Pausa" : "Reproducir")
                 .accessibilityIdentifier("boton-reproducir")
 
@@ -143,7 +158,7 @@ struct ControlesVideo: View {
     private var barraInferior: some View {
         HStack(spacing: 10) {
             botonDirecto()
-            if let estadisticas = reproductor.estadisticas, completa {
+            if let estadisticas = reproductor.estadisticas, contexto != .integrado {
                 Label("\(estadisticas.peers)", systemImage: "person.2.fill")
                     .font(.caption.weight(.semibold).monospacedDigit())
                     .foregroundStyle(.white.opacity(0.85))
@@ -204,11 +219,16 @@ struct ControlesVideo: View {
         }
     }
 
+    /// Integrado → reproductor grande en horizontal; grande → horizontal; completa → vertical.
     private func alternarPantallaCompleta() {
-        if completa {
-            alCerrar?()
-        } else {
-            reproductor.pantallaCompleta = true
+        switch contexto {
+        case .integrado:
+            withAnimation(Muelle.heroe) { reproductor.expandir() }
+            Orientacion.pedir(.landscape)
+        case .grande:
+            Orientacion.pedir(.landscape)
+        case .completa:
+            Orientacion.pedir(.portrait)
         }
     }
 
@@ -216,6 +236,71 @@ struct ControlesVideo: View {
         try? await Task.sleep(for: .seconds(3.2))
         guard !Task.isCancelled, reproductor.fase == .reproduciendo, !voiceOver else { return }
         withAnimation(Muelle.estandar) { visibles = false }
+    }
+}
+
+// MARK: - El vídeo (hueco de la única capa)
+
+/// El hueco del vídeo con su fondo negro y, mientras suena en la ventanita
+/// del PiP, un marcador en su sitio (nunca otra imagen: la capa es una).
+struct VideoApp: View {
+    @Environment(AppModel.self) private var app
+    let prioridad: PrioridadHueco
+    var gravedad: AVLayerVideoGravity = .resizeAspect
+    var compacto = false
+
+    var body: some View {
+        ZStack {
+            Color.black
+            VistaVideo(superficie: app.pip.superficie, prioridad: prioridad, gravedad: gravedad)
+            if app.pip.activo {
+                MarcadorPiP(compacto: compacto)
+                    .transition(.opacity)
+            }
+        }
+        .animation(Muelle.rapido, value: app.pip.activo)
+    }
+}
+
+/// Lo que ocupa el vídeo mientras se ve en la ventanita del PiP.
+struct MarcadorPiP: View {
+    @Environment(AppModel.self) private var app
+    var compacto = false
+
+    var body: some View {
+        ZStack {
+            Color.black
+            if compacto {
+                Image(systemName: "pip")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.85))
+            } else {
+                VStack(spacing: 10) {
+                    Image(systemName: "pip")
+                        .font(.largeTitle)
+                    Text("Se está viendo en imagen en imagen")
+                        .font(.subheadline.weight(.semibold))
+                        .multilineTextAlignment(.center)
+                    Button {
+                        app.pip.cerrar()
+                    } label: {
+                        Text("Volver aquí")
+                            .font(.subheadline.weight(.bold))
+                            .padding(.horizontal, 16)
+                            .frame(minHeight: Medida.toque)
+                            .cristal(en: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("boton-volver-del-pip")
+                }
+                .foregroundStyle(.white)
+                .environment(\.colorScheme, .dark)
+                .padding()
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Se está viendo en imagen en imagen")
+        .accessibilityIdentifier("marcador-pip")
     }
 }
 
@@ -230,11 +315,10 @@ struct ReproductorIntegrado: View {
         let reproductor = app.reproductor
         VStack(alignment: .leading, spacing: 8) {
             ZStack {
-                Color.black
-                if !reproductor.pantallaCompleta {
-                    VistaVideo(player: reproductor.motor.avPlayer, pip: app.pip)
+                VideoApp(prioridad: .integrado)
+                if !app.pip.activo {
+                    ControlesVideo(contexto: .integrado)
                 }
-                ControlesVideo(completa: false)
             }
             .aspectRatio(16 / 9, contentMode: .fit)
             .clipShape(RoundedRectangle(cornerRadius: Medida.radioL, style: .continuous))
@@ -288,82 +372,169 @@ struct LineaEstado: View {
     }
 }
 
-// MARK: - Pantalla completa
+// MARK: - Capa del reproductor (mini y grande)
 
-/// Reproductor a pantalla completa: negro, en horizontal y con los controles
-/// grandes. Se abre desde el botón, el mini-reproductor o al volver del PiP.
-struct ReproductorCompleto: View {
-    @Environment(AppModel.self) private var app
-    @Environment(\.dismiss) private var cerrar
-    @State private var arrastre: CGFloat = 0
+/// Medidas del armazón que el reproductor necesita saber: el alto de la
+/// barra de pestañas (para poner el mini justo encima) y el margen del sistema.
+@MainActor
+@Observable
+final class Maqueta {
+    /// Del borde inferior de la pantalla al borde superior de la barra de pestañas.
+    private(set) var alturaBarra: CGFloat = 0
+    /// Zona segura inferior de la ventana (la del indicador de inicio).
+    private(set) var margenSistema: CGFloat = 0
 
-    var body: some View {
-        let reproductor = app.reproductor
-        ZStack {
-            Color.black.ignoresSafeArea()
-            VistaVideo(player: reproductor.motor.avPlayer, pip: app.pip)
-                .ignoresSafeArea()
-            ControlesVideo(completa: true) { salir() }
-            VStack {
-                Spacer()
-                LineaEstado()
-                    .padding(.bottom, 70)
-                    .environment(\.colorScheme, .dark)
-            }
-        }
-        .offset(y: max(0, arrastre))
-        .gesture(
-            DragGesture(minimumDistance: 30)
-                .onChanged { valor in arrastre = valor.translation.height }
-                .onEnded { valor in
-                    if valor.translation.height > 140 { salir() } else { withAnimation(Muelle.estandar) { arrastre = 0 } }
-                }
-        )
-        .statusBarHidden()
-        .persistentSystemOverlays(.hidden)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Reproductor a pantalla completa")
-        .accessibilityAction(.escape) { salir() }
-        .accessibilityIdentifier("reproductor-completo")
-        .onAppear { Orientacion.pedir(.landscape) }
-        .onDisappear { Orientacion.pedir(.portrait) }
+    /// Alto del mini-reproductor.
+    static let altoMini: CGFloat = 60
+
+    func medirBarra(_ valor: CGFloat) {
+        guard valor > 0, abs(valor - alturaBarra) > 0.5 else { return }
+        alturaBarra = valor
     }
 
-    private func salir() {
-        app.reproductor.pantallaCompleta = false
-        cerrar()
+    func medirSistema(_ valor: CGFloat) {
+        guard abs(valor - margenSistema) > 0.5 else { return }
+        margenSistema = valor
+    }
+
+    /// Dónde va el mini (desde el borde de la pantalla), con un valor seguro si aún no se ha medido.
+    var baseMini: CGFloat { max(alturaBarra, 49 + margenSistema) + 6 }
+}
+
+/// El mini-reproductor y el reproductor grande, por encima de las pestañas.
+/// Comparten el espacio de `matchedGeometryEffect`: el vídeo y el fondo del
+/// mini crecen hasta el reproductor grande y vuelven.
+struct CapaReproductor: View {
+    @Environment(AppModel.self) private var app
+    @Environment(Maqueta.self) private var maqueta
+    @Environment(\.verticalSizeClass) private var claseVertical
+    @Environment(\.accessibilityReduceMotion) private var sinMovimiento
+    @Namespace private var espacio
+    @State private var arrastre: CGFloat = 0
+
+    private var muelle: Animation { sinMovimiento ? .easeInOut(duration: 0.15) : Muelle.heroe }
+
+    var body: some View {
+        let vista = app.reproductor.vista
+        ZStack {
+            if vista == .grande {
+                ReproductorGrande(espacio: espacio, arrastre: $arrastre, alMinimizar: { minimizar() })
+                    .transition(.opacity)
+                    .zIndex(2)
+            }
+            if vista == .mini {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    MiniReproductor(espacio: espacio, alAbrir: { abrir() })
+                        .padding(.horizontal, Medida.margen)
+                        .padding(.bottom, maqueta.baseMini)
+                }
+                .ignoresSafeArea(.container, edges: .bottom)
+                .ignoresSafeArea(.keyboard)
+                .transition(.opacity)
+                .zIndex(1)
+            }
+        }
+        .animation(muelle, value: vista)
+        .sensoryFeedback(.impact(weight: .light), trigger: vista == .grande)
+        .onChange(of: app.reproductor.canal == nil) { _, sinCanal in
+            if sinCanal { arrastre = 0 }
+        }
+    }
+
+    private func abrir() {
+        arrastre = 0
+        withAnimation(muelle) { app.reproductor.expandir() }
+    }
+
+    /// Se va desde donde lo haya dejado el dedo (el desplazamiento se pone a
+    /// cero al volver a abrirlo, no ahora: si no, subiría antes de encogerse).
+    private func minimizar() {
+        if claseVertical == .compact { Orientacion.pedir(.portrait) }
+        withAnimation(muelle) { app.reproductor.minimizar() }
+    }
+}
+
+extension View {
+    /// Aparta el contenido de una pestaña para que el mini-reproductor no
+    /// tape la última fila, y mide la barra de pestañas para colocarlo.
+    func reservaMini() -> some View {
+        modifier(ReservaMini())
+    }
+}
+
+private struct ReservaMini: ViewModifier {
+    @Environment(AppModel.self) private var app
+
+    func body(content: Content) -> some View {
+        content
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if app.reproductor.visibleEnMini {
+                    Color.clear
+                        .frame(height: Maqueta.altoMini + 12)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
+            .background { LectorBarra() }
+    }
+}
+
+/// Lee la zona segura inferior de la pestaña (la barra de pestañas y el indicador de inicio).
+private struct LectorBarra: View {
+    @Environment(Maqueta.self) private var maqueta
+
+    var body: some View {
+        GeometryReader { geo in
+            Color.clear
+                .onAppear { maqueta.medirBarra(geo.safeAreaInsets.bottom) }
+                .onChange(of: geo.safeAreaInsets.bottom) { _, nuevo in maqueta.medirBarra(nuevo) }
+        }
+        .ignoresSafeArea(.keyboard)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
 // MARK: - Mini-reproductor
 
-/// Mini-reproductor flotante sobre la barra de pestañas cuando se sale del
-/// partido sin detener: vídeo pequeño, título, pausa y cerrar. Al tocarlo se
-/// abre a pantalla completa.
+/// Mini-reproductor flotante sobre la barra de pestañas: vídeo pequeño,
+/// estado, título, pausa y cerrar. Tocarlo o deslizarlo hacia arriba abre el
+/// reproductor grande; deslizarlo hacia un lado (o la X) lo detiene.
 struct MiniReproductor: View {
     @Environment(AppModel.self) private var app
-    @Environment(\.espacioReproductor) private var espacioCompartido
     let espacio: Namespace.ID
+    let alAbrir: () -> Void
+    @State private var arrastre: CGSize = .zero
+    @State private var deteniendo = false
+
+    private let forma = RoundedRectangle(cornerRadius: 24, style: .continuous)
 
     var body: some View {
         let reproductor = app.reproductor
+        let desplazamiento = GestosReproductor.desplazamientoMini(arrastre)
         HStack(spacing: 12) {
-            ZStack {
-                Color.black
-                VistaVideo(player: reproductor.motor.avPlayer, pip: app.pip, gravedad: .resizeAspectFill)
-            }
-            .frame(width: 72, height: 42)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .accessibilityHidden(true)
+            VideoApp(prioridad: .mini, gravedad: .resizeAspectFill, compacto: true)
+                .frame(width: 76, height: 44)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .matchedGeometryEffect(id: "video", in: espacio)
+                .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(reproductor.canal?.partido?.titulo ?? reproductor.canal?.titulo ?? "")
-                    .font(.subheadline.weight(.semibold))
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 5) {
+                    if reproductor.fase == .reproduciendo {
+                        Image(systemName: "waveform")
+                            .symbolEffect(.variableColor.iterative, options: .repeating)
+                            .accessibilityHidden(true)
+                    }
+                    Text(estado(reproductor))
+                        .lineLimit(1)
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(reproductor.fase == .error ? Tinta.falloTinta : Tinta.acentoTinta)
+                Text(titulo(reproductor))
+                    .font(.subheadline.weight(.bold))
                     .foregroundStyle(Tinta.texto)
-                    .lineLimit(1)
-                Text(subtitulo(reproductor))
-                    .font(.caption)
-                    .foregroundStyle(reproductor.fase == .error ? Tinta.falloTinta : Tinta.texto2)
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -375,6 +546,7 @@ struct MiniReproductor: View {
                     .font(.title3)
                     .contentTransition(.symbolEffect(.replace))
                     .frame(width: Medida.toque, height: Medida.toque)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .foregroundStyle(Tinta.texto)
@@ -382,11 +554,12 @@ struct MiniReproductor: View {
             .accessibilityIdentifier("mini-reproducir")
 
             Button {
-                withAnimation(Muelle.estandar) { reproductor.detener() }
+                detener(lado: 0)
             } label: {
                 Image(systemName: "xmark")
                     .font(.body.weight(.semibold))
                     .frame(width: Medida.toque, height: Medida.toque)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .foregroundStyle(Tinta.texto2)
@@ -395,48 +568,464 @@ struct MiniReproductor: View {
         }
         .padding(.leading, 8)
         .padding(.trailing, 4)
-        .padding(.vertical, 6)
-        .cristal(en: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .shadow(color: .black.opacity(0.15), radius: 16, y: 6)
-        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .onTapGesture { reproductor.pantallaCompleta = true }
-        .origenZoom("mini", en: espacioCompartido ?? espacio)
-        .padding(.horizontal, Medida.margen)
-        .padding(.bottom, 8)
+        .padding(.vertical, 8)
+        .frame(height: Maqueta.altoMini)
+        .background {
+            forma
+                .fill(Color.clear)
+                .cristal(en: forma)
+                .matchedGeometryEffect(id: "fondo", in: espacio)
+        }
+        .shadow(color: .black.opacity(0.14), radius: 16, y: 6)
+        .contentShape(forma)
+        .offset(desplazamiento)
+        .opacity(1 - min(0.7, abs(desplazamiento.width) / 320))
+        .onTapGesture { alAbrir() }
+        .gesture(
+            DragGesture(minimumDistance: 8)
+                .onChanged { valor in
+                    guard !deteniendo else { return }
+                    arrastre = valor.translation
+                }
+                .onEnded { valor in soltar(valor) }
+        )
+        .sensoryFeedback(.impact(weight: .medium), trigger: deteniendo) { _, nuevo in nuevo }
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isButton)
-        .accessibilityHint("Abre el reproductor a pantalla completa")
+        .accessibilityLabel("Mini-reproductor: \(titulo(reproductor)), \(estado(reproductor))")
+        .accessibilityHint("Toca o desliza hacia arriba para abrir el reproductor")
+        .accessibilityAction(named: "Abrir el reproductor") { alAbrir() }
+        .accessibilityAction(named: "Detener") { detener(lado: 0) }
         .accessibilityIdentifier("mini-reproductor")
     }
 
-    private func subtitulo(_ reproductor: Reproductor) -> String {
+    private func soltar(_ valor: DragGesture.Value) {
+        switch GestosReproductor.alSoltarMini(traslacion: valor.translation, prevista: valor.predictedEndTranslation) {
+        case .abrir:
+            arrastre = .zero
+            alAbrir()
+        case .detener:
+            detener(lado: valor.translation.width < 0 ? -1 : 1)
+        case .nada:
+            withAnimation(Muelle.estandar) { arrastre = .zero }
+        }
+    }
+
+    /// Detiene; si viene de deslizar, antes sale por ese lado.
+    private func detener(lado: CGFloat) {
+        guard !deteniendo else { return }
+        deteniendo = true
+        if lado != 0 {
+            withAnimation(Muelle.rapido) { arrastre = CGSize(width: lado * 480, height: 0) }
+        }
+        Task { @MainActor in
+            if lado != 0 { try? await Task.sleep(for: .milliseconds(160)) }
+            withAnimation(Muelle.estandar) { app.reproductor.detener() }
+            arrastre = .zero
+            deteniendo = false
+        }
+    }
+
+    private func titulo(_ reproductor: Reproductor) -> String {
+        reproductor.canal?.partido?.titulo ?? reproductor.canal?.titulo ?? ""
+    }
+
+    private func estado(_ reproductor: Reproductor) -> String {
         if let mensaje = reproductor.mensaje, reproductor.fase != .reproduciendo { return mensaje }
-        if reproductor.canal?.partido != nil, let titulo = reproductor.canal?.titulo { return titulo }
-        return reproductor.fase.etiqueta
+        if app.pip.activo { return "En imagen en imagen" }
+        switch reproductor.fase {
+        case .reproduciendo:
+            if let canal = reproductor.canal, canal.partido != nil, !canal.titulo.isEmpty {
+                return "Sonando · \(ReglasFuentes.parteCanal(canal.titulo))"
+            }
+            return "Sonando"
+        case .pausado:
+            return "En pausa"
+        default:
+            return reproductor.fase.etiqueta
+        }
     }
 }
 
-/// Espacio de nombres del reproductor (el mini hace zoom al reproductor completo).
-private struct ClaveEspacioReproductor: EnvironmentKey {
-    static var defaultValue: Namespace.ID? { nil }
-}
+// MARK: - Reproductor grande
 
-extension EnvironmentValues {
-    var espacioReproductor: Namespace.ID? {
-        get { self[ClaveEspacioReproductor.self] }
-        set { self[ClaveEspacioReproductor.self] = newValue }
-    }
-}
+/// El reproductor a toda pantalla: el vídeo arriba con sus controles y,
+/// debajo, qué suena, el estado, las acciones y las fuentes del partido (u
+/// otros canales). Se minimiza deslizando hacia abajo (el gesto sigue al
+/// dedo y suelta con muelle) o con la flecha. En horizontal, solo el vídeo.
+struct ReproductorGrande: View {
+    @Environment(AppModel.self) private var app
+    @Environment(\.verticalSizeClass) private var claseVertical
+    let espacio: Namespace.ID
+    @Binding var arrastre: CGFloat
+    let alMinimizar: () -> Void
+    @State private var pegando = false
 
-extension View {
-    /// Coloca el mini-reproductor sobre la barra de pestañas (y aparta el contenido).
-    func conMiniReproductor(_ app: AppModel, espacio: Namespace.ID) -> some View {
-        safeAreaInset(edge: .bottom, spacing: 0) {
-            if app.reproductor.visibleEnMini {
-                MiniReproductor(espacio: espacio)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+    private var horizontal: Bool { claseVertical == .compact }
+
+    var body: some View {
+        GeometryReader { geo in
+            let alto = geo.size.height + geo.safeAreaInsets.top + geo.safeAreaInsets.bottom
+            let bajada = GestosReproductor.desplazamientoGrande(arrastre)
+            let progreso = GestosReproductor.progreso(bajada, alto: alto)
+            ZStack(alignment: .top) {
+                fondo(radio: min(38, bajada / 3))
+                if horizontal {
+                    pantallaCompleta(alto: alto)
+                } else {
+                    vertical(alto: alto)
+                }
+            }
+            .scaleEffect(1 - progreso * 0.08, anchor: .top)
+            .offset(y: bajada)
+        }
+        .statusBarHidden(horizontal)
+        .persistentSystemOverlays(horizontal ? .hidden : .automatic)
+        // Ya fuera de pantalla: la próxima vez se abre en su sitio.
+        .onDisappear { arrastre = 0 }
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isModal)
+        .accessibilityAction(.escape) { alMinimizar() }
+        .accessibilityIdentifier("reproductor-grande")
+        .sheet(isPresented: $pegando) {
+            if let centro = app.centroSonando {
+                PegarContentID(modelo: centro)
+                    .presentationDetents([.medium])
             }
         }
-        .animation(Muelle.estandar, value: app.reproductor.visibleEnMini)
+    }
+
+    // MARK: Fondo y gesto
+
+    private func fondo(radio: CGFloat) -> some View {
+        UnevenRoundedRectangle(
+            topLeadingRadius: radio, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: radio,
+            style: .continuous
+        )
+        .fill(horizontal ? Color.black : Tinta.fondo)
+        .ignoresSafeArea()
+        .matchedGeometryEffect(id: "fondo", in: espacio)
+        .shadow(color: .black.opacity(arrastre > 0 ? 0.25 : 0), radius: 24)
+    }
+
+    private func gesto(alto: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 14, coordinateSpace: .global)
+            .onChanged { valor in
+                // Solo hacia abajo y si el dedo baja más que se va de lado.
+                guard abs(valor.translation.height) >= abs(valor.translation.width) || arrastre != 0 else { return }
+                arrastre = valor.translation.height
+            }
+            .onEnded { valor in
+                let minimizar = GestosReproductor.alSoltarGrande(
+                    traslacion: valor.translation.height, prevista: valor.predictedEndTranslation.height, alto: alto)
+                if minimizar {
+                    alMinimizar()
+                } else {
+                    withAnimation(Muelle.estandar) { arrastre = 0 }
+                }
+            }
+    }
+
+    // MARK: Horizontal
+
+    private func pantallaCompleta(alto: CGFloat) -> some View {
+        ZStack {
+            VideoApp(prioridad: .grande)
+                .ignoresSafeArea()
+                .matchedGeometryEffect(id: "video", in: espacio)
+                .accessibilityHidden(true)
+            if !app.pip.activo {
+                ControlesVideo(contexto: .completa, alMinimizar: alMinimizar)
+            }
+            VStack {
+                Spacer()
+                LineaEstado()
+                    .padding(.bottom, 70)
+                    .environment(\.colorScheme, .dark)
+            }
+        }
+        .simultaneousGesture(gesto(alto: alto))
+        .accessibilityIdentifier("video-grande")
+    }
+
+    // MARK: Vertical
+
+    private func vertical(alto: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            VStack(spacing: 6) {
+                Capsule()
+                    .fill(Tinta.lineaFuerte)
+                    .frame(width: 38, height: 5)
+                    .padding(.top, 6)
+                    .accessibilityHidden(true)
+                cabecera
+                video
+                    .padding(.horizontal, Medida.margen)
+                    .padding(.top, 4)
+            }
+            .padding(.bottom, 12)
+            .contentShape(Rectangle())
+            .simultaneousGesture(gesto(alto: alto))
+
+            ScrollView {
+                DetalleReproduccion(pegando: $pegando)
+                    .padding(.horizontal, Medida.margen)
+                    .padding(.bottom, 40)
+            }
+            .scrollIndicators(.hidden)
+        }
+    }
+
+    private var cabecera: some View {
+        HStack(spacing: 4) {
+            Button {
+                alMinimizar()
+            } label: {
+                Image(systemName: "chevron.down")
+                    .font(.title3.weight(.semibold))
+                    .frame(width: Medida.toque, height: Medida.toque)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Tinta.texto)
+            .accessibilityLabel("Minimizar el reproductor")
+            .accessibilityIdentifier("boton-minimizar")
+
+            Spacer(minLength: 4)
+            VStack(spacing: 1) {
+                Text("Reproduciendo")
+                    .font(.caption2.weight(.bold))
+                    .textCase(.uppercase)
+                    .foregroundStyle(Tinta.texto3)
+                Text(origen)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Tinta.texto)
+                    .lineLimit(1)
+            }
+            .accessibilityElement(children: .combine)
+            Spacer(minLength: 4)
+
+            BotonAirPlayTinta()
+                .frame(width: Medida.toque, height: Medida.toque)
+                .accessibilityLabel("AirPlay")
+        }
+        .padding(.horizontal, 8)
+    }
+
+    private var origen: String {
+        guard let canal = app.reproductor.canal else { return "" }
+        if let partido = canal.partido { return partido.competicion.isEmpty ? "Partido" : partido.competicion }
+        switch canal.origen {
+        case "favorites": return "Favoritos"
+        case "history": return "Recientes"
+        case "m3u": return "Tu lista"
+        case "acestream": return "Búsqueda"
+        default: return "Canal"
+        }
+    }
+
+    private var video: some View {
+        ZStack {
+            VideoApp(prioridad: .grande)
+            if !app.pip.activo {
+                ControlesVideo(contexto: .grande, alMinimizar: alMinimizar)
+            }
+        }
+        .aspectRatio(16 / 9, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: Medida.radioL, style: .continuous))
+        .matchedGeometryEffect(id: "video", in: espacio)
+        .shadow(color: .black.opacity(0.18), radius: 18, y: 8)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Reproductor: \(app.reproductor.fase.etiqueta)")
+        .accessibilityIdentifier("video-grande")
+    }
+}
+
+/// AirPlay con el color del texto (sobre el fondo de la app, no sobre el vídeo).
+private struct BotonAirPlayTinta: UIViewRepresentable {
+    func makeUIView(context: Context) -> AVRoutePickerView {
+        let vista = AVRoutePickerView()
+        vista.prioritizesVideoDevices = true
+        vista.tintColor = UIColor(named: "Text") ?? .label
+        vista.activeTintColor = UIColor(named: "AccentInk") ?? .systemBlue
+        vista.accessibilityLabel = "AirPlay"
+        return vista
+    }
+
+    func updateUIView(_ vista: AVRoutePickerView, context: Context) {}
+}
+
+/// Debajo del vídeo grande: qué suena, el estado, acciones y fuentes u otros canales.
+struct DetalleReproduccion: View {
+    @Environment(AppModel.self) private var app
+    @Binding var pegando: Bool
+
+    var body: some View {
+        let reproductor = app.reproductor
+        VStack(alignment: .leading, spacing: 18) {
+            if let canal = reproductor.canal {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(canal.partido?.titulo ?? canal.titulo)
+                        .font(.titular(.title2))
+                        .foregroundStyle(Tinta.texto)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
+                    if canal.partido != nil {
+                        Text(canal.titulo)
+                            .font(.subheadline)
+                            .foregroundStyle(Tinta.texto2)
+                            .lineLimit(2)
+                    }
+                    LineaEstado()
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                acciones(canal)
+
+                if let centro = app.centroSonando {
+                    CabeceraPartido(partido: centro.partido, marcador: app.marcadores[centro.partido.id])
+                    SelectorFuentes(modelo: centro)
+                } else {
+                    OtrosCanales()
+                }
+
+                Button(role: .destructive) {
+                    withAnimation(Muelle.estandar) { reproductor.detener() }
+                } label: {
+                    Label("Detener", systemImage: "stop.fill")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, minHeight: Medida.toque)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier("boton-detener-grande")
+            }
+        }
+    }
+
+    private func acciones(_ canal: CanalReproducible) -> some View {
+        let favorito = app.esFavorito(canal.id)
+        return HStack(spacing: 10) {
+            Button {
+                Task { await app.alternarFavorito(id: canal.id, titulo: canal.titulo, ih: canal.ih) }
+            } label: {
+                Label(favorito ? "En favoritos" : "Favorito", systemImage: favorito ? "star.fill" : "star")
+                    .symbolEffect(.bounce, value: favorito)
+            }
+            .sensoryFeedback(.success, trigger: favorito)
+            .accessibilityIdentifier("boton-favorito-grande")
+
+            if app.pip.soportado {
+                Button {
+                    app.pip.alternar()
+                } label: {
+                    Label(app.pip.activo ? "Volver" : "PiP", systemImage: app.pip.activo ? "pip.exit" : "pip.enter")
+                }
+            }
+
+            Menu {
+                if app.centroSonando != nil {
+                    Button {
+                        pegando = true
+                    } label: {
+                        Label("Pegar un Content ID", systemImage: "doc.on.clipboard")
+                    }
+                }
+                Button {
+                    UIPasteboard.general.string = canal.id
+                    app.avisos.mostrar("Content ID copiado", tono: .ok)
+                } label: {
+                    Label("Copiar Content ID", systemImage: "doc.on.doc")
+                }
+                Menu {
+                    ForEach(ReglasFuentes.motivosReporte) { opcion in
+                        Button(opcion.texto) { Task { await reportar(canal, opcion.motivo) } }
+                    }
+                } label: {
+                    Label("Reportar", systemImage: "flag")
+                }
+                Picker(
+                    "Modo",
+                    selection: Binding(
+                        get: { app.reproductor.modo },
+                        set: { app.reproductor.cambiarModo($0) })
+                ) {
+                    ForEach(PlaybackMode.allCases, id: \.self) { modo in
+                        Text(modo.etiqueta).tag(modo)
+                    }
+                }
+            } label: {
+                Label("Más", systemImage: "ellipsis")
+            }
+            .accessibilityLabel("Más acciones")
+        }
+        .labelStyle(.titleAndIcon)
+        .font(.subheadline.weight(.semibold))
+        .buttonStyle(.bordered)
+        .controlSize(.regular)
+    }
+
+    private func reportar(_ canal: CanalReproducible, _ motivo: SourceReportReason) async {
+        if let centro = app.centroSonando, let entrada = centro.entradas.first(where: { $0.id == canal.id }) {
+            await centro.reportar(entrada, motivo: motivo)
+            return
+        }
+        let cuerpo = ReportBody(id: canal.id, reason: motivo, title: canal.titulo, source: canal.origen, ih: canal.ih)
+        do {
+            _ = try await app.entorno.api.enviar(API.reportarFuente(cuerpo))
+            app.avisos.mostrar("Canal reportado: se vuelve a comprobar", tono: .ok)
+        } catch {
+            app.avisos.mostrar(APIError.desde(error).mensaje, tono: .error)
+        }
+    }
+}
+
+/// Otros canales de la misma lista (favoritos, búsqueda o lista M3U) para cambiar sin salir.
+struct OtrosCanales: View {
+    @Environment(AppModel.self) private var app
+
+    var body: some View {
+        let reproductor = app.reproductor
+        let otros = Array(reproductor.lista.filter { $0.id != reproductor.canal?.id }.prefix(30))
+        if !otros.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("Otros canales")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(Tinta.texto)
+                        .accessibilityAddTraits(.isHeader)
+                    Text("\(otros.count)")
+                        .font(.subheadline.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(Tinta.texto3)
+                }
+                VStack(spacing: 0) {
+                    ForEach(Array(otros.enumerated()), id: \.element.id) { indice, canal in
+                        if indice > 0 { Divider().padding(.leading, 62) }
+                        Button {
+                            withAnimation(Muelle.estandar) { reproductor.reproducir(canal, origen: .usuario) }
+                        } label: {
+                            HStack(spacing: 12) {
+                                LogoCanal(titulo: canal.titulo, tamano: 38)
+                                Text(canal.titulo)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(Tinta.texto)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+                                Spacer(minLength: 4)
+                                Image(systemName: "play.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(Tinta.acentoTinta)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .frame(minHeight: Medida.toque)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(EstiloFilaPulsada())
+                        .accessibilityLabel("Ver \(canal.titulo)")
+                    }
+                }
+                .background(Tinta.superficie, in: RoundedRectangle(cornerRadius: Medida.radioL, style: .continuous))
+            }
+        }
     }
 }

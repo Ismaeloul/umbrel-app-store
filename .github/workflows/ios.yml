@@ -112,6 +112,9 @@ jobs:
       - name: Comprobar el catálogo de errores (mismo que packages/shared)
         run: node scripts/generar-catalogo-errores.mjs --check
 
+      - name: Comprobar los vectores de «Para ti» y de canales (generados desde packages/shared)
+        run: node scripts/generar-vectores.mjs --check
+
       - name: Generar el proyecto
         run: xcodegen generate
 

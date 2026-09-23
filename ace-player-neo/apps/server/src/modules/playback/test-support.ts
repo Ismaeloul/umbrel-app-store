@@ -156,6 +156,7 @@ export function recordEvents(core: TestCore): {
     'playback.activity',
     'playback.handoff',
     'playback.nowPlaying',
+    'playback.sessions',
     'stream.ready',
     'stream.reopened',
     'stream.modeChanged',

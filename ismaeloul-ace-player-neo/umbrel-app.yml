@@ -3,7 +3,7 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.7.0"
+version: "0.7.1"
 tagline: Agenda de futbol con la señal de cada partido, en el navegador y en el iPhone
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream con agenda de
@@ -13,47 +13,20 @@ description: >-
   entre dispositivos, cierra lo que ya nadie ve y lo reinicia solo si se
   cuelga.
 releaseNotes: >-
-  Ace Player Neo, rehecho por dentro y por fuera. Tus favoritos, recientes,
-  listas y preferencias pasan solos a la version nueva, y antes de tocar nada
-  se guarda una copia intacta de tus datos por si hubiera que volver atras.
+  Nuevo en Ajustes: "Donde se esta reproduciendo". Ves que canal esta
+  sonando y en que dispositivos (el ordenador, el iPhone...), y cambia al
+  momento cuando alguien pone o quita un canal. Tambien se abre desde el
+  reproductor.
 
-  Web nueva: otro diseño, en oscuro y en claro, con Agenda, Biblioteca, Buscar
-  y Ajustes siempre a mano (en el movil, en una barra abajo). El reproductor
-  ya no se pierde al navegar: grande en el partido y en miniatura mientras
-  miras la agenda. Abre antes y pesa menos. Las fuentes de cada partido salen
-  en lista con su estado, y cada canal tiene un "Abrir en..." para la app de
-  AceStream o para copiar la direccion del stream y verlo en VLC.
+  App de iPhone renovada (se actualiza aparte, con su IPA nueva): la agenda
+  filtra por tus equipos y ligas con "Para ti", las listas vienen agrupadas
+  como en la web, el reproductor se abre deslizando hacia arriba sobre el
+  mini y se minimiza deslizando hacia abajo, y al volver a la app con el PiP
+  activo ya no se ve el video dos veces. Adios a las franjas en blanco de
+  arriba en la agenda y en la biblioteca.
 
-  El mismo partido en dos pantallas: si abres en otro dispositivo el canal que
-  ya estas viendo, el primero ya no se corta; los dos lo ven a la vez. Con
-  canales distintos sigue como siempre: el ultimo que da al play se queda el
-  mando y el otro se para con aviso. Si prefieres lo de antes, esta "Un solo
-  dispositivo a la vez" en Ajustes.
-
-  El motor se cuida solo: si AceStream deja de responder, la app lo nota, lo
-  reinicia (como mucho tres veces por hora) y vuelve a abrir el canal que
-  estabas viendo. Reiniciarlo a mano tampoco para el video: el reproductor
-  espera y se reengancha. Cada canal que dejas de ver se cierra en el motor,
-  asi que no quedan descargas fantasma comiendose la conexion.
-
-  El comprobador de fuentes ya no molesta: ademas de no tocar nunca el canal
-  que estas viendo, va mas despacio mientras hay algo en marcha, asi no le
-  quita pares al partido.
-
-  Directo de verdad: el boton dice cuanto vas por detras del directo y salta
-  al borde en un toque. Una señal que da un segundo de imagen entre cortes ya
-  no reconecta sin fin: pasa a la siguiente fuente. Las estadisticas, la
-  agenda y el mando llegan al momento, sin que la pagina pregunte cada pocos
-  segundos.
-
-  App de iPhone: se empareja desde Ajustes > Dispositivos con un codigo de 6
-  digitos o un QR, sin el login de Umbrel, y funciona en casa y fuera por
-  Tailscale. Reproductor nativo con ventana flotante, AirPlay y el partido en
-  la pantalla de bloqueo, y ve tambien las fuentes HEVC que la web no puede.
-  Cada iPhone se puede desconectar desde la web.
-
-  Por dentro: el Umbrel comprueba cada fichero de la version nueva antes de
-  arrancarla, y la web ya no deja descargar el codigo del servidor.
+  Salud: cerrar la pagina o parar un canal ya no cuenta como fallo en el
+  registro de diagnostico.
 developer: Ismaeloul
 website: https://github.com/Ismaeloul
 dependencies: []

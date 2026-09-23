@@ -15,9 +15,10 @@ struct CentroPartidoView: View {
 
     var body: some View {
         ScrollView {
+            // Como la web: el vídeo arriba (con su línea de estado), luego el partido.
             VStack(alignment: .leading, spacing: 18) {
-                CabeceraPartido(partido: modelo.partido, marcador: marcador)
                 zonaReproductor
+                CabeceraPartido(partido: modelo.partido, marcador: marcador)
                 AccionesPartido(modelo: modelo, pegando: $pegando)
                 SelectorFuentes(modelo: modelo)
             }
@@ -37,8 +38,8 @@ struct CentroPartidoView: View {
         }
         .onChange(of: claseVertical) { _, clase in
             // Girar a horizontal con el partido sonando: pantalla completa.
-            if clase == .compact, modelo.suenaAqui, reproductor.conexion.enMarcha {
-                reproductor.pantallaCompleta = true
+            if clase == .compact, modelo.suenaAqui, reproductor.conexion.enMarcha, !reproductor.expandido {
+                withAnimation(Muelle.heroe) { reproductor.expandir() }
             }
         }
         .sheet(isPresented: $pegando) {

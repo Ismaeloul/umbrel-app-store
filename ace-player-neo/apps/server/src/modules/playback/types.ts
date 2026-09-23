@@ -64,6 +64,12 @@ export interface ViewerIdentity {
   /** Persistente: localStorage en la web; el dispositivo emparejado en iOS. */
   readonly deviceId: string | null;
   readonly device: AuthenticatedDevice | null;
+  /**
+   * Nombre legible para «Dónde se está reproduciendo»: el del emparejado en
+   * iOS o el sacado del User-Agent en la web (device-name.ts). Sin él, el del
+   * emparejado o "Navegador".
+   */
+  readonly deviceName?: string | null;
 }
 
 export interface PlaybackService extends Lifecycle {

@@ -208,3 +208,20 @@ Además, yo (orquestador): pruebas contra el motor real en Docker local
 | 2 | hecha y verificada (E2E, visual, accesibilidad, inventario) |
 | 3 | hecha: CI de iOS en verde con IPA; falta probar en el iPhone real |
 | 4 | hecha: CI en verde, release 0.7.0 cortada sin publicar, documentación |
+
+## Después de publicar (23-sep-2026)
+
+- 19:25: **0.7.0 publicada**: merge de `rewrite-v2` a `main` (`f72fa6f`) y
+  etiqueta `ace-player-neo-v0.7.0`; Isma actualizó él mismo desde Umbrel y
+  la web sincronizó bien en el móvil. Antes: copia del `state.json` de
+  producción en el NAS (`data/state.backup-antes-de-0.7.0-20260923-1915.json`)
+  y en este PC, y migración re-probada con esa copia (nada perdido).
+- 19:40: Isma prueba la app de iPhone y encuentra: bandas en blanco (tira de
+  días y selector de Biblioteca en iOS 26.6 real), agenda sin "Para ti",
+  listas sin agrupar, no se puede volver del mini-reproductor, PiP doble al
+  volver a la app; pide gestos (arriba abre el vídeo, abajo lo cierra) y un
+  apartado "Dónde se está reproduciendo". "La web está mejor hecha para el
+  móvil que la propia app": vuelta de hoja a la app de iOS.
+- 19:55: workflow `wf_f2429f23-e1a`: agente backend+web ("Dónde se está
+  reproduciendo" con contrato compartido) y agente iOS (repaso completo).
+  Saldrá como 0.7.1.

@@ -140,6 +140,44 @@ describe('events · conexión y formato (arquitectura §5.13)', () => {
     ]);
     expect(ios.sink.events()).toHaveLength(1);
   });
+
+  it('«Dónde se está reproduciendo»: playback.sessions llega a la web y a los iPhone', () => {
+    const ctx = setup();
+    const web = open(ctx, { origin: 'web', deviceId: 'web_tab_1' });
+    const ios = open(ctx, { origin: 'native', deviceId: 'dev_iphone01' });
+    const at = ctx.core.clock.date().toISOString();
+    const data: SseEventData<'playback.sessions'> = {
+      sessions: [
+        {
+          id: SID,
+          hash: HASH,
+          mode: 'progressive',
+          openedAt: at,
+          viewers: [
+            {
+              client: 'web',
+              deviceId: 'web_tab_1',
+              lastBeatAt: at,
+              viewerId: 'viewer_1',
+              deviceName: 'Chrome · Windows',
+              platform: 'web',
+              playing: true,
+            },
+          ],
+          title: 'DAZN 1',
+          protocol: 'mpegts',
+        },
+      ],
+    };
+    ctx.core.bus.emit('playback.sessions', data);
+    ctx.core.bus.emit('playback.sessions', { sessions: [] });
+    for (const sink of [web.sink, ios.sink]) {
+      expect(sink.events()).toEqual([
+        expect.objectContaining({ event: 'playback.sessions', data }),
+        expect.objectContaining({ event: 'playback.sessions', data: { sessions: [] } }),
+      ]);
+    }
+  });
 });
 
 describe('events · latido', () => {

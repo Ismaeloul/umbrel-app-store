@@ -182,12 +182,38 @@ public struct NowPlaying: Codable, Sendable, Hashable {
     public var at: Double
 }
 
-/// `SessionSummarySchema`: sesión abierta en el motor.
+/// `SessionSummarySchema`: sesión abierta en el motor. «Dónde se está
+/// reproduciendo» (Ajustes) la pinta con su canal y sus dispositivos.
+///
+/// Los campos de «dónde se está reproduciendo» (`title`, `protocol` y, en
+/// cada visor, `viewerId`, `deviceName`, `platform` y `playing`) son
+/// opcionales a propósito: un servidor anterior no los manda y la app no
+/// debe romperse por eso (se deduce lo que se pueda).
 public struct SessionSummary: Codable, Sendable, Hashable, Identifiable {
     public struct Viewer: Codable, Sendable, Hashable {
         public var client: ClientKind
         public var deviceId: String?
         public var lastBeatAt: String
+        /// Id del visor (en iOS, el de `IdentidadVisor`).
+        public var viewerId: String?
+        /// Nombre legible: el del iPhone emparejado o «Chrome · Windows» sacado del navegador.
+        public var deviceName: String?
+        public var platform: ClientKind?
+        /// Del último latido: reproduciendo (true) o en pausa (false); nil si no se sabe.
+        public var playing: Bool?
+
+        public init(
+            client: ClientKind, deviceId: String?, lastBeatAt: String, viewerId: String? = nil,
+            deviceName: String? = nil, platform: ClientKind? = nil, playing: Bool? = nil
+        ) {
+            self.client = client
+            self.deviceId = deviceId
+            self.lastBeatAt = lastBeatAt
+            self.viewerId = viewerId
+            self.deviceName = deviceName
+            self.platform = platform
+            self.playing = playing
+        }
     }
 
     public var id: String
@@ -195,6 +221,27 @@ public struct SessionSummary: Codable, Sendable, Hashable, Identifiable {
     public var mode: EngineSessionMode
     public var openedAt: String
     public var viewers: [Viewer]
+    /// Título del canal que se ve ("" si no se sabe).
+    public var title: String?
+    public var `protocol`: StreamProtocol?
+
+    public init(
+        id: String, hash: String, mode: EngineSessionMode, openedAt: String, viewers: [Viewer],
+        title: String? = nil, protocolo: StreamProtocol? = nil
+    ) {
+        self.id = id
+        self.hash = hash
+        self.mode = mode
+        self.openedAt = openedAt
+        self.viewers = viewers
+        self.title = title
+        self.protocol = protocolo
+    }
+}
+
+/// Evento `playback.sessions`: la lista entera cada vez que cambia.
+public struct PlaybackSessionsData: Codable, Sendable, Hashable {
+    public var sessions: [SessionSummary]
 }
 
 /// `PlaybackStatusSchema`: GET /api/v1/playback.

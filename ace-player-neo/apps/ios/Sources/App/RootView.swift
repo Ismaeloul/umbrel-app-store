@@ -56,39 +56,59 @@ enum Pestana: Hashable {
     case agenda, biblioteca, buscar, ajustes
 }
 
-/// La app emparejada: agenda, biblioteca, búsqueda y ajustes, con el
-/// mini-reproductor sobre la barra de pestañas (Liquid Glass del sistema en
-/// iOS 26) y el reproductor a pantalla completa por encima de todo.
+/// La app emparejada: agenda, biblioteca, búsqueda y ajustes y, por encima,
+/// la capa del reproductor: el mini-reproductor justo sobre la barra de
+/// pestañas y el reproductor grande a toda pantalla (se abren y cierran con
+/// gestos, `CapaReproductor`).
 struct PrincipalView: View {
     @Environment(AppModel.self) private var modelo
     @State private var pestana: Pestana = .agenda
-    @Namespace private var espacioReproductor
+    @State private var maqueta = Maqueta()
 
     var body: some View {
-        @Bindable var reproductor = modelo.reproductor
-        TabView(selection: $pestana) {
-            AgendaView(entorno: modelo.entorno)
-                .tabItem { Label("Agenda", systemImage: "calendar") }
-                .tag(Pestana.agenda)
-            BibliotecaView()
-                .tabItem { Label("Biblioteca", systemImage: "star.square.on.square") }
-                .tag(Pestana.biblioteca)
-            BuscarView(entorno: modelo.entorno)
-                .tabItem { Label("Buscar", systemImage: "magnifyingglass") }
-                .tag(Pestana.buscar)
-            AjustesView()
-                .tabItem { Label("Ajustes", systemImage: "gearshape") }
-                .tag(Pestana.ajustes)
+        let reproductor = modelo.reproductor
+        ZStack {
+            TabView(selection: $pestana) {
+                AgendaView(entorno: modelo.entorno)
+                    .tabItem { Label("Agenda", systemImage: "calendar") }
+                    .tag(Pestana.agenda)
+                BibliotecaView()
+                    .tabItem { Label("Biblioteca", systemImage: "star.square.on.square") }
+                    .tag(Pestana.biblioteca)
+                BuscarView(entorno: modelo.entorno)
+                    .tabItem { Label("Buscar", systemImage: "magnifyingglass") }
+                    .tag(Pestana.buscar)
+                AjustesView()
+                    .tabItem { Label("Ajustes", systemImage: "gearshape") }
+                    .tag(Pestana.ajustes)
+            }
+            // Con el reproductor grande abierto, lo de debajo no se lee con VoiceOver.
+            .accessibilityHidden(reproductor.vista == .grande)
+
+            CapaReproductor()
         }
-        .environment(\.espacioReproductor, espacioReproductor)
-        .avisos(modelo.avisos, margenInferior: 110)
-        .fullScreenCover(isPresented: $reproductor.pantallaCompleta) {
-            ReproductorCompleto()
-                .environment(modelo)
-                .destinoZoom("mini", en: espacioReproductor)
+        .background {
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { maqueta.medirSistema(geo.safeAreaInsets.bottom) }
+                    .onChange(of: geo.safeAreaInsets.bottom) { _, nuevo in maqueta.medirSistema(nuevo) }
+            }
+            .ignoresSafeArea(.keyboard)
         }
+        .environment(maqueta)
+        .avisos(modelo.avisos, margenInferior: margenAvisos)
         .sensoryFeedback(.selection, trigger: reproductor.cambiosDeFuente)
         .sensoryFeedback(.error, trigger: reproductor.errores)
+        .sensoryFeedback(.selection, trigger: pestana)
         .task { await modelo.arrancar() }
+    }
+
+    /// Los avisos van por encima de la barra de pestañas y del mini.
+    private var margenAvisos: CGFloat {
+        switch modelo.reproductor.vista {
+        case .grande: return 24
+        case .mini: return max(0, maqueta.baseMini - maqueta.margenSistema) + Maqueta.altoMini + 10
+        case .ninguna: return max(0, maqueta.baseMini - maqueta.margenSistema) + 4
+        }
     }
 }

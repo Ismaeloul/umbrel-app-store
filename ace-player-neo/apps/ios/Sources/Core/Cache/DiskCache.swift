@@ -19,6 +19,8 @@ public actor DiskCache {
         case biblioteca
         case arranque
         case marcadores
+        /// Los gustos de fútbol: la agenda abre en «Para ti» sin esperar a la red.
+        case preferencias
     }
 
     private struct Sobre<Valor: Codable>: Codable {

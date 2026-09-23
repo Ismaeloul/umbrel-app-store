@@ -678,6 +678,7 @@ anti-CSRF de `isAllowedMutation` (`server.js:1257-1274`, T-033) para el origen
 | Evento | Productor | Consumidor |
 |---|---|---|
 | `playback.nowPlaying`, `playback.handoff` | playback | web, iOS |
+| `playback.sessions` («Dónde se está reproduciendo», 0.7.1: la lista entera de sesiones con su canal y sus visores cada vez que cambia; no por cada latido) | playback | web, iOS |
 | `stream.ready`, `stream.reopened`, `stream.modeChanged`, `stream.closed` | playback | el visor afectado |
 | `stream.stats` (pares, bajada, subida, estado; cada 2 s) | playback | el visor afectado |
 | `engine.status` (con histéresis) | engine | todos |
