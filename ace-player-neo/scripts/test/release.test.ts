@@ -78,6 +78,7 @@ function writeWebDist(dir: string) {
   const js = `console.log(${JSON.stringify('app '.repeat(300))});\n`;
   writeFileSync(path.join(dir, 'assets', 'index-3f2a1b9c.js'), js);
   writeFileSync(path.join(dir, 'assets', 'index-3f2a1b9c.js.gz'), gzipSync(js, { level: 9 }));
+  writeFileSync(path.join(dir, 'assets', 'index-3f2a1b9c.js.map'), '{"version":3,"mappings":""}\n');
   writeFileSync(path.join(dir, 'assets', 'index-77aa11bb.css'), 'body{margin:0}\n');
 }
 
@@ -218,6 +219,8 @@ describe('scripts/release.mjs', () => {
       ['RELEASE.json', 'SHA256SUMS', 'engine-control.js', 'nginx.conf', 'server.js'].sort(),
     );
     expect(files).toContain('web/assets/index-3f2a1b9c.js.gz');
+    // Los mapas "hidden" de Vite no llegan al NAS.
+    expect(files.filter((file) => file.endsWith('.map'))).toEqual([]);
   });
 
   it('es reproducible: dos ejecuciones dan exactamente los mismos bytes', async () => {

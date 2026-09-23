@@ -283,9 +283,13 @@ export async function createRelease(options = {}) {
     const hasWeb = existsSync(path.join(webDist, 'index.html'));
     if (hasWeb) {
       const webOut = path.join(staging, 'web');
+      // Sin los .map: Vite los genera "hidden" (ningún asset los enlaza), así
+      // que el navegador nunca los pide y en el NAS solo ocupan (~5 MB, más que
+      // toda la web). Se regeneran desde el commit de RELEASE.json.
       cpSync(webDist, webOut, {
         recursive: true,
-        filter: (source) => path.resolve(source) !== path.join(webDist, 'sw.js'),
+        filter: (source) =>
+          path.resolve(source) !== path.join(webDist, 'sw.js') && !source.endsWith('.map'),
       });
       const ownWorker = path.join(webDist, 'sw.js');
       const workerSource = existsSync(ownWorker)
