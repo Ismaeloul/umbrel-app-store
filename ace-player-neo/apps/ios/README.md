@@ -82,17 +82,26 @@ Se escriben a mano (arquitectura §10.3) porque:
 
 - **Sin `NSAllowsArbitraryLoads`**.
 - `NSAllowsLocalNetworking`: permite `http://` a nombres `.local`
-  (`umbrel.local`) y a nombres sin dominio (el MagicDNS corto de Tailscale).
-- `NSExceptionDomains` → `ts.net` con subdominios y `http` permitido: los
-  nombres MagicDNS completos (`umbrel.tail1234.ts.net`).
-- **Limitación**: `NSExceptionDomains` **no admite IPs ni rangos CIDR**, así que
-  no se puede declarar "solo 100.64.0.0/10" (Tailscale) ni "solo 192.168.0.0/16
-  y 10.0.0.0/8" (LAN). Según la documentación de Apple, ATS no se aplica a las
-  direcciones IP literales, así que `http://100.x.y.z:7792` y
-  `http://192.168.1.10:7792` deberían funcionar sin más excepciones; queda por
-  **comprobar en el iPhone real**. Si iOS bloqueara alguna IP, la app lo dice
-  con un mensaje claro (`appTransportSecurityRequiresSecureConnection`) y la
-  salida es usar el nombre `.ts.net` o el `.local`.
+  (`umbrel.local`), a nombres sin dominio (el MagicDNS corto de Tailscale) y a
+  IP locales.
+- `NSExceptionDomains`, solo con `NSExceptionAllowsInsecureHTTPLoads`:
+  - `ts.net` con subdominios: los nombres MagicDNS completos (`umbrel.tail1234.ts.net`);
+  - `100.64.0.0/10` y `fd7a:115c:a1e0::/48`: las IP de Tailscale;
+  - `192.168.0.0/16`, `10.0.0.0/8` y `172.16.0.0/12`: las IP privadas de la LAN.
+- **La limitación de ATS con IPs literales** (documentación de Apple de
+  `NSAllowsLocalNetworking` y `NSExceptionDomains`):
+  - hasta iOS 16, ATS dejaba pasar cualquier IP literal y **no** admitía IP en
+    `NSExceptionDomains` (solo nombres), así que no se podía acotar a un rango;
+  - **desde iOS 17** (el mínimo de esta app) ATS ya **no** deja pasar IP
+    literales por defecto, pero `NSExceptionDomains` sí admite IP sueltas y
+    **rangos CIDR**: por eso se declaran exactamente los de Tailscale y los
+    privados, y una IP pública por `http://` sigue bloqueada;
+  - una excepción por nombre no cubre la IP a la que resuelve, ni al revés
+    (por eso van `ts.net` **y** `100.64.0.0/10`);
+  - queda por **comprobar en el iPhone real** (no hay Mac ni dispositivo en la
+    CI). Si iOS bloqueara una dirección, la app lo dice con un mensaje claro
+    (`appTransportSecurityRequiresSecureConnection`) y la salida es usar el
+    nombre `.ts.net` o el `.local`.
 - Por HTTP en la LAN el token viaja sin cifrar: riesgo aceptado en casa; fuera
   de casa, Tailscale ya cifra el tráfico (arquitectura §10.2).
 

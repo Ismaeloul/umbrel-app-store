@@ -38,10 +38,12 @@
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<!-- Sin NSAllowsArbitraryLoads: solo la red local y Tailscale van sin TLS.
-		     NSAllowsLocalNetworking cubre los nombres .local y los nombres sin dominio
-		     (MagicDNS corto de Tailscale); ts.net cubre los nombres MagicDNS completos.
-		     Las IP literales (100.64.0.0/10, 192.168.x, 10.x) no se pueden declarar:
-		     NSExceptionDomains no admite IP ni rangos. Ver apps/ios/README.md. -->
+		     NSAllowsLocalNetworking: nombres .local, nombres sin dominio (MagicDNS corto)
+		     e IP locales. Desde iOS 17 (el mínimo de la app) ATS ya no deja pasar IP
+		     literales por defecto, pero NSExceptionDomains admite IP y rangos CIDR: se
+		     declaran exactamente el de Tailscale (100.64.0.0/10 y fd7a:115c:a1e0::/48) y
+		     los privados de la LAN. Una excepción por nombre (ts.net) no cubre la IP a la
+		     que resuelve, ni al revés: por eso van los dos. Ver apps/ios/README.md. -->
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 		<key>NSExceptionDomains</key>
@@ -50,6 +52,31 @@
 			<dict>
 				<key>NSIncludesSubdomains</key>
 				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+			<key>100.64.0.0/10</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+			<key>fd7a:115c:a1e0::/48</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+			<key>192.168.0.0/16</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+			<key>10.0.0.0/8</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+			<key>172.16.0.0/12</key>
+			<dict>
 				<key>NSExceptionAllowsInsecureHTTPLoads</key>
 				<true/>
 			</dict>
