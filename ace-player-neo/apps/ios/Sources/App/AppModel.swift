@@ -31,16 +31,34 @@ public final class AppModel {
     /// Sube con cada `resync` o cambio relevante: las pantallas lo observan para recargar.
     public private(set) var recargas = 0
 
+    /// Marcadores en vivo (ESPN) por id de partido.
+    public private(set) var marcadores: [String: LiveScore] = [:]
+
     public let entorno: Entorno
+    /// El reproductor de toda la app (sigue sonando al salir del partido).
+    public let reproductor: Reproductor
+    public let pip: GestorPiP
+    public let avisos: Avisos
+    private let controles: ControlesSistema
+    @ObservationIgnored private var centros: [String: CentroPartidoModelo] = [:]
     @ObservationIgnored private var tareaTiempoReal: Task<Void, Never>?
     @ObservationIgnored private var tareaAccesoPerdido: Task<Void, Never>?
     @ObservationIgnored private var monitorRed: NWPathMonitor?
     @ObservationIgnored private var estuvoEnSegundoPlano = false
 
-    public init(entorno: Entorno) {
+    public init(entorno: Entorno, motor: (any MotorVideo)? = nil) {
         self.entorno = entorno
         let tieneToken = ((try? entorno.tokens.leerToken()) ?? nil) != nil
         fase = tieneToken && !entorno.configuracion.leer().vacia ? .lista : .emparejar
+        let motorElegido: any MotorVideo = motor ?? Self.motorPorDefecto()
+        reproductor = Reproductor(
+            motor: motorElegido, servicio: ServicioReproduccionAPI(api: entorno.api), visor: IdentidadVisor.id(),
+            preferencias: .standard)
+        pip = GestorPiP()
+        avisos = Avisos()
+        controles = ControlesSistema()
+        controles.conectar(reproductor)
+        pip.alRestaurar = { [weak self] in self?.restaurarDesdePiP() }
         tareaAccesoPerdido = Task { [weak self] in
             for await _ in entorno.accesoPerdido {
                 self?.accesoRetirado()
@@ -58,6 +76,8 @@ public final class AppModel {
 
     /// «Olvidar este servidor»: borra token, direcciones y caché.
     public func desemparejar() async {
+        reproductor.detener()
+        centros = [:]
         pararTiempoReal()
         try? entorno.tokens.borrarToken()
         entorno.configuracion.borrar()
@@ -70,6 +90,7 @@ public final class AppModel {
 
     private func accesoRetirado() {
         guard fase == .lista else { return }
+        reproductor.detener()
         pararTiempoReal()
         aviso = ErrorCatalog.mensaje(para: "device_revoked")
         fase = .emparejar
@@ -93,6 +114,7 @@ public final class AppModel {
             motor = arranque.engine
             biblioteca = arranque.library
             versionServidor = arranque.version
+            reproductor.dispositivoId = arranque.device?.id
             if let activo = await entorno.servidores.conocido() { conexion = .conectado(activo) }
             try? await entorno.cache.guardar(arranque.library, en: .biblioteca)
         } catch let error as APIError {
@@ -128,6 +150,8 @@ public final class AppModel {
         case .necesitaEmparejar:
             accesoRetirado()
         case .evento(let sobre):
+            reproductor.procesar(sobre.event)
+            for centro in centros.values { centro.procesar(sobre.event) }
             switch sobre.event {
             case .engineStatus(let estado):
                 motor = estado
@@ -167,15 +191,139 @@ public final class AppModel {
 
     /// Al volver a primer plano: comprobar la señal y reconectar si hacía falta.
     public func volvioAPrimerPlano() {
+        pip.soltarCapas(false, player: reproductor.motor.avPlayer)
         guard fase == .lista, estuvoEnSegundoPlano else { return }
         estuvoEnSegundoPlano = false
         arrancarTiempoReal()
+        reproductor.volvioAPrimerPlano()
         Task { await refrescarArranque() }
     }
 
-    /// En segundo plano no se mantiene el SSE (iOS lo cortaría igual).
+    /// En segundo plano no se mantiene el SSE (iOS lo cortaría igual). Si
+    /// suena algo sin PiP, la capa se suelta para que siga el audio.
     public func pasoASegundoPlano() {
         estuvoEnSegundoPlano = true
         pararTiempoReal()
+        if reproductor.canal != nil && reproductor.quiereReproducir {
+            pip.soltarCapas(true, player: reproductor.motor.avPlayer)
+        }
+    }
+
+    /// Al volver del PiP: si no se está viendo el partido, el reproductor a pantalla completa.
+    private func restaurarDesdePiP() {
+        if reproductor.superficiesGrandes == 0 { reproductor.pantallaCompleta = true }
+    }
+
+    // MARK: Partidos
+
+    /// El modelo de fuentes de un partido (el mismo mientras suene o esté abierto).
+    public func centro(para partido: FootballMatch) -> CentroPartidoModelo {
+        if let existente = centros[partido.id] { return existente }
+        // Solo se guardan el que suena y el abierto: el resto se descarta.
+        let sonando = reproductor.canal?.partido?.id
+        centros = centros.filter { $0.key == sonando || $0.value.vistaAbierta }
+        let nuevo = CentroPartidoModelo(partido: partido, app: self)
+        centros[partido.id] = nuevo
+        return nuevo
+    }
+
+    /// Reproduce un canal suelto (biblioteca, búsqueda): sin política de fuentes de partido.
+    public func reproducirCanal(_ canal: CanalReproducible, lista: [CanalReproducible] = []) {
+        reproductor.alFallarFuente = nil
+        reproductor.reproducir(canal, origen: .usuario, lista: lista)
+    }
+
+    // MARK: Marcadores
+
+    public func refrescarMarcadores() async {
+        guard fase == .lista else { return }
+        if let respuesta = try? await entorno.api.enviar(API.marcadores), respuesta.available {
+            marcadores = respuesta.scores
+        }
+    }
+
+    /// Refresca los marcadores cada minuto mientras la vista que lo pide siga viva.
+    public func vigilarMarcadores() async {
+        while !Task.isCancelled {
+            await refrescarMarcadores()
+            try? await Task.sleep(for: .seconds(60))
+        }
+    }
+
+    // MARK: Biblioteca
+
+    public func esFavorito(_ id: String) -> Bool {
+        biblioteca?.favorites.contains { $0.id.lowercased() == id.lowercased() } ?? false
+    }
+
+    /// Añade o quita de favoritos.
+    public func alternarFavorito(id: String, titulo: String, ih: Bool?) async {
+        let quitar = esFavorito(id)
+        let cambio: LibraryMutation =
+            quitar
+            ? .delete(collection: .favorites, id: id)
+            : .favoriteUpsert(ItemInput(id: id, title: String(titulo.prefix(500)), ih: ih))
+        await mutar(cambio, aviso: quitar ? "Quitado de favoritos" : "Añadido a favoritos")
+    }
+
+    /// Aplica un cambio a la biblioteca y guarda lo que devuelve el servidor.
+    @discardableResult
+    public func mutar(_ cambio: LibraryMutation, aviso: String? = nil) async -> Bool {
+        do {
+            let nueva = try await entorno.api.enviar(API.cambiarBiblioteca(cambio))
+            aplicarBiblioteca(nueva)
+            if let aviso { avisos.mostrar(aviso, tono: .ok) }
+            return true
+        } catch {
+            let convertido = APIError.desde(error)
+            if case .cancelado = convertido { return false }
+            avisos.mostrar(convertido.mensaje, tono: .error)
+            return false
+        }
+    }
+
+    /// Cambio local inmediato (p. ej. al borrar, antes de que conteste el servidor).
+    public func aplicarBiblioteca(_ nueva: LibraryView) {
+        biblioteca = nueva
+        let cache = entorno.cache
+        Task { try? await cache.guardar(nueva, en: .biblioteca) }
+    }
+
+    /// Cambia la lista (directorio) activa.
+    public func activarLista(_ id: String) async {
+        do {
+            let directorio = try await entorno.api.enviar(API.activarDirectorio(id: id))
+            if var actual = biblioteca {
+                actual.web = directorio.web
+                actual.webSources = directorio.webSources
+                actual.activeWebSourceId = directorio.activeWebSourceId
+                actual.webSyncedAt = directorio.webSyncedAt
+                aplicarBiblioteca(actual)
+            }
+        } catch {
+            avisos.mostrar(APIError.desde(error).mensaje, tono: .error)
+        }
+    }
+
+    // MARK: Motor
+
+    public func reiniciarMotor() async {
+        do {
+            let respuesta = try await entorno.api.enviar(API.reiniciarMotor)
+            avisos.mostrar(
+                respuesta.restarted ? "Reiniciando el motor…" : "El motor no se ha podido reiniciar ahora",
+                tono: respuesta.restarted ? .ok : .error)
+            if let estado = try? await entorno.api.enviar(API.estadoMotor) { motor = estado }
+        } catch {
+            avisos.mostrar(APIError.desde(error).mensaje, tono: .error)
+        }
+    }
+
+    /// El motor de vídeo: AVPlayer, o el simulado en las pruebas de interfaz.
+    private static func motorPorDefecto() -> any MotorVideo {
+        #if DEBUG
+            if ModoEjecucion.servidorSimulado { return MotorSimulado() }
+        #endif
+        return MotorAVPlayer()
     }
 }

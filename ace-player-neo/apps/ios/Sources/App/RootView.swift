@@ -50,17 +50,41 @@ struct RootView: View {
     }
 }
 
-/// La app emparejada: pestañas con la agenda y los ajustes.
+/// Qué pestaña se ve.
+enum Pestana: Hashable {
+    case agenda, biblioteca, buscar, ajustes
+}
+
+/// La app emparejada: agenda, biblioteca, búsqueda y ajustes, con el
+/// mini-reproductor sobre la barra de pestañas (Liquid Glass del sistema en
+/// iOS 26) y el reproductor a pantalla completa por encima de todo.
 struct PrincipalView: View {
     @Environment(AppModel.self) private var modelo
+    @State private var pestana: Pestana = .agenda
 
     var body: some View {
-        TabView {
+        @Bindable var reproductor = modelo.reproductor
+        TabView(selection: $pestana) {
             AgendaView(entorno: modelo.entorno)
                 .tabItem { Label("Agenda", systemImage: "calendar") }
+                .tag(Pestana.agenda)
+            BibliotecaView()
+                .tabItem { Label("Biblioteca", systemImage: "star.square.on.square") }
+                .tag(Pestana.biblioteca)
+            BuscarView(entorno: modelo.entorno)
+                .tabItem { Label("Buscar", systemImage: "magnifyingglass") }
+                .tag(Pestana.buscar)
             AjustesView()
                 .tabItem { Label("Ajustes", systemImage: "gearshape") }
+                .tag(Pestana.ajustes)
         }
+        .avisos(modelo.avisos, margenInferior: 110)
+        .fullScreenCover(isPresented: $reproductor.pantallaCompleta) {
+            ReproductorCompleto()
+                .environment(modelo)
+        }
+        .sensoryFeedback(.selection, trigger: reproductor.cambiosDeFuente)
+        .sensoryFeedback(.error, trigger: reproductor.errores)
         .task { await modelo.arrancar() }
     }
 }

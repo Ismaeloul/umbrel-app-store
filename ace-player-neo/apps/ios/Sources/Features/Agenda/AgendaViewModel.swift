@@ -22,6 +22,26 @@ final class AgendaViewModel {
         agenda?.days.filter { !$0.matches.isEmpty } ?? []
     }
 
+    /// El día que se enseña al abrir: hoy si hay partidos; si no, el primero que venga.
+    static func diaInicial(_ fechas: [String], ahora: Date = .now) -> String? {
+        let hoy = FormatoAgenda.clave(ahora)
+        if fechas.contains(hoy) { return hoy }
+        return fechas.first { $0 > hoy } ?? fechas.last
+    }
+
+    /// Partidos de un día agrupados por competición, en el orden en que aparecen.
+    static func porLiga(_ partidos: [FootballMatch]) -> [GrupoLiga] {
+        var grupos: [GrupoLiga] = []
+        for partido in partidos {
+            if let indice = grupos.firstIndex(where: { $0.competicion == partido.competition }) {
+                grupos[indice].partidos.append(partido)
+            } else {
+                grupos.append(GrupoLiga(competicion: partido.competition, pais: partido.country, partidos: [partido]))
+            }
+        }
+        return grupos
+    }
+
     /// Primero la caché (arranque en frío < 1 s), luego la red.
     func arrancar() async {
         if agenda == nil, let guardada = await entorno.cache.leer(FootballSchedule.self, de: .agenda) {
@@ -52,8 +72,32 @@ final class AgendaViewModel {
     }
 }
 
+/// Los partidos de una competición dentro de un día.
+struct GrupoLiga: Hashable {
+    var competicion: String
+    var pais: String
+    var partidos: [FootballMatch]
+}
+
 /// Textos de la agenda (fechas en hora de Madrid, como las da el servidor).
 enum FormatoAgenda {
+    /// `YYYY-MM-DD` de una fecha en Madrid.
+    static func clave(_ fecha: Date) -> String {
+        let c = calendario.dateComponents([.year, .month, .day], from: fecha)
+        return String(format: "%04d-%02d-%02d", c.year ?? 2026, c.month ?? 1, c.day ?? 1)
+    }
+
+    /// Para la tira de días: «HOY» / «JUE» arriba y el número del día.
+    static func partesDia(_ texto: String, ahora: Date = .now) -> (arriba: String, numero: String) {
+        guard let fecha = dia(texto) else { return ("", texto) }
+        let cal = calendario
+        let numero = String(cal.component(.day, from: fecha))
+        if cal.isDate(fecha, inSameDayAs: ahora) { return ("Hoy", numero) }
+        let estilo = Date.FormatStyle(locale: Locale(identifier: "es_ES"), calendar: cal, timeZone: zona)
+            .weekday(.abbreviated)
+        return (fecha.formatted(estilo).replacingOccurrences(of: ".", with: ""), numero)
+    }
+
     static var zona: TimeZone { TimeZone(identifier: "Europe/Madrid") ?? .current }
 
     static var calendario: Calendar {
