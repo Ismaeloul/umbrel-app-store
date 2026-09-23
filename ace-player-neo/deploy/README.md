@@ -95,3 +95,8 @@ Puertos (solo 127.0.0.1): 17792 pasarela falsa (login en `/__pasarela/login`),
   distinto, plan B de arquitectura §8.4 (puerto aparte).
 - CI (plan E4.1): `test:deploy`, `test:nginx`, `test:shellcheck`, release
   reproducible con `git diff --exit-code` y `docker build` del Dockerfile.
+- `typecheck:deploy` deja fuera, de momento, tres herramientas sueltas que
+  llegaron sin tipos JSDoc (`scripts/smoke-bundle.mjs`, `scripts/soak-real.mjs`
+  y `scripts/check-migration-prod.mjs`: 57 errores de `checkJs`). La prueba de
+  humo sí corre en la CI. Tiparlas y quitarlas del `exclude` de
+  `deploy/tsconfig.json`.
