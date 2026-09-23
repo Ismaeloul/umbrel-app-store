@@ -1,0 +1,12 @@
+# Lo genera XcodeGen desde project.yml
+*.xcodeproj/
+*.xcworkspace/
+# Compilación, archivos y resultados de tests
+build/
+DerivedData/
+*.xcresult/
+*.ipa
+# Ajustes locales (bundle id propio, equipo de firma…)
+Config/Local.xcconfig
+xcuserdata/
+.DS_Store

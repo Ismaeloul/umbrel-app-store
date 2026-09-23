@@ -1,0 +1,14 @@
+// Ajustes comunes de Ace Neo (Debug y Release).
+//
+// El bundle id y la versión se pueden cambiar sin tocar el proyecto:
+//   - en la línea de comandos: xcodebuild ... ACE_BUNDLE_ID=com.otro.id MARKETING_VERSION=0.7.1
+//   - o en Config/Local.xcconfig (no se sube a git), que se incluye al final.
+
+ACE_BUNDLE_ID = es.ismaeloul.aceplayerneo
+ACE_DISPLAY_NAME = Ace Neo
+
+// Versión que ve el usuario y número de compilación (la CI pone el número de ejecución).
+MARKETING_VERSION = 0.7.0
+CURRENT_PROJECT_VERSION = 1
+
+#include? "Local.xcconfig"
