@@ -10,6 +10,9 @@
    - Tu fútbol: resumen de gustos y «Editar mis gustos».
    - Reproducción: modo (Baja latencia / Equilibrado / Estable) y la política
      «Un solo dispositivo a la vez» (D5).
+   - Dónde se está reproduciendo (where-playing/): el canal y los dispositivos
+     que lo ven, en tiempo real (`playback.sessions` por SSE). El
+     mini-reproductor lleva aquí (`ajustes/donde`).
    - Apariencia: tema (sistema, claro, oscuro) y «Reducir transparencia».
    - Dispositivos y Salud: las aportan otras vistas (external.tsx); si aún no
      existen, no salen y `ajustes/salud` lleva a la sección del motor.
@@ -51,6 +54,7 @@ import {
   type IconName,
 } from '../../ui/index.ts';
 import { DirectoriesSection } from '../directories/DirectoriesSection.tsx';
+import { WherePlayingSection } from '../where-playing/WherePlayingSection.tsx';
 import { externalSection, type ExternalSection } from './external.tsx';
 import { ModePicker } from './ModePicker.tsx';
 import { PLAYBACK_MODE_HELP, setPlaybackMode, usePlaybackMode } from './playback-mode.ts';
@@ -61,6 +65,7 @@ type SectionId =
   | 'listas'
   | 'futbol'
   | 'reproduccion'
+  | 'donde'
   | 'apariencia'
   | 'dispositivos'
   | 'salud'
@@ -77,6 +82,7 @@ const SECTIONS: readonly SectionDef[] = [
   { id: 'listas', title: 'Listas', icon: 'list' },
   { id: 'futbol', title: 'Tu fútbol', icon: 'agenda' },
   { id: 'reproduccion', title: 'Reproducción', icon: 'play' },
+  { id: 'donde', title: 'Dónde se está reproduciendo', icon: 'tv' },
   { id: 'apariencia', title: 'Apariencia', icon: 'sol' },
   { id: 'dispositivos', title: 'Dispositivos', icon: 'movil' },
   { id: 'salud', title: 'Salud', icon: 'senal' },
@@ -515,6 +521,16 @@ export default function SettingsView({ route, active }: ViewProps) {
         return (
           <Section key={def.id} def={def}>
             <PlaybackSection />
+          </Section>
+        );
+      case 'donde':
+        return (
+          <Section
+            key={def.id}
+            def={def}
+            description="El canal que se está viendo ahora y en qué dispositivos. Se actualiza solo."
+          >
+            <WherePlayingSection />
           </Section>
         );
       case 'apariencia':

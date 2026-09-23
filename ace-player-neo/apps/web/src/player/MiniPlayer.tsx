@@ -5,9 +5,18 @@
 
    En el móvil se arrastra: hacia arriba vuelve al vídeo; hacia un lado la
    quita (detiene, con «Deshacer» durante 6 s). Durante el arrastre solo se
-   mueve con transform. */
+   mueve con transform.
+
+   «Dónde se está reproduciendo» (Ajustes → `ajustes/donde`): un botón con la
+   tele. En pantallas anchas siempre; en el móvil, para no apretar el título,
+   solo cuando otro dispositivo ve lo mismo (`data-shared`, del evento SSE
+   `playback.sessions` que ya está en la caché: no pide nada). */
 
 import type { RefObject } from 'react';
+import { getDeviceId, getViewerId } from '../api/identity.ts';
+import { useApiQuery } from '../api/query.ts';
+import { useNavigate } from '../app/router.tsx';
+import { otherDevicesWatching } from '../features/where-playing/model.ts';
 import { useSwipe } from '../lib/gestures.ts';
 import { prefersReducedMotion } from '../lib/media.ts';
 import { toast } from '../notices/toasts.ts';
@@ -46,6 +55,10 @@ function Mini({
 }) {
   const state = usePlayer();
   const { actions } = ctx;
+  const navigate = useNavigate();
+  /* Solo lo que ya hay en la caché (arranque + SSE): el mini no pide nada. */
+  const playback = useApiQuery('playbackStatus', undefined, { enabled: false });
+  const others = otherDevicesWatching(playback.data?.sessions, getViewerId(), getDeviceId());
   const wantsPlay = state.desiredPlaying || state.phase === 'buffer';
   const title = state.channel?.title ?? 'Ace Player Neo';
 
@@ -126,6 +139,18 @@ function Mini({
           <span className="player-mini__sub">{state.channel.subtitle}</span>
         ) : null}
       </button>
+      <IconButton
+        icon="tv"
+        label={
+          others > 0
+            ? `Dónde se está reproduciendo (también en ${others === 1 ? 'otro dispositivo' : `${others} dispositivos más`})`
+            : 'Dónde se está reproduciendo'
+        }
+        onClick={() => navigate({ vista: 'ajustes', seccion: 'donde' })}
+        className="player-mini__btn player-mini__where"
+        data-shared={others > 0 ? 'true' : undefined}
+        data-fill="true"
+      />
       <IconButton
         icon={wantsPlay ? 'pause' : 'play'}
         label={wantsPlay ? 'Pausar' : 'Reproducir'}

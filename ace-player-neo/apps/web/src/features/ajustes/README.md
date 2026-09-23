@@ -1,5 +1,8 @@
-Ajustes (listas, tu fútbol, reproducción, apariencia, dispositivos, salud,
-motor y «Acerca de»). Entrada del armazón: `index.tsx`. El código está en
+Ajustes (listas, tu fútbol, reproducción, «Dónde se está reproduciendo»,
+apariencia, dispositivos, salud, motor y «Acerca de»). «Dónde se está
+reproduciendo» vive en `src/features/where-playing/` (sesiones de
+GET /api/v1/playback y el evento SSE `playback.sessions`). Entrada del
+armazón: `index.tsx`. El código está en
 `src/features/settings/` y las listas en `src/features/directories/`.
 
 - «Tu fútbol» abre la hoja de `src/features/preferences/PreferencesSheet.tsx`.

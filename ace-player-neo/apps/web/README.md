@@ -86,7 +86,8 @@ Si una vista necesita un cambio en algo del armazón, en la API o en
   sistema`. `useRoute()`, `useNavigate()` (`navigate({ vista: 'partido', id,
   canal: null })`), `useBack()`, `useSearchParam('q')` para los parámetros
   propios de tu vista. Secciones de Ajustes acordadas: `salud` (el indicador del
-  motor lleva ahí) y `dispositivos`.
+  motor lleva ahí), `dispositivos` y `donde` («Dónde se está reproduciendo»: el
+  mini-reproductor y el menú del reproductor llevan ahí).
 - **Las vistas visitadas siguen montadas** (React `<Activity>`): al volver
   conservan estado y scroll. Oculta, una vista no tiene efectos vivos (sus
   consultas, atajos y temporizadores se paran solos). `active` dice si se ve.
