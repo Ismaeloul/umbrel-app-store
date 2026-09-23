@@ -190,8 +190,10 @@ La app se instala desde la tienda comunitaria de este repositorio
 (`umbrel-app-store`, rama `main`). Umbrel **no** construye imágenes: usa la
 imagen oficial de Node y el `server.js` de `releases/0.7.0/`.
 
-**Cortar la release 0.7.0** (con el OK de Isma; pasos exactos en
-[`deploy/README.md`](deploy/README.md#cortar-la-release-fase-4-con-ok-de-isma)):
+**La release 0.7.0 ya está cortada** en `rewrite-v2`, sin publicar. Cómo
+publicarla, qué pasa al actualizar, cómo comprobarla, cómo volver a la 0.6.59
+y lo que queda por hacer a mano: [`docs/despliegue.md`](docs/despliegue.md).
+Para volver a cortarla ([`deploy/README.md`](deploy/README.md#cortar-la-release-fase-4)):
 
 1. `corepack pnpm@10.18.2 --filter @ace/web build` y
    `corepack pnpm@10.18.2 release` → `../ismaeloul-ace-player-neo/releases/0.7.0/`
@@ -219,7 +221,8 @@ una 0.7.1 que es la 0.6.59 con otro número (rama `rollback/0.7.1`, preparada
 antes de publicar la 0.7.0): merge y Actualizar. La 0.6.59 lee el
 `state.json` que deja la 0.7.0 (hay un test que lo comprueba) e ignora
 `data/v2/`. Tras volver atrás, la web vieja funciona pero **la app iOS no**
-(la 0.6.59 no tiene `/native/`). Detalle en
+(la 0.6.59 no tiene `/native/`). Pasos exactos en
+[`docs/despliegue.md`](docs/despliegue.md#6-volver-atrás-a-la-0659); más en
 [`docs/arquitectura.md` §11.3](docs/arquitectura.md#113-actualización-y-vuelta-atrás).
 
 ## Emparejar el iPhone
@@ -274,4 +277,5 @@ la app IPA Station del propio Umbrel). Más en
 | [`docs/diseno/`](docs/diseno/) | sistema de diseño de la web («Luz de focos») |
 | [`docs/plan.md`](docs/plan.md), [`docs/PROGRESO.md`](docs/PROGRESO.md), [`docs/pendiente.md`](docs/pendiente.md) | plan, diario de la reescritura y lo que queda |
 | [`deploy/README.md`](deploy/README.md) | empaquetado, pila local y cómo cortar la release |
+| [`docs/despliegue.md`](docs/despliegue.md) | publicar la 0.7.0, comprobarla, volver atrás a la 0.6.59 y el vigilante del NAS |
 | [`apps/web/README.md`](apps/web/README.md), [`apps/ios/README.md`](apps/ios/README.md), [`apps/server/test/fake-engine/README.md`](apps/server/test/fake-engine/README.md) | cada pieza por dentro |

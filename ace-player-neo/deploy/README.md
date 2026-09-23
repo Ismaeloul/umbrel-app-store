@@ -71,18 +71,27 @@ Puertos (solo 127.0.0.1): 17792 pasarela falsa (login en `/__pasarela/login`),
   crear nada que existen el servidor, engine-control y la web compilada; con
   `--out` admite una release incompleta y lo avisa.
 
-## Cortar la release (Fase 4, con OK de Isma)
+## Cortar la release (Fase 4)
 
-1. Web compilada (`apps/web/dist`) y `apps/server/src/{main.ts, engine-control/main.ts}`.
-2. `corepack pnpm@10.18.2 release` → `ismaeloul-ace-player-neo/releases/0.7.0/`.
-3. Copiar `deploy/umbrel/docker-compose.yml` y `deploy/umbrel/hooks/pre-start` a
-   la carpeta de la app; el hook con modo 100755 en git
-   (`git add --chmod=+x ismaeloul-ace-player-neo/hooks/pre-start`).
+**Hecho el 23-09 en `rewrite-v2`**, sin publicar. Cómo publicarla, comprobarla
+y volver atrás: [`docs/despliegue.md`](../docs/despliegue.md).
+
+1. Web compilada (`corepack pnpm@10.18.2 --filter @ace/web build`).
+2. `corepack pnpm@10.18.2 release` → `ismaeloul-ace-player-neo/releases/0.7.0/`
+   (sin los `.map` de Vite). `corepack pnpm@10.18.2 check:release` la vuelve a
+   montar y la compara con la commiteada; CI lo hace en cada push.
+3. `deploy/umbrel/docker-compose.yml` y `deploy/umbrel/hooks/pre-start` copiados
+   tal cual a la carpeta de la app, el hook con modo 100755 en git. Un test
+   (`deploy/test/compose.test.ts`) exige que sigan siendo iguales.
 4. `umbrel-app.yml`: `version: "0.7.0"` (entre comillas, U9) y notas de la versión.
 5. `.gitattributes` de la raíz: `ismaeloul-ace-player-neo/releases/** -text`
-   (en este PC `core.autocrlf=true` y los hashes no cuadrarían).
-6. Etiqueta `ace-player-neo-v0.7.0` subida a la vez que el merge; la 0.7.1 de
-   vuelta atrás preparada antes (empaquetado §7.7-§7.8).
+   (en este PC `core.autocrlf=true` y los hashes no cuadrarían) y LF para
+   `monitoring/` y el paquete de la 0.6.59.
+6. Tests de la carpeta de la app: `tests/release.test.js` (coherencia del
+   paquete) y los de la 0.6.59 en `tests/legacy-0.6.59/`, siempre contra
+   `releases/0.6.59`, con su Compose y su hook en `paquete/`.
+7. Pendiente de Isma: el merge con la etiqueta `ace-player-neo-v0.7.0` a la vez,
+   y la 0.7.1 de vuelta atrás preparada antes (`docs/despliegue.md` §6).
 
 ## Pendiente
 
@@ -93,8 +102,6 @@ Puertos (solo 127.0.0.1): 17792 pasarela falsa (login en `/__pasarela/login`),
   real; falta la URL de vídeo caducada.
 - Probar la pasarela real de umbreld en un Umbrel (plan §8.3); si se comporta
   distinto, plan B de arquitectura §8.4 (puerto aparte).
-- CI (plan E4.1): `test:deploy`, `test:nginx`, `test:shellcheck`, release
-  reproducible con `git diff --exit-code` y `docker build` del Dockerfile.
 - `typecheck:deploy` deja fuera, de momento, tres herramientas sueltas que
   llegaron sin tipos JSDoc (`scripts/smoke-bundle.mjs`, `scripts/soak-real.mjs`
   y `scripts/check-migration-prod.mjs`: 57 errores de `checkJs`). La prueba de
