@@ -249,3 +249,29 @@ conservador). Todas se pueden revertir.
 - **Riesgo**: si un verificador cambia un contrato de la API, las vistas se
   ajustan en la integración de la FASE 2. Los verificadores tienen prohibido
   tocar `apps/web`.
+
+## D19. Verificación del backend: los números se fijan contra el fuente de la 0.6.59
+
+- **Contexto**: el verificador de comportamientos (23-09-2026) vio que muchos
+  tests usan la propia constante de la v2 para avanzar el reloj o comparar
+  (`clock.advance(FOOTBALL_CACHE_MS)`, `toBeLessThan(RECOMENDADO)`). Prueban
+  el mecanismo, pero si alguien cambia la constante la regla cambia sin que
+  falle nada.
+- **Decisión**: un solo test, `apps/server/test/numeros-0659.test.ts`,
+  compara cada constante de la v2 con la de `server.js` 0.6.59 **leída del
+  propio fuente** (las `const X = <número>;` y los `Math.min/Math.max` de las
+  variables de entorno); los números que la 0.6.59 escribía dentro de una
+  función se fijan con su línea. Las diferencias a propósito siguen en
+  `compat.md` con su test, no aquí.
+- **Además**: `main()` se parte en `installProcessHandlers(proceso, deps)` para
+  poder probar los enganches del proceso (T-111, B-247) con un proceso falso.
+  El comportamiento no cambia (`scripts/smoke-bundle.mjs` sigue apagando por
+  IPC con 0 en menos de 5 s).
+- **Estados**: siete filas de `comportamientos.md` que eran `pendiente-fase-2`
+  (B-063, B-135 a B-139, B-198) pasan a `cubierto (servidor) ·
+  pendiente-fase-2`, como ya estaban B-086 y B-112: su lógica vive en el
+  servidor o en `@ace/shared` y ya tiene test; lo que falta es la web.
+- **Segunda pasada** (misma fecha, tras el corte por límite de uso): mismo
+  criterio para 14 números más que ningún test miraba (topes de ESPN, Ollama
+  y ffprobe, esperas del comprobador, podas, 3 h del precalentado, 25 min de
+  los trabajos…). Solo tests y documentación: no cambia código de producción.

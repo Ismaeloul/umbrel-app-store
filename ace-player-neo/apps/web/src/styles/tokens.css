@@ -1,0 +1,422 @@
+/* ==========================================================================
+   Ace Player Neo v2 · Tokens del sistema de diseño
+   Dirección A «Luz de focos» (docs/diseno/opcion-A/tokens.css) con las
+   correcciones e injertos de docs/diseno/eleccion.md. Documentado en
+   docs/diseno/sistema.md.
+
+   Cómo funcionan los temas
+   - El tema sale del sistema (prefers-color-scheme) salvo que Ajustes lo fije:
+     entonces <html data-theme="light|dark"> cambia `color-scheme` y los
+     light-dark() de abajo siguen solos. <html data-scheme> lleva SIEMPRE el
+     tema resuelto (lo pone el script de index.html antes de pintar y
+     src/app/theme.ts después); solo lo usa el respaldo en hex.
+   - Colores en OKLCH con light-dark(). Los navegadores sin light-dark()
+     (Safari < 17.5, Chrome < 123) usan los hex de respaldo: son la conversión
+     exacta a sRGB de cada OKLCH (misma fórmula que el test tokens.test.ts).
+   - Un elemento con `color-scheme: dark` (el reproductor) recibe los valores
+     oscuros aunque la app esté en claro: light-dark() se resuelve en cada
+     elemento.
+   - Los contrastes (AA) los comprueba src/styles/tokens.test.ts leyendo este
+     fichero: si cambias un color, el test te dice si baja de 4,5:1 (texto) o
+     de 3:1 (medidores y bordes de control).
+   ========================================================================== */
+
+:root {
+  color-scheme: light dark;
+
+  /* ---- Tipografía --------------------------------------------------------- */
+  /* Una sola familia (Mona Sans) estirada o comprimida según lo que diga; la
+     monoespaciada solo en «Datos técnicos», hashes y teclas. */
+  --font: 'Mona Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: 'Martian Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* Escala: 11 · 12 · 13 · 15 · 17 · 22 · 30 · 44 · 64 · 96. Nada baja de 11. */
+  --fs-11: 0.6875rem;
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-15: 0.9375rem;
+  --fs-17: 1.0625rem;
+  --fs-22: 1.375rem;
+  --fs-30: 1.875rem;
+  --fs-44: 2.75rem;
+  --fs-64: 4rem;
+  --fs-96: 6rem;
+  /* Rótulos terciarios y pies: 11/12 en móvil y 12/13 en escritorio, donde
+     sobra sitio (corrección 7 de eleccion.md). Se usan siempre estos dos. */
+  --fs-label: var(--fs-11);
+  --fs-caption: var(--fs-12);
+
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-text: 1.45;
+
+  /* Ejes de Mona Sans: anchura (wdth) y peso (wght). */
+  --w-num: 75%; /* marcador, minuto, horas y contadores */
+  --w-tight: 88%; /* rótulos que tienen que caber (palabras de estado, barra) */
+  --w-text: 100%;
+  --w-head: 112%; /* titulares de página */
+  --wght-text: 450;
+  --wght-medium: 560;
+  --wght-strong: 650;
+  --wght-head: 760;
+  --wght-num: 780;
+  --tracking-head: -0.02em;
+  /* Celda de cada cifra del componente Num: el cero TABULAR de Mona Sans lleva
+     barra de serie (se lee «Ø», corrección 1) y ninguna función lo quita, así
+     que se usan las cifras proporcionales, que tienen el cero limpio, cada una
+     en una celda del ancho del «4» (la más ancha: 0,49 em a wdth 75 y peso 780). */
+  --num-cell: 0.49em;
+  /* Lo mismo para cifras dentro del texto: el «4» mide 0,62-0,645 em a wdth
+     100 con pesos 450-700 (medido en Chrome con la fuente del build). */
+  --num-cell-text: 0.645em;
+
+  /* ---- Formas concéntricas (radio interior = exterior − margen) --------- */
+  --r-xl: 28px;
+  --r-l: 20px;
+  --r-m: 14px;
+  --r-s: 10px;
+  --r-xs: 6px;
+  --r-pill: 999px;
+
+  /* ---- Espacio (base 4) --------------------------------------------------- */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-10: 40px;
+  --s-12: 48px;
+  --gutter: 16px;
+  /* Objetivo táctil mínimo. El dibujo puede ser menor; la zona, nunca. */
+  --tap: 44px;
+
+  /* ---- Zonas seguras y maquetación ---------------------------------------- */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  /* Alto del teclado en pantalla: lo mide src/lib/viewport.ts con visualViewport. */
+  --kb: 0px;
+  --rail-w: 84px;
+  --column-w: 300px;
+  --aside-w: 340px;
+  --tabbar-h: 64px;
+  --tabbar-gap: 10px;
+  --mini-h: 64px;
+  --content-max: 1180px;
+
+  /* ---- Capas -------------------------------------------------------------- */
+  --z-sticky: 20;
+  --z-veil: 39;
+  --z-nav: 40;
+  --z-mini: 41;
+  --z-toast: 60;
+  --z-sheet: 80;
+  --z-menu: 90;
+  --z-immersive: 100;
+  --z-skip: 200;
+
+  /* ---- Movimiento: la misma tabla de muelles que SwiftUI ----------------- */
+  /* rápido .spring(duration: 0.25, bounce: 0) · estándar (0.4, 0.15) · héroe
+     (0.55, 0.3), muestreados con linear(). La duración CSS es el tiempo real
+     de asentamiento. SOLO se animan transform y opacity. */
+  --ease-rapido: linear(
+    0,
+    0.049,
+    0.158,
+    0.286,
+    0.412,
+    0.527,
+    0.625,
+    0.707,
+    0.773,
+    0.826,
+    0.867,
+    0.899,
+    0.924,
+    0.943,
+    0.958,
+    0.968,
+    0.977,
+    0.983,
+    0.987,
+    0.991,
+    0.993,
+    0.995,
+    0.996,
+    0.997,
+    1
+  );
+  --dur-rapido: 340ms;
+  --ease-estandar: linear(
+    0,
+    0.029,
+    0.101,
+    0.196,
+    0.301,
+    0.406,
+    0.506,
+    0.598,
+    0.678,
+    0.747,
+    0.806,
+    0.854,
+    0.892,
+    0.923,
+    0.947,
+    0.965,
+    0.979,
+    0.989,
+    0.996,
+    1.001,
+    1.004,
+    1.005,
+    1.006,
+    1.006,
+    1.006,
+    1.006,
+    1.005,
+    1.004,
+    1.004,
+    1.003,
+    1.002,
+    1
+  );
+  --dur-estandar: 520ms;
+  --ease-heroe: linear(
+    0,
+    0.017,
+    0.061,
+    0.124,
+    0.201,
+    0.285,
+    0.372,
+    0.459,
+    0.543,
+    0.621,
+    0.694,
+    0.759,
+    0.816,
+    0.866,
+    0.909,
+    0.944,
+    0.973,
+    0.996,
+    1.014,
+    1.027,
+    1.036,
+    1.042,
+    1.045,
+    1.046,
+    1.045,
+    1.043,
+    1.04,
+    1.037,
+    1.033,
+    1.029,
+    1.025,
+    1.021,
+    1.018,
+    1.014,
+    1.011,
+    1.009,
+    1.006,
+    1.004,
+    1.003,
+    1.001,
+    1,
+    0.999,
+    0.999,
+    0.998,
+    0.998,
+    0.998,
+    0.998,
+    0.998,
+    1
+  );
+  --dur-heroe: 800ms;
+  /* Fundidos de salida (sin muelle): línea de estado, toasts y velos. */
+  --ease-out: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --dur-fade: 320ms;
+  /* Latido de «lo que está pasando»: onda del anillo y punto de directo. */
+  --dur-pulse: 2s;
+  /* Aparición escalonada de listas: retraso por elemento y tope. */
+  --stagger-step: 36ms;
+  --stagger-max: 10;
+}
+
+/* Movimiento reducido: fundidos cortos y ningún pulso (las animaciones
+   infinitas se quitan en base.css y en cada componente). */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-rapido: 120ms;
+    --dur-estandar: 150ms;
+    --dur-heroe: 150ms;
+    --ease-rapido: ease-out;
+    --ease-estandar: ease-out;
+    --ease-heroe: ease-out;
+    --stagger-step: 0ms;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --fs-label: var(--fs-12);
+    --fs-caption: var(--fs-13);
+    --gutter: 24px;
+  }
+}
+
+/* ==========================================================================
+   Colores · respaldo en hex (navegadores sin light-dark())
+   ========================================================================== */
+:root {
+  /* Claro de «papel» (injerto B6): el fondo va un escalón por debajo de las
+     superficies para que las tarjetas no floten sin borde. */
+  --bg: #e5eef4;
+  --bg-sunk: #dae6ed;
+  --surface: #fbfeff;
+  --surface-2: #ecf5fb;
+  --line: #c9d3da;
+  --line-soft: rgb(16 32 50 / 0.09);
+  --line-strong: #6c7d8b;
+  --text: #102032;
+  --text-2: #495a6b;
+  --text-3: #576574;
+  --accent: #5fd9ff;
+  --on-accent: #061c31;
+  --accent-ink: #0068a7;
+  --accent-edge: #1b8abd;
+  --accent-wash: rgb(95 217 255 / 0.22);
+  --ok: #009342;
+  --ok-ink: #006e30;
+  --weak: #b76c00;
+  --weak-ink: #8c5007;
+  --fail: #d02c2a;
+  --fail-ink: #b7191c;
+  --glass: rgb(251 254 255 / 0.7);
+  --glass-dense: rgb(251 254 255 / 0.92);
+  --glass-solid: #f6fbfe;
+  --glass-hi: rgb(255 255 255 / 0.95);
+  --glass-rim: rgb(16 32 50 / 0.14);
+  --scrim: rgb(6 20 35 / 0.42);
+  --shadow-1: 0 1px 2px rgb(16 32 50 / 0.06), 0 8px 24px -16px rgb(16 32 50 / 0.3);
+  --shadow-2: 0 18px 40px -18px rgb(30 60 90 / 0.4);
+}
+
+:root[data-scheme='dark'] {
+  --bg: #081829;
+  --bg-sunk: #051222;
+  --surface: #152738;
+  --surface-2: #1e3144;
+  --line: #364a5c;
+  --line-soft: rgb(240 246 250 / 0.08);
+  --line-strong: #6f8394;
+  --text: #f0f6fa;
+  --text-2: #a7bac9;
+  --text-3: #94a8b6;
+  --accent-ink: #5fd9ff;
+  --accent-edge: #5fd9ff;
+  --accent-wash: rgb(95 217 255 / 0.16);
+  --ok: #49de78;
+  --ok-ink: #49de78;
+  --weak: #ffbd34;
+  --weak-ink: #ffbd34;
+  --fail: #ff6056;
+  --fail-ink: #ff766a;
+  --glass: rgb(30 47 65 / 0.62);
+  --glass-dense: rgb(27 44 61 / 0.93);
+  --glass-solid: #1e2f41;
+  --glass-hi: rgb(255 255 255 / 0.16);
+  --glass-rim: rgb(2 8 18 / 0.55);
+  --scrim: rgb(2 8 18 / 0.62);
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.3), 0 10px 28px -18px rgb(0 0 0 / 0.8);
+  --shadow-2: 0 18px 40px -16px rgb(1 6 14 / 0.78);
+}
+
+/* Lo que no cambia con el tema. */
+:root {
+  --live: var(--accent-ink);
+  --idle: var(--text-3);
+  --glass-video: rgb(9 20 32 / 0.38);
+  --glass-video-solid: #0f1f2e;
+  --on-video: #f4f8fb;
+  --blur: blur(22px) saturate(1.7);
+  --blur-video: blur(16px) saturate(1.4);
+  --glass-shadow: var(--shadow-2);
+  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-edge);
+
+  /* Glifos de estado (injerto C4) para donde no cabe el medidor: forma + palabra. */
+  --glyph-ok: '●';
+  --glyph-weak: '▲';
+  --glyph-fail: '✕';
+  --glyph-pending: '○';
+}
+
+/* ==========================================================================
+   Colores · OKLCH con light-dark() (la versión de referencia)
+   ========================================================================== */
+@supports (color: light-dark(#000, #fff)) {
+  :root {
+    /* Superficies: azul abismo en oscuro, hielo de papel en claro. */
+    --bg: light-dark(oklch(0.945 0.013 235), oklch(0.205 0.04 252));
+    --bg-sunk: light-dark(oklch(0.918 0.016 235), oklch(0.18 0.038 252));
+    --surface: light-dark(oklch(0.995 0.004 235), oklch(0.265 0.04 250));
+    --surface-2: light-dark(oklch(0.965 0.012 235), oklch(0.305 0.042 250));
+    --line: light-dark(oklch(0.86 0.015 240), oklch(0.4 0.04 248));
+    --line-soft: light-dark(oklch(0.24 0.04 252 / 0.09), oklch(0.97 0.01 240 / 0.08));
+    /* Borde de control: ≥ 3:1 contra fondo y superficies (B6). */
+    --line-strong: light-dark(oklch(0.58 0.03 245), oklch(0.6 0.035 245));
+
+    --text: light-dark(oklch(0.24 0.04 252), oklch(0.97 0.008 240));
+    --text-2: light-dark(oklch(0.46 0.035 250), oklch(0.78 0.03 240));
+    --text-3: light-dark(oklch(0.5 0.03 250), oklch(0.72 0.03 240));
+
+    /* Acento «cielo»: foco, acción principal y «en directo». Nada de ámbar,
+       dorado ni violeta: el ámbar solo existe como «floja». */
+    --accent: oklch(0.83 0.12 222);
+    --on-accent: oklch(0.22 0.05 250);
+    --accent-ink: light-dark(oklch(0.5 0.13 245), oklch(0.83 0.12 222));
+    --accent-edge: light-dark(oklch(0.6 0.12 235), oklch(0.83 0.12 222));
+    --accent-wash: light-dark(oklch(0.83 0.12 222 / 0.22), oklch(0.83 0.12 222 / 0.16));
+
+    /* Estados de señal: el medidor (≥ 3:1) y la palabra (≥ 4,5:1). No se usan
+       para nada más. */
+    --ok: light-dark(oklch(0.58 0.16 150), oklch(0.8 0.19 150));
+    --ok-ink: light-dark(oklch(0.47 0.13 150), oklch(0.8 0.19 150));
+    --weak: light-dark(oklch(0.6 0.14 66), oklch(0.84 0.16 80));
+    --weak-ink: light-dark(oklch(0.49 0.11 62), oklch(0.84 0.16 80));
+    --fail: light-dark(oklch(0.56 0.2 27), oklch(0.7 0.2 27));
+    --fail-ink: light-dark(oklch(0.5 0.19 27), oklch(0.74 0.18 27));
+
+    /* Cristal: regular sobre contenido, casi opaco sobre listas (rendimiento
+       en Safari de iOS) y opaco de respaldo. */
+    --glass: light-dark(oklch(0.99 0.004 235 / 0.7), oklch(0.3 0.04 250 / 0.62));
+    --glass-dense: light-dark(oklch(0.99 0.004 235 / 0.92), oklch(0.285 0.04 250 / 0.93));
+    --glass-solid: light-dark(oklch(0.985 0.006 235), oklch(0.3 0.04 250));
+    --glass-hi: light-dark(oklch(1 0 0 / 0.95), oklch(1 0 0 / 0.16));
+    /* Borde oscurecido de iOS 27. */
+    --glass-rim: light-dark(oklch(0.24 0.04 252 / 0.14), oklch(0.08 0.03 252 / 0.55));
+    --scrim: light-dark(oklch(0.2 0.04 252 / 0.42), oklch(0.08 0.03 252 / 0.62));
+    /* light-dark() solo admite colores: en las sombras va solo en el color
+       (la maqueta lo ponía sobre la sombra entera, que no es válido). */
+    --shadow-1:
+      0 1px 2px light-dark(oklch(0.24 0.04 252 / 0.06), oklch(0 0 0 / 0.3)),
+      0 10px 26px -17px light-dark(oklch(0.24 0.04 252 / 0.3), oklch(0 0 0 / 0.8));
+    --shadow-2: 0 18px 40px -17px light-dark(oklch(0.3 0.06 250 / 0.4), oklch(0.05 0.03 252 / 0.78));
+
+    /* Sobre vídeo: siempre oscuro, porque debajo hay imagen. */
+    --glass-video: oklch(0.18 0.03 250 / 0.38);
+    --glass-video-solid: oklch(0.22 0.035 250);
+    --on-video: oklch(0.98 0.005 240);
+  }
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}

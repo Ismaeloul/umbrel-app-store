@@ -10,8 +10,10 @@
       0.6.59 (`/api/remux` y `/api/football/resolve`, con la URL exacta o con
       `?` detrás) y los de /api/v1 marcados `sideEffects` en la tabla de rutas.
    2. Para el resto: `Sec-Fetch-Site: cross-site` → no; `same-origin` → sí;
-      sin `Origin` → sí (clientes nativos, curl, tests); con `Origin`, solo si
-      su host coincide con `Host` o con el primer `X-Forwarded-Host`. */
+      sin `Origin` → sí (clientes nativos, curl, tests) salvo con
+      `Sec-Fetch-Site: same-site` (0.7.0, S-03 en docs/seguridad.md); con
+      `Origin`, solo si su host coincide con `Host` o con el primer
+      `X-Forwarded-Host`. */
 
 import type { IncomingHttpHeaders } from 'node:http';
 
@@ -47,7 +49,13 @@ export function isAllowedMutation(req: MutationRequest, options: MutationOptions
   if (fetchSite === 'cross-site') return false;
   if (fetchSite === 'same-origin') return true;
   const origin = String(req.headers.origin || '');
-  if (!origin) return true;
+  /* S-03 (docs/seguridad.md, cambio 0.7.0): sin Origin se acepta (clientes
+     nativos, curl y navegadores sin Sec-Fetch-*), SALVO si el navegador dice
+     `same-site`: es otra app del mismo Umbrel (mismo host, otro puerto) que
+     pide un GET con efectos con <img>/<video>, lleva la cookie del login y
+     el navegador no pone Origin en esos GET. Nunca es la propia web
+     (`same-origin`) ni una URL escrita a mano (`none`). */
+  if (!origin) return fetchSite !== 'same-site';
   const hosts = new Set(
     [
       String(req.headers.host || ''),

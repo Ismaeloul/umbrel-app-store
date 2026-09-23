@@ -1,0 +1,325 @@
+/* Ajustes → Dispositivos. Solo tokens; dentro de la tarjeta de la sección, los
+   bloques internos usan --r-inner y el fondo de los elementos de Ajustes. */
+
+.disp {
+  display: grid;
+  gap: var(--s-4);
+  min-width: 0;
+}
+.disp-intro,
+.disp-help {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  line-height: var(--lh-text);
+}
+.disp-intro {
+  margin-top: calc(-1 * var(--s-2));
+}
+.disp-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+.disp-pair-start {
+  display: flex;
+}
+
+/* ---- Dirección que va en el QR ---------------------------------------------- */
+.disp-origin {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  line-height: var(--lh-text);
+}
+.disp-origin > svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--accent-ink);
+}
+.disp-origin strong {
+  color: var(--text);
+  font-weight: var(--wght-strong);
+  overflow-wrap: anywhere;
+}
+.disp-origin--warn > svg {
+  color: var(--weak-ink);
+}
+
+/* ---- Código y QR -------------------------------------------------------------- */
+.disp-pair {
+  display: grid;
+  gap: var(--s-4);
+  justify-items: center;
+  padding: var(--s-4);
+  border-radius: var(--r-inner, var(--r-m));
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1.5px var(--accent-edge);
+  animation: ace-aparece var(--dur-estandar) var(--ease-estandar) both;
+}
+.disp-pair__qr {
+  display: grid;
+  justify-items: center;
+  gap: var(--s-2);
+  margin: 0;
+}
+/* Blanco también en oscuro: el QR se lee con módulos oscuros sobre claro. */
+.disp-pair__qr img {
+  display: block;
+  width: min(200px, 60vw);
+  height: auto;
+  aspect-ratio: 1;
+  padding: 6px;
+  border-radius: var(--r-s);
+  background: #fff;
+  image-rendering: pixelated;
+}
+.disp-pair__demo {
+  color: var(--text-3);
+  font-size: var(--fs-caption);
+}
+.disp-pair__side {
+  display: grid;
+  gap: var(--s-3);
+  justify-items: center;
+  min-width: 0;
+  width: 100%;
+  text-align: center;
+}
+.disp-pair__label {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  font-weight: var(--wght-strong);
+}
+.disp-pair__code {
+  font-size: clamp(var(--fs-44), 11vw, var(--fs-64));
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+.disp-pair__timer {
+  display: grid;
+  gap: 6px;
+  width: min(100%, 260px);
+}
+.disp-pair__left {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+/* Pasos numerados con su círculo (la lista del sistema no lleva números). */
+.disp-steps {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: paso;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  line-height: var(--lh-snug);
+  text-align: left;
+}
+.disp-steps > li {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  counter-increment: paso;
+}
+.disp-steps > li::before {
+  content: counter(paso);
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+  font-size: var(--fs-12);
+  font-weight: var(--wght-strong);
+  line-height: 1;
+}
+.disp-pair .disp-row {
+  justify-content: center;
+}
+
+/* Hecho o caducado: una línea con su icono, sin QR. */
+.disp-pair--done,
+.disp-pair--expired {
+  grid-template-columns: auto minmax(0, 1fr);
+  justify-items: start;
+  align-items: start;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.disp-pair--expired {
+  grid-template-columns: minmax(0, 1fr);
+}
+.disp-pair--done {
+  box-shadow: inset 0 0 0 1.5px var(--ok);
+}
+.disp-pair__done-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+  color: var(--ok-ink);
+}
+.disp-pair__done-text {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.disp-pair__title {
+  font-size: var(--fs-17);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  overflow-wrap: anywhere;
+}
+
+/* Desde 640 px de sección: QR a la izquierda y el código a su lado. */
+@container (min-width: 520px) {
+  .disp-pair:not(.disp-pair--done, .disp-pair--expired) {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    justify-items: start;
+    gap: var(--s-6);
+  }
+  .disp-pair__side {
+    justify-items: start;
+    text-align: left;
+  }
+  .disp-pair .disp-row {
+    justify-content: flex-start;
+  }
+}
+.disp {
+  container-type: inline-size;
+}
+
+/* ---- Lista ------------------------------------------------------------------- */
+.disp-block {
+  display: grid;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.disp-block__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+}
+.disp-block__title {
+  font-size: var(--fs-15);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+}
+.disp-block__aside {
+  color: var(--text-3);
+  font-size: var(--fs-13);
+  font-weight: var(--wght-medium);
+}
+.disp-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: var(--r-inner, var(--r-m));
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+.disp-dev {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: 64px;
+  padding: 10px 12px;
+  /* Pulsación larga: sin la lupa ni el menú de texto de iOS encima del nuestro. */
+  -webkit-touch-callout: none;
+}
+.disp-dev + .disp-dev {
+  box-shadow: inset 0 1px 0 var(--line-soft);
+}
+.disp-dev__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-s);
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+.disp-dev__text {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+.disp-dev__name {
+  font-weight: var(--wght-strong);
+  overflow-wrap: anywhere;
+}
+.disp-dev__meta {
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-snug);
+}
+.disp-dev__meta--soft {
+  color: var(--text-3);
+}
+.disp-dev--revoked .disp-dev__name {
+  color: var(--text-2);
+}
+.disp-dev--revoked {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+/* Móvil estrecho: el botón baja debajo del texto en vez de apretarlo. */
+@container (max-width: 340px) {
+  .disp-dev {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .disp-dev__act {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+.disp-revoked {
+  display: grid;
+  gap: var(--s-2);
+  justify-items: start;
+}
+.disp-list--revoked {
+  justify-self: stretch;
+}
+
+.disp-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 10px 12px;
+  border-radius: var(--r-inner, var(--r-m));
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  color: var(--text-2);
+  font-size: var(--fs-15);
+}
+.disp-inline > svg {
+  flex: none;
+}
+.disp-inline > span {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.disp-inline--err > svg {
+  color: var(--fail-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .disp-pair {
+    animation-name: ace-funde;
+    animation-duration: 150ms;
+  }
+}

@@ -124,12 +124,37 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   };
 }
 
-export async function main(): Promise<void> {
-  const server = await startServer();
-  const { logger, clock } = server.services;
+/**
+ * Lo que `main` necesita del proceso. Es `process` en producción; en los
+ * tests, un EventEmitter con `exit` falso (así se prueba sin matar Vitest).
+ */
+export interface ProcessHooks {
+  on(event: string, listener: (...args: unknown[]) => void): unknown;
+  once(event: string, listener: (...args: unknown[]) => void): unknown;
+  exit(code: number): void;
+  readonly send?: unknown;
+}
+
+export interface ProcessHandlerDeps {
+  readonly logger: Logger;
+  readonly clock: Clock;
+  /** Apagado limpio (el `stop` de `startServer`). */
+  readonly stop: () => Promise<void>;
+}
+
+/**
+ * Enganches del proceso (T-111, B-028, B-247; server.js:5162-5176). Va aparte
+ * de `main` para poder probarlo: en la 0.6.59 el test T-111 solo buscaba el
+ * texto `process.on("unhandledRejection"` en el fuente.
+ * - una promesa rechazada sin capturar se anota y el servidor sigue;
+ * - SIGTERM/SIGINT (o `shutdown` por IPC) apagan una sola vez, salen con 0 si
+ *   todo fue bien y con 1 si algo falló o si a los 5 s no ha terminado.
+ */
+export function installProcessHandlers(proc: ProcessHooks, deps: ProcessHandlerDeps): void {
+  const { logger, clock } = deps;
 
   /* Una promesa rechazada sin capturar no debe tumbar el servidor entero (server.js:5162). */
-  process.on('unhandledRejection', (reason) => {
+  proc.on('unhandledRejection', (reason: unknown) => {
     logger.error({ err: reason }, 'promesa rechazada sin capturar');
   });
 
@@ -141,26 +166,32 @@ export async function main(): Promise<void> {
     clock.setTimeout(
       () => {
         logger.error('el apagado no terminó a tiempo: salida forzada');
-        process.exit(1);
+        proc.exit(1);
       },
       SHUTDOWN_TIMINGS.forceExitMs,
       { unref: true },
     );
-    server.stop().then(
-      () => process.exit(0),
+    deps.stop().then(
+      () => proc.exit(0),
       (error: unknown) => {
         logger.error({ err: error }, 'apagado con errores');
-        process.exit(1);
+        proc.exit(1);
       },
     );
   };
-  process.once('SIGTERM', () => shutdown('SIGTERM'));
-  process.once('SIGINT', () => shutdown('SIGINT'));
-  if (typeof process.send === 'function') {
-    process.on('message', (message) => {
+  proc.once('SIGTERM', () => shutdown('SIGTERM'));
+  proc.once('SIGINT', () => shutdown('SIGINT'));
+  if (typeof proc.send === 'function') {
+    proc.on('message', (message: unknown) => {
       if (message === 'shutdown') shutdown('ipc');
     });
   }
+}
+
+export async function main(): Promise<void> {
+  const server = await startServer();
+  const { logger, clock } = server.services;
+  installProcessHandlers(process, { logger, clock, stop: () => server.stop() });
 }
 
 /* Solo si se ejecuta como programa (el bundle de build.mjs o `tsx src/main.ts`),

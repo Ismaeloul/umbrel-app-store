@@ -1,0 +1,494 @@
+/* ==========================================================================
+   Centro de partido (dirección A «Luz de focos», bento; injertos B3, B5 y
+   C3; correcciones 2, 7 y 8 de eleccion.md). Tokens siempre; solo se animan
+   transform y opacity; hover solo con ratón de verdad; nada < 11 px.
+   ========================================================================== */
+
+.mc-host {
+  min-width: 0;
+  container: mc / inline-size;
+}
+.mc {
+  display: grid;
+  gap: var(--s-4);
+  min-width: 0;
+  padding-top: var(--s-2);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'score'
+    'sources'
+    'where'
+    'nerd';
+}
+.mc > .mc-score,
+.mc > .mc-score--skeleton {
+  grid-area: score;
+}
+.mc > .mc-sources {
+  grid-area: sources;
+}
+.mc > .mc-where {
+  grid-area: where;
+}
+.mc > .mc-nerd {
+  grid-area: nerd;
+}
+.mc > .empty {
+  grid-column: 1 / -1;
+}
+
+/* Bento: con sitio, marcador y «Dónde se emite» lado a lado (maqueta A). El
+   umbral va por el ancho REAL de la vista (con agenda y panel a la vez, el
+   centro de 1280 px mide ~500 px y no caben dos columnas). */
+@container mc (min-width: 620px) {
+  .mc {
+    grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+    grid-template-areas:
+      'score where'
+      'sources sources'
+      'nerd nerd';
+    align-items: start;
+  }
+  .mc--channel {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'score'
+      'sources'
+      'nerd';
+  }
+}
+
+/* ---- Marcador --------------------------------------------------------------- */
+.mc-score {
+  --ta: transparent;
+  --tb: transparent;
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  gap: var(--s-3);
+  min-width: 0;
+  overflow: hidden;
+  padding: var(--s-4) 18px var(--s-5);
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  box-shadow:
+    inset 0 0 0 1px var(--line-soft),
+    var(--shadow-1);
+  container: score / inline-size;
+}
+.mc-score--skeleton {
+  justify-items: center;
+}
+.mc-score__skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-6);
+}
+/* Los focos: la luz de los dos equipos detrás del panel. Solo cambia su
+   opacidad (en directo se encienden; con un gol, se inundan). */
+.mc-score__light {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background:
+    radial-gradient(60% 75% at 14% 58%, color-mix(in oklab, var(--ta) 30%, transparent), transparent 70%),
+    radial-gradient(60% 75% at 86% 58%, color-mix(in oklab, var(--tb) 24%, transparent), transparent 70%);
+  opacity: 0;
+  transition: opacity var(--dur-heroe) var(--ease-estandar);
+  pointer-events: none;
+}
+.mc-score.is-live .mc-score__light {
+  opacity: 0.7;
+}
+.mc-score.is-goal-home .mc-score__light,
+.mc-score.is-goal-away .mc-score__light {
+  opacity: 1;
+  transition-duration: var(--dur-rapido);
+}
+.mc-score__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  min-height: var(--tap);
+  margin: -6px -8px -8px 0;
+}
+.mc-score__kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-12);
+  font-weight: var(--wght-strong);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.mc-score.is-live .mc-score__kicker {
+  color: var(--live);
+}
+.mc-score__meta {
+  margin-top: -6px;
+  font-size: var(--fs-13);
+  line-height: var(--lh-snug);
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.mc-score__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s-2);
+}
+.mc-side {
+  display: grid;
+  justify-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+  text-align: center;
+}
+.mc-side__crest {
+  transition: transform var(--dur-heroe) var(--ease-heroe);
+}
+.mc-side.is-scoring .mc-side__crest {
+  transform: scale(1.14);
+}
+.mc-side__name {
+  max-width: 100%;
+  font-size: var(--fs-15);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+.mc-score__mid {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  min-width: 92px;
+}
+.mc-score__big {
+  display: flex;
+  align-items: center;
+  gap: 0.1em;
+  font-size: var(--fs-64);
+  line-height: 0.9;
+  font-weight: var(--wght-num);
+}
+.mc-score__big--time {
+  font-size: var(--fs-44);
+}
+.mc-score__sep {
+  color: var(--text-3);
+  font-weight: 500;
+}
+.mc-score__tbc {
+  font-size: var(--fs-15);
+  font-weight: var(--wght-strong);
+  color: var(--text-2);
+}
+.mc-score__when {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+  font-size: var(--fs-15);
+  font-weight: var(--wght-strong);
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.mc-score__when.is-live {
+  color: var(--live);
+}
+.mc-score__cover {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  min-width: 96px;
+  min-height: var(--tap);
+  padding: 10px 14px;
+  border-radius: var(--r-m);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  color: var(--text);
+}
+.mc-score__cover-text {
+  font-size: var(--fs-13);
+  font-weight: var(--wght-strong);
+}
+@media (hover: hover) and (pointer: fine) {
+  .mc-score__cover:hover {
+    box-shadow: inset 0 0 0 1px var(--line-strong);
+  }
+}
+/* Barras de censura (B5). */
+.mc-censor {
+  display: inline-grid;
+  grid-auto-flow: column;
+  gap: 10px;
+}
+.mc-censor i {
+  display: block;
+  width: 30px;
+  height: 40px;
+  border-radius: 8px;
+  background: var(--text-3);
+  opacity: 0.55;
+}
+/* Cifras que giran como una paleta (B5): al cambiar o al destapar. */
+.mc-flip.is-turning {
+  display: inline-flex;
+  transform-origin: 50% 50%;
+  animation: mc-flip var(--dur-heroe) var(--ease-heroe) both;
+}
+@keyframes mc-flip {
+  from {
+    opacity: 0;
+    transform: perspective(240px) rotateX(-90deg);
+  }
+}
+.mc-score__timeline {
+  display: grid;
+  gap: 6px;
+}
+.mc-score__marks {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--fs-12);
+  font-weight: var(--wght-strong);
+  color: var(--text-3);
+}
+.mc-score.is-done .mc-side__name {
+  color: var(--text-2);
+}
+@container score (min-width: 460px) {
+  .mc-score__big {
+    font-size: var(--fs-96);
+  }
+  .mc-score__big--time {
+    font-size: var(--fs-64);
+  }
+  .mc-censor i {
+    width: 44px;
+    height: 60px;
+  }
+}
+
+/* ---- Dónde se emite ------------------------------------------------------------- */
+.mc-where {
+  display: grid;
+  gap: var(--s-3);
+  align-content: start;
+  min-width: 0;
+  padding: var(--s-4) 18px;
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+.mc-where__title {
+  font-size: var(--fs-17);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+}
+.mc-where__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mc-where__chips li {
+  min-width: 0;
+  max-width: 100%;
+}
+.mc-where__meta,
+.mc-where__muted {
+  font-size: var(--fs-13);
+  line-height: var(--lh-snug);
+  color: var(--text-2);
+}
+/* Los atajos solo con ratón y teclado de verdad (en táctil no sirven). */
+.mc-where__keys {
+  display: none;
+}
+@media (hover: hover) and (pointer: fine) and (min-width: 768px) {
+  .mc-where__keys {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 8px 10px;
+    align-items: center;
+    margin: 4px 0 0;
+    font-size: var(--fs-caption, var(--fs-12));
+    color: var(--text-2);
+  }
+  .mc-where__key {
+    display: contents;
+  }
+  .mc-where__key dd {
+    margin: 0;
+  }
+}
+
+/* ---- Canal suelto --------------------------------------------------------------- */
+.mc-channel {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s-2) var(--s-4);
+  min-width: 0;
+  padding: var(--s-4) 18px;
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  box-shadow:
+    inset 0 0 0 1px var(--line-soft),
+    var(--shadow-1);
+  grid-area: score;
+}
+.mc-channel__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.mc-channel__kicker {
+  font-size: var(--fs-12);
+  font-weight: var(--wght-strong);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.mc-channel__title {
+  font-size: var(--fs-22);
+  line-height: var(--lh-tight);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: var(--tracking-head);
+  overflow-wrap: anywhere;
+}
+.mc-channel__title:focus-visible {
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+.mc-channel__meta {
+  font-size: var(--fs-13);
+  color: var(--text-2);
+}
+.mc-channel__play {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+@container mc (min-width: 520px) {
+  .mc-channel {
+    grid-template-columns: 64px minmax(0, 1fr) auto;
+  }
+  .mc-channel__play {
+    grid-column: auto;
+  }
+}
+
+/* ---- Datos técnicos ----------------------------------------------------------- */
+.mc-nerd {
+  min-width: 0;
+  border-radius: var(--r-l);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+.mc-nerd__summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 12px 0 16px;
+  border-radius: var(--r-l);
+  list-style: none;
+  cursor: pointer;
+}
+.mc-nerd__summary::-webkit-details-marker {
+  display: none;
+}
+.mc-nerd__label,
+.mc-nerd__title {
+  font-size: var(--fs-15);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  white-space: nowrap;
+}
+.mc-nerd__summary > svg {
+  flex: none;
+}
+.mc-nerd__brief {
+  margin-left: auto;
+  min-width: 0;
+  font-family: var(--mono);
+  font-stretch: 87.5%;
+  font-size: var(--fs-12);
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mc-nerd[open] .mc-nerd__brief {
+  display: none;
+}
+.mc-nerd__kbd {
+  margin-left: auto;
+}
+.mc-nerd__brief + .mc-nerd__kbd {
+  margin-left: 0;
+}
+@media (hover: none) {
+  .mc-nerd__kbd {
+    display: none;
+  }
+}
+.mc-nerd .nerd-stats,
+.mc-nerd__empty {
+  padding: 0 16px 16px;
+}
+.mc-nerd__empty {
+  font-size: var(--fs-13);
+  color: var(--text-2);
+}
+.mc-nerd--panel {
+  display: grid;
+  gap: var(--s-3);
+  padding-top: var(--s-4);
+}
+.mc-nerd__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+}
+
+/* ---- Panel lateral --------------------------------------------------------------- */
+.mc-aside {
+  display: grid;
+  gap: var(--s-5);
+  align-content: start;
+  min-width: 0;
+}
+.mc-aside__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--tap);
+}
+.mc-aside__title {
+  font-size: var(--fs-22);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Con movimiento reducido el gol es solo un fundido de color (C3). */
+  .mc-side.is-scoring .mc-side__crest {
+    transform: none;
+  }
+  .mc-side__crest {
+    transition: none;
+  }
+  .mc-flip.is-turning {
+    animation: ace-funde 150ms ease-out both;
+  }
+}

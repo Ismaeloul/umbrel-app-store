@@ -1,0 +1,63 @@
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  max-width: 100%;
+  padding: 0 10px;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-caption);
+  font-weight: var(--wght-strong);
+  font-stretch: var(--w-tight);
+  white-space: nowrap;
+  color: var(--text-2);
+  background: var(--line-soft);
+}
+.chip__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chip__count {
+  color: var(--text-3);
+}
+.chip--mine {
+  color: var(--accent-ink);
+  background: var(--accent-wash);
+}
+.chip--live {
+  color: var(--live);
+  background: transparent;
+  padding-inline: 0;
+}
+/* B3: continuo = en tu biblioteca; discontinuo = se buscará al reproducir. */
+.chip--solid {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  color: var(--text);
+}
+.chip--dashed {
+  background: transparent;
+  border: 1px dashed var(--line-strong);
+  color: var(--text-2);
+}
+.chip--button {
+  min-height: 32px;
+}
+/* Zona táctil de 44 aunque el chip mida 32. */
+.chip--button::before {
+  content: '';
+  position: absolute;
+  inset: -6px -2px;
+}
+.chip--button[aria-pressed='true'] {
+  color: var(--accent-ink);
+  background: var(--accent-wash);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent-edge) 55%, transparent);
+}
+.chip--button[aria-pressed='true'] .chip__count {
+  color: inherit;
+}
+.chip--button:disabled {
+  opacity: 0.55;
+}

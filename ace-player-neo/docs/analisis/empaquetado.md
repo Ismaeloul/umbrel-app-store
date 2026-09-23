@@ -431,7 +431,7 @@ está vacío. El Compose siempre lo define, así que esto último no rompe nada.
   `/icon-maskable-512.png`. Una futura ruta `/native/` quedaría cacheada si no se
   añade a `ES_DATO`.
 - **Solo se registra en contexto seguro** (`index.html:6147-6151`). Por
-  `http://192.168.1.188:7792` no hay SW; solo por HTTPS (o `localhost`).
+  `http://<IP-del-NAS>:7792` no hay SW; solo por HTTPS (o `localhost`).
 
 ### 5.2 manifest.webmanifest
 

@@ -4,12 +4,20 @@
   "version": "0.7.0",
   "type": "module",
   "description": "Web de Ace Player Neo v2 (Vite + React + TypeScript)",
+  "sideEffects": [
+    "**/*.css",
+    "./src/main.tsx",
+    "./src/**/demo.ts"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "test": "vitest run",
+    "size": "node scripts/size.mjs",
+    "icons": "node scripts/icons.mjs",
+    "capturas": "node scripts/capturas.mjs",
     "e2e": "playwright test"
   },
   "dependencies": {

@@ -1,0 +1,346 @@
+/* La interfaz del reproductor (PlayerDock) con Testing Library: panel del
+   vídeo, botón de directo con sus dos estados, capa de toque, menú «Más
+   opciones» con «Abrir en…», datos técnicos, atajos del registro central,
+   Media Session, línea de estado, mini-reproductor y, de punta a punta, un
+   play() de la API pública que acaba en el panel de error de este navegador
+   (jsdom no tiene MSE ni HLS). Sin red: fetch simulado. */
+
+import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createQueryClient, routeKey } from '../api/query.ts';
+import { resetMode, setMode } from '../api/mode.ts';
+import { playerPresence } from '../app/player-presence.ts';
+import { RouterProvider } from '../app/router.tsx';
+import { installShortcutListener, shortcutStore } from '../app/shortcuts.ts';
+import { clearStatus, statusStore } from '../notices/statusLine.ts';
+import { fixture, mockFetch } from '../test/fetch.ts';
+import {
+  hostNerdPanel,
+  INITIAL_PLAYER_STATE,
+  play,
+  playerStore,
+  resetPlayerApi,
+  type PlayerState,
+} from './api.ts';
+import PlayerDock from './index.tsx';
+import { madridToday } from './PlayerSurface.tsx';
+
+const HASH = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
+const ROUTE = { vista: 'partido' as const, id: null, canal: HASH };
+
+let net: ReturnType<typeof mockFetch>;
+let uninstall: () => void = () => {};
+
+function Providers({ children, client }: { children: ReactNode; client: QueryClient }) {
+  return (
+    <QueryClientProvider client={client}>
+      <RouterProvider initialSearch={`?vista=partido/canal/${HASH}`}>{children}</RouterProvider>
+    </QueryClientProvider>
+  );
+}
+
+function renderDock(
+  presentation: 'stage' | 'mini' = 'stage',
+  handlers = { onMinimize: vi.fn(), onExpand: vi.fn() },
+  client: QueryClient = createQueryClient(),
+) {
+  const root = document.createElement('div');
+  root.id = 'root';
+  document.body.appendChild(root);
+  const view = render(
+    <Providers client={client}>
+      <PlayerDock presentation={presentation} route={ROUTE} {...handlers} />
+    </Providers>,
+    { container: root },
+  );
+  return { ...view, handlers };
+}
+
+function setPlayer(patch: Partial<PlayerState>) {
+  act(() => {
+    playerStore.set((state) => ({ ...state, ...patch }));
+  });
+}
+
+function playing(patch: Partial<PlayerState> = {}): Partial<PlayerState> {
+  return {
+    phase: 'reproduciendo',
+    conn: 'activa',
+    channel: {
+      hash: HASH,
+      title: 'M+ Liga de Campeones',
+      subtitle: 'Fuente 1, Elcano',
+      lead: 'Fuente 1 verificada.',
+    },
+    started: true,
+    desiredPlaying: true,
+    live: { available: true, atLive: true, behindS: 1, delayS: 6 },
+    ...patch,
+  };
+}
+
+beforeEach(() => {
+  history.replaceState(null, '', '/');
+  resetMode();
+  setMode('live', 'bootstrap');
+  resetPlayerApi();
+  clearStatus();
+  playerPresence.set({ active: false, route: null, immersive: false });
+  net = mockFetch({
+    'GET /api/v1/library': fixture('libraryGet'),
+    'GET /api/v1/engine/status': fixture('engineStatus'),
+    [`GET /api/v1/channels/${HASH}/stream`]: fixture('channelStream'),
+    'POST /api/v1/library': fixture('libraryMutate'),
+  });
+  uninstall = installShortcutListener(window);
+  // jsdom no reproduce vídeo: play/pause/load mínimos.
+  vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(() => Promise.resolve());
+  vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+  vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
+});
+
+afterEach(() => {
+  uninstall();
+  net.restore();
+  resetMode();
+  shortcutStore.set([]);
+  playerStore.set(INITIAL_PLAYER_STATE);
+});
+
+describe('reproductor en grande', () => {
+  it('en reposo: «Sin señal», sin controles de reproducción y un <video> sin controles del sistema', () => {
+    const { container } = renderDock();
+    expect(screen.getByText('Sin señal')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Pausar' })).toBeNull();
+    const video = container.querySelector('video')!;
+    expect(video).toHaveAttribute('playsinline');
+    expect(video).not.toHaveAttribute('controls');
+  });
+
+  it('en reposo, los tres datos del panel (§8.1): motor, canales y partidos de HOY (en Madrid)', async () => {
+    const schedule = fixture<{ days: Array<{ date: string; matches: unknown[] }> }>(
+      'footballSchedule',
+    );
+    const match = schedule.days[0]!.matches[0]!;
+    // Hoy con 2 partidos y mañana con 1: cuenta solo los de hoy.
+    schedule.days = [
+      { date: madridToday(), matches: [match, match] },
+      { date: '2099-01-01', matches: [match] },
+    ];
+    net.restore();
+    net = mockFetch({
+      'GET /api/v1/library': fixture('libraryGet'),
+      'GET /api/v1/engine/status': { ...fixture<object>('engineStatus'), status: 'online' },
+    });
+    // La agenda ya la trajo (el reproductor no la pide: solo mira la caché).
+    const client = createQueryClient();
+    client.setQueryData(routeKey('footballSchedule'), schedule);
+    renderDock('stage', undefined, client);
+    const facts = await screen.findByRole('list', { name: 'Resumen' });
+    await waitFor(() => expect(within(facts).getAllByRole('listitem')).toHaveLength(3));
+    expect(within(facts).getByText('Motor listo')).toBeInTheDocument();
+    expect(within(facts).getByText(/^Hoy/)).toHaveTextContent('Hoy 2 partidos');
+    expect(within(facts).getByText(/^Canales/)).toHaveTextContent(/^Canales \d+$/);
+    expect(net.calls.some((call) => call.url.includes('/api/v1/football'))).toBe(false);
+  });
+
+  it('botón de directo: relleno en el borde, «Ir al directo · −34 s» por detrás y «Reanudar» en pausa', () => {
+    renderDock();
+    setPlayer(playing());
+    expect(screen.getByRole('button', { name: 'Ya en directo' })).toHaveAttribute(
+      'data-mode',
+      'live',
+    );
+    setPlayer({ live: { available: true, atLive: false, behindS: 34, delayS: 40 } });
+    const behind = screen.getByRole('button', {
+      name: 'Ir al directo (vas 34 segundos por detrás)',
+    });
+    expect(behind).toHaveTextContent('Ir al directo · −34 s');
+    expect(behind).toHaveAttribute('data-mode', 'behind');
+    setPlayer({
+      phase: 'pausado',
+      desiredPlaying: false,
+      live: { available: true, atLive: true, behindS: 0, delayS: 6 },
+    });
+    expect(screen.getByRole('button', { name: 'Reanudar en directo' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reproducir' })).toBeInTheDocument();
+  });
+
+  it('controles: pausa, −30 s, silencio y minimizar; y la línea de estado bajo el vídeo', () => {
+    // Sin matchMedia (jsdom) cuenta como móvil: detener va en «Más opciones», como en la maqueta.
+    const { handlers } = renderDock();
+    setPlayer(playing());
+    expect(screen.getByRole('button', { name: 'Pausar' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Detener' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Minimizar el reproductor' }));
+    expect(handlers.onMinimize).toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Retroceder 30 segundos' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Silenciar' })).toBeInTheDocument();
+    expect(statusStore.get().base).toEqual({
+      text: 'Fuente 1 verificada. Vas en directo.',
+      signal: 'ok',
+      meta: '6 s de retraso',
+    });
+  });
+
+  it('autoplay bloqueado: «Toca para reproducir»', () => {
+    renderDock();
+    setPlayer(playing({ phase: 'bloqueado', started: false, conn: 'arrancando' }));
+    expect(screen.getByRole('button', { name: /Toca para reproducir/ })).toBeInTheDocument();
+  });
+
+  it('error: panel en rojo con su frase y «Reintentar»', () => {
+    renderDock();
+    setPlayer({
+      ...playing(),
+      phase: 'error',
+      conn: 'error',
+      idleReason: 'fallo',
+      message: 'Este canal no tiene pares ahora mismo. Puede que no esté emitiendo todavía.',
+    });
+    expect(screen.getByText('No se pudo abrir')).toBeInTheDocument();
+    expect(screen.getByText(/no tiene pares ahora mismo/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+    // Sin nada que reproducir, fuera los controles de abajo (Detener sigue en el menú).
+    expect(screen.queryByRole('button', { name: /Directo|Reanudar|directo/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Retroceder 30 segundos' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Más opciones' })).toBeInTheDocument();
+  });
+
+  it('«Más opciones»: abrir en AceStream, copiar URL para VLC, enlace y hash; y los datos técnicos', async () => {
+    renderDock();
+    setPlayer(playing({ engine: 'mpegts', protocol: 'mpegts' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Más opciones' }));
+    const menu = await screen.findByRole('menu', { name: 'Opciones del reproductor' });
+    for (const label of [
+      'Abrir en la app de AceStream',
+      'Copiar URL del stream (VLC)',
+      'Copiar enlace acestream://',
+      'Copiar hash',
+      'Retroceder 30 s',
+      'Detener',
+    ])
+      expect(
+        within(menu).getByRole('menuitem', { name: new RegExp(label.replace(/[()+]/g, '\\$&')) }),
+      ).toBeInTheDocument();
+    // Táctil (jsdom no tiene puntero fino): sin las teclas, que ahí no sirven.
+    expect(within(menu).queryByText('K')).toBeNull();
+    fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: /Datos técnicos/ }));
+    // Móvil en vertical sin vista que los enseñe: en una hoja (no empuja la línea de estado).
+    const panel = await screen.findByRole('dialog', { name: 'Datos técnicos' });
+    expect(within(panel).getByText('mpegts.js')).toBeInTheDocument();
+    expect(within(panel).getByText(HASH)).toBeInTheDocument();
+  });
+
+  it('si el centro de partido ya enseña los datos técnicos (useHostNerdPanel), el reproductor no saca los suyos', async () => {
+    const release = hostNerdPanel();
+    try {
+      renderDock();
+      setPlayer(playing({ engine: 'mpegts', nerdOpen: true }));
+      await act(async () => {});
+      expect(screen.queryByRole('dialog', { name: 'Datos técnicos' })).toBeNull();
+      expect(screen.queryByRole('region', { name: 'Datos técnicos' })).toBeNull();
+    } finally {
+      release();
+    }
+    // Al irse la vista, vuelven a salir del reproductor.
+    expect(await screen.findByRole('dialog', { name: 'Datos técnicos' })).toBeInTheDocument();
+  });
+
+  it('la estrella sabe si el canal está en favoritos', async () => {
+    renderDock();
+    setPlayer(playing());
+    expect(await screen.findByRole('button', { name: 'Quitar de favoritos' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('atajos en el registro central (salen en la ayuda «?»): espacio/K, M, J, F, P, S, G y ← →', () => {
+    renderDock();
+    const ids = shortcutStore.get().map((entry) => entry.id);
+    for (const id of [
+      'reproductor.pausa',
+      'reproductor.silencio',
+      'reproductor.atras',
+      'reproductor.completa',
+      'reproductor.pip',
+      'reproductor.nerd',
+      'reproductor.favorito',
+      'reproductor.anterior',
+      'reproductor.siguiente',
+    ])
+      expect(ids).toContain(id);
+    expect(shortcutStore.get().find((entry) => entry.id === 'reproductor.pausa')?.group).toBe(
+      'Reproductor',
+    );
+
+    // S abre los datos técnicos solo si hay canal.
+    fireEvent.keyDown(window, { key: 's' });
+    expect(playerStore.get().nerdOpen).toBe(false);
+    setPlayer(playing());
+    fireEvent.keyDown(window, { key: 's' });
+    expect(playerStore.get().nerdOpen).toBe(true);
+  });
+
+  it('Media Session con título, portada y acciones', () => {
+    const setActionHandler = vi.fn();
+    const mediaSession = { metadata: null as unknown, playbackState: 'none', setActionHandler };
+    Object.defineProperty(navigator, 'mediaSession', { configurable: true, value: mediaSession });
+    class FakeMetadata {
+      constructor(readonly init: { title: string; artist: string; artwork: unknown[] }) {}
+    }
+    vi.stubGlobal('MediaMetadata', FakeMetadata);
+    try {
+      renderDock();
+      setPlayer(playing());
+      const actions = setActionHandler.mock.calls.map(([action]) => action);
+      expect(actions).toEqual(expect.arrayContaining(['play', 'pause', 'stop', 'seekbackward']));
+      expect((mediaSession.metadata as FakeMetadata).init).toMatchObject({
+        title: 'M+ Liga de Campeones',
+        artist: 'Fuente 1, Elcano',
+      });
+      expect(mediaSession.playbackState).toBe('playing');
+    } finally {
+      vi.unstubAllGlobals();
+      Reflect.deleteProperty(navigator, 'mediaSession');
+    }
+  });
+});
+
+describe('mini-reproductor «Sonando»', () => {
+  it('canal, segunda línea sin marcador, pausa y detener; tocarlo vuelve al vídeo', () => {
+    const { handlers } = renderDock('mini');
+    setPlayer(playing());
+    expect(screen.getByText('Sonando')).toBeInTheDocument();
+    expect(screen.getByText('M+ Liga de Campeones')).toBeInTheDocument();
+    expect(screen.getByText('Fuente 1, Elcano')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Volver al vídeo: M+ Liga de Campeones' }));
+    expect(handlers.onExpand).toHaveBeenCalled();
+    act(() => playerPresence.set({ active: true, route: ROUTE, immersive: false }));
+    fireEvent.click(screen.getByRole('button', { name: 'Detener la reproducción' }));
+    expect(playerStore.get().phase).toBe('idle');
+    expect(playerPresence.get().active).toBe(false);
+  });
+});
+
+describe('de punta a punta', () => {
+  it('play() de la API pública: pide la URL, y en un navegador sin MSE ni HLS lo dice en el panel', async () => {
+    renderDock();
+    await waitFor(() => expect(playerStore.get().conn).toBe('idle'));
+    act(() => {
+      play({ hash: HASH, title: 'DAZN 1' }, { origin: 'library', route: ROUTE });
+    });
+    expect(playerPresence.get()).toMatchObject({ active: true, route: ROUTE });
+    await waitFor(() =>
+      expect(
+        screen.getByText('Este navegador no puede reproducir este canal.'),
+      ).toBeInTheDocument(),
+    );
+    const call = net.calls.find((c) => c.url.includes('/stream'))!;
+    // jsdom no tiene MSE: se pide el remux, como en un iPhone.
+    expect(new URL(call.url, 'http://x').searchParams.get('client')).toBe('ios');
+  });
+});

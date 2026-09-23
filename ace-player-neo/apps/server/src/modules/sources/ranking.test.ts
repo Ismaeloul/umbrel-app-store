@@ -171,6 +171,54 @@ describe('marca, familia y procedencia (B-042, B-043)', () => {
     expect(canalEsGenerico('DAZN', null)).toBe(false);
   });
 
+  /* Verificación del backend (23-09-2026): B-042 cita este caso con sus
+     números ("comprobado con mergeResolutionCandidates de la 0.6.59") y solo
+     lo cubría el contraste aleatorio, que usa 74 y no 72. */
+  it('la procedencia va antes que la puntuación: una m3u a 72 antes que el buscador a 100 (B-042)', () => {
+    const lista = [
+      señalDe(1, 'LIGA DE CAMPEONES => PUBLIC ACE', {
+        source: 'acestream',
+        score: 100,
+        availability: 1,
+      }),
+      señalDe(2, 'Liga Campeones 1080p', { source: 'm3u', score: 72 }),
+    ];
+    const salida = mergeResolutionCandidates(lista);
+    expect(salida.map((c) => [c.source, c.score])).toEqual([
+      ['m3u', 72],
+      ['acestream', 100],
+    ]);
+    expect(salida).toEqual(original.mergeResolutionCandidates?.(lista));
+  });
+
+  it('la fiabilidad aprendida solo desempata si difiere en más de 0,02 (B-043)', () => {
+    /* Dos hashes del mismo nivel de nombre (100 y 99), procedencia y
+       disponibilidad: el orden lo pone la fiabilidad si la diferencia pasa de
+       0,02; si no, la puntuación, como en server.js:4069-4079. */
+    const casi = normalizeSourceStats({
+      hashes: {
+        ['1'.repeat(40)]: { intentos: 200, exitos: 100, ultimo: FAKE_CLOCK_EPOCH },
+        ['2'.repeat(40)]: { intentos: 200, exitos: 101, ultimo: FAKE_CLOCK_EPOCH },
+      },
+    });
+    const lejos = normalizeSourceStats({
+      hashes: {
+        ['1'.repeat(40)]: { intentos: 40, exitos: 10, ultimo: FAKE_CLOCK_EPOCH },
+        ['2'.repeat(40)]: { intentos: 40, exitos: 30, ultimo: FAKE_CLOCK_EPOCH },
+      },
+    });
+    const lista = [señalDe(1, 'Canal A', { score: 100 }), señalDe(2, 'Canal B', { score: 99 })];
+    for (const stats of [casi, lejos]) {
+      expect(mergeResolutionCandidates(lista, { sourceStats: stats })).toEqual(
+        original.mergeResolutionCandidates?.(lista, { sourceStats: stats }),
+      );
+    }
+    // 100/200 frente a 101/200: menos de 0,02 de diferencia → decide la puntuación (100 antes que 99)
+    expect(mergeResolutionCandidates(lista, { sourceStats: casi })[0]?.title).toBe('Canal A');
+    // 10/40 frente a 30/40: la fiabilidad manda → primero el 2
+    expect(mergeResolutionCandidates(lista, { sourceStats: lejos })[0]?.title).toBe('Canal B');
+  });
+
   it('orden de procedencia propio, familia sin exacto y la marca detrás', () => {
     const custom = mergeResolutionCandidates(
       [

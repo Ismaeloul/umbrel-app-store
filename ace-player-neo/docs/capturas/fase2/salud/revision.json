@@ -1,0 +1,154 @@
+[
+  {
+    "file": "salud-movil-oscuro",
+    "problems": []
+  },
+  {
+    "file": "dispositivos-movil-oscuro",
+    "problems": []
+  },
+  {
+    "file": "dispositivos-codigo-movil-oscuro",
+    "problems": []
+  },
+  {
+    "file": "ayuda-movil-oscuro",
+    "problems": []
+  },
+  {
+    "file": "errores-consola-movil-oscuro",
+    "problems": []
+  },
+  {
+    "file": "salud-movil-claro",
+    "problems": []
+  },
+  {
+    "file": "dispositivos-movil-claro",
+    "problems": []
+  },
+  {
+    "file": "dispositivos-codigo-movil-claro",
+    "problems": []
+  },
+  {
+    "file": "ayuda-movil-claro",
+    "problems": []
+  },
+  {
+    "file": "errores-consola-movil-claro",
+    "problems": []
+  },
+  {
+    "file": "salud-escritorio-oscuro",
+    "problems": []
+  },
+  {
+    "file": "dispositivos-escritorio-oscuro",
+    "problems": []
+  },
+  {
+    "file": "dispositivos-codigo-escritorio-oscuro",
+    "problems": []
+  },
+  {
+    "file": "ayuda-escritorio-oscuro",
+    "problems": []
+  },
+  {
+    "file": "errores-consola-escritorio-oscuro",
+    "problems": []
+  },
+  {
+    "file": "salud-escritorio-claro",
+    "problems": []
+  },
+  {
+    "file": "dispositivos-escritorio-claro",
+    "problems": []
+  },
+  {
+    "file": "dispositivos-codigo-escritorio-claro",
+    "problems": []
+  },
+  {
+    "file": "ayuda-escritorio-claro",
+    "problems": []
+  },
+  {
+    "file": "errores-consola-escritorio-claro",
+    "problems": []
+  },
+  {
+    "file": "salud 360×800",
+    "problems": []
+  },
+  {
+    "file": "dispositivos 360×800",
+    "problems": []
+  },
+  {
+    "file": "salud 430×932",
+    "problems": []
+  },
+  {
+    "file": "dispositivos 430×932",
+    "problems": []
+  },
+  {
+    "file": "salud 844×390",
+    "problems": []
+  },
+  {
+    "file": "dispositivos 844×390",
+    "problems": []
+  },
+  {
+    "file": "salud 932×430",
+    "problems": []
+  },
+  {
+    "file": "dispositivos 932×430",
+    "problems": []
+  },
+  {
+    "file": "salud 768×1024",
+    "problems": []
+  },
+  {
+    "file": "dispositivos 768×1024",
+    "problems": []
+  },
+  {
+    "file": "salud 1024×1366",
+    "problems": []
+  },
+  {
+    "file": "dispositivos 1024×1366",
+    "problems": []
+  },
+  {
+    "file": "salud 1280×800",
+    "problems": []
+  },
+  {
+    "file": "dispositivos 1280×800",
+    "problems": []
+  },
+  {
+    "file": "salud 1920×1080",
+    "problems": []
+  },
+  {
+    "file": "dispositivos 1920×1080",
+    "problems": []
+  },
+  {
+    "file": "salud 2560×1440",
+    "problems": []
+  },
+  {
+    "file": "dispositivos 2560×1440",
+    "problems": []
+  }
+]

@@ -1,0 +1,55 @@
+.empty {
+  display: grid;
+  justify-items: center;
+  gap: var(--s-3);
+  padding: var(--s-8) var(--s-5);
+  text-align: center;
+}
+.empty__art {
+  width: 104px;
+  height: 104px;
+  margin-bottom: var(--s-2);
+}
+.empty__line {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 2.5;
+}
+.empty__lens {
+  fill: var(--accent-wash);
+  stroke: color-mix(in oklab, var(--accent-edge) 50%, transparent);
+  stroke-width: 1.5;
+}
+.empty__play {
+  fill: var(--accent-ink);
+}
+.empty__mark {
+  fill: none;
+  stroke: var(--fail);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.empty--error .empty__lens {
+  fill: color-mix(in oklab, var(--fail) 12%, transparent);
+  stroke: color-mix(in oklab, var(--fail) 40%, transparent);
+}
+.empty__title {
+  font-size: var(--fs-22);
+  line-height: var(--lh-snug);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.empty__text {
+  max-width: 44ch;
+  color: var(--text-2);
+  text-wrap: pretty;
+}
+.empty__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+}

@@ -18,12 +18,13 @@ import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { parse } from 'yaml';
-import { ASSAULT_PAYLOADS, judgeOutcome } from './lib/blindaje.mjs';
+import { ASSAULT_PAYLOADS, RAW_SOCKET_PAYLOADS, judgeOutcome } from './lib/blindaje.mjs';
 
 const MONOREPO_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const COMPOSE_FILE = path.join(MONOREPO_DIR, 'deploy', 'umbrel', 'docker-compose.yml');
@@ -157,6 +158,87 @@ function rawOnce(port, rawPath, options = {}) {
     request.on('timeout', () => request.destroy(new Error(`Plazo agotado: ${rawPath}`)));
     request.on('error', reject);
     request.end(options.body);
+  });
+}
+
+/**
+ * Petición escrita a mano por un socket: la línea de petición va tal cual,
+ * con bytes que `http.request` rechaza (tabuladores, controles, "#", formas
+ * absolutas raras). Reintenta como `raw` si la conexión se corta sin respuesta.
+ * @param {number} port
+ * @param {string} target
+ * @returns {Promise<RawResponse>}
+ */
+async function rawSocket(port, target) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await rawSocketOnce(port, target);
+    } catch (error) {
+      if (attempt >= 4) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 200 * attempt));
+    }
+  }
+}
+
+/**
+ * @param {number} port
+ * @param {string} target
+ * @returns {Promise<RawResponse>}
+ */
+function rawSocketOnce(port, target) {
+  return new Promise((resolve, reject) => {
+    const started = performance.now();
+    const socket = net.connect({ host: '127.0.0.1', port });
+    /** @type {Buffer[]} */
+    const chunks = [];
+    socket.setTimeout(10_000, () =>
+      socket.destroy(new Error(`Plazo agotado: ${JSON.stringify(target)}`)),
+    );
+    socket.on('data', (chunk) => chunks.push(chunk));
+    socket.on('error', reject);
+    socket.on('close', () => {
+      const text = Buffer.concat(chunks).toString('latin1');
+      const status = Number(/^HTTP\/1\.[01] (\d{3})/.exec(text)?.[1] ?? 0);
+      // Sin respuesta (conexión cerrada a secas): se reintenta.
+      if (!status) {
+        reject(new Error(`sin respuesta HTTP: ${JSON.stringify(target)}`));
+        return;
+      }
+      const [head = '', ...rest] = text.split('\r\n\r\n');
+      /** @type {Record<string, string>} */
+      const headers = {};
+      for (const line of head.split('\r\n').slice(1)) {
+        const colon = line.indexOf(':');
+        if (colon > 0)
+          headers[line.slice(0, colon).trim().toLowerCase()] = line.slice(colon + 1).trim();
+      }
+      // El cuerpo puede venir troceado (chunked): basta con el JSON del eco.
+      const body = rest.join('\r\n\r\n');
+      resolve({
+        status,
+        headers,
+        body: /\{[\s\S]*\}/.exec(body)?.[0] ?? body,
+        firstChunkMs: -1,
+        totalMs: performance.now() - started,
+      });
+    });
+    socket.write(
+      `GET ${target} HTTP/1.1\r\nHost: umbrel.local\r\nX-Ace-Origin: web\r\n` +
+        'X-Request-Id: puesto-por-el-cliente\r\nConnection: close\r\n\r\n',
+      'latin1',
+    );
+  });
+}
+
+/** @param {number} port @param {string} target */
+async function expectRawShielded(port, target) {
+  const response = await rawSocket(port, target);
+  const echo = echoOf(response.body);
+  return judgeOutcome({
+    status: response.status,
+    gatewayLogin: response.headers['x-pasarela-falsa'] === 'login',
+    service: echo.service,
+    origin: echo.headers?.['x-ace-origin'],
   });
 }
 
@@ -546,6 +628,23 @@ async function runMatrix(nginxPort, bareNginxPort, gatewayPort) {
     for (const payload of payloads) {
       await check(group, `${payload.path} (${payload.why})`, () =>
         expectShielded(port, payload.path),
+      );
+    }
+  }
+
+  // Las que solo caben escritas a mano en el socket (docs/seguridad.md §3.4):
+  // por los tres caminos, porque o las rechaza el parser (400) o acaban como
+  // native incluso sin la capa 1.
+  /** @type {[string, number][]} */
+  const rawAssaults = [
+    ['asalto crudo: pasarela sin login', gatewayPort],
+    ['asalto crudo: nginx directo', nginxPort],
+    ['asalto crudo: nginx sin capa 1', bareNginxPort],
+  ];
+  for (const [group, port] of rawAssaults) {
+    for (const payload of RAW_SOCKET_PAYLOADS) {
+      await check(group, `${JSON.stringify(payload.target)} (${payload.why})`, () =>
+        expectRawShielded(port, payload.target),
       );
     }
   }

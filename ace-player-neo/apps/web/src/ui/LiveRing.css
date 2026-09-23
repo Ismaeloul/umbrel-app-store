@@ -1,0 +1,120 @@
+/* La caja mide 1,16 × el anillo y recorta: la onda nunca sale de su sitio. */
+.ring-box {
+  --p: 0;
+  --d: 50px;
+  display: inline-grid;
+  place-items: center;
+  width: calc(var(--d) * 1.16);
+  height: calc(var(--d) * 1.16);
+  flex: none;
+  overflow: clip;
+  border-radius: 50%;
+}
+.ring {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--d);
+  height: var(--d);
+  border-radius: 50%;
+  color: var(--live);
+  font-size: var(--fs-17);
+  line-height: 1;
+}
+.ring-box--compact .ring {
+  font-size: var(--fs-13);
+}
+.ring-box--card .ring {
+  font-size: var(--fs-15);
+}
+/* Arco de progreso: conic-gradient recortado en anillo (no se anima: cambia
+   con el minuto, una vez por minuto). */
+.ring::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--live) calc(var(--p) * 1turn),
+    color-mix(in oklab, var(--text-3) 38%, transparent) 0
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+}
+.ring-box--compact .ring::before {
+  -webkit-mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 2.5px),
+    #000 calc(100% - 2.5px)
+  );
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2.5px));
+}
+/* Muesca del descanso, abajo (el minuto 45 queda justo ahí). */
+.ring::after {
+  content: '';
+  position: absolute;
+  left: calc(50% - 1px);
+  bottom: -1px;
+  width: 2px;
+  height: 6px;
+  border-radius: 1px;
+  background: var(--text-2);
+}
+.ring__wave {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--live);
+  pointer-events: none;
+  --onda-max: 1.15;
+  animation: ace-onda var(--dur-pulse) var(--ease-out) infinite;
+}
+.ring__text {
+  position: relative;
+}
+.ring__text--word {
+  font-size: var(--fs-11);
+  font-weight: var(--wght-strong);
+  font-stretch: var(--w-tight);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ring__wave {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+/* ---- Punto de «En directo» ------------------------------------------------- */
+/* Caja de 18 px que recorta: el anillo late dentro y no pisa el texto vecino. */
+.live-dot {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  overflow: clip;
+  border-radius: 50%;
+}
+.live-dot i {
+  position: relative;
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--live);
+}
+.live-dot i::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 1.5px solid var(--live);
+  --onda-max: 1.45;
+  animation: ace-onda var(--dur-pulse) var(--ease-out) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-dot i::after {
+    animation: none;
+    opacity: 0.45;
+  }
+}

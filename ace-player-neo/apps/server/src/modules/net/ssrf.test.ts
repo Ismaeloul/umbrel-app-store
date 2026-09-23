@@ -225,6 +225,38 @@ describe('resolveFetchAddresses (server.js:1310-1324)', () => {
     expect(resolver.lookup).not.toHaveBeenCalled();
   });
 
+  it('revisión de seguridad (docs/seguridad.md): más formas de escribir una IP interna', async () => {
+    /* Todas pasan por el parser WHATWG de new URL(), que las normaliza antes
+       del filtro: puntos anchos, dígitos rodeados, %XX en el host, v4
+       "traducida" (::ffff:0:0/96), NAT64 y los nombres de contenedor de
+       Docker (una sola etiqueta o con "_"). */
+    const resolver = resolverOf({});
+    for (const url of [
+      'http://127。0。0。1/',
+      'http://①②⑦.0.0.1/',
+      'http://%31%32%37.0.0.1/',
+      'http://0x7f.1/',
+      'http://017700000001/',
+      'http://0.0.0.0:3000/',
+      'http://[::]/',
+      'http://[0:0:0:0:0:ffff:127.0.0.1]/',
+      'http://[::ffff:0:7f00:1]/',
+      'http://[::ffff:a00:1]/',
+      'http://[64:ff9b::a9fe:a9fe]/',
+      'http://169.254.169.254/latest/meta-data/',
+      'http://100.100.100.100/',
+      'http://acestream:6878/',
+      'http://ismaeloul-ace-player-neo_storage_1:3000/',
+      'http://host.docker.internal:11434/',
+      'http://localhost./',
+    ]) {
+      expect(await codeOf(resolveFetchAddresses(new URL(url), resolver, false)), url).toBe(
+        'private_url',
+      );
+    }
+    expect(resolver.lookup).not.toHaveBeenCalled();
+  });
+
   it('una IP literal pública se usa tal cual (sin DNS)', async () => {
     const resolver = resolverOf({});
     await expect(

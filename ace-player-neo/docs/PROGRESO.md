@@ -157,3 +157,5 @@ Además, yo (orquestador): pruebas contra el motor real en Docker local
 (`analisis/motor-real.md`) y decisiones D1-D7.
 
 - 07:45: Isma ve las capturas de A, B y C y **confirma la A «Luz de focos»**.
+
+- 09:13: cuota reiniciada. Relanzo el workflow como reanudación (`wf_ad883ce2-ded`): los 2 verificadores del backend y el armazón B0 retoman lo que dejaron sin commitear; después las 5 vistas, 3 a la vez.

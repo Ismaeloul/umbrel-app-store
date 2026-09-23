@@ -1,0 +1,30 @@
+/* Hoja «Reproducir otro hash». */
+.paste {
+  display: grid;
+  gap: var(--s-3);
+  justify-items: start;
+}
+.paste > .field {
+  width: 100%;
+}
+.paste__eyebrow {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+.paste__eyebrow strong {
+  color: var(--text);
+  font-weight: var(--wght-strong);
+}
+.paste__clear {
+  flex: none;
+  margin-right: -6px;
+}
+.paste__ok {
+  max-width: 100%;
+  color: var(--ok-ink);
+  font-size: var(--fs-13);
+  overflow-wrap: anywhere;
+}
+.paste__ok code {
+  color: var(--text-2);
+}

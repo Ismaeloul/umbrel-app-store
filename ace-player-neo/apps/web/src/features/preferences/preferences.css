@@ -1,0 +1,105 @@
+/* Hoja «Tu agenda». Tokens y componentes del sistema; solo el orden propio. */
+
+.prefs-eyebrow {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--accent-ink);
+  font-size: var(--fs-label);
+  font-weight: var(--wght-strong);
+  font-stretch: var(--w-tight);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.prefs-lede {
+  display: block;
+  font-size: var(--fs-15);
+  line-height: var(--lh-text);
+}
+
+.prefs-body {
+  display: grid;
+  gap: var(--s-6);
+}
+
+.prefs-section {
+  display: grid;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.prefs-section__head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--s-3);
+  align-items: start;
+}
+.prefs-section__n {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-s);
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+  font-size: var(--fs-13);
+  font-weight: var(--wght-num);
+  font-stretch: var(--w-num);
+}
+.prefs-section__title {
+  font-size: var(--fs-17);
+  font-weight: 720;
+  font-stretch: var(--w-head);
+  line-height: var(--lh-snug);
+}
+.prefs-section__hint {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+.prefs-section__message {
+  min-height: 1lh;
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+}
+.prefs-section__message:empty {
+  display: none;
+}
+
+.prefs-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  min-width: 0;
+}
+/* Los chips de preferencias son botones de 32 px con zona de 44: entre filas
+   hace falta aire para que las zonas no se pisen. */
+.prefs-chips {
+  row-gap: 12px;
+}
+.prefs-chips .chip {
+  position: relative;
+  max-width: 100%;
+}
+.prefs-flag {
+  margin-right: 6px;
+  font-size: 1.05em;
+  line-height: 1;
+}
+
+.prefs-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--s-2);
+  align-items: center;
+}
+
+.prefs-note {
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-m);
+  background: var(--bg-sunk);
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  line-height: var(--lh-text);
+}
+.prefs-note[data-tone='error'] {
+  color: var(--fail-ink);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--fail) 45%, transparent);
+}

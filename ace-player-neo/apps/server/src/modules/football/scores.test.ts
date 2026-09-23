@@ -15,7 +15,7 @@ import {
   scoresCache,
   teamSimilarity,
 } from './legacy-exports.js';
-import { espnDateRange } from './scores.js';
+import { computeLiveScores, espnDateRange } from './scores.js';
 import { createFootball, fixture } from './test-support.js';
 
 const MIN = 60 * 1000;
@@ -282,5 +282,117 @@ describe('getLiveScores del servicio (api.md §4.13, B-128, B-130, B-132)', () =
 
   it('la fachada sin servicio no puede dar marcadores', async () => {
     await expect(getLiveScores()).rejects.toMatchObject({ code: 'not_implemented' });
+  });
+});
+
+/* Verificación del backend (23-09-2026): el ±45 min de deriva, el "uno de los
+   dos equipos tiene que casar claro" y el tope de 8 ligas de B-128/B-130/B-131
+   solo se veían a través del fixture de ESPN, que siempre casa. Aquí se prueban
+   los bordes con eventos hechos a mano sobre `computeLiveScores`
+   (server.js:2276-2337). */
+describe('computeLiveScores: deriva de ±45 min, ancla de 0,6 y tope de 8 ligas (B-130, B-131)', () => {
+  const SAQUE = Date.UTC(2026, 0, 1, 20, 0);
+  const evento = (start: number, home: string, away: string, score = ['2', '1']) => ({
+    date: new Date(start).toISOString(),
+    status: { displayClock: "30'", type: { state: 'in', shortDetail: "30'" } },
+    competitions: [
+      {
+        competitors: [
+          { homeAway: 'home', score: score[0], team: { displayName: home } },
+          { homeAway: 'away', score: score[1], team: { displayName: away } },
+        ],
+      },
+    ],
+  });
+  const agenda = (matches: Record<string, unknown>[]) => ({
+    days: [{ date: '2026-01-01', matches }],
+  });
+  function contexto(events: Record<string, unknown[]>) {
+    const pedidas: string[] = [];
+    const ctx = {
+      cache: new Map(),
+      now: () => SAQUE + 30 * MIN,
+      nowIso: () => new Date(SAQUE + 30 * MIN).toISOString(),
+      fetchText: async (url: string) => {
+        pedidas.push(url);
+        const liga = /soccer\/([^/]+)\/scoreboard/.exec(url)?.[1] ?? '';
+        return JSON.stringify({ events: events[liga] ?? [] });
+      },
+    };
+    return { ctx, pedidas };
+  }
+
+  it('un evento a 44 min del saque casa; a 46 min, no (es otro partido)', async () => {
+    const partido = {
+      id: 'm1',
+      home: 'Real Madrid',
+      away: 'Sevilla',
+      competition: 'LaLiga',
+      start: SAQUE,
+    };
+    const cerca = contexto({ 'esp.1': [evento(SAQUE + 44 * MIN, 'Real Madrid', 'Sevilla')] });
+    const lejos = contexto({ 'esp.1': [evento(SAQUE - 46 * MIN, 'Real Madrid', 'Sevilla')] });
+    expect((await computeLiveScores(cerca.ctx, agenda([partido]))).scores).toHaveProperty('m1');
+    expect((await computeLiveScores(lejos.ctx, agenda([partido]))).scores).toEqual({});
+  });
+
+  it('dos parecidos flojos no valen: al menos un equipo tiene que casar con 0,6', async () => {
+    const partido = {
+      id: 'm2',
+      home: 'Real Madrid',
+      away: 'Real Betis',
+      competition: 'LaLiga',
+      start: SAQUE,
+    };
+    // "Real Sociedad"/"Real Oviedo" comparten solo "Real" con cada uno: 0,5 los
+    // dos. La media (0,5) SÍ llega al mínimo de 0,5, así que lo único que lo
+    // descarta es el ancla de 0,6 (server.js:2315).
+    const flojo = contexto({ 'esp.1': [evento(SAQUE, 'Real Sociedad', 'Real Oviedo')] });
+    expect(teamSimilarity('Real Madrid', 'Real Sociedad')).toBe(0.5);
+    expect(teamSimilarity('Real Betis', 'Real Oviedo')).toBe(0.5);
+    expect((await computeLiveScores(flojo.ctx, agenda([partido]))).scores).toEqual({});
+    // Con un equipo claro (1) y el otro flojo (0,5) sí casa, con confianza 0,75.
+    const claro = contexto({ 'esp.1': [evento(SAQUE, 'Real Madrid', 'Real Oviedo')] });
+    expect((await computeLiveScores(claro.ctx, agenda([partido]))).scores).toMatchObject({
+      m2: { home: 2, away: 1, confidence: 0.75 },
+    });
+  });
+
+  it('la deriva de 45 min exactos todavía casa (el corte es "más de 45")', async () => {
+    const partido = {
+      id: 'm3',
+      home: 'Real Madrid',
+      away: 'Sevilla',
+      competition: 'LaLiga',
+      start: SAQUE,
+    };
+    const justo = contexto({ 'esp.1': [evento(SAQUE - 45 * MIN, 'Real Madrid', 'Sevilla')] });
+    expect((await computeLiveScores(justo.ctx, agenda([partido]))).scores).toHaveProperty('m3');
+  });
+
+  it('como mucho 8 ligas por consulta, en el orden en que aparecen', async () => {
+    const competiciones = [
+      'LaLiga',
+      'LaLiga Hypermotion',
+      'Copa del Rey',
+      'Premier League',
+      'Championship',
+      'Serie A Italiana',
+      'Bundesliga',
+      'Ligue 1',
+      'Eredivisie',
+    ];
+    const partidos = competiciones.map((competition, index) => ({
+      id: `m${index}`,
+      home: `Local ${index}`,
+      away: `Visitante ${index}`,
+      competition,
+      start: SAQUE,
+    }));
+    const { ctx, pedidas } = contexto({});
+    const result = await computeLiveScores(ctx, agenda(partidos));
+    expect(result).toMatchObject({ success: true, leagues: 8 });
+    expect(pedidas).toHaveLength(8);
+    expect(pedidas.some((url) => url.includes('/ned.1/'))).toBe(false);
   });
 });

@@ -1,0 +1,19 @@
+{
+  "//": "Typecheck de la web (navegador). La configuración de Vite y Vitest, que corre en Node, va aparte en tsconfig.node.json para no mezclar los tipos de Node con los del DOM.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "sourceMap": false,
+    "allowImportingTsExtensions": true,
+    "types": ["vite/client", "@testing-library/jest-dom/vitest"],
+    "paths": {
+      "@fixtures/*": ["../../packages/shared/fixtures/*"]
+    }
+  },
+  "include": ["src"]
+}

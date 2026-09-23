@@ -1,0 +1,53 @@
+/* Panel de ayuda. Reutiliza las clases .help* del armazón
+   (src/app/shortcut-help.css, que carga la hoja que lo contiene) para que el
+   teclado se vea igual que antes; aquí solo lo nuevo: los tres bloques y la
+   «tecla» de palabra de los gestos. */
+
+.ayuda {
+  gap: var(--s-6);
+}
+.ayuda-part {
+  display: grid;
+  gap: var(--s-3);
+}
+.ayuda-part__title {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--fs-17);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: var(--tracking-head);
+}
+.ayuda-part__title > svg {
+  color: var(--accent-ink);
+}
+/* El gesto, como una tecla de palabra: se lee de un vistazo a la izquierda. */
+.ayuda-gesture {
+  justify-self: start;
+  padding: 3px 8px;
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--text);
+  font-size: var(--fs-13);
+  font-weight: var(--wght-strong);
+  font-stretch: var(--w-tight);
+  line-height: var(--lh-snug);
+}
+/* La misma primera columna en todas las filas (y en las del teclado): cada
+   fila es su propia rejilla y, con «auto», las descripciones no se alineaban. */
+.ayuda .help__row {
+  grid-template-columns: 11rem minmax(0, 1fr);
+}
+/* En el móvil, gesto encima y qué hace debajo: en dos columnas no cabe. */
+@media (max-width: 479px) {
+  .ayuda .help__row {
+    grid-template-columns: 7.5rem minmax(0, 1fr);
+  }
+  .ayuda .ayuda-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+    padding-block: 8px;
+  }
+}

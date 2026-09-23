@@ -143,6 +143,40 @@ describe('trabajos y cola (B-014, B-022, B-023, B-024, B-027)', () => {
     );
   });
 
+  /* Verificación del backend (23-09-2026): el test de arriba ve que a los
+     10 min + 3 s ya se reintentó, pero no que ANTES no se reintente. B-024:
+     "no se recomprueba a los pocos segundos", retryAt = fallo + 10 min
+     (server.js:3437-3471, ACESTREAM_SCANNER_RETRY_DELAY_MS = 600000). El 10
+     va escrito a mano a propósito: si cambia el defecto, esto falla. Y el id
+     del trabajo son 24 hex (B-027, server.js:3562). */
+  it('un fallo no se reintenta antes de los 10 min; el id del trabajo son 24 hex (B-024, B-027)', async () => {
+    const { scanner, script, settle, clock } = setup({ [h(3)]: 'failed' });
+    const ref = scanner.enqueue({
+      kind: 'interactive',
+      candidates: [{ id: h(3), ih: false }],
+      clientKey: 'dev-1',
+    });
+    expect(ref?.id).toMatch(/^[0-9a-f]{24}$/);
+    const jobId = ref?.id ?? '';
+    await settle(3000);
+    const waiting = scanner.job(jobId);
+    expect(waiting.status).toBe('waiting');
+    expect(waiting.candidates[0]).toMatchObject({ state: 'failed', attempts: 1 });
+    expect(script.calls.meta).toEqual([h(3)]);
+    const retryAt = Date.parse(String(waiting.candidates[0]?.retryAt));
+    /* El fallo llegó dentro de esos 3 s: retryAt queda a 10 min de él. */
+    expect(retryAt - clock.now()).toBeGreaterThan(10 * MIN - 3000);
+    expect(retryAt - clock.now()).toBeLessThanOrEqual(10 * MIN);
+    /* Hasta 1 s antes de retryAt no se vuelve a probar... */
+    await settle(retryAt - clock.now() - 1000);
+    expect(script.calls.meta).toEqual([h(3)]);
+    expect(scanner.job(jobId).status).toBe('waiting');
+    /* ...y al vencer, sí (su único reintento). */
+    await settle(4000);
+    expect(script.calls.meta).toEqual([h(3), h(3)]);
+    expect(scanner.job(jobId)).toMatchObject({ status: 'complete' });
+  });
+
   it('un segundo fallo de una verificada es floja primero y fallida después; HEVC no se reintenta', async () => {
     const { scanner, script, settle } = setup({ [h(3)]: 'working', [h(4)]: 'hevc' });
     scanner.enqueue({ kind: 'interactive', candidates: [{ id: h(3), ih: false }] });
@@ -406,7 +440,13 @@ describe('poda, apagado, fugas y utilidades', () => {
       clientKey: 'report_r1',
       force: true,
     });
-    await settle(26 * MIN);
+    /* Verificación del backend (23-09-2026): B-027 dice 25 min; a los 24,5
+       el trabajo sigue ahí (la poda pasa cada minuto, así que se borra entre
+       el 25 y el 26). */
+    await settle(24 * MIN + 30_000);
+    expect(events.done).toEqual([]);
+    expect(scanner.job(ref?.id ?? '').status).not.toBe('cancelled');
+    await settle(90_000);
     expect(events.done).toEqual([
       expect.objectContaining({ jobId: ref?.id, status: 'cancelled', reportKey: 'r1' }),
     ]);

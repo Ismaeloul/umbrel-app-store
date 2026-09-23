@@ -130,4 +130,13 @@ describe('constantes del emparejador (T-084, T-087)', () => {
     expect(SEMANTIC_MAX_SCORE).toBe(94);
     expect(SEMANTIC_MAX_SCORE).toBeGreaterThan(RESOLUTION_EXACT_SCORE);
   });
+
+  /* T-017 y T-045 a T-062 comparan con RECOMENDADO y el tope de variante. En
+     la 0.6.59 eran 70 y 58 escritos en el test (tests/server.test.js:408-409);
+     aquí se fijan para que un cambio de la constante no arrastre en silencio a
+     los tests que la usan (verificación del backend, 23-09-2026). */
+  it('recomendado = 70 y tope de variante = 58, como en el test original', () => {
+    expect(LIBRARY_MIN_SCORE).toBe(70);
+    expect(CHANNEL_VARIANT_MAX_SCORE).toBe(58);
+  });
 });

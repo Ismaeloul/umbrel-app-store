@@ -20,7 +20,7 @@ estar en una fila de aquí (informe en `docs/analisis/contraste-0659.md`).
 
 | Grupo | Cambios | Afectan a rutas antiguas |
 |---|---:|---:|
-| 1. Capa HTTP, arranque y apagado | 8 | 7 |
+| 1. Capa HTTP, arranque y apagado | 9 | 8 |
 | 2. Motor y reinicios | 7 | 3 |
 | 3. Reproducción, mando y remux | 18 | 7 |
 | 4. Comprobador y fuentes | 13 | 4 |
@@ -28,9 +28,9 @@ estar en una fila de aquí (informe en `docs/analisis/contraste-0659.md`).
 | 6. Directorios y red | 18 | 4 |
 | 7. Estado y persistencia | 14 | 4 |
 | 8. Salud y diagnóstico | 10 | 4 |
-| 9. Emparejamiento, SSE y engine-control | 11 | 0 |
+| 9. Emparejamiento, SSE y engine-control | 13 | 0 |
 | 10. Fachada de exportaciones (`app.<nombre>`) | 8 | 0 |
-| **Total** | **116** | **37** |
+| **Total** | **119** | **38** |
 
 ## 1. Capa HTTP, arranque y apagado
 
@@ -44,6 +44,7 @@ estar en una fila de aquí (informe en `docs/analisis/contraste-0659.md`).
 | 1.6 | Apagado: deja de aceptar (503 a lo nuevo), cierra los SSE, para las sesiones del motor en paralelo (4 s), mata ffmpeg, para los trabajos de fondo en orden inverso, vacía la cola del estado y sale con 0; salida forzada a los 5 s. En Windows (desarrollo), además, por el mensaje IPC `shutdown`. | sí (hoy solo cerraba conexiones y mataba ffmpeg) | sin zombis en el motor al actualizar (§5.16, P7) | `test/integration/playback-flows.test.ts` › "apagado limpio", `scripts/smoke-bundle.mjs` (apagado del bundle: código 0 en < 5 s y el motor sin sesiones) |
 | 1.7 | Un servicio que falla (el comprobador entero lanzando) no tumba el proceso ni las demás rutas. | sí (igual que T-111) | T-111 portado como integración | `test/integration/wiring.test.ts` › "T-111" |
 | 1.8 | **(contraste E1.4)** Las respuestas sin cuerpo de `/remux/` (403 de ruta no válida, 404, 405 y 416) llevan también `Cache-Control: no-store` y `X-Content-Type-Options: nosniff`; la 0.6.59 solo ponía `no-store` en el 404 y el 416, y nada en el 403 y el 405. Código y cuerpo, iguales. | sí (solo cabeceras) | el gancho `onSend` de `app.ts` pone las cabeceras de `send()` (api.md §2.5) en todas las respuestas; más estricto y ningún cliente lo nota | `scripts/contraste.mjs` › S63a-S63h, S64e, S64f, S64i, S64l |
+| 1.9 | **(seguridad, S-03)** Anti-CSRF: un GET con efectos (`/api/remux`, `/api/football/resolve` y los `sideEffects` de v1) con `Sec-Fetch-Site: same-site` y **sin** `Origin` da 403 `cross_origin`; la 0.6.59 lo dejaba pasar ("sin Origin → sí"). Es la `<img>`/`<video>` de otra app del mismo Umbrel (mismo host, otro puerto), que lleva la cookie del login. `same-origin`, `none` y sin cabeceras (curl, iPhone 0.6.x) siguen pasando. | sí (solo desde otra app del NAS) | `docs/seguridad.md` S-03 | `test/security.test.ts` › "S-03 …" |
 
 ## 2. Motor y reinicios
 
@@ -184,6 +185,8 @@ estar en una fila de aquí (informe en `docs/analisis/contraste-0659.md`).
 | 9.9 | Un `Last-Event-ID` de cabecera que no son dígitos se ignora; en la query, 400. | no | decisión del módulo | `src/modules/events/routes.test.ts` |
 | 9.10 | Los eventos de visor (`stream.*`, `playback.handoff`) van a todas las conexiones y cada cliente filtra por sus `viewerIds` (el bus admite `targetDeviceIds` desde el paso 1.3, pero playback aún no lo rellena). | no | ver `decisiones.md` D13 | `src/modules/events/hub.test.ts` |
 | 9.11 | La URL de vídeo del iPhone va firmada en la respuesta de `channelStream` y del latido; los eventos SSE llevan la ruta sin `?t=` (la app pide la firmada con el latido). | no | auth se crea después de playback (sin ciclos) | `test/integration/wiring.test.ts` › "iPhone emparejado…" |
+| 9.12 | **(seguridad, S-01)** nginx responde 400 a toda URI que empieza por `//`: la pasarela de umbreld tomaba `//api/native/…` por host `api` + ruta `/native/…` (lista blanca, sin login) y nginx la mandaba a `/api/` como web, o al motor. Ningún cliente legítimo pide `//…`. | no | `docs/seguridad.md` S-01 | `deploy/test/nginx.test.ts`, `scripts/test-nginx-docker.mjs` (cargas S-01) |
+| 9.13 | **(seguridad, S-02)** Un iPhone (origen native) solo actúa sobre visores de su dispositivo: pedir un canal con el id de visor de otro da 409 `handoff_denied`, y el latido/soltar de un visor ajeno (también uno web sin `device`) da 404 / `released: false`. La web sigue pudiendo con todos. | no (v1) | `docs/seguridad.md` S-02 | `src/modules/playback/security.test.ts` |
 
 ## 10. Fachada de exportaciones (`app.<nombre>` de server.js)
 

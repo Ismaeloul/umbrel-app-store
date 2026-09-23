@@ -98,6 +98,11 @@ describe('nginx.conf: blindaje de la ruta nativa (arquitectura §8.2)', () => {
     ['/native/..\\api/state', '1'],
     ['/native/../api/state', '1'],
     ['/assets/..%2f..%2fnginx.conf', '1'],
+    // S-01 (docs/seguridad.md): "//" delante engaña a la pasarela (lo toma por host)
+    ['//api/native/state', '1'],
+    ['///api/native/state', '1'],
+    ['//native/api/v1/bootstrap', '1'],
+    ['/api/v1/search?q=//x', '0'],
     ['/api/v1/search?q=A%2FB', '0'],
     ['/api/v1/search?q=../..', '0'],
     ['/native/api/v1/bootstrap', '0'],

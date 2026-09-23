@@ -1,0 +1,25 @@
+.num-cells {
+  display: inline-flex;
+  align-items: baseline;
+  white-space: nowrap;
+  font-variant-numeric: lining-nums proportional-nums;
+}
+.num-cells__glyphs {
+  display: inline-flex;
+  align-items: baseline;
+}
+.num-cells__glyphs > span::before {
+  content: attr(data-g);
+}
+.num-cells__s {
+  white-space: pre;
+}
+.num-cells__d {
+  display: inline-block;
+  width: var(--num-cell);
+  text-align: center;
+}
+/* Cifras dentro del texto normal (wdth 100): celda más ancha. */
+.num-cells:not(.num) .num-cells__d {
+  width: var(--num-cell-text);
+}

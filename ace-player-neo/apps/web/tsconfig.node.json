@@ -1,0 +1,13 @@
+{
+  "//": "Typecheck de lo que corre en Node: la configuración de Vite y Vitest y sus plugins.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "sourceMap": false,
+    "types": ["node"]
+  },
+  "include": ["vite.config.ts", "vitest.config.ts", "build"]
+}

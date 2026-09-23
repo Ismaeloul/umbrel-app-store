@@ -1,0 +1,146 @@
+.field {
+  display: grid;
+  gap: 6px;
+}
+.field__label {
+  font-size: var(--fs-13);
+  font-weight: var(--wght-strong);
+  color: var(--text-2);
+}
+.field__box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 14px;
+  border-radius: var(--r-m);
+  background: var(--surface);
+  /* Borde de control a 3:1 (injerto B6). */
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+.field--search .field__box {
+  border-radius: var(--r-pill);
+  padding: 0 8px 0 18px;
+  background: var(--surface-2);
+}
+.field__box:focus-within {
+  box-shadow:
+    inset 0 0 0 1px var(--accent-edge),
+    0 0 0 3px color-mix(in oklab, var(--accent-edge) 30%, transparent);
+}
+.field--error .field__box {
+  box-shadow: inset 0 0 0 1.5px var(--fail);
+}
+.field__icon {
+  color: var(--text-2);
+}
+.field__input {
+  flex: 1;
+  min-width: 0;
+  height: 46px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  /* 16 px: Safari de iOS no hace zoom al enfocar un campo de 16 o más. */
+  font-size: max(16px, var(--fs-15));
+}
+.field__input::placeholder {
+  color: var(--text-3);
+}
+.field__input:focus-visible {
+  outline: none;
+}
+.field__input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+.field__kbd {
+  margin-right: 6px;
+}
+.field__hint {
+  font-size: var(--fs-caption);
+  color: var(--text-2);
+}
+.field__error {
+  font-size: var(--fs-13);
+  font-weight: var(--wght-medium);
+  color: var(--fail-ink);
+}
+
+/* ---- Interruptor ------------------------------------------------------------ */
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  min-height: 56px;
+}
+.switch-row__text {
+  display: grid;
+  gap: 2px;
+}
+.switch-row__label {
+  font-weight: var(--wght-medium);
+}
+.switch-row__desc {
+  font-size: var(--fs-13);
+  color: var(--text-2);
+}
+.switch {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 32px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+/* Zona táctil de 44. */
+.switch::before {
+  content: '';
+  position: absolute;
+  inset: -6px -2px;
+}
+.switch[aria-checked='true'] {
+  background: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-edge);
+}
+.switch__thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow:
+    0 1px 3px rgb(2 8 18 / 0.35),
+    inset 0 0 0 1px var(--line-soft);
+  transition: transform var(--dur-estandar) var(--ease-estandar);
+}
+.switch[aria-checked='true'] .switch__thumb {
+  transform: translateX(20px);
+  background: #fff;
+}
+.switch:disabled {
+  opacity: 0.5;
+}
+
+/* ---- Tecla ------------------------------------------------------------------ */
+.kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 7px;
+  border-radius: 7px;
+  background: var(--surface);
+  box-shadow:
+    inset 0 0 0 1px var(--line),
+    inset 0 -2px 0 var(--line);
+  color: var(--text);
+  font-family: var(--mono);
+  font-stretch: 87.5%;
+  font-size: var(--fs-12);
+  font-weight: 560;
+  line-height: 1;
+}

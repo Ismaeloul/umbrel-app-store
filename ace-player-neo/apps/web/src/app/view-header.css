@@ -1,0 +1,88 @@
+.view-head {
+  display: grid;
+  gap: var(--s-4);
+  padding: calc(var(--safe-top) + var(--s-5)) 0 var(--s-4);
+}
+/* Debajo del reproductor la cabecera ya no toca el borde de arriba. */
+.stage[data-presentation='stage'] ~ .views .view-head {
+  padding-top: var(--s-3);
+}
+/* Si las acciones no caben junto al titular (móvil estrecho, títulos largos),
+   bajan a la línea siguiente: nunca ensanchan la página. */
+.view-head__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px var(--s-3);
+  min-width: 0;
+}
+.view-head__titles {
+  display: grid;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: min(100%, 9ch);
+}
+.view-head__title {
+  font-size: var(--fs-30);
+  line-height: var(--lh-tight);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: var(--tracking-head);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.view-head__title:focus-visible {
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+.view-head__subtitle {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+.view-head__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s-1);
+  margin-left: auto;
+  min-width: 0;
+}
+.view-head__demo {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: var(--r-pill);
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+  font-size: var(--fs-label);
+  font-weight: var(--wght-strong);
+  font-stretch: var(--w-tight);
+  white-space: nowrap;
+}
+/* Móvil estrecho: el motor se queda en el rayo (como la 0.6.59, que dejaba el punto). */
+@media (max-width: 380px) {
+  .view-head__engine .engine__text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+}
+@media (min-width: 768px) {
+  /* En el carril ya está el motor. Doble clase: .engine (shell.css) se carga
+     después y pondría display otra vez. */
+  .view-head .view-head__engine {
+    display: none;
+  }
+  .view-head__title {
+    font-size: var(--fs-44);
+  }
+  .view-head {
+    padding-top: var(--s-6);
+  }
+}

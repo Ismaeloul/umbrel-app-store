@@ -160,6 +160,19 @@ function newSessionId(): string {
   return `s_${randomBytes(12).toString('base64url')}`;
 }
 
+/**
+ * S-02 (docs/seguridad.md): ¿el visor es de OTRO dispositivo que el iPhone
+ * que pide? Solo cuenta para el origen native (`identity.device`): la web es
+ * la administradora y puede con cualquier visor, como en la 0.6.59. Un visor
+ * sin dispositivo (web sin `device`, iPhone 0.6.x sin `dev`) tampoco es del
+ * iPhone: antes se le dejaba pasar y cualquier dispositivo emparejado podía
+ * soltarlo con solo ver su id en un evento SSE.
+ */
+function foreignViewer(viewer: ViewerRec, identity: ViewerIdentity): boolean {
+  const own = identity.device?.deviceId;
+  return own !== undefined && viewer.deviceId !== own;
+}
+
 function superseded(detail: string): AppError {
   return new AppError('session_expired', { detail });
 }
@@ -800,6 +813,14 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       if (stale()) throw superseded('sustituida por una petición más nueva del mismo visor');
       /* Cambio de canal: lo anterior se suelta (y se para) ANTES de abrir. */
       const previous = viewers.get(request.viewerId);
+      /* S-02 (docs/seguridad.md): el id de visor lo elige el cliente y viaja
+         en claro en los eventos stream.* (van a todas las conexiones, D13).
+         Un iPhone que pide un canal con el id de un visor de OTRO dispositivo
+         lo soltaría; se comprueba dentro de la cola del visor, así dos
+         peticiones a la vez no se cuelan entre la comprobación y el cambio. */
+      if (request.native && previous && previous.deviceId !== request.deviceId) {
+        throw new AppError('handoff_denied', { detail: 'el visor es de otro dispositivo' });
+      }
       if (
         previous &&
         (previous.hash !== request.hash ||
@@ -1159,8 +1180,7 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       const viewer = session.viewers.get(body.viewer);
       if (!viewer)
         throw new AppError('session_expired', { detail: 'el visor ya no está en la sesión' });
-      const deviceId = identity.device?.deviceId ?? null;
-      if (deviceId && viewer.deviceId && viewer.deviceId !== deviceId) {
+      if (foreignViewer(viewer, identity)) {
         throw new AppError('session_not_found', { detail: 'el visor es de otro dispositivo' });
       }
       viewer.lastBeat = clock.now();
@@ -1180,10 +1200,7 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
         const session = sessions.get(sessionId);
         const viewer = session?.viewers.get(body.viewer);
         if (!session || !viewer) return { released: false, sessionClosed: false };
-        const deviceId = identity.device?.deviceId ?? null;
-        if (deviceId && viewer.deviceId && viewer.deviceId !== deviceId) {
-          return { released: false, sessionClosed: false };
-        }
+        if (foreignViewer(viewer, identity)) return { released: false, sessionClosed: false };
         const { sessionClosed } = await dropViewer(viewer, 'released');
         return { released: true, sessionClosed };
       });

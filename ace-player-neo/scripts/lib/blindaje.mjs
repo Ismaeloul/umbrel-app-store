@@ -50,6 +50,57 @@ export const ASSAULT_PAYLOADS = [
   { path: '/api/state?x=/../native/', native: false, why: '.. en la query de una ruta web' },
   { path: '/native/api/v1/ping?next=/../../api/state', native: true, why: '.. en la query' },
   { path: '/native/api/v1/ping?q=%2f..%2f', native: true, why: '%2f y .. en la query' },
+  /* Revisión de seguridad (docs/seguridad.md, S-01): con "//" delante, la
+     pasarela toma lo primero como HOST y decide con lo que va detrás
+     (/native/…, lista blanca), pero nginx junta las barras y lo primero pasa a
+     ser una location web. Sin la regla "^//" de $ace_bad_uri estas llegaban
+     sin login al backend como web, al motor o a la web estática. */
+  { path: '//api/native/state', native: false, why: 'S-01: host "api" para la pasarela' },
+  { path: '///api/native/state', native: false, why: 'S-01: tres barras' },
+  { path: '//api/native/v1/ping', native: false, why: 'S-01: hacia /api/ con aspecto v1' },
+  { path: '//ace/native/getstream?id=x', native: false, why: 'S-01: al motor sin login' },
+  { path: '//content/native/x', native: false, why: 'S-01: contenido del motor' },
+  { path: '//remux/native/x/index.m3u8', native: false, why: 'S-01: /remux/ sin login' },
+  { path: '//assets/native/x.js', native: false, why: 'S-01: estáticos sin login' },
+  { path: '//API/native/state', native: false, why: 'S-01: host en mayúsculas' },
+  { path: '//x@api/native/state', native: false, why: 'S-01: usuario@host' },
+  /* Forma absoluta ("GET http://host/ruta"): la pasarela y nginx deciden con
+     la ruta que va detrás del host; la de /native/ acaba como native. */
+  { path: 'http://api/native/state', native: false, why: 'forma absoluta' },
+  { path: 'http://api//api/native/state', native: false, why: 'forma absoluta con //' },
+  { path: 'http://x/native/api/v1/ping', native: false, why: 'forma absoluta a /native/' },
+  { path: '/native/api/v1/ping%00', native: true, why: '%00 al final' },
+  { path: '/native/api/v1/ping/%2e', native: true, why: '%2e como último segmento' },
+];
+
+/**
+ * Cargas que `http.request` de Node no deja ni mandar (caracteres de control,
+ * tabuladores, "#" y formas de URL que solo caben en la línea de petición).
+ * Importan porque el parser WHATWG de la pasarela QUITA los tabuladores y
+ * saltos de línea de cualquier sitio y los controles del principio, corta en
+ * "#" y entiende "http:api/…" como host "api": si nginx recibiera alguna tal
+ * cual, la pasarela vería /native/* donde nginx ve otra cosa. Solo las manda
+ * scripts/test-nginx-docker.mjs, por un socket, a la pasarela y a los dos
+ * nginx (revisión de seguridad, docs/seguridad.md §3.4). La regla es la misma
+ * que la de ASSAULT_PAYLOADS (judgeOutcome).
+ * @type {{ target: string, why: string }[]}
+ */
+export const RAW_SOCKET_PAYLOADS = [
+  { target: '/api/.\t./native/api/v1/ping', why: 'tabulador dentro de ".."' },
+  { target: '/api/\t../native/api/v1/ping', why: 'tabulador antes de ".."' },
+  { target: '/\t/api/native/state', why: 'tabulador entre las dos barras (host "api")' },
+  { target: '\x01//api/native/state', why: 'control al principio' },
+  { target: '/api/..\x0b/native/state', why: 'tabulador vertical' },
+  { target: '/native/api/v1/ping\x00', why: 'NUL al final' },
+  { target: '/native/x#/../../api/state', why: '"#" y ".." detrás' },
+  { target: '/native/api/v1/ping#/../../../ace/getstream', why: '"#" hacia el motor' },
+  { target: 'HTTP://api/native/state', why: 'forma absoluta en mayúsculas' },
+  { target: 'http:api/native/state', why: 'esquema sin barras (host "api")' },
+  { target: 'http:native/api/v1/ping', why: 'esquema sin barras ni host' },
+  { target: 'https:api/native/state', why: 'https sin barras' },
+  { target: 'ws://api/native/x', why: 'otro esquema en forma absoluta' },
+  { target: 'http://api:80/native/x', why: 'forma absoluta con puerto' },
+  { target: 'api/native/state', why: 'sin barra inicial' },
 ];
 
 /**
@@ -59,7 +110,10 @@ export const ASSAULT_PAYLOADS = [
  * @param {string} rawPath
  */
 export function nginxNormalizedPath(rawPath) {
-  const pathPart = rawPath.split('?')[0] ?? '';
+  // Forma absoluta ("GET http://host/ruta"): nginx elige location con la ruta
+  // que va detrás del host, así que el esquema y el host no cuentan.
+  const target = rawPath.replace(/^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i, '');
+  const pathPart = target.split('?')[0] ?? '';
   let decoded;
   try {
     decoded = decodeURIComponent(pathPart);

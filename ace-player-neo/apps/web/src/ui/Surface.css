@@ -1,0 +1,19 @@
+.card,
+.panel {
+  --r-outer: var(--r-xl);
+  --pad: var(--s-4);
+  /* Radio concéntrico para lo de dentro (nunca menor que 6 px). */
+  --r-inner: max(6px, calc(var(--r-outer) - var(--pad)));
+  border-radius: var(--r-outer);
+  padding: var(--pad);
+}
+.card {
+  background: var(--surface);
+  box-shadow:
+    inset 0 0 0 1px var(--line-soft),
+    var(--shadow-1);
+}
+/* Sobre vídeo el texto es siempre claro (lo pone .glass--video). */
+.panel:not(.glass--video) {
+  color: var(--text);
+}

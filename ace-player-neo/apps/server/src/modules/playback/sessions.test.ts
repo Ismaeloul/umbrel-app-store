@@ -178,6 +178,9 @@ describe('una sesión por contenido y stop siempre (D5.1, B-002, B-003)', () => 
     });
   });
 
+  /* La parte de servidor de T-083 (1-2) de la 0.6.59: un hash externo que no
+     abre como Content ID se reintenta UNA vez como infohash (el resto de
+     T-083 es texto de index.html: Fase 2). */
   it('kind auto: prueba id y, si el motor no abre, una vez infohash (P6)', async () => {
     const setup = await setupPlayback({ unknownContent: 'fail' });
     const ih = contentIdToInfohash(X);
@@ -192,6 +195,18 @@ describe('una sesión por contenido y stop siempre (D5.1, B-002, B-003)', () => 
     );
     expect(code).toBe('source_no_peers');
     expect(metrics(setup).requestsByRoute.getstream).toBe(3);
+  });
+
+  /* Verificación del backend (23-09-2026): B-009 dice "UNA sola vez" y el
+     test de arriba solo veía el caso en que el segundo intento funciona. */
+  it('kind auto: si tampoco abre como infohash, no hay tercer intento (B-009)', async () => {
+    const setup = await setupPlayback({ unknownContent: 'fail' });
+    const code = await codeOf(
+      setup.runtime.service.acquire('e'.repeat(40), query(), web('visor-web-1'), live()),
+    );
+    expect(code).toBe('source_no_peers');
+    expect(metrics(setup).requestsByRoute.getstream).toBe(2);
+    expect(setup.runtime.inspect().sessions).toEqual([]);
   });
 
   it('un motor caído da engine_unavailable y no deja nada abierto', async () => {

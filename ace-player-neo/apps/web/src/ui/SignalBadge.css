@@ -1,0 +1,170 @@
+.sig {
+  --sig: var(--idle);
+  --sig-ink: var(--text-2);
+  --h: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--sig-ink);
+  font-size: var(--fs-caption);
+  font-weight: 620;
+  font-stretch: var(--w-tight);
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.sig--sm {
+  --h: 12px;
+}
+.sig--lg {
+  --h: 20px;
+  gap: 9px;
+  font-size: var(--fs-13);
+}
+.sig--stacked {
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+}
+.sig--stacked.sig--md {
+  --h: 18px;
+}
+
+.sig--ok {
+  --sig: var(--ok);
+  --sig-ink: var(--ok-ink);
+}
+.sig--weak {
+  --sig: var(--weak);
+  --sig-ink: var(--weak-ink);
+}
+.sig--fail {
+  --sig: var(--fail);
+  --sig-ink: var(--fail-ink);
+}
+.sig--checking {
+  --sig: var(--text-2);
+  --sig-ink: var(--text-2);
+}
+.sig--pending {
+  --sig: var(--idle);
+  --sig-ink: var(--text-3);
+}
+
+/* ---- Medidor --------------------------------------------------------------- */
+.sig__bars {
+  position: relative;
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: var(--h);
+  flex: none;
+}
+.sig__bars i {
+  position: relative;
+  display: block;
+  width: calc(var(--h) * 0.3);
+  border-radius: 1.5px;
+  box-shadow: inset 0 0 0 1.5px var(--sig);
+  overflow: hidden;
+}
+.sig__bars i:nth-child(1) {
+  height: 42%;
+}
+.sig__bars i:nth-child(2) {
+  height: 71%;
+}
+.sig__bars i:nth-child(3) {
+  height: 100%;
+}
+/* El relleno es una capa aparte para poder animarlo solo con opacidad. */
+.sig__bars b {
+  position: absolute;
+  inset: 0;
+  background: var(--sig);
+  opacity: 0;
+}
+.sig--ok .sig__bars b,
+.sig--weak .sig__bars i:nth-child(-n + 2) b {
+  opacity: 1;
+}
+
+/* Sin señal: ninguna barra encendida y un aspa encima. */
+.sig--fail .sig__bars i {
+  box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--sig) 55%, transparent);
+}
+.sig--fail .sig__bars::after {
+  content: '';
+  position: absolute;
+  inset: -1px -2px;
+  background:
+    linear-gradient(
+      45deg,
+      transparent calc(50% - 1px),
+      var(--sig) calc(50% - 1px) calc(50% + 1px),
+      transparent calc(50% + 1px)
+    ),
+    linear-gradient(
+      -45deg,
+      transparent calc(50% - 1px),
+      var(--sig) calc(50% - 1px) calc(50% + 1px),
+      transparent calc(50% + 1px)
+    );
+}
+
+/* Pendiente: barras punteadas (nada que ver con una barra llena). */
+.sig--pending .sig__bars i {
+  box-shadow: none;
+  background: repeating-linear-gradient(0deg, var(--sig) 0 2px, transparent 2px 4px);
+  opacity: 0.9;
+}
+
+/* Comprobando: SIEMPRE huecas; el relleno pasa de una a otra (corrección 3). */
+.sig--checking .sig__bars b {
+  animation: sig-comprobando 1.4s var(--ease-out) infinite;
+}
+.sig--checking .sig__bars i:nth-child(2) b {
+  animation-delay: 0.2s;
+}
+.sig--checking .sig__bars i:nth-child(3) b {
+  animation-delay: 0.4s;
+}
+@keyframes sig-comprobando {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  40% {
+    opacity: 0.85;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Quieto no puede parecer un medidor lleno: contorno discontinuo (como B). */
+  .sig--checking .sig__bars b {
+    animation: none;
+    opacity: 0;
+  }
+  .sig--checking .sig__bars i {
+    box-shadow: none;
+    border: 1.5px dashed var(--sig);
+  }
+}
+
+/* ---- Compacto (C4) --------------------------------------------------------- */
+.sig__glyph {
+  color: var(--sig);
+  font-size: 0.95em;
+  line-height: 1;
+}
+.sig--compact.sig--checking .sig__glyph {
+  animation: sig-glifo 1.4s var(--ease-out) infinite;
+}
+@keyframes sig-glifo {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sig--compact.sig--checking .sig__glyph {
+    animation: none;
+  }
+}

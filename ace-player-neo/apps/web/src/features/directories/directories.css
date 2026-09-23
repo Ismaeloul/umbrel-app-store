@@ -1,0 +1,150 @@
+/* Ajustes → Listas. */
+
+.dirs {
+  display: grid;
+  gap: var(--s-6);
+  min-width: 0;
+}
+.dir-form {
+  display: grid;
+  gap: var(--s-3);
+  min-width: 0;
+}
+/* Con el teclado abierto, el campo enfocado no queda debajo de él ni de la
+   barra inferior (el armazón mide lo que tapa el teclado en --kb). */
+.dir-form input {
+  scroll-margin-bottom: calc(var(--kb, 0px) + var(--tabbar-h) + var(--s-12));
+}
+.dir-form__title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  font-size: var(--fs-15);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+}
+.dir-count {
+  color: var(--text-3);
+  font-size: var(--fs-13);
+  font-weight: var(--wght-medium);
+  font-stretch: var(--w-text);
+}
+.dir-form__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.dir-note {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  line-height: var(--lh-text);
+}
+.dir-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-height: 1.4em;
+  font-size: var(--fs-13);
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.dir-status:empty {
+  display: none;
+}
+.dir-status--ok {
+  color: var(--ok-ink);
+}
+.dir-status--err {
+  color: var(--fail-ink);
+}
+.dir-status > svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.dir-saved {
+  display: grid;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.dir-list {
+  display: grid;
+  gap: var(--s-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.dir-card {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px 16px;
+  border-radius: var(--r-l);
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+.dir-card[data-active] {
+  box-shadow: inset 0 0 0 1.5px var(--accent-edge);
+}
+.dir-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.dir-card__name {
+  min-width: 0;
+  font-weight: var(--wght-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dir-badge {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 7px;
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+  font-size: var(--fs-label);
+  font-weight: var(--wght-strong);
+  font-stretch: var(--w-tight);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.dir-card__url {
+  min-width: 0;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dir-card__meta {
+  color: var(--text-3);
+  font-size: var(--fs-caption);
+  overflow-wrap: anywhere;
+}
+.dir-card__meta--failed {
+  color: var(--weak-ink);
+}
+.dir-card__error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+.dir-card__error > svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--weak-ink);
+}
+.dir-card__acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: 4px;
+}
+.dir-card__delete {
+  margin-left: auto;
+}
