@@ -185,4 +185,9 @@ tal cual.
 - **Tests**: `xcodegen generate` y
   `xcodebuild test -project AceNeo.xcodeproj -scheme AceNeo -destination 'platform=iOS Simulator,name=iPhone 16'`.
   Los de interfaz lanzan la app con `-AceNeoServidorSimulado` (servidor falso
-  dentro de la app, solo en Debug; código válido `482913`).
+  dentro de la app, solo en Debug; código válido `482913`), y con
+  `-AceNeoEmparejado` ya emparejada; el vídeo lo pone `MotorSimulado`.
+- **Capturas**: los XCUITest guardan capturas (agenda, centro de partido,
+  mini-reproductor, pantalla completa, biblioteca, deshacer) y la CI las sube
+  como artefacto `AceNeo-capturas`, junto al detalle de cualquier test que
+  falle en el paso «Resumen de los tests».

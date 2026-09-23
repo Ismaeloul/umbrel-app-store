@@ -270,7 +270,9 @@ final class ReproductorTests: XCTestCase {
         XCTAssertEqual(reproductor.conexion, .activa, "No reinicia la conexión")
         XCTAssertEqual(servicio.foto.streams.count, 1)
 
-        // Si después del salto sigue parada 16 tics (24 s), entonces sí reconecta.
+        // Si después del salto sigue parada 16 tics (24 s) y ya no hay vídeo
+        // por delante, entonces sí reconecta.
+        motor.probableSinCortes = false
         reproductor.tic()
         for _ in 0..<16 { reproductor.tic() }
         XCTAssertEqual(reproductor.conexion, .reconectando)

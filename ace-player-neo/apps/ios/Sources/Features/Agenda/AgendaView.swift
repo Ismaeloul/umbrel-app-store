@@ -152,7 +152,8 @@ struct TiraDias: View {
                 withAnimation(Muelle.estandar) { lector.scrollTo(nuevo, anchor: .center) }
             }
         }
-        .background(.bar)
+        // Solo detrás de la tira: si se extendiera hacia arriba taparía el título grande.
+        .background(.bar, ignoresSafeAreaEdges: [])
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Días")
     }

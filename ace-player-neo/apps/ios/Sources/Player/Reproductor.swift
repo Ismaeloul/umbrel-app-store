@@ -533,13 +533,18 @@ public final class Reproductor {
     }
 
     /// Imagen parada con vídeo por delante: saltar al directo en vez de reiniciar.
+    /// «Vídeo disponible» es cualquiera de las tres: el directo va 6 s o más por
+    /// delante, hay 2 s ya descargados por delante del cabezal o AVPlayer dice
+    /// que puede seguir (`isPlaybackLikelyToKeepUp`) y aun así no avanza.
     private func empujarAlDirecto() {
         guard let ventana = motor.ventana else { return }
         let seguridad = Directo.colchonSeguridad(modo: modo, duracionVentana: ventana.duracion)
         guard let objetivo = Directo.objetivo(ventana: ventana, seguridad: seguridad) else { return }
         let retraso = objetivo - motor.tiempoActual
         let porDelante = motor.colchonPorDelante
-        guard retraso >= UmbralesReproductor.empujonMinRetrasoS || porDelante >= UmbralesReproductor.videoDisponibleS
+        guard
+            retraso >= UmbralesReproductor.empujonMinRetrasoS || porDelante >= UmbralesReproductor.videoDisponibleS
+                || motor.probableSinCortes
         else { return }
         registro.info("Imagen parada con \(retraso, format: .fixed(precision: 1)) s por delante: salto al directo")
         saltosAlDirecto += 1

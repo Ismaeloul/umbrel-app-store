@@ -64,6 +64,9 @@ struct CabeceraPartido: View {
     let partido: FootballMatch
     let marcador: LiveScore?
     @Environment(\.accessibilityReduceMotion) private var sinMovimiento
+    /// Marcador y hora grandes que crecen con el tamaño de letra del sistema.
+    @ScaledMetric(relativeTo: .largeTitle) private var tamanoMarcador: CGFloat = 44
+    @ScaledMetric(relativeTo: .largeTitle) private var tamanoHora: CGFloat = 36
 
     private var enDirecto: Bool { marcador?.state == "in" }
     private var terminado: Bool { marcador?.state == "post" }
@@ -111,7 +114,7 @@ struct CabeceraPartido: View {
                     Text("\(marcador.away)")
                         .contentTransition(.numericText(value: Double(marcador.away)))
                 }
-                .font(.system(size: 44, weight: .heavy).width(.compressed).monospacedDigit())
+                .font(.system(size: tamanoMarcador, weight: .heavy).width(.compressed).monospacedDigit())
                 .foregroundStyle(Tinta.texto)
                 .animation(sinMovimiento ? nil : Muelle.heroe, value: marcador)
                 .sensoryFeedback(.impact, trigger: marcador.home + marcador.away)
@@ -121,7 +124,7 @@ struct CabeceraPartido: View {
             }
         } else {
             Text(partido.time)
-                .font(.system(size: 36, weight: .heavy).width(.compressed).monospacedDigit())
+                .font(.system(size: tamanoHora, weight: .heavy).width(.compressed).monospacedDigit())
                 .foregroundStyle(Tinta.acentoTinta)
         }
     }

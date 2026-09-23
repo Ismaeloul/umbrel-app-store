@@ -70,7 +70,10 @@ final class ReproduccionUITests: XCTestCase {
         let completo = elemento(app, "reproductor-completo")
         XCTAssertTrue(completo.waitForExistence(timeout: 10), "No abre el reproductor completo")
         let cerrar = elemento(app, "boton-cerrar-completa")
-        if !cerrar.waitForExistence(timeout: 3) { completo.tap() }
+        // Los controles se esconden solos a los 3,2 s: un toque fuera de los botones los enseña.
+        if !cerrar.waitForExistence(timeout: 3) {
+            completo.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap()
+        }
         XCTAssertTrue(cerrar.waitForExistence(timeout: 5), "El reproductor completo no tiene botón de cerrar")
         captura(app, "04-reproductor-completo")
         cerrar.tap()

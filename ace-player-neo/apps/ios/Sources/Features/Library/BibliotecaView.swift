@@ -83,7 +83,7 @@ struct BibliotecaView: View {
         .pickerStyle(.segmented)
         .padding(.horizontal, Medida.margen)
         .padding(.vertical, 8)
-        .background(.bar)
+        .background(.bar, ignoresSafeAreaEdges: [])
         .accessibilityIdentifier("selector-biblioteca")
     }
 

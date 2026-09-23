@@ -321,6 +321,9 @@ struct ReproductorCompleto: View {
         )
         .statusBarHidden()
         .persistentSystemOverlays(.hidden)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Reproductor a pantalla completa")
+        .accessibilityAction(.escape) { salir() }
         .accessibilityIdentifier("reproductor-completo")
         .onAppear { Orientacion.pedir(.landscape) }
         .onDisappear { Orientacion.pedir(.portrait) }
