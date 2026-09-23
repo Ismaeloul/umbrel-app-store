@@ -23,7 +23,9 @@
     "typecheck:deploy": "tsc -p deploy/tsconfig.json",
     "local:prepare": "node deploy/local/prepare.mjs",
     "release": "node scripts/release.mjs",
-    "check:release": "node scripts/check-release.mjs"
+    "check:release": "node scripts/check-release.mjs",
+    "release:docker": "node scripts/release-docker.mjs",
+    "check:release:docker": "node scripts/release-docker.mjs --check"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

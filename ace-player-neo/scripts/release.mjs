@@ -71,7 +71,7 @@ export const REQUIRED_FILES = [
 ];
 
 /** Rutas cuyo último commit identifica el código de la release. */
-const SOURCE_PATHS = [
+export const SOURCE_PATHS = [
   'apps/server',
   'apps/web',
   'packages',

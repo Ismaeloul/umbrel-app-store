@@ -11,6 +11,10 @@
 // las líneas que no son .gz; cada .gz se valida contra su propia línea y contra
 // el asset al que acompaña.
 //
+// La referencia es Linux: en Windows lightningcss redondea distinto algunos
+// colores del CSS y el index-*.css cambia de hash. Por eso la release se monta
+// con release-docker.mjs y en Windows se compara con check:release:docker.
+//
 // Hace falta la web compilada (corepack pnpm@10.18.2 --filter @ace/web build).
 // En CI, el checkout tiene que traer la historia (fetch-depth: 0): RELEASE.json
 // lleva el último commit que tocó las fuentes.
@@ -104,8 +108,8 @@ async function main() {
       console.error(`La release commiteada en ${shown} no es la que sale del código:`);
       for (const problem of problems) console.error(`  - ${problem}`);
       console.error(
-        'Vuelve a montarla (corepack pnpm@10.18.2 --filter @ace/web build && ' +
-          'corepack pnpm@10.18.2 release) y commitéala.',
+        'Vuelve a montarla en Linux (corepack pnpm@10.18.2 release:docker) y commitéala. ' +
+          'En Windows el CSS sale con otros redondeos: allí compara con check:release:docker.',
       );
       process.exitCode = 1;
       return;

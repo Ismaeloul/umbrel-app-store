@@ -152,7 +152,7 @@ jobs:
         run: node scripts/smoke-bundle.mjs
       # La release commiteada en ismaeloul-ace-player-neo/releases/<v> es la que
       # sale de este código (empaquetado §7.10). Si falla tras tocar el backend
-      # o la web: pnpm --filter @ace/web build && pnpm release, y commitearla.
+      # o la web: pnpm release:docker (se monta en Linux, como aquí) y commitearla.
       - name: La release commiteada es la que sale del código
         run: pnpm check:release
 

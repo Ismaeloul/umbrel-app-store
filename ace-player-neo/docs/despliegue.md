@@ -32,10 +32,19 @@ La CI lo vigila en cada push:
   `releases/0.6.59` y `paquete/` siguen siendo los del commit `22de271` (el que
   publicó la 0.6.59).
 
-**Si alguien toca el backend o la web después de esta release**, `check:release`
-falla hasta que se vuelva a montar y commitear (`corepack pnpm@10.18.2 --filter
-@ace/web build` y `corepack pnpm@10.18.2 release`, desde `ace-player-neo/`).
-Así lo que se publica es siempre lo que dice el código.
+**La release se monta en Linux**, con `corepack pnpm@10.18.2 release:docker`
+(desde `ace-player-neo/`, con Docker): clona HEAD dentro de la imagen de Node
+de producción, compila y copia `releases/0.7.0` a la carpeta de la app. En
+Windows, lightningcss redondea distinto algunos colores del CSS y el
+`index-*.css` sale con otro hash, así que la referencia es la de Linux, la
+misma que monta la CI. Para comprobarla desde Windows:
+`corepack pnpm@10.18.2 check:release:docker`.
+
+**Si alguien toca las fuentes** (`apps/server`, `apps/web`, `packages`,
+`deploy/umbrel`, `scripts`, `package.json` o el lockfile), aunque sea un test,
+`check:release` falla hasta que se vuelva a montar y commitear:
+`RELEASE.json` lleva el último commit de las fuentes. Así lo que se publica es
+siempre lo que dice el código.
 
 ## 2. Publicar
 

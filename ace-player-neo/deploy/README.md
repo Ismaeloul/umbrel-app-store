@@ -16,6 +16,8 @@ arquitectura §8 (nginx y ruta nativa) y §11 (empaquetado), empaquetado §6-§7
 | `apps/server/build.mjs` | esbuild: `server.js` y `engine-control.js`, un fichero CommonJS cada uno, `node24`, sin minificar, `__APP_VERSION__` inyectada. |
 | `apps/server/Dockerfile` | Imagen del backend (solo CI y perfil `test`; Umbrel no la usa). Su ignore efectivo es `Dockerfile.dockerignore`. |
 | `scripts/release.mjs` | Monta `releases/<v>/` desde cero: reproducible, `SHA256SUMS` con LF, `RELEASE.json` sin fecha, `sw.js` con la versión y la precarga. |
+| `scripts/release-docker.mjs` | La release de referencia, montada en Linux dentro de la imagen de Node de producción desde HEAD (`release:docker`), o comprobada (`check:release:docker`). |
+| `scripts/check-release.mjs` | Vuelve a montar la release y la compara con la commiteada (`check:release`, en CI). |
 | `scripts/test-nginx-docker.mjs` | Matriz de arquitectura §8.3 y cargas de ataque contra el nginx real, con y sin la pasarela falsa. |
 | `scripts/test-shellcheck-docker.mjs` | shellcheck del hook con la imagen oficial por digest. |
 | `scripts/lib/` | Lector de `nginx.conf` y la lista de cargas del blindaje, compartidos por los tests. |
@@ -76,10 +78,13 @@ Puertos (solo 127.0.0.1): 17792 pasarela falsa (login en `/__pasarela/login`),
 **Hecho el 23-09 en `rewrite-v2`**, sin publicar. Cómo publicarla, comprobarla
 y volver atrás: [`docs/despliegue.md`](../docs/despliegue.md).
 
-1. Web compilada (`corepack pnpm@10.18.2 --filter @ace/web build`).
-2. `corepack pnpm@10.18.2 release` → `ismaeloul-ace-player-neo/releases/0.7.0/`
-   (sin los `.map` de Vite). `corepack pnpm@10.18.2 check:release` la vuelve a
-   montar y la compara con la commiteada; CI lo hace en cada push.
+1. Fuentes commiteadas: `release:docker` monta desde HEAD y compila la web dentro.
+2. `corepack pnpm@10.18.2 release:docker` → `ismaeloul-ace-player-neo/releases/0.7.0/`
+   (sin los `.map` de Vite), montada en Linux dentro de la imagen de Node de
+   producción: en Windows lightningcss redondea distinto algunos colores y el
+   `index-*.css` cambia de hash. `check:release` (en CI, en cada push) y
+   `check:release:docker` (en Windows) la vuelven a montar y la comparan con
+   la commiteada. `corepack pnpm@10.18.2 release` sigue valiendo para probar.
 3. `deploy/umbrel/docker-compose.yml` y `deploy/umbrel/hooks/pre-start` copiados
    tal cual a la carpeta de la app, el hook con modo 100755 en git. Un test
    (`deploy/test/compose.test.ts`) exige que sigan siendo iguales.

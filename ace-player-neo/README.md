@@ -195,10 +195,9 @@ publicarla, qué pasa al actualizar, cómo comprobarla, cómo volver a la 0.6.59
 y lo que queda por hacer a mano: [`docs/despliegue.md`](docs/despliegue.md).
 Para volver a cortarla ([`deploy/README.md`](deploy/README.md#cortar-la-release-fase-4)):
 
-1. `corepack pnpm@10.18.2 --filter @ace/web build` y
-   `corepack pnpm@10.18.2 release` → `../ismaeloul-ace-player-neo/releases/0.7.0/`
+1. `corepack pnpm@10.18.2 release:docker` (Docker) → `../ismaeloul-ace-player-neo/releases/0.7.0/`
    (`server.js`, `engine-control.js`, `nginx.conf`, `web/`, `SHA256SUMS` y
-   `RELEASE.json`; reproducible).
+   `RELEASE.json`; reproducible, montada en Linux como en CI).
 2. Copiar `deploy/umbrel/docker-compose.yml` y `deploy/umbrel/hooks/pre-start`
    a la carpeta de la app (el hook, ejecutable en git:
    `git add --chmod=+x ismaeloul-ace-player-neo/hooks/pre-start`).
