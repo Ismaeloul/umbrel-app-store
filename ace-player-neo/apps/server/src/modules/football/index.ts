@@ -1,0 +1,19 @@
+/* Fábrica del módulo `football` (agenda, marcadores, resolución, IA y precalentado).
+
+   La implementación vive en service.ts (estado por instancia y enchufes con
+   los demás módulos); la lógica portada de la 0.6.59, en agenda-sources.ts
+   (futbolenlatv, EPG, TheSportsDB y demo), programming.ts (catálogo de
+   programación), scores.ts (ESPN), ai.ts (Ollama y LRU de vectores),
+   resolution.ts, preheat.ts y bindings.ts. El orden final de candidatos es
+   el de sources (`mergeResolutionCandidates`), y el emparejado de nombres,
+   el de @ace/shared. */
+
+import { FootballServiceImpl } from './service.js';
+import type { FootballDeps, FootballService } from './types.js';
+
+export type * from './types.js';
+export { FootballServiceImpl } from './service.js';
+
+export function createFootballService(deps: FootballDeps): FootballService {
+  return new FootballServiceImpl(deps);
+}

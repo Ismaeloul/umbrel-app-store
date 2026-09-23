@@ -1,0 +1,11 @@
+{
+  "type": "engine.status",
+  "data": {
+    "status": "online",
+    "online": true,
+    "since": "2026-09-23T18:30:00.000Z",
+    "checkedAt": "2026-09-23T18:30:00.000Z",
+    "engineVersion": "3.2.3",
+    "autoRestarts": { "lastHour": 0, "max": 3, "nextAllowedAt": null, "exhausted": false }
+  }
+}

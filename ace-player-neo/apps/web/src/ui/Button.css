@@ -1,0 +1,163 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  min-height: var(--tap);
+  padding: 0 18px;
+  border-radius: var(--r-pill);
+  font-weight: var(--wght-strong);
+  font-size: var(--fs-15);
+  line-height: 1.1;
+  white-space: nowrap;
+  text-align: center;
+}
+.btn__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.btn--block {
+  display: flex;
+  width: 100%;
+}
+.btn--sm {
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: var(--fs-13);
+}
+/* El dibujo mide 36 px pero la zona táctil sigue siendo de 44. */
+.btn--sm::before {
+  content: '';
+  position: absolute;
+  inset: -4px 0;
+}
+
+.btn--primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow:
+    inset 0 0 0 1px var(--accent-edge),
+    inset 0 1px 0 rgb(255 255 255 / 0.45);
+}
+.btn--quiet {
+  background: var(--surface-2);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+.btn--ghost {
+  color: var(--text-2);
+}
+.btn--glass {
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  color: var(--text);
+  box-shadow:
+    inset 0 0 0 1px var(--glass-rim),
+    inset 0 1px 0 var(--glass-hi);
+}
+.btn--video {
+  background: var(--glass-video);
+  -webkit-backdrop-filter: var(--blur-video);
+  backdrop-filter: var(--blur-video);
+  color: var(--on-video);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.16);
+}
+.btn--danger {
+  background: var(--surface-2);
+  color: var(--fail-ink);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--fail) 45%, transparent);
+}
+.btn[aria-pressed='true'] {
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent-edge) 55%, transparent);
+}
+.btn:disabled {
+  opacity: 0.55;
+}
+.btn[aria-busy='true'] {
+  opacity: 0.75;
+  cursor: progress;
+}
+
+/* ---- Botón de icono: 44×44 siempre ------------------------------------------ */
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  flex: none;
+  border-radius: 50%;
+  color: var(--text-2);
+}
+.icon-btn--lg {
+  width: 56px;
+  height: 56px;
+}
+.icon-btn--quiet {
+  background: var(--surface-2);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+.icon-btn--glass {
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  color: var(--text);
+  box-shadow:
+    inset 0 0 0 1px var(--glass-rim),
+    inset 0 1px 0 var(--glass-hi);
+}
+.icon-btn--video {
+  color: var(--on-video);
+}
+.icon-btn--primary {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.icon-btn--danger {
+  color: var(--fail-ink);
+}
+.icon-btn[aria-pressed='true'] {
+  color: var(--accent-ink);
+}
+.icon-btn--video[aria-pressed='true'] {
+  color: var(--accent);
+}
+.icon-btn:disabled {
+  opacity: 0.45;
+}
+
+:root[data-transparency='reduced'] .btn--glass,
+:root[data-transparency='reduced'] .icon-btn--glass {
+  background: var(--glass-solid);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+:root[data-transparency='reduced'] .btn--video {
+  background: var(--glass-video-solid);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+@media (prefers-reduced-transparency: reduce) {
+  .btn--glass,
+  .icon-btn--glass {
+    background: var(--glass-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .btn--video {
+    background: var(--glass-video-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn--ghost:hover:not(:disabled),
+  .icon-btn--ghost:hover:not(:disabled) {
+    color: var(--text);
+  }
+}

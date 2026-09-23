@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+test-results/
+playwright-report/
+blob-report/
+*.tsbuildinfo
+.vite/
+.cache/
+# Proyecto de Xcode: lo genera XcodeGen desde project.yml
+apps/ios/*.xcodeproj/
+apps/ios/build/
+apps/ios/DerivedData/
+# Datos de pruebas locales del servidor
+.data/
+.env

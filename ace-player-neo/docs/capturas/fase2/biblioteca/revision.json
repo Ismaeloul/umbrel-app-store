@@ -1,0 +1,398 @@
+[
+  {
+    "file": "biblioteca-movil-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-recientes-movil-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-listas-movil-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-vacia-movil-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-filtro-movil-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-menu-movil-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "buscar-movil-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "buscar-vacio-movil-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "ajustes-movil-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "pegar-hash-movil-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-sonando-movil-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-movil-claro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-recientes-movil-claro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-listas-movil-claro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-vacia-movil-claro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-filtro-movil-claro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-menu-movil-claro.png",
+    "problems": []
+  },
+  {
+    "file": "buscar-movil-claro.png",
+    "problems": []
+  },
+  {
+    "file": "buscar-vacio-movil-claro.png",
+    "problems": []
+  },
+  {
+    "file": "ajustes-movil-claro.png",
+    "problems": []
+  },
+  {
+    "file": "pegar-hash-movil-claro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-sonando-movil-claro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-escritorio-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-recientes-escritorio-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-listas-escritorio-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-vacia-escritorio-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-filtro-escritorio-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-menu-escritorio-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "buscar-escritorio-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "buscar-vacio-escritorio-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "ajustes-escritorio-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "pegar-hash-escritorio-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-sonando-escritorio-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-escritorio-claro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-recientes-escritorio-claro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-listas-escritorio-claro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-vacia-escritorio-claro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-filtro-escritorio-claro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-menu-escritorio-claro.png",
+    "problems": []
+  },
+  {
+    "file": "buscar-escritorio-claro.png",
+    "problems": []
+  },
+  {
+    "file": "buscar-vacio-escritorio-claro.png",
+    "problems": []
+  },
+  {
+    "file": "ajustes-escritorio-claro.png",
+    "problems": []
+  },
+  {
+    "file": "pegar-hash-escritorio-claro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-sonando-escritorio-claro.png",
+    "problems": []
+  },
+  {
+    "file": "biblioteca 360×800",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-listas 360×800",
+    "problems": []
+  },
+  {
+    "file": "buscar 360×800",
+    "problems": []
+  },
+  {
+    "file": "ajustes 360×800",
+    "problems": []
+  },
+  {
+    "file": "pegar-hash 360×800",
+    "problems": []
+  },
+  {
+    "file": "biblioteca 390×844",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-listas 390×844",
+    "problems": []
+  },
+  {
+    "file": "buscar 390×844",
+    "problems": []
+  },
+  {
+    "file": "ajustes 390×844",
+    "problems": []
+  },
+  {
+    "file": "pegar-hash 390×844",
+    "problems": []
+  },
+  {
+    "file": "biblioteca 430×932",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-listas 430×932",
+    "problems": []
+  },
+  {
+    "file": "buscar 430×932",
+    "problems": []
+  },
+  {
+    "file": "ajustes 430×932",
+    "problems": []
+  },
+  {
+    "file": "pegar-hash 430×932",
+    "problems": []
+  },
+  {
+    "file": "biblioteca 844×390",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-listas 844×390",
+    "problems": []
+  },
+  {
+    "file": "buscar 844×390",
+    "problems": []
+  },
+  {
+    "file": "ajustes 844×390",
+    "problems": []
+  },
+  {
+    "file": "pegar-hash 844×390",
+    "problems": []
+  },
+  {
+    "file": "biblioteca 932×430",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-listas 932×430",
+    "problems": []
+  },
+  {
+    "file": "buscar 932×430",
+    "problems": []
+  },
+  {
+    "file": "ajustes 932×430",
+    "problems": []
+  },
+  {
+    "file": "pegar-hash 932×430",
+    "problems": []
+  },
+  {
+    "file": "biblioteca 768×1024",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-listas 768×1024",
+    "problems": []
+  },
+  {
+    "file": "buscar 768×1024",
+    "problems": []
+  },
+  {
+    "file": "ajustes 768×1024",
+    "problems": []
+  },
+  {
+    "file": "pegar-hash 768×1024",
+    "problems": []
+  },
+  {
+    "file": "biblioteca 1024×1366",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-listas 1024×1366",
+    "problems": []
+  },
+  {
+    "file": "buscar 1024×1366",
+    "problems": []
+  },
+  {
+    "file": "ajustes 1024×1366",
+    "problems": []
+  },
+  {
+    "file": "pegar-hash 1024×1366",
+    "problems": []
+  },
+  {
+    "file": "biblioteca 1280×800",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-listas 1280×800",
+    "problems": []
+  },
+  {
+    "file": "buscar 1280×800",
+    "problems": []
+  },
+  {
+    "file": "ajustes 1280×800",
+    "problems": []
+  },
+  {
+    "file": "pegar-hash 1280×800",
+    "problems": []
+  },
+  {
+    "file": "biblioteca 1440×900",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-listas 1440×900",
+    "problems": []
+  },
+  {
+    "file": "buscar 1440×900",
+    "problems": []
+  },
+  {
+    "file": "ajustes 1440×900",
+    "problems": []
+  },
+  {
+    "file": "pegar-hash 1440×900",
+    "problems": []
+  },
+  {
+    "file": "biblioteca 1920×1080",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-listas 1920×1080",
+    "problems": []
+  },
+  {
+    "file": "buscar 1920×1080",
+    "problems": []
+  },
+  {
+    "file": "ajustes 1920×1080",
+    "problems": []
+  },
+  {
+    "file": "pegar-hash 1920×1080",
+    "problems": []
+  },
+  {
+    "file": "biblioteca 2560×1440",
+    "problems": []
+  },
+  {
+    "file": "biblioteca-listas 2560×1440",
+    "problems": []
+  },
+  {
+    "file": "buscar 2560×1440",
+    "problems": []
+  },
+  {
+    "file": "ajustes 2560×1440",
+    "problems": []
+  },
+  {
+    "file": "pegar-hash 2560×1440",
+    "problems": []
+  }
+]

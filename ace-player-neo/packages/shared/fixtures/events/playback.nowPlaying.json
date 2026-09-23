@@ -1,0 +1,13 @@
+{
+  "type": "playback.nowPlaying",
+  "data": {
+    "nowPlaying": {
+      "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+      "title": "DAZN 1",
+      "dev": "salon",
+      "token": "tok_abc123",
+      "at": 1790188200000
+    },
+    "learningCount": 4
+  }
+}

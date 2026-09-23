@@ -1,0 +1,9 @@
+{
+  "type": "stream.closed",
+  "data": {
+    "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+    "viewerIds": ["viewer_tab01"],
+    "reason": "engine_failed",
+    "code": "engine_unavailable"
+  }
+}

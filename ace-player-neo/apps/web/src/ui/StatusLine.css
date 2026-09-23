@@ -1,0 +1,54 @@
+.status-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border-radius: var(--r-m);
+  background: var(--surface);
+  box-shadow:
+    inset 0 0 0 1px var(--line-soft),
+    inset 3px 0 0 var(--status-edge, transparent);
+  animation: ace-funde var(--dur-rapido) var(--ease-out) both;
+  transition: opacity var(--dur-fade) var(--ease-out);
+}
+.status-line[data-state='leaving'] {
+  opacity: 0;
+}
+/* El borde izquierdo dice el tipo (como la 0.6.59), además del icono y la frase. */
+.status-line--ok {
+  --status-edge: var(--ok);
+}
+.status-line--warn {
+  --status-edge: var(--weak);
+}
+.status-line--err {
+  --status-edge: var(--fail);
+}
+.status-line--info {
+  --status-edge: var(--accent-edge);
+}
+.status-line__icon {
+  color: var(--text-2);
+}
+.status-line__text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-15);
+  font-weight: var(--wght-medium);
+}
+.status-line__count {
+  color: var(--text-2);
+  font-stretch: var(--w-num);
+  font-weight: var(--wght-num);
+}
+.status-line__meta {
+  flex: none;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  font-weight: var(--wght-strong);
+  white-space: nowrap;
+}

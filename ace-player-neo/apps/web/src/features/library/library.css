@@ -1,0 +1,656 @@
+/* ==========================================================================
+   Biblioteca (maqueta A, biblioteca.html, con el dorsal de C2 y «Emitiendo
+   ahora» de C1). Solo tokens; animaciones solo con transform y opacity; el
+   hover, solo con ratón de verdad.
+   ========================================================================== */
+
+.lib {
+  display: grid;
+  gap: var(--s-4);
+  align-content: start;
+  max-width: 880px;
+  margin-inline: auto;
+  min-width: 0;
+}
+.lib-search {
+  min-width: 0;
+}
+/* La pista «/» solo tiene sentido con teclado físico. */
+@media (hover: none) {
+  .lib-search .field__kbd {
+    display: none;
+  }
+}
+.lib-panel {
+  display: grid;
+  gap: var(--s-3);
+  min-width: 0;
+  outline: none;
+}
+.lib-panel:focus-visible {
+  outline: 2px solid var(--accent-edge);
+  outline-offset: 4px;
+  border-radius: var(--r-l);
+}
+
+/* ---- Lista activa (pestaña Listas) ---------------------------------------- */
+.lib-source {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+  padding-inline: var(--s-1);
+}
+.lib-source__text {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: var(--lh-snug);
+}
+.lib-source__name {
+  font-weight: var(--wght-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lib-source__meta {
+  color: var(--text-3);
+  font-size: var(--fs-caption);
+}
+
+/* ---- Contenedor de la lista (una superficie con separadores) ------------- */
+.lib-list {
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  overflow: hidden;
+  contain: layout paint;
+}
+.lib-row + .lib-row {
+  box-shadow: inset 0 1px 0 var(--line-soft);
+}
+
+/* ---- Tarjeta de canal ------------------------------------------------------ */
+.ch {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  isolation: isolate;
+}
+/* Fondo de hover y de «elegido» en una capa aparte: solo cambia su opacidad. */
+.ch::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--surface-2);
+  opacity: 0;
+  transition: opacity var(--dur-rapido) var(--ease-rapido);
+  pointer-events: none;
+}
+.ch[aria-current='true']::before {
+  opacity: 1;
+}
+.ch[aria-current='true']::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 14px;
+  bottom: 14px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent-edge);
+}
+.ch--enter {
+  animation: ace-aparece var(--dur-estandar) var(--ease-estandar) both;
+  animation-delay: calc(min(var(--i, 0), var(--stagger-max)) * var(--stagger-step));
+}
+@media (prefers-reduced-motion: reduce) {
+  .ch--enter {
+    animation-name: ace-funde;
+  }
+}
+
+.ch__main {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  min-height: 76px;
+  padding: 12px 4px 12px 16px;
+  color: inherit;
+  text-decoration: none;
+  /* La pulsación larga abre NUESTRO menú, no el del sistema. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  outline: none;
+}
+.ch__main:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent-edge);
+  border-radius: var(--r-l);
+}
+.ch__body {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.ch__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--fs-17);
+  font-weight: var(--wght-strong);
+  line-height: 1.2;
+}
+.ch__name-text {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ch__fallen {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  color: var(--weak-ink);
+}
+.ch__line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: var(--fs-13);
+  color: var(--text-2);
+}
+.ch__line--live .ch__txt {
+  color: var(--text);
+  font-weight: var(--wght-medium);
+}
+.ch__crests {
+  display: inline-flex;
+  flex: none;
+}
+.ch__crests > * + * {
+  margin-left: -5px;
+}
+.ch__txt {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ch__score {
+  color: var(--text);
+  font-weight: var(--wght-num);
+}
+.ch__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 20px;
+  font-size: var(--fs-caption);
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.ch__sub {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ch__min {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  color: var(--live);
+  font-size: var(--fs-13);
+  font-weight: var(--wght-strong);
+}
+.ch__state {
+  color: var(--live);
+  font-weight: var(--wght-medium);
+}
+.ch__state--hidden {
+  color: var(--text-2);
+}
+.ch__onair {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 7px;
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+  font-size: var(--fs-label);
+  font-weight: var(--wght-strong);
+  font-stretch: var(--w-tight);
+}
+/* Ecualizador de «En pantalla»: tres barras que laten con scaleY. */
+.ch__eq {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 10px;
+}
+.ch__eq i {
+  display: block;
+  width: 3px;
+  height: 10px;
+  border-radius: 1px;
+  background: currentColor;
+  transform-origin: bottom;
+  animation: lib-eq 1.1s var(--ease-out) infinite alternate;
+}
+.ch__eq i:nth-child(2) {
+  animation-delay: -0.4s;
+}
+.ch__eq i:nth-child(3) {
+  animation-delay: -0.8s;
+}
+@keyframes lib-eq {
+  from {
+    transform: scaleY(0.3);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ch__eq i {
+    animation: none;
+  }
+  .ch__eq i:nth-child(1) {
+    transform: scaleY(0.5);
+  }
+  .ch__eq i:nth-child(3) {
+    transform: scaleY(0.75);
+  }
+}
+
+.ch__acts {
+  display: flex;
+  align-items: center;
+  padding-right: 6px;
+}
+/* En el móvil estrecho solo cabe «Más» (la estrella está dentro del menú). */
+.ch__fav {
+  display: none;
+}
+.ch__fav[aria-pressed='true'] {
+  color: var(--accent-ink);
+}
+@media (min-width: 600px) {
+  .ch__fav {
+    display: inline-grid;
+  }
+}
+@media (hover: hover) and (pointer: fine) {
+  .ch:hover::before {
+    opacity: 0.55;
+  }
+  .ch[aria-current='true']:hover::before {
+    opacity: 1;
+  }
+  .ch__acts > * {
+    opacity: 0;
+    transition: opacity var(--dur-rapido) var(--ease-rapido);
+  }
+  .ch:hover .ch__acts > *,
+  .ch:focus-within .ch__acts > *,
+  .ch[aria-current='true'] .ch__acts > *,
+  .ch__acts > [aria-expanded='true'] {
+    opacity: 1;
+  }
+}
+
+/* ---- Cabeceras dentro de la lista ----------------------------------------- */
+.lib-when {
+  padding: 14px 16px 6px;
+  font-size: var(--fs-13);
+  font-weight: var(--wght-strong);
+  color: var(--text-2);
+}
+.lib-cat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 16px;
+  background: var(--bg-sunk);
+  color: var(--text);
+  font-weight: var(--wght-strong);
+  text-align: left;
+}
+/* El fondo de la cabecera tapa el separador de la fila: lo pinta ella. */
+.lib-row + .lib-row .lib-cat {
+  box-shadow: inset 0 1px 0 var(--line-soft);
+}
+.lib-cat:disabled {
+  cursor: default;
+}
+/* También en la 2.ª cabecera y siguientes: la regla del separador (más
+   específica) se comía el borde de foco (revisión de teclado de la Fase 2). */
+.lib-cat:focus-visible,
+.lib-row + .lib-row .lib-cat:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--accent-edge);
+}
+.lib-cat__chev {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  margin-inline: 4px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--dur-rapido) var(--ease-rapido);
+}
+.lib-cat[aria-expanded='true'] .lib-cat__chev {
+  transform: rotate(45deg) translate(-2px, -2px);
+}
+.lib-cat__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lib-cat__count {
+  color: var(--text-3);
+  font-size: var(--fs-13);
+}
+
+/* ---- Pie y botones bajo la lista ------------------------------------------ */
+.lib-engine {
+  justify-content: center;
+}
+.lib-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-inline: var(--s-1);
+  color: var(--text-3);
+  font-size: var(--fs-caption);
+}
+.lib-foot > span:last-child {
+  min-width: 0;
+}
+
+/* ---- «Emitiendo ahora» (C1) ----------------------------------------------- */
+.onair {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.onair__title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-15);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+}
+.onair__rail {
+  display: flex;
+  /* Cada tarjeta con su alto: la que lleva «Ver marcador» debajo no estira a
+     las demás (quedaban más altas y con el texto flotando en medio). */
+  align-items: flex-start;
+  gap: var(--s-3);
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  /* A sangre en el móvil: el carrusel llega al borde de la pantalla. */
+  margin-inline: calc(-1 * (var(--gutter) + var(--safe-left)))
+    calc(-1 * (var(--gutter) + var(--safe-right)));
+  padding-inline: calc(var(--gutter) + var(--safe-left)) calc(var(--gutter) + var(--safe-right));
+  /* Sin esto, el imán (`scroll-snap-align: start`) pega la primera tarjeta
+     al borde de la pantalla ignorando el relleno y la deja cortada. */
+  scroll-padding-inline: calc(var(--gutter) + var(--safe-left))
+    calc(var(--gutter) + var(--safe-right));
+  padding-block: 2px;
+}
+.onair__rail::-webkit-scrollbar {
+  display: none;
+}
+@media (min-width: 768px) {
+  .onair__rail {
+    margin-inline: 0;
+    padding-inline: 2px;
+    scroll-padding-inline: 2px;
+  }
+}
+.onair__item {
+  display: grid;
+  gap: 4px;
+  flex: 0 0 min(280px, 78vw);
+  scroll-snap-align: start;
+}
+.onair__card {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 76px;
+  padding: 12px 14px;
+  border-radius: var(--r-l);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  color: inherit;
+  text-decoration: none;
+}
+.onair__item[data-on-screen] .onair__card {
+  box-shadow: inset 0 0 0 1.5px var(--accent-edge);
+}
+.onair__card:focus-visible {
+  outline: 2px solid var(--accent-edge);
+  outline-offset: 2px;
+}
+.onair__body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.onair__name,
+.onair__match {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.onair__name {
+  font-weight: var(--wght-strong);
+}
+.onair__match {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+.onair__score {
+  color: var(--text);
+}
+.onair__meta {
+  display: flex;
+  gap: 6px;
+  color: var(--live);
+  font-size: var(--fs-caption);
+  font-weight: var(--wght-strong);
+}
+.onair__reveal {
+  justify-self: start;
+}
+
+/* ---- Hojas ------------------------------------------------------------------ */
+.lib-sheet-form {
+  display: grid;
+  gap: var(--s-4);
+}
+.lib-hashbox {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: var(--r-m);
+  background: var(--bg-sunk);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+.lib-hashbox__label {
+  color: var(--text-3);
+  font-size: var(--fs-caption);
+}
+.lib-hashbox__value {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* ---- Ficha del canal (panel lateral de escritorio) ------------------------ */
+.lib-detail {
+  display: grid;
+  gap: var(--s-4);
+  padding: 20px;
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  min-width: 0;
+}
+.lib-detail--empty {
+  color: var(--text-2);
+}
+.lib-detail__hint {
+  font-size: var(--fs-15);
+  line-height: var(--lh-text);
+}
+.lib-detail__head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+}
+.lib-detail__titles {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.lib-detail__name {
+  font-size: var(--fs-22);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.lib-detail__from {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+/* «Ver canal» a todo lo ancho y las acciones debajo: en un panel de 340 px no
+   caben en una fila sin cortar el texto del botón. */
+.lib-detail__acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.lib-detail__play {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+.lib-detail__sec {
+  display: grid;
+  gap: 10px;
+}
+.lib-detail__h {
+  font-size: var(--fs-15);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+}
+.lib-detail__none {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+.lib-now {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: var(--r-l);
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+.lib-now__teams {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.lib-now__team {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  font-weight: var(--wght-medium);
+}
+.lib-now__name {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lib-now__goals {
+  font-size: var(--fs-17);
+}
+.lib-now__reveal {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+.lib-later {
+  display: grid;
+  border-radius: var(--r-l);
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  overflow: hidden;
+}
+.lib-later__row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  font-size: var(--fs-13);
+}
+.lib-later__row + .lib-later__row {
+  box-shadow: inset 0 1px 0 var(--line-soft);
+}
+.lib-later__time {
+  color: var(--text-2);
+  font-size: var(--fs-15);
+}
+.lib-later__title {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lib-detail__hash {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-2);
+  min-width: 0;
+}
+.lib-detail__hash .mono {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -1,0 +1,24 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"],
+    "allowJs": true,
+    "checkJs": true
+  },
+  "include": [
+    "test/**/*.ts",
+    "local/**/*.mjs",
+    "prettier.config.mjs",
+    "../scripts/*.mjs",
+    "../scripts/lib/*.mjs",
+    "../scripts/test/**/*.ts",
+    "../apps/server/build.mjs",
+    "../vitest.config.ts"
+  ],
+  "exclude": [
+    "../scripts/smoke-bundle.mjs",
+    "../scripts/soak-real.mjs",
+    "../scripts/check-migration-prod.mjs"
+  ]
+}

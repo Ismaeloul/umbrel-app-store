@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Partido · Ace Player Neo (opción A)</title>
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#081829">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f0f7fc">
+<link rel="icon" href="icono.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112.5,100..800&family=Mona+Sans:wdth,wght@75..125,200..900&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="base.css">
+<style>
+  /* ======================================================================
+     Móvil: vídeo fijo arriba y una pila que se desplaza debajo.
+     Escritorio: carril + agenda + escenario + panel lateral a la vez.
+     ====================================================================== */
+  .agenda-col { display: none; }
+  .watch { position: relative; isolation: isolate; display: grid; gap: 14px; align-content: start; }
+  /* En móvil la columna del escenario no existe: así el vídeo se queda pegado arriba toda la página */
+  .stage-col { display: contents; }
+  .side-col { display: grid; gap: 14px; align-content: start; padding: 0 var(--gutter) 40px; }
+
+  /* ---- Reproductor -------------------------------------------------------- */
+  .player { position: sticky; top: 0; z-index: 30; }
+  .video {
+    position: relative; aspect-ratio: 16 / 9; overflow: hidden; background: #0b1a12;
+    padding-top: env(safe-area-inset-top);
+  }
+  .video > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .v-top, .v-bot { position: absolute; left: 8px; right: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; transition: opacity var(--dur-estandar) var(--ease-estandar); }
+  .v-top { top: calc(env(safe-area-inset-top) + 8px); }
+  .v-bot { bottom: 8px; }
+  .cap { display: inline-flex; align-items: center; gap: 0; padding: 0; border-radius: var(--r-pill); min-width: 0; }
+  .cap > button, .cap > .vol { position: relative; height: 44px; min-width: 44px; display: inline-grid; place-items: center; border-radius: var(--r-pill); color: inherit; }
+  .cap > button:hover { background: oklch(1 0 0 / 0.1); }
+  .cap .back30 { grid-auto-flow: column; gap: 2px; padding: 0 12px 0 8px; font-size: var(--fs-13); font-weight: 700; font-stretch: var(--w-num); font-variant-numeric: tabular-nums; }
+  .cap .live-btn { grid-auto-flow: column; gap: 8px; padding: 0 14px 0 13px; font-size: var(--fs-13); font-weight: 720; letter-spacing: 0.01em; }
+  .cap .live-btn .live-dot { --live: oklch(0.83 0.12 222); }
+  .cap .live-btn[data-behind="true"] { background: var(--accent); color: var(--on-accent); }
+  .cap .live-btn[data-behind="true"] .live-dot { background: var(--on-accent); }
+  .cap .live-btn[data-behind="true"] .live-dot::after { display: none; }
+  .vol { display: none !important; }
+  .chip-now { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 16px 0 14px; border-radius: var(--r-pill); font-size: var(--fs-13); font-weight: 650; }
+  .chip-now small { font-size: var(--fs-12); font-weight: 520; opacity: 0.85; }
+  .chip-now { display: none; }
+
+  /* Luz ambiental: los colores de los dos equipos se derraman desde el vídeo */
+  .ambient {
+    position: absolute; z-index: -1; left: 0; right: 0; top: 140px; height: 420px; pointer-events: none;
+    background:
+      radial-gradient(60% 55% at 12% 0%, color-mix(in oklch, var(--ta) 30%, transparent), transparent 72%),
+      radial-gradient(60% 55% at 88% 0%, color-mix(in oklch, var(--tb) 22%, transparent), transparent 72%);
+  }
+
+  /* ---- Línea de estado bajo el vídeo -------------------------------------- */
+  .status {
+    display: flex; align-items: center; gap: 10px; min-height: 44px; margin: 0 var(--gutter);
+    padding: 0 14px; border-radius: var(--r-m); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-soft);
+    font-size: var(--fs-13); font-weight: 560; color: var(--text);
+  }
+  .status .sig { flex: none; }
+  .status span.t { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .status .behind { margin-left: auto; color: var(--text-2); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* ---- Bento: marcador + información ------------------------------------- */
+  .bento { display: grid; gap: 12px; margin: 0 var(--gutter); }
+  .tile { border-radius: var(--r-xl); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-soft); }
+  .sb { position: relative; overflow: hidden; isolation: isolate; padding: 16px 18px 16px; display: grid; gap: 14px; }
+  .sb-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; margin: -6px -8px -6px 0; }
+  .sb-comp { font-size: var(--fs-13); color: var(--text-2); font-weight: 560; }
+  .sb-score { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; }
+  .sb-side { display: grid; justify-items: center; gap: 8px; text-align: center; min-width: 0; }
+  .sb-side .crest { --s: 58px; }
+  .sb-side .nm { font-size: var(--fs-15); font-weight: 700; font-stretch: var(--w-head); line-height: 1.2; }
+  .sb-mid { display: grid; justify-items: center; gap: 4px; min-width: 92px; }
+  .sb-big { font-size: var(--fs-64); line-height: 0.9; display: flex; align-items: center; gap: 0.1em; }
+  .sb-big .sep { color: var(--text-3); font-weight: 500; }
+  .sb-min { display: inline-flex; align-items: center; gap: 8px; color: var(--live); font-weight: 720; font-size: var(--fs-15); }
+  .sb-hidden { display: none; min-height: 44px; padding: 0 16px; border-radius: var(--r-pill); background: var(--surface-2); font-weight: 650; font-size: var(--fs-13); box-shadow: inset 0 0 0 1px var(--line-soft); }
+  .sb[data-oculto="true"] .sb-big { display: none; }
+  .sb[data-oculto="true"] .sb-hidden { display: inline-flex; align-items: center; gap: 8px; }
+  .sb[data-oculto="true"] .scorers { visibility: hidden; }
+  .sb[data-oculto="true"] .tl-goal { display: none; }
+  .scorers { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: var(--fs-12); color: var(--text-2); }
+  .scorers p:last-child { text-align: right; }
+  .scorers b { color: var(--text); font-weight: 650; }
+  .info { padding: 16px 18px; display: grid; gap: 14px; align-content: start; }
+  .info h3, .sec-h h2 { font-size: var(--fs-15); font-weight: 720; font-stretch: var(--w-head); }
+  .chs { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chs span { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 12px; border-radius: 12px; background: var(--surface-2); font-size: var(--fs-13); font-weight: 600; }
+  .place { font-size: var(--fs-13); color: var(--text-2); }
+  .keys { display: none; }
+
+  /* ---- Fuentes ------------------------------------------------------------ */
+  .sec-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
+  .sec-h .cnt { color: var(--text-3); font-weight: 650; margin-left: 6px; font-variant-numeric: tabular-nums; }
+  .sec-h .tools { display: flex; align-items: center; margin-right: -8px; }
+  .scan { display: grid; gap: 8px; }
+  .scan-bar { height: 4px; border-radius: 4px; background: var(--line-soft); box-shadow: inset 0 0 0 1px var(--line-soft); overflow: hidden; }
+  .scan-bar i { display: block; height: 100%; width: calc(var(--p) * 100%); background: var(--text-2); border-radius: inherit; }
+  .scan p { font-size: var(--fs-13); color: var(--text-2); }
+  .scan p b { color: var(--text); font-weight: 680; font-variant-numeric: tabular-nums; }
+  .srcl { border-radius: var(--r-xl); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-soft); overflow: hidden; }
+  .srcl li + li .src { box-shadow: inset 0 1px 0 var(--line-soft); }
+  .src {
+    position: relative; width: 100%; text-align: left;
+    display: grid; grid-template-columns: 24px minmax(0, 1fr); align-items: center; gap: 12px;
+    min-height: 60px; padding: 10px 14px 10px 16px;
+    transition: background-color var(--dur-rapido) var(--ease-rapido);
+  }
+  .src:hover { background: color-mix(in oklch, var(--surface-2) 60%, transparent); }
+  .src .n { font-size: var(--fs-22); line-height: 1; color: var(--text-2); }
+  .src .body { display: grid; gap: 3px; min-width: 0; }
+  .src .l1 { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .src .pv { font-size: var(--fs-15); font-weight: 680; }
+  .src .l2 { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--fs-12); color: var(--text-2); line-height: 1.35; }
+  .src .l2 .d { min-width: 0; }
+  .src[aria-current="true"] { background: var(--surface-2); }
+  .src[aria-current="true"]::before { content: ""; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent-edge); }
+  .src[aria-current="true"] .n { color: var(--accent-ink); }
+  .src .now { display: none; }
+  .src[aria-current="true"] .now { display: inline-flex; }
+  .now { flex: none; align-items: center; gap: 6px; min-height: 26px; padding: 0 9px; border-radius: 8px; background: var(--accent-wash); color: var(--accent-ink); font-size: var(--fs-11); font-weight: 700; font-stretch: var(--w-tight); white-space: nowrap; }
+
+  /* Acciones de la fuente activa: una sola cápsula */
+  .acts { display: grid; grid-template-columns: repeat(5, 1fr); padding: 4px; border-radius: var(--r-l); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-soft); }
+  .acts button { min-height: 62px; display: grid; place-items: center; align-content: center; gap: 4px; border-radius: 16px; color: var(--text); font-size: var(--fs-11); font-weight: 620; font-stretch: var(--w-tight); line-height: 1.15; text-align: center; padding: 4px 2px; }
+  .acts button:hover { background: var(--line-soft); }
+  .acts button[aria-pressed="true"] { color: var(--accent-ink); }
+  .acts .i { width: 22px; height: 22px; }
+  .acts-h { font-size: var(--fs-12); color: var(--text-2); font-weight: 600; padding: 0 4px; }
+
+  /* ---- Panel técnico («nerd») --------------------------------------------- */
+  .nerd { border-radius: var(--r-l); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-soft); }
+  .nerd summary { list-style: none; display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 12px 0 16px; cursor: pointer; border-radius: var(--r-l); }
+  .nerd summary::-webkit-details-marker { display: none; }
+  .nerd summary .t { font-size: var(--fs-15); font-weight: 700; font-stretch: var(--w-head); }
+  .nerd summary .peek { margin-left: auto; font-family: var(--mono); font-stretch: 87.5%; font-size: var(--fs-11); color: var(--text-2); white-space: nowrap; }
+  .nerd summary .chev { transition: transform var(--dur-estandar) var(--ease-estandar); color: var(--text-2); }
+  .nerd[open] summary .chev { transform: rotate(180deg); }
+  .nerd[open] summary .peek { display: none; }
+  kbd { font-family: var(--mono); font-stretch: 87.5%; font-size: var(--fs-11); font-weight: 600; min-width: 22px; height: 22px; padding: 0 6px; display: inline-grid; place-items: center; border-radius: 6px; background: var(--bg); color: var(--text-2); box-shadow: inset 0 0 0 1px var(--line), 0 1px 0 var(--line); }
+  .nerd-body { padding: 0 16px 16px; display: grid; gap: 12px; }
+  .spark { display: grid; gap: 4px; }
+  .spark svg { width: 100%; height: 56px; overflow: visible; }
+  .spark .cap-t { display: flex; justify-content: space-between; font-size: var(--fs-11); color: var(--text-3); font-weight: 600; }
+  .nerd dl { display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; margin: 0; font-size: var(--fs-12); }
+  .nerd dt { color: var(--text-2); font-weight: 560; }
+  .nerd dd { margin: 0; font-family: var(--mono); font-stretch: 87.5%; font-size: var(--fs-12); text-align: right; font-variant-numeric: tabular-nums; color: var(--text); min-width: 0; overflow-wrap: anywhere; }
+  .nerd dd.ok { color: var(--ok-ink); }
+
+  /* ======================================================================
+     Escritorio 1440
+     ====================================================================== */
+  @media (min-width: 1024px) {
+    .app { display: flex; height: 100dvh; overflow: hidden; }
+    .agenda-col {
+      display: grid; align-content: start; gap: 16px; width: 300px; flex: none; overflow-y: auto;
+      padding: 22px 14px 24px 16px; border-right: 1px solid var(--line-soft); background: var(--bg);
+    }
+    .agenda-col h2 { font-size: var(--fs-22); font-weight: 760; font-stretch: var(--w-head); letter-spacing: -0.01em; line-height: 1.1; }
+    .agenda-col .sub { display: flex; align-items: center; gap: 10px; margin-top: 4px; font-size: var(--fs-13); color: var(--text-2); }
+    .agenda-col .comp-head h2 { font-size: var(--fs-13); font-weight: 700; }
+    .agenda-col .comp-head p { font-size: var(--fs-12); }
+    .agenda-col .comp { gap: 8px; }
+    .watch { flex: 1; min-width: 0; display: flex; gap: 0; overflow: hidden; }
+    .stage-col { display: grid; align-content: start; flex: 1; min-width: 0; overflow-y: auto; padding: 20px 16px 24px 20px; gap: 12px; }
+    .side-col { width: 344px; flex: none; overflow-y: auto; padding: 14px 20px 24px 4px; gap: 12px;
+      transition: width var(--dur-estandar) var(--ease-estandar), opacity var(--dur-rapido) var(--ease-rapido); }
+    body.sin-panel .side-col { width: 0; padding: 0; opacity: 0; overflow: hidden; }
+    .player { position: relative; z-index: 1; }
+    .player::before { /* luz ambiental alrededor del vídeo */
+      content: ""; position: absolute; z-index: -1; inset: -28px -24px -34px;
+      background:
+        radial-gradient(50% 60% at 18% 40%, color-mix(in oklch, var(--ta) 34%, transparent), transparent 72%),
+        radial-gradient(50% 60% at 82% 40%, color-mix(in oklch, var(--tb) 26%, transparent), transparent 72%);
+      filter: blur(8px);
+    }
+    .ambient { display: none; }
+    .video { border-radius: var(--r-xl); padding-top: 0; box-shadow: 0 0 0 1px oklch(0 0 0 / 0.25), 0 30px 60px -30px oklch(0.05 0.03 252 / 0.7); }
+    .v-top { top: 12px; left: 12px; right: 12px; }
+    .v-bot { bottom: 12px; left: 12px; right: 12px; }
+    .vol { display: inline-flex !important; align-items: center; padding: 0 14px 0 2px; }
+    .vol input { width: 96px; }
+    .chip-now { display: inline-flex; }
+    .v-top .only-m { display: none; }
+    .status { margin: 0; }
+    .bento { margin: 0; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); }
+    .sb { padding: 16px 22px 18px; }
+    .sb-side .crest { --s: 64px; }
+    .keys { display: grid; grid-template-columns: auto 1fr; gap: 8px 10px; align-items: center; font-size: var(--fs-12); color: var(--text-2); }
+    .side-col .sec-h { padding-top: 6px; }
+    .src { min-height: 56px; padding: 8px 12px 8px 14px; }
+  }
+  @media (min-width: 1024px) and (max-width: 1279px) { .agenda-col { display: none; } }
+
+  /* Rango de volumen */
+  input[type="range"] { -webkit-appearance: none; appearance: none; background: transparent; height: 44px; margin: 0; }
+  input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: 4px; background: linear-gradient(90deg, #fff calc(var(--v) * 100%), oklch(1 0 0 / 0.3) 0); }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px oklch(0 0 0 / 0.4); }
+  input[type="range"]::-moz-range-track { height: 4px; border-radius: 4px; background: oklch(1 0 0 / 0.3); }
+  input[type="range"]::-moz-range-progress { height: 4px; border-radius: 4px; background: #fff; }
+  input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: #fff; }
+  /* Móvil: el orden lo marca la prioridad (marcador, fuentes, acciones, información, datos técnicos) */
+  @media (max-width: 1023px) {
+    .watch { padding-bottom: 40px; }
+    .bento, .side-col { display: contents; }
+    .sb, .info, .side-col > * { margin: 0 var(--gutter); }
+    .sb { order: 1; } .side-col > section:first-child { order: 2; } .side-col > section:nth-child(2) { order: 3; }
+    .info { order: 4; } .nerd { order: 5; }
+    .player, .status { order: 0; }
+    #plegar { display: none; }
+  }
+  @media (hover: none) { .nerd summary kbd { display: none; } }
+</style>
+</head>
+<body>
+<script src="iconos.js"></script>
+
+<div class="app" style="--ta: var(--t-atm); --tb: var(--t-tot)">
+  <aside class="rail">
+    <img class="brand" src="icono.svg" alt="Ace Player Neo">
+    <nav aria-label="Principal">
+      <a href="agenda.html" aria-current="page"><svg class="i"><use href="#i-agenda"/></svg>Agenda</a>
+      <a href="biblioteca.html"><svg class="i"><use href="#i-biblio"/></svg>Biblioteca</a>
+      <a href="#"><svg class="i"><use href="#i-buscar"/></svg>Buscar</a>
+      <a href="#"><svg class="i"><use href="#i-ajustes"/></svg>Ajustes</a>
+    </nav>
+    <button class="engine" data-state="ok" title="Motor AceStream en línea"><svg class="i"><use href="#i-motor"/></svg><span>Motor</span><span>en línea</span></button>
+  </aside>
+
+  <!-- Agenda a la vista mientras ves (escritorio) -->
+  <aside class="agenda-col" aria-label="Agenda de hoy">
+    <header>
+      <h2>Hoy, miércoles 23</h2>
+      <p class="sub"><span class="live-tag"><span class="live-dot"></span>3 en directo</span><span>8 partidos</span></p>
+    </header>
+    <section class="comp" aria-labelledby="ac-ucl">
+      <header class="comp-head"><h2 id="ac-ucl">Champions League</h2></header>
+      <ol class="franjas franjas--compact">
+        <li><a class="franja is-live" href="partido.html" aria-current="true" style="--ta: var(--t-atm); --tb: var(--t-tot)">
+          <div class="f-time"><span class="f-ring num" style="--p:0.8"><span class="onda" aria-hidden="true"></span>72'</span><span class="sr-only">En directo, estás viéndolo</span></div>
+          <div class="f-teams">
+            <div class="f-team lead"><span class="crest" data-team="atm"></span><span class="f-name">Atlético</span><span class="f-score num" data-marcador>2</span></div>
+            <div class="f-team trail"><span class="crest" data-team="tot"></span><span class="f-name">Tottenham</span><span class="f-score num" data-marcador>1</span></div>
+          </div>
+          <div class="f-sig"><span class="sig sig--ok"><span class="bars"><i></i><i></i><i></i></span>Verificada</span></div>
+        </a></li>
+        <li><a class="franja is-live" href="partido.html" style="--ta: var(--t-gal); --tb: var(--t-vil)">
+          <div class="f-time"><span class="f-ring num" style="--p:0.8"><span class="onda" aria-hidden="true"></span>72'</span><span class="sr-only">En directo</span></div>
+          <div class="f-teams">
+            <div class="f-team"><span class="crest" data-team="gal"></span><span class="f-name">Galatasaray</span><span class="f-score num">0</span></div>
+            <div class="f-team"><span class="crest" data-team="vil"></span><span class="f-name">Villarreal</span><span class="f-score num">0</span></div>
+          </div>
+          <div class="f-sig"><span class="sig sig--weak"><span class="bars"><i></i><i></i><i></i></span>Floja</span></div>
+        </a></li>
+        <li><a class="franja" href="partido.html">
+          <div class="f-time"><span class="f-clock num">21:00</span><span class="f-note">en 48 min</span></div>
+          <div class="f-teams">
+            <div class="f-team"><span class="crest" data-team="rma"></span><span class="f-name">Real Madrid</span></div>
+            <div class="f-team"><span class="crest" data-team="bay"></span><span class="f-name">Bayern</span></div>
+          </div>
+          <div class="f-sig"><span class="sig sig--check"><span class="bars"><i></i><i></i><i></i></span>Comprobando</span></div>
+        </a></li>
+        <li><a class="franja" href="partido.html">
+          <div class="f-time"><span class="f-clock num">21:00</span><span class="f-note">en 48 min</span></div>
+          <div class="f-teams">
+            <div class="f-team"><span class="crest" data-team="int"></span><span class="f-name">Inter</span></div>
+            <div class="f-team"><span class="crest" data-team="bar"></span><span class="f-name">Barcelona</span></div>
+          </div>
+          <div class="f-sig"><span class="sig sig--ok"><span class="bars"><i></i><i></i><i></i></span>Verificada</span></div>
+        </a></li>
+        <li><a class="franja" href="partido.html">
+          <div class="f-time"><span class="f-clock num">21:00</span><span class="f-note">en 48 min</span></div>
+          <div class="f-teams">
+            <div class="f-team"><span class="crest" data-team="ben"></span><span class="f-name">Benfica</span></div>
+            <div class="f-team"><span class="crest" data-team="ath"></span><span class="f-name">Athletic</span></div>
+          </div>
+          <div class="f-sig"><span class="sig sig--idle"><span class="bars"><i></i><i></i><i></i></span>Pendiente</span></div>
+        </a></li>
+      </ol>
+    </section>
+    <section class="comp" aria-labelledby="ac-liga">
+      <header class="comp-head"><h2 id="ac-liga">LaLiga EA Sports</h2></header>
+      <ol class="franjas franjas--compact">
+        <li><a class="franja is-live" href="partido.html" style="--ta: var(--t-gir); --tb: var(--t-rso)">
+          <div class="f-time"><span class="f-ring num" style="--p:0.644"><span class="onda" aria-hidden="true"></span>58'</span><span class="sr-only">En directo</span></div>
+          <div class="f-teams">
+            <div class="f-team"><span class="crest" data-team="gir"></span><span class="f-name">Girona</span><span class="f-score num">1</span></div>
+            <div class="f-team"><span class="crest" data-team="rso"></span><span class="f-name">Real Sociedad</span><span class="f-score num">1</span></div>
+          </div>
+          <div class="f-sig"><span class="sig sig--fail"><span class="bars"><i></i><i></i><i></i></span>Sin señal</span></div>
+        </a></li>
+        <li><a class="franja" href="partido.html">
+          <div class="f-time"><span class="f-clock num">21:30</span><span class="f-note">en 1 h 18</span></div>
+          <div class="f-teams">
+            <div class="f-team"><span class="crest" data-team="bet"></span><span class="f-name">Real Betis</span></div>
+            <div class="f-team"><span class="crest" data-team="val"></span><span class="f-name">Valencia</span></div>
+          </div>
+          <div class="f-sig"><span class="sig sig--idle"><span class="bars"><i></i><i></i><i></i></span>Pendiente</span></div>
+        </a></li>
+        <li><a class="franja is-done" href="partido.html">
+          <div class="f-time"><span class="f-clock num">17:00</span><span class="f-note">Final</span></div>
+          <div class="f-teams">
+            <div class="f-team"><span class="crest" data-team="mll"></span><span class="f-name">Mallorca</span><span class="f-score num">1</span></div>
+            <div class="f-team"><span class="crest" data-team="esp"></span><span class="f-name">Espanyol</span><span class="f-score num">0</span></div>
+          </div>
+          <div class="f-sig"></div>
+        </a></li>
+      </ol>
+    </section>
+  </aside>
+
+  <main class="watch">
+    <div class="ambient" aria-hidden="true"></div>
+
+    <!-- ================= Escenario ================= -->
+    <div class="stage-col">
+      <section class="player" aria-label="Reproductor">
+        <div class="video" id="video">
+          <img src="campo.svg" alt="Imagen del partido (simulada)">
+          <div class="v-top">
+            <a class="glass--video icon-btn press only-m" href="agenda.html" aria-label="Minimizar el reproductor"><svg class="i"><use href="#i-chev-d"/></svg></a>
+            <span class="chip-now glass--video"><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>M+ Liga de Campeones<small>Fuente 1, Elcano</small></span>
+            <div class="cap glass--video">
+              <button class="press" aria-label="Añadir a favoritos (G)" title="Favorito (G)"><svg class="i s20"><use href="#i-star"/></svg></button>
+              <button class="press" aria-label="Imagen dentro de imagen (P)" title="Imagen dentro de imagen (P)"><svg class="i s20"><use href="#i-pip"/></svg></button>
+              <button class="press" aria-label="Más opciones" title="Más opciones"><svg class="i s20"><use href="#i-more"/></svg></button>
+            </div>
+          </div>
+          <div class="v-bot">
+            <div class="cap glass--video">
+              <button class="press" id="play" aria-label="Pausar (espacio)" aria-pressed="true" title="Pausar (espacio)"><svg class="i fill s20"><use href="#i-pause"/></svg></button>
+              <button class="press back30" id="back" aria-label="Retroceder 30 segundos (J)" title="Retroceder 30 s (J)"><svg class="i s18"><use href="#i-back"/></svg>30</button>
+              <button class="press" id="mute" aria-label="Silenciar (M)" title="Silenciar (M)"><svg class="i s20"><use href="#i-vol"/></svg></button>
+              <label class="vol"><span class="sr-only">Volumen</span><input id="vol" type="range" min="0" max="1" step="0.05" value="0.7" style="--v:0.7"></label>
+            </div>
+            <div class="cap glass--video">
+              <button class="press live-btn" id="live" data-behind="false" aria-label="Ya estás en directo"><span class="live-dot"></span><span id="live-t">Directo</span></button>
+              <button class="press" aria-label="Pantalla completa (F)" title="Pantalla completa (F)"><svg class="i s20"><use href="#i-full"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <p class="status" role="status" aria-live="polite" id="status">
+        <span class="sig sig--sm sig--ok"><span class="bars"><i></i><i></i><i></i></span></span>
+        <span class="t" id="status-t">Fuente 1 verificada. Vas en directo.</span>
+        <span class="behind" id="behind">6 s de retraso</span>
+      </p>
+
+      <div class="bento">
+        <section class="tile sb" id="sb" data-oculto="false" aria-label="Marcador">
+          <div class="sb-top">
+            <span class="sb-comp">Champions League, fase liga, jornada 2</span>
+            <button class="icon-btn press" id="tapar" aria-pressed="false" aria-label="Ocultar el marcador (tu emisión va por detrás del directo)" title="Ocultar marcador"><svg class="i s20"><use href="#i-eye-off"/></svg></button>
+          </div>
+          <div class="sb-score">
+            <div class="sb-side lit"><span class="crest" data-team="atm"><b>ATM</b></span><span class="nm">Atlético de Madrid</span></div>
+            <div class="sb-mid">
+              <span class="sb-big num" aria-label="2 a 1">2<span class="sep">–</span>1</span>
+              <button class="sb-hidden press" id="destapar" title="Tu emisión va por detrás del directo"><svg class="i s18"><use href="#i-eye"/></svg>Ver marcador</button>
+              <span class="sb-min num"><span class="live-dot"></span>72'</span>
+            </div>
+            <div class="sb-side lit"><span class="crest" data-team="tot"><b>TOT</b></span><span class="nm">Tottenham</span></div>
+          </div>
+          <div class="tl" style="--p:0.8">
+            <div class="tl-track"><span class="tl-rail"></span><span class="tl-ht"></span>
+              <span class="tl-goal" data-side="a" style="--m:12" title="Julián Álvarez 12'"><span class="crest" data-team="atm" style="--s:12px"></span></span>
+              <span class="tl-goal" data-side="b" style="--m:38" title="Solanke 38'"><span class="crest" data-team="tot" style="--s:12px"></span></span>
+              <span class="tl-goal" data-side="a" style="--m:64" title="Julián Álvarez 64'"><span class="crest" data-team="atm" style="--s:12px"></span></span>
+            </div>
+            <div class="tl-labels"><span>0'</span><span>Descanso</span><span>90'</span></div>
+          </div>
+          <div class="scorers"><p>Julián Álvarez <b class="num">12'</b>, <b class="num">64'</b></p><p>Solanke <b class="num">38'</b></p></div>
+        </section>
+
+        <section class="tile info" aria-label="Información del partido">
+          <h3>Dónde se emite</h3>
+          <div class="chs"><span><svg class="i s16"><use href="#i-tv"/></svg>M+ Liga de Campeones</span><span><svg class="i s16"><use href="#i-tv"/></svg>M+ Liga de Campeones 2</span></div>
+          <p class="place">Metropolitano, Madrid. Tu equipo juega en casa.</p>
+          <div class="keys" aria-label="Atajos de teclado">
+            <kbd>Espacio</kbd><span>Pausa y reanuda</span>
+            <kbd>J</kbd><span>Retrocede 30 s</span>
+            <kbd>S</kbd><span>Datos técnicos</span>
+            <kbd>G</kbd><span>Favorito</span>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ================= Panel lateral: fuentes y datos técnicos ================= -->
+    <div class="side-col" id="side">
+      <section aria-labelledby="h-fuentes" style="display:grid; gap:12px">
+        <header class="sec-h">
+          <h2 id="h-fuentes">Fuentes<span class="cnt">6</span></h2>
+          <div class="tools">
+            <button class="icon-btn press" aria-label="Rebuscar fuentes" title="Rebuscar"><svg class="i s20"><use href="#i-refresh"/></svg></button>
+            <button class="icon-btn press" id="plegar" aria-label="Plegar el panel" title="Plegar el panel"><svg class="i s20"><use href="#i-panel"/></svg></button>
+          </div>
+        </header>
+        <div class="scan">
+          <div class="scan-bar" style="--p:0.667"><i></i></div>
+          <p><b>4 de 6</b> comprobadas, 2 verificadas. La 4 se está probando ahora.</p>
+        </div>
+        <ol class="srcl" id="srcl">
+          <li><button class="src" aria-current="true" data-n="1">
+            <span class="n num">1</span>
+            <span class="body">
+              <span class="l1"><span class="pv">Elcano</span><span class="sig sig--sm sig--ok"><span class="bars"><i></i><i></i><i></i></span>Verificada</span></span>
+              <span class="l2"><span class="now"><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>En pantalla</span><span class="d">reproduciendo ahora</span></span>
+            </span>
+          </button></li>
+          <li><button class="src" data-n="2">
+            <span class="n num">2</span>
+            <span class="body">
+              <span class="l1"><span class="pv">Faro</span><span class="sig sig--sm sig--ok"><span class="bars"><i></i><i></i><i></i></span>Verificada</span></span>
+              <span class="l2"><span class="now"><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>En pantalla</span><span class="d">funcionó en el reproductor</span></span>
+            </span>
+          </button></li>
+          <li><button class="src" data-n="3">
+            <span class="n num">3</span>
+            <span class="body">
+              <span class="l1"><span class="pv">Norte</span><span class="sig sig--sm sig--weak"><span class="bars"><i></i><i></i><i></i></span>Floja</span></span>
+              <span class="l2"><span class="now"><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>En pantalla</span><span class="d">llega menos señal de la que el canal necesita</span></span>
+            </span>
+          </button></li>
+          <li><button class="src" data-n="4">
+            <span class="n num">4</span>
+            <span class="body">
+              <span class="l1"><span class="pv">Vega</span><span class="sig sig--sm sig--check"><span class="bars"><i></i><i></i><i></i></span>Comprobando</span></span>
+              <span class="l2"><span class="now"><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>En pantalla</span><span class="d">probándose en el segundo motor</span></span>
+            </span>
+          </button></li>
+          <li><button class="src" data-n="5">
+            <span class="n num">5</span>
+            <span class="body">
+              <span class="l1"><span class="pv">Tarifa</span><span class="sig sig--sm sig--fail"><span class="bars"><i></i><i></i><i></i></span>Sin señal</span></span>
+              <span class="l2"><span class="now"><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>En pantalla</span><span class="d">no arrancó; reintento a las 20:16</span></span>
+            </span>
+          </button></li>
+          <li><button class="src" data-n="6">
+            <span class="n num">6</span>
+            <span class="body">
+              <span class="l1"><span class="pv">Sur</span><span class="sig sig--sm sig--idle"><span class="bars"><i></i><i></i><i></i></span>Pendiente</span></span>
+              <span class="l2"><span class="now"><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>En pantalla</span><span class="d">en cola</span></span>
+            </span>
+          </button></li>
+        </ol>
+      </section>
+
+      <section aria-label="Acciones de la fuente en pantalla" style="display:grid; gap:8px">
+        <p class="acts-h" id="acts-h">Fuente 1 en pantalla</p>
+        <div class="acts" role="group" aria-labelledby="acts-h">
+          <button class="press" aria-pressed="true" id="fav"><svg class="i"><use href="#i-star-f"/></svg>En favoritos</button>
+          <button class="press"><svg class="i"><use href="#i-copy"/></svg>Copiar hash</button>
+          <button class="press"><svg class="i"><use href="#i-paste"/></svg>Pegar hash</button>
+          <button class="press" aria-label="Es el canal correcto"><svg class="i"><use href="#i-learn"/></svg>Canal correcto</button>
+          <button class="press"><svg class="i"><use href="#i-flag"/></svg>Reportar</button>
+        </div>
+      </section>
+
+      <details class="nerd" id="nerd">
+        <summary>
+          <svg class="i s20"><use href="#i-nerd"/></svg><span class="t">Datos técnicos</span><kbd>S</kbd>
+          <span class="peek">48 pares, 1,92 MB/s</span>
+          <svg class="i s20 chev"><use href="#i-chev-d"/></svg>
+        </summary>
+        <div class="nerd-body">
+          <div class="spark">
+            <div class="cap-t"><span>Pares en los últimos 60 s</span><span class="num">48</span></div>
+            <svg viewBox="0 0 300 56" preserveAspectRatio="none" aria-label="Los pares suben de 31 a 48 tras cambiar a la fuente 1">
+              <defs><linearGradient id="sp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0.22"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs>
+              <g style="color: var(--accent-ink)">
+                <path d="M0 40 L15 41 L30 43 L45 42 L60 46 L75 48 L90 47 L100 50 L110 34 L125 29 L140 26 L155 24 L170 22 L185 23 L200 19 L215 18 L230 17 L245 19 L260 15 L275 14 L290 13 L300 12 L300 56 L0 56 Z" fill="url(#sp)"/>
+                <path d="M0 40 L15 41 L30 43 L45 42 L60 46 L75 48 L90 47 L100 50 L110 34 L125 29 L140 26 L155 24 L170 22 L185 23 L200 19 L215 18 L230 17 L245 19 L260 15 L275 14 L290 13 L300 12" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
+              </g>
+              <path d="M104 2V56" stroke="var(--text-3)" stroke-width="1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>
+            </svg>
+            <div class="cap-t"><span>hace 60 s</span><span>cambio a la fuente 1</span><span>ahora</span></div>
+          </div>
+          <dl>
+            <dt>Motor</dt><dd class="ok">en línea</dd>
+            <dt>Pares</dt><dd>48</dd>
+            <dt>Bajada</dt><dd>1,92 MB/s</dd>
+            <dt>Subida</dt><dd>214 KB/s</dd>
+            <dt>Retraso</dt><dd>6,4 s</dd>
+            <dt>Búfer</dt><dd>12,8 s</dd>
+            <dt>Vídeo</dt><dd>H.264 1080p50</dd>
+            <dt>Audio</dt><dd>AAC 48 kHz</dd>
+            <dt>Bitrate</dt><dd>6,1 Mbit/s</dd>
+            <dt>Entrega</dt><dd>mpegts progresivo</dd>
+            <dt>Hash</dt><dd>3f9a0c21…e84b7d10</dd>
+          </dl>
+        </div>
+      </details>
+    </div>
+  </main>
+</div>
+
+<script>
+  const $ = s => document.querySelector(s);
+  const status = t => { $('#status-t').textContent = t; };
+  const desk = matchMedia('(min-width: 1024px)');
+  if (desk.matches) $('#nerd').open = true;
+
+  /* Reproducir / pausar */
+  $('#play').addEventListener('click', e => {
+    const b = e.currentTarget, on = b.getAttribute('aria-pressed') !== 'true';
+    b.setAttribute('aria-pressed', on);
+    b.setAttribute('aria-label', on ? 'Pausar (espacio)' : 'Reproducir (espacio)');
+    b.querySelector('use').setAttribute('href', on ? '#i-pause' : '#i-play');
+    status(on ? 'Reanudado.' : 'En pausa. Pulsa Directo para volver al directo.');
+    if (!on) setBehind(true);
+  });
+  /* Silencio y volumen */
+  const vol = $('#vol');
+  $('#mute').addEventListener('click', e => {
+    const b = e.currentTarget, muted = b.dataset.muted !== 'true';
+    b.dataset.muted = muted;
+    b.setAttribute('aria-label', muted ? 'Activar sonido (M)' : 'Silenciar (M)');
+    b.querySelector('use').setAttribute('href', muted ? '#i-mute' : '#i-vol');
+    vol.style.setProperty('--v', muted ? 0 : vol.value);
+  });
+  vol.addEventListener('input', () => vol.style.setProperty('--v', vol.value));
+  /* −30 s y directo */
+  function setBehind(on) {
+    const l = $('#live');
+    l.dataset.behind = on;
+    $('#live-t').textContent = on ? 'Ir al directo' : 'Directo';
+    l.setAttribute('aria-label', on ? 'Ir al directo' : 'Ya estás en directo');
+    $('#behind').textContent = on ? '36 s por detrás' : '6 s de retraso';
+  }
+  $('#back').addEventListener('click', () => { setBehind(true); status('Retrocedido 30 s. Pulsa Ir al directo para volver.'); });
+  $('#live').addEventListener('click', () => {
+    if ($('#live').dataset.behind === 'true') { setBehind(false); status('De vuelta al directo.'); }
+    else status('Ya estabas en el directo.');
+  });
+  /* Tapar y destapar el marcador */
+  const sb = $('#sb');
+  function tapar(on) {
+    sb.dataset.oculto = on;
+    $('#tapar').setAttribute('aria-pressed', on);
+    document.querySelectorAll('[data-marcador]').forEach(x => x.style.visibility = on ? 'hidden' : '');
+  }
+  $('#tapar').addEventListener('click', () => tapar(sb.dataset.oculto !== 'true'));
+  $('#destapar').addEventListener('click', () => tapar(false));
+  /* Cambiar de fuente */
+  const nombres = { 1: 'Elcano', 2: 'Faro', 3: 'Norte', 4: 'Vega', 5: 'Tarifa', 6: 'Sur' };
+  document.querySelectorAll('.src').forEach(b => b.addEventListener('click', () => {
+    if (b.getAttribute('aria-current') === 'true') return;
+    if (b.querySelector('.sig--fail')) { status(`La fuente ${b.dataset.n} no responde ahora; se reintentará a las 20:16.`); return; }
+    document.querySelectorAll('.src').forEach(x => x.removeAttribute('aria-current'));
+    b.setAttribute('aria-current', 'true');
+    $('#acts-h').textContent = `Fuente ${b.dataset.n} en pantalla`;
+    document.querySelector('.chip-now small').textContent = `Fuente ${b.dataset.n}, ${nombres[b.dataset.n]}`;
+    status(`Conectando con la fuente ${b.dataset.n} (${nombres[b.dataset.n]})…`);
+  }));
+  /* Favorito */
+  $('#fav').addEventListener('click', e => {
+    const b = e.currentTarget, on = b.getAttribute('aria-pressed') !== 'true';
+    b.setAttribute('aria-pressed', on);
+    b.lastChild.textContent = on ? 'En favoritos' : 'Favorito';
+    b.querySelector('use').setAttribute('href', on ? '#i-star-f' : '#i-star');
+  });
+  /* Plegar el panel lateral: el vídeo gana ancho en vez de taparse */
+  $('#plegar').addEventListener('click', () => document.body.classList.toggle('sin-panel'));
+  /* Atajos */
+  addEventListener('keydown', e => {
+    if (e.target.closest('input, textarea')) return;
+    if (e.code === 'Space') { e.preventDefault(); $('#play').click(); }
+    if (e.key === 'j' || e.key === 'J') $('#back').click();
+    if (e.key === 'm' || e.key === 'M') $('#mute').click();
+    if (e.key === 's' || e.key === 'S') $('#nerd').open = !$('#nerd').open;
+    if (e.key === 'g' || e.key === 'G') $('#fav').click();
+  });
+</script>
+</body>
+</html>

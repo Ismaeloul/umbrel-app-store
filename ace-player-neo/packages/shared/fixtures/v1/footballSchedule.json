@@ -1,0 +1,29 @@
+{
+  "generatedAt": "2026-09-23T18:30:00.000Z",
+  "timezone": "Europe/Madrid",
+  "country": "Spain",
+  "source": "futbolenlatv",
+  "attribution": "futbolenlatv.com",
+  "demo": false,
+  "limited": false,
+  "partial": false,
+  "days": [
+    {
+      "date": "2026-09-23",
+      "matches": [
+        {
+          "id": "fltv-2026-09-23-3",
+          "date": "2026-09-23",
+          "time": "21:00",
+          "start": 1790188200000,
+          "title": "Equipo Local - Equipo Visitante",
+          "home": "Equipo Local",
+          "away": "Equipo Visitante",
+          "competition": "LaLiga",
+          "country": "Spain",
+          "channels": [{ "id": "m-laliga", "name": "M+ LaLiga" }]
+        }
+      ]
+    }
+  ]
+}

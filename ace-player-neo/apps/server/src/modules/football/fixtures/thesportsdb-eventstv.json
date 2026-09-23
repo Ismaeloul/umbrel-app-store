@@ -1,0 +1,50 @@
+{
+  "tvevents": [
+    {
+      "idEvent": "9001",
+      "strSport": "Soccer",
+      "strEvent": "Sevilla vs Rayo Vallecano",
+      "dateEvent": "2026-01-01",
+      "strTime": "19:00:00",
+      "idChannel": "11",
+      "strChannel": "DAZN LaLiga",
+      "strCountry": "Spain"
+    },
+    {
+      "idEvent": "9001",
+      "strSport": "Soccer",
+      "strEvent": "Sevilla vs Rayo Vallecano",
+      "dateEvent": "2026-01-01",
+      "strTime": "19:00:00",
+      "idChannel": "12",
+      "strChannel": "dazn laliga",
+      "strCountry": "Spain"
+    },
+    {
+      "idEvent": "9002",
+      "strSport": "Soccer",
+      "strEvent": "Real Madrid v Manchester City",
+      "strLeague": "UEFA Champions League",
+      "dateEvent": "2026-01-01",
+      "strTime": "20:00:00",
+      "idChannel": "13",
+      "strChannel": "M+ Liga de Campeones"
+    },
+    {
+      "idEvent": "9003",
+      "strSport": "Basketball",
+      "strEvent": "Real Madrid vs Barça",
+      "dateEvent": "2026-01-01",
+      "strTime": "20:00:00",
+      "strChannel": "#Vamos"
+    },
+    {
+      "strSport": "Soccer",
+      "strEvent": "Partido sin id",
+      "dateEvent": "2026-01-02",
+      "strTime": "",
+      "strChannel": ""
+    },
+    { "idEvent": "9004", "strSport": "Soccer", "strEvent": "Fecha rota", "dateEvent": "ayer" }
+  ]
+}

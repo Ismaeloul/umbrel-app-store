@@ -1,0 +1,255 @@
+name: Ace Player Neo · CI
+
+# CI del monorepo de la v2 (ace-player-neo/: backend, web, contratos y
+# empaquetado). La app iOS se compila y se prueba en ios.yml (macOS); aquí solo
+# pasa SwiftLint. Los tests de la carpeta de la app de Umbrel
+# (ismaeloul-ace-player-neo/: el paquete de la 0.7.0 y la 0.6.59 de vuelta
+# atrás) van en ace-player-neo.yml.
+#
+# Jobs (en paralelo):
+#   calidad    lint (ESLint + Prettier) y typecheck de todo el monorepo
+#   tests      Vitest: shared, servidor (unidad + integración), motor falso,
+#              empaquetado (deploy/ y scripts/) y web
+#   web        build de la web, presupuesto de tamaño, prueba de humo del
+#              backend empaquetado (server.js contra el motor falso) y que la
+#              release commiteada es la que sale del código (check:release)
+#   e2e        Playwright (Chrome + WebKit) contra la pila local con motor falso
+#   docker     nginx real y shellcheck del hook en Docker, y build de la imagen
+#   swiftlint  estilo de apps/ios: solo los errores rompen la CI
+
+on:
+  push:
+    paths:
+      - 'ace-player-neo/**'
+      - 'ismaeloul-ace-player-neo/releases/**'
+      - '.github/workflows/ci.yml'
+  pull_request:
+    paths:
+      - 'ace-player-neo/**'
+      - 'ismaeloul-ace-player-neo/releases/**'
+      - '.github/workflows/ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Nada de preguntas de corepack en un runner sin terminal.
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+  # Por si algo arranca el backend: ni listas ni agenda de internet.
+  AUTO_SYNC: 'false'
+  FORCE_COLOR: '1'
+
+defaults:
+  run:
+    shell: bash
+    working-directory: ace-player-neo
+
+jobs:
+  calidad:
+    name: Lint y typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: pnpm (corepack, versión de packageManager)
+        run: corepack enable && pnpm --version && echo "STORE=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('ace-player-neo/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+      - name: Instalar
+        id: instalar
+        run: pnpm install --frozen-lockfile
+      # Lo mismo que `pnpm lint`, en pasos sueltos: un fallo de formato no
+      # esconde los de ESLint ni los de tipos.
+      - name: ESLint
+        if: ${{ !cancelled() && steps.instalar.outcome == 'success' }}
+        run: pnpm exec eslint .
+      - name: Prettier (--check)
+        if: ${{ !cancelled() && steps.instalar.outcome == 'success' }}
+        run: pnpm exec prettier --check .
+      - name: Typecheck de los paquetes
+        if: ${{ !cancelled() && steps.instalar.outcome == 'success' }}
+        run: pnpm typecheck
+      - name: Typecheck de deploy/ y scripts/
+        if: ${{ !cancelled() && steps.instalar.outcome == 'success' }}
+        run: pnpm typecheck:deploy
+
+  tests:
+    name: Tests (Vitest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: pnpm (corepack, versión de packageManager)
+        run: corepack enable && pnpm --version && echo "STORE=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('ace-player-neo/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+      - name: Instalar
+        id: instalar
+        run: pnpm install --frozen-lockfile
+      # Cada batería corre aunque falle la anterior.
+      - name: packages/shared
+        if: ${{ !cancelled() && steps.instalar.outcome == 'success' }}
+        run: pnpm --filter @ace/shared test
+      - name: apps/server (unidad + integración)
+        if: ${{ !cancelled() && steps.instalar.outcome == 'success' }}
+        run: pnpm --filter @ace/server test
+      - name: Motor AceStream falso
+        if: ${{ !cancelled() && steps.instalar.outcome == 'success' }}
+        run: pnpm --filter @ace/server exec vitest run --config test/fake-engine/vitest.config.ts
+      - name: Empaquetado (deploy/ y scripts/)
+        if: ${{ !cancelled() && steps.instalar.outcome == 'success' }}
+        run: pnpm test:deploy
+      - name: apps/web
+        if: ${{ !cancelled() && steps.instalar.outcome == 'success' }}
+        run: pnpm --filter @ace/web test
+
+  web:
+    name: Build, tamaño y humo
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # check:release necesita la historia: RELEASE.json lleva el último
+          # commit que tocó las fuentes.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: pnpm (corepack, versión de packageManager)
+        run: corepack enable && pnpm --version && echo "STORE=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('ace-player-neo/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+      - name: Instalar
+        run: pnpm install --frozen-lockfile
+      - name: Build de la web
+        run: pnpm --filter @ace/web build
+      - name: Presupuesto de tamaño (JS inicial ≤ 150 KB gzip)
+        run: pnpm --filter @ace/web size
+      - name: Build del backend (server.js y engine-control.js)
+        run: pnpm --filter @ace/server build
+      - name: Prueba de humo del backend empaquetado
+        run: node scripts/smoke-bundle.mjs
+      # La release commiteada en ismaeloul-ace-player-neo/releases/<v> es la que
+      # sale de este código (empaquetado §7.10). Si falla tras tocar el backend
+      # o la web: pnpm release:docker (se monta en Linux, como aquí) y commitearla.
+      - name: La release commiteada es la que sale del código
+        run: pnpm check:release
+
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      # La batería E2E (apps/web/e2e + playwright.config.ts) la está cerrando
+      # otro agente: hasta que llegue al repo, el job pasa y lo avisa.
+      - name: ¿Hay pruebas E2E?
+        id: hay
+        run: |
+          if [ -f apps/web/playwright.config.ts ] && [ -d apps/web/e2e ]; then
+            echo "e2e=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "e2e=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=E2E::apps/web/e2e todavía no está en el repo; se salta Playwright."
+          fi
+      - uses: actions/setup-node@v4
+        if: steps.hay.outputs.e2e == 'true'
+        with:
+          node-version: 24
+      - name: pnpm (corepack, versión de packageManager)
+        if: steps.hay.outputs.e2e == 'true'
+        run: corepack enable && pnpm --version && echo "STORE=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+      - uses: actions/cache@v4
+        if: steps.hay.outputs.e2e == 'true'
+        with:
+          path: ${{ env.STORE }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('ace-player-neo/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+      - name: Instalar
+        if: steps.hay.outputs.e2e == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Navegadores de Playwright
+        if: steps.hay.outputs.e2e == 'true'
+        working-directory: ace-player-neo/apps/web
+        run: |
+          pnpm exec playwright install --with-deps chromium webkit
+          # Los proyectos de Chrome usan el Chrome de marca (channel 'chrome').
+          # El runner de Ubuntu ya lo trae; si faltara, lo instala Playwright.
+          if ! command -v google-chrome >/dev/null; then
+            pnpm exec playwright install --with-deps chrome
+          fi
+          google-chrome --version
+      - name: Playwright
+        if: steps.hay.outputs.e2e == 'true'
+        working-directory: ace-player-neo/apps/web
+        env:
+          CI: 'true'
+        run: pnpm e2e
+      - name: Informe de Playwright
+        if: failure() && steps.hay.outputs.e2e == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            ace-player-neo/apps/web/playwright-report
+            ace-player-neo/apps/web/test-results
+          retention-days: 7
+
+  docker:
+    name: nginx, shellcheck e imagen (Docker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: pnpm (corepack, versión de packageManager)
+        run: corepack enable && pnpm --version && echo "STORE=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('ace-player-neo/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+      - name: Instalar
+        run: pnpm install --frozen-lockfile
+      - name: nginx real (matriz de arquitectura §8.3 y cargas de ataque)
+        run: pnpm test:nginx
+      - name: shellcheck del hook pre-start
+        run: pnpm test:shellcheck
+      - name: docker build de apps/server/Dockerfile (sin publicar)
+        run: docker build -f apps/server/Dockerfile -t ace-player-neo-server:ci .
+
+  swiftlint:
+    name: SwiftLint (apps/ios)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      # Configuración en ace-player-neo/.swiftlint.yml (fuera de apps/ios).
+      # Sin --strict: los avisos salen en el registro y solo los errores fallan.
+      - name: SwiftLint 0.65.1 (imagen oficial)
+        run: |
+          docker run --rm -v "$PWD:/work:ro" -w /work ghcr.io/realm/swiftlint:0.65.1 \
+            swiftlint lint --no-cache --config .swiftlint.yml --reporter github-actions-logging

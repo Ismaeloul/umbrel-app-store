@@ -1,0 +1,66 @@
+/* Buscador del motor. Reutiliza la tarjeta y la lista de la biblioteca
+   (library.css); aquí solo van las secciones y los estados. */
+
+.search-sec {
+  display: grid;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.search-sec__title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  padding-inline: var(--s-1);
+  font-size: var(--fs-15);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+}
+.search-sec__count {
+  color: var(--text-3);
+  font-size: var(--fs-13);
+  font-weight: var(--wght-medium);
+  font-stretch: var(--w-num);
+}
+.search-local {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.search-hint {
+  display: grid;
+  gap: 4px;
+  padding: var(--s-5) var(--s-4);
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  text-align: center;
+}
+.search-hint__title {
+  font-weight: var(--wght-strong);
+}
+.search-hint__text {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+.search-loading {
+  display: grid;
+  gap: var(--s-3);
+}
+/* Pulso de «buscando»: solo opacidad; quieto con movimiento reducido. */
+.search-pulse {
+  padding-inline: var(--s-1);
+  animation: search-pulso 1.4s var(--ease-out) infinite alternate;
+}
+@keyframes search-pulso {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.45;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .search-pulse {
+    animation: none;
+  }
+}

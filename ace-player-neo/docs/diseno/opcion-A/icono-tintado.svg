@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-labelledby="t">
+  <title id="t">Ace Player Neo · icono tintado (una sola tinta; también el de la PWA en monocromo)</title>
+  <defs>
+    <clipPath id="dentro"><circle cx="512" cy="512" r="236"/></clipPath>
+  </defs>
+  <!-- iOS aplica el tinte sobre la luminancia: fondo neutro y símbolo en blanco. -->
+  <rect width="1024" height="1024" fill="#1c1c1e"/>
+  <g stroke="#ffffff" fill="none" stroke-width="22">
+    <path d="M512 0V250M512 774V1024"/>
+    <circle cx="512" cy="512" r="286"/>
+  </g>
+  <circle cx="512" cy="512" r="236" fill="#ffffff" fill-opacity="0.16"/>
+  <g clip-path="url(#dentro)">
+    <path d="M478 250V774" stroke="#ffffff" stroke-opacity="0.3" stroke-width="30"/>
+  </g>
+  <path d="M452 394c0-19 21-31 37-21l186 118c15 9 15 31 0 40L489 649c-16 10-37-2-37-21z" fill="#ffffff"/>
+</svg>

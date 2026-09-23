@@ -1,0 +1,16 @@
+{
+  "entries": [
+    {
+      "id": "diag_000001",
+      "at": "2026-09-23T18:30:00.000Z",
+      "cause": "source",
+      "code": "source_no_peers",
+      "message": "La fuente no tiene pares.",
+      "hash": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+      "channel": "DAZN 1",
+      "sessionId": "s_Q2FuYWxEZVBydWViYQ"
+    }
+  ],
+  "counts24h": { "engine": 1, "source": 3, "network": 0, "codec": 1, "client": 2, "state": 0 },
+  "total": 7
+}

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Ace Player Neo, icono oscuro: papel sobre pizarra">
+  <title>Ace Player Neo, icono oscuro: papel sobre pizarra</title>
+  <!-- Rótulo de marcador: dos barras apiladas (los dos equipos) con su franja de color a la
+       izquierda; juntas, la punta derecha es el triángulo de reproducir. Sin esquinas
+       redondeadas: iOS aplica su máscara. Para la PWA se exporta a PNG opaco. -->
+  <rect width="1024" height="1024" fill="#1a1f24"/>
+  <polygon fill="#f6f7f8" points="226.0,300.0 296.0,300.0 296.0,490.0 226.0,490.0"/>
+  <polygon fill="#f6f7f8" points="322.0,300.0 472.0,300.0 776.0,490.0 322.0,490.0"/>
+  <polygon fill="#f6f7f8" points="226.0,534.0 296.0,534.0 296.0,724.0 226.0,724.0"/>
+  <polygon fill="#f6f7f8" points="322.0,534.0 776.0,534.0 472.0,724.0 322.0,724.0"/>
+</svg>

@@ -1,0 +1,46 @@
+{
+  "web": [
+    {
+      "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+      "title": "DAZN 1",
+      "type": "web",
+      "category": "Deportes",
+      "date": "2026-09-23T18:30:00.000Z",
+      "fromWebSync": true,
+      "ih": false
+    },
+    {
+      "id": "b2c3d4e5f60718293a4b5c6d7e8f901234567890",
+      "title": "M+ LaLiga",
+      "type": "web",
+      "category": "Deportes",
+      "date": "2026-09-23T18:30:00.000Z",
+      "fromWebSync": true,
+      "ih": false
+    }
+  ],
+  "webSyncedAt": "2026-09-23T18:30:00.000Z",
+  "webSources": [
+    {
+      "id": "principal",
+      "name": "Principal",
+      "url": "https://example.com/lista.m3u",
+      "type": "m3u",
+      "count": 2,
+      "syncedAt": "2026-09-23T18:30:00.000Z",
+      "lastErrorAt": null,
+      "lastError": null
+    },
+    {
+      "id": "deportes",
+      "name": "Deportes",
+      "url": "https://example.com/lista.m3u",
+      "type": "m3u",
+      "count": 0,
+      "syncedAt": "2026-09-23T18:30:00.000Z",
+      "lastErrorAt": null,
+      "lastError": null
+    }
+  ],
+  "activeWebSourceId": "deportes"
+}

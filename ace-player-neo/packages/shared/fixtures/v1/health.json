@@ -1,0 +1,40 @@
+{
+  "version": "0.7.0",
+  "checkedAt": "2026-09-23T18:30:00.000Z",
+  "uptimeSeconds": 3600,
+  "components": {
+    "backend": { "status": "ready" },
+    "engine": {
+      "status": "online",
+      "online": true,
+      "since": "2026-09-23T18:30:00.000Z",
+      "checkedAt": "2026-09-23T18:30:00.000Z",
+      "engineVersion": "3.2.3",
+      "autoRestarts": { "lastHour": 0, "max": 3, "nextAllowedAt": null, "exhausted": false }
+    },
+    "scanner": {
+      "status": "ready",
+      "busy": false,
+      "queue": 0,
+      "activeJobs": 0,
+      "cachedSources": 42,
+      "leakedSessionsLastHour": 0
+    },
+    "ai": { "status": "disabled", "model": "embeddinggemma:300m-qat-q4_0" },
+    "agenda": {
+      "status": "ready",
+      "generatedAt": "2026-09-23T18:30:00.000Z",
+      "matches": 120,
+      "preheated": 3
+    },
+    "directories": { "status": "ready", "total": 1, "channels": 2 },
+    "state": { "status": "ready", "recoveredFrom": null },
+    "playback": { "sessions": 1, "viewers": 2, "remuxSessions": 1 },
+    "events": { "connections": 2 }
+  },
+  "reports": { "total": 2, "quarantined": 1, "learningCount": 4 },
+  "diagnostics": {
+    "counts24h": { "engine": 1, "source": 3, "network": 0, "codec": 1, "client": 2, "state": 0 }
+  },
+  "warnings": []
+}

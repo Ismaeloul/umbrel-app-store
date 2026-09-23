@@ -1,0 +1,381 @@
+/* ==========================================================================
+   Base: reinicio, tipografía, foco, cristal, utilidades de movimiento y
+   transiciones de vista. Los componentes llevan su propio CSS junto a ellos
+   (src/ui/*.css); aquí solo lo que es de toda la app.
+
+   Reglas que cuidan todas las hojas (docs/diseno/sistema.md):
+   - Solo se animan transform y opacity.
+   - El hover va SIEMPRE dentro de @media (hover: hover) and (pointer: fine):
+     en el móvil un :hover se queda «pegado» tras el toque.
+   - Nada de texto por debajo de 11 px.
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  background: var(--bg);
+  /* El móvil no debe «rebotar» el fondo de otro color al tirar de la página. */
+  overscroll-behavior-y: none;
+  scroll-padding-top: calc(var(--safe-top) + 12px);
+  scroll-padding-bottom: calc(var(--tabbar-h) + var(--tabbar-gap) + var(--safe-bottom) + 12px);
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--fs-15);
+  line-height: var(--lh-text);
+  font-stretch: var(--w-text);
+  font-weight: var(--wght-text);
+  font-synthesis: none;
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: clip;
+}
+
+h1,
+h2,
+h3,
+h4,
+p,
+ol,
+ul,
+figure,
+dl,
+dd {
+  margin: 0;
+}
+ol,
+ul {
+  padding: 0;
+  list-style: none;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+button {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+img,
+svg,
+video {
+  display: block;
+  max-width: 100%;
+}
+[hidden] {
+  display: none !important;
+}
+
+::selection {
+  background: var(--accent-wash);
+}
+
+/* ---- Foco visible: borde de acento, siempre (nunca outline: none a secas) - */
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: 2px solid var(--accent-edge);
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Enlace «Saltar al contenido»: invisible hasta que llega el foco. */
+.skip-link {
+  position: fixed;
+  z-index: var(--z-skip);
+  top: calc(var(--safe-top) + 8px);
+  left: calc(var(--safe-left) + 8px);
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0 18px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: var(--wght-strong);
+  /* Escondido del todo también con muesca: sube lo que baja `top` (zona
+     segura + 8 px) y un poco más. Sin restar la zona segura, en un iPhone
+     con muesca (PWA) asomaba media píldora bajo la barra de estado. */
+  transform: translateY(calc(-100% - var(--safe-top) - 24px));
+  transition: transform var(--dur-rapido) var(--ease-rapido);
+}
+.skip-link:focus-visible {
+  transform: none;
+}
+
+/* ---- Tipografía ------------------------------------------------------------ */
+.titulo {
+  font-size: var(--fs-30);
+  line-height: var(--lh-tight);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: var(--tracking-head);
+  text-wrap: balance;
+}
+.texto-2 {
+  color: var(--text-2);
+}
+.texto-3 {
+  color: var(--text-3);
+}
+/* Cifras condensadas y gruesas. Van con el componente Num (celdas fijas); esta
+   clase sola vale para cifras que no cambian. Nunca tabular-nums: el cero
+   tabular de Mona Sans lleva barra (corrección 1 de eleccion.md). */
+.num {
+  font-stretch: var(--w-num);
+  font-weight: var(--wght-num);
+  font-variant-numeric: lining-nums proportional-nums;
+  letter-spacing: 0;
+}
+.mono {
+  font-family: var(--mono);
+  font-stretch: 87.5%;
+  font-size: var(--fs-12);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+/* ---- Cristal --------------------------------------------------------------
+   Solo en lo que flota (navegación, mini-reproductor, controles del vídeo,
+   hojas y menús), nunca anidado. Sobre listas, la variante densa (casi opaca).
+   Respaldo opaco con «Reducir transparencia» (la media query del sistema o el
+   interruptor propio de Ajustes, que pone data-transparency en <html>) y en
+   navegadores sin backdrop-filter. */
+.glass {
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  border: 1px solid var(--glass-rim);
+  box-shadow:
+    inset 0 1px 0 var(--glass-hi),
+    var(--glass-shadow);
+}
+.glass--dense {
+  background: var(--glass-dense);
+}
+.glass--video {
+  background: var(--glass-video);
+  -webkit-backdrop-filter: var(--blur-video);
+  backdrop-filter: var(--blur-video);
+  border: 1px solid rgb(255 255 255 / 0.16);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.22),
+    0 6px 18px -8px rgb(2 8 18 / 0.55);
+  color: var(--on-video);
+  /* Lo que va dentro usa los tokens del tema oscuro aunque la app esté en claro. */
+  color-scheme: dark;
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass,
+  .glass--dense {
+    background: var(--glass-solid);
+  }
+  .glass--video {
+    background: var(--glass-video-solid);
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass,
+  .glass--dense {
+    background: var(--glass-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .glass--video {
+    background: var(--glass-video-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+:root[data-transparency='reduced'] .glass,
+:root[data-transparency='reduced'] .glass--dense {
+  background: var(--glass-solid);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+:root[data-transparency='reduced'] .glass--video {
+  background: var(--glass-video-solid);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* ---- Microinteracción al pulsar: el control se aprieta (transform) y se
+   ilumina (una capa con opacidad, no un filtro). -------------------------- */
+.press {
+  position: relative;
+  transition: transform var(--dur-rapido) var(--ease-rapido);
+}
+.press::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-rapido) var(--ease-rapido);
+}
+.press:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.press:active:not(:disabled)::after {
+  opacity: 0.1;
+}
+@media (hover: hover) and (pointer: fine) {
+  .press:hover:not(:disabled)::after {
+    opacity: 0.06;
+  }
+}
+
+/* ---- Movimiento ------------------------------------------------------------ */
+@keyframes ace-aparece {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@keyframes ace-funde {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes ace-onda {
+  0% {
+    transform: scale(1);
+    opacity: 0.75;
+  }
+  70%,
+  100% {
+    transform: scale(var(--onda-max, 1.5));
+    opacity: 0;
+  }
+}
+@keyframes ace-brillo {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* Aparición escalonada: cada hijo lleva style="--i: n". Solo corre al
+   insertarse el nodo, así que un repintado con las mismas claves no la
+   relanza (regla 2 del inventario). */
+.stagger > * {
+  animation: ace-aparece var(--dur-estandar) var(--ease-estandar) both;
+  animation-delay: calc(min(var(--i, 0), var(--stagger-max)) * var(--stagger-step));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .stagger > * {
+    animation-name: ace-funde;
+  }
+}
+
+/* ---- Transiciones de vista (View Transitions API) --------------------------
+   React (<ViewTransition> + startTransition) las lanza al navegar; donde el
+   navegador no las tiene, la navegación es instantánea (ese es el respaldo).
+   El cambio de vista es un fundido corto con un desplazamiento mínimo según
+   el sentido; el partido que viaja de la agenda al centro de partido usa su
+   propio nombre (src/app/transitions.ts). */
+::view-transition-group(*) {
+  animation-duration: var(--dur-estandar);
+  animation-timing-function: var(--ease-estandar);
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--dur-rapido);
+  animation-timing-function: var(--ease-out);
+}
+@keyframes ace-vt-entra-dcha {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+}
+@keyframes ace-vt-entra-izda {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+}
+@keyframes ace-vt-sale {
+  to {
+    opacity: 0;
+  }
+}
+::view-transition-old(ace-vista) {
+  animation: ace-vt-sale var(--dur-rapido) var(--ease-out) both;
+}
+::view-transition-new(ace-vista) {
+  animation: ace-funde var(--dur-rapido) var(--ease-out) both;
+}
+:active-view-transition-type(adelante)::view-transition-new(ace-vista) {
+  animation-name: ace-vt-entra-dcha;
+}
+:active-view-transition-type(atras)::view-transition-new(ace-vista) {
+  animation-name: ace-vt-entra-izda;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 120ms !important;
+    animation-timing-function: ease-out !important;
+  }
+  ::view-transition-new(ace-vista) {
+    animation-name: ace-funde !important;
+  }
+}
+
+/* ---- Barras de desplazamiento discretas (solo con ratón) ----------------- */
+@media (hover: hover) and (pointer: fine) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line) transparent;
+  }
+}

@@ -1,0 +1,81 @@
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(420px, 100%);
+  min-height: 52px;
+  padding: 6px 6px 6px 14px;
+  border-radius: var(--r-l);
+  pointer-events: auto;
+  animation: toast-entra var(--dur-estandar) var(--ease-estandar) both;
+}
+.toast[data-state='leaving'] {
+  animation: toast-sale var(--dur-fade) var(--ease-out) both;
+}
+@keyframes toast-entra {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+}
+@keyframes toast-sale {
+  to {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.toast__icon {
+  color: var(--text-2);
+}
+.toast--ok .toast__icon {
+  color: var(--ok-ink);
+}
+.toast--warn .toast__icon {
+  color: var(--weak-ink);
+}
+.toast--err .toast__icon {
+  color: var(--fail-ink);
+}
+.toast__text {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 0;
+  font-size: var(--fs-15);
+  font-weight: var(--wght-medium);
+  line-height: var(--lh-snug);
+}
+.toast__count {
+  color: var(--text-2);
+  font-stretch: var(--w-num);
+  font-weight: var(--wght-num);
+}
+.toast__action {
+  flex: none;
+  min-height: var(--tap);
+  padding: 0 14px;
+  border-radius: var(--r-pill);
+  color: var(--accent-ink);
+  font-weight: var(--wght-strong);
+}
+.toast__close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  border-radius: 50%;
+  color: var(--text-2);
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation-name: ace-funde;
+  }
+  .toast[data-state='leaving'] {
+    animation-name: toast-sale-quieto;
+  }
+  @keyframes toast-sale-quieto {
+    to {
+      opacity: 0;
+    }
+  }
+}

@@ -28,11 +28,34 @@ mark_failed() {
   overall="failed"
 }
 
-http_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 8 http://127.0.0.1:7792/ 2>/dev/null || true)"
-case "${http_code}" in
-  200|301|302|303|307|308) app_proxy="ok:${http_code}" ;;
-  *) app_proxy="failed:${http_code:-000}"; mark_failed ;;
-esac
+# Pasarela de Umbrel -> nginx -> backend, sin sesion. /native/api/v1/ping es
+# la unica ruta de la app (0.7.0 en adelante) que la pasarela deja pasar sin
+# login (PROXY_AUTH_WHITELIST) y que el backend contesta sin token. Solo da
+# "ok" si responde 200 con el JSON de la app y la version que dice el
+# manifiesto: asi se sabe que los tres saltos funcionan y que corre la release
+# instalada. Antes se pedia "/" y, sin sesion, la pasarela redirige al login
+# aunque nginx o el backend esten caidos: daba "ok" siempre.
+ping_response="$(curl -sS --max-time 8 -w '\n%{http_code}' http://127.0.0.1:7792/native/api/v1/ping 2>/dev/null || true)"
+http_code="${ping_response##*$'\n'}"
+http_code="${http_code:-000}"
+ping_body="${ping_response%$'\n'*}"
+running_version=""
+if [ "${http_code}" = "200" ]; then
+  running_version="$(printf '%s' "${ping_body}" | python3 -c 'import json, sys; d = json.load(sys.stdin); ok = d.get("ok") is True and d.get("app") == "ace-player-neo"; print(d.get("version", "")) if ok else sys.exit(1)' 2>/dev/null | tr -cd '0-9A-Za-z.+-' || true)"
+fi
+if [ "${http_code}" != "200" ]; then
+  app_proxy="failed:${http_code}"
+  mark_failed
+elif [ -z "${running_version}" ]; then
+  # 200 pero no es el ping de la app (por ejemplo, la pagina de login).
+  app_proxy="failed:not-ace-player-neo"
+  mark_failed
+elif [ "${version}" != "unknown" ] && [ "${running_version}" != "${version}" ]; then
+  app_proxy="failed:running-${running_version}"
+  mark_failed
+else
+  app_proxy="ok:${http_code}"
+fi
 
 if python3 -m json.tool "${APP_DIR}/data/state.json" >/dev/null 2>&1; then
   app_state="ok"
@@ -52,16 +75,14 @@ else
   mark_failed
 fi
 
-# Desde la 0.6.58 el comprobador no publica puerto (8622): se pregunta al
-# backend, que es quien habla con el. Mirar el puerto daba "failed" siempre.
+# El comprobador no publica puerto (desde la 0.6.58) y su estado solo lo da el
+# backend en /api/health o /api/v1/health, que piden el login de Umbrel (o el
+# token de un dispositivo). Sin sesion, la pasarela contesta con la redireccion
+# al login y esto salia "failed" siempre. Como el vigilante no puede saberlo, lo
+# dice: "unknown", que no cuenta como fallo. El estado real se ve en la web
+# (Ajustes > Salud).
 if grep -q '^[[:space:]]*acestream_scanner:' "${APP_DIR}/docker-compose.yml" 2>/dev/null; then
-  health_json="$(curl -sS --max-time 8 http://127.0.0.1:7792/api/health 2>/dev/null || true)"
-  if printf '%s' "${health_json}" | python3 -c 'import json, sys; sys.exit(0 if json.load(sys.stdin)["components"]["scanner"]["online"] else 1)' 2>/dev/null; then
-    scanner="ok"
-  else
-    scanner="failed"
-    mark_failed
-  fi
+  scanner="unknown"
 else
   scanner="not-installed"
 fi

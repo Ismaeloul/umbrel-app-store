@@ -1,0 +1,40 @@
+.toaster {
+  position: fixed;
+  z-index: var(--z-toast);
+  left: calc(var(--safe-left) + 12px);
+  right: calc(var(--safe-right) + 12px);
+  bottom: calc(var(--toast-bottom, 0px) + var(--safe-bottom) + 12px);
+  display: grid;
+  justify-items: center;
+  pointer-events: none;
+  transition: opacity var(--dur-rapido) var(--ease-out);
+}
+.toaster__list {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  width: 100%;
+}
+/* Con el vídeo a pantalla completa ningún toast se pinta encima. */
+.toaster[data-immersive='true'] {
+  opacity: 0;
+}
+.toaster[data-immersive='true'] .toast {
+  pointer-events: none;
+}
+@media (min-width: 768px) {
+  .toaster {
+    left: auto;
+    right: calc(var(--safe-right) + 20px);
+    bottom: calc(var(--safe-bottom) + 20px);
+    width: min(420px, calc(100vw - 40px));
+    justify-items: end;
+  }
+  .toaster__list {
+    justify-items: end;
+  }
+}
+
+.status-host {
+  min-height: 0;
+}

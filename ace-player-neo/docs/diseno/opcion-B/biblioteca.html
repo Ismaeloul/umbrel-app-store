@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#eff0f2">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1a1f24">
+<title>Biblioteca · Ace Player Neo</title>
+<link rel="icon" href="icono.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Azeret+Mono:wght@400..700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="comun.css">
+<style>
+  body { padding-block-end: calc(58px + 72px + env(safe-area-inset-bottom, 0px)); }
+  .biblio { min-inline-size: 0; }
+  .bi-cab { padding: 18px 16px 12px; display: grid; gap: 14px; }
+  .titulo { font-size: var(--t-24); font-weight: 800; font-stretch: var(--w-ancha); line-height: 1; letter-spacing: -0.01em; }
+  .titulo small { display: block; margin-block-start: 6px; font-size: var(--t-12); font-weight: 600; font-stretch: var(--w-normal); color: var(--tinta-2); letter-spacing: 0; }
+
+  .buscador { position: relative; display: flex; align-items: center; }
+  .buscador .ic { position: absolute; inset-inline-start: 12px; color: var(--tinta-2); pointer-events: none; }
+  .buscador input {
+    inline-size: 100%; min-block-size: 46px; padding: 0 44px 0 42px;
+    background: var(--superficie); border: 1px solid var(--linea-fuerte); border-radius: var(--r-1);
+    font-size: var(--t-16); color: var(--tinta);
+  }
+  .buscador input::placeholder { color: var(--tinta-2); opacity: 1; }
+  .buscador input:focus-visible { outline: 2px solid var(--foco); outline-offset: 1px; }
+  .buscador .tecla { position: absolute; inset-inline-end: 12px; display: none; }
+  .tecla { display: inline-grid; place-items: center; min-inline-size: 22px; block-size: 22px; padding-inline: 5px; border: 1px solid var(--linea-fuerte); border-radius: var(--r-1); font-family: var(--f-mono); font-size: var(--t-11); color: var(--tinta-2); }
+
+  .pestanas { position: sticky; inset-block-start: 0; z-index: 20; background: var(--fondo); padding-inline: 4px; }
+  .panel[hidden] { display: none; }
+
+  /* ---- Tarjeta de canal: la jerarquía la da lo que emite ahora ---- */
+  .lista { display: grid; }
+  .cf { position: relative; border-block-end: 1px solid var(--linea); }
+  .cf-fila { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; padding-inline-end: 6px; }
+  .cf-main { display: grid; grid-template-columns: 52px minmax(0, 1fr); column-gap: 12px; align-items: center; padding: 12px 4px 12px 16px; min-inline-size: 0; }
+  .cf-main:hover .cf-nombre { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  .cf-logo {
+    display: grid; place-content: center; justify-items: center; gap: 2px;
+    inline-size: 52px; block-size: 52px; border: 1px solid var(--linea-fuerte); border-radius: var(--r-1);
+    background: var(--superficie); line-height: 1; text-align: center;
+  }
+  .cf-logo b { font-size: var(--t-18); font-weight: 850; font-stretch: var(--w-comprimida); letter-spacing: 0.01em; }
+  .cf-logo small { font-size: var(--t-11); font-weight: 700; font-stretch: var(--w-comprimida); color: var(--tinta-2); max-inline-size: 48px; line-height: 1.05; }
+  .cf-txt { display: grid; gap: 5px; min-inline-size: 0; }
+  .cf-nombre { display: flex; align-items: center; gap: 8px; font-size: var(--t-16); font-weight: 700; line-height: 1.15; min-inline-size: 0; }
+  .cf-nombre > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cf-ahora { display: flex; align-items: center; gap: 8px; font-size: var(--t-14); color: var(--tinta-2); min-inline-size: 0; }
+  .cf-ahora > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cf-ahora .num.hora { font-size: var(--t-18); color: var(--tinta); }
+  .cf .mbug .chapa { inline-size: 12px; block-size: 15px; }
+  .cf .mbug .eq-sigla { font-size: var(--t-12); }
+  .cf .mbug .marcador .num { font-size: var(--t-18); block-size: 22px; min-inline-size: 18px; }
+  .cf .mbug .min { font-size: var(--t-16); }
+  .cf-estado .senal-sub { font-weight: 500; }
+  .cf .btn-ico { color: var(--tinta-2); }
+  .cf .btn-ico[aria-pressed="true"] { color: var(--tinta); }
+  .en-pantalla {
+    display: inline-flex; align-items: center; gap: 5px; flex: none;
+    font-size: var(--t-11); font-weight: 750; font-stretch: 112%; line-height: 1;
+    padding: 4px 6px; background: var(--inv-fondo); color: var(--inv-tinta); border-radius: var(--r-1);
+  }
+  .en-pantalla .ic { inline-size: 12px; block-size: 12px; stroke-width: 2.2; }
+
+  /* El canal que suena: más grande y con la barra del minuto */
+  .cf.es-sonando { background: var(--superficie); }
+  .cf.es-sonando .cf-main { grid-template-columns: 64px minmax(0, 1fr); padding-block: 16px 18px; }
+  .cf.es-sonando .cf-logo { inline-size: 64px; block-size: 64px; background: var(--inv-fondo); border-color: var(--inv-fondo); color: var(--inv-tinta); }
+  .cf.es-sonando .cf-logo b { font-size: var(--t-21); }
+  .cf.es-sonando .cf-logo small { color: var(--inv-tinta-2); }
+  .cf.es-sonando .cf-nombre { font-size: var(--t-18); }
+  .cf.es-sonando > .minbar { position: absolute; inset-inline: 0; inset-block-end: -1px; }
+
+  .cf-estado-col { display: none; }
+  .cf-estado { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .cf-estado .en-pantalla { order: 2; }
+  .cf-nombre .en-pantalla { display: none; }
+  .rec-cuando { font-size: var(--t-12); color: var(--tinta-2); font-weight: 600; white-space: nowrap; }
+
+  .bi-pie { padding: 18px 16px; font-size: var(--t-12); color: var(--tinta-2); }
+
+  /* ---- Listas: estado vacío con salida ---- */
+  .listas { display: none; }
+  body[data-tab="listas"] .listas { display: block; }
+  .li-cab { display: none; }
+  .vacio { display: grid; justify-items: start; gap: 14px; padding: 28px 16px 24px; }
+  .vacio-dibujo { display: grid; gap: 6px; inline-size: 180px; margin-block-end: 6px; }
+  .vacio-dibujo span { display: block; block-size: 22px; border: 1.5px dashed var(--linea-fuerte); border-inline-end: 0; position: relative;
+    clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 0 100%); }
+  .vacio-dibujo span::after { content: ""; position: absolute; inset-block: -1px; inset-inline-end: 0; inline-size: 14px;
+    background: linear-gradient(to bottom left, transparent calc(50% - 1px), var(--linea-fuerte) calc(50% - 1px) calc(50% + 0.5px), transparent calc(50% + 0.5px)) top / 100% 50% no-repeat,
+                linear-gradient(to top left, transparent calc(50% - 1px), var(--linea-fuerte) calc(50% - 1px) calc(50% + 0.5px), transparent calc(50% + 0.5px)) bottom / 100% 50% no-repeat; }
+  .vacio-dibujo span:nth-child(2) { inline-size: 84%; }
+  .vacio-dibujo span:nth-child(3) { inline-size: 62%; }
+  .vacio h2 { font-size: var(--t-18); font-weight: 800; font-stretch: 112%; line-height: 1.2; }
+  .vacio p { font-size: var(--t-14); color: var(--tinta-2); max-inline-size: 36ch; }
+  .vacio-acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-block-start: 4px; }
+
+  /* ---- Mini-reproductor ---- */
+  .sonando .mbug .chapa { inline-size: 14px; block-size: 17px; }
+  .sonando .mbug .marcador .num { font-size: var(--t-21); block-size: 26px; }
+
+  @media (min-width: 1024px) {
+    body { padding-block-end: 0; }
+    .shell { display: grid; grid-template-columns: 84px minmax(0, 1fr) 380px; align-items: start; }
+    .biblio { padding: 0 32px 120px; }
+    .bi-cab { grid-template-columns: minmax(0, 1fr) 360px; align-items: end; padding: 26px 0 18px; }
+    .titulo { font-size: var(--t-36); }
+    .buscador .tecla { display: inline-grid; }
+    .pestanas { position: static; padding-inline: 0; }
+    .pestana[data-opcion="listas"] { display: none; }
+    .cf-fila { grid-template-columns: minmax(0, 1fr) 230px auto auto; padding-inline-end: 8px; }
+    .cf-main { padding-inline-start: 12px; }
+    .cf-estado-col { display: block; }
+    .cf-nombre .en-pantalla { display: inline-flex; }
+    .cf-txt .cf-estado { display: none; }
+    .bi-pie { padding-inline: 0; }
+    .listas {
+      display: block; position: sticky; inset-block-start: 48px; block-size: calc(100dvh - 48px); overflow-y: auto;
+      background: var(--superficie); border-inline-start: 1px solid var(--linea);
+    }
+    .li-cab { display: flex; align-items: baseline; justify-content: space-between; padding: 28px 24px 0; }
+    .li-cab h2 { font-size: var(--t-18); font-weight: 800; font-stretch: var(--w-ancha); }
+    .li-cab span { font-size: var(--t-12); color: var(--tinta-2); font-weight: 600; }
+    .vacio { padding: 36px 24px; }
+    .sonando {
+      inset-inline: calc(84px + 32px) auto; inset-block-end: 24px;
+      inline-size: min(600px, calc(100vw - 84px - 380px - 64px));
+    }
+  }
+</style>
+</head>
+<body data-tab="favoritos">
+<script src="comun.js"></script>
+<a class="saltar" href="#contenido">Saltar al contenido</a>
+
+<header class="tira" aria-label="Marcadores en directo">
+  <span class="tira-directo"><span class="tally" aria-hidden="true"></span>Directo</span>
+  <ul class="tira-lista">
+    <li><a href="partido.html" class="mbug" aria-label="Sevilla 1, Real Betis 1, minuto 76">
+      <span class="chapa k-sev"></span><span class="eq-sigla">SEV</span>
+      <span class="marcador"><span class="num">1</span><span class="num">1</span></span>
+      <span class="eq-sigla">BET</span><span class="chapa k-bet"></span><span class="num min">76'</span></a></li>
+    <li><a href="partido.html" class="mbug" aria-label="Girona 0, Villarreal 2, minuto 78">
+      <span class="chapa k-gir"></span><span class="eq-sigla">GIR</span>
+      <span class="marcador"><span class="num">0</span><span class="num">2</span></span>
+      <span class="eq-sigla">VIL</span><span class="chapa k-vil"></span><span class="num min">78'</span></a></li>
+    <li class="tira-grupo">Luego</li>
+    <li><a href="partido.html" class="mbug"><span class="num tira-hora">21:00</span><span class="chapa k-atm"></span><span class="eq-sigla">ATM</span><span class="eq-sigla">ARS</span><span class="chapa k-ars"></span></a></li>
+    <li><a href="partido.html" class="mbug"><span class="num tira-hora">21:00</span><span class="chapa k-liv"></span><span class="eq-sigla">LIV</span><span class="eq-sigla">INT</span><span class="chapa k-int"></span></a></li>
+    <li><a href="partido.html" class="mbug"><span class="num tira-hora">21:30</span><span class="chapa k-rma"></span><span class="eq-sigla">RMA</span><span class="eq-sigla">RSO</span><span class="chapa k-rso"></span></a></li>
+  </ul>
+  <div class="tira-der">
+    <span class="motor">Motor listo</span>
+    <time class="num reloj" datetime="2026-09-23T20:45">20:45</time>
+  </div>
+</header>
+
+<div class="shell">
+  <nav class="carril" aria-label="Secciones">
+    <a class="carril-marca" href="agenda.html" aria-label="Ace Player Neo"><svg class="ic" style="inline-size:30px;block-size:30px"><use href="#i-marca"/></svg></a>
+    <a href="agenda.html"><svg class="ic"><use href="#i-agenda"/></svg>Agenda</a>
+    <a href="biblioteca.html" aria-current="page"><svg class="ic"><use href="#i-biblioteca"/></svg>Biblioteca</a>
+    <a href="#"><svg class="ic"><use href="#i-buscar"/></svg>Buscar</a>
+    <a href="#"><svg class="ic"><use href="#i-ajustes"/></svg>Ajustes</a>
+    <div class="carril-pie">
+      <button type="button"><svg class="ic"><use href="#i-hash"/></svg>Pegar hash</button>
+      <button type="button"><svg class="ic"><use href="#i-salud"/></svg>Salud</button>
+    </div>
+  </nav>
+
+  <main id="contenido" class="biblio">
+    <header class="bi-cab">
+      <h1 class="titulo">Biblioteca<small>Tus canales, lo último que viste y tus listas</small></h1>
+      <label class="buscador">
+        <span class="vh">Buscar canal</span>
+        <svg class="ic"><use href="#i-buscar"/></svg>
+        <input type="search" placeholder="Buscar canal" autocomplete="off" id="buscar">
+        <span class="tecla" aria-hidden="true">/</span>
+      </label>
+    </header>
+
+    <div class="pestanas" role="tablist" aria-label="Secciones de la biblioteca" data-grupo="tabs">
+      <button type="button" class="pestana" role="tab" data-opcion="favoritos" aria-selected="true" aria-controls="p-favoritos"><svg class="ic" style="inline-size:18px;block-size:18px"><use href="#i-estrella"/></svg>Favoritos <span class="cuenta">6</span></button>
+      <button type="button" class="pestana" role="tab" data-opcion="recientes" aria-selected="false" aria-controls="p-recientes">Recientes <span class="cuenta">12</span></button>
+      <button type="button" class="pestana" role="tab" data-opcion="listas" aria-selected="false" aria-controls="p-listas">Listas <span class="cuenta">0</span></button>
+    </div>
+
+    <!-- Favoritos, en el orden del zapping -->
+    <section class="panel" id="p-favoritos" role="tabpanel" aria-label="Favoritos">
+      <ol class="lista">
+        <li class="cf es-sonando">
+          <div class="cf-fila">
+            <a class="cf-main" href="partido.html">
+              <span class="cf-logo" aria-hidden="true"><b>DAZN</b><small>LaLiga</small></span>
+              <span class="cf-txt">
+                <span class="cf-nombre"><span>DAZN LaLiga</span><span class="en-pantalla"><svg class="ic"><use href="#i-vol"/></svg>Sonando</span></span>
+                <span class="cf-ahora"><span class="mbug"><span class="chapa k-sev"></span><span class="eq-sigla">SEV</span><span class="marcador"><span class="num">1</span><span class="num">1</span></span><span class="eq-sigla">BET</span><span class="chapa k-bet"></span><span class="num min">76'</span></span></span>
+                <span class="cf-estado"><span class="senal" data-e="ok"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Verificada <span class="senal-sub">fuente Faro</span></span><span class="en-pantalla"><svg class="ic"><use href="#i-vol"/></svg>Sonando</span></span>
+              </span>
+            </a>
+            <span class="cf-estado-col"><span class="senal" data-e="ok"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Verificada <span class="senal-sub">fuente Faro</span></span></span>
+            <button type="button" class="btn-ico" data-conmuta aria-pressed="true" data-l-on="Quitar DAZN LaLiga de favoritos" data-l-off="Añadir DAZN LaLiga a favoritos" aria-label="Quitar DAZN LaLiga de favoritos"><svg class="ic"><use href="#i-estrella"/></svg></button>
+            <button type="button" class="btn-ico" aria-label="Más acciones para DAZN LaLiga"><svg class="ic"><use href="#i-mas"/></svg></button>
+          </div>
+          <div class="minbar" style="--p:.84" aria-hidden="true"><i></i></div>
+        </li>
+
+        <li class="cf">
+          <div class="cf-fila">
+            <a class="cf-main" href="partido.html">
+              <span class="cf-logo" aria-hidden="true"><b>M+</b><small>LaLiga</small></span>
+              <span class="cf-txt">
+                <span class="cf-nombre"><span>M+ LaLiga</span></span>
+                <span class="cf-ahora"><span class="num hora">21:30</span><span>Real Madrid – Real Sociedad</span></span>
+                <span class="cf-estado"><span class="senal" data-e="pendiente"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Sin comprobar</span></span>
+              </span>
+            </a>
+            <span class="cf-estado-col"><span class="senal" data-e="pendiente"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Sin comprobar</span></span>
+            <button type="button" class="btn-ico" data-conmuta aria-pressed="true" data-l-on="Quitar M+ LaLiga de favoritos" data-l-off="Añadir M+ LaLiga a favoritos" aria-label="Quitar M+ LaLiga de favoritos"><svg class="ic"><use href="#i-estrella"/></svg></button>
+            <button type="button" class="btn-ico" aria-label="Más acciones para M+ LaLiga"><svg class="ic"><use href="#i-mas"/></svg></button>
+          </div>
+        </li>
+
+        <li class="cf">
+          <div class="cf-fila">
+            <a class="cf-main" href="partido.html">
+              <span class="cf-logo" aria-hidden="true"><b>M+</b><small>LaLiga 2</small></span>
+              <span class="cf-txt">
+                <span class="cf-nombre"><span>M+ LaLiga 2</span></span>
+                <span class="cf-ahora"><span class="mbug"><span class="chapa k-gir"></span><span class="eq-sigla">GIR</span><span class="marcador"><span class="num">0</span><span class="num">2</span></span><span class="eq-sigla">VIL</span><span class="chapa k-vil"></span><span class="num min">78'</span></span></span>
+                <span class="cf-estado"><span class="senal" data-e="fallo"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Sin señal <span class="senal-sub">reintento 20:51</span></span></span>
+              </span>
+            </a>
+            <span class="cf-estado-col"><span class="senal" data-e="fallo"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Sin señal <span class="senal-sub">reintento 20:51</span></span></span>
+            <button type="button" class="btn-ico" data-conmuta aria-pressed="true" data-l-on="Quitar M+ LaLiga 2 de favoritos" data-l-off="Añadir M+ LaLiga 2 a favoritos" aria-label="Quitar M+ LaLiga 2 de favoritos"><svg class="ic"><use href="#i-estrella"/></svg></button>
+            <button type="button" class="btn-ico" aria-label="Más acciones para M+ LaLiga 2"><svg class="ic"><use href="#i-mas"/></svg></button>
+          </div>
+        </li>
+
+        <li class="cf">
+          <div class="cf-fila">
+            <a class="cf-main" href="partido.html">
+              <span class="cf-logo" aria-hidden="true"><b>M+</b><small>Campeones</small></span>
+              <span class="cf-txt">
+                <span class="cf-nombre"><span>M+ Liga de Campeones</span></span>
+                <span class="cf-ahora"><span class="num hora">21:00</span><span>Atlético de Madrid – Arsenal</span></span>
+                <span class="cf-estado"><span class="senal" data-e="floja"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Floja <span class="senal-sub">1 de 4 fuentes</span></span></span>
+              </span>
+            </a>
+            <span class="cf-estado-col"><span class="senal" data-e="floja"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Floja <span class="senal-sub">1 de 4 fuentes</span></span></span>
+            <button type="button" class="btn-ico" data-conmuta aria-pressed="true" data-l-on="Quitar M+ Liga de Campeones de favoritos" data-l-off="Añadir M+ Liga de Campeones a favoritos" aria-label="Quitar M+ Liga de Campeones de favoritos"><svg class="ic"><use href="#i-estrella"/></svg></button>
+            <button type="button" class="btn-ico" aria-label="Más acciones para M+ Liga de Campeones"><svg class="ic"><use href="#i-mas"/></svg></button>
+          </div>
+        </li>
+
+        <li class="cf">
+          <div class="cf-fila">
+            <a class="cf-main" href="partido.html">
+              <span class="cf-logo" aria-hidden="true"><b>M+</b><small>Campeones 3</small></span>
+              <span class="cf-txt">
+                <span class="cf-nombre"><span>M+ Liga de Campeones 3</span></span>
+                <span class="cf-ahora"><span class="num hora">21:00</span><span>Liverpool – Inter de Milán</span></span>
+                <span class="cf-estado"><span class="senal" data-e="comprobando"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Comprobando <span class="senal-sub">2 de 5</span></span></span>
+              </span>
+            </a>
+            <span class="cf-estado-col"><span class="senal" data-e="comprobando"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Comprobando <span class="senal-sub">2 de 5</span></span></span>
+            <button type="button" class="btn-ico" data-conmuta aria-pressed="true" data-l-on="Quitar M+ Liga de Campeones 3 de favoritos" data-l-off="Añadir M+ Liga de Campeones 3 a favoritos" aria-label="Quitar M+ Liga de Campeones 3 de favoritos"><svg class="ic"><use href="#i-estrella"/></svg></button>
+            <button type="button" class="btn-ico" aria-label="Más acciones para M+ Liga de Campeones 3"><svg class="ic"><use href="#i-mas"/></svg></button>
+          </div>
+        </li>
+
+        <li class="cf">
+          <div class="cf-fila">
+            <a class="cf-main" href="partido.html">
+              <span class="cf-logo" aria-hidden="true"><b>DAZN</b><small>1</small></span>
+              <span class="cf-txt">
+                <span class="cf-nombre"><span>DAZN 1</span></span>
+                <span class="cf-ahora"><span>Sin fútbol hoy</span></span>
+                <span class="cf-estado"><span class="senal" data-e="ok"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Verificada <span class="senal-sub">ayer, 23:10</span></span></span>
+              </span>
+            </a>
+            <span class="cf-estado-col"><span class="senal" data-e="ok"><span class="led" aria-hidden="true"><i></i><i></i><i></i></span>Verificada <span class="senal-sub">ayer, 23:10</span></span></span>
+            <button type="button" class="btn-ico" data-conmuta aria-pressed="true" data-l-on="Quitar DAZN 1 de favoritos" data-l-off="Añadir DAZN 1 a favoritos" aria-label="Quitar DAZN 1 de favoritos"><svg class="ic"><use href="#i-estrella"/></svg></button>
+            <button type="button" class="btn-ico" aria-label="Más acciones para DAZN 1"><svg class="ic"><use href="#i-mas"/></svg></button>
+          </div>
+        </li>
+      </ol>
+      <p class="bi-pie">6 favoritos. Las flechas del teclado saltan entre ellos en este orden.</p>
+    </section>
+
+    <!-- Recientes -->
+    <section class="panel" id="p-recientes" role="tabpanel" aria-label="Recientes" hidden>
+      <ol class="lista">
+        <li class="cf"><div class="cf-fila"><a class="cf-main" href="partido.html"><span class="cf-logo" aria-hidden="true"><b>DAZN</b><small>LaLiga</small></span><span class="cf-txt"><span class="cf-nombre"><span>DAZN LaLiga</span><span class="en-pantalla">Sonando</span></span><span class="cf-ahora"><span>Desde las 20:31</span></span></span></a><span class="rec-cuando">ahora</span><button type="button" class="btn-ico" aria-label="Más acciones"><svg class="ic"><use href="#i-mas"/></svg></button></div></li>
+        <li class="cf"><div class="cf-fila"><a class="cf-main" href="partido.html"><span class="cf-logo" aria-hidden="true"><b>M+</b><small>LaLiga 2</small></span><span class="cf-txt"><span class="cf-nombre"><span>M+ LaLiga 2</span></span><span class="cf-ahora"><span>Se cortó a las 20:38</span></span></span></a><span class="rec-cuando">hace 7 min</span><button type="button" class="btn-ico" aria-label="Más acciones"><svg class="ic"><use href="#i-mas"/></svg></button></div></li>
+        <li class="cf"><div class="cf-fila"><a class="cf-main" href="partido.html"><span class="cf-logo" aria-hidden="true"><b>9f3c</b><small>hash</small></span><span class="cf-txt"><span class="cf-nombre"><span>Stream 9f3c81ab</span></span><span class="cf-ahora"><span>Hash pegado a mano</span></span></span></a><span class="rec-cuando">ayer</span><button type="button" class="btn-ico" aria-label="Más acciones"><svg class="ic"><use href="#i-mas"/></svg></button></div></li>
+        <li class="cf"><div class="cf-fila"><a class="cf-main" href="partido.html"><span class="cf-logo" aria-hidden="true"><b>DAZN</b><small>1</small></span><span class="cf-txt"><span class="cf-nombre"><span>DAZN 1</span></span><span class="cf-ahora"><span>Visto 1 h 52 min</span></span></span></a><span class="rec-cuando">ayer</span><button type="button" class="btn-ico" aria-label="Más acciones"><svg class="ic"><use href="#i-mas"/></svg></button></div></li>
+      </ol>
+    </section>
+  </main>
+
+  <!-- Listas M3U: en escritorio se ven al lado; en móvil, en su pestaña -->
+  <aside class="listas" id="p-listas" aria-labelledby="li-t">
+    <div class="li-cab"><h2 id="li-t">Listas</h2><span>Ninguna todavía</span></div>
+    <div class="vacio">
+      <div class="vacio-dibujo" aria-hidden="true"><span></span><span></span><span></span></div>
+      <h2>Aún no tienes listas</h2>
+      <p>Pega la dirección de una lista M3U y sus canales aparecerán aquí, ordenados por categorías. Tus favoritos no cambian.</p>
+      <div class="vacio-acciones">
+        <button type="button" class="btn btn-inv"><svg class="ic"><use href="#i-mas-uno"/></svg>Añadir una lista</button>
+        <button type="button" class="btn"><svg class="ic"><use href="#i-buscar"/></svg>Buscar en el motor</button>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<!-- Mini-reproductor: sigue sonando mientras navegas -->
+<aside class="sonando" aria-label="Sonando">
+  <div class="minbar" style="--p:.84" aria-hidden="true"><i></i></div>
+  <a class="sonando-cuerpo" href="partido.html">
+    <span class="sonando-que"><span class="tally" aria-hidden="true"></span><span>DAZN LaLiga, fuente Faro</span></span>
+    <span class="mbug"><span class="chapa k-sev"></span><span class="eq-sigla">SEV</span><span class="marcador"><span class="num">1</span><span class="num">1</span></span><span class="eq-sigla">BET</span><span class="chapa k-bet"></span><span class="num min">76'</span></span>
+  </a>
+  <button type="button" class="btn-ico btn-play" id="mini-play" aria-pressed="true" aria-label="Pausar"><svg class="ic"><use href="#i-pausa"/></svg></button>
+  <button type="button" class="btn-ico" id="mini-cerrar" aria-label="Detener la reproducción"><svg class="ic"><use href="#i-cerrar"/></svg></button>
+</aside>
+
+<nav class="barra-nav" aria-label="Secciones">
+  <a href="agenda.html"><svg class="ic"><use href="#i-agenda"/></svg>Agenda</a>
+  <a href="biblioteca.html" aria-current="page"><svg class="ic"><use href="#i-biblioteca"/></svg>Biblioteca</a>
+  <a href="#"><svg class="ic"><use href="#i-buscar"/></svg>Buscar</a>
+  <a href="#"><svg class="ic"><use href="#i-ajustes"/></svg>Ajustes</a>
+</nav>
+
+<script>
+  (function () {
+    var tabs = document.querySelector('[data-grupo="tabs"]');
+    function mostrar(tab) {
+      document.body.setAttribute('data-tab', tab);
+      tabs.querySelectorAll('[data-opcion]').forEach(function (b) { b.setAttribute('aria-selected', String(b.getAttribute('data-opcion') === tab)); });
+      document.getElementById('p-favoritos').hidden = tab !== 'favoritos';
+      document.getElementById('p-recientes').hidden = tab !== 'recientes';
+    }
+    tabs.addEventListener('elegido', function (e) { mostrar(e.detail); });
+    var q = new URLSearchParams(location.search).get('tab');
+    if (q) mostrar(q);
+
+    // Mini-reproductor
+    var play = document.getElementById('mini-play');
+    play.addEventListener('click', function () {
+      var sonando = play.getAttribute('aria-pressed') !== 'true';
+      play.setAttribute('aria-pressed', String(sonando));
+      play.setAttribute('aria-label', sonando ? 'Pausar' : 'Reproducir');
+      play.querySelector('use').setAttribute('href', sonando ? '#i-pausa' : '#i-play');
+    });
+    document.getElementById('mini-cerrar').addEventListener('click', function () {
+      document.querySelector('.sonando').hidden = true;
+    });
+
+    // «/» enfoca el buscador; filtra en local
+    var buscar = document.getElementById('buscar');
+    document.addEventListener('keydown', function (e) {
+      if (e.key === '/' && document.activeElement !== buscar) { e.preventDefault(); buscar.focus(); }
+    });
+    buscar.addEventListener('input', function () {
+      var t = buscar.value.trim().toLowerCase();
+      document.querySelectorAll('#p-favoritos .cf').forEach(function (li) {
+        li.hidden = t.length > 0 && li.querySelector('.cf-nombre').textContent.toLowerCase().indexOf(t) === -1;
+      });
+    });
+  })();
+</script>
+</body>
+</html>

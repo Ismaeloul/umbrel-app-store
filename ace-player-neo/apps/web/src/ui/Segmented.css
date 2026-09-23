@@ -1,0 +1,96 @@
+/* Pista con «gota» deslizante: columnas iguales (--n) y la gota va a la
+   columna --i con translateX. Muelle estándar (el de la barra inferior). */
+.seg {
+  --n: 2;
+  --i: 0;
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+  padding: 4px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  isolation: isolate;
+  /* Nunca más ancho que su sitio: en un móvil estrecho los rótulos se recortan. */
+  max-width: 100%;
+  justify-self: start;
+}
+.seg--block {
+  display: grid;
+  width: 100%;
+  justify-self: stretch;
+}
+.seg__item > span:not(.seg__count) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.seg::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc((100% - 8px) / var(--n));
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow:
+    inset 0 1px 0 var(--glass-hi),
+    0 4px 14px -6px rgb(2 8 18 / 0.35),
+    0 0 0 1px var(--line-soft);
+  transform: translateX(calc(var(--i) * 100%));
+  transition: transform var(--dur-estandar) var(--ease-estandar);
+}
+.seg__item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 clamp(8px, 3vw, 16px);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-13);
+  font-weight: 620;
+  color: var(--text-2);
+  white-space: nowrap;
+  /* Sin transición de color: solo se anima transform y opacity (prompt). El
+     cambio de color es instantáneo; lo que se mueve es la píldora de debajo. */
+}
+/* Zona táctil de 44 aunque el dibujo mida 36. */
+.seg__item::after {
+  content: '';
+  position: absolute;
+  inset: -4px 0;
+}
+.seg__item[aria-checked='true'],
+.seg__item[aria-selected='true'] {
+  color: var(--text);
+}
+.seg__item:disabled {
+  opacity: 0.5;
+}
+.seg__count {
+  color: var(--text-3);
+  font-size: var(--fs-13);
+}
+.seg__item:focus-visible {
+  outline-offset: -2px;
+  border-radius: var(--r-pill);
+}
+@media (hover: hover) and (pointer: fine) {
+  .seg__item:hover:not(:disabled) {
+    color: var(--text);
+  }
+}
+/* Móvil estrecho (360): con icono, «Sistema» no cabía en su tercio y salía
+   «Siste…» (revisión visual de la Fase 2). Menos aire a los lados y entre el
+   icono y el rótulo. */
+@media (max-width: 380px) {
+  .seg__item {
+    gap: 4px;
+    padding-inline: 6px;
+  }
+}

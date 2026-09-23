@@ -1,0 +1,26 @@
+[
+  {
+    "ShowId": 21,
+    "Titulo": "LIGA DE CAMPEONES",
+    "Directo": true,
+    "GeneroComAntena": "Fútbol",
+    "FechaHoraInicio": 1767297600000,
+    "Ficha": "https://ottcache.dof6.com/movistarplus/webplayer/contents/502/details"
+  },
+  {
+    "ShowId": 22,
+    "Titulo": "LALIGA EA SPORTS",
+    "Directo": true,
+    "GeneroComAntena": "Fútbol",
+    "FechaHoraInicio": 1767294000000,
+    "Ficha": "https://ottcache.dof6.com/movistarplus/webplayer/contents/501/details"
+  },
+  {
+    "ShowId": 23,
+    "Titulo": "FÚTBOL INTERNACIONAL",
+    "Directo": true,
+    "GeneroComAntena": "Fútbol",
+    "FechaHoraInicio": 1767373200000,
+    "Ficha": "sin-ficha"
+  }
+]

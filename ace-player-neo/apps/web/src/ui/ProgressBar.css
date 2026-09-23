@@ -1,0 +1,36 @@
+.progress {
+  --v: 0;
+  --fill: var(--accent-edge);
+  position: relative;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--line-soft);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+.progress--thin {
+  height: 3px;
+}
+.progress--live {
+  --fill: var(--live);
+}
+.progress--neutral {
+  --fill: var(--text-2);
+}
+.progress__fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--fill);
+  transform: scaleX(var(--v));
+  transform-origin: left center;
+  transition: transform var(--dur-heroe) var(--ease-estandar);
+}
+.progress__mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--bg);
+}

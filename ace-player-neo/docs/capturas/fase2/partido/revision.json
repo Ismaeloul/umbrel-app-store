@@ -1,0 +1,136 @@
+[
+  {
+    "file": "partido-movil-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "partido-entera-movil-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "partido-floja-movil-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "partido-sin-senal-movil-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "encontrar-canal-movil-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "no-encontrado-movil-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "partido-movil-claro.png",
+    "problems": []
+  },
+  {
+    "file": "partido-entera-movil-claro.png",
+    "problems": []
+  },
+  {
+    "file": "partido-floja-movil-claro.png",
+    "problems": []
+  },
+  {
+    "file": "partido-sin-senal-movil-claro.png",
+    "problems": []
+  },
+  {
+    "file": "encontrar-canal-movil-claro.png",
+    "problems": []
+  },
+  {
+    "file": "no-encontrado-movil-claro.png",
+    "problems": []
+  },
+  {
+    "file": "partido-escritorio-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "partido-entera-escritorio-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "partido-floja-escritorio-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "partido-sin-senal-escritorio-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "encontrar-canal-escritorio-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "no-encontrado-escritorio-oscuro.png",
+    "problems": []
+  },
+  {
+    "file": "partido-escritorio-claro.png",
+    "problems": []
+  },
+  {
+    "file": "partido-entera-escritorio-claro.png",
+    "problems": []
+  },
+  {
+    "file": "partido-floja-escritorio-claro.png",
+    "problems": []
+  },
+  {
+    "file": "partido-sin-senal-escritorio-claro.png",
+    "problems": []
+  },
+  {
+    "file": "encontrar-canal-escritorio-claro.png",
+    "problems": []
+  },
+  {
+    "file": "no-encontrado-escritorio-claro.png",
+    "problems": []
+  },
+  {
+    "file": "partido 360×800",
+    "problems": []
+  },
+  {
+    "file": "partido 430×932",
+    "problems": []
+  },
+  {
+    "file": "partido 844×390",
+    "problems": []
+  },
+  {
+    "file": "partido 932×430",
+    "problems": []
+  },
+  {
+    "file": "partido 768×1024",
+    "problems": [
+      "la página se ensancha a 776"
+    ]
+  },
+  {
+    "file": "partido 1024×1366",
+    "problems": []
+  },
+  {
+    "file": "partido 1280×800",
+    "problems": []
+  },
+  {
+    "file": "partido 1920×1080",
+    "problems": []
+  },
+  {
+    "file": "partido 2560×1440",
+    "problems": []
+  }
+]

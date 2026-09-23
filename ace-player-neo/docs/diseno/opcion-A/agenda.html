@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Agenda · Ace Player Neo (opción A)</title>
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#081829">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f0f7fc">
+<link rel="icon" href="icono.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112.5,100..800&family=Mona+Sans:wdth,wght@75..125,200..900&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="base.css">
+<style>
+  /* ---- Estructura ------------------------------------------------------- */
+  .agenda {
+    position: relative; isolation: isolate;
+    display: grid; gap: 18px; align-content: start;
+    max-width: 680px; margin: 0 auto;
+    padding: calc(env(safe-area-inset-top) + 14px) var(--gutter) 120px;
+  }
+  /* Luz de focos: si juega tu equipo, sus colores iluminan la cabecera */
+  .agenda-glow {
+    position: absolute; z-index: -1; inset: 0 0 auto 0; height: 300px; pointer-events: none;
+    background:
+      radial-gradient(70% 100% at 0% 0%, color-mix(in oklch, var(--ta) 24%, transparent), transparent 70%),
+      radial-gradient(70% 100% at 100% 0%, color-mix(in oklch, var(--tb) 16%, transparent), transparent 70%);
+  }
+
+  .head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 48px; }
+  .head h1 { font-size: var(--fs-30); font-weight: 760; font-stretch: var(--w-head); letter-spacing: -0.02em; line-height: 1.05; }
+  .head-tools { display: flex; align-items: center; margin-right: -8px; }
+
+  /* ---- Tira de días ------------------------------------------------------ */
+  .days {
+    display: flex; gap: 8px; overflow-x: auto; overscroll-behavior-x: contain;
+    margin: 0 calc(-1 * var(--gutter)); padding: 2px var(--gutter) 6px;
+    scroll-snap-type: x proximity; scrollbar-width: none;
+  }
+  .days::-webkit-scrollbar { display: none; }
+  .day {
+    flex: none; width: 70px; min-height: 86px; scroll-snap-align: center;
+    display: grid; justify-items: center; align-content: center; gap: 4px;
+    border-radius: var(--r-l); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-soft);
+    transition: background-color var(--dur-rapido) var(--ease-rapido), box-shadow var(--dur-rapido) var(--ease-rapido);
+  }
+  .day .d-l { font-size: var(--fs-13); font-weight: 650; color: var(--text-2); }
+  .day .d-n { font-size: 1.625rem; line-height: 1; }
+  .day .d-c { font-size: var(--fs-11); font-weight: 600; color: var(--text-2); font-stretch: var(--w-tight); }
+  .day.is-today .d-l { color: var(--accent-ink); }
+  .day.is-past .d-n { color: var(--text-2); }
+  .day[aria-selected="true"] { background: var(--accent-wash); box-shadow: inset 0 0 0 1.5px var(--accent-edge); }
+  .day[aria-selected="true"] .d-l, .day[aria-selected="true"] .d-c { color: var(--text); }
+
+  /* ---- Filtro ------------------------------------------------------------ */
+  .filters { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .live-sum { display: inline-flex; align-items: center; gap: 10px; font-size: var(--fs-13); font-weight: 680; color: var(--live); white-space: nowrap; }
+
+  .lists { display: grid; gap: 26px; }
+  .comp[data-solo="todos"] { display: none; }
+  body[data-filtro="todos"] .comp[data-solo="todos"] { display: grid; }
+
+  .foot { font-size: var(--fs-12); color: var(--text-3); padding: 0 4px; display: flex; flex-wrap: wrap; gap: 4px 12px; }
+
+  /* ---- Vista previa (solo escritorio) ----------------------------------- */
+  .preview { display: none; }
+
+  @media (min-width: 1024px) {
+    .app { display: flex; min-height: 100dvh; }
+    .agenda { flex: none; width: 600px; max-width: none; margin: 0; padding: 26px 24px 40px 32px; }
+    .preview { display: block; flex: 1; min-width: 0; position: sticky; top: 0; height: 100dvh; padding: 26px 28px 26px 8px; }
+    .head-tools .engine { display: none; }  /* en escritorio el motor vive en el carril */
+    .days { margin: 0; padding: 2px 0 6px; gap: 6px; }
+    .day { width: 64px; min-height: 80px; }
+  }
+  @media (min-width: 1360px) { .agenda { width: 640px; } }
+
+  .stage {
+    --ta: transparent; --tb: transparent;
+    position: relative; isolation: isolate; max-height: 100%;
+    display: flex; flex-direction: column;
+    border-radius: var(--r-xl); overflow: hidden;
+    background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-soft);
+  }
+  .stage-light {
+    position: absolute; z-index: -2; inset: 0 0 auto 0; height: 470px;
+    background:
+      radial-gradient(52% 78% at 8% 0%, color-mix(in oklch, var(--ta) 66%, transparent), transparent 74%),
+      radial-gradient(52% 78% at 92% 0%, color-mix(in oklch, var(--tb) 52%, transparent), transparent 74%);
+    transition: opacity var(--dur-estandar) var(--ease-estandar);
+  }
+  .pane { margin: 12px 12px 0; padding: 18px 22px 16px; border-radius: 16px; display: grid; gap: 16px; }
+  .pane-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 24px; }
+  .pane-comp { font-size: var(--fs-13); color: var(--text-2); font-weight: 560; text-align: right; }
+  .score { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
+  .score .side { display: grid; justify-items: center; gap: 10px; text-align: center; min-width: 0; }
+  .score .side .crest { --s: 84px; }
+  .score .side .nm { font-size: var(--fs-17); font-weight: 700; font-stretch: var(--w-head); line-height: 1.2; }
+  .score .mid { display: grid; justify-items: center; gap: 4px; }
+  .score .big { font-size: var(--fs-96); line-height: 0.9; letter-spacing: -0.01em; display: flex; align-items: center; gap: 0.12em; }
+  .score .big .sep { color: var(--text-3); font-weight: 500; }
+  .score .big.time { font-size: var(--fs-64); }
+  .score .when { font-size: var(--fs-15); font-weight: 700; color: var(--live); display: inline-flex; align-items: center; gap: 8px; }
+  .score .when.quiet { color: var(--text-2); }
+  .scorers { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: var(--fs-13); color: var(--text-2); }
+  .scorers p:last-child { text-align: right; }
+  .scorers b { color: var(--text); font-weight: 620; }
+
+  .st-body { padding: 20px 24px 24px; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 22px 24px; align-items: start; }
+  .st-sec { display: grid; gap: 10px; }
+  .st-sec h3 { font-size: var(--fs-15); font-weight: 720; font-stretch: var(--w-head); }
+  .st-sum { display: flex; align-items: center; gap: 12px; font-size: var(--fs-15); font-weight: 560; line-height: 1.3; }
+  .st-sum .sig { font-size: var(--fs-13); }
+  .srcs { display: grid; border-radius: var(--r-l); background: var(--bg); box-shadow: inset 0 0 0 1px var(--line-soft); overflow: hidden; }
+  .srcs li { display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 10px; min-height: 44px; padding: 0 14px; }
+  .srcs li + li { box-shadow: inset 0 1px 0 var(--line-soft); }
+  .srcs .n { font-size: var(--fs-15); color: var(--text-2); }
+  .srcs .p { font-weight: 620; }
+  .chs { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chs span { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 12px; border-radius: 12px; background: var(--surface-2); font-size: var(--fs-13); font-weight: 600; }
+  .st-actions { grid-column: 1 / -1; display: flex; gap: 10px; flex-wrap: wrap; }
+  .st-actions .btn--primary { flex: 1; min-height: 52px; font-size: var(--fs-17); }
+  .st-actions .btn--quiet { min-height: 52px; }
+  .st-place { font-size: var(--fs-13); color: var(--text-3); }
+</style>
+</head>
+<body data-filtro="para-ti">
+<script src="iconos.js"></script>
+
+<div class="app">
+  <!-- Carril lateral (escritorio) -->
+  <aside class="rail">
+    <img class="brand" src="icono.svg" alt="Ace Player Neo">
+    <nav aria-label="Principal">
+      <a href="agenda.html" aria-current="page"><svg class="i"><use href="#i-agenda"/></svg>Agenda</a>
+      <a href="biblioteca.html"><svg class="i"><use href="#i-biblio"/></svg>Biblioteca</a>
+      <a href="#"><svg class="i"><use href="#i-buscar"/></svg>Buscar</a>
+      <a href="#"><svg class="i"><use href="#i-ajustes"/></svg>Ajustes</a>
+    </nav>
+    <button class="engine" data-state="ok" title="Motor AceStream en línea. Pulsa para ver la salud del sistema.">
+      <svg class="i"><use href="#i-motor"/></svg><span>Motor</span><span>en línea</span>
+    </button>
+  </aside>
+
+  <main class="agenda" style="--ta: var(--t-atm); --tb: var(--t-tot)">
+    
+    <header class="head">
+      <h1>Agenda</h1>
+      <div class="head-tools">
+        <button class="engine" data-state="ok" aria-label="Motor AceStream en línea. Ver la salud del sistema">
+          <svg class="i"><use href="#i-motor"/></svg><span>Motor en línea</span>
+        </button>
+        <button class="icon-btn press" aria-label="Actualizar agenda"><svg class="i"><use href="#i-refresh"/></svg></button>
+      </div>
+    </header>
+
+    <div class="days" role="tablist" aria-label="Días">
+      <button class="day is-past" role="tab" aria-selected="false"><span class="d-l">Ayer</span><span class="d-n num">22</span><span class="d-c">9 partidos</span></button>
+      <button class="day is-today" role="tab" aria-selected="true"><span class="d-l">Hoy</span><span class="d-n num">23</span><span class="d-c" id="hoy-n">8 partidos</span></button>
+      <button class="day" role="tab" aria-selected="false"><span class="d-l">Jue</span><span class="d-n num">24</span><span class="d-c">6 partidos</span></button>
+      <button class="day" role="tab" aria-selected="false"><span class="d-l">Vie</span><span class="d-n num">25</span><span class="d-c">4 partidos</span></button>
+      <button class="day" role="tab" aria-selected="false"><span class="d-l">Sáb</span><span class="d-n num">26</span><span class="d-c">11 partidos</span></button>
+      <button class="day" role="tab" aria-selected="false"><span class="d-l">Dom</span><span class="d-n num">27</span><span class="d-c">12 partidos</span></button>
+      <button class="day" role="tab" aria-selected="false"><span class="d-l">Lun</span><span class="d-n num">28</span><span class="d-c">2 partidos</span></button>
+      <button class="day" role="tab" aria-selected="false"><span class="d-l">Mar</span><span class="d-n num">29</span><span class="d-c">9 partidos</span></button>
+    </div>
+
+    <div class="filters">
+      <div class="seg" id="filtro" style="--n:2; --i:0" role="group" aria-label="Qué partidos ver">
+        <button aria-pressed="true" data-v="para-ti">Para ti <span class="count">8</span></button>
+        <button aria-pressed="false" data-v="todos">Todos <span class="count">9</span></button>
+      </div>
+      <span class="live-sum"><span class="live-dot"></span>3 en directo</span>
+    </div>
+
+    <div class="lists">
+      <!-- Champions League -->
+      <section class="comp" aria-labelledby="c-ucl">
+        <header class="comp-head"><h2 id="c-ucl">Champions League</h2><p>Fase liga, jornada 2</p></header>
+        <ol class="franjas">
+          <li>
+            <a class="franja is-live" href="partido.html" data-id="atmtot" style="--ta: var(--t-atm); --tb: var(--t-tot)">
+              <div class="f-time"><span class="f-ring num" style="--p:0.8"><span class="onda" aria-hidden="true"></span>72'</span><span class="f-note">En directo</span></div>
+              <div class="f-teams">
+                <div class="f-team lead"><span class="crest" data-team="atm"></span><span class="f-name">Atlético</span><span class="f-score num">2</span></div>
+                <div class="f-team trail"><span class="crest" data-team="tot"></span><span class="f-name">Tottenham</span><span class="f-score num">1</span></div>
+              </div>
+              <div class="f-sig"><span class="sig sig--ok"><span class="bars"><i></i><i></i><i></i></span>Verificada</span></div>
+              <div class="f-meta"><span class="tag tag--mine">Tu equipo</span><span class="ch"><svg class="i s16"><use href="#i-tv"/></svg>M+ Liga de Campeones</span></div>
+              
+            </a>
+          </li>
+          <li>
+            <a class="franja is-live" href="partido.html" data-id="galvil" style="--ta: var(--t-gal); --tb: var(--t-vil)">
+              <div class="f-time"><span class="f-ring num" style="--p:0.8"><span class="onda" aria-hidden="true"></span>72'</span><span class="f-note">En directo</span></div>
+              <div class="f-teams">
+                <div class="f-team"><span class="crest" data-team="gal"></span><span class="f-name">Galatasaray</span><span class="f-score num">0</span></div>
+                <div class="f-team"><span class="crest" data-team="vil"></span><span class="f-name">Villarreal</span><span class="f-score num">0</span></div>
+              </div>
+              <div class="f-sig"><span class="sig sig--weak"><span class="bars"><i></i><i></i><i></i></span>Floja</span></div>
+              <div class="f-meta"><span class="ch"><svg class="i s16"><use href="#i-tv"/></svg>M+ Liga de Campeones 2</span></div>
+              
+            </a>
+          </li>
+          <li>
+            <a class="franja" href="partido.html" data-id="rmabay">
+              <div class="f-time"><span class="f-clock num">21:00</span><span class="f-note">en 48 min</span></div>
+              <div class="f-teams">
+                <div class="f-team"><span class="crest" data-team="rma"></span><span class="f-name">Real Madrid</span></div>
+                <div class="f-team"><span class="crest" data-team="bay"></span><span class="f-name">Bayern</span></div>
+              </div>
+              <div class="f-sig"><span class="sig sig--check"><span class="bars"><i></i><i></i><i></i></span>Comprobando</span></div>
+              <div class="f-meta"><span class="tag tag--mine">Tu equipo</span><span class="ch"><svg class="i s16"><use href="#i-tv"/></svg>M+ Liga de Campeones</span></div>
+            </a>
+          </li>
+          <li>
+            <a class="franja" href="partido.html" data-id="intbar">
+              <div class="f-time"><span class="f-clock num">21:00</span><span class="f-note">en 48 min</span></div>
+              <div class="f-teams">
+                <div class="f-team"><span class="crest" data-team="int"></span><span class="f-name">Inter</span></div>
+                <div class="f-team"><span class="crest" data-team="bar"></span><span class="f-name">Barcelona</span></div>
+              </div>
+              <div class="f-sig"><span class="sig sig--ok"><span class="bars"><i></i><i></i><i></i></span>Verificada</span></div>
+              <div class="f-meta"><span class="ch"><svg class="i s16"><use href="#i-tv"/></svg>M+ Liga de Campeones 2</span></div>
+            </a>
+          </li>
+          <li>
+            <a class="franja" href="partido.html" data-id="benath">
+              <div class="f-time"><span class="f-clock num">21:00</span><span class="f-note">en 48 min</span></div>
+              <div class="f-teams">
+                <div class="f-team"><span class="crest" data-team="ben"></span><span class="f-name">Benfica</span></div>
+                <div class="f-team"><span class="crest" data-team="ath"></span><span class="f-name">Athletic</span></div>
+              </div>
+              <div class="f-sig"><span class="sig sig--idle"><span class="bars"><i></i><i></i><i></i></span>Pendiente</span></div>
+              <div class="f-meta"><span class="ch"><svg class="i s16"><use href="#i-tv"/></svg>M+ Liga de Campeones 3</span></div>
+            </a>
+          </li>
+        </ol>
+      </section>
+
+      <!-- LaLiga -->
+      <section class="comp" aria-labelledby="c-liga">
+        <header class="comp-head"><h2 id="c-liga">LaLiga EA Sports</h2><p>Jornada 6</p></header>
+        <ol class="franjas">
+          <li>
+            <a class="franja is-live" href="partido.html" data-id="girrso" style="--ta: var(--t-gir); --tb: var(--t-rso)">
+              <div class="f-time"><span class="f-ring num" style="--p:0.644"><span class="onda" aria-hidden="true"></span>58'</span><span class="f-note">En directo</span></div>
+              <div class="f-teams">
+                <div class="f-team"><span class="crest" data-team="gir"></span><span class="f-name">Girona</span><span class="f-score num">1</span></div>
+                <div class="f-team"><span class="crest" data-team="rso"></span><span class="f-name">Real Sociedad</span><span class="f-score num">1</span></div>
+              </div>
+              <div class="f-sig"><span class="sig sig--fail"><span class="bars"><i></i><i></i><i></i></span>Sin señal</span></div>
+              <div class="f-meta"><span class="ch"><svg class="i s16"><use href="#i-tv"/></svg>DAZN LaLiga</span></div>
+              
+            </a>
+          </li>
+          <li>
+            <a class="franja" href="partido.html" data-id="betval">
+              <div class="f-time"><span class="f-clock num">21:30</span><span class="f-note">en 1 h 18 min</span></div>
+              <div class="f-teams">
+                <div class="f-team"><span class="crest" data-team="bet"></span><span class="f-name">Real Betis</span></div>
+                <div class="f-team"><span class="crest" data-team="val"></span><span class="f-name">Valencia</span></div>
+              </div>
+              <div class="f-sig"><span class="sig sig--idle"><span class="bars"><i></i><i></i><i></i></span>Pendiente</span></div>
+              <div class="f-meta"><span class="ch"><svg class="i s16"><use href="#i-tv"/></svg>M+ LaLiga</span></div>
+            </a>
+          </li>
+          <li>
+            <a class="franja is-done" href="partido.html" data-id="mllesp">
+              <div class="f-time"><span class="f-clock num">17:00</span><span class="f-note">Final</span></div>
+              <div class="f-teams">
+                <div class="f-team"><span class="crest" data-team="mll"></span><span class="f-name">Mallorca</span><span class="f-score num">1</span></div>
+                <div class="f-team"><span class="crest" data-team="esp"></span><span class="f-name">Espanyol</span><span class="f-score num">0</span></div>
+              </div>
+              <div class="f-sig"></div>
+              <div class="f-meta"><span class="ch"><svg class="i s16"><use href="#i-tv"/></svg>DAZN LaLiga</span></div>
+            </a>
+          </li>
+        </ol>
+      </section>
+
+      <!-- Solo con «Todos» -->
+      <section class="comp" data-solo="todos" aria-labelledby="c-seriea">
+        <header class="comp-head"><h2 id="c-seriea">Serie A</h2><p>Jornada 5</p></header>
+        <ol class="franjas">
+          <li>
+            <a class="franja" href="partido.html" data-id="juvrom">
+              <div class="f-time"><span class="f-clock num">20:45</span><span class="f-note">en 33 min</span></div>
+              <div class="f-teams">
+                <div class="f-team"><span class="crest" data-team="juv"></span><span class="f-name">Juventus</span></div>
+                <div class="f-team"><span class="crest" data-team="rom"></span><span class="f-name">Roma</span></div>
+              </div>
+              <div class="f-sig"><span class="sig sig--ok"><span class="bars"><i></i><i></i><i></i></span>Verificada</span></div>
+              <div class="f-meta"><span class="ch"><svg class="i s16"><use href="#i-tv"/></svg>DAZN 1</span></div>
+            </a>
+          </li>
+        </ol>
+      </section>
+    </div>
+
+    <p class="foot"><span>Datos de futbolenlatv, Movistar Plus+ y ESPN.</span><span>Horario peninsular.</span><span>Actualizado a las 20:11.</span></p>
+  </main>
+
+  <!-- Vista previa del partido elegido (escritorio) -->
+  <aside class="preview" aria-label="Partido seleccionado">
+    <article class="stage" id="stage" aria-live="polite"></article>
+  </aside>
+</div>
+
+<!-- Barra inferior (móvil) -->
+<nav class="tabbar glass glass--dense" aria-label="Principal" style="--i:0">
+  <a href="agenda.html" aria-current="page" class="press"><svg class="i"><use href="#i-agenda"/></svg>Agenda</a>
+  <a href="biblioteca.html" class="press"><svg class="i"><use href="#i-biblio"/></svg>Biblioteca</a>
+  <a href="#" class="press"><svg class="i"><use href="#i-buscar"/></svg>Buscar</a>
+  <a href="#" class="press"><svg class="i"><use href="#i-ajustes"/></svg>Ajustes</a>
+</nav>
+
+<script>
+  /* ---- Datos de la maqueta (ahora son las 20:12 del miércoles 23) -------- */
+  const T = {
+    atm: ['ATM', 'Atlético de Madrid'], tot: ['TOT', 'Tottenham'], gal: ['GAL', 'Galatasaray'], vil: ['VIL', 'Villarreal'],
+    rma: ['RMA', 'Real Madrid'], bay: ['BAY', 'Bayern de Múnich'], int: ['INT', 'Inter'], bar: ['BAR', 'Barcelona'],
+    ben: ['BEN', 'Benfica'], ath: ['ATH', 'Athletic Club'], gir: ['GIR', 'Girona'], rso: ['RSO', 'Real Sociedad'],
+    bet: ['BET', 'Real Betis'], val: ['VAL', 'Valencia'], mll: ['MLL', 'Mallorca'], esp: ['ESP', 'Espanyol'],
+    juv: ['JUV', 'Juventus'], rom: ['ROM', 'Roma']
+  };
+  const UCL = 'Champions League, fase liga, jornada 2', LIGA = 'LaLiga EA Sports, jornada 6';
+  const M = {
+    atmtot: { a: 'atm', b: 'tot', comp: UCL, st: 'live', min: "72'", p: 0.8, sa: 2, sb: 1, place: 'Metropolitano, Madrid',
+      goals: [[12, 'a', 'Julián Álvarez'], [38, 'b', 'Solanke'], [64, 'a', 'Julián Álvarez']],
+      sig: ['ok', 'Verificada'], sum: '3 de 6 fuentes verificadas',
+      src: [[1, 'Elcano', 'ok', 'Verificada'], [2, 'Faro', 'ok', 'Verificada'], [3, 'Norte', 'weak', 'Floja']],
+      ch: ['M+ Liga de Campeones', 'M+ Liga de Campeones 2'] },
+    galvil: { a: 'gal', b: 'vil', comp: UCL, st: 'live', min: "72'", p: 0.8, sa: 0, sb: 0, place: 'RAMS Park, Estambul', goals: [],
+      sig: ['weak', 'Floja'], sum: 'Señal floja: ninguna verificada todavía',
+      src: [[1, 'Vega', 'weak', 'Floja'], [2, 'Sur', 'check', 'Comprobando'], [3, 'Tarifa', 'fail', 'Sin señal']],
+      ch: ['M+ Liga de Campeones 2'] },
+    rmabay: { a: 'rma', b: 'bay', comp: UCL, st: 'next', hour: '21:00', note: 'en 48 min', place: 'Santiago Bernabéu, Madrid',
+      sig: ['check', 'Comprobando'], sum: 'Comprobando: 2 de 5 fuentes probadas',
+      src: [[1, 'Elcano', 'ok', 'Verificada'], [2, 'Faro', 'check', 'Comprobando'], [3, 'Vega', 'idle', 'Pendiente']],
+      ch: ['M+ Liga de Campeones'] },
+    intbar: { a: 'int', b: 'bar', comp: UCL, st: 'next', hour: '21:00', note: 'en 48 min', place: 'San Siro, Milán',
+      sig: ['ok', 'Verificada'], sum: '2 de 4 fuentes verificadas',
+      src: [[1, 'Faro', 'ok', 'Verificada'], [2, 'Norte', 'ok', 'Verificada'], [3, 'Sur', 'idle', 'Pendiente']],
+      ch: ['M+ Liga de Campeones 2'] },
+    benath: { a: 'ben', b: 'ath', comp: UCL, st: 'next', hour: '21:00', note: 'en 48 min', place: 'Estádio da Luz, Lisboa',
+      sig: ['idle', 'Pendiente'], sum: 'Pendiente: se comprueban 30 min antes', src: [], ch: ['M+ Liga de Campeones 3'] },
+    girrso: { a: 'gir', b: 'rso', comp: LIGA, st: 'live', min: "58'", p: 0.644, sa: 1, sb: 1, place: 'Montilivi, Girona',
+      goals: [[21, 'b', 'Oyarzabal'], [49, 'a', 'Tsygankov']],
+      sig: ['fail', 'Sin señal'], sum: 'Sin señal en las 4 fuentes. Reintento a las 20:16',
+      src: [[1, 'Faro', 'fail', 'Sin señal'], [2, 'Norte', 'fail', 'Sin señal'], [3, 'Elcano', 'check', 'Comprobando']],
+      ch: ['DAZN LaLiga'] },
+    betval: { a: 'bet', b: 'val', comp: LIGA, st: 'next', hour: '21:30', note: 'en 1 h 18 min', place: 'Benito Villamarín, Sevilla',
+      sig: ['idle', 'Pendiente'], sum: 'Pendiente: se comprueban 30 min antes', src: [], ch: ['M+ LaLiga'] },
+    mllesp: { a: 'mll', b: 'esp', comp: LIGA, st: 'done', hour: '17:00', sa: 1, sb: 0, p: 1, place: 'Son Moix, Palma',
+      goals: [[77, 'a', 'Muriqi']], sig: null, sum: '', src: [], ch: ['DAZN LaLiga'] },
+    juvrom: { a: 'juv', b: 'rom', comp: 'Serie A, jornada 5', st: 'next', hour: '20:45', note: 'en 33 min', place: 'Allianz Stadium, Turín',
+      sig: ['ok', 'Verificada'], sum: '1 de 2 fuentes verificada',
+      src: [[1, 'Vega', 'ok', 'Verificada'], [2, 'Sur', 'idle', 'Pendiente']], ch: ['DAZN 1'] }
+  };
+
+  const bars = '<span class="bars"><i></i><i></i><i></i></span>';
+  const crest = (id, s) => `<span class="crest" data-team="${id}" style="--s:${s}px">${s > 40 ? `<b>${T[id][0]}</b>` : ''}</span>`;
+
+  function render(id) {
+    const m = M[id], A = T[m.a], B = T[m.b];
+    const stage = document.getElementById('stage');
+    stage.style.setProperty('--ta', m.st === 'done' ? 'transparent' : `var(--t-${m.a})`);
+    stage.style.setProperty('--tb', m.st === 'done' ? 'transparent' : `var(--t-${m.b})`);
+    const top = m.st === 'live'
+      ? `<span class="live-tag"><span class="live-dot"></span>En directo</span>`
+      : m.st === 'done' ? `<span class="tag tag--soft">Terminado</span>` : `<span class="tag tag--soft">Hoy, ${m.hour}</span>`;
+    const mid = (m.st === 'next')
+      ? `<span class="big num time">${m.hour}</span><span class="when quiet">${m.note}</span>`
+      : `<span class="big num" aria-label="${m.sa} a ${m.sb}">${m.sa}<span class="sep">–</span>${m.sb}</span><span class="when ${m.st === 'done' ? 'quiet' : ''}">${m.st === 'live' ? '<span class="live-dot"></span>' + m.min : 'Final'}</span>`;
+    const tl = (m.st === 'next') ? '' : `
+      <div class="tl" style="--p:${m.p}">
+        <div class="tl-track"><span class="tl-rail"></span><span class="tl-ht"></span>
+          ${(m.goals || []).map(g => `<span class="tl-goal" data-side="${g[1]}" style="--m:${g[0]}" title="${g[2]} ${g[0]}'">${crest(g[1] === 'a' ? m.a : m.b, 12)}</span>`).join('')}
+        </div>
+        <div class="tl-labels"><span>0'</span><span>Descanso</span><span>90'</span></div>
+      </div>`;
+    const by = s => {
+      const g = {};
+      (m.goals || []).filter(x => x[1] === s).forEach(x => (g[x[2]] = g[x[2]] || []).push(`<b class="num">${x[0]}'</b>`));
+      return Object.entries(g).map(([who, mins]) => `${who} ${mins.join(', ')}`).join('; ');
+    };
+    const scorers = (m.goals && m.goals.length) ? `<div class="scorers"><p>${by('a') || '&nbsp;'}</p><p>${by('b') || '&nbsp;'}</p></div>` : '';
+    const sig = m.sig ? `
+      <section class="st-sec">
+        <h3>Señal</h3>
+        <p class="st-sum"><span class="sig sig--lg sig--${m.sig[0]}">${bars}</span><span>${m.sum}</span></p>
+        ${m.src.length ? `<ul class="srcs">${m.src.map(s => `<li><span class="n num">${s[0]}</span><span class="p">${s[1]}</span><span class="sig sig--sm sig--${s[2]}">${bars}${s[3]}</span></li>`).join('')}</ul>` : ''}
+      </section>` : '';
+    stage.innerHTML = `
+      <div class="stage-light" aria-hidden="true"></div>
+      <div class="pane glass">
+        <div class="pane-top">${top}<span class="pane-comp">${m.comp}</span></div>
+        <div class="score">
+          <div class="side">${crest(m.a, 84)}<span class="nm">${A[1]}</span></div>
+          <div class="mid">${mid}</div>
+          <div class="side">${crest(m.b, 84)}<span class="nm">${B[1]}</span></div>
+        </div>
+        ${tl}${scorers}
+      </div>
+      <div class="st-body">
+        ${sig}
+        <section class="st-sec">
+          <h3>Dónde se emite</h3>
+          <div class="chs">${m.ch.map(c => `<span><svg class="i s16"><use href="#i-tv"/></svg>${c}</span>`).join('')}</div>
+          <p class="st-place">${m.place}</p>
+        </section>
+        <div class="st-actions">
+          <a class="btn btn--primary press" href="partido.html"><svg class="i fill s20"><use href="#i-play"/></svg>${m.st === 'next' ? 'Abrir el partido' : 'Ver partido'}</a>
+          <a class="btn btn--quiet press" href="partido.html">Elegir fuente</a>
+        </div>
+      </div>`;
+  }
+
+  /* ---- Microinteracciones ------------------------------------------------ */
+  const desk = matchMedia('(min-width: 1024px)');
+  document.querySelectorAll('.franja').forEach(f => f.addEventListener('click', e => {
+    if (!desk.matches) return;           // en móvil la franja abre el centro de partido
+    e.preventDefault();
+    document.querySelectorAll('.franja[aria-current]').forEach(x => x.removeAttribute('aria-current'));
+    f.setAttribute('aria-current', 'true');
+    render(f.dataset.id);
+  }));
+  function inicial() {
+    const f = document.querySelector('.franja[data-id="atmtot"]');
+    if (desk.matches) { f.setAttribute('aria-current', 'true'); render('atmtot'); }
+    else f.removeAttribute('aria-current');
+  }
+  inicial();
+  desk.addEventListener('change', inicial);
+
+  const filtro = document.getElementById('filtro');
+  filtro.querySelectorAll('button').forEach((b, i) => b.addEventListener('click', () => {
+    filtro.style.setProperty('--i', i);
+    filtro.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    document.body.dataset.filtro = b.dataset.v;
+    document.getElementById('hoy-n').textContent = (b.dataset.v === 'todos' ? 9 : 8) + ' partidos';
+  }));
+
+  document.querySelectorAll('.day').forEach(d => d.addEventListener('click', () => {
+    document.querySelectorAll('.day').forEach(x => x.setAttribute('aria-selected', String(x === d)));
+    d.scrollIntoView({ inline: 'center', block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  }));
+</script>
+</body>
+</html>

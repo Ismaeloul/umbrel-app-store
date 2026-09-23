@@ -1,0 +1,10 @@
+{
+  "//": "Typecheck del backend. El motor falso (test/fake-engine) tiene su propio tsconfig y se comprueba aparte: es de otro módulo y se escribe en paralelo.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["src", "test", "vitest.config.ts"],
+  "exclude": ["test/fake-engine"]
+}

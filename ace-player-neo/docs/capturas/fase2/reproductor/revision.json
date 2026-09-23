@@ -1,0 +1,212 @@
+{
+  "movil-oscuro-reposo.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "movil-oscuro-conectando.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "movil-oscuro-reproduciendo.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "movil-oscuro-directo-atras.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "movil-oscuro-datos-tecnicos.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "movil-oscuro-menu.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "movil-oscuro-bloqueado.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "movil-oscuro-mini.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "movil-oscuro-error.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "movil-oscuro": {
+    "errors": []
+  },
+  "movil-claro-reposo.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "movil-claro-conectando.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "movil-claro-reproduciendo.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "movil-claro-directo-atras.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "movil-claro-datos-tecnicos.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "movil-claro-menu.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "movil-claro-bloqueado.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "movil-claro-mini.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "movil-claro-error.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "movil-claro": {
+    "errors": []
+  },
+  "escritorio-oscuro-reposo.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "escritorio-oscuro-conectando.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "escritorio-oscuro-reproduciendo.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "escritorio-oscuro-directo-atras.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "escritorio-oscuro-datos-tecnicos.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "escritorio-oscuro-menu.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "escritorio-oscuro-bloqueado.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "escritorio-oscuro-mini.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "escritorio-oscuro-error.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "escritorio-oscuro": {
+    "errors": []
+  },
+  "escritorio-claro-reposo.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "escritorio-claro-conectando.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "escritorio-claro-reproduciendo.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "escritorio-claro-directo-atras.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "escritorio-claro-datos-tecnicos.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "escritorio-claro-menu.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "escritorio-claro-bloqueado.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "escritorio-claro-mini.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "escritorio-claro-error.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "escritorio-claro": {
+    "errors": []
+  },
+  "horizontal-oscuro-reposo.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "horizontal-oscuro-conectando.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "horizontal-oscuro-reproduciendo.png": {
+    "hscroll": false,
+    "small": [],
+    "targets": []
+  },
+  "horizontal-oscuro": {
+    "errors": []
+  }
+}

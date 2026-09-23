@@ -1,0 +1,36 @@
+{
+  "events": [
+    {
+      "date": "2026-01-01T19:00Z",
+      "status": { "displayClock": "90'+4'", "type": { "state": "post", "shortDetail": "FT" } },
+      "competitions": [
+        {
+          "competitors": [
+            {
+              "homeAway": "home",
+              "score": "3",
+              "team": { "displayName": "Sevilla FC", "shortDisplayName": "Sevilla" }
+            },
+            {
+              "homeAway": "away",
+              "score": "3",
+              "team": { "displayName": "Rayo Vallecano", "shortDisplayName": "Rayo" }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "date": "2026-01-01T19:00Z",
+      "status": { "displayClock": "10'", "type": { "state": "in", "shortDetail": "10'" } },
+      "competitions": [
+        {
+          "competitors": [
+            { "homeAway": "home", "score": "", "team": { "displayName": "Real Sociedad" } },
+            { "homeAway": "away", "score": "", "team": { "displayName": "Real Betis" } }
+          ]
+        }
+      ]
+    }
+  ]
+}

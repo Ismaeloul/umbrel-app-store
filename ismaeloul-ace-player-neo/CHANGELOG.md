@@ -1,6 +1,82 @@
 # Historial de versiones de Ace Player Neo
 
-Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual conserva solo sus propias notas en `umbrel-app.yml`; todo lo anterior vive aqui.
+Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
+
+## 0.7.0 (2026-09-23)
+
+Ace Player Neo, rehecho por dentro y por fuera. Tus favoritos, recientes,
+listas y preferencias pasan solos a la version nueva, y antes de tocar nada
+se guarda una copia intacta de tus datos por si hubiera que volver atras.
+
+Web nueva: otro diseño, en oscuro y en claro, con Agenda, Biblioteca, Buscar
+y Ajustes siempre a mano (en el movil, en una barra abajo). El reproductor
+ya no se pierde al navegar: grande en el partido y en miniatura mientras
+miras la agenda. Abre antes y pesa menos. Las fuentes de cada partido salen
+en lista con su estado, y cada canal tiene un "Abrir en..." para la app de
+AceStream o para copiar la direccion del stream y verlo en VLC.
+
+El mismo partido en dos pantallas: si abres en otro dispositivo el canal que
+ya estas viendo, el primero ya no se corta; los dos lo ven a la vez. Con
+canales distintos sigue como siempre: el ultimo que da al play se queda el
+mando y el otro se para con aviso. Si prefieres lo de antes, esta "Un solo
+dispositivo a la vez" en Ajustes.
+
+El motor se cuida solo: si AceStream deja de responder, la app lo nota, lo
+reinicia (como mucho tres veces por hora) y vuelve a abrir el canal que
+estabas viendo. Reiniciarlo a mano tampoco para el video: el reproductor
+espera y se reengancha. Cada canal que dejas de ver se cierra en el motor,
+asi que no quedan descargas fantasma comiendose la conexion.
+
+El comprobador de fuentes ya no molesta: ademas de no tocar nunca el canal
+que estas viendo, va mas despacio mientras hay algo en marcha, asi no le
+quita pares al partido.
+
+Directo de verdad: el boton dice cuanto vas por detras del directo y salta
+al borde en un toque. Una señal que da un segundo de imagen entre cortes ya
+no reconecta sin fin: pasa a la siguiente fuente. Las estadisticas, la
+agenda y el mando llegan al momento, sin que la pagina pregunte cada pocos
+segundos.
+
+App de iPhone: se empareja desde Ajustes > Dispositivos con un codigo de 6
+digitos o un QR, sin el login de Umbrel, y funciona en casa y fuera por
+Tailscale. Reproductor nativo con ventana flotante, AirPlay y el partido en
+la pantalla de bloqueo, y ve tambien las fuentes HEVC que la web no puede.
+Cada iPhone se puede desconectar desde la web.
+
+Por dentro: el Umbrel comprueba cada fichero de la version nueva antes de
+arrancarla, y la web ya no deja descargar el codigo del servidor.
+
+## 0.6.59 (2026-09-22)
+
+Las listas de canales vuelven a actualizarse. Desde el 20 de septiembre las
+pasarelas publicas de IPFS (ipfs.io, dweb.link) ya no sirven ficheros y los
+tres directorios se quedaban con la copia vieja. Ahora el servidor los baja
+directamente de la red IPFS, sin pasarela, y comprueba cada trozo contra su
+huella.
+
+Fuentes que iban y venian: el estado de cada fuente ya no salta de
+"verificada" a "sin señal" y vuelta. Lo que ve el reproductor manda durante
+unos minutos sobre la prueba del comprobador y se comparte con las demas
+pantallas. Una fuente verificada que falla una sola prueba queda floja, no
+muerta. El comprobador deja en paz el canal que estas viendo, al que antes
+le quitaba pares, y la fuente que se esta conectando sale como
+"comprobando" en vez de parpadear en rojo. Si ninguna responde todavia, la
+app espera a los reintentos y arranca sola la primera que vuelva. Una
+fuente que ya se estaba viendo aguanta tres reconexiones antes de cambiar a
+otra, y un solo silencio del motor ya no pone "Motor: apagado" en pleno
+partido.
+
+iPhone, menos cortes: el canal arranca con unos segundos de colchon en vez
+de pegado al directo, el adaptador se reconecta solo si el motor se corta y
+la lista ya no se da por terminada. Si la imagen se queda parada con video
+disponible, salta al directo en vez de reiniciar; ante un error del
+reproductor reconecta al momento y no a los 30 segundos; y al volver a la
+app recupera la señal si se habia perdido. El arranque tiene margen para lo
+que tarda de verdad un canal lento. El titulo del canal sale en la pantalla
+de bloqueo y en la ventana flotante.
+
+HTTPS: las redirecciones del motor ya no llevan al navegador a http://
+cuando la app se abre por https.
 
 ## 0.6.58 (2026-09-19)
 

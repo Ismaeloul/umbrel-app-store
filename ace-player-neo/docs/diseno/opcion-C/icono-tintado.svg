@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Ace Player Neo, variante tintada (monocromo)">
+  <title>Ace Player Neo, variante tintada (monocromo)</title>
+  <defs>
+    <linearGradient id="fondo" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c1c1c"/><stop offset="1" stop-color="#000000"/></linearGradient>
+    <mask id="corte"><rect width="1024" height="1024" fill="#fff"/><path d="M458 386 Q442 377 442 395 L442 629 Q442 647 458 638 L650 527 Q666 512 650 497 Z" fill="#000" stroke="#000" stroke-width="16" stroke-linejoin="round"/></mask>
+  </defs>
+  <rect width="1024" height="1024" rx="230" fill="url(#fondo)"/>
+  
+  <circle cx="512" cy="512" r="330" fill="#f2f2f2" mask="url(#corte)" transform="translate(512 512) scale(1) translate(-512 -512)"/>
+</svg>

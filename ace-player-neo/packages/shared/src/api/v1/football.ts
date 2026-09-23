@@ -1,0 +1,73 @@
+/* Agenda, resolución, comprobador, precalentado, vínculos y marcadores en
+   /api/v1. Mismo comportamiento que las rutas antiguas de fútbol (api.md
+   §4.8-4.13), sin `success` y con los ids en la ruta en vez de en la query. */
+
+import { z } from 'zod';
+import { ScanJobIdSchema, IsoDateTimeSchema } from '../../primitives.js';
+import { ChannelBindingSchema } from '../../state/v1.js';
+import {
+  FootballScheduleSchema,
+  LiveScoreSchema,
+  PreheatPublicSchema,
+  ResolutionSchema,
+  ScanJobSchema,
+} from '../common.js';
+
+export const FootballScheduleResponseSchema = FootballScheduleSchema;
+
+/**
+ * GET /api/v1/football/resolve. `channel` se repite; se ignora si `match` es
+ * un partido de la agenda con canales. `research=1` es "Rebuscar": pasada
+ * nueva sin vínculos ni precalentado, con `current` (y `currentIh=1`) para
+ * seguir comprobando la fuente que se ve. `client` cancela el trabajo
+ * anterior del mismo cliente.
+ */
+export const ResolveQuerySchema = z.strictObject({
+  match: z.string().max(100).optional(),
+  channel: z.union([z.string().max(200), z.array(z.string().max(200)).max(32)]).optional(),
+  research: z.enum(['0', '1']).optional(),
+  current: z.string().max(2048).optional(),
+  currentIh: z.enum(['0', '1']).optional(),
+  client: z
+    .string()
+    .regex(/^[a-zA-Z0-9_-]{1,40}$/)
+    .optional(),
+});
+export type ResolveQuery = z.infer<typeof ResolveQuerySchema>;
+
+export const ResolveResponseSchema = ResolutionSchema;
+
+export const ScanParamsSchema = z.strictObject({ id: ScanJobIdSchema });
+export const ScanResponseSchema = ScanJobSchema;
+
+export const PreheatParamsSchema = z.strictObject({ matchId: z.string().min(1).max(100) });
+export const PreheatResponseSchema = z.strictObject({ preheat: PreheatPublicSchema.nullable() });
+
+/** POST /api/v1/football/bindings: vincular a mano un canal con un hash (B-149). */
+export const BindBodySchema = z.strictObject({
+  channel: z.string().min(1).max(200),
+  id: z.string().min(1).max(2048),
+  title: z.string().max(200).optional(),
+  ih: z.boolean().optional(),
+});
+export type BindBody = z.infer<typeof BindBodySchema>;
+
+export const BindResponseSchema = z.strictObject({
+  binding: ChannelBindingSchema,
+  channelBindings: z.array(ChannelBindingSchema),
+});
+export type BindResponse = z.infer<typeof BindResponseSchema>;
+
+/**
+ * Marcadores en vivo (ESPN). Una sola forma: sin agenda, `available: false`
+ * con 200 (la ruta antigua devuelve `success: false` con 200, api.md §6.10).
+ */
+export const ScoresResponseSchema = z.strictObject({
+  available: z.boolean(),
+  generatedAt: IsoDateTimeSchema.nullable(),
+  source: z.literal('espn'),
+  attribution: z.string().nullable(),
+  leagues: z.number().int().nonnegative(),
+  scores: z.record(z.string(), LiveScoreSchema),
+});
+export type ScoresResponse = z.infer<typeof ScoresResponseSchema>;
