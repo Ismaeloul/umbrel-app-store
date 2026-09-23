@@ -131,49 +131,64 @@ struct AgendaView: View {
 // MARK: - Tira de días
 
 /// Días de la agenda en horizontal; la gota del elegido se desliza de uno a otro.
+///
+/// Si caben, van en una fila fija; si no, en un ScrollView horizontal. Tras
+/// emparejar (teclado bajando y agenda recién llegada) la tira quedaba sin
+/// pintar aunque sus días estaban y se podían tocar: se vuelve a crear una vez
+/// cuando la pantalla ya está quieta (`generacion`), y la fila ignora el
+/// teclado.
 struct TiraDias: View {
     let dias: [FootballDay]
     let elegido: String?
     let alElegir: (String) -> Void
     @Namespace private var gota
+    @State private var generacion = 0
 
     var body: some View {
         ScrollViewReader { lector in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(dias) { dia in
-                        boton(dia)
-                            .id(dia.date)
+            ViewThatFits(in: .horizontal) {
+                fila
+                ScrollView(.horizontal, showsIndicators: false) { fila }
+                    .onAppear {
+                        // Solo si el día elegido no cabe a la vista, y tras la
+                        // primera maquetación.
+                        guard let elegido, let indice = dias.firstIndex(where: { $0.date == elegido }), indice > 3
+                        else { return }
+                        Task { @MainActor in
+                            await Task.yield()
+                            lector.scrollTo(elegido, anchor: .center)
+                        }
                     }
-                }
-                .padding(.horizontal, Medida.margen)
-                .padding(.vertical, 8)
             }
-            .onAppear {
-                // Solo si el día elegido no cabe a la vista (hoy suele ser el
-                // primero), y tras la primera maquetación: sin desplazar una
-                // tira que aún no se ha medido.
-                guard let elegido, let indice = dias.firstIndex(where: { $0.date == elegido }), indice > 3 else {
-                    return
-                }
-                Task { @MainActor in
-                    await Task.yield()
-                    lector.scrollTo(elegido, anchor: .center)
-                }
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .id(generacion)
             .onChange(of: elegido) { _, nuevo in
                 guard let nuevo else { return }
                 // Lo justo para que se vea (sin ancla): el que se toca ya está a la vista.
                 withAnimation(Muelle.estandar) { lector.scrollTo(nuevo) }
             }
         }
+        .ignoresSafeArea(.keyboard)
+        .task {
+            try? await Task.sleep(for: .milliseconds(600))
+            generacion += 1
+        }
         // Fondo opaco y solo detrás de la tira (si se extendiera hacia arriba
-        // taparía el título grande). Con el material `.bar`, en la app de verdad
-        // recién emparejada (E2E de la CI) los días quedaban sin pintar aunque
-        // estaban ahí y respondían al toque.
+        // taparía el título grande).
         .background(Tinta.superficie, ignoresSafeAreaEdges: [])
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Días")
+    }
+
+    private var fila: some View {
+        HStack(spacing: 8) {
+            ForEach(dias) { dia in
+                boton(dia)
+                    .id(dia.date)
+            }
+        }
+        .padding(.horizontal, Medida.margen)
+        .padding(.vertical, 8)
     }
 
     private func boton(_ dia: FootballDay) -> some View {
