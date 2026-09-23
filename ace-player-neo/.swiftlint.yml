@@ -1,0 +1,91 @@
+# SwiftLint de la app iOS (apps/ios). Vive en la raíz del monorepo y no dentro
+# de apps/ios a propósito: así la app no carga con la configuración de la CI.
+# Uso (desde ace-player-neo/):
+#   docker run --rm -v "$PWD:/work:ro" -w /work ghcr.io/realm/swiftlint:0.65.1 \
+#     swiftlint lint --no-cache --config .swiftlint.yml
+#
+# Criterio: la CI solo se rompe con ERRORES (fallos de verdad: force_cast,
+# force_try, force_unwrapping...). El estilo sale como aviso informativo.
+# Los umbrales son generosos porque la app sigue en construcción y el código
+# se escribe en español (nombres largos).
+
+included:
+  - apps/ios/Sources
+  - apps/ios/Tests
+
+excluded:
+  - apps/ios/build
+  - apps/ios/DerivedData
+  - apps/ios/.build
+
+disabled_rules:
+  - todo # los TODO se siguen en docs/pendiente.md
+  - trailing_comma # swift-format y Xcode ponen la coma final en listas multilínea
+  - opening_brace # choca con los cierres de SwiftUI en varias líneas
+
+opt_in_rules:
+  - empty_count
+  - first_where
+  - contains_over_first_not_nil
+  - discouraged_optional_boolean
+
+# `layer as! AVPlayerLayer` (con layerClass) es el patrón de siempre en UIKit:
+# aviso, no error. force_try sí rompe la CI.
+force_cast: warning
+force_try: error
+
+line_length:
+  warning: 160
+  error: 1000 # datos de prueba incrustados en Sources/Debug
+  ignores_comments: true
+  ignores_urls: true
+  ignores_interpolated_strings: true
+
+file_length:
+  warning: 800
+  error: 3000
+
+type_body_length:
+  warning: 400
+  error: 2000
+
+function_body_length:
+  warning: 80
+  error: 600
+
+cyclomatic_complexity:
+  warning: 15
+  error: 80
+  ignores_case_statements: true
+
+nesting:
+  type_level: 3
+  function_level: 5
+
+large_tuple:
+  warning: 4
+  error: 8
+
+identifier_name:
+  min_length:
+    warning: 2
+    error: 1
+  max_length:
+    warning: 60
+    error: 200
+  excluded:
+    - id
+    - x
+    - y
+    - i
+    - ok
+
+type_name:
+  min_length:
+    warning: 3
+    error: 2
+  max_length:
+    warning: 60
+    error: 200
+
+reporter: xcode

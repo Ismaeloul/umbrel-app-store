@@ -1,8 +1,13 @@
-name: Ace Player Neo
+name: Ace Player Neo · 0.6.59
 
 # Corre los tests de la app en cada PR y en cada push a main que la toque.
 # Hasta ahora solo se ejecutaban a mano en el PC: 114 tests que vigilan que
 # manifiesto, compose, hook, servidor y service worker vayan a la par.
+#
+# Solo mira la carpeta de la app de Umbrel (ismaeloul-ace-player-neo/), que
+# sigue en la 0.6.59. La v2 (ace-player-neo/) tiene su propia CI en ci.yml y
+# no se pisan. Cuando la carpeta pase a la 0.7.0 y ya no tenga tests/, el job
+# lo avisa y pasa en vez de fallar; entonces se puede retirar este fichero.
 
 on:
   pull_request:
@@ -32,4 +37,9 @@ jobs:
         with:
           node-version: 24
       - name: Tests del servidor y del reproductor
-        run: node --test tests/server.test.js tests/player-controller.test.js
+        run: |
+          if [ ! -f tests/server.test.js ]; then
+            echo "::notice::La carpeta de la app ya no es la 0.6.59 (sin tests/): nada que probar aquí."
+            exit 0
+          fi
+          node --test tests/server.test.js tests/player-controller.test.js
