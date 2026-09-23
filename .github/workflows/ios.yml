@@ -135,9 +135,37 @@ jobs:
       - name: Resumen de los tests
         if: always()
         run: |
-          if [ -d build/AceNeo-tests.xcresult ]; then
-            xcrun xcresulttool get test-results summary --path build/AceNeo-tests.xcresult --compact || true
+          RESULTADO=build/AceNeo-tests.xcresult
+          if [ -d "$RESULTADO" ]; then
+            xcrun xcresulttool get test-results summary --path "$RESULTADO" --compact > build/resumen.json || true
+            cat build/resumen.json || true
+            # Detalle (mensaje y línea) de cada test que falla.
+            python3 - <<'PY' || true
+          import json, subprocess
+          try:
+              resumen = json.load(open("build/resumen.json"))
+          except Exception:
+              resumen = {}
+          for fallo in resumen.get("testFailures", []):
+              ident = fallo.get("testIdentifierString", "")
+              print("::group::Fallo: " + ident)
+              subprocess.run(["xcrun", "xcresulttool", "get", "test-results", "test-details",
+                              "--test-id", ident, "--path", "build/AceNeo-tests.xcresult", "--compact"])
+              print("::endgroup::")
+          PY
+            # Capturas de las pruebas de interfaz (y las de los fallos).
+            mkdir -p build/capturas
+            xcrun xcresulttool export attachments --path "$RESULTADO" --output-path build/capturas || true
+            ls -la build/capturas || true
           fi
+
+      - name: Subir las capturas del simulador
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AceNeo-capturas
+          path: ace-player-neo/apps/ios/build/capturas
+          if-no-files-found: ignore
 
       - name: Archive sin firmar e IPA
         id: ipa
