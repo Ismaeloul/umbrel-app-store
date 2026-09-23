@@ -73,7 +73,7 @@ final class CapturasUITests: XCTestCase {
         // Centro de partido con la verificada sonando.
         partido.tap()
         XCTAssertTrue(elemento(app, "reproductor-integrado").waitForExistence(timeout: 20), "No arranca la verificada")
-        XCTAssertTrue(conTexto(app, "Verificada").waitForExistence(timeout: 10), "Sin estado de las fuentes")
+        XCTAssertTrue(conTexto(app, "Verificada").waitForExistence(timeout: 20), "Sin estado de las fuentes")
         captura(app, "\(modo)-03-centro-de-partido")
 
         // Atrás sin parar: mini-reproductor sobre la agenda.

@@ -102,6 +102,15 @@ final class ServidorRealUITests: XCTestCase {
             tiraVisible,
             "La tira de días no enseña el primer día (existe: \(primerDia.exists), marco: \(primerDia.frame))")
         continueAfterFailure = false
+        // Cambiar de día con la tira y volver a hoy.
+        let dias = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "dia-"))
+        if dias.count > 1, dias.element(boundBy: 1).isHittable {
+            dias.element(boundBy: 1).tap()
+            try await Task.sleep(for: .seconds(1.5))
+            captura(app, "e2e-02-agenda-otro-dia")
+            primerDia.tap()
+            try await Task.sleep(for: .seconds(1.5))
+        }
 
         // La agenda de demostración del backend: un partido con fuentes en el motor falso.
         var partido: XCUIElement?

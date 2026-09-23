@@ -201,7 +201,11 @@
         static let agenda: String = [
             #"{"generatedAt":"2026-09-23T18:30:00.000Z","timezone":"Europe/Madrid","country":"Spain","source":"demo","attribution":"Datos de muestra","demo":true,"limited":false,"partial":false,"days":[{"date":"HOY","matches":["#,
             #"{"id":"sim-1","date":"HOY","time":"18:30","title":"Equipo Local - Equipo Visitante","home":"Equipo Local","away":"Equipo Visitante","competition":"LaLiga","country":"Spain","channels":[{"id":"m-laliga","name":"M+ LaLiga"}]},"#,
-            #"{"id":"sim-2","date":"HOY","time":"21:00","title":"Otro Local - Otro Visitante","home":"Otro Local","away":"Otro Visitante","competition":"Champions League","country":"Europe","channels":[{"id":"m-lc","name":"M+ Liga de Campeones"}]}"#,
+            #"{"id":"sim-2","date":"HOY","time":"21:00","title":"Otro Local - Otro Visitante","home":"Otro Local","away":"Otro Visitante","competition":"Champions League","country":"Europe","channels":[{"id":"m-lc","name":"M+ Liga de Campeones"}]},"#,
+            // Unos cuantos más hoy: la lista tiene que desplazarse, como con la agenda real.
+            #"{"id":"sim-5","date":"HOY","time":"19:00","title":"Tercer Local - Tercer Visitante","home":"Tercer Local","away":"Tercer Visitante","competition":"LaLiga","country":"Spain","channels":[{"id":"m-laliga","name":"M+ LaLiga"}]},"#,
+            #"{"id":"sim-6","date":"HOY","time":"20:00","title":"Cuarto Local - Cuarto Visitante","home":"Cuarto Local","away":"Cuarto Visitante","competition":"Premier League","country":"England","channels":[{"id":"dazn","name":"DAZN"}]},"#,
+            #"{"id":"sim-7","date":"HOY","time":"22:00","title":"Quinto Local - Quinto Visitante","home":"Quinto Local","away":"Quinto Visitante","competition":"Amistoso","country":"Spain","channels":[{"id":"la1","name":"La 1 HD"}]}"#,
             "]},",
             // Más días (como la agenda real): la tira de días tiene varios.
             #"{"date":"MANANA","matches":[{"id":"sim-3","date":"MANANA","time":"20:00","title":"Local Mañana - Visitante Mañana","home":"Local Mañana","away":"Visitante Mañana","competition":"LaLiga","country":"Spain","channels":[{"id":"m-laliga","name":"M+ LaLiga"}]}]},"#,

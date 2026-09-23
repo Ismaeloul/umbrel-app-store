@@ -49,6 +49,12 @@ final class EmparejamientoUITests: XCTestCase {
             .firstMatch
         XCTAssertTrue(partido.waitForExistence(timeout: 30), "No aparece la agenda tras emparejar")
         XCTAssertTrue(app.navigationBars["Agenda"].exists)
+        // La agenda justo tras emparejar (con la transición desde la pantalla de emparejar).
+        Thread.sleep(forTimeInterval: 1.5)
+        let adjunto = XCTAttachment(screenshot: app.screenshot())
+        adjunto.name = "emparejar-02-agenda-tras-emparejar"
+        adjunto.lifetime = .keepAlways
+        add(adjunto)
     }
 
     @MainActor

@@ -94,7 +94,7 @@ struct AgendaView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .safeAreaInset(edge: .top, spacing: 0) {
+        .barraSuperior {
             TiraDias(dias: vm.dias, elegido: diaActual?.date) { fecha in
                 withAnimation(Muelle.estandar) { diaElegido = fecha }
             }
@@ -127,6 +127,22 @@ struct AgendaView: View {
 
 // MARK: - Tira de días
 
+extension View {
+    /// Barra propia pegada arriba de una lista. En iOS 26, `safeAreaBar`: el
+    /// sistema la trata como una barra y pone debajo el efecto de borde del
+    /// desplazamiento (con `safeAreaInset`, con la agenda real, que ya se
+    /// desplaza, la tira de días salía en blanco). Antes de iOS 26, `safeAreaInset`.
+    @ViewBuilder
+    func barraSuperior<Contenido: View>(@ViewBuilder _ contenido: () -> Contenido) -> some View {
+        let barra = contenido()
+        if #available(iOS 26.0, *) {
+            safeAreaBar(edge: .top, spacing: 0) { barra }
+        } else {
+            safeAreaInset(edge: .top, spacing: 0) { barra }
+        }
+    }
+}
+
 /// Días de la agenda en horizontal; la gota del elegido se desliza de uno a otro.
 struct TiraDias: View {
     let dias: [FootballDay]
@@ -148,9 +164,8 @@ struct TiraDias: View {
             }
             .onAppear {
                 // Solo si el día elegido no cabe a la vista (hoy suele ser el
-                // primero). Con la agenda real (varios días) un scrollTo
-                // centrado nada más aparecer, con la tira aún sin medir, la
-                // dejaba en blanco: se espera a la primera maquetación.
+                // primero), y tras la primera maquetación: sin desplazar una
+                // tira que aún no se ha medido.
                 guard let elegido, let indice = dias.firstIndex(where: { $0.date == elegido }), indice > 3 else {
                     return
                 }
