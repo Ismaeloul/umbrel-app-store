@@ -27,8 +27,11 @@ struct AgendaView: View {
                 }
                 .task { await vm.arrancar() }
                 .task { await app.vigilarMarcadores() }
-                .overlay(alignment: .bottom) { avisoSinConexion }
-                .animation(Muelle.estandar, value: vm.fallo)
+                // La animación solo para la píldora (antes animaba también el
+                // cambio de la carga a la lista entera).
+                .overlay(alignment: .bottom) {
+                    avisoSinConexion.animation(Muelle.estandar, value: vm.fallo)
+                }
                 .navigationDestination(for: FootballMatch.self) { partido in
                     CentroPartidoView(modelo: app.centro(para: partido))
                         .destinoZoom(partido.id, en: zoom)
@@ -94,7 +97,7 @@ struct AgendaView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .barraSuperior {
+        .safeAreaInset(edge: .top, spacing: 0) {
             TiraDias(dias: vm.dias, elegido: diaActual?.date) { fecha in
                 withAnimation(Muelle.estandar) { diaElegido = fecha }
             }
@@ -126,22 +129,6 @@ struct AgendaView: View {
 }
 
 // MARK: - Tira de días
-
-extension View {
-    /// Barra propia pegada arriba de una lista. En iOS 26, `safeAreaBar`: el
-    /// sistema la trata como una barra y pone debajo el efecto de borde del
-    /// desplazamiento (con `safeAreaInset`, con la agenda real, que ya se
-    /// desplaza, la tira de días salía en blanco). Antes de iOS 26, `safeAreaInset`.
-    @ViewBuilder
-    func barraSuperior<Contenido: View>(@ViewBuilder _ contenido: () -> Contenido) -> some View {
-        let barra = contenido()
-        if #available(iOS 26.0, *) {
-            safeAreaBar(edge: .top, spacing: 0) { barra }
-        } else {
-            safeAreaInset(edge: .top, spacing: 0) { barra }
-        }
-    }
-}
 
 /// Días de la agenda en horizontal; la gota del elegido se desliza de uno a otro.
 struct TiraDias: View {
@@ -180,8 +167,11 @@ struct TiraDias: View {
                 withAnimation(Muelle.estandar) { lector.scrollTo(nuevo) }
             }
         }
-        // Solo detrás de la tira: si se extendiera hacia arriba taparía el título grande.
-        .background(.bar, ignoresSafeAreaEdges: [])
+        // Fondo opaco y solo detrás de la tira (si se extendiera hacia arriba
+        // taparía el título grande). Con el material `.bar`, en la app de verdad
+        // recién emparejada (E2E de la CI) los días quedaban sin pintar aunque
+        // estaban ahí y respondían al toque.
+        .background(Tinta.superficie, ignoresSafeAreaEdges: [])
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Días")
     }

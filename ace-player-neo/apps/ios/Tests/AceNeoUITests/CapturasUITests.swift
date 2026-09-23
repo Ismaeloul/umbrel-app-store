@@ -65,7 +65,7 @@ final class CapturasUITests: XCTestCase {
         let primerDia = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "dia-")).firstMatch
         continueAfterFailure = true
         XCTAssertTrue(
-            primerDia.waitForExistence(timeout: 10) && primerDia.isHittable,
+            primerDia.waitForExistence(timeout: 10) && primerDia.isHittable && sePinta(app, primerDia),
             "La tira de días no enseña el primer día (marco: \(primerDia.frame))")
         continueAfterFailure = false
         captura(app, "\(modo)-02-agenda")

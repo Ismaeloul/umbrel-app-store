@@ -264,6 +264,9 @@
         override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
         override func startLoading() {
+            // La agenda llega con algo de retraso, como por la red de verdad: la
+            // pantalla se pinta antes (carga) y la lista después.
+            if request.url?.path().hasSuffix("/football") == true { Thread.sleep(forTimeInterval: 0.6) }
             let (estado, tipo, datos) = ServidorSimulado.respuesta(a: request)
             guard let url = request.url,
                 let respuesta = HTTPURLResponse(

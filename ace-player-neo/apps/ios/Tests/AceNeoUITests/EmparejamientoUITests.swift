@@ -49,8 +49,15 @@ final class EmparejamientoUITests: XCTestCase {
             .firstMatch
         XCTAssertTrue(partido.waitForExistence(timeout: 30), "No aparece la agenda tras emparejar")
         XCTAssertTrue(app.navigationBars["Agenda"].exists)
-        // La agenda justo tras emparejar (con la transición desde la pantalla de emparejar).
+        // La agenda justo tras emparejar (con la transición desde la pantalla de
+        // emparejar): la tira de días se ve. Si no, se anota y se sigue.
         Thread.sleep(forTimeInterval: 1.5)
+        let primerDia = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "dia-")).firstMatch
+        continueAfterFailure = true
+        XCTAssertTrue(
+            primerDia.exists && sePinta(app, primerDia),
+            "Tras emparejar, la tira de días no se ve (marco: \(primerDia.frame))")
+        continueAfterFailure = false
         let adjunto = XCTAttachment(screenshot: app.screenshot())
         adjunto.name = "emparejar-02-agenda-tras-emparejar"
         adjunto.lifetime = .keepAlways

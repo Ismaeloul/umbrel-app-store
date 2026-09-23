@@ -95,12 +95,15 @@ final class ServidorRealUITests: XCTestCase {
         // La tira de días con la agenda real (varios días): el primero (hoy) se ve.
         // Si no, se sigue igualmente para probar el resto y el fallo queda anotado.
         let primerDia = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "dia-")).firstMatch
-        let tiraVisible = await esperar(15) { primerDia.exists && primerDia.isHittable }
+        let tiraVisible = await esperar(15) {
+            primerDia.exists && primerDia.isHittable && sePinta(app, primerDia)
+        }
         if !tiraVisible { captura(app, "e2e-02-fallo-tira-de-dias") }
         continueAfterFailure = true
         XCTAssertTrue(
             tiraVisible,
-            "La tira de días no enseña el primer día (existe: \(primerDia.exists), marco: \(primerDia.frame))")
+            "La tira de días no enseña el primer día (existe: \(primerDia.exists), tocable: \(primerDia.isHittable), "
+                + "se pinta: \(sePinta(app, primerDia)), marco: \(primerDia.frame))")
         continueAfterFailure = false
         // Cambiar de día con la tira y volver a hoy.
         let dias = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "dia-"))

@@ -83,7 +83,8 @@ struct BibliotecaView: View {
         .pickerStyle(.segmented)
         .padding(.horizontal, Medida.margen)
         .padding(.vertical, 8)
-        .background(.bar, ignoresSafeAreaEdges: [])
+        // Opaco, como la tira de días de la agenda (el material `.bar` podía no pintar lo de encima).
+        .background(Tinta.superficie, ignoresSafeAreaEdges: [])
         .accessibilityIdentifier("selector-biblioteca")
     }
 
