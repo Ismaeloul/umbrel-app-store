@@ -2,6 +2,23 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 0.7.1 (2026-09-23)
+
+Nuevo en Ajustes: "Donde se esta reproduciendo". Ves que canal esta
+sonando y en que dispositivos (el ordenador, el iPhone...), y cambia al
+momento cuando alguien pone o quita un canal. Tambien se abre desde el
+reproductor.
+
+App de iPhone renovada (se actualiza aparte, con su IPA nueva): la agenda
+filtra por tus equipos y ligas con "Para ti", las listas vienen agrupadas
+como en la web, el reproductor se abre deslizando hacia arriba sobre el
+mini y se minimiza deslizando hacia abajo, y al volver a la app con el PiP
+activo ya no se ve el video dos veces. Adios a las franjas en blanco de
+arriba en la agenda y en la biblioteca.
+
+Salud: cerrar la pagina o parar un canal ya no cuenta como fallo en el
+registro de diagnostico.
+
 ## 0.7.0 (2026-09-23)
 
 Ace Player Neo, rehecho por dentro y por fuera. Tus favoritos, recientes,
