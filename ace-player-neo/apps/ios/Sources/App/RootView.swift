@@ -11,13 +11,14 @@ struct RootView: View {
             switch modelo.fase {
             case .emparejar:
                 PairingView(entorno: modelo.entorno, enlace: $enlacePendiente)
-                    .transition(.opacity)
             case .lista:
                 PrincipalView()
-                    .transition(.opacity)
             }
         }
-        .animation(Muelle.estandar, value: modelo.fase)
+        // Sin animar el cambio entre emparejar y la app: con el fundido, la
+        // tira de días de la agenda (un ScrollView que llega cuando la agenda
+        // ya ha cargado, en mitad del fundido) se quedaba sin pintar, aunque
+        // sus días estaban y se podían tocar (E2E de la CI y EmparejamientoUITests).
         .onOpenURL { url in
             // El QR abierto con la Cámara lleva aquí. Si ya está emparejada,
             // se pregunta antes de cambiar de servidor.
