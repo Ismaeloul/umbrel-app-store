@@ -74,31 +74,34 @@ jobs:
       - name: Generar el proyecto
         run: xcodegen generate
 
-      - name: Elegir un simulador de iPhone
+      - name: Arrancar un simulador de iPhone (en segundo plano)
         id: simulador
         run: |
           set -euo pipefail
-          ID=$(xcodebuild -showdestinations -project AceNeo.xcodeproj -scheme AceNeo 2>/dev/null | python3 -c '
-          import re, sys
+          # El primer arranque del simulador tarda minutos: se lanza ya y se
+          # compila mientras tanto (los errores de compilación salen antes).
+          ID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, re, sys
+          datos = json.load(sys.stdin)["devices"]
           mejor = None
-          for linea in sys.stdin:
-              if "Ineligible" in linea:
-                  break
-              if "error:" in linea:
+          for runtime, equipos in datos.items():
+              m = re.search(r"iOS-(\d+)-(\d+)", runtime)
+              if not m:
                   continue
-              m = re.search(r"platform:iOS Simulator,.*?id:([0-9A-Fa-f-]{36}),\s*OS:([0-9.]+),\s*name:([^}]+?)\s*\}", linea)
-              if not m or not m.group(3).startswith("iPhone"):
-                  continue
-              version = tuple(int(x) for x in m.group(2).split("."))
-              clave = (version, m.group(3).endswith(" Pro"))
-              if mejor is None or clave > mejor[0]:
-                  mejor = (clave, m.group(1), m.group(3), m.group(2))
+              version = (int(m.group(1)), int(m.group(2)))
+              for e in equipos:
+                  nombre = e.get("name", "")
+                  if not nombre.startswith("iPhone") or not e.get("isAvailable", True):
+                      continue
+                  clave = (version, nombre.endswith(" Pro"))
+                  if mejor is None or clave > mejor[0]:
+                      mejor = (clave, e["udid"], nombre, version)
           if mejor:
               print(mejor[1])
-              print("Simulador: %s (iOS %s)" % (mejor[2], mejor[3]), file=sys.stderr)
+              print("Simulador: %s (iOS %d.%d)" % (mejor[2], *mejor[3]), file=sys.stderr)
           ' || true)
           if [ -z "$ID" ]; then
-            echo "No hay simulador de iPhone listo: creo uno."
+            echo "No hay simulador de iPhone: creo uno."
             RUNTIME=$(xcrun simctl list runtimes available -j | python3 -c '
           import json, sys
           r = [x for x in json.load(sys.stdin)["runtimes"] if x.get("platform") == "iOS" or x["name"].startswith("iOS")]
@@ -111,21 +114,23 @@ jobs:
             ID=$(xcrun simctl create "iPhone CI" "$TIPO" "$RUNTIME")
           fi
           echo "id=$ID" >> "$GITHUB_OUTPUT"
-          xcrun simctl boot "$ID" || true
-          xcrun simctl bootstatus "$ID" -b
+          nohup xcrun simctl boot "$ID" > "$RUNNER_TEMP/arranque-simulador.log" 2>&1 &
+
+      - name: Compilar para los tests
+        run: |
+          set -o pipefail
+          mkdir -p build
+          xcodebuild build-for-testing             -project AceNeo.xcodeproj             -scheme AceNeo             -destination "id=${{ steps.simulador.outputs.id }}"             -derivedDataPath build/DerivedData             -quiet             CURRENT_PROJECT_VERSION=${{ github.run_number }}
+
+      - name: Esperar al simulador
+        run: |
+          cat "$RUNNER_TEMP/arranque-simulador.log" || true
+          xcrun simctl bootstatus "${{ steps.simulador.outputs.id }}" -b
 
       - name: Tests unitarios y de interfaz
         run: |
           set -o pipefail
-          mkdir -p build
-          xcodebuild test \
-            -project AceNeo.xcodeproj \
-            -scheme AceNeo \
-            -destination "id=${{ steps.simulador.outputs.id }}" \
-            -resultBundlePath build/AceNeo-tests.xcresult \
-            -retry-tests-on-failure -test-iterations 2 \
-            -quiet \
-            CURRENT_PROJECT_VERSION=${{ github.run_number }}
+          xcodebuild test-without-building             -project AceNeo.xcodeproj             -scheme AceNeo             -destination "id=${{ steps.simulador.outputs.id }}"             -derivedDataPath build/DerivedData             -resultBundlePath build/AceNeo-tests.xcresult             -retry-tests-on-failure -test-iterations 2             -quiet
 
       - name: Resumen de los tests
         if: always()
