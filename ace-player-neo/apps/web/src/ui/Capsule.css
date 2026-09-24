@@ -55,9 +55,11 @@
 }
 
 /* ---- Tonos: la palabra manda; el color acompaña ------------------------------ */
+/* Directo: blanco sobre el rojo, un 14 % más oscuro para pasar de 4,5:1
+   también en oscuro (#ff3b30 solo daba 3,55; la mezcla, 5,09). */
 .capsule--live {
   --cap-ink: #fff;
-  --cap-bg: var(--live);
+  --cap-bg: color-mix(in oklab, var(--live) 86%, #000);
 }
 .capsule--ok {
   --cap-ink: var(--ok-ink);
@@ -96,7 +98,7 @@
 }
 .capsule--glass.capsule--live {
   --cap-ink: #fff;
-  --cap-bg: var(--live);
+  --cap-bg: color-mix(in oklab, var(--live) 86%, #000);
   box-shadow: none;
 }
 .capsule--glass.capsule--gold {

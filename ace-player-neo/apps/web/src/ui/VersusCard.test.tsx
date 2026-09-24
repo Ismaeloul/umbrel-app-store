@@ -55,7 +55,9 @@ describe('VersusCard', () => {
     const card = container.querySelector('.versus') as HTMLElement;
     expect(card).toHaveClass('is-live', 'is-mine', 'is-watching');
     expect(container.querySelector('.versus__when')).toHaveTextContent("En directo · 13'");
+    // «Tu equipo» siempre se lee (la palabra es visible en lg/xl y sr-only en sm/md).
     expect(container.querySelector('.versus__mine')).toHaveTextContent('Tu equipo');
+    expect(container.querySelector('.versus__mine')).toHaveAttribute('title', 'Tu equipo');
     expect(container.querySelector('.versus__watching')).toHaveTextContent('En pantalla');
     // Nada que parezca «2-1» o «2 – 1».
     expect(card.textContent).not.toMatch(/\d\s*[-–]\s*\d/);

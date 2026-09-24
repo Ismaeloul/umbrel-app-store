@@ -2,8 +2,15 @@
    50/50 con los colores de los dos clubes, escudos grandes con sombra, el logo
    de la competición en una pastilla oscura al centro, un chip arriba con la
    fecha/hora («VIE 21:00»), «● EN DIRECTO · 13'» o «Final», y debajo «Local
-   vs. Visitante» en negrita con la competición en gris. SIN marcador: el
-   marcador vive tapado en el centro de partido (regla 29).
+   vs. Visitante» en negrita (dos líneas: «Local» / «vs. Visitante», cada una
+   con elipsis, como los carteles del prototipo) con la competición en gris
+   (solo en `xl`: en las tarjetas pequeñas la pastilla del centro ya la dice y
+   el hueco es para los nombres). SIN marcador: el marcador vive tapado en el
+   centro de partido (regla 29).
+
+   Colocación: arriba a la izquierda el chip de cuándo y la marca «Tu equipo»;
+   arriba a la derecha la cápsula de señal (`children`); abajo a la izquierda
+   los nombres; abajo a la derecha «En pantalla» si es lo que suena.
 
    - Colores: `versusPair(paletteOf(home), paletteOf(away))` (src/lib/teams.ts)
      decide las dos mitades (--h, --a); si se parecen, el visitante usa su
@@ -11,7 +18,6 @@
    - Escudos: `TeamMark` con `crest` (imagen del backend o monograma).
    - Los nombres siempre escritos (accesibilidad); el `aria-label` lo pone
      quien la usa, según lo que haga el toque («Ver canal para …»).
-   - `children` es el hueco de la esquina para la cápsula de señal.
    - `transitionName` envuelve el bloque de escudos en una <ViewTransition>
      (elemento compartido con el marcador del centro de partido). */
 
@@ -20,6 +26,7 @@ import { cx } from '../lib/cx.ts';
 import { paletteOf, versusPair, type TeamLike } from '../lib/teams.ts';
 import { Capsule } from './Capsule.tsx';
 import { CompetitionBadge } from './CompetitionBadge.tsx';
+import { Icon } from './Icon.tsx';
 import { TeamMark } from './TeamMark.tsx';
 import './VersusCard.css';
 
@@ -52,7 +59,7 @@ export interface VersusCardProps {
   onClick?: (event: MouseEvent<HTMLElement>) => void;
   /** Nombre de la View Transition del bloque de escudos. */
   transitionName?: string;
-  /** Cápsula de señal (esquina inferior derecha). */
+  /** Cápsula de señal (esquina superior derecha). */
   children?: ReactNode;
   className?: string;
   style?: CSSProperties;
@@ -146,38 +153,43 @@ export function VersusCard({
       </span>
       <span className="versus__veil" aria-hidden="true" />
       <span className="versus__top">
-        <Capsule
-          tone={live ? 'live' : 'neutral'}
-          size="sm"
-          glass
-          dot={live}
-          className="versus__when"
-        >
-          {live && when.minute ? `${when.label} · ${when.minute}'` : when.label}
-        </Capsule>
         <span className="versus__marks">
+          <Capsule
+            tone={live ? 'live' : 'neutral'}
+            size="sm"
+            glass
+            dot={live}
+            className="versus__when"
+          >
+            {live && when.minute ? `${when.label} · ${when.minute}'` : when.label}
+          </Capsule>
           {mine ? (
-            <Capsule tone="gold" size="sm" icon="star-f" className="versus__mine">
-              Tu equipo
-            </Capsule>
-          ) : null}
-          {watching ? (
-            <Capsule tone="gold" size="sm" dot className="versus__watching">
-              En pantalla
-            </Capsule>
+            <span className="versus__mine" title="Tu equipo">
+              <Icon name="star-f" size={16} />
+              <span className="versus__mine-text">Tu equipo</span>
+            </span>
           ) : null}
         </span>
+        {children ? <span className="versus__signal">{children}</span> : null}
       </span>
       {transitionName ? <ViewTransition name={transitionName}>{crests}</ViewTransition> : crests}
       <span className="versus__bottom">
         <span className="versus__names">
-          <b className="versus__name">{home.name}</b>
-          <span className="versus__vs">vs.</span>
-          <b className="versus__name">{away.name}</b>
+          <span className="versus__line">
+            <b className="versus__name">{home.name}</b>
+          </span>
+          <span className="versus__line">
+            <span className="versus__vs">vs.</span>
+            <b className="versus__name">{away.name}</b>
+          </span>
         </span>
         <span className="versus__competition">{competition}</span>
       </span>
-      {children ? <span className="versus__signal">{children}</span> : null}
+      {watching ? (
+        <Capsule tone="gold" size="sm" dot className="versus__watching">
+          En pantalla
+        </Capsule>
+      ) : null}
     </Tag>
   );
 }
