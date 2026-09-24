@@ -3,48 +3,68 @@ id: ismaeloul-trajet
 category: automation
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-trajet/icon.svg"
 name: Trajet
-version: "0.3.0"
-tagline: Tus trayectos de Île-de-France en tiempo real
+version: "0.4.0"
+tagline: Tus trayectos de Île-de-France en tiempo real, en el iPhone
 description: >-
   Trajet muestra los próximos pasos de tus trayectos habituales en transporte
   público de Île-de-France, con los datos en tiempo real del portal PRIM de
-  Île-de-France Mobilités.
+  Île-de-France Mobilités. Esta app es el servidor de la app de iPhone Trajet
+  y su panel de control.
 
   Guardas tus rutas (Casa → Trabajo, la vuelta desde clase…) con sus tramos y
   transbordos, y la app enseña sola la que toca según el día de la semana y la
-  hora. Por cada tramo verás los próximos cuatro pasos con los minutos que
-  faltan en grande, el destino, el andén cuando la red lo publica y el retraso
-  en minutos. Se refresca cada 30 segundos y siempre dice de cuándo es el dato
-  que estás viendo.
+  hora. Por cada tramo verás los próximos pasos con los minutos que faltan en
+  grande, el destino, el andén cuando la red lo publica (y una vía probable,
+  aprendida, cuando todavía no) y el retraso. Siempre dice de cuándo es el
+  dato que estás viendo.
 
   Si una de tus líneas está perturbada o interrumpida, calcula rutas
   alternativas evitándola y comprueba que las líneas de la alternativa tampoco
-  estén caídas. Guarda además un historial para saber qué línea te falla más y
-  cuántos días al mes tienes incidencias.
+  estén caídas. Guarda además un historial para saber qué línea te falla más.
+  Con Ollama instalado, los avisos llegan traducidos al español.
 
-  Pensada para el móvil y para usarla de pie: números grandes, alto contraste
-  y sin scroll en la pantalla principal.
+  Desde el panel, detrás del login de Umbrel, pegas tu clave de PRIM, emparejas
+  el iPhone con un código QR y ves la cuota del día. La app del iPhone se
+  instala aparte, por ejemplo con IPA Station.
 
   Necesitas una clave gratuita del portal PRIM
-  (https://prim.iledefrance-mobilites.fr). Métela en PRIM_API_KEY antes de
-  arrancar la app.
+  (https://prim.iledefrance-mobilites.fr). Se pega en el panel, que la prueba
+  antes de guardarla y la guarda cifrada.
 
 releaseNotes: >-
-  Instalable en la pantalla de inicio. Trajet se añade como una app más: con su
-  icono, a pantalla completa y sin barra de navegador. En el iPhone, desde
-  Safari: Compartir → Añadir a pantalla de inicio. En Android, Chrome →
-  Instalar aplicación. Sin pasar por ningún store de móvil.
+  Trajet ya es una app de iPhone. La web de siempre se despide: la app de
+  verdad es ahora la nativa del iPhone, y esta app de Umbrel pasa a ser su
+  servidor y su panel. Al abrir Trajet desde Umbrel ya no ves el tablero, sino
+  el panel.
 
-  Arranca sin cobertura. La interfaz se guarda en el propio móvil, así que al
-  tocar el icono en el metro sale el tablero con el último dato conocido y el
-  aviso de «sin conexión», en vez de la pantalla de error del navegador. Los
-  datos en tiempo real no se guardan nunca: un tablero cacheado sería un tren
-  que ya se ha ido, y además cada consulta cuenta contra la cuota diaria. Esto
-  pide entrar a la app por HTTPS; con Tailscale el certificado sale gratis.
+  Emparejar con un QR. En el panel generas un código QR, lo escaneas con el
+  iPhone y listo: la app se lleva las direcciones de casa y de Tailscale y su
+  propio pase. El código vale cinco minutos y un solo uso, y cada iPhone
+  emparejado se puede renombrar o desconectar desde el panel cuando quieras.
 
-  Más pantalla útil. Instalada, sin las dos barras del navegador, entra una
-  fila más de salidas. Y se ha corregido un hueco muerto sobre el indicador de
-  inicio del iPhone: el margen de seguridad se estaba contando dos veces.
+  El panel, detrás del login de Umbrel. Solo entras tú. La parte que usa el
+  iPhone queda fuera del login para que la app llegue sin sesión, pero no
+  contesta a nada sin el pase del emparejamiento.
+
+  La clave de PRIM, en el panel. Ya no hay que meterla en ninguna variable: la
+  pegas en el panel, Trajet la prueba contra PRIM antes de guardarla y la
+  guarda cifrada. Nunca sale del servidor; el panel solo enseña sus cuatro
+  últimos caracteres.
+
+  Cuota sin sustos. Trajet cuenta las llamadas del día y, cuando se acerca a
+  las 1000, refresca más despacio y tira de lo que ya tiene en vez de quedarse
+  en blanco. La pantalla nunca se vacía: como mucho, dice de cuándo es el dato.
+
+  Mapa de la ruta. Los trazados de las líneas, las paradas y los accesos de
+  las estaciones salen de los datos abiertos de Île-de-France Mobilités, sin
+  clave y sin gastar cuota de PRIM.
+
+  Actualizar no borra nada. La base de datos se pone al día sola al arrancar y
+  deja una copia de seguridad al lado; tus rutas, el historial y los andenes
+  aprendidos siguen ahí.
+
+  Antes de actualizar hay que publicar la imagen 0.4.0 en el NAS con
+  scripts/publish.sh del repo del servidor.
 
 developer: Ismaeloul
 website: https://github.com/Ismaeloul/umbrel-app-store

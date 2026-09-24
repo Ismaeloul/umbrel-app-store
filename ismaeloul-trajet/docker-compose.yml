@@ -1,39 +1,71 @@
 version: "3.7"
 
-# La imagen se sirve desde el registro local del NAS, igual que ace-player-neo
-# e ipa-station: umbreld ignora pull_policy, asi que una imagen construida a
-# mano con docker build no le vale, tiene que poder resolverla contra un
-# registro. Se publica con scripts/publish.sh del repo de Trajet.
+# Trajet 0.4.0: el servidor de la app de iPhone y su panel.
+#
+# La imagen se sirve desde el registro local del NAS (127.0.0.1:5000), igual
+# que ace-player-neo e ipa-station: umbreld hace un `docker pull` de cada
+# image: antes de arrancar e ignora pull_policy, asi que una imagen construida
+# a mano con docker build no le vale, tiene que poder resolverla contra un
+# registro. Se construye y se publica con scripts/publish.sh del repo
+# trajet-server, lanzado en el propio Umbrel.
+#
+# Este fichero es PUBLICO: ni IPs, ni claves. Las direcciones que van en el QR
+# se ponen en el panel y la clave de PRIM se pega alli (cifrada con APP_SEED).
 
 services:
   app_proxy:
     environment:
       APP_HOST: ismaeloul-trajet_web_1
       APP_PORT: "8000"
-      # Es una app personal en la red privada: sin login extra por delante.
-      PROXY_AUTH_ADD: "false"
+      # El panel (/), su API (/api/admin) y la API de la 0.3.0 (/api) quedan
+      # detras del login de Umbrel.
+      PROXY_AUTH_ADD: "true"
+      # Menos la API del iPhone: la app no tiene sesion de Umbrel, asi que
+      # /api/v1/* pasa sin login. No queda abierta: el servidor exige ahi el
+      # token de dispositivo que se consigue emparejando con el QR del panel.
+      # Solo /api/v1/ping (no dice nada) y /api/v1/pair (pide un codigo de un
+      # solo uso de 5 minutos, con limite de intentos) van sin token.
+      PROXY_AUTH_WHITELIST: "/api/v1/*"
 
   web:
-    image: localhost:5000/ismaeloul-trajet/trajet:0.3.0
+    image: localhost:5000/ismaeloul-trajet/trajet:0.4.0
     container_name: ismaeloul-trajet_web_1
     restart: unless-stopped
+    # tini como PID 1: reenvia las senales a uvicorn y recoge huerfanos.
     init: true
+    # Sin root. 1000:1000 es el dueno de ${APP_DATA_DIR} en Umbrel, asi que
+    # la carpeta de datos se puede escribir sin tocar permisos.
+    user: "1000:1000"
     environment:
-      # Clave del portal PRIM. Sin ella la app arranca pero no consulta nada.
-      PRIM_API_KEY: "${PRIM_API_KEY:-}"
       TZ: "Europe/Paris"
       TRAJET_DB: "/data/trajet.db"
-      # Traduccion de los avisos de perturbacion al espanol con el LLM local.
-      # Todas las apps de Umbrel comparten umbrel_main_network, asi que el
-      # contenedor de Ollama se resuelve por su nombre. Si Ollama no esta
-      # instalado, los avisos salen en frances y la app funciona igual.
+      # Semilla estable que Umbrel da a esta app: cifra la clave de PRIM que se
+      # pega en el panel. Vive fuera de /data, asi que una copia de los datos
+      # sola no sirve para sacar la clave.
+      TRAJET_SECRET_SEED: "${APP_SEED}"
+      # El panel solo acepta conexiones que lleguen del proxy de Umbrel: otra
+      # app de la red compartida no puede entrar por detras saltandose el login.
+      TRAJET_ADMIN_PEERS: "auto"
+      # Solo como alternativa: la clave de verdad se pega en el panel y manda
+      # sobre esta. Vacia, la app arranca y pide la clave en el panel.
+      PRIM_API_KEY: "${PRIM_API_KEY:-}"
+      # Traduccion de los avisos al espanol con el LLM local. Todas las apps de
+      # Umbrel comparten umbrel_main_network, asi que el contenedor de Ollama
+      # se resuelve por su nombre. Sin Ollama, los avisos salen en frances y la
+      # app funciona igual.
       OLLAMA_URL: "${OLLAMA_URL:-http://ollama_ollama_1:11434}"
       OLLAMA_MODEL: "${OLLAMA_MODEL:-gemma3:4b}"
       # Aprendizaje del anden en segundo plano. TRAJET_COLLECT=0 lo apaga.
       TRAJET_COLLECT: "${TRAJET_COLLECT:-1}"
+      # Mapa de la ruta con los datos abiertos de IDFM (sin clave y sin cuota
+      # de PRIM). TRAJET_MAP=0 lo apaga.
+      TRAJET_MAP: "${TRAJET_MAP:-1}"
     volumes:
-      # Rutas guardadas, historial y andenes aprendidos. Sobrevive a las
-      # actualizaciones de la app.
+      # Rutas, historial, andenes aprendidos, dispositivos emparejados, la clave
+      # cifrada (secrets/) y las copias de seguridad de las migraciones.
+      # Sobrevive a las actualizaciones de la app.
       - ${APP_DATA_DIR}/data:/data
+    # Un solo proceso: la cache de PRIM, la cuota y el recolector viven en
+    # memoria. En reposo usa unos 50 MB.
     mem_limit: 384m
     pids_limit: 128
