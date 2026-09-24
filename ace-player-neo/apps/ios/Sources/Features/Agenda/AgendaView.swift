@@ -1,36 +1,34 @@
 import SwiftUI
 
-/// Agenda: el título grande arriba y, dentro del contenido que se desplaza,
-/// la tira de días, «Para ti / Todos» (con tus gustos, las mismas reglas que
-/// la web), la tarjeta para personalizarla y los partidos por competición en
-/// tarjetas. Tirar para actualizar, el anillo del minuto en los que van en
-/// directo y estados de carga, vacío y error.
+/// Agenda de Palco: el título grande arriba y, dentro del contenido que se
+/// desplaza, la tarjeta «versus» grande del partido destacado (la portada),
+/// la tira de días, «Para ti / Todos», la tarjeta para personalizar y los
+/// partidos en tres secciones (En directo · Próximos · Terminados) como
+/// tarjetas «versus» a ancho completo, sin marcador (anti-spoiler). Tocar
+/// una abre el escenario. Nada se reproduce solo desde aquí.
 ///
 /// Sin `safeAreaInset` arriba: en el iPhone de verdad (iOS 26) la tira de
-/// días metida ahí se pintaba como una banda blanca vacía.
+/// días metida ahí se pintaba como una banda vacía.
 struct AgendaView: View {
     @Environment(AppModel.self) private var app
     @State private var vm: AgendaViewModel
-    @State private var ruta: [FootballMatch] = []
     @State private var diaElegido: String?
     @State private var modoElegido: ModoAgenda?
     @State private var editandoGustos = false
     @State private var ahora = Date.now
     @AppStorage("es.ismaeloul.aceplayerneo.agenda.tarjetaCerrada") private var tarjetaCerrada = false
-    @Namespace private var zoom
 
     init(entorno: Entorno) {
         _vm = State(initialValue: AgendaViewModel(entorno: entorno))
     }
 
     var body: some View {
-        NavigationStack(path: $ruta) {
+        NavigationStack {
             contenido
                 .navigationTitle("Agenda")
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) { IndicadorMotor() }
                 }
-                .background(Tinta.fondo.ignoresSafeArea())
                 .refreshable {
                     await vm.refrescar()
                     await app.refrescarMarcadores()
@@ -38,12 +36,9 @@ struct AgendaView: View {
                 .task { await vm.arrancar() }
                 .task { await app.vigilarMarcadores() }
                 .task { await pasarElReloj() }
+                .task(id: clavePrecalentado) { precalentar() }
                 .overlay(alignment: .bottom) {
                     avisoSinConexion.animation(Muelle.estandar, value: vm.fallo)
-                }
-                .navigationDestination(for: FootballMatch.self) { partido in
-                    CentroPartidoView(modelo: app.centro(para: partido))
-                        .destinoZoom(partido.id, en: zoom)
                 }
                 .sheet(isPresented: $editandoGustos) {
                     NavigationStack {
@@ -59,10 +54,18 @@ struct AgendaView: View {
             if let elegido = diaElegido, fechas.contains(elegido) { return }
             diaElegido = AgendaViewModel.diaInicial(fechas)
         }
-        .onChange(of: vm.agenda) { _, nueva in app.agendaCargada(nueva) }
+        .onChange(of: vm.agenda) { _, nueva in
+            app.agendaCargada(nueva)
+            if let nueva {
+                let hoy = FormatoAgenda.clave(.now)
+                app.precalentarEscudos(nueva.days.first { $0.date == hoy }?.matches ?? nueva.days.first?.matches ?? [])
+            }
+        }
     }
 
     // MARK: Datos
+
+    private var reloj: RelojMadrid { RelojMadrid(ahora) }
 
     private var modo: ModoAgenda { ReglasAgenda.modoEfectivo(modoElegido, gustos: app.gustos) }
 
@@ -85,6 +88,22 @@ struct AgendaView: View {
         ReglasAgenda.visibles(partidosDelDia, modo: modo, gustos: app.gustos)
     }
 
+    /// Los partidos de hoy (para la portada y el precalentado); si hoy no hay, los del día elegido.
+    private var partidosDeHoy: [FootballMatch] {
+        vm.dias.first { $0.date == reloj.fecha }?.matches ?? partidosDelDia
+    }
+
+    private var destacado: FootballMatch? {
+        ReglasAgenda.destacado(
+            partidosDeHoy, viendo: app.reproductor.canal?.partido?.id, reloj: reloj, marcadores: app.marcadores,
+            gustos: app.gustos)
+    }
+
+    /// Cambia cada minuto y con el día: vuelve a mirar qué partidos precalentar.
+    private var clavePrecalentado: String {
+        "\(diaActual?.date ?? "")-\(reloj.fecha)-\(reloj.minutos)-\(vm.agenda?.generatedAt ?? "")"
+    }
+
     /// Como la web: mientras las preferencias no digan que ya se personalizó.
     private var mostrarTarjeta: Bool {
         guard let preferencias = app.preferencias else { return false }
@@ -103,7 +122,7 @@ struct AgendaView: View {
                 Text(fallo)
             } actions: {
                 Button("Reintentar") { Task { await vm.refrescar() } }
-                    .buttonStyle(.borderedProminent)
+                    .botonOro()
             }
         } else if vm.dias.isEmpty {
             ContentUnavailableView(
@@ -117,22 +136,18 @@ struct AgendaView: View {
     private var esqueleto: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
+                RoundedRectangle(cornerRadius: Medida.radioM, style: .continuous)
+                    .fill(Tinta.superficie)
+                    .aspectRatio(16 / 9, contentMode: .fit)
                 HStack(spacing: 8) {
                     ForEach(0..<4, id: \.self) { _ in
                         Capsule().fill(Tinta.superficie).frame(width: 86, height: 40)
                     }
                 }
                 ForEach(0..<2, id: \.self) { _ in
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Competición").font(.title3.weight(.bold))
-                        VStack(spacing: 0) {
-                            ForEach(0..<3, id: \.self) { _ in
-                                FilaPartido(partido: .muestra, marcador: nil, estado: nil, destacado: false)
-                                    .padding(14)
-                            }
-                        }
-                        .background(Tinta.superficie, in: RoundedRectangle(cornerRadius: Medida.radioL, style: .continuous))
-                    }
+                    RoundedRectangle(cornerRadius: Medida.radioM, style: .continuous)
+                        .fill(Tinta.superficie)
+                        .aspectRatio(16 / 9, contentMode: .fit)
                 }
             }
             .padding(Medida.margen)
@@ -143,15 +158,24 @@ struct AgendaView: View {
     }
 
     private var lista: some View {
-        let reloj = RelojMadrid(ahora)
-        let grupos = ReglasAgenda.porCompeticion(visibles, reloj: reloj, marcadores: app.marcadores)
+        let reloj = self.reloj
+        let fases = ReglasAgenda.porFase(visibles, reloj: reloj, marcadores: app.marcadores)
         let gustos = app.gustos
+        // Las cápsulas de señal releen los centros creados por el precalentado.
+        _ = app.centrosVersion
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
+                if let destacado {
+                    PortadaDestacado(partido: destacado, reloj: reloj, capsula: capsula(destacado, reloj: reloj))
+                        .padding(.horizontal, Medida.margen)
+                        .padding(.top, 4)
+                        .id("portada-\(destacado.id)")
+                }
+
                 TiraDias(dias: entradasDias, elegido: diaActual?.date, ahora: ahora) { fecha in
                     withAnimation(Muelle.estandar) { diaElegido = fecha }
                 }
-                .padding(.top, 2)
+                .padding(.top, 18)
 
                 barraModo
                     .padding(.horizontal, Medida.margen)
@@ -171,11 +195,9 @@ struct AgendaView: View {
                         .padding(.horizontal, Medida.margen)
                         .padding(.top, 28)
                 } else {
-                    ForEach(grupos) { grupo in
-                        SeccionLiga(grupo: grupo, reloj: reloj, gustos: gustos, zoom: zoom)
-                            .padding(.horizontal, Medida.margen)
-                            .padding(.top, 22)
-                    }
+                    seccion("En directo", fases.directo, reloj: reloj, gustos: gustos, directo: true)
+                    seccion("Próximos", fases.proximos, reloj: reloj, gustos: gustos)
+                    seccion("Terminados", fases.terminados, reloj: reloj, gustos: gustos)
                 }
 
                 pie
@@ -188,6 +210,62 @@ struct AgendaView: View {
         }
         .scrollIndicators(.automatic)
         .accessibilityIdentifier("lista-agenda")
+    }
+
+    @ViewBuilder
+    private func seccion(_ titulo: String, _ partidos: [FootballMatch], reloj: RelojMadrid, gustos: GustosFutbol, directo: Bool = false)
+        -> some View
+    {
+        if !partidos.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                CabeceraFila(titulo: titulo, cuenta: partidos.count, directo: directo)
+                ForEach(partidos) { partido in
+                    tarjeta(partido, reloj: reloj, gustos: gustos)
+                }
+            }
+            .padding(.horizontal, Medida.margen)
+            .padding(.top, 24)
+        }
+    }
+
+    private func tarjeta(_ partido: FootballMatch, reloj: RelojMadrid, gustos: GustosFutbol) -> some View {
+        let marcador = app.marcadores[partido.id]
+        let estado = ReglasAgenda.estado(partido, reloj: reloj, marcador: marcador)
+        let enPantalla = app.reproductor.canal?.partido?.id == partido.id
+        return Button {
+            app.abrirPartido(partido)
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                TarjetaVersus(
+                    partido: partido, marcador: marcador, enDirecto: estado?.fase == .directo,
+                    capsula: capsula(partido, reloj: reloj), tuEquipo: ParaTi.destacado(partido, gustos),
+                    enPantalla: enPantalla)
+                PieVersus(partido: partido)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button {
+                app.verPartido(partido)
+            } label: {
+                Label("Ver ahora", systemImage: "play.fill")
+            }
+            Button {
+                app.abrirPartido(partido)
+            } label: {
+                Label("Abrir el partido", systemImage: "sportscourt")
+            }
+        }
+        .sensoryFeedback(.impact(weight: .light), trigger: app.escenario?.id)
+        .accessibilityHint("Abre el partido")
+    }
+
+    /// La cápsula de señal de una tarjeta: lo que sepa su centro (precalentado) o la regla sin sesión.
+    private func capsula(_ partido: FootballMatch, reloj: RelojMadrid) -> CapsulaSenal? {
+        ReglasSenal.capsula(
+            marcador: app.marcadores[partido.id], faltan: ReglasAgenda.minutosParaPartido(partido, reloj: reloj),
+            resumen: app.centroCargado(partido.id)?.resumen)
     }
 
     @ViewBuilder private var barraModo: some View {
@@ -207,7 +285,7 @@ struct AgendaView: View {
 
                 botonGustos
             }
-            .sensoryFeedback(.selection, trigger: modo)
+            .hapticoSeleccion(trigger: modo)
         } else if !mostrarTarjeta {
             HStack(spacing: 10) {
                 Text("Todos los partidos · \(partidosDelDia.count)")
@@ -247,7 +325,7 @@ struct AgendaView: View {
                 texto: "No hay partidos de tus ligas, equipos o selecciones. Puedes cambiar tus gustos o ver todos."
             ) {
                 Button("Ver todos") { withAnimation(Muelle.estandar) { modoElegido = .todos } }
-                    .buttonStyle(.borderedProminent)
+                    .botonOro()
                     .accessibilityIdentifier("boton-ver-todos")
                 Button("Editar mis gustos") { editandoGustos = true }
                     .buttonStyle(.bordered)
@@ -257,7 +335,10 @@ struct AgendaView: View {
                 icono: "sportscourt", titulo: "Sin partidos anunciados",
                 texto: "Este día no hay partidos en la agenda. Prueba con otro día o tira hacia abajo para actualizar."
             ) {
-                EmptyView()
+                if let siguiente = vm.dias.first(where: { $0.date > (diaActual?.date ?? "") }) {
+                    Button("Ver el día siguiente") { withAnimation(Muelle.estandar) { diaElegido = siguiente.date } }
+                        .buttonStyle(.bordered)
+                }
             }
         }
     }
@@ -302,6 +383,12 @@ struct AgendaView: View {
 
     // MARK: Acciones
 
+    /// Pide las fuentes de los partidos en directo o a menos de 45 min (cápsula «Señal»).
+    private func precalentar() {
+        guard vm.agenda != nil else { return }
+        app.precalentar(ReglasAgenda.precalentables(partidosDeHoy, reloj: reloj, marcadores: app.marcadores))
+    }
+
     private func ahoraNo() {
         withAnimation(Muelle.estandar) { tarjetaCerrada = true }
         Task {
@@ -322,6 +409,136 @@ struct AgendaView: View {
     }
 }
 
+// MARK: - Portada
+
+/// La cabecera de la agenda: la tarjeta «versus» grande del partido
+/// destacado. Solo enseña vídeo si ESTE iPhone ya está reproduciendo ese
+/// partido («Seguir viendo»); si no, la tarjeta con «Ver ahora», que es lo
+/// único que arranca algo. Nunca reproduce solo.
+struct PortadaDestacado: View {
+    @Environment(AppModel.self) private var app
+    let partido: FootballMatch
+    let reloj: RelojMadrid
+    let capsula: CapsulaSenal?
+
+    private var marcador: LiveScore? { app.marcadores[partido.id] }
+    private var estado: EstadoPartido? { ReglasAgenda.estado(partido, reloj: reloj, marcador: marcador) }
+    private var enDirecto: Bool { estado?.fase == .directo }
+    private var viendo: Bool {
+        app.reproductor.canal?.partido?.id == partido.id && app.reproductor.conexion.enMarcha
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 7) {
+                if enDirecto {
+                    PuntoDirecto(tamano: 6)
+                    Text("En directo")
+                } else if estado?.fase == .terminado {
+                    Text("Terminado")
+                } else {
+                    Image(systemName: "clock").font(.caption2.weight(.bold))
+                    Text("Próximo")
+                }
+                Text("·")
+                Text(partido.competition.isEmpty ? "Fútbol" : partido.competition)
+                    .lineLimit(1)
+            }
+            .font(.antetitulo)
+            .kerning(1.2)
+            .textCase(.uppercase)
+            .foregroundStyle(enDirecto ? Tinta.directo : Tinta.texto2)
+            .accessibilityElement(children: .combine)
+
+            Button {
+                app.abrirPartido(partido)
+            } label: {
+                if viendo {
+                    videoEnTarjeta
+                } else {
+                    TarjetaVersus(
+                        partido: partido, marcador: marcador, enDirecto: enDirecto, capsula: capsula,
+                        tuEquipo: ParaTi.destacado(partido, app.gustos), enPantalla: false)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Abre el partido")
+
+            HStack(alignment: .center, spacing: 12) {
+                PieVersus(partido: partido)
+                botonPrincipal
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("portada")
+    }
+
+    /// La imagen viva dentro de la tarjeta (solo si ya suena aquí): mientras
+    /// está a la vista, el mini se esconde (el escenario es una sola superficie).
+    private var videoEnTarjeta: some View {
+        ZStack {
+            VideoApp(prioridad: .integrado)
+            VStack {
+                HStack {
+                    CapsulaPalco(
+                        texto: FormatoAgenda.chipHora(partido, marcador: marcador, enDirecto: enDirecto),
+                        tono: enDirecto ? .directo : .neutro, punto: enDirecto, sobreImagen: true)
+                    Spacer()
+                }
+                Spacer()
+                HStack {
+                    Spacer()
+                    CapsulaPalco(texto: "En pantalla", tono: .oro, icono: "waveform", sobreImagen: true)
+                }
+            }
+            .padding(12)
+            .allowsHitTesting(false)
+        }
+        .aspectRatio(16 / 9, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: Medida.radioM, style: .continuous))
+        .onAppear { app.reproductor.superficieGrande(visible: true) }
+        .onDisappear { app.reproductor.superficieGrande(visible: false) }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(FormatoAgenda.equipos(partido)), en pantalla")
+        .accessibilityIdentifier("portada-video")
+    }
+
+    @ViewBuilder private var botonPrincipal: some View {
+        if viendo {
+            Button {
+                app.abrirPartido(partido)
+            } label: {
+                Label("Seguir viendo", systemImage: "play.fill")
+                    .font(.subheadline.weight(.bold))
+                    .frame(minHeight: Medida.toque)
+            }
+            .botonOro()
+            .accessibilityIdentifier("boton-ver-ahora")
+        } else if enDirecto {
+            Button {
+                app.verPartido(partido)
+            } label: {
+                Label("Ver ahora", systemImage: "play.fill")
+                    .font(.subheadline.weight(.bold))
+                    .frame(minHeight: Medida.toque)
+            }
+            .botonOro()
+            .sensoryFeedback(.impact(weight: .medium), trigger: app.escenario?.id)
+            .accessibilityIdentifier("boton-ver-ahora")
+        } else {
+            Button {
+                app.abrirPartido(partido)
+            } label: {
+                Label("Ver el partido", systemImage: "sportscourt")
+                    .font(.subheadline.weight(.bold))
+                    .frame(minHeight: Medida.toque)
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+        }
+    }
+}
+
 // MARK: - Tira de días
 
 /// Un día de la tira: su fecha y cuántos partidos se ven con el filtro.
@@ -331,9 +548,9 @@ struct EntradaDia: Identifiable, Hashable {
     var id: String { fecha }
 }
 
-/// Días de la agenda en píldoras que se desplazan en horizontal; la gota del
-/// elegido se desliza de una a otra. Va DENTRO del contenido de la agenda
-/// (nada de barras propias encima de la lista).
+/// Días de la agenda en píldoras que se desplazan en horizontal; la gota de
+/// oro del elegido se desliza de una a otra. Va DENTRO del contenido de la
+/// agenda (nada de barras propias encima de la lista).
 struct TiraDias: View {
     let dias: [EntradaDia]
     let elegido: String?
@@ -363,7 +580,7 @@ struct TiraDias: View {
                 withAnimation(Muelle.estandar) { lector.scrollTo(nuevo, anchor: .center) }
             }
         }
-        .sensoryFeedback(.selection, trigger: elegido)
+        .hapticoSeleccion(trigger: elegido)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Días")
         .accessibilityIdentifier("tira-dias")
@@ -390,7 +607,7 @@ struct TiraDias: View {
             .background {
                 if esElegido {
                     Capsule()
-                        .fill(Tinta.acento)
+                        .fill(Tinta.oro)
                         .matchedGeometryEffect(id: "gota", in: gota)
                 } else {
                     Capsule().fill(Tinta.superficie)
@@ -421,14 +638,14 @@ struct TarjetaPersonalizar: View {
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(Tinta.acentoTinta)
                 .frame(width: 44, height: 44)
-                .background(Tinta.acento.opacity(0.22), in: Circle())
+                .background(Tinta.oro.opacity(0.18), in: Circle())
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 6) {
                 Text("Personaliza tu agenda")
                     .font(.headline)
                     .foregroundStyle(Tinta.texto)
                     .accessibilityAddTraits(.isHeader)
-                Text("Dinos tus ligas y equipos y la agenda pondrá primero lo tuyo. Mientras tanto ves todos los partidos.")
+                Text("Dinos tus ligas y equipos y la agenda resaltará lo tuyo. Mientras tanto ves todos los partidos.")
                     .font(.subheadline)
                     .foregroundStyle(Tinta.texto2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -438,7 +655,7 @@ struct TarjetaPersonalizar: View {
                         .buttonStyle(.borderless)
                         .foregroundStyle(Tinta.texto2)
                     Button("Personalizar", action: alPersonalizar)
-                        .buttonStyle(.borderedProminent)
+                        .botonOro()
                         .accessibilityIdentifier("boton-personalizar")
                 }
                 .font(.subheadline.weight(.semibold))
@@ -449,202 +666,15 @@ struct TarjetaPersonalizar: View {
         .background(Tinta.superficie, in: RoundedRectangle(cornerRadius: Medida.radioL, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: Medida.radioL, style: .continuous)
-                .strokeBorder(Tinta.acentoBorde.opacity(0.6), lineWidth: 1)
+                .strokeBorder(Tinta.acentoBorde.opacity(0.5), lineWidth: 1)
         )
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("tarjeta-personalizar")
     }
 }
 
-// MARK: - Competición
-
-/// Un bloque de la agenda: el nombre de la competición con su recuento y
-/// una tarjeta con sus partidos.
-struct SeccionLiga: View {
-    @Environment(AppModel.self) private var app
-    let grupo: GrupoLiga
-    let reloj: RelojMadrid
-    let gustos: GustosFutbol
-    let zoom: Namespace.ID
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(grupo.competicion)
-                    .font(.title3.weight(.bold))
-                    .foregroundStyle(Tinta.texto)
-                    .lineLimit(2)
-                Text(FormatoAgenda.partidos(grupo.partidos.count))
-                    .font(.subheadline)
-                    .foregroundStyle(Tinta.texto3)
-            }
-            .padding(.horizontal, 4)
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
-
-            VStack(spacing: 0) {
-                ForEach(Array(grupo.partidos.enumerated()), id: \.element.id) { indice, partido in
-                    if indice > 0 {
-                        Divider().padding(.leading, 86)
-                    }
-                    NavigationLink(value: partido) {
-                        FilaPartido(
-                            partido: partido, marcador: app.marcadores[partido.id],
-                            estado: ReglasAgenda.estado(partido, reloj: reloj, marcador: app.marcadores[partido.id]),
-                            destacado: ParaTi.destacado(partido, gustos)
-                        )
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(EstiloFilaPulsada())
-                    .origenZoom(partido.id, en: zoom)
-                }
-            }
-            .background(Tinta.superficie, in: RoundedRectangle(cornerRadius: Medida.radioL, style: .continuous))
-            .clipShape(RoundedRectangle(cornerRadius: Medida.radioL, style: .continuous))
-        }
-    }
-}
-
-// MARK: - Fila de partido
-
-/// Una fila de partido: la hora (o el anillo del minuto) con «En 3 h 16 min»
-/// debajo, los equipos con su marca y marcador, y los canales.
-struct FilaPartido: View {
-    let partido: FootballMatch
-    let marcador: LiveScore?
-    let estado: EstadoPartido?
-    let destacado: Bool
-
-    private var enDirecto: Bool { marcador?.state == "in" }
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                if enDirecto {
-                    AnilloDirecto(minuto: marcador.flatMap(Marcador.minuto), tamano: 44)
-                } else {
-                    Text(partido.time)
-                        .font(.numeros(.title2, peso: .bold))
-                        .foregroundStyle(estado?.fase == .terminado ? Tinta.texto3 : Tinta.texto)
-                        .minimumScaleFactor(0.6)
-                        .lineLimit(1)
-                    if let estado {
-                        Text(estado.texto)
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(estado.fase == .directo ? Tinta.acentoTinta : Tinta.texto2)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-            .frame(width: 62, alignment: .leading)
-
-            VStack(alignment: .leading, spacing: 6) {
-                if partido.away.isEmpty {
-                    Text(partido.title)
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(Tinta.texto)
-                        .lineLimit(2)
-                } else {
-                    filaEquipo(partido.home, goles: marcador?.home)
-                    filaEquipo(partido.away, goles: marcador?.away)
-                }
-                if !partido.channels.isEmpty {
-                    HStack(spacing: 6) {
-                        ForEach(partido.channels.prefix(2)) { canal in
-                            Label(canal.name, systemImage: "tv")
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(Tinta.texto2)
-                                .lineLimit(1)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .overlay(Capsule().strokeBorder(Tinta.linea, lineWidth: 1))
-                        }
-                        if partido.channels.count > 2 {
-                            Text("+\(partido.channels.count - 2)")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(Tinta.texto3)
-                        }
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            if destacado {
-                Image(systemName: "star.fill")
-                    .font(.footnote)
-                    .foregroundStyle(Tinta.acentoTinta)
-                    .accessibilityHidden(true)
-            }
-            Image(systemName: "chevron.right")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(Tinta.texto3)
-                .accessibilityHidden(true)
-        }
-        .frame(minHeight: Medida.toque)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(etiquetaAccesible)
-        .accessibilityAddTraits(.isButton)
-    }
-
-    private func filaEquipo(_ nombre: String, goles: Int?) -> some View {
-        HStack(spacing: 8) {
-            MarcaEquipo(nombre, tamano: 24)
-            Text(nombre)
-                .font(.body.weight(.semibold))
-                .foregroundStyle(Tinta.texto)
-                .lineLimit(1)
-            Spacer(minLength: 4)
-            if let goles, marcador?.state != "pre" {
-                Text("\(goles)")
-                    .font(.numeros(.body, peso: .bold))
-                    .foregroundStyle(Tinta.texto)
-                    .contentTransition(.numericText())
-            }
-        }
-    }
-
-    private var etiquetaAccesible: String {
-        var partes = [FormatoAgenda.equipos(partido)]
-        if let marcador, marcador.state != "pre" {
-            partes.append("\(marcador.home) a \(marcador.away)")
-        }
-        if enDirecto {
-            partes.append(marcador.flatMap(Marcador.minuto).map { "en directo, minuto \($0)" } ?? "en directo")
-        } else {
-            partes.append("a las \(partido.time)")
-            if let estado { partes.append(estado.texto.lowercased()) }
-        }
-        if destacado { partes.append("tu equipo") }
-        partes.append(FormatoAgenda.detalle(partido))
-        return partes.joined(separator: ", ")
-    }
-}
-
-/// Lectura del marcador de ESPN.
-enum Marcador {
-    /// «54'» o «45'+2'» → 54 / 45.
-    static func minuto(_ marcador: LiveScore) -> Int? {
-        let cifras = marcador.clock.prefix { $0.isNumber }
-        return Int(cifras)
-    }
-
-    /// Progreso del partido (0…1) para la barra de la cabecera.
-    static func progreso(_ marcador: LiveScore?, inicio: Date?, ahora: Date = .now) -> Double {
-        switch marcador?.state {
-        case "post": return 1
-        case "in": return min(1, Double(marcador.flatMap(minuto) ?? 1) / 90)
-        default:
-            guard let inicio, ahora > inicio else { return 0 }
-            return min(1, ahora.timeIntervalSince(inicio) / (105 * 60))
-        }
-    }
-}
-
 extension FootballMatch {
-    /// Partido de relleno para el esqueleto de carga.
+    /// Partido de relleno para los esqueletos de carga.
     static let muestra = FootballMatch(
         id: "muestra", date: "2026-01-01", time: "21:00", start: nil, title: "Equipo local - Equipo visitante",
         home: "Equipo local", away: "Equipo visitante", competition: "Competición", country: "",

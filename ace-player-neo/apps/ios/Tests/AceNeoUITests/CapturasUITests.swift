@@ -1,9 +1,9 @@
 import XCTest
 
-/// Capturas de TODAS las pantallas, en claro y en oscuro, con el servidor
-/// simulado (datos fijos: siempre salen igual). Se guardan en el resultado de
-/// los tests y la CI las saca del `.xcresult` al artefacto `AceNeo-capturas`
-/// con su nombre (`claro-02-agenda.png`…).
+/// Capturas de TODAS las pantallas de Palco, en claro y en oscuro, con el
+/// servidor simulado (datos fijos: siempre salen igual). Se guardan en el
+/// resultado de los tests y la CI las saca del `.xcresult` al artefacto
+/// `AceNeo-capturas` con su nombre (`claro-02-agenda-portada.png`…).
 final class CapturasUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -21,7 +21,7 @@ final class CapturasUITests: XCTestCase {
 
     @MainActor
     private func captura(_ app: XCUIApplication, _ nombre: String) {
-        // Deja terminar las animaciones (muelles, cristal, zoom) antes de la foto.
+        // Deja terminar las animaciones (muelles, cristal, fundidos) antes de la foto.
         Thread.sleep(forTimeInterval: 1.2)
         let adjunto = XCTAttachment(screenshot: app.screenshot())
         adjunto.name = nombre
@@ -38,6 +38,18 @@ final class CapturasUITests: XCTestCase {
         return app
     }
 
+    /// Espera a que el vídeo del escenario diga «Reproduciendo».
+    @MainActor
+    private func esperarReproduciendo(_ app: XCUIApplication, plazo: TimeInterval = 20) -> Bool {
+        let video = elementoUI(app, "video-grande")
+        let limite = Date().addingTimeInterval(plazo)
+        while Date() < limite {
+            if video.exists, video.label.contains("Reproduciendo") { return true }
+            Thread.sleep(forTimeInterval: 0.4)
+        }
+        return video.exists && video.label.contains("Reproduciendo")
+    }
+
     @MainActor
     private func recorrer(apariencia modo: String) throws {
         // Emparejar (primera vez).
@@ -46,14 +58,14 @@ final class CapturasUITests: XCTestCase {
         captura(app, "\(modo)-01-emparejar")
         app.terminate()
 
-        // Emparejada: agenda «Para ti» con la tira de días.
+        // Emparejada: agenda con la portada, «Para ti» y la tira de días.
         app = lanzar(modo, emparejada: true)
         let partido = conTextoUI(app, "Equipo Local")
         XCTAssertTrue(partido.waitForExistence(timeout: 60), "No aparece la agenda")
         continueAfterFailure = true
         if let fallo = comprobarTiraDeDias(app) { XCTFail("La tira de días no está bien: \(fallo)") }
         continueAfterFailure = false
-        captura(app, "\(modo)-02-agenda-para-ti")
+        captura(app, "\(modo)-02-agenda-portada")
 
         // «Todos».
         let todos = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Todos")).firstMatch
@@ -73,44 +85,46 @@ final class CapturasUITests: XCTestCase {
             _ = esperarQueDesaparezca(elementoUI(app, "formulario-gustos"))
         }
 
-        // Centro de partido con la verificada sonando.
+        // El escenario con la verificada sonando.
         partido.tap()
-        XCTAssertTrue(elementoUI(app, "reproductor-integrado").waitForExistence(timeout: 20), "No arranca la verificada")
+        XCTAssertTrue(elementoUI(app, "reproductor-grande").waitForExistence(timeout: 20), "No abre el escenario")
+        XCTAssertTrue(esperarReproduciendo(app), "No arranca la verificada")
         XCTAssertTrue(conTextoUI(app, "Verificada").waitForExistence(timeout: 20), "Sin estado de las fuentes")
-        captura(app, "\(modo)-05-centro-de-partido")
+        captura(app, "\(modo)-05-escenario")
 
-        // Atrás sin parar: mini-reproductor sobre la agenda.
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        // La hoja de fuentes (desde la cápsula «Señal»).
+        let senal = elementoUI(app, "capsula-senal")
+        if senal.waitForExistence(timeout: 5) {
+            senal.tap()
+            XCTAssertTrue(elementoUI(app, "hoja-fuentes").waitForExistence(timeout: 10), "No abre la hoja de fuentes")
+            captura(app, "\(modo)-06-hoja-de-fuentes")
+            app.buttons["Cerrar"].firstMatch.tap()
+            _ = esperarQueDesaparezca(elementoUI(app, "hoja-fuentes"))
+        }
+
+        // Minimizar sin parar: el mini sobre la agenda.
+        elementoUI(app, "boton-minimizar").tap()
         let mini = elementoUI(app, "mini-reproductor")
         XCTAssertTrue(mini.waitForExistence(timeout: 10), "No aparece el mini-reproductor")
-        captura(app, "\(modo)-06-mini-reproductor")
+        captura(app, "\(modo)-07-mini")
 
-        // El reproductor grande (desde el mini).
-        mini.tap()
-        let grande = elementoUI(app, "reproductor-grande")
-        XCTAssertTrue(grande.waitForExistence(timeout: 10), "No abre el reproductor grande")
-        captura(app, "\(modo)-07-reproductor-grande")
-        elementoUI(app, "boton-minimizar").tap()
-        XCTAssertTrue(mini.waitForExistence(timeout: 10), "Al minimizar no vuelve el mini")
-
-        // Biblioteca: favoritos (con lo que emiten), recientes y listas agrupadas.
-        app.tabBars.buttons["Biblioteca"].tap()
-        XCTAssertTrue(conTextoUI(app, "Canal Favorito").waitForExistence(timeout: 20), "Biblioteca vacía")
-        captura(app, "\(modo)-08-biblioteca-favoritos")
-        let recientes = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Recientes")).firstMatch
-        if recientes.waitForExistence(timeout: 5) {
-            recientes.tap()
-            captura(app, "\(modo)-09-biblioteca-recientes")
+        // Canales: emitiendo ahora, favoritos, recientes y las listas agrupadas.
+        app.tabBars.buttons["Canales"].tap()
+        XCTAssertTrue(conTextoUI(app, "Canal Favorito").waitForExistence(timeout: 20), "Canales vacío")
+        captura(app, "\(modo)-08-canales")
+        let deportes = elementoUI(app, "categoria-Deportes")
+        let lista = elementoUI(app, "lista-biblioteca")
+        var visible = deportes.waitForExistence(timeout: 2) && deportes.isHittable
+        for _ in 0..<6 where !visible {
+            lista.swipeUp()
+            visible = deportes.waitForExistence(timeout: 2) && deportes.isHittable
         }
-        let listas = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Listas")).firstMatch
-        if listas.waitForExistence(timeout: 5) {
-            listas.tap()
-            let deportes = elementoUI(app, "categoria-Deportes")
-            if deportes.waitForExistence(timeout: 5) { deportes.tap() }
-            captura(app, "\(modo)-10-biblioteca-listas")
+        if visible {
+            deportes.tap()
+            captura(app, "\(modo)-09-canales-listas")
         }
 
-        // Buscar en el motor.
+        // Buscar en tus canales y en el motor.
         app.tabBars.buttons["Buscar"].tap()
         let buscador = app.searchFields.firstMatch
         XCTAssertTrue(buscador.waitForExistence(timeout: 10), "Sin buscador")
@@ -119,14 +133,19 @@ final class CapturasUITests: XCTestCase {
         XCTAssertTrue(conTextoUI(app, "DAZN 1 HD").waitForExistence(timeout: 15), "Sin resultados")
         XCTAssertTrue(conTextoUI(app, "En tu biblioteca").exists, "Buscar no enseña lo de tu biblioteca")
         XCTAssertTrue(conTextoUI(app, "DAZN LaLiga FHD").exists, "Buscar no encuentra en tu biblioteca")
-        captura(app, "\(modo)-11-buscar")
+        captura(app, "\(modo)-10-buscar")
 
-        // Ajustes con «Dónde se está reproduciendo» (este iPhone y el ordenador).
+        // Ajustes con «Dónde se está reproduciendo» (este iPhone y el ordenador) y Apariencia.
         app.tabBars.buttons["Ajustes"].tap()
         XCTAssertTrue(app.navigationBars["Ajustes"].waitForExistence(timeout: 10), "No abre Ajustes")
         XCTAssertTrue(elementoUI(app, "visor-este-dispositivo").waitForExistence(timeout: 20), "Sin «Este dispositivo»")
-        captura(app, "\(modo)-12-ajustes")
+        captura(app, "\(modo)-11-ajustes")
         elementoUI(app, "mini-detener").tap()
+        let apariencia = elementoUI(app, "selector-apariencia")
+        if apariencia.waitForExistence(timeout: 5) {
+            if !apariencia.isHittable { app.swipeUp() }
+            captura(app, "\(modo)-12-ajustes-apariencia")
+        }
 
         // Ajustes → Listas.
         let listasAjustes = elementoUI(app, "enlace-listas")

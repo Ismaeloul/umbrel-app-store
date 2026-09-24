@@ -5,6 +5,8 @@ import SwiftUI
 struct AceNeoApp: App {
     @State private var modelo = AppModel(entorno: .actual())
     @Environment(\.scenePhase) private var fase
+    /// Ajustes › Apariencia: Sistema (por defecto), Claro u Oscuro.
+    @AppStorage(Apariencia.clave) private var apariencia: Apariencia = .sistema
 
     init() {
         // Reproducción de vídeo: suena con el silenciador puesto y sigue en
@@ -31,7 +33,7 @@ struct AceNeoApp: App {
                 RootView()
                     .environment(modelo)
                     .tint(Tinta.acentoTinta)
-                    .preferredColorScheme(Self.esquemaForzado)
+                    .preferredColorScheme(Self.esquemaForzado ?? apariencia.esquema)
             }
         }
         .onChange(of: fase) { _, nueva in

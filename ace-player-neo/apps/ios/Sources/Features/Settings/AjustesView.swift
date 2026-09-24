@@ -1,42 +1,40 @@
 import SwiftUI
 
-/// Ajustes: dónde se está reproduciendo (en tiempo real), tu fútbol, modo
-/// de reproducción, servidor (Tailscale y red local, con cambio
-/// automático), emparejamiento (código o QR), estado y reinicio del motor y
-/// «Acerca de».
+/// Ajustes, en una lista agrupada del sistema: dónde se está reproduciendo
+/// (en tiempo real), tu fútbol, listas, reproducción, apariencia, servidor
+/// (Tailscale y red local, con cambio automático), el motor AceStream (con
+/// segundo toque para reiniciarlo), «Acerca de» y olvidar el servidor. Sin
+/// jerga y sin fondos propios.
 struct AjustesView: View {
     @Environment(AppModel.self) private var modelo
+    @AppStorage(Apariencia.clave) private var apariencia: Apariencia = .sistema
     @State private var config = ServerConfig()
     @State private var textoTailscale = ""
     @State private var textoLan = ""
-    @State private var confirmarOlvidar = false
-    @State private var confirmarReinicio = false
-    @State private var confirmarEmparejar = false
     @State private var reiniciando = false
 
     var body: some View {
         NavigationStack {
             Form {
-                // Los colores de «Luz de focos» (fondo y tarjetas), como el resto de pestañas.
-                Group {
-                    SeccionDondeSuena()
-                    seccionFutbol
-                    seccionListas
-                    seccionReproduccion
-                    seccionServidor
-                    seccionMotor
-                    seccionAcercaDe
-                    Section {
-                        Button("Olvidar este servidor", role: .destructive) { confirmarOlvidar = true }
-                            .accessibilityIdentifier("boton-olvidar")
-                    } footer: {
-                        Text("Borra el token del Llavero y las direcciones. Para volver a usar la app habrá que emparejarla otra vez.")
+                SeccionDondeSuena()
+                seccionFutbol
+                seccionListas
+                seccionReproduccion
+                seccionApariencia
+                seccionServidor
+                seccionMotor
+                seccionAcercaDe
+                Section {
+                    BotonSegundoToque(
+                        titulo: "Olvidar este servidor", confirmacion: "¿Olvidar? Toca otra vez", plazo: 5
+                    ) {
+                        Task { await modelo.desemparejar() }
                     }
+                    .accessibilityIdentifier("boton-olvidar")
+                } footer: {
+                    Text("Se borran el acceso y las direcciones de este iPhone. Para volver a usar la app habrá que emparejarla otra vez.")
                 }
-                .listRowBackground(Tinta.superficie)
             }
-            .scrollContentBackground(.hidden)
-            .background(Tinta.fondo.ignoresSafeArea())
             .navigationTitle("Ajustes")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) { IndicadorMotor() }
@@ -48,38 +46,6 @@ struct AjustesView: View {
             .task { await cargarConfig() }
             // «Dónde se está reproduciendo» al día mientras se ven los ajustes.
             .task { await modelo.vigilarSesiones() }
-            .confirmationDialog(
-                "¿Olvidar este servidor?", isPresented: $confirmarOlvidar, titleVisibility: .visible
-            ) {
-                Button("Olvidar", role: .destructive) {
-                    Task { await modelo.desemparejar() }
-                }
-                Button("Cancelar", role: .cancel) {}
-            }
-            .confirmationDialog(
-                "¿Reiniciar el motor AceStream?", isPresented: $confirmarReinicio, titleVisibility: .visible
-            ) {
-                Button("Reiniciar", role: .destructive) {
-                    Task {
-                        reiniciando = true
-                        await modelo.reiniciarMotor()
-                        reiniciando = false
-                    }
-                }
-                Button("Cancelar", role: .cancel) {}
-            } message: {
-                Text("Se cortará lo que esté sonando en todos los dispositivos durante unos segundos y se recuperará solo.")
-            }
-            .confirmationDialog(
-                "¿Emparejar de nuevo?", isPresented: $confirmarEmparejar, titleVisibility: .visible
-            ) {
-                Button("Emparejar de nuevo", role: .destructive) {
-                    Task { await modelo.desemparejar() }
-                }
-                Button("Cancelar", role: .cancel) {}
-            } message: {
-                Text("Se olvidará este servidor y podrás emparejar con un código o escaneando el QR de la web.")
-            }
         }
         .reservaMini()
     }
@@ -94,7 +60,6 @@ struct AjustesView: View {
             } label: {
                 VStack(alignment: .leading, spacing: 4) {
                     Label("Ligas, equipos y nacionalidades", systemImage: "star")
-                        .foregroundStyle(Tinta.texto)
                     Text(resumen(gustos))
                         .font(.footnote)
                         .foregroundStyle(Tinta.texto2)
@@ -106,7 +71,7 @@ struct AjustesView: View {
         } header: {
             Text("Tu fútbol")
         } footer: {
-            Text("La agenda «Para ti» enseña los partidos de tus ligas, equipos y selecciones, con las mismas reglas que la web.")
+            Text("La agenda «Para ti» enseña los partidos de tus ligas, equipos y selecciones, igual que la web.")
         }
     }
 
@@ -121,10 +86,9 @@ struct AjustesView: View {
             } label: {
                 VStack(alignment: .leading, spacing: 4) {
                     Label("Listas de canales", systemImage: "list.bullet.rectangle")
-                        .foregroundStyle(Tinta.texto)
                     Text(
-                        activa.map { "Activa: \($0.name) · \($0.count) canales · \(biblioteca?.webSources.count ?? 0) guardadas" }
-                            ?? "Sin listas: guarda una M3U o HTML."
+                        activa.map { "En uso: \($0.name) · \($0.count) canales · \(biblioteca?.webSources.count ?? 0) guardadas" }
+                            ?? "Sin listas: guarda una para tener canales."
                     )
                     .font(.footnote)
                     .foregroundStyle(Tinta.texto2)
@@ -143,6 +107,59 @@ struct AjustesView: View {
         let todos = gustos.leagues + gustos.teams + gustos.nationalities
         let primeros = todos.prefix(4).joined(separator: ", ")
         return todos.count > 4 ? "\(primeros) y \(todos.count - 4) más" : primeros
+    }
+
+    // MARK: Reproducción
+
+    private var seccionReproduccion: some View {
+        Section {
+            Picker(
+                "Modo",
+                selection: Binding(
+                    get: { modelo.reproductor.modo },
+                    set: { modelo.reproductor.cambiarModo($0) })
+            ) {
+                ForEach(PlaybackMode.allCases, id: \.self) { modo in
+                    Text(modo.etiqueta).tag(modo)
+                }
+            }
+            .pickerStyle(.segmented)
+            .hapticoSeleccion(trigger: modelo.reproductor.modo)
+            .accessibilityIdentifier("selector-modo")
+        } header: {
+            Text("Reproducción")
+        } footer: {
+            Text(explicacionModo)
+        }
+    }
+
+    private var explicacionModo: String {
+        let perfil = modelo.reproductor.modo.perfilIOS
+        let segundos = Int(perfil.liveEdgeOffsetS)
+        switch modelo.reproductor.modo {
+        case .low: return "Baja latencia: \(segundos) s por detrás del directo. Más cerca del directo, pero se corta antes si la señal flojea."
+        case .balanced: return "Equilibrado: \(segundos) s por detrás del directo. Lo recomendado."
+        case .stable: return "Estable: \(segundos) s por detrás del directo. Aguanta mejor las señales irregulares."
+        }
+    }
+
+    // MARK: Apariencia
+
+    private var seccionApariencia: some View {
+        Section {
+            Picker("Apariencia", selection: $apariencia) {
+                ForEach(Apariencia.allCases) { opcion in
+                    Text(opcion.titulo).tag(opcion)
+                }
+            }
+            .pickerStyle(.segmented)
+            .hapticoSeleccion(trigger: apariencia)
+            .accessibilityIdentifier("selector-apariencia")
+        } header: {
+            Text("Apariencia")
+        } footer: {
+            Text("«Sistema» sigue el modo claro u oscuro del iPhone. «Reducir transparencia» y «Reducir movimiento» de Accesibilidad también se respetan.")
+        }
     }
 
     // MARK: Servidor
@@ -175,11 +192,16 @@ struct AjustesView: View {
                     await modelo.refrescarArranque()
                 }
             }
-            Button("Emparejar con otro servidor (código o QR)") { confirmarEmparejar = true }
+            BotonSegundoToque(
+                titulo: "Emparejar con otro servidor", confirmacion: "¿Cambiar de servidor? Toca otra vez", plazo: 5,
+                destructivo: false
+            ) {
+                Task { await modelo.desemparejar() }
+            }
         } header: {
             Text("Servidor")
         } footer: {
-            Text("La app usa la dirección que responda: la de casa si estás en tu red y la de Tailscale fuera.")
+            Text("La app usa la dirección que responda: la de casa si estás en tu red y la de Tailscale fuera. Cambiar de servidor pide emparejar otra vez con un código o el QR.")
         }
     }
 
@@ -254,11 +276,21 @@ struct AjustesView: View {
             if let reinicios = modelo.motor?.autoRestarts, reinicios.lastHour > 0 {
                 LabeledContent("Reinicios automáticos (última hora)", value: "\(reinicios.lastHour) de \(reinicios.max)")
             }
-            Button("Reiniciar el motor", role: .destructive) { confirmarReinicio = true }
-                .disabled(reiniciando || modelo.motor?.status == .restarting)
-                .accessibilityIdentifier("boton-reiniciar-motor")
+            BotonSegundoToque(
+                titulo: "Reiniciar el motor", confirmacion: "¿Reiniciar? Toca otra vez", plazo: 6,
+                deshabilitado: reiniciando || modelo.motor?.status == .restarting
+            ) {
+                Task {
+                    reiniciando = true
+                    await modelo.reiniciarMotor()
+                    reiniciando = false
+                }
+            }
+            .accessibilityIdentifier("boton-reiniciar-motor")
         } header: {
             Text("Motor AceStream")
+        } footer: {
+            Text("Reiniciarlo corta unos segundos lo que esté sonando en todos los dispositivos; se recupera solo.")
         }
     }
 
@@ -290,39 +322,6 @@ struct AjustesView: View {
         }
     }
 
-    // MARK: Reproducción
-
-    private var seccionReproduccion: some View {
-        Section {
-            Picker(
-                "Modo",
-                selection: Binding(
-                    get: { modelo.reproductor.modo },
-                    set: { modelo.reproductor.cambiarModo($0) })
-            ) {
-                ForEach(PlaybackMode.allCases, id: \.self) { modo in
-                    Text(modo.etiqueta).tag(modo)
-                }
-            }
-            .pickerStyle(.segmented)
-            .accessibilityIdentifier("selector-modo")
-        } header: {
-            Text("Reproducción")
-        } footer: {
-            Text(explicacionModo)
-        }
-    }
-
-    private var explicacionModo: String {
-        let perfil = modelo.reproductor.modo.perfilIOS
-        let segundos = Int(perfil.liveEdgeOffsetS)
-        switch modelo.reproductor.modo {
-        case .low: return "Baja latencia: \(segundos) s por detrás del directo. Más cerca del directo, pero se corta antes si la señal flojea."
-        case .balanced: return "Equilibrado: \(segundos) s por detrás del directo. Lo recomendado."
-        case .stable: return "Estable: \(segundos) s por detrás del directo. Aguanta mejor las señales irregulares."
-        }
-    }
-
     // MARK: Acerca de
 
     private var seccionAcercaDe: some View {
@@ -332,7 +331,6 @@ struct AjustesView: View {
             if let version = modelo.versionServidor {
                 LabeledContent("Servidor", value: version)
             }
-            LabeledContent("Identificador", value: Bundle.main.bundleIdentifier ?? "—")
         }
     }
 

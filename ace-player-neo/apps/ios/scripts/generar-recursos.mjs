@@ -6,9 +6,9 @@
      tamaño único) y saca el resto al compilar.
    - Marca: el mismo icono a 96 pt (@2x y @3x) en claro y oscuro, para la
      pantalla de emparejamiento.
-   - Colores: un colorset por token, con su valor claro y oscuro, sacados del
-     respaldo en hex de apps/web/src/styles/tokens.css (conversión exacta de
-     los OKLCH que usa la web).
+   - Colores: un colorset por token, con su valor claro y oscuro. Los de
+     «Palco» (tabla PALCO de abajo) mandan; los que no estén ahí se sacan del
+     respaldo en hex de apps/web/src/styles/tokens.css.
 
    Los PNG se pintan con Chrome (Playwright, `channel: 'chrome'`) dibujando el
    SVG en un canvas del tamaño exacto, y se codifican aquí en RGB sin canal
@@ -149,20 +149,54 @@ const COLORES = [
   ['fail', 'Fail'],
   ['fail-ink', 'FailInk'],
   ['glass-solid', 'GlassSolid'],
+  // Solo de Palco (no salen de la web).
+  ['gold', 'Gold'],
+  ['live', 'Live'],
+  ['veil', 'Veil'],
 ];
 
-function componentes(hex) {
+/* Tokens de «Palco» (design-explorations/src/directions/03-palco/tokens.css), que
+   mandan sobre los de la web: [claro, oscuro] en hex y, si hace falta, [alfa claro,
+   alfa oscuro]. El oro es el único acento de acción; el rojo, «en directo»; el
+   semáforo de la señal, verde · ámbar · rojo. */
+const PALCO = {
+  bg: ['#f3f3f4', '#05070a'],
+  'bg-sunk': ['#e2e2e5', '#0f1218'],
+  surface: ['#ffffff', '#0f1218'],
+  'surface-2': ['#ececee', '#171b23'],
+  line: ['#dfdfe1', '#1e2126'],
+  'line-strong': ['#c4c4c8', '#34373d'],
+  text: ['#0c0c0e', '#ffffff'],
+  'text-2': ['#4a4c52', '#b9babd'],
+  'text-3': ['#66686f', '#85878b'],
+  accent: ['#ffd60a', '#ffd60a'],
+  'on-accent': ['#1a1400', '#1a1400'],
+  'accent-ink': ['#8a6508', '#ffd60a'],
+  'accent-edge': ['#9a6d00', '#ffd60a'],
+  ok: ['#1e7a46', '#34c759'],
+  'ok-ink': ['#1e7a46', '#34c759'],
+  weak: ['#8f5b00', '#ffb340'],
+  'weak-ink': ['#8f5b00', '#ffb340'],
+  fail: ['#c93a2e', '#ff453a'],
+  'fail-ink': ['#c93a2e', '#ff453a'],
+  'glass-solid': ['#ffffff', '#0f1218'],
+  gold: ['#b8860b', '#ffd60a'],
+  live: ['#d92d22', '#ff3b30'],
+  veil: ['#ffffff', '#000000', '0.700', '0.550'],
+};
+
+function componentes(hex, alpha = '1.000') {
   const n = (i) => (parseInt(hex.slice(i, i + 2), 16) / 255).toFixed(3);
-  return { 'color-space': 'srgb', components: { red: n(1), green: n(3), blue: n(5), alpha: '1.000' } };
+  return { 'color-space': 'srgb', components: { red: n(1), green: n(3), blue: n(5), alpha } };
 }
 
-function colorset(claro, oscuro) {
+function colorset(claro, oscuro, alfaClaro = '1.000', alfaOscuro = '1.000') {
   return {
     colors: [
-      { color: componentes(claro), idiom: 'universal' },
+      { color: componentes(claro, alfaClaro), idiom: 'universal' },
       {
         appearances: [{ appearance: 'luminosity', value: 'dark' }],
-        color: componentes(oscuro),
+        color: componentes(oscuro, alfaOscuro),
         idiom: 'universal',
       },
     ],
@@ -178,14 +212,16 @@ function generarColores() {
   rmSync(dir, { recursive: true, force: true });
   escribirJSON(path.join(dir, 'Contents.json'), { info: INFO, properties: { 'provides-namespace': false } });
   for (const [token, nombre] of COLORES) {
+    const palco = PALCO[token];
+    if (palco) {
+      escribirJSON(path.join(dir, `${nombre}.colorset/Contents.json`), colorset(...palco));
+      continue;
+    }
     if (!claro[token] || !oscuro[token]) throw new Error(`Falta el token --${token}`);
     escribirJSON(path.join(dir, `${nombre}.colorset/Contents.json`), colorset(claro[token], oscuro[token]));
   }
-  // Color de acento global (tinte de los controles): el cielo que se lee como texto.
-  escribirJSON(
-    path.join(CATALOGO, 'AccentColor.colorset/Contents.json'),
-    colorset(claro['accent-ink'], oscuro['accent-ink']),
-  );
+  // Color de acento global (tinte de los controles): el oro que se lee como texto.
+  escribirJSON(path.join(CATALOGO, 'AccentColor.colorset/Contents.json'), colorset(...PALCO['accent-ink']));
   return COLORES.length + 1;
 }
 

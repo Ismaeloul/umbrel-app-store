@@ -16,7 +16,7 @@ Cómo instalar la IPA: `docs/ios.md`. Direcciones del Umbrel: `docs/acceso-remot
 |---|---|---|---|
 | 0.1 | Instala la IPA con IPA Station. En el iPhone: Ajustes → General → VPN y gestión de dispositivos → confiar; Ajustes → Privacidad y seguridad → Modo de desarrollador activado. | Aparece **Ace Neo** con su icono en la pantalla de inicio y abre. | [ ] |
 | 0.2 | Abre Ace Neo por primera vez. | Pantalla **Emparejar** con tres huecos (red local, Tailscale, código) y el botón «Escanear código QR». «Emparejar» está desactivado. | [ ] |
-| 0.3 | Ajustes (de la app, tras emparejar) → Acerca de. | Versión 0.7.0 y el número de compilación = número de la ejecución de la CI de la que bajaste la IPA. | [ ] |
+| 0.3 | Ajustes (de la app, tras emparejar) → Acerca de. | Versión 0.8.0 y el número de compilación = número de la ejecución de la CI de la que bajaste la IPA. | [ ] |
 
 ## 1. Emparejar por QR en la LAN
 
@@ -178,12 +178,39 @@ Con el **bloqueo de rotación desactivado** en el Centro de Control.
 | 14.9 | Toca un canal de la biblioteca (p. ej. BOING). | Empieza a sonar y se abre el **reproductor grande** (vídeo arriba, título, estado, favorito, PiP, «Más» y otros canales de la lista). | [ ] |
 | 14.10 | En el reproductor grande, **desliza hacia abajo** desde el vídeo o la cabecera. | El reproductor baja siguiendo el dedo (se encoge un poco); al soltar pasado el umbral (o con un golpe rápido) se minimiza al mini con un muelle; si sueltas antes, vuelve arriba. | [ ] |
 | 14.11 | En el mini, **desliza hacia arriba**. | Se abre otra vez el reproductor grande. Tocarlo también. **Siempre se puede volver** una vez minimizado. | [ ] |
-| 14.12 | En el mini, desliza **hacia un lado** (o la X). | Se va por ese lado y se detiene la reproducción. | [ ] |
+| 14.12 | En el mini, desliza **hacia abajo** (o la ×). | Se detiene la reproducción con «Deshacer» (desde la 0.8.0 deslizar de lado ya no detiene; ver 15.8). | [ ] |
 | 14.13 | Con algo sonando en el iPhone y otra cosa en el PC, Ajustes → **Dónde se está reproduciendo**. | Cada sesión con su canal y sus dispositivos: el iPhone (icono de móvil, su nombre, «Este dispositivo», Reproduciendo) y el PC (icono de ordenador, «Chrome · Windows» o similar). Pausa en el PC: en menos de 15 s (su siguiente latido) pasa a «En pausa». Para en el PC: desaparece. | [ ] |
 | 14.14 | En esa sección, «Ver aquí» en la sesión del PC. | El iPhone se une a ese canal y abre el reproductor grande (la sesión del motor se comparte). | [ ] |
 | 14.15 | Buscar → escribe «dazn». | Arriba, «En tu biblioteca» con tus canales al instante (y lo que emiten hoy); debajo, «En el motor AceStream» con la disponibilidad. Tocar uno lo pone a sonar en el reproductor grande. | [ ] |
 | 14.16 | Ajustes → Listas. | Tus listas guardadas con la activa marcada; tocar otra la activa (la Biblioteca cambia). Deslizar: Actualizar / Borrar. Guardar una lista nueva con su dirección M3U. | [ ] |
 | 14.17 | Abre la app sin red (modo avión) tras haberla usado. | Agenda, biblioteca y «Para ti» salen al instante con lo guardado (los gustos también se guardan), con el aviso «Sin conexión». | [ ] |
+
+## 15. Palco (0.8.0)
+
+El rediseño «Palco»: la agenda con su portada, las tarjetas «versus», el
+escenario como única superficie de reproducción, el mini como accesorio de la
+barra de pestañas (iOS 26) y los gestos con su respuesta háptica. Las
+capturas de la CI (`AceNeo-capturas`, `claro-…` y `oscuro-…`) son la referencia.
+
+| # | Paso | Resultado esperado | ✔ |
+|---|---|---|---|
+| 15.1 | Abre la app con algún partido en directo en la agenda (o sin nada sonando). | La **Agenda** enseña arriba la **portada**: la tarjeta «versus» grande del partido destacado con «● EN DIRECTO · 13'» y la cápsula de señal, y debajo «Local vs. Visitante» y «Ver ahora». **No suena nada** hasta que tocas «Ver ahora» (o abres un partido). | [ ] |
+| 15.2 | Mira las tarjetas de la agenda (portada y secciones En directo · Próximos · Terminados). | Fondo partido en dos colores (los del club, unidos en diagonal), los dos **escudos grandes** (reales si el servidor los da; si no, un escudo generado con el monograma; nunca un hueco vacío), el logo de la competición en la pastilla del centro, el chip «VIE 21:00» o «● EN DIRECTO», la cápsula de señal («Señal», «Floja», «Sin señal», «Comprobando», «Señal lista», «Se comprueba 45 min antes») y la estrella de «tu equipo». **Ningún marcador en las tarjetas**, tampoco en las terminadas. | [ ] |
+| 15.3 | Toca una tarjeta. | Se abre el **escenario** con un fundido cruzado: cabecera (flecha, competición, «Más»), el vídeo 16:9, el título con escudos, las cápsulas Señal · Dónde se emite · Más, la fila de **carteles de fuentes** (tesela del canal, «1080p · Elcano», anillo de estado; **dorado** el que está en pantalla) y «Datos técnicos» plegado. En un partido en directo arranca sola la primera verificada; en uno futuro, la caja del vídeo enseña la hora y «Ver el canal ahora». | [ ] |
+| 15.4 | En iOS 26, fíjate en la barra de pestañas mientras suena algo y bajas por una lista. | La barra es la del sistema (Liquid Glass) con Agenda · Canales · Ajustes y el botón de Buscar; se **pliega al bajar** y el **mini** (imagen viva 96×54, título, minuto · estado, play, ×) va **dentro de la barra** como su accesorio (una sola línea cuando la barra está plegada). Nada de una segunda barra encima. | [ ] |
+| 15.5 | En el escenario, **arrastra el vídeo hacia abajo** despacio y suelta pasado el umbral. | Toda la pantalla se **encoge siguiendo al dedo** (escala, esquinas redondeadas, el resto se apaga), vibra al pasar el umbral y al soltar se minimiza al mini. Si sueltas antes, vuelve arriba con muelle. | [ ] |
+| 15.6 | Con dos o más fuentes verificadas o flojas, **desliza el vídeo a un lado**. | Aparece la pista «Siguiente fuente» / «Fuente anterior», vibra al armar y al soltar cambia de fuente con un **corte a negro** de medio segundo; el cartel dorado y la etiqueta «En pantalla» se deslizan al nuevo. Con una sola fuente, el gesto no hace nada. | [ ] |
+| 15.7 | **Un toque** en el vídeo; luego **dos toques** seguidos. | Un toque enseña o esconde los controles **al instante** (sin esperar al doble toque); el doble toque gira a **pantalla completa** con vibración; otro doble toque (o el botón) vuelve. | [ ] |
+| 15.8 | En el mini, **desliza hacia abajo**; luego toca «Deshacer». | El mini se va y se detiene la reproducción; sale el aviso «… detenido» con **Deshacer** durante 6 s: al tocarlo vuelve a sonar lo mismo y el mini reaparece. Deslizar de lado **ya no detiene**. | [ ] |
+| 15.9 | En el escenario, toca la cápsula «Señal · n» (o «Todas» al final de la fila). | Se abre la **hoja de fuentes** (media altura, se puede subir del todo) con todos los carteles en dos columnas, «Rebuscar» arriba y «Pegar Content ID» abajo; tocar un cartel lo pone en pantalla y cierra la hoja. Mantén pulsado un cartel: menú (Es el canal correcto · No es este canal · Reportar… · Copiar enlace). | [ ] |
+| 15.10 | Con un partido en directo sonando, mira el marcador del escenario; luego cambia de fuente o de canal. | El marcador va **tapado** («Marcador» con un ojo): al tocarlo se destapa (dígitos que ruedan y la lista de goles con su minuto) y **se vuelve a tapar al cambiar de canal**. En las tarjetas de la agenda y en la portada, el marcador nunca aparece. | [ ] |
+| 15.11 | Ajustes → **Apariencia**: Sistema · Claro · Oscuro. | Cambia al momento en toda la app. En **claro** conserva la personalidad (tarjetas versus, oro, cápsulas) sin ser una versión lavada del oscuro; en **oscuro**, fondos casi negros y la barra de Liquid Glass sin bandas. «Reducir transparencia» de iOS pone los cristales opacos. | [ ] |
+| 15.12 | Ajustes → Accesibilidad → Texto más grande al máximo. | Agenda, escenario, Canales y Ajustes se leen; las cápsulas y filas se adaptan (se desplazan en horizontal si no caben), nada se solapa ni se corta. | [ ] |
+| 15.13 | VoiceOver por la agenda, el escenario y el mini. | Cada tarjeta se anuncia con equipos, competición, hora o minuto, señal y «tu equipo»; el escenario es una ventana modal (el «Escape» de dos dedos lo minimiza); el mini dice qué suena y tiene las acciones «Abrir el reproductor» y «Detener». Todo en español. | [ ] |
+| 15.14 | Con algo sonando en el escenario, **gira** el iPhone a horizontal; luego vuelve a vertical. | Solo el vídeo a pantalla completa con las zonas seguras laterales; el botón de arriba a la derecha es «Minimizar» (no hay «salir»: se sale girando). En vertical vuelve el escenario entero. Con el escenario cerrado (mini), girar abre el escenario a pantalla completa. | [ ] |
+| 15.15 | Con el vídeo en el escenario, sube al inicio (PiP) y vuelve a la app tocando su icono. | El PiP se cierra y el vídeo vuelve al escenario, **una sola imagen**, sin reconectar (igual que en la sección 4). | [ ] |
+| 15.16 | Canales: fila «Emitiendo ahora», favoritos, recientes y listas; mantén pulsado un canal. | Carteles con el dorsal grande y lo que emiten; en las filas, deslizar a la izquierda borra con Deshacer y a la derecha marca favorito; la pulsación larga abre el menú (Ver canal · favoritos · Renombrar · Abrir en… · Borrar). Tocar un canal abre el **escenario del canal** (nombre · categoría, otras señales del mismo canal, otros canales de la lista). | [ ] |
+| 15.17 | Buscar: pega un enlace `acestream://…` o un Content ID de 40 caracteres. | Sale «Enlace detectado» con «Reproducir»: se abre el escenario como canal «Enlace pegado» y **no** entra en recientes. | [ ] |
 
 ## Cuando algo falla
 

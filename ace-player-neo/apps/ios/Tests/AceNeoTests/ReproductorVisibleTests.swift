@@ -27,12 +27,25 @@ final class GestosReproductorTests: XCTestCase {
             .abrir)
     }
 
-    func testDeslizarElMiniDeLadoLoDetiene() {
-        XCTAssertEqual(GestosReproductor.alSoltarMini(traslacion: CGSize(width: -140, height: 10), prevista: .zero), .detener)
+    func testDeslizarHaciaAbajoElMiniLoDetiene() {
+        XCTAssertEqual(GestosReproductor.alSoltarMini(traslacion: CGSize(width: 6, height: 60), prevista: .zero), .detener)
+        // Un golpe corto pero rápido hacia abajo también.
+        XCTAssertEqual(
+            GestosReproductor.alSoltarMini(
+                traslacion: CGSize(width: 0, height: 20), prevista: CGSize(width: 0, height: 300)),
+            .detener)
+        XCTAssertEqual(GestosReproductor.armadoMini(CGSize(width: 0, height: 50)), .detener)
+        XCTAssertEqual(GestosReproductor.armadoMini(CGSize(width: 0, height: -40)), .abrir)
+        XCTAssertEqual(GestosReproductor.armadoMini(CGSize(width: 0, height: 20)), .nada)
+    }
+
+    func testDeslizarElMiniDeLadoYaNoHaceNada() {
+        // Palco: de lado no se detiene (se detiene hacia abajo, con Deshacer).
+        XCTAssertEqual(GestosReproductor.alSoltarMini(traslacion: CGSize(width: -140, height: 10), prevista: .zero), .nada)
         XCTAssertEqual(
             GestosReproductor.alSoltarMini(
                 traslacion: CGSize(width: 40, height: 0), prevista: CGSize(width: 400, height: 0)),
-            .detener)
+            .nada)
     }
 
     func testPocoRecorridoNoHaceNada() {
@@ -41,14 +54,47 @@ final class GestosReproductorTests: XCTestCase {
         XCTAssertEqual(GestosReproductor.alSoltarMini(traslacion: CGSize(width: 60, height: 5), prevista: .zero), .nada)
     }
 
-    func testElMiniSigueAlDedoConResistenciaHaciaArriba() {
+    func testElMiniSigueAlDedoSoloEnVertical() {
         let deLado = GestosReproductor.desplazamientoMini(CGSize(width: 80, height: 10))
-        XCTAssertEqual(deLado, CGSize(width: 80, height: 0))
+        XCTAssertEqual(deLado, .zero, "De lado ya no se mueve")
         let arriba = GestosReproductor.desplazamientoMini(CGSize(width: 0, height: -400))
         XCTAssertLessThan(arriba.height, 0)
         XCTAssertGreaterThan(arriba.height, -90, "Nunca más allá del tope")
-        let abajo = GestosReproductor.desplazamientoMini(CGSize(width: 0, height: 200))
-        XCTAssertLessThan(abajo.height, 14)
+        let abajo = GestosReproductor.desplazamientoMini(CGSize(width: 0, height: 400))
+        XCTAssertGreaterThan(abajo.height, 0)
+        XCTAssertLessThan(abajo.height, 70)
+    }
+
+    func testDeslizarElVideoDeLadoCambiaDeFuente() {
+        XCTAssertEqual(GestosReproductor.alSoltarFuente(traslacion: CGSize(width: -100, height: 10), prevista: .zero), 1)
+        XCTAssertEqual(GestosReproductor.alSoltarFuente(traslacion: CGSize(width: 100, height: -5), prevista: .zero), -1)
+        // Un golpe corto pero rápido también.
+        XCTAssertEqual(
+            GestosReproductor.alSoltarFuente(
+                traslacion: CGSize(width: -30, height: 0), prevista: CGSize(width: -400, height: 0)),
+            1)
+        XCTAssertEqual(GestosReproductor.alSoltarFuente(traslacion: CGSize(width: -50, height: 0), prevista: .zero), 0)
+        XCTAssertEqual(
+            GestosReproductor.alSoltarFuente(traslacion: CGSize(width: 90, height: 120), prevista: .zero), 0,
+            "Más vertical que horizontal no zapea")
+        XCTAssertEqual(GestosReproductor.armadoFuente(CGSize(width: -90, height: 0)), 1)
+        XCTAssertEqual(GestosReproductor.armadoFuente(CGSize(width: 90, height: 0)), -1)
+        XCTAssertEqual(GestosReproductor.armadoFuente(CGSize(width: 40, height: 0)), 0)
+        let seguido = GestosReproductor.desplazamientoFuente(CGSize(width: -500, height: 0))
+        XCTAssertLessThan(seguido, 0)
+        XCTAssertGreaterThan(seguido, -120, "Con resistencia: no se va de la pantalla")
+    }
+
+    func testElEscenarioSeEncogeAlBajar() {
+        XCTAssertEqual(GestosReproductor.escala(0), 1)
+        XCTAssertEqual(GestosReproductor.escala(320), 0.92, accuracy: 0.001)
+        XCTAssertEqual(GestosReproductor.escala(1000), 0.92, accuracy: 0.001)
+        XCTAssertEqual(GestosReproductor.radio(0), 0)
+        XCTAssertEqual(GestosReproductor.radio(30), 17, accuracy: 0.001)
+        XCTAssertEqual(GestosReproductor.radio(200), 34)
+        XCTAssertEqual(GestosReproductor.opacidadCuerpo(0), 1)
+        XCTAssertEqual(GestosReproductor.opacidadCuerpo(200), 0.25, accuracy: 0.001)
+        XCTAssertEqual(GestosReproductor.opacidadCuerpo(800), 0.25, accuracy: 0.001)
     }
 
     func testDeslizarHaciaAbajoElGrandeLoMinimiza() {

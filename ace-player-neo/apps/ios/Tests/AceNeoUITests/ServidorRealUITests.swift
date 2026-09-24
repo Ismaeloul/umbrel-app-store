@@ -6,9 +6,9 @@ import XCTest
 ///
 /// 1. emparejar tecleando la dirección y un código recién creado (como desde
 ///    la web) → agenda de demostración del backend;
-/// 2. abrir un partido → el comprobador verifica las fuentes del motor falso →
-///    arranque automático → el backend prepara el HLS fMP4 con ffmpeg →
-///    AVPlayer lo reproduce en el simulador (primer fotograma real);
+/// 2. abrir un partido (el escenario) → el comprobador verifica las fuentes del
+///    motor falso → arranque automático → el backend prepara el HLS fMP4 con
+///    ffmpeg → AVPlayer lo reproduce en el simulador (primer fotograma real);
 /// 3. Ajustes → «Dónde se está reproduciendo» enseña la sesión de este iPhone
 ///    («Este dispositivo») con los datos del backend de verdad;
 /// 4. revocar el dispositivo desde «la web» → la app vuelve a emparejar y
@@ -53,7 +53,7 @@ final class ServidorRealUITests: XCTestCase {
     /// Lo que dice la pantalla ahora mismo (para que un fallo se entienda en el log de la CI).
     @MainActor
     private func estado(_ app: XCUIApplication) -> String {
-        let reproductor = elemento(app, "reproductor-integrado")
+        let reproductor = elemento(app, "video-grande")
         let linea = elemento(app, "linea-estado")
         let error = elemento(app, "error-emparejar")
         return [
@@ -135,10 +135,11 @@ final class ServidorRealUITests: XCTestCase {
         captura(app, "e2e-02-agenda")
         fila.tap()
 
-        // 2. Centro de partido: fuentes del motor falso, comprobador y arranque automático.
-        XCTAssertTrue(elemento(app, "cabecera-partido").waitForExistence(timeout: 30), "No abre el centro de partido")
+        // 2. El escenario del partido: fuentes del motor falso, comprobador y arranque automático.
+        XCTAssertTrue(elemento(app, "reproductor-grande").waitForExistence(timeout: 30), "No abre el escenario")
+        XCTAssertTrue(elemento(app, "cabecera-partido").waitForExistence(timeout: 30), "El escenario no enseña el partido")
         XCTAssertTrue(elemento(app, "selector-fuentes").waitForExistence(timeout: 60), "No hay fuentes")
-        let reproductor = elemento(app, "reproductor-integrado")
+        let reproductor = elemento(app, "video-grande")
         var suena = await esperar(90) {
             reproductor.exists && reproductor.label.contains("Reproduciendo")
         }
@@ -159,7 +160,10 @@ final class ServidorRealUITests: XCTestCase {
 
         // 3. «Dónde se está reproduciendo» con el backend de verdad (GET
         //    /native/api/v1/playback y el evento playback.sessions): la sesión
-        //    de este iPhone, con su canal, y «Este dispositivo».
+        //    de este iPhone, con su canal, y «Este dispositivo». Antes se
+        //    minimiza el escenario (tapa las pestañas).
+        elemento(app, "boton-minimizar").tap()
+        XCTAssertTrue(elemento(app, "mini-reproductor").waitForExistence(timeout: 10), "Al minimizar sale el mini")
         app.tabBars.buttons["Ajustes"].tap()
         let este = elemento(app, "visor-este-dispositivo")
         let visto = await esperar(30) { este.exists }

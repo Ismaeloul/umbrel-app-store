@@ -20,7 +20,7 @@ final class BuscarModelo {
     /// Busca `texto` (vacío = limpia). Pensado para `.task(id:)`, que cancela la anterior.
     func buscar(_ texto: String, esperar: Bool = true) async {
         let consulta = texto.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard consulta.count >= 2 else {
+        guard consulta.count >= 2, ReglasFuentes.hashValido(consulta) == nil else {
             resultados = []
             fallo = nil
             buscado = ""
@@ -47,9 +47,10 @@ final class BuscarModelo {
     }
 }
 
-/// Buscar, como la web: mientras se escribe, lo que ya tienes («En tu
-/// biblioteca», al instante, con lo que emite cada canal hoy) y, debajo, lo
-/// que encuentra el motor («En el motor AceStream», con su disponibilidad).
+/// Buscar: mientras se escribe, lo que ya tienes («En tu biblioteca», al
+/// instante, con lo que emite cada canal hoy) y, debajo, lo que encuentra el
+/// motor («En el motor», con su disponibilidad). Un Content ID o enlace
+/// `acestream://` pegado se detecta y se reproduce como canal suelto, sin guardarlo.
 struct BuscarView: View {
     @Environment(AppModel.self) private var app
     @State private var vm: BuscarModelo
@@ -64,14 +65,9 @@ struct BuscarView: View {
         NavigationStack {
             contenido
                 .navigationTitle("Buscar")
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) { IndicadorMotor() }
-                }
-                .background(Tinta.fondo.ignoresSafeArea())
-                .scrollContentBackground(.hidden)
                 .searchable(
                     text: $texto, placement: .navigationBarDrawer(displayMode: .always),
-                    prompt: "Canal, partido o competición")
+                    prompt: "Canal, partido o pega un enlace")
                 .onSubmit(of: .search) { Task { await vm.buscar(texto, esperar: false) } }
                 .task(id: texto) { await vm.buscar(texto) }
                 .task(id: app.agenda?.generatedAt) {
@@ -93,12 +89,39 @@ struct BuscarView: View {
         return Array(ReglasBiblioteca.filtrar(todos, texto: consulta).prefix(25))
     }
 
+    private var enlacePegado: String? { ReglasFuentes.hashValido(texto) }
+
     @ViewBuilder private var contenido: some View {
         let propios = locales
-        if texto.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && vm.buscado.isEmpty {
+        if let hash = enlacePegado {
+            List {
+                Section {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("Enlace detectado", systemImage: "link")
+                            .font(.headline)
+                            .foregroundStyle(Tinta.okTinta)
+                        Text("Se reproduce como señal externa, sin guardarla en recientes.")
+                            .font(.subheadline)
+                            .foregroundStyle(Tinta.texto2)
+                        Button {
+                            app.reproducirEnlace(hash)
+                        } label: {
+                            Label("Reproducir", systemImage: "play.fill")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity, minHeight: Medida.toque)
+                        }
+                        .botonOro()
+                        .accessibilityIdentifier("boton-reproducir-enlace")
+                    }
+                    .padding(.vertical, 6)
+                }
+            }
+            .listStyle(.insetGrouped)
+            .accessibilityIdentifier("enlace-detectado")
+        } else if texto.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && vm.buscado.isEmpty {
             ContentUnavailableView(
                 "Busca un canal", systemImage: "magnifyingglass",
-                description: Text("En tu biblioteca, al instante, y en la red AceStream."))
+                description: Text("En tus canales, al instante, y en el motor AceStream. También puedes pegar un enlace."))
         } else {
             List {
                 if !propios.isEmpty {
@@ -111,7 +134,7 @@ struct BuscarView: View {
                 Section {
                     motor
                 } header: {
-                    cabecera("En el motor AceStream", cuenta: vm.resultados.isEmpty ? nil : vm.resultados.count)
+                    cabecera("En el motor", cuenta: vm.resultados.isEmpty ? nil : vm.resultados.count)
                 }
             }
             .listStyle(.insetGrouped)
@@ -120,25 +143,15 @@ struct BuscarView: View {
     }
 
     private func cabecera(_ titulo: String, cuenta: Int?) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(titulo)
-                .font(.headline)
-                .foregroundStyle(Tinta.texto)
-            if let cuenta {
-                Text("\(cuenta)")
-                    .font(.subheadline.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(Tinta.texto3)
-            }
-        }
-        .textCase(nil)
-        .accessibilityAddTraits(.isHeader)
+        CabeceraFila(titulo: titulo, cuenta: cuenta)
+            .textCase(nil)
+            .padding(.horizontal, 4)
     }
 
     @ViewBuilder private var motor: some View {
         if vm.buscando && vm.resultados.isEmpty {
             ForEach(0..<3, id: \.self) { _ in
                 FilaResultado(resultado: SearchResult.muestra)
-                    .listRowBackground(Tinta.superficie)
                     .redacted(reason: .placeholder)
             }
         } else if let fallo = vm.fallo {
@@ -150,17 +163,14 @@ struct BuscarView: View {
                     .buttonStyle(.bordered)
             }
             .padding(.vertical, 4)
-            .listRowBackground(Tinta.superficie)
         } else if vm.buscado.isEmpty {
-            Text("Escribe al menos 2 letras para buscar en la red AceStream.")
+            Text("Escribe al menos dos letras para buscar en el motor.")
                 .font(.subheadline)
                 .foregroundStyle(Tinta.texto2)
-                .listRowBackground(Tinta.superficie)
         } else if vm.resultados.isEmpty {
             Text("El motor no encuentra nada con «\(vm.buscado)».")
                 .font(.subheadline)
                 .foregroundStyle(Tinta.texto2)
-                .listRowBackground(Tinta.superficie)
         } else {
             ForEach(vm.resultados) { resultado in
                 Button {
@@ -169,21 +179,25 @@ struct BuscarView: View {
                     FilaResultado(resultado: resultado)
                 }
                 .foregroundStyle(Tinta.texto)
-                .listRowBackground(Tinta.superficie)
                 .swipeActions(edge: .leading) {
                     Button {
                         Task { await app.alternarFavorito(id: resultado.id, titulo: resultado.title, ih: resultado.ih) }
                     } label: {
                         Label(app.esFavorito(resultado.id) ? "Quitar" : "Favorito", systemImage: "star")
                     }
-                    .tint(Tinta.acento)
+                    .tint(Tinta.oro)
                 }
                 .contextMenu {
+                    Button {
+                        abrir(resultado)
+                    } label: {
+                        Label("Ver canal", systemImage: "play.fill")
+                    }
                     Button {
                         Task { await app.alternarFavorito(id: resultado.id, titulo: resultado.title, ih: resultado.ih) }
                     } label: {
                         Label(
-                            app.esFavorito(resultado.id) ? "Quitar de favoritos" : "Añadir a favoritos",
+                            app.esFavorito(resultado.id) ? "Quitar de favoritos" : "Guardar en favoritos",
                             systemImage: "star")
                     }
                 }
@@ -193,43 +207,30 @@ struct BuscarView: View {
 
     private func filaLocal(_ item: Item, en lista: [Item]) -> some View {
         Button {
-            abrirLocal(item, en: lista)
+            app.abrirCanal(app.canalReproducible(item), lista: lista.map { app.canalReproducible($0) })
         } label: {
             FilaCanal(
                 item: item,
                 favorito: app.esFavorito(item.id),
                 antena: antena.para(titulo: item.title, alias: item.alias, marcadores: app.marcadores),
                 subtitulo: ReglasBiblioteca.subtitulo(item, seccion: item.type == .web ? .listas : .favoritos),
-                caido: false)
+                caido: false,
+                enPantalla: app.reproductor.canal?.id.lowercased() == item.id.lowercased())
         }
         .foregroundStyle(Tinta.texto)
-        .listRowBackground(Tinta.superficie)
     }
 
     private func canalDe(resultado: SearchResult) -> CanalReproducible {
         CanalReproducible(id: resultado.id, titulo: resultado.title, ih: resultado.ih, origen: "acestream")
     }
 
-    private func canalDe(item: Item) -> CanalReproducible {
-        CanalReproducible(
-            id: item.id, titulo: item.title, ih: item.ih,
-            listaId: item.type == .web ? app.biblioteca?.activeWebSourceId : nil,
-            origen: item.type == .web ? "m3u" : (item.type == .fav ? "favorites" : "history"))
-    }
-
-    /// Reproduce y abre el reproductor grande (deslizando hacia abajo se queda en el mini).
+    /// Reproduce y abre el escenario del canal.
     private func abrir(_ resultado: SearchResult) {
-        app.reproducirCanal(canalDe(resultado: resultado), lista: vm.resultados.map { canalDe(resultado: $0) })
-        withAnimation(Muelle.heroe) { app.reproductor.expandir() }
-    }
-
-    private func abrirLocal(_ item: Item, en lista: [Item]) {
-        app.reproducirCanal(canalDe(item: item), lista: lista.map { canalDe(item: $0) })
-        withAnimation(Muelle.heroe) { app.reproductor.expandir() }
+        app.abrirCanal(canalDe(resultado: resultado), lista: vm.resultados.map { canalDe(resultado: $0) })
     }
 }
 
-/// Un resultado de la búsqueda con su disponibilidad.
+/// Un resultado de la búsqueda con su disponibilidad en una cápsula («93 %»).
 struct FilaResultado: View {
     let resultado: SearchResult
 
@@ -250,8 +251,8 @@ struct FilaResultado: View {
             }
             Spacer(minLength: 4)
             if let porcentaje {
-                let estado: EstadoSenal = porcentaje >= 60 ? .ok : (porcentaje > 0 ? .floja : .sinSenal)
-                MedidorSenal(estado, palabra: "\(porcentaje)%")
+                let tono: TonoCapsula = porcentaje >= 60 ? .ok : (porcentaje > 0 ? .floja : .fallo)
+                CapsulaPalco(texto: "\(porcentaje) %", tono: tono, punto: true, compacta: true)
             }
         }
         .frame(minHeight: Medida.toque)

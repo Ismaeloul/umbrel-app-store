@@ -110,6 +110,9 @@
                 return (200, json, Data(resolucion.utf8))
             case ("GET", _) where resto.hasPrefix("football/scans/"):
                 return (200, json, Data(comprobacion.utf8))
+            case ("GET", _) where resto.hasPrefix("football/teams/") || resto.hasPrefix("football/competitions/"):
+                // Escudos y logos: un PNG pequeño generado en código (un círculo del color del club).
+                return (200, "image/png", pngEscudo(resto))
             case ("GET", _) where resto.hasPrefix("channels/"):
                 let partes = resto.split(separator: "/")
                 let id = partes.count > 1 ? String(partes[1]) : ""
@@ -173,6 +176,33 @@
 
         static func error(_ codigo: String, _ mensaje: String) -> String {
             #"{"error":{"code":"\#(codigo)","message":"\#(mensaje)","requestId":"req-simulado"}}"#
+        }
+
+        // MARK: Escudos
+
+        /// Un PNG de 48 × 48 con un círculo del color del club (por su id en la ruta).
+        static func pngEscudo(_ ruta: String) -> Data {
+            let partes = ruta.split(separator: "/").map(String.init)
+            let id = partes.count > 2 ? partes[2].lowercased() : "x"
+            let color: (UInt8, UInt8, UInt8)
+            if id.contains("madrid") {
+                color = (255, 255, 255)
+            } else if id.contains("getafe") {
+                color = (0, 89, 153)
+            } else if id.contains("villarreal") {
+                color = (255, 230, 103)
+            } else if id.contains("sociedad") {
+                color = (0, 103, 177)
+            } else if partes.contains("competitions") {
+                color = (255, 214, 10)
+            } else {
+                let h = id.utf8.reduce(UInt32(2_166_136_261)) { ($0 ^ UInt32($1)) &* 16_777_619 }
+                color = (
+                    UInt8(truncatingIfNeeded: h) | 0x40, UInt8(truncatingIfNeeded: h >> 8) | 0x40,
+                    UInt8(truncatingIfNeeded: h >> 16) | 0x40
+                )
+            }
+            return PNGSimulado.circulo(lado: 48, color: color)
         }
 
         // MARK: Biblioteca en memoria
@@ -331,7 +361,7 @@
 
         // MARK: Respuestas fijas
 
-        static let ping = #"{"ok":true,"app":"ace-player-neo","version":"0.7.0","apiVersion":1,"serverTime":1790188200000}"#
+        static let ping = #"{"ok":true,"app":"ace-player-neo","version":"0.8.0","apiVersion":1,"serverTime":1790188200000}"#
 
         static let dispositivo =
             #"{"id":"dev_simulado","name":"iPhone","platform":"ios","createdAt":"2026-09-23T18:30:00.000Z","lastSeenAt":null,"revokedAt":null}"#
@@ -345,7 +375,7 @@
 
         static func arranque() -> String {
             [
-                #"{"version":"0.7.0","serverTime":1790188200000,"origin":"native","device":"#, dispositivo,
+                #"{"version":"0.8.0","serverTime":1790188200000,"origin":"native","device":"#, dispositivo,
                 #","preferences":"#, preferencias(), ",",
                 #""library":"#, biblioteca(), ",",
                 #""playback":"#, estadoReproduccion(), ",",
@@ -356,16 +386,17 @@
 
         static let agenda: String = [
             #"{"generatedAt":"2026-09-23T18:30:00.000Z","timezone":"Europe/Madrid","country":"Spain","source":"demo","attribution":"Datos de muestra","demo":true,"limited":false,"partial":false,"days":[{"date":"HOY","matches":["#,
-            #"{"id":"sim-1","date":"HOY","time":"18:30","title":"Equipo Local - Equipo Visitante","home":"Equipo Local","away":"Equipo Visitante","competition":"LaLiga","country":"Spain","channels":[{"id":"m-laliga","name":"M+ LaLiga"}]},"#,
+            // Con escudos y colores (el módulo `teams` del backend): el escudo lo sirve `football/teams/<id>/crest`.
+            #"{"id":"sim-1","date":"HOY","time":"18:30","title":"Equipo Local - Equipo Visitante","home":"Equipo Local","away":"Equipo Visitante","competition":"LaLiga","country":"Spain","channels":[{"id":"m-laliga","name":"M+ LaLiga"}],"homeTeam":{"id":"133738","name":"Equipo Local","short":"LOC","crest":"/api/v1/football/teams/133738/crest?v=sim","colors":{"primary":"#1d3f9a","secondary":"#f2c94c"}},"awayTeam":{"id":"k-equipo-visitante","name":"Equipo Visitante","short":null,"crest":null,"colors":{"primary":"#a50044","secondary":null}},"competitionBadge":{"id":"4335","name":"Spanish La Liga","logo":"/api/v1/football/competitions/4335/logo?v=sim"}},"#,
             #"{"id":"sim-2","date":"HOY","time":"21:00","title":"Otro Local - Otro Visitante","home":"Otro Local","away":"Otro Visitante","competition":"Champions League","country":"Europe","channels":[{"id":"m-lc","name":"M+ Liga de Campeones"}]},"#,
             // Unos cuantos más hoy: la lista tiene que desplazarse, como con la agenda real.
             #"{"id":"sim-5","date":"HOY","time":"19:00","title":"Tercer Local - Tercer Visitante","home":"Tercer Local","away":"Tercer Visitante","competition":"LaLiga","country":"Spain","channels":[{"id":"m-laliga","name":"M+ LaLiga"}]},"#,
             #"{"id":"sim-6","date":"HOY","time":"20:00","title":"Cuarto Local - Cuarto Visitante","home":"Cuarto Local","away":"Cuarto Visitante","competition":"Premier League","country":"England","channels":[{"id":"dazn","name":"DAZN"}]},"#,
             #"{"id":"sim-7","date":"HOY","time":"22:00","title":"Quinto Local - Quinto Visitante","home":"Quinto Local","away":"Quinto Visitante","competition":"Amistoso","country":"Spain","channels":[{"id":"la1","name":"La 1 HD"}]},"#,
             // «Tu equipo» (sale en «Para ti» por el equipo aunque la copa no esté elegida)…
-            #"{"id":"sim-8","date":"HOY","time":"21:30","title":"Real Madrid - Getafe","home":"Real Madrid","away":"Getafe","competition":"Copa del Rey","country":"Spain","channels":[{"id":"vamos","name":"M+ Vamos"}]},"#,
+            #"{"id":"sim-8","date":"HOY","time":"21:30","title":"Real Madrid - Getafe","home":"Real Madrid","away":"Getafe","competition":"Copa del Rey","country":"Spain","channels":[{"id":"vamos","name":"M+ Vamos"}],"homeTeam":{"id":"real-madrid","name":"Real Madrid","short":"RMA","crest":"/api/v1/football/teams/real-madrid/crest?v=sim","colors":{"primary":"#ffffff","secondary":"#febe10"}},"awayTeam":{"id":"getafe","name":"Getafe","short":"GET","crest":"/api/v1/football/teams/getafe/crest?v=sim","colors":{"primary":"#005999","secondary":null}}},"#,
             // …un LaLiga que da un canal de la biblioteca (favorito: «A las 22:00, …»)…
-            #"{"id":"sim-10","date":"HOY","time":"22:00","title":"Villarreal - Real Sociedad","home":"Villarreal","away":"Real Sociedad","competition":"LaLiga","country":"Spain","channels":[{"id":"dazn-laliga","name":"DAZN LaLiga"}]},"#,
+            #"{"id":"sim-10","date":"HOY","time":"22:00","title":"Villarreal - Real Sociedad","home":"Villarreal","away":"Real Sociedad","competition":"LaLiga","country":"Spain","channels":[{"id":"dazn-laliga","name":"DAZN LaLiga"}],"homeTeam":{"id":"villarreal","name":"Villarreal","short":"VIL","crest":"/api/v1/football/teams/villarreal/crest?v=sim","colors":{"primary":"#ffe667","secondary":"#005187"}},"awayTeam":{"id":"real-sociedad","name":"Real Sociedad","short":"RSO","crest":"/api/v1/football/teams/real-sociedad/crest?v=sim","colors":{"primary":"#0067b1","secondary":"#ffffff"}}},"#,
             // …y las reservas argentinas que Isma veía primero: fuera de «Para ti».
             #"{"id":"sim-9","date":"HOY","time":"20:00","title":"Central Córdoba Reserva - Atlético Tucumán Reserva","home":"Central Córdoba Reserva","away":"Atlético Tucumán Reserva","competition":"Torneo Proyección","country":"Argentina","channels":[{"id":"lpf","name":"LPF Play"}]}"#,
             "]},",
@@ -415,6 +446,97 @@
 
         static let busqueda =
             #"{"query":"dazn","results":[{"id":"d4e5f60718293a4b5c6d7e8f9012345678901a2b","title":"DAZN 1 HD","category":"Deportes","availability":0.9,"bitrate":450000,"ih":true}]}"#
+    }
+
+    /// PNG sin dependencias para los escudos simulados: RGBA de 8 bits con
+    /// zlib «almacenado» (sin comprimir) y sus CRC.
+    enum PNGSimulado {
+        static func circulo(lado: Int, color: (UInt8, UInt8, UInt8)) -> Data {
+            var crudo = Data()
+            crudo.reserveCapacity(lado * (lado * 4 + 1))
+            let centro = Double(lado - 1) / 2
+            let radio = Double(lado) / 2 - 1
+            for y in 0..<lado {
+                crudo.append(0)  // filtro «ninguno» de la fila
+                for x in 0..<lado {
+                    let dx = Double(x) - centro
+                    let dy = Double(y) - centro
+                    let distancia = (dx * dx + dy * dy).squareRoot()
+                    if distancia <= radio {
+                        if distancia > radio - 3 {
+                            crudo.append(contentsOf: [40, 40, 40, 255])
+                        } else {
+                            crudo.append(contentsOf: [color.0, color.1, color.2, 255])
+                        }
+                    } else {
+                        crudo.append(contentsOf: [0, 0, 0, 0])
+                    }
+                }
+            }
+            var png = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+            var ihdr = Data()
+            ihdr.append(be32(UInt32(lado)))
+            ihdr.append(be32(UInt32(lado)))
+            ihdr.append(contentsOf: [8, 6, 0, 0, 0])
+            png.append(trozo("IHDR", ihdr))
+            png.append(trozo("IDAT", zlibAlmacenado(crudo)))
+            png.append(trozo("IEND", Data()))
+            return png
+        }
+
+        private static func be32(_ valor: UInt32) -> Data {
+            Data([
+                UInt8(truncatingIfNeeded: valor >> 24), UInt8(truncatingIfNeeded: valor >> 16),
+                UInt8(truncatingIfNeeded: valor >> 8), UInt8(truncatingIfNeeded: valor),
+            ])
+        }
+
+        private static func trozo(_ tipo: String, _ datos: Data) -> Data {
+            var cuerpo = Data(tipo.utf8)
+            cuerpo.append(datos)
+            var salida = be32(UInt32(datos.count))
+            salida.append(cuerpo)
+            salida.append(be32(crc32(cuerpo)))
+            return salida
+        }
+
+        private static func crc32(_ datos: Data) -> UInt32 {
+            var c: UInt32 = 0xFFFF_FFFF
+            for byte in datos {
+                c ^= UInt32(byte)
+                for _ in 0..<8 {
+                    c = (c & 1) != 0 ? 0xEDB8_8320 ^ (c >> 1) : c >> 1
+                }
+            }
+            return c ^ 0xFFFF_FFFF
+        }
+
+        /// zlib con bloques almacenados: cabecera, bloques de hasta 65535 bytes y Adler-32.
+        private static func zlibAlmacenado(_ datos: Data) -> Data {
+            var salida = Data([0x78, 0x01])
+            let bytes = [UInt8](datos)
+            var desplazamiento = 0
+            repeat {
+                let largo = min(65535, bytes.count - desplazamiento)
+                let ultimo = desplazamiento + largo >= bytes.count
+                salida.append(ultimo ? 1 : 0)
+                salida.append(UInt8(truncatingIfNeeded: largo))
+                salida.append(UInt8(truncatingIfNeeded: largo >> 8))
+                let negado = ~UInt16(largo)
+                salida.append(UInt8(truncatingIfNeeded: negado))
+                salida.append(UInt8(truncatingIfNeeded: negado >> 8))
+                salida.append(contentsOf: bytes[desplazamiento..<(desplazamiento + largo)])
+                desplazamiento += largo
+            } while desplazamiento < bytes.count
+            var a: UInt32 = 1
+            var b: UInt32 = 0
+            for byte in bytes {
+                a = (a + UInt32(byte)) % 65521
+                b = (b + a) % 65521
+            }
+            salida.append(be32((b << 16) | a))
+            return salida
+        }
     }
 
     /// `URLProtocol` que contesta con `ServidorSimulado` sin salir a la red.

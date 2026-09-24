@@ -28,6 +28,31 @@ public struct FootballMatch: Codable, Sendable, Hashable, Identifiable {
     public var competition: String
     public var country: String
     public var channels: [FootballChannelRef]
+    /// Escudos y colores (solo en /api/v1 y solo si se conocen); `home`/`away` siguen siendo texto.
+    public var homeTeam: TeamBadge?
+    public var awayTeam: TeamBadge?
+    /// Logo de la competición, si se conoce; `competition` sigue siendo texto.
+    public var competitionBadge: CompetitionBadge?
+
+    public init(
+        id: String, date: String, time: String, start: Int64?, title: String, home: String, away: String,
+        competition: String, country: String, channels: [FootballChannelRef], homeTeam: TeamBadge? = nil,
+        awayTeam: TeamBadge? = nil, competitionBadge: CompetitionBadge? = nil
+    ) {
+        self.id = id
+        self.date = date
+        self.time = time
+        self.start = start
+        self.title = title
+        self.home = home
+        self.away = away
+        self.competition = competition
+        self.country = country
+        self.channels = channels
+        self.homeTeam = homeTeam
+        self.awayTeam = awayTeam
+        self.competitionBadge = competitionBadge
+    }
 
     /// Hora de inicio como `Date`, si se conoce.
     public var inicio: Date? { start.map { Date(epochMs: $0) } }
@@ -44,6 +69,54 @@ public struct FootballDay: Codable, Sendable, Hashable, Identifiable {
 public enum FootballSource: String, EnumTolerante {
     case futbolenlatv, movistarplus, thesportsdb, demo
     case desconocido
+}
+
+/// Colores del club (`#rrggbb` en minúsculas) del `TeamBadgeSchema`.
+public struct TeamColors: Codable, Sendable, Hashable {
+    public var primary: String
+    public var secondary: String?
+
+    public init(primary: String, secondary: String? = nil) {
+        self.primary = primary
+        self.secondary = secondary
+    }
+}
+
+/// `TeamBadgeSchema`: escudo y colores de un equipo (módulo `teams` del
+/// backend, desde TheSportsDB). Solo llega cuando el índice conoce el equipo;
+/// si falta, la app pinta un escudo generado y un color derivado del nombre.
+public struct TeamBadge: Codable, Sendable, Hashable, Identifiable {
+    /// `idTeam` de TheSportsDB, o `k-<clave>` si solo hay colores fijados a mano.
+    public var id: String
+    public var name: String
+    /// Abreviatura de hasta 4 letras («RMA»), si la hay.
+    public var short: String?
+    /// Ruta relativa (`/api/v1/football/teams/<id>/crest?v=…`): la app le antepone su base y `/native`.
+    public var crest: String?
+    public var colors: TeamColors?
+
+    public init(id: String, name: String, short: String? = nil, crest: String? = nil, colors: TeamColors? = nil) {
+        self.id = id
+        self.name = name
+        self.short = short
+        self.crest = crest
+        self.colors = colors
+    }
+}
+
+/// `CompetitionBadgeSchema`: logo de la competición, mismo circuito que los escudos.
+public struct CompetitionBadge: Codable, Sendable, Hashable, Identifiable {
+    /// `idLeague` de TheSportsDB.
+    public var id: String
+    public var name: String
+    /// Ruta relativa (`/api/v1/football/competitions/<id>/logo?v=…`).
+    public var logo: String?
+
+    public init(id: String, name: String, logo: String? = nil) {
+        self.id = id
+        self.name = name
+        self.logo = logo
+    }
 }
 
 /// `FootballScheduleSchema`: la agenda completa.

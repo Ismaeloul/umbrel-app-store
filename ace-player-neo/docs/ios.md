@@ -10,6 +10,20 @@ quien la instala: en casa, **IPA Station** en el Umbrel con un Apple ID gratuito
 - Cómo se llega al Umbrel desde fuera de casa (Tailscale) y desde la LAN:
   `docs/acceso-remoto.md`.
 
+Desde la **0.8.0** la app lleva el diseño **«Palco»**
+(`design-explorations/src/directions/03-palco/DESIGN.md`): pestañas nativas
+Agenda · Canales · Buscar · Ajustes, la **Agenda** con la portada (tarjeta
+«versus» grande del partido destacado, que nunca reproduce sola), tira de días
+y tarjetas «versus» por secciones (En directo · Próximos · Terminados, sin
+marcador en las tarjetas), el **escenario** como única superficie de
+reproducción (a pantalla completa sobre las pestañas, para partidos y canales,
+con marcador tapado, cápsulas Señal · Dónde se emite · Más y carteles de
+fuentes), el **mini** de 72 pt como accesorio de la barra de pestañas en iOS 26
+(arriba abre, abajo detiene con «Deshacer»), **Canales** en una lista nativa,
+**Apariencia** en Ajustes (Sistema · Claro · Oscuro) y escudos y colores de
+club reales (`homeTeam`, `awayTeam`, `competitionBadge` de `GET football`,
+imágenes cacheadas en `Caches/AceNeo/imagenes/`).
+
 ## 1. Descargar la IPA
 
 ### Desde una ejecución de la CI (lo de ahora)
@@ -20,7 +34,7 @@ el workflow **«iOS (Ace Neo)»**. Si acaba en verde, deja estos artefactos:
 
 | Artefacto | Qué es |
 |---|---|
-| `AceNeo-unsigned-<versión>` | La IPA sin firmar (`AceNeo-unsigned-0.7.0.ipa`, dentro de un .zip). |
+| `AceNeo-unsigned-<versión>` | La IPA sin firmar (`AceNeo-unsigned-0.8.0.ipa`, dentro de un .zip). |
 | `AceNeo-capturas` | Capturas del simulador: pantallas en claro y oscuro y las del E2E con vídeo real. |
 | `AceNeo-tests-xcresult` | El resultado completo de los tests (se abre con Xcode). |
 | `AceNeo-pila-e2e-logs` | Logs del backend y del motor falso que usó la prueba E2E. |
@@ -29,28 +43,28 @@ Para bajarla:
 
 - **Web**: GitHub → `Ismaeloul/umbrel-app-store` → *Actions* → «iOS (Ace Neo)»
   → la última ejecución en verde de la rama → *Artifacts* →
-  `AceNeo-unsigned-0.7.0`. GitHub la da comprimida en un .zip: dentro está la
+  `AceNeo-unsigned-0.8.0`. GitHub la da comprimida en un .zip: dentro está la
   `.ipa`. Hace falta haber iniciado sesión en GitHub; los artefactos caducan a
   los 90 días.
 - **Terminal** (con `gh`):
 
   ```sh
   gh run list -R Ismaeloul/umbrel-app-store --workflow ios.yml --branch rewrite-v2 --status success --limit 1
-  gh run download <id> -R Ismaeloul/umbrel-app-store -n AceNeo-unsigned-0.7.0 -D ipa
+  gh run download <id> -R Ismaeloul/umbrel-app-store -n AceNeo-unsigned-0.8.0 -D ipa
   ```
 
-  `gh` ya descomprime el .zip: queda `ipa/AceNeo-unsigned-0.7.0.ipa`.
+  `gh` ya descomprime el .zip: queda `ipa/AceNeo-unsigned-0.8.0.ipa`.
 
 La **versión** que se ve en la app (Ajustes → Acerca de) es `MARKETING_VERSION`
-(0.7.0) y el **número de compilación** es el número de la ejecución de la CI:
+(0.8.0) y el **número de compilación** es el número de la ejecución de la CI:
 así se sabe qué IPA está instalada.
 
 ### Desde una Release (en el futuro)
 
-El mismo workflow, con un **tag `ios-v<versión>`** (por ejemplo `ios-v0.7.1`),
-compila con esa versión y **adjunta la IPA a la Release** `ios-v0.7.1` de
+El mismo workflow, con un **tag `ios-v<versión>`** (por ejemplo `ios-v0.8.0`),
+compila con esa versión y **adjunta la IPA a la Release** `ios-v0.8.0` de
 GitHub (la crea si no existe). Entonces basta con ir a *Releases* del repo y
-bajar `AceNeo-unsigned-0.7.1.ipa`, sin iniciar sesión y sin caducidad. Todavía
+bajar `AceNeo-unsigned-0.8.0.ipa`, sin iniciar sesión y sin caducidad. Todavía
 no se ha creado ningún tag `ios-v*`: se hará cuando Isma dé la app por buena en
 su iPhone.
 
@@ -139,12 +153,15 @@ desarrollo: `application-identifier`, `com.apple.developer.team-identifier`,
 - **Comprobado en la CI (simulador)**: compilación con Swift 6 estricto, tests
   unitarios (máquina de estados del reproductor con AVPlayer simulado, cambio
   de fuente, modelos contra todos los ejemplos de `@ace/shared`, cliente de API
-  con `URLProtocol`, SSE), reproducción real de un HLS en el simulador, y las
-  pruebas de interfaz: emparejar, partido → reproducir → mini-reproductor →
-  volver, borrar un favorito → deshacer, capturas en claro y oscuro y el **E2E
-  contra el backend de verdad** (motor falso + backend + ffmpeg en el runner:
-  emparejar, reproducir el HLS fMP4 del remux con AVPlayer, revocar y volver a
-  emparejar con el enlace del QR).
+  con `URLProtocol`, SSE, reglas de Palco: colores de la tarjeta versus,
+  cápsula de señal, marcador tapado, goles, caché de imágenes), reproducción
+  real de un HLS en el simulador, y las pruebas de interfaz: emparejar,
+  partido → escenario → mini → escenario (tocando y deslizando), mini hacia
+  abajo detiene con Deshacer, escenario de canal, borrar un favorito →
+  deshacer, capturas en claro y oscuro y el **E2E contra el backend de
+  verdad** (motor falso + backend + ffmpeg en el runner: emparejar, reproducir
+  el HLS fMP4 del remux con AVPlayer, revocar y volver a emparejar con el
+  enlace del QR).
 - **Sin comprobar hasta tenerla en el iPhone** (el simulador de la CI no lo
   permite): PiP, audio en segundo plano con la pantalla bloqueada, pantalla de
   bloqueo y Centro de Control, AirPlay, interrupciones (llamadas, Siri),
