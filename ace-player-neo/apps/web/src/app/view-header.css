@@ -1,3 +1,5 @@
+/* Cabecera de vista Palco: titular expandido (30 px en móvil, 44 desde 768),
+   subtítulo gris y acciones a la derecha. */
 .view-head {
   display: grid;
   gap: var(--s-4);
@@ -40,6 +42,7 @@
 .view-head__subtitle {
   color: var(--text-2);
   font-size: var(--fs-13);
+  font-weight: var(--wght-medium);
 }
 .view-head__actions {
   display: flex;
@@ -74,14 +77,15 @@
   }
 }
 @media (min-width: 768px) {
-  /* En el carril ya está el motor. Doble clase: .engine (shell.css) se carga
-     después y pondría display otra vez. */
+  /* En la barra superior ya está el motor. Doble clase: .engine (shell.css)
+     se carga después y pondría display otra vez. */
   .view-head .view-head__engine {
     display: none;
   }
   .view-head__title {
     font-size: var(--fs-44);
   }
+  /* La barra superior ya ocupa su fila: la cabecera solo añade su aire. */
   .view-head {
     padding-top: var(--s-6);
   }

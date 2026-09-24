@@ -28,8 +28,8 @@
   width: 100%;
   min-height: var(--tap);
   padding: 0 12px;
-  /* Concéntrico: radio del menú (20) menos su margen (6). */
-  border-radius: 14px;
+  /* Concéntrico: radio del menú (18) menos su margen (6). */
+  border-radius: 12px;
   color: var(--text);
   font-size: var(--fs-15);
   font-weight: var(--wght-medium);

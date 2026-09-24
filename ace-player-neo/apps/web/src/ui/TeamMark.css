@@ -62,3 +62,32 @@
   background: rgb(8 20 34 / 0.86);
   color: #fff;
 }
+
+/* ---- Escudo del backend: encima del monograma, que queda de respaldo -------- */
+.team__crest {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  /* Sombra suave bajo el escudo (filtro estático, nunca animado). */
+  filter: var(--shadow-crest);
+  opacity: 0;
+  transition: opacity var(--dur-rapido) var(--ease-out);
+}
+/* Cargado: el escudo se ve y el círculo desaparece (un PNG irregular dejaría
+   asomar el monograma por los bordes). */
+.team[data-crest='image'] {
+  background: transparent;
+  box-shadow: none;
+}
+.team[data-crest='image'] .team__crest {
+  opacity: 1;
+}
+.team[data-crest='image'] .team__plate {
+  opacity: 0;
+}
+.team[data-crest='image']::after {
+  border-radius: 30%;
+}

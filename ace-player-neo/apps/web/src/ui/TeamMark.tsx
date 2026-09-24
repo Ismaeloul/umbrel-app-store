@@ -1,19 +1,26 @@
-/* Marca de equipo: monograma con los colores del club. NUNCA escudos
-   oficiales (ni imágenes de terceros): un círculo con el color principal,
-   aro con el secundario y, a partir de 40 px, una placa con las siglas.
+/* Marca de equipo: el escudo del backend si lo hay y, si no, un monograma
+   con los colores del club (plan Palco fase 2, decisión W12).
 
-   - Colores: los de ESPN (`color` y `alternateColor`, hex sin «#»). Sin datos,
-     un tono sacado del nombre fuera de los tonos de estado (eleccion.md,
-     «Sin datos, escudo genérico con iniciales y un tono sacado del nombre»).
+   - `crest`: ruta relativa de mismo origen que da la API
+     (`/api/v1/football/teams/<id>/crest?v=…`). Se pinta un <img> ENCIMA del
+     monograma, que se queda debajo como respaldo: se ve mientras la imagen
+     carga y vuelve a verse si falla (`onError`). Nunca se enlaza a terceros.
+   - Sin `crest`: círculo con el color principal, aro con el secundario y, a
+     partir de 40 px, una placa con las siglas.
+   - Colores: `colors.primary`/`secondary` (hex, con o sin «#»). Sin datos,
+     un tono sacado del nombre fuera de los tonos de estado.
    - «Los escudos se encienden» solo en directo (`lit`): un halo con el color
-     del club normalizado por tema (src/lib/color.ts: los blancos usan su
-     segundo color en claro). El halo es una capa que aparece con opacidad.
+     del club normalizado por tema (src/lib/color.ts). Capa aparte, con
+     opacidad.
    - Decorativa: el nombre del equipo siempre está escrito al lado. */
 
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { channelTone, oklchCss, parseHex, rgbToHex, teamLight, hueFromName } from '../lib/color.ts';
 import { cx } from '../lib/cx.ts';
+import { teamInitials } from '../lib/teams.ts';
 import './TeamMark.css';
+
+export { teamInitials };
 
 export interface TeamColors {
   primary?: string | null;
@@ -22,9 +29,11 @@ export interface TeamColors {
 
 export interface TeamMarkProps {
   name: string;
-  /** Siglas para la placa (ESPN da `abbreviation`); si no, se sacan del nombre. */
-  short?: string;
-  colors?: TeamColors;
+  /** Siglas para la placa (la API da `short`); si no, se sacan del nombre. */
+  short?: string | null;
+  colors?: TeamColors | null;
+  /** Escudo del backend (ruta relativa) o null: entonces solo el monograma. */
+  crest?: string | null;
   /** Lado en px. */
   size?: number;
   /** En directo: el escudo se enciende. */
@@ -34,51 +43,19 @@ export interface TeamMarkProps {
   className?: string;
 }
 
-const SKIP = new Set([
-  'de',
-  'del',
-  'la',
-  'las',
-  'los',
-  'el',
-  'fc',
-  'cf',
-  'cd',
-  'sd',
-  'ud',
-  'sc',
-  'ac',
-  'afc',
-  'club',
-  'y',
-]);
-
-/** «Atlético de Madrid» → «AM»; «Tottenham» → «TOT»; «Real Madrid» → «RM». */
-export function teamInitials(name: string, short?: string): string {
-  if (short && short.trim()) return short.trim().slice(0, 4).toUpperCase();
-  const words = name
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .split(/[\s.-]+/)
-    .filter((word) => word && !SKIP.has(word.toLowerCase()));
-  if (words.length === 0) return '?';
-  if (words.length === 1) return (words[0] ?? '').slice(0, 3).toUpperCase();
-  return words
-    .slice(0, 3)
-    .map((word) => word[0])
-    .join('')
-    .toUpperCase();
-}
-
 export function TeamMark({
   name,
   short,
   colors,
+  crest,
   size = 28,
   lit = false,
   pattern = 'liso',
   className,
 }: TeamMarkProps) {
+  // Qué imagen ha cargado o fallado: al cambiar `crest` se vuelve a intentar.
+  const [loaded, setLoaded] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
   const primaryRgb = parseHex(colors?.primary);
   const secondaryRgb = parseHex(colors?.secondary);
   const fallbackHue = hueFromName(name);
@@ -104,14 +81,32 @@ export function TeamMark({
     '--glow-d': oklchCss(glowDark),
   } as CSSProperties;
   const withPlate = size >= 40;
+  const image = crest && crest.startsWith('/') && failed !== crest ? crest : null;
+  const crestState = !image ? 'mono' : loaded === image ? 'image' : 'loading';
   return (
     <span
       className={cx('team', `team--${pattern}`, withPlate && 'team--plate', className)}
       style={style}
       data-lit={lit ? 'true' : 'false'}
+      data-crest={crestState}
       aria-hidden="true"
     >
       {withPlate ? <b className="team__plate">{teamInitials(name, short)}</b> : null}
+      {image ? (
+        <img
+          key={image}
+          className="team__crest"
+          src={image}
+          alt=""
+          width={size}
+          height={size}
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+          onLoad={() => setLoaded(image)}
+          onError={() => setFailed(image)}
+        />
+      ) : null}
     </span>
   );
 }

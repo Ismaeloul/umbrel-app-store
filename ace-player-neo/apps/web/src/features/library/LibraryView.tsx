@@ -22,7 +22,7 @@ import type { ViewProps } from '../../app/contracts.ts';
 import { requestFocus } from '../../app/focus.ts';
 import { useLayout } from '../../app/layout.tsx';
 import { useNavigate, useSearchParam } from '../../app/router.tsx';
-import { searchFor } from '../../app/routes.ts';
+import { searchFor, VISTA_TITLE } from '../../app/routes.ts';
 import { ViewHeader } from '../../app/ViewHeader.tsx';
 import { useSwipe } from '../../lib/gestures.ts';
 import { notify } from '../../notices/index.ts';
@@ -290,7 +290,7 @@ export default function LibraryView({ active }: ViewProps) {
 
   const header = (
     <ViewHeader
-      title="Biblioteca"
+      title={VISTA_TITLE.biblioteca}
       actions={
         <>
           <IconButton

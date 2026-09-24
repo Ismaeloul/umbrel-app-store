@@ -4,8 +4,9 @@
   gap: 10px;
   width: min(420px, 100%);
   min-height: 52px;
-  padding: 6px 6px 6px 14px;
-  border-radius: var(--r-l);
+  padding: 6px 6px 6px 16px;
+  /* Palco: cápsula (una línea) que sigue redondeada si el texto crece. */
+  border-radius: 26px;
   pointer-events: auto;
   animation: toast-entra var(--dur-estandar) var(--ease-estandar) both;
 }

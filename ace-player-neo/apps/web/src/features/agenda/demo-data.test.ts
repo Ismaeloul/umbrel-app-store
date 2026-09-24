@@ -1,6 +1,18 @@
-import { FootballScheduleSchema, LiveScoreSchema, PreheatPublicSchema } from '@ace/shared';
+import {
+  FootballScheduleSchema,
+  LiveScoreSchema,
+  PreheatPublicSchema,
+  TeamBadgeSchema,
+} from '@ace/shared';
 import { describe, expect, it } from 'vitest';
-import { demoPreheat, demoSchedule, demoScores, setDemoAnchor } from './demo-data.ts';
+import {
+  demoCompetitionBadge,
+  demoPreheat,
+  demoSchedule,
+  demoScores,
+  demoTeamBadge,
+  setDemoAnchor,
+} from './demo-data.ts';
 import { matchStatus } from './domain.ts';
 import { NOW, TODAY } from './test-utils.tsx';
 
@@ -36,6 +48,37 @@ describe('agenda de la demo (inventario §3.8)', () => {
     const later = demoScores(NOW + 10 * 60_000)['demo-1'];
     expect(before).toMatchObject({ home: 1, away: 1, state: 'in' });
     expect(later).toMatchObject({ home: 2, away: 1 });
+  });
+
+  it('escudos y colores de club (W12): siglas y colores reales, sin imágenes de terceros', () => {
+    setDemoAnchor(NOW);
+    const matches = demoSchedule().days.flatMap((day) => day.matches);
+    for (const match of matches) {
+      expect(match.homeTeam, match.home).toBeDefined();
+      expect(match.awayTeam, match.away).toBeDefined();
+      for (const badge of [match.homeTeam!, match.awayTeam!]) {
+        TeamBadgeSchema.parse(badge);
+        expect(badge.id).toMatch(/^k-[a-z0-9-]+$/);
+        expect(badge.crest).toBeNull();
+        expect(badge.colors?.primary).toMatch(/^#[0-9a-f]{6}$/);
+      }
+      expect(match.competitionBadge).toEqual({
+        id: expect.stringMatching(/^k-/),
+        name: match.competition,
+        logo: null,
+      });
+    }
+    expect(demoTeamBadge('FC Barcelona')).toMatchObject({ id: 'k-fc-barcelona', short: 'BAR' });
+    // El alias «Barcelona» (demo-7) es el mismo club; «Barcelona SC» no.
+    expect(demoTeamBadge('Barcelona')?.id).toBe('k-fc-barcelona');
+    expect(demoTeamBadge('Barcelona SC')?.id).toBe('k-barcelona-sc');
+    expect(demoTeamBadge('Atlético de Madrid')?.id).toBe('k-atletico-de-madrid');
+    expect(demoTeamBadge('Equipo desconocido')).toBeUndefined();
+    expect(demoCompetitionBadge('Champions League')).toEqual({
+      id: 'k-champions-league',
+      name: 'Champions League',
+      logo: null,
+    });
   });
 
   it('señal simulada por partido (precalentado)', () => {

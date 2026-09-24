@@ -38,7 +38,7 @@
   line-height: var(--lh-snug);
   font-weight: var(--wght-head);
   font-stretch: var(--w-head);
-  letter-spacing: -0.01em;
+  letter-spacing: var(--tracking-head);
   text-wrap: balance;
 }
 .empty__text {

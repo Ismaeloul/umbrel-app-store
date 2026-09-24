@@ -1,0 +1,69 @@
+.prail {
+  --prail-gap: 12px;
+  --prail-pad: 0px;
+  --prail-item-w: 240px;
+  position: relative;
+  min-width: 0;
+}
+/* Sangrado hasta el borde: los márgenes negativos compensan el gutter y el
+   relleno lo devuelve, así el primer cartel queda alineado con el titular. */
+.prail--bleed {
+  --prail-pad: calc(var(--gutter) + var(--safe-left));
+  margin-inline: calc(-1 * (var(--gutter) + var(--safe-left)))
+    calc(-1 * (var(--gutter) + var(--safe-right)));
+}
+.prail__track {
+  display: flex;
+  gap: var(--prail-gap);
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* Aire para las sombras de los carteles sin recortarlas. */
+  padding: 6px var(--prail-pad) 14px;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: var(--prail-pad);
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.prail__track::-webkit-scrollbar {
+  display: none;
+}
+.prail__track > * {
+  flex: none;
+  width: var(--prail-item-w);
+  scroll-snap-align: start;
+}
+.prail__item {
+  display: block;
+}
+/* Flechas: solo con ratón y desbordamiento; flotan sobre los bordes. */
+.prail__arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  transform: translateY(-50%);
+  opacity: 0;
+  transition: opacity var(--dur-rapido) var(--ease-out);
+}
+.prail__arrow--prev {
+  left: calc(var(--prail-pad) + 6px);
+}
+.prail__arrow--next {
+  right: calc(var(--prail-pad) + 6px);
+}
+@media (hover: hover) and (pointer: fine) {
+  .prail--arrows:hover .prail__arrow,
+  .prail__arrow:focus-visible {
+    opacity: 1;
+  }
+}
+@media (min-width: 768px) {
+  .prail {
+    --prail-item-w: 300px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .prail__track {
+    scroll-behavior: auto;
+  }
+}

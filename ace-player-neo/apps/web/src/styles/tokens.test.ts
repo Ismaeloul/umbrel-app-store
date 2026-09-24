@@ -114,7 +114,7 @@ describe('tokens: contraste AA', () => {
       b: top.b * alpha + under.b * (1 - alpha),
     });
     expect(tokensCss).toContain(
-      '--accent-wash: light-dark(oklch(0.83 0.12 222 / 0.22), oklch(0.83 0.12 222 / 0.16))',
+      '--accent-wash: light-dark(oklch(0.889 0.181 93.4 / 0.22), oklch(0.889 0.181 93.4 / 0.16))',
     );
     for (const theme of ['light', 'dark'] as const) {
       for (const bg of BACKGROUNDS) {

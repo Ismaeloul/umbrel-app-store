@@ -143,7 +143,7 @@ const VIEWS = [
     prepare: async (page) => {
       await waitPlaying(page);
       const minimize = page.getByRole('button', { name: 'Minimizar el reproductor' });
-      const rail = page.locator('.rail a.rail__item[href*="vista=agenda"]').first();
+      const rail = page.locator('.topbar a.topbar__item[href*="vista=agenda"]').first();
       if ((await minimize.count()) > 0) {
         // Móvil: la flecha del vídeo. Los controles pueden estar ocultos (a los
         // 3,2 s): se despiertan moviendo el ratón por encima del vídeo.

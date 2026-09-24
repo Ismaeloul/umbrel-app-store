@@ -8,8 +8,7 @@
   grid-template-columns: repeat(var(--n), minmax(0, 1fr));
   padding: 4px;
   border-radius: var(--r-pill);
-  background: var(--surface-2);
-  box-shadow: inset 0 0 0 1px var(--line-soft);
+  background: var(--line-soft);
   isolation: isolate;
   /* Nunca más ancho que su sitio: en un móvil estrecho los rótulos se recortan. */
   max-width: 100%;
@@ -37,7 +36,7 @@
   background: var(--surface);
   box-shadow:
     inset 0 1px 0 var(--glass-hi),
-    0 4px 14px -6px rgb(2 8 18 / 0.35),
+    0 4px 14px -6px rgb(0 0 0 / 0.35),
     0 0 0 1px var(--line-soft);
   transform: translateX(calc(var(--i) * 100%));
   transition: transform var(--dur-estandar) var(--ease-estandar);

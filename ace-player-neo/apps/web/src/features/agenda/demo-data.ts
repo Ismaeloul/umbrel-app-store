@@ -8,9 +8,21 @@
      directo, uno en el descanso, dos por empezar y uno más tarde), y
    - se añaden dos de hoy (demo-12 en directo sin señal y demo-13 terminado).
    Los marcadores avanzan con el reloj (los goles caen en su minuto) y la
-   señal de cada partido sale del «precalentado» simulado. */
+   señal de cada partido sale del «precalentado» simulado.
 
-import type { FootballSchedule, LiveScore, PreheatPublic } from '@ace/shared';
+   Palco (fase 2, decisión W12): cada partido lleva `homeTeam`/`awayTeam`
+   (`TeamBadge` con siglas y colores reales del club) y `competitionBadge`,
+   como los daría el módulo `teams` del backend. `crest` y `logo` van a null
+   porque en demo no hay backend que sirva PNG y no se empaquetan escudos de
+   terceros: se ve el escudo generado con los colores de cada club. */
+
+import type {
+  CompetitionBadge,
+  FootballSchedule,
+  LiveScore,
+  PreheatPublic,
+  TeamBadge,
+} from '@ace/shared';
 import { addDays, madridClock, madridHour } from './domain.ts';
 
 const MINUTE = 60_000;
@@ -159,6 +171,65 @@ const SAMPLES: Sample[] = [
   },
 ];
 
+/* Siglas y colores (principal / secundario) de los clubes de la muestra, como
+   los devolvería el backend (`TeamBadge.colors`, hex en minúsculas). Colores
+   aproximados de cada club; «Barcelona» es un alias de FC Barcelona. */
+const CLUBS: Record<string, { short: string; primary: string; secondary: string | null }> = {
+  'Real Madrid': { short: 'RMA', primary: '#febe10', secondary: '#1a1a5e' },
+  'FC Barcelona': { short: 'BAR', primary: '#a50044', secondary: '#004d98' },
+  Barcelona: { short: 'BAR', primary: '#a50044', secondary: '#004d98' },
+  Juventus: { short: 'JUV', primary: '#101010', secondary: '#ffffff' },
+  Inter: { short: 'INT', primary: '#010e80', secondary: '#101010' },
+  'AC Milan': { short: 'MIL', primary: '#fb090b', secondary: '#101010' },
+  'Manchester City': { short: 'MCI', primary: '#6cabdd', secondary: '#1c2c5b' },
+  Arsenal: { short: 'ARS', primary: '#ef0107', secondary: '#063672' },
+  Liverpool: { short: 'LIV', primary: '#c8102e', secondary: '#00b2a9' },
+  'Atlético de Madrid': { short: 'ATM', primary: '#cb3524', secondary: '#272e61' },
+  'Real Sociedad': { short: 'RSO', primary: '#0067b1', secondary: '#ffffff' },
+  Villarreal: { short: 'VIL', primary: '#ffe667', secondary: '#005187' },
+  Sevilla: { short: 'SEV', primary: '#d4021d', secondary: '#ffffff' },
+  Girona: { short: 'GIR', primary: '#cd2534', secondary: '#ffffff' },
+  Mallorca: { short: 'MLL', primary: '#e20613', secondary: '#1b1b1b' },
+  Espanyol: { short: 'ESP', primary: '#007fc8', secondary: '#ffffff' },
+  'Real Betis': { short: 'BET', primary: '#00954c', secondary: '#ffffff' },
+  'Athletic Club': { short: 'ATH', primary: '#ee2523', secondary: '#101010' },
+  España: { short: 'ESP', primary: '#aa151b', secondary: '#f1bf00' },
+  Marruecos: { short: 'MAR', primary: '#c1272d', secondary: '#006233' },
+  Portugal: { short: 'POR', primary: '#006600', secondary: '#ff0000' },
+  'Barcelona SC': { short: 'BSC', primary: '#f9d616', secondary: '#101010' },
+  Emelec: { short: 'EME', primary: '#0033a0', secondary: '#9ea3a8' },
+};
+
+/** «Atlético de Madrid» → «k-atletico-de-madrid» (id `k-<clave>` de un equipo sin TheSportsDB). */
+function keyId(prefix: string, name: string): string {
+  const slug = name
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  return `${prefix}-${slug || 'x'}`;
+}
+
+/** Escudo de la demo: siglas y colores reales, sin imagen (crest: null). */
+export function demoTeamBadge(name: string): TeamBadge | undefined {
+  const club = CLUBS[name];
+  if (!club) return undefined;
+  const canonical = name === 'Barcelona' ? 'FC Barcelona' : name;
+  return {
+    id: keyId('k', canonical),
+    name: canonical,
+    short: club.short,
+    crest: null,
+    colors: { primary: club.primary, secondary: club.secondary },
+  };
+}
+
+/** Competición de la demo: nombre, sin logo (logo: null). */
+export function demoCompetitionBadge(name: string): CompetitionBadge {
+  return { id: keyId('k', name), name, logo: null };
+}
+
 /* Ancla fija por carga de página, redondeada a 5 min: volver a pedir la
    agenda (Actualizar) no mueve las horas. */
 let anchor = Math.floor(Date.now() / (5 * MINUTE)) * 5 * MINUTE;
@@ -216,21 +287,28 @@ export function demoSchedule(): FootballSchedule {
     matches: placed
       .filter((item) => item.date === date)
       .sort((a, b) => a.start - b.start)
-      .map(({ sample, start, time }) => ({
-        id: sample.id,
-        date,
-        time,
-        start,
-        title: `${sample.home} vs ${sample.away}`,
-        home: sample.home,
-        away: sample.away,
-        competition: sample.competition,
-        country: 'España',
-        channels: sample.channels.map((name, index) => ({
-          id: `demo-channel-${sample.id}-${index}`,
-          name,
-        })),
-      })),
+      .map(({ sample, start, time }) => {
+        const homeTeam = demoTeamBadge(sample.home);
+        const awayTeam = demoTeamBadge(sample.away);
+        return {
+          id: sample.id,
+          date,
+          time,
+          start,
+          title: `${sample.home} vs ${sample.away}`,
+          home: sample.home,
+          away: sample.away,
+          competition: sample.competition,
+          country: 'España',
+          channels: sample.channels.map((name, index) => ({
+            id: `demo-channel-${sample.id}-${index}`,
+            name,
+          })),
+          ...(homeTeam ? { homeTeam } : {}),
+          ...(awayTeam ? { awayTeam } : {}),
+          competitionBadge: demoCompetitionBadge(sample.competition),
+        };
+      }),
   }));
   return {
     generatedAt: new Date(anchor).toISOString(),

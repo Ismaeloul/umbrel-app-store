@@ -36,3 +36,43 @@
   font-size: calc(var(--s) * 0.64);
   bottom: -0.12em;
 }
+
+/* ---- Tesela 16:9 (carteles de fuente y de canal, Palco) ---------------------
+   `--s` es el alto; la cifra sigue enorme abajo a la derecha y la sigla del
+   canal va arriba a la izquierda, con una luz del tono detrás. */
+.dorsal--tile {
+  width: calc(var(--s) * 16 / 9);
+  border-radius: calc(var(--s) * 0.16);
+  background:
+    radial-gradient(80% 90% at 100% 100%, var(--tone-hi), transparent 70%),
+    linear-gradient(160deg, var(--tone), color-mix(in oklab, var(--tone) 70%, #0a0d12));
+}
+.dorsal--tile b {
+  right: 0.06em;
+  bottom: -0.16em;
+  font-size: calc(var(--s) * 0.86);
+  color: rgb(255 255 255 / 0.92);
+}
+.dorsal--tile.dorsal--letter b {
+  bottom: -0.04em;
+  font-size: calc(var(--s) * 0.78);
+}
+.dorsal--tile.dorsal--long b {
+  font-size: calc(var(--s) * 0.6);
+  bottom: -0.1em;
+}
+.dorsal__abbrev {
+  position: absolute;
+  top: calc(var(--s) * 0.1);
+  left: calc(var(--s) * 0.12);
+  max-width: calc(100% - var(--s) * 0.24);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgb(255 255 255 / 0.9);
+  font-size: max(11px, calc(var(--s) * 0.17));
+  font-weight: 760;
+  font-stretch: var(--w-tight);
+  letter-spacing: 0.08em;
+  line-height: 1;
+}

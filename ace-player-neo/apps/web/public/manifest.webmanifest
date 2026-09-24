@@ -9,8 +9,8 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#081829",
-  "theme_color": "#081829",
+  "background_color": "#05070a",
+  "theme_color": "#05070a",
   "categories": ["entertainment", "sports"],
   "shortcuts": [
     {

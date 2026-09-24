@@ -1,0 +1,229 @@
+.versus {
+  --h: #333;
+  --a: #666;
+  --versus-pad: 12px;
+  --versus-r: var(--r-m);
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--versus-r);
+  isolation: isolate;
+  color: #fff;
+  text-align: left;
+  box-shadow: var(--shadow-poster);
+  /* Todo lo de dentro usa los tokens oscuros (siempre hay imagen o color). */
+  color-scheme: dark;
+}
+.versus:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* Como enlace o botón el cursor lo dice; como div, nada. */
+a.versus,
+button.versus {
+  cursor: pointer;
+}
+button.versus {
+  padding: 0;
+  border: 0;
+  font: inherit;
+}
+
+/* ---- Las dos mitades con los colores de club --------------------------------- */
+.versus__halves {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.versus__half {
+  display: block;
+}
+.versus__half--home {
+  background:
+    radial-gradient(90% 100% at 0% 0%, rgb(255 255 255 / 0.14), transparent 60%),
+    linear-gradient(160deg, var(--h), color-mix(in oklab, var(--h) 78%, #0a0d12));
+}
+.versus__half--away {
+  background:
+    radial-gradient(90% 100% at 100% 100%, rgb(255 255 255 / 0.1), transparent 60%),
+    linear-gradient(160deg, color-mix(in oklab, var(--a) 88%, #fff), var(--a));
+}
+/* El velo: oscurece arriba y abajo para que cápsulas y nombres se lean sobre
+   cualquier color (también sobre un blanco). */
+.versus__veil {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(
+      180deg,
+      rgb(0 0 0 / 0.42) 0%,
+      rgb(0 0 0 / 0.05) 30%,
+      rgb(0 0 0 / 0.05) 45%,
+      rgb(0 0 0 / 0.82) 100%
+    ),
+    radial-gradient(60% 55% at 50% 52%, rgb(0 0 0 / 0.28), transparent 70%);
+}
+
+/* ---- Arriba: chip de cuándo y marcas ----------------------------------------- */
+.versus__top {
+  position: absolute;
+  top: var(--versus-pad);
+  left: var(--versus-pad);
+  right: var(--versus-pad);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.versus__when {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.versus__marks {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+/* ---- Centro: escudos grandes con sombra y la pastilla de competición -------- */
+.versus__crests {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transform: translate(-50%, -50%);
+}
+.versus__crest {
+  filter: var(--shadow-crest);
+}
+.versus__comp {
+  flex: none;
+}
+
+/* ---- Abajo: nombres en negrita y competición en gris ------------------------- */
+.versus__bottom {
+  position: absolute;
+  left: var(--versus-pad);
+  right: var(--versus-pad);
+  bottom: var(--versus-pad);
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  /* Sitio para la cápsula de señal de la esquina. */
+  padding-right: 34%;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
+}
+.versus__names {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 0.35em;
+  min-width: 0;
+  font-size: var(--fs-15);
+  line-height: 1.15;
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: -0.015em;
+}
+.versus__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: inherit;
+}
+.versus__vs {
+  color: rgb(255 255 255 / 0.7);
+  /* Nunca por debajo de 11 px (la tarjeta pequeña baja los nombres a 13). */
+  font-size: max(var(--fs-11), 0.8em);
+  font-weight: 600;
+  font-stretch: var(--w-text);
+  letter-spacing: 0;
+}
+.versus__competition {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgb(255 255 255 / 0.76);
+  font-size: var(--fs-12);
+  font-weight: 600;
+}
+.versus__signal {
+  position: absolute;
+  right: var(--versus-pad);
+  bottom: var(--versus-pad);
+  display: inline-flex;
+  align-items: flex-end;
+}
+
+/* ---- Estados ------------------------------------------------------------------ */
+.versus.is-watching {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    var(--shadow-poster);
+}
+.versus.is-selected::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 2px var(--accent);
+  pointer-events: none;
+}
+.versus.is-done .versus__halves {
+  opacity: 0.72;
+}
+
+/* ---- Tamaños ------------------------------------------------------------------ */
+.versus--sm {
+  --versus-pad: 10px;
+  --versus-r: var(--r-s);
+}
+.versus--sm .versus__names {
+  font-size: var(--fs-13);
+}
+.versus--sm .versus__competition {
+  font-size: var(--fs-11);
+}
+.versus--sm .versus__crests {
+  gap: 6px;
+}
+.versus--sm .versus__marks .versus__mine .capsule__text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.versus--lg .versus__names {
+  font-size: var(--fs-17);
+}
+.versus--xl {
+  --versus-pad: 16px;
+  --versus-r: var(--r-xl);
+}
+.versus--xl .versus__names {
+  font-size: var(--fs-22);
+}
+.versus--xl .versus__competition {
+  font-size: var(--fs-13);
+}
+.versus--xl .versus__crests {
+  gap: 16px;
+}
+.versus--xl .versus__bottom {
+  gap: 4px;
+}
+@media (min-width: 768px) {
+  .versus--xl .versus__names {
+    font-size: var(--fs-30);
+  }
+}

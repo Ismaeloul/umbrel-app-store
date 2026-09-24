@@ -157,20 +157,24 @@ const nav = () => screen.getAllByRole('navigation', { name: 'Principal' });
 const app = () => document.querySelector('.app') as HTMLElement;
 
 describe('armazón', () => {
-  it('navegación con los cuatro destinos (barra y carril) y enlace para saltar al contenido', async () => {
+  it('navegación con los cuatro destinos (barra inferior y superior) y enlace para saltar al contenido', async () => {
     renderApp();
     expect(nav()).toHaveLength(2);
+    // La barra superior tiene la marca, los destinos y la ayuda de atajos.
+    expect(document.querySelector('.topbar')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Atajos de teclado' })).toBeInTheDocument();
     for (const bar of nav()) {
       const links = within(bar).getAllByRole('link');
       expect(links.map((a) => a.textContent)).toEqual(
-        expect.arrayContaining(['Agenda', 'Biblioteca', 'Buscar', 'Ajustes']),
+        expect.arrayContaining(['Agenda', 'Canales', 'Buscar', 'Ajustes']),
       );
       expect(within(bar).getByRole('link', { name: 'Agenda' })).toHaveAttribute(
         'aria-current',
         'page',
       );
-      // Enlaces de verdad: se pueden abrir en otra pestaña.
-      expect(within(bar).getByRole('link', { name: 'Biblioteca' })).toHaveAttribute(
+      // Enlaces de verdad: se pueden abrir en otra pestaña (la vista sigue
+      // siendo `biblioteca` en la URL aunque se titule «Canales»).
+      expect(within(bar).getByRole('link', { name: 'Canales' })).toHaveAttribute(
         'href',
         '?vista=biblioteca',
       );
@@ -190,10 +194,8 @@ describe('armazón', () => {
     renderApp();
     await screen.findByRole('heading', { level: 1, name: 'Agenda' });
     fireEvent.change(screen.getByLabelText('Nota de agenda'), { target: { value: 'hola' } });
-    fireEvent.click(within(nav()[0] as HTMLElement).getByRole('link', { name: 'Biblioteca' }));
-    expect(
-      await screen.findByRole('heading', { level: 1, name: 'Biblioteca' }),
-    ).toBeInTheDocument();
+    fireEvent.click(within(nav()[0] as HTMLElement).getByRole('link', { name: 'Canales' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Canales' })).toBeInTheDocument();
     expect(location.search).toBe('?vista=biblioteca');
     const agenda = document.querySelector('.view[data-vista="agenda"]') as HTMLElement;
     expect(agenda.style.display).toBe('none');
@@ -222,9 +224,7 @@ describe('armazón', () => {
         new KeyboardEvent('keydown', { key: '/', bubbles: true, cancelable: true }),
       );
     });
-    expect(
-      await screen.findByRole('heading', { level: 1, name: 'Biblioteca' }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Canales' })).toBeInTheDocument();
   });
 
   it('el reproductor es UNO: de grande en el partido a «mini» fuera sin recrearse', async () => {
@@ -270,10 +270,10 @@ describe('armazón', () => {
     expect(document.querySelector('.toaster')).toHaveAttribute('data-immersive', 'true');
   });
 
-  it('escritorio: carril + vista + panel lateral plegable (se recuerda)', async () => {
+  it('escritorio: barra superior + vista + panel lateral plegable (se recuerda)', async () => {
     setViewport(1440, 900);
     renderApp('?vista=biblioteca');
-    await screen.findByRole('heading', { level: 1, name: 'Biblioteca' });
+    await screen.findByRole('heading', { level: 1, name: 'Canales' });
     expect(app()).toHaveAttribute('data-layout', 'wide');
     expect(await screen.findByText('Contenido del panel')).toBeInTheDocument();
     expect(screen.getByRole('complementary', { name: 'Panel lateral' })).toBeInTheDocument();
@@ -294,10 +294,10 @@ describe('armazón', () => {
     expect(app()).toHaveAttribute('data-column', 'true');
   });
 
-  it('tableta (768-1023): carril y sin panel lateral', async () => {
+  it('tableta (768-1023): barra superior y sin panel lateral', async () => {
     setViewport(800, 1024);
     renderApp('?vista=biblioteca');
-    await screen.findByRole('heading', { level: 1, name: 'Biblioteca' });
+    await screen.findByRole('heading', { level: 1, name: 'Canales' });
     expect(app()).toHaveAttribute('data-layout', 'tablet');
     expect(screen.queryByText('Contenido del panel')).toBeNull();
   });
