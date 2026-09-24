@@ -110,6 +110,8 @@ const device: Device = {
   revokedAt: null,
 };
 
+/* Con escudos, colores y logo (módulo `teams`): la URL lleva la versión del
+   fichero (`?v=<etag>`), que es lo que permite la caché inmutable. */
 const match: FootballMatch = {
   id: 'fltv-2026-09-23-3',
   date: '2026-09-23',
@@ -121,6 +123,40 @@ const match: FootballMatch = {
   competition: 'LaLiga',
   country: 'Spain',
   channels: [{ id: 'm-laliga', name: 'M+ LaLiga' }],
+  homeTeam: {
+    id: '133738',
+    name: 'Equipo Local',
+    short: 'LOC',
+    crest: '/api/v1/football/teams/133738/crest?v=3f2a1b9c5d7e8f01',
+    colors: { primary: '#1d3f9a', secondary: '#f2c94c' },
+  },
+  awayTeam: {
+    id: 'k-equipo-visitante',
+    name: 'Equipo Visitante',
+    short: null,
+    crest: null,
+    colors: { primary: '#a50044', secondary: null },
+  },
+  competitionBadge: {
+    id: '4335',
+    name: 'Spanish La Liga',
+    logo: '/api/v1/football/competitions/4335/logo?v=9b8c7d6e5f4a3b21',
+  },
+};
+
+/* Sin nada del módulo `teams` (equipo desconocido o servicio apagado): el
+   cliente pinta el escudo generado y un color derivado del nombre. */
+const plainMatch: FootballMatch = {
+  id: 'fltv-2026-09-24-1',
+  date: '2026-09-24',
+  time: '19:00',
+  start: AT_MS + 24 * 60 * 60 * 1000,
+  title: 'Otro Local - Otro Visitante',
+  home: 'Otro Local',
+  away: 'Otro Visitante',
+  competition: 'Copa del Rey',
+  country: 'Spain',
+  channels: [{ id: 'm-copa', name: 'M+ Vamos' }],
 };
 
 const candidate: ResolutionCandidate = {
@@ -372,7 +408,10 @@ export const V1_FIXTURES = {
     demo: false,
     limited: false,
     partial: false,
-    days: [{ date: '2026-09-23', matches: [match] }],
+    days: [
+      { date: '2026-09-23', matches: [match] },
+      { date: '2026-09-24', matches: [plainMatch] },
+    ],
   },
   footballResolve: {
     status: 'found',
@@ -618,5 +657,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   );
 }
 
-/** Para el test: qué rutas no tienen ejemplo porque no responden JSON. */
-export const NON_JSON_ROUTE_IDS: readonly V1RouteId[] = ['events', 'video'];
+/** Para el test: qué rutas no tienen ejemplo porque no responden JSON (SSE, vídeo y PNG). */
+export const NON_JSON_ROUTE_IDS: readonly V1RouteId[] = [
+  'events',
+  'video',
+  'footballTeamCrest',
+  'footballCompetitionLogo',
+];

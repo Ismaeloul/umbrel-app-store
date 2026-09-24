@@ -1,0 +1,12 @@
+{
+  "leagues": [
+    {
+      "idLeague": "4335",
+      "strLeague": "Spanish La Liga",
+      "strBadge": "https://r2.thesportsdb.com/images/media/league/badge/ja4it51687628717.png",
+      "strLogo": "https://r2.thesportsdb.com/images/media/league/logo/gq4b1r1687707889.png",
+      "strCountry": "Spain",
+      "strSport": "Soccer"
+    }
+  ]
+}

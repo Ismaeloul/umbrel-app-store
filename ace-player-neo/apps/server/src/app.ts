@@ -62,6 +62,7 @@ import * as scannerRoutes from './modules/scanner/routes.js';
 import * as searchRoutes from './modules/search/routes.js';
 import * as sourcesRoutes from './modules/sources/routes.js';
 import * as stateRoutes from './modules/state/routes.js';
+import * as teamsRoutes from './modules/teams/routes.js';
 import type { Services } from './services.js';
 
 declare module 'fastify' {
@@ -91,6 +92,7 @@ export const MODULE_ROUTES = [
   remuxRoutes,
   playbackRoutes,
   footballRoutes,
+  teamsRoutes,
   authRoutes,
   eventsRoutes,
   diagnosticsRoutes,

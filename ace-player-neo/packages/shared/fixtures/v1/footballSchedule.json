@@ -21,7 +21,43 @@
           "away": "Equipo Visitante",
           "competition": "LaLiga",
           "country": "Spain",
-          "channels": [{ "id": "m-laliga", "name": "M+ LaLiga" }]
+          "channels": [{ "id": "m-laliga", "name": "M+ LaLiga" }],
+          "homeTeam": {
+            "id": "133738",
+            "name": "Equipo Local",
+            "short": "LOC",
+            "crest": "/api/v1/football/teams/133738/crest?v=3f2a1b9c5d7e8f01",
+            "colors": { "primary": "#1d3f9a", "secondary": "#f2c94c" }
+          },
+          "awayTeam": {
+            "id": "k-equipo-visitante",
+            "name": "Equipo Visitante",
+            "short": null,
+            "crest": null,
+            "colors": { "primary": "#a50044", "secondary": null }
+          },
+          "competitionBadge": {
+            "id": "4335",
+            "name": "Spanish La Liga",
+            "logo": "/api/v1/football/competitions/4335/logo?v=9b8c7d6e5f4a3b21"
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-09-24",
+      "matches": [
+        {
+          "id": "fltv-2026-09-24-1",
+          "date": "2026-09-24",
+          "time": "19:00",
+          "start": 1790274600000,
+          "title": "Otro Local - Otro Visitante",
+          "home": "Otro Local",
+          "away": "Otro Visitante",
+          "competition": "Copa del Rey",
+          "country": "Spain",
+          "channels": [{ "id": "m-copa", "name": "M+ Vamos" }]
         }
       ]
     }

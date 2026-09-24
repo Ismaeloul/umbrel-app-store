@@ -28,6 +28,7 @@ import type { RemuxService } from '../remux/types.js';
 import type { ScannerService } from '../scanner/types.js';
 import type { SourcesService } from '../sources/types.js';
 import type { StateService } from '../state/types.js';
+import type { TeamsService } from '../teams/types.js';
 
 export interface HealthDeps extends CoreDeps {
   readonly state: StateService;
@@ -38,6 +39,12 @@ export interface HealthDeps extends CoreDeps {
   readonly playback: PlaybackService;
   readonly remux: RemuxService;
   readonly football: FootballService;
+  /**
+   * Escudos y colores (nivel 1 de la salud: solo avisos en `warnings[]`, sin
+   * componente propio). Opcional para los fakes de los tests; en producción
+   * siempre llega.
+   */
+  readonly teams?: TeamsService;
   readonly diagnostics: DiagnosticsService;
   readonly events: EventsHub;
   /**

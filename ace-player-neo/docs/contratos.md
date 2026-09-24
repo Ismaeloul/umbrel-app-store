@@ -43,8 +43,9 @@ scripts/smoke-bundle.mjs         prueba de humo del server.js empaquetado (paso 
 ```
 
 Módulos: `state`, `net`, `directories`, `engine`, `playback`, `remux`,
-`scanner`, `sources`, `football`, `auth`, `events`, `diagnostics`, `health`,
-`search`.
+`scanner`, `sources`, `football`, `teams` (fase 2: escudos y colores desde
+TheSportsDB, `docs/cobertura/teams.md`), `auth`, `events`, `diagnostics`,
+`health`, `search`.
 
 ## 2. Qué fichero es de quién
 
@@ -213,6 +214,7 @@ T-032 y T-033.
 | remux | `RemuxService` | T-003 (rangos), T-035, T-112, T-125 | B-217–B-226 |
 | playback | `PlaybackService` | T-037, T-038, T-115; sesiones y visores con el motor falso | B-005–B-008, B-277 |
 | football | `FootballService` | T-006 a T-016, T-018 a T-029, T-039 a T-044, T-056 a T-058, T-065 a T-071, T-078, T-081 a T-087, T-095 a T-100, T-113, T-114 | B-115–B-181 |
+| teams | `TeamsService` (`decorateSchedule`, `serveCrest`, `serveCompetitionLogo`, `runOnce`, `healthInfo`) | nuevos (fase 2, informe `fase2-server.md` §10) | — |
 | auth | `AuthService` | nuevos (plan E1.8) | B-227–B-234 |
 | events | `EventsHub` | nuevos (plan E1.7) | B-005 (aviso al momento) |
 | diagnostics | `DiagnosticsService` | nuevos (plan E1.7) | — |

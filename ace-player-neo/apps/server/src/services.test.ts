@@ -15,7 +15,7 @@ import { createTestCore } from '../test/helpers/index.js';
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 describe('createServices', () => {
-  it('monta los 14 servicios sin ciclos y ninguno es ya un esqueleto (paso 1.3)', () => {
+  it('monta los 15 servicios sin ciclos y ninguno es ya un esqueleto (paso 1.3; teams en la fase 2)', () => {
     const services = createServices(createTestCore());
     expect([...SERVICE_ORDER].sort()).toEqual([...SERVER_MODULES].sort());
     for (const name of SERVICE_ORDER) {

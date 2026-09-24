@@ -66,6 +66,29 @@ function errorList(route: V1RouteEntry): JsonObject[] {
   });
 }
 
+/* Qué devuelve cada ruta binaria (la tabla solo dice `content: 'binary'`).
+   Una ruta binaria nueva se documenta aquí; si falta, la generación falla. */
+const BINARY_RESPONSES: Readonly<Record<string, JsonObject>> = {
+  video: {
+    description: 'Lista m3u8 reescrita con `?t=` o segmento fMP4. Admite Range (206/416).',
+    content: {
+      'application/vnd.apple.mpegurl': { schema: { type: 'string' } },
+      'video/mp4': { schema: { type: 'string', format: 'binary' } },
+      'video/iso.segment': { schema: { type: 'string', format: 'binary' } },
+    },
+  },
+  footballTeamCrest: {
+    description:
+      'Escudo en PNG con `ETag`, `Last-Modified` y `Cache-Control` (inmutable con `?v=`; 304 con `If-None-Match`).',
+    content: { 'image/png': { schema: { type: 'string', format: 'binary' } } },
+  },
+  footballCompetitionLogo: {
+    description:
+      'Logo en PNG con `ETag`, `Last-Modified` y `Cache-Control` (inmutable con `?v=`; 304 con `If-None-Match`).',
+    content: { 'image/png': { schema: { type: 'string', format: 'binary' } } },
+  },
+};
+
 function successResponse(route: V1RouteEntry): JsonObject {
   if (route.content === 'sse') {
     return {
@@ -74,14 +97,9 @@ function successResponse(route: V1RouteEntry): JsonObject {
     };
   }
   if (route.content === 'binary') {
-    return {
-      description: 'Lista m3u8 reescrita con `?t=` o segmento fMP4. Admite Range (206/416).',
-      content: {
-        'application/vnd.apple.mpegurl': { schema: { type: 'string' } },
-        'video/mp4': { schema: { type: 'string', format: 'binary' } },
-        'video/iso.segment': { schema: { type: 'string', format: 'binary' } },
-      },
-    };
+    const documented = BINARY_RESPONSES[route.id];
+    if (!documented) throw new Error(`la ruta binaria ${route.id} no dice qué tipo devuelve`);
+    return documented;
   }
   if (!route.response) throw new Error(`la ruta ${route.id} es JSON pero no tiene esquema`);
   return {

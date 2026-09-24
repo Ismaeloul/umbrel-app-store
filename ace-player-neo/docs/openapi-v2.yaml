@@ -19,6 +19,7 @@ tags:
   - name: scanner
   - name: sources
   - name: football
+  - name: teams
   - name: auth
   - name: events
   - name: diagnostics
@@ -4764,6 +4765,111 @@ paths:
                                     - id
                                     - name
                                   additionalProperties: false
+                              homeTeam:
+                                type: object
+                                properties:
+                                  id:
+                                    type: string
+                                    pattern: ^[A-Za-z0-9_-]{1,64}$
+                                  name:
+                                    type: string
+                                  short:
+                                    anyOf:
+                                      - type: string
+                                        maxLength: 4
+                                      - type: "null"
+                                  crest:
+                                    anyOf:
+                                      - type: string
+                                        format: starts_with
+                                        pattern: ^\/.*
+                                      - type: "null"
+                                  colors:
+                                    anyOf:
+                                      - type: object
+                                        properties:
+                                          primary:
+                                            type: string
+                                            pattern: ^#[0-9a-f]{6}$
+                                          secondary:
+                                            anyOf:
+                                              - type: string
+                                                pattern: ^#[0-9a-f]{6}$
+                                              - type: "null"
+                                        required:
+                                          - primary
+                                          - secondary
+                                        additionalProperties: false
+                                      - type: "null"
+                                required:
+                                  - id
+                                  - name
+                                  - short
+                                  - crest
+                                  - colors
+                                additionalProperties: false
+                              awayTeam:
+                                type: object
+                                properties:
+                                  id:
+                                    type: string
+                                    pattern: ^[A-Za-z0-9_-]{1,64}$
+                                  name:
+                                    type: string
+                                  short:
+                                    anyOf:
+                                      - type: string
+                                        maxLength: 4
+                                      - type: "null"
+                                  crest:
+                                    anyOf:
+                                      - type: string
+                                        format: starts_with
+                                        pattern: ^\/.*
+                                      - type: "null"
+                                  colors:
+                                    anyOf:
+                                      - type: object
+                                        properties:
+                                          primary:
+                                            type: string
+                                            pattern: ^#[0-9a-f]{6}$
+                                          secondary:
+                                            anyOf:
+                                              - type: string
+                                                pattern: ^#[0-9a-f]{6}$
+                                              - type: "null"
+                                        required:
+                                          - primary
+                                          - secondary
+                                        additionalProperties: false
+                                      - type: "null"
+                                required:
+                                  - id
+                                  - name
+                                  - short
+                                  - crest
+                                  - colors
+                                additionalProperties: false
+                              competitionBadge:
+                                type: object
+                                properties:
+                                  id:
+                                    type: string
+                                    pattern: ^[A-Za-z0-9_-]{1,64}$
+                                  name:
+                                    type: string
+                                  logo:
+                                    anyOf:
+                                      - type: string
+                                        format: starts_with
+                                        pattern: ^\/.*
+                                      - type: "null"
+                                required:
+                                  - id
+                                  - name
+                                  - logo
+                                additionalProperties: false
                             required:
                               - id
                               - date
@@ -5948,6 +6054,150 @@ paths:
       x-native-path: /native/api/v1/scores
       x-side-effects: false
       x-legacy-twin: GET /api/scores
+      x-errors:
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
+  /api/v1/football/teams/{teamId}/crest:
+    get:
+      operationId: footballTeamCrest
+      tags:
+        - teams
+      summary: Escudo del equipo (PNG) con ETag y caché larga
+      description: "El `id` sale de `homeTeam`/`awayTeam` de la agenda. Con `?v=<etag>` (la URL que da la agenda) la respuesta es `public, max-age=31536000, immutable`; sin él, `private, max-age=86400`. `If-None-Match` da 304 sin cuerpo. Un id sin escudo da 404 `not_found`: el cliente pinta el escudo generado. Sin Range ni HEAD."
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{1,64}$
+        - name: v
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[a-f0-9]{8,16}$
+      responses:
+        "200":
+          description: Escudo en PNG con `ETag`, `Last-Modified` y `Cache-Control` (inmutable con `?v=`; 304 con `If-None-Match`).
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+        - deviceBearer: []
+      x-access: any
+      x-native-path: /native/api/v1/football/teams/{teamId}/crest
+      x-side-effects: false
+      x-legacy-twin: null
+      x-errors:
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
+  /api/v1/football/competitions/{competitionId}/logo:
+    get:
+      operationId: footballCompetitionLogo
+      tags:
+        - teams
+      summary: Logo de la competición (PNG) con ETag y caché larga
+      description: El `id` sale de `competitionBadge` de la agenda. Mismas cabeceras y caché que el escudo del equipo.
+      parameters:
+        - name: competitionId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{1,64}$
+        - name: v
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[a-f0-9]{8,16}$
+      responses:
+        "200":
+          description: Logo en PNG con `ETag`, `Last-Modified` y `Cache-Control` (inmutable con `?v=`; 304 con `If-None-Match`).
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+        - deviceBearer: []
+      x-access: any
+      x-native-path: /native/api/v1/football/competitions/{competitionId}/logo
+      x-side-effects: false
+      x-legacy-twin: null
       x-errors:
         - code: validation_error
           status: 400

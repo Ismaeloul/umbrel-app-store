@@ -410,6 +410,17 @@ export function createHealthService(deps: HealthDeps): HealthService {
       if (ai.status === 'model_missing') {
         warnings.push({ code: 'ai_model_missing', message: `Falta el modelo ${model} en Ollama.` });
       }
+      /* Escudos (módulo `teams`): un aviso si la última vuelta no pudo con
+         TheSportsDB o con el disco; apagado o calentando no es un aviso. */
+      const teams = deps.teams
+        ? read('escudos', warnings, () => deps.teams?.healthInfo() ?? null, null)
+        : null;
+      if (teams?.status === 'degraded') {
+        warnings.push({
+          code: 'crests_degraded',
+          message: `Escudos: ${teams.detail ?? 'la última vuelta falló'}; ${teams.pending} equipos pendientes.`,
+        });
+      }
 
       const sessions = playback?.sessions ?? [];
       return {

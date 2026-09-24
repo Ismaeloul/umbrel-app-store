@@ -65,6 +65,8 @@ export interface AppConfig {
     readonly settingsFile: string;
     readonly sessionsFile: string;
     readonly diagnosticsFile: string;
+    /** Índice y PNG de escudos y logos (`<v2Dir>/teams`, módulo `teams`). */
+    readonly teamsDir: string;
   };
   readonly engine: {
     readonly host: string;
@@ -103,6 +105,14 @@ export interface AppConfig {
     readonly days: number;
     readonly demoOnly: boolean;
     readonly timezone: 'Europe/Madrid';
+  };
+  readonly teams: {
+    /**
+     * Escudos y colores desde TheSportsDB (módulo `teams`). Apagado en demo
+     * (`FOOTBALL_DEMO_ONLY`) o con `ACE_TEAM_CRESTS=false`: entonces no toca
+     * red ni disco y la agenda sale sin `homeTeam`/`awayTeam`.
+     */
+    readonly enabled: boolean;
   };
   readonly ai: {
     readonly ollamaBaseUrl: string;
@@ -263,6 +273,7 @@ export function loadConfig(env: Env = process.env): LoadedConfig {
       settingsFile: path.join(v2Dir, 'settings.json'),
       sessionsFile: path.join(v2Dir, 'sessions.json'),
       diagnosticsFile: path.join(v2Dir, 'diagnostics.jsonl'),
+      teamsDir: path.join(v2Dir, 'teams'),
     },
     engine: {
       host: sanitizeHost(env.ACESTREAM_HOST, DEFAULTS.acestreamHost),
@@ -304,6 +315,9 @@ export function loadConfig(env: Env = process.env): LoadedConfig {
       days: intVar('FOOTBALL_DAYS', 3, 14, 7),
       demoOnly: env.FOOTBALL_DEMO_ONLY === 'true',
       timezone: 'Europe/Madrid',
+    },
+    teams: {
+      enabled: env.FOOTBALL_DEMO_ONLY !== 'true' && env.ACE_TEAM_CRESTS !== 'false',
     },
     ai: {
       ollamaBaseUrl,

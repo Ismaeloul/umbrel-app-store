@@ -38,6 +38,9 @@ const PARAM_VALUES: Record<string, string> = {
   sid: SID,
   file: 'index.m3u8',
   matchId: 'partido-1',
+  /* Escudos y logos (módulo teams): ids de TheSportsDB. */
+  teamId: '133738',
+  competitionId: '4335',
 };
 
 function concretePath(route: V1RouteDefinition): string {
