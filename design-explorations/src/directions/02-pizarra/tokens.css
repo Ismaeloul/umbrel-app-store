@@ -1,0 +1,321 @@
+/* Pizarra · tokens y base.
+   Todo va prefijado con .pz- para convivir con las demás propuestas.
+   Oscuro por defecto; claro con html[data-scheme="light"]; el «tablero»
+   (marcador de pizarra) es siempre oscuro, como una pizarra de vestuario. */
+
+.pz-root {
+  /* superficies */
+  --pz-bg: #0f1115;
+  --pz-panel: #161a20;
+  --pz-panel-2: #1d2229;
+  --pz-panel-3: #242a33;
+  --pz-line: #2a3038;
+  --pz-line-2: #343b45;
+  /* tinta */
+  --pz-ink: #eef2f6;
+  --pz-ink-2: #a3adba;
+  --pz-ink-3: #74808e;
+  /* semáforo de señal */
+  --pz-ok: #2ecc71;
+  --pz-ok-ink: #7be3a6;
+  --pz-ok-dim: rgba(46, 204, 113, 0.14);
+  --pz-weak: #f2b134;
+  --pz-weak-ink: #f5c05a;
+  --pz-weak-dim: rgba(242, 177, 52, 0.14);
+  --pz-fail: #ff5a4e;
+  --pz-fail-ink: #ff7d73;
+  --pz-fail-dim: rgba(255, 90, 78, 0.14);
+  --pz-live: #ff5a4e;
+  /* acento: solo selección y enlaces */
+  --pz-accent: #3d8bff;
+  --pz-accent-ink: #7db1ff;
+  --pz-accent-dim: rgba(61, 139, 255, 0.16);
+  --pz-sel: rgba(61, 139, 255, 0.1);
+  /* tablero (pizarra): siempre oscuro */
+  --pz-slate: #171b21;
+  --pz-slate-2: #1f242c;
+  --pz-slate-ink: #f4f7fa;
+  --pz-slate-ink-2: #aab4c0;
+  --pz-slate-line: rgba(255, 255, 255, 0.09);
+  --pz-slate-grid: rgba(255, 255, 255, 0.035);
+  /* vídeo */
+  --pz-video-bg: #0a0c10;
+  /* forma */
+  --pz-radius: 6px;
+  --pz-radius-panel: 10px;
+  /* densidad (Cómodo por defecto) */
+  --pz-row: 56px;
+  --pz-row-s: 48px;
+  --pz-body: 15px;
+  --pz-small: 13px;
+  /* movimiento */
+  --pz-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --pz-dur: 180ms;
+  --pz-dur-sheet: 240ms;
+  /* tipografía */
+  --pz-font: 'Inter Variable', system-ui, -apple-system, sans-serif;
+  --pz-cond: 'Barlow Condensed', 'Inter Variable', system-ui, sans-serif;
+  --pz-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  color: var(--pz-ink);
+  background: var(--pz-bg);
+  font-family: var(--pz-font);
+  font-size: var(--pz-body);
+  line-height: 1.3;
+  font-feature-settings: 'tnum' 1, 'cv11' 1, 'ss01' 1;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  color-scheme: dark;
+}
+
+html[data-scheme='light'] .pz-root {
+  --pz-bg: #f4f6f8;
+  --pz-panel: #ffffff;
+  --pz-panel-2: #e9edf1;
+  --pz-panel-3: #dde3e9;
+  --pz-line: #d5dbe2;
+  --pz-line-2: #c3cad3;
+  --pz-ink: #111418;
+  --pz-ink-2: #4d5866;
+  --pz-ink-3: #74808e;
+  --pz-ok: #1a8a4a;
+  --pz-ok-ink: #147a40;
+  --pz-ok-dim: rgba(26, 138, 74, 0.12);
+  --pz-weak: #9a6300;
+  --pz-weak-ink: #8a5800;
+  --pz-weak-dim: rgba(154, 99, 0, 0.12);
+  --pz-fail: #c4291f;
+  --pz-fail-ink: #b3241b;
+  --pz-fail-dim: rgba(196, 41, 31, 0.1);
+  --pz-live: #c4291f;
+  --pz-accent: #1f6fe0;
+  --pz-accent-ink: #1a5fc2;
+  --pz-accent-dim: rgba(31, 111, 224, 0.12);
+  --pz-sel: rgba(31, 111, 224, 0.08);
+  --pz-slate: #1c2128;
+  --pz-slate-2: #252b34;
+  color-scheme: light;
+}
+
+.pz-root[data-density='compacto'] {
+  --pz-row: 44px;
+  --pz-row-s: 40px;
+  --pz-body: 13px;
+  --pz-small: 12px;
+}
+
+html[data-motion='reduced'] .pz-root {
+  --pz-dur: 100ms;
+  --pz-dur-sheet: 100ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pz-root {
+    --pz-dur: 100ms;
+    --pz-dur-sheet: 100ms;
+  }
+}
+
+/* ---------- base ---------- */
+.pz-root *,
+.pz-root *::before,
+.pz-root *::after {
+  box-sizing: border-box;
+}
+
+:where(.pz-root) button,
+:where(.pz-root) input,
+:where(.pz-root) select,
+:where(.pz-root) textarea {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+/* :where() deja el reset con especificidad 0,0,1 para que .pz-btn, .pz-board… ganen. */
+:where(.pz-root) button {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-align: inherit;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+:where(.pz-root) button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.pz-root a {
+  color: var(--pz-accent-ink);
+  text-decoration: none;
+}
+
+.pz-root :focus-visible {
+  outline: 2px solid var(--pz-accent);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+
+.pz-root ::selection {
+  background: var(--pz-accent-dim);
+}
+
+.pz-root canvas {
+  display: block;
+}
+
+.pz-root svg {
+  display: block;
+  flex: none;
+}
+
+/* ---------- tipografía utilitaria ---------- */
+.pz-cond {
+  font-family: var(--pz-cond);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+.pz-mono {
+  font-family: var(--pz-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.pz-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pz-ink-3);
+  line-height: 1.2;
+}
+
+.pz-muted {
+  color: var(--pz-ink-2);
+}
+
+.pz-dim {
+  color: var(--pz-ink-3);
+}
+
+.pz-ellipsis {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.pz-tone-ok {
+  color: var(--pz-ok-ink);
+}
+.pz-tone-weak {
+  color: var(--pz-weak-ink);
+}
+.pz-tone-fail {
+  color: var(--pz-fail-ink);
+}
+.pz-tone-live {
+  color: var(--pz-live);
+}
+.pz-tone-accent {
+  color: var(--pz-accent-ink);
+}
+
+/* ---------- scroll ---------- */
+.pz-scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--pz-line-2) transparent;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.pz-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.pz-scroll::-webkit-scrollbar-thumb {
+  background: var(--pz-line-2);
+  border-radius: 4px;
+}
+.pz-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pz-hscroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.pz-hscroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---------- animaciones base (solo transform/opacity) ---------- */
+@keyframes pz-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes pz-checking {
+  0% {
+    opacity: 0.25;
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.25;
+  }
+}
+
+@keyframes pz-goal-flash {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes pz-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pz-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+html[data-motion='reduced'] .pz-root .pz-anim,
+html[data-motion='reduced'] .pz-root .pz-anim * {
+  animation: none !important;
+}
+
+.pz-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

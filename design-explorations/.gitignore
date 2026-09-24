@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.playwright/
+.dev-server.log
+.capturas-server.log
+scripts/tmp/
+capturas/_revision/
+capturas/**/_*
+public/escudos/*
+!public/escudos/LEEME.md
+capturas/**/*.png

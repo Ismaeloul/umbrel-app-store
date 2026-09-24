@@ -1,0 +1,167 @@
+/* Propuesta 5 · Transistor — tokens.
+   Papel cálido y tinta por defecto; marrón profundo en oscuro. Un solo acento:
+   el naranja de transistor. El LCD y el teletexto tienen sus propios colores
+   (son «pantallas» dentro del receptor), pero nunca compiten con el acento.
+   Los tokens viven en `.tr-root` (raíz propia) para no depender del slug del
+   registro, que no podemos tocar. */
+
+.tr-root {
+  --tr-font: 'Space Grotesk Variable', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --tr-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Papel */
+  --tr-paper: #f2ead9;
+  --tr-paper-2: #faf6ec;
+  --tr-paper-3: #e6dcc6;
+  --tr-paper-4: #d9cdb3;
+  --tr-ink: #1a1612;
+  --tr-ink-2: #5c534a;
+  --tr-ink-3: #7e746a;
+  --tr-line: rgba(26, 22, 18, 0.14);
+  --tr-line-2: rgba(26, 22, 18, 0.32);
+  --tr-fill: rgba(26, 22, 18, 0.06);
+  --tr-fill-2: rgba(26, 22, 18, 0.1);
+
+  /* Acento: naranja de transistor. Como relleno lleva tinta encima (AA);
+     como texto se usa la variante «ink», más oscura, que sí cumple AA. */
+  --tr-orange: #ff5a36;
+  --tr-orange-hot: #ff3d12;
+  --tr-orange-ink: #b4381a;
+  --tr-orange-soft: rgba(255, 90, 54, 0.16);
+  --tr-on-orange: #1a1612;
+  --tr-live: #b4381a;
+
+  /* Pantalla LCD */
+  --tr-lcd: #dfe9d8;
+  --tr-lcd-2: #d2dfca;
+  --tr-lcd-seg: #1f2a24;
+  --tr-lcd-seg-off: rgba(31, 42, 36, 0.08);
+  --tr-lcd-text: #1f2a24;
+  --tr-lcd-text-2: #4a5a50;
+
+  /* Teletexto: AA sobre papel */
+  --tr-tt-bg: #faf6ec;
+  --tr-tt-ink: #1a1612;
+  --tr-tt-muted: #7e746a;
+  --tr-tt-cyan: #006b76;
+  --tr-tt-yellow: #7a5f00;
+  --tr-tt-green: #1b6e3f;
+  --tr-tt-red: #b8301f;
+  --tr-tt-cyan-soft: rgba(0, 107, 118, 0.12);
+  --tr-tt-yellow-soft: rgba(122, 95, 0, 0.14);
+  --tr-tt-green-soft: rgba(27, 110, 63, 0.14);
+  --tr-tt-red-soft: rgba(184, 48, 31, 0.12);
+
+  /* Vídeo y velos */
+  --tr-video-bg: #0b1a10;
+  --tr-veil: rgba(26, 22, 18, 0.55);
+  --tr-scrim: rgba(26, 22, 18, 0.42);
+
+  /* Tecla física: sombra corta y dura */
+  --tr-key-shadow: 0 2px 0 var(--tr-ink);
+  --tr-key-shadow-soft: 0 2px 0 var(--tr-line-2);
+  --tr-frame: 1.5px solid var(--tr-ink);
+
+  /* Formas */
+  --tr-r-card: 12px;
+  --tr-r-key: 8px;
+  --tr-r-lcd: 4px;
+  --tr-r-pill: 999px;
+
+  /* Movimiento */
+  --tr-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --tr-spring: linear(0, 0.2178 2.1%, 0.4472 4.4%, 0.6537 6.9%, 0.8155 9.4%, 0.9373 12%, 1.0192 14.7%, 1.0677 17.6%, 1.0865 20.7%, 1.0847 23.9%, 1.0685 27.5%, 1.0453 31.5%, 1.019 36.5%, 1.0015 43.3%, 0.9973 52.2%, 1 100%);
+  --tr-dur-fast: 160ms;
+  --tr-dur: 280ms;
+  --tr-dur-slow: 420ms;
+  --tr-wave-dur: 1.2s;
+  --tr-wave-amp: 1;
+  --tr-blink: 1;
+
+  color-scheme: light;
+  font-family: var(--tr-font);
+  color: var(--tr-ink);
+  background: var(--tr-paper);
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+}
+
+html[data-scheme='dark'] .tr-root {
+  --tr-paper: #1a1612;
+  --tr-paper-2: #241f1a;
+  --tr-paper-3: #2e2822;
+  --tr-paper-4: #3a322a;
+  --tr-ink: #f2ead9;
+  --tr-ink-2: #b8ada0;
+  --tr-ink-3: #8f857a;
+  --tr-line: rgba(242, 234, 217, 0.14);
+  --tr-line-2: rgba(242, 234, 217, 0.3);
+  --tr-fill: rgba(242, 234, 217, 0.07);
+  --tr-fill-2: rgba(242, 234, 217, 0.12);
+
+  --tr-orange: #ff6f4d;
+  --tr-orange-hot: #ff4f24;
+  --tr-orange-ink: #ff8a6b;
+  --tr-orange-soft: rgba(255, 111, 77, 0.2);
+  --tr-on-orange: #1a1612;
+  --tr-live: #ff8a6b;
+
+  --tr-lcd: #0f1a14;
+  --tr-lcd-2: #0a120e;
+  --tr-lcd-seg: #7df2c0;
+  --tr-lcd-seg-off: rgba(125, 242, 192, 0.08);
+  --tr-lcd-text: #7df2c0;
+  --tr-lcd-text-2: #58b08c;
+
+  --tr-tt-bg: #0c0f12;
+  --tr-tt-ink: #f2ead9;
+  --tr-tt-muted: #8c949c;
+  --tr-tt-cyan: #4ff2ff;
+  --tr-tt-yellow: #ffe74a;
+  --tr-tt-green: #4ff28a;
+  --tr-tt-red: #ff5c5c;
+  --tr-tt-cyan-soft: rgba(79, 242, 255, 0.14);
+  --tr-tt-yellow-soft: rgba(255, 231, 74, 0.14);
+  --tr-tt-green-soft: rgba(79, 242, 138, 0.14);
+  --tr-tt-red-soft: rgba(255, 92, 92, 0.16);
+
+  --tr-veil: rgba(0, 0, 0, 0.6);
+  --tr-scrim: rgba(0, 0, 0, 0.5);
+  --tr-key-shadow: 0 2px 0 #0a0805;
+  --tr-key-shadow-soft: 0 2px 0 rgba(0, 0, 0, 0.6);
+  --tr-frame: 1.5px solid var(--tr-ink);
+  color-scheme: dark;
+}
+
+/* Gol entrando: el «dial de intensidad» sube 3 s. */
+.tr-root[data-goal='on'] {
+  --tr-orange: var(--tr-orange-hot);
+  --tr-wave-amp: 2;
+}
+
+/* Transparencia reducida: no hay cristal, pero los velos se vuelven opacos. */
+html[data-transparency='reduced'] .tr-root {
+  --tr-veil: #1a1612;
+  --tr-scrim: #1a1612;
+}
+
+/* Movimiento reducido: sin onda, sin parpadeo, fundidos cortos. */
+html[data-motion='reduced'] .tr-root {
+  --tr-dur-fast: 100ms;
+  --tr-dur: 120ms;
+  --tr-dur-slow: 140ms;
+  --tr-spring: ease-out;
+  --tr-wave-dur: 0s;
+  --tr-blink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tr-root {
+    --tr-dur-fast: 100ms;
+    --tr-dur: 120ms;
+    --tr-dur-slow: 140ms;
+    --tr-spring: ease-out;
+    --tr-wave-dur: 0s;
+    --tr-blink: 0;
+  }
+}

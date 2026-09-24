@@ -1,0 +1,1010 @@
+[
+ {
+  "dir": 3,
+  "mode": "iphone",
+  "name": "agenda",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "iphone",
+  "name": "agenda",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "iphone",
+  "name": "ajustes",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "iphone",
+  "name": "ajustes",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "iphone",
+  "name": "biblioteca",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "iphone",
+  "name": "biblioteca",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "iphone",
+  "name": "buscar",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "iphone",
+  "name": "buscar",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "iphone",
+  "name": "dispositivos",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "iphone",
+  "name": "dispositivos",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "iphone",
+  "name": "gol",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "iphone",
+  "name": "gol",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "iphone",
+  "name": "mini",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "iphone",
+  "name": "mini",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "iphone",
+  "name": "partido",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "iphone",
+  "name": "partido",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "iphone",
+  "name": "primer-uso",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "iphone",
+  "name": "primer-uso",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "iphone",
+  "name": "reconectando",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "iphone",
+  "name": "reconectando",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "iphone",
+  "name": "reproduciendo",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "iphone",
+  "name": "reproduciendo",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "iphone",
+  "name": "sin-senal",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "iphone",
+  "name": "sin-senal",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "web",
+  "name": "agenda",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "web",
+  "name": "agenda",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "web",
+  "name": "ajustes",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "web",
+  "name": "ajustes",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "web",
+  "name": "biblioteca",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "web",
+  "name": "biblioteca",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "web",
+  "name": "buscar",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "web",
+  "name": "buscar",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "web",
+  "name": "dispositivos",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "web",
+  "name": "dispositivos",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "web",
+  "name": "gol",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "web",
+  "name": "gol",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "web",
+  "name": "mini",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "web",
+  "name": "mini",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "web",
+  "name": "partido",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "web",
+  "name": "partido",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "web",
+  "name": "primer-uso",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "web",
+  "name": "primer-uso",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "web",
+  "name": "reconectando",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "web",
+  "name": "reconectando",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "web",
+  "name": "reproduciendo",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "web",
+  "name": "reproduciendo",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "web",
+  "name": "sin-senal",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 3,
+  "mode": "web",
+  "name": "sin-senal",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "iphone",
+  "name": "agenda",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "iphone",
+  "name": "agenda",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "iphone",
+  "name": "ajustes",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "iphone",
+  "name": "ajustes",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "iphone",
+  "name": "biblioteca",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "iphone",
+  "name": "biblioteca",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "iphone",
+  "name": "buscar",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "iphone",
+  "name": "buscar",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "iphone",
+  "name": "dispositivos",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "iphone",
+  "name": "dispositivos",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "iphone",
+  "name": "gol",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "iphone",
+  "name": "gol",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "iphone",
+  "name": "mini",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "iphone",
+  "name": "mini",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "iphone",
+  "name": "partido",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "iphone",
+  "name": "partido",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "iphone",
+  "name": "primer-uso",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "iphone",
+  "name": "primer-uso",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "iphone",
+  "name": "reconectando",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "iphone",
+  "name": "reconectando",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "iphone",
+  "name": "reproduciendo",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "iphone",
+  "name": "reproduciendo",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "iphone",
+  "name": "sin-senal",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "iphone",
+  "name": "sin-senal",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "web",
+  "name": "agenda",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "web",
+  "name": "agenda",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "web",
+  "name": "ajustes",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "web",
+  "name": "ajustes",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "web",
+  "name": "biblioteca",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "web",
+  "name": "biblioteca",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "web",
+  "name": "buscar",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "web",
+  "name": "buscar",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "web",
+  "name": "dispositivos",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "web",
+  "name": "dispositivos",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "web",
+  "name": "gol",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "web",
+  "name": "gol",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "web",
+  "name": "mini",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "web",
+  "name": "mini",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "web",
+  "name": "partido",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "web",
+  "name": "partido",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "web",
+  "name": "primer-uso",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "web",
+  "name": "primer-uso",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "web",
+  "name": "reconectando",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "web",
+  "name": "reconectando",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "web",
+  "name": "reproduciendo",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "web",
+  "name": "reproduciendo",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "web",
+  "name": "sin-senal",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 4,
+  "mode": "web",
+  "name": "sin-senal",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "iphone",
+  "name": "agenda",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "iphone",
+  "name": "agenda",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "iphone",
+  "name": "ajustes",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "iphone",
+  "name": "ajustes",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "iphone",
+  "name": "biblioteca",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "iphone",
+  "name": "biblioteca",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "iphone",
+  "name": "buscar",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "iphone",
+  "name": "buscar",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "iphone",
+  "name": "dispositivos",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "iphone",
+  "name": "dispositivos",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "iphone",
+  "name": "gol",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "iphone",
+  "name": "gol",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "iphone",
+  "name": "mini",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "iphone",
+  "name": "mini",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "iphone",
+  "name": "partido",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "iphone",
+  "name": "partido",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "iphone",
+  "name": "primer-uso",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "iphone",
+  "name": "primer-uso",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "iphone",
+  "name": "reconectando",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "iphone",
+  "name": "reconectando",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "iphone",
+  "name": "reproduciendo",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "iphone",
+  "name": "reproduciendo",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "iphone",
+  "name": "sin-senal",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "iphone",
+  "name": "sin-senal",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "web",
+  "name": "agenda",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "web",
+  "name": "agenda",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "web",
+  "name": "ajustes",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "web",
+  "name": "ajustes",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "web",
+  "name": "biblioteca",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "web",
+  "name": "biblioteca",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "web",
+  "name": "buscar",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "web",
+  "name": "buscar",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "web",
+  "name": "dispositivos",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "web",
+  "name": "dispositivos",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "web",
+  "name": "gol",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "web",
+  "name": "gol",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "web",
+  "name": "mini",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "web",
+  "name": "mini",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "web",
+  "name": "partido",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "web",
+  "name": "partido",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "web",
+  "name": "primer-uso",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "web",
+  "name": "primer-uso",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "web",
+  "name": "reconectando",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "web",
+  "name": "reconectando",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "web",
+  "name": "reproduciendo",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "web",
+  "name": "reproduciendo",
+  "tema": "oscuro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "web",
+  "name": "sin-senal",
+  "tema": "claro",
+  "ok": true
+ },
+ {
+  "dir": 5,
+  "mode": "web",
+  "name": "sin-senal",
+  "tema": "oscuro",
+  "ok": true
+ }
+]
