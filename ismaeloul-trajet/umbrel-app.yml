@@ -66,9 +66,7 @@ releaseNotes: >-
   Antes de actualizar: instala y empareja primero la app nueva del iPhone.
   Con la 0.4.0 la web desaparece y la API antigua queda detrás del login de
   Umbrel, así que un cliente viejo (la web o una app sin emparejar) deja de
-  ver el tablero hasta que el iPhone esté emparejado. Y hay que publicar
-  antes la imagen 0.4.0 en el NAS con scripts/publish.sh del repo del
-  servidor.
+  ver el tablero hasta que el iPhone esté emparejado.
 
 developer: Ismaeloul
 website: https://github.com/Ismaeloul/umbrel-app-store

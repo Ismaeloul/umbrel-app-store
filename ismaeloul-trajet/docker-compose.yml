@@ -2,12 +2,9 @@ version: "3.7"
 
 # Trajet 0.4.0: el servidor de la app de iPhone y su panel.
 #
-# La imagen se sirve desde el registro local del NAS (127.0.0.1:5000), igual
-# que ace-player-neo e ipa-station: umbreld hace un `docker pull` de cada
-# image: antes de arrancar e ignora pull_policy, asi que una imagen construida
-# a mano con docker build no le vale, tiene que poder resolverla contra un
-# registro. Se construye y se publica con scripts/publish.sh del repo
-# trajet-server, lanzado en el propio Umbrel.
+# La imagen es publica en GHCR: la construye y la publica el CI del repo
+# trajet-server al empujar el tag v0.4.0 (linux/amd64). umbreld hace un
+# `docker pull` de cada image: antes de arrancar, y esta se baja sin login.
 #
 # Este fichero es PUBLICO: ni IPs, ni claves. Las direcciones que van en el QR
 # se ponen en el panel y la clave de PRIM se pega alli (cifrada con APP_SEED).
@@ -28,7 +25,7 @@ services:
       PROXY_AUTH_WHITELIST: "/api/v1/*"
 
   web:
-    image: localhost:5000/ismaeloul-trajet/trajet:0.4.0
+    image: ghcr.io/ismaeloul/trajet-server:0.4.0
     container_name: ismaeloul-trajet_web_1
     restart: unless-stopped
     # tini como PID 1: reenvia las senales a uvicorn y recoge huerfanos.
