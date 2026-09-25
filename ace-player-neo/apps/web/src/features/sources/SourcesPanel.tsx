@@ -1,16 +1,19 @@
 /* El selector de fuentes entero: cabecera con el recuento, progreso del
    comprobador (§6), la barra «Emitiendo» (móvil, se desliza para cambiar de
-   fuente), la lista o el rack, el aviso cuando ninguna da señal y el
-   inspector de la fuente activa.
+   fuente), la rejilla de carteles (plan Palco fase 2, decisión W6), el aviso
+   cuando ninguna da señal y el inspector de la fuente activa.
 
-   Se pinta en UN sitio a la vez: en el panel lateral de escritorio (rack) o,
-   si no hay panel (móvil, tableta o plegado), dentro de la vista (lista).
-   Ahí también van sus atajos: N (siguiente fuente) y 1-9 (la fuente n). */
+   Se pinta en UN sitio a la vez: en la pestaña «Fuentes» del panel lateral de
+   escritorio (rack, dos carteles por fila) o, si no hay panel (móvil, tableta
+   o plegado), en la misma pestaña dentro de la vista (list). Ahí también van
+   sus atajos: N (siguiente fuente) y 1-9 (la fuente n). Cambiar de fuente con
+   la barra o deslizando da un toque háptico rígido (HAPTIC_MAP). */
 
 import { useId, useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react';
 import { useShortcut } from '../../app/shortcuts.ts';
 import { cx } from '../../lib/cx.ts';
 import { useSwipe } from '../../lib/gestures.ts';
+import { haptic } from '../../lib/haptics.ts';
 import { prefersReducedMotion } from '../../lib/media.ts';
 import { usePlayerSelector } from '../../player/api.ts';
 import { Button, EmptyState, IconButton, Num, ProgressBar, SkeletonRows } from '../../ui/index.ts';
@@ -37,6 +40,10 @@ function NowBar({
   const ids = rows.map((row) => row.entry.id);
   const active = rows.find((row) => row.entry.id === activeHash);
   const canStep = ids.length > 1;
+  const step = (direction: 1 | -1) => {
+    haptic('rigid');
+    stepSource(direction, ids);
+  };
   const move = (dx: number) => {
     if (textRef.current)
       textRef.current.style.transform = dx
@@ -52,15 +59,15 @@ function NowBar({
     onCancel: () => move(0),
     onSwipe: (direction) => {
       move(0);
-      if (direction === 'left') stepSource(1, ids);
-      if (direction === 'right') stepSource(-1, ids);
+      if (direction === 'left') step(1);
+      if (direction === 'right') step(-1);
     },
   });
   if (!active || !title) return null;
   return (
     <div className="src-now" ref={ref}>
       {canStep ? (
-        <IconButton icon="chev-l" label="Fuente anterior" onClick={() => stepSource(-1, ids)} />
+        <IconButton icon="chev-l" label="Fuente anterior" onClick={() => step(-1)} />
       ) : null}
       <div className="src-now__text" ref={textRef}>
         <span className="src-now__label">Emitiendo</span>
@@ -73,7 +80,7 @@ function NowBar({
         </span>
       </div>
       {canStep ? (
-        <IconButton icon="chev-r" label="Fuente siguiente" onClick={() => stepSource(1, ids)} />
+        <IconButton icon="chev-r" label="Fuente siguiente" onClick={() => step(1)} />
       ) : null}
     </div>
   );
@@ -95,10 +102,12 @@ function useKeepActiveInPanel(
     const first = last.current === null;
     last.current = activeHash;
     const panel = root.current?.closest<HTMLElement>('.app-aside');
-    const row = root.current?.querySelector<HTMLElement>('.src-row[aria-current="true"]');
+    const row = root.current?.querySelector<HTMLElement>('.src-poster[aria-current="true"]');
     if (!panel || !row) return;
     const box = panel.getBoundingClientRect();
     const item = row.getBoundingClientRect();
+    // En otra pestaña del panel (oculta) no hay nada que enseñar.
+    if (!item.height) return;
     let delta = 0;
     if (item.top < box.top + 12) delta = item.top - box.top - 12;
     else if (item.bottom > box.bottom - 12) delta = item.bottom - box.bottom + 12;

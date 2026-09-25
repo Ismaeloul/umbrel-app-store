@@ -1,22 +1,28 @@
-/* Centro de un canal suelto (`?vista=partido/canal/<hash>`): lo que se abre
-   al reproducir desde la biblioteca, el buscador, «Pegar hash» o el
-   zapping. Cabecera con el dorsal del canal (C2), sus fuentes HERMANAS del
-   mismo canal (regla 23: ≥ 92 por nombre; sin hermanas no hay selector,
-   §7.1) y el inspector con las acciones del canal. Aquí nunca se salta de
-   fuente sola (reproductor.md §4.4: en la biblioteca, nunca). */
+/* Teatro de un canal suelto (`?vista=partido/canal/<hash>`; plan Palco fase
+   2, decisión W5): lo que se abre al reproducir desde Canales, el buscador,
+   «Pegar hash» o el zapping. Bajo el vídeo, la cabecera del canal (su tesela
+   16:9 con la sigla sobre su tono, «Canal», el nombre y de dónde viene) con
+   «Reproducir» cuando hace falta y, debajo (o en el panel lateral), las
+   pestañas: Fuentes (solo si hay fuentes HERMANAS del mismo canal, regla
+   23: ≥ 92 por nombre; sin hermanas no hay selector, §7.1) · Canal (su ficha
+   y sus acciones) · Datos técnicos. Aquí nunca se salta de fuente sola
+   (reproductor.md §4.4: en la biblioteca, nunca). */
 
 import type { Item, LibraryView } from '@ace/shared';
-import { useLayoutEffect, useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import { useApiQuery } from '../../api/index.ts';
 import { useLayout } from '../../app/layout.tsx';
 import { kindFromIh, play, usePlayerSelector } from '../../player/api.ts';
-import { Button, ChannelMark, IconButton } from '../../ui/index.ts';
+import { Button, ChannelMark, IconButton, Num } from '../../ui/index.ts';
 import { findKnownItem } from '../library/model.ts';
 import { librarySiblings } from '../sources/model.ts';
-import { enterChannel, leaveSession } from '../sources/session.ts';
+import { enterChannel, leaveSession, useSession } from '../sources/session.ts';
 import { SourcesPanel } from '../sources/SourcesPanel.tsx';
 import type { InspectorTarget } from '../sources/SourceInspector.tsx';
+import type { SourceListVariant } from '../sources/SourceList.tsx';
 import { NerdSection } from './NerdSection.tsx';
+import { TheaterTabs, type TheaterTabDef } from './TheaterTabs.tsx';
+import { CHANNEL_HINTS, ShortcutHints } from './WhereAired.tsx';
 
 export interface ChannelContext {
   title: string;
@@ -57,6 +63,72 @@ function originText(item: Item | null, library: LibraryView | undefined): string
   return 'En tus recientes';
 }
 
+/** Cuántas fuentes del mismo canal hay (0 si solo está él). */
+function siblingCount(siblings: readonly Item[]): number {
+  return siblings.length > 1 ? siblings.length : 0;
+}
+
+/** La ficha del canal (pestaña «Canal»): de dónde viene, cuántas hermanas y su Content ID. */
+function ChannelDetails({ hash, context }: { hash: string; context: ChannelContext }) {
+  const count = siblingCount(context.siblings);
+  return (
+    <div className="mc-channel-info">
+      <dl className="mc-facts">
+        <div className="mc-facts__row">
+          <dt>Origen</dt>
+          <dd>{originText(context.item, context.library)}</dd>
+        </div>
+        <div className="mc-facts__row">
+          <dt>Fuentes del mismo canal</dt>
+          <dd>{count ? <Num value={count} /> : 'Solo esta'}</dd>
+        </div>
+        <div className="mc-facts__row mc-facts__row--hash">
+          <dt>{context.target.ih ? 'Infohash' : 'Content ID'}</dt>
+          <dd className="mono">{hash}</dd>
+        </div>
+      </dl>
+      <ShortcutHints hints={CHANNEL_HINTS} />
+    </div>
+  );
+}
+
+export interface ChannelTabsProps {
+  hash: string;
+  context: ChannelContext;
+  variant: SourceListVariant;
+  extra?: ReactNode;
+  className?: string;
+}
+
+/** Las pestañas de un canal: Fuentes (con hermanas) · Canal · Datos técnicos. */
+export function ChannelTabs({ hash, context, variant, extra, className }: ChannelTabsProps) {
+  const count = useSession((state) => (state.kind === 'channel' ? state.entries.length : 0));
+  const sources = (
+    <SourcesPanel variant={variant} channelFallback={context.target} className="mc-sources" />
+  );
+  const details = <ChannelDetails hash={hash} context={context} />;
+  const tabs: TheaterTabDef[] = count
+    ? [
+        { value: 'fuentes', label: 'Fuentes', count, content: sources },
+        { value: 'canal', label: 'Canal', content: details },
+      ]
+    : [
+        // Sin hermanas no hay selector (§7.1), pero sí las acciones del canal.
+        {
+          value: 'canal',
+          label: 'Canal',
+          content: (
+            <>
+              {sources}
+              {details}
+            </>
+          ),
+        },
+      ];
+  tabs.push({ value: 'datos', label: 'Datos técnicos', content: <NerdSection /> });
+  return <TheaterTabs kind="channel" tabs={tabs} extra={extra} className={className} />;
+}
+
 export function ChannelCenter({ hash, active }: { hash: string; active: boolean }) {
   const layout = useLayout();
   const context = useChannelContext(hash);
@@ -77,11 +149,11 @@ export function ChannelCenter({ hash, active }: { hash: string; active: boolean 
   });
   const siblingsKey = siblings.map((sibling) => sibling.id).join(',');
 
-  /* Las fuentes se montan DESPUÉS de entrar al canal, en el mismo pintado:
+  /* Las pestañas se montan DESPUÉS de entrar al canal, en el mismo pintado:
      enterChannel va en un efecto de maquetación y `entered` vuelve a pintar
      antes de que el navegador enseñe nada. Montadas antes, su primer pintado
      salía vacío (la sesión aún no existía y su suscripción llega en un efecto
-     normal, ya pintado) y al llenarse empujaban «Datos técnicos» fuera de la
+     normal, ya pintado) y al llenarse empujaban lo de debajo fuera de la
      pantalla (CLS 0,05 en el móvil; revisión de rendimiento de la Fase 2). */
   const [entered, setEntered] = useState(false);
   useLayoutEffect(() => {
@@ -92,11 +164,12 @@ export function ChannelCenter({ hash, active }: { hash: string; active: boolean 
     // Se vuelve a entrar si cambian el canal, su nombre o sus hermanas (no por identidad).
   }, [active, hash, title, siblingsKey]);
 
-  const count = siblings.length > 1 ? siblings.length : 0;
+  const count = siblingCount(siblings);
+  const desktop = layout.kind === 'desktop' || layout.kind === 'wide';
   return (
     <div className="mc mc--channel" data-layout={layout.kind}>
       <section className="mc-channel" aria-labelledby={`mc-canal-${hash}`}>
-        <ChannelMark name={title} size={64} className="mc-channel__mark" />
+        <ChannelMark name={title} shape="tile" size={72} className="mc-channel__mark" />
         <div className="mc-channel__text">
           <p className="mc-channel__kicker">Canal</p>
           <h1 id={`mc-canal-${hash}`} className="mc-channel__title" tabIndex={-1}>
@@ -124,23 +197,21 @@ export function ChannelCenter({ hash, active }: { hash: string; active: boolean 
         ) : null}
       </section>
       {layout.asideVisible || !entered ? null : (
-        <>
-          <SourcesPanel
-            variant={layout.kind === 'mobile' || layout.kind === 'tablet' ? 'list' : 'rack'}
-            channelFallback={context.target}
-            className="mc-sources"
-            headerExtra={
-              layout.asideAvailable ? (
-                <IconButton
-                  icon="panel"
-                  label="Mostrar el panel lateral"
-                  onClick={() => layout.setAsideOpen(true)}
-                />
-              ) : null
-            }
-          />
-          <NerdSection variant="fold" />
-        </>
+        <ChannelTabs
+          hash={hash}
+          context={context}
+          variant={desktop ? 'rack' : 'list'}
+          className="mc-tabs--view"
+          extra={
+            layout.asideAvailable ? (
+              <IconButton
+                icon="panel"
+                label="Mostrar el panel lateral"
+                onClick={() => layout.setAsideOpen(true)}
+              />
+            ) : null
+          }
+        />
       )}
     </div>
   );

@@ -1,6 +1,15 @@
 /* La superficie grande del reproductor (presentación «stage»): los controles
-   propios de la opción A sobre el vídeo, el panel de espera o error, la capa
-   «Toca para reproducir», el panel técnico y el menú contextual.
+   sobre el vídeo, el panel de espera o error, la capa «Toca para
+   reproducir», el panel técnico y el menú contextual.
+
+   Piel Palco (plan fase 2, decisiones W5 y W14): UN solo overlay
+   (`player-chrome`) con cápsulas de cristal sobre un velo negro que va del
+   30 al 55 %: arriba a la izquierda «Minimizar» (móvil) o el canal que suena,
+   y el hueco del escenario donde el centro de partido pone la cápsula del
+   marcador (stage-slot.ts); arriba a la derecha favorito · PiP · «Más
+   opciones»; abajo, pausa grande, −30 s, silencio y volumen, y el directo
+   con la pantalla completa (o «Modo teatro» en un escritorio sin pantalla
+   completa).
 
    - Controles propios en todas las plataformas (el diseño los pide también
      en el móvil). En iPhone la pantalla completa es la del sistema, con sus
@@ -33,7 +42,15 @@ import { usePlayer, type PlayerState } from './api.ts';
 import { CLICK_DELAY_MS, CONTROLS_HIDE_MS } from './constants.ts';
 import { usePlayerContext, type PlayerContextValue } from './context.ts';
 import { NerdPanel } from './NerdPanel.tsx';
+import { stageSlotStore } from './stage-slot.ts';
 import { liveButton, stageMessage } from './status.ts';
+
+/** Publica el hueco sobre el vídeo mientras existe (y lo retira al irse). */
+function publishStageSlot(node: HTMLDivElement | null) {
+  if (!node) return;
+  stageSlotStore.set(node);
+  return () => stageSlotStore.set((current) => (current === node ? null : current));
+}
 
 /** Barras de «sonando» (ecualizador). Quietas con movimiento reducido. */
 export function Equalizer({ playing }: { playing: boolean }) {
@@ -300,7 +317,8 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
       {state.phase === 'buffer' || state.phase === 'buscando' ? (
         <span className="player-spinner" aria-hidden="true" />
       ) : null}
-      {state.engine === 'demo' && state.started && state.channel ? (
+      {/* El rótulo de la demo, nunca encima del panel («Reconectando»…). */}
+      {state.engine === 'demo' && state.started && state.channel && !stageMessage(state) ? (
         <p className="player-demo" aria-hidden="true">
           <strong>{state.channel.title.toUpperCase()}</strong>
           <span>reproducción simulada — en el Umbrel verías el stream real</span>
@@ -322,25 +340,27 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
         }}
       >
         <div className="player-chrome__top">
-          {ctx.compact ? (
-            <IconButton
-              icon="chev-d"
-              label="Minimizar el reproductor"
-              variant="video"
-              className="player-round glass--video"
-              onClick={actions.minimize}
-            />
-          ) : hasChannel ? (
-            <p className="player-now glass--video">
-              <Equalizer playing={playing} />
-              <span className="player-now__title">{state.channel?.title}</span>
-              {state.channel?.subtitle ? (
-                <small className="player-now__sub">{state.channel.subtitle}</small>
-              ) : null}
-            </p>
-          ) : (
-            <span />
-          )}
+          <div className="player-chrome__lead">
+            {ctx.compact ? (
+              <IconButton
+                icon="chev-d"
+                label="Minimizar el reproductor"
+                variant="video"
+                className="player-round glass--video"
+                onClick={actions.minimize}
+              />
+            ) : hasChannel ? (
+              <p className="player-now glass--video">
+                <Equalizer playing={playing} />
+                <span className="player-now__title">{state.channel?.title}</span>
+                {state.channel?.subtitle ? (
+                  <small className="player-now__sub">{state.channel.subtitle}</small>
+                ) : null}
+              </p>
+            ) : null}
+            {/* Aquí proyecta el centro de partido la cápsula del marcador. */}
+            <div className="player-slot" ref={publishStageSlot} />
+          </div>
           {hasChannel ? (
             <div className="player-cap glass--video">
               <IconButton
@@ -377,57 +397,61 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
             «Reintentar» (Detener sigue en «Más opciones»). */}
         {hasChannel && state.phase !== 'error' ? (
           <div className="player-chrome__bottom">
-            <div className="player-cap glass--video">
+            <div className="player-chrome__group">
+              {/* Pausa grande: el botón que más se usa, relleno y aparte. */}
               <IconButton
                 icon={wantsPlay || connecting ? 'pause' : 'play'}
                 label={connecting ? 'Conectando…' : wantsPlay ? 'Pausar' : 'Reproducir'}
                 shortcut="Espacio"
                 variant="video"
+                className="player-play"
                 data-fill="true"
                 disabled={connecting}
                 onClick={actions.toggle}
               />
-              {ctx.compact ? null : (
-                <IconButton
-                  icon="stop"
-                  label="Detener"
-                  variant="video"
-                  className="player-stop"
-                  onClick={actions.stop}
-                />
-              )}
-              <button
-                type="button"
-                className="player-back press"
-                aria-label="Retroceder 30 segundos"
-                title="Retroceder 30 s (J)"
-                disabled={!canBack}
-                onClick={actions.back}
-              >
-                <Icon name="back" size={18} />
-                <Num value="30" />
-              </button>
-              <IconButton
-                icon={state.muted || state.volume === 0 ? 'mute' : 'vol'}
-                label={state.muted ? 'Activar sonido' : 'Silenciar'}
-                shortcut="M"
-                variant="video"
-                onClick={actions.toggleMute}
-              />
-              {ctx.finePointer && !ctx.compact ? (
-                <label className="player-vol">
-                  <span className="sr-only">Volumen</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    value={volume}
-                    style={{ '--v': volume } as CSSProperties}
-                    onChange={(event) => actions.setVolume(Number(event.currentTarget.value))}
+              <div className="player-cap glass--video">
+                {ctx.compact ? null : (
+                  <IconButton
+                    icon="stop"
+                    label="Detener"
+                    variant="video"
+                    className="player-stop"
+                    onClick={actions.stop}
                   />
-                </label>
-              ) : null}
+                )}
+                <button
+                  type="button"
+                  className="player-back press"
+                  aria-label="Retroceder 30 segundos"
+                  title="Retroceder 30 s (J)"
+                  disabled={!canBack}
+                  onClick={actions.back}
+                >
+                  <Icon name="back" size={18} />
+                  <Num value="30" />
+                </button>
+                <IconButton
+                  icon={state.muted || state.volume === 0 ? 'mute' : 'vol'}
+                  label={state.muted ? 'Activar sonido' : 'Silenciar'}
+                  shortcut="M"
+                  variant="video"
+                  onClick={actions.toggleMute}
+                />
+                {ctx.finePointer && !ctx.compact ? (
+                  <label className="player-vol">
+                    <span className="sr-only">Volumen</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      value={volume}
+                      style={{ '--v': volume } as CSSProperties}
+                      onChange={(event) => actions.setVolume(Number(event.currentTarget.value))}
+                    />
+                  </label>
+                ) : null}
+              </div>
             </div>
             <div className="player-cap glass--video">
               <LiveButton state={state} onPress={actions.goLive} />
@@ -440,7 +464,18 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
                   variant="video"
                   onClick={actions.toggleFullscreen}
                 />
-              ) : null}
+              ) : ctx.compact ? null : (
+                // Sin pantalla completa en este navegador (escritorio): el modo
+                // teatro llena la ventana con el vídeo (lo mismo que F).
+                <IconButton
+                  icon="pantalla"
+                  label={ctx.theater ? 'Salir del modo teatro' : 'Modo teatro'}
+                  shortcut="F"
+                  pressed={ctx.theater}
+                  variant="video"
+                  onClick={actions.toggleTheater}
+                />
+              )}
             </div>
           </div>
         ) : null}

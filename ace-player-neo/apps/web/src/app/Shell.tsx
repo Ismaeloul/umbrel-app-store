@@ -18,7 +18,9 @@
      vivos: sus sondeos, atajos y peticiones se paran solos.
    - El reproductor es UN componente en UN sitio del árbol: pasar de grande a
      mini no recrea el <video>.
-   - Los toasts nunca van sobre el vídeo; la línea de estado va bajo él. */
+   - Los toasts nunca van sobre el vídeo; la línea de estado es una cápsula
+     SOBRE él, abajo a la izquierda (Palco W5: la coloca shell.css en la
+     misma celda que el vídeo). */
 
 import {
   Activity,

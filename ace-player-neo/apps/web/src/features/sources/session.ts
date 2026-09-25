@@ -29,7 +29,10 @@
      el seguimiento del comprobador (regla 17); la lista se queda para poder
      elegir otra a mano.
    - Reproducir algo que no está en la lista (zapping, biblioteca) termina la
-     sesión (index.html:4887-4896). */
+     sesión (index.html:4887-4896).
+   - Palco (plan fase 2, W13): un toque háptico acompaña, nunca sustituye, al
+     aviso: «aviso» en el cambio automático de fuente, «error» si falla la
+     que elegiste, «éxito» al reportar o al pegar un Content ID. */
 
 import type {
   FootballMatch,
@@ -48,6 +51,8 @@ import { queryClient, routeKey } from '../../api/query.ts';
 import { realtimeStore } from '../../api/realtime-store.ts';
 import type { Route } from '../../app/routes.ts';
 import { hueFromName, oklchCss } from '../../lib/color.ts';
+import { haptic } from '../../lib/haptics.ts';
+import { matchVersusPair } from '../../lib/teams.ts';
 import { createStore, useStore } from '../../lib/store.ts';
 import { notify, toast } from '../../notices/index.ts';
 import {
@@ -111,6 +116,8 @@ export interface MatchInfo {
   date: string;
   time: string;
   channels: string[];
+  /** Los dos colores de club para la luz ambiental del vídeo (los de la API o, sin ellos, del nombre). */
+  colors?: readonly [string, string];
 }
 
 export type SessionPhase = 'idle' | 'resolving' | 'ready' | 'choices' | 'not_found' | 'no_channels';
@@ -208,7 +215,18 @@ export function matchInfoOf(match: FootballMatch): MatchInfo {
     date: match.date,
     time: match.time,
     channels: (match.channels ?? []).map((channel) => channel?.name).filter(Boolean) as string[],
+    colors: matchGlow(match),
   };
+}
+
+/**
+ * Luz ambiental del vídeo (plan Palco, W5): el par de colores de club de la
+ * tarjeta versus (los de la API; sin ellos, el tono del nombre), ya separados
+ * si los dos equipos se parecen.
+ */
+export function matchGlow(match: FootballMatch): readonly [string, string] {
+  const pair = matchVersusPair(match);
+  return [pair.home, match.away ? pair.away : pair.home];
 }
 
 function webSources(): WebSourceSummary[] | undefined {
@@ -247,6 +265,7 @@ function routeFor(state: SessionState): Route | undefined {
   return undefined;
 }
 
+/** Luz de un equipo solo por su nombre (sesiones preparadas sin el partido entero). */
 function glow(name: string): string {
   return oklchCss({ l: 0.66, c: 0.13, h: hueFromName(name || '?') });
 }
@@ -763,6 +782,7 @@ function maybeInitialSwitch(): void {
   const next = pickInitialSwitch(state.entries, state.activeHash, screenNow(), clock());
   if (!next) return;
   patch({ switchArmed: false });
+  haptic('warning');
   notify(
     `La señal inicial no responde; probamos automáticamente la fuente ${numberOf(state, next.id)}`,
     {
@@ -828,7 +848,9 @@ function playEntry(entry: SourceEntry, origin: PlayOrigin): void {
       ...(leadFor(number, effective, state) ? { lead: leadFor(number, effective, state) } : {}),
       source: presentation.short.slice(0, 60),
       ...(entry.listaId ? { listaId: entry.listaId } : {}),
-      ...(match ? { colors: [glow(match.home), glow(match.away || match.home)] as const } : {}),
+      ...(match
+        ? { colors: match.colors ?? ([glow(match.home), glow(match.away || match.home)] as const) }
+        : {}),
     },
     {
       origin,
@@ -911,6 +933,8 @@ function handleSourceFailed(failure: SourceFailure): SourceFailedReply {
   if (state.autoVerified && !state.stopped && state.kind === 'match') {
     const next = pickAutoSource(entries, effective, scanFinished(state.scan));
     if (next) {
+      // Cambio automático de fuente: un aviso háptico (HAPTIC_MAP), nunca la única señal.
+      haptic('warning');
       markAutoTried(next.id);
       playEntry(next, 'auto');
       return { next: true };
@@ -927,6 +951,7 @@ function handleSourceFailed(failure: SourceFailure): SourceFailedReply {
   }
 
   // Manual: se dice cuántas quedan y se deja elegir (regla 19).
+  haptic('error');
   const others = entries.filter(
     (entry, i) =>
       i !== index &&
@@ -1003,6 +1028,7 @@ export function addManualSource(raw: string): boolean {
   setWaitingMessage(null);
   const entry = entries.find((item) => item.id === hash);
   if (entry) playEntry(entry, 'user');
+  haptic('success');
   toast(existed ? 'Reproduciendo el hash seleccionado' : 'Hash externo añadido y reproduciendo', {
     tone: 'ok',
     icon: 'play',
@@ -1144,6 +1170,7 @@ export async function reportSource(hash: string, reason: SourceReportReason): Pr
           })
         : undefined;
     // Reportar no cambia de fuente sola (index.html:4034-4038); se ofrece hacerlo.
+    haptic('success');
     toast('Fuente apartada; el segundo motor ya la está comprobando', {
       tone: 'info',
       icon: 'refresh',

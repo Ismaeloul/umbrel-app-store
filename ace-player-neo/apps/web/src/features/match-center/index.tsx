@@ -1,26 +1,31 @@
-/* Centro de partido (`?vista=partido/<id>` y `partido/canal/<hash>`),
-   inventario §5, §6 y §7. El reproductor y la línea de estado los pone el
-   armazón ENCIMA de esta vista (src/app/Shell.tsx); aquí va todo lo demás.
+/* Centro de partido = TEATRO (`?vista=partido/<id>` y `partido/canal/<hash>`;
+   plan Palco fase 2, decisión W5; inventario §5, §6 y §7). El reproductor y
+   la cápsula de estado los pone el armazón ENCIMA de esta vista
+   (src/app/Shell.tsx); aquí va todo lo demás.
 
-   Maquetación (diseño A, bento):
-   - Móvil: marcador, fuentes (lista con frase humana y barra «Emitiendo»
-     que se desliza), acciones, «Dónde se emite» y «Datos técnicos» plegado.
-   - Escritorio: bajo el vídeo, marcador + «Dónde se emite»; las fuentes
-     (rack), sus acciones y los datos técnicos, en el panel lateral
-     (aside.tsx). Desde 1280 px el armazón añade la columna de la agenda:
-     agenda + reproductor + panel a la vez. Con el panel plegado, las
-     fuentes bajan aquí.
+   - Sobre el vídeo, arriba a la izquierda, la cápsula del marcador (tapada
+     por defecto): la vista la proyecta con un portal en el hueco que publica
+     el reproductor (player/stage-slot.ts). Sin reproductor (cargándose, o en
+     los tests) va en su sitio, arriba de la vista.
+   - Bajo el vídeo, la cabecera (competición, estado y los dos equipos) y el
+     panel con pestañas Fuentes · Partido · Datos técnicos. Desde 1024 px ese
+     panel va en el lateral (MatchAside.tsx), plegable; plegado, vuelve aquí.
+     Desde 1280 px el armazón añade además la columna de la agenda.
+   - Modo teatro (pantalla completa, F, doble clic o el móvil en horizontal):
+     el `data-immersive` del armazón deja solo el vídeo y sus cápsulas.
 
    La lógica de las fuentes vive fuera de React (src/features/sources/
    session.ts) para que siga funcionando con el reproductor en «mini». */
 
 import '../agenda/demo.ts';
 import '../sources/demo.ts';
-import type { FootballMatch, FootballSchedule } from '@ace/shared';
-import { useEffect, useEffectEvent, useMemo } from 'react';
+import type { FootballMatch } from '@ace/shared';
+import { useEffect, useEffectEvent, useMemo, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import type { ViewProps } from '../../app/contracts.ts';
 import { useLayout } from '../../app/layout.tsx';
 import { useNavigate } from '../../app/router.tsx';
+import { useStageSlot } from '../../player/stage-slot.ts';
 import { Button, EmptyState, IconButton, Skeleton, SkeletonRows } from '../../ui/index.ts';
 import { useLibraryLookup, useNow, useSchedule, useScores } from '../agenda/data.ts';
 import { channelInfo, madridClock } from '../agenda/domain.ts';
@@ -34,24 +39,14 @@ import {
   openPaste,
   useSession,
 } from '../sources/session.ts';
-import { SourcesPanel } from '../sources/SourcesPanel.tsx';
 import { ChannelCenter } from './ChannelCenter.tsx';
-import { NerdSection } from './NerdSection.tsx';
+import { findMatch } from './find.ts';
+import { MatchHead } from './MatchHead.tsx';
 import { Scoreboard } from './Scoreboard.tsx';
-import { WhereAired } from './WhereAired.tsx';
+import { MatchTabs } from './TheaterTabs.tsx';
 import './match-center.css';
 
-export function findMatch(
-  schedule: Pick<FootballSchedule, 'days'> | undefined,
-  id: string | null,
-): FootballMatch | null {
-  if (!schedule || !id) return null;
-  for (const day of schedule.days) {
-    const match = day.matches.find((item) => item.id === id);
-    if (match) return match;
-  }
-  return null;
-}
+export { findMatch } from './find.ts';
 
 /** Las hojas del centro de partido: una sola vez, aunque las abra el panel lateral. */
 function MatchSheets({ inMatch }: { inMatch: boolean }) {
@@ -75,20 +70,29 @@ function MatchSheets({ inMatch }: { inMatch: boolean }) {
   );
 }
 
+/** Esqueleto del teatro mientras llega la agenda (el vídeo ya lo guarda el armazón). */
 function MatchSkeleton() {
   return (
-    <div className="mc" aria-busy="true">
-      <div className="mc-score mc-score--skeleton">
-        <Skeleton width={180} height={16} radius="s" />
-        <div className="mc-score__skeleton-row">
-          <Skeleton width={72} height={72} radius="pill" />
-          <Skeleton width={120} height={56} radius="m" />
-          <Skeleton width={72} height={72} radius="pill" />
+    <div className="mc mc--theater" aria-busy="true">
+      <div className="mc-head mc-head--skeleton">
+        <Skeleton width={160} height={14} radius="s" />
+        <div className="mc-head__skeleton-row">
+          <Skeleton width={36} height={36} radius="circle" />
+          <Skeleton width="min(60%, 320px)" height={28} radius="m" />
+          <Skeleton width={36} height={36} radius="circle" />
         </div>
       </div>
+      <Skeleton width="100%" height={48} radius="pill" />
       <SkeletonRows rows={3} label="Cargando el partido…" />
     </div>
   );
+}
+
+/** La cápsula del marcador: sobre el vídeo si hay escenario; si no, arriba de la vista. */
+function ScoreCapsuleSlot({ children }: { children: ReactNode }) {
+  const slot = useStageSlot();
+  if (slot) return createPortal(children, slot);
+  return <div className="mc-scap-inline">{children}</div>;
 }
 
 function MatchView({ id, active }: { id: string; active: boolean }) {
@@ -117,11 +121,16 @@ function MatchView({ id, active }: { id: string; active: boolean }) {
   if (!match && schedule.isPending) return <MatchSkeleton />;
 
   const desktop = layout.kind === 'desktop' || layout.kind === 'wide';
-  const sources = layout.asideVisible ? null : (
-    <SourcesPanel
+  const tabs = layout.asideVisible ? null : (
+    <MatchTabs
+      match={match}
+      score={score}
+      now={now}
+      channels={channels}
+      today={today}
       variant={desktop ? 'rack' : 'list'}
-      className="mc-sources"
-      headerExtra={
+      className="mc-tabs--view"
+      extra={
         layout.asideAvailable ? (
           <IconButton
             icon="panel"
@@ -135,7 +144,7 @@ function MatchView({ id, active }: { id: string; active: boolean }) {
 
   if (!match) {
     return (
-      <div className="mc">
+      <div className="mc mc--theater">
         <h1 className="sr-only" tabIndex={-1}>
           Partido
         </h1>
@@ -166,23 +175,25 @@ function MatchView({ id, active }: { id: string; active: boolean }) {
             ? 'Sin la agenda no sabemos qué canales emiten el partido. Puedes pegar un Content ID.'
             : 'Puede que la agenda se haya actualizado. Búscalo de nuevo o pega un Content ID.'}
         </EmptyState>
-        {hasSession ? sources : null}
+        {hasSession ? tabs : null}
         <MatchSheets inMatch />
       </div>
     );
   }
 
-  const channelNames = channels.map((channel) => channel.name);
   return (
     <div
-      className="mc"
+      className="mc mc--theater"
       data-layout={layout.kind}
       data-aside={layout.asideVisible ? 'true' : 'false'}
     >
-      <Scoreboard match={match} score={score} now={now} channels={channelNames} />
-      {sources}
-      <WhereAired match={match} channels={channels} today={today} />
-      {layout.asideVisible ? null : <NerdSection variant="fold" />}
+      {active ? (
+        <ScoreCapsuleSlot>
+          <Scoreboard key={match.id} match={match} score={score} now={now} />
+        </ScoreCapsuleSlot>
+      ) : null}
+      <MatchHead match={match} score={score} now={now} />
+      {tabs}
       <MatchSheets inMatch />
     </div>
   );
@@ -190,7 +201,7 @@ function MatchView({ id, active }: { id: string; active: boolean }) {
 
 export default function MatchCenter({ route, active }: ViewProps) {
   if (route.vista !== 'partido') return null;
-  // `.mc-host` es el contenedor de las consultas de tamaño: el bento se
+  // `.mc-host` es el contenedor de las consultas de tamaño: el teatro se
   // decide por el ancho real de la vista, no por el de la pantalla.
   if (route.canal)
     return (

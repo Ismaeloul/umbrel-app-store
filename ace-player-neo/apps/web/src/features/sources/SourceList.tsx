@@ -1,177 +1,99 @@
-/* Lista de fuentes (inventario §7.1-7.2):
-   - `list` (móvil y tableta, opción A): una fila por fuente con número,
-     proveedor en una palabra, medidor con palabra y una frase humana
-     («funcionó en el reproductor», «reintento a las 20:16»).
-   - `rack` (escritorio, injerto B2): columnas alineadas Nº · proveedor ·
-     estado · pares · Mbit/s con cifras de celda fija.
+/* Lista de fuentes como rejilla de carteles (plan Palco fase 2, decisión W6;
+   inventario §7.1-7.2). Dos variantes con el mismo cartel:
+   - `list` (dentro de la vista): tantos carteles por fila como quepan
+     (dos en el móvil);
+   - `rack` (panel lateral de escritorio): dos por fila.
 
    Reglas que cuida:
    - El orden es el del servidor y los números no cambian: una fuente que se
      pliega no renumera las demás, y la lista nunca se recoloca sola (regla 1).
-   - Estado siempre con forma + palabra (SignalBadge); «comprobando» late.
-   - La activa lleva «En pantalla» y aria-current; pulsarla no hace nada.
+   - Estado siempre con forma + palabra (anillo y palabra en cada cartel).
+   - La que suena lleva «En pantalla» y aria-current; pulsarla no hace nada.
+     La cápsula «En pantalla» se DESLIZA de un cartel al otro al cambiar de
+     fuente (solo transform: FLIP a mano, decisión W14).
    - Clic derecho o pulsación larga: menú contextual de la fuente.
-   - Flechas ↑ ↓ para moverse entre filas; Intro o Espacio la eligen. */
+   - Flechas ← → ↑ ↓ para moverse por la rejilla; Intro o Espacio eligen.
+   - Las caídas y en cola van plegadas al final («Ver n más…», regla 22). */
 
-import {
-  useEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type KeyboardEvent,
-  type RefObject,
-} from 'react';
+import { useLayoutEffect, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 import { cx } from '../../lib/cx.ts';
-import { acestreamLink, copyText, openExternal } from '../../player/clipboard.ts';
-import { notify } from '../../notices/index.ts';
-import { Icon, Menu, Num, SignalBadge, useContextMenu, type MenuItem } from '../../ui/index.ts';
-import { swarmMbit } from './model.ts';
-import { openReport, selectSource, confirmSource } from './session.ts';
+import { prefersReducedMotion } from '../../lib/media.ts';
+import { Icon } from '../../ui/index.ts';
+import { SourcePoster } from './SourcePoster.tsx';
 import type { SourceRow } from './useSources.ts';
 
 export type SourceListVariant = 'list' | 'rack';
 
-function rowMenu(row: SourceRow, inMatch: boolean): MenuItem[] {
-  const items: MenuItem[] = [
-    {
-      id: 'ver',
-      label: row.onScreen ? 'Ya está en pantalla' : 'Ver esta fuente',
-      icon: 'play',
-      disabled: row.onScreen,
-      onSelect: () => selectSource(row.entry.id),
-    },
-    {
-      id: 'copiar-hash',
-      label: 'Copiar hash',
-      icon: 'hash',
-      onSelect: () =>
-        void copyText(row.entry.id).then((ok) =>
-          notify(ok ? 'Hash copiado' : 'No se pudo copiar el hash', {
-            tone: ok ? 'ok' : 'err',
-            icon: 'copy',
-          }),
-        ),
-    },
-    {
-      id: 'abrir',
-      label: 'Abrir en la app de AceStream',
-      icon: 'externo',
-      onSelect: () => openExternal(acestreamLink(row.entry.id)),
-    },
-  ];
-  if (inMatch && row.active && row.entry.learned !== 'correct')
-    items.push({
-      id: 'correcto',
-      label: 'Es el canal correcto',
-      icon: 'learn',
-      separated: true,
-      onSelect: () => void confirmSource(row.entry.id),
-    });
-  items.push({
-    id: 'reportar',
-    label: 'Reportar…',
-    icon: 'flag',
-    danger: true,
-    separated: !(inMatch && row.active && row.entry.learned !== 'correct'),
-    onSelect: () => openReport(row.entry.id),
-  });
-  return items;
+const ARROWS = new Set(['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight']);
+
+/** Cuántos carteles hay en la primera fila (por su posición real). */
+function columnsOf(buttons: readonly HTMLElement[]): number {
+  const first = buttons[0];
+  if (!first) return 1;
+  let count = 0;
+  for (const button of buttons) {
+    if (button.offsetTop !== first.offsetTop) break;
+    count += 1;
+  }
+  return Math.max(1, count);
 }
 
 function focusSibling(
   event: KeyboardEvent<HTMLButtonElement>,
   listRef: RefObject<HTMLElement | null>,
 ) {
-  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
-  const buttons = [...(listRef.current?.querySelectorAll<HTMLButtonElement>('.src-row') ?? [])];
+  if (!ARROWS.has(event.key)) return;
+  const buttons = [...(listRef.current?.querySelectorAll<HTMLButtonElement>('.src-poster') ?? [])];
   const index = buttons.indexOf(event.currentTarget);
-  const next = buttons[index + (event.key === 'ArrowDown' ? 1 : -1)];
-  if (!next) return;
+  if (index < 0) return;
+  const columns = columnsOf(buttons);
+  // En una sola fila (o sin maquetación, como en los tests) ↑ ↓ también recorren de uno en uno.
+  const step = columns >= buttons.length ? 1 : columns;
+  const delta =
+    event.key === 'ArrowRight'
+      ? 1
+      : event.key === 'ArrowLeft'
+        ? -1
+        : event.key === 'ArrowDown'
+          ? step
+          : -step;
+  // Las flechas son de la rejilla aunque no haya a dónde ir: que no se
+  // escapen al zapping del reproductor (← →).
   event.preventDefault();
-  next.focus();
+  buttons[index + delta]?.focus();
 }
 
-function SourceRowView({
-  row,
-  variant,
-  inMatch,
-  listRef,
-  index,
-}: {
-  row: SourceRow;
-  variant: SourceListVariant;
-  inMatch: boolean;
-  listRef: RefObject<HTMLElement | null>;
-  index: number;
-}) {
-  const { bind, menu } = useContextMenu();
-  // La pulsación larga abre el menú; el «clic» que llega al soltar el dedo
-  // justo después no debe elegir la fuente.
-  const menuOpenedAt = useRef(0);
-  useEffect(() => {
-    if (menu.open) menuOpenedAt.current = Date.now();
-  }, [menu.open]);
-  const mbit = swarmMbit(row.entry);
-  const peers = row.entry.probe?.peers ?? 0;
-  return (
-    <li className="src-item" style={{ '--i': index } as CSSProperties}>
-      <button
-        type="button"
-        className={cx('src-row', 'press', `src-row--${variant}`, row.active && 'is-active')}
-        data-state={row.signal.state}
-        aria-current={row.active ? 'true' : undefined}
-        aria-label={row.description}
-        title={variant === 'rack' ? row.description : undefined}
-        onClick={() => {
-          if (Date.now() - menuOpenedAt.current < 700) return;
-          selectSource(row.entry.id);
-        }}
-        onKeyDown={(event) => focusSibling(event, listRef)}
-        {...bind}
-      >
-        <span className="src-row__num" aria-hidden="true">
-          <Num value={row.number} />
-        </span>
-        <span className="src-row__main" aria-hidden="true">
-          <span className="src-row__name">{row.presentation.short}</span>
-          <span className="src-row__detail">
-            {row.onScreen ? (
-              <span className="src-row__here">
-                <Icon name="senal" size={16} />
-                En pantalla
-              </span>
-            ) : null}
-            <span className="src-row__phrase">{row.detail}</span>
-          </span>
-        </span>
-        <span className="src-row__sig" aria-hidden="true">
-          <SignalBadge
-            state={row.signal.state}
-            label={row.signal.word}
-            size="sm"
-            layout={variant === 'list' ? 'stacked' : 'inline'}
-          />
-        </span>
-        {variant === 'rack' ? (
-          <>
-            <span className="src-row__peers" aria-hidden="true">
-              {peers > 0 ? <Num value={peers} /> : '—'}
-            </span>
-            <span className="src-row__mbit" aria-hidden="true">
-              {mbit ? <Num value={mbit} /> : '—'}
-            </span>
-          </>
-        ) : null}
-      </button>
-      <Menu
-        open={menu.open}
-        anchor={menu.anchor}
-        onClose={menu.onClose}
-        label={`Fuente ${row.number}`}
-        items={rowMenu(row, inMatch)}
-      />
-    </li>
-  );
+/**
+ * «En pantalla» viaja de un cartel al siguiente: al cambiar la fuente que
+ * suena, la cápsula nueva arranca donde estaba la anterior y se desliza a su
+ * sitio (FLIP con transform; con movimiento reducido, aparece sin más).
+ */
+function useOnAirSlide(listRef: RefObject<HTMLElement | null>, onScreenId: string | null) {
+  const last = useRef<{ id: string | null; rect: DOMRect | null }>({ id: null, rect: null });
+  useLayoutEffect(() => {
+    const el = listRef.current?.querySelector<HTMLElement>('.src-poster__onair') ?? null;
+    const previous = last.current;
+    const rect = el?.getBoundingClientRect() ?? null;
+    last.current = { id: onScreenId, rect };
+    if (!el || !rect || !previous.rect || previous.id === onScreenId) return;
+    if (prefersReducedMotion()) return;
+    const dx = previous.rect.left - rect.left;
+    const dy = previous.rect.top - rect.top;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+    el.style.transition = 'none';
+    el.style.transform = `translate(${dx}px, ${dy}px)`;
+    // Fuerza el cálculo con la cápsula en el sitio viejo antes de soltarla.
+    void el.offsetWidth;
+    el.style.transition = 'transform var(--dur-estandar) var(--ease-estandar)';
+    el.style.transform = '';
+    el.addEventListener(
+      'transitionend',
+      () => {
+        el.style.transition = '';
+      },
+      { once: true },
+    );
+  });
 }
 
 export interface SourceListProps {
@@ -186,27 +108,20 @@ export function SourceList({ shown, tucked, variant, inMatch, label }: SourceLis
   const listRef = useRef<HTMLDivElement>(null);
   const [showTucked, setShowTucked] = useState(false);
   const failedTucked = tucked.filter((row) => row.signal.state === 'fail').length;
+  const onScreen = [...shown, ...tucked].find((row) => row.onScreen)?.entry.id ?? null;
+  useOnAirSlide(listRef, onScreen);
+  const onArrow = (event: KeyboardEvent<HTMLButtonElement>) => focusSibling(event, listRef);
   return (
     <div className={cx('src-list', `src-list--${variant}`)} ref={listRef}>
-      {variant === 'rack' && shown.length ? (
-        <div className="src-rack__head" aria-hidden="true">
-          <span>Nº</span>
-          <span>Fuente</span>
-          <span>Estado</span>
-          <span>Pares</span>
-          <span>Mbit/s</span>
-        </div>
-      ) : null}
       {shown.length ? (
         <ol className="src-list__rows stagger" aria-label={label}>
           {shown.map((row, index) => (
-            <SourceRowView
+            <SourcePoster
               key={row.entry.id}
               row={row}
-              variant={variant}
               inMatch={inMatch}
-              listRef={listRef}
               index={index}
+              onArrow={onArrow}
             />
           ))}
         </ol>
@@ -236,13 +151,12 @@ export function SourceList({ shown, tucked, variant, inMatch, label }: SourceLis
               aria-label={`${label}: sin señal o en cola`}
             >
               {tucked.map((row, index) => (
-                <SourceRowView
+                <SourcePoster
                   key={row.entry.id}
                   row={row}
-                  variant={variant}
                   inMatch={inMatch}
-                  listRef={listRef}
                   index={index}
+                  onArrow={onArrow}
                 />
               ))}
             </ol>

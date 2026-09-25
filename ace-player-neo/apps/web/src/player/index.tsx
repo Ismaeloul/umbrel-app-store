@@ -6,10 +6,16 @@
    inicial.
 
    Aquí se juntan: el orquestador (runtime.ts) atado al <video>, las acciones
-   (con sus avisos), los atajos del registro central, la Media Session, la
-   pantalla completa y el PiP, la línea de estado bajo el vídeo y la
-   presencia para el armazón. La API para las vistas está en api.ts (y se
-   reexporta abajo). Documentación: src/player/README.md. */
+   (con sus avisos y su toque háptico, HAPTIC_MAP), los atajos del registro
+   central, la Media Session, la pantalla completa, el modo teatro y el PiP,
+   el estado base de la cápsula de estado y la presencia para el armazón. La
+   API para las vistas está en api.ts (y se reexporta abajo). Documentación:
+   src/player/README.md.
+
+   Palco (plan fase 2, W5, W7 y W14): el mismo <video> se ve en grande o a
+   96×54 en el mini (solo cambia el CSS), el modo teatro es el mismo
+   `data-immersive` que la pantalla completa y, al cambiar de fuente, un velo
+   negro tapa medio segundo la imagen como un cambio de canal de verdad. */
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import { api } from '../api/client.ts';
@@ -19,6 +25,7 @@ import { setPlayerPresence } from '../app/player-presence.ts';
 import { useNavigate } from '../app/router.tsx';
 import { useShortcut } from '../app/shortcuts.ts';
 import { cx } from '../lib/cx.ts';
+import { haptic } from '../lib/haptics.ts';
 import { MEDIA, useLayoutKind, useMediaQuery } from '../lib/media.ts';
 import { notify } from '../notices/notify.ts';
 import { setStatusBase } from '../notices/statusLine.ts';
@@ -188,7 +195,19 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
   const nerdHosted = useNerdHosted();
   const stage = presentation === 'stage';
   const compact = layoutKind === 'mobile';
-  const immersive = fullscreen || (stage && phoneLandscape);
+  /* Modo teatro (escritorio sin pantalla completa): solo en grande y con algo
+     que ver; al detener o salir del partido se quita solo. */
+  const [theaterWanted, setTheaterWanted] = useState(false);
+  const theater = theaterWanted && stage && state.channel !== null;
+  if (theaterWanted && (!stage || !state.channel)) setTheaterWanted(false);
+  const immersive = fullscreen || theater || (stage && phoneLandscape);
+
+  /* Corte a negro (W14): al pasar de una fuente a otra, un velo negro tapa la
+     imagen medio segundo, como un cambio de canal de verdad. Se cuenta al
+     pintar (no en un efecto) para que el velo salga en el mismo fotograma. */
+  const hash = state.channel?.hash ?? null;
+  const [cut, setCut] = useState({ hash, n: 0 });
+  if (cut.hash !== hash) setCut({ hash, n: cut.hash && hash ? cut.n + 1 : cut.n });
 
   useNoNativeControls(videoRef);
 
@@ -208,10 +227,10 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
 
   if (state.channel) lastChannel.current = { channel: state.channel, state };
 
-  // Pantalla completa = inmersivo para el armazón (sin toasts ni navegación encima).
+  // Pantalla completa o modo teatro = inmersivo para el armazón (sin toasts ni navegación encima).
   useEffect(() => {
-    setPlayerPresence({ immersive: fullscreen });
-  }, [fullscreen]);
+    setPlayerPresence({ immersive: fullscreen || theater });
+  }, [fullscreen, theater]);
 
   // Salir del centro de partido con la pantalla completa puesta: se quita.
   useEffect(() => {
@@ -230,7 +249,6 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
   // Biblioteca: favoritos (estrella) y la lista de zapping.
   const library = useApiQuery('libraryGet');
   const zapList = useMemo<ZapItem[]>(() => zappingList(library.data), [library.data]);
-  const hash = state.channel?.hash ?? null;
   const isFavorite = Boolean(hash && library.data?.favorites.some((item) => item.id === hash));
   const canZap = zapList.length > 1 || (zapList.length === 1 && zapList[0]?.id !== hash);
 
@@ -239,6 +257,7 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
   const zap = (direction: 1 | -1) => {
     const target = zapTarget(zapList, hash, direction);
     if (!target) return;
+    haptic('rigid');
     notify(`Zapping: ${target.title}`, { kind: 'signal', icon: 'tv' });
     const next = { vista: 'partido' as const, id: null, canal: target.id };
     play(
@@ -249,10 +268,21 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
     navigate(next);
   };
 
+  const toggleTheater = () => {
+    haptic('medium');
+    setTheaterWanted((on) => !on);
+  };
+
   const actions: PlayerActions = {
-    toggle: () => void runtime?.toggle('user'),
+    toggle: () => {
+      haptic('light');
+      void runtime?.toggle('user');
+    },
     tapToPlay: () => void runtime?.tapToPlay(),
-    stop: () => stop(),
+    stop: () => {
+      haptic('rigid');
+      stop();
+    },
     retry: () => {
       if (playerStore.get().channel) runtime?.retry();
       else if (lastChannel.current) {
@@ -268,12 +298,23 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
     toggleMute: () => {
       const el = video();
       if (!el) return;
+      haptic('light');
       // Quitar el silencio con el volumen a 0 lo sube a la mitad (si no, no se oiría nada).
       if (el.muted && el.volume === 0) el.volume = 0.5;
       runtime?.setMuted(!el.muted);
     },
     setVolume: (value) => runtime?.setVolume(value),
     toggleFullscreen: () => {
+      // Sin pantalla completa en este navegador, en escritorio F es el modo teatro.
+      if (!abilities.fullscreen && !compact && !fullscreen && playerStore.get().channel) {
+        toggleTheater();
+        return;
+      }
+      if (theater) {
+        setTheaterWanted(false);
+        return;
+      }
+      haptic('medium');
       void toggleFullscreen(video()).then((result) => {
         if (result === 'not-ready')
           toast('La pantalla completa estará disponible cuando arranque la imagen', {
@@ -283,6 +324,7 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
           toast('Este navegador no permite la pantalla completa aquí', { tone: 'warn' });
       });
     },
+    toggleTheater,
     togglePip: () => {
       if (playerStore.get().demo) {
         toast('PiP necesita un vídeo real (en demo no hay señal)', { tone: 'info' });
@@ -309,6 +351,7 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
       void api('libraryMutate', { body })
         .then((view) => {
           queryClient.setQueryData(routeKey('libraryGet'), view);
+          if (!saved) haptic('success');
           toast(
             saved
               ? `«${current.title}» quitado de favoritos`
@@ -326,7 +369,10 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
         );
     },
     zap,
-    minimize: onMinimize,
+    minimize: () => {
+      haptic('light');
+      onMinimize();
+    },
     expand: onExpand,
   };
 
@@ -499,6 +545,19 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
     when: () => stageRef.current,
     handler: actions.toggleFullscreen,
   });
+  useShortcut(
+    {
+      id: 'reproductor.teatro',
+      keys: ['Escape'],
+      display: ['Esc'],
+      label: 'Sale del modo teatro',
+      group,
+      when: () => stageRef.current && theater,
+      handler: () => setTheaterWanted(false),
+      // Solo donde existe el modo teatro (escritorio sin pantalla completa).
+    },
+    !compact && !abilities.fullscreen,
+  );
   useShortcut({
     id: 'reproductor.pip',
     keys: ['p'],
@@ -561,6 +620,7 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
     actions,
     menuItems,
     fullscreen,
+    theater,
     pip,
     canFullscreen: abilities.fullscreen,
     canPip: abilities.pip,
@@ -603,6 +663,7 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
             aria-label={channel?.title ?? 'Vídeo'}
           />
           {state.engine === 'demo' && state.started ? <DemoPicture /> : null}
+          {cut.n > 0 ? <span key={cut.n} className="player-cut" aria-hidden="true" /> : null}
           {stage ? <PlayerSurface /> : null}
         </div>
         {stage ? null : <MiniPlayer rootRef={rootRef} />}

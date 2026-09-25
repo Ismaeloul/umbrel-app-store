@@ -48,8 +48,12 @@ export interface SourceProbe {
   peers: number;
   /** KB/s en la prueba. */
   speedDown: number;
+  /** Kbit/s que midió el comprobador en la señal (null si no llegó a medir). */
+  rateKbps: number | null;
   intakeKbps: number | null;
   streamKbps: number;
+  /** Códec de vídeo que vio el comprobador («h264», «hevc»…; vacío si no lo sabe). */
+  videoCodec: string;
   attempts: number;
   retryAt: string | null;
   /** D6: null si el comprobador aún no lo sabe. */
@@ -179,8 +183,10 @@ function probeFrom(candidate: ScanCandidate): SourceProbe {
     reason: candidate.reason,
     peers: candidate.peers,
     speedDown: candidate.speedDown,
+    rateKbps: candidate.rateKbps,
     intakeKbps: candidate.intakeKbps,
     streamKbps: candidate.streamKbps,
+    videoCodec: candidate.videoCodec,
     attempts: candidate.attempts,
     retryAt: candidate.retryAt,
     playableOnWeb: candidate.playableOn ? candidate.playableOn.web : null,
@@ -192,8 +198,10 @@ const QUEUED_PROBE: SourceProbe = {
   reason: '',
   peers: 0,
   speedDown: 0,
+  rateKbps: null,
   intakeKbps: null,
   streamKbps: 0,
+  videoCodec: '',
   attempts: 0,
   retryAt: null,
   playableOnWeb: null,
@@ -237,8 +245,10 @@ function sameProbe(a: SourceProbe, b: SourceProbe): boolean {
     a.reason === b.reason &&
     a.peers === b.peers &&
     a.speedDown === b.speedDown &&
+    a.rateKbps === b.rateKbps &&
     a.intakeKbps === b.intakeKbps &&
     a.streamKbps === b.streamKbps &&
+    a.videoCodec === b.videoCodec &&
     a.attempts === b.attempts &&
     a.retryAt === b.retryAt &&
     a.playableOnWeb === b.playableOnWeb
@@ -490,6 +500,37 @@ function mbit(kbps: number): string {
 export function swarmMbit(entry: SourceEntry): string | null {
   const intake = entry.probe?.intakeKbps;
   return typeof intake === 'number' && intake > 0 ? mbit(intake) : null;
+}
+
+/** Umbrales de bitrate (kbit/s) a partir de los que una señal se lee como 1080p o 720p. */
+export const QUALITY_KBPS = { fullHd: 3800, hd: 1700 } as const;
+
+/**
+ * Calidad legible para el cartel de la fuente (Palco, corrección 2): «1080p»,
+ * «720p» o «SD» según el bitrate que midió el comprobador (`rateKbps`; si no
+ * lo midió, el que declara el canal, `streamKbps`) y «HEVC» si el códec no es
+ * H.264. null cuando el comprobador no ha visto nada todavía.
+ */
+export function qualityLabel(entry: Pick<SourceEntry, 'probe'>): string | null {
+  const probe = entry.probe;
+  if (!probe) return null;
+  const kbps = probe.rateKbps && probe.rateKbps > 0 ? probe.rateKbps : probe.streamKbps;
+  const hevc = /hevc|h\.?265|hvc1|hev1/i.test(probe.videoCodec);
+  const definition =
+    kbps >= QUALITY_KBPS.fullHd
+      ? '1080p'
+      : kbps >= QUALITY_KBPS.hd
+        ? '720p'
+        : kbps > 0
+          ? 'SD'
+          : null;
+  if (!definition && !hevc) return null;
+  return [definition, hevc ? 'HEVC' : null].filter(Boolean).join(' · ');
+}
+
+/** Nombre del canal para la tesela del cartel: el título sin el proveedor o el canal con el que casó. */
+export function channelNameOf(entry: Pick<SourceEntry, 'title' | 'matchedChannel'>): string {
+  return channelPartOf(entry.title) || entry.matchedChannel || entry.title;
 }
 
 /**

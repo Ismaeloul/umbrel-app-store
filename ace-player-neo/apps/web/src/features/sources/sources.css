@@ -1,6 +1,7 @@
 /* ==========================================================================
-   Selector de fuentes (dirección A «Luz de focos» con el rack de B, B2).
-   Todo con tokens; solo se animan transform y opacity; el hover, solo con
+   Selector de fuentes, piel Palco (plan fase 2, decisiones W6 y W14): carteles
+   de fuente sin miniatura en rejilla, «En pantalla» que se desliza y
+   «Rebuscar» que gira mientras rebusca. Todo con tokens; solo se animan transform y opacity; el hover, solo con
    ratón de verdad; objetivos de 44 px; nada por debajo de 11 px.
    ========================================================================== */
 
@@ -38,7 +39,9 @@
   align-items: center;
   margin-right: -8px;
 }
-.src__research[aria-busy='true'] svg {
+.src__research[aria-busy='true'] svg,
+.src-inspector__research[aria-busy='true'] svg,
+.src__failure .btn[aria-busy='true'] svg {
   animation: src-gira 900ms linear infinite;
 }
 @keyframes src-gira {
@@ -139,74 +142,147 @@
   }
 }
 
-/* ---- Lista (A) --------------------------------------------------------------- */
+/* ---- Carteles (Palco, decisión W6 y corrección 2) -----------------------------
+   Rejilla de teselas 16:9 sin miniatura: la sigla y el dorsal del canal sobre
+   su tono (ChannelMark), el número de la fuente, «En pantalla» en oro y un
+   filo alrededor de la tesela con el color Y el trazo del estado (lleno,
+   discontinuo, punteado); debajo, el proveedor, el anillo con su palabra, la
+   calidad y la frase. Dos por fila en el móvil y en el panel lateral; en la
+   vista ancha, tantos de ~160 px como quepan. */
 .src-list {
   display: grid;
-  gap: var(--s-2);
+  gap: var(--s-3);
   min-width: 0;
 }
 .src-list__rows {
-  --r-outer: var(--r-xl);
-  --pad: 4px;
-  --r-inner: calc(var(--r-outer) - var(--pad));
   display: grid;
-  gap: 2px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--s-5) var(--s-3);
   margin: 0;
-  padding: var(--pad);
+  padding: 4px 4px 0;
   list-style: none;
-  border-radius: var(--r-outer);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--line-soft);
 }
-.src-list__rows--tucked {
-  background: var(--bg-sunk);
+.src-list--rack .src-list__rows,
+.src-list--list .src-list__rows {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (min-width: 768px) {
+  .src-list--list .src-list__rows {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
 }
 .src-item {
   min-width: 0;
 }
-.src-row {
-  position: relative;
+.src-poster {
+  --ring: var(--line-strong);
+  --ring-style: solid;
+  --ring-w: 2px;
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
+  gap: 8px;
+  align-content: start;
   width: 100%;
-  min-height: 64px;
-  padding: 10px 14px 10px 16px;
-  /* Radio concéntrico con la tarjeta (corrección 8). */
-  border-radius: var(--r-inner);
+  padding: 0;
+  border-radius: var(--r-m);
   text-align: left;
   color: var(--text);
 }
-/* Separador fino entre filas que no llega a los bordes redondeados (en el
-   <li>: los pseudoelementos del botón ya son la barra de la activa y el
-   brillo al pulsar). */
-.src-item {
+/* El filo del estado: color y trazo propios (forma + color; la palabra, debajo). */
+.src-poster[data-state='ok'] {
+  --ring: var(--ok);
+}
+.src-poster[data-state='weak'] {
+  --ring: var(--weak);
+  --ring-style: dashed;
+}
+.src-poster[data-state='fail'] {
+  --ring: var(--fail);
+}
+.src-poster[data-state='checking'] {
+  --ring: var(--text-2);
+  --ring-style: dashed;
+}
+.src-poster[data-state='pending'] {
+  --ring: var(--idle);
+  --ring-style: dotted;
+}
+.src-poster[data-state='reported'] {
+  --ring: var(--weak);
+  --ring-style: dotted;
+}
+/* La que suena: oro y más grueso (como el anillo). */
+.src-poster.is-onscreen {
+  --ring: var(--accent);
+  --ring-style: solid;
+  --ring-w: 3px;
+}
+.src-poster.is-active:not(.is-onscreen) {
+  --ring-w: 3px;
+}
+.src-poster__tile {
   position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--r-m);
+  background: var(--surface-2);
+  outline: var(--ring-w) var(--ring-style) var(--ring);
+  outline-offset: 2px;
+  container-type: inline-size;
+  box-shadow: var(--shadow-poster);
 }
-.src-item + .src-item::before {
-  content: '';
+/* La tesela del canal ocupa el cartel entero, sea cual sea su ancho. */
+.src-poster__mark {
+  --s: calc(100cqw * 9 / 16) !important;
   position: absolute;
-  top: -1px;
-  left: 16px;
-  right: 16px;
-  height: 1px;
-  background: var(--line-soft);
-  pointer-events: none;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
 }
-.src-row__num {
-  font-size: var(--fs-22);
+/* Sin señal o apartada: la tesela se apaga (el filo y la palabra lo dicen). */
+.src-poster[data-state='fail'] .src-poster__mark,
+.src-poster[data-state='reported'] .src-poster__mark {
+  opacity: 0.42;
+}
+.src-poster[data-state='pending'] .src-poster__mark {
+  opacity: 0.7;
+}
+/* Número de la fuente: pastilla oscura arriba a la derecha (la sigla va a la izquierda). */
+.src-poster__num {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 7px;
+  border-radius: var(--r-pill);
+  background: rgb(0 0 0 / 0.58);
+  color: #fff;
+  font-size: var(--fs-13);
+  font-weight: var(--wght-num);
   line-height: 1;
-  color: var(--text-2);
-  text-align: center;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.14);
 }
-.src-row__main {
+/* «En pantalla»: abajo a la izquierda; al cambiar de fuente se desliza de un
+   cartel al otro (FLIP con transform en SourceList). */
+.src-poster__onair {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  max-width: calc(100% - 12px);
+  box-shadow: 0 4px 12px -4px rgb(0 0 0 / 0.55);
+  will-change: transform;
+}
+.src-poster__body {
   display: grid;
-  gap: 4px;
+  gap: 3px;
   min-width: 0;
+  padding: 0 2px;
 }
-.src-row__name {
-  font-size: var(--fs-17);
+.src-poster__name {
+  font-size: var(--fs-15);
   font-weight: var(--wght-strong);
   font-stretch: var(--w-tight);
   line-height: var(--lh-tight);
@@ -214,63 +290,50 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.src-row__detail {
+.src-poster__meta {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 4px 8px;
+  gap: 6px;
   min-width: 0;
-  font-size: var(--fs-13);
-  line-height: var(--lh-snug);
-  color: var(--text-2);
-}
-.src-row__phrase {
-  min-width: 0;
-}
-.src-row__here {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 24px;
-  padding: 0 8px 0 6px;
-  border-radius: 8px;
-  background: var(--accent-wash);
-  color: var(--accent-ink);
   font-size: var(--fs-12);
   font-weight: var(--wght-strong);
   font-stretch: var(--w-tight);
+  color: var(--text-2);
   white-space: nowrap;
 }
-.src-row__sig {
-  align-self: start;
-  padding-top: 2px;
+.src-poster__meta .sring {
+  flex: none;
+  gap: 5px;
 }
-/* La activa: fondo elevado y una barra que NO toca la esquina (corrección 8). */
-.src-row.is-active {
-  background: var(--surface-2);
+.src-poster__extra {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.src-row.is-active::before {
-  content: '';
-  position: absolute;
-  left: 5px;
-  top: 14px;
-  bottom: 14px;
-  width: 4px;
-  border-radius: var(--r-pill);
-  background: var(--accent-edge);
+.src-poster__detail {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: var(--fs-12);
+  line-height: var(--lh-snug);
+  color: var(--text-2);
 }
-.src-row.is-active .src-row__num {
-  color: var(--accent-ink);
+.src-poster:focus-visible {
+  outline: none;
 }
-.src-row:focus-visible {
-  outline-offset: -2px;
+.src-poster:focus-visible .src-poster__tile {
+  box-shadow: var(--focus-ring), var(--shadow-poster);
 }
 @media (hover: hover) and (pointer: fine) {
-  .src-row:not(.is-active):hover {
-    background: color-mix(in oklab, var(--surface-2) 70%, transparent);
+  .src-poster:not(.is-onscreen):hover .src-poster__tile {
+    --ring-w: 3px;
   }
 }
 
+.src-list__rows--tucked {
+  padding-top: var(--s-1);
+}
 .src-list__more {
   display: inline-flex;
   align-items: center;
@@ -286,113 +349,6 @@
 @media (hover: hover) and (pointer: fine) {
   .src-list__more:hover {
     color: var(--text);
-  }
-}
-
-/* ---- Rack (B2, escritorio) ---------------------------------------------------- */
-/* Columnas FIJAS (salvo el proveedor) para que el estado, los pares y los
-   Mbit/s queden alineados de una fila a otra; la frase va debajo, a lo ancho. */
-.src-rack__head,
-.src-row--rack {
-  grid-template-columns: 22px minmax(0, 1fr) 92px 32px 40px;
-  column-gap: 8px;
-}
-.src-rack__head span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.src-rack__head {
-  display: grid;
-  padding: 0 12px 0 14px;
-  /* En caja normal: en mayúsculas «Pares» y «Mbit/s» no caben en sus columnas. */
-  font-size: var(--fs-11);
-  font-weight: var(--wght-strong);
-  font-stretch: var(--w-tight);
-  color: var(--text-3);
-}
-.src-rack__head span:nth-child(n + 4) {
-  text-align: right;
-}
-.src-row--rack {
-  grid-template-rows: auto auto;
-  row-gap: 3px;
-  min-height: 58px;
-  padding: 9px 12px 9px 14px;
-}
-.src-row--rack .src-row__main {
-  display: contents;
-}
-.src-row--rack .src-row__num {
-  grid-row: 1 / span 2;
-  font-size: var(--fs-17);
-}
-.src-row--rack .src-row__name {
-  grid-column: 2;
-  grid-row: 1;
-  font-size: var(--fs-15);
-}
-.src-row--rack .src-row__detail {
-  grid-column: 2 / -1;
-  grid-row: 2;
-  font-size: var(--fs-12);
-}
-.src-row--rack .src-row__sig {
-  grid-column: 3;
-  grid-row: 1;
-  align-self: center;
-  padding-top: 0;
-}
-.src-row--rack .src-row__peers {
-  grid-column: 4;
-  grid-row: 1;
-}
-.src-row--rack .src-row__mbit {
-  grid-column: 5;
-  grid-row: 1;
-}
-.src-row__peers,
-.src-row__mbit {
-  font-size: var(--fs-13);
-  font-weight: var(--wght-strong);
-  color: var(--text-2);
-  text-align: right;
-}
-.src-row--rack.is-active::before {
-  left: 4px;
-}
-@media (min-width: 1600px) {
-  .src-rack__head,
-  .src-row--rack {
-    column-gap: 12px;
-  }
-}
-/* Rack estrecho (el panel lateral de 320 px, hasta 1600 de ancho): con las
-   cuatro columnas fijas al nombre le quedaban ~70 px y salía «Lista d…»
-   (revisión visual de la Fase 2). Por debajo de 360 px el nombre va solo en
-   la primera línea, a lo ancho; el estado, los pares y los Mbit/s bajan a la
-   segunda, alineados con la cabecera, y la frase a la tercera. */
-.src-list--rack {
-  container-type: inline-size;
-}
-@container (max-width: 359px) {
-  .src-row--rack {
-    grid-template-rows: auto auto auto;
-  }
-  .src-row--rack .src-row__num {
-    grid-row: 1 / span 3;
-  }
-  .src-row--rack .src-row__name {
-    grid-column: 2 / -1;
-  }
-  .src-row--rack .src-row__sig,
-  .src-row--rack .src-row__peers,
-  .src-row--rack .src-row__mbit {
-    grid-row: 2;
-  }
-  .src-row--rack .src-row__detail {
-    grid-row: 3;
   }
 }
 
@@ -697,10 +653,15 @@
 
 @media (prefers-reduced-motion: reduce) {
   .src__progress .progress.is-running .progress__fill,
-  .src__research[aria-busy='true'] svg {
+  .src__research[aria-busy='true'] svg,
+  .src-inspector__research[aria-busy='true'] svg,
+  .src__failure .btn[aria-busy='true'] svg {
     animation: none;
   }
   .src-now__text {
     transition: none;
+  }
+  .src-poster__onair {
+    will-change: auto;
   }
 }

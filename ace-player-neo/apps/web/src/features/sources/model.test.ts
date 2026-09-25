@@ -6,6 +6,7 @@ import {
   applyScan,
   applyVerdict,
   availabilityPercent,
+  channelNameOf,
   channelPartOf,
   checkedLabel,
   clearScan,
@@ -25,6 +26,8 @@ import {
   PLAYER_VERDICT_MS,
   presentationOf,
   providerOf,
+  QUALITY_KBPS,
+  qualityLabel,
   reportFollowUp,
   resolutionSourceLabel,
   scanFinished,
@@ -170,6 +173,38 @@ describe('presentación de la fuente', () => {
     expect(resolutionSourceLabel('raro')).toBe('Fuente disponible');
     expect(checkedLabel('ai-programming')).toBe('IA');
     expect(checkedLabel('history')).toBe('Recientes');
+  });
+});
+
+describe('calidad y canal del cartel (Palco, corrección 2)', () => {
+  const withProbe = (extra: Partial<ScanCandidate>): SourceEntry =>
+    applyScan([entryFromCandidate(candidate(1), NOW)], {
+      candidates: [probe(1, 'working', extra)],
+    })[0]!;
+
+  it('sin prueba no hay calidad que decir', () => {
+    expect(qualityLabel(entryFromCandidate(candidate(1), NOW))).toBeNull();
+    expect(qualityLabel(withProbe({}))).toBeNull();
+  });
+
+  it('1080p, 720p o SD por el bitrate medido; si no lo midió, el que declara el canal', () => {
+    expect(qualityLabel(withProbe({ rateKbps: QUALITY_KBPS.fullHd }))).toBe('1080p');
+    expect(qualityLabel(withProbe({ rateKbps: 2400 }))).toBe('720p');
+    expect(qualityLabel(withProbe({ rateKbps: 900 }))).toBe('SD');
+    expect(qualityLabel(withProbe({ rateKbps: null, streamKbps: 4800 }))).toBe('1080p');
+    // Lo medido manda sobre lo declarado.
+    expect(qualityLabel(withProbe({ rateKbps: 1200, streamKbps: 4800 }))).toBe('SD');
+  });
+
+  it('HEVC se dice aparte (H.264 no se nombra) y sale solo si no hay bitrate', () => {
+    expect(qualityLabel(withProbe({ streamKbps: 4800, videoCodec: 'hevc' }))).toBe('1080p · HEVC');
+    expect(qualityLabel(withProbe({ streamKbps: 4800, videoCodec: 'h264' }))).toBe('1080p');
+    expect(qualityLabel(withProbe({ videoCodec: 'H.265' }))).toBe('HEVC');
+  });
+
+  it('la tesela lleva el nombre del canal, sin el proveedor', () => {
+    expect(channelNameOf(entryFromCandidate(candidate(1), NOW))).toBe('M+ Liga de Campeones');
+    expect(channelNameOf({ title: 'Canal suelto', matchedChannel: '' })).toBe('Canal suelto');
   });
 });
 

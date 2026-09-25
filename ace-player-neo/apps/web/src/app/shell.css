@@ -37,14 +37,20 @@
   padding-top: calc(var(--safe-top) + var(--s-6));
 }
 
-/* ---- Escenario del reproductor ------------------------------------------------ */
+/* ---- Escenario del reproductor ------------------------------------------------
+   Palco (plan fase 2, W5 y W7): el vídeo arriba y, SOBRE él, abajo a la
+   izquierda, la cápsula de estado (la línea de estado de siempre, mismo
+   statusLine.ts). Vídeo y cápsula comparten la celda de la rejilla: la
+   cápsula no ocupa sitio propio (antes, 44 px reservados bajo el vídeo). */
 .stage {
   display: grid;
   /* Una columna que NUNCA crece con el contenido: con `auto`, una frase larga
      de la línea de estado (texto en una línea) ensanchaba el vídeo más que la
      pantalla (añadido por el agente del reproductor). */
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--s-3);
+}
+.stage > * {
+  grid-area: 1 / 1;
 }
 .stage[data-presentation='mini'] {
   display: contents;
@@ -56,20 +62,114 @@
   z-index: var(--z-sticky);
   margin-inline: calc(-1 * (var(--gutter) + var(--safe-left)))
     calc(-1 * (var(--gutter) + var(--safe-right)));
-  padding-bottom: var(--s-3);
   background: var(--bg);
 }
+/* La cápsula de estado: sobre la imagen, abajo a la izquierda. Con los
+   controles a la vista sube justo encima de ellos (no los pisa) y, cuando se
+   esconden, baja al borde; con el panel del vídeo («Conectando», «Sin
+   señal»…) se aparta, porque el panel ya lo dice. Solo translate y opacity. */
 .stage__status {
-  /* El hueco de la línea (44 px) se guarda desde el principio: aparece en
-     cuanto el reproductor fija su estado y, sin reserva, empujaba el partido
-     hacia abajo (CLS 0,25 en el móvil; revisión de rendimiento de la Fase 2). */
-  min-height: 44px;
-  padding-inline: calc(var(--gutter) + var(--safe-left)) calc(var(--gutter) + var(--safe-right));
+  --status-lift: 0px;
+  position: relative;
+  z-index: 1;
+  align-self: end;
+  justify-self: center;
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+  min-width: 0;
+  padding: 0 8px 8px;
+  pointer-events: none;
+}
+.stage:has(.player-chrome[data-visible='true'] .player-chrome__bottom) .stage__status {
+  /* 52 px de la pausa grande + 8 de aire. */
+  --status-lift: -60px;
+}
+.stage__status .status-line {
+  min-height: 34px;
+  max-width: min(100%, 560px);
+  gap: 8px;
+  padding: 5px 14px 5px 10px;
+  border-radius: var(--r-pill);
+  background: var(--glass-video);
+  -webkit-backdrop-filter: var(--blur-video);
+  backdrop-filter: var(--blur-video);
+  color: var(--on-video);
+  color-scheme: dark;
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.16),
+    0 8px 20px -10px rgb(0 0 0 / 0.7);
+  translate: 0 var(--status-lift);
+  animation: stage-status-entra var(--dur-rapido) var(--ease-out) both;
+  transition:
+    opacity var(--dur-fade) var(--ease-out),
+    translate var(--dur-estandar) var(--ease-estandar);
+}
+@keyframes stage-status-entra {
+  from {
+    opacity: 0;
+    scale: 0.96;
+  }
+}
+.stage:has(.player-msg) .stage__status .status-line {
+  opacity: 0;
+}
+/* La imagen manda: con los controles escondidos, lo normal («Vas en
+   directo») se va con ellos; solo se queda lo que avisa (ámbar o rojo). */
+.stage:has(.player-chrome[data-visible='false'])
+  .stage__status
+  .status-line:not(.status-line--warn, .status-line--err) {
+  opacity: 0;
+}
+.stage__status .status-line__text {
+  font-size: var(--fs-13);
+  font-weight: var(--wght-strong);
+}
+.stage__status .status-line__meta,
+.stage__status .status-line__count,
+.stage__status .status-line__icon {
+  color: var(--on-video-2);
+}
+.stage__status .status-line__meta {
+  font-size: var(--fs-12);
+}
+/* El tono (además del icono y la frase): el icono se tiñe. */
+.stage__status .status-line--ok .status-line__icon {
+  color: var(--ok);
+}
+.stage__status .status-line--warn .status-line__icon {
+  color: var(--weak);
+}
+.stage__status .status-line--err .status-line__icon {
+  color: var(--fail);
+}
+:root[data-transparency='reduced'] .stage__status .status-line {
+  background: var(--glass-video-solid);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+@media (prefers-reduced-transparency: reduce) {
+  .stage__status .status-line {
+    background: var(--glass-video-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+/* Movimiento reducido: la cápsula aparece y cambia de sitio con un fundido. */
+@media (prefers-reduced-motion: reduce) {
+  .stage__status .status-line {
+    animation-name: ace-funde;
+    transition: opacity var(--dur-fade) var(--ease-out);
+  }
 }
 .dock[data-presentation='stage'] {
   position: relative;
 }
-/* Mini-reproductor «Sonando»: cápsula encima de la barra inferior. */
+/* Mini-reproductor «Sonando» (W7): banda de 72 px con la imagen viva
+   (96×54) encima de la barra inferior, márgenes de 12. */
+.app {
+  --mini-h: 72px;
+}
 .dock[data-presentation='mini'] {
   position: fixed;
   z-index: var(--z-mini);
@@ -334,8 +434,13 @@
     padding-top: var(--s-5);
     padding-bottom: var(--s-2);
   }
+  /* Alineada con el vídeo, que va centrado con tope de 70 dvh. */
   .stage__status {
-    padding-inline: 0;
+    max-width: min(100%, calc(70dvh * 16 / 9));
+    padding: 0 12px 12px;
+  }
+  .stage:has(.player-chrome[data-visible='true'] .player-chrome__bottom) .stage__status {
+    --status-lift: -64px;
   }
   .stage-placeholder {
     border-radius: var(--r-xl);
@@ -417,7 +522,19 @@
   inset: 0;
   background: #000;
 }
-.app[data-immersive='true'] .stage__status,
+/* En inmersivo la cápsula de estado sigue sobre la imagen, justo encima de
+   los controles. */
+.app[data-immersive='true'] .stage__status {
+  position: fixed;
+  z-index: calc(var(--z-immersive) + 1);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  justify-self: stretch;
+  width: auto;
+  max-width: none;
+  padding: 0 max(12px, var(--safe-right)) max(12px, var(--safe-bottom)) max(12px, var(--safe-left));
+}
 .app[data-immersive='true'] .topbar,
 .app[data-immersive='true'] .tabbar,
 .app[data-immersive='true'] .bottom-veil {
