@@ -188,13 +188,14 @@ private struct CifrasMarcador: View {
 
     private var cifras: some View {
         let animacion: Num.Animacion = girar ? .paleta : .rueda
+        let quieto: Bool = reducido
         return HStack(spacing: 22 * 0.12) {
             Num(String(marcador.home), tamano: 22, animacion: animacion)
             Text("–").estilo(EstiloTexto(tamano: 22, peso: 500, anchura: 75, altoLinea: 1)).foregroundStyle(Palco.onVideo2)
             Num(String(marcador.away), tamano: 22, animacion: animacion)
         }
         .keyframeAnimator(initialValue: 1.0, trigger: goles) { vista, escala in
-            vista.scaleEffect(reducido ? 1 : escala, anchor: UnitPoint(x: 0.5, y: 0.55))
+            vista.scaleEffect(quieto ? 1 : escala, anchor: UnitPoint(x: 0.5, y: 0.55))
         } keyframes: { _ in
             KeyframeTrack {
                 SpringKeyframe(1.14, duration: 0.252, spring: .init(duration: 0.55, bounce: 0.3))
