@@ -279,6 +279,27 @@ enum ReglasAgenda {
     }
 }
 
+/// Deslizar a los lados para cambiar de día (agenda) o de pestaña (Canales): `classifySwipe` de lib/gestures.ts
+/// con el eje x (a3 §6.7, a5 §3.4). Propio de M5 hasta que llegue `Deslizamiento` (M2, Core/Reglas/Gestos).
+enum GestoLateral {
+    /// Distancia que cuenta (`threshold`), velocidad (0,45 pt/ms) con al menos 24 pt, y eje dominante 1,4×.
+    static let umbral = 56.0
+    static let velocidad = 450.0
+    static let minimoRapido = 24.0
+
+    /// +1 = siguiente (el dedo va a la izquierda), −1 = anterior, 0 = nada.
+    static func paso(dx: Double, dy: Double, vx: Double) -> Int {
+        let ax = abs(dx)
+        let ay = abs(dy)
+        let lejos = max(ax, ay) >= umbral || (abs(vx) >= velocidad && max(ax, ay) >= minimoRapido)
+        guard lejos, ax > ay * 1.4 else { return 0 }
+        return dx < 0 ? 1 : -1
+    }
+
+    /// Mientras arrastras la lista de la agenda: `clamp(dx × 0,3, −60, +60)`.
+    static func resistencia(_ dx: Double) -> Double { min(60, max(-60, dx * 0.3)) }
+}
+
 /// Tablas propias (como `Intl` en es-ES: «Jue», «jueves», «septiembre»): no dependen del idioma del iPhone.
 enum FechasAgenda {
     static let diasCortos = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"]
