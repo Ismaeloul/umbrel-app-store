@@ -2,7 +2,7 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
-## 0.8.0 (preparada, sin publicar)
+## 0.8.0 (2026-09-25)
 
 Diseño nuevo, "Palco", en la web y en la app de iPhone: negro de cine con
 un solo color de accion, el oro, y un modo claro igual de cuidado. La app

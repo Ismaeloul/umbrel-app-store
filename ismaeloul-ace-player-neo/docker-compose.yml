@@ -66,7 +66,7 @@ services:
       # comparte la red de Docker y sin el no puede pedir reinicios. En la 0.7.0
       # un token vacio ya no abre la puerta: se rechaza todo.
       ENGINE_CONTROL_TOKEN: "${APP_SEED}"
-    command: node /releases/0.7.1/engine-control.js
+    command: node /releases/0.8.0/engine-control.js
     volumes:
       - ${APP_DATA_DIR}/releases:/releases:ro
       - /var/run/docker.sock:/var/run/docker.sock
@@ -117,7 +117,7 @@ services:
     # igual (solo se pierde la adaptacion para iPhone de canales HEVC).
     # timeout 60: sin red, apk podia comerse el start_period entero y nginx,
     # que espera a que storage este sano, no arrancaba nunca.
-    command: sh -c "timeout 60 apk add ffmpeg >/dev/null 2>&1 || echo 'sin ffmpeg, remux iOS desactivado'; exec node /releases/0.7.1/server.js"
+    command: sh -c "timeout 60 apk add ffmpeg >/dev/null 2>&1 || echo 'sin ffmpeg, remux iOS desactivado'; exec node /releases/0.8.0/server.js"
     volumes:
       - ${APP_DATA_DIR}/releases:/releases:ro
       - ${APP_DATA_DIR}/data:/data
@@ -152,6 +152,6 @@ services:
     # restaure.
     command: >
       sh -c "rm -rf /www && mkdir -p /www &&
-             cp -r /releases/0.7.1/web/. /www/ &&
-             cp /releases/0.7.1/nginx.conf /etc/nginx/conf.d/default.conf &&
+             cp -r /releases/0.8.0/web/. /www/ &&
+             cp /releases/0.8.0/nginx.conf /etc/nginx/conf.d/default.conf &&
              exec nginx -g 'daemon off;'"
