@@ -8,7 +8,7 @@ ACE_BUNDLE_ID = es.ismaeloul.aceplayerneo
 ACE_DISPLAY_NAME = Ace Neo
 
 // Versión que ve el usuario y número de compilación (la CI pone el número de ejecución).
-MARKETING_VERSION = 0.8.0
+MARKETING_VERSION = 0.8.1
 CURRENT_PROJECT_VERSION = 1
 
 #include? "Local.xcconfig"
