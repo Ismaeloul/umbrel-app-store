@@ -36,6 +36,8 @@ enum IDUI {
     static let barraEmitiendo = "barra-emitiendo", panelDatosTecnicos = "panel-datos-tecnicos"
     static let otrasSenales = "otras-senales"
     static let hojaReportar = "hoja-reportar", hojaEncontrarCanal = "hoja-encontrar-canal"
+    static let pestanaCanal = "pestana-canal", botonReproducirCanal = "boton-reproducir-canal"  // (M6, aditivo)
+    static let botonDetener = "boton-detener", panelMensajeVideo = "panel-mensaje-video"  // (M6, aditivo)
     // Canales, Buscar, Pegar
     static let buscadorBiblioteca = "buscador-biblioteca", emitiendoAhora = "emitiendo-ahora"
     static let pestanaFavoritos = "pestana-favoritos", pestanaRecientes = "pestana-recientes", pestanaListas = "pestana-listas"

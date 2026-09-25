@@ -22,6 +22,9 @@ import Foundation
     let transicion: TransicionTeatro
     let reproductor: Reproductor
     let presentacion: PresentacionReproductor
+    /// La única capa de vídeo y su PiP (`GestorPiP` con su `SuperficieVideo`). Añadido por M6 (contrato aditivo):
+    /// el escenario, el mini y el vuelo necesitan la MISMA superficie para `VistaVideo(superficie:prioridad:)`.
+    let pip: GestorPiP
     let fuentes: SesionFuentes
     let senales: SenalPartidos
     let destapados: MarcadoresDestapados
@@ -69,6 +72,7 @@ import Foundation
         let reproductor: Reproductor = Self.crearReproductor(entorno, motor: motor, modo: preferencias.modo)
         self.reproductor = reproductor
         presentacion = PresentacionReproductor(reproductor: reproductor)
+        pip = GestorPiP()
         let fuentes: SesionFuentes = SesionFuentes()
         self.fuentes = fuentes
         let senales: SenalPartidos = SenalPartidos()
@@ -121,6 +125,7 @@ import Foundation
         fuentes.conectar(self)
         reproductor.alFallarFuente = { [weak fuentes] fallo in fuentes?.alFallarFuente(fallo) ?? false }
         ControlesSistema().conectar(reproductor)
+        pip.conectar(reproductor.motor.avPlayer)
         // 5. Fases de la escena (a8 §3.5). El reproductor (pausa del sistema) lo engancha M3.
         cicloVida.alCambiar.append { [weak sesion] antes, despues in
             if despues == .segundoPlano {
