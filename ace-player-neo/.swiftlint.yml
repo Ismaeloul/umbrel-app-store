@@ -87,5 +87,9 @@ type_name:
   max_length:
     warning: 60
     error: 200
+  # S (espaciado) y R (radios) de Palco: nombres fijados por el contrato (b-arquitectura §2.2.2).
+  excluded:
+    - S
+    - R
 
 reporter: xcode
