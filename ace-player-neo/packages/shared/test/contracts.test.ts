@@ -10,6 +10,7 @@ import {
   COMMON_V1_ERRORS,
   ERROR_CATALOG,
   NATIVE_PUBLIC_ROUTE_IDS,
+  PairingCreateBodySchema,
   SSE_EVENT_TYPES,
   SseEventSchema,
   V1_ROUTES,
@@ -84,6 +85,31 @@ describe('tabla de rutas v1', () => {
 
   it('toOpenApiPath convierte :param en {param}', () => {
     expect(toOpenApiPath('/api/v1/video/:sid/:file')).toBe('/api/v1/video/{sid}/{file}');
+  });
+});
+
+describe('PairingCreateBodySchema (0.8.1: varias direcciones en el QR)', () => {
+  const ok = (body: unknown) => PairingCreateBodySchema.safeParse(body).success;
+
+  it('acepta sin nada, con baseUrl y con hasta dos alternativas', () => {
+    expect(ok({})).toBe(true);
+    expect(ok({ baseUrl: 'http://umbrel.local:7792' })).toBe(true);
+    expect(
+      ok({
+        baseUrl: 'http://umbrel.local:7792',
+        alternateBaseUrls: ['https://umbrel.tail1234.ts.net', 'http://192.168.1.10:7792'],
+      }),
+    ).toBe(true);
+  });
+
+  it('rechaza 3 alternativas, una con ruta o con ? y un campo de más', () => {
+    const base = 'http://umbrel.local:7792';
+    expect(ok({ baseUrl: base, alternateBaseUrls: ['http://a', 'http://b', 'http://c'] })).toBe(
+      false,
+    );
+    expect(ok({ baseUrl: base, alternateBaseUrls: ['http://a/b'] })).toBe(false);
+    expect(ok({ baseUrl: base, alternateBaseUrls: ['http://a?x=1'] })).toBe(false);
+    expect(ok({ baseUrl: base, extra: true })).toBe(false);
   });
 });
 

@@ -89,7 +89,7 @@ export interface DomainEvents {
   'diagnostics.report': DiagnosticReport;
   /** Fallo ya anotado (con id y fecha). */
   'diagnostics.new': DiagnosticEntry;
-  /** Alta, baja o cambio de un dispositivo emparejado (solo va al origen web). */
+  /** Alta, baja o cambio de un dispositivo emparejado (desde la 0.8.1 va a todos los orígenes). */
   'devices.changed': SseEventData<'devices.changed'>;
 }
 

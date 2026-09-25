@@ -258,9 +258,13 @@ describe('events · reanudación con Last-Event-ID (búfer de 200)', () => {
     ctx.core.bus.emit('state.changed', stateChanged(ctx));
     const since = ctx.hub.firstEventId() - 1;
     const ios = open(ctx, { origin: 'native', deviceId: 'dev_a', lastEventId: since });
-    expect(ios.sink.events().map((event) => event.id)).toEqual([ctx.hub.firstEventId() + 2]);
+    /* 0.8.1: devices.changed también llega a native; el dirigido a dev_b, no. */
+    expect(ios.sink.events().map((event) => event.id)).toEqual([
+      ctx.hub.firstEventId(),
+      ctx.hub.firstEventId() + 2,
+    ]);
     const iosB = open(ctx, { origin: 'native', deviceId: 'dev_b', lastEventId: since });
-    expect(iosB.sink.events()).toHaveLength(2);
+    expect(iosB.sink.events()).toHaveLength(3);
     const web = open(ctx, { origin: 'web', lastEventId: since });
     expect(web.sink.events().map((event) => event.event)).toEqual([
       'devices.changed',
@@ -270,13 +274,18 @@ describe('events · reanudación con Last-Event-ID (búfer de 200)', () => {
 });
 
 describe('events · filtro por origen y dispositivo', () => {
-  it('devices.changed (administración) solo va al origen web', () => {
+  it('devices.changed llega a web y a native (0.8.1)', () => {
     const ctx = setup();
     const web = open(ctx, { origin: 'web' });
     const ios = open(ctx, { origin: 'native', deviceId: 'dev_a' });
     ctx.core.bus.emit('devices.changed', { reason: 'paired', deviceId: 'dev_z' });
     expect(web.sink.events()).toHaveLength(1);
-    expect(ios.sink.events()).toEqual([]);
+    expect(ios.sink.events()).toEqual([
+      expect.objectContaining({
+        event: 'devices.changed',
+        data: { reason: 'paired', deviceId: 'dev_z' },
+      }),
+    ]);
   });
 
   it('un evento con destino solo llega a las conexiones de esos dispositivos', () => {
@@ -347,7 +356,7 @@ describe('events · cierre, revocación y contrapresión', () => {
     expect(ctx.hub.connections()).toBe(0);
   });
 
-  it('devices.changed revoked cierra las conexiones de ese dispositivo', async () => {
+  it('devices.changed revoked cierra las conexiones de ese dispositivo (que antes recibe su evento)', async () => {
     const ctx = setup();
     const revoked = open(ctx, { origin: 'native', deviceId: 'dev_a' });
     const other = open(ctx, { origin: 'native', deviceId: 'dev_b' });
@@ -356,6 +365,13 @@ describe('events · cierre, revocación y contrapresión', () => {
     await revoked.closed;
     expect(revoked.sink.writableEnded).toBe(true);
     expect(ctx.hub.connections()).toBe(2);
+    /* 0.8.1: se publica ANTES de cerrar, así que el revocado recibe su evento. */
+    const revokedEvent = {
+      event: 'devices.changed',
+      data: { reason: 'revoked', deviceId: 'dev_a' },
+    };
+    expect(revoked.sink.events()).toEqual([expect.objectContaining(revokedEvent)]);
+    expect(other.sink.events()).toEqual([expect.objectContaining(revokedEvent)]);
     expect(web.sink.events()).toEqual([
       expect.objectContaining({ data: { reason: 'revoked', deviceId: 'dev_a' } }),
     ]);

@@ -15,6 +15,9 @@
    - `native`: solo la app iOS (hoy, los ficheros del remux con `?t=`).
    - `any`: los dos. Desde /native hace falta credencial salvo que
      `credential` sea `none`.
+     Desde la 0.8.1 el iPhone emparejado administra como la web (Salud,
+     Dispositivos, emparejar otro y ajustes v2): solo `healthLive` sigue
+     siendo `web` (es el healthcheck de Docker; la app usa `ping`).
 
    Credencial nativa (`credential`, solo cuenta con origen native):
    - `bearer`: `Authorization: Bearer <deviceId>.<secreto>` (arquitectura §5.12).
@@ -240,7 +243,7 @@ export const V1_ROUTES = {
   health: defineRoute({
     method: 'GET',
     path: '/api/v1/health',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'health',
     summary: 'Panel de salud, desde las cachés de los vigilantes (sin red en cada llamada)',
@@ -422,7 +425,7 @@ export const V1_ROUTES = {
   settingsUpdate: defineRoute({
     method: 'PUT',
     path: '/api/v1/settings',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'state',
     summary: 'Cambiar los ajustes v2 (parcial: lo que no llega se queda como está)',
@@ -439,16 +442,18 @@ export const V1_ROUTES = {
   pairingCreate: defineRoute({
     method: 'POST',
     path: '/api/v1/pairing',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'auth',
     summary: 'Crear un código de 6 dígitos y su QR (5 min, un solo uso, anula el anterior)',
+    description:
+      'Desde la web (su dirección en baseUrl) o desde un iPhone emparejado (baseUrl = la dirección que usa ahora; alternateBaseUrls = la otra, casa o Tailscale). El QR lleva una u= por dirección, en ese orden. Si lo crea un iPhone y luego se revoca, su código muere.',
     body: PairingCreateBodySchema,
     response: PairingCreateResponseSchema,
     status: 201,
     content: 'json',
     sideEffects: true,
-    errors: [],
+    errors: ['bad_request', 'pairing_rate_limited'],
     legacyTwin: null,
   }),
   pairingClaim: defineRoute({
@@ -470,7 +475,7 @@ export const V1_ROUTES = {
   devicesList: defineRoute({
     method: 'GET',
     path: '/api/v1/devices',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'auth',
     summary: 'Dispositivos emparejados',
@@ -484,10 +489,12 @@ export const V1_ROUTES = {
   deviceRevoke: defineRoute({
     method: 'DELETE',
     path: '/api/v1/devices/:id',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'auth',
     summary: 'Revocar un dispositivo: cierra su SSE, suelta sus visores y anula sus URLs de vídeo',
+    description:
+      'Web o cualquier iPhone emparejado; también el propio (entonces responde 200 y todo lo suyo deja de valer al instante: su SSE recibe devices.changed revoked y se cierra).',
     params: DeviceParamsSchema,
     response: DeviceRevokeResponseSchema,
     status: 200,

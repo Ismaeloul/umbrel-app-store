@@ -318,3 +318,25 @@ conservador). Todas se pueden revertir.
 - **Por qué**: el Umbrel clona el repositorio entero de la tienda al
   actualizar, así que 45 MB de PNG harían cada actualización más lenta sin
   aportar nada a la app.
+
+## D22. El iPhone emparejado administra como la web (0.8.1)
+
+- **Decisión**: `health`, `settingsUpdate`, `pairingCreate`, `devicesList` y
+  `deviceRevoke` pasan de `web` a `any` (con Bearer desde `/native`) y
+  `devices.changed` llega a todos los orígenes. El iPhone puede emparejar
+  otro con un QR que lleva sus dos direcciones (`alternateBaseUrls`, una `u=`
+  por dirección, la de `baseUrl` la primera), revocar a cualquiera y también a
+  sí mismo, cambiar «Un solo dispositivo a la vez» y ver la Salud. Un código
+  creado por un iPhone muere si ese iPhone se revoca, y el log del canje lleva
+  `pairedBy`. Un iPhone crea como mucho 5 códigos por minuto, y cada
+  dirección del QR es un origen sin credenciales ni caracteres que se
+  codifiquen (así las tres caben en el QR).
+- **Por qué**: la app de iPhone de la Fase 3 calca la web móvil, y Ajustes ›
+  Salud, Dispositivos y Reproducción necesitan esas rutas y el evento en vivo.
+  Pasarlas a `any` en la tabla basta: `app.ts`, nginx y la lista blanca de la
+  pasarela no cambian.
+- **Lo que se deja fuera**: `healthLive` sigue solo web (es el healthcheck de
+  Docker; la app usa `ping`, y así queda una ruta que prueba la rama `web`).
+  `pairedBy` no se guarda en `devices.json` (esquema estricto: la 0.8.0 no lo
+  leería y volver atrás dejaría a todos los iPhone sin emparejar); la
+  revocación en cascada queda como propuesta (R-14 de `seguridad.md`).

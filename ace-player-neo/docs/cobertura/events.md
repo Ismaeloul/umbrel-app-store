@@ -29,8 +29,8 @@ Cómo queda:
   `buffer_miss` (ya no está), `unknown_event_id` (id mayor que el último) o
   `server_restart` (id de antes de arrancar), con `id` = el último emitido para
   que el cliente siga desde ahí tras recargar.
-- **Filtro**: `devices.changed` solo al origen web (`WEB_ONLY_EVENT_TYPES`);
-  un evento con destino (`publish(e, { deviceIds })` o `targetDeviceIds` en el
+- **Filtro**: por origen, `WEB_ONLY_EVENT_TYPES` (vacío desde la 0.8.1:
+  `devices.changed` va a todos, también a los iPhone); un evento con destino (`publish(e, { deviceIds })` o `targetDeviceIds` en el
   bus) solo a las conexiones de esos dispositivos; lo demás a todos. El
   dispositivo de una conexión iOS es SIEMPRE el del token (la query `device`
   solo cuenta en la web).
@@ -41,7 +41,8 @@ Cómo queda:
   `engine.status`, `scan.progress`, `scan.verdict`, `state.changed`,
   `diagnostics.new` y `devices.changed` (suscrito desde que se crea el hub; los
   anteriores a una conexión quedan en el búfer). `devices.changed` con
-  `revoked` cierra las conexiones de ese dispositivo. `closeAll()` (apagado)
+  `revoked` cierra las conexiones de ese dispositivo después de publicarlo (el
+  revocado recibe su propio evento). `closeAll()` (apagado)
   termina todas con `end()`; `stop()` además se da de baja del bus.
 
 ## Números
@@ -62,9 +63,9 @@ Ninguno: módulo nuevo (contratos.md §9, "nuevos, plan E1.7"). Tests nuevos:
 | Validación con @ace/shared/events | "un evento que no cumple su esquema no se envía…" |
 | Latido 15 s con FakeClock | "\": ping\" cada 15 s mientras haya conexiones…" |
 | Búfer de 200 y `Last-Event-ID` | "reenvía solo lo que falta", "\"nada visto de este proceso\"…", "solo guarda 200…", "un id del futuro… server_restart", `routes.test.ts` › "Last-Event-ID (cabecera) o lastEventId (query)…", "Last-Event-ID: cabecera, luego query…" |
-| Filtro por origen y dispositivo | "devices.changed (administración) solo va al origen web", "un evento con destino solo llega…", "del bus: targetDeviceIds…", "la reanudación respeta el mismo filtro…", `routes.test.ts` › "native: sin token 401…; con token, el dispositivo es el del token" |
+| Filtro por origen y dispositivo | "devices.changed llega a web y a native (0.8.1)", "un evento con destino solo llega…", "del bus: targetDeviceIds…", "la reanudación respeta el mismo filtro…", `routes.test.ts` › "native: sin token 401…; con token, el dispositivo es el del token" |
 | Contrapresión | "un cliente lento (más de 256 KiB sin leer) se cierra…", "si escribir falla…" |
-| Revocación y apagado | "devices.changed revoked cierra las conexiones…", "el cliente cuelga…", "closeAll (apagado)…" |
+| Revocación y apagado | "devices.changed revoked cierra las conexiones de ese dispositivo (que antes recibe su evento)", "el cliente cuelga…", "closeAll (apagado)…" |
 | Traducción del bus | "reenvía todos los eventos del bus que tienen esquema SSE" |
 
 ## B-xxx

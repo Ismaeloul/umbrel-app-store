@@ -3,11 +3,14 @@
    falso, azar determinista y un devices.json en memoria. */
 
 import { Writable } from 'node:stream';
+import QRCode from 'qrcode';
 import { describe, expect, it, vi } from 'vitest';
 import {
   PAIRING_ATTEMPTS_PER_CODE,
   PAIRING_ATTEMPTS_PER_MINUTE,
+  PAIRING_CREATES_PER_DEVICE_PER_MINUTE,
   PairingClaimResponseSchema,
+  PairingCreateBodySchema,
   PairingCreateResponseSchema,
   SCHEMA_VERSION,
   TIMEOUTS,
@@ -101,6 +104,196 @@ describe('auth · crear el código de emparejamiento (arquitectura §5.12)', () 
     }
     for (const code of codes) expect(code).toMatch(/^\d{6}$/);
     expect(codes.size).toBeGreaterThan(1);
+  });
+});
+
+describe('auth · códigos creados desde el iPhone (0.8.1)', () => {
+  it('alternateBaseUrls: una u= por dirección, en orden, sin repetidas ni barra final', async () => {
+    const ctx = setup({ codes: [42] });
+    const response = await ctx.auth.createPairing(
+      {
+        baseUrl: 'http://umbrel.local:7792',
+        alternateBaseUrls: ['http://umbrel.tail1234.ts.net:7792/', 'HTTP://UMBREL.LOCAL:7792'],
+      },
+      BASE,
+    );
+    expect(PairingCreateResponseSchema.parse(response)).toEqual(response);
+    expect(response.pairUri).toBe(
+      'aceneo://pair?u=http%3A%2F%2Fumbrel.local%3A7792&u=http%3A%2F%2Fumbrel.tail1234.ts.net%3A7792&c=000042',
+    );
+  });
+
+  it('con una sola dirección el pairUri es el de siempre', async () => {
+    const ctx = setup({ codes: [7] });
+    const response = await ctx.auth.createPairing(
+      { baseUrl: 'http://umbrel.local:7792', alternateBaseUrls: [] },
+      BASE,
+    );
+    expect(response.pairUri).toBe('aceneo://pair?u=http%3A%2F%2Fumbrel.local%3A7792&c=000007');
+  });
+
+  it('una alternativa con espacio da bad_request (pasa el zod, no BASE_URL_RE)', async () => {
+    const ctx = setup();
+    await expect(
+      ctx.auth.createPairing({ baseUrl: BASE, alternateBaseUrls: ['http://a b'] }, BASE),
+    ).rejects.toMatchObject({ code: 'bad_request' });
+    expect(ctx.auth.pairingStatus().active).toBe(false);
+  });
+
+  it('sin credenciales ni caracteres que se codifiquen: ni el zod ni el servicio los aceptan', async () => {
+    const rejected = [
+      'http://admin:secreto@umbrel.local:7792',
+      'http://admin@umbrel.local',
+      `http://${'%'.repeat(505)}`,
+      'http://umbrel%2elocal',
+      'http://umbrel\\local',
+      'http://umbrel.local"<script>',
+      `http://${'ñ'.repeat(505)}`,
+      'http://ñandú.local',
+      'http://umbrel.local:7792/ruta',
+      'http://umbrel.local:puerto',
+    ];
+    const ctx = setup();
+    for (const url of rejected) {
+      expect(PairingCreateBodySchema.safeParse({ baseUrl: url }).success, url).toBe(false);
+      expect(
+        PairingCreateBodySchema.safeParse({ baseUrl: BASE, alternateBaseUrls: [url] }).success,
+        url,
+      ).toBe(false);
+      /* La reserva de las cabeceras no pasa por el zod: la misma regla en el servicio. */
+      await expect(ctx.auth.createPairing({}, url), url).rejects.toMatchObject({
+        code: 'bad_request',
+      });
+      await expect(
+        ctx.auth.createPairing({ baseUrl: BASE, alternateBaseUrls: [url] }, BASE),
+        url,
+      ).rejects.toMatchObject({ code: 'bad_request' });
+    }
+    expect(ctx.auth.pairingStatus().active).toBe(false);
+    for (const url of [
+      'http://umbrel.local:7792',
+      'https://umbrel.tail1234.ts.net',
+      'http://192.168.1.188',
+      'http://100.64.0.7:7792',
+      'http://[fe80::1]:7792',
+      'http://xn--and-6ma2c.local',
+    ]) {
+      expect(PairingCreateBodySchema.safeParse({ baseUrl: url }).success, url).toBe(true);
+      await expect(ctx.auth.createPairing({ baseUrl: url }, BASE), url).resolves.toBeDefined();
+    }
+  });
+
+  it('las tres direcciones más largas que se aceptan caben en el QR', async () => {
+    const ctx = setup({ codes: [42] });
+    const longest = (letter: string) => `https://${letter.repeat(253)}:65535`;
+    const body = { baseUrl: longest('a'), alternateBaseUrls: [longest('b'), longest('c')] };
+    expect(PairingCreateBodySchema.parse(body)).toEqual(body);
+    const response = await ctx.auth.createPairing(body, BASE);
+    expect(PairingCreateResponseSchema.parse(response)).toEqual(response);
+    expect(response.pairUri.split('&u=')).toHaveLength(3);
+  });
+
+  it('si el QR no se puede dibujar: 400 y el código que ya estaba vivo sigue valiendo', async () => {
+    const ctx = setup({ codes: [111111, 222222] });
+    const web = await ctx.auth.createPairing({}, BASE);
+    const spy = vi
+      .spyOn(QRCode, 'toString')
+      .mockRejectedValueOnce(
+        new Error('The amount of data is too big to be stored in a QR Code') as never,
+      );
+    try {
+      await expect(ctx.auth.createPairing({ baseUrl: BASE }, BASE)).rejects.toMatchObject({
+        code: 'bad_request',
+      });
+    } finally {
+      spy.mockRestore();
+    }
+    const claimed = await ctx.auth.claimPairing({
+      code: web.code,
+      name: 'iPhone',
+      platform: 'ios',
+    });
+    expect(claimed.device.name).toBe('iPhone');
+  });
+
+  it('un iPhone crea como mucho 5 códigos por minuto; la web y los demás no se ven afectados', async () => {
+    const ctx = setup();
+    const a = await pair(ctx, 'iPhone A');
+    const b = await pair(ctx, 'iPhone B');
+    for (let index = 0; index < PAIRING_CREATES_PER_DEVICE_PER_MINUTE; index += 1) {
+      await ctx.auth.createPairing({}, BASE, a.deviceId);
+    }
+    /* La web crea el suyo: el bucle del iPhone ya no puede anularlo. */
+    const web = await ctx.auth.createPairing({}, BASE);
+    await expect(ctx.auth.createPairing({}, BASE, a.deviceId)).rejects.toMatchObject({
+      code: 'pairing_rate_limited',
+    });
+    expect(ctx.auth.pairingStatus().active).toBe(true);
+    await expect(
+      ctx.auth.claimPairing({ code: web.code, name: 'iPhone C', platform: 'ios' }),
+    ).resolves.toMatchObject({ device: { name: 'iPhone C' } });
+    /* Otro iPhone tiene su propio tope. */
+    await expect(ctx.auth.createPairing({}, BASE, b.deviceId)).resolves.toBeDefined();
+    ctx.core.clock.advance(PAIRING_WINDOW_MS);
+    await expect(ctx.auth.createPairing({}, BASE, a.deviceId)).resolves.toBeDefined();
+  });
+
+  it('el código que creó un dispositivo muere al revocarlo', async () => {
+    const ctx = setup();
+    const a = await pair(ctx, 'iPhone A');
+    const pairing = await ctx.auth.createPairing({}, BASE, a.deviceId);
+    await ctx.auth.revokeDevice(a.deviceId);
+    expect(ctx.auth.pairingStatus().active).toBe(false);
+    await expect(
+      ctx.auth.claimPairing({ code: pairing.code, name: 'Sembrado', platform: 'ios' }),
+    ).rejects.toMatchObject({ code: 'pairing_expired' });
+    /* Revocar otra vez (idempotente) tampoco deja nada vivo. */
+    await ctx.auth.revokeDevice(a.deviceId);
+    expect(ctx.store.read().devices).toHaveLength(1);
+  });
+
+  it('revocar a otro no anula un código ajeno (de otro iPhone o de la web)', async () => {
+    for (const creator of ['otro', 'web'] as const) {
+      const ctx = setup();
+      const a = await pair(ctx, 'iPhone A');
+      const b = await pair(ctx, 'iPhone B');
+      const pairing = await ctx.auth.createPairing(
+        {},
+        BASE,
+        creator === 'otro' ? a.deviceId : null,
+      );
+      await ctx.auth.revokeDevice(b.deviceId);
+      const claimed = await ctx.auth.claimPairing({
+        code: pairing.code,
+        name: 'iPhone C',
+        platform: 'ios',
+      });
+      expect(claimed.device.name).toBe('iPhone C');
+    }
+  });
+
+  it('el log del canje lleva pairedBy (null si lo creó la web)', async () => {
+    const memory = memoryLogger();
+    const ctx = setup({ logger: memory.logger });
+    const a = await pair(ctx, 'iPhone A');
+    const pairing = await ctx.auth.createPairing({}, BASE, a.deviceId);
+    const b = await ctx.auth.claimPairing({
+      code: pairing.code,
+      name: 'iPhone B',
+      platform: 'ios',
+    });
+    const entries = memory
+      .text()
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    const paired = entries.filter((entry) => entry.msg === 'dispositivo emparejado');
+    expect(paired).toEqual([
+      expect.objectContaining({ deviceId: a.deviceId, pairedBy: null }),
+      expect.objectContaining({ deviceId: b.deviceId, pairedBy: a.deviceId }),
+    ]);
+    const created = entries.filter((entry) => entry.msg === 'código de emparejamiento creado');
+    expect(created.at(-1)).toMatchObject({ createdBy: a.deviceId, addresses: 1 });
   });
 });
 

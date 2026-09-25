@@ -15,7 +15,15 @@ import {
   type PlaybackStatus,
   type StateV1,
 } from '@ace/shared';
-import { createTestApp, createTestCore, web, type TestCore } from '../../../test/helpers/index.js';
+import {
+  FAKE_TOKEN,
+  createTestApp,
+  createTestCore,
+  fakeAuth,
+  native,
+  web,
+  type TestCore,
+} from '../../../test/helpers/index.js';
 import type { AppConfig } from '../../config/index.js';
 import { notImplementedService } from '../../core/stub.js';
 import type { Services } from '../../services.js';
@@ -518,7 +526,7 @@ describe('rutas de la salud', () => {
     const services = { health } as unknown as Services;
     const { app } = await createTestApp({
       moduleRoutes: false,
-      services: { health },
+      services: { health, auth: fakeAuth() },
       register: (collector) => {
         registerLegacyRoutes(collector.legacy, services);
         registerV1Routes(collector.v1, services);
@@ -536,6 +544,23 @@ describe('rutas de la salud', () => {
     expect(ping.json()).toMatchObject({ ok: true, app: 'ace-player-neo' });
     const nativeHealth = await app.inject({ method: 'GET', url: '/native/api/v1/health/live' });
     expect(nativeHealth.statusCode).toBe(401);
+    /* 0.8.1: el panel de salud también para el iPhone emparejado (live sigue solo web). */
+    const nativePanel = await app.inject({
+      method: 'GET',
+      url: '/native/api/v1/health',
+      headers: native(FAKE_TOKEN),
+    });
+    expect(nativePanel.statusCode).toBe(200);
+    expect(HealthResponseSchema.safeParse(nativePanel.json()).success).toBe(true);
+    expect((await app.inject({ method: 'GET', url: '/native/api/v1/health' })).statusCode).toBe(
+      401,
+    );
+    const nativeLive = await app.inject({
+      method: 'GET',
+      url: '/native/api/v1/health/live',
+      headers: native(FAKE_TOKEN),
+    });
+    expect(nativeLive.statusCode).toBe(403);
   });
 
   it('systemHealth de la fachada llama al servicio enlazado', async () => {

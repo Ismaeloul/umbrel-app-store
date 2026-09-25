@@ -23,7 +23,14 @@ import {
   type EngineStatus,
   type PlaybackStatus,
 } from '@ace/shared';
-import { createTestApp, native, web, type TestApp } from '../../../test/helpers/index.js';
+import {
+  FAKE_TOKEN,
+  createTestApp,
+  fakeAuth,
+  native,
+  web,
+  type TestApp,
+} from '../../../test/helpers/index.js';
 import { AppError } from '../../core/errors.js';
 import { createLogger, type Logger } from '../../core/logger.js';
 import type { AuthenticatedDevice } from '../../core/module.js';
@@ -588,6 +595,28 @@ describe('rutas v1 del estado', () => {
       ['library', 'directories'],
       ['preferences'],
     ]);
+  });
+
+  it('0.8.1: el iPhone emparejado cambia los ajustes (PUT /native/api/v1/settings)', async () => {
+    const t = await stateApp({ auth: fakeAuth() });
+    const events = vi.fn();
+    t.services.bus.on('state.changed', events);
+    const res = await t.app.inject({
+      method: 'PUT',
+      url: '/native/api/v1/settings',
+      headers: native(FAKE_TOKEN, { 'content-type': 'application/json' }),
+      payload: JSON.stringify({ sameChannelPolicy: 'handoff' }),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ settings: { sameChannelPolicy: 'handoff' }, source: 'saved' });
+    expect(events.mock.calls.map(([payload]) => payload.scopes)).toEqual([['settings']]);
+    const anonymous = await t.app.inject({
+      method: 'PUT',
+      url: '/native/api/v1/settings',
+      headers: native(undefined, { 'content-type': 'application/json' }),
+      payload: JSON.stringify({ sameChannelPolicy: 'share' }),
+    });
+    expect(anonymous.statusCode).toBe(401);
   });
 });
 

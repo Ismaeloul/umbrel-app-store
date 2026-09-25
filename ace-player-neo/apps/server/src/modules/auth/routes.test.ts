@@ -121,20 +121,247 @@ describe('auth · rutas v1', () => {
     expect(after.json()).toMatchObject({ error: { code: 'device_revoked' } });
   });
 
-  it('el canje va sin token, pero crear códigos y administrar dispositivos es solo web', async () => {
+  it('el canje va sin token; crear códigos y administrar dispositivos, sin token 401 y con token el iPhone puede (0.8.1)', async () => {
     const { app } = await appWithStore();
     const { token, deviceId } = await pairOverHttp(app);
-    for (const [method, url] of [
-      ['POST', '/native/api/v1/pairing'],
-      ['GET', '/native/api/v1/devices'],
-      ['DELETE', `/native/api/v1/devices/${deviceId}`],
-    ] as const) {
+    const calls = [
+      ['POST', '/native/api/v1/pairing', 201],
+      ['GET', '/native/api/v1/devices', 200],
+      /* Revocar al final (el propio): después su token ya no vale. */
+      ['DELETE', `/native/api/v1/devices/${deviceId}`, 200],
+    ] as const;
+    for (const [method, url] of calls) {
       const noToken = await app.inject({ method, url, headers: native() });
-      expect(noToken.statusCode).toBe(401);
-      const withToken = await app.inject({ method, url, headers: native(token) });
-      expect(withToken.statusCode).toBe(403);
-      expect(withToken.json()).toMatchObject({ error: { code: 'origin_forbidden' } });
+      expect(noToken.statusCode, `${method} ${url}`).toBe(401);
     }
+    for (const [method, url, expected] of calls) {
+      const withToken = await app.inject({ method, url, headers: native(token) });
+      expect(withToken.statusCode, `${method} ${url}`).toBe(expected);
+    }
+    const after = await app.inject({
+      method: 'GET',
+      url: '/native/api/v1/devices',
+      headers: native(token),
+    });
+    expect(after.statusCode).toBe(401);
+    expect(after.json()).toMatchObject({ error: { code: 'device_revoked' } });
+  });
+
+  it('el iPhone crea un código con sus dos direcciones y otro iPhone lo canjea', async () => {
+    const { app } = await appWithStore();
+    const a = await pairOverHttp(app, 'iPhone A');
+    const created = await app.inject({
+      method: 'POST',
+      url: '/native/api/v1/pairing',
+      headers: native(a.token),
+      payload: {
+        baseUrl: 'http://umbrel.local:7792',
+        alternateBaseUrls: ['https://umbrel.tail1234.ts.net'],
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const { code, pairUri } = created.json<{ code: string; pairUri: string }>();
+    expect(pairUri).toBe(
+      `aceneo://pair?u=${encodeURIComponent('http://umbrel.local:7792')}&u=${encodeURIComponent('https://umbrel.tail1234.ts.net')}&c=${code}`,
+    );
+    const claimed = await app.inject({
+      method: 'POST',
+      url: '/native/api/v1/pairing/claim',
+      headers: native(),
+      payload: { code, name: 'iPhone B', platform: 'ios' },
+    });
+    expect(claimed.statusCode).toBe(201);
+    const list = await app.inject({
+      method: 'GET',
+      url: '/native/api/v1/devices',
+      headers: native(a.token),
+    });
+    expect(list.statusCode).toBe(200);
+    const devices = list.json<{ devices: { name: string; revokedAt: string | null }[] }>().devices;
+    expect(devices.filter((device) => device.revokedAt === null).map((d) => d.name)).toEqual([
+      'iPhone A',
+      'iPhone B',
+    ]);
+  });
+
+  it('sin baseUrl, el QR usa el Host con el que llegó el iPhone', async () => {
+    const { app } = await appWithStore();
+    const { token } = await pairOverHttp(app);
+    const created = await app.inject({
+      method: 'POST',
+      url: '/native/api/v1/pairing',
+      headers: native(token, { host: 'umbrel.local:7792' }),
+      payload: {},
+    });
+    expect(created.statusCode).toBe(201);
+    const { code, pairUri } = created.json<{ code: string; pairUri: string }>();
+    expect(pairUri).toBe(
+      `aceneo://pair?u=${encodeURIComponent('http://umbrel.local:7792')}&c=${code}`,
+    );
+  });
+
+  it('alternateBaseUrls con 3 entradas o con ruta → 400 validation_error', async () => {
+    const { app } = await appWithStore();
+    const { token } = await pairOverHttp(app);
+    for (const alternateBaseUrls of [
+      ['http://a', 'http://b', 'http://c'],
+      ['http://umbrel.local:7792/ruta'],
+    ]) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/native/api/v1/pairing',
+        headers: native(token),
+        payload: { baseUrl: 'http://umbrel.local:7792', alternateBaseUrls },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: { code: 'validation_error' } });
+    }
+  });
+
+  it('direcciones con credenciales o que se codifican (%, unicode) → 400, sin 500 ni código nuevo', async () => {
+    const { app } = await appWithStore();
+    const { token } = await pairOverHttp(app);
+    const fromWeb = await app.inject({ method: 'POST', url: '/api/v1/pairing', headers: web() });
+    expect(fromWeb.statusCode).toBe(201);
+    const noisy = `http://${'%'.repeat(505)}`;
+    for (const payload of [
+      { baseUrl: 'http://admin:secreto@umbrel.local:7792' },
+      { baseUrl: noisy, alternateBaseUrls: [`${noisy}a`, `${noisy}b`] },
+      { baseUrl: `http://${'a'.repeat(505)}`, alternateBaseUrls: [`http://${'ñ'.repeat(505)}`] },
+    ]) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/native/api/v1/pairing',
+        headers: native(token),
+        payload,
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: { code: 'validation_error' } });
+    }
+    /* Ninguna ha anulado el código que la web tenía a la vista. */
+    const claimed = await app.inject({
+      method: 'POST',
+      url: '/native/api/v1/pairing/claim',
+      headers: native(),
+      payload: { code: fromWeb.json<{ code: string }>().code, name: 'iPhone B', platform: 'ios' },
+    });
+    expect(claimed.statusCode).toBe(201);
+  });
+
+  it('el código que crea un iPhone por /native muere al revocarlo; el de la web, no', async () => {
+    const { app } = await appWithStore();
+    const a = await pairOverHttp(app, 'iPhone A');
+    const claim = (code: string, name: string) =>
+      app.inject({
+        method: 'POST',
+        url: '/native/api/v1/pairing/claim',
+        headers: native(),
+        payload: { code, name, platform: 'ios' },
+      });
+    const revoke = (deviceId: string) =>
+      app.inject({ method: 'DELETE', url: `/api/v1/devices/${deviceId}`, headers: web() });
+
+    /* A crea el código con su Bearer; la web revoca a A; el canje da 410. */
+    const seeded = await app.inject({
+      method: 'POST',
+      url: '/native/api/v1/pairing',
+      headers: native(a.token),
+      payload: { baseUrl: 'http://umbrel.local:7792' },
+    });
+    expect(seeded.statusCode).toBe(201);
+    expect((await revoke(a.deviceId)).statusCode).toBe(200);
+    const dead = await claim(seeded.json<{ code: string }>().code, 'Sembrado');
+    expect(dead.statusCode).toBe(410);
+    expect(dead.json()).toMatchObject({ error: { code: 'pairing_expired' } });
+
+    /* Al revés: el código de la web sobrevive a que se revoque un iPhone. */
+    const b = await pairOverHttp(app, 'iPhone B');
+    const fromWeb = await app.inject({
+      method: 'POST',
+      url: '/api/v1/pairing',
+      headers: web({ host: 'umbrel.local:7792' }),
+      payload: {},
+    });
+    expect(fromWeb.statusCode).toBe(201);
+    expect((await revoke(b.deviceId)).statusCode).toBe(200);
+    expect((await claim(fromWeb.json<{ code: string }>().code, 'iPhone C')).statusCode).toBe(201);
+  });
+
+  it('un iPhone en bucle: al sexto código en el minuto 429 pairing_rate_limited; la web sigue pudiendo', async () => {
+    const { app } = await appWithStore();
+    const a = await pairOverHttp(app, 'iPhone A');
+    const create = () =>
+      app.inject({
+        method: 'POST',
+        url: '/native/api/v1/pairing',
+        headers: native(a.token),
+        payload: { baseUrl: 'http://umbrel.local:7792' },
+      });
+    const statuses: number[] = [];
+    for (let index = 0; index < 6; index += 1) statuses.push((await create()).statusCode);
+    expect(statuses).toEqual([201, 201, 201, 201, 201, 429]);
+    const limited = await create();
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json()).toMatchObject({ error: { code: 'pairing_rate_limited' } });
+    const fromWeb = await app.inject({ method: 'POST', url: '/api/v1/pairing', headers: web() });
+    expect(fromWeb.statusCode).toBe(201);
+  });
+
+  it('revocarse a sí mismo: 200 con revokedAt y después 401 device_revoked (también su URL de vídeo)', async () => {
+    const { app, services } = await appWithStore();
+    const { token, deviceId } = await pairOverHttp(app);
+    const videoToken = services.auth.signVideoToken({ sessionId: SID, deviceId });
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/native/api/v1/devices/${deviceId}`,
+      headers: native(token),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ device: { id: deviceId, revokedAt: expect.any(String) } });
+    const after = await app.inject({
+      method: 'GET',
+      url: '/native/api/v1/bootstrap',
+      headers: native(token),
+    });
+    expect(after.statusCode).toBe(401);
+    expect(after.json()).toMatchObject({ error: { code: 'device_revoked' } });
+    const video = await app.inject({
+      method: 'GET',
+      url: `/native/api/v1/video/${SID}/index.m3u8?t=${encodeURIComponent(videoToken)}`,
+      headers: native(),
+    });
+    expect(video.statusCode).toBe(401);
+    expect(video.json()).toMatchObject({ error: { code: 'device_revoked' } });
+  });
+
+  it('un iPhone revoca a otro: el otro 401, el que revoca sigue 200', async () => {
+    const { app } = await appWithStore();
+    const a = await pairOverHttp(app, 'iPhone A');
+    const b = await pairOverHttp(app, 'iPhone B');
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/native/api/v1/devices/${b.deviceId}`,
+      headers: native(a.token),
+    });
+    expect(res.statusCode).toBe(200);
+    const get = (token: string) =>
+      app.inject({ method: 'GET', url: '/native/api/v1/devices', headers: native(token) });
+    const other = await get(b.token);
+    expect(other.statusCode).toBe(401);
+    expect(other.json()).toMatchObject({ error: { code: 'device_revoked' } });
+    expect((await get(a.token)).statusCode).toBe(200);
+  });
+
+  it('el id de la web (su navegador) no es un dispositivo: 404 device_not_found', async () => {
+    const { app } = await appWithStore();
+    const { token } = await pairOverHttp(app);
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/native/api/v1/devices/web_AbCdEf0123456789',
+      headers: native(token),
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toMatchObject({ error: { code: 'device_not_found' } });
   });
 
   it('web: lista y revoca; 404 device_not_found; 400 si el id no tiene forma', async () => {

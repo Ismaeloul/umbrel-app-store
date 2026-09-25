@@ -4,7 +4,9 @@
 
    - native sin token, con token manipulado y con token revocado → 401 en
      todas las rutas v1 salvo las dos `credential: 'none'` (ping y canje);
-   - native con token válido en una ruta solo web → 403 origin_forbidden;
+   - native con token válido en la única ruta solo web (`healthLive`) → 403
+     origin_forbidden; las de administración, abiertas desde la 0.8.1 (salud,
+     ajustes, emparejar, listar y revocar dispositivos);
    - native (por cabecera o por prefijo /native) en cualquier ruta antigua →
      403 origin_forbidden, aunque el token sea bueno;
    - URLs de vídeo firmadas: otra sesión, otra clave, payload cambiado sin
@@ -68,11 +70,13 @@ function fakePlayback(): PlaybackService {
   });
 }
 
-async function setup() {
+/* `real`: con los servicios de verdad (state en un DATA_DIR temporal), para
+   las rutas que sí tienen que llegar al manejador (salud, ajustes). */
+async function setup(options: { readonly real?: boolean } = {}) {
   const store = memoryDevicesStore();
-  const test = await createTestApp({
-    services: { state: fakeState(store), playback: fakePlayback() },
-  });
+  const test = await createTestApp(
+    options.real ? {} : { services: { state: fakeState(store), playback: fakePlayback() } },
+  );
   const { app } = test;
   const pair = async (name: string) => {
     const created = await app.inject({ method: 'POST', url: '/api/v1/pairing', headers: web() });
@@ -176,18 +180,50 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
     expect(failures).toEqual([]);
   });
 
-  it('con token válido, las rutas solo web dan 403 origin_forbidden', async () => {
+  it('con token válido, la única ruta solo web (healthLive) da 403 origin_forbidden', async () => {
     const s = await setup();
     const failures: string[] = [];
     const webOnly = V1.filter(([, route]) => route.access === 'web');
-    expect(webOnly.map(([id]) => id)).toEqual(
-      expect.arrayContaining(['pairingCreate', 'devicesList', 'deviceRevoke', 'settingsUpdate']),
-    );
+    /* Fija el conjunto: si se abre (o se cierra) una ruta por accidente, se ve aquí. */
+    expect(webOnly.map(([id]) => id)).toEqual(['healthLive']);
     for (const [id, route] of webOnly) {
       for (const url of nativeForms(concretePath(route))) {
         const { status, code } = await send(s, route.method, url, native(s.good.token));
         if (status !== 403 || code !== 'origin_forbidden') {
           failures.push(`${id} ${route.method} ${url}: ${status} ${code}`);
+        }
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
+  it('0.8.1: con token válido, las rutas de administración abiertas al iPhone responden', async () => {
+    const calls: [string, 'GET' | 'PUT' | 'POST' | 'DELETE', string, unknown, number][] = [
+      ['health', 'GET', '/api/v1/health', undefined, 200],
+      ['settingsUpdate', 'PUT', '/api/v1/settings', { sameChannelPolicy: 'handoff' }, 200],
+      ['pairingCreate', 'POST', '/api/v1/pairing', {}, 201],
+      ['devicesList', 'GET', '/api/v1/devices', undefined, 200],
+      /* Revocar otra vez al ya revocado: idempotente, 200. */
+      ['deviceRevoke', 'DELETE', '/api/v1/devices/:revoked', undefined, 200],
+    ];
+    for (const route of calls) expect(V1_ROUTES[route[0] as 'health'].access).toBe('any');
+    const failures: string[] = [];
+    /* Por prefijo /native y por cabecera sin prefijo: una app nueva por cada forma. */
+    for (const form of ['prefijo', 'cabecera'] as const) {
+      const s = await setup({ real: true });
+      for (const [id, method, path, payload, expected] of calls) {
+        const concrete = path.replace(':revoked', s.revoked.deviceId);
+        const url = form === 'prefijo' ? nativePath(concrete) : concrete;
+        const response = await s.app.inject({
+          method,
+          url,
+          headers: native(s.good.token),
+          ...(payload === undefined ? {} : { payload: payload as Record<string, unknown> }),
+        });
+        if (response.statusCode !== expected) {
+          failures.push(
+            `${id} ${method} ${url}: ${response.statusCode} ${response.body.slice(0, 200)}`,
+          );
         }
       }
     }
@@ -216,14 +252,14 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
     const s = await setup();
     const twisted = [
       '/native/api/v1/nope',
-      '/native/api/v1/devices/',
-      '/native/api/v1//devices',
-      '/native/api/v1/%64evices',
-      '/native/api/v1/devices?x=1',
-      '/native/api/v1/DEVICES',
-      '/native/api/v1/../v1/devices',
-      '/native/api/v1/pairing/claim/../../devices',
-      '/native/api/v1/ping/../devices',
+      '/native/api/v1/health/live/',
+      '/native/api/v1//health/live',
+      '/native/api/v1/%68ealth/live',
+      '/native/api/v1/health/live?x=1',
+      '/native/api/v1/HEALTH/LIVE',
+      '/native/api/v1/../v1/health/live',
+      '/native/api/v1/pairing/claim/../../health/live',
+      '/native/api/v1/ping/../health/live',
     ];
     for (const url of twisted) {
       /* Fastify no resuelve ".." ni junta barras: ninguna casa con ping ni con

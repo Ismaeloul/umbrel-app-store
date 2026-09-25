@@ -209,7 +209,11 @@ export const DiagnosticsNewEventSchema = z.strictObject({
   data: DiagnosticEntrySchema,
 });
 
-/** Solo va al origen `web` (administración). */
+/**
+ * A todos los orígenes desde la 0.8.1 (web e iPhone: lista de Dispositivos y
+ * «¡emparejado!» en vivo); el revocado recibe su `revoked` antes de que se le
+ * cierre el SSE.
+ */
 export const DevicesChangedEventSchema = z.strictObject({
   type: z.literal('devices.changed'),
   data: z.strictObject({
@@ -251,10 +255,12 @@ export const SSE_EVENT_TYPES: readonly SseEventType[] = SseEventSchema.options.m
   (option) => option.shape.type.value,
 );
 
-/** Eventos que solo recibe el origen `web`. */
-export const WEB_ONLY_EVENT_TYPES: ReadonlySet<SseEventType> = new Set<SseEventType>([
-  'devices.changed',
-]);
+/**
+ * Eventos que solo recibe el origen `web`. Vacío desde la 0.8.1:
+ * `devices.changed` llega también a los iPhone (Ajustes › Dispositivos en la
+ * app). El filtro se queda para eventos de administración futuros.
+ */
+export const WEB_ONLY_EVENT_TYPES: ReadonlySet<SseEventType> = new Set<SseEventType>([]);
 
 /** Eventos dirigidos a visores concretos: cada conexión recibe solo los de su dispositivo. */
 export const TARGETED_EVENT_TYPES: ReadonlySet<SseEventType> = new Set<SseEventType>([

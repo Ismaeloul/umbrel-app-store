@@ -176,8 +176,9 @@ Una ruta v1 nueva o un cambio de forma: en `@ace/shared` (A0), después
   revelar cuáles hay). Solo `ping` y `pairingClaim` van sin token.
 - El anti-CSRF solo se aplica al origen web; los GET v1 con efectos son los
   marcados `sideEffects` (`channelStream`, `footballResolve`).
-- Solo web: `health`, `healthLive`, `settingsUpdate`, `pairingCreate`,
-  `devicesList`, `deviceRevoke`. Solo native: `video`. Todo lo demás, los dos.
+- Solo web: `healthLive` (healthcheck de Docker). Solo native: `video`. Todo
+  lo demás, los dos (0.8.1: `health`, `settingsUpdate`, `pairingCreate`,
+  `devicesList` y `deviceRevoke` pasan a los dos para la app calcada).
 
 ## 8. Cómo portar un T-xxx
 

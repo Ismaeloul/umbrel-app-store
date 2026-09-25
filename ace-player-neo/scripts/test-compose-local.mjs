@@ -550,6 +550,80 @@ async function httpChecks({ gw, nginx, cookie }) {
   );
   const health401 = await request(gw, '/native/api/v1/health');
   check('/native/api/v1/health sin token → 401', health401.status === 401, `${health401.status}`);
+
+  // --- 0.8.1: el iPhone emparejado administra como la web (PUT y DELETE nativos) ---
+  const webCode = await request(gw, '/api/v1/pairing', {
+    method: 'POST',
+    headers: cookie,
+    body: {},
+  });
+  check(
+    'emparejar por la pasarela con login → 201',
+    webCode.status === 201 && typeof webCode.json?.code === 'string',
+    `${webCode.status} ${webCode.text.slice(0, 80)}`,
+  );
+  const claimed = await request(gw, '/native/api/v1/pairing/claim', {
+    method: 'POST',
+    body: { code: webCode.json?.code, name: 'iPhone de la pila', platform: 'ios' },
+  });
+  check(
+    'canje por /native/api/v1/pairing/claim → 201',
+    claimed.status === 201 && typeof claimed.json?.token === 'string',
+    `${claimed.status}`,
+  );
+  const bearer = { authorization: `Bearer ${claimed.json?.token}` };
+  const ownId = claimed.json?.deviceId;
+  const nativeDevices = await request(gw, '/native/api/v1/devices', { headers: bearer });
+  check(
+    '/native/api/v1/devices con token → 200',
+    nativeDevices.status === 200,
+    `${nativeDevices.status}`,
+  );
+  const nativeSettings = await request(gw, '/native/api/v1/settings', {
+    method: 'PUT',
+    headers: bearer,
+    body: { sameChannelPolicy: 'share' },
+  });
+  check(
+    'PUT /native/api/v1/settings con token → 200',
+    nativeSettings.status === 200,
+    `${nativeSettings.status} ${nativeSettings.text.slice(0, 80)}`,
+  );
+  const nativeCode = await request(gw, '/native/api/v1/pairing', {
+    method: 'POST',
+    headers: bearer,
+    body: {
+      baseUrl: 'http://umbrel.local:7792',
+      alternateBaseUrls: ['https://umbrel.tail1234.ts.net'],
+    },
+  });
+  check(
+    'POST /native/api/v1/pairing con dos direcciones → 201 y dos u=',
+    nativeCode.status === 201 && (nativeCode.json?.pairUri?.match(/u=/g) ?? []).length === 2,
+    `${nativeCode.status} ${nativeCode.json?.pairUri ?? nativeCode.text.slice(0, 80)}`,
+  );
+  const nativeHealth = await request(gw, '/native/api/v1/health', { headers: bearer });
+  check(
+    '/native/api/v1/health con token → 200',
+    nativeHealth.status === 200,
+    `${nativeHealth.status}`,
+  );
+  const selfRevoke = await request(gw, `/native/api/v1/devices/${ownId}`, {
+    method: 'DELETE',
+    headers: bearer,
+  });
+  check(
+    'DELETE /native/api/v1/devices/<propio> → 200',
+    selfRevoke.status === 200 && typeof selfRevoke.json?.device?.revokedAt === 'string',
+    `${selfRevoke.status}`,
+  );
+  const afterRevoke = await request(gw, '/native/api/v1/bootstrap', { headers: bearer });
+  check(
+    'tras revocarse, /native/api/v1/bootstrap → 401',
+    afterRevoke.status === 401,
+    `${afterRevoke.status} ${afterRevoke.text.slice(0, 80)}`,
+  );
+
   const legacyNative = await request(gw, '/native/api/state', {
     headers: { authorization: 'Bearer x.y' },
   });

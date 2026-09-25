@@ -449,8 +449,13 @@ Decisión (A, recomendada):
   No hay garantía de que la pasarela real de umbreld conserve el `Host` (la
   falsa sí, `gateway.mjs:150-156`): por eso la app debe mandar siempre
   `baseUrl`.
-- Tamaño del QR: dos URL de ~40 caracteres dan un QR versión ~6-7; el tope de
-  2 alternativas × 512 caracteres evita QR ilegibles.
+- Tamaño del QR: dos URL de ~40 caracteres dan un QR versión ~6-7. El tope
+  de 2 alternativas × 512 caracteres NO bastaba (con `%` o unicode,
+  `encodeURIComponent` multiplica por 3 o por 9 y el QR no cabía: 500). En
+  la 0.8.1 cada dirección es un origen con nombre ASCII o IPv6 y puerto
+  opcional (`PAIRING_BASE_URL_RE`, sin credenciales), ~280 caracteres
+  codificada como mucho; el QR se dibuja antes de anular el código vivo y,
+  si aun así falla, responde 400.
 
 Alternativa B (cero contrato, no recomendada): la app pide el código sin
 `alternateBaseUrls` y compone ella el `pairUri` con sus dos direcciones. Evita
@@ -646,7 +651,7 @@ corregir a6 para la nota de origen `--warn` y el aviso del backend.
 | N-1 | **Un iPhone robado pasa a ser administrador**: puede crear códigos y emparejar dispositivos nuevos (persistencia: revocar el robado no revoca los que sembró). Hoy solo podía «lo que no es de administración» (R-9). | Media | El código que crea un iPhone muere si ese iPhone se revoca (§2.7); el log dice `pairedBy`; la web lista todos con fecha y nombre y puede revocar cualquiera. | Sí: los que ya sembró siguen hasta revocarlos a mano. Propuesta futura (con migración y sin vuelta atrás a la 0.8.0): `pairedBy` en `devices.json` y revocación en cascada. |
 | N-2 | Un iPhone puede revocar a todos los demás (molestia). | Baja | La web (login de Umbrel) no se puede revocar y vuelve a emparejar. | Sí |
 | N-3 | Auto-revocación por error ⇒ el iPhone queda fuera. | Baja | Segundo toque de 5 s con el aviso debajo del botón (§3.5.2); se vuelve con un código desde la web u otro iPhone, y la pantalla de emparejar sale con las direcciones ya puestas (§3.5.4). | Sí |
-| N-4 | Un código creado desde el iPhone anula el que la web tuviera a la vista (solo hay uno vivo, `service.ts:232-233`): la web sigue contando atrás y el canje da 410 `pairing_expired`. | Baja | Ninguna (es la regla de siempre). | Sí; si molesta, un `pairing.changed` futuro. |
+| N-4 | Un código creado desde el iPhone anula el que la web tuviera a la vista (solo hay uno vivo): si nadie canjea el del iPhone, la web sigue contando atrás y su canje da 410 `pairing_expired`; si otro dispositivo lo canjea, la web recibe `devices.changed paired` de un id nuevo y enseña «¡Emparejado!» aunque su código esté muerto (falso éxito: el emparejamiento es real, pero no con su código). | Baja | Un iPhone crea como mucho 5 códigos por minuto (429 `pairing_rate_limited`): un bucle no deja a la web sin poder emparejar. | Sí; para evitar el falso éxito, un `pairing.changed` futuro (o `pairedBy` en el evento `paired`) con el que la web pase a «caducado» cuando su código deje de ser el vivo. |
 | N-5 | `pairingCreate` desde native sin `baseUrl` usa el `Host`/`X-Forwarded-*` que controla quien llama. | Nula | Quien llama está autenticado y el QR solo lo ve él; ya podía mandar `baseUrl`. La URL nunca la pide el servidor (no hay SSRF). | — |
 | N-6 | `devices.changed` a todos: cada iPhone ve los `deviceId` de los demás en vivo. | Nula | Ya los ve con `devicesList`. | — |
 | N-7 | `health` a native: versión, contadores, nombre del modelo de IA, avisos. | Nula | Sin secretos (§1.4); ya ven `engineStatus`, `diagnosticsList`, `playbackStatus`. | — |

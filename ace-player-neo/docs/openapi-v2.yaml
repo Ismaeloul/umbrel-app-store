@@ -1015,7 +1015,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/health
       x-side-effects: false
       x-legacy-twin: GET /api/health
@@ -2265,7 +2266,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/settings
       x-side-effects: true
       x-legacy-twin: null
@@ -2306,6 +2308,7 @@ paths:
       tags:
         - auth
       summary: Crear un código de 6 dígitos y su QR (5 min, un solo uso, anula el anterior)
+      description: Desde la web (su dirección en baseUrl) o desde un iPhone emparejado (baseUrl = la dirección que usa ahora; alternateBaseUrls = la otra, casa o Tailscale). El QR lleva una u= por dirección, en ese orden. Si lo crea un iPhone y luego se revoca, su código muere.
       parameters: []
       requestBody:
         required: true
@@ -2317,7 +2320,14 @@ paths:
                 baseUrl:
                   type: string
                   maxLength: 512
-                  pattern: ^https?:\/\/[^/?#]+$
+                  pattern: ^https?:\/\/(?:[A-Za-z0-9.-]{1,253}|\[[0-9A-Fa-f:.]{2,45}\])(?::\d{1,5})?$
+                alternateBaseUrls:
+                  maxItems: 2
+                  type: array
+                  items:
+                    type: string
+                    maxLength: 512
+                    pattern: ^https?:\/\/(?:[A-Za-z0-9.-]{1,253}|\[[0-9A-Fa-f:.]{2,45}\])(?::\d{1,5})?$
               additionalProperties: false
       responses:
         "201":
@@ -2361,11 +2371,18 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/pairing
       x-side-effects: true
       x-legacy-twin: null
       x-errors:
+        - code: bad_request
+          status: 400
+          message: La petición no es válida.
+        - code: pairing_rate_limited
+          status: 429
+          message: Demasiados intentos. Espera un minuto y vuelve a probar.
         - code: validation_error
           status: 400
           message: Falta algún dato o no tiene el formato esperado.
@@ -2610,7 +2627,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/devices
       x-side-effects: false
       x-legacy-twin: null
@@ -2651,6 +2669,7 @@ paths:
       tags:
         - auth
       summary: "Revocar un dispositivo: cierra su SSE, suelta sus visores y anula sus URLs de vídeo"
+      description: "Web o cualquier iPhone emparejado; también el propio (entonces responde 200 y todo lo suyo deja de valer al instante: su SSE recibe devices.changed revoked y se cierra)."
       parameters:
         - name: id
           in: path
@@ -2718,7 +2737,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
       security:
         - umbrelGateway: []
-      x-access: web
+        - deviceBearer: []
+      x-access: any
       x-native-path: /native/api/v1/devices/{id}
       x-side-effects: true
       x-legacy-twin: null

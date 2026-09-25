@@ -5,8 +5,9 @@
      esquema de @ace/shared/events, latido `: ping` cada 15 s y `retry: 3000`.
    - Reanudación: búfer circular de 200 eventos; con `Last-Event-ID` se
      reenvía lo que falte o, si ya no está, un `resync`.
-   - Filtro: cada conexión recibe lo general y lo de su dispositivo; los
-     eventos de administración (`devices.changed`) solo van al origen web.
+   - Filtro: cada conexión recibe lo general y lo de su dispositivo. Filtro
+     por origen: `WEB_ONLY_EVENT_TYPES` (vacío desde la 0.8.1:
+     `devices.changed` va a todos).
    - Contrapresión: si el búfer de escritura de una conexión pasa de 256 KiB,
      se cierra y el cliente reconecta.
    - Se suscribe al bus (playback, stream, engine, scan, state, diagnostics,

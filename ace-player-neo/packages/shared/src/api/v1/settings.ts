@@ -1,5 +1,6 @@
 /* Ajustes v2 (arquitectura §5.6): hoy solo la política de mismo canal.
-   Se leen desde la web y desde la app iOS; solo la web los cambia. */
+   Se leen y se cambian desde la web y desde la app iOS (0.8.1: «Un solo
+   dispositivo a la vez» también en el iPhone). */
 
 import { z } from 'zod';
 import { SameChannelPolicySchema, SettingsSchema } from '../../state/v2.js';
