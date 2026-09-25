@@ -39,17 +39,26 @@ struct Heroe: View {
         .accessibilityIdentifier(IDUI.heroe)
     }
 
+    private var movil: Bool { maquetacion.tipo == .movil }
+
+    /// Móvil: a sangre, alto de la ventana (a3 §4.7). Desde 768: `min(ancho × 9/16, 62 % del alto)`, mínimo 200.
+    private var alto: CGFloat {
+        guard !movil else { return CGFloat(maquetacion.altoHeroe) }
+        let ancho: Double = maquetacion.ancho - maquetacion.rellenoIzquierdo - maquetacion.rellenoDerecho
+        return CGFloat(max(200, min(ancho * 9 / 16, 0.62 * maquetacion.alto)))
+    }
+
     private var tarjeta: some View {
         ConSenal(partido: partido, ahora: foto.ahora, terminado: estado?.fase == .terminado) { senal in
             VersusAgenda(
-                datos, tamano: .heroe, alto: CGFloat(maquetacion.altoHeroe),
+                datos, tamano: movil ? .heroe : .valla, alto: alto,
                 arriba: CGFloat(maquetacion.seguras.arriba) + 76, origenVuelo: origenVuelo
             ) {
                 if let senal { CapsulaSenal(senal: senal, grande: true) }
             }
         }
-        .padding(.leading, -CGFloat(maquetacion.rellenoIzquierdo))
-        .padding(.trailing, -CGFloat(maquetacion.rellenoDerecho))
+        .padding(.leading, movil ? -CGFloat(maquetacion.rellenoIzquierdo) : 0)
+        .padding(.trailing, movil ? -CGFloat(maquetacion.rellenoDerecho) : 0)
     }
 }
 
@@ -57,14 +66,26 @@ struct Heroe: View {
 struct HeroeEsqueleto: View {
     @Environment(\.maquetacion) private var maquetacion
 
+    private var movil: Bool { maquetacion.tipo == .movil }
+
     var body: some View {
-        let forma = UnevenRoundedRectangle(bottomLeadingRadius: R.xl, bottomTrailingRadius: R.xl, style: .circular)
-        Esqueleto(alto: CGFloat(maquetacion.altoHeroe), radio: 0)
+        let arriba: CGFloat = movil ? 0 : R.xl
+        let forma = UnevenRoundedRectangle(
+            topLeadingRadius: arriba, bottomLeadingRadius: R.xl, bottomTrailingRadius: R.xl, topTrailingRadius: arriba,
+            style: .circular)
+        Esqueleto(alto: alto, radio: 0)
             .background(Palco.glassVideoSolid)
             .clipShape(forma)
             .islaOscura()
-            .padding(.leading, -CGFloat(maquetacion.rellenoIzquierdo))
-            .padding(.trailing, -CGFloat(maquetacion.rellenoDerecho))
+            .padding(.leading, movil ? -CGFloat(maquetacion.rellenoIzquierdo) : 0)
+            .padding(.trailing, movil ? -CGFloat(maquetacion.rellenoDerecho) : 0)
             .accessibilityHidden(true)
+    }
+
+    /// El mismo hueco que el héroe (a3 §4.6, §12).
+    private var alto: CGFloat {
+        guard !movil else { return CGFloat(maquetacion.altoHeroe) }
+        let ancho: Double = maquetacion.ancho - maquetacion.rellenoIzquierdo - maquetacion.rellenoDerecho
+        return CGFloat(max(200, min(ancho * 9 / 16, 0.62 * maquetacion.alto)))
     }
 }

@@ -74,6 +74,17 @@ enum EjemploAgenda {
         #expect(ReglasAgenda.unidadesJuntas("En directo") == "En directo")
     }
 
+    /// `classifySwipe` (lib/gestures.ts) para cambiar de día y de pestaña.
+    @Test func gestoLateral() {
+        #expect(GestoLateral.paso(dx: -60, dy: 10, vx: 0) == 1)
+        #expect(GestoLateral.paso(dx: 60, dy: 10, vx: 0) == -1)
+        #expect(GestoLateral.paso(dx: -30, dy: 5, vx: -500) == 1, "Rápido con ≥ 24 pt")
+        #expect(GestoLateral.paso(dx: -20, dy: 0, vx: -900) == 0, "Menos de 24 pt no cuenta")
+        #expect(GestoLateral.paso(dx: -60, dy: 50, vx: 0) == 0, "El eje dominante tiene que ser 1,4×")
+        #expect(GestoLateral.resistencia(400) == 60)
+        #expect(GestoLateral.resistencia(-100) == -30)
+    }
+
     @Test func dias() {
         #expect(ReglasAgenda.etiquetaDia(E.hoy, hoy: E.hoy).principal == "Hoy")
         #expect(ReglasAgenda.etiquetaDia(E.hoy, hoy: E.hoy).numero == "23")

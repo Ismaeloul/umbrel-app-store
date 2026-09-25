@@ -16,6 +16,8 @@ struct TiraDias: View {
     let dias: [DiaTira]
     let elegido: String?
     let hoy: String
+    /// A sangre en el móvil; desde 768 dentro del margen, con 28 a la derecha que se funden (a3 §12).
+    var sangrar = true
     let elegir: (String) -> Void
     @Environment(\.maquetacion) private var maquetacion
     @Environment(\.movimientoReducido) private var reducido
@@ -38,10 +40,11 @@ struct TiraDias: View {
         }
         .scrollIndicators(.hidden)
         .scrollPosition($posicion, anchor: .center)
-        .contentMargins(.leading, CGFloat(maquetacion.rellenoIzquierdo), for: .scrollContent)
-        .contentMargins(.trailing, CGFloat(maquetacion.rellenoDerecho), for: .scrollContent)
-        .padding(.leading, -CGFloat(maquetacion.rellenoIzquierdo))
-        .padding(.trailing, -CGFloat(maquetacion.rellenoDerecho))
+        .contentMargins(.leading, sangrar ? CGFloat(maquetacion.rellenoIzquierdo) : 2, for: .scrollContent)
+        .contentMargins(.trailing, sangrar ? CGFloat(maquetacion.rellenoDerecho) : 28, for: .scrollContent)
+        .mask { MascaraTira(sangrar: sangrar) }
+        .padding(.leading, sangrar ? -CGFloat(maquetacion.rellenoIzquierdo) : 0)
+        .padding(.trailing, sangrar ? -CGFloat(maquetacion.rellenoDerecho) : 0)
         .onChange(of: elegido, initial: true) { _, nuevo in centrar(nuevo) }
         .onChange(of: dias.isEmpty) { _, vacia in if !vacia { centrar(elegido) } }
         .accessibilityElement(children: .contain)
@@ -120,6 +123,23 @@ private struct FondoElegida: View {
             .brilloSuperior(forma: forma)
             .bordeInterior(Palco.lineSoft, forma: forma)
             .sombra([CapaSombra(y: 6, desenfoque: 18, expansion: -10, color: Color.black.opacity(0.45))], forma: forma)
+    }
+}
+
+/// Desde 768: opaca hasta `100 % − 28` y transparente al final (máscara lineal de la web).
+private struct MascaraTira: View {
+    let sangrar: Bool
+
+    var body: some View {
+        if sangrar {
+            Rectangle()
+        } else {
+            HStack(spacing: 0) {
+                Rectangle()
+                LinearGradient(colors: [Color.black, Color.black.opacity(0)], startPoint: .leading, endPoint: .trailing)
+                    .frame(width: 28)
+            }
+        }
     }
 }
 

@@ -5,7 +5,9 @@ import SwiftUI
    la ventana, escudos de 84 al 52 % y a escala 1, fila de arriba a safeTop + 76, esquinas de abajo de 24).
    Las mitades, el velo y las piezas son las de ui/VersusCard.tsx; SIN marcador en las mitades. Isla oscura. */
 
-enum TamanoVersusAgenda: Sendable { case fila, heroe }
+/// `fila` (240 × 150), `heroe` (vertical, a sangre) y `valla` (el héroe desde 768: dentro del margen, radio 24
+/// en las cuatro esquinas, escudos al 44 %, nombres de 30 y el velo de la valla ancha; a3 §12).
+enum TamanoVersusAgenda: Sendable { case fila, heroe, valla }
 
 /// Lo que pinta la tarjeta, ya resuelto desde el partido.
 struct DatosTarjetaAgenda: Equatable {
@@ -67,19 +69,20 @@ struct VersusAgenda<Senal: View>: View {
         self.senal = senal()
     }
 
-    private var heroe: Bool { tamano == .heroe }
+    private var heroe: Bool { tamano != .fila }
+    private var valla: Bool { tamano == .valla }
     private var relleno: CGFloat { heroe ? 16 : 12 }  // --versus-pad
     private var forma: UnevenRoundedRectangle {
         let r: CGFloat = heroe ? R.xl : R.m
         return UnevenRoundedRectangle(
-            topLeadingRadius: heroe ? 0 : r, bottomLeadingRadius: r, bottomTrailingRadius: r,
-            topTrailingRadius: heroe ? 0 : r, style: .circular)
+            topLeadingRadius: tamano == .heroe ? 0 : r, bottomLeadingRadius: r, bottomTrailingRadius: r,
+            topTrailingRadius: tamano == .heroe ? 0 : r, style: .circular)
     }
 
     var body: some View {
         ZStack {
-            FondoVersusAgenda(datos: datos.versus, heroe: heroe)
-            ColocarEnFraccion(x: 0.5, y: heroe ? 0.52 : 0.45) {  // --versus-crest-y
+            FondoVersusAgenda(datos: datos.versus, valla: valla)
+            ColocarEnFraccion(x: 0.5, y: centroEscudos) {  // --versus-crest-y
                 BloqueEscudos(datos.versus, tamano: heroe ? 84 : 56)
                     .modifier(PiezaVueloSi(activa: origenVuelo, partido: datos.partido))
             }
@@ -89,11 +92,19 @@ struct VersusAgenda<Senal: View>: View {
         }
         .modifier(MarcoVersus(heroe: heroe, alto: alto))
         .clipShape(forma)
-        .overlay { if heroe { VeloCabecera(arriba: arriba) } }
+        .overlay { if tamano == .heroe { VeloCabecera(arriba: arriba) } }
         .background { if datos.versus.enPantalla { forma.stroke(Palco.accent, lineWidth: 4) } }
         .sombra(heroe ? .s2 : .s3, forma: forma)
         .foregroundStyle(Color.white)
         .islaOscura()
+    }
+
+    private var centroEscudos: CGFloat {
+        switch tamano {
+        case .fila: 0.45
+        case .heroe: 0.52
+        case .valla: 0.44
+        }
     }
 
     private var filaArriba: some View {
@@ -107,15 +118,20 @@ struct VersusAgenda<Senal: View>: View {
             senal
         }
         .padding(.horizontal, relleno)
-        .padding(.top, heroe ? arriba : relleno)
+        .padding(.top, tamano == .heroe ? arriba : relleno)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private var pie: some View {
-        PieVersusAgenda(datos: datos.versus, heroe: heroe)
-            .padding(.trailing, datos.versus.enPantalla && heroe ? CGFloat(0.34 * maquetacion.ancho) : reservaNombres)
+        PieVersusAgenda(datos: datos.versus, heroe: heroe, valla: valla)
+            .padding(.trailing, datos.versus.enPantalla && heroe ? 0.34 * anchoTarjeta : reservaNombres)
             .padding(relleno)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+    }
+
+    private var anchoTarjeta: CGFloat {
+        let margenes: Double = valla ? maquetacion.rellenoIzquierdo + maquetacion.rellenoDerecho : 0
+        return CGFloat(maquetacion.ancho - margenes)
     }
 
     private var enPantalla: some View {
@@ -156,7 +172,7 @@ struct PiezaVueloSi: ViewModifier {
 /// Las dos mitades con sus luces y el velo (ui/VersusCard.css `.versus__half--*`, `.versus__veil`).
 private struct FondoVersusAgenda: View {
     let datos: DatosVersus
-    let heroe: Bool
+    let valla: Bool
     @State private var caja = CGSize(width: 1, height: 1)
 
     private var coloresLocal: [Color] {
@@ -174,7 +190,7 @@ private struct FondoVersusAgenda: View {
                 MitadAgenda(colores: coloresVisitante, local: false, caja: mitad)
             }
             .opacity(datos.terminado ? 0.72 : 1)
-            VeloAgenda(caja: caja)
+            if valla { VeloValla(caja: caja) } else { VeloAgenda(caja: caja) }
         }
         .onGeometryChange(for: CGSize.self) { $0.size } action: { caja = $0 }
     }
@@ -214,6 +230,33 @@ private struct VeloAgenda: View {
             Degradado.elipse(
                 Color.black.opacity(0.28), radioX: 0.6 * caja.width, radioY: 0.55 * caja.height, hasta: 0.7,
                 centro: UnitPoint(x: 0.5, y: 0.52))
+        }
+        .clipped()
+        .allowsHitTesting(false)
+    }
+}
+
+/// Velo de la valla ancha (agenda.css ≥ 768): `linear(180°: .36 · 0 24 % · 0 52 % · .5)` +
+/// `radial(64% 80% at 0 100%, .6 → 72 %)` + `radial(40% 60% at 50% 46%, .22 → 70 %)`.
+private struct VeloValla: View {
+    let caja: CGSize
+
+    private static let paradas: [Gradient.Stop] = [
+        Gradient.Stop(color: Color.black.opacity(0.36), location: 0),
+        Gradient.Stop(color: Color.black.opacity(0), location: 0.24),
+        Gradient.Stop(color: Color.black.opacity(0), location: 0.52),
+        Gradient.Stop(color: Color.black.opacity(0.5), location: 1),
+    ]
+
+    var body: some View {
+        ZStack {
+            LinearGradient(stops: VeloValla.paradas, startPoint: .top, endPoint: .bottom)
+            Degradado.elipse(
+                Color.black.opacity(0.6), radioX: 0.64 * caja.width, radioY: 0.8 * caja.height, hasta: 0.72,
+                centro: .bottomLeading)
+            Degradado.elipse(
+                Color.black.opacity(0.22), radioX: 0.4 * caja.width, radioY: 0.6 * caja.height, hasta: 0.7,
+                centro: UnitPoint(x: 0.5, y: 0.46))
         }
         .clipped()
         .allowsHitTesting(false)
@@ -295,8 +338,9 @@ private struct MarcaTuEquipoAgenda: View {
 private struct PieVersusAgenda: View {
     let datos: DatosVersus
     let heroe: Bool
+    let valla: Bool
 
-    private var tamanoNombre: Double { heroe ? 17 : 15 }
+    private var tamanoNombre: Double { valla ? 30 : heroe ? 17 : 15 }
     private var estiloNombre: EstiloTexto {
         EstiloTexto(tamano: tamanoNombre, peso: 800, anchura: 125, trackingEm: -0.015, altoLinea: 1.15)
     }

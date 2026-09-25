@@ -144,7 +144,7 @@ private struct ColumnaAgenda: View {
 
     /// Barra de estado blanca mientras el héroe está debajo (a3 §4.7; b §0.4).
     private func publicarBarraDeEstado() {
-        let bajo = vistaActiva && hayHeroe && desplazamiento < maquetacion.altoHeroe - maquetacion.seguras.arriba
+        let bajo = vistaActiva && hayHeroe && maquetacion.tipo == .movil && desplazamiento < maquetacion.altoHeroe - maquetacion.seguras.arriba
         if estadoVentana.heroeBajoBarra != bajo { estadoVentana.heroeBajoBarra = bajo }
     }
 
@@ -172,7 +172,28 @@ private struct FilaSuperiorAgenda: View {
     @Environment(\.maquetacion) private var maquetacion
 
     var body: some View {
-        ZStack(alignment: .top) {
+        if maquetacion.tipo == .movil {
+            ZStack(alignment: .top) {
+                heroe
+                cabecera.padding(.top, CGFloat(maquetacion.seguras.arriba))
+            }
+        } else {
+            // ≥ 768: la cabecera no flota; va encima, bajo la barra superior (64 + safeTop + 12; a3 §12).
+            VStack(alignment: .leading, spacing: 20) {
+                cabecera.padding(.top, CGFloat(maquetacion.rellenoSuperiorCabecera(agenda: true)) - 24)
+                heroe
+            }
+        }
+    }
+
+    private var cabecera: some View {
+        CabeceraAgenda(sobreHeroe: hayHeroe && maquetacion.tipo == .movil, cargando: datos.agenda.cargando) {
+            Task { await datos.agenda.refrescar() }
+        }
+    }
+
+    @ViewBuilder private var heroe: some View {
+        Group {
             if datos.agenda.datos == nil && datos.agenda.error == nil {
                 HeroeEsqueleto()
             } else if let destacado = foto.destacado {
@@ -185,10 +206,6 @@ private struct FilaSuperiorAgenda: View {
                 }
                 .id(destacado.id)
             }
-            CabeceraAgenda(sobreHeroe: hayHeroe, cargando: datos.agenda.cargando) {
-                Task { await datos.agenda.refrescar() }
-            }
-            .padding(.top, CGFloat(maquetacion.seguras.arriba))
         }
     }
 }
@@ -200,6 +217,7 @@ private struct BarraDiasAgenda: View {
     let tiraArriba: Bool
     @Environment(CentroHojas.self) private var hojas
     @Environment(Haptica.self) private var haptica
+    @Environment(\.maquetacion) private var maquetacion
     @Environment(\.movimientoReducido) private var reducido
 
     private var dias: [DiaTira] {
@@ -207,12 +225,28 @@ private struct BarraDiasAgenda: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            TiraDias(dias: dias, elegido: foto.dia, hoy: foto.hoy) { fecha in cambiarDia(fecha) }
-            FilaFiltro(
-                modo: foto.modo, hayGustos: foto.hayGustos, paraTi: foto.paraTi, todos: foto.delDia.count,
-                enDirecto: foto.enDirecto, cambiarModo: cambiarModo, editarGustos: { hojas.abrir(.gustos) })
+        if maquetacion.tipo == .movil {
+            VStack(alignment: .leading, spacing: 12) {
+                tira
+                filtro
+            }
+        } else {
+            // ≥ 768: días y filtro en la misma fila (`1fr | auto`, separación 16); la tira no va a sangre.
+            HStack(spacing: 16) {
+                tira
+                filtro.fixedSize()
+            }
         }
+    }
+
+    private var tira: some View {
+        TiraDias(dias: dias, elegido: foto.dia, hoy: foto.hoy, sangrar: maquetacion.tipo == .movil) { fecha in cambiarDia(fecha) }
+    }
+
+    private var filtro: some View {
+        FilaFiltro(
+            modo: foto.modo, hayGustos: foto.hayGustos, paraTi: foto.paraTi, todos: foto.delDia.count,
+            enDirecto: foto.enDirecto, cambiarModo: cambiarModo, editarGustos: { hojas.abrir(.gustos) })
     }
 
     private func cambiarDia(_ fecha: String) {
