@@ -35,10 +35,10 @@ final class LaboratorioUITests: XCTestCase {
     @MainActor
     func testCapturasDeCadaBloque() {
         for tema in ["claro", "oscuro"] {
-            for bloque in 1...8 {
+            for bloque in 1...9 {
                 let app = abrir(bloque: bloque, tema: tema)
                 capturar("laboratorio-\(bloque)-\(tema)")
-                if bloque <= 3 {
+                if bloque <= 3 || bloque == 9 {
                     app.terminate()
                     _ = abrir(bloque: bloque, tema: tema, desplazar: 700)
                     capturar("laboratorio-\(bloque)-\(tema)-y700")

@@ -32,6 +32,18 @@ extension View {
     /// El ÚNICO `.glassEffect(` de la app. Con transparencia reducida (sistema o app) pinta el sólido exacto de la web.
     func cristal(_ tipo: TipoCristal, en forma: some Shape = Capsule()) -> some View {
         modifier(ModificadorCristal(tipo: tipo, forma: forma))
+            .modifier(EsquemaCristal(video: tipo == .video || tipo == .videoBoton))
+    }
+}
+
+/// El cristal de vídeo es oscuro siempre (`.glass--video { color-scheme: dark }`, base.css): Liquid Glass sigue
+/// el esquema de su entorno y, en claro, el botón de vídeo salía gris sobre la imagen.
+private struct EsquemaCristal: ViewModifier {
+    let video: Bool
+    @Environment(\.colorScheme) private var esquema
+
+    func body(content: Content) -> some View {
+        content.environment(\.colorScheme, video ? .dark : esquema)
     }
 }
 
