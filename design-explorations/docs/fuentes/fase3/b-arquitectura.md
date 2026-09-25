@@ -38,6 +38,13 @@
    acordadas»:** A-1 fuera; A-2 fuera; A-3 sí (barra de estado legible: es una mejora nativa); A-4 se queda;
    A-5 botón con el aspecto de la web; A-6 ver punto 1; A-7 sí (la ayuda describe los gestos que la app tiene);
    A-8 sí.
+4. **Cierre de la fase 0 (I0, 25-sep).** `nativa/palco` fusionada en `rediseno/nativa`; `Sources/Sonda` y
+   `App/PalcoProvisional.swift` borrados (lo que Palco tomaba de los canarios va por `Armazon/Hojas.swift` y
+   `Armazon/Menus.swift`). Cambios de contrato que ya están en su sección: §2.2 (lo que calibró P: `.tarjeta()`
+   con `R.xl`, `Patron.mitades`, `altoLinea 1.45` heredado, `llenarAncho`, `trackingCapsulaEm`, contador del
+   segmentado, Martian con su caja), §2.3 (`PreferenciasLocales.estiloVentana` y la raíz con el banco y la galería),
+   §2.4.2 (`Hoja.muestra`), §2.4.5 (`.piezaVuelo` ya publica), §3.3.1 (`-AceNeoDesplazar`,
+   `-AceNeoLaboratorioSeccion`), §4.4 (`solo_uitests` con comas) y §5.3.1 (canarios cerrados).
 
 ### 0.1 Base elegida, injertos y correcciones
 
@@ -544,7 +551,7 @@ Sources/Debug/                          (todo #if DEBUG; M2 salvo lo indicado)
 ├─ ImagenDemo.swift                     campo de fútbol de player/index.tsx › DemoPicture en Canvas + rótulo de demo
 ├─ EscenasCaptura.swift                 I2 · prepara cada vista de final/ sin pasos de interfaz (-AceNeoEscena)
 └─ ServidorSimulado.swift               [B] M2 · sigue en la fase 0 (la demo provisional delega en él); M2 lo borra al acabar ServidorDemo
-Sources/Sonda/                          I0 · canarios de API (§5.3), un fichero por API; se borran al cerrar la fase 0
+Sources/Sonda/                          I0 · canarios de API (§5.3). BORRADO al cerrar la fase 0 (25-sep, §5.3.1)
 Sources/Design/                         [B] entero
 Sources/Features/                       [B] entero (lo rescatable está en §1.11)
 ```
@@ -1280,6 +1287,15 @@ enum GestosMini {
 
 ### 2.2 Palco (`Sources/Palco`, P)
 
+> **Calibrado en la fase 0.4 (P, `c0-laboratorio.md`) y fijado al cerrar la fase 0.** Lo que cambió respecto al
+> primer borrador y ya está abajo: `.tarjeta()` con **`R.xl`** por defecto (Surface.tsx); `MarcaEquipo.Patron` con
+> **`.mitades`**; **`altoLinea: 1.45`** en los estilos que en la web heredan el `line-height` del `body` (segmento,
+> menú, línea de estado, etiqueta de campo, pista, error, rótulo de la barra, destino de la barra superior, «Modo
+> demo» y motor); **Martian** con su caja natural de 1,2 em (`Martian.altoNatural`, `.altoDeLineaMartian`, que
+> `.estilo()` usa en los estilos `mono`); los valores de entorno **`llenarAncho`** y **`trackingCapsulaEm`**;
+> **`contador`** en `OpcionSegmento`; `FilaEquiposPartido(…, encendido:)`; `R.interiorTarjeta`, `Alturas` y
+> `panelCristal`. El cristal de vídeo pinta siempre en oscuro (`EsquemaCristal`, como `.glass--video`).
+
 #### 2.2.1 Color
 
 ```swift
@@ -1340,6 +1356,12 @@ enum R {            // radios (a1 §4.2)
     static let xl: CGFloat = 24, l: CGFloat = 18, m: CGFloat = 14, s: CGFloat = 10, xs: CGFloat = 6
     /// Radio de algo metido en un contenedor de radio `exterior` con `relleno`.
     static func interior(_ exterior: CGFloat, relleno: CGFloat) -> CGFloat { max(0, exterior - relleno) }
+    /// `--r-inner` de Card y Panel: `max(6, exterior − relleno)` (Surface.css).
+    static func interiorTarjeta(_ exterior: CGFloat, relleno: CGFloat) -> CGFloat { max(6, exterior - relleno) }
+}
+enum Alturas {      // tokens.css: barra 64, hueco 10, barra superior 64, mini 72, control 44, botón sm 36, campo 52, toast 52
+    static let barra: CGFloat = 64, huecoBarra: CGFloat = 10, barraSuperior: CGFloat = 64, mini: CGFloat = 72
+    static let control: CGFloat = 44, botonSm: CGFloat = 36, campo: CGFloat = 52, toast: CGFloat = 52
 }
 enum Capa {         // zIndex del armazón (a2 §4); hojas y menús son del sistema
     static let pestanas = 0.0, partido = 20.0, velo = 39.0, barra = 40.0, mini = 41.0, vuelo = 45.0
@@ -1398,6 +1420,8 @@ enum Mona {
 }
 enum Martian {      // wdth 87,5; peso 400 (560 en teclas); P fija el nombre PostScript en ORIGEN.json
     static func fuente(_ tamano: Double, peso: Double = 400) -> Font { … }
+    /// Caja natural de una línea (1000/−200 = 1,2 em, llevada a la rejilla @3x): Martian NO se normalizó a 1 em.
+    static func altoNatural(_ tamano: Double) -> Double { … }
 }
 
 struct EstiloTexto: Hashable, Sendable {
@@ -1426,18 +1450,18 @@ struct EstiloTexto: Hashable, Sendable {
     static let senal = EstiloTexto(tamano: 12, peso: 620, anchura: 88, altoLinea: 1.15)
     static let senalLg = EstiloTexto(tamano: 13, peso: 620, anchura: 88, altoLinea: 1.15)
     static let anillo = EstiloTexto(tamano: 12, peso: 640, anchura: 88, altoLinea: 1.15)
-    static let segmento = EstiloTexto(tamano: 13, peso: 620)
-    static let menu = EstiloTexto(tamano: 15, peso: 560)
+    static let segmento = EstiloTexto(tamano: 13, peso: 620, altoLinea: 1.45)
+    static let menu = EstiloTexto(tamano: 15, peso: 560, altoLinea: 1.45)
     static let toast = EstiloTexto(tamano: 15, peso: 560, altoLinea: 1.25)
-    static let lineaEstado = EstiloTexto(tamano: 15, peso: 560)
-    static let etiquetaCampo = EstiloTexto(tamano: 13, peso: 650)
+    static let lineaEstado = EstiloTexto(tamano: 15, peso: 560, altoLinea: 1.45)
+    static let etiquetaCampo = EstiloTexto(tamano: 13, peso: 650, altoLinea: 1.45)
     static let campo = EstiloTexto(tamano: 16, peso: 450)
-    static let pista = EstiloTexto(tamano: 12, peso: 450)
-    static let errorCampo = EstiloTexto(tamano: 13, peso: 560)
-    static let pestanaBarra = EstiloTexto(tamano: 11, peso: 620, anchura: 88)
-    static let destinoBarraSuperior = EstiloTexto(tamano: 13, peso: 620, anchura: 88)
-    static let modoDemo = EstiloTexto(tamano: 11, peso: 650, anchura: 88)
-    static let motor = EstiloTexto(tamano: 12, peso: 600, anchura: 88)
+    static let pista = EstiloTexto(tamano: 12, peso: 450, altoLinea: 1.45)
+    static let errorCampo = EstiloTexto(tamano: 13, peso: 560, altoLinea: 1.45)
+    static let pestanaBarra = EstiloTexto(tamano: 11, peso: 620, anchura: 88, altoLinea: 1.45)
+    static let destinoBarraSuperior = EstiloTexto(tamano: 13, peso: 620, anchura: 88, altoLinea: 1.45)
+    static let modoDemo = EstiloTexto(tamano: 11, peso: 650, anchura: 88, altoLinea: 1.45)
+    static let motor = EstiloTexto(tamano: 12, peso: 600, anchura: 88, altoLinea: 1.45)
     static let mono = EstiloTexto(tamano: 12, peso: 400, anchura: 87.5, mono: true)
     static func cifras(_ tamano: Double) -> EstiloTexto { EstiloTexto(tamano: tamano, peso: 780, anchura: 75) }
 }
@@ -1449,6 +1473,8 @@ extension View {
     func altoDeLinea(_ lh: Double, tamano: Double) -> some View {
         lineSpacing((lh - 1) * tamano).padding(.vertical, (lh - 1) * tamano / 2)
     }
+    /// Lo mismo para Martian: el sobrante `lh·t − Martian.altoNatural(t)` (su caja es 1,2 em, no 1 em).
+    func altoDeLineaMartian(_ lh: Double, tamano: Double) -> some View { … }
 }
 ```
 
@@ -1613,6 +1639,12 @@ extension View {
   (Acerca de) o con `-AceNeoSistema` en Debug.
 - `LaboratorioView()` (`#if DEBUG`, `-AceNeoLaboratorio`) — banco de la fase 0 (§4.1.4). Se queda en Debug para siempre:
   es el sitio donde I2 calibra tinte, alto de línea y sombras.
+- Las dos viven **dentro de `RaizView`** (§2.3), con el entorno de la app: háptica central, hojas por `CentroHojas`
+  (`Hoja.muestra(HojaMuestra)`, §2.4.2), menú por `menuContextual`, tema y transparencia de `PreferenciasLocales`
+  (como `setTheme`/`setTransparency` de SistemaPage.tsx) y ventana por `EstadoVentana`. Sin UIKit propio ni estado
+  global (`ModoGaleria`, `VentanaPalco` y `PresentadorHoja` ya no existen). Bloques del banco: 1 fuentes, 2 iconos,
+  3 cristal, 4 hojas y menús, 5 barra de estado («Barra clara» e «Inmersivo» publican en `EstadoVentana`), 6 háptica
+  (con la cuenta de pulsos de la raíz), 7 gestos y cifras, 8 marcos del vuelo (`.piezaVuelo`), 9 calibración del tinte.
 
 #### 2.2.10 Valores de entorno — `Palco/Entorno/ValoresEntorno.swift` (I0→P)
 
@@ -1628,6 +1660,14 @@ extension EnvironmentValues {
     @Entry var movimientoReducido: Bool = false
     @Entry var radioInterior: CGFloat = 8
     @Entry var cacheImagenes: CacheImagenes? = nil
+}
+
+// Con su primitiva (P, fase 0.4):
+extension EnvironmentValues {
+    @Entry var trackingCapsulaEm: Double? = nil      // Capsula.swift: el «cuándo» del versus (+0,06 em)
+    @Entry var llenarAncho: Bool = false             // Capsula y PastillaCompeticion a todo el ancho de su celda
+    @Entry var estadoMotor: EstadoMotorVista? = nil  // CabeceraVista.swift: nil = sin indicador del motor
+    @Entry var abrirSaludMotor: AccionPalco? = nil   // qué hace tocar el indicador (Ajustes › Salud)
 }
 ```
 
@@ -1650,7 +1690,8 @@ struct BotonIcono: View {
 }
 enum TonoPanel: Sendable { case normal, hundido, acento }
 extension View {
-    func tarjeta(radio: CGFloat = R.l, relleno: CGFloat = S.s4) -> some View { … }
+    func tarjeta(radio: CGFloat = R.xl, relleno: CGFloat = S.s4) -> some View { … }   // Surface.tsx:49-50
+    func panelCristal(_ tipo: TipoCristal = .regular, radio: CGFloat = R.l, relleno: CGFloat = S.s3) -> some View { … }
     func panel(_ tono: TonoPanel = .normal, radio: CGFloat = R.m, relleno: CGFloat = S.s3) -> some View { … }
     func islaOscura() -> some View { environment(\.colorScheme, .dark) }     // contenido sobre vídeo o héroe
 }
@@ -1696,7 +1737,7 @@ struct DatosEquipo: Hashable, Sendable {
     var halo: RGB?
 }
 struct MarcaEquipo: View {
-    enum Patron: Sendable { case liso, franjas }
+    enum Patron: Sendable { case liso, franjas, mitades }   // team--rayas, team--mitades
     init(_ equipo: DatosEquipo, tamano: CGFloat, encendido: Bool = true, patron: Patron = .liso) { … }
 }
 struct MarcaCanal: View {
@@ -1723,7 +1764,10 @@ struct TarjetaVersus<Senal: View>: View {
     init(_ datos: DatosVersus, tamano: Tamano = .md, seleccionada: Bool = false, @ViewBuilder senal: () -> Senal) { … }
 }
 struct BloqueEscudos: View { init(_ datos: DatosVersus, tamano: CGFloat) { … } }            // pieza que vuela
-struct FilaEquiposPartido: View { init(local: DatosEquipo, visitante: DatosEquipo) { … } }   // destino del vuelo
+struct FilaEquiposPartido: View {                                                             // destino del vuelo
+    init(local: DatosEquipo, visitante: DatosEquipo) { … }
+    init(local: DatosEquipo, visitante: DatosEquipo, encendido: Bool) { … }                      // en directo
+}
 
 struct CarrilCarteles<Datos: RandomAccessCollection, Celda: View>: View where Datos.Element: Identifiable {
     init(_ datos: Datos, anchoCelda: CGFloat, sangrado: CGFloat = 16, etiqueta: String,
@@ -1735,6 +1779,7 @@ struct OpcionSegmento<Valor: Hashable>: Identifiable {
     var titulo: String
     var icono: NombreIcono?
     var id: Valor { valor }
+    var contador: Int? = nil       // «Para ti 8»: Num 13 en --text-3
 }
 struct Segmentado<Valor: Hashable>: View {
     init(_ opciones: [OpcionSegmento<Valor>], seleccion: Binding<Valor>, bloque: Bool = false, etiqueta: String,
@@ -1827,7 +1872,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         } else {
             let contenedor = ContenedorApp.crear()
             ContenedorApp.actual = contenedor
-            ventana.overrideUserInterfaceStyle = contenedor.preferencias.tema.estiloUI
+            ventana.overrideUserInterfaceStyle = contenedor.preferencias.estiloVentana
             ventana.rootViewController = HostingRaiz(contenedor: contenedor)
             if let enlace = options.urlContexts.first?.url { contenedor.sesion.abrir(enlace: enlace) }
         }
@@ -1883,7 +1928,7 @@ final class HostingRaiz: UIHostingController<RaizView> {
     }
 
     private func aplicarEstadoVentana() {
-        view.window?.overrideUserInterfaceStyle = contenedor.preferencias.tema.estiloUI
+        view.window?.overrideUserInterfaceStyle = contenedor.preferencias.estiloVentana
         setNeedsStatusBarAppearanceUpdate()
         setNeedsUpdateOfHomeIndicatorAutoHidden()
         setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
@@ -1924,6 +1969,9 @@ enum TemaApp: String, CaseIterable, Sendable {
     private(set) var transparenciaReducida: Bool
     private(set) var modo: PlaybackMode
     init(_ defaults: UserDefaults = .standard) { … }
+    /// Lo que se pide a la ventana. En Debug, -AceNeoApariencia hace de apariencia DEL SISTEMA (como el
+    /// prefers-color-scheme de las capturas de la web): el tema arranca en «Sistema» y, mientras siga ahí, manda.
+    var estiloVentana: UIUserInterfaceStyle { … }
     func cambiarTema(_ tema: TemaApp) { … }
     func cambiarTransparencia(_ reducida: Bool) { … }
     func cambiarModo(_ modo: PlaybackMode) { … }
@@ -1988,7 +2036,9 @@ enum MigracionClaves {
     var tiempoRealAbierto: Bool { tiempoReal.abierto }
 }
 
-// RaizView.swift
+// RaizView.swift — el cuerpo real va en modificadores pequeños (ValoresRaiz, ObjetosDeInterfaz…) para tiparse
+// rápido; en Debug, -AceNeoLaboratorio / -AceNeoSistema ponen LaboratorioView() / SistemaView() (con
+// .hojasDeLaApp(contenedor.hojas)) en lugar del ZStack de las dos fases, con el MISMO entorno.
 struct RaizView: View {
     let contenedor: ContenedorApp
     @Environment(\.accessibilityReduceMotion) private var reducirMovimiento
@@ -2089,12 +2139,13 @@ enum Hoja: Identifiable, Hashable, Sendable {
     case renombrar(RefCanal)
     case ayuda
     case otroServidor(PairingLink)
+    case muestra(HojaMuestra)        // galería y banco (P): reproducirOtroHash (sm) · atajos (.grande) · haptica
 
     var id: String { … }
     var tamano: TamanoHoja { … }
     var detents: DetentsHoja {
         switch self {
-        case .gustos, .ayuda: .grande
+        case .gustos, .ayuda, .muestra(.atajos): .grande
         case .encontrarCanal: .medioYGrande
         default: .medido
         }
@@ -2124,6 +2175,7 @@ struct VistaHoja: View {
         case .renombrar(let canal): ContenidoRenombrar(canal: canal)                      // M5
         case .ayuda: ContenidoAyuda()                                                     // M7
         case .otroServidor(let enlace): ContenidoOtroServidor(enlace: enlace)             // M7
+        case .muestra(let muestra): ContenidoHojaMuestra(muestra: muestra)               // P (Palco/Galeria)
         }
     }
 }
@@ -2240,7 +2292,8 @@ struct ClaveMarco: Hashable, Sendable { var pieza: PiezaVuelo; var partido: Stri
 }
 
 extension View {
-    /// Publica el marco de esta pieza (onGeometryChange en .global) y lo olvida al desaparecer.
+    /// Publica el marco de esta pieza (onGeometryChange en .global) y lo olvida al desaparecer. HECHO en el
+    /// cierre de la fase 0 (canario C15: el marco sigue al desplazamiento; LaboratorioUITests, bloque 8).
     func piezaVuelo(_ pieza: PiezaVuelo, partido: String) -> some View { … }
 }
 ```
@@ -2750,7 +2803,8 @@ Reglas comunes a todos los módulos de la fase 1:
 | `-AceNeoApariencia claro\|oscuro` | ya existe |
 | `-AceNeoTransparenciaReducida` · `-AceNeoMovimientoReducido` | fuerzan esas preferencias |
 | `-AceNeoEmpezarDeCero` | ya existe: E2E contra el servidor real, sin token ni cachés |
-| `-AceNeoLaboratorio` · `-AceNeoSistema` | abren el banco de la fase 0 o la galería |
+| `-AceNeoLaboratorio` · `-AceNeoSistema` | abren el banco de la fase 0 o la galería (dentro de `RaizView`, con la demo sin SSE) |
+| `-AceNeoDesplazar <pt>` · `-AceNeoLaboratorioSeccion <n>` | el banco o la galería abren desplazados; el banco enseña solo el bloque n (capturas) |
 
 #### 3.3.2 Cómo se genera la demo
 
@@ -3098,7 +3152,7 @@ on:
       ipa_aunque_fallen_tests: { type: boolean, default: false }
       capturas:        { type: choice, options: [ninguna, clave, completas], default: ninguna }
       simulador:       { type: string, default: 'iPhone 16e' }
-      solo_uitests:    { type: string, default: '' }   # (0.3b) p. ej. FlujoArmazonUITests: solo esos UITests, sin unitarios, pila E2E ni IPA
+      solo_uitests:    { type: string, default: '' }   # (0.3b) p. ej. FlujoArmazonUITests,LaboratorioUITests/testHapticaConHoja (comas, fase 0): solo esos UITests, sin unitarios, pila E2E ni IPA
   # push y pull_request: como hoy (rewrite-v2, main, tags ios-v*)
 
 jobs:
@@ -3194,7 +3248,7 @@ jobs:
 Recorre `Sources/**/*.swift` (salvo `*.generado.swift`) y sale con código 1 si algo no cumple. Hasta la poda (0.2)
 mira solo las carpetas nuevas; desde la poda, todo `Sources` («todo» en la tabla). Una línea que termine en
 `// permitido: <motivo>` se salta **solo** para las reglas marcadas «con permiso» (el integrador revisa cada una).
-`Sources/Sonda/**` queda fuera del linter (son los canarios y se borran al cerrar la fase 0).
+`Sources/Sonda/**` quedaba fuera del linter; se borró al cerrar la fase 0 y el linter ya no lo menciona.
 
 | # | Regla | Patrón (regex) | Dónde | Excepción |
 |---|---|---|---|---|
