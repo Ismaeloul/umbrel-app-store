@@ -1,16 +1,21 @@
 name: iOS (Ace Neo)
 
 # App iOS nativa de Ace Player Neo (ace-player-neo/apps/ios). No hay Mac: se
-# compila y se prueba aquí, en el runner de macOS (el repo es público, así que
-# los minutos de macOS no cuestan).
+# compila y se prueba aquí (el repo es público, así que los minutos de macOS no
+# cuestan). Diseño: design-explorations/docs/fuentes/fase3/b-arquitectura.md §4.4.
+#   0. En Linux y en segundos, ANTES de gastar macOS:
+#      - generadores: linter (revisar-swift.mjs) y --check de todo lo generado desde la web;
+#      - nucleo-linux: el núcleo puro (Package.swift «NucleoPuro») con Swift 6.2.
 #   1. XcodeGen genera el .xcodeproj desde project.yml.
-#   2. Tests unitarios y de interfaz en un simulador de iPhone. Las de interfaz
-#      van contra el servidor simulado de la app y, además, contra el backend
-#      DE VERDAD: la pila E2E (motor AceStream falso + backend del monorepo +
-#      ffmpeg) corre en este mismo runner (apps/ios/scripts/pila-e2e.mjs).
-#   3. Capturas del simulador (claro, oscuro y E2E) sacadas del .xcresult.
-#   4. Archive en Release SIN FIRMAR y AceNeo-unsigned-<versión>.ipa como artefacto.
-#   5. En un tag ios-v*, la IPA se adjunta a la Release de GitHub.
+#   2. solo_compilar: Debug de simulador + Release de dispositivo, con alarma de
+#      expresiones lentas de tipar («to type-check»). Nada más.
+#   3. Si no: tests unitarios (sin reintento) y de interfaz (con reintento) en un
+#      simulador de iPhone; los de interfaz van contra el servidor simulado de la app
+#      y, además, contra el backend DE VERDAD: la pila E2E (motor AceStream falso +
+#      backend del monorepo + ffmpeg) corre en este mismo runner (scripts/pila-e2e.mjs).
+#   4. Capturas del simulador sacadas del .xcresult.
+#   5. Archive en Release SIN FIRMAR y AceNeo-unsigned-<versión>.ipa como artefacto;
+#      en un tag ios-v*, la IPA se adjunta a la Release de GitHub.
 
 on:
   push:
@@ -18,6 +23,7 @@ on:
     tags: ['ios-v*']
     paths:
       - 'ace-player-neo/apps/ios/**'
+      - 'ace-player-neo/apps/web/src/**'
       - 'ace-player-neo/packages/shared/fixtures/**'
       - 'ace-player-neo/packages/shared/src/**'
       # El E2E de la app corre contra el backend y el motor falso del monorepo.
@@ -29,9 +35,9 @@ on:
   pull_request:
     paths:
       - 'ace-player-neo/apps/ios/**'
+      - 'ace-player-neo/apps/web/src/**'
       - 'ace-player-neo/packages/shared/fixtures/**'
       - 'ace-player-neo/packages/shared/src/**'
-      # El E2E de la app corre contra el backend y el motor falso del monorepo.
       - 'ace-player-neo/apps/server/src/**'
       - 'ace-player-neo/apps/server/test/fake-engine/**'
       - 'ace-player-neo/apps/web/e2e/support/**'
@@ -39,14 +45,31 @@ on:
       - '.github/workflows/ios.yml'
   workflow_dispatch:
     inputs:
+      solo_compilar:
+        description: 'Debug simulador + Release dispositivo; nada más (unos minutos)'
+        type: boolean
+        default: false
+      solo_unitarios:
+        description: 'Compilar + tests unitarios (sin UITests ni pila E2E)'
+        type: boolean
+        default: false
+      ipa_sin_tests:
+        description: 'Compilar y sacar la IPA sin pasar pruebas'
+        type: boolean
+        default: false
       ipa_aunque_fallen_tests:
         description: 'Archivar y subir la IPA aunque falle algún test (para probar en el iPhone)'
         type: boolean
         default: false
-      solo_compilar:
-        description: 'Solo compilar la app y los tests (sin pila E2E, sin tests ni IPA): unos minutos'
-        type: boolean
-        default: false
+      capturas:
+        description: 'Capturas de la app (clave = agenda, partido, mini-reproductor, biblioteca-favoritos, ajustes, emparejar)'
+        type: choice
+        options: [ninguna, clave, completas]
+        default: ninguna
+      simulador:
+        description: 'Simulador de iPhone (si no existe, el iPhone más reciente del runner)'
+        type: string
+        default: 'iPhone 16e'
 
 concurrency:
   group: ios-${{ github.ref }}
@@ -60,10 +83,66 @@ env:
   HOMEBREW_NO_INSTALL_CLEANUP: '1'
 
 jobs:
+  generadores:
+    name: Linter y generadores (--check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+        working-directory: ace-player-neo
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Linter de Swift (b-arquitectura §5.2)
+        run: node apps/ios/scripts/revisar-swift.mjs
+
+      - name: Instalar el monorepo (fuentes de @fontsource y tsx)
+        run: corepack enable && corepack pnpm@10.18.2 install --frozen-lockfile
+
+      - name: Todo lo generado desde la web está al día
+        run: |
+          set -euo pipefail
+          node apps/ios/scripts/generar-tokens.mjs --check
+          node apps/ios/scripts/generar-iconos.mjs --check
+          node apps/ios/scripts/generar-plazos.mjs --check
+          node apps/ios/scripts/generar-rutas.mjs --check
+          node apps/ios/scripts/generar-catalogo-errores.mjs --check
+          # Hasta que M2 lo sustituya por vectores/dominio.ts (generar-vectores.ts).
+          if [ -f apps/ios/scripts/generar-vectores.mjs ]; then node apps/ios/scripts/generar-vectores.mjs --check; fi
+          if [ -f apps/ios/scripts/generar-vectores.ts ]; then corepack pnpm@10.18.2 exec tsx apps/ios/scripts/generar-vectores.ts --check; fi
+          if [ -f apps/ios/scripts/generar-demo.ts ]; then corepack pnpm@10.18.2 exec tsx apps/ios/scripts/generar-demo.ts --check; fi
+          pip install -q fonttools brotli
+          python3 apps/ios/scripts/generar-fuentes.py --check
+
+  nucleo-linux:
+    name: Núcleo puro en Linux (Swift 6.2)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container: swift:6.2-noble
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: tzdata (Europe/Madrid)
+        run: apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq tzdata
+
+      - name: swift test
+        working-directory: ace-player-neo/apps/ios
+        run: swift test
+
   ios:
     name: Compilar, probar y empaquetar
+    needs: [generadores, nucleo-linux]
     runs-on: macos-latest
-    timeout-minutes: 75
+    timeout-minutes: 90
     permissions:
       # Solo hace falta para adjuntar la IPA a la Release en los tags ios-v*.
       contents: write
@@ -71,31 +150,44 @@ jobs:
       run:
         shell: bash
         working-directory: ace-player-neo/apps/ios
+    env:
+      SOLO_COMPILAR: ${{ inputs.solo_compilar == true }}
+      # Pruebas: todas salvo con solo_compilar o ipa_sin_tests.
+      CON_TESTS: ${{ inputs.solo_compilar != true && inputs.ipa_sin_tests != true }}
+      # UITests y pila E2E: además, no con solo_unitarios.
+      CON_UITESTS: ${{ inputs.solo_compilar != true && inputs.ipa_sin_tests != true && inputs.solo_unitarios != true }}
+      SIMULADOR: ${{ inputs.simulador || 'iPhone 16e' }}
+      CAPTURAS: ${{ inputs.capturas || 'ninguna' }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Elegir el Xcode más reciente (SDK con Liquid Glass)
+      - name: Elegir Xcode (26.6 si está; si no, el más reciente, con aviso)
         run: |
           set -euo pipefail
           ls -d /Applications/Xcode*.app || true
-          XCODE=$(ls -d /Applications/Xcode_*.app 2>/dev/null \
-            | grep -E '/Xcode_[0-9]+(\.[0-9]+)*\.app$' \
-            | sed -E 's#^.*/Xcode_([0-9.]+)\.app$#\1 &#' \
-            | sort -V | tail -1 | cut -d' ' -f2 || true)
+          if [ -d /Applications/Xcode_26.6.app ]; then
+            XCODE=/Applications/Xcode_26.6.app
+          else
+            XCODE=$(ls -d /Applications/Xcode_*.app 2>/dev/null \
+              | grep -E '/Xcode_[0-9]+(\.[0-9]+)*\.app$' \
+              | sed -E 's#^.*/Xcode_([0-9.]+)\.app$#\1 &#' \
+              | sort -V | tail -1 | cut -d' ' -f2 || true)
+            echo "::warning::No está Xcode 26.6 en el runner: uso ${XCODE:-el de por defecto}"
+          fi
           if [ -n "$XCODE" ]; then
             sudo xcode-select -s "$XCODE/Contents/Developer"
           fi
           xcodebuild -version
           xcodebuild -showsdks | grep -i -E 'ios|simulator' || true
 
-      - name: Instalar XcodeGen (y ffmpeg en segundo plano, para el remux de la pila E2E)
+      - name: Instalar XcodeGen (y ffmpeg en segundo plano si hay pila E2E)
         run: |
           set -euo pipefail
           brew install xcodegen
           # ffmpeg tarda: se instala mientras compila Xcode. El paso de la pila
           # espera al fichero .fin (con el código de salida de brew).
-          if [ "${{ inputs.solo_compilar }}" = "true" ]; then
-            echo "Solo compilar: sin ffmpeg."
+          if [ "$CON_UITESTS" != "true" ]; then
+            echo "Sin pila E2E: sin ffmpeg."
           elif command -v ffmpeg >/dev/null && command -v ffprobe >/dev/null; then
             echo 0 > "$RUNNER_TEMP/brew-ffmpeg.fin"
           else
@@ -103,41 +195,40 @@ jobs:
           fi
 
       - uses: actions/setup-node@v4
+        if: env.CON_UITESTS == 'true'
         with:
           node-version: 24
 
       - name: pnpm (corepack, versión de packageManager)
+        if: env.CON_UITESTS == 'true'
         working-directory: ace-player-neo
         run: corepack enable && pnpm --version && echo "STORE=$(pnpm store path --silent)" >> "$GITHUB_ENV"
 
       - uses: actions/cache@v4
+        if: env.CON_UITESTS == 'true'
         with:
           path: ${{ env.STORE }}
           key: pnpm-${{ runner.os }}-${{ hashFiles('ace-player-neo/pnpm-lock.yaml') }}
           restore-keys: pnpm-${{ runner.os }}-
 
       - name: Instalar el monorepo (para la pila E2E)
+        if: env.CON_UITESTS == 'true'
         working-directory: ace-player-neo
         run: pnpm install --frozen-lockfile
-
-      - name: Comprobar el catálogo de errores (mismo que packages/shared)
-        run: node scripts/generar-catalogo-errores.mjs --check
-
-      - name: Comprobar los vectores de «Para ti» y de canales (generados desde packages/shared)
-        run: node scripts/generar-vectores.mjs --check
 
       - name: Generar el proyecto
         run: xcodegen generate
 
-      - name: Arrancar un simulador de iPhone (en segundo plano)
+      - name: Elegir simulador (y arrancarlo en segundo plano si hay pruebas)
         id: simulador
         run: |
           set -euo pipefail
           # El primer arranque del simulador tarda minutos: se lanza ya y se
           # compila mientras tanto (los errores de compilación salen antes).
-          ID=$(xcrun simctl list devices available -j | python3 -c '
-          import json, re, sys
+          ID=$(xcrun simctl list devices available -j | SIMULADOR="$SIMULADOR" python3 -c '
+          import json, os, re, sys
           datos = json.load(sys.stdin)["devices"]
+          pedido = os.environ.get("SIMULADOR", "")
           mejor = None
           for runtime, equipos in datos.items():
               m = re.search(r"iOS-(\d+)-(\d+)", runtime)
@@ -148,12 +239,14 @@ jobs:
                   nombre = e.get("name", "")
                   if not nombre.startswith("iPhone") or not e.get("isAvailable", True):
                       continue
-                  clave = (version, nombre.endswith(" Pro"))
+                  clave = (nombre == pedido, version, nombre.endswith(" Pro"))
                   if mejor is None or clave > mejor[0]:
                       mejor = (clave, e["udid"], nombre, version)
           if mejor:
               print(mejor[1])
               print("Simulador: %s (iOS %d.%d)" % (mejor[2], *mejor[3]), file=sys.stderr)
+              if mejor[2] != pedido:
+                  print("::warning::No hay «%s»: uso %s" % (pedido, mejor[2]), file=sys.stderr)
           ' || true)
           if [ -z "$ID" ]; then
             echo "No hay simulador de iPhone: creo uno."
@@ -169,17 +262,74 @@ jobs:
             ID=$(xcrun simctl create "iPhone CI" "$TIPO" "$RUNTIME")
           fi
           echo "id=$ID" >> "$GITHUB_OUTPUT"
-          nohup xcrun simctl boot "$ID" > "$RUNNER_TEMP/arranque-simulador.log" 2>&1 &
+          if [ "$CON_TESTS" = "true" ]; then
+            nohup xcrun simctl boot "$ID" > "$RUNNER_TEMP/arranque-simulador.log" 2>&1 &
+          fi
 
-      - name: Compilar para los tests
+      - name: Alarma de expresiones lentas de tipar (script)
+        run: |
+          # Busca «to type-check» (-warn-long-expression-type-checking=200 y
+          # -warn-long-function-bodies=400 de project.yml) en un log de xcodebuild.
+          # Hasta la poda (fase 0.2) no cuenta la interfaz vieja que se va a borrar.
+          cat > "$RUNNER_TEMP/alarma-tipado.sh" <<'EOF'
+          #!/bin/bash
+          VIEJA='/Sources/(Design|Features)/|/Sources/App/(AceNeoApp|AppModel|RootView)\.swift|/Sources/Player/(ReproductorVistas|GestosReproductor)\.swift'
+          TODAS=$(grep -E "to type-check" "$1" | sort -u || true)
+          if [ -n "$TODAS" ]; then
+            echo "::group::Avisos «to type-check» (todos)"
+            echo "$TODAS"
+            echo "::endgroup::"
+          fi
+          LENTAS=$(echo "$TODAS" | grep -v -E "$VIEJA" | grep -v '^$' || true)
+          if [ -n "$LENTAS" ]; then
+            echo "$LENTAS" | while IFS= read -r l; do echo "::error::Lenta de tipar: $l"; done
+            exit 1
+          fi
+          echo "Sin expresiones ni funciones lentas de tipar."
+          EOF
+          chmod +x "$RUNNER_TEMP/alarma-tipado.sh"
+
+      - name: Solo compilar (Debug simulador + Release dispositivo)
+        if: env.SOLO_COMPILAR == 'true'
         run: |
           set -o pipefail
           mkdir -p build
-          xcodebuild build-for-testing             -project AceNeo.xcodeproj             -scheme AceNeo             -destination "id=${{ steps.simulador.outputs.id }}"             -derivedDataPath build/DerivedData             -quiet             CURRENT_PROJECT_VERSION=${{ github.run_number }}
+          xcodebuild build -project AceNeo.xcodeproj -scheme AceNeo -configuration Debug \
+            -destination "id=${{ steps.simulador.outputs.id }}" \
+            -derivedDataPath build/DerivedData -quiet \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} 2>&1 | tee build/compilar.log
+          xcodebuild build -project AceNeo.xcodeproj -scheme AceNeo -configuration Release \
+            -destination "generic/platform=iOS" CODE_SIGNING_ALLOWED=NO \
+            -derivedDataPath build/DerivedData -quiet \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} 2>&1 | tee -a build/compilar.log
+          "$RUNNER_TEMP/alarma-tipado.sh" build/compilar.log
+
+      - name: Compilar para los tests
+        id: compilar_tests
+        if: env.CON_TESTS == 'true'
+        run: |
+          set -o pipefail
+          mkdir -p build
+          xcodebuild build-for-testing \
+            -project AceNeo.xcodeproj \
+            -scheme AceNeo \
+            -destination "id=${{ steps.simulador.outputs.id }}" \
+            -derivedDataPath build/DerivedData \
+            -quiet \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} 2>&1 | tee build/compilar.log
+          "$RUNNER_TEMP/alarma-tipado.sh" build/compilar.log
+
+      - name: Subir el log de compilación
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AceNeo-compilar-log
+          path: ace-player-neo/apps/ios/build/compilar.log
+          if-no-files-found: ignore
 
       - name: Arrancar la pila E2E (motor falso + backend de verdad + ffmpeg)
         id: pila
-        if: ${{ !inputs.solo_compilar }}
+        if: env.CON_UITESTS == 'true'
         env:
           ACE_E2E_PUERTO: '18790'
           ACE_E2E_DIR: ${{ runner.temp }}/pila-e2e
@@ -208,49 +358,84 @@ jobs:
           echo "puerto=$ACE_E2E_PUERTO" >> "$GITHUB_OUTPUT"
 
       - name: Esperar al simulador
-        if: ${{ !inputs.solo_compilar }}
+        if: env.CON_TESTS == 'true'
         run: |
           cat "$RUNNER_TEMP/arranque-simulador.log" || true
           xcrun simctl bootstatus "${{ steps.simulador.outputs.id }}" -b
 
-      - name: Tests unitarios y de interfaz
-        if: ${{ !inputs.solo_compilar }}
-        env:
-          # xcodebuild quita el prefijo TEST_RUNNER_ y se lo pasa al ejecutor de
-          # las pruebas: ServidorRealUITests habla con la pila por ese puerto.
-          TEST_RUNNER_ACE_E2E_PUERTO: ${{ steps.pila.outputs.puerto }}
+      - name: Barra de estado fija para las capturas (9:41)
+        if: env.CON_UITESTS == 'true' && env.CAPTURAS != 'ninguna'
+        run: |
+          xcrun simctl status_bar "${{ steps.simulador.outputs.id }}" override \
+            --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 --wifiBars 3 || true
+
+      - name: Tests unitarios (sin reintento)
+        id: unitarios
+        if: env.CON_TESTS == 'true' && steps.compilar_tests.outcome == 'success'
         run: |
           set -o pipefail
-          xcodebuild test-without-building             -project AceNeo.xcodeproj             -scheme AceNeo             -destination "id=${{ steps.simulador.outputs.id }}"             -derivedDataPath build/DerivedData             -resultBundlePath build/AceNeo-tests.xcresult             -retry-tests-on-failure -test-iterations 2             -quiet
+          xcodebuild test-without-building \
+            -project AceNeo.xcodeproj \
+            -scheme AceNeo \
+            -destination "id=${{ steps.simulador.outputs.id }}" \
+            -derivedDataPath build/DerivedData \
+            -resultBundlePath build/AceNeo-unitarios.xcresult \
+            -only-testing:AceNeoTests \
+            -quiet
+
+      - name: Tests de interfaz (con reintento)
+        if: ${{ !cancelled() && env.CON_UITESTS == 'true' && steps.compilar_tests.outcome == 'success' }}
+        env:
+          # xcodebuild quita el prefijo TEST_RUNNER_ y se lo pasa al ejecutor de
+          # las pruebas: ServidorRealUITests habla con la pila por ese puerto y las
+          # capturas saben qué juego sacar.
+          TEST_RUNNER_ACE_E2E_PUERTO: ${{ steps.pila.outputs.puerto }}
+          TEST_RUNNER_ACE_CAPTURAS: ${{ env.CAPTURAS }}
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building \
+            -project AceNeo.xcodeproj \
+            -scheme AceNeo \
+            -destination "id=${{ steps.simulador.outputs.id }}" \
+            -derivedDataPath build/DerivedData \
+            -resultBundlePath build/AceNeo-interfaz.xcresult \
+            -only-testing:AceNeoUITests \
+            -retry-tests-on-failure -test-iterations 3 \
+            -quiet
 
       - name: Resumen de los tests
         if: always()
         run: |
-          RESULTADO=build/AceNeo-tests.xcresult
-          if [ -d "$RESULTADO" ]; then
-            xcrun xcresulttool get test-results summary --path "$RESULTADO" --compact > build/resumen.json || true
-            cat build/resumen.json || true
+          mkdir -p build/capturas
+          for RESULTADO in build/*.xcresult; do
+            [ -d "$RESULTADO" ] || continue
+            NOMBRE=$(basename "$RESULTADO" .xcresult)
+            echo "::group::Resumen de $NOMBRE"
+            xcrun xcresulttool get test-results summary --path "$RESULTADO" --compact > "build/$NOMBRE-resumen.json" || true
+            cat "build/$NOMBRE-resumen.json" || true
+            echo "::endgroup::"
             # Detalle (mensaje y línea) de cada test que falla.
-            python3 - <<'PY' || true
-          import json, subprocess
+            RESULTADO="$RESULTADO" NOMBRE="$NOMBRE" python3 - <<'PY' || true
+          import json, os, subprocess
+          nombre = os.environ["NOMBRE"]
           try:
-              resumen = json.load(open("build/resumen.json"))
+              resumen = json.load(open("build/%s-resumen.json" % nombre))
           except Exception:
               resumen = {}
           for fallo in resumen.get("testFailures", []):
               ident = fallo.get("testIdentifierString", "")
               print("::group::Fallo: " + ident)
               subprocess.run(["xcrun", "xcresulttool", "get", "test-results", "test-details",
-                              "--test-id", ident, "--path", "build/AceNeo-tests.xcresult", "--compact"])
+                              "--test-id", ident, "--path", os.environ["RESULTADO"], "--compact"])
               print("::endgroup::")
           PY
-            # Capturas de las pruebas de interfaz (y las de los fallos).
-            mkdir -p build/capturas
-            xcrun xcresulttool export attachments --path "$RESULTADO" --output-path build/capturas || true
-            # Cada captura con el nombre que le dio el test (claro-02-agenda.png…).
-            python3 - <<'PY' || true
-          import json, os, re
-          base = "build/capturas"
+            # Capturas de las pruebas (y las de los fallos), con el nombre que les dio el test.
+            SALIDA="build/capturas-$NOMBRE"
+            mkdir -p "$SALIDA"
+            xcrun xcresulttool export attachments --path "$RESULTADO" --output-path "$SALIDA" || true
+            SALIDA="$SALIDA" python3 - <<'PY' || true
+          import json, os, re, shutil
+          base = os.environ["SALIDA"]
           try:
               manifiesto = json.load(open(os.path.join(base, "manifest.json")))
           except Exception:
@@ -268,12 +453,12 @@ jobs:
                   if repeticion > 1:
                       raiz, ext = os.path.splitext(nombre)
                       nombre = "%s-intento%d%s" % (raiz, repeticion, ext)
-                  destino = os.path.join(base, nombre)
+                  destino = os.path.join("build/capturas", nombre)
                   if os.path.isfile(origen) and not os.path.exists(destino):
-                      os.rename(origen, destino)
+                      shutil.move(origen, destino)
           PY
-            ls -la build/capturas || true
-          fi
+          done
+          ls -la build/capturas || true
 
       - name: Subir las capturas del simulador
         if: always()
@@ -284,7 +469,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Subir los logs de la pila E2E
-        if: always()
+        if: always() && env.CON_UITESTS == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: AceNeo-pila-e2e-logs
@@ -295,9 +480,10 @@ jobs:
 
       - name: Archive sin firmar e IPA
         id: ipa
-        # Como siempre, solo si todo lo anterior ha ido bien; lanzado a mano con
-        # «ipa_aunque_fallen_tests», también con tests en rojo (para probar en el iPhone).
-        if: ${{ !inputs.solo_compilar && (success() || (!cancelled() && inputs.ipa_aunque_fallen_tests)) }}
+        # Solo si todo lo anterior ha ido bien (con ipa_sin_tests no hay pruebas); lanzado
+        # a mano con «ipa_aunque_fallen_tests», también con tests en rojo. Nunca con
+        # solo_compilar ni solo_unitarios.
+        if: ${{ !inputs.solo_compilar && !inputs.solo_unitarios && (success() || (!cancelled() && inputs.ipa_aunque_fallen_tests)) }}
         run: |
           set -euo pipefail
           AJUSTES=(CURRENT_PROJECT_VERSION=${{ github.run_number }})
@@ -315,11 +501,11 @@ jobs:
           if-no-files-found: error
 
       - name: Subir el resultado de los tests (.xcresult)
-        if: always()
+        if: always() && env.CON_TESTS == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: AceNeo-tests-xcresult
-          path: ace-player-neo/apps/ios/build/AceNeo-tests.xcresult
+          path: ace-player-neo/apps/ios/build/*.xcresult
           if-no-files-found: warn
 
       - name: Adjuntar la IPA a la Release (tags ios-v*)
