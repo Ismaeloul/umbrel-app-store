@@ -48,7 +48,9 @@ import Testing
         @Test func azarSembradoComoElGenerador() {
             var azar = AleatorioDemo(semilla: 1)
             // xorshift32 desde 1: 270369 / 2^32 (el primer código de la demo sale «000062»).
-            #expect(azar.siguiente() == 270_369.0 / 4_294_967_296)
+            let esperado: Double = 270_369.0 / 4_294_967_296
+            let primero: Double = azar.siguiente()
+            #expect(primero == esperado)
         }
     }
 
