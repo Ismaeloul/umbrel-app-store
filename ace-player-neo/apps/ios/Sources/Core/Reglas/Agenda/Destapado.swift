@@ -1,14 +1,10 @@
 import Foundation
 
-/* Reglas puras de la agenda de Palco (aparte de la vista para probarlas):
-   el marcador tapado (anti-spoiler), el registro de goles a partir de dos
-   lecturas del marcador, las secciones En directo / Próximos / Terminados y
-   el partido destacado de la portada.
+/* Marcador tapado, goles y fases de la agenda (M5; a3 §8).
 
-   Rescatado en la poda (fase 0.2, b-arquitectura §1.11) de
-   Features/Agenda/ReglasPalco.swift sin cambiar el comportamiento. Se fue con
-   la interfaz vieja el chip de fecha y hora (su prueba, ChipHoraTests, también).
-   M5 lo convierte en el port de score-reveal.ts. */
+   Rescatado en la poda (fase 0.2, b-arquitectura §1.11) de Features/Agenda/ReglasPalco.swift (anti-spoiler,
+   goles, fases, precalentables) y completado por M5 con el port de agenda/score-reveal.ts (`Destapado`). El
+   destacado de la portada es `ReglasAgenda.destacado` (featuredMatch de domain.ts). */
 
 // MARK: - Anti-spoiler
 
@@ -74,7 +70,7 @@ enum RegistroGoles {
     }
 }
 
-// MARK: - Secciones y destacado
+// MARK: - Fases
 
 /// Los partidos de un día repartidos por fase.
 struct PartidosPorFase: Hashable, Sendable {
@@ -113,22 +109,6 @@ extension ReglasAgenda {
             terminados: terminados.sorted(by: porHora))
     }
 
-    /// El partido de la portada: el que se ve si suena algo; si no, el
-    /// primero en directo de «Para ti» (o de todos, sin gustos); si no, el próximo.
-    static func destacado(
-        _ partidos: [FootballMatch], viendo: String?, reloj: RelojMadrid, marcadores: [String: LiveScore],
-        gustos: GustosFutbol
-    ) -> FootballMatch? {
-        if let viendo, let sonando = partidos.first(where: { $0.id == viendo }) { return sonando }
-        let paraTi = visibles(partidos, modo: .paraTi, gustos: gustos)
-        let candidatos = paraTi.isEmpty ? partidos : paraTi
-        let fases = porFase(candidatos, reloj: reloj, marcadores: marcadores)
-        if let directo = fases.directo.first { return directo }
-        if let proximo = fases.proximos.first { return proximo }
-        let todas = porFase(partidos, reloj: reloj, marcadores: marcadores)
-        return todas.directo.first ?? todas.proximos.first ?? todas.terminados.last
-    }
-
     /// Los que hay que precalentar (pedir sus fuentes): en directo o a menos de 45 min.
     static func precalentables(_ partidos: [FootballMatch], reloj: RelojMadrid, marcadores: [String: LiveScore])
         -> [FootballMatch]
@@ -142,37 +122,31 @@ extension ReglasAgenda {
     }
 }
 
-// MARK: - Marcador
+// MARK: - score-reveal.ts
 
-/// Lectura del marcador de ESPN.
-enum Marcador {
-    /// «54'» o «45'+2'» → 54 / 45.
-    static func minuto(_ marcador: LiveScore) -> Int? {
-        let cifras = marcador.clock.prefix { $0.isNumber }
-        return Int(cifras)
+/// Lo que enseña la cápsula «Marcador» de un partido en la agenda.
+enum EstadoMarcador: Equatable, Sendable {
+    case tapado
+    case destapado
+}
+
+/// Port de `agenda/score-reveal.ts` (a3 §8.1): en la agenda TODO marcador va tapado hasta que se pide; el
+/// conjunto de destapados lo guarda `MarcadoresDestapados` (proceso, M1) y se vacía al cambiar lo que suena.
+enum Destapado {
+    /// `watchedMatchOf`: el partido que suena en este iPhone (un canal suelto no es un partido).
+    static func partidoViendo(canal: CanalReproducible?, activo: Bool) -> String? {
+        guard activo else { return nil }
+        return canal?.partido?.id
     }
 
-    /// Progreso del partido (0…1) para la barra.
-    static func progreso(_ marcador: LiveScore?, inicio: Date?, ahora: Date) -> Double {
-        switch marcador?.state {
-        case "post": return 1
-        case "in": return min(1, Double(marcador.flatMap(minuto) ?? 1) / 90)
-        default:
-            guard let inicio, ahora > inicio else { return 0 }
-            return min(1, ahora.timeIntervalSince(inicio) / (105 * 60))
-        }
+    /// Cápsula de la agenda: nil si el marcador no se pinta (`pre` o sin marcador).
+    static func estado(_ marcador: LiveScore?, destapado: Bool) -> EstadoMarcador? {
+        guard Marcadores.pintable(marcador) != nil else { return nil }
+        return destapado ? .destapado : .tapado
     }
 
-    /// «1–0».
-    static func texto(_ marcador: LiveScore) -> String {
-        "\(marcador.home)–\(marcador.away)"
-    }
-
-    /// «54'», «Descanso», «Final».
-    static func reloj(_ marcador: LiveScore) -> String {
-        if marcador.state == "post" { return "Final" }
-        let detalle = marcador.detail.lowercased()
-        if detalle.contains("descanso") || detalle.contains("halftime") || detalle == "ht" { return "Descanso" }
-        return marcador.clock.isEmpty ? "En directo" : marcador.clock
+    /// `useScoreHidden` (biblioteca, mini, centro de partido): tapado solo el que se ve y no se ha destapado.
+    static func tapadoFueraDeLaAgenda(viendo: Bool, destapado: Bool) -> Bool {
+        viendo && !destapado
     }
 }
