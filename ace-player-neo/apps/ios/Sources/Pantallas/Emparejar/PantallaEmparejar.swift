@@ -148,6 +148,7 @@ private struct VistaEmparejar: View {
                 estadoVentana.fondoOscuroArriba = sobreCartel
             }
             .onChange(of: ir) { _, destino in desplazar(lector, destino) }
+            .onAppear { estadoVentana.fondoOscuroArriba = true }
         }
     }
 

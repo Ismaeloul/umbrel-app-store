@@ -10,6 +10,7 @@ struct AjustesView: View {
     @Environment(Navegador.self) private var navegador
     @Environment(DatosApp.self) private var datos
     @Environment(Haptica.self) private var haptica
+    @Environment(PresentacionReproductor.self) private var presentacion
     @Environment(\.maquetacion) private var maquetacion
     @Environment(\.movimientoReducido) private var reducido
     @Environment(\.vistaActiva) private var vistaActiva
@@ -30,7 +31,7 @@ struct AjustesView: View {
                 }
                 .padding(.leading, maquetacion.rellenoIzquierdo)
                 .padding(.trailing, maquetacion.rellenoDerecho)
-                .padding(.bottom, maquetacion.rellenoInferiorContenido(mini: false, teatro: false))
+                .padding(.bottom, maquetacion.rellenoInferiorContenido(mini: conMini, teatro: false))
             }
             .scrollDismissesKeyboard(.interactively)
             .subeConLaBarraDeEstado(vistaActiva)
@@ -47,6 +48,9 @@ struct AjustesView: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(IDUI.pantalla("ajustes"))
     }
+
+    /// Con el mini a la vista el colchón de abajo crece (a6 §2.1).
+    private var conMini: Bool { presentacion.miniVisible(teatroVisible: navegador.teatroVisible, inmersivo: false) }
 
     /// El indicador del motor de la cabecera (`summarizeEngine`); en demo lo sustituye «Modo demo».
     private var estadoMotor: EstadoMotorVista? {

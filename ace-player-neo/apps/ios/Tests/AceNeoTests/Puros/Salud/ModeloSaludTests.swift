@@ -17,6 +17,11 @@ enum SoporteSalud {
         c.timeZone = TimeZone(identifier: "UTC") ?? TimeZone(secondsFromGMT: 0) ?? c.timeZone
         return c
     }
+    static func porId(_ filas: [FilaServicio]) -> [ServicioSalud: FilaServicio] {
+        var salida: [ServicioSalud: FilaServicio] = [:]
+        for fila in filas { salida[fila.id] = fila }
+        return salida
+    }
     static func salud() throws -> HealthResponse {
         try JSONDecoder().decode(HealthResponse.self, from: Fixtures.datos("v1/health.json"))
     }
@@ -69,20 +74,29 @@ struct RejillaSaludTests {
     @Test func losOchoServiciosConSuDetalle() throws {
         let filas = ModeloSalud.filas(try SoporteSalud.salud(), motorEnVivo: nil, ahora: SoporteSalud.ahora,
                                       calendario: SoporteSalud.utc)
-        #expect(filas.map(\.nombre) == ["Backend", "Motor principal", "Segundo motor", "IA local", "Agenda",
-                                        "Directorios M3U", "Datos guardados", "Reproducción"])
-        let por = Dictionary(uniqueKeysWithValues: filas.map { ($0.id, $0) })
-        #expect(por[.backend]?.detalle == "v0.7.0 · 1 h activo")
-        #expect(por[.engine]?.detalle == "Aceptando reproducción · versión 3.2.3")
-        #expect(por[.scanner]?.detalle == "0 trabajos · 0 en cola")
-        #expect(por[.ai]?.detalle == "Sin configurar")
-        #expect(por[.ai]?.palabra == "Desactivado")
-        #expect(por[.agenda]?.detalle == "120 partidos · 3 preparados")
-        #expect(por[.directories]?.detalle == "2 canales · 1 lista")
-        #expect(por[.playback]?.detalle == "1 sesión · 2 visores")
-        #expect(por[.playback]?.nota == "2 conexiones en tiempo real · 1 en remux (iPhone).")
-        #expect(por[.playback]?.notaAviso == false)
-        #expect(por[.engine]?.notaAviso == true)
+        let nombres: [String] = filas.map { (f: FilaServicio) -> String in f.nombre }
+        let esperados: [String] = ["Backend", "Motor principal", "Segundo motor", "IA local", "Agenda",
+                                   "Directorios M3U", "Datos guardados", "Reproducción"]
+        #expect(nombres == esperados)
+        let por: [ServicioSalud: FilaServicio] = SoporteSalud.porId(filas)
+        let backend: String? = por[ServicioSalud.backend]?.detalle
+        #expect(backend == "v0.7.0 · 1 h activo")
+        let motor: FilaServicio? = por[ServicioSalud.engine]
+        #expect(motor?.detalle == "Aceptando reproducción · versión 3.2.3")
+        #expect(motor?.notaAviso == true)
+        let segundo: String? = por[ServicioSalud.scanner]?.detalle
+        #expect(segundo == "0 trabajos · 0 en cola")
+        let ia: FilaServicio? = por[ServicioSalud.ai]
+        #expect(ia?.detalle == "Sin configurar")
+        #expect(ia?.palabra == "Desactivado")
+        let agenda: String? = por[ServicioSalud.agenda]?.detalle
+        #expect(agenda == "120 partidos · 3 preparados")
+        let listas: String? = por[ServicioSalud.directories]?.detalle
+        #expect(listas == "2 canales · 1 lista")
+        let reproduccion: FilaServicio? = por[ServicioSalud.playback]
+        #expect(reproduccion?.detalle == "1 sesión · 2 visores")
+        #expect(reproduccion?.nota == "2 conexiones en tiempo real · 1 en remux (iPhone).")
+        #expect(reproduccion?.notaAviso == false)
     }
 
     @Test func elMotorEnVivoMandaSobreLaFoto() throws {
@@ -118,15 +132,19 @@ struct RejillaSaludTests {
         h.components.ai = HealthResponse.Components.AI(status: "model_missing", model: "embeddinggemma")
         h.components.agenda.status = "stale"
         h.components.state = HealthResponse.Components.State(status: "recovered", recoveredFrom: "state.json.bak")
-        let por = Dictionary(uniqueKeysWithValues: ModeloSalud.filas(
-            h, motorEnVivo: nil, ahora: SoporteSalud.ahora, calendario: SoporteSalud.utc).map { ($0.id, $0) })
-        #expect(por[.scanner]?.detalle == "1 trabajo · 4 en cola")
-        #expect(por[.scanner]?.nota == "2 sesiones sin cerrar en la última hora.")
-        #expect(por[.ai]?.detalle == "Falta embeddinggemma")
-        #expect(por[.agenda]?.palabra == "Copia anterior")
-        #expect(por[.agenda]?.detalle == "120 partidos · 3 preparados · de las 18:30")
-        #expect(por[.state]?.palabra == "Recuperado")
-        #expect(por[.state]?.detalle == "Se usó una copia (state.json.bak)")
+        let por: [ServicioSalud: FilaServicio] = SoporteSalud.porId(ModeloSalud.filas(
+            h, motorEnVivo: nil, ahora: SoporteSalud.ahora, calendario: SoporteSalud.utc))
+        let segundo: FilaServicio? = por[ServicioSalud.scanner]
+        #expect(segundo?.detalle == "1 trabajo · 4 en cola")
+        #expect(segundo?.nota == "2 sesiones sin cerrar en la última hora.")
+        let ia: String? = por[ServicioSalud.ai]?.detalle
+        #expect(ia == "Falta embeddinggemma")
+        let agenda: FilaServicio? = por[ServicioSalud.agenda]
+        #expect(agenda?.palabra == "Copia anterior")
+        #expect(agenda?.detalle == "120 partidos · 3 preparados · de las 18:30")
+        let datos: FilaServicio? = por[ServicioSalud.state]
+        #expect(datos?.palabra == "Recuperado")
+        #expect(datos?.detalle == "Se usó una copia (state.json.bak)")
     }
 }
 
@@ -179,7 +197,8 @@ struct TiemposSaludTests {
 
 struct RegistroSaludTests {
     @Test func lasSeisCausasEnSuOrden() {
-        #expect(RegistroSalud.causas == [.engine, .source, .network, .codec, .client, .state])
+        let orden: [DiagnosticCause] = [DiagnosticCause.engine, DiagnosticCause.source, DiagnosticCause.network, DiagnosticCause.codec, DiagnosticCause.client, DiagnosticCause.state]
+        #expect(RegistroSalud.causas == orden)
         #expect(RegistroSalud.causas.map { RegistroSalud.info($0).palabra }
             == ["Motor", "Fuente", "Red", "Códec", "Reproductor", "Datos guardados"])
     }
@@ -212,7 +231,8 @@ struct RegistroSaludTests {
         ], ahora: SoporteSalud.ahora)
         #expect(grupos.map(\.nombre) == ["DAZN 1 HD", "Teledeporte"])
         #expect(grupos.map(\.cuenta) == [2, 1])
-        #expect(grupos.first?.causas == [.source, .client])
+        let causas: [DiagnosticCause] = [DiagnosticCause.source, DiagnosticCause.client]
+        #expect(grupos.first?.causas == causas)
         let c = String(repeating: "c", count: 40)
         #expect(RegistroSalud.porFuente([SoporteSalud.entrada(hash: c)], ahora: SoporteSalud.ahora).first?.nombre == "Fuente cccccccc")
     }
@@ -220,8 +240,10 @@ struct RegistroSaludTests {
     @Test func chipsPieYVacio() throws {
         let cuentas = try SoporteSalud.salud().diagnostics.counts24h
         #expect(RegistroSalud.total(cuentas) == 7)
-        #expect(RegistroSalud.causasVisibles(cuentas, elegida: nil) == [.engine, .source, .codec, .client])
-        #expect(RegistroSalud.causasVisibles(cuentas, elegida: .network) == [.engine, .source, .network, .codec, .client])
+        let sinElegir: [DiagnosticCause] = [DiagnosticCause.engine, DiagnosticCause.source, DiagnosticCause.codec, DiagnosticCause.client]
+        #expect(RegistroSalud.causasVisibles(cuentas, elegida: nil) == sinElegir)
+        let conRed: [DiagnosticCause] = [DiagnosticCause.engine, DiagnosticCause.source, DiagnosticCause.network, DiagnosticCause.codec, DiagnosticCause.client]
+        #expect(RegistroSalud.causasVisibles(cuentas, elegida: DiagnosticCause.network) == conRed)
         #expect(RegistroSalud.pie(mostrados: 200, guardados: 480) == "Salen los 200 más recientes de 480 guardados.")
         #expect(RegistroSalud.pie(mostrados: 1, guardados: 3) == "Sale el más reciente de 3 guardados.")
         #expect(RegistroSalud.pie(mostrados: 3, guardados: 3) == nil)

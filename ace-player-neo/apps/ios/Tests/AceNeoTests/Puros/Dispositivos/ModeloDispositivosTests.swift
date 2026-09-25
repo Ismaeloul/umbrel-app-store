@@ -71,9 +71,12 @@ struct ModeloDispositivosTests {
     }
 
     @Test func plataformasEIconos() {
-        #expect([DevicePlatform.ios, .ipados, .macos, .other].map(ModeloDispositivos.plataforma)
-            == ["iPhone", "iPad", "Mac", "Otro dispositivo"])
-        #expect([DevicePlatform.ios, .ipados, .macos, .other].map(ModeloDispositivos.icono) == [.movil, .movil, .pantalla, .link])
+        let plataformas: [DevicePlatform] = [DevicePlatform.ios, DevicePlatform.ipados, DevicePlatform.macos, DevicePlatform.other]
+        let palabras: [String] = plataformas.map { (p: DevicePlatform) -> String in ModeloDispositivos.plataforma(p) }
+        #expect(palabras == ["iPhone", "iPad", "Mac", "Otro dispositivo"])
+        let iconos: [NombreIcono] = plataformas.map { (p: DevicePlatform) -> NombreIcono in ModeloDispositivos.icono(p) }
+        let esperados: [NombreIcono] = [NombreIcono.movil, NombreIcono.movil, NombreIcono.pantalla, NombreIcono.link]
+        #expect(iconos == esperados)
     }
 }
 

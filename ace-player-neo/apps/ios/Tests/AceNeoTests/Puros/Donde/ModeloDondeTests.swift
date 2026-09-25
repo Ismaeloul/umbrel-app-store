@@ -30,14 +30,14 @@ private func sesion(
 struct ModeloDondeTests {
     @Test(arguments: [
         (ClientKind.web, "Chrome · Windows", TipoAparato.ordenador),
-        (.web, "Safari · Mac", .ordenador),
-        (.web, "Safari · iPhone", .movil),
-        (.web, "Chrome · Android", .movil),
-        (.web, "Navegador · Smart TV", .tele),
-        (.web, "Navegador", .ordenador),
-        (.ios, "iPhone de Isma", .movil),
-        (.ios, "MacBook de Isma", .ordenador),
-        (.legacy, "App antigua (0.6)", .movil),
+        (ClientKind.web, "Safari · Mac", TipoAparato.ordenador),
+        (ClientKind.web, "Safari · iPhone", TipoAparato.movil),
+        (ClientKind.web, "Chrome · Android", TipoAparato.movil),
+        (ClientKind.web, "Navegador · Smart TV", TipoAparato.tele),
+        (ClientKind.web, "Navegador", TipoAparato.ordenador),
+        (ClientKind.ios, "iPhone de Isma", TipoAparato.movil),
+        (ClientKind.ios, "MacBook de Isma", TipoAparato.ordenador),
+        (ClientKind.legacy, "App antigua (0.6)", TipoAparato.movil),
     ])
     func tipoDeAparato(_ plataforma: ClientKind, _ nombre: String, _ esperado: TipoAparato) {
         #expect(ModeloDonde.tipo(visor(nombre: nombre, plataforma: plataforma)) == esperado)

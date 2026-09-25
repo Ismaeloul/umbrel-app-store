@@ -41,7 +41,7 @@ struct SeccionDispositivos: View {
         .onAppear(perform: preparar)
         .task(id: vistaActiva) { await vigilar() }
         .task(id: debeSondear) { await sondear() }
-        .onChange(of: lista) { _, nueva in if let nueva { modelo?.lista(nueva, nombres: nombre) } }
+        .onChange(of: lista, initial: true) { _, nueva in if let nueva { modelo?.lista(nueva, nombres: nombre) } }
         .onChange(of: datos.dispositivos.error) { _, error in anotar(error, en: .devicesList) }
         .onChange(of: vistaActiva) { _, activa in if !activa { confirmar.desarmar() } }
     }
