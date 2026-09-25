@@ -37,9 +37,11 @@ export const NAV_VISTAS = [
 ] as const satisfies readonly Vista[];
 export type NavVista = (typeof NAV_VISTAS)[number];
 
+/* La vista `biblioteca` se titula «Canales» (decisión W3 del plan Palco): la
+   URL `?vista=biblioteca` y el acceso directo del manifiesto no cambian. */
 export const VISTA_TITLE: Record<Vista, string> = {
   agenda: 'Agenda',
-  biblioteca: 'Biblioteca',
+  biblioteca: 'Canales',
   buscar: 'Buscar',
   ajustes: 'Ajustes',
   partido: 'Partido',

@@ -1,0 +1,40 @@
+{
+  "name": "ace-player-neo-design-explorations",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Fase 1: cinco exploraciones de diseño navegables de Ace Player Neo (datos falsos, sin backend)",
+  "packageManager": "pnpm@10.18.2",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5180",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 5181",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "capturas": "node scripts/capturas.mjs",
+    "dev:capturas": "vite --config vite.capturas.config.ts",
+    "comparativa": "node scripts/comparativa.mjs"
+  },
+  "dependencies": {
+    "motion": "^12.23.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@fontsource-variable/bricolage-grotesque": "^5.2.5",
+    "@fontsource-variable/dm-sans": "^5.2.5",
+    "@fontsource-variable/geist": "^5.2.5",
+    "@fontsource-variable/inter": "^5.2.5",
+    "@fontsource-variable/jetbrains-mono": "^5.2.5",
+    "@fontsource-variable/manrope": "^5.2.5",
+    "@fontsource-variable/space-grotesk": "^5.2.5",
+    "@fontsource/barlow-condensed": "^5.2.5",
+    "@fontsource/instrument-serif": "^5.2.5",
+    "@types/node": "^24.13.6",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "playwright": "^1.55.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.1.0"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "teams": [
+    {
+      "idTeam": "133738",
+      "strTeam": "Real Madrid",
+      "strTeamShort": "MAD",
+      "strAlternate": "Real Madrid",
+      "strLeague": "Spanish La Liga",
+      "idLeague": "4335",
+      "strCountry": "Spain",
+      "strSport": "Soccer",
+      "strBadge": "https://r2.thesportsdb.com/images/media/team/badge/vwvwrw1473502969.png",
+      "strColour1": "#ffffff",
+      "strColour2": "#00529F"
+    }
+  ]
+}

@@ -1,0 +1,169 @@
+/* Héroe de la portada (plan Palco fase 2, decisiones D3 y W4; corrección 1 del
+   encargo): el partido destacado del día (`featuredMatch`: tu equipo en
+   directo → cualquiera en directo → el próximo → el primero) como tarjeta
+   versus XL a todo el ancho, con los colores de club, los escudos grandes, el
+   logo de la competición, el chip «HOY 21:00» / «EN DIRECTO · 13'» / «Final»
+   y la cápsula de señal. SIN marcador en la tarjeta.
+
+   Debajo: el botón primario oro («Ver ahora» en directo, «Ver el partido»,
+   «Buscar canal» si el canal no está en tu biblioteca, o «Canal por
+   confirmar» deshabilitado), la cápsula «Marcador» (el marcador va SIEMPRE
+   tapado en la agenda; al destapar, las cifras salen EN la cápsula y otro
+   toque lo vuelve a tapar) y dónde se emite.
+
+   La portada NUNCA arranca la reproducción ni enseña vídeo (regla 6): todo
+   navega al centro de partido. Si este dispositivo ya reproduce el partido,
+   la tarjeta lleva «En pantalla» y el botón dice «Volver al vídeo».
+
+   HeroView es de presentación (se prueba sola); AgendaHero la conecta con la
+   señal y el tapado. */
+
+import type { FootballMatch, LiveScore } from '@ace/shared';
+import { useId, type CSSProperties } from 'react';
+import { cx } from '../../lib/cx.ts';
+import { competitionLogo } from '../../lib/teams.ts';
+import { Button, Icon, VersusCard, type IconName } from '../../ui/index.ts';
+import { matchGlow, versusSide, versusWhen } from './cards.ts';
+import { useMatchSignal } from './data.ts';
+import {
+  matchStatus,
+  matchTitle,
+  paintableScore,
+  type ChannelInfo,
+  type MatchSignal,
+} from './domain.ts';
+import { ScoreToggle, SignalCapsule } from './MatchRow.tsx';
+import { hideScore, revealScore, useScoreRevealed } from './score-reveal.ts';
+
+export interface HeroViewProps {
+  match: FootballMatch;
+  now: number;
+  today: string;
+  score: LiveScore | null;
+  signal: MatchSignal | null;
+  channels: readonly ChannelInfo[];
+  mine: boolean;
+  /** Este dispositivo ya reproduce el partido (playerPresence). */
+  watching: boolean;
+  /** Marcador tapado (en la agenda, siempre hasta que se pide). */
+  scoreHidden: boolean;
+  onReveal(): void;
+  /** Segundo toque en la cápsula: vuelve a tapar. */
+  onHide?(): void;
+  onOpen(match: FootballMatch): void;
+  /** Nombre de la View Transition del bloque de escudos (único en la página). */
+  transitionName?: string | null;
+}
+
+export function HeroView({
+  match,
+  now,
+  today,
+  score: rawScore,
+  signal,
+  channels,
+  mine,
+  watching,
+  scoreHidden,
+  onReveal,
+  onHide,
+  onOpen,
+  transitionName = null,
+}: HeroViewProps) {
+  const titleId = useId();
+  const status = matchStatus(match, now, rawScore);
+  const phase = status?.phase ?? null;
+  const live = phase === 'live';
+  const score = paintableScore(rawScore);
+  const available = channels.some((channel) => channel.inLibrary);
+  const action = channels.length === 0 ? null : available ? 'Ver canal' : 'Buscar canal';
+  const when = versusWhen(match, now, rawScore, today);
+  const glow = matchGlow(match);
+  const style = {
+    '--ta': phase === 'done' ? 'transparent' : glow.home,
+    '--tb': phase === 'done' ? 'transparent' : glow.away,
+  } as CSSProperties;
+
+  let cta: { text: string; icon: IconName; disabled: boolean };
+  if (watching) cta = { text: 'Volver al vídeo', icon: 'play', disabled: false };
+  else if (!action) cta = { text: 'Canal por confirmar', icon: 'tv', disabled: true };
+  else if (!available) cta = { text: 'Buscar canal', icon: 'buscar', disabled: false };
+  else if (live) cta = { text: 'Ver ahora', icon: 'play', disabled: false };
+  else cta = { text: 'Ver el partido', icon: 'play', disabled: false };
+
+  return (
+    <section
+      className={cx('agenda-hero', phase && `is-${phase}`, watching && 'is-watching')}
+      aria-labelledby={titleId}
+      style={style}
+    >
+      <h2 id={titleId} className="sr-only">
+        {matchTitle(match)}
+      </h2>
+      <div className="agenda-hero__light" aria-hidden="true" />
+      <div className="agenda-hero__card">
+        <VersusCard
+          size="xl"
+          home={versusSide(match, 'home')}
+          away={versusSide(match, 'away')}
+          competition={match.competition?.trim() || 'Fútbol'}
+          competitionLogo={competitionLogo(match)}
+          when={when}
+          mine={mine}
+          watching={watching}
+          transitionName={transitionName ?? undefined}
+          className="agenda-hero__versus"
+        >
+          {signal ? <SignalCapsule signal={signal} size="md" /> : null}
+        </VersusCard>
+      </div>
+      <div className="agenda-hero__bar">
+        <Button
+          variant="primary"
+          icon={cta.icon}
+          className="agenda-hero__cta"
+          disabled={cta.disabled}
+          onClick={() => onOpen(match)}
+        >
+          {cta.text}
+        </Button>
+        {score ? (
+          <ScoreToggle
+            match={match}
+            score={score}
+            revealed={!scoreHidden}
+            onReveal={onReveal}
+            onHide={onHide}
+            size="md"
+            glass={false}
+            className="agenda-hero__score"
+          />
+        ) : null}
+        <span className="agenda-hero__where">
+          <Icon name="tv" size={16} />
+          {channels.length
+            ? channels.map((channel) => channel.name).join(' · ')
+            : 'Canal por confirmar'}
+        </span>
+      </div>
+    </section>
+  );
+}
+
+export type AgendaHeroProps = Omit<HeroViewProps, 'signal' | 'scoreHidden' | 'onReveal' | 'onHide'>;
+
+/** El héroe conectado: pide la señal del partido y sabe si su marcador está destapado. */
+export function AgendaHero(props: AgendaHeroProps) {
+  const status = matchStatus(props.match, props.now, props.score);
+  const signal = useMatchSignal(props.match, props.now, { finished: status?.phase === 'done' });
+  const revealed = useScoreRevealed(props.match.id);
+  return (
+    <HeroView
+      {...props}
+      signal={signal}
+      scoreHidden={!revealed}
+      onReveal={() => revealScore(props.match.id)}
+      onHide={() => hideScore(props.match.id)}
+    />
+  );
+}

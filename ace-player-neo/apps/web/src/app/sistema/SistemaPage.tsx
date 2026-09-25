@@ -8,9 +8,11 @@ import { useState, type ReactNode } from 'react';
 import { notify, setStatusBase, showStatus, StatusLineHost, toast } from '../../notices/index.ts';
 import {
   Button,
+  Capsule,
   Card,
   ChannelMark,
   Chip,
+  CompetitionBadge,
   EmptyState,
   Icon,
   ICON_NAMES,
@@ -22,10 +24,12 @@ import {
   MenuButton,
   Num,
   Panel,
+  PosterRail,
   ProgressBar,
   Segmented,
   Sheet,
   SignalBadge,
+  SignalRing,
   Skeleton,
   SkeletonRows,
   StatusLineView,
@@ -36,7 +40,9 @@ import {
   TextField,
   ToastView,
   useContextMenu,
+  VersusCard,
   type MenuItem,
+  type SignalRingState,
   type SignalState,
 } from '../../ui/index.ts';
 import type { ViewProps } from '../contracts.ts';
@@ -54,9 +60,10 @@ const COLOR_TOKENS = [
   ['--text', 'Texto'],
   ['--text-2', 'Texto secundario'],
   ['--text-3', 'Texto terciario'],
-  ['--accent', 'Cielo (relleno)'],
-  ['--accent-ink', 'Cielo (texto)'],
-  ['--accent-edge', 'Cielo (borde)'],
+  ['--accent', 'Oro (relleno)'],
+  ['--accent-ink', 'Oro (texto)'],
+  ['--accent-edge', 'Oro (borde)'],
+  ['--live', 'Directo'],
   ['--ok', 'Verificada'],
   ['--weak', 'Floja'],
   ['--fail', 'Sin señal'],
@@ -64,6 +71,46 @@ const COLOR_TOKENS = [
 ] as const;
 
 const SIGNALS: SignalState[] = ['ok', 'weak', 'fail', 'checking', 'pending'];
+
+const RING_WORDS: Record<SignalRingState, string> = {
+  ok: 'Verificada',
+  weak: 'Floja',
+  fail: 'Sin señal',
+  checking: 'Comprobando',
+  pending: 'Pendiente',
+  reported: 'Reportada',
+};
+
+const BARCA = {
+  name: 'FC Barcelona',
+  short: 'BAR',
+  colors: { primary: '#a50044', secondary: '#004d98' },
+};
+const JUVE = {
+  name: 'Juventus',
+  short: 'JUV',
+  colors: { primary: '#101010', secondary: '#ffffff' },
+};
+const SEVILLA = {
+  name: 'Sevilla',
+  short: 'SEV',
+  colors: { primary: '#d4021d', secondary: '#ffffff' },
+};
+const GIRONA = {
+  name: 'Girona',
+  short: 'GIR',
+  colors: { primary: '#cd2534', secondary: '#ffffff' },
+};
+const MADRID = {
+  name: 'Real Madrid',
+  short: 'RMA',
+  colors: { primary: '#febe10', secondary: '#1a1a5e' },
+};
+const CITY = {
+  name: 'Manchester City',
+  short: 'MCI',
+  colors: { primary: '#6cabdd', secondary: '#1c2c5b' },
+};
 
 const MENU_ITEMS: MenuItem[] = [
   {
@@ -129,7 +176,7 @@ export default function SistemaPage(_props: ViewProps) {
     <div className="sis">
       <ViewHeader
         title="Sistema"
-        subtitle="Tokens y componentes de la dirección A «Luz de focos»"
+        subtitle="Tokens y componentes de la piel «Palco»"
         actions={<MenuButton label="Más opciones" items={MENU_ITEMS} />}
       />
 
@@ -319,10 +366,135 @@ export default function SistemaPage(_props: ViewProps) {
             lit
           />
           <TeamMark name="Equipo sin datos" size={28} />
+          <TeamMark
+            name="Juventus"
+            short="JUV"
+            colors={{ primary: '101010', secondary: 'ffffff' }}
+            crest="/api/v1/football/teams/133676/crest?v=demo"
+            size={64}
+          />
           <ChannelMark name="DAZN 1" />
           <ChannelMark name="M+ Liga de Campeones 2" />
           <ChannelMark name="Eurosport" />
         </Card>
+        <Card className="sis-tiles">
+          <ChannelMark name="DAZN 1" shape="tile" size={54} />
+          <ChannelMark name="M+ Liga de Campeones 2" shape="tile" size={72} />
+          <ChannelMark name="La 1 HD" shape="tile" size={90} />
+          <ChannelMark name="Eurosport" shape="tile" size={54} />
+        </Card>
+      </Section>
+
+      <Section id="capsulas" title="Cápsulas y anillos de estado (Palco)">
+        <Card className="sis-row">
+          <Capsule tone="live" dot>
+            En directo · 13'
+          </Capsule>
+          <Capsule tone="neutral" icon="clock">
+            VIE 21:00
+          </Capsule>
+          <Capsule tone="ok" dot>
+            Señal lista
+          </Capsule>
+          <Capsule tone="weak">Floja</Capsule>
+          <Capsule tone="fail" icon="aviso">
+            Sin señal
+          </Capsule>
+          <Capsule tone="gold" icon="star-f">
+            Tu equipo
+          </Capsule>
+          <Capsule
+            as="button"
+            tone="neutral"
+            pressed={pressed}
+            onClick={() => setPressed((p) => !p)}
+          >
+            Marcador
+          </Capsule>
+        </Card>
+        <div className="sis-glass">
+          <Capsule tone="live" size="sm" glass dot>
+            En directo · 72'
+          </Capsule>
+          <Capsule tone="ok" size="sm" glass dot>
+            Señal lista
+          </Capsule>
+          <Capsule tone="neutral" size="sm" glass icon="clock">
+            45 min antes
+          </Capsule>
+          <Capsule tone="fail" size="sm" glass>
+            Sin señal
+          </Capsule>
+          <CompetitionBadge name="Champions League" />
+          <CompetitionBadge name="LaLiga" size="lg" />
+        </div>
+        <Card className="sis-signals">
+          {(Object.keys(RING_WORDS) as SignalRingState[]).map((state) => (
+            <div key={state} className="sis-signal">
+              <SignalRing state={state} word={RING_WORDS[state]} />
+              <SignalRing state={state} word={RING_WORDS[state]} size={40} hideWord />
+            </div>
+          ))}
+          <div className="sis-signal">
+            <SignalRing state="ok" word="En pantalla" active size={40} />
+          </div>
+        </Card>
+      </Section>
+
+      <Section id="versus" title="Tarjeta versus y carrusel (Palco)">
+        <div className="sis-poster-xl">
+          <VersusCard
+            home={BARCA}
+            away={JUVE}
+            competition="Amistoso"
+            when={{ kind: 'live', label: 'En directo', minute: '13' }}
+            size="xl"
+            mine
+            as="button"
+            aria-label="Ver canal para FC Barcelona - Juventus"
+            onClick={() => toast('Abriría el partido', { tone: 'info' })}
+          >
+            <Capsule tone="ok" size="sm" glass dot>
+              Señal lista
+            </Capsule>
+          </VersusCard>
+        </div>
+        <PosterRail label="Partidos de muestra" list bleed>
+          <VersusCard
+            home={SEVILLA}
+            away={GIRONA}
+            competition="LaLiga"
+            when={{ kind: 'time', label: 'SÁB 21:00' }}
+          >
+            <Capsule tone="neutral" size="sm" glass icon="clock">
+              45 min antes
+            </Capsule>
+          </VersusCard>
+          <VersusCard
+            home={MADRID}
+            away={CITY}
+            competition="Champions League"
+            when={{ kind: 'live', label: 'En directo', minute: '45+2' }}
+            watching
+          >
+            <Capsule tone="weak" size="sm" glass>
+              Floja
+            </Capsule>
+          </VersusCard>
+          <VersusCard
+            home={JUVE}
+            away={SEVILLA}
+            competition="Europa League"
+            when={{ kind: 'done', label: 'Final' }}
+          />
+          <VersusCard
+            home={{ name: 'Equipo A' }}
+            away={{ name: 'Equipo B' }}
+            competition="Fútbol"
+            when={{ kind: 'tbc', label: 'Por confirmar' }}
+            size="sm"
+          />
+        </PosterRail>
         <Card className="sis-stack">
           <ProgressBar
             value={progress}

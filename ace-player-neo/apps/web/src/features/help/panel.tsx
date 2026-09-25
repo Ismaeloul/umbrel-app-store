@@ -10,7 +10,10 @@
      no hay tecla «?»; sin esta lista, deslizar o mantener pulsado no se
      descubre nunca.
    - El orden depende del puntero: con ratón, teclado primero; con el dedo,
-     gestos primero. Se pinta todo siempre (un iPad con teclado usa ambos). */
+     gestos primero. Se pinta todo siempre (un iPad con teclado usa ambos).
+   - Piel «Palco» (plan fase 2, W10) en help.css y app/shortcut-help.css:
+     titulares expandidos con su icono en oro, rótulos de grupo en mayúsculas
+     y teclas oscuras a la derecha. */
 
 import { useShortcutGroups, type ShortcutGroup } from '../../app/shortcuts.ts';
 import { MEDIA, useMediaQuery } from '../../lib/media.ts';
@@ -24,7 +27,9 @@ function KeyboardGroups({ groups }: { groups: ShortcutGroup[] }) {
   return (
     <section className="ayuda-part" aria-labelledby="ayuda-teclado">
       <h3 id="ayuda-teclado" className="ayuda-part__title">
-        <Icon name="kbd" size={18} />
+        <span className="ayuda-part__icon" aria-hidden="true">
+          <Icon name="kbd" size={20} />
+        </span>
         Teclado
       </h3>
       {groups.length === 0 ? <p className="texto-2">Aquí no hay atajos.</p> : null}
@@ -75,7 +80,9 @@ function Gestures({
   return (
     <section className="ayuda-part" aria-labelledby={id}>
       <h3 id={id} className="ayuda-part__title">
-        <Icon name={icon} size={18} />
+        <span className="ayuda-part__icon" aria-hidden="true">
+          <Icon name={icon} size={20} />
+        </span>
         {title}
       </h3>
       <dl className="help__list">

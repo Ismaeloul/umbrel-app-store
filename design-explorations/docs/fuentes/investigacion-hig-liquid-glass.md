@@ -1,0 +1,83 @@
+# Fuente · Investigación HIG, Liquid Glass (iOS 26), Apple TV / Apple Sports y técnica web
+
+> Informe bruto del 24-sep-2026. Fuentes abiertas: 26 páginas de la HIG, ~50 páginas de referencia de SwiftUI/UIKit/AVKit (vía los endpoints JSON de developer.apple.com), 3 sesiones WWDC25 (219, 323, 356), notas de prensa y soporte de Apple y 25 fuentes de terceros. Mobbin y natashatherobot devolvieron 403.
+
+## A1. Liquid Glass: qué es, dónde va, qué no hacer
+- «Liquid Glass forms a distinct functional layer for controls and navigation elements — like tab bars and sidebars — that floats above the content layer». Dos capas: Liquid Glass (navegación) y materiales estándar (contenido). https://developer.apple.com/design/human-interface-guidelines/materials · https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass
+- **No hacer** (literal): «Don't use Liquid Glass in the content layer» · «Use Liquid Glass effects sparingly» · nunca glass sobre glass («avoid applying the material to both layers. Instead, use fills, transparency, and vibrancy») · no mezclar variantes · en reposo sin intersección contenido/vidrio · sin fondos propios en barras · «Avoid tinting all your elements». WWDC25 219 https://developer.apple.com/videos/play/wwdc2025/219/
+- **Regular vs Clear**: Regular en casi todo; Clear «for components that float above media backgrounds — such as photos and videos», con capa de oscurecimiento del 35 % (`.background(.black.opacity(0.3))`) y contenido «bold and bright» encima. https://developer.apple.com/documentation/swiftui/glass/clear
+- Adaptativo: barras pequeñas cambian de claro a oscuro según el fondo; los símbolos también. Al crecer (botón → menú) el material «casts deeper, richer shadows».
+- **Tinte**: solo la acción principal, en el fondo del control, nunca en el glifo. Con contenido colorido debajo (escudos, césped, vídeo) → «prefer a monochromatic appearance for toolbars and tab bars». https://developer.apple.com/design/human-interface-guidelines/color
+- **Morphing**: «Liquid Glass dynamically morphs between the controls»; action sheets salen del control; half-sheets se vuelven opacas al llegar a altura completa (WWDC25 356).
+- **Scroll edge effect** en vez de fondos sólidos bajo barras: `soft` (defecto) / `hard` (cabeceras fijadas); «Apply one scroll edge effect per view». https://developer.apple.com/documentation/swiftui/scrolledgeeffectstyle
+- Accesibilidad: Reduce Transparency «frostier», Increase Contrast «predominantly black or white with a contrasting border», Reduce Motion «disables any elastic properties». iOS 26.1 permite elegir «clear» o «tinted». https://support.apple.com/en-us/123075
+- Formas: fijas, cápsulas (radio = mitad de la altura), concéntricas (`.rect(corner: .containerConcentric)`, `ConcentricRectangle`). En iPhone, cápsula con margen extra junto al borde.
+- Rendimiento: agrupar en `GlassEffectContainer`; «Glass can not sample other glass». https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views
+
+## A2. APIs SwiftUI (iOS mínimo → alternativa iOS 17–25)
+| API | Desde | Alternativa |
+|---|---|---|
+| `glassEffect(_:in:)` (`.regular.tint().interactive()`) | 26 | `.background(.ultraThinMaterial, in: Capsule())` + borde blanco 25 % |
+| `GlassEffectContainer(spacing:)` | 26 | `HStack`/`VStack` |
+| `glassEffectID` + `glassEffectTransition(.matchedGeometry/.materialize)` | 26 | `matchedGeometryEffect` + `.transition(.opacity)` |
+| `glassEffectUnion(id:namespace:)` | 26 | un contenedor con material |
+| `.buttonStyle(.glass)` / `.glassProminent` | 26 | `.bordered` / `.borderedProminent` |
+| `.tabBarMinimizeBehavior(.onScrollDown)` (solo iPhone) | 26 | tab bar fija |
+| `Tab(role: .search)` (campo sustituye a la tab bar al activarse) | 18 | `.tabItem` con `magnifyingglass` |
+| `.tabViewBottomAccessory {}` + `@Environment(\.tabViewBottomAccessoryPlacement)` (`.expanded`/`.inline`) | 26 | `.safeAreaInset(edge: .bottom)` con barra de 56–64 pt |
+| `ToolbarSpacer(.fixed/.flexible)` · `.sharedBackgroundVisibility(.hidden)` | 26 | `ToolbarItemGroup` |
+| `.backgroundExtensionEffect()` | 26 | imagen + copia espejada con `blur` |
+| `.scrollEdgeEffectStyle(.soft/.hard)` · `.safeAreaBar(edge:)` | 26 | `toolbarBackground(.visible)` / `safeAreaInset` |
+| `.navigationTransition(.zoom(sourceID:in:))` + `.matchedTransitionSource` | 18 | push estándar |
+| `.presentationDetents([.height(220), .medium, .large])` · `.presentationBackgroundInteraction(.enabled(upThrough:))` · `.presentationCornerRadius` | 16 / 16.4 | igual |
+| `.contentMargins` · `.scrollTargetBehavior(.viewAligned)` + `.scrollTargetLayout()` · `Section(isExpanded:)` | 17 | igual |
+| `.searchToolbarBehavior(.minimize)` | 26 | `.searchable(placement: .navigationBarDrawer)` |
+| `.tabViewStyle(.sidebarAdaptable)` | 18 | omitir |
+| `Text.monospacedDigit()` · `.contentTransition(.numericText(countsDown:))` | 13 / 16 | igual |
+| `UIDesignRequiresCompatibility` (Info.plist) | 26 | — |
+
+## A3. Layout
+- iPhone 17 / 17 Pro: **402×874 pt** (1206×2622 px). Inset superior 62 pt, inferior 34 pt (home indicator). https://useyourloaf.com/blog/iphone-17-screen-sizes/
+- Isla dinámica: radio 44 pt; compacta 230 pt (17 Pro/17) · expandida 371 pt; compact leading/trailing 52,33×36,67 pt. https://developer.apple.com/design/human-interface-guidelines/live-activities
+- Tab bar iOS 26 flotante: píldora ≈62 pt de alto, inset lateral 21 pt, hueco píldora↔búsqueda 8 pt, glifos 28 pt, margen inferior 12 pt (≥16 pt sobre el home indicator). Clásica 49 pt (iOS 17). https://developer.apple.com/design/human-interface-guidelines/tab-bars · https://github.com/ryanashcraft/FabBar
+- Reglas de tab bar: solo navegación, ≤5, etiquetas de una palabra, símbolos rellenos, no ocultar ni deshabilitar, pestaña de búsqueda al final; con accesorio, minimizar al hacer scroll.
+- Toolbars: ≤3 grupos, título <15 caracteres, una sola acción `.prominent`, no mezclar texto e icono en un grupo. https://developer.apple.com/design/human-interface-guidelines/toolbars
+- Objetivos: 44×44 pt (mín. 28); 12 pt de padding con bisel, 24 sin bisel. Contraste 4,5:1 hasta 17 pt, 3:1 ≥18 pt o negrita; en oscuro custom aspirar a 7:1.
+- **SF Pro Dynamic Type (Large)**: Large Title 34/41 · Title 1 28/34 · Title 2 22/28 · Title 3 20/25 · Headline 17 semibold · Body 17/22 · Callout 16/21 · Subhead 15/20 · Footnote 13/18 · Caption 1 12/16 · Caption 2 11/13. Extremos xSmall (Body 14) y AX5 (Body 53). «avoid Ultralight, Thin, and Light». SF Pro Rounded para UI blanda; `monospacedDigit()` en marcadores. iOS 26: alertas «bolder and left-aligned»; cabeceras de sección en Title Case. https://developer.apple.com/design/human-interface-guidelines/typography
+
+## A4. Motion
+- Animación por defecto (iOS 17+): `spring(response: 0.55, dampingFraction: 1.0)`. `.smooth` / `.snappy` / `.bouncy` con `duration: 0.5` por defecto; `Spring(duration: 0.5, bounce: 0.3)` ≈ masa 1, rigidez 157,9, amortiguación 17,6. https://developer.apple.com/documentation/swiftui/spring
+- Recomendación: expandir/colapsar mini `.snappy(0.4)`; sheets/menús `.smooth(0.35)`; tap `.bouncy(0.3)` solo en glass interactivo.
+- Reduce Motion (literal HIG): «Tightening animation springs to reduce bounce — Tracking animations directly with people's gestures — Avoiding animating depth changes — Replacing transitions in x-, y-, z-axes with fades — Avoiding animating into and out of blurs». https://developer.apple.com/design/human-interface-guidelines/accessibility
+- Transiciones: push/pop con zoom (iOS 18); half-sheet inset → opaca al expandir; action sheet «springs from the action itself»; menús «pop open» inline.
+
+## A5. Colores y materiales del sistema
+- `systemBackground/secondary/tertiary` y, para listas agrupadas, `systemGroupedBackground/secondarySystemGroupedBackground/tertiary`. Etiquetas `label…quaternaryLabel`, `separator`, `link`. Usar nombres semánticos.
+- Dark Mode: «dimmer background colors and brighter foreground colors… not necessarily inversions»; Apple admite «a permanently dark appearance… for media» (reproductor).
+- Materiales estándar: `ultraThin / thin / regular / thick` (+`bar`); «Thicker materials… better contrast for text». https://developer.apple.com/documentation/swiftui/material
+
+## A6. Reproductor
+- «If your app truly requires a custom video player, reference the behavior and interface of the system video player». Carga >2 s: pantalla negra + spinner centrado; reanudar sin preguntar; Espacio = play/pausa. https://developer.apple.com/design/human-interface-guidelines/playing-video
+- AVKit: `AVPlayerViewController` (AirPlay + PiP), `AVPictureInPictureController`. Now Playing (`MPNowPlayingInfoCenter`) en pantalla de bloqueo, Centro de control y AirPlay. Categoría `playback`. https://developer.apple.com/design/human-interface-guidelines/playing-audio
+- Pantalla completa: barra de estado oculta solo temporalmente; gestos del sistema diferidos. https://developer.apple.com/design/human-interface-guidelines/going-full-screen
+- **HIG «Live-viewing apps»**: directo en la primera pestaña; «Let people tap once — or not at all — to start playback»; badge/sash LIVE; progreso del directo; orden fijo de acciones (Watch, Start Over, Record, Favorite); «content footer» para cambiar de canal durante la reproducción con el canal actual marcado; feedback instantáneo al cambiar; EPG con «My Channels/Favorites»; navegar con PiP. https://developer.apple.com/design/human-interface-guidelines/live-viewing-apps
+- **Apple Music (modelo del mini)**: MiniPlayer = `bottomAccessory` sobre la tab bar; al hacer scroll «the tab bar collapses and only the current tab item remains visible as a small circular button; the tab accessory… slides down next to it»; iOS 26.1: deslizar izquierda/derecha sobre el mini cambia de pista con háptica. Toque = Now Playing. https://www.macstories.net/stories/ios-and-ipados-26-the-macstories-review/3/ · https://9to5mac.com/2025/11/04/ios-26-1-gave-apple-music-convenient-new-trick/
+- **Apple TV**: sin mini; controles «float above your video without obstructing what's happening underneath» (Clear sobre vídeo). https://9to5mac.com/2025/07/16/apples-tv-app-gets-fresh-design-in-ios-26-and-tvos-26-heres-whats-new/
+- Sheets para «elegir señal»: `.medium`, grabber visible («they can also tap it to cycle through the detents»), Cancel leading / Done trailing, «Display only one sheet at a time». https://developer.apple.com/design/human-interface-guidelines/sheets
+
+## B. Apple Sports y Apple TV
+- **Apple Sports** (feb 2024, «Designed for speed and simplicity»): raíz Scores con selector «Yesterday / Today / Upcoming» y menú de alcance «Home / My Teams / League»; tarjetas con «scores and game clocks… updating stats in real time»; **ficha de partido** con estadísticas por pestañas y «broadcast viewing options appear on the game card. Tap Open in Apple TV»; «Swipe left or right to view another game card on the live schedule» y «Swipe down from the game card screen to return to scores»; Live Activities (iOS 18) y widget de inicio (v3.3, 16-sep-2025); disponible en España desde sep 2025; Segunda, Ligue 2, Serie B desde sep 2025. https://support.apple.com/guide/apple-sports-app/apd5a38547d1/web · https://www.apple.com/newsroom/2024/02/introducing-apple-sports-a-new-app-for-sports-fans/ · https://www.macrumors.com/guide/apple-sports/
+- **Apple TV app**: Home unificada con filas; iOS 26/tvOS 26: tab bar de Liquid Glass, «new vertical poster art», controles transparentes flotantes, Watchlist con iconos de dónde se reproduce; búsqueda como pestaña estándar con landing de géneros. Hero editorial con `backgroundExtensionEffect()` (Landmarks WWDC25). https://www.apple.com/newsroom/2023/12/redesigned-apple-tv-app-elevates-the-viewing-experience/ · https://developer.apple.com/documentation/swiftui/landmarks-building-an-app-with-liquid-glass
+- Adopción: 40+ apps con Liquid Glass (26-sep-2025); Focus usa el bottom accessory para su temporizador («feels great», MacStories). https://9to5mac.com/2025/09/26/these-30-apps-feature-a-new-liquid-glass-design-for-ios-26/
+
+## C. Técnica web
+- Receta de vidrio CSS: `background: rgba(255,255,255,.15); backdrop-filter: blur(2px) saturate(180%); border: 1px solid rgba(255,255,255,.8); box-shadow: 0 8px 32px rgba(31,38,135,.2), inset 0 4px 20px rgba(255,255,255,.3)` + `::after` con brillo especular. https://dev.to/kevinbism/recreating-apples-liquid-glass-effect-with-pure-css-3gpl
+- Tab bar flotante iOS 26 en CSS: `blur(24px) saturate(180%)`, `color-mix(in oklab, white 16%, transparent)`, borde `rgba(255,255,255,.4)`, `border-radius: 999px`, offset inferior 22 px, padding 10/14 expandida y 8 compacta, altura mínima de tab 44 px, colapso tras 10 px de scroll, `cubic-bezier(.34,1.4,.5,1)` 0,45 s. https://codefronts.com/navigation/css-liquid-glass-navbars/ios-26-floating-tab-bar/
+- Refracción real solo Chromium (`feDisplacementMap`); cada instancia reserva GPU. https://blog.logrocket.com/how-create-liquid-glass-effects-css-and-svg/
+- `backdrop-filter` Baseline sept 2024; un ancestro con `opacity<1`, `filter`, `mask`, `clip-path`, `mix-blend-mode` o `backdrop-filter` crea un backdrop root (= «no glass sobre glass»). https://developer.mozilla.org/en-US/docs/Web/CSS/backdrop-filter
+- Legibilidad: capa negra 30–35 % bajo el vidrio sobre vídeo. https://css-tricks.com/getting-clarity-on-apples-liquid-glass/
+- `prefers-reduced-motion` Baseline; `prefers-reduced-transparency` limitada (mejora progresiva). Safe areas: `viewport-fit=cover` + `padding: max(12px, env(safe-area-inset-left))`. PWA: `display: standalone` + `apple-mobile-web-app-capable` + `black-translucent` + `@media (display-mode: standalone)`. `100dvh` con fallback `100vh`; `svh` para lo que no debe saltar. `overscroll-behavior: contain`. Tiras: `scroll-snap-type: x mandatory; scroll-padding: 16px`. `@media (hover: hover)` para hover. https://webkit.org/blog/7929/designing-websites-for-iphone-x/ · https://web.dev/blog/viewport-units
+- **SF Pro no se puede embeber** (licencia: «solely for creating mock-ups… for Apple platforms»); pila `-apple-system, BlinkMacSystemFont, system-ui, Inter`; en el iPhone `system-ui` ya es SF Pro. Inter: OFL, `tnum`, `ss01`, `cv01–cv13`. Geist: OFL, x-height 0,53 vs Inter 0,546. https://developer.apple.com/fonts/ · https://rsms.me/inter/ · https://vercel.com/font
+
+## Reglas que aplicaremos (30)
+1 Dos capas y nada más: navegación en Liquid Glass; contenido en `systemGroupedBackground`. 2 Cero vidrio dentro de vidrio. 3 `.regular` en todo salvo sobre el vídeo (`.clear` + negro 30–35 %). 4 Tab bar monocroma, 4 pestañas + `Tab(role: .search)`, `.tabBarMinimizeBehavior(.onScrollDown)` en listas largas. 5 Mini = `tabViewBottomAccessory` (iOS 26) / `safeAreaInset(.bottom)` 56–64 pt (iOS 17); toque expande, deslizar vertical devuelve, deslizar horizontal cambia de canal/fuente con háptica. 6 Un solo tinte: el botón primario `.glassProminent`. 7 Toolbars ≤3 grupos, título <15 caracteres. 8 Sin fondos custom en barras; scroll edge effect `.soft`. 9 Hero con `backgroundExtensionEffect()` (iOS 26) o espejo+blur. 10 Selector de fuente en sheet `[.height(220), .medium, .large]` con `presentationBackgroundInteraction` para que el vídeo siga tocable. 11 Fichas con `navigationTransition(.zoom)`. 12 Ficha estilo Apple Sports: marcador `monospacedDigit()` + `numericText`, pestañas, swipe lateral entre partidos, swipe down para volver. 13 Agenda con menú de alcance y selector Ayer/Hoy/Próximos; directo primero con badge LIVE. 14 Un toque para reproducir; >2 s → negro + spinner. 15 Content footer de canales durante la reproducción; PiP y AirPlay vía AVKit; Now Playing. 16 Barra de estado oculta solo en pantalla completa. 17 Live Activity con medidas oficiales. 18 Solo SF Pro con estilos Dynamic Type; Rounded solo para marcadores grandes; nunca Light. 19 44×44 pt, 12/24 pt de padding, 4,5:1 (7:1 en oscuro). 20 Cápsulas con margen extra; `ConcentricRectangle`; sheets radio ≥21. 21 `.snappy(0.4)` expandir, `.smooth(0.35)` sheets, `.bouncy(0.3)` solo en glass interactivo; Reduce Motion → sin rebote y fades. 22 Probar Reduce Transparency, Increase Contrast y «tinted». 23 Oscuro permanente solo en reproductor y parrilla. 24 Un `GlassEffectContainer` por pantalla; ≤3–4 glass visibles. 25 `ViewModifier` `.liquidGlassIfAvailable(shape:)` con respaldo `.ultraThinMaterial`. 26–29 Web: `viewport-fit=cover`, `env()`, standalone, `100dvh`; vidrio `blur(20–24px) saturate(180%)`, fondo blanco 12–16 %, borde 40 %; scroll-snap; hover solo con `(hover: hover)`; `prefers-reduced-transparency` → ≥85 % opacidad; pila `-apple-system… Inter`, `tabular-nums`. 30 Nada que compita con la isla dinámica.

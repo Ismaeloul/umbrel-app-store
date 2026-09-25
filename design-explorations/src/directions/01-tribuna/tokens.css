@@ -1,0 +1,94 @@
+/* Propuesta 1 · Tribuna — tokens. Papel y tinta; el color lo ponen los clubes. */
+
+[data-dir='tribuna'] {
+  --tb-font: 'Inter Variable', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --tb-font-ios: -apple-system, BlinkMacSystemFont, system-ui, 'Inter Variable', sans-serif;
+  --tb-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --tb-bg: #f5f4f0;
+  --tb-bg-2: #ffffff;
+  --tb-bg-3: #ecebe6;
+  --tb-bg-4: #e2e1db;
+  --tb-ink: #1d1d1f;
+  --tb-ink-2: #6e6e73;
+  --tb-ink-3: #8e8e93;
+  --tb-line: rgba(0, 0, 0, 0.08);
+  --tb-line-2: rgba(0, 0, 0, 0.14);
+  --tb-accent: #0a84ff;
+  --tb-accent-ink: #0060d0;
+  --tb-accent-soft: rgba(10, 132, 255, 0.12);
+  --tb-live: #e3452f;
+  --tb-live-soft: rgba(227, 69, 47, 0.12);
+  --tb-ok: #1e7a46;
+  --tb-ok-soft: rgba(30, 122, 70, 0.14);
+  --tb-weak: #8f5b00;
+  --tb-weak-soft: rgba(143, 91, 0, 0.14);
+  --tb-fail: #c93a2e;
+  --tb-fail-soft: rgba(201, 58, 46, 0.12);
+  --tb-glass: rgba(255, 255, 255, 0.72);
+  --tb-glass-border: rgba(255, 255, 255, 0.55);
+  --tb-glass-shadow: 0 8px 24px rgba(0, 0, 0, 0.14), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --tb-video-veil: rgba(0, 0, 0, 0.3);
+  --tb-fill: rgba(120, 120, 128, 0.16);
+  --tb-fill-2: rgba(120, 120, 128, 0.24);
+  --tb-on-accent: #ffffff;
+  --tb-r-cell: 20px;
+  --tb-r-card: 16px;
+  --tb-r-video: 12px;
+  --tb-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --tb-spring: linear(0, 0.2178 2.1%, 0.4472 4.4%, 0.6537 6.9%, 0.8155 9.4%, 0.9373 12%, 1.0192 14.7%, 1.0677 17.6%, 1.0865 20.7%, 1.0847 23.9%, 1.0685 27.5%, 1.0453 31.5%, 1.019 36.5%, 1.0015 43.3%, 0.9973 52.2%, 1 100%);
+  --tb-dur-fast: 200ms;
+  --tb-dur: 360ms;
+  --tb-dur-slow: 480ms;
+  color-scheme: light;
+}
+
+html[data-scheme='dark'] [data-dir='tribuna'] {
+  --tb-bg: #000000;
+  --tb-bg-2: #1c1c1e;
+  --tb-bg-3: #2c2c2e;
+  --tb-bg-4: #3a3a3c;
+  --tb-ink: #f5f5f7;
+  --tb-ink-2: #a1a1a6;
+  --tb-ink-3: #8d8d92;
+  --tb-line: rgba(255, 255, 255, 0.1);
+  --tb-line-2: rgba(255, 255, 255, 0.18);
+  --tb-accent: #0a84ff;
+  --tb-accent-ink: #64b0ff;
+  --tb-accent-soft: rgba(10, 132, 255, 0.2);
+  --tb-live: #ff453a;
+  --tb-live-soft: rgba(255, 69, 58, 0.18);
+  --tb-ok: #3fcf7a;
+  --tb-ok-soft: rgba(63, 207, 122, 0.16);
+  --tb-weak: #f5b830;
+  --tb-weak-soft: rgba(245, 184, 48, 0.16);
+  --tb-fail: #f26d5b;
+  --tb-fail-soft: rgba(242, 109, 91, 0.16);
+  --tb-glass: rgba(28, 28, 30, 0.72);
+  --tb-glass-border: rgba(255, 255, 255, 0.14);
+  --tb-glass-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --tb-fill: rgba(120, 120, 128, 0.24);
+  --tb-fill-2: rgba(120, 120, 128, 0.36);
+  color-scheme: dark;
+}
+
+html[data-transparency='reduced'] [data-dir='tribuna'] {
+  --tb-glass: var(--tb-bg-2);
+  --tb-glass-border: var(--tb-line-2);
+}
+
+html[data-motion='reduced'] [data-dir='tribuna'] {
+  --tb-dur-fast: 100ms;
+  --tb-dur: 120ms;
+  --tb-dur-slow: 140ms;
+  --tb-spring: ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-dir='tribuna'] {
+    --tb-dur-fast: 100ms;
+    --tb-dur: 120ms;
+    --tb-dur-slow: 140ms;
+    --tb-spring: ease-out;
+  }
+}

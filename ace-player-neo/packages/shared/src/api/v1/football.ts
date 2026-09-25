@@ -3,7 +3,7 @@
    §4.8-4.13), sin `success` y con los ids en la ruta en vez de en la query. */
 
 import { z } from 'zod';
-import { ScanJobIdSchema, IsoDateTimeSchema } from '../../primitives.js';
+import { ScanJobIdSchema, IsoDateTimeSchema, SafeIdSchema } from '../../primitives.js';
 import { ChannelBindingSchema } from '../../state/v1.js';
 import {
   FootballScheduleSchema,
@@ -71,3 +71,20 @@ export const ScoresResponseSchema = z.strictObject({
   scores: z.record(z.string(), LiveScoreSchema),
 });
 export type ScoresResponse = z.infer<typeof ScoresResponseSchema>;
+
+// --- Escudos y logos (módulo `teams`) ---
+
+/** GET /api/v1/football/teams/:teamId/crest (PNG). */
+export const TeamCrestParamsSchema = z.strictObject({ teamId: SafeIdSchema });
+/** GET /api/v1/football/competitions/:competitionId/logo (PNG). */
+export const CompetitionLogoParamsSchema = z.strictObject({ competitionId: SafeIdSchema });
+/**
+ * `?v=<etag>`: la versión del fichero que lleva la URL de la agenda. Con
+ * ella la respuesta es inmutable un año; sin ella, caché privada de un día.
+ */
+export const BadgeVersionQuerySchema = z.strictObject({
+  v: z
+    .string()
+    .regex(/^[a-f0-9]{8,16}$/)
+    .optional(),
+});

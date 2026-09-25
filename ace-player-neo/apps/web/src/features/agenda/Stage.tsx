@@ -1,41 +1,30 @@
-/* Escenario de la agenda en escritorio (≥ 1024 px, opción A): el partido
-   elegido en grande, con los focos de sus dos equipos detrás de un panel de
-   cristal, el marcador a 96 px (o la hora), la barra del partido, su señal,
-   dónde se emite y la acción («Ver canal» / «Buscar canal»).
+/* Panel lateral de la agenda en escritorio (≥ 1024 px; plan Palco fase 2,
+   decisión W4): el partido ELEGIDO (`selected` de agendaUi, o el destacado)
+   como tarjeta versus grande, debajo «Señal» (cápsula + resumen), «Dónde se
+   emite» (chips continuos o discontinuos, injerto B3) y la acción («Ver
+   canal» / «Buscar canal», atajo O). El marcador va SIEMPRE tapado en la
+   agenda: la cápsula «Marcador» de la esquina lo destapa (y lo vuelve a
+   tapar) en esa misma cápsula. Si el partido elegido es el del héroe, la
+   vista no monta este panel (no se repite la tarjeta grande).
 
-   - El marcador del partido que ves sale TAPADO con barras de censura y se
-     destapa girando como una paleta (corrección 2 e injerto B5).
-   - Debajo, «Luego»: los próximos partidos del día (corrección 5: el hueco de
-     la columna derecha ya no queda vacío).
-   - Sin goleadores ni estadio: ninguna API que usemos los da (ver respuesta
-     del agente; el marcador de ESPN solo trae el resultado y el reloj). */
+   Doble clic sobre la tarjeta abre el partido (Intro sobre la tarjeta elegida
+   de la lista también, como hoy). Sin goleadores ni estadio: ninguna API que
+   usemos los da.
+
+   LiveStrip (solo `wide`, injerto B1): fila de cápsulas «En directo» con los
+   escudos pequeños, las siglas y el minuto; las cifras solo si ese partido
+   está destapado. Se desplaza a mano, nunca sola. */
 
 import type { FootballMatch, LiveScore } from '@ace/shared';
-import { useId, useState, type CSSProperties } from 'react';
+import { useId, type CSSProperties } from 'react';
 import { cx } from '../../lib/cx.ts';
-import {
-  Button,
-  Chip,
-  LiveDot,
-  Num,
-  Panel,
-  ProgressBar,
-  SignalBadge,
-  TeamMark,
-} from '../../ui/index.ts';
+import { competitionLogo, teamCrest, teamPalette, teamShort } from '../../lib/teams.ts';
+import { Button, Chip, LiveDot, Num, TeamMark, VersusCard } from '../../ui/index.ts';
+import { matchGlow, versusSide, versusWhen } from './cards.ts';
 import { useMatchSignal } from './data.ts';
-import {
-  dayLabel,
-  keepUnitsTogether,
-  liveMinute,
-  matchProgressAt,
-  matchStatus,
-  matchTitle,
-  paintableScore,
-  type ChannelInfo,
-} from './domain.ts';
-import { CensorBars, FlipNum, teamGlow } from './MatchRow.tsx';
-import { revealScore, useScoreHidden } from './score-reveal.ts';
+import { liveMinute, matchStatus, matchTitle, paintableScore, type ChannelInfo } from './domain.ts';
+import { ScoreToggle, SignalCapsule } from './MatchRow.tsx';
+import { hideScore, revealScore, useScoreRevealed } from './score-reveal.ts';
 
 export interface AgendaStageProps {
   match: FootballMatch;
@@ -43,6 +32,9 @@ export interface AgendaStageProps {
   today: string;
   score: LiveScore | null;
   channels: readonly ChannelInfo[];
+  mine: boolean;
+  /** Este dispositivo ya reproduce el partido. */
+  watching: boolean;
   onOpen(match: FootballMatch): void;
 }
 
@@ -52,45 +44,24 @@ export function AgendaStage({
   today,
   score: rawScore,
   channels,
+  mine,
+  watching,
   onOpen,
 }: AgendaStageProps) {
   const titleId = useId();
   const status = matchStatus(match, now, rawScore);
   const phase = status?.phase ?? null;
-  const live = phase === 'live';
   const done = phase === 'done';
   const score = paintableScore(rawScore);
-  const hidden = useScoreHidden(match.id) && score !== null;
-  const [justRevealed, setJustRevealed] = useState(false);
+  const revealed = useScoreRevealed(match.id);
   const signal = useMatchSignal(match, now, { finished: done });
-  const minute = liveMinute(rawScore);
   const available = channels.some((channel) => channel.inLibrary);
   const action = channels.length === 0 ? null : available ? 'Ver canal' : 'Buscar canal';
-  const day = dayLabel(match.date, today);
-
+  const glow = matchGlow(match);
   const style = {
-    '--ta': done ? 'transparent' : teamGlow(match.home),
-    '--tb': done ? 'transparent' : teamGlow(match.away || match.home),
+    '--ta': done ? 'transparent' : glow.home,
+    '--tb': done ? 'transparent' : glow.away,
   } as CSSProperties;
-
-  const when = live ? (
-    <span className="agenda-stage__when is-live">
-      <LiveDot />
-      {minute ? (
-        minute.halftime ? (
-          'Descanso'
-        ) : (
-          <Num value={`${minute.minute}'`} label={`Minuto ${minute.minute}`} />
-        )
-      ) : (
-        'En directo'
-      )}
-    </span>
-  ) : (
-    <span className="agenda-stage__when">
-      {done ? 'Final' : status ? keepUnitsTogether(status.text) : day.long}
-    </span>
-  );
 
   return (
     <article
@@ -99,96 +70,43 @@ export function AgendaStage({
       aria-labelledby={titleId}
     >
       <div className="agenda-stage__light" aria-hidden="true" />
-      <Panel className="agenda-stage__pane" radius="l" padding={5}>
-        <div className="agenda-stage__top">
-          {live ? (
-            <span className="agenda-stage__tag is-live">
-              <LiveDot />
-              En directo
-            </span>
-          ) : (
-            <span className="agenda-stage__tag">
-              {done ? 'Terminado' : `${day.primary}, ${match.time}`}
-            </span>
-          )}
-          <span className="agenda-stage__comp">{match.competition || 'Fútbol'}</span>
-        </div>
-        <h2 id={titleId} className="sr-only">
-          {matchTitle(match)}
-        </h2>
-        <div className="agenda-stage__score">
-          <div className="agenda-stage__side">
-            <TeamMark name={match.home} size={84} lit={live} className="agenda-stage__crest" />
-            <span className="agenda-stage__name">{match.home}</span>
-          </div>
-          <div className="agenda-stage__mid" aria-live="polite">
-            {hidden ? (
-              <button
-                type="button"
-                className="agenda-stage__cover press"
-                title="Tu emisión va por detrás del directo"
-                onClick={() => {
-                  setJustRevealed(true);
-                  revealScore(match.id);
-                }}
-              >
-                <CensorBars className="agenda-censor--big" />
-                <span>Ver marcador</span>
-              </button>
-            ) : score ? (
-              <span
-                className="agenda-stage__big"
-                aria-label={`${match.home} ${score.home}, ${match.away || ''} ${score.away}`}
-              >
-                <FlipNum value={score.home} animateOnMount={justRevealed} />
-                <span className="agenda-stage__sep" aria-hidden="true">
-                  –
-                </span>
-                <FlipNum value={score.away} animateOnMount={justRevealed} />
-              </span>
-            ) : (
-              <Num className="agenda-stage__big agenda-stage__big--time" value={match.time} />
-            )}
-            {when}
-          </div>
-          <div className="agenda-stage__side">
-            {match.away ? (
-              <>
-                <TeamMark name={match.away} size={84} lit={live} className="agenda-stage__crest" />
-                <span className="agenda-stage__name">{match.away}</span>
-              </>
-            ) : null}
-          </div>
-        </div>
-        {live || done ? (
-          <div className="agenda-stage__timeline">
-            <ProgressBar
-              value={matchProgressAt(match, now, rawScore)}
-              label={
-                done
-                  ? 'Partido terminado'
-                  : minute
-                    ? `Minuto ${minute.minute} de 90`
-                    : 'Partido en juego'
-              }
-              tone="live"
-              marks={[0.5]}
+      <h2 id={titleId} className="sr-only">
+        {matchTitle(match)}
+      </h2>
+      <div
+        className="agenda-stage__card"
+        title="Doble clic para abrir el partido"
+        onDoubleClick={() => onOpen(match)}
+      >
+        <VersusCard
+          size="lg"
+          home={versusSide(match, 'home')}
+          away={versusSide(match, 'away')}
+          competition={match.competition?.trim() || 'Fútbol'}
+          competitionLogo={competitionLogo(match)}
+          when={versusWhen(match, now, rawScore, today)}
+          mine={mine}
+          watching={watching}
+          className="agenda-stage__versus"
+        />
+        {score ? (
+          <div className="agenda-stage__corner">
+            <ScoreToggle
+              match={match}
+              score={score}
+              revealed={revealed}
+              onReveal={() => revealScore(match.id)}
+              onHide={() => hideScore(match.id)}
             />
-            <div className="agenda-stage__marks" aria-hidden="true">
-              <span>0'</span>
-              <span>Descanso</span>
-              <span>90'</span>
-            </div>
           </div>
         ) : null}
-      </Panel>
+      </div>
       <div className="agenda-stage__body">
         <section className="agenda-stage__sec">
           <h3>Señal</h3>
           {signal ? (
             <p className="agenda-stage__signal">
-              {/* La frase de al lado ya dice el estado: la palabra queda para lectores de pantalla. */}
-              <SignalBadge state={signal.state} size="lg" label={signal.label} hideWord />
+              <SignalCapsule signal={signal} size="md" glass={false} />
               <span>{signal.summary}</span>
             </p>
           ) : (
@@ -225,13 +143,13 @@ export function AgendaStage({
         <div className="agenda-stage__actions">
           <Button
             variant="primary"
-            icon={action ? (available ? 'play' : 'buscar') : undefined}
-            disabled={!action}
+            icon={watching ? 'play' : action ? (available ? 'play' : 'buscar') : undefined}
+            disabled={!action && !watching}
             onClick={() => onOpen(match)}
             aria-label={action ? `${action} para ${match.title}` : undefined}
             aria-keyshortcuts="O"
           >
-            {action ?? 'Canal por confirmar'}
+            {watching ? 'Volver al vídeo' : (action ?? 'Canal por confirmar')}
           </Button>
         </div>
       </div>
@@ -239,7 +157,7 @@ export function AgendaStage({
   );
 }
 
-/** Tira de directos (injerto B1): marcadores en vivo de un vistazo; se desplaza a mano, nunca sola. */
+/** Tira de directos (injerto B1): cápsulas con escudos y minuto; se desplaza a mano, nunca sola. */
 export function LiveStrip({
   matches,
   now,
@@ -281,11 +199,6 @@ export function LiveStrip({
   );
 }
 
-function short(name: string): string {
-  const clean = name.replace(/^(FC|CF|CD|SD|UD|RC|RCD)\s+/i, '').trim();
-  return clean.length > 12 ? `${clean.slice(0, 11)}…` : clean;
-}
-
 function LiveChip({
   match,
   score: rawScore,
@@ -298,7 +211,8 @@ function LiveChip({
   onSelect(match: FootballMatch): void;
 }) {
   const score = paintableScore(rawScore);
-  const hidden = useScoreHidden(match.id) && score !== null;
+  // Tapado por defecto: sin cifras salvo que ese partido esté destapado.
+  const shown = useScoreRevealed(match.id) ? score : null;
   const minute = liveMinute(rawScore);
   return (
     <button
@@ -306,17 +220,35 @@ function LiveChip({
       className="agenda-strip__chip press"
       aria-current={current ? 'true' : undefined}
       onClick={() => onSelect(match)}
-      aria-label={`${matchTitle(match)}${hidden ? ', marcador oculto' : score ? `, ${score.home} a ${score.away}` : ''}`}
+      aria-label={`${matchTitle(match)}${shown ? `, ${shown.home} a ${shown.away}` : ''}`}
     >
-      <span className="agenda-strip__team">{short(match.home)}</span>
-      {hidden ? (
-        <CensorBars />
-      ) : score ? (
-        <Num className="agenda-strip__score" value={`${score.home}–${score.away}`} />
+      <span className="agenda-strip__crests" aria-hidden="true">
+        <TeamMark
+          name={match.home}
+          short={teamShort(match, 'home')}
+          colors={teamPalette(match, 'home')}
+          crest={teamCrest(match, 'home')}
+          size={18}
+          lit
+        />
+        {match.away ? (
+          <TeamMark
+            name={match.away}
+            short={teamShort(match, 'away')}
+            colors={teamPalette(match, 'away')}
+            crest={teamCrest(match, 'away')}
+            size={18}
+            lit
+          />
+        ) : null}
+      </span>
+      <span className="agenda-strip__team">{teamShort(match, 'home')}</span>
+      {shown ? (
+        <Num className="agenda-strip__score" value={`${shown.home}–${shown.away}`} />
       ) : (
         <span className="agenda-strip__vs">vs</span>
       )}
-      <span className="agenda-strip__team">{short(match.away || '')}</span>
+      <span className="agenda-strip__team">{match.away ? teamShort(match, 'away') : ''}</span>
       {minute ? (
         <span className="agenda-strip__minute">
           {minute.halftime ? 'Desc.' : <Num value={`${minute.minute}'`} />}

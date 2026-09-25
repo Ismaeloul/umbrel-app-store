@@ -34,6 +34,14 @@
     justify-items: end;
   }
 }
+/* Palco: el mini-reproductor flota abajo a la izquierda (hasta 440 px) y los
+   avisos abajo a la derecha (hasta 420 px). Por debajo de ~920 px se pisarían:
+   los avisos suben por encima del mini para no tapar nunca el vídeo. */
+@media (min-width: 768px) and (max-width: 919px) {
+  .app[data-mini='true'] .toaster {
+    bottom: calc(var(--safe-bottom) + var(--mini-h) + 32px);
+  }
+}
 
 .status-host {
   min-height: 0;

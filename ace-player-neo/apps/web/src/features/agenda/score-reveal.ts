@@ -48,6 +48,38 @@ export function revealScore(matchId: string): void {
   });
 }
 
+/** Vuelve a tapar UN partido (segundo toque en la cápsula «Marcador» de la agenda). */
+export function hideScore(matchId: string): void {
+  store.set((state) => {
+    if (!state.revealed.has(matchId)) return state;
+    const revealed = new Set(state.revealed);
+    revealed.delete(matchId);
+    return { ...state, revealed };
+  });
+}
+
+/* ---- Agenda: TODO tapado por defecto (corrección 1 y DESIGN.md de Palco:
+   «el marcador vive oculto tras un toque en la cápsula "Marcador", nunca en
+   la imagen»). En la agenda (héroe, filas, panel, «Luego», columna y tira de
+   directos) un partido enseña cifras solo si está en `revealed`; lo demás
+   (centro de partido, biblioteca, mini) sigue con la regla 29 de arriba. El
+   destapado se olvida igual que antes al cambiar de partido o detener. */
+
+/** Puro: ¿este partido está destapado? */
+export function isScoreRevealed(revealed: ReadonlySet<string>, matchId: string): boolean {
+  return revealed.has(matchId);
+}
+
+/** Los partidos destapados (la agenda lo lee una vez para sus menús contextuales). */
+export function useRevealedScores(): ReadonlySet<string> {
+  return useStore(store, (state) => state.revealed);
+}
+
+/** ¿Este partido está destapado en la agenda? */
+export function useScoreRevealed(matchId: string): boolean {
+  return useStore(store, (state) => isScoreRevealed(state.revealed, matchId));
+}
+
 /** Vuelve a tapar (el reproductor lo puede llamar al cambiar de fuente o de canal). */
 export function resetScoreReveal(): void {
   store.set((state) => (state.revealed.size ? { ...state, revealed: new Set() } : state));

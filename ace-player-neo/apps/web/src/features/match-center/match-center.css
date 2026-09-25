@@ -1,7 +1,11 @@
 /* ==========================================================================
-   Centro de partido (dirección A «Luz de focos», bento; injertos B3, B5 y
-   C3; correcciones 2, 7 y 8 de eleccion.md). Tokens siempre; solo se animan
-   transform y opacity; hover solo con ratón de verdad; nada < 11 px.
+   Centro de partido = TEATRO, piel «Palco» (plan fase 2, decisiones W5 y
+   W14; antes bento de la dirección A con los injertos B3, B5 y C3). El vídeo
+   y la cápsula de estado los pone el armazón encima; aquí, la cápsula del
+   marcador que va SOBRE el vídeo, la cabecera bajo él y el panel con
+   pestañas (Fuentes · Partido · Datos técnicos). Tokens siempre; solo se
+   animan transform y opacity; hover solo con ratón de verdad; nada < 11 px;
+   objetivos de 44 px.
    ========================================================================== */
 
 .mc-host {
@@ -10,225 +14,151 @@
 }
 .mc {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s-4);
   min-width: 0;
-  padding-top: var(--s-2);
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-areas:
-    'score'
-    'sources'
-    'where'
-    'nerd';
-}
-.mc > .mc-score,
-.mc > .mc-score--skeleton {
-  grid-area: score;
-}
-.mc > .mc-sources {
-  grid-area: sources;
-}
-.mc > .mc-where {
-  grid-area: where;
-}
-.mc > .mc-nerd {
-  grid-area: nerd;
+  padding-top: var(--s-1);
 }
 .mc > .empty {
   grid-column: 1 / -1;
 }
-
-/* Bento: con sitio, marcador y «Dónde se emite» lado a lado (maqueta A). El
-   umbral va por el ancho REAL de la vista (con agenda y panel a la vez, el
-   centro de 1280 px mide ~500 px y no caben dos columnas). */
-@container mc (min-width: 620px) {
+/* Desde 768 el vídeo va centrado con tope de 70 dvh: lo de debajo, alineado con él. */
+@media (min-width: 768px) {
   .mc {
-    grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
-    grid-template-areas:
-      'score where'
-      'sources sources'
-      'nerd nerd';
-    align-items: start;
-  }
-  .mc--channel {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      'score'
-      'sources'
-      'nerd';
+    width: 100%;
+    max-width: min(100%, calc(70dvh * 16 / 9));
+    margin-inline: auto;
   }
 }
 
-/* ---- Marcador --------------------------------------------------------------- */
-.mc-score {
-  --ta: transparent;
-  --tb: transparent;
-  position: relative;
-  isolation: isolate;
-  display: grid;
-  gap: var(--s-3);
+/* ---- Cápsula del marcador (sobre el vídeo) ------------------------------------ */
+.mc-scap-inline {
+  display: flex;
+  padding-top: var(--s-3);
+}
+.mc-scap {
+  display: inline-flex;
+  align-items: center;
   min-width: 0;
-  overflow: hidden;
-  padding: var(--s-4) 18px var(--s-5);
-  border-radius: var(--r-xl);
-  background: var(--surface);
-  box-shadow:
-    inset 0 0 0 1px var(--line-soft),
-    var(--shadow-1);
-  container: score / inline-size;
-}
-.mc-score--skeleton {
-  justify-items: center;
-}
-.mc-score__skeleton-row {
-  display: flex;
-  align-items: center;
-  gap: var(--s-6);
-}
-/* Los focos: la luz de los dos equipos detrás del panel. Solo cambia su
-   opacidad (en directo se encienden; con un gol, se inundan). */
-.mc-score__light {
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  background:
-    radial-gradient(
-      60% 75% at 14% 58%,
-      color-mix(in oklab, var(--ta) 30%, transparent),
-      transparent 70%
-    ),
-    radial-gradient(
-      60% 75% at 86% 58%,
-      color-mix(in oklab, var(--tb) 24%, transparent),
-      transparent 70%
-    );
-  opacity: 0;
-  transition: opacity var(--dur-heroe) var(--ease-estandar);
-  pointer-events: none;
-}
-.mc-score.is-live .mc-score__light {
-  opacity: 0.7;
-}
-.mc-score.is-goal-home .mc-score__light,
-.mc-score.is-goal-away .mc-score__light {
-  opacity: 1;
-  transition-duration: var(--dur-rapido);
-}
-.mc-score__top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s-2);
+  max-width: 100%;
   min-height: var(--tap);
-  margin: -6px -8px -8px 0;
+  border-radius: var(--r-pill);
+  color: var(--on-video);
+  color-scheme: dark;
+  font-size: var(--fs-13);
+  font-weight: var(--wght-strong);
+  font-stretch: var(--w-tight);
+  white-space: nowrap;
 }
-.mc-score__kicker {
+.mc-scap__live {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+.mc-scap__cover {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: var(--fs-12);
-  font-weight: var(--wght-strong);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-2);
+  min-height: var(--tap);
+  padding: 0 12px 0 14px;
+  border-radius: var(--r-pill);
+  color: inherit;
+  font: inherit;
 }
-.mc-score.is-live .mc-score__kicker {
-  color: var(--live);
-}
-.mc-score__meta {
-  margin-top: -6px;
-  font-size: var(--fs-13);
-  line-height: var(--lh-snug);
-  color: var(--text-2);
-  overflow-wrap: anywhere;
-}
-.mc-score__row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: var(--s-2);
-}
-.mc-side {
-  display: grid;
-  justify-items: center;
-  gap: var(--s-2);
-  min-width: 0;
-  text-align: center;
-}
-.mc-side__crest {
-  transition: transform var(--dur-heroe) var(--ease-heroe);
-}
-.mc-side.is-scoring .mc-side__crest {
-  transform: scale(1.14);
-}
-.mc-side__name {
-  max-width: 100%;
+.mc-scap__word {
   font-size: var(--fs-15);
   font-weight: var(--wght-head);
   font-stretch: var(--w-head);
-  line-height: 1.2;
-  overflow-wrap: anywhere;
-  text-wrap: balance;
+  letter-spacing: var(--tracking-head);
 }
-.mc-score__mid {
-  display: grid;
-  justify-items: center;
-  gap: 6px;
-  min-width: 92px;
-}
-.mc-score__big {
-  display: flex;
-  align-items: center;
-  gap: 0.1em;
-  font-size: var(--fs-64);
-  line-height: 0.9;
-  font-weight: var(--wght-num);
-}
-.mc-score__big--time {
-  font-size: var(--fs-44);
-}
-.mc-score__sep {
-  color: var(--text-3);
-  font-weight: 500;
-}
-.mc-score__tbc {
-  font-size: var(--fs-15);
-  font-weight: var(--wght-strong);
-  color: var(--text-2);
-}
-.mc-score__when {
+.mc-scap__score,
+.mc-scap__time {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 22px;
-  font-size: var(--fs-15);
-  font-weight: var(--wght-strong);
-  color: var(--text-2);
-  white-space: nowrap;
+  padding: 0 10px 0 8px;
 }
-.mc-score__when.is-live {
-  color: var(--live);
+.mc-scap__time {
+  padding-left: 14px;
 }
-.mc-score__cover {
-  display: grid;
-  justify-items: center;
-  gap: 8px;
-  min-width: 96px;
-  min-height: var(--tap);
-  padding: 10px 14px;
-  border-radius: var(--r-m);
-  background: var(--surface-2);
-  box-shadow: inset 0 0 0 1px var(--line-soft);
-  color: var(--text);
+.mc-scap__digits {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.12em;
+  font-size: var(--fs-22);
+  font-weight: var(--wght-num);
+  line-height: 1;
+  transform-origin: 50% 55%;
 }
-.mc-score__cover-text {
+.mc-scap__sep {
+  color: var(--on-video-2);
+  font-weight: 500;
+}
+.mc-scap .mc-when,
+.mc-scap .mc-when.is-live {
+  gap: 6px;
+  padding-right: 14px;
   font-size: var(--fs-13);
-  font-weight: var(--wght-strong);
+  color: var(--on-video);
 }
-@media (hover: hover) and (pointer: fine) {
-  .mc-score__cover:hover {
-    box-shadow: inset 0 0 0 1px var(--line-strong);
+.mc-scap__cover + .mc-when {
+  margin-left: -4px;
+}
+.mc-scap__score + .mc-when,
+.mc-scap__time + .mc-when {
+  padding-left: 2px;
+}
+/* Sin cifras (en juego sin marcador): el minuto solo, con su aire. */
+.mc-scap__live > .mc-when:only-child {
+  padding-left: 14px;
+}
+.mc-scap__hide {
+  margin-left: -6px;
+}
+/* El rebote del gol (W14): las cifras crecen un 14 % y vuelven. */
+.mc-scap.is-goal .mc-scap__digits {
+  animation: mc-rebote 720ms var(--ease-heroe) both;
+}
+@keyframes mc-rebote {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.14);
+  }
+  100% {
+    transform: scale(1);
   }
 }
+@media (hover: hover) and (pointer: fine) {
+  .mc-scap__cover:hover {
+    background: rgb(255 255 255 / 0.1);
+  }
+}
+/* Vídeo estrecho (móvil): la cápsula se aprieta y sin barras de censura
+   (la palabra «Marcador» y el ojo ya lo dicen). */
+@container (max-width: 479px) {
+  .mc-scap .mc-censor--sm,
+  .mc-scap__crest {
+    display: none;
+  }
+  .mc-scap__score {
+    padding-left: 14px;
+  }
+  .mc-scap__cover {
+    padding-inline: 12px 10px;
+  }
+  .mc-scap__word {
+    font-size: var(--fs-13);
+  }
+}
+/* Móvil de 360: el minuto ya está bajo el vídeo; aquí solo «Marcador». */
+@container (max-width: 369px) {
+  .mc-scap__cover + .mc-when {
+    display: none;
+  }
+}
+
 /* Barras de censura (B5). */
 .mc-censor {
   display: inline-grid;
@@ -243,6 +173,16 @@
   background: var(--text-3);
   opacity: 0.55;
 }
+.mc-censor--sm {
+  gap: 4px;
+}
+.mc-censor--sm i {
+  width: 11px;
+  height: 16px;
+  border-radius: 4px;
+  background: var(--on-video);
+  opacity: 0.4;
+}
 /* Cifras que giran como una paleta (B5): al cambiar o al destapar. */
 .mc-flip.is-turning {
   display: inline-flex;
@@ -255,28 +195,377 @@
     transform: perspective(240px) rotateX(-90deg);
   }
 }
-.mc-score__timeline {
+/* El minuto, «Final» o cuánto falta. */
+.mc-when {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+  font-size: var(--fs-15);
+  font-weight: var(--wght-strong);
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.mc-when.is-live {
+  color: var(--live-ink);
+}
+
+/* ---- Cabecera bajo el vídeo ------------------------------------------------------ */
+.mc-head {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding-top: var(--s-3);
+}
+.mc-head__kicker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: var(--fs-kicker);
+  font-weight: var(--wght-strong);
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.mc-head.is-live .mc-head__kicker {
+  color: var(--live-ink);
+}
+/* Escudo · «Local – Visitante» (el texto se parte si no cabe) · escudo. */
+.mc-head__teams {
+  display: grid;
+  grid-template-columns: auto minmax(0, max-content) auto;
+  justify-content: start;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: var(--fs-22);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: var(--tracking-head);
+  line-height: var(--lh-tight);
+}
+.mc-head__names {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+.mc-head__vs {
+  color: var(--text-3);
+  font-weight: 500;
+}
+.mc-head__crest {
+  flex: none;
+}
+/* Estrecho: los dos escudos juntos delante (como la tarjeta versus) y el
+   texto, que se parte, al lado; con sitio, un escudo a cada lado. */
+@container mc (max-width: 619px) {
+  .mc-head__teams {
+    grid-template-columns: auto auto minmax(0, 1fr);
+    grid-template-areas: 'home away names';
+  }
+  .mc-head__teams > .mc-head__crest:first-child {
+    grid-area: home;
+  }
+  .mc-head__teams > .mc-head__names {
+    grid-area: names;
+  }
+  .mc-head__teams > .mc-head__crest:last-child {
+    grid-area: away;
+    margin-left: -20px;
+  }
+}
+@container mc (min-width: 620px) {
+  .mc-head__teams {
+    font-size: var(--fs-30);
+    gap: 12px;
+  }
+}
+.mc-head--skeleton {
+  gap: var(--s-3);
+}
+.mc-head__skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ---- Pestañas ------------------------------------------------------------------ */
+.mc-tabs {
+  display: grid;
+  gap: var(--s-4);
+  min-width: 0;
+  align-content: start;
+}
+.mc-tabs__bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.mc-tabs__list {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.mc-tabs__list .seg__item {
+  min-height: var(--tap);
+  padding-inline: 8px;
+  font-size: var(--fs-13);
+  white-space: nowrap;
+}
+/* En el panel lateral (340 px) caben justas: más prietas y, si aun así no
+   caben, «Datos técnicos» en dos líneas antes que cortada. */
+.mc-tabs--aside .mc-tabs__list .seg__item {
+  padding-inline: 3px;
+  font-size: var(--fs-12);
+  font-stretch: var(--w-tight);
+}
+.mc-tabs__list .seg__item > span:not(.seg__count) {
+  overflow: visible;
+  white-space: normal;
+  line-height: 1.1;
+  text-align: center;
+}
+/* Móvil estrecho (360): rótulos algo más prietos para que quepan en una línea. */
+@media (max-width: 400px) {
+  .mc-tabs__list .seg__item {
+    padding-inline: 4px;
+    font-stretch: var(--w-tight);
+  }
+}
+.mc-tabs__panel {
+  min-width: 0;
+  border-radius: var(--r-l);
+  animation: ace-funde var(--dur-rapido) var(--ease-out) both;
+}
+.mc-tabs__panel:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+/* Bajo el vídeo: el panel no encoge al cambiar de pestaña (sin saltos). */
+.mc-tabs--view .mc-tabs__panel {
+  min-height: 40dvh;
+}
+/* Móvil: la barra de pestañas se queda pegada bajo el vídeo al bajar. */
+@media (max-width: 767px) {
+  .mc-tabs--view .mc-tabs__bar {
+    position: sticky;
+    z-index: calc(var(--z-sticky) - 1);
+    top: calc(var(--safe-top) + 100vw * 9 / 16);
+    margin-inline: calc(-1 * var(--gutter));
+    padding: var(--s-2) var(--gutter);
+    background: var(--bg);
+  }
+}
+/* Las fuentes dentro de una pestaña: el título ya lo dice la pestaña. */
+.mc-tabs .src__title {
+  font-size: var(--fs-17);
+}
+/* Con la vista ancha (panel lateral plegado), tantos carteles como quepan. */
+.mc-tabs--view .src-list--rack .src-list__rows {
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+}
+
+/* ---- Pestaña «Partido» -------------------------------------------------------- */
+.mc-panel {
+  display: grid;
+  gap: var(--s-4);
+  min-width: 0;
+}
+.mc-panel__card {
+  --ta: transparent;
+  --tb: transparent;
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  gap: var(--s-4);
+  min-width: 0;
+  overflow: hidden;
+  padding: var(--s-5) var(--s-4);
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  box-shadow:
+    inset 0 0 0 1px var(--line-soft),
+    var(--shadow-1);
+  container: panel / inline-size;
+}
+/* La luz de los dos clubes (la pareja de la tarjeta versus), al 22 %. */
+.mc-panel__light {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background:
+    radial-gradient(
+      60% 80% at 12% 40%,
+      color-mix(in oklab, var(--ta) 22%, transparent),
+      transparent 72%
+    ),
+    radial-gradient(
+      60% 80% at 88% 40%,
+      color-mix(in oklab, var(--tb) 22%, transparent),
+      transparent 72%
+    );
+  opacity: 0.8;
+  transition: opacity var(--dur-heroe) var(--ease-estandar);
+  pointer-events: none;
+}
+.mc-panel.is-live .mc-panel__light {
+  opacity: 1;
+}
+.mc-panel.is-done .mc-panel__light {
+  opacity: 0.4;
+}
+/* Gol (C3): la luz del que marca sube al 60 % un momento (capas encima que
+   solo cambian de opacidad). */
+.mc-panel__card::before,
+.mc-panel__card::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  opacity: 0;
+  transition: opacity var(--dur-heroe) var(--ease-estandar);
+  pointer-events: none;
+}
+.mc-panel__card::before {
+  background: radial-gradient(
+    70% 90% at 12% 40%,
+    color-mix(in oklab, var(--ta) 60%, transparent),
+    transparent 72%
+  );
+}
+.mc-panel__card::after {
+  background: radial-gradient(
+    70% 90% at 88% 40%,
+    color-mix(in oklab, var(--tb) 60%, transparent),
+    transparent 72%
+  );
+}
+.mc-panel__card:has(.mc-big.is-goal-home)::before,
+.mc-panel__card:has(.mc-big.is-goal-away)::after {
+  opacity: 1;
+  transition-duration: var(--dur-rapido);
+}
+.mc-panel__timeline {
   display: grid;
   gap: 6px;
 }
-.mc-score__marks {
+.mc-panel__marks {
   display: flex;
   justify-content: space-between;
   font-size: var(--fs-12);
   font-weight: var(--wght-strong);
-  color: var(--text-3);
-}
-.mc-score.is-done .mc-side__name {
   color: var(--text-2);
 }
-@container score (min-width: 460px) {
-  .mc-score__big {
+.mc-panel__facts {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-width: 0;
+  padding: 0 var(--s-1);
+}
+.mc-panel__fact {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.mc-panel__competition {
+  font-size: var(--fs-15);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  overflow-wrap: anywhere;
+}
+.mc-panel__date {
+  font-size: var(--fs-13);
+  color: var(--text-2);
+}
+
+/* Marcador grande: escudos, cifras (o censura, u hora) y el minuto. */
+.mc-big {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s-2);
+}
+.mc-big__side {
+  display: grid;
+  justify-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+  text-align: center;
+}
+.mc-big__crest {
+  filter: var(--shadow-crest);
+  transition: transform var(--dur-heroe) var(--ease-heroe);
+}
+.mc-big__side.is-scoring .mc-big__crest {
+  transform: scale(1.14);
+}
+.mc-big__name {
+  max-width: 100%;
+  font-size: var(--fs-15);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+.mc-big.is-done .mc-big__name {
+  color: var(--text-2);
+}
+.mc-big__mid {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  min-width: 92px;
+}
+.mc-big__digits {
+  display: flex;
+  align-items: center;
+  gap: 0.1em;
+  font-size: var(--fs-64);
+  line-height: 0.9;
+  font-weight: var(--wght-num);
+}
+.mc-big__digits--time {
+  font-size: var(--fs-44);
+}
+.mc-big__sep {
+  color: var(--text-3);
+  font-weight: 500;
+}
+.mc-big__tbc {
+  font-size: var(--fs-15);
+  font-weight: var(--wght-strong);
+  color: var(--text-2);
+}
+.mc-big__covered {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+.mc-big__reveal {
+  min-height: var(--tap);
+  padding: 0 14px;
+  border-radius: var(--r-pill);
+  background: var(--line-soft);
+  color: var(--text);
+  font-size: var(--fs-13);
+  font-weight: var(--wght-strong);
+}
+@media (hover: hover) and (pointer: fine) {
+  .mc-big__reveal:hover {
+    background: var(--line);
+  }
+}
+@container panel (min-width: 460px) {
+  .mc-big__digits {
     font-size: var(--fs-96);
   }
-  .mc-score__big--time {
+  .mc-big__digits--time {
     font-size: var(--fs-64);
   }
-  .mc-censor i {
+  .mc-big .mc-censor i {
     width: 44px;
     height: 60px;
   }
@@ -288,15 +577,17 @@
   gap: var(--s-3);
   align-content: start;
   min-width: 0;
-  padding: var(--s-4) 18px;
+  padding: var(--s-4);
   border-radius: var(--r-xl);
   background: var(--surface);
   box-shadow: inset 0 0 0 1px var(--line-soft);
 }
 .mc-where__title {
-  font-size: var(--fs-17);
-  font-weight: var(--wght-head);
-  font-stretch: var(--w-head);
+  font-size: var(--fs-kicker);
+  font-weight: var(--wght-strong);
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+  color: var(--text-2);
 }
 .mc-where__chips {
   display: flex;
@@ -316,12 +607,13 @@
   line-height: var(--lh-snug);
   color: var(--text-2);
 }
-/* Los atajos solo con ratón y teclado de verdad (en táctil no sirven). */
-.mc-where__keys {
+
+/* Chuleta de atajos: solo con ratón y teclado de verdad (en táctil no sirven). */
+.mc-keys {
   display: none;
 }
 @media (hover: hover) and (pointer: fine) and (min-width: 768px) {
-  .mc-where__keys {
+  .mc-keys {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     gap: 8px 10px;
@@ -330,28 +622,25 @@
     font-size: var(--fs-caption, var(--fs-12));
     color: var(--text-2);
   }
-  .mc-where__key {
+  .mc-keys__item {
     display: contents;
   }
-  .mc-where__key dd {
+  .mc-keys__item dd {
     margin: 0;
   }
 }
 
-/* ---- Canal suelto --------------------------------------------------------------- */
+/* ---- Canal suelto: cabecera y ficha ------------------------------------------------ */
 .mc-channel {
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: var(--s-2) var(--s-4);
+  gap: var(--s-3) var(--s-4);
   min-width: 0;
-  padding: var(--s-4) 18px;
-  border-radius: var(--r-xl);
-  background: var(--surface);
-  box-shadow:
-    inset 0 0 0 1px var(--line-soft),
-    var(--shadow-1);
-  grid-area: score;
+  padding-top: var(--s-3);
+}
+.mc-channel__mark {
+  box-shadow: var(--shadow-poster);
 }
 .mc-channel__text {
   display: grid;
@@ -359,9 +648,9 @@
   min-width: 0;
 }
 .mc-channel__kicker {
-  font-size: var(--fs-12);
+  font-size: var(--fs-kicker);
   font-weight: var(--wght-strong);
-  letter-spacing: 0.06em;
+  letter-spacing: var(--tracking-kicker);
   text-transform: uppercase;
   color: var(--text-2);
 }
@@ -387,76 +676,94 @@
 }
 @container mc (min-width: 520px) {
   .mc-channel {
-    grid-template-columns: 64px minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
   .mc-channel__play {
     grid-column: auto;
   }
+  .mc-channel__title {
+    font-size: var(--fs-30);
+  }
+}
+.mc-channel-info {
+  display: grid;
+  gap: var(--s-4);
+  min-width: 0;
+}
+.mc-facts {
+  display: grid;
+  margin: 0;
+  padding: 2px var(--s-4);
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+.mc-facts__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+  min-height: var(--tap);
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: var(--fs-15);
+}
+.mc-facts__row:last-child {
+  border-bottom: 0;
+}
+.mc-facts__row dt {
+  color: var(--text-2);
+}
+.mc-facts__row dd {
+  min-width: 0;
+  margin: 0;
+  text-align: right;
+}
+.mc-facts__row--hash {
+  display: grid;
+  gap: 4px;
+}
+.mc-facts__row--hash dd {
+  text-align: left;
+  font-size: var(--fs-13);
+  word-break: break-all;
 }
 
 /* ---- Datos técnicos ----------------------------------------------------------- */
 .mc-nerd {
+  display: grid;
+  gap: var(--s-3);
   min-width: 0;
-  border-radius: var(--r-l);
+  padding: var(--s-4);
+  border-radius: var(--r-xl);
   background: var(--surface);
   box-shadow: inset 0 0 0 1px var(--line-soft);
 }
-.mc-nerd__summary {
+.mc-nerd__head {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 52px;
-  padding: 0 12px 0 16px;
-  border-radius: var(--r-l);
-  list-style: none;
-  cursor: pointer;
+  min-width: 0;
 }
-.mc-nerd__summary::-webkit-details-marker {
-  display: none;
-}
-.mc-nerd__label,
 .mc-nerd__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   font-size: var(--fs-15);
   font-weight: var(--wght-head);
   font-stretch: var(--w-head);
   white-space: nowrap;
 }
-.mc-nerd__summary > svg {
-  flex: none;
-}
 .mc-nerd__brief {
   margin-left: auto;
   min-width: 0;
   font-family: var(--mono);
-  font-stretch: 87.5%;
+  font-stretch: 75%;
   font-size: var(--fs-12);
   color: var(--text-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-/* En el móvil «14 pares · 503 KB/s» se quedaba en «503 KB…»: la mono más
-   estrecha que tiene (wdth 75) y huecos más justos (revisión visual de la
-   Fase 2). */
-@media (max-width: 430px) {
-  .mc-nerd__summary {
-    gap: 8px;
-  }
-  .mc-nerd__brief {
-    font-stretch: 75%;
-  }
-}
-@media (max-width: 380px) {
-  .mc-nerd__summary {
-    gap: 6px;
-    padding-inline: 12px 10px;
-  }
-  .mc-nerd__brief {
-    font-size: var(--fs-11);
-  }
-}
-.mc-nerd[open] .mc-nerd__brief {
-  display: none;
 }
 .mc-nerd__kbd {
   margin-left: auto;
@@ -469,52 +776,29 @@
     display: none;
   }
 }
-.mc-nerd .nerd-stats,
-.mc-nerd__empty {
-  padding: 0 16px 16px;
-}
 .mc-nerd__empty {
   font-size: var(--fs-13);
   color: var(--text-2);
-}
-.mc-nerd--panel {
-  display: grid;
-  gap: var(--s-3);
-  padding-top: var(--s-4);
-}
-.mc-nerd__title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 16px;
 }
 
 /* ---- Panel lateral --------------------------------------------------------------- */
 .mc-aside {
   display: grid;
-  gap: var(--s-5);
+  gap: var(--s-4);
   align-content: start;
   min-width: 0;
 }
-.mc-aside__bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: var(--tap);
-}
-.mc-aside__title {
-  font-size: var(--fs-22);
-  font-weight: var(--wght-head);
-  font-stretch: var(--w-head);
-}
 
 @media (prefers-reduced-motion: reduce) {
-  /* Con movimiento reducido el gol es solo un fundido de color (C3). */
-  .mc-side.is-scoring .mc-side__crest {
+  /* Con movimiento reducido el gol es solo un fundido de luz (C3): sin escalas. */
+  .mc-big__side.is-scoring .mc-big__crest {
     transform: none;
   }
-  .mc-side__crest {
+  .mc-big__crest {
     transition: none;
+  }
+  .mc-scap.is-goal .mc-scap__digits {
+    animation: none;
   }
   .mc-flip.is-turning {
     animation: ace-funde 150ms ease-out both;

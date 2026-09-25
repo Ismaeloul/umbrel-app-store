@@ -19,20 +19,23 @@ apps/ios/
 │   ├── App/                 # AceNeoApp, AppModel (estado global), Entorno (dependencias)
 │   ├── Core/
 │   │   ├── Dominio/         # reglas portadas de @ace/shared: «Para ti» (for-you.ts) y canales (channels.ts)
-│   │   ├── Models/          # Codable que reflejan @ace/shared (v1, eventos SSE, errores)
+│   │   ├── Models/          # Codable que reflejan @ace/shared (v1 con escudos y colores, eventos SSE, errores)
 │   │   ├── Networking/      # APIClient, rutas, errores + catálogo, ServerResolver, SSE
 │   │   ├── Auth/            # Llavero, direcciones (Tailscale/LAN), enlace QR, emparejar
-│   │   └── Cache/           # caché en disco de agenda y biblioteca
-│   ├── Player/              # Reproductor (máquina de estados), AVPlayer, PiP, Now Playing, vistas
-│   ├── Features/            # Pairing, Agenda, MatchCenter, Sources (reglas), Library, Search, Settings
-│   ├── Design/              # tokens «Luz de focos», muelles, cristal y componentes
+│   │   └── Cache/           # caché en disco de agenda y biblioteca; caché de escudos y logos (CacheImagenes)
+│   ├── Player/              # Reproductor (máquina de estados), AVPlayer, PiP, Now Playing, controles, mini
+│   ├── Features/            # Pairing, Agenda (portada + reglas de Palco), MatchCenter (el escenario y sus
+│   │                        #   hojas), Sources (reglas), Library (Canales), Search, Settings
+│   ├── Design/              # tokens «Palco» (oro, directo, semáforo), tarjeta versus, escudos, carteles,
+│   │                        #   cápsulas, cristal y componentes
 │   └── Debug/               # servidor y motor de vídeo simulados para XCUITest (solo Debug)
 ├── Tests/
 │   ├── AceNeoTests/         # XCTest: núcleo, reproductor, PiP y gestos (con dobles), centro de partido,
-│   │   │                    #   reglas de fuentes, agenda, biblioteca, HLS real y…
+│   │   │                    #   reglas de fuentes, agenda, biblioteca, reglas de Palco (PalcoTests), HLS real y…
 │   │   └── Vectores/        #   …los vectores de «Para ti» y de canales generados desde TypeScript
-│   └── AceNeoUITests/       # XCUITest: emparejar, tira de días, partido → mini → grande (tocando y
-│                            #   deslizando) → minimizar deslizando, listas agrupadas, «Dónde se está
+│   └── AceNeoUITests/       # XCUITest: emparejar, portada y tira de días, partido → escenario → mini →
+│                            #   escenario (tocando y deslizando) → minimizar deslizando el vídeo, mini abajo
+│                            #   detiene con Deshacer, escenario de canal, listas agrupadas, «Dónde se está
 │                            #   reproduciendo», borrar → deshacer, capturas claro/oscuro y E2E real
 └── scripts/
     ├── build-ipa.sh                 # IPA sin firmar en un Mac (lo usa también la CI)
@@ -41,46 +44,84 @@ apps/ios/
     ├── generar-vectores.mjs         # vectores de «Para ti» y canales ejecutando el TypeScript de verdad
     └── pila-e2e.mjs                 # motor falso + backend de verdad para el E2E (CI)
 
-## Pantallas (lo mismo que la web en el móvil, en nativo)
+## Pantallas (el diseño «Palco», 0.8.0)
+
+El diseño es «Palco» (`design-explorations/src/directions/03-palco/DESIGN.md`):
+negro cine, un solo acento de acción (oro), rojo para «en directo», el
+semáforo de la señal (verde · ámbar · rojo) y **una sola superficie de
+reproducción**, el escenario. Nativo antes que hecho a mano: `TabView` con
+Agenda · Canales · Buscar · Ajustes (`Tab` y `Tab(role: .search)` en iOS 18+;
+`.tabItem` en iOS 17), listas y formularios del sistema sin fondos propios
+(Liquid Glass no pinta bandas), y el mini como `tabViewBottomAccessory` en iOS
+26 (en 17-25, sobre la barra). Claro y oscuro de primera (Ajustes › Apariencia).
 
 - **Sin franjas propias arriba.** Nada de `safeAreaInset(edge: .top)` ni barras
   de sistema hechas a mano: en el iPhone real (iOS 26.6) la tira de días y el
   selector de la biblioteca metidos ahí salían como bandas VACÍAS. El título
   grande del sistema va arriba y lo demás, dentro del contenido que se desplaza.
-- **Agenda**: tira de días en píldoras (con el número de partidos del filtro),
-  **«Para ti · n / Todos · n»** con los gustos guardados en el servidor y las
-  MISMAS reglas que la web (`Core/Dominio/ParaTi.swift`, port de
-  `packages/shared/src/domain/for-you.ts`: alias de ligas, guarda de
-  Hypermotion, reglas de nacionalidad, alias de equipos). Por defecto «Para
-  ti» si hay gustos; sin ellos, la tarjeta «Personaliza tu agenda». Partidos
-  por competición en tarjetas (primero lo que va en directo, los terminados al
-  final, como `groupByCompetition` de la web), con «En 3 h 16 min», el anillo
-  del minuto, los canales y la estrella de «tu equipo».
+- **Agenda**: arriba, la **portada**: la tarjeta «versus» grande del partido
+  destacado (el que se ve si suena algo; si no, el primero en directo de «Para
+  ti»; si no, el próximo). **Nunca reproduce sola**: solo enseña vídeo si este
+  iPhone ya está viendo ese partido («Seguir viendo»); si no, «Ver ahora» es lo
+  único que arranca. Debajo, la tira de días, **«Para ti · n / Todos · n»** con
+  los gustos del servidor y las MISMAS reglas que la web
+  (`Core/Dominio/ParaTi.swift`) y tres secciones (**En directo · Próximos ·
+  Terminados**, `ReglasAgenda.porFase`) con tarjetas «versus» a ancho completo.
+- **Tarjeta «versus»** (`Design/TarjetaVersus.swift`): 16:9, radio 14, fondo
+  partido 50/50 con el color principal de cada club (unión en diagonal de 6°;
+  si chocan, el visitante usa su secundario y, si aun así, la mitad derecha se
+  oscurece un 30 %), los dos **escudos grandes** (imagen real cacheada o
+  escudo generado con monograma, `Design/Escudos.swift`), el logo de la
+  competición en una pastilla oscura, el chip «VIE 21:00» o «● EN DIRECTO ·
+  13'» y la **cápsula de señal** («● Señal», «Floja», «Sin señal»,
+  «Comprobando», «Señal lista», «Se comprueba 45 min antes»). **Nunca el
+  marcador** (anti-spoiler). Los escudos y colores llegan en `homeTeam`,
+  `awayTeam` y `competitionBadge` de `GET football` (opcionales) y las imágenes
+  se piden a `/native/api/v1/football/teams/<id>/crest` con el Bearer, por
+  `CacheImagenes` (memoria + disco + peticiones unidas, sin parpadeo).
+- **Escenario** (`Features/MatchCenter/EscenarioView.swift`): la capa a
+  pantalla completa sobre las pestañas, para un partido o un canal suelto.
+  Cabecera (minimizar · competición · Más), el vídeo 16:9 (la única
+  `AVPlayerLayer`), el título con escudos y el **marcador tapado** mientras se
+  ve ese partido (se destapa tocando y se vuelve a tapar al cambiar de canal;
+  con los goles debajo, deducidos de dos lecturas del marcador), las cápsulas
+  Señal · Dónde se emite · Más, la línea de estado, la fila de **carteles de
+  fuente** (tesela de la marca del canal, «1080p · Elcano», anillo de estado
+  con forma + palabra + color, dorado el que está en pantalla; sin miniaturas
+  vivas), «También en directo» y «Datos técnicos» plegados. Hojas (radio 24):
+  todas las fuentes, reportar (5 motivos, «Reportar y apartar»), pegar Content
+  ID («Enlace detectado») y dónde se emite. Sin reproducción, la caja del
+  vídeo enseña la hora y «Ver ahora» / «Volver a ver».
+- **Gestos y háptica** (`GestosReproductor`, con tests): arrastrar el vídeo
+  hacia abajo encoge el escenario siguiendo al dedo (escala, esquinas, el
+  resto se apaga) y minimiza; deslizarlo a los lados cambia de fuente si hay
+  dos o más que no estén caídas («Siguiente fuente» / «Fuente anterior»,
+  corte a negro de 0,5 s); un toque enseña/esconde los controles sin retardo y
+  el doble toque abre pantalla completa; en el mini, arriba abre y **abajo
+  detiene con «Deshacer»** (6 s); pulsación larga = menú en carteles y filas.
+  Todo con `.sensoryFeedback` (selección, impactos, éxito, aviso, error) y
+  respetando «Reducir movimiento».
 - **Tus gustos** (desde la agenda y desde Ajustes): chips de ligas, equipos y
   nacionalidades con bandera, añadir a mano (misma clave = mismo chip), topes
   del servidor. Se guardan con `PUT preferences` y la agenda cambia al momento.
-- **Biblioteca**: «Favoritos n / Recientes n / Listas n» como primera fila de
-  la lista (bajo el título y el buscador). **Listas agrupadas por categoría**
-  en secciones plegables con su recuento (orden alfabético, «General» para las
-  vacías), selector de la lista activa y buscador que filtra dentro (y
-  despliega lo que encuentra). Favoritos con el dorsal del canal y **lo que
-  emite hoy** («● Real Madrid 1–0 Getafe» / «A las 21:00, …», con el
-  emparejado de canales de la web portado en `Core/Dominio/Canales.swift`) y
-  «Ya no está en tu lista»; Recientes por tramos (Hoy, Ayer, Esta semana, Antes).
-- **Buscar** como la web: mientras escribes, «En tu biblioteca» (al
-  instante, con lo que emite cada canal) y, debajo, «En el motor AceStream»
-  con su disponibilidad. Tocar un resultado lo pone a sonar y abre el
-  reproductor grande.
-- **Centro de partido**: el vídeo arriba (como la web), luego el partido, las
-  acciones y las fuentes.
-- **Ajustes → Listas**: las listas guardadas (tocar activa; deslizar para
-  actualizar o borrar) y guardar una M3U/HTML nueva, como en la web.
-- **Ajustes → «Dónde se está reproduciendo»**: cada sesión abierta en el motor
-  con su canal y sus dispositivos (ordenador o móvil, nombre, «Este
-  dispositivo», reproduciendo o en pausa), en tiempo real (evento SSE
-  `playback.sessions` y, de respaldo, `GET playback` cada 20 s mientras se ve),
-  y «Ver aquí» para unirse desde el iPhone. Los campos nuevos del contrato se
-  decodifican como opcionales (un servidor anterior no rompe nada).
+- **Canales** (la biblioteca): «Emitiendo ahora» (carteles con el dorsal
+  grande y lo que emiten), Favoritos (filas con deslizar para borrar y
+  Deshacer), Recientes por tramos y **Listas agrupadas por categoría** con el
+  selector de la lista en uso, todo en una lista nativa. «Pegar Content ID» en
+  la barra. En iOS 17 lleva el buscador; desde iOS 18 la búsqueda es la pestaña
+  Buscar.
+- **Buscar**: «En tu biblioteca» (al instante, con lo que emite cada canal) y
+  «En el motor» con la disponibilidad en cápsula («93 %»); un Content ID o
+  enlace `acestream://` pegado se detecta («Enlace detectado») y se reproduce
+  como canal «Enlace pegado», sin guardarlo. Tocar un resultado abre el escenario.
+- **Ajustes** (lista agrupada del sistema): «Dónde se está reproduciendo» (con
+  «Ver aquí»), Tu fútbol, Listas, Reproducción, **Apariencia** (Sistema ·
+  Claro · Oscuro), Servidor, Motor AceStream (reiniciar con segundo toque de
+  6 s), Acerca de y Olvidar este servidor (segundo toque de 5 s). Sin jerga.
+  Dispositivos y Salud no están (la API los bloquea desde `/native`).
+- **Emparejar**: negro cine, el QR como acción principal (de oro), el código y
+  las direcciones debajo, marco de enfoque en el escáner y háptica de éxito al
+  emparejar.
 ```
 
 ## Cómo se habla con el servidor
@@ -115,24 +156,24 @@ apps/ios/
 ## Reproductor
 
 Reproductor propio sobre `AVPlayerLayer` (no `AVPlayerViewController`): los
-controles son los de «Luz de focos» con cristal (Liquid Glass en iOS 26) y el
-botón «Directo» enseña el retraso real.
+controles son los de Palco con cristal claro sobre la imagen (Liquid Glass en
+iOS 26) y el botón «Directo» enseña el retraso real.
 
 - **Una sola capa de vídeo** (`SuperficieVideo`): las pantallas ponen huecos
   (`VistaVideo`) y la única `AVPlayerLayer` va al de más prioridad que esté en
-  pantalla: reproductor grande > centro de partido > mini. Nunca hay dos
-  imágenes del vídeo (antes, al volver del PiP se veía doble).
-- **Mini y grande** (`CapaReproductor`, por encima de las pestañas, con
-  `matchedGeometryEffect` del vídeo y del fondo): tocar el mini o
-  **deslizarlo hacia arriba** abre el reproductor grande; en el grande,
-  **deslizar hacia abajo** lo minimiza (sigue al dedo, se encoge y suelta con
-  muelle; por distancia o por velocidad) y la flecha también; deslizar el mini
-  **de lado** o su X lo detiene. Siempre se puede volver: el mini sigue ahí.
-  Las decisiones de los gestos son funciones puras (`GestosReproductor`) con
-  sus tests. El grande enseña qué suena, la línea de estado, favorito/PiP/más
-  y las **fuentes del partido** (el mismo selector del centro de partido) u
-  otros canales de la lista; en horizontal, solo el vídeo a pantalla completa.
-  Reproducir desde la biblioteca o la búsqueda abre el grande directamente.
+  pantalla: escenario > portada de la agenda > mini. Nunca hay dos imágenes
+  del vídeo (antes, al volver del PiP se veía doble).
+- **Escenario y mini** (`CapaEscenario` sobre las pestañas; el mini como
+  accesorio de la barra en iOS 26): tocar el mini o **deslizarlo hacia
+  arriba** abre el escenario con un fundido cruzado de 420 ms; en el
+  escenario, **deslizar el vídeo hacia abajo** lo minimiza (sigue al dedo, se
+  encoge, redondea las esquinas y apaga el resto; por distancia o por
+  velocidad) y la flecha también; deslizar el mini **hacia abajo** o su × lo
+  detiene **con «Deshacer»** (`Reproductor.deshacerDetencion()`). Siempre se
+  puede volver: el mini sigue ahí. Las decisiones de los gestos son funciones
+  puras (`GestosReproductor`) con sus tests. En horizontal real, solo el vídeo
+  a pantalla completa (el botón de arriba a la derecha es «Minimizar»).
+  Reproducir desde Canales o Buscar abre el escenario del canal directamente.
 
 - `Reproductor` es `runtime.ts` de la web portado sobre la misma máquina de
   estados (`MaquinaConexion`): pide `channels/:id/stream?client=ios` (URL del
@@ -240,18 +281,22 @@ tal cual.
   como mínimo, Xcode solo pide el tamaño único de 1024 × 1024 y saca el resto.
   Para usar el oscuro también en modo claro, basta con cambiar el orden en el
   script.
-- Los colores son los tokens de la web (`apps/web/src/styles/tokens.css`), uno
-  por colorset con valor claro y oscuro.
+- Los colores son los tokens de «Palco» (tabla `PALCO` del script; los que no
+  estén ahí salen de `apps/web/src/styles/tokens.css`), uno por colorset con
+  valor claro y oscuro: `Tinta.oro`, `Tinta.directo`, `Tinta.velo` y el
+  semáforo `ok/floja/fallo`, además de los nombres de siempre. Los colorsets
+  nuevos se añadieron también a mano al catálogo.
 - Cristal: con el SDK de iOS 26 (Xcode 26, el que elige la CI) se usa
-  `glassEffect` del sistema; en iOS 17-25, materiales; con «Reducir
-  transparencia», fondo opaco.
+  `glassEffect` del sistema (`.clear` sobre el vídeo, con velo debajo); en
+  iOS 17-25, materiales; con «Reducir transparencia», fondo opaco. Todo lo de
+  iOS 26 va tras `#if compiler(>=6.2)` + `if #available(iOS 26.0, *)`.
 
 ## Compilar
 
 - **CI**: cada push a `rewrite-v2`/`main` que toque `apps/ios`, los ejemplos o
   el catálogo de errores. Artefactos: `AceNeo-unsigned-<versión>` (la IPA) y
-  `AceNeo-tests-xcresult`. Con un tag `ios-v0.7.1`, la IPA se adjunta a la
-  Release `ios-v0.7.1` (versión 0.7.1).
+  `AceNeo-tests-xcresult`. Con un tag `ios-v0.8.0`, la IPA se adjunta a la
+  Release `ios-v0.8.0` (versión 0.8.0, la de `Config/AceNeo.xcconfig`).
 - **En un Mac**: `brew install xcodegen` y `scripts/build-ipa.sh`. Para otro
   bundle id: `scripts/build-ipa.sh ACE_BUNDLE_ID=com.otro.aceneo` o
   `Config/Local.xcconfig` (no se sube a git).
@@ -277,11 +322,12 @@ tal cual.
   comprueba que el JSON está al día (`--check`): si la web cambia las reglas
   y la app no, la CI de iOS falla.
 - **Capturas**: `CapturasUITests` recorre TODAS las pantallas en claro y en
-  oscuro (`-AceNeoApariencia claro|oscuro`, solo Debug): emparejar, agenda
-  «Para ti» y «Todos», tus gustos, centro de partido, mini, reproductor
-  grande, biblioteca (favoritos, recientes y listas agrupadas), buscar y
-  ajustes con «Dónde se está reproduciendo»; el E2E añade las suyas con vídeo
-  real. La CI las saca del `.xcresult` con su nombre (`claro-02-agenda-para-ti.png`,
+  oscuro (`-AceNeoApariencia claro|oscuro`, solo Debug): emparejar, agenda con
+  la portada «Para ti» y «Todos», tus gustos, el escenario, la hoja de
+  fuentes, el mini, canales (con las listas agrupadas), ajustes con «Dónde se
+  está reproduciendo», Apariencia y las listas, y buscar al final (en iOS 26,
+  con la pestaña de búsqueda elegida, las demás pestañas se recogen); el E2E
+  añade las suyas con vídeo real. La CI las saca del `.xcresult` con su nombre (`claro-02-agenda-portada.png`,
   `e2e-04-donde-se-esta-reproduciendo.png`…) al artefacto `AceNeo-capturas`;
   los logs de la pila van a `AceNeo-pila-e2e-logs` y el detalle de cualquier
   test que falle, al paso «Resumen de los tests». La CI usa el Xcode y el

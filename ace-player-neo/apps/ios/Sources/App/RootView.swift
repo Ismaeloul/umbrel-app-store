@@ -6,19 +6,21 @@ struct RootView: View {
     @State private var enlacePendiente: PairingLink?
     @State private var enlaceAConfirmar: PairingLink?
 
-    var body: some View {
-        Group {
-            switch modelo.fase {
-            case .emparejar:
-                PairingView(entorno: modelo.entorno, enlace: $enlacePendiente)
-            case .lista:
-                PrincipalView()
-            }
+    /// Emparejamiento o la app (aparte del `body` para aligerar al type-checker).
+    @ViewBuilder private var contenido: some View {
+        switch modelo.fase {
+        case .emparejar:
+            PairingView(entorno: modelo.entorno, enlace: $enlacePendiente)
+        case .lista:
+            PrincipalView()
         }
+    }
+
+    var body: some View {
+        contenido
         // Sin animar el cambio entre emparejar y la app: con el fundido, la
         // tira de días de la agenda (un ScrollView que llega cuando la agenda
-        // ya ha cargado, en mitad del fundido) se quedaba sin pintar, aunque
-        // sus días estaban y se podían tocar (E2E de la CI y EmparejamientoUITests).
+        // ya ha cargado, en mitad del fundido) se quedaba sin pintar.
         .onOpenURL { url in
             // El QR abierto con la Cámara lleva aquí. Si ya está emparejada,
             // se pregunta antes de cambiar de servidor.
@@ -48,33 +50,75 @@ struct RootView: View {
         } message: {
             Text("Se olvidará el servidor actual y se usará el del código.")
         }
+        // Emparejada: éxito. Tipos escritos a mano: con `.emparejar`/`.lista`
+        // implícitos el type-checker no terminaba a tiempo (CI de la 0.8.0).
+        .sensoryFeedback(.success, trigger: modelo.fase) { (anterior: AppModel.Fase, nueva: AppModel.Fase) -> Bool in
+            anterior == AppModel.Fase.emparejar && nueva == AppModel.Fase.lista
+        }
     }
 }
 
-/// Qué pestaña se ve.
-enum Pestana: Hashable {
-    case agenda, biblioteca, buscar, ajustes
-}
-
-/// La app emparejada: agenda, biblioteca, búsqueda y ajustes y, por encima,
-/// la capa del reproductor: el mini-reproductor justo sobre la barra de
-/// pestañas y el reproductor grande a toda pantalla (se abren y cierran con
-/// gestos, `CapaReproductor`).
+/// La app emparejada: las pestañas nativas (Agenda · Canales · Buscar ·
+/// Ajustes) y, por encima, el escenario a pantalla completa (`CapaEscenario`).
+/// El mini va como accesorio de la barra de pestañas en iOS 26 y, en 17-25,
+/// sobre la barra como inset de cada pestaña.
 struct PrincipalView: View {
     @Environment(AppModel.self) private var modelo
+    @Environment(\.verticalSizeClass) private var claseVertical
     @State private var pestana: Pestana = .agenda
-    @State private var maqueta = Maqueta()
 
     var body: some View {
         let reproductor = modelo.reproductor
+        let escenarioAbierto = modelo.escenarioVisible != nil
         ZStack {
+            pestanas
+                // Con el escenario abierto, lo de debajo no se lee con VoiceOver.
+                .accessibilityHidden(escenarioAbierto)
+            CapaEscenario()
+        }
+        .avisos(modelo.avisos)
+        .hapticoSeleccion(trigger: pestana)
+        .sensoryFeedback(.error, trigger: reproductor.errores)
+        .onChange(of: modelo.pestanaSolicitada) { _, nueva in
+            guard let nueva else { return }
+            pestana = nueva
+            modelo.pestanaSolicitada = nil
+        }
+        .onChange(of: claseVertical) { _, clase in
+            // Girar a horizontal con algo sonando: el escenario a pantalla completa.
+            if clase == .compact, reproductor.canal != nil, reproductor.conexion.enMarcha, !escenarioAbierto {
+                modelo.abrirLoQueSuena()
+            }
+        }
+        .task { await modelo.arrancar() }
+    }
+
+    @ViewBuilder private var pestanas: some View {
+        if #available(iOS 18.0, *) {
+            conAccesorio(
+                TabView(selection: $pestana) {
+                    Tab("Agenda", systemImage: "calendar", value: Pestana.agenda) {
+                        AgendaView(entorno: modelo.entorno)
+                    }
+                    Tab("Canales", systemImage: "tv", value: Pestana.canales) {
+                        CanalesView()
+                    }
+                    Tab("Ajustes", systemImage: "gearshape", value: Pestana.ajustes) {
+                        AjustesView()
+                    }
+                    Tab("Buscar", systemImage: "magnifyingglass", value: Pestana.buscar, role: .search) {
+                        BuscarView(entorno: modelo.entorno)
+                    }
+                }
+            )
+        } else {
             TabView(selection: $pestana) {
                 AgendaView(entorno: modelo.entorno)
                     .tabItem { Label("Agenda", systemImage: "calendar") }
                     .tag(Pestana.agenda)
-                BibliotecaView()
-                    .tabItem { Label("Biblioteca", systemImage: "star.square.on.square") }
-                    .tag(Pestana.biblioteca)
+                CanalesView()
+                    .tabItem { Label("Canales", systemImage: "tv") }
+                    .tag(Pestana.canales)
                 BuscarView(entorno: modelo.entorno)
                     .tabItem { Label("Buscar", systemImage: "magnifyingglass") }
                     .tag(Pestana.buscar)
@@ -82,33 +126,23 @@ struct PrincipalView: View {
                     .tabItem { Label("Ajustes", systemImage: "gearshape") }
                     .tag(Pestana.ajustes)
             }
-            // Con el reproductor grande abierto, lo de debajo no se lee con VoiceOver.
-            .accessibilityHidden(reproductor.vista == .grande)
-
-            CapaReproductor()
         }
-        .background {
-            GeometryReader { geo in
-                Color.clear
-                    .onAppear { maqueta.medirSistema(geo.safeAreaInsets.bottom) }
-                    .onChange(of: geo.safeAreaInsets.bottom) { _, nuevo in maqueta.medirSistema(nuevo) }
-            }
-            .ignoresSafeArea(.keyboard)
-        }
-        .environment(maqueta)
-        .avisos(modelo.avisos, margenInferior: margenAvisos)
-        .sensoryFeedback(.selection, trigger: reproductor.cambiosDeFuente)
-        .sensoryFeedback(.error, trigger: reproductor.errores)
-        .sensoryFeedback(.selection, trigger: pestana)
-        .task { await modelo.arrancar() }
     }
 
-    /// Los avisos van por encima de la barra de pestañas y del mini.
-    private var margenAvisos: CGFloat {
-        switch modelo.reproductor.vista {
-        case .grande: return 24
-        case .mini: return max(0, maqueta.baseMini - maqueta.margenSistema) + Maqueta.altoMini + 10
-        case .ninguna: return max(0, maqueta.baseMini - maqueta.margenSistema) + 4
-        }
+    /// iOS 26: la barra se pliega al bajar por una lista y el mini es su accesorio.
+    @ViewBuilder private func conAccesorio<V: View>(_ vista: V) -> some View {
+        #if compiler(>=6.2)
+            if #available(iOS 26.0, *) {
+                vista
+                    .tabBarMinimizeBehavior(.onScrollDown)
+                    .tabViewBottomAccessory {
+                        MiniAccesorio()
+                    }
+            } else {
+                vista
+            }
+        #else
+            vista
+        #endif
     }
 }

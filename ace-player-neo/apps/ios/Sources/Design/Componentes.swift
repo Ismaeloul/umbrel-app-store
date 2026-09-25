@@ -126,20 +126,20 @@ public struct AnilloDirecto: View {
     public var body: some View {
         ZStack {
             Circle()
-                .stroke(Tinta.acentoTinta.opacity(0.18), lineWidth: 3)
+                .stroke(Tinta.directo.opacity(0.18), lineWidth: 3)
             Circle()
                 .trim(from: 0, to: progreso)
-                .stroke(Tinta.acentoTinta, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .stroke(Tinta.directo, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                 .rotationEffect(.degrees(-90))
             if !sinMovimiento {
                 // La onda vive dentro de su caja (no se sale al latir).
                 Circle()
-                    .stroke(Tinta.acentoTinta.opacity(latido ? 0 : 0.45), lineWidth: 2)
+                    .stroke(Tinta.directo.opacity(latido ? 0 : 0.45), lineWidth: 2)
                     .scaleEffect(latido ? 1.14 : 0.9)
             }
             Text(minuto.map { "\($0)'" } ?? "EN")
                 .font(.numeros(.caption, peso: .bold))
-                .foregroundStyle(Tinta.acentoTinta)
+                .foregroundStyle(Tinta.directo)
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
                 .padding(4)
@@ -391,7 +391,7 @@ public struct Aviso: Identifiable, Equatable, Sendable {
     public static func == (a: Aviso, b: Aviso) -> Bool { a.id == b.id }
 }
 
-/// Avisos de la app (uno a la vez, abajo, fuera del vídeo).
+/// Avisos de la app (uno a la vez, arriba, fuera del vídeo).
 @MainActor
 @Observable
 public final class Avisos {
@@ -485,13 +485,14 @@ struct VistaAviso: View {
 }
 
 extension View {
-    /// Pinta el aviso actual abajo, con su transición y su háptica.
-    func avisos(_ avisos: Avisos, margenInferior: CGFloat = 12) -> some View {
-        overlay(alignment: .bottom) {
+    /// Pinta el aviso actual ARRIBA (como los toasts del prototipo de Palco:
+    /// nunca sobre el vídeo ni sobre la barra de pestañas), con su transición y su háptica.
+    func avisos(_ avisos: Avisos, margenSuperior: CGFloat = 8) -> some View {
+        overlay(alignment: .top) {
             if let aviso = avisos.actual {
                 VistaAviso(aviso: aviso, alPulsar: { avisos.pulsarAccion() }, alCerrar: { avisos.cerrar() })
-                    .padding(.bottom, margenInferior)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .padding(.top, margenSuperior)
+                    .transition(.move(edge: .top).combined(with: .opacity))
                     .id(aviso.id)
             }
         }

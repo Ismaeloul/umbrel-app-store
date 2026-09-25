@@ -19,6 +19,8 @@ export interface PlayerActions {
   toggleMute(): void;
   setVolume(volume: number): void;
   toggleFullscreen(): void;
+  /** Modo teatro: el vídeo llena la ventana sin pantalla completa (escritorio sin ella). */
+  toggleTheater(): void;
   togglePip(): void;
   toggleNerd(): void;
   toggleFavorite(): void;
@@ -34,6 +36,8 @@ export interface PlayerContextValue {
   /** Menú «Más opciones» y menú contextual: los mismos elementos. */
   menuItems: MenuItem[];
   fullscreen: boolean;
+  /** Modo teatro puesto (plan Palco W5: el mismo `data-immersive` que la pantalla completa). */
+  theater: boolean;
   pip: boolean;
   canFullscreen: boolean;
   canPip: boolean;
@@ -43,7 +47,7 @@ export interface PlayerContextValue {
   finePointer: boolean;
   /** Móvil (< 768): flecha de minimizar, sin volumen (lo da el sistema). */
   compact: boolean;
-  /** Vídeo a toda la pantalla (móvil en horizontal o pantalla completa). */
+  /** Vídeo a toda la pantalla (móvil en horizontal, pantalla completa o modo teatro). */
   immersive: boolean;
   /** Una vista ya enseña «Datos técnicos» (useHostNerdPanel): el reproductor no saca el suyo. */
   nerdHosted: boolean;

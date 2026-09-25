@@ -172,7 +172,6 @@ struct GustosView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .background(Tinta.fondo.ignoresSafeArea())
         .navigationTitle("Tu fútbol")
         .navigationBarTitleDisplayMode(enHoja ? .inline : .large)
         .toolbar {
@@ -199,7 +198,7 @@ struct GustosView: View {
             VStack(alignment: .leading, spacing: 26) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("¿Qué fútbol te mueve?")
-                        .font(.titular(.title2))
+                        .font(.titular(.title2, peso: .heavy))
                         .foregroundStyle(Tinta.texto)
                     Text("Elige tus competiciones, equipos y nacionalidades. Los usaremos para tu agenda «Para ti»; siempre podrás ver todos los partidos.")
                         .font(.subheadline)
@@ -229,7 +228,7 @@ struct GustosView: View {
                     .foregroundStyle(Tinta.acentoTinta)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 4)
-                    .background(Tinta.acento.opacity(0.2), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .background(Tinta.oro.opacity(0.18), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(tipo.titulo)

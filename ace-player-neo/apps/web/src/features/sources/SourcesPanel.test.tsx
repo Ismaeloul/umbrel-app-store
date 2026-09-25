@@ -154,6 +154,32 @@ describe('lista (móvil)', () => {
     expect(getPlayer().channel?.hash).toBe(hash(2));
   });
 
+  it('cartel: proveedor, calidad y tipo; las flechas pasan de un cartel a otro', () => {
+    prepare(['working', 'working', 'weak'], { activeHash: hash(1) });
+    act(() =>
+      sessionStore.set((s) => ({
+        ...s,
+        entries: s.entries.map((entry, i) =>
+          i === 0 && entry.probe
+            ? { ...entry, probe: { ...entry.probe, rateKbps: 4200, videoCodec: 'hevc' } }
+            : entry,
+        ),
+      })),
+    );
+    renderWithApp(<SourcesPanel variant="list" />);
+    const list = screen.getByRole('list', { name: 'Fuentes del partido' });
+    const [first, second, third] = within(list).getAllByRole('button');
+    expect(within(first!).getByText('Elcano')).toBeInTheDocument();
+    expect(within(first!).getByText('· 1080p · HEVC · M3U')).toBeInTheDocument();
+    first!.focus();
+    fireEvent.keyDown(first!, { key: 'ArrowRight' });
+    expect(second).toHaveFocus();
+    fireEvent.keyDown(second!, { key: 'ArrowDown' });
+    expect(third).toHaveFocus();
+    fireEvent.keyDown(third!, { key: 'ArrowLeft' });
+    expect(second).toHaveFocus();
+  });
+
   it('atajos: N pasa a la siguiente y los números eligen', () => {
     prepare(['working', 'working', 'weak'], { activeHash: hash(1) });
     renderWithApp(<SourcesPanel variant="list" />);
@@ -237,11 +263,21 @@ describe('inspector y rack (escritorio)', () => {
     }
   });
 
-  it('rack con columnas y todas las acciones de la fuente activa', () => {
+  it('rack de carteles (forma + palabra de cada estado) y todas las acciones de la fuente activa', () => {
     prepare(['working', 'weak', 'checking'], { activeHash: hash(1) });
-    renderWithApp(<SourcesPanel variant="rack" />, { kind: 'wide' });
-    for (const label of ['Nº', 'Fuente', 'Estado', 'Pares', 'Mbit/s'])
-      expect(screen.getByText(label)).toBeInTheDocument();
+    const { container } = renderWithApp(<SourcesPanel variant="rack" />, { kind: 'wide' });
+    const list = screen.getByRole('list', { name: 'Fuentes del partido' });
+    const posters = within(list).getAllByRole('button');
+    expect(posters.map((poster) => poster.getAttribute('data-state'))).toEqual([
+      'ok',
+      'weak',
+      'checking',
+    ]);
+    // Cada cartel: anillo con su palabra (nunca solo color) y sin miniatura de vídeo.
+    for (const word of ['Verificada', 'Floja', 'Comprobando'])
+      expect(within(list).getByText(word, { selector: '.sring__word' })).toBeInTheDocument();
+    expect(container.querySelectorAll('.src-poster .sring')).toHaveLength(3);
+    expect(container.querySelector('.src-list video, .src-list img, .src-list canvas')).toBeNull();
     const group = screen.getByRole('group', { name: 'Acciones de la fuente' });
     const names = within(group)
       .getAllByRole('button')

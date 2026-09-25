@@ -30,7 +30,8 @@ public actor DiskCache {
     }
 
     /// Sube si cambia el formato de lo guardado: lo anterior se ignora.
-    private static let version = 1
+    /// 2: la agenda lleva escudos y colores (`homeTeam`, `awayTeam`, `competitionBadge`).
+    private static let version = 2
 
     private let directorio: URL
 

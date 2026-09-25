@@ -24,6 +24,10 @@ export const ShortCodeSchema = z.string().regex(/^[a-z0-9_]{1,40}$/, 'código co
 /** Ids que elige el servidor o el cliente: letras, números, `_` y `-`. */
 export const SafeIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, 'identificador');
 
+/** Color `#rrggbb` en minúsculas (colores de equipo, api/common.ts). */
+export const HexColorSchema = z.string().regex(/^#[0-9a-f]{6}$/, 'color #rrggbb en minúsculas');
+export type HexColor = z.infer<typeof HexColorSchema>;
+
 /** Id de sesión del motor que da el backend (arquitectura §5.6): `s_` + base64url. */
 export const SessionIdSchema = z.string().regex(/^s_[A-Za-z0-9_-]{8,64}$/, 'id de sesión');
 

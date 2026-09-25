@@ -1,5 +1,18 @@
 # Sistema de diseño · «Luz de focos»
 
+> **Desde la 0.8.0 la piel es «Palco»** (rama `rediseno/palco`, 25-sep-2026).
+> La regla de oro de abajo se cumplió: se cambiaron los VALORES de los tokens
+> (negro cine `#05070a`, claro matinal `#f3f3f4`, acento oro `#ffd60a`,
+> directo en rojo propio, titulares de Mona Sans al 125 % de anchura) y la
+> piel de `src/ui/`, sin tocar sus nombres ni la lógica. Primitivas nuevas:
+> `VersusCard`, `Capsule`, `SignalRing`, `CompetitionBadge` y `PosterRail`;
+> `TeamMark` pinta el escudo que sirve el backend (módulo `teams`) y
+> `ChannelMark` gana la tesela 16:9. Decisiones y mapa pantalla a pantalla en
+> `design-explorations/02-plan-palco.md` (§4, W1–W15); la galería
+> `?vista=sistema` enseña la piel actual. Las tablas de valores de este
+> documento son las de «Luz de focos» y quedan como historia: los valores
+> vigentes están en `apps/web/src/styles/tokens.css`.
+
 > FASE 2, armazón de la web (23-sep-2026). Es la dirección A de
 > [`eleccion.md`](eleccion.md) con sus correcciones e injertos, llevada a
 > código. Vive en `apps/web/src/styles/` (tokens) y `apps/web/src/ui/`

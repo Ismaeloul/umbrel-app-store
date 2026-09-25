@@ -18,6 +18,7 @@ import { RouterProvider } from '../app/router.tsx';
 import { installShortcutListener, shortcutStore } from '../app/shortcuts.ts';
 import { clearStatus, statusStore } from '../notices/statusLine.ts';
 import { toastStore } from '../notices/toasts.ts';
+import { resetScoreRevealForTests, revealScore } from '../features/agenda/score-reveal.ts';
 import { fixture, mockFetch } from '../test/fetch.ts';
 import {
   hostNerdPanel,
@@ -29,6 +30,7 @@ import {
 } from './api.ts';
 import PlayerDock, { sharedRuntimeForTests } from './index.tsx';
 import { madridToday } from './PlayerSurface.tsx';
+import { stageSlotStore } from './stage-slot.ts';
 
 const HASH = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
 const ROUTE = { vista: 'partido' as const, id: null, canal: HASH };
@@ -341,6 +343,26 @@ describe('reproductor en grande', () => {
     expect(playerStore.get().nerdOpen).toBe(true);
   });
 
+  it('Palco: publica el hueco del marcador sobre el vídeo y hace un corte a negro al cambiar de fuente (W5, W14)', () => {
+    const { container, unmount } = renderDock();
+    // El hueco donde el centro de partido proyecta su cápsula (arriba a la izquierda).
+    const slot = stageSlotStore.get();
+    expect(slot).not.toBeNull();
+    expect(slot).toHaveClass('player-slot');
+    expect(container.querySelector('.player-chrome__lead')).toContainElement(slot);
+    // Sin cambio de fuente, sin velo.
+    setPlayer(playing());
+    expect(container.querySelector('.player-cut')).toBeNull();
+    setPlayer({
+      channel: { hash: 'b'.repeat(40), title: 'M+ Liga de Campeones', subtitle: 'Fuente 2, Faro' },
+    });
+    expect(container.querySelector('.player-frame .player-cut')).not.toBeNull();
+    // Un solo <video> y ninguna miniatura.
+    expect(container.querySelectorAll('video')).toHaveLength(1);
+    unmount();
+    expect(stageSlotStore.get()).toBeNull();
+  });
+
   it('P sin Picture-in-Picture en el navegador: lo dice (B-093)', async () => {
     renderDock();
     setPlayer(playing());
@@ -390,6 +412,28 @@ describe('mini-reproductor «Sonando»', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Detener la reproducción' }));
     expect(playerStore.get().phase).toBe('idle');
     expect(playerPresence.get().active).toBe(false);
+  });
+
+  it('con un partido: «Marcador oculto» y, destapado, solo el minuto (nunca las cifras)', () => {
+    resetScoreRevealForTests();
+    const client = createQueryClient();
+    client.setQueryData(routeKey('scores'), {
+      available: true,
+      generatedAt: null,
+      source: 'espn',
+      attribution: null,
+      leagues: 1,
+      scores: {
+        'm-1': { home: 2, away: 1, state: 'in', clock: "72'", detail: '2ª parte', confidence: 0.9 },
+      },
+    });
+    renderDock('mini', undefined, client);
+    setPlayer(playing({ route: { vista: 'partido', id: 'm-1', canal: null } }));
+    expect(screen.getByText('Marcador oculto')).toBeInTheDocument();
+    expect(screen.getByText('Fuente 1, Elcano')).toBeInTheDocument();
+    act(() => revealScore('m-1'));
+    expect(screen.getByText("72'")).toBeInTheDocument();
+    expect(screen.queryByText(/2.1/)).toBeNull();
   });
 
   it('lleva a «Dónde se está reproduciendo» y avisa si otro dispositivo ve lo mismo', async () => {

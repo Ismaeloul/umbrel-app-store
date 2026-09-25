@@ -112,6 +112,7 @@ siguiente…» mientras conecta.
 | `engines/` | Adaptadores (`mpegts.ts`, `hls.ts`, `native.ts`, `demo.ts`) y la tabla protocolo × navegador (`index.ts`) |
 | `index.tsx` | El `PlayerDock`: acciones, atajos, Media Session, pantalla completa, PiP, línea de estado, presencia |
 | `PlayerSurface.tsx`, `MiniPlayer.tsx`, `NerdPanel.tsx` | La interfaz |
+| `stage-slot.ts` | El hueco sobre el vídeo (arriba a la izquierda) donde el centro de partido proyecta la cápsula del marcador (Palco W5) |
 | `status.ts` | Textos (línea de estado, panel, botón de directo), puros |
 | `constants.ts` | Umbrales de la 0.6.59 con nombre |
 
@@ -152,6 +153,18 @@ Reglas que cumple (inventario §8, §9, §11, §17, §18 y §26):
   pantalla completa, clic derecho menú; tocar enseña o esconde; deslizar hacia
   abajo minimiza (móvil). Botón de directo B4. Toasts nunca sobre el vídeo: lo
   de la señal va a la línea de estado (`notify(..., { kind: 'signal' })`).
+- **Piel Palco (fase 2, W5, W7 y W14)**: un solo overlay de cápsulas de
+  cristal sobre un velo negro (30-55 %), pausa grande aparte, directo en rojo;
+  la línea de estado es una cápsula SOBRE la imagen, abajo a la izquierda,
+  justo encima de los controles (la coloca `app/shell.css`; con el panel del
+  vídeo a la vista se aparta y, con los controles escondidos, solo se queda lo
+  ámbar o rojo); luz ambiental de los dos clubes (22 %, respira despacio,
+  quieta con movimiento reducido); corte a negro de ~0,5 s al cambiar de
+  fuente (`.player-cut`, solo opacidad); **modo teatro** (escritorio sin
+  pantalla completa: botón y F; Esc sale) = el mismo `data-immersive`; mini
+  con la imagen viva a 96×54 (el mismo `<video>`, solo CSS), «Marcador
+  oculto» o el minuto si es un partido (nunca las cifras). Toques hápticos en
+  los puntos de `HAPTIC_MAP` (`lib/haptics.ts`).
 - **Pantalla completa**: la de la página + inmersivo (así menús y avisos del
   reproductor se siguen viendo); en iPhone, la del vídeo.
 - **Atajos** (registro central, salen en «?»): Espacio/K, M, J, F, P, S, G, ← →

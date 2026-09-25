@@ -1,23 +1,30 @@
-/* Mini-reproductor «Sonando» (B-096, maqueta opcion-A/base.css .mini): al
-   volver a la portada con algo sonando no se para; queda una cápsula con la
-   imagen pequeña, el canal y la segunda línea (sin marcador: regla 29),
-   pausa y detener. Tocarla vuelve al vídeo.
+/* Mini-reproductor «Sonando» (B-096; piel Palco, plan fase 2 W7): al volver
+   a la portada con algo sonando no se para; queda una banda de cristal denso
+   con la IMAGEN VIVA a 96×54 (es el mismo <video> del escenario, que sigue en
+   .player-frame: solo cambia el CSS; ninguna miniatura aparte), el estado
+   («Sonando», «Conectando…»…), el canal y la segunda línea: la fuente y, si
+   es un partido, «Marcador oculto» o el minuto (nunca las cifras: regla 29).
+   Pausa y detener. Tocarla vuelve al vídeo.
 
    En el móvil se arrastra: hacia arriba vuelve al vídeo; hacia un lado la
    quita (detiene, con «Deshacer» durante 6 s). Durante el arrastre solo se
-   mueve con transform.
+   mueve con transform; al cruzar el umbral de quitarla, un toque háptico
+   fuerte (HAPTIC_MAP: heavy) y al abrirla, uno suave.
 
    «Dónde se está reproduciendo» (Ajustes → `ajustes/donde`): un botón con la
    tele. En pantallas anchas siempre; en el móvil, para no apretar el título,
    solo cuando otro dispositivo ve lo mismo (`data-shared`, del evento SSE
    `playback.sessions` que ya está en la caché: no pide nada). */
 
-import type { RefObject } from 'react';
+import { useRef, type RefObject } from 'react';
 import { getDeviceId, getViewerId } from '../api/identity.ts';
 import { useApiQuery } from '../api/query.ts';
 import { useNavigate } from '../app/router.tsx';
+import { liveMinute, paintableScore } from '../features/agenda/domain.ts';
+import { useScoreHidden } from '../features/agenda/score-reveal.ts';
 import { otherDevicesWatching } from '../features/where-playing/model.ts';
 import { useSwipe } from '../lib/gestures.ts';
+import { haptic } from '../lib/haptics.ts';
 import { prefersReducedMotion } from '../lib/media.ts';
 import { toast } from '../notices/toasts.ts';
 import { IconButton } from '../ui/Button.tsx';
@@ -46,6 +53,41 @@ export function miniKicker(state: PlayerState): string {
   }
 }
 
+/** Distancia a un lado a partir de la que soltar el mini lo detiene. */
+const DISMISS_PX = 72;
+
+/**
+ * Lo que el mini dice del partido que suena (si es un partido): «Marcador
+ * oculto» mientras esté tapado y, destapado, solo el minuto («72'»,
+ * «Descanso», «Final»). Nunca las cifras. Solo con lo que ya hay en la
+ * caché (la agenda pide los marcadores): el mini no pide nada.
+ */
+function useScoreNote(matchId: string): string | null {
+  const hidden = useScoreHidden(matchId, true);
+  const scores = useApiQuery('scores', undefined, { enabled: false }).data;
+  if (!scores?.available) return null;
+  const score = paintableScore(scores.scores[matchId]);
+  if (!score) return null;
+  if (hidden) return 'Marcador oculto';
+  if (score.state === 'post') return 'Final';
+  const minute = liveMinute(score);
+  if (!minute) return 'En directo';
+  return minute.halftime ? 'Descanso' : `${minute.minute}'`;
+}
+
+/* Con su propia clave por partido: el selector de useScoreHidden no puede
+   cambiar de partido sobre la marcha (useStore guarda el primero). */
+function ScoreNote({ matchId, separated }: { matchId: string; separated: boolean }) {
+  const note = useScoreNote(matchId);
+  if (!note) return null;
+  return (
+    <>
+      <span className="player-mini__note">{note}</span>
+      {separated ? ' · ' : null}
+    </>
+  );
+}
+
 function Mini({
   ctx,
   rootRef,
@@ -61,10 +103,19 @@ function Mini({
   const others = otherDevicesWatching(playback.data?.sessions, getViewerId(), getDeviceId());
   const wantsPlay = state.desiredPlaying || state.phase === 'buffer';
   const title = state.channel?.title ?? 'Ace Player Neo';
+  const matchId = state.route?.vista === 'partido' ? (state.route.id ?? null) : null;
+  const subtitle = state.channel?.subtitle ?? null;
+  const armed = useRef(false);
 
   const move = (dx: number, dy: number) => {
     const el = rootRef.current;
     if (!el) return;
+    // Al cruzar el umbral de quitarlo, un toque (una vez por cruce).
+    const past = Math.abs(dx) >= DISMISS_PX && Math.abs(dx) > Math.abs(dy);
+    if (past !== armed.current) {
+      armed.current = past;
+      if (past) haptic('heavy');
+    }
     // Hacia abajo no hay a dónde ir (está la barra): se frena.
     const y = dy > 0 ? dy * 0.25 : dy;
     el.style.transition = 'none';
@@ -72,6 +123,7 @@ function Mini({
     el.style.opacity = String(Math.max(0.35, 1 - Math.abs(dx) / 320));
   };
   const settle = () => {
+    armed.current = false;
     const el = rootRef.current;
     if (!el) return;
     el.style.transition = '';
@@ -109,12 +161,13 @@ function Mini({
   useSwipe(rootRef, {
     axis: 'both',
     enabled: !ctx.finePointer,
-    threshold: 72,
+    threshold: DISMISS_PX,
     onMove: move,
     onCancel: settle,
     onSwipe: (direction) => {
       if (direction === 'up') {
         settle();
+        haptic('light');
         actions.expand();
       } else if (direction === 'left' || direction === 'right') {
         dismiss(direction === 'right' ? 1 : -1);
@@ -135,8 +188,13 @@ function Mini({
           {miniKicker(state)}
         </span>
         <span className="player-mini__title">{title}</span>
-        {state.channel?.subtitle ? (
-          <span className="player-mini__sub">{state.channel.subtitle}</span>
+        {matchId || subtitle ? (
+          <span className="player-mini__sub">
+            {matchId ? (
+              <ScoreNote key={matchId} matchId={matchId} separated={subtitle !== null} />
+            ) : null}
+            {subtitle ? <span>{subtitle}</span> : null}
+          </span>
         ) : null}
       </button>
       <IconButton

@@ -1,41 +1,37 @@
 import SwiftUI
 import UIKit
 
-/// Biblioteca, como la de la web: el título grande arriba, el buscador y,
-/// dentro de la lista, el selector Favoritos / Recientes / Listas con sus
-/// recuentos. Favoritos con lo que emite cada canal hoy; Recientes por
-/// tramos (hoy, ayer…); Listas AGRUPADAS por categoría en secciones
-/// plegables con su recuento y el selector de la lista activa. Deslizar para
-/// borrar con «Deshacer», marcar favorito y editar el título.
+/// Canales (la biblioteca de Palco), todo en una lista nativa: «Emitiendo
+/// ahora» (carteles con el dorsal grande y lo que emiten), Favoritos (filas
+/// con deslizar para borrar y Deshacer), Recientes por tramos y Listas con
+/// el selector de la lista activa y las categorías plegadas. En iOS 17 lleva
+/// el buscador aquí; desde iOS 18 la búsqueda vive en la pestaña Buscar.
 ///
-/// Sin `safeAreaInset` arriba: en el iPhone de verdad el selector metido ahí
-/// dejaba una banda vacía enorme encima y el título debajo.
-struct BibliotecaView: View {
+/// Sin `safeAreaInset` arriba ni fondos propios: los del sistema.
+struct CanalesView: View {
     @Environment(AppModel.self) private var app
-    @State private var seccionElegida: SeccionBiblioteca?
     @State private var texto = ""
     @State private var desplegadas: Set<String> = []
     @State private var renombrando: Item?
     @State private var nuevoTitulo = ""
     @State private var antena = IndiceAntena.vacio
-
-    private var seccion: SeccionBiblioteca {
-        if let seccionElegida { return seccionElegida }
-        return app.biblioteca.map(ReglasBiblioteca.seccionInicial) ?? .favoritos
-    }
+    @State private var pegando = false
 
     var body: some View {
         NavigationStack {
             contenido
-                .navigationTitle("Biblioteca")
+                .navigationTitle("Canales")
                 .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) { IndicadorMotor() }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            pegando = true
+                        } label: {
+                            Label("Pegar Content ID", systemImage: "doc.on.clipboard")
+                        }
+                        .accessibilityIdentifier("boton-pegar-canales")
+                    }
                 }
-                .background(Tinta.fondo.ignoresSafeArea())
-                .scrollContentBackground(.hidden)
-                .searchable(
-                    text: $texto, placement: .navigationBarDrawer(displayMode: .always),
-                    prompt: "Buscar en \(seccion.titulo.lowercased())")
+                .modifier(BuscableSoloEnIOS17(texto: $texto))
                 .refreshable { await app.refrescarArranque() }
                 .task(id: app.agenda?.generatedAt) { await vigilarAntena() }
                 .alert(
@@ -46,7 +42,19 @@ struct BibliotecaView: View {
                     Button("Cancelar", role: .cancel) { renombrando = nil }
                     Button("Guardar") { guardarTitulo() }
                 } message: {
-                    Text("Solo cambia cómo se ve en tu biblioteca.")
+                    Text("Solo cambia cómo se ve en tus canales.")
+                }
+                .sheet(isPresented: $pegando) {
+                    HojaPegar(canal: nil) { texto, _ in
+                        guard let hash = ReglasFuentes.hashValido(texto) else {
+                            app.avisos.mostrar(ReglasFuentes.textoHashNoValido, tono: .error)
+                            return false
+                        }
+                        app.reproducirEnlace(hash)
+                        return true
+                    }
+                    .presentationDetents([.medium])
+                    .presentationCornerRadius(Medida.radioHoja)
                 }
         }
         .reservaMini()
@@ -59,10 +67,8 @@ struct BibliotecaView: View {
             lista(biblioteca)
         } else {
             List {
-                selector(nil)
                 ForEach(0..<5, id: \.self) { _ in
                     FilaCanal(item: Item.muestra, favorito: false, antena: nil, subtitulo: "Deportes", caido: false)
-                        .listRowBackground(Tinta.superficie)
                         .redacted(reason: .placeholder)
                 }
             }
@@ -72,42 +78,127 @@ struct BibliotecaView: View {
     }
 
     private func lista(_ biblioteca: LibraryView) -> some View {
-        let todos = ReglasBiblioteca.items(biblioteca, seccion)
-        let visibles = ReglasBiblioteca.filtrar(todos, texto: texto)
+        let buscando = !texto.trimmingCharacters(in: .whitespaces).isEmpty
+        let favoritos = ReglasBiblioteca.filtrar(biblioteca.favorites, texto: texto)
+        let recientes = ReglasBiblioteca.filtrar(biblioteca.history, texto: texto)
+        let canalesLista = ReglasBiblioteca.filtrar(biblioteca.web, texto: texto)
+        let emitiendo = buscando ? [] : emitiendoAhora(biblioteca)
+        let idsLista = Set(biblioteca.web.map { $0.id.lowercased() })
+        let enPantalla = app.reproductor.canal?.id.lowercased()
         return List {
-            selector(biblioteca)
-
-            if seccion == .listas {
-                cabeceraListas(biblioteca)
+            if !emitiendo.isEmpty {
+                Section {
+                    ScrollView(.horizontal) {
+                        LazyHStack(alignment: .top, spacing: 12) {
+                            ForEach(emitiendo, id: \.item.id) { entrada in
+                                Button {
+                                    abrir(entrada.item, en: emitiendo.map(\.item))
+                                } label: {
+                                    CartelCanal(
+                                        item: entrada.item, antena: entrada.antena, favorito: app.esFavorito(entrada.item.id),
+                                        enPantalla: enPantalla == entrada.item.id.lowercased())
+                                }
+                                .buttonStyle(.plain)
+                                .contextMenu { menu(entrada.item, seccion: entrada.item.type == .web ? .listas : .favoritos) }
+                            }
+                        }
+                        .scrollTargetLayout()
+                        .padding(.vertical, 4)
+                    }
+                    .scrollTargetBehavior(.viewAligned)
+                    .scrollIndicators(.hidden)
+                    .contentMargins(.horizontal, Medida.margen, for: .scrollContent)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                } header: {
+                    CabeceraFila(titulo: "Emitiendo ahora", cuenta: emitiendo.count, directo: true)
+                        .textCase(nil)
+                        .padding(.horizontal, 4)
+                }
             }
 
-            if visibles.isEmpty {
-                Section {
-                    vacio
+            Section {
+                if favoritos.isEmpty {
+                    if buscando {
+                        Text("Nada en favoritos con «\(texto)».")
+                            .font(.subheadline)
+                            .foregroundStyle(Tinta.texto2)
+                    } else {
+                        EstadoVacio(
+                            icono: "star", titulo: "Aún no tienes favoritos",
+                            texto: "Marca un canal con la estrella (mantén pulsado o desliza a la derecha en Recientes o Listas)."
+                        ) {
+                            EmptyView()
+                        }
                         .listRowInsets(EdgeInsets())
                         .listRowBackground(Color.clear)
+                    }
+                } else {
+                    ForEach(favoritos) { item in
+                        fila(item, en: favoritos, seccion: .favoritos, idsLista: idsLista, enPantalla: enPantalla)
+                    }
+                }
+            } header: {
+                CabeceraFila(titulo: "Favoritos", cuenta: biblioteca.favorites.isEmpty ? nil : favoritos.count)
+                    .textCase(nil)
+                    .padding(.horizontal, 4)
+            }
+
+            if recientes.isEmpty {
+                if !buscando {
+                    Section {
+                        EstadoVacio(icono: "clock", titulo: "Aún no has visto nada", texto: "Lo que veas irá quedando aquí.") {
+                            EmptyView()
+                        }
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                    } header: {
+                        CabeceraFila(titulo: "Recientes").textCase(nil).padding(.horizontal, 4)
+                    }
                 }
             } else {
-                switch seccion {
-                case .favoritos:
+                ForEach(Array(ReglasBiblioteca.porTramos(recientes).enumerated()), id: \.element.id) { indice, grupo in
                     Section {
-                        ForEach(visibles) { item in fila(item, en: visibles, biblioteca: biblioteca) }
-                    }
-                case .recientes:
-                    ForEach(ReglasBiblioteca.porTramos(visibles)) { grupo in
-                        Section {
-                            ForEach(grupo.items) { item in fila(item, en: visibles, biblioteca: biblioteca) }
-                        } header: {
+                        ForEach(grupo.items) { item in
+                            fila(item, en: recientes, seccion: .recientes, idsLista: idsLista, enPantalla: enPantalla)
+                        }
+                    } header: {
+                        if indice == 0 {
+                            CabeceraFila(titulo: "Recientes", cuenta: recientes.count, subtitulo: grupo.tramo)
+                                .textCase(nil)
+                                .padding(.horizontal, 4)
+                        } else {
                             Text(grupo.tramo)
                                 .font(.subheadline.weight(.bold))
                                 .foregroundStyle(Tinta.texto2)
                                 .textCase(nil)
                         }
                     }
-                case .listas:
-                    ForEach(ReglasBiblioteca.porCategoria(visibles)) { grupo in
-                        seccionCategoria(grupo, biblioteca: biblioteca, todos: visibles)
+                }
+            }
+
+            cabeceraListas(biblioteca)
+            if canalesLista.isEmpty {
+                Section {
+                    if buscando {
+                        Text("Nada en la lista con «\(texto)».")
+                            .font(.subheadline)
+                            .foregroundStyle(Tinta.texto2)
+                    } else {
+                        EstadoVacio(
+                            icono: "list.bullet.rectangle", titulo: "Sin lista",
+                            texto: "Guarda una lista M3U o HTML en Ajustes › Listas y sus canales saldrán aquí."
+                        ) {
+                            NavigationLink("Ir a Listas") { ListasView() }
+                                .buttonStyle(.bordered)
+                        }
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                     }
+                }
+            } else {
+                ForEach(ReglasBiblioteca.porCategoria(canalesLista)) { grupo in
+                    seccionCategoria(grupo, todos: canalesLista, idsLista: idsLista, enPantalla: enPantalla)
                 }
             }
 
@@ -121,31 +212,21 @@ struct BibliotecaView: View {
         }
         .listStyle(.insetGrouped)
         .listSectionSpacing(.compact)
-        .animation(Muelle.estandar, value: visibles.map(\.id))
         .animation(Muelle.estandar, value: desplegadas)
         .accessibilityIdentifier("lista-biblioteca")
     }
 
-    /// Favoritos · Recientes · Listas con sus recuentos (primera fila de la lista).
-    private func selector(_ biblioteca: LibraryView?) -> some View {
-        Picker(
-            "Sección",
-            selection: Binding(
-                get: { seccion },
-                set: { nueva in
-                    withAnimation(Muelle.estandar) { seccionElegida = nueva }
-                })
-        ) {
-            ForEach(SeccionBiblioteca.allCases) { opcion in
-                let cuenta = biblioteca.map { ReglasBiblioteca.items($0, opcion).count }
-                Text(cuenta.map { "\(opcion.titulo) \($0)" } ?? opcion.titulo).tag(opcion)
-            }
+    /// Canales de la biblioteca que dan un partido en juego ahora mismo.
+    private func emitiendoAhora(_ biblioteca: LibraryView) -> [(item: Item, antena: EnAntena)] {
+        var vistos = Set<String>()
+        var resultado: [(item: Item, antena: EnAntena)] = []
+        for item in biblioteca.favorites + biblioteca.web + biblioteca.history {
+            guard vistos.insert(item.id.lowercased()).inserted else { continue }
+            guard let antena = antena.para(titulo: item.title, alias: item.alias, marcadores: app.marcadores), antena.enDirecto
+            else { continue }
+            resultado.append((item, antena))
         }
-        .pickerStyle(.segmented)
-        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 8, trailing: 0))
-        .listRowBackground(Color.clear)
-        .sensoryFeedback(.selection, trigger: seccion)
-        .accessibilityIdentifier("selector-biblioteca")
+        return resultado
     }
 
     /// La lista activa, cuándo se sincronizó y el menú para cambiarla.
@@ -179,18 +260,31 @@ struct BibliotecaView: View {
                             .font(.subheadline.weight(.semibold))
                     }
                     .buttonStyle(.bordered)
+                    .buttonBorderShape(.capsule)
                     .accessibilityLabel("Elegir la lista activa")
                     .accessibilityIdentifier("selector-lista")
+                } else {
+                    NavigationLink {
+                        ListasView()
+                    } label: {
+                        Text("Gestionar")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.capsule)
                 }
             }
-            .listRowBackground(Tinta.superficie)
+        } header: {
+            CabeceraFila(titulo: "Listas", cuenta: biblioteca.webSources.isEmpty ? nil : biblioteca.webSources.count)
+                .textCase(nil)
+                .padding(.horizontal, 4)
         }
     }
 
     private func detalleLista(_ activa: WebSourceSummary?, biblioteca: LibraryView) -> String {
         var partes = [biblioteca.web.count == 1 ? "1 canal" : "\(biblioteca.web.count) canales"]
         if let fecha = (activa?.syncedAt ?? biblioteca.webSyncedAt).flatMap(FechaISO.parse) {
-            partes.append("sincronizada \(ReglasBiblioteca.fechaCorta(fecha))")
+            partes.append("actualizada \(ReglasBiblioteca.fechaCorta(fecha))")
         }
         if activa?.lastError != nil { partes.append("último intento con error") }
         return partes.joined(separator: " · ")
@@ -198,7 +292,7 @@ struct BibliotecaView: View {
 
     /// Una categoría plegable: la cabecera con su recuento y, desplegada, sus canales.
     @ViewBuilder
-    private func seccionCategoria(_ grupo: GrupoCategoria, biblioteca: LibraryView, todos: [Item]) -> some View {
+    private func seccionCategoria(_ grupo: GrupoCategoria, todos: [Item], idsLista: Set<String>, enPantalla: String?) -> some View {
         // Buscando, se despliegan solas las que tienen resultados.
         let abierta = !texto.isEmpty || desplegadas.contains(grupo.categoria)
         Section {
@@ -216,7 +310,7 @@ struct BibliotecaView: View {
                         .font(.footnote.weight(.bold))
                         .foregroundStyle(Tinta.texto2)
                         .rotationEffect(.degrees(abierta ? 90 : 0))
-                    Text(grupo.categoria.uppercased())
+                    Text(grupo.categoria)
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(Tinta.texto)
                         .lineLimit(1)
@@ -229,23 +323,25 @@ struct BibliotecaView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .listRowBackground(Tinta.superficie2)
+            .hapticoSeleccion(trigger: abierta)
             .accessibilityLabel("\(grupo.categoria), \(grupo.items.count) canales")
             .accessibilityValue(abierta ? "desplegada" : "plegada")
             .accessibilityHint(abierta ? "Toca para plegar" : "Toca para ver sus canales")
             .accessibilityIdentifier("categoria-\(grupo.categoria)")
 
             if abierta {
-                ForEach(grupo.items) { item in fila(item, en: todos, biblioteca: biblioteca) }
+                ForEach(grupo.items) { item in
+                    fila(item, en: todos, seccion: .listas, idsLista: idsLista, enPantalla: enPantalla)
+                }
             }
         }
     }
 
-    private func fila(_ item: Item, en lista: [Item], biblioteca: LibraryView) -> some View {
+    private func fila(_ item: Item, en lista: [Item], seccion: SeccionBiblioteca, idsLista: Set<String>, enPantalla: String?)
+        -> some View
+    {
         // «Canal caído» solo en favoritos (los que vinieron de la lista y ya no están).
-        let caido =
-            seccion == .favoritos && item.fromWebSync
-            && ReglasBiblioteca.caido(item, idsLista: Set(biblioteca.web.map { $0.id.lowercased() }))
+        let caido = seccion == .favoritos && item.fromWebSync && ReglasBiblioteca.caido(item, idsLista: idsLista)
         return Button {
             abrir(item, en: lista)
         } label: {
@@ -254,15 +350,15 @@ struct BibliotecaView: View {
                 favorito: seccion != .favoritos && app.esFavorito(item.id),
                 antena: antena.para(titulo: item.title, alias: item.alias, marcadores: app.marcadores),
                 subtitulo: ReglasBiblioteca.subtitulo(item, seccion: seccion),
-                caido: caido
+                caido: caido,
+                enPantalla: enPantalla == item.id.lowercased()
             )
         }
         .foregroundStyle(Tinta.texto)
-        .listRowBackground(Tinta.superficie)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             if seccion != .listas {
                 Button(role: .destructive) {
-                    borrar(item)
+                    borrar(item, seccion: seccion)
                 } label: {
                     Label("Borrar", systemImage: "trash")
                 }
@@ -276,90 +372,65 @@ struct BibliotecaView: View {
                 } label: {
                     Label(app.esFavorito(item.id) ? "Quitar" : "Favorito", systemImage: "star")
                 }
-                .tint(Tinta.acento)
+                .tint(Tinta.oro)
             }
         }
-        .contextMenu { menu(item) }
-    }
-
-    @ViewBuilder private var vacio: some View {
-        if !texto.isEmpty {
-            EstadoVacio(icono: "magnifyingglass", titulo: "Sin resultados", texto: "Nada en \(seccion.titulo.lowercased()) con «\(texto)».") {
-                EmptyView()
-            }
-        } else {
-            switch seccion {
-            case .favoritos:
-                EstadoVacio(
-                    icono: "star", titulo: "Sin favoritos",
-                    texto: "Marca un canal con la estrella (desliza a la derecha en Recientes o Listas) y aparecerá aquí."
-                ) {
-                    Button("Ver las listas") { withAnimation(Muelle.estandar) { seccionElegida = .listas } }
-                        .buttonStyle(.bordered)
-                }
-            case .recientes:
-                EstadoVacio(icono: "clock", titulo: "Nada reciente", texto: "Los canales que veas se guardan aquí.") {
-                    EmptyView()
-                }
-            case .listas:
-                EstadoVacio(
-                    icono: "list.bullet.rectangle", titulo: "Sin listas",
-                    texto: "Añade una lista M3U desde la web de Ace Player Neo (Ajustes → Listas)."
-                ) {
-                    EmptyView()
-                }
-            }
-        }
+        .contextMenu { menu(item, seccion: seccion) }
     }
 
     @ViewBuilder
-    private func menu(_ item: Item) -> some View {
+    private func menu(_ item: Item, seccion: SeccionBiblioteca) -> some View {
+        Button {
+            abrir(item, en: [item])
+        } label: {
+            Label("Ver canal", systemImage: "play.fill")
+        }
         Button {
             Task { await app.alternarFavorito(id: item.id, titulo: item.title, ih: item.ih) }
         } label: {
-            Label(app.esFavorito(item.id) ? "Quitar de favoritos" : "Añadir a favoritos", systemImage: "star")
+            Label(app.esFavorito(item.id) ? "Quitar de favoritos" : "Guardar en favoritos", systemImage: "star")
         }
         if seccion != .listas {
             Button {
                 nuevoTitulo = item.title
                 renombrando = item
             } label: {
-                Label("Editar título", systemImage: "pencil")
+                Label("Renombrar", systemImage: "pencil")
             }
         }
-        Button {
-            UIPasteboard.general.string = item.id
-            app.avisos.mostrar("Content ID copiado", tono: .ok)
+        Menu {
+            Button {
+                if let url = URL(string: "acestream://\(item.id)") { UIApplication.shared.open(url) }
+            } label: {
+                Label("Abrir en la app de AceStream", systemImage: "arrow.up.forward.app")
+            }
+            Button {
+                UIPasteboard.general.string = "acestream://\(item.id)"
+                app.avisos.mostrar("Enlace copiado", tono: .ok)
+            } label: {
+                Label("Copiar enlace", systemImage: "link")
+            }
         } label: {
-            Label("Copiar Content ID", systemImage: "doc.on.doc")
+            Label("Abrir en…", systemImage: "square.and.arrow.up")
         }
         if seccion != .listas {
             Button(role: .destructive) {
-                borrar(item)
+                borrar(item, seccion: seccion)
             } label: {
-                Label("Borrar", systemImage: "trash")
+                Label(seccion == .recientes ? "Quitar de recientes" : "Borrar", systemImage: "trash")
             }
         }
     }
 
     // MARK: Acciones
 
-    private func canal(_ item: Item) -> CanalReproducible {
-        CanalReproducible(
-            id: item.id, titulo: item.title, ih: item.ih,
-            listaId: item.type == .web ? app.biblioteca?.activeWebSourceId : nil,
-            origen: item.type == .web ? "m3u" : (item.type == .fav ? "favorites" : "history"))
-    }
-
-    /// Reproduce y abre el reproductor grande (deslizando hacia abajo se queda en el mini).
+    /// Reproduce y abre el escenario del canal.
     private func abrir(_ item: Item, en lista: [Item]) {
-        let elegido = canal(item)
-        app.reproducirCanal(elegido, lista: lista.map(canal))
-        withAnimation(Muelle.heroe) { app.reproductor.expandir() }
+        app.abrirCanal(app.canalReproducible(item), lista: lista.map { app.canalReproducible($0) })
     }
 
     /// Borra ya (se ve al instante) y ofrece deshacer durante 5 s.
-    private func borrar(_ item: Item) {
+    private func borrar(_ item: Item, seccion: SeccionBiblioteca) {
         guard var biblioteca = app.biblioteca else { return }
         let coleccion = seccion.coleccion
         switch coleccion {
@@ -384,7 +455,7 @@ struct BibliotecaView: View {
         let titulo = nuevoTitulo.trimmingCharacters(in: .whitespacesAndNewlines)
         renombrando = nil
         guard !titulo.isEmpty, titulo != item.title else { return }
-        let coleccion = seccion.coleccion
+        let coleccion: LibraryCollection = item.type == .recent ? .history : .favorites
         Task { await app.mutar(.rename(collection: coleccion, id: item.id, title: titulo), aviso: "Título cambiado") }
     }
 
@@ -394,6 +465,21 @@ struct BibliotecaView: View {
         while !Task.isCancelled {
             antena = IndiceAntena(agenda: app.agenda, reloj: RelojMadrid(.now))
             try? await Task.sleep(for: .seconds(60))
+        }
+    }
+}
+
+/// En iOS 17 la búsqueda va aquí (no hay pestaña Buscar con `Tab(role: .search)`).
+private struct BuscableSoloEnIOS17: ViewModifier {
+    @Binding var texto: String
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content
+        } else {
+            content.searchable(
+                text: $texto, placement: .navigationBarDrawer(displayMode: .always), prompt: "Buscar en tus canales")
         }
     }
 }
@@ -416,6 +502,7 @@ struct FilaCanal: View {
     let antena: EnAntena?
     let subtitulo: String?
     let caido: Bool
+    var enPantalla = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -432,6 +519,10 @@ struct FilaCanal: View {
                     Label("Ya no está en tu lista", systemImage: "exclamationmark.triangle")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Tinta.flojaTinta)
+                } else if enPantalla {
+                    Label("En pantalla", systemImage: "waveform")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(Tinta.acentoTinta)
                 } else if let subtitulo {
                     Text(subtitulo.uppercased())
                         .font(.caption2.weight(.semibold))
@@ -443,7 +534,7 @@ struct FilaCanal: View {
             if favorito {
                 Image(systemName: "star.fill")
                     .font(.footnote)
-                    .foregroundStyle(Tinta.acentoTinta)
+                    .foregroundStyle(Tinta.oro)
                     .accessibilityHidden(true)
             }
         }
@@ -464,12 +555,15 @@ struct FilaCanal: View {
         }
         if caido { partes.append("ya no está en tu lista") } else if let subtitulo { partes.append(subtitulo) }
         if favorito { partes.append("favorito") }
+        if enPantalla { partes.append("en pantalla") }
         return partes.joined(separator: ", ")
     }
 }
 
 /// «● Real Madrid 1–0 Getafe» si está en juego; «A las 21:00, España – Marruecos» si es el siguiente.
+/// El marcador del partido que suena en este iPhone va tapado (anti-spoiler), como en la web.
 struct LineaAntena: View {
+    @Environment(AppModel.self) private var app
     let antena: EnAntena
 
     var body: some View {
@@ -481,9 +575,9 @@ struct LineaAntena: View {
             }
             .accessibilityHidden(true)
             if antena.enDirecto {
-                Circle().fill(Color.red).frame(width: 6, height: 6)
+                Circle().fill(Tinta.directo).frame(width: 6, height: 6)
                 Text(textoDirecto(partido))
-                    .foregroundStyle(Tinta.acentoTinta)
+                    .foregroundStyle(Tinta.directo)
             } else if ReglasAgenda.minutosDeHora(partido.time) != nil {
                 Text("A las \(partido.time), \(FormatoAgenda.equipos(partido))")
                     .foregroundStyle(Tinta.texto2)
@@ -498,6 +592,9 @@ struct LineaAntena: View {
 
     private func textoDirecto(_ partido: FootballMatch) -> String {
         guard !partido.away.isEmpty else { return partido.title }
+        if app.marcadorTapado(partido) {
+            return "\(partido.home) – \(partido.away) · marcador oculto"
+        }
         if let marcador = antena.marcador, marcador.state == "in" || marcador.state == "post" {
             return "\(partido.home) \(marcador.home)–\(marcador.away) \(partido.away)"
         }

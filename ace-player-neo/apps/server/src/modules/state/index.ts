@@ -8,3 +8,14 @@
 
 export type * from './types.js';
 export { createStateService } from './service.js';
+/* Escritura atómica, lectura y cuarentena de ficheros (storage.ts): las usa
+   también `teams` para su índice y sus PNG en data/v2/teams/. */
+export {
+  corruptStamp,
+  fileExists,
+  isMissing,
+  quarantineSync,
+  readJsonObjectSync,
+  removeIfExists,
+  writeAtomic,
+} from './storage.js';

@@ -1,6 +1,8 @@
 /* Ajustes → Dispositivos (arquitectura §5.12 y §7.3): emparejar la app de
    iPhone, iPad o Mac con un código de 6 dígitos y su QR, ver los que ya están
-   y revocarlos.
+   y revocarlos. Piel «Palco» (plan fase 2, W10) en devices.css: tarjeta de
+   empezar con el botón de oro, código grande en oro, QR en tarjeta blanca y
+   punto verde en los que están conectados ahora mismo.
 
    - Emparejar: POST /api/v1/pairing → código grande (en dos grupos de 3) y el
      QR que dibuja el backend, con cuenta atrás de 5 min. Al caducar, «Crear
@@ -35,6 +37,7 @@ import { SkeletonRows } from '../../ui/Skeleton.tsx';
 import { useNow } from '../health/useNow.ts';
 import { useSecondTap } from '../settings/second-tap.ts';
 import {
+  isOnlineNow,
   lastSeenText,
   originKind,
   pairedText,
@@ -64,15 +67,19 @@ function DeviceRow({
   onRevoke(): void;
 }) {
   const { bind, menu } = useContextMenu();
+  const online = isOnlineNow(device, now);
   return (
-    <li className="disp-dev" {...bind}>
+    <li className="disp-dev" data-online={online || undefined} {...bind}>
       <span className="disp-dev__icon" aria-hidden="true">
         <Icon name={PLATFORM_ICON[device.platform]} size={20} />
       </span>
       <div className="disp-dev__text">
         <span className="disp-dev__name">{device.name}</span>
         <span className="disp-dev__meta">
-          {PLATFORM_LABEL[device.platform]} · {lastSeenText(device, now)}
+          {online ? <i className="disp-dev__dot" aria-hidden="true" /> : null}
+          <span>
+            {PLATFORM_LABEL[device.platform]} · {lastSeenText(device, now)}
+          </span>
         </span>
         <span className="disp-dev__meta disp-dev__meta--soft">{pairedText(device)}</span>
       </div>

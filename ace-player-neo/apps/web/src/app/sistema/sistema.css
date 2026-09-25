@@ -85,9 +85,23 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: var(--live);
+  color: var(--live-ink);
   font-weight: 700;
   font-size: var(--fs-13);
+}
+.sis-posters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--s-3);
+}
+.sis-poster-xl {
+  max-width: 720px;
+}
+.sis-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--s-3);
 }
 .sis-glass {
   display: grid;

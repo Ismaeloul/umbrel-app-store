@@ -7,7 +7,9 @@ import {
   DateOnlySchema,
   EpochMsSchema,
   HashSchema,
+  HexColorSchema,
   IsoDateTimeSchema,
+  SafeIdSchema,
   ScanJobIdSchema,
 } from '../primitives.js';
 import {
@@ -41,6 +43,38 @@ export const FootballChannelRefSchema = z.strictObject({
 
 export const FootballSourceSchema = z.enum(['futbolenlatv', 'movistarplus', 'thesportsdb', 'demo']);
 
+/**
+ * Escudo y colores de un equipo, resueltos por el módulo `teams` desde
+ * TheSportsDB y cacheados en el volumen de datos. Solo aparece en
+ * `GET /api/v1/football` (nunca en la ruta antigua) y solo cuando el índice
+ * sabe algo del equipo: si falta, el cliente pinta un escudo generado y un
+ * color derivado del nombre. Los clientes nunca enlazan imágenes de terceros.
+ */
+export const TeamBadgeSchema = z.strictObject({
+  /** `idTeam` de TheSportsDB, o `k-<clave>` si solo hay colores fijados a mano. */
+  id: SafeIdSchema,
+  /** Nombre según TheSportsDB (para depurar y para el `alt`). */
+  name: z.string(),
+  /** Abreviatura de hasta 4 letras (`RMA`), si la hay. */
+  short: z.string().max(4).nullable(),
+  /** `/api/v1/football/teams/<id>/crest?v=<etag>` (mismo origen; iOS le antepone su base y `/native`). */
+  crest: z.string().startsWith('/').nullable(),
+  colors: z
+    .strictObject({ primary: HexColorSchema, secondary: HexColorSchema.nullable() })
+    .nullable(),
+});
+export type TeamBadge = z.infer<typeof TeamBadgeSchema>;
+
+/** Logo de la competición, mismo circuito que los escudos. */
+export const CompetitionBadgeSchema = z.strictObject({
+  /** `idLeague` de TheSportsDB. */
+  id: SafeIdSchema,
+  name: z.string(),
+  /** `/api/v1/football/competitions/<id>/logo?v=<etag>`. */
+  logo: z.string().startsWith('/').nullable(),
+});
+export type CompetitionBadge = z.infer<typeof CompetitionBadgeSchema>;
+
 export const FootballMatchSchema = z.strictObject({
   /** `fltv-<fecha>-<posición>`, `epg-…`, id de TheSportsDB o `demo-N`. En la 0.7.0, estable (arquitectura §5.10). */
   id: z.string().min(1),
@@ -57,6 +91,11 @@ export const FootballMatchSchema = z.strictObject({
   competition: z.string(),
   country: z.string(),
   channels: z.array(FootballChannelRefSchema),
+  /** Escudos y colores (módulo `teams`): solo en /api/v1 y solo si se conocen. `home`/`away` siguen siendo texto. */
+  homeTeam: TeamBadgeSchema.optional(),
+  awayTeam: TeamBadgeSchema.optional(),
+  /** Logo de la competición, si se conoce. `competition` sigue siendo texto. */
+  competitionBadge: CompetitionBadgeSchema.optional(),
 });
 export type FootballMatch = z.infer<typeof FootballMatchSchema>;
 

@@ -1,4 +1,7 @@
-/* Vista Biblioteca (inventario-front §13, maqueta A `biblioteca.html`).
+/* Vista Canales (la biblioteca; inventario-front §13, piel «Palco», plan de la
+   fase 2 W8): «Emitiendo ahora» como carrusel de carteles de canal, filas con
+   tesela 16:9 y categorías como rótulos. Misma lógica y mismos nombres
+   accesibles que antes.
 
    - Pestañas Favoritos / Recientes / Listas, cada una con su contador. Abre en
      la que tiene contenido (regla 32) y la elegida viaja en la URL
@@ -22,9 +25,10 @@ import type { ViewProps } from '../../app/contracts.ts';
 import { requestFocus } from '../../app/focus.ts';
 import { useLayout } from '../../app/layout.tsx';
 import { useNavigate, useSearchParam } from '../../app/router.tsx';
-import { searchFor } from '../../app/routes.ts';
+import { searchFor, VISTA_TITLE } from '../../app/routes.ts';
 import { ViewHeader } from '../../app/ViewHeader.tsx';
 import { useSwipe } from '../../lib/gestures.ts';
+import { haptic } from '../../lib/haptics.ts';
 import { notify } from '../../notices/index.ts';
 import {
   Button,
@@ -111,7 +115,11 @@ export default function LibraryView({ active }: ViewProps) {
   const onScreen = useOnScreenHash();
   const selectOnClick = layout.asideVisible;
 
-  const setTab = (next: LibraryTab) => setTabParam(next);
+  const setTab = (next: LibraryTab) => {
+    // Cambiar de pestaña (toque o deslizamiento): «selección» del mapa háptico.
+    if (next !== tabParam) haptic('selection');
+    setTabParam(next);
+  };
   const actions = useChannelActions({ onFavoriteSaved: () => setTab('favoritos') });
 
   // Filtro local con 140 ms de espera: una tecla nueva cancela la anterior,
@@ -290,7 +298,7 @@ export default function LibraryView({ active }: ViewProps) {
 
   const header = (
     <ViewHeader
-      title="Biblioteca"
+      title={VISTA_TITLE.biblioteca}
       actions={
         <>
           <IconButton
@@ -473,7 +481,12 @@ export default function LibraryView({ active }: ViewProps) {
       {header}
       {search}
       {q ? null : (
-        <OnAirStrip entries={onAirNow} onScreen={onScreen} onPlay={(item) => actions.play(item)} />
+        <OnAirStrip
+          entries={onAirNow}
+          onScreen={onScreen}
+          favoriteIds={actions.favoriteIds}
+          onPlay={(item) => actions.play(item)}
+        />
       )}
       <Tabs
         label="Secciones de la biblioteca"

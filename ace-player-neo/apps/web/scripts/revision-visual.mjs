@@ -143,7 +143,7 @@ const VIEWS = [
     prepare: async (page) => {
       await waitPlaying(page);
       const minimize = page.getByRole('button', { name: 'Minimizar el reproductor' });
-      const rail = page.locator('.rail a.rail__item[href*="vista=agenda"]').first();
+      const rail = page.locator('.topbar a.topbar__item[href*="vista=agenda"]').first();
       if ((await minimize.count()) > 0) {
         // Móvil: la flecha del vídeo. Los controles pueden estar ocultos (a los
         // 3,2 s): se despiertan moviendo el ratón por encima del vídeo.
@@ -168,6 +168,22 @@ const VIEWS = [
       await page.waitForTimeout(700);
     },
   },
+  // Canales con un canal sonando: su cartel «En pantalla» con el marcador tapado.
+  {
+    name: 'biblioteca-sonando',
+    search: () => `?vista=partido/canal/${CANAL}`,
+    player: true,
+    prepare: async (page) => {
+      await waitPlaying(page);
+      await page.evaluate(() => {
+        const demo = location.search.includes('demo=1') ? '&demo=1' : '';
+        history.pushState(null, '', `?vista=biblioteca&pestana=favoritos${demo}`);
+        dispatchEvent(new PopStateEvent('popstate'));
+      });
+      await page.waitForSelector('.lib', { timeout: 10_000 });
+      await page.waitForTimeout(900);
+    },
+  },
   { name: 'biblioteca-favoritos', search: '?vista=biblioteca&pestana=favoritos', ready: '.lib' },
   { name: 'biblioteca-recientes', search: '?vista=biblioteca&pestana=recientes', ready: '.lib' },
   { name: 'biblioteca-listas', search: '?vista=biblioteca&pestana=listas', ready: '.lib' },
@@ -187,7 +203,35 @@ const VIEWS = [
     },
   },
   { name: 'buscar', search: '?vista=buscar&q=deportes', ready: 'main' },
+  // «Enlace detectado» (Palco W9): un Content ID de 40 hex en el campo.
+  {
+    name: 'buscar-enlace',
+    search: '?vista=buscar&q=a3f19c2b7d4e8f0a1b2c3d4e5f6a7b8c9d0e1f2a',
+    ready: '.search-link',
+  },
+  // Hoja «Pegar un Content ID» con un enlace ya escrito (Palco W9).
+  {
+    name: 'pegar',
+    search: '?vista=biblioteca',
+    ready: '.lib',
+    prepare: async (page) => {
+      await page
+        .getByRole('button', { name: /^Pegar un Content ID/ })
+        .first()
+        .click();
+      await dialogOpen(page);
+      await page
+        .locator('[role="dialog"] input')
+        .first()
+        .fill('acestream://a3f19c2b7d4e8f0a1b2c3d4e5f6a7b8c9d0e1f2a');
+      await page.waitForTimeout(300);
+    },
+  },
   { name: 'ajustes', search: '?vista=ajustes', ready: 'main' },
+  { name: 'ajustes-apariencia', search: '?vista=ajustes/apariencia', ready: 'main' },
+  { name: 'ajustes-reproduccion', search: '?vista=ajustes/reproduccion', ready: 'main' },
+  { name: 'ajustes-donde', search: '?vista=ajustes/donde', ready: 'main' },
+  { name: 'ajustes-motor', search: '?vista=ajustes/motor', ready: 'main' },
   {
     name: 'dispositivos',
     search: '?vista=ajustes/dispositivos',
@@ -210,7 +254,7 @@ const VIEWS = [
     ready: '.agenda',
     prepare: async (page) => {
       await page
-        .getByRole('button', { name: /Personalizar|Tus gustos|Preferencias/ })
+        .getByRole('button', { name: /Personalizar|Tus gustos|Editar mis gustos|Preferencias/ })
         .first()
         .click();
       await dialogOpen(page);
@@ -430,6 +474,54 @@ function auditInPage({ width, touch }) {
       break;
     }
   }
+  /* Capa de toque: un control absoluto que cubre su tarjeta entera (la
+     tarjeta de partido es UN botón por encima de todo, `.agenda-row__hit`).
+     Un control DENTRO de esa tarjeta que queda por encima de la capa (la
+     cápsula «Marcador») no la pisa: está encima a propósito, como lo fijo
+     sobre la lista. Se comprueba de verdad: en el centro de lo que se ve del
+     control, `elementFromPoint` tiene que devolver ese control (si está fuera
+     de la pantalla, se lleva al centro un momento y se deja todo como
+     estaba). Si la capa lo tapara, sí es un solape. */
+  const coversCard = (el) => {
+    const card = el.parentElement;
+    if (!card || getComputedStyle(el).position !== 'absolute') return null;
+    const a = el.getBoundingClientRect();
+    const c = card.getBoundingClientRect();
+    const same =
+      Math.abs(a.left - c.left) <= 1 &&
+      Math.abs(a.top - c.top) <= 1 &&
+      Math.abs(a.right - c.right) <= 1 &&
+      Math.abs(a.bottom - c.bottom) <= 1;
+    return same ? card : null;
+  };
+  const onTop = (el) => {
+    const hitsIt = () => {
+      const { left, top, right, bottom } = visibleRect(el);
+      const x = (left + right) / 2;
+      const y = (top + bottom) / 2;
+      if (x < 0 || y < 0 || x >= vw || y >= window.innerHeight) return null;
+      const hit = document.elementFromPoint(x, y);
+      return hit !== null && (hit === el || el.contains(hit));
+    };
+    const first = hitsIt();
+    if (first !== null) return first;
+    // Fuera de la pantalla: al centro, se mira y se devuelve cada scroll a su sitio.
+    const saved = [];
+    for (let node = el.parentElement; node; node = node.parentElement)
+      saved.push([node, node.scrollLeft, node.scrollTop]);
+    const [pageX, pageY] = [window.scrollX, window.scrollY];
+    el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
+    const result = hitsIt() === true;
+    for (const [node, left, top] of saved)
+      if (node.scrollLeft !== left || node.scrollTop !== top)
+        node.scrollTo({ left, top, behavior: 'instant' });
+    window.scrollTo({ left: pageX, top: pageY, behavior: 'instant' });
+    return result;
+  };
+  const aboveHitLayer = (layer, control) => {
+    const card = coversCard(layer);
+    return card !== null && card.contains(control) && onTop(control);
+  };
   for (let i = 0; i < boxes.length; i += 1) {
     for (let j = i + 1; j < boxes.length; j += 1) {
       const a = boxes[i];
@@ -437,8 +529,9 @@ function auditInPage({ width, touch }) {
       if (a.layer !== b.layer || a.el.contains(b.el) || b.el.contains(a.el)) continue;
       const w = Math.min(a.seen.right, b.seen.right) - Math.max(a.seen.left, b.seen.left);
       const h = Math.min(a.seen.bottom, b.seen.bottom) - Math.max(a.seen.top, b.seen.top);
-      if (w > 2 && h > 2)
-        problems.push(`controles solapados: ${describe(a.el)} y ${describe(b.el)}`);
+      if (w <= 2 || h <= 2) continue;
+      if (aboveHitLayer(a.el, b.el) || aboveHitLayer(b.el, a.el)) continue;
+      problems.push(`controles solapados: ${describe(a.el)} y ${describe(b.el)}`);
     }
   }
 
@@ -510,7 +603,8 @@ async function checkLandscapePlayer(page, shotFile = null) {
 
 /** Recorrido con Tab: todo lo enfocable se alcanza, el foco nunca se pierde
     ni cae en algo invisible, y siempre se ve (borde de foco o un cambio de
-    sombra, borde o fondo al enfocarse). Devuelve los problemas y cuántas
+    sombra, borde o fondo al enfocarse, en el control, su caja o lo que lleva
+    dentro). Devuelve los problemas y cuántas
     paradas tuvo el recorrido. */
 async function checkKeyboard(page) {
   const problems = [];
@@ -536,7 +630,14 @@ async function checkKeyboard(page) {
   const reached = new Set();
   let stops = 0;
   let lost = 0;
-  for (let step = 0; step < Math.min(tabbables + 4, 160); step += 1) {
+  /* El recorrido acaba al volver a un control ya visitado; el tope solo evita
+     un bucle sin fin. No vale `tabbables + 4`: el recorrido puede empezar a
+     media página (una vista que baja a su sección, como `ajustes/donde`, y
+     el navegador sigue desde ahí), dar la vuelta por la barra del navegador
+     y encontrar controles que se montan mientras se avanza (en Ajustes, Salud
+     y Acerca de se montan cuando el foco entra), que no estaban en la cuenta
+     inicial. Con el tope justo se quedaba sin llegar a los últimos. */
+  for (let step = 0; step < Math.max(tabbables * 2 + 20, 60) && step < 300; step += 1) {
     await page.keyboard.press('Tab');
     await page.waitForTimeout(40);
     let info = await page.evaluate(focusInfo);
@@ -599,8 +700,11 @@ function focusInfo() {
   if (!ring) {
     // Sin borde de foco: vale si al enfocarse cambia la sombra, el borde, el
     // fondo o el contorno del propio control o de su caja (:focus-within de
-    // los campos de texto, que pintan el anillo en .field__box).
+    // los campos de texto, que pintan el anillo en .field__box), o la sombra
+    // o el contorno de lo que lleva dentro (el cartel de fuente pinta el
+    // anillo alrededor de su tesela, `.src-poster:focus-visible .src-poster__tile`).
     const chain = [el, el.parentElement, el.parentElement?.parentElement].filter(Boolean);
+    const inside = [...el.querySelectorAll('*')].slice(0, 80);
     const snapshot = () =>
       chain
         .map((node) => {
@@ -612,7 +716,14 @@ function focusInfo() {
             style.outlineStyle,
           ].join('|');
         })
-        .join('||') + getComputedStyle(el).color;
+        .join('||') +
+      getComputedStyle(el).color +
+      inside
+        .map((node) => {
+          const style = getComputedStyle(node);
+          return `${style.boxShadow}|${style.outlineStyle}|${style.outlineColor}`;
+        })
+        .join('||');
     const withFocus = snapshot();
     el.blur();
     const without = snapshot();
@@ -646,6 +757,32 @@ async function checkAxe(page) {
 function urlFor(base, view) {
   const search = typeof view.search === 'function' ? view.search() : view.search;
   return `${base}/${search}${DEMO ? '&demo=1' : ''}`;
+}
+
+/** Espera a que acaben las entradas escalonadas (filas que llegan con
+    `ace-aparece`: opacidad y 8 px de desplazamiento). A medias, la captura
+    sale con filas desvaídas, axe mide el texto medio transparente y la fila
+    que sube asoma bajo el borde de su lista. En Canales las filas llegan
+    ~0,5 s después de estar lista la vista y tardan ~1 s; en Ajustes, Salud
+    llega cuando se acerca (y entra con su propia aparición). Se esperan solo
+    las animaciones CSS finitas: los latidos son infinitos y las transiciones
+    (barra de progreso, minuto) no paran. */
+async function settle(page) {
+  const quiet = () =>
+    document
+      .getAnimations()
+      .every(
+        (animation) =>
+          !(animation instanceof CSSAnimation) ||
+          animation.playState !== 'running' ||
+          animation.effect?.getComputedTiming().iterations === Infinity,
+      );
+  // Quieto dos veces seguidas con 300 ms entre medias (lo diferido llega a trozos).
+  for (let round = 0; round < 4; round += 1) {
+    await page.waitForFunction(quiet, null, { timeout: 4000 }).catch(() => {});
+    await page.waitForTimeout(300);
+    if (await page.evaluate(quiet)) return;
+  }
 }
 
 /** Abre la vista y la deja lista. En vivo, si el arranque cae en la demo (la red de
@@ -685,6 +822,7 @@ async function openView(page, base, view, size) {
         if (frame) await page.mouse.move(frame.x + frame.width / 2, frame.y + frame.height / 3);
       }
       await page.waitForTimeout(700);
+      await settle(page);
       return;
     } catch (error) {
       lastError = error;
@@ -740,8 +878,11 @@ async function runCombo(browser, base, size, scheme, extras) {
         .map((item) => item.slice(7));
       entry.problems.push(...found.filter((item) => !item.startsWith('aviso: ')));
       if (extras.checks) entry.problems.push(...(await extras.checks(page)));
-      if (WITH_AXE && !extras.suffix && AXE_SIZES.has(sizeKey(size)))
+      if (WITH_AXE && !extras.suffix && AXE_SIZES.has(sizeKey(size))) {
+        // Lo que haya llegado después de la captura (Salud en Ajustes), ya quieto.
+        await settle(page);
         entry.problems.push(...(await checkAxe(page)));
+      }
       if (view.player && view.name === 'reproductor' && isPhoneLandscape(size) && !extras.suffix) {
         const hidden = SHOTS_DIR
           ? path.join(

@@ -13,6 +13,10 @@ import type { FootballDeps, FootballService } from './types.js';
 
 export type * from './types.js';
 export { FootballServiceImpl } from './service.js';
+/* Parecido de nombres de equipo (scores.ts) y base de TheSportsDB: los usa
+   `teams` para elegir el candidato y pedir escudos. */
+export { canonicalTeam, teamSimilarity } from './scores.js';
+export { THESPORTSDB_BASE } from './constants.js';
 
 export function createFootballService(deps: FootballDeps): FootballService {
   return new FootballServiceImpl(deps);

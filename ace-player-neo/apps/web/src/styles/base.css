@@ -1,7 +1,8 @@
 /* ==========================================================================
    Base: reinicio, tipografía, foco, cristal, utilidades de movimiento y
    transiciones de vista. Los componentes llevan su propio CSS junto a ellos
-   (src/ui/*.css); aquí solo lo que es de toda la app.
+   (src/ui/*.css); aquí solo lo que es de toda la app. Piel «Palco» (fase 2,
+   decisión W1): cristal con desenfoque 30, foco en oro, titulares expandidos.
 
    Reglas que cuidan todas las hojas (docs/diseno/sistema.md):
    - Solo se animan transform y opacity.
@@ -144,6 +145,8 @@ video {
 }
 
 /* ---- Tipografía ------------------------------------------------------------ */
+/* Titular Palco: Mona Sans al 125 % de anchura, peso 800, tracking −0,02 em
+   (la misma voz que el fontWidth(.expanded) de la app). */
 .titulo {
   font-size: var(--fs-30);
   line-height: var(--lh-tight);
@@ -151,6 +154,14 @@ video {
   font-stretch: var(--w-head);
   letter-spacing: var(--tracking-head);
   text-wrap: balance;
+}
+/* Kicker: competición, sección o fecha en mayúsculas espaciadas. */
+.kicker {
+  font-size: var(--fs-kicker);
+  font-weight: 700;
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+  color: var(--text-3);
 }
 .texto-2 {
   color: var(--text-2);
@@ -239,8 +250,9 @@ video {
   backdrop-filter: none;
 }
 
-/* ---- Microinteracción al pulsar: el control se aprieta (transform) y se
-   ilumina (una capa con opacidad, no un filtro). -------------------------- */
+/* ---- Microinteracción al pulsar: el control se aprieta (transform, 0,975
+   como los carteles de Palco) y se ilumina (una capa con opacidad, no un
+   filtro). ------------------------------------------------------------------ */
 .press {
   position: relative;
   transition: transform var(--dur-rapido) var(--ease-rapido);
@@ -256,7 +268,7 @@ video {
   transition: opacity var(--dur-rapido) var(--ease-rapido);
 }
 .press:active:not(:disabled) {
-  transform: scale(0.97);
+  transform: scale(0.975);
 }
 .press:active:not(:disabled)::after {
   opacity: 0.1;

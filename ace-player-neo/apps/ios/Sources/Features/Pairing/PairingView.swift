@@ -1,7 +1,8 @@
 import SwiftUI
 import UIKit
 
-/// Emparejar el iPhone: escanear el QR de la web o teclear dirección y código.
+/// Emparejar el iPhone, en negro cine: escanear el QR de la web (la acción
+/// principal, de oro) o teclear el código y las direcciones debajo.
 struct PairingView: View {
     @Environment(AppModel.self) private var modelo
     @Binding var enlace: PairingLink?
@@ -24,15 +25,15 @@ struct PairingView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 28) {
+                VStack(alignment: .leading, spacing: 22) {
                     cabecera
                     if let aviso = modelo.aviso {
                         Label(aviso, systemImage: "exclamationmark.triangle.fill")
                             .font(.callout)
-                            .foregroundStyle(Tinta.falloTinta)
+                            .foregroundStyle(Color(red: 1, green: 0.48, blue: 0.44))
                             .padding(14)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Tinta.superficie, in: RoundedRectangle(cornerRadius: Medida.radioM))
+                            .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: Medida.radioM, style: .continuous))
                     }
                     Button {
                         errorEscaner = nil
@@ -40,27 +41,31 @@ struct PairingView: View {
                     } label: {
                         Label("Escanear el código QR", systemImage: "qrcode.viewfinder")
                             .font(.headline)
-                            .frame(maxWidth: .infinity, minHeight: Medida.toque)
+                            .frame(maxWidth: .infinity, minHeight: 50)
                     }
-                    .buttonStyle(.bordered)
+                    .botonOro()
                     .accessibilityIdentifier("boton-escanear")
 
-                    direcciones
+                    Text("o escribe el código")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .frame(maxWidth: .infinity)
+
                     codigo
+                    direcciones
                     if let mensaje = vm.mensajeError {
                         Label(mensaje, systemImage: "xmark.octagon.fill")
                             .font(.callout)
-                            .foregroundStyle(Tinta.falloTinta)
+                            .foregroundStyle(Color(red: 1, green: 0.48, blue: 0.44))
                             .accessibilityIdentifier("error-emparejar")
                     }
                 }
                 .padding(Medida.margen)
+                .padding(.top, 8)
             }
             .scrollDismissesKeyboard(.interactively)
-            .background(Tinta.fondo.ignoresSafeArea())
-            // Título grande del sistema arriba (se encoge al desplazar, con su
-            // propio fondo): nada de franjas propias encima del contenido.
-            .navigationTitle("Emparejar")
+            .background(fondo.ignoresSafeArea())
+            .toolbar(.hidden, for: .navigationBar)
             .safeAreaInset(edge: .bottom) { botonEmparejar }
             .sheet(isPresented: $vm.mostrandoEscaner) { escaner }
             .onChange(of: enlace, initial: true) { _, nuevo in
@@ -70,39 +75,91 @@ struct PairingView: View {
             }
             .sensoryFeedback(.error, trigger: vm.mensajeError) { _, nuevo in nuevo != nil }
         }
+        .environment(\.colorScheme, .dark)
+    }
+
+    /// Negro cine con una luz de oro y otra roja, como el plató del prototipo.
+    private var fondo: some View {
+        ZStack {
+            Color(red: 0.02, green: 0.027, blue: 0.04)
+            RadialGradient(
+                colors: [Tinta.oro.opacity(0.22), .clear], center: UnitPoint(x: 0.15, y: 0.1), startRadius: 0,
+                endRadius: 420)
+            RadialGradient(
+                colors: [Tinta.directo.opacity(0.16), .clear], center: UnitPoint(x: 0.9, y: 0.35), startRadius: 0,
+                endRadius: 380)
+            LinearGradient(
+                colors: [.clear, Color(red: 0.02, green: 0.027, blue: 0.04).opacity(0.9)], startPoint: .center,
+                endPoint: .bottom)
+        }
     }
 
     private var cabecera: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Image("Marca")
-                .resizable()
-                .frame(width: 72, height: 72)
-                .clipShape(RoundedRectangle(cornerRadius: 17, style: .continuous))
-                .accessibilityHidden(true)
-            Text("Ace Neo")
-                .font(.titular(.title))
-                .foregroundStyle(Tinta.texto)
+            HStack(spacing: 10) {
+                Image("Marca")
+                    .resizable()
+                    .frame(width: 32, height: 32)
+                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .accessibilityHidden(true)
+                Text("Ace Player Neo")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.white.opacity(0.85))
+            }
+            .padding(.bottom, 18)
+            Text("Empareja este iPhone")
+                .font(.titular(.largeTitle, peso: .heavy))
+                .foregroundStyle(.white)
                 .accessibilityAddTraits(.isHeader)
-            Text("Empareja este iPhone con tu Ace Player Neo. En la web, abre Ajustes → Dispositivos → Emparejar un dispositivo.")
+            Text("En la web, abre Ajustes › Dispositivos › Emparejar un dispositivo. Escanea el QR o escribe los seis dígitos y la dirección.")
                 .font(.body)
-                .foregroundStyle(Tinta.texto2)
+                .foregroundStyle(.white.opacity(0.78))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var codigo: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Código de emparejamiento")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.85))
+            TextField("000000", text: $vm.codigo)
+                .keyboardType(.numberPad)
+                .textContentType(.oneTimeCode)
+                .font(.numeros(.largeTitle, peso: .bold))
+                .kerning(8)
+                .multilineTextAlignment(.center)
+                .focused($enfoque, equals: .codigo)
+                .padding(.horizontal, 14)
+                .frame(minHeight: 60)
+                .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: Medida.radioM, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Medida.radioM, style: .continuous)
+                        .strokeBorder(
+                            enfoque == .codigo ? Tinta.oro : (vm.codigo.count == 6 ? Tinta.oro.opacity(0.7) : .white.opacity(0.22)),
+                            lineWidth: 1))
+                .accessibilityLabel("Código de 6 dígitos")
+                .accessibilityIdentifier("campo-codigo")
+            Text("Caduca a los 5 minutos y solo sirve una vez.")
+                .font(.footnote)
+                .foregroundStyle(.white.opacity(0.55))
         }
     }
 
     private var direcciones: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Dirección del servidor")
-                .font(.headline)
-                .foregroundStyle(Tinta.texto)
-            campoDireccion(
-                "Tailscale", ejemplo: "http://umbrel.tu-red.ts.net:7792", texto: $vm.direccionTailscale,
-                campo: .tailscale, id: "campo-tailscale")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.85))
             campoDireccion(
                 "Red local", ejemplo: "http://umbrel.local:7792", texto: $vm.direccionLAN, campo: .lan,
                 id: "campo-lan")
+            campoDireccion(
+                "Tailscale", ejemplo: "http://umbrel.tu-red.ts.net:7792", texto: $vm.direccionTailscale,
+                campo: .tailscale, id: "campo-tailscale")
             Text("Pon una o las dos: la app usa la que responda y cambia sola al salir de casa.")
                 .font(.footnote)
-                .foregroundStyle(Tinta.texto3)
+                .foregroundStyle(.white.opacity(0.55))
         }
     }
 
@@ -111,8 +168,8 @@ struct PairingView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(titulo)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(Tinta.texto2)
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.white.opacity(0.7))
             TextField(ejemplo, text: texto)
                 .keyboardType(.URL)
                 .textContentType(.URL)
@@ -122,57 +179,53 @@ struct PairingView: View {
                 .focused($enfoque, equals: campo)
                 .padding(.horizontal, 14)
                 .frame(minHeight: Medida.toque)
-                .background(Tinta.superficie, in: RoundedRectangle(cornerRadius: Medida.radioM))
+                .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: Medida.radioM, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: Medida.radioM)
-                        .strokeBorder(enfoque == campo ? Tinta.acentoBorde : Tinta.linea, lineWidth: 1))
+                    RoundedRectangle(cornerRadius: Medida.radioM, style: .continuous)
+                        .strokeBorder(enfoque == campo ? Tinta.oro : .white.opacity(0.22), lineWidth: 1))
                 .accessibilityLabel("Dirección de \(titulo)")
                 .accessibilityIdentifier(id)
         }
     }
 
-    private var codigo: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Código de emparejamiento")
-                .font(.headline)
-                .foregroundStyle(Tinta.texto)
-            TextField("000000", text: $vm.codigo)
-                .keyboardType(.numberPad)
-                .textContentType(.oneTimeCode)
-                .font(.numeros(.largeTitle, peso: .bold))
-                .kerning(6)
-                .focused($enfoque, equals: .codigo)
-                .padding(.horizontal, 14)
-                .frame(minHeight: 60)
-                .background(Tinta.superficie, in: RoundedRectangle(cornerRadius: Medida.radioM))
-                .overlay(
-                    RoundedRectangle(cornerRadius: Medida.radioM)
-                        .strokeBorder(enfoque == .codigo ? Tinta.acentoBorde : Tinta.linea, lineWidth: 1))
-                .accessibilityLabel("Código de 6 dígitos")
-                .accessibilityIdentifier("campo-codigo")
-            Text("Caduca a los 5 minutos y solo sirve una vez.")
-                .font(.footnote)
-                .foregroundStyle(Tinta.texto3)
-        }
-    }
-
     private var botonEmparejar: some View {
         VStack(spacing: 0) {
-            botonEmparejarSolo
+            Button {
+                enfoque = nil
+                let nombre = UIDevice.current.name
+                Task {
+                    if await vm.emparejar(nombreDispositivo: nombre) {
+                        modelo.emparejado()
+                    }
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    if vm.estado == .enviando {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "link")
+                    }
+                    Text(vm.estado == .enviando ? "Emparejando…" : "Emparejar")
+                }
+                .font(.headline)
+                .frame(maxWidth: .infinity, minHeight: Medida.toque)
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+            .tint(.white)
+            .disabled(!vm.puedeEnviar)
+            .accessibilityIdentifier("boton-emparejar")
         }
         .padding(.horizontal, Medida.margen)
         .padding(.top, 18)
         .padding(.bottom, 8)
-        // Sin barra de material (en oscuro salía como una franja gris): el
-        // contenido se funde con el fondo por detrás del botón. El fondo va en
-        // el contenedor: en el botón, su marco llegaba hasta debajo del
-        // teclado y XCUITest (y VoiceOver) lo tocaban fuera.
+        // El contenido se funde con el fondo por detrás del botón (sin barra de material).
         .background {
             LinearGradient(
                 stops: [
-                    .init(color: Tinta.fondo.opacity(0), location: 0),
-                    .init(color: Tinta.fondo, location: 0.28),
-                    .init(color: Tinta.fondo, location: 1),
+                    .init(color: Color(red: 0.02, green: 0.027, blue: 0.04).opacity(0), location: 0),
+                    .init(color: Color(red: 0.02, green: 0.027, blue: 0.04), location: 0.3),
+                    .init(color: Color(red: 0.02, green: 0.027, blue: 0.04), location: 1),
                 ],
                 startPoint: .top, endPoint: .bottom
             )
@@ -180,32 +233,6 @@ struct PairingView: View {
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
-    }
-
-    private var botonEmparejarSolo: some View {
-        Button {
-            enfoque = nil
-            let nombre = UIDevice.current.name
-            Task {
-                if await vm.emparejar(nombreDispositivo: nombre) {
-                    modelo.emparejado()
-                }
-            }
-        } label: {
-            HStack(spacing: 10) {
-                if vm.estado == .enviando {
-                    ProgressView()
-                } else {
-                    Image(systemName: "link")
-                }
-                Text(vm.estado == .enviando ? "Emparejando…" : "Emparejar")
-            }
-            .font(.headline)
-            .frame(maxWidth: .infinity, minHeight: Medida.toque)
-        }
-        .buttonStyle(.borderedProminent)
-        .disabled(!vm.puedeEnviar)
-        .accessibilityIdentifier("boton-emparejar")
     }
 
     private var escaner: some View {
@@ -219,6 +246,11 @@ struct PairingView: View {
                 alFallar: { mensaje in errorEscaner = mensaje }
             )
             .ignoresSafeArea()
+            .overlay {
+                MarcoEnfoque()
+                    .frame(width: 240, height: 240)
+                    .accessibilityHidden(true)
+            }
             .overlay(alignment: .bottom) {
                 Text(errorEscaner ?? vm.mensajeError ?? "Apunta al código QR que enseña la web.")
                     .font(.callout)
@@ -235,6 +267,25 @@ struct PairingView: View {
                     Button("Cerrar") { vm.mostrandoEscaner = false }
                 }
             }
+        }
+    }
+}
+
+/// Marco de enfoque del escáner: cuatro esquinas de oro y un velo alrededor.
+struct MarcoEnfoque: View {
+    var body: some View {
+        GeometryReader { geo in
+            let lado: CGFloat = 28
+            let w = geo.size.width
+            let h = geo.size.height
+            Path { camino in
+                for (x, y, dx, dy) in [(0, 0, 1, 1), (w, 0, -1, 1), (0, h, 1, -1), (w, h, -1, -1)] as [(CGFloat, CGFloat, CGFloat, CGFloat)] {
+                    camino.move(to: CGPoint(x: x, y: y + dy * lado))
+                    camino.addLine(to: CGPoint(x: x, y: y))
+                    camino.addLine(to: CGPoint(x: x + dx * lado, y: y))
+                }
+            }
+            .stroke(Tinta.oro, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
         }
     }
 }

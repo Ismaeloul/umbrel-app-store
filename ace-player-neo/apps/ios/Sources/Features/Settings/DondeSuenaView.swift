@@ -147,13 +147,13 @@ struct FilaSesion: View {
                 Spacer(minLength: 4)
                 if !aqui {
                     Button {
-                        modelo.reproducirCanal(CanalReproducible(id: sesion.hash, titulo: titulo, origen: "sesion"))
-                        withAnimation(Muelle.heroe) { modelo.reproductor.expandir() }
+                        modelo.abrirCanal(CanalReproducible(id: sesion.hash, titulo: titulo, origen: "sesion"))
                     } label: {
                         Text("Ver aquí")
                             .font(.subheadline.weight(.semibold))
                     }
                     .buttonStyle(.bordered)
+                    .buttonBorderShape(.capsule)
                     .controlSize(.small)
                     .accessibilityLabel("Ver \(titulo) en este iPhone")
                 }
@@ -167,8 +167,9 @@ struct FilaSesion: View {
         .accessibilityIdentifier("sesion-\(sesion.id)")
     }
 
+    /// «desde las 21:04 · 2 dispositivos» (sin jerga: el protocolo se queda en `DondeSuena.protocolo`).
     private var detalle: String {
-        var partes = [DondeSuena.protocolo(sesion)]
+        var partes: [String] = []
         if let desde = FechaISO.parse(sesion.openedAt) {
             partes.append("desde las \(desde.formatted(date: .omitted, time: .shortened))")
         }
@@ -203,7 +204,7 @@ struct FilaVisor: View {
                         .foregroundStyle(Tinta.acentoTinta)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 2)
-                        .background(Tinta.acento.opacity(0.2), in: Capsule())
+                        .background(Tinta.oro.opacity(0.18), in: Capsule())
                 }
             }
             Spacer(minLength: 4)

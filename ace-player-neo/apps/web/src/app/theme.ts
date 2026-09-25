@@ -24,7 +24,7 @@ export interface ThemeState {
 }
 
 /** Color de la barra del sistema (el fondo de cada tema). */
-export const THEME_COLOR = { light: '#e5eef4', dark: '#081829' } as const;
+export const THEME_COLOR = { light: '#f3f3f4', dark: '#05070a' } as const;
 
 function readTheme(): ThemePreference {
   const value = readItem(STORAGE_KEYS.theme);

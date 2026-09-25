@@ -1,6 +1,7 @@
 /* Estado del motor, discreto: un rayo y «Motor en línea» en gris; solo se
-   tiñe de ámbar o rojo si algo falla. Va en el carril (escritorio) y en la
-   cabecera de cada vista (móvil). Un toque lleva a Ajustes → Salud. */
+   tiñe de ámbar o rojo si algo falla. Va en la barra superior (desde 768) y
+   en la cabecera de cada vista (móvil). Un toque lleva a Ajustes → Salud.
+   La variante `rail` (texto en dos líneas) queda para quien lo apile. */
 
 import { useAppMode, useEngineSummary } from '../api/index.ts';
 import { cx } from '../lib/cx.ts';

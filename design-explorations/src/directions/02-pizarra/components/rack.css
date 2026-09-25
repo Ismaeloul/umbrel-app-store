@@ -1,0 +1,205 @@
+/* Rack de fuentes: tabla de filas a dos líneas (rejilla de divs para poder
+   deslizar filas en iPhone). Línea 1: Nº · Fuente · Estado. Línea 2: lista y
+   detalle a la izquierda; pares y Mbit/s en mono a la derecha. */
+.pz-rk {
+  display: grid;
+  min-height: 0;
+}
+.pz-rk-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto 28px;
+  align-items: center;
+  gap: 0 8px;
+  min-height: 24px;
+  padding: 0 8px 0 10px;
+  background: var(--pz-panel);
+  border-bottom: 1px solid var(--pz-line);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pz-ink-3);
+}
+.pz-rk-head .n {
+  text-align: center;
+}
+.pz-rk-item {
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid var(--pz-line);
+}
+.pz-rk-row {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto 28px;
+  grid-template-areas:
+    'n name st more'
+    'n sub sub more';
+  align-items: center;
+  gap: 2px 8px;
+  width: 100%;
+  min-height: var(--pz-row-s);
+  padding: 6px 8px 6px 10px;
+  background: var(--pz-panel);
+  color: var(--pz-ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--pz-dur) var(--pz-ease);
+  touch-action: pan-y;
+}
+.pz-rk-row:hover {
+  background: var(--pz-panel-2);
+}
+.pz-rk-row.is-active {
+  background: color-mix(in srgb, var(--pz-accent) 12%, var(--pz-panel));
+  box-shadow: inset 2px 0 0 var(--pz-accent);
+}
+.pz-rk-row.is-dead {
+  color: var(--pz-ink-3);
+}
+.pz-rk-row .n {
+  grid-area: n;
+  font-family: var(--pz-cond);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--pz-ink-2);
+  text-align: center;
+  line-height: 1;
+  align-self: center;
+}
+.pz-rk-row.is-active .n {
+  color: var(--pz-accent-ink);
+}
+.pz-rk-row.is-dead .n {
+  color: var(--pz-ink-3);
+}
+.pz-rk-name {
+  grid-area: name;
+  min-width: 0;
+  font-size: var(--pz-small);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.pz-rk-name .res {
+  font-family: var(--pz-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--pz-ink-3);
+}
+.pz-rk-row .st {
+  grid-area: st;
+  min-width: 0;
+  justify-self: end;
+}
+.pz-rk-sub {
+  grid-area: sub;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--pz-ink-3);
+}
+.pz-rk-sub small {
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.pz-rk-sub small .is-here {
+  color: var(--pz-accent-ink);
+  font-weight: 600;
+}
+.pz-rk-nums {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--pz-mono);
+  font-size: 11px;
+  color: var(--pz-ink-2);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+.pz-rk-nums em {
+  font-style: normal;
+  color: var(--pz-ink-3);
+}
+.pz-rk-row.is-dead .pz-rk-nums {
+  color: var(--pz-ink-3);
+}
+.pz-rk-more {
+  grid-area: more;
+  color: var(--pz-ink-3);
+  width: 28px;
+  height: 36px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 4px;
+  justify-self: end;
+  align-self: center;
+}
+.pz-rk-more:hover {
+  background: var(--pz-panel-3);
+  color: var(--pz-ink);
+}
+.pz-rk-swipe {
+  position: absolute;
+  inset: 0 0 0 auto;
+  display: grid;
+  grid-auto-flow: column;
+  z-index: 0;
+  /* ocultas hasta que se desliza la fila */
+  visibility: hidden;
+}
+.pz-rk-item.is-swiping .pz-rk-swipe {
+  visibility: visible;
+}
+.pz-rk-swipe button {
+  width: 76px;
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+}
+.pz-rk-swipe .rep {
+  background: var(--pz-fail);
+}
+.pz-rk-swipe .ok {
+  background: var(--pz-ok);
+}
+.pz-rk-dead-toggle {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--pz-ink-3);
+  border-bottom: 1px solid var(--pz-line);
+}
+.pz-rk-dead-toggle:hover {
+  color: var(--pz-ink);
+}
+.pz-rk-dead-toggle svg {
+  transition: transform var(--pz-dur) var(--pz-ease);
+}
+.pz-rk-dead-toggle.is-open svg {
+  transform: rotate(180deg);
+}

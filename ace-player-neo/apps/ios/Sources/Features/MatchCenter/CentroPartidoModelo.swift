@@ -29,10 +29,17 @@ public final class CentroPartidoModelo {
     public private(set) var sinComprobador = false
     /// La vista está en pantalla (solo entonces arranca sola).
     public private(set) var vistaAbierta = false
+    /// La agenda pidió sus fuentes por adelantado (para la cápsula de señal); se conserva en `AppModel`.
+    public private(set) var precalentado = false
+    /// Suben con cada reporte y cada Content ID pegado (háptica de éxito).
+    public private(set) var reportes = 0
+    public private(set) var pegados = 0
 
     private unowned let app: AppModel
     @ObservationIgnored private var tareaSeguimiento: Task<Void, Never>?
     @ObservationIgnored private var cargado = false
+    /// «Ver ahora» pulsado antes de tener fuentes: arranca la primera que valga.
+    @ObservationIgnored private var arranqueSolicitado = false
 
     public init(partido: FootballMatch, app: AppModel) {
         self.partido = partido
@@ -71,6 +78,27 @@ public final class CentroPartidoModelo {
         return resultado
     }
 
+    /// Resumen para la cápsula de señal («Señal», «Floja», «Comprobando»…).
+    public var resumen: ResumenFuentes { ReglasFuentes.resumen(entradas, efectivos: efectivos()) }
+
+    /// La fuente que suena ahora, si es de este partido.
+    public var entradaEnPantalla: EntradaFuente? {
+        guard suenaAqui, let id = reproductor.canal?.id else { return nil }
+        return entradas.first { $0.id == id }
+    }
+
+    /// Posición (1…n) de la fuente en pantalla, para el rótulo del vídeo.
+    public var indiceEnPantalla: Int? {
+        guard let id = entradaEnPantalla?.id, let indice = entradas.firstIndex(where: { $0.id == id }) else { return nil }
+        return indice + 1
+    }
+
+    /// Pide las fuentes por adelantado (la agenda, para los que van en directo o a menos de 45 min).
+    public func precalentar() async {
+        precalentado = true
+        await cargar()
+    }
+
     // MARK: Resolver
 
     public func cargar(rebuscar: Bool = false) async {
@@ -103,6 +131,7 @@ public final class CentroPartidoModelo {
             let convertido = APIError.desde(error)
             if case .cancelado = convertido { return }
             fallo = convertido.mensaje
+            arranqueSolicitado = false
         }
     }
 
@@ -196,6 +225,7 @@ public final class CentroPartidoModelo {
     // MARK: Arranque automático y cambio de fuente
 
     private func intentarArranqueAutomatico() {
+        if arranqueSolicitado, atenderArranqueSolicitado() { return }
         guard automatico, vistaAbierta, !entradas.isEmpty else { return }
         // Ya suena (o se conecta) una de este partido.
         if suenaAqui && reproductor.conexion.enMarcha { return }
@@ -256,6 +286,51 @@ public final class CentroPartidoModelo {
         }
     }
 
+    /// «Ver ahora» desde la portada o el escenario: si ya hay fuentes, la
+    /// mejor; si aún no, la primera que valga cuando lleguen.
+    public func verAhora() {
+        if suenaAqui && reproductor.conexion.enMarcha { return }
+        arranqueSolicitado = true
+        if !atenderArranqueSolicitado(), cargado, !cargando, entradas.isEmpty {
+            // Ya se preguntó y no hay nada: no queda nada que esperar.
+            arranqueSolicitado = false
+        }
+    }
+
+    /// Arranca la fuente pedida con «Ver ahora» en cuanto haya una que valga.
+    private func atenderArranqueSolicitado() -> Bool {
+        guard !entradas.isEmpty else { return false }
+        let efectivos = efectivos()
+        let elegida =
+            ReglasFuentes.elegirAutomatica(entradas, efectivos: efectivos, terminado: terminado)
+            ?? (terminado ? entradas.first(where: { efectivos[$0.id]?.reportada != true }) : nil)
+        guard let elegida else { return false }
+        arranqueSolicitado = false
+        poner(elegida, origen: .usuario)
+        return true
+    }
+
+    /// Deslizar el vídeo a los lados: la siguiente (+1) o la anterior (−1)
+    /// fuente que no esté caída ni reportada. Elegir a mano apaga el automático.
+    @discardableResult
+    public func elegirSiguiente(_ paso: Int) -> Bool {
+        let efectivos = efectivos()
+        let candidatas = ReglasFuentes.zapeables(entradas, efectivos: efectivos)
+        guard candidatas.count > 1 else { return false }
+        let actual = reproductor.canal?.id
+        let indice = candidatas.firstIndex { $0.id == actual } ?? -1
+        let siguiente = ((indice + paso) % candidatas.count + candidatas.count) % candidatas.count
+        let destino = candidatas[siguiente]
+        guard destino.id != actual else { return false }
+        elegir(destino)
+        return true
+    }
+
+    /// Hay al menos dos fuentes entre las que zapear.
+    public var puedeZapear: Bool {
+        ReglasFuentes.zapeables(entradas, efectivos: efectivos()).count > 1
+    }
+
     // MARK: Acciones
 
     /// Pega un Content ID o enlace `acestream://`; opcionalmente lo vincula al canal del partido.
@@ -275,7 +350,8 @@ public final class CentroPartidoModelo {
         }
         guard let entrada = entradas.first(where: { $0.id == hash }) else { return false }
         elegir(entrada)
-        app.avisos.mostrar(existe ? "Reproduciendo el hash seleccionado" : "Hash externo añadido y reproduciendo", tono: .ok)
+        pegados += 1
+        app.avisos.mostrar(existe ? "Reproduciendo la señal pegada" : "Señal añadida y reproduciendo", tono: .ok)
         if recordar, !canal.isEmpty {
             _ = try? await app.entorno.api.enviar(API.vincular(BindBody(channel: canal, id: hash, title: canal)))
         }
@@ -291,6 +367,7 @@ public final class CentroPartidoModelo {
         do {
             let respuesta = try await app.entorno.api.enviar(API.reportarFuente(cuerpo))
             if let fin = respuesta.report.quarantineUntil.flatMap(FechaISO.parse) { hasta = fin }
+            reportes += 1
             app.avisos.mostrar("Fuente reportada: se aparta y se vuelve a comprobar", tono: .ok)
         } catch {
             app.avisos.mostrar(APIError.desde(error).mensaje, tono: .error)
@@ -327,6 +404,7 @@ public final class CentroPartidoModelo {
 
     /// Deja de seguir al comprobador (al salir sin nada sonando de este partido).
     public func dormir() {
+        arranqueSolicitado = false
         guard !suenaAqui else { return }
         tareaSeguimiento?.cancel()
         tareaSeguimiento = nil

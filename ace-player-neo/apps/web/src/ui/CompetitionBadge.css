@@ -1,0 +1,43 @@
+.comp {
+  --comp-h: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: var(--comp-h);
+  height: var(--comp-h);
+  padding: 0 10px;
+  border-radius: var(--r-pill);
+  background: var(--glass-video-solid);
+  color: var(--on-video);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.12),
+    0 2px 8px rgb(0 0 0 / 0.35);
+  color-scheme: dark;
+  white-space: nowrap;
+}
+.comp--sm {
+  --comp-h: 22px;
+  padding: 0 7px;
+}
+.comp--lg {
+  --comp-h: 40px;
+  padding: 0 14px;
+}
+.comp--image {
+  padding: 0 6px;
+}
+.comp__text {
+  font-size: max(11px, calc(var(--comp-h) * 0.42));
+  font-weight: 760;
+  font-stretch: var(--w-tight);
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.comp__logo {
+  height: calc(var(--comp-h) - 8px);
+  width: auto;
+  max-width: calc(var(--comp-h) * 2.4);
+  object-fit: contain;
+}

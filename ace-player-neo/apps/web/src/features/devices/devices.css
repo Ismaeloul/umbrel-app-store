@@ -1,18 +1,27 @@
-/* Ajustes → Dispositivos. Solo tokens; dentro de la tarjeta de la sección, los
-   bloques internos usan --r-inner y el fondo de los elementos de Ajustes. */
+/* Ajustes → Dispositivos con la piel «Palco» (plan fase 2, decisión W10):
+   tarjeta «Añade el iPhone o el iPad» con su botón de oro, el código de 6
+   cifras grande, expandido y en oro, el QR en su tarjeta blanca (radio 14,
+   también en oscuro: un QR se lee con módulos oscuros sobre claro), la
+   dirección de la página como cápsula de aviso y la lista de emparejados con
+   su punto de «conectado». Solo tokens; dentro de la tarjeta de la sección,
+   los bloques usan --r-inner y el fondo hundido de Ajustes. Nada animado
+   salvo transform/opacity; nada por debajo de 11 px; objetivos de 44 px. */
 
 .disp {
   display: grid;
   gap: var(--s-4);
   min-width: 0;
+  container-type: inline-size;
 }
 .disp-intro,
 .disp-help {
   color: var(--text-2);
   font-size: var(--fs-13);
   line-height: var(--lh-text);
+  text-wrap: pretty;
 }
 .disp-intro {
+  max-width: 62ch;
   margin-top: calc(-1 * var(--s-2));
 }
 .disp-row {
@@ -21,15 +30,62 @@
   align-items: center;
   gap: var(--s-2);
 }
+
+/* ---- Empezar: tarjeta con icono, texto y el botón de oro -------------------- */
 .disp-pair-start {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s-3) var(--s-4);
+  padding: var(--s-4);
+  border-radius: var(--r-inner, var(--r-m));
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+.disp-pair-start__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--r-m);
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+}
+.disp-pair-start__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.disp-pair-start__title {
+  font-size: var(--fs-17);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: -0.01em;
+  line-height: var(--lh-snug);
+}
+/* En el móvil, el botón a todo lo ancho debajo (el pulgar llega mejor). */
+.disp-pair-start__btn {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+}
+@container (min-width: 560px) {
+  .disp-pair-start {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .disp-pair-start__btn {
+    grid-column: auto;
+    justify-self: end;
+  }
 }
 
-/* ---- Dirección que va en el QR ---------------------------------------------- */
+/* ---- Dirección que va en el QR: cápsula de aviso ------------------------------ */
 .disp-origin {
   display: flex;
   align-items: flex-start;
-  gap: var(--s-2);
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--r-l);
+  background: var(--line-soft);
   color: var(--text-2);
   font-size: var(--fs-13);
   line-height: var(--lh-text);
@@ -43,6 +99,11 @@
   color: var(--text);
   font-weight: var(--wght-strong);
   overflow-wrap: anywhere;
+}
+.disp-origin--warn {
+  background: color-mix(in oklab, var(--weak) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--weak) 40%, transparent);
+  color: var(--text);
 }
 .disp-origin--warn > svg {
   color: var(--weak-ink);
@@ -65,15 +126,18 @@
   gap: var(--s-2);
   margin: 0;
 }
-/* Blanco también en oscuro: el QR se lee con módulos oscuros sobre claro. */
+/* Tarjeta blanca de radio 14 también en oscuro, con su sombra corta. */
 .disp-pair__qr img {
   display: block;
-  width: min(200px, 60vw);
+  width: min(208px, 62vw);
   height: auto;
   aspect-ratio: 1;
-  padding: 6px;
-  border-radius: var(--r-s);
+  padding: 12px;
+  border-radius: var(--r-m);
   background: #fff;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.06),
+    var(--shadow-1);
   image-rendering: pixelated;
 }
 .disp-pair__demo {
@@ -88,57 +152,60 @@
   width: 100%;
   text-align: center;
 }
-.disp-pair__label {
-  color: var(--text-2);
-  font-size: var(--fs-13);
-  font-weight: var(--wght-strong);
-}
+/* El código: 6 cifras grandes, expandidas (la voz de los titulares) y en oro.
+   Num lo pinta en celdas fijas; con la cifra ancha, la celda también. */
 .disp-pair__code {
-  font-size: clamp(var(--fs-44), 11vw, var(--fs-64));
+  color: var(--accent-ink);
+  font-size: var(--fs-44);
+  font-size: clamp(2.75rem, 13cqi, var(--fs-64));
   line-height: 1;
-  letter-spacing: 0.02em;
-  color: var(--text);
+}
+.disp-pair__code .num {
+  --num-cell: 0.72em;
+  font-stretch: var(--w-head);
+  font-weight: var(--wght-head);
+  letter-spacing: 0;
 }
 .disp-pair__timer {
   display: grid;
   gap: 6px;
-  width: min(100%, 260px);
+  width: min(100%, 300px);
 }
 .disp-pair__left {
   color: var(--text-2);
   font-size: var(--fs-13);
 }
-/* Pasos numerados con su círculo (la lista del sistema no lleva números). */
+/* Pasos numerados con su círculo de oro (la lista del sistema no lleva números). */
 .disp-steps {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
   counter-reset: paso;
-  color: var(--text-2);
+  color: var(--text);
   font-size: var(--fs-13);
   line-height: var(--lh-snug);
   text-align: left;
 }
 .disp-steps > li {
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr);
+  grid-template-columns: 22px minmax(0, 1fr);
   align-items: start;
-  gap: 8px;
+  gap: 10px;
   counter-increment: paso;
 }
 .disp-steps > li::before {
   content: counter(paso);
   display: inline-grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  background: var(--accent-wash);
-  color: var(--accent-ink);
+  background: var(--accent);
+  color: var(--on-accent);
   font-size: var(--fs-12);
-  font-weight: var(--wght-strong);
+  font-weight: var(--wght-head);
   line-height: 1;
 }
 .disp-pair .disp-row {
@@ -157,14 +224,16 @@
   grid-template-columns: minmax(0, 1fr);
 }
 .disp-pair--done {
+  background: color-mix(in oklab, var(--ok) 8%, var(--bg));
   box-shadow: inset 0 0 0 1.5px var(--ok);
 }
 .disp-pair__done-icon {
   display: inline-grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
+  background: color-mix(in oklab, var(--ok) 16%, transparent);
   box-shadow: inset 0 0 0 1.5px currentColor;
   color: var(--ok-ink);
 }
@@ -177,30 +246,32 @@
   font-size: var(--fs-17);
   font-weight: var(--wght-head);
   font-stretch: var(--w-head);
+  letter-spacing: -0.01em;
   overflow-wrap: anywhere;
 }
 
-/* Desde 640 px de sección: QR a la izquierda y el código a su lado. */
+/* Con sitio: QR a la izquierda y el código a su lado. */
 @container (min-width: 520px) {
   .disp-pair:not(.disp-pair--done, .disp-pair--expired) {
     grid-template-columns: auto minmax(0, 1fr);
     align-items: center;
     justify-items: start;
     gap: var(--s-6);
+    padding: var(--s-5);
   }
   .disp-pair__side {
     justify-items: start;
     text-align: left;
   }
+  .disp-pair__code {
+    font-size: clamp(2.75rem, 9cqi, var(--fs-64));
+  }
   .disp-pair .disp-row {
     justify-content: flex-start;
   }
 }
-.disp {
-  container-type: inline-size;
-}
 
-/* ---- Lista ------------------------------------------------------------------- */
+/* ---- Lista de emparejados ----------------------------------------------------- */
 .disp-block {
   display: grid;
   gap: var(--s-3);
@@ -209,17 +280,19 @@
 .disp-block__head {
   display: flex;
   align-items: baseline;
-  gap: var(--s-2);
+  gap: 6px;
 }
-.disp-block__title {
-  font-size: var(--fs-15);
-  font-weight: var(--wght-head);
-  font-stretch: var(--w-head);
-}
+/* Rótulo Palco: mayúsculas pequeñas espaciadas, con la cuenta al lado. */
+.disp-block__title,
 .disp-block__aside {
   color: var(--text-3);
-  font-size: var(--fs-13);
-  font-weight: var(--wght-medium);
+  font-size: var(--fs-kicker);
+  font-weight: 700;
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+}
+.disp-block__aside::before {
+  content: '· ';
 }
 .disp-list {
   display: grid;
@@ -235,8 +308,8 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--s-3);
-  min-height: 64px;
-  padding: 10px 12px;
+  min-height: 68px;
+  padding: 10px 12px 10px 14px;
   /* Pulsación larga: sin la lupa ni el menú de texto de iOS encima del nuestro. */
   -webkit-touch-callout: none;
 }
@@ -246,25 +319,43 @@
 .disp-dev__icon {
   display: inline-grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--r-s);
   background: var(--surface-2);
   color: var(--text-2);
 }
+.disp-dev[data-online] .disp-dev__icon {
+  color: var(--text);
+}
 .disp-dev__text {
   display: grid;
-  gap: 1px;
+  gap: 2px;
   min-width: 0;
 }
 .disp-dev__name {
-  font-weight: var(--wght-strong);
+  font-size: var(--fs-15);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: -0.01em;
   overflow-wrap: anywhere;
 }
 .disp-dev__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 6px;
   color: var(--text-2);
   font-size: var(--fs-caption);
   line-height: var(--lh-snug);
+}
+/* «Conectado ahora mismo»: punto verde (la palabra ya lo dice). */
+.disp-dev__dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
 }
 .disp-dev__meta--soft {
   color: var(--text-3);
@@ -299,7 +390,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s-2);
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-radius: var(--r-inner, var(--r-m));
   background: var(--bg);
   box-shadow: inset 0 0 0 1px var(--line-soft);

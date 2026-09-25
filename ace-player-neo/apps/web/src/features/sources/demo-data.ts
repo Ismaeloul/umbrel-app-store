@@ -37,6 +37,8 @@ interface PlanItem {
   /** Mbit/s del enjambre y del canal. */
   intake?: number;
   stream?: number;
+  /** Códec de vídeo que ve el comprobador (h264 por defecto). */
+  codec?: string;
   source?: ResolutionCandidate['source'];
 }
 
@@ -46,11 +48,13 @@ interface Plan {
   engineAvailable?: boolean;
 }
 
+/* Calidades variadas para que los carteles enseñen «1080p», «1080p · HEVC»,
+   «720p» y «SD» (Palco, corrección 2). */
 const RICH: PlanItem[] = [
   { provider: 'Elcano', outcome: 'working', peers: 48, intake: 6.2, stream: 4.8 },
-  { provider: 'Faro', outcome: 'working', peers: 31, intake: 5.1, stream: 4.8 },
-  { provider: 'Norte', outcome: 'weak', peers: 9, intake: 2.1, stream: 4.8 },
-  { provider: 'Vega', outcome: 'working', slow: 9, peers: 22, intake: 4.9, stream: 4.8 },
+  { provider: 'Faro', outcome: 'working', peers: 31, intake: 5.1, stream: 4.8, codec: 'hevc' },
+  { provider: 'Norte', outcome: 'weak', peers: 9, intake: 2.1, stream: 2.6 },
+  { provider: 'Vega', outcome: 'working', slow: 9, peers: 22, intake: 4.9, stream: 1.4 },
   { provider: 'Tarifa', outcome: 'retry' },
   { provider: 'Sur', outcome: 'failed', slow: 14 },
 ];
@@ -256,7 +260,7 @@ function probeOf(
             : 'no_media',
     mediaValid: alive,
     browserCompatible: alive,
-    videoCodec: alive ? 'h264' : '',
+    videoCodec: alive ? (item.codec ?? 'h264') : '',
     audioCodecs: alive ? ['aac'] : [],
     cached: false,
     attempts: done ? 1 : 0,

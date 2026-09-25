@@ -1,14 +1,17 @@
 /* ==========================================================================
-   Biblioteca (maqueta A, biblioteca.html, con el dorsal de C2 y «Emitiendo
-   ahora» de C1). Solo tokens; animaciones solo con transform y opacity; el
-   hover, solo con ratón de verdad.
+   Canales (la biblioteca) con la piel «Palco» (plan fase 2, decisión W8):
+   carteles de canal en «Emitiendo ahora», filas con tesela 16:9 y nombre
+   expandido, cabeceras de categoría como rótulos en mayúsculas y la ficha del
+   canal en el panel lateral. Misma lógica y mismos nombres accesibles que
+   antes. Solo tokens; animaciones solo con transform y opacity; el hover,
+   solo con ratón de verdad; nada por debajo de 11 px; objetivos de 44 px.
    ========================================================================== */
 
 .lib {
   display: grid;
-  gap: var(--s-4);
+  gap: var(--s-5);
   align-content: start;
-  max-width: 880px;
+  max-width: 1040px;
   margin-inline: auto;
   min-width: 0;
 }
@@ -48,7 +51,9 @@
   line-height: var(--lh-snug);
 }
 .lib-source__name {
-  font-weight: var(--wght-strong);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: -0.01em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -58,11 +63,13 @@
   font-size: var(--fs-caption);
 }
 
-/* ---- Contenedor de la lista (una superficie con separadores) ------------- */
+/* ---- Contenedor de la lista (una tarjeta con separadores) ---------------- */
 .lib-list {
   border-radius: var(--r-xl);
   background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--line-soft);
+  box-shadow:
+    inset 0 0 0 1px var(--line-soft),
+    var(--shadow-1);
   overflow: hidden;
   contain: layout paint;
 }
@@ -70,7 +77,7 @@
   box-shadow: inset 0 1px 0 var(--line-soft);
 }
 
-/* ---- Tarjeta de canal ------------------------------------------------------ */
+/* ---- Fila de canal ---------------------------------------------------------- */
 .ch {
   position: relative;
   display: grid;
@@ -92,6 +99,7 @@
 .ch[aria-current='true']::before {
   opacity: 1;
 }
+/* Elegida: filo de oro a la izquierda. */
 .ch[aria-current='true']::after {
   content: '';
   position: absolute;
@@ -100,7 +108,7 @@
   bottom: 14px;
   width: 3px;
   border-radius: 0 3px 3px 0;
-  background: var(--accent-edge);
+  background: var(--accent);
 }
 .ch--enter {
   animation: ace-aparece var(--dur-estandar) var(--ease-estandar) both;
@@ -114,12 +122,12 @@
 
 .ch__main {
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr);
+  grid-template-columns: 64px minmax(0, 1fr);
   align-items: center;
   gap: 14px;
   min-width: 0;
-  min-height: 76px;
-  padding: 12px 4px 12px 16px;
+  min-height: 72px;
+  padding: 10px 4px 10px 14px;
   color: inherit;
   text-decoration: none;
   /* La pulsación larga abre NUESTRO menú, no el del sistema. */
@@ -132,18 +140,28 @@
   box-shadow: inset 0 0 0 2px var(--accent-edge);
   border-radius: var(--r-l);
 }
+/* La tesela 16:9 (64×36) con su sombra corta (más específico que .dorsal). */
+.ch .ch__dorsal {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.22),
+    inset 0 0 0 1px rgb(0 0 0 / 0.12),
+    0 4px 12px -4px rgb(0 0 0 / 0.5);
+}
 .ch__body {
   display: grid;
   gap: 3px;
   min-width: 0;
 }
+/* Nombre expandido (la voz de los titulares Palco, a tamaño de fila). */
 .ch__name {
   display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
-  font-size: var(--fs-17);
-  font-weight: var(--wght-strong);
+  font-size: var(--fs-15);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: -0.012em;
   line-height: 1.2;
 }
 .ch__name-text {
@@ -207,17 +225,18 @@
   align-items: center;
   gap: 4px;
   flex: none;
-  color: var(--live);
+  color: var(--live-ink);
   font-size: var(--fs-13);
   font-weight: var(--wght-strong);
 }
 .ch__state {
-  color: var(--live);
+  color: var(--live-ink);
   font-weight: var(--wght-medium);
 }
 .ch__state--hidden {
   color: var(--text-2);
 }
+/* «En pantalla»: cápsula de oro. */
 .ch__onair {
   display: inline-flex;
   align-items: center;
@@ -225,9 +244,9 @@
   flex: none;
   min-height: 22px;
   padding: 0 8px;
-  border-radius: 7px;
-  background: var(--accent-wash);
-  color: var(--accent-ink);
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--on-accent);
   font-size: var(--fs-label);
   font-weight: var(--wght-strong);
   font-stretch: var(--w-tight);
@@ -305,28 +324,34 @@
   .ch:hover .ch__acts > *,
   .ch:focus-within .ch__acts > *,
   .ch[aria-current='true'] .ch__acts > *,
-  .ch__acts > [aria-expanded='true'] {
+  .ch__acts > [aria-expanded='true'],
+  .ch__acts > [aria-pressed='true'] {
     opacity: 1;
   }
 }
 
-/* ---- Cabeceras dentro de la lista ----------------------------------------- */
+/* ---- Cabeceras dentro de la lista (rótulos Palco) ------------------------ */
 .lib-when {
-  padding: 14px 16px 6px;
-  font-size: var(--fs-13);
-  font-weight: var(--wght-strong);
-  color: var(--text-2);
+  padding: 16px 16px 6px;
+  font-size: var(--fs-kicker);
+  font-weight: 700;
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+  color: var(--text-3);
 }
 .lib-cat {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
-  min-height: 52px;
+  min-height: 48px;
   padding: 0 16px;
   background: var(--bg-sunk);
   color: var(--text);
-  font-weight: var(--wght-strong);
+  font-size: var(--fs-kicker);
+  font-weight: 700;
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
   text-align: left;
 }
 /* El fondo de la cabecera tapa el separador de la fila: lo pinta ella. */
@@ -347,9 +372,10 @@
   width: 8px;
   height: 8px;
   flex: none;
-  margin-inline: 4px;
+  margin-inline: 2px 4px;
   border-right: 2px solid currentColor;
   border-bottom: 2px solid currentColor;
+  color: var(--text-3);
   transform: rotate(-45deg);
   transition: transform var(--dur-rapido) var(--ease-rapido);
 }
@@ -366,6 +392,7 @@
 .lib-cat__count {
   color: var(--text-3);
   font-size: var(--fs-13);
+  letter-spacing: 0;
 }
 
 /* ---- Pie y botones bajo la lista ------------------------------------------ */
@@ -384,7 +411,7 @@
   min-width: 0;
 }
 
-/* ---- «Emitiendo ahora» (C1) ----------------------------------------------- */
+/* ---- «Emitiendo ahora» (C1): carrusel de carteles de canal ----------------- */
 .onair {
   display: grid;
   gap: var(--s-2);
@@ -393,99 +420,184 @@
 .onair__title {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  font-size: var(--fs-17);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: var(--tracking-head);
+}
+.onair__count {
+  color: var(--text-3);
+  font-size: var(--fs-13);
+  letter-spacing: 0;
+}
+/* Desde 768 el contenido ya no va a sangre: el carrusel se alinea con el
+   titular, pero conserva 16 px de aire a los lados (margen negativo + relleno)
+   para que la sombra del cartel no se corte en un rectángulo gris (se notaba
+   en el tema claro). */
+@media (min-width: 768px) {
+  .onair .prail--bleed {
+    --prail-pad: 16px;
+    margin-inline: -16px;
+  }
+}
+
+/* ---- Cartel de canal (ChannelPoster) ---------------------------------------- */
+.chp {
+  --tone: var(--surface-2);
+  --tone-hi: var(--surface-2);
+  /* Sombra corta: cabe en el relleno del carril (6 px arriba, 14 abajo, 16 a
+     los lados) y no se recorta en un rectángulo. */
+  --chp-shadow: 0 10px 18px -12px rgb(0 0 0 / 0.55);
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+.chp__hit {
+  /* El cartel es claro sobre oscuro, también en el tema claro («Ver marcador»,
+     debajo, sigue el tema de la página). */
+  color-scheme: dark;
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--r-m);
+  color: #fff;
+  text-align: left;
+  text-decoration: none;
+  isolation: isolate;
+  box-shadow: var(--chp-shadow);
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  outline: none;
+}
+.chp__hit:focus-visible {
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--accent-edge),
+    var(--chp-shadow);
+}
+.chp.is-watching .chp__hit {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    var(--chp-shadow);
+}
+/* El que suena, con foco: el anillo de foco por fuera del filo de oro (la
+   regla de arriba pesa más que :focus-visible y lo quitaba). */
+.chp.is-watching .chp__hit:focus-visible {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    0 0 0 4px var(--bg),
+    0 0 0 6px var(--accent-edge),
+    var(--chp-shadow);
+}
+/* La luz del tono del canal arriba a la izquierda sobre negro cine, y un velo
+   abajo para que el nombre se lea sobre cualquier color. */
+.chp__bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(85% 100% at 18% 0%, var(--tone-hi), transparent 62%),
+    linear-gradient(160deg, #161b24, #0a0d12);
+}
+.chp__bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgb(0 0 0 / 0) 36%, rgb(0 0 0 / 0.74) 100%);
+}
+.chp__mark {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  transform: translate(-50%, -50%);
+  filter: var(--shadow-crest);
+}
+.chp__top {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.chp__top > :only-child {
+  margin-left: auto;
+}
+.chp__fav {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.chp__capsule {
+  flex: none;
+}
+.chp__bottom {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 10px;
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
+}
+.chp__name {
+  min-width: 0;
   font-size: var(--fs-15);
   font-weight: var(--wght-head);
   font-stretch: var(--w-head);
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.onair__rail {
+.chp__match {
   display: flex;
-  /* Cada tarjeta con su alto: la que lleva «Ver marcador» debajo no estira a
-     las demás (quedaban más altas y con el texto flotando en medio). */
-  align-items: flex-start;
-  gap: var(--s-3);
-  min-width: 0;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scroll-snap-type: x proximity;
-  scrollbar-width: none;
-  /* A sangre en el móvil: el carrusel llega al borde de la pantalla. */
-  margin-inline: calc(-1 * (var(--gutter) + var(--safe-left)))
-    calc(-1 * (var(--gutter) + var(--safe-right)));
-  padding-inline: calc(var(--gutter) + var(--safe-left)) calc(var(--gutter) + var(--safe-right));
-  /* Sin esto, el imán (`scroll-snap-align: start`) pega la primera tarjeta
-     al borde de la pantalla ignorando el relleno y la deja cortada. */
-  scroll-padding-inline: calc(var(--gutter) + var(--safe-left))
-    calc(var(--gutter) + var(--safe-right));
-  padding-block: 2px;
-}
-.onair__rail::-webkit-scrollbar {
-  display: none;
-}
-@media (min-width: 768px) {
-  .onair__rail {
-    margin-inline: 0;
-    padding-inline: 2px;
-    scroll-padding-inline: 2px;
-  }
-}
-.onair__item {
-  display: grid;
-  gap: 4px;
-  flex: 0 0 min(280px, 78vw);
-  scroll-snap-align: start;
-}
-.onair__card {
-  display: grid;
-  grid-template-columns: 40px minmax(0, 1fr);
-  gap: 12px;
   align-items: center;
-  min-height: 76px;
-  padding: 12px 14px;
-  border-radius: var(--r-l);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--line-soft);
-  color: inherit;
-  text-decoration: none;
-}
-.onair__item[data-on-screen] .onair__card {
-  box-shadow: inset 0 0 0 1.5px var(--accent-edge);
-}
-.onair__card:focus-visible {
-  outline: 2px solid var(--accent-edge);
-  outline-offset: 2px;
-}
-.onair__body {
-  display: grid;
-  gap: 2px;
+  gap: 6px;
   min-width: 0;
+  color: rgb(255 255 255 / 0.82);
+  font-size: var(--fs-12);
+  font-weight: 600;
 }
-.onair__name,
-.onair__match {
+.chp__crests {
+  display: inline-flex;
+  flex: none;
+}
+.chp__crests > * + * {
+  margin-left: -5px;
+}
+.chp__txt {
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.onair__name {
-  font-weight: var(--wght-strong);
+.chp__score {
+  color: #fff;
+  font-weight: var(--wght-num);
 }
-.onair__match {
-  color: var(--text-2);
-  font-size: var(--fs-13);
+/* «Ver marcador» (marcador tapado, regla 29): cápsula bajo el cartel, hermana
+   del enlace (un botón no puede ir dentro de un <a>, y encima de él se
+   pisarían al tocar). El margen deja su zona táctil fuera del cartel. */
+.chp__reveal {
+  margin-top: 10px;
 }
-.onair__score {
-  color: var(--text);
-}
-.onair__meta {
-  display: flex;
-  gap: 6px;
-  color: var(--live);
-  font-size: var(--fs-caption);
-  font-weight: var(--wght-strong);
-}
-.onair__reveal {
-  justify-self: start;
+/* Zona táctil de 44 aunque la cápsula mida 24 (gana a .capsule--button::before). */
+.chp .chp__reveal::before {
+  inset: -10px -4px;
 }
 
 /* ---- Hojas ------------------------------------------------------------------ */
@@ -517,7 +629,9 @@
   padding: 20px;
   border-radius: var(--r-xl);
   background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--line-soft);
+  box-shadow:
+    inset 0 0 0 1px var(--line-soft),
+    var(--shadow-1);
   min-width: 0;
 }
 .lib-detail--empty {
@@ -533,22 +647,31 @@
   align-items: center;
   gap: 14px;
 }
+.lib-detail .lib-detail__mark {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.22),
+    0 8px 20px -6px rgb(0 0 0 / 0.55);
+}
 .lib-detail__titles {
   display: grid;
   gap: 4px;
+  justify-items: start;
   min-width: 0;
 }
 .lib-detail__name {
   font-size: var(--fs-22);
   font-weight: var(--wght-head);
   font-stretch: var(--w-head);
-  letter-spacing: -0.01em;
-  line-height: 1.15;
+  letter-spacing: var(--tracking-head);
+  line-height: 1.12;
   overflow-wrap: anywhere;
 }
 .lib-detail__from {
   color: var(--text-2);
   font-size: var(--fs-13);
+}
+.lib-detail__onair {
+  margin-top: 2px;
 }
 /* «Ver canal» a todo lo ancho y las acciones debajo: en un panel de 340 px no
    caben en una fila sin cortar el texto del botón. */
@@ -568,9 +691,11 @@
   gap: 10px;
 }
 .lib-detail__h {
-  font-size: var(--fs-15);
-  font-weight: var(--wght-head);
-  font-stretch: var(--w-head);
+  font-size: var(--fs-kicker);
+  font-weight: 700;
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+  color: var(--text-3);
 }
 .lib-detail__none {
   color: var(--text-2);

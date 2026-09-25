@@ -1,47 +1,73 @@
+/* Hoja «Atajos de teclado» (tecla «?») con la piel «Palco» (plan fase 2,
+   W10): cada grupo con su rótulo en mayúsculas pequeñas, filas con lo que
+   hace a la izquierda y las teclas a la derecha (teclas oscuras con su
+   canto), separadas por una línea fina, como en el prototipo. El orden del
+   DOM no cambia (`dt` teclas, `dd` qué hace): se recoloca con la rejilla.
+   Solo tokens; nada animado. */
+
 .help {
   display: grid;
   gap: var(--s-5);
 }
 .help__group {
   display: grid;
-  gap: var(--s-2);
+  gap: 2px;
 }
+/* Rótulo de grupo: «REPRODUCTOR», «FUENTES», «GENERAL»… */
 .help__title {
-  font-size: var(--fs-13);
-  font-weight: var(--wght-strong);
-  color: var(--text-2);
+  color: var(--text-3);
+  font-size: var(--fs-kicker);
+  font-weight: 700;
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
 }
 .help__list {
   display: grid;
   margin: 0;
-  border-radius: var(--r-m);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--line-soft);
 }
 .help__row {
   display: grid;
-  grid-template-columns: minmax(120px, auto) 1fr;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--s-3);
-  min-height: 44px;
-  padding: 6px 12px;
-}
-.help__row + .help__row {
-  box-shadow: inset 0 1px 0 var(--line-soft);
+  min-height: 48px;
+  padding: 6px 0;
+  box-shadow: inset 0 -1px 0 var(--line-soft);
 }
 .help__keys {
+  order: 2;
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
+}
+.help__label {
+  order: 1;
+  margin: 0;
+  min-width: 0;
+  font-size: var(--fs-15);
+  line-height: var(--lh-snug);
 }
 .help__or {
   color: var(--text-3);
   font-size: var(--fs-12);
 }
-.help__label {
-  margin: 0;
-  font-size: var(--fs-15);
+/* Tecla Palco: oscura sobre la hoja, con canto abajo y la cifra en negrita. */
+.help .kbd {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 9px;
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+  box-shadow:
+    inset 0 0 0 1px var(--line),
+    inset 0 -2px 0 var(--line-strong);
+  color: var(--text);
+  font-family: inherit;
+  font-stretch: var(--w-tight);
+  font-size: var(--fs-13);
+  font-weight: var(--wght-strong);
 }
 .help__note {
   font-size: var(--fs-caption);
@@ -49,8 +75,14 @@
 }
 
 /* Envoltorio enfocable de la ayuda (ShortcutHelp.tsx): el borde de foco va por
-   dentro, que la hoja recorta lo que sale de su cuerpo con scroll. */
+   dentro, que la hoja recorta lo que sale de su cuerpo con scroll. Lleva 10 px
+   de aire (compensados con margen negativo, dentro del relleno de la hoja)
+   para que el anillo no roce los titulares ni las teclas. */
+.help-scroll {
+  margin: -10px;
+  padding: 10px;
+  border-radius: var(--r-m);
+}
 .help-scroll:focus-visible {
   outline-offset: -2px;
-  border-radius: var(--r-m);
 }

@@ -13,6 +13,7 @@
      remux        → engine
      playback     → engine, remux, state, scanner
      football     → state, net, engine, scanner, search, sources, directories
+     teams        → net, football
      auth         → state
      events       (solo el bus)
      diagnostics  (solo el bus)
@@ -40,6 +41,7 @@ import { createScannerService, type ScannerService } from './modules/scanner/ind
 import { createSearchService, type SearchService } from './modules/search/index.js';
 import { createSourcesService, type SourcesService } from './modules/sources/index.js';
 import { createStateService, type StateService } from './modules/state/index.js';
+import { createTeamsService, type TeamsService } from './modules/teams/index.js';
 
 export interface Services {
   readonly config: AppConfig;
@@ -56,6 +58,7 @@ export interface Services {
   readonly remux: RemuxService;
   readonly playback: PlaybackService;
   readonly football: FootballService;
+  readonly teams: TeamsService;
   readonly auth: AuthService;
   readonly events: EventsHub;
   readonly diagnostics: DiagnosticsService;
@@ -76,6 +79,7 @@ export const SERVICE_ORDER: readonly ServiceName[] = [
   'remux',
   'playback',
   'football',
+  'teams',
   'auth',
   'events',
   'diagnostics',
@@ -103,6 +107,7 @@ export function createServices(
   const football =
     overrides.football ??
     createFootballService({ ...core, state, net, engine, scanner, search, sources, directories });
+  const teams = overrides.teams ?? createTeamsService({ ...core, net, football });
   const auth = overrides.auth ?? createAuthService({ ...core, state });
   const events = overrides.events ?? createEventsHub(core);
   const diagnostics = overrides.diagnostics ?? createDiagnosticsService(core);
@@ -118,6 +123,7 @@ export function createServices(
       playback,
       remux,
       football,
+      teams,
       diagnostics,
       events,
     });
@@ -134,6 +140,7 @@ export function createServices(
     remux,
     playback,
     football,
+    teams,
     auth,
     events,
     diagnostics,

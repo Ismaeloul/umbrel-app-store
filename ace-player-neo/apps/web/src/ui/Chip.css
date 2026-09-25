@@ -26,7 +26,7 @@
   background: var(--accent-wash);
 }
 .chip--live {
-  color: var(--live);
+  color: var(--live-ink);
   background: transparent;
   padding-inline: 0;
 }

@@ -1,53 +1,70 @@
-/* Panel de ayuda. Reutiliza las clases .help* del armazón
-   (src/app/shortcut-help.css, que carga la hoja que lo contiene) para que el
-   teclado se vea igual que antes; aquí solo lo nuevo: los tres bloques y la
-   «tecla» de palabra de los gestos. */
+/* Panel de ayuda con la piel «Palco» (plan fase 2, W10). Reutiliza las
+   clases .help* del armazón (src/app/shortcut-help.css, que carga la hoja que
+   lo contiene: rótulos en mayúsculas, filas con lo que hace a la izquierda y
+   las teclas oscuras a la derecha); aquí solo lo nuevo: los tres bloques
+   (Teclado · Gestos · Ratón) con su titular expandido y la «tecla» de
+   palabra de los gestos. Solo tokens; nada animado. */
 
 .ayuda {
-  gap: var(--s-6);
+  gap: var(--s-8);
 }
 .ayuda-part {
   display: grid;
-  gap: var(--s-3);
+  gap: var(--s-4);
 }
 .ayuda-part__title {
   display: flex;
   align-items: center;
-  gap: var(--s-2);
-  font-size: var(--fs-17);
+  gap: 10px;
+  font-size: var(--fs-22);
   font-weight: var(--wght-head);
   font-stretch: var(--w-head);
   letter-spacing: var(--tracking-head);
+  line-height: var(--lh-tight);
 }
-.ayuda-part__title > svg {
+/* El icono del bloque en su pastilla de oro. */
+.ayuda-part__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: var(--r-s);
+  background: var(--accent-wash);
   color: var(--accent-ink);
 }
-/* El gesto, como una tecla de palabra: se lee de un vistazo a la izquierda. */
+/* El gesto, como una tecla de palabra a la derecha (como las del teclado). */
 .ayuda-gesture {
-  justify-self: start;
-  padding: 3px 8px;
+  order: 2;
+  justify-self: end;
+  max-width: 13rem;
+  padding: 5px 10px;
   border-radius: var(--r-xs);
   background: var(--surface-2);
-  box-shadow: inset 0 0 0 1px var(--line);
+  box-shadow:
+    inset 0 0 0 1px var(--line),
+    inset 0 -2px 0 var(--line-strong);
   color: var(--text);
   font-size: var(--fs-13);
   font-weight: var(--wght-strong);
   font-stretch: var(--w-tight);
   line-height: var(--lh-snug);
+  text-align: right;
 }
-/* La misma primera columna en todas las filas (y en las del teclado): cada
-   fila es su propia rejilla y, con «auto», las descripciones no se alineaban. */
-.ayuda .help__row {
-  grid-template-columns: 11rem minmax(0, 1fr);
-}
-/* En el móvil, gesto encima y qué hace debajo: en dos columnas no cabe. */
+/* En el móvil, el gesto encima y qué hace debajo: en dos columnas no cabe. */
 @media (max-width: 479px) {
-  .ayuda .help__row {
-    grid-template-columns: 7.5rem minmax(0, 1fr);
-  }
   .ayuda .ayuda-row {
     grid-template-columns: minmax(0, 1fr);
-    gap: 4px;
-    padding-block: 8px;
+    gap: 6px;
+    padding-block: 10px;
+  }
+  .ayuda .ayuda-row .ayuda-gesture {
+    order: 0;
+    justify-self: start;
+    max-width: none;
+    text-align: left;
+  }
+  .ayuda .ayuda-row .help__label {
+    order: 1;
   }
 }

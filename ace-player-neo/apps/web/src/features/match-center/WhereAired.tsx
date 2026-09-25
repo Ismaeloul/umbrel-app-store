@@ -1,14 +1,17 @@
-/* «Dónde se emite» (diseño A + injerto B3): todos los canales anunciados
-   (regla 30: el backend limita a 8, aquí se pintan todos), con borde
-   continuo si el canal está en tu biblioteca y discontinuo si se buscará al
-   reproducir. Debajo, el día y la hora y, con ratón y teclado, los atajos
-   que más se usan (el resto, con «?»). */
+/* «Dónde se emite» (diseño A + injerto B3; en Palco, dentro de la pestaña
+   «Partido», decisión W5): todos los canales anunciados (regla 30: el
+   backend limita a 8, aquí se pintan todos), con borde continuo si el canal
+   está en tu biblioteca y discontinuo si se buscará al reproducir. Debajo,
+   el día y la hora y, con ratón y teclado, los atajos que más se usan (el
+   resto, con «?»). La chuleta de atajos también la usa el canal suelto. */
 
 import type { FootballMatch } from '@ace/shared';
 import { Chip, Kbd } from '../../ui/index.ts';
 import { dayLabel, type ChannelInfo } from '../agenda/domain.ts';
 
-const HINTS: ReadonlyArray<[string, string]> = [
+export type Hint = readonly [key: string, label: string];
+
+export const MATCH_HINTS: readonly Hint[] = [
   ['Espacio', 'Pausa y reanuda'],
   ['J', 'Retrocede 30 s'],
   ['N', 'Siguiente fuente'],
@@ -16,6 +19,31 @@ const HINTS: ReadonlyArray<[string, string]> = [
   ['G', 'Favorito'],
   ['?', 'Todos los atajos'],
 ];
+
+export const CHANNEL_HINTS: readonly Hint[] = [
+  ['Espacio', 'Pausa y reanuda'],
+  ['J', 'Retrocede 30 s'],
+  ['← →', 'Canal anterior o siguiente'],
+  ['S', 'Datos técnicos'],
+  ['G', 'Favorito'],
+  ['?', 'Todos los atajos'],
+];
+
+/** La chuleta de atajos (solo se ve con ratón y teclado de verdad). */
+export function ShortcutHints({ hints }: { hints: readonly Hint[] }) {
+  return (
+    <dl className="mc-keys" aria-label="Atajos de teclado">
+      {hints.map(([key, label]) => (
+        <div key={key} className="mc-keys__item">
+          <dt>
+            <Kbd>{key}</Kbd>
+          </dt>
+          <dd>{label}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
 
 export function WhereAired({
   match,
@@ -58,16 +86,7 @@ export function WhereAired({
         <p className="mc-where__muted">Canal por confirmar</p>
       )}
       <p className="mc-where__meta">{[match.competition, when].filter(Boolean).join(' · ')}</p>
-      <dl className="mc-where__keys" aria-label="Atajos de teclado">
-        {HINTS.map(([key, label]) => (
-          <div key={key} className="mc-where__key">
-            <dt>
-              <Kbd>{key}</Kbd>
-            </dt>
-            <dd>{label}</dd>
-          </div>
-        ))}
-      </dl>
+      <ShortcutHints hints={MATCH_HINTS} />
     </section>
   );
 }

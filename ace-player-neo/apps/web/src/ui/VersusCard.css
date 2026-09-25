@@ -1,0 +1,297 @@
+.versus {
+  --h: #333;
+  --a: #666;
+  --versus-pad: 12px;
+  --versus-r: var(--r-m);
+  /* Altura del centro de los escudos: baja cuanto más cabe debajo. */
+  --versus-crest-y: 42%;
+  --versus-name: var(--fs-15);
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--versus-r);
+  isolation: isolate;
+  color: #fff;
+  text-align: left;
+  box-shadow: var(--shadow-poster);
+  /* Todo lo de dentro usa los tokens oscuros (siempre hay imagen o color). */
+  color-scheme: dark;
+}
+.versus:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* Como enlace o botón el cursor lo dice; como div, nada. */
+a.versus,
+button.versus {
+  cursor: pointer;
+}
+button.versus {
+  padding: 0;
+  border: 0;
+  font: inherit;
+}
+
+/* ---- Las dos mitades con los colores de club --------------------------------- */
+.versus__halves {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.versus__half {
+  display: block;
+}
+.versus__half--home {
+  background:
+    radial-gradient(90% 100% at 0% 0%, rgb(255 255 255 / 0.14), transparent 60%),
+    linear-gradient(160deg, var(--h), color-mix(in oklab, var(--h) 78%, #0a0d12));
+}
+.versus__half--away {
+  background:
+    radial-gradient(90% 100% at 100% 100%, rgb(255 255 255 / 0.1), transparent 60%),
+    linear-gradient(160deg, color-mix(in oklab, var(--a) 88%, #fff), var(--a));
+}
+/* El velo: oscurece arriba y abajo para que cápsulas y nombres se lean sobre
+   cualquier color (también sobre un blanco). */
+.versus__veil {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(
+      180deg,
+      rgb(0 0 0 / 0.42) 0%,
+      rgb(0 0 0 / 0.05) 30%,
+      rgb(0 0 0 / 0.05) 45%,
+      rgb(0 0 0 / 0.82) 100%
+    ),
+    radial-gradient(60% 55% at 50% 52%, rgb(0 0 0 / 0.28), transparent 70%);
+}
+
+/* ---- Arriba: chip de cuándo y «Tu equipo» a la izquierda, señal a la derecha - */
+.versus__top {
+  position: absolute;
+  top: var(--versus-pad);
+  left: var(--versus-pad);
+  right: var(--versus-pad);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.versus__marks {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.versus__when {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.versus__signal {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+/* «Tu equipo»: estrella de oro; la palabra se ve en lg/xl y se lee siempre. */
+.versus__mine {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  height: 24px;
+  padding: 0 5px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: var(--fs-11);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.versus__mine-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.versus--lg .versus__mine,
+.versus--xl .versus__mine {
+  padding: 0 8px 0 6px;
+}
+.versus--lg .versus__mine-text,
+.versus--xl .versus__mine-text {
+  position: static;
+  width: auto;
+  height: auto;
+  clip-path: none;
+}
+
+/* ---- Centro: escudos grandes con sombra y la pastilla de competición -------- */
+.versus__crests {
+  position: absolute;
+  left: 50%;
+  top: var(--versus-crest-y);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transform: translate(-50%, -50%);
+}
+.versus__crest {
+  filter: var(--shadow-crest);
+}
+.versus__comp {
+  flex: none;
+}
+
+/* ---- Abajo: nombres en negrita (dos líneas) y, en xl, la competición en gris - */
+.versus__bottom {
+  position: absolute;
+  left: var(--versus-pad);
+  right: var(--versus-pad);
+  bottom: var(--versus-pad);
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
+}
+.versus__names {
+  display: grid;
+  min-width: 0;
+  font-size: var(--versus-name);
+  line-height: 1.15;
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: -0.015em;
+}
+.versus__line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3em;
+  min-width: 0;
+}
+.versus__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: inherit;
+}
+.versus__vs {
+  flex: none;
+  color: rgb(255 255 255 / 0.7);
+  /* Nunca por debajo de 11 px (la tarjeta pequeña baja los nombres a 13). */
+  font-size: max(var(--fs-11), 0.8em);
+  font-weight: 600;
+  font-stretch: var(--w-text);
+  letter-spacing: 0;
+}
+.versus__competition {
+  display: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgb(255 255 255 / 0.76);
+  font-size: var(--fs-13);
+  font-weight: 600;
+}
+/* «En pantalla»: abajo a la derecha; los nombres le dejan sitio. */
+.versus__watching {
+  position: absolute;
+  right: var(--versus-pad);
+  bottom: var(--versus-pad);
+}
+.versus.is-watching .versus__bottom {
+  padding-right: 34%;
+}
+/* Con «En pantalla» al lado, un nombre largo («Manchester City») no cabe en
+   una tarjeta estrecha: bajo 300 px se ven las siglas (como las tarjetas
+   pequeñas de la agenda) y el nombre entero queda para el lector. */
+.versus.is-watching {
+  container: versus / inline-size;
+}
+.versus__abbr {
+  display: none;
+}
+@container versus (max-width: 299px) {
+  .versus__full {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .versus__abbr {
+    display: inline;
+  }
+}
+
+/* ---- Estados ------------------------------------------------------------------ */
+.versus.is-watching {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    var(--shadow-poster);
+}
+.versus.is-selected::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 2px var(--accent);
+  pointer-events: none;
+}
+.versus.is-done .versus__halves {
+  opacity: 0.72;
+}
+
+/* ---- Tamaños ------------------------------------------------------------------ */
+.versus--sm {
+  --versus-pad: 10px;
+  --versus-r: var(--r-s);
+  --versus-crest-y: 40%;
+  --versus-name: var(--fs-13);
+}
+.versus--sm .versus__crests {
+  gap: 6px;
+}
+.versus--lg {
+  --versus-name: var(--fs-17);
+}
+.versus--xl {
+  --versus-pad: 16px;
+  --versus-r: var(--r-xl);
+  --versus-crest-y: 44%;
+  --versus-name: var(--fs-22);
+}
+.versus--xl .versus__crests {
+  gap: 16px;
+}
+.versus--xl .versus__bottom {
+  gap: 4px;
+}
+.versus--xl .versus__competition {
+  display: block;
+}
+/* Móvil: el héroe (xl) mide 358 px; escudos algo menores y más arriba para
+   que las dos líneas de nombres y la competición no los pisen. */
+@media (max-width: 767px) {
+  .versus--xl {
+    --versus-crest-y: 38%;
+    --versus-name: var(--fs-17);
+  }
+  .versus--xl .versus__crests {
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+}
+@media (min-width: 768px) {
+  .versus--xl {
+    --versus-name: var(--fs-30);
+  }
+}

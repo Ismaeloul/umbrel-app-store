@@ -1,0 +1,69 @@
+{
+  "teams": {
+    "espana": { "idTeam": "133909", "note": "selección; comprobado con searchteams.php?t=Spain" },
+    "portugal": { "query": "Portugal", "note": "selección" },
+    "marruecos": { "query": "Morocco", "note": "selección" },
+    "inglaterra": { "query": "England", "note": "selección" },
+    "francia": { "query": "France", "note": "selección" },
+    "italia": { "query": "Italy", "note": "selección" },
+    "alemania": { "query": "Germany", "note": "selección" },
+    "argentina": { "query": "Argentina", "note": "selección" },
+    "brasil": { "query": "Brazil", "note": "selección" },
+    "paises bajos": { "query": "Netherlands", "note": "selección" },
+    "real madrid": { "idTeam": "133738" },
+    "barcelona": { "idTeam": "133739" },
+    "atletico madrid": { "idTeam": "133729" },
+    "barcelona sc": {
+      "idTeam": "138159",
+      "country": "Ecuador",
+      "note": "el de Guayaquil, no el Barça"
+    },
+    "inter": {
+      "idTeam": "133681",
+      "note": "searchteams.php?t=Inter devuelve el Intercity con la clave gratuita"
+    },
+    "o lyonnais": { "idTeam": "133713", "note": "futbolenlatv abrevia Olympique Lyonnais" },
+    "lyon": { "idTeam": "133713" },
+    "b dortmund": {
+      "idTeam": "133650",
+      "note": "searchteams.php?t=Dortmund devuelve el ASC 09 Dortmund"
+    },
+    "borussia dortmund": { "idTeam": "133650" },
+    "real sociedad b": { "skip": true, "note": "filial: casaría con el primer equipo" },
+    "real madrid castilla": { "skip": true, "note": "filial" },
+    "barcelona atletic": { "skip": true, "note": "filial" }
+  },
+  "competitions": {
+    "laliga": { "idLeague": "4335" },
+    "la liga": { "idLeague": "4335" },
+    "la liga ea sports": { "idLeague": "4335" },
+    "laliga ea sports": { "idLeague": "4335" },
+    "laliga hypermotion": { "idLeague": "4400", "note": "Spanish La Liga 2" },
+    "laliga 2": { "idLeague": "4400" },
+    "segunda division": { "idLeague": "4400" },
+    "copa del rey": { "idLeague": "4483" },
+    "champions league": { "idLeague": "4480" },
+    "liga de campeones": { "idLeague": "4480" },
+    "uefa champions league": { "idLeague": "4480" },
+    "europa league": { "idLeague": "4481" },
+    "uefa europa league": { "idLeague": "4481" },
+    "conference league": { "idLeague": "5071" },
+    "uefa conference league": { "idLeague": "5071" },
+    "premier league": { "idLeague": "4328" },
+    "serie a": { "idLeague": "4332" },
+    "serie a italiana": { "idLeague": "4332" },
+    "bundesliga": { "idLeague": "4331" },
+    "ligue 1": { "idLeague": "4334" },
+    "francia ligue 1": { "idLeague": "4334" },
+    "supercopa de espana": {
+      "query": "Supercopa de España",
+      "country": "Spain",
+      "note": "sin id comprobado: search_all_leagues con la clave gratuita solo lista 5 ligas de España"
+    },
+    "supercopa": { "query": "Supercopa de España", "country": "Spain" },
+    "futbol": {
+      "skip": true,
+      "note": "'Fútbol' es el relleno de la agenda cuando no sabe la competición"
+    }
+  }
+}

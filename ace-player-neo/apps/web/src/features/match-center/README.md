@@ -1,4 +1,4 @@
-# Centro de partido y selector de fuentes
+# Centro de partido (teatro Palco) y selector de fuentes
 
 `?vista=partido/<id>` y `partido/canal/<hash>` (la ruta está en `../partido/`,
 que solo reexporta). Inventario §5, §6 y §7 enteros y las reglas 19-26 y 29-30
@@ -6,15 +6,19 @@ de §26. Capturas y revisión de 11 tamaños en `docs/capturas/fase2/partido/`.
 
 | Fichero | Qué |
 |---|---|
-| `match-center/index.tsx` | La vista: busca el partido en la agenda, entra (resolver, comprobar, arrancar), bento (marcador + «Dónde se emite») y, sin panel lateral, las fuentes y «Datos técnicos» debajo. Monta las hojas UNA vez |
-| `match-center/Scoreboard.tsx` | Marcador: antetítulo, meta, escudos encendidos, cifras que giran (B5), tapado por defecto (regla 29), minuto, barra del partido y momento de gol (C3) |
-| `match-center/WhereAired.tsx` | Todos los canales (B3: continuo si está en tu biblioteca, discontinuo si se buscará) y los atajos más usados (solo con ratón) |
-| `match-center/ChannelCenter.tsx` | Canal suelto: dorsal (C2), hermanas del mismo canal (regla 23) y sus acciones |
-| `match-center/MatchAside.tsx` | Panel lateral de escritorio (`../partido/aside.tsx`): rack de fuentes y «Datos técnicos» abierto |
-| `match-center/NerdSection.tsx` | «Datos técnicos» (`PlayerNerdStats` del reproductor): plegado con resumen en el móvil, abierto en el panel |
+| `match-center/index.tsx` | El TEATRO (Palco W5): busca el partido en la agenda, entra (resolver, comprobar, arrancar), proyecta la cápsula del marcador sobre el vídeo (`player/stage-slot.ts`), la cabecera y, sin panel lateral, las pestañas debajo. Monta las hojas UNA vez |
+| `match-center/Scoreboard.tsx` | Cápsula del marcador sobre el vídeo (tapada por defecto, regla 29; cifras que giran, B5; rebote del gol, W14) y el marcador grande de la pestaña «Partido» |
+| `match-center/MatchHead.tsx` | Cabecera bajo el vídeo: competición y estado, los dos escudos con los nombres (elemento compartido con la tarjeta de la agenda) y el h1 oculto con el título |
+| `match-center/TheaterTabs.tsx` | Panel con pestañas Fuentes · Partido · Datos técnicos (o Fuentes · Canal · Datos técnicos): paneles montados con `hidden`, pestaña recordada en la sesión y unida a la tecla S |
+| `match-center/MatchPanel.tsx` | Pestaña «Partido»: escudos grandes sobre la luz de los clubes, marcador grande (si está destapado), barra del partido, competición y «Dónde se emite» |
+| `match-center/WhereAired.tsx` | Todos los canales (B3: continuo si está en tu biblioteca, discontinuo si se buscará) y la chuleta de atajos (solo con ratón) |
+| `match-center/ChannelCenter.tsx` | Canal suelto: cabecera con la tesela del canal, hermanas del mismo canal (regla 23), su ficha y sus acciones |
+| `match-center/MatchAside.tsx` | Panel lateral de escritorio (`../partido/aside.tsx`): las mismas pestañas, con «Plegar el panel lateral» |
+| `match-center/NerdSection.tsx` | «Datos técnicos» (`PlayerNerdStats` del reproductor) en su pestaña |
+| `match-center/find.ts` | `findMatch` (la vista y el panel lateral se cargan por separado) |
 | `sources/session.ts` | **El controlador**, fuera de React: resolución, comprobador (SSE + respaldo), arranque automático, política de cambio de fuente, reportes, Rebuscar, vínculos |
-| `sources/model.ts` | Reglas puras (estado efectivo, qué se ve, qué arranca, frases, progreso, hermanas) |
-| `sources/SourcesPanel.tsx`, `SourceList.tsx`, `SourceInspector.tsx` | Selector (lista A en móvil, rack B2 en escritorio), barra «Emitiendo» que se desliza, inspector con «Abrir en…» |
+| `sources/model.ts` | Reglas puras (estado efectivo, qué se ve, qué arranca, frases, progreso, hermanas, calidad del cartel) |
+| `sources/SourcesPanel.tsx`, `SourceList.tsx`, `SourcePoster.tsx`, `SourceInspector.tsx` | Selector con CARTELES de fuente (Palco W6: tesela del canal, número, «En pantalla» que se desliza, anillo de estado con palabra, calidad y proveedor; nunca miniaturas de vídeo), barra «Emitiendo» que se desliza, inspector con «Abrir en…» |
 | `sources/ResolverSheet.tsx`, `ReportSheet.tsx` | «Encontrar canal» y «Reportar fuente» |
 | `sources/demo.ts` + `demo-data.ts` | Resolución y comprobador de muestra (un paso cada 1,35 s) |
 
@@ -72,6 +76,5 @@ de §26. Capturas y revisión de 11 tamaños en `docs/capturas/fase2/partido/`.
 
 - Reproductor: `PlayOptions.record: false` para no apuntar en Recientes un
   hash pegado (§7.5); un tono «sin señal» para `setWaitingMessage` (hoy el
-  mensaje final va en la vista y en la línea de estado); la luz ambiental
-  (`.player[data-ambient]::before`, `inset` negativo) ensancha la página 8 px
-  en 768-1023 px.
+  mensaje final va en la vista y en la línea de estado). La luz ambiental ya
+  no ensancha la página (a los lados nunca pasa del margen de la vista).

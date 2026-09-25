@@ -13,6 +13,11 @@
    4. Por fuente, si hay datos: las fuentes con fallos en 24 h.
    5. El registro de diagnóstico por causa.
 
+   Piel «Palco» (plan fase 2, W10), toda en health.css: el resumen es una
+   cápsula grande teñida del estado, cada servicio una tarjeta con su icono
+   teñido, el nombre como rótulo y el estado con SignalBadge (palabra +
+   forma), y el registro con el icono de cada causa teñido.
+
    Datos: GET /api/v1/health y /api/v1/diagnostics. NADA de sondeos: se
    consultan al abrir la sección (refetchOnMount 'always': cada vez que la
    vista vuelve a verse) y al pulsar el botón, como la 0.6.59; lo que cambia

@@ -10,12 +10,20 @@
 
    Cada chip conmuta su selección sobre un BORRADOR (aria-pressed); nada se
    guarda hasta «Guardar y ver mi agenda». En el móvil es una hoja desde abajo
-   con la botonera fija (por encima del teclado: la Sheet usa --kb). */
+   con la botonera fija (por encima del teclado: la Sheet usa --kb).
+
+   Piel Palco (plan fase 2, decisión W11): numeración «01» en oro expandido,
+   chips grandes (oro macizo con ✓ al marcarlos), el monograma de cada equipo
+   con su color (`TeamMark`; sin escudos: las opciones no traen id del
+   backend), la bandera en las nacionalidades y el campo «Añadir otro…» en
+   cápsula. Háptica (`lib/haptics.ts`): `selection` al marcar un chip o
+   añadir uno propio y `success` al guardar. */
 
 import { useId, useRef, useState, type KeyboardEvent } from 'react';
 import { useAppMode } from '../../api/index.ts';
+import { haptic } from '../../lib/haptics.ts';
 import { notify } from '../../notices/index.ts';
-import { Button, Chip, Sheet, TextField } from '../../ui/index.ts';
+import { Button, Chip, Sheet, TeamMark, TextField } from '../../ui/index.ts';
 import { modeAfterSaving } from '../agenda/state.ts';
 import {
   addCustomValue,
@@ -99,11 +107,17 @@ function PreferenceSection({
     if (result.full) setMessage(copy.fullText);
     else if (!result.added) setMessage(null);
     else {
+      haptic('selection');
       onChange(result.draft);
       setText('');
       setMessage(null);
     }
     inputRef.current?.focus();
+  };
+
+  const toggle = (name: string) => {
+    haptic('selection');
+    onChange(toggleValue(draft, kind, name));
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -126,26 +140,26 @@ function PreferenceSection({
           <p className="prefs-section__hint">{copy.hint}</p>
         </div>
       </div>
-      <div className="prefs-chips" role="group" aria-labelledby={headingId}>
+      <div className={`prefs-chips prefs-chips--${kind}`} role="group" aria-labelledby={headingId}>
         {chipsFor(kind, draft).map((name) => {
           const pressed = draft[kind].includes(name);
           return (
             <Chip
               key={name}
+              className="prefs-chip"
+              icon={pressed ? 'check' : undefined}
               pressed={pressed}
               disabled={disabled || (!pressed && full)}
-              onClick={() => onChange(toggleValue(draft, kind, name))}
+              onClick={() => toggle(name)}
             >
               {kind === 'nationalities' ? (
-                <>
-                  <span className="prefs-flag" aria-hidden="true">
-                    {flagFor(name)}
-                  </span>
-                  {name}
-                </>
-              ) : (
-                name
-              )}
+                <span className="prefs-flag" aria-hidden="true">
+                  {flagFor(name)}
+                </span>
+              ) : kind === 'teams' ? (
+                <TeamMark name={name} size={22} className="prefs-chip__team" />
+              ) : null}
+              <span className="prefs-chip__name">{name}</span>
             </Chip>
           );
         })}
@@ -153,6 +167,7 @@ function PreferenceSection({
       <div className="prefs-add">
         <TextField
           ref={inputRef}
+          icon="plus"
           label={copy.placeholder.replace('…', '')}
           hideLabel
           placeholder={copy.placeholder}
@@ -220,6 +235,7 @@ export function PreferencesSheet({
       const data = await save.mutateAsync({ body: preferencesBody(preferences, draft) });
       const has = hasAny(data.preferences);
       modeAfterSaving(has);
+      haptic('success');
       notify(
         has ? 'Tu agenda ya está personalizada' : 'Puedes personalizar tu agenda cuando quieras',
         {

@@ -1,6 +1,9 @@
-/* Ajustes → «Dónde se está reproduciendo». Solo tokens; dentro de la tarjeta
-   de la sección, los bloques usan --r-inner y el fondo de los elementos de
-   Ajustes (como Dispositivos). */
+/* Ajustes → «Dónde se está reproduciendo» con la piel «Palco» (plan fase 2,
+   decisión W10): cada reproducción es una tarjeta con la tesela del canal y
+   su luz de tono, y cada dispositivo una fila con icono, «Este dispositivo»
+   en oro y el estado en cápsula. Solo tokens; dentro de la tarjeta de la
+   sección, los bloques usan --r-inner y el fondo hundido de Ajustes (como
+   Dispositivos). Nada animado salvo transform/opacity. */
 
 .donde {
   display: grid;
@@ -21,7 +24,7 @@
 .donde-ses {
   display: grid;
   gap: var(--s-3);
-  padding: var(--s-3);
+  padding: var(--s-4);
   border-radius: var(--r-inner, var(--r-m));
   background: var(--bg);
   box-shadow: inset 0 0 0 1px var(--line-soft);
@@ -31,22 +34,29 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: var(--s-3);
+  gap: var(--s-3) var(--s-4);
+}
+.donde-ses .donde-ses__mark {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.22),
+    0 6px 16px -6px rgb(0 0 0 / 0.5);
 }
 .donde-ses__text {
   display: grid;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
 }
 .donde-ses__title {
   font-size: var(--fs-17);
-  font-weight: var(--wght-strong);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: -0.01em;
   line-height: var(--lh-snug);
   overflow-wrap: anywhere;
 }
 .donde-ses__meta {
   color: var(--text-2);
-  font-size: var(--fs-caption);
+  font-size: var(--fs-13);
   line-height: var(--lh-snug);
 }
 
@@ -86,7 +96,7 @@
 }
 .donde-dev__text {
   display: grid;
-  gap: 1px;
+  gap: 2px;
   min-width: 0;
 }
 .donde-dev__name {
@@ -97,34 +107,21 @@
   font-weight: var(--wght-strong);
   overflow-wrap: anywhere;
 }
-/* «Este dispositivo»: pastilla con borde de selección (no solo color). */
+.donde-dev__label {
+  min-width: 0;
+}
 .donde-dev__mine {
-  padding: 1px 8px;
-  border-radius: var(--r-pill);
-  box-shadow: inset 0 0 0 1px var(--accent-edge);
-  color: var(--accent-ink);
-  font-size: var(--fs-label);
-  font-weight: var(--wght-strong);
-  font-stretch: var(--w-tight);
-  white-space: nowrap;
+  flex: none;
 }
 .donde-dev__meta {
   color: var(--text-2);
   font-size: var(--fs-caption);
   line-height: var(--lh-snug);
 }
-/* Reproduciendo / En pausa / Conectado: icono y palabra. */
+/* Reproduciendo / En pausa / Conectado: cápsula con forma + palabra. */
 .donde-dev__state {
   display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-2);
-  font-size: var(--fs-caption);
-  font-weight: var(--wght-strong);
-  white-space: nowrap;
-}
-.donde-dev__state[data-state='reproduciendo'] {
-  color: var(--accent-ink);
+  justify-self: end;
 }
 
 /* Móvil estrecho: el estado baja debajo del nombre en vez de apretarlo. */
@@ -134,5 +131,12 @@
   }
   .donde-dev__state {
     grid-column: 2;
+    justify-self: start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .donde-ses {
+    animation-name: ace-funde;
   }
 }

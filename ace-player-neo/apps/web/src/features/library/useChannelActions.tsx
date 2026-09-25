@@ -8,6 +8,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useApiQuery } from '../../api/index.ts';
 import { useNavigate } from '../../app/router.tsx';
+import { haptic } from '../../lib/haptics.ts';
 import { Sheet, type MenuItem } from '../../ui/index.ts';
 import { channelMenuItems } from './actions.ts';
 import { removeWithUndo, renameChannel, saveFavorite } from './data.ts';
@@ -193,7 +194,10 @@ export function useChannelActions({
               setFavoriteTarget(null);
               void saveFavorite(client, { ...target, title })
                 .then((ok) => {
-                  if (ok) onFavoriteSaved?.();
+                  if (!ok) return;
+                  // Favorito guardado: toque de éxito (HAPTIC_MAP).
+                  haptic('success');
+                  onFavoriteSaved?.();
                 })
                 .finally(() => setBusy(false));
             }}

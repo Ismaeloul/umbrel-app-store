@@ -78,8 +78,16 @@ public final class Reproductor {
     public private(set) var errores = 0
     /// Sube con cada canal nuevo (háptica de cambio de fuente).
     public private(set) var cambiosDeFuente = 0
+    /// Sube cada vez que, agotada una fuente, el centro de partido pasa solo a la siguiente (háptica de aviso).
+    public private(set) var cambiosAutomaticos = 0
+    /// Hay una detención reciente que se puede deshacer («Deshacer» del mini).
+    public private(set) var puedeDeshacerDetencion = false
     /// Veces que el vigilante saltó al directo por imagen congelada.
     public private(set) var saltosAlDirecto = 0
+    /// Milisegundos desde que se pidió la fuente hasta la primera imagen («Datos técnicos»).
+    public private(set) var primeraImagenMs: Double?
+    /// Reconexiones de la fuente actual («Datos técnicos»).
+    public private(set) var reconexiones = 0
     /// El reproductor grande está abierto (se abre desde el mini tocándolo o
     /// deslizándolo hacia arriba, y se minimiza deslizándolo hacia abajo).
     public private(set) var expandido = false
@@ -165,6 +173,14 @@ public final class Reproductor {
         let latidoMs: Int
     }
 
+    /// Lo último que sonaba antes de `detener()`, para «Deshacer».
+    private struct Detencion {
+        let canal: CanalReproducible
+        let lista: [CanalReproducible]
+        let origen: OrigenReproduccion
+    }
+
+    @ObservationIgnored private var ultimaDetencion: Detencion?
     @ObservationIgnored private var fuente: EstadoFuente?
     @ObservationIgnored private var estadoConexion: EstadoConexion?
     @ObservationIgnored private var sesion: Sesion?
@@ -228,7 +244,11 @@ public final class Reproductor {
         arranco = false
         directo = .nada
         medio = .idle
+        primeraImagenMs = nil
+        reconexiones = 0
         quiereReproducir = true
+        puedeDeshacerDetencion = false
+        ultimaDetencion = nil
         cambiosDeFuente += 1
         transicion(.solicitar)
         sistema?.empezo(nuevo)
@@ -237,9 +257,11 @@ public final class Reproductor {
         arrancarVigilante()
     }
 
-    /// Para del todo y suelta la sesión.
+    /// Para del todo y suelta la sesión. Se recuerda lo que sonaba para «Deshacer».
     public func detener() {
-        guard canal != nil else { return }
+        guard let actual = canal else { return }
+        ultimaDetencion = Detencion(canal: actual, lista: lista, origen: fuente?.origen ?? .usuario)
+        puedeDeshacerDetencion = true
         terminarFuente(motivo: .user, porque: "parado")
         transicion(.detener)
         motivoParada = .usuario
@@ -252,6 +274,17 @@ public final class Reproductor {
         tareaVigilante?.cancel()
         tareaVigilante = nil
         sistema?.termino()
+    }
+
+    /// Vuelve a poner lo que se acababa de detener (el «Deshacer» del mini).
+    /// Devuelve false si no había nada que deshacer.
+    @discardableResult
+    public func deshacerDetencion() -> Bool {
+        guard let detencion = ultimaDetencion, canal == nil else { return false }
+        ultimaDetencion = nil
+        puedeDeshacerDetencion = false
+        reproducir(detencion.canal, origen: detencion.origen, lista: detencion.lista)
+        return true
     }
 
     public func pausar() {
@@ -426,6 +459,7 @@ public final class Reproductor {
             f.ttffMs = ahora.timeIntervalSince(f.pedidaEn) * 1000
         }
         fuente = f
+        primeraImagenMs = f.ttffMs
         arranco = true
         intento = nil
         mensaje = nil
@@ -433,9 +467,12 @@ public final class Reproductor {
         estadoConexion?.ticsGracia = UmbralesReproductor.graciaTics
         estadoConexion?.ultimaPosicion = motor.tiempoActual
         enviarResultado(.arranco, segundos: 0)
-        let servicio = self.servicio
-        let canal = f.canal
-        Task { await servicio.guardarReciente(canal) }
+        // Un Content ID pegado a mano no entra en recientes (inventario §5).
+        if f.canal.origen != "manual" {
+            let servicio = self.servicio
+            let canal = f.canal
+            Task { await servicio.guardarReciente(canal) }
+        }
         medirDirecto()
         sistema?.cambio(self)
     }
@@ -629,6 +666,7 @@ public final class Reproductor {
         f.reconexiones.append(ahora)
         f.reconexionesTotales += 1
         fuente = f
+        reconexiones = f.reconexionesTotales
         let n = f.reconexiones.count
         transicion(.fallo)
         medio = .idle
@@ -660,6 +698,7 @@ public final class Reproductor {
         errores += 1
         let aviso = FalloFuente(canal: f.canal, origen: f.origen, resultado: resultado, segundos: segundos, motivo: motivo)
         let cambiada = alFallarFuente?(aviso) ?? false
+        if cambiada { cambiosAutomaticos += 1 }
         if fuente?.clave != f.clave {
             // Quien escucha ya ha puesto otra fuente a sonar.
             mensaje = "Esta fuente no responde: probando la siguiente…"

@@ -65,14 +65,17 @@ function renderColumn() {
 }
 
 describe('columna compacta de la agenda (centro de partido)', () => {
-  it('franjas compactas del día, el partido abierto marcado y con su marcador tapado', async () => {
+  it('tarjetas compactas del día, el partido abierto marcado y los marcadores tapados', async () => {
     const { container } = renderColumn();
     expect(screen.getByRole('heading', { name: 'Agenda' })).toBeInTheDocument();
     const current = await screen.findByRole('button', { name: /Real Madrid vs Girona/ });
     expect(current).toHaveAttribute('aria-current', 'true');
     expect(container.querySelectorAll('.agenda-row--compact').length).toBe(3);
-    // El partido abierto va tapado aunque el reproductor no haya arrancado.
-    expect(await screen.findByRole('button', { name: 'Ver marcador' })).toBeInTheDocument();
+    // Todo tapado (como en toda la agenda): la cápsula «Marcador», sin cifras.
+    expect(
+      await screen.findByRole('button', { name: 'Ver marcador de Real Madrid vs Girona' }),
+    ).toBeInTheDocument();
+    expect(container.querySelectorAll('.agenda-score .num')).toHaveLength(0);
     expect(screen.getByText('Hoy 23')).toBeInTheDocument();
   });
 

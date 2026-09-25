@@ -18,6 +18,7 @@ describe('defectos (Compose vacío)', () => {
     expect(config.paths.stateBackupFile).toBe(`${path.join('/data', 'state.json')}.bak`);
     expect(config.paths.devicesFile).toBe(path.join('/data', 'v2', 'devices.json'));
     expect(config.paths.remuxDir).toBe(path.join('/data', 'remux'));
+    expect(config.paths.teamsDir).toBe(path.join('/data', 'v2', 'teams'));
   });
 
   it('los mismos valores por defecto que server.js', () => {
@@ -56,6 +57,7 @@ describe('defectos (Compose vacío)', () => {
       demoOnly: false,
       timezone: 'Europe/Madrid',
     });
+    expect(config.teams).toEqual({ enabled: true });
     expect(config.ai).toEqual({
       ollamaBaseUrl: '',
       embedModel: 'embeddinggemma:300m-qat-q4_0',
@@ -193,6 +195,17 @@ describe('variables nuevas', () => {
 
   it('APP_VERSION del entorno si el build no la inyecta', () => {
     expect(loadConfig({ ACE_SEED: SEED, APP_VERSION: '0.7.1' }).config.appVersion).toBe('0.7.1');
+  });
+
+  it('ACE_TEAM_CRESTS: solo "false" apaga los escudos; la demo también los apaga', () => {
+    expect(loadConfig({ ACE_SEED: SEED }).config.teams.enabled).toBe(true);
+    expect(loadConfig({ ACE_SEED: SEED, ACE_TEAM_CRESTS: 'no' }).config.teams.enabled).toBe(true);
+    expect(loadConfig({ ACE_SEED: SEED, ACE_TEAM_CRESTS: 'false' }).config.teams.enabled).toBe(
+      false,
+    );
+    expect(loadConfig({ ACE_SEED: SEED, FOOTBALL_DEMO_ONLY: 'true' }).config.teams.enabled).toBe(
+      false,
+    );
   });
 
   it('ACE_SEED manda; si falta, ENGINE_CONTROL_TOKEN (que en Compose ya es APP_SEED)', () => {

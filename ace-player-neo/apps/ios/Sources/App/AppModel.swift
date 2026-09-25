@@ -4,8 +4,26 @@ import Observation
 import os
 import UIKit
 
+/// Lo que enseña el escenario (la única superficie de reproducción, a pantalla completa).
+public enum ObjetivoEscenario: Hashable, Sendable {
+    case partido(FootballMatch)
+    case canal(CanalReproducible)
+
+    public var id: String {
+        switch self {
+        case .partido(let partido): "partido:\(partido.id)"
+        case .canal(let canal): "canal:\(canal.id)"
+        }
+    }
+}
+
+/// Qué pestaña se ve.
+public enum Pestana: Hashable, Sendable {
+    case agenda, canales, buscar, ajustes
+}
+
 /// Estado global de la app: si está emparejada, con qué servidor habla, el
-/// estado del motor y la conexión de tiempo real.
+/// estado del motor, la conexión de tiempo real y qué enseña el escenario.
 @MainActor
 @Observable
 public final class AppModel {
@@ -45,6 +63,14 @@ public final class AppModel {
     public private(set) var sesionesCargadas = false
     /// Id de este iPhone en el servidor (del arranque).
     public private(set) var dispositivoId: String?
+    /// Lo que enseña el escenario (nil: cerrado).
+    public private(set) var escenario: ObjetivoEscenario?
+    /// Marcadores destapados a mano (anti-spoiler); se vacía al cambiar de canal.
+    public private(set) var marcadoresDestapados: Set<String> = []
+    /// Goles deducidos de dos lecturas del marcador (lado y minuto), por partido.
+    public private(set) var goles: [String: [Gol]] = [:]
+    /// Sube cada vez que se crea un centro de partido: las tarjetas releen su cápsula de señal.
+    public private(set) var centrosVersion = 0
 
     /// Los gustos para las reglas de «Para ti».
     public var gustos: GustosFutbol { GustosFutbol(preferencias) }
@@ -103,12 +129,17 @@ public final class AppModel {
     /// «Olvidar este servidor»: borra token, direcciones y caché.
     public func desemparejar() async {
         reproductor.detener()
+        escenario = nil
         centros = [:]
+        centrosVersion += 1
+        marcadoresDestapados = []
+        goles = [:]
         pararTiempoReal()
         try? entorno.tokens.borrarToken()
         entorno.configuracion.borrar()
         await entorno.servidores.actualizar(ServerConfig())
         await entorno.cache.borrarTodo()
+        await entorno.imagenes.borrarTodo()
         motor = nil
         biblioteca = nil
         preferencias = nil
@@ -274,12 +305,132 @@ public final class AppModel {
         pip.superficie.recolocar()
     }
 
-    /// Al abrirse el PiP con el reproductor grande delante, se minimiza: se
-    /// sigue usando la app con el vídeo en la ventanita.
+    /// Al abrirse el PiP con el escenario delante, se minimiza: se sigue
+    /// usando la app con el vídeo en la ventanita.
     private func empezoElPiP() {
-        guard reproductor.expandido else { return }
+        guard reproductor.expandido || escenario != nil else { return }
         Orientacion.pedir(.portrait)
+        cerrarEscenario()
+    }
+
+    // MARK: Escenario
+
+    /// Lo que se ve en el escenario: lo abierto a propósito o, si el
+    /// reproductor está expandido (vuelta del PiP, giro), lo que suena.
+    public var escenarioVisible: ObjetivoEscenario? {
+        if let escenario { return escenario }
+        guard reproductor.vista == .grande else { return nil }
+        return objetivoDeLoQueSuena
+    }
+
+    /// El partido (si se conoce) o el canal que suena ahora.
+    public var objetivoDeLoQueSuena: ObjetivoEscenario? {
+        guard let canal = reproductor.canal else { return nil }
+        if let id = canal.partido?.id, let centro = centros[id] { return .partido(centro.partido) }
+        return .canal(canal)
+    }
+
+    /// Abre el escenario con un partido (sin reproducir nada: eso lo decide la persona o el arranque automático).
+    public func abrirPartido(_ partido: FootballMatch) {
+        _ = centro(para: partido)
+        escenario = .partido(partido)
+        reproductor.expandir()
+    }
+
+    /// «Ver ahora»: abre el escenario y arranca la mejor fuente que haya.
+    public func verPartido(_ partido: FootballMatch) {
+        abrirPartido(partido)
+        centro(para: partido).verAhora()
+    }
+
+    /// Reproduce un canal suelto y abre su escenario.
+    public func abrirCanal(_ canal: CanalReproducible, lista: [CanalReproducible] = []) {
+        reproducirCanal(canal, lista: lista)
+        escenario = .canal(canal)
+        reproductor.expandir()
+    }
+
+    /// Un Content ID pegado o un resultado del motor: se reproduce como canal
+    /// suelto con un título legible, sin guardarlo en recientes.
+    public func reproducirEnlace(_ hash: String, titulo: String = "Enlace pegado") {
+        abrirCanal(CanalReproducible(id: hash, titulo: titulo, ih: nil, origen: "manual"))
+    }
+
+    /// Abre el escenario con lo que suena (giro a horizontal, vuelta del PiP).
+    public func abrirLoQueSuena() {
+        guard let objetivo = objetivoDeLoQueSuena else { return }
+        escenario = objetivo
+        reproductor.expandir()
+    }
+
+    /// Minimiza: vuelve a las pestañas (con el mini si algo suena).
+    public func cerrarEscenario() {
+        escenario = nil
         reproductor.minimizar()
+    }
+
+    /// Mientras el escenario está abierto sigue a lo que suena (zapping,
+    /// «Ver aquí», siguiente canal desde la pantalla de bloqueo).
+    public func seguirLoQueSuena() {
+        guard escenario != nil, let objetivo = objetivoDeLoQueSuena else { return }
+        if case .partido(let abierto) = escenario, case .partido(let sonando) = objetivo, abierto.id == sonando.id {
+            return
+        }
+        if case .canal(let abierto) = escenario, case .canal(let sonando) = objetivo, abierto.id == sonando.id {
+            return
+        }
+        escenario = objetivo
+        reproductor.expandir()
+    }
+
+    // MARK: Marcador tapado y goles
+
+    /// ¿Va tapado el marcador de este partido? Solo mientras se ve ESE partido y está en juego.
+    public func marcadorTapado(_ partido: FootballMatch) -> Bool {
+        AntiSpoiler.tapado(
+            partido: partido.id, marcador: marcadores[partido.id], viendo: reproductor.canal?.partido?.id,
+            destapados: marcadoresDestapados)
+    }
+
+    public func destaparMarcador(_ id: String, _ destapar: Bool = true) {
+        if destapar {
+            marcadoresDestapados.insert(id)
+        } else {
+            marcadoresDestapados.remove(id)
+        }
+    }
+
+    /// Al cambiar de canal se vuelve a tapar todo.
+    public func taparMarcadores() {
+        if !marcadoresDestapados.isEmpty { marcadoresDestapados = [] }
+    }
+
+    // MARK: Imágenes
+
+    /// La dirección con la que se está hablando (o la guardada, mientras no responde ninguna).
+    public var baseServidor: URL? {
+        if case .conectado(let servidor) = conexion { return servidor.url }
+        return entorno.configuracion.leer().candidatas.first?.url
+    }
+
+    /// URL absoluta de una imagen del servidor (`/api/v1/football/teams/…/crest?v=…`):
+    /// la base que responde y el prefijo `/native`, como la URL del vídeo.
+    public func urlImagen(_ relativa: String?) -> URL? {
+        guard let relativa, relativa.hasPrefix("/"), let base = baseServidor else { return nil }
+        return URL(string: "/native" + relativa, relativeTo: base)?.absoluteURL
+    }
+
+    /// Pide por adelantado los escudos y logos de unos partidos (los del día).
+    public func precalentarEscudos(_ partidos: [FootballMatch]) {
+        var urls: [URL] = []
+        for partido in partidos {
+            for ruta in [partido.homeTeam?.crest, partido.awayTeam?.crest, partido.competitionBadge?.logo] {
+                if let url = urlImagen(ruta) { urls.append(url) }
+            }
+        }
+        guard !urls.isEmpty else { return }
+        let imagenes = entorno.imagenes
+        Task { await imagenes.precalentar(urls) }
     }
 
     // MARK: Dónde se está reproduciendo
@@ -364,15 +515,49 @@ public final class AppModel {
         return centros[id]
     }
 
-    /// El modelo de fuentes de un partido (el mismo mientras suene o esté abierto).
+    /// El modelo de fuentes de un partido (el mismo mientras suene, esté abierto o esté precalentado).
     public func centro(para partido: FootballMatch) -> CentroPartidoModelo {
         if let existente = centros[partido.id] { return existente }
-        // Solo se guardan el que suena y el abierto: el resto se descarta.
+        // Se guardan el que suena, el abierto y los precalentados por la agenda: el resto se descarta.
         let sonando = reproductor.canal?.partido?.id
-        centros = centros.filter { $0.key == sonando || $0.value.vistaAbierta }
+        centros = centros.filter { $0.key == sonando || $0.value.vistaAbierta || $0.value.precalentado }
         let nuevo = CentroPartidoModelo(partido: partido, app: self)
         centros[partido.id] = nuevo
+        centrosVersion += 1
         return nuevo
+    }
+
+    /// El centro de un partido SOLO si ya existe (las tarjetas de la agenda no crean ninguno).
+    public func centroCargado(_ id: String) -> CentroPartidoModelo? {
+        centros[id]
+    }
+
+    /// Pide las fuentes de los partidos que van en directo o empiezan en menos
+    /// de 45 min, para que la cápsula de la tarjeta diga «Señal», «Floja»…
+    public func precalentar(_ partidos: [FootballMatch]) {
+        for partido in partidos.prefix(6) where centros[partido.id]?.precalentado != true {
+            let modelo = centro(para: partido)
+            Task { await modelo.precalentar() }
+        }
+    }
+
+    /// Detener desde el mini o el escenario, con «Deshacer» durante 6 s.
+    public func detenerConDeshacer() {
+        guard reproductor.canal != nil else { return }
+        let titulo = reproductor.canal?.partido?.titulo ?? reproductor.canal?.titulo ?? ""
+        reproductor.detener()
+        let aviso = Aviso(titulo.isEmpty ? "Reproducción detenida" : "«\(titulo)» detenido", accion: "Deshacer", duracion: 6)
+        avisos.mostrar(aviso) { [weak self] in
+            _ = self?.reproductor.deshacerDetencion()
+        }
+    }
+
+    /// Qué pestaña quiere abrir alguien desde fuera de las pestañas (el menú «Más» del escenario).
+    public var pestanaSolicitada: Pestana?
+
+    public func pedirPestana(_ pestana: Pestana) {
+        cerrarEscenario()
+        pestanaSolicitada = pestana
     }
 
     /// Reproduce un canal suelto (biblioteca, búsqueda): sin política de fuentes de partido.
@@ -381,11 +566,32 @@ public final class AppModel {
         reproductor.reproducir(canal, origen: .usuario, lista: lista)
     }
 
+    /// Canales de la biblioteca cuyo nombre casa con el canal anunciado por la agenda («Dónde se emite»).
+    public func canalesDeBiblioteca(para nombre: String) -> [Item] {
+        guard let biblioteca else { return [] }
+        let clave = Canales.clave(nombre)
+        var vistos = Set<String>()
+        return (biblioteca.favorites + biblioteca.web + biblioteca.history).filter { item in
+            guard vistos.insert(item.id.lowercased()).inserted else { return false }
+            return Canales.puntuacionDeClaves(Canales.clave(item.title), clave) >= Canales.puntuacionExacta
+                || (item.alias.map { Canales.puntuacionDeClaves(Canales.clave($0), clave) >= Canales.puntuacionExacta } ?? false)
+        }
+    }
+
+    /// Un elemento de la biblioteca como canal reproducible.
+    public func canalReproducible(_ item: Item) -> CanalReproducible {
+        CanalReproducible(
+            id: item.id, titulo: item.title, ih: item.ih,
+            listaId: item.type == .web ? biblioteca?.activeWebSourceId : nil,
+            origen: item.type == .web ? "m3u" : (item.type == .fav ? "favorites" : "history"))
+    }
+
     // MARK: Marcadores
 
     public func refrescarMarcadores() async {
         guard fase == .lista else { return }
         if let respuesta = try? await entorno.api.enviar(API.marcadores), respuesta.available {
+            goles = RegistroGoles.anotar(anteriores: marcadores, nuevos: respuesta.scores, goles: goles)
             marcadores = respuesta.scores
         }
     }

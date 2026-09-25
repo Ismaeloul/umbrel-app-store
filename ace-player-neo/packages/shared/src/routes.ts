@@ -44,8 +44,10 @@ import {
 } from './api/v1/diagnostics.js';
 import { EngineRestartResponseSchema, EngineStatusSchema } from './api/v1/engine.js';
 import {
+  BadgeVersionQuerySchema,
   BindBodySchema,
   BindResponseSchema,
+  CompetitionLogoParamsSchema,
   FootballScheduleResponseSchema,
   PreheatParamsSchema,
   PreheatResponseSchema,
@@ -54,6 +56,7 @@ import {
   ScanParamsSchema,
   ScanResponseSchema,
   ScoresResponseSchema,
+  TeamCrestParamsSchema,
 } from './api/v1/football.js';
 import {
   DirectoryIdParamsSchema,
@@ -103,7 +106,7 @@ export const NATIVE_PREFIX = '/native';
 export type V1Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
 export type RouteAccess = 'web' | 'native' | 'any';
 export type NativeCredential = 'none' | 'bearer' | 'video-token';
-/** `json` = respuesta JSON validada; `sse` = text/event-stream; `binary` = ficheros del remux. */
+/** `json` = respuesta JSON validada; `sse` = text/event-stream; `binary` = ficheros del remux y escudos (PNG). */
 export type RouteContent = 'json' | 'sse' | 'binary';
 
 /** Módulos del backend (arquitectura §5.2): quién aporta el manejador de cada ruta. */
@@ -117,6 +120,7 @@ export const SERVER_MODULES = [
   'scanner',
   'sources',
   'football',
+  'teams',
   'auth',
   'events',
   'diagnostics',
@@ -732,6 +736,46 @@ export const V1_ROUTES = {
     sideEffects: false,
     errors: [],
     legacyTwin: 'GET /api/scores',
+  }),
+
+  // --- Escudos y logos (módulo teams) ---
+  footballTeamCrest: defineRoute({
+    method: 'GET',
+    path: '/api/v1/football/teams/:teamId/crest',
+    access: 'any',
+    credential: 'bearer',
+    module: 'teams',
+    summary: 'Escudo del equipo (PNG) con ETag y caché larga',
+    description:
+      'El `id` sale de `homeTeam`/`awayTeam` de la agenda. Con `?v=<etag>` (la URL que da la agenda) ' +
+      'la respuesta es `public, max-age=31536000, immutable`; sin él, `private, max-age=86400`. ' +
+      '`If-None-Match` da 304 sin cuerpo. Un id sin escudo da 404 `not_found`: el cliente pinta el escudo generado. Sin Range ni HEAD.',
+    params: TeamCrestParamsSchema,
+    query: BadgeVersionQuerySchema,
+    response: null,
+    status: 200,
+    content: 'binary',
+    sideEffects: false,
+    errors: [],
+    legacyTwin: null,
+  }),
+  footballCompetitionLogo: defineRoute({
+    method: 'GET',
+    path: '/api/v1/football/competitions/:competitionId/logo',
+    access: 'any',
+    credential: 'bearer',
+    module: 'teams',
+    summary: 'Logo de la competición (PNG) con ETag y caché larga',
+    description:
+      'El `id` sale de `competitionBadge` de la agenda. Mismas cabeceras y caché que el escudo del equipo.',
+    params: CompetitionLogoParamsSchema,
+    query: BadgeVersionQuerySchema,
+    response: null,
+    status: 200,
+    content: 'binary',
+    sideEffects: false,
+    errors: [],
+    legacyTwin: null,
   }),
 
   // --- Fuentes ---

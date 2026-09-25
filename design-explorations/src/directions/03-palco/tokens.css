@@ -1,0 +1,139 @@
+/* Palco · tokens. Oscuro por defecto (cine), claro «matinal». Todo bajo .pl-root
+   para no chocar con las demás propuestas. */
+
+.pl-root {
+  /* superficies */
+  --pl-bg: #05070a;
+  --pl-bg-2: #0f1218;
+  --pl-bg-3: #171b23;
+  --pl-bg-4: #1f242e;
+  --pl-ink: #ffffff;
+  --pl-ink-2: rgba(255, 255, 255, 0.72);
+  --pl-ink-3: rgba(255, 255, 255, 0.52);
+  --pl-line: rgba(255, 255, 255, 0.1);
+  --pl-line-2: rgba(255, 255, 255, 0.2);
+  --pl-card: rgba(255, 255, 255, 0.06);
+  --pl-card-2: rgba(255, 255, 255, 0.1);
+  --pl-card-3: rgba(255, 255, 255, 0.16);
+
+  /* acentos: un solo acento de acción (oro) + directo (rojo) + semáforo de señal */
+  --pl-live: #ff3b30;
+  --pl-gold: #ffd60a;
+  --pl-gold-ink: #1a1400;
+  --pl-gold-line: #ffd60a;
+  --pl-ok: #34c759;
+  --pl-weak: #ffb340;
+  --pl-fail: #ff453a;
+  --pl-ok-bg: rgba(52, 199, 89, 0.16);
+  --pl-weak-bg: rgba(255, 179, 64, 0.16);
+  --pl-fail-bg: rgba(255, 69, 58, 0.16);
+  --pl-info-bg: rgba(255, 255, 255, 0.1);
+
+  /* sobre la imagen (no cambian con el tema: el vídeo siempre es oscuro) */
+  --pl-on-video: #ffffff;
+  --pl-on-video-2: rgba(255, 255, 255, 0.76);
+  --pl-veil: rgba(0, 0, 0, 0.55);
+  --pl-veil-strong: rgba(0, 0, 0, 0.85);
+  --pl-video-glass: rgba(10, 12, 16, 0.62);
+
+  /* cristal */
+  --pl-glass: rgba(10, 12, 16, 0.62);
+  --pl-glass-2: rgba(22, 26, 34, 0.78);
+  --pl-glass-blur: blur(30px) saturate(150%);
+  --pl-glass-line: rgba(255, 255, 255, 0.12);
+
+  /* sombras */
+  --pl-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  --pl-shadow-sm: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --pl-shadow-xs: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --pl-focus: 0 0 0 3px rgba(255, 214, 10, 0.6);
+
+  /* tipografía */
+  --pl-display: 'Bricolage Grotesque Variable', 'Inter Variable', system-ui, sans-serif;
+  --pl-text: 'Inter Variable', system-ui, -apple-system, sans-serif;
+  --pl-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, monospace;
+
+  /* formas */
+  --pl-r-card: 14px;
+  --pl-r-sheet: 24px;
+  --pl-r-pill: 999px;
+  --pl-r-sm: 10px;
+
+  /* movimiento */
+  --pl-dur: 420ms;
+  --pl-dur-mid: 260ms;
+  --pl-dur-fast: 160ms;
+  --pl-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --pl-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  color-scheme: dark;
+  font-family: var(--pl-text);
+  color: var(--pl-ink);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'cv11', 'ss01';
+}
+
+/* Claro «matinal» */
+html[data-scheme='light'] .pl-root {
+  --pl-bg: #f3f3f4;
+  --pl-bg-2: #ffffff;
+  --pl-bg-3: #ececee;
+  --pl-bg-4: #e2e2e5;
+  --pl-ink: #0c0c0e;
+  --pl-ink-2: #4a4c52;
+  --pl-ink-3: #66686f;
+  --pl-line: rgba(0, 0, 0, 0.08);
+  --pl-line-2: rgba(0, 0, 0, 0.16);
+  --pl-card: rgba(0, 0, 0, 0.045);
+  --pl-card-2: rgba(0, 0, 0, 0.08);
+  --pl-card-3: rgba(0, 0, 0, 0.13);
+
+  --pl-live: #d92d22;
+  --pl-gold: #ffd60a;
+  --pl-gold-ink: #1a1400;
+  --pl-gold-line: #9a6d00;
+  --pl-ok: #1e7a46;
+  --pl-weak: #8f5b00;
+  --pl-fail: #c93a2e;
+  --pl-ok-bg: rgba(30, 122, 70, 0.12);
+  --pl-weak-bg: rgba(143, 91, 0, 0.12);
+  --pl-fail-bg: rgba(201, 58, 46, 0.12);
+  --pl-info-bg: rgba(0, 0, 0, 0.06);
+
+  --pl-glass: rgba(255, 255, 255, 0.72);
+  --pl-glass-2: rgba(255, 255, 255, 0.86);
+  --pl-glass-line: rgba(0, 0, 0, 0.08);
+
+  --pl-shadow: 0 20px 60px rgba(20, 20, 30, 0.18);
+  --pl-shadow-sm: 0 8px 24px rgba(20, 20, 30, 0.12);
+  --pl-shadow-xs: 0 2px 8px rgba(20, 20, 30, 0.1);
+  --pl-focus: 0 0 0 3px rgba(154, 109, 0, 0.5);
+
+  color-scheme: light;
+}
+
+/* Transparencia reducida: cristal opaco, nada de blur */
+html[data-transparency='reduced'] .pl-root {
+  --pl-glass: #0f1218;
+  --pl-glass-2: #171b23;
+  --pl-video-glass: #0f1218;
+  --pl-glass-blur: none;
+}
+html[data-transparency='reduced'][data-scheme='light'] .pl-root {
+  --pl-glass: #ffffff;
+  --pl-glass-2: #f3f3f4;
+}
+
+/* Movimiento reducido: fundidos cortos, sin luz que respira */
+html[data-motion='reduced'] .pl-root {
+  --pl-dur: 120ms;
+  --pl-dur-mid: 120ms;
+  --pl-dur-fast: 100ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pl-root {
+    --pl-dur: 120ms;
+    --pl-dur-mid: 120ms;
+    --pl-dur-fast: 100ms;
+  }
+}

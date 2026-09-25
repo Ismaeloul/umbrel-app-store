@@ -1,16 +1,28 @@
-/* Vista «Agenda» (inventario §3, §4 y §5.1 hasta abrir el partido).
+/* Vista «Agenda» = la portada (inventario §3, §4 y §5.1; plan Palco fase 2,
+   decisiones D3, D4 y W4; corrección 1 del encargo: sin reproducción
+   automática).
 
-   Móvil y tableta: cabecera, tira de días, filtro, tarjeta de primer uso y
-   la lista por competición. Tocar una franja abre el centro de partido (con
-   la franja viajando hasta allí: View Transition). Deslizar la lista a los
-   lados cambia de día; si habías bajado, la página vuelve a la tira para que
-   se vea qué día es (la tira no va pegada arriba: con la barra inferior y la
-   cabecera se comería media pantalla del móvil).
+   Arriba, el HÉROE: el partido destacado del día como tarjeta versus grande
+   (tu equipo en directo → cualquiera en directo → el próximo → el primero),
+   con «Ver ahora» que navega al centro de partido; la portada nunca arranca
+   el vídeo ni lo enseña (regla 6). Debajo, la tira de días y «Para ti» /
+   «Todos», la tarjeta de primer uso y, por competición, una FILA HORIZONTAL
+   de tarjetas versus (scroll-snap). Tocar una tarjeta abre el centro de
+   partido (con los escudos viajando hasta allí: View Transition). Deslizar la
+   lista a los lados cambia de día; si habías bajado, la página vuelve a la
+   tira para que se vea qué día es.
 
-   Escritorio (≥ 1024): la lista a la izquierda y, a la derecha, el ESCENARIO
-   con el partido elegido y «Luego» debajo; desde 1280, arriba del escenario,
-   la tira de directos (B1). Un clic en una franja la lleva al escenario; un
-   segundo clic, doble clic o Intro la abre.
+   Escritorio (≥ 1024): las filas a la izquierda y, a la derecha, el panel del
+   partido ELEGIDO (tarjeta grande, señal, dónde se emite, acción) y «Luego»;
+   desde 1280, arriba del panel, la tira de directos (B1). Un clic en una
+   tarjeta la lleva al panel; un segundo clic, doble clic o Intro la abre.
+   Mientras el elegido sea el del héroe, el panel no se repite: el lateral
+   deja el sitio a la tira de directos y a «Luego».
+
+   Marcadores: en la agenda van SIEMPRE tapados (corrección 1; DESIGN.md: «el
+   marcador vive oculto tras un toque en la cápsula "Marcador", nunca en la
+   imagen»). Cada partido con marcador lleva su cápsula «Marcador», que lo
+   destapa y lo vuelve a tapar (score-reveal.ts); el menú contextual también.
 
    §5.1: sin canales anunciados sale «El canal todavía no está anunciado»; con
    canales se abre el centro de partido, que es quien resuelve el canal
@@ -31,7 +43,9 @@ import { useShortcut } from '../../app/shortcuts.ts';
 import { partidoTransitionName } from '../../app/transitions.ts';
 import { preloadView } from '../../app/views.tsx';
 import { ViewHeader } from '../../app/ViewHeader.tsx';
+import { cx } from '../../lib/cx.ts';
 import { useSwipe } from '../../lib/gestures.ts';
+import { haptic } from '../../lib/haptics.ts';
 import { notify } from '../../notices/index.ts';
 import {
   Button,
@@ -52,7 +66,7 @@ import {
   toggleFollow,
 } from '../preferences/model.ts';
 import { usePreferences, useSavePreferences } from '../preferences/usePreferences.ts';
-import { flattenGroups, WindowAgendaList } from './AgendaList.tsx';
+import { AgendaRows, type RowSlot } from './AgendaList.tsx';
 import { useLibraryLookup, useNow, useSchedule, useScores } from './data.ts';
 import { DayStrip } from './DayStrip.tsx';
 import {
@@ -73,8 +87,15 @@ import {
   type AgendaMode,
 } from './domain.ts';
 import { FirstUseCard } from './FirstUseCard.tsx';
+import { AgendaHero } from './Hero.tsx';
 import { MatchRow } from './MatchRow.tsx';
-import { revealScore, useWatchedMatch } from './score-reveal.ts';
+import {
+  hideScore,
+  isScoreRevealed,
+  revealScore,
+  useRevealedScores,
+  useWatchedMatch,
+} from './score-reveal.ts';
 import { AgendaStage, LiveStrip } from './Stage.tsx';
 import { setAgendaDay, setAgendaMode, setAgendaSelected, useAgendaUi } from './state.ts';
 
@@ -82,26 +103,30 @@ const PreferencesSheet = lazy(() => import('../preferences/PreferencesSheet.tsx'
 
 const EMPTY: readonly FootballMatch[] = [];
 
+const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
+/** Esqueleto de la portada: el hueco del héroe y una fila de tarjetas. */
 function LoadingRows() {
   return (
     <div className="agenda-loading" aria-busy="true" aria-label="Cargando partidos">
       <Skeleton width={180} height={20} radius="s" />
-      <div className="agenda-loading__rows">
-        {[0, 1, 2].map((row) => (
-          <div key={row} className="agenda-loading__row">
-            <Skeleton width={48} height={48} radius="circle" />
-            <div className="agenda-loading__lines">
-              <Skeleton width="62%" height={16} />
-              <Skeleton width="48%" height={16} />
-              <Skeleton width="34%" height={12} />
-            </div>
-            <Skeleton width={46} height={30} radius="s" />
-          </div>
+      <div className="agenda-loading__rail">
+        {[0, 1, 2].map((card) => (
+          <Skeleton
+            key={card}
+            className="agenda-loading__card"
+            width="var(--agenda-card-w)"
+            height="auto"
+            radius="m"
+          />
         ))}
       </div>
     </div>
   );
 }
+
+/** Quién lleva el nombre de la transición compartida al abrir un partido. */
+type Opening = { id: string; from: 'hero' | 'list' } | null;
 
 export default function Agenda({ active }: ViewProps) {
   const navigate = useNavigate();
@@ -115,11 +140,12 @@ export default function Agenda({ active }: ViewProps) {
   const lookup = useLibraryLookup();
   const ui = useAgendaUi();
   const watched = useWatchedMatch();
+  const revealed = useRevealedScores();
 
   const [prefsOpen, setPrefsOpen] = useState(false);
   const [prefsMounted, setPrefsMounted] = useState(false);
   const [cardDismissed, setCardDismissed] = useState(false);
-  const [opening, setOpening] = useState<string | null>(null);
+  const [opening, setOpening] = useState<Opening>(null);
   const [swipeDirection, setSwipeDirection] = useState<'next' | 'prev' | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
@@ -137,7 +163,6 @@ export default function Agenda({ active }: ViewProps) {
   );
   const { scores } = useScores(dayMatches, now, active);
   const groups = useMemo(() => groupByCompetition(matches, now, scores), [matches, now, scores]);
-  const items = useMemo(() => flattenGroups(groups), [groups]);
   const dayEntries = useMemo(
     () =>
       days.map((item) => ({
@@ -153,15 +178,16 @@ export default function Agenda({ active }: ViewProps) {
   const liveCount = countLive(matches, now, scores);
 
   const stageVisible = kind === 'desktop' || kind === 'wide';
+  const mobile = kind === 'mobile' || kind === 'tablet';
+  const featured = featuredMatch(matches, now, scores, preferences);
   const selected = stageVisible
-    ? (matches.find((match) => match.id === ui.selected) ??
-      featuredMatch(matches, now, scores, preferences))
+    ? (matches.find((match) => match.id === ui.selected) ?? featured)
     : null;
   const later = stageVisible ? laterMatches(matches, now, scores, selected?.id ?? null) : [];
 
   /* El centro de partido se descarga en un rato libre con la agenda a la
-     vista: abrir un partido lo pinta en la misma transición y la franja viaja
-     hasta el marcador también la primera vez (views.tsx). */
+     vista: abrir un partido lo pinta en la misma transición y los escudos
+     viajan hasta el marcador también la primera vez (views.tsx). */
   useEffect(() => {
     if (!active) return;
     const idle = globalThis.requestIdleCallback;
@@ -181,14 +207,16 @@ export default function Agenda({ active }: ViewProps) {
   };
 
   const openMatch = useCallback(
-    (match: FootballMatch) => {
+    (match: FootballMatch, from: 'hero' | 'list' = 'list') => {
       if (!match.channels?.length) {
         notify('El canal todavía no está anunciado', { tone: 'info' });
         return;
       }
-      // Solo esta franja lleva el nombre de la transición compartida (tiene
-      // que ser único en la página); se queda para la vuelta atrás.
-      setOpening(match.id);
+      haptic('light');
+      // Solo un elemento lleva el nombre de la transición compartida (tiene
+      // que ser único en la página): el héroe o la tarjeta desde la que se
+      // abre; se queda para la vuelta atrás.
+      setOpening({ id: match.id, from });
       navigate({ vista: 'partido', id: match.id, canal: null });
     },
     [navigate],
@@ -197,6 +225,7 @@ export default function Agenda({ active }: ViewProps) {
   const changeDay = useCallback(
     (date: string, direction: 'next' | 'prev' | null = null) => {
       if (date === day) return;
+      haptic('selection');
       setSwipeDirection(direction);
       setAgendaDay(date);
       // Si has bajado por la lista, el día nuevo se enseña desde la tira de
@@ -214,6 +243,11 @@ export default function Agenda({ active }: ViewProps) {
     const index = days.findIndex((item) => item.date === day);
     const next = days[index + delta];
     if (next) changeDay(next.date, delta > 0 ? 'next' : 'prev');
+  };
+
+  const changeMode = (next: AgendaMode) => {
+    if (next !== mode) haptic('selection');
+    setAgendaMode(next);
   };
 
   const refresh = () => {
@@ -262,7 +296,11 @@ export default function Agenda({ active }: ViewProps) {
     );
   };
 
-  const menuFor = (match: FootballMatch, available: boolean, hidden: boolean): MenuItem[] => {
+  const menuFor = (
+    match: FootballMatch,
+    available: boolean,
+    score: 'hidden' | 'shown' | null,
+  ): MenuItem[] => {
     const items: MenuItem[] = [];
     if (match.channels?.length) {
       items.push({
@@ -272,12 +310,19 @@ export default function Agenda({ active }: ViewProps) {
         onSelect: () => openMatch(match),
       });
     }
-    if (hidden) {
+    if (score === 'hidden') {
       items.push({
         id: 'marcador',
         label: 'Ver marcador',
         icon: 'eye',
         onSelect: () => revealScore(match.id),
+      });
+    } else if (score === 'shown') {
+      items.push({
+        id: 'marcador',
+        label: 'Tapar el marcador',
+        icon: 'eye-off',
+        onSelect: () => hideScore(match.id),
       });
     }
     for (const team of [match.home, match.away].filter(Boolean)) {
@@ -335,7 +380,7 @@ export default function Agenda({ active }: ViewProps) {
     label: 'Cambia entre «Para ti» y «Todos»',
     group: 'Agenda',
     when: () => hasPrefs,
-    handler: () => setAgendaMode(mode === 'forYou' ? 'all' : 'forYou'),
+    handler: () => changeMode(mode === 'forYou' ? 'all' : 'forYou'),
   });
   useShortcut({
     id: 'agenda.actualizar',
@@ -354,7 +399,7 @@ export default function Agenda({ active }: ViewProps) {
   useShortcut({
     id: 'agenda.abrir',
     keys: ['o'],
-    label: 'Abre el partido del escenario',
+    label: 'Abre el partido del panel',
     group: 'Agenda',
     when: () => selected !== null,
     handler: () => {
@@ -363,10 +408,13 @@ export default function Agenda({ active }: ViewProps) {
   });
 
   // ---- Gesto: deslizar la lista cambia de día (táctil) -----------------------------
+  // Dentro de una fila con desbordamiento el navegador se queda el gesto
+  // para desplazarla (pointercancel), así que solo cambia de día un
+  // deslizamiento fuera de las filas o en una fila que no se mueve.
 
   const suppressClick = useRef(0);
   useSwipe(listRef, {
-    enabled: (kind === 'mobile' || kind === 'tablet') && days.length > 1,
+    enabled: mobile && days.length > 1,
     onMove: (dx) => {
       // Respuesta con transform mientras el dedo arrastra (con resistencia).
       const el = listRef.current;
@@ -390,34 +438,70 @@ export default function Agenda({ active }: ViewProps) {
   const listKey = `${day ?? ''}|${mode}`;
   const showCard =
     preferences !== null && preferences.onboardingComplete !== true && !cardDismissed;
+  const ready = !schedule.isPending && !(schedule.isError && !data);
 
-  const renderRow = (
-    item: { match: FootballMatch; position: 'first' | 'middle' | 'last' | 'only' },
-    staggerIndex: number | null,
-  ) => {
-    const { match } = item;
+  const renderRow = (slot: RowSlot, staggerIndex: number | null) => {
+    const { match } = slot;
     const channels = channelInfo(match, lookup);
     const available = channels.some((channel) => channel.inLibrary);
     const score = scores[match.id] ?? null;
-    const hidden = watched === match.id && paintableScore(score) !== null;
+    const scoreState =
+      paintableScore(score) === null
+        ? null
+        : isScoreRevealed(revealed, match.id)
+          ? 'shown'
+          : 'hidden';
     return (
       <MatchRow
+        key={match.id}
         match={match}
         now={now}
         score={score}
         channels={channels}
         mine={isMine(match, preferences)}
-        position={item.position}
+        position={slot.position}
         selected={stageVisible && selected?.id === match.id}
         interaction={stageVisible ? 'select' : 'open'}
         onOpen={openMatch}
         onSelect={(chosen) => setAgendaSelected(chosen.id)}
-        transitionName={opening === match.id ? partidoTransitionName(match.id) : null}
-        menuItems={menuFor(match, available, hidden)}
+        transitionName={
+          opening?.from === 'list' && opening.id === match.id
+            ? partidoTransitionName(match.id)
+            : null
+        }
+        menuItems={menuFor(match, available, scoreState)}
         staggerIndex={staggerIndex}
       />
     );
   };
+
+  let hero = null;
+  if (schedule.isPending) {
+    hero = (
+      <div className="agenda-hero agenda-hero--pending" aria-hidden="true">
+        <Skeleton className="agenda-hero__skeleton" height="auto" radius="xl" />
+      </div>
+    );
+  } else if (ready && featured) {
+    hero = (
+      <AgendaHero
+        key={featured.id}
+        match={featured}
+        now={now}
+        today={today}
+        score={scores[featured.id] ?? null}
+        channels={channelInfo(featured, lookup)}
+        mine={isMine(featured, preferences)}
+        watching={watched === featured.id}
+        onOpen={(match) => openMatch(match, 'hero')}
+        transitionName={
+          opening?.from === 'hero' && opening.id === featured.id
+            ? partidoTransitionName(featured.id)
+            : null
+        }
+      />
+    );
+  }
 
   let content;
   if (schedule.isPending) {
@@ -437,7 +521,7 @@ export default function Agenda({ active }: ViewProps) {
               icon="biblioteca"
               onClick={() => navigate({ vista: 'biblioteca' })}
             >
-              Ir a la biblioteca
+              Ir a los canales
             </Button>
           </>
         }
@@ -456,7 +540,7 @@ export default function Agenda({ active }: ViewProps) {
               <Button variant="primary" icon="pencil" onClick={openPreferences}>
                 Editar mis gustos
               </Button>
-              <Button variant="quiet" onClick={() => setAgendaMode('all')}>
+              <Button variant="quiet" onClick={() => changeMode('all')}>
                 Ver todos
               </Button>
             </>
@@ -489,20 +573,13 @@ export default function Agenda({ active }: ViewProps) {
       );
   } else {
     content = (
-      <WindowAgendaList
+      <AgendaRows
         key={listKey}
-        className={swipeDirection ? `agenda-list agenda-list--${swipeDirection}` : 'agenda-list'}
+        className={cx('agenda-list', swipeDirection && `agenda-list--${swipeDirection}`)}
         label="Partidos"
-        items={items}
+        groups={groups}
         listKey={listKey}
-        renderHead={(item) => (
-          <h2 className="agenda-group">
-            <span className="agenda-group__name">{item.competition}</span>
-            <span className="agenda-group__count">
-              {item.count} {item.count === 1 ? 'partido' : 'partidos'}
-            </span>
-          </h2>
-        )}
+        bleed={mobile}
         renderRow={renderRow}
       />
     );
@@ -524,7 +601,7 @@ export default function Agenda({ active }: ViewProps) {
   const foot = schedule.isPending ? (
     <p className="agenda-foot">Consultando horarios y canales…</p>
   ) : schedule.isError && !data ? (
-    <p className="agenda-foot">La biblioteca y el reproductor siguen disponibles.</p>
+    <p className="agenda-foot">Los canales y el reproductor siguen disponibles.</p>
   ) : (
     <p className="agenda-foot">
       <span>
@@ -535,11 +612,19 @@ export default function Agenda({ active }: ViewProps) {
   );
 
   const selectedScore = selected ? (scores[selected.id] ?? null) : null;
+  /* El elegido es el del héroe (lo normal al entrar): el panel no repite su
+     tarjeta grande, que está justo encima; el lateral se queda con la tira
+     de directos y «Luego». Al elegir otra tarjeta, el panel la enseña. */
+  const heroSelected = hero !== null && selected !== null && selected.id === featured?.id;
+  const sideVisible =
+    stageVisible &&
+    selected !== null &&
+    (!heroSelected || later.length > 0 || (kind === 'wide' && liveCount > 0));
+  const dayText = day ? dayLabel(day, today) : null;
 
-  /* Resumen para lectores de pantalla (regla 36: `aria-live` en la agenda).
-     No se pone en la lista entera (virtualizada, se leería fila a fila al
-     desplazar): una frase que solo cambia con el día, el filtro, la carga o
-     los directos. */
+  /* Resumen para lectores de pantalla (regla 36: `aria-live` en la agenda):
+     una frase que solo cambia con el día, el filtro, la carga o los directos,
+     en vez de anunciar las filas una a una. */
   const announcement = schedule.isPending
     ? 'Cargando partidos'
     : schedule.isError && !data
@@ -552,73 +637,77 @@ export default function Agenda({ active }: ViewProps) {
 
   return (
     <div
-      className={`agenda${stageVisible ? ' agenda--stage' : ''}`}
+      className={cx('agenda', stageVisible && 'agenda--stage', hero && 'has-hero')}
       data-demo={appMode === 'demo' || undefined}
     >
-      <div className="agenda__main">
-        <ViewHeader
-          title="Agenda"
-          className="agenda-head"
-          subtitle={
+      <ViewHeader
+        title="Agenda"
+        className="agenda-head"
+        subtitle={
+          dayText ? (
             <span className="agenda-head__lede">
-              El fútbol que viene: partidos, horarios y el canal donde puedes verlos.
+              {dayText.primary === dayText.long ? '' : `${dayText.primary} · `}
+              {capitalize(dayText.long)}
             </span>
-          }
-          actions={
-            <IconButton
-              icon="refresh"
-              label="Actualizar agenda de fútbol"
-              shortcut="R"
-              className="agenda-refresh"
-              busy={schedule.isFetching}
-              onClick={refresh}
-            />
-          }
-        />
-        <div ref={barRef} className="agenda-bar">
-          <DayStrip
-            days={dayEntries}
-            selected={day}
-            today={today}
-            onSelect={(date) => {
-              const from = days.findIndex((item) => item.date === day);
-              const to = days.findIndex((item) => item.date === date);
-              changeDay(date, to > from ? 'next' : 'prev');
-            }}
-            variant={stageVisible ? 'tiles' : 'line'}
-            controls="agenda-lista"
+          ) : undefined
+        }
+        actions={
+          <IconButton
+            icon="refresh"
+            label="Actualizar agenda de fútbol"
+            shortcut="R"
+            className="agenda-refresh"
+            busy={schedule.isFetching}
+            onClick={refresh}
           />
-          <div className="agenda-filter">
-            {/* «Editar mis gustos» va junto a «Para ti», que es lo que cambia (y
-                así la cabecera del móvil no parte en dos líneas). */}
-            <div className="agenda-filter__mode">
-              <Segmented<AgendaMode>
-                label="Qué partidos ver"
-                items={[
-                  { value: 'forYou', label: 'Para ti', count: forYouCount, disabled: !hasPrefs },
-                  { value: 'all', label: 'Todos', count: dayMatches.length },
-                ]}
-                value={mode}
-                onChange={setAgendaMode}
-              />
-              <IconButton
-                icon="pencil"
-                label="Editar mis gustos"
-                shortcut="E"
-                onClick={openPreferences}
-              />
-            </div>
-            {liveCount > 0 ? (
-              <span className="agenda-live-sum">
-                <LiveDot />
-                <Num value={liveCount} condensed={false} /> en directo
-              </span>
-            ) : null}
+        }
+      />
+      {hero}
+      <div ref={barRef} className="agenda-bar">
+        <DayStrip
+          days={dayEntries}
+          selected={day}
+          today={today}
+          onSelect={(date) => {
+            const from = days.findIndex((item) => item.date === day);
+            const to = days.findIndex((item) => item.date === date);
+            changeDay(date, to > from ? 'next' : 'prev');
+          }}
+          variant={stageVisible ? 'tiles' : 'line'}
+          controls="agenda-lista"
+        />
+        <div className="agenda-filter">
+          {/* «Editar mis gustos» va junto a «Para ti», que es lo que cambia (y
+              así la barra del móvil no parte en dos líneas). */}
+          <div className="agenda-filter__mode">
+            <Segmented<AgendaMode>
+              label="Qué partidos ver"
+              items={[
+                { value: 'forYou', label: 'Para ti', count: forYouCount, disabled: !hasPrefs },
+                { value: 'all', label: 'Todos', count: dayMatches.length },
+              ]}
+              value={mode}
+              onChange={changeMode}
+            />
+            <IconButton
+              icon="pencil"
+              label="Editar mis gustos"
+              shortcut="E"
+              onClick={openPreferences}
+            />
           </div>
+          {liveCount > 0 ? (
+            <span className="agenda-live-sum">
+              <LiveDot />
+              <Num value={liveCount} condensed={false} /> en directo
+            </span>
+          ) : null}
         </div>
-        {showCard ? (
-          <FirstUseCard onCustomize={openPreferences} onSkip={skipFirstUse} busy={save.isPending} />
-        ) : null}
+      </div>
+      {showCard ? (
+        <FirstUseCard onCustomize={openPreferences} onSkip={skipFirstUse} busy={save.isPending} />
+      ) : null}
+      <div className={cx('agenda__body', sideVisible && 'agenda__body--side')}>
         <div
           ref={listRef}
           id="agenda-lista"
@@ -626,7 +715,7 @@ export default function Agenda({ active }: ViewProps) {
           aria-labelledby={day ? `agenda-dia-${day}` : undefined}
           className="agenda-panel"
           onClickCapture={(event) => {
-            // Un deslizamiento no puede acabar abriendo la franja donde empezó.
+            // Un deslizamiento no puede acabar abriendo la tarjeta donde empezó.
             if (performance.now() < suppressClick.current) {
               event.preventDefault();
               event.stopPropagation();
@@ -635,65 +724,74 @@ export default function Agenda({ active }: ViewProps) {
         >
           {content}
         </div>
-        {foot}
-        <p className="sr-only" role="status" aria-live="polite">
-          {announcement}
-        </p>
+        {sideVisible && selected ? (
+          <aside
+            className={cx('agenda__side', heroSelected && 'agenda__side--later')}
+            aria-label={heroSelected ? 'Más partidos' : 'Partido elegido'}
+          >
+            {kind === 'wide' ? (
+              <LiveStrip
+                matches={matches}
+                now={now}
+                scores={scores}
+                currentId={selected.id}
+                onSelect={(match) => setAgendaSelected(match.id)}
+              />
+            ) : null}
+            {heroSelected ? null : (
+              <AgendaStage
+                key={selected.id}
+                match={selected}
+                now={now}
+                today={today}
+                score={selectedScore}
+                channels={channelInfo(selected, lookup)}
+                mine={isMine(selected, preferences)}
+                watching={watched === selected.id}
+                onOpen={openMatch}
+              />
+            )}
+            {later.length ? (
+              <section className="agenda-later" aria-labelledby="agenda-luego">
+                <h3 id="agenda-luego" className="agenda-later__title">
+                  Luego
+                </h3>
+                {/* Rejilla de tarjetas pequeñas (sin carrusel: en la columna
+                    caben dos por fila y no queda hueco bajo el título). */}
+                <div className="agenda-later__grid">
+                  {later.map((match, index) => (
+                    <MatchRow
+                      key={match.id}
+                      match={match}
+                      now={now}
+                      score={scores[match.id] ?? null}
+                      channels={channelInfo(match, lookup)}
+                      mine={isMine(match, preferences)}
+                      compact
+                      position={
+                        later.length === 1
+                          ? 'only'
+                          : index === 0
+                            ? 'first'
+                            : index === later.length - 1
+                              ? 'last'
+                              : 'middle'
+                      }
+                      interaction="select"
+                      onOpen={openMatch}
+                      onSelect={(chosen) => setAgendaSelected(chosen.id)}
+                    />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+          </aside>
+        ) : null}
       </div>
-      {stageVisible && selected ? (
-        <aside className="agenda__side" aria-label="Partido elegido">
-          {kind === 'wide' ? (
-            <LiveStrip
-              matches={matches}
-              now={now}
-              scores={scores}
-              currentId={selected.id}
-              onSelect={(match) => setAgendaSelected(match.id)}
-            />
-          ) : null}
-          <AgendaStage
-            key={selected.id}
-            match={selected}
-            now={now}
-            today={today}
-            score={selectedScore}
-            channels={channelInfo(selected, lookup)}
-            onOpen={openMatch}
-          />
-          {later.length ? (
-            <section className="agenda-later" aria-labelledby="agenda-luego">
-              <h3 id="agenda-luego" className="agenda-later__title">
-                Luego
-              </h3>
-              <div className="agenda-later__list">
-                {later.map((match, index) => (
-                  <MatchRow
-                    key={match.id}
-                    match={match}
-                    now={now}
-                    score={scores[match.id] ?? null}
-                    channels={channelInfo(match, lookup)}
-                    mine={isMine(match, preferences)}
-                    compact
-                    position={
-                      later.length === 1
-                        ? 'only'
-                        : index === 0
-                          ? 'first'
-                          : index === later.length - 1
-                            ? 'last'
-                            : 'middle'
-                    }
-                    interaction="select"
-                    onOpen={openMatch}
-                    onSelect={(chosen) => setAgendaSelected(chosen.id)}
-                  />
-                ))}
-              </div>
-            </section>
-          ) : null}
-        </aside>
-      ) : null}
+      {foot}
+      <p className="sr-only" role="status" aria-live="polite">
+        {announcement}
+      </p>
       {prefsMounted ? (
         <Suspense fallback={null}>
           <PreferencesSheet open={prefsOpen} onClose={() => setPrefsOpen(false)} />

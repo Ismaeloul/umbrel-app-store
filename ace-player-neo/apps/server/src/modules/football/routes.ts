@@ -8,7 +8,8 @@
    - GET /api/scores → sus tres formas, `success: false` con 200 si no hay agenda
 
    v1 (tabla de @ace/shared/routes.ts; acceso y validación en app.ts):
-   - footballSchedule: GET /api/v1/football
+   - footballSchedule: GET /api/v1/football (decorada con escudos y colores
+     por `teams`; si decorar falla, sale sin decorar y queda en el log)
    - footballResolve: GET /api/v1/football/resolve (el trabajo del comprobador
      apunta a /api/v1/football/scans/:id)
    - footballPreheat: GET /api/v1/football/preheat/:matchId
@@ -16,7 +17,7 @@
    - scores: GET /api/v1/scores
    La de `GET /api/v1/football/scans/:id` es del comprobador. */
 
-import type { ScanRef } from '@ace/shared';
+import { motivoDeFallo, type FootballSchedule, type ScanRef } from '@ace/shared';
 import type { LegacyRouter, V1Router } from '../../core/router.js';
 import type { Services } from '../../services.js';
 
@@ -74,8 +75,30 @@ export function registerLegacyRoutes(router: LegacyRouter, services: Services): 
   router.handle('GET', '/api/scores', () => services.football.legacyScores());
 }
 
+/**
+ * La agenda con `homeTeam`/`awayTeam`/`competitionBadge` donde `teams` sabe
+ * algo. Síncrona y pura (copia superficial): la agenda nunca espera ni falla
+ * por los escudos; si decorar lanza, se sirve tal cual y queda en el log.
+ */
+export function decorateWithTeams(
+  services: Pick<Services, 'teams' | 'logger'>,
+  schedule: FootballSchedule,
+): FootballSchedule {
+  try {
+    return services.teams.decorateSchedule(schedule);
+  } catch (error) {
+    services.logger.warn(
+      { errorCode: motivoDeFallo(error), err: error },
+      'agenda: no se pudo decorar con escudos; se sirve sin ellos',
+    );
+    return schedule;
+  }
+}
+
 export function registerV1Routes(router: V1Router, services: Services): void {
-  router.handle('footballSchedule', () => services.football.schedule());
+  router.handle('footballSchedule', async () =>
+    decorateWithTeams(services, await services.football.schedule()),
+  );
   router.handle('footballResolve', async (input, ctx) => {
     const result = await services.football.resolve(input.query, { signal: ctx.signal });
     return { ...result, scan: v1ScanRef(result.scan) };

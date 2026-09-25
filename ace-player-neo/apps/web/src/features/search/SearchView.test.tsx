@@ -8,7 +8,9 @@ import { makeLibrary, renderWithApp, resetPlayback } from '../library/test-utils
 import { installShortcutListener } from '../../app/shortcuts.ts';
 import SearchView from './SearchView.tsx';
 import { demoSearch } from './demo.ts';
-import { canSearch, cleanQuery, searchPhase } from './model.ts';
+import { canSearch, cleanQuery, isHashOrLink, searchPhase } from './model.ts';
+
+const HASH = 'a3f19c2b7d4e8f0a1b2c3d4e5f6a7b8c9d0e1f2a';
 
 let net: ReturnType<typeof mockFetch>;
 
@@ -196,6 +198,57 @@ describe('reglas del buscador (§15)', () => {
     );
     // Los resultados del motor son infohashes: se piden como tales (P6).
     expect(getPlayer().channel).toMatchObject({ title: 'DAZN 2', kind: 'infohash' });
+  });
+});
+
+describe('«Enlace detectado» (Palco W9)', () => {
+  it('detecta un Content ID, un enlace acestream:// o una URL con el id; nada más', () => {
+    expect(isHashOrLink(HASH)).toBe(HASH);
+    expect(isHashOrLink(`  acestream://${HASH.toUpperCase()} `)).toBe(HASH);
+    expect(isHashOrLink(`https://ejemplo.com/ver?content_id=${HASH}`)).toBe(HASH);
+    expect(isHashOrLink('dazn')).toBeNull();
+    expect(isHashOrLink('acestream://123')).toBeNull();
+    expect(isHashOrLink('')).toBeNull();
+  });
+
+  it('con un enlace en el campo no se pregunta al motor: sale la tarjeta y «Reproducir» lo abre', async () => {
+    setup();
+    fireEvent.change(field(), { target: { value: `acestream://${HASH}` } });
+    expect(await screen.findByText('Enlace detectado')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Es un Content ID de AceStream' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(HASH)).toBeInTheDocument();
+    expect(screen.queryByText('En el motor AceStream')).toBeNull();
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    await waitFor(() =>
+      expect(screen.getByTestId('ruta')).toHaveTextContent(`partido/canal/${HASH}`),
+    );
+    expect(searchCalls()).toHaveLength(0);
+    // El mismo camino que «Pegar hash»: título «Stream …» y el servidor decide id o infohash.
+    expect(getPlayer().channel).toMatchObject({
+      hash: HASH,
+      title: `Stream ${HASH.slice(0, 8)}`,
+      kind: 'auto',
+    });
+    expect(toastStore.get().at(-1)?.text).toBe('Hash externo añadido y reproduciendo');
+  });
+
+  it('si el hash ya está en tu biblioteca, la tarjeta lleva su nombre; «Limpiar» vacía el campo', async () => {
+    const library = makeLibrary();
+    const known = library.favorites[1]!;
+    setup();
+    await waitFor(() => expect(net.calls.some((c) => c.url === '/api/v1/library')).toBe(true));
+    fireEvent.change(field(), { target: { value: known.id } });
+    expect(await screen.findByRole('heading', { name: 'Eurosport 1' })).toBeInTheDocument();
+    expect(screen.getByText('En tu biblioteca')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Limpiar' }));
+    expect(field()).toHaveValue('');
+    expect(screen.queryByText('Enlace detectado')).toBeNull();
+    fireEvent.change(field(), { target: { value: known.id } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Reproducir' }));
+    await waitFor(() => expect(getPlayer().channel?.title).toBe('Eurosport 1'));
+    expect(toastStore.get().at(-1)?.text).toBe('Reproduciendo el hash seleccionado');
   });
 });
 

@@ -10,6 +10,8 @@ struct ListasView: View {
     @State private var tipo: WebSourceType = .m3u
     @State private var guardando = false
     @State private var actualizando: String?
+    /// Lista con el borrado armado (segundo toque).
+    @State private var borrando: String?
     @FocusState private var enfocado: Bool
 
     /// Tope de listas del servidor.
@@ -31,7 +33,7 @@ struct ListasView: View {
                 } header: {
                     Text("Listas guardadas · \(listas.count) de \(Self.maximo)")
                 } footer: {
-                    Text("Los canales de la lista activa salen en la Biblioteca, en «Listas». Toca una para activarla; desliza para actualizarla o borrarla.")
+                    Text("Los canales de la lista en uso salen en Canales, en «Listas». Toca una para usarla; desliza para actualizarla o borrarla (borrar pide un segundo toque).")
                 }
 
                 Section {
@@ -65,10 +67,7 @@ struct ListasView: View {
                     Text("Hasta \(Self.maximo) listas públicas; cada una conserva sus canales y se actualiza sola cada 3 h. Las direcciones de tu red local están bloqueadas por seguridad.")
                 }
             }
-            .listRowBackground(Tinta.superficie)
         }
-        .scrollContentBackground(.hidden)
-        .background(Tinta.fondo.ignoresSafeArea())
         .navigationTitle("Listas")
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("pantalla-listas")
@@ -88,7 +87,7 @@ struct ListasView: View {
             HStack(spacing: 12) {
                 Image(systemName: activa ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
-                    .foregroundStyle(activa ? Tinta.acentoTinta : Tinta.texto3)
+                    .foregroundStyle(activa ? Tinta.oro : Tinta.texto3)
                     .contentTransition(.symbolEffect(.replace))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(lista.name)
@@ -111,9 +110,9 @@ struct ListasView: View {
         .buttonStyle(.plain)
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) {
-                Task { await app.borrarLista(lista.id) }
+                borrar(lista)
             } label: {
-                Label("Borrar", systemImage: "trash")
+                Label(borrando == lista.id ? "¿Borrar?" : "Borrar", systemImage: "trash")
             }
             Button {
                 Task {
@@ -124,10 +123,25 @@ struct ListasView: View {
             } label: {
                 Label("Actualizar", systemImage: "arrow.clockwise")
             }
-            .tint(Tinta.acento)
+            .tint(Tinta.oro)
         }
-        .accessibilityLabel("\(lista.name), \(activa ? "activa" : "no activa"), \(detalle(lista))")
+        .accessibilityLabel("\(lista.name), \(activa ? "en uso" : "guardada"), \(detalle(lista))")
         .accessibilityAddTraits(activa ? [.isSelected, .isButton] : [.isButton])
+    }
+
+    /// Borrar pide un segundo toque en 5 s (inventario §5).
+    private func borrar(_ lista: WebSourceSummary) {
+        if borrando == lista.id {
+            borrando = nil
+            Task { await app.borrarLista(lista.id) }
+            return
+        }
+        borrando = lista.id
+        app.avisos.mostrar("Desliza y toca «¿Borrar?» otra vez para borrar «\(lista.name)»")
+        Task {
+            try? await Task.sleep(for: .seconds(5))
+            if borrando == lista.id { borrando = nil }
+        }
     }
 
     private func detalle(_ lista: WebSourceSummary) -> String {

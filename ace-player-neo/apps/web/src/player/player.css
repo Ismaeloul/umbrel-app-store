@@ -1,7 +1,11 @@
 /* ==========================================================================
-   Reproductor (dirección A «Luz de focos», maqueta opcion-A/partido.html y
-   base.css .mini, con el injerto B4 del botón de directo).
+   Reproductor, piel «Palco» (plan fase 2, decisiones W5, W7 y W14; antes
+   dirección A con el injerto B4 del botón de directo).
 
+   - Grande: a sangre en el móvil; desde 768, centrado con tope de 70 dvh,
+     radio 24, sombra larga y la luz de los dos clubes alrededor.
+   - Un solo overlay de controles: cápsulas de cristal sobre un velo negro.
+   - Mini: la misma imagen viva a 96×54 en una banda de cristal denso.
    - Todo lo que va sobre la imagen es cristal de vídeo (siempre oscuro).
    - Solo se animan transform y opacity. Hover solo con ratón de verdad.
    - Objetivos de 44 px; nada por debajo de 11 px.
@@ -60,35 +64,49 @@
   }
   .player[data-presentation='stage'] .player-frame {
     /* Lo más ancho posible sin pasar del 70 % del alto: se ve el partido debajo. */
-    max-width: calc(70dvh * 16 / 9);
+    max-width: min(100%, calc(70dvh * 16 / 9));
     margin-inline: auto;
     border-radius: var(--r-xl);
+    /* Sombra larga de Palco: el vídeo flota sobre el negro cine. */
     box-shadow:
-      0 0 0 1px rgb(0 0 0 / 0.25),
-      0 30px 60px -30px rgb(3 10 22 / 0.7);
+      0 0 0 1px rgb(0 0 0 / 0.3),
+      0 20px 60px rgb(0 0 0 / 0.6);
   }
-  /* Luz ambiental: los colores de los dos equipos se derraman desde el vídeo. */
+  /* Luz ambiental (W5): los colores de los dos clubes, dos radiales tenues al
+     22 % que se derraman desde el vídeo y «respiran» despacio (solo opacidad
+     y escala; quieta con movimiento reducido). */
   .player[data-presentation='stage'][data-ambient='true']::before {
     content: '';
     position: absolute;
     z-index: -1;
     /* A los lados, nunca más que el margen de la vista: en la tableta (768,
-       margen de 16 px) 24 px se salían de la pantalla y la página se
-       ensanchaba a 776 (revisión visual de la Fase 2). */
-    inset: -28px calc(-1 * min(24px, var(--gutter))) -34px;
+       margen de 16 px) más se salía de la pantalla y la página se ensanchaba
+       (revisión visual de la Fase 2). Arriba y abajo, mucha más luz. */
+    inset: -56px calc(-1 * min(32px, var(--gutter))) -72px;
     background:
       radial-gradient(
-        50% 60% at 18% 40%,
-        color-mix(in oklab, var(--ta) 34%, transparent),
-        transparent 72%
+        46% 62% at 16% 46%,
+        color-mix(in oklab, var(--ta) 22%, transparent),
+        transparent 74%
       ),
       radial-gradient(
-        50% 60% at 82% 40%,
-        color-mix(in oklab, var(--tb) 26%, transparent),
-        transparent 72%
+        46% 62% at 84% 46%,
+        color-mix(in oklab, var(--tb) 22%, transparent),
+        transparent 74%
       );
-    filter: blur(8px);
+    filter: blur(24px);
     pointer-events: none;
+    animation: player-respira 9s ease-in-out infinite alternate;
+  }
+}
+@keyframes player-respira {
+  from {
+    opacity: 0.72;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.02);
   }
 }
 
@@ -137,7 +155,7 @@
   padding: 56px var(--s-6);
   text-align: center;
   background:
-    radial-gradient(60% 80% at 50% 0%, rgb(95 217 255 / 0.12), transparent 70%),
+    radial-gradient(60% 80% at 50% 0%, rgb(255 214 10 / 0.08), transparent 70%),
     var(--glass-video-solid);
   pointer-events: none;
   animation: ace-funde var(--dur-rapido) var(--ease-out) both;
@@ -166,7 +184,7 @@
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  border: 2px solid var(--accent);
+  border: 2px solid var(--on-video);
   animation: player-late 1.6s var(--ease-out) infinite;
 }
 @keyframes player-late {
@@ -181,7 +199,8 @@
   }
 }
 .player-msg__title {
-  font-size: var(--fs-17);
+  font-size: var(--fs-22);
+  line-height: var(--lh-tight);
   font-weight: var(--wght-head);
   font-stretch: var(--w-head);
   letter-spacing: var(--tracking-head);
@@ -384,6 +403,24 @@
   pointer-events: none;
   transition: opacity var(--dur-estandar) var(--ease-estandar);
 }
+/* El velo negro (30-55 %) bajo las cápsulas: arriba y abajo, nunca en medio
+   de la imagen. Se va con los controles. */
+.player-chrome::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgb(0 0 0 / 0.55),
+    rgb(0 0 0 / 0.3) 18%,
+    transparent 36%,
+    transparent 60%,
+    rgb(0 0 0 / 0.3) 80%,
+    rgb(0 0 0 / 0.55)
+  );
+  pointer-events: none;
+}
 .player-chrome[data-visible='false'] {
   opacity: 0;
 }
@@ -395,9 +432,36 @@
   gap: 8px;
   min-width: 0;
 }
+.player-chrome__lead,
+.player-chrome__group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.player-chrome__lead {
+  flex: 1 1 auto;
+}
 .player-chrome[data-visible='true'] .player-chrome__top > *,
-.player-chrome[data-visible='true'] .player-chrome__bottom > * {
+.player-chrome[data-visible='true'] .player-chrome__bottom > *,
+.player-chrome[data-visible='true'] .player-chrome__lead > *,
+.player-chrome[data-visible='true'] .player-chrome__group > *,
+.player-chrome[data-visible='true'] .player-slot > * {
   pointer-events: auto;
+}
+/* La fila de la izquierda y el hueco no tapan el vídeo: solo sus piezas. */
+.player-chrome[data-visible='true'] .player-chrome__top > .player-chrome__lead,
+.player-chrome[data-visible='true'] .player-chrome__lead > .player-slot {
+  pointer-events: none;
+}
+/* Hueco del escenario (stage-slot.ts): la cápsula del marcador del partido. */
+.player-slot {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.player-slot:empty {
+  display: none;
 }
 @media (min-width: 768px) {
   .player-chrome {
@@ -431,13 +495,26 @@
   fill: currentColor;
 }
 
+/* Pausa grande: círculo relleno, aparte de la cápsula (el botón que más se usa). */
+.player-play.icon-btn {
+  width: 52px;
+  height: 52px;
+  background: rgb(255 255 255 / 0.92);
+  color: #0c0c0e;
+  box-shadow: 0 6px 18px -6px rgb(0 0 0 / 0.6);
+}
+.player-play.icon-btn:disabled {
+  opacity: 0.6;
+}
+
 /* Canal que suena (escritorio): ecualizador + título + fuente. */
 .player-now {
   display: inline-flex;
   align-items: center;
   gap: 10px;
+  flex: 0 1 auto;
   min-width: 0;
-  max-width: min(62%, 520px);
+  max-width: min(100%, 520px);
   min-height: var(--tap);
   padding: 0 16px 0 14px;
   border-radius: var(--r-pill);
@@ -526,9 +603,8 @@
   background: #fff;
 }
 
-/* Botón de directo, dos estados (injerto B4). */
+/* Botón de directo, dos estados (injerto B4; Palco: rojo en el borde). */
 .player-live {
-  --live: var(--accent);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -541,11 +617,14 @@
   letter-spacing: 0.01em;
   white-space: nowrap;
 }
-/* En el borde: relleno. */
+/* En el borde: el rojo del directo, relleno (blanco sobre el rojo un 14 % más
+   oscuro, como la cápsula «En directo»: 5:1). El punto, en blanco. */
 .player-live[data-mode='live'] {
-  --live: var(--on-accent);
-  background: var(--accent);
-  color: var(--on-accent);
+  background: color-mix(in oklab, var(--live) 86%, #000);
+  color: #fff;
+}
+.player-live[data-mode='live'] .live-dot {
+  --live: #fff;
 }
 /* Por detrás: contorno y «Ir al directo · −34 s». */
 .player-live[data-mode='behind'] {
@@ -687,10 +766,13 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-height: var(--mini-h);
-  padding: 6px;
-  border-radius: 24px;
+  padding: 9px 6px 9px 9px;
+  border-radius: 18px;
+  box-shadow:
+    inset 0 1px 0 var(--glass-hi),
+    var(--shadow-2);
   transition:
     transform var(--dur-estandar) var(--ease-estandar),
     opacity var(--dur-rapido) var(--ease-out);
@@ -703,11 +785,12 @@
     transform: translateY(12px);
   }
 }
+/* La imagen viva del mini (W7): el mismo <video>, a 96×54. */
 .player[data-presentation='mini'] .player-frame {
-  width: 80px;
+  width: 96px;
   aspect-ratio: 16 / 9;
-  border-radius: 18px;
-  background: #0d1a14;
+  border-radius: 10px;
+  background: #000;
   box-shadow: 0 0 0 1px rgb(0 0 0 / 0.25);
   cursor: pointer;
 }
@@ -751,6 +834,10 @@
   color: var(--text-2);
   font-size: var(--fs-12);
 }
+.player-mini__note {
+  color: var(--text);
+  font-weight: var(--wght-strong);
+}
 .player-mini__btn {
   color: var(--text);
 }
@@ -766,10 +853,24 @@
     display: inline-grid;
   }
 }
-@media (min-width: 768px) {
-  .player[data-presentation='mini'] .player-frame {
-    width: 112px;
-    border-radius: 16px;
+
+/* ---- Corte a negro al cambiar de fuente (W14) ------------------------------------ */
+.player-cut {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  animation: player-corte 560ms var(--ease-out) both;
+}
+@keyframes player-corte {
+  0%,
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
   }
 }
 
@@ -815,5 +916,12 @@ body:has(.app[data-immersive='true']) .menu {
   }
   .player[data-presentation='mini'] {
     animation-name: ace-funde;
+  }
+  /* La luz no respira y el corte a negro es un fundido corto. */
+  .player[data-presentation='stage'][data-ambient='true']::before {
+    animation: none;
+  }
+  .player-cut {
+    animation-duration: 200ms;
   }
 }

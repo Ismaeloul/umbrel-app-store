@@ -19,16 +19,22 @@ public struct SondaFuente: Sendable, Hashable {
     public var reintentoEn: String?
     /// D6: en iPhone se puede ver aunque la web no (HEVC por el remux).
     public var reproducibleEnIOS: Bool?
+    /// Códec de vídeo («h264», «hevc»), para «Datos técnicos».
+    public var codec: String = ""
+    /// Caudal medido (kbit/s): de él se deriva la calidad del cartel («1080p»).
+    public var kbps: Double?
 
     public init(
         estado: ScanCandidateState, motivo: String = "", pares: Double = 0, reintentoEn: String? = nil,
-        reproducibleEnIOS: Bool? = nil
+        reproducibleEnIOS: Bool? = nil, codec: String = "", kbps: Double? = nil
     ) {
         self.estado = estado
         self.motivo = motivo
         self.pares = pares
         self.reintentoEn = reintentoEn
         self.reproducibleEnIOS = reproducibleEnIOS
+        self.codec = codec
+        self.kbps = kbps
     }
 
     /// Del candidato del comprobador, con la regla D6 aplicada: una fuente que
@@ -40,10 +46,28 @@ public struct SondaFuente: Sendable, Hashable {
         {
             estado = .working
         }
+        let kbps = [candidato.rateKbps, candidato.streamKbps > 0 ? candidato.streamKbps : nil, candidato.intakeKbps]
+            .compactMap { $0 }.first { $0 > 0 }
         self.init(
             estado: estado, motivo: candidato.reason, pares: candidato.peers, reintentoEn: candidato.retryAt,
-            reproducibleEnIOS: candidato.playableOn?.ios)
+            reproducibleEnIOS: candidato.playableOn?.ios, codec: candidato.videoCodec, kbps: kbps)
     }
+}
+
+/// Resumen de las fuentes de un partido para la cápsula de la agenda y del
+/// escenario (`sessionSummary` del prototipo).
+public struct ResumenFuentes: Sendable, Hashable {
+    public enum Tono: Sendable, Hashable { case ok, floja, fallo, comprobando, neutro }
+
+    public var tono: Tono
+    /// «Señal», «Floja», «Sin señal», «Comprobando» o "" (sin datos).
+    public var etiqueta: String
+    /// «2 de 5 verificadas», «3 fuentes en cola»…
+    public var detalle: String
+    public var total: Int
+    public var verificadas: Int
+
+    public static let vacio = ResumenFuentes(tono: .neutro, etiqueta: "", detalle: "", total: 0, verificadas: 0)
 }
 
 /// Una fuente del partido.
@@ -338,5 +362,69 @@ public enum ReglasFuentes {
     public static func terminado(_ trabajo: ScanJob?) -> Bool {
         guard let trabajo else { return true }
         return trabajo.status == .complete || trabajo.status == .waiting || trabajo.status == .cancelled
+    }
+
+    /// Resumen para la cápsula: verificadas → «Señal»; todo en cola → «Comprobando»;
+    /// solo flojas → «Floja»; algo pendiente → «Comprobando»; si no, «Sin señal».
+    public static func resumen(_ entradas: [EntradaFuente], efectivos: [String: Efectivo]) -> ResumenFuentes {
+        let n = entradas.count
+        guard n > 0 else { return .vacio }
+        var verificadas = 0
+        var flojas = 0
+        var caidas = 0
+        var pendientes = 0
+        for entrada in entradas {
+            switch efectivos[entrada.id]?.estado {
+            case .working: verificadas += 1
+            case .weak: flojas += 1
+            case .failed: caidas += 1
+            case .checking, .queued, .desconocido, .none: pendientes += 1
+            }
+        }
+        let hechas = n - pendientes
+        if verificadas > 0 {
+            return ResumenFuentes(
+                tono: .ok, etiqueta: "Señal", detalle: "\(verificadas) de \(n) verificadas", total: n,
+                verificadas: verificadas)
+        }
+        if pendientes > 0 && hechas == 0 {
+            return ResumenFuentes(
+                tono: .comprobando, etiqueta: "Comprobando", detalle: n == 1 ? "1 fuente en cola" : "\(n) fuentes en cola",
+                total: n, verificadas: 0)
+        }
+        if flojas > 0 && pendientes == 0 {
+            return ResumenFuentes(
+                tono: .floja, etiqueta: "Floja", detalle: "\(flojas) de \(n) con señal floja", total: n, verificadas: 0)
+        }
+        if pendientes > 0 {
+            return ResumenFuentes(
+                tono: .comprobando, etiqueta: "Comprobando", detalle: "\(hechas) de \(n) probadas", total: n,
+                verificadas: 0)
+        }
+        return ResumenFuentes(
+            tono: .fallo, etiqueta: "Sin señal", detalle: caidas == 1 ? "1 fuente sin señal" : "\(caidas) fuentes sin señal",
+            total: n, verificadas: 0)
+    }
+
+    /// Calidad del cartel a partir del caudal («1080p», «720p», «576i»); nil sin medida.
+    public static func calidad(_ sonda: SondaFuente?) -> String? {
+        guard let kbps = sonda?.kbps, kbps > 0 else { return nil }
+        if kbps >= 5000 { return "1080p" }
+        if kbps >= 2500 { return "720p" }
+        return "576i"
+    }
+
+    /// «1080p · Elcano» (o solo una de las dos partes).
+    public static func chipsCartel(_ entrada: EntradaFuente) -> String {
+        [calidad(entrada.sonda), proveedor(entrada.titulo)].compactMap { $0 }.filter { !$0.isEmpty }
+            .joined(separator: " · ")
+    }
+
+    /// Las fuentes entre las que se puede zapear deslizando (no caídas ni reportadas).
+    public static func zapeables(_ entradas: [EntradaFuente], efectivos: [String: Efectivo]) -> [EntradaFuente] {
+        entradas.filter { entrada in
+            let efectivo = efectivos[entrada.id]
+            return efectivo?.reportada != true && efectivo?.estado != .failed
+        }
     }
 }

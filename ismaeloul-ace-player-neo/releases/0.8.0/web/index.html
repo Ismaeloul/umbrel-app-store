@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="es" dir="ltr">
+  <head>
+    <link rel="preload" as="font" type="font/woff2" href="/assets/mona-sans-latin-wdth-normal-BMVx8nn_.woff2" crossorigin="">
+
+    <meta charset="utf-8" />
+    <!-- viewport-fit=cover: la app pinta bajo la isla y la barra de gestos y
+         se aparta con env(safe-area-inset-*). resizes-content: en Android el
+         teclado encoge la página en vez de tapar los campos. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <title>Ace Player Neo</title>
+    <meta
+      name="description"
+      content="Agenda de fútbol con el canal de cada partido y reproducción AceStream desde el navegador."
+    />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f3f3f4" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#05070a" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icon-180.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Ace Player" />
+    <meta name="format-detection" content="telephone=no" />
+    <!-- Fondo del tema ANTES de que llegue el CSS: sin fogonazo blanco en oscuro. -->
+    <style>html{background:#f3f3f4}@media (prefers-color-scheme:dark){html:not([data-theme=light]){background:#05070a}}html[data-theme=dark]{background:#05070a}</style>
+    <!-- Tema y transparencia guardados en Ajustes, aplicados antes de pintar
+         (lo mismo que hace src/app/theme.ts después). Con try/catch: en una
+         ventana privada localStorage puede lanzar. La CSP de nginx permite
+         scripts en línea ('unsafe-inline'). -->
+    <script>
+      (function () {
+        var d = document.documentElement;
+        var t = null;
+        var r = null;
+        try {
+          t = localStorage.getItem('aceneo-tema');
+          r = localStorage.getItem('aceneo-transparencia');
+        } catch (e) {}
+        var dark = false;
+        try {
+          dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        } catch (e) {}
+        var s = t === 'claro' ? 'light' : t === 'oscuro' ? 'dark' : dark ? 'dark' : 'light';
+        if (t === 'claro' || t === 'oscuro') d.setAttribute('data-theme', s);
+        d.setAttribute('data-scheme', s);
+        if (r === 'reducida') d.setAttribute('data-transparency', 'reduced');
+      })();
+    </script>
+    <!-- El arranque de la API (/api/v1/bootstrap) se pide YA, en paralelo con
+         el JS: src/api/mode.ts recoge esta misma petición (y la repite si
+         falló). Antes salía cuando el JS ya estaba bajado y ejecutado, y todo
+         dato esperaba por él (revisión de rendimiento de la Fase 2).
+         src/api/client.ts acepta más peticiones adelantadas así
+         (window.__acePrefetch), pero adelantar también la agenda empeoraba el
+         LCP (2,7 → 2,9 s): con HTTP/1.1 le quitaba la conexión al JS de la
+         vista (docs/rendimiento.md). -->
+    <script>
+      (function () {
+        try {
+          if (location.protocol === 'file:' || /[?&]demo=1(&|$)/.test(location.search)) return;
+          var get = function (url) {
+            var p = fetch(url, {
+              headers: { Accept: 'application/json' },
+              cache: 'no-cache',
+              credentials: 'same-origin',
+            });
+            p.catch(function () {});
+            return p;
+          };
+          window.__aceBootstrap = get('/api/v1/bootstrap');
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-B-O0BYKk.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/rolldown-runtime-hePW80VL.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-Dx4dgo8m.js">
+    <link rel="modulepreload" crossorigin href="/assets/base-BHhoW4vg.js">
+    <link rel="stylesheet" crossorigin href="/assets/base-BPdiu4-6.css">
+    <link rel="stylesheet" crossorigin href="/assets/index-Awb9zvtQ.css">
+    <script>(function(m){try{var v=(new URLSearchParams(location.search).get('vista')||'agenda').split('/')[0].toLowerCase();var f=m[v];if(!f)return;for(var i=0;i<f.length;i++){var l=document.createElement('link');if(/\.css$/.test(f[i])){l.rel='preload';l.as='style'}else{l.rel='modulepreload'}l.crossOrigin='';l.href=f[i];document.head.appendChild(l)}}catch(e){}})({"agenda":["/assets/agenda-H-z-Tlxz.js","/assets/agenda-C1grC4ut.css","/assets/comun-0gFjmwW9.js","/assets/partidos-CmGfAjMt.js"],"ajustes":["/assets/ajustes-BFNlYShS.js","/assets/ajustes-h9_pEDMr.css","/assets/comun-0gFjmwW9.js","/assets/listas-z1Q4Q7_G.js","/assets/listas-Ces1X2SB.css","/assets/mando-BeEtL-mo.js","/assets/virtual-TAHPCmNa.js"],"biblioteca":["/assets/canales-DEN00l6f.js","/assets/canales-D9ShmdYo.css","/assets/comun-0gFjmwW9.js","/assets/partidos-CmGfAjMt.js","/assets/listas-z1Q4Q7_G.js","/assets/listas-Ces1X2SB.css","/assets/mando-BeEtL-mo.js","/assets/virtual-TAHPCmNa.js"],"buscar":["/assets/canales-DEN00l6f.js","/assets/canales-D9ShmdYo.css","/assets/comun-0gFjmwW9.js","/assets/partidos-CmGfAjMt.js","/assets/listas-z1Q4Q7_G.js","/assets/listas-Ces1X2SB.css","/assets/mando-BeEtL-mo.js","/assets/virtual-TAHPCmNa.js"],"match-center":["/assets/fuentes-Cf6oyZCn.js","/assets/fuentes-ChER30EF.css","/assets/comun-0gFjmwW9.js","/assets/partidos-CmGfAjMt.js","/assets/mando-BeEtL-mo.js","/assets/canales-DEN00l6f.js","/assets/canales-D9ShmdYo.css","/assets/listas-z1Q4Q7_G.js","/assets/listas-Ces1X2SB.css","/assets/virtual-TAHPCmNa.js"],"partido":["/assets/fuentes-Cf6oyZCn.js","/assets/fuentes-ChER30EF.css","/assets/comun-0gFjmwW9.js","/assets/partidos-CmGfAjMt.js","/assets/mando-BeEtL-mo.js","/assets/canales-DEN00l6f.js","/assets/canales-D9ShmdYo.css","/assets/listas-z1Q4Q7_G.js","/assets/listas-Ces1X2SB.css","/assets/virtual-TAHPCmNa.js","/assets/player-DSgesOvc.js","/assets/player-B1p6iW2l.css","/assets/ajustes-BFNlYShS.js","/assets/ajustes-h9_pEDMr.css"]});</script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>Ace Player Neo necesita JavaScript para funcionar.</noscript>
+  </body>
+</html>

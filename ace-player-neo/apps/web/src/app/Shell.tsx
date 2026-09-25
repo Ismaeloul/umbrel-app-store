@@ -1,14 +1,14 @@
 /* Armazón de la app: el esqueleto adaptativo en el que se montan las vistas y
    el reproductor.
 
-   Maquetación (docs/diseno/sistema.md §Maquetación):
-   - Móvil (< 768): la vista a lo ancho, barra inferior con los 4 destinos y el
-     mini-reproductor encima. En el centro de partido no hay barra: el vídeo
-     va arriba, pegado, y se minimiza con la flecha o deslizando.
-   - Tableta (768-1023): carril lateral + la vista.
-   - Escritorio (1024-1279): carril + vista + panel lateral de la vista.
-   - Ancho (≥ 1280): en el centro de partido, carril + columna de agenda +
-     reproductor + panel lateral, todo a la vez.
+   Maquetación (docs/diseno/sistema.md §Maquetación, piel «Palco» W3):
+   - Móvil (< 768): la vista a lo ancho, barra inferior flotante con los 4
+     destinos y el mini-reproductor encima. En el centro de partido no hay
+     barra: el vídeo va arriba, pegado, y se minimiza con la flecha o deslizando.
+   - Tableta (768-1023): barra superior + la vista.
+   - Escritorio (1024-1279): barra superior + vista + panel lateral de la vista.
+   - Ancho (≥ 1280): en el centro de partido, columna de agenda + reproductor +
+     panel lateral, todo a la vez bajo la barra superior.
    - Móvil en horizontal viendo un partido: el vídeo ocupa la pantalla (el
      reproductor oculta sus controles solo).
 
@@ -18,7 +18,9 @@
      vivos: sus sondeos, atajos y peticiones se paran solos.
    - El reproductor es UN componente en UN sitio del árbol: pasar de grande a
      mini no recrea el <video>.
-   - Los toasts nunca van sobre el vídeo; la línea de estado va bajo él. */
+   - Los toasts nunca van sobre el vídeo; la línea de estado es una cápsula
+     SOBRE él, abajo a la izquierda (Palco W5: la coloca shell.css en la
+     misma celda que el vídeo). */
 
 import {
   Activity,
@@ -45,7 +47,7 @@ import type { PlayerPresentation } from './contracts.ts';
 import { ErrorBoundary } from './ErrorBoundary.tsx';
 import { requestFocus } from './focus.ts';
 import { LayoutContext, type LayoutValue } from './layout.tsx';
-import { Rail, TabBar } from './Nav.tsx';
+import { TabBar, TopBar } from './Nav.tsx';
 import { usePlayerPresence } from './player-presence.ts';
 import { useBack, useNavigate, useRoute } from './router.tsx';
 import { formatVista, type Route, type Vista } from './routes.ts';
@@ -218,7 +220,7 @@ export function Shell() {
         >
           Saltar al contenido
         </a>
-        <Rail route={route} />
+        <TopBar route={route} onHelp={() => setHelpOpen(true)} />
         {columnVisible && AgendaColumn ? (
           <aside className="app-column" aria-label="Agenda">
             <ErrorBoundary what="la agenda">

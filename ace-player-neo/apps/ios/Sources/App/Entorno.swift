@@ -9,12 +9,15 @@ public struct Entorno: Sendable {
     public let tokens: any TokenStore
     public let tiempoReal: SSEClient
     public let cache: DiskCache
+    /// Escudos y logos, en memoria y en disco.
+    public let imagenes: CacheImagenes
     public let configuracion: ServerConfigStore
     /// Avisa cuando el servidor dice que el token ya no vale (401).
     public let accesoPerdido: AsyncStream<Void>
 
     public init(
-        session: URLSession, tokens: any TokenStore, configuracion: ServerConfigStore, cache: DiskCache
+        session: URLSession, tokens: any TokenStore, configuracion: ServerConfigStore, cache: DiskCache,
+        directorioImagenes: URL? = nil
     ) {
         let (avisos, continuacion) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
         let servidores = ServerResolver(config: configuracion.leer(), session: session)
@@ -27,6 +30,15 @@ public struct Entorno: Sendable {
             _ = continuacion.yield()
         }
         self.tiempoReal = SSEClient(session: session, servidores: servidores, tokens: tokens)
+        // Las imágenes van con el mismo `Bearer` que el resto de la API.
+        self.imagenes = CacheImagenes(session: session, directorio: directorioImagenes) { url in
+            var peticion = URLRequest(url: url, timeoutInterval: 20)
+            peticion.setValue("image/png, image/*", forHTTPHeaderField: "Accept")
+            if let token = try? tokens.leerToken(), !token.isEmpty {
+                peticion.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }
+            return peticion
+        }
     }
 
     /// El de verdad: Llavero, `UserDefaults` y caché en disco.
@@ -34,7 +46,7 @@ public struct Entorno: Sendable {
         let config = URLSessionConfiguration.default
         config.waitsForConnectivity = false
         config.httpMaximumConnectionsPerHost = 6
-        // ETag / 304 de la agenda y del arranque sin trabajo extra.
+        // ETag / 304 de la agenda, del arranque y de los escudos sin trabajo extra.
         config.requestCachePolicy = .useProtocolCachePolicy
         config.urlCache = URLCache(memoryCapacity: 4 << 20, diskCapacity: 32 << 20)
         return Entorno(

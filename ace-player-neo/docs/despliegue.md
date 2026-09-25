@@ -126,6 +126,11 @@ en su copia de la tienda, la bajaría de ahí antes que de `main`.
    - migra `state.json` del esquema 1 al 2 **sin quitar nada** (la 0.6.59 lo
      sigue pudiendo leer);
    - crea `data/v2/` (dispositivos, sesiones y ajustes nuevos).
+   - a los 30 s empieza a rellenar `data/v2/teams/` (escudos y colores de los
+     equipos de la agenda desde TheSportsDB, módulo `teams`; ~40 KB por
+     escudo, 400 como mucho). Se apaga con `ACE_TEAM_CRESTS: "false"` en el
+     Compose; las correcciones a mano van en `data/v2/teams/overrides.json`
+     (mismo esquema que `apps/server/src/modules/teams/overrides.json`).
 
    Cuando `/api/v1/health/live` responde, Docker da `storage` por sano y
    arranca nginx.

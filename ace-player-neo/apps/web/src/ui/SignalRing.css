@@ -1,0 +1,114 @@
+.sring {
+  --s: 28px;
+  --sring: var(--idle);
+  --sring-ink: var(--text-2);
+  --sring-w: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--sring-ink);
+  font-size: var(--fs-caption);
+  font-weight: 640;
+  font-stretch: var(--w-tight);
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.sring__svg {
+  flex: none;
+  width: var(--s);
+  height: var(--s);
+  overflow: visible;
+  /* Aparece creciendo (transform + opacity). */
+  animation: sring-aparece var(--dur-rapido) var(--ease-rapido) both;
+}
+.sring__track,
+.sring__ring {
+  fill: none;
+  stroke-width: var(--sring-w);
+  stroke-linecap: round;
+  transform-origin: 50% 50%;
+}
+.sring__track {
+  stroke: color-mix(in oklab, currentColor 18%, transparent);
+}
+.sring__ring {
+  stroke: var(--sring);
+  /* El trazo empieza arriba, no a las tres. */
+  transform: rotate(-90deg);
+}
+.sring__mark {
+  fill: none;
+  stroke: var(--sring);
+  stroke-width: var(--sring-w);
+  stroke-linecap: round;
+}
+
+/* ---- Estados ------------------------------------------------------------------ */
+.sring--ok {
+  --sring: var(--ok);
+  --sring-ink: var(--ok-ink);
+}
+.sring--weak {
+  --sring: var(--weak);
+  --sring-ink: var(--weak-ink);
+}
+.sring--fail {
+  --sring: var(--fail);
+  --sring-ink: var(--fail-ink);
+}
+.sring--checking {
+  --sring: var(--text-2);
+  --sring-ink: var(--text-2);
+}
+.sring--checking .sring__ring {
+  animation: sring-gira 1.6s linear infinite;
+}
+.sring--pending {
+  --sring: var(--idle);
+  --sring-ink: var(--text-3);
+}
+.sring--reported {
+  --sring: var(--weak);
+  --sring-ink: var(--weak-ink);
+}
+/* Reportada: el anillo se apaga y queda la barra. */
+.sring--reported .sring__ring {
+  opacity: 0.45;
+}
+
+/* ---- En pantalla: oro y más grueso ------------------------------------------- */
+.sring--active {
+  --sring: var(--accent);
+  --sring-ink: var(--accent-ink);
+  --sring-w: 4px;
+}
+.sring--active .sring__ring {
+  animation: none;
+  stroke-dasharray: none;
+}
+.sring--active .sring__mark {
+  display: none;
+}
+
+@keyframes sring-aparece {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+@keyframes sring-gira {
+  from {
+    transform: rotate(-90deg);
+  }
+  to {
+    transform: rotate(270deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sring__svg {
+    animation-name: ace-funde;
+  }
+  .sring--checking .sring__ring {
+    animation: none;
+  }
+}
