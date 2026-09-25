@@ -156,7 +156,7 @@ enum PresentacionFuentes {
     static func textoProgreso(_ trabajo: ScanJob?, filas: [FilaFuente], precalentado: PreheatPublic?) -> String {
         if filas.isEmpty && trabajo == nil { return "Preparando fuentes" }
         let total = max(trabajo?.total ?? 0, filas.count)
-        let vivas = filas.filter { !$0.efectivo.reportada && ($0.efectivo.estado == .working || $0.efectivo.estado == .weak) }
+        let vivas = filas.filter(viva)
         let verificadas = "\(vivas.count) \(vivas.count == 1 ? "verificada" : "verificadas")"
         if let trabajo {
             switch trabajo.status {
@@ -170,6 +170,12 @@ enum PresentacionFuentes {
             return "\(n) fuentes precalentadas"
         }
         return "\(filas.count) fuentes disponibles"
+    }
+
+    /// Verificada o floja y no reportada.
+    static func viva(_ fila: FilaFuente) -> Bool {
+        guard !fila.efectivo.reportada, let estado = fila.efectivo.estado else { return false }
+        return estado == .working || estado == .weak
     }
 
     /// La fuente que el comprobador está probando ahora (no la de pantalla), para « · la 3 se está probando ahora».

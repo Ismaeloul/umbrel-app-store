@@ -19,7 +19,11 @@ struct ContenidoCanal: View {
         let suena = video.reproductor.canal?.id == hash ? video.reproductor.canal?.titulo : nil
         return OtrasFuentes.titulo(item, reproductor: suena, hash: hash)
     }
-    private var ih: Bool { item?.ih ?? (video.reproductor.canal?.id == hash ? video.reproductor.canal?.ih == true : false) }
+    private var ih: Bool {
+        if let item { return item.ih }
+        guard let canal = video.reproductor.canal, canal.id == hash else { return false }
+        return canal.ih == true
+    }
     private var origen: String { OtrasFuentes.origen(item, biblioteca: biblioteca) }
 
     /// Fuentes de la sesión del canal o, mientras está vacía, sus hermanas.

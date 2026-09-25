@@ -64,8 +64,10 @@ struct EntornoVideo: DynamicProperty {
     var enPantalla: EnPantalla {
         let fase = reproductor.fase
         guard fase != .idle, fase != .error, let id = reproductor.canal?.id else { return .nada }
-        let sonando = reproductor.arranco && [.reproduciendo, .pausado, .buffer, .buscando].contains(fase)
-        let conectando = !sonando && [.cargando, .reconectando, .buffer].contains(fase)
+        let fasesSonando: [FaseReproductor] = [.reproduciendo, .pausado, .buffer, .buscando]
+        let fasesConectando: [FaseReproductor] = [.cargando, .reconectando, .buffer]
+        let sonando: Bool = reproductor.arranco && fasesSonando.contains(fase)
+        let conectando: Bool = !sonando && fasesConectando.contains(fase)
         return EnPantalla(id: id, sonando: sonando, conectando: conectando)
     }
 
@@ -303,9 +305,13 @@ enum ListaZappingTeatro {
 
     static func destino(_ lista: [Item], actual: String?, paso: Int) -> Item? {
         guard !lista.isEmpty else { return nil }
-        let indice = actual.flatMap { id in lista.firstIndex { $0.id == id } }
-        let siguiente = indice.map { (($0 + paso) % lista.count + lista.count) % lista.count } ?? 0
-        let item = lista[siguiente]
+        let total: Int = lista.count
+        var siguiente: Int = 0
+        if let actual, let indice = lista.firstIndex(where: { $0.id == actual }) {
+            let bruto: Int = (indice + paso) % total
+            siguiente = (bruto + total) % total
+        }
+        let item: Item = lista[siguiente]
         return item.id == actual ? nil : item
     }
 }

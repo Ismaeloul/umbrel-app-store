@@ -53,8 +53,9 @@ struct VarianteEscenario: Hashable, Sendable {
     /// pausa 52, hueco 8, cápsula −30 · silencio 98,7, hueco 8 y la cápsula de la derecha (a4 §4.1).
     func directoSoloIcono(anchoDirecto: Double, airPlay: Bool) -> Bool {
         guard airPlay else { return false }
-        let derecha = anchoDirecto + 44 + 44  // Directo · AirPlay · ⛶
-        let fila = 8 + 52 + 8 + 98.7 + 8 + derecha + 8
+        let izquierda: Double = 174.7  // 8 + 52 + 8 + 98,7 + 8
+        let derecha: Double = anchoDirecto + 88  // Directo · AirPlay (44) · ⛶ (44)
+        let fila: Double = izquierda + derecha + 8
         return fila > anchoVideo
     }
 

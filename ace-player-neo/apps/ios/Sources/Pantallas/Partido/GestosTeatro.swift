@@ -38,7 +38,9 @@ enum GestosTeatro {
     static func paso(_ ids: [String], activa: String?, delta: Int) -> String? {
         guard !ids.isEmpty else { return nil }
         guard let activa, let i = ids.firstIndex(of: activa) else { return delta >= 0 ? ids.first : ids.last }
-        return ids[((i + delta) % ids.count + ids.count) % ids.count]
+        let total: Int = ids.count
+        let bruto: Int = (i + delta) % total
+        return ids[(bruto + total) % total]
     }
 
     // MARK: Mini (MiniPlayer.tsx)

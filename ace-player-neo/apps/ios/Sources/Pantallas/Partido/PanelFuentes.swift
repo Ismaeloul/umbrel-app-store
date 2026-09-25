@@ -222,7 +222,9 @@ private struct BarraFina: View {
     private func opacidad(_ t: Double) -> Double {
         guard latiendo && !reducido else { return 1 }
         let fase: Double = t.truncatingRemainder(dividingBy: 2) / 2
-        return 1 - 0.45 * (0.5 - 0.5 * cos(2 * Double.pi * fase))
+        let angulo: Double = 2 * Double.pi * fase
+        let onda: Double = 0.5 - 0.5 * cos(angulo)
+        return 1 - 0.45 * onda
     }
 }
 

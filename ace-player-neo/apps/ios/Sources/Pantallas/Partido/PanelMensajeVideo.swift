@@ -34,6 +34,9 @@ struct PanelMensajeVideo: View {
         .accessibilityIdentifier(IDUI.panelMensajeVideo)
     }
 
+    /// 38 caracteres a 13 pt (el «0» de Mona mide ≈ 0,55 em).
+    private static let anchoTexto: CGFloat = 272
+
     /// Texto 13 (12 en el iPhone en vertical, cortado a 2 líneas), 1,25 de alto de línea, al 86 %.
     private var texto: some View {
         let tamano: Double = grande ? 13 : 12
@@ -42,7 +45,7 @@ struct PanelMensajeVideo: View {
             .opacity(0.86)
             .multilineTextAlignment(.center)
             .lineLimit(grande ? nil : 2)
-            .frame(maxWidth: grande ? 38 * 13 * 0.55 : .infinity)
+            .frame(maxWidth: grande ? PanelMensajeVideo.anchoTexto : .infinity)
     }
 
     /// La marca: el pulso (ocupado), el aviso rojo (error) o la tele (reposo; en vertical, oculta).
@@ -84,10 +87,11 @@ private struct PulsoMensaje: View {
             TimelineView(.animation) { contexto in
                 let t: Double = contexto.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.6) / 1.6
                 let p: Double = Movimiento.curvaSalida(t)
+                let escala: Double = 0.55 + 0.8 * p
                 Circle()
                     .strokeBorder(Color.white, lineWidth: 2)
                     .frame(width: 22, height: 22)
-                    .scaleEffect(0.55 + 0.8 * p)
+                    .scaleEffect(CGFloat(escala))
                     .opacity(1 - p)
             }
         }

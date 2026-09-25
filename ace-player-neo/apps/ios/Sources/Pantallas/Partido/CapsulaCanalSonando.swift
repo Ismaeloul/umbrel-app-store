@@ -53,7 +53,8 @@ struct Ecualizador: View {
     private func escala(_ t: Double, indice: Int) -> CGFloat {
         guard sonando && !reducido else { return 0.35 }
         let fase: Double = ((t - Double(indice) * 0.2) / 1.1).truncatingRemainder(dividingBy: 1)
-        let onda: Double = 0.5 - 0.5 * cos(2 * Double.pi * fase)
+        let angulo: Double = 2 * Double.pi * fase
+        let onda: Double = 0.5 - 0.5 * cos(angulo)
         return CGFloat(0.35 + 0.65 * onda)
     }
 }
