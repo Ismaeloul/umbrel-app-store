@@ -41,40 +41,55 @@ import Foundation
     }
 
     /// Crea los objetos sin cablearlos (lo hace `crear()`). Los tests pueden pasar su motor de vídeo.
+    /// Tipos escritos y dos ayudantes: todo en línea tardaba 453 ms en tiparse (CI 36177994191).
     init(entorno: Entorno, reloj: any Reloj, motor: any MotorVideo) {
         self.entorno = entorno
         self.reloj = reloj
         haptica = Haptica()
         estadoVentana = EstadoVentana()
-        let cicloVida = CicloVida()
-        self.cicloVida = cicloVida
-        let preferencias = PreferenciasLocales()
-        self.preferencias = preferencias
-        let sesion = SesionApp(entorno: entorno)
-        self.sesion = sesion
-        let datos = DatosApp(api: entorno.api, cache: entorno.cache)
-        self.datos = datos
-        let tiempoReal = TiempoReal(cliente: entorno.tiempoReal, esDemo: ModoEjecucion.demo)
-        self.tiempoReal = tiempoReal
         navegador = Navegador()
         hojas = CentroHojas()
-        let avisos = Avisos()
-        self.avisos = avisos
         transicion = TransicionTeatro()
-        let reproductor = Reproductor(
-            motor: motor, servicio: ServicioReproduccionAPI(api: entorno.api), visor: IdentidadVisor.id(),
-            modo: preferencias.modo)
+        destapados = MarcadoresDestapados()
+        bajas = BajasPendientes()
+        relojCompartido = RelojCompartido(reloj: reloj)
+        let cicloVida: CicloVida = CicloVida()
+        self.cicloVida = cicloVida
+        let preferencias: PreferenciasLocales = PreferenciasLocales()
+        self.preferencias = preferencias
+        let sesion: SesionApp = SesionApp(entorno: entorno)
+        self.sesion = sesion
+        raiz = Raiz(faseInicial: sesion.fase)
+        let datos: DatosApp = DatosApp(api: entorno.api, cache: entorno.cache)
+        self.datos = datos
+        let tiempoReal: TiempoReal = TiempoReal(cliente: entorno.tiempoReal, esDemo: ModoEjecucion.demo)
+        self.tiempoReal = tiempoReal
+        let avisos: Avisos = Avisos()
+        self.avisos = avisos
+        let reproductor: Reproductor = Self.crearReproductor(entorno, motor: motor, modo: preferencias.modo)
         self.reproductor = reproductor
         presentacion = PresentacionReproductor(reproductor: reproductor)
-        let fuentes = SesionFuentes()
+        let fuentes: SesionFuentes = SesionFuentes()
         self.fuentes = fuentes
-        let senales = SenalPartidos()
+        let senales: SenalPartidos = SenalPartidos()
         self.senales = senales
-        destapados = MarcadoresDestapados()
-        relojCompartido = RelojCompartido(reloj: reloj)
-        bajas = BajasPendientes()
-        raiz = Raiz(faseInicial: sesion.fase)
-        repartidor = RepartidorEventos(
+        repartidor = Self.crearRepartidor(
+            datos, tiempoReal, sesion, reproductor, fuentes, senales, avisos, cicloVida)
+    }
+
+    private static func crearReproductor(_ entorno: Entorno, motor: any MotorVideo, modo: PlaybackMode)
+        -> Reproductor
+    {
+        let servicio: ServicioReproduccionAPI = ServicioReproduccionAPI(api: entorno.api)
+        let visor: String = IdentidadVisor.id()
+        return Reproductor(motor: motor, servicio: servicio, visor: visor, modo: modo)
+    }
+
+    private static func crearRepartidor(
+        _ datos: DatosApp, _ tiempoReal: TiempoReal, _ sesion: SesionApp, _ reproductor: Reproductor,
+        _ fuentes: SesionFuentes, _ senales: SenalPartidos, _ avisos: Avisos, _ cicloVida: CicloVida
+    ) -> RepartidorEventos {
+        RepartidorEventos(
             datos: datos, tiempoReal: tiempoReal, sesion: sesion, reproductor: reproductor, fuentes: fuentes,
             senales: senales, avisos: avisos, cicloVida: cicloVida)
     }
