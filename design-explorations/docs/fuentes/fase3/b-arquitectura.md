@@ -2967,6 +2967,17 @@ fueron las de código borrado), Linux verde (45 XCTest + 5 Swift Testing). Lo qu
 
 - **0.3a**: `Core/Reglas` de §2.1 (Destino, Maquetacion, EstadoSenal, TiposAviso, TipoHaptico, OpcionMenu, NombreIcono
   generado, Datos). Commit propio: P arranca desde aquí.
+  **Resultado (I0, 25-sep-2026, commit e46c19b en `rediseno/nativa`)**: firmas exactas de §2.1.1-§2.1.4. Cuerpos
+  escritos donde el contrato da la fórmula: `Destino.init?(vista:)` con las reglas de `parseVista` (routes.ts: recorta
+  espacios y barras, cabeza sin mayúsculas, vacío = agenda, `HASH_RE` en minúsculas, `SEGMENT_RE`; donde la web cae en
+  la agenda devuelve `nil`; pestaña de Canales o sección de Ajustes desconocidas → `nil` dentro del caso) y todas las
+  fórmulas de `Maquetacion` (mini de 74 de alto; toasts móvil `min(420, ancho − 24 − zonas)`, tableta
+  `min(420, ancho − 40)`). **Esqueleto** para M1: `EfectosEvento.de(_:)` y `rutas(de:)` devuelven vacío. `RGB`,
+  `ColaToasts`, `LineaEstado` y `Deslizamiento` siguen siendo de M2. Pruebas nuevas en Swift Testing:
+  `Puros/Armazon/{DestinoTests,MaquetacionTests}`, `Puros/Comunes/TiposComunesTests` (señal, avisos, menú y
+  `ReglaHapticaTests`) y `Puros/Nucleo/DatosPurosTests` (esperas, identidad, capacidades, relojes; M1 las reparte).
+  Linux: 45 XCTest + 35 Swift Testing; `solo_compilar` 36171897600 verde; `solo_unitarios` 36172388405 verde
+  (203 pruebas, 244 ejecuciones con argumentos, 0 fallos).
 - **0.3b**: §2.3-§2.8 con stubs: ciclo de vida UIKit, `ContenedorApp` con el cableado de §2.5.7, `Navegador`, hojas, menús,
   avisos, transición, datos, sesión, reproducción, `IDUI`, las pantallas de §2.8 (cada una `Color.clear` con su
   `IDUI`), `ModoEjecucion` con los argumentos de §3.3.1, `ServidorDemo` provisional que delega en el `ServidorSimulado`
