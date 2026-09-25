@@ -37,4 +37,10 @@ enum LugarVideo: Sendable { case ninguno, mini, teatro, inmersivo, vuelo }
     func abrirDatosTecnicos() { datosTecnicosAbiertos = true }
     func cerrarDatosTecnicos() { datosTecnicosAbiertos = false }
     func fuenteCambiada() { cortes += 1 }
+
+    /// A segundo plano (lo engancha ContenedorApp con CicloVida). M3 lo rellena: PiP y audio.
+    func pasoASegundoPlano() {}
+
+    /// De vuelta a primer plano (lo engancha ContenedorApp con CicloVida). M3 lo rellena: PiP y señal.
+    func volvioAPrimerPlano() {}
 }

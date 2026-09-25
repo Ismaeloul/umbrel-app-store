@@ -11,12 +11,14 @@ private final class EntornoFuentesDePrueba: EntornoSesionFuentes {
     let haptica = Haptica()
     let hojas = CentroHojas()
     let reloj: any Reloj = RelojSistema()
+    let datos: DatosApp
     var visor: String { reproductor.visor }
     var tiempoRealAbierto: Bool { false }
 
-    init(api: APIClient, reproductor: Reproductor) {
+    init(api: APIClient, reproductor: Reproductor, datos: DatosApp) {
         self.api = api
         self.reproductor = reproductor
+        self.datos = datos
     }
 }
 
@@ -65,7 +67,8 @@ final class SesionFuentesTests: XCTestCase {
         let reproductor = Reproductor(
             motor: motor, servicio: ServicioReproduccionAPI(api: entorno.api), visor: "ios_prueba",
             automatico: false, esperar: { _ in })
-        let app = EntornoFuentesDePrueba(api: entorno.api, reproductor: reproductor)
+        let app = EntornoFuentesDePrueba(
+            api: entorno.api, reproductor: reproductor, datos: DatosApp(api: entorno.api, cache: entorno.cache))
         retenidos.append(app)
         let partido = try JSONDecoder().decode(FootballMatch.self, from: Data(partidoJSON.utf8))
         return (app, motor, SesionFuentesPartido(partido: partido, entorno: app))

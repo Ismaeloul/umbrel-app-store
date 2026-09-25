@@ -17,6 +17,8 @@ import Observation
     var reloj: any Reloj { get }
     var visor: String { get }
     var tiempoRealAbierto: Bool { get }
+    /// La biblioteca: hermanas del canal suelto, nombres de las listas y lo que devuelve Recientes (M3, aditivo).
+    var datos: DatosApp { get }
 }
 
 enum FaseSesionFuentes: Sendable { case reposo, resolviendo, lista, opciones, noEncontrado, sinCanales }
