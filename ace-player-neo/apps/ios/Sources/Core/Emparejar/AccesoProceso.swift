@@ -19,6 +19,15 @@ import UIKit
         return ventana?.safeAreaInsets ?? .zero
     }
 
+    /// El id de este iPhone: el prefijo del token antes del punto (a7 §7), si aún no ha llegado el arranque.
+    static var idDelToken: String? {
+        guard let token = try? entorno?.tokens.leerToken() else { return nil }
+        return IdentidadDispositivo.id(token: token)
+    }
+
+    /// El repartidor de eventos del SSE (`escuchar`, b-arquitectura §2.5.3): no es observable, no va en el entorno.
+    static var repartidor: RepartidorEventos? { ContenedorApp.actual?.repartidor }
+
     /// El nombre de este iPhone para el canje («iPhone» si iOS no deja leerlo).
     static var nombreDispositivo: String { UIDevice.current.name }
 }
