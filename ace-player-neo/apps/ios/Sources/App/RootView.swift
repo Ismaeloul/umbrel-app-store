@@ -6,15 +6,18 @@ struct RootView: View {
     @State private var enlacePendiente: PairingLink?
     @State private var enlaceAConfirmar: PairingLink?
 
-    var body: some View {
-        Group {
-            switch modelo.fase {
-            case .emparejar:
-                PairingView(entorno: modelo.entorno, enlace: $enlacePendiente)
-            case .lista:
-                PrincipalView()
-            }
+    /// Emparejamiento o la app (aparte del `body` para aligerar al type-checker).
+    @ViewBuilder private var contenido: some View {
+        switch modelo.fase {
+        case .emparejar:
+            PairingView(entorno: modelo.entorno, enlace: $enlacePendiente)
+        case .lista:
+            PrincipalView()
         }
+    }
+
+    var body: some View {
+        contenido
         // Sin animar el cambio entre emparejar y la app: con el fundido, la
         // tira de días de la agenda (un ScrollView que llega cuando la agenda
         // ya ha cargado, en mitad del fundido) se quedaba sin pintar.
@@ -47,9 +50,10 @@ struct RootView: View {
         } message: {
             Text("Se olvidará el servidor actual y se usará el del código.")
         }
-        // Emparejada: éxito.
-        .sensoryFeedback(.success, trigger: modelo.fase) { anterior, nueva in
-            anterior == .emparejar && nueva == .lista
+        // Emparejada: éxito. Tipos escritos a mano: con `.emparejar`/`.lista`
+        // implícitos el type-checker no terminaba a tiempo (CI de la 0.8.0).
+        .sensoryFeedback(.success, trigger: modelo.fase) { (anterior: AppModel.Fase, nueva: AppModel.Fase) -> Bool in
+            anterior == AppModel.Fase.emparejar && nueva == AppModel.Fase.lista
         }
     }
 }
