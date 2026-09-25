@@ -109,3 +109,21 @@ Fuente: `docs/fuentes/fase2-web.md` (armazón, tokens, demo, hooks, pantalla por
 - **No** se toca `umbrel-app.yml`, `releases/` ni el `docker-compose.yml` de la carpeta de la tienda (encargo). Publicar después = `corepack pnpm@10.18.2 release:docker` (monta `releases/0.8.0` en Linux), copiar la plantilla de Compose y subir `umbrel-app.yml` a `0.8.0` con las notas del CHANGELOG, `check:release`, merge a `main` y etiqueta `ace-player-neo-v0.8.0` (`docs/despliegue.md`).
 - `docs/pruebas-iphone.md` §15 con la lista de comprobación de Palco en el iPhone real.
 - Resumen final en español: qué se ha hecho, desviaciones respecto a Palco y por qué, pendiente, cómo probar la web y la app.
+
+## 7. Estado al cerrar la fase (25-sep-2026)
+
+Hecho en `rediseno/palco` (sin push, sin merge, sin publicar):
+
+| Commit | Qué |
+|---|---|
+| `4e13a7c` | Módulo `teams` (escudos, colores y logos desde TheSportsDB, caché en `data/v2/teams/`, rutas PNG con ETag) y contrato v1 con `homeTeam`/`awayTeam`/`competitionBadge` opcionales |
+| `3c4da14`, `2da6307` | Cimientos web: tokens Palco, barra superior, primitivas (`VersusCard`, `Capsule`, `SignalRing`, `CompetitionBadge`, `PosterRail`), `lib/teams.ts`, `lib/haptics.ts`, demo con colores de club |
+| `92e9a40` | Canales, Buscar («Enlace detectado») y Ajustes |
+| `72c697f`, `db5e912` | Portada/agenda con héroe versus sin autoplay, filas por competición, gustos; marcador tapado por defecto en toda la agenda |
+| `24dbb76` | Teatro, carteles de fuente sin miniatura, controles, mini con imagen |
+| `b67dae1`, `b1b5cb0` | Accesibilidad: contraste AA, foco visible, 44 px, teclado |
+| `386bbb2`, `0d1761c` | App de iPhone Palco (TabView nativo, escenario único, escudos cacheados) y revisión de compilación sin Xcode |
+| `a4ea90d` | Versión 0.8.0 preparada y CHANGELOG |
+| `bdba024`, `5326221` | Plan, informes fuente y nota en `docs/diseno/sistema.md` |
+
+Verificación: web 767/767 tests, typecheck, ESLint, Prettier, build y 110 KB de 150; e2e 40/40 (Chrome y WebKit, escritorio e iPhone); revisión visual con axe, teclado y movimiento reducido 264 combinaciones sin problemas (`capturas/_revision/web-palco/final/`, comparativa con el prototipo en `capturas/_revision/web-palco/comparativa.html`, `node scripts/comparativa-web-palco.mjs`); servidor 1399/1399 y contrato 66/66. En rojo a propósito hasta publicar: `deploy/test/compose.test.ts` › «la carpeta de la app publica esta plantilla» (la tienda sigue en 0.7.1). iOS sin compilar aquí: pendiente de la CI.
