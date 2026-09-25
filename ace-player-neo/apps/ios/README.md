@@ -1,5 +1,11 @@
 # Ace Neo (app iOS de Ace Player Neo)
 
+> **Nota (fase 0 de la app nativa, 25-sep-2026).** Este README describe la interfaz VIEJA (0.8.0: `TabView`,
+> `Features/`, `Design/`…), borrada en la poda. Lo vigente está en
+> `design-explorations/docs/fuentes/fase3/b-arquitectura.md` (árbol en §1, contratos en §2, CI en §4.4) y en
+> `c0-canarios.md` / `c0-laboratorio.md`. `ServidorRealUITests` se salta hasta que se reescriba. Este README
+> se reescribe en I1.
+
 App nativa en SwiftUI para ver Ace Player Neo desde el iPhone. iOS 17 como
 mínimo, Swift 6 con concurrencia estricta, `@Observable` (MVVM) y **sin
 dependencias externas**. El proyecto de Xcode se genera con XcodeGen desde

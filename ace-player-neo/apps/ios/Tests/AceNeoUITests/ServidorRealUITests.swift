@@ -16,9 +16,14 @@ import XCTest
 /// 5. volver a emparejar con el enlace del QR (`aceneo://pair?u=…&c=…`).
 ///
 /// Fuera de la CI (sin `ACE_E2E_PUERTO`) se salta.
+///
+/// FASE 0 (b-arquitectura §4.1.5): recorre la interfaz VIEJA (`campo-lan`, `video-grande`…), borrada en la poda.
+/// Se salta entero hasta que I1 lo reescriba contra la app nueva, para que la CI completa no quede en rojo
+/// toda la fase 1.
 final class ServidorRealUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
+        throw XCTSkip("Interfaz vieja: se reescribe en I1 (b-arquitectura §4.3)")
     }
 
     @MainActor
