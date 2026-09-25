@@ -163,7 +163,8 @@ final class APIClientTests: XCTestCase {
 
         let respuesta = try await cliente(servidores: servidores).enviar(API.agenda)
 
-        XCTAssertEqual(respuesta.days.count, 1)
+        // El ejemplo de la agenda trae dos días desde la 0.8.0 (uno con escudos y otro sin ellos).
+        XCTAssertEqual(respuesta.days.count, 2)
         let hosts = MockURLProtocol.peticiones.compactMap { $0.url?.host() }
         XCTAssertEqual(hosts, ["umbrel.local", "100.101.102.103"])
         let activo = await servidores.conocido()

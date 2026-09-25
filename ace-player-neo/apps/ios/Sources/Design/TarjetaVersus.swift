@@ -48,16 +48,21 @@ struct PastillaCompeticion: View {
 
     var body: some View {
         let alto: CGFloat = compacta ? 30 : 40
-        ImagenCacheada(url: app.urlImagen(partido.competitionBadge?.logo)) {
+        let logo = app.urlImagen(partido.competitionBadge?.logo)
+        // Con logo, la pastilla es casi un círculo (el logo cabe en su alto); sin
+        // él, el nombre a su ancho natural con tope. Antes el marco era flexible y
+        // se estiraba hasta 140 pt, encima de los escudos (capturas de la CI).
+        ImagenCacheada(url: logo) {
             Text(nombreCorto)
                 .font((compacta ? Font.caption2 : Font.caption).weight(.bold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .padding(.horizontal, compacta ? 8 : 10)
+                .frame(maxWidth: compacta ? 96 : 140)
         }
-        .frame(height: alto - 10)
-        .frame(minWidth: alto, maxWidth: compacta ? 96 : 140)
+        .frame(width: logo == nil ? nil : alto - 10, height: alto - 10)
+        .fixedSize(horizontal: true, vertical: false)
         .padding(.vertical, 5)
         .padding(.horizontal, 5)
         .background {

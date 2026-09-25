@@ -38,6 +38,11 @@ on:
       - 'ace-player-neo/pnpm-lock.yaml'
       - '.github/workflows/ios.yml'
   workflow_dispatch:
+    inputs:
+      ipa_aunque_fallen_tests:
+        description: 'Archivar y subir la IPA aunque falle algún test (para probar en el iPhone)'
+        type: boolean
+        default: false
 
 concurrency:
   group: ios-${{ github.ref }}
@@ -281,6 +286,9 @@ jobs:
 
       - name: Archive sin firmar e IPA
         id: ipa
+        # Como siempre, solo si todo lo anterior ha ido bien; lanzado a mano con
+        # «ipa_aunque_fallen_tests», también con tests en rojo (para probar en el iPhone).
+        if: ${{ success() || (!cancelled() && inputs.ipa_aunque_fallen_tests) }}
         run: |
           set -euo pipefail
           AJUSTES=(CURRENT_PROJECT_VERSION=${{ github.run_number }})
@@ -290,6 +298,7 @@ jobs:
           bash scripts/build-ipa.sh "${AJUSTES[@]}"
 
       - name: Subir la IPA
+        if: ${{ !cancelled() && steps.ipa.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: AceNeo-unsigned-${{ steps.ipa.outputs.version }}
