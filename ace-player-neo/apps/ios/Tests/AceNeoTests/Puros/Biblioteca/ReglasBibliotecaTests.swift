@@ -180,9 +180,9 @@ private func marcador(_ estado: String, reloj: String = "72'", detalle: String =
         let indice = IndiceAntena(agenda: agenda([("2026-09-23", [partido("ahora", "20:30", ["DAZN 1"])])]), reloj: reloj)
         let dazn = item("DAZN 1 HD", .fav, id: String(repeating: "d", count: 40))
         let otro = item("La 1", .recent)
-        let entradas = EmitiendoAhora.entradas([dazn, otro, dazn], indice: indice, marcadores: [:])
+        let entradas = ReglasEmitiendo.entradas([dazn, otro, dazn], indice: indice, marcadores: [:])
         #expect(entradas.map(\.item.id) == [dazn.id])
-        #expect(EmitiendoAhora.entradas([dazn], indice: .vacio, marcadores: [:]).isEmpty)
+        #expect(ReglasEmitiendo.entradas([dazn], indice: .vacio, marcadores: [:]).isEmpty)
     }
 }
 

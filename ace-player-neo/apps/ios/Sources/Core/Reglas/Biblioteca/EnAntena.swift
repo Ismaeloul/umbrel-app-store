@@ -142,7 +142,7 @@ struct EntradaEmitiendo: Hashable, Sendable, Identifiable {
     var id: String { item.id }
 }
 
-enum EmitiendoAhora {
+enum ReglasEmitiendo {
     static func entradas(_ items: [Item], indice: IndiceAntena, marcadores: [String: LiveScore]) -> [EntradaEmitiendo] {
         guard indice.hayAgenda else { return [] }
         var vistos = Set<String>()

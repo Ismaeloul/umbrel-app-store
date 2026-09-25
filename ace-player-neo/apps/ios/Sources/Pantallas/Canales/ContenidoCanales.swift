@@ -41,7 +41,7 @@ struct ContenidoCanales: View {
         let marcadores = datos.marcadores.datos?.scores ?? [:]
         let indice = IndiceAntena(agenda: datos.agenda.datos, reloj: RelojMadrid(reloj.ahora))
         if modelo.consultaLimpia.isEmpty {
-            let entradas = EmitiendoAhora.entradas(visibles.favoritos + visibles.recientes, indice: indice, marcadores: marcadores)
+            let entradas = ReglasEmitiendo.entradas(visibles.favoritos + visibles.recientes, indice: indice, marcadores: marcadores)
             if !entradas.isEmpty {
                 EmitiendoAhora(
                     entradas: entradas, enPantalla: reproductor.canal?.id, favoritos: Set(biblioteca.favorites.map(\.id)),
