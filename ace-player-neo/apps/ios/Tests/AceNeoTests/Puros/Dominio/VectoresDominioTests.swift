@@ -1,13 +1,18 @@
+import Foundation
 import XCTest
 
-@testable import AceNeo
+#if SWIFT_PACKAGE
+    @testable import NucleoPuro
+#else
+    @testable import AceNeo
+#endif
 
 /// El port de Swift de las reglas de @ace/shared tiene que dar EXACTAMENTE lo
 /// mismo que las funciones de TypeScript. Los vectores los genera
 /// `scripts/generar-vectores.mjs` ejecutando for-you.ts y channels.ts de
 /// verdad; la CI comprueba que el JSON está al día (`--check`).
 final class VectoresDominioTests: XCTestCase {
-    private struct Vectores: Decodable {
+    private struct Lote: Decodable {
         struct Clave: Decodable {
             let texto: String
             let preferencia: String
@@ -42,11 +47,8 @@ final class VectoresDominioTests: XCTestCase {
         let puntuaciones: [Par]
     }
 
-    private func vectores() throws -> Vectores {
-        let url = try XCTUnwrap(
-            Bundle(for: MockURLProtocol.self).url(forResource: "vectores-dominio", withExtension: "json"),
-            "vectores-dominio.json no está en el bundle de los tests")
-        return try JSONDecoder().decode(Vectores.self, from: Data(contentsOf: url))
+    private func vectores() throws -> Lote {
+        try JSONDecoder().decode(Lote.self, from: Vectores.datos("vectores-dominio"))
     }
 
     func testHayVectoresDeTodo() throws {

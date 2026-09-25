@@ -10,3 +10,7 @@ DerivedData/
 Config/Local.xcconfig
 xcuserdata/
 .DS_Store
+# SwiftPM del espejo Linux (Package.swift, Docker)
+.build/
+.swiftpm/
+Package.resolved

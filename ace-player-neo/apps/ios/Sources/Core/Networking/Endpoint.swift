@@ -1,5 +1,9 @@
 import Foundation
 
+#if canImport(FoundationNetworking)
+    import FoundationNetworking
+#endif
+
 /// Método HTTP de una ruta v1.
 public enum HTTPMethod: String, Sendable {
     case get = "GET"

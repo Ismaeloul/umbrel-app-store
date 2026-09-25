@@ -79,28 +79,6 @@ final class MockURLProtocol: URLProtocol {
     }
 }
 
-/// Ejemplos de packages/shared/fixtures, copiados al bundle de los tests.
-enum Fixtures {
-    static var raiz: URL {
-        guard let url = Bundle(for: MockURLProtocol.self).url(forResource: "fixtures", withExtension: nil) else {
-            fatalError("La carpeta fixtures no está en el bundle de los tests (revisa project.yml)")
-        }
-        return url
-    }
-
-    static func datos(_ ruta: String) throws -> Data {
-        try Data(contentsOf: raiz.appendingPathComponent(ruta))
-    }
-
-    /// Nombres (sin `.json`) de los ejemplos de una carpeta.
-    static func nombres(_ carpeta: String) throws -> [String] {
-        try FileManager.default.contentsOfDirectory(atPath: raiz.appendingPathComponent(carpeta).path)
-            .filter { $0.hasSuffix(".json") }
-            .map { String($0.dropLast(5)) }
-            .sorted()
-    }
-}
-
 /// Comparación de JSON sin depender del orden de claves ni de cómo se escriben los números.
 enum ComparadorJSON {
     /// Quita los `null`: Swift no codifica los opcionales vacíos.

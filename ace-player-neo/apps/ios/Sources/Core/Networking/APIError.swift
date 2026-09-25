@@ -1,5 +1,9 @@
 import Foundation
 
+#if canImport(FoundationNetworking)
+    import FoundationNetworking
+#endif
+
 /// Errores de la app al hablar con el servidor, con su texto en español.
 ///
 /// Los del servidor llevan el código del catálogo común (`ErrorCatalog`), así
