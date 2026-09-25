@@ -1,0 +1,46 @@
+{
+  "generador": "apps/ios/scripts/generar-fuentes.py",
+  "fontTools": "4.66.0",
+  "parametros": {
+    "version": 1,
+    "palco": {
+      "familia": "Palco Sans",
+      "postscript": "PalcoSans-ExtraLight",
+      "ascendenteEm": 0.885,
+      "descendenteEm": -0.115,
+      "interlineado": 0,
+      "useTypoMetrics": true
+    }
+  },
+  "origenes": {
+    "mona": {
+      "paquete": "@fontsource-variable/mona-sans@5.3.0",
+      "fichero": "mona-sans-latin-wdth-normal.woff2",
+      "sha256": "5ea3740633e5ac7af56c13d7e8ec32bcae12e7723e53d34284469a8947ccb2f3",
+      "licenciaSha256": "41e9911493de5899a20336baf13b6ea6483b5eea34e237f2ffed22c39bdc4a8d"
+    },
+    "martian": {
+      "paquete": "@fontsource-variable/martian-mono@5.3.0",
+      "fichero": "martian-mono-latin-wdth-normal.woff2",
+      "sha256": "f9c1655c2c9d1ed5bb8b301a57d1169a1123ffef1a588dc50a7a487810f7d732",
+      "licenciaSha256": "bd7d799f6a67b704f9546422ee83d69b4dc5e4ae289d5eabc22581251dd7150a"
+    }
+  },
+  "generados": {
+    "MartianMono-Variable.ttf": {
+      "postscript": "MartianMono-SemiExpandedRegular",
+      "sha256": "9b64155ced08dfa7b171e44760215e82441871f479a3b9da037560f4576ae5df"
+    },
+    "MonaSans-Variable.ttf": {
+      "postscript": "MonaSans-ExtraLight",
+      "sha256": "f26f01f802aabc164d05dce51969aa4409898df24e3fdb1920adc43a040e10a5"
+    },
+    "PalcoSans-Variable.ttf": {
+      "postscript": "PalcoSans-ExtraLight",
+      "sha256": "dfabb02dfcec8fb21a7af0380a18a129b130ca616132a06ea57e8e0f394a92eb"
+    },
+    "OFL.txt": {
+      "sha256": "472aa201c24ff1c6e905cf9b550042a97f052d9d2019c72ce90ad62ca51a0936"
+    }
+  }
+}
