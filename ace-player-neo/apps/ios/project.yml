@@ -87,9 +87,8 @@ targets:
     platform: iOS
     sources:
       - path: Tests/AceNeoUITests
-      # Los mismos identificadores en la app y en las pruebas (llega en la fase 0.3).
+      # Los mismos identificadores en la app y en las pruebas.
       - path: Sources/Armazon/IdentificadoresUI.swift
-        optional: true
     dependencies:
       - target: AceNeo
     settings:

@@ -294,7 +294,9 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p build
-          xcodebuild build -project AceNeo.xcodeproj -scheme AceNeo -configuration Debug \
+          # Debug de simulador con build-for-testing: la app Y sus dos objetivos de pruebas
+          # (un test que no compila sale aquí, no en la CI completa).
+          xcodebuild build-for-testing -project AceNeo.xcodeproj -scheme AceNeo -configuration Debug \
             -destination "id=${{ steps.simulador.outputs.id }}" \
             -derivedDataPath build/DerivedData -quiet \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} 2>&1 | tee build/compilar.log
