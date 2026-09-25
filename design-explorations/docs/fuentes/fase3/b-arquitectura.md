@@ -221,7 +221,7 @@ apps/ios/
 │  │  ├─ Colores/Bg.colorset/           [Q] lo exige UILaunchScreen; los otros 22 colorsets se borran
 │  │  └─ Marca.imageset/                [M] P · una sola variante (la oscura de apps/web/public/icon.svg)
 │  └─ Fuentes/
-│     ├─ MonaSansPalco-Variable.ttf     [N][G] P · Mona con hhea/OS2 885/−115/0 y USE_TYPO_METRICS; PostScript «MonaSansPalco-ExtraLight»
+│     ├─ PalcoSans-Variable.ttf         [N][G] P · Mona con hhea/OS2 885/−115/0 y USE_TYPO_METRICS; PostScript «PalcoSans-ExtraLight» (la OFL reserva «Mona», §5.3.1)
 │     ├─ MonaSans-Variable.ttf          [N][G] P · original, PostScript «MonaSans-ExtraLight» (solo TextField)
 │     ├─ MartianMono-Variable.ttf       [N][G] P · «MartianMono-SemiExpandedRegular» (hashes, datos técnicos, teclas)
 │     ├─ OFL.txt                        [N] P · licencia (se enseña en Acerca de)
@@ -832,7 +832,7 @@ enum Fixtures {
         /// apps/ios/Tests/AceNeoTests/Puros/Soporte/Fixtures.swift → ace-player-neo/packages/shared/fixtures
         static var raiz: URL {
             var url = URL(fileURLWithPath: #filePath)
-            for _ in 0..<6 { url.deleteLastPathComponent() }
+            for _ in 0..<7 { url.deleteLastPathComponent() }   // 7 niveles, no 6 (§5.3.1)
             return url.appendingPathComponent("packages/shared/fixtures")
         }
     #else
@@ -878,7 +878,7 @@ enum Vectores {
 
 | Clave | Valor |
 |---|---|
-| `UIAppFonts` | `MonaSansPalco-Variable.ttf`, `MonaSans-Variable.ttf`, `MartianMono-Variable.ttf` (XcodeGen copia los recursos sueltos en la raíz del bundle; `InfoPlistTests` comprueba `Bundle.main.url(forResource:)` y los tres nombres PostScript) |
+| `UIAppFonts` | `PalcoSans-Variable.ttf`, `MonaSans-Variable.ttf`, `MartianMono-Variable.ttf` (XcodeGen copia los recursos sueltos en la raíz del bundle; `InfoPlistTests` comprueba `Bundle.main.url(forResource:)` y los tres nombres PostScript) |
 | `UIApplicationSceneManifest` | `UIApplicationSupportsMultipleScenes = false`; la configuración de escena la da `AppDelegate.application(_:configurationForConnecting:options:)` |
 | `UIViewControllerBasedStatusBarAppearance` | `YES` (explícito) |
 | `UISupportedInterfaceOrientations` | vertical + horizontal izquierda y derecha; **se quita** `~ipad` |
@@ -1382,7 +1382,7 @@ enum Mona {
     }
     static func ctFont(_ tamano: Double, peso: Double, anchura: Double = 100, variante: VarianteMona = .palco) -> CTFont {
         let atributos: [CFString: Any] = [
-            kCTFontNameAttribute: variante == .palco ? "MonaSansPalco-ExtraLight" : "MonaSans-ExtraLight",
+            kCTFontNameAttribute: variante == .palco ? "PalcoSans-ExtraLight" : "MonaSans-ExtraLight",
             kCTFontVariationAttribute: [NSNumber(value: wdth): NSNumber(value: anchura), NSNumber(value: wght): NSNumber(value: peso)],
         ]
         return CTFontCreateWithFontDescriptor(CTFontDescriptorCreateWithAttributes(atributos as CFDictionary), CGFloat(tamano), nil)
@@ -1390,7 +1390,7 @@ enum Mona {
     static func uiFont(_ tamano: Double, peso: Double, anchura: Double = 100, variante: VarianteMona = .campos) -> UIFont {
         let ejes: [NSNumber: NSNumber] = [NSNumber(value: wdth): NSNumber(value: anchura), NSNumber(value: wght): NSNumber(value: peso)]
         let descriptor = UIFontDescriptor(fontAttributes: [
-            .name: variante == .palco ? "MonaSansPalco-ExtraLight" : "MonaSans-ExtraLight",
+            .name: variante == .palco ? "PalcoSans-ExtraLight" : "MonaSans-ExtraLight",
             UIFontDescriptor.AttributeName(rawValue: kCTFontVariationAttribute as String): ejes,
         ])
         return UIFont(descriptor: descriptor, size: CGFloat(tamano))
@@ -1878,7 +1878,7 @@ final class HostingRaiz: UIHostingController<RaizView> {
         let estado = contenedor.estadoVentana
         let preferencias = contenedor.preferencias
         vigilante = Task { @MainActor [weak self] in
-            let cambios = Observations { @MainActor in
+            let cambios = Observations {   // SIN «@MainActor in»: con la anotación el compilador se cae (§5.3.1, C2)
                 (estado.estiloBarraEstado, estado.barraEstadoOculta, estado.inmersivo, estado.mascaraOrientacion,
                  preferencias.tema)
             }
@@ -3176,6 +3176,45 @@ Cada canario es un fichero que **usa** la API tal como la usará el contrato. Co
 | C13 | overrides de barra de estado e indicador en `HostingRaiz` con raíz SwiftUI | banco | `.statusBarHidden` + `.preferredColorScheme` por zona (se pierde el matiz por zona) |
 | C14 | `ImageRenderer` → `UIImage` plantilla dentro de `Label` de `Menu` | banco | `UIGraphicsImageRenderer` dibujando el `Path` |
 | C15 | `onGeometryChange(for:of:action:)` en `.global` durante un `ScrollView` (marcos del vuelo) | banco | coordenadas con nombre del `AppShell` |
+
+#### 5.3.1 Resultado real de los canarios (I0, fase 0.1, 25-sep-2026)
+
+Compilados en la CI con Xcode 26.6 (Swift 6.2, macOS 26.6.2), simulador iPhone 16e con iOS 26.2, Debug de simulador
+(`build-for-testing`) y Release de dispositivo (`solo_compilar`: ejecuciones 36163818991 y 36166522134, en verde) y
+unitarios en el simulador (`solo_unitarios`: 36165365851, 198 pruebas, 0 fallos). Linux: `swift:6.2-noble` en Docker
+(`probar-linux.ps1`) y trabajo `nucleo-linux`. Informe completo: `c0-canarios.md` de esta carpeta. «Banco pendiente» = la
+parte que solo se ve en pantalla la mira P en el laboratorio (§4.1.4); la API **existe con esa firma y compila**.
+
+| # | Resultado | Qué se comprobó | Qué cambia |
+|---|---|---|---|
+| C1 | **vale** (banco pendiente) | `glassEffect(_:in:)` con `Glass` devuelto por una función, `.regular.tint(_:)`, `.interactive()`, `GlassEffectContainer(spacing:)`, modificador genérico sobre `Shape` con `some Shape = Capsule()` | nada |
+| C2 | **vale con un ajuste** | `Observations` con la tupla de cinco de §2.3 compila **solo si el cierre NO se anota `@MainActor in`** (hereda el aislamiento de la `Task { @MainActor … }`). Con `Observations { @MainActor in … }` el compilador **se cae** en IRGen (tupla: 36162945144; struct: 36163440026). Sin anotar: 36164502581 y verde en la rama | §2.3 corregido: `Observations { (…) }` sin `@MainActor in`. El plan B (`withObservationTracking` en bucle) también compila y queda de reserva |
+| C3 | **vale** (banco pendiente) | `UIGestureRecognizerRepresentable` con `makeCoordinator(converter:)`, coordinador `UIGestureRecognizerDelegate` (`shouldBeRequiredToFailBy` con `UIScreenEdgePanGestureRecognizer`, simultáneo), `update…`, `handle…Action` y `.gesture(_:)` sobre un `ScrollView` | nada |
+| C4 | **vale** | `@Entry` con un struct puro, `Bool`, `CGFloat` y un **actor** opcional (`= nil`) | nada |
+| C5 | **vale** (banco pendiente) | `.sensoryFeedback(trigger:_:)` con cierre `{ _, nuevo in nuevo.tipo.feedback }` (devuelve `SensoryFeedback`, no opcional) y la tabla de `TipoHaptico.feedback` | nada |
+| C6 | **vale** (banco pendiente: que la hoja medida no salte) | `.sheet(item:onDismiss:)` con `@Bindable`, `onGeometryChange(for: CGFloat.self)`, `.presentationDetents([.height(medido)])`, `.large`, `[.medium, .large]`, `presentationDragIndicator`, `presentationBackground(Color)`, `presentationCornerRadius`, `presentationContentInteraction(.scrolls)` | nada |
+| C7 | **vale** (banco pendiente) | `.contextMenu { } preview: { }`, `Menu` con `Section`, `Button(role: .destructive)`, `Toggle`, `.menuOrder(.fixed)` y `accessibilityActions { ForEach … }` | nada |
+| C8 | **vale** | `ScrollPosition(edge: .top)`, `.scrollPosition($posicion)`, `posicion.scrollTo(edge:)`, `onScrollGeometryChange(for:of:action:)` con `contentOffset` y `contentInsets` | nada |
+| C9 | **vale** (banco pendiente) | `.contentTransition(.numericText(value:))` en celdas de ancho fijo con `.animation(_:value:)` | nada |
+| C10 | **vale** | en el simulador (`InfoPlistTests`): los tres TTF están en el bundle y registrados por `UIAppFonts`; `CTFontCopyVariation` devuelve wdth 125 y wght 800; el «4» se estrecha a wdth 75 y se ensancha a 125; la Mona modificada tiene ascendente 88,5, descendente 11,5 e interlineado 0 a 100 pt. Compilan `OSAllocatedUnfairLock<[Clave: Font]>`, `Font(CTFont)` y `UIFont` por descriptor | **nombre de la fuente modificada** (riesgo 8): la OFL de Mona Sans reserva «Mona», así que la versión con métricas cambiadas se llama **«Palco Sans»**: fichero `PalcoSans-Variable.ttf`, PostScript **`PalcoSans-ExtraLight`** (no `MonaSansPalco-…`). §1.2, §1.13.3 y §2.2.3 corregidos |
+| C11 | **vale** | Swift Testing (`@Test`, `@Test(arguments:)` con tuplas, `#expect`) y `Bundle.module` con `resources: [.copy("Vectores")]` en `swift test` de Linux; los mismos ficheros en Xcode con `@testable import AceNeo` | `Fixtures.raiz` en SwiftPM sube **7** niveles, no 6 (§1.13.2 corregido) |
+| C12 | **vale** | `platforms: [.iOS(.v26), .macOS(.v26)]` con `swift-tools-version: 6.2` | nada |
+| C13 | **vale** (banco pendiente) | `UIHostingController<Raiz>` con `init(…)` propio, `required init?(coder:)` `@available(*, unavailable)` y los cinco overrides + los cuatro `setNeeds…` | nada |
+| C14 | **vale** (banco pendiente) | `ImageRenderer` (`scale = 3`) → `uiImage.withRenderingMode(.alwaysTemplate)` en `Label { } icon: { Image(uiImage:) }` dentro de `Menu` | nada |
+| C15 | **vale** (banco pendiente) | `onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action:` en celdas de un `LazyVStack` dentro de `ScrollView`, con `@ObservationIgnored` en el diccionario de marcos | nada |
+| C16 | **vale** (añadido por I0) | `final class …: Sendable` con `let` + `Mutex` (Synchronization) y **sin** `@unchecked`, como `EstadoDemo` (§0.1): compila en iOS (Debug y Release) y en Linux (`swift:6.2-noble`) | nada |
+
+Otros hallazgos de la fase 0.1 que tocan a todos:
+
+- **XcodeGen `optional: true` no basta** para un fichero que no existe: el objetivo lo sigue esperando y `build-for-testing`
+  falla. `Sources/Armazon/IdentificadoresUI.swift` ya existe como esqueleto (`enum IDUI {}`) para que compilen los UITests.
+- `solo_compilar` compila el Debug de simulador con `build-for-testing` (la app **y** sus pruebas), no solo la app.
+- La alarma de «to type-check» ignora la interfaz vieja hasta la poda (§1.11): hoy avisa en `EscenarioView.swift` (un
+  `body` de 24,6 s) y `ReproductorVistas.swift`, que se borran en la fase 0.2.
+- `Color(claro:oscuro:…)`, `Color(hex:alfa:)` y `UIColor(hex:alfa:)` (§2.2.1) ya están en `Palco/Tokens/ColorDinamico.swift`
+  porque el generado los necesita; `ParteIcono` vive en `TrazosIcono.generado.swift` (lo escribe el generador) y P **no**
+  lo vuelve a declarar en `IconoPalco.swift`. La extensión `RGB.color` llega con `RGB` (M2).
+- `Endpoint.swift` y `APIError.swift` ya importan `FoundationNetworking` en Linux (lo pedía `nucleo-linux`).
 
 ### 5.4 Plantillas seguras
 
