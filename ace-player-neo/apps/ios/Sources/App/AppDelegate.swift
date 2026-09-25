@@ -20,8 +20,11 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         _ application: UIApplication, configurationForConnecting sesion: UISceneSession,
         options: UIScene.ConnectionOptions
     ) -> UISceneConfiguration {
-        let configuracion = UISceneConfiguration(name: "Principal", sessionRole: sesion.role)
-        configuracion.delegateClass = SceneDelegate.self
+        // Tipos escritos a mano: `delegateClass = SceneDelegate.self` tardaba 302 ms en tiparse (CI 36168823914).
+        let rol: UISceneSession.Role = sesion.role
+        let configuracion = UISceneConfiguration(name: "Principal", sessionRole: rol)
+        let clase: AnyClass = SceneDelegate.self
+        configuracion.delegateClass = clase
         return configuracion
     }
 }
