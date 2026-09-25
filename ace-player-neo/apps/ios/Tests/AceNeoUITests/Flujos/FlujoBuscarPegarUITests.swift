@@ -4,7 +4,7 @@ import XCTest
 /// Flujos de «Buscar» y «Reproducir otro hash» (b-arquitectura §3.6, M5) contra la demo: buscar «dazn» en el
 /// motor, «Enlace detectado» con un Content ID y pegar un hash (a mano y del portapapeles).
 final class FlujoBuscarPegarUITests: XCTestCase {
-    private let hash = "a1b2c3d4e5f60718293a4b5c6d7e8f90abcdef12"
+    private let idPrueba = "a1b2c3d4e5f60718293a4b5c6d7e8f90abcdef12"
     /// «DAZN 1 HD», el resultado del motor de la demo.
     private let resultadoDazn = "d4e5f60718293a4b5c6d7e8f9012345678901a2b"
 
@@ -51,7 +51,7 @@ final class FlujoBuscarPegarUITests: XCTestCase {
     @MainActor
     func testEnlaceDetectado() throws {
         let app = arrancarEn("buscar")
-        escribirEnBuscar(app, "acestream://\(hash)")
+        escribirEnBuscar(app, "acestream://\(idPrueba)")
         XCTAssertTrue(elementoUI(app, IDUI.enlaceDetectado).waitForExistence(timeout: 5), "No se detecta el enlace")
         XCTAssertTrue(conTextoUI(app, "Es un Content ID de AceStream").exists)
         XCTAssertFalse(conTextoUI(app, "En el motor AceStream").exists, "Con enlace no se pregunta al motor")
@@ -72,7 +72,7 @@ final class FlujoBuscarPegarUITests: XCTestCase {
         app.typeText("no vale")
         XCTAssertTrue(conTextoUI(app, "Introduce un Content ID o enlace AceStream válido").waitForExistence(timeout: 5))
         app.buttons["Borrar Content ID"].firstMatch.tap()
-        app.typeText(hash)
+        app.typeText(idPrueba)
         XCTAssertTrue(conTextoUI(app, "Hash detectado:").waitForExistence(timeout: 5))
         XCTAssertTrue(reproducir.isEnabled)
         captura(app, "pegar")
@@ -82,7 +82,7 @@ final class FlujoBuscarPegarUITests: XCTestCase {
 
     @MainActor
     func testPegarDelPortapapeles() throws {
-        UIPasteboard.general.string = "http://umbrel.local:7792/ace/getstream?id=\(hash)"
+        UIPasteboard.general.string = "http://umbrel.local:7792/ace/getstream?id=\(idPrueba)"
         let app = arrancarEn("buscar")
         let boton = app.buttons["Pegar un Content ID o enlace acestream://"].firstMatch
         XCTAssertTrue(boton.waitForExistence(timeout: 15))
