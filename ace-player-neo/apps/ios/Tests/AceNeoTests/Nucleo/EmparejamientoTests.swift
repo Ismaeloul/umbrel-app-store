@@ -167,6 +167,36 @@ final class EmparejamientoTests: XCTestCase {
         XCTAssertEqual(cuerpo?["code"], "482913")
     }
 
+    /// QR con varias `u` (a9 §3.4): guarda la primera de cada tipo y canjea por la primera que responda.
+    func testConVariasDireccionesCanjeaPorLaPrimeraQueResponda() async throws {
+        let ping = try Fixtures.datos("v1/ping.json")
+        let reclamado = try Fixtures.datos("v1/pairingClaim.json")
+        MockURLProtocol.responder { peticion in
+            if peticion.url?.host() == "100.101.102.103" { throw URLError(.cannotConnectToHost) }
+            switch peticion.url?.path() {
+            case "/native/api/v1/ping": return (200, [:], ping)
+            case "/native/api/v1/pairing/claim": return (201, [:], reclamado)
+            default: return (404, [:], Prueba.errorJSON("not_found"))
+            }
+        }
+        let sesion = MockURLProtocol.sesion()
+        let tokens = KeychainTokenStore(backend: LlaveroSimulado())
+        let configuracion = ServerConfigStore(suite: "es.ismaeloul.aceplayerneo.tests.\(UUID().uuidString)")
+        let api = APIClient(
+            session: sesion, servidores: ServerResolver(config: ServerConfig(), session: sesion), tokens: tokens)
+        let servicio = PairingService(api: api, configuracion: configuracion)
+        let enlace = try XCTUnwrap(
+            PairingLink(texto: "aceneo://pair?u=http%3A%2F%2F100.101.102.103%3A7792&u=http%3A%2F%2Fumbrel.local%3A7792&c=482913"))
+
+        _ = try await servicio.emparejar(enlace: enlace, nombre: "iPhone de Isma")
+
+        XCTAssertEqual(configuracion.leer(), ServerConfig(tailscale: Prueba.baseTailscale, lan: Prueba.base))
+        let reclamo = try XCTUnwrap(MockURLProtocol.peticiones.last)
+        XCTAssertEqual(reclamo.url?.path(), "/native/api/v1/pairing/claim")
+        XCTAssertEqual(reclamo.url?.host(), "umbrel.local")
+        XCTAssertNotNil(try tokens.leerToken())
+    }
+
     func testUnCodigoMalEscritoNoSaleALaRed() async throws {
         let sesion = MockURLProtocol.sesion()
         let api = APIClient(

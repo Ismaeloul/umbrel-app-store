@@ -19,6 +19,8 @@ import UIKit
 
     /// `UNDO_MS` (library/model.ts).
     static let deshacer: Duration = .seconds(6)
+    /// Lo que dura el «Deshacer» (las pruebas lo acortan).
+    @ObservationIgnored var espera: Duration = BajasPendientes.deshacer
 
     private struct Baja {
         var canal: RefCanal
@@ -48,8 +50,9 @@ import UIKit
         guard bajas[clave] == nil else { return }
         let lista = coleccion == .web ? datos.biblioteca.datos?.activeWebSourceId : nil
         var baja = Baja(canal: canal, coleccion: coleccion, listaActiva: lista, datos: datos, avisos: avisos)
+        let espera = self.espera
         baja.reloj = Task { [weak self] in
-            try? await Task.sleep(for: Self.deshacer)
+            try? await Task.sleep(for: espera)
             guard !Task.isCancelled else { return }
             await self?.confirmar(clave)
         }
