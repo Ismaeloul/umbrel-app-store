@@ -4,8 +4,8 @@
    tarjetas versus pequeñas apiladas (plan Palco fase 2, decisión W4): dos
    escudos, siglas, hora o minuto y la cápsula de señal.
 
-   - El partido abierto va marcado y con su marcador TAPADO aunque el
-     reproductor aún no haya arrancado (corrección 2).
+   - El partido abierto va marcado. Todos los marcadores van TAPADOS (como
+     en toda la agenda) tras su cápsula «Marcador», que los destapa.
    - Tocar otra tarjeta abre ese partido (sin canales: el mismo aviso).
    - Sin virtualización: una decena de tarjetas por día. */
 
@@ -158,7 +158,6 @@ export default function AgendaColumn({ route, active }: ViewProps) {
               compact
               position={slot.position}
               selected={slot.match.id === currentId}
-              alsoWatched={slot.match.id === currentId}
               onOpen={open}
               staggerIndex={staggerIndex}
             />

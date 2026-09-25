@@ -2,28 +2,29 @@
    decisión W4): el partido ELEGIDO (`selected` de agendaUi, o el destacado)
    como tarjeta versus grande, debajo «Señal» (cápsula + resumen), «Dónde se
    emite» (chips continuos o discontinuos, injerto B3) y la acción («Ver
-   canal» / «Buscar canal», atajo O). El marcador del partido que ves sale
-   TAPADO y se destapa en una cápsula sobre la tarjeta (regla 29).
+   canal» / «Buscar canal», atajo O). El marcador va SIEMPRE tapado en la
+   agenda: la cápsula «Marcador» de la esquina lo destapa (y lo vuelve a
+   tapar) en esa misma cápsula. Si el partido elegido es el del héroe, la
+   vista no monta este panel (no se repite la tarjeta grande).
 
    Doble clic sobre la tarjeta abre el partido (Intro sobre la tarjeta elegida
    de la lista también, como hoy). Sin goleadores ni estadio: ninguna API que
    usemos los da.
 
    LiveStrip (solo `wide`, injerto B1): fila de cápsulas «En directo» con los
-   escudos pequeños, las siglas y el minuto; el marcador solo si está
-   destapado. Se desplaza a mano, nunca sola. */
+   escudos pequeños, las siglas y el minuto; las cifras solo si ese partido
+   está destapado. Se desplaza a mano, nunca sola. */
 
 import type { FootballMatch, LiveScore } from '@ace/shared';
-import { useId, useState, type CSSProperties } from 'react';
+import { useId, type CSSProperties } from 'react';
 import { cx } from '../../lib/cx.ts';
-import { haptic } from '../../lib/haptics.ts';
 import { competitionLogo, teamCrest, teamPalette, teamShort } from '../../lib/teams.ts';
 import { Button, Chip, LiveDot, Num, TeamMark, VersusCard } from '../../ui/index.ts';
 import { matchGlow, versusSide, versusWhen } from './cards.ts';
 import { useMatchSignal } from './data.ts';
 import { liveMinute, matchStatus, matchTitle, paintableScore, type ChannelInfo } from './domain.ts';
-import { CensorBars, ScoreCapsule, SignalCapsule } from './MatchRow.tsx';
-import { revealScore, useScoreHidden } from './score-reveal.ts';
+import { ScoreToggle, SignalCapsule } from './MatchRow.tsx';
+import { hideScore, revealScore, useScoreRevealed } from './score-reveal.ts';
 
 export interface AgendaStageProps {
   match: FootballMatch;
@@ -52,8 +53,7 @@ export function AgendaStage({
   const phase = status?.phase ?? null;
   const done = phase === 'done';
   const score = paintableScore(rawScore);
-  const hidden = useScoreHidden(match.id) && score !== null;
-  const [justRevealed, setJustRevealed] = useState(false);
+  const revealed = useScoreRevealed(match.id);
   const signal = useMatchSignal(match, now, { finished: done });
   const available = channels.some((channel) => channel.inLibrary);
   const action = channels.length === 0 ? null : available ? 'Ver canal' : 'Buscar canal';
@@ -89,26 +89,17 @@ export function AgendaStage({
           watching={watching}
           className="agenda-stage__versus"
         />
-        <div className="agenda-stage__corner">
-          {hidden ? (
-            <button
-              type="button"
-              className="agenda-cover press"
-              aria-label="Ver marcador"
-              title="Tu emisión va por detrás del directo"
-              onClick={() => {
-                setJustRevealed(true);
-                haptic('light');
-                revealScore(match.id);
-              }}
-            >
-              <CensorBars />
-              <span className="agenda-cover__text">Ver marcador</span>
-            </button>
-          ) : score ? (
-            <ScoreCapsule score={score} reveal={justRevealed} size="md" />
-          ) : null}
-        </div>
+        {score ? (
+          <div className="agenda-stage__corner">
+            <ScoreToggle
+              match={match}
+              score={score}
+              revealed={revealed}
+              onReveal={() => revealScore(match.id)}
+              onHide={() => hideScore(match.id)}
+            />
+          </div>
+        ) : null}
       </div>
       <div className="agenda-stage__body">
         <section className="agenda-stage__sec">
@@ -220,7 +211,8 @@ function LiveChip({
   onSelect(match: FootballMatch): void;
 }) {
   const score = paintableScore(rawScore);
-  const hidden = useScoreHidden(match.id) && score !== null;
+  // Tapado por defecto: sin cifras salvo que ese partido esté destapado.
+  const shown = useScoreRevealed(match.id) ? score : null;
   const minute = liveMinute(rawScore);
   return (
     <button
@@ -228,7 +220,7 @@ function LiveChip({
       className="agenda-strip__chip press"
       aria-current={current ? 'true' : undefined}
       onClick={() => onSelect(match)}
-      aria-label={`${matchTitle(match)}${hidden ? ', marcador oculto' : score ? `, ${score.home} a ${score.away}` : ''}`}
+      aria-label={`${matchTitle(match)}${shown ? `, ${shown.home} a ${shown.away}` : ''}`}
     >
       <span className="agenda-strip__crests" aria-hidden="true">
         <TeamMark
@@ -251,10 +243,8 @@ function LiveChip({
         ) : null}
       </span>
       <span className="agenda-strip__team">{teamShort(match, 'home')}</span>
-      {hidden ? (
-        <CensorBars />
-      ) : score ? (
-        <Num className="agenda-strip__score" value={`${score.home}–${score.away}`} />
+      {shown ? (
+        <Num className="agenda-strip__score" value={`${shown.home}–${shown.away}`} />
       ) : (
         <span className="agenda-strip__vs">vs</span>
       )}

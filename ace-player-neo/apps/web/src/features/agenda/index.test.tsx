@@ -67,9 +67,12 @@ function routes(overrides: Record<string, unknown> = {}) {
   } as Parameters<typeof mockFetch>[0];
 }
 
-function renderAgenda(kind: 'mobile' | 'desktop' = 'mobile') {
+function renderAgenda(kind: 'mobile' | 'desktop' | 'wide' = 'mobile') {
   return renderWithApp(<Agenda route={{ vista: 'agenda' }} active />, { kind });
 }
+
+/** Cifras de marcador pintadas en TODA la agenda (ninguna mientras esté tapado). */
+const scoreDigits = () => document.querySelectorAll('.agenda-score .num, .agenda-strip__score');
 
 /** Las filas de partidos (sin el héroe, que repite el destacado). */
 const rows = () => screen.getByRole('region', { name: 'Partidos' });
@@ -143,9 +146,12 @@ describe('vista Agenda', () => {
     expect(await within(hero).findByText("En directo · 54'")).toBeInTheDocument();
     expect(within(hero).getByText('Champions League')).toBeInTheDocument();
     expect(await within(hero).findByText('Señal')).toBeInTheDocument();
-    // El marcador solo en su cápsula, fuera de la tarjeta versus.
+    // El marcador, tapado en su cápsula, fuera de la tarjeta versus.
     expect(hero.querySelector('.versus .agenda-score')).toBeNull();
-    await waitFor(() => expect(within(hero).getByTitle('Marcador')).toHaveTextContent(/2.*1/));
+    expect(
+      await within(hero).findByRole('button', { name: 'Ver marcador de Real Madrid vs Girona' }),
+    ).toHaveTextContent('Marcador');
+    expect(scoreDigits()).toHaveLength(0);
     // El canal no está en tu biblioteca: «Buscar canal», que abre el partido.
     fireEvent.click(within(hero).getByRole('button', { name: 'Buscar canal' }));
     await waitFor(() => expect(location.search).toBe(`?vista=partido/${LIVE.id}`));
@@ -246,29 +252,63 @@ describe('vista Agenda', () => {
     expect(await findInRows('Real Madrid')).toBeInTheDocument();
   });
 
-  it('el marcador del partido que ves sale tapado hasta que lo pides', async () => {
+  it('marcadores TAPADOS por defecto en toda la agenda; «Marcador» destapa ese partido y otro toque lo tapa', async () => {
+    net = mockFetch(routes());
+    const { container } = renderAgenda();
+    const hero = await screen.findByRole('region', { name: 'Real Madrid vs Girona' });
+    const name = 'Ver marcador de Real Madrid vs Girona';
+    // Una cápsula en el héroe y otra en su tarjeta de la fila; ninguna cifra.
+    await waitFor(() => expect(screen.getAllByRole('button', { name })).toHaveLength(2));
+    expect(scoreDigits()).toHaveLength(0);
+    expect(container.textContent).not.toMatch(/2\s*[–-]\s*1/);
+    // Ni el resumen para lectores ni el botón de la tarjeta dicen el resultado.
+    expect(screen.getByText(/: 2 partidos, 1 en directo, solo los tuyos$/)).toBeInTheDocument();
+    expect(
+      within(rows()).getByRole('button', { name: `Buscar canal para ${LIVE.title}` }),
+    ).toBeInTheDocument();
+    fireEvent.click(within(hero).getByRole('button', { name }));
+    // Destapado ese partido (en todos sus sitios): las cifras en la misma cápsula.
+    const hide = 'Tapar el marcador de Real Madrid vs Girona: 2 a 1';
+    await waitFor(() => expect(screen.getAllByRole('button', { name: hide })).toHaveLength(2));
+    expect(within(hero).getByRole('button', { name: hide })).toHaveTextContent(/2.*1/);
+    const row = container.querySelector(`[data-match="${LIVE.id}"]`) as HTMLElement;
+    expect(row.querySelector('.agenda-score')?.textContent).toMatch(/2.*1/);
+    // Otro toque lo vuelve a tapar.
+    fireEvent.click(within(row).getByRole('button', { name: hide }));
+    await waitFor(() => expect(scoreDigits()).toHaveLength(0));
+    expect(screen.getAllByRole('button', { name })).toHaveLength(2);
+  });
+
+  it('menú contextual: «Ver marcador» destapa y «Tapar el marcador» lo tapa', async () => {
+    net = mockFetch(routes());
+    const { container } = renderAgenda();
+    await screen.findByRole('region', { name: 'Real Madrid vs Girona' });
+    const card = () =>
+      within(rows()).getByRole('button', { name: `Buscar canal para ${LIVE.title}` });
+    fireEvent.contextMenu(card());
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Ver marcador' }));
+    const row = container.querySelector(`[data-match="${LIVE.id}"]`) as HTMLElement;
+    await waitFor(() => expect(row.querySelector('.agenda-score')?.textContent).toMatch(/2.*1/));
+    fireEvent.contextMenu(card());
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Tapar el marcador' }));
+    await waitFor(() => expect(scoreDigits()).toHaveLength(0));
+  });
+
+  it('el partido que ves: «En pantalla» y «Volver al vídeo»; detener vuelve a tapar lo destapado (regla 29)', async () => {
     net = mockFetch(routes());
     setPlayerPresence({ active: true, route: { vista: 'partido', id: LIVE.id, canal: null } });
-    const { container } = renderAgenda();
-    const reveal = await screen.findByRole('button', { name: 'Ver marcador' });
-    const row = container.querySelector(`[data-match="${LIVE.id}"]`) as HTMLElement;
-    expect(within(row).queryByText('2')).toBeNull();
-    // El héroe es el partido que suena: «En pantalla», «Volver al vídeo» y «Marcador».
-    const hero = screen.getByRole('region', { name: 'Real Madrid vs Girona' });
+    renderAgenda();
+    const hero = await screen.findByRole('region', { name: 'Real Madrid vs Girona' });
     expect(within(hero).getByText('En pantalla')).toBeInTheDocument();
     expect(within(hero).getByRole('button', { name: 'Volver al vídeo' })).toBeInTheDocument();
-    expect(within(hero).queryByTitle('Marcador')).toBeNull();
-    expect(within(hero).getByRole('button', { name: 'Marcador' })).toBeInTheDocument();
-    fireEvent.click(reveal);
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Ver marcador' })).toBeNull());
-    expect(row.querySelector('.agenda-score')?.textContent).toContain('2');
-    // Destapar en un sitio destapa en todos: el héroe enseña ya las cifras.
-    expect(within(hero).queryByRole('button', { name: 'Marcador' })).toBeNull();
-    expect(within(hero).getByTitle('Marcador')).toHaveTextContent(/2.*1/);
+    const name = 'Ver marcador de Real Madrid vs Girona';
+    fireEvent.click(await within(hero).findByRole('button', { name }));
+    await waitFor(() => expect(scoreDigits().length).toBeGreaterThan(0));
     // Detener vuelve a tapar para la próxima vez.
     act(() => setPlayerPresence({ active: false }));
     act(() => setPlayerPresence({ active: true }));
-    expect(await screen.findByRole('button', { name: 'Ver marcador' })).toBeInTheDocument();
+    expect(await within(hero).findByRole('button', { name })).toBeInTheDocument();
+    expect(scoreDigits()).toHaveLength(0);
   });
 
   it('sin partidos tuyos: «Nada de los tuyos este día» con sus dos salidas', async () => {
@@ -401,25 +441,41 @@ describe('vista Agenda', () => {
     expect(net.calls.some((call) => call.url.startsWith('/api/v1/scores'))).toBe(false);
   });
 
-  it('escritorio: escenario con el directo destacado, «Luego» y un clic elige', async () => {
+  it('escritorio: el lateral no repite el héroe (solo «Luego»); un clic en otra tarjeta la lleva al panel', async () => {
     net = mockFetch(routes());
     renderAgenda('desktop');
-    const stage = await screen.findByRole('complementary', { name: 'Partido elegido' });
-    expect(
-      await within(stage).findByRole('heading', { name: LIVE.title.replace(' - ', ' vs ') }),
-    ).toBeInTheDocument();
-    expect(
-      within(stage).getByRole('button', { name: `Buscar canal para ${LIVE.title}` }),
-    ).toBeInTheDocument();
-    expect(within(stage).getByRole('heading', { name: 'Luego' })).toBeInTheDocument();
+    // El elegido por defecto es el destacado, que ya está en el héroe: sin panel.
+    const side = await screen.findByRole('complementary', { name: 'Más partidos' });
+    expect(within(side).getByRole('heading', { name: 'Luego' })).toBeInTheDocument();
+    expect(within(side).queryByRole('heading', { name: 'Real Madrid vs Girona' })).toBeNull();
+    expect(side.querySelector('.agenda-stage')).toBeNull();
     fireEvent.click(screen.getByRole('radio', { name: /Todos/ }));
     const list = screen.getByRole('region', { name: 'Partidos' });
     fireEvent.click(await within(list).findByRole('button', { name: /^Arsenal vs Chelsea/ }));
+    const stage = await screen.findByRole('complementary', { name: 'Partido elegido' });
     expect(
       await within(stage).findByRole('heading', { name: 'Arsenal vs Chelsea' }),
     ).toBeInTheDocument();
     expect(
       within(stage).getByRole('button', { name: `Ver canal para ${SOON.title}` }),
     ).toBeInTheDocument();
+    // Volver a elegir el destacado quita otra vez el panel.
+    fireEvent.click(within(list).getByRole('button', { name: /^Real Madrid vs Girona/ }));
+    expect(await screen.findByRole('complementary', { name: 'Más partidos' })).toBeInTheDocument();
+  });
+
+  it('pantalla ancha: la tira de directos no enseña el resultado hasta destaparlo', async () => {
+    net = mockFetch(routes());
+    renderAgenda('wide');
+    const strip = await screen.findByRole('navigation', { name: 'En directo' });
+    const chip = await within(strip).findByRole('button', { name: 'Real Madrid vs Girona' });
+    expect(strip.querySelector('.agenda-strip__score')).toBeNull();
+    fireEvent.click(
+      within(screen.getByRole('region', { name: 'Real Madrid vs Girona' })).getByRole('button', {
+        name: 'Ver marcador de Real Madrid vs Girona',
+      }),
+    );
+    await waitFor(() => expect(chip).toHaveAccessibleName('Real Madrid vs Girona, 2 a 1'));
+    expect(strip.querySelector('.agenda-strip__score')).toHaveTextContent(/2.*1/);
   });
 });

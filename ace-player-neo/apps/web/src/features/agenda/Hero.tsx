@@ -7,9 +7,9 @@
 
    Debajo: el botón primario oro («Ver ahora» en directo, «Ver el partido»,
    «Buscar canal» si el canal no está en tu biblioteca, o «Canal por
-   confirmar» deshabilitado), la cápsula «Marcador» que destapa el marcador
-   del partido que ves (regla 29; al destapar, las cifras salen EN la cápsula)
-   y dónde se emite.
+   confirmar» deshabilitado), la cápsula «Marcador» (el marcador va SIEMPRE
+   tapado en la agenda; al destapar, las cifras salen EN la cápsula y otro
+   toque lo vuelve a tapar) y dónde se emite.
 
    La portada NUNCA arranca la reproducción ni enseña vídeo (regla 6): todo
    navega al centro de partido. Si este dispositivo ya reproduce el partido,
@@ -19,11 +19,10 @@
    señal y el tapado. */
 
 import type { FootballMatch, LiveScore } from '@ace/shared';
-import { useId, useState, type CSSProperties } from 'react';
+import { useId, type CSSProperties } from 'react';
 import { cx } from '../../lib/cx.ts';
-import { haptic } from '../../lib/haptics.ts';
 import { competitionLogo } from '../../lib/teams.ts';
-import { Button, Capsule, Icon, VersusCard, type IconName } from '../../ui/index.ts';
+import { Button, Icon, VersusCard, type IconName } from '../../ui/index.ts';
 import { matchGlow, versusSide, versusWhen } from './cards.ts';
 import { useMatchSignal } from './data.ts';
 import {
@@ -33,8 +32,8 @@ import {
   type ChannelInfo,
   type MatchSignal,
 } from './domain.ts';
-import { ScoreCapsule, SignalCapsule } from './MatchRow.tsx';
-import { revealScore, useScoreHidden } from './score-reveal.ts';
+import { ScoreToggle, SignalCapsule } from './MatchRow.tsx';
+import { hideScore, revealScore, useScoreRevealed } from './score-reveal.ts';
 
 export interface HeroViewProps {
   match: FootballMatch;
@@ -46,9 +45,11 @@ export interface HeroViewProps {
   mine: boolean;
   /** Este dispositivo ya reproduce el partido (playerPresence). */
   watching: boolean;
-  /** El marcador existe pero es el partido que ves: sale tapado. */
+  /** Marcador tapado (en la agenda, siempre hasta que se pide). */
   scoreHidden: boolean;
   onReveal(): void;
+  /** Segundo toque en la cápsula: vuelve a tapar. */
+  onHide?(): void;
   onOpen(match: FootballMatch): void;
   /** Nombre de la View Transition del bloque de escudos (único en la página). */
   transitionName?: string | null;
@@ -65,6 +66,7 @@ export function HeroView({
   watching,
   scoreHidden,
   onReveal,
+  onHide,
   onOpen,
   transitionName = null,
 }: HeroViewProps) {
@@ -73,8 +75,6 @@ export function HeroView({
   const phase = status?.phase ?? null;
   const live = phase === 'live';
   const score = paintableScore(rawScore);
-  const hidden = scoreHidden && score !== null;
-  const [justRevealed, setJustRevealed] = useState(false);
   const available = channels.some((channel) => channel.inLibrary);
   const action = channels.length === 0 ? null : available ? 'Ver canal' : 'Buscar canal';
   const when = versusWhen(match, now, rawScore, today);
@@ -127,25 +127,13 @@ export function HeroView({
         >
           {cta.text}
         </Button>
-        {hidden ? (
-          <Capsule
-            as="button"
-            tone="neutral"
-            icon="eye"
-            className="agenda-hero__reveal"
-            title="Tu emisión va por detrás del directo"
-            onClick={() => {
-              setJustRevealed(true);
-              haptic('light');
-              onReveal();
-            }}
-          >
-            Marcador
-          </Capsule>
-        ) : score ? (
-          <ScoreCapsule
+        {score ? (
+          <ScoreToggle
+            match={match}
             score={score}
-            reveal={justRevealed}
+            revealed={!scoreHidden}
+            onReveal={onReveal}
+            onHide={onHide}
             size="md"
             glass={false}
             className="agenda-hero__score"
@@ -162,19 +150,20 @@ export function HeroView({
   );
 }
 
-export type AgendaHeroProps = Omit<HeroViewProps, 'signal' | 'scoreHidden' | 'onReveal'>;
+export type AgendaHeroProps = Omit<HeroViewProps, 'signal' | 'scoreHidden' | 'onReveal' | 'onHide'>;
 
-/** El héroe conectado: pide la señal del partido y sabe si su marcador va tapado. */
+/** El héroe conectado: pide la señal del partido y sabe si su marcador está destapado. */
 export function AgendaHero(props: AgendaHeroProps) {
   const status = matchStatus(props.match, props.now, props.score);
   const signal = useMatchSignal(props.match, props.now, { finished: status?.phase === 'done' });
-  const scoreHidden = useScoreHidden(props.match.id);
+  const revealed = useScoreRevealed(props.match.id);
   return (
     <HeroView
       {...props}
       signal={signal}
-      scoreHidden={scoreHidden}
+      scoreHidden={!revealed}
       onReveal={() => revealScore(props.match.id)}
+      onHide={() => hideScore(props.match.id)}
     />
   );
 }

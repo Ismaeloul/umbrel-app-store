@@ -37,7 +37,7 @@
   display: block;
 }
 /* Flechas: solo con ratón y desbordamiento; flotan sobre los bordes. */
-.prail__arrow {
+.prail .prail__arrow {
   position: absolute;
   top: 50%;
   z-index: 1;

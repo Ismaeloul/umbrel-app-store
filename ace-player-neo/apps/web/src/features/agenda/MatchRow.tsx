@@ -4,8 +4,10 @@
    competición, el chip «HOY 21:00» / «EN DIRECTO · 13'» / «Final» y los
    nombres; arriba a la derecha, la cápsula de señal (dentro de la fila de
    arriba de la tarjeta, que reparte el sitio con el chip); abajo a la
-   derecha, el marcador en una cápsula o, si el partido es el que ves, TAPADO
-   («Ver marcador», regla 29): nunca en las mitades. Debajo, en la tarjeta
+   derecha, si el partido tiene marcador, la cápsula «Marcador»: en la agenda
+   el marcador va SIEMPRE tapado (corrección 1; DESIGN.md: «oculto tras un
+   toque en la cápsula "Marcador"») y un toque lo destapa EN esa cápsula; otro
+   toque lo vuelve a tapar. Nunca en las mitades. Debajo, en la tarjeta
    normal: la línea fina de progreso en directo y una línea pequeña con el
    estado («En 48 min», «Terminado»), los canales (continuo si está en tu
    biblioteca, discontinuo si se buscará: injerto B3) y la acción.
@@ -15,11 +17,12 @@
    siendo «Ver canal para {title}» / «Buscar canal para {title}» /
    «{title}: canal por confirmar» / «{title}, en directo» (en escritorio, el
    primer toque elige y el segundo, o Intro, abre). El único control dentro es
-   «Ver marcador», por encima de esa capa.
+   la cápsula del marcador («Ver marcador de {Local} vs {Visitante}» /
+   «Tapar el marcador de …»), por encima de esa capa.
 
    MatchRowView es de presentación (se prueba sola); MatchRow la conecta con
-   la señal del partido y con el tapado. FlipNum, CensorBars y teamGlow los
-   usan también el escenario y el centro de partido. */
+   la señal del partido y con el destapado. ScoreToggle, FlipNum y teamGlow
+   los usan también el héroe, el panel y el centro de partido. */
 
 import type { FootballMatch, LiveScore } from '@ace/shared';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
@@ -51,7 +54,7 @@ import {
   type ChannelInfo,
   type MatchSignal,
 } from './domain.ts';
-import { revealScore, useScoreHidden } from './score-reveal.ts';
+import { hideScore, revealScore, useScoreRevealed } from './score-reveal.ts';
 
 export type RowPosition = 'first' | 'middle' | 'last' | 'only';
 
@@ -97,16 +100,6 @@ export function FlipNum({
   );
 }
 
-/** Barras de censura del marcador tapado (B5). Decorativas. */
-export function CensorBars({ className }: { className?: string }) {
-  return (
-    <span className={cx('agenda-censor', className)} aria-hidden="true">
-      <i />
-      <i />
-    </span>
-  );
-}
-
 /** Cápsula de señal de un partido: forma (glifo del medidor) + palabra + color. */
 export function SignalCapsule({
   signal,
@@ -132,34 +125,78 @@ export function SignalCapsule({
   );
 }
 
-/** Marcador destapado en una cápsula (nunca en las mitades de la tarjeta). */
-export function ScoreCapsule({
+/**
+ * Cápsula «Marcador» de la agenda: tapada enseña el ojo y la palabra
+ * («Ver marcador de {Local} vs {Visitante}»); un toque destapa ESE partido y
+ * las cifras salen en la misma cápsula, girando como una paleta (B5); otro
+ * toque («Tapar el marcador de …») la vuelve a tapar. Nunca en las mitades
+ * de la tarjeta. Sin marcador (partido por jugar) no se pinta.
+ */
+export function ScoreToggle({
+  match,
   score,
-  reveal = false,
+  revealed,
+  onReveal,
+  onHide,
   size = 'sm',
   glass = true,
+  iconOnly = false,
   className,
 }: {
+  match: Pick<FootballMatch, 'home' | 'away' | 'title'>;
   score: Pick<LiveScore, 'home' | 'away'>;
-  /** Acaba de destaparse: las cifras giran (B5). */
-  reveal?: boolean;
+  revealed: boolean;
+  onReveal(): void;
+  onHide?(): void;
   size?: 'sm' | 'md';
   glass?: boolean;
+  /** Tapada, solo el ojo (tarjetas pequeñas): la palabra queda para el lector. */
+  iconOnly?: boolean;
   className?: string;
 }) {
+  const title = matchTitle(match);
+  // Solo giran las cifras que se destapan con este toque, no las que ya se veían.
+  const [flip, setFlip] = useState(false);
+  if (!revealed)
+    return (
+      <Capsule
+        as="button"
+        tone="neutral"
+        size={size}
+        glass={glass}
+        icon="eye"
+        className={cx('agenda-score', 'is-hidden', iconOnly && 'agenda-score--icon', className)}
+        aria-label={`Ver marcador de ${title}`}
+        title="Ver el marcador (tu emisión puede ir por detrás del directo)"
+        onClick={() => {
+          setFlip(true);
+          haptic('light');
+          onReveal();
+        }}
+      >
+        <span className="agenda-score__word">Marcador</span>
+      </Capsule>
+    );
   return (
     <Capsule
+      as="button"
       tone="neutral"
       size={size}
       glass={glass}
-      className={cx('agenda-score', className)}
-      title="Marcador"
+      className={cx('agenda-score', 'is-shown', className)}
+      aria-label={`Tapar el marcador de ${title}: ${score.home} a ${score.away}`}
+      title="Tapar el marcador"
+      onClick={() => {
+        setFlip(false);
+        haptic('light');
+        onHide?.();
+      }}
     >
-      <FlipNum value={score.home} animateOnMount={reveal} />
+      <FlipNum value={score.home} animateOnMount={flip} />
       <span className="agenda-score__sep" aria-hidden="true">
         –
       </span>
-      <FlipNum value={score.away} animateOnMount={reveal} />
+      <FlipNum value={score.away} animateOnMount={flip} />
     </Capsule>
   );
 }
@@ -171,9 +208,11 @@ export interface MatchRowViewProps {
   signal: MatchSignal | null;
   channels: readonly ChannelInfo[];
   mine: boolean;
-  /** El marcador existe pero es el partido que ves: sale tapado. */
+  /** Marcador tapado (en la agenda, siempre hasta que se pide). */
   scoreHidden: boolean;
   onReveal(): void;
+  /** Segundo toque en la cápsula: vuelve a tapar. */
+  onHide?(): void;
   selected?: boolean;
   /** Tarjeta pequeña con siglas (columna del partido y «Luego»). */
   compact?: boolean;
@@ -198,6 +237,7 @@ export function MatchRowView({
   mine,
   scoreHidden,
   onReveal,
+  onHide,
   selected = false,
   compact = false,
   position = 'only',
@@ -212,8 +252,6 @@ export function MatchRowView({
   const status = matchStatus(match, now, rawScore);
   const phase = status?.phase ?? null;
   const live = phase === 'live';
-  const hidden = scoreHidden && score !== null;
-  const [justRevealed, setJustRevealed] = useState(false);
   const context = useContextMenu();
   const menuOpen = context.menu.open;
   // Pulsación larga (o clic derecho) que abre el menú: háptica media (HAPTIC_MAP).
@@ -225,7 +263,6 @@ export function MatchRowView({
   const action = channels.length === 0 ? null : available ? 'Ver canal' : 'Buscar canal';
   const today = madridClock(now).date;
   const when = versusWhen(match, now, rawScore, today);
-  const shown = score !== null && !hidden ? score : null;
 
   const label =
     interaction === 'select'
@@ -247,7 +284,7 @@ export function MatchRowView({
     '--tb': live ? glow.away : 'transparent',
     ...(staggerIndex !== null ? { '--i': staggerIndex } : null),
   } as CSSProperties;
-  const corner = hidden || shown !== null;
+  const corner = score !== null;
 
   return (
     <article
@@ -293,27 +330,17 @@ export function MatchRowView({
         >
           {signal ? <SignalCapsule signal={signal} /> : null}
         </VersusCard>
-        {/* Abajo a la derecha: el marcador en su cápsula o tapado. */}
-        {corner ? (
+        {/* Abajo a la derecha: la cápsula «Marcador» (tapada por defecto). */}
+        {score ? (
           <div className="agenda-row__corner">
-            {hidden ? (
-              <button
-                type="button"
-                className="agenda-cover press"
-                aria-label="Ver marcador"
-                title="Tu emisión va por detrás del directo"
-                onClick={() => {
-                  setJustRevealed(true);
-                  haptic('light');
-                  onReveal();
-                }}
-              >
-                <CensorBars />
-                {compact ? null : <span className="agenda-cover__text">Ver marcador</span>}
-              </button>
-            ) : shown ? (
-              <ScoreCapsule score={shown} reveal={justRevealed} />
-            ) : null}
+            <ScoreToggle
+              match={match}
+              score={score}
+              revealed={!scoreHidden}
+              onReveal={onReveal}
+              onHide={onHide}
+              iconOnly={compact}
+            />
           </div>
         ) : null}
       </div>
@@ -379,28 +406,27 @@ export function MatchRowView({
 
 export interface MatchRowProps extends Omit<
   MatchRowViewProps,
-  'signal' | 'scoreHidden' | 'onReveal'
+  'signal' | 'scoreHidden' | 'onReveal' | 'onHide'
 > {
-  /** Cuenta como el partido que ves aunque el reproductor no haya arrancado (columna del partido). */
-  alsoWatched?: boolean;
   /** false: no pide la señal (tarjetas que no se ven). */
   signalEnabled?: boolean;
 }
 
-/** La tarjeta conectada: pide su señal y sabe si su marcador va tapado. */
-export function MatchRow({ alsoWatched = false, signalEnabled = true, ...props }: MatchRowProps) {
+/** La tarjeta conectada: pide su señal y sabe si su marcador está destapado. */
+export function MatchRow({ signalEnabled = true, ...props }: MatchRowProps) {
   const status = matchStatus(props.match, props.now, props.score);
   const signal = useMatchSignal(props.match, props.now, {
     enabled: signalEnabled,
     finished: status?.phase === 'done',
   });
-  const scoreHidden = useScoreHidden(props.match.id, alsoWatched);
+  const revealed = useScoreRevealed(props.match.id);
   return (
     <MatchRowView
       {...props}
       signal={signal}
-      scoreHidden={scoreHidden}
+      scoreHidden={!revealed}
       onReveal={() => revealScore(props.match.id)}
+      onHide={() => hideScore(props.match.id)}
     />
   );
 }

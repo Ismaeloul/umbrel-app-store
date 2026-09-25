@@ -2,10 +2,14 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { setPlayerPresence } from '../../app/player-presence.ts';
 import {
+  hideScore,
+  isScoreRevealed,
   resetScoreReveal,
   resetScoreRevealForTests,
   revealScore,
+  useRevealedScores,
   useScoreHidden,
+  useScoreRevealed,
   useWatchedMatch,
   watchedMatchOf,
 } from './score-reveal.ts';
@@ -60,5 +64,24 @@ describe('marcador tapado del partido que ves (regla 29, corrección 2)', () => 
   it('«alsoWatched»: la columna tapa el partido abierto aunque aún no suene', () => {
     const { result } = renderHook(() => useScoreHidden('x', true));
     expect(result.current).toBe(true);
+  });
+});
+
+describe('agenda: todo tapado hasta que se pide (corrección 1)', () => {
+  it('destapar y tapar un partido; detener lo olvida (regla 29)', () => {
+    setPlayerPresence({ active: true, route: partido('a') });
+    const { result } = renderHook(() => ({
+      x: useScoreRevealed('x'),
+      all: useRevealedScores(),
+    }));
+    expect(result.current.x).toBe(false);
+    act(() => revealScore('x'));
+    expect(result.current.x).toBe(true);
+    expect(isScoreRevealed(result.current.all, 'x')).toBe(true);
+    act(() => hideScore('x'));
+    expect(result.current.x).toBe(false);
+    act(() => revealScore('x'));
+    act(() => setPlayerPresence({ active: false }));
+    expect(result.current.x).toBe(false);
   });
 });

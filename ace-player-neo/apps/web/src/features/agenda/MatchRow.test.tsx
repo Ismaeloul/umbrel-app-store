@@ -8,6 +8,7 @@ function renderRow(overrides: Partial<MatchRowViewProps> & { match?: FootballMat
   const onOpen = vi.fn();
   const onSelect = vi.fn();
   const onReveal = vi.fn();
+  const onHide = vi.fn();
   const match =
     overrides.match ??
     matchAt(30, { home: 'Real Madrid', away: 'Bayern', title: 'Real Madrid - Bayern' });
@@ -19,15 +20,19 @@ function renderRow(overrides: Partial<MatchRowViewProps> & { match?: FootballMat
       signal={null}
       channels={[{ name: 'M+ Liga de Campeones', inLibrary: true }]}
       mine={false}
-      scoreHidden={false}
+      scoreHidden
       onReveal={onReveal}
+      onHide={onHide}
       onOpen={onOpen}
       onSelect={onSelect}
       {...overrides}
     />,
   );
-  return { ...utils, onOpen, onSelect, onReveal, match };
+  return { ...utils, onOpen, onSelect, onReveal, onHide, match };
 }
+
+/** Cifras de marcador pintadas en la tarjeta (ninguna mientras esté tapado). */
+const digits = (container: HTMLElement) => container.querySelectorAll('.agenda-score .num');
 
 describe('tarjeta de partido', () => {
   it('hora, cuenta atrás, equipos y «Ver canal para …» cuando el canal está en tu biblioteca', () => {
@@ -53,16 +58,18 @@ describe('tarjeta de partido', () => {
     expect(screen.getByRole('button', { name: /canal por confirmar/ })).toBeInTheDocument();
   });
 
-  it('en directo: chip con el minuto, marcador en su cápsula (nunca en las mitades) y barra del partido', () => {
+  it('en directo: chip con el minuto, marcador TAPADO por defecto (cápsula «Marcador») y barra del partido', () => {
     const match = matchAt(-60, { home: 'Atlético', away: 'Tottenham' });
     const { container } = renderRow({ match, score: liveScore(2, 1, "45'+2'") });
     expect(screen.getByText("En directo · 45+2'")).toBeInTheDocument();
     expect(screen.getByText('En directo')).toBeInTheDocument();
     expect(container.querySelector('.agenda-row')).toHaveClass('is-live');
     expect(container.querySelector('.versus')).toHaveAttribute('data-when', 'live');
-    const score = screen.getByTitle('Marcador');
-    expect(score).toHaveClass('agenda-score');
-    expect(score).toHaveTextContent(/2.*1/);
+    // Sin cifras en ningún sitio: ni en la tarjeta ni en su esquina.
+    expect(digits(container)).toHaveLength(0);
+    expect(container.textContent).not.toMatch(/2\s*[–-]\s*1/);
+    const toggle = screen.getByRole('button', { name: 'Ver marcador de Atlético vs Tottenham' });
+    expect(toggle).toHaveTextContent('Marcador');
     expect(container.querySelector('.versus .agenda-score')).toBeNull();
     expect(screen.getByRole('progressbar', { name: 'Progreso del partido' })).toBeInTheDocument();
   });
@@ -82,23 +89,21 @@ describe('tarjeta de partido', () => {
     const other = renderRow({ match, score: liveScore(2, 1, "60'") });
     expect(other.container.querySelector('.agenda-row')).toHaveClass('has-corner');
     const corner = other.container.querySelector('.agenda-row__corner') as HTMLElement;
-    expect(within(corner).getByTitle('Marcador')).toBeInTheDocument();
+    expect(within(corner).getByRole('button', { name: /^Ver marcador de / })).toBeInTheDocument();
   });
 
-  it('el partido que ves sale TAPADO y se destapa con un toque (regla 29)', () => {
+  it('la cápsula «Marcador» destapa ESE partido en la misma cápsula y otro toque lo tapa', () => {
     const match = matchAt(-30, { home: 'Girona', away: 'Sevilla' });
-    const { onReveal, onOpen, container, rerender } = renderRow({
+    const { onReveal, onHide, onOpen, container, rerender } = renderRow({
       match,
       score: liveScore(1, 1),
-      scoreHidden: true,
     });
-    expect(container.querySelector('.agenda-score')).toBeNull();
-    const reveal = screen.getByRole('button', { name: 'Ver marcador' });
-    expect(reveal).toHaveAttribute('title', 'Tu emisión va por detrás del directo');
+    expect(digits(container)).toHaveLength(0);
+    const reveal = screen.getByRole('button', { name: 'Ver marcador de Girona vs Sevilla' });
     fireEvent.click(reveal);
     expect(onReveal).toHaveBeenCalled();
     expect(onOpen).not.toHaveBeenCalled();
-    rerender(
+    const view = (hidden: boolean) => (
       <MatchRowView
         match={match}
         now={NOW}
@@ -106,15 +111,37 @@ describe('tarjeta de partido', () => {
         signal={null}
         channels={[]}
         mine={false}
-        scoreHidden={false}
+        scoreHidden={hidden}
         onReveal={onReveal}
+        onHide={onHide}
         onOpen={onOpen}
-      />,
+      />
     );
-    expect(screen.queryByRole('button', { name: 'Ver marcador' })).toBeNull();
-    expect(screen.getByTitle('Marcador')).toHaveTextContent(/1.*1/);
+    rerender(view(false));
+    expect(screen.queryByRole('button', { name: /^Ver marcador de/ })).toBeNull();
+    const shown = screen.getByRole('button', {
+      name: 'Tapar el marcador de Girona vs Sevilla: 1 a 1',
+    });
+    expect(shown).toHaveClass('agenda-score', 'is-shown');
+    expect(digits(container)).toHaveLength(2);
     // Al destapar las cifras giran como una paleta (B5).
     expect(container.querySelector('.agenda-flip')).not.toBeNull();
+    // El nombre del botón de la tarjeta nunca lleva el resultado.
+    expect(screen.getByRole('button', { name: 'Girona vs Sevilla: canal por confirmar' })).toBe(
+      container.querySelector('.agenda-row__hit'),
+    );
+    fireEvent.click(shown);
+    expect(onHide).toHaveBeenCalled();
+    expect(onOpen).not.toHaveBeenCalled();
+    rerender(view(true));
+    expect(digits(container)).toHaveLength(0);
+  });
+
+  it('en la tarjeta pequeña, tapado, solo el ojo (la palabra, para el lector)', () => {
+    const match = matchAt(-30, { home: 'Girona', away: 'Sevilla' });
+    renderRow({ match, score: liveScore(1, 1), compact: true });
+    const toggle = screen.getByRole('button', { name: 'Ver marcador de Girona vs Sevilla' });
+    expect(toggle).toHaveClass('agenda-score--icon');
   });
 
   it('terminado y «Tu equipo» sin cambiar de sitio', () => {

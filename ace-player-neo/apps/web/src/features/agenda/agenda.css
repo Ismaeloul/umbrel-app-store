@@ -103,17 +103,16 @@
   padding-inline: 26px 30px;
   font-size: var(--fs-17);
 }
-/* «Marcador» y el marcador destapado: cápsulas altas junto al botón. */
-.agenda-hero__reveal.capsule,
-.agenda-hero__score.capsule {
+/* «Marcador» junto al botón: cápsula alta; destapada, las cifras grandes. */
+.agenda-hero__score.agenda-score.capsule {
   height: var(--tap);
   padding-inline: 16px 18px;
   font-size: var(--fs-15);
 }
-.agenda-hero__reveal.capsule--button::before {
-  inset: -4px -2px;
+.agenda-hero__score.agenda-score.capsule--button::before {
+  inset: 0 -2px;
 }
-.agenda-hero__score.capsule {
+.agenda-hero__score.agenda-score.is-shown.capsule {
   gap: 8px;
   font-size: var(--fs-22);
 }
@@ -524,7 +523,7 @@
 .agenda-list {
   position: relative;
   display: grid;
-  gap: var(--s-6);
+  gap: var(--s-4);
   min-width: 0;
 }
 .agenda-list--next {
@@ -587,10 +586,23 @@
 .agenda-rail {
   --prail-item-w: var(--agenda-card-w);
 }
+/* Bajo las tarjetas va su línea de canales (no la sombra del cartel): el aire
+   de abajo del carrusel sobra y dejaba un hueco grande antes de la
+   competición siguiente. */
+.agenda-rail .prail__track {
+  padding-bottom: 4px;
+}
+/* Las flechas flotan sobre el carrusel: `.press` (base.css, que se carga
+   después) les ponía `position: relative` y cada flecha ocupaba 44 px de alto
+   encima y debajo de la fila que se desborda (el hueco grande antes de la
+   competición siguiente). Pendiente de arreglar en ui/PosterRail.css. */
+.agenda-rail .prail__arrow {
+  position: absolute;
+}
 
 /* ---- Tarjeta de partido -------------------------------------------------------------
    Toda la tarjeta es UN botón (capa invisible por encima); lo demás no
-   captura el puntero salvo «Ver marcador», que va por encima de esa capa. */
+   captura el puntero salvo la cápsula «Marcador», por encima de esa capa. */
 .agenda-row {
   --ta: transparent;
   --tb: transparent;
@@ -671,8 +683,8 @@
   margin-right: 4px;
 }
 
-/* Abajo a la derecha: el marcador en su cápsula o tapado; los nombres le
-   dejan sitio. */
+/* Abajo a la derecha: la cápsula «Marcador» (tapada por defecto; destapada,
+   las cifras). Los nombres le dejan sitio. */
 .agenda-row__corner {
   position: absolute;
   z-index: 4;
@@ -681,83 +693,69 @@
   display: flex;
 }
 .agenda-row.has-corner .versus__bottom {
-  padding-right: 64px;
+  padding-right: 104px;
 }
-.agenda-row.has-corner:has(.agenda-cover) .versus__bottom {
-  padding-right: 112px;
+.agenda-row.has-corner:has(.agenda-score.is-shown) .versus__bottom,
+.agenda-row--compact.has-corner .versus__bottom {
+  padding-right: 60px;
 }
 .agenda-row--compact .agenda-row__corner {
   right: 10px;
   bottom: 10px;
 }
-.agenda-row--compact.has-corner .versus__bottom {
-  padding-right: 56px;
-}
 
-/* Marcador tapado (corrección 2, B5): barras de censura y «Ver marcador». */
-.agenda-censor {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 3px;
-}
-.agenda-censor i {
-  display: block;
-  width: 9px;
-  height: 13px;
-  border-radius: 3px;
-  background: currentColor;
-  opacity: 0.5;
-}
-.agenda-cover {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 32px;
-  padding: 0 12px 0 10px;
-  border-radius: var(--r-pill);
-  color-scheme: dark;
-  color: var(--on-video);
-  background: var(--glass-video);
-  -webkit-backdrop-filter: var(--blur-video);
-  backdrop-filter: var(--blur-video);
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.16);
-  font-size: var(--fs-12);
-  font-weight: 700;
-  font-stretch: var(--w-tight);
-  white-space: nowrap;
-  cursor: pointer;
+/* ---- Cápsula del marcador (ScoreToggle) --------------------------------------------
+   Tapada: ojo + «Marcador». Destapada: las cifras en la misma cápsula. Es el
+   único control dentro de la tarjeta: recibe el puntero por encima de la capa
+   que abre el partido. */
+.agenda-score.capsule {
   pointer-events: auto;
-}
-/* Zona táctil de 44 aunque el dibujo mida 32. */
-.agenda-cover::before {
-  content: '';
-  position: absolute;
-  inset: -6px -4px;
-}
-.agenda-row--compact .agenda-cover {
-  padding-inline: 9px;
-}
-:root[data-transparency='reduced'] .agenda-cover {
-  background: var(--glass-video-solid);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-}
-@media (prefers-reduced-transparency: reduce) {
-  .agenda-cover {
-    background: var(--glass-video-solid);
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
-}
-
-/* Marcador destapado en su cápsula; las cifras giran como una paleta (B5). */
-.agenda-score {
+  height: 28px;
   gap: 5px;
+  padding-inline: 9px 10px;
+}
+.agenda-score.is-shown.capsule {
+  padding-inline: 10px;
+  font-size: var(--fs-13);
+  font-weight: 760;
+}
+/* Zona táctil de 44 aunque el dibujo mida 28. */
+.agenda-score.capsule--button::before {
+  inset: -8px -6px;
 }
 .agenda-score__sep {
   opacity: 0.6;
 }
+/* Solo el ojo (tarjetas pequeñas y la tarjeta del móvil): la palabra se
+   queda para el lector de pantalla (el nombre accesible ya la dice). */
+.agenda-score--icon .capsule__text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.agenda-score--icon.capsule {
+  padding-inline: 7px;
+}
+@container agenda-row (max-width: 280px) {
+  .agenda-score.is-hidden .capsule__text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .agenda-score.is-hidden.capsule {
+    padding-inline: 7px;
+  }
+  .agenda-row.has-corner .versus__bottom {
+    padding-right: 60px;
+  }
+}
+
 .agenda-flip {
   display: inline-flex;
   transform-origin: 50% 50%;
@@ -903,7 +901,7 @@
 
 /* ---- Escritorio: filas + panel del partido elegido --------------------------------- */
 @media (min-width: 1024px) {
-  .agenda--stage .agenda__body {
+  .agenda--stage .agenda__body--side {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(340px, 400px);
     column-gap: var(--s-6);
@@ -926,7 +924,7 @@
   }
 }
 @media (min-width: 1280px) {
-  .agenda--stage .agenda__body {
+  .agenda--stage .agenda__body--side {
     grid-template-columns: minmax(0, 1fr) minmax(380px, 440px);
     column-gap: var(--s-8);
   }
@@ -1031,11 +1029,18 @@
 /* «Luego»: fila de tarjetas pequeñas bajo el panel. */
 .agenda-later {
   display: grid;
-  gap: var(--s-2);
+  gap: 10px;
   min-width: 0;
 }
 .agenda-later__title {
   padding-inline: 4px;
+}
+/* Rejilla de tarjetas pequeñas: dos por fila en la columna, sin carrusel. */
+.agenda-later__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 10px;
+  min-width: 0;
 }
 .agenda-later .agenda-row--compact .versus {
   aspect-ratio: 3 / 2;
@@ -1105,9 +1110,6 @@
   color: var(--live-ink);
   font-size: var(--fs-caption);
   font-weight: 760;
-}
-.agenda-strip .agenda-censor {
-  color: var(--text-3);
 }
 
 /* ---- Columna compacta del centro de partido ---------------------------------------- */

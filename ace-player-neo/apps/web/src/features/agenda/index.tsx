@@ -16,6 +16,13 @@
    partido ELEGIDO (tarjeta grande, señal, dónde se emite, acción) y «Luego»;
    desde 1280, arriba del panel, la tira de directos (B1). Un clic en una
    tarjeta la lleva al panel; un segundo clic, doble clic o Intro la abre.
+   Mientras el elegido sea el del héroe, el panel no se repite: el lateral
+   deja el sitio a la tira de directos y a «Luego».
+
+   Marcadores: en la agenda van SIEMPRE tapados (corrección 1; DESIGN.md: «el
+   marcador vive oculto tras un toque en la cápsula "Marcador", nunca en la
+   imagen»). Cada partido con marcador lleva su cápsula «Marcador», que lo
+   destapa y lo vuelve a tapar (score-reveal.ts); el menú contextual también.
 
    §5.1: sin canales anunciados sale «El canal todavía no está anunciado»; con
    canales se abre el centro de partido, que es quien resuelve el canal
@@ -46,7 +53,6 @@ import {
   IconButton,
   LiveDot,
   Num,
-  PosterRail,
   Segmented,
   Skeleton,
   type MenuItem,
@@ -83,7 +89,13 @@ import {
 import { FirstUseCard } from './FirstUseCard.tsx';
 import { AgendaHero } from './Hero.tsx';
 import { MatchRow } from './MatchRow.tsx';
-import { revealScore, useWatchedMatch } from './score-reveal.ts';
+import {
+  hideScore,
+  isScoreRevealed,
+  revealScore,
+  useRevealedScores,
+  useWatchedMatch,
+} from './score-reveal.ts';
 import { AgendaStage, LiveStrip } from './Stage.tsx';
 import { setAgendaDay, setAgendaMode, setAgendaSelected, useAgendaUi } from './state.ts';
 
@@ -128,6 +140,7 @@ export default function Agenda({ active }: ViewProps) {
   const lookup = useLibraryLookup();
   const ui = useAgendaUi();
   const watched = useWatchedMatch();
+  const revealed = useRevealedScores();
 
   const [prefsOpen, setPrefsOpen] = useState(false);
   const [prefsMounted, setPrefsMounted] = useState(false);
@@ -283,7 +296,11 @@ export default function Agenda({ active }: ViewProps) {
     );
   };
 
-  const menuFor = (match: FootballMatch, available: boolean, hidden: boolean): MenuItem[] => {
+  const menuFor = (
+    match: FootballMatch,
+    available: boolean,
+    score: 'hidden' | 'shown' | null,
+  ): MenuItem[] => {
     const items: MenuItem[] = [];
     if (match.channels?.length) {
       items.push({
@@ -293,12 +310,19 @@ export default function Agenda({ active }: ViewProps) {
         onSelect: () => openMatch(match),
       });
     }
-    if (hidden) {
+    if (score === 'hidden') {
       items.push({
         id: 'marcador',
         label: 'Ver marcador',
         icon: 'eye',
         onSelect: () => revealScore(match.id),
+      });
+    } else if (score === 'shown') {
+      items.push({
+        id: 'marcador',
+        label: 'Tapar el marcador',
+        icon: 'eye-off',
+        onSelect: () => hideScore(match.id),
       });
     }
     for (const team of [match.home, match.away].filter(Boolean)) {
@@ -421,7 +445,12 @@ export default function Agenda({ active }: ViewProps) {
     const channels = channelInfo(match, lookup);
     const available = channels.some((channel) => channel.inLibrary);
     const score = scores[match.id] ?? null;
-    const hidden = watched === match.id && paintableScore(score) !== null;
+    const scoreState =
+      paintableScore(score) === null
+        ? null
+        : isScoreRevealed(revealed, match.id)
+          ? 'shown'
+          : 'hidden';
     return (
       <MatchRow
         key={match.id}
@@ -440,7 +469,7 @@ export default function Agenda({ active }: ViewProps) {
             ? partidoTransitionName(match.id)
             : null
         }
-        menuItems={menuFor(match, available, hidden)}
+        menuItems={menuFor(match, available, scoreState)}
         staggerIndex={staggerIndex}
       />
     );
@@ -583,6 +612,14 @@ export default function Agenda({ active }: ViewProps) {
   );
 
   const selectedScore = selected ? (scores[selected.id] ?? null) : null;
+  /* El elegido es el del héroe (lo normal al entrar): el panel no repite su
+     tarjeta grande, que está justo encima; el lateral se queda con la tira
+     de directos y «Luego». Al elegir otra tarjeta, el panel la enseña. */
+  const heroSelected = hero !== null && selected !== null && selected.id === featured?.id;
+  const sideVisible =
+    stageVisible &&
+    selected !== null &&
+    (!heroSelected || later.length > 0 || (kind === 'wide' && liveCount > 0));
   const dayText = day ? dayLabel(day, today) : null;
 
   /* Resumen para lectores de pantalla (regla 36: `aria-live` en la agenda):
@@ -670,7 +707,7 @@ export default function Agenda({ active }: ViewProps) {
       {showCard ? (
         <FirstUseCard onCustomize={openPreferences} onSkip={skipFirstUse} busy={save.isPending} />
       ) : null}
-      <div className="agenda__body">
+      <div className={cx('agenda__body', sideVisible && 'agenda__body--side')}>
         <div
           ref={listRef}
           id="agenda-lista"
@@ -687,8 +724,11 @@ export default function Agenda({ active }: ViewProps) {
         >
           {content}
         </div>
-        {stageVisible && selected ? (
-          <aside className="agenda__side" aria-label="Partido elegido">
+        {sideVisible && selected ? (
+          <aside
+            className={cx('agenda__side', heroSelected && 'agenda__side--later')}
+            aria-label={heroSelected ? 'Más partidos' : 'Partido elegido'}
+          >
             {kind === 'wide' ? (
               <LiveStrip
                 matches={matches}
@@ -698,23 +738,27 @@ export default function Agenda({ active }: ViewProps) {
                 onSelect={(match) => setAgendaSelected(match.id)}
               />
             ) : null}
-            <AgendaStage
-              key={selected.id}
-              match={selected}
-              now={now}
-              today={today}
-              score={selectedScore}
-              channels={channelInfo(selected, lookup)}
-              mine={isMine(selected, preferences)}
-              watching={watched === selected.id}
-              onOpen={openMatch}
-            />
+            {heroSelected ? null : (
+              <AgendaStage
+                key={selected.id}
+                match={selected}
+                now={now}
+                today={today}
+                score={selectedScore}
+                channels={channelInfo(selected, lookup)}
+                mine={isMine(selected, preferences)}
+                watching={watched === selected.id}
+                onOpen={openMatch}
+              />
+            )}
             {later.length ? (
               <section className="agenda-later" aria-labelledby="agenda-luego">
                 <h3 id="agenda-luego" className="agenda-later__title">
                   Luego
                 </h3>
-                <PosterRail label="Luego" list itemWidth="220px" className="agenda-later__rail">
+                {/* Rejilla de tarjetas pequeñas (sin carrusel: en la columna
+                    caben dos por fila y no queda hueco bajo el título). */}
+                <div className="agenda-later__grid">
                   {later.map((match, index) => (
                     <MatchRow
                       key={match.id}
@@ -738,7 +782,7 @@ export default function Agenda({ active }: ViewProps) {
                       onSelect={(chosen) => setAgendaSelected(chosen.id)}
                     />
                   ))}
-                </PosterRail>
+                </div>
               </section>
             ) : null}
           </aside>
