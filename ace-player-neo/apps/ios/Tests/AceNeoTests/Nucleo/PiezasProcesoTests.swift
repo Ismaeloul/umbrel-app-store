@@ -112,10 +112,11 @@ final class PiezasProcesoTests: XCTestCase {
         XCTAssertEqual(c.avisos.cola.toasts.first?.icono, .trash)
         let borrado = await llegaA { !c.bajas.pendiente(hash) }
         XCTAssertTrue(borrado)
-        let rutas = MockURLProtocol.peticiones.map { "($0.httpMethod ?? "?") ($0.url?.path() ?? "?")" }
+        let rutas = MockURLProtocol.peticiones.map { ($0.httpMethod ?? "?") + " " + ($0.url?.path() ?? "?") }
+        let avisos = PruebaDatos.toasts(c.avisos)
         let peticion = try XCTUnwrap(
             MockURLProtocol.peticiones.first { $0.url?.path() == "/native/api/v1/library" },
-            "Peticiones: (rutas); avisos: (PruebaDatos.toasts(c.avisos))")
+            "Peticiones: \(rutas); avisos: \(avisos)")
         let cuerpo = try JSONSerialization.jsonObject(with: try XCTUnwrap(peticion.httpBody)) as? [String: String]
         XCTAssertEqual(cuerpo?["action"], "delete")
         XCTAssertEqual(cuerpo?["collection"], "web")
