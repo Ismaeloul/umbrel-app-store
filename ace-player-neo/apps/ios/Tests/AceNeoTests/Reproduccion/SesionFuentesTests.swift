@@ -8,6 +8,11 @@ private final class EntornoFuentesDePrueba: EntornoSesionFuentes {
     let api: APIClient
     let reproductor: Reproductor
     let avisos = Avisos()
+    let haptica = Haptica()
+    let hojas = CentroHojas()
+    let reloj: any Reloj = RelojSistema()
+    var visor: String { reproductor.visor }
+    var tiempoRealAbierto: Bool { false }
 
     init(api: APIClient, reproductor: Reproductor) {
         self.api = api
@@ -25,6 +30,8 @@ private final class EntornoFuentesDePrueba: EntornoSesionFuentes {
 /// - manual (la persona eligió): nunca se salta sola y se le pide otra.
 ///
 /// Poda (fase 0.2): era `CentroPartidoTests` con `AppModel`; ahora con `EntornoSesionFuentes`.
+/// Fase 0.3b: prueba `SesionFuentesPartido` (lo rescatado, referencia de M3); el contrato
+/// `SesionFuentes` de §2.6 lo prueba M3 cuando porte session.ts.
 final class SesionFuentesTests: XCTestCase {
     private let fuenteA = ServidorSimulado.fuenteA
     private let fuenteB = ServidorSimulado.fuenteB
@@ -41,7 +48,7 @@ final class SesionFuentesTests: XCTestCase {
     }
 
     @MainActor
-    private func preparar() throws -> (EntornoFuentesDePrueba, MotorFalso, SesionFuentes) {
+    private func preparar() throws -> (EntornoFuentesDePrueba, MotorFalso, SesionFuentesPartido) {
         MockURLProtocol.responder { peticion in
             let (codigo, tipo, datos) = ServidorSimulado.respuesta(a: peticion)
             return (codigo, ["Content-Type": tipo], datos)
@@ -61,7 +68,7 @@ final class SesionFuentesTests: XCTestCase {
         let app = EntornoFuentesDePrueba(api: entorno.api, reproductor: reproductor)
         retenidos.append(app)
         let partido = try JSONDecoder().decode(FootballMatch.self, from: Data(partidoJSON.utf8))
-        return (app, motor, SesionFuentes(partido: partido, entorno: app))
+        return (app, motor, SesionFuentesPartido(partido: partido, entorno: app))
     }
 
     /// Peticiones de vídeo (`channels/<id>/stream`) de una fuente.

@@ -191,6 +191,14 @@ public struct SettingsResponse: Codable, Sendable, Hashable {
     public var source: SettingsSource
 }
 
+/// `SettingsUpdateBodySchema`: PUT settings (0.8.1: también desde la app emparejada). Firma de I0
+/// (b-arquitectura §2.5.2) para que `DatosApp` compile; M1 lo completa si hace falta.
+struct SettingsUpdateBody: Codable, Sendable, Hashable {
+    var sameChannelPolicy: SameChannelPolicy?
+
+    init(sameChannelPolicy: SameChannelPolicy? = nil) { self.sameChannelPolicy = sameChannelPolicy }
+}
+
 // MARK: - Dispositivos y emparejamiento
 
 /// `DevicePlatformSchema`.
@@ -207,6 +215,18 @@ public struct Device: Codable, Sendable, Hashable, Identifiable {
     public var createdAt: String
     public var lastSeenAt: String?
     public var revokedAt: String?
+}
+
+/// `PairingCreateBodySchema`: POST pairing (0.8.1: también desde la app emparejada). `baseUrl` va la
+/// primera en el QR; `alternateBaseUrls` (como mucho 2), detrás. Firma de I0 (b-arquitectura §2.5.2).
+struct PairingCreateBody: Codable, Sendable, Hashable {
+    var baseUrl: String?
+    var alternateBaseUrls: [String]?
+
+    init(baseUrl: String? = nil, alternateBaseUrls: [String]? = nil) {
+        self.baseUrl = baseUrl
+        self.alternateBaseUrls = alternateBaseUrls
+    }
 }
 
 /// `PairingCreateResponseSchema` (lo crea la web; la app solo lo decodifica en los tests).

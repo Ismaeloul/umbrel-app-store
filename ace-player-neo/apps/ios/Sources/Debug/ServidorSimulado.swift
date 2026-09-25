@@ -5,23 +5,25 @@
     /// Servidor simulado para las pruebas de interfaz (XCUITest). Solo existe
     /// en Debug: la IPA (Release) no lo lleva.
     ///
-    /// Se activa lanzando la app con `-AceNeoServidorSimulado`. Responde como
-    /// un Ace Player Neo con el código `482913`, una agenda de hoy, dos fuentes
-    /// verificadas por partido y una biblioteca con un favorito, sin red, sin
-    /// Llavero y sin tocar lo guardado de verdad. Con `-AceNeoEmparejado`
-    /// arranca ya emparejada.
+    /// Lo usa `ServidorDemo` (provisional de la fase 0.3b) con `-AceNeoDemo` o
+    /// `-AceNeoServidorSimulado`. Responde como un Ace Player Neo con el código
+    /// `482913`, una agenda de hoy, dos fuentes verificadas por partido y una
+    /// biblioteca con un favorito, sin red, sin Llavero y sin tocar lo guardado de
+    /// verdad. M2 lo borra cuando `ServidorDemo` sirva la demo de la web.
     enum ServidorSimulado {
         static let codigoValido = "482913"
         static let tokenSimulado = "dev_simulado.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 
-        static func entorno() -> Entorno {
+        /// - Parameter emparejado: arranca ya emparejada (token y dirección de casa). Desde la fase 0.3b lo
+        ///   decide `ServidorDemo` (sin `-AceNeoSinEmparejar`); antes era `-AceNeoEmparejado`.
+        static func entorno(emparejado: Bool) -> Entorno {
             let config = URLSessionConfiguration.ephemeral
             config.protocolClasses = [ProtocoloSimulado.self]
             let suite = "es.ismaeloul.aceplayerneo.uitests"
             let configuracion = ServerConfigStore(suite: suite)
             configuracion.borrar()
             let tokens = MemoryTokenStore()
-            if ProcessInfo.processInfo.arguments.contains("-AceNeoEmparejado") {
+            if emparejado {
                 configuracion.guardar(ServerConfig(lan: URL(string: "http://umbrel.local:7792")))
                 try? tokens.guardarToken(tokenSimulado)
             }

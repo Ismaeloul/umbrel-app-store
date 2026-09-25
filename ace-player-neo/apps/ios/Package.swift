@@ -4,7 +4,7 @@
 // probarlos en Linux (Docker en el PC: scripts/probar-linux.ps1; trabajo nucleo-linux en la CI).
 // XcodeGen no lo ve: la app se compila siempre con AceNeo.xcodeproj.
 // Solo I0 y el integrador lo tocan. Cuando llegue un fichero [L] nuevo fuera de las carpetas
-// de abajo (App/MigracionClaves.swift, Debug/DemoNucleo), se añade a `sources`.
+// de abajo (p. ej. Debug/DemoNucleo, de M2), se añade a `sources`.
 import PackageDescription
 
 let package = Package(
@@ -29,6 +29,7 @@ let package = Package(
                 "Player/MaquinaConexion.swift",
                 "Player/Directo.swift",
                 "Player/TiposReproduccion.swift",
+                "App/MigracionClaves.swift",
             ],
             swiftSettings: [.swiftLanguageMode(.v6), .define("DEBUG")]
         ),

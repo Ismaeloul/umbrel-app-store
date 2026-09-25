@@ -57,7 +57,9 @@ public struct Entorno: Sendable {
     /// El que toca según cómo se ha lanzado la app.
     public static func actual() -> Entorno {
         #if DEBUG
-            if ModoEjecucion.servidorSimulado { return ServidorSimulado.entorno() }
+            if ModoEjecucion.demo || ModoEjecucion.servidorSimulado {
+                return ServidorDemo.entorno(opciones: ModoEjecucion.opcionesSimulado)
+            }
             if ModoEjecucion.empezarDeCero { olvidarTodo() }
         #endif
         return real()
@@ -76,31 +78,74 @@ public struct Entorno: Sendable {
     #endif
 }
 
-/// Cómo se ha lanzado el proceso.
+/// Cómo se ha lanzado el proceso: los argumentos de lanzamiento de b-arquitectura §3.3.1 (I0 los
+/// declara; M2 los hace funcionar). Todos cuentan SOLO en Debug: en la IPA (Release) son `false`/`nil`.
 public enum ModoEjecucion {
     /// Dentro de los tests unitarios (la app hace de anfitriona y no debe arrancar nada).
     public static var testsUnitarios: Bool {
         ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
-            && !servidorSimulado
+            && !servidorSimulado && !demo
     }
 
-    /// Pruebas de interfaz: servidor simulado y nada persistente.
-    public static var servidorSimulado: Bool {
-        ProcessInfo.processInfo.arguments.contains("-AceNeoServidorSimulado")
+    /// `-AceNeoDemo`: `ServidorDemo` sin SSE y `modoDemo = true` («Modo demo» en vez del motor), como `?demo=1`.
+    static var demo: Bool { argumento("-AceNeoDemo") }
+
+    /// `-AceNeoServidorSimulado`: `ServidorDemo` + `SSEDemo`, sin la cápsula de demo (flujos con tiempo real).
+    public static var servidorSimulado: Bool { argumento("-AceNeoServidorSimulado") }
+
+    /// `-AceNeoSinEmparejar` (con uno de los dos anteriores): arranca en Emparejar (código de la demo 482913).
+    static var sinEmparejar: Bool { argumento("-AceNeoSinEmparejar") }
+
+    /// `-AceNeoReloj <ISO 8601>`: `RelojDesplazado` desde esa hora (capturas: 2026-09-24T19:00:00+02:00).
+    static var reloj: Date? {
+        guard let texto = valor("AceNeoReloj") else { return nil }
+        return ISO8601DateFormatter().date(from: texto)
     }
+
+    /// `-AceNeoEscena <vista>`: `EscenasCaptura` deja la app en esa vista de `final/` (I2).
+    static var escena: String? { valor("AceNeoEscena") }
+
+    /// `-AceNeoTransparenciaReducida`: fuerza la transparencia reducida de la app.
+    static var transparenciaReducida: Bool { argumento("-AceNeoTransparenciaReducida") }
+
+    /// `-AceNeoMovimientoReducido`: fuerza el movimiento reducido (capturas).
+    static var movimientoReducido: Bool { argumento("-AceNeoMovimientoReducido") }
+
+    /// `-AceNeoLaboratorio`: abre el banco de la fase 0 (P).
+    static var laboratorio: Bool { argumento("-AceNeoLaboratorio") }
+
+    /// `-AceNeoSistema`: abre la galería «Sistema» (P).
+    static var sistema: Bool { argumento("-AceNeoSistema") }
 
     /// Prueba de interfaz contra el backend de verdad (pila E2E de la CI): la
     /// app de siempre, pero arrancando sin emparejar. Solo cuenta en Debug.
-    public static var empezarDeCero: Bool {
-        ProcessInfo.processInfo.arguments.contains("-AceNeoEmpezarDeCero")
-    }
+    public static var empezarDeCero: Bool { argumento("-AceNeoEmpezarDeCero") }
 
     /// Apariencia forzada para las capturas (`-AceNeoApariencia claro|oscuro`,
     /// que el sistema deja en el dominio de argumentos de `UserDefaults`).
     /// Solo en Debug: en la IPA manda siempre la del sistema.
-    public static var aparienciaForzada: String? {
+    public static var aparienciaForzada: String? { valor("AceNeoApariencia") }
+
+    #if DEBUG
+        /// Las opciones de `ServidorDemo` que salen de los argumentos.
+        static var opcionesSimulado: OpcionesSimulado {
+            OpcionesSimulado(sinEmparejar: sinEmparejar, tiempoReal: servidorSimulado && !demo, reloj: reloj)
+        }
+    #endif
+
+    /// Un argumento suelto (`-AceNeoX`). Solo en Debug.
+    private static func argumento(_ nombre: String) -> Bool {
         #if DEBUG
-            return UserDefaults.standard.string(forKey: "AceNeoApariencia")
+            return ProcessInfo.processInfo.arguments.contains(nombre)
+        #else
+            return false
+        #endif
+    }
+
+    /// El valor de `-Clave valor` (el sistema lo deja en el dominio de argumentos de `UserDefaults`). Solo en Debug.
+    private static func valor(_ clave: String) -> String? {
+        #if DEBUG
+            return UserDefaults.standard.string(forKey: clave)
         #else
             return nil
         #endif
