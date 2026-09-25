@@ -34,6 +34,18 @@ func arrastrar(_ elemento: XCUIElement, desde: CGVector, hasta: CGVector) {
     inicio.press(forDuration: 0.05, thenDragTo: fin)
 }
 
+/// Toca una pestaña. En iOS 26 la barra se pliega al bajar por una lista
+/// (`tabBarMinimizeBehavior(.onScrollDown)`) y sus botones dejan de verse: si
+/// la pestaña no se puede pulsar, se sube un poco para que la barra vuelva.
+@MainActor
+func tocarPestana(_ app: XCUIApplication, _ titulo: String) {
+    let boton = app.tabBars.buttons[titulo]
+    for _ in 0..<3 where !(boton.waitForExistence(timeout: 2) && boton.isHittable) {
+        app.swipeDown()
+    }
+    boton.tap()
+}
+
 /// Los días de la tira de la agenda.
 @MainActor
 func diasDeLaAgenda(_ app: XCUIApplication) -> XCUIElementQuery {

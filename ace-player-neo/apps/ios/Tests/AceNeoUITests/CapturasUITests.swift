@@ -124,19 +124,10 @@ final class CapturasUITests: XCTestCase {
             captura(app, "\(modo)-09-canales-listas")
         }
 
-        // Buscar en tus canales y en el motor.
-        app.tabBars.buttons["Buscar"].tap()
-        let buscador = app.searchFields.firstMatch
-        XCTAssertTrue(buscador.waitForExistence(timeout: 10), "Sin buscador")
-        buscador.tap()
-        buscador.typeText("dazn\n")
-        XCTAssertTrue(conTextoUI(app, "DAZN 1 HD").waitForExistence(timeout: 15), "Sin resultados")
-        XCTAssertTrue(conTextoUI(app, "En tu biblioteca").exists, "Buscar no enseña lo de tu biblioteca")
-        XCTAssertTrue(conTextoUI(app, "DAZN LaLiga FHD").exists, "Buscar no encuentra en tu biblioteca")
-        captura(app, "\(modo)-10-buscar")
-
         // Ajustes con «Dónde se está reproduciendo» (este iPhone y el ordenador) y Apariencia.
-        app.tabBars.buttons["Ajustes"].tap()
+        // Buscar va al final: en iOS 26, con la pestaña de búsqueda elegida, la
+        // barra se convierte en el buscador y las demás pestañas se recogen.
+        tocarPestana(app, "Ajustes")
         XCTAssertTrue(app.navigationBars["Ajustes"].waitForExistence(timeout: 10), "No abre Ajustes")
         XCTAssertTrue(elementoUI(app, "visor-este-dispositivo").waitForExistence(timeout: 20), "Sin «Este dispositivo»")
         captura(app, "\(modo)-11-ajustes")
@@ -155,6 +146,17 @@ final class CapturasUITests: XCTestCase {
             XCTAssertTrue(app.navigationBars["Listas"].waitForExistence(timeout: 10), "No abre las listas")
             captura(app, "\(modo)-13-ajustes-listas")
         }
+
+        // Buscar en tus canales y en el motor (la captura conserva su número).
+        tocarPestana(app, "Buscar")
+        let buscador = app.searchFields.firstMatch
+        XCTAssertTrue(buscador.waitForExistence(timeout: 10), "Sin buscador")
+        buscador.tap()
+        buscador.typeText("dazn\n")
+        XCTAssertTrue(conTextoUI(app, "DAZN 1 HD").waitForExistence(timeout: 15), "Sin resultados")
+        XCTAssertTrue(conTextoUI(app, "En tu biblioteca").exists, "Buscar no enseña lo de tu biblioteca")
+        XCTAssertTrue(conTextoUI(app, "DAZN LaLiga FHD").exists, "Buscar no encuentra en tu biblioteca")
+        captura(app, "\(modo)-10-buscar")
         app.terminate()
     }
 }

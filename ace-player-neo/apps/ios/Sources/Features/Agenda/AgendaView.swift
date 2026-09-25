@@ -50,6 +50,9 @@ struct AgendaView: View {
                 }
         }
         .reservaMini()
+        // Un solo háptico al abrir el escenario (antes cada tarjeta tenía el suyo y vibraban todas a la vez,
+        // también al cerrarlo).
+        .sensoryFeedback(.impact(weight: .light), trigger: app.escenario?.id) { _, nuevo in nuevo != nil }
         .onChange(of: vm.dias.map(\.date)) { _, fechas in
             if let elegido = diaElegido, fechas.contains(elegido) { return }
             diaElegido = AgendaViewModel.diaInicial(fechas)
@@ -257,7 +260,6 @@ struct AgendaView: View {
                 Label("Abrir el partido", systemImage: "sportscourt")
             }
         }
-        .sensoryFeedback(.impact(weight: .light), trigger: app.escenario?.id)
         .accessibilityHint("Abre el partido")
     }
 
@@ -523,7 +525,6 @@ struct PortadaDestacado: View {
                     .frame(minHeight: Medida.toque)
             }
             .botonOro()
-            .sensoryFeedback(.impact(weight: .medium), trigger: app.escenario?.id)
             .accessibilityIdentifier("boton-ver-ahora")
         } else {
             Button {

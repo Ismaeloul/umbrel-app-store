@@ -291,10 +291,10 @@ struct EscenarioView: View {
                     ControlesVideo(
                         contexto: .grande, visibles: $controlesVisibles, rotulo: rotulo.texto, rotuloEsError: rotulo.error,
                         automatico: centro?.automatico == true && centro?.entradaEnPantalla != nil, titulo: tituloCorto,
-                        alMinimizar: minimizar, alPantallaCompleta: alternarPantallaCompleta)
+                        alMinimizar: { minimizar() }, alPantallaCompleta: { alternarPantallaCompleta() })
                 }
             } else {
-                CajaSinReproduccion(objetivo: objetivo, centro: centro, marcador: marcador, alVer: verAhora)
+                CajaSinReproduccion(objetivo: objetivo, centro: centro, marcador: marcador, alVer: { verAhora() })
             }
             pistasZapping
             if corteNegro {
@@ -443,15 +443,15 @@ struct EscenarioView: View {
                 if !app.pip.activo {
                     ControlesVideo(
                         contexto: .completa, visibles: $controlesVisibles, rotulo: rotulo.texto,
-                        rotuloEsError: rotulo.error, titulo: tituloCorto, alMinimizar: minimizar,
-                        alPantallaCompleta: alternarPantallaCompleta
+                        rotuloEsError: rotulo.error, titulo: tituloCorto, alMinimizar: { minimizar() },
+                        alPantallaCompleta: { alternarPantallaCompleta() }
                     )
                     .padding(.leading, insets.leading)
                     .padding(.trailing, insets.trailing)
                     .padding(.bottom, insets.bottom)
                 }
             } else {
-                CajaSinReproduccion(objetivo: objetivo, centro: centro, marcador: marcador, alVer: verAhora)
+                CajaSinReproduccion(objetivo: objetivo, centro: centro, marcador: marcador, alVer: { verAhora() })
                     .overlay(alignment: .topTrailing) {
                         Button {
                             minimizar()

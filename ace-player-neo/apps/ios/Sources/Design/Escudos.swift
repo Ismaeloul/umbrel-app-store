@@ -172,10 +172,20 @@ extension FootballMatch {
 // MARK: - Vistas
 
 /// Forma de escudo clásico: recto arriba, redondeado abajo hasta la punta.
-public struct FormaEscudo: Shape {
+/// Es `InsettableShape` para que `strokeBorder` (borde por dentro) exista.
+public struct FormaEscudo: InsettableShape {
+    private var margen: CGFloat = 0
+
     public init() {}
 
-    public func path(in rect: CGRect) -> Path {
+    public func inset(by cantidad: CGFloat) -> FormaEscudo {
+        var copia = self
+        copia.margen += cantidad
+        return copia
+    }
+
+    public func path(in marco: CGRect) -> Path {
+        let rect = marco.insetBy(dx: margen, dy: margen)
         let w = rect.width
         let h = rect.height
         let x = rect.minX

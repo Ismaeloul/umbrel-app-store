@@ -324,9 +324,10 @@ tal cual.
 - **Capturas**: `CapturasUITests` recorre TODAS las pantallas en claro y en
   oscuro (`-AceNeoApariencia claro|oscuro`, solo Debug): emparejar, agenda con
   la portada «Para ti» y «Todos», tus gustos, el escenario, la hoja de
-  fuentes, el mini, canales (con las listas agrupadas), buscar, ajustes con
-  «Dónde se está reproduciendo» y Apariencia; el E2E añade las suyas con vídeo
-  real. La CI las saca del `.xcresult` con su nombre (`claro-02-agenda-portada.png`,
+  fuentes, el mini, canales (con las listas agrupadas), ajustes con «Dónde se
+  está reproduciendo», Apariencia y las listas, y buscar al final (en iOS 26,
+  con la pestaña de búsqueda elegida, las demás pestañas se recogen); el E2E
+  añade las suyas con vídeo real. La CI las saca del `.xcresult` con su nombre (`claro-02-agenda-portada.png`,
   `e2e-04-donde-se-esta-reproduciendo.png`…) al artefacto `AceNeo-capturas`;
   los logs de la pila van a `AceNeo-pila-e2e-logs` y el detalle de cualquier
   test que falle, al paso «Resumen de los tests». La CI usa el Xcode y el

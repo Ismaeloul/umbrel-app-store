@@ -561,7 +561,9 @@ struct FilaCanal: View {
 }
 
 /// «● Real Madrid 1–0 Getafe» si está en juego; «A las 21:00, España – Marruecos» si es el siguiente.
+/// El marcador del partido que suena en este iPhone va tapado (anti-spoiler), como en la web.
 struct LineaAntena: View {
+    @Environment(AppModel.self) private var app
     let antena: EnAntena
 
     var body: some View {
@@ -590,6 +592,9 @@ struct LineaAntena: View {
 
     private func textoDirecto(_ partido: FootballMatch) -> String {
         guard !partido.away.isEmpty else { return partido.title }
+        if app.marcadorTapado(partido) {
+            return "\(partido.home) – \(partido.away) · marcador oculto"
+        }
         if let marcador = antena.marcador, marcador.state == "in" || marcador.state == "post" {
             return "\(partido.home) \(marcador.home)–\(marcador.away) \(partido.away)"
         }

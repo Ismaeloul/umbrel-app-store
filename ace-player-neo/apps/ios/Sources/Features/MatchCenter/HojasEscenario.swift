@@ -133,7 +133,8 @@ struct HojaFuentes: View {
 struct HojaReportar: View {
     @Environment(\.dismiss) private var cerrar
     let entrada: EntradaFuente
-    let alReportar: (SourceReportReason) async -> Void
+    /// En el actor principal: se llama desde un `Task` de la vista sin cruzar de aislamiento.
+    let alReportar: @MainActor (SourceReportReason) async -> Void
     @State private var motivo: SourceReportReason = .notStarting
     @State private var enviando = false
 
@@ -226,8 +227,8 @@ struct HojaPegar: View {
     @Environment(\.dismiss) private var cerrar
     /// Canal del partido para «Recordar para…» (nil: sin partido).
     var canal: String?
-    /// Reproduce lo pegado; devuelve true si se aceptó.
-    let alReproducir: (String, Bool) async -> Bool
+    /// Reproduce lo pegado; devuelve true si se aceptó (en el actor principal, como `alReportar`).
+    let alReproducir: @MainActor (String, Bool) async -> Bool
     @State private var texto = ""
     @State private var recordar = true
     @State private var enviando = false

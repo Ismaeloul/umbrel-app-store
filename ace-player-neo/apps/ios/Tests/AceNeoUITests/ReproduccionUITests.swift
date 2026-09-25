@@ -158,8 +158,10 @@ final class ReproduccionUITests: XCTestCase {
         let mini = elementoUI(app, "mini-reproductor")
         XCTAssertTrue(mini.waitForExistence(timeout: 10), "No aparece el mini-reproductor")
 
-        // Hacia abajo: se detiene…
-        arrastrar(mini, desde: CGVector(dx: 0.5, dy: 0.5), hasta: CGVector(dx: 0.5, dy: 4))
+        // Hacia abajo: se detiene… (1,4 altos del mini: pasa de los 44 pt que
+        // detienen sin que el punto final se salga de la pantalla; el mini va
+        // justo encima de la barra de pestañas).
+        arrastrar(mini, desde: CGVector(dx: 0.5, dy: 0.5), hasta: CGVector(dx: 0.5, dy: 1.9))
         XCTAssertTrue(esperarQueDesaparezca(mini), "Deslizar el mini hacia abajo no lo detiene")
         // …con «Deshacer», que lo devuelve.
         let deshacer = elementoUI(app, "aviso-accion")
@@ -278,8 +280,9 @@ final class ReproduccionUITests: XCTestCase {
         XCTAssertTrue(conTextoUI(app, "Eurosport 1 HD").waitForExistence(timeout: 5), "Desplegar no enseña sus canales")
         captura(app, "10-listas-agrupadas")
 
-        // Buscar filtra dentro de tus canales (la pestaña Buscar).
-        app.tabBars.buttons["Buscar"].tap()
+        // Buscar filtra dentro de tus canales (la pestaña Buscar). Tras bajar por
+        // la lista, en iOS 26 la barra de pestañas está plegada.
+        tocarPestana(app, "Buscar")
         let buscador = app.searchFields.firstMatch
         XCTAssertTrue(buscador.waitForExistence(timeout: 10))
         buscador.tap()

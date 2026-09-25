@@ -427,6 +427,10 @@ struct MiniReproductor: View {
     var body: some View {
         let reproductor = app.reproductor
         let desplazamiento = GestosReproductor.desplazamientoMini(arrastre)
+        // Fuera de la cadena de modificadores: la cuenta con CGFloat, Double y
+        // literales dentro de un ternario es lo que más le cuesta al type-checker.
+        let opacidad: Double =
+            deteniendo ? 0.4 : 1 - min(0.5, max(0, Double(desplazamiento.height)) / 140)
         HStack(spacing: enLinea ? 10 : 12) {
             VideoApp(prioridad: .mini, gravedad: .resizeAspectFill, compacto: true)
                 .frame(width: enLinea ? 44 : 96, height: enLinea ? 26 : 54)
@@ -497,7 +501,7 @@ struct MiniReproductor: View {
         .contentShape(forma)
         .offset(desplazamiento)
         .scaleEffect(deteniendo && !sinMovimiento ? 0.96 : 1)
-        .opacity(deteniendo ? 0.4 : 1 - min(0.5, max(0, desplazamiento.height) / 140))
+        .opacity(opacidad)
         .onTapGesture { abrir() }
         .gesture(
             DragGesture(minimumDistance: 8)

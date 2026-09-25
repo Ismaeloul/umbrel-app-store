@@ -211,6 +211,9 @@ capturas de la CI (`AceNeo-capturas`, `claro-…` y `oscuro-…`) son la referen
 | 15.15 | Con el vídeo en el escenario, sube al inicio (PiP) y vuelve a la app tocando su icono. | El PiP se cierra y el vídeo vuelve al escenario, **una sola imagen**, sin reconectar (igual que en la sección 4). | [ ] |
 | 15.16 | Canales: fila «Emitiendo ahora», favoritos, recientes y listas; mantén pulsado un canal. | Carteles con el dorsal grande y lo que emiten; en las filas, deslizar a la izquierda borra con Deshacer y a la derecha marca favorito; la pulsación larga abre el menú (Ver canal · favoritos · Renombrar · Abrir en… · Borrar). Tocar un canal abre el **escenario del canal** (nombre · categoría, otras señales del mismo canal, otros canales de la lista). | [ ] |
 | 15.17 | Buscar: pega un enlace `acestream://…` o un Content ID de 40 caracteres. | Sale «Enlace detectado» con «Reproducir»: se abre el escenario como canal «Enlace pegado» y **no** entra en recientes. | [ ] |
+| 15.18 | En iOS 26, sin nada sonando (o tras detener), mira encima de la barra de pestañas. | **No queda una cápsula de cristal vacía** encima de la barra: el accesorio solo aparece con el mini. Si queda un hueco vacío, apúntalo: es el riesgo conocido de `tabViewBottomAccessory` con contenido vacío (alternativa: `tabViewBottomAccessory(isEnabled:)` de iOS 26.1). | [ ] |
+| 15.19 | En iOS 26, con algo sonando, mira el mini dentro de la barra (desplegada y plegada). | El mini **cabe entero**: imagen, título, estado, play y × visibles, sin recortes ni texto montado. | [ ] |
+| 15.20 | Con un partido en directo sonando, ve a **Canales** y busca el canal que lo emite. | Su línea dice «Local – Visitante · marcador oculto»: el marcador del partido que estás viendo **no aparece** hasta que lo destapas en el escenario. Los demás canales sí enseñan su resultado. | [ ] |
 
 ## Cuando algo falla
 

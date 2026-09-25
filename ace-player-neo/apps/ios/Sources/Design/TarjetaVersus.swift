@@ -140,7 +140,8 @@ struct TarjetaVersus: View {
         .clipShape(RoundedRectangle(cornerRadius: Medida.radioM, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: Medida.radioM, style: .continuous)
-                .strokeBorder(esquema == .dark ? .white.opacity(0.08) : .black.opacity(0.06), lineWidth: 1)
+                .strokeBorder(
+                    esquema == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.06), lineWidth: 1)
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(etiqueta)
