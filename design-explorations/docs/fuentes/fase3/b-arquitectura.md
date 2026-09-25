@@ -2565,8 +2565,11 @@ enum FaseSesionFuentes: Sendable { case reposo, resolviendo, lista, opciones, no
 /// Los mismos textos en la app (.accessibilityIdentifier) y en las pruebas. Solo String: nada de tipos de la app.
 enum IDUI {
     // Armazón
+    static let armazon = "armazon"                                             // (0.3b)
     static let barraPestanas = "barra-pestanas", barraSuperior = "barra-superior"
     static func pestana(_ id: String) -> String { "pestana-\(id)" }          // agenda · biblioteca · buscar · ajustes
+    /// La raíz de cada pantalla (agenda · biblioteca · buscar · ajustes · emparejar · sistema) (0.3b).
+    static func pantalla(_ id: String) -> String { "pantalla-\(id)" }
     static let mini = "mini-reproductor", miniPausa = "mini-pausa", miniDetener = "mini-detener", miniDonde = "mini-donde"
     static let toastAccion = "toast-accion", toastCerrar = "toast-cerrar", capsulaEstado = "capsula-estado"
     // Emparejar (a2 §22.9)
@@ -2602,6 +2605,7 @@ enum IDUI {
     static let campoBuscar = "campo-buscar", enlaceDetectado = "enlace-detectado"
     static func resultado(_ hash: String) -> String { "resultado-\(hash)" }
     static let hojaPegar = "hoja-pegar", campoHash = "campo-hash", botonPegarPortapapeles = "boton-pegar-portapapeles"
+    static let hojaGuardarFavorito = "hoja-guardar-favorito", hojaRenombrar = "hoja-renombrar"   // (0.3b)
     // Ajustes
     static let indiceAjustes = "indice-ajustes"
     static func chip(_ seccion: String) -> String { "chip-\(seccion)" }
@@ -2610,6 +2614,7 @@ enum IDUI {
     static let filaEsteIPhone = "fila-este-iphone", botonOlvidarEsteIPhone = "boton-olvidar-este-iphone"
     static let versionApp = "version-app", visorEsteDispositivo = "visor-este-dispositivo"
     static func sesion(_ id: String) -> String { "sesion-\(id)" }
+    static let hojaAyuda = "hoja-ayuda"                                        // (0.3b)
 }
 ```
 
@@ -2985,6 +2990,36 @@ fueron las de código borrado), Linux verde (45 XCTest + 5 Swift Testing). Lo qu
 - Salida: la app arranca con `-AceNeoDemo` en la agenda (stub) y la barra de pestañas provisional cambia de pestaña;
   `FlujoArmazonUITests.testArrancaYCambiaDePestana` en verde. Se etiqueta `fase0` y se crean las ramas de la fase 1.
 
+**Resultado de 0.3b (I0, 25-sep-2026, commits 0f75e6e · fea7f51 · e27f47d · 4b878e1 · 4c22cce en `rediseno/nativa`,
+etiqueta `fase0-contratos`)**: `solo_uitests=FlujoArmazonUITests` 36176979612 verde (la app arranca con `-AceNeoDemo`
+en la agenda y la barra cambia a Canales, Buscar, Ajustes y vuelve); `solo_unitarios` 36178928803 verde (203 pruebas,
+0 fallos); `solo_compilar` 36179822542 verde en 4c22cce; Linux verde. `ContenedorApp.init` rozó el límite de tipado
+(453 ms en 36177994191, por debajo en otra ejecución): tipos escritos y dos ayudantes. Lo que la fase 1 debe saber:
+
+- **Firmas exactas de §2.3-§2.8**. Cuerpos: donde era barato y sin duda, de verdad (`Navegador`, `CentroHojas`,
+  `Avisos` con relojes, `CicloVida`, `PreferenciasLocales`, `MigracionClaves` con el código de a1 §13.10, `Consulta`
+  sin reintentos, `DatosApp` con las rutas que ya tiene `API`); el resto, valor neutro. Las piezas de §2.5.5 ya van
+  cada una en su fichero de §1.4. `ColaToasts` y `LineaEstado` (M2) existen con la firma del contrato y un cuerpo
+  sencillo porque `Avisos` los necesita; M2 los calca de notices.
+- **`App/PalcoProvisional.swift`**: lo mínimo de Palco (§2.2.3 `Mona.fuente`, §2.2.7 háptica y `HapticaRaiz`, §2.2.10
+  los `@Entry`, `TamanoHoja`, `SistemaView` en stub) para no tocar `Sources/Palco`. **Al fusionar `nativa/palco` se
+  borra entero** (si no, «invalid redeclaration»), y con él su excepción de R5 en `revisar-swift.mjs`.
+- **`SesionFuentes` es ya el contrato de §2.6** (una sesión, `conectar(_:)`, cuerpos neutros; `alFallarFuente` devuelve
+  `false`). Lo rescatado en 0.2 se llama ahora **`SesionFuentesPartido`** (misma carpeta, con `SesionFuentesTests`):
+  referencia para M3, que lo borra al portar session.ts. `EntornoSesionFuentes` tiene los ocho miembros del contrato.
+- **`AppShell` provisional** pinta solo la pestaña actual y una barra de texto (`IDUI.pestana`), con `.hojasDeLaApp`.
+  Con las visitadas vivas y ocultas con `.opacity(0)` + `.accessibilityHidden(true)`, XCUITest **seguía viendo** la
+  oculta (36175911002): M4 debe sacarla del árbol de otra forma o ajustar la prueba.
+- `IDUI` añade `armazon`, `pantalla(_:)`, `hojaGuardarFavorito`, `hojaRenombrar` y `hojaAyuda` (§2.7). Las pantallas
+  de §2.8 son `Color.clear` con un `Text` del título encima y `.accessibilityElement(children: .combine)` (un
+  `Color.clear` solo no llega con seguridad al árbol de accesibilidad).
+- `SettingsUpdateBody` y `PairingCreateBody` (M1) existen con los campos de packages/shared para que `DatosApp`
+  compile. `ServidorSimulado.entorno(emparejado:)`: `-AceNeoEmparejado` desaparece; con `-AceNeoDemo` o
+  `-AceNeoServidorSimulado` la app arranca emparejada salvo `-AceNeoSinEmparejar`. En demo el motor es `MotorSimulado`.
+- CI: entrada nueva **`solo_uitests`** (§4.4). `tocarPestana(app, id)` de `AyudasUI` va por `IDUI.pestana`.
+- Sin hacer (de sus dueños): PiP (`GestorPiP`) sin conectar en `ContenedorApp` (M3); oyente de `CicloVida` del
+  reproductor (M3); `RGB` (M2) sigue sin existir y `DatosEquipo`/`RGB.color` de P lo necesitan.
+
 #### 4.1.4 Paso 0.4 — Palco y laboratorio (P, en paralelo con 0.3b)
 
 `LaboratorioView` (una página desplazable, Debug) con, en claro y en oscuro:
@@ -3063,6 +3098,7 @@ on:
       ipa_aunque_fallen_tests: { type: boolean, default: false }
       capturas:        { type: choice, options: [ninguna, clave, completas], default: ninguna }
       simulador:       { type: string, default: 'iPhone 16e' }
+      solo_uitests:    { type: string, default: '' }   # (0.3b) p. ej. FlujoArmazonUITests: solo esos UITests, sin unitarios, pila E2E ni IPA
   # push y pull_request: como hoy (rewrite-v2, main, tags ios-v*)
 
 jobs:
