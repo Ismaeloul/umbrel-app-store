@@ -37,15 +37,20 @@ struct MarcaCanal: View {
 
     /// `.dorsal__abbrev`: arriba 0,1·s, izquierda 0,12·s, `max(11, 0,17·s)` · 760 · wdth 88 · +0,08 em.
     private var siglaTesela: some View {
-        let letra = max(11, tamano * 0.17)
+        let s: CGFloat = tamano
+        let letra: CGFloat = max(11, s * 0.17)
+        let anchoMaximo: CGFloat = ancho - s * 0.24
+        let arriba: CGFloat = s * 0.1
+        let izquierda: CGFloat = s * 0.12
         let estilo = EstiloTexto(tamano: Double(letra), peso: 760, anchura: 88, trackingEm: 0.08)
-        return Text(TonosMarca.sigla(nombre))
+        let texto: String = TonosMarca.sigla(nombre)
+        return Text(texto)
             .estilo(estilo)
             .foregroundStyle(Color.white.opacity(0.9))
             .lineLimit(1)
-            .frame(maxWidth: ancho - tamano * 0.24, alignment: .leading)
-            .padding(.top, tamano * 0.1)
-            .padding(.leading, tamano * 0.12)
+            .frame(maxWidth: anchoMaximo, alignment: .leading)
+            .padding(.top, arriba)
+            .padding(.leading, izquierda)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }

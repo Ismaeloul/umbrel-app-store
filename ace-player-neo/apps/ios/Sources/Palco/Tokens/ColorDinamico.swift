@@ -40,6 +40,17 @@ extension RGB {
     }
 }
 
+extension RGB {
+    /// Un color de club de la API: hex con o sin «#», de 3 o 6 cifras (`paletteOf` normaliza así; a1 §2.5).
+    init?(hexTexto: String) {
+        var cifras = hexTexto.trimmingCharacters(in: .whitespaces)
+        if cifras.hasPrefix("#") { cifras.removeFirst() }
+        if cifras.count == 3 { cifras = cifras.map { "\($0)\($0)" }.joined() }
+        guard cifras.count == 6, let valor = UInt32(cifras, radix: 16) else { return nil }
+        self.init(hex: valor)
+    }
+}
+
 /// Colores fijos de las primitivas que la web escribe literales en su CSS (no son tokens).
 enum PalcoFijo {
     /// Fondo de la placa de siglas del escudo: `rgb(8 20 34 / .86)` (TeamMark.css; a1 §10.12).

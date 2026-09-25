@@ -14,7 +14,8 @@ struct DatosEquipo: Hashable, Sendable {
 /// interior de 0,09·lado del secundario, borde exterior de 1 `--line-soft`, placa de siglas desde 40 y, si
 /// está encendido (en directo), halo del color de club. El escudo del servidor tapa el monograma.
 struct MarcaEquipo: View {
-    enum Patron: Sendable { case liso, franjas }
+    /// `liso` (defecto), `franjas` (`team--rayas`) y `mitades` (`team--mitades`, lo usa la galería).
+    enum Patron: Sendable { case liso, franjas, mitades }
 
     let equipo: DatosEquipo
     let tamano: CGFloat
@@ -85,6 +86,12 @@ private struct MonogramaEquipo: View {
         case .franjas:
             FranjasEquipo(primario: equipo.primario.color, secundario: secundario.color, tamano: tamano)
                 .clipShape(Circle())
+        case .mitades:
+            HStack(spacing: 0) {
+                equipo.primario.color
+                secundario.color
+            }
+            .clipShape(Circle())
         }
     }
 }

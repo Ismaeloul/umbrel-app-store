@@ -34,6 +34,11 @@ enum TonosMarca {
         return (calido ? 0.56 : 0.46, calido ? 0.13 : 0.11, h)
     }
 
+    /// `nameTone`: la mitad del versus de un club sin colores (L 0,5, C 0,12, tono del nombre).
+    static func tonoNombre(_ nombre: String) -> (l: Double, c: Double, h: Double) {
+        (0.5, 0.12, tono(nombre))
+    }
+
     /// `channelDorsal`: el último grupo de cifras (hasta 3) o la primera letra sin tilde, o «·».
     static func dorsal(_ nombre: String) -> String {
         var grupos: [String] = []
