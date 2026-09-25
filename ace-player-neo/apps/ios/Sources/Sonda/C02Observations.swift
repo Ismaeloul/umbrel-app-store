@@ -28,6 +28,15 @@ enum SondaTemaApp: String, CaseIterable, Sendable {
     var barraEstadoOculta: Bool { inmersivo }
 }
 
+/// Lo que vigila HostingRaiz, en un valor (una tupla hace caer al compilador).
+struct SondaInstantaneaVentana: Equatable, Sendable {
+    var estilo: Int
+    var oculta: Bool
+    var inmersivo: Bool
+    var mascara: UInt
+    var tema: SondaTemaApp
+}
+
 struct SondaRaizView: View {
     let estado: SondaEstadoVentana
     var body: some View { Color.clear }
@@ -49,9 +58,12 @@ final class SondaHostingObservations: UIHostingController<SondaRaizView> {
         super.viewDidLoad()
         let estado = estado
         vigilante = Task { @MainActor [weak self] in
+            // Primer intento (con una TUPLA de cinco): el compilador de Xcode 26.6 se cae en IRGen
+            // (SyncCallEmission::setArgs, CI 36162945144). Segundo: un struct Sendable y Equatable.
             let cambios = Observations { @MainActor in
-                (estado.estiloBarraEstado, estado.barraEstadoOculta, estado.inmersivo, estado.mascaraOrientacion,
-                 estado.tema)
+                SondaInstantaneaVentana(
+                    estilo: estado.estiloBarraEstado.rawValue, oculta: estado.barraEstadoOculta, inmersivo: estado.inmersivo,
+                    mascara: estado.mascaraOrientacion.rawValue, tema: estado.tema)
             }
             for await _ in cambios { self?.aplicarEstadoVentana() }
         }
