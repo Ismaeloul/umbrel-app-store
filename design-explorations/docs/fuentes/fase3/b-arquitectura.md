@@ -879,7 +879,7 @@ enum Vectores {
 | Clave | Valor |
 |---|---|
 | `UIAppFonts` | `PalcoSans-Variable.ttf`, `MonaSans-Variable.ttf`, `MartianMono-Variable.ttf` (XcodeGen copia los recursos sueltos en la raíz del bundle; `InfoPlistTests` comprueba `Bundle.main.url(forResource:)` y los tres nombres PostScript) |
-| `UIApplicationSceneManifest` | `UIApplicationSupportsMultipleScenes = false`; la configuración de escena la da `AppDelegate.application(_:configurationForConnecting:options:)` |
+| `UIApplicationSceneManifest` | `UIApplicationSupportsMultipleScenes = false`; la escena la declara el propio plist (`UISceneConfigurations` → `UIWindowSceneSessionRoleApplication` → «Principal» con `UISceneDelegateClassName = $(PRODUCT_MODULE_NAME).SceneDelegate`). **Corregido en la fase 0.2**: con `AppDelegate.application(_:configurationForConnecting:options:)`, la línea `delegateClass = SceneDelegate.self` tardaba ~300 ms en tiparse y la alarma de la CI la rechazaba (ejecuciones 36168823914 y 36169354654) |
 | `UIViewControllerBasedStatusBarAppearance` | `YES` (explícito) |
 | `UISupportedInterfaceOrientations` | vertical + horizontal izquierda y derecha; **se quita** `~ipad` |
 | `UIBackgroundModes` (`audio`), `CFBundleURLTypes` (`aceneo`), ATS, `NSCameraUsageDescription`, `NSLocalNetworkUsageDescription`, `UILaunchScreen` (`Bg`), `ITSAppUsesNonExemptEncryption` | se quedan |
@@ -1806,12 +1806,8 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         return true
     }
 
-    func application(_ application: UIApplication, configurationForConnecting sesion: UISceneSession,
-                     options: UIScene.ConnectionOptions) -> UISceneConfiguration {
-        let configuracion = UISceneConfiguration(name: "Principal", sessionRole: sesion.role)
-        configuracion.delegateClass = SceneDelegate.self
-        return configuracion
-    }
+    // Sin `configurationForConnecting`: la escena la declara Info.plist (§1.13.3, corregido en la fase 0.2;
+    // `delegateClass = SceneDelegate.self` tardaba ~300 ms en tiparse).
 
     func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?)
         -> UIInterfaceOrientationMask {
@@ -2944,6 +2940,28 @@ los commits hechos y dicen qué comando de CI lanzarían.
 2. Borrar la lista de §1.11 y los colorsets. Mover las pruebas según la tabla de §1.11.
 3. `RaizView` provisional (texto «Ace Neo» sobre `Bg`) para que el objetivo compile.
 4. Salida: `solo_compilar` verde; unitarios verdes (los que quedan); Linux verde.
+
+**Resultado (I0, 25-sep-2026, commits 3c63d0b · 0aa3630 · aecd3ea en `rediseno/nativa`)**: `solo_compilar`
+36169850904 verde (sin avisos de tipado), `solo_unitarios` 36170273367 verde (173 pruebas, 0 fallos; antes 198: se
+fueron las de código borrado), Linux verde (45 XCTest + 5 Swift Testing). Lo que la fase 0.3b debe saber:
+
+- **Provisionales que 0.3b sustituye**: `App/AppDelegate.swift` y `App/SceneDelegate.swift` mínimos (audio y ventana
+  con `UIHostingController(rootView: RaizView())`), `App/RaizView.swift` («Ace Neo» sobre `Palco.bg`),
+  `Armazon/Avisos.swift` (el `Avisos` viejo sin vista: `mostrar(_:tono:)`), `Core/Datos/SesionApp.swift` (solo
+  `fase` inicial, `enlacePendiente`, `enlaceParaEmparejar` y `abrir(enlace:)`, con `FaseSesion` y `MotivoEmparejar`
+  del contrato) y `EntornoSesionFuentes` con solo `api`, `reproductor` y `avisos`.
+- **La escena la declara Info.plist** (§1.13.3 y §2.3 corregidos): `SceneDelegate.self` en `configurationForConnecting`
+  tardaba ~300 ms en tiparse.
+- `SesionFuentes` es el `CentroPartidoModelo` de siempre (`init(partido:entorno:)`, un objeto por partido, entorno
+  `unowned`); `HermanasModelo` vive en el mismo fichero. El contrato de §2.6 (una sesión, `conectar(_:)`) es de M3.
+- Lo puro rescatado ya no tiene `public` (R13) ni `Date.now` por defecto (R14): quien llama pasa `ahora:`.
+  `ReglasAgenda.minutosPrecalentado = 45` sustituye a `ReglasSenal.minutosPrecalentado`; `ReglasAgenda.diaInicial`
+  sale del `AgendaViewModel` borrado; el chip de fecha y hora se fue con `ChipHoraTests`.
+- `EscanerQR` sin háptica (R8): la pone M7 con `Haptica`. `BotonAirPlay` pinta con `Palco.accent` (el colorset
+  «Accent» ya no existe). `Flujo` lleva la firma del contrato pero solo coloca a la izquierda (P completa).
+- Linter con alcance «todo» (0 incumplimientos) y la alarma de tipado de la CI ya no ignora ninguna carpeta.
+- Pendiente de otros: `generar-recursos.mjs` aún escribe los colorsets y la Marca clara (P);
+  `ServidorRealUITests` (I1) y `README.md` (I1) siguen hablando de la interfaz vieja.
 
 #### 4.1.3 Paso 0.3 — contratos y esqueletos (I0)
 
