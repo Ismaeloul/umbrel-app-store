@@ -13,7 +13,7 @@
 | Iconos: los 52 de `ui/icons.ts` (caminos leídos una vez y escalados), `FormaIcono`, `IconoPalco` (trazo y «relleno + trazo»), `IconoImagen` | `Sources/Palco/Iconos/`; `scripts/generar-iconos.mjs` |
 | Cristal (`glassEffect` con el tinte del token; sólido exacto con transparencia reducida), háptica (`Haptica`, `HapticaRaiz`), entorno (§2.2.10), gestos (`DeslizamientoHorizontal`, `subeConLaBarraDeEstado`) | `Sources/Palco/{Cristal,Haptica,Entorno,Gestos}/` |
 | Las primitivas de §2.2.11 con sus firmas | `Sources/Palco/Componentes/` (una por fichero) |
-| Galería «Sistema» (los 16 bloques de a1 §11) | `Sources/Palco/Galeria/Sistema*.swift`, `MuestrasGaleria.swift`, `PresentadorHoja.swift` |
+| Galería «Sistema» (los 16 bloques de a1 §11) | `Sources/Palco/Galeria/Sistema*.swift`, `MuestrasGaleria.swift` y una vista por fichero (cierre de la fase 0: sin `PresentadorHoja`) |
 | Laboratorio (Debug, `-AceNeoLaboratorio`, `-AceNeoLaboratorioSeccion <n>`, `-AceNeoDesplazar <pt>`) | `Sources/Palco/Galeria/Laboratorio*.swift` |
 | Pruebas | `Tests/AceNeoTests/Palco/{TokensTests,FuentesTests,IconosNumEstiloTests}.swift`; `Tests/AceNeoUITests/Palco/{LaboratorioUITests,SistemaUITests}.swift` |
 | Marca | `Resources/Assets.xcassets/Marca.imageset` desde `apps/web/public/icon.svg`, una sola variante (`scripts/generar-recursos.mjs`, que ya no escribe colorsets ni toca el AppIcon) |
@@ -123,3 +123,25 @@
   `Palco/Componentes/TonosMarca.swift` y `MezclaOKLab`. `Num.segmentos` es `splitDigits` (NumTests).
 - **I2**: el tinte del cristal en claro (§3.3) y la sombra de la barra se ajustan en `CristalPalco.vidrio` y
   `SombraPalco`; la referencia @3x de la galería se rehace con los scripts de §2.
+
+## 6. Cierre de la fase 0 (I0, 25-sep-2026)
+
+- **Fusionado** en `rediseno/nativa`. El banco y la galería viven dentro de `RaizView` (`-AceNeoLaboratorio`,
+  `-AceNeoSistema`) con el entorno de la app: háptica central, hojas por `CentroHojas` (`Hoja.muestra`), menú por
+  `menuContextual`, tema y transparencia de `PreferenciasLocales` (`HostingRaiz` los pone en la ventana) y ventana por
+  `EstadoVentana`. Fuera `PresentadorHoja`, `VentanaPalco`, `ModoGaleria` (`ModoEjecucion.desplazar` y
+  `.seccionLaboratorio`) y los tipos `Sonda*`. Con `-AceNeoApariencia` el tema arranca en «Sistema» (como el
+  `prefers-color-scheme` de las capturas de la web).
+- Bloques nuevos: 5 con «Barra clara» e «Inmersivo», 6 con la cuenta de pulsos, 8 «Marcos del vuelo» y 9 «Calibración
+  del tinte».
+- **Cristal en claro (§3.3, resuelto para que lo apruebe el integrador jefe).** Seis tintes (regular y `clear`,
+  blanco 0,72 a 1,00; bloque 9) dejaban el reflejo: la barra media (228,247,226)→(227,243,248) de izquierda a derecha
+  frente a (231,242,234)→(230,237,238) de la web. Ahora `CristalPalco.vidrio` no tiñe en claro y `CristalPalco.velo`
+  pone `--glass`/`--glass-dense` encima del vidrio, como `.glass { background }` sobre el desenfoque de la web: la
+  barra queda uniforme, (242,245,242)→(241,243,244), algo más blanca y menos verde que la web (la web satura 1,5 lo
+  que asoma). En oscuro no cambia nada (27,36,37 frente a 21,39,34 de la web). El cristal de vídeo pinta siempre en
+  oscuro (`.glass--video { color-scheme: dark }`): en claro el botón de vídeo ya no sale gris sobre la imagen.
+  Pares web/app en `c0-cristal/`: `{web,app}-{barra,capsula,boton-video}-{claro,oscuro}.png` (web: Chrome @3x sobre
+  la `.sis-glass` de la galería, la barra real y un `icon-btn--video` en `.glass--video`; app: `laboratorio-3-*`
+  de la ejecución 36192007911) y el antes, `app-antes-{barra,boton-video}-claro.png`.
+- Canarios de banco cerrados: ver `c0-canarios.md`, «Cierre de la fase 0».

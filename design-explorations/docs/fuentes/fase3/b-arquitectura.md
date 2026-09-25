@@ -1512,15 +1512,18 @@ enum TipoCristal: Sendable { case denso, regular, video, videoBoton }
 enum CristalPalco {
     /// Interruptor de rendimiento: false = sólido en las filas de listas largas.
     static let vidrioEnListas = true
-    /// ÚNICO sitio del tinte (I2 lo calibra contra las capturas).
+    /// ÚNICO sitio del tinte (I2 lo calibra contra las capturas). Cierre de la fase 0 (c0-cristal/): en claro
+    /// NO se tiñe (ningún tinte quitaba el reflejo de la imagen) y lo pone velo(_:); en oscuro, el token.
     static func vidrio(_ tipo: TipoCristal) -> Glass {
         switch tipo {
-        case .denso: .regular.tint(Palco.glassDense)
-        case .regular: .regular.tint(Palco.glass)
+        case .denso: .regular.tint(soloEnOscuro(Palco.glassDense))
+        case .regular: .regular.tint(soloEnOscuro(Palco.glass))
         case .video: .regular.tint(Palco.glassVideo)
         case .videoBoton: .regular.tint(Palco.glassVideo).interactive()
         }
     }
+    /// .glass { background: var(--glass) } de la web sobre el vidrio, solo en claro (video: Color.clear).
+    static func velo(_ tipo: TipoCristal) -> Color { … }
     static func solido(_ tipo: TipoCristal) -> Color {
         switch tipo {
         case .denso, .regular: Palco.glassSolid
@@ -1544,7 +1547,8 @@ private struct ModificadorCristal<Forma: Shape>: ViewModifier {
         if opaco {
             content.background(CristalPalco.solido(tipo), in: forma)
         } else {
-            content.glassEffect(CristalPalco.vidrio(tipo), in: forma)
+            content.background(CristalPalco.velo(tipo), in: forma)   // --glass encima del vidrio, solo en claro
+                .glassEffect(CristalPalco.vidrio(tipo), in: forma)
         }
     }
 }
@@ -3306,22 +3310,29 @@ parte que solo se ve en pantalla la mira P en el laboratorio (§4.1.4); la API *
 
 | # | Resultado | Qué se comprobó | Qué cambia |
 |---|---|---|---|
-| C1 | **vale** (banco pendiente) | `glassEffect(_:in:)` con `Glass` devuelto por una función, `.regular.tint(_:)`, `.interactive()`, `GlassEffectContainer(spacing:)`, modificador genérico sobre `Shape` con `some Shape = Capsule()` | nada |
+| C1 | **vale** (ajuste de tinte en claro: `CristalPalco.velo`) | `glassEffect(_:in:)` con `Glass` devuelto por una función, `.regular.tint(_:)`, `.interactive()`, `GlassEffectContainer(spacing:)`, modificador genérico sobre `Shape` con `some Shape = Capsule()` | nada |
 | C2 | **vale con un ajuste** | `Observations` con la tupla de cinco de §2.3 compila **solo si el cierre NO se anota `@MainActor in`** (hereda el aislamiento de la `Task { @MainActor … }`). Con `Observations { @MainActor in … }` el compilador **se cae** en IRGen (tupla: 36162945144; struct: 36163440026). Sin anotar: 36164502581 y verde en la rama | §2.3 corregido: `Observations { (…) }` sin `@MainActor in`. El plan B (`withObservationTracking` en bucle) también compila y queda de reserva |
-| C3 | **vale** (banco pendiente) | `UIGestureRecognizerRepresentable` con `makeCoordinator(converter:)`, coordinador `UIGestureRecognizerDelegate` (`shouldBeRequiredToFailBy` con `UIScreenEdgePanGestureRecognizer`, simultáneo), `update…`, `handle…Action` y `.gesture(_:)` sobre un `ScrollView` | nada |
+| C3 | **vale** | `UIGestureRecognizerRepresentable` con `makeCoordinator(converter:)`, coordinador `UIGestureRecognizerDelegate` (`shouldBeRequiredToFailBy` con `UIScreenEdgePanGestureRecognizer`, simultáneo), `update…`, `handle…Action` y `.gesture(_:)` sobre un `ScrollView` | nada |
 | C4 | **vale** | `@Entry` con un struct puro, `Bool`, `CGFloat` y un **actor** opcional (`= nil`) | nada |
-| C5 | **vale** (banco pendiente) | `.sensoryFeedback(trigger:_:)` con cierre `{ _, nuevo in nuevo.tipo.feedback }` (devuelve `SensoryFeedback`, no opcional) y la tabla de `TipoHaptico.feedback` | nada |
-| C6 | **vale** (banco pendiente: que la hoja medida no salte) | `.sheet(item:onDismiss:)` con `@Bindable`, `onGeometryChange(for: CGFloat.self)`, `.presentationDetents([.height(medido)])`, `.large`, `[.medium, .large]`, `presentationDragIndicator`, `presentationBackground(Color)`, `presentationCornerRadius`, `presentationContentInteraction(.scrolls)` | nada |
-| C7 | **vale** (banco pendiente) | `.contextMenu { } preview: { }`, `Menu` con `Section`, `Button(role: .destructive)`, `Toggle`, `.menuOrder(.fixed)` y `accessibilityActions { ForEach … }` | nada |
+| C5 | **vale** (la vibración se siente en el iPhone) | `.sensoryFeedback(trigger:_:)` con cierre `{ _, nuevo in nuevo.tipo.feedback }` (devuelve `SensoryFeedback`, no opcional) y la tabla de `TipoHaptico.feedback` | nada |
+| C6 | **vale** | `.sheet(item:onDismiss:)` con `@Bindable`, `onGeometryChange(for: CGFloat.self)`, `.presentationDetents([.height(medido)])`, `.large`, `[.medium, .large]`, `presentationDragIndicator`, `presentationBackground(Color)`, `presentationCornerRadius`, `presentationContentInteraction(.scrolls)` | nada |
+| C7 | **vale** | `.contextMenu { } preview: { }`, `Menu` con `Section`, `Button(role: .destructive)`, `Toggle`, `.menuOrder(.fixed)` y `accessibilityActions { ForEach … }` | nada |
 | C8 | **vale** | `ScrollPosition(edge: .top)`, `.scrollPosition($posicion)`, `posicion.scrollTo(edge:)`, `onScrollGeometryChange(for:of:action:)` con `contentOffset` y `contentInsets` | nada |
-| C9 | **vale** (banco pendiente) | `.contentTransition(.numericText(value:))` en celdas de ancho fijo con `.animation(_:value:)` | nada |
+| C9 | **vale** | `.contentTransition(.numericText(value:))` en celdas de ancho fijo con `.animation(_:value:)` | nada |
 | C10 | **vale** | en el simulador (`InfoPlistTests`): los tres TTF están en el bundle y registrados por `UIAppFonts`; `CTFontCopyVariation` devuelve wdth 125 y wght 800; el «4» se estrecha a wdth 75 y se ensancha a 125; la Mona modificada tiene ascendente 88,5, descendente 11,5 e interlineado 0 a 100 pt. Compilan `OSAllocatedUnfairLock<[Clave: Font]>`, `Font(CTFont)` y `UIFont` por descriptor | **nombre de la fuente modificada** (riesgo 8): la OFL de Mona Sans reserva «Mona», así que la versión con métricas cambiadas se llama **«Palco Sans»**: fichero `PalcoSans-Variable.ttf`, PostScript **`PalcoSans-ExtraLight`** (no `MonaSansPalco-…`). §1.2, §1.13.3 y §2.2.3 corregidos |
 | C11 | **vale** | Swift Testing (`@Test`, `@Test(arguments:)` con tuplas, `#expect`) y `Bundle.module` con `resources: [.copy("Vectores")]` en `swift test` de Linux; los mismos ficheros en Xcode con `@testable import AceNeo` | `Fixtures.raiz` en SwiftPM sube **7** niveles, no 6 (§1.13.2 corregido) |
 | C12 | **vale** | `platforms: [.iOS(.v26), .macOS(.v26)]` con `swift-tools-version: 6.2` | nada |
-| C13 | **vale** (banco pendiente) | `UIHostingController<Raiz>` con `init(…)` propio, `required init?(coder:)` `@available(*, unavailable)` y los cinco overrides + los cuatro `setNeeds…` | nada |
-| C14 | **vale** (banco pendiente) | `ImageRenderer` (`scale = 3`) → `uiImage.withRenderingMode(.alwaysTemplate)` en `Label { } icon: { Image(uiImage:) }` dentro de `Menu` | nada |
-| C15 | **vale** (banco pendiente) | `onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action:` en celdas de un `LazyVStack` dentro de `ScrollView`, con `@ObservationIgnored` en el diccionario de marcos | nada |
+| C13 | **vale** | `UIHostingController<Raiz>` con `init(…)` propio, `required init?(coder:)` `@available(*, unavailable)` y los cinco overrides + los cuatro `setNeeds…` | nada |
+| C14 | **vale** | `ImageRenderer` (`scale = 3`) → `uiImage.withRenderingMode(.alwaysTemplate)` en `Label { } icon: { Image(uiImage:) }` dentro de `Menu` | nada |
+| C15 | **vale** | `onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action:` en celdas de un `LazyVStack` dentro de `ScrollView`, con `@ObservationIgnored` en el diccionario de marcos | nada |
 | C16 | **vale** (añadido por I0) | `final class …: Sendable` con `let` + `Mutex` (Synchronization) y **sin** `@unchecked`, como `EstadoDemo` (§0.1): compila en iOS (Debug y Release) y en Linux (`swift:6.2-noble`) | nada |
+
+**Cierre de la fase 0 (I0, 25-sep).** Todos los canarios quedan **«vale»** (ninguno con plan B; C2 con el ajuste
+de 0.1) y `Sources/Sonda` está borrado. Lo que solo se ve en pantalla se comprobó en el banco con `LaboratorioUITests`
+(C2/C13 barra de estado leída de la captura, C5 cuenta de pulsos con hoja y en horizontal, C6/C7 hojas y menú de las
+puertas de la app, C15 marco `.global` de `.piezaVuelo` a ±1 pt tras desplazar). C1: en claro, `CristalPalco.vidrio`
+no tiñe y `CristalPalco.velo` pone el velo `--glass` de la web encima (`c0-cristal/`); el cristal de vídeo pinta
+siempre en oscuro. Detalle y ejecuciones: `c0-canarios.md`, «Cierre de la fase 0».
 
 Otros hallazgos de la fase 0.1 que tocan a todos:
 
