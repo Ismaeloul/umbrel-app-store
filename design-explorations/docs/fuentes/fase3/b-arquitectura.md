@@ -2487,6 +2487,7 @@ enum EstadoConexion: Hashable, Sendable { case conectando, conectado(ServerVia),
 @MainActor @Observable final class MarcadoresDestapados {
     func destapado(_ partido: String) -> Bool { … }
     func destapar(_ partido: String) { … }
+    func tapar(_ partido: String) { … }                      // (M5, contrato aditivo) segundo toque en «Marcador»
     func vaciar() { … }
 }
 @MainActor @Observable final class RelojCompartido {         // tic de 20 s mientras haya quien mire
