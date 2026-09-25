@@ -2,9 +2,16 @@ import Observation
 import SwiftUI
 import UIKit
 
-// Canario C2 (b-arquitectura §5.3): `Observations { … }` (Swift 6.2, iOS 26) con un elemento
-// tupla, dentro de un UIHostingController, tal como lo usará App/HostingRaiz.swift (§2.3).
-// Plan B: withObservationTracking en bucle. Se borra al cerrar la fase 0.
+// Canario C2 (b-arquitectura §5.3): `Observations { … }` (Swift 6.2, iOS 26) dentro de un
+// UIHostingController, tal como lo iba a usar App/HostingRaiz.swift (§2.3).
+//
+// RESULTADO: FALLA. Con Xcode 26.6 (Swift 6.2) el compilador se cae en IRGen al emitir el
+// «thunk» del cierre @isolated(any) que recibe `Observations` (SyncCallEmission::setArgs →
+// SmallVector «at maximum capacity»):
+//   - con una tupla de cinco valores (el contrato): CI 36162945144;
+//   - con un struct Sendable y Equatable en lugar de la tupla: CI 36163440026.
+// Plan B aplicado: withObservationTracking en bucle (C02bSeguimiento.swift), que compila.
+// Aquí quedan solo los tipos que comparten C2, C2b y C13. Se borra al cerrar la fase 0.
 
 enum SondaTemaApp: String, CaseIterable, Sendable {
     case sistema, claro, oscuro
@@ -28,49 +35,7 @@ enum SondaTemaApp: String, CaseIterable, Sendable {
     var barraEstadoOculta: Bool { inmersivo }
 }
 
-/// Lo que vigila HostingRaiz, en un valor (una tupla hace caer al compilador).
-struct SondaInstantaneaVentana: Equatable, Sendable {
-    var estilo: Int
-    var oculta: Bool
-    var inmersivo: Bool
-    var mascara: UInt
-    var tema: SondaTemaApp
-}
-
 struct SondaRaizView: View {
     let estado: SondaEstadoVentana
     var body: some View { Color.clear }
-}
-
-final class SondaHostingObservations: UIHostingController<SondaRaizView> {
-    private let estado: SondaEstadoVentana
-    private var vigilante: Task<Void, Never>?
-
-    init(estado: SondaEstadoVentana) {
-        self.estado = estado
-        super.init(rootView: SondaRaizView(estado: estado))
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("sin storyboard") }
-
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        let estado = estado
-        vigilante = Task { @MainActor [weak self] in
-            // Primer intento (con una TUPLA de cinco): el compilador de Xcode 26.6 se cae en IRGen
-            // (SyncCallEmission::setArgs, CI 36162945144). Segundo: un struct Sendable y Equatable.
-            let cambios = Observations { @MainActor in
-                SondaInstantaneaVentana(
-                    estilo: estado.estiloBarraEstado.rawValue, oculta: estado.barraEstadoOculta, inmersivo: estado.inmersivo,
-                    mascara: estado.mascaraOrientacion.rawValue, tema: estado.tema)
-            }
-            for await _ in cambios { self?.aplicarEstadoVentana() }
-        }
-    }
-
-    private func aplicarEstadoVentana() {
-        view.window?.overrideUserInterfaceStyle = estado.tema.estiloUI
-        setNeedsStatusBarAppearanceUpdate()
-    }
 }
