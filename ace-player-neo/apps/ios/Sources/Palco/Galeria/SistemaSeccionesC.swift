@@ -55,7 +55,8 @@ private struct BloqueAvisos: View {
                     galeria.mostrarLinea(ContenidoLinea(texto: "Fuente floja: rellenando el colchón", tono: .warn))
                 }
             }
-            if let linea = galeria.linea { LineaEstadoVista(linea) }
+            // `<StatusLineHost />`: la región siempre está montada (vacía, 0 de alto), así que la web deja su hueco de 12.
+            if let linea = galeria.linea { LineaEstadoVista(linea) } else { Color.clear.frame(height: 0) }
             LineaEstadoVista(ContenidoLinea(texto: "Fuente 1 verificada. Vas en directo.", tono: .ok, senal: .ok,
                                             dato: "6 s de retraso"))
             LineaEstadoVista(ContenidoLinea(texto: "Sin señal en la fuente 3. Probando la 4.", tono: .err, senal: .fail,
