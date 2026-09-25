@@ -254,7 +254,7 @@ const VIEWS = [
     ready: '.agenda',
     prepare: async (page) => {
       await page
-        .getByRole('button', { name: /Personalizar|Tus gustos|Preferencias/ })
+        .getByRole('button', { name: /Personalizar|Tus gustos|Editar mis gustos|Preferencias/ })
         .first()
         .click();
       await dialogOpen(page);

@@ -1,13 +1,15 @@
-/* Hoja «Tu agenda». Tokens y componentes del sistema; solo el orden propio. */
+/* Hoja «Tu agenda» con la piel Palco (plan fase 2, decisión W11): numeración
+   en oro expandido, chips grandes (oro macizo al marcarlos), monograma de
+   equipo o bandera delante del nombre y el campo «Añadir otro…» en cápsula.
+   Tokens y componentes del sistema; solo se animan transform y opacity. */
 
 .prefs-eyebrow {
   display: block;
   margin-bottom: 4px;
   color: var(--accent-ink);
-  font-size: var(--fs-label);
-  font-weight: var(--wght-strong);
-  font-stretch: var(--w-tight);
-  letter-spacing: 0.06em;
+  font-size: var(--fs-kicker);
+  font-weight: 760;
+  letter-spacing: var(--tracking-kicker);
   text-transform: uppercase;
 }
 .prefs-lede {
@@ -18,39 +20,39 @@
 
 .prefs-body {
   display: grid;
-  gap: var(--s-6);
+  gap: var(--s-8);
 }
 
 .prefs-section {
   display: grid;
-  gap: var(--s-3);
+  gap: var(--s-4);
   min-width: 0;
 }
 .prefs-section__head {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--s-3);
-  align-items: start;
+  gap: 2px var(--s-3);
+  align-items: baseline;
 }
+/* «01»: cifras en oro, expandidas, a la altura del titular. */
 .prefs-section__n {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--r-s);
-  background: var(--accent-wash);
   color: var(--accent-ink);
-  font-size: var(--fs-13);
-  font-weight: var(--wght-num);
-  font-stretch: var(--w-num);
+  font-size: var(--fs-17);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 .prefs-section__title {
-  font-size: var(--fs-17);
-  font-weight: 720;
+  font-size: var(--fs-22);
+  font-weight: var(--wght-head);
   font-stretch: var(--w-head);
+  letter-spacing: var(--tracking-head);
   line-height: var(--lh-snug);
 }
 .prefs-section__hint {
+  margin-top: 2px;
   color: var(--text-2);
   font-size: var(--fs-13);
 }
@@ -63,32 +65,86 @@
   display: none;
 }
 
+/* ---- Chips grandes: 44 px de dibujo (sin zona extra que pise la fila vecina) --- */
 .prefs-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s-2);
+  gap: 10px;
   min-width: 0;
 }
-/* Los chips de preferencias son botones de 32 px con zona de 44: entre filas
-   hace falta aire para que las zonas no se pisen. */
-.prefs-chips {
-  row-gap: 12px;
-}
-.prefs-chips .chip {
+.prefs-chips .prefs-chip.chip {
   position: relative;
   max-width: 100%;
+  min-height: var(--tap);
+  gap: 8px;
+  padding: 0 18px;
+  background: var(--surface-2);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  font-size: var(--fs-15);
+  font-weight: 640;
+}
+.prefs-chips .prefs-chip.chip--button::before {
+  inset: 0;
+}
+/* El recorte con «…» va en el nombre, no en la etiqueta: si no, el
+   monograma y su aro se cortaban por la izquierda. */
+.prefs-chip .chip__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  overflow: visible;
+}
+.prefs-chip__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.prefs-chips--teams .prefs-chip.chip,
+.prefs-chips--nationalities .prefs-chip.chip {
+  padding-left: 12px;
+}
+/* Marcado: oro macizo con su ✓ (el color cambia al instante; nada se anima). */
+.prefs-chips .prefs-chip.chip--button[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.35),
+    0 2px 8px rgb(0 0 0 / 0.16);
+}
+.prefs-chips .prefs-chip[aria-pressed='true'] .prefs-chip__team {
+  box-shadow: 0 0 0 1.5px var(--on-accent);
+}
+.prefs-chip .icon {
+  margin-left: -4px;
 }
 .prefs-flag {
-  margin-right: 6px;
-  font-size: 1.05em;
+  font-size: 1.15em;
   line-height: 1;
 }
 
+/* ---- «Añadir otro…» en cápsula ------------------------------------------------- */
 .prefs-add {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--s-2);
   align-items: center;
+  max-width: 480px;
+}
+/* El campo nunca más ancho que su columna (en 360 px pisaba «Añadir»). */
+.prefs-add .field,
+.prefs-add .field__box {
+  min-width: 0;
+}
+.prefs-add .field__input {
+  width: 100%;
+}
+.prefs-add .field__box {
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+}
+.prefs-add .btn {
+  min-height: 52px;
 }
 
 .prefs-note {

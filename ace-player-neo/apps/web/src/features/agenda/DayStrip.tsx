@@ -1,4 +1,6 @@
-/* Tira de días (inventario §3.3). Reglas que conserva:
+/* Tira de días (inventario §3.3; piel Palco de la fase 2, decisión W4:
+   pastillas con el día en mayúsculas pequeñas, el número grande expandido y
+   el recuento debajo; «Hoy» en oro). Reglas que conserva:
 
    - Un botón por día de la agenda. El recuento es el de partidos VISIBLES con
      el filtro actual.
@@ -10,8 +12,8 @@
      deshabilitan en los extremos y se ocultan si no hay desbordamiento. Van
      solo con ratón (pointer: fine): en táctil se desliza la propia tira y las
      flechas se comerían 88 px del móvil (decisión anotada).
-   - Dos formas: `line` (móvil, injerto B8: «Hoy 23 · 8» en una línea) y
-     `tiles` (escritorio, teselas con el número grande).
+   - Dos formas: `line` (móvil y tableta, a sangre, pastillas justas) y
+     `tiles` (escritorio, pastillas anchas con «n partidos»).
    - Pestañas ARIA: flechas, Inicio y Fin cambian de día con el foco. */
 
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
@@ -171,18 +173,20 @@ export function DayStrip({
                 'press',
                 day.date === today && 'is-today',
                 day.date < today && 'is-past',
+                day.count === 0 && 'is-empty',
               )}
               onClick={() => onSelect(day.date)}
               onKeyDown={(event) => onKeyDown(event, index)}
             >
               <span className="agenda-day__label">{label.primary}</span>
-              <Num className="agenda-day__num" value={label.number} />
+              {/* Número en texto plano (no en celdas de Num): va expandido y
+                  no cambia, así que no hay nada que alinear. */}
+              <span className="agenda-day__num" aria-hidden="true">
+                {label.number}
+              </span>
               <span className="agenda-day__count">
                 {variant === 'line' ? (
-                  <>
-                    <span aria-hidden="true">· </span>
-                    <Num value={day.count} condensed={false} />
-                  </>
+                  <Num value={day.count} condensed={false} />
                 ) : (
                   partidos(day.count)
                 )}

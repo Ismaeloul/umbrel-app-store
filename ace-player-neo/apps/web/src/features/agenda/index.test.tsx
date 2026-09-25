@@ -71,6 +71,13 @@ function renderAgenda(kind: 'mobile' | 'desktop' = 'mobile') {
   return renderWithApp(<Agenda route={{ vista: 'agenda' }} active />, { kind });
 }
 
+/** Las filas de partidos (sin el héroe, que repite el destacado). */
+const rows = () => screen.getByRole('region', { name: 'Partidos' });
+const findInRows = async (text: string) => {
+  await waitFor(() => expect(within(rows()).getByText(text)).toBeInTheDocument());
+  return within(rows()).getByText(text);
+};
+
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(NOW);
@@ -112,18 +119,37 @@ describe('vista Agenda', () => {
       'aria-selected',
       'true',
     );
-    // Directo con su anillo, su marcador y la señal del precalentado.
-    expect(await screen.findByText('Minuto 54, en directo')).toBeInTheDocument();
-    expect(await screen.findByText('Verificada')).toBeInTheDocument();
+    // Directo con su minuto en el chip y la señal del precalentado en la cápsula.
+    const live = document.querySelector(`[data-match="${LIVE.id}"]`) as HTMLElement;
+    expect(await within(live).findByText("En directo · 54'")).toBeInTheDocument();
+    expect(await within(live).findByText('Señal')).toBeInTheDocument();
     expect(document.querySelector('.agenda-live-sum')?.textContent).toBe('1 en directo');
     // Resumen para lectores de pantalla (regla 36): una frase, no la lista entera.
     expect(screen.getByText(/: 2 partidos, 1 en directo, solo los tuyos$/)).toHaveAttribute(
       'aria-live',
       'polite',
     );
-    expect(screen.getByText('Tu equipo')).toBeInTheDocument();
+    expect(within(live).getByText('Tu equipo')).toBeInTheDocument();
     expect(screen.getByText('futbolenlatv.com', { exact: false })).toBeInTheDocument();
     expect(screen.getByText(/horario peninsular/)).toBeInTheDocument();
+  });
+
+  it('portada: héroe con el destacado, sin marcador en la tarjeta; el botón navega y nunca reproduce', async () => {
+    net = mockFetch(routes());
+    renderAgenda();
+    // El destacado es tu equipo en directo (Real Madrid, en tus gustos).
+    const hero = await screen.findByRole('region', { name: 'Real Madrid vs Girona' });
+    expect(hero).toHaveClass('agenda-hero', 'is-live');
+    expect(await within(hero).findByText("En directo · 54'")).toBeInTheDocument();
+    expect(within(hero).getByText('Champions League')).toBeInTheDocument();
+    expect(await within(hero).findByText('Señal')).toBeInTheDocument();
+    // El marcador solo en su cápsula, fuera de la tarjeta versus.
+    expect(hero.querySelector('.versus .agenda-score')).toBeNull();
+    await waitFor(() => expect(within(hero).getByTitle('Marcador')).toHaveTextContent(/2.*1/));
+    // El canal no está en tu biblioteca: «Buscar canal», que abre el partido.
+    fireEvent.click(within(hero).getByRole('button', { name: 'Buscar canal' }));
+    await waitFor(() => expect(location.search).toBe(`?vista=partido/${LIVE.id}`));
+    expect(document.querySelector('video')).toBeNull();
   });
 
   it('pie: la frescura de la agenda (última copia, parcial o limitada) y la atribución (B-146)', async () => {
@@ -177,13 +203,13 @@ describe('vista Agenda', () => {
     renderAgenda();
     await screen.findByRole('heading', { name: /Champions League/ });
     fireEvent.click(screen.getByRole('tab', { name: /^Mañana/ }));
-    expect(await screen.findByText('Betis')).toBeInTheDocument();
+    expect(await findInRows('Betis')).toBeInTheDocument();
     act(() => {
       window.dispatchEvent(
         new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true, cancelable: true }),
       );
     });
-    expect(await screen.findByText('Real Madrid')).toBeInTheDocument();
+    expect(await findInRows('Real Madrid')).toBeInTheDocument();
     expect(screen.queryByText('Betis')).toBeNull();
   });
 
@@ -205,7 +231,7 @@ describe('vista Agenda', () => {
       pointerType: 'touch',
     });
     fireEvent.pointerUp(panel, { pointerId: 1, clientX: 180, clientY: 404, pointerType: 'touch' });
-    expect(await screen.findByText('Betis')).toBeInTheDocument();
+    expect(await findInRows('Betis')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /^Mañana/ })).toHaveAttribute('aria-selected', 'true');
     // El clic que sigue al gesto no abre nada.
     fireEvent.click(screen.getByRole('button', { name: /Betis vs Sevilla/ }));
@@ -217,7 +243,7 @@ describe('vista Agenda', () => {
       pointerType: 'touch',
     });
     fireEvent.pointerUp(panel, { pointerId: 2, clientX: 220, clientY: 404, pointerType: 'touch' });
-    expect(await screen.findByText('Real Madrid')).toBeInTheDocument();
+    expect(await findInRows('Real Madrid')).toBeInTheDocument();
   });
 
   it('el marcador del partido que ves sale tapado hasta que lo pides', async () => {
@@ -227,9 +253,18 @@ describe('vista Agenda', () => {
     const reveal = await screen.findByRole('button', { name: 'Ver marcador' });
     const row = container.querySelector(`[data-match="${LIVE.id}"]`) as HTMLElement;
     expect(within(row).queryByText('2')).toBeNull();
+    // El héroe es el partido que suena: «En pantalla», «Volver al vídeo» y «Marcador».
+    const hero = screen.getByRole('region', { name: 'Real Madrid vs Girona' });
+    expect(within(hero).getByText('En pantalla')).toBeInTheDocument();
+    expect(within(hero).getByRole('button', { name: 'Volver al vídeo' })).toBeInTheDocument();
+    expect(within(hero).queryByTitle('Marcador')).toBeNull();
+    expect(within(hero).getByRole('button', { name: 'Marcador' })).toBeInTheDocument();
     fireEvent.click(reveal);
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Ver marcador' })).toBeNull());
-    expect(row.querySelectorAll('.agenda-team__score')[0]?.textContent).toContain('2');
+    expect(row.querySelector('.agenda-score')?.textContent).toContain('2');
+    // Destapar en un sitio destapa en todos: el héroe enseña ya las cifras.
+    expect(within(hero).queryByRole('button', { name: 'Marcador' })).toBeNull();
+    expect(within(hero).getByTitle('Marcador')).toHaveTextContent(/2.*1/);
     // Detener vuelve a tapar para la próxima vez.
     act(() => setPlayerPresence({ active: false }));
     act(() => setPlayerPresence({ active: true }));
@@ -280,7 +315,7 @@ describe('vista Agenda', () => {
     // Sin gustos, «Para ti» está deshabilitado y se fuerza «Todos».
     expect(screen.getByRole('radio', { name: /Para ti/ })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Ver el día siguiente' }));
-    expect(await screen.findByText('Betis')).toBeInTheDocument();
+    expect(await findInRows('Betis')).toBeInTheDocument();
   });
 
   it('si la agenda falla: error con «Reintentar» y la biblioteca sigue a mano', async () => {
@@ -300,10 +335,11 @@ describe('vista Agenda', () => {
       await screen.findByRole('heading', { name: 'No pudimos cargar la agenda' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText('La biblioteca y el reproductor siguen disponibles.'),
+      screen.getByText('Los canales y el reproductor siguen disponibles.'),
     ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ir a los canales' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
-    expect(await screen.findByText('Real Madrid')).toBeInTheDocument();
+    expect(await findInRows('Real Madrid')).toBeInTheDocument();
   });
 
   it('tarjeta de primer uso: «Ahora no» guarda onboardingComplete sin tocar tus gustos', async () => {

@@ -1,18 +1,30 @@
 /* ==========================================================================
-   Agenda (dirección A «Luz de focos» con los injertos B1, B3, B5, B7 y B8 y
-   las correcciones 2, 3, 5, 6 y 7 de eleccion.md). Todo con tokens; solo se
-   animan transform y opacity; el hover, solo con ratón de verdad.
+   Agenda = portada, piel «Palco» (plan fase 2, decisiones D3, D4, W4 y W11;
+   corrección 1 del encargo). Arriba el héroe versus XL; debajo la tira de
+   días y «Para ti» / «Todos»; después, por competición, una fila horizontal
+   de tarjetas versus (PosterRail). En escritorio, a la derecha, el panel del
+   partido elegido y «Luego». Todo con tokens; solo se animan transform y
+   opacity; el hover, solo con ratón de verdad.
    ========================================================================== */
 
 .agenda {
+  /* Ancho de las tarjetas de las filas (lo usa también el esqueleto). */
+  --agenda-card-w: 240px;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  row-gap: var(--s-5);
   min-width: 0;
 }
-.agenda__main {
-  display: grid;
-  gap: var(--s-4);
-  align-content: start;
-  min-width: 0;
+@media (min-width: 768px) {
+  .agenda {
+    --agenda-card-w: 300px;
+  }
+}
+
+/* ---- Cabecera -------------------------------------------------------------------- */
+.agenda-head.view-head {
+  padding-bottom: 0;
 }
 .agenda-head__lede {
   display: none;
@@ -21,17 +33,11 @@
   .agenda-head__lede {
     display: inline;
   }
-}
-/* La frase larga bajo el titular no debe empujar las acciones a otra línea:
-   el bloque del titular parte de 0 y la frase se parte dentro. Solo desde
-   768 (en el móvil no hay frase y el titular no se puede recortar). */
-@media (min-width: 768px) {
+  /* La frase larga bajo el titular no empuja las acciones a otra línea. */
   .agenda-head .view-head__titles {
     flex-basis: 0;
   }
 }
-
-/* ---- Cabecera: actualizar gira mientras carga ---------------------------------- */
 .agenda-refresh[aria-busy='true'] svg {
   animation: agenda-gira 900ms linear infinite;
 }
@@ -41,11 +47,213 @@
   }
 }
 
-/* ---- Barra de días y filtro --------------------------------------------------- */
+/* ---- Héroe ------------------------------------------------------------------------
+   Tarjeta versus XL (sin marcador) y, debajo, la acción oro, la cápsula
+   «Marcador» y dónde se emite. La luz de los dos clubes (--ta, --tb) queda
+   detrás de la tarjeta como un halo fijo (sin animar). */
+.agenda-hero {
+  --ta: transparent;
+  --tb: transparent;
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  gap: var(--s-4);
+  min-width: 0;
+}
+.agenda-hero__light {
+  position: absolute;
+  z-index: -1;
+  inset: 4% 0 14%;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      46% 70% at 22% 50%,
+      color-mix(in oklch, var(--ta) 30%, transparent),
+      transparent 72%
+    ),
+    radial-gradient(
+      46% 70% at 78% 50%,
+      color-mix(in oklch, var(--tb) 26%, transparent),
+      transparent 72%
+    );
+}
+.agenda-hero__card {
+  position: relative;
+  min-width: 0;
+}
+.agenda-hero__versus.versus {
+  min-height: 260px;
+  max-height: 56dvh;
+  box-shadow: var(--shadow-2);
+}
+.agenda-hero__versus.versus.is-watching {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    var(--shadow-2);
+}
+.agenda-hero__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.agenda-hero__cta.btn {
+  min-height: 52px;
+  padding-inline: 26px 30px;
+  font-size: var(--fs-17);
+}
+/* «Marcador» y el marcador destapado: cápsulas altas junto al botón. */
+.agenda-hero__reveal.capsule,
+.agenda-hero__score.capsule {
+  height: var(--tap);
+  padding-inline: 16px 18px;
+  font-size: var(--fs-15);
+}
+.agenda-hero__reveal.capsule--button::before {
+  inset: -4px -2px;
+}
+.agenda-hero__score.capsule {
+  gap: 8px;
+  font-size: var(--fs-22);
+}
+.agenda-hero__where {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  font-weight: var(--wght-medium);
+}
+.agenda-hero__where svg {
+  flex: none;
+}
+/* Mientras carga: el hueco del héroe, oscuro como lo será la tarjeta. */
+.agenda-hero__skeleton.skeleton {
+  aspect-ratio: 16 / 9;
+  min-height: 260px;
+  max-height: 56dvh;
+  background: var(--glass-video-solid);
+  color-scheme: dark;
+}
+
+/* Móvil: el héroe va a sangre arriba del todo, alto como un cartel, y la
+   cabecera («Agenda», que sigue siendo el primer <h1>) flota encima sobre un
+   velo oscuro. */
+@media (max-width: 767px) {
+  .agenda-hero__light {
+    display: none;
+  }
+  .agenda-hero__card,
+  .agenda-hero--pending {
+    margin-inline: calc(-1 * (var(--gutter) + var(--safe-left)))
+      calc(-1 * (var(--gutter) + var(--safe-right)));
+  }
+  .agenda-hero__versus.versus--xl {
+    --versus-r: 0;
+    --versus-crest-y: 52%;
+    aspect-ratio: auto;
+    height: clamp(360px, 60svh, 500px);
+    max-height: none;
+    border-radius: 0 0 var(--r-xl) var(--r-xl);
+  }
+  .agenda-hero .versus--xl .versus__crests {
+    transform: translate(-50%, -50%);
+  }
+  .agenda-hero__skeleton.skeleton {
+    aspect-ratio: auto;
+    height: clamp(360px, 60svh, 500px);
+    border-radius: 0 0 var(--r-xl) var(--r-xl);
+  }
+  .agenda-hero__bar {
+    padding-inline: 2px;
+  }
+  .agenda-hero__cta.btn {
+    flex: 1 1 180px;
+  }
+  .agenda-hero__where {
+    flex-basis: 100%;
+  }
+
+  .agenda.has-hero > .agenda-head {
+    grid-row: 1;
+    grid-column: 1;
+    z-index: 2;
+    align-self: start;
+    /* Sobre la tarjeta: los tokens se resuelven en oscuro (light-dark()). */
+    color-scheme: dark;
+    color: #fff;
+    pointer-events: none;
+  }
+  .agenda.has-hero > .agenda-head .view-head__titles,
+  .agenda.has-hero > .agenda-head .view-head__actions {
+    pointer-events: auto;
+  }
+  .agenda.has-hero > .agenda-hero {
+    grid-row: 1;
+    grid-column: 1;
+  }
+  /* El chip y la señal bajan para dejar sitio a la cabecera. */
+  .agenda.has-hero .agenda-hero .versus__top {
+    top: calc(var(--safe-top) + 76px);
+  }
+  /* Velo extra arriba para que «Agenda» se lea sobre un club blanco. */
+  .agenda.has-hero .agenda-hero__card::before {
+    content: '';
+    position: absolute;
+    z-index: 1;
+    inset: 0 0 auto;
+    height: calc(var(--safe-top) + 96px);
+    background: linear-gradient(180deg, rgb(0 0 0 / 0.55), transparent);
+    pointer-events: none;
+  }
+}
+@media (min-width: 768px) {
+  .agenda-hero__versus.versus--xl {
+    --versus-r: var(--r-xl);
+  }
+  /* En la valla ancha el velo de la tarjeta enturbiaba media mitad (un
+     amarillo salía oliva): aquí oscurece arriba, abajo y, sobre todo, la
+     esquina de los nombres. */
+  .agenda-hero .versus--xl .versus__veil {
+    background:
+      linear-gradient(
+        180deg,
+        rgb(0 0 0 / 0.36) 0%,
+        rgb(0 0 0 / 0) 24%,
+        rgb(0 0 0 / 0) 52%,
+        rgb(0 0 0 / 0.5) 100%
+      ),
+      radial-gradient(64% 80% at 0% 100%, rgb(0 0 0 / 0.6), transparent 72%),
+      radial-gradient(40% 60% at 50% 46%, rgb(0 0 0 / 0.22), transparent 70%);
+  }
+}
+/* Escritorio: una valla a todo el ancho con tope de alto; escudos y nombres
+   crecen con ella. */
+@media (min-width: 1024px) {
+  .agenda-hero .versus--xl {
+    --versus-pad: 24px;
+    --versus-name: var(--fs-44);
+    --versus-crest-y: 44%;
+  }
+  .agenda-hero .versus--xl .versus__crests {
+    transform: translate(-50%, -50%) scale(1.4);
+  }
+}
+
+/* ---- Barra: días y filtro ---------------------------------------------------------- */
 .agenda-bar {
   display: grid;
   gap: var(--s-3);
   min-width: 0;
+}
+@media (min-width: 1280px) {
+  .agenda-bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: var(--s-6);
+  }
 }
 
 .agenda-days {
@@ -60,7 +268,7 @@
 .agenda-days__track {
   display: flex;
   flex: 1 1 auto;
-  gap: var(--s-2);
+  gap: 4px;
   min-width: 0;
   padding: 4px calc(var(--gutter) + var(--safe-right)) 6px calc(var(--gutter) + var(--safe-left));
   overflow-x: auto;
@@ -72,58 +280,77 @@
 .agenda-days__track::-webkit-scrollbar {
   display: none;
 }
+/* Pastilla de día: rótulo en mayúsculas pequeñas, número grande expandido y
+   el recuento debajo. La elegida lleva una píldora que aparece con opacidad. */
 .agenda-day {
+  isolation: isolate;
+  display: grid;
   flex: none;
-  scroll-snap-align: center;
+  justify-items: center;
+  align-content: center;
+  gap: 3px;
+  min-width: 58px;
+  min-height: 74px;
+  padding: 8px 10px;
+  border-radius: var(--r-l);
   color: var(--text);
+  scroll-snap-align: center;
+}
+.agenda-day::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
   background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--line-soft);
+  box-shadow:
+    inset 0 1px 0 var(--glass-hi),
+    0 0 0 1px var(--line-soft),
+    0 6px 18px -10px rgb(0 0 0 / 0.45);
+  opacity: 0;
+  transition: opacity var(--dur-rapido) var(--ease-rapido);
+}
+.agenda-day[aria-selected='true']::before {
+  opacity: 1;
 }
 .agenda-day__label {
-  font-weight: var(--wght-strong);
+  color: var(--text-2);
+  font-size: var(--fs-11);
+  font-weight: 760;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.agenda-day__num {
+  font-size: var(--fs-22);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: var(--tracking-head);
+  line-height: 1;
 }
 .agenda-day__count {
-  color: var(--text-2);
-  font-weight: 600;
+  color: var(--text-3);
+  font-size: var(--fs-11);
+  font-weight: 640;
   font-stretch: var(--w-tight);
+  line-height: 1.1;
 }
-.agenda-day.is-today .agenda-day__label {
-  color: var(--accent-ink);
-}
-.agenda-day.is-past .agenda-day__num {
-  color: var(--text-2);
-}
-.agenda-day[aria-selected='true'] {
-  background: var(--accent-wash);
-  box-shadow: inset 0 0 0 1.5px var(--accent-edge);
-}
-.agenda-day[aria-selected='true'] .agenda-day__count,
 .agenda-day[aria-selected='true'] .agenda-day__label {
   color: var(--text);
 }
-
-/* B8: el día en una línea («Hoy 23 · 8»), 44 px de alto. */
-.agenda-days--line .agenda-day {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
-  min-height: var(--tap);
-  padding: 11px 14px 0;
-  border-radius: var(--r-pill);
-  white-space: nowrap;
+/* «Hoy» en oro (texto oro AA en los dos temas). */
+.agenda-day.is-today .agenda-day__label {
+  color: var(--accent-ink);
 }
-.agenda-days--line .agenda-day__label {
-  font-size: var(--fs-15);
+.agenda-day.is-past .agenda-day__num,
+.agenda-day.is-empty .agenda-day__num {
+  color: var(--text-3);
 }
-.agenda-days--line .agenda-day__num {
-  font-size: var(--fs-17);
-  line-height: 1;
+.agenda-day--pending {
+  width: 58px;
+  background: color-mix(in oklab, var(--text-3) 12%, transparent);
 }
-.agenda-days--line .agenda-day__count {
-  font-size: var(--fs-13);
-}
-
-/* Teselas de escritorio (12-13 px en sus rótulos: corrección 7). */
+/* Teselas de escritorio: más anchas, con «n partidos». */
 .agenda-days--tiles {
   margin-inline: 0;
 }
@@ -132,32 +359,15 @@
   padding: 4px 2px 6px;
 }
 .agenda-days--tiles .agenda-day {
-  display: grid;
-  justify-items: center;
-  align-content: center;
-  gap: 3px;
-  width: 70px;
-  min-height: 82px;
-  border-radius: var(--r-l);
-}
-.agenda-days--tiles .agenda-day__label {
-  font-size: var(--fs-caption);
-  color: var(--text-2);
+  min-width: 78px;
+  min-height: 86px;
+  padding-inline: 8px;
 }
 .agenda-days--tiles .agenda-day__num {
-  font-size: 1.625rem;
-  line-height: 1;
+  font-size: var(--fs-30);
 }
-.agenda-days--tiles .agenda-day__count {
-  font-size: var(--fs-label);
-}
-/* Pastillas vacías mientras carga (DayStrip): mismo alto que las de verdad. */
-.agenda-day--pending {
-  background: color-mix(in oklab, var(--text-3) 12%, transparent);
-  box-shadow: none;
-}
-.agenda-days--line .agenda-day--pending {
-  width: 92px;
+.agenda-days--tiles .agenda-day--pending {
+  width: 78px;
 }
 .agenda-days.has-arrows .agenda-days__track {
   padding-inline: 2px;
@@ -176,16 +386,17 @@
 
 .agenda-filter {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--s-3);
+  gap: var(--s-2) var(--s-3);
   min-width: 0;
 }
 .agenda-filter__mode {
   display: flex;
   flex: 0 1 auto;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
 }
 .agenda-filter .seg {
@@ -195,20 +406,17 @@
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 6px;
-  color: var(--live);
+  gap: 4px;
+  color: var(--live-ink);
   font-size: var(--fs-13);
-  font-weight: 680;
+  font-weight: 700;
   white-space: nowrap;
 }
 
-/* Móvil en horizontal (pantalla baja con carril): la cabecera, la tira y el
-   filtro se comían 290 de 390 px y no se veía ni un partido entero. Titular
-   más bajo, sin la frase, y días y filtro en la misma línea. */
+/* Móvil en horizontal (pantalla baja): titular más bajo y sin frase. */
 @media (min-width: 768px) and (max-height: 540px) {
   .agenda-head.view-head {
     padding-top: calc(var(--safe-top) + var(--s-3));
-    padding-bottom: 0;
   }
   .agenda-head .view-head__title {
     font-size: var(--fs-30);
@@ -216,34 +424,60 @@
   .agenda-head .agenda-head__lede {
     display: none;
   }
+  .agenda-hero__versus.versus,
+  .agenda-hero__skeleton.skeleton {
+    min-height: 200px;
+    max-height: 62dvh;
+  }
+  /* Días y filtro en la misma línea; la tira se funde donde acaba. */
   .agenda-bar {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     column-gap: var(--s-4);
   }
-  /* Aquí la tira acaba a media pantalla (junto al filtro): el fundido dice
-     que sigue. */
   .agenda-days--line .agenda-days__track {
     padding-right: 28px;
     mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
   }
 }
 
-/* ---- Tarjeta de primer uso ------------------------------------------------------ */
-.agenda-first {
+/* ---- Tarjeta de primer uso: oscura con una luz dorada tenue ------------------------ */
+.agenda-first.card {
+  position: relative;
+  isolation: isolate;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--s-3) var(--s-3);
-  align-items: start;
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent-edge) 35%, transparent);
+  gap: var(--s-4);
+  align-items: center;
+  overflow: hidden;
+  padding: var(--s-5);
+  /* Siempre oscura (los tokens se resuelven en oscuro también en el tema claro). */
+  color-scheme: dark;
+  color: var(--text);
+  background: var(--glass-video-solid);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, var(--accent) 28%, transparent),
+    var(--shadow-2);
+}
+.agenda-first__light {
+  position: absolute;
+  z-index: -1;
+  inset: -40% 30% 10% -20%;
+  pointer-events: none;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in oklab, var(--accent) 26%, transparent),
+    transparent
+  );
 }
 .agenda-first__mark {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
-  background: var(--accent-wash);
+  background: color-mix(in oklab, var(--accent) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 40%, transparent);
   color: var(--accent-ink);
 }
 .agenda-first__text {
@@ -252,9 +486,10 @@
   min-width: 0;
 }
 .agenda-first__title {
-  font-size: var(--fs-17);
-  font-weight: 720;
+  font-size: var(--fs-22);
+  font-weight: var(--wght-head);
   font-stretch: var(--w-head);
+  letter-spacing: var(--tracking-head);
   line-height: var(--lh-snug);
 }
 .agenda-first__text p {
@@ -270,23 +505,27 @@
   gap: var(--s-2);
 }
 @media (min-width: 768px) {
-  .agenda-first {
+  .agenda-first.card {
     grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: center;
+    padding: var(--s-6);
   }
   .agenda-first__actions {
     grid-column: auto;
   }
 }
 
-/* ---- Lista (virtualizada) -------------------------------------------------------- */
+/* ---- Cuerpo: filas (y, en escritorio, el panel lateral) ---------------------------- */
+.agenda__body {
+  min-width: 0;
+}
 .agenda-panel {
   min-width: 0;
 }
 .agenda-list {
   position: relative;
+  display: grid;
+  gap: var(--s-6);
   min-width: 0;
-  container-type: inline-size;
 }
 .agenda-list--next {
   animation: agenda-entra-dcha var(--dur-estandar) var(--ease-estandar) both;
@@ -306,33 +545,25 @@
     transform: translateX(-24px);
   }
 }
-.agenda-list__space {
-  position: relative;
-  width: 100%;
-}
-.agenda-list__head,
-.agenda-list__row {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-}
-.agenda-list__head {
-  padding: var(--s-6) 4px var(--s-3);
-}
-.agenda-list__head[data-first='true'] {
-  padding-top: var(--s-1);
+.agenda-group-sec {
+  display: grid;
+  gap: var(--s-1);
+  min-width: 0;
 }
 .agenda-group {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
   min-width: 0;
+  padding-inline: 2px;
   font-size: var(--fs-17);
-  font-weight: 720;
+  font-weight: var(--wght-head);
   font-stretch: var(--w-head);
-  letter-spacing: -0.005em;
+  letter-spacing: -0.01em;
   line-height: var(--lh-snug);
+}
+.agenda-group__logo {
+  flex: none;
 }
 .agenda-group__name {
   min-width: 0;
@@ -342,314 +573,191 @@
 }
 .agenda-group__count {
   flex: none;
-  color: var(--text-2);
+  color: var(--text-3);
   font-size: var(--fs-13);
-  font-weight: 500;
+  font-weight: 600;
   font-stretch: 100%;
   letter-spacing: 0;
 }
-.agenda-list--compact .agenda-list__head {
-  padding: var(--s-4) 4px var(--s-2);
+@media (min-width: 768px) {
+  .agenda-group {
+    font-size: var(--fs-22);
+  }
 }
-.agenda-list--compact .agenda-list__head[data-first='true'] {
-  padding-top: 0;
-}
-.agenda-group--compact {
-  font-size: var(--fs-13);
-  color: var(--text-2);
+.agenda-rail {
+  --prail-item-w: var(--agenda-card-w);
 }
 
-/* ---- Franja de partido -------------------------------------------------------------
-   Un bloque por competición: la primera franja lleva las esquinas de arriba,
-   la última las de abajo y entre medias una línea fina (con sombras interiores
-   para que el borde siga el radio). */
+/* ---- Tarjeta de partido -------------------------------------------------------------
+   Toda la tarjeta es UN botón (capa invisible por encima); lo demás no
+   captura el puntero salvo «Ver marcador», que va por encima de esa capa. */
 .agenda-row {
   --ta: transparent;
   --tb: transparent;
   position: relative;
   isolation: isolate;
   display: grid;
-  /* La columna de la señal tiene ancho fijo: así los marcadores de todas las
-     franjas quedan en la misma vertical aunque cambie la palabra. */
-  grid-template-columns: 58px minmax(0, 1fr) 88px;
-  grid-template-areas:
-    'time teams sig'
-    'time meta meta';
-  column-gap: var(--s-3);
-  row-gap: var(--s-2);
-  align-items: center;
-  min-height: 88px;
-  padding: 14px;
-  background: var(--surface);
-  box-shadow:
-    inset 1px 0 0 var(--line-soft),
-    inset -1px 0 0 var(--line-soft),
-    inset 0 1px 0 var(--line-soft);
+  gap: 8px;
+  min-width: 0;
+  container: agenda-row / inline-size;
 }
-/* Móvil estrecho (360): con la señal al lado, a los nombres les faltaban
-   unos píxeles («Real Socie…»). La hora (22 px) cabe en 54 y «En 4 h 12 min»
-   ya parte en dos líneas; los huecos, algo más justos (revisión visual de la
-   Fase 2). */
-@media (max-width: 380px) {
-  .agenda-row:not(.agenda-row--compact) {
-    grid-template-columns: 54px minmax(0, 1fr) 88px;
-    column-gap: var(--s-2);
-  }
-}
-.agenda-row--first {
-  border-radius: var(--r-xl) var(--r-xl) 0 0;
-}
-.agenda-row--last {
-  border-radius: 0 0 var(--r-xl) var(--r-xl);
-  box-shadow:
-    inset 1px 0 0 var(--line-soft),
-    inset -1px 0 0 var(--line-soft),
-    inset 0 1px 0 var(--line-soft),
-    inset 0 -1px 0 var(--line-soft);
-}
-.agenda-row--only {
-  border-radius: var(--r-xl);
-  box-shadow: inset 0 0 0 1px var(--line-soft);
-}
-/* En directo: la franja recibe un velo con la luz de sus dos equipos. */
-.agenda-row.is-live {
-  background:
-    radial-gradient(
-      40% 60% at 18% 26%,
-      color-mix(in oklch, var(--ta) 16%, transparent),
-      transparent 75%
-    ),
-    radial-gradient(
-      40% 60% at 18% 72%,
-      color-mix(in oklch, var(--tb) 14%, transparent),
-      transparent 75%
-    ),
-    var(--surface);
-}
-.agenda-row.is-selected {
-  background-color: var(--surface-2);
-}
-.agenda-row.is-live.is-selected {
-  background:
-    radial-gradient(
-      40% 60% at 18% 26%,
-      color-mix(in oklch, var(--ta) 16%, transparent),
-      transparent 75%
-    ),
-    radial-gradient(
-      40% 60% at 18% 72%,
-      color-mix(in oklch, var(--tb) 14%, transparent),
-      transparent 75%
-    ),
-    var(--surface-2);
-}
-.agenda-row.is-selected::before {
-  content: '';
-  position: absolute;
-  z-index: 2;
-  left: 0;
-  top: 12px;
-  bottom: 12px;
-  width: 3px;
-  border-radius: 0 3px 3px 0;
-  background: var(--accent-edge);
-}
-/* Hover: una capa que aparece con opacidad (nada de animar colores). */
-.agenda-row::after {
-  content: '';
-  position: absolute;
-  z-index: 0;
-  inset: 0;
-  border-radius: inherit;
-  background: var(--surface-2);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--dur-rapido) var(--ease-rapido);
-}
-@media (hover: hover) and (pointer: fine) {
-  .agenda-row:hover::after {
-    opacity: 0.6;
-  }
-}
-.agenda-row:active::after {
-  opacity: 0.8;
-}
-
-/* Toda la franja es el botón: una capa encima; lo demás no captura el puntero. */
 .agenda-row__hit {
   position: absolute;
-  z-index: 1;
+  z-index: 3;
   inset: 0;
-  border-radius: inherit;
+  border-radius: var(--r-m);
   cursor: pointer;
 }
 .agenda-row__hit:focus-visible {
-  outline: 2px solid var(--accent-edge);
-  outline-offset: -3px;
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 .agenda-row > :not(.agenda-row__hit) {
-  position: relative;
-  z-index: 2;
   pointer-events: none;
 }
-
+.agenda-row__card {
+  position: relative;
+  min-width: 0;
+  border-radius: var(--r-m);
+}
+/* En directo, la luz de los dos clubes bajo la tarjeta (sombra fija). */
+.agenda-row.is-live .agenda-row__card {
+  box-shadow: 0 12px 26px -16px color-mix(in oklch, var(--ta) 80%, transparent);
+}
+.agenda-row .versus {
+  aspect-ratio: 16 / 10;
+}
+.agenda-row:not(.agenda-row--compact) .versus {
+  --versus-crest-y: 45%;
+}
+.agenda-row__versus,
+.agenda-row__corner {
+  transition: transform var(--dur-rapido) var(--ease-rapido);
+}
+@media (hover: hover) and (pointer: fine) {
+  .agenda-row:hover .agenda-row__versus,
+  .agenda-row:hover .agenda-row__corner {
+    transform: translateY(-3px);
+  }
+}
+.agenda-row:active .agenda-row__versus,
+.agenda-row:active .agenda-row__corner {
+  transform: translateY(1px);
+}
 .agenda-row--enter {
   animation: ace-aparece var(--dur-estandar) var(--ease-estandar) both;
   animation-delay: calc(min(var(--i, 0), var(--stagger-max)) * var(--stagger-step));
 }
 
-/* Tiempo */
-.agenda-row__time {
-  grid-area: time;
-  align-self: start;
-  display: grid;
-  justify-items: start;
-  gap: 3px;
-  padding-top: 2px;
+/* Cápsula de señal (arriba a la derecha): la palabra se recorta antes que el
+   chip de cuándo, que nunca se parte. */
+.agenda-row .versus__marks {
+  flex: none;
+}
+.agenda-row .versus__signal {
+  flex: 0 1 auto;
   min-width: 0;
 }
-.agenda-row__time--ring {
-  justify-items: center;
-  gap: 2px;
-  padding-top: 0;
+.agenda-sig {
+  min-width: 0;
 }
-.agenda-row__clock {
-  font-size: var(--fs-22);
-  line-height: 1;
-  color: var(--text);
+.agenda-sig .sig {
+  display: inline;
+  font: inherit;
+  color: inherit;
 }
-.agenda-row.is-live .agenda-row__clock {
-  color: var(--live);
-}
-.agenda-row__note {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  color: var(--text-2);
-  font-size: var(--fs-label);
-  font-weight: 620;
-  font-stretch: var(--w-tight);
-  line-height: 1.25;
-}
-.agenda-row__note .live-dot {
-  margin-left: -4px;
-}
-.agenda-row.is-live .agenda-row__note,
-.agenda-row.is-soon .agenda-row__note {
-  color: var(--live);
-}
-.agenda-row__tbc {
-  color: var(--text-2);
-  font-size: var(--fs-13);
-  font-weight: 600;
-  line-height: 1.2;
+.agenda-sig .sig__glyph {
+  display: inline-block;
+  margin-right: 4px;
 }
 
-/* Equipos y marcador */
-.agenda-row__teams {
-  grid-area: teams;
-  display: grid;
-  gap: 6px;
-  min-width: 0;
+/* Abajo a la derecha: el marcador en su cápsula o tapado; los nombres le
+   dejan sitio. */
+.agenda-row__corner {
+  position: absolute;
+  z-index: 4;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
 }
-.agenda-row__teams.has-cover {
-  grid-template-columns: minmax(0, 1fr) auto;
-  column-gap: var(--s-2);
+.agenda-row.has-corner .versus__bottom {
+  padding-right: 64px;
 }
-.agenda-row__teams.has-cover > .agenda-team {
-  grid-column: 1;
+.agenda-row.has-corner:has(.agenda-cover) .versus__bottom {
+  padding-right: 112px;
 }
-.agenda-team {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 9px;
-  min-height: 24px;
+.agenda-row--compact .agenda-row__corner {
+  right: 10px;
+  bottom: 10px;
 }
-.agenda-team__name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--fs-15);
-  font-weight: var(--wght-medium);
-}
-.agenda-team__score {
-  font-size: var(--fs-22);
-  line-height: 1;
-  text-align: right;
-}
-/* Sin marcador (partido por jugar) la columna vacía del marcador no se queda
-   con su hueco: esos 7-9 px son del nombre. Con la señal al lado, «Real
-   Sociedad» salía «Real Socie…» en la columna del partido y en el móvil de
-   360 px (revisión visual de la Fase 2). */
-.agenda-team:has(> .agenda-team__score:empty) {
-  grid-template-columns: auto minmax(0, 1fr);
-}
-.agenda-team__score:empty {
-  display: none;
-}
-.agenda-team.is-lead .agenda-team__name {
-  font-weight: 700;
-}
-.agenda-team.is-trail .agenda-team__name,
-.agenda-team.is-trail .agenda-team__score {
-  color: var(--text-2);
-}
-/* Terminado: en gris legible (texto 3 ≥ 4,5:1), no con opacidad. */
-.agenda-row.is-done .agenda-team__name,
-.agenda-row.is-done .agenda-team__score,
-.agenda-row.is-done .agenda-row__clock {
-  color: var(--text-3);
-}
-.agenda-row.is-done .agenda-team__name {
-  font-weight: 500;
+.agenda-row--compact.has-corner .versus__bottom {
+  padding-right: 56px;
 }
 
 /* Marcador tapado (corrección 2, B5): barras de censura y «Ver marcador». */
 .agenda-censor {
-  display: inline-grid;
-  gap: 5px;
-  justify-items: end;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
 }
 .agenda-censor i {
   display: block;
-  width: 18px;
-  height: 14px;
-  border-radius: 4px;
-  background: var(--text-3);
-  opacity: 0.55;
+  width: 9px;
+  height: 13px;
+  border-radius: 3px;
+  background: currentColor;
+  opacity: 0.5;
 }
 .agenda-cover {
-  grid-column: 2;
-  grid-row: 1 / span 2;
-  pointer-events: auto;
-  display: grid;
-  justify-items: center;
-  align-content: center;
-  gap: 4px;
-  min-width: var(--tap);
-  min-height: var(--tap);
-  padding: 4px 6px;
-  border-radius: var(--r-s);
-  color: var(--text-2);
-  font-size: var(--fs-label);
-  font-weight: 650;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 12px 0 10px;
+  border-radius: var(--r-pill);
+  color-scheme: dark;
+  color: var(--on-video);
+  background: var(--glass-video);
+  -webkit-backdrop-filter: var(--blur-video);
+  backdrop-filter: var(--blur-video);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.16);
+  font-size: var(--fs-12);
+  font-weight: 700;
   font-stretch: var(--w-tight);
-  line-height: 1.1;
-  text-align: center;
-}
-.agenda-row > .agenda-row__teams .agenda-cover {
+  white-space: nowrap;
+  cursor: pointer;
   pointer-events: auto;
 }
-.agenda-cover__text {
-  max-width: 7ch;
+/* Zona táctil de 44 aunque el dibujo mida 32. */
+.agenda-cover::before {
+  content: '';
+  position: absolute;
+  inset: -6px -4px;
 }
-.agenda-cover:focus-visible {
-  outline-offset: 0;
+.agenda-row--compact .agenda-cover {
+  padding-inline: 9px;
+}
+:root[data-transparency='reduced'] .agenda-cover {
+  background: var(--glass-video-solid);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+@media (prefers-reduced-transparency: reduce) {
+  .agenda-cover {
+    background: var(--glass-video-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 
-/* Cifras que giran como una paleta (B5) al cambiar o al destapar. */
+/* Marcador destapado en su cápsula; las cifras giran como una paleta (B5). */
+.agenda-score {
+  gap: 5px;
+}
+.agenda-score__sep {
+  opacity: 0.6;
+}
 .agenda-flip {
   display: inline-flex;
   transform-origin: 50% 50%;
@@ -662,83 +770,91 @@
   }
 }
 
-/* Sin señal ni marcador, los equipos ocupan también la columna de la señal. */
-.agenda-row--roomy .agenda-row__teams {
-  grid-column: 2 / -1;
+/* Progreso del partido en directo: una línea fina bajo la tarjeta. */
+.agenda-row__progress {
+  margin-inline: 4px;
 }
 
-/* Señal */
-.agenda-row__sig {
-  grid-area: sig;
-  justify-self: end;
-  align-self: center;
-  min-width: 0;
-}
-.agenda-row__sig .sig__word {
-  max-width: 11ch;
-  white-space: normal;
-  text-align: right;
-}
-
-/* Canales y acción */
+/* Línea pequeña bajo la tarjeta: estado, canales y acción. */
 .agenda-row__meta {
-  grid-area: meta;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
+  padding-inline: 2px;
   color: var(--text-2);
-  font-size: var(--fs-caption);
+  font-size: var(--fs-12);
 }
-.agenda-row .agenda-row__mine {
+.agenda-row__note {
+  display: inline-flex;
   flex: none;
-  min-height: 24px;
-  padding: 0 8px;
-  border-radius: var(--r-xs);
-  font-size: var(--fs-label);
+  align-items: center;
+  gap: 2px;
+  font-weight: 680;
+  font-stretch: var(--w-tight);
+  white-space: nowrap;
 }
+.agenda-row__note .live-dot {
+  margin-left: -4px;
+}
+.agenda-row__note.is-live,
+.agenda-row__note.is-soon {
+  color: var(--live-ink);
+}
+.agenda-row__note.is-done {
+  color: var(--text-3);
+}
+/* Los canales en UNA línea de texto que se recorta entera con «…» (en la
+   tarjeta de 240 px dos rótulos no caben como chips). */
 .agenda-row__channels {
-  display: flex;
   flex: 0 1 auto;
-  gap: 6px;
   min-width: 0;
   overflow: hidden;
-}
-/* B3: continuo = en tu biblioteca; discontinuo = se buscará al reproducir. */
-.agenda-ch {
-  display: inline-flex;
-  flex: 0 1 auto;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-  height: 24px;
-  padding: 0 8px;
-  border-radius: var(--r-xs);
-  outline: 1px solid var(--line-strong);
-  outline-offset: -1px;
+  text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 22px;
+}
+.agenda-row__tv {
+  display: inline-block;
+  margin-right: 5px;
+  vertical-align: -3px;
+  color: var(--text-3);
+}
+/* B3 en pequeño: subrayado continuo = en tu biblioteca; discontinuo = se
+   buscará al reproducir (la forma dice lo mismo que el `title`). */
+.agenda-ch {
+  font-weight: 640;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 4px;
+}
+.agenda-ch + .agenda-ch::before {
+  content: '·';
+  display: inline-block;
+  margin-inline: 5px;
+  color: var(--text-3);
+  text-decoration: none;
 }
 .agenda-ch.is-lib {
   color: var(--text);
 }
 .agenda-ch.is-search {
-  outline-style: dashed;
-}
-.agenda-ch svg {
-  flex: none;
-}
-.agenda-ch__name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  text-decoration-style: dashed;
 }
 .agenda-ch--more {
-  flex: none;
-  outline: none;
-  padding: 0 2px;
+  margin-left: 5px;
+  color: var(--text-3);
+  text-decoration: none;
+}
+.agenda-ch + .agenda-ch--more::before {
+  content: none;
 }
 .agenda-row__none {
+  overflow: hidden;
   color: var(--text-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .agenda-row__cta {
   display: inline-flex;
@@ -746,145 +862,37 @@
   align-items: center;
   gap: 4px;
   margin-left: auto;
-  padding-left: 4px;
   color: var(--accent-ink);
-  font-weight: 650;
+  font-weight: 700;
 }
-/* Por debajo de 480 px de lista (móvil y la lista de 1024-1279 junto al
-   escenario) la acción se queda en su icono: el texto se comía los canales,
-   que son lo que decide qué ver. La franja entera ya dice «Ver canal» o
-   «Buscar canal» a los lectores de pantalla. */
-@container (max-width: 480px) {
+/* En la tarjeta del móvil la acción se queda en su icono: el texto se comía
+   los canales, que son lo que decide qué ver (el botón ya lo dice entero). */
+@container agenda-row (max-width: 280px) {
   .agenda-row__cta-text {
     display: none;
   }
 }
 
-/* Progreso del partido en la base de la franja en directo. */
-.agenda-row > .agenda-row__progress {
-  position: absolute;
-  z-index: 2;
-  left: 14px;
-  right: 14px;
-  bottom: 0;
-  border-radius: 3px 3px 0 0;
-}
-
-/* Franja compacta (columna del centro de partido y «Luego»). */
-.agenda-row--compact {
-  grid-template-columns: 50px minmax(0, 1fr) 76px;
-  grid-template-areas: 'time teams sig';
-  column-gap: 10px;
-  min-height: 66px;
-  padding: 10px 12px;
-}
-/* En la columna de 300 px cada píxel es nombre de equipo: la señal y los
-   huecos van justos (la maqueta de la opción A usa medidas parecidas). */
-.agenda-col .agenda-row--compact {
-  grid-template-columns: 50px minmax(0, 1fr) 66px;
-  column-gap: 6px;
-  padding-inline: 10px;
-}
-.agenda-row--compact.agenda-row--first {
-  border-radius: var(--r-l) var(--r-l) 0 0;
-}
-.agenda-row--compact.agenda-row--last {
-  border-radius: 0 0 var(--r-l) var(--r-l);
-}
-.agenda-row--compact.agenda-row--only {
-  border-radius: var(--r-l);
-}
-.agenda-row--compact .agenda-row__time {
-  align-self: center;
-}
-.agenda-row--compact .agenda-row__clock {
-  font-size: var(--fs-15);
-}
-/* «En 2 h 28 min» no cabe en una línea de 50 px: parte en dos en vez de
-   meterse debajo del escudo. */
-.agenda-row--compact .agenda-row__note {
-  max-width: 100%;
-  overflow-wrap: anywhere;
-}
-.agenda-row--compact .agenda-row__teams {
-  gap: 4px;
-}
-.agenda-row--compact .agenda-team {
-  gap: 7px;
-  min-height: 20px;
-}
-.agenda-row--compact .agenda-team__name {
-  font-size: var(--fs-13);
-}
-.agenda-row--compact .agenda-team__score {
-  font-size: var(--fs-15);
-}
-/* «Comprobando» a 11 px cabe en 70 px; a 13 se comía el nombre del equipo.
-   Es un rótulo terciario (el medidor ya dice el estado con su forma). */
-.agenda-col .agenda-row--compact .agenda-row__sig .sig__word {
-  font-size: var(--fs-11);
-}
-.agenda-row--compact .agenda-censor i {
-  width: 14px;
-  height: 10px;
-}
-/* Tapado en la franja compacta: las barras ocupan el hueco del marcador
-   (24 px) y no una columna de 44 que dejaba «FC …» / «Juv…» en la columna
-   del partido. El objetivo táctil sigue siendo de 44 px con una capa
-   invisible por fuera (los nombres de debajo no capturan el puntero). */
-.agenda-row--compact .agenda-row__teams.has-cover {
-  grid-template-columns: minmax(0, 1fr) 24px;
-  column-gap: 6px;
-}
-.agenda-row--compact .agenda-cover {
-  position: relative;
-  min-width: 24px;
-  min-height: 24px;
-  padding: 0;
-}
-.agenda-row--compact .agenda-cover::before {
-  content: '';
-  position: absolute;
-  inset: -2px -10px;
-}
-.agenda-row--compact.is-selected::before {
-  top: 8px;
-  bottom: 8px;
-}
-
-/* ---- Estados y pie ------------------------------------------------------------ */
+/* ---- Estados y pie ----------------------------------------------------------------- */
 .agenda-loading {
   display: grid;
   gap: var(--s-3);
 }
-.agenda-loading__rows {
-  display: grid;
-  border-radius: var(--r-xl);
+.agenda-loading__rail {
+  display: flex;
+  gap: 12px;
   overflow: hidden;
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--line-soft);
 }
-.agenda-loading__row {
-  display: grid;
-  grid-template-columns: 58px minmax(0, 1fr) auto;
-  gap: var(--s-3);
-  align-items: center;
-  min-height: 88px;
-  padding: 14px;
-}
-.agenda-loading__row + .agenda-loading__row {
-  box-shadow: inset 0 1px 0 var(--line-soft);
-}
-.agenda-loading__lines {
-  display: grid;
-  gap: 8px;
+.agenda-loading__card.skeleton {
+  flex: none;
+  aspect-ratio: 16 / 10;
 }
 .agenda-foot {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 4px var(--s-3);
-  padding: var(--s-1) 4px 0;
+  padding: var(--s-1) 2px 0;
   color: var(--text-3);
   font-size: var(--fs-caption);
 }
@@ -893,242 +901,113 @@
   font-weight: 650;
 }
 
-/* ---- Escritorio: lista + escenario --------------------------------------------- */
+/* ---- Escritorio: filas + panel del partido elegido --------------------------------- */
 @media (min-width: 1024px) {
-  /* 1024-1279: el escenario tiene su ancho mínimo (si no, en una tableta
-     grande se quedaba en 260 px y los escudos pisaban el marcador). */
-  .agenda--stage {
-    grid-template-columns: minmax(360px, 1fr) minmax(360px, 420px);
+  .agenda--stage .agenda__body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 400px);
     column-gap: var(--s-6);
     align-items: start;
   }
   .agenda__side {
     position: sticky;
-    top: 0;
+    top: calc(var(--topbar-h) + var(--safe-top) + var(--s-4));
     display: grid;
-    gap: var(--s-4);
+    gap: var(--s-5);
     align-content: start;
     min-width: 0;
-    max-height: 100dvh;
+    max-height: calc(100dvh - var(--topbar-h) - var(--safe-top) - var(--s-8));
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-width: thin;
-    padding: calc(var(--safe-top) + var(--s-6)) 2px var(--s-6);
+    /* Aire para el anillo de foco y las sombras sin recortarlos. */
+    padding: 4px 4px var(--s-4);
+    margin: -4px -4px 0;
   }
 }
 @media (min-width: 1280px) {
-  .agenda--stage {
-    grid-template-columns: minmax(420px, 600px) minmax(0, 1fr);
+  .agenda--stage .agenda__body {
+    grid-template-columns: minmax(0, 1fr) minmax(380px, 440px);
     column-gap: var(--s-8);
   }
 }
-@media (min-width: 1360px) {
-  .agenda--stage {
-    grid-template-columns: 620px minmax(0, 1fr);
-  }
-}
-@media (min-width: 1800px) {
-  .agenda--stage {
-    grid-template-columns: 680px minmax(0, 1fr);
-    column-gap: var(--s-10);
-  }
-  /* Pantallas muy anchas: «Luego» se pone al lado del escenario en vez de debajo. */
-  .agenda__side {
-    grid-template-columns: minmax(0, 960px) minmax(300px, 380px);
-    align-items: start;
-  }
-}
-@media (min-width: 2200px) {
-  /* 2560 px: el escenario y «Luego» ocupan todo el ancho que queda (con
-     tope en 960 px quedaba media pantalla vacía a la derecha). */
-  .agenda--stage {
-    grid-template-columns: 720px minmax(0, 1fr);
-  }
-  .agenda__side {
-    grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
-  }
-  .agenda__side > .agenda-strip {
-    grid-column: 1 / -1;
-  }
-}
 
-/* ---- Escenario ------------------------------------------------------------------ */
+/* ---- Panel del partido elegido ------------------------------------------------------ */
 .agenda-stage {
   --ta: transparent;
   --tb: transparent;
   position: relative;
   isolation: isolate;
   display: grid;
+  gap: var(--s-4);
   min-width: 0;
   overflow: hidden;
+  padding: 10px 10px var(--s-5);
   border-radius: var(--r-xl);
   background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--line-soft);
-  container-type: inline-size;
+  box-shadow:
+    inset 0 0 0 1px var(--line-soft),
+    var(--shadow-1);
 }
 .agenda-stage__light {
   position: absolute;
   z-index: -1;
-  inset: 0 0 auto 0;
-  height: 440px;
+  inset: 0 0 auto;
+  height: 70%;
   pointer-events: none;
   background:
     radial-gradient(
-      52% 78% at 8% 0%,
-      color-mix(in oklch, var(--ta) 55%, transparent),
+      60% 70% at 10% 0%,
+      color-mix(in oklch, var(--ta) 22%, transparent),
       transparent 74%
     ),
     radial-gradient(
-      52% 78% at 92% 0%,
-      color-mix(in oklch, var(--tb) 45%, transparent),
+      60% 70% at 90% 0%,
+      color-mix(in oklch, var(--tb) 18%, transparent),
       transparent 74%
     );
 }
-.agenda-stage__pane {
-  display: grid;
-  gap: var(--s-4);
-  margin: 12px 12px 0;
+.agenda-stage__card {
+  position: relative;
   min-width: 0;
 }
-.agenda-stage__top {
+.agenda-stage__corner {
+  position: absolute;
+  z-index: 2;
+  right: 12px;
+  bottom: 12px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s-3);
-  min-height: 24px;
-  min-width: 0;
 }
-.agenda-stage__tag {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 4px;
-  color: var(--text-2);
-  font-size: var(--fs-caption);
-  font-weight: 650;
-  font-stretch: var(--w-tight);
-}
-.agenda-stage__tag.is-live {
-  color: var(--live);
-}
-.agenda-stage__comp {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-2);
-  font-size: var(--fs-13);
-  font-weight: var(--wght-medium);
-}
-.agenda-stage__score {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: var(--s-3);
-}
-.agenda-stage__side {
-  display: grid;
-  justify-items: center;
-  gap: 10px;
-  min-width: 0;
-  text-align: center;
-}
-.agenda-stage__name {
-  max-width: 100%;
-  font-size: var(--fs-17);
-  font-weight: 700;
-  font-stretch: var(--w-head);
-  line-height: 1.2;
-  overflow-wrap: break-word;
-  hyphens: auto;
-}
-.agenda-stage__mid {
-  display: grid;
-  justify-items: center;
-  gap: 6px;
-}
-.agenda-stage__big {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.12em;
-  font-size: var(--fs-96);
-  line-height: 0.9;
-}
-.agenda-stage__big--time {
-  font-size: var(--fs-64);
-}
-.agenda-stage__sep {
-  color: var(--text-3);
-  font-weight: 500;
-}
-.agenda-stage__when {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--text-2);
-  font-size: var(--fs-15);
-  font-weight: 700;
-  text-align: center;
-}
-.agenda-stage__when.is-live {
-  color: var(--live);
-}
-.agenda-stage__cover {
-  display: grid;
-  justify-items: center;
-  gap: 8px;
-  min-height: var(--tap);
-  padding: 8px 12px;
-  border-radius: var(--r-m);
-  color: var(--text-2);
-  font-size: var(--fs-13);
-  font-weight: 650;
-}
-.agenda-censor--big {
-  grid-auto-flow: column;
-  gap: 14px;
-}
-.agenda-censor--big i {
-  width: 48px;
-  height: 64px;
-  border-radius: 10px;
-}
-.agenda-stage__timeline {
-  display: grid;
-  gap: 6px;
-}
-.agenda-stage__marks {
-  display: flex;
-  justify-content: space-between;
-  color: var(--text-3);
-  font-size: var(--fs-label);
-  font-weight: 600;
-  font-stretch: var(--w-tight);
+.agenda-stage__card:has(.agenda-stage__corner > *) .versus__bottom {
+  padding-right: 120px;
 }
 .agenda-stage__body {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-  gap: 22px var(--s-6);
-  align-items: start;
-  padding: var(--s-5) var(--s-6) var(--s-6);
+  gap: var(--s-5);
+  padding-inline: 10px;
 }
 .agenda-stage__sec {
   display: grid;
   gap: 10px;
   min-width: 0;
 }
-.agenda-stage__sec h3 {
-  font-size: var(--fs-15);
-  font-weight: 720;
-  font-stretch: var(--w-head);
+.agenda-stage__sec h3,
+.agenda-later__title {
+  color: var(--text-2);
+  font-size: var(--fs-kicker);
+  font-weight: 760;
+  letter-spacing: var(--tracking-kicker);
+  line-height: 1.2;
+  text-transform: uppercase;
 }
 .agenda-stage__signal {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--s-3);
-  font-size: var(--fs-15);
+  gap: 8px var(--s-3);
+  font-size: var(--fs-13);
   font-weight: var(--wght-medium);
-  line-height: 1.3;
+  line-height: 1.35;
 }
 .agenda-stage__chips {
   display: flex;
@@ -1141,7 +1020,6 @@
   font-size: var(--fs-13);
 }
 .agenda-stage__actions {
-  grid-column: 1 / -1;
   display: flex;
 }
 .agenda-stage__actions .btn {
@@ -1149,61 +1027,21 @@
   min-height: 52px;
   font-size: var(--fs-17);
 }
-/* Escenario estrecho (1024-1279 y tabletas grandes): todo un punto más pequeño. */
-@container (max-width: 540px) {
-  .agenda-stage__big {
-    font-size: var(--fs-64);
-  }
-  .agenda-stage__big--time {
-    font-size: var(--fs-44);
-  }
-  .agenda-stage__crest {
-    --s: 60px !important;
-  }
-  .agenda-stage__name {
-    font-size: var(--fs-15);
-  }
-  .agenda-censor--big i {
-    width: 34px;
-    height: 44px;
-  }
-  .agenda-stage__body {
-    grid-template-columns: minmax(0, 1fr);
-    padding: var(--s-4) var(--s-5) var(--s-5);
-  }
-}
-@container (max-width: 400px) {
-  .agenda-stage__big {
-    font-size: var(--fs-44);
-  }
-  .agenda-stage__big--time {
-    font-size: var(--fs-30);
-  }
-  .agenda-stage__crest {
-    --s: 48px !important;
-  }
-  .agenda-stage__score {
-    gap: var(--s-2);
-  }
-}
 
-/* «Luego» bajo el escenario (corrección 5). */
+/* «Luego»: fila de tarjetas pequeñas bajo el panel. */
 .agenda-later {
   display: grid;
-  gap: 10px;
+  gap: var(--s-2);
   min-width: 0;
 }
 .agenda-later__title {
-  padding: 0 4px;
-  font-size: var(--fs-15);
-  font-weight: 720;
-  font-stretch: var(--w-head);
+  padding-inline: 4px;
 }
-.agenda-later__list {
-  display: grid;
+.agenda-later .agenda-row--compact .versus {
+  aspect-ratio: 3 / 2;
 }
 
-/* ---- Tira de directos (B1) ------------------------------------------------------ */
+/* ---- Tira de directos (B1, solo en pantallas anchas) ------------------------------- */
 .agenda-strip {
   display: flex;
   align-items: center;
@@ -1215,9 +1053,9 @@
   flex: none;
   align-items: center;
   gap: 2px;
-  color: var(--live);
+  color: var(--live-ink);
   font-size: var(--fs-13);
-  font-weight: 700;
+  font-weight: 760;
 }
 .agenda-strip__list {
   display: flex;
@@ -1227,8 +1065,7 @@
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
-  /* El último partido se funde en el borde: se ve que la tira sigue (se
-     desplaza a mano, nunca sola). */
+  /* El último partido se funde en el borde: la tira sigue (a mano, nunca sola). */
   mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
 }
 .agenda-strip__list::-webkit-scrollbar {
@@ -1237,41 +1074,43 @@
 .agenda-strip__chip {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   min-height: var(--tap);
-  padding: 0 14px;
+  padding: 0 14px 0 8px;
   border-radius: var(--r-pill);
   background: var(--surface);
   box-shadow: inset 0 0 0 1px var(--line-soft);
-  white-space: nowrap;
   font-size: var(--fs-13);
-  font-weight: 620;
+  font-weight: 680;
+  font-stretch: var(--w-tight);
+  white-space: nowrap;
 }
 .agenda-strip__chip[aria-current='true'] {
-  background: var(--accent-wash);
-  box-shadow: inset 0 0 0 1.5px var(--accent-edge);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.agenda-strip__crests {
+  display: inline-flex;
+}
+.agenda-strip__crests > .team + .team {
+  margin-left: -5px;
 }
 .agenda-strip__score {
-  font-size: var(--fs-17);
+  font-size: var(--fs-15);
 }
 .agenda-strip__vs {
   color: var(--text-3);
+  font-weight: 600;
 }
 .agenda-strip__minute {
-  color: var(--live);
+  color: var(--live-ink);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: 760;
 }
 .agenda-strip .agenda-censor {
-  grid-auto-flow: column;
-  gap: 4px;
-}
-.agenda-strip .agenda-censor i {
-  width: 12px;
-  height: 16px;
+  color: var(--text-3);
 }
 
-/* ---- Columna compacta del centro de partido ------------------------------------ */
+/* ---- Columna compacta del centro de partido ---------------------------------------- */
 .agenda-col {
   display: grid;
   gap: var(--s-3);
@@ -1299,18 +1138,42 @@
   align-items: center;
 }
 .agenda-col__daylabel {
-  min-width: 60px;
+  min-width: 64px;
   text-align: center;
   font-size: var(--fs-13);
-  font-weight: 650;
+  font-weight: 700;
+}
+.agenda-col__loading {
+  display: grid;
+  gap: 10px;
 }
 .agenda-col__empty {
   padding: var(--s-4) 4px;
   color: var(--text-2);
   font-size: var(--fs-13);
 }
+.agenda-list--compact {
+  gap: var(--s-4);
+}
+.agenda-group--compact {
+  color: var(--text-2);
+  font-size: var(--fs-kicker);
+  font-weight: 760;
+  font-stretch: 100%;
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+}
+.agenda-stack {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.agenda-col .agenda-row--compact .versus {
+  --versus-crest-y: 46%;
+  aspect-ratio: 2 / 1;
+}
 
-/* ---- Movimiento reducido: fundidos cortos, nada gira ni se desliza ------------- */
+/* ---- Movimiento reducido: fundidos cortos, nada gira ni se desliza ----------------- */
 @media (prefers-reduced-motion: reduce) {
   .agenda-row--enter,
   .agenda-list--next,
@@ -1321,5 +1184,11 @@
   .agenda-refresh[aria-busy='true'] svg {
     animation: none;
     opacity: 0.6;
+  }
+  .agenda-row:hover .agenda-row__versus,
+  .agenda-row:hover .agenda-row__corner,
+  .agenda-row:active .agenda-row__versus,
+  .agenda-row:active .agenda-row__corner {
+    transform: none;
   }
 }
