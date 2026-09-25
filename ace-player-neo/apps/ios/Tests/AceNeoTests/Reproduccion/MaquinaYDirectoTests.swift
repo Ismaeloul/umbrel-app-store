@@ -105,11 +105,13 @@ final class MaquinaYDirectoTests: XCTestCase {
     }
 
     func testIdentidadDelVisor() {
-        let defaults = UserDefaults(suiteName: "es.ismaeloul.aceplayerneo.tests.visor")!
-        defaults.removePersistentDomain(forName: "es.ismaeloul.aceplayerneo.tests.visor")
-        let id = IdentidadVisor.id(defaults)
+        // Como la web (api/identity.ts): `v_` + 14 base64url, una por arranque de proceso (a7 §7).
+        let id = IdentidadVisor.id()
         XCTAssertTrue(IdentidadVisor.valido(id))
-        XCTAssertEqual(IdentidadVisor.id(defaults), id, "Es la misma en cada arranque")
+        XCTAssertEqual(IdentidadVisor.id(), id, "La misma durante todo el proceso")
+        XCTAssertTrue(id.hasPrefix("v_"))
+        XCTAssertEqual(id.count, 16)
+        XCTAssertNotEqual(IdentidadVisor.generar(), IdentidadVisor.generar())
         XCTAssertFalse(IdentidadVisor.valido("a b"))
         XCTAssertFalse(IdentidadVisor.valido("abc"))
     }

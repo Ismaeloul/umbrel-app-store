@@ -30,7 +30,8 @@ public protocol ServicioReproduccion: Sendable {
     func resultado(_ cuerpo: OutcomeBody) async
     func informar(_ cuerpo: DiagnosticReportBody) async
     func estadoReproduccion() async throws -> PlaybackStatus
-    func guardarReciente(_ canal: CanalReproducible) async
+    /// Apunta el canal en Recientes (`history-upsert`) y devuelve la biblioteca que queda.
+    func guardarReciente(_ canal: CanalReproducible) async throws -> LibraryView
     /// Olvida la dirección elegida (red local ↔ Tailscale) antes de reconectar.
     func olvidarServidor() async
 }
@@ -71,9 +72,10 @@ public struct ServicioReproduccionAPI: ServicioReproduccion {
         try await api.enviar(API.estadoReproduccion)
     }
 
-    public func guardarReciente(_ canal: CanalReproducible) async {
-        let item = ItemInput(id: canal.id, title: String(canal.titulo.prefix(500)), ih: canal.ih)
-        _ = try? await api.enviar(API.cambiarBiblioteca(.historyUpsert(item)))
+    public func guardarReciente(_ canal: CanalReproducible) async throws -> LibraryView {
+        // `ih: kind === "infohash"` (a7 §9.2): un Content ID o uno pegado van como false.
+        let item = ItemInput(id: canal.id, title: String(canal.titulo.prefix(500)), ih: canal.ih == true)
+        return try await api.enviar(API.cambiarBiblioteca(.historyUpsert(item)))
     }
 
     public func olvidarServidor() async {
@@ -92,15 +94,21 @@ public struct ServicioReproduccionAPI: ServicioReproduccion {
     }
 }
 
-/// Identidad de este visor para el backend (`viewer`): una por instalación.
+/// Identidad de este visor para el backend (`viewer`): `v_` + 14 caracteres base64url, UNA por arranque de
+/// proceso y solo en memoria, como la web (`api/identity.ts`: una por carga de página; a7 §7, a8 §3.11.5).
 public enum IdentidadVisor {
-    private static let clave = "es.ismaeloul.aceplayerneo.visor"
+    private static let deProceso = generar()
 
-    public static func id(_ defaults: UserDefaults = .standard) -> String {
-        if let guardado = defaults.string(forKey: clave), valido(guardado) { return guardado }
-        let nuevo = "ios_" + UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
-        defaults.set(nuevo, forKey: clave)
-        return nuevo
+    public static func id() -> String { deProceso }
+
+    /// `v_` + base64url de 10 bytes al azar sin relleno (14 caracteres).
+    static func generar() -> String {
+        var generador = SystemRandomNumberGenerator()
+        let bytes = (0..<10).map { _ in UInt8.random(in: 0...255, using: &generador) }
+        let base64 = Data(bytes).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        return "v_" + base64
     }
 
     /// `ViewerIdSchema`: `^[A-Za-z0-9_-]{4,64}$`.

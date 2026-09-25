@@ -1,228 +1,132 @@
 import Foundation
 
-/* Reglas puras del selector de fuentes: las de la web
-   (apps/web/src/features/sources/model.ts), sin red ni temporizadores, para
-   probarlas solas. Vocabulario:
-   - «entrada»: una fuente del partido con lo que se sabe de ella: lo que dijo
-     la resolución, lo que dice el comprobador (`sonda`) y lo que vio el
-     reproductor (`veredicto`).
-   - «estado efectivo»: lo que se enseña y lo que usa el arranque automático.
-     Manda, por este orden: el reporte en cuarentena, el reproductor en
-     pantalla (sonando = verificada; conectando = comprobando), lo que vio el
-     reproductor en los últimos 3 min y el comprobador. */
-
-/// Lo que dice el comprobador de una fuente.
-struct SondaFuente: Sendable, Hashable {
-    var estado: ScanCandidateState
-    var motivo: String
-    var pares: Double
-    var reintentoEn: String?
-    /// D6: en iPhone se puede ver aunque la web no (HEVC por el remux).
-    var reproducibleEnIOS: Bool?
-    /// Códec de vídeo («h264», «hevc»), para «Datos técnicos».
-    var codec: String = ""
-    /// Caudal medido (kbit/s): de él se deriva la calidad del cartel («1080p»).
-    var kbps: Double?
-
-    init(
-        estado: ScanCandidateState, motivo: String = "", pares: Double = 0, reintentoEn: String? = nil,
-        reproducibleEnIOS: Bool? = nil, codec: String = "", kbps: Double? = nil
-    ) {
-        self.estado = estado
-        self.motivo = motivo
-        self.pares = pares
-        self.reintentoEn = reintentoEn
-        self.reproducibleEnIOS = reproducibleEnIOS
-        self.codec = codec
-        self.kbps = kbps
-    }
-
-    /// Del candidato del comprobador, con la regla D6 aplicada: una fuente que
-    /// la web no puede ver solo por el códec cuenta como verificada en iOS.
-    init(_ candidato: ScanCandidate) {
-        var estado = candidato.state
-        if candidato.playableOn?.ios == true, estado == .failed || estado == .weak,
-            candidato.reason == "unsupported_codec"
-        {
-            estado = .working
-        }
-        let kbps = [candidato.rateKbps, candidato.streamKbps > 0 ? candidato.streamKbps : nil, candidato.intakeKbps]
-            .compactMap { $0 }.first { $0 > 0 }
-        self.init(
-            estado: estado, motivo: candidato.reason, pares: candidato.peers, reintentoEn: candidato.retryAt,
-            reproducibleEnIOS: candidato.playableOn?.ios, codec: candidato.videoCodec, kbps: kbps)
-    }
-}
-
-/// Resumen de las fuentes de un partido para la cápsula de la agenda y del
-/// escenario (`sessionSummary` del prototipo).
-struct ResumenFuentes: Sendable, Hashable {
-    enum Tono: Sendable, Hashable { case ok, floja, fallo, comprobando, neutro }
-
-    var tono: Tono
-    /// «Señal», «Floja», «Sin señal», «Comprobando» o "" (sin datos).
-    var etiqueta: String
-    /// «2 de 5 verificadas», «3 fuentes en cola»…
-    var detalle: String
-    var total: Int
-    var verificadas: Int
-
-    static let vacio = ResumenFuentes(tono: .neutro, etiqueta: "", detalle: "", total: 0, verificadas: 0)
-}
-
-/// Una fuente del partido.
-struct EntradaFuente: Sendable, Hashable, Identifiable {
-    var id: String
-    /// Título tal cual llega («M+ Liga de Campeones --> Elcano»).
-    var titulo: String
-    var alias: String?
-    /// true: infohash; false: Content ID; nil: pegado a mano.
-    var ih: Bool?
-    /// `CandidateSource` o «manual».
-    var origen: String
-    var listaId: String?
-    /// Canal del partido con el que casó.
-    var canal: String
-    /// 0…1 o porcentaje; nil si no se midió.
-    var disponibilidad: Double?
-    var aprendida: LearnedVerdict?
-    /// Fin de la cuarentena por un reporte.
-    var reportadaHasta: Date?
-    var motivoReporte: SourceReportReason?
-    var sonda: SondaFuente?
-    /// Lo que vio el reproductor (y cuándo).
-    var veredicto: VeredictoReproductor?
-    /// Ya la probó el arranque automático (no se vuelve a intentar sola).
-    var probadaAuto = false
-
-    init(
-        id: String, titulo: String, alias: String? = nil, ih: Bool?, origen: String, listaId: String? = nil,
-        canal: String, disponibilidad: Double? = nil, aprendida: LearnedVerdict? = nil, reportadaHasta: Date? = nil,
-        motivoReporte: SourceReportReason? = nil, sonda: SondaFuente? = nil
-    ) {
-        self.id = id
-        self.titulo = titulo
-        self.alias = alias
-        self.ih = ih
-        self.origen = origen
-        self.listaId = listaId
-        self.canal = canal
-        self.disponibilidad = disponibilidad
-        self.aprendida = aprendida
-        self.reportadaHasta = reportadaHasta
-        self.motivoReporte = motivoReporte
-        self.sonda = sonda
-    }
-
-    /// De un candidato de la resolución.
-    init(_ candidato: ResolutionCandidate, ahora: Date) {
-        var hasta: Date?
-        var motivo: SourceReportReason?
-        if let reporte = candidato.reported, let fin = reporte.quarantineUntil.flatMap(FechaISO.parse), fin > ahora {
-            hasta = fin
-            motivo = reporte.reason
-        } else if candidato.quarantined {
-            hasta = ahora.addingTimeInterval(ReglasFuentes.cuarentenaLocal)
-            motivo = candidato.reported?.reason ?? .notStarting
-        }
-        self.init(
-            id: candidato.id, titulo: candidato.title.isEmpty ? "Fuente" : candidato.title, alias: candidato.alias,
-            ih: candidato.ih, origen: candidato.source.rawValue, listaId: candidato.listaId,
-            canal: candidato.matchedChannel, disponibilidad: candidato.availability, aprendida: candidato.learned,
-            reportadaHasta: hasta, motivoReporte: motivo)
-    }
-
-    /// Lo que se le pasa al reproductor.
-    func canalReproducible(partido: ContextoPartido?) -> CanalReproducible {
-        var contexto = partido
-        if !canal.isEmpty { contexto?.canal = canal }
-        return CanalReproducible(
-            id: id, titulo: ReglasFuentes.nombreVisible(self), ih: ih, partido: contexto, listaId: listaId,
-            origen: origen)
-    }
-}
-
-/// Un motivo para reportar una fuente, con su texto.
-struct MotivoReporte: Sendable, Hashable, Identifiable {
-    var motivo: SourceReportReason
-    var texto: String
-    var id: SourceReportReason { motivo }
-}
-
-/// Lo que vio el reproductor al usar la fuente.
-struct VeredictoReproductor: Sendable, Hashable {
-    var estado: VerdictState
-    var motivo: String
-    var fecha: Date
-}
-
-/// Qué hay en pantalla ahora (para la regla «la que se ve manda»).
-struct EnPantalla: Sendable, Hashable {
-    var id: String?
-    var sonando: Bool
-    var conectando: Bool
-
-    static let nada = EnPantalla(id: nil, sonando: false, conectando: false)
-
-    init(id: String?, sonando: Bool, conectando: Bool) {
-        self.id = id
-        self.sonando = sonando
-        self.conectando = conectando
-    }
-    // `EnPantalla(reproductor)` vive en Player/Fuentes/SesionFuentes.swift (necesita el Reproductor).
-}
-
-/// Estado efectivo de una entrada.
-struct Efectivo: Sendable, Hashable {
-    /// nil = sin datos.
-    var estado: ScanCandidateState?
-    var motivo: String
-    var reportada: Bool
-}
+/* Reglas puras del selector de fuentes: apps/web/src/features/sources/model.ts tal cual (mismos umbrales,
+   mismo orden de comprobaciones, mismos textos), sin red ni temporizadores. La sesión (SesionFuentes) las
+   usa para decidir y las vistas para pintar. Revalidado contra la web en la fase 1 (M3). */
 
 enum ReglasFuentes {
-    /// El veredicto del reproductor manda sobre el del comprobador durante 3 min.
+    /// El veredicto del reproductor manda sobre el del comprobador (PLAYER_VERDICT_MS, model.ts).
     static let vigenciaVeredicto: TimeInterval = 3 * 60
-    /// Cuarentena local si el servidor no devuelve el reporte.
+    /// Cuarentena local si el servidor no devuelve el reporte (LOCAL_QUARANTINE_MS).
     static let cuarentenaLocal: TimeInterval = 30 * 60
-    /// Vista 60 s o más y luego cortada: floja y visible, no «sin señal».
+    /// Vista 60 s o más y luego cortada: floja y visible, no «sin señal» (DROPPED_AFTER_S).
     static let caidaTrasSegundos = 60
+    /// Fuentes iniciales que se ven sin esperar al comprobador (SCANNER_INITIAL_SOURCES de @ace/shared).
+    static let inicialesPorDefecto = 3
+    /// Umbrales de bitrate (kbit/s) de «1080p» y «720p» (QUALITY_KBPS).
+    static let kbpsFullHD: Double = 3800
+    static let kbpsHD: Double = 1700
+
+    // MARK: Construir y juntar entradas
+
+    /// `dedupeEntries`: sin repetir id, conservando el orden del servidor (el cliente no reordena).
+    static func sinDuplicados(_ entradas: [EntradaFuente]) -> [EntradaFuente] {
+        var vistos = Set<String>()
+        return entradas.filter { vistos.insert($0.id).inserted }
+    }
+
+    /// `startScan`: todas arrancan en cola y las primeras `inicial` (3 por defecto) se marcan iniciales.
+    static func empezarComprobacion(_ entradas: [EntradaFuente], inicial: Int) -> [EntradaFuente] {
+        let pedidas = inicial > 0 ? inicial : inicialesPorDefecto
+        let iniciales = max(1, min(entradas.count, pedidas))
+        return entradas.enumerated().map { indice, entrada in
+            var nueva = entrada
+            let reportada = entrada.reportadaHasta != nil
+            if !reportada { nueva.sonda = .enCola }
+            nueva.inicial = !reportada && indice < iniciales
+            return nueva
+        }
+    }
+
+    /// `applyScan`: copia lo que dice el comprobador a cada entrada.
+    static func aplicarComprobacion(_ entradas: [EntradaFuente], candidatos: [ScanCandidate]) -> [EntradaFuente] {
+        var porId: [String: ScanCandidate] = [:]
+        for candidato in candidatos { porId[candidato.id] = candidato }
+        return entradas.map { entrada in
+            guard let candidato = porId[entrada.id] else { return entrada }
+            var nueva = entrada
+            nueva.sonda = SondaFuente(candidato)
+            return nueva
+        }
+    }
+
+    /// `applyVerdict`: un veredicto suelto (`scan.verdict` por SSE) cambia el estado sin esperar al trabajo.
+    static func aplicarVeredicto(_ entradas: [EntradaFuente], _ veredicto: ScanVerdictData) -> [EntradaFuente] {
+        entradas.map { entrada in
+            guard entrada.id == veredicto.hash else { return entrada }
+            var nueva = entrada
+            var sonda = entrada.sonda ?? .enCola
+            sonda.estado = estadoDe(veredicto.state)
+            sonda.motivo = veredicto.reason
+            if let donde = veredicto.playableOn {
+                sonda.reproducibleEnWeb = donde.web
+                sonda.reproducibleEnIOS = donde.ios
+                // D6 de iOS, como en SondaFuente(_:).
+                if donde.ios, sonda.estado != .working, veredicto.reason == "unsupported_codec" { sonda.estado = .working }
+            }
+            nueva.sonda = sonda
+            return nueva
+        }
+    }
+
+    /// `clearScan`: olvida el comprobador (se cayó o se canceló): se enseñan todas.
+    static func olvidarComprobacion(_ entradas: [EntradaFuente]) -> [EntradaFuente] {
+        entradas.map { entrada in
+            var nueva = entrada
+            nueva.sonda = nil
+            nueva.inicial = false
+            return nueva
+        }
+    }
+
+    static func estadoDe(_ veredicto: VerdictState) -> ScanCandidateState {
+        switch veredicto {
+        case .working: .working
+        case .weak: .weak
+        case .failed: .failed
+        case .desconocido: .queued
+        }
+    }
+
+    // MARK: Estado efectivo
 
     static func reportada(_ entrada: EntradaFuente, ahora: Date) -> Bool {
         (entrada.reportadaHasta ?? .distantPast) > ahora
     }
 
+    /// `effectiveOf`: reporte en cuarentena › reproductor en pantalla › veredicto del reproductor (< 3 min) ›
+    /// comprobador › nada.
     static func efectivo(_ entrada: EntradaFuente, pantalla: EnPantalla, ahora: Date) -> Efectivo {
         if reportada(entrada, ahora: ahora) { return Efectivo(estado: .failed, motivo: "reported", reportada: true) }
         if entrada.id == pantalla.id && pantalla.sonando {
             return Efectivo(estado: .working, motivo: "player", reportada: false)
         }
-        // La que se conecta en pantalla es «comprobando» aunque el comprobador la diera por caída.
+        // Regla 20: la que se conecta en pantalla es «comprobando» aunque el comprobador la diera por caída.
         if entrada.id == pantalla.id && pantalla.conectando {
             return Efectivo(estado: .checking, motivo: "player_check", reportada: false)
         }
         if let veredicto = entrada.veredicto, ahora.timeIntervalSince(veredicto.fecha) < vigenciaVeredicto {
-            let estado: ScanCandidateState =
-                switch veredicto.estado {
-                case .working: .working
-                case .weak: .weak
-                case .failed: .failed
-                case .desconocido: .queued
-                }
-            return Efectivo(estado: estado, motivo: veredicto.motivo, reportada: false)
+            return Efectivo(estado: estadoDe(veredicto.estado), motivo: veredicto.motivo, reportada: false)
         }
         if let sonda = entrada.sonda { return Efectivo(estado: sonda.estado, motivo: sonda.motivo, reportada: false) }
         return Efectivo(estado: nil, motivo: "", reportada: false)
     }
 
-    /// 0…1 o porcentaje → 0…100.
+    /// `effectiveMap`.
+    static func efectivos(_ entradas: [EntradaFuente], pantalla: EnPantalla, ahora: Date) -> [String: Efectivo] {
+        var salida: [String: Efectivo] = [:]
+        for entrada in entradas { salida[entrada.id] = efectivo(entrada, pantalla: pantalla, ahora: ahora) }
+        return salida
+    }
+
+    /// `availabilityPercent`: 0…1 o porcentaje → 0…100 entero.
     static func porcentaje(_ valor: Double?) -> Int? {
         guard let valor, valor.isFinite else { return nil }
         let p = valor >= 0 && valor <= 1 ? valor * 100 : valor
-        return Int(max(0, min(100, p)).rounded())
+        return Int(max(0, min(100, p)).rounded(.toNearestOrAwayFromZero))
     }
 
-    /// Medidor + palabra de la fuente.
+    /// `signalOf`: medidor + palabra de la fuente; sin comprobador, la disponibilidad de la resolución.
     static func senal(_ efectivo: Efectivo, _ entrada: EntradaFuente) -> (estado: EstadoSenal, palabra: String) {
         if efectivo.reportada { return (.fail, "Reportada") }
         if let estado = efectivo.estado {
@@ -247,6 +151,7 @@ enum ReglasFuentes {
         MotivoReporte(motivo: .audio, texto: "Problema de audio"),
     ]
 
+    /// `reportReasonLabel`.
     static func etiqueta(_ motivo: SourceReportReason) -> String {
         motivosReporte.first { $0.motivo == motivo }?.texto ?? "No arranca"
     }
@@ -266,7 +171,17 @@ enum ReglasFuentes {
         "delayed_retry": "reintentando",
     ]
 
-    /// Frase humana de la fuente.
+    private static func fraseDeEstado(_ estado: ScanCandidateState) -> String {
+        switch estado {
+        case .working: "verificada"
+        case .weak: "señal sin confirmar"
+        case .checking: "probándose en el segundo motor"
+        case .queued, .desconocido: "en cola"
+        case .failed: "sin señal"
+        }
+    }
+
+    /// `detailOf`: frase humana de la fuente; una fallida que se volverá a probar dice a qué hora (B7).
     static func detalle(_ efectivo: Efectivo, _ entrada: EntradaFuente) -> String {
         if efectivo.reportada, let motivo = entrada.motivoReporte {
             return "apartada por tu reporte (\(etiqueta(motivo).lowercased()))"
@@ -274,38 +189,163 @@ enum ReglasFuentes {
         guard let estado = efectivo.estado else {
             return porcentaje(entrada.disponibilidad).map { "\($0)% disponible" } ?? "disponibilidad sin medir"
         }
-        let porEstado: String =
-            switch estado {
-            case .working: "verificada"
-            case .weak: "señal sin confirmar"
-            case .checking: "probándose en el segundo motor"
-            case .queued, .desconocido: "en cola"
-            case .failed: "sin señal"
-            }
-        return frases[efectivo.motivo] ?? porEstado
+        let frase = frases[efectivo.motivo] ?? fraseDeEstado(estado)
+        let reintento =
+            estado == .failed && efectivo.motivo != "player_failed" ? horaMadrid(entrada.sonda?.reintentoEn) : nil
+        return reintento.map { "\(frase); reintento a las \($0)" } ?? frase
     }
 
-    /// Proveedor tras la flecha: «M+ Liga de Campeones --> Elcano» → «Elcano».
+    /// `madridHour` (agenda/domain.ts): «HH:MM» en Madrid de una fecha ISO, o nil.
+    static func horaMadrid(_ iso: String?) -> String? {
+        guard let iso, !iso.isEmpty, let fecha = FechaISO.parse(iso) else { return nil }
+        var calendario = Calendar(identifier: .gregorian)
+        calendario.timeZone = TimeZone(identifier: "Europe/Madrid") ?? TimeZone(secondsFromGMT: 3600) ?? .current
+        let partes = calendario.dateComponents([.hour, .minute], from: fecha)
+        return String(format: "%02d:%02d", partes.hour ?? 0, partes.minute ?? 0)
+    }
+
+    // MARK: Presentación
+
+    private static let tipos: [String: String] = [
+        "saved": "Guardada", "m3u": "M3U", "favorites": "Favorito", "history": "Reciente", "acestream": "AceStream",
+        "manual": "Externa",
+    ]
+
+    /// `--> -> ==> => → ⇒ ➜ ➝ ⟶ ⟹` (providerOf / channelPartOf).
+    private static let flechas = ["-->", "->", "==>", "=>", "→", "⇒", "➜", "➝", "⟶", "⟹"]
+
+    /// La primera flecha del título (la más a la izquierda) y lo que ocupa.
+    private static func primeraFlecha(_ titulo: String) -> Range<String.Index>? {
+        var mejor: Range<String.Index>?
+        for flecha in flechas {
+            guard let rango = titulo.range(of: flecha) else { continue }
+            if let actual = mejor, actual.lowerBound <= rango.lowerBound { continue }
+            mejor = rango
+        }
+        return mejor
+    }
+
+    /// `providerOf`: «M+ Liga de Campeones --> Elcano» → «Elcano».
     static func proveedor(_ titulo: String) -> String {
-        guard let rango = titulo.range(of: "-->") else { return "" }
-        return titulo[rango.upperBound...].trimmingCharacters(in: .whitespaces)
+        guard let rango = primeraFlecha(titulo) else { return "" }
+        return titulo[rango.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// Parte del canal: «M+ Liga de Campeones --> Elcano» → «M+ Liga de Campeones».
+    /// `channelPartOf`: «M+ Liga de Campeones --> Elcano» → «M+ Liga de Campeones».
     static func parteCanal(_ titulo: String) -> String {
-        guard let rango = titulo.range(of: "-->") else { return titulo.trimmingCharacters(in: .whitespaces) }
-        return titulo[..<rango.lowerBound].trimmingCharacters(in: .whitespaces)
+        guard let rango = primeraFlecha(titulo) else { return titulo.trimmingCharacters(in: .whitespacesAndNewlines) }
+        return titulo[..<rango.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// Nombre corto para la lista y la pantalla de bloqueo.
-    static func nombreVisible(_ entrada: EntradaFuente) -> String {
+    /// `channelNameOf`: el título sin el proveedor o el canal con el que casó.
+    static func nombreCanal(_ entrada: EntradaFuente) -> String {
+        let parte = parteCanal(entrada.titulo)
+        if !parte.isEmpty { return parte }
+        return entrada.canal.isEmpty ? entrada.titulo : entrada.canal
+    }
+
+    /// `listNameOf`: nombre de la lista sin «Directorio (de)».
+    static func nombreLista(_ listaId: String?, listas: [WebSourceSummary]) -> String {
+        guard let listaId, !listaId.isEmpty else { return "" }
+        let nombre = listas.first { $0.id == listaId }?.name ?? ""
+        let sinPrefijo = nombre.replacingOccurrences(
+            of: #"^directorio(?:\s+de)?\s+"#, with: "", options: [.regularExpression, .caseInsensitive])
+        return sinPrefijo.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// `presentationOf`.
+    static func presentacion(_ entrada: EntradaFuente, listas: [WebSourceSummary]) -> PresentacionFuente {
+        let tipo = tipos[entrada.origen] ?? (entrada.ih == true ? "AceStream" : "Fuente")
+        let lista = nombreLista(entrada.listaId, listas: listas)
         let quien = proveedor(entrada.titulo)
-        let nombre = parteCanal(entrada.titulo)
-        return quien.isEmpty ? nombre : "\(nombre) · \(quien)"
+        let detalle = quien.isEmpty ? lista : quien
+        return PresentacionFuente(
+            tipo: tipo, lista: lista, proveedor: quien, etiqueta: detalle.isEmpty ? tipo : "\(tipo) · \(detalle)",
+            corto: quien.isEmpty ? (lista.isEmpty ? tipo : lista) : quien)
     }
 
-    /// Arranque por verificadas: la primera verificada no reportada ni probada;
-    /// con el comprobador terminado, la primera floja.
+    /// Kbit/s → «6,2» (es-ES, un decimal).
+    static func mbit(_ kbps: Double) -> String {
+        String(format: "%.1f", kbps / 1000).replacingOccurrences(of: ".", with: ",")
+    }
+
+    /// `swarmMbit`: Mbit/s del enjambre en la prueba; nil si no se midió.
+    static func mbitEnjambre(_ entrada: EntradaFuente) -> String? {
+        guard let intake = entrada.sonda?.intakeKbps, intake > 0 else { return nil }
+        return mbit(intake)
+    }
+
+    /// `qualityLabel`: «1080p», «720p» o «SD» por el bitrate medido (o el del canal) y «HEVC» si el códec no es
+    /// H.264; nil sin nada medido.
+    static func calidad(_ sonda: SondaFuente?) -> String? {
+        guard let sonda else { return nil }
+        let kbps = (sonda.rateKbps ?? 0) > 0 ? (sonda.rateKbps ?? 0) : sonda.streamKbps
+        let hevc =
+            sonda.codec.range(of: #"hevc|h\.?265|hvc1|hev1"#, options: [.regularExpression, .caseInsensitive]) != nil
+        let definicion: String? = kbps >= kbpsFullHD ? "1080p" : (kbps >= kbpsHD ? "720p" : (kbps > 0 ? "SD" : nil))
+        guard definicion != nil || hevc else { return nil }
+        return [definicion, hevc ? "HEVC" : nil].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    /// `describeSource`: nombre largo para VoiceOver.
+    static func describir(
+        _ entrada: EntradaFuente, numero: Int, efectivo: Efectivo, presentacion: PresentacionFuente, conComprobador: Bool
+    ) -> String {
+        let intake = entrada.sonda?.intakeKbps ?? 0
+        let stream = entrada.sonda?.streamKbps ?? 0
+        let pares = entrada.sonda?.pares ?? 0
+        var partes = [entrada.titulo, presentacion.etiqueta]
+        if !presentacion.lista.isEmpty && presentacion.lista != presentacion.proveedor {
+            partes.append("Lista \(presentacion.lista)")
+        }
+        partes.append("Hash \(entrada.id)")
+        partes.append(detalle(efectivo, entrada))
+        if pares > 0 { partes.append("\(Int(pares)) pares en la prueba") }
+        if intake > 0 {
+            partes.append("\(mbit(intake)) Mbit/s del enjambre" + (stream > 0 ? " para un canal de \(mbit(stream))" : ""))
+        }
+        if !conComprobador {
+            partes.append(porcentaje(entrada.disponibilidad).map { "\($0)% disponible" } ?? "Disponibilidad sin medir")
+        }
+        return "Fuente \(numero): " + partes.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    /// `useSourcesView`: cada fuente con su número, estado, medidor, frase y descripción.
+    static func filas(
+        _ entradas: [EntradaFuente], pantalla: EnPantalla, ahora: Date, activa: String?, listas: [WebSourceSummary],
+        conComprobador: Bool
+    ) -> [FilaFuente] {
+        entradas.enumerated().map { indice, entrada in
+            let efectivo = efectivo(entrada, pantalla: pantalla, ahora: ahora)
+            let presentacion = presentacion(entrada, listas: listas)
+            let senal = senal(efectivo, entrada)
+            return FilaFuente(
+                entrada: entrada, numero: indice + 1, efectivo: efectivo, senal: senal.estado, palabra: senal.palabra,
+                detalle: detalle(efectivo, entrada), presentacion: presentacion, activa: entrada.id == activa,
+                enPantalla: entrada.id == pantalla.id,
+                descripcion: describir(
+                    entrada, numero: indice + 1, efectivo: efectivo, presentacion: presentacion,
+                    conComprobador: conComprobador))
+        }
+    }
+
+    // MARK: Qué se ve y qué arranca solo
+
+    /// `isShownWhileScanning` (regla 22): la activa, las vivas y las iniciales sin probar.
+    static func visibleMientrasComprueba(_ entrada: EntradaFuente, efectivo: Efectivo, activa: String?) -> Bool {
+        if entrada.id == activa { return true }
+        if efectivo.viva { return true }
+        let sinProbar = efectivo.estado == .queued || efectivo.estado == .checking || efectivo.estado == nil
+        return entrada.inicial && (entrada.sonda?.intentos ?? 0) == 0 && sinProbar
+    }
+
+    /// `scanFinished`: sin comprobador, o `complete`/`waiting`. Entonces una floja también vale para arrancar.
+    static func comprobadorTerminado(_ comprobador: EstadoComprobador?) -> Bool {
+        guard let comprobador else { return true }
+        return comprobador.estado == .complete || comprobador.estado == .waiting
+    }
+
+    /// `pickAutoSource`: la primera verificada no reportada ni probada ya; terminado, la primera floja.
     static func elegirAutomatica(
         _ entradas: [EntradaFuente], efectivos: [String: Efectivo], terminado: Bool
     ) -> EntradaFuente? {
@@ -314,104 +354,150 @@ enum ReglasFuentes {
         return terminado ? candidatas.first { efectivos[$0.id]?.estado == .weak } : nil
     }
 
-    /// Qué veredicto deja el reproductor al agotar una fuente.
+    /// `pickInitialSwitch`: si la inicial sale fallida en el comprobador y no se está viendo, la primera otra viva.
+    static func elegirSaltoInicial(
+        _ entradas: [EntradaFuente], activa: String?, pantalla: EnPantalla, ahora: Date
+    ) -> EntradaFuente? {
+        guard let actual = entradas.first(where: { $0.id == activa }), !reportada(actual, ahora: ahora),
+            actual.sonda?.estado == .failed
+        else { return nil }
+        if pantalla.id == actual.id && pantalla.sonando { return nil }
+        return entradas.first { entrada in
+            entrada.id != actual.id && !reportada(entrada, ahora: ahora)
+                && (entrada.sonda?.estado == .working || entrada.sonda?.estado == .weak)
+        }
+    }
+
+    /// `failureVerdict`: qué veredicto deja el reproductor al agotar una fuente (regla 21).
     static func veredictoFallo(_ resultado: OutcomeResult, segundos: Int) -> (VerdictState, String) {
-        if resultado == .cayo && segundos >= caidaTrasSegundos { return (VerdictState.weak, "player_dropped") }
-        return (VerdictState.failed, "player_failed")
+        if resultado == .cayo && segundos >= caidaTrasSegundos { return (.weak, "player_dropped") }
+        return (.failed, "player_failed")
     }
 
-    /// Quita duplicados (mismo id), quedándose con la primera aparición.
-    static func sinDuplicados(_ entradas: [EntradaFuente]) -> [EntradaFuente] {
+    // MARK: Progreso del comprobador
+
+    /// `scanProgress`: 0…1, nunca en blanco del todo (4 % como mínimo).
+    static func progreso(_ comprobador: EstadoComprobador?, entradas: Int) -> Double {
+        let total = max(comprobador?.total ?? 0, entradas)
+        guard let comprobador, total > 0 else { return 0 }
+        return max(0.04, min(1, Double(comprobador.comprobadas) / Double(total)))
+    }
+
+    /// `scanProgressText`.
+    static func textoProgreso(
+        _ comprobador: EstadoComprobador?, entradas: [EntradaFuente], efectivos: [String: Efectivo],
+        precalentado: PreheatPublic?
+    ) -> String {
+        if entradas.isEmpty && comprobador == nil { return "Preparando fuentes" }
+        let total = max(comprobador?.total ?? 0, entradas.count)
+        let jugables = entradas.filter { efectivos[$0.id]?.viva == true }.count
+        let verificadas = "\(jugables) \(jugables == 1 ? "verificada" : "verificadas")"
+        if comprobador?.estado == .complete {
+            return "\(verificadas) · \(total) \(total == 1 ? "comprobada" : "comprobadas")"
+        }
+        if comprobador?.estado == .waiting { return "\(verificadas) · fallidas en reposo" }
+        if let comprobador { return "\(comprobador.comprobadas)/\(total) · buscando señales vivas" }
+        if let precalentado, precalentado.status != .failed {
+            let n = precalentado.candidateCount > 0 ? precalentado.candidateCount : entradas.count
+            return "\(n) fuentes precalentadas"
+        }
+        return "\(entradas.count) fuentes disponibles"
+    }
+
+    // MARK: Reportes
+
+    /// `reportFollowUp`: si vive y el motivo era «No arranca», vuelve; con otro motivo se queda apartada.
+    static func seguimientoReporte(_ motivo: SourceReportReason, estado: ScanCandidateState?) -> SeguimientoReporte {
+        let viva = estado == .working || estado == .weak
+        guard viva else {
+            return SeguimientoReporte(
+                sigueApartada: true, texto: "El segundo motor confirma que esta fuente no entrega señal", tono: .err)
+        }
+        if motivo != .notStarting {
+            return SeguimientoReporte(
+                sigueApartada: true, texto: "La señal está viva, pero queda apartada por tu reporte", tono: .ok)
+        }
+        return SeguimientoReporte(
+            sigueApartada: false, texto: "El segundo motor confirma que la fuente vuelve a funcionar", tono: .ok)
+    }
+
+    // MARK: Biblioteca: hermanas del mismo canal (regla 23)
+
+    /// `librarySiblings`: lista + favoritos + recientes sin repetir, del MISMO canal (puntuación ≥ 92).
+    static func hermanas(_ biblioteca: LibraryView?, id: String) -> [Item] {
+        guard let biblioteca else { return [] }
         var vistos = Set<String>()
-        return entradas.filter { vistos.insert($0.id.lowercased()).inserted }
+        var todos: [Item] = []
+        for item in biblioteca.web + biblioteca.favorites + biblioteca.history
+        where !item.id.isEmpty && vistos.insert(item.id).inserted {
+            todos.append(item)
+        }
+        guard let actual = todos.first(where: { $0.id == id }) else { return [] }
+        let nombre = nombreDe(actual)
+        if Canales.clave(nombre).isEmpty { return [actual] }
+        return todos.filter { item in
+            item.id == id || Canales.puntuacion(nombre, nombreDe(item)) >= Canales.puntuacionExacta
+        }
     }
 
-    /// Un Content ID o enlace `acestream://` válido (40 hex) → el hash.
+    private static func nombreDe(_ item: Item) -> String {
+        if let alias = item.alias, !alias.isEmpty { return alias }
+        return item.title
+    }
+
+    // MARK: Resolución («Encontrar canal»)
+
+    /// `resolutionSourceLabel`.
+    static func etiquetaOrigenResolucion(_ origen: String) -> String {
+        let etiquetas = [
+            "saved": "Asociación guardada", "m3u": "Directorio M3U", "favorites": "Favoritos", "history": "Recientes",
+            "acestream": "Buscador AceStream",
+        ]
+        return etiquetas[origen] ?? "Fuente disponible"
+    }
+
+    /// `checkedLabel`.
+    static func etiquetaRevisado(_ valor: String) -> String {
+        let etiquetas = [
+            "saved": "Vínculos", "favorites": "Favoritos", "history": "Recientes", "m3u": "M3U", "library": "Biblioteca",
+            "acestream": "AceStream", "ai-programming": "IA", "ai": "IA",
+        ]
+        return etiquetas[valor] ?? valor
+    }
+
+    /// `INVALID_HASH_TEXT`.
+    static let textoHashNoValido = "Introduce un Content ID o enlace AceStream válido de 40 caracteres."
+
+    // MARK: Hash
+
+    /// `normalizeHash` (packages/shared/src/domain/hash.ts): `acestream://<40 hex>`, una URL con `?id=` o
+    /// `?content_id=` de 40 hex, o cualquier texto con 40 hex seguidos → el hash en minúsculas; nil si no hay.
+    static func normalizarHash(_ texto: String) -> String? {
+        let limpio = texto.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let rango = limpio.range(of: #"acestream://[a-fA-F0-9]{40}"#, options: .regularExpression) {
+            return String(limpio[rango].suffix(40)).lowercased()
+        }
+        if let componentes = URLComponents(string: limpio), componentes.scheme != nil {
+            let items = componentes.queryItems ?? []
+            let valor = items.first { $0.name == "id" }?.value ?? items.first { $0.name == "content_id" }?.value
+            if let valor, esHash(valor) { return valor.lowercased() }
+        }
+        guard let rango = limpio.range(of: #"[a-fA-F0-9]{40}"#, options: .regularExpression) else { return nil }
+        return String(limpio[rango]).lowercased()
+    }
+
+    /// `HASH_RE`: 40 hexadecimales en cualquier caja.
+    static func esHash(_ texto: String) -> Bool {
+        texto.count == 40 && texto.allSatisfy(\.isHexDigit)
+    }
+
+    /// Un Content ID o enlace `acestream://` de 40 hex EXACTOS → el hash (lo usa la búsqueda de M5). Para pegar
+    /// se usa `normalizarHash`, que es la regla de la web.
     static func hashValido(_ texto: String) -> String? {
         var limpio = texto.trimmingCharacters(in: .whitespacesAndNewlines)
         if limpio.lowercased().hasPrefix("acestream://") { limpio = String(limpio.dropFirst("acestream://".count)) }
         if let interrogacion = limpio.firstIndex(of: "?") { limpio = String(limpio[..<interrogacion]) }
-        guard limpio.count == 40, limpio.allSatisfy(\.isHexDigit) else { return nil }
+        guard esHash(limpio) else { return nil }
         return limpio.lowercased()
-    }
-
-    static let textoHashNoValido = "Introduce un Content ID o enlace AceStream válido de 40 caracteres."
-
-    /// Progreso del comprobador (0…1, nunca en blanco del todo).
-    static func progreso(_ trabajo: ScanJob?, total entradas: Int) -> Double {
-        guard let trabajo else { return 0 }
-        let total = max(trabajo.total, entradas)
-        guard total > 0 else { return 0 }
-        return max(0.04, min(1, Double(trabajo.checked) / Double(total)))
-    }
-
-    /// El comprobador ya no va a cambiar nada.
-    static func terminado(_ trabajo: ScanJob?) -> Bool {
-        guard let trabajo else { return true }
-        return trabajo.status == .complete || trabajo.status == .waiting || trabajo.status == .cancelled
-    }
-
-    /// Resumen para la cápsula: verificadas → «Señal»; todo en cola → «Comprobando»;
-    /// solo flojas → «Floja»; algo pendiente → «Comprobando»; si no, «Sin señal».
-    static func resumen(_ entradas: [EntradaFuente], efectivos: [String: Efectivo]) -> ResumenFuentes {
-        let n = entradas.count
-        guard n > 0 else { return .vacio }
-        var verificadas = 0
-        var flojas = 0
-        var caidas = 0
-        var pendientes = 0
-        for entrada in entradas {
-            switch efectivos[entrada.id]?.estado {
-            case .working: verificadas += 1
-            case .weak: flojas += 1
-            case .failed: caidas += 1
-            case .checking, .queued, .desconocido, .none: pendientes += 1
-            }
-        }
-        let hechas = n - pendientes
-        if verificadas > 0 {
-            return ResumenFuentes(
-                tono: .ok, etiqueta: "Señal", detalle: "\(verificadas) de \(n) verificadas", total: n,
-                verificadas: verificadas)
-        }
-        if pendientes > 0 && hechas == 0 {
-            return ResumenFuentes(
-                tono: .comprobando, etiqueta: "Comprobando", detalle: n == 1 ? "1 fuente en cola" : "\(n) fuentes en cola",
-                total: n, verificadas: 0)
-        }
-        if flojas > 0 && pendientes == 0 {
-            return ResumenFuentes(
-                tono: .floja, etiqueta: "Floja", detalle: "\(flojas) de \(n) con señal floja", total: n, verificadas: 0)
-        }
-        if pendientes > 0 {
-            return ResumenFuentes(
-                tono: .comprobando, etiqueta: "Comprobando", detalle: "\(hechas) de \(n) probadas", total: n,
-                verificadas: 0)
-        }
-        return ResumenFuentes(
-            tono: .fallo, etiqueta: "Sin señal", detalle: caidas == 1 ? "1 fuente sin señal" : "\(caidas) fuentes sin señal",
-            total: n, verificadas: 0)
-    }
-
-    /// Calidad del cartel a partir del caudal («1080p», «720p», «576i»); nil sin medida.
-    static func calidad(_ sonda: SondaFuente?) -> String? {
-        guard let kbps = sonda?.kbps, kbps > 0 else { return nil }
-        if kbps >= 5000 { return "1080p" }
-        if kbps >= 2500 { return "720p" }
-        return "576i"
-    }
-
-    /// «1080p · Elcano» (o solo una de las dos partes).
-    static func chipsCartel(_ entrada: EntradaFuente) -> String {
-        [calidad(entrada.sonda), proveedor(entrada.titulo)].compactMap { $0 }.filter { !$0.isEmpty }
-            .joined(separator: " · ")
-    }
-
-    /// Las fuentes entre las que se puede zapear deslizando (no caídas ni reportadas).
-    static func zapeables(_ entradas: [EntradaFuente], efectivos: [String: Efectivo]) -> [EntradaFuente] {
-        entradas.filter { entrada in
-            let efectivo = efectivos[entrada.id]
-            return efectivo?.reportada != true && efectivo?.estado != .failed
-        }
     }
 }

@@ -2,16 +2,18 @@ import AVFoundation
 import MediaPlayer
 import UIKit
 
-/// Lo que el sistema tiene que saber de la reproducción:
+/// Lo que el sistema tiene que saber de la reproducción (player/media-session.ts; a7 §9.6, a8 §3.11.6):
 ///
-/// - `AVAudioSession` en `.playback` (suena con el silenciador y sigue en
-///   segundo plano y en PiP), con las interrupciones (llamadas, Siri) y los
-///   cambios de ruta (auriculares desconectados → pausa).
-/// - `MPNowPlayingInfoCenter`: canal, partido y competición en la pantalla de
-///   bloqueo y el Centro de Control, marcado como directo.
-/// - `MPRemoteCommandCenter`: reproducir, pausa y canal anterior/siguiente.
+/// - `AVAudioSession` en `.playback` (suena con el silenciador y sigue en segundo plano y en PiP), con las
+///   interrupciones (llamadas, Siri) y los cambios de ruta (auriculares desconectados → pausa).
+/// - `MPNowPlayingInfoCenter` como la Media Session de la web: título = canal ‖ «Ace Player Neo», artista =
+///   subtítulo ‖ «Ace Player Neo», álbum «Ace Player Neo», carátula el icono (`Marca`), marcado como directo;
+///   nada en reposo o con error.
+/// - `MPRemoteCommandCenter`: reproducir, pausa, detener, −30 s y canal anterior/siguiente solo con zapping.
 @MainActor
 public final class ControlesSistema: ControlesDelSistema {
+    static let nombreApp = "Ace Player Neo"
+
     private weak var reproductor: Reproductor?
     private var observadores: [NSObjectProtocol] = []
     private var comandosRegistrados = false
@@ -32,22 +34,30 @@ public final class ControlesSistema: ControlesDelSistema {
     public func empezo(_ canal: CanalReproducible) {
         activarSesion()
         registrarComandos()
-        publicar(canal: canal, reproduciendo: false)
     }
 
     public func cambio(_ reproductor: Reproductor) {
-        guard let canal = reproductor.canal else { return }
-        publicar(canal: canal, reproduciendo: reproductor.medio == .reproduciendo)
         let comandos = MPRemoteCommandCenter.shared()
-        let conLista = reproductor.lista.count > 1
-        comandos.nextTrackCommand.isEnabled = conLista
-        comandos.previousTrackCommand.isEnabled = conLista
+        let zapeo = reproductor.puedeZapear
+        comandos.nextTrackCommand.isEnabled = zapeo
+        comandos.previousTrackCommand.isEnabled = zapeo
+        let fase = reproductor.fase
+        // `engaged` de media-session.ts: con canal y fuera de reposo y de error.
+        guard let canal = reproductor.canal, fase != .idle, fase != .error else {
+            quitarInfo()
+            return
+        }
+        publicar(canal: canal, reproduciendo: fase == .reproduciendo || fase == .buffer)
     }
 
     public func termino() {
+        quitarInfo()
+        desactivarSesion()
+    }
+
+    private func quitarInfo() {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         ultimoInfo = [:]
-        desactivarSesion()
     }
 
     // MARK: Sesión de audio
@@ -111,18 +121,23 @@ public final class ControlesSistema: ControlesDelSistema {
 
     // MARK: Now Playing
 
+    /// Los metadatos de la Media Session de la web (título, artista y álbum).
+    static func metadatos(_ canal: CanalReproducible) -> (titulo: String, artista: String, album: String) {
+        let titulo = canal.titulo.isEmpty ? nombreApp : canal.titulo
+        let artista = (canal.subtitulo?.isEmpty == false ? canal.subtitulo : nil) ?? nombreApp
+        return (titulo, artista, nombreApp)
+    }
+
     private func publicar(canal: CanalReproducible, reproduciendo: Bool) {
         let centro = MPNowPlayingInfoCenter.default()
-        let titulo = canal.partido?.titulo ?? canal.titulo
-        let artista = canal.partido != nil ? canal.titulo : "Ace Neo"
-        let album = canal.partido?.competicion ?? "En directo"
-        let clave = ["t": titulo, "a": artista, "b": album]
+        let datos = Self.metadatos(canal)
+        let clave = ["t": datos.titulo, "a": datos.artista, "b": datos.album]
         if clave != ultimoInfo || centro.nowPlayingInfo == nil {
             ultimoInfo = clave
             var info: [String: Any] = [
-                MPMediaItemPropertyTitle: titulo,
-                MPMediaItemPropertyArtist: artista,
-                MPMediaItemPropertyAlbumTitle: album,
+                MPMediaItemPropertyTitle: datos.titulo,
+                MPMediaItemPropertyArtist: datos.artista,
+                MPMediaItemPropertyAlbumTitle: datos.album,
                 MPNowPlayingInfoPropertyIsLiveStream: true,
                 MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.video.rawValue,
             ]
@@ -155,8 +170,22 @@ public final class ControlesSistema: ControlesDelSistema {
             MainActor.assumeIsolated { self?.reproductor?.pausar() }
             return .success
         }
+        // Auriculares con un solo botón (diferencia consciente e inocua, a8 §3.11.6).
         comandos.togglePlayPauseCommand.addTarget { [weak self] _ in
             MainActor.assumeIsolated { self?.reproductor?.alternar() }
+            return .success
+        }
+        comandos.stopCommand.addTarget { [weak self] _ in
+            MainActor.assumeIsolated { self?.reproductor?.detener() }
+            return .success
+        }
+        comandos.skipBackwardCommand.preferredIntervals = [NSNumber(value: UmbralesReproductor.retrocesoS)]
+        comandos.skipBackwardCommand.isEnabled = true
+        comandos.skipBackwardCommand.addTarget { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let reproductor = self?.reproductor else { return }
+                Task { await reproductor.retroceder() }
+            }
             return .success
         }
         comandos.nextTrackCommand.addTarget { [weak self] _ in
@@ -170,6 +199,5 @@ public final class ControlesSistema: ControlesDelSistema {
         // En directo no hay avance ni barra que arrastrar.
         comandos.changePlaybackPositionCommand.isEnabled = false
         comandos.skipForwardCommand.isEnabled = false
-        comandos.skipBackwardCommand.isEnabled = false
     }
 }

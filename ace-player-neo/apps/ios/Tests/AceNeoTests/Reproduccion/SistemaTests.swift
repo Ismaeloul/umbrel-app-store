@@ -37,25 +37,35 @@ final class SistemaTests: XCTestCase {
     }
 
     @MainActor
-    func testNowPlayingConElPartidoYComandosRemotos() throws {
+    func testNowPlayingComoLaMediaSessionDeLaWebYComandosRemotos() async throws {
         let motor = MotorFalso()
         let servicio = try ServicioFalso()
         let reproductor = Reproductor(
-            motor: motor, servicio: servicio, visor: "ios_prueba", automatico: false, esperar: { _ in })
+            motor: motor, servicio: servicio, visor: "v_prueba", automatico: false, esperar: { _ in })
+        reproductor.demo = false
         let controles = ControlesSistema()
         controles.conectar(reproductor)
-        let canal = CanalReproducible(
-            id: "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678", titulo: "DAZN 1", ih: false,
+        var canal = CanalReproducible(
+            id: "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678", titulo: "M+ Liga de Campeones", ih: false,
             partido: ContextoPartido(id: "p1", titulo: "Local – Visitante", competicion: "LaLiga", canal: "DAZN 1"))
+        canal.subtitulo = "Fuente 1, Elcano"
 
         reproductor.reproducir(canal, lista: [canal])
 
+        // media-session.ts: título = canal, artista = subtítulo, álbum «Ace Player Neo».
         let info = try XCTUnwrap(MPNowPlayingInfoCenter.default().nowPlayingInfo)
-        XCTAssertEqual(info[MPMediaItemPropertyTitle] as? String, "Local – Visitante")
-        XCTAssertEqual(info[MPMediaItemPropertyArtist] as? String, "DAZN 1")
-        XCTAssertEqual(info[MPMediaItemPropertyAlbumTitle] as? String, "LaLiga")
+        XCTAssertEqual(info[MPMediaItemPropertyTitle] as? String, "M+ Liga de Campeones")
+        XCTAssertEqual(info[MPMediaItemPropertyArtist] as? String, "Fuente 1, Elcano")
+        XCTAssertEqual(info[MPMediaItemPropertyAlbumTitle] as? String, "Ace Player Neo")
         XCTAssertEqual(info[MPNowPlayingInfoPropertyIsLiveStream] as? Bool, true)
-        XCTAssertFalse(MPRemoteCommandCenter.shared().nextTrackCommand.isEnabled, "Con un solo canal no hay siguiente")
+        let comandos = MPRemoteCommandCenter.shared()
+        XCTAssertFalse(comandos.nextTrackCommand.isEnabled, "Con un solo canal (el que suena) no hay zapping")
+        XCTAssertTrue(comandos.skipBackwardCommand.isEnabled)
+        XCTAssertEqual(comandos.skipBackwardCommand.preferredIntervals, [30])
+
+        // Sin subtítulo, «Ace Player Neo».
+        let suelto = CanalReproducible(id: "b2c3d4e5f60718293a4b5c6d7e8f901234567890", titulo: "DAZN 1")
+        XCTAssertEqual(ControlesSistema.metadatos(suelto).artista, "Ace Player Neo")
 
         // Pausar desde el Centro de Control llega al reproductor.
         reproductor.pausar()
@@ -70,7 +80,7 @@ final class SistemaTests: XCTestCase {
     func testAuricularesDesconectadosPausan() async throws {
         let motor = MotorFalso()
         let reproductor = Reproductor(
-            motor: motor, servicio: try ServicioFalso(), visor: "ios_prueba", automatico: false, esperar: { _ in })
+            motor: motor, servicio: try ServicioFalso(), visor: "v_prueba", automatico: false, esperar: { _ in })
         let controles = ControlesSistema()
         controles.conectar(reproductor)
         reproductor.reproducir(CanalReproducible(id: "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678", titulo: "DAZN 1"))

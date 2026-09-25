@@ -55,4 +55,6 @@ public protocol MotorVideo: AnyObject {
     func saltar(a segundos: Double) async -> Bool
     /// Suelta el elemento actual (sin reproducción).
     func vaciar()
+    /// Silencio del vídeo (botón del reproductor).
+    func silenciar(_ silencio: Bool)
 }
