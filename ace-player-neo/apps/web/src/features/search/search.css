@@ -11,6 +11,13 @@
   background: var(--surface);
   box-shadow: inset 0 0 0 1px var(--line-strong);
 }
+/* El anillo de foco del campo (Field.css): la regla de arriba pesa más que
+   `.field__box:focus-within` y el campo se quedaba sin foco visible. */
+.search .search-field .field__box:focus-within {
+  box-shadow:
+    inset 0 0 0 1px var(--accent-edge),
+    0 0 0 3px color-mix(in oklab, var(--accent-edge) 30%, transparent);
+}
 .search .search-field .field__input {
   height: 58px;
   font-size: var(--fs-17);

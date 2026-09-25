@@ -210,6 +210,28 @@ button.versus {
 .versus.is-watching .versus__bottom {
   padding-right: 34%;
 }
+/* Con «En pantalla» al lado, un nombre largo («Manchester City») no cabe en
+   una tarjeta estrecha: bajo 300 px se ven las siglas (como las tarjetas
+   pequeñas de la agenda) y el nombre entero queda para el lector. */
+.versus.is-watching {
+  container: versus / inline-size;
+}
+.versus__abbr {
+  display: none;
+}
+@container versus (max-width: 299px) {
+  .versus__full {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .versus__abbr {
+    display: inline;
+  }
+}
 
 /* ---- Estados ------------------------------------------------------------------ */
 .versus.is-watching {

@@ -148,4 +148,33 @@ describe('VersusCard', () => {
       '?vista=partido/demo-1',
     );
   });
+
+  it('con «En pantalla»: el nombre entero para el lector y las siglas para la tarjeta estrecha', () => {
+    const { container } = render(
+      <VersusCard
+        home={{ name: 'Real Madrid', short: 'RMA' }}
+        away={{ name: 'Manchester City' }}
+        competition="Champions League"
+        when={{ kind: 'live', label: 'En directo', minute: '45+2' }}
+        watching
+      />,
+    );
+    const full = [...container.querySelectorAll('.versus__full')].map((el) => el.textContent);
+    expect(full).toEqual(['Real Madrid', 'Manchester City']);
+    const abbr = [...container.querySelectorAll('.versus__abbr')];
+    expect(abbr.map((el) => el.textContent)).toEqual(['RMA', 'MC']);
+    for (const el of abbr) expect(el).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('sin «En pantalla», el nombre a secas (sin siglas)', () => {
+    const { container } = render(
+      <VersusCard
+        home={BARCA}
+        away={JUVE}
+        competition="Amistoso"
+        when={{ kind: 'time', label: 'VIE 21:00' }}
+      />,
+    );
+    expect(container.querySelector('.versus__abbr')).toBeNull();
+  });
 });

@@ -24,7 +24,7 @@
 
 import type { PlaybackMode } from '@ace/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import {
   api,
   describeFailure,
@@ -453,12 +453,56 @@ function AboutSection() {
    de las de debajo (así su sitio no cambia de alto mientras se va a ellas).
    Montado todo de golpe, en el 4G de Lighthouse entraba antes del LCP
    (revisión de rendimiento de la Fase 2, docs/rendimiento.md). Sin
-   IntersectionObserver (jsdom), se monta a la primera. */
+   IntersectionObserver (jsdom), se monta a la primera.
+   También en cuanto el foco entra en Ajustes (Tab, o tocar un campo): quien
+   la recorre con el teclado avanza más deprisa de lo que Salud tarda en
+   llegar. Y si aun así llega (y crece) con el foco ya más abajo, lo que
+   tiene el foco vuelve a la pantalla: antes se quedaba fuera («Atajos de
+   teclado», «Reiniciar el motor»; revisión visual final). */
 const NEAR_MARGIN = '800px 0px';
+/* Lo que crece al llegar lo diferido (el esqueleto mide unos 350 px) y el
+   rato en que se vigila: después, ningún cambio de alto mueve la página. */
+const ARRIVAL_GROWTH = 40;
+const ARRIVAL_WINDOW_MS = 8000;
+
+/**
+ * Mientras llega lo diferido de `card` (el trozo de JS y sus datos) y la hace
+ * crecer: si el foco está más abajo y ha quedado fuera de la pantalla, se
+ * lleva a ella (`nearest`, respetando el scroll-padding de las barras). Solo
+ * durante unos segundos tras montarse.
+ */
+function useFocusStaysOnArrival(card: RefObject<HTMLElement | null>, armed: boolean) {
+  useEffect(() => {
+    const el = card.current;
+    if (!armed || !el || typeof ResizeObserver !== 'function') return;
+    let height = el.getBoundingClientRect().height;
+    const observer = new ResizeObserver(() => {
+      const next = el.getBoundingClientRect().height;
+      const grew = next - height >= ARRIVAL_GROWTH;
+      height = next;
+      if (!grew) return;
+      const focused = document.activeElement;
+      if (!(focused instanceof HTMLElement) || el.contains(focused)) return;
+      if (!(el.compareDocumentPosition(focused) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
+      const rect = focused.getBoundingClientRect();
+      if (rect.top >= 0 && rect.bottom <= window.innerHeight) return;
+      focused.scrollIntoView({ block: 'nearest' });
+    });
+    observer.observe(el);
+    const stop = window.setTimeout(() => observer.disconnect(), ARRIVAL_WINDOW_MS);
+    return () => {
+      window.clearTimeout(stop);
+      observer.disconnect();
+    };
+  }, [card, armed]);
+}
 
 function WhenNear({ eager, children }: { eager: boolean; children: ReactNode }) {
   const holder = useRef<HTMLDivElement>(null);
+  // La tarjeta de la sección: sigue montada cuando el esqueleto se va.
+  const card = useRef<HTMLElement | null>(null);
   const [near, setNear] = useState(eager || typeof IntersectionObserver !== 'function');
+  useFocusStaysOnArrival(card, near);
   useEffect(() => {
     if (near) return;
     if (eager) {
@@ -478,7 +522,12 @@ function WhenNear({ eager, children }: { eager: boolean; children: ReactNode }) 
   }, [near, eager]);
   if (near) return children;
   return (
-    <div ref={holder}>
+    <div
+      ref={(el) => {
+        holder.current = el;
+        if (el) card.current = el.parentElement;
+      }}
+    >
       <SkeletonRows rows={3} label="Cargando…" />
     </div>
   );
@@ -512,6 +561,8 @@ export default function SettingsView({ route, active }: ViewProps) {
         ? (requested as SectionId)
         : null;
   const firstScroll = useRef(true);
+  // El foco ha entrado en Ajustes: se monta todo lo diferido (WhenNear).
+  const [focused, setFocused] = useState(false);
 
   // Ir a la sección pedida al llegar (y al elegirla en el índice).
   useEffect(() => {
@@ -587,7 +638,9 @@ export default function SettingsView({ route, active }: ViewProps) {
       case 'salud':
         return (
           <Section key={def.id} def={{ ...def, title: 'Salud del sistema' }}>
-            <WhenNear eager={current === 'salud' || current === 'motor' || current === 'acerca'}>
+            <WhenNear
+              eager={focused || current === 'salud' || current === 'motor' || current === 'acerca'}
+            >
               <External section="salud" route={route} active={active} />
             </WhenNear>
           </Section>
@@ -602,7 +655,7 @@ export default function SettingsView({ route, active }: ViewProps) {
         return (
           <Section key={def.id} def={def}>
             {/* Su tecla «?» va en la fuente mono (39 KB): que no se pida al abrir Ajustes. */}
-            <WhenNear eager={current === 'acerca'}>
+            <WhenNear eager={focused || current === 'acerca'}>
               <AboutSection />
             </WhenNear>
           </Section>
@@ -611,7 +664,7 @@ export default function SettingsView({ route, active }: ViewProps) {
   };
 
   return (
-    <div className="set">
+    <div className="set" onFocus={focused ? undefined : () => setFocused(true)}>
       <ViewHeader title="Ajustes" />
       <div className="set-layout">
         <nav className="set-index" aria-label="Secciones de Ajustes">

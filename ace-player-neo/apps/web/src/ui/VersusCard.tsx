@@ -17,13 +17,16 @@
      segundo color y, si siguen chocando, se oscurece una mitad.
    - Escudos: `TeamMark` con `crest` (imagen del backend o monograma).
    - Los nombres siempre escritos (accesibilidad); el `aria-label` lo pone
-     quien la usa, según lo que haga el toque («Ver canal para …»).
+     quien la usa, según lo que haga el toque («Ver canal para …»). Con «En
+     pantalla» abajo a la derecha, en una tarjeta estrecha (< 300 px) el
+     nombre no cabe al lado: se ven las siglas y el nombre entero sigue ahí
+     para el lector de pantalla (VersusCard.css).
    - `transitionName` envuelve el bloque de escudos en una <ViewTransition>
      (elemento compartido con el marcador del centro de partido). */
 
 import { ViewTransition, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
 import { cx } from '../lib/cx.ts';
-import { paletteOf, versusPair, type TeamLike } from '../lib/teams.ts';
+import { paletteOf, teamInitials, versusPair, type TeamLike } from '../lib/teams.ts';
 import { Capsule } from './Capsule.tsx';
 import { CompetitionBadge } from './CompetitionBadge.tsx';
 import { Icon } from './Icon.tsx';
@@ -124,6 +127,18 @@ export function VersusCard({
   );
   const Tag = as;
   const interactive = as === 'button' || as === 'a';
+  // Con «En pantalla», el nombre entero y sus siglas: el CSS elige según el ancho.
+  const nameOf = (team: TeamLike) =>
+    watching ? (
+      <>
+        <span className="versus__full">{team.name}</span>
+        <span className="versus__abbr" aria-hidden="true">
+          {teamInitials(team.name, team.short)}
+        </span>
+      </>
+    ) : (
+      team.name
+    );
   return (
     <Tag
       className={cx(
@@ -176,11 +191,11 @@ export function VersusCard({
       <span className="versus__bottom">
         <span className="versus__names">
           <span className="versus__line">
-            <b className="versus__name">{home.name}</b>
+            <b className="versus__name">{nameOf(home)}</b>
           </span>
           <span className="versus__line">
             <span className="versus__vs">vs.</span>
-            <b className="versus__name">{away.name}</b>
+            <b className="versus__name">{nameOf(away)}</b>
           </span>
         </span>
         <span className="versus__competition">{competition}</span>

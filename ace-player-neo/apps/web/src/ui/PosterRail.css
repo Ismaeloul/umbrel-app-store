@@ -28,6 +28,11 @@
 .prail__track::-webkit-scrollbar {
   display: none;
 }
+/* Pista enfocable (sin nada enfocable dentro): el anillo va por dentro, porque
+   sangrada llega a los bordes de la pantalla y por fuera se recortaría. */
+.prail__track:focus-visible {
+  outline-offset: -2px;
+}
 .prail__track > * {
   flex: none;
   width: var(--prail-item-w);

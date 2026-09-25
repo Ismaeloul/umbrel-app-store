@@ -6,13 +6,27 @@
    - la rueda vertical del ratón desplaza en horizontal (lib/scroll.ts);
    - flechas solo con puntero fino y cuando hay desbordamiento;
    - no se recoloca solo al repintar (regla 1 del inventario);
-   - `list` lo anuncia como lista con un elemento por hijo. */
+   - `list` lo anuncia como lista con un elemento por hijo;
+   - si desborda y no lleva nada enfocable dentro (carteles de muestra, sin
+     enlace ni botón), la propia pista entra en el orden de tabulación con su
+     nombre, para desplazarla con las flechas del teclado (WCAG 2.1.1; axe
+     «scrollable-region-focusable»). Con carteles enfocables no hace falta:
+     el navegador la desplaza al llevar el foco a cada uno. */
 
-import { Children, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import {
+  Children,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import { cx } from '../lib/cx.ts';
 import { MEDIA, useMediaQuery } from '../lib/media.ts';
 import { wheelToHorizontal } from '../lib/scroll.ts';
 import { IconButton } from './Button.tsx';
+import { focusableIn } from './overlay.ts';
 import './PosterRail.css';
 
 export interface PosterRailProps {
@@ -42,6 +56,15 @@ export function PosterRail({
   const trackRef = useRef<HTMLDivElement | null>(null);
   const fine = useMediaQuery(MEDIA.finePointer);
   const [overflow, setOverflow] = useState(false);
+  // ¿Hay algo enfocable dentro? Se mira tras cada pintado (los hijos cambian);
+  // solo se guarda si cambia, así que no hay bucle.
+  const [hasFocusable, setHasFocusable] = useState(true);
+  useLayoutEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    const found = focusableIn(track).length > 0;
+    if (found !== hasFocusable) setHasFocusable(found);
+  });
 
   useEffect(() => {
     const track = trackRef.current;
@@ -94,6 +117,7 @@ export function PosterRail({
         className="prail__track"
         role={list ? 'list' : 'group'}
         aria-label={label}
+        tabIndex={overflow && !hasFocusable ? 0 : undefined}
       >
         {items}
       </div>

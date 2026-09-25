@@ -484,6 +484,15 @@
     0 0 0 2px var(--accent),
     var(--chp-shadow);
 }
+/* El que suena, con foco: el anillo de foco por fuera del filo de oro (la
+   regla de arriba pesa más que :focus-visible y lo quitaba). */
+.chp.is-watching .chp__hit:focus-visible {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    0 0 0 4px var(--bg),
+    0 0 0 6px var(--accent-edge),
+    var(--chp-shadow);
+}
 /* La luz del tono del canal arriba a la izquierda sobre negro cine, y un velo
    abajo para que el nombre se lea sobre cualquier color. */
 .chp__bg {

@@ -128,6 +128,36 @@ describe('tokens: contraste AA', () => {
     }
   });
 
+  /* Las cápsulas de tono (ui/Capsule.css) pintan la palabra (--ok-ink…) sobre
+     el propio tono al 16 % encima de lo que haya debajo. La revisión visual
+     final (axe) lo pilló en claro: 4,35:1 sobre blanco y menos sobre los
+     fondos hundidos. Se mide sobre la mezcla, con el porcentaje del CSS. */
+  it('palabra de cada tono ≥ 4,5:1 sobre el velo de su cápsula en los cuatro fondos', () => {
+    const capsuleCss = readFileSync(path.join(SRC_DIR, 'ui', 'Capsule.css'), 'utf8');
+    const mix = (top: Rgb, under: Rgb, alpha: number): Rgb => ({
+      r: top.r * alpha + under.r * (1 - alpha),
+      g: top.g * alpha + under.g * (1 - alpha),
+      b: top.b * alpha + under.b * (1 - alpha),
+    });
+    for (const tone of ['ok', 'weak', 'fail'] as const) {
+      const block = new RegExp(
+        `\\.capsule--${tone} \\{[^}]*--cap-ink: var\\(--${tone}-ink\\);[^}]*--cap-bg: color-mix\\(in oklab, var\\(--${tone}\\) (\\d+)%, transparent\\)`,
+      ).exec(capsuleCss);
+      expect(block, `.capsule--${tone} en Capsule.css`).not.toBeNull();
+      const alpha = Number(block?.[1]) / 100;
+      for (const theme of ['light', 'dark'] as const) {
+        for (const bg of BACKGROUNDS) {
+          const under = mix(tokens[`--${tone}`]![theme], tokens[bg]![theme], alpha);
+          const ratio = contrastRatio(tokens[`--${tone}-ink`]![theme], under);
+          expect(
+            ratio,
+            `--${tone}-ink sobre su cápsula + ${bg} en ${theme}: ${ratio.toFixed(2)}`,
+          ).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+    }
+  });
+
   it('texto sobre el cielo ≥ 4,5:1', () => {
     expect(
       contrastRatio(tokens['--on-accent']!.light, tokens['--accent']!.light),

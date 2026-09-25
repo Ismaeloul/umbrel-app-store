@@ -72,8 +72,10 @@
   letter-spacing: var(--tracking-head);
   line-height: var(--lh-snug);
 }
+/* «(demo)» junto al titular: --text-2, porque el velo del estado oscurece el
+   fondo y --text-3 se quedaba en 4,28:1 en claro (axe, revisión final). */
 .salud-sum__demo {
-  color: var(--text-3);
+  color: var(--text-2);
   font-weight: var(--wght-medium);
   font-stretch: var(--w-text);
   letter-spacing: 0;

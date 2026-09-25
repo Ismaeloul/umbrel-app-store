@@ -739,6 +739,11 @@
 .agenda-score--icon.capsule {
   padding-inline: 7px;
 }
+/* Solo el ojo, la cápsula mide 28 × 28: la zona táctil crece por igual a los
+   cuatro lados hasta 44 × 44 (con -6 px a los lados se quedaba en 40). */
+.agenda-score--icon.capsule--button::before {
+  inset: -8px;
+}
 @container agenda-row (max-width: 280px) {
   .agenda-score.is-hidden .capsule__text {
     position: absolute;
@@ -750,6 +755,9 @@
   }
   .agenda-score.is-hidden.capsule {
     padding-inline: 7px;
+  }
+  .agenda-score.is-hidden.capsule--button::before {
+    inset: -8px;
   }
   .agenda-row.has-corner .versus__bottom {
     padding-right: 60px;

@@ -322,8 +322,15 @@
 .src-poster:focus-visible {
   outline: none;
 }
+/* El anillo de foco del sistema (hueco del fondo + 2 px de --accent-edge) va
+   POR FUERA del filo del estado: el filo es un outline a 2 px de la tesela y
+   se pintaba encima de --focus-ring, que quedaba tapado (revisión final). */
 .src-poster:focus-visible .src-poster__tile {
-  box-shadow: var(--focus-ring), var(--shadow-poster);
+  --focus-gap: calc(2px + var(--ring-w) + 2px);
+  box-shadow:
+    0 0 0 var(--focus-gap) var(--bg),
+    0 0 0 calc(var(--focus-gap) + 2px) var(--accent-edge),
+    var(--shadow-poster);
 }
 @media (hover: hover) and (pointer: fine) {
   .src-poster:not(.is-onscreen):hover .src-poster__tile {
