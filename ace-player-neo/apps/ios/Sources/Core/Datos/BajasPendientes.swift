@@ -78,6 +78,10 @@ import UIKit
     func enviarYa() {
         let pendientes = Array(bajas.keys)
         guard !pendientes.isEmpty else { return }
+        for clave in pendientes where bajas[clave]?.enviando == false {
+            bajas[clave]?.reloj?.cancel()  // ya no hace falta esperar
+            bajas[clave]?.reloj = nil
+        }
         let tarea = TareaDeFondo()
         tarea.empezar()
         Task { [weak self] in
@@ -95,7 +99,7 @@ import UIKit
 
     private func confirmar(_ clave: String) async {
         guard var baja = bajas[clave], !baja.enviando else { return }
-        baja.reloj?.cancel()
+        // Sin cancelar el reloj: puede ser la tarea que está llamando (se cancelaría a sí misma).
         baja.reloj = nil
         baja.enviando = true
         bajas[clave] = baja
