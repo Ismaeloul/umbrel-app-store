@@ -546,9 +546,10 @@ final class SesionFuentesTests: XCTestCase {
     @MainActor
     func testElegirEnEncontrarCanalVinculaArmaElSaltoYSaltaSiFalla() async throws {
         let servidor = ServidorFuentes()
-        var opciones = GuionFuentes.resolucion(2)
-        opciones.status = .choices
-        opciones.candidate = nil
+        var eleccion = GuionFuentes.resolucion(2)
+        eleccion.status = .choices
+        eleccion.candidate = nil
+        let opciones = eleccion
         servidor.estado.withLock {
             $0.resolucion = opciones
             $0.trabajo = GuionFuentes.trabajo([.failed, .working], estado: .complete)
@@ -593,8 +594,9 @@ final class SesionFuentesTests: XCTestCase {
     @MainActor
     func testRebuscarSinCanalesAvisaYConNovedadesLasJunta() async throws {
         let servidor = ServidorFuentes()
-        var nueva = GuionFuentes.resolucion(4)
-        nueva.research = true
+        var rebuscada = GuionFuentes.resolucion(4)
+        rebuscada.research = true
+        let nueva = rebuscada
         servidor.estado.withLock { $0.rebusqueda = nueva }
         let (sesion, entorno, _, _) = try preparar(servidor)
         await sesion.rebuscar()

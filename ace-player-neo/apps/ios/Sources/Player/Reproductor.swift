@@ -403,10 +403,14 @@ public final class Reproductor {
     nonisolated static func destinoZapeo(_ lista: [CanalReproducible], actual: String?, paso: Int)
         -> CanalReproducible?
     {
-        guard !lista.isEmpty else { return nil }
-        let indice = actual.flatMap { id in lista.firstIndex { $0.id == id } }
-        let siguiente = indice.map { (($0 + paso) % lista.count + lista.count) % lista.count } ?? 0
-        let destino = lista[siguiente]
+        let total: Int = lista.count
+        guard total > 0 else { return nil }
+        var siguiente: Int = 0
+        if let actual, let indice: Int = lista.firstIndex(where: { (canal: CanalReproducible) -> Bool in canal.id == actual }) {
+            let desplazado: Int = (indice + paso) % total
+            siguiente = (desplazado + total) % total
+        }
+        let destino: CanalReproducible = lista[siguiente]
         return destino.id == actual ? nil : destino
     }
 
