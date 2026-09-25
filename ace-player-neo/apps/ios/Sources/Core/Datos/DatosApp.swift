@@ -2,10 +2,13 @@ import Foundation
 import Observation
 
 /* Los datos de la app (b-arquitectura §2.5.2, I0→M1): una `Consulta<T>` por ruta de lectura y las
-   mutaciones con escritura directa (a7 §4.3). Vida de proceso (en `ContenedorApp`).
-   ESQUELETO de I0 (fase 0.3b): cada consulta ya sabe pedir su ruta y las mutaciones que tienen ruta en
-   `API` escriben la respuesta; lo demás (sembrar, pintar en frío, invalidar por ruta, las rutas 0.8.1
-   de salud, dispositivos, ajustes y códigos) lo escribe M1. */
+   mutaciones con escritura directa en la caché (a7 §4.3). Vida de proceso (en `ContenedorApp`).
+   - Arranque (a7 §5): `sembrar(con:)` rellena con UNA petición biblioteca, gustos, reproducción y motor
+     (`seedFromBootstrap` de api/boot.ts); en demo no se siembra nada (cada consulta pide la suya).
+   - `pintarEnFrio()` enseña lo último guardado en disco (agenda, biblioteca, arranque, gustos) mientras
+     llega la red (a2 §23.1); lo que llega de la red se vuelve a guardar.
+   - Las rutas de administración de la 0.8.1 (salud, dispositivos, ajustes, códigos) avisan de su 403
+     `origin_forbidden` o de su 2xx para las capacidades (a9 §9.1). */
 
 @MainActor @Observable final class DatosApp {
     let arranque: Consulta<BootstrapResponse>
@@ -25,13 +28,31 @@ import Observation
     private(set) var busquedas: [String: Consulta<SearchResponse>] = [:]
     var tiempoRealAbierto = false
 
+    /// 403 `origin_forbidden` (u otro fallo) de una ruta de administración: lo apunta `SesionApp`.
+    @ObservationIgnored var alFallarAdministracion: ((APIError, RutaAdministracion) -> Void)?
+    /// 2xx de una ruta de administración: el servidor ya es 0.8.1.
+    @ObservationIgnored var alAbrirAdministracion: ((RutaAdministracion) -> Void)?
+    /// Cada `bootstrap` nuevo (VigiaVersion lo usa como lectura de versión, a7 §5.2).
+    @ObservationIgnored var alLlegarArranque: ((BootstrapResponse) -> Void)?
+    /// El reloj de la frescura de todas las consultas (el de la app; -AceNeoReloj en Debug).
+    @ObservationIgnored var reloj: any Reloj = RelojSistema() {
+        didSet { for consulta in fijas { consulta.reloj = reloj } }
+    }
+
+    /// Límite de `diagnosticsList` en Salud (a7 §4.2: `{limit: 200}`).
+    static let limiteDiagnosticos = 200
+    /// Tras «Reiniciar el motor» se vuelve a mirar a los 2,5 s (a7 §4.3).
+    static let esperaTrasReiniciar: Duration = .milliseconds(2500)
+
     private let api: APIClient
     private let cache: DiskCache
+    private let esDemo: Bool
 
     init(api: APIClient, cache: DiskCache) {
         self.api = api
         self.cache = cache
-        arranque = Consulta(.alMontar) { try await api.enviar(API.bootstrap) }
+        esDemo = ModoEjecucion.demo
+        arranque = Consulta(.porDefecto) { try await api.enviar(API.bootstrap) }
         agenda = Consulta(.agenda) { try await api.enviar(API.agenda) }
         biblioteca = Consulta { try await api.enviar(API.biblioteca) }
         preferencias = Consulta { try await api.enviar(API.preferencias) }
@@ -40,44 +61,130 @@ import Observation
         motor = Consulta { try await api.enviar(API.estadoMotor) }
         reproduccion = Consulta { try await api.enviar(API.estadoReproduccion) }
         marcadores = Consulta(.marcadores) { try await api.enviar(API.marcadores) }
-        dispositivos = Consulta { throw DatosApp.pendiente }  // M1: ruta devicesList (0.8.1)
-        salud = Consulta { throw DatosApp.pendiente }  // M1: ruta health (0.8.1)
-        diagnosticos = Consulta { try await api.enviar(API.diagnosticos()) }
+        dispositivos = Consulta(.alMontar) { try await api.enviar(API.dispositivos) }
+        salud = Consulta(.alMontar) { try await api.enviar(API.salud) }
+        let limite = Self.limiteDiagnosticos
+        diagnosticos = Consulta(.alMontar) { try await api.enviar(API.diagnosticos(limite: limite)) }
+        engancharAdministracion()
+        engancharDisco()
     }
 
-    /// Lo que aún no tiene ruta en `API` (M1 añade las de la 0.8.1).
-    nonisolated static let pendiente = APIError.formato("Pendiente (M1)")
+    /// Las consultas fijas (sin las de por partido, trabajo o búsqueda).
+    private var fijas: [any ConsultaVaciable] {
+        [
+            arranque, agenda, biblioteca, preferencias, ajustes, directorios, motor, reproduccion, marcadores,
+            dispositivos, salud, diagnosticos,
+        ]
+    }
 
-    func sembrar(con arranque: BootstrapResponse) {}  // biblioteca, preferencias y ajustes salen del arranque
-    func pintarEnFrio() async {}  // DiskCache: agenda, biblioteca, arranque, preferencias
+    private func engancharAdministracion() {
+        dispositivos.alFallar = { [weak self] error in self?.alFallarAdministracion?(error, .devicesList) }
+        dispositivos.alEscribir = { [weak self] _ in self?.alAbrirAdministracion?(.devicesList) }
+        salud.alFallar = { [weak self] error in self?.alFallarAdministracion?(error, .health) }
+        salud.alEscribir = { [weak self] _ in self?.alAbrirAdministracion?(.health) }
+    }
 
-    func invalidar(_ rutas: Set<RutaConsulta>) {}
+    /// Lo que llega de la red se guarda para pintar en frío la próxima vez (a2 §23.1).
+    private func engancharDisco() {
+        let cache = self.cache
+        arranque.alEscribir = { [weak self] valor in
+            Task { try? await cache.guardar(valor, en: .arranque) }
+            self?.alLlegarArranque?(valor)
+        }
+        agenda.alEscribir = { valor in Task { try? await cache.guardar(valor, en: .agenda) } }
+        biblioteca.alEscribir = { valor in Task { try? await cache.guardar(valor, en: .biblioteca) } }
+        preferencias.alEscribir = { valor in Task { try? await cache.guardar(valor, en: .preferencias) } }
+    }
 
+    // MARK: Arranque
+
+    /// `seedFromBootstrap` (api/boot.ts): arranque, biblioteca, gustos, reproducción y motor con UNA
+    /// petición. En demo no se siembra (a7 §5 punto 2).
+    func sembrar(con arranque: BootstrapResponse) {
+        self.arranque.escribir(arranque)
+        guard !esDemo else { return }
+        biblioteca.escribir(arranque.library)
+        preferencias.escribir(PreferencesResponse(preferences: arranque.preferences))
+        reproduccion.escribir(arranque.playback)
+        motor.escribir(arranque.engine)
+    }
+
+    /// DiskCache: agenda, biblioteca, arranque y gustos, caducados (se vuelven a pedir).
+    func pintarEnFrio() async {
+        if let entrada = await cache.leer(FootballSchedule.self, de: .agenda) { agenda.pintarEnFrio(entrada.valor) }
+        if let entrada = await cache.leer(LibraryView.self, de: .biblioteca) { biblioteca.pintarEnFrio(entrada.valor) }
+        if let entrada = await cache.leer(BootstrapResponse.self, de: .arranque) { arranque.pintarEnFrio(entrada.valor) }
+        if let entrada = await cache.leer(PreferencesResponse.self, de: .preferencias) {
+            preferencias.pintarEnFrio(entrada.valor)
+        }
+    }
+
+    // MARK: Invalidar
+
+    func invalidar(_ rutas: Set<RutaConsulta>) {
+        for ruta in rutas { invalidar(ruta) }
+    }
+
+    private func invalidar(_ ruta: RutaConsulta) {
+        switch ruta {
+        case .bootstrap: arranque.invalidar()
+        case .libraryGet: biblioteca.invalidar()
+        case .preferencesGet: preferencias.invalidar()
+        case .directoriesGet: directorios.invalidar()
+        case .settingsGet: ajustes.invalidar()
+        case .playbackStatus: reproduccion.invalidar()
+        case .engineStatus: motor.invalidar()
+        case .footballSchedule: agenda.invalidar()
+        case .scores: marcadores.invalidar()
+        case .footballPreheat: for consulta in precalentados.values { consulta.invalidar() }
+        case .footballScan: for consulta in trabajos.values { consulta.invalidar() }
+        case .health: salud.invalidar()
+        case .diagnosticsList: diagnosticos.invalidar()
+        case .devicesList: dispositivos.invalidar()
+        case .search: for consulta in busquedas.values { consulta.invalidar() }
+        case .footballResolve: break  // la sesión de fuentes la llama con api(): no es una consulta (a7 §6.4)
+        }
+    }
+
+    /// `resync` o versión nueva del servidor: todo `['v1']`.
     func invalidarTodo() {
-        arranque.invalidar()
-        agenda.invalidar()
-        biblioteca.invalidar()
-        preferencias.invalidar()
-        ajustes.invalidar()
-        directorios.invalidar()
-        motor.invalidar()
-        reproduccion.invalidar()
-        marcadores.invalidar()
-        dispositivos.invalidar()
-        salud.invalidar()
-        diagnosticos.invalidar()
+        invalidar(Set(RutaConsulta.allCases))
     }
 
-    func vaciar() {  // olvidar este iPhone
+    /// Olvidar este iPhone o acceso perdido: nada del servidor se queda, ni en memoria ni en disco (a9 §3.5.2).
+    func vaciar() {
+        for consulta in fijas { consulta.vaciar() }
+        for consulta in precalentados.values { consulta.vaciar() }
+        for consulta in trabajos.values { consulta.vaciar() }
+        for consulta in busquedas.values { consulta.vaciar() }
         precalentados = [:]
         trabajos = [:]
         busquedas = [:]
+        let cache = self.cache
+        Task { await cache.borrarTodo() }
     }
+
+    /// La app vuelve a primer plano (`refetchOnWindowFocus`, a7 §4.1).
+    func volverActiva() {
+        let abierto = tiempoRealAbierto
+        for consulta in fijas { consulta.volverActiva(tiempoRealAbierto: abierto) }
+        for consulta in precalentados.values { consulta.volverActiva(tiempoRealAbierto: abierto) }
+    }
+
+    /// Vuelve la conexión (`refetchOnReconnect`): las que alguien mira y fallaron.
+    func reintentarFallidas() {
+        for consulta in fijas { consulta.reintentarSiFallo() }
+        for consulta in precalentados.values { consulta.reintentarSiFallo() }
+        for consulta in trabajos.values { consulta.reintentarSiFallo() }
+    }
+
+    // MARK: Consultas con parámetro
 
     func precalentado(partido id: String) -> Consulta<PreheatResponse> {
         if let hecha = precalentados[id] { return hecha }
         let api = self.api
         let nueva = Consulta<PreheatResponse> { try await api.enviar(API.precalentado(partido: id)) }
+        nueva.reloj = reloj
         precalentados[id] = nueva
         return nueva
     }
@@ -86,6 +193,7 @@ import Observation
         if let hecha = trabajos[id] { return hecha }
         let api = self.api
         let nueva = Consulta<ScanJob> { try await api.enviar(API.comprobacion(id: id)) }
+        nueva.reloj = reloj
         trabajos[id] = nueva
         return nueva
     }
@@ -94,39 +202,116 @@ import Observation
         if let hecha = busquedas[q] { return hecha }
         let api = self.api
         let nueva = Consulta<SearchResponse>(.busqueda) { try await api.enviar(API.buscar(q)) }
+        nueva.reloj = reloj
         busquedas[q] = nueva
         return nueva
     }
 
-    // MARK: Mutaciones (a7 §4.3): escritura directa con la respuesta + invalidación de lo que dependa.
+    // MARK: Mutaciones (a7 §4.3): escritura directa con la respuesta + lo que dependa. Sin reintentos.
 
+    /// `setLibraryData` (library/data.ts): biblioteca y, con sus canales y listas, directorios.
     func mutarBiblioteca(_ cambio: LibraryMutation) async throws {
-        biblioteca.escribir(try await api.enviar(API.cambiarBiblioteca(cambio)))
+        let vista = try await api.enviar(API.cambiarBiblioteca(cambio))
+        biblioteca.escribir(vista)
+        directorios.escribir(Self.directorios(de: vista))
     }
 
+    /// Gustos y el `bootstrap.preferences` de la caché.
     func guardarPreferencias(_ cuerpo: PreferencesInput) async throws {
-        preferencias.escribir(try await api.enviar(API.guardarPreferencias(cuerpo)))
+        let respuesta = try await api.enviar(API.guardarPreferencias(cuerpo))
+        preferencias.escribir(respuesta)
+        arranque.modificar { $0.preferences = respuesta.preferences }
     }
 
-    func guardarAjustes(_ cuerpo: SettingsUpdateBody) async throws { throw Self.pendiente }  // M1: settingsUpdate
+    /// «Un solo dispositivo a la vez» (0.8.1: `any`).
+    func guardarAjustes(_ cuerpo: SettingsUpdateBody) async throws {
+        let respuesta = try await administrar(.settingsUpdate) { [api] in
+            try await api.enviar(API.guardarAjustes(cuerpo))
+        }
+        ajustes.escribir(respuesta)
+    }
 
+    /// `applyDirectoryView`: directorios y, encima de la biblioteca, sus canales y listas.
     func sincronizarLista(_ cuerpo: DirectorySyncBody) async throws {
-        directorios.escribir(try await api.enviar(API.sincronizarDirectorio(cuerpo)))
+        aplicar(try await api.enviar(API.sincronizarDirectorio(cuerpo)))
     }
 
     func activarLista(id: String) async throws {
-        directorios.escribir(try await api.enviar(API.activarDirectorio(id: id)))
+        aplicar(try await api.enviar(API.activarDirectorio(id: id)))
     }
 
     func borrarLista(id: String) async throws {
-        directorios.escribir(try await api.enviar(API.borrarDirectorio(id: id)))
+        aplicar(try await api.enviar(API.borrarDirectorio(id: id)))
     }
 
-    func reiniciarMotor() async throws -> EngineRestartResponse { try await api.enviar(API.reiniciarMotor) }
+    /// Al pulsar, el motor pasa a «reiniciando»; a los 2,5 s se vuelve a mirar (motor y salud).
+    func reiniciarMotor() async throws -> EngineRestartResponse {
+        motor.modificar { estado in
+            estado.status = .restarting
+            estado.online = false
+        }
+        defer {
+            let motor = self.motor
+            let salud = self.salud
+            Task {
+                try? await Task.sleep(for: Self.esperaTrasReiniciar)
+                motor.invalidar()
+                salud.invalidar()
+            }
+        }
+        return try await api.enviar(API.reiniciarMotor)
+    }
 
-    func revocar(dispositivo id: String) async throws { throw Self.pendiente }  // M1: deviceRevoke
+    /// Revocar otro aparato (o el propio: eso lo hace `SesionApp.olvidarEsteIPhone`).
+    func revocar(dispositivo id: String) async throws {
+        _ = try await administrar(.deviceRevoke) { [api] in
+            try await api.enviar(API.revocarDispositivo(id: id))
+        }
+        dispositivos.invalidar()
+    }
 
-    func crearCodigo(_ cuerpo: PairingCreateBody) async throws -> PairingCreateResponse {  // M1: pairingCreate
-        throw Self.pendiente
+    /// Código y QR para emparejar otro aparato (0.8.1). El cuerpo lo arma `SesionApp.cuerpoParaCodigo()`.
+    func crearCodigo(_ cuerpo: PairingCreateBody) async throws -> PairingCreateResponse {
+        try await administrar(.pairingCreate) { [api] in try await api.enviar(API.crearCodigo(cuerpo)) }
+    }
+
+    /// Una llamada a una ruta de administración: su resultado va a las capacidades.
+    private func administrar<R: Sendable>(
+        _ ruta: RutaAdministracion, _ llamada: @Sendable () async throws -> R
+    ) async throws -> R {
+        do {
+            let respuesta = try await llamada()
+            alAbrirAdministracion?(ruta)
+            return respuesta
+        } catch {
+            alFallarAdministracion?(APIError.desde(error), ruta)
+            throw error
+        }
+    }
+
+    private func aplicar(_ vista: DirectoryView) {
+        directorios.escribir(vista)
+        biblioteca.modificar { biblioteca in
+            biblioteca.web = vista.web
+            biblioteca.webSyncedAt = vista.webSyncedAt
+            biblioteca.webSources = vista.webSources
+            biblioteca.activeWebSourceId = vista.activeWebSourceId
+        }
+    }
+
+    static func directorios(de vista: LibraryView) -> DirectoryView {
+        DirectoryView(
+            web: vista.web, webSyncedAt: vista.webSyncedAt, webSources: vista.webSources,
+            activeWebSourceId: vista.activeWebSourceId)
     }
 }
+
+/// Lo común de todas las consultas para recorrerlas sin saber su tipo.
+@MainActor protocol ConsultaVaciable: AnyObject {
+    var reloj: any Reloj { get set }
+    func vaciar()
+    func volverActiva(tiempoRealAbierto: Bool)
+    func reintentarSiFallo()
+}
+
+extension Consulta: ConsultaVaciable {}
