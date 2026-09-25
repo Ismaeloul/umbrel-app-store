@@ -8,12 +8,26 @@
      (src/api/sse.ts); sin SSE, el respaldo sondea esta consulta cada 5 s.
      Al abrir la sección se vuelve a pedir por si se perdió algo.
    - Vacío: «No se está reproduciendo nada», con la salida a la agenda
-     (regla 32: todo vacío lleva un botón que lo resuelve). */
+     (regla 32: todo vacío lleva un botón que lo resuelve).
+   - Piel «Palco» (plan fase 2, W10): cada reproducción es una tarjeta con la
+     tesela del canal (ChannelMark en forma `tile`); cada dispositivo, con su
+     icono y su estado en cápsula (forma + palabra: punto que late
+     «Reproduciendo», pausa «En pausa», señal «Conectado») y «Este
+     dispositivo» en oro. Mismos nombres de las listas y mismo resumen. */
 
 import { describeFailure, getDeviceId, useApiQuery, useAppMode } from '../../api/index.ts';
 import { useNavigate } from '../../app/router.tsx';
 import type { SessionSummary, SessionViewer } from '@ace/shared';
-import { Button, ChannelMark, EmptyState, Icon, Num, SkeletonRows } from '../../ui/index.ts';
+import {
+  Button,
+  Capsule,
+  ChannelMark,
+  EmptyState,
+  Icon,
+  Num,
+  SkeletonRows,
+  type CapsuleTone,
+} from '../../ui/index.ts';
 import {
   countText,
   deviceKind,
@@ -25,12 +39,20 @@ import {
   PLAY_ICON,
   PLAY_TEXT,
   playState,
+  type PlayState,
   PROTOCOL_LABEL,
   sessionTitle,
   summaryText,
   visibleSessions,
 } from './model.ts';
 import './where-playing.css';
+
+/** El tono de la cápsula de estado: solo tiñe; la forma la pone el punto o el icono. */
+const STATE_TONE: Record<PlayState, CapsuleTone> = {
+  reproduciendo: 'ok',
+  pausa: 'neutral',
+  conectado: 'neutral',
+};
 
 function ViewerRow({ viewer, mine }: { viewer: SessionViewer; mine: boolean }) {
   const kind = deviceKind(viewer);
@@ -42,16 +64,26 @@ function ViewerRow({ viewer, mine }: { viewer: SessionViewer; mine: boolean }) {
       </span>
       <div className="donde-dev__text">
         <span className="donde-dev__name">
-          {viewer.deviceName}
-          {mine ? <span className="donde-dev__mine">Este dispositivo</span> : null}
+          <span className="donde-dev__label">{viewer.deviceName}</span>
+          {mine ? (
+            <Capsule tone="gold" size="sm" className="donde-dev__mine">
+              Este dispositivo
+            </Capsule>
+          ) : null}
         </span>
         <span className="donde-dev__meta">
           {KIND_LABEL[kind]} · {PLATFORM_LABEL[viewer.platform]}
         </span>
       </div>
       <span className="donde-dev__state" data-state={state}>
-        <Icon name={PLAY_ICON[state]} size={16} />
-        <span>{PLAY_TEXT[state]}</span>
+        <Capsule
+          tone={STATE_TONE[state]}
+          size="sm"
+          dot={state === 'reproduciendo'}
+          icon={state === 'reproduciendo' ? undefined : PLAY_ICON[state]}
+        >
+          {PLAY_TEXT[state]}
+        </Capsule>
       </span>
     </li>
   );
@@ -63,7 +95,7 @@ function SessionItem({ session, deviceId }: { session: SessionSummary; deviceId:
   return (
     <li className="donde-ses">
       <div className="donde-ses__head">
-        <ChannelMark name={title} size={44} />
+        <ChannelMark name={title} shape="tile" size={40} className="donde-ses__mark" />
         <div className="donde-ses__text">
           <span className="donde-ses__title">{title}</span>
           <span className="donde-ses__meta">

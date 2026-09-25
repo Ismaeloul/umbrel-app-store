@@ -1,4 +1,7 @@
-/* Vista Ajustes (inventario-front §14, §8.9 y §12.2, más lo nuevo de la v2).
+/* Vista Ajustes (inventario-front §14, §8.9 y §12.2, más lo nuevo de la v2),
+   con la piel «Palco» (plan fase 2, decisión W10): el índice como tarjetas con
+   icono grande y cada sección como tarjeta con cabecera expandida. Mismas 9
+   secciones, mismos ids y mismos nombres accesibles.
 
    En la 0.6.59 era un modal; en la v2 es una vista con secciones y un índice
    (fila de chips en el móvil, columna fija en escritorio). Cada sección tiene
@@ -41,16 +44,19 @@ import { searchFor } from '../../app/routes.ts';
 import { setTheme, setTransparency, useTheme, type ThemePreference } from '../../app/theme.ts';
 import { ViewHeader } from '../../app/ViewHeader.tsx';
 import { cx } from '../../lib/cx.ts';
+import { haptic } from '../../lib/haptics.ts';
 import { MEDIA, prefersReducedMotion, useMediaQuery } from '../../lib/media.ts';
 import { notify } from '../../notices/index.ts';
 import {
   Button,
+  Capsule,
   Card,
   Icon,
   Kbd,
   Segmented,
   SkeletonRows,
   Switch,
+  type CapsuleTone,
   type IconName,
 } from '../../ui/index.ts';
 import { DirectoriesSection } from '../directories/DirectoriesSection.tsx';
@@ -76,19 +82,34 @@ interface SectionDef {
   id: SectionId;
   title: string;
   icon: IconName;
+  /** Una línea bajo el título en la tarjeta del índice (decorativa). */
+  hint: string;
 }
 
 const SECTIONS: readonly SectionDef[] = [
-  { id: 'listas', title: 'Listas', icon: 'list' },
-  { id: 'futbol', title: 'Tu fútbol', icon: 'agenda' },
-  { id: 'reproduccion', title: 'Reproducción', icon: 'play' },
-  { id: 'donde', title: 'Dónde se está reproduciendo', icon: 'tv' },
-  { id: 'apariencia', title: 'Apariencia', icon: 'sol' },
-  { id: 'dispositivos', title: 'Dispositivos', icon: 'movil' },
-  { id: 'salud', title: 'Salud', icon: 'senal' },
-  { id: 'motor', title: 'Motor AceStream', icon: 'motor' },
-  { id: 'acerca', title: 'Acerca de', icon: 'info' },
+  { id: 'listas', title: 'Listas', icon: 'list', hint: 'De dónde salen los canales' },
+  { id: 'futbol', title: 'Tu fútbol', icon: 'agenda', hint: 'Ligas, equipos y selecciones' },
+  { id: 'reproduccion', title: 'Reproducción', icon: 'play', hint: 'Modo y un solo dispositivo' },
+  {
+    id: 'donde',
+    title: 'Dónde se está reproduciendo',
+    icon: 'tv',
+    hint: 'Qué suena y en qué pantalla',
+  },
+  { id: 'apariencia', title: 'Apariencia', icon: 'sol', hint: 'Tema y transparencia' },
+  {
+    id: 'dispositivos',
+    title: 'Dispositivos',
+    icon: 'movil',
+    hint: 'Emparejar el iPhone y el iPad',
+  },
+  { id: 'salud', title: 'Salud', icon: 'senal', hint: 'Motor, comprobador y registro' },
+  { id: 'motor', title: 'Motor AceStream', icon: 'motor', hint: 'Estado y reinicio' },
+  { id: 'acerca', title: 'Acerca de', icon: 'info', hint: 'Versión y atajos' },
 ];
+
+/** Tono de la cápsula del motor a partir del resumen (`idle` → neutro). */
+const ENGINE_CAPSULE: Record<string, CapsuleTone> = { ok: 'ok', weak: 'weak', fail: 'fail' };
 
 /** Reinicio del motor: 6 s para el segundo toque (index.html:5962). */
 export const CONFIRM_RESTART_MS = 6000;
@@ -119,7 +140,7 @@ function Section({
     >
       <header className="set-sec__head">
         <span className="set-sec__icon" aria-hidden="true">
-          <Icon name={def.icon} size={20} />
+          <Icon name={def.icon} size={24} />
         </span>
         <h2 id={`ajustes-${def.id}-t`} className="set-sec__title">
           {def.title}
@@ -226,7 +247,10 @@ function PlaybackSection() {
           labelledBy="ajustes-modo"
           value={mode}
           // El reproductor guarda el modo, avisa «Modo «…» activado» y se reengancha.
-          onChange={(next: PlaybackMode) => setPlaybackMode(next)}
+          onChange={(next: PlaybackMode) => {
+            haptic('selection');
+            setPlaybackMode(next);
+          }}
         />
         <p className="set-help">{PLAYBACK_MODE_HELP}</p>
       </div>
@@ -244,7 +268,8 @@ function PlaybackSection() {
         }
         checked={single}
         disabled={!settings.data || update.isPending}
-        onChange={(checked) =>
+        onChange={(checked) => {
+          haptic('selection');
           update.mutate(
             { body: { sameChannelPolicy: checked ? 'handoff' : 'share' } },
             {
@@ -258,8 +283,8 @@ function PlaybackSection() {
               onError: (error) =>
                 notify(`No se pudo guardar el ajuste. ${describeFailure(error)}`, { tone: 'err' }),
             },
-          )
-        }
+          );
+        }}
       />
       {settings.isError && !settings.data ? (
         <p className="set-help set-help--err">
@@ -283,7 +308,10 @@ function AppearanceSection() {
           label="Tema"
           block
           value={theme.theme}
-          onChange={(next: ThemePreference) => setTheme(next)}
+          onChange={(next: ThemePreference) => {
+            haptic('selection');
+            setTheme(next);
+          }}
           items={[
             { value: 'sistema', label: 'Sistema', icon: 'pantalla' },
             { value: 'claro', label: 'Claro', icon: 'sol' },
@@ -300,7 +328,10 @@ function AppearanceSection() {
             : 'Cambia el cristal de la barra, las hojas y los menús por superficies opacas.'
         }
         checked={theme.transparency === 'reducida'}
-        onChange={(checked) => setTransparency(checked ? 'reducida' : 'normal')}
+        onChange={(checked) => {
+          haptic('selection');
+          setTransparency(checked ? 'reducida' : 'normal');
+        }}
       />
     </div>
   );
@@ -337,11 +368,19 @@ function EngineSection({ onHealth }: { onHealth: (() => void) | null }) {
   };
 
   const version = status.data?.engineVersion;
+  const tone = mode === 'demo' ? 'ok' : summary.tone;
   return (
     <div className="set-stack">
-      <p className="set-engine" data-tone={mode === 'demo' ? 'ok' : summary.tone}>
-        <Icon name="motor" size={18} />
-        <span>{mode === 'demo' ? 'Motor en línea (demo)' : summary.text}</span>
+      {/* Cápsula de estado: forma (punto o icono) + palabra + color. */}
+      <p className="set-engine" data-tone={tone}>
+        <Capsule
+          tone={ENGINE_CAPSULE[tone] ?? 'neutral'}
+          dot={tone === 'ok'}
+          icon={tone === 'ok' ? undefined : 'motor'}
+          className="set-engine__capsule"
+        >
+          {mode === 'demo' ? 'Motor en línea (demo)' : summary.text}
+        </Capsule>
         {version ? <span className="set-engine__ver">versión {version}</span> : null}
       </p>
       <p className="set-help">{RESTART_WARNING}</p>
@@ -577,21 +616,35 @@ export default function SettingsView({ route, active }: ViewProps) {
       <div className="set-layout">
         <nav className="set-index" aria-label="Secciones de Ajustes">
           <ul className="set-index__list">
+            {/* Tarjeta con icono grande, título y una pista. El enlace ES la
+                tarjeta (objetivo de 44 px de verdad, también en táctil): dentro
+                lleva el icono (decorativo, sin texto) y el título, así que su
+                nombre y su texto siguen siendo solo el título. La pista es
+                decorativa y va fuera, colocada por CSS bajo el título. */}
             {sections.map((def) => (
-              <li key={def.id}>
+              <li
+                key={def.id}
+                className={cx('set-index__item', current === def.id && 'is-current')}
+              >
                 <a
-                  className={cx('set-index__link', 'press')}
+                  className="set-index__link"
                   href={searchFor({ vista: 'ajustes', seccion: def.id })}
                   aria-current={current === def.id ? 'location' : undefined}
                   onClick={(event) => {
                     if (event.button !== 0 || event.metaKey || event.ctrlKey) return;
                     event.preventDefault();
+                    haptic('selection');
                     go(def.id);
                   }}
                 >
-                  <Icon name={def.icon} size={18} />
-                  <span>{def.title}</span>
+                  <span className="set-index__icon" aria-hidden="true">
+                    <Icon name={def.icon} size={20} />
+                  </span>
+                  <span className="set-index__title">{def.title}</span>
                 </a>
+                <span className="set-index__hint" aria-hidden="true">
+                  {def.hint}
+                </span>
               </li>
             ))}
           </ul>

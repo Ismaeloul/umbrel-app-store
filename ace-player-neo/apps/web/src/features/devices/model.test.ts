@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   countdown,
   groupCode,
+  isOnlineNow,
   lastSeenText,
   originKind,
   pairedText,
@@ -38,6 +39,14 @@ describe('dispositivos', () => {
       lastSeenText(device({ lastSeenAt: new Date(NOW - 5 * 86400_000).toISOString() }), NOW),
     ).toMatch(/^Visto el \d+ \w+, a las \d\d:\d\d$/);
     expect(pairedText(device({}))).toMatch(/^Emparejado el 1 sept 2026$/);
+    // El punto verde de la fila sale con la misma regla que «Conectado ahora mismo».
+    expect(isOnlineNow(device({}), NOW)).toBe(false);
+    expect(isOnlineNow(device({ lastSeenAt: new Date(NOW - 60_000).toISOString() }), NOW)).toBe(
+      true,
+    );
+    expect(isOnlineNow(device({ lastSeenAt: new Date(NOW - 3 * 60_000).toISOString() }), NOW)).toBe(
+      false,
+    );
   });
 
   it('activos por última conexión; revocados aparte', () => {

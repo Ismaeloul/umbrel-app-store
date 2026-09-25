@@ -168,6 +168,22 @@ const VIEWS = [
       await page.waitForTimeout(700);
     },
   },
+  // Canales con un canal sonando: su cartel «En pantalla» con el marcador tapado.
+  {
+    name: 'biblioteca-sonando',
+    search: () => `?vista=partido/canal/${CANAL}`,
+    player: true,
+    prepare: async (page) => {
+      await waitPlaying(page);
+      await page.evaluate(() => {
+        const demo = location.search.includes('demo=1') ? '&demo=1' : '';
+        history.pushState(null, '', `?vista=biblioteca&pestana=favoritos${demo}`);
+        dispatchEvent(new PopStateEvent('popstate'));
+      });
+      await page.waitForSelector('.lib', { timeout: 10_000 });
+      await page.waitForTimeout(900);
+    },
+  },
   { name: 'biblioteca-favoritos', search: '?vista=biblioteca&pestana=favoritos', ready: '.lib' },
   { name: 'biblioteca-recientes', search: '?vista=biblioteca&pestana=recientes', ready: '.lib' },
   { name: 'biblioteca-listas', search: '?vista=biblioteca&pestana=listas', ready: '.lib' },
@@ -187,7 +203,35 @@ const VIEWS = [
     },
   },
   { name: 'buscar', search: '?vista=buscar&q=deportes', ready: 'main' },
+  // «Enlace detectado» (Palco W9): un Content ID de 40 hex en el campo.
+  {
+    name: 'buscar-enlace',
+    search: '?vista=buscar&q=a3f19c2b7d4e8f0a1b2c3d4e5f6a7b8c9d0e1f2a',
+    ready: '.search-link',
+  },
+  // Hoja «Pegar un Content ID» con un enlace ya escrito (Palco W9).
+  {
+    name: 'pegar',
+    search: '?vista=biblioteca',
+    ready: '.lib',
+    prepare: async (page) => {
+      await page
+        .getByRole('button', { name: /^Pegar un Content ID/ })
+        .first()
+        .click();
+      await dialogOpen(page);
+      await page
+        .locator('[role="dialog"] input')
+        .first()
+        .fill('acestream://a3f19c2b7d4e8f0a1b2c3d4e5f6a7b8c9d0e1f2a');
+      await page.waitForTimeout(300);
+    },
+  },
   { name: 'ajustes', search: '?vista=ajustes', ready: 'main' },
+  { name: 'ajustes-apariencia', search: '?vista=ajustes/apariencia', ready: 'main' },
+  { name: 'ajustes-reproduccion', search: '?vista=ajustes/reproduccion', ready: 'main' },
+  { name: 'ajustes-donde', search: '?vista=ajustes/donde', ready: 'main' },
+  { name: 'ajustes-motor', search: '?vista=ajustes/motor', ready: 'main' },
   {
     name: 'dispositivos',
     search: '?vista=ajustes/dispositivos',

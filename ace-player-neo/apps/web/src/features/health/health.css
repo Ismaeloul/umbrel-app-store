@@ -1,7 +1,12 @@
-/* Ajustes → Salud del sistema. Solo tokens (docs/diseno/sistema.md). Va dentro
-   de la tarjeta de la sección: lo de dentro usa --r-inner (radio concéntrico)
-   y el fondo de los elementos internos de Ajustes (--bg con una línea), como
-   las listas guardadas. Nada por debajo de 11 px; objetivos de 44 px. */
+/* Ajustes → Salud del sistema con la piel «Palco» (plan fase 2, decisión
+   W10): el resumen como una cápsula grande teñida del estado (ok, con avisos
+   o fallo: icono + frase + color), las tarjetas de servicio en rejilla con su
+   icono teñido, el nombre como rótulo en mayúsculas y el estado con
+   SignalBadge (palabra + forma), las fuentes con fallos y el registro con
+   chips por causa. Solo tokens (docs/diseno/sistema.md). Va dentro de la
+   tarjeta de la sección: lo de dentro usa --r-inner (radio concéntrico) y el
+   fondo hundido de Ajustes (--bg con una línea), como las listas guardadas.
+   Nada por debajo de 11 px; objetivos de 44 px; solo transform/opacity. */
 
 .salud {
   display: grid;
@@ -9,7 +14,7 @@
   min-width: 0;
 }
 
-/* ---- Resumen ---------------------------------------------------------------- */
+/* ---- Resumen: cápsula grande teñida del estado -------------------------------- */
 .salud-top {
   display: flex;
   flex-wrap: wrap;
@@ -19,31 +24,41 @@
   min-width: 0;
 }
 .salud-sum {
+  --sum: var(--text-3);
+  --sum-ink: var(--text-2);
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--s-3);
-  flex: 1 1 260px;
+  flex: 1 1 280px;
   min-width: 0;
+  min-height: 64px;
+  padding: 12px 18px 12px 12px;
+  border-radius: var(--r-l);
+  background: color-mix(in oklab, var(--sum) 12%, var(--bg));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--sum) 34%, transparent);
+}
+.salud-sum--ok {
+  --sum: var(--ok);
+  --sum-ink: var(--ok-ink);
+}
+.salud-sum--weak {
+  --sum: var(--weak);
+  --sum-ink: var(--weak-ink);
+}
+.salud-sum--fail {
+  --sum: var(--fail);
+  --sum-ink: var(--fail-ink);
 }
 .salud-sum__icon {
   display: inline-grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   flex: none;
   border-radius: 50%;
-  background: var(--bg);
+  background: color-mix(in oklab, var(--sum) 20%, transparent);
   box-shadow: inset 0 0 0 1.5px currentColor;
-  color: var(--text-2);
-}
-.salud-sum--ok .salud-sum__icon {
-  color: var(--ok-ink);
-}
-.salud-sum--weak .salud-sum__icon {
-  color: var(--weak-ink);
-}
-.salud-sum--fail .salud-sum__icon {
-  color: var(--fail-ink);
+  color: var(--sum-ink);
 }
 .salud-sum__text {
   display: grid;
@@ -70,6 +85,7 @@
 }
 /* «Comprobando…»: pulso de opacidad (lo único que late aquí: está pasando). */
 .salud-sum__facts--pulse {
+  padding-left: 6px;
   animation: salud-pulso 1.4s var(--ease-out) infinite alternate;
 }
 @keyframes salud-pulso {
@@ -96,10 +112,10 @@
   display: flex;
   align-items: flex-start;
   gap: var(--s-2);
-  padding: 10px 12px;
+  padding: 10px 14px;
   border-radius: var(--r-inner, var(--r-m));
-  background: var(--bg);
-  box-shadow: inset 0 0 0 1px var(--line);
+  background: color-mix(in oklab, var(--weak) 10%, var(--bg));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--weak) 40%, transparent);
   color: var(--weak-ink);
   font-size: var(--fs-13);
   line-height: var(--lh-text);
@@ -112,24 +128,38 @@
   color: var(--text);
 }
 
-/* ---- Cuadrícula por servicio ------------------------------------------------ */
+/* ---- Rejilla por servicio ------------------------------------------------------ */
 .salud-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 232px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
   gap: var(--s-2);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .salud-tile {
+  --tile: var(--text-3);
+  --tile-ink: var(--text-2);
   display: grid;
   align-content: start;
   gap: 6px;
   min-width: 0;
-  padding: 12px 14px;
+  padding: 14px 16px 16px;
   border-radius: var(--r-inner, var(--r-m));
   background: var(--bg);
   box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+.salud-tile[data-signal='ok'] {
+  --tile: var(--ok);
+  --tile-ink: var(--ok-ink);
+}
+.salud-tile[data-signal='weak'] {
+  --tile: var(--weak);
+  --tile-ink: var(--weak-ink);
+}
+.salud-tile[data-signal='fail'] {
+  --tile: var(--fail);
+  --tile-ink: var(--fail-ink);
 }
 /* Lo que falla se ve también por el borde (además de la forma y la palabra). */
 .salud-tile[data-signal='fail'] {
@@ -140,37 +170,49 @@
 }
 .salud-tile--skeleton {
   gap: 10px;
-  min-height: 76px;
+  min-height: 108px;
 }
+/* Icono arriba a la izquierda y el estado a la derecha; el nombre, debajo,
+   como rótulo en mayúsculas (el orden del DOM no cambia). */
 .salud-tile__head {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    'icon state'
+    'name name';
   align-items: center;
-  gap: var(--s-2);
+  gap: 10px var(--s-2);
   min-width: 0;
 }
 .salud-tile__icon {
+  grid-area: icon;
   display: inline-grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--r-xs);
-  background: var(--surface-2);
-  color: var(--text-2);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-s);
+  background: color-mix(in oklab, var(--tile) 16%, transparent);
+  color: var(--tile-ink);
 }
 .salud-tile__name {
+  grid-area: name;
   min-width: 0;
-  font-size: var(--fs-15);
-  font-weight: var(--wght-strong);
+  color: var(--text-3);
+  font-size: var(--fs-kicker);
+  font-weight: 700;
+  letter-spacing: var(--tracking-kicker);
   line-height: var(--lh-snug);
+  text-transform: uppercase;
   overflow-wrap: anywhere;
 }
 .salud-tile__state {
+  grid-area: state;
   justify-self: end;
 }
 .salud-tile__detail {
-  color: var(--text-2);
-  font-size: var(--fs-13);
+  color: var(--text);
+  font-size: var(--fs-15);
+  font-weight: var(--wght-strong);
   line-height: var(--lh-snug);
   overflow-wrap: anywhere;
 }
@@ -187,7 +229,7 @@
   display: grid;
   justify-items: start;
   gap: 4px;
-  margin-top: 4px;
+  margin-top: 6px;
 }
 .salud-tile__warn {
   color: var(--text-2);
@@ -208,17 +250,19 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--s-2);
+  gap: 6px;
 }
-.salud-block__title {
-  font-size: var(--fs-15);
-  font-weight: var(--wght-head);
-  font-stretch: var(--w-head);
-}
+/* Rótulo Palco: «REGISTRO DE FALLOS · 12 EN 24 H». */
+.salud-block__title,
 .salud-block__aside {
   color: var(--text-3);
-  font-size: var(--fs-13);
-  font-weight: var(--wght-medium);
+  font-size: var(--fs-kicker);
+  font-weight: 700;
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+}
+.salud-block__aside::before {
+  content: '· ';
 }
 .salud-help {
   color: var(--text-2);
@@ -244,8 +288,8 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--s-3);
-  min-height: var(--tap);
-  padding: 8px 12px;
+  min-height: 56px;
+  padding: 8px 14px;
 }
 .salud-src + .salud-src {
   box-shadow: inset 0 1px 0 var(--line-soft);
@@ -262,7 +306,9 @@
   text-align: right;
 }
 .salud-src__name {
-  font-weight: var(--wght-strong);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: -0.01em;
   overflow-wrap: anywhere;
 }
 .salud-src__causes,
@@ -271,6 +317,7 @@
   font-size: var(--fs-caption);
 }
 .salud-src__count {
+  color: var(--fail-ink);
   font-size: var(--fs-13);
   font-weight: var(--wght-strong);
 }
@@ -302,27 +349,41 @@ ul.salud-log > li + li {
   box-shadow: inset 0 1px 0 var(--line-soft);
 }
 .salud-entry {
+  --cause: var(--text-3);
+  --cause-ink: var(--text-2);
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: var(--s-3);
-  padding: 10px 12px;
+  padding: 12px 14px;
+}
+/* La causa tiñe su icono (la palabra va en la línea de abajo): el motor y los
+   datos guardados en ámbar, la fuente en rojo, lo demás neutro. */
+.salud-entry[data-cause='engine'],
+.salud-entry[data-cause='state'] {
+  --cause: var(--weak);
+  --cause-ink: var(--weak-ink);
+}
+.salud-entry[data-cause='source'] {
+  --cause: var(--fail);
+  --cause-ink: var(--fail-ink);
 }
 .salud-entry__icon {
   display: inline-grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--surface-2);
-  color: var(--text-2);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-s);
+  background: color-mix(in oklab, var(--cause) 16%, transparent);
+  color: var(--cause-ink);
 }
 .salud-entry__body {
   display: grid;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
 }
 .salud-entry__msg {
   font-size: var(--fs-15);
+  font-weight: var(--wght-medium);
   line-height: var(--lh-snug);
   overflow-wrap: anywhere;
 }
@@ -336,7 +397,7 @@ ul.salud-log > li + li {
 }
 .salud-entry__cause {
   font-weight: var(--wght-strong);
-  color: var(--text);
+  color: var(--cause-ink);
 }
 .salud-entry__metrics {
   color: var(--text-2);
@@ -358,7 +419,7 @@ ul.salud-log > li + li {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s-2);
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-radius: var(--r-inner, var(--r-m));
   background: var(--bg);
   box-shadow: inset 0 0 0 1px var(--line-soft);

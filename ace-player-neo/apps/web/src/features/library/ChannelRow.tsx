@@ -1,7 +1,7 @@
-/* Tarjeta de canal (inventario §13.2 con la jerarquía de la maqueta A y el
-   dorsal del injerto C2):
+/* Fila de canal (inventario §13.2 con la piel «Palco», plan fase 2 W8):
 
-   1. el dorsal y el nombre (con el aviso de «canal caído» si toca);
+   1. la tesela 16:9 del canal (ChannelMark en forma `tile`, 64×36) y el nombre
+      expandido (con el aviso de «canal caído» si toca);
    2. lo que da hoy según la agenda: en directo, escudos y marcador (TAPADO si
       es el partido que ves: regla 29); si no, «A las 21:30, Local – Visitante»;
    3. la meta: «En pantalla», el minuto, o el subtítulo de siempre (categoría,
@@ -15,6 +15,8 @@
 import type { LibraryCollection } from '@ace/shared';
 import { useEffect, useId, useRef, type CSSProperties, type MouseEvent } from 'react';
 import { cx } from '../../lib/cx.ts';
+import { haptic } from '../../lib/haptics.ts';
+import { teamCrest, teamPalette, teamShort } from '../../lib/teams.ts';
 import {
   ChannelMark,
   Icon,
@@ -80,8 +82,24 @@ function OnAirLine({
     return (
       <span className="ch__line ch__line--live" id={id}>
         <span className="ch__crests" aria-hidden="true">
-          <TeamMark name={match.home} size={18} lit />
-          {match.away ? <TeamMark name={match.away} size={18} lit /> : null}
+          <TeamMark
+            name={match.home}
+            short={teamShort(match, 'home')}
+            colors={teamPalette(match, 'home')}
+            crest={teamCrest(match, 'home')}
+            size={18}
+            lit
+          />
+          {match.away ? (
+            <TeamMark
+              name={match.away}
+              short={teamShort(match, 'away')}
+              colors={teamPalette(match, 'away')}
+              crest={teamCrest(match, 'away')}
+              size={18}
+              lit
+            />
+          ) : null}
         </span>
         <span className="ch__txt">
           {match.away ? (
@@ -112,8 +130,22 @@ function OnAirLine({
     return (
       <span className="ch__line" id={id}>
         <span className="ch__crests" aria-hidden="true">
-          <TeamMark name={match.home} size={18} />
-          {match.away ? <TeamMark name={match.away} size={18} /> : null}
+          <TeamMark
+            name={match.home}
+            short={teamShort(match, 'home')}
+            colors={teamPalette(match, 'home')}
+            crest={teamCrest(match, 'home')}
+            size={18}
+          />
+          {match.away ? (
+            <TeamMark
+              name={match.away}
+              short={teamShort(match, 'away')}
+              colors={teamPalette(match, 'away')}
+              crest={teamCrest(match, 'away')}
+              size={18}
+            />
+          ) : null}
         </span>
         <span className="ch__txt">
           {/^\d{2}:\d{2}$/.test(match.time) ? (
@@ -157,7 +189,10 @@ export function ChannelRow({
   const metaId = `${id}-meta`;
 
   useEffect(() => {
-    if (menu.open) lastMenuAt.current = Date.now();
+    if (!menu.open) return;
+    lastMenuAt.current = Date.now();
+    // Pulsación larga (o clic derecho): un toque medio al abrirse el menú (HAPTIC_MAP).
+    haptic('medium');
   }, [menu.open]);
 
   const onClick = (event: MouseEvent<HTMLAnchorElement>) => {
@@ -203,7 +238,7 @@ export function ChannelRow({
           bind.onContextMenu(event);
         }}
       >
-        <ChannelMark name={title} size={52} className="ch__dorsal" />
+        <ChannelMark name={title} shape="tile" size={36} className="ch__dorsal" />
         <span className="ch__body">
           <span className="ch__name">
             <span className="ch__name-text">{title}</span>

@@ -1,5 +1,7 @@
 /* El bloque de emparejar: el botón y, al pulsarlo, el código de 6 dígitos con
-   su QR y la cuenta atrás de 5 min (arquitectura §7.3).
+   su QR y la cuenta atrás de 5 min (arquitectura §7.3). Con la piel «Palco»
+   (plan fase 2, W10): tarjeta «Añade el iPhone o el iPad» con el botón de oro,
+   el código expandido y en oro, y un toque de éxito al emparejar (HAPTIC_MAP).
 
    - El QR es el SVG que dibuja el backend, pintado como <img> con una URL
      data: (la CSP de nginx permite `img-src data:`). Como imagen, nada de lo
@@ -11,6 +13,7 @@
      sí se anuncia (listo, caducado, emparejado) va en una región polite. */
 
 import { useEffect, useRef } from 'react';
+import { haptic } from '../../lib/haptics.ts';
 import { notify } from '../../notices/index.ts';
 import { Button } from '../../ui/Button.tsx';
 import { Icon } from '../../ui/Icon.tsx';
@@ -46,10 +49,11 @@ export function PairingPanel({ pairing, pairedName, demo }: PairingPanelProps) {
   const toasted = useRef<string | null>(null);
 
   // Un aviso al emparejar (una vez por dispositivo): si la sección no está a la
-  // vista, el toast es lo que se entera.
+  // vista, el toast es lo que se entera. Con toque de éxito (HAPTIC_MAP).
   useEffect(() => {
     if (!pairedId || toasted.current === pairedId || !pairedName) return;
     toasted.current = pairedId;
+    haptic('success');
     notify(`«${pairedName}» se ha emparejado`, { tone: 'ok', icon: 'check' });
   }, [pairedId, pairedName]);
 
@@ -70,10 +74,20 @@ function PanelBody({ pairing, pairedName, demo }: PairingPanelProps) {
   if (state.phase === 'idle' || state.phase === 'creating') {
     return (
       <div className="disp-pair-start">
+        <span className="disp-pair-start__icon" aria-hidden="true">
+          <Icon name="qr" size={28} />
+        </span>
+        <div className="disp-pair-start__text">
+          <p className="disp-pair-start__title">Añade el iPhone o el iPad</p>
+          <p className="disp-help">
+            En la app, escanea el código QR o escribe los seis dígitos que salen aquí.
+          </p>
+        </div>
         <Button
           variant="primary"
           icon="qr"
           busy={state.phase === 'creating'}
+          className="disp-pair-start__btn"
           onClick={() => void create()}
         >
           {state.phase === 'creating' ? 'Creando el código…' : 'Emparejar un dispositivo'}
@@ -157,7 +171,7 @@ function PanelBody({ pairing, pairedName, demo }: PairingPanelProps) {
         {demo ? <figcaption className="disp-pair__demo">QR de muestra (demo)</figcaption> : null}
       </figure>
       <div className="disp-pair__side">
-        <p id="disp-pair-t" className="disp-pair__label">
+        <p id="disp-pair-t" className="disp-pair__label kicker">
           Código para emparejar
         </p>
         <p className="disp-pair__code">

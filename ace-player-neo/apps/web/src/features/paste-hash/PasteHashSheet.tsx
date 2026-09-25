@@ -20,6 +20,7 @@ import { normalizeHash } from '@ace/shared';
 import { useId, useRef, useState, type FormEvent } from 'react';
 import { useApiQuery } from '../../api/index.ts';
 import { useNavigate } from '../../app/router.tsx';
+import { haptic } from '../../lib/haptics.ts';
 import { notify } from '../../notices/index.ts';
 import { Button, IconButton, Sheet, TextField } from '../../ui/index.ts';
 import { findKnownItem } from '../library/model.ts';
@@ -75,6 +76,8 @@ export function PasteHashSheet({ open, onClose, onSubmit }: PasteHashSheetProps)
       return;
     }
     close();
+    // Content ID pegado: toque de éxito (HAPTIC_MAP).
+    haptic('success');
     if (onSubmit) {
       onSubmit(hash);
       return;

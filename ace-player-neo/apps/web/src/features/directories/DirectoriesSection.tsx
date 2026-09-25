@@ -1,6 +1,8 @@
-/* Ajustes → Listas (inventario-front §14): añadir una lista M3U o HTML por su
-   dirección, elegir la activa, actualizarla a mano y borrarla con segundo
-   toque. Hasta 8; el servidor las actualiza solas cada 3 h.
+/* Ajustes → Listas (inventario-front §14, piel «Palco» W10): añadir una lista
+   M3U o HTML por su dirección, elegir la activa, actualizarla a mano y
+   borrarla con segundo toque. Hasta 8; el servidor las actualiza solas cada
+   3 h. Cada lista guardada es una tarjeta con su icono y la cápsula «En uso»
+   en oro.
 
    Cambios sobre la 0.6.59, todos a favor del usuario:
    - los botones se deshabilitan mientras se sincroniza (§29.26: antes se
@@ -20,7 +22,15 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { api, useApiQuery } from '../../api/index.ts';
 import { notify } from '../../notices/index.ts';
 import { cx } from '../../lib/cx.ts';
-import { Button, EmptyState, Icon, IconButton, SkeletonRows, TextField } from '../../ui/index.ts';
+import {
+  Button,
+  Capsule,
+  EmptyState,
+  Icon,
+  IconButton,
+  SkeletonRows,
+  TextField,
+} from '../../ui/index.ts';
 import { useSecondTap } from '../settings/second-tap.ts';
 import {
   applyDirectoryView,
@@ -265,22 +275,31 @@ export function DirectoriesSection() {
               const mine = busy && 'id' in busy && busy.id === source.id ? busy.kind : null;
               return (
                 <li key={source.id} className="dir-card" data-active={active || undefined}>
-                  <div className="dir-card__head">
-                    <span className="dir-card__name">{source.name}</span>
-                    {active ? <span className="dir-badge">En uso</span> : null}
-                  </div>
-                  <p className="dir-card__url mono" title={source.url}>
-                    {source.url}
-                  </p>
-                  <p className={cx('dir-card__meta', failed && 'dir-card__meta--failed')}>
-                    {sourceMeta(source)}
-                  </p>
-                  {failed && source.lastError ? (
-                    <p className="dir-card__error">
-                      <Icon name="aviso" size={16} />
-                      {errorMessage(source.lastError)}
+                  <span className="dir-card__icon" aria-hidden="true">
+                    <Icon name="list" size={20} />
+                  </span>
+                  <div className="dir-card__body">
+                    <div className="dir-card__head">
+                      <span className="dir-card__name">{source.name}</span>
+                      {active ? (
+                        <Capsule tone="gold" size="sm" className="dir-badge">
+                          En uso
+                        </Capsule>
+                      ) : null}
+                    </div>
+                    <p className="dir-card__url mono" title={source.url}>
+                      {source.url}
                     </p>
-                  ) : null}
+                    <p className={cx('dir-card__meta', failed && 'dir-card__meta--failed')}>
+                      {sourceMeta(source)}
+                    </p>
+                    {failed && source.lastError ? (
+                      <p className="dir-card__error">
+                        <Icon name="aviso" size={16} />
+                        {errorMessage(source.lastError)}
+                      </p>
+                    ) : null}
+                  </div>
                   <div className="dir-card__acts">
                     <Button
                       size="sm"

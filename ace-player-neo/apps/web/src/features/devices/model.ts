@@ -20,12 +20,20 @@ export const PLATFORM_ICON: Record<DevicePlatform, IconName> = {
   other: 'link',
 };
 
+/**
+ * Conectado ahora: el backend apunta la última vez como mucho una vez por
+ * minuto, así que por debajo de 2 min es «ahora».
+ */
+export function isOnlineNow(device: Pick<Device, 'lastSeenAt'>, now: number = Date.now()): boolean {
+  if (!device.lastSeenAt) return false;
+  const at = Date.parse(device.lastSeenAt);
+  return Number.isFinite(at) && now - at < 2 * 60_000;
+}
+
 /** «Conectado hace 5 min», «Aún no se ha conectado». */
 export function lastSeenText(device: Pick<Device, 'lastSeenAt'>, now: number = Date.now()): string {
   if (!device.lastSeenAt) return 'Aún no se ha conectado';
-  const at = Date.parse(device.lastSeenAt);
-  // El backend la apunta como mucho una vez por minuto: por debajo de 2 min es «ahora».
-  if (Number.isFinite(at) && now - at < 2 * 60_000) return 'Conectado ahora mismo';
+  if (isOnlineNow(device, now)) return 'Conectado ahora mismo';
   const when = formatWhen(device.lastSeenAt, now);
   if (when.relative === 'ayer') return `Visto ayer, a las ${when.time}`;
   if (/^\d/.test(when.relative)) return `Visto el ${when.relative}, a las ${when.time}`;

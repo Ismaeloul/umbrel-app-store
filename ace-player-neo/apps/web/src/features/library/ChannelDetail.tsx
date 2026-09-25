@@ -1,6 +1,7 @@
-/* Ficha del canal elegido (panel lateral de escritorio, maqueta A):
+/* Ficha del canal elegido (panel lateral de escritorio, piel Palco W8):
 
-   - dorsal, nombre y de dónde sale (favorito, reciente, lista);
+   - tesela del canal, nombre expandido y de dónde sale (favorito, reciente,
+     lista);
    - «Ver canal» como acción principal y, al lado, favorito, copiar enlace,
      renombrar y eliminar (con deshacer), más «Abrir en…» (D7);
    - «Ahora»: el partido que da en este momento, con el minuto en el círculo
@@ -12,8 +13,10 @@
    está en la tarjeta y en su menú «Más». */
 
 import type { Item, LibraryCollection } from '@ace/shared';
+import { teamCrest, teamPalette, teamShort } from '../../lib/teams.ts';
 import {
   Button,
+  Capsule,
   ChannelMark,
   IconButton,
   LiveRing,
@@ -78,13 +81,18 @@ export function ChannelDetail({ active = true }: { active?: boolean }) {
   return (
     <section className="lib-detail" aria-label={`Ficha de ${item.title}`}>
       <header className="lib-detail__head">
-        <ChannelMark name={item.title} size={76} />
+        <ChannelMark name={item.title} shape="tile" size={54} className="lib-detail__mark" />
         <div className="lib-detail__titles">
           <h2 className="lib-detail__name">{item.title}</h2>
           <p className="lib-detail__from">
             {COLLECTION_LABEL[selection.collection]}
             {item.category ? ` · ${item.category}` : ''}
           </p>
+          {watching ? (
+            <Capsule tone="gold" size="sm" className="lib-detail__onair">
+              En pantalla
+            </Capsule>
+          ) : null}
         </div>
       </header>
       <div className="lib-detail__acts">
@@ -124,7 +132,8 @@ export function ChannelDetail({ active = true }: { active?: boolean }) {
           <div className="lib-now">
             {minute ? (
               <LiveRing
-                minute={minute}
+                /* `liveMinute` ya trae el apóstrofo («33'») y el anillo pone el suyo. */
+                minute={minute.replace(/'$/, '')}
                 progress={matchProgress(minute)}
                 halftime={isHalftime(live.score)}
                 size="card"
@@ -132,11 +141,20 @@ export function ChannelDetail({ active = true }: { active?: boolean }) {
             ) : null}
             <div className="lib-now__teams">
               {[
-                { name: live.match.home, goals: live.score?.home },
-                ...(live.match.away ? [{ name: live.match.away, goals: live.score?.away }] : []),
+                { side: 'home' as const, name: live.match.home, goals: live.score?.home },
+                ...(live.match.away
+                  ? [{ side: 'away' as const, name: live.match.away, goals: live.score?.away }]
+                  : []),
               ].map((team) => (
                 <p key={team.name} className="lib-now__team">
-                  <TeamMark name={team.name} size={22} lit />
+                  <TeamMark
+                    name={team.name}
+                    short={teamShort(live.match, team.side)}
+                    colors={teamPalette(live.match, team.side)}
+                    crest={teamCrest(live.match, team.side)}
+                    size={22}
+                    lit
+                  />
                   <span className="lib-now__name">{team.name}</span>
                   {!hidden && typeof team.goals === 'number' ? (
                     <Num className="lib-now__goals" value={team.goals} />

@@ -7,9 +7,22 @@
      TanStack Query (clave con el texto) y la anterior se cancela al cambiar,
      así que una respuesta que llega tarde nunca pinta encima de la nueva. */
 
-import { SEARCH_QUERY_MAX, SEARCH_QUERY_MIN } from '@ace/shared';
+import { normalizeHash, SEARCH_QUERY_MAX, SEARCH_QUERY_MIN } from '@ace/shared';
 
 export const ENGINE_SEARCH_DELAY_MS = 450;
+
+/**
+ * «Enlace detectado» (plan Palco fase 2, decisión W9): si lo escrito o pegado
+ * es un Content ID de 40 hexadecimales, un enlace `acestream://…` o una URL
+ * con el id, no se manda al motor: se ofrece reproducirlo. La regla es la de
+ * TODO el sistema (`normalizeHash`, la misma que «Pegar hash» y el servidor).
+ * Devuelve el hash en minúsculas o null.
+ */
+export function isHashOrLink(value: string): string | null {
+  const text = value.trim();
+  if (!text) return null;
+  return normalizeHash(text) || null;
+}
 
 export const SEARCH_FAILED_TOAST = 'La búsqueda falló. ¿Está el motor AceStream en línea?';
 

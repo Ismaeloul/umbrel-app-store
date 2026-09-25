@@ -1,6 +1,26 @@
-/* Buscador del motor. Reutiliza la tarjeta y la lista de la biblioteca
-   (library.css); aquí solo van las secciones y los estados. */
+/* Buscar con la piel «Palco» (plan fase 2, decisión W9): campo grande, la
+   tarjeta «Enlace detectado» y las secciones «En tu biblioteca» / «En el motor
+   AceStream». Reutiliza la fila y la lista de Canales (library.css). Solo
+   tokens; animaciones solo con transform y opacity. */
 
+/* ---- Campo grande ------------------------------------------------------------ */
+.search .search-field .field__box {
+  min-height: 60px;
+  padding: 0 8px 0 20px;
+  border-radius: var(--r-l);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+.search .search-field .field__input {
+  height: 58px;
+  font-size: var(--fs-17);
+  font-weight: var(--wght-medium);
+}
+.search-field__clear {
+  flex: none;
+}
+
+/* ---- Secciones --------------------------------------------------------------- */
 .search-sec {
   display: grid;
   gap: var(--s-3);
@@ -11,15 +31,17 @@
   align-items: baseline;
   gap: var(--s-2);
   padding-inline: var(--s-1);
-  font-size: var(--fs-15);
+  font-size: var(--fs-17);
   font-weight: var(--wght-head);
   font-stretch: var(--w-head);
+  letter-spacing: var(--tracking-head);
 }
 .search-sec__count {
   color: var(--text-3);
   font-size: var(--fs-13);
   font-weight: var(--wght-medium);
   font-stretch: var(--w-num);
+  letter-spacing: 0;
 }
 .search-local {
   list-style: none;
@@ -29,7 +51,7 @@
 .search-hint {
   display: grid;
   gap: 4px;
-  padding: var(--s-5) var(--s-4);
+  padding: var(--s-6) var(--s-4);
   border-radius: var(--r-xl);
   background: var(--surface);
   box-shadow: inset 0 0 0 1px var(--line-soft);
@@ -41,6 +63,7 @@
 .search-hint__text {
   color: var(--text-2);
   font-size: var(--fs-13);
+  text-wrap: pretty;
 }
 .search-loading {
   display: grid;
@@ -59,8 +82,81 @@
     opacity: 0.45;
   }
 }
+
+/* ---- «Enlace detectado» ------------------------------------------------------ */
+.search-link {
+  display: grid;
+  gap: var(--s-4);
+  padding: var(--s-4);
+  border-radius: var(--r-xl);
+  background: color-mix(in oklab, var(--ok) 10%, var(--surface));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, var(--ok) 35%, transparent),
+    var(--shadow-1);
+  animation: ace-aparece var(--dur-estandar) var(--ease-estandar) both;
+}
+.search-link__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+.search-link__known {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  font-weight: var(--wght-medium);
+}
+.search-link__body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--s-4);
+}
+.search-link .search-link__mark {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.22),
+    0 6px 16px -6px rgb(0 0 0 / 0.5);
+}
+.search-link__text {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.search-link__title {
+  font-size: var(--fs-22);
+  line-height: var(--lh-tight);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: var(--tracking-head);
+  overflow-wrap: anywhere;
+}
+.search-link__lede {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  line-height: var(--lh-text);
+  text-wrap: pretty;
+}
+.search-link__hash {
+  margin-top: 4px;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.search-link__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+@media (max-width: 479px) {
+  .search-link__acts > .btn {
+    flex: 1 1 auto;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .search-pulse {
     animation: none;
+  }
+  .search-link {
+    animation-name: ace-funde;
   }
 }
