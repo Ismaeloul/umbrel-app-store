@@ -9,7 +9,8 @@ name: iOS (Ace Neo)
 #   1. XcodeGen genera el .xcodeproj desde project.yml.
 #   2. solo_compilar: Debug de simulador + Release de dispositivo, con alarma de
 #      expresiones lentas de tipar («to type-check»). Nada más.
-#   3. Si no: tests unitarios (sin reintento) y de interfaz (con reintento) en un
+#   3. Si no: tests unitarios (sin reintento) y de interfaz (con reintento; solo_uitests
+#      elige unos pocos, sin unitarios ni pila E2E) en un
 #      simulador de iPhone; los de interfaz van contra el servidor simulado de la app
 #      y, además, contra el backend DE VERDAD: la pila E2E (motor AceStream falso +
 #      backend del monorepo + ffmpeg) corre en este mismo runner (scripts/pila-e2e.mjs).
@@ -70,6 +71,10 @@ on:
         description: 'Simulador de iPhone (si no existe, el iPhone más reciente del runner)'
         type: string
         default: 'iPhone 16e'
+      solo_uitests:
+        description: 'Solo estos UITests (p. ej. FlujoArmazonUITests o FlujoArmazonUITests/testArrancaYCambiaDePestana), sin unitarios, pila E2E ni IPA'
+        type: string
+        default: ''
 
 concurrency:
   group: ios-${{ github.ref }}
@@ -154,8 +159,12 @@ jobs:
       SOLO_COMPILAR: ${{ inputs.solo_compilar == true }}
       # Pruebas: todas salvo con solo_compilar o ipa_sin_tests.
       CON_TESTS: ${{ inputs.solo_compilar != true && inputs.ipa_sin_tests != true }}
-      # UITests y pila E2E: además, no con solo_unitarios.
+      # UITests: además, no con solo_unitarios.
       CON_UITESTS: ${{ inputs.solo_compilar != true && inputs.ipa_sin_tests != true && inputs.solo_unitarios != true }}
+      # solo_uitests: solo esos UITests (AceNeoUITests/<valor>), sin unitarios, sin pila E2E y sin IPA.
+      SOLO_UI: ${{ inputs.solo_uitests || '' }}
+      # Pila E2E (motor falso + backend + ffmpeg): con los UITests completos, no con solo_uitests.
+      CON_E2E: ${{ inputs.solo_compilar != true && inputs.ipa_sin_tests != true && inputs.solo_unitarios != true && !inputs.solo_uitests }}
       SIMULADOR: ${{ inputs.simulador || 'iPhone 16e' }}
       CAPTURAS: ${{ inputs.capturas || 'ninguna' }}
     steps:
@@ -186,7 +195,7 @@ jobs:
           brew install xcodegen
           # ffmpeg tarda: se instala mientras compila Xcode. El paso de la pila
           # espera al fichero .fin (con el código de salida de brew).
-          if [ "$CON_UITESTS" != "true" ]; then
+          if [ "$CON_E2E" != "true" ]; then
             echo "Sin pila E2E: sin ffmpeg."
           elif command -v ffmpeg >/dev/null && command -v ffprobe >/dev/null; then
             echo 0 > "$RUNNER_TEMP/brew-ffmpeg.fin"
@@ -195,24 +204,24 @@ jobs:
           fi
 
       - uses: actions/setup-node@v4
-        if: env.CON_UITESTS == 'true'
+        if: env.CON_E2E == 'true'
         with:
           node-version: 24
 
       - name: pnpm (corepack, versión de packageManager)
-        if: env.CON_UITESTS == 'true'
+        if: env.CON_E2E == 'true'
         working-directory: ace-player-neo
         run: corepack enable && pnpm --version && echo "STORE=$(pnpm store path --silent)" >> "$GITHUB_ENV"
 
       - uses: actions/cache@v4
-        if: env.CON_UITESTS == 'true'
+        if: env.CON_E2E == 'true'
         with:
           path: ${{ env.STORE }}
           key: pnpm-${{ runner.os }}-${{ hashFiles('ace-player-neo/pnpm-lock.yaml') }}
           restore-keys: pnpm-${{ runner.os }}-
 
       - name: Instalar el monorepo (para la pila E2E)
-        if: env.CON_UITESTS == 'true'
+        if: env.CON_E2E == 'true'
         working-directory: ace-player-neo
         run: pnpm install --frozen-lockfile
 
@@ -324,7 +333,7 @@ jobs:
 
       - name: Arrancar la pila E2E (motor falso + backend de verdad + ffmpeg)
         id: pila
-        if: env.CON_UITESTS == 'true'
+        if: env.CON_E2E == 'true'
         env:
           ACE_E2E_PUERTO: '18790'
           ACE_E2E_DIR: ${{ runner.temp }}/pila-e2e
@@ -366,7 +375,7 @@ jobs:
 
       - name: Tests unitarios (sin reintento)
         id: unitarios
-        if: env.CON_TESTS == 'true' && steps.compilar_tests.outcome == 'success'
+        if: env.CON_TESTS == 'true' && env.SOLO_UI == '' && steps.compilar_tests.outcome == 'success'
         run: |
           set -o pipefail
           xcodebuild test-without-building \
@@ -388,13 +397,16 @@ jobs:
           TEST_RUNNER_ACE_CAPTURAS: ${{ env.CAPTURAS }}
         run: |
           set -o pipefail
+          # Con solo_uitests, solo AceNeoUITests/<valor>; si no, todos (con ServidorRealUITests y la pila).
+          FILTRO="AceNeoUITests"
+          if [ -n "$SOLO_UI" ]; then FILTRO="AceNeoUITests/$SOLO_UI"; fi
           xcodebuild test-without-building \
             -project AceNeo.xcodeproj \
             -scheme AceNeo \
             -destination "id=${{ steps.simulador.outputs.id }}" \
             -derivedDataPath build/DerivedData \
             -resultBundlePath build/AceNeo-interfaz.xcresult \
-            -only-testing:AceNeoUITests \
+            "-only-testing:$FILTRO" \
             -retry-tests-on-failure -test-iterations 3 \
             -quiet
 
@@ -464,7 +476,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Subir los logs de la pila E2E
-        if: always() && env.CON_UITESTS == 'true'
+        if: always() && env.CON_E2E == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: AceNeo-pila-e2e-logs
@@ -478,7 +490,7 @@ jobs:
         # Solo si todo lo anterior ha ido bien (con ipa_sin_tests no hay pruebas); lanzado
         # a mano con «ipa_aunque_fallen_tests», también con tests en rojo. Nunca con
         # solo_compilar ni solo_unitarios.
-        if: ${{ !inputs.solo_compilar && !inputs.solo_unitarios && (success() || (!cancelled() && inputs.ipa_aunque_fallen_tests)) }}
+        if: ${{ !inputs.solo_compilar && !inputs.solo_unitarios && !inputs.solo_uitests && (success() || (!cancelled() && inputs.ipa_aunque_fallen_tests)) }}
         run: |
           set -euo pipefail
           AJUSTES=(CURRENT_PROJECT_VERSION=${{ github.run_number }})
