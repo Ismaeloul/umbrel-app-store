@@ -1,10 +1,12 @@
 import SwiftUI
 
-/* El armazón de la app (b-arquitectura §2.4.6, M4). PROVISIONAL de I0 (fase 0.3b): las pestañas
-   visitadas vivas en un ZStack (solo la actual visible), la capa de encima (teatro o sistema) y una
-   barra de pestañas provisional (texto sobre `Palco.surface`) para que la app navegue con las pantallas
-   en stub. M4 escribe las capas de verdad (CapaPestanas, CapaPartido, VeloInferior, BarraPestanas con
-   glassEffect, CapaMini, CapaVuelo, CapaAvisos, CapaInmersiva) y mide la Maquetacion. */
+/* El armazón de la app (b-arquitectura §2.4.6, M4). PROVISIONAL de I0 (fase 0.3b): SOLO la pestaña
+   actual (sin mantener vivas las visitadas), la capa de encima (teatro o sistema) y una barra de
+   pestañas provisional (texto sobre `Palco.surface`) para que la app navegue con las pantallas en stub.
+   M4 escribe las capas de verdad (CapaPestanas con las visitadas vivas, CapaPartido, VeloInferior,
+   BarraPestanas con glassEffect, CapaMini, CapaVuelo, CapaAvisos, CapaInmersiva) y mide la Maquetacion.
+   Ojo, M4: con las pestañas vivas, `.opacity(0)` + `.accessibilityHidden(true)` NO bastó para que
+   XCUITest dejara de ver la pestaña oculta (CI 36175911002: «Se ve agenda estando en biblioteca»). */
 
 struct AppShell: View {
     @Environment(Navegador.self) private var navegador
@@ -13,24 +15,13 @@ struct AppShell: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             Palco.bg.ignoresSafeArea()
-            ForEach(Pestana.allCases) { pestana in
-                if navegador.visitadas.contains(pestana) { capaPestana(pestana) }
-            }
+            if navegador.capa == nil { VistaPestana(pestana: navegador.pestana) }
             if let capa = navegador.capa { capaEncima(capa) }
             if navegador.capa == nil { BarraPestanasProvisional() }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(IDUI.armazon)
         .hojasDeLaApp(hojas)
-    }
-
-    private func capaPestana(_ pestana: Pestana) -> some View {
-        let visible = navegador.capa == nil && navegador.pestana == pestana
-        return VistaPestana(pestana: pestana)
-            .opacity(visible ? 1 : 0)
-            .allowsHitTesting(visible)
-            .accessibilityHidden(!visible)
-            .environment(\.vistaActiva, visible)
     }
 
     @ViewBuilder private func capaEncima(_ capa: Destino) -> some View {
