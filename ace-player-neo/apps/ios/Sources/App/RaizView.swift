@@ -3,6 +3,10 @@ import SwiftUI
 /// Raíz de la app (b-arquitectura §2.3, I0→M4): las dos fases emparejar ↔ app (a2 §27.2), los valores
 /// y los objetos de proceso en el entorno, la háptica central y la fuente raíz. Los valores y los objetos
 /// van en modificadores pequeños para que el compilador no tarde en tiparlo (§5.1.6).
+///
+/// En Debug, `-AceNeoLaboratorio` y `-AceNeoSistema` (§3.3.1) abren el banco de Palco o la galería «Sistema» en
+/// lugar de las dos fases, con el MISMO entorno: la háptica central, las hojas de `CentroHojas` y el tema de
+/// `PreferenciasLocales` que aplica `HostingRaiz`.
 struct RaizView: View {
     let contenedor: ContenedorApp
     @Environment(\.accessibilityReduceMotion) private var reducirMovimiento
@@ -11,7 +15,7 @@ struct RaizView: View {
     var body: some View {
         let reducido: Bool = reducirMovimiento || ModoEjecucion.movimientoReducido
         let opaco: Bool = reducirTransparencia || contenedor.preferencias.transparenciaReducida
-        fases
+        contenido
             .modifier(ValoresRaiz(reducido: reducido, opaco: opaco, imagenes: contenedor.entorno.imagenes))
             .modifier(ObjetosDeInterfaz(contenedor: contenedor))
             .modifier(ObjetosDelArmazon(contenedor: contenedor))
@@ -19,6 +23,21 @@ struct RaizView: View {
             .modifier(ObjetosDeReproduccion(contenedor: contenedor))
             .modifier(HapticaRaiz(haptica: contenedor.haptica))
             .onChange(of: reducido, initial: true) { _, valor in contenedor.haptica.reducirMovimiento = valor }
+    }
+
+    /// Las dos fases o, en Debug, el banco o la galería (con las hojas de la app).
+    @ViewBuilder private var contenido: some View {
+        #if DEBUG
+            if ModoEjecucion.laboratorio {
+                LaboratorioView().hojasDeLaApp(contenedor.hojas)
+            } else if ModoEjecucion.sistema {
+                SistemaView().hojasDeLaApp(contenedor.hojas)
+            } else {
+                fases
+            }
+        #else
+            fases
+        #endif
     }
 
     private var fases: some View {

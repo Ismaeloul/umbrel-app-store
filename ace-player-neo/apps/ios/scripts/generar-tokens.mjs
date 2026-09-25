@@ -31,6 +31,8 @@ const IOS = path.resolve(AQUI, '..');
 const WEB = path.resolve(IOS, '../web/src');
 const ORIGEN = path.join(WEB, 'styles/tokens.css');
 const DESTINO = path.join(IOS, 'Sources/Palco/Tokens/ColoresPalco.generado.swift');
+/** Los mismos valores en JSON para TokensTests (Tests/AceNeoTests/Palco): cada Color resuelto = el hex de la web. */
+const DESTINO_JSON = path.join(IOS, 'Tests/AceNeoTests/Vectores/vectores-tokens.json');
 
 /** Nombre en Swift → token de la web, en el orden de b-arquitectura §2.2.1. */
 const TOKENS = [
@@ -354,6 +356,10 @@ const mezclas = resolverMezclas(tokens);
 const lineasTokens = tokens
   .map((t) => `    /// \`--${t.token}\`${t.nombre === 'sombra' ? ' (color de las sombras, sin alfa)' : ''}\n    static let ${t.nombre} = ${expresion(t)}`)
   .join('\n');
+const lineasCatalogo = tokens
+  .map((t) => `        MuestraToken(nombre: "${t.nombre}", token: "--${t.token}", color: ${t.nombre}),`)
+  .concat(mezclas.map((m) => `        MuestraToken(nombre: "${m.nombre}", token: "${m.formula}", color: PalcoMezcla.${m.nombre}),`))
+  .join('\n');
 const lineasMezclas = mezclas
   .map((m) => `    /// \`${m.formula}\` · ${m.donde.join(', ')}\n    static let ${m.nombre} = ${expresion(m)}`)
   .join('\n');
@@ -368,6 +374,18 @@ import SwiftUI
 /// Una mezcla con transparente se escribe \`Palco.token.opacity(p)\`.
 enum Palco {
 ${lineasTokens}
+
+    /// Todos los tokens y mezclas con su nombre (galería «Sistema» y TokensTests).
+    static let catalogo: [MuestraToken] = [
+${lineasCatalogo}
+    ]
+}
+
+/// Un color con nombre del catálogo.
+struct MuestraToken: Sendable {
+    let nombre: String
+    let token: String
+    let color: Color
 }
 
 /// Mezclas entre dos colores que usan los componentes de la web, ya resueltas en OKLab (a1 §2.3).
@@ -376,7 +394,28 @@ ${lineasMezclas}
 }
 `;
 
+const aHex = (n) => '#' + n.toString(16).padStart(6, '0');
+const valorJson = (v) => ({ hex: aHex(v.hex), alfa: Number(v.alfa.toFixed(4)) });
+const json =
+  JSON.stringify(
+    tokens
+      .map((t) => ({ nombre: t.nombre, claro: valorJson(t.claro), oscuro: valorJson(t.oscuro) }))
+      .concat(mezclas.map((m) => ({ nombre: m.nombre, claro: valorJson(m.claro), oscuro: valorJson(m.oscuro) }))),
+    null,
+    2,
+  ) + '\n';
+
 if (process.argv.includes('--check')) {
+  let actualJson = '';
+  try {
+    actualJson = readFileSync(DESTINO_JSON, 'utf8').replace(/\r\n/g, '\n');
+  } catch {
+    actualJson = '';
+  }
+  if (actualJson !== json) {
+    console.error('vectores-tokens.json no está al día. Ejecuta: node apps/ios/scripts/generar-tokens.mjs');
+    process.exit(1);
+  }
   let actual = '';
   try {
     actual = readFileSync(DESTINO, 'utf8').replace(/\r\n/g, '\n');
@@ -394,6 +433,8 @@ if (process.argv.includes('--check')) {
 } else {
   mkdirSync(path.dirname(DESTINO), { recursive: true });
   writeFileSync(DESTINO, swift);
+  mkdirSync(path.dirname(DESTINO_JSON), { recursive: true });
+  writeFileSync(DESTINO_JSON, json);
   for (const a of avisos) console.warn(`aviso: ${a}`);
   console.log(`ColoresPalco.generado.swift generado con ${tokens.length} tokens y ${mezclas.length} mezclas.`);
 }

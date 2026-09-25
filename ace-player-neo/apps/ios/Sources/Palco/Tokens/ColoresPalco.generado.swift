@@ -79,6 +79,59 @@ enum Palco {
     static let veil = Color(hex: 0x000000, alfa: 0.55)
     /// `--veil-strong`
     static let veilStrong = Color(hex: 0x000000, alfa: 0.85)
+
+    /// Todos los tokens y mezclas con su nombre (galería «Sistema» y TokensTests).
+    static let catalogo: [MuestraToken] = [
+        MuestraToken(nombre: "bg", token: "--bg", color: bg),
+        MuestraToken(nombre: "bgSunk", token: "--bg-sunk", color: bgSunk),
+        MuestraToken(nombre: "surface", token: "--surface", color: surface),
+        MuestraToken(nombre: "surface2", token: "--surface-2", color: surface2),
+        MuestraToken(nombre: "line", token: "--line", color: line),
+        MuestraToken(nombre: "lineSoft", token: "--line-soft", color: lineSoft),
+        MuestraToken(nombre: "lineStrong", token: "--line-strong", color: lineStrong),
+        MuestraToken(nombre: "text", token: "--text", color: text),
+        MuestraToken(nombre: "text2", token: "--text-2", color: text2),
+        MuestraToken(nombre: "text3", token: "--text-3", color: text3),
+        MuestraToken(nombre: "accent", token: "--accent", color: accent),
+        MuestraToken(nombre: "onAccent", token: "--on-accent", color: onAccent),
+        MuestraToken(nombre: "accentInk", token: "--accent-ink", color: accentInk),
+        MuestraToken(nombre: "accentEdge", token: "--accent-edge", color: accentEdge),
+        MuestraToken(nombre: "accentWash", token: "--accent-wash", color: accentWash),
+        MuestraToken(nombre: "live", token: "--live", color: live),
+        MuestraToken(nombre: "liveInk", token: "--live-ink", color: liveInk),
+        MuestraToken(nombre: "ok", token: "--ok", color: ok),
+        MuestraToken(nombre: "okInk", token: "--ok-ink", color: okInk),
+        MuestraToken(nombre: "weak", token: "--weak", color: weak),
+        MuestraToken(nombre: "weakInk", token: "--weak-ink", color: weakInk),
+        MuestraToken(nombre: "fail", token: "--fail", color: fail),
+        MuestraToken(nombre: "failInk", token: "--fail-ink", color: failInk),
+        MuestraToken(nombre: "glass", token: "--glass", color: glass),
+        MuestraToken(nombre: "glassDense", token: "--glass-dense", color: glassDense),
+        MuestraToken(nombre: "glassSolid", token: "--glass-solid", color: glassSolid),
+        MuestraToken(nombre: "glassHi", token: "--glass-hi", color: glassHi),
+        MuestraToken(nombre: "glassRim", token: "--glass-rim", color: glassRim),
+        MuestraToken(nombre: "scrim", token: "--scrim", color: scrim),
+        MuestraToken(nombre: "sombra", token: "--shadow-1", color: sombra),
+        MuestraToken(nombre: "glassVideo", token: "--glass-video", color: glassVideo),
+        MuestraToken(nombre: "glassVideoSolid", token: "--glass-video-solid", color: glassVideoSolid),
+        MuestraToken(nombre: "onVideo", token: "--on-video", color: onVideo),
+        MuestraToken(nombre: "onVideo2", token: "--on-video-2", color: onVideo2),
+        MuestraToken(nombre: "veil", token: "--veil", color: veil),
+        MuestraToken(nombre: "veilStrong", token: "--veil-strong", color: veilStrong),
+        MuestraToken(nombre: "fail9SobreSurface", token: "color-mix(in oklab, var(--fail) 9%, var(--surface))", color: PalcoMezcla.fail9SobreSurface),
+        MuestraToken(nombre: "liveCapsula", token: "color-mix(in oklab, var(--live) 86%, #000)", color: PalcoMezcla.liveCapsula),
+        MuestraToken(nombre: "ok10SobreBgSunk", token: "color-mix(in oklab, var(--ok) 10%, var(--bg-sunk))", color: PalcoMezcla.ok10SobreBgSunk),
+        MuestraToken(nombre: "ok10SobreSurface", token: "color-mix(in oklab, var(--ok) 10%, var(--surface))", color: PalcoMezcla.ok10SobreSurface),
+        MuestraToken(nombre: "ok8SobreBg", token: "color-mix(in oklab, var(--ok) 8%, var(--bg))", color: PalcoMezcla.ok8SobreBg),
+        MuestraToken(nombre: "weak10SobreBg", token: "color-mix(in oklab, var(--weak) 10%, var(--bg))", color: PalcoMezcla.weak10SobreBg),
+    ]
+}
+
+/// Un color con nombre del catálogo.
+struct MuestraToken: Sendable {
+    let nombre: String
+    let token: String
+    let color: Color
 }
 
 /// Mezclas entre dos colores que usan los componentes de la web, ya resueltas en OKLab (a1 §2.3).

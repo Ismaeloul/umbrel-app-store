@@ -82,8 +82,7 @@ const REGLAS = [
     id: 'R5',
     texto: 'una sola puerta: .sensoryFeedback( solo en Palco/Haptica/HapticaRaiz.swift',
     patron: /\.sensoryFeedback\(/,
-    // App/PalcoProvisional.swift: stub de Palco de I0 (fase 0.3b) que se borra al fusionar nativa/palco.
-    excepto: ['Palco/Haptica/HapticaRaiz.swift', 'App/PalcoProvisional.swift'],
+    excepto: ['Palco/Haptica/HapticaRaiz.swift'],
   },
   {
     id: 'R5',

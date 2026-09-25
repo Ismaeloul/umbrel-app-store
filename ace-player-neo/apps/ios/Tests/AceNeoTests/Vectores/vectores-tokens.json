@@ -1,0 +1,464 @@
+[
+  {
+    "nombre": "bg",
+    "claro": {
+      "hex": "#f3f3f4",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#05070a",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "bgSunk",
+    "claro": {
+      "hex": "#e9e9eb",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#020305",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "surface",
+    "claro": {
+      "hex": "#ffffff",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#0f1218",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "surface2",
+    "claro": {
+      "hex": "#ececee",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#171b23",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "line",
+    "claro": {
+      "hex": "#d9d9dc",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#282a2c",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "lineSoft",
+    "claro": {
+      "hex": "#0c0c0e",
+      "alfa": 0.08
+    },
+    "oscuro": {
+      "hex": "#ffffff",
+      "alfa": 0.1
+    }
+  },
+  {
+    "nombre": "lineStrong",
+    "claro": {
+      "hex": "#83858c",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#696a6c",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "text",
+    "claro": {
+      "hex": "#0c0c0e",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#ffffff",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "text2",
+    "claro": {
+      "hex": "#4a4c52",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#b9baba",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "text3",
+    "claro": {
+      "hex": "#66686f",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#878889",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "accent",
+    "claro": {
+      "hex": "#ffd60a",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#ffd60a",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "onAccent",
+    "claro": {
+      "hex": "#1a1400",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#1a1400",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "accentInk",
+    "claro": {
+      "hex": "#7e6100",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#ffd60a",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "accentEdge",
+    "claro": {
+      "hex": "#9a6d01",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#ffd60a",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "accentWash",
+    "claro": {
+      "hex": "#ffd60a",
+      "alfa": 0.22
+    },
+    "oscuro": {
+      "hex": "#ffd60a",
+      "alfa": 0.16
+    }
+  },
+  {
+    "nombre": "live",
+    "claro": {
+      "hex": "#d92d22",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#ff3b30",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "liveInk",
+    "claro": {
+      "hex": "#ce1e16",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#ff3b30",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "ok",
+    "claro": {
+      "hex": "#1f7a46",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#35c759",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "okInk",
+    "claro": {
+      "hex": "#006a37",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#35c759",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "weak",
+    "claro": {
+      "hex": "#8f5b00",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#ffb340",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "weakInk",
+    "claro": {
+      "hex": "#805100",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#ffb340",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "fail",
+    "claro": {
+      "hex": "#c93a2e",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#ff453a",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "failInk",
+    "claro": {
+      "hex": "#b01e16",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#fe5547",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "glass",
+    "claro": {
+      "hex": "#ffffff",
+      "alfa": 0.72
+    },
+    "oscuro": {
+      "hex": "#0a0c10",
+      "alfa": 0.62
+    }
+  },
+  {
+    "nombre": "glassDense",
+    "claro": {
+      "hex": "#ffffff",
+      "alfa": 0.9
+    },
+    "oscuro": {
+      "hex": "#161a22",
+      "alfa": 0.86
+    }
+  },
+  {
+    "nombre": "glassSolid",
+    "claro": {
+      "hex": "#fafafb",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#12161d",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "glassHi",
+    "claro": {
+      "hex": "#ffffff",
+      "alfa": 0.95
+    },
+    "oscuro": {
+      "hex": "#ffffff",
+      "alfa": 0.1
+    }
+  },
+  {
+    "nombre": "glassRim",
+    "claro": {
+      "hex": "#0c0c0e",
+      "alfa": 0.1
+    },
+    "oscuro": {
+      "hex": "#ffffff",
+      "alfa": 0.12
+    }
+  },
+  {
+    "nombre": "scrim",
+    "claro": {
+      "hex": "#0c0c0e",
+      "alfa": 0.4
+    },
+    "oscuro": {
+      "hex": "#000000",
+      "alfa": 0.62
+    }
+  },
+  {
+    "nombre": "sombra",
+    "claro": {
+      "hex": "#14151f",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#000000",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "glassVideo",
+    "claro": {
+      "hex": "#090c11",
+      "alfa": 0.62
+    },
+    "oscuro": {
+      "hex": "#090c11",
+      "alfa": 0.62
+    }
+  },
+  {
+    "nombre": "glassVideoSolid",
+    "claro": {
+      "hex": "#0f1218",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#0f1218",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "onVideo",
+    "claro": {
+      "hex": "#ffffff",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#ffffff",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "onVideo2",
+    "claro": {
+      "hex": "#ffffff",
+      "alfa": 0.76
+    },
+    "oscuro": {
+      "hex": "#ffffff",
+      "alfa": 0.76
+    }
+  },
+  {
+    "nombre": "veil",
+    "claro": {
+      "hex": "#000000",
+      "alfa": 0.55
+    },
+    "oscuro": {
+      "hex": "#000000",
+      "alfa": 0.55
+    }
+  },
+  {
+    "nombre": "veilStrong",
+    "claro": {
+      "hex": "#000000",
+      "alfa": 0.85
+    },
+    "oscuro": {
+      "hex": "#000000",
+      "alfa": 0.85
+    }
+  },
+  {
+    "nombre": "fail9SobreSurface",
+    "claro": {
+      "hex": "#fdeeec",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#22191d",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "liveCapsula",
+    "claro": {
+      "hex": "#b1231a",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#d12e25",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "ok10SobreBgSunk",
+    "claro": {
+      "hex": "#d6deda",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#05100c",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "ok10SobreSurface",
+    "claro": {
+      "hex": "#e9f1eb",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#15211f",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "ok8SobreBg",
+    "claro": {
+      "hex": "#e3e9e5",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#091311",
+      "alfa": 1
+    }
+  },
+  {
+    "nombre": "weak10SobreBg",
+    "claro": {
+      "hex": "#e9e3dd",
+      "alfa": 1
+    },
+    "oscuro": {
+      "hex": "#171512",
+      "alfa": 1
+    }
+  }
+]

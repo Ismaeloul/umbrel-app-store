@@ -326,21 +326,37 @@ enum ParteIcono: Sendable { case trazo, relleno }
 enum TrazosIcono {
     /// El camino de un icono escalado y centrado en \`rect\` (el lado es el menor de los dos).
     static func camino(_ nombre: NombreIcono, parte: ParteIcono, en rect: CGRect) -> Path {
-        let datos = parte == .trazo ? trazo(nombre) : relleno(nombre)
+        let dibujo = rejilla[nombre] ?? DibujoIcono(trazo: Path(), relleno: Path())
         let lado = min(rect.width, rect.height)
         let escala = lado / 24
         let dx = rect.minX + (rect.width - lado) / 2
         let dy = rect.minY + (rect.height - lado) / 2
-        return leer(datos, escala: escala, dx: dx, dy: dy)
+        let transformacion = CGAffineTransform(translationX: dx, y: dy).scaledBy(x: escala, y: escala)
+        return (parte == .trazo ? dibujo.trazo : dibujo.relleno).applying(transformacion)
     }
 
+    /// Los caminos de un icono en la rejilla de 24.
+    struct DibujoIcono: Sendable {
+        let trazo: Path
+        let relleno: Path
+    }
+
+    /// Todos los dibujos, leídos una sola vez (la primera vez que se pide un icono).
+    private static let rejilla: [NombreIcono: DibujoIcono] = {
+        var todos: [NombreIcono: DibujoIcono] = [:]
+        for nombre in NombreIcono.allCases {
+            todos[nombre] = DibujoIcono(trazo: leer(trazo(nombre)), relleno: leer(relleno(nombre)))
+        }
+        return todos
+    }()
+
     /// Lee «M x y L x y C x1 y1 x2 y2 x y Z».
-    private static func leer(_ datos: String, escala: CGFloat, dx: CGFloat, dy: CGFloat) -> Path {
+    private static func leer(_ datos: String) -> Path {
         var camino = Path()
         var orden: Character = "M"
         var numeros: [CGFloat] = []
         func punto(_ i: Int) -> CGPoint {
-            CGPoint(x: dx + numeros[i] * escala, y: dy + numeros[i + 1] * escala)
+            CGPoint(x: numeros[i], y: numeros[i + 1])
         }
         func cerrarOrden() {
             switch orden {
