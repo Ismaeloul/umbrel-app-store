@@ -1,18 +1,16 @@
 #!/usr/bin/env node
-/* Genera el Asset Catalog de la app iOS a partir del diseño «Luz de focos»:
+/* Genera la imagen «Marca» del Asset Catalog de la app iOS desde el icono de la web
+   (apps/web/public/icon.svg, la variante oscura por defecto; b-arquitectura §1.2, §0.3 «Icono»):
+   96 pt a @2x y @3x, UNA sola variante (sin claro/oscuro). La usan la pantalla de emparejar y la
+   carátula de Now Playing.
 
-   - AppIcon: icono claro (apariencia por defecto), oscuro y tintado, a
-     1024 × 1024. Con iOS 17 como mínimo, Xcode solo pide ese tamaño (icono de
-     tamaño único) y saca el resto al compilar.
-   - Marca: el mismo icono a 96 pt (@2x y @3x) en claro y oscuro, para la
-     pantalla de emparejamiento.
-   - Colores: un colorset por token, con su valor claro y oscuro. Los de
-     «Palco» (tabla PALCO de abajo) mandan; los que no estén ahí se sacan del
-     respaldo en hex de apps/web/src/styles/tokens.css.
+   Lo que ya NO hace (fase 0.4): los colores salen de Palco/Tokens/ColoresPalco.generado.swift
+   (generar-tokens.mjs), así que no escribe colorsets; el AppIcon (claro, oscuro y tintado) se queda
+   intacto (decisión 8) y no se toca. `Colores/Bg.colorset` (lo exige UILaunchScreen) y
+   `AccentColor.colorset` tampoco se tocan.
 
-   Los PNG se pintan con Chrome (Playwright, `channel: 'chrome'`) dibujando el
-   SVG en un canvas del tamaño exacto, y se codifican aquí en RGB sin canal
-   alfa (el icono principal no puede llevar transparencia).
+   Los PNG se pintan con Chrome (Playwright, `channel: 'chrome'`) dibujando el SVG en un canvas del
+   tamaño exacto, y se codifican aquí en RGB sin alfa (el icono es opaco).
 
    Uso (desde ace-player-neo, en Windows o en un Mac):
      node apps/ios/scripts/generar-recursos.mjs */
@@ -23,15 +21,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import zlib from 'node:zlib';
 
-const require = createRequire(import.meta.url);
-const { chromium } = require('@playwright/test');
-
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const IOS = path.resolve(AQUI, '..');
 const RAIZ = path.resolve(IOS, '../..');
-const DISENO = path.join(RAIZ, 'docs/diseno/opcion-A');
-const TOKENS = path.join(RAIZ, 'apps/web/src/styles/tokens.css');
+const ICONO_WEB = path.join(RAIZ, 'apps/web/public/icon.svg');
 const CATALOGO = path.join(IOS, 'Resources/Assets.xcassets');
+// Playwright se busca junto a la web (el monorepo instalado); ACE_MODULOS permite apuntar a otro sitio.
+const require = createRequire(process.env.ACE_MODULOS ?? path.join(RAIZ, 'apps/web/package.json'));
+const { chromium } = require('@playwright/test');
 
 const INFO = { author: 'xcode', version: 1 };
 
@@ -115,176 +112,22 @@ function escribirJSON(ruta, datos) {
   writeFileSync(ruta, JSON.stringify(datos, null, 2) + '\n');
 }
 
-// --- Colores ---
-
-function bloqueHex(css, selector) {
-  const inicio = css.indexOf(selector + ' {', css.indexOf('Colores · respaldo en hex'));
-  if (inicio < 0) throw new Error(`No encuentro ${selector} en tokens.css`);
-  const fin = css.indexOf('\n}', inicio);
-  const valores = {};
-  for (const m of css.slice(inicio, fin).matchAll(/--([a-z0-9-]+):\s*(#[0-9a-f]{6});/gi)) {
-    valores[m[1]] = m[2].toLowerCase();
+const svg = readFileSync(ICONO_WEB, 'utf8');
+const navegador = await chromium.launch({ channel: 'chrome' });
+try {
+  const pagina = await navegador.newPage();
+  await pagina.setContent('<!doctype html><html><body></body></html>');
+  const marca = path.join(CATALOGO, 'Marca.imageset');
+  rmSync(marca, { recursive: true, force: true });
+  mkdirSync(marca, { recursive: true });
+  const imagenes = [];
+  for (const escala of [2, 3]) {
+    const fichero = `marca@${escala}x.png`;
+    writeFileSync(path.join(marca, fichero), await pintar(pagina, svg, 96 * escala));
+    imagenes.push({ filename: fichero, idiom: 'universal', scale: `${escala}x` });
   }
-  return valores;
+  escribirJSON(path.join(marca, 'Contents.json'), { images: imagenes, info: INFO });
+} finally {
+  await navegador.close();
 }
-
-const COLORES = [
-  ['bg', 'Bg'],
-  ['bg-sunk', 'BgSunk'],
-  ['surface', 'Surface'],
-  ['surface-2', 'Surface2'],
-  ['line', 'Line'],
-  ['line-strong', 'LineStrong'],
-  ['text', 'Text'],
-  ['text-2', 'Text2'],
-  ['text-3', 'Text3'],
-  ['accent', 'Accent'],
-  ['on-accent', 'OnAccent'],
-  ['accent-ink', 'AccentInk'],
-  ['accent-edge', 'AccentEdge'],
-  ['ok', 'Ok'],
-  ['ok-ink', 'OkInk'],
-  ['weak', 'Weak'],
-  ['weak-ink', 'WeakInk'],
-  ['fail', 'Fail'],
-  ['fail-ink', 'FailInk'],
-  ['glass-solid', 'GlassSolid'],
-  // Solo de Palco (no salen de la web).
-  ['gold', 'Gold'],
-  ['live', 'Live'],
-  ['veil', 'Veil'],
-];
-
-/* Tokens de «Palco» (design-explorations/src/directions/03-palco/tokens.css), que
-   mandan sobre los de la web: [claro, oscuro] en hex y, si hace falta, [alfa claro,
-   alfa oscuro]. El oro es el único acento de acción; el rojo, «en directo»; el
-   semáforo de la señal, verde · ámbar · rojo. */
-const PALCO = {
-  bg: ['#f3f3f4', '#05070a'],
-  'bg-sunk': ['#e2e2e5', '#0f1218'],
-  surface: ['#ffffff', '#0f1218'],
-  'surface-2': ['#ececee', '#171b23'],
-  line: ['#dfdfe1', '#1e2126'],
-  'line-strong': ['#c4c4c8', '#34373d'],
-  text: ['#0c0c0e', '#ffffff'],
-  'text-2': ['#4a4c52', '#b9babd'],
-  'text-3': ['#66686f', '#85878b'],
-  accent: ['#ffd60a', '#ffd60a'],
-  'on-accent': ['#1a1400', '#1a1400'],
-  'accent-ink': ['#8a6508', '#ffd60a'],
-  'accent-edge': ['#9a6d00', '#ffd60a'],
-  ok: ['#1e7a46', '#34c759'],
-  'ok-ink': ['#1e7a46', '#34c759'],
-  weak: ['#8f5b00', '#ffb340'],
-  'weak-ink': ['#8f5b00', '#ffb340'],
-  fail: ['#c93a2e', '#ff453a'],
-  'fail-ink': ['#c93a2e', '#ff453a'],
-  'glass-solid': ['#ffffff', '#0f1218'],
-  gold: ['#b8860b', '#ffd60a'],
-  live: ['#d92d22', '#ff3b30'],
-  veil: ['#ffffff', '#000000', '0.700', '0.550'],
-};
-
-function componentes(hex, alpha = '1.000') {
-  const n = (i) => (parseInt(hex.slice(i, i + 2), 16) / 255).toFixed(3);
-  return { 'color-space': 'srgb', components: { red: n(1), green: n(3), blue: n(5), alpha } };
-}
-
-function colorset(claro, oscuro, alfaClaro = '1.000', alfaOscuro = '1.000') {
-  return {
-    colors: [
-      { color: componentes(claro, alfaClaro), idiom: 'universal' },
-      {
-        appearances: [{ appearance: 'luminosity', value: 'dark' }],
-        color: componentes(oscuro, alfaOscuro),
-        idiom: 'universal',
-      },
-    ],
-    info: INFO,
-  };
-}
-
-function generarColores() {
-  const css = readFileSync(TOKENS, 'utf8');
-  const claro = bloqueHex(css, ':root');
-  const oscuro = { ...claro, ...bloqueHex(css, ":root[data-scheme='dark']") };
-  const dir = path.join(CATALOGO, 'Colores');
-  rmSync(dir, { recursive: true, force: true });
-  escribirJSON(path.join(dir, 'Contents.json'), { info: INFO, properties: { 'provides-namespace': false } });
-  for (const [token, nombre] of COLORES) {
-    const palco = PALCO[token];
-    if (palco) {
-      escribirJSON(path.join(dir, `${nombre}.colorset/Contents.json`), colorset(...palco));
-      continue;
-    }
-    if (!claro[token] || !oscuro[token]) throw new Error(`Falta el token --${token}`);
-    escribirJSON(path.join(dir, `${nombre}.colorset/Contents.json`), colorset(claro[token], oscuro[token]));
-  }
-  // Color de acento global (tinte de los controles): el oro que se lee como texto.
-  escribirJSON(path.join(CATALOGO, 'AccentColor.colorset/Contents.json'), colorset(...PALCO['accent-ink']));
-  return COLORES.length + 1;
-}
-
-// --- Imágenes ---
-
-async function generarImagenes() {
-  const svg = (nombre) => readFileSync(path.join(DISENO, nombre), 'utf8');
-  const claro = svg('icono-claro.svg');
-  const oscuro = svg('icono.svg');
-  const tintado = svg('icono-tintado.svg');
-
-  const navegador = await chromium.launch({ channel: 'chrome' });
-  try {
-    const pagina = await navegador.newPage();
-    await pagina.setContent('<!doctype html><html><body></body></html>');
-
-    const icono = path.join(CATALOGO, 'AppIcon.appiconset');
-    rmSync(icono, { recursive: true, force: true });
-    mkdirSync(icono, { recursive: true });
-    const variantes = [
-      ['AppIcon-claro.png', claro, null],
-      ['AppIcon-oscuro.png', oscuro, 'dark'],
-      ['AppIcon-tintado.png', tintado, 'tinted'],
-    ];
-    const images = [];
-    for (const [fichero, fuente, apariencia] of variantes) {
-      writeFileSync(path.join(icono, fichero), await pintar(pagina, fuente, 1024));
-      images.push({
-        ...(apariencia ? { appearances: [{ appearance: 'luminosity', value: apariencia }] } : {}),
-        filename: fichero,
-        idiom: 'universal',
-        platform: 'ios',
-        size: '1024x1024',
-      });
-    }
-    escribirJSON(path.join(icono, 'Contents.json'), { images, info: INFO });
-
-    const marca = path.join(CATALOGO, 'Marca.imageset');
-    rmSync(marca, { recursive: true, force: true });
-    mkdirSync(marca, { recursive: true });
-    const imagenesMarca = [];
-    for (const [sufijo, fuente, apariencia] of [
-      ['claro', claro, null],
-      ['oscuro', oscuro, 'dark'],
-    ]) {
-      for (const escala of [2, 3]) {
-        const fichero = `marca-${sufijo}@${escala}x.png`;
-        writeFileSync(path.join(marca, fichero), await pintar(pagina, fuente, 96 * escala));
-        imagenesMarca.push({
-          ...(apariencia ? { appearances: [{ appearance: 'luminosity', value: apariencia }] } : {}),
-          filename: fichero,
-          idiom: 'universal',
-          scale: `${escala}x`,
-        });
-      }
-    }
-    escribirJSON(path.join(marca, 'Contents.json'), { images: imagenesMarca, info: INFO });
-  } finally {
-    await navegador.close();
-  }
-}
-
-escribirJSON(path.join(CATALOGO, 'Contents.json'), { info: INFO });
-const colores = generarColores();
-await generarImagenes();
-console.log(`Asset Catalog listo: 3 variantes del icono, la marca y ${colores} colores.`);
+console.log('Marca.imageset listo (apps/web/public/icon.svg, 96 pt @2x y @3x, una sola variante).');

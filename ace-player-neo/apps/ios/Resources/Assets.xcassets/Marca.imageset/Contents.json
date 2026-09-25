@@ -1,12 +1,12 @@
 {
   "images": [
     {
-      "filename": "marca-oscuro@2x.png",
+      "filename": "marca@2x.png",
       "idiom": "universal",
       "scale": "2x"
     },
     {
-      "filename": "marca-oscuro@3x.png",
+      "filename": "marca@3x.png",
       "idiom": "universal",
       "scale": "3x"
     }
