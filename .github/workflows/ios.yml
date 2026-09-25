@@ -90,6 +90,8 @@ env:
 jobs:
   generadores:
     name: Linter y generadores (--check)
+    # Con solo_compilar se saltan para que el Mac empiece antes; corren en todo lo demás.
+    if: ${{ !inputs.solo_compilar }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -130,6 +132,7 @@ jobs:
 
   nucleo-linux:
     name: Núcleo puro en Linux (Swift 6.2)
+    if: ${{ !inputs.solo_compilar }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     container: swift:6.2-noble
@@ -146,6 +149,8 @@ jobs:
   ios:
     name: Compilar, probar y empaquetar
     needs: [generadores, nucleo-linux]
+    # Corre si los dos anteriores pasan o se han saltado (solo_compilar).
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
     runs-on: macos-latest
     timeout-minutes: 90
     permissions:
