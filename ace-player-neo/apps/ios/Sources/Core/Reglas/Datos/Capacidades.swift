@@ -19,5 +19,11 @@ struct Capacidades: Sendable {
 
     mutating func olvidar() { cerradas = [] }
 
+    /// Una de esas rutas ha respondido 2xx: el servidor ya es 0.8.1 y se olvida lo apuntado (a9 §9.1.1).
+    mutating func abierta(_ ruta: RutaAdministracion) { cerradas = [] }
+
+    /// ¿Esta ruta la cerró el servidor?
+    func cerrada(_ ruta: RutaAdministracion) -> Bool { cerradas.contains(ruta) }
+
     var servidorViejo: Bool { !cerradas.isEmpty }
 }

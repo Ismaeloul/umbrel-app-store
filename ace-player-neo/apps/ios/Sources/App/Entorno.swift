@@ -12,7 +12,8 @@ public struct Entorno: Sendable {
     /// Escudos y logos, en memoria y en disco.
     public let imagenes: CacheImagenes
     public let configuracion: ServerConfigStore
-    /// Avisa cuando el servidor dice que el token ya no vale (401).
+    /// Avisa cuando el servidor dice que el token ya no vale (401); el código queda en
+    /// `api.ultimoCodigoAccesoPerdido` (lo escucha `SesionApp`).
     public let accesoPerdido: AsyncStream<Void>
 
     public init(
@@ -30,8 +31,15 @@ public struct Entorno: Sendable {
             _ = continuacion.yield()
         }
         self.tiempoReal = SSEClient(session: session, servidores: servidores, tokens: tokens)
-        // Las imágenes van con el mismo `Bearer` que el resto de la API.
-        self.imagenes = CacheImagenes(session: session, directorio: directorioImagenes) { url in
+        // Las imágenes van con el mismo `Bearer` que el resto de la API. Las de la agenda llegan con el
+        // anfitrión simbólico de `RutaImagen`: aquí se cambia por la dirección que responda ahora.
+        self.imagenes = CacheImagenes(session: session, directorio: directorioImagenes) { simbolica in
+            var url = simbolica
+            if simbolica.scheme == RutaImagen.esquema {
+                let base = try await servidores.actual().url
+                guard let real = RutaImagen.resolver(simbolica, base: base) else { throw APIError.sinServidor }
+                url = real
+            }
             var peticion = URLRequest(url: url, timeoutInterval: 20)
             peticion.setValue("image/png, image/*", forHTTPHeaderField: "Accept")
             if let token = try? tokens.leerToken(), !token.isEmpty {
@@ -46,7 +54,8 @@ public struct Entorno: Sendable {
         let config = URLSessionConfiguration.default
         config.waitsForConnectivity = false
         config.httpMaximumConnectionsPerHost = 6
-        // ETag / 304 de la agenda, del arranque y de los escudos sin trabajo extra.
+        // ETag / 304 de la agenda, del arranque y de los escudos. Cada petición de la API pone su política
+        // (GET revalida, el resto no usa la caché: `Endpoint.peticion`, a7 §3.1).
         config.requestCachePolicy = .useProtocolCachePolicy
         config.urlCache = URLCache(memoryCapacity: 4 << 20, diskCapacity: 32 << 20)
         return Entorno(

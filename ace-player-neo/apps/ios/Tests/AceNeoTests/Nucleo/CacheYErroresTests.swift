@@ -80,17 +80,20 @@ final class CatalogoErroresTests: XCTestCase {
         XCTAssertEqual(ErrorCatalog.mensaje(para: "no_existe"), ErrorCatalog.mensaje(para: "internal_error"))
     }
 
-    func testUnCodigoInternoNoSeEnsenaTalCual() {
+    /// Orden de la web (errors.ts): el `message` del servidor; sin él, el catálogo común.
+    func testElMensajeDelServidorVaPrimero() {
         let interno = APIError.servidor(
             codigo: "scanner_session_leak", estado: 502, mensaje: "detalle interno", requestId: nil)
         XCTAssertEqual(interno.mensaje, "detalle interno")
-        let publico = APIError.servidor(codigo: "remux_timeout", estado: 504, mensaje: "otro texto", requestId: nil)
+        let publico = APIError.servidor(codigo: "remux_timeout", estado: 504, mensaje: nil, requestId: nil)
         XCTAssertEqual(publico.mensaje, ErrorCatalog.mensaje(para: "remux_timeout"))
     }
 
     func testMensajesPropiosDeLaApp() {
         XCTAssertTrue(APIError.servidorInalcanzable.mensaje.contains("Tailscale"))
-        XCTAssertEqual(APIError.red(.notConnectedToInternet).mensaje, "No hay conexión a internet.")
+        XCTAssertEqual(
+            APIError.red(.notConnectedToInternet).mensaje,
+            "No hay conexión con el Umbrel. Comprueba la red; la app seguirá reintentando.")
         XCTAssertEqual(APIError.desde(URLError(.cancelled)), .cancelado)
         XCTAssertEqual(APIError.desde(CancellationError()), .cancelado)
     }

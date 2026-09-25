@@ -1,4 +1,5 @@
 import XCTest
+import os
 
 @testable import AceNeo
 
@@ -81,9 +82,88 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(avisos.actual, 1)
     }
 
+    /// Mientras se olvida este iPhone el 401 ni borra ni avisa: manda el resultado del DELETE (a9 §3.5.3).
+    func test401CalladoMientrasSeOlvida() async throws {
+        MockURLProtocol.responder { _ in (401, [:], Prueba.errorJSON("device_revoked")) }
+        let tokens = MemoryTokenStore(token: Prueba.token)
+        let avisos = Contador()
+        let api = try cliente(tokens: tokens, alPerderAcceso: { _ = avisos.sumar() })
+        api.callarAccesoPerdido(true)
+        do {
+            _ = try await api.enviar(API.biblioteca)
+            XCTFail("Tenía que pedir emparejar")
+        } catch let error as APIError {
+            XCTAssertEqual(error, .necesitaEmparejar(codigo: "device_revoked"))
+        }
+        XCTAssertEqual(try tokens.leerToken(), Prueba.token)
+        XCTAssertEqual(avisos.actual, 0)
+        XCTAssertNil(api.ultimoCodigoAccesoPerdido)
+
+        api.callarAccesoPerdido(false)
+        _ = try? await api.enviar(API.biblioteca)
+        XCTAssertEqual(avisos.actual, 1)
+        XCTAssertEqual(api.ultimoCodigoAccesoPerdido, "device_revoked")
+    }
+
+    /// Plazo TOTAL (withTimeout de la web): un servidor que gotea bytes sin acabar no lo alarga.
+    func testPlazoTotalConServidorQueGotea() async throws {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [ProtocoloGoteo.self]
+        let api = APIClient(
+            session: URLSession(configuration: config), servidores: try Prueba.servidores(),
+            tokens: MemoryTokenStore(token: Prueba.token))
+        var lenta = API.biblioteca
+        lenta.plazo = 1
+        lenta.idempotente = false  // sin la repetición contra la otra dirección
+        let inicio = Date()
+        do {
+            _ = try await api.enviar(lenta)
+            XCTFail("Tenía que agotar el plazo")
+        } catch let error as APIError {
+            XCTAssertEqual(error, .red(.timedOut))
+            XCTAssertEqual(error.mensaje, "El servidor tarda demasiado en responder. Vuelve a intentarlo en un momento.")
+        }
+        XCTAssertLessThan(Date().timeIntervalSince(inicio), 4)
+    }
+
+    /// Las mutaciones no se repiten contra la otra dirección (a8 §3.11.1): `PUT preferences` tampoco.
+    func testUnPUTNoSeRepite() async throws {
+        MockURLProtocol.responder { _ in throw URLError(.networkConnectionLost) }
+        do {
+            _ = try await cliente().enviar(API.guardarPreferencias(PreferencesInput(onboardingComplete: true)))
+            XCTFail("Tenía que fallar")
+        } catch let error as APIError {
+            XCTAssertEqual(error, .red(.networkConnectionLost))
+            XCTAssertTrue(error.reintentable)
+        }
+        XCTAssertEqual(MockURLProtocol.peticiones.count, 1)
+    }
+
+    /// Cancelar quien llama no es un error que se enseñe.
+    func testCancelarNoEsUnPlazo() async throws {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [ProtocoloGoteo.self]
+        let api = APIClient(
+            session: URLSession(configuration: config), servidores: try Prueba.servidores(),
+            tokens: MemoryTokenStore(token: Prueba.token))
+        let tarea = Task { () -> APIError? in
+            do {
+                _ = try await api.enviar(API.biblioteca)
+                return nil
+            } catch {
+                return APIError.desde(error)
+            }
+        }
+        try await Task.sleep(for: .milliseconds(300))
+        tarea.cancel()
+        let error = await tarea.value
+        XCTAssertEqual(error, .cancelado)
+    }
+
     func testCodigoIncorrectoNoEsPerderElAcceso() async throws {
         // pairing_invalid también es un 401, pero en una ruta sin token: es un error normal.
-        MockURLProtocol.responder { _ in (401, [:], Prueba.errorJSON("pairing_invalid")) }
+        let texto = ErrorCatalog.mensaje(para: "pairing_invalid")
+        MockURLProtocol.responder { _ in (401, [:], Prueba.errorJSON("pairing_invalid", texto)) }
         let tokens = MemoryTokenStore(token: "otro.token")
         let avisos = Contador()
         do {
@@ -99,7 +179,7 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(avisos.actual, 0)
     }
 
-    func testErrorDelServidorConElMensajeDelCatalogo() async throws {
+    func testErrorDelServidorConSuMensaje() async throws {
         let fallo = try Fixtures.datos("errors/api-error.json")
         MockURLProtocol.responder { _ in (502, [:], fallo) }
         do {
@@ -112,9 +192,9 @@ final class APIClientTests: XCTestCase {
             XCTAssertEqual(codigo, "engine_unavailable")
             XCTAssertEqual(estado, 502)
             XCTAssertEqual(requestId, "req-7f3a9c")
-            // El texto es el del catálogo común (el mismo que ve la web), no el que venga en la respuesta.
-            XCTAssertEqual(error.localizedDescription, ErrorCatalog.mensaje(para: "engine_unavailable"))
-            XCTAssertTrue(error.localizedDescription.hasPrefix("El motor AceStream no responde."))
+            // Como la web (errors.ts): el `message` que manda el servidor (ya sale de su catálogo).
+            XCTAssertEqual(
+                error.localizedDescription, "El motor AceStream no responde. Prueba a reiniciarlo desde Ajustes.")
         }
     }
 
@@ -239,4 +319,28 @@ final class EndpointTests: XCTestCase {
         XCTAssertEqual(PoliticaReconexion.espera(intento: 3), 4)
         XCTAssertEqual(PoliticaReconexion.espera(intento: 9), 8)
     }
+}
+
+/// Un servidor que responde 200 y va mandando un espacio cada 0,2 s sin acabar nunca.
+final class ProtocoloGoteo: URLProtocol, @unchecked Sendable {
+    private let parado = OSAllocatedUnfairLock(initialState: false)
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        guard let url = request.url,
+            let respuesta = HTTPURLResponse(
+                url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: ["Content-Type": "application/json"])
+        else { return }
+        client?.urlProtocol(self, didReceive: respuesta, cacheStoragePolicy: .notAllowed)
+        Thread.detachNewThread { [self] in
+            while !parado.withLock({ $0 }) {
+                client?.urlProtocol(self, didLoad: Data(" ".utf8))
+                Thread.sleep(forTimeInterval: 0.2)
+            }
+        }
+    }
+
+    override func stopLoading() { parado.withLock { $0 = true } }
 }

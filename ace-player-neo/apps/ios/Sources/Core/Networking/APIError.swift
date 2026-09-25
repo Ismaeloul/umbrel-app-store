@@ -7,7 +7,9 @@ import Foundation
 /// Errores de la app al hablar con el servidor, con su texto en español.
 ///
 /// Los del servidor llevan el código del catálogo común (`ErrorCatalog`), así
-/// que el iPhone enseña exactamente el mismo mensaje que la web.
+/// que el iPhone enseña exactamente el mismo mensaje que la web. Los del
+/// cliente (sin red, plazo agotado, respuesta ilegible) son los de
+/// `apps/web/src/api/errors.ts` (`CLIENT_ERRORS`, a7 §3.3).
 public enum APIError: Error, Sendable, Equatable {
     /// Error del catálogo que ha devuelto el servidor.
     case servidor(codigo: String, estado: Int, mensaje: String?, requestId: String?)
@@ -21,11 +23,11 @@ public enum APIError: Error, Sendable, Equatable {
     case noEsAcePlayerNeo
     /// El servidor habla una versión de la API que esta app no entiende.
     case versionIncompatible(Int)
-    /// Fallo de red (sin conexión, plazo agotado…).
+    /// Fallo de red (sin conexión, plazo agotado…). El plazo total de una petición sale como `.timedOut`.
     case red(URLError.Code)
     /// La respuesta no tiene el formato esperado.
     case formato(String)
-    /// La operación se ha cancelado (cambio de pantalla, app en segundo plano…).
+    /// La operación se ha cancelado (cambio de pantalla, app en segundo plano…). No se enseña.
     case cancelado
 
     /// Código del catálogo, si lo hay.
@@ -37,6 +39,22 @@ public enum APIError: Error, Sendable, Equatable {
         }
     }
 
+    /// Estado HTTP del servidor, si lo hubo.
+    public var estado: Int? {
+        if case .servidor(_, let estado, _, _) = self { return estado }
+        return nil
+    }
+
+    /// `retryable` de la web (errors.ts): sin red, plazo agotado, 5xx o 429. Los 4xx no.
+    public var reintentable: Bool {
+        switch self {
+        case .red(let codigo): codigo != .appTransportSecurityRequiresSecureConnection
+        case .servidorInalcanzable: true
+        case .servidor(_, let estado, _, _): estado >= 500 || estado == 429
+        default: false
+        }
+    }
+
     /// Convierte cualquier error en uno de la app.
     public static func desde(_ error: any Error) -> APIError {
         switch error {
@@ -45,6 +63,17 @@ public enum APIError: Error, Sendable, Equatable {
         case is CancellationError: return .cancelado
         case is DecodingError: return .formato(String(describing: error))
         default: return .formato(String(describing: error))
+        }
+    }
+
+    /// `describeFailure` de la web: el texto de un fallo cualquiera para un aviso o un estado de error.
+    /// Un aborto sale como el plazo agotado; lo que no es de la API, como `internal_error`.
+    public static func describirFallo(_ error: any Error) -> String {
+        switch error {
+        case let error as APIError: return error.mensaje
+        case let error as URLError: return APIError.desde(error).mensaje
+        case is CancellationError: return TextosCliente.plazo
+        default: return ErrorCatalog.mensaje(para: "internal_error")
         }
     }
 
@@ -61,20 +90,27 @@ public enum APIError: Error, Sendable, Equatable {
     }
 }
 
+/// Textos del cliente web (`CLIENT_ERRORS` de apps/web/src/api/errors.ts), tal cual.
+enum TextosCliente {
+    static let red = "No hay conexión con el Umbrel. Comprueba la red; la app seguirá reintentando."
+    static let plazo = "El servidor tarda demasiado en responder. Vuelve a intentarlo en un momento."
+    static let respuestaIlegible = "El servidor ha respondido algo que no se entiende."
+    static let demo = "Esto no se puede hacer en el modo demo."
+}
+
 extension APIError: LocalizedError {
     public var errorDescription: String? { mensaje }
 
-    /// Texto para enseñárselo a Isma tal cual.
+    /// Texto para enseñárselo a Isma tal cual. Orden de la web (errors.ts): el `message` del
+    /// servidor (ya sale de su catálogo), el catálogo común si solo llega el código, y los del cliente.
     public var mensaje: String {
         switch self {
         case .servidor(let codigo, _, let mensaje, _):
-            if let definicion = ErrorCatalog.describir(codigo), definicion.isPublic {
-                return definicion.message
-            }
             if let mensaje, !mensaje.isEmpty { return mensaje }
-            return ErrorCatalog.mensaje(para: "internal_error")
+            return ErrorCatalog.mensaje(para: codigo)
         case .necesitaEmparejar(let codigo):
             return ErrorCatalog.mensaje(para: codigo == "device_revoked" ? "device_revoked" : "unauthorized")
+        // Diferencias conscientes (a8 §3.11.1): emparejar y el cambio casa/Tailscale no existen en la web.
         case .sinServidor:
             return "Todavía no hay ningún servidor configurado. Empareja la app con tu Ace Player Neo."
         case .servidorInalcanzable:
@@ -85,19 +121,17 @@ extension APIError: LocalizedError {
             return "El servidor usa la versión \(version) de la API y esta app no la entiende. Actualiza la app o el servidor."
         case .red(let codigo):
             switch codigo {
-            case .notConnectedToInternet, .dataNotAllowed:
-                return "No hay conexión a internet."
             case .timedOut:
-                return "El servidor ha tardado demasiado en responder."
+                return TextosCliente.plazo
             case .appTransportSecurityRequiresSecureConnection:
                 return "iOS no permite conectar con esa dirección sin cifrar. Usa la dirección de Tailscale (.ts.net) o la de la red local."
             default:
-                return "No se ha podido conectar con el servidor."
+                return TextosCliente.red
             }
         case .formato:
-            return "La respuesta del servidor no tiene el formato esperado. Puede que la app y el servidor tengan versiones distintas."
+            return TextosCliente.respuestaIlegible
         case .cancelado:
-            return "Se ha cancelado la operación."
+            return TextosCliente.plazo
         }
     }
 }

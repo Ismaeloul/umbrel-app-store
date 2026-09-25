@@ -54,6 +54,24 @@ public actor ServerResolver {
         enCurso = nil
     }
 
+    /// Emparejar por una dirección concreta (la primera `u` del QR que responda, a7 §8.9.1): le hace ping
+    /// y, si es un Ace Player Neo, la deja elegida sin carrera.
+    public func probarYFijar(_ url: URL) async throws -> ActiveServer {
+        let miGeneracion = generacion
+        do {
+            _ = try await pinger(url)
+        } catch {
+            throw APIError.desde(error)
+        }
+        let elegido = ActiveServer(via: ServerVia.clasificar(url), url: url)
+        if miGeneracion == generacion {
+            enCurso?.cancel()
+            enCurso = nil
+            activo = elegido
+        }
+        return elegido
+    }
+
     /// La dirección que hay que usar (la recordada o una carrera nueva).
     public func actual() async throws -> ActiveServer {
         if let activo { return activo }
