@@ -94,10 +94,25 @@
 		<string>MonaSans-Variable.ttf</string>
 		<string>MartianMono-Variable.ttf</string>
 	</array>
+	<!-- La escena se declara aquí y no en AppDelegate.configurationForConnecting: en Swift,
+	     `delegateClass = SceneDelegate.self` tardaba ~300 ms en tiparse y disparaba la alarma
+	     de la CI (fase 0.2, ejecuciones 36168823914 y 36169354654). -->
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Principal</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+				</dict>
+			</array>
+		</dict>
 	</dict>
 	<key>UIBackgroundModes</key>
 	<array>
