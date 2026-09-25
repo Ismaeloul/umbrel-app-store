@@ -177,6 +177,28 @@ enum LugarVideo: Sendable { case ninguno, mini, teatro, inmersivo, vuelo }
         }
     }
 
+    // MARK: Lo que pintan el teatro y el mini (status.ts)
+
+    /// Estado base de la línea de estado (`statusFor`): el teatro lo fija en `Avisos.fijarBase` mientras se ve.
+    var lineaBase: ContenidoLinea? { EstadoVisible.linea(reproductor.foto) }
+
+    /// El botón de directo (`liveButton`).
+    var botonDirecto: BotonDirecto { EstadoVisible.botonDirecto(reproductor.foto) }
+
+    /// El panel del vídeo sin imagen (`stageMessage`).
+    var mensajeEscenario: MensajeEscenario? { EstadoVisible.mensajeEscenario(reproductor.foto) }
+
+    /// Las filas de «Datos técnicos» (`nerdRows`); `motor` es el texto del estado del motor.
+    func filasDatosTecnicos(motor: String) -> [(String, String)] {
+        let r = reproductor
+        return EstadoVisible.filasDatosTecnicos(
+            EstadoVisible.DatosTecnicos(
+                motor: r.demo ? "en línea (demo)" : motor, demo: r.demo, hayMotorVideo: r.conexion.enMarcha,
+                protocolo: r.protocolo, estadisticas: r.estadisticas, colchonS: r.conexion == .activa ? r.colchonS : 0,
+                retrasoS: DirectoVisible(r.directo).retrasoS, primeraImagenMs: r.primeraImagenMs, codec: r.codec,
+                sesion: r.sesionId))
+    }
+
     // MARK: Menú «Más opciones»
 
     /// Lo que decide las 14 opciones (a4 §5.6).
