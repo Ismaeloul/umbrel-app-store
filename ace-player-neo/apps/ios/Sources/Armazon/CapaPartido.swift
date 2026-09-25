@@ -90,7 +90,8 @@ struct CapaPartido: View {
 /// El zoom de la ida (§3.5): la capa entera escala uniformemente desde el origen, recortada a un marco que crece
 /// del origen a la ventana con el radio del origen → 0; encima, la foto de la tarjeta se funde. Todo sale de
 /// `progreso` con funciones lineales, así que SwiftUI anima la escala, el desplazamiento y el recorte (forma
-/// animable) con el mismo muelle, igual que si animara `progreso`.
+/// animable) con el mismo muelle, igual que si animara `progreso`. Sin origen (o al acabar) todo vale la identidad:
+/// los mismos modificadores siempre, sin ramas, para que el teatro no se rehaga (perdería su estado) al terminar.
 private struct ZoomTeatro: ViewModifier {
     let progreso: Double
     let origen: CGRect?
@@ -99,16 +100,9 @@ private struct ZoomTeatro: ViewModifier {
     let opacidadFoto: Double
     let ventana: CGRect
 
-    @ViewBuilder func body(content: Content) -> some View {
-        if let origen {
-            zoom(content, origen: origen)
-        } else {
-            content
-        }
-    }
-
-    private func zoom(_ content: Content, origen: CGRect) -> some View {
-        let desde = Marco(x: origen.minX, y: origen.minY, ancho: origen.width, alto: origen.height)
+    func body(content: Content) -> some View {
+        let desdeRect: CGRect = origen ?? ventana
+        let desde = Marco(x: desdeRect.minX, y: desdeRect.minY, ancho: desdeRect.width, alto: desdeRect.height)
         let hasta = Marco(x: 0, y: 0, ancho: ventana.width, alto: ventana.height)
         let t: TransformacionVuelo = GeometriaVuelo.zoom(origen: desde, destino: hasta, progreso: progreso)
         let recorte: Marco = GeometriaVuelo.marco(desde: desde, hasta: hasta, progreso: progreso)

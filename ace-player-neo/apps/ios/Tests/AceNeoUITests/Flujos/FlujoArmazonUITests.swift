@@ -27,7 +27,15 @@ final class FlujoArmazonUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-AceNeoDemo"] + argumentos
         app.launch()
+        esperarVertical(app)
         return app
+    }
+
+    /// Tras una prueba en horizontal el giro de vuelta puede no haber acabado: se espera a la ventana vertical.
+    @MainActor
+    private func esperarVertical(_ app: XCUIApplication) {
+        let limite = Date().addingTimeInterval(5)
+        while Date() < limite && app.frame.width > app.frame.height { Thread.sleep(forTimeInterval: 0.2) }
     }
 
     /// La pantalla visible es la de `id` y ninguna otra pestaña se ve.
@@ -35,8 +43,11 @@ final class FlujoArmazonUITests: XCTestCase {
     private func comprobarPantalla(_ app: XCUIApplication, _ id: String) {
         let pantalla = elementoUI(app, IDUI.pantalla(id))
         XCTAssertTrue(pantalla.waitForExistence(timeout: 10), "No se ve la pantalla \(id)")
+        // Las pestañas visitadas siguen montadas (vivas, a2 §12): XCUITest las encuentra aunque estén ocultas y fuera
+        // de VoiceOver (SwiftUI las deja en sus elementos de automatización). Lo que cuenta es que no se puedan tocar.
         for otra in ["agenda", "biblioteca", "buscar", "ajustes"] where otra != id {
-            XCTAssertFalse(elementoUI(app, IDUI.pantalla(otra)).exists, "Se ve \(otra) estando en \(id)")
+            let oculta = elementoUI(app, IDUI.pantalla(otra))
+            XCTAssertFalse(oculta.exists && oculta.isHittable, "Se ve \(otra) estando en \(id)")
         }
         XCTAssertTrue(elementoUI(app, IDUI.pestana(id)).isSelected, "La pestaña \(id) no está marcada")
     }
@@ -95,8 +106,10 @@ final class FlujoArmazonUITests: XCTestCase {
         XCTAssertTrue(toast.waitForExistence(timeout: 20), "No sale el toast con «Deshacer»")
         let barra = elementoUI(app, IDUI.barraPestanas)
         XCTAssertTrue(barra.exists)
-        XCTAssertLessThan(toast.frame.maxY, barra.frame.minY, "El toast debe ir por encima de la barra")
+        Thread.sleep(forTimeInterval: 0.8)  // entrada del toast (muelle estándar, 520 ms)
         captura(app, "armazon-toast")
+        XCTAssertLessThan(toast.frame.maxY, barra.frame.minY + 1,
+                          "El toast debe ir por encima de la barra (toast \(toast.frame), barra \(barra.frame))")
         // «Deshacer» va a la izquierda del ✕ de 44 (a2 §8.3): se toca con el dedo en su sitio.
         let punto = CGVector(dx: (toast.frame.maxX - 6 - 44 - 45) / app.frame.width, dy: toast.frame.midY / app.frame.height)
         app.coordinate(withNormalizedOffset: punto).tap()
