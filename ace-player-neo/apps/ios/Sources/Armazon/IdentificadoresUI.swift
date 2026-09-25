@@ -54,4 +54,8 @@ enum IDUI {
     static let versionApp = "version-app", visorEsteDispositivo = "visor-este-dispositivo"
     static func sesion(_ id: String) -> String { "sesion-\(id)" }
     static let hojaAyuda = "hoja-ayuda"
+    // Ajustes (M7, añadidos aditivos: controles que tocan FlujoAjustesUITests)
+    static let segmentadoTema = "segmentado-tema", interruptorTransparencia = "interruptor-transparencia"
+    static let botonEmparejarDispositivo = "boton-emparejar-dispositivo", botonAtajos = "boton-atajos"
+    static func botonRevocar(_ id: String) -> String { "boton-revocar-\(id)" }
 }
