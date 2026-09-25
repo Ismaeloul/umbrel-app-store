@@ -2,6 +2,40 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 0.8.0 (preparada, sin publicar)
+
+Diseño nuevo, "Palco", en la web y en la app de iPhone: negro de cine con
+un solo color de accion, el oro, y un modo claro igual de cuidado. La app
+sigue el tema del sistema (claro u oscuro) salvo que elijas otro en
+Ajustes > Apariencia.
+
+Escudos y colores de verdad: la agenda enseña el escudo de cada equipo, sus
+colores y el logo de la competicion. Los descarga tu Umbrel una vez y los
+guarda; la web y el iPhone nunca los piden a nadie mas. Si un equipo no
+aparece, sale un escudo generado con sus iniciales, y la agenda nunca espera
+por ellos. Se apagan con ACE_TEAM_CRESTS=false.
+
+Agenda: arriba, el partido destacado en una tarjeta grande con los colores
+de los dos clubes, su hora o el minuto en directo y el estado de la señal.
+Nada suena hasta que tocas "Ver ahora". El marcador sigue tapado hasta que
+lo pides.
+
+Partido: el video manda, con la luz de los dos equipos alrededor. Las
+fuentes son carteles con el nombre del canal, la calidad y un anillo que
+dice su estado con forma, palabra y color (Verificada, Floja, Sin señal,
+Comprobando, Pendiente, Reportada); la dorada es la que esta en pantalla.
+Un solo reproductor para todo: grande en el partido y en miniatura, con
+imagen, mientras navegas.
+
+Canales (antes Biblioteca), Buscar y Ajustes con el mismo aire. Pega un
+Content ID o un enlace acestream:// en Buscar y lo reproduce al momento.
+
+App de iPhone renovada (se actualiza aparte, con su IPA nueva): barra de
+pestañas del sistema (Liquid Glass en iOS 26) con el mini-reproductor dentro,
+arrastrar el video hacia abajo para minimizarlo, deslizarlo a los lados para
+cambiar de fuente, doble toque para pantalla completa y vibraciones en cada
+gesto.
+
 ## 0.7.1 (2026-09-23)
 
 Nuevo en Ajustes: "Donde se esta reproduciendo". Ves que canal esta
