@@ -5,13 +5,13 @@ import XCTest
 /// giro a 844×390 con la barra superior, y tocar la pestaña activa / conservar el scroll (se saltan mientras la
 /// pantalla sea un stub sin nada que desplazar).
 final class FlujoArmazonUITests: XCTestCase {
-    override func setUpWithError() throws {
+    override func setUp() async throws {
         continueAfterFailure = false
-        XCUIDevice.shared.orientation = .portrait
+        await MainActor.run { XCUIDevice.shared.orientation = .portrait }
     }
 
-    override func tearDownWithError() throws {
-        XCUIDevice.shared.orientation = .portrait
+    override func tearDown() async throws {
+        await MainActor.run { XCUIDevice.shared.orientation = .portrait }
     }
 
     @MainActor
