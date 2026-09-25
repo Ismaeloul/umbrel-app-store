@@ -211,7 +211,7 @@ private struct CeldaIcono: View {
         let forma = RoundedRectangle(cornerRadius: R.m, style: .circular)
         VStack(spacing: 6) {
             IconoPalco(nombre, tamano: 24).foregroundStyle(Palco.text)
-            Text(nombre.rawValue).font(Martian.fuente(11)).altoDeLinea(1.45, tamano: 11).foregroundStyle(Palco.text2)
+            Text(nombre.rawValue).font(Martian.fuente(11)).altoDeLineaMartian(1.45, tamano: 11).foregroundStyle(Palco.text2)
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 6)

@@ -14,7 +14,7 @@ struct SistemaView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: S.s8) {
                 CabeceraVista("Sistema", subtitulo: "Tokens y componentes de la piel «Palco»") {
                     MenuMuestra(galeria: galeria)
                 }

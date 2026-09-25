@@ -34,7 +34,7 @@ final class LaboratorioUITests: XCTestCase {
     @MainActor
     func testCapturasDeCadaBloque() {
         for tema in ["claro", "oscuro"] {
-            for bloque in 1...6 {
+            for bloque in 1...7 {
                 let app = abrir(bloque: bloque, tema: tema)
                 capturar("laboratorio-\(bloque)-\(tema)")
                 if bloque <= 3 {
@@ -91,11 +91,27 @@ final class LaboratorioUITests: XCTestCase {
         app.buttons["exito"].tap()
         app.buttons["Abrir una hoja y vibrar desde ella"].tap()
         XCTAssertTrue(app.staticTexts["Háptica con hoja"].waitForExistence(timeout: 5))
-        app.buttons["rigida"].firstMatch.tap()
+        // El de la hoja (el del banco queda debajo y no se puede tocar).
+        let rigidos = app.buttons.matching(NSPredicate(format: "label == %@", "rigida")).allElementsBoundByIndex
+        rigidos.first(where: { $0.isHittable })?.tap()
         capturar("laboratorio-haptica-hoja")
         XCUIDevice.shared.orientation = .landscapeLeft
         capturar("laboratorio-haptica-horizontal")
         XCUIDevice.shared.orientation = .portrait
+    }
+
+    /// El pan horizontal responde en la tarjeta y cede al carril (canario C3); la rueda y la paleta (C9).
+    @MainActor
+    func testGestosYCifras() {
+        let app = abrir(bloque: 7, tema: "claro")
+        app.buttons["Gol"].tap()
+        app.buttons["Destapar"].tap()
+        capturar("laboratorio-cifras")
+        let tarjeta = app.staticTexts["Desliza esta tarjeta a los lados"]
+        XCTAssertTrue(tarjeta.waitForExistence(timeout: 5))
+        tarjeta.swipeLeft()
+        XCTAssertTrue(conTextoUI(app, "soltado dx=-").waitForExistence(timeout: 3), "El pan horizontal no ha llegado")
+        capturar("laboratorio-gestos")
     }
 
     /// Tocar la barra de estado sube el banco (el único ScrollView con `scrollsToTop`; a2 §24, §27.5).

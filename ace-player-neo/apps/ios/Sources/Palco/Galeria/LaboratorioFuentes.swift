@@ -51,7 +51,7 @@
                 Medido(web: 36.45, 17) { Num("21:00", tamano: 17) }
                 Medido(web: 75, 13) { Text("En directo · 13'").estilo(.capsula) }
                 Medido(web: 265.2, 17.39) {
-                    Text("Hash b71e44d0…0c9f2a31 · 1,92 MB/s").font(Martian.fuente(12)).altoDeLinea(1.45, tamano: 12)
+                    Text("Hash b71e44d0…0c9f2a31 · 1,92 MB/s").font(Martian.fuente(12)).altoDeLineaMartian(1.45, tamano: 12)
                 }
             }
         }

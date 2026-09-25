@@ -131,13 +131,14 @@ private struct BloqueCapsulas: View {
 private struct CapsulasEnCristal: View {
     var body: some View {
         VStack(alignment: .leading, spacing: S.s3) {
-            Capsula("En directo · 72'", tono: .directo, tamano: .sm, punto: true, cristal: .video).frame(maxWidth: .infinity, alignment: .leading)
-            Capsula("Señal lista", tono: .ok, tamano: .sm, punto: true, cristal: .video).frame(maxWidth: .infinity, alignment: .leading)
-            Capsula("45 min antes", tamano: .sm, icono: .clock, cristal: .video).frame(maxWidth: .infinity, alignment: .leading)
-            Capsula("Sin señal", tono: .fail, tamano: .sm, cristal: .video).frame(maxWidth: .infinity, alignment: .leading)
-            PastillaCompeticion(nombre: "Champions League", logo: nil, tamano: 28).frame(maxWidth: .infinity)
-            PastillaCompeticion(nombre: "LaLiga", logo: nil, tamano: 40).frame(maxWidth: .infinity)
+            Capsula("En directo · 72'", tono: .directo, tamano: .sm, punto: true, cristal: .video)
+            Capsula("Señal lista", tono: .ok, tamano: .sm, punto: true, cristal: .video)
+            Capsula("45 min antes", tamano: .sm, icono: .clock, cristal: .video)
+            Capsula("Sin señal", tono: .fail, tamano: .sm, cristal: .video)
+            PastillaCompeticion(nombre: "Champions League", logo: nil, tamano: 28)
+            PastillaCompeticion(nombre: "LaLiga", logo: nil, tamano: 40)
         }
+        .environment(\.llenarAncho, true)
         .padding(.vertical, S.s6)
         .padding(.horizontal, S.s4)
         .background(FondoRetransmision())

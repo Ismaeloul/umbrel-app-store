@@ -54,6 +54,7 @@
             if solo == nil || solo == 4 { LabHojasYMenus(galeria: galeria) }
             if solo == nil || solo == 5 { LabBarraEstado(galeria: galeria) }
             if solo == nil || solo == 6 { LabHaptica() }
+            if solo == nil || solo == 7 { LabGestos() }
         }
     }
 

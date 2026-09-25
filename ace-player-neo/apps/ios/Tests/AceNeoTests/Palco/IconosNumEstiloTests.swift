@@ -75,7 +75,8 @@ struct EstiloTextoTests {
         #expect(abs(EstiloTexto.titularVista.altoLineaPt - 33) < 0.0001)
         #expect(abs(EstiloTexto.tituloHoja.altoLineaPt - 27.5) < 0.0001)
         #expect(abs(EstiloTexto.subtituloVista.altoLineaPt - 18.85) < 0.0001)
-        #expect(EstiloTexto.menu.altoLineaPt == 15)
+        #expect(abs(EstiloTexto.etiquetaCampo.altoLineaPt - 18.85) < 0.0001)  // hereda el 1,45 del cuerpo
+        #expect(EstiloTexto.campo.altoLineaPt == 16)
     }
 
     @Test func cifrasCondensadas() {

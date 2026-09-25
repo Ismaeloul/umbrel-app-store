@@ -8,6 +8,7 @@ struct PastillaCompeticion: View {
     let nombre: String
     let logo: URL?
     let tamano: CGFloat
+    @Environment(\.llenarAncho) private var llenarAncho
 
     init(nombre: String, logo: URL?, tamano: CGFloat = 20) {
         self.nombre = nombre
@@ -25,7 +26,7 @@ struct PastillaCompeticion: View {
     var body: some View {
         contenido
             .padding(.horizontal, relleno)
-            .frame(minWidth: tamano)
+            .frame(minWidth: tamano, maxWidth: llenarAncho ? .infinity : nil)
             .frame(height: tamano)
             .background(Palco.glassVideoSolid, in: Capsule())
             .bordeInterior(Color.white.opacity(0.12), forma: Capsule())

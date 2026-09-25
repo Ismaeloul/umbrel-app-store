@@ -77,6 +77,15 @@ enum Martian {
         return nueva
     }
 
+    /// Alto natural de una línea de Martian en pantalla: ascendente + descendente (1000/−200, 1,2 em; es su caja de
+    /// contenido también en la web, USE_TYPO_METRICS) llevado a la rejilla de píxeles @3x como lo pinta SwiftUI.
+    /// Martian no se normalizó a 1 em (no hacía falta): el alto de línea se calcula con esta caja (laboratorio, bloque 1).
+    static func altoNatural(_ tamano: Double) -> Double {
+        let fuente = ctFont(tamano)
+        let bruto = Double(CTFontGetAscent(fuente) + CTFontGetDescent(fuente) + CTFontGetLeading(fuente))
+        return (bruto * 3).rounded(.up) / 3
+    }
+
     static func ctFont(_ tamano: Double, peso: Double = 400) -> CTFont {
         let ejes: [NSNumber: NSNumber] = [
             NSNumber(value: Mona.wdth): NSNumber(value: anchura), NSNumber(value: Mona.wght): NSNumber(value: peso),

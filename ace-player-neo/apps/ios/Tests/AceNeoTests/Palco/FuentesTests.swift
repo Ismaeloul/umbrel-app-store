@@ -28,14 +28,16 @@ struct FuentesTests {
 
     @Test func monaLlevaSiempreLosDosEjes() throws {
         let titular = Mona.ctFont(30, peso: 800, anchura: 125)
-        #expect(CTFontCopyPostScriptName(titular) as String == Mona.postscriptPalco)
+        // Con variación, CoreText añade los ejes al nombre («PalcoSans-ExtraLight_wdth…_wght…»).
+        #expect((CTFontCopyPostScriptName(titular) as String).hasPrefix(Mona.postscriptPalco))
         let variacion = try #require(CTFontCopyVariation(titular) as? [NSNumber: NSNumber])
         #expect(abs((variacion[FuentesTests.wdth]?.doubleValue ?? 0) - 125) < 0.01)
         #expect(abs((variacion[FuentesTests.wght]?.doubleValue ?? 0) - 800) < 0.01)
-        // Con la anchura por defecto (100) también fija los dos ejes: nunca sale el peso 200 del fichero.
+        // Con la anchura por defecto (100) el peso sigue fijado: nunca sale el 200 del fichero. CoreText no lista
+        // en la variación los ejes que valen su defecto (wdth 100).
         let cuerpo = try #require(CTFontCopyVariation(Mona.ctFont(15, peso: 450)) as? [NSNumber: NSNumber])
         #expect(abs((cuerpo[FuentesTests.wght]?.doubleValue ?? 0) - 450) < 0.01)
-        #expect(abs((cuerpo[FuentesTests.wdth]?.doubleValue ?? 0) - 100) < 0.01)
+        #expect(abs((cuerpo[FuentesTests.wdth]?.doubleValue ?? 100) - 100) < 0.01)
     }
 
     @Test func elCuatroMideComoEnLaWeb() {
@@ -53,14 +55,15 @@ struct FuentesTests {
         #expect(abs(CTFontGetDescent(palco) - 11.5) < 0.2)
         #expect(abs(CTFontGetLeading(palco)) < 0.01)
         let campos = Mona.uiFont(100, peso: 450)
-        #expect(campos.fontName == Mona.postscriptCampos)
+        #expect(campos.fontName.hasPrefix(Mona.postscriptCampos))
     }
 
     @Test func martianConSuAnchura() throws {
         let mono = Martian.ctFont(12)
-        #expect(CTFontCopyPostScriptName(mono) as String == Martian.postscript)
+        #expect((CTFontCopyPostScriptName(mono) as String).hasPrefix(Martian.postscript))
         let variacion = try #require(CTFontCopyVariation(mono) as? [NSNumber: NSNumber])
         #expect(abs((variacion[FuentesTests.wdth]?.doubleValue ?? 0) - 87.5) < 0.01)
-        #expect(abs((variacion[FuentesTests.wght]?.doubleValue ?? 0) - 400) < 0.01)
+        #expect(abs((variacion[FuentesTests.wght]?.doubleValue ?? 400) - 400) < 0.01)  // 400 es su defecto
+        #expect(abs(Martian.altoNatural(12) - 14.4) < 0.34, "caja de Martian: 1,2 em")
     }
 }

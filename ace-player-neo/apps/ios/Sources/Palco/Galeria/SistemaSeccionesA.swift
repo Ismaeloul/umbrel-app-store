@@ -72,7 +72,7 @@ private struct MuestraColor: View {
         VStack(alignment: .leading, spacing: 4) {
             chip.fill(color).frame(height: 44).bordeInterior(Palco.lineSoft, forma: chip)
             Text(nombre).estilo(EstiloTexto(tamano: 13, peso: 650, altoLinea: 1.45)).foregroundStyle(Palco.text)
-            Text(token).font(Martian.fuente(12)).altoDeLinea(1.45, tamano: 12).foregroundStyle(Palco.text)
+            Text(token).font(Martian.fuente(12)).altoDeLineaMartian(1.45, tamano: 12).foregroundStyle(Palco.text)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .panel(.normal, radio: R.m, relleno: 10)
@@ -93,7 +93,7 @@ private struct BloqueTipografia: View {
             parrafo
             Text("Hash b71e44d0…0c9f2a31 · 1,92 MB/s · 48 pares")
                 .font(Martian.fuente(12))
-                .altoDeLinea(1.45, tamano: 12)
+                .altoDeLineaMartian(1.45, tamano: 12)
         }
         .foregroundStyle(Palco.text)
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -34,6 +34,7 @@ struct Capsula: View {
     private var sm: Bool { tamano == .sm }
     private var activo: Bool { pulsado == true }
     @Environment(\.trackingCapsulaEm) private var trackingPropio
+    @Environment(\.llenarAncho) private var llenarAncho
 
     private var estiloTexto: EstiloTexto {
         var estilo = sm ? EstiloTexto.capsulaSm : EstiloTexto.capsula
@@ -64,6 +65,7 @@ struct Capsula: View {
             Text(texto).estilo(estiloTexto).lineLimit(1)
         }
         .padding(.horizontal, sm ? 8 : 10)
+        .frame(maxWidth: llenarAncho ? .infinity : nil, alignment: .leading)
         .frame(height: sm ? 24 : 28)
         .background(FondoCapsula(tono: tono, cristal: activo ? nil : cristal, pulsado: activo))
     }
@@ -84,6 +86,8 @@ struct Capsula: View {
 extension EnvironmentValues {
     /// Tracking propio del texto de las cápsulas de dentro (el «cuándo» del versus: +0,06 em).
     @Entry var trackingCapsulaEm: Double? = nil
+    /// Cápsulas y pastillas a todo el ancho de su celda (en una rejilla de la web se estiran: la galería).
+    @Entry var llenarAncho: Bool = false
 }
 
 /// El fondo de la cápsula según tono, cristal y pulsado (Capsule.css).
