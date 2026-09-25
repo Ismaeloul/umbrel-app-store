@@ -144,6 +144,11 @@ final class ControladorEscanerQR: UIViewController, AVCaptureMetadataOutputObjec
         guard !configurada, !preparando else { return }
         preparando = true
         defer { preparando = false }
+        // Sin cámara (simulador, fallo) no se pide permiso: no serviría de nada (a2 §22.3.2).
+        guard AVCaptureDevice.default(for: .video) != nil else {
+            informar(.sinCamara)
+            return
+        }
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             break
