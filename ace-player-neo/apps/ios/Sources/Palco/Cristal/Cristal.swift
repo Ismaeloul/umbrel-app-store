@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // Cristal (b-arquitectura §2.2.5; a1 §6; decisión 3 de Isma: Liquid Glass de verdad). El ÚNICO
 // `.glassEffect(` de la app (regla R5). Con transparencia reducida (del sistema o de Ajustes) se pinta el
@@ -11,13 +12,24 @@ enum TipoCristal: Sendable { case denso, regular, video, videoBoton }
 enum CristalPalco {
     /// Interruptor de rendimiento: false = sólido en las filas de listas largas.
     static let vidrioEnListas = true
-    /// ÚNICO sitio del tinte (I2 lo calibra contra las capturas).
+    /// ÚNICO sitio del tinte (I2 lo calibra contra las capturas). En oscuro, el token tiñe el vidrio (casa con la
+    /// web). En claro NO se tiñe: ningún tinte quitaba el reflejo verde/melocotón que Liquid Glass saca de la
+    /// imagen de debajo (bloque 9 del banco, c0-cristal/); lo pone `velo(_:)` como la web.
     static func vidrio(_ tipo: TipoCristal) -> Glass {
         switch tipo {
-        case .denso: .regular.tint(Palco.glassDense)
-        case .regular: .regular.tint(Palco.glass)
+        case .denso: .regular.tint(soloEnOscuro(Palco.glassDense))
+        case .regular: .regular.tint(soloEnOscuro(Palco.glass))
         case .video: .regular.tint(Palco.glassVideo)
         case .videoBoton: .regular.tint(Palco.glassVideo).interactive()
+        }
+    }
+    /// El velo de la web encima del vidrio, solo en claro: `.glass { background: var(--glass) }` (72 %, denso
+    /// 90 % de blanco) sobre lo desenfocado. Así el color de la imagen solo asoma lo que asoma en la web.
+    static func velo(_ tipo: TipoCristal) -> Color {
+        switch tipo {
+        case .denso: soloEnClaro(Palco.glassDense)
+        case .regular: soloEnClaro(Palco.glass)
+        case .video, .videoBoton: Color.clear
         }
     }
     static func solido(_ tipo: TipoCristal) -> Color {
@@ -25,6 +37,19 @@ enum CristalPalco {
         case .denso, .regular: Palco.glassSolid
         case .video, .videoBoton: Palco.glassVideoSolid
         }
+    }
+
+    /// El token en claro y transparente en oscuro (y al revés): tintes y velos que solo cambian un tema.
+    private static func soloEnClaro(_ token: Color) -> Color {
+        Color(uiColor: UIColor { rasgos in
+            rasgos.userInterfaceStyle == .dark ? UIColor.clear : UIColor(token).resolvedColor(with: rasgos)
+        })
+    }
+
+    private static func soloEnOscuro(_ token: Color) -> Color {
+        Color(uiColor: UIColor { rasgos in
+            rasgos.userInterfaceStyle == .dark ? UIColor(token).resolvedColor(with: rasgos) : UIColor.clear
+        })
     }
 }
 
@@ -55,7 +80,9 @@ private struct ModificadorCristal<Forma: Shape>: ViewModifier {
         if opaco {
             content.background(CristalPalco.solido(tipo), in: forma)
         } else {
-            content.glassEffect(CristalPalco.vidrio(tipo), in: forma)
+            content
+                .background(CristalPalco.velo(tipo), in: forma)
+                .glassEffect(CristalPalco.vidrio(tipo), in: forma)
         }
     }
 }

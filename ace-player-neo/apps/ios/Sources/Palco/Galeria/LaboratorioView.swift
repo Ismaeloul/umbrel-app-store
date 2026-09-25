@@ -58,11 +58,21 @@
                     ForEach(CalibracionTinte.candidatos, id: \.titulo) { candidato in
                         fila(candidato.titulo, alfa: candidato.alfa, claro: candidato.claro)
                     }
+                    elegido
                 }
                 .padding(S.s3)
                 .background(FondoRetransmision())
                 .clipShape(RoundedRectangle(cornerRadius: R.l, style: .circular))
             }
+        }
+
+        /// Lo que quedó en `CristalPalco` (vidrio sin tinte + velo de la web en claro; token en oscuro).
+        private var elegido: some View {
+            Text("G · velo de la web (CristalPalco, denso)")
+                .estilo(.pestanaBarra)
+                .foregroundStyle(Palco.text2)
+                .frame(maxWidth: .infinity, minHeight: Alturas.barra)
+                .cristal(.denso, en: RoundedRectangle(cornerRadius: R.xl, style: .circular))
         }
 
         private func fila(_ titulo: String, alfa: Double, claro: Bool) -> some View {
