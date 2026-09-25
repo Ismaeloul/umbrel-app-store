@@ -25,6 +25,8 @@ enum Hoja: Identifiable, Hashable, Sendable {
     case renombrar(RefCanal)
     case ayuda
     case otroServidor(PairingLink)
+    /// Las hojas de muestra de la galería «Sistema» y del banco (P): pasan por esta misma puerta.
+    case muestra(HojaMuestra)
 
     var id: String {
         switch self {
@@ -36,15 +38,21 @@ enum Hoja: Identifiable, Hashable, Sendable {
         case .renombrar(let canal): "renombrar-\(canal.hash)"
         case .ayuda: "ayuda"
         case .otroServidor: "otro-servidor"
+        case .muestra(let muestra): "muestra-\(muestra.rawValue)"
         }
     }
 
     /// Ancho del contenido en ≥ 768 (420 / 560 / 760). Valor neutro de I0; M4 pone el de a2 §9 por hoja.
-    var tamano: TamanoHoja { .md }
+    var tamano: TamanoHoja {
+        switch self {
+        case .muestra(let muestra): muestra.tamano
+        default: .md
+        }
+    }
 
     var detents: DetentsHoja {
         switch self {
-        case .gustos, .ayuda: .grande
+        case .gustos, .ayuda, .muestra(.atajos): .grande
         case .encontrarCanal: .medioYGrande
         default: .medido
         }
@@ -89,6 +97,7 @@ struct VistaHoja: View {
         case .renombrar(let canal): ContenidoRenombrar(canal: canal)  // M5
         case .ayuda: ContenidoAyuda()  // M7
         case .otroServidor(let enlace): ContenidoOtroServidor(enlace: enlace)  // M7
+        case .muestra(let muestra): ContenidoHojaMuestra(muestra: muestra)  // P (galería y banco)
         }
     }
 }

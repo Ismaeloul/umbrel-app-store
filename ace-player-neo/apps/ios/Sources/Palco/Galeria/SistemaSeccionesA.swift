@@ -5,36 +5,13 @@ struct SeccionesSistemaA: View {
     let galeria: EstadoGaleria
 
     var body: some View {
-        SeccionGaleria("Tema y transparencia") { BloqueTema(galeria: galeria) }
+        SeccionGaleria("Tema y transparencia") {
+            ControlTema(descripcion: "El cristal pasa a opaco (además de la opción del sistema).").tarjeta()
+        }
         SeccionGaleria("Color") { MuestrasColor() }
         SeccionGaleria("Tipografía y cifras") { BloqueTipografia() }
         SeccionGaleria("Botones") { BloqueBotones(galeria: galeria) }
         SeccionGaleria("Chips, pestañas y segmentado") { BloqueChips(galeria: galeria) }
-    }
-}
-
-private struct BloqueTema: View {
-    let galeria: EstadoGaleria
-
-    private var opciones: [OpcionSegmento<EstadoGaleria.Tema>] {
-        [
-            OpcionSegmento(valor: .sistema, titulo: "Sistema", icono: .pantalla),
-            OpcionSegmento(valor: .claro, titulo: "Claro", icono: .sol),
-            OpcionSegmento(valor: .oscuro, titulo: "Oscuro", icono: .luna),
-        ]
-    }
-
-    var body: some View {
-        @Bindable var galeria = galeria
-        VStack(alignment: .leading, spacing: S.s4) {
-            Segmentado(opciones, seleccion: Binding(get: { galeria.tema }, set: { galeria.cambiarTema($0) }),
-                       etiqueta: "Tema")
-            FilaInterruptor("Reducir transparencia",
-                            descripcion: "El cristal pasa a opaco (además de la opción del sistema).",
-                            activo: $galeria.transparenciaReducida)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .tarjeta()
     }
 }
 

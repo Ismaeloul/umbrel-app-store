@@ -41,8 +41,14 @@ final class HostingRaiz: UIHostingController<RaizView> {
         }
     }
 
+    /// La primera vez, con la ventana ya puesta (la primera vuelta de `Observations` puede llegar antes).
+    override func viewIsAppearing(_ animated: Bool) {
+        super.viewIsAppearing(animated)
+        aplicarEstadoVentana()
+    }
+
     private func aplicarEstadoVentana() {
-        view.window?.overrideUserInterfaceStyle = contenedor.preferencias.tema.estiloUI
+        view.window?.overrideUserInterfaceStyle = contenedor.preferencias.estiloVentana
         setNeedsStatusBarAppearanceUpdate()
         setNeedsUpdateOfHomeIndicatorAutoHidden()
         setNeedsUpdateOfScreenEdgesDeferringSystemGestures()

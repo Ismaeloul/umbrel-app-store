@@ -57,7 +57,8 @@ public struct Entorno: Sendable {
     /// El que toca según cómo se ha lanzado la app.
     public static func actual() -> Entorno {
         #if DEBUG
-            if ModoEjecucion.demo || ModoEjecucion.servidorSimulado {
+            // El banco y la galería no hablan con ningún servidor: la demo sin SSE.
+            if ModoEjecucion.demo || ModoEjecucion.servidorSimulado || ModoEjecucion.laboratorio || ModoEjecucion.sistema {
                 return ServidorDemo.entorno(opciones: ModoEjecucion.opcionesSimulado)
             }
             if ModoEjecucion.empezarDeCero { olvidarTodo() }
@@ -116,6 +117,12 @@ public enum ModoEjecucion {
 
     /// `-AceNeoSistema`: abre la galería «Sistema» (P).
     static var sistema: Bool { argumento("-AceNeoSistema") }
+
+    /// `-AceNeoDesplazar <pt>`: el banco o la galería abren desplazados (capturas por tramos).
+    static var desplazar: Double { Double(valor("AceNeoDesplazar") ?? "") ?? 0 }
+
+    /// `-AceNeoLaboratorioSeccion <n>`: el banco enseña solo el bloque n (capturas por bloque).
+    static var seccionLaboratorio: Int? { Int(valor("AceNeoLaboratorioSeccion") ?? "") }
 
     /// Prueba de interfaz contra el backend de verdad (pila E2E de la CI): la
     /// app de siempre, pero arrancando sin emparejar. Solo cuenta en Debug.

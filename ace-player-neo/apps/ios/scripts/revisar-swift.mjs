@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* Linter de patrones prohibidos de la app nativa (b-arquitectura §5.2). Tarda segundos.
 
-   Recorre Sources/**\/*.swift (salvo *.generado.swift y Sources/Sonda/**) y sale con
+   Recorre Sources/**\/*.swift (salvo *.generado.swift) y sale con
    código 1 si una línea incumple una regla. R20 (ficheros de más de 400 líneas) solo avisa.
 
    Alcance: hasta la poda (fase 0.2) solo miraba las carpetas nuevas (Palco, Armazon,
@@ -276,7 +276,6 @@ const avisos = [];
 let revisados = 0;
 for (const fichero of ficheros(SOURCES)) {
   const rel = path.relative(SOURCES, fichero).replace(/\\/g, '/');
-  if (rel.startsWith('Sonda/')) continue; // canarios de la fase 0 (§5.3)
   if (!TODO && !en(rel, CARPETAS_NUEVAS)) continue;
   revisados += 1;
   const fuente = readFileSync(fichero, 'utf8').replace(/\r\n/g, '\n');

@@ -14,7 +14,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         } else {
             let contenedor = ContenedorApp.crear()
             ContenedorApp.actual = contenedor
-            ventana.overrideUserInterfaceStyle = contenedor.preferencias.tema.estiloUI
+            ventana.overrideUserInterfaceStyle = contenedor.preferencias.estiloVentana
             ventana.rootViewController = HostingRaiz(contenedor: contenedor)
             if let enlace = options.urlContexts.first?.url { contenedor.sesion.abrir(enlace: enlace) }
         }
