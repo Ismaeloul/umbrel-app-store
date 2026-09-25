@@ -102,5 +102,6 @@ private struct ObjetosDeReproduccion: ViewModifier {
         content.environment(contenedor.reproductor).environment(contenedor.presentacion)
             .environment(contenedor.fuentes).environment(contenedor.relojCompartido)
             .environment(contenedor.bajas).environment(contenedor.pip)
+            .environment(\.servidores, contenedor.entorno.servidores)
     }
 }
