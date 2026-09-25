@@ -1,0 +1,77 @@
+{
+  "aviso": "Generado por apps/ios/scripts/generar-demo.ts ejecutando la demo de la web. No se edita a mano.",
+  "descripcion": "Dispositivos: lista, revocar y uno que no existe",
+  "t0": "2026-09-24T17:00:00.000Z",
+  "pasos": [
+    {
+      "t": 0,
+      "ruta": "devicesList",
+      "params": {},
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "devices": [
+          {
+            "id": "dev_iphone01",
+            "name": "iPhone de prueba",
+            "platform": "ios",
+            "createdAt": "2026-09-23T18:30:00.000Z",
+            "lastSeenAt": "2026-09-23T18:30:00.000Z",
+            "revokedAt": null
+          }
+        ]
+      }
+    },
+    {
+      "t": 60000,
+      "ruta": "deviceRevoke",
+      "params": {
+        "id": "dev_iphone01"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "device": {
+          "id": "dev_iphone01",
+          "name": "iPhone de prueba",
+          "platform": "ios",
+          "createdAt": "2026-09-23T18:30:00.000Z",
+          "lastSeenAt": "2026-09-23T18:30:00.000Z",
+          "revokedAt": "2026-09-24T17:01:00.000Z"
+        }
+      }
+    },
+    {
+      "t": 61000,
+      "ruta": "deviceRevoke",
+      "params": {
+        "id": "dev_no_existe"
+      },
+      "query": [],
+      "cuerpo": null,
+      "error": {
+        "code": "not_found",
+        "status": 404
+      }
+    },
+    {
+      "t": 62000,
+      "ruta": "devicesList",
+      "params": {},
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "devices": [
+          {
+            "id": "dev_iphone01",
+            "name": "iPhone de prueba",
+            "platform": "ios",
+            "createdAt": "2026-09-23T18:30:00.000Z",
+            "lastSeenAt": "2026-09-23T18:30:00.000Z",
+            "revokedAt": "2026-09-24T17:01:00.000Z"
+          }
+        ]
+      }
+    }
+  ]
+}

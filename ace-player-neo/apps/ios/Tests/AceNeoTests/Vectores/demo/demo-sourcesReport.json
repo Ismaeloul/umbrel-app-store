@@ -1,0 +1,342 @@
+{
+  "aviso": "Generado por apps/ios/scripts/generar-demo.ts ejecutando la demo de la web. No se edita a mano.",
+  "descripcion": "Reportar una fuente de un trabajo y una externa, y seguir el reporte",
+  "t0": "2026-09-24T17:00:00.000Z",
+  "pasos": [
+    {
+      "t": 0,
+      "ruta": "footballResolve",
+      "params": {},
+      "query": [
+        [
+          "match",
+          "demo-1"
+        ],
+        [
+          "channel",
+          "DAZN"
+        ]
+      ],
+      "cuerpo": null,
+      "respuesta": {
+        "status": "found",
+        "channels": [
+          "DAZN"
+        ],
+        "checked": [
+          "saved",
+          "m3u",
+          "favorites",
+          "history",
+          "acestream"
+        ],
+        "candidates": [
+          {
+            "id": "0feeabf0888811b8dd55c807eef65f8d85fa4cce",
+            "title": "DAZN --> Elcano",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 100,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "0b4d17a79e8dcc1bc6d94c1c040dcd910a49da8e",
+            "title": "DAZN --> Faro",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 99,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "e450210aee5337729f1b56ac4c1b252b3f747ff4",
+            "title": "DAZN --> Norte",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 98,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": 0.4,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "e0885d7d8fd6952ef31c09773468ddaed47c4240",
+            "title": "DAZN --> Vega",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 97,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "affb6793a225a4f7c1d2baea4779840d88fbe1d1",
+            "title": "DAZN --> Tarifa",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 96,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "da287e2b6843ef7da024f0cbf98c7575937f3264",
+            "title": "DAZN --> Sur",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 95,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          }
+        ],
+        "engineAvailable": true,
+        "ai": {
+          "enabled": false,
+          "used": false,
+          "model": null,
+          "catalogSize": 0,
+          "error": null
+        },
+        "program": null,
+        "research": false,
+        "preheat": null,
+        "scan": {
+          "id": "de1a0d45c168010000000000",
+          "statusUrl": "/api/v1/football/scans/de1a0d45c168010000000000",
+          "total": 6,
+          "initialCount": 3
+        },
+        "candidate": {
+          "id": "0feeabf0888811b8dd55c807eef65f8d85fa4cce",
+          "title": "DAZN --> Elcano",
+          "alias": null,
+          "ih": false,
+          "source": "m3u",
+          "score": 100,
+          "matchedChannel": "DAZN",
+          "soloFamilia": false,
+          "familyFallbackAllowed": false,
+          "listaId": "principal",
+          "availability": null,
+          "bitrate": null,
+          "learned": null,
+          "reported": null,
+          "rejectedByLearning": false,
+          "quarantined": false
+        }
+      }
+    },
+    {
+      "t": 3000,
+      "ruta": "sourcesReport",
+      "params": {},
+      "query": [],
+      "cuerpo": {
+        "id": "0feeabf0888811b8dd55c807eef65f8d85fa4cce",
+        "channel": "DAZN",
+        "matchId": "demo-1"
+      },
+      "respuesta": {
+        "report": {
+          "reportId": "rep_demo_000000",
+          "id": "0feeabf0888811b8dd55c807eef65f8d85fa4cce",
+          "channel": "DAZN",
+          "matchId": "demo-1",
+          "reason": "not_starting",
+          "state": "checking",
+          "checkReason": "",
+          "reportedAt": "2026-09-24T17:00:03.000Z",
+          "lastCheckedAt": null,
+          "quarantineUntil": "2026-09-24T17:30:03.000Z"
+        },
+        "scan": {
+          "id": "de1a0d45c223820000000000",
+          "statusUrl": "/api/v1/football/scans/de1a0d45c223820000000000",
+          "total": 1,
+          "initialCount": 1
+        }
+      }
+    },
+    {
+      "t": 5700,
+      "ruta": "footballScan",
+      "params": {
+        "id": "de1a0d45c223820000000000"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "id": "de1a0d45c223820000000000",
+        "kind": "report",
+        "status": "complete",
+        "createdAt": "2026-09-24T17:00:03.000Z",
+        "updatedAt": "2026-09-24T17:00:05.700Z",
+        "total": 1,
+        "checked": 1,
+        "playable": 1,
+        "failed": 0,
+        "waiting": 0,
+        "retryAt": null,
+        "initialCount": 1,
+        "candidates": [
+          {
+            "id": "0feeabf0888811b8dd55c807eef65f8d85fa4cce",
+            "state": "working",
+            "checkedAt": "2026-09-24T17:00:05.700Z",
+            "retryAt": null,
+            "durationMs": 900,
+            "bytes": 180000,
+            "peers": 12,
+            "speedDown": 375,
+            "rateKbps": 4000,
+            "intakeKbps": 3000,
+            "streamKbps": 4000,
+            "reason": "playable_media",
+            "mediaValid": true,
+            "browserCompatible": true,
+            "videoCodec": "h264",
+            "audioCodecs": [
+              "aac"
+            ],
+            "cached": false,
+            "attempts": 1,
+            "playableOn": {
+              "web": true,
+              "ios": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "t": 9000,
+      "ruta": "sourcesReport",
+      "params": {},
+      "query": [],
+      "cuerpo": {
+        "id": "ffffffffffffffffffffffffffffffffffffffff",
+        "reason": "wrong_channel"
+      },
+      "respuesta": {
+        "report": {
+          "reportId": "rep_demo_000000",
+          "id": "ffffffffffffffffffffffffffffffffffffffff",
+          "channel": "",
+          "matchId": "",
+          "reason": "wrong_channel",
+          "state": "checking",
+          "checkReason": "",
+          "reportedAt": "2026-09-24T17:00:09.000Z",
+          "lastCheckedAt": null,
+          "quarantineUntil": "2026-09-24T17:30:09.000Z"
+        },
+        "scan": {
+          "id": "de1a0d45c39a830000000000",
+          "statusUrl": "/api/v1/football/scans/de1a0d45c39a830000000000",
+          "total": 1,
+          "initialCount": 1
+        }
+      }
+    },
+    {
+      "t": 11700,
+      "ruta": "footballScan",
+      "params": {
+        "id": "de1a0d45c39a830000000000"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "id": "de1a0d45c39a830000000000",
+        "kind": "report",
+        "status": "complete",
+        "createdAt": "2026-09-24T17:00:09.000Z",
+        "updatedAt": "2026-09-24T17:00:11.700Z",
+        "total": 1,
+        "checked": 1,
+        "playable": 0,
+        "failed": 1,
+        "waiting": 0,
+        "retryAt": null,
+        "initialCount": 1,
+        "candidates": [
+          {
+            "id": "ffffffffffffffffffffffffffffffffffffffff",
+            "state": "failed",
+            "checkedAt": "2026-09-24T17:00:11.700Z",
+            "retryAt": null,
+            "durationMs": 900,
+            "bytes": 0,
+            "peers": 0,
+            "speedDown": 0,
+            "rateKbps": null,
+            "intakeKbps": null,
+            "streamKbps": 0,
+            "reason": "no_media",
+            "mediaValid": false,
+            "browserCompatible": false,
+            "videoCodec": "",
+            "audioCodecs": [],
+            "cached": false,
+            "attempts": 1,
+            "playableOn": {
+              "web": false,
+              "ios": false
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

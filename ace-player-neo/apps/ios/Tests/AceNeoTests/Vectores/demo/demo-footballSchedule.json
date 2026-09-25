@@ -1,0 +1,1798 @@
+{
+  "aviso": "Generado por apps/ios/scripts/generar-demo.ts ejecutando la demo de la web. No se edita a mano.",
+  "descripcion": "Agenda de muestra en T0, T0 + 5 min y T0 + 2 h (el ancla no se mueve)",
+  "t0": "2026-09-24T17:00:00.000Z",
+  "pasos": [
+    {
+      "t": 0,
+      "ruta": "footballSchedule",
+      "params": {},
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "generatedAt": "2026-09-24T17:00:00.000Z",
+        "timezone": "Europe/Madrid",
+        "country": "España",
+        "source": "demo",
+        "attribution": "Datos de muestra",
+        "demo": true,
+        "limited": false,
+        "partial": false,
+        "days": [
+          {
+            "date": "2026-09-24",
+            "matches": [
+              {
+                "id": "demo-13",
+                "date": "2026-09-24",
+                "time": "15:55",
+                "start": 1790258100000,
+                "title": "Mallorca vs Espanyol",
+                "home": "Mallorca",
+                "away": "Espanyol",
+                "competition": "LaLiga",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-13-0",
+                    "name": "M+ LaLiga"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-mallorca",
+                  "name": "Mallorca",
+                  "short": "MLL",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#e20613",
+                    "secondary": "#1b1b1b"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-espanyol",
+                  "name": "Espanyol",
+                  "short": "ESP",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#007fc8",
+                    "secondary": "#ffffff"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-laliga",
+                  "name": "LaLiga",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-1",
+                "date": "2026-09-24",
+                "time": "17:48",
+                "start": 1790264880000,
+                "title": "FC Barcelona vs Juventus",
+                "home": "FC Barcelona",
+                "away": "Juventus",
+                "competition": "Amistoso",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-1-0",
+                    "name": "DAZN"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-fc-barcelona",
+                  "name": "FC Barcelona",
+                  "short": "BAR",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#a50044",
+                    "secondary": "#004d98"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-juventus",
+                  "name": "Juventus",
+                  "short": "JUV",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#101010",
+                    "secondary": "#ffffff"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-amistoso",
+                  "name": "Amistoso",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-4",
+                "date": "2026-09-24",
+                "time": "18:08",
+                "start": 1790266080000,
+                "title": "Real Sociedad vs Villarreal",
+                "home": "Real Sociedad",
+                "away": "Villarreal",
+                "competition": "LaLiga",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-4-0",
+                    "name": "DAZN LaLiga"
+                  },
+                  {
+                    "id": "demo-channel-demo-4-1",
+                    "name": "M+ LaLiga 2"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-real-sociedad",
+                  "name": "Real Sociedad",
+                  "short": "RSO",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#0067b1",
+                    "secondary": "#ffffff"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-villarreal",
+                  "name": "Villarreal",
+                  "short": "VIL",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#ffe667",
+                    "secondary": "#005187"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-laliga",
+                  "name": "LaLiga",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-12",
+                "date": "2026-09-24",
+                "time": "18:29",
+                "start": 1790267340000,
+                "title": "Girona vs Sevilla",
+                "home": "Girona",
+                "away": "Sevilla",
+                "competition": "LaLiga",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-12-0",
+                    "name": "DAZN 1"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-girona",
+                  "name": "Girona",
+                  "short": "GIR",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#cd2534",
+                    "secondary": "#ffffff"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-sevilla",
+                  "name": "Sevilla",
+                  "short": "SEV",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#d4021d",
+                    "secondary": "#ffffff"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-laliga",
+                  "name": "LaLiga",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-5",
+                "date": "2026-09-24",
+                "time": "19:25",
+                "start": 1790270700000,
+                "title": "Real Madrid vs Manchester City",
+                "home": "Real Madrid",
+                "away": "Manchester City",
+                "competition": "Champions League",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-5-0",
+                    "name": "M+ Liga de Campeones"
+                  },
+                  {
+                    "id": "demo-channel-demo-5-1",
+                    "name": "M+ Liga de Campeones 2"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-real-madrid",
+                  "name": "Real Madrid",
+                  "short": "RMA",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#febe10",
+                    "secondary": "#1a1a5e"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-manchester-city",
+                  "name": "Manchester City",
+                  "short": "MCI",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#6cabdd",
+                    "secondary": "#1c2c5b"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-champions-league",
+                  "name": "Champions League",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-2",
+                "date": "2026-09-24",
+                "time": "19:40",
+                "start": 1790271600000,
+                "title": "Barcelona SC vs Emelec",
+                "home": "Barcelona SC",
+                "away": "Emelec",
+                "competition": "Amistoso",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-2-0",
+                    "name": "Zapping"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-barcelona-sc",
+                  "name": "Barcelona SC",
+                  "short": "BSC",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#f9d616",
+                    "secondary": "#101010"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-emelec",
+                  "name": "Emelec",
+                  "short": "EME",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#0033a0",
+                    "secondary": "#9ea3a8"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-amistoso",
+                  "name": "Amistoso",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-3",
+                "date": "2026-09-24",
+                "time": "21:30",
+                "start": 1790278200000,
+                "title": "España vs Marruecos",
+                "home": "España",
+                "away": "Marruecos",
+                "competition": "Amistoso",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-3-0",
+                    "name": "La 1 HD"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-espana",
+                  "name": "España",
+                  "short": "ESP",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#aa151b",
+                    "secondary": "#f1bf00"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-marruecos",
+                  "name": "Marruecos",
+                  "short": "MAR",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#c1272d",
+                    "secondary": "#006233"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-amistoso",
+                  "name": "Amistoso",
+                  "logo": null
+                }
+              }
+            ]
+          },
+          {
+            "date": "2026-09-25",
+            "matches": [
+              {
+                "id": "demo-6",
+                "date": "2026-09-25",
+                "time": "19:00",
+                "start": 1790355600000,
+                "title": "Real Betis vs Athletic Club",
+                "home": "Real Betis",
+                "away": "Athletic Club",
+                "competition": "LaLiga",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-6-0",
+                    "name": "GOL Play"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-real-betis",
+                  "name": "Real Betis",
+                  "short": "BET",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#00954c",
+                    "secondary": "#ffffff"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-athletic-club",
+                  "name": "Athletic Club",
+                  "short": "ATH",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#ee2523",
+                    "secondary": "#101010"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-laliga",
+                  "name": "LaLiga",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-7",
+                "date": "2026-09-25",
+                "time": "21:30",
+                "start": 1790364600000,
+                "title": "Barcelona vs Atlético de Madrid",
+                "home": "Barcelona",
+                "away": "Atlético de Madrid",
+                "competition": "LaLiga",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-7-0",
+                    "name": "DAZN LaLiga 2"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-fc-barcelona",
+                  "name": "FC Barcelona",
+                  "short": "BAR",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#a50044",
+                    "secondary": "#004d98"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-atletico-de-madrid",
+                  "name": "Atlético de Madrid",
+                  "short": "ATM",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#cb3524",
+                    "secondary": "#272e61"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-laliga",
+                  "name": "LaLiga",
+                  "logo": null
+                }
+              }
+            ]
+          },
+          {
+            "date": "2026-09-26",
+            "matches": [
+              {
+                "id": "demo-8",
+                "date": "2026-09-26",
+                "time": "20:45",
+                "start": 1790448300000,
+                "title": "Inter vs AC Milan",
+                "home": "Inter",
+                "away": "AC Milan",
+                "competition": "Champions League",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-8-0",
+                    "name": "M+ Liga de Campeones"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-inter",
+                  "name": "Inter",
+                  "short": "INT",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#010e80",
+                    "secondary": "#101010"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-ac-milan",
+                  "name": "AC Milan",
+                  "short": "MIL",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#fb090b",
+                    "secondary": "#101010"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-champions-league",
+                  "name": "Champions League",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-9",
+                "date": "2026-09-26",
+                "time": "21:00",
+                "start": 1790449200000,
+                "title": "España vs Portugal",
+                "home": "España",
+                "away": "Portugal",
+                "competition": "Nations League",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-9-0",
+                    "name": "La 1 HD"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-espana",
+                  "name": "España",
+                  "short": "ESP",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#aa151b",
+                    "secondary": "#f1bf00"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-portugal",
+                  "name": "Portugal",
+                  "short": "POR",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#006600",
+                    "secondary": "#ff0000"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-nations-league",
+                  "name": "Nations League",
+                  "logo": null
+                }
+              }
+            ]
+          },
+          {
+            "date": "2026-09-27",
+            "matches": [
+              {
+                "id": "demo-10",
+                "date": "2026-09-27",
+                "time": "18:30",
+                "start": 1790526600000,
+                "title": "Arsenal vs Liverpool",
+                "home": "Arsenal",
+                "away": "Liverpool",
+                "competition": "Premier League",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-10-0",
+                    "name": "DAZN"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-arsenal",
+                  "name": "Arsenal",
+                  "short": "ARS",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#ef0107",
+                    "secondary": "#063672"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-liverpool",
+                  "name": "Liverpool",
+                  "short": "LIV",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#c8102e",
+                    "secondary": "#00b2a9"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-premier-league",
+                  "name": "Premier League",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-11",
+                "date": "2026-09-27",
+                "time": "21:00",
+                "start": 1790535600000,
+                "title": "Sevilla vs Girona",
+                "home": "Sevilla",
+                "away": "Girona",
+                "competition": "LaLiga",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-11-0",
+                    "name": "Amazon Prime Video"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-sevilla",
+                  "name": "Sevilla",
+                  "short": "SEV",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#d4021d",
+                    "secondary": "#ffffff"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-girona",
+                  "name": "Girona",
+                  "short": "GIR",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#cd2534",
+                    "secondary": "#ffffff"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-laliga",
+                  "name": "LaLiga",
+                  "logo": null
+                }
+              }
+            ]
+          },
+          {
+            "date": "2026-09-28",
+            "matches": []
+          }
+        ]
+      }
+    },
+    {
+      "t": 300000,
+      "ruta": "footballSchedule",
+      "params": {},
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "generatedAt": "2026-09-24T17:00:00.000Z",
+        "timezone": "Europe/Madrid",
+        "country": "España",
+        "source": "demo",
+        "attribution": "Datos de muestra",
+        "demo": true,
+        "limited": false,
+        "partial": false,
+        "days": [
+          {
+            "date": "2026-09-24",
+            "matches": [
+              {
+                "id": "demo-13",
+                "date": "2026-09-24",
+                "time": "15:55",
+                "start": 1790258100000,
+                "title": "Mallorca vs Espanyol",
+                "home": "Mallorca",
+                "away": "Espanyol",
+                "competition": "LaLiga",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-13-0",
+                    "name": "M+ LaLiga"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-mallorca",
+                  "name": "Mallorca",
+                  "short": "MLL",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#e20613",
+                    "secondary": "#1b1b1b"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-espanyol",
+                  "name": "Espanyol",
+                  "short": "ESP",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#007fc8",
+                    "secondary": "#ffffff"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-laliga",
+                  "name": "LaLiga",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-1",
+                "date": "2026-09-24",
+                "time": "17:48",
+                "start": 1790264880000,
+                "title": "FC Barcelona vs Juventus",
+                "home": "FC Barcelona",
+                "away": "Juventus",
+                "competition": "Amistoso",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-1-0",
+                    "name": "DAZN"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-fc-barcelona",
+                  "name": "FC Barcelona",
+                  "short": "BAR",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#a50044",
+                    "secondary": "#004d98"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-juventus",
+                  "name": "Juventus",
+                  "short": "JUV",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#101010",
+                    "secondary": "#ffffff"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-amistoso",
+                  "name": "Amistoso",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-4",
+                "date": "2026-09-24",
+                "time": "18:08",
+                "start": 1790266080000,
+                "title": "Real Sociedad vs Villarreal",
+                "home": "Real Sociedad",
+                "away": "Villarreal",
+                "competition": "LaLiga",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-4-0",
+                    "name": "DAZN LaLiga"
+                  },
+                  {
+                    "id": "demo-channel-demo-4-1",
+                    "name": "M+ LaLiga 2"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-real-sociedad",
+                  "name": "Real Sociedad",
+                  "short": "RSO",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#0067b1",
+                    "secondary": "#ffffff"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-villarreal",
+                  "name": "Villarreal",
+                  "short": "VIL",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#ffe667",
+                    "secondary": "#005187"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-laliga",
+                  "name": "LaLiga",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-12",
+                "date": "2026-09-24",
+                "time": "18:29",
+                "start": 1790267340000,
+                "title": "Girona vs Sevilla",
+                "home": "Girona",
+                "away": "Sevilla",
+                "competition": "LaLiga",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-12-0",
+                    "name": "DAZN 1"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-girona",
+                  "name": "Girona",
+                  "short": "GIR",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#cd2534",
+                    "secondary": "#ffffff"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-sevilla",
+                  "name": "Sevilla",
+                  "short": "SEV",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#d4021d",
+                    "secondary": "#ffffff"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-laliga",
+                  "name": "LaLiga",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-5",
+                "date": "2026-09-24",
+                "time": "19:25",
+                "start": 1790270700000,
+                "title": "Real Madrid vs Manchester City",
+                "home": "Real Madrid",
+                "away": "Manchester City",
+                "competition": "Champions League",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-5-0",
+                    "name": "M+ Liga de Campeones"
+                  },
+                  {
+                    "id": "demo-channel-demo-5-1",
+                    "name": "M+ Liga de Campeones 2"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-real-madrid",
+                  "name": "Real Madrid",
+                  "short": "RMA",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#febe10",
+                    "secondary": "#1a1a5e"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-manchester-city",
+                  "name": "Manchester City",
+                  "short": "MCI",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#6cabdd",
+                    "secondary": "#1c2c5b"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-champions-league",
+                  "name": "Champions League",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-2",
+                "date": "2026-09-24",
+                "time": "19:40",
+                "start": 1790271600000,
+                "title": "Barcelona SC vs Emelec",
+                "home": "Barcelona SC",
+                "away": "Emelec",
+                "competition": "Amistoso",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-2-0",
+                    "name": "Zapping"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-barcelona-sc",
+                  "name": "Barcelona SC",
+                  "short": "BSC",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#f9d616",
+                    "secondary": "#101010"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-emelec",
+                  "name": "Emelec",
+                  "short": "EME",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#0033a0",
+                    "secondary": "#9ea3a8"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-amistoso",
+                  "name": "Amistoso",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-3",
+                "date": "2026-09-24",
+                "time": "21:30",
+                "start": 1790278200000,
+                "title": "España vs Marruecos",
+                "home": "España",
+                "away": "Marruecos",
+                "competition": "Amistoso",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-3-0",
+                    "name": "La 1 HD"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-espana",
+                  "name": "España",
+                  "short": "ESP",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#aa151b",
+                    "secondary": "#f1bf00"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-marruecos",
+                  "name": "Marruecos",
+                  "short": "MAR",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#c1272d",
+                    "secondary": "#006233"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-amistoso",
+                  "name": "Amistoso",
+                  "logo": null
+                }
+              }
+            ]
+          },
+          {
+            "date": "2026-09-25",
+            "matches": [
+              {
+                "id": "demo-6",
+                "date": "2026-09-25",
+                "time": "19:00",
+                "start": 1790355600000,
+                "title": "Real Betis vs Athletic Club",
+                "home": "Real Betis",
+                "away": "Athletic Club",
+                "competition": "LaLiga",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-6-0",
+                    "name": "GOL Play"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-real-betis",
+                  "name": "Real Betis",
+                  "short": "BET",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#00954c",
+                    "secondary": "#ffffff"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-athletic-club",
+                  "name": "Athletic Club",
+                  "short": "ATH",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#ee2523",
+                    "secondary": "#101010"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-laliga",
+                  "name": "LaLiga",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-7",
+                "date": "2026-09-25",
+                "time": "21:30",
+                "start": 1790364600000,
+                "title": "Barcelona vs Atlético de Madrid",
+                "home": "Barcelona",
+                "away": "Atlético de Madrid",
+                "competition": "LaLiga",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-7-0",
+                    "name": "DAZN LaLiga 2"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-fc-barcelona",
+                  "name": "FC Barcelona",
+                  "short": "BAR",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#a50044",
+                    "secondary": "#004d98"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-atletico-de-madrid",
+                  "name": "Atlético de Madrid",
+                  "short": "ATM",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#cb3524",
+                    "secondary": "#272e61"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-laliga",
+                  "name": "LaLiga",
+                  "logo": null
+                }
+              }
+            ]
+          },
+          {
+            "date": "2026-09-26",
+            "matches": [
+              {
+                "id": "demo-8",
+                "date": "2026-09-26",
+                "time": "20:45",
+                "start": 1790448300000,
+                "title": "Inter vs AC Milan",
+                "home": "Inter",
+                "away": "AC Milan",
+                "competition": "Champions League",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-8-0",
+                    "name": "M+ Liga de Campeones"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-inter",
+                  "name": "Inter",
+                  "short": "INT",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#010e80",
+                    "secondary": "#101010"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-ac-milan",
+                  "name": "AC Milan",
+                  "short": "MIL",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#fb090b",
+                    "secondary": "#101010"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-champions-league",
+                  "name": "Champions League",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-9",
+                "date": "2026-09-26",
+                "time": "21:00",
+                "start": 1790449200000,
+                "title": "España vs Portugal",
+                "home": "España",
+                "away": "Portugal",
+                "competition": "Nations League",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-9-0",
+                    "name": "La 1 HD"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-espana",
+                  "name": "España",
+                  "short": "ESP",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#aa151b",
+                    "secondary": "#f1bf00"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-portugal",
+                  "name": "Portugal",
+                  "short": "POR",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#006600",
+                    "secondary": "#ff0000"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-nations-league",
+                  "name": "Nations League",
+                  "logo": null
+                }
+              }
+            ]
+          },
+          {
+            "date": "2026-09-27",
+            "matches": [
+              {
+                "id": "demo-10",
+                "date": "2026-09-27",
+                "time": "18:30",
+                "start": 1790526600000,
+                "title": "Arsenal vs Liverpool",
+                "home": "Arsenal",
+                "away": "Liverpool",
+                "competition": "Premier League",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-10-0",
+                    "name": "DAZN"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-arsenal",
+                  "name": "Arsenal",
+                  "short": "ARS",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#ef0107",
+                    "secondary": "#063672"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-liverpool",
+                  "name": "Liverpool",
+                  "short": "LIV",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#c8102e",
+                    "secondary": "#00b2a9"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-premier-league",
+                  "name": "Premier League",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-11",
+                "date": "2026-09-27",
+                "time": "21:00",
+                "start": 1790535600000,
+                "title": "Sevilla vs Girona",
+                "home": "Sevilla",
+                "away": "Girona",
+                "competition": "LaLiga",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-11-0",
+                    "name": "Amazon Prime Video"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-sevilla",
+                  "name": "Sevilla",
+                  "short": "SEV",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#d4021d",
+                    "secondary": "#ffffff"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-girona",
+                  "name": "Girona",
+                  "short": "GIR",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#cd2534",
+                    "secondary": "#ffffff"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-laliga",
+                  "name": "LaLiga",
+                  "logo": null
+                }
+              }
+            ]
+          },
+          {
+            "date": "2026-09-28",
+            "matches": []
+          }
+        ]
+      }
+    },
+    {
+      "t": 7200000,
+      "ruta": "footballSchedule",
+      "params": {},
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "generatedAt": "2026-09-24T17:00:00.000Z",
+        "timezone": "Europe/Madrid",
+        "country": "España",
+        "source": "demo",
+        "attribution": "Datos de muestra",
+        "demo": true,
+        "limited": false,
+        "partial": false,
+        "days": [
+          {
+            "date": "2026-09-24",
+            "matches": [
+              {
+                "id": "demo-13",
+                "date": "2026-09-24",
+                "time": "15:55",
+                "start": 1790258100000,
+                "title": "Mallorca vs Espanyol",
+                "home": "Mallorca",
+                "away": "Espanyol",
+                "competition": "LaLiga",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-13-0",
+                    "name": "M+ LaLiga"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-mallorca",
+                  "name": "Mallorca",
+                  "short": "MLL",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#e20613",
+                    "secondary": "#1b1b1b"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-espanyol",
+                  "name": "Espanyol",
+                  "short": "ESP",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#007fc8",
+                    "secondary": "#ffffff"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-laliga",
+                  "name": "LaLiga",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-1",
+                "date": "2026-09-24",
+                "time": "17:48",
+                "start": 1790264880000,
+                "title": "FC Barcelona vs Juventus",
+                "home": "FC Barcelona",
+                "away": "Juventus",
+                "competition": "Amistoso",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-1-0",
+                    "name": "DAZN"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-fc-barcelona",
+                  "name": "FC Barcelona",
+                  "short": "BAR",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#a50044",
+                    "secondary": "#004d98"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-juventus",
+                  "name": "Juventus",
+                  "short": "JUV",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#101010",
+                    "secondary": "#ffffff"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-amistoso",
+                  "name": "Amistoso",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-4",
+                "date": "2026-09-24",
+                "time": "18:08",
+                "start": 1790266080000,
+                "title": "Real Sociedad vs Villarreal",
+                "home": "Real Sociedad",
+                "away": "Villarreal",
+                "competition": "LaLiga",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-4-0",
+                    "name": "DAZN LaLiga"
+                  },
+                  {
+                    "id": "demo-channel-demo-4-1",
+                    "name": "M+ LaLiga 2"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-real-sociedad",
+                  "name": "Real Sociedad",
+                  "short": "RSO",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#0067b1",
+                    "secondary": "#ffffff"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-villarreal",
+                  "name": "Villarreal",
+                  "short": "VIL",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#ffe667",
+                    "secondary": "#005187"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-laliga",
+                  "name": "LaLiga",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-12",
+                "date": "2026-09-24",
+                "time": "18:29",
+                "start": 1790267340000,
+                "title": "Girona vs Sevilla",
+                "home": "Girona",
+                "away": "Sevilla",
+                "competition": "LaLiga",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-12-0",
+                    "name": "DAZN 1"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-girona",
+                  "name": "Girona",
+                  "short": "GIR",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#cd2534",
+                    "secondary": "#ffffff"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-sevilla",
+                  "name": "Sevilla",
+                  "short": "SEV",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#d4021d",
+                    "secondary": "#ffffff"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-laliga",
+                  "name": "LaLiga",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-5",
+                "date": "2026-09-24",
+                "time": "19:25",
+                "start": 1790270700000,
+                "title": "Real Madrid vs Manchester City",
+                "home": "Real Madrid",
+                "away": "Manchester City",
+                "competition": "Champions League",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-5-0",
+                    "name": "M+ Liga de Campeones"
+                  },
+                  {
+                    "id": "demo-channel-demo-5-1",
+                    "name": "M+ Liga de Campeones 2"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-real-madrid",
+                  "name": "Real Madrid",
+                  "short": "RMA",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#febe10",
+                    "secondary": "#1a1a5e"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-manchester-city",
+                  "name": "Manchester City",
+                  "short": "MCI",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#6cabdd",
+                    "secondary": "#1c2c5b"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-champions-league",
+                  "name": "Champions League",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-2",
+                "date": "2026-09-24",
+                "time": "19:40",
+                "start": 1790271600000,
+                "title": "Barcelona SC vs Emelec",
+                "home": "Barcelona SC",
+                "away": "Emelec",
+                "competition": "Amistoso",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-2-0",
+                    "name": "Zapping"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-barcelona-sc",
+                  "name": "Barcelona SC",
+                  "short": "BSC",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#f9d616",
+                    "secondary": "#101010"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-emelec",
+                  "name": "Emelec",
+                  "short": "EME",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#0033a0",
+                    "secondary": "#9ea3a8"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-amistoso",
+                  "name": "Amistoso",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-3",
+                "date": "2026-09-24",
+                "time": "21:30",
+                "start": 1790278200000,
+                "title": "España vs Marruecos",
+                "home": "España",
+                "away": "Marruecos",
+                "competition": "Amistoso",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-3-0",
+                    "name": "La 1 HD"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-espana",
+                  "name": "España",
+                  "short": "ESP",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#aa151b",
+                    "secondary": "#f1bf00"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-marruecos",
+                  "name": "Marruecos",
+                  "short": "MAR",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#c1272d",
+                    "secondary": "#006233"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-amistoso",
+                  "name": "Amistoso",
+                  "logo": null
+                }
+              }
+            ]
+          },
+          {
+            "date": "2026-09-25",
+            "matches": [
+              {
+                "id": "demo-6",
+                "date": "2026-09-25",
+                "time": "19:00",
+                "start": 1790355600000,
+                "title": "Real Betis vs Athletic Club",
+                "home": "Real Betis",
+                "away": "Athletic Club",
+                "competition": "LaLiga",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-6-0",
+                    "name": "GOL Play"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-real-betis",
+                  "name": "Real Betis",
+                  "short": "BET",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#00954c",
+                    "secondary": "#ffffff"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-athletic-club",
+                  "name": "Athletic Club",
+                  "short": "ATH",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#ee2523",
+                    "secondary": "#101010"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-laliga",
+                  "name": "LaLiga",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-7",
+                "date": "2026-09-25",
+                "time": "21:30",
+                "start": 1790364600000,
+                "title": "Barcelona vs Atlético de Madrid",
+                "home": "Barcelona",
+                "away": "Atlético de Madrid",
+                "competition": "LaLiga",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-7-0",
+                    "name": "DAZN LaLiga 2"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-fc-barcelona",
+                  "name": "FC Barcelona",
+                  "short": "BAR",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#a50044",
+                    "secondary": "#004d98"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-atletico-de-madrid",
+                  "name": "Atlético de Madrid",
+                  "short": "ATM",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#cb3524",
+                    "secondary": "#272e61"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-laliga",
+                  "name": "LaLiga",
+                  "logo": null
+                }
+              }
+            ]
+          },
+          {
+            "date": "2026-09-26",
+            "matches": [
+              {
+                "id": "demo-8",
+                "date": "2026-09-26",
+                "time": "20:45",
+                "start": 1790448300000,
+                "title": "Inter vs AC Milan",
+                "home": "Inter",
+                "away": "AC Milan",
+                "competition": "Champions League",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-8-0",
+                    "name": "M+ Liga de Campeones"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-inter",
+                  "name": "Inter",
+                  "short": "INT",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#010e80",
+                    "secondary": "#101010"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-ac-milan",
+                  "name": "AC Milan",
+                  "short": "MIL",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#fb090b",
+                    "secondary": "#101010"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-champions-league",
+                  "name": "Champions League",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-9",
+                "date": "2026-09-26",
+                "time": "21:00",
+                "start": 1790449200000,
+                "title": "España vs Portugal",
+                "home": "España",
+                "away": "Portugal",
+                "competition": "Nations League",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-9-0",
+                    "name": "La 1 HD"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-espana",
+                  "name": "España",
+                  "short": "ESP",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#aa151b",
+                    "secondary": "#f1bf00"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-portugal",
+                  "name": "Portugal",
+                  "short": "POR",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#006600",
+                    "secondary": "#ff0000"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-nations-league",
+                  "name": "Nations League",
+                  "logo": null
+                }
+              }
+            ]
+          },
+          {
+            "date": "2026-09-27",
+            "matches": [
+              {
+                "id": "demo-10",
+                "date": "2026-09-27",
+                "time": "18:30",
+                "start": 1790526600000,
+                "title": "Arsenal vs Liverpool",
+                "home": "Arsenal",
+                "away": "Liverpool",
+                "competition": "Premier League",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-10-0",
+                    "name": "DAZN"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-arsenal",
+                  "name": "Arsenal",
+                  "short": "ARS",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#ef0107",
+                    "secondary": "#063672"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-liverpool",
+                  "name": "Liverpool",
+                  "short": "LIV",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#c8102e",
+                    "secondary": "#00b2a9"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-premier-league",
+                  "name": "Premier League",
+                  "logo": null
+                }
+              },
+              {
+                "id": "demo-11",
+                "date": "2026-09-27",
+                "time": "21:00",
+                "start": 1790535600000,
+                "title": "Sevilla vs Girona",
+                "home": "Sevilla",
+                "away": "Girona",
+                "competition": "LaLiga",
+                "country": "España",
+                "channels": [
+                  {
+                    "id": "demo-channel-demo-11-0",
+                    "name": "Amazon Prime Video"
+                  }
+                ],
+                "homeTeam": {
+                  "id": "k-sevilla",
+                  "name": "Sevilla",
+                  "short": "SEV",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#d4021d",
+                    "secondary": "#ffffff"
+                  }
+                },
+                "awayTeam": {
+                  "id": "k-girona",
+                  "name": "Girona",
+                  "short": "GIR",
+                  "crest": null,
+                  "colors": {
+                    "primary": "#cd2534",
+                    "secondary": "#ffffff"
+                  }
+                },
+                "competitionBadge": {
+                  "id": "k-laliga",
+                  "name": "LaLiga",
+                  "logo": null
+                }
+              }
+            ]
+          },
+          {
+            "date": "2026-09-28",
+            "matches": []
+          }
+        ]
+      }
+    }
+  ]
+}

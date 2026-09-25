@@ -2,14 +2,10 @@
     import Foundation
     import os
 
-    /// Servidor simulado para las pruebas de interfaz (XCUITest). Solo existe
-    /// en Debug: la IPA (Release) no lo lleva.
-    ///
-    /// Lo usa `ServidorDemo` (provisional de la fase 0.3b) con `-AceNeoDemo` o
-    /// `-AceNeoServidorSimulado`. Responde como un Ace Player Neo con el código
-    /// `482913`, una agenda de hoy, dos fuentes verificadas por partido y una
-    /// biblioteca con un favorito, sin red, sin Llavero y sin tocar lo guardado de
-    /// verdad. M2 lo borra cuando `ServidorDemo` sirva la demo de la web.
+    /// El servidor simulado de la 0.8.0 (otros datos, otro reloj). La app YA NO lo usa: `ServidorDemo`
+    /// sirve la demo de la web (M2). Se queda solo porque lo usan dos pruebas de otros módulos tal como
+    /// están en la rama base: `SesionFuentesTests` (M3: `ServidorSimulado.respuesta`, `fuenteA`/`fuenteB`)
+    /// y `CacheImagenesTests` (M1: `PNGSimulado`). Se borra cuando esas pruebas pasen a `RutasDemo`.
     enum ServidorSimulado {
         static let codigoValido = "482913"
         static let tokenSimulado = "dev_simulado.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"

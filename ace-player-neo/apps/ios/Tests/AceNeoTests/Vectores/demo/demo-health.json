@@ -1,0 +1,169 @@
+{
+  "aviso": "Generado por apps/ios/scripts/generar-demo.ts ejecutando la demo de la web. No se edita a mano.",
+  "descripcion": "Salud de muestra",
+  "t0": "2026-09-24T17:00:00.000Z",
+  "pasos": [
+    {
+      "t": 0,
+      "ruta": "health",
+      "params": {},
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "version": "0.7.0",
+        "checkedAt": "2026-09-24T17:00:00.000Z",
+        "uptimeSeconds": 12300,
+        "components": {
+          "backend": {
+            "status": "ready"
+          },
+          "engine": {
+            "status": "online",
+            "online": true,
+            "since": "2026-09-24T15:25:00.000Z",
+            "checkedAt": "2026-09-24T17:00:00.000Z",
+            "engineVersion": "3.2.3",
+            "autoRestarts": {
+              "lastHour": 0,
+              "max": 3,
+              "nextAllowedAt": null,
+              "exhausted": false
+            }
+          },
+          "scanner": {
+            "status": "ready",
+            "busy": true,
+            "queue": 2,
+            "activeJobs": 1,
+            "cachedSources": 42,
+            "leakedSessionsLastHour": 0
+          },
+          "ai": {
+            "status": "disabled",
+            "model": "embeddinggemma:300m-qat-q4_0"
+          },
+          "agenda": {
+            "status": "ready",
+            "generatedAt": "2026-09-24T17:00:00.000Z",
+            "matches": 38,
+            "preheated": 2
+          },
+          "directories": {
+            "status": "ready",
+            "total": 2,
+            "channels": 61
+          },
+          "state": {
+            "status": "ready",
+            "recoveredFrom": null
+          },
+          "playback": {
+            "sessions": 1,
+            "viewers": 1,
+            "remuxSessions": 0
+          },
+          "events": {
+            "connections": 2
+          }
+        },
+        "reports": {
+          "total": 3,
+          "quarantined": 1,
+          "learningCount": 4
+        },
+        "diagnostics": {
+          "counts24h": {
+            "engine": 1,
+            "source": 3,
+            "network": 1,
+            "codec": 1,
+            "client": 2,
+            "state": 0
+          }
+        },
+        "warnings": []
+      }
+    },
+    {
+      "t": 7200000,
+      "ruta": "health",
+      "params": {},
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "version": "0.7.0",
+        "checkedAt": "2026-09-24T19:00:00.000Z",
+        "uptimeSeconds": 12300,
+        "components": {
+          "backend": {
+            "status": "ready"
+          },
+          "engine": {
+            "status": "online",
+            "online": true,
+            "since": "2026-09-24T17:25:00.000Z",
+            "checkedAt": "2026-09-24T19:00:00.000Z",
+            "engineVersion": "3.2.3",
+            "autoRestarts": {
+              "lastHour": 0,
+              "max": 3,
+              "nextAllowedAt": null,
+              "exhausted": false
+            }
+          },
+          "scanner": {
+            "status": "ready",
+            "busy": true,
+            "queue": 2,
+            "activeJobs": 1,
+            "cachedSources": 42,
+            "leakedSessionsLastHour": 0
+          },
+          "ai": {
+            "status": "disabled",
+            "model": "embeddinggemma:300m-qat-q4_0"
+          },
+          "agenda": {
+            "status": "ready",
+            "generatedAt": "2026-09-24T19:00:00.000Z",
+            "matches": 38,
+            "preheated": 2
+          },
+          "directories": {
+            "status": "ready",
+            "total": 2,
+            "channels": 61
+          },
+          "state": {
+            "status": "ready",
+            "recoveredFrom": null
+          },
+          "playback": {
+            "sessions": 1,
+            "viewers": 1,
+            "remuxSessions": 0
+          },
+          "events": {
+            "connections": 2
+          }
+        },
+        "reports": {
+          "total": 3,
+          "quarantined": 1,
+          "learningCount": 4
+        },
+        "diagnostics": {
+          "counts24h": {
+            "engine": 1,
+            "source": 3,
+            "network": 1,
+            "codec": 1,
+            "client": 2,
+            "state": 0
+          }
+        },
+        "warnings": []
+      }
+    }
+  ]
+}

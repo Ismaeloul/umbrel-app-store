@@ -1,0 +1,1312 @@
+{
+  "aviso": "Generado por apps/ios/scripts/generar-demo.ts ejecutando la demo de la web. No se edita a mano.",
+  "descripcion": "Resolución de cada guion (y «Rebuscar», y un canal suelto)",
+  "t0": "2026-09-24T17:00:00.000Z",
+  "pasos": [
+    {
+      "t": 0,
+      "ruta": "footballResolve",
+      "params": {},
+      "query": [
+        [
+          "match",
+          "demo-1"
+        ],
+        [
+          "channel",
+          "DAZN"
+        ],
+        [
+          "channel",
+          "Otro"
+        ]
+      ],
+      "cuerpo": null,
+      "respuesta": {
+        "status": "found",
+        "channels": [
+          "DAZN",
+          "Otro"
+        ],
+        "checked": [
+          "saved",
+          "m3u",
+          "favorites",
+          "history",
+          "acestream"
+        ],
+        "candidates": [
+          {
+            "id": "0feeabf0888811b8dd55c807eef65f8d85fa4cce",
+            "title": "DAZN --> Elcano",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 100,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "0b4d17a79e8dcc1bc6d94c1c040dcd910a49da8e",
+            "title": "DAZN --> Faro",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 99,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "e450210aee5337729f1b56ac4c1b252b3f747ff4",
+            "title": "DAZN --> Norte",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 98,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": 0.4,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "e0885d7d8fd6952ef31c09773468ddaed47c4240",
+            "title": "DAZN --> Vega",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 97,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "affb6793a225a4f7c1d2baea4779840d88fbe1d1",
+            "title": "DAZN --> Tarifa",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 96,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "da287e2b6843ef7da024f0cbf98c7575937f3264",
+            "title": "DAZN --> Sur",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 95,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          }
+        ],
+        "engineAvailable": true,
+        "ai": {
+          "enabled": false,
+          "used": false,
+          "model": null,
+          "catalogSize": 0,
+          "error": null
+        },
+        "program": null,
+        "research": false,
+        "preheat": null,
+        "scan": {
+          "id": "de1a0d45c168010000000000",
+          "statusUrl": "/api/v1/football/scans/de1a0d45c168010000000000",
+          "total": 6,
+          "initialCount": 3
+        },
+        "candidate": {
+          "id": "0feeabf0888811b8dd55c807eef65f8d85fa4cce",
+          "title": "DAZN --> Elcano",
+          "alias": null,
+          "ih": false,
+          "source": "m3u",
+          "score": 100,
+          "matchedChannel": "DAZN",
+          "soloFamilia": false,
+          "familyFallbackAllowed": false,
+          "listaId": "principal",
+          "availability": null,
+          "bitrate": null,
+          "learned": null,
+          "reported": null,
+          "rejectedByLearning": false,
+          "quarantined": false
+        }
+      }
+    },
+    {
+      "t": 1,
+      "ruta": "footballResolve",
+      "params": {},
+      "query": [
+        [
+          "match",
+          "demo-4"
+        ],
+        [
+          "channel",
+          "DAZN"
+        ],
+        [
+          "channel",
+          "Otro"
+        ]
+      ],
+      "cuerpo": null,
+      "respuesta": {
+        "status": "found",
+        "channels": [
+          "DAZN",
+          "Otro"
+        ],
+        "checked": [
+          "saved",
+          "m3u",
+          "favorites",
+          "history",
+          "acestream"
+        ],
+        "candidates": [
+          {
+            "id": "2d0fe07ff10d771fa239a5e846193bea4ded2058",
+            "title": "DAZN --> Alba",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 100,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "913265da6ca028de5ec05c63fccece65854de064",
+            "title": "DAZN --> Brisa",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 99,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "08cd9e42dbb5fbc0fd74fd6639d98d4a0669e732",
+            "title": "DAZN --> Cierzo",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 98,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": 0.4,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "1b531d5e67e4c5621657a206a0f572addaba6a5d",
+            "title": "DAZN --> Duna",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 97,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "c45f4c7797e6e97f13ecaf7b4672033ac4bd4630",
+            "title": "DAZN --> Estela",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 96,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          }
+        ],
+        "engineAvailable": true,
+        "ai": {
+          "enabled": false,
+          "used": false,
+          "model": null,
+          "catalogSize": 0,
+          "error": null
+        },
+        "program": null,
+        "research": false,
+        "preheat": null,
+        "scan": {
+          "id": "de1a0d45c168120000000000",
+          "statusUrl": "/api/v1/football/scans/de1a0d45c168120000000000",
+          "total": 5,
+          "initialCount": 3
+        },
+        "candidate": {
+          "id": "2d0fe07ff10d771fa239a5e846193bea4ded2058",
+          "title": "DAZN --> Alba",
+          "alias": null,
+          "ih": false,
+          "source": "m3u",
+          "score": 100,
+          "matchedChannel": "DAZN",
+          "soloFamilia": false,
+          "familyFallbackAllowed": false,
+          "listaId": "principal",
+          "availability": null,
+          "bitrate": null,
+          "learned": null,
+          "reported": null,
+          "rejectedByLearning": false,
+          "quarantined": false
+        }
+      }
+    },
+    {
+      "t": 2,
+      "ruta": "footballResolve",
+      "params": {},
+      "query": [
+        [
+          "match",
+          "demo-12"
+        ],
+        [
+          "channel",
+          "DAZN"
+        ],
+        [
+          "channel",
+          "Otro"
+        ]
+      ],
+      "cuerpo": null,
+      "respuesta": {
+        "status": "found",
+        "channels": [
+          "DAZN",
+          "Otro"
+        ],
+        "checked": [
+          "saved",
+          "m3u",
+          "favorites",
+          "history",
+          "acestream"
+        ],
+        "candidates": [
+          {
+            "id": "a77cefba6bfded1f1d92a0307b041bbaf617d7e3",
+            "title": "DAZN --> Orión",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 100,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "2454e265bb1bd349ef20edf0a14c035f05d98a4c",
+            "title": "DAZN --> Lira",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 99,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "b59c9e03edc1488d5ec1d645e521cc61491dc4d7",
+            "title": "DAZN --> Vela",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 98,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "d2a42df4b44a49595143eac9af4144447ef973a0",
+            "title": "DAZN --> Hidra",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 97,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          }
+        ],
+        "engineAvailable": true,
+        "ai": {
+          "enabled": false,
+          "used": false,
+          "model": null,
+          "catalogSize": 0,
+          "error": null
+        },
+        "program": null,
+        "research": false,
+        "preheat": null,
+        "scan": {
+          "id": "de1a0d45c168230000000000",
+          "statusUrl": "/api/v1/football/scans/de1a0d45c168230000000000",
+          "total": 4,
+          "initialCount": 3
+        },
+        "candidate": {
+          "id": "a77cefba6bfded1f1d92a0307b041bbaf617d7e3",
+          "title": "DAZN --> Orión",
+          "alias": null,
+          "ih": false,
+          "source": "m3u",
+          "score": 100,
+          "matchedChannel": "DAZN",
+          "soloFamilia": false,
+          "familyFallbackAllowed": false,
+          "listaId": "principal",
+          "availability": null,
+          "bitrate": null,
+          "learned": null,
+          "reported": null,
+          "rejectedByLearning": false,
+          "quarantined": false
+        }
+      }
+    },
+    {
+      "t": 3,
+      "ruta": "footballResolve",
+      "params": {},
+      "query": [
+        [
+          "match",
+          "demo-2"
+        ],
+        [
+          "channel",
+          "DAZN"
+        ],
+        [
+          "channel",
+          "Otro"
+        ]
+      ],
+      "cuerpo": null,
+      "respuesta": {
+        "status": "choices",
+        "channels": [
+          "DAZN",
+          "Otro"
+        ],
+        "checked": [
+          "saved",
+          "m3u",
+          "favorites",
+          "history",
+          "acestream"
+        ],
+        "candidates": [
+          {
+            "id": "627047d13bc0001443912355988da5a8ab2ec534",
+            "title": "DAZN --> Zapping HD",
+            "alias": null,
+            "ih": true,
+            "source": "acestream",
+            "score": 100,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": null,
+            "availability": 0.91,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "81d4faaaceb708aadbe9b01b50be7b2e64a56ca3",
+            "title": "DAZN --> Zapping 2",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 99,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": 0.4,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          }
+        ],
+        "engineAvailable": true,
+        "ai": {
+          "enabled": false,
+          "used": false,
+          "model": null,
+          "catalogSize": 0,
+          "error": null
+        },
+        "program": null,
+        "research": false,
+        "preheat": null,
+        "scan": null,
+        "candidate": null
+      }
+    },
+    {
+      "t": 4,
+      "ruta": "footballResolve",
+      "params": {},
+      "query": [
+        [
+          "match",
+          "demo-3"
+        ],
+        [
+          "channel",
+          "DAZN"
+        ],
+        [
+          "channel",
+          "Otro"
+        ]
+      ],
+      "cuerpo": null,
+      "respuesta": {
+        "status": "not_found",
+        "channels": [
+          "DAZN",
+          "Otro"
+        ],
+        "checked": [
+          "saved",
+          "m3u",
+          "favorites",
+          "history",
+          "acestream"
+        ],
+        "candidates": [],
+        "engineAvailable": true,
+        "ai": {
+          "enabled": false,
+          "used": false,
+          "model": null,
+          "catalogSize": 0,
+          "error": null
+        },
+        "program": null,
+        "research": false,
+        "preheat": null,
+        "scan": null,
+        "candidate": null
+      }
+    },
+    {
+      "t": 5,
+      "ruta": "footballResolve",
+      "params": {},
+      "query": [
+        [
+          "match",
+          "demo-6"
+        ],
+        [
+          "channel",
+          "DAZN"
+        ],
+        [
+          "channel",
+          "Otro"
+        ]
+      ],
+      "cuerpo": null,
+      "respuesta": {
+        "status": "found",
+        "channels": [
+          "DAZN",
+          "Otro"
+        ],
+        "checked": [
+          "saved",
+          "m3u",
+          "favorites",
+          "history",
+          "acestream"
+        ],
+        "candidates": [
+          {
+            "id": "b5a0b509c33955a9d80c2c8fee21aa61b6d11d37",
+            "title": "DAZN --> Atlas",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 100,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "d9eb1030c644f506446737f4f1a531b8a5d15451",
+            "title": "DAZN --> Boreal",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 99,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": 0.4,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "7d947ddab7c7dd6dc121305802623a6de0d8a7ba",
+            "title": "DAZN --> Cénit",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 98,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          }
+        ],
+        "engineAvailable": true,
+        "ai": {
+          "enabled": false,
+          "used": false,
+          "model": null,
+          "catalogSize": 0,
+          "error": null
+        },
+        "program": null,
+        "research": false,
+        "preheat": null,
+        "scan": {
+          "id": "de1a0d45c168540000000000",
+          "statusUrl": "/api/v1/football/scans/de1a0d45c168540000000000",
+          "total": 3,
+          "initialCount": 3
+        },
+        "candidate": {
+          "id": "b5a0b509c33955a9d80c2c8fee21aa61b6d11d37",
+          "title": "DAZN --> Atlas",
+          "alias": null,
+          "ih": false,
+          "source": "m3u",
+          "score": 100,
+          "matchedChannel": "DAZN",
+          "soloFamilia": false,
+          "familyFallbackAllowed": false,
+          "listaId": "principal",
+          "availability": null,
+          "bitrate": null,
+          "learned": null,
+          "reported": null,
+          "rejectedByLearning": false,
+          "quarantined": false
+        }
+      }
+    },
+    {
+      "t": 6,
+      "ruta": "footballResolve",
+      "params": {},
+      "query": [
+        [
+          "match",
+          "demo-13"
+        ],
+        [
+          "channel",
+          "DAZN"
+        ],
+        [
+          "channel",
+          "Otro"
+        ]
+      ],
+      "cuerpo": null,
+      "respuesta": {
+        "status": "found",
+        "channels": [
+          "DAZN",
+          "Otro"
+        ],
+        "checked": [
+          "saved",
+          "m3u",
+          "favorites",
+          "history",
+          "acestream"
+        ],
+        "candidates": [
+          {
+            "id": "563060e11fa1d3179da71f36b67de2d64ec3df65",
+            "title": "DAZN --> Atlas",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 100,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "c61fbda904fa2afc7514cfee71c64adaab378414",
+            "title": "DAZN --> Boreal",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 99,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": 0.4,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "30d4bfbf434289ee5d975af16fed13357cf16bf0",
+            "title": "DAZN --> Cénit",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 98,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          }
+        ],
+        "engineAvailable": true,
+        "ai": {
+          "enabled": false,
+          "used": false,
+          "model": null,
+          "catalogSize": 0,
+          "error": null
+        },
+        "program": null,
+        "research": false,
+        "preheat": null,
+        "scan": {
+          "id": "de1a0d45c168650000000000",
+          "statusUrl": "/api/v1/football/scans/de1a0d45c168650000000000",
+          "total": 3,
+          "initialCount": 3
+        },
+        "candidate": {
+          "id": "563060e11fa1d3179da71f36b67de2d64ec3df65",
+          "title": "DAZN --> Atlas",
+          "alias": null,
+          "ih": false,
+          "source": "m3u",
+          "score": 100,
+          "matchedChannel": "DAZN",
+          "soloFamilia": false,
+          "familyFallbackAllowed": false,
+          "listaId": "principal",
+          "availability": null,
+          "bitrate": null,
+          "learned": null,
+          "reported": null,
+          "rejectedByLearning": false,
+          "quarantined": false
+        }
+      }
+    },
+    {
+      "t": 10,
+      "ruta": "footballResolve",
+      "params": {},
+      "query": [
+        [
+          "match",
+          "demo-1"
+        ],
+        [
+          "channel",
+          "DAZN"
+        ],
+        [
+          "research",
+          "1"
+        ]
+      ],
+      "cuerpo": null,
+      "respuesta": {
+        "status": "found",
+        "channels": [
+          "DAZN"
+        ],
+        "checked": [
+          "saved",
+          "m3u",
+          "favorites",
+          "history",
+          "acestream"
+        ],
+        "candidates": [
+          {
+            "id": "0feeabf0888811b8dd55c807eef65f8d85fa4cce",
+            "title": "DAZN --> Elcano",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 100,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "0b4d17a79e8dcc1bc6d94c1c040dcd910a49da8e",
+            "title": "DAZN --> Faro",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 99,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "e450210aee5337729f1b56ac4c1b252b3f747ff4",
+            "title": "DAZN --> Norte",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 98,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": 0.4,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "e0885d7d8fd6952ef31c09773468ddaed47c4240",
+            "title": "DAZN --> Vega",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 97,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "affb6793a225a4f7c1d2baea4779840d88fbe1d1",
+            "title": "DAZN --> Tarifa",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 96,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "da287e2b6843ef7da024f0cbf98c7575937f3264",
+            "title": "DAZN --> Sur",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 95,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "5b1f762a0e97f427f27ee9eec724f7af63f653a7",
+            "title": "DAZN --> Poniente",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 94,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "f0cfcb6d3def983c13e79648c4f23d3fe9e60e35",
+            "title": "DAZN --> Levante",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 93,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          }
+        ],
+        "engineAvailable": true,
+        "ai": {
+          "enabled": false,
+          "used": false,
+          "model": null,
+          "catalogSize": 0,
+          "error": null
+        },
+        "program": null,
+        "research": true,
+        "preheat": null,
+        "scan": {
+          "id": "de1a0d45c168a60000000000",
+          "statusUrl": "/api/v1/football/scans/de1a0d45c168a60000000000",
+          "total": 8,
+          "initialCount": 3
+        },
+        "candidate": {
+          "id": "0feeabf0888811b8dd55c807eef65f8d85fa4cce",
+          "title": "DAZN --> Elcano",
+          "alias": null,
+          "ih": false,
+          "source": "m3u",
+          "score": 100,
+          "matchedChannel": "DAZN",
+          "soloFamilia": false,
+          "familyFallbackAllowed": false,
+          "listaId": "principal",
+          "availability": null,
+          "bitrate": null,
+          "learned": null,
+          "reported": null,
+          "rejectedByLearning": false,
+          "quarantined": false
+        }
+      }
+    },
+    {
+      "t": 11,
+      "ruta": "footballResolve",
+      "params": {},
+      "query": [
+        [
+          "channel",
+          "DAZN 1"
+        ]
+      ],
+      "cuerpo": null,
+      "respuesta": {
+        "status": "found",
+        "channels": [
+          "DAZN 1"
+        ],
+        "checked": [
+          "saved",
+          "m3u",
+          "favorites",
+          "history",
+          "acestream"
+        ],
+        "candidates": [
+          {
+            "id": "e76eeb747a0eb8f40f1da1fcdf6df1cd4bd84d87",
+            "title": "DAZN 1 --> Atlas",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 100,
+            "matchedChannel": "DAZN 1",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "3f6af9b16bc1da7f414c5538b68d296d67b0971d",
+            "title": "DAZN 1 --> Boreal",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 99,
+            "matchedChannel": "DAZN 1",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": 0.4,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "7ad0e528a8cf145202eb5f7049a815b228d0779d",
+            "title": "DAZN 1 --> Cénit",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 98,
+            "matchedChannel": "DAZN 1",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          }
+        ],
+        "engineAvailable": true,
+        "ai": {
+          "enabled": false,
+          "used": false,
+          "model": null,
+          "catalogSize": 0,
+          "error": null
+        },
+        "program": null,
+        "research": false,
+        "preheat": null,
+        "scan": {
+          "id": "de1a0d45c168b70000000000",
+          "statusUrl": "/api/v1/football/scans/de1a0d45c168b70000000000",
+          "total": 3,
+          "initialCount": 3
+        },
+        "candidate": {
+          "id": "e76eeb747a0eb8f40f1da1fcdf6df1cd4bd84d87",
+          "title": "DAZN 1 --> Atlas",
+          "alias": null,
+          "ih": false,
+          "source": "m3u",
+          "score": 100,
+          "matchedChannel": "DAZN 1",
+          "soloFamilia": false,
+          "familyFallbackAllowed": false,
+          "listaId": "principal",
+          "availability": null,
+          "bitrate": null,
+          "learned": null,
+          "reported": null,
+          "rejectedByLearning": false,
+          "quarantined": false
+        }
+      }
+    },
+    {
+      "t": 12,
+      "ruta": "footballResolve",
+      "params": {},
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "status": "found",
+        "channels": [],
+        "checked": [
+          "saved",
+          "m3u",
+          "favorites",
+          "history",
+          "acestream"
+        ],
+        "candidates": [
+          {
+            "id": "4bbb98d22c9954c2c623ef82c1adbf0bbfd0618d",
+            "title": "Canal --> Atlas",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 100,
+            "matchedChannel": "Canal",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "2cececa89e4f36946b2cd19ad2e2cbb5f911e19f",
+            "title": "Canal --> Boreal",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 99,
+            "matchedChannel": "Canal",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": 0.4,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "a00b099be63929e7a3b0a4c55223b571b53d61d7",
+            "title": "Canal --> Cénit",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 98,
+            "matchedChannel": "Canal",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          }
+        ],
+        "engineAvailable": true,
+        "ai": {
+          "enabled": false,
+          "used": false,
+          "model": null,
+          "catalogSize": 0,
+          "error": null
+        },
+        "program": null,
+        "research": false,
+        "preheat": null,
+        "scan": {
+          "id": "de1a0d45c168c80000000000",
+          "statusUrl": "/api/v1/football/scans/de1a0d45c168c80000000000",
+          "total": 3,
+          "initialCount": 3
+        },
+        "candidate": {
+          "id": "4bbb98d22c9954c2c623ef82c1adbf0bbfd0618d",
+          "title": "Canal --> Atlas",
+          "alias": null,
+          "ih": false,
+          "source": "m3u",
+          "score": 100,
+          "matchedChannel": "Canal",
+          "soloFamilia": false,
+          "familyFallbackAllowed": false,
+          "listaId": "principal",
+          "availability": null,
+          "bitrate": null,
+          "learned": null,
+          "reported": null,
+          "rejectedByLearning": false,
+          "quarantined": false
+        }
+      }
+    }
+  ]
+}

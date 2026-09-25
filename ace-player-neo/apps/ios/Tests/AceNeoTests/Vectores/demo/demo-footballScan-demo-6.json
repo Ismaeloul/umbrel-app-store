@@ -1,0 +1,1000 @@
+{
+  "aviso": "Generado por apps/ios/scripts/generar-demo.ts ejecutando la demo de la web. No se edita a mano.",
+  "descripcion": "Comprobador de demo-6 paso a paso (1 350 ms por paso)",
+  "t0": "2026-09-24T17:00:00.000Z",
+  "pasos": [
+    {
+      "t": 0,
+      "ruta": "footballResolve",
+      "params": {},
+      "query": [
+        [
+          "match",
+          "demo-6"
+        ],
+        [
+          "channel",
+          "DAZN"
+        ]
+      ],
+      "cuerpo": null,
+      "respuesta": {
+        "status": "found",
+        "channels": [
+          "DAZN"
+        ],
+        "checked": [
+          "saved",
+          "m3u",
+          "favorites",
+          "history",
+          "acestream"
+        ],
+        "candidates": [
+          {
+            "id": "b5a0b509c33955a9d80c2c8fee21aa61b6d11d37",
+            "title": "DAZN --> Atlas",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 100,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "d9eb1030c644f506446737f4f1a531b8a5d15451",
+            "title": "DAZN --> Boreal",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 99,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": 0.4,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          },
+          {
+            "id": "7d947ddab7c7dd6dc121305802623a6de0d8a7ba",
+            "title": "DAZN --> Cénit",
+            "alias": null,
+            "ih": false,
+            "source": "m3u",
+            "score": 98,
+            "matchedChannel": "DAZN",
+            "soloFamilia": false,
+            "familyFallbackAllowed": false,
+            "listaId": "principal",
+            "availability": null,
+            "bitrate": null,
+            "learned": null,
+            "reported": null,
+            "rejectedByLearning": false,
+            "quarantined": false
+          }
+        ],
+        "engineAvailable": true,
+        "ai": {
+          "enabled": false,
+          "used": false,
+          "model": null,
+          "catalogSize": 0,
+          "error": null
+        },
+        "program": null,
+        "research": false,
+        "preheat": null,
+        "scan": {
+          "id": "de1a0d45c168010000000000",
+          "statusUrl": "/api/v1/football/scans/de1a0d45c168010000000000",
+          "total": 3,
+          "initialCount": 3
+        },
+        "candidate": {
+          "id": "b5a0b509c33955a9d80c2c8fee21aa61b6d11d37",
+          "title": "DAZN --> Atlas",
+          "alias": null,
+          "ih": false,
+          "source": "m3u",
+          "score": 100,
+          "matchedChannel": "DAZN",
+          "soloFamilia": false,
+          "familyFallbackAllowed": false,
+          "listaId": "principal",
+          "availability": null,
+          "bitrate": null,
+          "learned": null,
+          "reported": null,
+          "rejectedByLearning": false,
+          "quarantined": false
+        }
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "footballScan",
+      "params": {
+        "id": "de1a0d45c168010000000000"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "id": "de1a0d45c168010000000000",
+        "kind": "interactive",
+        "status": "running",
+        "createdAt": "2026-09-24T17:00:00.000Z",
+        "updatedAt": "2026-09-24T17:00:00.000Z",
+        "total": 3,
+        "checked": 0,
+        "playable": 0,
+        "failed": 0,
+        "waiting": 0,
+        "retryAt": null,
+        "initialCount": 3,
+        "candidates": [
+          {
+            "id": "b5a0b509c33955a9d80c2c8fee21aa61b6d11d37",
+            "state": "checking",
+            "checkedAt": null,
+            "retryAt": null,
+            "durationMs": 0,
+            "bytes": 0,
+            "peers": 0,
+            "speedDown": 0,
+            "rateKbps": null,
+            "intakeKbps": null,
+            "streamKbps": 0,
+            "reason": "",
+            "mediaValid": false,
+            "browserCompatible": false,
+            "videoCodec": "",
+            "audioCodecs": [],
+            "cached": false,
+            "attempts": 0
+          },
+          {
+            "id": "d9eb1030c644f506446737f4f1a531b8a5d15451",
+            "state": "checking",
+            "checkedAt": null,
+            "retryAt": null,
+            "durationMs": 0,
+            "bytes": 0,
+            "peers": 0,
+            "speedDown": 0,
+            "rateKbps": null,
+            "intakeKbps": null,
+            "streamKbps": 0,
+            "reason": "",
+            "mediaValid": false,
+            "browserCompatible": false,
+            "videoCodec": "",
+            "audioCodecs": [],
+            "cached": false,
+            "attempts": 0
+          },
+          {
+            "id": "7d947ddab7c7dd6dc121305802623a6de0d8a7ba",
+            "state": "queued",
+            "checkedAt": null,
+            "retryAt": null,
+            "durationMs": 0,
+            "bytes": 0,
+            "peers": 0,
+            "speedDown": 0,
+            "rateKbps": null,
+            "intakeKbps": null,
+            "streamKbps": 0,
+            "reason": "",
+            "mediaValid": false,
+            "browserCompatible": false,
+            "videoCodec": "",
+            "audioCodecs": [],
+            "cached": false,
+            "attempts": 0
+          }
+        ]
+      }
+    },
+    {
+      "t": 1350,
+      "ruta": "footballScan",
+      "params": {
+        "id": "de1a0d45c168010000000000"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "id": "de1a0d45c168010000000000",
+        "kind": "interactive",
+        "status": "running",
+        "createdAt": "2026-09-24T17:00:00.000Z",
+        "updatedAt": "2026-09-24T17:00:01.350Z",
+        "total": 3,
+        "checked": 0,
+        "playable": 0,
+        "failed": 0,
+        "waiting": 0,
+        "retryAt": null,
+        "initialCount": 3,
+        "candidates": [
+          {
+            "id": "b5a0b509c33955a9d80c2c8fee21aa61b6d11d37",
+            "state": "checking",
+            "checkedAt": null,
+            "retryAt": null,
+            "durationMs": 0,
+            "bytes": 0,
+            "peers": 0,
+            "speedDown": 0,
+            "rateKbps": null,
+            "intakeKbps": null,
+            "streamKbps": 0,
+            "reason": "",
+            "mediaValid": false,
+            "browserCompatible": false,
+            "videoCodec": "",
+            "audioCodecs": [],
+            "cached": false,
+            "attempts": 0
+          },
+          {
+            "id": "d9eb1030c644f506446737f4f1a531b8a5d15451",
+            "state": "checking",
+            "checkedAt": null,
+            "retryAt": null,
+            "durationMs": 0,
+            "bytes": 0,
+            "peers": 0,
+            "speedDown": 0,
+            "rateKbps": null,
+            "intakeKbps": null,
+            "streamKbps": 0,
+            "reason": "",
+            "mediaValid": false,
+            "browserCompatible": false,
+            "videoCodec": "",
+            "audioCodecs": [],
+            "cached": false,
+            "attempts": 0
+          },
+          {
+            "id": "7d947ddab7c7dd6dc121305802623a6de0d8a7ba",
+            "state": "checking",
+            "checkedAt": null,
+            "retryAt": null,
+            "durationMs": 0,
+            "bytes": 0,
+            "peers": 0,
+            "speedDown": 0,
+            "rateKbps": null,
+            "intakeKbps": null,
+            "streamKbps": 0,
+            "reason": "",
+            "mediaValid": false,
+            "browserCompatible": false,
+            "videoCodec": "",
+            "audioCodecs": [],
+            "cached": false,
+            "attempts": 0
+          }
+        ]
+      }
+    },
+    {
+      "t": 2700,
+      "ruta": "footballScan",
+      "params": {
+        "id": "de1a0d45c168010000000000"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "id": "de1a0d45c168010000000000",
+        "kind": "interactive",
+        "status": "running",
+        "createdAt": "2026-09-24T17:00:00.000Z",
+        "updatedAt": "2026-09-24T17:00:02.700Z",
+        "total": 3,
+        "checked": 2,
+        "playable": 2,
+        "failed": 0,
+        "waiting": 0,
+        "retryAt": null,
+        "initialCount": 3,
+        "candidates": [
+          {
+            "id": "b5a0b509c33955a9d80c2c8fee21aa61b6d11d37",
+            "state": "working",
+            "checkedAt": "2026-09-24T17:00:02.700Z",
+            "retryAt": null,
+            "durationMs": 900,
+            "bytes": 180000,
+            "peers": 27,
+            "speedDown": 675,
+            "rateKbps": 4600,
+            "intakeKbps": 5400,
+            "streamKbps": 4600,
+            "reason": "playable_media",
+            "mediaValid": true,
+            "browserCompatible": true,
+            "videoCodec": "h264",
+            "audioCodecs": [
+              "aac"
+            ],
+            "cached": false,
+            "attempts": 1,
+            "playableOn": {
+              "web": true,
+              "ios": true
+            }
+          },
+          {
+            "id": "d9eb1030c644f506446737f4f1a531b8a5d15451",
+            "state": "weak",
+            "checkedAt": "2026-09-24T17:00:02.700Z",
+            "retryAt": null,
+            "durationMs": 1530,
+            "bytes": 180000,
+            "peers": 7,
+            "speedDown": 300,
+            "rateKbps": 4600,
+            "intakeKbps": 2400,
+            "streamKbps": 4600,
+            "reason": "starved",
+            "mediaValid": true,
+            "browserCompatible": true,
+            "videoCodec": "h264",
+            "audioCodecs": [
+              "aac"
+            ],
+            "cached": false,
+            "attempts": 1,
+            "playableOn": {
+              "web": true,
+              "ios": true
+            }
+          },
+          {
+            "id": "7d947ddab7c7dd6dc121305802623a6de0d8a7ba",
+            "state": "checking",
+            "checkedAt": null,
+            "retryAt": null,
+            "durationMs": 0,
+            "bytes": 0,
+            "peers": 0,
+            "speedDown": 0,
+            "rateKbps": null,
+            "intakeKbps": null,
+            "streamKbps": 0,
+            "reason": "",
+            "mediaValid": false,
+            "browserCompatible": false,
+            "videoCodec": "",
+            "audioCodecs": [],
+            "cached": false,
+            "attempts": 0
+          }
+        ]
+      }
+    },
+    {
+      "t": 4050,
+      "ruta": "footballScan",
+      "params": {
+        "id": "de1a0d45c168010000000000"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "id": "de1a0d45c168010000000000",
+        "kind": "interactive",
+        "status": "complete",
+        "createdAt": "2026-09-24T17:00:00.000Z",
+        "updatedAt": "2026-09-24T17:00:04.050Z",
+        "total": 3,
+        "checked": 3,
+        "playable": 2,
+        "failed": 1,
+        "waiting": 0,
+        "retryAt": null,
+        "initialCount": 3,
+        "candidates": [
+          {
+            "id": "b5a0b509c33955a9d80c2c8fee21aa61b6d11d37",
+            "state": "working",
+            "checkedAt": "2026-09-24T17:00:04.050Z",
+            "retryAt": null,
+            "durationMs": 900,
+            "bytes": 180000,
+            "peers": 27,
+            "speedDown": 675,
+            "rateKbps": 4600,
+            "intakeKbps": 5400,
+            "streamKbps": 4600,
+            "reason": "playable_media",
+            "mediaValid": true,
+            "browserCompatible": true,
+            "videoCodec": "h264",
+            "audioCodecs": [
+              "aac"
+            ],
+            "cached": false,
+            "attempts": 1,
+            "playableOn": {
+              "web": true,
+              "ios": true
+            }
+          },
+          {
+            "id": "d9eb1030c644f506446737f4f1a531b8a5d15451",
+            "state": "weak",
+            "checkedAt": "2026-09-24T17:00:04.050Z",
+            "retryAt": null,
+            "durationMs": 1530,
+            "bytes": 180000,
+            "peers": 7,
+            "speedDown": 300,
+            "rateKbps": 4600,
+            "intakeKbps": 2400,
+            "streamKbps": 4600,
+            "reason": "starved",
+            "mediaValid": true,
+            "browserCompatible": true,
+            "videoCodec": "h264",
+            "audioCodecs": [
+              "aac"
+            ],
+            "cached": false,
+            "attempts": 1,
+            "playableOn": {
+              "web": true,
+              "ios": true
+            }
+          },
+          {
+            "id": "7d947ddab7c7dd6dc121305802623a6de0d8a7ba",
+            "state": "failed",
+            "checkedAt": "2026-09-24T17:00:04.050Z",
+            "retryAt": null,
+            "durationMs": 2160,
+            "bytes": 0,
+            "peers": 0,
+            "speedDown": 0,
+            "rateKbps": null,
+            "intakeKbps": null,
+            "streamKbps": 0,
+            "reason": "no_media",
+            "mediaValid": false,
+            "browserCompatible": false,
+            "videoCodec": "",
+            "audioCodecs": [],
+            "cached": false,
+            "attempts": 1,
+            "playableOn": {
+              "web": false,
+              "ios": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "t": 5400,
+      "ruta": "footballScan",
+      "params": {
+        "id": "de1a0d45c168010000000000"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "id": "de1a0d45c168010000000000",
+        "kind": "interactive",
+        "status": "complete",
+        "createdAt": "2026-09-24T17:00:00.000Z",
+        "updatedAt": "2026-09-24T17:00:05.400Z",
+        "total": 3,
+        "checked": 3,
+        "playable": 2,
+        "failed": 1,
+        "waiting": 0,
+        "retryAt": null,
+        "initialCount": 3,
+        "candidates": [
+          {
+            "id": "b5a0b509c33955a9d80c2c8fee21aa61b6d11d37",
+            "state": "working",
+            "checkedAt": "2026-09-24T17:00:05.400Z",
+            "retryAt": null,
+            "durationMs": 900,
+            "bytes": 180000,
+            "peers": 27,
+            "speedDown": 675,
+            "rateKbps": 4600,
+            "intakeKbps": 5400,
+            "streamKbps": 4600,
+            "reason": "playable_media",
+            "mediaValid": true,
+            "browserCompatible": true,
+            "videoCodec": "h264",
+            "audioCodecs": [
+              "aac"
+            ],
+            "cached": false,
+            "attempts": 1,
+            "playableOn": {
+              "web": true,
+              "ios": true
+            }
+          },
+          {
+            "id": "d9eb1030c644f506446737f4f1a531b8a5d15451",
+            "state": "weak",
+            "checkedAt": "2026-09-24T17:00:05.400Z",
+            "retryAt": null,
+            "durationMs": 1530,
+            "bytes": 180000,
+            "peers": 7,
+            "speedDown": 300,
+            "rateKbps": 4600,
+            "intakeKbps": 2400,
+            "streamKbps": 4600,
+            "reason": "starved",
+            "mediaValid": true,
+            "browserCompatible": true,
+            "videoCodec": "h264",
+            "audioCodecs": [
+              "aac"
+            ],
+            "cached": false,
+            "attempts": 1,
+            "playableOn": {
+              "web": true,
+              "ios": true
+            }
+          },
+          {
+            "id": "7d947ddab7c7dd6dc121305802623a6de0d8a7ba",
+            "state": "failed",
+            "checkedAt": "2026-09-24T17:00:05.400Z",
+            "retryAt": null,
+            "durationMs": 2160,
+            "bytes": 0,
+            "peers": 0,
+            "speedDown": 0,
+            "rateKbps": null,
+            "intakeKbps": null,
+            "streamKbps": 0,
+            "reason": "no_media",
+            "mediaValid": false,
+            "browserCompatible": false,
+            "videoCodec": "",
+            "audioCodecs": [],
+            "cached": false,
+            "attempts": 1,
+            "playableOn": {
+              "web": false,
+              "ios": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "t": 10000,
+      "ruta": "footballScan",
+      "params": {
+        "id": "de1a0d45c168010000000000"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "id": "de1a0d45c168010000000000",
+        "kind": "interactive",
+        "status": "complete",
+        "createdAt": "2026-09-24T17:00:00.000Z",
+        "updatedAt": "2026-09-24T17:00:10.000Z",
+        "total": 3,
+        "checked": 3,
+        "playable": 2,
+        "failed": 1,
+        "waiting": 0,
+        "retryAt": null,
+        "initialCount": 3,
+        "candidates": [
+          {
+            "id": "b5a0b509c33955a9d80c2c8fee21aa61b6d11d37",
+            "state": "working",
+            "checkedAt": "2026-09-24T17:00:10.000Z",
+            "retryAt": null,
+            "durationMs": 900,
+            "bytes": 180000,
+            "peers": 27,
+            "speedDown": 675,
+            "rateKbps": 4600,
+            "intakeKbps": 5400,
+            "streamKbps": 4600,
+            "reason": "playable_media",
+            "mediaValid": true,
+            "browserCompatible": true,
+            "videoCodec": "h264",
+            "audioCodecs": [
+              "aac"
+            ],
+            "cached": false,
+            "attempts": 1,
+            "playableOn": {
+              "web": true,
+              "ios": true
+            }
+          },
+          {
+            "id": "d9eb1030c644f506446737f4f1a531b8a5d15451",
+            "state": "weak",
+            "checkedAt": "2026-09-24T17:00:10.000Z",
+            "retryAt": null,
+            "durationMs": 1530,
+            "bytes": 180000,
+            "peers": 7,
+            "speedDown": 300,
+            "rateKbps": 4600,
+            "intakeKbps": 2400,
+            "streamKbps": 4600,
+            "reason": "starved",
+            "mediaValid": true,
+            "browserCompatible": true,
+            "videoCodec": "h264",
+            "audioCodecs": [
+              "aac"
+            ],
+            "cached": false,
+            "attempts": 1,
+            "playableOn": {
+              "web": true,
+              "ios": true
+            }
+          },
+          {
+            "id": "7d947ddab7c7dd6dc121305802623a6de0d8a7ba",
+            "state": "failed",
+            "checkedAt": "2026-09-24T17:00:10.000Z",
+            "retryAt": null,
+            "durationMs": 2160,
+            "bytes": 0,
+            "peers": 0,
+            "speedDown": 0,
+            "rateKbps": null,
+            "intakeKbps": null,
+            "streamKbps": 0,
+            "reason": "no_media",
+            "mediaValid": false,
+            "browserCompatible": false,
+            "videoCodec": "",
+            "audioCodecs": [],
+            "cached": false,
+            "attempts": 1,
+            "playableOn": {
+              "web": false,
+              "ios": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "t": 20000,
+      "ruta": "footballScan",
+      "params": {
+        "id": "de1a0d45c168010000000000"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "id": "de1a0d45c168010000000000",
+        "kind": "interactive",
+        "status": "complete",
+        "createdAt": "2026-09-24T17:00:00.000Z",
+        "updatedAt": "2026-09-24T17:00:20.000Z",
+        "total": 3,
+        "checked": 3,
+        "playable": 2,
+        "failed": 1,
+        "waiting": 0,
+        "retryAt": null,
+        "initialCount": 3,
+        "candidates": [
+          {
+            "id": "b5a0b509c33955a9d80c2c8fee21aa61b6d11d37",
+            "state": "working",
+            "checkedAt": "2026-09-24T17:00:20.000Z",
+            "retryAt": null,
+            "durationMs": 900,
+            "bytes": 180000,
+            "peers": 27,
+            "speedDown": 675,
+            "rateKbps": 4600,
+            "intakeKbps": 5400,
+            "streamKbps": 4600,
+            "reason": "playable_media",
+            "mediaValid": true,
+            "browserCompatible": true,
+            "videoCodec": "h264",
+            "audioCodecs": [
+              "aac"
+            ],
+            "cached": false,
+            "attempts": 1,
+            "playableOn": {
+              "web": true,
+              "ios": true
+            }
+          },
+          {
+            "id": "d9eb1030c644f506446737f4f1a531b8a5d15451",
+            "state": "weak",
+            "checkedAt": "2026-09-24T17:00:20.000Z",
+            "retryAt": null,
+            "durationMs": 1530,
+            "bytes": 180000,
+            "peers": 7,
+            "speedDown": 300,
+            "rateKbps": 4600,
+            "intakeKbps": 2400,
+            "streamKbps": 4600,
+            "reason": "starved",
+            "mediaValid": true,
+            "browserCompatible": true,
+            "videoCodec": "h264",
+            "audioCodecs": [
+              "aac"
+            ],
+            "cached": false,
+            "attempts": 1,
+            "playableOn": {
+              "web": true,
+              "ios": true
+            }
+          },
+          {
+            "id": "7d947ddab7c7dd6dc121305802623a6de0d8a7ba",
+            "state": "failed",
+            "checkedAt": "2026-09-24T17:00:20.000Z",
+            "retryAt": null,
+            "durationMs": 2160,
+            "bytes": 0,
+            "peers": 0,
+            "speedDown": 0,
+            "rateKbps": null,
+            "intakeKbps": null,
+            "streamKbps": 0,
+            "reason": "no_media",
+            "mediaValid": false,
+            "browserCompatible": false,
+            "videoCodec": "",
+            "audioCodecs": [],
+            "cached": false,
+            "attempts": 1,
+            "playableOn": {
+              "web": false,
+              "ios": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "t": 360000,
+      "ruta": "footballScan",
+      "params": {
+        "id": "de1a0d45c168010000000000"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "id": "de1a0d45c168010000000000",
+        "kind": "interactive",
+        "status": "complete",
+        "createdAt": "2026-09-24T17:00:00.000Z",
+        "updatedAt": "2026-09-24T17:06:00.000Z",
+        "total": 3,
+        "checked": 3,
+        "playable": 2,
+        "failed": 1,
+        "waiting": 0,
+        "retryAt": null,
+        "initialCount": 3,
+        "candidates": [
+          {
+            "id": "b5a0b509c33955a9d80c2c8fee21aa61b6d11d37",
+            "state": "working",
+            "checkedAt": "2026-09-24T17:06:00.000Z",
+            "retryAt": null,
+            "durationMs": 900,
+            "bytes": 180000,
+            "peers": 27,
+            "speedDown": 675,
+            "rateKbps": 4600,
+            "intakeKbps": 5400,
+            "streamKbps": 4600,
+            "reason": "playable_media",
+            "mediaValid": true,
+            "browserCompatible": true,
+            "videoCodec": "h264",
+            "audioCodecs": [
+              "aac"
+            ],
+            "cached": false,
+            "attempts": 1,
+            "playableOn": {
+              "web": true,
+              "ios": true
+            }
+          },
+          {
+            "id": "d9eb1030c644f506446737f4f1a531b8a5d15451",
+            "state": "weak",
+            "checkedAt": "2026-09-24T17:06:00.000Z",
+            "retryAt": null,
+            "durationMs": 1530,
+            "bytes": 180000,
+            "peers": 7,
+            "speedDown": 300,
+            "rateKbps": 4600,
+            "intakeKbps": 2400,
+            "streamKbps": 4600,
+            "reason": "starved",
+            "mediaValid": true,
+            "browserCompatible": true,
+            "videoCodec": "h264",
+            "audioCodecs": [
+              "aac"
+            ],
+            "cached": false,
+            "attempts": 1,
+            "playableOn": {
+              "web": true,
+              "ios": true
+            }
+          },
+          {
+            "id": "7d947ddab7c7dd6dc121305802623a6de0d8a7ba",
+            "state": "failed",
+            "checkedAt": "2026-09-24T17:06:00.000Z",
+            "retryAt": null,
+            "durationMs": 2160,
+            "bytes": 0,
+            "peers": 0,
+            "speedDown": 0,
+            "rateKbps": null,
+            "intakeKbps": null,
+            "streamKbps": 0,
+            "reason": "no_media",
+            "mediaValid": false,
+            "browserCompatible": false,
+            "videoCodec": "",
+            "audioCodecs": [],
+            "cached": false,
+            "attempts": 1,
+            "playableOn": {
+              "web": false,
+              "ios": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "t": 2700000,
+      "ruta": "footballScan",
+      "params": {
+        "id": "de1a0d45c168010000000000"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "id": "de1a0d45c168010000000000",
+        "kind": "interactive",
+        "status": "complete",
+        "createdAt": "2026-09-24T17:00:00.000Z",
+        "updatedAt": "2026-09-24T17:45:00.000Z",
+        "total": 3,
+        "checked": 3,
+        "playable": 2,
+        "failed": 1,
+        "waiting": 0,
+        "retryAt": null,
+        "initialCount": 3,
+        "candidates": [
+          {
+            "id": "b5a0b509c33955a9d80c2c8fee21aa61b6d11d37",
+            "state": "working",
+            "checkedAt": "2026-09-24T17:45:00.000Z",
+            "retryAt": null,
+            "durationMs": 900,
+            "bytes": 180000,
+            "peers": 27,
+            "speedDown": 675,
+            "rateKbps": 4600,
+            "intakeKbps": 5400,
+            "streamKbps": 4600,
+            "reason": "playable_media",
+            "mediaValid": true,
+            "browserCompatible": true,
+            "videoCodec": "h264",
+            "audioCodecs": [
+              "aac"
+            ],
+            "cached": false,
+            "attempts": 1,
+            "playableOn": {
+              "web": true,
+              "ios": true
+            }
+          },
+          {
+            "id": "d9eb1030c644f506446737f4f1a531b8a5d15451",
+            "state": "weak",
+            "checkedAt": "2026-09-24T17:45:00.000Z",
+            "retryAt": null,
+            "durationMs": 1530,
+            "bytes": 180000,
+            "peers": 7,
+            "speedDown": 300,
+            "rateKbps": 4600,
+            "intakeKbps": 2400,
+            "streamKbps": 4600,
+            "reason": "starved",
+            "mediaValid": true,
+            "browserCompatible": true,
+            "videoCodec": "h264",
+            "audioCodecs": [
+              "aac"
+            ],
+            "cached": false,
+            "attempts": 1,
+            "playableOn": {
+              "web": true,
+              "ios": true
+            }
+          },
+          {
+            "id": "7d947ddab7c7dd6dc121305802623a6de0d8a7ba",
+            "state": "failed",
+            "checkedAt": "2026-09-24T17:45:00.000Z",
+            "retryAt": null,
+            "durationMs": 2160,
+            "bytes": 0,
+            "peers": 0,
+            "speedDown": 0,
+            "rateKbps": null,
+            "intakeKbps": null,
+            "streamKbps": 0,
+            "reason": "no_media",
+            "mediaValid": false,
+            "browserCompatible": false,
+            "videoCodec": "",
+            "audioCodecs": [],
+            "cached": false,
+            "attempts": 1,
+            "playableOn": {
+              "web": false,
+              "ios": false
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
