@@ -139,8 +139,11 @@
   cursor: not-allowed;
 }
 
+/* Misma especificidad que la regla de los tonos que late: si no, esta pierde. */
 @media (prefers-reduced-motion: reduce) {
-  .capsule__dot::after {
+  .capsule__dot::after,
+  .capsule--live .capsule__dot::after,
+  .capsule--ok .capsule__dot::after {
     animation: none;
     opacity: 0;
   }
