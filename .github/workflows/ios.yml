@@ -43,6 +43,10 @@ on:
         description: 'Archivar y subir la IPA aunque falle algún test (para probar en el iPhone)'
         type: boolean
         default: false
+      solo_compilar:
+        description: 'Solo compilar la app y los tests (sin pila E2E, sin tests ni IPA): unos minutos'
+        type: boolean
+        default: false
 
 concurrency:
   group: ios-${{ github.ref }}
@@ -90,7 +94,9 @@ jobs:
           brew install xcodegen
           # ffmpeg tarda: se instala mientras compila Xcode. El paso de la pila
           # espera al fichero .fin (con el código de salida de brew).
-          if command -v ffmpeg >/dev/null && command -v ffprobe >/dev/null; then
+          if [ "${{ inputs.solo_compilar }}" = "true" ]; then
+            echo "Solo compilar: sin ffmpeg."
+          elif command -v ffmpeg >/dev/null && command -v ffprobe >/dev/null; then
             echo 0 > "$RUNNER_TEMP/brew-ffmpeg.fin"
           else
             nohup bash -c 'brew install ffmpeg > "$RUNNER_TEMP/brew-ffmpeg.log" 2>&1; echo $? > "$RUNNER_TEMP/brew-ffmpeg.fin"' > /dev/null 2>&1 &
@@ -173,6 +179,7 @@ jobs:
 
       - name: Arrancar la pila E2E (motor falso + backend de verdad + ffmpeg)
         id: pila
+        if: ${{ !inputs.solo_compilar }}
         env:
           ACE_E2E_PUERTO: '18790'
           ACE_E2E_DIR: ${{ runner.temp }}/pila-e2e
@@ -201,11 +208,13 @@ jobs:
           echo "puerto=$ACE_E2E_PUERTO" >> "$GITHUB_OUTPUT"
 
       - name: Esperar al simulador
+        if: ${{ !inputs.solo_compilar }}
         run: |
           cat "$RUNNER_TEMP/arranque-simulador.log" || true
           xcrun simctl bootstatus "${{ steps.simulador.outputs.id }}" -b
 
       - name: Tests unitarios y de interfaz
+        if: ${{ !inputs.solo_compilar }}
         env:
           # xcodebuild quita el prefijo TEST_RUNNER_ y se lo pasa al ejecutor de
           # las pruebas: ServidorRealUITests habla con la pila por ese puerto.
@@ -288,7 +297,7 @@ jobs:
         id: ipa
         # Como siempre, solo si todo lo anterior ha ido bien; lanzado a mano con
         # «ipa_aunque_fallen_tests», también con tests en rojo (para probar en el iPhone).
-        if: ${{ success() || (!cancelled() && inputs.ipa_aunque_fallen_tests) }}
+        if: ${{ !inputs.solo_compilar && (success() || (!cancelled() && inputs.ipa_aunque_fallen_tests)) }}
         run: |
           set -euo pipefail
           AJUSTES=(CURRENT_PROJECT_VERSION=${{ github.run_number }})
