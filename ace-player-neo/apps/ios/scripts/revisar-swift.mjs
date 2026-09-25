@@ -4,9 +4,9 @@
    Recorre Sources/**\/*.swift (salvo *.generado.swift y Sources/Sonda/**) y sale con
    código 1 si una línea incumple una regla. R20 (ficheros de más de 400 líneas) solo avisa.
 
-   Alcance: hasta la poda (fase 0.2) solo mira las carpetas nuevas (Palco, Armazon,
-   Pantallas, Core/Datos, Core/Reglas); tras la poda se cambia ALCANCE a 'todo'
-   (o se pasa --todo). Los comentarios y el texto de las cadenas no cuentan.
+   Alcance: hasta la poda (fase 0.2) solo miraba las carpetas nuevas (Palco, Armazon,
+   Pantallas, Core/Datos, Core/Reglas); desde la poda, ALCANCE = 'todo' (todo Sources).
+   Los comentarios y el texto de las cadenas no cuentan.
 
    Excepción por línea: una línea que termine en «// permitido: <motivo>» se salta solo
    en las reglas marcadas «con permiso» (R10). El integrador revisa cada una.
@@ -23,8 +23,8 @@ import { fileURLToPath } from 'node:url';
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const IOS = path.resolve(AQUI, '..');
 
-/** 'nuevas' hasta la poda (fase 0.2); luego 'todo'. */
-const ALCANCE = 'nuevas';
+/** 'nuevas' hasta la poda (fase 0.2); desde la poda, 'todo'. */
+const ALCANCE = 'todo';
 const CARPETAS_NUEVAS = ['Palco', 'Armazon', 'Pantallas', 'Core/Datos', 'Core/Reglas'];
 
 const argumento = (nombre) => {

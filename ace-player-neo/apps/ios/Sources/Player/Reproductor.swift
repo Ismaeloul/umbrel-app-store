@@ -2,40 +2,6 @@ import Foundation
 import Observation
 import os
 
-/// Quién pidió reproducir: la persona o el arranque automático por fuentes verificadas.
-public enum OrigenReproduccion: String, Sendable, Hashable {
-    case usuario
-    case automatico
-}
-
-/// Por qué no suena nada.
-public enum MotivoParada: String, Sendable, Hashable {
-    /// La persona lo paró.
-    case usuario
-    /// Otro dispositivo se quedó el mando.
-    case traspaso
-    /// La fuente se dio por perdida.
-    case fallo
-    /// El servidor ya no deja reproducir (dispositivo retirado).
-    case sinAcceso
-}
-
-/// Aviso de fuente perdida (reconexiones agotadas) para quien decide la siguiente.
-public struct FalloFuente: Sendable, Hashable {
-    public var canal: CanalReproducible
-    public var origen: OrigenReproduccion
-    /// `fallo` si nunca dio imagen; `cayo` si llegó a verse.
-    public var resultado: OutcomeResult
-    public var segundos: Int
-    public var motivo: String
-}
-
-/// Reconexión en curso: n de máx.
-public struct IntentoReconexion: Sendable, Hashable {
-    public var n: Int
-    public var max: Int
-}
-
 /// El orquestador de la reproducción: pide la URL al backend, engancha
 /// AVPlayer, vigila, reconecta, salta al directo, suelta la sesión y cuenta
 /// lo que pasa. Es `runtime.ts` de la web portado sobre `MaquinaConexion`:
@@ -88,39 +54,13 @@ public final class Reproductor {
     public private(set) var primeraImagenMs: Double?
     /// Reconexiones de la fuente actual («Datos técnicos»).
     public private(set) var reconexiones = 0
-    /// El reproductor grande está abierto (se abre desde el mini tocándolo o
-    /// deslizándolo hacia arriba, y se minimiza deslizándolo hacia abajo).
-    public private(set) var expandido = false
-    /// Superficies de vídeo grandes en pantalla (el centro de partido); con
-    /// alguna, el mini-reproductor se esconde.
-    public private(set) var superficiesGrandes = 0
     /// Canales para «anterior / siguiente» (fuentes del partido o favoritos).
     public var lista: [CanalReproducible] = []
 
     public var fase: FaseReproductor { FaseReproductor.derivar(conexion, medio) }
 
-    /// El mini-reproductor se ve si hay algo que no se ha parado a propósito
-    /// y no se está viendo ya en grande.
-    public var visibleEnMini: Bool {
-        canal != nil && motivoParada != .usuario && superficiesGrandes == 0 && !expandido
-    }
-
-    /// Qué se ve del reproductor fuera de las pantallas de partido y canal.
-    public var vista: VistaReproductor {
-        if expandido && canal != nil { return .grande }
-        return visibleEnMini ? .mini : .ninguna
-    }
-
-    /// Abre el reproductor grande (desde el mini, el botón de pantalla completa o al volver del PiP).
-    public func expandir() {
-        guard canal != nil else { return }
-        expandido = true
-    }
-
-    /// Vuelve al mini-reproductor (deslizar hacia abajo o el botón de cerrar).
-    public func minimizar() {
-        expandido = false
-    }
+    // La presentación (expandido, superficiesGrandes, visibleEnMini, vista, expandir, minimizar,
+    // superficieGrande) salió en la poda (fase 0.2): pasa a PresentacionReproductor (b-arquitectura §2.6, M3).
 
     // MARK: Dependencias
 
@@ -270,7 +210,6 @@ public final class Reproductor {
         intento = nil
         medio = .idle
         quiereReproducir = false
-        expandido = false
         tareaVigilante?.cancel()
         tareaVigilante = nil
         sistema?.termino()
@@ -350,11 +289,6 @@ public final class Reproductor {
         modo = nuevo
         preferencias?.set(nuevo.rawValue, forKey: Self.claveModo)
         motor.aplicar(perfil: nuevo.perfilIOS)
-    }
-
-    /// Una vista de vídeo grande entra o sale de pantalla.
-    public func superficieGrande(visible: Bool) {
-        superficiesGrandes = max(0, superficiesGrandes + (visible ? 1 : -1))
     }
 
     // MARK: Conexión

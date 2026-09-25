@@ -1,57 +1,5 @@
 import Foundation
 
-/// Lo que se reproduce: un canal (hash AceStream o infohash) y, si viene de
-/// la agenda, el partido.
-public struct CanalReproducible: Sendable, Hashable, Identifiable {
-    /// Hash de 40 hex o infohash.
-    public var id: String
-    public var titulo: String
-    /// true: infohash; false: Content ID; nil: no se sabe (pegado a mano).
-    public var ih: Bool?
-    public var partido: ContextoPartido?
-    public var listaId: String?
-    /// De dónde salió (`CandidateSource` o «manual»), para el resultado de la fuente.
-    public var origen: String?
-
-    public init(
-        id: String, titulo: String, ih: Bool? = nil, partido: ContextoPartido? = nil, listaId: String? = nil,
-        origen: String? = nil
-    ) {
-        self.id = id
-        self.titulo = titulo
-        self.ih = ih
-        self.partido = partido
-        self.listaId = listaId
-        self.origen = origen
-    }
-
-    /// `kind` de la petición de stream.
-    public var tipo: StreamKind {
-        switch ih {
-        case .some(true): .infohash
-        case .some(false): .id
-        case .none: .auto
-        }
-    }
-}
-
-/// El partido al que pertenece la señal (para Now Playing y el mini-reproductor).
-public struct ContextoPartido: Sendable, Hashable {
-    public var id: String
-    /// «Local – Visitante».
-    public var titulo: String
-    public var competicion: String
-    /// Canal del partido con el que casó la fuente.
-    public var canal: String
-
-    public init(id: String, titulo: String, competicion: String, canal: String) {
-        self.id = id
-        self.titulo = titulo
-        self.competicion = competicion
-        self.canal = canal
-    }
-}
-
 /// URL concedida por el backend, ya absoluta.
 public struct Concesion: Sendable, Hashable {
     public var grant: StreamGrant

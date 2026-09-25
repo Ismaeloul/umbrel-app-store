@@ -270,17 +270,10 @@ jobs:
         run: |
           # Busca «to type-check» (-warn-long-expression-type-checking=200 y
           # -warn-long-function-bodies=400 de project.yml) en un log de xcodebuild.
-          # Hasta la poda (fase 0.2) no cuenta la interfaz vieja que se va a borrar.
+          # Desde la poda (fase 0.2) cuenta todo: la interfaz vieja ya no está.
           cat > "$RUNNER_TEMP/alarma-tipado.sh" <<'EOF'
           #!/bin/bash
-          VIEJA='/Sources/(Design|Features)/|/Sources/App/(AceNeoApp|AppModel|RootView)\.swift|/Sources/Player/(ReproductorVistas|GestosReproductor)\.swift'
-          TODAS=$(grep -E "to type-check" "$1" | sort -u || true)
-          if [ -n "$TODAS" ]; then
-            echo "::group::Avisos «to type-check» (todos)"
-            echo "$TODAS"
-            echo "::endgroup::"
-          fi
-          LENTAS=$(echo "$TODAS" | grep -v -E "$VIEJA" | grep -v '^$' || true)
+          LENTAS=$(grep -E "to type-check" "$1" | sort -u | grep -v '^$' || true)
           if [ -n "$LENTAS" ]; then
             echo "$LENTAS" | while IFS= read -r l; do echo "::error::Lenta de tipar: $l"; done
             exit 1

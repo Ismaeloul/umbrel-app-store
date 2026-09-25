@@ -11,8 +11,8 @@ import UIKit
    el vídeo DOS veces (la ventana del PiP, que seguía con la capa antigua, y
    la capa nueva de la pantalla completa). Ahora hay una única capa
    (`SuperficieVideo.vista`) y las pantallas solo ponen HUECOS donde puede ir;
-   la capa va al hueco de más prioridad que esté en pantalla (el reproductor
-   grande, luego el del centro de partido, luego el mini). El PiP se crea una
+   la capa va al hueco de más prioridad que esté en pantalla (el vuelo, luego
+   el inmersivo, luego el teatro, luego el mini). El PiP se crea una
    vez para esa capa: el automático al salir de la app y la vuelta siempre
    salen de ella. */
 
@@ -28,19 +28,17 @@ public final class CapaVideoUIView: UIView {
     }
 }
 
-/// Dónde puede ir el vídeo, de más a menos prioridad.
+/// Dónde puede ir el vídeo: gana el de más prioridad en pantalla (b-arquitectura §2.6).
+/// `mini < teatro < inmersivo < vuelo` (el hueco que viaja del escenario al mini gana a todos).
 public enum PrioridadHueco: Int, Sendable, Comparable {
-    case mini = 1
-    case integrado = 2
-    case grande = 3
-
-    public static func < (a: PrioridadHueco, b: PrioridadHueco) -> Bool { a.rawValue < b.rawValue }
+    case mini = 1, teatro = 2, inmersivo = 3, vuelo = 4
+    public static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
 }
 
 /// Un hueco para el vídeo. Avisa a la superficie al entrar y salir de la ventana.
 public final class HuecoVideoUIView: UIView {
     weak var superficie: SuperficieVideo?
-    var prioridad: PrioridadHueco = .integrado
+    var prioridad: PrioridadHueco = .teatro
     var gravedad: AVLayerVideoGravity = .resizeAspect
 
     override public func didMoveToWindow() {
@@ -386,7 +384,7 @@ public struct BotonAirPlay: UIViewRepresentable {
         let vista = AVRoutePickerView()
         vista.prioritizesVideoDevices = true
         vista.tintColor = .white
-        vista.activeTintColor = UIColor(named: "Accent") ?? .systemBlue
+        vista.activeTintColor = UIColor(Palco.accent)  // el colorset «Accent» se fue en la poda: el mismo oro de tokens.css
         vista.accessibilityLabel = "AirPlay"
         return vista
     }

@@ -1,33 +1,11 @@
 {
   "images": [
     {
-      "filename": "marca-claro@2x.png",
-      "idiom": "universal",
-      "scale": "2x"
-    },
-    {
-      "filename": "marca-claro@3x.png",
-      "idiom": "universal",
-      "scale": "3x"
-    },
-    {
-      "appearances": [
-        {
-          "appearance": "luminosity",
-          "value": "dark"
-        }
-      ],
       "filename": "marca-oscuro@2x.png",
       "idiom": "universal",
       "scale": "2x"
     },
     {
-      "appearances": [
-        {
-          "appearance": "luminosity",
-          "value": "dark"
-        }
-      ],
       "filename": "marca-oscuro@3x.png",
       "idiom": "universal",
       "scale": "3x"
