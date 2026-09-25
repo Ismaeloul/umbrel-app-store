@@ -72,7 +72,7 @@ on:
         type: string
         default: 'iPhone 16e'
       solo_uitests:
-        description: 'Solo estos UITests (p. ej. FlujoArmazonUITests o FlujoArmazonUITests/testArrancaYCambiaDePestana), sin unitarios, pila E2E ni IPA'
+        description: 'Solo estos UITests, separados por comas (p. ej. FlujoArmazonUITests,LaboratorioUITests/testHapticaConHoja), sin unitarios, pila E2E ni IPA'
         type: string
         default: ''
 
@@ -397,16 +397,24 @@ jobs:
           TEST_RUNNER_ACE_CAPTURAS: ${{ env.CAPTURAS }}
         run: |
           set -o pipefail
-          # Con solo_uitests, solo AceNeoUITests/<valor>; si no, todos (con ServidorRealUITests y la pila).
-          FILTRO="AceNeoUITests"
-          if [ -n "$SOLO_UI" ]; then FILTRO="AceNeoUITests/$SOLO_UI"; fi
+          # Con solo_uitests, solo AceNeoUITests/<cada valor, separados por comas>; si no, todos (con
+          # ServidorRealUITests y la pila).
+          FILTROS=("-only-testing:AceNeoUITests")
+          if [ -n "$SOLO_UI" ]; then
+            FILTROS=()
+            IFS=',' read -ra PEDIDOS <<< "$SOLO_UI"
+            for P in "${PEDIDOS[@]}"; do
+              P="${P// /}"
+              if [ -n "$P" ]; then FILTROS+=("-only-testing:AceNeoUITests/$P"); fi
+            done
+          fi
           xcodebuild test-without-building \
             -project AceNeo.xcodeproj \
             -scheme AceNeo \
             -destination "id=${{ steps.simulador.outputs.id }}" \
             -derivedDataPath build/DerivedData \
             -resultBundlePath build/AceNeo-interfaz.xcresult \
-            "-only-testing:$FILTRO" \
+            "${FILTROS[@]}" \
             -retry-tests-on-failure -test-iterations 3 \
             -quiet
 
