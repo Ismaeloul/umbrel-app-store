@@ -58,6 +58,10 @@ enum FaseSesionFuentes: Sendable { case reposo, resolviendo, lista, opciones, no
     func reportar(_ hash: String, motivo: SourceReportReason) async throws {}
     func confirmar(_ hash: String) async {}
     func elegirCandidata(_ candidata: ResolutionCandidate) async {}
+    /// «Encontrar canal» con la casilla «Recordar mi elección para {canal}» (`chooseCandidate(choice, remember)`,
+    /// a4 §20.15). Añadido por M6 (contrato aditivo): la hoja tiene la casilla y el contrato no la recibía.
+    /// Esqueleto: delega en `elegirCandidata(_:)`; M3 vincula (`POST /football/bindings`) solo si `recordar`.
+    func elegirCandidata(_ candidata: ResolutionCandidate, recordar: Bool) async { await elegirCandidata(candidata) }
     func vincularManual(_ hash: String) async throws {}
     func procesar(_ evento: SSEEvent) {}
     /// Reconexiones agotadas: `true` si ya ha puesto otra a sonar. Esqueleto: nunca.
