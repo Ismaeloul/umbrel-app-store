@@ -10,7 +10,7 @@
    (`iptv`), así se ve cómo un canal sale una sola vez. Los ids son los mismos
    que da la resolución de la demo. */
 
-import type { IptvChannelsResponse, SearchResponse } from '@ace/shared';
+import { fuzzyFilter, type IptvChannelsResponse, type SearchResponse } from '@ace/shared';
 import { registerDemoHandler } from '../../api/index.ts';
 import { foldText } from '../library/model.ts';
 import { DEMO_IPTV_SEARCH, demoIptvId, fakeHash } from './demo-ids.ts';
@@ -34,9 +34,19 @@ const CATALOG: ReadonlyArray<[string, string, number]> = [
   ['La 1', 'Generalistas', 0.83],
 ];
 
+/* Lo de siempre (el texto dentro del nombre) y, además, el buscador «como Google» (§20: erratas y alias). */
+function demoMatches<T extends readonly [string, ...unknown[]]>(
+  rows: readonly T[],
+  query: string,
+): T[] {
+  const q = foldText(query).slice(0, 80);
+  const fuzzy = new Set(fuzzyFilter(rows, query, ([title]) => [title]));
+  return rows.filter((row) => foldText(row[0]).includes(q) || fuzzy.has(row));
+}
+
 export function demoSearch(query: string): SearchResponse {
   const q = foldText(query).slice(0, 80);
-  const results = CATALOG.filter(([title]) => foldText(title).includes(q))
+  const results = demoMatches(CATALOG, query)
     .sort((a, b) => b[2] - a[2])
     .map(([title, category, availability]) => ({
       id: fakeHash(title),
@@ -58,17 +68,15 @@ const DEMO_QUALITIES: Readonly<Record<string, ('uhd' | 'fhd' | 'hd' | 'sd')[]>> 
 
 export function demoIptvChannels(query: string): IptvChannelsResponse {
   const q = foldText(query).slice(0, 80);
-  const channels = DEMO_IPTV_SEARCH.filter(([title]) => foldText(title).includes(q)).map(
-    ([title, quality]) => ({
-      id: demoIptvId(title),
-      title,
-      quality,
-      qualities: DEMO_QUALITIES[title] ?? [quality],
-      country: null,
-      provider: 'Casa',
-      library: [],
-    }),
-  );
+  const channels = demoMatches(DEMO_IPTV_SEARCH, query).map(([title, quality]) => ({
+    id: demoIptvId(title),
+    title,
+    quality,
+    qualities: DEMO_QUALITIES[title] ?? [quality],
+    country: null,
+    provider: 'Casa',
+    library: [],
+  }));
   return { query: q, total: channels.length, capped: false, channels };
 }
 

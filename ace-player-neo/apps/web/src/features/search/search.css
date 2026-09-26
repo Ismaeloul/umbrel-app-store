@@ -193,3 +193,36 @@
   color: var(--text-2);
   font-size: var(--fs-13);
 }
+
+/* ---- Partidos (buscador «como Google», docs/iptv.md §20) -------------------------
+   Las tarjetas pequeñas de la agenda («Luego»): dos por fila en el móvil y las
+   que quepan en escritorio. Tocar una abre el partido. */
+.search-matches__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+.search-matches .agenda-row--compact .versus {
+  aspect-ratio: 3 / 2;
+}
+.search-matches__more {
+  justify-self: start;
+}
+
+/* ---- Lo que se preguntó al motor y «Quizás quisiste decir» ------------------------ */
+.search-sec__searched {
+  margin-top: calc(-1 * var(--s-2));
+  padding-inline: var(--s-1);
+}
+.search-suggest__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-ink);
+  font: inherit;
+  font-weight: var(--wght-head);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}

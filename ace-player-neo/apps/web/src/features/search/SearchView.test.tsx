@@ -1,4 +1,4 @@
-import type { BootstrapResponse } from '@ace/shared';
+import type { BootstrapResponse, FootballMatch } from '@ace/shared';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetMode, setMode } from '../../api/mode.ts';
@@ -7,7 +7,8 @@ import { resetToasts, toastStore } from '../../notices/toasts.ts';
 import { fixture, json, mockFetch, type MockCall } from '../../test/fetch.ts';
 import { getPlayer } from '../../player/api.ts';
 import { takeChannelTap } from '../library/play.ts';
-import { makeLibrary, renderWithApp, resetPlayback } from '../library/test-utils.tsx';
+import { makeItem, makeLibrary, renderWithApp, resetPlayback } from '../library/test-utils.tsx';
+import { matchAt, scheduleOf } from '../agenda/test-utils.tsx';
 import { installShortcutListener } from '../../app/shortcuts.ts';
 import SearchView from './SearchView.tsx';
 import { demoIptvChannels, demoSearch } from './demo.ts';
@@ -585,5 +586,140 @@ describe('buscador con IPTV (docs/iptv.md §14.5)', () => {
     expect(iptv.channels.map((c) => c.title)).toContain('DAZN LaLiga');
     const dazn = demoSearch('dazn laliga').results.find((r) => r.title === 'DAZN LaLiga');
     expect(dazn?.iptv).toBe(iptv.channels.find((c) => c.title === 'DAZN LaLiga')?.id);
+  });
+});
+
+describe('buscador «como Google» (docs/iptv.md §20)', () => {
+  const byDay = (matches: FootballMatch[]) => {
+    const days: Record<string, FootballMatch[]> = {};
+    for (const match of matches) (days[match.date] ??= []).push(match);
+    return scheduleOf(days);
+  };
+  const partidos = () =>
+    byDay([
+      matchAt(
+        90,
+        {
+          id: 'm-ing',
+          home: 'Inglaterra',
+          away: 'España',
+          competition: 'UEFA Nations League',
+          channels: [{ id: 'c-ing', name: 'La 1' }],
+        },
+        Date.now(),
+      ),
+      matchAt(
+        150,
+        {
+          id: 'm-nor',
+          home: 'Noruega',
+          away: 'Portugal',
+          competition: 'UEFA Nations League',
+          channels: [{ id: 'c-nor', name: 'Teledeporte' }],
+        },
+        Date.now(),
+      ),
+      matchAt(
+        200,
+        {
+          id: 'm-barca',
+          home: 'FC Barcelona',
+          away: 'Juventus',
+          competition: 'Amistoso',
+          channels: [],
+        },
+        Date.now(),
+      ),
+    ]);
+
+  function setupGoogle(
+    engine: (q: string) => Record<string, unknown> = (q) => ({ query: q, results: [] }),
+    library = makeLibrary({
+      favorites: [makeItem('Telecinco HD', 'fav', { category: 'TDT' })],
+    }),
+  ) {
+    net = mockFetch({
+      'GET /api/v1/library': library,
+      'GET /api/v1/football': partidos(),
+      'GET /api/v1/search': (call) =>
+        json(engine(new URL(call.url, 'http://x').searchParams.get('q') ?? '')),
+    });
+    return renderWithApp(<SearchView route={{ vista: 'buscar' }} active />, {
+      search: '?vista=buscar',
+    });
+  }
+  const buscar = (text: string) => {
+    fireEvent.change(field(), { target: { value: text } });
+    fireEvent.keyDown(field(), { key: 'Enter' });
+  };
+
+  it('«inglatera» encuentra el partido de Inglaterra en «Partidos», arriba, y tocarlo lo abre', async () => {
+    setupGoogle();
+    buscar('inglatera');
+    const section = await screen.findByRole('region', { name: /Partidos/ });
+    const card = within(section).getByRole('button', { name: /Inglaterra vs España/ });
+    expect(within(section).queryByRole('button', { name: /Noruega/ })).toBeNull();
+    fireEvent.click(card);
+    await waitFor(() =>
+      expect(new URLSearchParams(location.search).get('vista')).toBe('partido/m-ing'),
+    );
+  });
+
+  it('«esp» encuentra España; «barsa», el Barça; un partido sin canal avisa', async () => {
+    setupGoogle();
+    buscar('esp');
+    let section = await screen.findByRole('region', { name: /Partidos/ });
+    expect(
+      within(section).getByRole('button', { name: /Inglaterra vs España/ }),
+    ).toBeInTheDocument();
+    buscar('barsa');
+    const barca = await screen.findByRole('button', { name: /FC Barcelona vs Juventus/ });
+    section = screen.getByRole('region', { name: /Partidos/ });
+    expect(within(section).queryByRole('button', { name: /Inglaterra/ })).toBeNull();
+    fireEvent.click(barca);
+    expect(toastStore.get().some((t) => t.text === 'El canal todavía no está anunciado')).toBe(
+      true,
+    );
+  });
+
+  it('«telecinko» encuentra tu «Telecinco HD» en la biblioteca', async () => {
+    setupGoogle();
+    buscar('telecinko');
+    const section = await screen.findByRole('region', { name: 'En tu biblioteca' });
+    expect(within(section).getByRole('link', { name: 'Telecinco HD' })).toBeInTheDocument();
+  });
+
+  it('dice lo que se preguntó al motor si el servidor lo corrigió', async () => {
+    setupGoogle((q) => ({
+      query: q,
+      results: q === 'telecinko' ? [result('Telecinco', 0.8)] : [],
+      ...(q === 'telecinko' ? { searched: 'telecinco' } : {}),
+    }));
+    buscar('telecinko');
+    expect(await screen.findByText('También se ha buscado «telecinco».')).toBeInTheDocument();
+  });
+
+  it('«Quizás quisiste decir» solo cuando no sale nada, y tocarlo busca la corrección', async () => {
+    setupGoogle();
+    buscar('nroega');
+    const link = await screen.findByRole('button', { name: 'Noruega' });
+    expect(screen.getByText(/Quizás quisiste decir/)).toBeInTheDocument();
+    fireEvent.click(link);
+    expect(field()).toHaveValue('Noruega');
+    const section = await screen.findByRole('region', { name: /Partidos/ });
+    expect(
+      within(section).getByRole('button', { name: /Noruega vs Portugal/ }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Quizás quisiste decir/)).toBeNull();
+  });
+
+  it('la sugerencia del motor sale si no hay nada local', async () => {
+    setupGoogle((q) => ({
+      query: q,
+      results: [],
+      ...(q === 'xkcdxkcd' ? { suggestion: 'dazn' } : {}),
+    }));
+    buscar('xkcdxkcd');
+    expect(await screen.findByRole('button', { name: 'dazn' })).toBeInTheDocument();
   });
 });

@@ -9,7 +9,14 @@
    En la 0.6.59 la pestaña se llamaba «Directorio»; en la v2 es «Listas»
    (maqueta A), pero la regla es la misma: solo enseña la lista activa. */
 
-import type { Item, LibraryCollection, LibraryView } from '@ace/shared';
+import {
+  IPTV_LIBRARY_CATEGORY,
+  filterLibrary,
+  suggestLibrary,
+  type Item,
+  type LibraryCollection,
+  type LibraryView,
+} from '@ace/shared';
 
 /** Las pestañas que son una colección de la biblioteca. */
 export type CollectionTab = 'favoritos' | 'recientes' | 'listas';
@@ -91,22 +98,38 @@ export function foldText(value: string): string {
 }
 
 /**
- * Filtro local por título o categoría (index.html:5549-5550). Se compara sin
- * tildes ni mayúsculas, que es lo que se espera escribiendo en el móvil.
+ * Filtro local por título o categoría (index.html:5549-5550), con el
+ * buscador «como Google» (docs/iptv.md §20: sin tildes ni mayúsculas, por el
+ * principio, alias y erratas: «telecinko», «m+ laliga», «t5»). Conserva el
+ * orden de la lista (las pestañas agrupan por día o por categoría).
  */
 export function filterItems<T extends Pick<Item, 'title' | 'category'>>(
   items: readonly T[],
   query: string,
 ): T[] {
-  const q = foldText(query);
-  if (!q) return [...items];
-  return items.filter(
-    (item) => foldText(item.title).includes(q) || categoryMatches(item.category, q),
-  );
+  if (!foldText(query)) return [...items];
+  const found = new Set(filterLibrary(items, query));
+  return items.filter((item) => found.has(item));
+}
+
+/** Lo mismo, en el orden del buscador (exacta, prefijo, alias y errata): «En tu biblioteca» de Buscar. */
+export function searchItems<T extends Pick<Item, 'title' | 'category'>>(
+  items: readonly T[],
+  query: string,
+): T[] {
+  return foldText(query) ? filterLibrary(items, query) : [...items];
+}
+
+/** «Quizás quisiste decir» sobre una lista de la biblioteca (null si no hay nada mejor). */
+export function suggestItems<T extends Pick<Item, 'title' | 'category'>>(
+  items: readonly T[],
+  query: string,
+): string | null {
+  return foldText(query) ? suggestLibrary(items, query) : null;
 }
 
 /** La categoría que llevan los canales de tu IPTV guardados desde el buscador (docs/iptv.md §14.6). */
-export const IPTV_CATEGORY = 'IPTV';
+export const IPTV_CATEGORY = IPTV_LIBRARY_CATEGORY;
 
 /**
  * ¿Casa la categoría con el texto (ya plegado)? «IPTV» es una marca, no una

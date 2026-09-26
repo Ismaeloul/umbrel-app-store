@@ -35,6 +35,9 @@
        sincronizaciones correctas (reloj falso) con `iptv_gone` y luego se va.
    15. Fugas: `iptvChannels` y `search` con `iptv` no llevan nada del
        proveedor.
+   19. Buscador «como Google» (§20): «telecinko», «t5», «dasn 1», «antna 3»,
+       «champions», «antenna tres»… encuentran su canal; «dazn 1» no trae otra
+       cosa; sin nada, `suggestion`; ninguna petición al proveedor.
 
    Pestaña IPTV en Canales (docs/iptv.md §16.9), con el catálogo grande del
    proveedor falso (nombres como los de la lista real):
@@ -583,6 +586,31 @@ describe('buscador: IPTV y AceStream juntos (docs/iptv.md §14.9)', () => {
         expect(text).not.toContain(secret);
       }
     }
+  });
+
+  it('19 · buscador «como Google» (§20): erratas y alias encuentran su canal; sin nada, «Quizás quisiste decir»; ninguna petición al proveedor', async () => {
+    const r = await setup({ search: true });
+    await saveXtream(r);
+    r.provider.limpiarPeticiones();
+    const first = async (q: string) => (await channels(r.h, q)).channels[0]?.title;
+    expect(await first('telecinko')).toBe('Telecinco');
+    expect(await first('t5')).toBe('Telecinco');
+    expect(await first('tele 5')).toBe('Telecinco');
+    expect(await first('dasn 1')).toBe('DAZN 1');
+    expect(await first('antna 3')).toBe('Antena 3');
+    expect(await first('champions')).toBe('M+ Liga de Campeones');
+    expect(await first('m+ liga de campeone')).toBe('M+ Liga de Campeones');
+    /* DAZN 1 nunca trae la DAZN LaLiga ni otra cosa con «1» por una errata. */
+    expect((await channels(r.h, 'dazn 1')).channels.map((c) => c.title)).not.toContain(
+      'DAZN LaLiga',
+    );
+    /* Sin nada: la corrección, que sí da algo. */
+    /* Errata y alias a la vez: «antenna» → «antena» y «antena tres» → «Antena 3». */
+    expect(await first('antenna tres')).toBe('Antena 3');
+    const missing = await channels(r.h, 'telcnco');
+    expect(missing.total).toBe(0);
+    expect(missing.suggestion).toBe('telecinco');
+    expect(r.provider.peticiones()).toEqual([]);
   });
 
   it('12 · search con IPTV activa: los «La 1 HD --> …» del motor llevan el id IPTV de «La 1»; Hypermotion no', async () => {

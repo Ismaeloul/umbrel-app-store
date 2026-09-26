@@ -69,6 +69,7 @@ import {
   seeChannelsText,
 } from './texts.ts';
 import { registerIptvBrowseDemo } from './demo-register.ts';
+import { Suggestion } from '../../search/Suggestion.tsx';
 import './iptv.css';
 
 registerIptvBrowseDemo();
@@ -83,13 +84,23 @@ export interface IptvTabProps {
   onAir(item: ActionableChannel): ChannelOnAir;
   /** El nombre de la categoría abierta (para «Buscar en {categoría}»), o null en la raíz. */
   onCategoryName(name: string | null): void;
+  /** Tocar «Quizás quisiste decir «…»» (§20): cambia el texto del campo. */
+  onSuggest?(value: string): void;
 }
 
 function rowOf(channel: IptvBrowseChannel): ActionableChannel & { iptv: string } {
   return { id: channel.id, title: channel.title, category: 'IPTV', ih: false, iptv: channel.id };
 }
 
-export function IptvTab({ text, active, actions, onScreen, onAir, onCategoryName }: IptvTabProps) {
+export function IptvTab({
+  text,
+  active,
+  actions,
+  onScreen,
+  onAir,
+  onCategoryName,
+  onSuggest,
+}: IptvTabProps) {
   const navigate = useNavigate();
   const layout = useLayout();
   const mobile = layout.kind === 'mobile';
@@ -279,7 +290,11 @@ export function IptvTab({ text, active, actions, onScreen, onAir, onCategoryName
                 {searchBothText(q)}
               </Button>
             }
-          />
+          >
+            {first?.suggestion && onSuggest ? (
+              <Suggestion value={first.suggestion} onPick={onSuggest} />
+            ) : null}
+          </EmptyState>
         );
       return <NoneWithFilters filters={hasFilters(filters)} onClear={clearFilters} />;
     }

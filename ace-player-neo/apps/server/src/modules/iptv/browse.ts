@@ -27,6 +27,7 @@
 
 import { createHash } from 'node:crypto';
 import {
+  FuzzyVocabulary,
   IPTV_BROWSE,
   IPTV_BROWSE_QUALITIES,
   IPTV_SPORTS,
@@ -34,12 +35,19 @@ import {
   MOVISTAR_WORDS,
   SEARCH_QUERY_MAX,
   SEARCH_QUERY_MIN,
+  aliasReadings,
+  aliasWords,
+  namedGroups,
+  searchWords,
   type IptvFacetName,
   type IptvQuality,
 } from '@ace/shared';
 import { compareVariants, type Catalog, type CatalogEntry } from './catalog.js';
 import { FacetDeriver, variantQuality } from './facets.js';
-import { foldText, searchQueryKey, significant } from './search.js';
+import { foldText, searchQueryKey, searchQueryText, significant } from './search.js';
+
+/** El nivel más alto de `textMatch` (erratas con alias). */
+const BROWSE_LEVEL_MAX = 19;
 
 export const FACET_NAMES: readonly IptvFacetName[] = [
   'country',
@@ -182,6 +190,8 @@ export function* buildBrowseIndexSteps(
   catalog: Catalog,
   chunk: number = IPTV_BROWSE.buildChunk,
 ): Generator<void, BrowseIndex, void> {
+  /* La tabla de alias del buscador (§20) se pliega aquí, al montar, y no en la primera consulta. */
+  void aliasWords();
   const deriver = new FacetDeriver();
   const entries = catalog.entries;
   /* Categorías: primero el orden del proveedor, luego la primera aparición y «Sin categoría» al final. */
@@ -464,11 +474,14 @@ function inOrder(words: readonly string[], key: string): boolean {
 }
 
 /**
- * Filas que casan con el texto (mapa de bits) y el nivel de cada una
- * (0 clave igual, 1 empieza por, 2 palabras en orden, 3 el resto, 4 sin la
- * marca: «m+ la liga» → «LA LIGA TV BAR»). La consulta se limpia como en el
- * buscador (`searchQueryKey`, §18) y, como allí, «tv», «canal» y «channel»
- * no hace falta encontrarlas si hay otras palabras.
+ * Filas que casan con el texto (mapa de bits) y el nivel de cada una. La
+ * consulta se limpia como en el buscador (`searchQueryKey`, §18) y, como
+ * allí, «tv», «canal» y «channel» no hace falta encontrarlas si hay otras
+ * palabras. Niveles (§20, como el buscador): 0 clave igual, 1 por un alias
+ * que da el canal igual o empieza por él («t5» → «TELECINCO»), 2 empieza
+ * por la consulta, 4 palabras en orden, 6 el resto, 8 sin la marca («m+ la
+ * liga» → «LA LIGA TV BAR»), 9 el resto de lo del alias y 10 en adelante con
+ * erratas («telecinko»).
  */
 function textMatch(
   index: BrowseIndex,
@@ -478,6 +491,111 @@ function textMatch(
   const rank = new Uint8Array(index.words * 32);
   const key = searchQueryKey(query);
   if (!key) return { bits, rank };
+  const mark = (row: number, level: number): void => {
+    if (hasBit(bits, row) && (rank[row] as number) <= level) return;
+    setBit(bits, row);
+    rank[row] = level;
+  };
+  const matchedWords = new Set<string>();
+  /* La consulta tal cual, escrita directamente (es la de siempre y la que más filas marca). */
+  keyMatch(
+    index,
+    key,
+    (position, level) => {
+      const row = index.keyRow[position] as number;
+      setBit(bits, row);
+      rank[row] = level * 2;
+      const more = index.keyMoreRows.get(position);
+      if (more) {
+        for (const other of more) {
+          setBit(bits, other);
+          rank[other] = level * 2;
+        }
+      }
+    },
+    matchedWords,
+  );
+
+  /* Por un alias: solo los canales que de verdad nombran ese grupo. */
+  const aliasPass = (words: readonly string[], base: number, max: number): void => {
+    for (const reading of aliasReadings(words, max)) {
+      const readingKey = searchQueryKey(reading.text);
+      if (!readingKey || readingKey === key) continue;
+      keyMatch(index, readingKey, (position, level) => {
+        const named = namedGroups((index.keyText[position] as string).split(' '));
+        if (!reading.groups.every((id) => named.has(id))) return;
+        markKey(index, position, base + (level <= 1 ? 1 : 9), mark);
+      });
+    }
+  };
+  aliasPass(searchWords(searchQueryText(query).text), 0, 8);
+
+  /* Con erratas, solo las palabras que no casan con nada. */
+  const words = significant([...new Set(key.split(' ').filter(Boolean))]);
+  const options = words.map((word) => {
+    if (/\d/.test(word) || matchedWords.has(word)) return [word];
+    /* El vocabulario de erratas solo se monta (una vez) si alguna palabra no casa con nada. */
+    const found = browseVocabulary(index)
+      .corrections(word, { max: 3 })
+      .map((item) => item.token);
+    return found.length ? found : [word];
+  });
+  if (options.some((list, i) => list.length > 1 || list[0] !== words[i])) {
+    let variants: string[][] = [[]];
+    for (const list of options) {
+      const next: string[][] = [];
+      for (const variant of variants) for (const word of list) next.push([...variant, word]);
+      variants = next.slice(0, 6);
+    }
+    for (const variant of variants) {
+      if (variant.every((word, i) => word === words[i])) continue;
+      keyMatch(index, variant.join(' '), (position, level) =>
+        markKey(index, position, 10 + Math.min(level, 4), mark),
+      );
+      aliasPass(variant, 10, 4);
+    }
+  }
+  return { bits, rank };
+}
+
+/* Una clave del índice casa con un nivel: se marcan su fila y las de sus otros países. */
+function markKey(
+  index: BrowseIndex,
+  position: number,
+  level: number,
+  mark: (row: number, level: number) => void,
+): void {
+  mark(index.keyRow[position] as number, level);
+  for (const row of index.keyMoreRows.get(position) ?? []) mark(row, level);
+}
+
+/** Vocabulario de erratas de la pestaña (palabras de las claves y de los alias), con caché. */
+const BROWSE_VOCABULARIES = new WeakMap<BrowseIndex, FuzzyVocabulary>();
+function browseVocabulary(index: BrowseIndex): FuzzyVocabulary {
+  let known = BROWSE_VOCABULARIES.get(index);
+  if (!known) {
+    const weights = new Map<string, number>();
+    for (const [token, items] of index.byToken) {
+      weights.set(token, typeof items === 'number' ? 1 : items.length);
+    }
+    known = new FuzzyVocabulary([...index.byToken.keys(), ...aliasWords()], weights);
+    BROWSE_VOCABULARIES.set(index, known);
+  }
+  return known;
+}
+
+/*
+ * Las claves que casan con una clave limpia y su nivel (0 igual, 1 empieza
+ * por, 2 palabras en orden, 3 el resto, 4 sin la marca), una a una a
+ * `onMatch` (sin montar listas: con 100 000 canales, «canal» casa con todos).
+ * `matched` recibe las palabras que casan con algo.
+ */
+function keyMatch(
+  index: BrowseIndex,
+  key: string,
+  onMatch: (position: number, level: number) => void,
+  matched?: Set<string>,
+): void {
   const words = significant([...new Set(key.split(' ').filter(Boolean))]).slice(0, 32);
   /* Sin Movistar delante (como el buscador): las listas no siempre lo escriben. */
   const branded = words.map((word) => MOVISTAR_WORDS.has(word));
@@ -497,7 +615,9 @@ function textMatch(
     if (!branded[position]) hitsBrandless[item] = (hitsBrandless[item] as number) + 1;
   };
   words.forEach((word, position) => {
-    for (const token of tokensForWord(index, word)) {
+    const tokens = tokensForWord(index, word);
+    if (tokens.length) matched?.add(word);
+    for (const token of tokens) {
       const items = index.byToken.get(token);
       if (typeof items === 'number') hit(items, position);
       else if (items) for (const item of items) hit(item, position);
@@ -506,27 +626,17 @@ function textMatch(
   /* O la clave sin espacios contiene la consulta sin espacios («la sexta» → «lasexta»). */
   const compact = key.replace(/ /g, '');
   const byCompact = compact.length >= SEARCH_QUERY_MIN;
-  const mark = (row: number, level: number): void => {
-    setBit(bits, row);
-    rank[row] = level;
-  };
   for (let position = 0; position < count; position += 1) {
-    let level: number;
     if (
       hits[position] === words.length ||
       (byCompact && (index.keyCompact[position] as string).includes(compact))
     ) {
       const text = index.keyText[position] as string;
-      level = text === key ? 0 : text.startsWith(key) ? 1 : inOrder(words, text) ? 2 : 3;
+      onMatch(position, text === key ? 0 : text.startsWith(key) ? 1 : inOrder(words, text) ? 2 : 3);
     } else if (brandless && hitsBrandless[position] === brandlessCount) {
-      level = 4;
-    } else {
-      continue;
+      onMatch(position, 4);
     }
-    mark(index.keyRow[position] as number, level);
-    for (const row of index.keyMoreRows.get(position) ?? []) mark(row, level);
   }
-  return { bits, rank };
 }
 
 function categoryBits(index: BrowseIndex, category: BrowseCategory): Uint32Array {
@@ -723,7 +833,7 @@ function compute(
   /* Orden: el del proveedor; con texto, por niveles y luego el del proveedor. */
   const rows = rowsOf(result);
   if (!text) return { order: Int32Array.from(rows), categories, facets, text: query };
-  /* Por niveles sin comparar: cinco cubos que ya vienen en el orden del proveedor y, dentro de
+  /* Por niveles sin comparar: cubos que ya vienen en el orden del proveedor y, dentro de
      cada uno, España y sin país primero (como el buscador, §18: «dazn 1» da antes el de aquí). */
   const order = new Int32Array(rows.length);
   let at = 0;
@@ -731,10 +841,12 @@ function compute(
     const country = index.country[row];
     return country === null || country === undefined || country === 'ES';
   };
-  for (let level = 0; level <= 4; level += 1) {
-    for (const row of rows) if (text.rank[row] === level && home(row)) order[at++] = row;
-    for (const row of rows) if (text.rank[row] === level && !home(row)) order[at++] = row;
+  /* Una pasada: cada fila a su cubo (nivel y, dentro, España o sin país primero), ya en el orden del proveedor. */
+  const buckets: number[][] = Array.from({ length: (BROWSE_LEVEL_MAX + 1) * 2 }, () => []);
+  for (const row of rows) {
+    (buckets[(text.rank[row] as number) * 2 + (home(row) ? 0 : 1)] as number[]).push(row);
   }
+  for (const bucket of buckets) for (const row of bucket) order[at++] = row;
   return { order, categories, facets, text: query };
 }
 

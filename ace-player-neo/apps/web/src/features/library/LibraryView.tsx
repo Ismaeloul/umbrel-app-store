@@ -61,6 +61,7 @@ import {
   iptvTags,
 } from '../search/iptv.ts';
 import { canSearch, cleanQuery, ENGINE_SEARCH_DELAY_MS } from '../search/model.ts';
+import { Suggestion } from '../search/Suggestion.tsx';
 import { goToEngineSearch } from '../search/navigation.ts';
 import { ChannelRow } from './ChannelRow.tsx';
 import { usePendingKeys } from './data.ts';
@@ -69,6 +70,7 @@ import { searchInCategory, IPTV_TAB_TEXT } from './iptv/texts.ts';
 import {
   ENGINE_SEARCH_MIN,
   filterItems,
+  suggestItems,
   groupByCategory,
   initialTab,
   isFallenFavorite,
@@ -507,6 +509,19 @@ export default function LibraryView({ active }: ViewProps) {
       </section>
     ) : null;
 
+  /* «Quizás quisiste decir» (§20): solo con la pestaña vacía y nada en tu IPTV. */
+  const tabSuggestion =
+    channelCount === 0 &&
+    collectionTab !== null &&
+    q.length >= ENGINE_SEARCH_MIN &&
+    !iptvShown.length
+      ? suggestItems(itemsFor(visible ?? data, collectionTab), q)
+      : null;
+  const pickSuggestion = (value: string) => {
+    setText(value);
+    setQuery(value);
+  };
+
   const empty = (() => {
     if (channelCount > 0 || collectionTab === null) return null;
     if (q.length >= ENGINE_SEARCH_MIN)
@@ -518,7 +533,9 @@ export default function LibraryView({ active }: ViewProps) {
               {withIptv ? bothButtonText(q) : `Buscar «${q}» en el motor`}
             </Button>
           }
-        />
+        >
+          {tabSuggestion ? <Suggestion value={tabSuggestion} onPick={pickSuggestion} /> : null}
+        </EmptyState>
       );
     if (tab === 'listas')
       return (
@@ -657,6 +674,7 @@ export default function LibraryView({ active }: ViewProps) {
             onScreen={onScreen}
             onAir={onAir}
             onCategoryName={setIptvCategory}
+            onSuggest={pickSuggestion}
           />
         ) : (
           (empty ?? (
