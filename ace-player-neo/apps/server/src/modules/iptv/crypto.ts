@@ -15,7 +15,8 @@
 
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { gunzipSync, gzipSync } from 'node:zlib';
+import { once } from 'node:events';
+import { createGzip, gunzipSync, gzipSync } from 'node:zlib';
 import type { IptvKind, Sealed } from '@ace/shared';
 import { AppError } from '../../core/errors.js';
 import type { AppConfig } from '../../config/index.js';
@@ -92,6 +93,34 @@ export function sealBlob(key: Buffer, aad: string, value: unknown): Buffer {
   const plain = gzipSync(Buffer.from(JSON.stringify(value), 'utf8'));
   const data = Buffer.concat([cipher.update(plain), cipher.final()]);
   return Buffer.concat([BLOB_MAGIC, iv, cipher.getAuthTag(), data]);
+}
+
+/**
+ * Lo mismo que `sealBlob` a partir de un JSON que llega a trozos (el
+ * catálogo): gzip en streaming, sin montar el texto entero en memoria.
+ */
+export async function sealBlobChunks(
+  key: Buffer,
+  aad: string,
+  chunks: Iterable<string>,
+): Promise<Buffer> {
+  const iv = randomBytes(IV_BYTES);
+  const cipher = createCipheriv(ALG, key, iv, { authTagLength: TAG_BYTES });
+  cipher.setAAD(Buffer.from(aad, 'utf8'));
+  const gzip = createGzip();
+  const out: Buffer[] = [];
+  gzip.on('data', (chunk: Buffer) => out.push(cipher.update(chunk)));
+  const ended = new Promise<void>((resolve, reject) => {
+    gzip.once('end', resolve);
+    gzip.once('error', reject);
+  });
+  for (const chunk of chunks) {
+    if (!gzip.write(chunk, 'utf8')) await once(gzip, 'drain');
+  }
+  gzip.end();
+  await ended;
+  out.push(cipher.final());
+  return Buffer.concat([BLOB_MAGIC, iv, cipher.getAuthTag(), ...out]);
 }
 
 /** Descifra lo de `sealBlob`. */

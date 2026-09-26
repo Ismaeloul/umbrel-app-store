@@ -1,23 +1,22 @@
 /* Catálogo de la IPTV en memoria (docs/iptv.md §3.4).
 
-   - Entrada: `{ id, display, base, key, quality, backup, hevc, country,
-     tvgId, group, ref, … }`. `ref` es el `stream_id` en Xtream y la URL en
-     M3U: NUNCA sale del módulo.
+   - Entrada: `{ id, title, group, tvgId, ref, key, quality, backup, hevc,
+     country, order, … }`. `ref` es el `stream_id` en Xtream y la URL en M3U:
+     NUNCA sale del módulo. `display` y `base` se calculan al pedirlos (solo
+     hacen falta para las pocas entradas que se puntúan o se enseñan).
    - Índice por palabras (y por clave exacta) para no pasar
      `channelMatchScore` sobre 30 000 entradas en cada resolución: primero se
      preselecciona por palabras compartidas y luego se puntúa.
    - Variantes: las entradas con la misma `key` (FHD, HD, reserva) forman un
      grupo, ordenado de mejor a peor (no HEVC, fhd > hd > uhd > sd > sin
      marca, no reserva, orden del catálogo). Hacia fuera solo sale la mejor.
+   - Memoria (docs/iptv.md §12.2, riesgo 6): entradas de forma fija (clase),
+     índices con arrays y valores sueltos en vez de `Set`, y los textos que se
+     repiten (grupos, User-Agent) compartidos.
    - Se guarda cifrado en `catalogo.enc` (con las URLs de stream y las de la
      guía, que llevan credenciales) y se carga al arrancar sin red. */
 
-import {
-  CHANNEL_FILLER_TOKENS,
-  normalizeChannelKey,
-  type IptvKind,
-  type IptvQuality,
-} from '@ace/shared';
+import { CHANNEL_FILLER_TOKENS, type IptvKind, type IptvQuality } from '@ace/shared';
 import { cleanIptvTitle, iptvSpelling, qualityRank } from './names.js';
 
 export interface RawChannel {
@@ -34,16 +33,36 @@ export interface RawChannel {
   readonly referrer: string | null;
 }
 
-export interface CatalogEntry extends RawChannel {
-  readonly display: string;
-  readonly base: string;
-  readonly key: string;
-  readonly quality: IptvQuality | null;
-  readonly backup: boolean;
-  readonly hevc: boolean;
-  readonly country: string | null;
-  /** Orden en el catálogo (desempate final). */
-  readonly order: number;
+/** Una entrada del catálogo (forma fija para no gastar memoria de más). */
+export class CatalogEntry implements RawChannel {
+  constructor(
+    readonly id: string,
+    readonly title: string,
+    readonly group: string,
+    readonly tvgId: string,
+    readonly ref: string,
+    readonly tvgShift: number | null,
+    readonly userAgent: string | null,
+    readonly referrer: string | null,
+    /** `normalizeChannelKey(base)`: clave del grupo de variantes. */
+    readonly key: string,
+    readonly quality: IptvQuality | null,
+    readonly backup: boolean,
+    readonly hevc: boolean,
+    readonly country: string | null,
+    /** Orden en el catálogo (desempate final). */
+    readonly order: number,
+  ) {}
+
+  /** Nombre para enseñar («DAZN LaLiga»), sin país, adornos, calidad ni reserva. */
+  get display(): string {
+    return cleanIptvTitle(this.title, this.group).display;
+  }
+
+  /** Nombre para emparejar: `display` con las grafías de la IPTV. */
+  get base(): string {
+    return iptvSpelling(this.display);
+  }
 }
 
 /** Lo que se guarda en `catalogo.enc` (y se carga al arrancar). */
@@ -89,12 +108,101 @@ export function compareVariants(a: CatalogEntry, b: CatalogEntry): number {
   return a.order - b.order;
 }
 
+type OneOrMany<T> = T | T[];
+
+function push<T>(map: Map<string, OneOrMany<T>>, key: string, value: T): void {
+  const current = map.get(key);
+  if (current === undefined) map.set(key, value);
+  else if (Array.isArray(current)) current.push(value);
+  else map.set(key, [current, value]);
+}
+
+function many<T>(value: OneOrMany<T> | undefined): T[] {
+  if (value === undefined) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+/**
+ * Construye el catálogo canal a canal, mientras se lee la lista (así no hay
+ * que guardar antes todos los canales en crudo: memoria, §12.2).
+ */
+export class CatalogBuilder {
+  readonly entries: CatalogEntry[] = [];
+  readonly byId = new Map<string, CatalogEntry>();
+  readonly groups = new Map<string, OneOrMany<CatalogEntry>>();
+  readonly tokens = new Map<string, string[]>();
+  readonly tvg = new Map<string, OneOrMany<string>>();
+  /* Textos que se repiten en miles de entradas: una sola copia. */
+  private readonly pool = new Map<string, string>();
+  private order = 0;
+  private sorted = false;
+
+  private intern(value: string | null): string | null {
+    if (value === null) return null;
+    const known = this.pool.get(value);
+    if (known !== undefined) return known;
+    this.pool.set(value, value);
+    return value;
+  }
+
+  get size(): number {
+    return this.entries.length;
+  }
+
+  add(channel: RawChannel): void {
+    const order = this.order++;
+    if (this.byId.has(channel.id)) return;
+    const clean = cleanIptvTitle(channel.title, channel.group);
+    if (!clean.key) return;
+    const entry = new CatalogEntry(
+      channel.id,
+      channel.title,
+      this.intern(channel.group) as string,
+      channel.tvgId,
+      channel.ref,
+      channel.tvgShift,
+      this.intern(channel.userAgent),
+      this.intern(channel.referrer),
+      clean.key,
+      clean.quality,
+      clean.backup,
+      clean.hevc,
+      clean.country,
+      order,
+    );
+    this.entries.push(entry);
+    this.byId.set(entry.id, entry);
+    const known = this.groups.has(entry.key);
+    push(this.groups, entry.key, entry);
+    if (!known) {
+      for (const token of indexTokens(entry.key)) {
+        const list = this.tokens.get(token);
+        if (list) list.push(entry.key);
+        else this.tokens.set(token, [entry.key]);
+      }
+    }
+    const tvgId = entry.tvgId.trim().toLowerCase();
+    if (tvgId && !many(this.tvg.get(tvgId)).includes(entry.key)) push(this.tvg, tvgId, entry.key);
+  }
+
+  /** Ordena las variantes de cada grupo (una vez, al terminar). */
+  finish(): this {
+    if (this.sorted) return this;
+    this.sorted = true;
+    this.pool.clear();
+    for (const [key, value] of this.groups) {
+      if (Array.isArray(value)) this.groups.set(key, value.sort(compareVariants));
+    }
+    return this;
+  }
+}
+
 export class Catalog {
   readonly entries: readonly CatalogEntry[];
-  private readonly byId = new Map<string, CatalogEntry>();
-  private readonly groups = new Map<string, CatalogEntry[]>();
-  private readonly tokens = new Map<string, Set<string>>();
-  private readonly tvg = new Map<string, Set<string>>();
+  private readonly byId: Map<string, CatalogEntry>;
+  private readonly groups: Map<string, OneOrMany<CatalogEntry>>;
+  private readonly tokens: Map<string, string[]>;
+  private readonly tvg: Map<string, OneOrMany<string>>;
 
   constructor(
     readonly providerId: string,
@@ -103,42 +211,20 @@ export class Catalog {
     readonly builtAt: number,
     readonly guideUrls: readonly string[],
     readonly streamExt: 'ts' | 'm3u8' | null,
-    raw: readonly RawChannel[],
+    raw: readonly RawChannel[] | CatalogBuilder,
   ) {
-    const entries: CatalogEntry[] = [];
-    raw.forEach((channel, order) => {
-      if (this.byId.has(channel.id)) return;
-      const clean = cleanIptvTitle(channel.title, channel.group);
-      if (!clean.key) return;
-      const entry: CatalogEntry = { ...channel, ...clean, order };
-      entries.push(entry);
-      this.byId.set(entry.id, entry);
-      let group = this.groups.get(entry.key);
-      if (!group) {
-        group = [];
-        this.groups.set(entry.key, group);
-        for (const token of indexTokens(entry.key)) {
-          let set = this.tokens.get(token);
-          if (!set) {
-            set = new Set();
-            this.tokens.set(token, set);
-          }
-          set.add(entry.key);
-        }
-      }
-      group.push(entry);
-      const tvgId = entry.tvgId.trim().toLowerCase();
-      if (tvgId) {
-        let set = this.tvg.get(tvgId);
-        if (!set) {
-          set = new Set();
-          this.tvg.set(tvgId, set);
-        }
-        set.add(entry.key);
-      }
-    });
-    for (const group of this.groups.values()) group.sort(compareVariants);
-    this.entries = entries;
+    let builder: CatalogBuilder;
+    if (raw instanceof CatalogBuilder) builder = raw;
+    else {
+      builder = new CatalogBuilder();
+      for (const channel of raw) builder.add(channel);
+    }
+    builder.finish();
+    this.entries = builder.entries;
+    this.byId = builder.byId;
+    this.groups = builder.groups;
+    this.tokens = builder.tokens;
+    this.tvg = builder.tvg;
   }
 
   get size(): number {
@@ -155,12 +241,12 @@ export class Catalog {
 
   /** Variantes de un grupo, de mejor a peor. */
   group(key: string): readonly CatalogEntry[] {
-    return this.groups.get(key) ?? [];
+    return many(this.groups.get(key));
   }
 
   /** Grupos con ese `tvg-id` (para la guía). */
   groupsByTvgId(tvgId: string): string[] {
-    return [...(this.tvg.get(tvgId.trim().toLowerCase()) ?? [])];
+    return [...many(this.tvg.get(tvgId.trim().toLowerCase()))];
   }
 
   /** `tvg-id` con al menos un canal en el catálogo. */
@@ -177,7 +263,7 @@ export class Catalog {
     const out = new Set<string>();
     for (const channel of channels) {
       for (const variant of new Set([channel, iptvSpelling(channel)])) {
-        const key = normalizeChannelKey(variant);
+        const key = cleanIptvTitle(variant).key;
         if (!key) continue;
         if (this.groups.has(key)) out.add(key);
         if (this.groups.has(`${key} 1`)) out.add(`${key} 1`);
@@ -190,6 +276,42 @@ export class Catalog {
       }
     }
     return [...out];
+  }
+
+  /**
+   * La misma forma que `toStored()` en JSON y a trozos, para guardar sin
+   * montar de golpe un texto de decenas de MB (memoria, §12.2).
+   */
+  *storedChunks(batch = 500): Generator<string> {
+    const head = JSON.stringify({
+      v: 1,
+      providerId: this.providerId,
+      revision: this.revision,
+      kind: this.kind,
+      builtAt: this.builtAt,
+      guideUrls: this.guideUrls,
+      streamExt: this.streamExt,
+    });
+    yield `${head.slice(0, -1)},"entries":[`;
+    for (let start = 0; start < this.entries.length; start += batch) {
+      const part = this.entries
+        .slice(start, start + batch)
+        .map((entry) =>
+          JSON.stringify([
+            entry.id,
+            entry.title,
+            entry.group,
+            entry.tvgId,
+            entry.ref,
+            entry.tvgShift,
+            entry.userAgent,
+            entry.referrer,
+          ]),
+        )
+        .join(',');
+      yield start + batch < this.entries.length ? `${part},` : part;
+    }
+    yield ']}';
   }
 
   /** Forma para `catalogo.enc`. */

@@ -12,6 +12,11 @@ import type { NetResolver, NetTransport } from '../../src/modules/net/types.js';
 import { nodeTransport, systemResolver } from '../../src/modules/net/transport.js';
 
 export const FAKE_IPTV_HOST = 'iptv.ace-e2e.example';
+
+/* Conexiones reutilizadas con el proveedor falso: en el PC de Isma abrir y cerrar
+   muchas seguidas tumba a veces el proceso de Node (0xC0000409, ver
+   test/fake-engine/test-utils.ts). Los streams largos van igual por su conexión. */
+const keepAlive = new http.Agent({ keepAlive: true, maxSockets: 16, keepAliveMsecs: 1000 });
 /** Una IP pública cualquiera (no se conecta nunca a ella). */
 export const FAKE_IPTV_PUBLIC_IP = '93.184.215.14';
 
@@ -60,7 +65,7 @@ export function fakeIptvTransport(
           port: target.port,
           path: `${request.url.pathname}${request.url.search}`,
           headers: { ...request.headers, host: request.url.host },
-          agent: false,
+          agent: keepAlive,
         },
         (response) => {
           resolve({ status: response.statusCode ?? 0, headers: response.headers, body: response });

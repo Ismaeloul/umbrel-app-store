@@ -435,6 +435,62 @@ describe('IPTV de punta a punta (docs/iptv.md §9.2)', () => {
     expect(r.h.bus.of('iptv.status').at(-1)?.status).toBe('disabled');
   });
 
+  it('gracia de 3 s solo al irse sin pedir otra cosa; otro canal la cancela y cierra antes de abrir', async () => {
+    const r = await setup();
+    await saveXtream(r);
+    const antena = await iptvIdFor(r.h, 'Antena 3');
+    const la1 = await iptvIdFor(r.h, 'La 1');
+    const grant = await open(r.h, antena, 'visor_gracia');
+    await until('conectado', () => r.provider.conexiones() === 1);
+    r.provider.limpiarPeticiones();
+    const release = await inject(r.h, 'POST', `/api/v1/sessions/${grant.session.id}/release`, {
+      viewer: 'visor_gracia',
+    });
+    expect(release.statusCode).toBe(200);
+    /* Vuelta enseguida al mismo canal: misma sesión y ni una petición nueva al proveedor. */
+    const back = await open(r.h, antena, 'visor_gracia');
+    expect(back.session.id).toBe(grant.session.id);
+    expect(r.provider.peticionesDeStream()).toEqual([]);
+    expect(r.provider.conexiones()).toBe(1);
+    /* Se va otra vez y pasan los 3 s: se cierra y se suelta la plaza. */
+    await inject(r.h, 'POST', `/api/v1/sessions/${back.session.id}/release`, {
+      viewer: 'visor_gracia',
+    });
+    await r.h.advance(4_000, 1_000);
+    await until('cerrada tras la gracia', () => r.provider.conexiones() === 0);
+    expect(r.h.playback.inspect().sessions).toEqual([]);
+    /* Soltar y abrir OTRO canal IPTV: la gracia no se aplica, se cierra antes de abrir. */
+    const third = await open(r.h, antena, 'visor_gracia');
+    await until('conectado otra vez', () => r.provider.conexiones() === 1);
+    await inject(r.h, 'POST', `/api/v1/sessions/${third.session.id}/release`, {
+      viewer: 'visor_gracia',
+    });
+    const other = await openDriven(r.h, la1, 'visor_gracia');
+    expect(other.session.id).not.toBe(third.session.id);
+    expect(r.h.playback.inspect().sessions).toHaveLength(1);
+    expect(r.provider.conexiones()).toBeLessThanOrEqual(1);
+  });
+
+  it('§7.7 · un partido que solo tiene IPTV queda «discovered» en el precalentamiento, no «no_sources»', async () => {
+    const r = await setup();
+    await saveXtream(r);
+    const schedule = await r.h.services.football.schedule();
+    const match = schedule.days.flatMap((day) => day.matches).find((item) => item.id === 'demo-3');
+    expect(match?.channels.map((channel) => channel.name)).toEqual(['La 1 HD']);
+    const football = r.h.services.football as unknown as {
+      preheatMatch(
+        match: unknown,
+        stage: 'discovery',
+        now?: number,
+      ): Promise<{ status: string } | null>;
+    };
+    const record = await football.preheatMatch(match, 'discovery');
+    expect(record?.status).toBe('discovered');
+    const preheat = await inject(r.h, 'GET', '/api/v1/football/preheat/demo-3');
+    expect(preheat.json().preheat.candidateCount).toBe(1);
+    expect(preheat.json().preheat.status).toBe('discovered');
+  });
+
   it('9 · con el motor caído, el canal suelto se resuelve por la IPTV y se reproduce', async () => {
     const r = await setup();
     await saveXtream(r);

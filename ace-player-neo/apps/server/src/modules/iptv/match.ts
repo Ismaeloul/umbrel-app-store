@@ -93,20 +93,25 @@ const HAS_DIGIT = /\d/;
 const TRAILING_ONE = /\s+1$/;
 
 /* Mejor puntuación de una entrada contra UN canal pedido. */
-function scoreAgainst(scorer: ChannelScorer, channel: string, entry: CatalogEntry): number {
+function scoreAgainst(
+  scorer: ChannelScorer,
+  channel: string,
+  entry: CatalogEntry,
+  base: string,
+): number {
   const alias = entry.tvgId || null;
   const spelled = iptvSpelling(channel);
   const asked = spelled === channel ? [channel] : [channel, spelled];
   let best = 0;
   for (const wanted of asked) {
-    best = Math.max(best, scorer([wanted], { id: entry.id, title: entry.base, alias }).score);
+    best = Math.max(best, scorer([wanted], { id: entry.id, title: base, alias }).score);
     /* Nunca con la marca paraguas («DAZN» no es «DAZN 1»). */
     if (
       !HAS_DIGIT.test(wanted) &&
       !channelAllowsFamilyFallback(wanted) &&
-      TRAILING_ONE.test(entry.base)
+      TRAILING_ONE.test(base)
     ) {
-      const without = entry.base.replace(TRAILING_ONE, '');
+      const without = base.replace(TRAILING_ONE, '');
       best = Math.max(best, scorer([wanted], { id: entry.id, title: without, alias: null }).score);
     }
   }
@@ -133,8 +138,10 @@ export function matchIptvChannels(
     if (!representative) continue;
     let score = 0;
     let matchedChannel = wanted[0] as string;
+    /* `base` se calcula una vez por grupo (es un getter con la limpieza del nombre). */
+    const base = representative.base;
     for (const channel of wanted) {
-      const value = scoreAgainst(options.scorer, channel, representative);
+      const value = scoreAgainst(options.scorer, channel, representative, base);
       if (value > score) {
         score = value;
         matchedChannel = channel;

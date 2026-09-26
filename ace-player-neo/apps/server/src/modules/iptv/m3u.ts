@@ -45,7 +45,10 @@ export interface M3uHeader {
 
 export interface M3uParseResult {
   readonly header: M3uHeader;
+  /** Vacío si se pasó `onEntry` (los canales se entregan según se leen). */
   readonly entries: readonly M3uEntry[];
+  /** Canales en directo válidos leídos. */
+  readonly count: number;
   /** Tramos de ruta que se repiten antes del id (usuario y contraseña de las URLs cortas). */
   readonly learnedSecrets: readonly string[];
   /** Entradas descartadas (VOD, esquemas que no son http, líneas enormes). */
@@ -56,6 +59,8 @@ export interface M3uParseOptions {
   readonly maxLineBytes?: number;
   readonly maxChannels?: number;
   readonly signal?: AbortSignal;
+  /** Cada canal según se lee, sin acumularlos (memoria, docs/iptv.md §12.2). */
+  readonly onEntry?: (entry: M3uEntry) => void;
 }
 
 const VOD_PATH_RE = /\/(?:movie|movies|series)\//i;
@@ -159,6 +164,7 @@ export async function parseM3uStream(
   let header: M3uHeader = { guideUrls: [], tvgShift: null };
   let sawHeader = false;
   let skipped = 0;
+  let count = 0;
 
   let pending: {
     title: string;
@@ -215,7 +221,7 @@ export async function parseM3uStream(
       skipped += 1;
       return;
     }
-    entries.push({
+    const entry: M3uEntry = {
       title: current.title,
       tvgId: current.tvgId,
       tvgName: current.tvgName,
@@ -224,8 +230,11 @@ export async function parseM3uStream(
       url: line,
       userAgent,
       referrer,
-    });
-    if (entries.length > maxChannels) throw new AppError('iptv_too_large');
+    };
+    count += 1;
+    if (count > maxChannels) throw new AppError('iptv_too_large');
+    if (options.onEntry) options.onEntry(entry);
+    else entries.push(entry);
     const pair = shortPair(line);
     if (pair) pairs.set(pair, (pairs.get(pair) ?? 0) + 1);
   };
@@ -278,8 +287,8 @@ export async function parseM3uStream(
 
   /* Un tramo que se repite en la mayoría de los canales es de la cuenta. */
   const learnedSecrets: string[] = [];
-  for (const [pair, count] of pairs) {
-    if (count * 2 > entries.length && count >= 2) {
+  for (const [pair, hits] of pairs) {
+    if (hits * 2 > count && hits >= 2) {
       for (const part of pair.split('\n')) {
         let decoded = part;
         try {
@@ -291,5 +300,5 @@ export async function parseM3uStream(
       }
     }
   }
-  return { header, entries, learnedSecrets, skipped };
+  return { header, entries, count, learnedSecrets, skipped };
 }

@@ -23,16 +23,12 @@ import {
   IPTV_DEFAULT_NAME,
   IPTV_GUIDE_LIMITS,
   IPTV_M3U_LIMITS,
-  IPTV_MAX_CANDIDATES,
-  IPTV_MAX_GUIDE_HINTS,
   IPTV_PROBE,
   IPTV_QUICK_TEST,
   IPTV_REFRESH,
   IPTV_REFRESH_HOURS,
   IPTV_SESSION,
   IPTV_USER_AGENT,
-  IPTV_GUIDE_SCORE,
-  channelMatchScore,
   normalizeChannelKey,
   type IptvAccountState,
   type IptvFile,
@@ -48,7 +44,7 @@ import type { TimerHandle } from '../../core/clock.js';
 import { AppError, errorCodeOf, isAppError } from '../../core/errors.js';
 import type { IptvKeys } from '../../config/keys.js';
 import type { IptvFetchPolicy } from '../net/types.js';
-import { Catalog, type CatalogEntry, type RawChannel } from './catalog.js';
+import { Catalog, CatalogBuilder, type CatalogEntry } from './catalog.js';
 import { loadIptvKeys, openJson, sealJson, secretAad } from './crypto.js';
 import { toIptvError } from './errors.js';
 import {
@@ -58,8 +54,8 @@ import {
   type GuideWindow,
   type StoredProgramme,
 } from './guide.js';
-import { confirmByGuide, type GuideChannelCandidate } from './guide-match.js';
 import { iptvChannelId, isIptvId, m3uKey, xtreamKey } from './ids.js';
+import { guideGroupMatches, mergeIptvMatches } from './layer.js';
 import { parseM3uStream } from './m3u.js';
 import { matchIptvChannels, pickVariants, type IptvGroupMatch } from './match.js';
 import { probeIptvStream } from './probe.js';
@@ -800,7 +796,8 @@ export class IptvServiceImpl implements IptvService {
     let failure: AppError | null = null;
     try {
       const policy = this.policy();
-      const raw: RawChannel[] = [];
+      /* El catálogo se va montando según se lee la lista (sin copia en crudo, §12.2). */
+      const builder = new CatalogBuilder();
       let guideUrls: string[] = [];
       let streamExt: 'ts' | 'm3u8' | null = null;
       if (secrets.kind === 'xtream') {
@@ -816,7 +813,7 @@ export class IptvServiceImpl implements IptvService {
           this.deps.net,
           secrets,
           (stream) => {
-            raw.push({
+            builder.add({
               id: iptvChannelId(keys, providerId, xtreamKey(stream.streamId)),
               title: stream.name,
               group: categories.get(stream.categoryId) ?? '',
@@ -846,34 +843,37 @@ export class IptvServiceImpl implements IptvService {
         } catch (error) {
           throw toIptvError(error, 'list');
         }
+        const repeats = new Map<string, number>();
         let parsed;
         try {
-          parsed = await parseM3uStream(opened.body, { signal });
+          parsed = await parseM3uStream(opened.body, {
+            signal,
+            onEntry: (entry) => {
+              const titleKey = normalizeChannelKey(entry.title);
+              const pair = `${entry.tvgId}\n${titleKey}`;
+              const n = repeats.get(pair) ?? 0;
+              repeats.set(pair, n + 1);
+              builder.add({
+                id: iptvChannelId(keys, providerId, m3uKey(entry.tvgId, titleKey, n)),
+                title: entry.title,
+                group: entry.group,
+                tvgId: entry.tvgId,
+                ref: entry.url,
+                tvgShift: entry.tvgShift,
+                userAgent: entry.userAgent,
+                referrer: entry.referrer,
+              });
+            },
+          });
         } catch (error) {
           throw toIptvError(error, 'list');
         }
+        repeats.clear();
         for (const secret of parsed.learnedSecrets) this.redactor.add(secret);
-        const repeats = new Map<string, number>();
-        for (const entry of parsed.entries) {
-          const titleKey = normalizeChannelKey(entry.title);
-          const pair = `${entry.tvgId}\n${titleKey}`;
-          const n = repeats.get(pair) ?? 0;
-          repeats.set(pair, n + 1);
-          raw.push({
-            id: iptvChannelId(keys, providerId, m3uKey(entry.tvgId, titleKey, n)),
-            title: entry.title,
-            group: entry.group,
-            tvgId: entry.tvgId,
-            ref: entry.url,
-            tvgShift: entry.tvgShift,
-            userAgent: entry.userAgent,
-            referrer: entry.referrer,
-          });
-        }
         guideUrls = [...parsed.header.guideUrls];
         for (const url of guideUrls) this.redactor.addUrl(url);
       }
-      if (!raw.length) throw new AppError('iptv_empty');
+      if (!builder.size) throw new AppError('iptv_empty');
       catalog = new Catalog(
         providerId,
         revision,
@@ -881,9 +881,8 @@ export class IptvServiceImpl implements IptvService {
         clock.now(),
         guideUrls,
         streamExt,
-        raw,
+        builder,
       );
-      if (!catalog.size) throw new AppError('iptv_empty');
     } catch (error) {
       failure = signal.aborted
         ? null
@@ -1096,7 +1095,8 @@ export class IptvServiceImpl implements IptvService {
     for (const entry of catalog.entries) {
       if (picked.length >= IPTV_GUIDE_LIMITS.shortEpgChannels) break;
       if (entry.country !== null && entry.country !== 'ES') continue;
-      if (seen.has(entry.key)) continue;
+      /* Sin tvg-id no hay dónde apuntar sus programas: no entra. */
+      if (!entry.tvgId || seen.has(entry.key)) continue;
       if (!sportRe.test(entry.group) && !sportRe.test(entry.display)) continue;
       seen.add(entry.key);
       picked.push(entry);
@@ -1112,7 +1112,7 @@ export class IptvServiceImpl implements IptvService {
           policy: this.policy(),
           signal,
         }).catch(() => []);
-        const channel = (entry.tvgId || `stream:${entry.ref}`).toLowerCase();
+        const channel = entry.tvgId.trim().toLowerCase();
         for (const item of items) {
           if (item.stop <= now || item.start >= now + IPTV_GUIDE_LIMITS.windowMs) continue;
           list.push({
@@ -1253,18 +1253,12 @@ export class IptvServiceImpl implements IptvService {
       ...(request.reliability ? { reliability: request.reliability } : {}),
     });
     const byGuide = request.program ? this.guideMatches(request.program, request.reliability) : [];
-    const merged = new Map<string, IptvGroupMatch>();
-    for (const match of byGuide) merged.set(match.key, match);
-    for (const match of byName) if (!merged.has(match.key)) merged.set(match.key, match);
-    const ordered = [...merged.values()].sort(
-      (a, b) =>
-        Number(b.guide) - Number(a.guide) || b.score - a.score || a.best.order - b.best.order,
-    );
-    const candidates = ordered
-      .slice(0, IPTV_MAX_CANDIDATES)
-      .map((match) => this.toCandidate(match));
-    const hints = byGuide.slice(0, IPTV_MAX_GUIDE_HINTS).map((match) => match.best.display);
-    return { candidates, hints, consulted: true };
+    const layer = mergeIptvMatches(byGuide, byName);
+    return {
+      candidates: layer.matches.map((match) => this.toCandidate(match)),
+      hints: layer.hints,
+      consulted: true,
+    };
   }
 
   /** Canales confirmados por la guía para un partido (caché de 10 min). */
@@ -1279,55 +1273,7 @@ export class IptvServiceImpl implements IptvService {
     const cacheKey = `${program.id}|${program.start}|${program.channels.join(',')}|${catalog.builtAt}|${window.builtAt}`;
     const cached = this.guideCache.get(cacheKey);
     if (cached && now - cached.at < 10 * MINUTE) return cached.result;
-    const candidates: GuideChannelCandidate[] = [];
-    const groups = new Map<string, StoredProgramme[]>();
-    for (const [channel, programmes] of window.byChannel) {
-      for (const key of catalog.groupsByTvgId(channel)) {
-        const bucket = groups.get(key) ?? [];
-        bucket.push(...programmes);
-        groups.set(key, bucket);
-      }
-    }
-    for (const [key, programmes] of groups) {
-      const entries = catalog.group(key);
-      const best = entries[0];
-      if (!best) continue;
-      /* País: ES explícito en alguna variante; si no, el de la mejor. */
-      const country = entries.some((entry) => entry.country === 'ES') ? 'ES' : best.country;
-      candidates.push({ key, display: best.display, country, programmes });
-    }
-    const agendaScore = (display: string): number =>
-      program.channels.reduce(
-        (max, channel) => Math.max(max, channelMatchScore(channel, display)),
-        0,
-      );
-    const confirmed = confirmByGuide(
-      {
-        home: program.home,
-        away: program.away,
-        competition: program.competition,
-        title: program.title,
-        start: program.start,
-        channels: program.channels,
-      },
-      candidates,
-      { agendaScore },
-    );
-    const result: IptvGroupMatch[] = [];
-    for (const item of confirmed) {
-      const entries = catalog
-        .group(item.key)
-        .filter((entry) => entry.country === null || entry.country === 'ES');
-      const picked = pickVariants(entries.length ? entries : catalog.group(item.key), reliability);
-      if (!picked) continue;
-      result.push({
-        key: item.key,
-        ...picked,
-        score: IPTV_GUIDE_SCORE,
-        matchedChannel: item.display,
-        guide: true,
-      });
-    }
+    const result = guideGroupMatches(catalog, window, program, reliability);
     this.guideCache.set(cacheKey, { at: now, result });
     if (this.guideCache.size > 64) {
       const oldest = this.guideCache.keys().next().value;

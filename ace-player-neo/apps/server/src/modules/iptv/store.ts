@@ -10,7 +10,15 @@ import { chmod, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import type { IptvKeys } from '../../config/keys.js';
 import type { Logger } from '../../core/logger.js';
 import { Catalog } from './catalog.js';
-import { FILE_MODE, catalogAad, ensureIptvDir, guideAad, openBlob, sealBlob } from './crypto.js';
+import {
+  FILE_MODE,
+  catalogAad,
+  ensureIptvDir,
+  guideAad,
+  openBlob,
+  sealBlob,
+  sealBlobChunks,
+} from './crypto.js';
 import { guideFromStored, guideToStored, type GuideWindow } from './guide.js';
 
 export interface IptvFilePaths {
@@ -32,10 +40,16 @@ export class IptvFiles {
     private readonly paths: IptvFilePaths,
     private readonly keys: () => IptvKeys,
     private readonly logger: Logger,
+    /** Solo lectura (el ensayo): un fichero ilegible no se borra. */
+    private readonly readOnly = false,
   ) {}
 
   async saveCatalog(catalog: Catalog): Promise<void> {
-    const blob = sealBlob(this.keys().secrets, catalogAad(catalog.providerId), catalog.toStored());
+    const blob = await sealBlobChunks(
+      this.keys().secrets,
+      catalogAad(catalog.providerId),
+      catalog.storedChunks(),
+    );
     await writeSecret(this.paths.iptvCatalogFile, this.paths.iptvDir, blob);
   }
 
@@ -58,7 +72,9 @@ export class IptvFiles {
         'catálogo IPTV ilegible: se descarta',
       );
     }
-    await rm(this.paths.iptvCatalogFile, { force: true }).catch(() => undefined);
+    if (!this.readOnly) {
+      await rm(this.paths.iptvCatalogFile, { force: true }).catch(() => undefined);
+    }
     return null;
   }
 
@@ -87,7 +103,7 @@ export class IptvFiles {
     } catch {
       this.logger.warn({ errorCode: 'iptv_secret_unreadable' }, 'guía IPTV ilegible: se descarta');
     }
-    await rm(this.paths.iptvGuideFile, { force: true }).catch(() => undefined);
+    if (!this.readOnly) await rm(this.paths.iptvGuideFile, { force: true }).catch(() => undefined);
     return null;
   }
 
