@@ -270,7 +270,10 @@ final class ServidorRealUITests: XCTestCase {
         captura(app, "e2e-06-olvidar-armado")
         boton.tap()
         let fuera = elementoUI(app, IDUI.pantalla("emparejar")).waitForExistence(timeout: 20)
+        // Emparejar aparece al empezar el fundido de salida (a2 §23.3): la captura, cuando el armazón ya se ha ido.
+        let sinArmazon = esperarQueDesaparezca(elementoUI(app, IDUI.armazon))
         captura(app, "e2e-07-vuelta-a-emparejar")
+        try exigir(sinArmazon, "Tras olvidar sigue el armazón de la app. \(estado(app))")
         try exigir(fuera, "«Olvidar este iPhone» no vuelve a Emparejar. \(estado(app))")
         try exigir(!(elementoUI(app, IDUI.avisoAcceso).exists), "Tras olvidar no hay aviso (a2 §23.3)")
         try exigir(!(elementoUI(app, IDUI.mini).exists), "Tras olvidar sigue el mini")
