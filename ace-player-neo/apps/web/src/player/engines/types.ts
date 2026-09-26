@@ -3,7 +3,21 @@
    Safari o la señal de la demo: solo arranca, destruye y escucha estos
    avisos. Así cada adaptador se prueba solo con un motor simulado. */
 
-import type { PlaybackProfile } from '@ace/shared';
+import type { PlaybackMode, PlaybackProfile } from '@ace/shared';
+
+/**
+ * hls.js sobre el remux del servidor (docs/multidispositivo.md §4.4): el modo
+ * y el seguimiento del directo de la concesión (`latency.liveSync`), en
+ * segundos.
+ */
+export interface RemuxTuning {
+  readonly mode: PlaybackMode;
+  readonly liveSync: {
+    readonly targetS: number;
+    readonly maxS: number;
+    readonly rate: number;
+  } | null;
+}
 
 export type EngineKind = 'mpegts' | 'hls' | 'native' | 'demo';
 
@@ -27,6 +41,10 @@ export interface EngineInfo {
   speedKBs?: number | null;
   decodedFrames?: number | null;
   droppedFrames?: number | null;
+  /** hls.js: segundos por detrás del final de la lista (`hls.latency`). */
+  latencyS?: number;
+  /** hls.js: TARGETDURATION de la lista y lo que duran de verdad sus segmentos. */
+  segment?: { targetS: number; minS: number | null; maxS: number | null };
 }
 
 export interface Engine {
@@ -52,6 +70,8 @@ export interface EngineArgs {
   callbacks: EngineCallbacks;
   /** Para la demo: el canal de muestra que «no responde». */
   demoFails?: boolean;
+  /** hls.js sobre el remux del servidor: en segundos (docs/multidispositivo.md §4.4). */
+  remux?: RemuxTuning | null;
 }
 
 export type EngineFactory = (args: EngineArgs) => Engine;

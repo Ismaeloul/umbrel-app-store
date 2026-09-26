@@ -501,6 +501,12 @@ paths:
                                     type:
                                       - boolean
                                       - "null"
+                                  follows:
+                                    type: boolean
+                                    const: true
+                                  away:
+                                    type: boolean
+                                    const: true
                                 required:
                                   - client
                                   - deviceId
@@ -524,6 +530,10 @@ paths:
                               enum:
                                 - engine
                                 - iptv
+                            matchId:
+                              type: string
+                              minLength: 1
+                              maxLength: 100
                           required:
                             - id
                             - hash
@@ -622,6 +632,8 @@ paths:
                       demoSchedule:
                         type: boolean
                       iptv:
+                        type: boolean
+                      multi:
                         type: boolean
                     required:
                       - scanner
@@ -1453,6 +1465,47 @@ paths:
           schema:
             type: string
             maxLength: 200
+        - name: others
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - move
+              - stop
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^s_[A-Za-z0-9_-]{8,64}$
+        - name: join
+          in: query
+          required: false
+          schema:
+            type: string
+            const: "1"
+        - name: match
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+        - name: follows
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - "0"
+              - "1"
+        - name: latency
+          in: query
+          required: false
+          schema:
+            type: string
+            const: "2"
       responses:
         "200":
           description: Correcto
@@ -1580,6 +1633,11 @@ paths:
                     enum:
                       - engine
                       - iptv
+                  iptvInput:
+                    type: string
+                    enum:
+                      - ts
+                      - hls
                 required:
                   - session
                   - url
@@ -2014,6 +2072,12 @@ paths:
                                 type:
                                   - boolean
                                   - "null"
+                              follows:
+                                type: boolean
+                                const: true
+                              away:
+                                type: boolean
+                                const: true
                             required:
                               - client
                               - deviceId
@@ -2037,6 +2101,10 @@ paths:
                           enum:
                             - engine
                             - iptv
+                        matchId:
+                          type: string
+                          minLength: 1
+                          maxLength: 100
                       required:
                         - id
                         - hash
@@ -8850,6 +8918,15 @@ components:
                   enum:
                     - other_channel
                     - same_channel
+                byDeviceName:
+                  type: string
+                  maxLength: 80
+                follow:
+                  type: boolean
+                matchId:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
               required:
                 - sessionId
                 - viewerIds
@@ -8925,6 +9002,12 @@ components:
                               type:
                                 - boolean
                                 - "null"
+                            follows:
+                              type: boolean
+                              const: true
+                            away:
+                              type: boolean
+                              const: true
                           required:
                             - client
                             - deviceId
@@ -8948,6 +9031,10 @@ components:
                         enum:
                           - engine
                           - iptv
+                      matchId:
+                        type: string
+                        minLength: 1
+                        maxLength: 100
                     required:
                       - id
                       - hash

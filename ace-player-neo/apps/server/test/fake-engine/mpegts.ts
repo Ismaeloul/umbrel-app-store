@@ -371,10 +371,22 @@ function cached(key: string, build: () => Buffer): Buffer {
   return value;
 }
 
+/** Posición de un cuadro en su GOP (el muxer la lleva cuando el GOP no es el de siempre). */
+export interface GopPosition {
+  /** Cuadros desde el último IDR (0 = IDR). */
+  readonly inGop: number;
+  /** Número de GOP (mueve la barra del IDR y alterna `idr_pic_id`). */
+  readonly gop: number;
+}
+
 /* Cuadro `frame` (índice absoluto desde la época) de un canal. */
-export function videoAccessUnit(codec: VideoCodec, color: PictureColor, frame: number): Buffer {
-  const inGop = frame % GOP_FRAMES;
-  const gop = Math.floor(frame / GOP_FRAMES);
+export function videoAccessUnit(
+  codec: VideoCodec,
+  color: PictureColor,
+  frame: number,
+  position: GopPosition = { inGop: frame % GOP_FRAMES, gop: Math.floor(frame / GOP_FRAMES) },
+): Buffer {
+  const { inGop, gop } = position;
   if (codec === 'hevc') return inGop === 0 ? HEVC_IDR : HEVC_P;
   if (inGop === 0) {
     const bar = gop % WIDTH_MBS;
@@ -383,7 +395,9 @@ export function videoAccessUnit(codec: VideoCodec, color: PictureColor, frame: n
       Buffer.concat([H264_AUD, H264_SPS, H264_PPS, h264IdrSlice(color, bar, idrPicId)]),
     );
   }
-  return cached(`p:${inGop}`, () => Buffer.concat([H264_AUD, h264PSlice(inGop)]));
+  /* frame_num tiene 5 bits: con GOP de más de 32 cuadros da la vuelta (es válido). */
+  const frameNum = inGop % 32;
+  return cached(`p:${frameNum}`, () => Buffer.concat([H264_AUD, h264PSlice(frameNum)]));
 }
 
 // ---------------------------------------------------------------------------
@@ -540,6 +554,13 @@ function pmtSection(video: VideoCodec, audio: readonly AudioCodec[]): Buffer {
 // ---------------------------------------------------------------------------
 // Múltiplex CBR
 
+function checkGop(frames: number): number {
+  if (!Number.isInteger(frames) || frames < 1 || frames > 250) {
+    throw new Error(`gopFrames fuera de rango (1-250): ${String(frames)}`);
+  }
+  return frames;
+}
+
 export interface MuxOptions {
   video: VideoCodec;
   audio: readonly AudioCodec[];
@@ -555,6 +576,10 @@ export interface MuxOptions {
      discontinuity_indicator (si no, ffmpeg marcaría como corrupto el IDR con
      el que empieza cada segmento y el remux con +discardcorrupt lo tiraría). */
   markDiscontinuity?: boolean;
+  /* Cuadros por GOP (por defecto `GOP_FRAMES`, 1 s). El primer cuadro es
+     siempre un IDR; con otro GOP los IDR caen cada `gopFrames` desde ahí
+     (docs/multidispositivo.md §6.2: 20 = 0,8 s, 24 = 0,96 s, 38 = 1,52 s). */
+  gopFrames?: number;
 }
 
 interface PesItem {
@@ -583,8 +608,13 @@ export class TsMuxer {
   private readonly pat: Buffer;
   private readonly pmt: Buffer;
   private readonly audioSpecs: AudioSpec[];
+  private gopFrames: number;
+  private framesSinceKey = 0;
+  private gopCount: number;
 
   constructor(private readonly options: MuxOptions) {
+    this.gopFrames = checkGop(options.gopFrames ?? GOP_FRAMES);
+    this.gopCount = Math.floor((options.startSec * FPS) / this.gopFrames);
     const kbps = Math.round(options.bitrateKbps);
     if (!(kbps >= MIN_BITRATE_KBPS && kbps <= MAX_BITRATE_KBPS)) {
       throw new Error(`bitrate fuera de rango (${MIN_BITRATE_KBPS}-${MAX_BITRATE_KBPS} kbit/s)`);
@@ -619,6 +649,11 @@ export class TsMuxer {
       if (pid !== PID_PAT && pid !== PID_PMT) this.queues.set(pid, []);
       if (options.markDiscontinuity) this.discontinuityPending.add(pid);
     }
+  }
+
+  /* Cambia el GOP a mitad del flujo (desde el siguiente IDR). */
+  setGopFrames(frames: number): void {
+    this.gopFrames = checkGop(frames);
   }
 
   /* Siguientes `count` paquetes del flujo (progresivo). */
@@ -696,14 +731,20 @@ export class TsMuxer {
     while (this.nextFrame < this.endFrame && this.nextFrame / FPS <= t) {
       const frame = this.nextFrame;
       this.nextFrame += 1;
-      const au = videoAccessUnit(this.options.video, this.options.color, frame);
+      const inGop = this.framesSinceKey;
+      if (inGop === 0 && frame !== this.options.startSec * FPS) this.gopCount += 1;
+      this.framesSinceKey = inGop + 1 >= this.gopFrames ? 0 : inGop + 1;
+      const au = videoAccessUnit(this.options.video, this.options.color, frame, {
+        inGop,
+        gop: this.gopCount,
+      });
       const pts = frame * (90000 / FPS) + (TIME_BASE_S + PTS_DELAY_S) * 90000;
       this.queues.get(PID_VIDEO)?.push({
         pid: PID_VIDEO,
         data: pes(0xe0, pts, au, false),
         offset: 0,
         timeSec: frame / FPS,
-        key: frame % GOP_FRAMES === 0,
+        key: inGop === 0,
       });
     }
     this.audioSpecs.forEach((spec, index) => {

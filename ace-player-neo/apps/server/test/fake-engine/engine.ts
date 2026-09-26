@@ -799,7 +799,7 @@ export async function createFakeEngine(options: FakeEngineOptions = {}): Promise
   }
 
   function segmentBytes(content: FakeContent, n: number): Buffer {
-    const key = `${content.infohash}:${n}:${content.bitrateKbps}:${content.video}:${content.audio.join(',')}`;
+    const key = `${content.infohash}:${n}:${content.bitrateKbps}:${content.video}:${content.audio.join(',')}:${content.gopFrames ?? ''}`;
     let data = segmentCache.get(key);
     if (!data) {
       const startSec = segmentStartSec(plan, n);
@@ -810,6 +810,7 @@ export async function createFakeEngine(options: FakeEngineOptions = {}): Promise
         startSec,
         endSec: startSec + segmentDurationSec(plan, n),
         color: colorFromSeed(content.infohash),
+        ...(content.gopFrames === undefined ? {} : { gopFrames: content.gopFrames }),
       });
       segmentCache.set(key, data);
       if (segmentCache.size > 12) {
@@ -965,6 +966,7 @@ export async function createFakeEngine(options: FakeEngineOptions = {}): Promise
         // la ráfaga es lo que el motor ya tenía en caché: empieza en el pasado
         startSec: Math.max(0, Math.floor(timelineSec() - burstSeconds)),
         color: colorFromSeed(content.infohash),
+        ...(content.gopFrames === undefined ? {} : { gopFrames: content.gopFrames }),
       }),
       bytesPerMs: bytesPerSec / 1000,
       credit: burst,

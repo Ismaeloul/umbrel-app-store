@@ -167,7 +167,39 @@ describe('mini-reproductor y datos técnicos', () => {
       Pares: '48',
       Bajada: '1,92 MB/s',
       Subida: '214 KB/s',
+      Segmento: '—',
     });
+  });
+
+  it('IPTV por el remux: «Origen: IPTV · Casa · TS», «Segmento» y «Retraso» (docs/multidispositivo.md §4.2)', () => {
+    const rows = (patch: Partial<PlayerState>) =>
+      Object.fromEntries(
+        nerdRows(
+          playing({
+            engine: 'hls',
+            protocol: 'hls',
+            streamSource: 'iptv',
+            channel: { hash: HASH, title: 'Antena 3', source: 'Casa', iptv: true },
+            live: { available: true, atLive: true, behindS: 0, delayS: 3 },
+            ...patch,
+          }),
+          'en línea',
+        ),
+      );
+    expect(rows({ iptvInput: 'ts', segment: { targetS: 1, minS: 1, maxS: 1 } })).toMatchObject({
+      Origen: 'IPTV · Casa · TS',
+      Segmento: '1 s',
+      Retraso: '3 s',
+    });
+    expect(
+      rows({ iptvInput: 'hls', segment: { targetS: 1, minS: 0.96, maxS: 0.96 } }),
+    ).toMatchObject({ Origen: 'IPTV · Casa · HLS', Segmento: '1 s · reales 0,96 s' });
+    expect(rows({ segment: { targetS: 1, minS: 1.2, maxS: 1.48 } }).Segmento).toBe(
+      '1 s · reales 1,2-1,48 s',
+    );
+    expect(rows({ segment: { targetS: 2, minS: null, maxS: null } }).Segmento).toBe('2 s');
+    /* Servidor de antes, sin `iptvInput`: como hasta ahora. */
+    expect(rows({ iptvInput: null }).Origen).toBe('IPTV · Casa');
   });
 });
 
@@ -202,5 +234,57 @@ describe('«Abrir en…» (D7)', () => {
       `http://umbrel.local:8765/ace/getstream?id=${HASH}`,
     );
     expect(externalStreamUrl(HASH, 'infohash', '')).toBe(`/ace/getstream?infohash=${HASH}`);
+  });
+});
+
+describe('varios dispositivos: traspaso y «otra cosa en casa» (docs/multidispositivo.md §2.5)', () => {
+  const OTHER_HASH = 'b2c3d4e5f60718293a4b5c6d7e8f901234567890';
+  const handoff = (patch: Partial<NonNullable<PlayerState['handoff']>> = {}): PlayerState => ({
+    ...INITIAL_PLAYER_STATE,
+    idleReason: 'traspasado',
+    handoff: {
+      kind: 'stopped',
+      reason: 'other_channel',
+      byLabel: 'el PC',
+      by: { client: 'web', deviceId: 'web_pc', deviceName: 'Chrome · Windows' },
+      hash: OTHER_HASH,
+      title: 'Antena 3',
+      matchId: null,
+      policy: 'share',
+      previous: { channel: { hash: HASH, title: 'DAZN LaLiga' }, route: null },
+      ...patch,
+    },
+  });
+
+  it('panel y línea de estado tras «Solo aquí»', () => {
+    expect(stageMessage(handoff())).toEqual({
+      title: 'Ahora en el PC',
+      text: 'En el PC han cambiado a Antena 3.',
+      tone: 'idle',
+    });
+    expect(statusFor(handoff())).toEqual({
+      text: 'En el PC han cambiado a Antena 3',
+      icon: 'movil',
+    });
+  });
+
+  it('mismo canal con el interruptor encendido y nada que seguir', () => {
+    expect(stageMessage(handoff({ reason: 'same_channel', policy: 'handoff' }))?.text).toBe(
+      'Un solo dispositivo a la vez: DAZN LaLiga sigue en el PC.',
+    );
+    expect(stageMessage(handoff({ kind: 'nothing' }))).toMatchObject({
+      title: 'Nada en el PC',
+      text: 'El PC ya no está viendo nada: no hay nada que seguir.',
+    });
+  });
+
+  it('otra cosa en casa', () => {
+    const state: PlayerState = {
+      ...INITIAL_PLAYER_STATE,
+      idleReason: 'otra-cosa-en-casa',
+      houseIdle: { labels: ['el iPhone'], title: 'DAZN LaLiga' },
+    };
+    expect(stageMessage(state)?.text).toBe('En el iPhone se está viendo DAZN LaLiga.');
+    expect(statusFor(state)?.text).toBe('En el iPhone se está viendo DAZN LaLiga.');
   });
 });

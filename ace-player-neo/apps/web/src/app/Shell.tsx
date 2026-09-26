@@ -39,6 +39,9 @@ import {
   StatusLineHost,
   Toaster,
 } from '../notices/index.ts';
+import { registerHouseNavigation } from '../features/multi/house.ts';
+import { HouseQuestion } from '../features/multi/HouseQuestion.tsx';
+import { installHouse } from '../features/multi/install.ts';
 import { MEDIA, useLayoutKind, useMediaQuery } from '../lib/media.ts';
 import { readItem, STORAGE_KEYS, writeItem } from '../lib/storage.ts';
 import { Icon } from '../ui/Icon.tsx';
@@ -140,6 +143,15 @@ export function Shell() {
     if (!inPartido) clearStatus();
   }, [inPartido]);
   useEffect(() => setImmersive(immersive), [immersive]);
+
+  // Varios dispositivos (docs/multidispositivo.md): la puerta de play() y seguir al otro.
+  useEffect(() => installHouse(), []);
+  const routeRef = useRef(route);
+  routeRef.current = route;
+  useEffect(() => {
+    registerHouseNavigation(navigate, () => routeRef.current);
+    return () => registerHouseNavigation(null, () => null);
+  }, [navigate]);
 
   // Cada vista vuelve a su scroll (o arriba la primera vez).
   const key = formatVista(route);
@@ -281,6 +293,7 @@ export function Shell() {
         <TabBar route={route} hidden={!tabbarVisible} />
         <Toaster bottomOffset={toastBottom} />
         <ShortcutHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
+        <HouseQuestion />
       </div>
     </LayoutContext>
   );

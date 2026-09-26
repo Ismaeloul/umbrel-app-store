@@ -24,7 +24,12 @@ import {
 import { EngineStatusSchema } from './api/v1/engine.js';
 import { DiagnosticEntrySchema } from './api/v1/diagnostics.js';
 import { IptvStatusSchema } from './api/v1/iptv.js';
-import { SessionSummarySchema, StreamProtocolSchema } from './api/v1/playback.js';
+import {
+  DEVICE_NAME_MAX,
+  MatchRefSchema,
+  SessionSummarySchema,
+  StreamProtocolSchema,
+} from './api/v1/playback.js';
 
 // --- Reproducción ---
 
@@ -51,6 +56,16 @@ export const PlaybackHandoffEventSchema = z.strictObject({
     title: z.string(),
     /** `other_channel`: canales distintos, siempre traspaso. `same_channel`: política `handoff`. */
     reason: z.enum(['other_channel', 'same_channel']),
+    /*
+     * Varios dispositivos (docs/multidispositivo.md §2.2). Opcionales: un
+     * cliente que no los conoce se para como hasta la 0.8.1.
+     */
+    /** Nombre legible del que se lo ha quedado («Chrome · Windows», «iPhone de Isma», «App antigua (0.6)»). */
+    byDeviceName: z.string().max(DEVICE_NAME_MAX).optional(),
+    /** true: el que cambia ha elegido «Cambiar en los dos»; el visor debe pasar solo a `hash` (con `join=1`). */
+    follow: z.boolean().optional(),
+    /** Partido del canal nuevo, si se pidió desde un partido. */
+    matchId: MatchRefSchema.optional(),
   }),
 });
 

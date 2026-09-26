@@ -4,7 +4,9 @@
 
 import {
   IOS_PLAYBACK_PROFILES,
+  IOS_PLAYBACK_PROFILES_080,
   PLAYBACK_PROFILES,
+  remuxLatency,
   type EngineSessionMode,
   type PlaybackMode,
   type StreamLatency,
@@ -32,16 +34,62 @@ export function legacyVideoPath(hash: string): string {
   return `/remux/${hash}/index.m3u8`;
 }
 
+/** Lo que sabe la concesión del remux de quien lo lee (docs/multidispositivo.md §4.4). */
+export interface RemuxLatencyInput {
+  /** TARGETDURATION fijado al quedar lista la lista (null si no se sabe: se toma 2). */
+  readonly targetDurationS: number | null;
+}
+
 /**
  * `latency` de la respuesta: `initial`/`rebuild` del perfil; seguimiento del
  * directo de mpegts.js en segundos (null en Estable); en iOS, los valores de
  * AVPlayer (P11) y sin seguimiento por velocidad.
+ *
+ * Con el remux (docs/multidispositivo.md §4.4) la distancia sale de
+ * `remuxLatency` con el TARGETDURATION real: en el iPhone nunca menos de 3 TD
+ * (lo que aguanta AVPlayer); en la web (hls.js, IPTV) en segundos y también en
+ * «Estable».
  */
-export function latencyFor(mode: PlaybackMode, protocol: StreamProtocol): StreamLatency {
+export function latencyFor(
+  mode: PlaybackMode,
+  protocol: StreamProtocol,
+  remux: RemuxLatencyInput | null = null,
+  /** La app pidió `latency=2` (el margen de la 0.8.1); sin eso, lo de la 0.8.0. */
+  iosEdge: boolean = false,
+): StreamLatency {
   const profile = PLAYBACK_PROFILES[mode];
   const base = { mode, initialBufferS: profile.initial, rebuildS: profile.rebuild };
   if (protocol === 'hls-fmp4') {
-    return { ...base, liveSync: null, ios: { ...IOS_PLAYBACK_PROFILES[mode] } };
+    if (!iosEdge) {
+      /* App publicada (0.8.0): sus 4 / 8 / 12 s, o 3 × TD si el segmento es largo. */
+      const legacy = IOS_PLAYBACK_PROFILES_080[mode];
+      const floor = remux ? 3 * Math.max(1, Math.ceil(remux.targetDurationS ?? 2)) : 0;
+      const edge = Math.max(legacy.liveEdgeOffsetS, floor);
+      return {
+        ...base,
+        liveSync: null,
+        ios: {
+          preferredForwardBufferDuration: Math.max(legacy.preferredForwardBufferDuration, edge),
+          liveEdgeOffsetS: edge,
+        },
+      };
+    }
+    if (!remux) return { ...base, liveSync: null, ios: { ...IOS_PLAYBACK_PROFILES[mode] } };
+    const ios = remuxLatency(mode, remux.targetDurationS, 'ios');
+    /* El colchón por delante no pasa de la distancia al final: más no cabe y
+       podría hacer que AVPlayer esperase de más al arrancar (a medir, §7). */
+    return {
+      ...base,
+      liveSync: null,
+      ios: {
+        preferredForwardBufferDuration: ios.targetS,
+        liveEdgeOffsetS: ios.targetS,
+      },
+    };
+  }
+  if (remux) {
+    const web = remuxLatency(mode, remux.targetDurationS, 'web');
+    return { ...base, liveSync: { targetS: web.targetS, maxS: web.maxS, rate: web.rate } };
   }
   const mpegts = profile.mpegts;
   const liveSync = mpegts.liveSync
@@ -55,6 +103,11 @@ export function latencyFor(mode: PlaybackMode, protocol: StreamProtocol): Stream
       }
     : null;
   return { ...base, liveSync };
+}
+
+/** `iptvInput` de la concesión: qué entrega el proveedor (solo IPTV, docs/multidispositivo.md §4.4). */
+export function iptvInputOf(input: { readonly isHls: boolean }): 'ts' | 'hls' {
+  return input.isHls ? 'hls' : 'ts';
 }
 
 export interface StreamCodec {

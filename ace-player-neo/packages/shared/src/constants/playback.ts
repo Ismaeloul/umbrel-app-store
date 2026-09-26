@@ -95,14 +95,15 @@ export const PLAYBACK_PROFILES: Readonly<Record<PlaybackMode, PlaybackProfile>> 
   },
 };
 
-/* Traducción a AVPlayer. Hoy en iPhone los modos casi no hacen nada: el
-   remux tiene valores fijos y solo se usaba `rebuild` para calcular el
-   directo, y encima cambiar de modo reconectaba (P11). En la app nativa:
+/* Traducción a AVPlayer (P11; docs/multidispositivo.md §4.4). En la app nativa:
    - `preferredForwardBufferDuration` = `rebuild`: el mismo colchón que la web
      rehace tras un parón es el que AVPlayer intenta tener por delante.
-   - `liveEdgeOffsetS` = `rebuild`: la distancia al borde del directo, que en
-     la web es el tope de `bufferSafety` (index.html:5030). En AVPlayer se
-     aplica con `configuredTimeOffsetFromLive`.
+   - `liveEdgeOffsetS` = `initial`: la distancia al borde del directo, la misma
+     que persigue mpegts.js en la web (3/6/10 s). En AVPlayer se aplica con
+     `configuredTimeOffsetFromLive`. Es el respaldo de la app cuando la
+     concesión no trae `latency.ios`; con ella manda `remuxLatency`, que nunca
+     baja de 3 × TARGETDURATION (lo que aguanta AVPlayer sin LL-HLS).
+   Hasta la 0.8.1 los dos valían `rebuild` (4/8/12).
    Cambiar de modo en iOS solo toca estos dos valores; no reconecta. */
 export interface IosPlaybackProfile {
   readonly preferredForwardBufferDuration: number;
@@ -110,10 +111,88 @@ export interface IosPlaybackProfile {
 }
 
 export const IOS_PLAYBACK_PROFILES: Readonly<Record<PlaybackMode, IosPlaybackProfile>> = {
+  stable: { preferredForwardBufferDuration: 12, liveEdgeOffsetS: 10 },
+  balanced: { preferredForwardBufferDuration: 8, liveEdgeOffsetS: 6 },
+  low: { preferredForwardBufferDuration: 4, liveEdgeOffsetS: 3 },
+};
+
+/**
+ * Lo que recibía la app de iPhone hasta la 0.8.0 (los dos a `rebuild`). La
+ * concesión se lo sigue dando a la app que no pide `latency=2`: la 0.8.1 no
+ * acerca al directo a la app publicada sin que el laboratorio lo haya medido
+ * (docs/multidispositivo.md §4.4 y §7). Con segmentos largos sube a 3 × TD.
+ */
+export const IOS_PLAYBACK_PROFILES_080: Readonly<Record<PlaybackMode, IosPlaybackProfile>> = {
   stable: { preferredForwardBufferDuration: 12, liveEdgeOffsetS: 12 },
   balanced: { preferredForwardBufferDuration: 8, liveEdgeOffsetS: 8 },
   low: { preferredForwardBufferDuration: 4, liveEdgeOffsetS: 4 },
 };
+
+/* Distancia al directo de quien lee el HLS del remux (IPTV en la web, iPhone),
+   en SEGUNDOS y no en segmentos: así los tres modos valen lo mismo que con
+   mpegts.js, sea cual sea el GOP del canal (docs/multidispositivo.md §4.4).
+
+   - Suelo por TARGETDURATION (TD): el iPhone no baja de 3 × TD; hls.js aguanta
+     algo menos (2 / 3 / 4 × TD según el modo), pero no menos de 4 s en «Baja
+     latencia» (`REMUX_WEB_MIN_S`).
+   - Tope para acelerar (`maxS`): 7 / 14 / 24 s, o el objetivo más 2 TD.
+   - Velocidad de alcance y colchón por delante, los de hls.js de siempre. */
+export const REMUX_WEB_TD_FACTOR: Readonly<Record<PlaybackMode, number>> = {
+  low: 2,
+  balanced: 3,
+  stable: 4,
+};
+/**
+ * Suelo en segundos de la web con el remux. En «Baja latencia», 4 s y no los
+ * 3 de mpegts.js: con 3 s hls.js se paraba de vez en cuando aun con el
+ * proveedor falso en local (7 de 33 muestras en pausa, p90 de 3,97 s), y un
+ * proveedor de verdad oscila más. Equilibrado y Estable, como el perfil.
+ */
+export const REMUX_WEB_MIN_S: Readonly<Record<PlaybackMode, number>> = {
+  low: 4,
+  balanced: 6,
+  stable: 10,
+};
+export const REMUX_MAX_LATENCY_S: Readonly<Record<PlaybackMode, number>> = {
+  low: 7,
+  balanced: 14,
+  stable: 24,
+};
+export const REMUX_RATE: Readonly<Record<PlaybackMode, number>> = {
+  low: 1.05,
+  balanced: 1.03,
+  stable: 1,
+};
+export const REMUX_BUFFER_S: Readonly<Record<PlaybackMode, number>> = {
+  low: 10,
+  balanced: 30,
+  stable: 60,
+};
+
+export interface RemuxLatency {
+  /** Distancia al final de la lista que se persigue. */
+  readonly targetS: number;
+  /** Por encima de esto, se acelera para volver. */
+  readonly maxS: number;
+  readonly rate: number;
+  /** Colchón por delante (`maxBufferLength` de hls.js). */
+  readonly bufferS: number;
+}
+
+/** Distancia al directo de un visor del remux (docs/multidispositivo.md §4.4). */
+export function remuxLatency(
+  mode: PlaybackMode,
+  targetDurationS: number | null,
+  client: 'web' | 'ios',
+): RemuxLatency {
+  const td = Math.max(1, Math.ceil(targetDurationS ?? 2));
+  const profile = PLAYBACK_PROFILES[mode];
+  const floor =
+    client === 'ios' ? 3 * td : Math.max(REMUX_WEB_TD_FACTOR[mode] * td, REMUX_WEB_MIN_S[mode]);
+  const targetS = Math.max(profile.initial, floor);
+  const maxS = Math.max(REMUX_MAX_LATENCY_S[mode], targetS + 2 * td);
+  return { targetS, maxS, rate: REMUX_RATE[mode], bufferS: REMUX_BUFFER_S[mode] };
+}
 
 /* Política de reconexión del reproductor (reproductor.md §4.1).
    - 3 reconexiones como máximo; 1 si se está en el arranque automático por

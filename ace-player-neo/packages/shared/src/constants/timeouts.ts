@@ -129,10 +129,30 @@ export const SHUTDOWN_TIMINGS = {
   forceExitMs: 5 * SECOND,
 } as const;
 
+/**
+ * Segmentación del remux (docs/multidispositivo.md §1.5 y §4.3). Con `-c copy`
+ * ffmpeg solo corta en fotogramas clave, en el primero tras cada marca de
+ * `n × hlsTimeS`: con 0,5 s cada GOP de 0,5 s o más es un segmento, y
+ * `EXT-X-TARGETDURATION` queda en 1 con cualquier GOP de menos de 1,5 s. Hasta
+ * la 0.8.1 eran 2 s en ventana de 15 (B-225). La ventana de 64 va de ~31 s
+ * (GOP de 0,48 s) a ~2 min (GOP de 2 s), siempre por encima de «Estable».
+ */
+export const REMUX_SEGMENT = {
+  hlsTimeS: 0.5,
+  listSize: 64,
+  deleteThreshold: 2,
+} as const;
+
 /** Remux: cuándo la lista se da por lista y cuándo se recoge una sesión (server.js:44-52). */
 export const REMUX_TIMINGS = {
-  /** Lista lista con 2 segmentos y 6 s de vídeo... */
-  readySegments: 2,
+  /**
+   * Lista lista con 3 segmentos y la distancia que necesita el reproductor
+   * para arrancar: `max(readyMinSeconds, 3 × TARGETDURATION + 1 s)` de vídeo
+   * (TD 1: 4 s; TD 2: 7 s). Docs/multidispositivo.md §4.3.
+   */
+  readySegments: 3,
+  readyMinSeconds: 4,
+  /** Lo que pedía la 0.6.59 (2 segmentos y 6 s, B-105): se conserva el número de referencia. */
   readySeconds: 6,
   /** ...o con 1 segmento pasados 20 s. */
   readyFallbackAfterMs: 20 * SECOND,
@@ -142,4 +162,12 @@ export const REMUX_TIMINGS = {
   reaperIntervalMs: 15 * SECOND,
   /** Pasado el arranque, 15 s sin tocar la lista es un ffmpeg atascado. */
   staleMs: 15 * SECOND,
+  /** Cada cuánto, como mucho, el remux apunta en el registro la duración real de los segmentos. */
+  segmentLogMs: 60 * SECOND,
 } as const;
+
+/** Segundos de vídeo que tiene que tener la lista para darla por lista (§4.3). */
+export function remuxReadySeconds(targetDurationS: number): number {
+  const td = Math.max(1, Math.ceil(targetDurationS));
+  return Math.max(REMUX_TIMINGS.readyMinSeconds, 3 * td + 1);
+}

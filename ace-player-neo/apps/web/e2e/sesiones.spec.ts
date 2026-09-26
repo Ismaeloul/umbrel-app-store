@@ -81,11 +81,20 @@ test(
     await esperarQueAvance(page);
 
     await otro.page.goto(canal(ultimo.id));
+    /* Con otro dispositivo viendo otra cosa se pregunta (docs/multidispositivo.md
+       §2): «Solo aquí» es el traspaso de siempre, un canal para toda la casa. */
+    await otro.page.getByRole('button', { name: 'Solo aquí' }).click();
     await esperarQueAvance(otro.page);
 
     // El primero se entera (SSE o, sin él, el latido) y se para con su aviso.
     await expect(
-      page.getByText('La reproducción ha pasado a otro dispositivo').first(),
+      page
+        .getByText(
+          new RegExp(
+            `^En el (otro )?PC han cambiado a (${ultimo.title}|Canal ${ultimo.id.slice(0, 8)})\\.$`,
+          ),
+        )
+        .first(),
     ).toBeVisible({ timeout: 30_000 });
     await expect
       .poll(() => page.evaluate(() => document.querySelector('video')?.paused ?? true))

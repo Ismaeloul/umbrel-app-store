@@ -71,7 +71,7 @@ describe('remux con origen IPTV', () => {
   function runtime(options: { readonly autoSegments?: readonly number[] | null } = {}) {
     const core = createTestCore();
     const ffmpeg = createFakeLauncher({
-      autoSegments: options.autoSegments === undefined ? [2, 2, 2] : options.autoSegments,
+      autoSegments: options.autoSegments === undefined ? [1, 1, 1, 1] : options.autoSegments,
     });
     const redacted: string[] = [];
     const rt = createRemuxRuntime({
@@ -89,7 +89,7 @@ describe('remux con origen IPTV', () => {
     return { core, ffmpeg, rt, redacted };
   }
 
-  it('lanza ffmpeg con la URL del relé y queda listo con 2 segmentos', async () => {
+  it('lanza ffmpeg con la URL del relé y queda listo con 3 segmentos y 4 s (TD 1)', async () => {
     const { ffmpeg, rt } = runtime();
     const handle = await rt.service.ensure(source(), 'v_web');
     expect(handle.ready).toBe(true);

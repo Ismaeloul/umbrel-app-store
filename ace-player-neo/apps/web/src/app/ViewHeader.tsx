@@ -7,7 +7,9 @@
 
 import type { ReactNode } from 'react';
 import { useAppMode } from '../api/index.ts';
+import { HouseCapsule } from '../features/multi/HouseCapsule.tsx';
 import { cx } from '../lib/cx.ts';
+import { useLayoutKind } from '../lib/media.ts';
 import { EngineIndicator } from './EngineIndicator.tsx';
 import './view-header.css';
 
@@ -31,6 +33,8 @@ export function ViewHeader({
   children,
 }: ViewHeaderProps) {
   const mode = useAppMode();
+  const layout = useLayoutKind();
+  const compactLayout = layout === 'mobile' || layout === 'tablet';
   return (
     <header className={cx('view-head', className)}>
       <div className="view-head__row">
@@ -51,6 +55,9 @@ export function ViewHeader({
           {actions}
         </div>
       </div>
+      {/* Qué se ve en el otro dispositivo (docs/multidispositivo.md §3.3): en el
+          móvil y la tableta, bajo el título; en escritorio va en la barra superior. */}
+      {compactLayout ? <HouseCapsule placement="header" /> : null}
       {children}
     </header>
   );

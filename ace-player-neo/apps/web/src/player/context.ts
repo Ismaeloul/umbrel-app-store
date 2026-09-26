@@ -27,6 +27,12 @@ export interface PlayerActions {
   zap(direction: 1 | -1): void;
   minimize(): void;
   expand(): void;
+  /** Tras un traspaso: «Ver … aquí» / «Pasar aquí» (se une con join=1, docs/multidispositivo.md §2.4.4). */
+  handoffHere(): void;
+  /** Tras un traspaso: «Volver a …» (por la puerta: pregunta si el otro sigue viendo). */
+  handoffBack(): void;
+  /** Panel «otra cosa en casa»: «Poner aquí» (por la puerta). */
+  putHere(): void;
 }
 
 export interface PlayerContextValue {

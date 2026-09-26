@@ -23,8 +23,10 @@
    Control: `modo(id, …)` (`ok`, `down`, `401`, `404`, `busy`, `lento`,
    `corta-a-los:S` y `corta-a-los:S:pts`, que reanuda con otra base de
    PTS/PCR), `conexiones()` y `peticiones()`; también por HTTP en
-   `/__iptv/modo?id=&modo=`, `/__iptv/conexiones`, `/__iptv/peticiones` y
-   `/__iptv/reset` (todo en `ok`, cuenta activa y sin historial).
+   `/__iptv/modo?id=&modo=`, `/__iptv/conexiones`, `/__iptv/peticiones`,
+   `/__iptv/ajustes?colchon=&gop=` (colchón al abrir y GOP, para medir la
+   latencia: docs/multidispositivo.md §6.3) y `/__iptv/reset` (todo en `ok`,
+   cuenta activa, sin historial y con el colchón y el GOP del principio).
    `quitar(id)` / `/__iptv/quitar?id=` saca un canal de la lista y de
    `get_live_streams` (el re-emparejado de §14.6); `reset` lo devuelve.
 
@@ -189,6 +191,12 @@ export interface FakeIptvOptions {
    * lista lista, rozando el plazo de arranque de 20 s.
    */
   readonly burstSeconds?: number;
+  /**
+   * Cuadros por GOP de los streams (por defecto 25 = 1 s). Con 24 (0,96 s) o
+   * 20 (0,8 s) se prueba el caso que `-hls_time 1` rompía; con 38 (1,52 s),
+   * TARGETDURATION 2 (docs/multidispositivo.md §1.5 y §6.2).
+   */
+  readonly gopFrames?: number;
   /** `allowed_output_formats` del panel. */
   readonly outputFormats?: readonly string[];
   /** Reloj de la plaza retenida (los tests pasan el reloj falso del backend). */
@@ -231,6 +239,13 @@ export interface FakeIptv {
   fallarPrimera(veces: number, como: FakeIptvFailure): void;
   /** Canales del catálogo grande (vacío sin `grande`). */
   readonly grandes: readonly BigChannel[];
+  /**
+   * Cambia el colchón al abrir (para las aperturas siguientes) y el GOP (para
+   * las siguientes y, desde su próximo IDR, para los streams abiertos).
+   */
+  ajustes(change: { readonly burstSeconds?: number; readonly gopFrames?: number }): void;
+  /** El colchón y el GOP de ahora. */
+  ajustesActuales(): { readonly burstSeconds: number; readonly gopFrames: number };
   close(): Promise<void>;
 }
 
@@ -306,7 +321,15 @@ interface StreamState {
 export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<FakeIptv> {
   const host = options.host ?? '127.0.0.1';
   const bitrate = options.bitrateKbps ?? 1500;
-  const burstTicks = Math.max(1, Math.round((options.burstSeconds ?? 0.2) / 0.04));
+  const initialTuning = {
+    burstSeconds: options.burstSeconds ?? 0.2,
+    gopFrames: options.gopFrames ?? 25,
+  };
+  const tuning = { ...initialTuning };
+  const burstTicks = (): number => Math.max(1, Math.round(tuning.burstSeconds / 0.04));
+  const muxers = new Map<http.ServerResponse, TsMuxer>();
+  /** Cuándo se abrió por última vez cada canal (el cuadro 0 de ese stream sale entonces). */
+  const lastOpenAt = new Map<number, number>();
   const maxConnections = options.maxConnections ?? 1;
   const retener = options.retenerPlazaMs ?? 0;
   const formats = options.outputFormats ?? ['m3u8', 'ts'];
@@ -484,13 +507,22 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
       bitrateKbps: kbps,
       startSec,
       color: colorFromSeed(String(id)),
+      gopFrames: tuning.gopFrames,
     });
     res.writeHead(200, { 'content-type': 'video/mp2t' });
     open.add(res);
     openIds.set(res, id);
+    muxers.set(res, muxer);
     const perTick = Math.max(1, Math.round((kbps * 1000 * 0.04) / 8 / TS_PACKET_SIZE));
     const startedAt = Date.now();
     const opensAtStart = state.opens;
+    /* Al ritmo del reloj de pared, no de los tics: en Windows setInterval(40)
+       salta cada ~47 ms y el stream iba al 85 % del tiempo real (el final de la
+       lista se quedaba atrás y el reproductor lo alcanzaba). El múltiplex es
+       CBR: cada paquete son 188 × 8 / bitrate segundos. */
+    const packetsPerMs = (kbps * 1000) / (TS_PACKET_SIZE * 8) / 1000;
+    const burstPackets = perTick * burstTicks();
+    let sent = 0;
     const timer = setInterval(() => {
       if (res.destroyed || res.writableEnded) return;
       /* Solo la primera conexión se corta: la reconexión sigue. */
@@ -504,12 +536,18 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
         res.destroy();
         return;
       }
-      res.write(muxer.nextPackets(perTick));
+      const owed = burstPackets + Math.floor((Date.now() - startedAt) * packetsPerMs) - sent;
+      if (owed <= 0) return;
+      sent += owed;
+      res.write(muxer.nextPackets(owed));
     }, 40);
-    res.write(muxer.nextPackets(perTick * burstTicks));
+    lastOpenAt.set(id, Date.now());
+    sent = burstPackets;
+    res.write(muxer.nextPackets(burstPackets));
     res.once('close', () => {
       clearInterval(timer);
       openIds.delete(res);
+      muxers.delete(res);
       if (open.delete(res)) held.push(clockNow());
     });
   };
@@ -567,6 +605,7 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
       startSec: (seq % 1000) * 2,
       endSec: (seq % 1000) * 2 + 2,
       color: colorFromSeed(String(id)),
+      gopFrames: tuning.gopFrames,
     });
     res.writeHead(200, {
       'content-type': 'application/octet-stream',
@@ -589,6 +628,32 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
             (url.searchParams.get('modo') ?? 'ok') as FakeIptvMode,
           );
           json(res, { ok: true });
+        } else if (path === '/__iptv/ajustes') {
+          /* Colchón al abrir (`colchon`, s) y GOP (`gop`, cuadros): docs/multidispositivo.md §6.3. */
+          const colchon = url.searchParams.get('colchon');
+          const gop = url.searchParams.get('gop');
+          controller.ajustes({
+            ...(colchon === null ? {} : { burstSeconds: Number(colchon) }),
+            ...(gop === null ? {} : { gopFrames: Number(gop) }),
+          });
+          json(res, controller.ajustesActuales());
+        } else if (path === '/__iptv/aperturas') {
+          /* Cuándo se abrió cada canal (reloj de pared): el segundo `s` del último
+             stream abierto sale a las `lastOpenAt + s - colchón`, en tiempo real.
+             Para medir el retraso de verdad. */
+          json(res, {
+            canales: Object.fromEntries(
+              [...states].map(([key, state]) => [
+                key,
+                {
+                  firstOpenAt: state.firstOpenAt,
+                  lastOpenAt: lastOpenAt.get(key) ?? 0,
+                  opens: state.opens,
+                },
+              ]),
+            ),
+            ...tuning,
+          });
         } else if (path === '/__iptv/quitar') {
           controller.quitar(
             Number(url.searchParams.get('id') ?? 0),
@@ -613,6 +678,7 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
           controller.cuenta({ status: 'Active', auth: 1 });
           controller.limpiarPeticiones();
           failing.veces = 0;
+          controller.ajustes(initialTuning);
           json(res, { ok: true });
         } else res.writeHead(404).end();
         return;
@@ -812,6 +878,18 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
       failing.como = como;
     },
     grandes: big?.channels ?? [],
+    ajustes(change) {
+      if (change.burstSeconds !== undefined && Number.isFinite(change.burstSeconds))
+        tuning.burstSeconds = Math.max(0, Math.min(30, change.burstSeconds));
+      if (change.gopFrames !== undefined) {
+        const frames = Math.round(change.gopFrames);
+        if (frames >= 1 && frames <= 250) {
+          tuning.gopFrames = frames;
+          for (const muxer of muxers.values()) muxer.setGopFrames(frames);
+        }
+      }
+    },
+    ajustesActuales: () => ({ ...tuning }),
     async close() {
       for (const res of open) res.destroy();
       for (const socket of sockets) socket.destroy();

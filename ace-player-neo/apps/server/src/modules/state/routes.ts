@@ -193,6 +193,8 @@ export function bootstrap(services: Services, ctx: RequestContext): BootstrapRes
       )
         ? { iptv: true }
         : {}),
+      /* docs/multidispositivo.md §2.2: entiende others, from, join, match y follows. */
+      multi: true,
     },
   };
 }

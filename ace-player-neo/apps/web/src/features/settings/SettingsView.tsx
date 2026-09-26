@@ -63,6 +63,7 @@ import {
   type IconName,
 } from '../../ui/index.ts';
 import { DirectoriesSection } from '../directories/DirectoriesSection.tsx';
+import { SAME_CHANNEL_HELP } from '../multi/texts.ts';
 import { WherePlayingSection } from '../where-playing/WherePlayingSection.tsx';
 import { externalSection, type ExternalSection } from './external.tsx';
 import { ModePicker } from './ModePicker.tsx';
@@ -270,9 +271,7 @@ function PlaybackSection() {
         label="Un solo dispositivo a la vez"
         description={
           <>
-            Al dar al play en otro dispositivo, este se para (como hasta la 0.6.59). Desactivado,
-            dos dispositivos pueden ver el mismo canal a la vez; con canales distintos siempre manda
-            el último.
+            {SAME_CHANNEL_HELP}
             {settings.data?.source === 'environment' ? (
               <> Ahora lo fija el servidor (ACE_SAME_CHANNEL_POLICY) hasta que lo cambies aquí.</>
             ) : null}

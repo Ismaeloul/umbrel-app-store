@@ -44,3 +44,28 @@ IPTV. Sin guia, todo funciona igual.
 La app emparejada del iPhone puede usar Salud, Dispositivos y "Un solo
 dispositivo a la vez", y revocar otros iPhone o a si misma. El codigo QR de
 emparejar lleva tambien tu otra direccion (casa y Tailscale).
+
+Varios dispositivos a la vez. Tu Umbrel sigue poniendo un canal para toda la
+casa (AceStream o IPTV), pero ahora se nota menos: si cambias de canal mientras
+en otro dispositivo se ve algo, el navegador te pregunta "Cambiar en los dos" o
+"Solo aqui". Con "Cambiar en los dos", el otro pasa solo al canal nuevo. Con
+"Solo aqui", el otro deja de verlo con un aviso claro ("En el PC han cambiado a
+Antena 3") y un toque para ver lo mismo o volver a lo suyo. Arriba sale una
+capsula pequeña con lo que se ve en el otro ("En el iPhone · DAZN LaLiga"); al
+tocarla lo ves tambien donde estas. Con un solo dispositivo no sale nada, y con
+"Un solo dispositivo a la vez" encendido manda el ultimo, como antes. La app del
+iPhone lo tendra en su proxima version; la de ahora se para como siempre.
+
+Los tres modos tambien con la IPTV. En el navegador la IPTV va a unos 4, 6 o
+10 s por detras segun el modo ("Baja latencia" se queda en 4 s y no en 3: con
+3 s se paraba de vez en cuando). Tu Umbrel corta ahora el video del iPhone en
+trozos tan cortos como deja cada canal (uno por fotograma clave, normalmente de
+1 s), pero la app del iPhone de ahora sigue con su margen de siempre (4, 8 o
+12 s por detras): acercarla mas al directo se hara con la proxima app, cuando
+se haya medido que el iPhone lo aguanta sin pararse. Si el PC y el iPhone ven a
+la vez el mismo canal de AceStream, los dos siguen unos 15 s por detras: esta
+version no lo mejora. Con canales de fotograma clave corto la IPTV arranca antes
+(unos 7 s sin colchon del proveedor, antes 15-20 s); con fotogramas clave largos
+(4-10 s, habitual en IPTV que recodifican) tarda de 10 a 20 s, como antes. Las
+apps 0.6 siguen arrancando con el margen de siempre, pero tras un paron pueden
+quedarse mas cerca del directo (y pararse algo mas con redes P2P justas).

@@ -46,22 +46,48 @@ function seconds(value: number | null | undefined): string {
   return `${value.toLocaleString('es-ES', { maximumFractionDigits: 1 })} s`;
 }
 
+function decimal(value: number): string {
+  return value.toLocaleString('es-ES', { maximumFractionDigits: 2 });
+}
+
+/**
+ * «Segmento» (docs/multidispositivo.md §4.2): el TARGETDURATION de la lista
+ * que ve hls.js y, si no coincide, lo que duran de verdad: «1 s» o «1 s ·
+ * reales 1,2-1,5 s». Con mpegts.js no hay segmentos: «—».
+ */
+export function segmentText(segment: PlayerState['segment']): string {
+  if (!segment) return '—';
+  const target = `${decimal(segment.targetS)} s`;
+  const { minS, maxS } = segment;
+  if (minS === null || maxS === null) return target;
+  const near = (value: number) => Math.abs(value - segment.targetS) <= 0.02;
+  if (near(minS) && near(maxS)) return target;
+  const real =
+    Math.abs(maxS - minS) <= 0.02 ? `${decimal(maxS)} s` : `${decimal(minS)}-${decimal(maxS)} s`;
+  return `${target} · reales ${real}`;
+}
+
 /**
  * De dónde viene lo que suena, SIEMPRE (docs/iptv.md §8.1 y §19): «IPTV · Casa
- * · 1080p» o «AceStream · NEW ERA» (la lista o el proveedor de la fuente).
+ * · 1080p · TS» (el proveedor, la calidad y lo que entrega, docs/multidispositivo.md
+ * §4.4) o «AceStream · NEW ERA» (la lista o el proveedor de la fuente).
  */
-export function originText(state: Pick<PlayerState, 'streamSource' | 'channel'>): string | null {
+export function originText(
+  state: Pick<PlayerState, 'streamSource' | 'channel' | 'iptvInput'>,
+): string | null {
   const channel = state.channel;
   if (!channel) return null;
   if (isIptvPlayback(state))
-    return ['IPTV', channel?.source, channel?.quality].filter(Boolean).join(' · ');
-  const source = channel?.source && channel.source !== 'AceStream' ? channel.source : '';
+    return ['IPTV', channel.source, channel.quality, state.iptvInput?.toUpperCase()]
+      .filter(Boolean)
+      .join(' · ');
+  const source = channel.source && channel.source !== 'AceStream' ? channel.source : '';
   return source ? `AceStream · ${source}` : 'AceStream';
 }
 
 export function nerdRows(state: PlayerState, engineText: string): Array<[string, string]> {
   const stats = state.stats;
-  // IPTV (§8.1): sin pares (no hay enjambre) ni hash.
+  // IPTV (§8.1): «Origen: IPTV · Casa · TS», sin pares (no hay enjambre) ni hash.
   const iptv = isIptvPlayback(state);
   const note = !iptv ? state.channel?.iptvNote : undefined;
   const origin = originText(state);
@@ -72,6 +98,7 @@ export function nerdRows(state: PlayerState, engineText: string): Array<[string,
     ['Motor', engineText],
     ['Reproductor', state.engine ? ENGINE_NAME[state.engine] : '—'],
     ['Entrega', state.protocol ? (DELIVERY[state.protocol] ?? state.protocol) : '—'],
+    ['Segmento', segmentText(state.segment)],
     ['Pares', stats && !iptv ? String(stats.peers) : '—'],
     ['Bajada', formatSpeed(stats?.speedDown)],
     ['Subida', formatSpeed(stats?.speedUp)],

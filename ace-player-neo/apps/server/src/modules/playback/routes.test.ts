@@ -238,6 +238,7 @@ describe('el claim de un cliente 0.6.x en la v2 (arquitectura §5.6, B-005)', ()
         hash: Y,
         title: 'Otro',
         reason: 'other_channel',
+        byDeviceName: 'App antigua (0.6)',
       },
     ]);
     expect(fakeEngine.control.metrics().sessionsOpen).toBe(0);
@@ -486,7 +487,20 @@ describe('rutas v1 de reproducción (arquitectura §6.2-6.3)', () => {
     expect(grant.url).toBe(
       `/native/api/v1/video/${sid}/index.m3u8?t=${encodeURIComponent(`firma.${sid}.iphone-1`)}`,
     );
+    /* «Estable» con TARGETDURATION 1 (el ffmpeg falso corta en 1 s) y sin
+       `latency=2`: los 12 s de la 0.8.0 (docs/multidispositivo.md §4.4). */
     expect(grant.latency.ios).toEqual({ preferredForwardBufferDuration: 12, liveEdgeOffsetS: 12 });
+    const opted = await app.inject({
+      method: 'GET',
+      url: `/native/api/v1/channels/${X}/stream?client=ios&viewer=visor-ios-1&mode=stable&latency=2`,
+      headers: native(TOKEN),
+    });
+    expect(opted.statusCode).toBe(200);
+    /* Con `latency=2` (la app nueva): 10 s del directo y el colchón igual. */
+    expect(StreamGrantSchema.parse(opted.json()).latency.ios).toEqual({
+      preferredForwardBufferDuration: 10,
+      liveEdgeOffsetS: 10,
+    });
     const beat = await app.inject({
       method: 'POST',
       url: `/native/api/v1/sessions/${sid}/heartbeat`,

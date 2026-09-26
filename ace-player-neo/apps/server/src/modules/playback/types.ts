@@ -62,6 +62,12 @@ export interface PlaybackDeps extends CoreDeps {
    * cerrojo de la casa y solo cambia la apertura (relé + remux). Opcional.
    */
   readonly iptv?: IptvService;
+  /**
+   * C.4 (docs/multidispositivo.md §4.6): una web que entra en un AceStream que
+   * ya tiene remux (un iPhone llegó antes) lee ese remux en vez de pasar el
+   * motor a HLS. Por defecto `SHARE_VIA_REMUX` (apagado hasta medirlo).
+   */
+  readonly shareViaRemux?: boolean;
 }
 
 /** Quién pide el canal. */

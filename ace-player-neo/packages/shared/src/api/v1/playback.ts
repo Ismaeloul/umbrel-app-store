@@ -39,6 +39,13 @@ export type StreamSource = z.infer<typeof StreamSourceSchema>;
 
 export const ChannelStreamParamsSchema = z.strictObject({ id: HashSchema });
 
+/** Qué pasa con los visores de otros dispositivos al cambiar de canal (docs/multidispositivo.md §2). */
+export const OthersActionSchema = z.enum(['move', 'stop']);
+export type OthersAction = z.infer<typeof OthersActionSchema>;
+
+/** Id de un partido de la agenda, tal cual lo da `footballSchedule`. */
+export const MatchRefSchema = z.string().min(1).max(100);
+
 export const ChannelStreamQuerySchema = z.strictObject({
   client: z.enum(['web', 'ios']),
   /**
@@ -52,6 +59,41 @@ export const ChannelStreamQuerySchema = z.strictObject({
   device: DeviceIdSchema.optional(),
   /** Título para el mando y el historial de la sesión. */
   title: z.string().max(200).optional(),
+  /*
+   * Varios dispositivos (docs/multidispositivo.md §2.2). Solo los manda un
+   * cliente que ha visto `features.multi` en el arranque: un servidor sin
+   * ellos rechazaría la petición (el esquema es estricto).
+   */
+  /**
+   * `move`: los visores de otros dispositivos que están en la sesión `from`
+   * reciben `playback.handoff` con `follow: true` y pasan solos a este; los
+   * de cualquier otra sesión se paran. `stop` (o ausente, como hasta la
+   * 0.8.1): se paran todos. `move` sin `from`, o con la política `handoff`,
+   * el servidor lo trata como `stop`.
+   */
+  others: OthersActionSchema.optional(),
+  /** Sesión que el cliente vio al decidir (`playbackStatus`): solo sus visores se mueven con `move`. */
+  from: SessionIdSchema.optional(),
+  /**
+   * '1': unirse a lo que ya se ve, nunca cambiar el canal de la casa. Si no
+   * hay sesión viva de este `hash`, 410 `session_expired` sin cerrar nada.
+   * Lo llevan seguir, la cápsula y «Ver … aquí». Con `join`, `others` y
+   * `from` se ignoran.
+   */
+  join: z.literal('1').optional(),
+  /** Partido desde el que se pide (su `id` de la agenda): para unirse y seguir desde otro dispositivo. */
+  match: MatchRefSchema.optional(),
+  /** '1': este visor sabe seguir un cambio (`playback.handoff` con `follow`). */
+  follows: z.enum(['0', '1']).optional(),
+  /**
+   * '2': la app de iPhone acepta el margen de la 0.8.1 en `latency.ios`
+   * (3 / 6 / 10 s del final, nunca menos de 3 × TARGETDURATION;
+   * docs/multidispositivo.md §4.4). Sin él, la app recibe los números de la
+   * 0.8.0 (4 / 8 / 12 s, o 3 × TD si es más): la app publicada no cambia de
+   * comportamiento hasta que el laboratorio mida que AVPlayer aguanta 3 s. Solo
+   * lo manda un cliente que ha visto `features.multi`. La web lo ignora.
+   */
+  latency: z.literal('2').optional(),
 });
 export type ChannelStreamQuery = z.infer<typeof ChannelStreamQuerySchema>;
 
@@ -108,6 +150,12 @@ export const StreamGrantSchema = z.strictObject({
   handoff: z.boolean(),
   /** `iptv` si el vídeo sale de la IPTV (textos del reproductor); ausente = `engine`. */
   source: StreamSourceSchema.optional(),
+  /**
+   * Solo IPTV: lo que entrega el proveedor, TS continuo o una lista HLS (con
+   * HLS el retraso lo marca el segmento del proveedor). «Datos técnicos»
+   * (docs/multidispositivo.md §4.4). Ausente = no es IPTV o servidor anterior.
+   */
+  iptvInput: z.enum(['ts', 'hls']).optional(),
 });
 export type StreamGrant = z.infer<typeof StreamGrantSchema>;
 
@@ -182,6 +230,13 @@ export const SessionViewerSchema = z.strictObject({
   platform: ClientKindSchema,
   /** Del último latido: reproduciendo, en pausa o `null` si aún no lo ha dicho. */
   playing: z.boolean().nullable(),
+  /** El visor sabe seguir un cambio de canal (lo declaró al pedirlo). Ausente = no. */
+  follows: z.literal(true).optional(),
+  /**
+   * Sin latido desde hace más de `MULTI_TIMINGS.viewerAwayMs` (20 s): no
+   * cuenta para la pregunta ni la cápsula. Ausente = vivo.
+   */
+  away: z.literal(true).optional(),
 });
 export type SessionViewer = z.infer<typeof SessionViewerSchema>;
 
@@ -198,6 +253,8 @@ export const SessionSummarySchema = z.strictObject({
   protocol: StreamProtocolSchema,
   /** `iptv` si la sesión es de la IPTV («Dónde se está reproduciendo» suma « · IPTV»); ausente = `engine`. */
   source: StreamSourceSchema.optional(),
+  /** Partido que se ve en esta sesión (el del último visor que lo dijo). Ausente = canal suelto o no se sabe. */
+  matchId: MatchRefSchema.optional(),
 });
 export type SessionSummary = z.infer<typeof SessionSummarySchema>;
 

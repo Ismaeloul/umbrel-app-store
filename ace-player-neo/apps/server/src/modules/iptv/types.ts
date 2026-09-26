@@ -106,11 +106,23 @@ export interface IptvInput {
   readonly isHls: boolean;
   /** Nombre limpio del canal y del proveedor, para «Dónde se está reproduciendo». */
   readonly title: string;
-  stats(): { readonly bytes: number; readonly kbps: number; readonly lastByteAt: number | null };
+  /** Cuándo se empezó a abrir el relé (reintentos de «ocupado» incluidos, docs/multidispositivo.md §4.5). */
+  readonly openedAt: number;
+  stats(): {
+    readonly bytes: number;
+    readonly kbps: number;
+    readonly lastByteAt: number | null;
+    /** Primer byte entregado al ffmpeg de ahora (null si aún ninguno). */
+    readonly firstByteAt: number | null;
+  };
   /** El relé se ha agotado (o la cuenta ya no vale): hay que cerrar la sesión con ese código. */
   onDropped(listener: (code: IptvReason) => void): void;
   /** Otra base de tiempos o variante: hay que reiniciar el remux en la misma sesión. */
   onRestart(listener: () => void): void;
+  /** El remux va a relanzar ffmpeg sin cortar la conexión con el proveedor (§4.5). */
+  prepareRestart(): boolean;
+  /** La lista del remux ya está lista: el relé deja de guardar la cola para `prepareRestart`. */
+  probeSettled?(): void;
   /** Aborta la conexión con el proveedor y espera a que se suelte. Idempotente. */
   close(): Promise<void>;
 }
