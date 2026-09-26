@@ -80,6 +80,9 @@ export function pausedMap(): ReadonlyMap<string, number> {
 
 // ---- Nombres ---------------------------------------------------------------------------------
 
+/** El último nombre con el que el servidor vio a este dispositivo. */
+let lastMe: DeviceRef | null = null;
+
 /** Este dispositivo tal como lo ve el servidor (su nombre, si ya está en alguna sesión). */
 export function myDeviceRef(
   sessions: readonly SessionSummary[] = houseSessions(),
@@ -87,9 +90,14 @@ export function myDeviceRef(
   const deviceId = getDeviceId();
   for (const session of sessions) {
     const viewer = session.viewers.find((candidate) => candidate.deviceId === deviceId);
-    if (viewer) return { platform: viewer.platform, deviceName: viewer.deviceName, deviceId };
+    if (viewer) {
+      lastMe = { platform: viewer.platform, deviceName: viewer.deviceName, deviceId };
+      return lastMe;
+    }
   }
-  return null;
+  /* Ya no está en ninguna (el servidor acaba de quitarle): el último nombre con
+     el que se le vio, para que «el otro PC» no pase a «el PC» en el aviso. */
+  return lastMe?.deviceId === deviceId ? lastMe : null;
 }
 
 /** Nombres cortos de estos visores de otros dispositivos, con las reglas de choque. */

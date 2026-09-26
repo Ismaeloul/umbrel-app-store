@@ -155,12 +155,25 @@ describe('sin SSE: pending (§2.1)', () => {
 });
 
 describe('la hoja abierta no se queda vieja (§2.4.1)', () => {
-  it('playback.sessions sin nadie más: se cierra y la orden sigue', () => {
+  it('playback.sessions sin nadie más: si sigue así 1,5 s, se cierra y la orden sigue', async () => {
+    seedHouse({ sessions: [houseSession(H1, [iphone()])] });
+    play({ hash: H2, title: 'Antena 3' });
+    setSessions([]);
+    dispatchSse('playback.sessions', { sessions: [] }, META);
+    /* Un instante raro (un traspaso a medias) no la cierra: espera a confirmarse. */
+    expect(houseQuestionStore.get()).not.toBeNull();
+    await vi.waitFor(() => expect(houseQuestionStore.get()).toBeNull(), { timeout: 3_000 });
+    expect(played()).toHaveLength(1);
+  });
+
+  it('si el otro vuelve a aparecer antes de 1,5 s, la hoja sigue abierta', async () => {
     seedHouse({ sessions: [houseSession(H1, [iphone()])] });
     play({ hash: H2, title: 'Antena 3' });
     dispatchSse('playback.sessions', { sessions: [] }, META);
-    expect(houseQuestionStore.get()).toBeNull();
-    expect(played()).toHaveLength(1);
+    dispatchSse('playback.sessions', { sessions: [houseSession(H1, [iphone()])] }, META);
+    await new Promise((resolve) => setTimeout(resolve, 1_800));
+    expect(houseQuestionStore.get()).not.toBeNull();
+    expect(played()).toHaveLength(0);
   });
 
   it('el otro cambia de canal: cambian la frase y from', () => {

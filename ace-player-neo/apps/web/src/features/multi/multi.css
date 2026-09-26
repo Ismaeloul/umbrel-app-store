@@ -125,6 +125,18 @@
   }
 }
 
+/* En el móvil la cabecera de la agenda va sobre la tarjeta del partido (y no
+   recibe toques): la cápsula sí, y el chip de la tarjeta baja lo que ella ocupa. */
+@media (max-width: 767px) {
+  .agenda.has-hero > .agenda-head .house-capsule {
+    pointer-events: auto;
+    color-scheme: dark;
+  }
+  .agenda.has-hero:has(.house-capsule) .agenda-hero .versus__top {
+    top: calc(var(--safe-top) + 124px);
+  }
+}
+
 /* ---- La hoja (A) ---------------------------------------------------------------- */
 .house-question__body {
   display: grid;

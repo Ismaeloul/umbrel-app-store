@@ -44,6 +44,7 @@ interface Chain {
   readonly byLabel: string;
   readonly previous: HandoffInfo['previous'];
   readonly startedAt: number;
+  /** Saltos de más tras llegar tarde (el primer seguir no cuenta): como mucho `followHops`. */
   hops: number;
 }
 
@@ -84,7 +85,7 @@ export function followHouse(request: FollowRequest): void {
     byLabel: request.byLabel,
     previous: request.previous,
     startedAt: now(),
-    hops: 1,
+    hops: 0,
   };
   followingStore.set(true);
   const title = channelName(request.title, request.hash);

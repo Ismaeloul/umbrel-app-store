@@ -157,6 +157,31 @@ describe('«Cambiar en los dos»: others=move y from (§2.3)', () => {
     expect(events.find((event) => !event.follow)?.viewerIds).toEqual(['x2']);
   });
 
+  it('al cambiar de canal no se publica el instante en que X ya no está en la sesión vieja', async () => {
+    const setup = await setupPlayback();
+    const from = await together(setup);
+    const before = setup.events.of('playback.sessions').length;
+    await setup.runtime.service.acquire(
+      H2,
+      query({ others: 'move', from }),
+      web('x', 'pc'),
+      live(),
+    );
+    /* Ninguna lista con la sesión de H1 y solo Y: la hoja abierta de Y creería que X ha parado. */
+    const published = setup.events.of('playback.sessions').slice(before);
+    expect(
+      published.some((event) =>
+        event.sessions.some(
+          (session) =>
+            session.hash === H1 &&
+            session.viewers.length === 1 &&
+            session.viewers[0]?.viewerId === 'y',
+        ),
+      ),
+    ).toBe(false);
+    expect(published.at(-1)?.sessions.map((session) => session.hash)).toEqual([H2]);
+  });
+
   it('mismo hash con move: se une sin traspaso', async () => {
     const setup = await setupPlayback();
     const x = await setup.runtime.service.acquire(H1, query(), web('x', 'pc'), live());

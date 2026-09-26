@@ -71,7 +71,7 @@ import { setPlayerPresence } from '../app/player-presence.ts';
 import type { Route } from '../app/routes.ts';
 import { joinHouse } from '../features/multi/follow.ts';
 import { handoffLabel, housePolicy, multiEnabled } from '../features/multi/house.ts';
-import { handoffTexts } from '../features/multi/texts.ts';
+import { channelName, handoffTexts } from '../features/multi/texts.ts';
 import { deviceKind, KIND_ICON } from '../features/where-playing/model.ts';
 import { shallowEqual } from '../lib/store.ts';
 import { showImmersiveAction } from '../notices/immersiveAction.ts';
@@ -289,6 +289,11 @@ export function isIptvSourceError(code: string | undefined, iptvSource: boolean)
   if (!code) return false;
   if (code.startsWith('iptv_')) return true;
   return iptvSource && (code.startsWith('remux_') || code === 'ffmpeg_missing');
+}
+
+/** ¿Es el título de relleno que pone play() cuando no se sabe («Canal 1a2b3c4d»)? */
+function isFillerTitle(channel: { hash: string; title: string }): boolean {
+  return channel.title === `Canal ${channel.hash.slice(0, 8)}`;
 }
 
 /** A dónde vuelve «Volver a …» tras un traspaso: la ruta con la que se pidió la fuente. */
@@ -824,7 +829,9 @@ export class PlayerRuntime {
             mode: this.mode(),
             viewer: identity.viewer,
             device: identity.device,
-            title: source.channel.title.slice(0, 200),
+            /* El «Canal 1a2b3c4d» de relleno no se manda: pisaría el título que el
+               servidor ya conoce («Dónde» y la cápsula de los demás, §3.4). */
+            ...(isFillerTitle(source.channel) ? {} : { title: source.channel.title.slice(0, 200) }),
             ...this.houseQuery(source),
           },
           signal: connection.abort.signal,
@@ -1673,7 +1680,11 @@ export class PlayerRuntime {
         deviceName: data.byDeviceName ?? null,
       },
       hash: data.hash,
-      title: data.title.trim(),
+      /* «Stream 1a2b3c4d» es el relleno del servidor cuando no sabe el título. */
+      title:
+        data.title.trim() === `Stream ${data.hash.slice(0, 8)}`
+          ? channelName(null, data.hash)
+          : data.title.trim(),
       matchId: data.matchId ?? null,
       policy,
       previous,

@@ -97,18 +97,18 @@ describe('seguir (§2.4.3)', () => {
     expect(plays()[1]).toMatchObject({ channel: { hash: H3 }, options: { house: 'follow' } });
   });
 
-  it('tope de 3 saltos en 10 s: después, «Nada en el iPhone»', async () => {
+  it('tope de 3 saltos de más en 10 s: después, «Nada en el iPhone»', async () => {
     mockFetch({
       'GET /api/v1/playback': () => json(statusWith(houseSession(H3, [iphone()]))),
     });
     follow();
-    for (let hop = 0; hop < 2; hop += 1) {
+    for (let hop = 0; hop < 3; hop += 1) {
       notifyJoinExpired({ channel: { hash: H2, title: 'x' }, options: { house: 'follow' } });
       await vi.waitFor(() => expect(plays()).toHaveLength(hop + 2));
     }
     notifyJoinExpired({ channel: { hash: H2, title: 'x' }, options: { house: 'follow' } });
     await vi.waitFor(() => expect(playerStore.get().handoff?.kind).toBe('nothing'));
-    expect(plays()).toHaveLength(3);
+    expect(plays()).toHaveLength(4);
     expect(playerStore.get()).toMatchObject({
       idleReason: 'traspasado',
       message: 'El iPhone ya no está viendo nada: no hay nada que seguir.',

@@ -187,6 +187,7 @@ export type HouseAnswer = 'both' | 'here' | 'cancel';
 export function answerHouse(answer: HouseAnswer): void {
   const open = houseQuestionStore.get();
   if (!open) return;
+  clearSettle();
   houseQuestionStore.set(null);
   const { command, question, labels } = open;
   if (answer === 'cancel') {
@@ -203,18 +204,41 @@ export function answerHouse(answer: HouseAnswer): void {
   });
 }
 
-/** Cada `playback.sessions` con la hoja abierta: se vuelve a decidir con lo nuevo. */
+/** «Ya no hace falta preguntar» esperando a confirmarse (no se sigue por un instante raro). */
+let settleTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearSettle(): void {
+  if (settleTimer) clearTimeout(settleTimer);
+  settleTimer = null;
+}
+
+/**
+ * Cada `playback.sessions` con la hoja abierta: se vuelve a decidir con lo
+ * nuevo. Si el otro ha cambiado de canal, cambian la frase y `from` al
+ * momento; si ya no hace falta preguntar (ha parado o ya ve lo mismo), la
+ * hoja se cierra y sigue sola, pero solo si sigue así `capsuleHideMs` (un
+ * traspaso a medias o un cambio de fuente del otro no la cierran).
+ */
 function onSessions(sessions: readonly SessionSummary[]): void {
   trackPaused(sessions, now());
   const open = houseQuestionStore.get();
   if (!open) return;
   const decision = decideFor(open.command, true, sessions);
-  if ('go' in decision) {
-    houseQuestionStore.set(null);
-    dispatchPlay(withDecision(open.command, decision.go));
+  if ('ask' in decision) {
+    clearSettle();
+    houseQuestionStore.set(textsFor(open.command, decision.ask));
     return;
   }
-  if ('ask' in decision) houseQuestionStore.set(textsFor(open.command, decision.ask));
+  if (!('go' in decision) || settleTimer) return;
+  settleTimer = setTimeout(() => {
+    settleTimer = null;
+    const still = houseQuestionStore.get();
+    if (still !== open) return;
+    const again = decideFor(open.command, true);
+    if (!('go' in again)) return;
+    houseQuestionStore.set(null);
+    dispatchPlay(withDecision(open.command, again.go));
+  }, MULTI_TIMINGS.capsuleHideMs);
 }
 
 /** Un traspaso para este visor con la hoja abierta: el otro ha actuado después. */
@@ -222,6 +246,7 @@ function onHandoff(viewerIds: readonly string[]): void {
   if (!viewerIds.includes(getViewerId())) return;
   queued = null;
   refreshSeq += 1;
+  clearSettle();
   const open = houseQuestionStore.get();
   if (!open) return;
   houseQuestionStore.set(null);
@@ -244,6 +269,7 @@ export function resetHouseGate(clock?: () => number): void {
   remembered = null;
   queued = null;
   refreshSeq += 1;
+  clearSettle();
   now = clock ?? (() => Date.now());
   houseQuestionStore.set(null);
 }

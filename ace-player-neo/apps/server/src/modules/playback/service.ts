@@ -458,8 +458,8 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     bus.emit('playback.sessions', { sessions: list });
   }
 
-  function emitActivity(): void {
-    emitSessions();
+  function emitActivity(options: { sessions?: boolean } = {}): void {
+    if (options.sessions !== false) emitSessions();
     const hashes = [
       ...new Set([...[...viewers.values()].map((viewer) => viewer.hash), ...waiting.values()]),
     ].sort();
@@ -1037,7 +1037,11 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       sessionClosed = session.closed;
     }
     if (reason !== 'channel_change') await releaseNowPlaying(viewer);
-    emitActivity();
+    /* Cambio de canal: el visor se va de la sesión vieja y enseguida se coloca
+       en la nueva. Publicar ese instante en `playback.sessions` haría creer a
+       los demás que ha dejado de ver (docs/multidispositivo.md §2.4.1: una hoja
+       abierta seguiría sola); lo publica la colocación, ya con todo hecho. */
+    emitActivity({ sessions: reason !== 'channel_change' });
     syncTicker();
     return { sessionClosed };
   }
@@ -1046,7 +1050,9 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
   async function placeLocked(request: AcquireRequest): Promise<Omit<Placement, 'remux'>> {
     if (stopped) throw new AppError('engine_unavailable', { detail: 'apagando' });
     waiting.set(request.viewerId, request.hash);
-    emitActivity();
+    /* Esperar a abrir solo cambia `playback.activity`; las sesiones se publican
+       al colocarle (sin el instante en que ha dejado la vieja, ver dropViewer). */
+    emitActivity({ sessions: false });
     try {
       return await placeWaitingLocked(request);
     } finally {
