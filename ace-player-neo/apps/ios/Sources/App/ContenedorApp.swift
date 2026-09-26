@@ -44,7 +44,8 @@ import Foundation
     }
 
     /// Crea los objetos sin cablearlos (lo hace `crear()`). Los tests pueden pasar su motor de vídeo.
-    /// Tipos escritos y dos ayudantes: todo en línea tardaba 453 ms en tiparse (CI 36177994191).
+    /// Tipos escritos y ayudantes: todo en línea tardaba 453 ms en tiparse (CI 36177994191) y aún 474 ms con dos
+    /// ayudantes en una CI lenta (36234695778).
     init(entorno: Entorno, reloj: any Reloj, motor: any MotorVideo) {
         self.entorno = entorno
         self.reloj = reloj
@@ -69,19 +70,35 @@ import Foundation
         self.tiempoReal = tiempoReal
         let avisos: Avisos = Avisos()
         self.avisos = avisos
-        let reproductor: Reproductor = Self.crearReproductor(
+        let reproduccion: Reproduccion = Self.crearReproduccion(
             entorno, motor: motor, modo: preferencias.modo, reloj: reloj)
+        let reproductor: Reproductor = reproduccion.reproductor
         self.reproductor = reproductor
-        // Una sola capa de vídeo: la presentación (M3) y el entorno (M6) comparten el MISMO GestorPiP.
-        let pip: GestorPiP = GestorPiP()
-        self.pip = pip
-        presentacion = PresentacionReproductor(reproductor: reproductor, pip: pip)
+        pip = reproduccion.pip
+        presentacion = reproduccion.presentacion
         let fuentes: SesionFuentes = SesionFuentes()
         self.fuentes = fuentes
         let senales: SenalPartidos = SenalPartidos()
         self.senales = senales
         repartidor = Self.crearRepartidor(
             datos, tiempoReal, sesion, reproductor, fuentes, senales, avisos, cicloVida)
+    }
+
+    /// El reproductor, la única capa de vídeo con su PiP y la presentación que los junta.
+    private struct Reproduccion {
+        let reproductor: Reproductor
+        let pip: GestorPiP
+        let presentacion: PresentacionReproductor
+    }
+
+    /// Una sola capa de vídeo: la presentación (M3) y el entorno (M6) comparten el MISMO GestorPiP.
+    private static func crearReproduccion(
+        _ entorno: Entorno, motor: any MotorVideo, modo: PlaybackMode, reloj: any Reloj
+    ) -> Reproduccion {
+        let reproductor: Reproductor = crearReproductor(entorno, motor: motor, modo: modo, reloj: reloj)
+        let pip: GestorPiP = GestorPiP()
+        let presentacion = PresentacionReproductor(reproductor: reproductor, pip: pip)
+        return Reproduccion(reproductor: reproductor, pip: pip, presentacion: presentacion)
     }
 
     /// El reproductor con el reloj de la app (-AceNeoReloj en Debug; §5.1 regla 7): primera imagen, ventana de
