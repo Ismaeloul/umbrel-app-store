@@ -126,7 +126,12 @@ struct EscenarioVideo: View {
         } else if foto.fase == .buffer || foto.fase == .buscando {
             GiroCarga()
         } else if foto.demo && foto.arranco, let titulo = foto.titulo {
-            RotuloDemo(titulo: titulo, grande: variante.mensajeGrande)
+            #if DEBUG
+                // El campo de `DemoPicture` con su rótulo: la imagen de la demo es de M2 (Debug/ImagenDemo).
+                ImagenDemo(titulo: titulo, estrecho: !variante.mensajeGrande).allowsHitTesting(false)
+            #else
+                RotuloDemo(titulo: titulo, grande: variante.mensajeGrande)
+            #endif
         }
     }
 

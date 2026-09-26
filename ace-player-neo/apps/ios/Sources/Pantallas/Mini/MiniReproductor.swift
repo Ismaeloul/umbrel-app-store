@@ -49,12 +49,20 @@ struct MiniReproductor: View {
     private var imagen: some View {
         let forma = RoundedRectangle(cornerRadius: R.s, style: .circular)
         return VistaVideo(superficie: pip.superficie, prioridad: .mini)
+            .overlay { imagenDemo }
             .frame(width: 96, height: 54)
             .clipShape(forma)
             .bordeInterior(Color.black.opacity(0.25), forma: forma)
             .contentShape(forma)
             .onTapGesture { abrir() }
             .accessibilityHidden(true)
+    }
+
+    /// En la demo no hay vídeo: el campo de `DemoPicture` sin rótulo (M2), como el mini de la web.
+    @ViewBuilder private var imagenDemo: some View {
+        #if DEBUG
+            if reproductor.demo && reproductor.arranco { ImagenDemo(titulo: nil, conRotulo: false) }
+        #endif
     }
 
     /// Volver al vídeo: la ruta que se estaba viendo (el partido o el canal).
