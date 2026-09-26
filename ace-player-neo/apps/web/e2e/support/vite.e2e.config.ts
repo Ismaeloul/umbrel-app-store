@@ -15,5 +15,26 @@ export default mergeConfig(
       hmr: false,
       watch: null,
     },
+    /* Todas las dependencias de la web, optimizadas al arrancar y sin
+       descubrir ninguna después: cuando Vite descubría una a mitad de la
+       batería (hls.js al unirse a una sesión compartida o con la IPTV,
+       @tanstack/react-virtual al abrir Canales, o lo que tardaba en rastrear
+       en la primera carga) recargaba todas las páginas abiertas. Si la web
+       gana una dependencia de npm, va aquí. */
+    optimizeDeps: {
+      noDiscovery: true,
+      include: [
+        'react',
+        'react-dom',
+        'react-dom/client',
+        'react/jsx-runtime',
+        'react/jsx-dev-runtime',
+        '@tanstack/react-query',
+        '@tanstack/react-virtual',
+        'hls.js',
+        'mpegts.js',
+        '@ace/shared > zod',
+      ],
+    },
   }),
 );

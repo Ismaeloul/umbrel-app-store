@@ -16,10 +16,12 @@ const table = (td: number | null, client: 'web' | 'ios') =>
   ) as Record<PlaybackMode, ReturnType<typeof remuxLatency>>;
 
 describe('remuxLatency', () => {
-  it('TD 1: los tres modos valen lo que dicen (3 / 6 / 10 s) en la web y en el iPhone', () => {
+  it('TD 1: 3 / 6 / 10 s en el iPhone; en la web, 4 / 6 / 10 s (hls.js se paraba a 3 s)', () => {
     for (const client of ['web', 'ios'] as const) {
       const t = table(1, client);
-      expect([t.low.targetS, t.balanced.targetS, t.stable.targetS]).toEqual([3, 6, 10]);
+      expect([t.low.targetS, t.balanced.targetS, t.stable.targetS]).toEqual(
+        client === 'ios' ? [3, 6, 10] : [4, 6, 10],
+      );
       expect([t.low.maxS, t.balanced.maxS, t.stable.maxS]).toEqual([7, 14, 24]);
     }
   });

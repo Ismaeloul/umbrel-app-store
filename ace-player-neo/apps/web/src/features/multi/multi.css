@@ -37,6 +37,18 @@
   flex: 0 1 auto;
   max-width: min(420px, 36vw);
 }
+/* La cápsula se ve de 38 px, pero sus dos toques miden 44 (--tap): el área
+   sobresale 4 px arriba y abajo sin cambiar el dibujo. */
+.house-capsule__main,
+.house-capsule__close {
+  position: relative;
+}
+.house-capsule__main::before,
+.house-capsule__close::before {
+  content: '';
+  position: absolute;
+  inset: -4px 0;
+}
 .house-capsule__main {
   display: inline-flex;
   align-items: center;
@@ -102,7 +114,7 @@
   display: grid;
   place-items: center;
   flex: none;
-  width: 36px;
+  width: var(--tap);
   border: 0;
   border-left: 1px solid var(--line-soft);
   border-radius: 0 var(--r-pill) var(--r-pill) 0;

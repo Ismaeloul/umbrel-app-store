@@ -85,6 +85,15 @@ export const ChannelStreamQuerySchema = z.strictObject({
   match: MatchRefSchema.optional(),
   /** '1': este visor sabe seguir un cambio (`playback.handoff` con `follow`). */
   follows: z.enum(['0', '1']).optional(),
+  /**
+   * '2': la app de iPhone acepta el margen de la 0.8.1 en `latency.ios`
+   * (3 / 6 / 10 s del final, nunca menos de 3 × TARGETDURATION;
+   * docs/multidispositivo.md §4.4). Sin él, la app recibe los números de la
+   * 0.8.0 (4 / 8 / 12 s, o 3 × TD si es más): la app publicada no cambia de
+   * comportamiento hasta que el laboratorio mida que AVPlayer aguanta 3 s. Solo
+   * lo manda un cliente que ha visto `features.multi`. La web lo ignora.
+   */
+  latency: z.literal('2').optional(),
 });
 export type ChannelStreamQuery = z.infer<typeof ChannelStreamQuerySchema>;
 

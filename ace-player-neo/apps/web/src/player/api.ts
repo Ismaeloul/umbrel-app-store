@@ -100,6 +100,12 @@ export interface PlayOptions {
   from?: string;
   /** Partido desde el que se pide (su id de la agenda). */
   match?: string;
+  /**
+   * Seguir (`house: 'follow'`): lo que se veía aquí antes de seguir. Si el
+   * seguir no llega a dar imagen, «Volver a …» ofrece esto y no el canal que
+   * nunca se vio aquí.
+   */
+  followFrom?: HandoffInfo['previous'];
 }
 
 /**

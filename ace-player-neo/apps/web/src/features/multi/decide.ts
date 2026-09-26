@@ -57,6 +57,13 @@ export type HouseDecision =
 export interface RememberedBoth {
   readonly devices: string;
   readonly at: number;
+  /**
+   * La última sesión de la casa de la que se movió a los demás (`from` del
+   * último `move`). En un zapping rápido este visor puede no estar aún en
+   * ninguna sesión (su cambio anterior sigue abriendo): se manda esta, y el
+   * servidor la reconoce en la sesión abierta desde ella (`movedFrom`, §2.3).
+   */
+  readonly from?: string;
 }
 
 export interface DecideInput {
@@ -201,8 +208,12 @@ export function decideHouseChange(input: DecideInput): HouseDecision {
        (el servidor lo ha sacado de la sesión vieja y aún no está en la nueva,
        así que no sale en la lista). Sin `move` el servidor lo pararía al
        llegar; con `from` = la mía solo se mueve a quien ya esté en ella, y si
-       no hay nadie no pasa nada. */
-    if (recent && mine) return { go: { others: 'move', from: mine.id } };
+       no hay nadie no pasa nada. Si este visor tampoco está en ninguna (su
+       cambio anterior aún abre, lo normal con AceStream), `from` = la última
+       de la que se movió a los demás: el servidor la reconoce en la sesión
+       abierta desde ella. */
+    const from = mine?.id ?? remembered?.from;
+    if (recent && from) return { go: { others: 'move', from } };
     return { go: {} };
   }
   if (!input.sseOpen && !input.fresh) return { pending: true };

@@ -104,6 +104,70 @@ describe('«Cambiar en los dos»: others=move y from (§2.3)', () => {
     expect(sessionsNow(setup)).toMatchObject([{ hash: H2, matchId: 'fltv-1' }]);
   });
 
+  it('zapping rápido: un move con la from de ANTES también mueve a quien siguió a la sesión abierta desde ella (movedFrom)', async () => {
+    const setup = await setupPlayback();
+    const s0 = await together(setup);
+    /* X cambia a Dos con «en los dos»: Y sigue. */
+    const dos = await setup.runtime.service.acquire(
+      H2,
+      query({ title: 'Dos', others: 'move', from: s0 }),
+      web('x', 'pc'),
+      live(),
+    );
+    await setup.runtime.service.acquire(
+      H2,
+      query({ title: 'Dos', join: '1' }),
+      web('y', 'iphone', 'Safari · iPhone'),
+      live(),
+    );
+    /* X vuelve a cambiar antes de ver la sesión de Dos: manda from = S0. */
+    await setup.runtime.service.acquire(
+      H3,
+      query({ title: 'Tres', others: 'move', from: s0 }),
+      web('x', 'pc'),
+      live(),
+    );
+    const handoffs = setup.events.of('playback.handoff');
+    expect(handoffs.at(-1)).toMatchObject({
+      sessionId: dos.session.id,
+      viewerIds: ['y'],
+      hash: H3,
+      follow: true,
+    });
+    /* Y otra vez; ahora con from = Dos (la cadena sigue: S0 → Dos → Tres). */
+    const tres = await setup.runtime.service.acquire(
+      H3,
+      query({ title: 'Tres', join: '1' }),
+      web('y', 'iphone', 'Safari · iPhone'),
+      live(),
+    );
+    await setup.runtime.service.acquire(
+      H1,
+      query({ title: 'Uno', others: 'move', from: dos.session.id }),
+      web('x', 'pc'),
+      live(),
+    );
+    expect(setup.events.of('playback.handoff').at(-1)).toMatchObject({
+      sessionId: tres.session.id,
+      viewerIds: ['y'],
+      follow: true,
+    });
+  });
+
+  it('un move con una from que no es de la cadena sigue parando al otro', async () => {
+    const setup = await setupPlayback();
+    await together(setup);
+    await setup.runtime.service.acquire(
+      H2,
+      query({ title: 'Dos', others: 'move', from: 's_desconocida' }),
+      web('x', 'pc'),
+      live(),
+    );
+    const [event] = setup.events.of('playback.handoff');
+    expect(event).toMatchObject({ viewerIds: ['y'] });
+    expect(event).not.toHaveProperty('follow');
+  });
+
   it.each([
     ['move sin from', { others: 'move' as const }],
     ['stop', { others: 'stop' as const }],

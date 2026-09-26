@@ -111,17 +111,22 @@ async function conectarXtream(): Promise<void> {
  * aborta sola al abrir una sesión, así que no se exige).
  */
 async function sinNadaSonando(): Promise<void> {
+  let ultimo = '';
   await expect
     .poll(
       async () => {
         const status = (await (await backend.pedir('/api/v1/playback')).json()) as {
           sessions: unknown[];
         };
+        ultimo = JSON.stringify(status.sessions);
         return status.sessions.length;
       },
       { timeout: 60_000, intervals: [500, 1000] },
     )
-    .toBe(0);
+    .toBe(0)
+    .catch((error: unknown) => {
+      throw new Error(`sesiones que quedan: ${ultimo}`, { cause: error });
+    });
   for (let i = 0; i < 20 && (await proveedor.conexiones()) > 0; i++) await sleep(500);
 }
 
@@ -295,7 +300,7 @@ test(
     const soloModos = process.env.E2E_LATENCIA_MODOS?.split(',');
     const modos = (
       [
-        ['low', 0, 4.5],
+        ['low', 0, 5.5],
         ['balanced', 5, 8],
         ['stable', 9, 13],
       ] as const
@@ -456,6 +461,51 @@ test(
     const con = medidas.filter((m) => m.colchonS === 8).map((m) => m.toqueMs);
     expect(Math.max(...sin), JSON.stringify(medidas)).toBeLessThanOrEqual(12_000);
     expect(Math.max(...con), JSON.stringify(medidas)).toBeLessThanOrEqual(5_000);
+    await detenerReproductor(page);
+  },
+);
+
+test(
+  'IPTV con GOP largo (4 y 6 s) y sin colchón: arranca por la IPTV, sin pasar a AceStream',
+  { tag: '@video' },
+  async ({ page }, testInfo) => {
+    test.setTimeout(240_000);
+    const medidas: {
+      gopS: number;
+      ms: number;
+      fuente: string | null;
+      segmento: Estado['segment'];
+    }[] = [];
+    /* 25 cuadros por segundo: 100 = 4 s, 150 = 6 s (IPTV que recodifican con x264 por defecto). */
+    for (const gop of [100, 150]) {
+      await detenerReproductor(page);
+      await sinNadaSonando();
+      await proveedor.reset();
+      await proveedor.ajustes(0, gop);
+      const t0 = Date.now();
+      await abrirAntena3(page, 'balanced');
+      await esperarQueAvance(page, 60_000);
+      const s = await estado(page);
+      medidas.push({
+        gopS: gop / 25,
+        ms: Date.now() - t0,
+        fuente: s.streamSource,
+        segmento: s.segment,
+      });
+    }
+    writeFileSync(
+      path.join(testInfo.project.outputDir, '..', `gop-largo-iptv-${testInfo.project.name}.json`),
+      JSON.stringify({ fecha: new Date().toISOString(), medidas }, null, 2),
+    );
+    await testInfo.attach('gop-largo', {
+      body: JSON.stringify(medidas, null, 2),
+      contentType: 'application/json',
+    });
+    for (const m of medidas) {
+      expect(m.fuente, JSON.stringify(medidas)).toBe('iptv');
+      expect(m.ms, JSON.stringify(medidas)).toBeLessThan(30_000);
+    }
+    await expect(page.getByText(/Tu IPTV no responde/)).toHaveCount(0);
     await detenerReproductor(page);
   },
 );

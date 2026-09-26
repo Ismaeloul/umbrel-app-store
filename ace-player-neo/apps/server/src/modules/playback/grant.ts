@@ -4,6 +4,7 @@
 
 import {
   IOS_PLAYBACK_PROFILES,
+  IOS_PLAYBACK_PROFILES_080,
   PLAYBACK_PROFILES,
   remuxLatency,
   type EngineSessionMode,
@@ -53,17 +54,35 @@ export function latencyFor(
   mode: PlaybackMode,
   protocol: StreamProtocol,
   remux: RemuxLatencyInput | null = null,
+  /** La app pidió `latency=2` (el margen de la 0.8.1); sin eso, lo de la 0.8.0. */
+  iosEdge: boolean = false,
 ): StreamLatency {
   const profile = PLAYBACK_PROFILES[mode];
   const base = { mode, initialBufferS: profile.initial, rebuildS: profile.rebuild };
   if (protocol === 'hls-fmp4') {
+    if (!iosEdge) {
+      /* App publicada (0.8.0): sus 4 / 8 / 12 s, o 3 × TD si el segmento es largo. */
+      const legacy = IOS_PLAYBACK_PROFILES_080[mode];
+      const floor = remux ? 3 * Math.max(1, Math.ceil(remux.targetDurationS ?? 2)) : 0;
+      const edge = Math.max(legacy.liveEdgeOffsetS, floor);
+      return {
+        ...base,
+        liveSync: null,
+        ios: {
+          preferredForwardBufferDuration: Math.max(legacy.preferredForwardBufferDuration, edge),
+          liveEdgeOffsetS: edge,
+        },
+      };
+    }
     if (!remux) return { ...base, liveSync: null, ios: { ...IOS_PLAYBACK_PROFILES[mode] } };
     const ios = remuxLatency(mode, remux.targetDurationS, 'ios');
+    /* El colchón por delante no pasa de la distancia al final: más no cabe y
+       podría hacer que AVPlayer esperase de más al arrancar (a medir, §7). */
     return {
       ...base,
       liveSync: null,
       ios: {
-        preferredForwardBufferDuration: Math.max(profile.rebuild, ios.targetS),
+        preferredForwardBufferDuration: ios.targetS,
         liveEdgeOffsetS: ios.targetS,
       },
     };

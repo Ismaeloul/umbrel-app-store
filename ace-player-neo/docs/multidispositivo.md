@@ -412,6 +412,7 @@ app 0.8.0, que no entiende `follow`, simplemente se para, como hoy.
 | Y cambia a H3 justo antes de que llegue el `move` de X (que vio a Y en H1) | Y es arrastrado a H2 sin preguntarle | `from=H1` ≠ H3: Y se para con «En el PC han cambiado a H2» y sus dos botones |
 | Los dos cambian a la vez (X a H2, Y a H3, cada uno con su hoja contestada) | el último que coloca gana; el otro recibe un traspaso que puede ser `follow` hacia un canal que ya no existe | el último que coloca gana; el primero recibe el aviso de parada (o un `follow` que descarta, §2.4.3). Nunca dos sesiones |
 | Y toca la cápsula de H2 mientras X cambia a H3 | la petición de Y a H2 cierra H3 y para a X | `join` → `session_expired`; Y ve «{DAZN LaLiga} ya no se está viendo en {el PC}.» y la cápsula se actualiza sola |
+| Zapping con «en los dos» recordado y canales que tardan en abrir (AceStream de verdad): X pone H2 (desde H1) y, mientras H2 abre, H3. Y ya siguió a H2 | — | Antes de la revisión del 26-sep, **Y se paraba**: X aún no estaba en ninguna sesión (su H2 abría) y mandaba H3 sin `move`, o con `from=H1` (su caché vieja), que no era la sesión de Y. Ahora la sesión abierta por un `move` guarda de dónde viene (`movedFrom`: la `from` y las de aquella, hasta 8) y un `move` con cualquiera de ellas en `from` también mueve a sus visores; y el cliente, con «en los dos» recordado y sin sesión propia, manda la `from` del último `move` (`RememberedBoth.from`). E2E 14 y 14b con `slowStart` de 3 s |
 
 ### 2.4 Web
 
@@ -783,7 +784,11 @@ Con TD 2 (hoy, GOP de 1-1,2 s o 2 s), el iPhone suma unos 6 + 2 = 8 s en «Baja 
 - **`RemuxHandle`** gana `targetDurationS(): number | null` (el fijado, `null` antes de estar lista) y
   `segments(): { minS, maxS } | null` (§4.2).
 - **Lista lista** (AceStream e IPTV): al menos 3 segmentos **y** `max(4 s, 3 × TD + 1 s)` de vídeo (TD 1: 4 s; TD 2:
-  7 s; hoy, 6 s), o 1 segmento pasados 20 s como hoy. Así, cuando el cliente recibe la URL, la lista ya tiene la
+  7 s; hoy, 6 s), o 1 segmento pasados 20 s como hoy. **IPTV, además** (revisión del 26-sep): con GOP largo la regla
+  pide 4 segmentos (16 s de vídeo con GOP 4, 24 s con GOP 6) y no cabe en el plazo de 20 s desde el primer byte, así
+  que también vale con 2 segmentos de cualquier duración pasados 10 s desde el primer byte (lo que pedía la 0.8.0) y
+  con 1 al vencer el plazo; sin ninguno, `iptv_timeout` (`IPTV_REMUX_EARLY_MS`, `IPTV_REMUX_EARLY_SEGMENTS`). Con
+  reloj falso: GOP 1 → lista a los ~5 s; GOP 4 → 10 s; GOP 6 → 13 s; GOP 8 → 17 s; GOP 12 → 20 s con 1 segmento. Así, cuando el cliente recibe la URL, la lista ya tiene la
   distancia que su reproductor necesita para arrancar sin esperar más.
 - Esto cambia B-225 (`docs/comportamientos.md`: «HLS fMP4 de 2 s en ventana de 15») y la prueba «buildRemuxArgs es la
   línea de la 0.6.59» de `remux/pure.test.ts`: se actualizan las dos, diciendo por qué.
@@ -808,12 +813,15 @@ export function remuxLatency(
 }
 ```
 
-- **iPhone** (`hls-fmp4`): `grant.latency.ios = { liveEdgeOffsetS: targetS, preferredForwardBufferDuration:
-  max(p.rebuild, targetS) }`. `IOS_PLAYBACK_PROFILES` (el respaldo de la app sin `ios` en la concesión) pasa a
+- **iPhone** (`hls-fmp4`), **solo con `latency=2`** en la consulta (revisión del 26-sep: la app publicada no lo manda
+  y sigue con los 4 / 8 / 12 s de la 0.8.0, o 3 × TD si es más; §7): `grant.latency.ios = { liveEdgeOffsetS: targetS,
+  preferredForwardBufferDuration: targetS }` (antes `max(p.rebuild, targetS)`, que pedía 4 s de colchón con 3 s de
+  distancia al final). `IOS_PLAYBACK_PROFILES` (el respaldo de la app sin `ios` en la concesión) pasa a
   `liveEdgeOffsetS` 3/6/10 (el `initial` de la web, que es el objetivo de mpegts.js) y `preferredForwardBufferDuration`
   4/8/12.
 - **Web con el remux** (IPTV, y AceStream juntos con §4.6): `grant.latency.liveSync = { targetS, maxS, rate }` también
-  en «Estable» (hoy es `null`). `player/engines/hls.ts`: si la URL es del remux (`/api/v1/video/`), hls.js va **en
+  en «Estable» (hoy es `null`). En «Baja latencia», 4 s como mínimo (`REMUX_WEB_MIN_S`, revisión del 26-sep): con 3 s
+  hls.js se paraba 7 de 33 muestras aun con el proveedor falso en local. `player/engines/hls.ts`: si la URL es del remux (`/api/v1/video/`), hls.js va **en
   segundos**: `liveSyncDuration: targetS`, `liveMaxLatencyDuration: maxS`, `maxLiveSyncPlaybackRate: rate`,
   `maxBufferLength: bufferS`, `lowLatencyMode: false`, `backBufferLength: 30`. Con el HLS del motor (dos webs en el
   mismo AceStream) sigue en segmentos, como hoy: su segmento no lo controlamos.
@@ -1166,12 +1174,17 @@ Linux» o «Chrome · Windows» → «el PC»):
 ## 7. Impacto en la app nativa (`rediseno/nativa`)
 
 **Sin cambiar nada, también la 0.8.0 publicada:**
-- Nada se rompe: los campos nuevos son opcionales (Codable los ignora), no hay rutas, eventos ni códigos nuevos, y
-  `fixtures/v1/` y `fixtures/events/` no cambian.
-- **Gana la latencia** de C.1 y C.2 al pedir el canal: segmentos de un GOP (`-hls_time 0.5`), `TARGETDURATION`
-  fijo y `grant.latency.ios` calculado con él. Al cambiar de modo sin reconectar sigue usando su perfil fijo
-  (4/8/12), que queda algo por encima. Si el TD sube a mitad de sesión (GOP irregular, §4.3), se queda con el margen
-  de la concesión: más cerca de lo que AVPlayer aguanta, más riesgo de parón hasta que se reconecte.
+- Los campos nuevos son opcionales (Codable los ignora), no hay rutas, eventos ni códigos nuevos, y `fixtures/v1/` y
+  `fixtures/events/` no cambian. Lo que sí cambia para ella es el vídeo: segmentos de un GOP (`-hls_time 0.5`) y
+  `TARGETDURATION` fijo (y, con GOP irregular, subido a mitad de sesión, §4.3). Eso no se ha probado con AVPlayer:
+  se prueba en el laboratorio antes de publicar el servidor.
+- **Su margen no cambia** (revisión del 26-sep): `grant.latency.ios` le sigue dando lo de la 0.8.0, 4 / 8 / 12 s
+  del final (`IOS_PLAYBACK_PROFILES_080`), o 3 × TD si es más (GOP largo). Los 3 / 6 / 10 s de `remuxLatency`
+  (§4.4) solo los recibe quien pide `latency=2`, es decir, la app nueva cuando el laboratorio mida que AVPlayer los
+  aguanta. Así la 0.8.1 no acerca al directo a todos los iPhone con P2P («Equilibrado» es el modo por defecto) sin
+  haberlo medido. Con segmentos de 1 s y 4 s de margen, la 0.8.0 queda a unos 4-5 s del final en «Baja latencia» si
+  AVPlayer respeta `configuredTimeOffsetFromLive` (sin medir). Si el TD sube a mitad de sesión, se queda con el margen
+  de la concesión hasta que se reconecte.
 - Como «el otro dispositivo», no sabe seguir: con «Cambiar en los dos» se para como hoy. La web lo sabe (`follows`
   ausente) y se lo dice a Isma en la hoja (§2.5.1). No ve la cápsula ni la hoja. Su visor sí cuenta `away` en el
   servidor, así que un iPhone con la 0.8.0 suspendido sin PiP deja de salir en la hoja y la cápsula de la web a los
@@ -1184,10 +1197,11 @@ final lo pone su dueño):
 
 | Módulo | Dónde | Qué |
 |---|---|---|
-| M1 · datos | `Core/Models/Reproduccion.swift`, modelo de `bootstrap`, `Core/Datos` | `others`, `from`, `join`, `match` y `follows` en la consulta de `channelStream` (solo con `features.multi`); `follows` y `away` en `SessionViewer`; `matchId` en `SessionSummary`; `byDeviceName`, `follow` y `matchId` en `playback.handoff`; `iptvInput` en la concesión; `features.multi: Bool?`; `session_expired` de una petición con `join` llega a quien la pidió, sin reintento |
+| M1 · datos | `Core/Models/Reproduccion.swift`, modelo de `bootstrap`, `Core/Datos` | `others`, `from`, `join`, `match`, `follows` y `latency` en la consulta de `channelStream` (solo con `features.multi`); `follows` y `away` en `SessionViewer`; `matchId` en `SessionSummary`; `byDeviceName`, `follow` y `matchId` en `playback.handoff`; `iptvInput` en la concesión; `features.multi: Bool?`; `session_expired` de una petición con `join` llega a quien la pidió, sin reintento |
 | M3 · reproducción | `Core/Reglas/Reproduccion/Casa.swift`* | `decideHouseChange` e `isLiveViewer` con los vectores de `decide.test.ts` (`scripts/vectores/multi.ts`*), incluidos `pending`, `from`, `away` y la pausa de 10 min |
 | M3 | `Sources/Player/Reproductor.swift` y `Fuentes/SesionFuentes.swift` | la puerta (`house: continue/follow/join`, `pending` sin bloquear, `others`/`from`/`join` solo en la primera petición, `follows=1`); la hoja que se vuelve a evaluar y se cierra con un traspaso; descartar el traspaso de la sesión que deja una petición propia en curso; seguir con `follow` y `join`, con la cadena de §2.4.3 (también en segundo plano y con PiP: cambia el `AVPlayerItem` sin parar el audio); estado de traspaso con `by` y `previous`; lo que suena en casa primero con `join`; no arrancar solo si otro ve otra cosa (panel «Poner aquí»); `continue` con `move` y `from` en P16 y en el puente |
 | M3 | ciclo de vida | **soltar la sesión** (`sessionRelease`, `POST /api/v1/sessions/:sid/release`, como el `pagehide` de la web) al pasar a segundo plano **sin PiP** ni AirPlay, para no ser un dispositivo fantasma en la hoja y la cápsula de los demás; con PiP sigue latiendo. Al volver, reanuda por la puerta como un «Reintentar» |
+| M1 / M3 | consulta de `channelStream` | **`latency=2`** (con `features.multi`) solo cuando el laboratorio haya medido que AVPlayer aguanta 3 s del final con segmentos de 0,5-1,5 s y TD 1 sin retrasar el arranque ni pararse. Sin él la concesión trae los números de la 0.8.0. Con él, `preferredForwardBufferDuration` = `liveEdgeOffsetS` (3 / 6 / 10 s): no pide más colchón que distancia al final |
 | M3 | `Sources/Player/MotorAVPlayer.swift` | `configuredTimeOffsetFromLive = max(grant.latency.ios.liveEdgeOffsetS, item.recommendedTimeOffsetFromLive)` al pedir, **al cambiar de modo** (con el `initial` de la web, 3/6/10, y `recommendedTimeOffsetFromLive` en vez del perfil fijo) y **cuando cambie `recommendedTimeOffsetFromLive`** (el TD subió a mitad de sesión, §4.3); `preferredForwardBufferDuration` de la concesión; `automaticallyPreservesTimeOffsetFromLive = true`; medir en el laboratorio si AVPlayer acepta 3 s con segmentos de 0,5-1,5 s y TD 1 (las cifras de §4.7 dependen de eso) y probar `automaticallyWaitsToMinimizeStalling = false` en «Baja latencia» (§4.8) |
 | M3 | «Datos técnicos» | «Segmento» (TD y duración real) y «Retraso» (con `currentDate()` y la hora del servidor, gracias a `program_date_time`); «Origen: IPTV · … · TS/HLS» con `iptvInput` |
 | M4 · armazón | `Armazon/Hojas.swift` | la hoja de §2.5.1 por la única puerta de hojas (`.sheet` nativa, fondo `glassSolid`, contenido y botones de la web); háptica `selection` / `success` |
@@ -1333,3 +1347,63 @@ Descartado de la revisión, además de lo dicho en la tabla:
   para «iPhone primero», no hay `modeChanged`. La regla pegajosa en el servidor lo cubre sin contrato nuevo.
 - Un tope en segmentos (`liveSyncDurationCount`) en vez de recalcular en `LEVEL_UPDATED`: volvería a hacer que los
   modos de la web valgan distinto según el GOP, que es justo lo que C.2 arregla.
+
+---
+
+## 12. Segunda revisión del 26-sep (cierre de `rediseno/multi`)
+
+**Arreglado:**
+
+| Problema | Qué se ha hecho |
+|---|---|
+| IPTV con GOP largo: la regla de 3 segmentos y `3 × TD + 1 s` pedía 24 s de vídeo con GOP 6 y acababa en `iptv_timeout` («Tu IPTV no responde: seguimos por AceStream») a los ~22 s; la 0.8.0 arrancaba esos canales | `waitReady` (rama IPTV): 2 segmentos de cualquier duración pasados 10 s desde el primer byte, o 1 al vencer el plazo (§4.3). Pruebas con reloj falso y GOP de 1, 4, 5, 6, 8, 12 y 40 s en `remux/service.test.ts`. De punta a punta, con el ffmpeg de verdad y el proveedor falso sin colchón (`e2e/latencia.spec.ts`, «IPTV con GOP largo»): GOP 4 y 6 s suenan por la IPTV a los ~15,4 s de abrir el canal (antes, «seguimos por AceStream» a los 22 s), con «Segmento: 4 s» y «6 s». Las notas ya no dicen «la IPTV arranca antes» sin más |
+| La 0.8.1 cambiaba sin opt-in el margen de la app 0.8.0 publicada (4/8/12 → 3/6/10 s, también en «Equilibrado») sin haberlo medido | `latency=2` en la consulta de `channelStream` (`ChannelStreamQuerySchema`): sin él, lo de la 0.8.0 (`IOS_PLAYBACK_PROFILES_080`, o 3 × TD si es más). §7 dice ya qué cambia de verdad para la 0.8.0 (el vídeo, no el margen) |
+| Zapping con «en los dos» recordado y canales lentos: el otro se paraba (E2E 14 fallaba al primer intento) | `movedFrom` en el servidor y `RememberedBoth.from` en el cliente (§2.3, última fila). E2E 14 con `slowStart` y 14b nuevo (segundo cambio a los 0,6 y a los 1,5 s), en verde |
+| «Baja latencia» con la IPTV en la web se paraba (7 de 33 muestras) | 4 s como mínimo en la web con el remux (`REMUX_WEB_MIN_S`); el E2E de latencia acepta hasta 5,5 s en «Baja latencia» |
+| El reinicio con 5 MB / 5 s saltaba con cualquier «Could not find codec parameters», teletexto y subtítulos incluidos | Solo con pistas de vídeo o audio (`PROBE_FAILED_RE`), con prueba |
+| El relé guardaba 5 MiB toda la sesión | `probeSettled()`: al quedar lista la lista, el relé deja de guardar la cola hasta que se engancha otro ffmpeg |
+| La cápsula y los botones del panel de traspaso medían 36 px | 44 px (`--tap`): la «×» de ancho, el área de toque de la cápsula 4 px más arriba y abajo sin cambiar el dibujo, y los botones del panel |
+| Canal suelto sin nada aquí: «Sin señal · Elige un partido…» detrás de la hoja y al cancelar | Con la hoja abierta y nada sonando, el panel «otra cosa en casa» (`gate.ts`); al cancelar se queda, con «Poner aquí» (vuelve a preguntar) y «No has cambiado nada» |
+| La cápsula tocada desde Inicio no abría el canal (sonaba en el mini) | Unirse desde otra vista navega al canal o al centro de su partido (§3.3); seguir desde otra vista sigue sin navegar |
+| «… en los dos» con 3 o más dispositivos; «Volver a …» tras un seguir fallido ofrecía el canal que nunca se vio aquí | «en todos» con 3 o más; `followFrom` en las opciones del seguir y `previousOf` en el reproductor |
+| Vite optimizaba hls.js a mitad del E2E y recargaba las páginas | `optimizeDeps.include` con hls.js, mpegts.js y @tanstack/react-virtual en `vite.e2e.config.ts` |
+| Sesión viva más de 60 s tras parar (E2E intermitente «arranque de la IPTV») | **Reproducido y arreglado; era un fallo de verdad.** Al pulsar «Detener» en un canal, el reproductor publica primero la fase `idle` y después el motivo (`detenido`); la sesión de fuentes solo miraba el cambio de fase, así que no se daba por parada y el siguiente aviso del comprobador **arrancaba otra fuente (la AceStream) justo después de «Detener»**. Ahora mira también el cambio de motivo (`features/sources/session.ts`, con prueba). De paso, el `release` al parar se repite una vez si no contestó el servidor (un corte de red la dejaba viva hasta caducar) |
+
+**Impacto en la app nativa** (además de §7; nadie de aquí toca `apps/ios`):
+- `latency=2` en `channelStream` solo cuando el laboratorio lo haya medido; hasta entonces, la concesión le da lo de la
+  0.8.0 aunque sea la app nueva.
+- La puerta calca `RememberedBoth.from`: con «en los dos» recordado y sin sesión propia, `move` con la `from` del
+  último `move` (vectores nuevos en `decide.test.ts`, «zapping … mi cambio anterior aún abriendo»).
+- Seguir que no llega a dar imagen: «Volver a …» ofrece lo de antes de seguir (`followFrom`), no el canal que nunca
+  se vio.
+- «… ha cambiado a X en todos» con 3 o más dispositivos (`followedText`, vector nuevo en `texts.test.ts`).
+- Tocar la cápsula desde otra pestaña abre el canal o el centro de su partido; seguir no cambia de pestaña.
+- Hoja abierta sin nada sonando: detrás, el panel «otra cosa en casa»; «Cancelar» lo deja, con «Poner aquí» y «No has
+  cambiado nada».
+- Toques de 44 pt en la cápsula y en los botones del panel de traspaso.
+- «Detener» apaga lo automático de la sesión de fuentes aunque el estado del reproductor cambie en dos pasos: nunca
+  arrancar otra fuente sola después de «Detener».
+
+**Sigue abierto (dicho claro):**
+- **C en el iPhone no está medido.** Las cifras del iPhone (3,2 / 6,2 / 10,2 s y las de §4.7) son estimaciones. Hay que
+  medir en el laboratorio de la app, **antes de publicar el servidor**, que la 0.8.0 aguanta segmentos de 1 s y TD fijo
+  (y subido a mitad de sesión) y, después, con la app nueva, si AVPlayer acepta 3 s con `latency=2`.
+- **El caso que Isma probó no mejora:** el PC y el iPhone en el mismo canal de AceStream siguen unos 15 s por detrás
+  (HLS del motor con segmentos de 4-6 s). C.4 (`SHARE_VIA_REMUX`) está apagado y, aunque se encendiera, no cubre «el PC
+  primero». «Baja latencia» en el iPhone solo mejorará cuando vea solo o el canal sea IPTV.
+- El GOP de los canales de Isma sigue sin medirse (§4.2).
+- Reconexiones sin `join` tras la primera concesión (`houseQuery`/`houseGranted` en `runtime.ts`): si el SSE de Y está
+  caído cuando X elige «Solo aquí», el corte del stream de Y lo reconecta al canal viejo y echa a X. Ya pasaba antes.
+- `matchId` se conserva entre peticiones del mismo visor: si el mismo hash pasa a otro partido sin petición nueva, la
+  cápsula del otro abre el partido viejo. Raro.
+- Subir el TARGETDURATION a mitad de sesión va contra RFC 8216 §6.2.1 (documentado en §4.3; es mejor que un segmento
+  que no cabe).
+- `away` deja 5 s de margen sobre el latido de 15 s: una pestaña de fondo con el throttling intensivo de Chrome sale
+  como ausente y no se le pregunta. Ya pasaba con la caducidad de 45 s.
+- «Códec: unknown · unknown» en «Datos técnicos»; con IPTV el canal tocado entra en Recientes aunque se cancele la
+  pregunta (código del buscador, otro trabajo); faltan los E2E 8 (IPTV en el navegador), 9-10 (partidos) y 13
+  (WebKit).
+- Fuera de A, B y C, pedidos por Isma y sin tocar: deslizar en Canales y en el Calendario (el gesto vertical que se
+  lleva el carrusel, y el lag), el PiP que vuelve al reproductor al volver a la app, la línea blanca abajo en pantalla
+  completa, la animación de minimizar en el navegador, la barra con Liquid Glass (solo la app) y «Datos técnicos» que
+  no responde en la app de iPhone actual (en la web móvil sí funciona).

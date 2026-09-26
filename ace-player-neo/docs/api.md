@@ -977,11 +977,12 @@ Diseño y medidas en [`multidispositivo.md`](./multidispositivo.md). Sin rutas, 
 
 | Parámetro | Valores | Qué hace |
 |---|---|---|
-| `others` | `move` \| `stop` | «Cambiar en los dos» (`move`) o «Solo aquí» (`stop`, o ausente, como hasta ahora). Con `move`, los visores de **otros dispositivos** que estaban en la sesión `from` reciben `playback.handoff` con `follow: true` y pasan solos al canal nuevo; los de cualquier otra sesión se paran. `move` sin `from`, o con «Un solo dispositivo a la vez» encendido, se trata como `stop`. |
+| `others` | `move` \| `stop` | «Cambiar en los dos» (`move`) o «Solo aquí» (`stop`, o ausente, como hasta ahora). Con `move`, los visores de **otros dispositivos** que estaban en la sesión `from` (o en una abierta desde ella por otro `move`: el zapping rápido) reciben `playback.handoff` con `follow: true` y pasan solos al canal nuevo; los de cualquier otra sesión se paran. `move` sin `from`, o con «Un solo dispositivo a la vez» encendido, se trata como `stop`. |
 | `from` | id de sesión | La sesión que el cliente vio al decidir (`playbackStatus`). Contra las carreras: si el otro ya había cambiado a otra cosa, no se le arrastra. |
 | `join` | `1` | Unirse a lo que ya se ve, **sin cambiar nunca el canal de la casa**. Si no hay sesión viva de ese canal, `410 session_expired` sin cerrar ni abrir nada. Lo usan seguir, la cápsula y «Ver … aquí». Con `join`, `others` y `from` se ignoran; con «Un solo dispositivo a la vez», el que se une se la queda (`same_channel` para los demás). |
 | `match` | id de la agenda | Partido desde el que se pide: para que el otro dispositivo pueda unirse o seguir en el mismo partido. |
 | `follows` | `0` \| `1` | Este visor sabe seguir un cambio (`playback.handoff` con `follow`). La web manda `1`; la app 0.8.0 no lo manda y, como «el otro», se para como hasta ahora. |
+| `latency` | `2` | La app de iPhone acepta el margen de la 0.8.1 en `latency.ios` (3 / 6 / 10 s del final, nunca menos de 3 × TD; `preferredForwardBufferDuration` igual). Sin él, la concesión trae lo de la 0.8.0 (4 / 8 / 12 s, o 3 × TD si es más): la app publicada no cambia hasta que el laboratorio lo mida (docs/multidispositivo.md §4.4 y §7). La web lo ignora. |
 
 La concesión (`StreamGrant`) solo gana `iptvInput` (`ts` \| `hls`, solo IPTV: lo que entrega el proveedor, para «Datos técnicos»). `latency` no cambia de forma, pero ahora se calcula en **segundos** con el `EXT-X-TARGETDURATION` real del remux (§8.4).
 

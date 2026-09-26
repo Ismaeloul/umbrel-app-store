@@ -357,7 +357,7 @@ describe('hls.js', () => {
       hls.emit('hlsLevelUpdated', {
         details: { targetduration: 1, fragments: [{ duration: 0.96 }, { duration: 0.96 }] },
       });
-      expect(hls.config.liveSyncDuration).toBe(3);
+      expect(hls.config.liveSyncDuration).toBe(4);
       expect(engine.info().segment).toEqual({ targetS: 1, minS: 0.96, maxS: 0.96 });
       hls.emit('hlsLevelUpdated', {
         details: { targetduration: 2, fragments: [{ duration: 1.52 }, { duration: 1.2 }] },

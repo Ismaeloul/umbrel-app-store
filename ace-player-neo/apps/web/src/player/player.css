@@ -213,6 +213,8 @@
 }
 .player-msg .btn {
   margin-top: var(--s-2);
+  /* Botones de un toque sobre el vídeo («Ver … aquí», «Volver a …», «Poner aquí»): 44 px. */
+  min-height: var(--tap);
 }
 /* Tras un traspaso (docs/multidispositivo.md §2.4.4): «Ver … aquí» y «Volver a …», juntos. */
 .player-msg__actions {

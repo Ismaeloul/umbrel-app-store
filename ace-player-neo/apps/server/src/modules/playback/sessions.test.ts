@@ -7,7 +7,7 @@
 import Fastify from 'fastify';
 import { describe, expect, it } from 'vitest';
 import {
-  IOS_PLAYBACK_PROFILES,
+  IOS_PLAYBACK_PROFILES_080,
   StreamGrantSchema,
   TIMEOUTS,
   type ChannelStreamQuery,
@@ -461,7 +461,7 @@ describe('iOS: remux sobre la sesión del backend (arquitectura §5.7, D5.3)', (
       url: `/native/api/v1/video/${grant.session.id}/index.m3u8`,
       protocol: 'hls-fmp4',
       remux: true,
-      latency: { mode: 'low', liveSync: null, ios: IOS_PLAYBACK_PROFILES.low },
+      latency: { mode: 'low', liveSync: null, ios: IOS_PLAYBACK_PROFILES_080.low },
     });
     expect(ffmpeg.last().input).toMatch(/\/ace\/r\//);
     expect(ffmpeg.last().sessionId).toBe(grant.session.id);
@@ -489,8 +489,8 @@ describe('iOS: remux sobre la sesión del backend (arquitectura §5.7, D5.3)', (
       url: `/api/v1/video/${pc.session.id}/index.m3u8`,
       protocol: 'hls',
       remux: true,
-      /* TD 1 del ffmpeg falso: «Baja latencia» a 3 s, como el iPhone. */
-      latency: { liveSync: { targetS: 3, maxS: 7, rate: 1.05 } },
+      /* TD 1 del ffmpeg falso: «Baja latencia» a 4 s en la web (REMUX_WEB_MIN_S). */
+      latency: { liveSync: { targetS: 4, maxS: 7, rate: 1.05 } },
     });
     await runtime.idle();
     expect(runtime.inspect().sessions[0]?.mode).toBe('progressive');

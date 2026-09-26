@@ -285,6 +285,9 @@ const SYSTEM_ERRORS = new Set([
 ]);
 
 /** Una IPTV que falla sin alternativa (§8.3). */
+/** Espera antes de repetir un `release` que no llegó al servidor. */
+const RELEASE_RETRY_MS = 1000;
+
 export const IPTV_IDLE_MESSAGE = 'Tu IPTV no da señal ahora mismo.';
 /** A los 10 s sin imagen con la IPTV (docs/multidispositivo.md §4.5). */
 export const IPTV_SLOW_START_TEXT = 'Tu IPTV está tardando en arrancar…';
@@ -304,6 +307,19 @@ function isFillerTitle(channel: { hash: string; title: string }): boolean {
 /** A dónde vuelve «Volver a …» tras un traspaso: la ruta con la que se pidió la fuente. */
 function routeOf(source: Pick<SourceAttempt, 'options' | 'channel'>): Route {
   return source.options.route ?? channelRoute(source.channel.hash);
+}
+
+/**
+ * Lo que se veía aquí para «Volver a …»: la fuente de ahora, salvo si es un
+ * seguir que aún no ha dado imagen (nunca se vio aquí): entonces, lo de antes
+ * de seguir (docs/multidispositivo.md §2.4.3).
+ */
+function previousOf(
+  source: Pick<SourceAttempt, 'options' | 'channel' | 'startedAt'>,
+): HandoffInfo['previous'] {
+  const before = source.options.followFrom;
+  if (before && source.startedAt === null) return before;
+  return { channel: source.channel, route: routeOf(source) };
 }
 
 const IDLE_MESSAGES: Record<IdleReason, string> = {
@@ -1602,13 +1618,29 @@ export class PlayerRuntime {
   ): Promise<void> {
     if (this.session === session) this.dropSession();
     if (this.demo()) return Promise.resolve();
-    return this.request('sessionRelease', {
-      params: { sid: session.id },
-      body: { viewer: this.identity().viewer, reason },
-      keepalive: true,
-    }).then(
+    const send = () =>
+      this.request('sessionRelease', {
+        params: { sid: session.id },
+        body: { viewer: this.identity().viewer, reason },
+        keepalive: true,
+      });
+    /* Un corte de red al soltar dejaba la sesión viva hasta que caducaba (45 s
+       sin latido, y con IPTV la plaza del proveedor ocupada): un reintento
+       si no contestó el servidor (sin respuesta o 5xx). */
+    return send().then(
       () => undefined,
-      () => undefined,
+      (error: unknown) => {
+        const status = (error as { status?: number } | null)?.status ?? 0;
+        if (status !== 0 && status < 500) return undefined;
+        return new Promise<void>((resolve) => {
+          setTimeout(() => {
+            send().then(
+              () => resolve(),
+              () => resolve(),
+            );
+          }, RELEASE_RETRY_MS);
+        });
+      },
     );
   }
 
@@ -1651,7 +1683,7 @@ export class PlayerRuntime {
     /* Mi petición en curso ya deja esa sesión: llegará después y gana el último
        (docs/multidispositivo.md §2.4.3). Si coloca la suya, el otro recibirá su aviso. */
     if (data.sessionId && source.leaving === data.sessionId) return;
-    const previous = { channel: source.channel, route: routeOf(source) };
+    const previous = previousOf(source);
     const byLabel = this.handoffLabel({
       client: data.byClient,
       deviceId: data.byDeviceId,
@@ -1687,9 +1719,7 @@ export class PlayerRuntime {
       deviceId: data.byDeviceId,
       deviceName: data.byDeviceName,
     }),
-    previous: HandoffInfo['previous'] | null = this.source
-      ? { channel: this.source.channel, route: routeOf(this.source) }
-      : null,
+    previous: HandoffInfo['previous'] | null = this.source ? previousOf(this.source) : null,
   ): void {
     if (!previous) {
       this.stop('traspasado');

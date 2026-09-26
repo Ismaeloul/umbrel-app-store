@@ -9,10 +9,13 @@ import { getViewerId } from '../../api/identity.ts';
 import { dispatchSse } from '../../api/sse.ts';
 import { playerPresence } from '../../app/player-presence.ts';
 import { json, mockFetch } from '../../test/fetch.ts';
+import { toastStore } from '../../notices/toasts.ts';
 import {
   connectRuntime,
   onPlayCancelled,
   play,
+  playerStore,
+  putHere,
   resetPlayerApi,
   setHouseGate,
   type PlayerCommand,
@@ -91,6 +94,25 @@ describe('la puerta pregunta (§2.1)', () => {
     answerHouse('cancel');
     expect(played()).toHaveLength(1);
     expect(cancelled).toEqual([H3]);
+  });
+
+  it('canal suelto sin nada aquí: detrás de la hoja, «otra cosa en casa»; al cancelar sigue con «Poner aquí» y «No has cambiado nada»', () => {
+    seedHouse({ sessions: [houseSession(H1, [iphone()])] });
+    toastStore.set([]);
+    play({ hash: H2, title: 'Antena 3' });
+    expect(playerStore.get()).toMatchObject({
+      idleReason: 'otra-cosa-en-casa',
+      houseIdle: { labels: ['el iPhone'], title: 'DAZN LaLiga' },
+    });
+    answerHouse('cancel');
+    expect(played()).toHaveLength(0);
+    expect(playerStore.get().houseIdle).not.toBeNull();
+    expect(toastStore.get().map((item) => item.text)).toContain('No has cambiado nada');
+    /* «Poner aquí» vuelve a preguntar (pasa otra vez por la puerta). */
+    putHere();
+    expect(houseQuestionStore.get()?.command.channel.hash).toBe(H2);
+    answerHouse('here');
+    expect(played()[0]?.options).toMatchObject({ others: 'stop' });
   });
 
   it('continue, follow y join no preguntan; con la política handoff tampoco', () => {

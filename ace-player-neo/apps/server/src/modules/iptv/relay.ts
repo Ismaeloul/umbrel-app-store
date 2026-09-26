@@ -130,6 +130,12 @@ export interface RelaySession {
    * vídeo nuevo. `false` si la sesión ya está cerrada.
    */
   prepareRestart(): boolean;
+  /**
+   * La lista del remux de este ffmpeg ya está lista: no habrá reinicio por el
+   * análisis, así que se deja de guardar la cola para `prepareRestart` (hasta
+   * que se enganche otro ffmpeg). En HLS no hace nada.
+   */
+  probeSettled(): void;
   /** Aborta la conexión con el proveedor y espera a que se suelte. Idempotente. */
   close(): Promise<void>;
 }
@@ -284,6 +290,8 @@ abstract class BaseSession implements RelaySession {
 
   abstract prepareRestart(): boolean;
 
+  probeSettled(): void {}
+
   onDropped(listener: (code: IptvReason) => void): void {
     this.dropped.push(listener);
   }
@@ -353,6 +361,8 @@ class TsSession extends BaseSession {
   /** Lo último entregado a ffmpeg (hasta `retainMax`), para volver a dárselo tras `prepareRestart`. */
   private retained: Buffer[] = [];
   private retainedBytes = 0;
+  /** La lista del ffmpeg de ahora ya está lista: no se guarda la cola (hasta el siguiente `attach`). */
+  private settled = false;
 
   constructor(
     ticket: string,
@@ -411,7 +421,7 @@ class TsSession extends BaseSession {
   private retain(chunk: Buffer): void {
     this.noteDelivered();
     const max = this.relay.deps.retainBytes ?? IPTV_PROBE_RETAIN_BYTES;
-    if (max <= 0) return;
+    if (max <= 0 || this.settled) return;
     this.retained.push(chunk);
     this.retainedBytes += chunk.length;
     while (
@@ -420,6 +430,12 @@ class TsSession extends BaseSession {
     ) {
       this.retainedBytes -= (this.retained.shift() as Buffer).length;
     }
+  }
+
+  override probeSettled(): void {
+    this.settled = true;
+    this.retained = [];
+    this.retainedBytes = 0;
   }
 
   prepareRestart(): boolean {
@@ -478,6 +494,8 @@ class TsSession extends BaseSession {
     this.downstream = res;
     this.delivered = 0;
     this.firstByteAt = null;
+    /* Un ffmpeg nuevo vuelve a analizar: se guarda otra vez la cola por si su análisis corto falla. */
+    this.settled = false;
     res.writeHead(200, { 'content-type': 'video/mp2t', 'cache-control': 'no-store' });
     const flush = this.pending;
     this.pending = [];

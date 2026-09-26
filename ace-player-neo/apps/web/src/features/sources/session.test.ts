@@ -345,6 +345,18 @@ describe('política única de cambio de fuente (P16)', () => {
     expect(getPlayer().channel).toBeNull();
   });
 
+  it('detener publicado en dos pasos (fase idle y después el motivo) también lo apaga', async () => {
+    await playingAuto();
+    /* Como el reproductor de verdad: `transition('detener')` publica la fase y
+       `setState` el motivo justo después. */
+    playerStore.set((state) => ({ ...state, phase: 'idle' }));
+    playerStore.set((state) => ({ ...state, channel: null, idleReason: 'detenido' }));
+    expect(getSession()).toMatchObject({ stopped: true, autoVerified: false });
+    scan = scanJob(['working', 'working', 'working']);
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(getPlayer().channel).toBeNull();
+  });
+
   it('reproducir algo que no es de la lista termina la sesión', async () => {
     await playingAuto();
     const { play } = await import('../../player/api.ts');

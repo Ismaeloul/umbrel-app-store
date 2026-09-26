@@ -1500,6 +1500,12 @@ paths:
             enum:
               - "0"
               - "1"
+        - name: latency
+          in: query
+          required: false
+          schema:
+            type: string
+            const: "2"
       responses:
         "200":
           description: Correcto

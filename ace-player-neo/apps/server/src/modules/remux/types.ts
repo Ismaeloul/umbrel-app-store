@@ -120,6 +120,11 @@ export interface RemuxSource {
    * con el proveedor. `false` si el relé ya no está (§4.5).
    */
   readonly prepareRestart?: () => boolean;
+  /**
+   * IPTV: la lista de este ffmpeg ya está lista y no habrá reinicio por el
+   * análisis: el relé deja de guardar la cola de 5 MiB para él.
+   */
+  readonly probeSettled?: () => void;
 }
 
 export interface RemuxSegments {

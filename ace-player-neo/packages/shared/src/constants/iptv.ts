@@ -207,6 +207,18 @@ export const IPTV_FFMPEG_RW_TIMEOUT_US = 55_000_000;
  * FFMPEG (hasta la 0.8.1 contaba desde que arrancaba ffmpeg). §4.5.
  */
 export const IPTV_REMUX_READY_MS = 20 * SECOND;
+/**
+ * IPTV con GOP largo (canales recodificados con x264 por defecto, un fotograma
+ * clave cada 4-10 s): la regla general (3 segmentos y `3 × TD + 1 s` de vídeo)
+ * pide 4 segmentos, de 16 a 40 s de vídeo, y con GOP de 6 s o más no cabe en
+ * el plazo de 20 s. Por eso la lista de una IPTV también se da por lista con
+ * `IPTV_REMUX_EARLY_SEGMENTS` segmentos de cualquier duración pasados
+ * `IPTV_REMUX_EARLY_MS` desde el primer byte (lo que pedía la 0.8.0) y, al
+ * vencer el plazo, con 1 segmento, como el motor (docs/multidispositivo.md
+ * §4.3 y §4.5). El reproductor espera en su lado lo que le falte.
+ */
+export const IPTV_REMUX_EARLY_MS = 10 * SECOND;
+export const IPTV_REMUX_EARLY_SEGMENTS = 2;
 /** Tope desde que se abre el relé (reintentos de «ocupado» de 2, 4 y 8 s incluidos) hasta la lista lista. */
 export const IPTV_REMUX_OPEN_MAX_MS = 28 * SECOND;
 /**

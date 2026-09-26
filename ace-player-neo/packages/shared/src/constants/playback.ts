@@ -116,18 +116,42 @@ export const IOS_PLAYBACK_PROFILES: Readonly<Record<PlaybackMode, IosPlaybackPro
   low: { preferredForwardBufferDuration: 4, liveEdgeOffsetS: 3 },
 };
 
+/**
+ * Lo que recibía la app de iPhone hasta la 0.8.0 (los dos a `rebuild`). La
+ * concesión se lo sigue dando a la app que no pide `latency=2`: la 0.8.1 no
+ * acerca al directo a la app publicada sin que el laboratorio lo haya medido
+ * (docs/multidispositivo.md §4.4 y §7). Con segmentos largos sube a 3 × TD.
+ */
+export const IOS_PLAYBACK_PROFILES_080: Readonly<Record<PlaybackMode, IosPlaybackProfile>> = {
+  stable: { preferredForwardBufferDuration: 12, liveEdgeOffsetS: 12 },
+  balanced: { preferredForwardBufferDuration: 8, liveEdgeOffsetS: 8 },
+  low: { preferredForwardBufferDuration: 4, liveEdgeOffsetS: 4 },
+};
+
 /* Distancia al directo de quien lee el HLS del remux (IPTV en la web, iPhone),
    en SEGUNDOS y no en segmentos: así los tres modos valen lo mismo que con
    mpegts.js, sea cual sea el GOP del canal (docs/multidispositivo.md §4.4).
 
    - Suelo por TARGETDURATION (TD): el iPhone no baja de 3 × TD; hls.js aguanta
-     algo menos (2 / 3 / 4 × TD según el modo).
+     algo menos (2 / 3 / 4 × TD según el modo), pero no menos de 4 s en «Baja
+     latencia» (`REMUX_WEB_MIN_S`).
    - Tope para acelerar (`maxS`): 7 / 14 / 24 s, o el objetivo más 2 TD.
    - Velocidad de alcance y colchón por delante, los de hls.js de siempre. */
 export const REMUX_WEB_TD_FACTOR: Readonly<Record<PlaybackMode, number>> = {
   low: 2,
   balanced: 3,
   stable: 4,
+};
+/**
+ * Suelo en segundos de la web con el remux. En «Baja latencia», 4 s y no los
+ * 3 de mpegts.js: con 3 s hls.js se paraba de vez en cuando aun con el
+ * proveedor falso en local (7 de 33 muestras en pausa, p90 de 3,97 s), y un
+ * proveedor de verdad oscila más. Equilibrado y Estable, como el perfil.
+ */
+export const REMUX_WEB_MIN_S: Readonly<Record<PlaybackMode, number>> = {
+  low: 4,
+  balanced: 6,
+  stable: 10,
 };
 export const REMUX_MAX_LATENCY_S: Readonly<Record<PlaybackMode, number>> = {
   low: 7,
@@ -163,7 +187,8 @@ export function remuxLatency(
 ): RemuxLatency {
   const td = Math.max(1, Math.ceil(targetDurationS ?? 2));
   const profile = PLAYBACK_PROFILES[mode];
-  const floor = client === 'ios' ? 3 * td : REMUX_WEB_TD_FACTOR[mode] * td;
+  const floor =
+    client === 'ios' ? 3 * td : Math.max(REMUX_WEB_TD_FACTOR[mode] * td, REMUX_WEB_MIN_S[mode]);
   const targetS = Math.max(profile.initial, floor);
   const maxS = Math.max(REMUX_MAX_LATENCY_S[mode], targetS + 2 * td);
   return { targetS, maxS, rate: REMUX_RATE[mode], bufferS: REMUX_BUFFER_S[mode] };

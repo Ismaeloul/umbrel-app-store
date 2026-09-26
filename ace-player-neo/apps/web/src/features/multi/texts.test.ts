@@ -263,6 +263,7 @@ describe('el otro dispositivo (§2.5.2)', () => {
 
   it('seguir, nada que seguir y llegar tarde', () => {
     expect(followedText('el PC', 'Antena 3')).toBe('El PC ha cambiado a Antena 3 en los dos');
+    expect(followedText('el PC', 'Antena 3', 3)).toBe('El PC ha cambiado a Antena 3 en todos');
     expect(nothingToFollowTexts('el PC', 'DAZN LaLiga')).toEqual({
       title: 'Nada en el PC',
       text: 'El PC ya no está viendo nada: no hay nada que seguir.',

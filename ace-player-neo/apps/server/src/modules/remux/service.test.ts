@@ -107,7 +107,7 @@ describe('arranque y espera del manifiesto (B-105, B-217)', () => {
     expect(runtime.entries()[0]).toMatchObject({ pid: proc.pid, ready: true, exited: false });
   });
 
-  it('espera a 2 segmentos y 6 s; con 1 segmento, pasados 20 s; nunca con la lista vacía', async () => {
+  it('sin 3 segmentos y 4 s de vídeo no está lista; con 1 segmento, pasados 20 s; nunca con la lista vacía', async () => {
     const { service, fake, clock } = setup({ launcher: { autoSegments: null } });
     let done = false;
     const pending = service.ensure(source(1), 'visor-1').then((handle) => {
@@ -342,6 +342,67 @@ describe('IPTV: plazos y análisis largo sin perder la conexión (docs/multidisp
     expect(again.at).toBeLessThan(7000);
   });
 
+  /**
+   * ffmpeg con `-c copy` solo corta en fotogramas clave: con GOP de G s sale
+   * un segmento de G s cada G s de vídeo, el primero G s después del primer
+   * byte más el análisis (1 s). Devuelve cuándo quedó lista (o el error).
+   */
+  async function arranqueConGop(gopS: number): Promise<{ code?: string; at: number }> {
+    const { service, fake, clock } = setup({ launcher: { autoSegments: null } });
+    const t0 = clock.now();
+    const firstByteAt = t0;
+    let result: { code?: string; at: number } | null = null;
+    void service.ensure(iptvSource({ firstByteAt: () => firstByteAt }), 'v').then(
+      () => {
+        result = { at: clock.now() - t0 };
+      },
+      (error: unknown) => {
+        result = { code: isAppError(error) ? error.code : String(error), at: clock.now() - t0 };
+      },
+    );
+    let written = 0;
+    for (let ms = 0; ms <= 30_000 && !result; ms += 500) {
+      const due = Math.floor(Math.max(0, ms - 1000) / (gopS * 1000));
+      if (due > written) {
+        fake.last().writeSegments(Array.from({ length: due - written }, () => gopS));
+        written = due;
+      }
+      await parked(clock, 1, 500);
+      await clock.advanceAsync(500);
+    }
+    await parked(clock, 0, 50);
+    return result ?? { code: 'sin resultado', at: clock.now() - t0 };
+  }
+
+  it('GOP de 1 s: la regla general (3 segmentos y 4 s) la da por lista en unos 5 s', async () => {
+    const out = await arranqueConGop(1);
+    expect(out.code).toBeUndefined();
+    expect(out.at).toBeLessThanOrEqual(6000);
+  });
+
+  it('GOP largo (4, 5, 6 y 8 s): 2 segmentos pasados 10 s del primer byte, nunca iptv_timeout', async () => {
+    for (const [gop, maxAt] of [
+      [4, 10_500],
+      [5, 11_500],
+      [6, 13_500],
+      [8, 17_500],
+    ] as const) {
+      const out = await arranqueConGop(gop);
+      expect(out.code, `GOP ${gop} s`).toBeUndefined();
+      expect(out.at, `GOP ${gop} s`).toBeGreaterThanOrEqual(10_000);
+      expect(out.at, `GOP ${gop} s`).toBeLessThanOrEqual(maxAt);
+    }
+  });
+
+  it('GOP de 12 s: con 1 segmento al vencer los 20 s; sin ninguno, iptv_timeout', async () => {
+    const out = await arranqueConGop(12);
+    expect(out.code).toBeUndefined();
+    expect(out.at).toBeGreaterThanOrEqual(20_000);
+    expect(out.at).toBeLessThan(21_000);
+    const nada = await arranqueConGop(40);
+    expect(nada.code).toBe('iptv_timeout');
+  });
+
   it('«Could not find codec parameters» con 2 MB / 2 s: prepareRestart ANTES y un reinicio con 5 MB / 5 s', async () => {
     const { service, fake, clock, runtime, detached } = setup({
       launcher: { autoSegments: null },
@@ -373,16 +434,42 @@ describe('IPTV: plazos y análisis largo sin perder la conexión (docs/multidisp
     expect(service.viewersOf('s_sesion0007')).toEqual(['v']);
     expect(detached).toEqual([]);
     /* Un solo reinicio: si el largo vuelve a quejarse, no hay otro. */
-    second.stderr('Could not find codec parameters for stream 1');
+    second.stderr('Could not find codec parameters for stream 1 (Audio: ac3)');
     await runtime.idle();
     expect(fake.spawned).toHaveLength(2);
+  });
+
+  it('teletexto, subtítulos o datos sin parámetros: ni reinicio ni preparar el relé', async () => {
+    const { service, fake, clock, runtime } = setup({ launcher: { autoSegments: null } });
+    let prepared = 0;
+    const pending = service.ensure(
+      iptvSource({
+        prepareRestart: () => {
+          prepared += 1;
+          return true;
+        },
+      }),
+      'v',
+    );
+    await parked(clock);
+    fake
+      .last()
+      .stderr(
+        '[mpegts] Could not find codec parameters for stream 2 (Subtitle: dvb_teletext ([6][0][0][0] / 0x0006), none): unspecified size\n' +
+          'Could not find codec parameters for stream 3 (Unknown: none ([12][0][0][0] / 0x000C)): unknown codec\n',
+      );
+    await runtime.idle();
+    expect(prepared).toBe(0);
+    expect(fake.spawned).toHaveLength(1);
+    fake.last().writeSegments([1, 1, 1, 1]);
+    expect((await settle(clock, pending)).value?.ready).toBe(true);
   });
 
   it('sin relé (prepareRestart da false) no se reinicia y sigue el error de siempre', async () => {
     const { service, fake, clock, runtime } = setup({ launcher: { autoSegments: null } });
     const pending = codeOf(service.ensure(iptvSource({ prepareRestart: () => false }), 'v'));
     await parked(clock);
-    fake.last().stderr('Could not find codec parameters for stream 1');
+    fake.last().stderr('Could not find codec parameters for stream 1 (Audio: ac3)');
     fake.last().exit(1);
     await runtime.idle();
     expect(fake.spawned).toHaveLength(1);
@@ -404,7 +491,7 @@ describe('IPTV: plazos y análisis largo sin perder la conexión (docs/multidisp
       ),
     );
     await parked(clock);
-    fake.last().stderr('Could not find codec parameters for stream 1');
+    fake.last().stderr('Could not find codec parameters for stream 1 (Audio: ac3)');
     fake.last().exit(1);
     await runtime.idle();
     expect(prepared).toBe(0);

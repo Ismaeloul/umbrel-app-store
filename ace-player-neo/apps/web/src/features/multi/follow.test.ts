@@ -14,6 +14,7 @@ import {
 } from '../../player/api.ts';
 import { toastStore } from '../../notices/toasts.ts';
 import { followHouse, followingStore, joinHouse, listenFollow, resetFollow } from './follow.ts';
+import { registerHouseNavigation } from './house.ts';
 import { H1, H2, H3, houseSession, iphone, resetHouse, seedHouse } from './test-utils.ts';
 
 let commands: PlayerCommand[] = [];
@@ -144,6 +145,31 @@ describe('unirse (§3.3)', () => {
     expect(toastStore.get().map((item) => item.text)).toContain(
       'Antena 3 ya no se está viendo en el iPhone.',
     );
+  });
+
+  it('desde Inicio abre el canal (o el centro de su partido); seguir desde otra vista no navega', () => {
+    const visited: { to: unknown; replace: boolean }[] = [];
+    registerHouseNavigation(
+      (to, options) => visited.push({ to, replace: options?.replace === true }),
+      () => ({ vista: 'agenda' }) as never,
+    );
+    try {
+      joinHouse({ hash: H2, title: 'Antena 3', matchId: null, byLabel: 'el iPhone' });
+      joinHouse({ hash: H3, title: 'DAZN', matchId: 'fltv-3', byLabel: 'el iPhone' });
+      expect(visited).toEqual([
+        { to: { vista: 'partido', id: null, canal: H2 }, replace: false },
+        { to: { vista: 'partido', id: 'fltv-3', canal: null }, replace: false },
+      ]);
+      follow();
+      expect(visited).toHaveLength(2);
+    } finally {
+      registerHouseNavigation(null, () => null);
+    }
+  });
+
+  it('un seguir que no llega a dar imagen lleva followFrom (lo de antes) para «Volver a …»', () => {
+    follow();
+    expect(plays()[0]?.options.followFrom).toEqual(previous);
   });
 
   it('un join de la sesión de fuentes (sin cápsula) no saca el toast', () => {

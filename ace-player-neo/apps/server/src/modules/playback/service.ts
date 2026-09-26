@@ -142,7 +142,18 @@ interface SessionRec {
   readonly pendingDetach: string[];
   /** Última vez que el relé apuntó `working` por `player` (con bytes entrando). */
   lastWorkingAt: number;
+  /**
+   * Sesiones de las que viene esta por «Cambiar en los dos» (la `from` de la
+   * petición que la abrió y las de aquella). Un `move` posterior con
+   * cualquiera de ellas en `from` también mueve a sus visores: en un zapping
+   * rápido el cliente aún no ha visto la sesión nueva y manda la de antes
+   * (docs/multidispositivo.md §2.3).
+   */
+  readonly movedFrom: Set<string>;
 }
+
+/** Cuántas sesiones de antes recuerda `movedFrom` (un zapping largo no crece sin fin). */
+const MOVED_FROM_MAX = 8;
 
 interface AcquireRequest {
   readonly hash: string;
@@ -382,6 +393,7 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       openedAt: input.openedAt,
       firstByteAt: () => input.stats().firstByteAt,
       prepareRestart: () => !session.closed && input.prepareRestart(),
+      probeSettled: () => input.probeSettled?.(),
     };
   }
 
@@ -777,6 +789,7 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       input,
       graceTimer: null,
       pendingDetach: [],
+      movedFrom: new Set(),
       lastWorkingAt: 0,
     };
     sessions.set(session.id, session);
@@ -818,6 +831,7 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
         input: null,
         graceTimer: null,
         pendingDetach: [],
+        movedFrom: new Set(),
         lastWorkingAt: 0,
       };
       if (stopped) {
@@ -1156,6 +1170,11 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       matchId: request.matchId,
     };
     let handoff = false;
+    /* Sesiones de las que se viene con «en los dos» (para `movedFrom` de la nueva). */
+    const lineage = new Set<string>();
+    if (request.others === 'move' && request.from !== null && !request.join) {
+      lineage.add(request.from);
+    }
     if (request.join) {
       /* Unirse (docs/multidispositivo.md §2.3, D-M7): seguir, la cápsula y
          «Ver … aquí» nunca cambian el canal de la casa. Si ya no hay nadie
@@ -1173,11 +1192,20 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
         if (other.hash === request.hash) continue;
         const affected = [...other.viewers.values()].filter((v) => v.viewerId !== request.viewerId);
         /* «Cambiar en los dos» (§2.3): solo siguen los visores de OTROS
-           dispositivos de la sesión que el cliente vio al decidir (`from`).
+           dispositivos de la sesión que el cliente vio al decidir (`from`), o
+           de una abierta desde ella por otro «en los dos» (`movedFrom`: el
+           zapping rápido, en el que el cliente aún no ha visto la nueva).
            Los de cualquier otra sesión (alguien cambió mientras tanto) se
            paran con el aviso: nunca se les arrastra sin preguntar. */
         const moving =
-          request.others === 'move' && request.from === other.id && policy() === 'share';
+          request.others === 'move' &&
+          request.from !== null &&
+          (request.from === other.id || other.movedFrom.has(request.from)) &&
+          policy() === 'share';
+        if (moving) {
+          lineage.add(other.id);
+          for (const id of other.movedFrom) lineage.add(id);
+        }
         const follows = moving
           ? affected.filter((v) => v.deviceId === null || v.deviceId !== request.deviceId)
           : [];
@@ -1229,7 +1257,13 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
         session = undefined;
       }
     }
-    if (!session) session = await openSessionLocked(request);
+    if (!session) {
+      session = await openSessionLocked(request);
+      if (policy() === 'share') {
+        /* Las primeras son las más cercanas (la `from` de esta petición y la sesión movida). */
+        for (const id of [...lineage].slice(0, MOVED_FROM_MAX)) session.movedFrom.add(id);
+      }
+    }
     const existing = session.viewers.get(request.viewerId);
     const viewer: ViewerRec = existing ?? {
       viewerId: request.viewerId,
@@ -1751,6 +1785,7 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
           viewer.consumes === 'remux'
             ? { targetDurationS: placed.remux?.targetDurationS() ?? null }
             : null,
+          query.latency === '2',
         ),
         stats: { via: 'sse' },
         handoff: placed.handoff,

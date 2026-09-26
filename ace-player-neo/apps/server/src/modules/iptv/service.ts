@@ -1624,6 +1624,7 @@ export class IptvServiceImpl implements IptvService {
       onDropped: (listener) => session.onDropped(listener),
       onRestart: (listener) => session.onRestart(listener),
       prepareRestart: () => !closed && session.prepareRestart(),
+      probeSettled: () => session.probeSettled(),
       close: async () => {
         if (closed) return;
         closed = true;

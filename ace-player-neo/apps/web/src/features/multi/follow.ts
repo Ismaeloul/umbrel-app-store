@@ -28,9 +28,16 @@ import {
   type HandoffInfo,
   type JoinExpired,
 } from '../../player/api.ts';
-import { isLiveViewer } from './decide.ts';
-import { houseNavigate, housePolicy, houseRoute, houseSessions, pausedMap } from './house.ts';
-import { channelName, followedText, goneText, nothingToFollowTexts } from './texts.ts';
+import { isLiveViewer, mySession } from './decide.ts';
+import {
+  houseMe,
+  houseNavigate,
+  housePolicy,
+  houseRoute,
+  houseSessions,
+  pausedMap,
+} from './house.ts';
+import { channelName, deviceKey, followedText, goneText, nothingToFollowTexts } from './texts.ts';
 
 /** Seguir en curso: la cápsula no sale mientras (aunque el cerrojo tarde en abrir). */
 export const followingStore = createStore<boolean>(false);
@@ -64,9 +71,12 @@ function requestJoin(
 ): void {
   const route = target.matchId ? matchRoute(target.matchId) : channelRoute(target.hash);
   const current = houseRoute();
-  /* En el teatro del canal viejo se pasa a la ruta nueva (reemplazando); en el
-     mini o en otra vista no se navega: el mini cambia de canal. */
+  /* En el teatro del canal viejo se pasa a la ruta nueva (reemplazando). Unirse
+     desde otra vista (la cápsula en Inicio o en Canales) abre ese canal o el
+     centro de su partido (§3.3). Seguir desde otra vista no navega: el mini
+     cambia de canal sin sacar a nadie de lo que estaba mirando. */
   if (current?.vista === 'partido') houseNavigate(route, { replace: true });
+  else if (house === 'join') houseNavigate(route);
   play(
     { hash: target.hash, title: target.title },
     {
@@ -74,12 +84,18 @@ function requestJoin(
       route,
       house,
       ...(target.matchId ? { match: target.matchId } : {}),
+      /* Si el seguir no llega a dar imagen, «Volver a …» ofrece lo de antes. */
+      ...(house === 'follow' && chain ? { followFrom: chain.previous } : {}),
     },
   );
 }
 
 /** El reproductor recibió un traspaso con `follow`: este dispositivo sigue al otro. */
 export function followHouse(request: FollowRequest): void {
+  /* Cuántos dispositivos estaban juntos (para «en los dos» o «en todos»): la
+     caché aún tiene la sesión vieja con este visor dentro. */
+  const before = mySession(houseSessions(), houseMe());
+  const devices = before ? new Set(before.viewers.map(deviceKey)).size : 2;
   chain = {
     byDeviceId: request.byDeviceId,
     byLabel: request.byLabel,
@@ -90,7 +106,7 @@ export function followHouse(request: FollowRequest): void {
   followingStore.set(true);
   const title = channelName(request.title, request.hash);
   requestJoin({ hash: request.hash, title, matchId: request.matchId }, 'follow');
-  notify(followedText(request.byLabel, title), { kind: 'signal', icon: 'movil' });
+  notify(followedText(request.byLabel, title, devices), { kind: 'signal', icon: 'movil' });
 }
 
 /** La cápsula, «Ver … aquí» y «Pasar aquí»: unirse a lo que se ve en casa. */

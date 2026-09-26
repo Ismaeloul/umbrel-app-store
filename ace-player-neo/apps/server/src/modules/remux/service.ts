@@ -33,6 +33,8 @@ import { mkdir, readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import {
   HASH_RE,
+  IPTV_REMUX_EARLY_MS,
+  IPTV_REMUX_EARLY_SEGMENTS,
   IPTV_REMUX_OPEN_MAX_MS,
   IPTV_REMUX_READY_MS,
   MAX_REMUX_SESSIONS,
@@ -198,8 +200,13 @@ function carryOf(entry: Entry): Carry {
   };
 }
 
-/** «ffmpeg no encontró los parámetros de un stream» con el análisis corto de la IPTV. */
-const PROBE_FAILED_RE = /Could not find codec parameters/i;
+/**
+ * «ffmpeg no encontró los parámetros de un stream» con el análisis corto de la
+ * IPTV, solo de vídeo o audio: el teletexto, los subtítulos o los datos de un
+ * TS de DVB lo dicen a menudo y ffmpeg sigue bien con lo demás (no merece un
+ * reinicio). ffmpeg escribe `… for stream 2 (Subtitle: dvb_teletext …)`.
+ */
+const PROBE_FAILED_RE = /Could not find codec parameters for stream \d+ \((?:Video|Audio)\b/i;
 
 export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
   const { config, clock, bus } = deps;
@@ -577,10 +584,13 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
    * llegado nada), 28 s desde que se abrió el relé (solo al abrir la sesión) y
    * el tope de la petición.
    */
-  function iptvDeadline(entry: Entry, deadlineAt: number | undefined): number {
+  function iptvBase(entry: Entry): number {
     const first = entry.source.firstByteAt?.() ?? null;
-    const base = first === null ? entry.startedAt : Math.max(first, entry.startedAt);
-    let limit = base + IPTV_REMUX_READY_MS;
+    return first === null ? entry.startedAt : Math.max(first, entry.startedAt);
+  }
+
+  function iptvDeadline(entry: Entry, deadlineAt: number | undefined): number {
+    let limit = iptvBase(entry) + IPTV_REMUX_READY_MS;
     if (entry.firstLaunch && entry.source.openedAt !== undefined) {
       limit = Math.min(limit, entry.source.openedAt + IPTV_REMUX_OPEN_MAX_MS);
     }
@@ -599,8 +609,9 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
   /**
    * Espera del arranque (server.js:4914-4924; B-105; docs/multidispositivo.md
    * §4.3): 3 segmentos y `max(4 s, 3 × TD + 1 s)` de vídeo, o 1 segmento
-   * pasados 20 s, 45 s como máximo. IPTV: la misma lista lista o
-   * `iptv_timeout` (§4.5). Devuelve la entrada que queda lista (otra si hubo
+   * pasados 20 s, 45 s como máximo. IPTV: la misma regla; con GOP largo, 2
+   * segmentos pasados 10 s desde el primer byte o 1 al vencer el plazo; sin
+   * ninguno, `iptv_timeout` (§4.5). Devuelve la entrada que queda lista (otra si hubo
    * que relanzar ffmpeg con el análisis largo).
    */
   async function waitReady(
@@ -632,9 +643,18 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       if (enough) break;
       const now = clock.now();
       if (entry.origin === 'iptv') {
+        /* GOP largo (§4.5): 2 segmentos de cualquier duración pasados 10 s
+           desde el primer byte, o 1 al vencer el plazo; sin nada, iptv_timeout. */
+        const segments = stats?.segments ?? 0;
+        const earlyAt = iptvBase(entry) + IPTV_REMUX_EARLY_MS;
+        if (segments >= IPTV_REMUX_EARLY_SEGMENTS && now >= earlyAt) break;
         const limit = iptvDeadline(entry, deadlineAt);
-        if (now >= limit) throw new AppError('iptv_timeout');
-        await waitChange(entry, Math.max(1, Math.min(READY_POLL_MS, limit - now)), signal);
+        if (now >= limit) {
+          if (segments >= 1) break;
+          throw new AppError('iptv_timeout');
+        }
+        const nextMark = earlyAt > now ? Math.min(limit, earlyAt) : limit;
+        await waitChange(entry, Math.max(1, Math.min(READY_POLL_MS, nextMark - now)), signal);
         continue;
       }
       const waited = now - t0;
@@ -644,6 +664,13 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     }
     if (!entry.ready) {
       entry.ready = true;
+      /* Lista lista: ya no hay reinicio por el análisis (maybeProbeRetry pide
+         !ready), así que el relé puede soltar su cola de 5 MiB. */
+      if (entry.origin === 'iptv') {
+        try {
+          entry.source.probeSettled?.();
+        } catch {}
+      }
       entry.targetS = initialTargetDuration(text ?? '');
       entry.segments = text === null ? null : segmentSpread(text);
       logSegments(entry, false, true);

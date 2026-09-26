@@ -197,6 +197,28 @@ describe('A1 · interruptor apagado (share)', () => {
     expect(decideHouseChange(input({ sessions }))).toEqual({ go: {} });
   });
 
+  it('14 · zapping con «en los dos» recordado y mi cambio anterior aún abriendo: move con la última from', () => {
+    /* Ni yo ni el otro salimos en la lista (los dos entre sesiones). */
+    const devices = devicesKey([viewer()]);
+    const remembered = { devices, at: NOW - 1000, from: 's_anterior' };
+    expect(decideHouseChange(input({ sessions: [], remembered }))).toEqual({
+      go: { others: 'move', from: 's_anterior' },
+    });
+    /* Si estoy en una sesión, manda la mía. */
+    expect(decideHouseChange(input({ sessions: [session(H1, [mine])], remembered }))).toEqual({
+      go: { others: 'move', from: `s_${H1.slice(0, 10)}` },
+    });
+    /* Recuerdo vencido: nada. */
+    expect(
+      decideHouseChange(
+        input({
+          sessions: [],
+          remembered: { ...remembered, at: NOW - MULTI_TIMINGS.rememberBothMs - 1 },
+        }),
+      ),
+    ).toEqual({ go: {} });
+  });
+
   it('14b-14c · away o en pausa más de 10 min: no pregunta', () => {
     expect(decideHouseChange(input({ sessions: [session(H1, [viewer({ away: true })])] }))).toEqual(
       { go: {} },

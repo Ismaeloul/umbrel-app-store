@@ -24,8 +24,11 @@ import { notify } from '../../notices/notify.ts';
 import {
   dispatchPlay,
   notifyPlayCancelled,
+  play,
   playerStore,
+  setHouseIdle,
   type HouseGate,
+  type HouseIdleInfo,
   type PlayCommand,
 } from '../../player/api.ts';
 import {
@@ -45,7 +48,13 @@ import {
   sseOpen,
   trackPaused,
 } from './house.ts';
-import { answeredText, channelName, questionTexts, type QuestionTexts } from './texts.ts';
+import {
+  NOTHING_CHANGED,
+  answeredText,
+  channelName,
+  questionTexts,
+  type QuestionTexts,
+} from './texts.ts';
 
 /** La pregunta abierta: la orden guardada y sus textos. */
 export interface OpenQuestion {
@@ -109,7 +118,16 @@ function decideFor(
   });
 }
 
+/**
+ * Un `move` que sale: con «en los dos» recordado, se apunta su `from` (el
+ * zapping siguiente lo manda si este visor aún no está en ninguna sesión).
+ */
+function noteMove(go: { others?: string; from?: string }): void {
+  if (go.others === 'move' && go.from && remembered) remembered = { ...remembered, from: go.from };
+}
+
 function withDecision(command: PlayCommand, go: { others?: string; from?: string }): PlayCommand {
+  noteMove(go);
   if (!go.others && !go.from) return command;
   return {
     ...command,
@@ -134,10 +152,37 @@ function textsFor(command: PlayCommand, question: HouseQuestion): OpenQuestion {
   return { command, question, texts, labels };
 }
 
+/** El panel «otra cosa en casa» que ha puesto la puerta (null si ninguno o ya no es el suyo). */
+let gatePanel: HouseIdleInfo | null = null;
+
+/**
+ * Con la hoja abierta y nada sonando aquí, detrás no queda «Sin señal · Elige
+ * un partido…»: el panel «otra cosa en casa» dice qué se ve en el otro, y
+ * «Poner aquí» vuelve a preguntar (§2.5.1, fila 11 de la tabla A1). Vale
+ * también para un canal suelto abierto por enlace o de un toque.
+ */
+function showElsewhere(open: OpenQuestion): void {
+  const player = playerStore.get();
+  if (player.phase !== 'idle' || engagedHash() !== null) return;
+  if (player.houseIdle && player.houseIdle !== gatePanel) return;
+  const info: HouseIdleInfo = {
+    labels: [...open.labels],
+    title: channelName(open.question.sessionTitle, open.question.sessionHash),
+  };
+  gatePanel = info;
+  const { channel, options } = open.command;
+  setHouseIdle(info, () => {
+    gatePanel = null;
+    play(channel, options);
+  });
+}
+
 function openQuestion(command: PlayCommand, question: HouseQuestion): void {
   const previous = houseQuestionStore.get();
   if (previous && previous.command !== command) notifyPlayCancelled(previous.command);
-  houseQuestionStore.set(textsFor(command, question));
+  const open = textsFor(command, question);
+  houseQuestionStore.set(open);
+  showElsewhere(open);
   haptic('selection');
 }
 
@@ -164,8 +209,12 @@ function refreshAndDecide(command: PlayCommand): void {
 export const houseGate: HouseGate = {
   decide(command) {
     /* Un salto automático que ya dice de qué sesión viene (la que falla, §2.1). */
-    if (command.options.house === 'continue' && command.options.from) return { go: {} };
+    if (command.options.house === 'continue' && command.options.from) {
+      noteMove({ others: command.options.others ?? '', from: command.options.from });
+      return { go: {} };
+    }
     const decision = decideFor(command, false);
+    if ('go' in decision) noteMove(decision.go);
     if ('pending' in decision) {
       refreshAndDecide(command);
       return decision;
@@ -192,11 +241,18 @@ export function answerHouse(answer: HouseAnswer): void {
   const { command, question, labels } = open;
   if (answer === 'cancel') {
     notifyPlayCancelled(command);
+    /* La sesión de fuentes de un partido pone su propio panel y su aviso; si
+       no (canal suelto), queda el de la puerta y «No has cambiado nada». */
+    const player = playerStore.get();
+    if (gatePanel && player.houseIdle === gatePanel && player.phase === 'idle')
+      notify(NOTHING_CHANGED, { kind: 'signal', icon: 'movil' });
     return;
   }
   haptic('success');
   const both = answer === 'both' && question.ability !== 'none';
-  remembered = both ? { devices: devicesKey(question.others), at: now() } : null;
+  remembered = both
+    ? { devices: devicesKey(question.others), at: now(), from: question.from }
+    : null;
   dispatchPlay(withDecision(command, { others: both ? 'move' : 'stop', from: question.from }));
   notify(answeredText(both ? 'both' : 'here', { labels, title: command.channel.title }), {
     kind: 'signal',
@@ -267,6 +323,7 @@ export function listenHouseGate(): () => void {
 /** Solo para los tests. */
 export function resetHouseGate(clock?: () => number): void {
   remembered = null;
+  gatePanel = null;
   queued = null;
   refreshSeq += 1;
   clearSettle();

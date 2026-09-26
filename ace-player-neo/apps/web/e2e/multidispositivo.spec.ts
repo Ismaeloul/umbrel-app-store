@@ -25,6 +25,8 @@ import {
 const [UNO, DOS, TRES] = FUENTES.lista;
 const canal = (id: string) => `/?vista=partido/canal/${id}`;
 const hoja = (page: Page) => page.getByRole('dialog', { name: /^¿Cambiar/ });
+/** Cada canal tarda 3 s en abrir en el motor falso (y medio segundo más el primer dato). */
+const LENTO = { kind: 'slowStart', ms: 3000, firstByteMs: 500 };
 
 /** Tocar un canal en este dispositivo (pasa por la puerta de la casa). */
 async function poner(page: Page, destino: { id: string; title: string }): Promise<void> {
@@ -168,14 +170,18 @@ test(
     await expect(capsula).toBeFocused();
     await b.page.keyboard.press('Enter');
     await esperarQueAvance(b.page);
-    await expect(b.page.getByTestId('casa')).toHaveCount(0);
+    /* Desde Inicio, la cápsula abre ese canal (§3.3), no solo el mini. */
+    await expect(b.page).toHaveURL(/vista=partido/);
+    await expect(b.page.locator('[data-testid="casa"]:visible')).toHaveCount(0);
     await expect.poll(async () => (await motor.activasDe(UNO.id)).length).toBe(1);
     /* Paran los dos: sin cápsula en ninguno. */
     await detenerReproductor(page);
     await detenerReproductor(b.page);
     await page.waitForTimeout(3_500);
     await expect(page.getByTestId('casa')).toHaveCount(0);
-    await expect(b.page.getByTestId('casa')).toHaveCount(0);
+    /* Unirse desde Inicio abre el canal (§3.3): Inicio se queda montado y oculto
+       detrás, con su cápsula congelada; cuenta la que se ve. */
+    await expect(b.page.locator('[data-testid="casa"]:visible')).toHaveCount(0);
   },
 );
 
@@ -249,6 +255,10 @@ test(
     await poner(b.page, DOS);
     await b.page.getByRole('button', { name: 'Cambiar en los dos' }).click();
     await expect.poll(async () => (await estadoReproductor(page)).hash).toBe(DOS.id);
+    /* Como el AceStream de verdad: cada canal tarda unos segundos en abrir.
+       Con canales que abren al momento esto pasaba aunque fallara (a veces
+       solo al reintentar). */
+    await motor.modo('*', LENTO);
     /* Tres cambios seguidos en menos de 2 s. */
     await poner(b.page, TRES);
     await b.page.waitForTimeout(400);
@@ -265,6 +275,34 @@ test(
     await expect.poll(async () => (await motor.sesiones('active')).length).toBe(1);
   },
 );
+
+for (const pausa of [600, 1500]) {
+  test(
+    `14b · «en los dos» recordado y canales que tardan 3 s en abrir: el otro sigue (segundo cambio a los ${pausa} ms)`,
+    { tag: '@video' },
+    async ({ page, browser }, testInfo) => {
+      const b = await otroDispositivo(browser, testInfo);
+      await juntos(page, b.page);
+      await poner(b.page, DOS);
+      await b.page.getByRole('button', { name: 'Cambiar en los dos' }).click();
+      await expect.poll(async () => (await estadoReproductor(page)).hash).toBe(DOS.id);
+      await esperarQueAvance(page);
+      await motor.modo('*', LENTO);
+      /* B cambia a TRES y, mientras TRES abre (B aún no está en ninguna
+         sesión), a UNO: A tiene que acabar en UNO, no parado. */
+      await poner(b.page, TRES);
+      await b.page.waitForTimeout(pausa);
+      await poner(b.page, UNO);
+      await expect(hoja(b.page)).toHaveCount(0);
+      await expect
+        .poll(async () => (await estadoReproductor(page)).hash, { timeout: 30_000 })
+        .toBe(UNO.id);
+      await esperarQueAvance(page);
+      await expect(page.getByText(/han cambiado a/)).toHaveCount(0);
+      await expect.poll(async () => (await motor.sesiones('active')).length).toBe(1);
+    },
+  );
+}
 
 test(
   '15 · los dos cambian a la vez: nunca dos sesiones',

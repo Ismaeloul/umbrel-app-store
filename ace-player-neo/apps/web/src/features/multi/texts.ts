@@ -299,8 +299,9 @@ export function handoffTexts(input: {
 }
 
 /** Seguir («Cambiar en los dos»): «{El PC} ha cambiado a {Antena 3} en los dos». */
-export function followedText(by: string, title: string): string {
-  return `${capitalize(by)} ha cambiado a ${title} en los dos`;
+/** `devices`: cuántos dispositivos estaban juntos (este incluido); con 3 o más, «en todos». */
+export function followedText(by: string, title: string, devices = 2): string {
+  return `${capitalize(by)} ha cambiado a ${title} ${devices >= 3 ? 'en todos' : 'en los dos'}`;
 }
 
 /** Seguir sin nada que seguir (el otro ha parado mientras este se unía). */

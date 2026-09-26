@@ -119,6 +119,8 @@ export interface IptvInput {
   onRestart(listener: () => void): void;
   /** El remux va a relanzar ffmpeg sin cortar la conexión con el proveedor (§4.5). */
   prepareRestart(): boolean;
+  /** La lista del remux ya está lista: el relé deja de guardar la cola para `prepareRestart`. */
+  probeSettled?(): void;
   /** Aborta la conexión con el proveedor y espera a que se suelte. Idempotente. */
   close(): Promise<void>;
 }

@@ -1488,10 +1488,13 @@ function onPlayerChange(): void {
   if (!state.key) return;
   const hash = player.channel?.hash ?? null;
 
-  // Detener (o el traspaso): se apaga todo lo automático (regla 17).
+  // Detener (o el traspaso): se apaga todo lo automático (regla 17). El
+  // reproductor lo publica en dos pasos (primero la fase `idle`, después el
+  // motivo): se mira también el cambio de motivo. Si no, el siguiente aviso
+  // del comprobador arrancaba otra fuente justo después de «Detener».
   if (
     player.phase === 'idle' &&
-    previous.phase !== 'idle' &&
+    (previous.phase !== 'idle' || previous.idleReason !== player.idleReason) &&
     (player.idleReason === 'detenido' || player.idleReason === 'traspasado')
   ) {
     stopWatchers();
