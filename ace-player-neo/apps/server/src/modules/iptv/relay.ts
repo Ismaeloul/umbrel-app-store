@@ -341,6 +341,8 @@ class TsSession extends BaseSession {
     body.once('error', lost);
     body.once('close', lost);
     if (!this.downstream) body.pause();
+    /* Si ya había terminado antes de engancharse, sus eventos no vuelven a llegar. */
+    if (body.destroyed || body.readableEnded) queueMicrotask(lost);
   }
 
   private deliver(chunk: Buffer): void {
@@ -490,6 +492,11 @@ class TsSession extends BaseSession {
       headBytes += chunk.length;
       probe.push(chunk);
       firstPcr = probe.first;
+    }
+    /* Una conexión que no manda nada cuenta como intento fallido. */
+    if (!headBytes) {
+      opened.body.destroy();
+      throw new AppError('iptv_dropped', { detail: 'reconexión sin datos' });
     }
     const jump =
       forceRestart ||

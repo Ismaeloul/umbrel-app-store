@@ -301,8 +301,10 @@ export class IptvServiceImpl implements IptvService {
     this.lan = await this.deps.net.hostIsLan(host).catch(() => false);
   }
 
+  /** Filtro de la IPTV (§3.1): red de casa solo si el host configurado lo es, y nunca el puerto del relé. */
   private policy(): IptvFetchPolicy {
-    return { lan: this.lan };
+    const port = this.relay.port();
+    return port === null ? { lan: this.lan } : { lan: this.lan, blockedPorts: [port] };
   }
 
   // --- Temporizadores ---
@@ -956,16 +958,11 @@ export class IptvServiceImpl implements IptvService {
         durationMs,
         error: code,
       };
-      if (code === 'iptv_account_expired' || code === 'iptv_auth_failed') {
-        draft.provider.account = {
-          status: code === 'iptv_account_expired' ? 'expired' : 'disabled',
-          expiresAt: draft.provider.account?.expiresAt ?? null,
-          maxConnections: draft.provider.account?.maxConnections ?? null,
-          activeConnections: draft.provider.account?.activeConnections ?? null,
-          checkedAt: nowIso,
-        };
-      }
+      /* La cuenta NO se da por caducada por un solo fallo: eso lo deciden dos
+         `user_info` seguidos (§7.4). Aquí solo queda el motivo del fallo. */
     });
+    if (code === 'iptv_account_expired' || code === 'iptv_auth_failed')
+      void this.checkAccount(true);
     this.logger.warn(
       { host: still.host, errorCode: code, reason },
       'IPTV: no se pudo sincronizar la lista',
@@ -1173,9 +1170,15 @@ export class IptvServiceImpl implements IptvService {
     let confirmedExpired = false;
     if (bad) {
       /* Caducada solo si lo dicen DOS comprobaciones seguidas con 1 min entre ellas (§7.4). */
-      if (this.expiredSince === null) this.expiredSince = now;
-      else if (now - this.expiredSince >= IPTV_REFRESH.accountExpiredConfirmMs)
+      if (this.expiredSince === null) {
+        this.expiredSince = now;
+        /* La segunda comprobación, al minuto. */
+        this.schedule('account-confirm', IPTV_REFRESH.accountExpiredConfirmMs, () => {
+          void this.checkAccount(true);
+        });
+      } else if (now - this.expiredSince >= IPTV_REFRESH.accountExpiredConfirmMs) {
         confirmedExpired = true;
+      }
     } else this.expiredSince = null;
     const previous = this.record?.account ?? null;
     const status = bad && !confirmedExpired && previous ? previous.status : account.status;
@@ -1424,10 +1427,13 @@ export class IptvServiceImpl implements IptvService {
     if (verdict !== 'owned') return { state: 'failed', reason: 'iptv_gone' };
     const record = this.record as IptvProviderRecord;
     if (record.kind === 'xtream') {
+      /* Como mucho 5 s: si tarda, se usa el último dato (la espera se cancela al terminar). */
+      const wait = new AbortController();
       await Promise.race([
         this.checkAccount(false),
-        this.deps.clock.sleep(IPTV_REFRESH.accountCheckMs).catch(() => undefined),
+        this.deps.clock.sleep(IPTV_REFRESH.accountCheckMs, wait.signal).catch(() => undefined),
       ]);
+      wait.abort();
       const account = this.record?.account ?? null;
       const dead = this.accountDead();
       if (dead) return { state: 'failed', reason: dead };
