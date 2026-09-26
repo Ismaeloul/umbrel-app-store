@@ -11,14 +11,21 @@ import Testing
    errores del canje, código, host y direcciones del enlace. */
 
 struct ReglasEmparejarTests {
-    @Test func capsulaDeCadaEstado() {
+    /// En tres: juntas pasaban del límite de tipar en la CI (36234117696).
+    @Test func capsulaAlPrepararYEscanear() {
         #expect(ReglasEmparejar.capsula(.preparando)?.texto == "Preparando la cámara…")
         #expect(ReglasEmparejar.capsula(.escaneando)?.texto == "Apunta al QR de la web: Ajustes › Dispositivos")
         #expect(ReglasEmparejar.capsula(.qrAjeno)?.tinta == .ambar)
+    }
+
+    @Test func capsulaAlEmparejar() {
         #expect(ReglasEmparejar.capsula(.emparejando(host: "umbrel.local"))?.texto == "Emparejando con umbrel.local…")
         #expect(ReglasEmparejar.capsula(.emparejando(host: "umbrel.local"))?.ruedita == true)
         #expect(ReglasEmparejar.capsula(.emparejado(host: "umbrel.local"))?.texto == "Emparejado con umbrel.local")
         #expect(ReglasEmparejar.capsula(.errorEmparejar)?.texto == "No se pudo emparejar")
+    }
+
+    @Test func capsulaEnPausaYSinCamara() {
         #expect(ReglasEmparejar.capsula(.pausa)?.icono == .clock)
         #expect(ReglasEmparejar.capsula(.ocupada)?.texto == "La cámara la está usando otra app")
         #expect(ReglasEmparejar.capsula(.sinPermiso) == nil)

@@ -17,8 +17,15 @@ struct ContenidoEncontrarCanal: View {
     @State private var ocupado = false
 
     private var resolucion: Resolution? { fuentes.resolucion }
-    private var candidatas: [ResolutionCandidate] { resolucion?.candidates ?? [] }
-    private var noEncontrado: Bool { resolucion?.status != .choices }
+    // Sin `?.` ni `??` (CI 36234117696: pasaba de 200 ms de tipar).
+    private var candidatas: [ResolutionCandidate] {
+        guard let resolucion else { return [] }
+        return resolucion.candidates
+    }
+    private var noEncontrado: Bool {
+        guard let resolucion else { return true }
+        return resolucion.status != ResolutionStatus.choices
+    }
 
     /// El canal por el que se pregunta: el primero de la resolución, si no el primero del partido (`resolverChannel`).
     private var canal: String {
