@@ -403,7 +403,10 @@ test(
     });
     await esperarQueAvance(page);
     await proveedor.modo('*', 'down');
-    await expect(page.getByText(/^Tu IPTV no responde/).first()).toBeVisible({ timeout: 60_000 });
+    // Antes de AceStream prueba las otras variantes IPTV (§16): se espera al salto a AceStream.
+    await expect(
+      page.getByText(/^Tu IPTV no responde: seguimos por AceStream/).first(),
+    ).toBeVisible({ timeout: 60_000 });
     await proveedor.modo('*', 'ok');
     await page.getByRole('button', { name: 'Volver a la IPTV' }).click();
     await expect(cartelIptv(page)).toHaveAttribute('aria-label', /reproduciendo ahora/, {
