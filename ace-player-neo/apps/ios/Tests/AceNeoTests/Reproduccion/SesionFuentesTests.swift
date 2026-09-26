@@ -230,8 +230,10 @@ final class SesionFuentesTests: XCTestCase {
         XCTAssertNil(entorno.reproductor.espera)
         XCTAssertEqual(sesion.activa, GuionFuentes.hash(1))
         XCTAssertTrue(sesion.entradas[0].probadaAuto)
+        await esperarHasta("Pide la fuente", plazo: 5) { servicio.foto.streams.count == 1 }
         XCTAssertEqual(servicio.foto.streams, [GuionFuentes.hash(1)])
-        XCTAssertEqual(sesion.textoProgreso(ahora: Date()), "3 verificadas · 3 comprobadas")
+        // La que se conecta en pantalla cuenta como «comprobando» (regla 20): quedan la verificada y la floja.
+        XCTAssertEqual(sesion.textoProgreso(ahora: Date()), "2 verificadas · 3 comprobadas")
     }
 
     @MainActor
