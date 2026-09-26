@@ -44,17 +44,17 @@ final class ServidorRealUITests: XCTestCase {
 
     @MainActor
     private func emparejar(_ app: XCUIApplication, _ servidor: ServidorDePruebas) async throws {
-        XCTAssertTrue(elementoUI(app, IDUI.pantalla("emparejar")).waitForExistence(timeout: 60), "No arranca en Emparejar")
+        try exigir(elementoUI(app, IDUI.pantalla("emparejar")).waitForExistence(timeout: 60), "No arranca en Emparejar")
         let codigo = try await servidor.crearCodigo()
         // En el simulador no hay cámara: el bloque «No hay cámara disponible» y «Escribir el código».
         let escribir = elementoUI(app, IDUI.botonEscribirCodigo)
         if escribir.waitForExistence(timeout: 5), escribir.isHittable { escribir.tap() }
         let campoCodigo = elementoUI(app, IDUI.campoCodigo)
-        XCTAssertTrue(campoCodigo.waitForExistence(timeout: 10), "No hay campo del código")
+        try exigir(campoCodigo.waitForExistence(timeout: 10), "No hay campo del código")
         campoCodigo.tap()
         campoCodigo.typeText(codigo.codigo)
         let casa = elementoUI(app, IDUI.campoLan).textFields.firstMatch
-        XCTAssertTrue(casa.waitForExistence(timeout: 5), "No hay campo de la dirección de casa")
+        try exigir(casa.waitForExistence(timeout: 5), "No hay campo de la dirección de casa")
         if !(casa.value(forKey: "hasKeyboardFocus") as? Bool ?? false) { casa.tap() }
         casa.typeText(servidor.direccionConEsquema)
         captura(app, "e2e-01-emparejar")
@@ -62,10 +62,10 @@ final class ServidorRealUITests: XCTestCase {
 
         let dentro = await esperar(45) { elementoUI(app, IDUI.armazon).exists }
         if !dentro { captura(app, "e2e-01-sin-entrar") }
-        XCTAssertTrue(dentro, "No entra en la app tras emparejar con el backend real. \(estado(app))")
-        XCTAssertTrue(esperarQueDesaparezca(elementoUI(app, IDUI.pantalla("emparejar"))), "Emparejar no se va")
+        try exigir(dentro, "No entra en la app tras emparejar con el backend real. \(estado(app))")
+        try exigir(esperarQueDesaparezca(elementoUI(app, IDUI.pantalla("emparejar"))), "Emparejar no se va")
         let vivos = try await servidor.dispositivos().filter { !$0.revocado && $0.plataforma == "ios" }
-        XCTAssertFalse(vivos.isEmpty, "El backend no tiene ningún iPhone emparejado tras el canje")
+        try exigir(!(vivos.isEmpty), "El backend no tiene ningún iPhone emparejado tras el canje")
     }
 
     /// Como en el teclado: «siguiente» en la dirección de casa pasa a la de Tailscale (TarjetaCodigo) y su «ir»
@@ -92,12 +92,12 @@ final class ServidorRealUITests: XCTestCase {
 
     @MainActor
     private func agendaCarga(_ app: XCUIApplication) async throws {
-        XCTAssertTrue(elementoUI(app, IDUI.pantalla("agenda")).waitForExistence(timeout: 30), "No se ve la agenda")
+        try exigir(elementoUI(app, IDUI.pantalla("agenda")).waitForExistence(timeout: 30), "No se ve la agenda")
         let tarjetas = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "tarjeta-partido-"))
         let cargada = await esperar(60) { tarjetas.count > 0 }
         captura(app, "e2e-02-agenda")
-        XCTAssertTrue(cargada, "La agenda del backend no enseña ninguna tarjeta de partido. \(estado(app))")
-        XCTAssertTrue(elementoUI(app, IDUI.tiraDias).exists, "Falta la tira de días con la agenda real")
+        try exigir(cargada, "La agenda del backend no enseña ninguna tarjeta de partido. \(estado(app))")
+        try exigir(elementoUI(app, IDUI.tiraDias).exists, "Falta la tira de días con la agenda real")
     }
 
     // MARK: 3. Reproducir
@@ -107,8 +107,8 @@ final class ServidorRealUITests: XCTestCase {
         let tarjeta = try XCTUnwrap(buscarTarjeta(app), "La agenda del backend no enseña los partidos con fuentes")
         tarjeta.tap()
         let video = elementoUI(app, IDUI.videoTeatro)
-        XCTAssertTrue(video.waitForExistence(timeout: 20), "No abre el teatro del partido")
-        XCTAssertTrue(elementoUI(app, IDUI.cabeceraPartido).waitForExistence(timeout: 20), "El teatro no enseña el partido")
+        try exigir(video.waitForExistence(timeout: 20), "No abre el teatro del partido")
+        try exigir(elementoUI(app, IDUI.cabeceraPartido).waitForExistence(timeout: 20), "El teatro no enseña el partido")
 
         // Arranque solo: la primera fuente verificada por el comprobador. Si no arranca, se elige a mano la primera.
         var suena = await esperar(90) { self.suena(video) }
@@ -121,11 +121,11 @@ final class ServidorRealUITests: XCTestCase {
             }
         }
         captura(app, "e2e-03-teatro")
-        XCTAssertTrue(suena, "AVPlayer no llega a reproducir el HLS del backend. \(estado(app))")
+        try exigir(suena, "AVPlayer no llega a reproducir el HLS del backend. \(estado(app))")
         // Sigue con imagen unos segundos: no es solo el colchón inicial.
         try await Task.sleep(for: .seconds(6))
         let valor = fase(video)
-        XCTAssertTrue(valor.contains("imagen") && !valor.contains("error") && !valor.contains("idle"),
+        try exigir(valor.contains("imagen") && !valor.contains("error") && !valor.contains("idle"),
                       "La reproducción no se sostiene. \(estado(app))")
         captura(app, "e2e-03-reproduciendo-video-real")
     }
@@ -175,41 +175,51 @@ final class ServidorRealUITests: XCTestCase {
     private func saludYDispositivos(_ app: XCUIApplication, _ servidor: ServidorDePruebas) async throws {
         // Otro aparato emparejado desde la API: la lista trae más que «Este iPhone».
         let otro = try await servidor.emparejarOtro(nombre: "iPad de pruebas")
-        minimizar(app)
+        try await minimizar(app)
         tocarPestana(app, "ajustes")
-        XCTAssertTrue(elementoUI(app, IDUI.pantalla("ajustes")).waitForExistence(timeout: 15), "No sale Ajustes")
+        try exigir(elementoUI(app, IDUI.pantalla("ajustes")).waitForExistence(timeout: 15), "No sale Ajustes")
 
-        tocarChip(app, "salud")
+        try tocarChip(app, "salud")
         let conSalud = await esperar(30) { conTextoUI(app, "Motor principal").exists && conTextoUI(app, "Segundo motor").exists }
         captura(app, "e2e-04-salud")
-        XCTAssertTrue(conSalud, "Salud no enseña los servicios del backend. \(estado(app))")
-        XCTAssertTrue(conTextoUI(app, "Backend").exists, "Falta la tarjeta del backend en Salud")
-        XCTAssertFalse(conTextoUI(app, "No se pudo leer la salud").exists, "Salud no se pudo leer")
+        try exigir(conSalud, "Salud no enseña los servicios del backend. \(estado(app))")
+        try exigir(conTextoUI(app, "Backend").exists, "Falta la tarjeta del backend en Salud")
+        try exigir(!(conTextoUI(app, "No se pudo leer la salud").exists), "Salud no se pudo leer")
 
-        tocarChip(app, "dispositivos")
+        try tocarChip(app, "dispositivos")
         let este = elementoUI(app, IDUI.filaEsteIPhone)
         let fila = elementoUI(app, IDUI.filaDispositivo(otro))
         let conLista = await esperar(30) { este.exists && fila.exists }
         captura(app, "e2e-05-dispositivos")
-        XCTAssertTrue(conLista, "Dispositivos no enseña «Este iPhone» y el iPad emparejado. \(estado(app))")
-        XCTAssertTrue(conTextoUI(app, "iPad de pruebas").exists, "Falta el nombre del otro aparato")
-        XCTAssertTrue(elementoUI(app, IDUI.botonOlvidarEsteIPhone).exists, "Falta «Olvidar este iPhone»")
+        try exigir(conLista, "Dispositivos no enseña «Este iPhone» y el iPad emparejado. \(estado(app))")
+        try exigir(conTextoUI(app, "iPad de pruebas").exists, "Falta el nombre del otro aparato")
+        try exigir(elementoUI(app, IDUI.botonOlvidarEsteIPhone).exists, "Falta «Olvidar este iPhone»")
     }
 
+    /// ⌄ Minimizar. Con los controles ya ocultos, el primer toque solo los enseña (a4 §5.1): se reintenta, y si
+    /// aun así no sale el mini, se desliza el vídeo hacia abajo (el mismo gesto de a4 §5.2).
     @MainActor
-    private func minimizar(_ app: XCUIApplication) {
+    private func minimizar(_ app: XCUIApplication) async throws {
         let boton = elementoUI(app, IDUI.botonMinimizar)
-        if !boton.waitForExistence(timeout: 5) || !boton.isHittable { elementoUI(app, IDUI.videoTeatro).tap() }
-        XCTAssertTrue(boton.waitForExistence(timeout: 5), "Sin ⌄ Minimizar")
-        boton.tap()
-        XCTAssertTrue(elementoUI(app, IDUI.mini).waitForExistence(timeout: 10), "Al minimizar no sale el mini")
+        let mini = elementoUI(app, IDUI.mini)
+        for _ in 0..<3 where !mini.exists {
+            if boton.exists, boton.isHittable { boton.tap() } else { elementoUI(app, IDUI.videoTeatro).tap() }
+            _ = await esperar(3) { mini.exists }
+        }
+        if !mini.exists {
+            let video = elementoUI(app, IDUI.videoTeatro)
+            if video.exists { arrastrar(video, desde: CGVector(dx: 0.5, dy: 0.3), hasta: CGVector(dx: 0.5, dy: 1.6)) }
+        }
+        let sale = mini.waitForExistence(timeout: 10)
+        captura(app, "e2e-04-mini")
+        try exigir(sale, "Al minimizar no sale el mini. \(estado(app))")
     }
 
     /// Toca un chip del índice de Ajustes (desplazando la fila si hace falta).
     @MainActor
-    private func tocarChip(_ app: XCUIApplication, _ seccion: String) {
+    private func tocarChip(_ app: XCUIApplication, _ seccion: String) throws {
         let chip = elementoUI(app, IDUI.chip(seccion))
-        XCTAssertTrue(chip.waitForExistence(timeout: 10), "No hay chip \(seccion)")
+        try exigir(chip.waitForExistence(timeout: 10), "No hay chip \(seccion)")
         let indice = elementoUI(app, IDUI.indiceAjustes)
         var intentos = 0
         while chip.frame.maxX > app.frame.maxX - 8 && intentos < 8 {
@@ -217,7 +227,7 @@ final class ServidorRealUITests: XCTestCase {
             intentos += 1
         }
         chip.tap()
-        XCTAssertTrue(elementoUI(app, IDUI.seccion(seccion)).waitForExistence(timeout: 10), "No hay tarjeta \(seccion)")
+        try exigir(elementoUI(app, IDUI.seccion(seccion)).waitForExistence(timeout: 10), "No hay tarjeta \(seccion)")
         Thread.sleep(forTimeInterval: 0.8)
     }
 
@@ -228,19 +238,31 @@ final class ServidorRealUITests: XCTestCase {
         let antes = try await servidor.dispositivos().filter { !$0.revocado && $0.plataforma == "ios" }.map(\.id)
         let boton = elementoUI(app, IDUI.botonOlvidarEsteIPhone)
         boton.tap()
-        XCTAssertTrue(conTextoUI(app, "¿Olvidar? Pulsa otra vez").waitForExistence(timeout: 3), "No se arma")
+        try exigir(conTextoUI(app, "¿Olvidar? Pulsa otra vez").waitForExistence(timeout: 3), "No se arma")
         captura(app, "e2e-06-olvidar-armado")
         boton.tap()
         let fuera = elementoUI(app, IDUI.pantalla("emparejar")).waitForExistence(timeout: 20)
         captura(app, "e2e-07-vuelta-a-emparejar")
-        XCTAssertTrue(fuera, "«Olvidar este iPhone» no vuelve a Emparejar. \(estado(app))")
-        XCTAssertFalse(elementoUI(app, IDUI.avisoAcceso).exists, "Tras olvidar no hay aviso (a2 §23.3)")
-        XCTAssertFalse(elementoUI(app, IDUI.mini).exists, "Tras olvidar sigue el mini")
+        try exigir(fuera, "«Olvidar este iPhone» no vuelve a Emparejar. \(estado(app))")
+        try exigir(!(elementoUI(app, IDUI.avisoAcceso).exists), "Tras olvidar no hay aviso (a2 §23.3)")
+        try exigir(!(elementoUI(app, IDUI.mini).exists), "Tras olvidar sigue el mini")
         let despues = try await servidor.dispositivos().filter { !$0.revocado && $0.plataforma == "ios" }.map(\.id)
-        XCTAssertLessThan(despues.count, antes.count, "El backend sigue dando por emparejado este iPhone")
+        try exigir(despues.count < antes.count, "El backend sigue dando por emparejado este iPhone")
     }
 
     // MARK: Ayudas
+
+    /// Un fallo que corta la prueba. En una prueba `async`, `continueAfterFailure = false` no la para: un
+    /// XCTAssert fallido seguiría con los pasos siguientes y el log se llenaría de fallos en cadena.
+    private struct FalloE2E: Error, CustomStringConvertible {
+        let description: String
+    }
+
+    @MainActor
+    private func exigir(_ condicion: Bool, _ mensaje: @autoclosure () -> String) throws {
+        guard !condicion else { return }
+        throw FalloE2E(description: mensaje())
+    }
 
     @MainActor
     private func captura(_ app: XCUIApplication, _ nombre: String) {
