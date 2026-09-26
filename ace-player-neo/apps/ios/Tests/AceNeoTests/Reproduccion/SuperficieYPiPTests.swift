@@ -156,6 +156,28 @@ final class PiPTests: XCTestCase {
         XCTAssertFalse(pip.activo)
     }
 
+    /// Si al entrar en primer plano iOS aún no hace caso a «parar», se vuelve a pedir al activarse la escena (una
+    /// vez); sin PiP abierto al volver, activarse no toca nada.
+    @MainActor
+    func testElPiPSeVuelveACerrarAlActivarseLaEscena() {
+        let (pip, falso) = preparar()
+        pip.simularInicio()
+        falso.activo = true
+        pip.pasoASegundoPlano()
+        pip.volvioAPrimerPlano()
+        XCTAssertEqual(falso.parados, 1)
+        pip.seActivoLaEscena()
+        XCTAssertEqual(falso.parados, 2, "Al activarse la escena se vuelve a cerrar")
+        pip.seActivoLaEscena()
+        XCTAssertEqual(falso.parados, 2, "Solo una vez por vuelta")
+        pip.simularFin()
+        falso.activo = false
+        pip.pasoASegundoPlano()
+        pip.volvioAPrimerPlano()
+        pip.seActivoLaEscena()
+        XCTAssertEqual(falso.parados, 2, "Sin PiP abierto no hay nada que cerrar")
+    }
+
     @MainActor
     func testSinQuienEnseneElReproductorRestaurarDiceQueSi() async {
         let (pip, _) = preparar()

@@ -224,6 +224,9 @@ enum LugarVideo: Sendable { case ninguno, mini, teatro, inmersivo, vuelo }
         reproductor.volvioAPrimerPlano()
     }
 
+    /// La escena se activa: el PiP que siguiera abierto tras volver se cierra.
+    func seActivoLaEscena() { pip.seActivoLaEscena() }
+
     // MARK: Primer fotograma con la capa (a8 §3.11.7)
 
     private func engancharCapa() {

@@ -164,6 +164,7 @@ import Foundation
             } else if antes == .segundoPlano {
                 presentacion?.volvioAPrimerPlano()
             }
+            if despues == .activa { presentacion?.seActivoLaEscena() }
         }
         // 6. `datos.tiempoRealAbierto` sigue a `tiempoReal.estado`: lo hace el repartidor (M1).
     }
@@ -181,15 +182,9 @@ import Foundation
         }
         // Zapping (← →, pantalla de bloqueo): la web navega a `partido/canal/<hash>` (player/index.tsx › zap).
         reproductor.alZapear = { [weak navegador] canal in navegador?.ir(.canal(hash: canal.id)) }
-        // «Volver» en la ventanita del PiP: se enseña el teatro de lo que suena para que el vídeo vuelva a su sitio.
-        pip.alRestaurar = { [weak navegador, weak reproductor] in
-            guard let navegador, let canal = reproductor?.canal else { return }
-            if let partido = canal.partido {
-                navegador.ir(.partido(id: partido.id))
-            } else {
-                navegador.ir(.canal(hash: canal.id))
-            }
-        }
+        // Al cerrarse el PiP (volver a la app o «volver» en la ventanita) el vídeo vuelve a donde estaba, el teatro o
+        // el mini, sin navegar (Isma, 26-sep: como YouTube). Siempre hay uno de los dos con su hueco mientras suena.
+        pip.alRestaurar = nil
     }
 
     /// Arranque de proceso (orden de M1/M4): repartidor y sesión.

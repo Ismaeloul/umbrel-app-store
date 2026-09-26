@@ -63,6 +63,9 @@ public final class GestorPiP {
     @ObservationIgnored private var controlador: (any ControladorPiP)?
     @ObservationIgnored private var jugador: AVPlayer?
     @ObservationIgnored private var capaSoltada = false
+    /// Se volvió de segundo plano con la ventanita abierta: se vuelve a cerrar al activarse la escena (al entrar en
+    /// primer plano iOS puede no hacer caso todavía a `stopPictureInPicture`).
+    @ObservationIgnored private var cerrarAlActivarse = false
     private let fabrica: @MainActor (AVPlayerLayer, DelegadoPiP) -> (any ControladorPiP)?
     private let delegado = DelegadoPiP()
 
@@ -146,6 +149,15 @@ public final class GestorPiP {
             superficie.vista.capa.player = jugador
             capaSoltada = false
         }
+        cerrarAlActivarse = activo || arrancando || controlador?.activo == true
+        cerrar()
+    }
+
+    /// La escena ya está activa: si la ventanita sigue abierta tras volver, se cierra ahora (como YouTube: el
+    /// vídeo vuelve solo a su sitio, el teatro o el mini, sin corte).
+    public func seActivoLaEscena() {
+        guard cerrarAlActivarse else { return }
+        cerrarAlActivarse = false
         cerrar()
     }
 
