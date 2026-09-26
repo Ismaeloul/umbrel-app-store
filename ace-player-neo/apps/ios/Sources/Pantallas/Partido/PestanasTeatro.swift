@@ -37,6 +37,23 @@ enum PestanaTeatro: String, CaseIterable, Sendable { case fuentes, partido, cana
         }
     }
 
+    /// Las sesiones (`partido:<id>`, `canal:<hash>`) con las plegadas abiertas. En la web los paneles siguen
+    /// montados con `hidden` y al volver a «Fuentes» siguen abiertas; aquí el panel se desmonta, así que se apunta
+    /// aquí y se olvida al salir del teatro (cuando la web también desmonta).
+    private(set) var plegadasAbiertas: Set<String> = []
+
+    func plegadas(abiertas: Bool, en clave: String) {
+        if abiertas {
+            plegadasAbiertas.insert(clave)
+        } else {
+            plegadasAbiertas.remove(clave)
+        }
+    }
+
+    func olvidarPlegadas() {
+        if !plegadasAbiertas.isEmpty { plegadasAbiertas.removeAll() }
+    }
+
     /// El menú del vídeo abre o cierra «Datos técnicos» (`nerdOpen` de TheaterTabs.tsx).
     func datosTecnicos(abiertos: Bool, en tipo: Tipo) {
         if abiertos {

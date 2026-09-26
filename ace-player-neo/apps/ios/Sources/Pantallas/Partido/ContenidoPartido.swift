@@ -32,7 +32,10 @@ struct ContenidoPartido: View {
         }
         .task(id: id) { await entrar() }
         .task(id: "\(id)-\(partido != nil)") { await sondearMarcadores() }
-        .onDisappear { video.fuentes.salirVista() }
+        .onDisappear {
+            video.fuentes.salirVista()
+            memoria.olvidarPlegadas()
+        }
         .modifier(SincronizarDatosTecnicos(tipo: .partido))
     }
 

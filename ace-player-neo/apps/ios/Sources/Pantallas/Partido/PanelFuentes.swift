@@ -94,7 +94,7 @@ struct PanelFuentes: View {
             vacioResolucion
         } else if !vista.filas.isEmpty {
             barra(vista)
-            ListaCarteles(visibles: vista.visibles, plegadas: vista.plegadas, enPartido: enPartido)
+            ListaCarteles(visibles: vista.visibles, plegadas: vista.plegadas, enPartido: enPartido, clave: claveSesion)
         }
     }
 

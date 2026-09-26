@@ -188,6 +188,40 @@ final class PiPTests: XCTestCase {
         XCTAssertEqual(completado, true)
     }
 
+    /// Isma, 26-sep (como YouTube): al volver del PiP no se navega (`pip.alRestaurar = nil` en ContenedorApp); el
+    /// vídeo vuelve al hueco que siga en pantalla, el del mini o el del teatro, y AVKit recibe el «sí» enseguida.
+    @MainActor
+    func testRestaurarSinNavegarDevuelveElVideoAlMiniOAlTeatro() async {
+        for prioridad in [PrioridadHueco.mini, .teatro] {
+            let superficie = SuperficieVideo()
+            let falso = ControladorPiPFalso()
+            let pip = GestorPiP(superficie: superficie, soportado: true, fabrica: { _, _ in falso })
+            pip.prepararControlador()
+            pip.alRestaurar = nil
+            let ventana = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+            ventana.isHidden = false
+            let hueco = HuecoVideoUIView(frame: CGRect(x: 0, y: 100, width: 390, height: 219))
+            hueco.superficie = superficie
+            hueco.prioridad = prioridad
+            ventana.addSubview(hueco)
+
+            pip.simularInicio()
+            falso.activo = true
+            pip.pasoASegundoPlano()
+            pip.volvioAPrimerPlano()
+            var completado: Bool?
+            pip.simularRestaurar { completado = $0 }
+            await esperarHasta("Restaura sin navegar", plazo: 3) { completado != nil }
+            XCTAssertEqual(completado, true)
+            XCTAssertTrue(superficie.huecoActual === hueco, "El vídeo vuelve al hueco que está en pantalla")
+            pip.simularFin()
+            falso.activo = false
+            XCTAssertFalse(pip.activo)
+            XCTAssertTrue(superficie.huecoActual === hueco, "Sigue en su sitio al cerrarse el PiP")
+            ventana.isHidden = true
+        }
+    }
+
     @MainActor
     func testElMismoBotonAbreYCierraElPiPYAvisaAlEmpezar() {
         let (pip, falso) = preparar()

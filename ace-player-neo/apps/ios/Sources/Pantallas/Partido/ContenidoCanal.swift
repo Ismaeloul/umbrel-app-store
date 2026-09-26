@@ -38,7 +38,10 @@ struct ContenidoCanal: View {
             paneles
         }
         .task(id: "\(hash)-\(titulo)-\(hermanas.map(\.id).joined(separator: ","))") { await entrar() }
-        .onDisappear { video.fuentes.salirVista() }
+        .onDisappear {
+            video.fuentes.salirVista()
+            memoria.olvidarPlegadas()
+        }
         .modifier(SincronizarDatosTecnicos(tipo: .canal))
     }
 
