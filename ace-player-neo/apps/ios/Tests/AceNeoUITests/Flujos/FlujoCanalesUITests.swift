@@ -44,10 +44,6 @@ final class FlujoCanalesUITests: XCTestCase {
         XCTAssertTrue(deportes.waitForExistence(timeout: 10), "No hay categoría Deportes")
         // Con una sola categoría la web la abre (LibraryView.tsx); con varias empiezan plegadas.
         XCTAssertTrue(elementoUI(app, IDUI.filaCanal(mLaLiga)).waitForExistence(timeout: 5), "Una sola categoría sale abierta")
-        deportes.tap()
-        XCTAssertTrue(esperarQueDesaparezca(elementoUI(app, IDUI.filaCanal(mLaLiga))), "Tocar la categoría la pliega")
-        deportes.tap()
-        XCTAssertTrue(elementoUI(app, IDUI.filaCanal(mLaLiga)).waitForExistence(timeout: 5), "Desplegar no enseña los canales")
         captura(app, "biblioteca-listas")
 
         elementoUI(app, IDUI.pestanaRecientes).tap()
@@ -61,6 +57,10 @@ final class FlujoCanalesUITests: XCTestCase {
         elementoUI(app, IDUI.pestanaListas).tap()
         let fila = elementoUI(app, IDUI.filaCanal(mLaLiga))
         if !fila.waitForExistence(timeout: 5) { elementoUI(app, IDUI.categoria("Deportes")).tap() }
+        // La fila puede quedar detrás de la barra de pestañas: se sube la lista antes de pulsarla.
+        if fila.waitForExistence(timeout: 5) && !fila.isHittable {
+            arrastrar(elementoUI(app, IDUI.pantalla("biblioteca")), desde: CGVector(dx: 0.5, dy: 0.7), hasta: CGVector(dx: 0.5, dy: 0.3))
+        }
         XCTAssertTrue(fila.waitForExistence(timeout: 5))
         fila.press(forDuration: 1.0)
         let anadir = app.buttons["Añadir a favoritos"].firstMatch

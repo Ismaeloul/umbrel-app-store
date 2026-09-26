@@ -64,6 +64,10 @@ final class FlujoAgendaUITests: XCTestCase {
         let app = arrancar()
         let paraTi = elementoUI(app, IDUI.filtroParaTi)
         XCTAssertTrue(paraTi.waitForExistence(timeout: 10))
+        // El filtro queda bajo la barra de pestañas con el héroe entero (como en la web): se sube la agenda.
+        if !paraTi.isHittable {
+            arrastrar(elementoUI(app, IDUI.pantalla("agenda")), desde: CGVector(dx: 0.5, dy: 0.75), hasta: CGVector(dx: 0.5, dy: 0.45))
+        }
         XCTAssertTrue(paraTi.isSelected, "Con gustos y sin tocar, «Para ti»")
         let reserva = elementoUI(app, IDUI.tarjetaPartido("demo-2"))
         XCTAssertFalse(reserva.exists, "Barcelona SC – Emelec (amistoso) no es de «Para ti»")
