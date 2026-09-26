@@ -119,9 +119,9 @@ import Foundation
             datos.trabajos[id]?.invalidar()
         case .senalPartido(let progreso):
             senales.anotar(progreso, ahora: senales.reloj.ahora)
-            fuentes.procesar(.scanProgress(progreso))
+            fuentes.procesar(SSEEvent.scanProgress(progreso))
         case .veredicto(let veredicto):
-            fuentes.procesar(.scanVerdict(veredicto))
+            fuentes.procesar(SSEEvent.scanVerdict(veredicto))
         case .dispositivos(let cambio):
             revocadoDesdeOtro(cambio)
         case .alReproductor(let evento):
