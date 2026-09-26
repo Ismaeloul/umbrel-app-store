@@ -258,7 +258,64 @@ export const IPTV_CLIENT = {
   searchMs: 4 * SECOND,
   /** `footballResolve` con `engine=1` (búsqueda inversa de fondo, §14.4). */
   channelEngineMs: 20 * SECOND,
+  /** `iptvBrowse` desde la pestaña IPTV de Canales (§16.2): `TIMEOUTS.iptvBrowse` de la web. */
+  browseMs: 6 * SECOND,
 } as const;
+
+// --- Pestaña IPTV en Canales (§16) ---
+
+export const IPTV_BROWSE = {
+  /** Filas por página: por defecto y como mucho. `limit=0` pide solo categorías y facetas. */
+  limit: 60,
+  limitMax: 100,
+  /** Categorías devueltas como mucho (las del proveedor, en su orden). */
+  categoriesMax: 2_000,
+  /** Valores por faceta como mucho (País puede pasar de 100). */
+  facetValuesMax: 250,
+  /** Valores elegidos por faceta en una consulta. */
+  selectedMax: 16,
+  /** Consultas ya calculadas que el servidor guarda para servir las páginas siguientes. */
+  cacheEntries: 16,
+  /** Nombre de categoría enseñado: como mucho. */
+  categoryNameMax: 120,
+} as const;
+
+/** Tipos (§16.4). El orden es el de la hoja de filtros cuando empatan en número. */
+export const IPTV_TYPES = [
+  'generalistas',
+  'deportes',
+  'cine',
+  'series',
+  'noticias',
+  'infantil',
+  'documentales',
+  'musica',
+  'entretenimiento',
+  'religion',
+  'adultos',
+] as const;
+export type IptvType = (typeof IPTV_TYPES)[number];
+
+/** Deportes (§16.4). */
+export const IPTV_SPORTS = [
+  'futbol',
+  'baloncesto',
+  'f1',
+  'motos',
+  'motor',
+  'tenis',
+  'padel',
+  'golf',
+  'ciclismo',
+  'balonmano',
+  'rugby',
+  'lucha',
+  'futbol-americano',
+  'hockey',
+  'beisbol',
+  'toros',
+] as const;
+export type IptvSport = (typeof IPTV_SPORTS)[number];
 
 // --- Buscador: IPTV y AceStream juntos (§14) ---
 

@@ -963,6 +963,24 @@ Ejemplo (`fixtures/web/v1/iptvChannels.json`):
   "channels": [{ "id": "f607…45ef", "title": "La 1", "quality": "hd", "provider": "Casa", "library": ["c3d4…901a"] }] }
 ```
 
+### 7.6 bis Pestaña IPTV en Canales (`docs/iptv.md` §16, 0.8.2)
+
+| id | Método y ruta | Consulta | Respuesta | Errores propios |
+|---|---|---|---|---|
+| `iptvBrowse` | `GET /api/v1/iptv/browse` (`access: 'web'` hasta que la app calque la pestaña, D29) | `category` (12 hex o `none`), `q` (con menos de 2 letras se ignora), `country`, `language`, `type`, `sport`, `quality` (listas separadas por comas, 16 valores como mucho), `cursor` (el `nextCursor` de la página anterior) y `limit` (0 a 100, por defecto 60; `0` = solo categorías y facetas) | `IptvBrowseResponse` | — (una consulta mal formada es `validation_error`) |
+
+- **Qué devuelve.** `active` (falso sin IPTV activa: todo vacío y `200`), `provider`, `catalog` (sello que cambia con cada sincronización), `category` (la pedida con su recuento, o `null` si ya no existe), `total` y `catalogTotal`, y en la primera página `facets` (cada valor con `value`, `count` con los DEMÁS filtros y `selected`) y, sin `category`, `categories` (las del proveedor en su orden). `channels` es una fila por canal (clave limpia y país): `{ id, title, qualities, country, category }`. `nextCursor: null` = no hay más; `stale: true` = el cursor era de otro catálogo y esta es la primera página. Nunca lleva URL, `stream_id`, `tvg-id`, usuario ni contraseña; los nombres de categoría pasan por el redactor.
+
+Ejemplo (`fixtures/web/v1/iptvBrowse.json`, la raíz con `limit=0`):
+
+```json
+{ "active": true, "provider": "Casa", "catalog": "k2x9m4", "query": "", "category": null,
+  "total": 27687, "catalogTotal": 27687,
+  "categories": [{ "id": "8b41d2e6c09f", "name": "ES | DEPORTES", "count": 214 }],
+  "facets": { "country": [{ "value": "ES", "count": 2310, "selected": false }], "…": [] },
+  "channels": [], "nextCursor": null, "stale": false }
+```
+
 ### 7.7 Estado (26-sep-2026)
 
 Implementado en la rama `rediseno/iptv` (servidor y web), para la 0.8.1 sin publicar. Pruebas: unitarias del contrato, del servidor y de la web; integración del servidor con el proveedor falso (`apps/server/test/fake-iptv`); E2E `apps/web/e2e/iptv.spec.ts` contra la pila entera con ffmpeg de verdad (configurar M3U y Xtream, la IPTV primero en un partido y en un canal suelto, el puente en los dos sentidos, volver con un toque y la búsqueda de la contraseña y el usuario en todas las respuestas, el SSE, la página y los ficheros de datos y logs).

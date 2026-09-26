@@ -19,8 +19,9 @@
      Dispositivos, emparejar otro y ajustes v2): solo `healthLive` (es el
      healthcheck de Docker; la app usa `ping`), las 5 rutas de Ajustes →
      IPTV (`iptv*`, docs/iptv.md §5.3: la IPTV solo se configura en la web)
-     y `iptvChannels` (el buscador IPTV, §14.2; pasa a `any` cuando la app
-     calque el buscador, D27) son `web`.
+     `iptvChannels` (el buscador IPTV, §14.2; pasa a `any` cuando la app
+     calque el buscador, D27) e `iptvBrowse` (la pestaña IPTV de Canales,
+     §16.2, D29) son `web`.
      `video` es `any` desde la IPTV (docs/iptv.md §5.4): la web entra sin
      token (el login de Umbrel basta) y el iPhone con `video-token`.
 
@@ -89,6 +90,8 @@ import {
   VideoQuerySchema,
 } from './api/v1/playback.js';
 import {
+  IptvBrowseQuerySchema,
+  IptvBrowseResponseSchema,
   IptvChannelsQuerySchema,
   IptvChannelsResponseSchema,
   IptvSaveBodySchema,
@@ -590,6 +593,26 @@ export const V1_ROUTES = {
     content: 'json',
     sideEffects: false,
     errors: ['empty_query'],
+    legacyTwin: null,
+  }),
+
+  iptvBrowse: defineRoute({
+    method: 'GET',
+    path: '/api/v1/iptv/browse',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary:
+      'Recorrer tu IPTV: categorías del proveedor, sus canales por páginas, texto y filtros con facetas',
+    description:
+      'Pestaña IPTV de Canales (docs/iptv.md §16): las categorías del proveedor en su orden y con su número de canales, los canales de una categoría (o de toda la IPTV) en el orden del proveedor, paginados con `cursor`, un texto y filtros de país, idioma, tipo, deporte y calidad con sus recuentos (O dentro de un filtro, Y entre filtros). ' +
+      'Una fila es un canal (clave limpia y país) con sus calidades. `limit=0` pide solo categorías y facetas. Sin IPTV activa responde 200 con `active: false`; una categoría que ya no existe, 200 con `category: null`; un cursor de otro catálogo, la primera página con `stale: true`. Nunca lleva URL, stream_id, tvg-id, usuario ni contraseña.',
+    query: IptvBrowseQuerySchema,
+    response: IptvBrowseResponseSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: false,
+    errors: [],
     legacyTwin: null,
   }),
 

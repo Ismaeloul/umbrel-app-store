@@ -28,6 +28,7 @@ import type {
   Device,
   EngineStatus,
   FootballMatch,
+  IptvFacets,
   IptvStatus,
   IptvView,
   Item,
@@ -56,8 +57,9 @@ export type JsonRouteId = {
 
 /**
  * Rutas solo web cuyo ejemplo va en `web/v1/` (docs/iptv.md §5.7): las 5 de
- * la IPTV y el buscador IPTV (`iptvChannels`, §14.2; pasa a `v1/` cuando la
- * app calque el buscador, §14.10). `healthLive` y las demás rutas `web` de
+ * la IPTV, el buscador IPTV (`iptvChannels`, §14.2; pasa a `v1/` cuando la app
+ * calque el buscador, §14.10) y la pestaña IPTV de Canales (`iptvBrowse`,
+ * §16.2; pasa cuando la app calque la pestaña, §16.11). `healthLive` y las demás rutas `web` de
  * antes se quedan en `v1/`, donde la app ya las conoce.
  */
 export const WEB_FIXTURE_ROUTE_IDS = [
@@ -67,6 +69,7 @@ export const WEB_FIXTURE_ROUTE_IDS = [
   'iptvSync',
   'iptvDelete',
   'iptvChannels',
+  'iptvBrowse',
 ] as const satisfies readonly JsonRouteId[];
 export type WebFixtureRouteId = (typeof WEB_FIXTURE_ROUTE_IDS)[number];
 /** Rutas con ejemplo en `v1/`. */
@@ -616,6 +619,45 @@ const IPTV_ID_NAME = 'e5f60718293a4b5c6d7e8f901234567812ab34cd';
 const IPTV_ID_LA1 = 'f60718293a4b5c6d7e8f9012345678ab23cd45ef';
 const IPTV_ID_TELECINCO = '0718293a4b5c6d7e8f9012345678abcd34ef5601';
 
+/* Pestaña IPTV de Canales (§16): categorías del proveedor con ids de 12 hex. */
+const IPTV_CAT_DAZN = '3f9a1c7e5b20';
+const IPTV_CAT_DEPORTES = '8b41d2e6c09f';
+const IPTV_CAT_GENERALISTAS = 'c52e7a13f4d8';
+const IPTV_ID_DAZN_F1 = '18293a4b5c6d7e8f9012345678abcdef45a1b2c3';
+const IPTV_ID_DAZN_ACB = '293a4b5c6d7e8f9012345678abcdef0156b2c3d4';
+const IPTV_CATALOG = 'k2x9m4';
+
+const iptvFacets: IptvFacets = {
+  country: [
+    { value: 'ES', count: 2310, selected: false },
+    { value: 'UK', count: 1874, selected: false },
+    { value: 'FR', count: 1206, selected: false },
+    { value: 'none', count: 412, selected: false },
+  ],
+  language: [
+    { value: 'es', count: 2644, selected: false },
+    { value: 'en', count: 2103, selected: false },
+    { value: 'none', count: 380, selected: false },
+  ],
+  type: [
+    { value: 'deportes', count: 1520, selected: false },
+    { value: 'cine', count: 610, selected: false },
+    { value: 'adultos', count: 95, selected: false },
+    { value: 'none', count: 2980, selected: false },
+  ],
+  sport: [
+    { value: 'futbol', count: 604, selected: false },
+    { value: 'baloncesto', count: 88, selected: false },
+    { value: 'f1', count: 21, selected: false },
+  ],
+  quality: [
+    { value: 'uhd', count: 64, selected: false },
+    { value: 'fhd', count: 3120, selected: false },
+    { value: 'hd', count: 2890, selected: false },
+    { value: 'none', count: 1450, selected: false },
+  ],
+};
+
 export const WEB_V1_FIXTURES = {
   iptvChannels: {
     query: 'la',
@@ -635,6 +677,26 @@ export const WEB_V1_FIXTURES = {
   },
   iptvSync: iptvSyncing,
   iptvDelete: { provider: null, refreshHours: 6 },
+  /* La raíz de la pestaña con `limit=0`: categorías y facetas, sin canales. */
+  iptvBrowse: {
+    active: true,
+    provider: 'Casa',
+    catalog: IPTV_CATALOG,
+    query: '',
+    category: null,
+    total: 27687,
+    catalogTotal: 27687,
+    categories: [
+      { id: IPTV_CAT_DEPORTES, name: 'ES | DEPORTES', count: 214 },
+      { id: IPTV_CAT_DAZN, name: 'ES | DAZN', count: 18 },
+      { id: IPTV_CAT_GENERALISTAS, name: 'ES | GENERALISTAS', count: 96 },
+      { id: 'none', name: '', count: 7 },
+    ],
+    facets: iptvFacets,
+    channels: [],
+    nextCursor: null,
+    stale: false,
+  },
 } satisfies { [K in WebFixtureRouteId]: V1ResponseInput<K> };
 
 // --- Variantes (variantes/<ruta>.<caso>.json) ---
@@ -832,7 +894,78 @@ export const VARIANT_FIXTURES = {
     handoff: false,
     source: 'iptv',
   },
+  /* Pestaña IPTV (§16.2): una categoría con sus canales y la página siguiente. */
+  'iptvBrowse.categoria': {
+    active: true,
+    provider: 'Casa',
+    catalog: IPTV_CATALOG,
+    query: '',
+    category: { id: IPTV_CAT_DAZN, name: 'ES | DAZN', count: 18 },
+    total: 18,
+    catalogTotal: 27687,
+    facets: {
+      ...iptvFacets,
+      country: [{ value: 'ES', count: 18, selected: false }],
+      language: [{ value: 'es', count: 18, selected: false }],
+      type: [{ value: 'deportes', count: 18, selected: false }],
+      sport: [
+        { value: 'baloncesto', count: 7, selected: false },
+        { value: 'f1', count: 1, selected: false },
+      ],
+      quality: [
+        { value: 'fhd', count: 12, selected: false },
+        { value: 'hd', count: 15, selected: false },
+      ],
+    },
+    channels: [
+      {
+        id: IPTV_ID_DAZN_F1,
+        title: 'DAZN F1',
+        qualities: ['fhd', 'hd'],
+        country: 'ES',
+        category: IPTV_CAT_DAZN,
+      },
+      {
+        id: IPTV_ID_DAZN_ACB,
+        title: 'DAZN ACB 1',
+        qualities: ['hd'],
+        country: 'ES',
+        category: IPTV_CAT_DAZN,
+      },
+    ],
+    nextCursor: 'azJ4OW00LjI',
+    stale: false,
+  },
+  /* Sin IPTV activa (sin proveedor, en pausa o sin catálogo): 200 y todo vacío. */
+  'iptvBrowse.inactiva': {
+    active: false,
+    provider: '',
+    catalog: '0',
+    query: '',
+    category: null,
+    total: 0,
+    catalogTotal: 0,
+    channels: [],
+    nextCursor: null,
+    stale: false,
+  },
+  /* Una categoría que ya no existe (otra sincronización, un enlace viejo): 200 con `category: null`. */
+  'iptvBrowse.categoria-perdida': {
+    active: true,
+    provider: 'Casa',
+    catalog: IPTV_CATALOG,
+    query: '',
+    category: null,
+    total: 0,
+    catalogTotal: 27687,
+    channels: [],
+    nextCursor: null,
+    stale: false,
+  },
 } satisfies {
+  'iptvBrowse.categoria': V1ResponseInput<'iptvBrowse'>;
+  'iptvBrowse.inactiva': V1ResponseInput<'iptvBrowse'>;
+  'iptvBrowse.categoria-perdida': V1ResponseInput<'iptvBrowse'>;
   'footballResolve.iptv-canal': V1ResponseInput<'footballResolve'>;
   'search.iptv': V1ResponseInput<'search'>;
   'libraryGet.iptv': V1ResponseInput<'libraryGet'>;
