@@ -10,9 +10,11 @@ import UIKit
      desde la tarjeta (radio 14 → 0; héroe 24; mini 18) con el muelle estándar, el contenido de la tarjeta se funde
      (`1 − min(1, 2p)`) y los escudos vuelan de la tarjeta a la fila de equipos; la pestaña de debajo se funde en
      340 ms. Sin origen (enlace, Buscar, galería) entra como una vista «adelante» de la web: fundido y +16.
-   - Vuelta (la de la web): el teatro se funde, la pestaña entra desde −16, los escudos vuelven a la tarjeta si
-     sigue en pantalla y, si algo suena y M3 ha dado la superficie, el vídeo vuela al mini (si no, plan B: el mini
-     aparece al acabar).
+   - Vuelta (la de la web): el teatro se funde, la pestaña entra desde −16 y los escudos vuelven a la tarjeta si
+     sigue en pantalla. Si algo suena, en vez de fundirse el vídeo se encoge y vuela al mini mientras la página se
+     funde (`alMini`), y el mini aparece justo donde aterriza.
+   - Arrastrar el vídeo hacia abajo (Isma, 26-sep: como YouTube): lo mismo pero con el dedo (`arrastrarAlMini`);
+     al soltar pasado el umbral termina de volar con el muelle y, si no, vuelve a su sitio.
    - Borde izquierdo: la capa sigue al dedo 1:1 y la pestaña de debajo entra de −16 a 0 (`arrastrarBorde`).
    - Movimiento reducido: fundidos de 120 ms, sin zoom ni vuelos.
 
@@ -66,14 +68,19 @@ struct VueloPieza: Identifiable {
     private(set) var vuelos: [VueloPieza] = []
     /// Piezas que no se pintan mientras vuela su foto.
     private(set) var ocultas: Set<ClaveMarco> = []
+    /// El vídeo camino del mini: 0 = en el teatro, 1 = en el sitio del vídeo del mini (`EscenarioAlMini`).
+    private(set) var alMini: Double = 0
+    /// El mini aparece sin su entrada (`player-sube`): el vídeo acaba de aterrizar en su sitio.
+    private(set) var miniSinEntrada = false
 
     /// La ventana (la pone `CapaPartido`): el marco del mini y el ancho para el borde.
     @ObservationIgnored var maquetacion: Maquetacion = .referencia
-    /// La superficie del vídeo, cuando M3 la ofrezca (`VueloVideo`); sin ella, plan B de §3.5.
-    @ObservationIgnored var superficie: SuperficieVideo?
+    /// Marco del escenario al empezar a ir al mini (coordenadas de la ventana; mientras vuela no se vuelve a medir).
+    @ObservationIgnored private(set) var desdeAlMini: CGRect?
     @ObservationIgnored private var turno = 0
     @ObservationIgnored private var siguienteVuelo = 0
     @ObservationIgnored private var saliendoPorBorde = false
+    @ObservationIgnored private var saliendoAlMini = false
 
     func publicar(_ marco: CGRect, para clave: ClaveMarco) { marcos[clave] = marco }
 
@@ -108,33 +115,40 @@ struct VueloPieza: Identifiable {
         terminar(mio)
     }
 
-    /// Vuelta de la web: el teatro se funde, la pestaña entra desde −16, los escudos vuelven,
-    /// y el vídeo vuela al mini si sigue sonando.
-    func cerrar(haciaMini: Bool, desde marcoVideo: CGRect?, reducido: Bool) async {
+    /// Vuelta de la web: el teatro se funde, la pestaña entra desde −16, los escudos vuelven y, si sigue sonando,
+    /// el vídeo se encoge y vuela al mini (la página se funde a su alrededor).
+    func cerrar(haciaMini: Bool, reducido: Bool) async {
         let porBorde = saliendoPorBorde
+        let porDedo = saliendoAlMini
         let mio = empezar(ida: false)
-        if porBorde {  // la capa ya ha salido con el dedo: solo queda esperar al muelle
+        if porBorde || porDedo {  // la capa ya ha salido con el dedo: solo queda esperar al muelle
             try? await Task.sleep(for: .milliseconds(TransicionTeatro.muelleMs))
             guard mio == turno else { return }
-            quitarCapa(mio)
+            quitarCapa(mio, miniSinEntrada: porDedo)
             return
         }
         let duracion: Double = reducido ? 0.12 : 0.34
-        if !reducido { prepararVuelta(haciaMini: haciaMini, marcoVideo: marcoVideo) }
+        let volar: Bool = haciaMini && !reducido && prepararAlMini()
+        if !reducido { prepararVuelta() }
         opacidadDebajo = 0
         entradaDebajo = GeometriaVuelo.entradaVista(.atras, reducido: reducido)  // a2 §11: la pestaña entra desde −16
         try? await Task.sleep(for: .milliseconds(17))
         guard mio == turno else { return }
         withAnimation(.easeOut(duration: duracion)) {  // a2 §11: fundido de vista 340 ms (reducido 120)
-            opacidadTeatro = 0
+            if !volar { opacidadTeatro = 0 }
             opacidadDebajo = 1
             entradaDebajo = 0
         }
-        if !vuelos.isEmpty { withAnimation(Movimiento.estandar(false)) { progreso = 1 } }
-        let espera: Int = vuelos.isEmpty ? Int(duracion * 1000) : TransicionTeatro.muelleMs
+        if volar || !vuelos.isEmpty {
+            withAnimation(Movimiento.estandar(false)) {
+                progreso = 1
+                if volar { alMini = 1 }
+            }
+        }
+        let espera: Int = vuelos.isEmpty && !volar ? Int(duracion * 1000) : TransicionTeatro.muelleMs
         try? await Task.sleep(for: .milliseconds(espera))
         guard mio == turno else { return }
-        quitarCapa(mio)
+        quitarCapa(mio, miniSinEntrada: volar)
     }
 
     /// El teatro sin transición (arranque con `-AceNeoVista`, o de un partido a otro).
@@ -186,6 +200,69 @@ struct VueloPieza: Identifiable {
         return vuelve
     }
 
+    // MARK: Arrastrar el vídeo al mini (decisión 3; Isma 26-sep)
+
+    /// Mientras se arrastra el vídeo hacia abajo: el vídeo baja con el dedo y se encoge hacia el mini, la página se
+    /// funde y deja ver la pestaña de debajo. `escenario`: el marco del vídeo en la ventana al empezar.
+    func arrastrarAlMini(_ dy: Double, escenario: CGRect) {
+        guard !activa else { return }
+        if alMini == 0 || desdeAlMini == nil { desdeAlMini = escenario }
+        guard let desde = desdeAlMini else { return }
+        let hasta: Marco = maquetacion.marcoVideoMini()
+        alMini = GeometriaVuelo.progresoAlMini(dy: dy, desde: TransicionTeatro.marco(desde), hasta: hasta)
+        opacidadDebajo = 1
+        entradaDebajo = 0
+    }
+
+    /// Al soltar pasado el umbral: termina de volar al mini con el muelle y quien llama minimiza
+    /// (`navegador.atras()`); `cerrar` solo espera a que aterrice. Con movimiento reducido, la vuelta de siempre.
+    func soltarAlMini(reducido: Bool) {
+        guard !reducido, desdeAlMini != nil else {
+            withAnimation(.easeOut(duration: 0.12)) { alMini = 0 }
+            return
+        }
+        saliendoAlMini = true
+        withAnimation(Movimiento.estandar(false)) { alMini = 1 }
+    }
+
+    /// Al soltar sin llegar al umbral: el vídeo vuelve a su sitio con el muelle.
+    func devolverAlTeatro(reducido: Bool) {
+        let mio = turno
+        withAnimation(reducido ? .easeOut(duration: 0.12) : Movimiento.estandar(false)) { alMini = 0 }
+        Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(TransicionTeatro.muelleMs))
+            guard let self, mio == self.turno, self.alMini == 0, !self.activa else { return }
+            self.opacidadDebajo = 0
+            self.desdeAlMini = nil
+        }
+    }
+
+    /// Escala y desplazamiento del escenario camino del mini (los lee `EscenarioAlMini`).
+    var transformacionAlMini: TransformacionVuelo {
+        guard alMini != 0, let desde = desdeAlMini else { return .identidad }
+        let hasta: Marco = maquetacion.marcoVideoMini()
+        return GeometriaVuelo.alMini(desde: TransicionTeatro.marco(desde), hasta: hasta, progreso: alMini)
+    }
+
+    /// La vuelta de ⌄ o de «atrás» con algo sonando: el marco del escenario de lo que se ve (partido o canal).
+    private func prepararAlMini() -> Bool {
+        var clave: String?
+        switch mostrado {
+        case .partido(let id): clave = id
+        case .canal(let hash): clave = hash
+        default: clave = nil
+        }
+        guard let clave, let marco = marcos[ClaveMarco(pieza: .escenario, partido: clave)], marco.width > 1 else {
+            return false
+        }
+        desdeAlMini = marco
+        return true
+    }
+
+    static func marco(_ r: CGRect) -> Marco {
+        Marco(x: Double(r.minX), y: Double(r.minY), ancho: Double(r.width), alto: Double(r.height))
+    }
+
     // MARK: Pasos
 
     /// Asentamiento del muelle estándar (a1 §7.1: 520 ms).
@@ -195,6 +272,7 @@ struct VueloPieza: Identifiable {
         turno += 1
         self.ida = ida
         activa = true
+        miniSinEntrada = false
         return turno
     }
 
@@ -233,26 +311,15 @@ struct VueloPieza: Identifiable {
         ocultas = [clave]
     }
 
-    /// Vuelta: la fila de equipos vuelve a los escudos de la tarjeta (si sigue en pantalla) y el vídeo al mini.
-    private func prepararVuelta(haciaMini: Bool, marcoVideo: CGRect?) {
-        var nuevos: [VueloPieza] = []
-        var tapadas: Set<ClaveMarco> = []
-        if case .partido(let id) = mostrado {
-            let destino = ClaveMarco(pieza: .escudos, partido: id)
-            if let desde = marcos[ClaveMarco(pieza: .filaEquipos, partido: id)], let hasta = marcos[destino],
-                let foto = Instantanea.tomar(desde)
-            {
-                nuevos.append(nuevoVuelo(.foto(foto), desde: desde, hasta: hasta, fundir: false))
-                tapadas.insert(destino)
-            }
-        }
-        if haciaMini, let superficie, let marcoVideo {
-            nuevos.append(nuevoVuelo(.video(superficie), desde: marcoVideo, hasta: TransicionTeatro.cg(maquetacion.marcoVideoMini()),
-                                     fundir: false))
-        }
-        guard !nuevos.isEmpty else { return }
-        vuelos = nuevos
-        ocultas = tapadas
+    /// Vuelta: la fila de equipos vuelve a los escudos de la tarjeta (si sigue en pantalla).
+    private func prepararVuelta() {
+        guard case .partido(let id) = mostrado else { return }
+        let destino = ClaveMarco(pieza: .escudos, partido: id)
+        guard let desde = marcos[ClaveMarco(pieza: .filaEquipos, partido: id)], let hasta = marcos[destino],
+            let foto = Instantanea.tomar(desde)
+        else { return }
+        vuelos = [nuevoVuelo(.foto(foto), desde: desde, hasta: hasta, fundir: false)]
+        ocultas = [destino]
         progreso = 0
     }
 
@@ -290,13 +357,20 @@ struct VueloPieza: Identifiable {
         activa = false
     }
 
-    private func quitarCapa(_ mio: Int) {
+    private func quitarCapa(_ mio: Int, miniSinEntrada sinEntrada: Bool = false) {
         guard mio == turno else { return }
         mostrado = nil
         limpiar()
         opacidadDebajo = 1
         entradaDebajo = 0
+        miniSinEntrada = sinEntrada
         activa = false
+        guard sinEntrada else { return }
+        Task { [weak self] in  // solo para esta aparición: «Deshacer» u otra vuelta traen la entrada de siempre
+            try? await Task.sleep(for: .milliseconds(100))
+            guard let self, mio == self.turno else { return }
+            self.miniSinEntrada = false
+        }
     }
 
     private func limpiar() {
@@ -310,42 +384,10 @@ struct VueloPieza: Identifiable {
         entradaTeatro = 0
         arrastreBorde = 0
         saliendoPorBorde = false
+        alMini = 0
+        desdeAlMini = nil
+        saliendoAlMini = false
     }
 
     static func cg(_ m: Marco) -> CGRect { CGRect(x: m.x, y: m.y, width: m.ancho, height: m.alto) }
-}
-
-extension View {
-    /// Publica el marco de esta pieza (onGeometryChange en .global) y lo olvida al desaparecer. Mientras su foto
-    /// vuela, la pieza no se pinta (la foto ocupa su sitio).
-    func piezaVuelo(_ pieza: PiezaVuelo, partido: String) -> some View {
-        modifier(PublicarMarco(clave: ClaveMarco(pieza: pieza, partido: partido)))
-    }
-}
-
-/// Cada cambio de marco, en coordenadas de la ventana, va a `TransicionTeatro` (sin observar: nadie se repinta).
-private struct PublicarMarco: ViewModifier {
-    let clave: ClaveMarco
-    @Environment(TransicionTeatro.self) private var transicion
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(transicion.ocultas.contains(clave) ? 0 : 1)
-            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { transicion.publicar($0, para: clave) }
-            .onDisappear { transicion.olvidar(clave) }
-    }
-}
-
-/// Fotos de un trozo de la pantalla (lo que se ve AHORA), para los vuelos.
-@MainActor enum Instantanea {
-    static func tomar(_ marco: CGRect) -> UIView? {
-        guard marco.width >= 1, marco.height >= 1, let ventana = ventanaClave() else { return nil }
-        return ventana.resizableSnapshotView(from: marco, afterScreenUpdates: false, withCapInsets: .zero)
-    }
-
-    static func ventanaClave() -> UIWindow? {
-        let escenas = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        let activa = escenas.first { $0.activationState == .foregroundActive } ?? escenas.first
-        return activa?.keyWindow
-    }
 }

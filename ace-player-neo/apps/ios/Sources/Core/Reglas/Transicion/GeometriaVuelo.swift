@@ -70,6 +70,35 @@ enum GeometriaVuelo {
         return sentido == .adelante ? 16 : -16
     }
 
+    // MARK: El vídeo al mini (decisión 3; Isma 26-sep: interactivo, como YouTube)
+
+    /// Umbral del arrastre hacia abajo: el de `classifySwipe` (56 pt). Al cruzarlo, háptica; al soltar pasado, vuela.
+    static let umbralAlMini = 56.0
+
+    /// Progreso 0…1 con el dedo: el vídeo baja con él (su borde de arriba, 1:1) hasta el del vídeo del mini.
+    static func progresoAlMini(dy: Double, desde: Marco, hasta: Marco) -> Double {
+        let recorrido = hasta.y - desde.y
+        guard recorrido > 1 else { return dy > 0 ? 1 : 0 }
+        return min(1, max(0, dy / recorrido))
+    }
+
+    /// Escala uniforme por el ancho y desplazamiento de la esquina de arriba a la izquierda del escenario hacia el
+    /// vídeo del mini (96 × 54, a4 §19.1). Con `p` = 0 es la identidad; con 1, el vídeo del mini.
+    static func alMini(desde: Marco, hasta: Marco, progreso p: Double) -> TransformacionVuelo {
+        guard desde.ancho > 0 else { return .identidad }
+        return TransformacionVuelo(escala: mezclar(1, hasta.ancho / desde.ancho, p), dx: mezclar(0, hasta.x - desde.x, p),
+                                   dy: mezclar(0, hasta.y - desde.y, p))
+    }
+
+    /// La página y la franja negra se funden antes de que el vídeo llegue: `1 − min(1, 1,5·p)`.
+    static func opacidadTeatroAlMini(_ p: Double) -> Double { 1 - min(1, max(0, 1.5 * p)) }
+
+    /// Los controles del vídeo se van en el primer cuarto del recorrido.
+    static func opacidadControlesAlMini(_ p: Double) -> Double { 1 - min(1, max(0, 4 * p)) }
+
+    /// Radio de la imagen en pt de pantalla: 0 → 10 (el del vídeo del mini, a4 §19.2).
+    static func radioAlMini(_ p: Double) -> Double { mezclar(0, 10, min(1, max(0, p))) }
+
     /// Radio del origen de cada apertura (§3.5; a2 §7 para el mini).
     static func radioOrigen(heroe: Bool, mini: Bool) -> Double {
         if mini { return 18 }
