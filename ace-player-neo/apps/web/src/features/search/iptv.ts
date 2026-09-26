@@ -1,18 +1,19 @@
-/* Buscador: IPTV y AceStream juntos (docs/iptv.md §14.3 y §14.5). Puro.
+/* Buscador: IPTV y AceStream juntos (docs/iptv.md §14.3, §14.5 y §19). Puro.
 
    `mergeSearch` junta lo que ya tienes («En tu biblioteca»), tu IPTV
    (`iptvChannels`) y el motor AceStream (`search`) con una regla: UN CANAL,
-   UNA FILA (D26).
-   1. Biblioteca primero. Una fila de tu biblioteca lleva el distintivo «IPTV»
-      si su id está en el `library` de algún canal IPTV de la respuesta, o si
-      es un id IPTV (`iptvIds`). Ese canal queda representado por ella.
-   2. «En tu IPTV»: los canales que no están representados, en el orden del
-      servidor. Se ven 5; el resto, con «Ver más».
-   3. «En el motor AceStream»: un resultado con `iptv` cuyo canal está
-      representado (por la biblioteca o por «En tu IPTV», también detrás de
-      «Ver más») se esconde y suma a ese canal («también en AceStream»). Si su
-      canal no está (pasó del límite de 50), se queda el PRIMERO de ese canal
-      con «IPTV» y se esconden los demás.
+   UNA FILA, y cada fila dice DE DÓNDE se puede ver con etiquetas separadas:
+   «IPTV» (con sus calidades) y «AceStream» (con cuántas fuentes). Nada de
+   «IPTV» encima de una entrada que es de AceStream (§19: Isma vio «LA 1 4K
+   --> NEW ERA» con «IPTV» y lo leyó, con razón, como un error).
+   1. Tu biblioteca: una fila que es un canal de tu IPTV (un id IPTV) lo
+      representa; una entrada de AceStream que es un canal de tu IPTV se junta
+      con él (su «AceStream» y su respaldo al tocarlo).
+   2. «En tu IPTV»: sus canales, con su nombre limpio («La 1»), aunque estén
+      en tu biblioteca como AceStream. Se ven 5; el resto, con «Ver más».
+   3. «En el motor AceStream»: lo de un canal que ya tiene fila se esconde y
+      suma a su «AceStream»; si su canal no vino (pasó de 50), el PRIMERO sale
+      como fila de canal.
    4. El contador del motor cuenta solo los que se ven.
 
    Los textos literales viven aquí también: los usan la vista, el filtro de
@@ -20,6 +21,7 @@
 
 import {
   IPTV_SEARCH,
+  stripQualityMarks,
   type IptvChannel,
   type IptvIdState,
   type IptvQuality,
@@ -41,7 +43,6 @@ export const IPTV_TEXT = {
   hint: 'Busca canales en tu IPTV y en el motor AceStream.',
   section: 'En tu IPTV',
   badge: 'IPTV',
-  alsoAce: ' · también en AceStream',
   showLess: 'Ver menos',
   failed: 'No se pudo buscar en tu IPTV.',
   retry: 'Reintentar',
@@ -99,11 +100,12 @@ export function iptvCountText(total: number, capped: boolean): string {
 }
 
 /**
- * Subtítulo de una fila IPTV: «Casa», más « · también en AceStream» si lo
- * está. Las calidades van aparte, como etiquetas (`iptvTags`, §16).
+ * Subtítulo de una fila IPTV: «Casa» (el nombre de tu IPTV). De dónde más se
+ * puede ver y en qué calidades va aparte, como etiquetas: «IPTV», «1080p»,
+ * «AceStream · 2» (`iptvTags`, §16 y §19).
  */
-export function iptvSubtitle(channel: Pick<IptvChannel, 'provider'>, alsoAce: boolean): string {
-  return `${channel.provider}${alsoAce ? IPTV_TEXT.alsoAce : ''}`;
+export function iptvSubtitle(channel: Pick<IptvChannel, 'provider'>): string {
+  return channel.provider;
 }
 
 /**
@@ -130,7 +132,7 @@ export const IPTV_ID_SUBTITLE: Record<IptvIdState, string> = {
   iptv_removed: 'Has eliminado tu IPTV',
 };
 
-// ---- Mezcla (§14.3) ---------------------------------------------------------------
+// ---- Mezcla (§14.3 y §19) ------------------------------------------------------------
 
 export interface MergeInput<L extends { id: string }> {
   /** «En tu biblioteca» (5 como mucho, como hoy). */
@@ -144,20 +146,31 @@ export interface MergeInput<L extends { id: string }> {
 
 export interface MergedLocal<L> {
   item: L;
-  /** El canal IPTV que representa esta fila (para el distintivo y para `playChannel`), o null. */
+  /** El canal IPTV que ES esta fila (un canal de tu IPTV guardado en tu biblioteca), o null. */
   iptv: string | null;
+  /** Fuentes de AceStream de ese canal en el motor (escondidas: salen como etiqueta). */
+  ace: number;
 }
 
 export interface MergedIptv {
   channel: IptvChannel;
-  /** Hay AceStream de ese canal: en tu biblioteca o en el motor (escondidos). */
+  /**
+   * Fuentes de AceStream del canal: las de tu biblioteca que son ese canal y
+   * las del motor (escondidas). 0 si solo está en tu IPTV.
+   */
+  ace: number;
+  /** Los ids de tu biblioteca que son este canal en AceStream: el respaldo al tocarlo (§19). */
+  library: string[];
+  /** Hay AceStream de ese canal (`ace > 0`). */
   alsoAce: boolean;
 }
 
 export interface MergedEngine {
   result: SearchResult;
-  /** El canal IPTV de este resultado si se enseña con «IPTV» (su canal no vino en la respuesta). */
+  /** El canal IPTV de este resultado si su canal no vino en la respuesta: fila de canal con «IPTV» y «AceStream». */
   iptv: string | null;
+  /** Fuentes de AceStream de esa fila: ella y las del mismo canal escondidas. */
+  ace: number;
 }
 
 export interface MergedSearch<L> {
@@ -169,57 +182,106 @@ export interface MergedSearch<L> {
   hiddenEngine: number;
 }
 
+/**
+ * Un canal, una fila (docs/iptv.md §14.3, rehecho en §19 tras la prueba de
+ * Isma con «LA 1 4K --> NEW ERA»):
+ * 1. Tu biblioteca: una fila que ES un canal de tu IPTV (un id IPTV) lo
+ *    representa. Una entrada de AceStream que es un canal de tu IPTV NO lleva
+ *    «IPTV» ni lo esconde: se junta con él (cuenta como su AceStream y es su
+ *    respaldo al tocarlo) y deja de salir suelta.
+ * 2. «En tu IPTV»: todos sus canales salvo los que ya son una fila de tu
+ *    biblioteca; cada uno con cuántas fuentes de AceStream tiene.
+ * 3. El motor: un resultado de un canal que ya tiene fila se esconde y suma a
+ *    ese canal. Si su canal no vino en la respuesta (pasó de 50), se queda el
+ *    PRIMERO de ese canal, como fila de canal («IPTV» y «AceStream»).
+ */
 export function mergeSearch<L extends { id: string }>(input: MergeInput<L>): MergedSearch<L> {
   const channels = input.iptv ?? [];
   const iptvIds = input.iptvIds ?? {};
-  /* Id de la biblioteca (o id IPTV) → canal IPTV de la respuesta. */
-  const channelOfLibrary = new Map<string, string>();
-  for (const channel of channels) {
-    channelOfLibrary.set(channel.id, channel.id);
-    for (const id of channel.library)
-      if (!channelOfLibrary.has(id)) channelOfLibrary.set(id, channel.id);
-  }
-  const represented = new Set<string>();
-  const local = input.local.map((item): MergedLocal<L> => {
-    const fromResponse = channelOfLibrary.get(item.id) ?? null;
-    const iptv = fromResponse ?? (Object.hasOwn(iptvIds, item.id) ? item.id : null);
-    if (iptv) represented.add(iptv);
-    return { item, iptv };
-  });
-  const shownChannels = channels.filter((channel) => !represented.has(channel.id));
   const inResponse = new Set(channels.map((channel) => channel.id));
+  /* Entrada de AceStream de tu biblioteca → el canal IPTV que es. */
+  const channelOfAce = new Map<string, string>();
+  for (const channel of channels)
+    for (const id of channel.library)
+      if (id !== channel.id && !channelOfAce.has(id)) channelOfAce.set(id, channel.id);
+  const represented = new Map<string, number>();
+  const folded = new Map<string, string[]>();
+  const local: MergedLocal<L>[] = [];
+  for (const item of input.local) {
+    const isIptvId = inResponse.has(item.id) || Object.hasOwn(iptvIds, item.id);
+    if (isIptvId) {
+      represented.set(item.id, local.length);
+      local.push({ item, iptv: item.id, ace: 0 });
+      continue;
+    }
+    const channelId = channelOfAce.get(item.id);
+    if (channelId) {
+      folded.set(channelId, [...(folded.get(channelId) ?? []), item.id]);
+      continue;
+    }
+    local.push({ item, iptv: null, ace: 0 });
+  }
   const hiddenFor = new Map<string, number>();
-  const firstOf = new Set<string>();
+  const firstOf = new Map<string, number>();
   const engine: MergedEngine[] = [];
   let hiddenEngine = 0;
   for (const result of input.engine) {
     const iptv = result.iptv ?? null;
     if (!iptv) {
-      engine.push({ result, iptv: null });
+      engine.push({ result, iptv: null, ace: 1 });
       continue;
     }
-    if (represented.has(iptv) || inResponse.has(iptv)) {
+    const row = represented.get(iptv);
+    if (row !== undefined) {
+      (local[row] as MergedLocal<L>).ace += 1;
+      hiddenEngine += 1;
+      continue;
+    }
+    if (inResponse.has(iptv)) {
       hiddenFor.set(iptv, (hiddenFor.get(iptv) ?? 0) + 1);
       hiddenEngine += 1;
       continue;
     }
-    /* Su canal no vino en la respuesta: el primero, con «IPTV»; los demás, fuera. */
-    if (firstOf.has(iptv)) {
+    /* Su canal no vino en la respuesta: el primero, como fila de canal; los demás suman a esa fila. */
+    const first = firstOf.get(iptv);
+    if (first !== undefined) {
+      (engine[first] as MergedEngine).ace += 1;
       hiddenEngine += 1;
       continue;
     }
-    firstOf.add(iptv);
-    engine.push({ result, iptv });
+    firstOf.set(iptv, engine.length);
+    engine.push({ result, iptv, ace: 1 });
   }
   return {
     local,
-    iptv: shownChannels.map((channel) => ({
-      channel,
-      alsoAce: channel.library.length > 0 || (hiddenFor.get(channel.id) ?? 0) > 0,
-    })),
+    iptv: channels
+      .filter((channel) => !represented.has(channel.id))
+      .map((channel) => {
+        const library = folded.get(channel.id) ?? [];
+        const ace = library.length + (hiddenFor.get(channel.id) ?? 0);
+        return { channel, ace, library, alsoAce: ace > 0 };
+      }),
     engine,
     hiddenEngine,
   };
+}
+
+/* Lo que las listas de AceStream ponen detrás del canal: « --> NEW ERA». */
+const ACE_ARROW_RE = /\s*(?:--?>|={1,2}>|[→⇒➜➝⟶⟹]).*$/u;
+
+/**
+ * El nombre del CANAL de un resultado de AceStream, sin la lista ni la
+ * calidad (§19): «LA 1 4K --> NEW ERA» → «LA 1». Para la fila de canal de un
+ * resultado del motor que también está en tu IPTV.
+ */
+export function aceChannelName(title: string): string {
+  const bare = title.replace(ACE_ARROW_RE, '').trim();
+  return stripQualityMarks(bare || title);
+}
+
+/** Etiqueta de las fuentes de AceStream de una fila: «AceStream» o «AceStream · 3». */
+export function aceTagText(count: number): string {
+  return count > 1 ? `AceStream · ${count}` : 'AceStream';
 }
 
 /** Las filas de «En tu IPTV» a la vista: 5 (3 en Canales) o todas si se desplegó. */

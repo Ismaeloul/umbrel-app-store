@@ -221,6 +221,13 @@ export const IPTV_SESSION = {
   recentCloseMs: 120 * SECOND,
   /** Esperas de los reintentos al abrir con la plaza recién cerrada. */
   busyRetryMs: [2 * SECOND, 4 * SECOND, 8 * SECOND],
+  /**
+   * Solo se reintenta «ocupada» si la cerramos nosotros hace menos de esto (el
+   * panel tarda unos segundos en soltarla). Más tarde, la plaza la tiene otro
+   * aparato (la app de IPTV del PC, docs/iptv.md §19) y esperar 14 s no sirve:
+   * se dice al momento y se sigue por AceStream.
+   */
+  busyRetryWindowMs: 20 * SECOND,
   /** Estadísticas del relé → `stream.stats`. */
   statsEveryMs: 2 * SECOND,
   /** Con bytes entrando, el relé apunta `working` por `player` cada este rato. */

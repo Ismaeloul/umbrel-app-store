@@ -11,6 +11,7 @@
    116) y hay otro «DAZN 1» en Alemania (117) y en el Reino Unido (109). */
 
 import { execFileSync } from 'node:child_process';
+import http from 'node:http';
 import type { Page } from '@playwright/test';
 import { FUENTES } from './support/catalogo.ts';
 import { readPorts } from './support/puertos.ts';
@@ -216,14 +217,16 @@ test(
 );
 
 test(
-  '9 · en los dos: «la 1» sale una vez, «también en AceStream»; suena la IPTV y, si cae, sigue por la AceStream del mismo canal',
+  '9 · en los dos: «la 1» sale una vez con «IPTV» y «AceStream · 2»; suena la IPTV y, si cae, sigue por la AceStream del mismo canal',
   { tag: '@video' },
   async ({ page }) => {
     test.setTimeout(180_000);
     await conectarXtream(page);
     await buscar(page, 'la 1');
     const la1 = fila(page, enTuIptv(page), 'La 1');
-    await expect(la1.getByText('Casa · también en AceStream')).toBeVisible();
+    await expect(la1.getByText('Casa', { exact: true })).toBeVisible();
+    await expect(la1.getByText('IPTV', { exact: true })).toBeVisible();
+    await expect(la1.getByText('AceStream · 2', { exact: true })).toBeVisible();
     await expect(la1.locator('.ch__tag')).toHaveText(['720p']);
     // El motor tiene dos «La 1 HD»: ninguno a la vista (son ese mismo canal).
     await expect(page.getByRole('link', { name: 'La 1 HD', exact: true })).toHaveCount(0);
@@ -343,18 +346,18 @@ test(
 );
 
 test(
-  '10 · ya en tu biblioteca: «Antena» saca tu «Antena 3 HD» con «IPTV» y no la repite en «En tu IPTV»',
+  '10 · ya en tu biblioteca: tu «Antena 3 HD» de AceStream no lleva «IPTV»; sale el canal «Antena 3» en «En tu IPTV» con las dos etiquetas (§19)',
   { tag: '@video' },
   async ({ page }) => {
     await backend.guardarFavorito(ANTENA3.id, ANTENA3.title);
     await conectarXtream(page);
     await buscar(page, 'Antena');
-    const tuya = fila(page, enTuBiblioteca(page), ANTENA3.title);
-    await expect(tuya.getByText('IPTV', { exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Antena 3', exact: true })).toHaveCount(0);
-    await expect(enTuIptv(page)).toHaveCount(0);
-    // El motor también la tiene: no sale otra vez.
-    await expect(enElMotor(page).getByRole('link', { name: ANTENA3.title })).toHaveCount(0);
+    const canal = fila(page, enTuIptv(page), 'Antena 3');
+    await expect(canal.getByText('IPTV', { exact: true })).toBeVisible();
+    await expect(canal.getByText(/^AceStream/)).toBeVisible();
+    /* Tu entrada de AceStream se junta con su canal: ni suelta ni con «IPTV» encima. */
+    await expect(page.getByRole('link', { name: ANTENA3.title, exact: true })).toHaveCount(0);
+    await expect(enTuBiblioteca(page)).toHaveCount(0);
   },
 );
 
@@ -431,5 +434,82 @@ test(
       page.getByText('Tu IPTV está en pausa y este canal no está en AceStream.').first(),
     ).toBeVisible({ timeout: 45_000 });
     expect(await motor.sesiones('active')).toHaveLength(0);
+  },
+);
+
+/** Ocupa la única plaza de la cuenta como otra app de IPTV (TPTV): un stream abierto directo al proveedor. */
+function ocuparPlaza(): { soltar(): void } {
+  const req = http.get(`http://[::1]:${ports.iptv}/live/${USUARIO}/${CLAVE}/107.ts`, (res) => {
+    res.on('data', () => undefined);
+  });
+  req.on('error', () => undefined);
+  return { soltar: () => req.destroy() };
+}
+
+const LA1_NEW_ERA = FUENTES.la1[1];
+
+/** El caso de Isma (§19): en tu biblioteca «LA 1 4K --> NEW ERA» (lista de AceStream) y en tu IPTV «La 1». */
+async function buscarLa1ComoIsma(page: Page): Promise<ReturnType<typeof fila>> {
+  await backend.guardarFavorito(LA1_NEW_ERA.id, 'LA 1 4K --> NEW ERA');
+  await conectarXtream(page);
+  await buscar(page, 'la 1');
+  const canal = fila(page, enTuIptv(page), 'La 1');
+  await expect(canal.getByText('IPTV', { exact: true })).toBeVisible();
+  await expect(canal.getByText(/^AceStream/)).toBeVisible();
+  /* Nada de «IPTV» encima de una entrada que es de AceStream: tu entrada se junta con su canal. */
+  await expect(page.getByRole('link', { name: 'LA 1 4K --> NEW ERA', exact: true })).toHaveCount(0);
+  return canal;
+}
+
+const datosTecnicos = async (page: Page): Promise<string> => {
+  const pestana = page.getByRole('tab', { name: /Datos técnicos/ });
+  if (await pestana.count()) await pestana.first().click();
+  return (await page.locator('.nerd-stats').first().innerText()).replace(/\s+/g, ' ');
+};
+
+test(
+  '15 · el caso de Isma (§19): «La 1» es una fila de canal con «IPTV» y «AceStream»; al tocarla suena la IPTV y Datos técnicos dice «IPTV · Casa · 720p»',
+  { tag: '@video' },
+  async ({ page }) => {
+    test.setTimeout(180_000);
+    const canal = await buscarLa1ComoIsma(page);
+    await canal.getByRole('link', { name: 'La 1', exact: true }).click();
+    await page.waitForURL(/vista=partido/);
+    await esperarQueAvance(page);
+    expect(await suenaIptv(page)).toBe(true);
+    expect(await motor.sesiones('active')).toHaveLength(0);
+    await expect.poll(() => datosTecnicos(page)).toContain('Origen IPTV · Casa · 720p');
+  },
+);
+
+test(
+  '16 · la IPTV ocupada en otra app (§19): se dice al momento, suena tu AceStream de respaldo y Datos técnicos dice de dónde viene y por qué',
+  { tag: '@video' },
+  async ({ page }) => {
+    test.setTimeout(180_000);
+    const canal = await buscarLa1ComoIsma(page);
+    const otraApp = ocuparPlaza();
+    try {
+      await expect.poll(() => proveedor.conexiones()).toBe(1);
+      await canal.getByRole('link', { name: 'La 1', exact: true }).click();
+      await page.waitForURL(/vista=partido/);
+      await expect(
+        page
+          .getByText(
+            /^Tu IPTV está ocupada en otro aparato \(tu cuenta admite 1 conexión\): seguimos por AceStream/,
+          )
+          .first(),
+        /* Al momento si la plaza la tiene otra app desde hace rato; si otro recorrido acaba de soltar la suya,
+           el servidor la reintenta hasta 14 s por si es la nuestra que el panel aún cuenta (§19). */
+      ).toBeVisible({ timeout: 30_000 });
+      await expect.poll(async () => (await motor.activasDe(LA1_NEW_ERA.id)).length).toBe(1);
+      await esperarQueAvance(page);
+      expect(await suenaIptv(page)).toBe(false);
+      const datos = await datosTecnicos(page);
+      expect(datos).toContain('Origen AceStream · NEW ERA');
+      expect(datos).toContain('Tu IPTV está ocupada en otro aparato (tu cuenta admite 1 conexión)');
+    } finally {
+      otraApp.soltar();
+    }
   },
 );

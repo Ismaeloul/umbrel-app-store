@@ -12,9 +12,11 @@
    a la vista). Acciones: estrella y «Más» (con el ratón aparecen al pasar por
    encima; en táctil siempre), clic derecho y pulsación larga.
 
-   Buscador con IPTV (docs/iptv.md §14.5): un canal de tu IPTV lleva el
-   distintivo «IPTV» (el del cartel de la fuente: cápsula neutra con la tele)
-   y su subtítulo propio («Casa · 1080p», «Tu IPTV»…). */
+   Buscador con IPTV (docs/iptv.md §14.5 y §19): la fila dice DE DÓNDE se
+   puede ver el canal con etiquetas separadas en la meta, nunca sobre el
+   nombre: «IPTV» (cápsula neutra con la tele, como en el cartel de la
+   fuente) con sus calidades detrás, y «AceStream» con cuántas fuentes
+   («AceStream · 3»). Si solo está en uno, solo su etiqueta. */
 
 import type { LibraryCollection } from '@ace/shared';
 import { useEffect, useId, useRef, type CSSProperties, type MouseEvent } from 'react';
@@ -35,6 +37,7 @@ import {
   type MenuItem,
 } from '../../ui/index.ts';
 import { useScoreHidden } from '../agenda/score-reveal.ts';
+import { aceTagText } from '../search/iptv.ts';
 import { subtitleFor } from './model.ts';
 import { isHalftime, liveMinute, type ChannelOnAir } from './on-air.ts';
 
@@ -64,8 +67,10 @@ export interface ChannelRowProps {
   menuItems: MenuItem[];
   /** Posición para la aparición escalonada (solo al entrar); null, sin animación. */
   enterIndex?: number | null;
-  /** Es (o representa) un canal de tu IPTV: distintivo «IPTV» (§14.5). */
+  /** Se puede ver por tu IPTV: etiqueta «IPTV» antes de las calidades (§14.5 y §19). */
   iptv?: boolean;
+  /** Fuentes de AceStream del canal: etiqueta «AceStream» (con el número si son 2 o más); 0, sin ella. */
+  ace?: number | undefined;
   /** Subtítulo propio (el de una fila IPTV); si no, el de siempre. */
   subtitle?: string | undefined;
   /** Etiquetas pequeñas tras el subtítulo: el país y las calidades de un canal IPTV («4K · 1080p · 720p», §16). */
@@ -190,6 +195,7 @@ export function ChannelRow({
   menuItems,
   enterIndex = null,
   iptv = false,
+  ace = 0,
   subtitle: ownSubtitle,
   tags,
 }: ChannelRowProps) {
@@ -256,11 +262,6 @@ export function ChannelRow({
         <span className="ch__body">
           <span className="ch__name">
             <span className="ch__name-text">{title}</span>
-            {iptv ? (
-              <Capsule tone="neutral" size="sm" icon="tv" className="ch__iptv">
-                IPTV
-              </Capsule>
-            ) : null}
             {fallen ? (
               <span
                 className="ch__fallen"
@@ -301,13 +302,28 @@ export function ChannelRow({
             ) : (
               <span className="ch__sub">{subtitle}</span>
             )}
-            {tags?.length ? (
+            {iptv || tags?.length || ace > 0 ? (
               <span className="ch__tags">
-                {tags.map((tag) => (
+                {iptv ? (
+                  <Capsule tone="neutral" size="sm" icon="tv" className="ch__src ch__iptv">
+                    IPTV
+                  </Capsule>
+                ) : null}
+                {(tags ?? []).map((tag) => (
                   <Capsule key={tag} tone="neutral" size="sm" className="ch__tag">
                     {tag}
                   </Capsule>
                 ))}
+                {ace > 0 ? (
+                  <Capsule
+                    tone="neutral"
+                    size="sm"
+                    className="ch__src ch__ace"
+                    title={ace === 1 ? 'Está en AceStream' : `${ace} fuentes de AceStream`}
+                  >
+                    {aceTagText(ace)}
+                  </Capsule>
+                ) : null}
               </span>
             ) : null}
           </span>

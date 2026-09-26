@@ -45,7 +45,12 @@ interface RenameState {
 export interface ChannelActions {
   library: LibraryView | undefined;
   favoriteIds: ReadonlySet<string>;
-  play(channel: ActionableChannel, origin?: PlayOrigin): void;
+  /** `ace`: las entradas de AceStream de tu biblioteca que son ese canal IPTV (respaldo, §19). */
+  play(
+    channel: ActionableChannel,
+    origin?: PlayOrigin,
+    extra?: { readonly ace?: readonly string[] },
+  ): void;
   /** ¿Es un canal de tu IPTV (id sintético)? Sin hash de AceStream que copiar. */
   isIptvId(id: string): boolean;
   toggleFavorite(channel: ActionableChannel): void;
@@ -86,7 +91,11 @@ export function useChannelActions({
   const iptvOf = (channel: ActionableChannel): string | null =>
     channel.iptv ?? (isIptvId(channel.id) ? channel.id : null);
 
-  const play = (channel: ActionableChannel, origin: PlayOrigin = 'biblioteca') => {
+  const play = (
+    channel: ActionableChannel,
+    origin: PlayOrigin = 'biblioteca',
+    extra: { readonly ace?: readonly string[] } = {},
+  ) => {
     const iptv = iptvOf(channel);
     playChannel(navigate, {
       hash: channel.id,
@@ -98,6 +107,7 @@ export function useChannelActions({
       ...(iptv ? { iptv } : {}),
       // Un id IPTV renombrado se busca por su nombre en la IPTV (§14.6).
       ...(iptv === channel.id && channel.alias ? { alias: channel.alias } : {}),
+      ...(iptv && extra.ace?.length ? { ace: extra.ace } : {}),
     });
   };
 

@@ -168,7 +168,10 @@ async function openWhenReady(
 }
 
 /** El texto de una lista que puede no estar todavía (la ruta nativa, que la reescribe con el token). */
-export async function readWhenReady(file: string, waitMs = NOT_YET_WAIT_MS): Promise<string | null> {
+export async function readWhenReady(
+  file: string,
+  waitMs = NOT_YET_WAIT_MS,
+): Promise<string | null> {
   const handle = await openWhenReady(file, true, () => false, waitMs);
   if (!handle) return null;
   try {

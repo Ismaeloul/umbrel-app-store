@@ -25,8 +25,14 @@ import './ChannelMark.css';
  * 26-sep; docs/iptv.md §18): «La 1 TVE 720p» → «1», «DAZN 2 1080p50 H265» →
  * «2», «Eurosport 4K» → «E».
  */
+const DORSAL_BACKUP_RE =
+  /[([]\s*(?:bk|bkp|backup)\s*[-_]?\s*\d{0,2}\s*[)\]]|\b(?:bk|bkp|backup)\s*[-_]?\s*\d{1,2}\b/giu;
+const DORSAL_SIZE_RE = /\b\d{3,4}\s*[x×]\s*\d{3,4}\b/giu;
+
 export function channelDorsal(name: string): string {
-  const numbers = stripQualityMarks(name)
+  /* Tampoco la reserva («(BK-2)», «[BK 1]», «BK-1») ni una resolución escrita «1920x1080» (docs/iptv.md §19). */
+  const bare = name.replace(DORSAL_BACKUP_RE, ' ').replace(DORSAL_SIZE_RE, ' ');
+  const numbers = stripQualityMarks(bare)
     .match(/\d+/g)
     ?.filter((number) => !isQualityNumber(number));
   const last = numbers?.at(-1);

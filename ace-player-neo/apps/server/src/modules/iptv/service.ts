@@ -1714,6 +1714,12 @@ export class IptvServiceImpl implements IptvService {
     return this.recentCloses.some((at) => now - at <= IPTV_SESSION.recentCloseMs);
   }
 
+  /** ¿La soltamos hace tan poco que el panel puede seguir contándola? (los reintentos de «ocupada», §19). */
+  private closedJustNow(): boolean {
+    const now = this.deps.clock.now();
+    return this.recentCloses.some((at) => now - at <= IPTV_SESSION.busyRetryWindowMs);
+  }
+
   async openInput(id: string, options: { readonly signal: AbortSignal }): Promise<IptvInput> {
     const verdict = this.classify(id);
     if (verdict !== 'owned') {
@@ -1733,7 +1739,7 @@ export class IptvServiceImpl implements IptvService {
     const session = await this.relay.open({
       variants,
       signal: options.signal,
-      busyRetryMs: this.closedRecently() ? IPTV_SESSION.busyRetryMs : [],
+      busyRetryMs: this.closedJustNow() ? IPTV_SESSION.busyRetryMs : [],
     });
     /* Pausa, eliminar o cambio de proveedor mientras se abría (§7.4): no se
        queda una conexión viva con el proveedor ni con credenciales borradas. */

@@ -472,6 +472,21 @@ describe('relé (§6.1) y plaza (§6.5)', () => {
     await again.close();
   });
 
+  it('ocupada por otro aparato con nuestro cierre de hace más de 20 s: iptv_busy al momento, sin esperar 14 s (§19)', async () => {
+    const r = await rig();
+    await saveXtream(r);
+    const id = r.service.resolve({ channels: ['La 1'], scorer }).candidates[0]?.id as string;
+    const input = await r.service.openInput(id, { signal: signal() });
+    await input.close();
+    await waitFor('cerrado', () => r.fake.conexiones() === 0);
+    await r.core.clock.advanceAsync(21_000);
+    r.fake.modo('*', 'busy');
+    r.fake.limpiarPeticiones();
+    /* Sin avanzar el reloj: si reintentara, se quedaría esperando los 2 s del primer reintento. */
+    expect(await codeOf(r.service.openInput(id, { signal: signal() }))).toBe('iptv_busy');
+    expect(r.fake.peticionesDeStream()).toHaveLength(1);
+  });
+
   it('un id que no es del catálogo: iptv_gone sin tocar al proveedor', async () => {
     const r = await rig();
     await saveXtream(r);

@@ -477,11 +477,12 @@ interface QueryWords {
 }
 
 /* Países que alguien escribe delante, en minúsculas o mayúsculas: «es-m.laliga», «[es] dazn 1», «uk: …». */
+// prettier-ignore
 const QUERY_COUNTRIES = new Set([
   'es', 'esp', 'spa', 'uk', 'gb', 'de', 'ger', 'fr', 'fra', 'pt', 'por', 'it', 'ita', 'us', 'usa', 'mx',
   'ar', 'arg', 'co', 'cl', 'pe', 'per', 'ec', 've', 'br', 'nl', 'be', 'ch', 'at', 'pl', 'ro', 'se', 'sw',
   'no', 'dk', 'fi', 'ie', 'tr', 'ru', 'ca', 'ad',
-]); // prettier-ignore
+]);
 /* «[es] », «(es) », «es-», «es:», «es|», «es - », «|es| ». */
 const QUERY_COUNTRY_RE = /^\s*(?:[[(|]\s*(\p{L}{2,3})\s*[\])|]|(\p{L}{2,3})\s*[-–:|]+)\s*/iu;
 /* «es dazn 1», «esp la 1»: España con un espacio (otras siglas son palabras: «de», «la», «tv»). */
@@ -495,7 +496,10 @@ const QUERY_TVE_AFTER_RE = /\b(la\s*[12]|clan|24\s*h(?:oras)?|teledeporte|tdp)\s
  * cualquier caja («es-m.laliga», «[es] dazn 1», «es dazn 1») y RTVE como la agenda («la 1 tve», «tve 1» → «la
  * 1»). Devuelve el texto y el país pedido ('' España o ninguno).
  */
-export function searchQueryText(query: string): { readonly text: string; readonly country: string } {
+export function searchQueryText(query: string): {
+  readonly text: string;
+  readonly country: string;
+} {
   let text = String(query ?? '');
   let country = '';
   const prefix = QUERY_COUNTRY_RE.exec(text);

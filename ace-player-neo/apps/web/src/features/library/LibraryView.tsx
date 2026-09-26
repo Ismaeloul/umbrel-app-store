@@ -418,16 +418,15 @@ export default function LibraryView({ active }: ViewProps) {
     void requestFocus('url-lista');
   };
 
-  /* «En tu IPTV» del filtro (§14.5): los canales que no son ya una fila de esta pestaña. */
+  /* «En tu IPTV» del filtro (§14.5 y §19): los canales que no son ya una fila de esta pestaña. Una entrada de
+     AceStream de la pestaña que es ese canal no lo esconde: el canal IPTV siempre se ve. */
   const engineButton = withIptv ? bothButtonText(q) : `Buscar «${q}» en el motor AceStream`;
   const iptvData =
     withIptv && q.length >= ENGINE_SEARCH_MIN && iptvSearch.data?.query === cleanQuery(q)
       ? iptvSearch.data
       : undefined;
   const tabIds = new Set(filterItems(itemsFor(visible ?? data, tab), q).map((item) => item.id));
-  const iptvChannels = (iptvData?.channels ?? []).filter(
-    (channel) => !tabIds.has(channel.id) && !channel.library.some((id) => tabIds.has(id)),
-  );
+  const iptvChannels = (iptvData?.channels ?? []).filter((channel) => !tabIds.has(channel.id));
   const iptvShown = iptvChannels.slice(0, IPTV_SEARCH.shownInLibrary);
   const iptvSection =
     iptvShown.length > 0 ? (
@@ -454,7 +453,8 @@ export default function LibraryView({ active }: ViewProps) {
                   onScreen={onScreen === channel.id}
                   onAir={onAir(iptvRow)}
                   iptv
-                  subtitle={iptvSubtitle(channel, channel.library.length > 0)}
+                  ace={channel.library.length}
+                  subtitle={iptvSubtitle(channel)}
                   tags={iptvTags(channel)}
                   onPlay={() => actions.play(iptvRow)}
                   onToggleFavorite={() => actions.toggleFavorite(iptvRow)}

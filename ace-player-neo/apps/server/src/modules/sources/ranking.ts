@@ -236,7 +236,9 @@ export function mergeResolutionCandidates<T extends RankableCandidate>(
   /* Una IPTV (≥ 92 por su propia regla) no es «lo genérico» frente a AceStream: «La 1» de la IPTV no va detrás
      de «La 1 TVE 720p *» de una lista, que es el mismo canal con adornos (docs/iptv.md §4.6 y §18). Entre IPTV
      sí manda la regla de la marca (B-174): con una IPTV concreta, la genérica va detrás (§19). */
-  const iptvConcreta = vivas.some((candidate) => candidate.source === 'iptv' && !generica(candidate));
+  const iptvConcreta = vivas.some(
+    (candidate) => candidate.source === 'iptv' && !generica(candidate),
+  );
   const esGenerica = (candidate: T): boolean =>
     generica(candidate) && (candidate.source !== 'iptv' || iptvConcreta);
   const concretas = vivas.filter((candidate) => !esGenerica(candidate));

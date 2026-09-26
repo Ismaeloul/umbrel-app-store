@@ -1,12 +1,15 @@
-/* `mergeSearch` (docs/iptv.md §14.3): un canal, una fila. Biblioteca con
-   «IPTV» y sin repetir la fila IPTV; fila IPTV cuando no está en la
-   biblioteca; resultados del motor escondidos y contados («también en
-   AceStream»); canal fuera de los 50 → el primero del motor con «IPTV»; 5 a
-   la vista y «Ver {N} más de tu IPTV». */
+/* `mergeSearch` (docs/iptv.md §14.3 y §19): un canal, una fila, con de dónde
+   se puede ver. Un canal de tu IPTV guardado es su fila; una entrada de
+   AceStream que es un canal de tu IPTV se junta con él (nunca «IPTV» encima);
+   resultados del motor escondidos y contados («AceStream · 2»); canal fuera de
+   los 50 → el primero del motor como fila de canal; 5 a la vista y «Ver {N}
+   más de tu IPTV». */
 
 import type { IptvChannel, SearchResult } from '@ace/shared';
 import { describe, expect, it } from 'vitest';
 import {
+  aceChannelName,
+  aceTagText,
   cappedText,
   emptyTitle,
   IPTV_ID_SUBTITLE,
@@ -44,32 +47,66 @@ const result = (n: number, title: string, iptv?: string): SearchResult => ({
   ...(iptv ? { iptv } : {}),
 });
 
-describe('mergeSearch (§14.3)', () => {
-  it('la fila de tu biblioteca lleva «IPTV» y no se repite en «En tu IPTV»', () => {
+describe('mergeSearch (§14.3 y §19)', () => {
+  it('un canal de tu IPTV guardado (id IPTV) es su fila: no se repite en «En tu IPTV» y suma el AceStream del motor', () => {
     const merged = mergeSearch({
-      local: [{ id: ANTENA_FAV, title: 'Antena 3 HD' }],
-      iptv: [channel(IPTV_ANTENA, 'Antena 3', [ANTENA_FAV])],
+      local: [{ id: IPTV_ANTENA, title: 'Antena 3' }],
+      iptv: [channel(IPTV_ANTENA, 'Antena 3')],
       engine: [result(10, 'Antena 3 HD --> ELCANO', IPTV_ANTENA)],
     });
     expect(merged.local).toEqual([
-      { item: { id: ANTENA_FAV, title: 'Antena 3 HD' }, iptv: IPTV_ANTENA },
+      { item: { id: IPTV_ANTENA, title: 'Antena 3' }, iptv: IPTV_ANTENA, ace: 1 },
     ]);
     expect(merged.iptv).toEqual([]);
     expect(merged.engine).toEqual([]);
     expect(merged.hiddenEngine).toBe(1);
   });
 
-  it('un canal que no está en tu biblioteca sale en «En tu IPTV»; uno solo de la IPTV, sin «también en AceStream»', () => {
+  it('el caso de Isma: «LA 1 4K --> NEW ERA» de tu biblioteca NO lleva «IPTV»; sale el canal «La 1» en «En tu IPTV» con «AceStream»', () => {
+    const merged = mergeSearch({
+      local: [{ id: ANTENA_FAV, title: 'LA 1 4K --> NEW ERA' }],
+      iptv: [channel(IPTV_LA1, 'La 1', [ANTENA_FAV])],
+      engine: [result(20, 'La 1 HD --> ELCANO', IPTV_LA1)],
+    });
+    /* La entrada de AceStream se junta con su canal: ni fila suelta ni «IPTV» encima. */
+    expect(merged.local).toEqual([]);
+    expect(merged.iptv).toEqual([
+      {
+        channel: channel(IPTV_LA1, 'La 1', [ANTENA_FAV]),
+        ace: 2,
+        library: [ANTENA_FAV],
+        alsoAce: true,
+      },
+    ]);
+    expect(merged.hiddenEngine).toBe(1);
+  });
+
+  it('una entrada de tu biblioteca que no es de tu IPTV sale como siempre, sin «IPTV»', () => {
+    const merged = mergeSearch({
+      local: [{ id: ANTENA_FAV, title: 'Antena 3 HD' }],
+      iptv: [channel(IPTV_TELE, 'Telecinco')],
+      engine: [],
+    });
+    expect(merged.local).toEqual([
+      { item: { id: ANTENA_FAV, title: 'Antena 3 HD' }, iptv: null, ace: 0 },
+    ]);
+    expect(merged.iptv.map((row) => row.channel.title)).toEqual(['Telecinco']);
+  });
+
+  it('un canal solo de la IPTV sale en «En tu IPTV» sin AceStream', () => {
     const merged = mergeSearch({
       local: [],
       iptv: [channel(IPTV_TELE, 'Telecinco')],
       engine: [result(11, 'Teledeporte')],
     });
-    expect(merged.iptv).toEqual([{ channel: channel(IPTV_TELE, 'Telecinco'), alsoAce: false }]);
+    expect(merged.iptv).toEqual([
+      { channel: channel(IPTV_TELE, 'Telecinco'), ace: 0, library: [], alsoAce: false },
+    ]);
     expect(merged.engine.map((row) => row.result.title)).toEqual(['Teledeporte']);
+    expect(iptvSubtitle(merged.iptv[0]!.channel)).toBe('Casa');
   });
 
-  it('los resultados del motor de un canal IPTV se esconden y cuentan: «La 1» sale una vez, «también en AceStream»', () => {
+  it('los resultados del motor de un canal IPTV se esconden y cuentan: «La 1» sale una vez con «AceStream · 2»', () => {
     const merged = mergeSearch({
       local: [],
       iptv: [channel(IPTV_LA1, 'La 1')],
@@ -79,15 +116,14 @@ describe('mergeSearch (§14.3)', () => {
         result(22, 'La 10 Deportes'),
       ],
     });
-    expect(merged.iptv).toEqual([{ channel: channel(IPTV_LA1, 'La 1'), alsoAce: true }]);
+    expect(merged.iptv[0]).toMatchObject({ ace: 2, library: [] });
     expect(merged.engine.map((row) => row.result.id)).toEqual([h(22)]);
     expect(merged.hiddenEngine).toBe(2);
-    expect(iptvSubtitle(merged.iptv[0]!.channel, merged.iptv[0]!.alsoAce)).toBe(
-      'Casa · también en AceStream',
-    );
+    expect(aceTagText(2)).toBe('AceStream · 2');
+    expect(aceTagText(1)).toBe('AceStream');
   });
 
-  it('un canal IPTV fuera de los 50: el primero del motor con «IPTV» y los demás escondidos', () => {
+  it('un canal IPTV fuera de los 50: el primero del motor como fila de canal, con los demás sumados', () => {
     const merged = mergeSearch({
       local: [],
       iptv: [],
@@ -98,13 +134,16 @@ describe('mergeSearch (§14.3)', () => {
       ],
     });
     expect(merged.engine).toEqual([
-      { result: result(30, 'Deportes 1 --> A', IPTV_FUERA), iptv: IPTV_FUERA },
-      { result: result(32, 'Otra cosa'), iptv: null },
+      { result: result(30, 'Deportes 1 --> A', IPTV_FUERA), iptv: IPTV_FUERA, ace: 2 },
+      { result: result(32, 'Otra cosa'), iptv: null, ace: 1 },
     ]);
     expect(merged.hiddenEngine).toBe(1);
+    expect(aceChannelName('LA 1 4K --> NEW ERA')).toBe('LA 1');
+    expect(aceChannelName('La 1 TVE 720p *')).toBe('La 1 TVE');
+    expect(aceChannelName('DAZN 1')).toBe('DAZN 1');
   });
 
-  it('un id IPTV de tu biblioteca (iptvIds) lleva «IPTV» aunque su canal no venga en la respuesta', () => {
+  it('un id IPTV de tu biblioteca (iptvIds) es un canal de tu IPTV aunque no venga en la respuesta', () => {
     const merged = mergeSearch({
       local: [{ id: IPTV_TELE, title: 'Tele 5' }],
       iptv: null,
@@ -141,7 +180,7 @@ describe('mergeSearch (§14.3)', () => {
       '1 en tu biblioteca, 0 en tu IPTV y 0 en el motor para «tele».',
     );
     expect(emptyTitle('zzz')).toBe('Sin resultados para «zzz».');
-    expect(iptvSubtitle({ provider: 'Casa' }, false)).toBe('Casa');
+    expect(iptvSubtitle({ provider: 'Casa' })).toBe('Casa');
     expect(iptvTags({ quality: 'fhd', qualities: ['uhd', 'fhd', 'hd'], country: null })).toEqual([
       '4K',
       '1080p',

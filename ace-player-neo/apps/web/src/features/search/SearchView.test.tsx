@@ -6,6 +6,7 @@ import { routeKey } from '../../api/query.ts';
 import { resetToasts, toastStore } from '../../notices/toasts.ts';
 import { fixture, json, mockFetch, type MockCall } from '../../test/fetch.ts';
 import { getPlayer } from '../../player/api.ts';
+import { takeChannelTap } from '../library/play.ts';
 import { makeLibrary, renderWithApp, resetPlayback } from '../library/test-utils.tsx';
 import { installShortcutListener } from '../../app/shortcuts.ts';
 import SearchView from './SearchView.tsx';
@@ -351,6 +352,7 @@ describe('buscador con IPTV (docs/iptv.md §14.5)', () => {
   });
 
   function setupIptv(options: {
+    library?: ReturnType<typeof makeLibrary>;
     channels?: (q: string) => ReturnType<typeof channel>[];
     engine?: (q: string) => ReturnType<typeof result>[];
     iptvStatus?: number;
@@ -358,7 +360,7 @@ describe('buscador con IPTV (docs/iptv.md §14.5)', () => {
     capped?: boolean;
   }) {
     net = mockFetch({
-      'GET /api/v1/library': makeLibrary(),
+      'GET /api/v1/library': options.library ?? makeLibrary(),
       'GET /api/v1/search': (call) => {
         const q = new URL(call.url, 'http://x').searchParams.get('q') ?? '';
         return json({ query: q, results: options.engine?.(q) ?? [] });
@@ -429,7 +431,7 @@ describe('buscador con IPTV (docs/iptv.md §14.5)', () => {
     ).toBeInTheDocument();
   });
 
-  it('«La 1» en los dos sitios sale una vez, con «también en AceStream», y el motor no la repite', async () => {
+  it('«La 1» en los dos sitios sale una vez, con «IPTV» y «AceStream · 2», y el motor no la repite', async () => {
     setupIptv({
       channels: () => [channel(IPTV_LA1, 'La 1')],
       engine: () => [
@@ -439,21 +441,46 @@ describe('buscador con IPTV (docs/iptv.md §14.5)', () => {
     });
     type('la 1');
     const section = await screen.findByRole('region', { name: /^En tu IPTV/ });
-    expect(within(section).getByText('Casa · también en AceStream')).toBeInTheDocument();
+    const row = within(section).getByRole('link', { name: 'La 1' }).closest('article')!;
+    expect(within(row).getByText('Casa')).toBeInTheDocument();
+    expect(within(row).getByText('IPTV')).toBeInTheDocument();
+    expect(await within(row).findByText('AceStream · 2')).toBeInTheDocument();
     await waitFor(() =>
       expect(net.calls.some((c) => c.url.startsWith('/api/v1/search'))).toBe(true),
     );
     expect(screen.queryByRole('link', { name: 'La 1 HD --> ELCANO' })).toBeNull();
-    /* La biblioteca de muestra tiene «La 1» en la lista: sale en «En tu biblioteca». */
-    expect(screen.getAllByRole('link', { name: 'La 1' }).length).toBeGreaterThan(0);
   });
 
-  it('un canal de tu biblioteca que está en tu IPTV lleva «IPTV» y no sale otra vez en «En tu IPTV»', async () => {
-    const dazn = makeLibrary().favorites[0]!;
-    setupIptv({ channels: () => [channel(IPTV_DAZN, 'DAZN 1', [dazn.id])] });
+  it('el caso de Isma (§19): tu «LA 1 4K --> NEW ERA» de AceStream no lleva «IPTV»; el canal «La 1» sale en «En tu IPTV» con las dos etiquetas y al tocarlo va la IPTV con tu AceStream de respaldo', async () => {
+    const library = makeLibrary();
+    const mine = { ...library.favorites[0]!, title: 'LA 1 4K --> NEW ERA' };
+    setupIptv({
+      channels: () => [channel(IPTV_LA1, 'La 1', [mine.id])],
+      library: { ...library, favorites: [mine, ...library.favorites.slice(1)] },
+    });
+    type('la 1');
+    const section = await screen.findByRole('region', { name: /^En tu IPTV/ });
+    const row = within(section).getByRole('link', { name: 'La 1' }).closest('article')!;
+    expect(within(row).getByText('IPTV')).toBeInTheDocument();
+    expect(within(row).getByText('AceStream')).toBeInTheDocument();
+    /* Tu entrada de AceStream no sale suelta con «IPTV» encima: se junta con su canal. */
+    expect(screen.queryByRole('link', { name: 'LA 1 4K --> NEW ERA' })).toBeNull();
+    fireEvent.click(within(row).getByRole('link', { name: 'La 1' }));
+    const tap = takeChannelTap(IPTV_LA1);
+    expect(tap).toMatchObject({ hash: IPTV_LA1, iptv: IPTV_LA1, ace: [mine.id] });
+  });
+
+  it('un canal de tu IPTV guardado en tu biblioteca es su fila, con «IPTV», y no sale otra vez en «En tu IPTV»', async () => {
+    const library = makeLibrary();
+    const saved = { ...library.favorites[0]!, id: IPTV_DAZN, title: 'DAZN 1', category: 'IPTV' };
+    setupIptv({
+      channels: () => [channel(IPTV_DAZN, 'DAZN 1')],
+      library: { ...library, favorites: [saved], iptvIds: { [IPTV_DAZN]: 'ok' } },
+    });
     type('dazn');
     const local = await screen.findByRole('region', { name: 'En tu biblioteca' });
     await waitFor(() => expect(within(local).getAllByText('IPTV').length).toBeGreaterThan(0));
+    expect(within(local).getByText('Tu IPTV')).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: /^En tu IPTV/ })).toBeNull();
   });
 

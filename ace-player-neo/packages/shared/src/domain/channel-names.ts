@@ -63,7 +63,9 @@ export function channelSpelling(value: string): string {
   let text = String(value ?? '');
   if (!text) return text;
   text = text.replace(MOVISTAR_PREFIX_RE, 'Movistar ');
-  text = text.replace(/\bla\s*liga\s*(?:\+|plus\b)/giu, 'LaLigaPlus ').replace(/\bla\s*liga\b/giu, 'LaLiga');
+  text = text
+    .replace(/\bla\s*liga\s*(?:\+|plus\b)/giu, 'LaLigaPlus ')
+    .replace(/\bla\s*liga\b/giu, 'LaLiga');
   for (const [re, to] of COMPOUNDS) text = text.replace(re, to);
   for (const [re, to] of FIXED_TYPOS) text = text.replace(re, to);
   text = text.replace(REAL_RE, 'Real ').replace(INTERNATIONAL_RE, 'Internacional');

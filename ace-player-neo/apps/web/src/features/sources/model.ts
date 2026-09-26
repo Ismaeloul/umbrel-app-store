@@ -430,6 +430,11 @@ const REASON_PHRASE: Record<string, string> = {
   iptv_unsupported: 'formato no compatible',
 };
 
+/** La frase de un motivo de la IPTV («se cortó en el proveedor»), o null si no es de la IPTV (§19). */
+export function iptvReasonText(reason: string): string | null {
+  return reason.startsWith('iptv_') ? (REASON_PHRASE[reason] ?? null) : null;
+}
+
 /* Lo que se lee cuando el motivo no dice nada más. Las de «en cola» y
    «probándose» son las de la maqueta: al lado ya está la palabra del medidor,
    así que repetir «comprobando» no aportaba nada. */
@@ -1078,7 +1083,7 @@ export function resolutionSourceLabel(source: CandidateSource | string): string 
     (
       {
         saved: 'Asociación guardada',
-        m3u: 'Directorio M3U',
+        m3u: 'Lista de AceStream',
         favorites: 'Favoritos',
         history: 'Recientes',
         acestream: 'Buscador AceStream',
@@ -1095,7 +1100,7 @@ export function checkedLabel(value: string): string {
         saved: 'Vínculos',
         favorites: 'Favoritos',
         history: 'Recientes',
-        m3u: 'M3U',
+        m3u: 'Listas de AceStream',
         library: 'Biblioteca',
         acestream: 'AceStream',
         iptv: 'IPTV',

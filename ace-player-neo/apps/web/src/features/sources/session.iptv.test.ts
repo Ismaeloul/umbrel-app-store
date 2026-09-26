@@ -194,13 +194,35 @@ describe('el puente (P16.6)', () => {
     await iptvPlaying(['working', 'working', 'working']);
     const reply = failNow({ code: 'iptv_busy' });
     expect(reply.message).toBe(
-      'Tu IPTV tiene la conexión ocupada: seguimos por AceStream (fuente 2)',
+      'Tu IPTV está ocupada en otro aparato: seguimos por AceStream (fuente 2)',
     );
     // Ocupada es dudosa: «Floja», no «Sin señal».
     expect(getSession().entries[0]?.playerVerdict).toMatchObject({
       state: 'weak',
       reason: 'iptv_busy',
     });
+    // Se dice al momento y bien a la vista (§19): el toast lleva el motivo, no solo «Seguimos por AceStream».
+    expect(toasts()).toContain(
+      'Tu IPTV está ocupada en otro aparato: seguimos por AceStream (fuente 2)',
+    );
+    // Datos técnicos: suena AceStream y por qué no suena la IPTV.
+    expect(getPlayer().channel?.iptv).toBeUndefined();
+    expect(getPlayer().channel?.iptvNote).toBe('Tu IPTV está ocupada en otro aparato');
+  });
+
+  it('con la cuenta conocida dice cuántas conexiones admite (§19)', async () => {
+    queryClient.setQueryData(routeKey('iptvGet'), {
+      provider: { account: { maxConnections: 1 } },
+    });
+    await iptvPlaying(['working', 'working', 'working']);
+    const reply = failNow({ code: 'iptv_busy' });
+    expect(reply.message).toBe(
+      'Tu IPTV está ocupada en otro aparato (tu cuenta admite 1 conexión): seguimos por AceStream (fuente 2)',
+    );
+    expect(getPlayer().channel?.iptvNote).toBe(
+      'Tu IPTV está ocupada en otro aparato (tu cuenta admite 1 conexión)',
+    );
+    queryClient.removeQueries({ queryKey: routeKey('iptvGet') });
   });
 
   it('en pausa o eliminada durante la reproducción: sin toast de volver', async () => {

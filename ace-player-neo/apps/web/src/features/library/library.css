@@ -170,9 +170,23 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Distintivo «IPTV» de un canal de tu IPTV (docs/iptv.md §14.5): no encoge. */
-.ch__iptv {
+/* De dónde se puede ver (docs/iptv.md §19): «IPTV» y «AceStream», en la meta, enteras y sin encoger. */
+.ch__tags .ch__src {
+  --cap-ink: var(--text);
   flex: none;
+  max-width: none;
+  height: 18px;
+  padding: 0 6px;
+  font-size: var(--fs-caption);
+  font-weight: var(--wght-medium);
+}
+.ch__src .capsule__text {
+  overflow: visible;
+  text-overflow: clip;
+}
+.ch__src .capsule__icon {
+  width: 14px;
+  height: 14px;
 }
 .ch__fallen {
   display: inline-grid;

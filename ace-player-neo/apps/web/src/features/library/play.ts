@@ -43,6 +43,11 @@ export interface PlayRequest {
    * §14.6): se busca por él, no por el nombre que le pusiste.
    */
   alias?: string | null;
+  /**
+   * Las entradas de AceStream de tu biblioteca que son este canal IPTV (la
+   * fila de canal del buscador, §19): el respaldo si la IPTV no va.
+   */
+  ace?: readonly string[] | undefined;
 }
 
 /** Lo que se tocó, para la sesión del canal (preguntar por la IPTV y volver a él si cae). */
@@ -56,6 +61,8 @@ export interface TappedChannel {
   iptv: string | null;
   /** El nombre en tu IPTV de un id IPTV renombrado: el que se busca (§14.6). */
   alias?: string | null;
+  /** Entradas de AceStream de tu biblioteca que son este canal: el respaldo de la IPTV (§19). */
+  ace?: readonly string[];
 }
 
 /** Ventana en la que un segundo «reproducir» del mismo canal se ignora. */
@@ -103,6 +110,7 @@ export function playChannel(navigate: Navigate, request: PlayRequest): void {
       ih: request.ih,
       iptv,
       ...(request.alias ? { alias: request.alias } : {}),
+      ...(request.ace?.length ? { ace: [...request.ace] } : {}),
     };
     if (channelStarter) channelStarter(tapped);
     else pendingTap = { ...tapped, at: now };

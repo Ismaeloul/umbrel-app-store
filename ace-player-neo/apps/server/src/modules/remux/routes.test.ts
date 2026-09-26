@@ -392,7 +392,8 @@ describe('«aún no está» solo cuando falta el fichero (docs/iptv.md §19)', (
     const err = (code: string) => Object.assign(new Error(code), { code });
     expect(isMissing(err('ENOENT'))).toBe(true);
     expect(isMissing(err('ENOTDIR'))).toBe(true);
-    for (const code of ['EACCES', 'EMFILE', 'EISDIR', 'EPERM']) expect(isMissing(err(code))).toBe(false);
+    for (const code of ['EACCES', 'EMFILE', 'EISDIR', 'EPERM'])
+      expect(isMissing(err(code))).toBe(false);
     expect(isMissing(null)).toBe(false);
   });
 });

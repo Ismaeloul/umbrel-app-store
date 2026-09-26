@@ -46,16 +46,29 @@ function seconds(value: number | null | undefined): string {
   return `${value.toLocaleString('es-ES', { maximumFractionDigits: 1 })} s`;
 }
 
+/**
+ * De dónde viene lo que suena, SIEMPRE (docs/iptv.md §8.1 y §19): «IPTV · Casa
+ * · 1080p» o «AceStream · NEW ERA» (la lista o el proveedor de la fuente).
+ */
+export function originText(state: Pick<PlayerState, 'streamSource' | 'channel'>): string | null {
+  const channel = state.channel;
+  if (!channel) return null;
+  if (isIptvPlayback(state))
+    return ['IPTV', channel?.source, channel?.quality].filter(Boolean).join(' · ');
+  const source = channel?.source && channel.source !== 'AceStream' ? channel.source : '';
+  return source ? `AceStream · ${source}` : 'AceStream';
+}
+
 export function nerdRows(state: PlayerState, engineText: string): Array<[string, string]> {
   const stats = state.stats;
-  // IPTV (§8.1): «Origen: IPTV · Casa», sin pares (no hay enjambre) ni hash.
+  // IPTV (§8.1): sin pares (no hay enjambre) ni hash.
   const iptv = isIptvPlayback(state);
+  const note = !iptv ? state.channel?.iptvNote : undefined;
+  const origin = originText(state);
   return [
-    ...(iptv
-      ? ([['Origen', state.channel?.source ? `IPTV · ${state.channel.source}` : 'IPTV']] as Array<
-          [string, string]
-        >)
-      : []),
+    ...(origin ? ([['Origen', origin]] as Array<[string, string]>) : []),
+    // Suena AceStream pero el canal está en tu IPTV: por qué no suena ella (§19).
+    ...(note ? ([['IPTV', note]] as Array<[string, string]>) : []),
     ['Motor', engineText],
     ['Reproductor', state.engine ? ENGINE_NAME[state.engine] : '—'],
     ['Entrega', state.protocol ? (DELIVERY[state.protocol] ?? state.protocol) : '—'],

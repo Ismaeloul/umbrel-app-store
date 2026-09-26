@@ -27,6 +27,16 @@ describe('channelDorsal', () => {
     expect(channelDorsal('Canal 24 Horas 50 FPS')).toBe('24');
     expect(channelDorsal('TV3 HD')).toBe('3');
   });
+
+  it('se salta la reserva y la resolución escrita con «x» (§19)', () => {
+    expect(channelDorsal('M. LALIGA 1 FHD (BK-2)')).toBe('1');
+    expect(channelDorsal('M. LALIGA HD (BK-1)')).toBe('M');
+    expect(channelDorsal('M. LALIGA [BK 2]')).toBe('M');
+    expect(channelDorsal('DAZN 2 BK-1')).toBe('2');
+    expect(channelDorsal('La 1 HD 1920x1080')).toBe('1');
+    expect(channelDorsal('DAZN 1 1280×720')).toBe('1');
+    expect(channelDorsal('Canal 24 Horas')).toBe('24');
+  });
 });
 
 describe('channelAbbrev', () => {

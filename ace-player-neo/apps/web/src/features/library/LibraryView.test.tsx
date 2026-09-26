@@ -454,7 +454,7 @@ describe('filtro de Canales con IPTV (docs/iptv.md §14.5)', () => {
     expect(net.calls.filter((c) => c.url.startsWith('/api/v1/iptv/channels'))).toHaveLength(1);
   });
 
-  it('3 como mucho, sin los canales que ya son filas de la pestaña, y «Ver todo en Buscar»', async () => {
+  it('3 como mucho; el canal IPTV se ve aunque tengas su AceStream en la pestaña (§19), con «AceStream»; y «Ver todo en Buscar»', async () => {
     const library = makeLibrary();
     const dazn = library.favorites[0]!;
     setupIptv(library, [
@@ -471,7 +471,13 @@ describe('filtro de Canales con IPTV (docs/iptv.md §14.5)', () => {
       within(section)
         .getAllByRole('link')
         .map((a) => a.getAttribute('aria-label')),
-    ).toEqual(['DAZN 2', 'DAZN 3', 'DAZN 4']);
+    ).toEqual(['DAZN 1', 'DAZN 2', 'DAZN 3']);
+    const first = within(section).getAllByRole('link')[0]!.closest('article')!;
+    expect(within(first).getByText('IPTV')).toBeInTheDocument();
+    expect(within(first).getByText('AceStream')).toBeInTheDocument();
+    /* Tu favorito de AceStream sigue siendo tuyo y sin «IPTV» encima. */
+    const mine = screen.getAllByRole('link', { name: dazn.title })[0]!.closest('article')!;
+    expect(within(mine).queryByText('IPTV')).toBeNull();
     fireEvent.click(within(section).getByRole('button', { name: 'Ver todo en Buscar' }));
     expect(route()).toBe('buscar');
     expect(new URLSearchParams(location.search).get('q')).toBe('dazn');

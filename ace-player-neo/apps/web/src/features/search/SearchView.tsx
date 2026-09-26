@@ -22,12 +22,15 @@
    el canal ya está y no hace falta preguntar al motor. El texto viaja en la
    URL (`&q=`), así que la biblioteca puede mandar aquí una búsqueda hecha.
 
-   Con IPTV activa (docs/iptv.md §14): se pregunta a la vez al motor y a tu
-   IPTV (`iptvChannels`, el mismo texto confirmado) y se junta todo con
-   `mergeSearch` (iptv.ts): un canal, una fila. Entre «En tu biblioteca» y
-   «En el motor AceStream» sale «En tu IPTV» (5 a la vista y «Ver más»); un
-   canal que está en los dos sitios sale una vez con el distintivo «IPTV».
-   Tocarlo es como tocar un partido: IPTV primero y AceStream de respaldo.
+   Con IPTV activa (docs/iptv.md §14 y §19): se pregunta a la vez al motor y
+   a tu IPTV (`iptvChannels`, el mismo texto confirmado) y se junta todo con
+   `mergeSearch` (iptv.ts): un canal, una fila, y cada fila dice de dónde se
+   puede ver con etiquetas separadas: «IPTV» con sus calidades y «AceStream»
+   con cuántas fuentes. Entre «En tu biblioteca» y «En el motor AceStream»
+   sale «En tu IPTV» (5 a la vista y «Ver más»), con el canal por su nombre
+   limpio («La 1») aunque tengas en tu biblioteca una entrada de AceStream de
+   ese canal («LA 1 4K --> NEW ERA», que se junta con él). Tocar la fila de
+   un canal es como tocar un partido: IPTV primero y AceStream de respaldo.
    Sin IPTV activa, ni una llamada a `iptvChannels` y los textos de siempre. */
 
 import { IPTV_SEARCH, type Item, type SearchResult } from '@ace/shared';
@@ -60,6 +63,7 @@ import '../library/library.css';
 import { PasteHashSheet, pastedTitle } from '../paste-hash/index.ts';
 import { registerSearchDemo } from './demo.ts';
 import {
+  aceChannelName,
   emptyTitle,
   engineEmptyBelowText,
   engineEmptyText,
@@ -369,19 +373,22 @@ export default function SearchView({ active }: ViewProps) {
         </section>
       ) : null}
 
-      {!detected && local.length > 0 ? (
+      {!detected && merged.local.length > 0 ? (
         <section className="search-sec" aria-labelledby="buscar-local">
           <h2 id="buscar-local" className="search-sec__title">
             En tu biblioteca
           </h2>
           <ul className="lib-list search-local">
-            {merged.local.map(({ item, iptv }) => {
+            {merged.local.map(({ item, iptv, ace }) => {
               const idState = actions.library?.iptvIds?.[item.id];
               const channel = { ...item, iptv };
               /* Tu fila que es un canal de tu IPTV lleva también sus calidades (§16). */
               const iptvChannel = iptv
                 ? iptvData?.channels.find((candidate) => candidate.id === iptv)
                 : undefined;
+              /* De dónde se puede ver (§19): un canal de tu IPTV, «IPTV» (y «AceStream» si el motor lo
+                 tiene); una entrada de AceStream, «AceStream». Sin IPTV activa, como siempre. */
+              const aceCount = iptv ? ace : withIptv ? 1 : 0;
               return (
                 <li key={item.id} className="lib-row">
                   <ChannelRow
@@ -394,6 +401,7 @@ export default function SearchView({ active }: ViewProps) {
                     onScreen={onScreen === item.id}
                     onAir={onAir(item)}
                     iptv={iptv !== null}
+                    ace={aceCount}
                     subtitle={idState ? IPTV_ID_SUBTITLE[idState] : undefined}
                     tags={iptvChannel ? iptvTags(iptvChannel) : undefined}
                     onPlay={() => actions.play(channel, 'buscar')}
@@ -434,7 +442,7 @@ export default function SearchView({ active }: ViewProps) {
             </div>
           ) : (
             <ul className="lib-list search-local search-iptv__list">
-              {iptvRows.map(({ channel, alsoAce }) => {
+              {iptvRows.map(({ channel, ace, library }) => {
                 const row = {
                   id: channel.id,
                   title: channel.title,
@@ -452,9 +460,11 @@ export default function SearchView({ active }: ViewProps) {
                       onScreen={onScreen === channel.id}
                       onAir={onAir(row)}
                       iptv
-                      subtitle={iptvSubtitle(channel, alsoAce)}
+                      ace={ace}
+                      subtitle={iptvSubtitle(channel)}
                       tags={iptvTags(channel)}
-                      onPlay={() => actions.play(row, 'buscar')}
+                      /* IPTV primero y, de respaldo, sus AceStream de tu biblioteca (§19). */
+                      onPlay={() => actions.play(row, 'buscar', { ace: library })}
                       onToggleFavorite={() => actions.toggleFavorite(row)}
                       menuItems={actions.menuFor(row, 'search')}
                     />
@@ -544,11 +554,14 @@ export default function SearchView({ active }: ViewProps) {
               className="lib-list"
               label={`Resultados para «${phase.query}»`}
               rowClassName={() => 'lib-row'}
-              renderRow={({ result, iptv }, index) => {
+              renderRow={({ result, iptv, ace }, index) => {
                 const channel = { ...result, iptv };
+                /* Un canal de tu IPTV que no vino en su respuesta: fila de canal, con su nombre limpio y las
+                   dos etiquetas (§19). Tocarla: IPTV primero y este AceStream de respaldo. */
+                const item = iptv ? { ...result, title: aceChannelName(result.title) } : result;
                 return (
                   <ChannelRow
-                    item={result}
+                    item={item}
                     kind="search"
                     availability={result.availability}
                     href={searchFor({ vista: 'partido', id: null, canal: result.id })}
@@ -556,6 +569,7 @@ export default function SearchView({ active }: ViewProps) {
                     onScreen={onScreen === result.id}
                     onAir={onAir(result)}
                     iptv={iptv !== null}
+                    ace={iptv ? ace : 0}
                     onPlay={() => actions.play(channel, 'buscar')}
                     onToggleFavorite={() => actions.toggleFavorite(result)}
                     menuItems={actions.menuFor(result, 'search')}
