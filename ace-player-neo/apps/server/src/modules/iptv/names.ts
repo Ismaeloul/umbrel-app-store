@@ -28,9 +28,29 @@
       compartido, que tiene la matriz 0.6.59 congelada): «la liga» → «laliga»
       y los alias curados `IPTV_CHANNEL_ALIASES`.
    6. Lo que queda es `base`, que pasa por `channelMatchScore`. `display` es
-      lo mismo sin las grafías (lo que se enseña: «DAZN LaLiga»). */
+      lo mismo sin las grafías (lo que se enseña: «DAZN LaLiga»).
 
-import { normalizeChannelKey, type IptvQuality } from '@ace/shared';
+   Con la lista real de Isma (26-sep, docs/iptv.md §17) se suma:
+   - Filas que no son canales (`filler`): cabeceras «##### … #####» y «NO
+     MATCH». El catálogo no las guarda: ni se buscan ni se emparejan.
+   - Filas de evento con horario («ESPN PLUS 12 : SOCCER … 3:00 PM ET»):
+     `event`, que el buscador pone al final.
+   - País: «ES TI - » (la segunda sigla es la plataforma), «ES-M.LALIGA»
+     pegado, la «Ñ» suelta del final («BEIN SPORTS Ñ») y las categorías
+     `CONTINENTE | PAÍS | TEMA` («EU | ES | TDT»: el país es ES, no EU).
+   - Fuera del nombre: ᴿᴬᵂ (reserva: otro feed del mismo canal), ᵛᶦᵖ y los
+     demás superíndices, «4K/UHD», las notas entre corchetes o paréntesis
+     («[ PREMIERELEAGUE ]», «(SOLO EVENTOS)», «[NOT 24/7]»), la reserva
+     «(BK-1)» / «BK-1» (antes se leía «M. LALIGA ( -1)» y se juntaba con
+     M. LALIGA 1), el «#» delante de palabra y los asteriscos.
+   - La grafía única de `channelSpelling` (@ace/shared): «M.», «M+»,
+     «MOVISTAR PLUS+»… → «Movistar»; «LA SEXTA» = «LASEXTA»; «LALIGA+» →
+     «LaLiga Plus»; «SUPER CUPA» → «Supercopa»; «R. MADRID» → «Real Madrid».
+   - `platform`: VIX, Pluto TV, Rakuten TV, GOLD TV 24/7… (por el nombre o
+     la categoría). No se emparejan por nombre con la agenda (su «LA LIGA 1»
+     no es «M+ LaLiga TV») y el buscador las pone detrás. */
+
+import { channelSpelling, normalizeChannelKey, type IptvQuality } from '@ace/shared';
 
 export interface CleanIptvTitle {
   /** Nombre para enseñar, sin país, adornos, calidad ni reserva. */
@@ -45,6 +65,12 @@ export interface CleanIptvTitle {
   readonly country: string | null;
   /** El número de copia quitado del final («(2)» → 2), o null. */
   readonly mirror: number | null;
+  /** No es un canal: cabecera «##### … #####» o «NO MATCH» (docs/iptv.md §17). */
+  readonly filler: boolean;
+  /** Fila de un evento con horario («ESPN PLUS 12 : … 3:00 PM ET»). */
+  readonly event: boolean;
+  /** Plataforma de internet por el nombre o la categoría («vix», «pluto», «rakuten»…), o null. */
+  readonly platform: string | null;
 }
 
 export interface CleanOptions {
@@ -58,13 +84,16 @@ export interface CleanOptions {
 
 const ES_CODES = new Set(['ES', 'ESP', 'SPA', 'SP', 'ESPAÑA', 'ESPANA', 'SPAIN']);
 
-/* «ES: », «|ES| », «[ES] », «(ES) », «ES - », «ESPAÑA | », «ES • ». */
-const TITLE_COUNTRY_RE = /^\s*[|[(]?\s*([A-Z]{2,3}|ESPAÑA|ESPANA|SPAIN)\s*[|\]):\-–•·▎┃]+\s*/u;
+/* «ES: », «|ES| », «[ES] », «(ES) », «ES - », «ESPAÑA | », «ES • », «ES TI - » (la segunda sigla es la plataforma). */
+const TITLE_COUNTRY_RE =
+  /^\s*[|[(]?\s*([A-Z]{2,3}|ESPAÑA|ESPANA|SPAIN)(?:\s+[A-Z]{2,3})?\s*[|\]):\-–•·▎┃]+\s*/u;
 /* España al final, entre corchetes, paréntesis o barras: «DAZN 1 [ES]», «DAZN 1 |ES|», «DAZN 1 (ESP)». */
 const TITLE_SPAIN_SUFFIX_RE = /\s*[|[(]\s*(?:ES|ESP|SPA|ESPAÑA|ESPANA|SPAIN)\s*[|\])]?\s*$/u;
 /* Grupo o categoría: «ES | DEPORTES», «ES: DEPORTES», «UK| SPORTS», «SPAIN SPORTS», «España». */
 const GROUP_COUNTRY_RE = /^\s*[|[(]?\s*([A-Z]{2,3})\s*[|\]):\-–]/u;
 const GROUP_SPAIN_RE = /^\s*[|[(]?\s*(?:españa|espana|spain)\b/iu;
+/* El primer tramo de «EU | ES | TDT» es el continente: el país va en el segundo. */
+const CONTINENTS = new Set(['EU', 'AM', 'AS', 'AF', 'OC', 'EUR', 'AME', 'LATAM']);
 /*
  * Lo que va delante como un país sin serlo: una marca («VIP | ES: …»), una
  * calidad («FHD | ES: …», que cuenta como calidad) o un grupo («XXX |
@@ -88,11 +117,34 @@ const NOT_COUNTRY: Readonly<Record<string, IptvQuality | null>> = {
 
 /* Superíndices de calidad. */
 const SUPERSCRIPT_QUALITY: readonly (readonly [RegExp, IptvQuality])[] = [
-  [/ᵁᴴᴰ/gu, 'uhd'],
+  [/ᵁᴴᴰ|⁴ᴷ/gu, 'uhd'],
   [/ᶠᴴᴰ/gu, 'fhd'],
   [/ᴴᴰ/gu, 'hd'],
   [/ˢᴰ/gu, 'sd'],
 ];
+/* «ᴿᴬᵂ»: el feed en crudo del mismo canal (reserva). */
+const SUPERSCRIPT_RAW_RE = /ᴿᴬᵂ/gu;
+/* Cualquier otra tira de superíndices («ᵛᶦᵖ», «ᴺᴱᵂ»): adorno. */
+const SUPERSCRIPT_RE = /[\u1D2C-\u1D6A\u1D9B-\u1DBF\u2070-\u209F]+/gu;
+
+/* Cabeceras y huecos de la lista: «##### ES - M. LALIGA #####», «==== CINE ====», «XX - NO MATCH». */
+const FILLER_RE =
+  /^\s*([#=*~_★☆•-])\1{2,}.*\1{2,}\s*$|^\s*(?:[A-Z]{2,4}\s*[-|:]\s*)?NO\s+(?:MATCH|EVENT)S?\s*$/iu;
+/* Fila de evento con horario: «ESPN PLUS 12 : SOCCER: … SEP 25 – 3:00 PM ET / 8:00 PM UK». */
+const EVENT_RE = /\s:\s.*(?:\b\d{1,2}:\d{2}\s*(?:AM|PM)\b|\b(?:ET|UK|CET)\s*$)/iu;
+/* Notas entre corchetes o paréntesis que no cambian el canal. */
+const NOTE_RE =
+  /[([]\s*(?:solo\s+eventos?|only\s+events?|not\s*24\s*\/\s*7|24\s*\/\s*7|live\s*event|premiere?\s*league)\s*[)\]]/giu;
+/* La reserva escrita «(BK-1)», «[BK 2]», «BK-1» (el número es de la reserva, no del canal). */
+const BACKUP_TAG_RE =
+  /[([]\s*(?:bk|bkp|backup)\s*[-_]?\s*\d{0,2}\s*[)\]]|\bbk\s*[-_]\s*\d{1,2}\b/giu;
+/* La «Ñ» suelta del final marca la versión española («BEIN SPORTS Ñ»). */
+const SPAIN_LETTER_RE = /\s+Ñ\s*$/u;
+/* Plataformas de internet por el nombre («VIX - …», «Pluto TV …») o por la categoría. */
+const PLATFORM_TITLE_RE =
+  /^\s*(vix|pluto\s*tv|rakuten(?:\s*tv)?|gold\s*tv(?:\s*24\s*\/\s*7)?|samsung\s*tv\s*plus)\b/iu;
+const PLATFORM_GROUP_RE =
+  /\b(vix|pluto(?:\s*tv)?|rakuten(?:\s*tv)?|gold\s*tv|samsung\s*tv\s*plus|fast\s*channels?)\b/iu;
 
 /* Con los fps pegados («1080p50», «720p60») y el «+» de «HD+». */
 const QUALITY_TOKENS: readonly (readonly [RegExp, IptvQuality])[] = [
@@ -115,7 +167,7 @@ const MIRROR_RE = /\s*[([]\s*(\d{1,2})\s*[)\]]\s*$/u;
 
 /* Emojis, banderas (indicadores regionales) y adornos. */
 const EMOJI_RE = /\p{Extended_Pictographic}|[\u{1F1E6}-\u{1F1FF}]|\u{FE0F}|\u{200D}/gu;
-const DECOR_RE = /[★☆◉●○◆◇■□▶►▷▸•·|✪✦✧⚽▎┃]/gu;
+const DECOR_RE = /[★☆◉●○◆◇■□▶►▷▸•·|✪✦✧⚽▎┃*]/gu;
 
 /**
  * Alias curados, pocos y con test (docs/iptv.md §4.2). Clave y valor van ya
@@ -127,13 +179,34 @@ export const IPTV_CHANNEL_ALIASES: Readonly<Record<string, string>> = {
   'laliga hypermotion': 'LaLiga TV Hypermotion',
   'movistar laliga': 'M+ LaLiga TV',
   'movistar liga de campeones': 'M+ Liga de Campeones',
+  /* La agenda dice «TVG»; la lista, «TV GALICIA» (o «ES TI - TVG»). «TVG 2» es otro canal. */
+  tvg: 'TV Galicia',
 };
 
-/** «la liga» (con o sin espacio, en cualquier caja) → «LaLiga». */
+/**
+ * La grafía de la IPTV para emparejar: `channelSpelling` (Movistar, LaLiga,
+ * compuestos…) y los alias curados. «M+ La Liga» → «M+ LaLiga TV».
+ */
 export function iptvSpelling(value: string): string {
-  const joined = value.replace(/\bla\s*liga\b/giu, 'LaLiga');
-  const key = normalizeChannelKey(joined);
-  return IPTV_CHANNEL_ALIASES[key] ?? joined;
+  const spelled = channelSpelling(value);
+  const key = normalizeChannelKey(spelled);
+  return IPTV_CHANNEL_ALIASES[key] ?? spelled;
+}
+
+/*
+ * Lo que escribe una persona en el buscador: «m laliga» o «mov laliga» es
+ * Movistar (en una lista, «M LALIGA» sin punto no se toca: podría ser otra
+ * cosa).
+ */
+const SEARCH_MOVISTAR_RE = /^\s*(?:m|mov)\s+(?=[\p{L}\p{N}])/iu;
+
+/**
+ * La grafía para el BUSCADOR (docs/iptv.md §17): `channelSpelling` sin los
+ * alias curados del emparejado (que añadían palabras: «movistar laliga» →
+ * «M+ LaLiga TV» buscaba también «tv» y daba 0).
+ */
+export function iptvSearchSpelling(value: string): string {
+  return channelSpelling(String(value ?? '').replace(SEARCH_MOVISTAR_RE, 'Movistar '));
 }
 
 /** País de un código o nombre (ES para las formas de España). */
@@ -144,9 +217,16 @@ export function countryCode(value: string): string {
 
 /** País que declara un grupo o categoría, o null. */
 export function groupCountry(group: string | null | undefined): string | null {
-  const text = String(group ?? '');
+  const text = String(group ?? '').replace(/\u00a0/g, ' ');
   if (!text) return null;
   if (GROUP_SPAIN_RE.test(text)) return 'ES';
+  /* «EU | ES | TDT», «AM | USA | ESPN PLUS»: el país es el segundo tramo. */
+  const parts = text.split('|').map((part) => part.trim().toUpperCase());
+  if (parts.length >= 2 && CONTINENTS.has(parts[0] as string)) {
+    const code = parts[1] as string;
+    if (!/^[A-Z]{2,4}$/.test(code) || Object.hasOwn(NOT_COUNTRY, code)) return null;
+    return countryCode(code);
+  }
   const match = GROUP_COUNTRY_RE.exec(text);
   if (!match?.[1] || Object.hasOwn(NOT_COUNTRY, match[1])) return null;
   return countryCode(match[1]);
@@ -164,10 +244,29 @@ export function countryBucket(country: string | null): string {
 function collapse(value: string): string {
   return value
     .replace(/\(\s*\)|\[\s*\]|\{\s*\}/g, ' ')
-    .replace(/\s*[-–:]\s*$/u, '')
-    .replace(/^\s*[-–:]\s*/u, '')
+    .replace(/(?:\s*[-–:/]\s*)+$/u, '')
+    .replace(/^(?:\s*[-–:/]\s*)+/u, '')
+    .replace(/\s+\/\s+(?=\S)/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/** ¿Es la fila de un evento con horario («ESPN PLUS 12 : … 3:00 PM ET / 8:00 PM UK»)? */
+export function isEventTitle(title: string): boolean {
+  return EVENT_RE.test(String(title ?? ''));
+}
+
+/** ¿Es una fila que no es un canal (cabecera «##### … #####», «NO MATCH»)? */
+export function isFillerTitle(title: string): boolean {
+  return FILLER_RE.test(String(title ?? ''));
+}
+
+/** Plataforma de internet de un canal por su nombre o su categoría, o null. */
+export function iptvPlatform(title: string, group?: string | null): string | null {
+  const byTitle = PLATFORM_TITLE_RE.exec(String(title ?? ''));
+  const match = byTitle ?? PLATFORM_GROUP_RE.exec(String(group ?? '').replace(/\u00a0/g, ' '));
+  if (!match?.[1]) return null;
+  return match[1].toLowerCase().split(/\s+/)[0] || null;
 }
 
 /* Quita lo que case con `re` (global) y dice si había algo. */
@@ -186,15 +285,20 @@ export function cleanIptvTitle(
   group?: string | null,
   options: CleanOptions = {},
 ): CleanIptvTitle {
-  let text = String(title ?? '').normalize('NFC');
+  const raw = String(title ?? '').normalize('NFC');
+  let text = raw;
   let country: string | null = null;
   let quality: IptvQuality | null = null;
+  const filler = isFillerTitle(raw);
+  const event = EVENT_RE.test(raw);
 
   for (const [re, value] of SUPERSCRIPT_QUALITY) {
     const step = strip(text, re);
     text = step.text;
     if (step.found) quality ??= value;
   }
+  const rawFeed = strip(text, SUPERSCRIPT_RAW_RE);
+  text = rawFeed.text.replace(SUPERSCRIPT_RE, ' ');
   text = text.replace(EMOJI_RE, ' ');
   /* El país va delante (o, entre corchetes o barras, al final); se mira antes
      de quitar las barras de adorno. Delante puede haber marcas que no lo son. */
@@ -215,7 +319,9 @@ export function cleanIptvTitle(
     country ??= 'ES';
     text = text.slice(0, suffix.index);
   }
-  text = text.replace(DECOR_RE, ' ');
+  text = text.replace(NOTE_RE, ' ');
+  const backupTag = strip(text, BACKUP_TAG_RE);
+  text = backupTag.text.replace(DECOR_RE, ' ').replace(/#(?=[\p{L}\p{N}])/gu, '');
   const hevcStep = strip(text, HEVC_RE);
   text = hevcStep.text;
   const hevc = hevcStep.found;
@@ -227,6 +333,11 @@ export function cleanIptvTitle(
   }
   const backupStep = strip(text, BACKUP_RE);
   text = collapse(backupStep.text);
+  const spainLetter = SPAIN_LETTER_RE.exec(text);
+  if (spainLetter && spainLetter.index > 0) {
+    country ??= 'ES';
+    text = text.slice(0, spainLetter.index);
+  }
   /* «(1)», «(2)» al final: la misma señal repetida en la lista; de la segunda en adelante, reserva. */
   let mirror: number | null = null;
   const copy = MIRROR_RE.exec(text);
@@ -240,6 +351,8 @@ export function cleanIptvTitle(
   if (geo) text = text.slice(0, geo.index);
   const backup =
     backupStep.found ||
+    backupTag.found ||
+    rawFeed.found ||
     (mirror !== null && mirror >= 2 && !options.keepMirror) ||
     Boolean(geo?.[1]);
   const display = collapse(text);
@@ -254,25 +367,54 @@ export function cleanIptvTitle(
     hevc,
     country,
     mirror,
+    filler,
+    event,
+    platform: iptvPlatform(raw, group),
   };
 }
 
 /* Plataformas de internet, no canales de televisión: «RTVE Play», «LPF Play», «DAZN App Gratis», «Real Betis TV
-   YouTube», «OneFootball PPV»… Con ellas no se sabe qué canal IPTV es (en una lista hay decenas de «En Play»). */
+   YouTube», «OneFootball PPV», «Disney+», «Prime Video», «Apple TV», «FANSEAT»… Con ellas no se sabe qué canal
+   IPTV es (en una lista hay decenas de «En Play», y «Disney+» casaba con «DISNEY CHANNEL»). «Movistar Plus+» es un
+   canal, no una plataforma. */
 const PLATFORM_RE =
-  /\b(?:play|app|youtube|twitch|facebook|twitter|instagram|tiktok|ppv|web|online)\b|@/iu;
+  /\b(?:play|app|youtube|twitch|facebook|twitter|instagram|tiktok|ppv|web|online|netflix|skyshowtime|filmin|atresplayer|mitele|fanseat|fanplay|peacock|hbo\s*max|prime\s*video|amazon\s*prime|apple\s*tv|vix|pluto\s*tv|rakuten)\b|\bparamount\s*\+|\bdisney\s*(?:\+|plus\b)|^\s*max\s*$|[a-z]play\b|@/iu;
 /* La cadena detrás del canal en la agenda: «La 1 TVE», «Clan RTVE». */
 const BROADCASTER_SUFFIX_RE = /\s+r?tve$/iu;
+/* … y en medio, detrás de un canal de RTVE: «La 1 TVE 720p *» (biblioteca de AceStream). */
+const BROADCASTER_INNER_RE = /\b(la\s*[12]|clan|24\s*h(?:oras)?|teledeporte|tdp)\s+r?tve\b/giu;
+/* Lo que las listas de AceStream ponen detrás de la flecha: « --> NEW ERA». */
+const ACE_PROVIDER_RE = /\s*(?:--?>|={1,2}>|[→⇒➜➝⟶⟹]).*$/u;
 
 /**
- * Cómo busca la IPTV un canal de la agenda (docs/iptv.md §4.3): null si es una plataforma de internet (no se
- * empareja por nombre: solo la guía puede confirmarla) y sin la cadena del final («La 1 TVE» → «La 1»), que las
- * listas no ponen. Solo para la IPTV: el emparejado de AceStream no cambia.
+ * Un nombre de canal de las listas de AceStream (o de la agenda) listo para
+ * compararlo con la IPTV (docs/iptv.md §17): sin lo que va tras la flecha
+ * («LA 1 4K --> NEW ERA» → «LA 1»), sin asteriscos, sin marcas de calidad,
+ * códec ni fotogramas en cualquier sitio («La 1 TVE 720p *» → «La 1»), y sin
+ * «TVE»/«RTVE» detrás de un canal de RTVE. Si no queda nada, el original.
+ */
+export function aceChannelTitle(title: string): string {
+  const original = String(title ?? '').trim();
+  let text = original.replace(ACE_PROVIDER_RE, ' ').replace(/[*]+/g, ' ');
+  text = text.replace(HEVC_RE, ' ').replace(FPS_RE, ' ').replace(TECH_RE, ' ');
+  for (const [re] of QUALITY_TOKENS) text = text.replace(re, ' ');
+  text = text.replace(BROADCASTER_INNER_RE, '$1');
+  text = collapse(text).replace(BROADCASTER_SUFFIX_RE, '').trim();
+  return text || original;
+}
+
+/**
+ * Cómo busca la IPTV un canal de la agenda o de una lista de AceStream (docs/iptv.md §4.3 y §17): null si es una
+ * plataforma de internet (no se empareja por nombre: solo la guía puede confirmarla), limpio como
+ * `aceChannelTitle` y sin la cadena del final («La 1 TVE» → «La 1»), que las listas no ponen. Solo para la IPTV:
+ * el emparejado de AceStream no cambia.
  */
 export function iptvAskedChannel(channel: string): string | null {
   const text = String(channel ?? '').trim();
-  if (!text || PLATFORM_RE.test(text)) return null;
-  return text.replace(BROADCASTER_SUFFIX_RE, '').trim() || text;
+  if (!text) return null;
+  const clean = aceChannelTitle(text);
+  if (PLATFORM_RE.test(clean)) return null;
+  return clean;
 }
 
 /**

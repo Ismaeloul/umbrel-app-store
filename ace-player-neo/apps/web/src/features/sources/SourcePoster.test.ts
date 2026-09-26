@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { entryFromCandidate, presentationOf, type SourceEntry, type SourceProbe } from './model.ts';
-import { posterTagsOf } from './SourcePoster.tsx';
+import { posterNameOf, posterTagsOf } from './SourcePoster.tsx';
 import { candidate } from './test-utils.ts';
 
 const NOW = Date.parse('2026-09-23T19:00:00.000Z');
@@ -35,13 +35,13 @@ describe('posterTagsOf', () => {
     expect(posterTagsOf(rowOf(entry))).toEqual([
       { kind: 'quality', label: '1080p' },
       { kind: 'quality', label: 'HEVC' },
-      { kind: 'type', label: 'M3U' },
+      { kind: 'type', label: 'AceStream' },
     ]);
   });
 
   it('sin medir, solo el tipo', () => {
     expect(posterTagsOf(rowOf(entryFromCandidate(candidate(1), NOW)))).toEqual([
-      { kind: 'type', label: 'M3U' },
+      { kind: 'type', label: 'AceStream' },
     ]);
   });
 
@@ -65,5 +65,33 @@ describe('posterTagsOf', () => {
     const row = rowOf(saved);
     expect(row.presentation.short).toBe('Guardada');
     expect(posterTagsOf(row)).toEqual([]);
+  });
+});
+
+describe('posterNameOf (§17)', () => {
+  it('la IPTV «La 1 TVE 720p»: el nombre sin la calidad, que ya va en su etiqueta', () => {
+    const entry = entryFromCandidate(
+      candidate(1, {
+        source: 'iptv',
+        listaId: null,
+        title: 'La 1 TVE 720p',
+        matchedChannel: 'La 1',
+        iptv: { provider: 'Casa', quality: 'hd', backup: false, guide: false },
+      }),
+      NOW,
+    );
+    const row = rowOf(entry);
+    expect(posterTagsOf(row).map((tag) => tag.label)).toEqual(['720p', 'IPTV']);
+    expect(posterNameOf(row)).toBe('La 1 TVE');
+  });
+
+  it('AceStream medida: sin «1080p» ni los asteriscos de copia; sin medir, la calidad se queda', () => {
+    const measured: SourceEntry = {
+      ...entryFromCandidate(candidate(1, { title: 'DAZN 2 1080p ** --> Faro' }), NOW),
+      probe: { ...PROBE, rateKbps: 4200 },
+    };
+    expect(posterNameOf(rowOf(measured))).toBe('DAZN 2');
+    const unmeasured = entryFromCandidate(candidate(1, { title: 'DAZN 2 1080p * --> Faro' }), NOW);
+    expect(posterNameOf(rowOf(unmeasured))).toBe('DAZN 2 1080p');
   });
 });

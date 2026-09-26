@@ -36,6 +36,7 @@ import { redactText } from '../../core/logger.js';
 import { buildRemuxArgs } from './args.js';
 import { elegirSesionRemuxADesalojar, type EvictionCandidate } from './eviction.js';
 import {
+  NOT_YET_HEADERS,
   parseByteRange,
   readPlaylistStats,
   rewritePlaylist,
@@ -633,14 +634,19 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       if (!VIDEO_FILE_RE.test(file)) throw new AppError('not_found');
       touch(entry, options.deviceId ?? null);
       const full = path.join(entry.dir, file);
-      const send = { rangeHeader: options.rangeHeader, head: options.head };
-      if (file === 'index.m3u8' && options.videoToken) {
+      /* La lista de un remux que arranca o se reinicia puede no estar todavía: «aún no está» (503 con
+         Retry-After), no un error (docs/iptv.md §17). */
+      const playlist = file === 'index.m3u8';
+      const send = { rangeHeader: options.rangeHeader, head: options.head, notYet: playlist };
+      if (playlist && options.videoToken) {
         let text: string | null = null;
         try {
           text = await readFile(full, 'utf8');
         } catch {}
         if (text === null) {
-          await sendBare(reply, 404, { 'cache-control': 'no-store' });
+          /* La app nativa (con ?t=) sigue recibiendo el 404 de siempre (su reproductor ya lo reintenta),
+             ahora con Retry-After. */
+          await sendBare(reply, 404, { ...NOT_YET_HEADERS });
           return;
         }
         await sendBuffer(reply, full, Buffer.from(rewritePlaylist(text, options.videoToken)), send);
@@ -672,8 +678,10 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
         await sendBare(reply, 403);
         return;
       }
-      const seen = await sendFile(reply, file, options);
-      if (seen && entry && path.basename(file) === 'index.m3u8') noteObservation(entry, seen);
+      /* Con la sesión viva, su lista que aún no está es «aún no está» (503), no 404 (docs/iptv.md §17). */
+      const playlist = path.basename(file) === 'index.m3u8';
+      const seen = await sendFile(reply, file, { ...options, notYet: playlist && !!entry });
+      if (seen && entry && playlist) noteObservation(entry, seen);
     },
 
     async legacyStop(body) {

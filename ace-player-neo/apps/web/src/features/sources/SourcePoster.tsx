@@ -11,7 +11,7 @@
    2. el anillo de estado con su palabra, en su línea (SignalRing:
       Verificada · Floja · Comprobando · Pendiente · Sin señal · Reportada);
    3. los datos técnicos en SU línea, una etiqueta por dato («1080p»,
-      «HEVC», «M3U»/«IPTV»; posterTagsOf): siempre enteros, pasan a la línea
+      «HEVC», «AceStream»/«IPTV»; posterTagsOf): siempre enteros, pasan a la línea
       siguiente si no caben y nunca con «…»; sin datos, la línea no sale;
    4. la frase humana solo si no repite la palabra del estado
       (posterDetailOf).
@@ -31,6 +31,7 @@
    «Copiar hash» ni «Abrir en la app de AceStream»: no es un hash de AceStream. */
 
 import { useEffect, useRef, type CSSProperties, type KeyboardEvent } from 'react';
+import { stripQualityMarks } from '@ace/shared';
 import { cx } from '../../lib/cx.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { acestreamLink, copyText, openExternal } from '../../player/clipboard.ts';
@@ -108,13 +109,20 @@ export function rowMenu(row: SourceRow, inMatch: boolean): MenuItem[] {
   return items;
 }
 
-/** Lo que va debajo del cartel: el canal sin el proveedor que ya lleva la tesela. */
+/**
+ * Lo que va debajo del cartel: el canal sin el proveedor que ya lleva la
+ * tesela y, si la calidad ya sale en su etiqueta, sin la marca de calidad ni
+ * los asteriscos de copia (Isma, 26-sep; docs/iptv.md §17): «La 1 TVE 720p
+ * *» → «La 1 TVE».
+ */
 export function posterNameOf(row: Pick<SourceRow, 'entry' | 'presentation'>): string {
   const { short, provider, list } = row.presentation;
-  return channelNameWithoutProvider(channelNameOf(row.entry), [short, provider, list]);
+  const name = channelNameWithoutProvider(channelNameOf(row.entry), [short, provider, list]);
+  const bare = name.replace(/(?:\s*\*)+\s*$/u, '').trim() || name;
+  return qualityTags(row.entry).length ? stripQualityMarks(bare) : bare;
 }
 
-/** Una etiqueta del cartel: la calidad («1080p», «HEVC») o el tipo de fuente («M3U», «IPTV»). */
+/** Una etiqueta del cartel: la calidad («1080p», «HEVC») o el tipo de fuente («AceStream», «IPTV»). */
 export interface PosterTag {
   kind: 'quality' | 'type';
   label: string;
@@ -124,7 +132,7 @@ export interface PosterTag {
  * Los datos técnicos del cartel, uno por etiqueta y en este orden: la
  * calidad (definición, códec, «reserva») y el tipo de fuente. El tipo no se
  * repite si ya es lo que lleva la tesela (una fuente sin proveedor ni lista
- * enseña «Guardada» o «M3U» dentro). Vacío: el cartel no pinta la línea.
+ * enseña «Guardada» o «AceStream» dentro). Vacío: el cartel no pinta la línea.
  */
 export function posterTagsOf(row: Pick<SourceRow, 'entry' | 'presentation'>): PosterTag[] {
   const { type, short } = row.presentation;

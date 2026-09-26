@@ -206,7 +206,8 @@ export class CatalogBuilder {
     const order = this.order++;
     if (this.byId.has(channel.id)) return;
     const clean = cleanIptvTitle(channel.title, channel.group);
-    if (!clean.key) return;
+    /* Cabeceras «##### … #####» y «NO MATCH» no son canales (docs/iptv.md §17): ni se buscan ni se emparejan. */
+    if (!clean.key || clean.filler) return;
     const entry = new CatalogEntry(
       channel.id,
       channel.title,

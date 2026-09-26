@@ -129,12 +129,13 @@ describe('searchCatalog (§14.3)', () => {
       ['DAZN 1', '', 5],
       ['DAZN 1', 'DE', 1],
     ]);
-    /* «DAZN 2» y «DAZN F1» son otros canales (otras filas con «dazn»). */
-    expect(searchCatalog(c, 'dazn').groups.map((group) => group.key)).toEqual([
-      'dazn 1',
-      'dazn 1',
-      'dazn 2',
-      'dazn f1',
+    /* «DAZN 2» y «DAZN F1» son otros canales (otras filas con «dazn»). Dentro de la familia (§17), España
+       o sin país antes que otro país: el «DAZN 1» alemán va detrás de «DAZN 2». */
+    expect(searchCatalog(c, 'dazn').groups.map((group) => [group.key, group.bucket])).toEqual([
+      ['dazn 1', ''],
+      ['dazn 2', ''],
+      ['dazn 1', 'DE'],
+      ['dazn f1', ''],
     ]);
   });
 

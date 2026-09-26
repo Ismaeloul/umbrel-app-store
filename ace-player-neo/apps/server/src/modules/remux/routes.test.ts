@@ -331,6 +331,28 @@ describe('GET /api/v1/video/:sid/:file (arquitectura §5.12)', () => {
     await runtime.service.stopAll();
   });
 
+  it('la lista que aún no está (el remux arranca o se reinicia): 503 con Retry-After, nunca 500 (§17)', async () => {
+    const { app, runtime, remuxDir } = await withSession();
+    rmSync(path.join(remuxDir, ID_A, 'index.m3u8'), { force: true });
+    for (const [url, headers] of [
+      [`/api/v1/video/${SID}/index.m3u8`, web()],
+      [`/remux/${ID_A}/index.m3u8`, web()],
+    ] as const) {
+      const res = await app.inject({ method: 'GET', url, headers });
+      expect(res.statusCode, url).toBe(503);
+      expect(res.headers['retry-after'], url).toBe('1');
+      expect(res.headers['cache-control'], url).toBe('no-store');
+    }
+    /* Un segmento que no está sigue siendo 404: solo la lista «aún no está». */
+    const seg = await app.inject({
+      method: 'GET',
+      url: `/api/v1/video/${SID}/index99.m4s`,
+      headers: web(),
+    });
+    expect(seg.statusCode).toBe(404);
+    await runtime.service.stopAll();
+  });
+
   it('sin ?t= la lista sale tal cual y los errores de ruta se respetan (servicio)', async () => {
     const { runtime } = await withSession();
     const bare = Fastify();
@@ -377,6 +399,7 @@ describe('casos raros del servido (api.md §6)', () => {
     });
     expect(gone.statusCode).toBe(404);
     expect(gone.body).toBe('');
+    expect(gone.headers['retry-after']).toBe('1');
     await runtime.service.stopAll();
   });
 });

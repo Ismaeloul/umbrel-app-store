@@ -172,7 +172,7 @@ describe('lista (móvil)', () => {
     expect(first!.querySelector('.dorsal__abbrev')).toHaveTextContent(/^Elcano$/);
     expect(first!.querySelector('.src-poster__name')).toHaveTextContent(/^M\+ Liga de Campeones$/);
     const tags = [...first!.querySelectorAll('.src-poster__tags .src-poster__tag')];
-    expect(tags.map((tag) => tag.textContent)).toEqual(['1080p', 'HEVC', 'M3U']);
+    expect(tags.map((tag) => tag.textContent)).toEqual(['1080p', 'HEVC', 'AceStream']);
     first!.focus();
     fireEvent.keyDown(first!, { key: 'ArrowRight' });
     expect(second).toHaveFocus();
@@ -210,7 +210,7 @@ describe('lista (móvil)', () => {
     expect(first).toHaveAttribute(
       'aria-label',
       expect.stringMatching(
-        /^Fuente 1: Movistar LaLiga \[NEW ERA\] --> New Era III · M3U · New Era III/,
+        /^Fuente 1: Movistar LaLiga \[NEW ERA\] --> New Era III · AceStream · New Era III/,
       ),
     );
     expect(second!.querySelector('.dorsal__abbrev')).toHaveTextContent(/^Faro$/);
@@ -238,7 +238,7 @@ describe('lista (móvil)', () => {
     expect(lines(first!)).toEqual(['src-poster__name', 'src-poster__state', 'src-poster__tags']);
     expect(first!.querySelector('.src-poster__state')).toHaveTextContent(/^Verificada$/);
     const tags = [...first!.querySelectorAll('.src-poster__tag')].map((tag) => tag.textContent);
-    expect(tags).toEqual(['1080p', 'HEVC', 'M3U']);
+    expect(tags).toEqual(['1080p', 'HEVC', 'AceStream']);
     // Cada dato en su etiqueta, sin «·» ni «…» pegados.
     expect(first!.querySelector('.src-poster__tags')).not.toHaveTextContent(/[·…]/);
     // Comprobando: la frase dice algo más que el estado y sí sale, al final.
@@ -251,7 +251,7 @@ describe('lista (móvil)', () => {
     expect(first).toHaveAttribute(
       'aria-label',
       expect.stringMatching(
-        /^Fuente 1: M\+ Liga de Campeones --> Elcano · M3U · Elcano · Hash .* · verificada/,
+        /^Fuente 1: M\+ Liga de Campeones --> Elcano · AceStream · Elcano · Hash .* · verificada/,
       ),
     );
   });

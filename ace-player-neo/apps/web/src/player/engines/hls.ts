@@ -41,11 +41,24 @@ interface HlsErrorData {
   details?: string;
 }
 
+/** Reintentos de la lista (maestra y de nivel) ante un 503 «aún no está»: 4, cada 0,5 s y 2 s como mucho. */
+export const HLS_PLAYLIST_RETRY = {
+  manifestLoadingMaxRetry: 4,
+  manifestLoadingRetryDelay: 500,
+  manifestLoadingMaxRetryTimeout: 2_000,
+  levelLoadingMaxRetry: 4,
+  levelLoadingRetryDelay: 500,
+  levelLoadingMaxRetryTimeout: 2_000,
+} as const;
+
 /** La configuración que recibe hls.js (exportada para el test). */
 export function hlsConfig(profile: EngineArgs['profile']): Record<string, unknown> {
   return {
     manifestLoadingTimeOut: 20_000,
     fragLoadingTimeOut: 20_000,
+    /* La lista del remux puede no estar aún (arranca o se reinicia): el servidor responde 503 con
+       Retry-After (docs/iptv.md §17) y hls.js lo reintenta solo, sin error a la vista. */
+    ...HLS_PLAYLIST_RETRY,
     ...profile.hls,
   };
 }

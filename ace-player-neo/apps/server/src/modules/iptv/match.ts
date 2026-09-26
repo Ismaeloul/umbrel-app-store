@@ -31,7 +31,13 @@ import {
 } from '@ace/shared';
 import type { Catalog, CatalogEntry, QualityOf } from './catalog.js';
 import { compareVariants, isLastResort, nameQuality } from './catalog.js';
-import { cleanIptvTitle, iptvAskedChannel, iptvSpelling } from './names.js';
+import {
+  aceChannelTitle,
+  cleanIptvTitle,
+  iptvAskedChannel,
+  iptvPlatform,
+  iptvSpelling,
+} from './names.js';
 
 /** Lo que devuelve la función de puntuación de la resolución. */
 export interface ChannelScore {
@@ -195,6 +201,27 @@ export function withoutTrailingNote(name: string): string {
   return name.slice(0, note.index).trim() || name;
 }
 
+/*
+ * La marca de cadena de un nombre (docs/iptv.md §17): «movistar» (M., M+,
+ * Movistar…) o «dazn», o ''. La regla del « 1» final solo vale si el canal
+ * pedido y la entrada IPTV llevan la misma: «M+ LaLiga TV» no es «LA LIGA 1»
+ * (el de Rakuten), aunque sin marca los dos sean «laliga».
+ */
+function chainBrand(name: string): string {
+  const first = normalizeChannelKey(iptvSpelling(name)).split(' ')[0] ?? '';
+  return first === 'movistar' || first === 'dazn' ? first : '';
+}
+
+/** ¿Es la marca paraguas sola («DAZN», sin número ni nada más)? «DAZN 1» no lo es. */
+export function isUmbrellaBrand(channel: string): boolean {
+  return channelAllowsFamilyFallback(channel) && !HAS_DIGIT.test(normalizeChannelKey(channel));
+}
+
+/** ¿Son todas las variantes de este canal de una plataforma de internet (VIX, Pluto TV, Rakuten…)? */
+export function isPlatformChannel(entries: readonly CatalogEntry[]): boolean {
+  return entries.length > 0 && entries.every((entry) => iptvPlatform(entry.title, entry.group));
+}
+
 /* Mejor puntuación de una entrada contra UN canal pedido. */
 function scoreAgainst(
   scorer: ChannelScorer,
@@ -213,11 +240,13 @@ function scoreAgainst(
     if (bare !== base) {
       best = Math.max(best, scorer([wanted], { id: entry.id, title: bare, alias: null }).score);
     }
-    /* Nunca con la marca paraguas («DAZN» no es «DAZN 1»). */
+    /* Nunca con la marca paraguas («DAZN» no es «DAZN 1») ni con otra marca de cadena
+       («M+ LaLiga TV» no es «LA LIGA 1»). */
     if (
       !HAS_DIGIT.test(wanted) &&
       !channelAllowsFamilyFallback(wanted) &&
-      TRAILING_ONE.test(base)
+      TRAILING_ONE.test(base) &&
+      (!chainBrand(wanted) || chainBrand(wanted) === chainBrand(base))
     ) {
       const without = base.replace(TRAILING_ONE, '');
       best = Math.max(best, scorer([wanted], { id: entry.id, title: without, alias: null }).score);
@@ -262,7 +291,11 @@ export function matchIptvChannels(
     ...new Set(
       channels
         .map((channel) => iptvAskedChannel(channel))
-        .filter((channel): channel is string => Boolean(channel)),
+        /* «DAZN» a secas es la marca paraguas (la agenda no dice qué DAZN): nunca casa por nombre, ni con un
+           canal que la lista llame «DAZN» (docs/iptv.md §17). */
+        .filter(
+          (channel): channel is string => Boolean(channel) && !isUmbrellaBrand(channel as string),
+        ),
     ),
   ];
   if (!wanted.length) return [];
@@ -283,6 +316,8 @@ export function matchIptvChannels(
     }
     if (score < minScore) continue;
     for (const { bucket, entries } of catalog.buckets(key)) {
+      /* Una plataforma de internet no se empareja por nombre (docs/iptv.md §17). */
+      if (isPlatformChannel(entries)) continue;
       const match = groupMatch(
         key,
         bucket,
@@ -363,6 +398,14 @@ function splitGluedNumbers(value: string): string {
   return value.replace(GLUED_NUMBER, '$1 $2');
 }
 
+/*
+ * La clave con las palabras de letras pegadas entre sí («la sexta» →
+ * «lasexta»; los números siguen aparte: «dazn 1» no es «dazn 10»).
+ */
+function joinedLetters(value: string): string {
+  return normalizeChannelKey(iptvSpelling(value)).replace(/(?<=[a-z]) (?=[a-z])/g, '');
+}
+
 function sameChannelCore(
   wanted: string,
   text: string,
@@ -371,10 +414,18 @@ function sameChannelCore(
 ): number {
   const variants = new Set([text, iptvSpelling(text)]);
   if (clean.display && (clean.country === null || clean.country === 'ES')) variants.add(clean.base);
+  /* El nombre de AceStream sin flecha, asteriscos, calidad ni «TVE» («La 1 TVE 720p *» → «La 1»). */
+  const ace = aceChannelTitle(text);
+  if (ace !== text) variants.add(iptvSpelling(ace));
   const score = (a: string, b: string): number => scorer([a], { id: '', title: b }).score;
   let best = 0;
   for (const variant of variants) best = Math.max(best, score(wanted, variant));
   if (best >= 100) return best;
+  /* Las mismas letras juntas o separadas («LA SEXTA» = «laSexta»): mismo canal. */
+  const joined = joinedLetters(wanted);
+  if (joined) {
+    for (const variant of variants) if (joinedLetters(variant) === joined) return 100;
+  }
   /* Números pegados en alguno de los dos: se prueba con ellos separados. */
   const wantedSplit = splitGluedNumbers(wanted);
   for (const variant of variants) {

@@ -11,6 +11,22 @@ describe('channelDorsal', () => {
     expect(channelDorsal('Ñoño TV')).toBe('N');
     expect(channelDorsal('***')).toBe('·');
   });
+
+  it('se salta la resolución, el códec y los fotogramas: el número es el del canal (§17)', () => {
+    expect(channelDorsal('La 1 TVE 720p')).toBe('1');
+    expect(channelDorsal('La 1 TVE 720p *')).toBe('1');
+    expect(channelDorsal('La 1 TVE 720')).toBe('1');
+    expect(channelDorsal('DAZN 2 1080p')).toBe('2');
+    expect(channelDorsal('DAZN 2 1080i')).toBe('2');
+    expect(channelDorsal('DAZN 2 1080p50 H265')).toBe('2');
+    expect(channelDorsal('M+ LaLiga TV 3 2160')).toBe('3');
+    expect(channelDorsal('M+ LaLiga TV 3 x265 60fps')).toBe('3');
+    expect(channelDorsal('Eurosport 4K')).toBe('E');
+    expect(channelDorsal('Eurosport 8K')).toBe('E');
+    expect(channelDorsal('Movistar Plus+ 1080p H264')).toBe('M');
+    expect(channelDorsal('Canal 24 Horas 50 FPS')).toBe('24');
+    expect(channelDorsal('TV3 HD')).toBe('3');
+  });
 });
 
 describe('channelAbbrev', () => {
