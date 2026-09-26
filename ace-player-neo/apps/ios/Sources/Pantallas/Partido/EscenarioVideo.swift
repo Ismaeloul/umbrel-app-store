@@ -8,6 +8,23 @@ import SwiftUI
 
 enum ArrastreVideo: Sendable { case mover(CGFloat), soltar(minimiza: Bool) }
 
+/// Lo que se desplaza siguiendo al dedo. Va en un objeto aparte para que solo lo lea quien se mueve: si el
+/// escenario entero se volviera a pintar a cada paso, la capa de toques se recrearía y el gesto se cancelaría.
+@MainActor @Observable final class DesplazamientoGesto {
+    var valor: CGFloat = 0
+}
+
+/// Aplica el desplazamiento del gesto en un eje.
+struct SigueAlDedo: ViewModifier {
+    enum Eje { case horizontal, vertical }
+    let gesto: DesplazamientoGesto
+    let eje: Eje
+
+    func body(content: Content) -> some View {
+        content.offset(x: eje == .horizontal ? gesto.valor : 0, y: eje == .vertical ? gesto.valor : 0)
+    }
+}
+
 struct EscenarioVideo: View {
     let inmersivo: Bool
     private let alArrastrar: ((ArrastreVideo) -> Void)?
@@ -17,7 +34,7 @@ struct EscenarioVideo: View {
     @Environment(\.movimientoReducido) private var reducido
     @Environment(RelojCompartido.self) private var reloj
     @State private var corte = 0
-    @State private var desplazamiento: CGFloat = 0
+    @State private var desplazamiento = DesplazamientoGesto()
 
     init(inmersivo: Bool) {
         self.init(inmersivo: inmersivo, alArrastrar: nil)
@@ -44,7 +61,7 @@ struct EscenarioVideo: View {
         ZStack {
             Color.black
             VistaVideo(superficie: video.pip.superficie, prioridad: inmersivo ? .inmersivo : .teatro)
-                .offset(x: desplazamiento)
+                .modifier(SigueAlDedo(gesto: desplazamiento, eje: .horizontal))
             CorteNegro(disparo: corte + video.presentacion.cortes)
             capaToques(foto)
             capasMensaje(foto)
@@ -117,14 +134,14 @@ struct EscenarioVideo: View {
 
     private func mover(dx: CGFloat, dy: CGFloat) {
         if dx != 0 {
-            desplazamiento = CGFloat(GestosTeatro.desplazamientoTexto(Double(dx)))
+            desplazamiento.valor = CGFloat(GestosTeatro.desplazamientoTexto(Double(dx)))
         } else {
             alArrastrar?(.mover(dy))
         }
     }
 
     private func soltar(_ direccion: DireccionGesto) {
-        withAnimation(Movimiento.rapido(reducido)) { desplazamiento = 0 }
+        withAnimation(Movimiento.rapido(reducido)) { desplazamiento.valor = 0 }
         switch direccion {
         case .izquierda: video.pasoFuente(1)
         case .derecha: video.pasoFuente(-1)

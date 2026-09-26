@@ -62,6 +62,13 @@ struct CapaToquesVideo: UIViewRepresentable {
             return capa.abajoMinimiza && (t.y > 0 || v.y > 0)
         }
 
+        /// La pulsación larga del menú del sistema no le quita el arrastre al dedo (la cancela el propio movimiento).
+        func gestureRecognizer(
+            _ reconocedor: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otro: UIGestureRecognizer
+        ) -> Bool {
+            reconocedor is UIPanGestureRecognizer && otro is UILongPressGestureRecognizer
+        }
+
         /// El borde izquierdo (volver) va primero.
         func gestureRecognizer(
             _ reconocedor: UIGestureRecognizer, shouldRequireFailureOf otro: UIGestureRecognizer

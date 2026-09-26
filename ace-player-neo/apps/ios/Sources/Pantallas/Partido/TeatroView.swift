@@ -12,7 +12,7 @@ struct TeatroView: View {
     @Environment(\.maquetacion) private var maquetacion
     @Environment(\.movimientoReducido) private var reducido
     @Environment(EstadoVentana.self) private var estadoVentana
-    @State private var arrastre: CGFloat = 0
+    @State private var arrastre = DesplazamientoGesto()
 
     var body: some View {
         let ancho: CGFloat = CGFloat(maquetacion.ancho - maquetacion.seguras.izquierda - maquetacion.seguras.derecha)
@@ -25,7 +25,7 @@ struct TeatroView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Palco.bg)
         .ignoresSafeArea(edges: .vertical)
-        .offset(y: arrastre)
+        .modifier(SigueAlDedo(gesto: arrastre, eje: .vertical))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(IDUI.teatro)
         .modifier(EstadoBaseTeatro())
@@ -49,13 +49,13 @@ struct TeatroView: View {
     private func arrastrar(_ gesto: ArrastreVideo) {
         switch gesto {
         case .mover(let dy):
-            arrastre = max(0, dy)
+            arrastre.valor = max(0, dy)
         case .soltar(let minimiza):
             if minimiza {
                 video.minimizar()
-                arrastre = 0
+                arrastre.valor = 0
             } else {
-                withAnimation(Movimiento.estandar(reducido)) { arrastre = 0 }
+                withAnimation(Movimiento.estandar(reducido)) { arrastre.valor = 0 }
             }
         }
     }

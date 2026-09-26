@@ -69,7 +69,7 @@ final class FlujoTeatroUITests: XCTestCase {
                     app.buttons["Tapar el marcador (tu emisión va por detrás)"].waitForExistence(timeout: 5), "No se destapa")
             }
             elementoUI(app, IDUI.pestanaPartido).tap()
-            XCTAssertTrue(conTextoUI(app, "Dónde se emite").waitForExistence(timeout: 5), "Sin la pestaña Partido")
+            XCTAssertTrue(conTextoUI(app, "M+ LaLiga").waitForExistence(timeout: 5), "Sin la pestaña Partido (Dónde se emite)")
             captura(app, "teatro-partido-pestana-partido-\(tema)")
             elementoUI(app, IDUI.pestanaDatos).tap()
             XCTAssertTrue(elementoUI(app, IDUI.panelDatosTecnicos).waitForExistence(timeout: 5), "Sin datos técnicos")

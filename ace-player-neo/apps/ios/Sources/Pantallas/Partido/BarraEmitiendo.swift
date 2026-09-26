@@ -12,13 +12,13 @@ struct BarraEmitiendo: View {
     let puedeCambiar: Bool
     let video = EntornoVideo()
     @Environment(\.movimientoReducido) private var reducido
-    @State private var desplazamiento: CGFloat = 0
+    @State private var desplazamiento = DesplazamientoGesto()
 
     var body: some View {
         let forma = RoundedRectangle(cornerRadius: R.l, style: .circular)
         HStack(spacing: 4) {
             if puedeCambiar { BotonIcono(.chevL, etiqueta: "Fuente anterior") { video.pasoFuente(-1) } }
-            texto.offset(x: desplazamiento)
+            texto.modifier(SigueAlDedo(gesto: desplazamiento, eje: .horizontal))
             if puedeCambiar { BotonIcono(.chevR, etiqueta: "Fuente siguiente") { video.pasoFuente(1) } }
         }
         .padding(4)
@@ -29,7 +29,7 @@ struct BarraEmitiendo: View {
         .gesture(
             DeslizamientoHorizontal(
                 activo: puedeCambiar,
-                alMover: { dx in desplazamiento = CGFloat(GestosTeatro.desplazamientoTexto(Double(dx))) },
+                alMover: { dx in desplazamiento.valor = CGFloat(GestosTeatro.desplazamientoTexto(Double(dx))) },
                 alSoltar: { dx, dy, vx in soltar(dx: dx, dy: dy, vx: vx) }))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(IDUI.barraEmitiendo)
@@ -66,7 +66,7 @@ struct BarraEmitiendo: View {
     }
 
     private func soltar(dx: CGFloat, dy: CGFloat, vx: CGFloat) {
-        withAnimation(Movimiento.rapido(reducido)) { desplazamiento = 0 }
+        withAnimation(Movimiento.rapido(reducido)) { desplazamiento.valor = 0 }
         switch GestosTeatro.clasificar(dx: Double(dx), dy: Double(dy), vx: Double(vx), vy: 0) {
         case .izquierda: video.pasoFuente(1)
         case .derecha: video.pasoFuente(-1)
