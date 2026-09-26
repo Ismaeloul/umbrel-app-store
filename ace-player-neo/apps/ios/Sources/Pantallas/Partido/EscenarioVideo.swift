@@ -101,7 +101,9 @@ struct EscenarioVideo: View {
 
     // MARK: Capas
 
-    @ViewBuilder private func capaToques(_ foto: FotoEscenario) -> some View {
+    /// Siempre la MISMA vista (sin `if`): si el menú apareciera al llegar el título, la capa de toques se
+    /// recrearía y un arrastre en marcha se cancelaría (sin título no hay acciones y el menú no sale).
+    private func capaToques(_ foto: FotoEscenario) -> some View {
         let toques = CapaToquesVideo(
             abajoMinimiza: variante.deslizarAbajoMinimiza && alArrastrar != nil,
             ladosCambian: video.idsFuentesVisibles.count > 1,
@@ -109,11 +111,9 @@ struct EscenarioVideo: View {
             alDobleToque: { video.alternarPantallaCompleta() },
             alMover: { dx, dy in mover(dx: dx, dy: dy) },
             alSoltar: { direccion in soltar(direccion) })
-        if let titulo = foto.titulo {
-            toques.menuContextual(video.accionesMenu()) { VistaPreviaVideo(titulo: titulo, fase: foto.fase) }
-        } else {
-            toques
-        }
+        let acciones: [AccionMenu] = foto.titulo == nil ? [] : video.accionesMenu()
+        let titulo: String = foto.titulo ?? ""
+        return toques.menuContextual(acciones) { VistaPreviaVideo(titulo: titulo, fase: foto.fase) }
     }
 
     @ViewBuilder private func capasMensaje(_ foto: FotoEscenario) -> some View {
@@ -153,13 +153,13 @@ struct EscenarioVideo: View {
 
     private func mover(dx: CGFloat, dy: CGFloat) {
         if dx != 0 {
-            desplazamiento.valor = CGFloat(GestosTeatro.desplazamientoTexto(Double(dx)))
+            desplazamiento.valor = CGFloat(BarraEmitiendo.arrastreTexto(Double(dx)))
         } else {
             alArrastrar?(.mover(dy))
         }
     }
 
-    private func soltar(_ direccion: DireccionGesto) {
+    private func soltar(_ direccion: ResultadoDeslizar) {
         withAnimation(Movimiento.rapido(reducido)) { desplazamiento.valor = 0 }
         switch direccion {
         case .izquierda: video.pasoFuente(1)

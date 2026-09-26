@@ -8,7 +8,6 @@ struct CabeceraPartido: View {
     let partido: FootballMatch
     let marcador: LiveScore?
     let ahora: Date
-    @State private var base: URL?
 
     private var enDirecto: Bool { DatosTeatro.estado(partido, marcador: marcador, ahora: ahora)?.fase == .directo }
 
@@ -27,13 +26,12 @@ struct CabeceraPartido: View {
         }
         .padding(.top, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .modifier(BaseServidor(base: $base))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(IDUI.cabeceraPartido)
     }
 
     @ViewBuilder private var equipos: some View {
-        let local = EquiposTeatro.equipo(partido, local: true, base: base)
+        let local = DatosEquipo.de(partido, .local)
         if partido.away.isEmpty {
             HStack(spacing: 10) {
                 MarcaEquipo(local, tamano: 34, encendido: enDirecto)
@@ -46,7 +44,7 @@ struct CabeceraPartido: View {
             .accessibilityAddTraits(.isHeader)
         } else {
             FilaEquiposPartido(
-                local: local, visitante: EquiposTeatro.equipo(partido, local: false, base: base), encendido: enDirecto)
+                local: local, visitante: DatosEquipo.de(partido, .visitante), encendido: enDirecto)
         }
     }
 }

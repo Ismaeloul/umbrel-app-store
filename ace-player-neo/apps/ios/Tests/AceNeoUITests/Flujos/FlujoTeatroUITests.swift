@@ -124,15 +124,31 @@ final class FlujoTeatroUITests: XCTestCase {
         XCTAssertTrue(esperarQueDesaparezca(salir, plazo: 8), "El segundo doble toque no quita la pantalla completa")
     }
 
-    /// Deslizar el vídeo a un lado cambia de fuente (necesita dos fuentes visibles en la sesión).
+    /// El cartel es el de la fuente elegida (`.isSelected`, la activa de la sesión).
+    @MainActor
+    private func esperarElegido(_ elemento: XCUIElement, plazo: TimeInterval) -> Bool {
+        let limite = Date().addingTimeInterval(plazo)
+        while Date() < limite {
+            if elemento.exists && elemento.isSelected { return true }
+            Thread.sleep(forTimeInterval: 0.25)
+        }
+        return elemento.exists && elemento.isSelected
+    }
+
+    /// Deslizar el vídeo a un lado cambia de fuente (`stepSource`). En demo-1 el comprobador verifica Elcano y
+    /// Faro en el paso 2 (2,7 s) y el arranque automático pone la 1; hasta entonces no hay activa y deslizar a la
+    /// izquierda elegiría la primera (como la web). Por eso se espera a que la 1 sea la elegida.
     @MainActor
     func testDeslizarDeLadoCambiaDeFuente() throws {
         let app = abrir("partido/demo-1")
+        let primero = elementoUI(app, IDUI.cartelFuente(1))
         let segundo = elementoUI(app, IDUI.cartelFuente(2))
-        try XCTSkipUnless(segundo.waitForExistence(timeout: 20), "La sesión de fuentes aún no da carteles (M3)")
+        XCTAssertTrue(segundo.waitForExistence(timeout: 20), "La sesión de fuentes no da carteles")
+        XCTAssertTrue(esperarElegido(primero, plazo: 20), "El arranque automático no pone la fuente 1")
         let video = elementoUI(app, IDUI.videoTeatro)
         arrastrar(video, desde: CGVector(dx: 0.8, dy: 0.5), hasta: CGVector(dx: 0.1, dy: 0.5))
-        XCTAssertTrue(conTextoUI(app, "Fuente 2, ").waitForExistence(timeout: 10), "No pasa a la fuente 2")
+        XCTAssertTrue(esperarElegido(segundo, plazo: 10), "Deslizar a la izquierda no pasa a la fuente 2")
+        XCTAssertFalse(primero.isSelected, "La fuente 1 sigue elegida")
     }
 
     /// Elegir un cartel lo pone «En pantalla».

@@ -93,7 +93,8 @@ struct ContenidoCanal: View {
         }
     }
 
-    /// `enterChannel`: la sesión del canal con sus hermanas y, en reposo desde el inicio, suena (origen biblioteca).
+    /// `enterChannel` (M3): la sesión del canal con sus hermanas y, si el reproductor está en reposo desde el
+    /// inicio, suena (origen biblioteca). Tras «Detener» no lo relanza.
     private func entrar() async {
         let datos = video.datos
         await datos.biblioteca.asegurar(tiempoRealAbierto: datos.tiempoRealAbierto)
@@ -106,9 +107,5 @@ struct ContenidoCanal: View {
             }
         let canal = RefCanal(hash: hash, titulo: titulo, coleccion: coleccion, ih: item?.ih)
         await video.fuentes.entrarCanal(canal, listaActiva: biblioteca?.activeWebSourceId)
-        let r = video.reproductor
-        if r.fase == .idle && r.canal?.id != hash && r.motivoParada == nil {
-            r.reproducir(CanalReproducible(id: hash, titulo: titulo, ih: item?.ih))
-        }
     }
 }

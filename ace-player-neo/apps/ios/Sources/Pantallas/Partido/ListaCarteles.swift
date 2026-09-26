@@ -6,8 +6,8 @@ import SwiftUI
    Las plegadas van al final tras «Ver n más…». */
 
 struct ListaCarteles: View {
-    let visibles: [FilaCartel]
-    let plegadas: [FilaCartel]
+    let visibles: [FilaFuente]
+    let plegadas: [FilaFuente]
     let enPartido: Bool
     @State private var abiertas = false
     @Namespace private var espacio
@@ -37,7 +37,7 @@ struct ListaCarteles: View {
         Button { abiertas.toggle() } label: {
             HStack(spacing: 6) {
                 IconoPalco(abiertas ? .chevU : .chevD, tamano: 18)
-                Text(PresentacionFuentes.textoPlegadas(plegadas, abiertas: abiertas)).estilo(.botonSm)
+                Text(Self.textoPlegadas(plegadas, abiertas: abiertas)).estilo(.botonSm)
             }
             .padding(.leading, 8)
             .padding(.trailing, 12)
@@ -48,10 +48,21 @@ struct ListaCarteles: View {
         .foregroundStyle(Palco.text2)
         .accessibilityAddTraits(abiertas ? .isSelected : [])
     }
+
+    /// «Ver 3 más sin señal» / «Ver 3 más (1 sin señal, 2 en cola)» / «Ver 3 más en cola» / «Ocultar…»
+    /// (el botón de SourceList.tsx).
+    static func textoPlegadas(_ plegadas: [FilaFuente], abiertas: Bool) -> String {
+        if abiertas { return "Ocultar las que no dan señal" }
+        let sinSenal: Int = plegadas.filter { $0.senal == .fail }.count
+        let n: Int = plegadas.count
+        if sinSenal == n { return "Ver \(n) más sin señal" }
+        if sinSenal > 0 { return "Ver \(n) más (\(sinSenal) sin señal, \(n - sinSenal) en cola)" }
+        return "Ver \(n) más en cola"
+    }
 }
 
 private struct RejillaCarteles: View {
-    let filas: [FilaCartel]
+    let filas: [FilaFuente]
     let enPartido: Bool
     let espacio: Namespace.ID
 

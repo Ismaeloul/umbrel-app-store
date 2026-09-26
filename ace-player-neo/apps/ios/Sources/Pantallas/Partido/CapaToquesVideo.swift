@@ -16,8 +16,8 @@ struct CapaToquesVideo: UIViewRepresentable {
     var alDobleToque: () -> Void
     /// Mientras se arrastra: (dx, dy) ya con el eje bloqueado (el otro a 0).
     var alMover: (_ dx: CGFloat, _ dy: CGFloat) -> Void
-    /// Al soltar: la dirección clasificada con los números de la web (`.ninguna` = vuelve a su sitio).
-    var alSoltar: (_ direccion: DireccionGesto) -> Void
+    /// Al soltar: la dirección clasificada con los números de la web (`Deslizamiento`, M2; `.ninguno` = vuelve).
+    var alSoltar: (_ direccion: ResultadoDeslizar) -> Void
 
     @MainActor final class Coordinador: NSObject, UIGestureRecognizerDelegate {
         var capa: CapaToquesVideo
@@ -40,11 +40,11 @@ struct CapaToquesVideo: UIViewRepresentable {
                 let v = pan.velocity(in: pan.view?.window)
                 let dx = eje == .horizontal ? Double(t.x) : 0
                 let dy = eje == .vertical ? Double(t.y) : 0
-                let direccion = GestosTeatro.clasificar(dx: dx, dy: dy, vx: Double(v.x), vy: Double(v.y))
+                let direccion = Deslizamiento.clasificar(dx: dx, dy: dy, vx: Double(v.x), vy: Double(v.y))
                 capa.alSoltar(direccion)
                 eje = .ninguno
             case .cancelled, .failed:
-                capa.alSoltar(.ninguna)
+                capa.alSoltar(.ninguno)
                 eje = .ninguno
             default:
                 break

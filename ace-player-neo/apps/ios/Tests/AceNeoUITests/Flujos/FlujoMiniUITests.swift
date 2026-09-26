@@ -52,11 +52,17 @@ final class FlujoMiniUITests: XCTestCase {
         }
     }
 
+    /// Se arrastra con el canal ya pedido y con imagen (el motor de la demo la da a los 1,8 s): antes, si el
+    /// canal llegaba a mitad del arrastre, la capa de toques se recreaba y el gesto se perdía (fallaba a veces).
     @MainActor
     func testArrastrarElVideoAbajoMinimiza() throws {
         let app = abrirCanal()
         let video = elementoUI(app, IDUI.videoTeatro)
         XCTAssertTrue(video.waitForExistence(timeout: 10))
+        let conCanal = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label == %@", "Reproductor: DAZN 1")).firstMatch
+        XCTAssertTrue(conCanal.waitForExistence(timeout: 15), "El canal no llega al escenario")
+        Thread.sleep(forTimeInterval: 2.5)
         arrastrar(video, desde: CGVector(dx: 0.5, dy: 0.4), hasta: CGVector(dx: 0.5, dy: 2.6))
         XCTAssertTrue(elementoUI(app, IDUI.miniPausa).waitForExistence(timeout: 10), "Arrastrar hacia abajo no minimiza")
     }

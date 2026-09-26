@@ -4,10 +4,10 @@ import SwiftUI
    arriba a la derecha y «En pantalla» en oro abajo a la izquierda si es la que suena; alrededor, el filo del
    estado (oro en la que suena); debajo, el proveedor, el anillo con su palabra, la calidad y el tipo, y la
    frase. Toque: háptica rígida y elegir. Pulsación larga: menú «Fuente n» (sin háptica); las mismas opciones
-   van a VoiceOver como acciones. Sirve igual para cualquier tipo de fuente (FilaCartel). */
+   van a VoiceOver como acciones. Sirve igual para cualquier tipo de fuente (`FilaFuente` de la sesión, M3). */
 
 struct CartelFuente: View {
-    let fila: FilaCartel
+    let fila: FilaFuente
     let enPartido: Bool
     var espacio: Namespace.ID?
     let video = EntornoVideo()
@@ -32,31 +32,31 @@ struct CartelFuente: View {
         .accessibilityIdentifier(IDUI.cartelFuente(fila.numero))
     }
 
-    /// Las opciones del menú «Fuente n» con su acción (ninguna vibra).
+    /// Las opciones del menú «Fuente n» (`rowMenu`, M3) con su acción (ninguna vibra).
     private var acciones: [AccionMenu] {
-        PresentacionFuentes.opcionesCartel(fila, enPartido: enPartido).map { opcion in
+        OpcionesFuente.menu(fila, enPartido: enPartido).map { (opcion: OpcionMenu) -> AccionMenu in
             AccionMenu(opcion) { ejecutar(opcion.id) }
         }
     }
 
     private func ejecutar(_ id: String) {
         let hash = fila.id
-        switch id {
-        case "ver": video.elegirFuente(hash)
-        case "copiar-hash": video.copiar(hash, bien: "Hash copiado", mal: "No se pudo copiar el hash")
-        case "abrir": video.abrirEnAceStream(hash)
-        case "correcto":
+        guard let opcion = OpcionFuente(rawValue: id) else { return }
+        switch opcion {
+        case .ver: video.elegirFuente(hash)
+        case .copiarHash: video.copiar(hash, bien: "Hash copiado", mal: "No se pudo copiar el hash")
+        case .abrir: video.abrirEnAceStream(hash)
+        case .correcto:
             let fuentes = video.fuentes
             Task { await fuentes.confirmar(hash) }
-        case "reportar": hojas.abrir(.reportar(hash: hash, numero: fila.numero))
-        default: break
+        case .reportar: hojas.abrir(.reportar(hash: hash, numero: fila.numero))
         }
     }
 }
 
 /// La tesela con su filo, el número y «En pantalla».
 private struct TeselaCartel: View {
-    let fila: FilaCartel
+    let fila: FilaFuente
     let espacio: Namespace.ID?
     @State private var alto: CGFloat = 90
 
@@ -64,7 +64,7 @@ private struct TeselaCartel: View {
         let forma = RoundedRectangle(cornerRadius: R.m, style: .circular)
         ZStack {
             forma.fill(Palco.surface2)
-            MarcaCanal(nombre: fila.nombreCanal, forma: .tesela, tamano: alto)
+            MarcaCanal(nombre: ReglasFuentes.nombreCanal(fila.entrada), forma: .tesela, tamano: alto)
                 .clipShape(forma)
         }
         .aspectRatio(16 / 9, contentMode: .fit)
@@ -112,7 +112,7 @@ private struct NumeroCartel: View {
 /// El filo del estado alrededor de la tesela (2; 3 en la activa y en la que suena), a 2 de ella, radio 16:
 /// continuo (ok, sin señal, en pantalla oro), discontinuo (floja, comprobando) o punteado (pendiente, reportada).
 private struct FiloCartel: View {
-    let fila: FilaCartel
+    let fila: FilaFuente
 
     private enum Trazo { case continuo, discontinuo, punteado }
 
@@ -146,18 +146,33 @@ private struct FiloCartel: View {
 
 /// Nombre (15/650/88), meta (anillo 14 + palabra · calidad · tipo) y frase (12, dos líneas como mucho).
 private struct CuerpoCartel: View {
-    let fila: FilaCartel
+    let fila: FilaFuente
+
+    /// «1080p · M3U»: la calidad (`qualityLabel`) y el tipo, este solo si no es ya el nombre (SourcePoster.tsx).
+    private var extras: String {
+        let presentacion = fila.presentacion
+        let tipo: String? = presentacion.tipo != presentacion.corto ? presentacion.tipo : nil
+        return [ReglasFuentes.calidad(fila.entrada.sonda), tipo].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    /// El anillo del medidor (`ringStateOf`): la reportada tiene dibujo propio y la que está en pantalla, oro.
+    private var anillo: EstadoAnillo {
+        if fila.enPantalla { return .activa }
+        if fila.efectivo.reportada { return .reportada }
+        return .senal(fila.senal)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(fila.corto)
+            Text(fila.presentacion.corto)
                 .estilo(EstiloTexto(tamano: 15, peso: 650, anchura: 88, altoLinea: 1.1))
                 .foregroundStyle(Palco.text)
                 .lineLimit(1)
             HStack(spacing: 6) {
-                AnilloSenal(PresentacionFuentes.anillo(fila), tamano: 14, palabra: fila.palabra)
-                if !fila.extras.isEmpty {
-                    Text("· \(fila.extras)").estilo(EstiloTexto(tamano: 12, peso: 650, anchura: 88, altoLinea: 1.15))
+                AnilloSenal(anillo, tamano: 14, palabra: fila.palabra)
+                let extras = self.extras
+                if !extras.isEmpty {
+                    Text("· \(extras)").estilo(EstiloTexto(tamano: 12, peso: 650, anchura: 88, altoLinea: 1.15))
                         .foregroundStyle(Palco.text2).lineLimit(1)
                 }
             }
