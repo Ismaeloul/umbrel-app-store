@@ -68,6 +68,8 @@ export interface ChannelRowProps {
   iptv?: boolean;
   /** Subtítulo propio (el de una fila IPTV); si no, el de siempre. */
   subtitle?: string | undefined;
+  /** Etiquetas pequeñas tras el subtítulo: el país y las calidades de un canal IPTV («4K · 1080p · 720p», §16). */
+  tags?: readonly string[] | undefined;
 }
 
 function scoreText(home: number, away: number): string {
@@ -189,6 +191,7 @@ export function ChannelRow({
   enterIndex = null,
   iptv = false,
   subtitle: ownSubtitle,
+  tags,
 }: ChannelRowProps) {
   const { bind, menu } = useContextMenu();
   // El marcador del partido que ves va tapado (regla 29). El «destapado» es
@@ -298,6 +301,15 @@ export function ChannelRow({
             ) : (
               <span className="ch__sub">{subtitle}</span>
             )}
+            {tags?.length ? (
+              <span className="ch__tags">
+                {tags.map((tag) => (
+                  <Capsule key={tag} tone="neutral" size="sm" className="ch__tag">
+                    {tag}
+                  </Capsule>
+                ))}
+              </span>
+            ) : null}
           </span>
         </span>
       </a>

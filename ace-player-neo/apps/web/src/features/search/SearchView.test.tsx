@@ -305,12 +305,49 @@ describe('buscador con IPTV (docs/iptv.md §14.5)', () => {
   const IPTV_TELE = 'f1'.repeat(20);
   const IPTV_LA1 = 'f2'.repeat(20);
   const IPTV_DAZN = 'f3'.repeat(20);
-  const channel = (id: string, title: string, library: string[] = []) => ({
+  const channel = (
+    id: string,
+    title: string,
+    library: string[] = [],
+    extra: {
+      quality?: 'uhd' | 'fhd' | 'hd' | 'sd';
+      qualities?: ('uhd' | 'fhd' | 'hd' | 'sd')[];
+      country?: string | null;
+    } = {},
+  ) => ({
     id,
     title,
-    quality: 'hd' as const,
+    quality: 'hd' as 'uhd' | 'fhd' | 'hd' | 'sd',
     provider: 'Casa',
     library,
+    ...extra,
+  });
+
+  it('un canal con 5 variantes sale en UNA fila con sus calidades («4K · 1080p · 720p · SD»); otro país, en otra con el suyo (§16)', async () => {
+    const DAZN1 = 'f5'.repeat(20);
+    const DAZN1_DE = 'f6'.repeat(20);
+    setupIptv({
+      channels: () => [
+        channel(DAZN1, 'DAZN 1', [], { quality: 'fhd', qualities: ['uhd', 'fhd', 'hd', 'sd'] }),
+        channel(DAZN1_DE, 'DAZN 1', [], { qualities: ['hd'], country: 'DE' }),
+      ],
+    });
+    type('dazn 1');
+    const section = await screen.findByRole('region', { name: /^En tu IPTV/ });
+    const rows = within(section).getAllByRole('link', { name: 'DAZN 1' });
+    expect(rows).toHaveLength(2);
+    const spain = rows[0]!.closest('article')!;
+    expect([...spain.querySelectorAll('.ch__tag')].map((tag) => tag.textContent)).toEqual([
+      '4K',
+      '1080p',
+      '720p',
+      'SD',
+    ]);
+    const germany = rows[1]!.closest('article')!;
+    expect([...germany.querySelectorAll('.ch__tag')].map((tag) => tag.textContent)).toEqual([
+      'DE',
+      '720p',
+    ]);
   });
 
   function setupIptv(options: {
@@ -384,7 +421,7 @@ describe('buscador con IPTV (docs/iptv.md §14.5)', () => {
     const section = await screen.findByRole('region', { name: /^En tu IPTV/ });
     const row = within(section).getByRole('link', { name: 'Telecinco' }).closest('article')!;
     expect(within(row).getByText('IPTV')).toBeInTheDocument();
-    expect(within(row).getByText('Casa · 720p')).toBeInTheDocument();
+    expect(within(row).getByText('Casa')).toBeInTheDocument();
     expect(iptvCalls()[0]?.url).toBe('/api/v1/iptv/channels?q=tele&limit=50');
     expect(await screen.findByRole('link', { name: 'Teledeporte' })).toBeInTheDocument();
     expect(
@@ -402,7 +439,7 @@ describe('buscador con IPTV (docs/iptv.md §14.5)', () => {
     });
     type('la 1');
     const section = await screen.findByRole('region', { name: /^En tu IPTV/ });
-    expect(within(section).getByText('Casa · 720p · también en AceStream')).toBeInTheDocument();
+    expect(within(section).getByText('Casa · también en AceStream')).toBeInTheDocument();
     await waitFor(() =>
       expect(net.calls.some((c) => c.url.startsWith('/api/v1/search'))).toBe(true),
     );

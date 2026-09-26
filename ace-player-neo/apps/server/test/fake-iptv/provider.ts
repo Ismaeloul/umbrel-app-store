@@ -30,7 +30,14 @@
 
    Buscador (docs/iptv.md §14.9): «ES: Telecinco HD» (110) solo está en la
    IPTV (ni en el motor falso ni en la biblioteca E2E) y hay un grupo «XXX»
-   con un canal que el buscador no debe enseñar nunca. */
+   con un canal («ES: Tele Noche HD», 111), que el buscador enseña como
+   todo lo demás (§16, todo desbloqueado).
+
+   Variantes (docs/iptv.md §16): «DAZN 1» tiene 5 (FHD 112, HD 113, SD 114,
+   4K 115 y la reserva 116), cada una con su stream: por HLS (la M3U), una
+   lista maestra con su `RESOLUTION` de verdad; por TS, un caudal acorde. Y
+   hay canales de otros países: «UK: DAZN 1» (109), «DE: DAZN 1 HD» (117) y
+   «FR: Canal+ Sport» (118). */
 
 import http from 'node:http';
 import type { AddressInfo, Socket } from 'node:net';
@@ -47,9 +54,25 @@ export interface FakeIptvChannel {
   readonly category: number;
   /** En la M3U, este canal va por HLS. */
   readonly hlsInM3u?: boolean;
+  /**
+   * Resolución de verdad del stream («1920x1080»): por HLS, una lista maestra
+   * con esa `RESOLUTION` (el relé la lee y manda sobre la del nombre, §16);
+   * por TS, un caudal acorde (4K más que 1080p, y 1080p más que SD).
+   */
+  readonly resolution?: string;
 }
 
-/** Canales del proveedor falso (los de docs/iptv.md §9.2). */
+/** kbit/s de un stream TS según su resolución (para que las variantes se distingan también por caudal). */
+function kbpsFor(resolution: string | undefined, fallback: number): number {
+  const height = Number(resolution?.split('x')[1] ?? 0);
+  if (height >= 2000) return 4000;
+  if (height >= 1000) return 2500;
+  if (height >= 700) return 1500;
+  if (height > 0) return 800;
+  return fallback;
+}
+
+/** Canales del proveedor falso (los de docs/iptv.md §9.2, §14.9 y §16). */
 export const FAKE_IPTV_CHANNELS: readonly FakeIptvChannel[] = [
   { id: 101, name: 'ES: DAZN LaLiga FHD', epg: 'DAZNLaLiga.es', category: 1, hlsInM3u: true },
   { id: 102, name: 'ES: DAZN LaLiga HD', epg: 'DAZNLaLiga.es', category: 1 },
@@ -62,6 +85,50 @@ export const FAKE_IPTV_CHANNELS: readonly FakeIptvChannel[] = [
   { id: 109, name: 'UK: DAZN 1', epg: 'DAZN1.uk', category: 3 },
   { id: 110, name: 'ES: Telecinco HD', epg: 'Telecinco.es', category: 2 },
   { id: 111, name: 'ES: Tele Noche HD', epg: 'TeleNoche.es', category: 4 },
+  /* Un canal con 5 variantes de resolución (§16), cada una con su stream. */
+  {
+    id: 112,
+    name: 'ES: DAZN 1 FHD',
+    epg: 'DAZN1.es',
+    category: 1,
+    hlsInM3u: true,
+    resolution: '1920x1080',
+  },
+  {
+    id: 113,
+    name: 'ES: DAZN 1 HD',
+    epg: 'DAZN1.es',
+    category: 1,
+    hlsInM3u: true,
+    resolution: '1280x720',
+  },
+  {
+    id: 114,
+    name: 'ES: DAZN 1 SD',
+    epg: 'DAZN1.es',
+    category: 1,
+    hlsInM3u: true,
+    resolution: '720x576',
+  },
+  {
+    id: 115,
+    name: 'ES: DAZN 1 4K',
+    epg: 'DAZN1.es',
+    category: 1,
+    hlsInM3u: true,
+    resolution: '3840x2160',
+  },
+  {
+    id: 116,
+    name: 'ES: DAZN 1 (backup)',
+    epg: 'DAZN1.es',
+    category: 1,
+    hlsInM3u: true,
+    resolution: '1920x1080',
+  },
+  /* Otros países (todo desbloqueado, §16): el mismo nombre en Alemania es otro canal. */
+  { id: 117, name: 'DE: DAZN 1 HD', epg: 'DAZN1.de', category: 5 },
+  { id: 118, name: 'FR: Canal+ Sport', epg: 'CanalSport.fr', category: 6 },
 ];
 
 const CATEGORIES = [
@@ -69,6 +136,8 @@ const CATEGORIES = [
   { category_id: '2', category_name: 'ES | GENERALISTAS', parent_id: 0 },
   { category_id: '3', category_name: 'UK | SPORTS', parent_id: 0 },
   { category_id: '4', category_name: 'XXX', parent_id: 0 },
+  { category_id: '5', category_name: 'DE | SPORT', parent_id: 0 },
+  { category_id: '6', category_name: 'FR | SPORT', parent_id: 0 },
 ];
 
 export type FakeIptvMode =
@@ -306,17 +375,18 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
     /* Una reapertura sigue la misma línea de tiempo; con `:pts`, salta 1000 s. */
     const elapsed = Math.floor((Date.now() - state.firstOpenAt) / 1000);
     const startSec = pts ? state.opens * 1000 : elapsed;
+    const kbps = kbpsFor(FAKE_IPTV_CHANNELS.find((c) => c.id === id)?.resolution, bitrate);
     const muxer = new TsMuxer({
       video: 'h264',
       audio: ['ac3'],
-      bitrateKbps: bitrate,
+      bitrateKbps: kbps,
       startSec,
       color: colorFromSeed(String(id)),
     });
     res.writeHead(200, { 'content-type': 'video/mp2t' });
     open.add(res);
     openIds.set(res, id);
-    const perTick = Math.max(1, Math.round((bitrate * 1000 * 0.04) / 8 / TS_PACKET_SIZE));
+    const perTick = Math.max(1, Math.round((kbps * 1000 * 0.04) / 8 / TS_PACKET_SIZE));
     const startedAt = Date.now();
     const opensAtStart = state.opens;
     const timer = setInterval(() => {
@@ -342,13 +412,31 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
     });
   };
 
-  const serveHlsPlaylist = async (id: number, res: http.ServerResponse): Promise<void> => {
+  const serveHlsPlaylist = async (
+    id: number,
+    res: http.ServerResponse,
+    media = false,
+  ): Promise<void> => {
     const state = states.get(id);
     if (!state) {
       res.writeHead(404).end();
       return;
     }
     if (await applyMode(state, res)) return;
+    const resolution = FAKE_IPTV_CHANNELS.find((c) => c.id === id)?.resolution;
+    if (resolution && !media) {
+      /* Lista maestra con la resolución de verdad (§16); el audio va muxeado en los segmentos. */
+      const kbps = kbpsFor(resolution, bitrate);
+      const master = Buffer.from(
+        `#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-STREAM-INF:BANDWIDTH=${kbps * 1000},RESOLUTION=${resolution},CODECS="avc1.42c01e,ac-3"\n/hls/${id}/media.m3u8\n`,
+      );
+      res.writeHead(200, {
+        'content-type': 'application/vnd.apple.mpegurl',
+        'content-length': String(master.length),
+      });
+      res.end(master);
+      return;
+    }
     const now = Math.floor(Date.now() / 2000);
     const first = Math.max(0, now - 5);
     const lines = [
@@ -500,6 +588,11 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
       const live = /^\/live\/([^/]+)\/([^/]+)\/(\d+)\.(ts|m3u8)$/.exec(path);
       const short = /^\/([^/]+)\/([^/]+)\/(\d+)$/.exec(path);
       const segment = /^\/hls\/(\d+)\/seg\.php$/.exec(path);
+      const mediaList = /^\/hls\/(\d+)\/media\.m3u8$/.exec(path);
+      if (mediaList) {
+        await serveHlsPlaylist(Number(mediaList[1]), res, true);
+        return;
+      }
       if (segment) {
         serveHlsSegment(Number(segment[1]), Number(url.searchParams.get('n') ?? 0), res);
         return;

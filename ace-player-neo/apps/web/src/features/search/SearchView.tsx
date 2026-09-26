@@ -68,6 +68,7 @@ import {
   cappedText,
   iptvCountText,
   iptvSubtitle,
+  iptvTags,
   mergeSearch,
   searchLiveText,
   showMoreText,
@@ -377,6 +378,10 @@ export default function SearchView({ active }: ViewProps) {
             {merged.local.map(({ item, iptv }) => {
               const idState = actions.library?.iptvIds?.[item.id];
               const channel = { ...item, iptv };
+              /* Tu fila que es un canal de tu IPTV lleva también sus calidades (§16). */
+              const iptvChannel = iptv
+                ? iptvData?.channels.find((candidate) => candidate.id === iptv)
+                : undefined;
               return (
                 <li key={item.id} className="lib-row">
                   <ChannelRow
@@ -390,6 +395,7 @@ export default function SearchView({ active }: ViewProps) {
                     onAir={onAir(item)}
                     iptv={iptv !== null}
                     subtitle={idState ? IPTV_ID_SUBTITLE[idState] : undefined}
+                    tags={iptvChannel ? iptvTags(iptvChannel) : undefined}
                     onPlay={() => actions.play(channel, 'buscar')}
                     onToggleFavorite={() => actions.toggleFavorite(channel)}
                     menuItems={actions.menuFor(
@@ -447,6 +453,7 @@ export default function SearchView({ active }: ViewProps) {
                       onAir={onAir(row)}
                       iptv
                       subtitle={iptvSubtitle(channel, alsoAce)}
+                      tags={iptvTags(channel)}
                       onPlay={() => actions.play(row, 'buscar')}
                       onToggleFavorite={() => actions.toggleFavorite(row)}
                       menuItems={actions.menuFor(row, 'search')}

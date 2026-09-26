@@ -9,7 +9,8 @@ import { windowFrom, type StoredProgramme } from './guide.js';
 import { guideGroupMatches } from './layer.js';
 import {
   matchIptvChannels,
-  pickVariants,
+  planVariants,
+  relayVariants,
   sameChannel,
   sameChannelScore,
   withoutTrailingNote,
@@ -94,18 +95,20 @@ const CORPUS = [
 describe('matchIptvChannels', () => {
   const cat = catalog(CORPUS);
 
-  it('umbral 92: un canal por grupo, la mejor variante (FHD, no HEVC, no reserva)', () => {
+  it('umbral 92: un canal por grupo, con un cartel por resolución (FHD, HD, la reserva al final; HEVC sin cartel)', () => {
     const [match, ...rest] = matchIptvChannels(cat, ['DAZN LaLiga'], { scorer });
     expect(rest.map((item) => item.best.display)).not.toContain('DAZN LaLiga');
     expect(match?.best.display).toBe('DAZN LaLiga');
     expect(match?.best.quality).toBe('fhd');
     expect(match?.best.hevc).toBe(false);
     expect(match?.score).toBeGreaterThanOrEqual(92);
-    /* Respaldo: HD y la reserva (la HEVC no entra si hay 2 mejores). */
-    expect(match?.variants.map((entry) => entry.title)).toEqual([
+    expect(match?.posters.map((entry) => entry.title)).toEqual([
+      'ES: DAZN LaLiga FHD',
       'ES: DAZN LaLiga HD',
       'ES: DAZN LaLiga (Backup)',
     ]);
+    /* La HEVC no tiene cartel (la web no la reproduce, D6): queda de respaldo. */
+    expect(match?.hidden.map((entry) => entry.title)).toEqual(['ES: DAZN LaLiga HEVC']);
   });
 
   it('«LaLiga TV Hypermotion» no casa con «LaLiga TV» (ni al revés)', () => {
@@ -119,7 +122,8 @@ describe('matchIptvChannels', () => {
 
   it('«DAZN» no casa con «DAZN 1» (familia 78 < 92); «DAZN 1» no casa con «DAZN F1»', () => {
     expect(matchIptvChannels(cat, ['DAZN'], { scorer })).toEqual([]);
-    expect(names(matchIptvChannels(cat, ['DAZN 1'], { scorer }))).toEqual(['DAZN 1']);
+    /* «DAZN 1» de España, del Reino Unido y de Italia: tres canales del mismo nombre, ninguno «DAZN F1». */
+    expect([...new Set(names(matchIptvChannels(cat, ['DAZN 1'], { scorer })))]).toEqual(['DAZN 1']);
     expect(names(matchIptvChannels(cat, ['DAZN F1'], { scorer }))).toEqual(['DAZN F1']);
   });
 
@@ -144,12 +148,32 @@ describe('matchIptvChannels', () => {
     expect(names(matchIptvChannels(cat, ['M+ La Liga TV'], { scorer }))).toContain('M+ LaLiga TV');
   });
 
-  it('filtro de país: «UK: DAZN 1» e «IT: DAZN 1» no casan con «DAZN 1»', () => {
+  it('país: preferencia, no filtro; «DAZN 1» de España va antes que «UK: DAZN 1» e «IT: DAZN 1»', () => {
     const matches = matchIptvChannels(cat, ['DAZN 1'], { scorer });
-    expect(matches).toHaveLength(1);
+    expect(matches.map((match) => [match.best.display, match.bucket])).toEqual([
+      ['DAZN 1', ''],
+      ['DAZN 1', 'UK'],
+      ['DAZN 1', 'IT'],
+    ]);
     expect(matches[0]?.best.country).toBe('ES');
-    const foreign = catalog(['UK: DAZN 1', 'IT: DAZN 1']);
-    expect(matchIptvChannels(foreign, ['DAZN 1'], { scorer })).toEqual([]);
+    /* Si solo existe el extranjero y casa por nombre, sale. */
+    const foreign = catalog(['UK: DAZN 1', 'IT: DAZN 1 HD']);
+    expect(matchIptvChannels(foreign, ['DAZN 1'], { scorer }).map((match) => match.bucket)).toEqual(
+      ['UK', 'IT'],
+    );
+    /* España y sin país son el mismo canal: sus variantes van juntas. */
+    const mixed = matchIptvChannels(catalog(['DAZN 1 SD', 'ES: DAZN 1 FHD']), ['DAZN 1'], {
+      scorer,
+    });
+    expect(mixed).toHaveLength(1);
+    expect(mixed[0]?.posters.map((entry) => entry.title)).toEqual(['ES: DAZN 1 FHD', 'DAZN 1 SD']);
+  });
+
+  it('Hypermotion y el umbral siguen igual con cualquier país', () => {
+    const list = catalog(['DE: LaLiga TV Hypermotion', 'UK: LaLiga TV', 'IT: DAZN']);
+    expect(names(matchIptvChannels(list, ['LaLiga TV'], { scorer }))).toEqual(['LaLiga TV']);
+    expect(matchIptvChannels(list, ['LaLiga TV'], { scorer })[0]?.bucket).toBe('UK');
+    expect(matchIptvChannels(list, ['DAZN 1'], { scorer })).toEqual([]);
   });
 
   it('trampas medidas: «Bar», «Antena 3 Internacional»', () => {
@@ -170,8 +194,8 @@ describe('matchIptvChannels', () => {
   });
 });
 
-describe('pickVariants', () => {
-  it('FHD > HD > 4K > SD, no HEVC antes que HEVC, reserva al final; la fiabilidad desempata', () => {
+describe('planVariants (§16)', () => {
+  it('un cartel por resolución: 1080p, 4K, 720p y SD; la reserva y la HEVC, de respaldo; la fiabilidad desempata', () => {
     const list = catalog([
       'DAZN LaLiga SD',
       'DAZN LaLiga 4K',
@@ -180,16 +204,197 @@ describe('pickVariants', () => {
       'DAZN LaLiga FHD backup',
       'DAZN LaLiga FHD',
     ]).group('dazn laliga');
-    const picked = pickVariants(list);
-    expect(picked?.best.title).toBe('DAZN LaLiga FHD');
-    /* Mismos desempates: la reserva FHD va antes que la HD normal (calidad antes que reserva). */
-    expect(picked?.variants.map((entry) => entry.title)).toEqual([
-      'DAZN LaLiga FHD backup',
+    const plan = planVariants(list);
+    expect(plan?.posters.map((entry) => entry.title)).toEqual([
+      'DAZN LaLiga FHD',
+      'DAZN LaLiga 4K',
       'DAZN LaLiga HD',
+      'DAZN LaLiga SD',
+    ]);
+    expect(plan?.hidden.map((entry) => entry.title)).toEqual([
+      'DAZN LaLiga FHD backup',
+      'DAZN LaLiga FHD HEVC',
     ]);
     const twins = catalog(['X HD', 'X HD']).group('x');
     const second = twins[1]?.id as string;
-    expect(pickVariants(twins, (id) => (id === second ? 0.9 : 0.1))?.best.id).toBe(second);
+    const byReliability = planVariants(twins, {
+      reliability: (id) => (id === second ? 0.9 : 0.1),
+    });
+    expect(byReliability?.posters[0]?.id).toBe(second);
+    expect(byReliability?.hidden).toHaveLength(1);
+  });
+
+  it('con sitio, la reserva tiene su cartel al final; las copias de una resolución, no', () => {
+    const list = catalog([
+      'ES: DAZN 1 (backup)',
+      'ES: DAZN 1 HD',
+      'ES: DAZN 1 FHD',
+      'DAZN 1 FHD (2)',
+    ]).group('dazn 1');
+    const plan = planVariants(list);
+    expect(plan?.posters.map((entry) => entry.title)).toEqual([
+      'ES: DAZN 1 FHD',
+      'ES: DAZN 1 HD',
+      'ES: DAZN 1 (backup)',
+    ]);
+    /* «(2)» es la segunda copia (reserva) de la 1080p: la del cartel 1080p la prueba el relé antes de caer. */
+    expect(plan?.hidden.map((entry) => entry.title)).toEqual(['DAZN 1 FHD (2)']);
+  });
+
+  it('la calidad real del stream manda sobre la del nombre', () => {
+    const list = catalog(['DAZN 1 HD', 'DAZN 1 SD']).group('dazn 1');
+    const hd = list.find((entry) => entry.title === 'DAZN 1 HD') as (typeof list)[number];
+    const sd = list.find((entry) => entry.title === 'DAZN 1 SD') as (typeof list)[number];
+    /* El «SD» es en realidad 1080 (lo dijo la maestra HLS): arranca primero. */
+    const plan = planVariants(list, {
+      qualityOf: (entry) => (entry.id === sd.id ? 'fhd' : entry.quality),
+    });
+    expect(plan?.posters.map((entry) => entry.id)).toEqual([sd.id, hd.id]);
+  });
+
+  it('el relé prueba detrás de un cartel solo las variantes sin cartel que le tocan', () => {
+    const list = catalog([
+      'DAZN 1 FHD',
+      'DAZN 1 FHD alt',
+      'DAZN 1 1080p (2)',
+      'DAZN 1 4K',
+      'DAZN 1 HD',
+      'DAZN 1 SD',
+      'DAZN 1 576p',
+    ]).group('dazn 1');
+    const plan = planVariants(list);
+    expect(plan).not.toBe(null);
+    const titles = (entries: readonly { title: string }[]) => entries.map((entry) => entry.title);
+    expect(titles(plan?.posters ?? [])).toEqual([
+      'DAZN 1 FHD',
+      'DAZN 1 4K',
+      'DAZN 1 HD',
+      'DAZN 1 SD',
+    ]);
+    const at = (title: string) =>
+      list.find((entry) => entry.title === title) as (typeof list)[number];
+    expect(titles(relayVariants(plan!, at('DAZN 1 FHD')))).toEqual([
+      'DAZN 1 FHD',
+      'DAZN 1 FHD alt',
+      'DAZN 1 1080p (2)',
+    ]);
+    expect(titles(relayVariants(plan!, at('DAZN 1 SD')))).toEqual(['DAZN 1 SD', 'DAZN 1 576p']);
+    expect(titles(relayVariants(plan!, at('DAZN 1 4K')))).toEqual(['DAZN 1 4K']);
+  });
+});
+
+/* Nombres de variantes como los de las listas de verdad (anonimizados): todas
+   las de un canal dan la misma clave, y nunca se juntan canales distintos. */
+describe('grupos de variantes: corpus', () => {
+  /* La clave de `title` en una lista que también trae el canal sin adornos (así una copia «(2)» lo es). */
+  const key = (title: string) => catalog([raw(title), raw('Otro canal')]).entries[0]?.key;
+  const VARIANTS: readonly (readonly [string, readonly string[]])[] = [
+    [
+      'dazn 1',
+      [
+        'DAZN 1',
+        'DAZN 1 FHD',
+        'DAZN 1 HD',
+        'DAZN 1 SD',
+        'DAZN 1 4K',
+        'DAZN 1 UHD',
+        'DAZN 1 (backup)',
+        'DAZN 1 [BACKUP]',
+        'DAZN 1 BK',
+        'DAZN 1 bk2',
+        'DAZN 1 ALT',
+        'DAZN 1 (1)',
+        'DAZN 1 (2)',
+        'ES: DAZN 1 1080p',
+        'ES: DAZN 1 720p',
+        'ES | DAZN 1 HD',
+        '|ES| DAZN 1 FHD',
+        '[ES] DAZN 1',
+        'ES- DAZN 1 SD',
+        'DAZN 1 [ES]',
+        'DAZN 1 |ES|',
+        'DAZN 1 HEVC',
+        'DAZN 1 H265',
+        'DAZN 1 H.265 FHD',
+        'DAZN 1 50FPS',
+        'DAZN 1 FHD 50 fps',
+        'DAZN 1 1080p50',
+        'DAZN 1 VIP',
+        'VIP | ES: DAZN 1 FHD',
+        'FHD | ES: DAZN 1',
+        'ES: DAZN 1 ᶠᴴᴰ',
+        '★ DAZN 1 ★ HD+',
+        'DAZN 1 Full HD',
+        'DAZN 1 FullHD',
+        'DAZN 1 HDR',
+        'DAZN 1 H264',
+        'ES • DAZN 1 HD',
+      ],
+    ],
+    [
+      'movistar laliga tv',
+      [
+        'M+ LaLiga TV',
+        'M+ LaLiga TV FHD',
+        'ES: M+ LALIGA TV HD',
+        'M+ LaLiga (backup)',
+        'Movistar LaLiga 1080p',
+        'M+ La Liga TV UHD',
+        'ES: M+ LaLiga TV (1)',
+      ],
+    ],
+    ['movistar laliga tv 2', ['M+ LaLiga TV 2', 'M+ LaLiga TV 2 FHD', 'ES: M+ LaLiga TV 2 HD']],
+    [
+      'laliga tv hypermotion',
+      ['LaLiga TV Hypermotion', 'ES: LaLiga TV Hypermotion FHD', 'M+ Hypermotion HD'],
+    ],
+    ['laliga tv', ['LaLiga TV', 'LaLiga TV FHD', 'ES: LaLiga TV HD']],
+    ['dazn 2', ['DAZN 2', 'DAZN 2 FHD', 'ES: DAZN 2 HD']],
+  ];
+
+  it.each(VARIANTS)('«%s»: todas sus variantes son un grupo', (expected, titles) => {
+    const list = catalog(titles.map((title) => raw(title)));
+    for (const entry of list.entries)
+      expect([entry.title, entry.key]).toEqual([entry.title, expected]);
+    expect(list.buckets(expected)).toHaveLength(1);
+    /* Y sin la copia «(n)», cada una sola da la misma clave. */
+    for (const title of titles.filter((item) => !/\(\d\)$/.test(item)))
+      expect([title, key(title)]).toEqual([title, expected]);
+  });
+
+  it('nunca junta canales distintos', () => {
+    const pairs: readonly (readonly [string, string])[] = [
+      ['DAZN 1 FHD', 'DAZN 2 FHD'],
+      ['DAZN 1', 'DAZN F1'],
+      ['DAZN 1 HD', 'DAZN 12 HD'],
+      ['LaLiga TV FHD', 'LaLiga TV Hypermotion FHD'],
+      ['M+ LaLiga FHD', 'M+ LaLiga 2 FHD'],
+      ['M+ LaLiga TV', 'M+ LaLiga TV 2'],
+      ['M+ LaLiga TV (1)', 'M+ LaLiga TV 2'],
+      ['La 1 HD', 'La 2 HD'],
+      ['Antena 3 FHD', 'Antena 3 Internacional'],
+      ['M+ Deportes HD', 'M+ Deportes 2 HD'],
+      ['Eurosport 1 HD', 'Eurosport 2 HD'],
+    ];
+    for (const [a, b] of pairs) expect([a, b, key(a) === key(b)]).toEqual([a, b, false]);
+  });
+
+  it('las variantes con otro país son otro canal del mismo nombre (mismo grupo, otro país)', () => {
+    const list = catalog(['ES: DAZN 1 HD', 'DE: DAZN 1 HD', 'DAZN 1 FHD']);
+    expect(list.buckets('dazn 1').map((item) => [item.bucket, item.entries.length])).toEqual([
+      ['', 2],
+      ['DE', 1],
+    ]);
+  });
+
+  it('«Canal Sur (2)» sin un «Canal Sur» al lado es otro canal («Canal Sur 2»), no una copia', () => {
+    const lone = catalog(['Canal Sur (2)', 'Otro']);
+    expect(lone.entries[0]?.key).toBe('canal sur 2');
+    expect(lone.entries[0]?.display).toBe('Canal Sur (2)');
+    expect(lone.entries[0]?.backup).toBe(false);
+    const both = catalog(['Canal Sur', 'Canal Sur (2)']);
+    expect(both.group('canal sur')).toHaveLength(2);
+    expect(both.group('canal sur')[1]?.backup).toBe(true);
   });
 });
 
@@ -279,16 +484,19 @@ describe('lista pública de canales en abierto', () => {
       at('Deportes Uno', 'https://ads.example/playlist.m3u8?id=8&is_lat=[LMT]'),
       at('Solo Anuncios', 'https://ads.example/playlist.m3u8?cb=[CACHEBUSTER]'),
     ]);
-    const uno = pickVariants(list.group(list.entries[0]?.key as string));
-    expect(uno?.best.ref).toBe('https://oficial.example/uno/main.m3u8');
-    expect(uno?.variants.map((entry) => entry.ref)).toEqual([
+    const uno = planVariants(list.group(list.entries[0]?.key as string));
+    /* La misma resolución: la de macros no tiene cartel, es el respaldo del relé. */
+    expect(uno?.posters.map((entry) => entry.ref)).toEqual([
+      'https://oficial.example/uno/main.m3u8',
+    ]);
+    expect(uno?.hidden.map((entry) => entry.ref)).toEqual([
       'https://ads.example/playlist.m3u8?id=7&ip=[IP]&ua=[UA]&did=[DEVICE_ID]',
     ]);
     /* «Deportes Uno GEO» y «Deportes Uno» son un solo grupo. */
     const deportes = matchIptvChannels(list, ['Deportes Uno'], { scorer });
     expect(deportes).toHaveLength(1);
     expect(deportes[0]?.best.ref).toBe('https://oficial.example/dep/main.m3u8');
-    expect(deportes[0]?.variants).toHaveLength(1);
+    expect(deportes[0]?.hidden).toHaveLength(1);
     /* Un canal con solo la URL con macros sigue saliendo (esos servidores responden con el texto tal cual). */
     expect(names(matchIptvChannels(list, ['Solo Anuncios'], { scorer }))).toEqual([
       'Solo Anuncios',
@@ -308,6 +516,7 @@ describe('lista pública de canales en abierto', () => {
   });
 
   it('la cadena entre paréntesis del final no la pone la agenda; una nota con competición sí cuenta', () => {
+    /* «Canal Sur (2)» sin «Canal Sur» al lado es «Canal Sur 2» (§16): no casa con «Canal Sur». */
     const list = catalog(['TV Canaria (RTVC)', 'LaLiga TV (Hypermotion)', 'Canal Sur (2)']);
     expect(names(matchIptvChannels(list, ['TV Canaria'], { scorer }))).toEqual([
       'TV Canaria (RTVC)',

@@ -6,17 +6,19 @@ import {
   IPTV_GUIDE_SCORE,
   IPTV_MAX_CANDIDATES,
   IPTV_MAX_GUIDE_HINTS,
+  IPTV_MAX_MATCHED_CHANNELS,
   channelMatchScore,
 } from '@ace/shared';
 import type { Catalog } from './catalog.js';
 import type { GuideWindow, StoredProgramme } from './guide.js';
 import { confirmByGuide, type GuideChannelCandidate } from './guide-match.js';
 import {
+  groupMatch,
   matchIptvChannels,
-  pickVariants,
   withoutTrailingNote,
   type ChannelScorer,
   type IptvGroupMatch,
+  type VariantOptions,
 } from './match.js';
 import { iptvAskedChannel } from './names.js';
 import type { IptvProgramInput } from './types.js';
@@ -26,7 +28,7 @@ export function guideGroupMatches(
   catalog: Catalog,
   window: GuideWindow | null,
   program: IptvProgramInput,
-  reliability?: (id: string) => number | null,
+  options: VariantOptions = {},
 ): IptvGroupMatch[] {
   if (!window || program.start === null || !program.home || !program.away) return [];
   const groups = new Map<string, StoredProgramme[]>();
@@ -72,41 +74,85 @@ export function guideGroupMatches(
   );
   const out: IptvGroupMatch[] = [];
   for (const item of confirmed) {
-    const all = catalog.group(item.key);
-    const entries = all.filter((entry) => entry.country === null || entry.country === 'ES');
-    const picked = pickVariants(entries.length ? entries : all, reliability);
-    if (!picked) continue;
-    out.push({
-      key: item.key,
-      ...picked,
-      score: IPTV_GUIDE_SCORE,
-      matchedChannel: item.display,
-      guide: true,
-    });
+    /* La guía exige España (§4.5.5): su canal es el de España o sin país; si no hay, el primero. */
+    const bucket = catalog.buckets(item.key)[0];
+    if (!bucket) continue;
+    const match = groupMatch(
+      item.key,
+      bucket.bucket,
+      bucket.entries,
+      { score: IPTV_GUIDE_SCORE, matchedChannel: item.display, guide: true },
+      options,
+    );
+    if (match) out.push(match);
   }
   return out;
 }
 
 export interface IptvLayerResult {
-  /** Como mucho 2 grupos, primero los de la guía. */
+  /**
+   * Los canales con sitio, primero los de la guía, cada uno con los carteles
+   * que le tocan: 4 carteles en total como mucho (§16).
+   */
   readonly matches: readonly IptvGroupMatch[];
   /** Nombres de canal confirmados por la guía (pistas para AceStream). */
   readonly hints: readonly string[];
 }
 
-/** Junta la guía y el nombre: un cartel por grupo, la guía primero, 2 como mucho. */
+/**
+ * Reparte los 4 carteles IPTV entre los canales, ya en orden (§16): los 2
+ * primeros canales «de verdad» tienen uno asegurado cada uno (el gemelo de
+ * otro país de un canal que ya está, «DE: DAZN 1» con «DAZN 1», no cuenta:
+ * solo entra si sobra sitio) y el resto se llena en orden, así el primer
+ * canal enseña todas sus resoluciones. Lo que no cabe pasa a respaldo.
+ */
+export function allotPosters(ordered: readonly IptvGroupMatch[]): IptvGroupMatch[] {
+  const withSpain = new Set(ordered.filter((match) => match.bucket === '').map((m) => m.key));
+  const twin = (match: IptvGroupMatch): boolean => match.bucket !== '' && withSpain.has(match.key);
+  const counts = new Map<IptvGroupMatch, number>();
+  let left = IPTV_MAX_CANDIDATES;
+  for (const match of ordered.filter((item) => !twin(item)).slice(0, IPTV_MAX_MATCHED_CHANNELS)) {
+    if (left <= 0) break;
+    counts.set(match, 1);
+    left -= 1;
+  }
+  for (const match of ordered) {
+    while (left > 0 && (counts.get(match) ?? 0) < match.posters.length) {
+      counts.set(match, (counts.get(match) ?? 0) + 1);
+      left -= 1;
+    }
+  }
+  return ordered
+    .filter((match) => (counts.get(match) ?? 0) > 0)
+    .map((match) => {
+      const count = counts.get(match) as number;
+      if (count >= match.posters.length) return match;
+      return {
+        ...match,
+        posters: match.posters.slice(0, count),
+        hidden: [...match.posters.slice(count), ...match.hidden],
+      };
+    });
+}
+
+/** Junta la guía y el nombre: un canal una vez (la guía primero) y 4 carteles como mucho (§16). */
 export function mergeIptvMatches(
   byGuide: readonly IptvGroupMatch[],
   byName: readonly IptvGroupMatch[],
 ): IptvLayerResult {
   const merged = new Map<string, IptvGroupMatch>();
-  for (const match of byGuide) merged.set(match.key, match);
-  for (const match of byName) if (!merged.has(match.key)) merged.set(match.key, match);
+  const id = (match: IptvGroupMatch): string => `${match.key}\u0000${match.bucket}`;
+  for (const match of byGuide) merged.set(id(match), match);
+  for (const match of byName) if (!merged.has(id(match))) merged.set(id(match), match);
   const ordered = [...merged.values()].sort(
-    (a, b) => Number(b.guide) - Number(a.guide) || b.score - a.score || a.best.order - b.best.order,
+    (a, b) =>
+      Number(b.guide) - Number(a.guide) ||
+      b.score - a.score ||
+      Number(a.bucket !== '') - Number(b.bucket !== '') ||
+      a.best.order - b.best.order,
   );
   return {
-    matches: ordered.slice(0, IPTV_MAX_CANDIDATES),
+    matches: allotPosters(ordered),
     hints: byGuide.slice(0, IPTV_MAX_GUIDE_HINTS).map((match) => match.best.display),
   };
 }
