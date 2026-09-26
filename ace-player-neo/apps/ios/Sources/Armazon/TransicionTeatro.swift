@@ -208,7 +208,7 @@ struct VueloPieza: Identifiable {
     @discardableResult func arrastrarAlMini(_ dy: Double, escenario: CGRect) -> Bool {
         guard !activa else { return false }
         if alMini == 0 || desdeAlMini == nil { desdeAlMini = escenario }
-        guard let desde = desdeAlMini else { return }
+        guard let desde = desdeAlMini else { return false }
         let hasta: Marco = maquetacion.marcoVideoMini()
         alMini = GeometriaVuelo.progresoAlMini(dy: dy, desde: TransicionTeatro.marco(desde), hasta: hasta)
         opacidadDebajo = 1
