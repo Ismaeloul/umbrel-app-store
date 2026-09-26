@@ -204,7 +204,7 @@ private struct VistaEmparejar: View {
 
     private func cartel(_ medidas: CartelCamara.Medidas) -> some View {
         CartelCamara(
-            modelo: modelo, camara: camara, medidas: medidas, recomprobar: recomprobar, activa: cicloVida.fase == .activa,
+            modelo: modelo, camaraQR: camara, medidas: medidas, recomprobar: recomprobar, activa: cicloVida.fase == .activa,
             alAbrirAjustes: abrirAjustes, alEscribirCodigo: escribirCodigo)
     }
 
