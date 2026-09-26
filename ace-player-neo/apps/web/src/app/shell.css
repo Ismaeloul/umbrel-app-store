@@ -410,8 +410,13 @@
     align-items: center;
     justify-content: flex-end;
     gap: 2px;
-    justify-self: end;
+    /* Ocupa su columna entera (y no más): así la cápsula de «En el móvil · …»
+       se recorta con puntos suspensivos en vez de pisar «Ajustes». */
+    justify-self: stretch;
     min-width: 0;
+  }
+  .topbar__right > :not(.house-capsule) {
+    flex: none;
   }
   .topbar__help {
     color: var(--text-2);

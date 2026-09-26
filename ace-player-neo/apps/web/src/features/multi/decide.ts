@@ -193,14 +193,23 @@ export function decideHouseChange(input: DecideInput): HouseDecision {
   if (input.engagedHash && input.engagedHash === hash) return { go: {} };
   /* El mismo canal que ya se ve en casa: se une sin preguntar. */
   if ((sessions ?? []).some((session) => session.hash === hash)) return { go: {} };
+  const remembered = input.remembered;
+  const recent = remembered !== null && now - remembered.at < MULTI_TIMINGS.rememberBothMs;
   const house0 = houseSession(sessions, me, now, pausedSince);
-  if (!house0) return { go: {} };
+  if (!house0) {
+    /* Zapping con «en los dos» recordado: el otro puede estar a medio seguir
+       (el servidor lo ha sacado de la sesión vieja y aún no está en la nueva,
+       así que no sale en la lista). Sin `move` el servidor lo pararía al
+       llegar; con `from` = la mía solo se mueve a quien ya esté en ella, y si
+       no hay nadie no pasa nada. */
+    if (recent && mine) return { go: { others: 'move', from: mine.id } };
+    return { go: {} };
+  }
   if (!input.sseOpen && !input.fresh) return { pending: true };
   const { session, others } = house0;
   const together = session.viewers.some((viewer) => viewer.viewerId === me.viewerId);
   const { ability, cannotFollow } = abilityOf(others);
   /* «Cambiar en los dos» se recuerda 5 min mientras sigan juntos los mismos (D-M3). */
-  const remembered = input.remembered;
   if (
     together &&
     ability !== 'none' &&
