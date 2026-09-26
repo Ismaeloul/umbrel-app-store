@@ -21,11 +21,24 @@ enum Deslizamiento {
     static let dominio = 1.4
 
     /// classifySwipe: distancia ≥ 56 pt o velocidad ≥ 450 pt/s con ≥ 24 pt, y eje dominante ≥ 1,4×.
+    /// OJO: esta forma (la del contrato) mira los DOS ejes, y la web sin `axis` solo el horizontal; y `vx`/`vy`
+    /// tienen que ser la velocidad MEDIA del gesto, no la instantánea de `DragGesture.Value.velocity`. Para un
+    /// reconocedor, mejor `clasificar(dx:dy:ms:eje:umbral:)`, que es classifySwipe tal cual.
     static func clasificar(dx: Double, dy: Double, vx: Double, vy: Double) -> ResultadoDeslizar {
         clasificar(dx: dx, dy: dy, vx: vx, vy: vy, eje: .ambos)
     }
 
-    /// Igual, con los ejes que interesan y el umbral de distancia (el mini usa 72).
+    /// classifySwipe tal cual (lib/gestures.ts): la velocidad es la media, `max(|dx|,|dy|) / max(ms, 1)`, con
+    /// `ms` lo que duró el gesto; sin eje, solo el horizontal (`axis = 'x'`). Contrato aditivo de M2 (ronda 2).
+    static func clasificar(
+        dx: Double, dy: Double, ms: Double, eje: EjeDeslizar = .horizontal, umbral: Double = distancia
+    ) -> ResultadoDeslizar {
+        let recorrido = max(abs(dx), abs(dy))
+        let media = recorrido / max(ms, 1) * 1000
+        return clasificar(dx: dx, dy: dy, vx: media, vy: 0, eje: eje, umbral: umbral)
+    }
+
+    /// Igual, con los ejes que interesan y el umbral de distancia (el mini usa 72). `vx`/`vy`, velocidad media.
     static func clasificar(
         dx: Double, dy: Double, vx: Double, vy: Double, eje: EjeDeslizar, umbral: Double = distancia
     ) -> ResultadoDeslizar {
@@ -60,8 +73,11 @@ enum GestosMini {
     static let umbral = 72.0
     /// Freno del arrastre hacia abajo (`dy * 0.25`).
     static let descartarFraccion = 0.25
-    /// La opacidad baja con `|dx| / 320` (mínimo 0,35); también la salida volando.
+    /// Divisor de la opacidad al arrastrar: `1 - |dx| / 320` (MiniPlayer.tsx). No son milisegundos: el nombre
+    /// viene del contrato; el vuelo real es `vueloMs`. Mejor `divisorOpacidad`.
     static let salidaMs = 320.0
+    /// `1 - |dx| / 320` (contrato aditivo de M2, ronda 2: el nombre que dice lo que es).
+    static let divisorOpacidad = salidaMs
     /// Opacidad mínima mientras se arrastra.
     static let opacidadMinima = 0.35
     /// Salida volando al descartar (220 ms, `window.setTimeout(finish, 220)`).
@@ -69,8 +85,18 @@ enum GestosMini {
 
     enum Soltar: Sendable { case volver, abrir, descartar }
 
+    /// `vx`/`vy`, velocidad media del gesto (ver `Deslizamiento.clasificar`).
     static func soltar(dx: Double, dy: Double, vx: Double, vy: Double, ancho: Double) -> Soltar {
-        switch Deslizamiento.clasificar(dx: dx, dy: dy, vx: vx, vy: vy, eje: .ambos, umbral: umbral) {
+        decidir(Deslizamiento.clasificar(dx: dx, dy: dy, vx: vx, vy: vy, eje: .ambos, umbral: umbral))
+    }
+
+    /// El `useSwipe` del mini tal cual: `axis: 'both'`, umbral 72 y la velocidad media con lo que duró (`ms`).
+    static func soltar(dx: Double, dy: Double, ms: Double) -> Soltar {
+        decidir(Deslizamiento.clasificar(dx: dx, dy: dy, ms: ms, eje: .ambos, umbral: umbral))
+    }
+
+    private static func decidir(_ resultado: ResultadoDeslizar) -> Soltar {
+        switch resultado {
         case .arriba: .abrir
         case .izquierda, .derecha: .descartar
         case .abajo, .ninguno: .volver
@@ -85,6 +111,6 @@ enum GestosMini {
     /// Lo que se mueve el mini con el dedo: x 1:1, y frenada hacia abajo, y su opacidad.
     static func arrastre(dx: Double, dy: Double) -> (x: Double, y: Double, opacidad: Double) {
         let y = dy > 0 ? dy * descartarFraccion : dy
-        return (dx, y, max(opacidadMinima, 1 - abs(dx) / salidaMs))
+        return (dx, y, max(opacidadMinima, 1 - abs(dx) / divisorOpacidad))
     }
 }

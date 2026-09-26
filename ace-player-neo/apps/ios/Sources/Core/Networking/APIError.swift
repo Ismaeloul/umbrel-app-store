@@ -77,6 +77,22 @@ public enum APIError: Error, Sendable, Equatable {
         }
     }
 
+    /// `errorFromResponse` de la web (errors.ts): el error de una respuesta que no es 2xx. Sobre v1
+    /// `{ error: { code, message, requestId } }` con lo que traiga de texto (sin código, `http_<estado>`); forma
+    /// antigua `{ error: "<código>" }` si el código existe (también `http_NNN`); si no, `http_<estado>`.
+    public static func deRespuesta(estado: Int, datos: Data) -> APIError {
+        let cuerpo = (try? JSONSerialization.jsonObject(with: datos, options: [.fragmentsAllowed])) as? [String: Any]
+        let crudo = cuerpo?["error"]
+        if let objeto = crudo as? [String: Any] {
+            return .servidor(
+                codigo: objeto["code"] as? String ?? "http_\(estado)", estado: estado,
+                mensaje: objeto["message"] as? String, requestId: objeto["requestId"] as? String)
+        }
+        var codigo = "http_\(estado)"
+        if let antiguo = crudo as? String, ErrorCatalog.describir(antiguo) != nil { codigo = antiguo }
+        return .servidor(codigo: codigo, estado: estado, mensaje: nil, requestId: nil)
+    }
+
     /// Fallos de red en los que tiene sentido probar la otra dirección del servidor.
     public static func esDeConectividad(_ codigo: URLError.Code) -> Bool {
         switch codigo {
