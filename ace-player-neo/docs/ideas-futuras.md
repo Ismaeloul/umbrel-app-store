@@ -22,22 +22,31 @@ reproducir. Hoy ya se usa embeddinggemma para recuperar rótulos raros
 (B-165), pero por debajo de las reglas, porque los embeddings ven casi
 iguales «LaLiga» y «LaLiga Hypermotion».
 
-## 3. Soporte IPTV (además de AceStream)
+## 3. Soporte IPTV (además de AceStream) · HECHO (0.8.1, sin publicar)
 
-Pregunta de Isma (23-sep-2026). Viable sobre la arquitectura v2:
-- Listas M3U con URLs `http(s)` de stream (`.m3u8`/`.ts`), no solo enlaces
-  AceStream (hoy `parseM3u` descarta lo que no lleva hash de 40 caracteres), y
-  listas Xtream Codes (servidor + usuario + contraseña) como otro tipo.
-- Un "tipo de fuente" más en el SessionManager: sin motor ni sesión P2P; el
-  backend entrega la URL o la pasa por el Umbrel (HTTPS/CORS). Web con
-  hls.js/mpegts.js; iPhone con HLS directo y el remux de ffmpeg para `.ts` o
-  HEVC.
-- El comprobador prueba la URL (bytes, códec, bitrate) con los mismos
-  estados; la resolución de partidos incluye canales IPTV con el mismo
-  algoritmo (y la protección de Hypermotion).
-- Opcional: EPG XMLTV de la lista para mejorar la agenda.
-- Credenciales Xtream solo en el servidor, nunca al navegador ni a los logs;
-  se mantiene el bloqueo SSRF salvo `ALLOW_PRIVATE_SYNC_URLS`.
+Pregunta de Isma (23-sep-2026), pedida en firme el 26-sep-2026 y hecha en la
+rama `rediseno/iptv`. El diseño cerrado y lo implementado están en
+`docs/iptv.md`; el contrato, en `docs/api.md` §7. En resumen:
+
+- Listas M3U (URL, con streams `http(s)` `.m3u8`/`.ts`) y Xtream Codes
+  (servidor + usuario + contraseña). Se configuran **solo en la web** (Ajustes →
+  IPTV) y se guardan cifradas en el Umbrel: las credenciales no vuelven ni al
+  navegador, ni al iPhone, ni a los registros (el E2E las busca en todas las
+  respuestas, el SSE, la página y los ficheros de datos y logs).
+- Al reproducir un canal o un partido de la agenda, si ese canal está en la
+  IPTV sale **primero** (dos carteles como mucho, con su distintivo «IPTV»).
+  El comprobador sigue verificando AceStream de fondo.
+- Puente en los dos sentidos: si cae la IPTV pasa sola a la mejor AceStream
+  verificada con su aviso y «Volver a la IPTV» a un toque; si cae AceStream y
+  hay IPTV, se usa la IPTV.
+- El vídeo pasa siempre por el servidor (relé local + ffmpeg → HLS fMP4) y la
+  web lo reproduce con hls.js, no con mpegts.js.
+- La guía XMLTV (Xtream `xmltv.php`, o `url-tvg` de la M3U) se usa solo por
+  dentro: confirma qué canal echa el partido a su hora (sin repeticiones,
+  resúmenes ni previas) y es una pista más para las candidatas AceStream.
+  Nada visible nuevo salvo la línea de estado de la guía en Ajustes → IPTV.
+- Queda para después: «mantener caliente» el canal que funciona y la guía como
+  fuente de partidos para la agenda (Isma lo descartó por ahora).
 
 ## 4. Motor AceStream del propio PC en la web (con el Umbrel de respaldo)
 

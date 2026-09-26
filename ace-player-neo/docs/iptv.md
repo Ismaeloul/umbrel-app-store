@@ -6,6 +6,29 @@ publicar. Lo pidió Isma el 26-sep-2026. Este documento sustituye al boceto de `
 **Estado: cerrado tras dos revisiones** (seguridad y robustez; producto y coherencia). Los cambios que salieron de
 ellas ya están en el texto; el anexo «Revisión» (§13) dice qué se cambió, qué se descartó y por qué.
 
+**Implementado (26-sep-2026)** en `rediseno/iptv` (servidor y web; la app nativa no cambia). Lo que se desvía del
+texto o quedó fuera:
+
+- El E2E de §9.3 corre contra la pila entera: `apps/web/e2e/support/iptv.ts` lanza el proveedor falso en
+  `[::1]:<iptv>` y `backend.ts` lleva `iptv.ace-e2e.example` hasta él. Las credenciales de prueba son las del
+  proveedor falso (`usuario-e2e`); el canal suelto es «Antena 3 HD» guardado como favorito.
+- El proveedor falso manda ahora una trama AC-3 de silencio real (antes solo cabecera y ceros): con la vieja, ffmpeg
+  no podía pasar el audio a AAC y el remux no sacaba nada.
+- En Windows (PC de desarrollo y E2E) ffmpeg escribe la lista sin `temp_file` y con barras «/»: el renombrado de
+  `index.m3u8.tmp` falla en Windows mientras el backend lee la lista, e `init.mp4` acababa en el directorio de
+  trabajo. En Linux (el Umbrel) los argumentos no cambian.
+- El arranque depende del colchón del proveedor: con un TS en tiempo real sin colchón, ffmpeg tarda ~5 s en analizar
+  la entrada y otros ~6 s en tener la lista, y el total (15-20 s en el PC) roza el plazo de 20 s del arranque
+  (`iptv_timeout`). El proveedor falso manda 8 s de golpe en el E2E (`burstSeconds`, como un panel de verdad) y
+  arranca en ~6 s. Conviene medirlo con un proveedor real antes de publicar.
+- En la cabecera de un canal suelto, «Reproducir» ya no sale mientras suena la IPTV de ese canal (el selector de
+  `useStore` se quedaba con la lista de fuentes vacía del primer render).
+- Pendiente: «mantener caliente» el canal que funciona; una `location /api/v1/video/` propia en el nginx de
+  `deploy/umbrel`, sin buffer ni registro como `/remux/` (hoy el vídeo de la web va por `location /api/`, con buffer
+  y una línea de log por segmento); comprobar de quién es la sesión en
+  `/api/v1/video` desde la web; cerrar las sesiones vivas al cambiar de proveedor; la renovación del token de las
+  listas M3U y la vuelta a la guía corta, sin probar contra un proveedor real.
+
 Las rutas de ficheros son relativas a `ace-player-neo/` salvo que se diga otra cosa. Los textos entre «comillas» son
 **literales**: se copian tal cual en el código, porque la app nativa los genera desde la web (`generar-textos.mjs`) y
 los compara en `TextosTests`.

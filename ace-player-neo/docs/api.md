@@ -938,3 +938,13 @@ Las 5 rutas son `access: 'web'`: desde `/native` dan `403 origin_forbidden`. No 
 ### 7.4 Errores
 
 16 códigos `iptv_*` (`packages/shared/src/errors.ts`), todos públicos, sin estado antiguo y todos **de fuente**: agotan la fuente y permiten el salto a AceStream. `channelStream` con un id IPTV que ya no vale responde sin tocar el motor: `404 iptv_gone`, `409 iptv_disabled` o `410 iptv_removed`.
+
+### 7.5 Lo demás que ve un cliente
+
+- **`bootstrap.features.iptv`** (opcional, booleano): hay una IPTV activa con catálogo cargado. Es lo único de la IPTV que llega al iPhone; la web lo usa para preguntar primero por la IPTV al tocar un canal suelto.
+- **SSE.** `iptv.status` solo a la web (lo mismo que `iptvGet`, sin secretos). En una sesión IPTV, `stream.stats` lo da el relé (`status: 'iptv'`, `peers: 0`, `speedUp: 0`) y la sesión se cierra siempre con `stream.closed` `reason: 'remux_failed'` y un código `iptv_*` (`iptv_dropped`, `iptv_disabled`, `iptv_removed`, `iptv_busy`) para que el reproductor salte al momento. Cuando el relé reconecta con otra base de tiempos o cambia de variante llega `stream.reopened` con `reason: 'remux_restart'` (mismo `sid`, ffmpeg nuevo), que no cuenta como fallo.
+- **`footballResolve`.** Las candidatas IPTV van primero, dos como mucho, con `source: 'iptv'` y `iptv: { provider, quality, backup, guide }` (`guide: true` si la confirmó la guía XMLTV). Su `title` es «<canal> --> <proveedor>» y nunca lleva la URL ni el id del proveedor.
+
+### 7.6 Estado (26-sep-2026)
+
+Implementado en la rama `rediseno/iptv` (servidor y web), para la 0.8.1 sin publicar. Pruebas: unitarias del contrato, del servidor y de la web; integración del servidor con el proveedor falso (`apps/server/test/fake-iptv`); E2E `apps/web/e2e/iptv.spec.ts` contra la pila entera con ffmpeg de verdad (configurar M3U y Xtream, la IPTV primero en un partido y en un canal suelto, el puente en los dos sentidos, volver con un toque y la búsqueda de la contraseña y el usuario en todas las respuestas, el SSE, la página y los ficheros de datos y logs).
