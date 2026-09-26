@@ -1,9 +1,10 @@
 import SwiftUI
 
-/* Cartel de fuente (SourcePoster.tsx, sources.css; a4 §12.6): tesela 16:9 con la marca del canal, su número
-   arriba a la derecha y «En pantalla» en oro abajo a la izquierda si es la que suena; alrededor, el filo del
-   estado (oro en la que suena); debajo, el proveedor, el anillo con su palabra, la calidad y el tipo, y la
-   frase. Toque: háptica rígida y elegir. Pulsación larga: menú «Fuente n» (sin háptica); las mismas opciones
+/* Cartel de fuente (SourcePoster.tsx, sources.css; a4 §12.6): tesela 16:9 con la marca del canal (tono y dorsal
+   del canal; arriba, en el sitio de la sigla, el PROVEEDOR), su número arriba a la derecha y «En pantalla» en oro
+   abajo a la izquierda si es la que suena; alrededor, el filo del estado (oro en la que suena); debajo, el nombre
+   del canal SIN el proveedor (dos líneas como mucho; NombreCartel, Isma 26-sep), el anillo con su palabra, la
+   calidad y el tipo, y la frase. Toque: háptica rígida y elegir. Pulsación larga: menú «Fuente n» (sin háptica); las mismas opciones
    van a VoiceOver como acciones. Sirve igual para cualquier tipo de fuente (`FilaFuente` de la sesión, M3). */
 
 struct CartelFuente: View {
@@ -64,8 +65,11 @@ private struct TeselaCartel: View {
         let forma = RoundedRectangle(cornerRadius: R.m, style: .circular)
         ZStack {
             forma.fill(Palco.surface2)
-            MarcaCanal(nombre: ReglasFuentes.nombreCanal(fila.entrada), forma: .tesela, tamano: alto)
-                .clipShape(forma)
+            MarcaCanal(
+                nombre: ReglasFuentes.nombreCanal(fila.entrada), forma: .tesela, tamano: alto,
+                sigla: NombreCartel.proveedorTesela(fila.presentacion), reservaDerecha: 32
+            )
+            .clipShape(forma)
         }
         .aspectRatio(16 / 9, contentMode: .fit)
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { alto = max(1, $0) }
@@ -144,7 +148,7 @@ private struct FiloCartel: View {
     }
 }
 
-/// Nombre (15/650/88), meta (anillo 14 + palabra · calidad · tipo) y frase (12, dos líneas como mucho).
+/// Nombre del canal sin el proveedor (15/650/88, dos líneas con «…»), meta (anillo 14 + palabra · calidad · tipo) y frase (12, dos líneas como mucho).
 private struct CuerpoCartel: View {
     let fila: FilaFuente
 
@@ -164,10 +168,12 @@ private struct CuerpoCartel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(fila.presentacion.corto)
+            Text(NombreCartel.nombre(fila.entrada, fila.presentacion))
                 .estilo(EstiloTexto(tamano: 15, peso: 650, anchura: 88, altoLinea: 1.1))
                 .foregroundStyle(Palco.text)
-                .lineLimit(1)
+                .lineLimit(2)
+                .truncationMode(.tail)
+                .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 6) {
                 AnilloSenal(anillo, tamano: 14, palabra: fila.palabra)
                 let extras = self.extras
