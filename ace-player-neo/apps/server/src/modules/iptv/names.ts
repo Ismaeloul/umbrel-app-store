@@ -30,7 +30,7 @@
    6. Lo que queda es `base`, que pasa por `channelMatchScore`. `display` es
       lo mismo sin las grafías (lo que se enseña: «DAZN LaLiga»).
 
-   Con la lista real de Isma (26-sep, docs/iptv.md §17) se suma:
+   Con la lista real de Isma (26-sep, docs/iptv.md §18) se suma:
    - Filas que no son canales (`filler`): cabeceras «##### … #####» y «NO
      MATCH». El catálogo no las guarda: ni se buscan ni se emparejan.
    - Filas de evento con horario («ESPN PLUS 12 : SOCCER … 3:00 PM ET»):
@@ -65,7 +65,7 @@ export interface CleanIptvTitle {
   readonly country: string | null;
   /** El número de copia quitado del final («(2)» → 2), o null. */
   readonly mirror: number | null;
-  /** No es un canal: cabecera «##### … #####» o «NO MATCH» (docs/iptv.md §17). */
+  /** No es un canal: cabecera «##### … #####» o «NO MATCH» (docs/iptv.md §18). */
   readonly filler: boolean;
   /** Fila de un evento con horario («ESPN PLUS 12 : … 3:00 PM ET»). */
   readonly event: boolean;
@@ -201,7 +201,7 @@ export function iptvSpelling(value: string): string {
 const SEARCH_MOVISTAR_RE = /^\s*(?:m|mov)\s+(?=[\p{L}\p{N}])/iu;
 
 /**
- * La grafía para el BUSCADOR (docs/iptv.md §17): `channelSpelling` sin los
+ * La grafía para el BUSCADOR (docs/iptv.md §18): `channelSpelling` sin los
  * alias curados del emparejado (que añadían palabras: «movistar laliga» →
  * «M+ LaLiga TV» buscaba también «tv» y daba 0).
  */
@@ -388,7 +388,7 @@ const ACE_PROVIDER_RE = /\s*(?:--?>|={1,2}>|[→⇒➜➝⟶⟹]).*$/u;
 
 /**
  * Un nombre de canal de las listas de AceStream (o de la agenda) listo para
- * compararlo con la IPTV (docs/iptv.md §17): sin lo que va tras la flecha
+ * compararlo con la IPTV (docs/iptv.md §18): sin lo que va tras la flecha
  * («LA 1 4K --> NEW ERA» → «LA 1»), sin asteriscos, sin marcas de calidad,
  * códec ni fotogramas en cualquier sitio («La 1 TVE 720p *» → «La 1»), y sin
  * «TVE»/«RTVE» detrás de un canal de RTVE. Si no queda nada, el original.
@@ -404,7 +404,7 @@ export function aceChannelTitle(title: string): string {
 }
 
 /**
- * Cómo busca la IPTV un canal de la agenda o de una lista de AceStream (docs/iptv.md §4.3 y §17): null si es una
+ * Cómo busca la IPTV un canal de la agenda o de una lista de AceStream (docs/iptv.md §4.3 y §18): null si es una
  * plataforma de internet (no se empareja por nombre: solo la guía puede confirmarla), limpio como
  * `aceChannelTitle` y sin la cadena del final («La 1 TVE» → «La 1»), que las listas no ponen. Solo para la IPTV:
  * el emparejado de AceStream no cambia.

@@ -68,7 +68,7 @@ describe('posterTagsOf', () => {
   });
 });
 
-describe('posterNameOf (§17)', () => {
+describe('posterNameOf (§18)', () => {
   it('la IPTV «La 1 TVE 720p»: el nombre sin la calidad, que ya va en su etiqueta', () => {
     const entry = entryFromCandidate(
       candidate(1, {

@@ -1,5 +1,5 @@
 /* Grafías de nombres de canal que comparten el buscador y el emparejado de la
-   IPTV, la web y la app (docs/iptv.md §17). Pura y sin estado.
+   IPTV, la web y la app (docs/iptv.md §18). Pura y sin estado.
 
    `normalizeChannelKey` (channels.ts) tiene la matriz 0.6.59 congelada y NO
    se toca: esto va ANTES, sobre el nombre, y solo lo usan los que lo piden

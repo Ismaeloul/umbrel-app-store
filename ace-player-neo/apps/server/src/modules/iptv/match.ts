@@ -202,7 +202,7 @@ export function withoutTrailingNote(name: string): string {
 }
 
 /*
- * La marca de cadena de un nombre (docs/iptv.md §17): «movistar» (M., M+,
+ * La marca de cadena de un nombre (docs/iptv.md §18): «movistar» (M., M+,
  * Movistar…) o «dazn», o ''. La regla del « 1» final solo vale si el canal
  * pedido y la entrada IPTV llevan la misma: «M+ LaLiga TV» no es «LA LIGA 1»
  * (el de Rakuten), aunque sin marca los dos sean «laliga».
@@ -292,7 +292,7 @@ export function matchIptvChannels(
       channels
         .map((channel) => iptvAskedChannel(channel))
         /* «DAZN» a secas es la marca paraguas (la agenda no dice qué DAZN): nunca casa por nombre, ni con un
-           canal que la lista llame «DAZN» (docs/iptv.md §17). */
+           canal que la lista llame «DAZN» (docs/iptv.md §18). */
         .filter(
           (channel): channel is string => Boolean(channel) && !isUmbrellaBrand(channel as string),
         ),
@@ -316,7 +316,7 @@ export function matchIptvChannels(
     }
     if (score < minScore) continue;
     for (const { bucket, entries } of catalog.buckets(key)) {
-      /* Una plataforma de internet no se empareja por nombre (docs/iptv.md §17). */
+      /* Una plataforma de internet no se empareja por nombre (docs/iptv.md §18). */
       if (isPlatformChannel(entries)) continue;
       const match = groupMatch(
         key,

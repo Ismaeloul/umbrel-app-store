@@ -12,7 +12,7 @@ describe('channelDorsal', () => {
     expect(channelDorsal('***')).toBe('·');
   });
 
-  it('se salta la resolución, el códec y los fotogramas: el número es el del canal (§17)', () => {
+  it('se salta la resolución, el códec y los fotogramas: el número es el del canal (§18)', () => {
     expect(channelDorsal('La 1 TVE 720p')).toBe('1');
     expect(channelDorsal('La 1 TVE 720p *')).toBe('1');
     expect(channelDorsal('La 1 TVE 720')).toBe('1');

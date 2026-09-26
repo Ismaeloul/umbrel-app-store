@@ -293,9 +293,26 @@ function demoChannelResolve(channel: string, tapped?: string): Resolution {
     DEMO_IPTV_CHANNELS.find((title) => tapped !== undefined && demoIptvId(title) === tapped) ??
     DEMO_IPTV_CHANNELS.find((title) => normalizeChannelKey(title) === key);
   if (!key || !name) return base;
-  const iptv = candidateOf({ ...DEMO_IPTV, hash: demoIptvId(name) }, name, 0);
+  /* «La 1» se llama en la IPTV de ejemplo como en la lista de Isma («La 1 TVE 720p», docs/iptv.md §18): el cartel
+     enseña el dorsal «1» (no «720») y debajo «La 1 TVE», con «720p» en su etiqueta. */
+  const listed = DEMO_IPTV_LISTED[name];
+  const iptv = listed
+    ? {
+        ...candidateOf(
+          { ...DEMO_IPTV, quality: listed.quality, hash: demoIptvId(name) },
+          listed.title,
+          0,
+        ),
+        title: listed.title,
+      }
+    : candidateOf({ ...DEMO_IPTV, hash: demoIptvId(name) }, name, 0);
   return { ...base, status: 'found', candidate: iptv, candidates: [iptv] };
 }
+
+/** Canales de la IPTV de ejemplo con el nombre tal y como lo escribe una lista real. */
+const DEMO_IPTV_LISTED: Readonly<Record<string, { title: string; quality: 'hd' }>> = {
+  'La 1': { title: 'La 1 TVE 720p', quality: 'hd' },
+};
 
 function stepsOf(item: PlanItem, index: number): { start: number; end: number } {
   const start = Math.floor(index / 2);

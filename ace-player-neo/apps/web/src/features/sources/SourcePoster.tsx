@@ -112,7 +112,7 @@ export function rowMenu(row: SourceRow, inMatch: boolean): MenuItem[] {
 /**
  * Lo que va debajo del cartel: el canal sin el proveedor que ya lleva la
  * tesela y, si la calidad ya sale en su etiqueta, sin la marca de calidad ni
- * los asteriscos de copia (Isma, 26-sep; docs/iptv.md §17): «La 1 TVE 720p
+ * los asteriscos de copia (Isma, 26-sep; docs/iptv.md §18): «La 1 TVE 720p
  * *» → «La 1 TVE».
  */
 export function posterNameOf(row: Pick<SourceRow, 'entry' | 'presentation'>): string {

@@ -57,7 +57,7 @@ export function hlsConfig(profile: EngineArgs['profile']): Record<string, unknow
     manifestLoadingTimeOut: 20_000,
     fragLoadingTimeOut: 20_000,
     /* La lista del remux puede no estar aún (arranca o se reinicia): el servidor responde 503 con
-       Retry-After (docs/iptv.md §17) y hls.js lo reintenta solo, sin error a la vista. */
+       Retry-After (docs/iptv.md §18) y hls.js lo reintenta solo, sin error a la vista. */
     ...HLS_PLAYLIST_RETRY,
     ...profile.hls,
   };

@@ -258,7 +258,7 @@ describe('hls.js', () => {
     expect(hlsConfig(PLAYBACK_PROFILES.stable)).toMatchObject({
       maxBufferLength: 90,
       maxLiveSyncPlaybackRate: 1,
-      /* La lista que aún no está (503 del remux) se reintenta sola (docs/iptv.md §17). */
+      /* La lista que aún no está (503 del remux) se reintenta sola (docs/iptv.md §18). */
       manifestLoadingMaxRetry: 4,
       levelLoadingMaxRetry: 4,
     });

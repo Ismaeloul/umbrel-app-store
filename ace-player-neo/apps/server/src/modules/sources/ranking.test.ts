@@ -255,7 +255,7 @@ describe('marca, familia y procedencia (B-042, B-043)', () => {
     expect(marca.map((c) => c.title)).toEqual(['DAZN LaLiga', 'DAZN']);
   });
 
-  it('una IPTV nunca es «lo genérico»: «La 1» de la IPTV va antes que «La 1 TVE 720p *» (§17)', () => {
+  it('una IPTV nunca es «lo genérico»: «La 1» de la IPTV va antes que «La 1 TVE 720p *» (§18)', () => {
     const tocado = 'La 1 TVE 720p *';
     const orden = mergeResolutionCandidates(
       [

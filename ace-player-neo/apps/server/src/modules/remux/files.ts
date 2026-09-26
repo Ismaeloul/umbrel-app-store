@@ -117,13 +117,13 @@ export interface SendOptions {
   readonly head?: boolean | undefined;
   /**
    * El fichero puede no estar TODAVÍA (la lista de un remux que arranca o se
-   * reinicia, docs/iptv.md §17): si falta, 503 con `Retry-After: 1` («aún no
+   * reinicia, docs/iptv.md §18): si falta, 503 con `Retry-After: 1` («aún no
    * está», hls.js lo reintenta) en vez de 404.
    */
   readonly notYet?: boolean | undefined;
 }
 
-/** «Aún no está»: la lista del remux mientras arranca o se reinicia (docs/iptv.md §17). */
+/** «Aún no está»: la lista del remux mientras arranca o se reinicia (docs/iptv.md §18). */
 export const NOT_YET_HEADERS: Readonly<Record<string, string>> = {
   'cache-control': 'no-store',
   'retry-after': '1',
@@ -193,7 +193,7 @@ export async function sendFile(
   let mtimeMs: number;
   /* Se abre ANTES de medir y se lee de ese mismo descriptor: si el remux se
      reinicia y borra la carpeta entre medias, ya no hay un ENOENT al abrir el
-     stream (que salía como 500 «error interno», docs/iptv.md §17). */
+     stream (que salía como 500 «error interno», docs/iptv.md §18). */
   let handle: FileHandle;
   try {
     handle = await open(file, 'r');

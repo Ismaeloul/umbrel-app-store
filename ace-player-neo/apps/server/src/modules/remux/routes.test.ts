@@ -331,7 +331,7 @@ describe('GET /api/v1/video/:sid/:file (arquitectura §5.12)', () => {
     await runtime.service.stopAll();
   });
 
-  it('la lista que aún no está (el remux arranca o se reinicia): 503 con Retry-After, nunca 500 (§17)', async () => {
+  it('la lista que aún no está (el remux arranca o se reinicia): 503 con Retry-After, nunca 500 (§18)', async () => {
     const { app, runtime, remuxDir } = await withSession();
     rmSync(path.join(remuxDir, ID_A, 'index.m3u8'), { force: true });
     for (const [url, headers] of [

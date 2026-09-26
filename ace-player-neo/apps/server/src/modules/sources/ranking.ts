@@ -232,7 +232,7 @@ export function mergeResolutionCandidates<T extends RankableCandidate>(
     (Boolean(candidate.soloFamilia) || candidate.source === 'saved') &&
     !conExacto.has(normalizeChannelKey(candidate.matchedChannel));
   /* Una IPTV (≥ 92 por su propia regla) nunca es «lo genérico»: «La 1» de la IPTV no va detrás de «La 1 TVE
-     720p *» de una lista, que es el mismo canal con adornos (docs/iptv.md §4.6 y §17). */
+     720p *» de una lista, que es el mismo canal con adornos (docs/iptv.md §4.6 y §18). */
   const esGenerica = (candidate: T): boolean =>
     candidate.source !== 'iptv' &&
     (canalEsGenerico(candidate.matchedChannel, pedidos) || sinExacto(candidate));

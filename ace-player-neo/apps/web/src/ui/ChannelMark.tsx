@@ -22,7 +22,7 @@ import './ChannelMark.css';
 /**
  * «DAZN 1» → «1», «M+ Liga de Campeones 2» → «2», «Eurosport» → «E». Las
  * cifras de resolución, códec y fotogramas no son el número del canal (Isma,
- * 26-sep; docs/iptv.md §17): «La 1 TVE 720p» → «1», «DAZN 2 1080p50 H265» →
+ * 26-sep; docs/iptv.md §18): «La 1 TVE 720p» → «1», «DAZN 2 1080p50 H265» →
  * «2», «Eurosport 4K» → «E».
  */
 export function channelDorsal(name: string): string {

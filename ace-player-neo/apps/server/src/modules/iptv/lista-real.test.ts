@@ -1,4 +1,4 @@
-/* Normalización compartida por el buscador y el emparejado de la IPTV (docs/iptv.md §17), con una lista
+/* Normalización compartida por el buscador y el emparejado de la IPTV (docs/iptv.md §18), con una lista
    SINTÉTICA que tiene la misma forma que la lista real de Isma del 26-sep: prefijos «ES - », «ES| », «ES-»
    pegado, «ES TI - » (Tivify), «VIP - », categorías `CONTINENTE | PAÍS | TEMA`, «M.» por Movistar, ᴿᴬᵂ, ᵛᶦᵖ,
    «(BK-1)», «4K/UHD», la «Ñ» final, notas entre corchetes, cabeceras «##### … #####», «NO MATCH» y filas de
@@ -335,7 +335,7 @@ describe('lado AceStream (biblioteca y agenda)', () => {
   });
 });
 
-describe('buscador con la forma de la lista real (§17)', () => {
+describe('buscador con la forma de la lista real (§18)', () => {
   const c = lista();
   const top = (q: string, n = 10): string[] =>
     searchCatalog(c, q)
@@ -460,7 +460,7 @@ describe('buscador con la forma de la lista real (§17)', () => {
   });
 });
 
-describe('emparejado automático con la forma de la lista real (§17)', () => {
+describe('emparejado automático con la forma de la lista real (§18)', () => {
   const c = lista();
   const pick = (channel: string): string[] =>
     matchIptvChannels(c, [channel], { scorer }).map(

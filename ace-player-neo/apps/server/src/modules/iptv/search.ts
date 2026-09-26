@@ -1,4 +1,4 @@
-/* El buscador de la IPTV (docs/iptv.md §14.3 y §17). Puro: lo llama `iptv.search()`.
+/* El buscador de la IPTV (docs/iptv.md §14.3 y §18). Puro: lo llama `iptv.search()`.
 
    1. Qué casa. La consulta pasa por la misma limpieza que un nombre IPTV
       (`cleanIptvTitle`) y por la grafía del buscador (`iptvSearchSpelling`:
@@ -15,7 +15,7 @@
       «DAZN 1 HD», «ES: DAZN 1 1080p», «DAZN 1 (backup)»…) son una fila, con
       sus calidades. España y sin país son un canal; cada otro país, otro
       («DE: DAZN 1» es otra fila, con su país).
-   4. Orden por parecido (§17): igual → misma familia → empieza por la
+   4. Orden por parecido (§18): igual → misma familia → empieza por la
       consulta → mismo orden → el resto → sin Movistar → por la categoría;
       dentro, España o sin país, el canal principal antes que bar, PPV,
       reservas, plataformas y eventos, la clave más corta y el orden del
@@ -84,7 +84,7 @@ export interface SearchGroup {
   readonly compact: string;
 }
 
-/** Lo que el índice sabe de cada canal para ordenar (docs/iptv.md §17). */
+/** Lo que el índice sabe de cada canal para ordenar (docs/iptv.md §18). */
 interface GroupFacts {
   /** Palabras que cuentan (sin «tv», «canal», «channel»). */
   readonly sig: string;
@@ -199,7 +199,7 @@ const COMPOUND_PARTS: Readonly<Record<string, readonly string[]>> = {
 const CATEGORY_CONTINENTS: ReadonlySet<string> = new Set(['EU', 'AM', 'AS', 'AF', 'OC', 'LATAM']);
 
 /**
- * Sinónimos para buscar por CATEGORÍA (docs/iptv.md §17), en la forma única
+ * Sinónimos para buscar por CATEGORÍA (docs/iptv.md §18), en la forma única
  * de la izquierda. Se aplican a las palabras de la categoría y a las de la
  * consulta: «futbol» encuentra «TV FOOTBALL PPV», «infantil» encuentra
  * «NIÑOS» y «deportes» encuentra «SPORTS». Tabla de datos, con pruebas.
@@ -434,7 +434,7 @@ function intersect(sets: readonly Set<number>[]): Set<number> {
 }
 
 /*
- * Nivel de un canal que casa por el nombre (docs/iptv.md §17): 0 igual; 1
+ * Nivel de un canal que casa por el nombre (docs/iptv.md §18): 0 igual; 1
  * misma familia (sin el número del final o sin la marca de delante: «m+
  * laliga» → «M. LALIGA 3», «laliga» → «DAZN LaLiga»); 2 empieza por la
  * consulta; 3 las palabras en el mismo orden; 4 en cualquier orden o por
@@ -491,7 +491,7 @@ export interface CatalogSearchResult {
 }
 
 /**
- * Busca en el catálogo (docs/iptv.md §14.3 y §17):
+ * Busca en el catálogo (docs/iptv.md §14.3 y §18):
  * 1. Por el NOMBRE: cada palabra de la consulta (menos «tv», «canal» y
  *    «channel», que no hace falta encontrar) casa con el principio de una
  *    palabra de la clave, en cualquier orden; un número, solo entero; por

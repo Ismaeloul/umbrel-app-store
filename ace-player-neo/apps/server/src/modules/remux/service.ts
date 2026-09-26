@@ -635,7 +635,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       touch(entry, options.deviceId ?? null);
       const full = path.join(entry.dir, file);
       /* La lista de un remux que arranca o se reinicia puede no estar todavía: «aún no está» (503 con
-         Retry-After), no un error (docs/iptv.md §17). */
+         Retry-After), no un error (docs/iptv.md §18). */
       const playlist = file === 'index.m3u8';
       const send = { rangeHeader: options.rangeHeader, head: options.head, notYet: playlist };
       if (playlist && options.videoToken) {
@@ -678,7 +678,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
         await sendBare(reply, 403);
         return;
       }
-      /* Con la sesión viva, su lista que aún no está es «aún no está» (503), no 404 (docs/iptv.md §17). */
+      /* Con la sesión viva, su lista que aún no está es «aún no está» (503), no 404 (docs/iptv.md §18). */
       const playlist = path.basename(file) === 'index.m3u8';
       const seen = await sendFile(reply, file, { ...options, notYet: playlist && !!entry });
       if (seen && entry && playlist) noteObservation(entry, seen);
