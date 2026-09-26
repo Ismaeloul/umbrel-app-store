@@ -26,8 +26,20 @@ struct PanelFuentes: View {
         if let partidoId { return "partido:\(partidoId)" }
         return canalHash.map { "canal:\($0)" }
     }
-    private var deSesion: Bool { video.fuentes.clave == claveSesion && !video.fuentes.entradas.isEmpty }
-    private var fase: FaseSesionFuentes { video.fuentes.clave == claveSesion ? video.fuentes.fase : .reposo }
+    /// ¿La sesión de fuentes es la de esta vista? (Por pasos: la comparación de opcionales tipaba lenta.)
+    private var esLaSesion: Bool {
+        let clave: String? = video.fuentes.clave
+        let propia: String? = claveSesion
+        return clave == propia
+    }
+    private var deSesion: Bool {
+        let hayEntradas: Bool = !video.fuentes.entradas.isEmpty
+        return esLaSesion && hayEntradas
+    }
+    private var fase: FaseSesionFuentes {
+        guard esLaSesion else { return FaseSesionFuentes.reposo }
+        return video.fuentes.fase
+    }
 
     var body: some View {
         let vista = calcular()
@@ -46,7 +58,7 @@ struct PanelFuentes: View {
 
     /// El fallo de la sesión, solo si es la de esta vista (en la web `useSession` ya es la de la vista).
     private var textoFallo: String? {
-        guard video.fuentes.clave == claveSesion, enPartido || !video.fuentes.entradas.isEmpty else { return nil }
+        guard esLaSesion, enPartido || !video.fuentes.entradas.isEmpty else { return nil }
         return video.fuentes.textoFallo
     }
 
