@@ -100,7 +100,7 @@ private func marcador(_ estado: String, reloj: String = "72'", detalle: String =
     }
 
     /// Partido de canalCaido: con todo junto pasaba de los 400 ms de tipar (CI 36226729698).
-    @Test func pieConocidoYFavoritoNuevo() {
+    @Test func pieYConocido() {
         let viejo = item("Viejo", .fav, id: String(repeating: "a", count: 40), lista: true)
         let reciente = item("Canal de prueba", .recent, id: String(repeating: "b", count: 40))
         let biblioteca = LibraryView(
@@ -115,6 +115,15 @@ private func marcador(_ estado: String, reloj: String = "72'", detalle: String =
         #expect(ReglasBiblioteca.conocido(biblioteca, hash: String(repeating: "f", count: 40)) == nil)
         #expect(ReglasBiblioteca.conocido(nil, hash: "x") == nil)
         #expect(ReglasBiblioteca.tituloFavoritoPorDefecto("abcdef0123") == "Canal abcdef")
+    }
+
+    /// Otra parte más: con el pie y lo conocido pasaba de los 400 ms de tipar (CI 36234006734).
+    @Test func favoritoNuevoYEnTuBiblioteca() {
+        let viejo = item("Viejo", .fav, id: String(repeating: "a", count: 40), lista: true)
+        let reciente = item("Canal de prueba", .recent, id: String(repeating: "b", count: 40))
+        let biblioteca = LibraryView(
+            web: [item("L1"), item("L2"), item("L3")], webSyncedAt: "2026-09-23T10:00:00.000Z", webSources: [],
+            activeWebSourceId: "", favorites: [viejo, item("F2", .fav)], history: [reciente])
         let ahora = Date(timeIntervalSince1970: 1_790_000_000)
         let deRecientes = ReglasBiblioteca.favoritoNuevo(
             hash: reciente.id, escrito: "  Mi   canal ", categoria: "Deportes", ih: nil, biblioteca: biblioteca, ahora: ahora)

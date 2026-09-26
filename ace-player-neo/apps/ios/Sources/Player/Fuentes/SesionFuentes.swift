@@ -59,6 +59,9 @@ enum ErrorFuentes: Error, Sendable, Equatable {
     private(set) var detenida = false
     private(set) var textoFallo: String?
     private(set) var textoEspera: String?
+    /// `textoEspera` para `EntornoVideo.foto`: leído desde fuera a través del macro de `@Observable` tardaba más de
+    /// 200 ms en tiparse en la CI.
+    var esperaParaFoto: String? { textoEspera }
     /// Sin uso desde §0.0 punto 1: «Otras fuentes» del canal suelto son `entradas` (las hermanas de la biblioteca).
     private(set) var otrasSenales: [ResolutionCandidate] = []
     private(set) var buscandoOtras = false

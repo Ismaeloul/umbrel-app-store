@@ -35,8 +35,7 @@ struct EntornoVideo: DynamicProperty {
         foto.motivoParada = reproductor.motivoParada
         foto.quiereReproducir = reproductor.quiereReproducir
         foto.demo = demo
-        let espera: String? = fuentes.textoEspera  // en su línea: tipado en 202 ms (CI 36230463114)
-        foto.espera = espera
+        foto.espera = fuentes.esperaParaFoto  // `textoEspera` directo tardaba > 200 ms en tiparse (CI 36234006734)
         // «Fuente n verificada.» · «Fuente n, señal floja.» · «Fuente n.»: la pone la sesión al reproducir
         // (`leadFor` → `channel.lead`, lo que lee statusFor en la web).
         foto.lead = canal?.lead
