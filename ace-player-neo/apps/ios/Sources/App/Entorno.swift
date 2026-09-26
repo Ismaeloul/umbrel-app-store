@@ -2,7 +2,7 @@ import Foundation
 
 /// Todas las dependencias de la app en un sitio: se crean una vez al
 /// arrancar y se pasan a los modelos de pantalla. En las pruebas de interfaz
-/// se sustituyen por un servidor simulado (ver `ServidorSimulado`).
+/// se sustituyen por el servidor de la demo (ver `ServidorDemo`, solo Debug).
 public struct Entorno: Sendable {
     public let api: APIClient
     public let servidores: ServerResolver
