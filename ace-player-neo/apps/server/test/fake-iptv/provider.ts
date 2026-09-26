@@ -77,6 +77,13 @@ export interface FakeIptvOptions {
   readonly matchStart?: number;
   /** kbit/s de los streams. */
   readonly bitrateKbps?: number;
+  /**
+   * Segundos de vídeo que manda de golpe al abrir un stream TS, como los paneles
+   * de verdad, que tienen colchón (por defecto 0,2 s: casi en tiempo real). Sin
+   * colchón, ffmpeg tarda ~5 s en analizar la entrada y otros 6 s en tener la
+   * lista lista, rozando el plazo de arranque de 20 s.
+   */
+  readonly burstSeconds?: number;
   /** `allowed_output_formats` del panel. */
   readonly outputFormats?: readonly string[];
   /** Reloj de la plaza retenida (los tests pasan el reloj falso del backend). */
@@ -179,6 +186,7 @@ interface StreamState {
 export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<FakeIptv> {
   const host = options.host ?? '127.0.0.1';
   const bitrate = options.bitrateKbps ?? 1500;
+  const burstTicks = Math.max(1, Math.round((options.burstSeconds ?? 0.2) / 0.04));
   const maxConnections = options.maxConnections ?? 1;
   const retener = options.retenerPlazaMs ?? 0;
   const formats = options.outputFormats ?? ['m3u8', 'ts'];
@@ -313,7 +321,7 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
       }
       res.write(muxer.nextPackets(perTick));
     }, 40);
-    res.write(muxer.nextPackets(perTick * 5));
+    res.write(muxer.nextPackets(perTick * burstTicks));
     res.once('close', () => {
       clearInterval(timer);
       openIds.delete(res);

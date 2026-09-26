@@ -309,6 +309,8 @@ test(
     await page.waitForURL(/vista=partido/);
     await esperarQueAvance(page);
     expect(await suenaIptv(page)).toBe(true);
+    // Suena el canal (por su IPTV): la cabecera no ofrece «Reproducir».
+    await expect(page.getByRole('button', { name: 'Reproducir', exact: true })).toBeHidden();
     // El reproductor nunca conecta antes con AceStream.
     expect(await motor.sesiones('active')).toHaveLength(0);
     expect(await proveedor.conexiones()).toBe(1);

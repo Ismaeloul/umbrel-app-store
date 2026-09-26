@@ -21,6 +21,9 @@ const fake = await createFakeIptv({
   port: ports.iptv,
   publicHost: IPTV_PUBLIC_HOST,
   maxConnections: 1,
+  /* Colchón de 8 s al abrir, como un panel de verdad: sin él el remux tarda
+     15-20 s en tener lista y a veces pasa del plazo de arranque (20 s). */
+  burstSeconds: 8,
 });
 process.stdout.write(`proveedor IPTV falso en [::1]:${fake.port}\n`);
 

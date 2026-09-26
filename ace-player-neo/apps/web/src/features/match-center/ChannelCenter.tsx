@@ -142,16 +142,24 @@ export function ChannelCenter({ hash, active }: { hash: string; active: boolean 
   const ownIds = useSession((state) =>
     state.key === `c:${hash}` ? state.entries.map((entry) => entry.id).join(',') : '',
   );
-  const showPlay = usePlayerSelector((state) => {
-    const idle = state.phase === 'idle' || state.phase === 'error';
-    const playing = state.channel?.hash;
+  /* useStore se queda con el selector del PRIMER render: `ownIds` llega
+     después (cuando la sesión del canal ya tiene sus fuentes), así que la
+     decisión se toma aquí, fuera del selector, con lo que suena. */
+  const player = usePlayerSelector((state) => ({
+    phase: state.phase,
+    playing: state.channel?.hash ?? null,
+    idleReason: state.idleReason,
+  }));
+  const showPlay = (() => {
+    const idle = player.phase === 'idle' || player.phase === 'error';
+    const { playing } = player;
     if (playing && !idle && (playing === hash || ownIds.split(',').includes(playing))) return false;
     const autoStarts =
-      state.phase === 'idle' &&
-      state.channel?.hash !== hash &&
-      (state.idleReason === 'inicio' || state.idleReason === null);
+      player.phase === 'idle' &&
+      playing !== hash &&
+      (player.idleReason === 'inicio' || player.idleReason === null);
     return !autoStarts;
-  });
+  })();
   // Con IPTV activa, mientras se pregunta si el canal está en ella (≤ 2,5 s) va a arrancar solo.
   const asking = useSession((state) => state.key === `c:${hash}` && state.phase === 'resolving');
   const siblingsKey = siblings.map((sibling) => sibling.id).join(',');
