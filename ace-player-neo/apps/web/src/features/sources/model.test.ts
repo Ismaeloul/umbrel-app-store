@@ -238,11 +238,28 @@ describe('nombre de debajo del cartel, sin el proveedor (Isma, 26-sep)', () => {
     expect(sin('DAZN F1|Elcano', ['Elcano'])).toBe('DAZN F1');
   });
 
-  it('delante, en medio o suelto también', () => {
+  it('delante con separador o paréntesis, o como últimas palabras', () => {
     expect(sin('ELCANO | DAZN 1', ['Elcano'])).toBe('DAZN 1');
     expect(sin('[Elcano] DAZN 1', ['Elcano'])).toBe('DAZN 1');
     expect(sin('DAZN 1 ELCANO', ['Elcano'])).toBe('DAZN 1');
+    expect(sin('DAZN 1 Elcano', ['Elcano'])).toBe('DAZN 1');
     expect(sin('DAZN 1 HD (Elcano) --> ', ['Elcano'])).toBe('DAZN 1 HD');
+    expect(sin('DAZN 1 | Elcano | HD', ['Elcano'])).toBe('DAZN 1 | HD');
+  });
+
+  it('nunca suelto al principio ni en mitad del nombre (verificador, 26-sep)', () => {
+    expect(sin('Casa de Papel TV', ['Casa'])).toBe('Casa de Papel TV');
+    expect(sin('Elcano DAZN 1', ['Elcano'])).toBe('Elcano DAZN 1');
+    expect(sin('DAZN Elcano Liga', ['Elcano'])).toBe('DAZN Elcano Liga');
+    expect(sin('Canal - Casa de Papel TV', ['Casa'])).toBe('Canal - Casa de Papel TV');
+    expect(sin('Casa-Blanca TV', ['Casa'])).toBe('Casa-Blanca TV');
+  });
+
+  it('paréntesis a medias: se quita el proveedor y los espacios que sobran', () => {
+    expect(sin('Canal (Elcano 1080p)', ['Elcano'])).toBe('Canal (1080p)');
+    expect(sin('Canal (1080p Elcano)', ['Elcano'])).toBe('Canal (1080p)');
+    expect(sin('Canal [Elcano - 1080p]', ['Elcano'])).toBe('Canal [1080p]');
+    expect(sin('Canal ( HD ) | Elcano', ['Elcano'])).toBe('Canal (HD)');
   });
 
   it('sin mayúsculas ni tildes que valgan', () => {

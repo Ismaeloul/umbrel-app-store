@@ -594,19 +594,33 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** Separadores con los que las listas pegan el proveedor al canal. */
-const PROVIDER_SEPARATOR = String.raw`(?:-{1,2}>|={1,2}>|[→⇒➜➝⟶⟹»|·:/–—-])`;
+/**
+ * Separadores con los que las listas pegan el proveedor al canal. El guion
+ * suelto solo cuenta con un espacio al lado («Eurosport 1 - Elcano»): pegado
+ * a dos palabras («Casa-Blanca») es parte del nombre.
+ */
+const PROVIDER_SEPARATOR = String.raw`(?:-{1,2}>|={1,2}>|[→⇒➜➝⟶⟹»|·:/–—]|(?<=\s)-|-(?=\s))`;
 /** «NEW ERA III», «Elcano 2»: el proveedor con su numeral detrás. */
 const PROVIDER_SUFFIX = String.raw`(?:\s+(?:[ivx]{1,4}|\d{1,2}))?`;
-const EDGE_JUNK = /^[\s\-–—|»·:/<>=→⇒➜➝⟶⟹,]+|[\s\-–—|»·:/<>=→⇒➜➝⟶⟹,]+$/g;
+const OPEN_BRACKET = String.raw`[([{]`;
+const CLOSE_BRACKET = String.raw`[)\]}]`;
+const EDGE_CHARS = String.raw`\s\-–—|»·:/<>=→⇒➜➝⟶⟹,`;
+const EDGE_JUNK = new RegExp(String.raw`^[${EDGE_CHARS}]+|[${EDGE_CHARS}]+$`, 'gu');
 
 /**
  * Nombre del canal para debajo del cartel, SIN el proveedor (Isma, 26-sep:
  * «si ya pones New Era o Elcano arriba, de nada sirve volver a ponerlo
- * abajo»). Quita cada proveedor (y su variante con o sin numeral: «NEW ERA»
- * frente a «NEW ERA III») junto con su separador: flechas, «»», «|», guion o
- * raya, paréntesis y corchetes. Sin distinguir mayúsculas ni tildes y solo por
- * palabras enteras. Si al quitarlo no queda nada, devuelve el nombre tal cual.
+ * abajo»). El proveedor (y su variante con o sin numeral: «NEW ERA» frente a
+ * «NEW ERA III») solo se quita cuando:
+ *  - va entre paréntesis, corchetes o llaves, solo («M+ LaLiga (NEW ERA)») o
+ *    al principio o al final de lo de dentro («Canal (Elcano 1080p)» →
+ *    «Canal (1080p)»);
+ *  - va unido a un separador (flechas, «»», «|», guion o raya) y ocupa todo
+ *    ese tramo («… --> NEW ERA III», «ELCANO | DAZN 1»);
+ *  - son las últimas palabras del nombre («DAZN 1 Elcano»).
+ * Nunca suelto al principio ni en mitad: con «Casa», «Casa de Papel TV» se
+ * queda igual. Sin distinguir mayúsculas ni tildes y solo por palabras
+ * enteras. Si al quitarlo no queda un nombre, devuelve el original.
  *
  * «MOVISTAR PLUS FHD --> NEW ERA III» → «MOVISTAR PLUS FHD»,
  * «DAZN 1 HD | ELCANO» → «DAZN 1 HD», «M+ LaLiga (NEW ERA)» → «M+ LaLiga»,
@@ -630,21 +644,29 @@ export function channelNameWithoutProvider(
     if (base && base !== provider) variants.add(base);
   }
   if (!original || variants.size === 0) return original;
+  const SEP = PROVIDER_SEPARATOR;
+  const notWordBefore = String.raw`(?<![\p{L}\p{N}])`;
+  const notWordAfter = String.raw`(?![\p{L}\p{N}])`;
+  // Fin de tramo: final del nombre, otro separador o un paréntesis.
+  const segmentEnd = String.raw`(?=\s*(?:$|${SEP}|${OPEN_BRACKET}|${CLOSE_BRACKET}))`;
   let result = original;
   // Los largos primero: «NEW ERA III» antes que «NEW ERA».
   for (const variant of [...variants].sort((a, b) => b.length - a.length)) {
     const word = `${escapeRegExp(variant).replace(/ /g, String.raw`\s+`)}${PROVIDER_SUFFIX}`;
-    const edge = String.raw`(?![\p{L}\p{N}])`;
     const patterns = [
-      // «(NEW ERA)», «[Elcano]», «{Faro}»
-      new RegExp(String.raw`\s*[([{]\s*${word}\s*[)\]}]`, 'gu'),
-      // «… --> NEW ERA III», «… | ELCANO», «… - Faro»
-      new RegExp(String.raw`\s*${PROVIDER_SEPARATOR}\s*${word}${edge}`, 'gu'),
-      // «ELCANO | DAZN 1»
-      new RegExp(String.raw`(?<![\p{L}\p{N}])${word}\s*${PROVIDER_SEPARATOR}\s*`, 'gu'),
-      // «DAZN 1 ELCANO»
-      new RegExp(String.raw`(?<![\p{L}\p{N}])${word}${edge}`, 'gu'),
-    ];
+      // «(NEW ERA)», «[Elcano]», «{Faro}»: el paréntesis entero.
+      String.raw`\s*${OPEN_BRACKET}\s*${word}\s*${CLOSE_BRACKET}`,
+      // «(Elcano 1080p)», «(Elcano - 1080p)»: al principio de lo de dentro.
+      String.raw`(?<=${OPEN_BRACKET}\s*)${word}${notWordAfter}(?:\s*${SEP})?`,
+      // «(1080p Elcano)», «(1080p - Elcano)»: al final de lo de dentro.
+      String.raw`(?:\s*${SEP})?\s*${notWordBefore}${word}(?=\s*${CLOSE_BRACKET})`,
+      // «… --> NEW ERA III», «… | ELCANO», «A - Elcano - B»: todo el tramo.
+      String.raw`\s*${SEP}\s*${word}${segmentEnd}`,
+      // «ELCANO | DAZN 1», «[HD] Elcano | DAZN 1»: el primer tramo.
+      String.raw`(?<=(?:^|${OPEN_BRACKET}|${CLOSE_BRACKET})\s*)${word}\s*${SEP}\s*`,
+      // «DAZN 1 ELCANO»: las últimas palabras.
+      String.raw`${notWordBefore}${word}(?=[${EDGE_CHARS}]*$)`,
+    ].map((source) => new RegExp(source, 'gu'));
     for (const pattern of patterns) {
       // Se busca en la copia plegada y se corta el original por las mismas posiciones.
       const folded = foldForMatch(result);
@@ -660,6 +682,9 @@ export function channelNameWithoutProvider(
   }
   const cleaned = result
     .replace(/[([{]\s*[)\]}]/g, ' ')
+    // «Canal ( 1080p)» → «Canal (1080p)»
+    .replace(/([([{])\s+/g, '$1')
+    .replace(/\s+([)\]}])/g, '$1')
     .replace(/\s+/g, ' ')
     .replace(EDGE_JUNK, '')
     .trim();
