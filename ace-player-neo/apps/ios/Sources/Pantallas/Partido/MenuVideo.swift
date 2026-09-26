@@ -23,7 +23,7 @@ extension EntornoVideo {
         return acciones
     }
 
-    private func accionesReproduccion(_ foto: FotoReproductor) -> [AccionMenu] {
+    private func accionesReproduccion(_ foto: FotoEscenario) -> [AccionMenu] {
         let pausa = OpcionMenu(
             id: "pausa", titulo: foto.quiereSonar ? "Pausar" : "Reproducir", icono: foto.quiereSonar ? .pause : .play)
         let atras = OpcionMenu(

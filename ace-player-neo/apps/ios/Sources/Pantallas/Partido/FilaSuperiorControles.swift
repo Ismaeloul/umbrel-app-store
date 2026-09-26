@@ -26,7 +26,7 @@ struct FilaSuperiorControles: View {
         }
     }
 
-    @ViewBuilder private func izquierda(_ foto: FotoReproductor) -> some View {
+    @ViewBuilder private func izquierda(_ foto: FotoEscenario) -> some View {
         if variante.minimizarVisible {
             BotonIcono(.chevD, etiqueta: "Minimizar el reproductor", variante: .video) { video.minimizar() }
                 .cristal(.video, en: Circle())
