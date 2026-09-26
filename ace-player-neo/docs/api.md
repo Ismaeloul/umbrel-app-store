@@ -963,6 +963,28 @@ Ejemplo (`fixtures/web/v1/iptvChannels.json`):
   "channels": [{ "id": "f607…45ef", "title": "La 1", "quality": "hd", "provider": "Casa", "library": ["c3d4…901a"] }] }
 ```
 
-### 7.7 Estado (26-sep-2026)
+### 7.7 Pestaña IPTV en Canales (`docs/iptv.md` §16, 0.8.2)
+
+| id | Método y ruta | Consulta | Respuesta | Errores propios |
+|---|---|---|---|---|
+| `iptvBrowse` | `GET /api/v1/iptv/browse` (`access: 'web'` hasta que la app calque la pestaña, D29) | `category` (12 hex o `none`), `q` (con menos de 2 letras se ignora), `country`, `language`, `type`, `sport`, `quality` (listas separadas por comas, 16 como mucho), `cursor` (el de `nextCursor`), `limit` (0 a 100, por defecto 60; `0` = solo categorías y facetas) | `IptvBrowseResponse` | — (una consulta o un cursor mal formados, `400 validation_error`) |
+
+- **Qué devuelve.** Las categorías del proveedor en su orden y con su número de canales (sin `category` y en la primera página), las facetas de país, idioma, tipo, deporte y calidad con su recuento (O dentro de un filtro, Y entre filtros; cada valor cuenta con los demás filtros elegidos), y una fila por canal: `{ id, title, qualities, country, category }` (la mejor variante de las que tienen la misma clave limpia y el mismo país). Nunca lleva URL, `stream_id`, `tvg-id` ni credenciales; los nombres de categoría pasan por el redactor.
+- **Páginas.** `nextCursor` es opaco (`base64url(<sello>.<posición>)`); un cursor de otro catálogo (hubo sincronización) devuelve la primera página con `stale: true`. Sin IPTV activa, `200` con `active: false`; una categoría que ya no existe, `category: null` y `total: 0`.
+- **Rendimiento.** El servidor filtra, pagina y cuenta sobre un índice en memoria que se monta tras cada sincronización y al arrancar: con 30 000 canales, < 20 ms por consulta en frío dentro del servidor y p95 < 100 ms por respuesta.
+- **«Guardar IPTV» (§16.8).** La prueba rápida hace un solo reintento interno si el primer intento falló rápido por algo pasajero (5xx, 429, cuerpo vacío o que no se entiende, sin `user_info`, corte, DNS, redirecciones); nunca con `auth: 0`, 401 o 403. Si falla también el segundo, el error v1 lleva `error.attempts: 2` (campo opcional nuevo de `ApiError`).
+
+Ejemplo (`fixtures/variantes/iptvBrowse.categoria.json`, recortado):
+
+```json
+{ "active": true, "provider": "Casa", "catalog": "mfz3k1a01", "query": "",
+  "category": { "id": "8e1d0a6b2c93", "name": "ES | DAZN", "count": 12 },
+  "total": 12, "catalogTotal": 812,
+  "facets": { "sport": [{ "value": "baloncesto", "count": 7, "selected": false }, { "value": "f1", "count": 1, "selected": false }], "…": [] },
+  "channels": [{ "id": "1829…0712", "title": "DAZN F1", "qualities": ["fhd", "hd"], "country": "ES", "category": "8e1d0a6b2c93" }],
+  "nextCursor": "bWZ6M2sxYTAxLjM", "stale": false }
+```
+
+### 7.8 Estado (26-sep-2026)
 
 Implementado en la rama `rediseno/iptv` (servidor y web), para la 0.8.1 sin publicar. Pruebas: unitarias del contrato, del servidor y de la web; integración del servidor con el proveedor falso (`apps/server/test/fake-iptv`); E2E `apps/web/e2e/iptv.spec.ts` contra la pila entera con ffmpeg de verdad (configurar M3U y Xtream, la IPTV primero en un partido y en un canal suelto, el puente en los dos sentidos, volver con un toque y la búsqueda de la contraseña y el usuario en todas las respuestas, el SSE, la página y los ficheros de datos y logs).

@@ -3681,6 +3681,353 @@ paths:
         - code: internal_error
           status: 500
           message: Algo ha fallado en el servidor. Queda anotado en el registro.
+  /api/v1/iptv/browse:
+    get:
+      operationId: iptvBrowse
+      tags:
+        - iptv
+      summary: "Recorrer tu IPTV como la ordena el proveedor: categorías, canales por páginas, texto y filtros con facetas"
+      description: "La pestaña IPTV de Canales (docs/iptv.md §16): categorías del proveedor en su orden y con su número de canales, una fila por canal (nombre limpio y país) con sus calidades, filtros de país, idioma, tipo, deporte y calidad (O dentro de un filtro, Y entre filtros) con sus recuentos, y páginas de 60 con `nextCursor`. El servidor filtra, pagina y cuenta sobre un índice en memoria. Sin IPTV activa responde 200 con `active: false`; una categoría que ya no existe, `category: null`; un cursor de otro catálogo, la primera página con `stale: true`. Nunca lleva URL, `stream_id`, `tvg-id` ni credenciales."
+      parameters:
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^(?:[a-f0-9]{12}|none)$
+        - name: q
+          in: query
+          required: false
+          schema:
+            default: ""
+            type: string
+            maxLength: 500
+        - name: country
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^(?:[A-Z]{2,4}|none)(?:,(?:[A-Z]{2,4}|none)){0,15}$
+        - name: language
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^(?:[a-z]{2}|none)(?:,(?:[a-z]{2}|none)){0,15}$
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^(?:generalistas|deportes|cine|series|noticias|infantil|documentales|musica|entretenimiento|religion|adultos|none)(?:,(?:generalistas|deportes|cine|series|noticias|infantil|documentales|musica|entretenimiento|religion|adultos|none)){0,15}$
+        - name: sport
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^(?:futbol|baloncesto|f1|motos|motor|tenis|padel|golf|ciclismo|balonmano|rugby|lucha|futbol-americano|hockey|beisbol|toros)(?:,(?:futbol|baloncesto|f1|motos|motor|tenis|padel|golf|ciclismo|balonmano|rugby|lucha|futbol-americano|hockey|beisbol|toros)){0,15}$
+        - name: quality
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^(?:uhd|fhd|hd|sd|none)(?:,(?:uhd|fhd|hd|sd|none)){0,15}$
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{1,64}$
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 100
+      responses:
+        "200":
+          description: Correcto
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  active:
+                    type: boolean
+                  provider:
+                    type: string
+                    maxLength: 40
+                  catalog:
+                    type: string
+                    pattern: ^[a-z0-9]{1,16}$
+                  query:
+                    type: string
+                    maxLength: 80
+                  category:
+                    anyOf:
+                      - type: object
+                        properties:
+                          id:
+                            type: string
+                            pattern: ^(?:[a-f0-9]{12}|none)$
+                          name:
+                            type: string
+                            maxLength: 120
+                          count:
+                            type: integer
+                            minimum: 0
+                            maximum: 9007199254740991
+                        required:
+                          - id
+                          - name
+                          - count
+                        additionalProperties: false
+                      - type: "null"
+                  total:
+                    type: integer
+                    minimum: 0
+                    maximum: 9007199254740991
+                  catalogTotal:
+                    type: integer
+                    minimum: 0
+                    maximum: 9007199254740991
+                  categories:
+                    maxItems: 2000
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          pattern: ^(?:[a-f0-9]{12}|none)$
+                        name:
+                          type: string
+                          maxLength: 120
+                        count:
+                          type: integer
+                          minimum: 0
+                          maximum: 9007199254740991
+                      required:
+                        - id
+                        - name
+                        - count
+                      additionalProperties: false
+                  facets:
+                    type: object
+                    properties:
+                      country:
+                        maxItems: 250
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            value:
+                              type: string
+                              minLength: 1
+                              maxLength: 20
+                            count:
+                              type: integer
+                              minimum: 0
+                              maximum: 9007199254740991
+                            selected:
+                              type: boolean
+                          required:
+                            - value
+                            - count
+                            - selected
+                          additionalProperties: false
+                      language:
+                        maxItems: 250
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            value:
+                              type: string
+                              minLength: 1
+                              maxLength: 20
+                            count:
+                              type: integer
+                              minimum: 0
+                              maximum: 9007199254740991
+                            selected:
+                              type: boolean
+                          required:
+                            - value
+                            - count
+                            - selected
+                          additionalProperties: false
+                      type:
+                        maxItems: 12
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            value:
+                              type: string
+                              minLength: 1
+                              maxLength: 20
+                            count:
+                              type: integer
+                              minimum: 0
+                              maximum: 9007199254740991
+                            selected:
+                              type: boolean
+                          required:
+                            - value
+                            - count
+                            - selected
+                          additionalProperties: false
+                      sport:
+                        maxItems: 16
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            value:
+                              type: string
+                              minLength: 1
+                              maxLength: 20
+                            count:
+                              type: integer
+                              minimum: 0
+                              maximum: 9007199254740991
+                            selected:
+                              type: boolean
+                          required:
+                            - value
+                            - count
+                            - selected
+                          additionalProperties: false
+                      quality:
+                        maxItems: 5
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            value:
+                              type: string
+                              minLength: 1
+                              maxLength: 20
+                            count:
+                              type: integer
+                              minimum: 0
+                              maximum: 9007199254740991
+                            selected:
+                              type: boolean
+                          required:
+                            - value
+                            - count
+                            - selected
+                          additionalProperties: false
+                    required:
+                      - country
+                      - language
+                      - type
+                      - sport
+                      - quality
+                    additionalProperties: false
+                  channels:
+                    maxItems: 100
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          pattern: ^[a-f0-9]{40}$
+                        title:
+                          type: string
+                          minLength: 1
+                          maxLength: 120
+                        qualities:
+                          maxItems: 4
+                          type: array
+                          items:
+                            type: string
+                            enum:
+                              - uhd
+                              - fhd
+                              - hd
+                              - sd
+                        country:
+                          anyOf:
+                            - type: string
+                              pattern: ^[A-Z]{2,4}$
+                            - type: "null"
+                        category:
+                          type: string
+                          pattern: ^(?:[a-f0-9]{12}|none)$
+                      required:
+                        - id
+                        - title
+                        - qualities
+                        - country
+                        - category
+                      additionalProperties: false
+                  nextCursor:
+                    anyOf:
+                      - type: string
+                        pattern: ^[A-Za-z0-9_-]{1,64}$
+                      - type: "null"
+                  stale:
+                    type: boolean
+                required:
+                  - active
+                  - provider
+                  - catalog
+                  - query
+                  - category
+                  - total
+                  - catalogTotal
+                  - channels
+                  - nextCursor
+                  - stale
+                additionalProperties: false
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+      x-access: web
+      x-native-path: /native/api/v1/iptv/browse
+      x-side-effects: false
+      x-legacy-twin: null
+      x-errors:
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
   /api/v1/pairing:
     post:
       operationId: pairingCreate
@@ -8365,6 +8712,10 @@ components:
               type: string
               minLength: 1
               maxLength: 128
+            attempts:
+              type: integer
+              minimum: 2
+              maximum: 9
           required:
             - code
             - message
