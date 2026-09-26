@@ -186,7 +186,7 @@ import Foundation
         guard habia, let ahora = consulta.datos, ahora.nowPlaying != antes else { return }
         let sintetico = SSEEvent.playbackNowPlaying(
             PlaybackNowPlayingData(nowPlaying: ahora.nowPlaying, learningCount: ahora.learningCount))
-        reproductor.procesar(sintetico)
+        reproductor.procesar(sintetico, sintetico: true)
         for oyente in oyentes.values { oyente(sintetico) }
     }
 }

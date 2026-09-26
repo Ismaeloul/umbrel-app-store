@@ -106,7 +106,8 @@ extension Reproductor {
         return visores.isEmpty || visores.contains(visor)
     }
 
-    public func procesar(_ evento: SSEEvent) {
+    /// - Parameter sintetico: el evento lo fabrica el sondeo de respaldo (sin SSE), no el servidor (`meta.synthetic`).
+    public func procesar(_ evento: SSEEvent, sintetico: Bool = false) {
         guard fuente != nil else { return }
         switch evento {
         case .playbackHandoff(let datos):
