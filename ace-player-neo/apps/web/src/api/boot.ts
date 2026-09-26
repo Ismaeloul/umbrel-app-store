@@ -10,7 +10,7 @@
 import type { BootstrapResponse } from '@ace/shared';
 import type { QueryClient } from '@tanstack/react-query';
 import { detectMode, setMode, type DetectOptions } from './mode.ts';
-import { routeKey } from './query.ts';
+import { apiQuery, queryClient, routeKey } from './query.ts';
 import { markRealtimeDemo, startRealtime, type RealtimeOptions } from './sse.ts';
 
 export function seedFromBootstrap(client: QueryClient, bootstrap: BootstrapResponse): void {
@@ -19,6 +19,17 @@ export function seedFromBootstrap(client: QueryClient, bootstrap: BootstrapRespo
   client.setQueryData(routeKey('preferencesGet'), { preferences: bootstrap.preferences });
   client.setQueryData(routeKey('playbackStatus'), bootstrap.playback);
   client.setQueryData(routeKey('engineStatus'), bootstrap.engine);
+}
+
+/**
+ * ¿Hay IPTV activa con catálogo cargado? (`bootstrap.features.iptv`, docs/iptv.md
+ * §5.1). Es el dato barato con el que la web decide si al tocar un canal, o al
+ * abrir un partido sin canales, merece la pena preguntar antes por la IPTV.
+ * Ausente o falso (servidor sin IPTV, o de antes de la 0.8.1): el camino de
+ * siempre, sin ninguna espera. Lo mantiene al día el evento `iptv.status`.
+ */
+export function iptvActive(client: QueryClient = queryClient): boolean {
+  return client.getQueryData<BootstrapResponse>(routeKey('bootstrap'))?.features.iptv === true;
 }
 
 export interface BootNotice {
@@ -40,6 +51,8 @@ export async function bootApi(
   setMode(detected.mode, detected.reason);
   if (detected.mode === 'demo') {
     markRealtimeDemo();
+    // La demo también dice si hay IPTV (iptvActive): el arranque de muestra se pide ya.
+    void client.prefetchQuery(apiQuery('bootstrap'));
     return {
       mode: 'demo',
       notice: { tone: 'info', text: 'Modo demo: sin backend, canales de muestra cargados' },

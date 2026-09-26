@@ -975,3 +975,182 @@ describe('con el cliente de la API de verdad', () => {
     net.restore();
   });
 });
+
+/* IPTV (docs/iptv.md §7.2 y §8.3): la concesión trae `source: 'iptv'` y
+   `protocol: 'hls'` (hls.js sobre el remux del servidor). Sus fallos agotan
+   la fuente al momento: el servidor ya reintentó y el puente pasa a AceStream. */
+describe('IPTV', () => {
+  const IPTV_ID = 'd4e5f60718293a4b5c6d7e8f9012345601a2b3c4';
+  const IPTV_SID = 's_Q2FuYWxEZVBydWViYQ';
+
+  function iptvGrant() {
+    return {
+      ...grant('hls', 'balanced', IPTV_SID),
+      url: `/api/v1/video/${IPTV_SID}/index.m3u8`,
+      remux: true,
+      codec: { video: 'h264', audio: 'aac', source: 'ffprobe' },
+      source: 'iptv' as const,
+    };
+  }
+
+  function iptvSetup() {
+    const t = setup();
+    t.handlers.channelStream = () => iptvGrant();
+    return t;
+  }
+
+  const playIptv = (t: Harness, origin: 'user' | 'auto' = 'auto') =>
+    t.runtime.play({ hash: IPTV_ID, title: 'DAZN LaLiga', source: 'Casa', iptv: true }, { origin });
+
+  it('«Conectando con tu IPTV…», hls.js sobre /api/v1/video sin token y la fuente en el estado', async () => {
+    const t = iptvSetup();
+    playIptv(t);
+    expect(t.state.message).toBe('Conectando con tu IPTV…');
+    await flush();
+    const engine = t.engines.last();
+    expect(engine.kind).toBe('hls');
+    expect(engine.args.url).toBe(`/api/v1/video/${IPTV_SID}/index.m3u8`);
+    expect(t.state).toMatchObject({ protocol: 'hls', streamSource: 'iptv' });
+  });
+
+  it('un iptv_* al abrir agota la fuente al momento, sin reconexiones', async () => {
+    const t = iptvSetup();
+    t.handlers.channelStream = () => {
+      throw new ApiError({
+        code: 'iptv_timeout',
+        status: 504,
+        message: 'Tu IPTV no respondió a tiempo.',
+      });
+    };
+    playIptv(t, 'user');
+    await flush();
+    expect(t.failures).toHaveLength(1);
+    expect(t.failures[0]).toMatchObject({ outcome: 'fallo', code: 'iptv_timeout' });
+    expect(t.callsTo('channelStream')).toHaveLength(1);
+    // Sin alternativa: «Tu IPTV no da señal ahora mismo.»
+    expect(t.state).toMatchObject({ phase: 'error', message: 'Tu IPTV no da señal ahora mismo.' });
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(t.callsTo('channelStream')).toHaveLength(1);
+  });
+
+  it('remux_busy o ffmpeg_missing con la fuente IPTV son fallo de fuente, no de sistema', async () => {
+    const t = iptvSetup();
+    t.handlers.channelStream = () => {
+      throw new ApiError({ code: 'remux_busy', status: 503, message: 'Hay demasiados vídeos…' });
+    };
+    t.reply.next = true;
+    t.reply.message = 'Tu IPTV no responde: seguimos por AceStream (fuente 2)';
+    playIptv(t);
+    await flush();
+    expect(t.failures).toHaveLength(1);
+    expect(t.failures[0]?.code).toBe('remux_busy');
+    expect(t.state.message).toBe('Tu IPTV no responde: seguimos por AceStream (fuente 2)');
+    expect(t.notices.at(-1)).toBe('Tu IPTV no responde: seguimos por AceStream (fuente 2)');
+  });
+
+  it('stream.closed con un iptv_* agota ya (sin las 3 reconexiones)', async () => {
+    const t = iptvSetup();
+    playIptv(t, 'user');
+    await flush();
+    await reachFirstFrame(t);
+    expect(t.state.phase).toBe('reproduciendo');
+    dispatchSse(
+      'stream.closed',
+      {
+        sessionId: IPTV_SID,
+        viewerIds: ['v_prueba'],
+        reason: 'remux_failed',
+        code: 'iptv_dropped',
+      },
+      META,
+    );
+    await flush();
+    expect(t.failures).toHaveLength(1);
+    expect(t.failures[0]).toMatchObject({ outcome: 'cayo', code: 'iptv_dropped' });
+    expect(t.callsTo('channelStream')).toHaveLength(1);
+  });
+
+  it('un remux_died que gana la carrera a iptv_dropped también agota ya', async () => {
+    const t = iptvSetup();
+    playIptv(t, 'user');
+    await flush();
+    await reachFirstFrame(t);
+    dispatchSse(
+      'stream.closed',
+      { sessionId: IPTV_SID, viewerIds: ['v_prueba'], reason: 'remux_failed', code: 'remux_died' },
+      META,
+    );
+    await flush();
+    expect(t.failures).toHaveLength(1);
+    expect(t.failures[0]?.code).toBe('remux_died');
+  });
+
+  it('stream.reopened remux_restart: se reengancha a la URL nueva sin contarlo como fallo', async () => {
+    const t = iptvSetup();
+    playIptv(t, 'user');
+    await flush();
+    await reachFirstFrame(t);
+    dispatchSse(
+      'stream.reopened',
+      {
+        sessionId: IPTV_SID,
+        viewerIds: ['v_prueba'],
+        url: `/api/v1/video/${IPTV_SID}/index.m3u8?r=2`,
+        protocol: 'hls',
+        reason: 'remux_restart',
+      },
+      META,
+    );
+    await flush();
+    expect(t.engines.last().args.url).toBe(`/api/v1/video/${IPTV_SID}/index.m3u8?r=2`);
+    expect(t.notices).toContain('Tu IPTV se ha reconectado: reenganchando la señal…');
+    expect(t.failures).toHaveLength(0);
+  });
+
+  it('no apunta en Recientes si la sesión lo pide (record: false)', async () => {
+    const t = iptvSetup();
+    t.runtime.play(
+      { hash: IPTV_ID, title: 'DAZN LaLiga', iptv: true },
+      { origin: 'auto', record: false },
+    );
+    await flush();
+    expect(t.callsTo('libraryMutate')).toHaveLength(0);
+  });
+
+  it('motor caído con una AceStream: pregunta si hay IPTV; si la sesión salta, no espera al motor', async () => {
+    const t = setup();
+    t.handlers.channelStream = (input) => {
+      if (input.params?.id === IPTV_ID) return iptvGrant();
+      throw new ApiError({
+        code: 'engine_unavailable',
+        status: 503,
+        message: 'El motor AceStream no responde.',
+      });
+    };
+    t.reply.next = true;
+    t.reply.message = 'El motor AceStream no responde: pasamos a tu IPTV';
+    t.hooks.onFailed = () =>
+      t.runtime.play({ hash: IPTV_ID, title: 'DAZN LaLiga', iptv: true }, { origin: 'auto' });
+    t.runtime.play({ hash: HASH, title: 'DAZN LaLiga' });
+    await flush();
+    expect(t.failures[0]).toMatchObject({ code: 'engine_unavailable' });
+    expect(t.state.channel?.hash).toBe(IPTV_ID);
+    expect(t.state.idleReason).toBeNull();
+    expect(t.state.message).toBe('El motor AceStream no responde: pasamos a tu IPTV');
+  });
+
+  it('motor caído sin IPTV a la que pasar: espera al motor como siempre', async () => {
+    const t = setup();
+    t.handlers.channelStream = () => {
+      throw new ApiError({
+        code: 'engine_unavailable',
+        status: 503,
+        message: 'El motor AceStream no responde.',
+      });
+    };
+    t.runtime.play({ hash: HASH, title: 'Canal' });
+    await flush();
+    expect(t.failures).toHaveLength(1);
+    expect(t.state).toMatchObject({ phase: 'error', idleReason: 'sin-motor' });
+  });
+});

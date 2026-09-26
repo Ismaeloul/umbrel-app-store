@@ -1,0 +1,72 @@
+/* Ajustes → IPTV (docs/iptv.md §1), piel «Palco»: reutiliza el formulario y
+   la tarjeta de «Listas» (directories.css: .dir-form, .dir-card, .dir-status,
+   .dir-note) y solo añade las líneas de estado de la tarjeta y el hueco del
+   interruptor. Solo tokens; los colores de tono son los mismos «ink» que ya
+   pasan contraste AA en claro y en oscuro. */
+
+.iptv-card-wrap {
+  display: grid;
+  gap: var(--s-3);
+  min-width: 0;
+}
+/* Sin botones dentro: la tarjeta es solo el estado; las acciones van debajo. */
+.iptv-card {
+  grid-template-areas: 'icon body';
+}
+@container (min-width: 620px) {
+  .iptv-card {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: 'icon body';
+  }
+}
+/* El host en mono y lo guardado en texto normal; parte en dos líneas si no cabe. */
+.iptv-card__host {
+  min-width: 0;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  line-height: var(--lh-text);
+  overflow-wrap: anywhere;
+}
+.iptv-card__line {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  line-height: var(--lh-text);
+  overflow-wrap: anywhere;
+}
+.iptv-card__line > svg {
+  flex: none;
+  margin-top: 1px;
+}
+.iptv-card__line--weak > svg {
+  color: var(--weak-ink);
+}
+.iptv-card__line--err {
+  color: var(--text);
+}
+.iptv-card__line--err > svg {
+  color: var(--fail-ink);
+}
+.iptv-card__guide {
+  color: var(--text-3);
+  font-size: var(--fs-caption);
+}
+.iptv-switch {
+  padding: 0 4px;
+}
+.iptv-card__acts {
+  align-items: center;
+}
+.iptv-card__acts .dir-card__delete {
+  margin-left: auto;
+}
+.iptv-card__delete-note {
+  margin-top: calc(-1 * var(--s-1));
+}
+/* «Guardada · escríbela solo para cambiarla» entera en 390 px (el texto
+   escrito sigue en 16 px, para que Safari de iOS no haga zoom). */
+.iptv-form .field__input::placeholder {
+  font-size: var(--fs-13);
+}

@@ -30,11 +30,20 @@
      pregunta a quien escuche onSourceFailed (el centro de partido decide).
    - P23: métricas (tiempo hasta la primera imagen, rebuffers, reconexiones y
      retraso) a /api/v1/diagnostics y a la consola de desarrollo.
+   - IPTV (docs/iptv.md §7.2 y §8.3): la concesión trae `source: 'iptv'` y
+     `protocol: 'hls'` (hls.js sobre el remux fMP4 del servidor). Sus fallos
+     (`iptv_*` al abrir, `stream.closed` con un `iptv_*`, y cualquier
+     `remux_*` o `ffmpeg_missing` con la fuente IPTV) agotan la fuente AL
+     MOMENTO, sin las 3 reconexiones: el relé del servidor ya reintentó, y el
+     puente de la sesión pasa a AceStream. Con el motor caído y la fuente de
+     AceStream, se pregunta primero si hay una IPTV a la que pasar.
 
    Nada aquí toca React: la interfaz lee el estado de `playerStore` (api.ts)
    y llama a los métodos públicos (toggle, goLive, back, …). */
 
 import {
+  errorMessage,
+  isAnyErrorCode,
   liveBufferSafety,
   PLAYBACK_PROFILES,
   readSeekWindow,
@@ -180,6 +189,8 @@ interface SourceAttempt {
   /** Ya se mandó el resumen de métricas de esta fuente (player_session). */
   metricsSent: boolean;
   failed: boolean;
+  /** Sale de la IPTV: lo dice el canal (sesión de fuentes) y lo confirma la concesión (`grant.source`). */
+  iptv: boolean;
 }
 
 interface Connection {
@@ -219,6 +230,16 @@ const SYSTEM_ERRORS = new Set([
   'origin_forbidden',
   'demo_unsupported',
 ]);
+
+/** Una IPTV que falla sin alternativa (§8.3). */
+export const IPTV_IDLE_MESSAGE = 'Tu IPTV no da señal ahora mismo.';
+
+/** ¿Es un fallo de la IPTV que agota la fuente sin reintentos? (`iptv_*` siempre; `remux_*` y ffmpeg con fuente IPTV). */
+export function isIptvSourceError(code: string | undefined, iptvSource: boolean): boolean {
+  if (!code) return false;
+  if (code.startsWith('iptv_')) return true;
+  return iptvSource && (code.startsWith('remux_') || code === 'ffmpeg_missing');
+}
 
 const IDLE_MESSAGES: Record<IdleReason, string> = {
   inicio: 'Elige un partido en la agenda o un canal de la biblioteca.',
@@ -414,6 +435,7 @@ export class PlayerRuntime {
       },
       metricsSent: false,
       failed: false,
+      iptv: channel.iptv === true,
     };
     this.waitingForEngine = false;
     this.lastStats = null;
@@ -426,6 +448,7 @@ export class PlayerRuntime {
       started: false,
       ttffMs: null,
       stats: null,
+      streamSource: null,
       live: IDLE_LIVE,
       bufferAheadS: 0,
       rebuffering: null,
@@ -459,6 +482,7 @@ export class PlayerRuntime {
       stats: null,
       engine: null,
       protocol: null,
+      streamSource: null,
       codec: null,
       sessionId: null,
       ttffMs: null,
@@ -692,8 +716,15 @@ export class PlayerRuntime {
     this.transition(this.conn === 'reconectando' ? 'reintentar' : 'solicitar');
     this.controller.setSession(this.controllerKey());
     this.resetVideo();
+    const iptv = this.isIptvSource();
     this.setState({
-      message: recovery ? 'Reconectando con AceStream…' : 'Conectando con AceStream…',
+      message: iptv
+        ? recovery
+          ? 'Reconectando con tu IPTV…'
+          : 'Conectando con tu IPTV…'
+        : recovery
+          ? 'Reconectando con AceStream…'
+          : 'Conectando con AceStream…',
       rebuffering: null,
     });
 
@@ -731,6 +762,7 @@ export class PlayerRuntime {
         this.transition('concedida');
         this.setState({
           protocol: grant.protocol,
+          streamSource: grant.source ?? 'engine',
           codec: { video: grant.codec.video, audio: grant.codec.audio },
           sessionId: grant.session.id,
         });
@@ -752,7 +784,14 @@ export class PlayerRuntime {
       this.fail('No se pudo abrir el canal: reconectando', { detail: String(error) });
       return;
     }
+    // IPTV: el servidor ya reintentó (relé, variantes, plaza recién cerrada): se agota ya.
+    if (isIptvSourceError(error.code, this.isIptvSource())) {
+      this.fail(error.message, { retryable: false, code: error.code });
+      return;
+    }
     if (error.code === 'engine_unavailable') {
+      // Con el motor caído, una IPTV sí puede sonar: se pregunta antes de esperar.
+      if (!this.isIptvSource() && this.bridgeOnEngineDown(error.message)) return;
       // El motor está caído: saltar de fuente no sirve. Se espera a que vuelva (P13).
       this.failSystem(error.message, 'sin-motor', error.code);
       this.waitingForEngine = true;
@@ -768,6 +807,40 @@ export class PlayerRuntime {
     });
   }
 
+  /** La fuente sale de la IPTV (por la concesión o, antes, por lo que dijo la sesión de fuentes). */
+  private isIptvSource(): boolean {
+    return this.source?.iptv === true;
+  }
+
+  /**
+   * Motor caído con una fuente de AceStream: si la sesión de fuentes tiene
+   * una IPTV utilizable, salta a ella (§7.2, «El motor AceStream no responde:
+   * pasamos a tu IPTV»). Devuelve true si alguien reproduce otra cosa.
+   */
+  private bridgeOnEngineDown(reason: string): boolean {
+    const source = this.source;
+    if (!source) return false;
+    this.endConnection();
+    this.releaseSession('error');
+    this.controller.reset();
+    this.resetVideo();
+    this.transition('agotado');
+    const reply = this.sourceFailed({
+      channel: source.channel,
+      origin: source.origin,
+      outcome: 'fallo',
+      seconds: 0,
+      reason,
+      code: 'engine_unavailable',
+    });
+    if (this.source === source && !reply.next) return false;
+    source.failed = true;
+    const text = reply.message ?? 'El motor AceStream no responde: pasamos a tu IPTV';
+    if (this.source && this.source !== source) this.setState({ message: text });
+    this.notify(text, { kind: 'signal', tone: 'warn', signal: 'checking' });
+    return true;
+  }
+
   private adoptSession(grant: StreamGrant): void {
     const previous = this.session;
     if (previous && previous.id !== grant.session.id) this.stopHeartbeat();
@@ -779,6 +852,8 @@ export class PlayerRuntime {
       remux: grant.remux,
       lastBeatAt: Date.now(),
     };
+    // La concesión dice de dónde sale el vídeo; sin el campo (servidor de antes), lo que dijo el canal.
+    if (this.source && grant.source) this.source.iptv = grant.source === 'iptv';
     this.startHeartbeat();
   }
 
@@ -1172,25 +1247,28 @@ export class PlayerRuntime {
     this.controller.reset();
     this.resetVideo();
     this.transition('agotado');
+    const wasIptv = this.isIptvSource();
     const reply = this.sourceFailed({
       channel: source.channel,
       origin: source.origin,
       outcome,
       seconds,
       reason,
+      ...(code ? { code } : {}),
     });
     if (this.source !== source) {
       // Lo normal: quien escucha ya ha llamado a play() con la siguiente fuente
       // dentro del propio aviso. Esa fuente manda (su estado, su presencia):
       // aquí solo se cuenta por qué se ha cambiado, sin marcarla como fallida.
-      const next = 'Esta fuente no responde: probando la siguiente…';
+      // Con el puente IPTV ↔ AceStream, su texto sustituye al genérico (§7.2).
+      const next = reply.message ?? 'Esta fuente no responde: probando la siguiente…';
       if (this.source) this.setState({ message: next });
       this.notify(next, { kind: 'signal', tone: 'warn', signal: 'checking' });
       return;
     }
     const message = reply.next
-      ? 'Esta fuente no responde: probando la siguiente…'
-      : (reply.message ?? IDLE_MESSAGES.fallo);
+      ? (reply.message ?? 'Esta fuente no responde: probando la siguiente…')
+      : (reply.message ?? (wasIptv ? IPTV_IDLE_MESSAGE : IDLE_MESSAGES.fallo));
     this.setState({ attempt: null, rebuffering: null, idleReason: 'fallo', message });
     // Sustituye al último «reconectando (n/máx)…» de la línea de estado.
     this.notify(message, {
@@ -1430,11 +1508,15 @@ export class PlayerRuntime {
 
   private onReopened(data: SseEventData<'stream.reopened'>): void {
     if (!this.ours(data)) return;
+    // IPTV: el relé reconectó con otra base de tiempos (§6.1) y el servidor
+    // reinició el remux en la misma sesión: se reengancha sin contarlo como fallo.
     this.reattach(
       data.url,
       data.protocol,
       data.reason === 'remux_restart'
-        ? 'La conversión para iPhone se ha reiniciado: reenganchando…'
+        ? this.isIptvSource()
+          ? 'Tu IPTV se ha reconectado: reenganchando la señal…'
+          : 'La conversión para iPhone se ha reiniciado: reenganchando…'
         : 'El motor se ha reiniciado: reenganchando la señal…',
     );
   }
@@ -1470,9 +1552,21 @@ export class PlayerRuntime {
         this.dropSession();
         this.fail('La sesión había caducado: reconectando');
         return;
-      default:
+      default: {
+        const iptv = this.isIptvSource();
         this.dropSession();
+        // IPTV: `iptv_dropped`, `iptv_disabled`, `iptv_removed`, `iptv_busy`… y, por
+        // si un `remux_died` gana la carrera, cualquier cierre del remux (§7.2).
+        if (isIptvSourceError(data.code, iptv) || (iptv && data.reason === 'remux_failed')) {
+          const code = data.code ?? 'iptv_dropped';
+          this.fail(isAnyErrorCode(code) ? errorMessage(code) : 'Tu IPTV ha cortado la emisión.', {
+            retryable: false,
+            code,
+          });
+          return;
+        }
         this.fail('La señal se ha cortado: reconectando', { detail: data.code ?? data.reason });
+      }
     }
   }
 

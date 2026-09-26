@@ -8,7 +8,12 @@
    técnicos», nunca aquí. */
 
 import type { StatusContent } from '../notices/statusLine.ts';
-import type { PlayerState } from './api.ts';
+import { isIptvPlayback, type PlayerState } from './api.ts';
+
+/** «Conectando con AceStream…» o, si la fuente es de la IPTV, «Conectando con tu IPTV…» (§8.3). */
+function connectingText(state: PlayerState): string {
+  return isIptvPlayback(state) ? 'Conectando con tu IPTV…' : 'Conectando con AceStream…';
+}
 
 function withLead(lead: string | undefined, text: string): string {
   const clean = lead?.trim();
@@ -28,7 +33,7 @@ export function statusFor(state: PlayerState): StatusContent | null {
       return null;
     case 'cargando':
       return {
-        text: state.message ?? 'Conectando con AceStream…',
+        text: state.message ?? connectingText(state),
         signal: 'checking',
         ...(state.attempt ? { meta: `intento ${state.attempt.n} de ${state.attempt.max}` } : {}),
       };
@@ -143,7 +148,7 @@ export function stageMessage(state: PlayerState): {
       if (state.conn === 'activa') return null;
       return {
         title: state.started || state.attempt ? 'Reconectando' : 'Conectando',
-        text: state.message ?? 'Conectando con AceStream…',
+        text: state.message ?? connectingText(state),
         tone: 'busy',
       };
     case 'reconectando':

@@ -75,6 +75,12 @@ export function sessionTitle(session: Pick<SessionSummary, 'title' | 'hash'>): s
   return session.title.trim() || `Canal ${session.hash.slice(0, 8)}`;
 }
 
+/** La línea del canal: su título y, si sale de la IPTV, « · IPTV» (docs/iptv.md §8.1). */
+export function channelLine(session: Pick<SessionSummary, 'title' | 'hash' | 'source'>): string {
+  const title = sessionTitle(session);
+  return session.source === 'iptv' ? `${title} · IPTV` : title;
+}
+
 export function countText(count: number): string {
   return count === 1 ? '1 dispositivo' : `${count} dispositivos`;
 }

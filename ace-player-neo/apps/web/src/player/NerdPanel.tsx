@@ -17,7 +17,7 @@
 
 import { useEngineSummary } from '../api/hooks.ts';
 import { IconButton } from '../ui/Button.tsx';
-import { usePlayer, setNerdOpen, type PlayerState } from './api.ts';
+import { isIptvPlayback, usePlayer, setNerdOpen, type PlayerState } from './api.ts';
 import type { EngineKind } from './engines/types.ts';
 
 const ENGINE_NAME: Record<EngineKind, string> = {
@@ -48,11 +48,18 @@ function seconds(value: number | null | undefined): string {
 
 export function nerdRows(state: PlayerState, engineText: string): Array<[string, string]> {
   const stats = state.stats;
+  // IPTV (§8.1): «Origen: IPTV · Casa», sin pares (no hay enjambre) ni hash.
+  const iptv = isIptvPlayback(state);
   return [
+    ...(iptv
+      ? ([['Origen', state.channel?.source ? `IPTV · ${state.channel.source}` : 'IPTV']] as Array<
+          [string, string]
+        >)
+      : []),
     ['Motor', engineText],
     ['Reproductor', state.engine ? ENGINE_NAME[state.engine] : '—'],
     ['Entrega', state.protocol ? (DELIVERY[state.protocol] ?? state.protocol) : '—'],
-    ['Pares', stats ? String(stats.peers) : '—'],
+    ['Pares', stats && !iptv ? String(stats.peers) : '—'],
     ['Bajada', formatSpeed(stats?.speedDown)],
     ['Subida', formatSpeed(stats?.speedUp)],
     ['Estado del motor', stats?.status || '—'],
@@ -84,10 +91,12 @@ export function PlayerNerdStats({ className }: { className?: string }) {
           <dd className="mono">{value}</dd>
         </div>
       ))}
-      <div className="nerd-stats__row nerd-stats__row--hash">
-        <dt>Hash</dt>
-        <dd className="mono">{state.channel?.hash ?? '—'}</dd>
-      </div>
+      {isIptvPlayback(state) ? null : (
+        <div className="nerd-stats__row nerd-stats__row--hash">
+          <dt>Hash</dt>
+          <dd className="mono">{state.channel?.hash ?? '—'}</dd>
+        </div>
+      )}
     </dl>
   );
 }

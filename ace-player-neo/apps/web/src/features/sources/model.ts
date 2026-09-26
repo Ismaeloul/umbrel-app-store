@@ -9,7 +9,13 @@
    - «estado efectivo»: lo que se enseña y lo que usa el arranque automático.
      Manda, por este orden: el reporte en cuarentena, el reproductor en
      pantalla (reproduciendo = verificada; conectando = comprobando, regla
-     20), lo que vio el reproductor en los últimos 3 min y el comprobador. */
+     20), lo que vio el reproductor en los últimos 3 min y el comprobador.
+
+   IPTV (docs/iptv.md §7 y §8): una candidata `source: 'iptv'` es «una fuente
+   más con su distintivo». Va primera (la ordena el servidor), arranca sin
+   esperar a «Verificada» (la cuenta activa no es un stream visto), nunca se
+   pliega y no enseña hash. El puente IPTV ↔ AceStream (P16.6) elige aquí a
+   quién se salta (`pickBridgeTarget`). */
 
 import {
   channelMatchScore,
@@ -24,6 +30,7 @@ import {
   type ScanCandidate,
   type ScanCandidateState,
   type ScanJob,
+  type CandidateIptvInfo,
   type SourceReportReason,
   type VerdictState,
   type WebSourceSummary,
@@ -87,6 +94,15 @@ export interface SourceEntry {
   playerVerdict: { state: VerdictState; reason: string; at: number } | null;
   /** Ya la probó el arranque automático (no se vuelve a intentar sola). */
   autoTried: boolean;
+  /** Solo IPTV: proveedor («Casa»), calidad, reserva y si la confirmó la guía (§5.1). */
+  iptv?: CandidateIptvInfo | null;
+  /** Cuándo la mandó reproducir la sesión por última vez (epoch ms; el puente no vuelve a una IPTV probada hace < 60 s). */
+  triedAt?: number | null;
+}
+
+/** ¿Es una fuente de la IPTV? (distintivo, sin hash, nunca plegada, puente). */
+export function isIptv(entry: Pick<SourceEntry, 'origin'>): boolean {
+  return entry.origin === 'iptv';
 }
 
 // ---- Construir entradas -----------------------------------------------------------
@@ -119,6 +135,7 @@ export function entryFromCandidate(candidate: ResolutionCandidate, now = Date.no
     initial: false,
     playerVerdict: null,
     autoTried: false,
+    ...(candidate.source === 'iptv' ? { iptv: candidate.iptv ?? null } : {}),
   };
 }
 
@@ -397,6 +414,15 @@ const REASON_PHRASE: Record<string, string> = {
   starved: 'llega menos señal de la que el canal necesita',
   retry: 'reintentando',
   delayed_retry: 'reintentando',
+  // IPTV (docs/iptv.md §8.1): motivos del comprobador (nivel 1) y del relé.
+  iptv_busy: 'conexión ocupada',
+  iptv_auth_failed: 'la cuenta no entra',
+  iptv_account_expired: 'cuenta caducada',
+  iptv_gone: 'ya no está en la lista',
+  iptv_timeout: 'no respondió a tiempo',
+  iptv_unreachable: 'el proveedor no responde',
+  iptv_dropped: 'se cortó en el proveedor',
+  iptv_unsupported: 'formato no compatible',
 };
 
 /* Lo que se lee cuando el motivo no dice nada más. Las de «en cola» y
@@ -414,6 +440,9 @@ const STATE_PHRASE: Record<ScanCandidateState, string> = {
 export function detailOf(effective: Effective, entry: SourceEntry): string {
   if (effective.reported && entry.reported)
     return `apartada por tu reporte (${reportReasonLabel(entry.reported.reason).toLowerCase()})`;
+  // Una IPTV sin comprobar es lo normal (la cuenta activa no es un stream
+  // visto, §7.3): no hay disponibilidad que medir.
+  if (effective.state === 'none' && isIptv(entry)) return 'se prueba al reproducirla';
   if (effective.state === 'none') {
     const percent = availabilityPercent(entry.availability);
     return percent === null ? 'disponibilidad sin medir' : `${percent}% disponible`;
@@ -435,7 +464,7 @@ const TYPE_LABEL: Record<SourceOrigin, string> = {
   favorites: 'Favorito',
   history: 'Reciente',
   acestream: 'AceStream',
-  /* docs/iptv.md §8.1. El resto de la IPTV en la web (distintivo, puente…) es de la parte «web». */
+  /* docs/iptv.md §8.1: «IPTV · Casa». */
   iptv: 'IPTV',
   manual: 'Externa',
 };
@@ -479,8 +508,9 @@ export function presentationOf(
   webSources?: readonly Pick<WebSourceSummary, 'id' | 'name'>[],
 ): SourcePresentation {
   const type = TYPE_LABEL[entry.origin] ?? (entry.ih ? 'AceStream' : 'Fuente');
-  const list = listNameOf(entry.listaId, webSources);
-  const provider = providerOf(entry.title);
+  // IPTV: el proveedor es el nombre que puso Isma («Casa», §8.1); su `listaId` es el del proveedor, no una lista.
+  const list = isIptv(entry) ? '' : listNameOf(entry.listaId, webSources);
+  const provider = (isIptv(entry) ? entry.iptv?.provider : '') || providerOf(entry.title);
   const detail = provider || list;
   return {
     type,
@@ -513,8 +543,24 @@ export const QUALITY_KBPS = { fullHd: 3800, hd: 1700 } as const;
  * lo midió, el que declara el canal, `streamKbps`) y «HEVC» si el códec no es
  * H.264. null cuando el comprobador no ha visto nada todavía.
  */
-export function qualityLabel(entry: Pick<SourceEntry, 'probe'>): string | null {
+const IPTV_QUALITY_LABEL: Record<string, string> = {
+  fhd: '1080p',
+  hd: '720p',
+  uhd: '4K',
+  sd: 'SD',
+};
+
+export function qualityLabel(entry: Pick<SourceEntry, 'probe' | 'iptv'>): string | null {
   const probe = entry.probe;
+  const measured = probe && (probe.rateKbps || probe.streamKbps || probe.videoCodec);
+  // IPTV sin medir: la calidad que declara su nombre (§8.1), y «reserva» si lo es.
+  if (entry.iptv && !measured) {
+    const parts = [
+      entry.iptv.quality ? IPTV_QUALITY_LABEL[entry.iptv.quality] : null,
+      entry.iptv.backup ? 'reserva' : null,
+    ].filter(Boolean);
+    return parts.length ? parts.join(' · ') : null;
+  }
   if (!probe) return null;
   const kbps = probe.rateKbps && probe.rateKbps > 0 ? probe.rateKbps : probe.streamKbps;
   const hevc = /hevc|h\.?265|hvc1|hev1/i.test(probe.videoCodec);
@@ -550,6 +596,18 @@ export function describeSource(
   const percent = availabilityPercent(entry.availability);
   const intake = entry.probe?.intakeKbps ?? 0;
   const stream = entry.probe?.streamKbps ?? 0;
+  if (isIptv(entry)) {
+    // Sin «Hash …» (§8.1): «Fuente 1: DAZN LaLiga · IPTV · Casa · 1080p · frase · Mbit/s».
+    const rate = entry.probe?.rateKbps ?? 0;
+    const iptvParts = [
+      channelPartOf(entry.title) || entry.matchedChannel || entry.title,
+      presentation.label,
+      qualityLabel(entry) ?? '',
+      detailOf(effective, entry),
+      rate > 0 ? `${mbit(rate)} Mbit/s` : '',
+    ].filter(Boolean);
+    return `Fuente ${number}: ${iptvParts.join(' · ')}`;
+  }
   const parts = [
     entry.title,
     presentation.label,
@@ -580,6 +638,8 @@ export function isShownWhileScanning(
   activeHash: string | null,
 ): boolean {
   if (entry.id === activeHash) return true;
+  // La IPTV nunca se pliega (§7.5 y §8.3): volver a ella es un toque en su cartel.
+  if (isIptv(entry)) return true;
   if (!effective.reported && (effective.state === 'working' || effective.state === 'weak'))
     return true;
   return (
@@ -606,15 +666,26 @@ export function scanFinished(scan: ScanView | null): boolean {
  * Arranque por verificadas (`arrancarPrimeraVerificada`, index.html:3614-3644):
  * la primera verificada no reportada ni probada ya, en el orden del servidor;
  * con el comprobador terminado, la primera floja.
+ *
+ * IPTV primero (§7.1): la primera IPTV no reportada, no probada y cuyo estado
+ * NO sea «Sin señal» arranca sin esperar a «Verificada» («Floja», por ejemplo
+ * `iptv_busy`, no la frena: abrir es la prueba de verdad). Con `iptv: false`
+ * solo se miran las demás (el puente decide aparte si toca la IPTV).
  */
 export function pickAutoSource(
   entries: readonly SourceEntry[],
   effectiveById: ReadonlyMap<string, Effective>,
   finished: boolean,
+  { iptv = true }: { iptv?: boolean } = {},
 ): SourceEntry | null {
   const pool = entries.filter(
-    (entry) => !entry.autoTried && !effectiveById.get(entry.id)?.reported,
+    (entry) =>
+      !entry.autoTried && !effectiveById.get(entry.id)?.reported && (iptv || !isIptv(entry)),
   );
+  const firstIptv = pool.find(
+    (entry) => isIptv(entry) && effectiveById.get(entry.id)?.state !== 'failed',
+  );
+  if (firstIptv) return firstIptv;
   const working = pool.find((entry) => effectiveById.get(entry.id)?.state === 'working');
   if (working) return working;
   return finished
@@ -643,6 +714,50 @@ export function pickInitialSwitch(
         !isReported(entry, now) &&
         (entry.probe?.state === 'working' || entry.probe?.state === 'weak'),
     ) ?? null
+  );
+}
+
+/** Motivos de fallo de CUENTA (§4.3): con ellos ninguna otra IPTV del mismo proveedor va a abrir. */
+const IPTV_ACCOUNT_CODES = new Set(['iptv_busy', 'iptv_auth_failed', 'iptv_account_expired']);
+
+export function isIptvAccountFailure(code: string | null | undefined): boolean {
+  return IPTV_ACCOUNT_CODES.has(String(code ?? ''));
+}
+
+/** Una IPTV probada hace menos de esto no recibe el salto desde AceStream (§7.2). */
+export const BRIDGE_RECENT_TRY_MS = 60_000;
+/** Saltos automáticos del puente IPTV ↔ AceStream como mucho en la ventana (§7.2, contra los bucles). */
+export const BRIDGE_MAX_JUMPS = 2;
+export const BRIDGE_WINDOW_MS = 3 * 60_000;
+
+/** ¿Queda sitio para otro salto del puente? (2 cada 3 min por sesión). */
+export function bridgeAllowed(jumps: readonly number[], now: number): boolean {
+  return jumps.filter((at) => now - at < BRIDGE_WINDOW_MS).length < BRIDGE_MAX_JUMPS;
+}
+
+/**
+ * El puente P16.6 (§7.2, «si uno no va, va el otro»):
+ * - cae una IPTV → la mejor AceStream (verificada; con el comprobador
+ *   terminado, también floja) no probada todavía;
+ * - cae una AceStream → la primera IPTV no reportada, no «Sin señal» y no
+ *   probada en los últimos 60 s (aunque ya la probara el arranque).
+ * null si no hay a quién saltar (la sesión decide qué decir).
+ */
+export function pickBridgeTarget(
+  entries: readonly SourceEntry[],
+  effectiveById: ReadonlyMap<string, Effective>,
+  from: 'iptv' | 'acestream',
+  finished: boolean,
+  now: number,
+): SourceEntry | null {
+  if (from === 'iptv') return pickAutoSource(entries, effectiveById, finished, { iptv: false });
+  return (
+    entries.find((entry) => {
+      if (!isIptv(entry)) return false;
+      const effective = effectiveById.get(entry.id);
+      if (!effective || effective.reported || effective.state === 'failed') return false;
+      return !entry.triedAt || now - entry.triedAt >= BRIDGE_RECENT_TRY_MS;
+    }) ?? null
   );
 }
 
@@ -768,6 +883,7 @@ export function resolutionSourceLabel(source: CandidateSource | string): string 
         favorites: 'Favoritos',
         history: 'Recientes',
         acestream: 'Buscador AceStream',
+        iptv: 'Tu IPTV',
       } as Record<string, string>
     )[source] ?? 'Fuente disponible'
   );
@@ -783,6 +899,7 @@ export function checkedLabel(value: string): string {
         m3u: 'M3U',
         library: 'Biblioteca',
         acestream: 'AceStream',
+        iptv: 'IPTV',
         'ai-programming': 'IA',
         ai: 'IA',
       } as Record<string, string>

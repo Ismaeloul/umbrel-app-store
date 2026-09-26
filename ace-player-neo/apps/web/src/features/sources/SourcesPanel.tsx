@@ -17,7 +17,7 @@ import { haptic } from '../../lib/haptics.ts';
 import { prefersReducedMotion } from '../../lib/media.ts';
 import { usePlayerSelector } from '../../player/api.ts';
 import { Button, EmptyState, IconButton, Num, ProgressBar, SkeletonRows } from '../../ui/index.ts';
-import { scanProgress, scanProgressText } from './model.ts';
+import { isIptv, scanProgress, scanProgressText } from './model.ts';
 import { openPaste, openResolver, research, selectSource, stepSource } from './session.ts';
 import { SourceInspector, type InspectorTarget } from './SourceInspector.tsx';
 import { SourceList, type SourceListVariant } from './SourceList.tsx';
@@ -171,6 +171,7 @@ export function SourcesPanel({
         title: activeRow.entry.title,
         ih: activeRow.entry.ih === true,
         learned: activeRow.entry.learned === 'correct',
+        iptv: isIptv(activeRow.entry),
       }
     : channelFallback;
 

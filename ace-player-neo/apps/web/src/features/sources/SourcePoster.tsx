@@ -14,7 +14,12 @@
    aria-current y data-state, el menú contextual (clic derecho o pulsación
    larga) con los mismos elementos que la fila de antes, y las flechas para
    moverse entre carteles (Intro o Espacio eligen). Al elegir, un toque
-   háptico rígido (HAPTIC_MAP). */
+   háptico rígido (HAPTIC_MAP).
+
+   IPTV (docs/iptv.md §8.1): `data-origin="iptv"`, la cápsula «IPTV» (neutra,
+   con el icono de la tele) arriba a la izquierda de la tesela, el proveedor
+   («Casa») debajo y la calidad que declara («1080p»). Su menú no ofrece
+   «Copiar hash» ni «Abrir en la app de AceStream»: no es un hash de AceStream. */
 
 import { useEffect, useRef, type CSSProperties, type KeyboardEvent } from 'react';
 import { cx } from '../../lib/cx.ts';
@@ -31,12 +36,13 @@ import {
   type MenuItem,
   type SignalRingState,
 } from '../../ui/index.ts';
-import { channelNameOf, qualityLabel } from './model.ts';
+import { channelNameOf, isIptv, qualityLabel } from './model.ts';
 import { confirmSource, openReport, selectSource } from './session.ts';
 import type { SourceRow } from './useSources.ts';
 
 /** Los mismos elementos del menú que tenía la fila (inventario §7.1). */
 export function rowMenu(row: SourceRow, inMatch: boolean): MenuItem[] {
+  const iptv = isIptv(row.entry);
   const items: MenuItem[] = [
     {
       id: 'ver',
@@ -45,25 +51,28 @@ export function rowMenu(row: SourceRow, inMatch: boolean): MenuItem[] {
       disabled: row.onScreen,
       onSelect: () => selectSource(row.entry.id),
     },
-    {
-      id: 'copiar-hash',
-      label: 'Copiar hash',
-      icon: 'hash',
-      onSelect: () =>
-        void copyText(row.entry.id).then((ok) =>
-          notify(ok ? 'Hash copiado' : 'No se pudo copiar el hash', {
-            tone: ok ? 'ok' : 'err',
-            icon: 'copy',
-          }),
-        ),
-    },
-    {
-      id: 'abrir',
-      label: 'Abrir en la app de AceStream',
-      icon: 'externo',
-      onSelect: () => openExternal(acestreamLink(row.entry.id)),
-    },
   ];
+  if (!iptv)
+    items.push(
+      {
+        id: 'copiar-hash',
+        label: 'Copiar hash',
+        icon: 'hash',
+        onSelect: () =>
+          void copyText(row.entry.id).then((ok) =>
+            notify(ok ? 'Hash copiado' : 'No se pudo copiar el hash', {
+              tone: ok ? 'ok' : 'err',
+              icon: 'copy',
+            }),
+          ),
+      },
+      {
+        id: 'abrir',
+        label: 'Abrir en la app de AceStream',
+        icon: 'externo',
+        onSelect: () => openExternal(acestreamLink(row.entry.id)),
+      },
+    );
   const canLearn = inMatch && row.active && row.entry.learned !== 'correct';
   if (canLearn)
     items.push({
@@ -120,6 +129,7 @@ export function SourcePoster({ row, inMatch, index, onArrow }: SourcePosterProps
           row.onScreen && 'is-onscreen',
         )}
         data-state={ring}
+        data-origin={row.entry.origin}
         aria-current={row.active ? 'true' : undefined}
         aria-label={row.description}
         title={row.description}
@@ -141,6 +151,11 @@ export function SourcePoster({ row, inMatch, index, onArrow }: SourcePosterProps
           <span className="src-poster__num">
             <Num value={row.number} />
           </span>
+          {isIptv(row.entry) ? (
+            <Capsule tone="neutral" size="sm" icon="tv" className="src-poster__iptv">
+              IPTV
+            </Capsule>
+          ) : null}
           {row.onScreen ? (
             <Capsule tone="gold" size="sm" icon="senal" className="src-poster__onair">
               En pantalla

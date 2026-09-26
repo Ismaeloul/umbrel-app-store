@@ -31,6 +31,7 @@ beforeEach(() => {
     'GET /api/v1/health': fixture('health'),
     'GET /api/v1/diagnostics': fixture('diagnosticsList'),
     'GET /api/v1/devices': fixture('devicesList'),
+    'GET /api/v1/iptv': { provider: null, refreshHours: 6 },
   });
 });
 afterEach(() => {

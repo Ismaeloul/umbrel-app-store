@@ -67,6 +67,10 @@ const TIMEOUTS: Partial<Record<JsonRouteId, number>> = {
   channelStream: 60_000,
   search: 15_000,
   directoriesSync: 50_000,
+  /* IPTV (docs/iptv.md §5.3): guardar hace la prueba rápida (Xtream 8 s, M3U
+     20 s) y actualizar solo lanza la sincronización; nunca más de los 60 s de nginx. */
+  iptvSave: 30_000,
+  iptvSync: 12_000,
   engineRestart: 20_000,
   healthLive: 4_000,
 };

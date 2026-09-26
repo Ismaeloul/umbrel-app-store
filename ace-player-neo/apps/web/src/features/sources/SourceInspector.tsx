@@ -11,6 +11,10 @@
    - Reportar (§7.7).
    - «Abrir en…» (D7): la app de AceStream con `acestream://` y copiar la
      URL del stream para VLC.
+   - Con una IPTV en pantalla (docs/iptv.md §8.1) solo quedan «Rebuscar»,
+     «Pegar hash», «Es el canal correcto» y «Reportar»: un id IPTV no es un
+     hash de AceStream que copiar o abrir fuera, ni se guarda en Favoritos
+     (el favorito es el canal de AceStream, que ya trae la IPTV primero).
 
    Es un componente de React normal: si ni la fuente ni las acciones
    cambian, el DOM no se toca y la fila no vuelve al principio al
@@ -34,6 +38,8 @@ export interface InspectorTarget {
   title: string;
   ih: boolean;
   learned: boolean;
+  /** Es una fuente de la IPTV. */
+  iptv?: boolean;
 }
 
 export interface SourceInspectorProps {
@@ -146,6 +152,7 @@ export function SourceInspector({
     );
   }
   const isFavorite = actions.favoriteIds.has(target.hash);
+  const iptv = target.iptv === true;
   return (
     <div
       ref={scroll.ref}
@@ -155,22 +162,24 @@ export function SourceInspector({
       data-edge={layout === 'row' ? scroll.edge : undefined}
       onScroll={layout === 'row' ? scroll.onScroll : undefined}
     >
-      <Button
-        size="sm"
-        icon={isFavorite ? 'star-f' : 'star'}
-        pressed={isFavorite}
-        className={cx(isFavorite && 'is-on')}
-        onClick={() =>
-          actions.toggleFavorite({
-            id: target.hash,
-            title: target.title,
-            category: 'Fútbol',
-            ih: target.ih,
-          })
-        }
-      >
-        {isFavorite ? 'En favoritos' : 'Favorito'}
-      </Button>
+      {iptv ? null : (
+        <Button
+          size="sm"
+          icon={isFavorite ? 'star-f' : 'star'}
+          pressed={isFavorite}
+          className={cx(isFavorite && 'is-on')}
+          onClick={() =>
+            actions.toggleFavorite({
+              id: target.hash,
+              title: target.title,
+              category: 'Fútbol',
+              ih: target.ih,
+            })
+          }
+        >
+          {isFavorite ? 'En favoritos' : 'Favorito'}
+        </Button>
+      )}
       {inMatch ? (
         <Button
           size="sm"
@@ -185,9 +194,11 @@ export function SourceInspector({
       <Button size="sm" icon="paste" onClick={() => openPaste(true)}>
         Pegar hash
       </Button>
-      <Button size="sm" icon="copy" onClick={() => void copyHash(target.hash)}>
-        Copiar hash
-      </Button>
+      {iptv ? null : (
+        <Button size="sm" icon="copy" onClick={() => void copyHash(target.hash)}>
+          Copiar hash
+        </Button>
+      )}
       {inMatch ? (
         <Button
           size="sm"
@@ -202,7 +213,7 @@ export function SourceInspector({
       <Button size="sm" icon="flag" onClick={() => openReport(target.hash)}>
         Reportar
       </Button>
-      <OpenElsewhere hash={target.hash} ih={target.ih} />
+      {iptv ? null : <OpenElsewhere hash={target.hash} ih={target.ih} />}
       {actions.sheets}
     </div>
   );
