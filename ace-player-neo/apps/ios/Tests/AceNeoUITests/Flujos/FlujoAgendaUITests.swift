@@ -49,7 +49,11 @@ final class FlujoAgendaUITests: XCTestCase {
         XCTAssertTrue(elementoUI(app, IDUI.dia(dia(1))).isSelected)
 
         // Deslizar a la derecha sobre la lista vuelve al día anterior (el carril de una tarjeta no se desplaza).
-        arrastrar(tarjetaManana, desde: CGVector(dx: 0.2, dy: 0.5), hasta: CGVector(dx: 1.2, dy: 0.5))
+        // Antes se sube la página para que la tarjeta quede a la vista (con la barra de pestañas debajo).
+        let pantalla = elementoUI(app, IDUI.pantalla("agenda"))
+        arrastrar(pantalla, desde: CGVector(dx: 0.5, dy: 0.75), hasta: CGVector(dx: 0.5, dy: 0.35))
+        XCTAssertTrue(tarjetaManana.isHittable, "La tarjeta de mañana no queda a la vista")
+        arrastrar(tarjetaManana, desde: CGVector(dx: 0.2, dy: 0.3), hasta: CGVector(dx: 1.2, dy: 0.3))
         XCTAssertTrue(elementoUI(app, IDUI.tarjetaPartido("sim-1")).waitForExistence(timeout: 10), "Deslizar no vuelve a hoy")
         XCTAssertTrue(elementoUI(app, IDUI.dia(dia(0))).isSelected)
         captura(app, "agenda-deslizada")
