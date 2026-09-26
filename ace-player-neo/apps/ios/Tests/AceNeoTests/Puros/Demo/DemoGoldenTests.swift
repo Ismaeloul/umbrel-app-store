@@ -45,6 +45,9 @@ import Testing
                 let obtenido = respuesta.json ?? .nulo
                 let diferencia = Self.diferencia(obtenido, esperado)
                 #expect(diferencia == nil, "\(donde): \(diferencia ?? "")")
+                // Byte a byte (§3.3 «Hecho cuando»): el mismo texto, con las claves en el mismo orden.
+                guard diferencia == nil else { continue }
+                #expect(obtenido.cadena == esperado.cadena, "\(donde): mismos datos, otro orden de claves")
             }
         }
 

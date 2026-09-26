@@ -42,7 +42,9 @@
 //                                  del iPhone (47 y 34 en 390×844)
 //             --safe-horizontal <arriba,derecha,abajo,izquierda>
 //                                  las de los tamaños en horizontal (p. ej. 0,47,21,47 en 844×390)
-//   node scripts/revision-visual.mjs --reloj 2026-09-24T19:00:00+02:00 --escala 3 --safe-top 47 //        --safe-bottom 34 --safe-horizontal 0,47,21,47 --tamanos 390x844,844x390 --movimiento //        --capturas ../../../design-explorations/capturas/_revision/web-palco/calco
+//   node scripts/revision-visual.mjs --reloj 2026-09-24T19:00:00+02:00 --escala 3 --safe-top 47 \
+//        --safe-bottom 34 --safe-horizontal 0,47,21,47 --tamanos 390x844,844x390 --movimiento \
+//        --capturas ../../../design-explorations/capturas/_revision/web-palco/calco
 // Deja el informe en <capturas o carpeta temporal>/revision.json.
 
 import { execFileSync, spawn } from 'node:child_process';
