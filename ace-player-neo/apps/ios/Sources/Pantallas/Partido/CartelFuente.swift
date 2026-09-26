@@ -2,9 +2,8 @@ import SwiftUI
 
 /* Cartel de fuente (SourcePoster.tsx, sources.css; a4 §12.6): tesela 16:9 con la marca del canal, su número
    arriba a la derecha y «En pantalla» en oro abajo a la izquierda si es la que suena; alrededor, el filo del
-   estado (oro en la que suena). Isma (26-sep): el PROVEEDOR («Elcano», «New Era») va dentro de la tesela, donde
-   iba la sigla, y debajo solo el NOMBRE DEL CANAL, sin el proveedor; luego el anillo con su palabra, la calidad
-   y el tipo, y la frase. Toque: háptica rígida y elegir. Pulsación larga: menú «Fuente n» (sin háptica); las mismas opciones
+   estado (oro en la que suena); debajo, el proveedor, el anillo con su palabra, la calidad y el tipo, y la
+   frase. Toque: háptica rígida y elegir. Pulsación larga: menú «Fuente n» (sin háptica); las mismas opciones
    van a VoiceOver como acciones. Sirve igual para cualquier tipo de fuente (FilaCartel). */
 
 struct CartelFuente: View {
@@ -65,7 +64,7 @@ private struct TeselaCartel: View {
         let forma = RoundedRectangle(cornerRadius: R.m, style: .circular)
         ZStack {
             forma.fill(Palco.surface2)
-            MarcaCanal(nombre: fila.nombreCanal, forma: .tesela, tamano: alto, etiqueta: fila.corto)
+            MarcaCanal(nombre: fila.nombreCanal, forma: .tesela, tamano: alto)
                 .clipShape(forma)
         }
         .aspectRatio(16 / 9, contentMode: .fit)
@@ -145,17 +144,16 @@ private struct FiloCartel: View {
     }
 }
 
-/// Canal sin el proveedor (15/650/88, dos líneas como mucho), meta (anillo 14 + palabra · calidad · tipo) y frase (12, dos líneas como mucho).
+/// Nombre (15/650/88), meta (anillo 14 + palabra · calidad · tipo) y frase (12, dos líneas como mucho).
 private struct CuerpoCartel: View {
     let fila: FilaCartel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(fila.nombreDebajo)
+            Text(fila.corto)
                 .estilo(EstiloTexto(tamano: 15, peso: 650, anchura: 88, altoLinea: 1.1))
                 .foregroundStyle(Palco.text)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(1)
             HStack(spacing: 6) {
                 AnilloSenal(PresentacionFuentes.anillo(fila), tamano: 14, palabra: fila.palabra)
                 if !fila.extras.isEmpty {

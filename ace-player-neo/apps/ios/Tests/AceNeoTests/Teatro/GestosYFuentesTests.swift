@@ -101,19 +101,6 @@ struct PresentacionFuentesTests {
         #expect(PresentacionFuentes.textoPlegadas([filas[1]], abiertas: true) == "Ocultar las que no dan señal")
     }
 
-    /// Isma, 26-sep: arriba (en la tesela) el proveedor y debajo SOLO el canal, sin repetirlo.
-    @Test func proveedorArribaCanalDebajo() {
-        let entrada = EntradaFuente(
-            id: "h1", titulo: "Movistar LaLiga [NEW ERA] --> New Era III", ih: false, origen: "m3u", canal: "Movistar")
-        let fila = PresentacionFuentes.fila(
-            entrada, numero: 1, activa: nil, pantalla: .nada, ahora: Date(timeIntervalSince1970: 0), listas: [],
-            hayComprobador: true)
-        #expect(fila.corto == "New Era III")
-        #expect(fila.nombreDebajo == "Movistar LaLiga")
-        #expect(fila.nombreCanal == "Movistar LaLiga [NEW ERA]")
-        #expect(fila.descripcion.hasPrefix("Fuente 1: Movistar LaLiga [NEW ERA] --> New Era III · M3U · New Era III"))
-    }
-
     @Test func menuDelCartel() {
         let entrada = EntradaFuente(id: "h1", titulo: "DAZN", ih: false, origen: "m3u", canal: "DAZN")
         let fila = PresentacionFuentes.fila(
