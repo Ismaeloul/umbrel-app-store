@@ -75,8 +75,7 @@ struct SeccionReproduccion: View {
         haptica.disparar(.seleccion)
         guard modo != preferencias.modo else { return }
         preferencias.cambiarModo(modo)
-        reproductor.cambiarModo(modo)
-        avisos.avisar("Modo «\(modo.etiqueta)» activado", tono: .ok)
+        reproductor.cambiarModo(modo)  // el aviso «Modo «…» activado» lo da el reproductor (M3): una sola vez
     }
 
     private func guardar(_ unoSolo: Bool) async {

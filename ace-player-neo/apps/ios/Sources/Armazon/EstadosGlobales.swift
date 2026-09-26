@@ -24,10 +24,6 @@ struct EstadosGlobales: ViewModifier {
             .environment(\.abrirSaludMotor, AccionPalco { navegador.ir(.ajustes(.salud)) })
             .mira(datos.motor)
             .task { await arrancar() }
-            .onChange(of: sesion.conexion) { _, conexion in
-                guard conexion == .backendNoDisponible else { return }
-                avisos.avisar(EstadosGlobales.textoSinBackend, tono: .warn, duracion: 4)
-            }
             .onChange(of: sesion.enlacePendiente, initial: true) { _, enlace in
                 guard let enlace else { return }
                 hojas.abrir(.otroServidor(enlace))
@@ -40,16 +36,16 @@ struct EstadosGlobales: ViewModifier {
         (datos.motor.error != nil && datos.motor.datos == nil) || sesion.conexion == .backendNoDisponible
     }
 
-    /// Una vez por armazón montado: el aviso de la demo y la primera lectura del motor.
+    /// Una vez por armazón montado: la primera lectura del motor. Los dos avisos de arranque (demo y «Backend no
+    /// disponible…») los da la sesión (M1, `SesionApp.arrancar`/`sinConexion`) por `alAvisar`: aquí salían dos veces.
     private func arrancar() async {
-        if modoDemo { avisos.avisar(EstadosGlobales.textoDemo, tono: .info, duracion: 4) }
         #if DEBUG
             ArgumentosArmazon.avisoDePrueba(avisos)
         #endif
         await datos.motor.asegurar(tiempoRealAbierto: datos.tiempoRealAbierto)
     }
 
-    /// api/boot.ts (aviso de 4 s de `bootApi`, main.tsx).
+    /// api/boot.ts (aviso de 4 s de `bootApi`, main.tsx); los pone `SesionApp` con estos mismos textos.
     static let textoDemo = "Modo demo: sin backend, canales de muestra cargados"
     static let textoSinBackend = "Backend no disponible; la app seguirá reintentando"
 

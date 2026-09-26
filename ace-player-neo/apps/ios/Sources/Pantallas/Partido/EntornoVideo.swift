@@ -137,67 +137,16 @@ struct EntornoVideo: DynamicProperty {
         reproductor.detener()
     }
 
-    /// «Ir al directo» (`goLive`, a4 §5.4): mide antes, salta solo si está a más de 1,25 s del borde útil y decide
-    /// el aviso después de ver qué ha pasado. Sin conexión activa no hace nada (tampoco el reproductor).
+    /// «Ir al directo» (`goLive`, a4 §5.4): el reproductor (M3) mide, salta y avisa con los textos de runtime.ts.
     func irAlDirecto() {
-        guard let hash = reproductor.canal?.id else { return }
         let reproductor = self.reproductor
-        let avisos = self.avisos
-        if demo {
-            reproductor.reanudar()
-            Self.avisar(ReglasSalto.demoDirecto, avisos: avisos)
-            return
-        }
-        guard reproductor.conexion == .activa else { return }
-        let antes: MedidaDirecto? = Self.medidaDirecto(reproductor)
-        let sonaba: Bool = reproductor.fase == .reproduciendo
-        if ReglasSalto.enBorde(antes) {
-            if !sonaba { reproductor.reanudar() }
-            Self.avisar(ReglasSalto.avisoEnBorde(sonaba: sonaba), avisos: avisos)
-            return
-        }
-        guard let antes else { return }
-        Task {
-            await reproductor.irAlDirecto()
-            guard reproductor.canal?.id == hash else { return }  // otra fuente entretanto: sin aviso
-            let despues: MedidaDirecto? = Self.medidaDirecto(reproductor)
-            Self.avisar(ReglasSalto.avisoTrasSaltar(antes: antes, despues: despues), avisos: avisos)
-        }
+        Task { await reproductor.irAlDirecto() }
     }
 
-    /// −30 s (`back`, a4 §5.4): calcula antes lo que de verdad puede retroceder y solo avisa «Retrocedido n s» si
-    /// el cabezal ha vuelto atrás.
+    /// −30 s (`back`, a4 §5.4): también mide y avisa el reproductor (M3), una sola vez.
     func retroceder() {
-        guard let hash = reproductor.canal?.id else { return }
         let reproductor = self.reproductor
-        let avisos = self.avisos
-        if demo {
-            Self.avisar(ReglasSalto.demoRetroceso, avisos: avisos)
-            return
-        }
-        let ventana: VentanaDirecto? = reproductor.conexion == .activa ? reproductor.motor.ventana : nil
-        let antes: Double = reproductor.motor.tiempoActual
-        switch ReglasSalto.planRetroceso(ventana: ventana, actual: antes) {
-        case .avisar(let aviso):
-            Self.avisar(aviso, avisos: avisos)
-        case .saltar(let real):
-            Task {
-                await reproductor.retroceder()
-                guard reproductor.canal?.id == hash else { return }
-                let despues: Double = reproductor.motor.tiempoActual
-                guard ReglasSalto.retrocedio(antes: antes, despues: despues, real: real) else { return }
-                Self.avisar(ReglasSalto.avisoRetrocedido(real), avisos: avisos)
-            }
-        }
-    }
-
-    private static func medidaDirecto(_ reproductor: Reproductor) -> MedidaDirecto? {
-        let ventana: VentanaDirecto? = reproductor.motor.ventana
-        return MedidaDirecto.medir(ventana: ventana, actual: reproductor.motor.tiempoActual, modo: reproductor.modo)
-    }
-
-    private static func avisar(_ aviso: AvisoSalto, avisos: Avisos) {
-        avisos.avisar(aviso.texto, clase: .senal, tono: aviso.tono, icono: aviso.icono)
+        Task { await reproductor.retroceder() }
     }
 
     /// Silencio: un solo estado para las dos filas de controles (vertical e inmersivo), aplicado al AVPlayer de
