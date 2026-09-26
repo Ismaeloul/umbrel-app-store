@@ -28,7 +28,7 @@ import type {
   SourceReportReason,
 } from '@ace/shared';
 import { normalizeChannelKey } from '@ace/shared';
-import { DEMO_IPTV_SEARCH, demoIptvId } from '../search/demo.ts';
+import { DEMO_IPTV_SEARCH, demoIptvId } from '../search/demo-ids.ts';
 
 export const DEMO_STEP_MS = 1350;
 

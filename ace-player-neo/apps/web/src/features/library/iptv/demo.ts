@@ -22,7 +22,7 @@ import {
   type IptvFacetValue,
   type IptvQuality,
 } from '@ace/shared';
-import { DEMO_IPTV_SEARCH, demoIptvId } from '../../search/demo.ts';
+import { DEMO_IPTV_SEARCH, demoIptvId, fakeHash } from '../../search/demo-ids.ts';
 import { foldText } from '../model.ts';
 import { FACET_NAMES } from './model.ts';
 
@@ -320,16 +320,9 @@ const SEEDS: Seed[] = [
   },
 ];
 
+/** Id de categoría de 12 hex, como el del servidor (§16.3), a partir del nombre. */
 function categoryIdOf(name: string): string {
-  if (!name) return 'none';
-  let h = 2166136261;
-  let out = '';
-  for (let round = 0; out.length < 12; round += 1)
-    for (const ch of `cat|${name}#${round}`) {
-      h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
-      if (out.length < 12) out += (h & 15).toString(16);
-    }
-  return out.slice(0, 12);
+  return name ? fakeHash(`cat|${name}`).slice(0, 12) : 'none';
 }
 
 const IN_SEARCH = new Set(DEMO_IPTV_SEARCH.map(([title]) => title));
