@@ -8,12 +8,15 @@
          `partido/demo-1` para probar el borde izquierdo sin tocar una tarjeta.
        - `-AceNeoAvisoDeshacer`: al montar el armazón sale el toast de la web «Reproducción detenida» con «Deshacer»
          (el del mini, a2 §7 y a4 §19.3; info, icono `stop`; 30 s en vez de 6) para probar la capa de avisos.
+       - `-AceNeoMedirTirones`: monta el medidor de tirones (`MedidorTirones.swift`) para los UITests de rendimiento.
        En Release no existen. `ModoEjecucion` (Entorno.swift) es de M1: estos se leen aquí para no tocarlo. */
 
     @MainActor enum ArgumentosArmazon {
         static var vista: Destino? {
             valor("-AceNeoVista").flatMap(Destino.init(vista:))
         }
+
+        static var medirTirones: Bool { ProcessInfo.processInfo.arguments.contains("-AceNeoMedirTirones") }
 
         /// El toast dura 30 s en vez de los 6 de la web: el flujo de interfaz tarda en leerlo (arranque del
         /// simulador, instantáneas de XCUITest) y con 6 s a veces ya se había ido (testToastConDeshacer).

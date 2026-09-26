@@ -27,6 +27,9 @@ struct AppShell: View {
             CapaVuelo().zIndex(Capa.vuelo)
             CapaAvisos(inmersivo: inmersivo).zIndex(Capa.avisos)
             CapaInmersiva(inmersivo: inmersivo).zIndex(Capa.inmersivo)
+            #if DEBUG
+                if ArgumentosArmazon.medirTirones { SondaTirones().frame(width: 1, height: 1).allowsHitTesting(false) }
+            #endif
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()

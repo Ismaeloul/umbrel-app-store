@@ -5,7 +5,9 @@ import XCTest
 /// - en Canales la lista no subía ni bajaba hasta mover antes el dedo de lado;
 /// - en la Agenda, empezar sobre un partido movía el carril en vez de la página;
 /// - el desplazamiento iba a tirones: las dos pruebas de rendimiento miden los tirones al arrastrar y al frenar
-///   (`XCTOSSignpostMetric.scrollingAndDecelerationMetric`); la CI saca sus números en «Métricas».
+///   (`XCTOSSignpostMetric.scrollingAndDecelerationMetric`; en el simulador solo da la duración) y los fotogramas
+///   que llegan tarde en el hilo principal con el medidor de la app (`-AceNeoMedirTirones`). La CI saca las
+///   métricas en «Resumen de los tests» y los tirones van como adjunto `tirones-*` en las capturas.
 final class FlujoDesplazamientoUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -21,8 +23,8 @@ final class FlujoDesplazamientoUITests: XCTestCase {
     }
 
     @MainActor
-    private func arrancarEnCanales() -> XCUIApplication {
-        let app = arrancar(["-AceNeoListaLarga"])
+    private func arrancarEnCanales(_ argumentos: [String] = []) -> XCUIApplication {
+        let app = arrancar(["-AceNeoListaLarga"] + argumentos)
         tocarPestana(app, "biblioteca")
         XCTAssertTrue(elementoUI(app, IDUI.pantalla("biblioteca")).waitForExistence(timeout: 15), "No se ve Canales")
         XCTAssertTrue(elementoUI(app, IDUI.pestanaFavoritos).waitForExistence(timeout: 15), "No llegan las pestañas")
@@ -77,14 +79,49 @@ final class FlujoDesplazamientoUITests: XCTestCase {
 
     @MainActor
     func testRendimientoDesplazarAgenda() throws {
-        let app = arrancar()
-        medirDesplazamiento(elementoUI(app, IDUI.pantalla("agenda")))
+        let app = arrancar(["-AceNeoMedirTirones"])
+        let lista = elementoUI(app, IDUI.pantalla("agenda"))
+        contarTirones(app, lista, nombre: "tirones-agenda")
+        medirDesplazamiento(lista)
     }
 
     @MainActor
     func testRendimientoDesplazarCanales() throws {
-        let app = arrancarEnCanales()
-        medirDesplazamiento(elementoUI(app, IDUI.pantalla("biblioteca")))
+        let app = arrancarEnCanales(["-AceNeoMedirTirones"])
+        let lista = elementoUI(app, IDUI.pantalla("biblioteca"))
+        contarTirones(app, lista, nombre: "tirones-canales")
+        medirDesplazamiento(lista)
+    }
+
+    /// Lo que marca el medidor de la app: fotogramas, tirones, décimas de ms de retraso y ms transcurridos.
+    @MainActor
+    private func leerMedidor(_ app: XCUIApplication) -> [Int] {
+        let medidor = elementoUI(app, IDUI.medidorTirones)
+        guard medidor.waitForExistence(timeout: 5), let valor = medidor.value as? String else { return [0, 0, 0, 0] }
+        let numeros = valor.split(separator: " ").compactMap { (trozo: Substring) -> Int? in Int(trozo) }
+        return numeros.count == 4 ? numeros : [0, 0, 0, 0]
+    }
+
+    /// Diez golpes (arriba y abajo) y lo que se retrasaron los fotogramas mientras tanto, como adjunto.
+    @MainActor
+    private func contarTirones(_ app: XCUIApplication, _ lista: XCUIElement, nombre: String) {
+        let antes = leerMedidor(app)
+        for _ in 0..<5 {
+            lista.swipeUp(velocity: .fast)
+            lista.swipeDown(velocity: .fast)
+        }
+        let despues = leerMedidor(app)
+        let fotogramas = despues[0] - antes[0]
+        let tirones = despues[1] - antes[1]
+        let ms = Double(despues[2] - antes[2]) / 10
+        let segundos = Double(despues[3] - antes[3]) / 1000
+        let razon = segundos > 0 ? ms / segundos : 0
+        let texto = "\(nombre): fotogramas=\(fotogramas) tirones=\(tirones) retraso=\(ms) ms en \(segundos) s → \(razon) ms/s"
+        let adjunto = XCTAttachment(string: texto)
+        adjunto.name = nombre
+        adjunto.lifetime = .keepAlways
+        add(adjunto)
+        XCTAssertGreaterThan(fotogramas, 0, "El medidor de tirones no cuenta fotogramas (\(texto))")
     }
 
     /// Cinco golpes hacia arriba medidos (arrastre y frenada) y, sin medir, vuelta arriba.
