@@ -19,7 +19,12 @@
      con «Cargar más canales» (teclado y lector de pantalla).
    - Región viva educada tras cada cambio de texto o filtro. */
 
-import type { IptvBrowseChannel, IptvBrowseResponse, IptvCategory } from '@ace/shared';
+import {
+  IPTV_BROWSE,
+  type IptvBrowseChannel,
+  type IptvBrowseResponse,
+  type IptvCategory,
+} from '@ace/shared';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLayout } from '../../../app/layout.tsx';
 import { useNavigate } from '../../../app/router.tsx';
@@ -45,7 +50,6 @@ import { IptvFilterLines, IptvFilterRow, IptvFilterSheetBody } from './IptvFilte
 import {
   ALL_CATEGORY,
   browseScope,
-  categoriesMatching,
   categoryName,
   channelSubtitle,
   hasFilters,
@@ -253,7 +257,7 @@ export function IptvTab({ text, active, actions, onScreen, onAir, onCategoryName
       );
     }
     const matching: IptvCategory[] =
-      screen === 'search' ? categoriesMatching(first.categories ?? [], q) : [];
+      screen === 'search' ? (first.categories ?? []).slice(0, IPTV_BROWSE.categoriesMatchMax) : [];
     if (total === 0 && matching.length === 0) {
       if (q && screen === 'category')
         return (

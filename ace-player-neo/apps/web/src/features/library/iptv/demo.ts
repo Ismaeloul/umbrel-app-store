@@ -24,7 +24,7 @@ import {
 } from '@ace/shared';
 import { DEMO_IPTV_SEARCH, demoIptvId, fakeHash } from '../../search/demo-ids.ts';
 import { foldText } from '../model.ts';
-import { FACET_NAMES } from './model.ts';
+import { categoriesMatching, FACET_NAMES } from './model.ts';
 
 const CATALOG = 'demo1';
 const PROVIDER = 'IPTV de ejemplo';
@@ -516,23 +516,25 @@ export function demoIptvBrowse(query: Partial<IptvBrowseQuery>): IptvBrowseRespo
     }
     response.facets = facets;
     if (categoryId === null) {
+      /* Sin texto: las categorías con algún canal, en su orden. Con texto (como
+         el servidor, §16.13): las que tienen el texto en el nombre, 5 como
+         mucho, contadas con los filtros pero sin el texto (lo que se verá al entrar). */
+      const counted = words.length > 0 ? rows.filter((row) => passes(row, null)) : result;
       const perCategory = new Map<string, number>();
-      for (const row of result)
+      for (const row of counted)
         perCategory.set(row.category, (perCategory.get(row.category) ?? 0) + 1);
-      response.categories = categories
-        .map((c): IptvCategory => ({ id: c.id, name: c.name, count: perCategory.get(c.id) ?? 0 }))
-        .filter(
-          (c) =>
-            c.count > 0 ||
-            (words.length > 0 && foldText(c.name).includes(q) && !hasSelection(selected)),
-        );
+      const all = categories.map((c): IptvCategory => ({
+        id: c.id,
+        name: c.name,
+        count: perCategory.get(c.id) ?? 0,
+      }));
+      response.categories =
+        words.length > 0
+          ? categoriesMatching(all, q, IPTV_BROWSE.categoriesMatchMax)
+          : all.filter((c) => c.count > 0);
     }
   }
   return response;
-}
-
-function hasSelection(selected: Record<IptvFacetName, string[]>): boolean {
-  return FACET_NAMES.some((facet) => selected[facet].length > 0);
 }
 
 /** Solo para los tests: el id de categoría de un nombre de la demo. */

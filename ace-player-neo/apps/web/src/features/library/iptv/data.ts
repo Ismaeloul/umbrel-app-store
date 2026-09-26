@@ -13,7 +13,7 @@
    - `stale: true` en una página siguiente (hubo otra sincronización): la
      lista se vacía y empieza de nuevo, sin avisar. */
 
-import { IPTV_BROWSE, type IptvBrowseResponse } from '@ace/shared';
+import { IPTV_BROWSE, IPTV_CLIENT, type IptvBrowseResponse } from '@ace/shared';
 import { useInfiniteQuery, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../api/index.ts';
@@ -118,9 +118,9 @@ export function useIptvUrlState(): IptvUrlControls {
 // ---- Consultas -------------------------------------------------------------------------
 
 /** Tras la última tecla, como Buscar (una petición por texto, no por tecla). */
-export const IPTV_TEXT_DELAY_MS = 450;
+export const IPTV_TEXT_DELAY_MS = IPTV_CLIENT.browseDebounceMs;
 /** Tras el último toque en un filtro: junta varios toques seguidos en una petición. */
-export const IPTV_FILTER_DELAY_MS = 200;
+export const IPTV_FILTER_DELAY_MS = IPTV_CLIENT.browseFilterDebounceMs;
 /** Lo que dura una respuesta como buena. */
 const STALE_MS = 60_000;
 

@@ -8,14 +8,17 @@
      la red) se prueba el cliente de verdad (plazo, validación, cursores); y
      «Guardar IPTV» con el 502 que ya se reintentó dos veces enseña la frase
      de §16.8.
+   - Con la ruta real y el proveedor falso del servidor (support/iptv.ts): se
+     conecta por Ajustes, se recorre la pestaña, suena un canal por hls.js
+     (@video, necesita ffmpeg) y el primer «Guardar» que falla con un 502 se
+     guarda al segundo intento sin error a la vista. */
 
-   Cuando `iptv/pestana-servidor` esté fusionada, los recorridos contra la
-   ruta real con el proveedor falso en modo grande van en iptv.spec.ts. */
-
+import { execFileSync } from 'node:child_process';
 import type { Page, Route } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { demoCategoryId, demoIptvBrowse } from '../src/features/library/iptv/demo.ts';
-import { esMovil, expect, test } from './support/pruebas.ts';
+import { readPorts } from './support/puertos.ts';
+import { backend, esMovil, esperarQueAvance, expect, test } from './support/pruebas.ts';
 
 type Gancho = { get(): { channel: { hash: string; iptv?: boolean } | null } };
 
@@ -290,5 +293,123 @@ test.describe('contra la pila de verdad', () => {
     await expect(iptv.getByRole('alert')).toContainText(
       'Lo he intentado dos veces: prueba otra vez en un momento.',
     );
+  });
+});
+
+// --- Con la ruta real y el proveedor falso -------------------------------------------
+
+const CONTROL = `http://[::1]:${readPorts().iptv}`;
+/* Los de apps/server/test/fake-iptv/provider.ts, como en iptv.spec.ts. */
+const SERVIDOR = 'http://iptv.ace-e2e.example:8080';
+const USUARIO = 'usuario-e2e';
+const CLAVE = 'Cl4ve-Secreta-E2E';
+
+function hayFfmpeg(): boolean {
+  try {
+    execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function control(ruta: string): Promise<unknown> {
+  let ultimo: unknown;
+  for (let i = 0; i < 5; i++) {
+    try {
+      const res = await fetch(`${CONTROL}/__iptv/${ruta}`, { signal: AbortSignal.timeout(15_000) });
+      if (!res.ok) throw new Error(`/__iptv/${ruta} → ${res.status}`);
+      return await res.json();
+    } catch (error) {
+      ultimo = error;
+      await new Promise((resolve) => setTimeout(resolve, 250 * (i + 1)));
+    }
+  }
+  throw new Error(`/__iptv/${ruta}: ${String(ultimo)}`);
+}
+
+const borrarIptv = () => backend.pedir('/api/v1/iptv', { method: 'DELETE' });
+
+async function conectarXtream(page: Page): Promise<void> {
+  await page.goto('/?vista=ajustes/iptv');
+  const iptv = page.getByRole('region', { name: 'IPTV', exact: true });
+  await iptv.getByRole('radio', { name: 'Xtream Codes' }).click();
+  await iptv.getByRole('textbox', { name: 'Nombre' }).fill('Casa');
+  await iptv.getByRole('textbox', { name: 'Servidor' }).fill(SERVIDOR);
+  await iptv.getByRole('textbox', { name: 'Usuario' }).fill(USUARIO);
+  await iptv.getByLabel('Contraseña').fill(CLAVE);
+  await iptv.getByRole('button', { name: 'Guardar IPTV' }).click();
+  await expect(iptv.getByText('Activa', { exact: true })).toBeVisible({ timeout: 60_000 });
+  await expect(iptv.getByText(/^Xtream · \d+ canales/)).toBeVisible({ timeout: 60_000 });
+}
+
+test.describe('con la ruta real y el proveedor falso', () => {
+  test.beforeEach(async () => {
+    await control('reset');
+    await borrarIptv();
+  });
+  test.afterEach(async () => {
+    await borrarIptv();
+    await control('reset');
+  });
+
+  test(
+    '15-17 · recorrer tu IPTV de verdad: categorías del proveedor, «UK: DAZN 1» aparte, buscar y tocar suena por hls.js',
+    { tag: '@video' },
+    async ({ page }) => {
+      test.skip(!hayFfmpeg(), 'falta ffmpeg en el PATH (el remux IPTV lo necesita)');
+      await conectarXtream(page);
+      await page.goto('/?vista=biblioteca&pestana=iptv');
+      await expect(pestanas(page).nth(3)).toHaveText('IPTV');
+      const lista = page.getByRole('list', { name: 'Categorías' });
+      await expect(
+        lista.getByRole('button', { name: /^Todos los canales, \d+ canales$/ }),
+      ).toBeVisible();
+      const nombres = await lista
+        .getByRole('button')
+        .evaluateAll((botones) =>
+          botones.map((b) => b.getAttribute('aria-label')?.replace(/, \d+ canal(es)?$/, '')),
+        );
+      // «Todos los canales» y las categorías en el orden de get_live_categories.
+      expect(nombres.slice(0, 4)).toEqual([
+        'Todos los canales',
+        'ES | DEPORTES',
+        'ES | GENERALISTAS',
+        'UK | SPORTS',
+      ]);
+      // Buscar en la raíz: «DAZN 1» sale una fila por país (España con sus 4 calidades, Reino
+      // Unido y Alemania aparte), y «DAZN LaLiga» en la suya.
+      await page.getByRole('searchbox', { name: 'Buscar en tu IPTV' }).fill('dazn 1');
+      const dazn1 = page.locator('article.ch').filter({
+        has: page.getByRole('link', { name: 'DAZN 1', exact: true }),
+      });
+      await expect(dazn1).toHaveCount(3);
+      await expect(dazn1.filter({ hasText: '4K' })).toHaveCount(1);
+      await page.getByRole('searchbox', { name: 'Buscar en tu IPTV' }).fill('dazn');
+      await expect(page.getByRole('link', { name: 'DAZN LaLiga', exact: true })).toBeVisible();
+      await page.getByRole('searchbox', { name: 'Buscar en tu IPTV' }).fill('');
+      await abrirCategoria(page, 'ES | DEPORTES');
+      const fila = page
+        .locator('article.ch')
+        .filter({ has: page.getByRole('link', { name: 'DAZN LaLiga', exact: true }) });
+      await expect(fila.getByText('IPTV', { exact: true })).toBeVisible();
+      await expect(fila.getByText('1080p', { exact: true })).toBeVisible();
+      await expect(fila.getByText('720p', { exact: true })).toBeVisible();
+      // Nada del proveedor en la página: ni el usuario ni la contraseña.
+      expect(await page.content()).not.toContain(CLAVE);
+      await fila.getByRole('link', { name: 'DAZN LaLiga', exact: true }).click();
+      await page.waitForURL(/vista=partido\/canal\//);
+      await expect.poll(() => suenaIptv(page), { timeout: 45_000 }).toBe(true);
+      await esperarQueAvance(page);
+    },
+  );
+
+  test('20 · el primer «Guardar» falla con un 502: se guarda al segundo intento, sin error a la vista', async ({
+    page,
+  }) => {
+    await control('fallar-primera?veces=1&como=502');
+    await conectarXtream(page);
+    const iptv = page.getByRole('region', { name: 'IPTV', exact: true });
+    await expect(iptv.getByRole('alert')).toHaveCount(0);
   });
 });
