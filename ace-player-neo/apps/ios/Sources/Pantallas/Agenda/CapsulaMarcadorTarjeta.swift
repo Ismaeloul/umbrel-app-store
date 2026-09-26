@@ -2,7 +2,11 @@ import SwiftUI
 
 /* Las cápsulas de la agenda (M5; a3 §4.3, §7.2, §8.2, §8.3): la de señal (glifo + palabra, de cristal) y la
    cápsula «Marcador» (tapada → ojo; destapada → las cifras, que giran como una paleta al destapar y ruedan
-   al cambiar: un gol). En la tarjeta es de cristal (28); en el héroe, sin cristal y de 44. */
+   al cambiar: un gol). En la tarjeta es de cristal (28); en el héroe, sin cristal y de 44.
+
+   El «cristal» de estas cápsulas es el velo `--glass-video` sin Liquid Glass: van en cada tarjeta de una lista
+   que se desplaza y un vidrio por tarjeta daba tirones (prueba de Isma). Sobre el degradado de la tarjeta el
+   desenfoque de la web apenas cambia nada; el color es el mismo token. */
 
 /// `SignalCapsule`: cápsula del tono de la señal con el glifo del medidor y la palabra (a3 §7.2).
 struct CapsulaSenal: View {
@@ -27,7 +31,7 @@ struct CapsulaSenal: View {
         .padding(.horizontal, grande ? 10 : 8)
         .frame(height: grande ? 28 : 24)
         .background {
-            Color.clear.cristal(.video, en: Capsule()).bordeInterior(Color.white.opacity(0.12), forma: Capsule())
+            Capsule().fill(Palco.glassVideo).bordeInterior(Color.white.opacity(0.12), forma: Capsule())
         }
         .islaOscura()
         .accessibilityElement(children: .ignore)
@@ -121,7 +125,7 @@ private struct CajaMarcador: ViewModifier {
     }
 }
 
-/// Héroe: sin cristal, `--line-soft`. Tarjeta: cristal de vídeo con filo blanco al 12 %.
+/// Héroe: sin cristal, `--line-soft`. Tarjeta: el velo del cristal de vídeo con filo blanco al 12 %.
 private struct FondoMarcador: ViewModifier {
     let variante: CapsulaMarcador.Variante
 
@@ -132,7 +136,7 @@ private struct FondoMarcador: ViewModifier {
         case .tarjeta:
             content
                 .background {
-                    Color.clear.cristal(.video, en: Capsule()).bordeInterior(Color.white.opacity(0.12), forma: Capsule())
+                    Capsule().fill(Palco.glassVideo).bordeInterior(Color.white.opacity(0.12), forma: Capsule())
                 }
                 .islaOscura()
         }
