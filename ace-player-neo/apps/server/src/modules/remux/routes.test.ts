@@ -13,6 +13,7 @@ import type { AuthenticatedDevice } from '../../core/module.js';
 import { notImplementedService } from '../../core/stub.js';
 import type { AuthService } from '../auth/types.js';
 import type { EngineService } from '../engine/types.js';
+import { isMissing } from './files.js';
 import { createRemuxRuntime } from './service.js';
 import { createFakeLauncher } from './test-support.js';
 
@@ -43,6 +44,7 @@ async function setup() {
     launcher: fake.launcher,
     procRoot: null,
     watchFiles: false,
+    notYetWaitMs: 400,
   });
   const accesses: [string, string | null][] = [];
   runtime.service.subscribe({ onAccess: (sid, device) => accesses.push([sid, device]) });
@@ -343,6 +345,16 @@ describe('GET /api/v1/video/:sid/:file (arquitectura §5.12)', () => {
       expect(res.headers['retry-after'], url).toBe('1');
       expect(res.headers['cache-control'], url).toBe('no-store');
     }
+    /* Si aparece mientras se espera (el remux la escribe enseguida), 200 sin pasar por el 503 (§19): el
+       HLS nativo de Safari no reintenta un 503. */
+    setTimeout(() => writeFileSync(path.join(remuxDir, ID_A, 'index.m3u8'), '#EXTM3U\n'), 120);
+    const waited = await app.inject({
+      method: 'GET',
+      url: `/api/v1/video/${SID}/index.m3u8`,
+      headers: web(),
+    });
+    expect(waited.statusCode).toBe(200);
+    expect(waited.body).toContain('#EXTM3U');
     /* Un segmento que no está sigue siendo 404: solo la lista «aún no está». */
     const seg = await app.inject({
       method: 'GET',
@@ -372,6 +384,16 @@ describe('GET /api/v1/video/:sid/:file (arquitectura §5.12)', () => {
     expect(bad.statusCode).toBe(500);
     await bare.close();
     await runtime.service.stopAll();
+  });
+});
+
+describe('«aún no está» solo cuando falta el fichero (docs/iptv.md §19)', () => {
+  it('ENOENT y ENOTDIR son «aún no está»; EACCES, EMFILE o EISDIR son errores de verdad (500)', () => {
+    const err = (code: string) => Object.assign(new Error(code), { code });
+    expect(isMissing(err('ENOENT'))).toBe(true);
+    expect(isMissing(err('ENOTDIR'))).toBe(true);
+    for (const code of ['EACCES', 'EMFILE', 'EISDIR', 'EPERM']) expect(isMissing(err(code))).toBe(false);
+    expect(isMissing(null)).toBe(false);
   });
 });
 

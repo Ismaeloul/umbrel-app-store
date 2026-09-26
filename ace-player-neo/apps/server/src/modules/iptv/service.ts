@@ -1540,7 +1540,10 @@ export class IptvServiceImpl implements IptvService {
       matchByName: (name: string): string | null => {
         const known = byName.get(name);
         if (known !== undefined) return known;
-        const match = matchIptvChannels(catalog, [name], { scorer: this.scorer })[0];
+        const match = matchIptvChannels(catalog, [name], {
+          scorer: this.scorer,
+          anyCountry: true,
+        })[0];
         const id = match ? match.best.id : null;
         byName.set(name, id);
         return id;

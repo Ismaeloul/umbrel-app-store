@@ -121,6 +121,8 @@ export interface SendOptions {
    * está», hls.js lo reintenta) en vez de 404.
    */
   readonly notYet?: boolean | undefined;
+  /** Cuánto esperar a que aparezca antes del 503 (por defecto `NOT_YET_WAIT_MS`; los tests, 0). */
+  readonly notYetWaitMs?: number | undefined;
 }
 
 /** «Aún no está»: la lista del remux mientras arranca o se reinicia (docs/iptv.md §18). */
@@ -128,6 +130,53 @@ export const NOT_YET_HEADERS: Readonly<Record<string, string>> = {
   'cache-control': 'no-store',
   'retry-after': '1',
 };
+
+/**
+ * Lo que se espera a una lista que aún no está antes de responder 503 (docs/iptv.md §19): así un
+ * reproductor que no reintenta un 503 (el HLS nativo de Safari) casi nunca lo ve, y hls.js tampoco.
+ */
+export const NOT_YET_WAIT_MS = 2_500;
+const NOT_YET_POLL_MS = 150;
+
+/** ¿Es «el fichero no está» (y no un permiso, un límite de descriptores…)? */
+export function isMissing(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code;
+  return code === 'ENOENT' || code === 'ENOTDIR';
+}
+
+/**
+ * Abre un fichero y, si es una lista que aún no está (`notYet`), lo reintenta cada 150 ms hasta
+ * `NOT_YET_WAIT_MS` (o hasta que el cliente se vaya). null si sigue sin estar; otro error (EACCES, EMFILE)
+ * se lanza: eso es un error de verdad, no «aún no está».
+ */
+async function openWhenReady(
+  file: string,
+  notYet: boolean,
+  gone: () => boolean,
+  waitMs: number,
+): Promise<FileHandle | null> {
+  const until = Date.now() + (notYet ? waitMs : 0);
+  for (;;) {
+    try {
+      return await open(file, 'r');
+    } catch (error) {
+      if (!isMissing(error)) throw error;
+      if (Date.now() >= until || gone()) return null;
+      await new Promise((resolve) => setTimeout(resolve, NOT_YET_POLL_MS));
+    }
+  }
+}
+
+/** El texto de una lista que puede no estar todavía (la ruta nativa, que la reescribe con el token). */
+export async function readWhenReady(file: string, waitMs = NOT_YET_WAIT_MS): Promise<string | null> {
+  const handle = await openWhenReady(file, true, () => false, waitMs);
+  if (!handle) return null;
+  try {
+    return await handle.readFile('utf8');
+  } finally {
+    await handle.close().catch(() => undefined);
+  }
+}
 
 /* Espera a que la respuesta termine (o se corte) para que la capa HTTP la
    dé por enviada: con un stream, `reply.sent` no es verdadero hasta el final. */
@@ -194,10 +243,13 @@ export async function sendFile(
   /* Se abre ANTES de medir y se lee de ese mismo descriptor: si el remux se
      reinicia y borra la carpeta entre medias, ya no hay un ENOENT al abrir el
      stream (que salía como 500 «error interno», docs/iptv.md §18). */
-  let handle: FileHandle;
-  try {
-    handle = await open(file, 'r');
-  } catch {
+  const found = await openWhenReady(
+    file,
+    Boolean(options.notYet),
+    () => reply.raw.destroyed,
+    options.notYetWaitMs ?? NOT_YET_WAIT_MS,
+  );
+  if (!found) {
     sendEmpty(
       reply,
       options.notYet ? 503 : 404,
@@ -206,6 +258,7 @@ export async function sendFile(
     await settle(reply);
     return null;
   }
+  const handle = found;
   try {
     const info = await handle.stat();
     if (!info.isFile()) throw new Error('not_file');

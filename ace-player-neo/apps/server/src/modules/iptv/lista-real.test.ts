@@ -145,7 +145,8 @@ describe('channelSpelling (@ace/shared)', () => {
     ['Movistar Plus+', 'Movistar Plus+'],
     ['MOVIESTAR DEPORTES', 'Movistar DEPORTES'],
     ['LA LIGA', 'LaLiga'],
-    ['LALIGA+ PPV 3', 'LaLiga Plus PPV 3'],
+    ['LALIGA+ PPV 3', 'LaLigaPlus PPV 3'],
+    ['LaLiga Plus', 'LaLigaPlus'],
     ['LA SEXTA', 'LaSexta'],
     ['lasexta', 'LaSexta'],
     ['TELE CINCO', 'Telecinco'],
@@ -223,7 +224,7 @@ describe('cleanIptvTitle con la forma de la lista real', () => {
     ['ES - R. MADRID TV HD', DEP, 'R. MADRID TV', 'real madrid tv', 'hd', false, 'ES'],
     ['ES - TELE CINCO SD', TDT, 'TELE CINCO', 'telecinco', 'sd', false, 'ES'],
     ['ES - M. SUPER CUPA HD', EVT, 'M. SUPER CUPA', 'movistar supercopa', 'hd', false, 'ES'],
-    ['ES - LALIGA+ PPV 1', DEP, 'LALIGA+ PPV 1', 'laliga plus ppv 1', null, false, 'ES'],
+    ['ES - LALIGA+ PPV 1', DEP, 'LALIGA+ PPV 1', 'laligaplus ppv 1', null, false, 'ES'],
     ['ES TI - TVG HD', 'EU | ES | TIVIFY GOLD', 'TVG', 'tv galicia', 'hd', false, 'ES'],
     ['LA 1', TDT, 'LA 1', 'la 1', null, false, 'ES'],
   ] as const)('%s', (title, group, display, key, quality, backup, country) => {

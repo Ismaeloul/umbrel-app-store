@@ -13,7 +13,9 @@
       principio y seguidos de otra palabra → «Movistar …». Nunca «M6», «M95»
       ni «MTV» (sin punto ni «+»).
    2. LaLiga: «la liga» (con o sin espacio, cualquier caja) → «LaLiga»;
-      «LALIGA+» es otra marca → «LaLiga Plus».
+      «LALIGA+» (o «LaLiga Plus») es otra marca → «LaLigaPlus», una sola
+      palabra: «plus» suelto es relleno al puntuar y «LaLiga+» casaba con
+      «Movistar LaLiga» (docs/iptv.md §19).
    3. Compuestos que las listas escriben juntos o separados: «LA SEXTA» =
       «LASEXTA», «TELE CINCO» = «TELECINCO», «TELE DEPORTE», «TELE MADRID»,
       «ONE TORO», «BE MAD», «MOTO GP», y «TRECETV» = «TRECE TV».
@@ -61,7 +63,7 @@ export function channelSpelling(value: string): string {
   let text = String(value ?? '');
   if (!text) return text;
   text = text.replace(MOVISTAR_PREFIX_RE, 'Movistar ');
-  text = text.replace(/\bla\s*liga\s*\+/giu, 'LaLiga Plus ').replace(/\bla\s*liga\b/giu, 'LaLiga');
+  text = text.replace(/\bla\s*liga\s*(?:\+|plus\b)/giu, 'LaLigaPlus ').replace(/\bla\s*liga\b/giu, 'LaLiga');
   for (const [re, to] of COMPOUNDS) text = text.replace(re, to);
   for (const [re, to] of FIXED_TYPOS) text = text.replace(re, to);
   text = text.replace(REAL_RE, 'Real ').replace(INTERNATIONAL_RE, 'Internacional');

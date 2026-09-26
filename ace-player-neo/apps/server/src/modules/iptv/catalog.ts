@@ -20,7 +20,14 @@
      guía, que llevan credenciales) y se carga al arrancar sin red. */
 
 import { CHANNEL_FILLER_TOKENS, type IptvKind, type IptvQuality } from '@ace/shared';
-import { cleanIptvTitle, countryBucket, iptvSpelling, qualityRank } from './names.js';
+import {
+  cleanIptvTitle,
+  countryBucket,
+  iptvGroupPlatform,
+  iptvSpelling,
+  iptvTitlePlatform,
+  qualityRank,
+} from './names.js';
 
 export interface RawChannel {
   /** Id de 40 hex ya calculado (ids.ts). */
@@ -353,6 +360,54 @@ export class Catalog {
 
   get(id: string): CatalogEntry | null {
     return this.byId.get(id.toLowerCase()) ?? null;
+  }
+
+  /* Categorías con nombre de plataforma que en realidad mezclan canales de la TDT (§19). */
+  private mixedPlatformGroups: ReadonlySet<string> | null = null;
+
+  /**
+   * Categorías con nombre de plataforma («RAKUTEN TV», «PLUTO TV»…) que mezclan canales de siempre: al menos 3
+   * de sus canales (y 1 de cada 5) están también en una categoría normal («ES - LA 2», «ES - ANTENA 3»). En
+   * ellas la categoría no dice que un canal sea de la plataforma («ES - TVG 2» es la TVG 2 de siempre).
+   */
+  private mixedGroups(): ReadonlySet<string> {
+    if (this.mixedPlatformGroups) return this.mixedPlatformGroups;
+    const normalKeys = new Set<string>();
+    const byGroup = new Map<string, Set<string>>();
+    for (const entry of this.entries) {
+      if (iptvTitlePlatform(entry.title)) continue;
+      if (!iptvGroupPlatform(entry.group)) {
+        normalKeys.add(entry.key);
+        continue;
+      }
+      const keys = byGroup.get(entry.group) ?? new Set<string>();
+      keys.add(entry.key);
+      byGroup.set(entry.group, keys);
+    }
+    const mixed = new Set<string>();
+    for (const [group, keys] of byGroup) {
+      let shared = 0;
+      for (const key of keys) if (normalKeys.has(key)) shared += 1;
+      if (shared >= 3 && shared * 5 >= keys.size) mixed.add(group);
+    }
+    this.mixedPlatformGroups = mixed;
+    return mixed;
+  }
+
+  /**
+   * La plataforma de internet de una entrada (docs/iptv.md §18 y §19): la del nombre o, si su categoría es solo
+   * de una plataforma, la de la categoría. null si es un canal de televisión.
+   */
+  platformOf(entry: CatalogEntry): string | null {
+    const byTitle = iptvTitlePlatform(entry.title);
+    if (byTitle) return byTitle;
+    const byGroup = iptvGroupPlatform(entry.group);
+    return byGroup && !this.mixedGroups().has(entry.group) ? byGroup : null;
+  }
+
+  /** ¿Está en una categoría con nombre de plataforma (aunque la mezcle con canales de siempre)? */
+  inPlatformGroup(entry: CatalogEntry): boolean {
+    return Boolean(iptvTitlePlatform(entry.title) ?? iptvGroupPlatform(entry.group));
   }
 
   has(id: string): boolean {

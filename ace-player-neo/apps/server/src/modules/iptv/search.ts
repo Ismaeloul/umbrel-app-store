@@ -40,7 +40,7 @@ import { sameChannelScore, type ChannelScorer } from './match.js';
 import {
   cleanIptvTitle,
   countryBucket,
-  iptvPlatform,
+  countryCode,
   iptvSearchSpelling,
   isEventTitle,
 } from './names.js';
@@ -280,10 +280,12 @@ function countryRankOf(bucket: string): number {
   return SPANISH_AMERICA.has(bucket) ? 1 : 2;
 }
 
-function penaltyOf(group: SearchGroup): number {
+function penaltyOf(group: SearchGroup, catalog: Catalog): number {
   const { best } = group;
   if (isEventTitle(best.title)) return 3;
-  if (group.entries.every((entry) => iptvPlatform(entry.title, entry.group))) return 2;
+  /* En el buscador, detrás todo lo de una categoría de plataforma, también la que mezcla canales de la TDT
+     («LA LIGA 1» de «RAKUTEN TV» detrás de «DAZN LaLiga» y «M. LALIGA»); se encuentra igual («tvg 2»). */
+  if (group.entries.every((entry) => catalog.inPlatformGroup(entry))) return 2;
   if (group.words.some((word) => SECONDARY_WORDS.has(word))) return 1;
   if (group.entries.every((entry) => entry.backup)) return 1;
   return 0;
@@ -332,7 +334,7 @@ export function searchIndex(catalog: Catalog): SearchIndex {
         family: familyKey,
         core: coreOf(family).join(' '),
         countryRank: countryRankOf(bucket),
-        penalty: penaltyOf(group),
+        penalty: penaltyOf(group, catalog),
         keyOrder,
         number: Number.isFinite(trailing) ? trailing : 0,
       });
@@ -403,8 +405,8 @@ function wordMatch(token: string, word: string): number {
   return insideMatch(token, word) ? 1 : 0;
 }
 
-/* Grupos con alguna palabra que casa con `word`. */
-function groupsForWord(index: SearchIndex, word: string): Set<number> {
+/* Grupos con alguna palabra que casa con `word` (con `inside` false, solo por el principio). */
+function groupsForWord(index: SearchIndex, word: string, inside = true): Set<number> {
   const out = new Set<number>();
   const add = (token: string): void => {
     for (const position of index.byToken.get(token) ?? []) out.add(position);
@@ -418,7 +420,7 @@ function groupsForWord(index: SearchIndex, word: string): Set<number> {
     if (!token.startsWith(word)) break;
     add(token);
   }
-  if (word.length >= 2) {
+  if (inside && word.length >= 2) {
     for (const token of index.tokens) if (insideMatch(token, word)) add(token);
   }
   return out;
@@ -474,9 +476,43 @@ interface QueryWords {
   readonly compact: string;
 }
 
+/* Países que alguien escribe delante, en minúsculas o mayúsculas: «es-m.laliga», «[es] dazn 1», «uk: …». */
+const QUERY_COUNTRIES = new Set([
+  'es', 'esp', 'spa', 'uk', 'gb', 'de', 'ger', 'fr', 'fra', 'pt', 'por', 'it', 'ita', 'us', 'usa', 'mx',
+  'ar', 'arg', 'co', 'cl', 'pe', 'per', 'ec', 've', 'br', 'nl', 'be', 'ch', 'at', 'pl', 'ro', 'se', 'sw',
+  'no', 'dk', 'fi', 'ie', 'tr', 'ru', 'ca', 'ad',
+]); // prettier-ignore
+/* «[es] », «(es) », «es-», «es:», «es|», «es - », «|es| ». */
+const QUERY_COUNTRY_RE = /^\s*(?:[[(|]\s*(\p{L}{2,3})\s*[\])|]|(\p{L}{2,3})\s*[-–:|]+)\s*/iu;
+/* «es dazn 1», «esp la 1»: España con un espacio (otras siglas son palabras: «de», «la», «tv»). */
+const QUERY_SPAIN_WORD_RE = /^\s*(?:es|esp)\s+(?=\S)/iu;
+/* RTVE como la escribe la agenda o una lista: «La 1 TVE», «TVE 1», «tve1», «Clan RTVE». */
+const QUERY_TVE_NUMBER_RE = /\br?tve\s*([12])\b/giu;
+const QUERY_TVE_AFTER_RE = /\b(la\s*[12]|clan|24\s*h(?:oras)?|teledeporte|tdp)\s+r?tve\b/giu;
+
+/**
+ * Lo que escribe una persona, listo para limpiarlo como un nombre (docs/iptv.md §19): el país de delante en
+ * cualquier caja («es-m.laliga», «[es] dazn 1», «es dazn 1») y RTVE como la agenda («la 1 tve», «tve 1» → «la
+ * 1»). Devuelve el texto y el país pedido ('' España o ninguno).
+ */
+export function searchQueryText(query: string): { readonly text: string; readonly country: string } {
+  let text = String(query ?? '');
+  let country = '';
+  const prefix = QUERY_COUNTRY_RE.exec(text);
+  const code = (prefix?.[1] ?? prefix?.[2] ?? '').toLowerCase();
+  if (prefix && QUERY_COUNTRIES.has(code) && prefix[0].length < text.trim().length) {
+    country = countryBucket(countryCode(code));
+    text = text.slice(prefix[0].length);
+  } else if (QUERY_SPAIN_WORD_RE.test(text)) {
+    text = text.replace(QUERY_SPAIN_WORD_RE, '');
+  }
+  text = text.replace(QUERY_TVE_AFTER_RE, '$1').replace(QUERY_TVE_NUMBER_RE, 'la $1');
+  return { text, country };
+}
+
 /** La consulta limpia para el buscador: sin país, calidad ni reserva, con `iptvSearchSpelling`. */
 export function searchQueryKey(query: string): string {
-  const clean = cleanIptvTitle(query);
+  const clean = cleanIptvTitle(searchQueryText(query).text);
   return normalizeChannelKey(iptvSearchSpelling(clean.display));
 }
 
@@ -516,6 +552,8 @@ export function searchCatalog(
 ): CatalogSearchResult {
   const key = searchQueryKey(query);
   if (!key) return { key, total: 0, capped: false, groups: [] };
+  /* «uk: la liga tv»: el país pedido va el primero (§19). */
+  const askedCountry = searchQueryText(query).country;
   const index = searchIndex(catalog);
   const words = [...new Set(key.split(' ').filter(Boolean))];
   const required = significant(words);
@@ -556,13 +594,14 @@ export function searchCatalog(
       }
     });
   }
-  /* 2. Sin Movistar delante («movistar vamos» → «#VAMOS»): las listas no siempre lo escriben. */
+  /* 2. Sin Movistar delante («movistar vamos» → «#VAMOS»): las listas no siempre lo escriben. Solo por el
+     principio de una palabra: «movistar ellas» no es «LAS ESTRELLAS» (§19). */
   const brandless = required.filter((word) => !MOVISTAR_WORDS.has(word));
   if (
     brandless.length < required.length &&
     brandless.some((word) => word.length >= 3 && !NUMBER_RE.test(word))
   ) {
-    for (const position of intersect(brandless.map((word) => byWord.get(word) as Set<number>))) {
+    for (const position of intersect(brandless.map((word) => groupsForWord(index, word, false)))) {
       put(position, 5);
     }
   }
@@ -580,6 +619,10 @@ export function searchCatalog(
 
   const familyOrderOf = (fact: GroupFacts): number =>
     index.familyOrder.get(fact.family) ?? fact.keyOrder;
+  /* España o sin país delante de todo (también de un canal extranjero que se llame igual: «LA LIGA TV» de UK
+     detrás de «DAZN LaLiga» y «M. LALIGA», §19); con un país pedido, ese país el primero. */
+  const regionOf = (item: { group: SearchGroup; fact: GroupFacts }): number =>
+    askedCountry && item.group.bucket === askedCountry ? -1 : item.fact.countryRank;
   const ranked = [...tiers]
     .map(([position, tier]) => ({
       group: index.groups[position] as SearchGroup,
@@ -588,8 +631,8 @@ export function searchCatalog(
     }))
     .sort(
       (a, b) =>
+        regionOf(a) - regionOf(b) ||
         a.tier - b.tier ||
-        a.fact.countryRank - b.fact.countryRank ||
         a.fact.penalty - b.fact.penalty ||
         (a.tier === 6 ? 0 : a.fact.family.length - b.fact.family.length) ||
         familyOrderOf(a.fact) - familyOrderOf(b.fact) ||

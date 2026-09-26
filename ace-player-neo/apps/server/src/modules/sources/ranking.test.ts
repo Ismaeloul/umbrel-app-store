@@ -267,6 +267,18 @@ describe('marca, familia y procedencia (B-042, B-043)', () => {
     expect(orden.map((c) => c.source)).toEqual(['iptv', 'm3u']);
   });
 
+  it('entre IPTV sigue la regla de la marca (B-174): «DAZN» de la IPTV detrás de «DAZN LaLiga» de la IPTV (§19)', () => {
+    const orden = mergeResolutionCandidates(
+      [
+        señalDe(1, 'DAZN', { matchedChannel: 'DAZN', source: 'iptv' }),
+        señalDe(2, 'DAZN LaLiga', { matchedChannel: 'DAZN LaLiga', source: 'iptv' }),
+        señalDe(3, 'DAZN LaLiga 1080', { matchedChannel: 'DAZN LaLiga' }),
+      ],
+      { requestedChannels: ['DAZN LaLiga', 'DAZN'] },
+    );
+    expect(orden.map((c) => c.title)).toEqual(['DAZN LaLiga', 'DAZN LaLiga 1080', 'DAZN']);
+  });
+
   it('contraste con la 0.6.59 sobre 400 listas generadas', () => {
     let state = 99;
     const next = (): number => {

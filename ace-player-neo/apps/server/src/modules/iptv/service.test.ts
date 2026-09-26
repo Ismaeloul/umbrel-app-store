@@ -533,9 +533,10 @@ describe('buscador y biblioteca (docs/iptv.md §14)', () => {
       dazn.channels.map((channel) => [channel.title, channel.country, channel.qualities]),
     ).toEqual([
       ['DAZN 1', null, ['uhd', 'fhd', 'hd', 'sd']],
+      ['DAZN LaLiga', null, ['fhd', 'hd']],
+      /* Otro país, detrás de todos los de España (§19). */
       ['DAZN 1', 'UK', []],
       ['DAZN 1', 'DE', ['hd']],
-      ['DAZN LaLiga', null, ['fhd', 'hd']],
     ]);
     /* La fila de «DAZN 1» arranca por la 1080p. */
     expect(dazn.channels[0]?.quality).toBe('fhd');

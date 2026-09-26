@@ -231,11 +231,14 @@ export function mergeResolutionCandidates<T extends RankableCandidate>(
     conExacto.size > 0 &&
     (Boolean(candidate.soloFamilia) || candidate.source === 'saved') &&
     !conExacto.has(normalizeChannelKey(candidate.matchedChannel));
-  /* Una IPTV (≥ 92 por su propia regla) nunca es «lo genérico»: «La 1» de la IPTV no va detrás de «La 1 TVE
-     720p *» de una lista, que es el mismo canal con adornos (docs/iptv.md §4.6 y §18). */
+  const generica = (candidate: T): boolean =>
+    canalEsGenerico(candidate.matchedChannel, pedidos) || sinExacto(candidate);
+  /* Una IPTV (≥ 92 por su propia regla) no es «lo genérico» frente a AceStream: «La 1» de la IPTV no va detrás
+     de «La 1 TVE 720p *» de una lista, que es el mismo canal con adornos (docs/iptv.md §4.6 y §18). Entre IPTV
+     sí manda la regla de la marca (B-174): con una IPTV concreta, la genérica va detrás (§19). */
+  const iptvConcreta = vivas.some((candidate) => candidate.source === 'iptv' && !generica(candidate));
   const esGenerica = (candidate: T): boolean =>
-    candidate.source !== 'iptv' &&
-    (canalEsGenerico(candidate.matchedChannel, pedidos) || sinExacto(candidate));
+    generica(candidate) && (candidate.source !== 'iptv' || iptvConcreta);
   const concretas = vivas.filter((candidate) => !esGenerica(candidate));
   const genericas = concretas.length ? vivas.filter(esGenerica) : [];
   const porNivel = concretas.length ? [concretas, genericas] : [vivas];

@@ -12,11 +12,14 @@
       « 1», la entrada sin ese « 1». Nunca al revés, y nunca con la marca
       paraguas («DAZN», la de la familia 78: «DAZN» no es «DAZN 1»).
    3. Umbral estricto: 92. Mejor no emparejar que emparejar mal.
-   4. País (Isma, 26-sep: «déjalo todo desbloqueado»): no se excluye ninguno.
-      España y sin país son un canal y cada otro país es otro («DE: DAZN 1» no
-      es una variante de «DAZN 1»). Con la misma puntuación, el de España o sin
-      país va antes: es una preferencia de orden, no un filtro. Si solo existe
-      el extranjero y casa por nombre, sale.
+   4. País: España y sin país son un canal y cada otro país es otro («DE:
+      DAZN 1» no es una variante de «DAZN 1»). El emparejado AUTOMÁTICO (la
+      agenda, un canal de AceStream tocado) solo coge el de España o sin país
+      (docs/iptv.md §19): «DAZN 2 (FR)», «TV3 (SW)», «PER - MOVISTAR
+      DEPORTES» o «UK - LA LIGA TV» son otra programación y no pueden sonar
+      solos si cae el de España. En el buscador salen todos (todo
+      desbloqueado) y tocarlos los reproduce; el re-emparejado de la
+      biblioteca (`anyCountry`) también los mira.
    5. Variantes de resolución (§16, `planVariants`): de cada canal, un cartel
       por resolución (1080p, 4K, 720p, SD, en ese orden) y detrás las reservas
       y las URLs con macros; 4 como mucho. Las copias de la misma resolución
@@ -62,6 +65,11 @@ export interface VariantOptions {
 export interface IptvMatchOptions extends VariantOptions {
   readonly scorer: ChannelScorer;
   readonly minScore?: number;
+  /**
+   * También los canales de otro país (el re-emparejado de un favorito, que
+   * puede ser «DE: DAZN 1»). Sin esto, solo España o sin país (§19).
+   */
+  readonly anyCountry?: boolean;
 }
 
 /** Las variantes de UN canal (mismo grupo y mismo país) repartidas en carteles y respaldo. */
@@ -217,9 +225,17 @@ export function isUmbrellaBrand(channel: string): boolean {
   return channelAllowsFamilyFallback(channel) && !HAS_DIGIT.test(normalizeChannelKey(channel));
 }
 
-/** ¿Son todas las variantes de este canal de una plataforma de internet (VIX, Pluto TV, Rakuten…)? */
-export function isPlatformChannel(entries: readonly CatalogEntry[]): boolean {
-  return entries.length > 0 && entries.every((entry) => iptvPlatform(entry.title, entry.group));
+/**
+ * ¿Son todas las variantes de este canal de una plataforma de internet (VIX, Pluto TV, Rakuten…)? Con el
+ * catálogo, una categoría «RAKUTEN TV» que mezcla canales de la TDT no cuenta (§19).
+ */
+export function isPlatformChannel(entries: readonly CatalogEntry[], catalog?: Catalog): boolean {
+  return (
+    entries.length > 0 &&
+    entries.every((entry) =>
+      catalog ? catalog.platformOf(entry) : iptvPlatform(entry.title, entry.group),
+    )
+  );
 }
 
 /* Mejor puntuación de una entrada contra UN canal pedido. */
@@ -228,6 +244,7 @@ function scoreAgainst(
   channel: string,
   entry: CatalogEntry,
   base: string,
+  strict = false,
 ): number {
   const alias = entry.tvgId || null;
   const spelled = iptvSpelling(channel);
@@ -235,6 +252,9 @@ function scoreAgainst(
   let best = 0;
   const bare = withoutTrailingNote(base);
   for (const wanted of asked) {
+    /* En una categoría de plataforma, un canal con marca de cadena pedido («M+ LaLiga TV 2») solo casa con uno
+       que la lleve: «LA LIGA 2» de «RAKUTEN TV» no es Movistar (§19). */
+    if (strict && chainBrand(wanted) && chainBrand(wanted) !== chainBrand(base)) continue;
     best = Math.max(best, scorer([wanted], { id: entry.id, title: base, alias }).score);
     /* La cadena entre paréntesis del final («TV Canaria (RTVC)») no la pone la agenda. */
     if (bare !== base) {
@@ -243,6 +263,7 @@ function scoreAgainst(
     /* Nunca con la marca paraguas («DAZN» no es «DAZN 1») ni con otra marca de cadena
        («M+ LaLiga TV» no es «LA LIGA 1»). */
     if (
+      !strict &&
       !HAS_DIGIT.test(wanted) &&
       !channelAllowsFamilyFallback(wanted) &&
       TRAILING_ONE.test(base) &&
@@ -277,9 +298,10 @@ export function groupMatch(
 
 /**
  * Canales IPTV que casan (≥ 92) con alguno de los canales, de mejor a peor
- * puntuación y, con la misma, España o sin país antes que otro país. Un
- * resultado por canal (grupo y país), con sus carteles. Sin tope: el de 4
- * carteles lo aplica quien junta con la guía.
+ * puntuación: solo los de España o sin país (con `anyCountry`, también los
+ * de otro país, detrás con la misma puntuación). Un resultado por canal
+ * (grupo y país), con sus carteles. Sin tope: el de 4 carteles lo aplica
+ * quien junta con la guía.
  */
 export function matchIptvChannels(
   catalog: Catalog,
@@ -307,8 +329,11 @@ export function matchIptvChannels(
     let matchedChannel = wanted[0] as string;
     /* `base` se calcula una vez por grupo (es un getter con la limpieza del nombre). */
     const base = representative.base;
+    /* En una categoría de plataforma («RAKUTEN TV» con canales de la TDT), solo el nombre tal cual: sin la
+       regla del « 1» («LaLiga TV» no es «LA LIGA 1» de Rakuten, §19). */
+    const strict = catalog.group(key).every((entry) => catalog.inPlatformGroup(entry));
     for (const channel of wanted) {
-      const value = scoreAgainst(options.scorer, channel, representative, base);
+      const value = scoreAgainst(options.scorer, channel, representative, base, strict);
       if (value > score) {
         score = value;
         matchedChannel = channel;
@@ -316,8 +341,10 @@ export function matchIptvChannels(
     }
     if (score < minScore) continue;
     for (const { bucket, entries } of catalog.buckets(key)) {
+      /* Otro país es otra programación: nunca sale solo (§19). */
+      if (bucket !== '' && !options.anyCountry) continue;
       /* Una plataforma de internet no se empareja por nombre (docs/iptv.md §18). */
-      if (isPlatformChannel(entries)) continue;
+      if (isPlatformChannel(entries, catalog)) continue;
       const match = groupMatch(
         key,
         bucket,

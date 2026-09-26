@@ -129,14 +129,16 @@ describe('searchCatalog (§14.3)', () => {
       ['DAZN 1', '', 5],
       ['DAZN 1', 'DE', 1],
     ]);
-    /* «DAZN 2» y «DAZN F1» son otros canales (otras filas con «dazn»). Dentro de la familia (§18), España
-       o sin país antes que otro país: el «DAZN 1» alemán va detrás de «DAZN 2». */
+    /* «DAZN 2» y «DAZN F1» son otros canales (otras filas con «dazn»). España o sin país antes que otro
+       país, en cualquier nivel (§19): el «DAZN 1» alemán va detrás de todos los de España. */
     expect(searchCatalog(c, 'dazn').groups.map((group) => [group.key, group.bucket])).toEqual([
       ['dazn 1', ''],
       ['dazn 2', ''],
-      ['dazn 1', 'DE'],
       ['dazn f1', ''],
+      ['dazn 1', 'DE'],
     ]);
+    /* Con el país pedido delante (en cualquier caja), ese país el primero. */
+    expect(searchCatalog(c, 'de: dazn 1').groups.map((group) => group.bucket)).toEqual(['DE', '']);
   });
 
   it('total y capped con 250 coincidencias; la respuesta, 50 como mucho', () => {

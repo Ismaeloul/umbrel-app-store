@@ -148,19 +148,20 @@ describe('matchIptvChannels', () => {
     expect(names(matchIptvChannels(cat, ['M+ La Liga TV'], { scorer }))).toContain('M+ LaLiga TV');
   });
 
-  it('país: preferencia, no filtro; «DAZN 1» de España va antes que «UK: DAZN 1» e «IT: DAZN 1»', () => {
+  it('país (§19): el emparejado automático solo coge España o sin país; «UK: DAZN 1» e «IT: DAZN 1» son otra programación', () => {
     const matches = matchIptvChannels(cat, ['DAZN 1'], { scorer });
-    expect(matches.map((match) => [match.best.display, match.bucket])).toEqual([
-      ['DAZN 1', ''],
-      ['DAZN 1', 'UK'],
-      ['DAZN 1', 'IT'],
-    ]);
+    expect(matches.map((match) => [match.best.display, match.bucket])).toEqual([['DAZN 1', '']]);
     expect(matches[0]?.best.country).toBe('ES');
-    /* Si solo existe el extranjero y casa por nombre, sale. */
+    /* Si solo existe el extranjero, no sale solo (sí en el buscador y tocándolo). */
     const foreign = catalog(['UK: DAZN 1', 'IT: DAZN 1 HD']);
-    expect(matchIptvChannels(foreign, ['DAZN 1'], { scorer }).map((match) => match.bucket)).toEqual(
-      ['UK', 'IT'],
-    );
+    expect(matchIptvChannels(foreign, ['DAZN 1'], { scorer })).toEqual([]);
+    /* El re-emparejado de un favorito sí los mira, detrás del de España. */
+    expect(
+      matchIptvChannels(cat, ['DAZN 1'], { scorer, anyCountry: true }).map((m) => m.bucket),
+    ).toEqual(['', 'UK', 'IT']);
+    expect(
+      matchIptvChannels(foreign, ['DAZN 1'], { scorer, anyCountry: true }).map((m) => m.bucket),
+    ).toEqual(['UK', 'IT']);
     /* España y sin país son el mismo canal: sus variantes van juntas. */
     const mixed = matchIptvChannels(catalog(['DAZN 1 SD', 'ES: DAZN 1 FHD']), ['DAZN 1'], {
       scorer,
@@ -171,9 +172,11 @@ describe('matchIptvChannels', () => {
 
   it('Hypermotion y el umbral siguen igual con cualquier país', () => {
     const list = catalog(['DE: LaLiga TV Hypermotion', 'UK: LaLiga TV', 'IT: DAZN']);
-    expect(names(matchIptvChannels(list, ['LaLiga TV'], { scorer }))).toEqual(['LaLiga TV']);
-    expect(matchIptvChannels(list, ['LaLiga TV'], { scorer })[0]?.bucket).toBe('UK');
-    expect(matchIptvChannels(list, ['DAZN 1'], { scorer })).toEqual([]);
+    const any = { scorer, anyCountry: true };
+    expect(names(matchIptvChannels(list, ['LaLiga TV'], any))).toEqual(['LaLiga TV']);
+    expect(matchIptvChannels(list, ['LaLiga TV'], any)[0]?.bucket).toBe('UK');
+    expect(matchIptvChannels(list, ['LaLiga TV'], { scorer })).toEqual([]);
+    expect(matchIptvChannels(list, ['DAZN 1'], any)).toEqual([]);
   });
 
   it('trampas medidas: «Bar», «Antena 3 Internacional»', () => {

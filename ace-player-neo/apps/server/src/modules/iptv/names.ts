@@ -45,7 +45,7 @@
      M. LALIGA 1), el «#» delante de palabra y los asteriscos.
    - La grafía única de `channelSpelling` (@ace/shared): «M.», «M+»,
      «MOVISTAR PLUS+»… → «Movistar»; «LA SEXTA» = «LASEXTA»; «LALIGA+» →
-     «LaLiga Plus»; «SUPER CUPA» → «Supercopa»; «R. MADRID» → «Real Madrid».
+     «LaLigaPlus»; «SUPER CUPA» → «Supercopa»; «R. MADRID» → «Real Madrid».
    - `platform`: VIX, Pluto TV, Rakuten TV, GOLD TV 24/7… (por el nombre o
      la categoría). No se emparejan por nombre con la agenda (su «LA LIGA 1»
      no es «M+ LaLiga TV») y el buscador las pone detrás. */
@@ -142,7 +142,7 @@ const BACKUP_TAG_RE =
 const SPAIN_LETTER_RE = /\s+Ñ\s*$/u;
 /* Plataformas de internet por el nombre («VIX - …», «Pluto TV …») o por la categoría. */
 const PLATFORM_TITLE_RE =
-  /^\s*(vix|pluto\s*tv|rakuten(?:\s*tv)?|gold\s*tv(?:\s*24\s*\/\s*7)?|samsung\s*tv\s*plus)\b/iu;
+  /^\s*(?:[|[(]?\s*[A-Z]{2,3}\s*[|\]):\-–]+\s*)?(vix|pluto\s*tv|rakuten(?:\s*tv)?|gold\s*tv(?:\s*24\s*\/\s*7)?|samsung\s*tv\s*plus)\b/iu;
 const PLATFORM_GROUP_RE =
   /\b(vix|pluto(?:\s*tv)?|rakuten(?:\s*tv)?|gold\s*tv|samsung\s*tv\s*plus|fast\s*channels?)\b/iu;
 
@@ -224,6 +224,14 @@ export function groupCountry(group: string | null | undefined): string | null {
   const parts = text.split('|').map((part) => part.trim().toUpperCase());
   if (parts.length >= 2 && CONTINENTS.has(parts[0] as string)) {
     const code = parts[1] as string;
+    /* «AM | LATINO», «EU | LATVIA», «AS | THAILAND»: el nombre del país en vez de su sigla (docs/iptv.md §19).
+       No es España: los latinos y México cuentan como América en español; el resto, con el continente. */
+    if (/^\p{L}[\p{L} +]{3,}$/u.test(code) && !Object.hasOwn(NOT_COUNTRY, code)) {
+      if (/^(?:ESPAÑA|ESPANA|SPAIN)\b/u.test(code)) return 'ES';
+      if (/^LATIN|^LATAM/u.test(code)) return 'LAT';
+      if (/^MEXIC/u.test(code)) return 'MX';
+      return parts[0] as string;
+    }
     if (!/^[A-Z]{2,4}$/.test(code) || Object.hasOwn(NOT_COUNTRY, code)) return null;
     return countryCode(code);
   }
@@ -263,10 +271,23 @@ export function isFillerTitle(title: string): boolean {
 
 /** Plataforma de internet de un canal por su nombre o su categoría, o null. */
 export function iptvPlatform(title: string, group?: string | null): string | null {
-  const byTitle = PLATFORM_TITLE_RE.exec(String(title ?? ''));
-  const match = byTitle ?? PLATFORM_GROUP_RE.exec(String(group ?? '').replace(/\u00a0/g, ' '));
-  if (!match?.[1]) return null;
-  return match[1].toLowerCase().split(/\s+/)[0] || null;
+  return iptvTitlePlatform(title) ?? iptvGroupPlatform(group);
+}
+
+/** Plataforma de internet que dice el NOMBRE (\u00abVIX - \u2026\u00bb, \u00abPluto TV \u2026\u00bb, \u00abRAKUTEN TV ACCION\u00bb), o null. */
+export function iptvTitlePlatform(title: string): string | null {
+  const match = PLATFORM_TITLE_RE.exec(String(title ?? ''));
+  return match?.[1] ? match[1].toLowerCase().split(/\s+/)[0] || null : null;
+}
+
+/**
+ * Plataforma de internet que dice la CATEGOR\u00cdA (\u00abEU | ES | RAKUTEN TV\u00bb), o null. Ojo: hay categor\u00edas con ese
+ * nombre que mezclan canales de la TDT (\u00abES - LA 2\u00bb, \u00abES - TVG 2\u00bb); el cat\u00e1logo las distingue
+ * (`Catalog.platformOf`, docs/iptv.md \u00a719).
+ */
+export function iptvGroupPlatform(group: string | null | undefined): string | null {
+  const match = PLATFORM_GROUP_RE.exec(String(group ?? '').replace(/\u00a0/g, ' '));
+  return match?.[1] ? match[1].toLowerCase().split(/\s+/)[0] || null : null;
 }
 
 /* Quita lo que case con `re` (global) y dice si había algo. */
@@ -385,6 +406,51 @@ const BROADCASTER_SUFFIX_RE = /\s+r?tve$/iu;
 const BROADCASTER_INNER_RE = /\b(la\s*[12]|clan|24\s*h(?:oras)?|teledeporte|tdp)\s+r?tve\b/giu;
 /* Lo que las listas de AceStream ponen detrás de la flecha: « --> NEW ERA». */
 const ACE_PROVIDER_RE = /\s*(?:--?>|={1,2}>|[→⇒➜➝⟶⟹]).*$/u;
+/* … o entre corchetes o paréntesis, tras una barra o un guion con espacios, o tras la calidad («LA 1 FHD [NEW
+   ERA]», «LA 1 (NEW ERA)», «LA 1 | NEW ERA», «LA 1 - NEW ERA», «LA 1 1080 NEW ERA»). */
+const ACE_TAIL_NOTE_RE = /\s*[[(]\s*([^\])]+?)\s*[\])]\s*$/u;
+const ACE_TAIL_BAR_RE = /\s+(?:\||-|–)\s+([^|\-–]+?)\s*$/u;
+const ACE_TAIL_QUALITY_RE =
+  /\s(?:uhd|4k|fhd|full\s*hd|hd|sd|(?:2160|1080|720|576|480)[pi]?(?:25|30|50|60)?)\+?\s+(\D+?)\s*$/iu;
+/* Lo que sí distingue un canal y no se quita nunca de detrás: números, competiciones, «Bar», «PPV»… */
+const ACE_TAIL_DISTINCT_RE =
+  /\d|hyper|smartbank|segunda|liga|champions|campeones|europa|conference|premier|copa|f1|moto|femen|women|\bbar\b|ppv|evento|uhd|4k|\b(?:es|en|eng|fr|de|pt|it|cat)\b/iu;
+
+/*
+ * El nombre de la lista (o del que la sube) que las listas de AceStream ponen detrás del canal sin flecha. Solo
+ * si va en mayúsculas o entre corchetes y no dice nada del canal (ver `ACE_TAIL_DISTINCT_RE`): «TV Canaria
+ * (RTVC)» pierde «(RTVC)», pero «LaLiga TV (Hypermotion)» y «M+ LaLiga TV - Bar» se quedan como están.
+ */
+function aceListTail(value: string): string {
+  let text = value.trim();
+  for (let guard = 0; guard < 3; guard += 1) {
+    const note = ACE_TAIL_NOTE_RE.exec(text);
+    if (note && note.index > 0 && !ACE_TAIL_DISTINCT_RE.test(note[1] ?? '')) {
+      text = text.slice(0, note.index).trim();
+      continue;
+    }
+    const bar = ACE_TAIL_BAR_RE.exec(text);
+    const barText = bar?.[1] ?? '';
+    if (
+      bar &&
+      bar.index > 0 &&
+      barText === barText.toUpperCase() &&
+      /\p{L}{2}/u.test(barText) &&
+      !ACE_TAIL_DISTINCT_RE.test(barText)
+    ) {
+      text = text.slice(0, bar.index).trim();
+      continue;
+    }
+    const tail = ACE_TAIL_QUALITY_RE.exec(text);
+    const tailText = tail?.[1] ?? '';
+    if (tail && tailText === tailText.toUpperCase() && !ACE_TAIL_DISTINCT_RE.test(tailText)) {
+      text = text.slice(0, text.length - tailText.length).trim();
+      continue;
+    }
+    break;
+  }
+  return text || value;
+}
 
 /**
  * Un nombre de canal de las listas de AceStream (o de la agenda) listo para
@@ -395,7 +461,7 @@ const ACE_PROVIDER_RE = /\s*(?:--?>|={1,2}>|[→⇒➜➝⟶⟹]).*$/u;
  */
 export function aceChannelTitle(title: string): string {
   const original = String(title ?? '').trim();
-  let text = original.replace(ACE_PROVIDER_RE, ' ').replace(/[*]+/g, ' ');
+  let text = aceListTail(original.replace(ACE_PROVIDER_RE, ' ').replace(/[*]+/g, ' '));
   text = text.replace(HEVC_RE, ' ').replace(FPS_RE, ' ').replace(TECH_RE, ' ');
   for (const [re] of QUALITY_TOKENS) text = text.replace(re, ' ');
   text = text.replace(BROADCASTER_INNER_RE, '$1');
@@ -414,8 +480,12 @@ export function iptvAskedChannel(channel: string): string | null {
   if (!text) return null;
   const clean = aceChannelTitle(text);
   if (PLATFORM_RE.test(clean)) return null;
-  return clean;
+  /* «LaLiga+» es otra marca: en una palabra, para que el «+» no se pierda al puntuar (§19). */
+  return clean.replace(LALIGA_PLUS_RE, 'LaLigaPlus ').replace(/\s+/g, ' ').trim();
 }
+
+/* «LaLiga+», «LALIGA +», «LaLiga Plus» (la marca de la plataforma, no LaLiga TV). */
+const LALIGA_PLUS_RE = /\bla\s*liga\s*(?:\+|plus\b)/giu;
 
 /**
  * Orden de las variantes de un canal (Isma, 26-sep; docs/iptv.md §16): 1080p
