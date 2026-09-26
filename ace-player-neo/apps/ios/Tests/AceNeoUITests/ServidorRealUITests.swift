@@ -176,6 +176,7 @@ final class ServidorRealUITests: XCTestCase {
         // Otro aparato emparejado desde la API: la lista trae más que «Este iPhone».
         let otro = try await servidor.emparejarOtro(nombre: "iPad de pruebas")
         try await minimizar(app)
+        try await pausarEnElMini(app)
         tocarPestana(app, "ajustes")
         try exigir(elementoUI(app, IDUI.pantalla("ajustes")).waitForExistence(timeout: 15), "No sale Ajustes")
 
@@ -196,26 +197,37 @@ final class ServidorRealUITests: XCTestCase {
         try exigir(elementoUI(app, IDUI.botonOlvidarEsteIPhone).exists, "Falta «Olvidar este iPhone»")
     }
 
-    /// ⌄ Minimizar. Los controles se esconden a los 3,2 s de reproducir (PresentacionReproductor) y, escondidos, el
-    /// primer toque solo los enseña (a4 §5.1). Cada consulta de XCUITest tarda cerca de un segundo con el vídeo en
-    /// marcha, así que se toca por coordenada y, si el mini no ha salido, se vuelve a tocar enseguida (dentro del
-    /// plazo en que ya se ven). El árbol de accesibilidad da el botón por visible aunque esté escondido.
+    /// Minimizar deslizando el vídeo hacia abajo (a4 §5.2), que no depende de los controles. Tocar ⌄ no sirve aquí:
+    /// los controles se esconden a los 3,2 s de reproducir, escondidos el primer toque solo los enseña (a4 §5.1) y
+    /// con el vídeo en marcha cada acción de XCUITest tarda de 5 a 10 s en la CI (36232892098), así que el
+    /// segundo toque siempre llega con los controles otra vez escondidos. El arrastre se hace con los controles
+    /// escondidos: visibles, su velo se queda el toque y no llega a la capa de toques del vídeo.
     @MainActor
     private func minimizar(_ app: XCUIApplication) async throws {
-        let boton = elementoUI(app, IDUI.botonMinimizar)
+        let video = elementoUI(app, IDUI.videoTeatro)
         let mini = elementoUI(app, IDUI.mini)
-        try exigir(boton.waitForExistence(timeout: 5), "Sin ⌄ Minimizar. \(estado(app))")
-        let punto = boton.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-        for _ in 0..<3 {
-            punto.tap()
-            try await Task.sleep(for: .milliseconds(300))
-            if mini.exists { break }
-            punto.tap()
-            if await esperar(3, { mini.exists }) { break }
+        try exigir(video.waitForExistence(timeout: 5), "Sin vídeo que minimizar. \(estado(app))")
+        for intento in 0..<3 where !mini.exists {
+            if intento > 0 { try await Task.sleep(for: .seconds(4)) }
+            let inicio = video.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45))
+            let fin = video.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 1.9))
+            inicio.press(forDuration: 0.05, thenDragTo: fin, withVelocity: .fast, thenHoldForDuration: 0)
+            _ = await esperar(4) { mini.exists }
         }
         let sale = mini.waitForExistence(timeout: 10)
         captura(app, "e2e-04-mini")
-        try exigir(sale, "Al minimizar no sale el mini. \(estado(app))")
+        try exigir(sale, "Al deslizar el vídeo hacia abajo no sale el mini. \(estado(app))")
+    }
+
+    /// ⏸ del mini: con el vídeo parado la app se queda quieta y XCUITest no espera varios segundos tras cada toque
+    /// (el segundo toque de «Olvidar este iPhone» tiene que llegar antes de que se desarme). El mini sigue ahí.
+    @MainActor
+    private func pausarEnElMini(_ app: XCUIApplication) async throws {
+        let pausa = elementoUI(app, IDUI.miniPausa)
+        try exigir(pausa.waitForExistence(timeout: 5), "El mini no tiene ⏸. \(estado(app))")
+        pausa.tap()
+        let parado = await esperar(10) { pausa.label == "Reproducir" }
+        try exigir(parado, "⏸ del mini no pausa. \(estado(app))")
     }
 
     /// Sube Ajustes hasta que el elemento quede entre la barra de estado y el mini (que tapa lo de abajo).
