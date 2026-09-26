@@ -24,6 +24,8 @@ import type { PlayerDockProps } from '../app/contracts.ts';
 import { setPlayerPresence } from '../app/player-presence.ts';
 import { useNavigate } from '../app/router.tsx';
 import { useShortcut } from '../app/shortcuts.ts';
+import { joinHouse } from '../features/multi/follow.ts';
+import { isHouseQuestionOpen } from '../features/multi/gate.ts';
 import { cx } from '../lib/cx.ts';
 import { haptic } from '../lib/haptics.ts';
 import { MEDIA, useLayoutKind, useMediaQuery } from '../lib/media.ts';
@@ -38,6 +40,7 @@ import {
   kindFromIh,
   play,
   playerStore,
+  putHere,
   setNerdOpen,
   stop,
   toggleNerd,
@@ -255,6 +258,8 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
   const video = () => videoRef.current as VideoWithExtras | null;
 
   const zap = (direction: 1 | -1) => {
+    // Con la pregunta de la casa abierta, ← → no hacen nada (docs/multidispositivo.md §2.4.2).
+    if (isHouseQuestionOpen()) return;
     const target = zapTarget(zapList, hash, direction);
     if (!target) return;
     haptic('rigid');
@@ -292,6 +297,27 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
           previous.route ? { origin: 'user', route: previous.route } : { origin: 'user' },
         );
       }
+    },
+    handoffHere: () => {
+      const handoff = playerStore.get().handoff;
+      if (!handoff) return;
+      joinHouse({
+        hash: handoff.hash,
+        title: handoff.title,
+        matchId: handoff.matchId,
+        byLabel: handoff.byLabel,
+      });
+    },
+    handoffBack: () => {
+      const handoff = playerStore.get().handoff;
+      if (!handoff) return;
+      haptic('light');
+      const { channel, route: back } = handoff.previous;
+      play(channel, back ? { origin: 'user', route: back } : { origin: 'user' });
+    },
+    putHere: () => {
+      haptic('light');
+      putHere();
     },
     goLive: () => void runtime?.goLive(),
     back: () => void runtime?.back(),

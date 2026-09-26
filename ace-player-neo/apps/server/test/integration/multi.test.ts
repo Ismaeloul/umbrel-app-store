@@ -214,7 +214,7 @@ describe('varios dispositivos de punta a punta (docs/multidispositivo.md §6.2)'
     await r.h.settle();
     expect(r.h.playback.inspect().sessions).toHaveLength(1);
     expect(r.h.fake.control.metrics().sessionsOpen).toBe(1);
-    expect(r.h.playback.inspect().sessions[0]?.viewers.sort()).toEqual([X, Y]);
+    expect([...(r.h.playback.inspect().sessions[0]?.viewers ?? [])].sort()).toEqual([X, Y]);
   });
 
   it('2 · IPTV: «Cambiar en los dos» con una sola conexión con el proveedor en todo momento', async () => {

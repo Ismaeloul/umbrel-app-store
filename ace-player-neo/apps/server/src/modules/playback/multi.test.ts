@@ -113,7 +113,11 @@ describe('«Cambiar en los dos»: others=move y from (§2.3)', () => {
     const from = await together(setup);
     await setup.runtime.service.acquire(
       H2,
-      query({ title: 'Dos', ...over, ...(over.others === 'stop' ? { from } : {}) }),
+      query({
+        title: 'Dos',
+        ...over,
+        ...('others' in over && over.others === 'stop' ? { from } : {}),
+      }),
       web('x', 'pc'),
       live(),
     );

@@ -31,6 +31,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import { useEngineSummary } from '../api/hooks.ts';
+import { PUT_HERE } from '../features/multi/texts.ts';
 import { useApiQuery } from '../api/query.ts';
 import { useSwipe } from '../lib/gestures.ts';
 import { useStore } from '../lib/store.ts';
@@ -45,7 +46,7 @@ import { CLICK_DELAY_MS, CONTROLS_HIDE_MS } from './constants.ts';
 import { usePlayerContext, type PlayerContextValue } from './context.ts';
 import { NerdPanel } from './NerdPanel.tsx';
 import { stageSlotStore } from './stage-slot.ts';
-import { liveButton, stageMessage } from './status.ts';
+import { handoffCopy, liveButton, stageMessage } from './status.ts';
 
 /** Publica el hueco sobre el vídeo mientras existe (y lo retira al irse). */
 function publishStageSlot(node: HTMLDivElement | null) {
@@ -167,8 +168,14 @@ function StageMessage({ state, ctx }: { state: PlayerState; ctx: PlayerContextVa
   const message = stageMessage(state);
   if (!message) return null;
   const showRetry = state.phase === 'error' && state.idleReason !== 'sin-motor';
-  const showHere = state.phase === 'idle' && state.idleReason === 'traspasado';
-  const showFacts = state.phase === 'idle' && !state.waiting && !showHere;
+  const idle = state.phase === 'idle' && !state.waiting;
+  /* Tras un traspaso (docs/multidispositivo.md §2.4.4): «Ver … aquí» y «Volver a …». */
+  const handoff = idle && state.idleReason === 'traspasado' ? state.handoff : null;
+  const copy = handoff ? handoffCopy(handoff) : null;
+  const showHere = idle && state.idleReason === 'traspasado' && !handoff;
+  /* Otro dispositivo ve otra cosa y aquí no se ha arrancado nada (D-M2). */
+  const elsewhere = idle && state.idleReason === 'otra-cosa-en-casa' && state.houseIdle !== null;
+  const showFacts = idle && !showHere && !handoff && !elsewhere;
   return (
     <div className="player-msg" data-tone={message.tone} role="status">
       <span className="player-msg__mark" aria-hidden="true">
@@ -189,6 +196,25 @@ function StageMessage({ state, ctx }: { state: PlayerState; ctx: PlayerContextVa
           onClick={ctx.actions.retry}
         >
           {showHere ? 'Reproducir aquí' : 'Reintentar'}
+        </Button>
+      ) : null}
+      {copy && (copy.here || copy.back) ? (
+        <div className="player-msg__actions">
+          {copy.here ? (
+            <Button variant="video" size="sm" icon="play" onClick={ctx.actions.handoffHere}>
+              {copy.here}
+            </Button>
+          ) : null}
+          {copy.back ? (
+            <Button variant="video" size="sm" icon="back" onClick={ctx.actions.handoffBack}>
+              {copy.back}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+      {elsewhere ? (
+        <Button variant="video" size="sm" icon="play" onClick={ctx.actions.putHere}>
+          {PUT_HERE}
         </Button>
       ) : null}
     </div>

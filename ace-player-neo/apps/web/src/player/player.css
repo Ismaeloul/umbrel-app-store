@@ -214,6 +214,17 @@
 .player-msg .btn {
   margin-top: var(--s-2);
 }
+/* Tras un traspaso (docs/multidispositivo.md §2.4.4): «Ver … aquí» y «Volver a …», juntos. */
+.player-msg__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s-2);
+  max-width: 100%;
+}
+.player-msg__actions .btn {
+  max-width: 100%;
+}
 /* Reposo: motor, canales y partidos de hoy (inventario §8.1), en píldoras discretas. */
 .player-facts {
   display: flex;

@@ -7,8 +7,36 @@
    («6 s de retraso»). Lo técnico (pares, velocidades, códec) va en «Datos
    técnicos», nunca aquí. */
 
+import {
+  elsewhereText,
+  handoffTexts,
+  nothingToFollowTexts,
+  type HandoffTexts,
+} from '../features/multi/texts.ts';
 import type { StatusContent } from '../notices/statusLine.ts';
-import { isIptvPlayback, type PlayerState } from './api.ts';
+import { isIptvPlayback, type HandoffInfo, type PlayerState } from './api.ts';
+
+/** Textos del aviso de traspaso (docs/multidispositivo.md §2.5.2). */
+export function handoffCopy(info: HandoffInfo): HandoffTexts {
+  if (info.kind === 'nothing') {
+    const texts = nothingToFollowTexts(info.byLabel, info.previous.channel.title);
+    return {
+      title: texts.title,
+      text: texts.text,
+      status: texts.status,
+      here: null,
+      hereShort: null,
+      back: texts.back,
+    };
+  }
+  return handoffTexts({
+    by: info.byLabel,
+    reason: info.reason,
+    title: info.title || null,
+    previous: info.previous.channel.title,
+    policy: info.policy,
+  });
+}
 
 /** «Conectando con AceStream…» o, si la fuente es de la IPTV, «Conectando con tu IPTV…» (§8.3). */
 function connectingText(state: PlayerState): string {
@@ -26,8 +54,15 @@ export function statusFor(state: PlayerState): StatusContent | null {
   switch (state.phase) {
     case 'idle':
       if (state.waiting) return { text: state.waiting, signal: 'checking' };
+      if (state.idleReason === 'traspasado' && state.handoff)
+        return { text: handoffCopy(state.handoff).status, icon: 'movil' };
       if (state.idleReason === 'traspasado' && state.message)
         return { text: state.message, icon: 'movil' };
+      if (state.idleReason === 'otra-cosa-en-casa' && state.houseIdle)
+        return {
+          text: elsewhereText(state.houseIdle.labels, state.houseIdle.title),
+          icon: 'movil',
+        };
       if (state.idleReason === 'detenido' && state.message)
         return { text: state.message, icon: 'stop' };
       return null;
@@ -136,8 +171,18 @@ export function stageMessage(state: PlayerState): {
   switch (state.phase) {
     case 'idle':
       if (state.waiting) return { title: 'Buscando señal', text: state.waiting, tone: 'busy' };
+      if (state.idleReason === 'traspasado' && state.handoff) {
+        const copy = handoffCopy(state.handoff);
+        return { title: copy.title, text: copy.text, tone: 'idle' };
+      }
       if (state.idleReason === 'traspasado')
         return { title: 'En otro dispositivo', text: state.message ?? '', tone: 'idle' };
+      if (state.idleReason === 'otra-cosa-en-casa' && state.houseIdle)
+        return {
+          title: 'Sin señal',
+          text: elsewhereText(state.houseIdle.labels, state.houseIdle.title),
+          tone: 'idle',
+        };
       return {
         title: 'Sin señal',
         text: state.message ?? 'Elige un partido en la agenda o un canal de la biblioteca.',

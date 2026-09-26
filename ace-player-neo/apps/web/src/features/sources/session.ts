@@ -81,15 +81,22 @@ import { noticeFlags } from '../../notices/notify.ts';
 import {
   getPlayer,
   kindFromIh,
+  onJoinExpired,
+  onPlayCancelled,
   onSourceFailed,
   play,
   playerStore,
+  setHouseIdle,
   setWaitingMessage,
+  type JoinExpired,
   type PlayerState,
+  type PlayOptions,
   type PlayOrigin,
   type SourceFailedReply,
   type SourceFailure,
 } from '../../player/api.ts';
+import { continueOptions, houseStartFor } from '../multi/sources.ts';
+import { joiningText, NOTHING_CHANGED } from '../multi/texts.ts';
 import { madridHour } from '../agenda/domain.ts';
 import { registerChannelStarter, takeChannelTap, type TappedChannel } from '../library/play.ts';
 import {
@@ -344,6 +351,8 @@ const reportWatches = new Map<string, () => void>();
 let researchWatch: { before: Set<string>; ai: string } | null = null;
 let offFailed: (() => void) | null = null;
 let offPlayer: (() => void) | null = null;
+/** Oyentes de la casa (varios dispositivos): pregunta cancelada, join tarde y sesiones. */
+let offHouse: (() => void) | null = null;
 let lastPlayer: PlayerState = getPlayer();
 /** El toast «Volver a la IPTV» (atado a esta sesión: se quita al acabarla). */
 let backToastId: number | null = null;
@@ -359,6 +368,17 @@ function dismissBackToast(): void {
 
 function attach(): void {
   if (!offFailed) offFailed = onSourceFailed(handleSourceFailed);
+  if (!offHouse) {
+    const offs = [
+      onPlayCancelled(onHouseCancelled),
+      onJoinExpired(onHouseJoinExpired),
+      /* Después de que el SSE actualice la caché (applyToCache va antes que los oyentes). */
+      onSseEvent('playback.sessions', () => queueMicrotask(onHouseSessions)),
+    ];
+    offHouse = () => {
+      for (const off of offs) off();
+    };
+  }
   if (!offPlayer) {
     lastPlayer = getPlayer();
     offPlayer = playerStore.subscribe(onPlayerChange);
@@ -368,6 +388,8 @@ function attach(): void {
 function detach(): void {
   offFailed?.();
   offFailed = null;
+  offHouse?.();
+  offHouse = null;
   offPlayer?.();
   offPlayer = null;
 }
@@ -390,6 +412,9 @@ export function endSession(): void {
   detach();
   dismissBackToast();
   if (sessionStore.get().key) setWaitingMessage(null);
+  if (getPlayer().houseIdle) setHouseIdle(null);
+  joinSkip = new Set();
+  houseOverride = null;
   sessionStore.set(EMPTY);
 }
 
@@ -565,6 +590,8 @@ function applyEntryResolution(data: Resolution): void {
   }
   // Sin comprobador: la mejor colocada, como antes (index.html:4150-4151).
   setWaitingMessage(null);
+  // Antes, lo que suena en casa (docs/multidispositivo.md §2.4.5).
+  if (houseFirst(sessionStore.get(), effectiveMap(entries, screen, now), screen) !== null) return;
   const best = entries.find((entry) => entry.id === data.candidate?.id) ?? entries[0];
   if (best) playEntry(best, 'user');
 }
@@ -977,6 +1004,8 @@ function tryAutoStart(): boolean {
   if (belongsOnScreen(state, screen)) return false;
   const now = clock();
   const effective = effectiveMap(state.entries, screen, now);
+  const house = houseFirst(state, effective, screen);
+  if (house !== null) return house;
   const finished = scanFinished(state.scan);
   const chosen = pickAutoSource(state.entries, effective, finished);
   const total = state.entries.length;
@@ -1026,6 +1055,113 @@ function tryAutoStart(): boolean {
   return false;
 }
 
+// ---- La casa: varios dispositivos (docs/multidispositivo.md §2.4.5) ---------------------------
+
+/** Fuentes que no hay que volver a intentar unir en esta sesión (su `join` llegó tarde). */
+let joinSkip = new Set<string>();
+/** «Poner aquí» ya pulsado en esta sesión: el arranque sigue aunque otro vea otra cosa. */
+let houseOverride: string | null = null;
+
+/**
+ * Antes del arranque automático: lo que suena en casa, primero (se une con
+ * `join=1`), y si otro dispositivo ve otra cosa, no se arranca nada (D-M2).
+ * true: ha mandado reproducir; false: no hay que arrancar; null: sigue lo de siempre.
+ */
+function houseFirst(
+  state: SessionState,
+  effective: ReadonlyMap<string, Effective>,
+  screen: OnScreen,
+): boolean | null {
+  const usable = state.entries
+    .filter((entry) => {
+      const e = effective.get(entry.id);
+      return !e?.reported && e?.state !== 'failed';
+    })
+    .map((entry) => entry.id);
+  const house = houseStartFor(usable, joinSkip);
+  if (!house) return null;
+  if (house.kind === 'join') {
+    const entry = state.entries.find((item) => item.id === house.hash);
+    if (!entry) return null;
+    setWaitingMessage(null);
+    notify(joiningText(house.labels), { kind: 'signal', icon: 'movil' });
+    markAutoTried(entry.id);
+    playEntry(entry, 'auto', { house: 'join' });
+    return true;
+  }
+  /* Ya se ve con otro dispositivo (se unió o le sigue): no se cambia nada solo. */
+  if (house.kind === 'together') return screen.hash ? false : null;
+  /* Otro dispositivo ve otra cosa: solo en un partido y con el reproductor parado (D-M2). */
+  if (state.kind !== 'match' || houseOverride === state.key) return null;
+  if (screen.hash && (screen.playing || screen.connecting)) return false;
+  setWaitingMessage(null);
+  patch({ stopped: true, autoVerified: false });
+  setHouseIdle({ labels: house.labels, title: house.title }, putHereForSession(state.key));
+  return false;
+}
+
+/** «Poner aquí»: arranca la fuente de siempre, ahora sí por la puerta (y ahí pregunta). */
+function putHereForSession(key: string | null): () => void {
+  return () => {
+    const current = sessionStore.get();
+    if (!key || current.key !== key) return;
+    houseOverride = key;
+    patch({ stopped: false, autoVerified: true, failureText: null });
+    const now = clock();
+    const effective = effectiveMap(current.entries, screenNow(), now);
+    const chosen = pickAutoSource(current.entries, effective, scanFinished(current.scan));
+    if (chosen) {
+      markAutoTried(chosen.id);
+      playEntry(chosen, 'user');
+      return;
+    }
+    tryAutoStart();
+  };
+}
+
+/** Se canceló la pregunta de la casa con una fuente de esta sesión. */
+function onHouseCancelled(hash: string): void {
+  const state = sessionStore.get();
+  if (!state.key || !state.entries.some((entry) => entry.id === hash)) return;
+  const screen = screenNow();
+  const playing = screen.hash !== null && state.entries.some((entry) => entry.id === screen.hash);
+  patch({ activeHash: playing ? screen.hash : null });
+  if (screen.hash && (screen.playing || screen.connecting)) return;
+  /* Se estaba empezando: queda parada, con la lista a la vista y el panel «otra cosa en casa». */
+  patch({ stopped: true, autoVerified: false, switchArmed: false });
+  const house = houseStartFor([]);
+  if (house?.kind === 'elsewhere')
+    setHouseIdle({ labels: house.labels, title: house.title }, putHereForSession(state.key));
+  notify(NOTHING_CHANGED, { kind: 'signal', icon: 'movil' });
+}
+
+/** Unirse a lo que sonaba en casa llegó tarde: como si no hubiera nada (pickAutoSource). */
+function onHouseJoinExpired(expired: JoinExpired): void {
+  const state = sessionStore.get();
+  if (expired.options.house !== 'join') return;
+  if (!state.key || !state.entries.some((entry) => entry.id === expired.channel.hash)) return;
+  joinSkip = new Set([...joinSkip, expired.channel.hash]);
+  sessionStore.set((current) => ({
+    ...current,
+    stopped: false,
+    autoVerified: drives(current),
+    entries: current.entries.map((entry) =>
+      entry.id === expired.channel.hash ? { ...entry, autoTried: false } : entry,
+    ),
+  }));
+  tryAutoStart();
+}
+
+/** El panel «otra cosa en casa» sigue a la casa: se va si el otro deja de ver y cambia si cambia. */
+function onHouseSessions(): void {
+  const state = sessionStore.get();
+  if (!state.key || !getPlayer().houseIdle) return;
+  const house = houseStartFor([]);
+  if (house?.kind === 'elsewhere')
+    setHouseIdle({ labels: house.labels, title: house.title }, putHereForSession(state.key));
+  else setHouseIdle(null);
+}
+
 function markAutoTried(hash: string): void {
   sessionStore.set((state) => ({
     ...state,
@@ -1049,7 +1185,7 @@ function maybeInitialSwitch(): void {
       icon: 'tv',
     },
   );
-  playEntry(next, 'auto');
+  playEntry(next, 'auto', continueOptions(state.activeHash));
 }
 
 function announceResearch(): void {
@@ -1088,7 +1224,11 @@ export function channelTitleFor(state: SessionState, entry: SourceEntry): string
   );
 }
 
-function playEntry(entry: SourceEntry, origin: PlayOrigin): void {
+function playEntry(
+  entry: SourceEntry,
+  origin: PlayOrigin,
+  house: Pick<PlayOptions, 'house' | 'others' | 'from'> = {},
+): void {
   const state = sessionStore.get();
   const number = numberOf(state, entry.id);
   const presentation = presentationOf(entry, webSources());
@@ -1122,6 +1262,9 @@ function playEntry(entry: SourceEntry, origin: PlayOrigin): void {
       ...(routeFor(state) ? { route: routeFor(state) } : {}),
       // Un hash pegado a mano no entra en Recientes (B-187); una IPTV tampoco (§4.6).
       ...(entry.origin === 'manual' || iptv ? { record: false } : {}),
+      // Varios dispositivos (docs/multidispositivo.md §2.4.1): el partido y la casa.
+      ...(state.kind === 'match' && match ? { match: match.id } : {}),
+      ...house,
     },
   );
   patch({
@@ -1233,7 +1376,7 @@ function handleSourceFailed(failure: SourceFailure): SourceFailedReply {
       // Cambio automático de fuente: un aviso háptico (HAPTIC_MAP), nunca la única señal.
       haptic('warning');
       markAutoTried(next.id);
-      playEntry(next, 'auto');
+      playEntry(next, 'auto', continueOptions(failure.channel.hash));
       return { next: true };
     }
     if (!finished)
@@ -1392,7 +1535,7 @@ function bridge(
       });
       haptic('warning');
       markAutoTried(target.id);
-      playEntry(target, 'auto');
+      playEntry(target, 'auto', continueOptions(failed.id));
       if (!paused) showBackToast(failed.id);
       const text = `${lead}: seguimos por AceStream${numbered ? ` (fuente ${number})` : ''}`;
       return { next: true, message: paused ? text : withBackHint(text, entries, failed.id) };
@@ -1422,7 +1565,7 @@ function bridge(
   });
   haptic('warning');
   dismissBackToast();
-  playEntry(target, 'auto');
+  playEntry(target, 'auto', continueOptions(failed.id));
   return {
     next: true,
     message:
