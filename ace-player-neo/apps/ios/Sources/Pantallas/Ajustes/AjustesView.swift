@@ -17,15 +17,14 @@ struct AjustesView: View {
     @Environment(\.modoDemo) private var modoDemo
     @State private var primeraVez = true
     @State private var ir: SeccionAjustes?
-    @State private var subir = 0
 
     var body: some View {
         ScrollViewReader { lector in
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Color.clear.frame(height: 0).id("arriba")
                     CabeceraVista("Ajustes") { EmptyView() }
                         .padding(.bottom, -16)
+                        .background(alignment: .top) { Color.clear.frame(height: 1).id("arriba") }
                     IndiceChips(actual: navegador.seccionAjustes, alElegir: elegir)
                     SeccionesAjustes()
                 }

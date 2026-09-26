@@ -33,9 +33,11 @@ final class FlujoAjustesUITests: XCTestCase {
     private func tocarChip(_ app: XCUIApplication, _ seccion: String) {
         let chip = elementoUI(app, IDUI.chip(seccion))
         XCTAssertTrue(chip.waitForExistence(timeout: 10), "No hay chip \(seccion)")
+        // Fuera de la pantalla, `isHittable` falla («activation point invalid»): se mira el marco.
+        let indice = elementoUI(app, IDUI.indiceAjustes)
         var intentos = 0
-        while !chip.isHittable && intentos < 6 {
-            elementoUI(app, IDUI.indiceAjustes).swipeLeft()
+        while chip.frame.maxX > app.frame.maxX - 8 && intentos < 8 {
+            arrastrar(indice, desde: CGVector(dx: 0.8, dy: 0.5), hasta: CGVector(dx: 0.3, dy: 0.5))
             intentos += 1
         }
         chip.tap()
