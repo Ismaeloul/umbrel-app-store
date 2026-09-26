@@ -66,3 +66,64 @@ tenga motor.
   la sesión compartida (D5) ni en el vigilante del Umbrel.
 - Medir antes de darlo por bueno: TTFF y cortes con motor local frente al
   Umbrel (el cuello de botella suele ser el enjambre, no el salto de red).
+
+## 5. VPN solo para el reproductor, como rescate
+
+Idea de Isma (26-sep-2026). A veces una fuente de AceStream o la IPTV se cae y
+vuelve a ir saliendo por una VPN. La idea es que eso pase solo, sin que la VPN
+afecte al acceso remoto.
+
+- **Túnel dividido:**
+  - Un contenedor VPN dentro del compose de la app, por ejemplo gluetun.
+  - El motor AceStream sale por él (`network_mode: service:vpn`) y el
+    servidor baja la IPTV por su proxy HTTP.
+  - La web, la app del iPhone y Tailscale NO pasan por la VPN.
+- **Proveedores:**
+  - Surfshark: Isma lo tiene pagado hasta finales de 2028. Va con WireGuard
+    y gluetun lo soporta directamente.
+  - Cloudflare WARP: gratis, pensado para quien no quiera pagar.
+  - Cualquier WireGuard con su fichero de configuración.
+  - Sin VPN: el valor por defecto.
+- **Modo rescate (recomendado):**
+  - Normalmente se sale sin VPN.
+  - Si una fuente no arranca o se cae, se reintenta sola por la VPN, como
+    un respaldo más: igual que el paso de IPTV a AceStream.
+  - Cuando vuelve a ir sin VPN, se vuelve.
+  - Por separado para AceStream y para la IPTV, porque algunos proveedores
+    de IPTV bloquean las VPN.
+- **Puertos:** no hace falta abrir ninguno.
+  - Sin puerto abierto se ve igual; solo se conecta con algo menos de gente.
+    En los partidos grandes no se nota.
+  - Surfshark y WARP no reenvían puertos. Si algún día se quiere la VPN
+    siempre encendida, mejor un proveedor que sí (ProtonVPN, AirVPN); gluetun
+    pasa el puerto al motor.
+  - En casa, abrir el 8621 en el router es una mejora opcional.
+- **Ajustes (solo en la web):** proveedor y claves, que se guardan cifradas
+  y no salen del Umbrel; estado; qué hacer si la VPN cae (parar o seguir sin
+  ella).
+- **Umbrel:** en el compose, `cap_add: NET_ADMIN` y `/dev/net/tun`.
+
+## 6. Un aparato propio para amigos (o para sacar la app del Umbrel)
+
+Idea de Isma (26-sep-2026). Montarle a un amigo su propio Ace Player Neo, con
+su IPTV, sus listas y sus gustos, sin compartir nada del de Isma.
+
+- **Aparato:** un mini PC x86.
+  - De segunda mano: ThinkCentre Tiny, OptiPlex Micro o EliteDesk Mini con
+    un i5, por 60-100 €.
+  - Nuevo: Intel N100 o N150 con 16 GB de RAM y SSD.
+  - Mejor que una Raspberry Pi: el motor AceStream que usamos
+    (`wafy80/acestream`) solo existe para amd64, y en ARM habría que tirar de
+    motores no oficiales.
+  - Siempre por cable de red.
+- **Sistema:**
+  - umbrelOS: tienda comunitaria de Isma y Tailscale de su tienda. Las
+    actualizaciones le llegan igual.
+  - Debian con Docker: más ligero, pero hace falta un compose propio y una
+    contraseña, porque hoy el inicio de sesión lo pone el app_proxy de
+    Umbrel.
+- **Coste para el amigo:** solo el aparato y la luz. Tailscale y WARP son
+  gratis.
+- **iPhone:** la IPA va sin firmar. Se instala con su propio Apple ID
+  (AltStore o Sideloadly) y, con cuenta gratuita, hay que renovarla cada 7
+  días.
