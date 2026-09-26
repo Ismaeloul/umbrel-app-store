@@ -7,7 +7,9 @@ import UIKit
 // capturas es estricta. Las cápsulas de directo y oro NO son cristal: llevan su color siempre (§0.4).
 // Varias piezas de cristal juntas (barra, fila de botones del vídeo) van dentro de un `GlassEffectContainer`.
 
-enum TipoCristal: Sendable { case denso, regular, video, videoBoton }
+/// `barra`: la barra de pestañas de la app, Liquid Glass de verdad (Isma: se transparenta y refracta como el
+/// cristal de iOS 26, sin el velo de la web que la dejaba blanca en claro; en oscuro, igual).
+enum TipoCristal: Sendable { case denso, regular, video, videoBoton, barra }
 
 enum CristalPalco {
     /// Interruptor de rendimiento: false = sólido en las filas de listas largas.
@@ -21,6 +23,7 @@ enum CristalPalco {
         case .regular: .regular.tint(soloEnOscuro(Palco.glass))
         case .video: .regular.tint(Palco.glassVideo)
         case .videoBoton: .regular.tint(Palco.glassVideo).interactive()
+        case .barra: .regular.interactive()
         }
     }
     /// El velo de la web encima del vidrio, solo en claro: `.glass { background: var(--glass) }` (72 %, denso
@@ -29,12 +32,12 @@ enum CristalPalco {
         switch tipo {
         case .denso: soloEnClaro(Palco.glassDense)
         case .regular: soloEnClaro(Palco.glass)
-        case .video, .videoBoton: Color.clear
+        case .video, .videoBoton, .barra: Color.clear
         }
     }
     static func solido(_ tipo: TipoCristal) -> Color {
         switch tipo {
-        case .denso, .regular: Palco.glassSolid
+        case .denso, .regular, .barra: Palco.glassSolid
         case .video, .videoBoton: Palco.glassVideoSolid
         }
     }
