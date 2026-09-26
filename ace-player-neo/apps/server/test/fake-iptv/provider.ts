@@ -23,7 +23,8 @@
    Control: `modo(id, …)` (`ok`, `down`, `401`, `404`, `busy`, `lento`,
    `corta-a-los:S` y `corta-a-los:S:pts`, que reanuda con otra base de
    PTS/PCR), `conexiones()` y `peticiones()`; también por HTTP en
-   `/__iptv/modo?id=&modo=`, `/__iptv/conexiones` y `/__iptv/peticiones`. */
+   `/__iptv/modo?id=&modo=`, `/__iptv/conexiones`, `/__iptv/peticiones` y
+   `/__iptv/reset` (todo en `ok`, cuenta activa y sin historial). */
 
 import http from 'node:http';
 import type { AddressInfo, Socket } from 'node:net';
@@ -380,7 +381,13 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
         } else if (path === '/__iptv/conexiones')
           json(res, { conexiones: controller.conexiones() });
         else if (path === '/__iptv/peticiones') json(res, { peticiones: controller.peticiones() });
-        else res.writeHead(404).end();
+        else if (path === '/__iptv/reset') {
+          /* Entre recorridos E2E: todos los canales bien, la cuenta activa y sin historial. */
+          controller.modo('*', 'ok');
+          controller.cuenta({ status: 'Active', auth: 1 });
+          controller.limpiarPeticiones();
+          json(res, { ok: true });
+        } else res.writeHead(404).end();
         return;
       }
       if (path === '/lista.m3u' || path === '/lista.m3u.gz') {

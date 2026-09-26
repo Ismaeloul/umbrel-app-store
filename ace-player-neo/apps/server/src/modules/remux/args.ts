@@ -24,6 +24,8 @@ export interface RemuxArgsInput {
   readonly origin?: 'engine' | 'iptv';
   /** La entrada del relé es HLS (lista) y no TS continuo. */
   readonly isHls?: boolean;
+  /** Sistema en el que corre ffmpeg (por defecto, el del proceso). */
+  readonly platform?: NodeJS.Platform;
 }
 
 /** Marca que lleva cada ffmpeg del remux en su línea de órdenes. */
@@ -43,6 +45,24 @@ function iptvInputArgs(input: RemuxArgsInput): string[] {
     String(IPTV_FFMPEG_RW_TIMEOUT_US),
     ...(input.isHls ? ['-live_start_index', '-3'] : []),
   ];
+}
+
+/**
+ * `-hls_flags` de la 0.6.59. En Windows (solo el PC de desarrollo y el E2E) sin
+ * `temp_file`: ffmpeg escribe index.m3u8.tmp y lo renombra encima de la lista,
+ * y en Windows ese renombrado falla en cuanto el backend la está leyendo (lo
+ * hace en cada aviso de la carpeta); ffmpeg no lo reintenta y la lista se queda
+ * con el primer segmento para siempre. En Linux (el Umbrel) no cambia nada.
+ */
+export function hlsFlags(platform: NodeJS.Platform): string {
+  return platform === 'win32'
+    ? 'delete_segments+independent_segments+omit_endlist'
+    : 'delete_segments+independent_segments+temp_file+omit_endlist';
+}
+
+/** Ruta de index.m3u8 para ffmpeg, siempre con «/» (también en Windows). */
+export function playlistPath(dir: string): string {
+  return path.join(dir, 'index.m3u8').replaceAll(path.win32.sep, path.posix.sep);
 }
 
 export function buildRemuxArgs(input: RemuxArgsInput): string[] {
@@ -116,11 +136,14 @@ export function buildRemuxArgs(input: RemuxArgsInput): string[] {
     '-hls_delete_threshold',
     '2',
     '-hls_flags',
-    'delete_segments+independent_segments+temp_file+omit_endlist',
+    hlsFlags(input.platform ?? process.platform),
     '-hls_segment_type',
     'fmp4',
     '-hls_fmp4_init_filename',
     'init.mp4',
-    path.join(input.dir, 'index.m3u8'),
+    /* Con barras «/»: ffmpeg deja init.mp4 junto a la lista solo si encuentra
+       una «/» en su ruta; con las «\» de Windows lo escribía en el directorio
+       de trabajo del backend (en Linux, el del Umbrel, no cambia nada). */
+    playlistPath(input.dir),
   ];
 }

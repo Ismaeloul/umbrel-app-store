@@ -200,6 +200,13 @@ jobs:
             pnpm exec playwright install --with-deps chrome
           fi
           google-chrome --version
+      # El remux de la IPTV (e2e/iptv.spec.ts) necesita un ffmpeg de verdad.
+      - name: ffmpeg
+        if: steps.hay.outputs.e2e == 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          ffmpeg -hide_banner -version | head -1
       - name: Playwright
         if: steps.hay.outputs.e2e == 'true'
         working-directory: ace-player-neo/apps/web

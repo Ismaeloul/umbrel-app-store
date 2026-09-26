@@ -3,7 +3,8 @@
    fondo y `listen`), con dos diferencias: escucha en `::` (ver abajo) y el
    cliente saliente (`net`)
    resuelve y «descarga» la lista M3U de pruebas (catalogo.ts) sin salir a
-   internet. El filtro anti-SSRF sigue entero: la lista va a un dominio
+   internet, y lleva `iptv.ace-e2e.example` al proveedor IPTV falso de la pila
+   (support/iptv.ts, en [::1]:E2E_PORTS.iptv). El filtro anti-SSRF sigue entero: la lista va a un dominio
    reservado que se resuelve a una IP pública, y cualquier URL privada se
    bloquea igual que en producción.
 
@@ -21,7 +22,16 @@ import { createNetClient } from '../../../server/src/modules/net/index.js';
 import { nodeTransport, systemResolver } from '../../../server/src/modules/net/transport.js';
 import type { NetResolver, NetTransport } from '../../../server/src/modules/net/types.js';
 import { createServices } from '../../../server/src/services.js';
+import {
+  FAKE_IPTV_HOST,
+  fakeIptvResolver,
+  fakeIptvTransport,
+} from '../../../server/test/fake-iptv/net.js';
 import { LISTA_HOST, LISTA_URL, listaM3u } from './catalogo.ts';
+import { readPorts } from './puertos.ts';
+
+const iptvResolver = fakeIptvResolver({ others: 'real' });
+const iptvTransport = fakeIptvTransport({ host: '::1', port: readPorts().iptv });
 
 /* Una IP pública cualquiera (no se conecta nunca: el transporte de abajo
    contesta antes). Tiene que ser pública para pasar el filtro anti-SSRF. */
@@ -30,6 +40,7 @@ const IP_PUBLICA = '93.184.215.14';
 const resolver: NetResolver = {
   lookup(hostname) {
     if (hostname === LISTA_HOST) return Promise.resolve([{ address: IP_PUBLICA, family: 4 }]);
+    if (hostname === FAKE_IPTV_HOST) return iptvResolver.lookup(hostname);
     return systemResolver.lookup(hostname);
   },
 };
@@ -37,6 +48,7 @@ const resolver: NetResolver = {
 const LISTA_PATH = new URL(LISTA_URL).pathname;
 
 const transport: NetTransport = (request) => {
+  if (request.url.hostname === FAKE_IPTV_HOST) return iptvTransport(request);
   if (request.url.hostname !== LISTA_HOST) return nodeTransport(request);
   if (request.url.pathname !== LISTA_PATH) {
     return Promise.resolve({ status: 404, headers: {}, body: Readable.from([]) });

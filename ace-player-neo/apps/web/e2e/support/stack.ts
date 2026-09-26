@@ -5,9 +5,11 @@
    1. motores.ts: motor AceStream falso principal en 127.0.0.N:6878
       (puertos.ts) con su API de control /__fake/*, el motor falso del
       comprobador y engine_control falso en 127.0.0.N:3001;
-   2. backend.ts: el backend con DATA_DIR temporal, AUTO_SYNC=false y la
+   2. iptv.ts: el proveedor IPTV falso (apps/server/test/fake-iptv) en
+      [::1]:<iptv>, con su control /__iptv/*;
+   3. backend.ts: el backend con DATA_DIR temporal, AUTO_SYNC=false y la
       agenda de demostración (no sale nada a internet);
-   3. la web con Vite (vite.e2e.config.ts: sin HMR): proxy de /api al
+   4. la web con Vite (vite.e2e.config.ts: sin HMR): proxy de /api al
       backend y de /ace/ y /content/ al motor (VITE_ENGINE), como nginx en
       el NAS.
 
@@ -22,7 +24,14 @@
    mata el árbol de procesos al acabar), apaga todo y borra los datos. */
 
 import { spawn, type ChildProcess } from 'node:child_process';
-import { createWriteStream, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
+import {
+  createWriteStream,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
@@ -35,6 +44,7 @@ import {
   readPorts,
 } from './puertos.ts';
 import { cacheDelMotorS } from './catalogo.ts';
+import { carpetaDeLaPila } from './pila.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = path.resolve(HERE, '../..');
@@ -64,6 +74,9 @@ if (!process.env.E2E_KEEP_DATA) {
 }
 const work = mkdtempSync(path.join(os.tmpdir(), 'ace-e2e-'));
 const dataDir = path.join(work, 'data');
+/* Los recorridos buscan aquí (datos y logs de cada pieza) que ninguna
+   credencial IPTV se haya escrito en claro (iptv.spec.ts). */
+writeFileSync(carpetaDeLaPila(ports), work, 'utf8');
 
 interface Piece {
   readonly name: string;
@@ -94,7 +107,10 @@ async function shutdown(code: number): Promise<never> {
     }
     await new Promise((resolve) => setTimeout(resolve, 1500));
     for (const piece of pieces) if (piece.child?.exitCode === null) piece.child.kill();
-    if (!process.env.E2E_KEEP_DATA) rmSync(work, { recursive: true, force: true });
+    if (!process.env.E2E_KEEP_DATA) {
+      rmSync(work, { recursive: true, force: true });
+      rmSync(carpetaDeLaPila(ports), { force: true });
+    }
   }
   process.exit(code);
 }
@@ -184,6 +200,15 @@ try {
   log(
     `motores falsos en ${MOTOR_HOST}:${MOTOR_PORT} (control ${ports.control}, caché ${cacheDelMotorS()} s) y [::]:${ports.scanner}`,
   );
+
+  await start({
+    name: 'iptv',
+    args: [TSX_CLI, path.join(HERE, 'iptv.ts')],
+    env: { ...process.env },
+    ready: `http://[::1]:${ports.iptv}/__iptv/conexiones`,
+    child: null,
+  });
+  log(`proveedor IPTV falso en [::1]:${ports.iptv} (iptv.ace-e2e.example:8080)`);
 
   await start({
     name: 'backend',
