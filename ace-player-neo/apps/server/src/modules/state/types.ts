@@ -28,6 +28,7 @@ import type {
   StateScope,
   StateV1,
   DevicesFile,
+  IptvFile,
   SessionsFile,
 } from '@ace/shared';
 import type { z } from 'zod';
@@ -61,6 +62,14 @@ export interface JsonDocumentStore<T> {
   read(): T;
   /** Aplica el cambio en orden, lo valida con su esquema y lo persiste antes de resolver. */
   update<R>(mutator: (draft: T) => R | Promise<R>): Promise<R>;
+}
+
+/** Documento de v2/ que además se puede purgar (`.bak`, restos y copias apartadas). */
+export interface PurgeableDocumentStore<T> extends JsonDocumentStore<T> {
+  /** Borra `.bak`, `.tmp` y las copias `.corrupt-*` (el documento vigente no se toca). */
+  purge(): Promise<void>;
+  /** Espera a que no quede nada en su cola. */
+  flush(): Promise<void>;
 }
 
 export interface StateService extends Lifecycle {
@@ -120,6 +129,8 @@ export interface StateService extends Lifecycle {
   devices(): JsonDocumentStore<DevicesFile>;
   /** v2/sessions.json (playback: sesiones que hay que parar si el proceso muere). */
   sessions(): JsonDocumentStore<SessionsFile>;
+  /** v2/iptv.json (iptv, docs/iptv.md §2): configuración con los secretos cifrados, 0600. */
+  iptv(): PurgeableDocumentStore<IptvFile>;
 
   /** Espera a que la cola quede vacía (apagado y tests). */
   flush(): Promise<void>;

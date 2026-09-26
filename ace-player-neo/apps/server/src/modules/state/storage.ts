@@ -14,6 +14,7 @@
    síncrona (arranque y fachada de la 0.6.59, que era síncrona). */
 
 import {
+  chmodSync,
   closeSync,
   constants as fsConstants,
   copyFileSync,
@@ -26,7 +27,7 @@ import {
   statSync,
   writeSync,
 } from 'node:fs';
-import { copyFile, open, rename, rm } from 'node:fs/promises';
+import { chmod, copyFile, open, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 
 /* En Windows (solo desarrollo y tests) un antivirus o el indexador pueden
@@ -72,8 +73,8 @@ export function isMissing(error: unknown): boolean {
 
 // --- fsync ---
 
-async function writeAndSync(file: string, text: string): Promise<void> {
-  const handle = await open(file, 'w');
+async function writeAndSync(file: string, text: string, mode?: number): Promise<void> {
+  const handle = await open(file, 'w', mode);
   try {
     await handle.writeFile(text, 'utf8');
     await handle.sync();
@@ -82,8 +83,8 @@ async function writeAndSync(file: string, text: string): Promise<void> {
   }
 }
 
-function writeAndSyncSync(file: string, text: string): void {
-  const fd = openSync(file, 'w');
+function writeAndSyncSync(file: string, text: string, mode?: number): void {
+  const fd = openSync(file, 'w', mode);
   try {
     writeSync(fd, text, null, 'utf8');
     fsyncSync(fd);
@@ -135,6 +136,13 @@ function syncDirSync(dir: string): void {
   } catch {}
 }
 
+/* chmod sin romper nada donde no aplica (Windows en desarrollo). */
+function chmodQuiet(file: string, mode: number): void {
+  try {
+    chmodSync(file, mode);
+  } catch {}
+}
+
 export function fileExists(file: string): boolean {
   try {
     statSync(file);
@@ -149,6 +157,11 @@ export function fileExists(file: string): boolean {
 export interface AtomicWriteOptions {
   /** Ruta de la copia del contenido anterior (`<destino>.bak`); null = sin copia. */
   readonly backup: string | null;
+  /**
+   * Permisos del fichero y de su copia (0o600 para la IPTV, docs/iptv.md
+   * §2.1). Sin él, los de siempre (umask).
+   */
+  readonly mode?: number;
 }
 
 /** Escritura atómica asíncrona (la cola de mutaciones). */
@@ -158,7 +171,8 @@ export async function writeAtomic(
   options: AtomicWriteOptions,
 ): Promise<void> {
   const tmp = `${target}.tmp`;
-  await writeAndSync(tmp, text);
+  await writeAndSync(tmp, text, options.mode);
+  if (options.mode !== undefined) await chmod(tmp, options.mode).catch(() => undefined);
   if (options.backup) {
     const backupTmp = `${options.backup}.tmp`;
     let copied = true;
@@ -169,6 +183,7 @@ export async function writeAtomic(
       copied = false; // primera escritura: no hay nada que copiar
     }
     if (copied) {
+      if (options.mode !== undefined) await chmod(backupTmp, options.mode).catch(() => undefined);
       await syncFile(backupTmp);
       await retrying(() => rename(backupTmp, options.backup as string));
     }
@@ -180,7 +195,8 @@ export async function writeAtomic(
 /** Lo mismo, síncrono (arranque y fachada de la 0.6.59). */
 export function writeAtomicSync(target: string, text: string, options: AtomicWriteOptions): void {
   const tmp = `${target}.tmp`;
-  writeAndSyncSync(tmp, text);
+  writeAndSyncSync(tmp, text, options.mode);
+  if (options.mode !== undefined) chmodQuiet(tmp, options.mode);
   if (options.backup) {
     const backupTmp = `${options.backup}.tmp`;
     let copied = true;
@@ -191,6 +207,7 @@ export function writeAtomicSync(target: string, text: string, options: AtomicWri
       copied = false;
     }
     if (copied) {
+      if (options.mode !== undefined) chmodQuiet(backupTmp, options.mode);
       syncFileSync(backupTmp);
       retryingSync(() => renameSync(backupTmp, options.backup as string));
     }

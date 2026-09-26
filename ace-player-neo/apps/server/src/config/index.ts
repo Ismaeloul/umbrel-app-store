@@ -14,7 +14,7 @@
      fallar el arranque (`ConfigError`): un `ACE_SEED` demasiado corto. */
 
 import path from 'node:path';
-import { DEFAULT_SAME_CHANNEL_POLICY, type SameChannelPolicy } from '@ace/shared';
+import { DEFAULT_SAME_CHANNEL_POLICY, V2_FILES, type SameChannelPolicy } from '@ace/shared';
 import { LOG_LEVELS, type LogLevel } from '../core/logger.js';
 import { MIN_SEED_LENGTH, deriveKeys, ephemeralSeed, type DerivedKeys } from './keys.js';
 
@@ -67,6 +67,13 @@ export interface AppConfig {
     readonly diagnosticsFile: string;
     /** Índice y PNG de escudos y logos (`<v2Dir>/teams`, módulo `teams`). */
     readonly teamsDir: string;
+    /** IPTV (docs/iptv.md §2.1): configuración con los secretos cifrados (0600). */
+    readonly iptvFile: string;
+    /** Carpeta de la IPTV (0700): catálogo y guía cifrados y, sin semilla, la clave. */
+    readonly iptvDir: string;
+    readonly iptvCatalogFile: string;
+    readonly iptvGuideFile: string;
+    readonly iptvKeyFile: string;
   };
   readonly engine: {
     readonly host: string;
@@ -274,6 +281,11 @@ export function loadConfig(env: Env = process.env): LoadedConfig {
       sessionsFile: path.join(v2Dir, 'sessions.json'),
       diagnosticsFile: path.join(v2Dir, 'diagnostics.jsonl'),
       teamsDir: path.join(v2Dir, 'teams'),
+      iptvFile: path.join(dataDir, V2_FILES.iptv),
+      iptvDir: path.join(dataDir, V2_FILES.iptvDir),
+      iptvCatalogFile: path.join(dataDir, V2_FILES.iptvCatalog),
+      iptvGuideFile: path.join(dataDir, V2_FILES.iptvGuide),
+      iptvKeyFile: path.join(dataDir, V2_FILES.iptvKey),
     },
     engine: {
       host: sanitizeHost(env.ACESTREAM_HOST, DEFAULTS.acestreamHost),
