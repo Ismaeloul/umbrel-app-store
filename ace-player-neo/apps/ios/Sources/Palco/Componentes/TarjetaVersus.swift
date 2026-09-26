@@ -1,5 +1,34 @@
 import SwiftUI
 
+/// Lo que cada sitio de la web cambia de `<VersusCard>` con su CSS (agenda.css: `.agenda-row .versus` a 16:10 con
+/// los escudos al 45 %; el héroe a sangre de alto fijo, esquinas de arriba 0, escudos al 52 % y a escala 1; la
+/// valla ancha con su velo). Por defecto, la tarjeta de ui/VersusCard.css tal cual.
+struct DisposicionVersus: Hashable, Sendable {
+    /// `aspect-ratio` (16:9 por defecto); `nil` con `alto`.
+    var proporcion: CGFloat? = 16 / 9
+    /// Alto fijo (el héroe de la agenda, a3 §4.7 y §12).
+    var alto: CGFloat?
+    /// `--versus-crest-y` y la escala de los escudos, si el sitio los cambia.
+    var centroEscudos: CGFloat?
+    var escalaEscudos: CGFloat?
+    /// Radio de las esquinas de arriba (0 en el héroe a sangre); `nil`, el del tamaño.
+    var radioArriba: CGFloat?
+    /// Relleno de la fila de arriba (el héroe la baja a safeTop + 76); `nil`, el del tamaño.
+    var rellenoArriba: CGFloat?
+    /// Sitio a la derecha de los nombres (la cápsula «Marcador» de la agenda: 104 o 60). Sin él, «En pantalla»
+    /// deja el 34 %.
+    var reservaNombres: CGFloat = 0
+    /// El velo de la valla ancha (agenda.css ≥ 768).
+    var veloValla = false
+    /// `--shadow-2` en vez de la sombra de cartel (el héroe).
+    var sombraGrande = false
+    /// Partido del que esta tarjeta es origen del vuelo al teatro (`.piezaVuelo` de la tarjeta y de sus escudos;
+    /// solo el elemento desde el que se abre, a3 §4.8).
+    var origenVuelo: String?
+
+    init() {}
+}
+
 /// `<VersusCard>` de la web: tarjeta 16:9 con dos mitades de club (a1 §10.15; ui/VersusCard.css). Isla oscura
 /// entera. SIN marcador (regla de la web). `senal` es la cápsula de señal de arriba a la derecha.
 struct TarjetaVersus<Senal: View>: View {
@@ -8,14 +37,24 @@ struct TarjetaVersus<Senal: View>: View {
     let datos: DatosVersus
     let tamano: Tamano
     let seleccionada: Bool
+    let disposicion: DisposicionVersus
     let senal: Senal
     @Environment(\.maquetacion) private var maquetacion
     @State private var ancho: CGFloat = 0
 
     init(_ datos: DatosVersus, tamano: Tamano = .md, seleccionada: Bool = false, @ViewBuilder senal: () -> Senal) {
+        self.init(datos, tamano: tamano, disposicion: DisposicionVersus(), seleccionada: seleccionada, senal: senal)
+    }
+
+    /// Con lo que cambia el sitio (la agenda).
+    init(
+        _ datos: DatosVersus, tamano: Tamano, disposicion: DisposicionVersus, seleccionada: Bool = false,
+        @ViewBuilder senal: () -> Senal
+    ) {
         self.datos = datos
         self.tamano = tamano
         self.seleccionada = seleccionada
+        self.disposicion = disposicion
         self.senal = senal()
     }
 
@@ -32,30 +71,47 @@ struct TarjetaVersus<Senal: View>: View {
 
     var body: some View {
         let m = medidas
-        let forma = RoundedRectangle(cornerRadius: m.radio, style: .circular)
+        let d = disposicion
+        let forma = UnevenRoundedRectangle(
+            topLeadingRadius: d.radioArriba ?? m.radio, bottomLeadingRadius: m.radio, bottomTrailingRadius: m.radio,
+            topTrailingRadius: d.radioArriba ?? m.radio, style: .circular)
         ZStack {
-            FondoVersus(local: datos.mitadLocal, visitante: datos.mitadVisitante, terminado: datos.terminado)
-            ColocarEnFraccion(x: 0.5, y: m.centroEscudos) {
-                BloqueEscudos(datos, tamano: m.escudo).scaleEffect(m.escalaEscudos)
+            FondoVersus(local: datos.mitadLocal, visitante: datos.mitadVisitante, terminado: datos.terminado,
+                        valla: d.veloValla)
+                .allowsHitTesting(false)  // los degradados se escalan más allá de la tarjeta
+            ColocarEnFraccion(x: 0.5, y: d.centroEscudos ?? m.centroEscudos) {
+                BloqueEscudos(datos, tamano: m.escudo)
+                    .scaleEffect(d.escalaEscudos ?? m.escalaEscudos)
+                    .modifier(OrigenVuelo(pieza: .escudos, partido: d.origenVuelo,
+                                          contenido: .escudos(datos, tamano: m.escudo)))
             }
             capas(m)
         }
-        .aspectRatio(16 / 9, contentMode: .fit)
+        .modifier(MarcoTarjetaVersus(proporcion: d.proporcion, alto: d.alto))
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { ancho = $0 }
         .clipShape(forma)
-        .overlay { if seleccionada { forma.strokeBorder(Palco.accent, lineWidth: 2) } }
+        .contentShape(forma)
+        .overlay { if seleccionada { RoundedRectangle(cornerRadius: m.radio).strokeBorder(Palco.accent, lineWidth: 2) } }
         .background { if datos.enPantalla { forma.stroke(Palco.accent, lineWidth: 4) } }  // `0 0 0 2px --accent`
-        .sombra(.s3, forma: forma)
+        .sombra(d.sombraGrande ? .s2 : .s3, forma: forma)
         .foregroundStyle(Color.white)
         .islaOscura()
+        .modifier(OrigenVuelo(pieza: .tarjeta, partido: d.origenVuelo, contenido: nil))
+    }
+
+    /// «En pantalla» deja el 34 % a la derecha salvo que el sitio reserve lo suyo (la cápsula «Marcador»).
+    private var reservaNombres: CGFloat {
+        if disposicion.reservaNombres > 0 { return disposicion.reservaNombres }
+        return datos.enPantalla ? ancho * 0.34 : 0
     }
 
     @ViewBuilder private func capas(_ m: MedidasVersus) -> some View {
         ArribaVersus(datos: datos, grande: m.grande, senal: senal)
             .padding(m.relleno)
+            .padding(.top, (disposicion.rellenoArriba ?? m.relleno) - m.relleno)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         PieVersus(datos: datos, medidas: m, siglas: datos.enPantalla && ancho > 0 && ancho < 300)
-            .padding(.trailing, datos.enPantalla ? ancho * 0.34 : 0)
+            .padding(.trailing, reservaNombres)
             .padding(m.relleno)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
         if datos.enPantalla {
@@ -139,11 +195,41 @@ struct ColocarEnFraccion: Layout {
     }
 }
 
+/// `aspect-ratio` o alto fijo.
+private struct MarcoTarjetaVersus: ViewModifier {
+    let proporcion: CGFloat?
+    let alto: CGFloat?
+
+    func body(content: Content) -> some View {
+        if let alto {
+            content.frame(height: alto)
+        } else {
+            content.aspectRatio(proporcion ?? 16 / 9, contentMode: .fit)
+        }
+    }
+}
+
+/// `.piezaVuelo` solo en la tarjeta desde la que se abre el partido.
+private struct OrigenVuelo: ViewModifier {
+    let pieza: PiezaVuelo
+    let partido: String?
+    let contenido: ContenidoPieza?
+
+    func body(content: Content) -> some View {
+        if let partido {
+            content.piezaVuelo(pieza, partido: partido, contenido: contenido)
+        } else {
+            content
+        }
+    }
+}
+
 /// Las dos mitades con sus luces y el velo (VersusCard.css `.versus__half--*`, `.versus__veil`).
 private struct FondoVersus: View {
     let local: RGB
     let visitante: RGB
     let terminado: Bool
+    let valla: Bool
 
     var body: some View {
         ZStack {
@@ -152,8 +238,33 @@ private struct FondoVersus: View {
                 MitadVersus(local: false, color: visitante)
             }
             .opacity(terminado ? 0.72 : 1)
-            VeloVersus()
+            if valla { VeloValla() } else { VeloVersus() }
         }
+    }
+}
+
+/// Velo de la valla ancha (agenda.css ≥ 768): `linear(180°: .36 · 0 24 % · 0 52 % · .5)` +
+/// `radial(64% 80% at 0 100%, .6 → 72 %)` + `radial(40% 60% at 50% 46%, .22 → 70 %)`.
+private struct VeloValla: View {
+    @State private var caja = CGSize(width: 1, height: 1)
+
+    private static let paradas: [Gradient.Stop] = [
+        Gradient.Stop(color: Color.black.opacity(0.36), location: 0),
+        Gradient.Stop(color: Color.black.opacity(0), location: 0.24),
+        Gradient.Stop(color: Color.black.opacity(0), location: 0.52),
+        Gradient.Stop(color: Color.black.opacity(0.5), location: 1),
+    ]
+
+    var body: some View {
+        ZStack {
+            LinearGradient(stops: VeloValla.paradas, startPoint: .top, endPoint: .bottom)
+            Degradado.elipse(Color.black.opacity(0.6), radioX: 0.64 * caja.width, radioY: 0.8 * caja.height,
+                             hasta: 0.72, centro: .bottomLeading)
+            Degradado.elipse(Color.black.opacity(0.22), radioX: 0.4 * caja.width, radioY: 0.6 * caja.height,
+                             hasta: 0.7, centro: UnitPoint(x: 0.5, y: 0.46))
+        }
+        .clipped()
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { caja = $0 }
     }
 }
 
@@ -217,6 +328,7 @@ private struct ArribaVersus<Senal: View>: View {
                     .environment(\.trackingCapsulaEm, 0.06)
                 if datos.tuEquipo { MarcaTuEquipo(grande: grande) }
             }
+            .fixedSize()  // el chip de cuándo nunca se parte: se recorta antes la palabra de la señal
             Spacer(minLength: 0)
             senal
         }
