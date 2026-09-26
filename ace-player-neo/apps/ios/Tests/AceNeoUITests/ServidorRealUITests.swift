@@ -265,13 +265,7 @@ final class ServidorRealUITests: XCTestCase {
     @MainActor
     private func olvidar(_ app: XCUIApplication, _ servidor: ServidorDePruebas) async throws {
         let antes = try await servidor.dispositivos().filter { !$0.revocado && $0.plataforma == "ios" }.map(\.id)
-        let boton = elementoUI(app, IDUI.botonOlvidarEsteIPhone)
-        traerALaVista(app, boton)
-        boton.tap()
-        try exigir(conTextoUI(app, "¿Olvidar? Pulsa otra vez").waitForExistence(timeout: 3), "No se arma")
-        captura(app, "e2e-06-olvidar-armado")
-        boton.tap()
-        let fuera = elementoUI(app, IDUI.pantalla("emparejar")).waitForExistence(timeout: 20)
+        let fuera = try await dosToquesEnOlvidar(app)
         // Emparejar aparece al empezar el fundido de salida (a2 §23.3): la captura, cuando el armazón ya se ha ido.
         let sinArmazon = esperarQueDesaparezca(elementoUI(app, IDUI.armazon))
         captura(app, "e2e-07-vuelta-a-emparejar")
@@ -282,6 +276,32 @@ final class ServidorRealUITests: XCTestCase {
         let despues = try await servidor.dispositivos().filter { !$0.revocado && $0.plataforma == "ios" }.map(\.id)
         try exigir(despues.count < antes.count, "El backend sigue dando por emparejado este iPhone")
         try await emparejarAsentado(app)
+    }
+
+    /// «Olvidar este iPhone» se arma con el primer toque y se desarma a los 3 s (SegundoToque). En la CI una
+    /// búsqueda por texto y una captura entre los dos toques pasaban de 3 s y el segundo toque llegaba desarmado
+    /// (36252974586, primer intento). Ahora el segundo toque va justo después de leer la etiqueta del botón, y si
+    /// aun así llega tarde se vuelve a armar (hasta tres veces). Ya no hay captura del botón armado: era lo que
+    /// retrasaba el segundo toque. Si una vuelta no sale de la app, queda «e2e-06-olvidar-sin-salir».
+    @MainActor
+    private func dosToquesEnOlvidar(_ app: XCUIApplication) async throws -> Bool {
+        let boton = elementoUI(app, IDUI.botonOlvidarEsteIPhone)
+        let emparejar = elementoUI(app, IDUI.pantalla("emparejar"))
+        var armadoAlgunaVez = false
+        for _ in 0..<3 {
+            traerALaVista(app, boton)
+            guard boton.exists else { break }
+            boton.tap()
+            let armado: Bool = boton.exists && boton.label.contains("Pulsa otra vez")
+            if armado {
+                armadoAlgunaVez = true
+                boton.tap()
+            }
+            if emparejar.waitForExistence(timeout: 12) { return true }
+            captura(app, "e2e-06-olvidar-sin-salir")
+        }
+        try exigir(armadoAlgunaVez, "«Olvidar este iPhone» no se arma con el primer toque. \(estado(app))")
+        return emparejar.exists
     }
 
     /// Pasado el cruce (a2 §27.2), Emparejar cabe en la pantalla. Antes se quedaba en 776 pt de ancho en un iPhone
