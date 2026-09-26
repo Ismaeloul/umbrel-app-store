@@ -71,32 +71,51 @@ struct PalabrasSaludTests {
 }
 
 struct RejillaSaludTests {
-    @Test func losOchoServiciosConSuDetalle() throws {
-        let filas = ModeloSalud.filas(try SoporteSalud.salud(), motorEnVivo: nil, ahora: SoporteSalud.ahora,
-                                      calendario: SoporteSalud.utc)
+    private func porId() throws -> [ServicioSalud: FilaServicio] {
+        SoporteSalud.porId(ModeloSalud.filas(try SoporteSalud.salud(), motorEnVivo: nil, ahora: SoporteSalud.ahora,
+                                             calendario: SoporteSalud.utc))
+    }
+
+    private func detalle(_ por: [ServicioSalud: FilaServicio], _ id: ServicioSalud) -> String {
+        por[id]?.detalle ?? ""
+    }
+
+    @Test func losOchoServiciosEnSuOrden() throws {
+        let filas: [FilaServicio] = ModeloSalud.filas(try SoporteSalud.salud(), motorEnVivo: nil, ahora: SoporteSalud.ahora)
         let nombres: [String] = filas.map { (f: FilaServicio) -> String in f.nombre }
         let esperados: [String] = ["Backend", "Motor principal", "Segundo motor", "IA local", "Agenda",
                                    "Directorios M3U", "Datos guardados", "Reproducción"]
         #expect(nombres == esperados)
-        let por: [ServicioSalud: FilaServicio] = SoporteSalud.porId(filas)
-        let backend: String? = por[ServicioSalud.backend]?.detalle
+    }
+
+    @Test func detalleDeCadaServicio() throws {
+        let por: [ServicioSalud: FilaServicio] = try porId()
+        let backend: String = detalle(por, ServicioSalud.backend)
         #expect(backend == "v0.7.0 · 1 h activo")
-        let motor: FilaServicio? = por[ServicioSalud.engine]
-        #expect(motor?.detalle == "Aceptando reproducción · versión 3.2.3")
-        #expect(motor?.notaAviso == true)
-        let segundo: String? = por[ServicioSalud.scanner]?.detalle
+        let motor: String = detalle(por, ServicioSalud.engine)
+        #expect(motor == "Aceptando reproducción · versión 3.2.3")
+        let segundo: String = detalle(por, ServicioSalud.scanner)
         #expect(segundo == "0 trabajos · 0 en cola")
-        let ia: FilaServicio? = por[ServicioSalud.ai]
-        #expect(ia?.detalle == "Sin configurar")
-        #expect(ia?.palabra == "Desactivado")
-        let agenda: String? = por[ServicioSalud.agenda]?.detalle
+        let ia: String = detalle(por, ServicioSalud.ai)
+        #expect(ia == "Sin configurar")
+        let agenda: String = detalle(por, ServicioSalud.agenda)
         #expect(agenda == "120 partidos · 3 preparados")
-        let listas: String? = por[ServicioSalud.directories]?.detalle
+        let listas: String = detalle(por, ServicioSalud.directories)
         #expect(listas == "2 canales · 1 lista")
-        let reproduccion: FilaServicio? = por[ServicioSalud.playback]
-        #expect(reproduccion?.detalle == "1 sesión · 2 visores")
-        #expect(reproduccion?.nota == "2 conexiones en tiempo real · 1 en remux (iPhone).")
-        #expect(reproduccion?.notaAviso == false)
+        let reproduccion: String = detalle(por, ServicioSalud.playback)
+        #expect(reproduccion == "1 sesión · 2 visores")
+    }
+
+    @Test func notasYPalabras() throws {
+        let por: [ServicioSalud: FilaServicio] = try porId()
+        let palabraIA: String = por[ServicioSalud.ai]?.palabra ?? ""
+        #expect(palabraIA == "Desactivado")
+        let nota: String = por[ServicioSalud.playback]?.nota ?? ""
+        #expect(nota == "2 conexiones en tiempo real · 1 en remux (iPhone).")
+        let avisoReproduccion: Bool = por[ServicioSalud.playback]?.notaAviso ?? true
+        #expect(!avisoReproduccion)
+        let avisoMotor: Bool = por[ServicioSalud.engine]?.notaAviso ?? false
+        #expect(avisoMotor)
     }
 
     @Test func elMotorEnVivoMandaSobreLaFoto() throws {
