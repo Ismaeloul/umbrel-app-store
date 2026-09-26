@@ -115,12 +115,11 @@ private struct SeccionesAjustes: View {
     }
 
     private func tarjeta<Contenido: View>(_ s: SeccionAjustes, @ViewBuilder _ contenido: () -> Contenido) -> some View {
-        contenido()
-            .background(alignment: .top) {
-                Color.clear
-                    .frame(height: 1)
-                    .alignmentGuide(.top) { (d: ViewDimensions) -> CGFloat in d[.top] + 16 }
-                    .id(AjustesView.ancla(s))
-            }
+        // Un hueco transparente de 16 encima (con relleno negativo: no mueve nada) es el ancla del desplazamiento.
+        VStack(spacing: 0) {
+            Color.clear.frame(height: 16).id(AjustesView.ancla(s)).accessibilityHidden(true)
+            contenido()
+        }
+        .padding(.top, -16)
     }
 }

@@ -200,8 +200,11 @@ private struct VistaEmparejar: View {
                 FilaAvisoEmparejar(texto: aviso, tono: .acceso)
             }
             if let fila = modelo.fila {
-                FilaAvisoEmparejar(texto: fila, tono: .error)
-                    .background(alignment: .top) { anclaFila }
+                VStack(spacing: 0) {
+                    anclaFila
+                    FilaAvisoEmparejar(texto: fila, tono: .error)
+                }
+                .padding(.top, -(seguras.top + 16))
             }
             TarjetaCodigo(modelo: modelo, focoCodigo: $focoCodigo, focoCasa: $focoCasa, focoTailscale: $focoTailscale,
                           alEnviar: enviar)
@@ -213,11 +216,10 @@ private struct VistaEmparejar: View {
     /// Marca a 16 pt (más la zona segura) por encima de la fila de error: desplazar a ella deja la fila a 16 del
     /// borde de arriba (a2 §22.5).
     private var anclaFila: some View {
-        let desfase: CGFloat = seguras.top + 16
-        return Color.clear
-            .frame(height: 1)
-            .alignmentGuide(.top) { (d: ViewDimensions) -> CGFloat in d[.top] + desfase }
+        Color.clear
+            .frame(height: seguras.top + 16)
             .id("ancla-fila")
+            .accessibilityHidden(true)
     }
 
     private var textoAviso: String? {

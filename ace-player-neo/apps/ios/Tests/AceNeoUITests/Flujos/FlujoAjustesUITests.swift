@@ -57,7 +57,7 @@ final class FlujoAjustesUITests: XCTestCase {
     func testLosChipsLlevanASuSeccion() throws {
         let app = abrirAjustes()
         captura(app, "ajustes-390x844")
-        for seccion in ["apariencia", "motor", "acerca", "listas"] {
+        for seccion in ["apariencia", "motor", "dispositivos", "listas"] {
             tocarChip(app, seccion)
             comprobarArriba(app, seccion)
             captura(app, "ajustes-\(seccion)")
