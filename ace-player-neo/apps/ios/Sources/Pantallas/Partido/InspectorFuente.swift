@@ -54,13 +54,18 @@ struct InspectorFuente: View {
     }
 
     @ViewBuilder private func acciones(_ o: ObjetivoInspector) -> some View {
-        let favorito = video.datos.biblioteca.datos?.favorites.contains { $0.id == o.hash } ?? false
-        AccionInspector(favorito ? "En favoritos" : "Favorito", icono: favorito ? .starF : .star, pulsado: favorito) {
+        // Títulos e iconos con su tipo, fuera de la llamada: con los ternarios dentro tardaba más de 200 ms en
+        // tiparse en la CI (36230716702).
+        let favorito: Bool = video.datos.biblioteca.datos?.favorites.contains { $0.id == o.hash } ?? false
+        let tituloFavorito: String = favorito ? "En favoritos" : "Favorito"
+        let iconoFavorito: NombreIcono = favorito ? .starF : .star
+        AccionInspector(tituloFavorito, icono: iconoFavorito, pulsado: favorito) {
             alternarFavorito(o, guardado: favorito)
         }
         if enPartido {
-            let rebuscando = video.fuentes.rebuscando
-            AccionInspector(rebuscando ? "Rebuscando…" : "Rebuscar", icono: .refresh, girando: rebuscando) {
+            let rebuscando: Bool = video.fuentes.rebuscando
+            let tituloRebuscar: String = rebuscando ? "Rebuscando…" : "Rebuscar"
+            AccionInspector(tituloRebuscar, icono: NombreIcono.refresh, girando: rebuscando) {
                 let fuentes = video.fuentes
                 Task { await fuentes.rebuscar() }
             }
@@ -71,8 +76,9 @@ struct InspectorFuente: View {
             video.copiar(o.hash, bien: "Hash copiado", mal: "No se pudo copiar el hash")
         }
         if enPartido {
-            AccionInspector(o.aprendida ? "✓ Canal aprendido" : "Es el canal correcto", icono: o.aprendida ? .check : .learn,
-                            pulsado: o.aprendida) {
+            let tituloAprendida: String = o.aprendida ? "✓ Canal aprendido" : "Es el canal correcto"
+            let iconoAprendida: NombreIcono = o.aprendida ? .check : .learn
+            AccionInspector(tituloAprendida, icono: iconoAprendida, pulsado: o.aprendida) {
                 let fuentes = video.fuentes
                 Task { await fuentes.confirmar(o.hash) }
             }
