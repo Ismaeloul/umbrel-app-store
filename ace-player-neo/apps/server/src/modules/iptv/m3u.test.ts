@@ -72,6 +72,29 @@ describe('parseM3uStream', () => {
     expect(result.skipped).toBe(4);
   });
 
+  it('dos líneas #EXTM3U (firma y luego la guía): se suman la guía y el tvg-shift de la segunda', async () => {
+    const text = [
+      '#EXTM3U @autor https://repo.example/lista',
+      '#EXTM3U url-tvg="https://guia.example/epg/TV.xml.gz" tvg-shift="2"',
+      '#EXTINF:-1 tvg-id="Uno.TV" group-title="Generalistas" tvg-name="Uno",Uno',
+      'https://tv.example/uno/main.m3u8',
+      '#EXTM3U x-tvg-url="https://guia.example/otra.xml,https://guia.example/epg/TV.xml.gz,https://guia.example/tercera.xml"',
+      '#EXTINF:-1 tvg-id="Dos.TV",Dos',
+      'https://tv.example/dos/main.m3u8',
+      '',
+    ].join('\n');
+    for (const size of [0, 1]) {
+      const result = await parseM3uStream(bytes(text, size));
+      expect(result.header.guideUrls).toEqual([
+        'https://guia.example/epg/TV.xml.gz',
+        'https://guia.example/otra.xml',
+      ]);
+      expect(result.header.tvgShift).toBe(2);
+      expect(result.entries.map((entry) => entry.title)).toEqual(['Uno', 'Dos']);
+      expect(result.skipped).toBe(0);
+    }
+  });
+
   it('funciona a trozos de 1 byte', async () => {
     const result = await parseM3uStream(bytes(LIST, 1));
     expect(result.entries).toHaveLength(3);

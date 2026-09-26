@@ -49,6 +49,25 @@ describe('lista maestra', () => {
     expect(codeOf(() => pickMasterVariant(masterVariants(text)))).toBe('iptv_unsupported');
   });
 
+  it('grupo de audio con una rendición sin URI (la muxeada) y otras aparte: la variante vale', () => {
+    /* Como las televisiones públicas: audio principal dentro de la variante (sin URI) y el original y la
+       audiodescripción aparte. Antes daba iptv_unsupported y el canal no se podía ver. */
+    const text = [
+      '#EXTM3U',
+      '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audios",NAME="Principal",LANGUAGE="spa",DEFAULT=YES,AUTOSELECT=YES',
+      '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audios",NAME="Original",LANGUAGE="qaa",DEFAULT=NO,URI="main_a_39.m3u8"',
+      '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audios",NAME="Audiodescripción",DEFAULT=NO,URI="main_a_195.m3u8"',
+      '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="Español",URI="main_es.m3u8"',
+      '#EXT-X-STREAM-INF:BANDWIDTH=3012608,RESOLUTION=1280x720,AUDIO="audios",SUBTITLES="subs"',
+      'main_720.m3u8',
+      '#EXT-X-STREAM-INF:BANDWIDTH=1155072,RESOLUTION=640x360,AUDIO="audios",SUBTITLES="subs"',
+      'main_360.m3u8',
+    ].join('\n');
+    const variants = masterVariants(text);
+    expect(variants.every((variant) => !variant.separateAudio)).toBe(true);
+    expect(pickMasterVariant(variants).uri).toBe('main_720.m3u8');
+  });
+
   it('sin resolución: la de más BANDWIDTH; ninguna cabe: la más pequeña', () => {
     expect(
       pickMasterVariant(

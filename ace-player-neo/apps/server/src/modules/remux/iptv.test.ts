@@ -50,6 +50,11 @@ describe('buildRemuxArgs con IPTV', () => {
       isHls: true,
     });
     expect(hls[hls.indexOf('-live_start_index') + 1]).toBe('-3');
+    /* El relé sirve la lista y los segmentos de uno en uno: ffmpeg no puede pedir el siguiente segmento sin
+       haber leído entero el actual (con segmentos de 2 MB se quedaban esperándose hasta iptv_timeout). */
+    expect(hls[hls.indexOf('-http_multiple') + 1]).toBe('0');
+    expect(hls.indexOf('-http_multiple')).toBeLessThan(hls.indexOf('-i'));
+    expect(args).not.toContain('-http_multiple');
     /* El motor, como siempre. */
     expect(buildRemuxArgs({ url: 'http://motor/ace/r/1', dir: '/x', sessionId: SID })).toContain(
       '-reconnect',

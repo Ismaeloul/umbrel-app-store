@@ -3,7 +3,8 @@
    - Lista maestra: se elige UNA variante (la de mayor BANDWIDTH con
      RESOLUTION ≤ 1920×1080, o la mayor si no hay resolución) entre las que
      llevan el audio muxeado. Si todas usan una rendición de audio aparte
-     (`#EXT-X-MEDIA TYPE=AUDIO` con `URI`), `iptv_unsupported`.
+     (un grupo `#EXT-X-MEDIA TYPE=AUDIO` en el que todas llevan `URI`),
+     `iptv_unsupported`. Un grupo con alguna rendición sin `URI` es audio muxeado.
    - Lista de medios: reescritura por LISTA BLANCA. Solo pasan `#EXTM3U`,
      `#EXT-X-VERSION`, `#EXT-X-TARGETDURATION`, `#EXT-X-MEDIA-SEQUENCE`,
      `#EXT-X-DISCONTINUITY-SEQUENCE`, `#EXT-X-DISCONTINUITY`,
@@ -58,14 +59,21 @@ export function isPlaylist(text: string): boolean {
 /** Variantes de una lista maestra. */
 export function masterVariants(text: string): MasterVariant[] {
   const all = lines(text);
+  /* Un grupo de audio va aparte solo si TODAS sus rendiciones llevan URI. Una
+     rendición sin URI es el audio que ya va muxeado en la variante (RFC 8216
+     §4.3.4.1): las televisiones públicas declaran así su audio principal y
+     añaden aparte el original o la audiodescripción. */
   const audioWithUri = new Set<string>();
+  const audioMuxed = new Set<string>();
   for (const line of all) {
     if (!line.toUpperCase().startsWith('#EXT-X-MEDIA:')) continue;
     const attributes = hlsAttributes(line.slice(line.indexOf(':') + 1));
-    if (attributes.get('TYPE') === 'AUDIO' && attributes.get('URI')) {
-      audioWithUri.add(attributes.get('GROUP-ID') ?? '');
-    }
+    if (attributes.get('TYPE') !== 'AUDIO') continue;
+    const group = attributes.get('GROUP-ID') ?? '';
+    if (attributes.get('URI')) audioWithUri.add(group);
+    else audioMuxed.add(group);
   }
+  for (const group of audioMuxed) audioWithUri.delete(group);
   const out: MasterVariant[] = [];
   for (let index = 0; index < all.length; index += 1) {
     const line = all[index] as string;

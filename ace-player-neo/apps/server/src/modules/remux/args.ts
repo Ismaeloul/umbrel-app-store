@@ -36,6 +36,11 @@ export const ACE_SESSION_MARK = 'ace_session=';
  * el relé), `-rw_timeout` en MICROsegundos por encima del peor caso del relé
  * (49 s con el cambio de variante), solo los protocolos del relé en 127.0.0.1 y, con HLS, empezando 3
  * segmentos antes del final. La URL es la del relé: sin credenciales.
+ *
+ * Con HLS, `-http_multiple 0`: el relé sirve la lista y los segmentos de uno en uno por ticket (§6.1), y
+ * ffmpeg, por defecto, pide el segmento siguiente antes de terminar de leer el actual. Con segmentos que no
+ * caben en el búfer del socket (los de 2 MB de las televisiones públicas) se quedaban los dos esperando al
+ * otro hasta el plazo de 20 s (`iptv_timeout`).
  */
 function iptvInputArgs(input: RemuxArgsInput): string[] {
   return [
@@ -43,7 +48,7 @@ function iptvInputArgs(input: RemuxArgsInput): string[] {
     'http,tcp,crypto',
     '-rw_timeout',
     String(IPTV_FFMPEG_RW_TIMEOUT_US),
-    ...(input.isHls ? ['-live_start_index', '-3'] : []),
+    ...(input.isHls ? ['-live_start_index', '-3', '-http_multiple', '0'] : []),
   ];
 }
 

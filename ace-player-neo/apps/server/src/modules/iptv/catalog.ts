@@ -8,8 +8,9 @@
      `channelMatchScore` sobre 30 000 entradas en cada resolución: primero se
      preselecciona por palabras compartidas y luego se puntúa.
    - Variantes: las entradas con la misma `key` (FHD, HD, reserva) forman un
-     grupo, ordenado de mejor a peor (no HEVC, fhd > hd > uhd > sd > sin
-     marca, no reserva, orden del catálogo). Hacia fuera solo sale la mejor.
+     grupo, ordenado de mejor a peor (no HEVC, URL sin macros de plantilla,
+     fhd > hd > uhd > sd > sin marca, no reserva, orden del catálogo). Hacia
+     fuera solo sale la mejor.
    - Memoria (docs/iptv.md §12.2, riesgo 6): entradas de forma fija (clase),
      índices con arrays y valores sueltos en vez de `Set`, y los textos que se
      repiten (grupos, User-Agent) compartidos.
@@ -99,9 +100,24 @@ export function indexTokens(key: string): string[] {
     );
 }
 
+/* Macro sin sustituir en la URL («…&ip=[IP]&ua=[UA]», de los servidores de anuncios). */
+const URL_MACRO_RE = /\[[A-Z][A-Z0-9_]{1,31}\]/;
+
+/**
+ * ¿La URL de este stream (M3U) trae macros de plantilla sin sustituir? Se
+ * usa tal cual (esos servidores responden igual con el texto literal), pero
+ * va detrás de una variante sin macros del mismo canal. En Xtream `ref` es un
+ * número y nunca casa.
+ */
+export function hasUrlMacros(ref: string): boolean {
+  return URL_MACRO_RE.test(ref);
+}
+
 /** Orden de las variantes de un grupo, sin la fiabilidad (docs/iptv.md §4.3). */
 export function compareVariants(a: CatalogEntry, b: CatalogEntry): number {
   if (a.hevc !== b.hevc) return a.hevc ? 1 : -1;
+  const macros = Number(hasUrlMacros(a.ref)) - Number(hasUrlMacros(b.ref));
+  if (macros) return macros;
   const quality = qualityRank(b.quality) - qualityRank(a.quality);
   if (quality) return quality;
   if (a.backup !== b.backup) return a.backup ? 1 : -1;

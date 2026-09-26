@@ -25,9 +25,12 @@ import { IptvFiles } from './store.js';
 
 export interface EnsayoOptions {
   readonly env: Env;
-  /** URL de la agenda (por defecto, la del backend que corre en este contenedor). */
+  /**
+   * Backend del que pedir la agenda (`http://[::1]:3100`) o la URL entera de la agenda. Por defecto, el
+   * backend que corre en este contenedor (`127.0.0.1:PORT`).
+   */
   readonly api?: string;
-  /** Fichero JSON con la agenda (`GET /api/v1/football/schedule`), en vez de pedirla. */
+  /** Fichero JSON con la agenda (`GET /api/v1/football`), en vez de pedirla. */
   readonly agendaFile?: string;
   readonly now?: number;
   readonly print: (line: string) => void;
@@ -39,6 +42,15 @@ async function defaultFetchJson(url: string): Promise<unknown> {
   const response = await fetch(url, { headers: { 'x-ace-origin': 'web' } });
   if (!response.ok) throw new Error(`la agenda respondió ${response.status}`);
   return response.json();
+}
+
+/** Ruta de la agenda (`footballSchedule`, docs/api.md). */
+export const AGENDA_PATH = '/api/v1/football';
+
+/** URL de la agenda: `api` puede ser solo el backend (`http://[::1]:3100`) o ya la URL entera. */
+export function agendaUrl(api: string): string {
+  const trimmed = api.trim().replace(/\/+$/, '');
+  return /\/api\//.test(trimmed) ? trimmed : `${trimmed}${AGENDA_PATH}`;
 }
 
 function quality(value: string | null): string {
@@ -97,7 +109,7 @@ export async function runIptvEnsayo(options: EnsayoOptions): Promise<number> {
     const value = options.agendaFile
       ? (JSON.parse(readFileSync(options.agendaFile, 'utf8')) as unknown)
       : await (options.fetchJson ?? defaultFetchJson)(
-          options.api ?? `http://127.0.0.1:${config.port}/api/v1/football/schedule`,
+          agendaUrl(options.api ?? `http://127.0.0.1:${config.port}`),
         );
     schedule = FootballScheduleSchema.parse(value);
   } catch (error) {
