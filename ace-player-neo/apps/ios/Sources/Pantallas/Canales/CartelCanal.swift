@@ -53,7 +53,7 @@ struct CartelCanal: View {
     private var cartel: some View {
         let forma = RoundedRectangle(cornerRadius: R.m, style: .circular)
         return ZStack {
-            FondoCartel(nombre: titulo)
+            FondoCartel(nombre: titulo).allowsHitTesting(false)
             ColocarEnFraccion(x: 0.5, y: 0.4) {
                 MarcaCanal(nombre: titulo, forma: .tesela, tamano: 52).shadow(color: Color.black.opacity(0.5), radius: 8, y: 8)
             }

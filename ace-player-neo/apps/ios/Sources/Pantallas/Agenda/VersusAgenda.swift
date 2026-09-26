@@ -81,7 +81,8 @@ struct VersusAgenda<Senal: View>: View {
 
     var body: some View {
         ZStack {
-            FondoVersusAgenda(datos: datos.versus, valla: valla)
+            // Los degradados elípticos se escalan más allá de la tarjeta: no deben recibir toques.
+            FondoVersusAgenda(datos: datos.versus, valla: valla).allowsHitTesting(false)
             ColocarEnFraccion(x: 0.5, y: centroEscudos) {  // --versus-crest-y
                 BloqueEscudos(datos.versus, tamano: heroe ? 84 : 56)
                     .modifier(PiezaVueloSi(activa: origenVuelo, partido: datos.partido))
@@ -92,6 +93,7 @@ struct VersusAgenda<Senal: View>: View {
         }
         .modifier(MarcoVersus(heroe: heroe, alto: alto))
         .clipShape(forma)
+        .contentShape(forma)
         .overlay { if tamano == .heroe { VeloCabecera(arriba: arriba) } }
         .background { if datos.versus.enPantalla { forma.stroke(Palco.accent, lineWidth: 4) } }
         .sombra(heroe ? .s2 : .s3, forma: forma)

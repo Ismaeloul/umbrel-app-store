@@ -88,7 +88,9 @@ final class FlujoBuscarPegarUITests: XCTestCase {
         XCTAssertTrue(boton.waitForExistence(timeout: 15))
         boton.tap()
         XCTAssertTrue(elementoUI(app, IDUI.hojaPegar).waitForExistence(timeout: 5))
-        elementoUI(app, IDUI.botonPegarPortapapeles).tap()
+        let pegar = app.buttons["Pegar del portapapeles"].firstMatch
+        XCTAssertTrue(pegar.waitForExistence(timeout: 5), "Falta «Pegar del portapapeles»")
+        pegar.tap()
         // iOS pregunta la primera vez: «Permitir pegar» (pregunta A-5 de la arquitectura).
         let sistema = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         for texto in ["Permitir pegar", "Allow Paste"] {
