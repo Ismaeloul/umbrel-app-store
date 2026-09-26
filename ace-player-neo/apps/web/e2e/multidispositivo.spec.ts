@@ -276,11 +276,23 @@ test(
     await poner(b.page, TRES);
     await expect(hoja(page)).toBeVisible();
     await expect(hoja(b.page)).toBeVisible();
-    await Promise.all([
-      page.getByRole('button', { name: 'Cambiar en los dos' }).click(),
-      b.page.getByRole('button', { name: 'Cambiar en los dos' }).click(),
-    ]);
+    /* Los dos a la vez: si el de uno llega antes, la hoja del otro se cierra
+       sola y sigue (§2.4.2, E2E 16), así que su botón puede desaparecer antes
+       del clic. Basta con que uno de los dos llegue a pulsar. */
+    const pulsar = (p: Page) =>
+      p
+        .getByRole('button', { name: 'Cambiar en los dos' })
+        .click({ timeout: 5_000 })
+        .then(
+          () => true,
+          () => false,
+        );
+    const pulsados = await Promise.all([pulsar(page), pulsar(b.page)]);
+    expect(pulsados.some(Boolean)).toBe(true);
     await page.waitForTimeout(8_000);
+    /* Ninguna hoja se queda abierta. */
+    await expect(hoja(page)).toHaveCount(0);
+    await expect(hoja(b.page)).toHaveCount(0);
     await expect
       .poll(async () => (await motor.sesiones('active')).length, { timeout: 30_000 })
       .toBeLessThanOrEqual(1);
