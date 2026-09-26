@@ -36,12 +36,18 @@ struct PanelFuentes: View {
             if enPartido && (!vista.filas.isEmpty || fase == .resolviendo) {
                 ProgresoComprobador(vista: vista, resolviendo: fase == .resolviendo)
             }
-            if deSesion || enPartido, let fallo = video.fuentes.textoFallo { AvisoFallo(texto: fallo, pegar: pegar) }
+            if let fallo = textoFallo { AvisoFallo(texto: fallo, pegar: pegar) }
             cuerpo(vista)
             InspectorFuente(objetivo: objetivo(vista), enPartido: enPartido, partidoId: partidoId)
         }
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier(enPartido ? "" : IDUI.otrasSenales)
+        .modifier(IdentificadorOtrasSenales(activo: !enPartido))
+    }
+
+    /// El fallo de la sesión, solo si es la de esta vista (en la web `useSession` ya es la de la vista).
+    private var textoFallo: String? {
+        guard video.fuentes.clave == claveSesion, enPartido || !video.fuentes.entradas.isEmpty else { return nil }
+        return video.fuentes.textoFallo
     }
 
     // MARK: Datos
@@ -253,5 +259,18 @@ private struct AvisoFallo: View {
         .background(PalcoMezcla.fail9SobreSurface, in: forma)
         .bordeInterior(Palco.fail.opacity(0.35), forma: forma)
         .accessibilityElement(children: .contain)
+    }
+}
+
+/// El identificador de «Otras señales» solo en el canal suelto (en el partido el panel no lleva ninguno).
+private struct IdentificadorOtrasSenales: ViewModifier {
+    let activo: Bool
+
+    func body(content: Content) -> some View {
+        if activo {
+            content.accessibilityIdentifier(IDUI.otrasSenales)
+        } else {
+            content
+        }
     }
 }

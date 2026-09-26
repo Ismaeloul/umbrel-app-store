@@ -36,6 +36,11 @@ struct MiniReproductor: View {
         .offset(x: CGFloat(d.x) + saliendo, y: CGFloat(d.y))
         .opacity(saliendo != 0 ? 0 : d.opacidad)
         .gesture(arrastrar)
+        .onAppear { reponer() }
+        .onChange(of: reproductor.canal?.id) { _, nuevo in
+            // «Deshacer» (o un canal nuevo) con el mini aún montado: vuelve a su sitio.
+            if nuevo != nil { reponer() }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(IDUI.mini)
     }
@@ -86,6 +91,12 @@ struct MiniReproductor: View {
         case .volver:
             withAnimation(Movimiento.estandar(reducido)) { arrastre = .zero }
         }
+    }
+
+    private func reponer() {
+        saliendo = 0
+        arrastre = .zero
+        armado = false
     }
 
     /// Sale volando `translate(±110 %)` y a los 220 ms detiene y ofrece «Deshacer» durante 6 s.

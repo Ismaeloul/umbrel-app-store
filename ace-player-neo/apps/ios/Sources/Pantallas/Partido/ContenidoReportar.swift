@@ -11,7 +11,6 @@ struct ContenidoReportar: View {
     @Environment(CentroHojas.self) private var hojas
     @Environment(SesionFuentes.self) private var fuentes
     @Environment(DatosApp.self) private var datos
-    @Environment(Avisos.self) private var avisos
     @State private var motivo: SourceReportReason = .notStarting
     @State private var ocupado = false
 
@@ -69,12 +68,8 @@ struct ContenidoReportar: View {
         ocupado = true
         let elegido = motivo
         Task {
-            do {
-                try await fuentes.reportar(hash, motivo: elegido)
-                hojas.cerrar()
-            } catch {
-                avisos.avisar("No se pudo enviar el reporte", tono: .err)
-            }
+            // Los avisos (enviado o fallido) los pone la sesión (`reportSource`); la hoja no avisa (ReportSheet.tsx).
+            if (try? await fuentes.reportar(hash, motivo: elegido)) != nil { hojas.cerrar() }
             ocupado = false
         }
     }

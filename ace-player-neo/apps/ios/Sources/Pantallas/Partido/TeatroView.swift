@@ -20,6 +20,7 @@ struct TeatroView: View {
             Color.black.frame(height: CGFloat(maquetacion.seguras.arriba))
             EscenarioVideo(inmersivo: false) { gesto in arrastrar(gesto) }
                 .frame(width: ancho, height: ancho * 9 / 16)
+                .piezaVuelo(.escenario, partido: claveVuelo)
             contenido
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -32,8 +33,22 @@ struct TeatroView: View {
         .onAppear { estadoVentana.fondoOscuroArriba = true }
         .onDisappear {
             estadoVentana.fondoOscuroArriba = false
-            // Salir del partido con la pantalla completa puesta la quita (a4 §5.5).
-            if video.presentacion.pantallaCompletaForzada { video.presentacion.alternarPantallaCompleta() }
+            // Salir del partido con la pantalla completa puesta la quita (a4 §5.5); si solo se oculta (el armazón
+            // tapa el teatro con el inmersivo), la ruta sigue siendo el teatro y la pantalla completa se queda.
+            let presentacion = video.presentacion
+            if !video.navegador.teatroVisible && presentacion.pantallaCompletaForzada {
+                presentacion.alternarPantallaCompleta()
+            }
+        }
+    }
+
+    /// La clave del marco del escenario para el vuelo (zoom de la capa y vídeo→mini): el id del partido; en un
+    /// canal suelto, su hash.
+    private var claveVuelo: String {
+        switch destino {
+        case .partido(let id): id
+        case .canal(let hash): hash
+        default: ""
         }
     }
 

@@ -25,6 +25,19 @@ struct SigueAlDedo: ViewModifier {
     }
 }
 
+/// Salir del partido o del canal con la pantalla completa puesta la quita (a4 §5.5). Se mira la ruta
+/// (`teatroVisible`), no si el escenario desaparece: el armazón puede ocultar el teatro mientras está el inmersivo.
+/// Va en los dos escenarios (vertical e inmersivo) para que lo haga el que siga montado.
+private struct QuitaPantallaCompletaAlSalir: ViewModifier {
+    let video = EntornoVideo()
+
+    func body(content: Content) -> some View {
+        content.onChange(of: video.navegador.teatroVisible) { _, visible in
+            if !visible && video.presentacion.pantallaCompletaForzada { video.presentacion.alternarPantallaCompleta() }
+        }
+    }
+}
+
 struct EscenarioVideo: View {
     let inmersivo: Bool
     private let alArrastrar: ((ArrastreVideo) -> Void)?
@@ -78,6 +91,7 @@ struct EscenarioVideo: View {
             if viejo != nil, nuevo != nil, viejo != nuevo { corte += 1 }
         }
         .onChange(of: voiceOver, initial: true) { _, activo in video.presentacion.voiceOverActivo = activo }
+        .modifier(QuitaPantallaCompletaAlSalir())
     }
 
     private var marcador: LiveScore? {
