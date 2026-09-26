@@ -69,10 +69,16 @@ final class FlujoTeatroUITests: XCTestCase {
             // La demo de la fase 0 pone el partido a una hora fija de HOY: el marcador solo se pide cerca de esa
             // hora (`scoresWanted`), así que tapado y destapado se prueban cuando lo hay.
             let marcador = app.buttons["Ver marcador"]
+            // Destapar vale para ESA reproducción: si la demo arranca la fuente (o cambia de fuente) justo después del
+            // toque, `fijarViendo`/`resetScoreReveal` lo vuelven a tapar, como en la web. Se reintenta el toque.
             if marcador.waitForExistence(timeout: 5) {
-                marcador.tap()
-                XCTAssertTrue(
-                    app.buttons["Tapar el marcador (tu emisión va por detrás)"].waitForExistence(timeout: 5), "No se destapa")
+                let tapar = app.buttons["Tapar el marcador (tu emisión va por detrás)"]
+                var destapado = false
+                for _ in 0..<4 where !destapado {
+                    if marcador.exists { marcador.tap() }
+                    destapado = tapar.waitForExistence(timeout: 4)
+                }
+                XCTAssertTrue(destapado, "No se destapa")
             }
             // Tocar una pestaña cambia el panel de debajo (Isma: «Canal» y «Datos técnicos» no hacían nada).
             elementoUI(app, IDUI.pestanaPartido).tap()
