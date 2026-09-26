@@ -49,6 +49,11 @@ final class HostingRaiz: UIHostingController<RaizView> {
 
     private func aplicarEstadoVentana() {
         view.window?.overrideUserInterfaceStyle = contenedor.preferencias.estiloVentana
+        // En inmersivo, lo que SwiftUI no llegue a pintar (el giro, el borde bajo el indicador de inicio) es negro y
+        // no el fondo claro del sistema: sin línea blanca abajo (Isma, 26-sep).
+        let negro: Bool = contenedor.estadoVentana.inmersivo
+        view.backgroundColor = negro ? .black : .systemBackground
+        view.window?.backgroundColor = negro ? .black : nil
         setNeedsStatusBarAppearanceUpdate()
         setNeedsUpdateOfHomeIndicatorAutoHidden()
         setNeedsUpdateOfScreenEdgesDeferringSystemGestures()

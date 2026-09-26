@@ -13,10 +13,14 @@ struct CapaInmersiva: View {
         ZStack {
             if inmersivo {
                 ZStack {
-                    Color.black  // `.player--immersive { background: #000 }` (fijo, no es un token del tema)
                     EscenarioVideo(inmersivo: true)
+                        .frame(width: maquetacion.ancho, height: maquetacion.alto)
                 }
-                .frame(width: maquetacion.ancho, height: maquetacion.alto)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // `.player--immersive { background: #000 }` a sangre: bajo el indicador de inicio y en toda la ventana
+                // aunque la medida vaya un paso por detrás al girar (Isma veía una línea blanca abajo).
+                .background(Color.black.ignoresSafeArea())
+                .ignoresSafeArea()
                 .transition(.opacity)
             }
         }
