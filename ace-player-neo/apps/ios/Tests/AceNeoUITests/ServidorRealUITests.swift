@@ -18,6 +18,7 @@ final class ServidorRealUITests: XCTestCase {
     /// El partido de la agenda de demostración con fuentes en el motor falso (apps/web/e2e/support/catalogo.ts):
     /// Real Madrid – Manchester City (M+ Liga de Campeones, 3 fuentes), y de reserva los otros tres.
     private static let partidos = ["demo-5", "demo-1", "demo-4", "demo-3"]
+    private static let locales = ["Real Madrid", "FC Barcelona", "Real Sociedad", "España"]
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -60,21 +61,31 @@ final class ServidorRealUITests: XCTestCase {
         enviar(app)
 
         let dentro = await esperar(45) { elementoUI(app, IDUI.armazon).exists }
+        if !dentro { captura(app, "e2e-01-sin-entrar") }
         XCTAssertTrue(dentro, "No entra en la app tras emparejar con el backend real. \(estado(app))")
         XCTAssertTrue(esperarQueDesaparezca(elementoUI(app, IDUI.pantalla("emparejar"))), "Emparejar no se va")
         let vivos = try await servidor.dispositivos().filter { !$0.revocado && $0.plataforma == "ios" }
         XCTAssertFalse(vivos.isEmpty, "El backend no tiene ningún iPhone emparejado tras el canje")
     }
 
-    /// «Emparejar»; si el botón no se deja tocar (teclado encima), «ir» del teclado.
+    /// Como en el teclado: «siguiente» en la dirección de casa pasa a la de Tailscale (TarjetaCodigo) y su «ir»
+    /// empareja. El botón «Emparejar» queda debajo del teclado, así que no se toca. Si al final no se ha ido el
+    /// foco (teclado cerrado), se toca el botón.
     @MainActor
     private func enviar(_ app: XCUIApplication) {
-        let boton = elementoUI(app, IDUI.botonEmparejar)
-        if boton.exists, boton.isHittable, boton.isEnabled {
-            boton.tap()
-        } else {
-            app.typeText("\n")
+        app.typeText("\n")
+        let tailscale = elementoUI(app, IDUI.campoTailscale).textFields.firstMatch
+        var enfocado = false
+        for _ in 0..<12 where !enfocado {
+            enfocado = tailscale.exists && (tailscale.value(forKey: "hasKeyboardFocus") as? Bool ?? false)
+            if !enfocado { Thread.sleep(forTimeInterval: 0.25) }
         }
+        if enfocado {
+            app.typeText("\n")
+            return
+        }
+        let boton = elementoUI(app, IDUI.botonEmparejar)
+        if boton.exists, boton.isHittable, boton.isEnabled { boton.tap() }
     }
 
     // MARK: 2. Agenda
@@ -125,6 +136,7 @@ final class ServidorRealUITests: XCTestCase {
         let todos = elementoUI(app, IDUI.filtroTodos)
         if todos.exists, todos.isHittable, !todos.isSelected { todos.tap() }
         let pantalla = elementoUI(app, IDUI.pantalla("agenda"))
+        if let heroe = botonDelHeroe(app) { return heroe }
         for _ in 0..<10 {
             for id in Self.partidos {
                 let tarjeta = elementoUI(app, IDUI.tarjetaPartido(id))
@@ -133,6 +145,16 @@ final class ServidorRealUITests: XCTestCase {
             arrastrar(pantalla, desde: CGVector(dx: 0.5, dy: 0.75), hasta: CGVector(dx: 0.5, dy: 0.4))
         }
         return nil
+    }
+
+    /// El partido destacado va en el héroe y no en una tarjeta: su «Ver…» (navega al partido, a3 §4), si es uno
+    /// de los que tienen fuentes en el motor falso.
+    @MainActor
+    private func botonDelHeroe(_ app: XCUIApplication) -> XCUIElement? {
+        let heroe = elementoUI(app, IDUI.heroe)
+        guard heroe.exists, Self.locales.contains(where: { heroe.label.contains($0) }) else { return nil }
+        let boton = elementoUI(app, IDUI.botonVerAhora)
+        return boton.exists && boton.isHittable ? boton : nil
     }
 
     /// La fase del reproductor que el escenario publica en Debug (`data-phase` de la web): «reproduciendo imagen».
