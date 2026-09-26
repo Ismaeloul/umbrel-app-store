@@ -17,7 +17,7 @@ final class FlujoArmazonUITests: XCTestCase {
     @MainActor
     private func captura(_ app: XCUIApplication, _ nombre: String) {
         let adjunto: XCTAttachment
-        if app.frame.width > app.frame.height {
+        if app.frame.width > app.frame.height || XCUIDevice.shared.orientation.isLandscape {
             adjunto = XCTAttachment(image: capturaHorizontal())
         } else {
             adjunto = XCTAttachment(screenshot: app.screenshot())
@@ -29,16 +29,34 @@ final class FlujoArmazonUITests: XCTestCase {
 
     /// En horizontal, `app.screenshot()` recorta la foto de la pantalla (vertical, la del panel) con el marco
     /// horizontal de la app: salía girada, cortada y con media imagen en negro. Se toma la pantalla entera y se
-    /// gira para que se lea como la ve la persona (para compararla con `agenda-844x390-*.png` de la web).
+    /// deja en horizontal para que se lea como la ve la persona (para compararla con `agenda-844x390-*.png`).
+    ///
+    /// La foto de `XCUIScreen` trae los píxeles en vertical y el giro solo en `imageOrientation` (su `size` ya
+    /// dice horizontal): el PNG del adjunto no mira esa marca y salía de 1170×2532 con todo tumbado. Primero se
+    /// repinta respetando la marca; si aun así quedan los píxeles en vertical, se giran a mano.
     @MainActor
     private func capturaHorizontal() -> UIImage {
-        let imagen = XCUIScreen.main.screenshot().image
-        let ancho = imagen.size.width
-        let alto = imagen.size.height
-        guard ancho < alto else { return imagen }  // ya viene en horizontal
+        let pintada = repintada(XCUIScreen.main.screenshot().image)
+        guard pintada.size.width < pintada.size.height else { return pintada }
         // Girado a la izquierda (botón de inicio a la derecha), lo de arriba de la app queda en el borde derecho
         // del panel: se gira 90° a la izquierda. Girado a la derecha, al revés.
-        let izquierda: Bool = XCUIDevice.shared.orientation != .landscapeRight
+        return girada(pintada, izquierda: XCUIDevice.shared.orientation != .landscapeRight)
+    }
+
+    /// Los píxeles tal y como se ven (con `imageOrientation` aplicada), marca `.up`.
+    @MainActor
+    private func repintada(_ imagen: UIImage) -> UIImage {
+        let formato = UIGraphicsImageRendererFormat()
+        formato.scale = imagen.scale
+        return UIGraphicsImageRenderer(size: imagen.size, format: formato).image { _ in
+            imagen.draw(in: CGRect(origin: .zero, size: imagen.size))
+        }
+    }
+
+    @MainActor
+    private func girada(_ imagen: UIImage, izquierda: Bool) -> UIImage {
+        let ancho = imagen.size.width
+        let alto = imagen.size.height
         let formato = UIGraphicsImageRendererFormat()
         formato.scale = imagen.scale
         let lienzo = UIGraphicsImageRenderer(size: CGSize(width: alto, height: ancho), format: formato)
