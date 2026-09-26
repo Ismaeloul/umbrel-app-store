@@ -40,6 +40,11 @@ struct FilaCartel: Hashable, Sendable, Identifiable {
         if !parte.isEmpty { return parte }
         return entrada.canal.isEmpty ? entrada.titulo : entrada.canal
     }
+    /// Lo que va DEBAJO del cartel (`posterNameOf`, Isma 26-sep): el canal sin el proveedor que ya lleva la tesela.
+    var nombreDebajo: String {
+        let quien = PresentacionFuentes.proveedor(entrada.titulo)
+        return ReglasFuentes.nombreSinProveedor(nombreCanal, proveedores: [corto, quien, lista])
+    }
 }
 
 enum PresentacionFuentes {
