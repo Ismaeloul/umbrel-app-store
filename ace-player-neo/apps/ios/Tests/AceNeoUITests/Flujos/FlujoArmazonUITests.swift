@@ -101,9 +101,20 @@ final class FlujoArmazonUITests: XCTestCase {
             let oculta = elementoUI(app, IDUI.pantalla(otra))
             let limite = Date().addingTimeInterval(2)
             while Date() < limite && oculta.exists && oculta.isHittable { Thread.sleep(forTimeInterval: 0.2) }
+            if oculta.exists && oculta.isHittable { diagnostico(app, "oculta-\(otra)-en-\(id)") }
             XCTAssertFalse(oculta.exists && oculta.isHittable, "Se ve \(otra) estando en \(id)")
         }
         XCTAssertTrue(elementoUI(app, IDUI.pestana(id)).isSelected, "La pestaña \(id) no está marcada")
+    }
+
+    /// Foto y árbol de accesibilidad para diagnosticar un fallo.
+    @MainActor
+    private func diagnostico(_ app: XCUIApplication, _ nombre: String) {
+        captura(app, nombre)
+        let arbol = XCTAttachment(string: app.debugDescription)
+        arbol.name = nombre + "-arbol"
+        arbol.lifetime = .keepAlways
+        add(arbol)
     }
 
     @MainActor
