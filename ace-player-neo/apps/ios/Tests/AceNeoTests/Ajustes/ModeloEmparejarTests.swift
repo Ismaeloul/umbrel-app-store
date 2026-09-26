@@ -189,7 +189,8 @@ struct ModeloEmparejarTests {
     }
 
     @Test func unEnlaceDeFueraConVariasDireccionesRellenaLasDos() throws {
-        let m = modelo(RegistroEmparejar())
+        let registro = RegistroEmparejar()
+        let m = modelo(registro)
         let url = try #require(URL(string: SoporteAjustes.enlaceDoble))
         let enlace = try #require(PairingLink(url: url))
         m.aplicar(enlace)
@@ -198,12 +199,15 @@ struct ModeloEmparejarTests {
         #expect(m.codigo == "482913")
     }
 
-    @Test func alLeerLaCamaraSeParaEnElMismoTurno() {
-        let m = modelo(RegistroEmparejar())
+    @Test func alLeerLaCamaraSeParaEnElMismoTurno() async {
+        // El registro vive hasta que acaba el canje: sus servicios lo miran con `unowned`.
+        let registro = RegistroEmparejar()
+        let m = modelo(registro)
         m.cambioCaptura(.activa)
         #expect(m.camaraLeyendo)
         #expect(m.leido(SoporteAjustes.enlace))
         #expect(!m.camaraLeyendo, "la imagen queda congelada antes de que empiece el canje (a2 §22.3.1)")
+        #expect(await SoporteAjustes.esperar { registro.emparejados == ["umbrel.local"] })
     }
 
     @Test func trasUnFalloDeRedSePuedeReleerElMismoQR() async {
