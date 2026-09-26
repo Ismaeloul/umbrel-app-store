@@ -58,7 +58,7 @@ final class ServidorRealUITests: XCTestCase {
         if !(casa.value(forKey: "hasKeyboardFocus") as? Bool ?? false) { casa.tap() }
         casa.typeText(servidor.direccionConEsquema)
         captura(app, "e2e-01-emparejar")
-        enviar(app)
+        try await enviar(app)
 
         let dentro = await esperar(45) { elementoUI(app, IDUI.armazon).exists }
         if !dentro { captura(app, "e2e-01-sin-entrar") }
@@ -72,13 +72,13 @@ final class ServidorRealUITests: XCTestCase {
     /// empareja. El botón «Emparejar» queda debajo del teclado, así que no se toca. Si al final no se ha ido el
     /// foco (teclado cerrado), se toca el botón.
     @MainActor
-    private func enviar(_ app: XCUIApplication) {
+    private func enviar(_ app: XCUIApplication) async throws {
         app.typeText("\n")
         let tailscale = elementoUI(app, IDUI.campoTailscale).textFields.firstMatch
         var enfocado = false
         for _ in 0..<12 where !enfocado {
             enfocado = tailscale.exists && (tailscale.value(forKey: "hasKeyboardFocus") as? Bool ?? false)
-            if !enfocado { Thread.sleep(forTimeInterval: 0.25) }
+            if !enfocado { try await Task.sleep(for: .milliseconds(250)) }
         }
         if enfocado {
             app.typeText("\n")
@@ -94,7 +94,7 @@ final class ServidorRealUITests: XCTestCase {
     private func agendaCarga(_ app: XCUIApplication) async throws {
         try exigir(elementoUI(app, IDUI.pantalla("agenda")).waitForExistence(timeout: 30), "No se ve la agenda")
         let tarjetas = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "tarjeta-partido-"))
-        let cargada = await esperar(60) { tarjetas.count > 0 }
+        let cargada = await esperar(60) { tarjetas.firstMatch.exists }
         captura(app, "e2e-02-agenda")
         try exigir(cargada, "La agenda del backend no enseña ninguna tarjeta de partido. \(estado(app))")
         try exigir(elementoUI(app, IDUI.tiraDias).exists, "Falta la tira de días con la agenda real")
@@ -180,14 +180,14 @@ final class ServidorRealUITests: XCTestCase {
         tocarPestana(app, "ajustes")
         try exigir(elementoUI(app, IDUI.pantalla("ajustes")).waitForExistence(timeout: 15), "No sale Ajustes")
 
-        try tocarChip(app, "salud")
+        try await tocarChip(app, "salud")
         let conSalud = await esperar(30) { conTextoUI(app, "Motor principal").exists && conTextoUI(app, "Segundo motor").exists }
         captura(app, "e2e-04-salud")
         try exigir(conSalud, "Salud no enseña los servicios del backend. \(estado(app))")
         try exigir(conTextoUI(app, "Backend").exists, "Falta la tarjeta del backend en Salud")
         try exigir(!(conTextoUI(app, "No se pudo leer la salud").exists), "Salud no se pudo leer")
 
-        try tocarChip(app, "dispositivos")
+        try await tocarChip(app, "dispositivos")
         let este = elementoUI(app, IDUI.filaEsteIPhone)
         let fila = elementoUI(app, IDUI.filaDispositivo(otro))
         let conLista = await esperar(30) { este.exists && fila.exists }
@@ -225,8 +225,10 @@ final class ServidorRealUITests: XCTestCase {
     private func pausarEnElMini(_ app: XCUIApplication) async throws {
         let pausa = elementoUI(app, IDUI.miniPausa)
         try exigir(pausa.waitForExistence(timeout: 5), "El mini no tiene ⏸. \(estado(app))")
+        // Que cambie la etiqueta (Pausar → Reproducir), sin atarse al texto de ContenidoMini.
+        let antes = pausa.label
         pausa.tap()
-        let parado = await esperar(10) { pausa.label == "Reproducir" }
+        let parado = await esperar(10) { pausa.label != antes }
         try exigir(parado, "⏸ del mini no pausa. \(estado(app))")
     }
 
@@ -244,7 +246,7 @@ final class ServidorRealUITests: XCTestCase {
 
     /// Toca un chip del índice de Ajustes (desplazando la fila si hace falta).
     @MainActor
-    private func tocarChip(_ app: XCUIApplication, _ seccion: String) throws {
+    private func tocarChip(_ app: XCUIApplication, _ seccion: String) async throws {
         let chip = elementoUI(app, IDUI.chip(seccion))
         try exigir(chip.waitForExistence(timeout: 10), "No hay chip \(seccion)")
         let indice = elementoUI(app, IDUI.indiceAjustes)
@@ -255,7 +257,7 @@ final class ServidorRealUITests: XCTestCase {
         }
         chip.tap()
         try exigir(elementoUI(app, IDUI.seccion(seccion)).waitForExistence(timeout: 10), "No hay tarjeta \(seccion)")
-        Thread.sleep(forTimeInterval: 0.8)
+        try await Task.sleep(for: .milliseconds(800))
     }
 
     // MARK: 5. Olvidar este iPhone
