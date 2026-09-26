@@ -11,6 +11,7 @@ struct RegistroFallos: View {
     let nombres: [String: String]
     let ahora: Date
     let reintentar: () -> Void
+    @Environment(SesionApp.self) private var sesion
     @State private var causa: DiagnosticCause?
     @State private var filtrado: DiagnosticsListResponse?
     @State private var errorFiltrado: APIError?
@@ -78,7 +79,7 @@ struct RegistroFallos: View {
         guard let causa else { return }
         filtrado = nil
         errorFiltrado = nil
-        guard let api = AccesoProceso.entorno?.api else { return }
+        let api = sesion.entorno.api
         do {
             filtrado = try await api.enviar(API.diagnosticos(causa: causa, limite: RegistroSalud.limite))
         } catch {

@@ -149,13 +149,14 @@ private struct ObjetosDelArmazon: ViewModifier {
     }
 }
 
-/// Sesión, consultas, tiempo real, señales y marcadores destapados.
+/// Sesión, consultas, tiempo real, señales, marcadores destapados y el repartidor de eventos.
 private struct ObjetosDeDatos: ViewModifier {
     let contenedor: ContenedorApp
     func body(content: Content) -> some View {
         content.environment(contenedor.sesion).environment(contenedor.datos)
             .environment(contenedor.tiempoReal).environment(contenedor.senales)
             .environment(contenedor.destapados)
+            .environment(\.repartidor, contenedor.repartidor)
     }
 }
 

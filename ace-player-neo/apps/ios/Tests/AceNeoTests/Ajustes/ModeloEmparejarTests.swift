@@ -10,6 +10,8 @@ import Testing
 @MainActor
 enum SoporteAjustes {
     static let enlace = "aceneo://pair?u=http%3A%2F%2Fumbrel.local%3A7792&c=482913"
+    static let enlaceDoble =
+        "aceneo://pair?u=http%3A%2F%2Fumbrel.local%3A7792&u=http%3A%2F%2Fumbrel.tu-red.ts.net%3A7792&c=482913"
     static let plazos = ModeloEmparejar.Plazos(
         pausa: .milliseconds(150), vueltaCapsula: .milliseconds(150), ignorarTrasAjeno: .milliseconds(80),
         marcoRojo: .milliseconds(20))
@@ -184,6 +186,53 @@ struct ModeloEmparejarTests {
         #expect(registro.canjes.isEmpty)
         m.direccionTailscale = "umbrel.tu-red.ts.net:7792"
         #expect(m.erroresCampo[.tailscale] == nil)
+    }
+
+    @Test func unEnlaceDeFueraConVariasDireccionesRellenaLasDos() throws {
+        let registro = RegistroEmparejar()
+        let m = modelo(registro)
+        let url = try #require(URL(string: SoporteAjustes.enlaceDoble))
+        let enlace = try #require(PairingLink(url: url))
+        m.aplicar(enlace)
+        #expect(m.direccionCasa == "http://umbrel.local:7792")
+        #expect(m.direccionTailscale == "http://umbrel.tu-red.ts.net:7792")
+        #expect(m.codigo == "482913")
+    }
+
+    @Test func alLeerLaCamaraSeParaEnElMismoTurno() async {
+        // El registro vive hasta que acaba el canje: sus servicios lo miran con `unowned`.
+        let registro = RegistroEmparejar()
+        let m = modelo(registro)
+        m.cambioCaptura(.activa)
+        #expect(m.camaraLeyendo)
+        #expect(m.leido(SoporteAjustes.enlace))
+        #expect(!m.camaraLeyendo, "la imagen queda congelada antes de que empiece el canje (a2 §22.3.1)")
+        #expect(await SoporteAjustes.esperar { registro.emparejados == ["umbrel.local"] })
+    }
+
+    @Test func trasUnFalloDeRedSePuedeReleerElMismoQR() async {
+        let registro = RegistroEmparejar()
+        registro.fallo = .sinServidor
+        let m = modelo(registro)
+        m.cambioCaptura(.activa)
+        #expect(m.leido(SoporteAjustes.enlace))
+        #expect(await SoporteAjustes.esperar { m.fila != nil })
+        #expect(m.vecesReleer == 0)
+        #expect(await SoporteAjustes.esperar { m.vecesReleer == 1 })
+        #expect(m.estadoCamara == .escaneando)
+        #expect(m.leido(SoporteAjustes.enlace))
+        #expect(await SoporteAjustes.esperar { registro.canjes.count == 2 })
+    }
+
+    @Test func conUnCodigoMaloNoSeRelee() async {
+        let registro = RegistroEmparejar()
+        registro.fallo = .servidor(codigo: "pairing_invalid", estado: 401, mensaje: nil, requestId: nil)
+        let m = modelo(registro)
+        m.cambioCaptura(.activa)
+        #expect(m.leido(SoporteAjustes.enlace))
+        #expect(await SoporteAjustes.esperar { m.estadoCamara == .escaneando && m.fila != nil })
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(m.vecesReleer == 0)
     }
 
     @Test func lasDireccionesGuardadasSalenEscritas() {

@@ -17,4 +17,7 @@ extension EnvironmentValues {
     /// La dirección con la que se habla (M6, aditivo): escudos y logos (`/native` + ruta relativa) y la URL del
     /// stream para VLC (`<origen>/ace/getstream?id=…`) necesitan la base del servidor.
     @Entry var servidores: ServerResolver? = nil
+    /// El repartidor de eventos del SSE (M7, aditivo): Ajustes › Dispositivos escucha `devices.changed` con
+    /// `escuchar` mientras se ve (b-arquitectura §2.5.3) sin leer `ContenedorApp.actual` (§2.8).
+    @Entry var repartidor: RepartidorEventos? = nil
 }

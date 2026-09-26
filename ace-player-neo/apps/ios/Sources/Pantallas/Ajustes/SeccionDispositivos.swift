@@ -15,18 +15,21 @@ struct SeccionDispositivos: View {
     @Environment(CicloVida.self) private var cicloVida
     @Environment(\.vistaActiva) private var vistaActiva
     @Environment(\.modoDemo) private var modoDemo
+    @Environment(\.repartidor) private var repartidor
     @State private var modelo: ModeloEmparejarDispositivo?
     @State private var confirmar = SegundoToque()
     @State private var ocupado: String?
     @State private var verRevocados = false
     @State private var ahora = Date.distantPast
     @State private var config = ServerConfig()
+    /// El id que dice el token del Llavero, leído una vez al aparecer (no en cada `body`).
+    @State private var idDelToken: String?
 
     static let intro =
         "Empareja la app de iPhone o iPad con este Ace Player Neo: ve la agenda y tus canales y reproduce desde el propio dispositivo. El código dura 5 minutos y solo sirve una vez."
 
     private var lista: [Device]? { datos.dispositivos.datos?.devices }
-    private var esteId: String? { datos.arranque.datos?.device?.id ?? sesion.dispositivo ?? AccesoProceso.idDelToken }
+    private var esteId: String? { datos.arranque.datos?.device?.id ?? sesion.dispositivo ?? idDelToken }
     private var visible: Bool { vistaActiva && cicloVida.fase == .activa }
 
     var body: some View {
@@ -61,16 +64,17 @@ struct SeccionDispositivos: View {
 
     private var emparejados: some View {
         let partes = ModeloDispositivos.partir(lista ?? [])
+        // El número cuenta las filas que se ven: «Este iPhone» sale aunque la lista aún no lo traiga.
+        let filas = ModeloDispositivos.conEsteIPhone(partes.activos, esteId: esteId, delArranque: datos.arranque.datos?.device)
         return VStack(alignment: .leading, spacing: 12) {
-            RotuloBloque(titulo: "Emparejados", dato: lista == nil ? nil : "\(partes.activos.count)", datoKicker: true)
-            cuerpoLista(partes.activos)
+            RotuloBloque(titulo: "Emparejados", dato: lista == nil ? nil : "\(filas.count)", datoKicker: true)
+            cuerpoLista(filas)
             if !partes.revocados.isEmpty { revocados(partes.revocados) }
         }
     }
 
-    @ViewBuilder private func cuerpoLista(_ activos: [Device]) -> some View {
+    @ViewBuilder private func cuerpoLista(_ filas: [Device]) -> some View {
         if lista != nil {
-            let filas = ModeloDispositivos.conEsteIPhone(activos, esteId: esteId, delArranque: datos.arranque.datos?.device)
             if filas.isEmpty {
                 FilaEnLinea(icono: .movil, tinta: Palco.text2,
                             texto: "Aún no hay ningún dispositivo emparejado. Empieza con «Emparejar un dispositivo».")
@@ -138,8 +142,9 @@ struct SeccionDispositivos: View {
     // MARK: Datos, relojes y eventos
 
     private func preparar() {
-        ahora = AccesoProceso.reloj.ahora
-        config = AccesoProceso.entorno?.configuracion.leer() ?? ServerConfig()
+        ahora = datos.reloj.ahora
+        config = sesion.entorno.configuracion.leer()
+        idDelToken = AccesoProceso.idDelToken(sesion.entorno)
         guard modelo == nil else { return }
         modelo = crearModelo()
     }
@@ -149,14 +154,14 @@ struct SeccionDispositivos: View {
         let sesion = self.sesion
         let haptica = self.haptica
         let avisos = self.avisos
+        let entorno = sesion.entorno
         var servicios = ModeloEmparejarDispositivo.Servicios(
             crear: {
-                let entorno = AccesoProceso.entorno
-                let guardadas = entorno?.configuracion.leer() ?? ServerConfig()
-                let activa = await entorno?.servidores.conocido()?.url
+                let guardadas = entorno.configuracion.leer()
+                let activa = await entorno.servidores.conocido()?.url
                 return try await datos.crearCodigo(CuerpoCodigo.de(activa: activa, config: guardadas))
             },
-            ahora: { AccesoProceso.reloj.ahora })
+            ahora: { datos.reloj.ahora })
         servicios.cerrado = { (fallo: APIError) in sesion.anotar(fallo, en: .pairingCreate) }
         servicios.emparejado = { (nombre: String) in
             haptica.disparar(.exito)
@@ -171,14 +176,14 @@ struct SeccionDispositivos: View {
     /// eventos `devices.changed` mientras se vea.
     private func vigilar() async {
         guard vistaActiva else { return }
-        ahora = AccesoProceso.reloj.ahora
+        ahora = datos.reloj.ahora
         modelo?.tic()
-        let repartidor = AccesoProceso.repartidor
+        let repartidor = self.repartidor
         let oyente = repartidor?.escuchar { (evento: SSEEvent) in alEvento(evento) }
         await datos.dispositivos.refrescar()
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(60))
-            ahora = AccesoProceso.reloj.ahora
+            ahora = datos.reloj.ahora
         }
         if let oyente { repartidor?.dejarDeEscuchar(oyente) }
     }
