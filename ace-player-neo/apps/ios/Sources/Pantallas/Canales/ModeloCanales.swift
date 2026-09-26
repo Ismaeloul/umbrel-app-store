@@ -17,7 +17,7 @@ import Observation
     /// Aparición escalonada: solo lo que se monta en los 900 ms tras entrar en una pestaña.
     private(set) var entrando = true
     @ObservationIgnored private var tareaEntrada: Task<Void, Never>?
-    @ObservationIgnored private var guarda = GuardaReproducir()
+    @ObservationIgnored private var guarda = GuardaReproducir.compartida
 
     var consultaLimpia: String { consulta.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -58,8 +58,11 @@ import Observation
     func puedeReproducir(_ hash: String) -> Bool { guarda.permitir(hash) }
 }
 
-/// La guarda del doble toque de play.ts: el mismo canal otra vez en menos de 800 ms no cuenta.
+/// La guarda del doble toque de play.ts: el mismo canal otra vez en menos de 800 ms no cuenta. Una sola para
+/// Canales y Buscar, como el `lastPlay` del módulo en la web.
 @MainActor final class GuardaReproducir {
+    static let compartida = GuardaReproducir()
+
     private var ultimo: String?
     private var bloqueado = false
     private var tarea: Task<Void, Never>?

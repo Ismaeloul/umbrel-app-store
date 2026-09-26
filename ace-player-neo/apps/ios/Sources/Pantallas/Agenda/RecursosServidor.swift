@@ -6,8 +6,17 @@ import Foundation
 
 @MainActor
 enum RecursosServidor {
-    /// La dirección del servidor emparejado (la primera candidata: casa, si no Tailscale).
-    static var base: URL? { ContenedorApp.actual?.entorno.configuracion.leer().candidatas.first?.url }
+    /// La dirección del servidor emparejado (la primera candidata: casa, si no Tailscale). Se lee una vez por
+    /// segundo como mucho: cada escudo y cada logo la piden al pintarse y leerla decodifica JSON.
+    static var base: URL? {
+        let ahora = ProcessInfo.processInfo.systemUptime  // monótono; solo mide el segundo de la memoria
+        if let memoria, memoria.hasta > ahora { return memoria.base }
+        let leida = ContenedorApp.actual?.entorno.configuracion.leer().candidatas.first?.url
+        memoria = (ahora + 1, leida)
+        return leida
+    }
+
+    private static var memoria: (hasta: TimeInterval, base: URL?)?
 
     /// `/api/v1/football/teams/…/crest?v=…` → `https://…/native/api/v1/football/teams/…/crest?v=…`.
     static func imagen(_ relativa: String?) -> URL? {

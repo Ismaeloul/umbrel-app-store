@@ -15,7 +15,7 @@ import Observation
     private(set) var entrando = false
     @ObservationIgnored private var ultimoAvisado: String?
     @ObservationIgnored private var tareaEntrada: Task<Void, Never>?
-    @ObservationIgnored private var guarda = GuardaReproducir()
+    @ObservationIgnored private var guarda = GuardaReproducir.compartida
 
     /// `commit`: fija lo que se busca (y lo deja en la ruta).
     func comprometer(_ valor: String, navegador: Navegador) {
