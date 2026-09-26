@@ -9,6 +9,7 @@ import SwiftUI
 struct CartelFuente: View {
     let fila: FilaFuente
     let enPartido: Bool
+    var espacio: Namespace.ID?
     let video = EntornoVideo()
     @Environment(CentroHojas.self) private var hojas
 
@@ -19,7 +20,7 @@ struct CartelFuente: View {
             video.elegirFuente(fila.id)
         } label: {
             VStack(alignment: .leading, spacing: 8) {
-                TeselaCartel(fila: fila)
+                TeselaCartel(fila: fila, espacio: espacio)
                 CuerpoCartel(fila: fila)
             }
             .contentShape(RoundedRectangle(cornerRadius: R.m, style: .circular))
@@ -56,6 +57,7 @@ struct CartelFuente: View {
 /// La tesela con su filo, el número y «En pantalla».
 private struct TeselaCartel: View {
     let fila: FilaFuente
+    let espacio: Namespace.ID?
     @State private var alto: CGFloat = 90
 
     var body: some View {
@@ -86,6 +88,7 @@ private struct TeselaCartel: View {
     @ViewBuilder private var enPantalla: some View {
         if fila.enPantalla {
             Capsula("En pantalla", tono: .oro, tamano: .sm, icono: .senal)
+                .modifier(ViajeEnPantalla(espacio: espacio))
                 .sombra([CapaSombra(y: 4, desenfoque: 12, expansion: -4, color: Color.black.opacity(0.55))], forma: Capsule())
                 .padding(6)
         }
@@ -168,5 +171,18 @@ private struct CuerpoCartel: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .multilineTextAlignment(.leading)
         .accessibilityHidden(true)
+    }
+}
+
+/// La cápsula «En pantalla» es la misma pieza en cualquier cartel: viaja de uno a otro.
+private struct ViajeEnPantalla: ViewModifier {
+    let espacio: Namespace.ID?
+
+    func body(content: Content) -> some View {
+        if let espacio {
+            content.matchedGeometryEffect(id: "en-pantalla", in: espacio)
+        } else {
+            content
+        }
     }
 }

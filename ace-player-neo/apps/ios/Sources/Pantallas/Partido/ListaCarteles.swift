@@ -10,20 +10,26 @@ struct ListaCarteles: View {
     let plegadas: [FilaFuente]
     let enPartido: Bool
     @State private var abiertas = false
+    @Namespace private var espacio
+    @Environment(\.movimientoReducido) private var reducido
+
+    /// «En pantalla» viaja del cartel viejo al nuevo (FLIP de SourceList.tsx; con movimiento reducido, aparece sin más).
+    private var enPantalla: String? { (visibles + plegadas).first { $0.enPantalla }?.id }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if !visibles.isEmpty {
-                RejillaCarteles(filas: visibles, enPartido: enPartido)
+                RejillaCarteles(filas: visibles, enPartido: enPartido, espacio: espacio)
                     .accessibilityLabel(enPartido ? "Fuentes del partido" : "Fuentes del canal")
             }
             if !plegadas.isEmpty { botonPlegadas.padding(.top, 20) }
             if abiertas && !plegadas.isEmpty {
-                RejillaCarteles(filas: plegadas, enPartido: enPartido)
+                RejillaCarteles(filas: plegadas, enPartido: enPartido, espacio: espacio)
                     .padding(.top, 4)
                     .accessibilityLabel(enPartido ? "Fuentes del partido: sin señal o en cola" : "Fuentes del canal: sin señal o en cola")
             }
         }
+        .animation(reducido ? nil : Movimiento.estandar(false), value: enPantalla)
     }
 
     /// Alto 44, relleno 0 12 0 8, separación 6, píldora, 13/650 `--text-2`, icono 18.
@@ -47,13 +53,14 @@ struct ListaCarteles: View {
 private struct RejillaCarteles: View {
     let filas: [FilaFuente]
     let enPartido: Bool
+    let espacio: Namespace.ID
 
     private let columnas = [GridItem(.flexible(), spacing: 12, alignment: .top), GridItem(.flexible(), alignment: .top)]
 
     var body: some View {
         LazyVGrid(columns: columnas, alignment: .leading, spacing: 20) {
             ForEach(Array(filas.enumerated()), id: \.element.id) { indice, fila in
-                CartelFuente(fila: fila, enPartido: enPartido)
+                CartelFuente(fila: fila, enPartido: enPartido, espacio: espacio)
                     .modifier(AparicionEscalonada(indice: indice))
             }
         }

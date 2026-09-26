@@ -7,6 +7,14 @@ final class FlujoTeatroUITests: XCTestCase {
     /// «Canal Favorito» de la demo (ServidorSimulado.favoritoInicial).
     private let canal = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
 
+    /// Hoy a las 18:45 en Madrid: el partido «sim-1» de la demo (18:30, con marcador de ESPN) va en directo.
+    private func relojDemo() -> String {
+        var calendario = Calendar(identifier: .gregorian)
+        calendario.timeZone = TimeZone(identifier: "Europe/Madrid") ?? .current
+        let hoy = calendario.dateComponents([.year, .month, .day], from: Date())
+        return String(format: "%04d-%02d-%02dT18:45:00+02:00", hoy.year ?? 2026, hoy.month ?? 1, hoy.day ?? 1)
+    }
+
     override func setUpWithError() throws {
         continueAfterFailure = false
     }
@@ -14,7 +22,10 @@ final class FlujoTeatroUITests: XCTestCase {
     @MainActor
     private func abrir(_ vista: String, tema: String = "oscuro") -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-AceNeoDemo", "-AceNeoMovimientoReducido", "-AceNeoApariencia", tema, "-AceNeoEscena", vista]
+        app.launchArguments = [
+            "-AceNeoDemo", "-AceNeoMovimientoReducido", "-AceNeoApariencia", tema, "-AceNeoEscena", vista,
+            "-AceNeoReloj", relojDemo(),
+        ]
         app.launch()
         XCTAssertTrue(elementoUI(app, IDUI.teatro).waitForExistence(timeout: 20), "No se abre el teatro de \(vista)")
         return app
@@ -47,12 +58,16 @@ final class FlujoTeatroUITests: XCTestCase {
             XCTAssertTrue(elementoUI(app, IDUI.cabeceraPartido).waitForExistence(timeout: 15), "Sin cabecera del partido")
             XCTAssertTrue(conTextoUI(app, "Equipo Local").exists, "La cabecera no dice los equipos")
             XCTAssertTrue(elementoUI(app, IDUI.pestanaFuentes).exists, "Sin pestaña Fuentes")
+            XCTAssertTrue(elementoUI(app, IDUI.capsulaMarcador).waitForExistence(timeout: 10), "Sin cápsula del marcador")
             captura(app, "teatro-partido-\(tema)")
+            // La demo de la fase 0 pone el partido a una hora fija de HOY: el marcador solo se pide cerca de esa
+            // hora (`scoresWanted`), así que tapado y destapado se prueban cuando lo hay.
             let marcador = app.buttons["Ver marcador"]
-            XCTAssertTrue(marcador.waitForExistence(timeout: 10), "La cápsula del marcador no sale tapada")
-            marcador.tap()
-            XCTAssertTrue(
-                app.buttons["Tapar el marcador (tu emisión va por detrás)"].waitForExistence(timeout: 5), "No se destapa")
+            if marcador.waitForExistence(timeout: 5) {
+                marcador.tap()
+                XCTAssertTrue(
+                    app.buttons["Tapar el marcador (tu emisión va por detrás)"].waitForExistence(timeout: 5), "No se destapa")
+            }
             elementoUI(app, IDUI.pestanaPartido).tap()
             XCTAssertTrue(conTextoUI(app, "Dónde se emite").waitForExistence(timeout: 5), "Sin la pestaña Partido")
             captura(app, "teatro-partido-pestana-partido-\(tema)")

@@ -12,6 +12,9 @@ struct MarcadorGrande: View {
     let base: URL?
     @Environment(MarcadoresDestapados.self) private var destapados
     @Environment(Haptica.self) private var haptica
+    @State private var anterior: [Int]?
+    @State private var golesLocal = 0
+    @State private var golesVisitante = 0
 
     private var pintable: LiveScore? { DatosTeatro.pintable(marcador) }
     private var tapado: Bool { pintable != nil && !destapados.destapado(partido.id) }
@@ -19,15 +22,31 @@ struct MarcadorGrande: View {
     private var terminado: Bool { estado?.fase == .terminado }
 
     var body: some View {
+        let visto: [Int]? = tapado ? nil : pintable.map { [$0.home, $0.away] }
         HStack(alignment: .center, spacing: 8) {
-            LadoMarcador(equipo: EquiposTeatro.equipo(partido, local: true, base: base), encendido: enDirecto, terminado: terminado)
+            LadoMarcador(
+                equipo: EquiposTeatro.equipo(partido, local: true, base: base), encendido: enDirecto, terminado: terminado,
+                goles: golesLocal)
             centro.frame(minWidth: 92)
             if partido.away.isEmpty {
                 Color.clear.frame(maxWidth: .infinity)
             } else {
                 LadoMarcador(
-                    equipo: EquiposTeatro.equipo(partido, local: false, base: base), encendido: enDirecto, terminado: terminado)
+                    equipo: EquiposTeatro.equipo(partido, local: false, base: base), encendido: enDirecto, terminado: terminado,
+                    goles: golesVisitante)
             }
+        }
+        .onChange(of: visto, initial: true) { _, nuevo in gol(nuevo) }
+    }
+
+    /// Un gol visto destapado: el escudo del que marca crece a 1,14 (tapado no se celebra).
+    private func gol(_ nuevo: [Int]?) {
+        defer { anterior = nuevo }
+        guard let nuevo, let antes = anterior, nuevo.count == 2, antes.count == 2 else { return }
+        if nuevo[0] > antes[0] {
+            golesLocal += 1
+        } else if nuevo[1] > antes[1] {
+            golesVisitante += 1
         }
     }
 
@@ -84,11 +103,22 @@ private struct LadoMarcador: View {
     let equipo: DatosEquipo
     let encendido: Bool
     let terminado: Bool
+    let goles: Int
+    @Environment(\.movimientoReducido) private var reducido
 
     var body: some View {
+        let quieto: Bool = reducido
         VStack(spacing: 8) {
             MarcaEquipo(equipo, tamano: 72, encendido: encendido)
                 .shadow(color: .black.opacity(0.5), radius: 8, x: 0, y: 8)
+                .keyframeAnimator(initialValue: 1.0, trigger: goles) { vista, escala in
+                    vista.scaleEffect(quieto ? 1 : escala)
+                } keyframes: { _ in
+                    KeyframeTrack {
+                        SpringKeyframe(1.14, duration: 0.28, spring: .init(duration: 0.55, bounce: 0.3))
+                        SpringKeyframe(1.0, duration: 0.52, spring: .init(duration: 0.55, bounce: 0.3))
+                    }
+                }
             Text(equipo.nombre)
                 .estilo(EstiloTexto(tamano: 15, peso: 800, anchura: 125, altoLinea: 1.2))
                 .foregroundStyle(terminado ? Palco.text2 : Palco.text)

@@ -30,7 +30,11 @@ struct TeatroView: View {
         .accessibilityIdentifier(IDUI.teatro)
         .modifier(EstadoBaseTeatro())
         .onAppear { estadoVentana.fondoOscuroArriba = true }
-        .onDisappear { estadoVentana.fondoOscuroArriba = false }
+        .onDisappear {
+            estadoVentana.fondoOscuroArriba = false
+            // Salir del partido con la pantalla completa puesta la quita (a4 §5.5).
+            if video.presentacion.pantallaCompletaForzada { video.presentacion.alternarPantallaCompleta() }
+        }
     }
 
     @ViewBuilder private var contenido: some View {
