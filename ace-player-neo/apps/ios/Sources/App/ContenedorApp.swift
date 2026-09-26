@@ -69,7 +69,8 @@ import Foundation
         self.tiempoReal = tiempoReal
         let avisos: Avisos = Avisos()
         self.avisos = avisos
-        let reproductor: Reproductor = Self.crearReproductor(entorno, motor: motor, modo: preferencias.modo)
+        let reproductor: Reproductor = Self.crearReproductor(
+            entorno, motor: motor, modo: preferencias.modo, reloj: reloj)
         self.reproductor = reproductor
         // Una sola capa de vídeo: la presentación (M3) y el entorno (M6) comparten el MISMO GestorPiP.
         let pip: GestorPiP = GestorPiP()
@@ -83,12 +84,15 @@ import Foundation
             datos, tiempoReal, sesion, reproductor, fuentes, senales, avisos, cicloVida)
     }
 
-    private static func crearReproductor(_ entorno: Entorno, motor: any MotorVideo, modo: PlaybackMode)
-        -> Reproductor
-    {
+    /// El reproductor con el reloj de la app (-AceNeoReloj en Debug; §5.1 regla 7): primera imagen, ventana de
+    /// reconexiones y el `at` de las estadísticas de la demo.
+    private static func crearReproductor(
+        _ entorno: Entorno, motor: any MotorVideo, modo: PlaybackMode, reloj: any Reloj
+    ) -> Reproductor {
         let servicio: ServicioReproduccionAPI = ServicioReproduccionAPI(api: entorno.api)
         let visor: String = IdentidadVisor.id()
-        return Reproductor(motor: motor, servicio: servicio, visor: visor, modo: modo)
+        let ahora: @Sendable () -> Date = { reloj.ahora }
+        return Reproductor(motor: motor, servicio: servicio, visor: visor, modo: modo, reloj: ahora)
     }
 
     private static func crearRepartidor(

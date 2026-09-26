@@ -505,18 +505,24 @@ final class ReproductorTests: XCTestCase {
     func testStreamReopenedReenganchaSinIntervencion() async throws {
         let (reproductor, motor, servicio) = try preparar()
         await arrancar(reproductor, motor)
+        var avisos: [AvisoReproductor] = []
+        reproductor.avisar = { avisos.append($0) }
         let datos = StreamReopenedData(
             sessionId: servicio.grant.session.id, viewerIds: [visor], url: servicio.grant.url, protocol: .hlsFmp4,
             reason: .remuxRestart)
         reproductor.procesar(.streamReopened(datos))
         XCTAssertEqual(reproductor.conexion, .conectando)
-        XCTAssertEqual(reproductor.mensaje, "Conectando con AceStream…")
+        // `reattach` de runtime.ts: el aviso queda como mensaje del vídeo (no «Conectando con AceStream…»).
+        XCTAssertEqual(reproductor.mensaje, TextosReproductor.remuxReiniciado)
         await esperarHasta("Pide la URL otra vez") { servicio.foto.streams.count == 2 }
         motor.emitir(.listo)
         motor.emitir(.primerFotograma)
         XCTAssertEqual(reproductor.conexion, .activa)
         XCTAssertNil(reproductor.mensaje)
         XCTAssertNil(reproductor.intento, "Un reenganche no gasta reconexiones")
+        // Es una recuperación: con la primera imagen, «Señal recuperada» (onFirstFrame con `recovery`).
+        XCTAssertEqual(avisos.last?.texto, TextosReproductor.senalRecuperada)
+        XCTAssertEqual(avisos.last?.tono, .ok)
     }
 
     @MainActor

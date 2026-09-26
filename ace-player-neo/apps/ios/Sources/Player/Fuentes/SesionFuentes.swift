@@ -100,6 +100,8 @@ enum ErrorFuentes: Error, Sendable, Equatable {
     /// Dos fases: el contenedor se crea y luego se presenta (evita el ciclo en el init). Los tests pasan un doble.
     /// Engancha al reproductor: sus sucesos (`onPlayerChange`), sus avisos, su háptica y Recientes.
     func conectar(_ entorno: any EntornoSesionFuentes) {
+        // Una sola vez por entorno: otra llamada añadiría otro oyente y duplicaría los sucesos.
+        if let actual = self.entorno, actual === entorno { return }
         self.entorno = entorno
         let reproductor = entorno.reproductor
         reproductor.escuchar { [weak self] suceso in self?.alSuceso(suceso) }
@@ -109,6 +111,15 @@ enum ErrorFuentes: Error, Sendable, Equatable {
         }
         reproductor.vibrar = { [weak entorno] tipo in entorno?.haptica.disparar(tipo) }
         reproductor.alGuardarReciente = { [weak entorno] biblioteca in entorno?.datos.biblioteca.escribir(biblioteca) }
+        // La lista de zapping sale de la biblioteca al momento (`zappingList`): ‹ ›, ← → y la pantalla de bloqueo.
+        reproductor.listaViva = { [weak entorno] in Self.listaZapping(entorno?.datos.biblioteca.datos) }
+    }
+
+    /// `zappingList` (M5) como canales para el reproductor (favoritos y directorio declaran su tipo).
+    static func listaZapping(_ biblioteca: LibraryView?) -> [CanalReproducible] {
+        Zapping.lista(biblioteca).map { (item: CanalZapping) -> CanalReproducible in
+            CanalReproducible(id: item.id, titulo: item.titulo, ih: item.ih ?? false)  // kindFromIh(ih ?? false)
+        }
     }
 
     // MARK: Lo que se lee

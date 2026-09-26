@@ -101,9 +101,15 @@ extension Reproductor {
         case .servidor(let codigo, _, _, _) where Self.erroresDeSistema.contains(codigo):
             fallarSistema(error.mensaje, motivo: .fallo, codigo: codigo)
         case .servidor(let codigo, let estado, _, _):
-            fallar(error.mensaje, reintentable: estado >= 500 || estado == 429, codigo: codigo)
-        case .red, .sinServidor, .servidorInalcanzable:
+            // `error.retryable || error.status === 504` (runtime.ts): la bandera de api/errors.ts es `reintentable`.
+            fallar(error.mensaje, reintentable: error.reintentable || estado == 504, codigo: codigo)
+        case .red, .servidorInalcanzable:
+            fallar(error.mensaje, reintentable: error.reintentable, codigo: error.codigo)
+        case .sinServidor:
             fallar(error.mensaje, codigo: error.codigo)
+        case .formato:
+            // `bad_response` de api/errors.ts: un ApiError que no es reintentable.
+            fallar(error.mensaje, reintentable: false, codigo: error.codigo)
         default:
             fallar(TextosReproductor.noSePudoAbrir, detalle: error.mensaje)
         }

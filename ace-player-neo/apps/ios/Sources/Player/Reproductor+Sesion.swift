@@ -72,14 +72,17 @@ extension Reproductor {
     }
 
     /// Cambio de URL sin contar como fallo (motor reiniciado, remux rehecho…): se pide otra vez la URL (unirse
-    /// a la sesión es inmediato si sigue viva) para que llegue firmada y con el remux listo.
+    /// a la sesión es inmediato si sigue viva) para que llegue firmada y con el remux listo. Como `reattach` de
+    /// runtime.ts es una RECUPERACIÓN (los 4 tics de gracia y «Señal recuperada» con la primera imagen), pero sin
+    /// olvidar la dirección del servidor y con el aviso como mensaje del vídeo.
     private func reenganchar(_ aviso: String) {
         guard fuente != nil, transicion(.reenganche) else { return }
-        mensaje = aviso
         medio = .idle
         notificar(aviso, icono: .refresh)
         motor.vaciar()
         conectar(recuperacion: false)
+        estadoConexion?.recuperacion = true
+        mensaje = aviso
     }
 
     func soltarSesion(_ motivo: ReleaseReason) {
@@ -139,10 +142,11 @@ extension Reproductor {
             conectar(recuperacion: f.empezoEn != nil)
             arrancarVigilante()
         case .playbackNowPlaying(let datos):
-            // Sin SSE, el sondeo de respaldo avisa de cambios de mando: el latido confirma si nos han echado.
-            guard sesion != nil, let ahora = datos.nowPlaying, let propio = dispositivoId, ahora.dev != propio else {
-                return
-            }
+            // Sin SSE, el sondeo de respaldo avisa de cambios de mando: el latido confirma si nos han echado. Solo
+            // con los sintéticos del sondeo (`onNowPlaying`, runtime.ts); los del SSE ya llegan con su traspaso.
+            guard sintetico, sesion != nil, let ahora = datos.nowPlaying, let propio = dispositivoId,
+                ahora.dev != propio
+            else { return }
             Task { await self.latir() }
         default:
             break
