@@ -3706,6 +3706,8 @@ Las dos ramas de la pestaña se habían unido ya entre sí y con `rediseno/iptv`
   la lista real (Movistar, LaLiga+, La Sexta).
 - **España y sin país primero dentro de cada nivel de texto**, como el buscador: «dazn 1» da antes el de aquí que los
   de Reino Unido, Alemania o Italia.
+- **El país que la limpieza de §18 saca del nombre** («DAZN 1 ES», «ES DAZN 1») es el último recurso del país de la
+  fila (`FacetInput.nameCountry`): «DAZN 1 ES» cae en la fila de España y no en una «Sin país» aparte.
 - **El país como etiqueta en la fila** (`rowTags`: «UK», «DE»… si no es España ni sin país, y luego las calidades),
   igual que la fila del buscador. Hacía falta: con «DAZN 1» de cinco países y la guía a la vista, el subtítulo enseña
   el partido y las cinco filas se veían iguales.

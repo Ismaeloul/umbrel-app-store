@@ -946,6 +946,11 @@ export interface FacetInput {
   readonly tvgCountry?: string | null;
   readonly tvgLanguage?: string | null;
   readonly quality?: IptvQuality | null;
+  /**
+   * El país que ya sacó del nombre la limpieza de la lista real (§18, `cleanIptvTitle`): «DAZN 1 ES» o
+   * «ES DAZN 1». Solo se usa si nada de lo de aquí lo dice.
+   */
+  readonly nameCountry?: string | null;
 }
 
 export interface ChannelFacets {
@@ -994,7 +999,7 @@ export class FacetDeriver {
 
   /** País de un canal (el que separa las filas, §16.3). */
   country(
-    input: Pick<FacetInput, 'title' | 'group' | 'tvgCountry'>,
+    input: Pick<FacetInput, 'title' | 'group' | 'tvgCountry' | 'nameCountry'>,
     titlePrefixes: readonly string[] = prefixes(input.title),
   ): string | null {
     const group = this.group(input.group ?? '');
@@ -1004,7 +1009,8 @@ export class FacetDeriver {
       group.prefixCountry ??
       group.firstWordCountry ??
       bracketCountry(input.title) ??
-      group.bracketCountry
+      group.bracketCountry ??
+      (input.nameCountry && /^[A-Z]{2,4}$/.test(input.nameCountry) ? input.nameCountry : null)
     );
   }
 

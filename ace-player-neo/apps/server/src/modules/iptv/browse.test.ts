@@ -182,6 +182,13 @@ describe('texto (§16.3)', () => {
     ]);
   });
 
+  it('el país que la lista real pone detrás del nombre («DAZN 1 ES», §18) junta la fila con la de España', () => {
+    const index = buildBrowseIndex(
+      catalogOf([raw(1, 'ES: DAZN 1 FHD', 'ES | DEPORTES'), raw(2, 'DAZN 1 ES', 'DEPORTES')]),
+    );
+    expect(titles(index, query(index, { q: 'dazn 1' }).rows)).toEqual(['DAZN 1/ES']);
+  });
+
   it('dentro de cada nivel, España y sin país antes que otro país (como el buscador, §18)', () => {
     const channels = [
       raw(1, 'UK: DAZN 1', 'UK | SPORTS'),

@@ -246,6 +246,7 @@ export function* buildBrowseIndexSteps(
       tvgCountry: entry.tvgCountry,
       tvgLanguage: entry.tvgLanguage,
       quality: entry.quality,
+      nameCountry: entry.country,
     });
     let row = firstRow.get(entry.key);
     if (row !== undefined && country[row] !== derived.country) {
