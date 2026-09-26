@@ -10,7 +10,7 @@ name: iOS (Ace Neo)
 #   2. solo_compilar: Debug de simulador + Release de dispositivo, con alarma de
 #      expresiones lentas de tipar («to type-check»). Nada más.
 #   3. Si no: tests unitarios (sin reintento) y de interfaz (con reintento; solo_uitests
-#      elige unos pocos, sin unitarios ni pila E2E) en un
+#      elige unos pocos, sin unitarios ni IPA; la pila E2E solo si nombra ServidorRealUITests) en un
 #      simulador de iPhone; los de interfaz van contra el servidor simulado de la app
 #      y, además, contra el backend DE VERDAD: la pila E2E (motor AceStream falso +
 #      backend del monorepo + ffmpeg) corre en este mismo runner (scripts/pila-e2e.mjs).
@@ -72,7 +72,7 @@ on:
         type: string
         default: 'iPhone 16e'
       solo_uitests:
-        description: 'Solo estos UITests, separados por comas (p. ej. FlujoArmazonUITests,LaboratorioUITests/testHapticaConHoja), sin unitarios, pila E2E ni IPA'
+        description: 'Solo estos UITests, separados por comas (p. ej. FlujoArmazonUITests,LaboratorioUITests/testHapticaConHoja), sin unitarios ni IPA (pila E2E solo si nombra ServidorRealUITests)'
         type: string
         default: ''
 
@@ -166,10 +166,12 @@ jobs:
       CON_TESTS: ${{ inputs.solo_compilar != true && inputs.ipa_sin_tests != true }}
       # UITests: además, no con solo_unitarios.
       CON_UITESTS: ${{ inputs.solo_compilar != true && inputs.ipa_sin_tests != true && inputs.solo_unitarios != true }}
-      # solo_uitests: solo esos UITests (AceNeoUITests/<valor>), sin unitarios, sin pila E2E y sin IPA.
+      # solo_uitests: solo esos UITests (AceNeoUITests/<valor>), sin unitarios y sin IPA; sin pila E2E salvo que
+      # el filtro nombre ServidorRealUITests.
       SOLO_UI: ${{ inputs.solo_uitests || '' }}
-      # Pila E2E (motor falso + backend + ffmpeg): con los UITests completos, no con solo_uitests.
-      CON_E2E: ${{ inputs.solo_compilar != true && inputs.ipa_sin_tests != true && inputs.solo_unitarios != true && !inputs.solo_uitests }}
+      # Pila E2E (motor falso + backend + ffmpeg): con los UITests completos, o con solo_uitests si incluye
+      # ServidorRealUITests (el E2E de I1 se puede lanzar solo, en minutos).
+      CON_E2E: ${{ inputs.solo_compilar != true && inputs.ipa_sin_tests != true && inputs.solo_unitarios != true && (!inputs.solo_uitests || contains(inputs.solo_uitests, 'ServidorRealUITests')) }}
       SIMULADOR: ${{ inputs.simulador || 'iPhone 16e' }}
       CAPTURAS: ${{ inputs.capturas || 'ninguna' }}
     steps:
