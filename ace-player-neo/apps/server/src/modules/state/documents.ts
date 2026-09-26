@@ -10,6 +10,8 @@
      (5 como mucho), se prueba la copia `.bak` y, si tampoco vale, se empieza
      con el documento por defecto. Nunca se borra nada en silencio. */
 
+import { readdir, rm } from 'node:fs/promises';
+import path from 'node:path';
 import type { z } from 'zod';
 import { AppError } from '../../core/errors.js';
 import type { Clock } from '../../core/clock.js';
@@ -19,6 +21,7 @@ import {
   corruptStamp,
   quarantineSync,
   readJsonObjectSync,
+  removeIfExists,
   writeAtomic,
   writeAtomicSync,
 } from './storage.js';
@@ -37,6 +40,11 @@ export interface DocumentStoreOptions<T> {
   readonly logger: Logger;
   /** Aviso de documento ilegible y apartado (el servicio lo manda a diagnóstico, paso 1.3). */
   readonly onUnreadable?: (document: string, moved: string | null) => void;
+  /**
+   * Permisos del fichero y de su `.bak` (0o600 para la IPTV, docs/iptv.md
+   * §2.1). Sin él, los de siempre.
+   */
+  readonly fileMode?: number;
 }
 
 export interface ManagedDocumentStore<T> extends JsonDocumentStore<T> {
@@ -46,6 +54,12 @@ export interface ManagedDocumentStore<T> extends JsonDocumentStore<T> {
   replaceSync(value: T): void;
   /** Espera a que no quede nada en la cola. */
   flush(): Promise<void>;
+  /**
+   * Borra la copia `.bak`, los restos `.tmp` y las copias apartadas como
+   * ilegibles (`<fichero>.corrupt-*`), en la cola (docs/iptv.md §5.3:
+   * «Eliminar» la IPTV borra también esto). El documento vigente no se toca.
+   */
+  purge(): Promise<void>;
 }
 
 /** Congela en profundidad: lo que se entrega a los demás módulos es de solo lectura. */
@@ -60,6 +74,7 @@ export function deepFreeze<T>(value: T): T {
 export function createDocumentStore<T>(options: DocumentStoreOptions<T>): ManagedDocumentStore<T> {
   const { name, file, schema, clock, logger } = options;
   const backup = `${file}.bak`;
+  const mode = options.fileMode === undefined ? {} : { mode: options.fileMode };
   let current: T | null = null;
   let status: DocumentLoadStatus | null = null;
   let chain: Promise<unknown> = Promise.resolve();
@@ -74,7 +89,7 @@ export function createDocumentStore<T>(options: DocumentStoreOptions<T>): Manage
   /* Al arrancar, un disco que no deja escribir no impide seguir en memoria. */
   function persistAtLoad(text: string): void {
     try {
-      writeAtomicSync(file, text, { backup: null });
+      writeAtomicSync(file, text, { backup: null, ...mode });
     } catch (error) {
       logger.error(
         { err: error, document: name },
@@ -132,7 +147,7 @@ export function createDocumentStore<T>(options: DocumentStoreOptions<T>): Manage
       const parsed = validate(value);
       if (parsed === null) throw new AppError('internal_error', { detail: `${name} no válido` });
       ensure();
-      writeAtomicSync(file, serialize(parsed), { backup });
+      writeAtomicSync(file, serialize(parsed), { backup, ...mode });
       current = deepFreeze(parsed);
     },
     update<R>(mutator: (draft: T) => R | Promise<R>): Promise<R> {
@@ -149,7 +164,7 @@ export function createDocumentStore<T>(options: DocumentStoreOptions<T>): Manage
             })),
           });
         }
-        await writeAtomic(file, serialize(parsed.data), { backup });
+        await writeAtomic(file, serialize(parsed.data), { backup, ...mode });
         current = deepFreeze(parsed.data);
         return result;
       };
@@ -159,6 +174,25 @@ export function createDocumentStore<T>(options: DocumentStoreOptions<T>): Manage
     },
     async flush() {
       await chain;
+    },
+    purge() {
+      const job = async (): Promise<void> => {
+        for (const leftover of [backup, `${backup}.tmp`, `${file}.tmp`]) {
+          await removeIfExists(leftover).catch(() => undefined);
+        }
+        const dir = path.dirname(file);
+        const prefix = `${path.basename(file)}.corrupt-`;
+        let names: string[] = [];
+        try {
+          names = (await readdir(dir)).filter((entry) => entry.startsWith(prefix));
+        } catch {}
+        for (const entry of names) {
+          await rm(path.join(dir, entry), { force: true, recursive: true }).catch(() => undefined);
+        }
+      };
+      const promise = chain.then(job);
+      chain = promise.catch(() => undefined);
+      return promise;
     },
   };
 }

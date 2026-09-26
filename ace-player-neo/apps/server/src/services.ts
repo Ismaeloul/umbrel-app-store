@@ -8,13 +8,13 @@
      state, net
      iptv         → state, net (docs/iptv.md §11.2)
      engine
-     scanner      → engine
+     scanner      → engine, iptv (carril IPTV)
      search       → engine, scanner
      sources      → state, scanner
      directories  → net, state
-     remux        → engine
-     playback     → engine, remux, state, scanner
-     football     → state, net, engine, scanner, search, sources, directories
+     remux        → engine, iptv (redactor)
+     playback     → engine, remux, state, scanner, iptv
+     football     → state, net, engine, scanner, search, sources, directories, iptv
      teams        → net, football
      auth         → state
      events       (solo el bus)
@@ -103,16 +103,28 @@ export function createServices(
   const net = overrides.net ?? createNetClient(core);
   const iptv = overrides.iptv ?? createIptvService({ ...core, state, net });
   const engine = overrides.engine ?? createEngineService(core);
-  const scanner = overrides.scanner ?? createScannerService({ ...core, engine });
+  const scanner = overrides.scanner ?? createScannerService({ ...core, engine, iptv });
   const search = overrides.search ?? createSearchService({ ...core, engine, scanner });
   const sources = overrides.sources ?? createSourcesService({ ...core, state, scanner });
   const directories = overrides.directories ?? createDirectoriesService({ ...core, net, state });
-  const remux = overrides.remux ?? createRemuxService({ ...core, engine });
+  const remux =
+    overrides.remux ??
+    createRemuxService({ ...core, engine, redact: (text: string) => iptv.redact(text) });
   const playback =
-    overrides.playback ?? createPlaybackService({ ...core, engine, remux, state, scanner });
+    overrides.playback ?? createPlaybackService({ ...core, engine, remux, state, scanner, iptv });
   const football =
     overrides.football ??
-    createFootballService({ ...core, state, net, engine, scanner, search, sources, directories });
+    createFootballService({
+      ...core,
+      state,
+      net,
+      engine,
+      scanner,
+      search,
+      sources,
+      directories,
+      iptv,
+    });
   const teams = overrides.teams ?? createTeamsService({ ...core, net, football });
   const auth = overrides.auth ?? createAuthService({ ...core, state });
   const events = overrides.events ?? createEventsHub(core);

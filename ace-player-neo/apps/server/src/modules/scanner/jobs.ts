@@ -30,6 +30,8 @@ export interface JobCandidate {
   audioCodecs?: readonly string[];
   cached?: boolean;
   playableOn?: PlayableOn;
+  /** Va por el carril de la IPTV (docs/iptv.md §7.3): no espera al motor comprobador. */
+  lane?: 'iptv';
   [extra: string]: unknown;
 }
 

@@ -19,6 +19,7 @@
 import type { ScanJob, ScanJobKind, ScanRef, VerdictState } from '@ace/shared';
 import type { CoreDeps, Lifecycle } from '../../core/module.js';
 import type { EngineService } from '../engine/types.js';
+import type { IptvService } from '../iptv/types.js';
 import type { PlayableOn } from './evidence.js';
 import type { ScannerTransport } from './transport.js';
 
@@ -35,6 +36,12 @@ export interface ScannerDeps extends CoreDeps {
   readonly transport?: ScannerTransport;
   /** Ids de trabajo (tests deterministas). Por defecto, 12 bytes aleatorios en hex. */
   readonly jobId?: () => string;
+  /**
+   * La IPTV (docs/iptv.md §7.3): sus candidatas van por su propio carril (la
+   * comprobación de cuenta y, solo de fondo, la sonda de stream), sin el
+   * motor comprobador ni sus 20 s de espaciado.
+   */
+  readonly iptv?: Pick<IptvService, 'classify' | 'check'>;
 }
 
 export interface ScanCandidateInput {

@@ -49,6 +49,8 @@ function legacyNet(): NetClient {
         ...(options?.accept ? { accept: options.accept } : {}),
       }),
     fetchJson: () => Promise.reject(notImplemented('fetchJson antiguo')),
+    openStream: () => Promise.reject(notImplemented('openStream antiguo')),
+    hostIsLan: () => Promise.reject(notImplemented('hostIsLan antiguo')),
     isPrivateAddress: () => {
       throw notImplemented('isPrivateAddress antiguo');
     },

@@ -71,9 +71,28 @@ export interface NetDeps extends CoreDeps {
   readonly transport?: NetTransport;
 }
 
+/**
+ * Filtro de la IPTV (docs/iptv.md §3.1): las URLs las decide el proveedor
+ * (redirecciones, segmentos, claves, `url-tvg`), así que se bloquean siempre
+ * loopback, enlace local, multicast, nombres de una etiqueta y el puerto del
+ * relé, aunque ALLOW_PRIVATE_SYNC_URLS esté activado. Además acepta `gzip`
+ * (por cabecera o por los bytes `1f 8b`) con tope de bytes descomprimidos, y
+ * el `detail` de los errores lleva solo el host, nunca la URL.
+ */
+export interface IptvFetchPolicy {
+  /** El host que escribió Isma es de su red local (solo cuenta con ALLOW_PRIVATE_SYNC_URLS). */
+  readonly lan: boolean;
+  /** Puertos que nunca se abren (el del relé). */
+  readonly blockedPorts?: readonly number[];
+  /** Tope de bytes ya descomprimidos (por defecto, `maxBytes`). */
+  readonly maxDecompressedBytes?: number;
+}
+
 export interface FetchOptions {
   /** Tope de bytes del cuerpo (por defecto 2 MiB, `FETCH_MAX_BYTES`). */
   readonly maxBytes?: number;
+  /** Petición de la IPTV (filtro más duro, gzip y errores sin URL). */
+  readonly iptv?: IptvFetchPolicy;
   /** Plazo total (por defecto 45 s) y de inactividad del socket (12 s). */
   readonly totalTimeoutMs?: number;
   readonly idleTimeoutMs?: number;
@@ -92,7 +111,45 @@ export interface FetchedResponse<T> {
   readonly contentType: string | null;
 }
 
+export interface OpenStreamOptions {
+  /** Tope de bytes que llegan por la red (sin él, sin tope: el relé de vídeo). */
+  readonly maxBytes?: number;
+  /** Plazo total, cuerpo incluido (sin él, sin plazo: el relé de vídeo). */
+  readonly totalMs?: number;
+  /** Sin bytes en este rato, se corta (`fetch_timeout`). */
+  readonly idleMs: number;
+  /** Plazo de cada salto hasta las cabeceras (por defecto, `idleMs`). */
+  readonly headersMs?: number;
+  readonly accept?: string;
+  readonly headers?: Readonly<Record<string, string>>;
+  readonly signal?: AbortSignal;
+  /** Filtro de la IPTV (docs/iptv.md §3.1). */
+  readonly iptv?: IptvFetchPolicy;
+}
+
+export interface OpenedStream {
+  readonly status: number;
+  readonly headers: Readonly<Record<string, string | readonly string[] | undefined>>;
+  readonly contentType: string | null;
+  /**
+   * Cuerpo ya descomprimido si llegó en gzip (solo IPTV). Respeta los topes y
+   * los plazos: si se pasan, se destruye con `response_too_large` o
+   * `fetch_timeout`. Destruirlo corta la conexión.
+   */
+  readonly body: Readable;
+  /** URL final tras las redirecciones. Con la IPTV NO sale del relé (docs/iptv.md §2.4). */
+  readonly finalUrl: string;
+}
+
 export interface NetClient {
+  /**
+   * Abre una descarga en streaming (docs/iptv.md §3.1): mismo filtro y mismas
+   * redirecciones que `fetchBuffer`, pero devuelve el cuerpo sin leerlo. Un
+   * estado que no es 2xx lanza `http_NNN`.
+   */
+  openStream(url: string, options: OpenStreamOptions): Promise<OpenedStream>;
+  /** ¿El host es de la red de casa? (IP de casa o nombre que resuelve solo a casa). */
+  hostIsLan(hostname: string): Promise<boolean>;
   /** Descarga texto (UTF-8). */
   fetchText(url: string, options?: FetchOptions): Promise<FetchedResponse<string>>;
   /** Descarga binario (bloques CAR de IPFS). */

@@ -1,40 +1,16 @@
 /* Fábrica del módulo `iptv` (docs/iptv.md).
 
-   ESQUELETO del contrato: sin proveedor guardado ni lógica. `view()` y
-   `remove()` responden «sin IPTV»; `update()` y `sync()` dicen
-   `iptv_not_configured` (que es lo correcto sin IPTV) y `save()`
-   `not_implemented` hasta que la parte «servidor» ponga store, crypto,
-   prueba rápida y sincronización (docs/iptv.md §11.2). */
+   La implementación vive en service.ts (guardado, sincronización, guía,
+   emparejado, apertura y comprobación), con las piezas puras de al lado:
+   crypto, redact, ids, names, m3u, json-array, xtream, catalog, match,
+   xmltv, guide, guide-match, hls, relay, probe y store. */
 
-import { IPTV_REFRESH_HOURS, type IptvView } from '@ace/shared';
-import { AppError } from '../../core/errors.js';
+import { IptvServiceImpl } from './service.js';
 import type { IptvDeps, IptvService } from './types.js';
 
 export type * from './types.js';
+export { isIptvId } from './ids.js';
 
-const NO_IPTV: IptvView = { provider: null, refreshHours: IPTV_REFRESH_HOURS };
-
-export function createIptvService(_deps: IptvDeps): IptvService {
-  return {
-    async start() {},
-    async stop() {},
-    async view() {
-      return NO_IPTV;
-    },
-    async save() {
-      throw new AppError('not_implemented', { detail: 'iptv: guardar todavía no existe' });
-    },
-    async update() {
-      throw new AppError('iptv_not_configured');
-    },
-    async sync() {
-      throw new AppError('iptv_not_configured');
-    },
-    async remove() {
-      return NO_IPTV;
-    },
-    active() {
-      return false;
-    },
-  };
+export function createIptvService(deps: IptvDeps): IptvService {
+  return new IptvServiceImpl(deps);
 }

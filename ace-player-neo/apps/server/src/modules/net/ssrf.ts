@@ -165,6 +165,118 @@ export async function resolveFetchAddresses(
   return addresses;
 }
 
+// --- Filtro de la IPTV (docs/iptv.md §3.1) ---
+
+/* Redes de casa que se pueden permitir con ALLOW_PRIVATE_SYNC_URLS: solo
+   RFC1918 y las ULA de IPv6. Nunca loopback, enlace local, metadatos,
+   multicast, 0.0.0.0/8, CGNAT ni nada reservado. */
+const LAN_NETWORKS = new BlockList();
+LAN_NETWORKS.addSubnet('10.0.0.0', 8, 'ipv4');
+LAN_NETWORKS.addSubnet('172.16.0.0', 12, 'ipv4');
+LAN_NETWORKS.addSubnet('192.168.0.0', 16, 'ipv4');
+LAN_NETWORKS.addSubnet('fc00::', 7, 'ipv6');
+
+/** ¿Es una dirección de la red de casa (RFC1918 o ULA)? Las v4 mapeadas en v6 cuentan como v4. */
+export function isLanAddress(value: unknown): boolean {
+  const address = normalizedIp(value);
+  const mapped = address.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  if (mapped) return isLanAddress(mapped[1]);
+  const family = isIP(address);
+  if (family === 4) return LAN_NETWORKS.check(address, 'ipv4');
+  if (family === 6) return LAN_NETWORKS.check(address, 'ipv6');
+  return false;
+}
+
+/** Cómo se filtra una URL que decide el proveedor de IPTV. */
+export interface IptvAddressPolicy {
+  /** ALLOW_PRIVATE_SYNC_URLS. */
+  readonly allowPrivate: boolean;
+  /**
+   * El host que escribió Isma ya es de su red local: solo entonces, y solo
+   * con `allowPrivate`, se permiten además RFC1918 y ULA.
+   */
+  readonly lan: boolean;
+  /** Puertos que nunca se abren (el del relé local). */
+  readonly blockedPorts?: readonly number[];
+}
+
+function effectivePort(parsed: URL): number {
+  if (parsed.port) return Number(parsed.port);
+  return parsed.protocol === 'https:' ? 443 : 80;
+}
+
+/**
+ * Resolución y filtro de una URL de la IPTV (lista, guía, stream, segmento,
+ * clave o redirección). Más duro que `resolveFetchAddresses`: aunque
+ * ALLOW_PRIVATE_SYNC_URLS esté activado se bloquean siempre loopback, enlace
+ * local, metadatos, multicast, 0.0.0.0/8, los nombres de una sola etiqueta
+ * (los de Docker) y el puerto del relé. Con el interruptor solo se permiten
+ * además RFC1918 y ULA, y solo si el host configurado ya es de casa. El
+ * `detail` de los errores lleva solo el host.
+ */
+export async function resolveIptvAddresses(
+  parsed: URL,
+  resolver: NetResolver,
+  policy: IptvAddressPolicy,
+): Promise<ResolvedAddress[]> {
+  const hostname = normalizedIp(parsed.hostname).replace(/\.$/, '');
+  const lanOk = policy.allowPrivate && policy.lan;
+  if (policy.blockedPorts?.includes(effectivePort(parsed))) {
+    throw new AppError('private_url', { detail: hostname });
+  }
+  const literal = familyOf(hostname);
+  const singleLabel = !literal && hostname !== '' && !hostname.includes('.');
+  const loopbackName = hostname === 'localhost' || hostname.endsWith('.localhost');
+  if (singleLabel || loopbackName) throw new AppError('private_url', { detail: hostname });
+  const allowed = (address: string): boolean =>
+    !isPrivateAddress(address) || (lanOk && isLanAddress(address));
+  if (literal) {
+    if (!allowed(hostname)) throw new AppError('private_url', { detail: hostname });
+    return [{ address: hostname, family: literal }];
+  }
+  /* Nombres de uso privado (.local, .lan…): solo si la red de casa vale; lo
+     que manda después es la IP a la que resuelven. */
+  if (!lanOk && isPrivateHostname(hostname)) {
+    throw new AppError('private_url', { detail: hostname });
+  }
+  let entries: readonly ResolvedAddress[];
+  try {
+    entries = await resolver.lookup(hostname);
+  } catch (error) {
+    throw new AppError('dns_failed', { detail: hostname, cause: error });
+  }
+  if (!entries.length) throw new AppError('dns_failed', { detail: hostname });
+  const addresses: ResolvedAddress[] = [];
+  for (const entry of entries) {
+    const address = normalizedIp(entry.address);
+    const family = familyOf(address);
+    if (!family) throw new AppError('dns_failed', { detail: hostname });
+    addresses.push({ address, family });
+  }
+  if (addresses.some((entry) => !allowed(entry.address))) {
+    throw new AppError('private_url', { detail: hostname });
+  }
+  return addresses;
+}
+
+/**
+ * ¿El host que escribió Isma es de su red local? Una IP de casa escrita tal
+ * cual, o un nombre que resuelve SOLO a direcciones de casa. Sirve para
+ * decidir `IptvAddressPolicy.lan`; con cualquier fallo, `false`.
+ */
+export async function hostIsLan(hostname: string, resolver: NetResolver): Promise<boolean> {
+  const host = normalizedIp(hostname).replace(/\.$/, '');
+  if (!host) return false;
+  if (familyOf(host)) return isLanAddress(host);
+  if (!host.includes('.') || host === 'localhost' || host.endsWith('.localhost')) return false;
+  try {
+    const entries = await resolver.lookup(host);
+    return entries.length > 0 && entries.every((entry) => isLanAddress(entry.address));
+  } catch {
+    return false;
+  }
+}
+
 type LookupCallback = (
   error: NodeJS.ErrnoException | null,
   address: string | LookupAddress[],

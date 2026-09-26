@@ -77,6 +77,13 @@ export interface DomainEvents {
     readonly watching: boolean;
     readonly hashes: readonly string[];
     readonly viewers: number;
+    /**
+     * Alguien está viendo (o esperando) algo que sale del MOTOR. Con solo
+     * IPTV el motor principal está libre: el vigilante y el buscador la
+     * ignoran; el comprobador mantiene su espaciado (la red es la misma,
+     * docs/iptv.md §6.4). Ausente = `watching`.
+     */
+    readonly engineWatching?: boolean;
   };
   'stream.ready': SseEventData<'stream.ready'> & DeviceTargeted;
   'stream.reopened': SseEventData<'stream.reopened'> & DeviceTargeted;

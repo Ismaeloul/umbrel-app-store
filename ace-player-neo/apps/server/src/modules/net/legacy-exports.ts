@@ -30,7 +30,7 @@ export async function fetchText(
   options: { binary?: boolean; accept?: string } = {},
 ): Promise<string | Buffer> {
   const clock = createSystemClock();
-  const fetchBytes = createFetcher({
+  const { fetchBytes } = createFetcher({
     clock,
     resolver: systemResolver,
     transport: nodeTransport,

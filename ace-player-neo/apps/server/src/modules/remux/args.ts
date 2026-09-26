@@ -11,20 +11,59 @@
    `-hide_banner -loglevel warning -nostdin` ya estaban en la 0.6.59. */
 
 import path from 'node:path';
+import { IPTV_FFMPEG_RW_TIMEOUT_US } from '@ace/shared';
 
 export interface RemuxArgsInput {
-  /** URL absoluta de la `playbackUrl` en el motor principal. */
+  /** URL absoluta de la entrada: la `playbackUrl` en el motor principal o la del relé IPTV. */
   readonly url: string;
   /** Carpeta de la sesión (index.m3u8, init.mp4 e index<N>.m4s). */
   readonly dir: string;
   /** Id `s_…` de la sesión del backend. */
   readonly sessionId: string;
+  /** De dónde sale la entrada (por defecto, el motor). */
+  readonly origin?: 'engine' | 'iptv';
+  /** La entrada del relé es HLS (lista) y no TS continuo. */
+  readonly isHls?: boolean;
 }
 
 /** Marca que lleva cada ffmpeg del remux en su línea de órdenes. */
 export const ACE_SESSION_MARK = 'ace_session=';
 
+/**
+ * Entrada con origen IPTV (docs/iptv.md §6.3): sin `-reconnect*` (reconecta
+ * el relé), `-rw_timeout` en MICROsegundos por encima del peor caso del relé
+ * (41 s), solo los protocolos del relé en 127.0.0.1 y, con HLS, empezando 3
+ * segmentos antes del final. La URL es la del relé: sin credenciales.
+ */
+function iptvInputArgs(input: RemuxArgsInput): string[] {
+  return [
+    '-protocol_whitelist',
+    'http,tcp,crypto',
+    '-rw_timeout',
+    String(IPTV_FFMPEG_RW_TIMEOUT_US),
+    ...(input.isHls ? ['-live_start_index', '-3'] : []),
+  ];
+}
+
 export function buildRemuxArgs(input: RemuxArgsInput): string[] {
+  const reconnect =
+    input.origin === 'iptv'
+      ? iptvInputArgs(input)
+      : [
+          // server.js:269-271: reconexión sola si el motor corta (B-224)
+          '-reconnect',
+          '1',
+          '-reconnect_streamed',
+          '1',
+          '-reconnect_at_eof',
+          '1',
+          '-reconnect_on_network_error',
+          '1',
+          '-reconnect_delay_max',
+          '4',
+          '-rw_timeout',
+          '20000000',
+        ];
   return [
     // server.js:262
     '-hide_banner',
@@ -34,19 +73,7 @@ export function buildRemuxArgs(input: RemuxArgsInput): string[] {
     // server.js:263 (B-220)
     '-fflags',
     '+genpts+discardcorrupt',
-    // server.js:269-271: reconexión sola si el motor corta (B-224)
-    '-reconnect',
-    '1',
-    '-reconnect_streamed',
-    '1',
-    '-reconnect_at_eof',
-    '1',
-    '-reconnect_on_network_error',
-    '1',
-    '-reconnect_delay_max',
-    '4',
-    '-rw_timeout',
-    '20000000',
+    ...reconnect,
     // server.js:272-273
     '-probesize',
     '5000000',

@@ -189,6 +189,15 @@ export function installProcessHandlers(proc: ProcessHooks, deps: ProcessHandlerD
 }
 
 export async function main(): Promise<void> {
+  /* `node server.js --iptv-ensayo`: el ensayo de la IPTV (docs/iptv.md §9.2), sin arrancar el servidor. */
+  if (process.argv.includes('--iptv-ensayo')) {
+    const { runIptvEnsayo } = await import('./modules/iptv/ensayo.js');
+    process.exitCode = await runIptvEnsayo({
+      env: process.env,
+      print: (line) => process.stdout.write(`${line}\n`),
+    });
+    return;
+  }
   const server = await startServer();
   const { logger, clock } = server.services;
   installProcessHandlers(process, { logger, clock, stop: () => server.stop() });

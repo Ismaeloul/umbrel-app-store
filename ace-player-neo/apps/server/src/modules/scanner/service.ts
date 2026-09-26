@@ -98,6 +98,8 @@ export class ScannerServiceImpl implements ScannerService {
   private watched = new Set<string>();
   private lastProbeAt = Number.NEGATIVE_INFINITY;
   private leakWarned = false;
+  /* Carril IPTV: una comprobación cada vez por proveedor (docs/iptv.md §7.3). */
+  private iptvChain: Promise<unknown> = Promise.resolve();
 
   constructor(private readonly deps: ScannerDeps) {
     this.verdicts = new VerdictCache(verdictPolicy(deps.config.scanner.badTtlMs));
@@ -365,6 +367,7 @@ export class ScannerServiceImpl implements ScannerService {
         attempts: 0,
         force,
         retryAt: 0,
+        ...(this.isIptv(id) ? { lane: 'iptv' as const } : {}),
       });
       if (candidates.length >= SCANNER_MAX_CANDIDATES) break;
     }
@@ -395,11 +398,14 @@ export class ScannerServiceImpl implements ScannerService {
       parked: false,
     };
     for (const candidate of job.candidates) {
+      /* La IPTV la mira siempre su carril (sus fallidas se reintentan a los 2 min, no a los 10). */
+      if (candidate.lane) continue;
       const cached = force ? null : this.verdicts.hit(candidate.id, now);
       if (cached) Object.assign(candidate, cached, { cached: true });
     }
     this.jobs.set(job.id, job);
     if (clientKey) this.clients.set(clientKey, job.id);
+    for (const candidate of job.candidates) if (candidate.lane) this.runIptvLane(job, candidate);
     if (!this.hasQueued(job)) {
       /* Todo tenía veredicto: completo desde el principio. El aviso sale
          después de devolver la referencia, para que quien lo crea la tenga. */
@@ -426,13 +432,86 @@ export class ScannerServiceImpl implements ScannerService {
   }
 
   private hasQueued(job: Job): boolean {
-    return job.candidates.some((item) => item.state === 'queued');
+    return job.candidates.some((item) => item.state === 'queued' && !item.lane);
   }
 
   private hasPending(job: Job): boolean {
     return job.candidates.some(
-      (item) => item.state === 'queued' || item.state === 'retry_wait' || item.state === 'checking',
+      (item) =>
+        !item.lane &&
+        (item.state === 'queued' || item.state === 'retry_wait' || item.state === 'checking'),
     );
+  }
+
+  /** ¿Es un id de la IPTV (del catálogo vigente o de antes)? */
+  private isIptv(id: string): boolean {
+    const iptv = this.deps.iptv;
+    if (!iptv) return false;
+    try {
+      return iptv.classify(id) !== 'engine';
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Carril IPTV (docs/iptv.md §7.3): nivel 1 (la cuenta) siempre y sin gastar
+   * conexión; nivel 2 (sonda de stream) solo en el precalentamiento. Una
+   * cuenta activa no es un stream verificado: sin veredicto, el candidato se
+   * queda «Sin comprobar» (`queued`) y no frena el trabajo.
+   */
+  private runIptvLane(job: Job, candidate: JobCandidate): void {
+    const iptv = this.deps.iptv;
+    if (!iptv || this.stopped) return;
+    const transport = this.transport;
+    const inspectFile = transport?.inspectFile
+      ? (file: string, timeoutMs: number, signal?: AbortSignal) =>
+          (transport.inspectFile as NonNullable<ScannerTransport['inspectFile']>)(
+            file,
+            timeoutMs,
+            signal,
+          )
+      : undefined;
+    const run = async (): Promise<void> => {
+      if (job.status === 'cancelled' || this.stopped) return;
+      let result: Awaited<ReturnType<typeof iptv.check>>;
+      try {
+        result = await iptv.check(candidate.id, {
+          kind: job.kind,
+          signal: this.life.signal,
+          ...(inspectFile ? { inspectFile } : {}),
+        });
+      } catch (error) {
+        this.deps.logger.debug(
+          { errorCode: error instanceof Error ? error.message : 'desconocido' },
+          '[scanner] carril IPTV',
+        );
+        return;
+      }
+      if (!result || this.stopped || (job.status as string) === 'cancelled') return;
+      const verdict = this.record(
+        candidate.id,
+        {
+          state: result.state,
+          reason: result.reason,
+          by: 'scanner',
+          checkedAt: this.deps.clock.date().toISOString(),
+          ...(result.videoCodec ? { videoCodec: result.videoCodec } : {}),
+          ...(result.audioCodecs ? { audioCodecs: [...result.audioCodecs] } : {}),
+          ...(result.rateKbps !== undefined ? { rateKbps: result.rateKbps } : {}),
+          ...(result.playableOn ? { playableOn: result.playableOn } : {}),
+        },
+        job.id,
+      );
+      Object.assign(candidate, verdict, {
+        cached: false,
+        attempts: (candidate.attempts || 0) + 1,
+      });
+      job.updatedAt = this.deps.clock.now();
+      this.progress(job);
+    };
+    const next = this.iptvChain.then(run, run);
+    this.iptvChain = next.catch(() => undefined);
   }
 
   /** `enqueueScannerJob` (server.js:3420-3427). */
@@ -585,7 +664,7 @@ export class ScannerServiceImpl implements ScannerService {
   private pick(job: Job, now: number): PickedCandidate | 'park' | null {
     let onlyWatched = false;
     for (const candidate of job.candidates) {
-      if (candidate.state !== 'queued') continue;
+      if (candidate.state !== 'queued' || candidate.lane) continue;
       if (this.isWatched(candidate.id)) {
         const cached = this.verdicts.hit(candidate.id, now);
         if (cached) return { candidate, cached };
