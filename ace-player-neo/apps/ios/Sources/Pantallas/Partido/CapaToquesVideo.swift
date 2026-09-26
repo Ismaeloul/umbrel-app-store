@@ -33,7 +33,10 @@ struct CapaToquesVideo: UIViewRepresentable {
             let t = pan.translation(in: pan.view?.window)  // la ventana: la capa se mueve con el dedo
             switch pan.state {
             case .began:
-                eje = abs(t.x) >= abs(t.y) ? .horizontal : .vertical
+                // El eje que decidió `gestureRecognizerShouldBegin`: al empezar, la traslación puede ser aún (0, 0)
+                // (pasa con los arrastres sintéticos de XCUITest) y «abs(0) >= abs(0)» lo daba por horizontal, así
+                // que arrastrar hacia abajo acababa en un deslizamiento de lado de 20 pt que no hacía nada.
+                if eje == .ninguno { eje = Coordinador.ejeDe(pan) }
             case .changed:
                 if eje == .horizontal { capa.alMover(t.x, 0) } else { capa.alMover(0, max(0, t.y)) }
             case .ended:
@@ -51,15 +54,25 @@ struct CapaToquesVideo: UIViewRepresentable {
             }
         }
 
-        /// El arrastre solo empieza en un eje permitido, decidido a los 8 pt (lo que mande entonces).
+        /// El arrastre solo empieza en un eje permitido, decidido a los 8 pt (lo que mande entonces); ese eje se
+        /// queda para todo el gesto.
         func gestureRecognizerShouldBegin(_ reconocedor: UIGestureRecognizer) -> Bool {
             guard let pan = reconocedor as? UIPanGestureRecognizer else { return true }
             let t = pan.translation(in: pan.view?.window)  // la ventana: la capa se mueve con el dedo
             let v = pan.velocity(in: pan.view)
+            let decidido = Coordinador.ejeDe(pan)
+            let empieza = decidido == .horizontal ? capa.ladosCambian : capa.abajoMinimiza && (t.y > 0 || v.y > 0)
+            eje = empieza ? decidido : .ninguno
+            return empieza
+        }
+
+        /// Horizontal si domina x (traslación o, si aún es 0, velocidad); si no, vertical.
+        private static func ejeDe(_ pan: UIPanGestureRecognizer) -> Eje {
+            let t = pan.translation(in: pan.view?.window)
+            let v = pan.velocity(in: pan.view)
             let dx = abs(t.x) > 0 ? abs(t.x) : abs(v.x)
             let dy = abs(t.y) > 0 ? abs(t.y) : abs(v.y)
-            if dx > dy { return capa.ladosCambian }
-            return capa.abajoMinimiza && (t.y > 0 || v.y > 0)
+            return dx > dy ? .horizontal : .vertical
         }
 
         /// La pulsación larga del menú del sistema no le quita el arrastre al dedo (la cancela el propio movimiento).

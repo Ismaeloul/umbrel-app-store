@@ -157,6 +157,9 @@ struct PanelMontado<Contenido: View>: View {
             .clipped()
             .animation(funde) { $0.opacity(visible ? 1 : 0) }
             .allowsHitTesting(visible)
+            // Oculto de verdad para VoiceOver (y para XCUITest): con solo `accessibilityHidden` los hijos del panel
+            // escondido seguían en el árbol con su marco sin recortar.
+            .accessibilityElement(children: visible ? .contain : .ignore)
             .accessibilityHidden(!visible)
     }
 }
