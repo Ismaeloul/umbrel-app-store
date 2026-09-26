@@ -10,7 +10,11 @@
    Es un enlace de verdad (`?vista=partido/canal/<hash>`): se puede abrir en
    otra pestaña; el clic normal reproduce (o elige, con la ficha de escritorio
    a la vista). Acciones: estrella y «Más» (con el ratón aparecen al pasar por
-   encima; en táctil siempre), clic derecho y pulsación larga. */
+   encima; en táctil siempre), clic derecho y pulsación larga.
+
+   Buscador con IPTV (docs/iptv.md §14.5): un canal de tu IPTV lleva el
+   distintivo «IPTV» (el del cartel de la fuente: cápsula neutra con la tele)
+   y su subtítulo propio («Casa · 1080p», «Tu IPTV»…). */
 
 import type { LibraryCollection } from '@ace/shared';
 import { useEffect, useId, useRef, type CSSProperties, type MouseEvent } from 'react';
@@ -18,6 +22,7 @@ import { cx } from '../../lib/cx.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { teamCrest, teamPalette, teamShort } from '../../lib/teams.ts';
 import {
+  Capsule,
   ChannelMark,
   Icon,
   IconButton,
@@ -59,6 +64,10 @@ export interface ChannelRowProps {
   menuItems: MenuItem[];
   /** Posición para la aparición escalonada (solo al entrar); null, sin animación. */
   enterIndex?: number | null;
+  /** Es (o representa) un canal de tu IPTV: distintivo «IPTV» (§14.5). */
+  iptv?: boolean;
+  /** Subtítulo propio (el de una fila IPTV); si no, el de siempre. */
+  subtitle?: string | undefined;
 }
 
 function scoreText(home: number, away: number): string {
@@ -178,6 +187,8 @@ export function ChannelRow({
   onToggleFavorite,
   menuItems,
   enterIndex = null,
+  iptv = false,
+  subtitle: ownSubtitle,
 }: ChannelRowProps) {
   const { bind, menu } = useContextMenu();
   // El marcador del partido que ves va tapado (regla 29). El «destapado» es
@@ -215,7 +226,7 @@ export function ChannelRow({
   // En el descanso el reloj de ESPN se queda en 45': se dice «Descanso», como
   // el anillo de la ficha, para que la tarjeta y la ficha no se contradigan.
   const halftime = live ? isHalftime(live.score) : false;
-  const subtitle = subtitleFor(item, kind, availability);
+  const subtitle = ownSubtitle ?? subtitleFor(item, kind, availability);
   const title = item.title || 'Canal sin nombre';
 
   return (
@@ -242,6 +253,11 @@ export function ChannelRow({
         <span className="ch__body">
           <span className="ch__name">
             <span className="ch__name-text">{title}</span>
+            {iptv ? (
+              <Capsule tone="neutral" size="sm" icon="tv" className="ch__iptv">
+                IPTV
+              </Capsule>
+            ) : null}
             {fallen ? (
               <span
                 className="ch__fallen"

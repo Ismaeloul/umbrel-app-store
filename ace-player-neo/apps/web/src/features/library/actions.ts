@@ -10,7 +10,10 @@
      la app. Así los dos menús copian exactamente lo mismo y funciona con
      cualquier canal, no solo con el que suena.
    - Renombrar y Eliminar no salen en los resultados del buscador
-     (index.html:5501-5506). */
+     (index.html:5501-5506).
+   - Un canal de tu IPTV (`iptv: true`, docs/iptv.md §14.5) no tiene hash de
+     AceStream: sin «Abrir en la app de AceStream», «Copiar URL del stream
+     (VLC)», «Copiar enlace acestream://» ni «Copiar hash». */
 
 import type { MenuItem } from '../../ui/index.ts';
 import { externalStreamUrl } from '../../player/clipboard.ts';
@@ -27,6 +30,8 @@ export interface ChannelMenuOptions {
   title: string;
   /** true si es un infohash (resultado del buscador): la URL del stream lo pide así. */
   ih?: boolean;
+  /** Es un canal de tu IPTV (id sintético): sin las acciones del hash (§14.5). */
+  iptv?: boolean;
   isFavorite: boolean;
   onToggleFavorite(): void;
   onPlay?(): void;
@@ -40,6 +45,7 @@ export function channelMenuItems({
   hash,
   title,
   ih = false,
+  iptv = false,
   isFavorite,
   onToggleFavorite,
   onPlay,
@@ -56,35 +62,51 @@ export function channelMenuItems({
     icon: isFavorite ? 'star-f' : 'star',
     onSelect: onToggleFavorite,
   });
-  items.push({
-    id: 'abrir-acestream',
-    label: 'Abrir en la app de AceStream',
-    icon: 'externo',
-    separated: true,
-    onSelect: () => openInAceStream(hash),
-  });
-  items.push(
-    {
-      id: 'copiar-stream',
-      label: 'Copiar URL del stream (VLC)',
-      icon: 'externo',
-      // Se calcula al pulsar: el origen de la página es el de ese momento.
-      onSelect: () => void copyStreamUrl(externalStreamUrl(hash, ih ? 'infohash' : 'auto')),
-    },
-    {
-      id: 'copiar-enlace',
-      label: 'Copiar enlace acestream://',
-      icon: 'link',
-      onSelect: () => void copyAcestreamLink(hash),
-    },
-    { id: 'copiar-hash', label: 'Copiar hash', icon: 'hash', onSelect: () => void copyHash(hash) },
-    {
+  if (iptv) {
+    items.push({
       id: 'copiar-nombre',
       label: 'Copiar nombre',
       icon: 'copy',
+      separated: true,
       onSelect: () => void copyChannelName(title),
-    },
-  );
+    });
+  } else {
+    items.push({
+      id: 'abrir-acestream',
+      label: 'Abrir en la app de AceStream',
+      icon: 'externo',
+      separated: true,
+      onSelect: () => openInAceStream(hash),
+    });
+  }
+  if (!iptv)
+    items.push(
+      {
+        id: 'copiar-stream',
+        label: 'Copiar URL del stream (VLC)',
+        icon: 'externo',
+        // Se calcula al pulsar: el origen de la página es el de ese momento.
+        onSelect: () => void copyStreamUrl(externalStreamUrl(hash, ih ? 'infohash' : 'auto')),
+      },
+      {
+        id: 'copiar-enlace',
+        label: 'Copiar enlace acestream://',
+        icon: 'link',
+        onSelect: () => void copyAcestreamLink(hash),
+      },
+      {
+        id: 'copiar-hash',
+        label: 'Copiar hash',
+        icon: 'hash',
+        onSelect: () => void copyHash(hash),
+      },
+      {
+        id: 'copiar-nombre',
+        label: 'Copiar nombre',
+        icon: 'copy',
+        onSelect: () => void copyChannelName(title),
+      },
+    );
   if (onRename)
     items.push({
       id: 'renombrar',

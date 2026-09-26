@@ -28,6 +28,7 @@ import type {
   SourceReportReason,
 } from '@ace/shared';
 import { normalizeChannelKey } from '@ace/shared';
+import { DEMO_IPTV_SEARCH, demoIptvId } from '../search/demo.ts';
 
 export const DEMO_STEP_MS = 1350;
 
@@ -73,8 +74,8 @@ const DEMO_IPTV: PlanItem = {
   source: 'iptv',
   quality: 'fhd',
 };
-/** Canales que están en la IPTV de muestra (para `scope=channel`). */
-const DEMO_IPTV_CHANNELS = ['DAZN 1', 'M+ Liga de Campeones', 'M+ Liga de Campeones 2'];
+/** Canales que están en la IPTV de muestra (para `scope=channel`): los del buscador de la demo. */
+const DEMO_IPTV_CHANNELS = DEMO_IPTV_SEARCH.map(([title]) => title);
 
 const PLANS: Record<string, Plan> = {
   'demo-1': { status: 'found', items: RICH },
@@ -219,6 +220,7 @@ export function demoResolve(query: {
   channel?: string | string[] | undefined;
   research?: '0' | '1' | undefined;
   scope?: 'match' | 'channel' | undefined;
+  iptv?: string | undefined;
 }): Resolution {
   const channels = Array.isArray(query.channel)
     ? query.channel
@@ -226,7 +228,7 @@ export function demoResolve(query: {
       ? [query.channel]
       : [];
   const channel = channels[0] ?? 'Canal';
-  if (query.scope === 'channel') return demoChannelResolve(channel);
+  if (query.scope === 'channel') return demoChannelResolve(channel, query.iptv);
   const plan = planFor(query.match);
   const research = query.research === '1';
   const items = [...plan.items, ...(research ? RESEARCH_EXTRA : [])].map((item) => ({
@@ -271,7 +273,7 @@ export function demoResolve(query: {
  * `not_found` sin trabajo (la web sigue como hoy); con ella, la IPTV sola
  * (las hermanas de la biblioteca las pone la web).
  */
-function demoChannelResolve(channel: string): Resolution {
+function demoChannelResolve(channel: string, tapped?: string): Resolution {
   const base: Resolution = {
     status: 'not_found',
     channels: [channel],
@@ -286,8 +288,12 @@ function demoChannelResolve(channel: string): Resolution {
     scan: null,
   };
   const key = normalizeChannelKey(channel);
-  if (!key || !DEMO_IPTV_CHANNELS.some((name) => normalizeChannelKey(name) === key)) return base;
-  const iptv = candidateOf({ ...DEMO_IPTV, hash: demoHash(`iptv|${key}`) }, channel, 0);
+  /* El canal IPTV tocado en el buscador (§14.4) manda aunque el título no case. */
+  const name =
+    DEMO_IPTV_CHANNELS.find((title) => tapped !== undefined && demoIptvId(title) === tapped) ??
+    DEMO_IPTV_CHANNELS.find((title) => normalizeChannelKey(title) === key);
+  if (!key || !name) return base;
+  const iptv = candidateOf({ ...DEMO_IPTV, hash: demoIptvId(name) }, name, 0);
   return { ...base, status: 'found', candidate: iptv, candidates: [iptv] };
 }
 

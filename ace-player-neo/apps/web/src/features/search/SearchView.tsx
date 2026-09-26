@@ -20,11 +20,19 @@
 
    Además, arriba, lo que ya tienes en tu biblioteca con ese nombre: a menudo
    el canal ya está y no hace falta preguntar al motor. El texto viaja en la
-   URL (`&q=`), así que la biblioteca puede mandar aquí una búsqueda hecha. */
+   URL (`&q=`), así que la biblioteca puede mandar aquí una búsqueda hecha.
 
-import type { SearchResult } from '@ace/shared';
+   Con IPTV activa (docs/iptv.md §14): se pregunta a la vez al motor y a tu
+   IPTV (`iptvChannels`, el mismo texto confirmado) y se junta todo con
+   `mergeSearch` (iptv.ts): un canal, una fila. Entre «En tu biblioteca» y
+   «En el motor AceStream» sale «En tu IPTV» (5 a la vista y «Ver más»); un
+   canal que está en los dos sitios sale una vez con el distintivo «IPTV».
+   Tocarlo es como tocar un partido: IPTV primero y AceStream de respaldo.
+   Sin IPTV activa, ni una llamada a `iptvChannels` y los textos de siempre. */
+
+import { IPTV_SEARCH, type Item, type SearchResult } from '@ace/shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { isAbortError, useApiQuery } from '../../api/index.ts';
+import { isAbortError, useApiQuery, useIptvActive } from '../../api/index.ts';
 import type { ViewProps } from '../../app/contracts.ts';
 import { requestFocus } from '../../app/focus.ts';
 import { useNavigate, useSearchParam } from '../../app/router.tsx';
@@ -52,6 +60,18 @@ import '../library/library.css';
 import { PasteHashSheet, pastedTitle } from '../paste-hash/index.ts';
 import { registerSearchDemo } from './demo.ts';
 import {
+  emptyTitle,
+  IPTV_ID_SUBTITLE,
+  IPTV_TEXT,
+  cappedText,
+  iptvCountText,
+  iptvSubtitle,
+  liveText,
+  mergeSearch,
+  showMoreText,
+  visibleIptv,
+} from './iptv.ts';
+import {
   canSearch,
   cleanQuery,
   ENGINE_SEARCH_DELAY_MS,
@@ -75,7 +95,9 @@ export default function SearchView({ active }: ViewProps) {
   const [text, setText] = useState(() => param ?? '');
   const [committed, setCommitted] = useState(() => param ?? '');
   const [pasteOpen, setPasteOpen] = useState(false);
+  const [iptvExpanded, setIptvExpanded] = useState(false);
   const lastParam = useRef(param);
+  const withIptv = useIptvActive();
   const actions = useChannelActions();
   const onAir = useOnAir(active);
   const onScreen = useOnScreenHash();
@@ -133,6 +155,21 @@ export default function SearchView({ active }: ViewProps) {
     },
   );
 
+  // Tu IPTV, a la vez y con el mismo texto (§14.3). Rápida: sin esqueleto.
+  const iptvSearch = useApiQuery(
+    'iptvChannels',
+    { query: { q: query, limit: IPTV_SEARCH.limit } },
+    {
+      enabled: withIptv && canSearch(query) && detected === null,
+      retry: false,
+      staleTime: 60_000,
+    },
+  );
+  const iptvData = withIptv && iptvSearch.data?.query === query ? iptvSearch.data : undefined;
+  const iptvFailed = withIptv && iptvSearch.isError && !isAbortError(iptvSearch.error);
+  // Cada búsqueda nueva empieza con «En tu IPTV» plegada.
+  useEffect(() => setIptvExpanded(false), [query]);
+
   // El aviso de fallo, una vez por búsqueda fallida (no por repintado).
   const failedAt = search.isError && !isAbortError(search.error) ? search.errorUpdatedAt : 0;
   useEffect(() => {
@@ -140,19 +177,6 @@ export default function SearchView({ active }: ViewProps) {
   }, [failedAt]);
 
   const results: SearchResult[] = search.data?.results ?? [];
-  const phase = searchPhase({
-    typed: text,
-    committed: query,
-    loading: search.isFetching && !search.data,
-    error: search.isError && !search.data,
-    count: search.data ? results.length : null,
-  });
-
-  // Aparición escalonada solo al llegar resultados nuevos, no al desplazarse.
-  const enter = useRef({ key: '', until: 0 });
-  const enterKey = phase.kind === 'results' ? phase.query : '';
-  if (enter.current.key !== enterKey) enter.current = { key: enterKey, until: Date.now() + 900 };
-  const entering = Date.now() < enter.current.until;
 
   const local = useMemo(() => {
     const data = actions.library;
@@ -162,6 +186,42 @@ export default function SearchView({ active }: ViewProps) {
       .filter((item) => (seen.has(item.id) ? false : (seen.add(item.id), true)))
       .slice(0, LOCAL_LIMIT);
   }, [actions.library, query, detected]);
+
+  // Un canal, una fila (§14.3): biblioteca, «En tu IPTV» y el motor, sin repetir.
+  const merged = useMemo(
+    () =>
+      mergeSearch<Item>({
+        local,
+        iptv: iptvData ? iptvData.channels : null,
+        engine: results,
+        iptvIds: actions.library?.iptvIds,
+      }),
+    [local, iptvData, results, actions.library?.iptvIds],
+  );
+  const engineRows = merged.engine;
+  const phase = searchPhase({
+    typed: text,
+    committed: query,
+    loading: search.isFetching && !search.data,
+    error: search.isError && !search.data,
+    count: search.data ? engineRows.length : null,
+  });
+  // Todo lo del motor ya sale arriba (biblioteca o IPTV): su sección sobra.
+  const engineAllShown = phase.kind === 'empty' && merged.hiddenEngine > 0;
+  const bothEmpty =
+    withIptv &&
+    phase.kind === 'empty' &&
+    !engineAllShown &&
+    iptvData !== undefined &&
+    iptvData.channels.length === 0;
+  const iptvRows = visibleIptv(merged.iptv, iptvExpanded, IPTV_SEARCH.shownInSearch);
+  const iptvHidden = merged.iptv.length - iptvRows.length;
+
+  // Aparición escalonada solo al llegar resultados nuevos, no al desplazarse.
+  const enter = useRef({ key: '', until: 0 });
+  const enterKey = phase.kind === 'results' ? phase.query : '';
+  if (enter.current.key !== enterKey) enter.current = { key: enterKey, until: Date.now() + 900 };
+  const entering = Date.now() < enter.current.until;
 
   // Vaciar (Esc, la ✕ del campo, «Limpiar», «Borrar la búsqueda»): el foco
   // vuelve al campo para escribir otra cosa.
@@ -210,7 +270,7 @@ export default function SearchView({ active }: ViewProps) {
         className="lib-search search-field"
         variant="search"
         type="search"
-        label="Buscar en el motor AceStream"
+        label={withIptv ? IPTV_TEXT.fieldLabel : 'Buscar en el motor AceStream'}
         hideLabel
         icon="buscar"
         placeholder="Nombre de un canal, o pega un enlace de AceStream…"
@@ -247,13 +307,18 @@ export default function SearchView({ active }: ViewProps) {
       <p className="sr-only" aria-live="polite">
         {detected
           ? `Enlace detectado: ${known ? known.title : `Content ID ${detected}`}.`
-          : phase.kind === 'loading'
-            ? `Buscando «${phase.query}» en el motor…`
-            : phase.kind === 'results'
-              ? `${phase.count} ${phase.count === 1 ? 'resultado' : 'resultados'} para «${phase.query}».`
-              : phase.kind === 'empty'
-                ? `Sin resultados para «${phase.query}».`
-                : ''}
+          : withIptv &&
+              iptvData &&
+              (phase.kind === 'results' || phase.kind === 'empty') &&
+              (merged.iptv.length > 0 || engineRows.length > 0)
+            ? liveText(merged.iptv.length, engineRows.length, phase.query)
+            : phase.kind === 'loading'
+              ? `Buscando «${phase.query}» en el motor…`
+              : phase.kind === 'results'
+                ? `${phase.count} ${phase.count === 1 ? 'resultado' : 'resultados'} para «${phase.query}».`
+                : phase.kind === 'empty'
+                  ? `Sin resultados para «${phase.query}».`
+                  : ''}
       </p>
 
       {detected ? (
@@ -304,29 +369,106 @@ export default function SearchView({ active }: ViewProps) {
             En tu biblioteca
           </h2>
           <ul className="lib-list search-local">
-            {local.map((item) => (
-              <li key={item.id} className="lib-row">
-                <ChannelRow
-                  item={item}
-                  kind={item.type === 'web' ? 'web' : item.type === 'fav' ? 'favorites' : 'history'}
-                  href={searchFor({ vista: 'partido', id: null, canal: item.id })}
-                  isFavorite={actions.favoriteIds.has(item.id)}
-                  onScreen={onScreen === item.id}
-                  onAir={onAir(item)}
-                  onPlay={() => actions.play(item, 'buscar')}
-                  onToggleFavorite={() => actions.toggleFavorite(item)}
-                  menuItems={actions.menuFor(
-                    item,
-                    item.type === 'web' ? 'web' : item.type === 'fav' ? 'favorites' : 'history',
-                  )}
-                />
-              </li>
-            ))}
+            {merged.local.map(({ item, iptv }) => {
+              const idState = actions.library?.iptvIds?.[item.id];
+              const channel = { ...item, iptv };
+              return (
+                <li key={item.id} className="lib-row">
+                  <ChannelRow
+                    item={item}
+                    kind={
+                      item.type === 'web' ? 'web' : item.type === 'fav' ? 'favorites' : 'history'
+                    }
+                    href={searchFor({ vista: 'partido', id: null, canal: item.id })}
+                    isFavorite={actions.favoriteIds.has(item.id)}
+                    onScreen={onScreen === item.id}
+                    onAir={onAir(item)}
+                    iptv={iptv !== null}
+                    subtitle={idState ? IPTV_ID_SUBTITLE[idState] : undefined}
+                    onPlay={() => actions.play(channel, 'buscar')}
+                    onToggleFavorite={() => actions.toggleFavorite(channel)}
+                    menuItems={actions.menuFor(
+                      channel,
+                      item.type === 'web' ? 'web' : item.type === 'fav' ? 'favorites' : 'history',
+                    )}
+                  />
+                </li>
+              );
+            })}
           </ul>
         </section>
       ) : null}
 
-      {!detected ? (
+      {!detected && withIptv && canSearch(query) && (merged.iptv.length > 0 || iptvFailed) ? (
+        <section className="search-sec search-iptv" aria-labelledby="buscar-iptv-titulo">
+          <h2 id="buscar-iptv-titulo" className="search-sec__title">
+            {IPTV_TEXT.section}
+            {iptvData && merged.iptv.length > 0 ? (
+              <span className="search-sec__count">
+                {iptvCountText(iptvData.total, iptvData.capped)}
+              </span>
+            ) : null}
+          </h2>
+          {iptvFailed && !iptvData ? (
+            <div className="search-iptv__error" role="status">
+              <p>{IPTV_TEXT.failed}</p>
+              <Button
+                variant="quiet"
+                size="sm"
+                icon="refresh"
+                onClick={() => void iptvSearch.refetch()}
+              >
+                {IPTV_TEXT.retry}
+              </Button>
+            </div>
+          ) : (
+            <ul className="lib-list search-local search-iptv__list">
+              {iptvRows.map(({ channel, alsoAce }) => {
+                const row = {
+                  id: channel.id,
+                  title: channel.title,
+                  category: 'IPTV',
+                  ih: false,
+                  iptv: channel.id,
+                };
+                return (
+                  <li key={channel.id} className="lib-row">
+                    <ChannelRow
+                      item={row}
+                      kind="search"
+                      href={searchFor({ vista: 'partido', id: null, canal: channel.id })}
+                      isFavorite={actions.favoriteIds.has(channel.id)}
+                      onScreen={onScreen === channel.id}
+                      onAir={onAir(row)}
+                      iptv
+                      subtitle={iptvSubtitle(channel, alsoAce)}
+                      onPlay={() => actions.play(row, 'buscar')}
+                      onToggleFavorite={() => actions.toggleFavorite(row)}
+                      menuItems={actions.menuFor(row, 'search')}
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {merged.iptv.length > IPTV_SEARCH.shownInSearch ? (
+            <Button
+              variant="quiet"
+              size="sm"
+              className="search-iptv__more"
+              aria-expanded={iptvExpanded}
+              onClick={() => setIptvExpanded((open) => !open)}
+            >
+              {iptvExpanded ? IPTV_TEXT.showLess : showMoreText(iptvHidden)}
+            </Button>
+          ) : null}
+          {iptvExpanded && iptvData && (iptvData.capped || iptvData.total > IPTV_SEARCH.limit) ? (
+            <p className="search-hint__text search-iptv__note">{cappedText(query)}</p>
+          ) : null}
+        </section>
+      ) : null}
+
+      {!detected && !engineAllShown ? (
         <section className="search-sec" aria-labelledby="buscar-motor-titulo">
           <h2 id="buscar-motor-titulo" className="search-sec__title">
             En el motor AceStream
@@ -336,7 +478,9 @@ export default function SearchView({ active }: ViewProps) {
           </h2>
           {phase.kind === 'idle' || phase.kind === 'short' ? (
             <div className="search-hint">
-              <p className="search-hint__title">Busca canales publicados en el motor AceStream.</p>
+              <p className="search-hint__title">
+                {withIptv ? IPTV_TEXT.hint : 'Busca canales publicados en el motor AceStream.'}
+              </p>
               <p className="search-hint__text">Escribe al menos 2 letras.</p>
               <p className="search-hint__text">
                 Si pegas un Content ID o un enlace acestream://, se reproduce directamente.
@@ -351,14 +495,14 @@ export default function SearchView({ active }: ViewProps) {
           ) : null}
           {phase.kind === 'empty' ? (
             <EmptyState
-              title={`Sin resultados para «${phase.query}».`}
+              title={emptyTitle(phase.query)}
               actions={
                 <Button variant="quiet" icon="x" onClick={clear}>
                   Borrar la búsqueda
                 </Button>
               }
             >
-              Prueba con otro nombre o menos palabras.
+              {bothEmpty ? IPTV_TEXT.emptyText : 'Prueba con otro nombre o menos palabras.'}
             </EmptyState>
           ) : null}
           {phase.kind === 'error' ? (
@@ -377,27 +521,31 @@ export default function SearchView({ active }: ViewProps) {
           {phase.kind === 'results' ? (
             <VirtualList
               key={phase.query}
-              rows={results}
-              rowKey={(row) => row.id}
+              rows={engineRows}
+              rowKey={(row) => row.result.id}
               estimate={() => 84}
               className="lib-list"
               label={`Resultados para «${phase.query}»`}
               rowClassName={() => 'lib-row'}
-              renderRow={(result, index) => (
-                <ChannelRow
-                  item={result}
-                  kind="search"
-                  availability={result.availability}
-                  href={searchFor({ vista: 'partido', id: null, canal: result.id })}
-                  isFavorite={actions.favoriteIds.has(result.id)}
-                  onScreen={onScreen === result.id}
-                  onAir={onAir(result)}
-                  onPlay={() => actions.play(result, 'buscar')}
-                  onToggleFavorite={() => actions.toggleFavorite(result)}
-                  menuItems={actions.menuFor(result, 'search')}
-                  enterIndex={entering ? Math.min(index, 12) : null}
-                />
-              )}
+              renderRow={({ result, iptv }, index) => {
+                const channel = { ...result, iptv };
+                return (
+                  <ChannelRow
+                    item={result}
+                    kind="search"
+                    availability={result.availability}
+                    href={searchFor({ vista: 'partido', id: null, canal: result.id })}
+                    isFavorite={actions.favoriteIds.has(result.id)}
+                    onScreen={onScreen === result.id}
+                    onAir={onAir(result)}
+                    iptv={iptv !== null}
+                    onPlay={() => actions.play(channel, 'buscar')}
+                    onToggleFavorite={() => actions.toggleFavorite(result)}
+                    menuItems={actions.menuFor(result, 'search')}
+                    enterIndex={entering ? Math.min(index, 12) : null}
+                  />
+                );
+              }}
             />
           ) : null}
         </section>

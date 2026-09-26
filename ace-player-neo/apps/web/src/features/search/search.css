@@ -167,3 +167,24 @@
     animation-name: ace-funde;
   }
 }
+
+/* ---- «En tu IPTV» (docs/iptv.md §14.5) ---------------------------------------- */
+.search-iptv__more {
+  justify-self: start;
+}
+.search-iptv__note {
+  padding-inline: var(--s-1);
+}
+.search-iptv__error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-l);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}

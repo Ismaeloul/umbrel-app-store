@@ -2,9 +2,14 @@
    mismo resultado; aquí se filtra un catálogo pequeño de muestra por el texto
    escrito, para que la demo enseñe también «Sin resultados». Los hashes son
    inventados (40 hexadecimales) y se marcan como infohash, como los de verdad.
-   Solo se registra una vez, al cargar el trozo del buscador. */
+   Solo se registra una vez, al cargar el trozo del buscador.
 
-import type { SearchResponse } from '@ace/shared';
+   IPTV (docs/iptv.md §14.8): `iptvChannels` contesta con los canales de la
+   «IPTV de ejemplo» de demo-5 («Casa») y los resultados del motor de «DAZN
+   LaLiga» llevan su id (`iptv`), así se ven las tres secciones y el
+   distintivo. Los ids son los mismos que da la resolución de la demo. */
+
+import type { IptvChannelsResponse, SearchResponse } from '@ace/shared';
 import { registerDemoHandler } from '../../api/index.ts';
 import { foldText } from '../library/model.ts';
 
@@ -35,6 +40,23 @@ function fakeHash(seed: string): string {
   return out.slice(0, 40);
 }
 
+/** Canales de la IPTV de ejemplo (demo-5, «Casa»): nombre limpio y calidad. */
+export const DEMO_IPTV_SEARCH: ReadonlyArray<[string, 'fhd' | 'hd']> = [
+  ['DAZN LaLiga', 'fhd'],
+  ['DAZN 1', 'fhd'],
+  ['M+ LaLiga TV', 'fhd'],
+  ['M+ Liga de Campeones', 'fhd'],
+  ['M+ Liga de Campeones 2', 'hd'],
+  ['Telecinco', 'hd'],
+  ['laSexta', 'hd'],
+  ['La 1', 'hd'],
+];
+
+/** Id de un canal de la IPTV de ejemplo (el mismo en el buscador y en la resolución). */
+export function demoIptvId(title: string): string {
+  return fakeHash(`iptv|${foldText(title)}`);
+}
+
 export function demoSearch(query: string): SearchResponse {
   const q = foldText(query).slice(0, 80);
   const results = CATALOG.filter(([title]) => foldText(title).includes(q))
@@ -46,8 +68,23 @@ export function demoSearch(query: string): SearchResponse {
       availability,
       bitrate: null,
       ih: true as const,
+      ...(title === 'DAZN LaLiga' ? { iptv: demoIptvId(title) } : {}),
     }));
   return { query: q, results };
+}
+
+export function demoIptvChannels(query: string): IptvChannelsResponse {
+  const q = foldText(query).slice(0, 80);
+  const channels = DEMO_IPTV_SEARCH.filter(([title]) => foldText(title).includes(q)).map(
+    ([title, quality]) => ({
+      id: demoIptvId(title),
+      title,
+      quality,
+      provider: 'Casa',
+      library: [],
+    }),
+  );
+  return { query: q, total: channels.length, capped: false, channels };
 }
 
 let registered = false;
@@ -58,5 +95,9 @@ export function registerSearchDemo(): void {
   registerDemoHandler('search', async ({ query }) => {
     await new Promise((resolve) => setTimeout(resolve, 260));
     return demoSearch(String(query?.q ?? ''));
+  });
+  registerDemoHandler('iptvChannels', async ({ query }) => {
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    return demoIptvChannels(String(query?.q ?? ''));
   });
 }

@@ -15,12 +15,16 @@
    - Con la ficha de escritorio a la vista (aside.tsx), el clic elige el canal;
      sin ella, el clic reproduce (selection.ts).
    - Oculta (Activity), la vista conserva pestaña, texto, acordeones y scroll
-     y no tiene nada vivo: ni consultas, ni temporizadores. */
+     y no tiene nada vivo: ni consultas, ni temporizadores.
+   - Con IPTV activa y 2 letras o más (docs/iptv.md §14.5): debajo de la lista
+     filtrada, «En tu IPTV» con 3 canales como mucho (sin los que ya son filas
+     de la pestaña) y «Ver todo en Buscar». Pregunta con el texto estable
+     450 ms, como Buscar, y comparte su consulta en caché. */
 
-import type { Item, LibraryCollection } from '@ace/shared';
+import { IPTV_SEARCH, type Item, type LibraryCollection } from '@ace/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { api, useApiQuery, useAppMode } from '../../api/index.ts';
+import { api, useApiQuery, useAppMode, useIptvActive } from '../../api/index.ts';
 import type { ViewProps } from '../../app/contracts.ts';
 import { requestFocus } from '../../app/focus.ts';
 import { useLayout } from '../../app/layout.tsx';
@@ -45,6 +49,8 @@ import {
 } from '../../ui/index.ts';
 import { applyDirectoryView, directoryErrorMessage } from '../directories/model.ts';
 import { PasteHashSheet } from '../paste-hash/index.ts';
+import { bothButtonText, IPTV_ID_SUBTITLE, IPTV_TEXT, iptvSubtitle } from '../search/iptv.ts';
+import { canSearch, cleanQuery, ENGINE_SEARCH_DELAY_MS } from '../search/model.ts';
 import { goToEngineSearch } from '../search/navigation.ts';
 import { ChannelRow } from './ChannelRow.tsx';
 import { usePendingKeys } from './data.ts';
@@ -109,6 +115,9 @@ export default function LibraryView({ active }: ViewProps) {
   const [query, setQuery] = useState('');
   const [openCats, setOpenCats] = useState<ReadonlySet<string>>(() => new Set());
   const [pasteOpen, setPasteOpen] = useState(false);
+  /* El texto para tu IPTV: estable 450 ms, como Buscar (una petición por texto, no por tecla). */
+  const [iptvText, setIptvText] = useState('');
+  const withIptv = useIptvActive();
   const panelRef = useRef<HTMLDivElement>(null);
   const selection = useSelection();
   const onAir = useOnAir(active);
@@ -129,6 +138,18 @@ export default function LibraryView({ active }: ViewProps) {
     const timer = setTimeout(() => setQuery(text), LOCAL_FILTER_DELAY_MS);
     return () => clearTimeout(timer);
   }, [text, query]);
+
+  useEffect(() => {
+    const clean = cleanQuery(text);
+    if (clean === iptvText) return;
+    const timer = setTimeout(() => setIptvText(clean), ENGINE_SEARCH_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [text, iptvText]);
+  const iptvSearch = useApiQuery(
+    'iptvChannels',
+    { query: { q: iptvText, limit: IPTV_SEARCH.limit } },
+    { enabled: active && withIptv && canSearch(iptvText), retry: false, staleTime: 60_000 },
+  );
 
   const data = library.data;
   // Las filas que esperan el «Deshacer» no se ven (ni cuentan).
@@ -158,6 +179,7 @@ export default function LibraryView({ active }: ViewProps) {
   );
   const webIds = useMemo(() => new Set(webById.keys()), [webById]);
   const q = query.trim();
+  const iptvIds = data?.iptvIds;
 
   // `channelCount` cuenta los canales que encajan aunque su categoría esté
   // plegada: una lista con todo plegado NO está vacía.
@@ -276,9 +298,13 @@ export default function LibraryView({ active }: ViewProps) {
     const { item, collection } = row;
     const watching = onScreen === item.id;
     const category = item.category || webById.get(item.id)?.category || '';
+    // Un canal de tu IPTV guardado: «Tu IPTV», «Ya no está en tu IPTV»… (§14.5).
+    const idState = iptvIds?.[item.id];
     return (
       <ChannelRow
         item={category === item.category ? item : { ...item, category }}
+        iptv={idState !== undefined}
+        subtitle={idState ? IPTV_ID_SUBTITLE[idState] : undefined}
         kind={collection}
         href={searchFor({ vista: 'partido', id: null, canal: item.id })}
         isFavorite={actions.favoriteIds.has(item.id)}
@@ -386,6 +412,65 @@ export default function LibraryView({ active }: ViewProps) {
     void requestFocus('url-lista');
   };
 
+  /* «En tu IPTV» del filtro (§14.5): los canales que no son ya una fila de esta pestaña. */
+  const engineButton = withIptv ? bothButtonText(q) : `Buscar «${q}» en el motor AceStream`;
+  const iptvData =
+    withIptv && q.length >= ENGINE_SEARCH_MIN && iptvSearch.data?.query === cleanQuery(q)
+      ? iptvSearch.data
+      : undefined;
+  const tabIds = new Set(filterItems(itemsFor(visible ?? data, tab), q).map((item) => item.id));
+  const iptvChannels = (iptvData?.channels ?? []).filter(
+    (channel) => !tabIds.has(channel.id) && !channel.library.some((id) => tabIds.has(id)),
+  );
+  const iptvShown = iptvChannels.slice(0, IPTV_SEARCH.shownInLibrary);
+  const iptvSection =
+    iptvShown.length > 0 ? (
+      <section className="lib-iptv" aria-labelledby="bib-iptv-titulo">
+        <h2 id="bib-iptv-titulo" className="lib-iptv__title">
+          {IPTV_TEXT.section}
+        </h2>
+        <ul className="lib-list lib-iptv__list">
+          {iptvShown.map((channel) => {
+            const iptvRow = {
+              id: channel.id,
+              title: channel.title,
+              category: 'IPTV',
+              ih: false,
+              iptv: channel.id,
+            };
+            return (
+              <li key={channel.id} className="lib-row">
+                <ChannelRow
+                  item={iptvRow}
+                  kind="search"
+                  href={searchFor({ vista: 'partido', id: null, canal: channel.id })}
+                  isFavorite={actions.favoriteIds.has(channel.id)}
+                  onScreen={onScreen === channel.id}
+                  onAir={onAir(iptvRow)}
+                  iptv
+                  subtitle={iptvSubtitle(channel, channel.library.length > 0)}
+                  onPlay={() => actions.play(iptvRow)}
+                  onToggleFavorite={() => actions.toggleFavorite(iptvRow)}
+                  menuItems={actions.menuFor(iptvRow, 'search')}
+                />
+              </li>
+            );
+          })}
+        </ul>
+        {iptvChannels.length > iptvShown.length || (iptvData?.total ?? 0) > iptvChannels.length ? (
+          <Button
+            variant="quiet"
+            size="sm"
+            icon="buscar"
+            className="lib-iptv__all"
+            onClick={() => goToEngineSearch(navigate, q)}
+          >
+            {IPTV_TEXT.seeAllInSearch}
+          </Button>
+        ) : null}
+      </section>
+    ) : null;
+
   const empty = (() => {
     if (channelCount > 0) return null;
     if (q.length >= ENGINE_SEARCH_MIN)
@@ -394,7 +479,7 @@ export default function LibraryView({ active }: ViewProps) {
           title={`Nada en esta pestaña con «${q}».`}
           actions={
             <Button variant="primary" icon="buscar" onClick={() => goToEngineSearch(navigate, q)}>
-              {`Buscar «${q}» en el motor`}
+              {withIptv ? bothButtonText(q) : `Buscar «${q}» en el motor`}
             </Button>
           }
         />
@@ -539,6 +624,7 @@ export default function LibraryView({ active }: ViewProps) {
             rowClassName={(row) => `lib-row lib-row--${row.type}`}
           />
         )}
+        {iptvSection}
         {q.length >= ENGINE_SEARCH_MIN && channelCount > 0 ? (
           <Button
             variant="quiet"
@@ -547,7 +633,7 @@ export default function LibraryView({ active }: ViewProps) {
             className="lib-engine"
             onClick={() => goToEngineSearch(navigate, q)}
           >
-            {`Buscar «${q}» en el motor AceStream`}
+            {engineButton}
           </Button>
         ) : null}
       </div>

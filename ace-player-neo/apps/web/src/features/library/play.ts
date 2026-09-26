@@ -13,6 +13,11 @@
    siempre, sin ninguna espera. «Pegar hash» tampoco cambia: es un hash
    concreto que se quiere ver.
 
+   Buscador (docs/iptv.md §14.4): una fila puede traer el canal IPTV que es
+   (`iptv`). Un id IPTV (de «En tu IPTV», o un favorito o reciente que lo es)
+   NUNCA va a `play()`: el motor no lo entiende. Va siempre por la sesión del
+   canal, aunque la IPTV esté en pausa (`iptv === hash`).
+
    «En pantalla» (index.html:5538-5546) es el canal que suena o se conecta en
    ESTE dispositivo: lo dice el propio reproductor (`channel.hash`). */
 
@@ -31,6 +36,8 @@ export interface PlayRequest {
   /** Apuntarlo en Recientes (false para un hash pegado, index.html:3962; B-187). */
   record: boolean;
   origin: PlayOrigin;
+  /** El canal IPTV que es esta fila (§14.4); igual a `hash` si lo tocado es un id IPTV. */
+  iptv?: string | null;
 }
 
 /** Lo que se tocó, para la sesión del canal (preguntar por la IPTV y volver a él si cae). */
@@ -40,6 +47,8 @@ export interface TappedChannel {
   kind: 'id' | 'infohash' | 'auto';
   record: boolean;
   ih: boolean | null;
+  /** El canal IPTV tocado (§14.4), o null si no se sabe (se manda el hash tocado). */
+  iptv: string | null;
 }
 
 /** Ventana en la que un segundo «reproducir» del mismo canal se ignora. */
@@ -77,13 +86,15 @@ export function playChannel(navigate: Navigate, request: PlayRequest): void {
   lastPlay = { hash: request.hash, at: now };
   // El tipo que declara la lista o el buscador (B-010); solo el pegado va en `auto`.
   const kind = kindFromIh(request.ih);
-  if (request.origin !== 'pegado' && iptvActive()) {
+  const iptv = request.iptv ?? null;
+  if (request.origin !== 'pegado' && (iptvActive() || iptv === request.hash)) {
     const tapped: TappedChannel = {
       hash: request.hash,
       title: request.title,
       kind,
       record: request.record,
       ih: request.ih,
+      iptv,
     };
     if (channelStarter) channelStarter(tapped);
     else pendingTap = { ...tapped, at: now };

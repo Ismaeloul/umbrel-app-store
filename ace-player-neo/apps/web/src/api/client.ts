@@ -19,6 +19,7 @@
    - Modo demo: espera a que se decida (mode.ts) y, si es demo, contesta el
      módulo diferido demo/ sin red. */
 
+import { IPTV_CLIENT } from '@ace/shared';
 import { ApiError, errorFromResponse, isAbortError } from './errors.ts';
 import { isDemo, whenModeReady } from './mode.ts';
 import {
@@ -71,6 +72,8 @@ const TIMEOUTS: Partial<Record<JsonRouteId, number>> = {
      20 s) y actualizar solo lanza la sincronización; nunca más de los 60 s de nginx. */
   iptvSave: 30_000,
   iptvSync: 12_000,
+  /* El buscador IPTV (§14.2): el servidor tarda < 50 ms; si no, mejor no esperar. */
+  iptvChannels: IPTV_CLIENT.searchMs,
   engineRestart: 20_000,
   healthLive: 4_000,
 };

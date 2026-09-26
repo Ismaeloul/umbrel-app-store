@@ -200,12 +200,15 @@ export function ChannelDetail({ active = true }: { active?: boolean }) {
         </div>
       ) : null}
 
-      <p className="lib-detail__hash">
-        <span className="mono">
-          Hash {item.id.slice(0, 8)}…{item.id.slice(-8)}
-        </span>
-        <IconButton icon="copy" label="Copiar hash" onClick={() => void copyHash(item.id)} />
-      </p>
+      {/* Un canal de tu IPTV no tiene hash de AceStream que enseñar (docs/iptv.md §14.5). */}
+      {actions.isIptvId(item.id) ? null : (
+        <p className="lib-detail__hash">
+          <span className="mono">
+            Hash {item.id.slice(0, 8)}…{item.id.slice(-8)}
+          </span>
+          <IconButton icon="copy" label="Copiar hash" onClick={() => void copyHash(item.id)} />
+        </p>
+      )}
       {actions.sheets}
     </section>
   );
