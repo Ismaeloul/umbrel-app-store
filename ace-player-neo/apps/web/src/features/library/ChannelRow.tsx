@@ -14,7 +14,8 @@
 
    Buscador con IPTV (docs/iptv.md §14.5): un canal de tu IPTV lleva el
    distintivo «IPTV» (el del cartel de la fuente: cápsula neutra con la tele)
-   y su subtítulo propio («Casa · 1080p», «Tu IPTV»…). */
+   y su subtítulo propio («Casa · 1080p», «Tu IPTV»…). En la pestaña IPTV
+   (§16.6), sus calidades van como etiquetas delante del subtítulo. */
 
 import type { LibraryCollection } from '@ace/shared';
 import { useEffect, useId, useRef, type CSSProperties, type MouseEvent } from 'react';
@@ -68,7 +69,10 @@ export interface ChannelRowProps {
   iptv?: boolean;
   /** Subtítulo propio (el de una fila IPTV); si no, el de siempre. */
   subtitle?: string | undefined;
-  /** Etiquetas pequeñas tras el subtítulo: el país y las calidades de un canal IPTV («4K · 1080p · 720p», §17). */
+  /**
+   * Etiquetas pequeñas tras el subtítulo: el país y las calidades de un canal
+   * IPTV («4K · 1080p · 720p»), en el buscador (§17) y en la pestaña IPTV (§16.6).
+   */
   tags?: readonly string[] | undefined;
 }
 

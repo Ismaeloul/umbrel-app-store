@@ -13,6 +13,9 @@
 import type { IptvChannelsResponse, SearchResponse } from '@ace/shared';
 import { registerDemoHandler } from '../../api/index.ts';
 import { foldText } from '../library/model.ts';
+import { DEMO_IPTV_SEARCH, demoIptvId, fakeHash } from './demo-ids.ts';
+
+export { DEMO_IPTV_SEARCH, demoIptvId };
 
 const CATALOG: ReadonlyArray<[string, string, number]> = [
   ['DAZN 1 HD', 'Deportes', 0.92],
@@ -30,33 +33,6 @@ const CATALOG: ReadonlyArray<[string, string, number]> = [
   ['Teledeporte', 'Generalistas', 0.77],
   ['La 1', 'Generalistas', 0.83],
 ];
-
-function fakeHash(seed: string): string {
-  let h = 2166136261;
-  let out = '';
-  for (let round = 0; out.length < 40; round += 1) {
-    for (const ch of `${seed}#${round}`) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
-    out += h.toString(16).padStart(8, '0');
-  }
-  return out.slice(0, 40);
-}
-
-/** Canales de la IPTV de ejemplo (demo-5, «Casa»): nombre limpio y calidad. */
-export const DEMO_IPTV_SEARCH: ReadonlyArray<[string, 'fhd' | 'hd']> = [
-  ['DAZN LaLiga', 'fhd'],
-  ['DAZN 1', 'fhd'],
-  ['M+ LaLiga TV', 'fhd'],
-  ['M+ Liga de Campeones', 'fhd'],
-  ['M+ Liga de Campeones 2', 'hd'],
-  ['Telecinco', 'hd'],
-  ['laSexta', 'hd'],
-  ['La 1', 'hd'],
-];
-
-/** Id de un canal de la IPTV de ejemplo (el mismo en el buscador y en la resolución). */
-export function demoIptvId(title: string): string {
-  return fakeHash(`iptv|${foldText(title)}`);
-}
 
 export function demoSearch(query: string): SearchResponse {
   const q = foldText(query).slice(0, 80);
