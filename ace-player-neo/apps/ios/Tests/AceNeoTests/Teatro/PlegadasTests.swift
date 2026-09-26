@@ -6,6 +6,7 @@ import Testing
 /* El botón de las plegadas (SourceList.tsx): ListaCarteles es una vista, así que esta prueba va con la app y no
    en el paquete de Linux (OtrasFuentesTests sí). */
 
+@MainActor
 struct PlegadasTests {
     private func fila(_ id: String, _ estado: ScanCandidateState) -> FilaFuente {
         let entrada = EntradaFuente(
