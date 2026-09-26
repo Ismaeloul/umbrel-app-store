@@ -71,6 +71,8 @@ como en Firefox). **Pendiente de comprobar en un iPhone de verdad.**
 | D5 | `sesiones.spec.ts` | Cerrar la pestaña suelta la sesión al momento (sendBeacon); si muere sin avisar, caduca por falta de latido (45 s). |
 | TTFF | `ttff.spec.ts` | Toque en una fuente verificada → primera imagen, en Equilibrado (6 muestras en frío). Resultados en `docs/rendimiento.md` y en `test-results/e2e/ttff-<proyecto>.json`. |
 | — | `webkit.spec.ts` | Solo WebKit: sin forma de reproducir, la app lo explica y no deja nada abierto. |
+| IPTV | `iptv-demo.spec.ts` | Con `?demo=1` (corre ya, en los 4 proyectos): Ajustes → IPTV sin credenciales en la página, la IPTV como fuente 1 de demo-5 que arranca sola y no se pliega, el puente (cae la IPTV → AceStream con «Volver a la IPTV») y un canal de Canales que está en la IPTV suena primero por ella. |
+| IPTV | `iptv.spec.ts` | `docs/iptv.md` §9.3 contra el backend con el proveedor IPTV falso y ffmpeg (`@video`). **Preparado**: se salta con su motivo hasta que existan `apps/server/test/fake-iptv`, la pila lo lance (`E2E_IPTV_CONTROL`, `iptv.ace-e2e.example` en `support/backend.ts`) y haya ffmpeg. |
 
 ## Excepciones que se aceptan
 

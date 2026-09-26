@@ -65,6 +65,14 @@ export interface PlayChannel {
   listaId?: string;
   /** Colores de los dos equipos: la luz ambiental alrededor del vídeo (opcional). */
   colors?: readonly [string, string];
+  /**
+   * La fuente es de la IPTV (docs/iptv.md §8.3): «Conectando con tu IPTV…»
+   * antes de la concesión, y sus fallos (`iptv_*`, `remux_*`, `ffmpeg_missing`)
+   * agotan la fuente al momento, sin las 3 reconexiones: el servidor ya
+   * reintentó y el puente pasa a AceStream. Tras la concesión manda
+   * `grant.source` (`PlayerState.streamSource`).
+   */
+  iptv?: boolean;
 }
 
 export interface PlayOptions {
@@ -139,6 +147,8 @@ export interface PlayerState {
   rebuffering: { targetS: number } | null;
   engine: EngineKind | null;
   protocol: StreamProtocol | null;
+  /** De dónde sale el vídeo según la concesión (`grant.source`): el motor AceStream o la IPTV. */
+  streamSource: 'engine' | 'iptv' | null;
   codec: { video: string; audio: string } | null;
   sessionId: string | null;
   stats: PlayerStats | null;
@@ -172,6 +182,7 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
   rebuffering: null,
   engine: null,
   protocol: null,
+  streamSource: null,
   codec: null,
   sessionId: null,
   stats: null,
@@ -257,6 +268,11 @@ export function play(channel: PlayChannel, options: PlayOptions = {}): boolean {
   return true;
 }
 
+/** ¿Lo que suena (o se conecta) sale de la IPTV? Antes de la concesión lo dice el canal; después, el backend. */
+export function isIptvPlayback(state: Pick<PlayerState, 'streamSource' | 'channel'>): boolean {
+  return state.streamSource ? state.streamSource === 'iptv' : state.channel?.iptv === true;
+}
+
 /** Detiene todo y suelta la sesión (inventario §8.13). */
 export function stop(): void {
   if (runtime) {
@@ -295,14 +311,24 @@ export interface SourceFailure {
   seconds: number;
   /** Lo último que pasó, en español («La imagen se ha quedado parada…»). */
   reason: string;
+  /**
+   * Código del catálogo si lo hubo (`iptv_busy`, `iptv_dropped`,
+   * `engine_unavailable`…). Con `engine_unavailable` el reproductor solo
+   * pregunta por si hay una IPTV a la que pasar (§7.2): si nadie salta, espera
+   * al motor como siempre.
+   */
+  code?: string;
 }
 
 /**
  * Qué contesta quien escucha: `{ next: true }` si va a reproducir otra
  * fuente (el reproductor espera su play()), `{ message }` para el panel en
- * rojo, o nada para el mensaje por defecto.
+ * rojo, o nada para el mensaje por defecto. Con `{ next: true, message }`,
+ * ese texto sustituye al genérico «Esta fuente no responde: probando la
+ * siguiente…» en la línea de estado (el puente IPTV ↔ AceStream, §7.2).
  */
-export type SourceFailedReply = { next: true } | { message: string } | boolean | void;
+export type SourceFailedReply =
+  { next: true; message?: string } | { message: string } | boolean | void;
 export type SourceFailedHandler = (failure: SourceFailure) => SourceFailedReply;
 
 const failureHandlers: SourceFailedHandler[] = [];
@@ -334,10 +360,11 @@ export function notifySourceFailed(failure: SourceFailure): {
       console.error('[reproductor] Un oyente de onSourceFailed ha fallado', error);
       continue;
     }
-    if (reply === true || (reply && typeof reply === 'object' && 'next' in reply && reply.next))
-      return { next: true, message: null };
-    if (reply && typeof reply === 'object' && 'message' in reply && !message)
-      message = reply.message;
+    if (reply === true) return { next: true, message: null };
+    if (reply && typeof reply === 'object' && 'next' in reply && reply.next)
+      return { next: true, message: reply.message ?? null };
+    if (reply && typeof reply === 'object' && 'message' in reply && reply.message && !message)
+      message = reply.message ?? null;
   }
   return { next: false, message };
 }

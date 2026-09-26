@@ -410,3 +410,70 @@ describe('«Encontrar canal»', () => {
     expect(within(dialog).queryByRole('checkbox')).toBeNull();
   });
 });
+
+/* IPTV en el selector (docs/iptv.md §8.1-8.3): distintivo, sin hash, nunca
+   plegada, y sin «Favorito», «Copiar hash» ni «Abrir en…». */
+describe('IPTV', () => {
+  function prepareWithIptv(activeIptv: boolean) {
+    prepare(['failed', 'working', 'queued', 'failed']);
+    const iptv = entryFromCandidate(
+      candidate(100, {
+        title: 'M+ Liga de Campeones --> Casa',
+        source: 'iptv',
+        listaId: 'p_Ab3dE5gH',
+        iptv: { provider: 'Casa', quality: 'fhd', backup: false, guide: false },
+      }),
+    );
+    act(() =>
+      sessionStore.set((s) => ({
+        ...s,
+        // Sin veredicto del comprobador y con un fallo del reproductor: aun así, visible.
+        entries: [
+          {
+            ...iptv,
+            playerVerdict: { state: 'failed', reason: 'player_failed', at: Date.now() },
+          },
+          ...s.entries,
+        ],
+        activeHash: activeIptv ? hash(100) : hash(3),
+      })),
+    );
+  }
+
+  it('cartel con «IPTV», el proveedor y la calidad; sin hash y nunca plegado', () => {
+    prepareWithIptv(false);
+    renderWithApp(<SourcesPanel variant="list" />);
+    const list = screen.getByRole('list', { name: 'Fuentes del partido' });
+    const iptv = within(list).getAllByRole('button')[0]!;
+    expect(iptv).toHaveAttribute('data-origin', 'iptv');
+    expect(within(iptv).getByText('IPTV')).toBeInTheDocument();
+    expect(within(iptv).getByText('Casa')).toBeInTheDocument();
+    expect(within(iptv).getByText('· 1080p · IPTV')).toBeInTheDocument();
+    expect(iptv.getAttribute('aria-label')).toMatch(
+      /^Fuente 1: M\+ Liga de Campeones · IPTV · Casa · 1080p · no arrancó en el reproductor/,
+    );
+    expect(iptv.getAttribute('aria-label')).not.toMatch(/Hash/);
+  });
+
+  it('su menú no ofrece «Copiar hash» ni «Abrir en la app de AceStream»', () => {
+    prepareWithIptv(false);
+    renderWithApp(<SourcesPanel variant="list" />);
+    const list = screen.getByRole('list', { name: 'Fuentes del partido' });
+    fireEvent.contextMenu(within(list).getAllByRole('button')[0]!, { clientX: 10, clientY: 10 });
+    const items = screen.getAllByRole('menuitem').map((item) => item.textContent);
+    expect(items).toContain('Ver esta fuente');
+    expect(items).toContain('Reportar…');
+    expect(items).not.toContain('Copiar hash');
+    expect(items).not.toContain('Abrir en la app de AceStream');
+  });
+
+  it('con la IPTV en pantalla, el inspector no tiene «Favorito», «Copiar hash» ni «Abrir en…»', () => {
+    prepareWithIptv(true);
+    renderWithApp(<SourcesPanel variant="rack" />, { kind: 'wide' });
+    const group = screen.getByRole('group', { name: 'Acciones de la fuente' });
+    const names = within(group)
+      .getAllByRole('button')
+      .map((b) => b.textContent);
+    expect(names).toEqual(['Rebuscar', 'Pegar hash', 'Es el canal correcto', 'Reportar']);
+  });
+});

@@ -1,6 +1,9 @@
+import type { BootstrapResponse } from '@ace/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { queryClient, routeKey } from '../../api/query.ts';
 import { getPlayer } from '../../player/api.ts';
-import { playChannel } from './play.ts';
+import { fixture } from '../../test/fetch.ts';
+import { playChannel, takeChannelTap } from './play.ts';
 import { resetPlayback } from './test-utils.tsx';
 
 const HASH = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
@@ -9,7 +12,16 @@ const OTHER = 'b1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
 afterEach(() => {
   vi.useRealTimers();
   resetPlayback();
+  queryClient.removeQueries({ queryKey: ['v1', 'bootstrap'] });
 });
+
+function iptvActive(active: boolean) {
+  const boot = fixture<BootstrapResponse>('bootstrap');
+  queryClient.setQueryData(routeKey('bootstrap'), {
+    ...boot,
+    features: { ...boot.features, iptv: active },
+  });
+}
 
 describe('reproducir desde la biblioteca', () => {
   it('manda el título y el tipo al reproductor y navega al canal', () => {
@@ -65,5 +77,60 @@ describe('reproducir desde la biblioteca', () => {
     vi.advanceTimersByTime(900);
     playChannel(navigate, request);
     expect(navigate).toHaveBeenCalledTimes(3);
+  });
+});
+
+/* docs/iptv.md §8.4: con IPTV activa, tocar un canal no arranca AceStream
+   antes de preguntar al servidor si está en la IPTV. */
+describe('con IPTV activa', () => {
+  const tap = {
+    hash: HASH,
+    title: 'DAZN 1',
+    ih: false,
+    record: true,
+    origin: 'biblioteca',
+  } as const;
+
+  it('no llama a play(): navega y deja el encargo a la sesión del canal', () => {
+    iptvActive(true);
+    const navigate = vi.fn();
+    playChannel(navigate, tap);
+    expect(getPlayer().channel).toBeNull();
+    expect(navigate).toHaveBeenCalledWith({ vista: 'partido', id: null, canal: HASH });
+    expect(takeChannelTap(OTHER)).toBeNull();
+    playChannel(navigate, { ...tap, hash: OTHER, title: 'DAZN 2', ih: true, origin: 'buscar' });
+    expect(takeChannelTap(OTHER)).toEqual({
+      hash: OTHER,
+      title: 'DAZN 2',
+      kind: 'infohash',
+      record: true,
+      ih: true,
+    });
+    // Una sola vez.
+    expect(takeChannelTap(OTHER)).toBeNull();
+  });
+
+  it('un encargo que nadie recoge caduca', () => {
+    iptvActive(true);
+    playChannel(vi.fn(), tap);
+    expect(takeChannelTap(HASH, Date.now() + 11_000)).toBeNull();
+  });
+
+  it('«Pegar hash» sigue igual que hoy', () => {
+    iptvActive(true);
+    playChannel(vi.fn(), {
+      ...tap,
+      title: 'Stream a1b2c3d4',
+      ih: null,
+      record: false,
+      origin: 'pegado',
+    });
+    expect(getPlayer().channel).toMatchObject({ hash: HASH, kind: 'auto' });
+  });
+
+  it('con la IPTV en pausa (features.iptv falso), lo de siempre', () => {
+    iptvActive(false);
+    playChannel(vi.fn(), tap);
+    expect(getPlayer().channel).toMatchObject({ hash: HASH, kind: 'id' });
   });
 });

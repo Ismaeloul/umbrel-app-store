@@ -29,6 +29,7 @@ import {
   type CapsuleTone,
 } from '../../ui/index.ts';
 import {
+  channelLine,
   countText,
   deviceKind,
   isMine,
@@ -97,7 +98,7 @@ function SessionItem({ session, deviceId }: { session: SessionSummary; deviceId:
       <div className="donde-ses__head">
         <ChannelMark name={title} shape="tile" size={40} className="donde-ses__mark" />
         <div className="donde-ses__text">
-          <span className="donde-ses__title">{title}</span>
+          <span className="donde-ses__title">{channelLine(session)}</span>
           <span className="donde-ses__meta">
             {countText(session.viewers.length)} · {PROTOCOL_LABEL[session.protocol]}
             {since ? (

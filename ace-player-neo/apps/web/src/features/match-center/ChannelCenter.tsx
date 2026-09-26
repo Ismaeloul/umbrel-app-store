@@ -138,15 +138,22 @@ export function ChannelCenter({ hash, active }: { hash: string; active: boolean 
      reposo desde el inicio). Antes salía un instante al abrir el canal y, al
      quitarse, las fuentes subían de golpe (CLS 0,13 en el móvil; revisión de
      rendimiento de la Fase 2). */
+  // Lo que suena puede ser otra fuente del MISMO canal (su IPTV o una hermana).
+  const ownIds = useSession((state) =>
+    state.key === `c:${hash}` ? state.entries.map((entry) => entry.id).join(',') : '',
+  );
   const showPlay = usePlayerSelector((state) => {
     const idle = state.phase === 'idle' || state.phase === 'error';
-    if (state.channel?.hash === hash && !idle) return false;
+    const playing = state.channel?.hash;
+    if (playing && !idle && (playing === hash || ownIds.split(',').includes(playing))) return false;
     const autoStarts =
       state.phase === 'idle' &&
       state.channel?.hash !== hash &&
       (state.idleReason === 'inicio' || state.idleReason === null);
     return !autoStarts;
   });
+  // Con IPTV activa, mientras se pregunta si el canal está en ella (≤ 2,5 s) va a arrancar solo.
+  const asking = useSession((state) => state.key === `c:${hash}` && state.phase === 'resolving');
   const siblingsKey = siblings.map((sibling) => sibling.id).join(',');
 
   /* Las pestañas se montan DESPUÉS de entrar al canal, en el mismo pintado:
@@ -180,7 +187,7 @@ export function ChannelCenter({ hash, active }: { hash: string; active: boolean 
             {count ? ` · ${count} fuentes del mismo canal` : ''}
           </p>
         </div>
-        {showPlay ? (
+        {showPlay && !asking ? (
           <Button
             variant="primary"
             icon="play"
