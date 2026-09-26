@@ -225,11 +225,11 @@ final class ServidorRealUITests: XCTestCase {
     private func pausarEnElMini(_ app: XCUIApplication) async throws {
         let pausa = elementoUI(app, IDUI.miniPausa)
         try exigir(pausa.waitForExistence(timeout: 5), "El mini no tiene ⏸. \(estado(app))")
-        // Que cambie la etiqueta (Pausar → Reproducir), sin atarse al texto de ContenidoMini.
-        let antes = pausa.label
+        // Sonando dice «Pausar»; parado, «Reproducir» (BotonesMini en ContenidoMini). Solo vale la de reanudar.
+        try exigir(pausa.label == "Pausar", "El mini no está sonando: «\(pausa.label)». \(estado(app))")
         pausa.tap()
-        let parado = await esperar(10) { pausa.label != antes }
-        try exigir(parado, "⏸ del mini no pausa. \(estado(app))")
+        let parado = await esperar(10) { pausa.label == "Reproducir" }
+        try exigir(parado, "⏸ del mini no pausa: «\(pausa.label)». \(estado(app))")
     }
 
     /// Sube Ajustes hasta que el elemento quede entre la barra de estado y el mini (que tapa lo de abajo).
