@@ -51,7 +51,8 @@ struct DatosTeatroTests {
         #expect(DatosTeatro.kicker(directo, marcador: nil, ahora: t0) == "Amistoso · En directo")
         #expect(DatosTeatro.kicker(partido(hora: "18:00"), marcador: marcador("post"), ahora: t0) == "Amistoso · Final")
         #expect(DatosTeatro.kicker(partido(hora: "19:48"), marcador: nil, ahora: t0) == "Amistoso · En 48 min")
-        #expect(DatosTeatro.kicker(partido(hora: "23:30"), marcador: nil, ahora: t0) == "Amistoso · 23:30")
+        #expect(DatosTeatro.kicker(partido(hora: "23:30"), marcador: nil, ahora: t0) == "Amistoso · En 4 h 30 min")
+        #expect(DatosTeatro.kicker(partido(hora: "21:00", fecha: "2026-09-25"), marcador: nil, ahora: t0) == "Amistoso · 21:00")
         #expect(DatosTeatro.kicker(partido(hora: "Por confirmar"), marcador: nil, ahora: t0) == "Amistoso · Hora por confirmar")
     }
 
