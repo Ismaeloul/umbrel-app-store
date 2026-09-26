@@ -66,6 +66,20 @@ final class FlujoArmazonUITests: XCTestCase {
         }
     }
 
+    /// La barra en oscuro y con transparencia reducida (a2 §1.1 y §14), para mirarla frente a las capturas de la web.
+    @MainActor
+    func testBarraEnOscuroYOpaca() throws {
+        let oscuro = abrir(["-AceNeoApariencia", "oscuro"])
+        XCTAssertTrue(elementoUI(oscuro, IDUI.barraPestanas).waitForExistence(timeout: 20))
+        tocarPestana(oscuro, "biblioteca")
+        Thread.sleep(forTimeInterval: 0.8)
+        captura(oscuro, "armazon-canales-oscuro")
+        oscuro.terminate()
+        let opaca = abrir(["-AceNeoTransparenciaReducida"])
+        XCTAssertTrue(elementoUI(opaca, IDUI.barraPestanas).waitForExistence(timeout: 20))
+        captura(opaca, "armazon-agenda-claro-transparencia-reducida")
+    }
+
     /// a2 §2.4: deslizar desde el borde izquierdo saca del partido y deja ver la pestaña de debajo.
     @MainActor
     func testBordeIzquierdoSaleDelPartido() throws {
@@ -108,10 +122,13 @@ final class FlujoArmazonUITests: XCTestCase {
         XCTAssertTrue(barra.exists)
         Thread.sleep(forTimeInterval: 0.8)  // entrada del toast (muelle estándar, 520 ms)
         captura(app, "armazon-toast")
-        XCTAssertLessThan(toast.frame.maxY, barra.frame.minY + 1,
+        // Los marcos de accesibilidad incluyen la sombra (`--shadow-2`, 60 de desenfoque): se comparan los centros.
+        // Toast de dos líneas (68) a safeB + 94 y barra de 64 a safeB + 10: centros separados 34 + 8 + 32 + 10 = 84.
+        XCTAssertLessThan(toast.frame.midY + 60, barra.frame.midY,
                           "El toast debe ir por encima de la barra (toast \(toast.frame), barra \(barra.frame))")
-        // «Deshacer» va a la izquierda del ✕ de 44 (a2 §8.3): se toca con el dedo en su sitio.
-        let punto = CGVector(dx: (toast.frame.maxX - 6 - 44 - 45) / app.frame.width, dy: toast.frame.midY / app.frame.height)
+        // «Deshacer» va a la izquierda del ✕ de 44 (a2 §8.3); el toast acaba a 12 del borde derecho.
+        let derecha = app.frame.width - 12
+        let punto = CGVector(dx: (derecha - 6 - 44 - 45) / app.frame.width, dy: toast.frame.midY / app.frame.height)
         app.coordinate(withNormalizedOffset: punto).tap()
         XCTAssertTrue(esperarQueDesaparezca(toast, plazo: 3), "«Deshacer» no cierra el toast")
     }
