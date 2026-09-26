@@ -2,6 +2,31 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 0.8.1 (2026-09-26)
+
+Tu IPTV, primero. En Ajustes > IPTV, desde el navegador, conectas tu lista
+M3U o tu cuenta Xtream Codes. Se guarda cifrada en tu Umbrel y no sale de
+ahi. En el iPhone no hay nada que configurar.
+
+Si un partido o un canal esta en tu IPTV, sale primero la IPTV y AceStream
+queda de respaldo. Si uno se corta, sigue solo por el otro, en los dos
+sentidos, y te avisa; a la IPTV vuelves con un toque.
+
+Guia: si tu lista trae guia de programas, tu Umbrel la usa para encontrar
+el canal que de verdad echa cada partido (las repeticiones, los resumenes y
+las previas no cuentan). Sin guia, todo funciona igual.
+
+Buscar: tu IPTV y AceStream salen juntos, con la seccion "En tu IPTV" y
+cada canal en una sola fila.
+
+Carteles de fuente: el nombre de la lista va dentro del cartel, debajo solo
+el canal, y la calidad en su propia linea.
+
+App de iPhone: tu Umbrel ya deja a la app emparejada usar Salud,
+Dispositivos y "Un solo dispositivo a la vez", y emparejar o quitar otros
+iPhone con un QR que lleva tus dos direcciones (casa y Tailscale). Lo
+aprovecha la app nueva, que se actualiza aparte.
+
 ## 0.8.0 (2026-09-25)
 
 Diseño nuevo, "Palco", en la web y en la app de iPhone: negro de cine con
