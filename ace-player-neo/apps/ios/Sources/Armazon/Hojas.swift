@@ -42,11 +42,15 @@ enum Hoja: Identifiable, Hashable, Sendable {
         }
     }
 
-    /// Ancho del contenido en ≥ 768 (420 / 560 / 760). Valor neutro de I0; M4 pone el de a2 §9 por hoja.
+    /// Ancho del contenido en ≥ 768 (420 / 560 / 760): el `size` de cada `<Sheet>` de la web (PreferencesSheet lg,
+    /// PasteHashSheet sm, ReportSheet sm, ResolverSheet md, useChannelActions sm, ShortcutHelp md). La de «otro
+    /// servidor» no existe en la web: sm, como las de una sola pregunta (a2 §22.8).
     var tamano: TamanoHoja {
         switch self {
+        case .gustos: .lg
+        case .pegar, .reportar, .guardarFavorito, .renombrar, .otroServidor: .sm
+        case .encontrarCanal, .ayuda: .md
         case .muestra(let muestra): muestra.tamano
-        default: .md
         }
     }
 
@@ -116,7 +120,10 @@ private struct ModificadorHojas: ViewModifier {
     func body(content: Content) -> some View {
         content.sheet(item: $centro.actual, onDismiss: alCerrar) { hoja in
             VistaHoja(hoja: hoja)
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { altoMedido = $0 }
+                // La hoja medida tiene el alto de su contenido (a2 §9.2: «alto: el de su contenido»).
+                .fixedSize(horizontal: false, vertical: hoja.detents == .medido)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { altoMedido = max(1, $0) }
+                .frame(maxHeight: .infinity, alignment: .top)
                 .presentationDetents(detents(hoja.detents))
                 .presentationDragIndicator(.visible)
                 .presentationBackground(Palco.glassSolid)

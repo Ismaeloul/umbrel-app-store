@@ -1,71 +1,90 @@
 import SwiftUI
 
-/* El armazón de la app (b-arquitectura §2.4.6, M4). PROVISIONAL de I0 (fase 0.3b): SOLO la pestaña
-   actual (sin mantener vivas las visitadas), la capa de encima (teatro o sistema) y una barra de
-   pestañas provisional (texto sobre `Palco.surface`) para que la app navegue con las pantallas en stub.
-   M4 escribe las capas de verdad (CapaPestanas con las visitadas vivas, CapaPartido, VeloInferior,
-   BarraPestanas con glassEffect, CapaMini, CapaVuelo, CapaAvisos, CapaInmersiva) y mide la Maquetacion.
-   Ojo, M4: con las pestañas vivas, `.opacity(0)` + `.accessibilityHidden(true)` NO bastó para que
-   XCUITest dejara de ver la pestaña oculta (CI 36175911002: «Se ve agenda estando en biblioteca»). */
+/* El armazón de la app (b-arquitectura §2.4.6, M4; a2 §3). Un ZStack a toda la ventana (ignora las zonas seguras;
+   cada capa se coloca con `Maquetacion`, que las suma) con las capas en el orden de la web:
+
+     CapaPestanas z 0 · CapaPartido z 20 · VeloInferior z 39 · BarraPestanas / BarraSuperior z 40 · CapaMini z 41 ·
+     CapaVuelo z 45 · CapaAvisos z 60 · CapaInmersiva z 100 · y la única puerta a las hojas.
+
+   Aquí se decide el inmersivo (`immersive = pantalla completa pedida || (teatro && phoneLandscape)`, a2 §2.3) y se
+   publica en `EstadoVentana` (barra de estado, indicador de inicio, bordes) y en `Avisos`. */
 
 struct AppShell: View {
     @Environment(Navegador.self) private var navegador
     @Environment(CentroHojas.self) private var hojas
+    @Environment(PresentacionReproductor.self) private var presentacion
+    @Environment(\.maquetacion) private var maquetacion
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            Palco.bg.ignoresSafeArea()
-            if navegador.capa == nil { VistaPestana(pestana: navegador.pestana) }
-            if let capa = navegador.capa { capaEncima(capa) }
-            if navegador.capa == nil { BarraPestanasProvisional() }
+        let inmersivo: Bool = maquetacion.inmersivo(
+            teatroVisible: navegador.teatroVisible, forzado: presentacion.pantallaCompletaForzada)
+        ZStack(alignment: .topLeading) {
+            Palco.bg
+            CapaPestanas().zIndex(Capa.pestanas)
+            CapaPartido(inmersivo: inmersivo).zIndex(Capa.partido)
+            BarrasDelArmazon(inmersivo: inmersivo).zIndex(Capa.velo)
+            CapaMini(inmersivo: inmersivo).zIndex(Capa.mini)
+            CapaVuelo().zIndex(Capa.vuelo)
+            CapaAvisos(inmersivo: inmersivo).zIndex(Capa.avisos)
+            CapaInmersiva(inmersivo: inmersivo).zIndex(Capa.inmersivo)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .ignoresSafeArea()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(IDUI.armazon)
+        .modifier(PublicarInmersivo(inmersivo: inmersivo))
+        .modifier(ControlOrientacion())
+        .modifier(EstadosGlobales())
         .hojasDeLaApp(hojas)
     }
-
-    @ViewBuilder private func capaEncima(_ capa: Destino) -> some View {
-        if capa.esTeatro {
-            TeatroView(destino: capa)
-        } else {
-            SistemaView()
-        }
-    }
 }
 
-/// La pantalla de cada pestaña.
-private struct VistaPestana: View {
-    let pestana: Pestana
+/// Velo, barra inferior (móvil) y barra superior (tableta), con sus reglas de visibilidad (a2 §4.4, §5, §16.1).
+private struct BarrasDelArmazon: View {
+    let inmersivo: Bool
+    @Environment(Navegador.self) private var navegador
+    @Environment(PresentacionReproductor.self) private var presentacion
+    @Environment(\.maquetacion) private var maquetacion
+    @Environment(\.movimientoReducido) private var reducido
+
     var body: some View {
-        switch pestana {
-        case .agenda: AgendaView()
-        case .canales: CanalesView()
-        case .buscar: BuscarView()
-        case .ajustes: AjustesView()
+        let teatro: Bool = navegador.teatroVisible
+        let inferior: Bool = maquetacion.barraInferior(teatroVisible: teatro, inmersivo: inmersivo, emparejando: false)
+        let superior: Bool = maquetacion.barraSuperior(inmersivo: inmersivo, emparejando: false)
+        let mini: Bool = presentacion.miniVisible(teatroVisible: teatro, inmersivo: inmersivo)
+        ZStack(alignment: .topLeading) {
+            if inferior {
+                VeloInferior(mini: mini).zIndex(Capa.velo).transition(.opacity)
+                BarraPestanas().zIndex(Capa.barra).transition(.opacity)
+            }
+            if superior && !teatro {
+                BarraSuperior().zIndex(Capa.barra).transition(.opacity)
+            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        // La barra aparece y desaparece con el fundido de raíz de la web (340 ms, a2 §4.4 y §21.4).
+        .animation(Movimiento.vista(reducido), value: inferior)
+        .animation(Movimiento.vista(reducido), value: superior && !teatro)
     }
 }
 
-/// Barra de pestañas PROVISIONAL (la de la web con glassEffect es de M4): cuatro botones de texto.
-private struct BarraPestanasProvisional: View {
+/// El inmersivo va a la ventana (barra de estado oculta, indicador de inicio, bordes diferidos) y a los avisos
+/// (los toasts se apagan sobre el vídeo); ver el teatro manda los avisos de señal a la línea de estado (a2 §8).
+private struct PublicarInmersivo: ViewModifier {
+    let inmersivo: Bool
+    @Environment(EstadoVentana.self) private var ventana
+    @Environment(Avisos.self) private var avisos
     @Environment(Navegador.self) private var navegador
 
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(Pestana.allCases) { pestana in boton(pestana) }
-        }
-        .frame(height: 64)
-        .background(Palco.surface)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier(IDUI.barraPestanas)
-    }
-
-    private func boton(_ pestana: Pestana) -> some View {
-        let activa = navegador.pestana == pestana
-        return Button(pestana.titulo) { navegador.tocarPestana(pestana) }
-            .foregroundStyle(activa ? Palco.accentInk : Palco.text2)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .accessibilityAddTraits(activa ? .isSelected : [])
-            .accessibilityIdentifier(IDUI.pestana(pestana.rawValue))
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: inmersivo, initial: true) { _, valor in
+                ventana.inmersivo = valor
+                avisos.inmersivo = valor
+            }
+            .onChange(of: navegador.teatroVisible, initial: true) { _, valor in
+                avisos.viendoTeatro = valor
+                if !valor { avisos.vaciarLinea() }  // a2 §8.4: la línea de estado se vacía al salir del partido
+            }
     }
 }

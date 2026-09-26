@@ -104,6 +104,13 @@ import Foundation
 
     /// Los hooks entre objetos de proceso. Todos con `weak`: el contenedor vive lo que el proceso.
     private func cablear() {
+        // 1. El armazón (M4): la barra vibra por la háptica central; la raíz avisa, vibra y cierra hojas al
+        //    cambiar de fase. En Debug, -AceNeoVista abre la app en esa ruta.
+        navegador.haptica = haptica
+        raiz.conectar(avisos: avisos, haptica: haptica, hojas: hojas)
+        #if DEBUG
+            if let vista = ArgumentosArmazon.vista { navegador.ir(vista) }
+        #endif
         // 2. Acceso perdido → la raíz vuelve a Emparejar y el reproductor se para.
         sesion.alPerderAcceso = { [weak self] motivo in
             guard let self else { return }
