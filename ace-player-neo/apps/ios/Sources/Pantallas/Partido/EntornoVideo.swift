@@ -88,7 +88,15 @@ struct EntornoVideo: DynamicProperty {
     }
 
     /// ‹ › de «Emitiendo» y deslizar el vídeo a los lados: la siguiente o anterior en bucle (háptica rígida).
+    /// Con la sesión llena manda la regla de la sesión (`stepSource`, M3); solo las hermanas de un canal con la
+    /// sesión vacía se recorren aquí.
     func pasoFuente(_ delta: Int) {
+        if !fuentes.entradas.isEmpty {
+            guard fuentes.visibles.count > 1 else { return }
+            haptica.disparar(.rigida)
+            fuentes.paso(delta)
+            return
+        }
         let ids = idsFuentesVisibles
         let activa = fuentes.activa ?? reproductor.canal?.id
         guard ids.count > 1, let destino = GestosTeatro.paso(ids, activa: activa, delta: delta) else { return }
@@ -129,49 +137,77 @@ struct EntornoVideo: DynamicProperty {
         reproductor.detener()
     }
 
-    /// «Ir al directo» y sus avisos en la cápsula de estado (a4 §5.4; umbral de salto 1,25 s).
+    /// «Ir al directo» (`goLive`, a4 §5.4): mide antes, salta solo si está a más de 1,25 s del borde útil y decide
+    /// el aviso después de ver qué ha pasado. Sin conexión activa no hace nada (tampoco el reproductor).
     func irAlDirecto() {
-        let antes = foto
-        if antes.demo {
-            avisos.avisar("Ya estás en el directo (en demo no hay retardo)", clase: .senal)
-            return
-        }
-        if antes.fase == .reproduciendo && antes.directo.enDirecto {
-            avisos.avisar("Ya estabas en el directo", clase: .senal)
-            return
-        }
+        guard let hash = reproductor.canal?.id else { return }
         let reproductor = self.reproductor
         let avisos = self.avisos
+        if demo {
+            reproductor.reanudar()
+            Self.avisar(ReglasSalto.demoDirecto, avisos: avisos)
+            return
+        }
+        guard reproductor.conexion == .activa else { return }
+        let antes: MedidaDirecto? = Self.medidaDirecto(reproductor)
+        let sonaba: Bool = reproductor.fase == .reproduciendo
+        if ReglasSalto.enBorde(antes) {
+            if !sonaba { reproductor.reanudar() }
+            Self.avisar(ReglasSalto.avisoEnBorde(sonaba: sonaba), avisos: avisos)
+            return
+        }
+        guard let antes else { return }
         Task {
             await reproductor.irAlDirecto()
-            let texto = antes.fase == .pausado ? "Directo reanudado" : "De vuelta al directo"
-            avisos.avisar(texto, clase: .senal, tono: .ok)
+            guard reproductor.canal?.id == hash else { return }  // otra fuente entretanto: sin aviso
+            let despues: MedidaDirecto? = Self.medidaDirecto(reproductor)
+            Self.avisar(ReglasSalto.avisoTrasSaltar(antes: antes, despues: despues), avisos: avisos)
         }
     }
 
-    /// −30 s y sus avisos (a4 §5.4).
+    /// −30 s (`back`, a4 §5.4): calcula antes lo que de verdad puede retroceder y solo avisa «Retrocedido n s» si
+    /// el cabezal ha vuelto atrás.
     func retroceder() {
-        if foto.demo {
-            avisos.avisar("En la demo no hay imagen guardada que repetir", clase: .senal)
-            return
-        }
+        guard let hash = reproductor.canal?.id else { return }
         let reproductor = self.reproductor
         let avisos = self.avisos
-        Task {
-            await reproductor.retroceder()
-            avisos.avisar("Retrocedido 30 s · pulsa DIRECTO para volver", clase: .senal)
+        if demo {
+            Self.avisar(ReglasSalto.demoRetroceso, avisos: avisos)
+            return
+        }
+        let ventana: VentanaDirecto? = reproductor.conexion == .activa ? reproductor.motor.ventana : nil
+        let antes: Double = reproductor.motor.tiempoActual
+        switch ReglasSalto.planRetroceso(ventana: ventana, actual: antes) {
+        case .avisar(let aviso):
+            Self.avisar(aviso, avisos: avisos)
+        case .saltar(let real):
+            Task {
+                await reproductor.retroceder()
+                guard reproductor.canal?.id == hash else { return }
+                let despues: Double = reproductor.motor.tiempoActual
+                guard ReglasSalto.retrocedio(antes: antes, despues: despues, real: real) else { return }
+                Self.avisar(ReglasSalto.avisoRetrocedido(real), avisos: avisos)
+            }
         }
     }
 
-    /// Silencio: el AVPlayer de verdad (en la demo no hay). Devuelve el estado nuevo.
-    func alternarSilencio(_ silenciado: Bool) -> Bool {
-        haptica.disparar(.ligera)
-        let nuevo = !silenciado
-        reproductor.motor.avPlayer?.isMuted = nuevo
-        return nuevo
+    private static func medidaDirecto(_ reproductor: Reproductor) -> MedidaDirecto? {
+        let ventana: VentanaDirecto? = reproductor.motor.ventana
+        return MedidaDirecto.medir(ventana: ventana, actual: reproductor.motor.tiempoActual, modo: reproductor.modo)
     }
 
-    var silenciadoAhora: Bool { reproductor.motor.avPlayer?.isMuted ?? false }
+    private static func avisar(_ aviso: AvisoSalto, avisos: Avisos) {
+        avisos.avisar(aviso.texto, clase: .senal, tono: aviso.tono, icono: aviso.icono)
+    }
+
+    /// Silencio: un solo estado para las dos filas de controles (vertical e inmersivo), aplicado al AVPlayer de
+    /// verdad (en la demo no hay).
+    func alternarSilencio() {
+        haptica.disparar(.ligera)
+        SilencioVideo.compartido.alternar(reproductor.motor.avPlayer)
+    }
+
+    var silenciadoAhora: Bool { SilencioVideo.compartido.silenciado }
 
     /// ⛶ = inmersivo en horizontal con nuestros controles (decisión 3; a4 §23.2). Háptica media.
     func alternarPantallaCompleta() {
@@ -270,7 +306,7 @@ struct EntornoVideo: DynamicProperty {
         Task {
             let base: URL? = await servidores?.conocido()?.url
             let texto = Self.urlStream(base: base, hash: hash, infohash: infohash)
-            Self.copiar(texto, bien: "URL del stream copiada: pégala en VLC", mal: "No se pudo copiar", icono: .link, avisos: avisos)
+            Self.copiar(texto, bien: "URL del stream copiada: pégala en VLC", mal: "No se pudo copiar", icono: .copy, avisos: avisos)
         }
     }
 
@@ -282,6 +318,19 @@ struct EntornoVideo: DynamicProperty {
             origen = "\(esquema)://\(host)\(puerto)"
         }
         return "\(origen)/ace/getstream?\(parametro)=\(hash)"
+    }
+}
+
+/// El silencio del vídeo (la web lee `state.muted` del reproductor, PlayerSurface.tsx). `Reproductor` no tiene
+/// silencio y el AVPlayer (uno solo, el del motor) no se puede observar: lo que pintan los botones sale de aquí,
+/// compartido por todas las filas de controles montadas, y se aplica al AVPlayer.
+@MainActor @Observable final class SilencioVideo {
+    static let compartido = SilencioVideo()
+    private(set) var silenciado = false
+
+    func alternar(_ avPlayer: AVPlayer?) {
+        silenciado.toggle()
+        avPlayer?.isMuted = silenciado
     }
 }
 

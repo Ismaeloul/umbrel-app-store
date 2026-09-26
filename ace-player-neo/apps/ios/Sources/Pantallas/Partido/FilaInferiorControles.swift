@@ -11,7 +11,6 @@ import SwiftUI
 struct FilaInferiorControles: View {
     let variante: VarianteEscenario
     let video = EntornoVideo()
-    @State private var silenciado = false
     @State private var hayRutas = false
 
     var body: some View {
@@ -24,7 +23,6 @@ struct FilaInferiorControles: View {
             Spacer(minLength: 0)
             CapsulaVideo { derecha(foto) }.layoutPriority(1)
         }
-        .onAppear { silenciado = video.silenciadoAhora }
         .modifier(RutasAirPlay(hay: $hayRutas))
     }
 
@@ -34,8 +32,9 @@ struct FilaInferiorControles: View {
                 .accessibilityIdentifier(IDUI.botonDetener)
         }
         BotonRetroceder(habilitado: foto.puedeRetroceder) { video.retroceder() }
+        let silenciado: Bool = video.silenciadoAhora
         BotonIcono(silenciado ? .mute : .vol, etiqueta: silenciado ? "Activar sonido" : "Silenciar", variante: .video) {
-            silenciado = video.alternarSilencio(silenciado)
+            video.alternarSilencio()
         }
         .accessibilityIdentifier(IDUI.botonSilencio)
     }
