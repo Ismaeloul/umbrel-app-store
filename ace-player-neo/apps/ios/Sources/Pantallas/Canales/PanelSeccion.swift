@@ -23,13 +23,16 @@ struct PanelSeccion: View {
 
     var body: some View {
         let contenido = FilaLista.de(items, seccion: seccion, consulta: consulta, abiertas: modelo.abiertas, ahora: reloj.ahora)
+        // Una vez por pintada, no por fila: con listas de miles de canales, rehacer este conjunto en cada fila que
+        // aparece al desplazar costaba en cada fotograma (tirones en Canales, prueba de Isma).
+        let idsLista: Set<String> = seccion == .favoritos ? Set(biblioteca.web.map(\.id)) : []
         VStack(alignment: .leading, spacing: 12) {
             if seccion == .listas { TarjetaListaActiva(biblioteca: biblioteca) }
             if contenido.canales == 0 {
                 vacio
             } else {
                 TarjetaLista(filas: contenido.filas, etiqueta: seccion.titulo) { fila, i in
-                    celda(fila).modifier(AparicionEscalonada(indice: modelo.entrando ? min(i, ReglasBiblioteca.topeEscalonado) : nil))
+                    celda(fila, idsLista: idsLista).modifier(AparicionEscalonada(indice: modelo.entrando ? min(i, ReglasBiblioteca.topeEscalonado) : nil))
                 }
                 .id(seccion)
             }
@@ -41,7 +44,7 @@ struct PanelSeccion: View {
         }
     }
 
-    @ViewBuilder private func celda(_ fila: FilaLista) -> some View {
+    @ViewBuilder private func celda(_ fila: FilaLista, idsLista: Set<String>) -> some View {
         switch fila {
         case .fecha(let tramo):
             CabeceraFecha(tramo: tramo)
@@ -50,11 +53,11 @@ struct PanelSeccion: View {
                 modelo.alternarCategoria(nombre)
             }
         case .canal(let item, let coleccion):
-            filaCanal(item, coleccion: coleccion)
+            filaCanal(item, coleccion: coleccion, idsLista: idsLista)
         }
     }
 
-    private func filaCanal(_ item: Item, coleccion: LibraryCollection) -> some View {
+    private func filaCanal(_ item: Item, coleccion: LibraryCollection, idsLista: Set<String>) -> some View {
         let conCategoria = conCategoriaDeLaLista(item)
         let canal = CanalFila(conCategoria)
         let antena = indice.para(titulo: item.title, alias: item.alias, marcadores: marcadores)
@@ -62,7 +65,7 @@ struct PanelSeccion: View {
         let subtitulo = ReglasBiblioteca.subtitulo(conCategoria, coleccion: coleccion)
         return FilaCanal(
             canal: canal, subtitulo: subtitulo,
-            caido: coleccion == .favorites && ReglasBiblioteca.caido(item, idsLista: Set(biblioteca.web.map(\.id))),
+            caido: coleccion == .favorites && ReglasBiblioteca.caido(item, idsLista: idsLista),
             enPantalla: reproductor.canal?.id == item.id, antena: antena, tapado: tapado(partido, item.id),
             acciones: acciones.menu(canal, origen: .coleccion(coleccion)), reproducir: { reproducir(canal) },
             identificador: IDUI.filaCanal(item.id),
