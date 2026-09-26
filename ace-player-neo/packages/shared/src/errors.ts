@@ -736,6 +736,12 @@ export const ApiErrorSchema = z.strictObject({
     code: z.string().min(1).max(64),
     message: z.string().min(1),
     requestId: z.string().min(1).max(128),
+    /**
+     * Intentos que hizo el servidor antes de rendirse, si fueron más de uno
+     * (hoy solo «Guardar IPTV», docs/iptv.md §16.8: la web añade «Lo he
+     * intentado dos veces…»). Ausente en todo lo demás.
+     */
+    attempts: z.number().int().min(2).max(9).optional(),
   }),
 });
 export type ApiError = z.infer<typeof ApiErrorSchema>;

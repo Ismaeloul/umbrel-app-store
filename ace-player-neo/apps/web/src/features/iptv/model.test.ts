@@ -187,7 +187,7 @@ describe('formulario', () => {
   });
 
   it('dos intentos con un fallo pasajero: la frase de §16.8; nunca con el usuario y la contraseña', () => {
-    const twice = (code: string) => new ApiError({ code, status: 502, data: { attempts: 2 } });
+    const twice = (code: string) => new ApiError({ code, status: 502, attempts: 2 });
     expect(iptvErrorMessage(twice('iptv_unreachable'))).toBe(
       `${errorMessage('iptv_unreachable')}${IPTV_SAVE_RETRIED_HINT}`,
     );

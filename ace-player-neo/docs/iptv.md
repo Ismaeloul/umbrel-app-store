@@ -2680,9 +2680,9 @@ arregló, cada cosa con su prueba sobre datos inventados con la misma forma:
 
 Lo pidió Isma el 26-sep, para la **0.8.2**: en Canales, una pestaña «IPTV» a la derecha de Favoritos, Recientes y
 Listas para **recorrer su IPTV como la ordena su proveedor** (categorías, sus canales y un buscador), con filtros de
-país, idioma, tipo, deporte y calidad. Rama `iptv/pestana`, que sale de `rediseno/iptv` (`2c69fcc`). Diseño, sin
-implementar todavía. La 0.8.1 ya está preparada aparte y **no cambia**: nada de este anexo toca versiones,
-`releases/`, la tienda ni `apps/ios`.
+país, idioma, tipo, deporte y calidad. Rama `iptv/pestana`, que sale de `rediseno/iptv` (`2c69fcc`). **Contrato y
+servidor implementados** en `iptv/pestana-servidor` (§16.13); la web, en su rama. La 0.8.1 ya está preparada aparte y
+**no cambia**: nada de este anexo toca versiones, `releases/`, la tienda ni `apps/ios`.
 
 **Datos reales con los que se diseña** (la IPTV de Isma en su pila local, vista por la API y sin credenciales): Xtream,
 **27 687 canales**, sincroniza en 2 s, guía para 51 canales y 1 conexión como máximo. Sus nombres tienen esta forma:
@@ -3454,7 +3454,10 @@ en el `PATH` solo para estas órdenes):
 - `iptvBrowse` responde 403 desde `/native` mientras sea `access: 'web'`: la app no la llama.
 - Un favorito guardado desde la pestaña es un favorito IPTV como los del buscador (§14.6 y §14.10): sale en su lista y
   se reproduce por `channelStream`, con lo que ya se sabe que falla sin cambios (sin distintivo y con acciones de hash).
-- Ningún formato cambia: ni `v1/`, ni eventos, ni ids.
+- Ningún formato cambia: ni `v1/`, ni eventos, ni ids. `ApiError` gana `error.attempts` **opcional** (solo en un
+  «Guardar IPTV» que falla dos veces, que la app no hace): los decodificadores de Swift ignoran claves de más y el
+  ejemplo `errors/api-error.json` no lo lleva.
+- El país de la pestaña puede tener **4 letras** (`EXYU`): el modelo de la app lo trata como `String`.
 
 **Cambios cuando exista la pantalla** (los ficheros con * no existen aún en `rediseno/nativa`; el nombre lo pone su
 dueño):
@@ -3502,19 +3505,75 @@ dueño):
 5. **Choques al fusionar con el trabajo de variantes** (§16.10): la pestaña va detrás y se adapta a lo que quede de la
    fila del buscador.
 
-### 16.13 Estado (26-sep): contrato y web hechos en `iptv/pestana-web`
+### 16.13 Estado: contrato y servidor (26-sep, rama `iptv/pestana-servidor`)
 
-**Contrato** (`packages/shared`), tal como §16.2 salvo lo marcado:
-- `iptvBrowse` (`GET /api/v1/iptv/browse`, `access: 'web'`), `IptvBrowseQuerySchema`, `IptvBrowseResponseSchema`,
-  `IptvCategorySchema`, `IptvFacetsSchema`, `IptvBrowseChannelSchema`, `IPTV_BROWSE`, `IPTV_TYPES`, `IPTV_SPORTS` e
-  `IPTV_CLIENT.browseMs` (6 s). Ejemplo en `fixtures/web/v1/iptvBrowse.json` (son 7 rutas en `WEB_FIXTURE_ROUTE_IDS`) y
-  las 3 variantes (`iptvBrowse.categoria`, `.inactiva`, `.categoria-perdida`); `openapi-v2.yaml` regenerado, `api.md`
-  §7.6 bis y la ruta en la lista de solo web de `apps/server/test/security.test.ts`.
-- **Cambio:** el código de país acepta **2 a 4 letras** (`[A-Z]{2,4}`, en la consulta y en `channels[].country`),
-  porque la tabla de §16.4 tiene `EXYU`. El servidor tiene que usar la misma forma.
-- **Pendiente del servidor** (no es de esta rama): el manejador de la ruta (sin él responde `501 not_implemented`), y
-  que el error de `iptvSave` lleve `error.data = { attempts: 2 }`. Hoy `ApiErrorSchema` es estricto y `toV1Error` no
-  escribe `data`: hay que añadir `data` opcional a los dos. La web ya lo lee (`ApiError.data`) y es tolerante.
+**Hecho** (contrato de §16.2 y la parte «servidor» de §16.10):
+
+| Pieza | Dónde |
+|---|---|
+| Constantes `IPTV_BROWSE`, `IPTV_TYPES`, `IPTV_SPORTS`, `IPTV_BROWSE_QUALITIES`, `IPTV_CLIENT.browseMs` / `browseDebounceMs` / `browseFilterDebounceMs` y el reintento de `IPTV_QUICK_TEST` | `packages/shared/src/constants/iptv.ts` |
+| Esquemas `IptvBrowseQuery`, `IptvBrowseResponse`, `IptvCategory`, `IptvFacets`, `IptvBrowseChannel`; ruta `iptvBrowse` (`web`); `ApiError.error.attempts` opcional | `packages/shared/src/api/v1/iptv.ts`, `routes.ts`, `errors.ts` |
+| Ejemplos: `fixtures/web/v1/iptvBrowse.json` y `variantes/iptvBrowse.{categoria,inactiva,categoria-perdida}.json`; `WEB_FIXTURE_ROUTE_IDS` con 7; `openapi-v2.yaml` y `docs/api.md` §7.7 | `packages/shared`, `docs/` |
+| Deducción de país, idioma, tipo, deporte y calidad (tablas de §16.4, NFKC, frases que gastan palabras, adultos excluyente) | `apps/server/src/modules/iptv/facets.ts` |
+| Índice (mapas de bits por valor, categorías como listas, texto) y consulta (O/Y, recuentos disyuntivos, niveles, LRU de 16, cursor) | `modules/iptv/browse.ts` |
+| `groupOrder`, `tvg-country` y `tvg-language` en el catálogo y en `catalogo.enc` (un catálogo viejo se carga igual) | `catalog.ts`, `m3u.ts` |
+| Xtream: orden de `get_live_categories`, `category_ids`, respuesta sin `user_info` = `iptv_unreachable` (`detail: sin_user_info`) | `xtream.ts` |
+| Servicio: `browse()`, índice al aplicar y al cargar, `tappedCandidate` y los respaldos del relé por **fila** (clave + país, `rowVariants`), reintento de la prueba rápida con su registro | `service.ts`, `routes.ts`, `app.ts` (consulta fuera del registro) |
+| Proveedor falso: `grande: N` (CLI `--grande`) con los nombres reales de §16.9 y `fallarPrimera(veces, como)` (HTTP `/__iptv/fallar-primera`) | `apps/server/test/fake-iptv/{provider,catalogo-grande,cli}.ts` |
+
+**Números** (este PC, Node 24):
+
+| Qué | Objetivo | Medido |
+|---|---|---|
+| Montar el índice, 30 000 canales | < 300 ms | ~215 ms (27 000 filas) |
+| Montar el índice, 100 000 canales | < 1,5 s | ~0,7-0,8 s |
+| Consulta en frío dentro del servidor, 30 000 | < 20 ms | 0,3-8 ms (la más cara, «canal», que casa con casi todo) |
+| Consulta en frío, 100 000 | < 60 ms | 0,5-22 ms |
+| Página siguiente (caché) | < 2 ms | < 1 ms |
+| Respuesta HTTP, p95 de 50 peticiones variadas con 30 000 | < 100 ms | ~2 ms (máximo ~11 ms, la primera) |
+| Memoria que se queda el índice | < 15 MB con 100 000 | unos pocos MB (arrays paralelos, sin un objeto por clave) |
+
+**Lo que cambia respecto al diseño** (y por qué):
+- **País de hasta 4 letras** (`[A-Z]{2,4}` en la consulta y en la fila): la tabla de §16.4 tiene `EXYU`.
+- **`error.attempts`** en vez de `data: { attempts: 2 }`: `AppError.data` solo va al registro y `ApiError` es estricto;
+  el campo es opcional y solo sale en un «Guardar» que falla dos veces por algo pasajero.
+- **Registro del reintento:** `{ host, kind, errorCode, detail, attempt, ms }` (el registro redacta una clave `code`).
+  El `detail` de un corte es ahora `fetch_failed:ECONNRESET` (antes, el nombre de la clase).
+- **El índice se monta 2 s después** de aplicar la lista o de cargarla (`IPTV_BROWSE.buildDelayMs`), para no sumarse al
+  pico de memoria de la lectura de 100 000 canales (el test de memoria de §12.2 lo pedía). Si alguien abre la pestaña
+  antes, se monta en ese momento (una petición espera a esa promesa, nunca a una sincronización).
+- **Categorías con texto** (raíz): cuentan con los filtros pero **sin** el texto, que es lo que se verá al entrar.
+- **Un texto que solo es calidad** («hd», «4k») no casa con nada en la pestaña (`total: 0`).
+- **`search.ts` no se ha tocado** (es donde más choca con el trabajo de variantes): `browse.ts` lleva su propio
+  emparejado con las mismas reglas, y un test comprueba que casa con las mismas claves que el buscador. Al fusionar se
+  puede pasar a una función compartida.
+
+**El 502 del primer «Guardar» (§16.8), lo que se ha podido ver.** El registro de la pila local sí seguía en este PC
+(contenedor `aceneo-local-storage-1`, 0.8.1): `PUT /api/v1/iptv` → **502 en 58 ms** a las 13:11:27 y, 6 s después,
+«IPTV guardada» y «lista sincronizada» (27 687 canales en 2 031 ms). El registro estaba en `info` y el código del fallo
+solo se escribía en `debug`, así que no dice cuál de los 502 posibles fue. 58 ms es demasiado poco para un plazo: fue
+una respuesta inmediata que no sirvió (5xx, HTML, `[]`) o un corte. No se ha sondeado el panel de Isma (no se toca un
+servicio ajeno desde aquí). Desde ahora cada intento fallido deja en
+`warn` su `errorCode` y `detail`, así que la próxima vez se sabrá; y los seis casos pasajeros del proveedor falso
+(502, 503, corte, vacío, HTML y `[]`) se guardan al segundo intento.
+
+**Pruebas:** `facets.test.ts` (la tabla de 27 casos entera y 26 más), `browse.test.ts` (filas, categorías, texto,
+facetas, páginas, cursor y rendimiento con 30 000 y 100 000), `catalog.test.ts`, `errors.test.ts`, `m3u.test.ts`,
+`routes.test.ts`, `service-pestana.test.ts` (servicio contra el proveedor falso: navegar, filtrar, `stale`, arranque
+sin red, el canal tocado por país y los casos del 502) e integración 16-21 (`test/integration/iptv.test.ts`).
+
+**Pendiente:**
+- **Web**: hecha en `iptv/pestana-web` (§16.14).
+- **Fusión** con el trabajo «todo desbloqueado + variantes» de `rediseno/iptv`: choques previstos en `service.ts`
+  (`candidateFor` y `variantsOf` ya usan `rowVariants`; el filtro D25 de España sigue en `relinkLibrary` y en el
+  buscador), `names.ts` (superíndices) y `IptvChannelSchema`. La fila de la pestaña tiene que verse igual que la del
+  buscador cuando este enseñe calidades por variante.
+- `docs/comportamientos.md` y la tabla de §12.1 al cerrar.
+
+### 16.14 Estado: la web (26-sep, rama `iptv/pestana-web`, ya fusionada con `iptv/pestana-servidor`)
+
+El contrato es el de §16.13 (la web lo usa tal cual: `error.attempts`, categorías con texto ya filtradas por el
+servidor, `IPTV_CLIENT.browseDebounceMs` y `browseFilterDebounceMs`).
 
 **Web** (`apps/web/src/features/library/iptv/`):
 
@@ -3530,16 +3589,15 @@ dueño):
 Además: `LibraryView` (cuarta pestaña, campo «Buscar en tu IPTV» / «Buscar en {categoría}», sin «Emitiendo ahora»),
 `model.ts` (`CollectionTab`, `tabsFor`, `shownTab`), `VirtualList` (`onEndReached`, `setSize`), `ChannelRow` (`tags`
 para las calidades), `Chip` (`label` para el nombre accesible), `api/client.ts` (`TIMEOUTS.iptvBrowse`), `api/sse.ts`
-(`iptv.status` invalida `iptvBrowse`), `api/errors.ts` (`ApiError.data`) y `features/iptv/model.ts`
-(`IPTV_SAVE_RETRIED_HINT` para `iptv_unreachable`, `iptv_busy` y `dns_failed` con `attempts: 2`).
+(`iptv.status` invalida `iptvBrowse`), `api/errors.ts` (`ApiError.attempts`, de `error.attempts`) y
+`features/iptv/model.ts` (`IPTV_SAVE_RETRIED_HINT` para `iptv_unreachable`, `iptv_busy` y `dns_failed` con 2 intentos).
 
 **Decisiones de la implementación** (dentro de lo que dice §16.6):
 - «Todos los canales» viaja en la URL como `&cat=todos` (a la API va **sin** `category`).
 - Subtítulo dentro de una categoría: el **país** (o el nombre del proveedor). El idioma no sale porque la fila del
   contrato no lo trae; si se quiere, `IptvBrowseChannel` tendría que ganar `languages`.
-- «Categorías con «{q}»» se saca en la web de `categories` de la primera página (nombre que contiene el texto, sin
-  tildes, 5 como mucho). Para que salga también una categoría cuyo nombre casa pero cuyos canales no, el servidor
-  tiene que incluirla en `categories` aunque cuente 0 (la demo lo hace así).
+- «Categorías con «{q}»» son las `categories` de la primera página en la raíz con texto (el servidor ya las filtra
+  por nombre, 5 como mucho, y las cuenta sin el texto; la demo hace lo mismo).
 - Con la ficha de escritorio a la vista, una fila de la pestaña **reproduce** al primer clic (como «En tu IPTV»): no es
   un canal de tu biblioteca y la ficha no sabría enseñarlo.
 - En el móvil, con cuatro pestañas, `lib-tabs--4` quita aire lateral (y a ≤ 380 px baja a 12 px) para que «Favoritos
@@ -3551,11 +3609,13 @@ repetir, `stale`, categoría perdida, adultos excluyente, «UK: DAZN 1» ≠ «E
 `iptv/model.test.ts` e `iptv/IptvSection.test.tsx` (la frase de los dos intentos); `packages/shared` (consulta,
 respuesta, fugas y variantes). E2E `apps/web/e2e/iptv-pestana.spec.ts`: 14 a 19 con la demo, y contra la pila de
 verdad 14 (sin IPTV no hay pestaña), la ruta interceptada (raíz, páginas con cursor y `stale`) y 20 (el mensaje de los
-dos intentos), en los 4 proyectos. Capturas a 390×844 y 1440×900, en claro y oscuro.
+dos intentos); y con la ruta real y el proveedor falso, 15-17 (categorías en el orden de `get_live_categories`, «UK:
+DAZN 1» aparte de «DAZN LaLiga», «1080p» y «720p» en la fila y tocar suena por hls.js, `@video`) y 20 (`fallar-primera`
+con un 502: se guarda al segundo intento sin error a la vista). Capturas a 390×844 y 1440×900, en claro y oscuro.
 
-**Falta, al fusionar con `iptv/pestana-servidor`:** E2E 15 y 17 contra la ruta real con el proveedor falso en modo
-grande (hls.js de verdad), la integración 16-21 del servidor y el reintento de §16.8 visto de punta a punta
-(`fallar-primera`).
+**Falta:** fusionar con «todo desbloqueado + variantes» de `rediseno/iptv` (`9e8a99e`, choques previstos en §16.13) y
+que la fila de la pestaña se vea igual que la del buscador cuando este enseñe calidades por variante;
+`docs/comportamientos.md` y la tabla de §12.1 al cerrar.
 
 **Para la app nativa** (se suma a §16.11): la pestaña se calca con estos mismos valores — parámetros `cat`, `pais`,
 `idioma`, `tipo`, `deporte`, `calidad` y `cat=todos` si la app guarda estado en enlaces; esperas de 450 ms (texto) y

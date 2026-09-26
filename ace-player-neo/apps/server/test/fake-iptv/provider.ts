@@ -30,12 +30,22 @@
 
    Buscador (docs/iptv.md §14.9): «ES: Telecinco HD» (110) solo está en la
    IPTV (ni en el motor falso ni en la biblioteca E2E) y hay un grupo «XXX»
-   con un canal que el buscador no debe enseñar nunca. */
+   con un canal que el buscador no debe enseñar nunca.
+
+   Pestaña IPTV (docs/iptv.md §16.9): `grande: N` suma N canales de
+   `catalogo-grande.ts` (categorías y nombres como los de la lista real, con
+   `tvg-country` / `tvg-language` en la M3U y un canal con `category_ids`) y
+   sus streams se sirven como los demás. `fallarPrimera(veces, como)` y
+   `/__iptv/fallar-primera?veces=&como=` hacen fallar las primeras pruebas de
+   conexión (`player_api.php` sin `action`, la lista M3U y `get.php`) con 502,
+   503, `corte`, `vacio`, `html`, `sin-user-info` o `auth0` (el 502 del primer
+   «Guardar», §16.8). */
 
 import http from 'node:http';
 import type { AddressInfo, Socket } from 'node:net';
 import { gzipSync } from 'node:zlib';
 import { colorFromSeed, generateSegment, TsMuxer, TS_PACKET_SIZE } from '../fake-engine/mpegts.js';
+import { bigCatalog, type BigChannel } from './catalogo-grande.js';
 
 export const FAKE_IPTV_USER = 'usuario-e2e';
 export const FAKE_IPTV_PASSWORD = 'Cl4ve-Secreta-E2E';
@@ -74,6 +84,23 @@ const CATEGORIES = [
 export type FakeIptvMode =
   'ok' | 'down' | '401' | '404' | 'busy' | 'lento' | `corta-a-los:${string}`;
 
+/**
+ * Cómo falla la prueba de conexión las primeras veces (docs/iptv.md §16.8):
+ * 502 o 503, `corte` (cierra el socket), `vacio` (200 sin cuerpo), `html`
+ * (200 con una portada), `sin-user-info` (`[]`) y `auth0`
+ * (`{"user_info":{"auth":0}}`; en la M3U, un 401).
+ */
+export const FAKE_IPTV_FAILURES = [
+  '502',
+  '503',
+  'corte',
+  'vacio',
+  'html',
+  'sin-user-info',
+  'auth0',
+] as const;
+export type FakeIptvFailure = (typeof FAKE_IPTV_FAILURES)[number];
+
 export interface FakeIptvOptions {
   readonly host?: string;
   readonly port?: number;
@@ -97,6 +124,12 @@ export interface FakeIptvOptions {
   readonly outputFormats?: readonly string[];
   /** Reloj de la plaza retenida (los tests pasan el reloj falso del backend). */
   readonly now?: () => number;
+  /**
+   * Modo catálogo grande (docs/iptv.md §16.9): suma estos canales, con las
+   * categorías y los nombres de `catalogo-grande.ts` (como los de la lista
+   * real) y relleno hasta el número pedido.
+   */
+  readonly grande?: number;
 }
 
 export interface FakeIptv {
@@ -122,6 +155,13 @@ export interface FakeIptv {
   limpiarPeticiones(): void;
   /** Cambia el `status` de la cuenta (`Active`, `Expired`…) o `auth`. */
   cuenta(change: { readonly status?: string; readonly auth?: 0 | 1 }): void;
+  /**
+   * Las próximas `veces` peticiones de la prueba de conexión (`player_api.php`
+   * sin `action`, la lista M3U y `get.php`) fallan de la forma `como` (§16.8).
+   */
+  fallarPrimera(veces: number, como: FakeIptvFailure): void;
+  /** Canales del catálogo grande (vacío sin `grande`). */
+  readonly grandes: readonly BigChannel[];
   close(): Promise<void>;
 }
 
@@ -214,6 +254,19 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
   const hidden = new Set<number>();
   const listed = (): FakeIptvChannel[] => FAKE_IPTV_CHANNELS.filter((c) => !hidden.has(c.id));
   let publicHost = options.publicHost ?? '';
+  /* Catálogo grande (§16.9): sus streams se crean al pedirlos. */
+  const big = options.grande ? bigCatalog(options.grande) : null;
+  const bigById = new Map((big?.channels ?? []).map((c) => [c.streamId, c]));
+  const bigCategoryId = new Map((big?.categories ?? []).map((c) => [c.name, c.id]));
+  const failing: { veces: number; como: FakeIptvFailure } = { veces: 0, como: '502' };
+  const stateOf = (id: number): StreamState | undefined => {
+    let state = states.get(id);
+    if (!state && bigById.has(id)) {
+      state = { mode: 'ok', opens: 0, firstOpenAt: 0, cutFirst: true };
+      states.set(id, state);
+    }
+    return state;
+  };
 
   const clockNow = options.now ?? (() => Date.now());
   const heldNow = (): number => {
@@ -245,6 +298,22 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
         lines.push(`${base()}/live/${FAKE_IPTV_USER}/${FAKE_IPTV_PASSWORD}/${c.id}.m3u8`);
       else lines.push(`${base()}/live/${FAKE_IPTV_USER}/${FAKE_IPTV_PASSWORD}/${c.id}.ts`);
     }
+    /* Catálogo grande: con `tvg-country` y `tvg-language` donde los trae (§16.4). */
+    for (const c of big?.channels ?? []) {
+      const attributes = [
+        `tvg-id="${c.epg}"`,
+        `tvg-name="${c.name}"`,
+        ...(c.tvgCountry ? [`tvg-country="${c.tvgCountry}"`] : []),
+        ...(c.tvgLanguage ? [`tvg-language="${c.tvgLanguage}"`] : []),
+        `group-title="${c.category}"`,
+      ];
+      lines.push(`#EXTINF:-1 ${attributes.join(' ')},${c.name}`);
+      lines.push(
+        short
+          ? `${base()}/${FAKE_IPTV_USER}/${FAKE_IPTV_PASSWORD}/${c.streamId}`
+          : `${base()}/live/${FAKE_IPTV_USER}/${FAKE_IPTV_PASSWORD}/${c.streamId}.ts`,
+      );
+    }
     lines.push(
       '#EXTINF:-1 group-title="CINE",Peli de estreno',
       `${base()}/movie/${FAKE_IPTV_USER}/${FAKE_IPTV_PASSWORD}/9001.mp4`,
@@ -263,6 +332,39 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
       'content-length': String(body.length),
     });
     res.end(body);
+  };
+
+  /* La prueba de conexión falla las primeras veces (§16.8); true si ya ha respondido. */
+  const failFirst = (res: http.ServerResponse, m3uList: boolean): boolean => {
+    if (failing.veces <= 0) return false;
+    failing.veces -= 1;
+    switch (failing.como) {
+      case '502':
+        res.writeHead(502, { 'content-type': 'text/html' }).end('<html>502 Bad Gateway</html>');
+        break;
+      case '503':
+        res.writeHead(503).end();
+        break;
+      case 'corte':
+        res.socket?.destroy();
+        break;
+      case 'vacio':
+        res.writeHead(200, { 'content-length': '0' }).end();
+        break;
+      case 'html':
+        res
+          .writeHead(200, { 'content-type': 'text/html' })
+          .end('<!DOCTYPE html><html><body>Comprobando tu navegador…</body></html>');
+        break;
+      case 'sin-user-info':
+        json(res, []);
+        break;
+      case 'auth0':
+        if (m3uList) res.writeHead(401).end();
+        else json(res, { user_info: { auth: 0 } });
+        break;
+    }
+    return true;
   };
 
   /* Aplica el modo de un canal; true si ya ha respondido. */
@@ -289,7 +391,7 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
   };
 
   const serveTs = async (id: number, res: http.ServerResponse): Promise<void> => {
-    const state = states.get(id);
+    const state = stateOf(id);
     if (!state) {
       res.writeHead(404).end();
       return;
@@ -343,7 +445,7 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
   };
 
   const serveHlsPlaylist = async (id: number, res: http.ServerResponse): Promise<void> => {
-    const state = states.get(id);
+    const state = stateOf(id);
     if (!state) {
       res.writeHead(404).end();
       return;
@@ -405,6 +507,14 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
             url.searchParams.get('quitado') !== '0',
           );
           json(res, { ok: true });
+        } else if (path === '/__iptv/fallar-primera') {
+          const como = (url.searchParams.get('como') ?? '502') as FakeIptvFailure;
+          if (!FAKE_IPTV_FAILURES.includes(como)) {
+            res.writeHead(400).end();
+            return;
+          }
+          controller.fallarPrimera(Number(url.searchParams.get('veces') ?? 1), como);
+          json(res, { ok: true });
         } else if (path === '/__iptv/conexiones')
           json(res, { conexiones: controller.conexiones() });
         else if (path === '/__iptv/peticiones') json(res, { peticiones: controller.peticiones() });
@@ -414,11 +524,13 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
           hidden.clear();
           controller.cuenta({ status: 'Active', auth: 1 });
           controller.limpiarPeticiones();
+          failing.veces = 0;
           json(res, { ok: true });
         } else res.writeHead(404).end();
         return;
       }
       if (path === '/lista.m3u' || path === '/lista.m3u.gz') {
+        if (failFirst(res, true)) return;
         const text = Buffer.from(m3u(false));
         const body = path.endsWith('.gz') ? gzipSync(text) : text;
         res.writeHead(200, { 'content-type': 'audio/x-mpegurl' });
@@ -426,6 +538,7 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
         return;
       }
       if (path === '/get.php') {
+        if (failFirst(res, true)) return;
         if (!authed(url)) {
           res.writeHead(401).end();
           return;
@@ -445,6 +558,7 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
         return;
       }
       if (path === '/player_api.php') {
+        if (!url.searchParams.get('action') && failFirst(res, false)) return;
         if (
           url.searchParams.get('username') !== FAKE_IPTV_USER ||
           url.searchParams.get('password') !== FAKE_IPTV_PASSWORD
@@ -470,24 +584,46 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
           return;
         }
         if (action === 'get_live_categories') {
-          json(res, CATEGORIES);
+          json(res, [
+            ...CATEGORIES,
+            ...(big?.categories ?? []).map((c) => ({
+              category_id: c.id,
+              category_name: c.name,
+              parent_id: 0,
+            })),
+          ]);
           return;
         }
         if (action === 'get_live_streams') {
-          json(
-            res,
-            listed().map((c, index) => ({
-              num: index + 1,
+          const small = listed().map((c, index) => ({
+            num: index + 1,
+            name: c.name,
+            stream_type: 'live',
+            stream_id: c.id,
+            stream_icon: '',
+            epg_channel_id: c.epg,
+            added: '1700000000',
+            category_id: String(c.category),
+            direct_source: `http://no-usar.example/${c.id}`,
+          }));
+          const large = (big?.channels ?? []).map((c, index) => {
+            const categoryId = bigCategoryId.get(c.category) ?? '';
+            return {
+              num: small.length + index + 1,
               name: c.name,
               stream_type: 'live',
-              stream_id: c.id,
+              stream_id: c.streamId,
               stream_icon: '',
               epg_channel_id: c.epg,
               added: '1700000000',
-              category_id: String(c.category),
-              direct_source: `http://no-usar.example/${c.id}`,
-            })),
-          );
+              /* «VIP» manda `category_ids` y no `category_id`, como algunos paneles (§16.3). */
+              ...(c.category === 'VIP'
+                ? { category_id: null, category_ids: [Number(categoryId)] }
+                : { category_id: categoryId }),
+              direct_source: '',
+            };
+          });
+          json(res, [...small, ...large]);
           return;
         }
         if (action === 'get_short_epg') {
@@ -578,6 +714,11 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
       if (change.status !== undefined) account.status = change.status;
       if (change.auth !== undefined) account.auth = change.auth;
     },
+    fallarPrimera(veces, como) {
+      failing.veces = Math.max(0, Math.floor(veces));
+      failing.como = como;
+    },
+    grandes: big?.channels ?? [],
     async close() {
       for (const res of open) res.destroy();
       for (const socket of sockets) socket.destroy();

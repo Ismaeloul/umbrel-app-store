@@ -3686,8 +3686,8 @@ paths:
       operationId: iptvBrowse
       tags:
         - iptv
-      summary: "Recorrer tu IPTV: categorías del proveedor, sus canales por páginas, texto y filtros con facetas"
-      description: "Pestaña IPTV de Canales (docs/iptv.md §16): las categorías del proveedor en su orden y con su número de canales, los canales de una categoría (o de toda la IPTV) en el orden del proveedor, paginados con `cursor`, un texto y filtros de país, idioma, tipo, deporte y calidad con sus recuentos (O dentro de un filtro, Y entre filtros). Una fila es un canal (clave limpia y país) con sus calidades. `limit=0` pide solo categorías y facetas. Sin IPTV activa responde 200 con `active: false`; una categoría que ya no existe, 200 con `category: null`; un cursor de otro catálogo, la primera página con `stale: true`. Nunca lleva URL, stream_id, tvg-id, usuario ni contraseña."
+      summary: "Recorrer tu IPTV como la ordena el proveedor: categorías, canales por páginas, texto y filtros con facetas"
+      description: "La pestaña IPTV de Canales (docs/iptv.md §16): categorías del proveedor en su orden y con su número de canales, una fila por canal (nombre limpio y país) con sus calidades, filtros de país, idioma, tipo, deporte y calidad (O dentro de un filtro, Y entre filtros) con sus recuentos, y páginas de 60 con `nextCursor`. El servidor filtra, pagina y cuenta sobre un índice en memoria. Sin IPTV activa responde 200 con `active: false`; una categoría que ya no existe, `category: null`; un cursor de otro catálogo, la primera página con `stale: true`. Nunca lleva URL, `stream_id`, `tvg-id` ni credenciales."
       parameters:
         - name: category
           in: query
@@ -8712,6 +8712,10 @@ components:
               type: string
               minLength: 1
               maxLength: 128
+            attempts:
+              type: integer
+              minimum: 2
+              maximum: 9
           required:
             - code
             - message

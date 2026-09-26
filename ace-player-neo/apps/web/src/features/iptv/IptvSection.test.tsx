@@ -201,7 +201,7 @@ describe('sin IPTV: «Conectar tu IPTV»', () => {
               code: 'iptv_unreachable',
               message: 'Tu proveedor de IPTV no responde.',
               requestId: 'r1',
-              data: { attempts: 2 },
+              attempts: 2,
             },
           },
           502,

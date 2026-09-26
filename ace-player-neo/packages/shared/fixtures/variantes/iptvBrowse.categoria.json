@@ -1,40 +1,47 @@
 {
   "active": true,
   "provider": "Casa",
-  "catalog": "k2x9m4",
+  "catalog": "mfz3k1a01",
   "query": "",
-  "category": { "id": "3f9a1c7e5b20", "name": "ES | DAZN", "count": 18 },
-  "total": 18,
-  "catalogTotal": 27687,
+  "category": { "id": "8e1d0a6b2c93", "name": "ES | DAZN", "count": 12 },
+  "total": 12,
+  "catalogTotal": 812,
   "facets": {
-    "country": [{ "value": "ES", "count": 18, "selected": false }],
-    "language": [{ "value": "es", "count": 18, "selected": false }],
-    "type": [{ "value": "deportes", "count": 18, "selected": false }],
+    "country": [{ "value": "ES", "count": 12, "selected": false }],
+    "language": [{ "value": "es", "count": 12, "selected": false }],
+    "type": [{ "value": "deportes", "count": 12, "selected": false }],
     "sport": [
       { "value": "baloncesto", "count": 7, "selected": false },
       { "value": "f1", "count": 1, "selected": false }
     ],
     "quality": [
-      { "value": "fhd", "count": 12, "selected": false },
-      { "value": "hd", "count": 15, "selected": false }
+      { "value": "fhd", "count": 3, "selected": false },
+      { "value": "hd", "count": 12, "selected": false }
     ]
   },
   "channels": [
     {
-      "id": "18293a4b5c6d7e8f9012345678abcdef45a1b2c3",
+      "id": "293a4b5c6d7e8f9012345678abcdef0156071823",
+      "title": "DAZN 1",
+      "qualities": ["fhd", "hd"],
+      "country": "ES",
+      "category": "8e1d0a6b2c93"
+    },
+    {
+      "id": "18293a4b5c6d7e8f9012345678abcdef45f60712",
       "title": "DAZN F1",
       "qualities": ["fhd", "hd"],
       "country": "ES",
-      "category": "3f9a1c7e5b20"
+      "category": "8e1d0a6b2c93"
     },
     {
-      "id": "293a4b5c6d7e8f9012345678abcdef0156b2c3d4",
+      "id": "3a4b5c6d7e8f9012345678abcdef012367182934",
       "title": "DAZN ACB 1",
       "qualities": ["hd"],
       "country": "ES",
-      "category": "3f9a1c7e5b20"
+      "category": "8e1d0a6b2c93"
     }
   ],
-  "nextCursor": "azJ4OW00LjI",
+  "nextCursor": "bWZ6M2sxYTAxLjM",
   "stale": false
 }

@@ -28,10 +28,10 @@ export class ApiError extends Error {
   readonly requestId: string | null;
   readonly route: string | null;
   /**
-   * Datos extra del error, si el servidor los manda (`error.data`): hoy, los
-   * intentos de la prueba rápida de «Guardar IPTV» (docs/iptv.md §16.8).
+   * Intentos que hizo el servidor antes de rendirse (`error.attempts`, solo si
+   * fueron más de uno): hoy, la prueba rápida de «Guardar IPTV» (docs/iptv.md §16.8).
    */
-  readonly data: Readonly<Record<string, unknown>> | null;
+  readonly attempts: number | null;
 
   constructor(options: {
     code: string;
@@ -40,7 +40,7 @@ export class ApiError extends Error {
     requestId?: string | null;
     route?: string | null;
     cause?: unknown;
-    data?: Readonly<Record<string, unknown>> | null;
+    attempts?: number | null;
   }) {
     super(
       options.message || messageFor(options.code),
@@ -50,7 +50,7 @@ export class ApiError extends Error {
     this.status = options.status ?? 0;
     this.requestId = options.requestId ?? null;
     this.route = options.route ?? null;
-    this.data = options.data ?? null;
+    this.attempts = options.attempts ?? null;
   }
 
   /** Error del propio cliente (sin red, plazo...) y no del servidor. */
@@ -89,12 +89,13 @@ export function describeFailure(error: unknown): string {
 }
 
 interface V1ErrorBody {
-  error: { code?: unknown; message?: unknown; requestId?: unknown; data?: unknown } | string;
+  error: { code?: unknown; message?: unknown; requestId?: unknown; attempts?: unknown } | string;
 }
 
-function plainObject(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
+/** Un número de intentos que tenga sentido (2 a 9), o null. */
+function attemptsOf(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 2 && value <= 9
+    ? value
     : null;
 }
 
@@ -113,7 +114,7 @@ export async function errorFromResponse(response: Response, route: string): Prom
       requestId: typeof raw.requestId === 'string' ? raw.requestId : null,
       status: response.status,
       route,
-      data: plainObject(raw.data),
+      attempts: attemptsOf(raw.attempts),
     });
   }
   // Forma antigua `{ error: "<código>" }` o cuerpo que no es JSON (la pasarela de Umbrel).

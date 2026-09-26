@@ -18,9 +18,18 @@ motores; va bien en el JS inicial). `index.tsx` reexporta lo mismo.
 
 ```ts
 import {
-  play, stop, usePlayer, usePlayerSelector, getPlayer,
-  onSourceFailed, setWaitingMessage, setPlaybackMode, usePlaybackMode,
-  confirmChannel, toggleNerd, useHostNerdPanel,
+  play,
+  stop,
+  usePlayer,
+  usePlayerSelector,
+  getPlayer,
+  onSourceFailed,
+  setWaitingMessage,
+  setPlaybackMode,
+  usePlaybackMode,
+  confirmChannel,
+  toggleNerd,
+  useHostNerdPanel,
 } from '../../player/api.ts';
 ```
 
@@ -30,25 +39,27 @@ Reproduce un canal o una fuente. Idempotente: si ya suena o conecta ese mismo
 hash, solo actualiza los textos (así el centro de partido y el zapping pueden
 pedirlo sin miedo). Devuelve `false` si el hash no es válido.
 
-| Campo de `channel` | Para qué |
-|---|---|
-| `hash` | Content ID o infohash (acepta `acestream://…` y URLs con `?id=`, `normalizeHash`) |
-| `title` | Nombre del canal: título, mando, historial, pantalla de bloqueo |
-| `kind?` | `'infohash'` si viene del buscador del motor; por defecto `'auto'` (decide el backend, P6) |
-| `subtitle?` | Segunda línea («Fuente 1, Elcano», «Atlético – Tottenham»). **Nunca el marcador** (regla 29) |
-| `lead?` | Frase de la fuente para la línea de estado: «Fuente 1 verificada.» → «Fuente 1 verificada. Vas en directo.» |
-| `source?`, `listaId?` | Proveedor y lista para el resultado que se manda a `/api/v1/sources/outcome` |
-| `colors?` | `[colorA, colorB]` de los equipos: luz ambiental alrededor del vídeo (≥ 768 px) |
+| Campo de `channel`    | Para qué                                                                                                    |
+| --------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `hash`                | Content ID o infohash (acepta `acestream://…` y URLs con `?id=`, `normalizeHash`)                           |
+| `title`               | Nombre del canal: título, mando, historial, pantalla de bloqueo                                             |
+| `kind?`               | `'infohash'` si viene del buscador del motor; por defecto `'auto'` (decide el backend, P6)                  |
+| `subtitle?`           | Segunda línea («Fuente 1, Elcano», «Atlético – Tottenham»). **Nunca el marcador** (regla 29)                |
+| `lead?`               | Frase de la fuente para la línea de estado: «Fuente 1 verificada.» → «Fuente 1 verificada. Vas en directo.» |
+| `source?`, `listaId?` | Proveedor y lista para el resultado que se manda a `/api/v1/sources/outcome`                                |
+| `colors?`             | `[colorA, colorB]` de los equipos: luz ambiental alrededor del vídeo (≥ 768 px)                             |
 
-| `options` | |
-|---|---|
-| `origin` | `'user'` (por defecto), `'auto'` (arranque automático por verificadas: **1** reconexión antes de la primera imagen), `'zapping'`, `'library'` |
-| `route` | A dónde vuelve el mini-reproductor (por defecto `partido/canal/<hash>`) |
+| `options` |                                                                                                                                               |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `origin`  | `'user'` (por defecto), `'auto'` (arranque automático por verificadas: **1** reconexión antes de la primera imagen), `'zapping'`, `'library'` |
+| `route`   | A dónde vuelve el mini-reproductor (por defecto `partido/canal/<hash>`)                                                                       |
 
 ### `stop()`
+
 Detiene todo y suelta la sesión (`release` con `reason: 'user'`).
 
 ### `usePlayer()` / `usePlayerSelector(sel)` / `getPlayer()`
+
 El estado público (`PlayerState`, ver `api.ts`). Lo más útil:
 
 - `phase`: `idle | cargando | buffer | reproduciendo | pausado | bloqueado | buscando | reconectando | error`.
@@ -58,19 +69,26 @@ El estado público (`PlayerState`, ver `api.ts`). Lo más útil:
 - `attempt`: `{ n, max }` mientras reconecta; `stats` (pares y velocidades por SSE); `ttffMs`.
 
 ### `onSourceFailed(handler) → () => void`
+
 Cuando una fuente agota sus reconexiones (3; 1 con `origin: 'auto'` antes del
 primer fotograma), el reproductor pregunta al último que escucha. El centro de
 partido decide (política única, P16):
 
 ```ts
-useEffect(() => onSourceFailed((fallo) => {
-  // fallo: { channel, origin, outcome: 'fallo' | 'cayo', seconds, reason }
-  const siguiente = siguienteVerificadaNoProbada();
-  if (!siguiente)
-    return { message: `Esta señal no responde. Tienes ${n} fuentes para este canal: prueba otra en el selector.` };
-  play(siguiente, { origin: 'auto', route });
-  return { next: true };
-}), []);
+useEffect(
+  () =>
+    onSourceFailed((fallo) => {
+      // fallo: { channel, origin, outcome: 'fallo' | 'cayo', seconds, reason }
+      const siguiente = siguienteVerificadaNoProbada();
+      if (!siguiente)
+        return {
+          message: `Esta señal no responde. Tienes ${n} fuentes para este canal: prueba otra en el selector.`,
+        };
+      play(siguiente, { origin: 'auto', route });
+      return { next: true };
+    }),
+  [],
+);
 ```
 
 Sin respuesta, el panel dice «Este canal no tiene pares ahora mismo. Puede que
@@ -81,6 +99,7 @@ oyente (como arriba) es lo esperado: la fuente nueva arranca limpia (sin el
 siguiente…» mientras conecta.
 
 ### Otras
+
 - `setWaitingMessage(texto | null)`: mientras el centro de partido espera una
   fuente verificada, lo que se ve en el vídeo y en la línea de estado
   («Comprobando 5 fuentes: arranca la primera que funcione…»), con el pulso de
@@ -104,17 +123,17 @@ siguiente…» mientras conecta.
 
 ## Cómo funciona
 
-| Fichero | Qué |
-|---|---|
-| `controller.ts` | `NeoPlayerController` portado (intención, retenciones, órdenes serializadas) con P1, P2 y P18 |
-| `machine.ts` | La máquina de la conexión (`idle → pidiendo → conectando → precarga → arrancando → activa`, `reconectando`, `error`) y la fase pública |
-| `runtime.ts` | El orquestador: URL del backend, motor, precarga, primer fotograma, vigilante, rebuffer, reconexiones, sesión, SSE, resultados y métricas |
-| `engines/` | Adaptadores (`mpegts.ts`, `hls.ts`, `native.ts`, `demo.ts`) y la tabla protocolo × navegador (`index.ts`) |
-| `index.tsx` | El `PlayerDock`: acciones, atajos, Media Session, pantalla completa, PiP, línea de estado, presencia |
-| `PlayerSurface.tsx`, `MiniPlayer.tsx`, `NerdPanel.tsx` | La interfaz |
-| `stage-slot.ts` | El hueco sobre el vídeo (arriba a la izquierda) donde el centro de partido proyecta la cápsula del marcador (Palco W5) |
-| `status.ts` | Textos (línea de estado, panel, botón de directo), puros |
-| `constants.ts` | Umbrales de la 0.6.59 con nombre |
+| Fichero                                                | Qué                                                                                                                                       |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `controller.ts`                                        | `NeoPlayerController` portado (intención, retenciones, órdenes serializadas) con P1, P2 y P18                                             |
+| `machine.ts`                                           | La máquina de la conexión (`idle → pidiendo → conectando → precarga → arrancando → activa`, `reconectando`, `error`) y la fase pública    |
+| `runtime.ts`                                           | El orquestador: URL del backend, motor, precarga, primer fotograma, vigilante, rebuffer, reconexiones, sesión, SSE, resultados y métricas |
+| `engines/`                                             | Adaptadores (`mpegts.ts`, `hls.ts`, `native.ts`, `demo.ts`) y la tabla protocolo × navegador (`index.ts`)                                 |
+| `index.tsx`                                            | El `PlayerDock`: acciones, atajos, Media Session, pantalla completa, PiP, línea de estado, presencia                                      |
+| `PlayerSurface.tsx`, `MiniPlayer.tsx`, `NerdPanel.tsx` | La interfaz                                                                                                                               |
+| `stage-slot.ts`                                        | El hueco sobre el vídeo (arriba a la izquierda) donde el centro de partido proyecta la cápsula del marcador (Palco W5)                    |
+| `status.ts`                                            | Textos (línea de estado, panel, botón de directo), puros                                                                                  |
+| `constants.ts`                                         | Umbrales de la 0.6.59 con nombre                                                                                                          |
 
 Reglas que cumple (inventario §8, §9, §11, §17, §18 y §26):
 

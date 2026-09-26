@@ -137,6 +137,14 @@ export const IPTV_QUICK_TEST = {
   xtreamMs: 8 * SECOND,
   m3uMs: 20 * SECOND,
   m3uBytes: 256 * KIB,
+  /**
+   * Un solo reintento interno (§16.8) si el primer intento falló por algo
+   * pasajero y en menos de `retryFastMs`, tras `retryDelayMs`. Los dos
+   * intentos caben en `budgetMs` (la web espera 30 s, `TIMEOUTS.iptvSave`).
+   */
+  retryFastMs: 5 * SECOND,
+  retryDelayMs: 1_500,
+  budgetMs: 25 * SECOND,
 } as const;
 
 /** Refrescos (§3.5, §3.6 y §7.4). */
@@ -258,9 +266,39 @@ export const IPTV_CLIENT = {
   searchMs: 4 * SECOND,
   /** `footballResolve` con `engine=1` (búsqueda inversa de fondo, §14.4). */
   channelEngineMs: 20 * SECOND,
-  /** `iptvBrowse` desde la pestaña IPTV de Canales (§16.2): `TIMEOUTS.iptvBrowse` de la web. */
+  /** `iptvBrowse` (la pestaña IPTV de Canales, §16.2): `TIMEOUTS.iptvBrowse` de la web. */
   browseMs: 6 * SECOND,
+  /** Espera tras la última tecla del campo de la pestaña y tras un cambio de filtro (juntar toques). */
+  browseDebounceMs: 450,
+  browseFilterDebounceMs: 200,
 } as const;
+
+// --- Buscador: IPTV y AceStream juntos (§14) ---
+
+export const IPTV_SEARCH = {
+  /** Filas por búsqueda: por defecto y como mucho. */
+  limit: 50,
+  /** `total` cuenta hasta aquí; si hay más, `capped: true`. */
+  totalCap: 200,
+  /** Filas IPTV a la vista antes de «Ver más»: en Buscar y en el filtro de Canales. */
+  shownInSearch: 5,
+  shownInLibrary: 3,
+  /** Ids de tu biblioteca que se devuelven por canal IPTV, y cuántos de la biblioteca se miran como mucho. */
+  libraryMatchesMax: 20,
+  libraryCandidatesMax: 200,
+  /** Grupos del catálogo preseleccionados por resultado del motor al anotar `SearchResult.iptv`. */
+  annotatePreselect: 50,
+  /** Consultas al motor de la búsqueda inversa (§14.4). */
+  reverseQueriesMax: 2,
+  /** Con menos fuentes de AceStream que esto, la sesión del canal pide la búsqueda inversa. */
+  reverseBelowAce: 3,
+  /** Un favorito IPTV que no casa tras cambiar de proveedor se quita pasado esto (§14.6). */
+  relinkGraceMs: 24 * HOUR,
+} as const;
+
+/** Estado de un id IPTV de favoritos o recientes (`LibraryView.iptvIds`, §14.6). */
+export const IPTV_ID_STATES = ['ok', 'iptv_gone', 'iptv_disabled', 'iptv_removed'] as const;
+export type IptvIdState = (typeof IPTV_ID_STATES)[number];
 
 // --- Pestaña IPTV en Canales (§16) ---
 
@@ -270,6 +308,8 @@ export const IPTV_BROWSE = {
   limitMax: 100,
   /** Categorías devueltas como mucho (las del proveedor, en su orden). */
   categoriesMax: 2_000,
+  /** Categorías cuyo nombre contiene el texto, en la raíz con texto (§16.3). */
+  categoriesMatchMax: 5,
   /** Valores por faceta como mucho (País puede pasar de 100). */
   facetValuesMax: 250,
   /** Valores elegidos por faceta en una consulta. */
@@ -278,6 +318,10 @@ export const IPTV_BROWSE = {
   cacheEntries: 16,
   /** Nombre de categoría enseñado: como mucho. */
   categoryNameMax: 120,
+  /** El índice se monta a trozos de este tamaño, cediendo el hilo entre trozo y trozo. */
+  buildChunk: 5_000,
+  /** …y este rato después de aplicar la lista (o antes, si alguien abre la pestaña). */
+  buildDelayMs: 2 * SECOND,
 } as const;
 
 /** Tipos (§16.4). El orden es el de la hoja de filtros cuando empatan en número. */
@@ -317,29 +361,5 @@ export const IPTV_SPORTS = [
 ] as const;
 export type IptvSport = (typeof IPTV_SPORTS)[number];
 
-// --- Buscador: IPTV y AceStream juntos (§14) ---
-
-export const IPTV_SEARCH = {
-  /** Filas por búsqueda: por defecto y como mucho. */
-  limit: 50,
-  /** `total` cuenta hasta aquí; si hay más, `capped: true`. */
-  totalCap: 200,
-  /** Filas IPTV a la vista antes de «Ver más»: en Buscar y en el filtro de Canales. */
-  shownInSearch: 5,
-  shownInLibrary: 3,
-  /** Ids de tu biblioteca que se devuelven por canal IPTV, y cuántos de la biblioteca se miran como mucho. */
-  libraryMatchesMax: 20,
-  libraryCandidatesMax: 200,
-  /** Grupos del catálogo preseleccionados por resultado del motor al anotar `SearchResult.iptv`. */
-  annotatePreselect: 50,
-  /** Consultas al motor de la búsqueda inversa (§14.4). */
-  reverseQueriesMax: 2,
-  /** Con menos fuentes de AceStream que esto, la sesión del canal pide la búsqueda inversa. */
-  reverseBelowAce: 3,
-  /** Un favorito IPTV que no casa tras cambiar de proveedor se quita pasado esto (§14.6). */
-  relinkGraceMs: 24 * HOUR,
-} as const;
-
-/** Estado de un id IPTV de favoritos o recientes (`LibraryView.iptvIds`, §14.6). */
-export const IPTV_ID_STATES = ['ok', 'iptv_gone', 'iptv_disabled', 'iptv_removed'] as const;
-export type IptvIdState = (typeof IPTV_ID_STATES)[number];
+/** Calidades de la faceta Calidad, en su orden fijo (4K, 1080p, 720p, SD). */
+export const IPTV_BROWSE_QUALITIES = ['uhd', 'fhd', 'hd', 'sd'] as const;

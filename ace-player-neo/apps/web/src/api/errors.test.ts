@@ -67,16 +67,17 @@ describe('errorFromResponse', () => {
     const error = await errorFromResponse(html, 'x');
     expect(error.code).toBe('http_502');
     expect(error.message).toMatch(/502/);
-    expect(error.data).toBeNull();
+    expect(error.attempts).toBeNull();
   });
 
-  it('los datos extra del error (`error.data`), si llegan como objeto', async () => {
-    const body = (data: unknown) => ({
-      error: { code: 'iptv_unreachable', message: 'No responde.', requestId: 'r', data },
+  it('los intentos del servidor (`error.attempts`, docs/iptv.md §16.8), solo si tienen sentido', async () => {
+    const body = (attempts: unknown) => ({
+      error: { code: 'iptv_unreachable', message: 'No responde.', requestId: 'r', attempts },
     });
-    const twice = await errorFromResponse(json(body({ attempts: 2 }), 502), 'iptvSave');
-    expect(twice.data).toEqual({ attempts: 2 });
-    expect((await errorFromResponse(json(body([2]), 502), 'iptvSave')).data).toBeNull();
-    expect((await errorFromResponse(json(body('2'), 502), 'iptvSave')).data).toBeNull();
+    const twice = await errorFromResponse(json(body(2), 502), 'iptvSave');
+    expect(twice.attempts).toBe(2);
+    expect((await errorFromResponse(json(body('2'), 502), 'iptvSave')).attempts).toBeNull();
+    expect((await errorFromResponse(json(body(1), 502), 'iptvSave')).attempts).toBeNull();
+    expect((await errorFromResponse(json(body(2.5), 502), 'iptvSave')).attempts).toBeNull();
   });
 });

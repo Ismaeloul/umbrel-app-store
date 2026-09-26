@@ -254,7 +254,7 @@ export function iptvErrorMessage(error: unknown, kind?: IptvKind): string {
   if (error.code === 'iptv_too_large' && kind === 'm3u')
     return `${errorMessage('iptv_too_large')} ${IPTV_TOO_LARGE_HINT}`;
   if (isAnyErrorCode(error.code) && error.code !== 'internal_error') {
-    const retried = error.data?.attempts === 2 && RETRIED_HINT_CODES.has(error.code);
+    const retried = (error.attempts ?? 0) >= 2 && RETRIED_HINT_CODES.has(error.code);
     return retried
       ? `${errorMessage(error.code)}${IPTV_SAVE_RETRIED_HINT}`
       : errorMessage(error.code);
