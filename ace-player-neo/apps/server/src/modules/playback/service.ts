@@ -28,6 +28,7 @@ import {
   DEFAULT_PLAYBACK_MODE,
   IPTV_SESSION,
   LEGACY_DEVICE_NAME,
+  MULTI_TIMINGS,
   SHUTDOWN_TIMINGS,
   SSE_TIMINGS,
   TIMEOUTS,
@@ -39,6 +40,7 @@ import {
   type EngineSessionMode,
   type EngineState,
   type NowPlaying,
+  type OthersAction,
   type PersistedSession,
   type PlaybackMode,
   type PlaybackStatus,
@@ -109,6 +111,10 @@ interface ViewerRec {
   playing: boolean | null;
   /** Token del `claim` 0.6.x (visores sin sesión). */
   readonly claimToken: string | null;
+  /** Partido desde el que lo pidió (docs/multidispositivo.md §2.3); null = canal suelto. */
+  matchId: string | null;
+  /** Sabe seguir un cambio de canal (`playback.handoff` con `follow`). */
+  follows: boolean;
 }
 
 interface SessionRec {
@@ -154,6 +160,18 @@ interface AcquireRequest {
   readonly writeNowPlaying: boolean;
   /** Decidido ANTES de mirar el motor (docs/iptv.md §4.1 y §6.4). */
   readonly source: 'engine' | 'iptv';
+  /*
+   * Varios dispositivos (docs/multidispositivo.md §2.3). `legacyRemux` y
+   * `applyLegacyClaim` ponen `stop`, null, false, null y false.
+   */
+  /** `move`: los visores de otros dispositivos de la sesión `from` siguen el cambio. */
+  readonly others: OthersAction;
+  /** Sesión que vio el cliente al decidir; solo sus visores se mueven con `move`. */
+  readonly from: string | null;
+  /** Unirse a lo que ya se ve; nunca cerrar otra sesión (`session_expired` si no hay nada). */
+  readonly join: boolean;
+  readonly matchId: string | null;
+  readonly follows: boolean;
 }
 
 interface Placement {
@@ -364,49 +382,60 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
   /** Clave de la última lista publicada en `playback.sessions` (sin `lastBeatAt`). */
   let lastSessionsKey = '';
 
+  /**
+   * ¿Lleva el visor más de `viewerAwayMs` sin latido? (docs/multidispositivo.md
+   * §2.3): un iPhone suspendido sin PiP o una pestaña cuyo `pagehide` no llegó
+   * deja de contar para la pregunta y la cápsula a los 20 s, no a los 45 s.
+   */
+  function isAway(viewer: ViewerRec, now: number): boolean {
+    return viewer.heartbeat && now - viewer.lastBeat > MULTI_TIMINGS.viewerAwayMs;
+  }
+
+  function summarizeViewer(viewer: ViewerRec, now: number): SessionSummary['viewers'][number] {
+    return {
+      client: viewer.client,
+      deviceId: viewer.deviceId,
+      lastBeatAt: new Date(viewer.lastBeat).toISOString(),
+      viewerId: viewer.viewerId,
+      deviceName: viewer.deviceName,
+      platform: viewer.client,
+      playing: viewer.playing,
+      /* Se omiten sin dato: la forma de siempre no cambia para quien no los use. */
+      ...(viewer.follows ? { follows: true as const } : {}),
+      ...(isAway(viewer, now) ? { away: true as const } : {}),
+    };
+  }
+
   function summarize(session: SessionRec): SessionSummary {
     const list = [...session.viewers.values()];
+    const now = clock.now();
     /* El título del visor que llegó el último y lo sabía. */
     const known = list.findLast((viewer) => viewer.label !== '');
+    /* Y el partido, igual (docs/multidispositivo.md §2.3). */
+    const matchId = list.findLast((viewer) => viewer.matchId !== null)?.matchId ?? null;
     const direct = list.some((viewer) => viewer.consumes !== 'remux');
-    if (session.source === 'iptv') {
-      return {
-        id: session.id,
-        hash: session.hash,
-        mode: session.mode,
-        openedAt: new Date(session.openedAt).toISOString(),
-        viewers: list.map((viewer) => ({
-          client: viewer.client,
-          deviceId: viewer.deviceId,
-          lastBeatAt: new Date(viewer.lastBeat).toISOString(),
-          viewerId: viewer.viewerId,
-          deviceName: viewer.deviceName,
-          platform: viewer.client,
-          playing: viewer.playing,
-        })),
-        title: known?.label ?? '',
-        /* Una IPTV siempre pasa por el remux: `hls` si la ve alguna web, `hls-fmp4` si solo iPhones. */
-        protocol: list.some((viewer) => webIptvViewer(session, viewer)) ? 'hls' : 'hls-fmp4',
-        source: 'iptv',
-      };
-    }
-    return {
+    const common = {
       id: session.id,
       hash: session.hash,
       mode: session.mode,
       openedAt: new Date(session.openedAt).toISOString(),
-      viewers: list.map((viewer) => ({
-        client: viewer.client,
-        deviceId: viewer.deviceId,
-        lastBeatAt: new Date(viewer.lastBeat).toISOString(),
-        viewerId: viewer.viewerId,
-        deviceName: viewer.deviceName,
-        platform: viewer.client,
-        playing: viewer.playing,
-      })),
+      viewers: list.map((viewer) => summarizeViewer(viewer, now)),
       title: known?.label ?? '',
+    };
+    if (session.source === 'iptv') {
+      return {
+        ...common,
+        /* Una IPTV siempre pasa por el remux: `hls` si la ve alguna web, `hls-fmp4` si solo iPhones. */
+        protocol: list.some((viewer) => webIptvViewer(session, viewer)) ? 'hls' : 'hls-fmp4',
+        source: 'iptv',
+        ...(matchId ? { matchId } : {}),
+      };
+    }
+    return {
+      ...common,
       /* Solo apps de iOS (remux): hls-fmp4. Si no, lo que da el motor. */
       protocol: !direct && list.length > 0 ? 'hls-fmp4' : directProtocol(session.mode),
+      ...(matchId ? { matchId } : {}),
     };
   }
 
@@ -429,8 +458,8 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     bus.emit('playback.sessions', { sessions: list });
   }
 
-  function emitActivity(): void {
-    emitSessions();
+  function emitActivity(options: { sessions?: boolean } = {}): void {
+    if (options.sessions !== false) emitSessions();
     const hashes = [
       ...new Set([...[...viewers.values()].map((viewer) => viewer.hash), ...waiting.values()]),
     ].sort();
@@ -912,11 +941,23 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
 
   // --- Visores ---
 
+  interface HandoffBy {
+    readonly deviceId: string | null;
+    readonly client: ClientKind;
+    readonly hash: string;
+    readonly title: string;
+    /** Nombre legible del que se lo queda (docs/multidispositivo.md §2.2). */
+    readonly deviceName: string;
+    /** Partido del canal nuevo, si se pidió desde uno. */
+    readonly matchId: string | null;
+  }
+
   function emitHandoff(
     session: SessionRec,
     list: ViewerRec[],
-    by: { deviceId: string | null; client: ClientKind; hash: string; title: string },
+    by: HandoffBy,
     reason: 'other_channel' | 'same_channel',
+    follow = false,
   ): void {
     const ids = list.map((viewer) => viewer.viewerId);
     if (!ids.length) return;
@@ -928,6 +969,10 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       hash: by.hash,
       title: by.title,
       reason,
+      byDeviceName: by.deviceName,
+      /* Solo si son `true` o no nulos: la forma de siempre para lo demás. */
+      ...(follow ? { follow: true } : {}),
+      ...(by.matchId ? { matchId: by.matchId } : {}),
     });
   }
 
@@ -992,7 +1037,11 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       sessionClosed = session.closed;
     }
     if (reason !== 'channel_change') await releaseNowPlaying(viewer);
-    emitActivity();
+    /* Cambio de canal: el visor se va de la sesión vieja y enseguida se coloca
+       en la nueva. Publicar ese instante en `playback.sessions` haría creer a
+       los demás que ha dejado de ver (docs/multidispositivo.md §2.4.1: una hoja
+       abierta seguiría sola); lo publica la colocación, ya con todo hecho. */
+    emitActivity({ sessions: reason !== 'channel_change' });
     syncTicker();
     return { sessionClosed };
   }
@@ -1001,7 +1050,9 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
   async function placeLocked(request: AcquireRequest): Promise<Omit<Placement, 'remux'>> {
     if (stopped) throw new AppError('engine_unavailable', { detail: 'apagando' });
     waiting.set(request.viewerId, request.hash);
-    emitActivity();
+    /* Esperar a abrir solo cambia `playback.activity`; las sesiones se publican
+       al colocarle (sin el instante en que ha dejado la vieja, ver dropViewer). */
+    emitActivity({ sessions: false });
     try {
       return await placeWaitingLocked(request);
     } finally {
@@ -1011,25 +1062,55 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
   }
 
   async function placeWaitingLocked(request: AcquireRequest): Promise<Omit<Placement, 'remux'>> {
-    const by = {
+    const by: HandoffBy = {
       deviceId: request.deviceId,
       client: request.client,
       hash: request.hash,
       title: request.title,
+      deviceName: request.deviceName,
+      matchId: request.matchId,
     };
     let handoff = false;
-    /* Canales distintos: siempre traspaso (una sola sesión en el motor principal). */
-    for (const other of [...sessions.values()]) {
-      if (other.hash === request.hash) continue;
-      const affected = [...other.viewers.values()].filter((v) => v.viewerId !== request.viewerId);
-      emitHandoff(other, affected, by, 'other_channel');
-      handoff ||= affected.length > 0;
-      await closeSessionLocked(other);
-    }
-    /* Los 0.6.x con mando se enteran por nowPlaying: dejan de contar como visores. */
-    for (const viewer of [...viewers.values()]) {
-      if (viewer.sessionId === null && viewer.viewerId !== request.viewerId) {
-        viewers.delete(viewer.viewerId);
+    if (request.join) {
+      /* Unirse (docs/multidispositivo.md §2.3, D-M7): seguir, la cápsula y
+         «Ver … aquí» nunca cambian el canal de la casa. Si ya no hay nadie
+         viendo ese canal (el otro ha vuelto a cambiar o ha parado), 410 sin
+         tocar ninguna otra sesión ni abrir nada: en IPTV, ni una conexión
+         nueva con el proveedor. Un seguir tardío nunca cierra la más nueva. */
+      const alive = [...sessions.values()].find(
+        (candidate) =>
+          candidate.hash === request.hash && !candidate.closed && candidate.viewers.size > 0,
+      );
+      if (!alive) throw new AppError('session_expired', { detail: 'no hay nada que seguir' });
+    } else {
+      /* Canales distintos: siempre traspaso (una sola sesión en el motor principal). */
+      for (const other of [...sessions.values()]) {
+        if (other.hash === request.hash) continue;
+        const affected = [...other.viewers.values()].filter((v) => v.viewerId !== request.viewerId);
+        /* «Cambiar en los dos» (§2.3): solo siguen los visores de OTROS
+           dispositivos de la sesión que el cliente vio al decidir (`from`).
+           Los de cualquier otra sesión (alguien cambió mientras tanto) se
+           paran con el aviso: nunca se les arrastra sin preguntar. */
+        const moving =
+          request.others === 'move' && request.from === other.id && policy() === 'share';
+        const follows = moving
+          ? affected.filter((v) => v.deviceId === null || v.deviceId !== request.deviceId)
+          : [];
+        emitHandoff(other, follows, by, 'other_channel', true);
+        emitHandoff(
+          other,
+          affected.filter((v) => !follows.includes(v)),
+          by,
+          'other_channel',
+        );
+        handoff ||= affected.length > 0;
+        await closeSessionLocked(other);
+      }
+      /* Los 0.6.x con mando se enteran por nowPlaying: dejan de contar como visores. */
+      for (const viewer of [...viewers.values()]) {
+        if (viewer.sessionId === null && viewer.viewerId !== request.viewerId) {
+          viewers.delete(viewer.viewerId);
+        }
       }
     }
     let session = [...sessions.values()].find((candidate) => candidate.hash === request.hash);
@@ -1081,12 +1162,17 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       lastBeat: clock.now(),
       playing: null,
       claimToken: null,
+      matchId: request.matchId,
+      follows: request.follows,
     };
     viewer.lastBeat = clock.now();
     viewer.title = request.title;
     viewer.label = request.label;
     viewer.deviceName = request.deviceName;
     viewer.mode = request.mode;
+    /* Las reconexiones no repiten `match` (docs/multidispositivo.md §2.4.1): se conserva. */
+    if (request.matchId !== null) viewer.matchId = request.matchId;
+    viewer.follows = request.follows;
     /* D5.3: el progresivo solo admite un consumidor. */
     if (session.mode === 'progressive' && consumers(session, viewer) > 1) {
       try {
@@ -1215,6 +1301,9 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       );
     }
     for (const session of sessions.values()) pollStats(session);
+    /* Un visor que cruza los 20 s sin latido (o vuelve a latir) cambia su
+       `away` (docs/multidispositivo.md §2.3): se publica solo si ha cambiado. */
+    emitSessions();
   }
 
   /**
@@ -1416,11 +1505,13 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
   async function applyLegacyClaim(nowPlaying: NowPlaying): Promise<void> {
     await engineLock.run(async () => {
       if (stopped) return;
-      const by = {
+      const by: HandoffBy = {
         deviceId: nowPlaying.dev,
-        client: 'legacy' as const,
+        client: 'legacy',
         hash: nowPlaying.id,
         title: nowPlaying.title,
+        deviceName: LEGACY_DEVICE_NAME,
+        matchId: null,
       };
       for (const session of [...sessions.values()]) {
         /* Su propio /api/remux (mismo dev y canal) no se toca. */
@@ -1462,6 +1553,8 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
         lastBeat: clock.now(),
         playing: null,
         claimToken: nowPlaying.token,
+        matchId: null,
+        follows: false,
       });
       emitActivity();
       syncTicker();
@@ -1544,6 +1637,12 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
         mode,
         signal,
         writeNowPlaying: true,
+        /* Varios dispositivos (docs/multidispositivo.md §2.3). */
+        others: query.others ?? 'stop',
+        from: query.from ?? null,
+        join: query.join === '1',
+        matchId: query.match ?? null,
+        follows: query.follows === '1',
       });
       const { session, viewer } = placed;
       const url = urlFor(session, viewer);
@@ -1731,6 +1830,11 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
           signal,
           legacyDevice: dev,
           writeNowPlaying: false,
+          others: 'stop',
+          from: null,
+          join: false,
+          matchId: null,
+          follows: false,
         });
         return { url: legacyVideoPath(id), token: placed.remux?.legacyToken ?? '' };
       } catch (error) {

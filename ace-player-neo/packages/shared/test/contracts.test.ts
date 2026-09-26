@@ -197,8 +197,23 @@ describe('ejemplos de fixtures/ (reparto de docs/iptv.md §5.7)', () => {
     }
   });
 
+  /** Variante de un evento (`<tipo>.<caso>`): su tipo SSE, o undefined si es de una ruta. */
+  const eventVariantType = (name: string) =>
+    SSE_EVENT_TYPES.find((type) => name.startsWith(`${type}.`));
+
+  it('cada variante de evento valida con el esquema SSE de su tipo', () => {
+    const names = namesIn('variantes').filter((name) => eventVariantType(name));
+    expect(names).toContain('playback.handoff.follow');
+    for (const name of names) {
+      const value = readJson(`variantes/${name}.json`) as { type: string };
+      expect(value.type, name).toBe(eventVariantType(name));
+      const result = SseEventSchema.safeParse(value);
+      expect(result.success ? 'ok' : result.error.message, name).toBe('ok');
+    }
+  });
+
   it('cada variante valida con el esquema de la ruta que va antes del primer punto', () => {
-    const names = namesIn('variantes');
+    const names = namesIn('variantes').filter((name) => !eventVariantType(name));
     expect(names.length).toBeGreaterThan(0);
     for (const name of names) {
       const id = name.split('.')[0] ?? '';

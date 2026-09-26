@@ -50,8 +50,11 @@ import {
   reconnectDelayMs,
   RECONNECT_POLICY,
   resolveLiveTarget,
+  MULTI_TIMINGS,
+  type ClientKind,
   type PlaybackMode,
   type PlaybackProfile,
+  type SameChannelPolicy,
   type SeekWindow,
   type SseEventData,
   type StreamGrant,
@@ -65,16 +68,27 @@ import { isDemo } from '../api/mode.ts';
 import { routeKey, queryClient } from '../api/query.ts';
 import { onSseEvent } from '../api/sse.ts';
 import { setPlayerPresence } from '../app/player-presence.ts';
+import type { Route } from '../app/routes.ts';
+import { joinHouse } from '../features/multi/follow.ts';
+import { handoffLabel, housePolicy, multiEnabled } from '../features/multi/house.ts';
+import { channelName, handoffTexts } from '../features/multi/texts.ts';
+import { deviceKind, KIND_ICON } from '../features/where-playing/model.ts';
 import { shallowEqual } from '../lib/store.ts';
-import { notify as defaultNotify, type NotifyOptions } from '../notices/notify.ts';
+import { showImmersiveAction } from '../notices/immersiveAction.ts';
+import { noticeFlags, notify as defaultNotify, type NotifyOptions } from '../notices/notify.ts';
 import { toast } from '../notices/toasts.ts';
 import {
   channelRoute,
+  getFollowHandler,
   getPlaybackMode,
   IDLE_LIVE,
+  notifyJoinExpired,
   notifySourceFailed,
   playerStore,
+  type FollowRequest,
+  type HandoffInfo,
   type IdleReason,
+  type JoinExpired,
   type LiveInfo,
   type PlayChannel,
   type PlayerCommand,
@@ -163,6 +177,31 @@ export interface RuntimeDeps {
   subscribe?: typeof onSseEvent;
   /** window/document para el ciclo de vida de la página (null en algún test). */
   lifecycle?: { window: Window; document: Document } | null;
+  /*
+   * Varios dispositivos (docs/multidispositivo.md §2.4). Por defecto, los de
+   * features/multi (el servidor lo anuncia con `bootstrap.features.multi`).
+   */
+  /** ¿El servidor entiende `others`, `from`, `join`, `match` y `follows`? */
+  multi?: () => boolean;
+  /** Un `join=1` que llega tarde (410): se le dice a quien lo pidió. */
+  joinExpired?: (expired: JoinExpired) => void;
+  /** Quien sabe seguir un «Cambiar en los dos» (null: se para como hoy). */
+  follow?: () => ((request: FollowRequest) => void) | null;
+  /** «Un solo dispositivo a la vez» ahora mismo. */
+  policy?: () => SameChannelPolicy;
+  /** Nombre corto de quien se ha quedado la casa («el PC», «otra pestaña»…). */
+  handoffLabel?: (by: {
+    client: ClientKind;
+    deviceId: string | null;
+    deviceName?: string | undefined;
+  }) => string;
+  /** «Ver … aquí» del toast y de la cápsula inmersiva. */
+  joinHouse?: (target: {
+    hash: string;
+    title: string;
+    matchId: string | null;
+    byLabel: string;
+  }) => void;
 }
 
 interface SourceAttempt {
@@ -191,6 +230,17 @@ interface SourceAttempt {
   failed: boolean;
   /** Sale de la IPTV: lo dice el canal (sesión de fuentes) y lo confirma la concesión (`grant.source`). */
   iptv: boolean;
+  /** Las opciones de play() (varios dispositivos: `house`, `others`, `from`, `match`). */
+  options: PlayOptions;
+  /**
+   * Ya hubo concesión con esta fuente: `others`, `from`, `join` y `match` no
+   * se repiten en las reconexiones (docs/multidispositivo.md §2.4.1). Hasta
+   * la primera concesión sí: una reconexión sin `join` podría cerrar la
+   * sesión de otro dispositivo.
+   */
+  houseGranted: boolean;
+  /** La sesión que esta fuente deja atrás (un traspaso de esa sesión se descarta, §2.4.3). */
+  leaving: string | null;
 }
 
 interface Connection {
@@ -241,12 +291,23 @@ export function isIptvSourceError(code: string | undefined, iptvSource: boolean)
   return iptvSource && (code.startsWith('remux_') || code === 'ffmpeg_missing');
 }
 
+/** ¿Es el título de relleno que pone play() cuando no se sabe («Canal 1a2b3c4d»)? */
+function isFillerTitle(channel: { hash: string; title: string }): boolean {
+  return channel.title === `Canal ${channel.hash.slice(0, 8)}`;
+}
+
+/** A dónde vuelve «Volver a …» tras un traspaso: la ruta con la que se pidió la fuente. */
+function routeOf(source: Pick<SourceAttempt, 'options' | 'channel'>): Route {
+  return source.options.route ?? channelRoute(source.channel.hash);
+}
+
 const IDLE_MESSAGES: Record<IdleReason, string> = {
   inicio: 'Elige un partido en la agenda o un canal de la biblioteca.',
   detenido: 'Reproducción detenida. Elige otro partido o canal.',
-  traspasado: 'La reproducción ha pasado a otro dispositivo.',
+  traspasado: 'En otro dispositivo han cambiado de canal.',
   fallo: 'Este canal no tiene pares ahora mismo. Puede que no esté emitiendo todavía.',
   'sin-motor': 'El motor AceStream no responde. Se reanudará solo cuando vuelva.',
+  'otra-cosa-en-casa': 'Elige un partido en la agenda o un canal de la biblioteca.',
 };
 
 /** Lo cargado por delante del cabezal en el rango que lo contiene (index.html:4352-4362). */
@@ -315,6 +376,12 @@ export class PlayerRuntime {
   private readonly setPresence: typeof setPlayerPresence;
   private readonly onLibrary: (library: unknown) => void;
   private readonly log: (message: string, data?: unknown) => void;
+  private readonly multi: () => boolean;
+  private readonly joinExpired: (expired: JoinExpired) => void;
+  private readonly follow: () => ((request: FollowRequest) => void) | null;
+  private readonly policy: () => SameChannelPolicy;
+  private readonly handoffLabel: NonNullable<RuntimeDeps['handoffLabel']>;
+  private readonly joinHouse: NonNullable<RuntimeDeps['joinHouse']>;
 
   private conn: ConnState = 'idle';
   private source: SourceAttempt | null = null;
@@ -353,6 +420,12 @@ export class PlayerRuntime {
       ((message, data) => {
         if (import.meta.env.DEV) console.info(`[reproductor] ${message}`, data ?? '');
       });
+    this.multi = deps.multi ?? multiEnabled;
+    this.joinExpired = deps.joinExpired ?? notifyJoinExpired;
+    this.follow = deps.follow ?? getFollowHandler;
+    this.policy = deps.policy ?? housePolicy;
+    this.handoffLabel = deps.handoffLabel ?? handoffLabel;
+    this.joinHouse = deps.joinHouse ?? joinHouse;
 
     this.controller = new PlayerController(this.video, {
       isDemo: () => this.demo(),
@@ -414,8 +487,13 @@ export class PlayerRuntime {
     }
     this.endSource(current?.failed ? null : 'cambio de canal');
     this.clearReconnect();
+    const leaving =
+      current && current.channel.hash !== channel.hash ? (this.session?.id ?? null) : null;
     this.source = {
       channel,
+      options,
+      houseGranted: false,
+      leaving,
       origin: options.origin ?? 'user',
       requestedAt: Date.now(),
       startedAt: null,
@@ -453,6 +531,8 @@ export class PlayerRuntime {
       bufferAheadS: 0,
       rebuffering: null,
       demo: this.demo(),
+      handoff: null,
+      houseIdle: null,
     });
     this.setPresence({ active: true, route });
     // Un hash pegado a mano no entra en Recientes (B-187).
@@ -749,13 +829,18 @@ export class PlayerRuntime {
             mode: this.mode(),
             viewer: identity.viewer,
             device: identity.device,
-            title: source.channel.title.slice(0, 200),
+            /* El «Canal 1a2b3c4d» de relleno no se manda: pisaría el título que el
+               servidor ya conoce («Dónde» y la cápsula de los demás, §3.4). */
+            ...(isFillerTitle(source.channel) ? {} : { title: source.channel.title.slice(0, 200) }),
+            ...this.houseQuery(source),
           },
           signal: connection.abort.signal,
         }),
       )
       .then((grant) => {
         if (!this.isCurrent(connection)) return;
+        source.houseGranted = true;
+        source.leaving = null;
         if (grant.remux && source.metrics.remuxStartMs === null)
           source.metrics.remuxStartMs = Date.now() - startedAt;
         this.adoptSession(grant);
@@ -779,7 +864,46 @@ export class PlayerRuntime {
       });
   }
 
+  /**
+   * Varios dispositivos (docs/multidispositivo.md §2.4.1): `follows=1` siempre
+   * y, hasta la primera concesión de esta fuente, `others`, `from`, `join` y
+   * `match`. Solo con un servidor que los entiende (`features.multi`).
+   */
+  private houseQuery(source: SourceAttempt): {
+    follows?: '1';
+    others?: 'move' | 'stop';
+    from?: string;
+    join?: '1';
+    match?: string;
+  } {
+    if (!this.multi()) return {};
+    const { house, others, from, match } = source.options;
+    if (source.houseGranted) return { follows: '1' };
+    const join = house === 'follow' || house === 'join';
+    return {
+      follows: '1',
+      ...(join ? { join: '1' as const } : {}),
+      ...(!join && others ? { others } : {}),
+      ...(!join && from ? { from } : {}),
+      ...(match ? { match: match.slice(0, 100) } : {}),
+    };
+  }
+
   private onGrantError(error: unknown): void {
+    const source = this.source;
+    if (source) source.leaving = null;
+    /* Unirse ha llegado tarde: no se reintenta, se le dice a quien lo pidió (§2.4.1). */
+    if (
+      source &&
+      isApiError(error) &&
+      error.code === 'session_expired' &&
+      (source.options.house === 'follow' || source.options.house === 'join')
+    ) {
+      const expired = { channel: source.channel, options: source.options };
+      this.stop('detenido');
+      this.joinExpired(expired);
+      return;
+    }
     if (!isApiError(error)) {
       this.fail('No se pudo abrir el canal: reconectando', { detail: String(error) });
       return;
@@ -1414,16 +1538,27 @@ export class PlayerRuntime {
     this.dropSession();
     const source = this.source;
     if (!source) return;
-    let otherDevice = false;
+    /* La sesión que deja mi propia petición en curso: el servidor ya me quitó de ella. */
+    if (source.leaving === session.id) return;
+    let otherDevice: { id: string; title: string } | null = null;
     try {
       const status = await this.request('playbackStatus');
       const now = status.nowPlaying;
-      otherDevice =
-        now !== null && (now.dev !== this.identity().device || now.id !== source.channel.hash);
+      if (now !== null && (now.dev !== this.identity().device || now.id !== source.channel.hash))
+        otherDevice = { id: now.id, title: now.title };
     } catch {}
     if (this.source !== source) return;
     if (otherDevice) {
-      this.handoff();
+      /* Sin SSE no se sabe quién: «otro dispositivo» y el canal del mando. */
+      this.handoff({
+        sessionId: session.id,
+        viewerIds: [this.identity().viewer],
+        byDeviceId: null,
+        byClient: 'web',
+        hash: otherDevice.id,
+        title: otherDevice.title,
+        reason: otherDevice.id === source.channel.hash ? 'same_channel' : 'other_channel',
+      });
       return;
     }
     this.fail('La sesión había caducado: reconectando');
@@ -1483,16 +1618,114 @@ export class PlayerRuntime {
   }
 
   private onHandoff(data: SseEventData<'playback.handoff'>): void {
-    if (!this.source) return;
+    const source = this.source;
+    if (!source) return;
     const mine = data.viewerIds.includes(this.identity().viewer);
     if (!mine && !(data.sessionId && this.session?.id === data.sessionId)) return;
-    this.handoff();
+    /* Mi petición en curso ya deja esa sesión: llegará después y gana el último
+       (docs/multidispositivo.md §2.4.3). Si coloca la suya, el otro recibirá su aviso. */
+    if (data.sessionId && source.leaving === data.sessionId) return;
+    const previous = { channel: source.channel, route: routeOf(source) };
+    const byLabel = this.handoffLabel({
+      client: data.byClient,
+      deviceId: data.byDeviceId,
+      deviceName: data.byDeviceName,
+    });
+    const follow = data.follow === true ? this.follow() : null;
+    if (follow && this.multi() && data.byDeviceId !== this.identity().device) {
+      /* «Cambiar en los dos»: el servidor ya me ha quitado de la sesión vieja;
+         quien sabe seguir pide el canal nuevo con join=1 (§2.4.3). */
+      this.dropSession();
+      follow({
+        hash: data.hash,
+        title: data.title,
+        matchId: data.matchId ?? null,
+        byDeviceId: data.byDeviceId,
+        byLabel,
+        previous,
+      });
+      return;
+    }
+    this.handoff(data, byLabel, previous);
   }
 
-  /** Otro dispositivo se ha quedado el mando (D5): se para sin soltar (ya lo hizo el backend). */
-  private handoff(): void {
-    this.notify('La reproducción ha pasado a otro dispositivo', { kind: 'signal', icon: 'movil' });
+  /**
+   * Otro dispositivo se ha quedado el canal de la casa (D5): se para sin soltar
+   * (ya lo hizo el backend) y deja el aviso con quién y qué, y lo que se veía
+   * aquí para «Volver a …» (docs/multidispositivo.md §2.4.4).
+   */
+  private handoff(
+    data: SseEventData<'playback.handoff'>,
+    byLabel = this.handoffLabel({
+      client: data.byClient,
+      deviceId: data.byDeviceId,
+      deviceName: data.byDeviceName,
+    }),
+    previous: HandoffInfo['previous'] | null = this.source
+      ? { channel: this.source.channel, route: routeOf(this.source) }
+      : null,
+  ): void {
+    if (!previous) {
+      this.stop('traspasado');
+      return;
+    }
+    const policy = this.policy();
+    const info: HandoffInfo = {
+      kind: 'stopped',
+      reason: data.reason,
+      byLabel,
+      by: {
+        client: data.byClient,
+        deviceId: data.byDeviceId,
+        deviceName: data.byDeviceName ?? null,
+      },
+      hash: data.hash,
+      /* «Stream 1a2b3c4d» es el relleno del servidor cuando no sabe el título. */
+      title:
+        data.title.trim() === `Stream ${data.hash.slice(0, 8)}`
+          ? channelName(null, data.hash)
+          : data.title.trim(),
+      matchId: data.matchId ?? null,
+      policy,
+      previous,
+    };
+    const texts = handoffTexts({
+      by: byLabel,
+      reason: data.reason,
+      title: info.title || null,
+      previous: previous.channel.title,
+      policy,
+    });
     this.stop('traspasado');
+    this.setState({ handoff: info, message: texts.text });
+    const icon = data.byDeviceName
+      ? KIND_ICON[deviceKind({ platform: data.byClient, deviceName: data.byDeviceName })]
+      : 'movil';
+    const here = texts.hereShort
+      ? () =>
+          this.joinHouse({
+            hash: data.hash,
+            title: info.title,
+            matchId: info.matchId,
+            byLabel,
+          })
+      : null;
+    const flags = noticeFlags.get();
+    if (flags.immersive && here && texts.hereShort) {
+      showImmersiveAction(
+        { text: texts.status, label: texts.hereShort, onAction: here },
+        MULTI_TIMINGS.handoffNoticeMs,
+      );
+    }
+    /* En el teatro, la línea de estado (el panel ya tiene los botones); fuera, un toast con acción. */
+    this.notify(texts.status, {
+      kind: 'signal',
+      icon,
+      ms: MULTI_TIMINGS.handoffNoticeMs,
+      ...(!flags.watching && here && texts.hereShort
+        ? { action: { label: texts.hereShort, onAction: here } }
+        : {}),
+    });
   }
 
   private onModeChanged(data: SseEventData<'stream.modeChanged'>): void {

@@ -96,4 +96,6 @@ export const STORAGE_KEYS = {
   flags: 'aceneo-flags',
   /** Panel lateral plegado en escritorio. */
   aside: 'aceneo-panel',
+  /** Sesión de la casa cuya cápsula se ha ocultado con «×» (sessionStorage, docs/multidispositivo.md §3.1). */
+  houseHidden: 'aceneo-casa-oculta',
 } as const;

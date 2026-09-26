@@ -24,7 +24,9 @@ import {
   type MouseEvent,
   type RefObject,
 } from 'react';
+import { HouseCapsule } from '../features/multi/HouseCapsule.tsx';
 import { cx } from '../lib/cx.ts';
+import { useLayoutKind } from '../lib/media.ts';
 import { IconButton } from '../ui/Button.tsx';
 import { Icon } from '../ui/Icon.tsx';
 import type { IconName } from '../ui/icons.ts';
@@ -116,6 +118,8 @@ export function TopBar({ route, onHelp }: { route: Route; onHelp?: () => void })
   const link = useNavLink(route);
   const index = activeIndex(route);
   const [scrolled, sentinel] = useScrolledPast();
+  const layout = useLayoutKind();
+  const wide = layout === 'desktop' || layout === 'wide';
   return (
     <>
       <div ref={sentinel} className="topbar-sentinel" aria-hidden="true" />
@@ -142,6 +146,8 @@ export function TopBar({ route, onHelp }: { route: Route; onHelp?: () => void })
           ))}
         </div>
         <div className="topbar__right">
+          {/* Qué se ve en el otro dispositivo (docs/multidispositivo.md §3.3), solo en escritorio. */}
+          {wide ? <HouseCapsule placement="topbar" route={route} /> : null}
           <EngineIndicator className="topbar__engine" />
           {onHelp ? (
             <IconButton

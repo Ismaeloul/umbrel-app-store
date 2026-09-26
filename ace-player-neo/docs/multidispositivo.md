@@ -7,6 +7,23 @@ Isma el 26-sep-2026, después de probar a la vez el PC (web) y el iPhone (app 0.
 «multi» (A y B) y «latencia» (C), con el reparto de §8. No toca `apps/ios` ni el buscador de la IPTV (§14 de
 `docs/iptv.md`), que se hace en paralelo en `rediseno/iptv`.
 
+**«multi» (A y B) implementado en `multi/dispositivos` (26-sep).** Desvíos respecto a lo de abajo:
+- `fixtures/variantes/channelStream.multi.json` no existe: la concesión no cambia con «multi» (los campos nuevos van
+  en la petición). La variante de evento `playback.handoff.follow.json` lleva `{ type, data }` y `contracts.test.ts`
+  valida las variantes de eventos con el esquema SSE.
+- Seguir cuenta como «saltos» solo los de después de llegar tarde: el primer seguir no gasta ninguno de los
+  `followHops` (3), para que tres ← → seguidos con «en los dos» recordado (E2E 14) no dejen al otro parado.
+- La hoja abierta solo se cierra sola si «ya no hace falta preguntar» dura `capsuleHideMs` (1,5 s). Además el servidor
+  ya no publica en `playback.sessions` el instante en que un visor ha dejado su sesión vieja y aún no está en la nueva
+  (`dropViewer` por `channel_change` y la espera de `placeLocked`): con él, la hoja de Y creía que X había parado.
+- Con los dos navegadores iguales («Chrome · Windows») las frases dicen «el otro PC» cuando este dispositivo está (o
+  estaba) en la sesión, como piden las reglas de choque de §2.5; los E2E de §6.3 aceptan «el PC» o «el otro PC».
+- La web ya no manda el título de relleno «Canal 1a2b3c4d» al pedir un canal (pisaba el título que el servidor sabía),
+  y el aviso de traspaso trata el «Stream 1a2b3c4d» del servidor como título desconocido.
+- E2E hechos: 1-7, 11, 12 (axe de la cápsula), 14-17 y capturas, en `chrome-escritorio` y `chrome-iphone`. Pendientes:
+  8 (IPTV, cubierto por `test/integration/multi.test.ts`), 9 y 10 (partido; cubiertos en `session.multi.test.ts`) y 13
+  (WebKit sin vídeo en Windows).
+
 Las rutas de ficheros son relativas a `ace-player-neo/`. Los textos entre «comillas» son **literales**: se copian tal
 cual, porque la app nativa los saca de la web (`apps/ios/scripts/generar-textos.mjs`) y los compara en `TextosTests`.
 `{…}` es lo que se interpola.

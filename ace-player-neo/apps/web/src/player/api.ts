@@ -25,7 +25,10 @@ import {
   normalizeHash,
   PLAYBACK_MODES,
   PLAYBACK_PROFILES,
+  type ClientKind,
+  type OthersAction,
   type PlaybackMode,
+  type SameChannelPolicy,
   type StreamProtocol,
 } from '@ace/shared';
 import { api } from '../api/client.ts';
@@ -84,6 +87,19 @@ export interface PlayOptions {
    * (`recordHistory = false`, index.html:3962; B-187).
    */
   record?: boolean;
+  /*
+   * Varios dispositivos (docs/multidispositivo.md §2.4.1). Sin `house`, la
+   * puerta de la casa pregunta si hace falta («¿Cambiar en los dos o solo
+   * aquí?»). `follow` y `join` van con `join=1` y nunca preguntan;
+   * `continue` (saltos automáticos de fuente) se lleva a los demás.
+   */
+  house?: 'continue' | 'follow' | 'join';
+  /** Lo que se pide para los otros dispositivos (lo pone la puerta). */
+  others?: OthersAction;
+  /** Sesión de la casa en la que se basó la decisión (lo pone la puerta). */
+  from?: string;
+  /** Partido desde el que se pide (su id de la agenda). */
+  match?: string;
 }
 
 /**
@@ -120,7 +136,36 @@ export interface LiveInfo {
   delayS: number | null;
 }
 
-export type IdleReason = 'inicio' | 'detenido' | 'traspasado' | 'fallo' | 'sin-motor';
+export type IdleReason =
+  'inicio' | 'detenido' | 'traspasado' | 'fallo' | 'sin-motor' | 'otra-cosa-en-casa';
+
+/**
+ * Otro dispositivo se ha quedado el canal de la casa (docs/multidispositivo.md
+ * §2.4.4): lo que hace falta para el panel del vídeo, la línea de estado y el
+ * toast. Los textos salen de features/multi/texts.ts.
+ */
+export interface HandoffInfo {
+  /** `stopped`: el aviso de parada; `nothing`: seguir sin nada que seguir. */
+  kind: 'stopped' | 'nothing';
+  reason: 'other_channel' | 'same_channel';
+  /** Quién, ya con las reglas de choque: «el PC», «el otro PC», «otra pestaña»… */
+  byLabel: string;
+  by: { client: ClientKind; deviceId: string | null; deviceName: string | null };
+  /** El canal nuevo de la casa (`title` vacío si no se sabe). */
+  hash: string;
+  title: string;
+  matchId: string | null;
+  /** La política cuando llegó: cambia «Ver … aquí» por «Pasar … aquí». */
+  policy: SameChannelPolicy;
+  /** Lo que se estaba viendo aquí, para «Volver a …». */
+  previous: { channel: PlayChannel & { hash: string }; route: Route | null };
+}
+
+/** El panel «otra cosa en casa» (§2.4.5): quién ve qué, ya en texto. */
+export interface HouseIdleInfo {
+  labels: string[];
+  title: string;
+}
 
 export interface PlayerState {
   /** La fase pública (machine.ts): idle, cargando, buffer, reproduciendo, pausado… */
@@ -161,6 +206,10 @@ export interface PlayerState {
   waiting: string | null;
   /** Panel «Datos técnicos» (tecla S) abierto. */
   nerdOpen: boolean;
+  /** Tras un traspaso: quién se ha quedado la casa y qué se veía aquí. */
+  handoff: HandoffInfo | null;
+  /** Otro dispositivo ve otra cosa y aquí no se ha arrancado nada (D-M2). */
+  houseIdle: HouseIdleInfo | null;
 }
 
 export const IDLE_LIVE: LiveInfo = { available: false, atLive: true, behindS: 0, delayS: null };
@@ -192,6 +241,8 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
   ttffMs: null,
   waiting: null,
   nerdOpen: false,
+  handoff: null,
+  houseIdle: null,
 };
 
 export const playerStore = createStore<PlayerState>(INITIAL_PLAYER_STATE);
@@ -242,11 +293,39 @@ export function channelRoute(hash: string): Route {
 export function play(channel: PlayChannel, options: PlayOptions = {}): boolean {
   const hash = normalizeHash(channel.hash);
   if (!hash) return false;
-  const command: PlayerCommand = {
+  const command: PlayCommand = {
     type: 'play',
     channel: { ...channel, hash, title: channel.title.trim() || `Canal ${hash.slice(0, 8)}` },
     options,
   };
+  /* La puerta de la casa (docs/multidispositivo.md §2.4.1), ANTES de tocar el
+     reproductor y la presencia: si hay que preguntar (o refrescar lo que se
+     sabe de la casa), se queda con la orden y play() vuelve ya. */
+  if (houseGate) {
+    const decision = houseGate.decide(command);
+    if (!('go' in decision)) return true;
+    const { others, from } = decision.go;
+    if (others || from)
+      command.options = {
+        ...options,
+        ...(others ? { others } : {}),
+        ...(from ? { from } : {}),
+      };
+  }
+  dispatchPlay(command);
+  return true;
+}
+
+/** Una orden de reproducir. */
+export type PlayCommand = Extract<PlayerCommand, { type: 'play' }>;
+
+/**
+ * Manda la orden al reproductor sin pasar por la puerta: lo llama play() y,
+ * al contestar la pregunta, la puerta (features/multi/gate.ts).
+ */
+export function dispatchPlay(command: PlayCommand): void {
+  const { options } = command;
+  const hash = command.channel.hash;
   // El armazón mantiene montado el reproductor mientras esto sea verdad (también en «mini»).
   setPlayerPresence({ active: true, route: options.route ?? channelRoute(hash) });
   if (runtime) {
@@ -263,9 +342,131 @@ export function play(channel: PlayChannel, options: PlayOptions = {}): boolean {
       route: options.route ?? channelRoute(hash),
       message: 'Preparando el reproductor…',
       idleReason: null,
+      handoff: null,
+      houseIdle: null,
     }));
   }
-  return true;
+}
+
+// ---- Varios dispositivos (docs/multidispositivo.md §2.4) -----------------------------
+
+/** Lo que contesta la puerta de la casa (features/multi/decide.ts). */
+export type HouseGateDecision =
+  { go: { others?: OthersAction; from?: string } } | { ask: unknown } | { pending: true };
+
+export interface HouseGate {
+  /** Síncrona: con `ask` o `pending` la puerta se queda la orden y la manda (o no) después. */
+  decide(command: PlayCommand): HouseGateDecision;
+}
+
+let houseGate: HouseGate | null = null;
+
+/** La registra el armazón al arrancar (features/multi/gate.ts). null la quita. */
+export function setHouseGate(gate: HouseGate | null): void {
+  houseGate = gate;
+}
+
+type HashListener = (hash: string, command: PlayCommand) => void;
+const cancelListeners = new Set<HashListener>();
+
+/**
+ * Se canceló la pregunta de la casa: la orden no se manda. Lo escucha la
+ * sesión de fuentes para volver a lo que suena (o quedarse parada).
+ */
+export function onPlayCancelled(listener: HashListener): () => void {
+  cancelListeners.add(listener);
+  return () => cancelListeners.delete(listener);
+}
+
+/** Solo para la puerta. */
+export function notifyPlayCancelled(command: PlayCommand): void {
+  for (const listener of [...cancelListeners]) {
+    try {
+      listener(command.channel.hash, command);
+    } catch (error) {
+      console.error('[reproductor] Un oyente de onPlayCancelled ha fallado', error);
+    }
+  }
+}
+
+/** Una petición con `join=1` que ha llegado tarde (410 `session_expired`). */
+export interface JoinExpired {
+  channel: PlayChannel & { hash: string };
+  options: PlayOptions;
+}
+
+type JoinListener = (expired: JoinExpired) => void;
+const joinListeners = new Set<JoinListener>();
+
+/**
+ * Unirse ha llegado tarde: no se reintenta solo, se le dice a quien lo pidió
+ * (seguir, la cápsula, «Ver … aquí» o lo que suena en casa).
+ */
+export function onJoinExpired(listener: JoinListener): () => void {
+  joinListeners.add(listener);
+  return () => joinListeners.delete(listener);
+}
+
+/** Solo para el reproductor. */
+export function notifyJoinExpired(expired: JoinExpired): void {
+  for (const listener of [...joinListeners]) {
+    try {
+      listener(expired);
+    } catch (error) {
+      console.error('[reproductor] Un oyente de onJoinExpired ha fallado', error);
+    }
+  }
+}
+
+/** El `playback.handoff` con `follow: true` que el reproductor pasa a quien sabe seguir. */
+export interface FollowRequest {
+  hash: string;
+  title: string;
+  matchId: string | null;
+  byDeviceId: string | null;
+  byLabel: string;
+  previous: HandoffInfo['previous'];
+}
+
+let followHandler: ((request: FollowRequest) => void) | null = null;
+
+/** La registra el armazón (features/multi/follow.ts). Sin ella, el reproductor se para como hoy. */
+export function setFollowHandler(handler: ((request: FollowRequest) => void) | null): void {
+  followHandler = handler;
+}
+
+export function getFollowHandler(): ((request: FollowRequest) => void) | null {
+  return followHandler;
+}
+
+let putHereAction: (() => void) | null = null;
+
+/**
+ * El panel «otra cosa en casa» (§2.4.5, D-M2): la sesión de fuentes no ha
+ * arrancado nada porque otro dispositivo ve otra cosa. `onPut` es «Poner
+ * aquí» (pasa por la puerta). null lo quita.
+ */
+export function setHouseIdle(info: HouseIdleInfo | null, onPut: (() => void) | null = null): void {
+  putHereAction = info ? onPut : null;
+  playerStore.set((state) => {
+    if (!info) return state.houseIdle ? { ...state, houseIdle: null } : state;
+    // Solo con el reproductor parado: si algo suena, el panel no tiene sentido.
+    if (state.phase !== 'idle') return state;
+    return { ...state, houseIdle: info, idleReason: 'otra-cosa-en-casa', handoff: null };
+  });
+}
+
+/** «Poner aquí» del panel «otra cosa en casa». */
+export function putHere(): void {
+  const action = putHereAction;
+  putHereAction = null;
+  playerStore.set((state) => (state.houseIdle ? { ...state, houseIdle: null } : state));
+  action?.();
+}
+
+/** Quita el aviso de traspaso del estado (al empezar otra cosa o al cerrarlo). */
+export function clearHandoff(): void {
+  playerStore.set((state) => (state.handoff ? { ...state, handoff: null } : state));
 }
 
 /** ¿Lo que suena (o se conecta) sale de la IPTV? Antes de la concesión lo dice el canal; después, el backend. */
@@ -484,6 +685,11 @@ export async function confirmChannel(channelName?: string): Promise<boolean> {
 export function resetPlayerApi(): void {
   runtime = null;
   pending = null;
+  houseGate = null;
+  followHandler = null;
+  putHereAction = null;
+  cancelListeners.clear();
+  joinListeners.clear();
   failureHandlers.length = 0;
   nerdHostStore.set(0);
   playerStore.set(INITIAL_PLAYER_STATE);

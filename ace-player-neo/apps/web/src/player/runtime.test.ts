@@ -13,7 +13,7 @@ import { dispatchSse } from '../api/sse.ts';
 import { mockFetch } from '../test/fetch.ts';
 import { INITIAL_PLAYER_STATE, type PlayerState, type SourceFailure } from './api.ts';
 import type { Platform } from './engines/index.ts';
-import { mergePlayerState, PlayerRuntime } from './runtime.ts';
+import { mergePlayerState, PlayerRuntime, type RuntimeDeps } from './runtime.ts';
 import { fakeEngines, FakeVideo, ranges } from './testing.ts';
 
 const HASH = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
@@ -63,10 +63,13 @@ function setup({
   platform = DESKTOP,
   lifecycle = null,
   mode = () => 'balanced' as PlaybackMode,
+  deps = {},
 }: {
   platform?: Platform;
   lifecycle?: { window: Window; document: Document } | null;
   mode?: () => PlaybackMode;
+  /** Dependencias de más (varios dispositivos: multi, follow, joinExpired…). */
+  deps?: Partial<RuntimeDeps>;
 } = {}) {
   const video = new FakeVideo();
   const engines = fakeEngines();
@@ -133,6 +136,7 @@ function setup({
     onLibrary: () => {},
     log: () => {},
     lifecycle,
+    ...deps,
   });
   runtimes.push(runtime);
   return {
@@ -749,12 +753,21 @@ describe('sesión, traspaso y tiempo real', () => {
       },
       META,
     );
+    /* Sin byDeviceName (un servidor de antes): «otro dispositivo» (docs/multidispositivo.md §2.5.2). */
     expect(t.state).toMatchObject({
       phase: 'idle',
       idleReason: 'traspasado',
-      message: 'La reproducción ha pasado a otro dispositivo.',
+      message: 'En otro dispositivo han cambiado a M+.',
+      handoff: {
+        kind: 'stopped',
+        reason: 'other_channel',
+        byLabel: 'otro dispositivo',
+        hash: HASH,
+        title: 'M+',
+        previous: { channel: { hash: HASH, title: 'M+ Liga de Campeones' } },
+      },
     });
-    expect(t.notices).toContain('La reproducción ha pasado a otro dispositivo');
+    expect(t.notices).toContain('En otro dispositivo han cambiado a M+');
     expect(t.callsTo('sessionRelease')).toHaveLength(0);
     expect(t.outcomes()).toEqual(['arranco']);
   });
@@ -1152,5 +1165,161 @@ describe('IPTV', () => {
     await flush();
     expect(t.failures).toHaveLength(1);
     expect(t.state).toMatchObject({ phase: 'error', idleReason: 'sin-motor' });
+  });
+});
+
+describe('varios dispositivos (docs/multidispositivo.md §2.4)', () => {
+  const house = (extra: Partial<RuntimeDeps> = {}): Partial<RuntimeDeps> => ({
+    multi: () => true,
+    policy: () => 'share',
+    handoffLabel: (by) => (by.deviceName ? 'el PC' : 'otro dispositivo'),
+    follow: () => null,
+    joinHouse: () => {},
+    ...extra,
+  });
+
+  it('others, from y match van hasta la primera concesión; follows=1 siempre; join sin others', async () => {
+    const t = setup({ deps: house() });
+    t.runtime.play(
+      { hash: HASH, title: 'Uno' },
+      { origin: 'user', others: 'move', from: 's_casa123456', match: 'fltv-1' },
+    );
+    await flush();
+    expect(t.callsTo('channelStream')[0]!.input.query).toMatchObject({
+      follows: '1',
+      others: 'move',
+      from: 's_casa123456',
+      match: 'fltv-1',
+    });
+    await reachFirstFrame(t);
+    /* Una reconexión (el modo) no repite others, from ni match. */
+    t.runtime.handle({ type: 'mode', mode: 'low' });
+    await flush();
+    const again = t.callsTo('channelStream')[1]!.input.query!;
+    expect(again).toMatchObject({ follows: '1' });
+    expect(again).not.toHaveProperty('others');
+    expect(again).not.toHaveProperty('match');
+    t.runtime.play(
+      { hash: OTHER, title: 'Dos' },
+      { origin: 'user', house: 'join', others: 'move', from: 's_casa123456' },
+    );
+    await flush();
+    const joined = t.callsTo('channelStream')[2]!.input.query!;
+    expect(joined).toMatchObject({ join: '1', follows: '1' });
+    expect(joined).not.toHaveProperty('others');
+    expect(joined).not.toHaveProperty('from');
+  });
+
+  it('sin features.multi no manda nada nuevo (el servidor rechazaría la petición)', async () => {
+    const t = setup({ deps: house({ multi: () => false }) });
+    t.runtime.play({ hash: HASH, title: 'Uno' }, { others: 'move', from: 's_casa123456' });
+    await flush();
+    const query = t.callsTo('channelStream')[0]!.input.query!;
+    for (const field of ['follows', 'others', 'from', 'join', 'match'])
+      expect(query).not.toHaveProperty(field);
+  });
+
+  it('un traspaso con follow lo sigue quien sabe seguir: no se para ni suelta nada', async () => {
+    const follows: unknown[] = [];
+    const t = setup({ deps: house({ follow: () => (request) => follows.push(request) }) });
+    await startPlaying(t);
+    dispatchSse(
+      'playback.handoff',
+      {
+        sessionId: SID,
+        viewerIds: ['v_prueba'],
+        byDeviceId: 'web_otro',
+        byClient: 'web',
+        hash: OTHER,
+        title: 'Antena 3',
+        reason: 'other_channel',
+        byDeviceName: 'Chrome · Windows',
+        follow: true,
+        matchId: 'fltv-2',
+      },
+      META,
+    );
+    expect(follows).toEqual([
+      expect.objectContaining({
+        hash: OTHER,
+        title: 'Antena 3',
+        matchId: 'fltv-2',
+        byDeviceId: 'web_otro',
+        byLabel: 'el PC',
+      }),
+    ]);
+    expect(t.state.idleReason).not.toBe('traspasado');
+    expect(t.callsTo('sessionRelease')).toHaveLength(0);
+  });
+
+  it('sin follow: aviso de parada con quién, qué y lo que se veía', async () => {
+    const t = setup({ deps: house() });
+    await startPlaying(t);
+    dispatchSse(
+      'playback.handoff',
+      {
+        sessionId: SID,
+        viewerIds: ['v_prueba'],
+        byDeviceId: 'web_otro',
+        byClient: 'web',
+        hash: OTHER,
+        title: 'Antena 3',
+        reason: 'other_channel',
+        byDeviceName: 'Chrome · Windows',
+      },
+      META,
+    );
+    expect(t.state).toMatchObject({
+      idleReason: 'traspasado',
+      message: 'En el PC han cambiado a Antena 3.',
+      handoff: { byLabel: 'el PC', policy: 'share', previous: { channel: { hash: HASH } } },
+    });
+    expect(t.notices).toContain('En el PC han cambiado a Antena 3');
+  });
+
+  it('un traspaso de la sesión que deja mi petición en curso se descarta', async () => {
+    const t = setup({ deps: house() });
+    await startPlaying(t);
+    let answer: (value: unknown) => void = () => {};
+    t.handlers.channelStream = () =>
+      new Promise((resolve) => {
+        answer = resolve;
+      });
+    t.runtime.play({ hash: OTHER, title: 'Dos' }, { origin: 'user' });
+    await flush();
+    dispatchSse(
+      'playback.handoff',
+      {
+        sessionId: SID,
+        viewerIds: ['v_prueba'],
+        byDeviceId: 'web_otro',
+        byClient: 'web',
+        hash: 'c3d4e5f60718293a4b5c6d7e8f9012345678901a',
+        title: 'Tres',
+        reason: 'other_channel',
+      },
+      META,
+    );
+    expect(t.state.idleReason).not.toBe('traspasado');
+    expect(t.state.channel?.hash).toBe(OTHER);
+    answer(grant('mpegts', 'balanced', 's_nueva12345'));
+    await flush();
+    expect(t.state.sessionId).toBe('s_nueva12345');
+  });
+
+  it('join que llega tarde (410): se para sin reintentar y se lo dice a quien lo pidió', async () => {
+    const expired: unknown[] = [];
+    const t = setup({ deps: house({ joinExpired: (value) => expired.push(value) }) });
+    t.handlers.channelStream = () => {
+      throw new ApiError({ code: 'session_expired', status: 410 });
+    };
+    t.runtime.play({ hash: OTHER, title: 'Dos' }, { origin: 'library', house: 'join' });
+    await flush();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(t.callsTo('channelStream')).toHaveLength(1);
+    expect(t.state).toMatchObject({ phase: 'idle', idleReason: 'detenido' });
+    expect(expired).toEqual([
+      expect.objectContaining({ channel: expect.objectContaining({ hash: OTHER }) }),
+    ]);
   });
 });

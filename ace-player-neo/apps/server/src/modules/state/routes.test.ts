@@ -652,7 +652,7 @@ describe('GET /api/v1/bootstrap', () => {
       playback,
       engine,
       settings: { sameChannelPolicy: 'share' },
-      features: { scanner: false, ai: false, demoSchedule: true },
+      features: { scanner: false, ai: false, demoSchedule: true, multi: true },
     });
     expect(boot.library.favorites[0]?.id).toBe(ID_A);
   });
