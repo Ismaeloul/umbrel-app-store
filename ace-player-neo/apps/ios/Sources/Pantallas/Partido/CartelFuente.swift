@@ -45,12 +45,16 @@ struct CartelFuente: View {
         case "ver": video.elegirFuente(hash)
         case "copiar-hash": video.copiar(hash, bien: "Hash copiado", mal: "No se pudo copiar el hash")
         case "abrir": video.abrirEnAceStream(hash)
-        case "correcto":
-            let fuentes = video.fuentes
-            Task { await fuentes.confirmar(hash) }
+        case "correcto": confirmar(hash)
         case "reportar": hojas.abrir(.reportar(hash: hash, numero: fila.numero))
         default: break
         }
+    }
+
+    /// «Funciona bien» (tipos escritos: en línea tardaba 204 ms en tiparse, CI 36226033650).
+    private func confirmar(_ hash: String) {
+        let fuentes: SesionFuentes = video.fuentes
+        Task { () async -> Void in await fuentes.confirmar(hash) }
     }
 }
 
