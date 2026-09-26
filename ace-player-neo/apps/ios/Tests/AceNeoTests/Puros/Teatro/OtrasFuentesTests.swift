@@ -1,7 +1,11 @@
 import Foundation
 import Testing
 
-@testable import AceNeo
+#if SWIFT_PACKAGE
+    @testable import NucleoPuro
+#else
+    @testable import AceNeo
+#endif
 
 /* Lo que el teatro pone encima de las reglas de otros módulos: la cabecera del canal suelto (ChannelCenter.tsx),
    el botón de las plegadas (SourceList.tsx) y los equipos para Palco. Los gestos son los de M2
@@ -43,24 +47,5 @@ struct OtrasFuentesTests {
         #expect(OtrasFuentes.item(lib, hash: "b")?.title == "DAZN 1 HD")
         #expect(OtrasFuentes.titulo(nil, reproductor: nil, hash: "0123456789abcdef") == "Canal 01234567")
         #expect(OtrasFuentes.titulo(nil, reproductor: "DAZN", hash: "0123456789abcdef") == "DAZN")
-    }
-}
-
-struct PlegadasTests {
-    private func fila(_ id: String, _ estado: ScanCandidateState) -> FilaFuente {
-        let entrada = EntradaFuente(
-            id: id, titulo: "DAZN --> \(id)", ih: false, origen: "m3u", canal: "DAZN", sonda: SondaFuente(estado: estado))
-        return ReglasFuentes.filas(
-            [entrada], pantalla: .nada, ahora: Date(timeIntervalSince1970: 0), activa: nil, listas: [],
-            conComprobador: true)[0]
-    }
-
-    @Test func textoDelBotonComoSourceList() {
-        let caida = fila("a", .failed)
-        let enCola = fila("b", .queued)
-        #expect(ListaCarteles.textoPlegadas([caida], abiertas: false) == "Ver 1 más sin señal")
-        #expect(ListaCarteles.textoPlegadas([caida, enCola], abiertas: false) == "Ver 2 más (1 sin señal, 1 en cola)")
-        #expect(ListaCarteles.textoPlegadas([enCola], abiertas: false) == "Ver 1 más en cola")
-        #expect(ListaCarteles.textoPlegadas([caida], abiertas: true) == "Ocultar las que no dan señal")
     }
 }

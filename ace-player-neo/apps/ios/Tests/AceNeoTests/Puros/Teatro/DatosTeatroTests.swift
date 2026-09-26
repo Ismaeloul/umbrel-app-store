@@ -1,7 +1,11 @@
 import Foundation
 import Testing
 
-@testable import AceNeo
+#if SWIFT_PACKAGE
+    @testable import NucleoPuro
+#else
+    @testable import AceNeo
+#endif
 
 /* Reglas del teatro de un partido (features/agenda/domain.ts: matchStatus, liveMinute, paintableScore,
    matchProgressAt, dayLabel; MatchHead.tsx › statusLine; WhereAired.tsx) en hora de Madrid. */

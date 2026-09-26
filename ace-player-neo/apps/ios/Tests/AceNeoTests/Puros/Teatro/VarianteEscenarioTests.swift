@@ -1,7 +1,11 @@
 import Foundation
 import Testing
 
-@testable import AceNeo
+#if SWIFT_PACKAGE
+    @testable import NucleoPuro
+#else
+    @testable import AceNeo
+#endif
 
 /* Reglas del escenario por el ancho del vídeo (b-arquitectura §3.7: 369/419/479/579 y compacto) con las medidas
    de la web (a4 §4.1, §5.4, §6.2, §18, §18.1). */
