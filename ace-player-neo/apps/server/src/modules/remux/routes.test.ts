@@ -290,7 +290,7 @@ describe('GET /api/v1/video/:sid/:file (arquitectura §5.12)', () => {
     await runtime.service.stopAll();
   });
 
-  it('410 session_expired sin remux, 401 con token malo, 400 con un fichero que no es de ffmpeg y 403 desde la web', async () => {
+  it('410 session_expired sin remux, 401 con token malo, 400 con un fichero que no es de ffmpeg; la web entra sin reescribir (IPTV)', async () => {
     const { app, runtime } = await withSession();
     const expired = await app.inject({
       method: 'GET',
@@ -311,12 +311,23 @@ describe('GET /api/v1/video/:sid/:file (arquitectura §5.12)', () => {
       headers: native(),
     });
     expect(log.statusCode).toBe(400);
+    /* docs/iptv.md §5.4: `video` es `any`; desde la web `t` se ignora y la
+       lista sale tal cual, sin `?t=` en sus URIs. */
     const fromWeb = await app.inject({
       method: 'GET',
       url: `/api/v1/video/${SID}/index.m3u8?t=${encodeURIComponent(GOOD_TOKEN)}`,
       headers: web(),
     });
-    expect(fromWeb.statusCode).toBe(403);
+    expect(fromWeb.statusCode).toBe(200);
+    expect(fromWeb.body).toContain('#EXTM3U');
+    expect(fromWeb.body).not.toContain('?t=');
+    const fromWebBare = await app.inject({
+      method: 'GET',
+      url: `/api/v1/video/${SID}/index.m3u8`,
+      headers: web(),
+    });
+    expect(fromWebBare.statusCode).toBe(200);
+    expect(fromWebBare.body).toBe(fromWeb.body);
     await runtime.service.stopAll();
   });
 

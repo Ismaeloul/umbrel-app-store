@@ -26,6 +26,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import {
   DEFAULT_PLAYBACK_MODE,
+  IPTV_SESSION,
   LEGACY_DEVICE_NAME,
   SHUTDOWN_TIMINGS,
   SSE_TIMINGS,
@@ -51,8 +52,16 @@ import { AppError, errorCodeOf, isAppError } from '../../core/errors.js';
 import { isEngineUnreachable } from '../engine/index.js';
 import type { EngineSessionMeta } from '../engine/types.js';
 import { SerialLock } from '../remux/lock.js';
+import type { IptvInput } from '../iptv/types.js';
 import type { RemuxCloseReason, RemuxHandle, RemuxSource } from '../remux/types.js';
-import { codecFor, directProtocol, latencyFor, legacyVideoPath, nativeVideoPath } from './grant.js';
+import {
+  codecFor,
+  directProtocol,
+  latencyFor,
+  legacyVideoPath,
+  nativeVideoPath,
+  webVideoPath,
+} from './grant.js';
 import { cleanDeviceName } from './device-name.js';
 import { decideClaim, decideRelease, type Tombstones } from './mando.js';
 import type { PlaybackDeps, PlaybackService, ViewerIdentity } from './types.js';
@@ -114,6 +123,16 @@ interface SessionRec {
   statInFlight: boolean;
   statFailures: number;
   readonly reopens: number[];
+  /** De dónde sale el vídeo: el motor o la IPTV (relé + remux, docs/iptv.md §6.4). */
+  readonly source: 'engine' | 'iptv';
+  /** Entrada del relé (solo IPTV). */
+  readonly input: IptvInput | null;
+  /** Gracia de 3 s tras irse el último visor sin pedir otra cosa (solo IPTV). */
+  graceTimer: TimerHandle | null;
+  /** Visores que dejan el remux cuando se engancha el siguiente (o acaba la gracia). */
+  readonly pendingDetach: string[];
+  /** Última vez que el relé apuntó `working` por `player` (con bytes entrando). */
+  lastWorkingAt: number;
 }
 
 interface AcquireRequest {
@@ -133,6 +152,8 @@ interface AcquireRequest {
   /** `dev` de un `/api/remux` 0.6.x (ficha del remux). */
   readonly legacyDevice?: string;
   readonly writeNowPlaying: boolean;
+  /** Decidido ANTES de mirar el motor (docs/iptv.md §4.1 y §6.4). */
+  readonly source: 'engine' | 'iptv';
 }
 
 interface Placement {
@@ -287,21 +308,37 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
   }
 
   function sourceOf(session: SessionRec): RemuxSource {
-    return {
+    const base = {
       sessionId: session.id,
       hash: session.hash,
       playbackUrl: session.meta.playbackUrl,
       mode: session.mode,
     };
+    if (session.source !== 'iptv' || !session.input) return base;
+    return {
+      ...base,
+      inputUrl: session.input.inputUrl,
+      origin: 'iptv',
+      ...(session.input.isHls ? { isHls: true } : {}),
+    };
+  }
+
+  /* Visor web de una IPTV: hls.js sobre /api/v1/video (docs/iptv.md §5.4 y §6.4). */
+  function webIptvViewer(session: SessionRec, viewer: ViewerRec): boolean {
+    return session.source === 'iptv' && !viewer.native && viewer.client !== 'legacy';
   }
 
   function urlFor(session: SessionRec, viewer: ViewerRec): string {
     if (viewer.consumes !== 'remux') return session.meta.playbackUrl;
-    return viewer.native ? nativeVideoPath(session.id) : legacyVideoPath(session.hash);
+    if (viewer.native) return nativeVideoPath(session.id);
+    return webIptvViewer(session, viewer)
+      ? webVideoPath(session.id)
+      : legacyVideoPath(session.hash);
   }
 
   function protocolFor(session: SessionRec, viewer: ViewerRec): StreamProtocol {
-    return viewer.consumes === 'remux' ? 'hls-fmp4' : directProtocol(session.mode);
+    if (viewer.consumes !== 'remux') return directProtocol(session.mode);
+    return webIptvViewer(session, viewer) ? 'hls' : 'hls-fmp4';
   }
 
   function sessionInfo(session: SessionRec) {
@@ -332,6 +369,27 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     /* El título del visor que llegó el último y lo sabía. */
     const known = list.findLast((viewer) => viewer.label !== '');
     const direct = list.some((viewer) => viewer.consumes !== 'remux');
+    if (session.source === 'iptv') {
+      return {
+        id: session.id,
+        hash: session.hash,
+        mode: session.mode,
+        openedAt: new Date(session.openedAt).toISOString(),
+        viewers: list.map((viewer) => ({
+          client: viewer.client,
+          deviceId: viewer.deviceId,
+          lastBeatAt: new Date(viewer.lastBeat).toISOString(),
+          viewerId: viewer.viewerId,
+          deviceName: viewer.deviceName,
+          platform: viewer.client,
+          playing: viewer.playing,
+        })),
+        title: known?.label ?? '',
+        /* Una IPTV siempre pasa por el remux: `hls` si la ve alguna web, `hls-fmp4` si solo iPhones. */
+        protocol: list.some((viewer) => webIptvViewer(session, viewer)) ? 'hls' : 'hls-fmp4',
+        source: 'iptv',
+      };
+    }
     return {
       id: session.id,
       hash: session.hash,
@@ -376,10 +434,25 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     const hashes = [
       ...new Set([...[...viewers.values()].map((viewer) => viewer.hash), ...waiting.values()]),
     ].sort();
+    /* ¿Alguien ve (o espera) algo del MOTOR? Con solo IPTV, el motor está libre. */
+    const onEngine = (hash: string): boolean => {
+      if (!deps.iptv) return true;
+      try {
+        return deps.iptv.classify(hash) === 'engine';
+      } catch {
+        return true;
+      }
+    };
+    const watching = viewers.size > 0 || waiting.size > 0;
+    const engineWatching =
+      [...viewers.values()].some((viewer) => onEngine(viewer.hash)) ||
+      [...waiting.values()].some(onEngine);
+    /* `engineWatching` solo cuando difiere (hay IPTV): sin IPTV, el evento de siempre. */
     const payload = {
-      watching: viewers.size > 0 || waiting.size > 0,
+      watching,
       hashes,
       viewers: viewers.size,
+      ...(engineWatching !== watching ? { engineWatching } : {}),
     };
     const key = JSON.stringify(payload);
     if (key === lastActivity) return;
@@ -555,8 +628,53 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     }
   }
 
+  /**
+   * Abre una sesión IPTV (docs/iptv.md §6.4): el relé en vez del motor. Sin
+   * `reportOpen*`, sin `stat_url` y sin sessions.json (el ffmpeg huérfano ya
+   * lo mata la marca `ace_session=`). Con el cerrojo de la casa tomado.
+   */
+  async function openIptvLocked(request: AcquireRequest): Promise<SessionRec> {
+    const iptv = deps.iptv;
+    if (!iptv) throw new AppError('iptv_removed');
+    const input = await iptv.openInput(request.hash, { signal: request.signal });
+    if (stopped) {
+      await input.close();
+      throw new AppError('engine_unavailable', { detail: 'apagando' });
+    }
+    const session: SessionRec = {
+      id: newSessionId(),
+      hash: request.hash,
+      kind: 'id',
+      mode: 'hls',
+      meta: {
+        playbackUrl: input.inputUrl,
+        statUrl: '',
+        commandUrl: '',
+        infohash: null,
+        isLive: true,
+      },
+      openedAt: clock.now(),
+      viewers: new Map(),
+      closed: false,
+      statInFlight: false,
+      statFailures: 0,
+      reopens: [],
+      source: 'iptv',
+      input,
+      graceTimer: null,
+      pendingDetach: [],
+      lastWorkingAt: 0,
+    };
+    sessions.set(session.id, session);
+    input.onDropped((code) => track(closeIptv(session, code)));
+    input.onRestart(() => track(restartIptv(session)));
+    logger.info({ sessionId: session.id }, 'sesión IPTV abierta');
+    return session;
+  }
+
   /** Abre una sesión nueva (progresiva). Con `auto`, `id` y si no abre, una vez `infohash` (P6). */
   async function openSessionLocked(request: AcquireRequest): Promise<SessionRec> {
+    if (request.source === 'iptv') return openIptvLocked(request);
     const kinds: EngineSessionKind[] =
       request.kind === 'auto' ? ['id', 'infohash'] : [request.kind];
     let lastError: unknown = null;
@@ -582,6 +700,11 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
         statInFlight: false,
         statFailures: 0,
         reopens: [],
+        source: 'engine',
+        input: null,
+        graceTimer: null,
+        pendingDetach: [],
+        lastWorkingAt: 0,
       };
       if (stopped) {
         await stopEngine(meta.commandUrl);
@@ -604,12 +727,23 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     session.closed = true;
     sessions.delete(session.id);
     rememberClosed(session.id);
+    clock.clearTimeout(session.graceTimer);
+    session.graceTimer = null;
+    session.pendingDetach.length = 0;
     for (const viewer of session.viewers.values()) {
       if (viewers.get(viewer.viewerId) === viewer) viewers.delete(viewer.viewerId);
     }
     session.viewers.clear();
     for (const viewerId of remux.viewersOf(session.id)) {
       await remux.detach(session.id, viewerId).catch(() => undefined);
+    }
+    if (session.source === 'iptv') {
+      /* Cerrar antes de abrir: se espera a que el relé suelte el socket con el proveedor. */
+      await session.input?.close().catch(() => undefined);
+      logger.info({ sessionId: session.id }, 'sesión IPTV cerrada');
+      emitActivity();
+      syncTicker();
+      return;
     }
     if (options.stop !== false) await stopEngine(session.meta.commandUrl);
     await forgetSession(session.id);
@@ -712,6 +846,70 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     if (remuxViewers(session).length) track(retargetRemux(session, reason));
   }
 
+  // --- IPTV ---
+
+  /**
+   * Cierre de una sesión IPTV que decide el servidor (docs/iptv.md §7.4):
+   * relé agotado, pausa, eliminar o cuenta caducada. Primero se avisa
+   * (`stream.closed remux_failed` con el código `iptv_*`) y DESPUÉS se mata
+   * ffmpeg, para que gane el código IPTV y no un `remux_died`.
+   */
+  async function closeIptv(session: SessionRec, code: string): Promise<void> {
+    await engineLock.run(async () => {
+      if (session.closed) return;
+      const gone = [...session.viewers.values()];
+      emitClosed(session.id, [...session.viewers.keys()], 'remux_failed', code);
+      if (code === 'iptv_dropped' || code === 'iptv_busy') {
+        try {
+          scanner.recordVerdict(session.hash, {
+            state: code === 'iptv_busy' ? 'weak' : 'failed',
+            reason: code,
+            by: 'player',
+          });
+        } catch {}
+      }
+      await closeSessionLocked(session);
+      for (const viewer of gone) track(releaseNowPlaying(viewer));
+    });
+  }
+
+  /** El relé pide reiniciar el remux (otra base de tiempos u otra variante, §6.1). */
+  async function restartIptv(session: SessionRec): Promise<void> {
+    if (session.closed) return;
+    let handle: RemuxHandle | null = null;
+    try {
+      handle = await remux.restart(session.id);
+    } catch (error) {
+      logger.warn(
+        { sessionId: session.id, errorCode: errorCodeOf(error) },
+        'reinicio del remux IPTV',
+      );
+    }
+    if (session.closed) return;
+    if (!handle) {
+      await closeIptv(session, 'iptv_dropped');
+      return;
+    }
+    for (const group of groupByUrl(session, remuxViewers(session))) {
+      bus.emit('stream.reopened', { sessionId: session.id, ...group, reason: 'remux_restart' });
+    }
+  }
+
+  /** Pausa, eliminar o cuenta caducada: fuera todas las sesiones IPTV (§7.4). */
+  function onIptvRevoked(code: string): void {
+    for (const session of [...sessions.values()]) {
+      if (session.source === 'iptv') track(closeIptv(session, code));
+    }
+  }
+
+  /* Visores que dejaron el remux durante la gracia: se sueltan cuando ya se ha enganchado el nuevo. */
+  async function releasePendingDetach(session: SessionRec): Promise<void> {
+    for (const viewerId of session.pendingDetach.splice(0)) {
+      if (session.viewers.has(viewerId)) continue;
+      await remux.detach(session.id, viewerId).catch(() => undefined);
+    }
+  }
+
   // --- Visores ---
 
   function emitHandoff(
@@ -752,6 +950,36 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       } else if (reason === 'remux_failed') {
         emitClosed(session.id, [viewer.viewerId], 'remux_failed', code);
       }
+    }
+    /* IPTV (docs/iptv.md §6.4): gracia de 3 s SOLO si el último visor se va sin
+       pedir otra cosa (soltar o latido perdido). Mientras, el remux y la
+       conexión con el proveedor siguen; volver enseguida al mismo canal no
+       reabre nada. Cualquier otra colocación la cancela y cierra al momento. */
+    const grace =
+      session?.source === 'iptv' &&
+      session.viewers.size === 0 &&
+      (reason === 'released' || reason === 'expired') &&
+      !stopped;
+    if (session && grace) {
+      if (viewer.consumes === 'remux') session.pendingDetach.push(viewer.viewerId);
+      clock.clearTimeout(session.graceTimer);
+      session.graceTimer = clock.setTimeout(
+        () => {
+          session.graceTimer = null;
+          track(
+            engineLock.run(async () => {
+              if (session.closed || session.viewers.size > 0) return;
+              await closeSessionLocked(session);
+            }),
+          );
+        },
+        IPTV_SESSION.graceMs,
+        { unref: true },
+      );
+      await releaseNowPlaying(viewer);
+      emitActivity();
+      syncTicker();
+      return { sessionClosed: false };
     }
     if (session && viewer.consumes === 'remux') {
       await remux.detach(session.id, viewer.viewerId).catch(() => undefined);
@@ -805,9 +1033,28 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       }
     }
     let session = [...sessions.values()].find((candidate) => candidate.hash === request.hash);
+    /* Vuelta al mismo canal IPTV durante la gracia: se reutiliza (docs/iptv.md §6.4). */
+    if (session?.graceTimer) {
+      clock.clearTimeout(session.graceTimer);
+      session.graceTimer = null;
+    }
     if (session && policy() === 'handoff') {
       const others = [...session.viewers.values()].filter((v) => v.viewerId !== request.viewerId);
-      if (others.length) {
+      if (others.length && session.source === 'iptv') {
+        /* IPTV (docs/iptv.md §6.5): la sesión vive en el servidor. Se echa a
+           los demás y se conserva: cerrar y reabrir la conexión con el
+           proveedor dejaría al nuevo sin plaza en los paneles que la retienen. */
+        emitHandoff(session, others, by, 'same_channel');
+        handoff = true;
+        for (const other of others) {
+          session.viewers.delete(other.viewerId);
+          if (viewers.get(other.viewerId) === other) viewers.delete(other.viewerId);
+          if (other.consumes !== 'remux') continue;
+          /* El remux sigue hasta que se engancha el nuevo (como en la gracia). */
+          if (request.consumes === 'remux') session.pendingDetach.push(other.viewerId);
+          else await remux.detach(session.id, other.viewerId).catch(() => undefined);
+        }
+      } else if (others.length) {
         /* El último manda y la sesión se reabre para él, en vez de dejar que
            el motor mate la del otro con un 403 (arquitectura §5.6). */
         emitHandoff(session, others, by, 'same_channel');
@@ -923,8 +1170,13 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
           if (request.signal.aborted) {
             throw superseded('el cliente colgó mientras se preparaba el remux');
           }
+          /* Una IPTV que no arranca en el remux se cierra (sin gracia): la plaza del proveedor queda libre. */
+          if (session.source === 'iptv' && !session.closed && session.viewers.size === 0) {
+            await engineLock.run(() => closeSessionLocked(session));
+          }
           throw error;
         }
+        if (session.pendingDetach.length) await releasePendingDetach(session);
       }
       if (request.signal.aborted || stale() || viewers.get(viewer.viewerId) !== viewer) {
         await dropViewer(viewer, 'aborted');
@@ -965,7 +1217,43 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     for (const session of sessions.values()) pollStats(session);
   }
 
+  /**
+   * Estadísticas de una IPTV: las del relé (docs/iptv.md §5.5), y con bytes
+   * entrando se apunta `working` por el reproductor cada 60 s (§7.3).
+   */
+  function iptvStats(session: SessionRec): void {
+    const input = session.input;
+    if (!input || session.closed || !session.viewers.size) return;
+    const stats = input.stats();
+    const now = clock.now();
+    bus.emit('stream.stats', {
+      sessionId: session.id,
+      viewerIds: [...session.viewers.keys()],
+      status: 'iptv',
+      peers: 0,
+      speedDown: stats.kbps,
+      speedUp: 0,
+      downloaded: stats.bytes,
+      at: clock.date().toISOString(),
+    });
+    const flowing = stats.lastByteAt !== null && now - stats.lastByteAt < 5_000;
+    if (flowing && now - session.lastWorkingAt >= IPTV_SESSION.workingEveryMs) {
+      session.lastWorkingAt = now;
+      try {
+        scanner.recordVerdict(session.hash, {
+          state: 'working',
+          reason: 'playable_media',
+          by: 'player',
+        });
+      } catch {}
+    }
+  }
+
   function pollStats(session: SessionRec): void {
+    if (session.source === 'iptv') {
+      iptvStats(session);
+      return;
+    }
     if (session.closed || session.statInFlight || !session.viewers.size) return;
     session.statInFlight = true;
     const controller = new AbortController();
@@ -1058,7 +1346,8 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     track(
       engineLock.run(async () => {
         for (const session of [...sessions.values()]) {
-          if (session.closed || !session.viewers.size) continue;
+          /* Una IPTV no depende del motor: no se reabre al volver (docs/iptv.md §6.4). */
+          if (session.closed || !session.viewers.size || session.source === 'iptv') continue;
           /* Solo se reabre si la sesión ya no existe en el motor. Tras un bache
              sin reinicio puede seguir viva (reabrirla cortaría a quien la ve);
              y tras un reinicio puede que ya la haya reabierto la vía de las
@@ -1093,6 +1382,13 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     viewerIds: readonly string[],
     reason: RemuxCloseReason,
   ): void {
+    /* IPTV: el remux se ha ido solo (desalojo, ffmpeg muerto, recolector): se
+       cierra con `iptv_dropped`, nunca con `remux_died` (docs/iptv.md §6.3). */
+    const session = sessions.get(sessionId);
+    if (session?.source === 'iptv' && reason !== 'stopped' && reason !== 'shutdown') {
+      track(closeIptv(session, 'iptv_dropped'));
+      return;
+    }
     for (const viewerId of viewerIds) {
       const viewer = viewers.get(viewerId);
       if (!viewer || viewer.sessionId !== sessionId) continue;
@@ -1203,6 +1499,7 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
           if (event.reason === 'revoked') track(service.releaseDevice(event.deviceId));
         }),
         remux.subscribe({ onAccess: onRemuxAccess, onDetached: onRemuxDetached }),
+        ...(deps.iptv ? [deps.iptv.subscribe({ onRevoked: onIptvRevoked })] : []),
       ];
     },
 
@@ -1217,18 +1514,28 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     async acquire(hashParam, query, identity, signal) {
       const hash = normalizeHash(hashParam);
       if (!hash) throw new AppError('bad_request', { detail: 'hash no válido' });
+      /* Decisión de §4.1 ANTES de mirar el motor: un id IPTV que ya no vale
+         responde sin tocarlo; uno del catálogo vigente se abre por el relé. */
+      const iptvClass = deps.iptv ? deps.iptv.classify(hash) : 'engine';
+      if (iptvClass !== 'engine' && iptvClass !== 'owned') throw new AppError(iptvClass);
+      const source = iptvClass === 'owned' ? 'iptv' : 'engine';
       const client = query.client;
       const deviceId = identity.device?.deviceId ?? identity.deviceId ?? query.device ?? null;
       const mode = query.mode ?? DEFAULT_PLAYBACK_MODE;
       /* Sin título en la petición, el de la biblioteca (favoritos, historial o la lista activa). */
-      const label = cleanTitle(query.title, '') || libraryTitle(hash);
+      const label =
+        cleanTitle(query.title, '') ||
+        (source === 'iptv' ? cleanTitle(deps.iptv?.titleOf(hash) ?? '', '') : '') ||
+        libraryTitle(hash);
       const placed = await acquireInternal({
         hash,
         kind: query.kind ?? 'auto',
         viewerId: identity.viewerId,
         deviceId,
         client,
-        consumes: client === 'ios' ? 'remux' : 'direct',
+        source,
+        /* Una IPTV siempre pasa por el remux, también en la web (docs/iptv.md §6.4). */
+        consumes: client === 'ios' || source === 'iptv' ? 'remux' : 'direct',
         heartbeat: true,
         native: identity.device !== null,
         title: label || `Stream ${hash.slice(0, 8)}`,
@@ -1256,6 +1563,7 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
         latency: latencyFor(mode, protocol),
         stats: { via: 'sse' },
         handoff: placed.handoff,
+        ...(session.source === 'iptv' ? { source: 'iptv' as const } : {}),
       };
       return grant;
     },
@@ -1402,9 +1710,13 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
         .replace(/[^a-zA-Z0-9_-]/g, '')
         .slice(0, 40);
       const viewerId = dev ? `lr_${dev}` : `lr_${randomBytes(9).toString('base64url')}`;
+      const iptvClass = deps.iptv ? deps.iptv.classify(id) : 'engine';
+      if (iptvClass !== 'engine' && iptvClass !== 'owned')
+        throw new AppError('remux_died', { detail: iptvClass });
       try {
         const placed = await acquireInternal({
           hash: id,
+          source: iptvClass === 'owned' ? 'iptv' : 'engine',
           kind: ihParam ? 'infohash' : 'id',
           viewerId,
           deviceId: dev || null,
@@ -1462,6 +1774,11 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       emitActivity();
       const work = Promise.all(
         all.map(async (session) => {
+          clock.clearTimeout(session.graceTimer);
+          if (session.source === 'iptv') {
+            await session.input?.close().catch(() => undefined);
+            return;
+          }
           await stopEngine(session.meta.commandUrl);
           await forgetSession(session.id);
         }),

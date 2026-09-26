@@ -57,6 +57,12 @@ export const DIAGNOSTICS_DEFAULT_LIST_LIMIT = 100;
 /** Emparejamiento: intentos por código y por minuto en total (arquitectura §5.12). */
 export const PAIRING_ATTEMPTS_PER_CODE = 5;
 export const PAIRING_ATTEMPTS_PER_MINUTE = 10;
+/**
+ * Emparejamiento: códigos que puede crear un mismo iPhone por minuto (0.8.1).
+ * Cada uno anula el vivo; sin tope, un iPhone en bucle dejaría a la web sin
+ * poder emparejar. La web (login de Umbrel) no tiene tope.
+ */
+export const PAIRING_CREATES_PER_DEVICE_PER_MINUTE = 5;
 
 /** Emparejamiento: dígitos del código y bits del secreto del token (arquitectura §5.12). */
 export const PAIRING_CODE_DIGITS = 6;

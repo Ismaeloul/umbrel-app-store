@@ -6,7 +6,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { REMUX_LOG_BYTES, normalizeHash } from '@ace/shared';
 import { tempDir } from '../../../test/helpers/index.js';
-import { buildRemuxArgs } from './args.js';
+import { buildRemuxArgs, hlsFlags, playlistPath } from './args.js';
 import { playlistStatsFromText, rewritePlaylist } from './files.js';
 import {
   elegirSesionRemuxADesalojar,
@@ -118,6 +118,7 @@ describe('T-125 · el iPhone arranca con colchon y el adaptador sobrevive a los 
       url: 'http://motor:6878/ace/r/x/y',
       dir: '/data/remux/h',
       sessionId: 's_prueba123',
+      platform: 'linux',
     });
     expect(
       contains(args, ['-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_at_eof', '1']),
@@ -133,13 +134,27 @@ describe('T-125 · el iPhone arranca con colchon y el adaptador sobrevive a los 
   it('buildRemuxArgs es la línea de la 0.6.59 más -threads 2 y -metadata ace_session=<id>', () => {
     const dir = path.join('/data', 'remux', ID_A);
     const url = `http://motor:6878/ace/r/${ID_A}/sesion`;
-    const args = buildRemuxArgs({ url, dir, sessionId: 's_abcdefgh12' });
-    const original = ORIGINAL_0659(url, path.join(dir, 'index.m3u8'));
+    const args = buildRemuxArgs({ url, dir, sessionId: 's_abcdefgh12', platform: 'linux' });
+    const original = ORIGINAL_0659(url, playlistPath(dir));
     const extra = ['-threads', '2', '-metadata', 'ace_session=s_abcdefgh12'];
     const at = original.indexOf('-f');
     expect(args).toEqual([...original.slice(0, at), ...extra, ...original.slice(at)]);
     expect(args.slice(0, 4)).toEqual(['-hide_banner', '-loglevel', 'warning', '-nostdin']);
     expect(args).not.toContain('getstream');
+  });
+
+  it('en Windows, sin temp_file y con la lista en barras «/» (ffmpeg no puede renombrar encima)', () => {
+    const args = buildRemuxArgs({
+      url: 'http://127.0.0.1:1/r/t/in.ts',
+      dir: ['C:', 'datos', 'remux', 'h'].join(path.win32.sep),
+      sessionId: 's_prueba123',
+      origin: 'iptv',
+      platform: 'win32',
+    });
+    expect(args).toContain('delete_segments+independent_segments+omit_endlist');
+    expect(args.join(' ')).not.toContain('temp_file');
+    expect(args.at(-1)).toBe('C:/datos/remux/h/index.m3u8');
+    expect(hlsFlags('linux')).toContain('temp_file');
   });
 });
 

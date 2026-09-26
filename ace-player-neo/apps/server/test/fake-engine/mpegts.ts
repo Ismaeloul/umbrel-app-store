@@ -332,13 +332,27 @@ const AUDIO_SPECS: Record<AudioCodec, AudioSpec> = {
     samplesPerFrame: 1152,
     frame: Buffer.concat([Buffer.from([0xff, 0xfd, 0x84, 0x00]), Buffer.alloc(380)]),
   },
-  // AC-3 192 kbit/s, 48 kHz, 2/0: sincronía, tamaño y BSI; el resto a cero
+  // AC-3 192 kbit/s, 48 kHz, 2/0: una trama de silencio DE VERDAD (768 bytes, con
+  // sus CRC), sacada de `ffmpeg -f lavfi -i anullsrc=r=48000:cl=stereo -c:a ac3
+  // -b:a 192k`. Con la de antes (solo cabecera y ceros) ffmpeg no podía
+  // decodificar el audio y el remux IPTV (AC-3 → AAC) no sacaba nada.
   ac3: {
     samplesPerFrame: 1536,
-    frame: Buffer.concat([
-      Buffer.from([0x0b, 0x77, 0, 0, 0x14, 0x40, 0x43, 0xe0]),
-      Buffer.alloc(760),
-    ]),
+    frame: Buffer.from(
+      'C3dQUhRAQ+EG9GNwgICCEBAQQVx8+fPnz58+fPnz58+fPnz58+fPnz58+fPv+dXz58+fPnz58+fPnz58+fPnz58+' +
+        'fPnz58+fPnz58+fPnz58+fPj/nV8+fPnz58+fPnz58+fPnz58+fPnz58+fPnz58+fPnz58+fPnz4y/xRIkSAAAAA' +
+        'AHjbbbbx48eO7u7gAAAAAAAAAAAAAAAAAAAAAB3d3d48eNttvnzWta1rWta1rWta1oAAAAB422228ePHju7u4AAA' +
+        'AAAAAAAAAAAAAAAAAAAd3d3ePHjbbb581rWta1rWta1rWtaYAAAAAAAHjbbbbx48eO7u7gAAAAAAAAAAAAAAAAAA' +
+        'AAAB3d3d48eNttvnzWta1rWta1rWta1oAAAAB422228ePHju7u4AAAAAAAAAAAAAAAAAAAAAAd3d3ePHjbbb581r' +
+        'Wta1rWta1rWtaYAAAAAAAHjbbbbx48eO7u7gAAAAAAAAAAAAAAAAAAAAAB3d3d48eNttvnzWta1rWta1rWta1oAA' +
+        'AAB422228ePHju7u4AAAAAAAAAAAAAAAAAAAAAAd3d3ePHjbbb581rWta1rWta1rWtaYAAAAAAAHjbbbbx48eO7u' +
+        '7gAAAAAAAAAAAAAAAAAAAAAB3d3d48eNttvnzWta1rWta1rWta1oAAAAB422228ePHju7u4AAAAAAAAAAAAAAAAA' +
+        'AAAAAd3d3ePHjbbb581rWta1rWta1rWtaYAAAAAAAHjbbbbx48eO7u7gAAAAAAAAAAAAAAAAAAAAAB3d3d48eNtt' +
+        'vnzWta1rWta1rWta1oAAAAB422228ePHju7u4AAAAAAAAAAAAAAAAAAAAAAd3d3ePHjbbb581rWta1rWta1rWtaY' +
+        'AAAAAAAHjbbbbx48eO7u7gAAAAAAAAAAAAAAAAAAAAAB3d3d48eNttvnzWta1rWta1rWta1oAAAAB422228ePHju' +
+        '7u4AAAAAAAAAAAAAAAAAAAAAAd3d3ePHjbbb581rWta1rWta1rWtaPR7',
+      'base64',
+    ),
   },
 };
 

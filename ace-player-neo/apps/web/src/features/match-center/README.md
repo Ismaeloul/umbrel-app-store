@@ -35,8 +35,41 @@ de §26. Capturas y revisión de 11 tamaños en `docs/capturas/fase2/partido/`.
    canal»**, todo es manual: nunca se salta sola; el reproductor dice cuántas
    quedan. Única excepción heredada: el salto de entrada tras «Encontrar
    canal» si el comprobador da la elegida por fallida antes de verse.
-4. **Canal de la biblioteca**: nunca salta sola (reproductor.md §4.4).
+4. **Canal de la biblioteca**: nunca salta sola (reproductor.md §4.4), salvo
+   con IPTV activa: tocarlo pregunta antes al servidor (`scope=channel`,
+   2,5 s) y, si está en la IPTV, se abre como un partido (IPTV primero,
+   comprobador y puente, regla 6); si no, exactamente como siempre.
 5. **Detener o el traspaso** apagan todo lo automático; la lista se queda.
+6. **El puente IPTV ↔ AceStream (P16.6, `docs/iptv.md` §7.2)**: «si uno no va,
+   va el otro». Vale en automático, **en manual** y en los canales sueltos
+   abiertos con IPTV (las reglas 3 y 4 siguen para saltar entre dos AceStream).
+   - La IPTV arranca **la primera** sin esperar a «Verificada» (la cuenta
+     activa no es un stream visto); una «Floja» (`iptv_busy`) no la frena.
+   - **Cae la IPTV** → la mejor AceStream verificada no probada (con el
+     comprobador terminado, también floja), con `haptic('warning')`, el texto
+     en la línea de estado («Tu IPTV no responde: seguimos por AceStream
+     (fuente N)», o «tiene la conexión ocupada», o «está en pausa») y un toast
+     «Seguimos por AceStream» · **«Volver a la IPTV»** (8 s, atado a la sesión
+     de fuentes: al cambiar de partido o canal se quita y no hace nada).
+     En inmersivo (móvil en horizontal, pantalla completa) no hay toasts: la
+     misma acción va en una cápsula tocable sobre el vídeo, y con ratón la
+     línea añade «Para volver, pulsa N». Sin ninguna verificada
+     todavía, se espera a la primera; en un canal suelto, el hash que se tocó.
+   - **Cae una AceStream** (auto o manual) y hay una IPTV no «Sin señal» ni
+     caída en los últimos 60 s → la IPTV («Esta fuente no responde: pasamos
+     a tu IPTV»). Con el motor caído (`engine_unavailable`), igual («El motor
+     AceStream no responde: pasamos a tu IPTV»), y si no hay IPTV se espera
+     al motor como siempre.
+   - Un fallo de **cuenta** (`iptv_busy`, `iptv_auth_failed`,
+     `iptv_account_expired`) da por probadas todas las IPTV del proveedor.
+   - **Tope**: 2 saltos del puente cada 3 min por sesión; después solo se
+     deja de saltar entre IPTV y AceStream (sigue P16 entre las AceStream).
+     El texto «Ni tu IPTV ni las fuentes de AceStream dan señal ahora mismo.»
+     sale solo cuando de verdad no queda ninguna.
+   - **No hay vuelta automática a la IPTV** (D7): se vuelve con un toque (el
+     toast, su cartel, que nunca se pliega, su número o deslizar).
+   - La IPTV se reproduce con `record: false` (no entra en Recientes) y su
+     cartel e inspector no ofrecen «Favorito», «Copiar hash» ni «Abrir en…».
 
 ## Decisiones (modo autónomo, criterio conservador)
 

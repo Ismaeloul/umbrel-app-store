@@ -7,9 +7,11 @@
      (T-035, B-221). `ffmpeg.log` ya no existe: el log vive en memoria.
 
    v1 (tabla de @ace/shared/routes.ts):
-   - video: GET /api/v1/video/:sid/:file (solo native, con `?t=` ya
-     comprobado por app.ts): la lista reescrita con `?t=` en cada URI y los
-     segmentos con Range. Cada petición cuenta como latido del visor. */
+   - video: GET /api/v1/video/:sid/:file. Desde native, con `?t=` ya
+     comprobado por app.ts: la lista reescrita con `?t=` en cada URI y los
+     segmentos con Range. Desde la web (docs/iptv.md §5.4, `access: 'any'`),
+     `t` se ignora y la lista sale tal cual. Cada petición cuenta como latido
+     del visor. */
 
 import type { LegacyRouter, V1Router } from '../../core/router.js';
 import type { Services } from '../../services.js';
@@ -43,7 +45,8 @@ export function registerV1Routes(router: V1Router, services: Services): void {
   router.handle('video', async (input, ctx) => {
     await services.remux.serveFile(ctx.reply, input.params.sid, input.params.file, {
       rangeHeader: ctx.request.headers.range,
-      videoToken: input.query.t,
+      /* Solo el token comprobado de /native reescribe la lista; el de la web se ignora. */
+      ...(ctx.origin === 'native' && input.query.t ? { videoToken: input.query.t } : {}),
       deviceId: ctx.device?.deviceId ?? null,
     });
   });

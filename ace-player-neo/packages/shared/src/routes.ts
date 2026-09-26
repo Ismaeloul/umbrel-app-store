@@ -15,6 +15,14 @@
    - `native`: solo la app iOS (hoy, los ficheros del remux con `?t=`).
    - `any`: los dos. Desde /native hace falta credencial salvo que
      `credential` sea `none`.
+     Desde la 0.8.1 el iPhone emparejado administra como la web (Salud,
+     Dispositivos, emparejar otro y ajustes v2): solo `healthLive` (es el
+     healthcheck de Docker; la app usa `ping`), las 5 rutas de Ajustes →
+     IPTV (`iptv*`, docs/iptv.md §5.3: la IPTV solo se configura en la web)
+     y `iptvChannels` (el buscador IPTV, §14.2; pasa a `any` cuando la app
+     calque el buscador, D27) son `web`.
+     `video` es `any` desde la IPTV (docs/iptv.md §5.4): la web entra sin
+     token (el login de Umbrel basta) y el iPhone con `video-token`.
 
    Credencial nativa (`credential`, solo cuenta con origen native):
    - `bearer`: `Authorization: Bearer <deviceId>.<secreto>` (arquitectura §5.12).
@@ -80,6 +88,13 @@ import {
   VideoParamsSchema,
   VideoQuerySchema,
 } from './api/v1/playback.js';
+import {
+  IptvChannelsQuerySchema,
+  IptvChannelsResponseSchema,
+  IptvSaveBodySchema,
+  IptvUpdateBodySchema,
+  IptvViewSchema,
+} from './api/v1/iptv.js';
 import { SearchQuerySchema, SearchResponseSchema } from './api/v1/search.js';
 import { SettingsResponseSchema, SettingsUpdateBodySchema } from './api/v1/settings.js';
 import {
@@ -103,7 +118,8 @@ export const V1_PREFIX = '/api/v1';
 /** Prefijo por el que entra la app iOS sin el login de Umbrel (D4). */
 export const NATIVE_PREFIX = '/native';
 
-export type V1Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
+/** `PATCH` llegó con la IPTV (`iptvUpdate`: pausar o renombrar sin tocar los secretos). */
+export type V1Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export type RouteAccess = 'web' | 'native' | 'any';
 export type NativeCredential = 'none' | 'bearer' | 'video-token';
 /** `json` = respuesta JSON validada; `sse` = text/event-stream; `binary` = ficheros del remux y escudos (PNG). */
@@ -113,6 +129,7 @@ export type RouteContent = 'json' | 'sse' | 'binary';
 export const SERVER_MODULES = [
   'state',
   'net',
+  'iptv',
   'directories',
   'engine',
   'playback',
@@ -205,6 +222,41 @@ const DIRECTORY_FETCH_ERRORS = [
   'ipfs_unsupported_hash',
 ] as const satisfies readonly ErrorCode[];
 
+/* Lo que puede dar la prueba rápida de «Guardar IPTV» (docs/iptv.md §5.3):
+   la descarga con el filtro SSRF de `net` y la respuesta del proveedor. */
+const IPTV_SAVE_ERRORS = [
+  'bad_url',
+  'private_url',
+  'dns_failed',
+  'redirect_limit',
+  'redirect_loop',
+  'unsupported_encoding',
+  'iptv_credentials_required',
+  'iptv_secret_unreadable',
+  'iptv_auth_failed',
+  'iptv_account_expired',
+  'iptv_unreachable',
+  'iptv_timeout',
+  'iptv_bad_list',
+  'iptv_empty',
+] as const satisfies readonly ErrorCode[];
+
+/* Abrir un id IPTV (docs/iptv.md §4.1 y §6): uno que ya no vale responde
+   sin tocar el motor (`iptv_gone`, `iptv_disabled`, `iptv_removed`); los
+   demás son fallos de la apertura. Todos son de fuente: agotan la fuente. */
+const IPTV_STREAM_ERRORS = [
+  'iptv_gone',
+  'iptv_disabled',
+  'iptv_removed',
+  'iptv_secret_unreadable',
+  'iptv_busy',
+  'iptv_auth_failed',
+  'iptv_account_expired',
+  'iptv_unreachable',
+  'iptv_timeout',
+  'iptv_unsupported',
+] as const satisfies readonly ErrorCode[];
+
 export const V1_ROUTES = {
   // --- Sistema ---
   ping: defineRoute({
@@ -240,7 +292,7 @@ export const V1_ROUTES = {
   health: defineRoute({
     method: 'GET',
     path: '/api/v1/health',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'health',
     summary: 'Panel de salud, desde las cachés de los vigilantes (sin red en cada llamada)',
@@ -320,7 +372,8 @@ export const V1_ROUTES = {
     module: 'playback',
     summary: 'Abrir (o unirse a) la sesión del motor de un canal y recibir su URL',
     description:
-      'Espera a que la URL sea reproducible (la sesión abierta o, en iOS, el remux listo). Si el cliente cuelga, se cancela. Arquitectura §6.3.',
+      'Espera a que la URL sea reproducible (la sesión abierta o, en iOS, el remux listo). Si el cliente cuelga, se cancela. Arquitectura §6.3. ' +
+      'Con un id IPTV (docs/iptv.md §6.4) la sesión sale del relé y del remux: la web recibe `hls` en `/api/v1/video/<sid>/index.m3u8` sin token y el iPhone `hls-fmp4`, los dos con `source: iptv`.',
     params: ChannelStreamParamsSchema,
     query: ChannelStreamQuerySchema,
     response: StreamGrantSchema,
@@ -336,6 +389,7 @@ export const V1_ROUTES = {
       'remux_died',
       'ffmpeg_missing',
       'handoff_denied',
+      ...IPTV_STREAM_ERRORS,
     ],
     legacyTwin: 'GET /api/remux',
   }),
@@ -388,12 +442,14 @@ export const V1_ROUTES = {
   video: defineRoute({
     method: 'GET',
     path: '/api/v1/video/:sid/:file',
-    access: 'native',
+    access: 'any',
     credential: 'video-token',
     module: 'remux',
-    summary: 'Lista y segmentos del remux para AVPlayer (Range, 206/416, no-store)',
+    summary:
+      'Lista y segmentos del remux para AVPlayer y, con la IPTV, para hls.js (Range, 206/416, no-store)',
     description:
-      'El backend reescribe cada m3u8 y añade `?t=` a cada URI, también a `#EXT-X-MAP:URI` (arquitectura §5.12).',
+      'Desde /native, `?t=` obligatorio: el backend reescribe cada m3u8 y añade `?t=` a cada URI, también a `#EXT-X-MAP:URI` (arquitectura §5.12). ' +
+      'Desde la web (docs/iptv.md §5.4), sin token: `t` se ignora y la lista sale sin `?t=`. La sesión tiene que existir y tener remux vivo; si no, error como hoy.',
     params: VideoParamsSchema,
     query: VideoQuerySchema,
     response: null,
@@ -422,7 +478,7 @@ export const V1_ROUTES = {
   settingsUpdate: defineRoute({
     method: 'PUT',
     path: '/api/v1/settings',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'state',
     summary: 'Cambiar los ajustes v2 (parcial: lo que no llega se queda como está)',
@@ -435,20 +491,124 @@ export const V1_ROUTES = {
     legacyTwin: null,
   }),
 
+  // --- Ajustes → IPTV (solo web, docs/iptv.md §5.3) ---
+  iptvGet: defineRoute({
+    method: 'GET',
+    path: '/api/v1/iptv',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary:
+      'Tu IPTV: tipo, nombre, host, estado, cuenta y guía (nunca URL, usuario ni contraseña)',
+    response: IptvViewSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: false,
+    errors: [],
+    legacyTwin: null,
+  }),
+  iptvSave: defineRoute({
+    method: 'PUT',
+    path: '/api/v1/iptv',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary:
+      'Conectar o cambiar la IPTV (M3U o Xtream): prueba rápida, cifra, guarda y sincroniza de fondo',
+    description:
+      'Un secreto ausente es «el guardado». Al crear, o si cambia el tipo o el origen del servidor, son obligatorios (`iptv_credentials_required`). ' +
+      'Si la prueba rápida falla no guarda nada. Responde `syncing`; el recuento llega por SSE (`iptv.status`). Aborta la sincronización en curso.',
+    body: IptvSaveBodySchema,
+    response: IptvViewSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: true,
+    errors: IPTV_SAVE_ERRORS,
+    legacyTwin: null,
+  }),
+  iptvUpdate: defineRoute({
+    method: 'PATCH',
+    path: '/api/v1/iptv',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary: 'Pausar o reanudar la IPTV, o cambiarle el nombre',
+    description:
+      'En pausa se guarda pero no se ofrece; cierra las sesiones IPTV vivas y conserva el catálogo.',
+    body: IptvUpdateBodySchema,
+    response: IptvViewSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: true,
+    errors: ['iptv_not_configured'],
+    legacyTwin: null,
+  }),
+  iptvSync: defineRoute({
+    method: 'POST',
+    path: '/api/v1/iptv/sync',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary: 'Actualizar ya la lista de la IPTV (responde syncing; el recuento llega por SSE)',
+    response: IptvViewSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: true,
+    errors: ['iptv_not_configured', 'iptv_disabled'],
+    legacyTwin: null,
+  }),
+  iptvDelete: defineRoute({
+    method: 'DELETE',
+    path: '/api/v1/iptv',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary: 'Eliminar la IPTV y todos sus datos del Umbrel (copias incluidas)',
+    description:
+      'Aborta los trabajos en curso, cierra las sesiones IPTV y borra configuración, catálogo, guía, `.bak` y copias apartadas. Los ids de antes dan 410 `iptv_removed`.',
+    response: IptvViewSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: true,
+    errors: [],
+    legacyTwin: null,
+  }),
+
+  iptvChannels: defineRoute({
+    method: 'GET',
+    path: '/api/v1/iptv/channels',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary: 'Buscar canales en tu IPTV (2 a 80 letras; hasta 50, España o sin país, sin adultos)',
+    description:
+      'Buscador de la web (docs/iptv.md §14): una fila por canal (la mejor variante) con su nombre limpio, la calidad, el nombre del proveedor y los ids de tu biblioteca que son ese canal. ' +
+      'Nunca lleva URL, grupo ni nada más del proveedor. Sin IPTV activa responde 200 con la lista vacía. Nada se lista sin escribir al menos 2 letras.',
+    query: IptvChannelsQuerySchema,
+    response: IptvChannelsResponseSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: false,
+    errors: ['empty_query'],
+    legacyTwin: null,
+  }),
+
   // --- Emparejamiento y dispositivos ---
   pairingCreate: defineRoute({
     method: 'POST',
     path: '/api/v1/pairing',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'auth',
     summary: 'Crear un código de 6 dígitos y su QR (5 min, un solo uso, anula el anterior)',
+    description:
+      'Desde la web (su dirección en baseUrl) o desde un iPhone emparejado (baseUrl = la dirección que usa ahora; alternateBaseUrls = la otra, casa o Tailscale). El QR lleva una u= por dirección, en ese orden. Si lo crea un iPhone y luego se revoca, su código muere.',
     body: PairingCreateBodySchema,
     response: PairingCreateResponseSchema,
     status: 201,
     content: 'json',
     sideEffects: true,
-    errors: [],
+    errors: ['bad_request', 'pairing_rate_limited'],
     legacyTwin: null,
   }),
   pairingClaim: defineRoute({
@@ -470,7 +630,7 @@ export const V1_ROUTES = {
   devicesList: defineRoute({
     method: 'GET',
     path: '/api/v1/devices',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'auth',
     summary: 'Dispositivos emparejados',
@@ -484,10 +644,12 @@ export const V1_ROUTES = {
   deviceRevoke: defineRoute({
     method: 'DELETE',
     path: '/api/v1/devices/:id',
-    access: 'web',
+    access: 'any',
     credential: 'bearer',
     module: 'auth',
     summary: 'Revocar un dispositivo: cierra su SSE, suelta sus visores y anula sus URLs de vídeo',
+    description:
+      'Web o cualquier iPhone emparejado; también el propio (entonces responde 200 y todo lo suyo deja de valer al instante: su SSE recibe devices.changed revoked y se cierra).',
     params: DeviceParamsSchema,
     response: DeviceRevokeResponseSchema,
     status: 200,

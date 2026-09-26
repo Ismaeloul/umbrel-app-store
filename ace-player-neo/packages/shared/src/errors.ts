@@ -434,6 +434,107 @@ export const ERROR_CATALOG = {
     message: 'Escribe al menos 2 letras para buscar.',
   },
 
+  /* --- IPTV (docs/iptv.md §5.6) ---
+     Todos son errores DE FUENTE, nunca de sistema: agotan la fuente y
+     permiten el salto a AceStream (puente, §7.2). La 0.6.59 no los conocía. */
+  iptv_not_configured: {
+    status: 409,
+    legacyStatus: null,
+    public: true,
+    message: 'Todavía no has conectado ninguna IPTV.',
+  },
+  iptv_disabled: {
+    status: 409,
+    legacyStatus: null,
+    public: true,
+    message: 'Tu IPTV está en pausa.',
+  },
+  iptv_removed: {
+    status: 410,
+    legacyStatus: null,
+    public: true,
+    message: 'Has eliminado tu IPTV.',
+  },
+  iptv_credentials_required: {
+    status: 400,
+    legacyStatus: null,
+    public: true,
+    message: 'Si cambias el servidor o el tipo, vuelve a escribir el usuario y la contraseña.',
+  },
+  iptv_secret_unreadable: {
+    status: 409,
+    legacyStatus: null,
+    public: true,
+    message: 'No se pueden leer los datos guardados de tu IPTV. Vuelve a escribirlos.',
+  },
+  iptv_auth_failed: {
+    status: 502,
+    legacyStatus: null,
+    public: true,
+    message: 'Tu proveedor de IPTV no acepta ese usuario y contraseña.',
+  },
+  iptv_account_expired: {
+    status: 502,
+    legacyStatus: null,
+    public: true,
+    message: 'La cuenta de tu IPTV ha caducado o está desactivada.',
+  },
+  iptv_unreachable: {
+    status: 502,
+    legacyStatus: null,
+    public: true,
+    message: 'Tu proveedor de IPTV no responde.',
+  },
+  iptv_timeout: {
+    status: 504,
+    legacyStatus: null,
+    public: true,
+    message: 'Tu IPTV no respondió a tiempo.',
+  },
+  iptv_busy: {
+    status: 503,
+    legacyStatus: null,
+    public: true,
+    message:
+      'Tu IPTV ya tiene todas sus conexiones en uso. Cierra la otra reproducción o espera un momento.',
+  },
+  iptv_gone: {
+    status: 404,
+    legacyStatus: null,
+    public: true,
+    message: 'Ese canal ya no está en tu IPTV.',
+  },
+  iptv_dropped: {
+    status: 502,
+    legacyStatus: null,
+    public: true,
+    message: 'Tu IPTV ha cortado la emisión.',
+  },
+  iptv_unsupported: {
+    status: 422,
+    legacyStatus: null,
+    public: true,
+    message: 'Ese canal de tu IPTV usa un formato que no se puede reproducir aquí.',
+  },
+  iptv_bad_list: {
+    status: 422,
+    legacyStatus: null,
+    public: true,
+    message: 'La dirección respondió, pero no es una lista M3U con canales en directo.',
+  },
+  iptv_empty: {
+    status: 422,
+    legacyStatus: null,
+    public: true,
+    message: 'La lista no trae ningún canal en directo que se pueda usar.',
+  },
+  iptv_too_large: {
+    status: 502,
+    legacyStatus: null,
+    public: true,
+    message: 'La lista de tu IPTV es demasiado grande para el Umbrel.',
+  },
+
   // --- Internos: no deberían salir nunca en una respuesta ---
   state_unreadable: {
     status: 500,
@@ -580,6 +681,16 @@ export type HttpStatusErrorCode = `http_${number}`;
 export type AnyErrorCode = ErrorCode | HttpStatusErrorCode;
 
 export const ERROR_CODES = Object.keys(ERROR_CATALOG) as ErrorCode[];
+
+/** Códigos de la IPTV (docs/iptv.md §5.6): los 16 `iptv_*`, todos de fuente. */
+export type IptvErrorCode = Extract<ErrorCode, `iptv_${string}`>;
+export const IPTV_ERROR_CODES = ERROR_CODES.filter((code): code is IptvErrorCode =>
+  code.startsWith('iptv_'),
+);
+
+export function isIptvErrorCode(value: unknown): value is IptvErrorCode {
+  return isErrorCode(value) && value.startsWith('iptv_');
+}
 
 const HTTP_STATUS_ERROR_RE = /^http_(\d{3})$/;
 

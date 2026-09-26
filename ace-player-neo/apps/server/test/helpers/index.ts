@@ -7,19 +7,24 @@
      que el test quiera sustituir.
    - `web()` / `native()`: cabeceras para simular por dónde entra la petición
      (nginx pone `X-Ace-Origin`, arquitectura §8.2).
-   - `tempDir()`: carpeta temporal que se borra sola al terminar el test. */
+   - `tempDir()`: carpeta temporal que se borra sola al terminar el test.
+   - `fakeAuth()`: auth falso que solo conoce `FAKE_TOKEN` (el dispositivo
+     `FAKE_DEVICE`), para probar rutas native sin emparejar de verdad. */
 
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import type { DeviceRecord } from '@ace/shared';
 import type { FastifyInstance } from 'fastify';
-import { afterEach } from 'vitest';
+import { afterEach, vi } from 'vitest';
 import { buildApp, type BuildAppOptions } from '../../src/app.js';
 import { loadConfig, type Env } from '../../src/config/index.js';
 import { createDomainBus } from '../../src/core/bus.js';
 import { FakeClock } from '../../src/core/clock.js';
+import { AppError } from '../../src/core/errors.js';
 import { createSilentLogger, type Logger } from '../../src/core/logger.js';
-import type { CoreDeps } from '../../src/core/module.js';
+import type { AuthenticatedDevice, CoreDeps } from '../../src/core/module.js';
+import type { AuthService } from '../../src/modules/auth/types.js';
 import { createServices, type Services } from '../../src/services.js';
 
 export { FakeClock } from '../../src/core/clock.js';
@@ -114,4 +119,28 @@ export function native(
     ...(token ? { authorization: `Bearer ${token}` } : {}),
     ...headers,
   };
+}
+
+/** Token con forma válida que conoce `fakeAuth()`. */
+export const FAKE_TOKEN = 'dev_iphone01.' + 'A'.repeat(43);
+
+/** El dispositivo de `FAKE_TOKEN`. */
+export const FAKE_DEVICE: DeviceRecord = {
+  id: 'dev_iphone01',
+  name: 'iPhone de prueba',
+  platform: 'ios',
+  secretSha256: 'b'.repeat(64),
+  createdAt: '2026-01-01T00:00:00.000Z',
+  lastSeenAt: null,
+  revokedAt: null,
+};
+
+/** Auth falso: solo conoce `FAKE_TOKEN`; lo demás, `unauthorized`. */
+export function fakeAuth(): AuthService {
+  return {
+    authenticateBearer: vi.fn(async (token: string): Promise<AuthenticatedDevice> => {
+      if (token !== FAKE_TOKEN) throw new AppError('unauthorized');
+      return { deviceId: FAKE_DEVICE.id, device: FAKE_DEVICE, via: 'bearer' };
+    }),
+  } as unknown as AuthService;
 }

@@ -181,10 +181,12 @@ que parece la real). Se cambió por `<IP-del-NAS>`; aquí tampoco se repite. El 
 - Matriz completa (`test/security.test.ts`), con y sin prefijo `/native`: sin
   token, `Bearer` vacío, otro esquema, secreto cambiado, secreto de otro
   dispositivo, id inexistente, punto de más → 401 `unauthorized`; revocado →
-  401 `device_revoked` (solo con el secreto bueno). Con token bueno, las rutas
-  solo web → 403 `origin_forbidden`, y las 27 rutas antiguas → 403 siempre.
-  Solo `ping` y `pairingClaim` van sin credencial (el test falla si aparece
-  otra). Rutas retorcidas (`%64evices`, `//`, `..`, mayúsculas) → 401 sin token.
+  401 `device_revoked` (solo con el secreto bueno). Con token bueno, la única
+  ruta solo web (`healthLive`, desde la 0.8.1; el test fija el conjunto) → 403
+  `origin_forbidden`, y las 27 rutas antiguas → 403 siempre. Solo `ping` y
+  `pairingClaim` van sin credencial (el test falla si aparece otra). Rutas
+  retorcidas (`%68ealth/live`, `//`, `..`, mayúsculas) → 401 sin token y nunca
+  2xx con token.
 - El origen: `/native…` es native aunque la cabecera diga `web`; un valor raro
   cuenta como native; nginx pisa `X-Ace-Origin` en todas las location que
   llegan a Node.
@@ -196,6 +198,13 @@ que parece la real). Se cambió por `<IP-del-NAS>`; aquí tampoco se repite. El 
   salida con `DeviceSchema` estricto (el hash no puede salir).
 - Fuerza bruta del emparejamiento: 5 fallos matan el código y 10 intentos por
   minuto en total → como mucho 5 intentos por código de 10⁶ (ver R-4).
+- Crear códigos (0.8.1): cada dirección del QR es un origen http(s) con nombre
+  ASCII o IPv6 entre corchetes y puerto opcional (`PAIRING_BASE_URL_RE` en
+  `@ace/shared`, también para la reserva de las cabeceras): sin
+  `usuario:clave@`, ruta, `%`, `\` ni unicode, así que las tres direcciones
+  caben en el QR. El QR se dibuja antes de tocar el código vivo (si falla,
+  400 y el anterior sigue valiendo). Un iPhone crea como mucho 5 códigos por
+  minuto (429 `pairing_rate_limited`); la web no tiene tope.
 - URLs de vídeo: payload con `sid`, `dev` y `exp` firmado con HMAC (clave
   `ace-video-v1`); se comprueba la firma ANTES de parsear el JSON. Cambiar
   `exp`, `dev` o `sid` sin volver a firmar, usarla en otra sesión, firmarla con
@@ -264,8 +273,9 @@ motor`…); con la línea, 188 de 188.
   `contaminacion-prototipo.test.ts`), también que el estado resultante se relee
   en el siguiente arranque (`load()` → `ready`, sin cuarentena): no hay DoS
   persistente desde la web ni desde un dispositivo emparejado.
-- SSE: `devices.changed` solo al origen web; revocar cierra las conexiones del
-  dispositivo; el dispositivo de una conexión native es SIEMPRE el del token
+- SSE: `devices.changed` a todos (0.8.1); revocar publica el evento y luego
+  cierra las conexiones del dispositivo (el revocado recibe su propio
+  `revoked`); el dispositivo de una conexión native es SIEMPRE el del token
   (no la query). Los eventos de visor van a todos (R-2).
 
 ## 4. Riesgos aceptados
@@ -280,11 +290,12 @@ motor`…); con la línea, 188 de 188.
 | R-6 | CSP con `'unsafe-inline'` en `script-src`. | Heredada de la 0.6.59 y fijada por `deploy/test/nginx.test.ts`; la web v2 aún se está construyendo. | Quitarla cuando el build de Vite no tenga scripts en línea. |
 | R-7 | storage corre como root y sin `read_only` (instala ffmpeg con `apk` al arrancar); engine_control corre como root con `docker.sock`. | Sin `docker.sock` en storage; engine_control solo reinicia un contenedor y ya es `read_only` con `no-new-privileges`. | `cap_drop: [ALL]` en engine_control (root es dueño del socket y no necesita capacidades); probarlo antes en el Umbrel real. |
 | R-8 | El hook comprueba `SHA256SUMS`, pero viene en el mismo archivo: integridad, no autenticidad. La recuperación desde `main` es mutable. | La confianza es la misma que la del Compose (la tienda en GitHub por HTTPS). | Fijar en el Compose el sha256 de `SHA256SUMS` al cortar la release (`scripts/release.mjs`). |
-| R-9 | Un dispositivo emparejado puede todo lo que no es de administración: sincronizar un directorio con cualquier URL pública (el servidor la descarga, filtrada), biblioteca, preferencias, diagnóstico. | Por diseño: son los dispositivos de casa. | — |
+| R-9 | Un dispositivo emparejado puede todo lo que puede la web (desde la 0.8.1 también administrar: emparejar otro dispositivo, listar y revocar, también a sí mismo, cambiar los ajustes v2 y ver la salud): sincronizar un directorio con cualquier URL pública (el servidor la descarga, filtrada), biblioteca, preferencias, diagnóstico. Solo `healthLive` sigue siendo solo web. | Por diseño: son los dispositivos de casa, y la app de iPhone calca la web. La web (login de Umbrel) no está en `devices.json`: ningún iPhone puede revocarla. | — |
 | R-10 | `ALLOW_PRIVATE_SYNC_URLS=true` quita todo el filtro (también `127.0.0.1:3000`, engine_control y el resto de contenedores). | Opción explícita del dueño, documentada en el Compose. | Aun con ella, bloquear loopback y los nombres de contenedor de la propia app. |
 | R-11 | Desde la web, `/remux/<hash>/../<otro-hash>/…` lee los segmentos de otra sesión. | La web es la administradora; igual que la 0.6.59. | — |
 | R-12 | Ni `frame-ancestors` en la CSP ni `X-Frame-Options`: otra página puede enmarcar la web (clickjacking sobre revocar, borrar directorios, reiniciar el motor…). | Igual en la 0.6.59, y `deploy/test/nginx.test.ts` fija a propósito la CSP "de siempre". Desde otro sitio, la cookie de Umbrel normalmente no viaja en un iframe de terceros (se ve el login); desde otra app del NAS, R-1 ya da más que esto. No se puede comprobar hoy que umbrelOS no enmarque nunca las apps. | Añadir `frame-ancestors 'self'` a la CSP junto con R-6, cuando la web v2 esté montada y se pruebe en el Umbrel real. |
 | R-13 | Sin tope de conexiones SSE ni de peticiones por dispositivo: un dispositivo emparejado (o la web) puede abrir cientos de SSE o pedir sincronizaciones y reinicios del motor sin parar (estos, con su enfriamiento de 15 s). | Son los dispositivos de casa (R-9); cada SSE lento se cierra al pasar de 256 KiB sin leer; la 0.6.59 tampoco tenía topes. Un tope mal puesto cortaría varias pestañas legítimas. | Tope de SSE por dispositivo (p. ej. 8) y `limit_conn` en nginx para `/native/`, cuando haya app iOS con la que medir. |
+| R-14 | Un iPhone robado es administrador (0.8.1): puede crear códigos y emparejar dispositivos nuevos, y revocar el robado no revoca los que sembró. | La app calca la web (R-9). Mitigación: un código creado por un iPhone muere si ese iPhone se revoca (solo en memoria, `auth/service.ts`), el log del canje lleva `pairedBy`, y la web lista todos con nombre y fecha y puede revocar cualquiera. Un iPhone crea como mucho 5 códigos por minuto: en bucle (fallo de la app o token robado) no deja a la web sin poder emparejar. Como solo hay un código vivo, el de un iPhone anula el que la web tuviera a la vista sin avisarla; si alguien canjea el del iPhone, la web recibe `devices.changed paired` de un dispositivo nuevo y enseña «¡Emparejado!» aunque su código ya no valga (el emparejamiento es real, pero no fue con su código). `pairedBy` no se guarda en `devices.json` a propósito: su esquema es estricto y la 0.8.0 no lo leería, así que volver atrás dejaría a todos los iPhone sin emparejar. | `pairedBy` en `devices.json` y revocación en cascada, con migración y sin vuelta atrás a la 0.8.0. |
 
 ## 5. Decisiones tomadas en modo autónomo
 
@@ -322,3 +333,38 @@ también los tests nuevos del otro verificador), ninguno saltado; `tsc
 --noEmit` del servidor; `eslint apps/server packages`;
 `scripts/smoke-bundle.mjs` 18 de 18; vitest de la raíz (`deploy/test` +
 `scripts/test`) 112; `scripts/test-nginx-docker.mjs` con Docker 188 de 188.
+
+## 7. Cambio de la 0.8.1: el iPhone emparejado administra como la web
+
+- Rutas que pasan de `web` a `any` (con Bearer desde `/native`): `health`,
+  `settingsUpdate`, `pairingCreate`, `devicesList` y `deviceRevoke`. Todas ya
+  eran `credential: 'bearer'`, así que sin token siguen dando 401 (la matriz
+  de §3.2 no cambia). `healthLive` sigue solo web: es el healthcheck de Docker
+  y la única ruta que ejercita la rama `web` de `app.ts`.
+- `devices.changed` llega a todos los orígenes. Revocar publica el evento
+  antes de cerrar el SSE, así que el propio revocado lo recibe.
+- `pairingCreate` acepta `alternateBaseUrls` (hasta 2 orígenes http(s) sin
+  ruta): el QR lleva una `u=` por dirección, la de `baseUrl` la primera (la app
+  de la 0.8.0 lee solo esa). Sin `baseUrl`, la reserva sale de las cabeceras
+  (`Host`/`X-Forwarded-*`), que controla quien llama; como ya está autenticado
+  y el QR solo lo ve él, no es un riesgo nuevo (el servidor nunca pide esa URL:
+  no hay SSRF).
+- Un código creado por un iPhone muere si ese iPhone se revoca; el log del
+  canje lleva `pairedBy` (R-14). Sin cambios de disco: volver a la 0.8.0 es
+  seguro.
+- Las direcciones del QR se validan como origen (nombre ASCII o IPv6, puerto
+  opcional; ni credenciales ni caracteres que se codifiquen), el QR se dibuja
+  antes de anular el código vivo y un iPhone crea como mucho 5 códigos por
+  minuto (429 `pairing_rate_limited`).
+- Un código creado desde el iPhone anula el que la web tuviera a la vista:
+  si nadie lo canjea, la web sigue contando atrás y su canje da 410
+  `pairing_expired`; si otro dispositivo canjea el del iPhone, la web enseña
+  «¡Emparejado!» por un emparejamiento que no fue con su código (R-14).
+- Tests: `test/security.test.ts` fija que la única ruta solo web es
+  `healthLive`, mueve las rutas retorcidas a `health/live` y comprueba que las
+  cinco rutas abiertas responden con token (con prefijo y por cabecera);
+  `scripts/test-compose-local.mjs` lo repite por la pila real (pasarela falsa +
+  nginx + Node), también `PUT` y `DELETE` nativos.
+- No cambia nada de nginx (`/native/` ya reenvía todo), ni de la lista blanca
+  de la pasarela (`PROXY_AUTH_WHITELIST: "/native/*"` cubre cualquier método),
+  ni de `core/origin.ts` o `core/csrf.ts`.

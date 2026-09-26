@@ -5,10 +5,10 @@
 
    v1 (tabla de @ace/shared/routes.ts; se registran solas en /api/v1 y
    /native/api/v1 con acceso, validación y errores ya resueltos):
-   - pairingCreate: POST /api/v1/pairing (solo web)
+   - pairingCreate: POST /api/v1/pairing (web o iPhone emparejado)
    - pairingClaim: POST /api/v1/pairing/claim (sin token)
-   - devicesList: GET /api/v1/devices (solo web)
-   - deviceRevoke: DELETE /api/v1/devices/:id (solo web)
+   - devicesList: GET /api/v1/devices (web o iPhone)
+   - deviceRevoke: DELETE /api/v1/devices/:id (web o iPhone, también el propio)
 
    La comprobación del Bearer y de la URL de vídeo firmada la llama app.ts
    (services.auth.authenticateBearer / verifyVideoToken) antes del manejador. */
@@ -37,10 +37,12 @@ function firstHeader(value: string | string[] | undefined): string | undefined {
 }
 
 /**
- * URL base para el QR cuando la web no manda `baseUrl` (arquitectura §5.12):
+ * URL base para el QR cuando no llega `baseUrl` (arquitectura §5.12):
  * `X-Forwarded-Proto`/`X-Forwarded-Host` si llegan con forma válida, si no
- * `Host`. Solo la usa el origen web (la ruta es solo web), y el QR lo ve el
- * mismo que lo pide.
+ * `Host`. Desde /native es el `Host` con el que el iPhone llegó (nginx lo
+ * reenvía tal cual); la app nueva manda siempre `baseUrl`. Estas cabeceras
+ * las controla quien llama, pero quien llama ya está autenticado y podría
+ * mandar `baseUrl` a su gusto: el QR solo lo ve él.
  */
 export function baseUrlFromHeaders(headers: IncomingHttpHeaders): string {
   const proto = firstHeader(headers['x-forwarded-proto'])?.toLowerCase();
@@ -56,7 +58,11 @@ export function registerLegacyRoutes(_router: LegacyRouter, _services: Services)
 
 export function registerV1Routes(router: V1Router, services: Services): void {
   router.handle('pairingCreate', (input, ctx) =>
-    services.auth.createPairing(input.body, baseUrlFromHeaders(ctx.request.headers)),
+    services.auth.createPairing(
+      input.body,
+      baseUrlFromHeaders(ctx.request.headers),
+      ctx.device?.deviceId ?? null,
+    ),
   );
   router.handle('pairingClaim', (input) => services.auth.claimPairing(input.body));
   router.handle('devicesList', () => services.auth.listDevices());

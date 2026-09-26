@@ -176,8 +176,11 @@ Una ruta v1 nueva o un cambio de forma: en `@ace/shared` (A0), después
   revelar cuáles hay). Solo `ping` y `pairingClaim` van sin token.
 - El anti-CSRF solo se aplica al origen web; los GET v1 con efectos son los
   marcados `sideEffects` (`channelStream`, `footballResolve`).
-- Solo web: `health`, `healthLive`, `settingsUpdate`, `pairingCreate`,
-  `devicesList`, `deviceRevoke`. Solo native: `video`. Todo lo demás, los dos.
+- Solo web: `healthLive` (healthcheck de Docker) y, con la IPTV, las 5 rutas
+  `iptv*` de Ajustes → IPTV. Solo native: ninguna desde la IPTV (`video` pasa
+  a `any`: la web sin token y el iPhone con `video-token`, ver §13). Todo lo
+  demás, los dos (0.8.1: `health`, `settingsUpdate`, `pairingCreate`,
+  `devicesList` y `deviceRevoke` pasan a los dos para la app calcada).
 
 ## 8. Cómo portar un T-xxx
 
@@ -332,3 +335,28 @@ que TODA operación antigua y ruta v1 tiene manejador.
   fuentes con `ios: false`.
 - Dirigir los eventos de visor por dispositivo (`targetDeviceIds`, D13) cuando
   la web fije su `device`.
+
+## 13. IPTV (contrato de `docs/iptv.md`, rama `rediseno/iptv`)
+
+- **Ids sintéticos.** Un canal IPTV tiene un id de 40 hex que cumple
+  `HashSchema` (32 hex de HMAC + 8 hex de etiqueta firmada, docs/iptv.md §4.1),
+  así que ningún formato de id cambia. El servidor lo reconoce solo
+  (`isIptvId`, en `modules/iptv/ids.ts`) y decide ANTES de tocar el motor:
+  catálogo vigente con la IPTV activa → IPTV; id IPTV que ya no vale →
+  `iptv_gone` / `iptv_disabled` / `iptv_removed`; si no, AceStream.
+- **`@ace/shared`:** `constants/iptv.ts` (umbrales, topes, plazos,
+  `IPTV_REASONS`), `api/v1/iptv.ts` (`IptvSaveBody`, `IptvUpdateBody`,
+  `IptvStatus`, `IptvView`), `state/v2.ts` (`IptvFileSchema`, `SealedSchema`,
+  `V2_FILES.iptv*`), candidata `source: 'iptv'` con `iptv`,
+  `ResolveQuery.scope`, `source` opcional en `StreamGrant` y
+  `SessionSummary`, `bootstrap.features.iptv`, evento `iptv.status` (solo
+  web), 16 errores `iptv_*` y el método `PATCH`.
+- **Módulo `iptv`** en `SERVER_MODULES` y `SERVICE_ORDER`, justo después de
+  `net`. Hoy es un esqueleto: las 5 rutas responden «sin IPTV».
+- **Fixtures:** lo solo web en `fixtures/web/{v1,events}/` y las variantes en
+  `fixtures/variantes/` (`<ruta>.<caso>.json`); `v1/` y `events/` no cambian,
+  para que `FixturesTests` y `GeneradosTests` de la app sigan igual.
+- **App nativa (docs/iptv.md §10.1):** antes de fusionar, `rediseno/nativa`
+  regenera `RutaID` (5 rutas `web`, `video` a `any`, `PATCH`), `ErrorCatalog`
+  (16 códigos) y `PlazosWeb` (cuando la web ponga `iptvSave` e `iptvSync` en
+  `TIMEOUTS`).

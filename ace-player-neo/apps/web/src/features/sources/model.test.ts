@@ -7,6 +7,7 @@ import {
   applyVerdict,
   availabilityPercent,
   channelNameOf,
+  channelNameWithoutProvider,
   channelPartOf,
   checkedLabel,
   clearScan,
@@ -23,11 +24,13 @@ import {
   onScreenOf,
   pickAutoSource,
   pickInitialSwitch,
+  posterDetailOf,
   PLAYER_VERDICT_MS,
   presentationOf,
   providerOf,
   QUALITY_KBPS,
   qualityLabel,
+  qualityTags,
   reportFollowUp,
   resolutionSourceLabel,
   scanFinished,
@@ -202,9 +205,103 @@ describe('calidad y canal del cartel (Palco, corrección 2)', () => {
     expect(qualityLabel(withProbe({ videoCodec: 'H.265' }))).toBe('HEVC');
   });
 
+  it('una etiqueta por dato: qualityTags da la lista y qualityLabel la une', () => {
+    expect(qualityTags(entryFromCandidate(candidate(1), NOW))).toEqual([]);
+    expect(qualityTags(withProbe({ streamKbps: 4800, videoCodec: 'hevc' }))).toEqual([
+      '1080p',
+      'HEVC',
+    ]);
+    expect(qualityTags(withProbe({ rateKbps: 2400 }))).toEqual(['720p']);
+    expect(qualityTags(withProbe({ videoCodec: 'hev1' }))).toEqual(['HEVC']);
+  });
+
   it('la tesela lleva el nombre del canal, sin el proveedor', () => {
     expect(channelNameOf(entryFromCandidate(candidate(1), NOW))).toBe('M+ Liga de Campeones');
     expect(channelNameOf({ title: 'Canal suelto', matchedChannel: '' })).toBe('Canal suelto');
+  });
+});
+
+describe('nombre de debajo del cartel, sin el proveedor (Isma, 26-sep)', () => {
+  const sin = channelNameWithoutProvider;
+
+  it('los cuatro casos de Isma', () => {
+    expect(sin('MOVISTAR PLUS FHD --> NEW ERA III', ['New Era'])).toBe('MOVISTAR PLUS FHD');
+    expect(sin('DAZN 1 HD | ELCANO', ['Elcano'])).toBe('DAZN 1 HD');
+    expect(sin('M+ LaLiga (NEW ERA)', ['New Era'])).toBe('M+ LaLiga');
+    expect(sin('LaLiga TV [Elcano] 1080', ['Elcano'])).toBe('LaLiga TV 1080');
+  });
+
+  it('parte de channelNameOf: la flecha ya se fue y lo que queda sale igual', () => {
+    const name = channelNameOf({ title: 'MOVISTAR PLUS FHD --> NEW ERA III', matchedChannel: '' });
+    expect(sin(name, ['NEW ERA III'])).toBe('MOVISTAR PLUS FHD');
+  });
+
+  it('el proveedor con o sin numeral: «NEW ERA» frente a «NEW ERA III»', () => {
+    expect(sin('M+ LaLiga (NEW ERA)', ['NEW ERA III'])).toBe('M+ LaLiga');
+    expect(sin('DAZN 2 | NEW ERA II', ['New Era'])).toBe('DAZN 2');
+    expect(sin('Eurosport 1 - Elcano 2', ['Elcano'])).toBe('Eurosport 1');
+  });
+
+  it('todos los separadores', () => {
+    for (const sep of ['-->', '->', '=>', '==>', '»', '|', '-', '–', '—', '→', '·', ':', '/'])
+      expect(sin(`DAZN F1 ${sep} Elcano`, ['Elcano']), sep).toBe('DAZN F1');
+    expect(sin('DAZN F1 {Elcano}', ['Elcano'])).toBe('DAZN F1');
+    expect(sin('DAZN F1 ( Elcano )', ['Elcano'])).toBe('DAZN F1');
+    expect(sin('DAZN F1|Elcano', ['Elcano'])).toBe('DAZN F1');
+  });
+
+  it('delante con separador o paréntesis, o como últimas palabras', () => {
+    expect(sin('ELCANO | DAZN 1', ['Elcano'])).toBe('DAZN 1');
+    expect(sin('[Elcano] DAZN 1', ['Elcano'])).toBe('DAZN 1');
+    expect(sin('DAZN 1 ELCANO', ['Elcano'])).toBe('DAZN 1');
+    expect(sin('DAZN 1 Elcano', ['Elcano'])).toBe('DAZN 1');
+    expect(sin('DAZN 1 HD (Elcano) --> ', ['Elcano'])).toBe('DAZN 1 HD');
+    expect(sin('DAZN 1 | Elcano | HD', ['Elcano'])).toBe('DAZN 1 | HD');
+  });
+
+  it('nunca suelto al principio ni en mitad del nombre (verificador, 26-sep)', () => {
+    expect(sin('Casa de Papel TV', ['Casa'])).toBe('Casa de Papel TV');
+    expect(sin('Elcano DAZN 1', ['Elcano'])).toBe('Elcano DAZN 1');
+    expect(sin('DAZN Elcano Liga', ['Elcano'])).toBe('DAZN Elcano Liga');
+    expect(sin('Canal - Casa de Papel TV', ['Casa'])).toBe('Canal - Casa de Papel TV');
+    expect(sin('Casa-Blanca TV', ['Casa'])).toBe('Casa-Blanca TV');
+  });
+
+  it('paréntesis a medias: se quita el proveedor y los espacios que sobran', () => {
+    expect(sin('Canal (Elcano 1080p)', ['Elcano'])).toBe('Canal (1080p)');
+    expect(sin('Canal (1080p Elcano)', ['Elcano'])).toBe('Canal (1080p)');
+    expect(sin('Canal [Elcano - 1080p]', ['Elcano'])).toBe('Canal [1080p]');
+    expect(sin('Canal ( HD ) | Elcano', ['Elcano'])).toBe('Canal (HD)');
+  });
+
+  it('sin mayúsculas ni tildes que valgan', () => {
+    expect(sin('M+ Vamos | orion', ['Orión'])).toBe('M+ Vamos');
+    expect(sin('M+ Vamos (ORIÓN)', ['orion'])).toBe('M+ Vamos');
+    expect(sin('Canal Sur Andalucía [Cénit]', ['cenit'])).toBe('Canal Sur Andalucía');
+  });
+
+  it('solo palabras enteras: el proveedor dentro de otra palabra no se toca', () => {
+    expect(sin('Eurosport 1', ['Sport'])).toBe('Eurosport 1');
+    expect(sin('Faroe Islands TV', ['Faro'])).toBe('Faroe Islands TV');
+    expect(sin('LaLiga TV 1080', ['Elcano'])).toBe('LaLiga TV 1080');
+  });
+
+  it('si no queda nombre, el original', () => {
+    expect(sin('Elcano', ['Elcano'])).toBe('Elcano');
+    expect(sin('(New Era)', ['New Era'])).toBe('(New Era)');
+    expect(sin('DAZN 1', ['DAZN'])).toBe('DAZN 1');
+  });
+
+  it('sin proveedores (o vacíos) el nombre queda igual, con los espacios en orden', () => {
+    expect(sin('  DAZN   LaLiga ', [])).toBe('DAZN LaLiga');
+    expect(sin('DAZN LaLiga', ['', null, undefined, '  '])).toBe('DAZN LaLiga');
+  });
+
+  it('varios proveedores a la vez y caracteres raros en el nombre del proveedor', () => {
+    expect(sin('M+ LaLiga (Casa) | Elcano', ['Casa', 'Elcano'])).toBe('M+ LaLiga');
+    expect(sin('DAZN 1 | TV+ Pro', ['TV+ Pro'])).toBe('DAZN 1');
+    expect(sin('DAZN 1 [a.b]', ['a.b'])).toBe('DAZN 1');
+    expect(sin('DAZN 1 axb', ['a.b'])).toBe('DAZN 1 axb');
   });
 });
 
@@ -490,5 +587,65 @@ describe('hermanas de la biblioteca (regla 23)', () => {
       origin: 'favorites',
       listaId: null,
     });
+  });
+});
+
+describe('la frase del cartel, solo si no repite el estado (Isma, 26-sep)', () => {
+  it('no sale si repite la palabra del estado, sin mirar mayúsculas, tildes ni el punto', () => {
+    expect(posterDetailOf('Verificada', 'verificada')).toBeNull();
+    expect(posterDetailOf('Comprobando', 'comprobando')).toBeNull();
+    expect(posterDetailOf('Sin señal', 'sin senal')).toBeNull();
+    expect(posterDetailOf('Sin señal', 'SIN SEÑAL.')).toBeNull();
+    expect(posterDetailOf('70% disponible', '70%  disponible')).toBeNull();
+    expect(posterDetailOf('Verificada', '  ')).toBeNull();
+    expect(posterDetailOf('Verificada', null)).toBeNull();
+  });
+
+  it('sale cuando dice algo más', () => {
+    expect(posterDetailOf('Comprobando', 'probándose en el segundo motor')).toBe(
+      'probándose en el segundo motor',
+    );
+    expect(posterDetailOf('Sin comprobar', 'disponibilidad sin medir')).toBe(
+      'disponibilidad sin medir',
+    );
+    expect(posterDetailOf('Comprobando', 'comprobando en pantalla')).toBe(
+      'comprobando en pantalla',
+    );
+    expect(posterDetailOf('Pendiente', 'en cola')).toBe('en cola');
+    expect(posterDetailOf('Floja', 'señal detectada · vídeo sin confirmar')).toBe(
+      'señal detectada · vídeo sin confirmar',
+    );
+    expect(posterDetailOf('Verificada', 'reproduciendo ahora')).toBe('reproduciendo ahora');
+    // Sin palabra de estado, la frase tal cual.
+    expect(posterDetailOf('', 'en cola')).toBe('en cola');
+  });
+
+  it('si empieza repitiendo el estado, queda lo nuevo', () => {
+    expect(posterDetailOf('Sin señal', 'sin señal; reintento a las 21:30')).toBe(
+      'reintento a las 21:30',
+    );
+    expect(posterDetailOf('Verificada', 'verificada · ')).toBeNull();
+  });
+
+  it('con las frases de verdad del modelo', () => {
+    const entry = entryFromCandidate(candidate(1), NOW);
+    const at = (state: Effective['state'], reason = ''): Effective => ({
+      state,
+      reason,
+      reported: false,
+    });
+    const shown = (effective: Effective) =>
+      posterDetailOf(signalOf(effective, entry).word, detailOf(effective, entry));
+    expect(shown(at('working'))).toBeNull();
+    expect(shown(at('failed'))).toBeNull();
+    expect(shown(at('checking'))).toBe('probándose en el segundo motor');
+    expect(shown(at('checking', 'player_check'))).toBe('comprobando en pantalla');
+    expect(shown(at('queued'))).toBe('en cola');
+    expect(shown(at('none'))).toBe('disponibilidad sin medir');
+    expect(signalOf(at('none'), entry).word).toBe('Sin comprobar');
+    const available = { ...entry, availability: 0.7 };
+    expect(
+      posterDetailOf(signalOf(at('none'), available).word, detailOf(at('none'), available)),
+    ).toBeNull();
   });
 });

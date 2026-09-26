@@ -3,7 +3,7 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.8.0"
+version: "0.8.1"
 tagline: Agenda de futbol con la señal de cada partido, en el navegador y en el iPhone
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream con agenda de
@@ -13,37 +13,28 @@ description: >-
   entre dispositivos, cierra lo que ya nadie ve y lo reinicia solo si se
   cuelga.
 releaseNotes: >-
-  Diseño nuevo, "Palco", en la web y en la app de iPhone: negro de cine con
-  un solo color de accion, el oro, y un modo claro igual de cuidado. La app
-  sigue el tema del sistema (claro u oscuro) salvo que elijas otro en
-  Ajustes > Apariencia.
+  Tu IPTV, primero. En Ajustes > IPTV, desde el navegador, conectas tu lista
+  M3U o tu cuenta Xtream Codes. Se guarda cifrada en tu Umbrel y no sale de
+  ahi. En el iPhone no hay nada que configurar.
 
-  Escudos y colores de verdad: la agenda enseña el escudo de cada equipo,
-  sus colores y el logo de la competicion. Los descarga tu Umbrel una vez y
-  los guarda; la web y el iPhone nunca los piden a nadie mas. Si un equipo
-  no aparece, sale un escudo generado con sus iniciales, y la agenda nunca
-  espera por ellos. Se apagan con ACE_TEAM_CRESTS=false.
+  Si un partido o un canal esta en tu IPTV, sale primero la IPTV y AceStream
+  queda de respaldo. Si uno se corta, sigue solo por el otro, en los dos
+  sentidos, y te avisa; a la IPTV vuelves con un toque.
 
-  Agenda: arriba, el partido destacado en una tarjeta grande con los colores
-  de los dos clubes, su hora o el minuto en directo y el estado de la señal.
-  Nada suena hasta que tocas "Ver ahora". El marcador sigue tapado hasta que
-  lo pides.
+  Guia: si tu lista trae guia de programas, tu Umbrel la usa para encontrar
+  el canal que de verdad echa cada partido (las repeticiones, los resumenes y
+  las previas no cuentan). Sin guia, todo funciona igual.
 
-  Partido: el video manda, con la luz de los dos equipos alrededor. Las
-  fuentes son carteles con el nombre del canal, la calidad y un anillo que
-  dice su estado con forma, palabra y color (Verificada, Floja, Sin señal,
-  Comprobando, Pendiente, Reportada); la dorada es la que esta en pantalla.
-  Un solo reproductor para todo: grande en el partido y en miniatura, con
-  imagen, mientras navegas.
+  Buscar: tu IPTV y AceStream salen juntos, con la seccion "En tu IPTV" y
+  cada canal en una sola fila.
 
-  Canales (antes Biblioteca), Buscar y Ajustes con el mismo aire. Pega un
-  Content ID o un enlace acestream:// en Buscar y lo reproduce al momento.
+  Carteles de fuente: el nombre de la lista va dentro del cartel, debajo solo
+  el canal, y la calidad en su propia linea.
 
-  App de iPhone renovada (se actualiza aparte, con su IPA nueva): barra de
-  pestañas del sistema (Liquid Glass en iOS 26) con el mini-reproductor
-  dentro, arrastrar el video hacia abajo para minimizarlo, deslizarlo a los
-  lados para cambiar de fuente, doble toque para pantalla completa y
-  vibraciones en cada gesto.
+  App de iPhone: tu Umbrel ya deja a la app emparejada usar Salud,
+  Dispositivos y "Un solo dispositivo a la vez", y emparejar o quitar otros
+  iPhone con un QR que lleva tus dos direcciones (casa y Tailscale). Lo
+  aprovecha la app nueva, que se actualiza aparte.
 developer: Ismaeloul
 website: https://github.com/Ismaeloul
 dependencies: []

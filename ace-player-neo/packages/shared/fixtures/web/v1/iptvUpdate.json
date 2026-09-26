@@ -1,0 +1,31 @@
+{
+  "provider": {
+    "kind": "xtream",
+    "name": "Casa",
+    "enabled": false,
+    "host": "proveedor.example:8080",
+    "origin": "http://proveedor.example:8080",
+    "hasUrl": false,
+    "hasUsername": true,
+    "hasPassword": true,
+    "status": "disabled",
+    "channels": 812,
+    "updatedAt": "2026-09-23T18:30:00.000Z",
+    "error": null,
+    "staleSince": null,
+    "account": {
+      "status": "active",
+      "expiresAt": "2026-12-03T00:00:00.000Z",
+      "maxConnections": 1,
+      "activeConnections": 0,
+      "ours": 0
+    },
+    "guide": {
+      "available": true,
+      "channelsWithGuide": 640,
+      "updatedAt": "2026-09-23T12:00:00.000Z",
+      "failedAt": null
+    }
+  },
+  "refreshHours": 6
+}

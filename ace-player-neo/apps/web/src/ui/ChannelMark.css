@@ -75,4 +75,12 @@
   font-stretch: var(--w-tight);
   letter-spacing: 0.08em;
   line-height: 1;
+  /* La sigla ya viene en mayúsculas; un proveedor («Elcano», `label`) se
+     escribe igual sin tocar el texto. */
+  text-transform: uppercase;
+}
+/* Un proveedor largo: algo menos de letra y de aire antes de los puntos suspensivos. */
+.dorsal__abbrev--long {
+  font-size: max(10px, calc(var(--s) * 0.14));
+  letter-spacing: 0.05em;
 }

@@ -3,7 +3,7 @@
    §4.8-4.13), sin `success` y con los ids en la ruta en vez de en la query. */
 
 import { z } from 'zod';
-import { ScanJobIdSchema, IsoDateTimeSchema, SafeIdSchema } from '../../primitives.js';
+import { HashSchema, ScanJobIdSchema, IsoDateTimeSchema, SafeIdSchema } from '../../primitives.js';
 import { ChannelBindingSchema } from '../../state/v1.js';
 import {
   FootballScheduleSchema,
@@ -21,7 +21,15 @@ export const FootballScheduleResponseSchema = FootballScheduleSchema;
  * nueva sin vínculos ni precalentado, con `current` (y `currentIh=1`) para
  * seguir comprobando la fuente que se ve. `client` cancela el trabajo
  * anterior del mismo cliente.
+ *
+ * `scope=channel` (docs/iptv.md §5.2): canal suelto, sin `match`. Solo
+ * vínculos guardados, biblioteca e IPTV; ni buscador del motor ni IA. Sin
+ * ninguna IPTV responde `not_found` sin trabajo del comprobador. Ausente es
+ * `match`, lo de siempre.
  */
+export const ResolveScopeSchema = z.enum(['match', 'channel']);
+export type ResolveScope = z.infer<typeof ResolveScopeSchema>;
+
 export const ResolveQuerySchema = z.strictObject({
   match: z.string().max(100).optional(),
   channel: z.union([z.string().max(200), z.array(z.string().max(200)).max(32)]).optional(),
@@ -32,6 +40,15 @@ export const ResolveQuerySchema = z.strictObject({
     .string()
     .regex(/^[a-zA-Z0-9_-]{1,40}$/)
     .optional(),
+  scope: ResolveScopeSchema.optional(),
+  /**
+   * Solo con `scope=channel` (docs/iptv.md §14.4): el canal IPTV tocado, o el
+   * hash tocado si no se sabe. Si es del catálogo vigente, sale primero con su
+   * mejor variante; si no, se ignora y manda el emparejado por nombre.
+   */
+  iptv: HashSchema.optional(),
+  /** Solo con `scope=channel`: '1' busca también en el motor AceStream (búsqueda inversa, 2 consultas, ≥ 92). */
+  engine: z.enum(['0', '1']).optional(),
 });
 export type ResolveQuery = z.infer<typeof ResolveQuerySchema>;
 

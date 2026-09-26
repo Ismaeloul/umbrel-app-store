@@ -77,6 +77,13 @@ export interface DomainEvents {
     readonly watching: boolean;
     readonly hashes: readonly string[];
     readonly viewers: number;
+    /**
+     * Alguien está viendo (o esperando) algo que sale del MOTOR. Con solo
+     * IPTV el motor principal está libre: el vigilante y el buscador la
+     * ignoran; el comprobador mantiene su espaciado (la red es la misma,
+     * docs/iptv.md §6.4). Ausente = `watching`.
+     */
+    readonly engineWatching?: boolean;
   };
   'stream.ready': SseEventData<'stream.ready'> & DeviceTargeted;
   'stream.reopened': SseEventData<'stream.reopened'> & DeviceTargeted;
@@ -89,8 +96,13 @@ export interface DomainEvents {
   'diagnostics.report': DiagnosticReport;
   /** Fallo ya anotado (con id y fecha). */
   'diagnostics.new': DiagnosticEntry;
-  /** Alta, baja o cambio de un dispositivo emparejado (solo va al origen web). */
+  /** Alta, baja o cambio de un dispositivo emparejado (desde la 0.8.1 va a todos los orígenes). */
   'devices.changed': SseEventData<'devices.changed'>;
+  /**
+   * Estado de la IPTV (lo emite el módulo iptv; docs/iptv.md §5.5). El hub lo
+   * manda solo a la web (`WEB_ONLY_EVENT_TYPES`).
+   */
+  'iptv.status': SseEventData<'iptv.status'>;
 }
 
 export type DomainEventType = keyof DomainEvents;

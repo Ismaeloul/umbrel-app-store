@@ -6,6 +6,11 @@
    - demo-1 y demo-5: seis fuentes con de todo (verificadas, floja, una que
      tarda en comprobarse, una sin señal con reintento y una en cola), como
      la maqueta. Arranca sola la primera verificada.
+   - demo-5 lleva además, la primera, una IPTV «Casa» de 1080p (docs/iptv.md
+     §8.5): arranca ella sin esperar al comprobador, que solo prueba las de
+     AceStream (la IPTV no se sondea en una resolución interactiva, §7.3).
+   - Al tocar un canal con la IPTV activa (`scope=channel`), «DAZN 1» y los
+     de la Liga de Campeones están en la IPTV de muestra; los demás, no.
    - demo-4: ninguna verificada del todo → «probamos la fuente 3, que da
      señal floja».
    - demo-12: todas sin señal y reintento → «Las vuelvo a probar a las…».
@@ -23,6 +28,7 @@ import type {
   SourceReportReason,
 } from '@ace/shared';
 import { normalizeChannelKey } from '@ace/shared';
+import { DEMO_IPTV_SEARCH, demoIptvId } from '../search/demo.ts';
 
 export const DEMO_STEP_MS = 1350;
 
@@ -40,6 +46,8 @@ interface PlanItem {
   /** Códec de vídeo que ve el comprobador (h264 por defecto). */
   codec?: string;
   source?: ResolutionCandidate['source'];
+  /** Solo IPTV: calidad que declara su nombre. */
+  quality?: 'uhd' | 'fhd' | 'hd' | 'sd';
 }
 
 interface Plan {
@@ -59,9 +67,19 @@ const RICH: PlanItem[] = [
   { provider: 'Sur', outcome: 'failed', slow: 14 },
 ];
 
+/** La IPTV de muestra (§8.5): proveedor «Casa», un cartel de 1080p. */
+const DEMO_IPTV: PlanItem = {
+  provider: 'Casa',
+  outcome: 'working',
+  source: 'iptv',
+  quality: 'fhd',
+};
+/** Canales que están en la IPTV de muestra (para `scope=channel`): los del buscador de la demo. */
+const DEMO_IPTV_CHANNELS = DEMO_IPTV_SEARCH.map(([title]) => title);
+
 const PLANS: Record<string, Plan> = {
   'demo-1': { status: 'found', items: RICH },
-  'demo-5': { status: 'found', items: RICH },
+  'demo-5': { status: 'found', items: [DEMO_IPTV, ...RICH] },
   'demo-4': {
     status: 'found',
     items: [
@@ -148,6 +166,26 @@ function candidateOf(
   channel: string,
   index: number,
 ): ResolutionCandidate {
+  if (item.source === 'iptv')
+    return {
+      id: item.hash,
+      title: `${channel} --> ${item.provider}`,
+      alias: null,
+      ih: false,
+      source: 'iptv',
+      score: 100,
+      matchedChannel: channel,
+      soloFamilia: false,
+      familyFallbackAllowed: false,
+      listaId: 'p_Demo0001',
+      availability: null,
+      bitrate: null,
+      learned: null,
+      reported: null,
+      rejectedByLearning: false,
+      quarantined: false,
+      iptv: { provider: item.provider, quality: item.quality ?? null, backup: false, guide: false },
+    };
   return {
     id: item.hash,
     title: `${channel} --> ${item.provider}`,
@@ -181,6 +219,8 @@ export function demoResolve(query: {
   match?: string | undefined;
   channel?: string | string[] | undefined;
   research?: '0' | '1' | undefined;
+  scope?: 'match' | 'channel' | undefined;
+  iptv?: string | undefined;
 }): Resolution {
   const channels = Array.isArray(query.channel)
     ? query.channel
@@ -188,6 +228,7 @@ export function demoResolve(query: {
       ? [query.channel]
       : [];
   const channel = channels[0] ?? 'Canal';
+  if (query.scope === 'channel') return demoChannelResolve(channel, query.iptv);
   const plan = planFor(query.match);
   const research = query.research === '1';
   const items = [...plan.items, ...(research ? RESEARCH_EXTRA : [])].map((item) => ({
@@ -195,6 +236,8 @@ export function demoResolve(query: {
     hash: demoHash(`${query.match ?? channel}|${item.provider}`),
   }));
   const candidates = items.map((item, index) => candidateOf(item, channel, index));
+  // El comprobador solo prueba las de AceStream: una IPTV no se sondea al entrar (§7.3).
+  const probed = items.filter((item) => item.source !== 'iptv');
   const base: Resolution = {
     status: research ? 'found' : plan.status,
     channels,
@@ -212,10 +255,46 @@ export function demoResolve(query: {
     id: newJobId(),
     kind: research ? 'research' : 'interactive',
     createdAt: Date.now(),
-    items,
+    items: probed,
   };
   jobs.set(job.id, job);
-  return { ...base, candidate: candidates[0] ?? null, scan: scanRef(job) };
+  return {
+    ...base,
+    checked: candidates.some((candidate) => candidate.source === 'iptv')
+      ? ['iptv', ...base.checked]
+      : base.checked,
+    candidate: candidates[0] ?? null,
+    scan: scanRef(job),
+  };
+}
+
+/**
+ * Tocar un canal con la IPTV activa (`scope=channel`, §5.2): sin IPTV,
+ * `not_found` sin trabajo (la web sigue como hoy); con ella, la IPTV sola
+ * (las hermanas de la biblioteca las pone la web).
+ */
+function demoChannelResolve(channel: string, tapped?: string): Resolution {
+  const base: Resolution = {
+    status: 'not_found',
+    channels: [channel],
+    checked: ['iptv', 'saved', 'favorites', 'history'],
+    candidate: null,
+    candidates: [],
+    engineAvailable: true,
+    ai: { enabled: false, used: false, model: null, catalogSize: 0, error: null },
+    program: null,
+    research: false,
+    preheat: null,
+    scan: null,
+  };
+  const key = normalizeChannelKey(channel);
+  /* El canal IPTV tocado en el buscador (§14.4) manda aunque el título no case. */
+  const name =
+    DEMO_IPTV_CHANNELS.find((title) => tapped !== undefined && demoIptvId(title) === tapped) ??
+    DEMO_IPTV_CHANNELS.find((title) => normalizeChannelKey(title) === key);
+  if (!key || !name) return base;
+  const iptv = candidateOf({ ...DEMO_IPTV, hash: demoIptvId(name) }, name, 0);
+  return { ...base, status: 'found', candidate: iptv, candidates: [iptv] };
 }
 
 function stepsOf(item: PlanItem, index: number): { start: number; end: number } {

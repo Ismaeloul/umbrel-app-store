@@ -6,7 +6,12 @@
    Palco (fase 2, corrección 2) añade la forma `tile`: una tesela 16:9 con la
    misma cifra grande y la sigla del canal arriba, para los carteles de fuente
    y de canal (que no llevan miniatura). `size` es el lado en `round` y el ALTO
-   en `tile` (el ancho sale de 16:9). */
+   en `tile` (el ancho sale de 16:9).
+
+   Los carteles de FUENTE (Isma, 26-sep) cambian esa etiqueta por el proveedor
+   («Elcano», «New Era») con `label`: mismo sitio y misma tipografía; si no
+   cabe, puntos suspensivos (y una letra algo menor si es larga). El tono y la
+   cifra siguen saliendo de `name`. */
 
 import type { CSSProperties } from 'react';
 import { channelTone, oklchCss } from '../lib/color.ts';
@@ -41,9 +46,17 @@ export interface ChannelMarkProps {
   /** `round` (dorsal cuadrado redondeado) o `tile` (tesela 16:9). */
   shape?: 'round' | 'tile';
   className?: string;
+  /** Solo en `tile`: la etiqueta de arriba en lugar de la sigla del canal. */
+  label?: string | undefined;
 }
 
-export function ChannelMark({ name, size = 52, shape = 'round', className }: ChannelMarkProps) {
+export function ChannelMark({
+  name,
+  size = 52,
+  shape = 'round',
+  className,
+  label,
+}: ChannelMarkProps) {
   const tone = channelTone(name);
   const style = {
     '--s': `${size}px`,
@@ -54,6 +67,7 @@ export function ChannelMark({ name, size = 52, shape = 'round', className }: Cha
   // Una cifra se recorta por abajo; una letra, por la derecha (una «E»
   // cortada por abajo se lee «F»).
   const letter = !/\d/.test(dorsal);
+  const tag = label?.trim() || channelAbbrev(name);
   return (
     <span
       className={cx(
@@ -67,7 +81,11 @@ export function ChannelMark({ name, size = 52, shape = 'round', className }: Cha
       data-shape={shape}
       aria-hidden="true"
     >
-      {shape === 'tile' ? <small className="dorsal__abbrev">{channelAbbrev(name)}</small> : null}
+      {shape === 'tile' ? (
+        <small className={cx('dorsal__abbrev', tag.length > 9 && 'dorsal__abbrev--long')}>
+          {tag}
+        </small>
+      ) : null}
       <b>{dorsal}</b>
     </span>
   );

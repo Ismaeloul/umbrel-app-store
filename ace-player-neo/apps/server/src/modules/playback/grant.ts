@@ -22,6 +22,11 @@ export function nativeVideoPath(sessionId: string): string {
   return `/native/api/v1/video/${sessionId}/index.m3u8`;
 }
 
+/** Lista del remux de una IPTV para la web (hls.js, sin token: el login de Umbrel basta, docs/iptv.md §5.4). */
+export function webVideoPath(sessionId: string): string {
+  return `/api/v1/video/${sessionId}/index.m3u8`;
+}
+
 /** Lista del remux por la ruta de siempre (visor iOS desde la web, 0.6.x). */
 export function legacyVideoPath(hash: string): string {
   return `/remux/${hash}/index.m3u8`;

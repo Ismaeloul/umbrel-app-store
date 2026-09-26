@@ -1,7 +1,13 @@
 /* Acciones sobre canales compartidas por la biblioteca, su ficha lateral y el
    buscador: reproducir, favorito (con hoja para el nombre al añadir y
    deshacer al quitar), renombrar y eliminar con deshacer. Devuelve también
-   las hojas, que cada vista monta una vez. */
+   las hojas, que cada vista monta una vez.
+
+   Canales de tu IPTV (docs/iptv.md §14.4 a §14.6): una fila puede traer el
+   canal IPTV que es (`iptv`); si es un id IPTV (de «En tu IPTV», o un favorito
+   o reciente que lo es, según `iptvIds`), se guarda en favoritos con
+   `{ category: 'IPTV', alias: nombre limpio, ih: false }` y su menú no tiene
+   las acciones del hash. */
 
 import type { Item, LibraryCollection, LibraryView } from '@ace/shared';
 import { useQueryClient } from '@tanstack/react-query';
@@ -27,6 +33,8 @@ export interface ActionableChannel {
   category: string;
   ih: boolean;
   alias?: string | undefined;
+  /** El canal IPTV que es esta fila (igual a `id` si es un canal de «En tu IPTV»). */
+  iptv?: string | null | undefined;
 }
 
 interface RenameState {
@@ -38,6 +46,8 @@ export interface ChannelActions {
   library: LibraryView | undefined;
   favoriteIds: ReadonlySet<string>;
   play(channel: ActionableChannel, origin?: PlayOrigin): void;
+  /** ¿Es un canal de tu IPTV (id sintético)? Sin hash de AceStream que copiar. */
+  isIptvId(id: string): boolean;
   toggleFavorite(channel: ActionableChannel): void;
   rename(collection: LibraryCollection, item: Item): void;
   remove(collection: LibraryCollection, item: Item): void;
@@ -72,20 +82,41 @@ export function useChannelActions({
     [data?.favorites],
   );
 
-  const play = (channel: ActionableChannel, origin: PlayOrigin = 'biblioteca') =>
+  const isIptvId = (id: string): boolean => Object.hasOwn(data?.iptvIds ?? {}, id);
+  const iptvOf = (channel: ActionableChannel): string | null =>
+    channel.iptv ?? (isIptvId(channel.id) ? channel.id : null);
+
+  const play = (channel: ActionableChannel, origin: PlayOrigin = 'biblioteca') => {
+    const iptv = iptvOf(channel);
     playChannel(navigate, {
       hash: channel.id,
       title: channel.title,
-      ih: channel.ih,
+      ih: iptv === channel.id ? false : channel.ih,
       category: channel.category,
       record: true,
       origin,
+      ...(iptv ? { iptv } : {}),
+      // Un id IPTV renombrado se busca por su nombre en la IPTV (§14.6).
+      ...(iptv === channel.id && channel.alias ? { alias: channel.alias } : {}),
     });
+  };
 
   const toggleFavorite = (channel: ActionableChannel) => {
     const existing = data?.favorites.find((item) => item.id === channel.id);
     if (existing) {
       removeWithUndo({ client, kind: 'unfavorite', collection: 'favorites', item: existing });
+      return;
+    }
+    // Un canal de tu IPTV (de «En tu IPTV», o un reciente que es un id IPTV):
+    // su nombre en la IPTV queda como alias (§14.6), también si ya lo renombraste.
+    if (iptvOf(channel) === channel.id) {
+      setFavoriteTarget({
+        id: channel.id,
+        title: channel.title,
+        category: 'IPTV',
+        ih: false,
+        alias: channel.alias || channel.title,
+      });
       return;
     }
     setFavoriteTarget({
@@ -124,6 +155,7 @@ export function useChannelActions({
       hash: channel.id,
       title: channel.title,
       ih: channel.ih,
+      iptv: iptvOf(channel) === channel.id,
       isFavorite: favoriteIds.has(channel.id),
       onToggleFavorite: () => toggleFavorite(channel),
       ...(options.withPlay
@@ -207,5 +239,15 @@ export function useChannelActions({
     </>
   );
 
-  return { library: data, favoriteIds, play, toggleFavorite, rename, remove, menuFor, sheets };
+  return {
+    library: data,
+    favoriteIds,
+    play,
+    isIptvId,
+    toggleFavorite,
+    rename,
+    remove,
+    menuFor,
+    sheets,
+  };
 }

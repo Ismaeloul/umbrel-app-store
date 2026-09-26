@@ -91,13 +91,18 @@ describe('events · rutas v1', () => {
       { deviceIds: [DEVICE.id] },
     );
     core.bus.emit('devices.changed', { reason: 'paired', deviceId: 'dev_otro' });
-    /* Revocar su dispositivo cierra su SSE. */
+    /* Revocar su dispositivo cierra su SSE (antes recibe su propio revoked). */
     core.bus.emit('devices.changed', { reason: 'revoked', deviceId: DEVICE.id });
     const res = await pending;
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('"learning"');
     expect(res.body).not.toContain('"stats"');
-    expect(res.body).not.toContain('devices.changed');
+    /* 0.8.1: devices.changed llega también a native (el de dev_otro y el suyo). */
+    expect(res.body.match(/event: devices\.changed/g)).toHaveLength(2);
+    const blocks = res.body.trim().split('\n\n');
+    const lastBlock = blocks.at(-1) ?? '';
+    expect(lastBlock).toContain('event: devices.changed');
+    expect(lastBlock).toContain(`"reason":"revoked","deviceId":"${DEVICE.id}"`);
     expect(services.events.connections()).toBe(0);
   });
 

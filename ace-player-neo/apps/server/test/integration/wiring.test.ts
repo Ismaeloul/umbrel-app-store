@@ -245,6 +245,106 @@ describe('integración · iPhone emparejado: URL de vídeo firmada de punta a pu
     });
     expect(bearer.statusCode).toBe(401);
   });
+
+  it('0.8.1: el iPhone A empareja a B desde la app, lo revoca y se revoca', async () => {
+    const h = (current = await createHarness());
+    const claimWith = async (code: string, name: string) => {
+      const claim = await h.app.inject({
+        method: 'POST',
+        url: '/native/api/v1/pairing/claim',
+        headers: { 'x-ace-origin': 'native', 'content-type': 'application/json' },
+        payload: { code, name, platform: 'ios' },
+      });
+      expect(claim.statusCode, claim.body).toBe(201);
+      const { token, deviceId } = claim.json() as { token: string; deviceId: string };
+      return {
+        deviceId,
+        headers: { 'x-ace-origin': 'native', authorization: `Bearer ${token}` },
+      };
+    };
+    /* A, por la web. */
+    const webCode = await h.app.inject({
+      method: 'POST',
+      url: '/api/v1/pairing',
+      headers: { ...WEB, 'content-type': 'application/json' },
+      payload: { baseUrl: 'http://umbrel.local:7792' },
+    });
+    expect(webCode.statusCode, webCode.body).toBe(201);
+    const a = await claimWith(webCode.json().code, 'iPhone A');
+    /* B, con un código que crea A con sus dos direcciones. */
+    const appCode = await h.app.inject({
+      method: 'POST',
+      url: '/native/api/v1/pairing',
+      headers: { ...a.headers, 'content-type': 'application/json' },
+      payload: {
+        baseUrl: 'http://umbrel.local:7792',
+        alternateBaseUrls: ['https://umbrel.tail1234.ts.net'],
+      },
+    });
+    expect(appCode.statusCode, appCode.body).toBe(201);
+    expect(appCode.json().pairUri.match(/u=/g)).toHaveLength(2);
+    const b = await claimWith(appCode.json().code, 'iPhone B');
+
+    /* B abre un canal (URL firmada) y el motor arranca. */
+    const stream = await h.app.inject({
+      method: 'GET',
+      url: `/native/api/v1/channels/${X}/stream?client=ios&viewer=visor-iphone-b`,
+      headers: b.headers,
+    });
+    expect(stream.statusCode, stream.body).toBe(200);
+    const grant = StreamGrantSchema.parse(stream.json());
+    const list = await h.app.inject({
+      method: 'GET',
+      url: grant.url,
+      headers: { 'x-ace-origin': 'native' },
+    });
+    expect(list.statusCode, list.body).toBe(200);
+    expect(h.fake.control.metrics().sessionsOpen).toBe(1);
+
+    /* A revoca a B: sus URLs dan 401 y el motor para (nadie más mira). */
+    const revokeB = await h.app.inject({
+      method: 'DELETE',
+      url: `/native/api/v1/devices/${b.deviceId}`,
+      headers: a.headers,
+    });
+    expect(revokeB.statusCode, revokeB.body).toBe(200);
+    await h.settle();
+    expect(h.fake.control.metrics().sessionsOpen).toBe(0);
+    const afterB = await h.app.inject({
+      method: 'GET',
+      url: grant.url,
+      headers: { 'x-ace-origin': 'native' },
+    });
+    expect(afterB.statusCode).toBe(401);
+    const bearerB = await h.app.inject({
+      method: 'GET',
+      url: '/native/api/v1/playback',
+      headers: b.headers,
+    });
+    expect(bearerB.statusCode).toBe(401);
+
+    /* A se revoca a sí mismo: 200 y después ya no entra. */
+    const revokeA = await h.app.inject({
+      method: 'DELETE',
+      url: `/native/api/v1/devices/${a.deviceId}`,
+      headers: a.headers,
+    });
+    expect(revokeA.statusCode, revokeA.body).toBe(200);
+    const bootstrap = await h.app.inject({
+      method: 'GET',
+      url: '/native/api/v1/bootstrap',
+      headers: a.headers,
+    });
+    expect(bootstrap.statusCode).toBe(401);
+    expect(bootstrap.json()).toMatchObject({ error: { code: 'device_revoked' } });
+    await h.settle();
+    expect(h.bus.of('devices.changed').map((change) => change.reason)).toEqual([
+      'paired',
+      'paired',
+      'revoked',
+      'revoked',
+    ]);
+  });
 });
 
 describe('integración · la salud lee los datos de verdad (arquitectura §5.14)', () => {

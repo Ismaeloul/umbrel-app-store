@@ -27,6 +27,8 @@ export interface E2EPorts {
   readonly scanner: number;
   /** API de control del motor principal (/__fake/*), en `motorHost`: sigue viva con el motor caído. */
   readonly control: number;
+  /** Proveedor IPTV falso (apps/server/test/fake-iptv), en `::1`, con su control /__iptv/*. */
+  readonly iptv: number;
 }
 
 function freePort(host: string): Promise<number> {
@@ -82,6 +84,7 @@ export async function pickPorts(): Promise<E2EPorts> {
     backend: await pick('0.0.0.0'),
     scanner: await pick('::'),
     control: await pick(motorHost),
+    iptv: await pick('::1'),
   };
 }
 

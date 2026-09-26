@@ -13,7 +13,8 @@
      reenvía lo que falte (con el mismo filtro que en vivo) o, si ya no está,
      un `resync` (`buffer_miss`, `unknown_event_id` o `server_restart`) con el
      id del último evento, para que el cliente recargue y siga desde ahí.
-   - Filtro: `devices.changed` solo al origen web; un evento con destino
+   - Filtro por origen: `WEB_ONLY_EVENT_TYPES` (vacío desde la 0.8.1:
+     `devices.changed` va a todos); un evento con destino
      (`deviceIds`) solo a las conexiones de esos dispositivos; lo demás, a
      todos. Los eventos de visor (`stream.*`, `playback.handoff`) llegan del
      bus sin dispositivo: van a todos y cada cliente se queda con sus
@@ -22,7 +23,9 @@
    - Contrapresión: si tras escribir el búfer de salida de una conexión pasa
      de 256 KiB, se cierra (destroy) y el cliente reconecta con su
      `Last-Event-ID`.
-   - `devices.changed` con `revoked` cierra las conexiones de ese dispositivo. */
+   - `devices.changed` con `revoked` cierra las conexiones de ese dispositivo.
+     Se publica ANTES de cerrar: el propio dispositivo revocado recibe su
+     `devices.changed` `revoked` y luego se le cierra el SSE. */
 
 import type { FastifyReply } from 'fastify';
 import {
@@ -72,6 +75,7 @@ export const FORWARDED_EVENTS = [
   'state.changed',
   'diagnostics.new',
   'devices.changed',
+  'iptv.status',
 ] as const satisfies readonly (DomainEventType & SseEventType)[];
 
 /** Cabeceras de la respuesta SSE (el hijack se salta onSend: se ponen aquí las de siempre). */

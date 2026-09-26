@@ -15,11 +15,13 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import {
   DevicesFileSchema,
+  IptvFileSchema,
   SCHEMA_VERSION,
   SameChannelPolicySchema,
   SessionsFileSchema,
   SettingsFileSchema,
   type DevicesFile,
+  type IptvFile,
   type LegacyPublicState,
   type Preferences,
   type SameChannelPolicy,
@@ -136,6 +138,17 @@ export function createStateService(deps: StateDeps): StateService & {
     clock,
     logger,
     onUnreadable: reportUnreadable,
+  });
+  /* IPTV (docs/iptv.md §2.1): secretos cifrados, pero aun así 0600. */
+  const iptvStore = createDocumentStore<IptvFile>({
+    name: 'iptv',
+    file: paths.iptvFile,
+    schema: IptvFileSchema,
+    defaults: () => ({ version: 1, provider: null }),
+    clock,
+    logger,
+    onUnreadable: reportUnreadable,
+    fileMode: 0o600,
   });
   const settingsStore = createDocumentStore<SettingsFile>({
     name: 'settings',
@@ -296,6 +309,7 @@ export function createStateService(deps: StateDeps): StateService & {
     devicesStore.loadSync();
     sessionsStore.loadSync();
     settingsStore.loadSync();
+    iptvStore.loadSync();
     syncSettingsWithEnvironment();
     return report;
   }
@@ -413,9 +427,9 @@ export function createStateService(deps: StateDeps): StateService & {
       return ensureLoaded().channelFeedback.length;
     },
 
-    async mutateLibrary(body): Promise<LibraryMutationResult> {
+    async mutateLibrary(body, options = {}): Promise<LibraryMutationResult> {
       const { result, state } = await run(
-        (draft) => applyLibraryMutation(draft, body, ctx),
+        (draft) => applyLibraryMutation(draft, body, ctx, options),
         (collection) => (collection === 'web' ? ['library', 'directories'] : ['library']),
       );
       return { collection: result, state };
@@ -458,10 +472,19 @@ export function createStateService(deps: StateDeps): StateService & {
       ensureLoaded();
       return sessionsStore;
     },
+    iptv() {
+      ensureLoaded();
+      return iptvStore;
+    },
 
     async flush() {
       await chain;
-      await Promise.all([devicesStore.flush(), sessionsStore.flush(), settingsStore.flush()]);
+      await Promise.all([
+        devicesStore.flush(),
+        sessionsStore.flush(),
+        settingsStore.flush(),
+        iptvStore.flush(),
+      ]);
     },
 
     [LEGACY_SYNC]: {

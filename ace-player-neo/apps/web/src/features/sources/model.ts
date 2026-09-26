@@ -9,7 +9,13 @@
    - «estado efectivo»: lo que se enseña y lo que usa el arranque automático.
      Manda, por este orden: el reporte en cuarentena, el reproductor en
      pantalla (reproduciendo = verificada; conectando = comprobando, regla
-     20), lo que vio el reproductor en los últimos 3 min y el comprobador. */
+     20), lo que vio el reproductor en los últimos 3 min y el comprobador.
+
+   IPTV (docs/iptv.md §7 y §8): una candidata `source: 'iptv'` es «una fuente
+   más con su distintivo». Va primera (la ordena el servidor), arranca sin
+   esperar a «Verificada» (la cuenta activa no es un stream visto), nunca se
+   pliega y no enseña hash. El puente IPTV ↔ AceStream (P16.6) elige aquí a
+   quién se salta (`pickBridgeTarget`). */
 
 import {
   channelMatchScore,
@@ -24,6 +30,7 @@ import {
   type ScanCandidate,
   type ScanCandidateState,
   type ScanJob,
+  type CandidateIptvInfo,
   type SourceReportReason,
   type VerdictState,
   type WebSourceSummary,
@@ -87,6 +94,15 @@ export interface SourceEntry {
   playerVerdict: { state: VerdictState; reason: string; at: number } | null;
   /** Ya la probó el arranque automático (no se vuelve a intentar sola). */
   autoTried: boolean;
+  /** Solo IPTV: proveedor («Casa»), calidad, reserva y si la confirmó la guía (§5.1). */
+  iptv?: CandidateIptvInfo | null;
+  /** Solo IPTV: cuándo FALLÓ por última vez (epoch ms). El puente no vuelve a una IPTV caída hace < 60 s; una que sonaba bien y se dejó a mano, sí. */
+  failedAt?: number | null;
+}
+
+/** ¿Es una fuente de la IPTV? (distintivo, sin hash, nunca plegada, puente). */
+export function isIptv(entry: Pick<SourceEntry, 'origin'>): boolean {
+  return entry.origin === 'iptv';
 }
 
 // ---- Construir entradas -----------------------------------------------------------
@@ -119,6 +135,7 @@ export function entryFromCandidate(candidate: ResolutionCandidate, now = Date.no
     initial: false,
     playerVerdict: null,
     autoTried: false,
+    ...(candidate.source === 'iptv' ? { iptv: candidate.iptv ?? null } : {}),
   };
 }
 
@@ -397,6 +414,15 @@ const REASON_PHRASE: Record<string, string> = {
   starved: 'llega menos señal de la que el canal necesita',
   retry: 'reintentando',
   delayed_retry: 'reintentando',
+  // IPTV (docs/iptv.md §8.1): motivos del comprobador (nivel 1) y del relé.
+  iptv_busy: 'conexión ocupada',
+  iptv_auth_failed: 'la cuenta no entra',
+  iptv_account_expired: 'cuenta caducada',
+  iptv_gone: 'ya no está en la lista',
+  iptv_timeout: 'no respondió a tiempo',
+  iptv_unreachable: 'el proveedor no responde',
+  iptv_dropped: 'se cortó en el proveedor',
+  iptv_unsupported: 'formato no compatible',
 };
 
 /* Lo que se lee cuando el motivo no dice nada más. Las de «en cola» y
@@ -414,6 +440,9 @@ const STATE_PHRASE: Record<ScanCandidateState, string> = {
 export function detailOf(effective: Effective, entry: SourceEntry): string {
   if (effective.reported && entry.reported)
     return `apartada por tu reporte (${reportReasonLabel(entry.reported.reason).toLowerCase()})`;
+  // Una IPTV sin comprobar es lo normal (la cuenta activa no es un stream
+  // visto, §7.3): no hay disponibilidad que medir.
+  if (effective.state === 'none' && isIptv(entry)) return 'se prueba al reproducirla';
   if (effective.state === 'none') {
     const percent = availabilityPercent(entry.availability);
     return percent === null ? 'disponibilidad sin medir' : `${percent}% disponible`;
@@ -435,6 +464,8 @@ const TYPE_LABEL: Record<SourceOrigin, string> = {
   favorites: 'Favorito',
   history: 'Reciente',
   acestream: 'AceStream',
+  /* docs/iptv.md §8.1: «IPTV · Casa». */
+  iptv: 'IPTV',
   manual: 'Externa',
 };
 
@@ -477,8 +508,9 @@ export function presentationOf(
   webSources?: readonly Pick<WebSourceSummary, 'id' | 'name'>[],
 ): SourcePresentation {
   const type = TYPE_LABEL[entry.origin] ?? (entry.ih ? 'AceStream' : 'Fuente');
-  const list = listNameOf(entry.listaId, webSources);
-  const provider = providerOf(entry.title);
+  // IPTV: el proveedor es el nombre que puso Isma («Casa», §8.1); su `listaId` es el del proveedor, no una lista.
+  const list = isIptv(entry) ? '' : listNameOf(entry.listaId, webSources);
+  const provider = (isIptv(entry) ? entry.iptv?.provider : '') || providerOf(entry.title);
   const detail = provider || list;
   return {
     type,
@@ -511,9 +543,29 @@ export const QUALITY_KBPS = { fullHd: 3800, hd: 1700 } as const;
  * lo midió, el que declara el canal, `streamKbps`) y «HEVC» si el códec no es
  * H.264. null cuando el comprobador no ha visto nada todavía.
  */
-export function qualityLabel(entry: Pick<SourceEntry, 'probe'>): string | null {
+const IPTV_QUALITY_LABEL: Record<string, string> = {
+  fhd: '1080p',
+  hd: '720p',
+  uhd: '4K',
+  sd: 'SD',
+};
+
+/**
+ * Los datos técnicos de la calidad, uno por etiqueta (Isma, 26-sep: el
+ * cartel los enseña enteros, cada uno en su cápsula): `['1080p', 'HEVC']`,
+ * `['720p']`, `['SD', 'reserva']`… Vacío si no hay nada que decir.
+ */
+export function qualityTags(entry: Pick<SourceEntry, 'probe' | 'iptv'>): string[] {
   const probe = entry.probe;
-  if (!probe) return null;
+  const measured = probe && (probe.rateKbps || probe.streamKbps || probe.videoCodec);
+  // IPTV sin medir: la calidad que declara su nombre (§8.1), y «reserva» si lo es.
+  if (entry.iptv && !measured) {
+    return [
+      entry.iptv.quality ? (IPTV_QUALITY_LABEL[entry.iptv.quality] ?? null) : null,
+      entry.iptv.backup ? 'reserva' : null,
+    ].filter((part): part is string => Boolean(part));
+  }
+  if (!probe) return [];
   const kbps = probe.rateKbps && probe.rateKbps > 0 ? probe.rateKbps : probe.streamKbps;
   const hevc = /hevc|h\.?265|hvc1|hev1/i.test(probe.videoCodec);
   const definition =
@@ -524,13 +576,167 @@ export function qualityLabel(entry: Pick<SourceEntry, 'probe'>): string | null {
         : kbps > 0
           ? 'SD'
           : null;
-  if (!definition && !hevc) return null;
-  return [definition, hevc ? 'HEVC' : null].filter(Boolean).join(' · ');
+  return [definition, hevc ? 'HEVC' : null].filter((part): part is string => Boolean(part));
+}
+
+/** La calidad en una línea («1080p · HEVC»), para el aria-label y el rack; null si no hay. */
+export function qualityLabel(entry: Pick<SourceEntry, 'probe' | 'iptv'>): string | null {
+  const tags = qualityTags(entry);
+  return tags.length ? tags.join(' · ') : null;
+}
+
+/** Minúsculas, sin tildes ni espacios de más ni punto final: para comparar frases. */
+function plainPhrase(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLocaleLowerCase('es')
+    .replace(/\s+/g, ' ')
+    .replace(/[\s.…]+$/, '')
+    .trim();
+}
+
+const PHRASE_SEPARATOR = /\s*[;:,·—–]\s*/;
+
+/**
+ * La frase del cartel (row.detail) SOLO si dice algo que no dice ya la
+ * palabra del estado (Isma, 26-sep). «verificada» bajo «Verificada»,
+ * «sin señal» bajo «Sin señal» o «70% disponible» bajo «70% disponible» no
+ * salen (null); «probándose en el segundo motor», «disponibilidad sin
+ * medir» o «comprobando en pantalla» sí. Si empieza repitiendo el estado y
+ * sigue tras un separador («sin señal; reintento a las 21:30»), queda lo
+ * nuevo: «reintento a las 21:30». Sin distinguir mayúsculas ni tildes.
+ */
+export function posterDetailOf(
+  word: string | null | undefined,
+  detail: string | null | undefined,
+): string | null {
+  const phrase = String(detail ?? '').trim();
+  if (!phrase) return null;
+  const state = plainPhrase(String(word ?? ''));
+  if (!state) return phrase;
+  if (plainPhrase(phrase) === state) return null;
+  const separator = PHRASE_SEPARATOR.exec(phrase);
+  if (separator && plainPhrase(phrase.slice(0, separator.index)) === state) {
+    return posterDetailOf(word, phrase.slice(separator.index + separator[0].length));
+  }
+  return phrase;
 }
 
 /** Nombre del canal para la tesela del cartel: el título sin el proveedor o el canal con el que casó. */
 export function channelNameOf(entry: Pick<SourceEntry, 'title' | 'matchedChannel'>): string {
   return channelPartOf(entry.title) || entry.matchedChannel || entry.title;
+}
+
+/** Minúsculas y sin tildes, letra a letra (mismo largo, para cortar el original por las mismas posiciones). */
+function foldForMatch(text: string): string {
+  return Array.from(text, (char) => {
+    const base = char.normalize('NFD').replace(/\p{M}/gu, '');
+    const lower = (base.length === 1 ? base : char).toLowerCase();
+    return lower.length === char.length ? lower : char;
+  }).join('');
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Separadores con los que las listas pegan el proveedor al canal. El guion
+ * suelto solo cuenta con un espacio al lado («Eurosport 1 - Elcano»): pegado
+ * a dos palabras («Casa-Blanca») es parte del nombre.
+ */
+const PROVIDER_SEPARATOR = String.raw`(?:-{1,2}>|={1,2}>|[→⇒➜➝⟶⟹»|·:/–—]|(?<=\s)-|-(?=\s))`;
+/** «NEW ERA III», «Elcano 2»: el proveedor con su numeral detrás. */
+const PROVIDER_SUFFIX = String.raw`(?:\s+(?:[ivx]{1,4}|\d{1,2}))?`;
+const OPEN_BRACKET = String.raw`[([{]`;
+const CLOSE_BRACKET = String.raw`[)\]}]`;
+const EDGE_CHARS = String.raw`\s\-–—|»·:/<>=→⇒➜➝⟶⟹,`;
+const EDGE_JUNK = new RegExp(String.raw`^[${EDGE_CHARS}]+|[${EDGE_CHARS}]+$`, 'gu');
+
+/**
+ * Nombre del canal para debajo del cartel, SIN el proveedor (Isma, 26-sep:
+ * «si ya pones New Era o Elcano arriba, de nada sirve volver a ponerlo
+ * abajo»). El proveedor (y su variante con o sin numeral: «NEW ERA» frente a
+ * «NEW ERA III») solo se quita cuando:
+ *  - va entre paréntesis, corchetes o llaves, solo («M+ LaLiga (NEW ERA)») o
+ *    al principio o al final de lo de dentro («Canal (Elcano 1080p)» →
+ *    «Canal (1080p)»);
+ *  - va unido a un separador (flechas, «»», «|», guion o raya) y ocupa todo
+ *    ese tramo («… --> NEW ERA III», «ELCANO | DAZN 1»);
+ *  - son las últimas palabras del nombre («DAZN 1 Elcano»).
+ * Nunca suelto al principio ni en mitad: con «Casa», «Casa de Papel TV» se
+ * queda igual. Sin distinguir mayúsculas ni tildes y solo por palabras
+ * enteras. Si al quitarlo no queda un nombre, devuelve el original.
+ *
+ * «MOVISTAR PLUS FHD --> NEW ERA III» → «MOVISTAR PLUS FHD»,
+ * «DAZN 1 HD | ELCANO» → «DAZN 1 HD», «M+ LaLiga (NEW ERA)» → «M+ LaLiga»,
+ * «LaLiga TV [Elcano] 1080» → «LaLiga TV 1080».
+ */
+export function channelNameWithoutProvider(
+  name: string,
+  providers: readonly (string | null | undefined)[],
+): string {
+  const original = name.replace(/\s+/g, ' ').trim();
+  const variants = new Set<string>();
+  for (const raw of providers) {
+    const provider = foldForMatch(
+      String(raw ?? '')
+        .replace(/\s+/g, ' ')
+        .trim(),
+    );
+    if (!provider) continue;
+    variants.add(provider);
+    const base = provider.replace(/\s+(?:[ivx]{1,4}|\d{1,2})$/, '');
+    if (base && base !== provider) variants.add(base);
+  }
+  if (!original || variants.size === 0) return original;
+  const SEP = PROVIDER_SEPARATOR;
+  const notWordBefore = String.raw`(?<![\p{L}\p{N}])`;
+  const notWordAfter = String.raw`(?![\p{L}\p{N}])`;
+  // Fin de tramo: final del nombre, otro separador o un paréntesis.
+  const segmentEnd = String.raw`(?=\s*(?:$|${SEP}|${OPEN_BRACKET}|${CLOSE_BRACKET}))`;
+  let result = original;
+  // Los largos primero: «NEW ERA III» antes que «NEW ERA».
+  for (const variant of [...variants].sort((a, b) => b.length - a.length)) {
+    const word = `${escapeRegExp(variant).replace(/ /g, String.raw`\s+`)}${PROVIDER_SUFFIX}`;
+    const patterns = [
+      // «(NEW ERA)», «[Elcano]», «{Faro}»: el paréntesis entero.
+      String.raw`\s*${OPEN_BRACKET}\s*${word}\s*${CLOSE_BRACKET}`,
+      // «(Elcano 1080p)», «(Elcano - 1080p)»: al principio de lo de dentro.
+      String.raw`(?<=${OPEN_BRACKET}\s*)${word}${notWordAfter}(?:\s*${SEP})?`,
+      // «(1080p Elcano)», «(1080p - Elcano)»: al final de lo de dentro.
+      String.raw`(?:\s*${SEP})?\s*${notWordBefore}${word}(?=\s*${CLOSE_BRACKET})`,
+      // «… --> NEW ERA III», «… | ELCANO», «A - Elcano - B»: todo el tramo.
+      String.raw`\s*${SEP}\s*${word}${segmentEnd}`,
+      // «ELCANO | DAZN 1», «[HD] Elcano | DAZN 1»: el primer tramo.
+      String.raw`(?<=(?:^|${OPEN_BRACKET}|${CLOSE_BRACKET})\s*)${word}\s*${SEP}\s*`,
+      // «DAZN 1 ELCANO»: las últimas palabras.
+      String.raw`${notWordBefore}${word}(?=[${EDGE_CHARS}]*$)`,
+    ].map((source) => new RegExp(source, 'gu'));
+    for (const pattern of patterns) {
+      // Se busca en la copia plegada y se corta el original por las mismas posiciones.
+      const folded = foldForMatch(result);
+      let next = '';
+      let last = 0;
+      for (const match of folded.matchAll(pattern)) {
+        const start = match.index;
+        next += `${result.slice(last, start)} `;
+        last = start + match[0].length;
+      }
+      if (last > 0) result = next + result.slice(last);
+    }
+  }
+  const cleaned = result
+    .replace(/[([{]\s*[)\]}]/g, ' ')
+    // «Canal ( 1080p)» → «Canal (1080p)»
+    .replace(/([([{])\s+/g, '$1')
+    .replace(/\s+([)\]}])/g, '$1')
+    .replace(/\s+/g, ' ')
+    .replace(EDGE_JUNK, '')
+    .trim();
+  // Sin una letra («DAZN 1» con el proveedor «DAZN» dejaría «1») no es un nombre.
+  return /\p{L}/u.test(cleaned) ? cleaned : original;
 }
 
 /**
@@ -548,6 +754,18 @@ export function describeSource(
   const percent = availabilityPercent(entry.availability);
   const intake = entry.probe?.intakeKbps ?? 0;
   const stream = entry.probe?.streamKbps ?? 0;
+  if (isIptv(entry)) {
+    // Sin «Hash …» (§8.1): «Fuente 1: DAZN LaLiga · IPTV · Casa · 1080p · frase · Mbit/s».
+    const rate = entry.probe?.rateKbps ?? 0;
+    const iptvParts = [
+      channelPartOf(entry.title) || entry.matchedChannel || entry.title,
+      presentation.label,
+      qualityLabel(entry) ?? '',
+      detailOf(effective, entry),
+      rate > 0 ? `${mbit(rate)} Mbit/s` : '',
+    ].filter(Boolean);
+    return `Fuente ${number}: ${iptvParts.join(' · ')}`;
+  }
   const parts = [
     entry.title,
     presentation.label,
@@ -578,6 +796,8 @@ export function isShownWhileScanning(
   activeHash: string | null,
 ): boolean {
   if (entry.id === activeHash) return true;
+  // La IPTV nunca se pliega (§7.5 y §8.3): volver a ella es un toque en su cartel.
+  if (isIptv(entry)) return true;
   if (!effective.reported && (effective.state === 'working' || effective.state === 'weak'))
     return true;
   return (
@@ -604,15 +824,26 @@ export function scanFinished(scan: ScanView | null): boolean {
  * Arranque por verificadas (`arrancarPrimeraVerificada`, index.html:3614-3644):
  * la primera verificada no reportada ni probada ya, en el orden del servidor;
  * con el comprobador terminado, la primera floja.
+ *
+ * IPTV primero (§7.1): la primera IPTV no reportada, no probada y cuyo estado
+ * NO sea «Sin señal» arranca sin esperar a «Verificada» («Floja», por ejemplo
+ * `iptv_busy`, no la frena: abrir es la prueba de verdad). Con `iptv: false`
+ * solo se miran las demás (el puente decide aparte si toca la IPTV).
  */
 export function pickAutoSource(
   entries: readonly SourceEntry[],
   effectiveById: ReadonlyMap<string, Effective>,
   finished: boolean,
+  { iptv = true }: { iptv?: boolean } = {},
 ): SourceEntry | null {
   const pool = entries.filter(
-    (entry) => !entry.autoTried && !effectiveById.get(entry.id)?.reported,
+    (entry) =>
+      !entry.autoTried && !effectiveById.get(entry.id)?.reported && (iptv || !isIptv(entry)),
   );
+  const firstIptv = pool.find(
+    (entry) => isIptv(entry) && effectiveById.get(entry.id)?.state !== 'failed',
+  );
+  if (firstIptv) return firstIptv;
   const working = pool.find((entry) => effectiveById.get(entry.id)?.state === 'working');
   if (working) return working;
   return finished
@@ -641,6 +872,51 @@ export function pickInitialSwitch(
         !isReported(entry, now) &&
         (entry.probe?.state === 'working' || entry.probe?.state === 'weak'),
     ) ?? null
+  );
+}
+
+/** Motivos de fallo de CUENTA (§4.3): con ellos ninguna otra IPTV del mismo proveedor va a abrir. */
+const IPTV_ACCOUNT_CODES = new Set(['iptv_busy', 'iptv_auth_failed', 'iptv_account_expired']);
+
+export function isIptvAccountFailure(code: string | null | undefined): boolean {
+  return IPTV_ACCOUNT_CODES.has(String(code ?? ''));
+}
+
+/** Una IPTV caída hace menos de esto no recibe el salto desde AceStream (§7.2). */
+export const BRIDGE_RECENT_TRY_MS = 60_000;
+/** Saltos automáticos del puente IPTV ↔ AceStream como mucho en la ventana (§7.2, contra los bucles). */
+export const BRIDGE_MAX_JUMPS = 2;
+export const BRIDGE_WINDOW_MS = 3 * 60_000;
+
+/** ¿Queda sitio para otro salto del puente? (2 cada 3 min por sesión). */
+export function bridgeAllowed(jumps: readonly number[], now: number): boolean {
+  return jumps.filter((at) => now - at < BRIDGE_WINDOW_MS).length < BRIDGE_MAX_JUMPS;
+}
+
+/**
+ * El puente P16.6 (§7.2, «si uno no va, va el otro»):
+ * - cae una IPTV → la mejor AceStream (verificada; con el comprobador
+ *   terminado, también floja) no probada todavía;
+ * - cae una AceStream → la primera IPTV no reportada, no «Sin señal» y no
+ *   caída en los últimos 60 s (aunque ya la probara el arranque, y aunque
+ *   sonara hace nada: dejarla a mano por una AceStream no cuenta como fallo).
+ * null si no hay a quién saltar (la sesión decide qué decir).
+ */
+export function pickBridgeTarget(
+  entries: readonly SourceEntry[],
+  effectiveById: ReadonlyMap<string, Effective>,
+  from: 'iptv' | 'acestream',
+  finished: boolean,
+  now: number,
+): SourceEntry | null {
+  if (from === 'iptv') return pickAutoSource(entries, effectiveById, finished, { iptv: false });
+  return (
+    entries.find((entry) => {
+      if (!isIptv(entry)) return false;
+      const effective = effectiveById.get(entry.id);
+      if (!effective || effective.reported || effective.state === 'failed') return false;
+      return !entry.failedAt || now - entry.failedAt >= BRIDGE_RECENT_TRY_MS;
+    }) ?? null
   );
 }
 
@@ -766,6 +1042,7 @@ export function resolutionSourceLabel(source: CandidateSource | string): string 
         favorites: 'Favoritos',
         history: 'Recientes',
         acestream: 'Buscador AceStream',
+        iptv: 'Tu IPTV',
       } as Record<string, string>
     )[source] ?? 'Fuente disponible'
   );
@@ -781,6 +1058,7 @@ export function checkedLabel(value: string): string {
         m3u: 'M3U',
         library: 'Biblioteca',
         acestream: 'AceStream',
+        iptv: 'IPTV',
         'ai-programming': 'IA',
         ai: 'IA',
       } as Record<string, string>

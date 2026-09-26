@@ -38,6 +38,7 @@ import type {
 import type { z } from 'zod';
 import type { CoreDeps, Lifecycle } from '../../core/module.js';
 import type { DirectoriesService } from '../directories/types.js';
+import type { IptvService } from '../iptv/types.js';
 import type { EngineService } from '../engine/types.js';
 import type { NetClient } from '../net/types.js';
 import type { ScannerService } from '../scanner/types.js';
@@ -53,6 +54,11 @@ export interface FootballDeps extends CoreDeps {
   readonly search: SearchService;
   readonly sources: SourcesService;
   readonly directories: DirectoriesService;
+  /**
+   * La IPTV (docs/iptv.md §4): capa de la resolución, canales sueltos y
+   * partidos sin canales. Opcional: sin ella, todo como siempre.
+   */
+  readonly iptv?: IptvService;
   /**
    * Embeddings de un lote de textos (paso 1.1). Por defecto, `POST
    * <OLLAMA_BASE_URL>/api/embed` con `ollamaFetch`; los tests pasan uno falso.

@@ -130,8 +130,27 @@ struct PrincipalView: View {
     }
 
     /// iOS 26: la barra se pliega al bajar por una lista y el mini es su accesorio.
+    /// Desde iOS 26.1 el accesorio solo existe mientras hay mini: con contenido
+    /// vacío, el sistema dejaba una cápsula de cristal vacía encima de la barra
+    /// (capturas de la CI) y el mini no llegaba a aparecer en ella.
     @ViewBuilder private func conAccesorio<V: View>(_ vista: V) -> some View {
-        #if compiler(>=6.2)
+        #if compiler(>=6.2.1)
+            if #available(iOS 26.1, *) {
+                vista
+                    .tabBarMinimizeBehavior(.onScrollDown)
+                    .tabViewBottomAccessory(isEnabled: modelo.reproductor.visibleEnMini) {
+                        MiniAccesorio()
+                    }
+            } else if #available(iOS 26.0, *) {
+                vista
+                    .tabBarMinimizeBehavior(.onScrollDown)
+                    .tabViewBottomAccessory {
+                        MiniAccesorio()
+                    }
+            } else {
+                vista
+            }
+        #elseif compiler(>=6.2)
             if #available(iOS 26.0, *) {
                 vista
                     .tabBarMinimizeBehavior(.onScrollDown)

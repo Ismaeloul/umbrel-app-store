@@ -61,6 +61,9 @@ export const FUENTES = {
     { id: e2eId(31), title: 'La 1 HD --> ELCANO' },
     { id: e2eId(32), title: 'La 1 HD --> NEW ERA' },
   ],
+  /* Un canal suelto que también está en la IPTV falsa («ES: Antena 3 FHD»):
+     iptv.spec.ts lo guarda como favorito y lo toca desde Canales. */
+  generalistas: [{ id: e2eId(51), title: 'Antena 3 HD' }],
   /* Los canales de la lista M3U (también existen en el motor, para poder
      reproducirlos desde la biblioteca). */
   lista: [

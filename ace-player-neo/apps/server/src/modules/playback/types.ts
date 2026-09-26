@@ -46,6 +46,7 @@ import type {
 import type { z } from 'zod';
 import type { AuthenticatedDevice, CoreDeps, Lifecycle } from '../../core/module.js';
 import type { EngineService } from '../engine/types.js';
+import type { IptvService } from '../iptv/types.js';
 import type { RemuxService } from '../remux/types.js';
 import type { ScannerService } from '../scanner/types.js';
 import type { StateService } from '../state/types.js';
@@ -56,6 +57,11 @@ export interface PlaybackDeps extends CoreDeps {
   readonly state: StateService;
   /** Para el códec de la respuesta (veredicto del comprobador o del reproductor, §6.3). */
   readonly scanner: ScannerService;
+  /**
+   * La IPTV (docs/iptv.md §6.4): una sesión IPTV se coloca con el MISMO
+   * cerrojo de la casa y solo cambia la apertura (relé + remux). Opcional.
+   */
+  readonly iptv?: IptvService;
 }
 
 /** Quién pide el canal. */

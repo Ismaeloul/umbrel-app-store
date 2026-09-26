@@ -8,7 +8,7 @@
 
 import { TIMEOUTS } from '@ace/shared';
 import { createFetcher, NetBadResponseError, type FetchBytesOptions } from './client.js';
-import { isPrivateAddress, isPrivateHostname } from './ssrf.js';
+import { hostIsLan, isPrivateAddress, isPrivateHostname } from './ssrf.js';
 import { nodeTransport, systemResolver } from './transport.js';
 import type { FetchOptions, FetchedResponse, NetClient, NetDeps } from './types.js';
 
@@ -16,9 +16,10 @@ export type * from './types.js';
 export { NetBadResponseError } from './client.js';
 
 export function createNetClient(deps: NetDeps): NetClient {
-  const fetchBytes = createFetcher({
+  const resolver = deps.resolver ?? systemResolver;
+  const { fetchBytes, openStream } = createFetcher({
     clock: deps.clock,
-    resolver: deps.resolver ?? systemResolver,
+    resolver,
     transport: deps.transport ?? nodeTransport,
     allowPrivateUrls: deps.config.sync.allowPrivateUrls,
     userAgent: `AcePlayerNeo/${deps.config.appVersion}`,
@@ -31,6 +32,7 @@ export function createNetClient(deps: NetDeps): NetClient {
     ...(options.accept === undefined ? {} : { accept: options.accept }),
     ...(options.headers === undefined ? {} : { headers: options.headers }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
+    ...(options.iptv === undefined ? {} : { iptv: options.iptv }),
   });
 
   const fetchBuffer = (url: string, options?: FetchOptions): Promise<FetchedResponse<Buffer>> =>
@@ -45,6 +47,8 @@ export function createNetClient(deps: NetDeps): NetClient {
   };
 
   return {
+    openStream,
+    hostIsLan: (hostname) => hostIsLan(hostname, resolver),
     fetchBuffer,
     fetchText,
     async fetchJson(url, options) {

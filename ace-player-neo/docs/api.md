@@ -903,3 +903,66 @@ Al recibir `SIGTERM` o `SIGINT` cierra conexiones y mata los ffmpeg (`server.js:
 21. **Tras una precarga, `/api/football/resolve` puede reproducir sin preguntar un candidato flojo.** En la rama precargada cualquier candidato da `status: "found"` y `candidate` puede tener menos de 92 (`server.js:4781-4790`), mientras que sin precarga eso sería `choices`. El cliente, con `found`, entra directo sin el diálogo de elección (`index:4142-4153`). Sin validar en ejecución si pasa en la práctica.
 22. **`/remux/<hash>/ffmpeg.log` se puede descargar.** El log de ffmpeg vive junto a los segmentos (`server.js:260`) y la ruta sirve cualquier fichero del directorio de la sesión (`server.js:4928-4938`). Detrás de Umbrel solo lo ve quien ya está autenticado, pero es un fichero que no hace falta exponer.
 23. **Sin cobertura HTTP en los tests**: `/api/health`, `/api/football/scan`, `/api/football/preheat`, `/api/scores`, `/api/search`, `/api/engine/status`, `/api/streams/activate`, `/api/streams/delete`, el caso de éxito de `/api/restart-engine` y el de `/api/remux`.
+
+## 7. IPTV (0.8.1, solo `/api/v1`)
+
+Esta sección no es de la 0.6.59: resume el contrato de la IPTV (diseño completo en `docs/iptv.md`; esquemas en `packages/shared/src/api/v1/iptv.ts` y referencia generada en `docs/openapi-v2.yaml`). La 0.6.59 y las rutas antiguas no cambian.
+
+### 7.1 Ajustes → IPTV (solo web)
+
+Las 5 rutas son `access: 'web'`: desde `/native` dan `403 origin_forbidden`. No hay «Probar conexión»: guardar ya hace una prueba rápida.
+
+| id | Método y ruta | Cuerpo | Respuesta | Errores propios |
+|---|---|---|---|---|
+| `iptvGet` | `GET /api/v1/iptv` | — | `IptvView` | — |
+| `iptvSave` | `PUT /api/v1/iptv` | `IptvSaveBody` (`kind: 'm3u'` con `url`, o `kind: 'xtream'` con `server`, `username` y `password`; `name` opcional) | `IptvView` con `status: 'syncing'` | `bad_url`, `private_url`, `dns_failed`, `redirect_*`, `unsupported_encoding`, `iptv_credentials_required`, `iptv_secret_unreadable`, `iptv_auth_failed`, `iptv_account_expired`, `iptv_unreachable`, `iptv_timeout`, `iptv_bad_list`, `iptv_empty` |
+| `iptvUpdate` | `PATCH /api/v1/iptv` | `{ enabled?, name? }` | `IptvView` | `iptv_not_configured` |
+| `iptvSync` | `POST /api/v1/iptv/sync` | — | `IptvView` con `status: 'syncing'` | `iptv_not_configured`, `iptv_disabled` |
+| `iptvDelete` | `DELETE /api/v1/iptv` | — | `IptvView` con `provider: null` | — |
+
+- **Secretos.** Ninguna respuesta lleva la URL de la lista, el usuario ni la contraseña: `IptvView` solo dice `host`, `origin` (Xtream) y `hasUrl` / `hasUsername` / `hasPassword`. En `iptvSave` un campo ausente es «el guardado»; al crear, o si cambia el tipo o el origen del servidor, son obligatorios (`400 iptv_credentials_required`) y se crea otro proveedor (otros ids de canal).
+- **Cifrado.** Los secretos se guardan cifrados (AES-256-GCM) en `v2/iptv.json` con la clave derivada de `ACE_SEED` / `APP_SEED`. Si no hay semilla se usa `v2/iptv/clave` (0600), que viaja en la misma copia de seguridad de Umbrel: entonces el cifrado solo protege frente a quien lea `iptv.json` suelto.
+- **Estado en vivo.** El recuento de canales llega por el evento SSE `iptv.status` (solo web, `data` = `IptvStatus`).
+
+### 7.2 Canales sueltos: `footballResolve` con `scope=channel`
+
+`GET /api/v1/football/resolve?channel=<título>&scope=channel&client=<visor>`, sin `match`. Solo mira vínculos guardados, biblioteca e IPTV (ni buscador del motor ni IA). Sin ninguna candidata IPTV responde `{ status: 'not_found', candidates: [], candidate: null, scan: null }` sin trabajo del comprobador; con IPTV, la resolución normal con las IPTV primero (`source: 'iptv'` y su campo `iptv`, dos como mucho).
+
+### 7.3 La ruta `video` se abre a la web
+
+`GET /api/v1/video/:sid/:file` pasa de `access: 'native'` a `'any'`:
+
+- Desde la web, `t` es opcional y se ignora; la lista sale sin `?t=`. La concesión de una IPTV a la web es `protocol: 'hls'` con `url: '/api/v1/video/<sid>/index.m3u8'` y `source: 'iptv'`.
+- Desde `/native`, igual que antes: sin `t`, o con uno inválido, `401 video_token_invalid`.
+
+### 7.4 Errores
+
+16 códigos `iptv_*` (`packages/shared/src/errors.ts`), todos públicos, sin estado antiguo y todos **de fuente**: agotan la fuente y permiten el salto a AceStream. `channelStream` con un id IPTV que ya no vale responde sin tocar el motor: `404 iptv_gone`, `409 iptv_disabled` o `410 iptv_removed`.
+
+### 7.5 Lo demás que ve un cliente
+
+- **`bootstrap.features.iptv`** (opcional, booleano): hay una IPTV activa con catálogo cargado. Es lo único de la IPTV que llega al iPhone; la web lo usa para preguntar primero por la IPTV al tocar un canal suelto.
+- **SSE.** `iptv.status` solo a la web (lo mismo que `iptvGet`, sin secretos). En una sesión IPTV, `stream.stats` lo da el relé (`status: 'iptv'`, `peers: 0`, `speedUp: 0`) y la sesión se cierra siempre con `stream.closed` `reason: 'remux_failed'` y un código `iptv_*` (`iptv_dropped`, `iptv_disabled`, `iptv_removed`, `iptv_busy`) para que el reproductor salte al momento. Cuando el relé reconecta con otra base de tiempos o cambia de variante llega `stream.reopened` con `reason: 'remux_restart'` (mismo `sid`, ffmpeg nuevo), que no cuenta como fallo.
+- **`footballResolve`.** Las candidatas IPTV van primero, dos como mucho, con `source: 'iptv'` y `iptv: { provider, quality, backup, guide }` (`guide: true` si la confirmó la guía XMLTV). Su `title` es «<canal> --> <proveedor>» y nunca lleva la URL ni el id del proveedor.
+
+### 7.6 Buscador: IPTV y AceStream juntos (`docs/iptv.md` §14)
+
+| id | Método y ruta | Consulta | Respuesta | Errores propios |
+|---|---|---|---|---|
+| `iptvChannels` | `GET /api/v1/iptv/channels` (`access: 'web'` hasta que la app calque el buscador) | `q` (2 a 80 letras, limpia como `search`), `limit` (1 a 50, por defecto 50) | `IptvChannelsResponse` | `empty_query` |
+
+- **Qué devuelve.** Una fila por canal de tu IPTV (la mejor variante): `{ id, title, quality, provider, library }`. `title` es el nombre limpio («Antena 3»), `provider` el nombre que pusiste («Casa») y `library` los ids de tu biblioteca que son ese canal (≥ 92, 20 como mucho). `total` cuenta hasta 200 y `capped` dice si hay más. Solo canales de España o sin país y nunca los grupos para adultos. Nunca lleva URL, grupo, `tvg-id` ni `stream_id`. Sin IPTV activa: `200` con `channels: []`.
+- **`search`** gana `iptv` (opcional) en cada resultado de `/api/v1/search`: el canal de tu IPTV que es ese resultado (≥ 92, con la protección Hypermotion). La ruta antigua `/api/search` nunca lo lleva.
+- **`footballResolve` con `scope=channel`** gana `iptv` (el canal IPTV tocado: si es del catálogo vigente sale primero con su mejor variante; si no, se ignora y manda el nombre) y `engine=1` (búsqueda inversa en el motor: 2 consultas como mucho, solo lo que es ese canal con ≥ 92; con ella se devuelve lo que haya aunque no haya IPTV, y `not_found` solo si no hay nada).
+- **`libraryGet`, `libraryMutate` y `bootstrap.library`** ganan `iptvIds` (opcional): el estado ahora de cada id IPTV de favoritos y recientes (`ok`, `iptv_gone`, `iptv_disabled`, `iptv_removed`). Tras cada sincronización correcta, los favoritos y recientes IPTV de otro proveedor se re-emparejan por nombre (`alias` o título): un reciente que no casa se quita al momento y un favorito, pasadas 24 h.
+
+Ejemplo (`fixtures/web/v1/iptvChannels.json`):
+
+```json
+{ "query": "la", "total": 3, "capped": false,
+  "channels": [{ "id": "f607…45ef", "title": "La 1", "quality": "hd", "provider": "Casa", "library": ["c3d4…901a"] }] }
+```
+
+### 7.7 Estado (26-sep-2026)
+
+Implementado en la rama `rediseno/iptv` (servidor y web), para la 0.8.1 sin publicar. Pruebas: unitarias del contrato, del servidor y de la web; integración del servidor con el proveedor falso (`apps/server/test/fake-iptv`); E2E `apps/web/e2e/iptv.spec.ts` contra la pila entera con ffmpeg de verdad (configurar M3U y Xtream, la IPTV primero en un partido y en un canal suelto, el puente en los dos sentidos, volver con un toque y la búsqueda de la contraseña y el usuario en todas las respuestas, el SSE, la página y los ficheros de datos y logs).

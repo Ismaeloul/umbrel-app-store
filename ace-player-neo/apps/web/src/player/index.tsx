@@ -112,6 +112,7 @@ function usePlayerRuntime(videoRef: RefObject<HTMLVideoElement | null>): PlayerR
           muted: state.muted,
           volume: state.volume,
           waiting: state.waiting,
+          waitingFinal: state.waitingFinal,
         }));
       }, 0);
     };

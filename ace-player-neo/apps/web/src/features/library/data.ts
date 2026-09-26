@@ -194,6 +194,8 @@ export interface FavoriteInput {
   title: string;
   category?: string;
   ih?: boolean;
+  /** El nombre del canal en tu IPTV (§14.6): el re-emparejado lo usa aunque lo renombres. */
+  alias?: string;
 }
 
 /** Nombre por defecto sin escribir nada: `Canal {6 del hash}` (index.html:5364). */
@@ -205,6 +207,7 @@ export async function saveFavorite(client: QueryClient, input: FavoriteInput): P
   const title = input.title.replace(/\s+/g, ' ').trim() || defaultFavoriteTitle(input.id);
   const previous = libraryData(client);
   const fromWebSync = previous?.web.some((w) => w.id === input.id) ?? false;
+  const alias = input.alias?.replace(/\s+/g, ' ').trim();
   const item: Item = {
     id: input.id,
     title,
@@ -213,6 +216,7 @@ export async function saveFavorite(client: QueryClient, input: FavoriteInput): P
     date: new Date().toISOString(),
     fromWebSync,
     ih: input.ih === true,
+    ...(alias && alias !== title ? { alias } : {}),
   };
   if (previous) {
     client.setQueryData(routeKey('libraryGet'), {
@@ -230,6 +234,7 @@ export async function saveFavorite(client: QueryClient, input: FavoriteInput): P
           category: item.category,
           fromWebSync,
           ih: item.ih,
+          ...(alias ? { alias } : {}),
         },
       },
     });

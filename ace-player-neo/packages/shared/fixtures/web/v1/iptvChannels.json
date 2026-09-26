@@ -1,0 +1,28 @@
+{
+  "query": "la",
+  "total": 3,
+  "capped": false,
+  "channels": [
+    {
+      "id": "f60718293a4b5c6d7e8f9012345678ab23cd45ef",
+      "title": "La 1",
+      "quality": "hd",
+      "provider": "Casa",
+      "library": ["c3d4e5f60718293a4b5c6d7e8f9012345678901a"]
+    },
+    {
+      "id": "e5f60718293a4b5c6d7e8f901234567812ab34cd",
+      "title": "DAZN LaLiga",
+      "quality": "fhd",
+      "provider": "Casa",
+      "library": []
+    },
+    {
+      "id": "d4e5f60718293a4b5c6d7e8f9012345601a2b3c4",
+      "title": "M+ LaLiga TV 2",
+      "quality": "fhd",
+      "provider": "Casa",
+      "library": []
+    }
+  ]
+}

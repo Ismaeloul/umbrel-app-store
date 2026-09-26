@@ -8,6 +8,10 @@
      HMAC con la clave `ace-pair-v1`, y el canje lo compara en tiempo
      constante. 5 fallos por código (al quinto muere) y 10 intentos por
      minuto en total, sin mirar la IP (el backend solo ve la de nginx).
+   - Desde la 0.8.1 también crea códigos un iPhone emparejado: el QR lleva
+     sus dos direcciones (una `u=` por dirección) y, solo en memoria, quién lo
+     creó; si ese iPhone se revoca, su código muere (no se puede dejar
+     sembrado un emparejamiento).
    - Token `<deviceId>.<secreto de 256 bits en base64url>`: en
      v2/devices.json solo va `sha256(secreto)`; el token en claro solo sale en
      la respuesta del canje. Nunca se escribe en el log.
@@ -29,7 +33,9 @@ import {
   DeviceIdSchema,
   PAIRING_ATTEMPTS_PER_CODE,
   PAIRING_ATTEMPTS_PER_MINUTE,
+  PAIRING_BASE_URL_RE,
   PAIRING_CODE_DIGITS,
+  PAIRING_CREATES_PER_DEVICE_PER_MINUTE,
   SessionIdSchema,
   TIMEOUTS,
   type Device,
@@ -58,8 +64,11 @@ const DEVICE_ID_BYTES = 12;
 const SECRET_LENGTH = Math.ceil((DEVICE_SECRET_BYTES * 8) / 6);
 /** Tope de longitud de un token de vídeo (el de VideoQuerySchema). */
 const MAX_VIDEO_TOKEN_LENGTH = 2048;
-/** Origen http(s) sin ruta, como pide PairingCreateBodySchema. */
-const BASE_URL_RE = /^https?:\/\/[^/?#\s]+$/i;
+/**
+ * Origen http(s) sin ruta ni credenciales, como pide PairingCreateBodySchema
+ * (también para la reserva de las cabeceras, que no pasa por el zod).
+ */
+const BASE_URL_RE = PAIRING_BASE_URL_RE;
 
 /** Lo que va firmado en la URL de vídeo. */
 const VideoTokenPayloadSchema = z.strictObject({
@@ -96,6 +105,8 @@ interface PendingPairing {
   /** HMAC del código con la clave ace-pair-v1: el código en claro no se guarda. */
   readonly codeMac: Buffer;
   readonly expiresAt: number;
+  /** Dispositivo que lo pidió por /native; null si lo pidió la web. Solo en memoria. */
+  readonly createdBy: string | null;
   failures: number;
 }
 
@@ -128,6 +139,8 @@ export function createAuth(deps: AuthDeps, options: AuthOptions = {}): AuthServi
   let pending: PendingPairing | null = null;
   /** Instantes de los últimos canjes (límite global por minuto). */
   let attempts: number[] = [];
+  /** Instantes de los últimos códigos creados por cada iPhone (límite por minuto). */
+  const createdByDevice = new Map<string, number[]>();
   /** Última escritura de `lastSeenAt` por dispositivo (en memoria, para no escribir en cada petición). */
   const lastSeenWritten = new Map<string, number>();
   const pendingWrites = new Set<Promise<void>>();
@@ -177,6 +190,23 @@ export function createAuth(deps: AuthDeps, options: AuthOptions = {}): AuthServi
     attempts.push(now);
   }
 
+  /** Un iPhone no puede crear más de 5 códigos por minuto (la web no tiene tope). */
+  function checkCreateRateLimit(deviceId: string, now: number): void {
+    const recent = (createdByDevice.get(deviceId) ?? []).filter(
+      (at) => now - at < PAIRING_WINDOW_MS,
+    );
+    if (recent.length >= PAIRING_CREATES_PER_DEVICE_PER_MINUTE) {
+      createdByDevice.set(deviceId, recent);
+      logger.warn(
+        { errorCode: 'pairing_rate_limited', deviceId },
+        'emparejamiento: demasiados códigos pedidos por un dispositivo',
+      );
+      throw new AppError('pairing_rate_limited');
+    }
+    recent.push(now);
+    createdByDevice.set(deviceId, recent);
+  }
+
   function videoSignature(encodedPayload: string): string {
     return hmac(videoKey, encodedPayload).toString('base64url');
   }
@@ -218,26 +248,58 @@ export function createAuth(deps: AuthDeps, options: AuthOptions = {}): AuthServi
       };
     },
 
-    async createPairing(body: PairingCreateBody, fallbackBaseUrl: string) {
-      const baseUrl = (body.baseUrl ?? fallbackBaseUrl).replace(/\/+$/, '');
+    async createPairing(
+      body: PairingCreateBody,
+      fallbackBaseUrl: string,
+      createdBy: string | null = null,
+    ) {
+      const clean = (url: string) => url.replace(/\/+$/, '');
+      const baseUrl = clean(body.baseUrl ?? fallbackBaseUrl);
       if (!BASE_URL_RE.test(baseUrl)) {
         throw new AppError('bad_request', { detail: 'URL base del emparejamiento no válida' });
       }
+      /* Una `u=` por dirección: la de `baseUrl` la primera (la app de la 0.8.0
+         lee solo esa) y luego las alternativas, en orden y sin repetidas. */
+      const urls = [baseUrl];
+      for (const raw of body.alternateBaseUrls ?? []) {
+        const url = clean(raw);
+        if (!BASE_URL_RE.test(url)) {
+          throw new AppError('bad_request', {
+            detail: 'URL alternativa del emparejamiento no válida',
+          });
+        }
+        if (!urls.some((known) => known.toLowerCase() === url.toLowerCase())) urls.push(url);
+      }
+      const now = clock.now();
+      if (createdBy !== null) checkCreateRateLimit(createdBy, now);
       const code = String(random.randomInt(10 ** PAIRING_CODE_DIGITS)).padStart(
         PAIRING_CODE_DIGITS,
         '0',
       );
-      const now = clock.now();
       const expiresAt = now + TIMEOUTS.pairingCodeTtlMs;
+      const query = urls.map((url) => `u=${encodeURIComponent(url)}`).join('&');
+      const pairUri = `aceneo://pair?${query}&c=${code}`;
+      /* El QR se dibuja ANTES de tocar el código vivo: si falla, el que ya
+         tenía alguien a la vista sigue valiendo. Con BASE_URL_RE las tres
+         direcciones caben de sobra; el catch es por si acaso (400, no 500). */
+      let qrSvg: string;
+      try {
+        qrSvg = await QRCode.toString(pairUri, {
+          type: 'svg',
+          errorCorrectionLevel: 'M',
+          margin: 2,
+        });
+      } catch {
+        throw new AppError('bad_request', {
+          detail: 'direcciones demasiado largas para el QR',
+        });
+      }
       /* Uno nuevo anula el anterior: solo hay un código vivo. */
-      pending = { codeMac: codeMac(code), expiresAt, failures: 0 };
-      const pairUri = `aceneo://pair?u=${encodeURIComponent(baseUrl)}&c=${code}`;
-      const qrSvg = await QRCode.toString(pairUri, {
-        type: 'svg',
-        errorCorrectionLevel: 'M',
-        margin: 2,
-      });
-      logger.info({ expiresAt: iso(expiresAt) }, 'código de emparejamiento creado');
+      pending = { codeMac: codeMac(code), expiresAt, createdBy, failures: 0 };
+      logger.info(
+        { expiresAt: iso(expiresAt), createdBy, addresses: urls.length },
+        'código de emparejamiento creado',
+      );
       const response: PairingCreateResponse = {
         code,
         expiresAt: iso(expiresAt),
@@ -269,6 +331,7 @@ export function createAuth(deps: AuthDeps, options: AuthOptions = {}): AuthServi
         throw new AppError('pairing_invalid');
       }
       /* Un solo uso: se consume ANTES de cualquier await (dos canjes a la vez no valen los dos). */
+      const pairedBy = current.createdBy;
       pending = null;
 
       const deviceId = `dev_${random.randomBytes(DEVICE_ID_BYTES).toString('base64url')}`;
@@ -289,7 +352,7 @@ export function createAuth(deps: AuthDeps, options: AuthOptions = {}): AuthServi
       });
       lastSeenWritten.set(deviceId, now);
       bus.emit('devices.changed', { reason: 'paired', deviceId });
-      logger.info({ deviceId, platform: record.platform }, 'dispositivo emparejado');
+      logger.info({ deviceId, platform: record.platform, pairedBy }, 'dispositivo emparejado');
       const response: PairingClaimResponse = {
         deviceId,
         token: `${deviceId}.${secret}`,
@@ -364,6 +427,15 @@ export function createAuth(deps: AuthDeps, options: AuthOptions = {}): AuthServi
       });
       if (!result) throw new AppError('device_not_found');
       lastSeenWritten.delete(deviceId);
+      createdByDevice.delete(deviceId);
+      /* Un código que creó este dispositivo no sobrevive a su revocación. */
+      if (pending?.createdBy === deviceId) {
+        pending = null;
+        logger.info(
+          { deviceId },
+          'código de emparejamiento anulado: lo creó un dispositivo revocado',
+        );
+      }
       if (result.changed) {
         bus.emit('devices.changed', { reason: 'revoked', deviceId });
         logger.info({ deviceId }, 'dispositivo revocado');

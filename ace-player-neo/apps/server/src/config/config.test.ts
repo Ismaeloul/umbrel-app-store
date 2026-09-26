@@ -237,7 +237,17 @@ describe('HKDF-SHA256 (arquitectura §5.3)', () => {
     expect(a.video.equals(b.video)).toBe(true);
     expect(a.video.equals(a.pairing)).toBe(false);
     expect(deriveKeys('otra-semilla-cualquiera').video.equals(a.video)).toBe(false);
-    expect(KEY_LABELS).toEqual({ video: 'ace-video-v1', pairing: 'ace-pair-v1' });
+    expect(KEY_LABELS).toEqual({
+      video: 'ace-video-v1',
+      pairing: 'ace-pair-v1',
+      iptvSecrets: 'ace-iptv-v1',
+      iptvIds: 'ace-iptv-id-v1',
+      iptvIdTag: 'ace-iptv-tag-v1',
+    });
+    /* Las tres de la IPTV (docs/iptv.md §2.3) son independientes entre sí y de las demás. */
+    const iptv = [a.iptv.secrets, a.iptv.ids, a.iptv.idTag];
+    expect(new Set([a.video, a.pairing, ...iptv].map((key) => key.toString('hex'))).size).toBe(5);
+    expect(a.iptv.secrets.equals(deriveKey(SEED, KEY_LABELS.iptvSecrets))).toBe(true);
   });
 
   it('vector fijo: si cambia la derivación, todas las URLs firmadas dejan de valer', () => {

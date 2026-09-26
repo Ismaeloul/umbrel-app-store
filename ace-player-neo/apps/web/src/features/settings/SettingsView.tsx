@@ -10,6 +10,9 @@
 
    Secciones:
    - Listas (directories/): añadir, activar, actualizar y borrar listas.
+   - IPTV (iptv/, docs/iptv.md §1): conectar una lista M3U o Xtream Codes,
+     pausarla, actualizarla y eliminarla. Solo en la web: en el iPhone no
+     existe. Va en su propio trozo de JS (React.lazy) y se monta con WhenNear.
    - Tu fútbol: resumen de gustos y «Editar mis gustos».
    - Reproducción: modo (Baja latencia / Equilibrado / Estable) y la política
      «Un solo dispositivo a la vez» (D5).
@@ -69,6 +72,7 @@ import './settings.css';
 
 type SectionId =
   | 'listas'
+  | 'iptv'
   | 'futbol'
   | 'reproduccion'
   | 'donde'
@@ -88,6 +92,7 @@ interface SectionDef {
 
 const SECTIONS: readonly SectionDef[] = [
   { id: 'listas', title: 'Listas', icon: 'list', hint: 'De dónde salen los canales' },
+  { id: 'iptv', title: 'IPTV', icon: 'tv', hint: 'Tu proveedor, M3U o Xtream' },
   { id: 'futbol', title: 'Tu fútbol', icon: 'agenda', hint: 'Ligas, equipos y selecciones' },
   { id: 'reproduccion', title: 'Reproducción', icon: 'play', hint: 'Modo y un solo dispositivo' },
   {
@@ -115,6 +120,10 @@ const ENGINE_CAPSULE: Record<string, CapsuleTone> = { ok: 'ok', weak: 'weak', fa
 export const CONFIRM_RESTART_MS = 6000;
 /** Tras reiniciar, se vuelve a mirar el motor a los 2,5 s (index.html:4267). */
 export const RECHECK_AFTER_RESTART_MS = 2500;
+
+/** Descripción de Ajustes → IPTV (docs/iptv.md §1.1; el mismo texto que features/iptv/model.ts). */
+export const IPTV_DESCRIPTION =
+  'Si un canal o un partido está en tu IPTV, sale el primero. Si se cae, se pasa sola a la mejor fuente de AceStream.';
 
 export const RESTART_WARNING =
   'Reiniciarlo corta la reproducción en todos los dispositivos. Úsalo solo si el motor no responde.';
@@ -194,6 +203,9 @@ export function preferenceSummary(
    Ajustes solo la abre, como el «Editar mis gustos» de la 0.6.59. Va en su
    propio trozo de JS: solo se descarga al pulsar. */
 const PreferencesSheet = lazy(() => import('../preferences/PreferencesSheet.tsx'));
+
+/* Ajustes → IPTV (docs/iptv.md §1.1): su propio trozo de JS, solo al acercarse. */
+const IptvSection = lazy(() => import('../iptv/IptvSection.tsx'));
 
 function FootballSection() {
   const prefs = useApiQuery('preferencesGet');
@@ -599,6 +611,18 @@ export default function SettingsView({ route, active }: ViewProps) {
             description="Los canales de la lista activa salen en la biblioteca, en «Listas»."
           >
             <DirectoriesSection />
+          </Section>
+        );
+      case 'iptv':
+        return (
+          <Section key={def.id} def={def} description={IPTV_DESCRIPTION}>
+            <WhenNear eager={focused || (current !== null && current !== 'listas')}>
+              <ErrorBoundary what="la IPTV">
+                <Suspense fallback={<SkeletonRows rows={2} label="Cargando la IPTV…" />}>
+                  <IptvSection />
+                </Suspense>
+              </ErrorBoundary>
+            </WhenNear>
           </Section>
         );
       case 'futbol':

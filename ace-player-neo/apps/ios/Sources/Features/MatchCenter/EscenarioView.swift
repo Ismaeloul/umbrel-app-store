@@ -108,16 +108,31 @@ struct EscenarioView: View {
 
     // MARK: Cuerpo
 
+    /// Los márgenes seguros de verdad. Con `.ignoresSafeArea()` el proxy los da
+    /// a cero, y la cabecera (minimizar, título, «Más») quedaba debajo de la barra
+    /// de estado y de la isla dinámica (capturas y UITests de la CI de la 0.8.0).
+    private func margenes(_ geo: GeometryProxy) -> EdgeInsets {
+        let proxy = geo.safeAreaInsets
+        if proxy.top > 0 || proxy.leading > 0 || proxy.trailing > 0 { return proxy }
+        let ventana = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first { $0.isKeyWindow }
+        guard let seguro = ventana?.safeAreaInsets else { return proxy }
+        return EdgeInsets(top: seguro.top, leading: seguro.left, bottom: seguro.bottom, trailing: seguro.right)
+    }
+
     var body: some View {
         GeometryReader { geo in
             let alto = geo.size.height
             let bajada = GestosReproductor.desplazamientoGrande(arrastre)
+            let insets = margenes(geo)
             ZStack(alignment: .top) {
                 (horizontal ? Color.black : Tinta.fondo)
                 if horizontal {
-                    pantallaCompleta(insets: geo.safeAreaInsets, alto: alto)
+                    pantallaCompleta(insets: insets, alto: alto)
                 } else {
-                    vertical(insets: geo.safeAreaInsets, alto: alto, bajada: bajada)
+                    vertical(insets: insets, alto: alto, bajada: bajada)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)

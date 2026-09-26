@@ -3,7 +3,14 @@
    state.json sigue en forma v1 más `schemaVersion: 2`. */
 
 import { z } from 'zod';
-import { DeviceIdSchema, HashSchema, IsoDateTimeSchema, SessionIdSchema } from '../primitives.js';
+import {
+  DeviceIdSchema,
+  HashSchema,
+  IsoDateTimeSchema,
+  SessionIdSchema,
+  ShortCodeSchema,
+} from '../primitives.js';
+import { IPTV_NAME_MAX } from '../constants/iptv.js';
 import { StateV1Schema } from './v1.js';
 
 /** Versión de esquema que escribe la 0.7.0. Ausente = 1 (arquitectura §5.4). */
@@ -16,6 +23,14 @@ export const V2_FILES = {
   settings: 'v2/settings.json',
   sessions: 'v2/sessions.json',
   diagnostics: 'v2/diagnostics.jsonl',
+  /** IPTV (docs/iptv.md §2.1): configuración con los secretos cifrados (0600). */
+  iptv: 'v2/iptv.json',
+  /** Carpeta de la IPTV (0700): catálogo y guía cifrados y, sin semilla, la clave. */
+  iptvDir: 'v2/iptv',
+  iptvCatalog: 'v2/iptv/catalogo.enc',
+  iptvGuide: 'v2/iptv/guia.enc',
+  /** 32 bytes aleatorios, solo si no hay `ACE_SEED` ni `ENGINE_CONTROL_TOKEN`. */
+  iptvKey: 'v2/iptv/clave',
 } as const;
 
 /** state.json tal y como lo escribe la 0.7.0: las 12 claves v1 más la versión. */
@@ -107,3 +122,107 @@ export const SessionsFileSchema = z.strictObject({
   sessions: z.array(PersistedSessionSchema),
 });
 export type SessionsFile = z.infer<typeof SessionsFileSchema>;
+
+// --- v2/iptv.json (docs/iptv.md §2) ---
+
+/** Tipo de proveedor: una lista M3U por URL o Xtream Codes (`player_api.php`). */
+export const IptvKindSchema = z.enum(['m3u', 'xtream']);
+export type IptvKind = z.infer<typeof IptvKindSchema>;
+
+/**
+ * Id del proveedor: aleatorio al crear, nuevo al eliminar y al cambiar el
+ * origen o el tipo (§1.4, D11). Entra en el HMAC de los ids de canal, así que
+ * cambiarlo cambia todos los ids.
+ */
+export const IptvProviderIdSchema = z
+  .string()
+  .regex(/^p_[A-Za-z0-9_-]{8}$/, 'id de proveedor IPTV');
+export type IptvProviderId = z.infer<typeof IptvProviderIdSchema>;
+
+/** Estado de la cuenta según `user_info` de Xtream. */
+export const IptvAccountStatusSchema = z.enum([
+  'active',
+  'expired',
+  'banned',
+  'disabled',
+  'unknown',
+]);
+export type IptvAccountStatus = z.infer<typeof IptvAccountStatusSchema>;
+
+/**
+ * Bloque cifrado con AES-256-GCM (§2.3). El AAD es
+ * `ace-iptv|<provider.id>|<kind>`, para que no se pueda pegar el bloque de
+ * otro proveedor. En claro: M3U `{ url }`; Xtream `{ server, username, password }`.
+ */
+export const SealedSchema = z.strictObject({
+  alg: z.literal('A256GCM'),
+  /** 12 bytes en base64url sin relleno. */
+  iv: z.string().regex(/^[A-Za-z0-9_-]{16}$/, 'base64url de 12 bytes'),
+  /** 16 bytes en base64url sin relleno. */
+  tag: z.string().regex(/^[A-Za-z0-9_-]{22}$/, 'base64url de 16 bytes'),
+  data: z
+    .string()
+    .max(64 * 1024)
+    .regex(/^[A-Za-z0-9_-]+$/, 'base64url'),
+});
+export type Sealed = z.infer<typeof SealedSchema>;
+
+export const IptvLastSyncSchema = z.strictObject({
+  at: IsoDateTimeSchema,
+  ok: z.boolean(),
+  channels: z.number().int().nonnegative(),
+  durationMs: z.number().nonnegative(),
+  error: ShortCodeSchema.nullable(),
+});
+export type IptvLastSync = z.infer<typeof IptvLastSyncSchema>;
+
+export const IptvGuideStateSchema = z.strictObject({
+  at: IsoDateTimeSchema,
+  ok: z.boolean(),
+  channelsWithGuide: z.number().int().nonnegative(),
+  programmes: z.number().int().nonnegative(),
+  error: ShortCodeSchema.nullable(),
+});
+export type IptvGuideState = z.infer<typeof IptvGuideStateSchema>;
+
+/** Solo Xtream (`user_info`). */
+export const IptvAccountStateSchema = z.strictObject({
+  status: IptvAccountStatusSchema,
+  expiresAt: IsoDateTimeSchema.nullable(),
+  maxConnections: z.number().int().nonnegative().nullable(),
+  activeConnections: z.number().int().nonnegative().nullable(),
+  checkedAt: IsoDateTimeSchema,
+});
+export type IptvAccountState = z.infer<typeof IptvAccountStateSchema>;
+
+export const IptvProviderRecordSchema = z.strictObject({
+  id: IptvProviderIdSchema,
+  /** Sube con cada cambio de datos: un resultado de sincronización de otra `revision` no se aplica (§3.4). */
+  revision: z.number().int().nonnegative(),
+  kind: IptvKindSchema,
+  name: z.string().min(1).max(IPTV_NAME_MAX),
+  enabled: z.boolean(),
+  /** `nombre[:puerto]`, sin credenciales, esquema, ruta ni query. */
+  host: z.string().max(260),
+  /** Solo Xtream: `esquema://host[:puerto]`, sin ruta. */
+  origin: z.string().max(300).nullable(),
+  secret: SealedSchema,
+  createdAt: IsoDateTimeSchema,
+  updatedAt: IsoDateTimeSchema,
+  lastSync: IptvLastSyncSchema.nullable(),
+  guide: IptvGuideStateSchema.nullable(),
+  account: IptvAccountStateSchema.nullable(),
+});
+export type IptvProviderRecord = z.infer<typeof IptvProviderRecordSchema>;
+
+/**
+ * `v2/iptv.json`. No va en `settings.json` (es `strictObject` y la 0.8.0
+ * apartaría el fichero) ni en `state.json`. Sin listas de ids: un id IPTV se
+ * reconoce solo por su etiqueta (§4.1), así que nada de aquí crece sin tope.
+ * `provider: null` = sin IPTV (o eliminada).
+ */
+export const IptvFileSchema = z.strictObject({
+  version: z.literal(1),
+  provider: IptvProviderRecordSchema.nullable(),
+});
+export type IptvFile = z.infer<typeof IptvFileSchema>;

@@ -10,7 +10,7 @@ antiguas (`legacy-exports.ts` sigue vacío). Código en
 |---|---|
 | `service.ts` / `index.ts` | `createAuth(deps, { random })` (la fábrica `createAuthService(deps)` lo llama con el azar de node:crypto): código de emparejamiento, canje, Bearer, `lastSeenAt`, firma y comprobación de URLs de vídeo, lista y revocación |
 | `crypto.ts` | sha256, HMAC y comparaciones con `timingSafeEqual` sobre resúmenes de 32 bytes |
-| `routes.ts` | v1 `pairingCreate`, `pairingClaim`, `devicesList`, `deviceRevoke`; `baseUrlFromHeaders` para el QR |
+| `routes.ts` | v1 `pairingCreate`, `pairingClaim`, `devicesList`, `deviceRevoke` (desde la 0.8.1, crear, listar y revocar también desde el iPhone con su Bearer; `pairingCreate` pasa quién lo pide); `baseUrlFromHeaders` para el QR |
 | `types.ts` | + `VideoUrlSigner` (solo añadido) |
 | `test-support.ts` | devices.json en memoria (misma semántica que el de state), `fakeState`, azar determinista |
 
@@ -19,9 +19,17 @@ Cómo queda cada pieza:
 - **Código**: `crypto.randomInt(10^6)` con ceros a la izquierda; en memoria
   solo su HMAC con la clave `ace-pair-v1` (config/keys.ts). 5 min, un solo uso
   (se consume antes de cualquier `await`), uno vivo como mucho. QR con la
-  librería `qrcode` (SVG) de `aceneo://pair?u=<encodeURIComponent(URL base)>&c=<código>`.
-  URL base: la de la web (`baseUrl`) o, si no llega, `X-Forwarded-Proto`/
-  `X-Forwarded-Host`/`Host` con forma válida (si nada vale, `http://localhost`).
+  librería `qrcode` (SVG) de `aceneo://pair?u=<encodeURIComponent(URL base)>[&u=<otra>]&c=<código>`.
+  URL base: la de la web o el iPhone (`baseUrl`) o, si no llega, `X-Forwarded-Proto`/
+  `X-Forwarded-Host`/`Host` con forma válida (si nada vale, `http://localhost`);
+  detrás, `alternateBaseUrls` (0.8.1, hasta 2, sin repetidas ni barra final).
+  Cada dirección, también la de las cabeceras, cumple `PAIRING_BASE_URL_RE`
+  (nombre ASCII o IPv6 entre corchetes, puerto opcional: sin credenciales ni
+  caracteres que se codifiquen). El QR se dibuja antes de anular el código
+  vivo: si falla, `bad_request` y el anterior sigue valiendo.
+  Si lo crea un iPhone (`createdBy`, solo en memoria) y se revoca, el código
+  muere; el log del canje lleva `pairedBy`. Un iPhone crea como mucho 5
+  códigos por minuto (`pairing_rate_limited`); la web no tiene tope.
 - **Canje**: 10 intentos por minuto en total (ventana deslizante con el
   reloj inyectado; el intento rechazado por el límite no cuenta) y 5 fallos
   por código (el quinto responde `pairing_invalid` y lo anula; después,
@@ -44,7 +52,8 @@ Cómo queda cada pieza:
 
 ## Números
 
-- 43 tests en `auth.test.ts` (29), `routes.test.ts` (9) y `timing.test.ts` (5), 0 saltados.
+- 62 tests en `auth.test.ts` (39), `routes.test.ts` (18) y `timing.test.ts` (5), 0 saltados
+  (0.8.1: +10 y +9; las cifras de cobertura de abajo son las de la 0.7.0).
 - Cobertura (`--coverage.include='src/modules/auth/**'`): líneas 98,6 %,
   sentencias 97,5 %, ramas 89,7 %, funciones 98,4 % (`service.ts`: 100 % de líneas).
 - Sin red ni reloj real: FakeClock, `app.inject`, devices.json en memoria y,
@@ -62,11 +71,13 @@ Ninguno: módulo nuevo (contratos.md §9, "nuevos, plan E1.7/E1.8"). Tests nuevo
 | Fuerza bruta (5 por código, 10 por minuto) | "fuerza bruta: al quinto fallo…", "fuerza bruta: 10 intentos por minuto…"; `routes.test.ts` › "errores del canje con su HTTP…" (401/410/429/400) |
 | Comparación en tiempo constante | `timing.test.ts` (espía `timingSafeEqual`: siempre 32 contra 32 bytes, acierte o no, exista o no el dispositivo) |
 | Solo el hash en disco | "da { deviceId, token, device }; guarda SOLO sha256…"; `routes.test.ts` › "flujo completo con el estado real…" (lee v2/devices.json) |
-| Rutas nativas sin token, token manipulado, revocado | `routes.test.ts` › "native: sin token 401, token bueno 200, manipulado 401 y revocado 401 device_revoked", "el canje va sin token, pero crear códigos y administrar dispositivos es solo web"; `auth.test.ts` › "token manipulado, de otro dispositivo o con otra forma…", "revocado: device_revoked con el secreto bueno…" |
+| Rutas nativas sin token, token manipulado, revocado | `routes.test.ts` › "native: sin token 401, token bueno 200, manipulado 401 y revocado 401 device_revoked", "el canje va sin token; crear códigos y administrar dispositivos, sin token 401 y con token el iPhone puede (0.8.1)"; `auth.test.ts` › "token manipulado, de otro dispositivo o con otra forma…", "revocado: device_revoked con el secreto bueno…" |
 | Token caducado/manipulado (vídeo) | "t = base64url({ sid, dev, exp })…", "pasado exp solo vale con el visor vivo…", "tope absoluto de 6 h…", "manipulada, de otra sesión o con otra clave…", "revocar el dispositivo anula al momento…"; `routes.test.ts` › "URL de vídeo: …" |
 | `lastSeenAt` 1/min | "lastSeenAt se guarda como mucho una vez por minuto", "un dispositivo sin lastSeenAt…", "si falla la escritura de lastSeenAt…" |
 | Token/código/secreto fuera del log | "ni el código, ni el token, ni el secreto salen en el log"; `routes.test.ts` › "el token, el secreto, el código y el t= no salen en el log de peticiones" |
 | Lista y revocación | "lista sin el hash del secreto…", "revocar marca revokedAt…", "uno que no existe…"; `routes.test.ts` › "web: lista y revoca…" |
+| 0.8.1: códigos creados desde el iPhone | `auth.test.ts` › "alternateBaseUrls: una u= por dirección…", "con una sola dirección el pairUri es el de siempre", "una alternativa con espacio da bad_request…", "el código que creó un dispositivo muere al revocarlo", "revocar a otro no anula un código ajeno…", "el log del canje lleva pairedBy…", "sin credenciales ni caracteres que se codifiquen…", "las tres direcciones más largas que se aceptan caben en el QR", "si el QR no se puede dibujar: 400 y el código que ya estaba vivo sigue valiendo", "un iPhone crea como mucho 5 códigos por minuto…"; `routes.test.ts` › "el iPhone crea un código con sus dos direcciones…", "sin baseUrl, el QR usa el Host…", "alternateBaseUrls con 3 entradas o con ruta → 400…", "direcciones con credenciales o que se codifican (%, unicode) → 400…", "el código que crea un iPhone por /native muere al revocarlo; el de la web, no", "un iPhone en bucle: al sexto código en el minuto 429…" |
+| 0.8.1: el iPhone lista y revoca | `routes.test.ts` › "revocarse a sí mismo: 200 con revokedAt…", "un iPhone revoca a otro…", "el id de la web (su navegador) no es un dispositivo…"; `test/integration/wiring.test.ts` › "0.8.1: el iPhone A empareja a B desde la app, lo revoca y se revoca" |
 
 ## B-xxx
 

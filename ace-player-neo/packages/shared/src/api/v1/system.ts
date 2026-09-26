@@ -49,6 +49,14 @@ export const BootstrapResponseSchema = z.strictObject({
     ai: z.boolean(),
     /** La agenda es la de muestra (`FOOTBALL_DEMO_ONLY`). */
     demoSchedule: z.boolean(),
+    /**
+     * Hay IPTV activa con catálogo cargado (docs/iptv.md §5.1). Es el dato
+     * barato con el que la web y la app deciden si preguntan por la IPTV al
+     * tocar un canal o al abrir un partido sin canales. Opcional: ausente es
+     * «no». El ejemplo `fixtures/v1/bootstrap.json` no lo lleva, para no
+     * cambiar la ida y vuelta de la app.
+     */
+    iptv: z.boolean().optional(),
   }),
 });
 export type BootstrapResponse = z.infer<typeof BootstrapResponseSchema>;

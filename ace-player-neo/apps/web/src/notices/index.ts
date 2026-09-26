@@ -10,6 +10,12 @@ export {
   type StatusContent,
 } from './statusLine.ts';
 export { StatusLineHost } from './StatusLineHost.tsx';
+export {
+  dismissImmersiveAction,
+  immersiveActionStore,
+  showImmersiveAction,
+  type ImmersiveAction,
+} from './immersiveAction.ts';
 export { Toaster } from './Toaster.tsx';
 export {
   dismissToast,

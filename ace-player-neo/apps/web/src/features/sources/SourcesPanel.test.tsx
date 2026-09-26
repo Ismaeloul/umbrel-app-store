@@ -154,7 +154,7 @@ describe('lista (móvil)', () => {
     expect(getPlayer().channel?.hash).toBe(hash(2));
   });
 
-  it('cartel: proveedor, calidad y tipo; las flechas pasan de un cartel a otro', () => {
+  it('cartel: proveedor en la tesela, canal debajo, calidad y tipo; las flechas pasan de un cartel a otro', () => {
     prepare(['working', 'working', 'weak'], { activeHash: hash(1) });
     act(() =>
       sessionStore.set((s) => ({
@@ -169,8 +169,10 @@ describe('lista (móvil)', () => {
     renderWithApp(<SourcesPanel variant="list" />);
     const list = screen.getByRole('list', { name: 'Fuentes del partido' });
     const [first, second, third] = within(list).getAllByRole('button');
-    expect(within(first!).getByText('Elcano')).toBeInTheDocument();
-    expect(within(first!).getByText('· 1080p · HEVC · M3U')).toBeInTheDocument();
+    expect(first!.querySelector('.dorsal__abbrev')).toHaveTextContent(/^Elcano$/);
+    expect(first!.querySelector('.src-poster__name')).toHaveTextContent(/^M\+ Liga de Campeones$/);
+    const tags = [...first!.querySelectorAll('.src-poster__tags .src-poster__tag')];
+    expect(tags.map((tag) => tag.textContent)).toEqual(['1080p', 'HEVC', 'M3U']);
     first!.focus();
     fireEvent.keyDown(first!, { key: 'ArrowRight' });
     expect(second).toHaveFocus();
@@ -178,6 +180,101 @@ describe('lista (móvil)', () => {
     expect(third).toHaveFocus();
     fireEvent.keyDown(third!, { key: 'ArrowLeft' });
     expect(second).toHaveFocus();
+  });
+
+  it('Isma, 26-sep: arriba (en la tesela) el proveedor y debajo SOLO el canal, sin repetirlo', () => {
+    prepare(['working', 'working']);
+    act(() =>
+      sessionStore.set((s) => ({
+        ...s,
+        entries: s.entries.map((entry, i) =>
+          i === 0 ? { ...entry, title: 'Movistar LaLiga [NEW ERA] --> New Era III' } : entry,
+        ),
+      })),
+    );
+    renderWithApp(<SourcesPanel variant="list" />);
+    const list = screen.getByRole('list', { name: 'Fuentes del partido' });
+    const [first, second] = within(list).getAllByRole('button');
+    // El orden del cartel: la tesela (con el proveedor) y después el nombre del canal.
+    const tag = first!.querySelector('.src-poster__tile .dorsal__abbrev')!;
+    const name = first!.querySelector('.src-poster__body .src-poster__name')!;
+    expect(tag).toHaveTextContent(/^New Era III$/);
+    expect(name).toHaveTextContent(/^Movistar LaLiga$/);
+    expect(tag.compareDocumentPosition(name) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Ni la sigla recortada («MOVIST») ni el proveedor repetido debajo.
+    expect(first).not.toHaveTextContent('MOVIST');
+    expect(name).not.toHaveTextContent(/new era/i);
+    // La cifra grande, el número de fuente y el aria-label largo no cambian.
+    expect(first!.querySelector('.dorsal b')).toHaveTextContent(/^M$/);
+    expect(first!.querySelector('.src-poster__num')).toHaveTextContent('1');
+    expect(first).toHaveAttribute(
+      'aria-label',
+      expect.stringMatching(
+        /^Fuente 1: Movistar LaLiga \[NEW ERA\] --> New Era III · M3U · New Era III/,
+      ),
+    );
+    expect(second!.querySelector('.dorsal__abbrev')).toHaveTextContent(/^Faro$/);
+    expect(second!.querySelector('.src-poster__name')).toHaveTextContent(/^M\+ Liga de Campeones$/);
+  });
+
+  it('Isma, 26-sep: canal, estado, datos técnicos (una etiqueta por dato) y la frase, por ese orden', () => {
+    prepare(['working', 'checking', 'weak'], { activeHash: hash(1) });
+    act(() =>
+      sessionStore.set((s) => ({
+        ...s,
+        entries: s.entries.map((entry, i) =>
+          i === 0 && entry.probe
+            ? { ...entry, probe: { ...entry.probe, rateKbps: 4200, videoCodec: 'hevc' } }
+            : entry,
+        ),
+      })),
+    );
+    renderWithApp(<SourcesPanel variant="list" />);
+    const list = screen.getByRole('list', { name: 'Fuentes del partido' });
+    const [first, second] = within(list).getAllByRole('button');
+    const lines = (poster: HTMLElement) =>
+      [...poster.querySelector('.src-poster__body')!.children].map((child) => child.className);
+    // Verificada con datos: la frase «verificada» repetiría el estado y no sale.
+    expect(lines(first!)).toEqual(['src-poster__name', 'src-poster__state', 'src-poster__tags']);
+    expect(first!.querySelector('.src-poster__state')).toHaveTextContent(/^Verificada$/);
+    const tags = [...first!.querySelectorAll('.src-poster__tag')].map((tag) => tag.textContent);
+    expect(tags).toEqual(['1080p', 'HEVC', 'M3U']);
+    // Cada dato en su etiqueta, sin «·» ni «…» pegados.
+    expect(first!.querySelector('.src-poster__tags')).not.toHaveTextContent(/[·…]/);
+    // Comprobando: la frase dice algo más que el estado y sí sale, al final.
+    expect(second!.querySelector('.src-poster__state')).toHaveTextContent(/^Comprobando$/);
+    expect(second!.querySelector('.src-poster__detail')).toHaveTextContent(
+      /^probándose en el segundo motor$/,
+    );
+    expect(lines(second!).at(-1)).toBe('src-poster__detail');
+    // El aria-label largo no cambia: sigue diciendo la frase entera.
+    expect(first).toHaveAttribute(
+      'aria-label',
+      expect.stringMatching(
+        /^Fuente 1: M\+ Liga de Campeones --> Elcano · M3U · Elcano · Hash .* · verificada/,
+      ),
+    );
+  });
+
+  it('sin datos técnicos la línea de etiquetas no aparece', () => {
+    prepare(['working']);
+    act(() =>
+      sessionStore.set((s) => ({
+        ...s,
+        entries: s.entries.map((entry) => ({
+          ...entry,
+          origin: 'saved',
+          listaId: null,
+          title: 'M+ Liga de Campeones',
+        })),
+      })),
+    );
+    renderWithApp(<SourcesPanel variant="list" />);
+    const list = screen.getByRole('list', { name: 'Fuentes del partido' });
+    const [first] = within(list).getAllByRole('button');
+    expect(first!.querySelector('.dorsal__abbrev')).toHaveTextContent(/^Guardada$/);
+    expect(first!.querySelector('.src-poster__tags')).toBeNull();
+    expect(first!.querySelector('.src-poster__state')).toHaveTextContent(/^Verificada$/);
   });
 
   it('atajos: N pasa a la siguiente y los números eligen', () => {
@@ -408,5 +505,74 @@ describe('«Encontrar canal»', () => {
       ),
     ).toBeInTheDocument();
     expect(within(dialog).queryByRole('checkbox')).toBeNull();
+  });
+});
+
+/* IPTV en el selector (docs/iptv.md §8.1-8.3): distintivo, sin hash, nunca
+   plegada, y sin «Favorito», «Copiar hash» ni «Abrir en…». */
+describe('IPTV', () => {
+  function prepareWithIptv(activeIptv: boolean) {
+    prepare(['failed', 'working', 'queued', 'failed']);
+    const iptv = entryFromCandidate(
+      candidate(100, {
+        title: 'M+ Liga de Campeones --> Casa',
+        source: 'iptv',
+        listaId: 'p_Ab3dE5gH',
+        iptv: { provider: 'Casa', quality: 'fhd', backup: false, guide: false },
+      }),
+    );
+    act(() =>
+      sessionStore.set((s) => ({
+        ...s,
+        // Sin veredicto del comprobador y con un fallo del reproductor: aun así, visible.
+        entries: [
+          {
+            ...iptv,
+            playerVerdict: { state: 'failed', reason: 'player_failed', at: Date.now() },
+          },
+          ...s.entries,
+        ],
+        activeHash: activeIptv ? hash(100) : hash(3),
+      })),
+    );
+  }
+
+  it('cartel con «IPTV», el proveedor y la calidad; sin hash y nunca plegado', () => {
+    prepareWithIptv(false);
+    renderWithApp(<SourcesPanel variant="list" />);
+    const list = screen.getByRole('list', { name: 'Fuentes del partido' });
+    const iptv = within(list).getAllByRole('button')[0]!;
+    expect(iptv).toHaveAttribute('data-origin', 'iptv');
+    expect(iptv.querySelector('.src-poster__tile')).toHaveTextContent('IPTV');
+    expect(iptv.querySelector('.dorsal__abbrev')).toHaveTextContent(/^Casa$/);
+    expect(iptv.querySelector('.src-poster__name')).toHaveTextContent(/^M\+ Liga de Campeones$/);
+    const tags = [...iptv.querySelectorAll('.src-poster__tags .src-poster__tag')];
+    expect(tags.map((tag) => tag.textContent)).toEqual(['1080p', 'IPTV']);
+    expect(iptv.getAttribute('aria-label')).toMatch(
+      /^Fuente 1: M\+ Liga de Campeones · IPTV · Casa · 1080p · no arrancó en el reproductor/,
+    );
+    expect(iptv.getAttribute('aria-label')).not.toMatch(/Hash/);
+  });
+
+  it('su menú no ofrece «Copiar hash» ni «Abrir en la app de AceStream»', () => {
+    prepareWithIptv(false);
+    renderWithApp(<SourcesPanel variant="list" />);
+    const list = screen.getByRole('list', { name: 'Fuentes del partido' });
+    fireEvent.contextMenu(within(list).getAllByRole('button')[0]!, { clientX: 10, clientY: 10 });
+    const items = screen.getAllByRole('menuitem').map((item) => item.textContent);
+    expect(items).toContain('Ver esta fuente');
+    expect(items).toContain('Reportar…');
+    expect(items).not.toContain('Copiar hash');
+    expect(items).not.toContain('Abrir en la app de AceStream');
+  });
+
+  it('con la IPTV en pantalla, el inspector no tiene «Favorito», «Copiar hash» ni «Abrir en…»', () => {
+    prepareWithIptv(true);
+    renderWithApp(<SourcesPanel variant="rack" />, { kind: 'wide' });
+    const group = screen.getByRole('group', { name: 'Acciones de la fuente' });
+    const names = within(group)
+      .getAllByRole('button')
+      .map((b) => b.textContent);
+    expect(names).toEqual(['Rebuscar', 'Pegar hash', 'Es el canal correcto', 'Reportar']);
   });
 });

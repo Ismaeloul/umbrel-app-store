@@ -1,10 +1,11 @@
-import type { LibraryView as LibraryData } from '@ace/shared';
+import type { BootstrapResponse, LibraryView as LibraryData } from '@ace/shared';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetMode, setMode } from '../../api/mode.ts';
+import { routeKey } from '../../api/query.ts';
 import { resetToasts } from '../../notices/toasts.ts';
 import { play } from '../../player/api.ts';
-import { mockFetch } from '../../test/fetch.ts';
+import { fixture, json, mockFetch } from '../../test/fetch.ts';
 import LibraryView from './LibraryView.tsx';
 import { resetPending } from './data.ts';
 import { madridClock } from './on-air.ts';
@@ -396,5 +397,125 @@ describe('«Emitiendo ahora» (C1) y lo que da cada canal', () => {
     fireEvent.click(within(strip).getByRole('button', { name: 'Ver marcador' }));
     await waitFor(() => expect(within(strip).getByText('1 a 1')).toBeInTheDocument());
     expect(screen.queryByText('Marcador oculto')).toBeNull();
+  });
+});
+
+describe('filtro de Canales con IPTV (docs/iptv.md §14.5)', () => {
+  const iptvChannel = (n: number, title: string, library: string[] = []) => ({
+    id: `${n}`.padStart(40, 'e'),
+    title,
+    quality: 'fhd' as const,
+    provider: 'Casa',
+    library,
+  });
+
+  function setupIptv(
+    library: LibraryData,
+    channels: ReturnType<typeof iptvChannel>[],
+    total?: number,
+  ) {
+    const view = setup(library, {
+      routes: {
+        'GET /api/v1/iptv/channels': (call) => {
+          const q = new URL(call.url, 'http://x').searchParams.get('q') ?? '';
+          return json({ query: q, total: total ?? channels.length, capped: false, channels });
+        },
+      },
+    });
+    const boot = fixture<BootstrapResponse>('bootstrap');
+    act(() => {
+      view.client.setQueryData(routeKey('bootstrap'), {
+        ...boot,
+        features: { ...boot.features, iptv: true },
+      });
+    });
+    return view;
+  }
+  const filter = (value: string) =>
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Buscar canal' }), {
+      target: { value },
+    });
+
+  it('«tele» en Favoritos vacío: «Nada en esta pestaña…» y debajo «En tu IPTV» con Telecinco', async () => {
+    setupIptv(makeLibrary(), [iptvChannel(1, 'Telecinco')]);
+    await screen.findByRole('tab', { name: /Favoritos/ });
+    filter('tele');
+    expect(
+      await screen.findByRole('heading', { name: 'Nada en esta pestaña con «tele».' }),
+    ).toBeInTheDocument();
+    const section = await screen.findByRole('region', { name: 'En tu IPTV' });
+    const row = within(section).getByRole('link', { name: 'Telecinco' }).closest('article')!;
+    expect(within(row).getByText('IPTV')).toBeInTheDocument();
+    expect(within(row).getByText('Casa · 1080p')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Buscar «tele» en tu IPTV y el motor' }),
+    ).toBeInTheDocument();
+    /* Una sola petición, con el texto estable (450 ms), no una por tecla. */
+    expect(net.calls.filter((c) => c.url.startsWith('/api/v1/iptv/channels'))).toHaveLength(1);
+  });
+
+  it('3 como mucho, sin los canales que ya son filas de la pestaña, y «Ver todo en Buscar»', async () => {
+    const library = makeLibrary();
+    const dazn = library.favorites[0]!;
+    setupIptv(library, [
+      iptvChannel(1, 'DAZN 1', [dazn.id]),
+      iptvChannel(2, 'DAZN 2'),
+      iptvChannel(3, 'DAZN 3'),
+      iptvChannel(4, 'DAZN 4'),
+      iptvChannel(5, 'DAZN F1'),
+    ]);
+    await screen.findByRole('tab', { name: /Favoritos/ });
+    filter('dazn');
+    const section = await screen.findByRole('region', { name: 'En tu IPTV' });
+    expect(
+      within(section)
+        .getAllByRole('link')
+        .map((a) => a.getAttribute('aria-label')),
+    ).toEqual(['DAZN 2', 'DAZN 3', 'DAZN 4']);
+    fireEvent.click(within(section).getByRole('button', { name: 'Ver todo en Buscar' }));
+    expect(route()).toBe('buscar');
+    expect(new URLSearchParams(location.search).get('q')).toBe('dazn');
+  });
+
+  it('un favorito que es un canal de tu IPTV dice su estado: «Tu IPTV», «Tu IPTV está en pausa»…', async () => {
+    const tele = makeItem('Telecinco', 'fav', { category: 'IPTV' });
+    const gone = makeItem('Canal que se fue', 'fav', { category: 'IPTV' });
+    setup(
+      makeLibrary({
+        favorites: [tele, gone],
+        iptvIds: { [tele.id]: 'ok', [gone.id]: 'iptv_gone' },
+      }),
+    );
+    const teleRow = (await screen.findByRole('link', { name: 'Telecinco' })).closest('article')!;
+    expect(within(teleRow).getByText('Tu IPTV')).toBeInTheDocument();
+    expect(within(teleRow).getByText('IPTV')).toBeInTheDocument();
+    const goneRow = screen.getByRole('link', { name: 'Canal que se fue' }).closest('article')!;
+    expect(within(goneRow).getByText('Ya no está en tu IPTV')).toBeInTheDocument();
+  });
+
+  it('la estrella en un reciente que es un canal de tu IPTV lo guarda como canal IPTV (categoría «IPTV» y alias)', async () => {
+    const tele = makeItem('Mi tele', 'recent', { alias: 'Telecinco' });
+    setup(makeLibrary({ favorites: [], history: [tele], iptvIds: { [tele.id]: 'ok' } }), {
+      search: '?vista=biblioteca&pestana=recientes',
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Añadir Mi tele a favoritos' }));
+    await screen.findByRole('dialog', { name: 'Guardar favorito' });
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar en favoritos' }));
+    await waitFor(() =>
+      expect(net.calls.find((c) => c.method === 'POST')?.body).toMatchObject({
+        action: 'favorite-upsert',
+        item: { id: tele.id, title: 'Mi tele', category: 'IPTV', alias: 'Telecinco', ih: false },
+      }),
+    );
+  });
+
+  it('sin IPTV activa, ni sección ni petición, y el botón de siempre', async () => {
+    setup();
+    await screen.findByRole('tab', { name: /Favoritos/ });
+    filter('euro');
+    await screen.findByRole('button', { name: 'Buscar «euro» en el motor AceStream' });
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(net.calls.some((c) => c.url.startsWith('/api/v1/iptv/channels'))).toBe(false);
+    expect(screen.queryByRole('region', { name: 'En tu IPTV' })).toBeNull();
   });
 });

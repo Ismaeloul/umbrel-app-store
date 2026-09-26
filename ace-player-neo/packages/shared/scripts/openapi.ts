@@ -70,7 +70,8 @@ function errorList(route: V1RouteEntry): JsonObject[] {
    Una ruta binaria nueva se documenta aquí; si falta, la generación falla. */
 const BINARY_RESPONSES: Readonly<Record<string, JsonObject>> = {
   video: {
-    description: 'Lista m3u8 reescrita con `?t=` o segmento fMP4. Admite Range (206/416).',
+    description:
+      'Lista m3u8 (reescrita con `?t=` desde /native; tal cual desde la web) o segmento fMP4. Admite Range (206/416).',
     content: {
       'application/vnd.apple.mpegurl': { schema: { type: 'string' } },
       'video/mp4': { schema: { type: 'string', format: 'binary' } },
@@ -110,7 +111,13 @@ function successResponse(route: V1RouteEntry): JsonObject {
 
 function security(route: V1RouteEntry): JsonObject[] {
   if (route.credential === 'none') return [];
-  if (route.credential === 'video-token') return [{ videoToken: [] }];
+  /* `video` desde la IPTV (docs/iptv.md §5.4): la web entra con la sesión de
+     Umbrel y sin token; /native, con la URL firmada. */
+  if (route.credential === 'video-token') {
+    return route.access === 'any'
+      ? [{ umbrelGateway: [] }, { videoToken: [] }]
+      : [{ videoToken: [] }];
+  }
   /* Dos alternativas: desde la web basta la sesión de Umbrel (el backend no
      ve ninguna credencial) y desde /native hace falta el token del dispositivo. */
   return route.access === 'web'

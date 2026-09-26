@@ -73,8 +73,21 @@ export function filterItems<T extends Pick<Item, 'title' | 'category'>>(
   const q = foldText(query);
   if (!q) return [...items];
   return items.filter(
-    (item) => foldText(item.title).includes(q) || foldText(item.category || '').includes(q),
+    (item) => foldText(item.title).includes(q) || categoryMatches(item.category, q),
   );
+}
+
+/** La categoría que llevan los canales de tu IPTV guardados desde el buscador (docs/iptv.md §14.6). */
+export const IPTV_CATEGORY = 'IPTV';
+
+/**
+ * ¿Casa la categoría con el texto (ya plegado)? «IPTV» es una marca, no una
+ * categoría tuya: solo casa si escribes «ipt» o «iptv», no con «tv» (si no,
+ * «tv» sacaría todos tus favoritos IPTV aunque su nombre no case).
+ */
+export function categoryMatches(category: string | undefined, q: string): boolean {
+  if (category === IPTV_CATEGORY) return q.length >= 3 && 'iptv'.startsWith(q);
+  return foldText(category || '').includes(q);
 }
 
 /** Clave estable de una fila: el mismo hash puede estar en dos colecciones. */

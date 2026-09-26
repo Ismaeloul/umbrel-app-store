@@ -48,7 +48,7 @@ export function routePrefix(id: JsonRouteId): QueryKey {
 const realtimeOpen = () => realtimeStore.get().status === 'open';
 
 export function createQueryClient(): QueryClient {
-  return new QueryClient({
+  const client = new QueryClient({
     defaultOptions: {
       queries: {
         staleTime: () => (realtimeOpen() ? Number.POSITIVE_INFINITY : 30_000),
@@ -63,6 +63,11 @@ export function createQueryClient(): QueryClient {
       },
     },
   });
+  /* El bootstrap se siembra al arrancar y casi nunca tiene una vista que lo
+     observe, pero iptvActive() lo lee al tocar cada canal: sin esto, a los
+     5 min sin observador se borraría y la IPTV dejaría de salir primero. */
+  client.setQueryDefaults(routePrefix('bootstrap'), { gcTime: Number.POSITIVE_INFINITY });
+  return client;
 }
 
 /** El cliente de la app (uno por pestaña). Los tests crean el suyo. */

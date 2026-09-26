@@ -467,7 +467,16 @@ struct PortadaDestacado: View {
             .accessibilityHint("Abre el partido")
 
             HStack(alignment: .center, spacing: 12) {
-                PieVersus(partido: partido)
+                // El título también abre el partido (como la tarjeta): tocar el
+                // nombre de los equipos y que no pasara nada confundía (UITests de la CI).
+                Button {
+                    app.abrirPartido(partido)
+                } label: {
+                    PieVersus(partido: partido)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Abre el partido")
                 botonPrincipal
             }
         }

@@ -112,3 +112,33 @@ export function madridDateTime(
   const local = madridDateTimeWithStart(dateEvent, strTime);
   return local ? { date: local.date, time: local.time } : null;
 }
+
+/**
+ * Instante (epoch ms) de una fecha y hora de Madrid («2026-09-26», «18:30»),
+ * o null si no se entienden. Lo usa la guía de la IPTV con los partidos que
+ * no traen `start` (la agenda de demostración, por ejemplo).
+ */
+export function madridLocalToEpoch(date: unknown, time: unknown): number | null {
+  const day = String(date || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const clock = String(time || '').match(/^(\d{1,2}):(\d{2})$/);
+  if (!day || !clock) return null;
+  const hour = Number(clock[1]);
+  const minute = Number(clock[2]);
+  if (hour > 23 || minute > 59) return null;
+  const naive = Date.UTC(Number(day[1]), Number(day[2]) - 1, Number(day[3]), hour, minute);
+  if (!Number.isFinite(naive)) return null;
+  /* Desfase de Madrid en un instante: su hora de pared menos el instante. */
+  const offsetAt = (instant: number): number => {
+    const parts = DATE_TIME_FORMAT.formatToParts(new Date(instant));
+    const wall = Date.UTC(
+      Number(partOf(parts, 'year')),
+      Number(partOf(parts, 'month')) - 1,
+      Number(partOf(parts, 'day')),
+      Number(partOf(parts, 'hour')) % 24,
+      Number(partOf(parts, 'minute')),
+    );
+    return wall - instant;
+  };
+  const first = naive - offsetAt(naive);
+  return naive - offsetAt(first);
+}

@@ -12,6 +12,11 @@ corepack pnpm@10.18.2 run e2e e2e/ttff.spec.ts        # solo el TTFF
 npx playwright show-report playwright-report          # el informe HTML
 ```
 
+`iptv.spec.ts` necesita `ffmpeg` en el PATH (la CI lo instala). En Windows
+vale cualquier ffmpeg reciente (probado con el 7.0 que trae L-Connect 3): en
+Windows el remux escribe la lista sin `temp_file` y con barras «/»
+(`apps/server/src/modules/remux/args.ts`).
+
 Si falta el WebKit de esta versión: `npx playwright install webkit` (baja a la
 caché del usuario, `%LOCALAPPDATA%\ms-playwright`).
 
@@ -22,7 +27,9 @@ caché del usuario, `%LOCALAPPDATA%\ms-playwright`).
 | `puertos.ts` | Elige los puertos UNA vez (el proceso principal) y los pasa en `E2E_PORTS`. El backend busca el motor SIEMPRE en el 6878: el falso escucha en la primera `127.0.0.N:6878` libre desde la `.40` y el backend va a ella con `ACESTREAM_HOST`. |
 | `stack.ts` | El `webServer` de Playwright: lanza y vigila motores, backend y Vite; si un proceso se cae (los filtros de red de este PC tumban a veces un Node), lo relanza en el mismo puerto. Al acabar borra el `DATA_DIR` temporal. |
 | `motores.ts` | Motor falso principal con su API de control `/__fake/*` en un puerto aparte, el del comprobador (otro motor, como en el NAS) y un `engine_control` falso en el 3001 de la misma dirección. |
-| `backend.ts` | El arranque de `apps/server/src/main.ts` con dos cambios: escucha en `::` y la lista M3U de pruebas se «descarga» sin salir a internet (un dominio reservado que resuelve a una IP pública; el filtro anti-SSRF es el de producción). |
+| `iptv.ts` | El proveedor IPTV falso (`apps/server/test/fake-iptv`) en `[::1]:<iptv>`, anunciado como `iptv.ace-e2e.example:8080`, con su control `/__iptv/*` (`modo`, `conexiones`, `peticiones`, `reset`). |
+| `backend.ts` | El arranque de `apps/server/src/main.ts` con dos cambios: escucha en `::` y la lista M3U de pruebas y el proveedor IPTV se «descargan» sin salir a internet (dominios reservados que resuelven a una IP pública; los filtros anti-SSRF son los de producción). |
+| `pila.ts` | Dónde deja la pila su carpeta de trabajo, para que `iptv.spec.ts` busque las credenciales en los datos y los logs. |
 | `catalogo.ts` | Las fuentes del motor falso (casan con la agenda de demostración), la lista M3U y la caché del motor (`E2E_CACHE_MOTOR_S`, 15 s por defecto: ver «TTFF» abajo). |
 | `vite.e2e.config.ts` | `vite.config.ts` sin HMR ni vigilancia: otros agentes editan la web a la vez y cada guardado recargaba las páginas a mitad de un recorrido. |
 | `pruebas.ts` | El `test` con su fixture (motor sin fallos al empezar; al acabar, nada sonando y ninguna excepción sin capturar), el acceso al backend y al motor falso y los pasos comunes. |
@@ -70,7 +77,11 @@ como en Firefox). **Pendiente de comprobar en un iPhone de verdad.**
 | D5 | `sesiones.spec.ts` | Canales distintos → manda el último: el primero se para con su aviso y el motor suelta su canal. |
 | D5 | `sesiones.spec.ts` | Cerrar la pestaña suelta la sesión al momento (sendBeacon); si muere sin avisar, caduca por falta de latido (45 s). |
 | TTFF | `ttff.spec.ts` | Toque en una fuente verificada → primera imagen, en Equilibrado (6 muestras en frío). Resultados en `docs/rendimiento.md` y en `test-results/e2e/ttff-<proyecto>.json`. |
+| IPTV | `iptv-buscador.spec.ts` | Buscador con IPTV y AceStream juntos (docs/iptv.md §14.9): Telecinco solo en la IPTV suena por hls.js, entra en Recientes y se guarda en Favoritos; «La 1» sale una vez y, si cae su IPTV, sigue por su AceStream; tu «Antena 3 HD» lleva «IPTV»; el filtro de Canales; la pausa. Necesita ffmpeg. |
 | — | `webkit.spec.ts` | Solo WebKit: sin forma de reproducir, la app lo explica y no deja nada abierto. |
+| Fuentes | `fuentes-demo.spec.ts` | Con `?demo=1` (en los 4 proyectos): en los carteles de fuente de un partido y de un canal con varias fuentes, el proveedor va dentro de la tesela (donde iba la sigla, sin meterse bajo el número) y debajo solo el nombre del canal, sin repetir el proveedor. |
+| IPTV | `iptv-demo.spec.ts` | Con `?demo=1` (corre ya, en los 4 proyectos): Ajustes → IPTV sin credenciales en la página, la IPTV como fuente 1 de demo-5 que arranca sola y no se pliega, el puente (cae la IPTV → AceStream con «Volver a la IPTV») y un canal de Canales que está en la IPTV suena primero por ella. |
+| IPTV | `iptv.spec.ts` | `docs/iptv.md` §9.3 contra el backend con el proveedor IPTV falso (`support/iptv.ts`) y ffmpeg de verdad (`@video`, los dos Chrome): configurar Xtream y M3U sin que las credenciales vuelvan; la IPTV primera en un partido (confirmada por la guía) y en un canal suelto (Antena 3) con hls.js; cae la IPTV → AceStream con aviso y «Volver a la IPTV»; cae la AceStream → la IPTV; en pausa, como hoy; y la contraseña y el usuario buscados en todas las respuestas, el SSE, la página, el almacenamiento y los ficheros de datos y logs de la pila. Sin ffmpeg en el PATH se salta con su motivo. |
 
 ## Excepciones que se aceptan
 

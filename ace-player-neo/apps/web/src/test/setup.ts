@@ -5,8 +5,15 @@
    sale a la red: el cliente de la API se prueba con src/test/fetch.ts. */
 
 import '@testing-library/jest-dom/vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { afterEach, vi } from 'vitest';
+
+/* Las vistas y secciones perezosas (Ajustes, IPTV, Sistema) se transforman la
+   primera vez que se piden; con `pnpm -r test` el servidor corre sus pruebas a
+   la vez y ese primer import puede pasar del segundo que dan por defecto
+   findBy y waitFor. Cinco segundos quitan el falso rojo sin tapar fallos reales
+   (una espera que falla de verdad sigue fallando, solo tarda más). */
+configure({ asyncUtilTimeout: 5_000 });
 
 afterEach(() => {
   cleanup();

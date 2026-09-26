@@ -9,35 +9,12 @@
    usan los módulos reales (paso 1.3: ya no quedan esqueletos). */
 
 import { describe, expect, it, vi } from 'vitest';
-import type { DeviceRecord, PingResponse } from '@ace/shared';
+import type { PingResponse } from '@ace/shared';
 import { AppError } from '../src/core/errors.js';
-import type { AuthenticatedDevice } from '../src/core/module.js';
-import type { AuthService } from '../src/modules/auth/types.js';
 import type { EngineService } from '../src/modules/engine/types.js';
-import { createTestApp, native, web } from './helpers/index.js';
+import { FAKE_TOKEN as TOKEN, createTestApp, fakeAuth, native, web } from './helpers/index.js';
 
 const HASH = 'a'.repeat(40);
-const TOKEN = 'dev_iphone01.' + 'A'.repeat(43);
-
-const DEVICE: DeviceRecord = {
-  id: 'dev_iphone01',
-  name: 'iPhone de prueba',
-  platform: 'ios',
-  secretSha256: 'b'.repeat(64),
-  createdAt: '2026-01-01T00:00:00.000Z',
-  lastSeenAt: null,
-  revokedAt: null,
-};
-
-/* Auth falso: solo conoce TOKEN. */
-function fakeAuth(): AuthService {
-  return {
-    authenticateBearer: vi.fn(async (token: string): Promise<AuthenticatedDevice> => {
-      if (token !== TOKEN) throw new AppError('unauthorized');
-      return { deviceId: DEVICE.id, device: DEVICE, via: 'bearer' };
-    }),
-  } as unknown as AuthService;
-}
 
 /** La app sin las rutas de los módulos: solo lo que registre el test. */
 const CORE_ONLY = { moduleRoutes: false } as const;
@@ -259,7 +236,7 @@ describe('origen native (arquitectura §5.12)', () => {
     expect(devices).toEqual([null]);
   });
 
-  it('token incorrecto → 401; ruta solo web con token → 403 origin_forbidden', async () => {
+  it('token incorrecto → 401; la ruta solo web (healthLive) con token → 403 origin_forbidden', async () => {
     const { app } = await createTestApp({ services: { auth: fakeAuth() } });
     const bad = await app.inject({
       method: 'GET',
@@ -267,13 +244,13 @@ describe('origen native (arquitectura §5.12)', () => {
       headers: native('x.y'),
     });
     expect(bad.statusCode).toBe(401);
-    const devices = await app.inject({
+    const live = await app.inject({
       method: 'GET',
-      url: '/native/api/v1/devices',
+      url: '/native/api/v1/health/live',
       headers: native(TOKEN),
     });
-    expect(devices.statusCode).toBe(403);
-    expect(devices.json().error.code).toBe('origin_forbidden');
+    expect(live.statusCode).toBe(403);
+    expect(live.json().error.code).toBe('origin_forbidden');
   });
 
   it('una ruta v1 desconocida pide token antes de decir que no existe', async () => {
@@ -293,7 +270,7 @@ describe('origen native (arquitectura §5.12)', () => {
     expect(conToken.json().error.code).toBe('not_found');
   });
 
-  it('el vídeo firmado es solo para native y exige ?t=', async () => {
+  it('el vídeo exige ?t= desde native; la web entra sin token (IPTV, docs/iptv.md §5.4)', async () => {
     const { app } = await createTestApp({ services: { auth: fakeAuth() } });
     const url = '/api/v1/video/s_abcdefgh12/index.m3u8';
     const desdeWeb = await app.inject({
@@ -301,7 +278,9 @@ describe('origen native (arquitectura §5.12)', () => {
       url: `${url}?t=${'x'.repeat(20)}`,
       headers: web(),
     });
-    expect(desdeWeb.statusCode).toBe(403);
+    /* Sin remux para ese sid: el error de siempre, no un 403 de origen. */
+    expect(desdeWeb.statusCode).toBe(410);
+    expect(desdeWeb.json().error.code).toBe('session_expired');
     const sinT = await app.inject({ method: 'GET', url: `/native${url}`, headers: native() });
     expect(sinT.statusCode).toBe(401);
     expect(sinT.json().error.code).toBe('video_token_invalid');

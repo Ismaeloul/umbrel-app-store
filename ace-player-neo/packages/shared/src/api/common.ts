@@ -18,6 +18,7 @@ import {
   SourceReportStateSchema,
   WebSourceTypeSchema,
 } from '../state/v1.js';
+import { IPTV_NAME_MAX } from '../constants/iptv.js';
 
 /** Resumen público de un directorio (`sourceSummaries`, server.js:948-952): sin streams, renombres ni ocultos. */
 export const WebSourceSummarySchema = z.strictObject({
@@ -137,8 +138,36 @@ export type LiveScore = z.infer<typeof LiveScoreSchema>;
 
 // --- Resolución (api.md §3.13-3.14) ---
 
-export const CandidateSourceSchema = z.enum(['saved', 'm3u', 'favorites', 'history', 'acestream']);
+/** `iptv`: canal de la IPTV de Isma, con id sintético de 40 hex (docs/iptv.md §4.1 y §5.1). */
+export const CandidateSourceSchema = z.enum([
+  'saved',
+  'm3u',
+  'favorites',
+  'history',
+  'acestream',
+  'iptv',
+]);
 export type CandidateSource = z.infer<typeof CandidateSourceSchema>;
+
+/** Calidad que declara el nombre del canal IPTV (FHD, HD, 4K, SD); `null` si no lleva marca. */
+export const IptvQualitySchema = z.enum(['uhd', 'fhd', 'hd', 'sd']);
+export type IptvQuality = z.infer<typeof IptvQualitySchema>;
+
+/**
+ * Lo propio de una candidata `source: 'iptv'` (docs/iptv.md §5.1). Sale una
+ * por canal: las demás variantes (HD, reserva) se quedan en el servidor como
+ * respaldo del relé. Nunca lleva URLs ni credenciales.
+ */
+export const CandidateIptvInfoSchema = z.strictObject({
+  /** Nombre que puso Isma al proveedor («Casa»). */
+  provider: z.string().max(IPTV_NAME_MAX),
+  quality: IptvQualitySchema.nullable(),
+  /** La mejor variante es una reserva («Backup», «Alt»…). */
+  backup: z.boolean(),
+  /** Confirmada por la guía (no se enseña; diagnóstico y tests). */
+  guide: z.boolean(),
+});
+export type CandidateIptvInfo = z.infer<typeof CandidateIptvInfoSchema>;
 
 export const ResolutionCandidateSchema = z.strictObject({
   id: HashSchema,
@@ -167,6 +196,8 @@ export const ResolutionCandidateSchema = z.strictObject({
   quarantined: z.boolean(),
   semantic: z.literal(true).optional(),
   semanticSimilarity: z.number().optional(),
+  /** Solo con `source: 'iptv'` (docs/iptv.md §5.1). */
+  iptv: CandidateIptvInfoSchema.optional(),
 });
 export type ResolutionCandidate = z.infer<typeof ResolutionCandidateSchema>;
 
@@ -360,6 +391,11 @@ export const SearchResultSchema = z.strictObject({
   bitrate: z.number().nullable(),
   /** Siempre true: el buscador da infohashes. */
   ih: z.literal(true),
+  /**
+   * Solo en /api/v1/search y con IPTV activa: el canal de tu IPTV que es este
+   * resultado (≥ 92, docs/iptv.md §14.3). La ruta antigua nunca lo lleva.
+   */
+  iptv: HashSchema.optional(),
 });
 export type SearchResult = z.infer<typeof SearchResultSchema>;
 

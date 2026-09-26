@@ -51,6 +51,8 @@ export interface FavoriteTarget {
   title: string;
   category?: string;
   ih?: boolean;
+  /** Canal de tu IPTV: su nombre en la IPTV (§14.6). */
+  alias?: string;
 }
 
 export function SaveFavoriteBody({

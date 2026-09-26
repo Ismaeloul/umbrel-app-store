@@ -8,7 +8,16 @@
 
    Uso: corepack pnpm@10.18.2 --filter @ace/shared fixtures
    Datos inventados: hashes de ejemplo, nombres genéricos y un host
-   `umbrel.local`; nada real. */
+   `umbrel.local`; nada real.
+
+   Carpetas (docs/iptv.md §5.7). La app iOS recorre TODO `v1/` y `events/`
+   (FixturesTests exige un tipo Swift por fichero y GeneradosTests un RutaID
+   por nombre), así que lo que la app no usa va aparte:
+   - `v1/` y `events/`: lo que ve la app (rutas JSON y eventos compartidos).
+   - `web/v1/` y `web/events/`: rutas solo web con ejemplo propio
+     (`WEB_FIXTURE_ROUTE_IDS`) y eventos de `WEB_ONLY_EVENT_TYPES`.
+   - `variantes/`: otras formas de una respuesta (`<ruta>.<caso>.json`), que
+     validan con el esquema de la ruta cuyo id va antes del primer punto. */
 
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -19,16 +28,19 @@ import type {
   Device,
   EngineStatus,
   FootballMatch,
+  IptvStatus,
+  IptvView,
   Item,
   LibraryView,
   Preferences,
   ResolutionCandidate,
   ScanJob,
+  SharedEventType,
   SseEventData,
-  SseEventType,
   V1ResponseInput,
   V1RouteId,
   V1Routes,
+  WebOnlyEventType,
   WebSourceSummary,
 } from '../src/index.js';
 
@@ -41,6 +53,27 @@ export const FIXTURES_DIR = path.resolve(
 export type JsonRouteId = {
   [K in V1RouteId]: V1Routes[K]['response'] extends null ? never : K;
 }[V1RouteId];
+
+/**
+ * Rutas solo web cuyo ejemplo va en `web/v1/` (docs/iptv.md §5.7): las 5 de
+ * la IPTV y el buscador IPTV (`iptvChannels`, §14.2; pasa a `v1/` cuando la
+ * app calque el buscador, §14.10). `healthLive` y las demás rutas `web` de
+ * antes se quedan en `v1/`, donde la app ya las conoce.
+ */
+export const WEB_FIXTURE_ROUTE_IDS = [
+  'iptvGet',
+  'iptvSave',
+  'iptvUpdate',
+  'iptvSync',
+  'iptvDelete',
+  'iptvChannels',
+] as const satisfies readonly JsonRouteId[];
+export type WebFixtureRouteId = (typeof WEB_FIXTURE_ROUTE_IDS)[number];
+/** Rutas con ejemplo en `v1/`. */
+export type AppFixtureRouteId = Exclude<JsonRouteId, WebFixtureRouteId>;
+
+/** Subcarpetas de fixtures/ que escribe este script (se regeneran enteras). */
+export const FIXTURE_DIRS = ['v1', 'events', 'errors', 'web', 'variantes'] as const;
 
 // --- Piezas comunes ---
 
@@ -279,7 +312,7 @@ const diagnostic = {
   sessionId: SID,
 };
 
-// --- Una respuesta por ruta JSON ---
+// --- Una respuesta por ruta JSON que ve la app (v1/) ---
 
 export const V1_FIXTURES = {
   ping: { ok: true, app: 'ace-player-neo', version: '0.7.0', apiVersion: 1, serverTime: AT_MS },
@@ -529,7 +562,283 @@ export const V1_FIXTURES = {
       },
     ],
   },
-} satisfies { [K in JsonRouteId]: V1ResponseInput<K> };
+} satisfies { [K in AppFixtureRouteId]: V1ResponseInput<K> };
+
+// --- Rutas solo web con ejemplo aparte (web/v1/): Ajustes → IPTV ---
+
+const IPTV_PROVIDER_ID = 'p_Ab3dE5gH';
+const IPTV_SYNCED_AT = '2026-09-23T18:30:00.000Z';
+const IPTV_GUIDE_AT = '2026-09-23T12:00:00.000Z';
+
+/** Estado de una IPTV Xtream sincronizada, con cuenta y guía («Casa», 812 canales). */
+const iptvStatusOk: IptvStatus = {
+  status: 'ok',
+  channels: 812,
+  updatedAt: IPTV_SYNCED_AT,
+  error: null,
+  staleSince: null,
+  account: {
+    status: 'active',
+    expiresAt: '2026-12-03T00:00:00.000Z',
+    maxConnections: 1,
+    activeConnections: 0,
+    ours: 0,
+  },
+  guide: { available: true, channelsWithGuide: 640, updatedAt: IPTV_GUIDE_AT, failedAt: null },
+};
+
+/* Nunca lleva la URL, el usuario ni la contraseña: solo si están guardados. */
+const iptvView: IptvView = {
+  provider: {
+    kind: 'xtream',
+    name: 'Casa',
+    enabled: true,
+    host: 'proveedor.example:8080',
+    origin: 'http://proveedor.example:8080',
+    hasUrl: false,
+    hasUsername: true,
+    hasPassword: true,
+    ...iptvStatusOk,
+  },
+  refreshHours: 6,
+};
+
+const iptvSyncing: IptvView = {
+  provider: { ...iptvView.provider!, status: 'syncing' },
+  refreshHours: 6,
+};
+
+/** Id sintético de un canal IPTV (32 hex de HMAC + 8 de etiqueta, docs/iptv.md §4.1). */
+const IPTV_ID_GUIDE = 'd4e5f60718293a4b5c6d7e8f9012345601a2b3c4';
+const IPTV_ID_NAME = 'e5f60718293a4b5c6d7e8f901234567812ab34cd';
+/* Canales del buscador IPTV (§14): «La 1» está en tu biblioteca y en el
+   motor; «Telecinco», solo en la IPTV. */
+const IPTV_ID_LA1 = 'f60718293a4b5c6d7e8f9012345678ab23cd45ef';
+const IPTV_ID_TELECINCO = '0718293a4b5c6d7e8f9012345678abcd34ef5601';
+
+export const WEB_V1_FIXTURES = {
+  iptvChannels: {
+    query: 'la',
+    total: 3,
+    capped: false,
+    channels: [
+      { id: IPTV_ID_LA1, title: 'La 1', quality: 'hd', provider: 'Casa', library: [HASH_C] },
+      { id: IPTV_ID_NAME, title: 'DAZN LaLiga', quality: 'fhd', provider: 'Casa', library: [] },
+      { id: IPTV_ID_GUIDE, title: 'M+ LaLiga TV 2', quality: 'fhd', provider: 'Casa', library: [] },
+    ],
+  },
+  iptvGet: iptvView,
+  iptvSave: iptvSyncing,
+  iptvUpdate: {
+    provider: { ...iptvView.provider!, enabled: false, status: 'disabled' },
+    refreshHours: 6,
+  },
+  iptvSync: iptvSyncing,
+  iptvDelete: { provider: null, refreshHours: 6 },
+} satisfies { [K in WebFixtureRouteId]: V1ResponseInput<K> };
+
+// --- Variantes (variantes/<ruta>.<caso>.json) ---
+
+const iptvCandidate = (
+  id: string,
+  channel: string,
+  alias: string | null,
+  guide: boolean,
+): ResolutionCandidate => ({
+  id,
+  title: `${channel} --> Casa`,
+  alias,
+  ih: false,
+  source: 'iptv',
+  score: 100,
+  matchedChannel: channel,
+  soloFamilia: false,
+  familyFallbackAllowed: false,
+  listaId: IPTV_PROVIDER_ID,
+  availability: null,
+  bitrate: null,
+  learned: null,
+  reported: null,
+  rejectedByLearning: false,
+  quarantined: false,
+  iptv: { provider: 'Casa', quality: 'fhd', backup: false, guide },
+});
+
+/* La guía confirma el partido en «M+ LaLiga TV 2» aunque la agenda diga
+   «DAZN LaLiga»: va primera. Luego la IPTV por nombre (un solo cartel, la
+   FHD) y detrás las AceStream. El comprobador solo lleva las AceStream. */
+const iptvGuideCandidate = iptvCandidate(IPTV_ID_GUIDE, 'M+ LaLiga TV 2', 'MLaLigaTV2.es', true);
+const iptvNameCandidate = iptvCandidate(IPTV_ID_NAME, 'DAZN LaLiga', 'DAZNLaLiga.es', false);
+/* Canal solo de la IPTV tocado en el buscador (§14.4): su IPTV con puntuación 100. */
+const iptvTelecinco: ResolutionCandidate = {
+  ...iptvCandidate(IPTV_ID_TELECINCO, 'Telecinco', 'Telecinco.es', false),
+  iptv: { provider: 'Casa', quality: 'hd', backup: false, guide: false },
+};
+
+export const VARIANT_FIXTURES = {
+  /* Canal solo de la IPTV con la búsqueda inversa (`engine=1`, §14.4): su IPTV
+     primera y detrás dos AceStream del motor que casan ≥ 92. */
+  'footballResolve.iptv-canal': {
+    status: 'found',
+    channels: ['Telecinco'],
+    checked: ['iptv', 'saved', 'library', 'acestream'],
+    candidate: iptvTelecinco,
+    candidates: [
+      iptvTelecinco,
+      {
+        ...candidate,
+        id: HASH_C,
+        title: 'Telecinco --> NEW ERA',
+        ih: true,
+        source: 'acestream',
+        score: 100,
+        matchedChannel: 'Telecinco',
+        listaId: null,
+        availability: 0.7,
+      },
+      {
+        ...candidate,
+        id: HASH_A,
+        title: 'Telecinco HD --> ELCANO',
+        ih: true,
+        source: 'acestream',
+        score: 96,
+        matchedChannel: 'Telecinco',
+        listaId: null,
+        availability: 0.9,
+      },
+    ],
+    engineAvailable: true,
+    ai: { enabled: false, used: false, model: null, catalogSize: 0, error: null },
+    program: null,
+    research: false,
+    preheat: null,
+    scan: {
+      id: SCAN_ID,
+      statusUrl: `/api/v1/football/scans/${SCAN_ID}`,
+      total: 3,
+      initialCount: 3,
+    },
+  },
+  /* Buscar con IPTV activa (§14.3): los resultados del motor que son un canal
+     de tu IPTV llevan su id; los demás, no. */
+  'search.iptv': {
+    query: 'la 1',
+    results: [
+      {
+        id: HASH_A,
+        title: 'La 1 HD --> ELCANO',
+        category: 'Busqueda',
+        availability: 0.9,
+        bitrate: 450000,
+        ih: true,
+        iptv: IPTV_ID_LA1,
+      },
+      {
+        id: HASH_B,
+        title: 'La 1 HD --> NEW ERA',
+        category: 'Busqueda',
+        availability: 0.7,
+        bitrate: null,
+        ih: true,
+        iptv: IPTV_ID_LA1,
+      },
+      {
+        id: HASH_C,
+        title: 'La 10 Deportes',
+        category: 'Busqueda',
+        availability: 0.4,
+        bitrate: null,
+        ih: true,
+      },
+    ],
+  },
+  /* Biblioteca con canales IPTV guardados desde el buscador (§14.6): un
+     favorito renombrado y un reciente que ya no está en tu IPTV. */
+  'libraryGet.iptv': {
+    ...library,
+    favorites: [
+      ...library.favorites,
+      {
+        /* Renombrado por Isma: el nombre del canal en la IPTV queda aparte. */
+        id: IPTV_ID_TELECINCO,
+        title: 'Tele 5',
+        type: 'fav',
+        category: 'IPTV',
+        alias: 'Telecinco',
+        date: AT,
+        fromWebSync: false,
+        ih: false,
+      },
+    ],
+    history: [
+      {
+        id: IPTV_ID_NAME,
+        title: 'DAZN LaLiga',
+        type: 'recent',
+        category: '',
+        date: AT,
+        fromWebSync: false,
+        ih: false,
+      },
+      ...library.history,
+    ],
+    iptvIds: { [IPTV_ID_TELECINCO]: 'ok', [IPTV_ID_NAME]: 'iptv_gone' },
+  },
+  'footballResolve.iptv': {
+    status: 'found',
+    channels: ['DAZN LaLiga'],
+    checked: ['iptv', 'saved', 'm3u', 'favorites', 'history', 'acestream'],
+    candidate: iptvGuideCandidate,
+    candidates: [
+      iptvGuideCandidate,
+      iptvNameCandidate,
+      { ...candidate, id: HASH_A, title: 'DAZN LaLiga FHD', matchedChannel: 'DAZN LaLiga' },
+      {
+        ...candidate,
+        id: HASH_C,
+        title: 'DAZN LaLiga',
+        source: 'acestream',
+        score: 92,
+        matchedChannel: 'DAZN LaLiga',
+        listaId: null,
+      },
+    ],
+    engineAvailable: true,
+    ai: { enabled: false, used: false, model: null, catalogSize: 0, error: null },
+    program: null,
+    research: false,
+    preheat: null,
+    scan: {
+      id: SCAN_ID,
+      statusUrl: `/api/v1/football/scans/${SCAN_ID}`,
+      total: 2,
+      initialCount: 2,
+    },
+  },
+  'channelStream.iptv': {
+    session: streamSession,
+    url: `/api/v1/video/${SID}/index.m3u8`,
+    protocol: 'hls',
+    remux: true,
+    codec: { video: 'h264', audio: 'aac', source: 'ffprobe' },
+    latency: {
+      mode: 'balanced',
+      initialBufferS: 6,
+      rebuildS: 8,
+      liveSync: { targetS: 6, maxS: 14, rate: 1.03 },
+    },
+    stats: { via: 'sse' },
+    handoff: false,
+    source: 'iptv',
+  },
+} satisfies {
+  'footballResolve.iptv-canal': V1ResponseInput<'footballResolve'>;
+  'search.iptv': V1ResponseInput<'search'>;
+  'libraryGet.iptv': V1ResponseInput<'libraryGet'>;
+  'footballResolve.iptv': V1ResponseInput<'footballResolve'>;
+  'channelStream.iptv': V1ResponseInput<'channelStream'>;
+};
 
 // --- Un evento de cada tipo ---
 
@@ -611,7 +920,12 @@ export const EVENT_FIXTURES = {
   'diagnostics.new': diagnostic,
   'devices.changed': { reason: 'paired', deviceId: DEVICE_ID },
   resync: { reason: 'buffer_miss' },
-} satisfies { [T in SseEventType]: SseEventData<T> };
+} satisfies { [T in SharedEventType]: SseEventData<T> };
+
+/** Eventos solo web (web/events/): no llegan nunca a /native. */
+export const WEB_EVENT_FIXTURES = {
+  'iptv.status': iptvStatusOk,
+} satisfies { [T in WebOnlyEventType]: SseEventData<T> };
 
 export const ERROR_FIXTURE: ApiError = {
   error: {
@@ -628,6 +942,11 @@ export function fixtureFiles(): Map<string, unknown> {
   for (const [type, data] of Object.entries(EVENT_FIXTURES))
     files.set(`events/${type}.json`, { type, data });
   files.set('errors/api-error.json', ERROR_FIXTURE);
+  for (const [id, value] of Object.entries(WEB_V1_FIXTURES)) files.set(`web/v1/${id}.json`, value);
+  for (const [type, data] of Object.entries(WEB_EVENT_FIXTURES))
+    files.set(`web/events/${type}.json`, { type, data });
+  for (const [name, value] of Object.entries(VARIANT_FIXTURES))
+    files.set(`variantes/${name}.json`, value);
   return files;
 }
 
@@ -642,14 +961,13 @@ export async function toFixtureJson(value: unknown, file: string): Promise<strin
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  for (const sub of ['v1', 'events', 'errors']) {
-    const dir = path.join(FIXTURES_DIR, sub);
+  for (const sub of FIXTURE_DIRS) {
     /* Se regenera la carpeta entera: un ejemplo de una ruta borrada no debe quedarse. */
-    rmSync(dir, { recursive: true, force: true });
-    mkdirSync(dir, { recursive: true });
+    rmSync(path.join(FIXTURES_DIR, sub), { recursive: true, force: true });
   }
   for (const [rel, value] of fixtureFiles()) {
     const file = path.join(FIXTURES_DIR, rel);
+    mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, await toFixtureJson(value, file));
   }
   console.log(

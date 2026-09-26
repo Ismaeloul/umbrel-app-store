@@ -55,6 +55,7 @@ import * as engineRoutes from './modules/engine/routes.js';
 import * as eventsRoutes from './modules/events/routes.js';
 import * as footballRoutes from './modules/football/routes.js';
 import * as healthRoutes from './modules/health/routes.js';
+import * as iptvRoutes from './modules/iptv/routes.js';
 import * as netRoutes from './modules/net/routes.js';
 import * as playbackRoutes from './modules/playback/routes.js';
 import * as remuxRoutes from './modules/remux/routes.js';
@@ -84,6 +85,7 @@ declare module 'fastify' {
 export const MODULE_ROUTES = [
   stateRoutes,
   netRoutes,
+  iptvRoutes,
   engineRoutes,
   scannerRoutes,
   searchRoutes,
@@ -110,6 +112,21 @@ export interface BuildAppOptions {
 /* Un `X-Request-Id` que llega de fuera se acepta solo con forma inocua: va
    al log y a la respuesta, y no puede meter saltos de línea ni basura. */
 const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,128}$/;
+
+/**
+ * Rutas cuya consulta es lo que Isma escribe en el buscador de su IPTV
+ * (docs/iptv.md §14.2): ni en un 400 se escribe en el registro.
+ */
+const QUIET_QUERY_ROUTES: ReadonlySet<string> = new Set(['iptvChannels']);
+
+/** La URL para el registro: redactada y, en esas rutas, sin la consulta. */
+export function loggedUrl(url: string, routeId: string | undefined): string {
+  if (routeId && QUIET_QUERY_ROUTES.has(routeId)) {
+    const mark = url.indexOf('?');
+    return mark < 0 ? url : `${url.slice(0, mark)}?[consulta]`;
+  }
+  return redactUrl(url);
+}
 
 export function requestIdFrom(header: string | string[] | undefined): string {
   const value = Array.isArray(header) ? header[0] : header;
@@ -237,7 +254,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     const entry = {
       reqId: request.id,
       method: request.method,
-      url: redactUrl(request.url),
+      url: loggedUrl(request.url, request.routeOptions.config?.v1RouteId),
       status: reply.statusCode,
       ms: Math.round(reply.elapsedTime),
       origin: request.aceOrigin,

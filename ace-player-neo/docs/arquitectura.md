@@ -617,10 +617,18 @@ responden 403 a cualquier petición `native`, con o sin token: la app iOS solo
 usa v1.
 
 **Emparejamiento** (flujo en §7.3):
-- Desde la web: `POST /api/v1/pairing` crea un código de **6 dígitos**
-  (`crypto.randomInt`) y un QR `aceneo://pair?u=<URL base>&c=<código>`,
+- Desde la web o desde un iPhone emparejado (0.8.1): `POST /api/v1/pairing`
+  crea un código de **6 dígitos** (`crypto.randomInt`) y un QR
+  `aceneo://pair?u=<URL base>[&u=<otra>]&c=<código>` (una `u` por dirección:
+  primero `baseUrl`, luego `alternateBaseUrls`, hasta 2, sin repetidas),
   válido **5 minutos**, de un solo uso. Solo hay un código vivo: uno nuevo
-  anula el anterior.
+  anula el anterior. Si lo creó un iPhone y ese iPhone se revoca, el código
+  muere; quién lo creó solo se guarda en memoria y en el log (`pairedBy`).
+  Cada dirección es un origen http(s) con nombre ASCII o IPv6 entre
+  corchetes y puerto opcional (`PAIRING_BASE_URL_RE`: sin credenciales, ruta
+  ni caracteres que se codifiquen, para que el QR quepa). Un iPhone crea como
+  mucho **5 códigos por minuto** (429 `pairing_rate_limited`); la web, sin
+  tope.
 - Desde iOS: `POST /native/api/v1/pairing/claim { code, name, platform }`.
   Límites que no dependen de la IP (el backend ve la de nginx, empaquetado
   N3, y no se sabe si la pasarela manda `X-Forwarded-For`): **5 intentos por
@@ -635,9 +643,10 @@ usa v1.
 `deviceId`, se compara el hash con `timingSafeEqual` y se comprueba que no
 está revocado. `lastSeenAt` se actualiza como mucho una vez por minuto.
 
-**Revocación**: `DELETE /api/v1/devices/:id` (solo web). Cierra sus
-conexiones SSE, suelta sus visores y hace que sus URLs de vídeo dejen de valer
-al instante (la firma lleva el `deviceId`).
+**Revocación**: `DELETE /api/v1/devices/:id` (web o iPhone emparejado,
+también el propio). Cierra sus conexiones SSE, suelta sus visores y hace que
+sus URLs de vídeo dejen de valer al instante (la firma lleva el `deviceId`).
+El código de emparejamiento que hubiera creado ese iPhone muere.
 
 **URLs de vídeo firmadas** (AVPlayer no puede poner `Authorization` en cada
 segmento):
@@ -668,8 +677,9 @@ anti-CSRF de `isAllowedMutation` (`server.js:1257-1274`, T-033) para el origen
 - **Reanudación**: búfer circular de 200 eventos; con `Last-Event-ID` se
   reenvía lo que falte o, si ya no está, un `resync` para que el cliente
   recargue.
-- **Filtro**: cada conexión recibe lo general y lo de su dispositivo; los
-  eventos de administración (`devices.changed`) solo van al origen `web`.
+- **Filtro**: cada conexión recibe lo general y lo de su dispositivo. Desde
+  la 0.8.1 `devices.changed` va a todos (web y iPhone: Ajustes › Dispositivos
+  en la app); el filtro por origen (`WEB_ONLY_EVENT_TYPES`) queda vacío.
 - **Contrapresión**: si el búfer de escritura de una conexión pasa de 256 KiB
   se cierra y el cliente reconecta.
 - Si el SSE no conecta en 10 s, la web vuelve al sondeo de `/api/playback`
@@ -685,7 +695,7 @@ anti-CSRF de `isAllowedMutation` (`server.js:1257-1274`, T-033) para el origen
 | `scan.progress`, `scan.verdict` | scanner | quien vea ese trabajo |
 | `state.changed` (biblioteca, preferencias, directorios, aprendizaje) | state | todos |
 | `diagnostics.new` | diagnostics | panel de salud abierto |
-| `devices.changed` | auth | solo web |
+| `devices.changed` | auth | todos (0.8.1) |
 | `resync` | events | quien reconecta tarde |
 
 ### 5.14 `diagnostics` y `health`
@@ -791,12 +801,12 @@ zod. Las nuevas:
 | `POST /api/v1/sessions/:sid/release` | web, native | soltar (también con `sendBeacon` al cerrar la página) |
 | `GET /api/v1/video/:sid/:file` | native (con `t`) | lista y segmentos del remux para AVPlayer |
 | `GET /api/v1/events` | web, native | SSE |
-| `POST /api/v1/pairing` | web | crear código y QR |
+| `POST /api/v1/pairing` | web, native | crear código y QR (desde el iPhone, con sus dos direcciones) |
 | `POST /api/v1/pairing/claim` | cualquiera, sin token | canjear código |
-| `GET /api/v1/devices`, `DELETE /api/v1/devices/:id` | web | listar y revocar |
-| `GET/PUT /api/v1/settings` | web (lectura también native) | ajustes v2 (§5.6) |
+| `GET /api/v1/devices`, `DELETE /api/v1/devices/:id` | web, native | listar y revocar (también el propio) |
+| `GET/PUT /api/v1/settings` | web, native | ajustes v2 (§5.6) |
 | `GET/POST /api/v1/diagnostics` | web, native | registro de fallos |
-| `GET /api/v1/health`, `GET /api/v1/health/live` | web · interno | panel de salud · healthcheck |
+| `GET /api/v1/health`, `GET /api/v1/health/live` | web, native · interno (live solo web) | panel de salud · healthcheck |
 
 ### 6.3 `GET /api/v1/channels/:id/stream`
 
@@ -945,6 +955,12 @@ sequenceDiagram
   W->>S: DELETE /api/v1/devices/ID
   S-->>I: cierra su SSE, sus URLs de vídeo dejan de valer y las peticiones dan 401
 ```
+
+Desde la 0.8.1 el código también lo puede crear un iPhone ya emparejado
+(`POST /native/api/v1/pairing` con su Bearer, el QR lleva sus dos
+direcciones), `devices.changed` llega también a los iPhone y revocar se puede
+hacer desde cualquier iPhone emparejado, también el propio (primero recibe su
+`devices.changed` `revoked` y luego se le cierra el SSE).
 
 ### 7.4 SSE
 

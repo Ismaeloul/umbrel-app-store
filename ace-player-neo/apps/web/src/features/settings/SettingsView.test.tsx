@@ -31,6 +31,7 @@ function setup(search = '?vista=ajustes', extra: Parameters<typeof mockFetch>[0]
     'POST /api/v1/engine/restart': { restarted: true },
     'GET /api/v1/bootstrap': fixture('bootstrap'),
     'GET /api/v1/playback': fixture('playbackStatus'),
+    'GET /api/v1/iptv': { provider: null, refreshHours: 6 },
     ...extra,
   });
   const seccion = new URLSearchParams(search).get('vista')?.split('/')[1] ?? null;
@@ -61,6 +62,7 @@ describe('Ajustes', () => {
       .map((a) => a.textContent);
     expect(names).toEqual([
       'Listas',
+      'IPTV',
       'Tu fútbol',
       'Reproducción',
       'Dónde se está reproduciendo',

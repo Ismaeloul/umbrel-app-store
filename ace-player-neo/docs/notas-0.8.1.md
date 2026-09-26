@@ -1,0 +1,46 @@
+# Notas de la 0.8.1
+
+El CHANGELOG de la app vive en el paquete de la tienda
+(`ismaeloul-ace-player-neo/CHANGELOG.md`), que solo se toca al publicar. Hasta
+entonces, la entrada de la 0.8.1 se prepara aquí; al montar la release se copia
+tal cual en el CHANGELOG y en `releaseNotes` de `umbrel-app.yml`, con su fecha.
+
+**Montada el 26-09 en la rama `release/0.8.1`.** Lo de abajo es el borrador
+largo; lo que se publica es la versión corta que está en el CHANGELOG y en
+`releaseNotes` (entrada «0.8.1 (2026-09-26)»), con lo que trae la 0.8.1: IPTV
+con AceStream de respaldo en los dos sentidos, la guía, el buscador con los
+dos juntos, los carteles de fuente nuevos y la app emparejada con Salud,
+Dispositivos y «Un solo dispositivo a la vez».
+
+---
+
+## 0.8.1 (sin fecha)
+
+Tu IPTV, primero. En Ajustes > IPTV, desde el navegador del ordenador, puedes
+conectar una lista M3U (su direccion) o una cuenta Xtream Codes (servidor,
+usuario y contraseña). Se guarda cifrada en tu Umbrel y no vuelve a salir de
+ahi: ni al navegador, ni al iPhone, ni a los registros. En el iPhone no hay
+nada que configurar.
+
+Cuando un partido de la agenda se ve por un canal que esta en tu IPTV (por
+ejemplo DAZN LaLiga), o tocas un canal que tambien tienes en ella (por ejemplo
+Antena 3), sale primero la IPTV, con su distintivo en el selector de fuentes.
+El comprobador sigue verificando las fuentes de AceStream por detras.
+
+Si uno no va, va el otro: si la IPTV se cae, sigue sola por la mejor fuente de
+AceStream verificada, te avisa y vuelves a la IPTV con un toque ("Volver a la
+IPTV"). Si falla AceStream y tienes IPTV, pasa a la IPTV. Cambiar a mano es un
+toque en el selector.
+
+El video de la IPTV pasa siempre por tu Umbrel, convertido a HLS: en el
+navegador se reproduce con hls.js y en el iPhone como cualquier otro canal.
+
+Si tu lista trae guia de programas (XMLTV), tu Umbrel la usa por dentro para
+encontrar el canal que de verdad echa cada partido, aunque la agenda no lo
+sepa; las repeticiones, los resumenes y las previas no cuentan. No hay
+pantallas nuevas: como mucho, una linea con el estado de la guia en Ajustes >
+IPTV. Sin guia, todo funciona igual.
+
+La app emparejada del iPhone puede usar Salud, Dispositivos y "Un solo
+dispositivo a la vez", y revocar otros iPhone o a si misma. El codigo QR de
+emparejar lleva tambien tu otra direccion (casa y Tailscale).

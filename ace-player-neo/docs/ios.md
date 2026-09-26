@@ -84,7 +84,9 @@ vuelve a firmar sola.
    - **Ajustes → Privacidad y seguridad → Modo de desarrollador** activado (lo
      pide iOS para cualquier app firmada con un certificado de desarrollo).
 4. Abre **Ace Neo** y empareja (web → Ajustes → Dispositivos → «Emparejar un
-   dispositivo»; en el iPhone, escanea el QR o escribe la dirección y el código).
+   dispositivo», o desde otro iPhone ya emparejado → Ajustes → Dispositivos,
+   con servidor 0.8.1 o posterior; en el iPhone, escanea el QR o escribe la
+   dirección y el código).
 5. Deja que IPA Station la refresque antes de los 7 días. Si caduca, la app no
    abre hasta que se vuelve a firmar; **no se pierde nada** (el token sigue en el
    Llavero si firmas con el mismo Apple ID).
@@ -139,7 +141,8 @@ desarrollo: `application-identifier`, `com.apple.developer.team-identifier`,
    Groups…): Ace Neo no usa ninguna.
 3. **Mismo Apple ID en cada refresco.** El Llavero va por equipo: si firmas con
    otro Apple ID, la app nueva no ve el token de la anterior y hay que volver a
-   emparejar (la web mostrará el iPhone viejo en «Dispositivos»: revócalo).
+   emparejar (la web mostrará el iPhone viejo en «Dispositivos»: revócalo
+   desde la web o, con servidor 0.8.1 o posterior, desde el iPhone nuevo).
 4. **Nombre y versión**: tras instalar, Ajustes (de la app) → Acerca de
    enseña versión y compilación; tiene que coincidir con la ejecución de la CI
    de la que bajaste la IPA.

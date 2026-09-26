@@ -5,14 +5,16 @@
    (el comprobador avisando a fuentes, precalentado y playback; el motor
    avisando a la web) va por el bus de dominio, que se crea antes que nadie.
 
-     state, net, engine
-     scanner      → engine
+     state, net
+     iptv         → state, net (docs/iptv.md §11.2)
+     engine
+     scanner      → engine, iptv (carril IPTV)
      search       → engine, scanner
      sources      → state, scanner
      directories  → net, state
-     remux        → engine
-     playback     → engine, remux, state, scanner
-     football     → state, net, engine, scanner, search, sources, directories
+     remux        → engine, iptv (redactor)
+     playback     → engine, remux, state, scanner, iptv
+     football     → state, net, engine, scanner, search, sources, directories, iptv
      teams        → net, football
      auth         → state
      events       (solo el bus)
@@ -32,8 +34,13 @@ import { createDiagnosticsService, type DiagnosticsService } from './modules/dia
 import { createDirectoriesService, type DirectoriesService } from './modules/directories/index.js';
 import { createEngineService, type EngineService } from './modules/engine/index.js';
 import { createEventsHub, type EventsHub } from './modules/events/index.js';
-import { createFootballService, type FootballService } from './modules/football/index.js';
+import {
+  createFootballService,
+  scoreResolutionCandidate,
+  type FootballService,
+} from './modules/football/index.js';
 import { createHealthService, type HealthService } from './modules/health/index.js';
+import { createIptvService, type IptvService } from './modules/iptv/index.js';
 import { createNetClient, type NetClient } from './modules/net/index.js';
 import { createPlaybackService, type PlaybackService } from './modules/playback/index.js';
 import { createRemuxService, type RemuxService } from './modules/remux/index.js';
@@ -50,6 +57,7 @@ export interface Services {
   readonly bus: DomainBus;
   readonly state: StateService;
   readonly net: NetClient;
+  readonly iptv: IptvService;
   readonly engine: EngineService;
   readonly scanner: ScannerService;
   readonly search: SearchService;
@@ -71,6 +79,7 @@ export type ServiceName = Exclude<keyof Services, keyof CoreDeps>;
 export const SERVICE_ORDER: readonly ServiceName[] = [
   'state',
   'net',
+  'iptv',
   'engine',
   'scanner',
   'search',
@@ -96,17 +105,38 @@ export function createServices(
 ): Services {
   const state = overrides.state ?? createStateService(core);
   const net = overrides.net ?? createNetClient(core);
+  /* La IPTV puntúa con la MISMA función que la resolución (docs/iptv.md §14.3). */
+  const iptv =
+    overrides.iptv ??
+    createIptvService({
+      ...core,
+      state,
+      net,
+      scorer: (channels, item) => scoreResolutionCandidate(channels, item, 'iptv'),
+    });
   const engine = overrides.engine ?? createEngineService(core);
-  const scanner = overrides.scanner ?? createScannerService({ ...core, engine });
+  const scanner = overrides.scanner ?? createScannerService({ ...core, engine, iptv });
   const search = overrides.search ?? createSearchService({ ...core, engine, scanner });
   const sources = overrides.sources ?? createSourcesService({ ...core, state, scanner });
   const directories = overrides.directories ?? createDirectoriesService({ ...core, net, state });
-  const remux = overrides.remux ?? createRemuxService({ ...core, engine });
+  const remux =
+    overrides.remux ??
+    createRemuxService({ ...core, engine, redact: (text: string) => iptv.redact(text) });
   const playback =
-    overrides.playback ?? createPlaybackService({ ...core, engine, remux, state, scanner });
+    overrides.playback ?? createPlaybackService({ ...core, engine, remux, state, scanner, iptv });
   const football =
     overrides.football ??
-    createFootballService({ ...core, state, net, engine, scanner, search, sources, directories });
+    createFootballService({
+      ...core,
+      state,
+      net,
+      engine,
+      scanner,
+      search,
+      sources,
+      directories,
+      iptv,
+    });
   const teams = overrides.teams ?? createTeamsService({ ...core, net, football });
   const auth = overrides.auth ?? createAuthService({ ...core, state });
   const events = overrides.events ?? createEventsHub(core);
@@ -132,6 +162,7 @@ export function createServices(
     ...core,
     state,
     net,
+    iptv,
     engine,
     scanner,
     search,
