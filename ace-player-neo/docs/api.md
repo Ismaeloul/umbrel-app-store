@@ -966,3 +966,39 @@ Ejemplo (`fixtures/web/v1/iptvChannels.json`):
 ### 7.7 Estado (26-sep-2026)
 
 Implementado en la rama `rediseno/iptv` (servidor y web), para la 0.8.1 sin publicar. Pruebas: unitarias del contrato, del servidor y de la web; integración del servidor con el proveedor falso (`apps/server/test/fake-iptv`); E2E `apps/web/e2e/iptv.spec.ts` contra la pila entera con ffmpeg de verdad (configurar M3U y Xtream, la IPTV primero en un partido y en un canal suelto, el puente en los dos sentidos, volver con un toque y la búsqueda de la contraseña y el usuario en todas las respuestas, el SSE, la página y los ficheros de datos y logs).
+
+## 8. Varios dispositivos y latencia (0.8.1, solo `/api/v1`)
+
+Diseño y medidas en [`multidispositivo.md`](./multidispositivo.md). Sin rutas, eventos ni códigos de error nuevos: todo son campos opcionales, así que la app 0.8.0 publicada sigue igual (los ignora) y `fixtures/v1/` y `fixtures/events/` no cambian. Las variantes nuevas están en `packages/shared/fixtures/variantes/*.multi.json` y `playback.handoff.follow.json`.
+
+### 8.1 Pedir un canal: `channelStream`
+
+`GET /api/v1/channels/:id/stream` gana cinco parámetros. Un cliente solo los manda si ha visto `bootstrap.features.multi === true` (el esquema es estricto: un servidor anterior los rechazaría).
+
+| Parámetro | Valores | Qué hace |
+|---|---|---|
+| `others` | `move` \| `stop` | «Cambiar en los dos» (`move`) o «Solo aquí» (`stop`, o ausente, como hasta ahora). Con `move`, los visores de **otros dispositivos** que estaban en la sesión `from` reciben `playback.handoff` con `follow: true` y pasan solos al canal nuevo; los de cualquier otra sesión se paran. `move` sin `from`, o con «Un solo dispositivo a la vez» encendido, se trata como `stop`. |
+| `from` | id de sesión | La sesión que el cliente vio al decidir (`playbackStatus`). Contra las carreras: si el otro ya había cambiado a otra cosa, no se le arrastra. |
+| `join` | `1` | Unirse a lo que ya se ve, **sin cambiar nunca el canal de la casa**. Si no hay sesión viva de ese canal, `410 session_expired` sin cerrar ni abrir nada. Lo usan seguir, la cápsula y «Ver … aquí». Con `join`, `others` y `from` se ignoran; con «Un solo dispositivo a la vez», el que se une se la queda (`same_channel` para los demás). |
+| `match` | id de la agenda | Partido desde el que se pide: para que el otro dispositivo pueda unirse o seguir en el mismo partido. |
+| `follows` | `0` \| `1` | Este visor sabe seguir un cambio (`playback.handoff` con `follow`). La web manda `1`; la app 0.8.0 no lo manda y, como «el otro», se para como hasta ahora. |
+
+La concesión (`StreamGrant`) solo gana `iptvInput` (`ts` \| `hls`, solo IPTV: lo que entrega el proveedor, para «Datos técnicos»). `latency` no cambia de forma, pero ahora se calcula en **segundos** con el `EXT-X-TARGETDURATION` real del remux (§8.4).
+
+### 8.2 «Dónde se reproduce»: `playbackStatus` y `playback.sessions`
+
+- Cada `SessionSummary` gana `matchId` (el partido que se ve, el del último visor que lo dijo; ausente = canal suelto o no se sabe).
+- Cada visor gana `follows: true` (sabe seguir) y `away: true` (más de 20 s sin latido, `MULTI_TIMINGS.viewerAwayMs`: no cuenta para la pregunta ni para la cápsula). Los dos se omiten sin dato: la forma de siempre no cambia. El servidor publica `playback.sessions` al cruzar los 20 s y al volver a latir.
+- Ya no se publica el instante en que un visor ha dejado su sesión vieja y aún no está en la nueva (cambio de canal): con él, el otro dispositivo creía que ya no quedaba nadie.
+
+### 8.3 `playback.handoff` y `bootstrap`
+
+- `playback.handoff` gana `byDeviceName` (quién se lo ha quedado, con el nombre de «Dispositivos»: «Chrome · Windows», «iPhone de Isma», «App antigua (0.6)»), `follow` (`true` si eligió «Cambiar en los dos»: el visor pide el canal nuevo con `join=1`, sin tocar nada) y `matchId`. Con `same_channel` («Un solo dispositivo a la vez») nunca lleva `follow`.
+- `bootstrap.features.multi` (opcional, booleano): el servidor entiende los parámetros de §8.1.
+
+### 8.4 Latencia del remux (IPTV en la web y el iPhone)
+
+- **Segmentos:** `-hls_time 0.5` (antes 2) en ventana de 64. Con `-c copy` solo se corta en fotogramas clave, así que cada GOP es un segmento y `EXT-X-TARGETDURATION` queda en 1 con GOP de menos de 1,5 s (2 con GOP de 1,5 a 2 s). El TD se fija al quedar lista la lista y se sirve igual en todas las ramas (nunca baja; sube si un segmento no cabe). Las listas de `/remux/` (apps 0.6) llevan `EXT-X-START:TIME-OFFSET=-6.0`. Medidas con ffmpeg de verdad en `multidispositivo.md` §4.9.
+- **`latency.web` de una IPTV** (hls.js): objetivo 3 / 6 / 10 s por modo, nunca por debajo de 2 / 3 / 4 × TD; tope para acelerar 7 / 14 / 24 s (o el objetivo más 2 TD).
+- **`latency.ios`**: `liveEdgeOffsetS` 3 / 6 / 10 s, nunca por debajo de 3 × TD (lo que aguanta AVPlayer sin LL-HLS); `preferredForwardBufferDuration` 4 / 8 / 12.
+- **Arranque de la IPTV:** la lista queda lista con 3 segmentos y `max(4 s, 3 × TD + 1 s)` de vídeo, o con 1 segmento pasados 20 s desde el primer byte entregado a ffmpeg. Análisis de 2 MB / 2 s, con un reinicio a 5 MB / 5 s sin soltar la conexión con el proveedor si ffmpeg no encuentra los parámetros. Tope total de la petición, 50 s (`IPTV_ACQUIRE_MAX_MS`), siempre con `iptv_timeout` y nunca con un corte.

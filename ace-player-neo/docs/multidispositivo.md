@@ -3,8 +3,16 @@
 Rama `rediseno/multi`, que sale de `rediseno/iptv` en `246fa67`, con el servidor 0.8.1 todavía sin publicar. Lo pidió
 Isma el 26-sep-2026, después de probar a la vez el PC (web) y el iPhone (app 0.8.0) contra su Umbrel.
 
-**Estado: diseño cerrado tras la revisión del 26-sep (§11). C (latencia) implementado en `multi/latencia` (§4.9,
-con las medidas); A y B, en `multi/casa`.** Lo implementan dos agentes en paralelo,
+**Estado (26-sep): implementado y fusionado en `rediseno/multi`**: `multi/dispositivos` (A y B), `multi/latencia` (C,
+§4.9 con las medidas) y `rediseno/iptv` (con el buscador de §14 de `docs/iptv.md`). Cierre de §8.3 hecho: `docs/api.md`
+§8, `docs/comportamientos.md` (B-225 y B-279 a B-282) y `docs/openapi-v2.yaml` regenerado; notas en
+`docs/notas-0.8.1.md`. Al fusionar, el ffmpeg falso de `test/integration/multi.test.ts` pasó a 4 segmentos de 1 s: con la
+espera de §4.3 (3 segmentos y `max(4 s, 3 × TD + 1 s)`), 3 de 2 s nunca dejaban la lista lista. Dos arreglos
+tras probar a mano con dos navegadores: (1) con «en los dos» recordado, si el otro está a medio seguir (el servidor ya
+lo sacó de la sesión vieja y aún no está en la nueva, así que no sale en la lista) se manda igualmente `others=move` con
+`from` = la sesión propia; sin eso el servidor lo paraba al llegar (el E2E 14 fallaba 1 de cada ~15 veces);
+(2) en el escritorio la cápsula de la barra superior se recorta con «…» en vez de pisar «Ajustes». Falta la app nativa
+(§7) y medir el iPhone en el laboratorio. Lo implementaron dos agentes en paralelo,
 «multi» (A y B) y «latencia» (C), con el reparto de §8. No toca `apps/ios` ni el buscador de la IPTV (§14 de
 `docs/iptv.md`), que se hace en paralelo en `rediseno/iptv`.
 

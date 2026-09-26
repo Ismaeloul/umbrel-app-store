@@ -39,6 +39,17 @@ La app emparejada del iPhone puede usar Salud, Dispositivos y "Un solo
 dispositivo a la vez", y revocar otros iPhone o a si misma. El codigo QR de
 emparejar lleva tambien tu otra direccion (casa y Tailscale).
 
+Varios dispositivos a la vez. Tu Umbrel sigue poniendo un canal para toda la
+casa (AceStream o IPTV), pero ahora se nota menos: si cambias de canal mientras
+en otro dispositivo se ve algo, el navegador te pregunta "Cambiar en los dos" o
+"Solo aqui". Con "Cambiar en los dos", el otro pasa solo al canal nuevo. Con
+"Solo aqui", el otro deja de verlo con un aviso claro ("En el PC han cambiado a
+Antena 3") y un toque para ver lo mismo o volver a lo suyo. Arriba sale una
+capsula pequeña con lo que se ve en el otro ("En el iPhone · DAZN LaLiga"); al
+tocarla lo ves tambien donde estas. Con un solo dispositivo no sale nada, y con
+"Un solo dispositivo a la vez" encendido manda el ultimo, como antes. La app del
+iPhone lo tendra en su proxima version; la de ahora se para como siempre.
+
 Menos retraso en el iPhone y los tres modos tambien con la IPTV. Tu Umbrel corta
 el video en trozos tan cortos como deja cada canal (uno por fotograma clave,
 normalmente de 1 s): en "Baja latencia" el iPhone pasa de unos 8-11 s a unos 4 s
