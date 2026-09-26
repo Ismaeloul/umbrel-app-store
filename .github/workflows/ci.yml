@@ -159,7 +159,9 @@ jobs:
   e2e:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # Con varios dispositivos, latencia y el buscador «como Google» (0.8.3) la
+    # batería pasa de 38 min en Linux: 40 la cortaba a medias.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       # La batería E2E (apps/web/e2e + playwright.config.ts) la está cerrando
