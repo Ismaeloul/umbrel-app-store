@@ -3,7 +3,7 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.8.1"
+version: "0.8.2"
 tagline: Agenda de futbol con la señal de cada partido, en el navegador y en el iPhone
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream con agenda de
@@ -13,28 +13,37 @@ description: >-
   entre dispositivos, cierra lo que ya nadie ve y lo reinicia solo si se
   cuelga.
 releaseNotes: >-
-  Tu IPTV, primero. En Ajustes > IPTV, desde el navegador, conectas tu lista
-  M3U o tu cuenta Xtream Codes. Se guarda cifrada en tu Umbrel y no sale de
-  ahi. En el iPhone no hay nada que configurar.
+  Pestaña IPTV en Canales: con tu IPTV conectada, Canales tiene una pestaña
+  nueva con las categorias de tu proveedor, en su orden, un buscador y
+  filtros por pais, idioma, tipo, deporte y calidad.
 
-  Si un partido o un canal esta en tu IPTV, sale primero la IPTV y AceStream
-  queda de respaldo. Si uno se corta, sigue solo por el otro, en los dos
-  sentidos, y te avisa; a la IPTV vuelves con un toque.
+  Buscar: el buscador entiende como escriben las listas IPTV. "M." es
+  Movistar, los prefijos de pais ("ES:", "|ES|") no estorban y tambien
+  encuentra por categoria, como TDT o futbol. Cada canal sale una sola vez y
+  dice de donde se ve: "IPTV" con sus calidades y "AceStream" con cuantas
+  fuentes tiene.
 
-  Guia: si tu lista trae guia de programas, tu Umbrel la usa para encontrar
-  el canal que de verdad echa cada partido (las repeticiones, los resumenes y
-  las previas no cuentan). Sin guia, todo funciona igual.
+  Todo desbloqueado: el buscador enseña todos los canales de tu IPTV, de
+  todos los paises (con su pais en una etiqueta) y de todos los grupos. En lo
+  automatico, como el canal de cada partido, va primero España y nunca el
+  mismo canal de otro pais, que echa otra programacion.
 
-  Buscar: tu IPTV y AceStream salen juntos, con la seccion "En tu IPTV" y
-  cada canal en una sola fila.
+  Calidades: las resoluciones de un mismo canal (4K, 1080p, 720p...) van
+  juntas, con un cartel por resolucion, hasta 4. Si una se cae, se prueba
+  otra de tu IPTV antes que AceStream, sin saltar a otro pais.
 
-  Carteles de fuente: el nombre de la lista va dentro del cartel, debajo solo
-  el canal, y la calidad en su propia linea.
+  IPTV ocupada: si tu cuenta admite una sola conexion y la esta usando otro
+  aparato, te lo dice claro al momento y sigue por AceStream.
 
-  App de iPhone: tu Umbrel ya deja a la app emparejada usar Salud,
-  Dispositivos y "Un solo dispositivo a la vez", y emparejar o quitar otros
-  iPhone con un QR que lleva tus dos direcciones (casa y Tailscale). Lo
-  aprovecha la app nueva, que se actualiza aparte.
+  Datos tecnicos: dice siempre de donde viene lo que suena, tu IPTV o
+  AceStream, y si suena AceStream teniendo el canal en tu IPTV, por que.
+
+  Carteles de fuente: dicen "AceStream" en vez de "M3U", el numero grande ya
+  no lleva la resolucion y el nombre de debajo no repite la calidad.
+
+  Arreglos: guardar la IPTV lo intenta otra vez si el panel de tu proveedor
+  falla a la primera, y el video de la IPTV ya no da error mientras se
+  prepara al arrancar.
 developer: Ismaeloul
 website: https://github.com/Ismaeloul
 dependencies: []
