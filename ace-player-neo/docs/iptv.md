@@ -29,11 +29,10 @@ texto o quedó fuera:
   proveedor (§7.6); el bootstrap no caduca en la caché de la web (`iptvActive()` seguía en falso a los 5 min sin
   Ajustes); en inmersivo «Volver a la IPTV» es una cápsula tocable sobre el vídeo (§7.2); el puente solo espera 60 s
   tras un **fallo** de la IPTV; pausar, eliminar o cambiar de proveedor corta también lo que se estaba abriendo y lo
-  que suena del proveedor anterior; otra lista M3U del mismo host es otro proveedor; `-rw_timeout` a 55 s (el relé con cambio de variante llega a 49 s); las redes de Docker del Umbrel
+  que suena del proveedor anterior; otra lista M3U del mismo host es otro proveedor; `location /api/v1/video/` propia
+  en el nginx; `-rw_timeout` a 55 s (el relé con cambio de variante llega a 49 s); las redes de Docker del Umbrel
   (10.21.0.0/16 y 172.17.0.0/16) nunca cuentan como casa; y una línea de log (host y código) si la guía no baja.
-- Pendiente: «mantener caliente» el canal que funciona; una `location /api/v1/video/` propia en el nginx de
-  `deploy/umbrel` (sin buffer, gzip ni registro, como `/remux/`), que tiene que ir con la release 0.8.1 porque el test
-  del paquete de la tienda compara esa nginx.conf con la de la release commiteada; comprobar de quién es la sesión en `/api/v1/video` desde la
+- Pendiente: «mantener caliente» el canal que funciona; comprobar de quién es la sesión en `/api/v1/video` desde la
   web; medir el arranque con un proveedor real; la renovación del token de las listas M3U y la vuelta a la guía corta,
   sin probar contra un proveedor real.
 
