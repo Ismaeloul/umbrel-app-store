@@ -4363,3 +4363,179 @@ técnicos: «AceStream · NEW ERA» y la fila «IPTV» con el porqué).
 3. **Categoría mixta:** el umbral «3 canales y 1 de cada 5» sale de la lista real; una categoría de plataforma pequeña
    con 3 canales repetidos también pasaría a mixta (sus canales, emparejables solo por el nombre tal cual).
 4. **«(tu cuenta admite N conexión)»** solo si el estado de la IPTV ya se pudo pedir; si no, la frase sin paréntesis.
+
+---
+
+## 20. Anexo: el buscador «como Google» (26-sep, para la 0.8.3)
+
+Lo pidió Isma el 26-sep: «haz súper potente el buscador, como el de Google: si me equivoco al escribir, que me lo
+encuentre. Si pongo Inglatera con una R, que salga Inglaterra; si pongo ESP en vez de España, que lo encuentre».
+**Implementado** en `iptv/google` (sobre `rediseno/iptv`, que sale antes como 0.8.2). Manda sobre §14.3, §16.5 y
+§18.3 en lo que toca a qué casa y en qué orden; el emparejado automático (§4, §17, §18.4, §19.5) **no cambia**.
+
+### 20.1 En pocas palabras
+
+1. **Vale para todas las búsquedas:** Buscar (biblioteca, tu IPTV y el motor AceStream), el filtro de Canales, la
+   pestaña IPTV de Canales y los partidos de la agenda.
+2. **Una palabra casa** exacta (sin tildes ni mayúsculas), por el principio («barc» → Barcelona, «ingl» →
+   Inglaterra), por un **alias** («esp» → España, «t5» → Telecinco, «champions» → Liga de Campeones) o con una
+   **errata**: 1 error desde 4 letras y 2 desde 8 (Damerau: cambio, letra de más, de menos o dos cambiadas de
+   orden), letras dobles y sencillas («Inglatera», «Villareal») y las confusiones del español (b/v, y/ll, c/z/s/k,
+   qu/k, h muda, ñ/n: «barsa», «telecinko», «dasn», «real madrid tb»). Nunca en palabras con números: «DAZN 1» no
+   es «DAZN 2».
+3. **La errata solo entra si la palabra no casa con nada** (ni exacta ni por el principio) o, si solo casa por el
+   principio, con los alias («champion» → CHAMPIONSHIP primero y la Liga de Campeones detrás). «Getafe» existe, así
+   que nunca pasa a «Gerona».
+4. **Orden:** exacta → prefijo → alias → errata; un alias escrito entero cuenta como exacto y, si empata con otra
+   cosa exacta, va delante («madrid» → el Real Madrid y luego el Atlético; «segunda» → la Hypermotion y luego la
+   Segunda Federación; «esp» → España antes que el Espanyol, que también es ESP). Con el mismo nivel, lo de España
+   primero (en la IPTV, España o sin país sigue delante de todo, como en §19.6).
+5. **«Partidos»**, arriba en Buscar: buscar un equipo, una selección o una competición encuentra sus partidos, con
+   las tarjetas pequeñas de la agenda (Palco). Primero el que está en directo o el más próximo; los terminados al
+   final. Tocar una abre el partido.
+6. **«Quizás quisiste decir «…»»** solo cuando no sale nada en ningún sitio, con la corrección tocable.
+7. **Seguridad del emparejado:** las erratas y los alias son SOLO para buscar. `matchIptvChannels`, `sameChannel`,
+   la resolución, las pistas y la búsqueda inversa no importan el buscador nuevo. El ensayo (§20.8) da lo mismo
+   antes y después, byte a byte.
+
+### 20.2 El motor compartido (`packages/shared/src/domain/fuzzy.ts`)
+
+Puro y sin estado (salvo la tabla de alias plegada una vez). Lo usan el servidor y la web; la app lo portará.
+
+| Pieza | Qué hace |
+|---|---|
+| `searchFold` / `searchWords` | `channelSpelling` (M+/M./Movistar, LaLiga, laSexta…), NFKD sin marcas, minúsculas, «+» → «plus», números y letras separados («antena3» → «antena 3», «t5» → «t 5») |
+| `documentWords` | además, las partes de los compuestos del texto («LaLiga» también es «liga»; «laSexta», «sexta») |
+| `requiredWords` | artículos opcionales con 2 palabras de verdad («atlético de madrid» = «Atlético Madrid»; «la 1» pide el «la»); «tv», «canal», «club» con una |
+| `phoneticKey` | «ch» se queda; qu/k/c dura → k; c suave/z/s → s; g suave → j; ll → y; v → b; h fuera; x → ks; dobles → sencillas |
+| `typoBudget`, `editDistance`, `typoDistance` | presupuesto por letras sin contar las dobles (0 hasta 3, 1 desde 4, 2 desde 8); Damerau (alineamiento óptimo) con corte; misma fonética = distancia 0 |
+| `FuzzyVocabulary` | palabras ordenadas (prefijos por búsqueda binaria), clave fonética y **índice de trigramas** de esa clave: solo las que comparten trigramas se comparan con Damerau |
+| `findAliases`, `aliasReadings`, `namedGroups`, `canonicalAliasText` | alias de la consulta (el más largo primero), lecturas con los nombres «de verdad» del grupo, qué nombra un texto y el nombre de siempre para el motor |
+| `FuzzySearchIndex` | buscador de listas (biblioteca, partidos, demo): cada palabra que hay que encontrar casa con alguna palabra de algún texto; `search` ordena y `suggest` da el «Quizás» |
+| `filterLibrary`, `suggestLibrary` | el filtro de la biblioteca (título y categoría; «IPTV» solo con «ipt»/«iptv»), el mismo en la web y en el servidor |
+
+**Tabla de alias** (`search-aliases.ts`, datos editables con pruebas): selecciones (ESP, ING/ENG, FRA…, «la Roja»),
+clubes (RMA, FCB, ATM…, Barça/Barca/Barsa, Atleti, «la Real», «el Submarino», Madrid → Real Madrid),
+competiciones (Champions = Liga de Campeones = UCL; UEL; UECL; LaLiga = Primera; Hypermotion = Segunda; Primera y
+Segunda Federación; Liga F; Copa del Rey; Supercopa; Nations League = UNL; Mundial; Eurocopa; Premier; Serie A;
+Bundesliga; Ligue 1…), canales (Movistar/M+/M./Mov; Tele 5/T5 = Telecinco; La 6 = laSexta; TDP = Teledeporte;
+RMTV = Real Madrid TV; A3; Gol; beIN; Eurosport…) y deportes (basket = baloncesto, F1 = Fórmula 1…).
+- Un nombre con «~» delante es **solo de la consulta** (códigos, apodos y palabras sueltas): buscar «~Madrid»
+  encuentra el Real Madrid, pero un texto que dice «Madrid» (el Atlético, el Madrid CFF) no pasa a serlo.
+- Por un alias solo sale lo que **nombra de verdad** ese grupo (el nombre más largo manda): «primera» no trae
+  «LaLiga Hypermotion», «liga f» no es LaLiga.
+- Un nombre está en un solo grupo y el primero de cada grupo es «de verdad» (lo comprueban las pruebas).
+
+### 20.3 Servidor
+
+- **`iptvChannels`** (`search.ts`): la búsqueda de §18 tal cual y, además, las lecturas por alias (solo los canales
+  que nombran el grupo; un alias entero que da el canal igual o su familia cuenta como igual) y las erratas (las
+  palabras sin nada, contra un `FuzzyVocabulary` del catálogo con las palabras de los nombres, de las categorías y
+  de los alias; 3 por palabra, 6 lecturas), siempre detrás de lo que casa sin ellas. El vocabulario se monta una vez
+  por catálogo y solo si alguna palabra no casa; la tabla de alias se pliega al montar el índice.
+- **`suggestion`** (nuevo, opcional) en `IptvChannelsResponse` e `IptvBrowseResponse`: solo sin ningún canal, la
+  consulta corregida con un error más de tolerancia, si con ella sale algo.
+- **Pestaña IPTV** (`browse.ts`): las mismas lecturas con niveles propios (0 igual, 1 alias, 2 empieza por, 4 en
+  orden, 6 el resto, 8 sin la marca, 9 el resto del alias, 10+ erratas), en una sola pasada por cubos.
+- **Biblioteca** (`libraryCandidates`): `filterLibrary`, lo mismo que enseña la web.
+- **`/api/v1/search`** (`search/correct.ts`, solo v1): se pregunta SIEMPRE lo escrito y, a la vez, como mucho una
+  consulta más: el nombre de siempre del alias («t5» → «Telecinco») o, si no hay, la errata corregida contra tu
+  IPTV, tu biblioteca y los nombres «de verdad» de la tabla (con menos de 6 letras solo si suena igual: «roma»
+  nunca pasa a ser otra cosa). Lo escrito va primero y lo añadido detrás, sin repetir. `searched` (nuevo, opcional)
+  dice qué más se preguntó si trajo algo; `suggestion`, el «Quizás» sin resultados. Las búsquedas de la
+  resolución (`via: 'auto'`) no pasan por aquí.
+
+### 20.4 Web
+
+- **Buscar** (`features/search/SearchView.tsx`, `matches.ts`, `Suggestion.tsx`): «Partidos» arriba (4 a la vista,
+  «Ver N partidos más»), con `MatchRow` compacta de la agenda; «En tu biblioteca» con el buscador nuevo (texto
+  aplazado con `useDeferredValue`: escribir nunca espera); «También se ha buscado «…».» bajo el motor si el
+  servidor añadió una consulta; «Quizás quisiste decir «…».» en el vacío (biblioteca y agenda aquí mismo; si no, lo
+  que diga tu IPTV o el motor).
+- **Canales**: el filtro (`filterItems`) casa con el buscador nuevo y conserva el orden de la pestaña (días,
+  categorías); con la pestaña vacía y nada en tu IPTV, «Quizás quisiste decir» tocable. La pestaña IPTV enseña la
+  `suggestion` del servidor en su vacío.
+- **Demo**: el motor y la IPTV de ejemplo casan también con erratas y alias.
+
+**Textos nuevos** (literales): «Partidos» (con su recuento), «Ver {N} partido(s) más» / «Ver menos», «También se ha
+buscado «{q}».», «Quizás quisiste decir «{q}».» y, en la región viva, «{n} partido(s). » delante de lo de siempre.
+
+### 20.5 Contrato (`packages/shared`)
+
+Todo opcional; la 0.8.0 lo ignora: `IptvChannelsResponse.suggestion`, `IptvBrowseResponse.suggestion`,
+`SearchResponse.searched` y `SearchResponse.suggestion` (solo v1). `openapi-v2.yaml` regenerado; ningún ejemplo
+cambia.
+
+### 20.6 Pruebas
+
+- **Unitarias, shared:** `fuzzy.test.ts` (plegado, fonética, Damerau, vocabulario, lecturas, partidos de ejemplo:
+  «inglatera», «esp», «barsa», «champions», «m+ liga de campeone», «madrid» → Real Madrid y luego Atlético, y lo
+  que NO casa: DAZN 1/2, Real Madrid/Real Sociedad, Getafe/Gerona, Liga F/LaLiga, Hypermotion/Primera; «Quizás»;
+  5000 canales en milisegundos) y `search-aliases.test.ts` (tabla: ids, nombres únicos, los grupos que pidió Isma).
+- **Unitarias, servidor:** `iptv/fuzzy-search.test.ts` (erratas, alias, orden, lo que no casa, pestaña IPTV,
+  biblioteca, **el emparejado automático sin erratas ni alias** y 30 000 canales < 50 ms) y
+  `search/correct.test.ts` (qué se pregunta al motor, «roma» intacto, por HTTP).
+- **Integración:** caso 19 de `test/integration/iptv.test.ts`.
+- **Web:** `search/matches.test.ts` y seis casos nuevos en `SearchView.test.tsx`.
+- **E2E** (`e2e/buscador-google.spec.ts`, los cuatro proyectos): «inglatera» encuentra el partido de Inglaterra
+  (añadido a la agenda en el navegador) y lo abre; «esp», «barsa», «Barça»; con la IPTV falsa, «champions» y «m+
+  liga de campeone» (partido y canal), «telecinko», «telcnco» → «Quizás quisiste decir «telecinco»» tocable; la
+  pestaña IPTV con «telecinko» y «t5». Capturas con `BUSCADOR_CAPTURAS=<carpeta>`.
+
+### 20.7 Banco (149 consultas reales + 24 erratas y abreviaturas de Isma)
+
+Sin tocar la pila de Isma: el volcado de nombres de §18 ya no existía, así que el catálogo es **sintético** (los
+249 títulos que salen en la tabla del banco, con una categoría como las de la lista, más el catálogo grande del
+proveedor falso hasta **30 000 canales**) y la agenda es la del banco (solo nombres). «Antes» = `origin/rediseno/iptv`
+(14b2bde), «después» = esta rama; `searchCatalog` (lo que responde `iptvChannels`) y, para los partidos, el buscador
+de la web (antes no había).
+
+| | Antes | Después |
+|---|---|---|
+| Canales bien en el top 10 (149 del banco, 124 con lo esperado) | 100 | **120** |
+| Canales bien en el top 10 (24 de Isma, 16 con lo esperado) | 4 | **16** |
+| Partidos bien en el top 3 (37 con lo esperado) | 0 | **34** |
+| Empeoran | — | **0** |
+| Consultas con 0 canales (de 173) | 57 | 27 |
+| Mediana / p95 / máximo por consulta (30 000 canales, en proceso) | 1,0 / 2,1 / 4,3 ms | 2,5 / 7,8 / 12,6 ms |
+
+Mejoran 32: champions, champions league, ucl, movistar champions, segunda division, primera federacion, 1 rfef,
+dasn, dazm laliga, a3, tele 5, t5, la 6, tdp, antena tres, telecinko, antna 3, eurosprot, rmtv, basket, telecinko
+hd, movistar lalija, dazn lalgia, laliga hypermotin, champion, liga de campeonse, teledeprote, la sesta, bein
+sprots, real madrid tb, gol plai y formula uno. Siguen mal 4 de canales porque el catálogo sintético no tiene esas
+categorías (tenis, ciclismo, eventos, tivify) y 3 de partidos porque esos días no hay ese partido (Atlético de
+Madrid, Champions): con la lista y la agenda reales hay que repetirlo.
+
+### 20.8 Ensayo del emparejado antes y después
+
+El bucle de `ensayo.ts` (`iptvLayer` para los 273 partidos de hoy y mañana de la agenda del banco) contra el mismo
+catálogo sintético: **23 de 273 con IPTV antes y después y las 570 líneas iguales byte a byte.** Además,
+`fuzzy-search.test.ts` comprueba que «Telecinko», «T5», «Tele 5», «La 6», «TDP», «RMTV», «Champions», «UCL» y «Dasn
+1» no emparejan con nada aunque el buscador sí los encuentre.
+
+### 20.9 Impacto en la app nativa (actualiza §10, §14.10, §17.9, §18.8 y §19.8)
+
+Nadie de `iptv/google` toca `apps/ios`. **Sin cambiar nada** (incluida la 0.8.0): las claves nuevas son opcionales y
+las ignora; el emparejado no cambia.
+
+**Cuando la app calque el buscador**, porta:
+
+| Módulo | Fichero o carpeta | Cambio |
+|---|---|---|
+| M1 | `Sources/Core/Models/Buscar.swift`* | `suggestion: String?` en `RespuestaCanalesIptv` y en la de la pestaña IPTV; `searched` y `suggestion` en la del motor |
+| M3 | `Sources/Core/Reglas/Buscar/BuscadorDifuso.swift`* | `fuzzy.ts` tal cual (plegado, fonética, Damerau, vocabulario con trigramas, lecturas por alias, `FuzzySearchIndex`, `filterLibrary`), con vectores generados desde `fuzzy.test.ts` |
+| M3 | `Sources/Core/Reglas/Buscar/Alias.json`* | la tabla de `search-aliases.ts` exportada (un generador en `scripts/vectores/`), con la misma prueba de nombres únicos |
+| M6 | `Sources/Pantallas/Buscar/`* | «Partidos» arriba con las tarjetas pequeñas de la agenda (primero en directo o el más próximo; tocar abre el partido); «Quizás quisiste decir» tocable; «También se ha buscado «…»» |
+| M6 | `Sources/Pantallas/Canales/`* | el filtro con `filterLibrary` (conserva el orden de la pestaña) y el «Quizás» de la pestaña y de la IPTV |
+
+### 20.10 Riesgos
+
+1. **Ruido de erratas:** solo entran en palabras que no casan con nada y van detrás; en listas enormes una palabra
+   corta con errata puede traer otra cosa (siempre detrás de lo bueno). El motor AceStream nunca pierde lo escrito.
+2. **Alias que Isma no quiere:** «segunda» pone la Hypermotion delante de la Segunda Federación y «madrid», el Real
+   Madrid delante del Atlético. Se cambia en la tabla (con su prueba).
+3. **Una letra sola** no casa por el principio («liga f» no trae «FC … LaLiga»); mientras se escribe «barcelona f»,
+   la «f» espera a la segunda letra.
+4. **Coste:** el vocabulario de erratas del catálogo se monta la primera vez que una palabra no casa (≈ 100 ms con
+   30 000 canales) y se queda con el catálogo; la pestaña IPTV sigue igual de rápida sin erratas.
+5. **El banco con la lista real** queda pendiente: esta medida es con un catálogo sintético.
