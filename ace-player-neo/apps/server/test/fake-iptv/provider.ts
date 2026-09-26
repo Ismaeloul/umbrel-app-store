@@ -171,6 +171,8 @@ interface StreamState {
   /** Veces que se ha abierto desde el último cambio de modo (base de PTS tras reconectar). */
   opens: number;
   firstOpenAt: number;
+  /** Con `corta-a-los`, cortar la primera conexión (si al cambiar el modo no había ninguna viva). */
+  cutFirst: boolean;
 }
 
 export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<FakeIptv> {
@@ -181,10 +183,11 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
   const formats = options.outputFormats ?? ['m3u8', 'ts'];
   const matchStart = options.matchStart ?? demoMatchStart();
   const states = new Map<number, StreamState>(
-    FAKE_IPTV_CHANNELS.map((c) => [c.id, { mode: 'ok', opens: 0, firstOpenAt: 0 }]),
+    FAKE_IPTV_CHANNELS.map((c) => [c.id, { mode: 'ok', opens: 0, firstOpenAt: 0, cutFirst: true }]),
   );
   const requests: string[] = [];
   const open = new Set<http.ServerResponse>();
+  const openIds = new Map<http.ServerResponse, number>();
   const held: number[] = [];
   const account = { status: 'Active', auth: 1 as 0 | 1 };
   const sockets = new Set<Socket>();
@@ -280,7 +283,7 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
     const cutMs = cutRaw ? Number(cutRaw) * 1000 : null;
     /* Una reapertura sigue la misma línea de tiempo; con `:pts`, salta 1000 s. */
     const elapsed = Math.floor((Date.now() - state.firstOpenAt) / 1000);
-    const startSec = pts ? (state.opens - 1) * 1000 : elapsed;
+    const startSec = pts ? state.opens * 1000 : elapsed;
     const muxer = new TsMuxer({
       video: 'h264',
       audio: ['ac3'],
@@ -290,13 +293,19 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
     });
     res.writeHead(200, { 'content-type': 'video/mp2t' });
     open.add(res);
+    openIds.set(res, id);
     const perTick = Math.max(1, Math.round((bitrate * 1000 * 0.04) / 8 / TS_PACKET_SIZE));
     const startedAt = Date.now();
     const opensAtStart = state.opens;
     const timer = setInterval(() => {
       if (res.destroyed || res.writableEnded) return;
       /* Solo la primera conexión se corta: la reconexión sigue. */
-      if (cutMs !== null && opensAtStart === 1 && Date.now() - startedAt >= cutMs) {
+      if (
+        cutMs !== null &&
+        opensAtStart === 1 &&
+        state.cutFirst &&
+        Date.now() - startedAt >= cutMs
+      ) {
         clearInterval(timer);
         res.destroy();
         return;
@@ -306,6 +315,7 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
     res.write(muxer.nextPackets(perTick * 5));
     res.once('close', () => {
       clearInterval(timer);
+      openIds.delete(res);
       if (open.delete(res)) held.push(clockNow());
     });
   };
@@ -508,6 +518,11 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
         if (id === '*' || key === id) {
           state.mode = mode;
           state.opens = 0;
+          /* Un modo de fallo corta ya las conexiones vivas de ese canal (y entonces
+             `corta-a-los` no vuelve a cortar la siguiente). */
+          const live = [...openIds].filter(([, owner]) => owner === key).map(([res]) => res);
+          if (mode !== 'ok' && mode !== 'lento') for (const res of live) res.destroy();
+          state.cutFirst = live.length === 0 || mode === 'ok';
         }
       }
     },

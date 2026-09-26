@@ -11,6 +11,7 @@
 
 import {
   CHANNEL_FILLER_TOKENS,
+  IPTV_SOURCE_ORDER,
   RESOLUTION_EXACT_SCORE,
   normalizeChannelKey,
   type SourceStats,
@@ -29,6 +30,8 @@ export interface RankableCandidate {
   readonly soloFamilia?: boolean;
   readonly familyFallbackAllowed?: boolean;
   readonly matchedChannel?: string;
+  /** Solo las IPTV: confirmada por la guía (docs/iptv.md §4.6). */
+  readonly iptv?: { readonly guide?: boolean } | undefined;
 }
 
 /** HDR, Bar o UHD son el MISMO canal en otra calidad o para otro local (server.js:3981). */
@@ -45,8 +48,12 @@ export const CHANNEL_VARIANT_TOKENS: ReadonlySet<string> = new Set([
 const LIKELY_SCORE = 70;
 /** Diferencia de fiabilidad que cuenta al ordenar (server.js:4078). */
 const RELIABILITY_EPSILON = 0.02;
-/** Orden de procedencia por defecto (server.js:4092). */
-const DEFAULT_SOURCE_ORDER = ['saved', 'm3u', 'favorites', 'history', 'acestream'] as const;
+/**
+ * Orden de procedencia por defecto (server.js:4092). Desde la IPTV
+ * (docs/iptv.md §4.6) va primero `iptv`: «si hay ese canal en la IPTV, sale
+ * primero», también por delante de un vínculo guardado de AceStream.
+ */
+const DEFAULT_SOURCE_ORDER = IPTV_SOURCE_ORDER;
 
 /** `resolutionTier` (server.js:3762-3766): 2 si ≥ 92, 1 si ≥ 70, 0 si no. */
 export function resolutionTier(candidate: Pick<RankableCandidate, 'score'>): number {
@@ -189,6 +196,10 @@ export function mergeResolutionCandidates<T extends RankableCandidate>(
     const tierA = resolutionTier(a);
     const tierB = resolutionTier(b);
     if (tierA !== tierB) return tierB - tierA;
+    /* Entre dos IPTV, la confirmada por la guía va primero (docs/iptv.md §4.6). */
+    const guideA = a.iptv?.guide === true ? 1 : 0;
+    const guideB = b.iptv?.guide === true ? 1 : 0;
+    if (guideA !== guideB) return guideB - guideA;
     /* Lo aprendido ordena entre iguales; nunca decide QUÉ canal es (B-061). */
     const fiaA = fiabilidadDeCandidato(a, stats) ?? STATS_NEUTRAL;
     const fiaB = fiabilidadDeCandidato(b, stats) ?? STATS_NEUTRAL;

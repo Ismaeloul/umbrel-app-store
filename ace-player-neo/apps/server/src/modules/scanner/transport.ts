@@ -64,6 +64,11 @@ export interface ScannerTransport {
   ): Promise<ScannerSampleResult>;
   /** `inspectScannerMedia` (server.js:3065): nunca lanza. */
   inspect(pathname: string, timeoutMs: number, signal?: AbortSignal): Promise<ScannerMediaResult>;
+  /**
+   * ffprobe sobre un fichero local (la muestra de la sonda de la IPTV, docs/iptv.md
+   * §7.3): sin otra petición ni otra conexión al proveedor. Nunca lanza.
+   */
+  inspectFile?(file: string, timeoutMs: number, signal?: AbortSignal): Promise<ScannerMediaResult>;
 }
 
 /** Lo que se usa de un proceso hijo (ffprobe). */
@@ -318,7 +323,22 @@ export function createHttpScannerTransport(options: HttpScannerTransportOptions)
   ): Promise<ScannerMediaResult> {
     const target = scannerEnginePath(pathname);
     if (!target) return Promise.resolve(mediaUnavailable('probe_unavailable'));
-    const url = `${base}${target}`;
+    return ffprobe(`${base}${target}`, timeoutMs, signal);
+  }
+
+  function inspectFile(
+    file: string,
+    timeoutMs: number,
+    signal?: AbortSignal,
+  ): Promise<ScannerMediaResult> {
+    return ffprobe(file, timeoutMs, signal);
+  }
+
+  function ffprobe(
+    url: string,
+    timeoutMs: number,
+    signal?: AbortSignal,
+  ): Promise<ScannerMediaResult> {
     return new Promise((resolve) => {
       let child: ProbeProcess | undefined;
       let timer: object | null = null;
@@ -359,5 +379,5 @@ export function createHttpScannerTransport(options: HttpScannerTransportOptions)
     });
   }
 
-  return { request, sample, inspect };
+  return { request, sample, inspect, inspectFile };
 }

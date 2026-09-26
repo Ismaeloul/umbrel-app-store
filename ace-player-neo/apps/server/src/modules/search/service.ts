@@ -33,8 +33,9 @@ export function createSearchRuntime(deps: SearchDeps): SearchRuntime {
   const { engine, scanner, bus } = deps;
   const logger = deps.logger.child({ module: 'search' });
   let watching = false;
+  /* Con solo IPTV el motor principal está libre: las búsquedas van a él (docs/iptv.md §6.4). */
   bus.on('playback.activity', (activity) => {
-    watching = activity.watching;
+    watching = activity.engineWatching ?? activity.watching;
   });
 
   const scannerEnabled = (): boolean => {

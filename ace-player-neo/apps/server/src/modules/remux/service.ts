@@ -22,9 +22,17 @@ import { randomBytes } from 'node:crypto';
 import { watch, type FSWatcher } from 'node:fs';
 import { mkdir, readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { HASH_RE, MAX_REMUX_SESSIONS, REMUX_TIMINGS, TIMEOUTS, normalizeHash } from '@ace/shared';
+import {
+  HASH_RE,
+  IPTV_REMUX_READY_MS,
+  MAX_REMUX_SESSIONS,
+  REMUX_TIMINGS,
+  TIMEOUTS,
+  normalizeHash,
+} from '@ace/shared';
 import type { TimerHandle } from '../../core/clock.js';
 import { AppError } from '../../core/errors.js';
+import { redactText } from '../../core/logger.js';
 import { buildRemuxArgs } from './args.js';
 import { elegirSesionRemuxADesalojar, type EvictionCandidate } from './eviction.js';
 import {
@@ -65,6 +73,11 @@ interface Entry {
   readonly hash: string;
   readonly sessionId: string;
   readonly playbackUrl: string;
+  /** Lo que identifica la entrada: la URL del relé (IPTV) o la `playbackUrl`. */
+  readonly inputKey: string;
+  /** La fuente con la que se lanzó (para reiniciar en la misma sesión). */
+  readonly source: RemuxSource;
+  readonly origin: 'engine' | 'iptv';
   readonly dir: string;
   readonly startedAt: number;
   lastAccess: number;
@@ -150,6 +163,8 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
   const remuxDir = config.paths.remuxDir;
   const engineBase = `http://${hostForUrl(config.engine.host)}:${config.engine.port}`;
 
+  const redact = deps.redact ?? redactText;
+  const inputKeyOf = (source: RemuxSource): string => source.inputUrl ?? source.playbackUrl;
   const byHash = new Map<string, Entry>();
   const listeners = new Set<RemuxListener>();
   const registry = new SerialLock();
@@ -257,7 +272,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
        termine sus peticiones; el recolector lo borra después. */
     entry.lastAccess = clock.now();
     if (entry.killed) return;
-    const tail = entry.log.tail(300);
+    const tail = redact(entry.log.tail(300));
     const cause = /codec|decoder|encoder|invalid data|unsupported|not supported/i.test(tail)
       ? 'codec'
       : 'engine';
@@ -307,10 +322,14 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     );
     await mkdir(dir, { recursive: true });
     const now = clock.now();
+    const origin = source.origin ?? 'engine';
     const entry: Entry = {
       hash,
       sessionId: source.sessionId,
       playbackUrl: source.playbackUrl,
+      inputKey: inputKeyOf(source),
+      source,
+      origin,
       dir,
       startedAt: now,
       lastAccess: now,
@@ -331,9 +350,11 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       watcher: null,
     };
     const args = buildRemuxArgs({
-      url: `${engineBase}${source.playbackUrl}`,
+      url: source.inputUrl ?? `${engineBase}${source.playbackUrl}`,
       dir,
       sessionId: source.sessionId,
+      origin,
+      ...(source.isHls ? { isHls: true } : {}),
     });
     let proc: RemuxProcess;
     try {
@@ -355,7 +376,10 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
         entry.watcher.on('error', () => undefined);
       } catch {}
     }
-    logger.info({ sessionId: source.sessionId, pid: proc.pid, mode: source.mode }, 'remux lanzado');
+    logger.info(
+      { sessionId: source.sessionId, pid: proc.pid, mode: source.mode, origin },
+      'remux lanzado',
+    );
     return entry;
   }
 
@@ -439,6 +463,13 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       const ready = await readPlaylistStats(path.join(entry.dir, 'index.m3u8'));
       throwIfGone(entry);
       const waited = clock.now() - t0;
+      /* IPTV (docs/iptv.md §6.3): 2 segmentos o 20 s como mucho; pasado eso, iptv_timeout. */
+      if (entry.origin === 'iptv') {
+        if (ready && ready.segments >= REMUX_TIMINGS.readySegments) break;
+        if (waited > IPTV_REMUX_READY_MS) throw new AppError('iptv_timeout');
+        await waitChange(entry, READY_POLL_MS, signal);
+        continue;
+      }
       if (
         ready &&
         ready.segments >= REMUX_TIMINGS.readySegments &&
@@ -515,7 +546,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
           const sameSession = current.sessionId === source.sessionId;
           const reusable =
             sameSession &&
-            current.playbackUrl === source.playbackUrl &&
+            current.inputKey === inputKeyOf(source) &&
             !current.exited &&
             !(await isStalled(current));
           if (!reusable) {
@@ -549,7 +580,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       const entry = await registry.run(async () => {
         const current = findBySession(source.sessionId);
         if (!current) return null;
-        if (current.playbackUrl === source.playbackUrl && !current.exited) return current;
+        if (current.inputKey === inputKeyOf(source) && !current.exited) return current;
         const carry: Carry = {
           viewers: [...current.viewers],
           legacyClients: [...current.legacyClients],
@@ -558,6 +589,25 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
         clearViewers(current);
         await closeLocked(current, 'stopped', false);
         return startLocked(source, current.hash, carry);
+      });
+      if (!entry) return null;
+      await waitReady(entry, signal);
+      return handleOf(entry, '');
+    },
+
+    async restart(sessionId, signal) {
+      if (stopped) throw new AppError('remux_died', { detail: 'remux parado' });
+      const entry = await registry.run(async () => {
+        const current = findBySession(sessionId);
+        if (!current) return null;
+        const carry: Carry = {
+          viewers: [...current.viewers],
+          legacyClients: [...current.legacyClients],
+          lingering: [...current.lingering],
+        };
+        clearViewers(current);
+        await closeLocked(current, 'stopped', false);
+        return startLocked(current.source, current.hash, carry);
       });
       if (!entry) return null;
       await waitReady(entry, signal);

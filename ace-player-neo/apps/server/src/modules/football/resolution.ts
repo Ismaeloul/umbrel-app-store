@@ -13,6 +13,7 @@
    refresco de listas de `directories`; la fachada antigua, los suyos. */
 
 import {
+  IPTV_MAX_CANDIDATES,
   LIBRARY_MIN_SCORE,
   RESOLUTION_EXACT_SCORE,
   channelAllowsFamilyFallback,
@@ -219,6 +220,29 @@ function minimumResolutionScore(
   return LIBRARY_MIN_SCORE;
 }
 
+/**
+ * Capa IPTV de la resolución (docs/iptv.md §4). La da el servicio `football`
+ * a partir del módulo `iptv`; sin IPTV no está y todo va como siempre.
+ */
+export interface ResolutionIptv {
+  /** Candidatas IPTV (2 como mucho, primero las de la guía) y pistas para AceStream. */
+  resolve(
+    channels: readonly string[],
+    program: Readonly<Record<string, unknown>> | null,
+  ): {
+    readonly candidates: readonly BaseCandidate[];
+    readonly hints: readonly string[];
+    readonly consulted: boolean;
+  };
+  /** Decisión de §4.1: `owned`, un `iptv_*` que ya no vale o `engine` (AceStream). */
+  classify(id: string): 'owned' | 'iptv_gone' | 'iptv_disabled' | 'iptv_removed' | 'engine';
+  /** Un id del catálogo vigente que llega de vínculos, favoritos o historial, como candidata IPTV. */
+  convert(
+    id: string,
+    match: { readonly score: number; readonly matchedChannel: string },
+  ): BaseCandidate | null;
+}
+
 /** Lo que la resolución necesita de fuera. */
 export interface ResolveDeps {
   /** Una búsqueda en el motor (resultados `{ id, title, ih, availability… }`). */
@@ -235,7 +259,18 @@ export interface ResolveDeps {
   readonly model: string;
   /** Canales de toda la agenda (catálogo de programación). */
   readonly programChannels: readonly string[];
+  /** Capa IPTV (docs/iptv.md §4.3): se consulta siempre que esté activa. */
+  readonly iptv?: ResolutionIptv;
 }
+
+/**
+ * - `match`: un partido (lo de siempre, con la capa IPTV si la hay).
+ * - `channel`: canal suelto (docs/iptv.md §5.2): solo vínculos, biblioteca
+ *   (hermanas ≥ 92) e IPTV; ni buscador del motor ni IA.
+ * - `guide`: partido sin canales en la agenda (docs/iptv.md §4.5): solo la
+ *   guía de la IPTV y las pistas que salgan de ella en la biblioteca.
+ */
+export type ResolveScope = 'match' | 'channel' | 'guide';
 
 export interface ResolveOptions {
   /** `research` = "Rebuscar" (B-214). */
@@ -244,6 +279,7 @@ export interface ResolveOptions {
   readonly program?: Readonly<Record<string, unknown>> | null;
   /** Canales de parrilla para la IA; por defecto, los del catálogo. */
   readonly programChannels?: readonly unknown[];
+  readonly scope?: ResolveScope;
 }
 
 export interface AiInfo {
@@ -268,9 +304,63 @@ export interface ResolutionCore {
 }
 
 /**
+ * Una candidata AceStream que solo casa con una PISTA de la guía (≥ 70) entra
+ * con esa pista como `matchedChannel` y su nivel topado en el de ≥ 70 (91 como
+ * mucho): nunca adelanta a una que casa ≥ 92 con un canal de la agenda
+ * (docs/iptv.md §4.5).
+ */
+function withGuideHints(
+  candidates: readonly BaseCandidate[],
+  hints: readonly string[],
+): BaseCandidate[] {
+  if (!hints.length) return [...candidates];
+  return candidates.map((candidate) => {
+    if (candidate.source === 'iptv' || candidate.score >= LIBRARY_MIN_SCORE) return candidate;
+    const byHint = scoreResolutionCandidate(
+      hints,
+      { id: candidate.id, title: candidate.title, alias: candidate.alias },
+      candidate.source,
+    );
+    if (byHint.score < LIBRARY_MIN_SCORE) return candidate;
+    return {
+      ...candidate,
+      score: Math.min(byHint.score, RESOLUTION_EXACT_SCORE - 1),
+      matchedChannel: byHint.matchedChannel,
+      soloFamilia: byHint.soloFamilia,
+      familyFallbackAllowed: byHint.familyFallbackAllowed,
+    };
+  });
+}
+
+/** Como mucho 2 IPTV (docs/iptv.md §4.3): primero la guía, luego la puntuación. */
+function capIptv<
+  T extends { readonly id: string; readonly source: string; readonly score: number },
+>(candidates: readonly T[]): T[] {
+  const iptv = candidates
+    .filter((candidate) => candidate.source === 'iptv')
+    .sort((a, b) => {
+      const guideA = (a as { iptv?: { guide?: boolean } }).iptv?.guide === true ? 1 : 0;
+      const guideB = (b as { iptv?: { guide?: boolean } }).iptv?.guide === true ? 1 : 0;
+      return guideB - guideA || b.score - a.score;
+    });
+  const keep = new Set<string>();
+  for (const candidate of iptv) {
+    if (keep.size >= IPTV_MAX_CANDIDATES) break;
+    keep.add(candidate.id);
+  }
+  return candidates.filter((candidate) => candidate.source !== 'iptv' || keep.has(candidate.id));
+}
+
+/**
  * `resolveFootballChannel` (server.js:4227-4335). Lanza `channel_required` si
- * no queda ningún canal. T-009 a T-012, T-021, T-022, T-026, T-028, T-029,
- * T-067, T-099, T-114.
+ * no queda ningún canal (salvo `scope: 'guide'`). T-009 a T-012, T-021,
+ * T-022, T-026, T-028, T-029, T-067, T-099, T-114.
+ *
+ * Con la IPTV (docs/iptv.md §4.3 a §4.6): la capa IPTV se consulta siempre
+ * que esté activa (también con el motor caído); todo id IPTV de vínculos,
+ * favoritos, historial o del buscador pasa por la decisión de §4.1 ANTES de
+ * deduplicar (se convierte en `iptv` o se descarta) y las pistas de la guía
+ * suman candidatas AceStream con el nivel topado.
  */
 export async function resolveFootballChannel(
   state: ResolutionState,
@@ -278,90 +368,158 @@ export async function resolveFootballChannel(
   deps: ResolveDeps,
   options: ResolveOptions = {},
 ): Promise<ResolutionCore> {
+  const scope: ResolveScope = options.scope ?? 'match';
   const channels = resolutionChannels(values);
-  if (!channels.length) throw new AppError('channel_required');
+  if (!channels.length && scope !== 'guide') throw new AppError('channel_required');
 
-  const research = options.mode === 'research';
-  const semanticEnabled = deps.semantic.enabled;
-  const checked = research
-    ? ['favorites', 'm3u', 'acestream']
-    : ['saved', 'm3u', 'library', 'acestream'];
+  const research = options.mode === 'research' && scope === 'match';
+  const program = options.program || null;
+  const semanticEnabled = deps.semantic.enabled && scope === 'match';
+
+  /* Capa IPTV: primero, porque de ella salen las pistas de la guía. */
+  const iptvLayer = deps.iptv ? deps.iptv.resolve(channels, program) : null;
+  const channelKeys = new Set(channels.map((channel) => normalizeChannelKey(channel)));
+  const hints = (iptvLayer?.hints ?? []).filter(
+    (hint) => !channelKeys.has(normalizeChannelKey(hint)),
+  );
+
+  let checked: string[];
+  if (scope === 'channel') checked = ['saved', 'library'];
+  else if (scope === 'guide') checked = ['library'];
+  else if (research) checked = ['favorites', 'm3u', 'acestream'];
+  else checked = ['saved', 'm3u', 'library', 'acestream'];
   if (semanticEnabled) checked.push('ai-programming');
+  if (iptvLayer?.consulted) checked.unshift('iptv');
 
-  deps.refreshLists();
+  if (scope === 'match') deps.refreshLists();
 
-  const bindings: BaseCandidate[] = research
-    ? []
-    : (state.channelBindings || [])
-        .map((binding) => {
-          const scored = scoreResolutionCandidate(
-            channels,
-            { ...binding, title: binding.channel },
-            'saved',
-          );
-          return { ...scored, title: binding.title, ih: binding.ih as boolean };
-        })
-        .filter((candidate) => candidate.score >= RESOLUTION_EXACT_SCORE);
+  /* §4.1 y §4.6: un id IPTV que llega por otra vía se convierte o se descarta. */
+  const adopt = (candidate: BaseCandidate): BaseCandidate | null => {
+    const kind = deps.iptv ? deps.iptv.classify(candidate.id) : 'engine';
+    if (kind === 'engine') return candidate;
+    if (kind !== 'owned' || !deps.iptv) return null;
+    return deps.iptv.convert(candidate.id, {
+      score: candidate.score,
+      matchedChannel: candidate.matchedChannel,
+    });
+  };
+  const adoptAll = (list: readonly BaseCandidate[]): BaseCandidate[] =>
+    list.map(adopt).filter((candidate): candidate is BaseCandidate => candidate !== null);
+
+  const bindings: BaseCandidate[] =
+    research || scope === 'guide'
+      ? []
+      : adoptAll(
+          (state.channelBindings || [])
+            .map((binding) => {
+              const scored = scoreResolutionCandidate(
+                channels,
+                { ...binding, title: binding.channel },
+                'saved',
+              );
+              return { ...scored, title: binding.title, ih: binding.ih as boolean };
+            })
+            .filter((candidate) => candidate.score >= RESOLUTION_EXACT_SCORE),
+        );
 
   /* Se conservan todas las entradas: las que el emparejado clásico no
      entienda tienen una segunda oportunidad en la IA; después, el umbral. */
-  const local = libraryResolutionCandidates(
-    state,
-    channels,
-    0,
-    research ? { sourceOrder: ['favorites', 'm3u'] } : {},
+  const local = adoptAll(
+    withGuideHints(
+      scope === 'guide'
+        ? libraryResolutionCandidates(state, hints, 0)
+        : libraryResolutionCandidates(
+            state,
+            channels,
+            0,
+            research ? { sourceOrder: ['favorites', 'm3u'] } : {},
+          ),
+      scope === 'guide' ? [] : hints,
+    ).map((candidate) =>
+      scope === 'guide'
+        ? { ...candidate, score: Math.min(candidate.score, RESOLUTION_EXACT_SCORE - 1) }
+        : candidate,
+    ),
   );
 
-  const queries = aceSearchQueries(channels, semanticEnabled);
-  const searched = await Promise.allSettled(queries.map((query) => deps.search(query)));
-  const engineAvailable = searched.some((result) => result.status === 'fulfilled');
   const remote: BaseCandidate[] = [];
-  for (const result of searched) {
-    if (result.status !== 'fulfilled') continue;
-    for (const item of result.value)
-      remote.push(scoreResolutionCandidate(channels, item, 'acestream'));
+  let engineAvailable = true;
+  if (scope === 'match') {
+    /* Las pistas de la guía también se buscan (8 consultas como mucho). */
+    const queries = aceSearchQueries([...channels, ...hints], semanticEnabled);
+    const searched = await Promise.allSettled(queries.map((query) => deps.search(query)));
+    engineAvailable = searched.some((result) => result.status === 'fulfilled');
+    const found: BaseCandidate[] = [];
+    for (const result of searched) {
+      if (result.status !== 'fulfilled') continue;
+      for (const item of result.value)
+        found.push(scoreResolutionCandidate(channels, item, 'acestream'));
+    }
+    /* Un id IPTV no llega nunca al motor: del buscador se descarta. */
+    remote.push(
+      ...withGuideHints(found, hints).filter(
+        (candidate) => !deps.iptv || deps.iptv.classify(candidate.id) === 'engine',
+      ),
+    );
   }
 
-  const program = options.program || null;
   const programChannels = [
     ...(Array.isArray(program?.channels) ? (program.channels as unknown[]) : []),
     ...(Array.isArray(options.programChannels) ? options.programChannels : deps.programChannels),
   ];
-  const semanticResult = await applySemanticCandidateScores(
-    channels,
-    [...local, ...remote],
-    programChannels,
-    deps.semantic,
-  );
+  const semanticResult = semanticEnabled
+    ? await applySemanticCandidateScores(
+        channels,
+        [...local, ...remote],
+        programChannels,
+        deps.semantic,
+      )
+    : { candidates: [...local, ...remote], used: false, catalogSize: 0, error: null };
+  const iptvCandidates = iptvLayer?.candidates ?? [];
   /* Lo aprendido se aplica UNA vez, sobre todas las capas y antes del umbral:
-     la subida a 98 de una fuente confirmada cuenta para pasar el corte (B-181). */
-  const learned = deps.applyLearned(channels, [...bindings, ...semanticResult.candidates]);
-  const qualified = learned.filter(
-    (candidate) => candidate.score >= minimumResolutionScore(candidate, semanticResult.used),
+     la subida a 98 de una fuente confirmada cuenta para pasar el corte (B-181).
+     Un «Canal incorrecto» aparta también una IPTV. */
+  const learnedChannels = hints.length ? [...channels, ...hints] : channels;
+  const learned = deps.applyLearned(learnedChannels, [
+    ...iptvCandidates,
+    ...bindings,
+    ...semanticResult.candidates,
+  ]);
+  const qualified = capIptv(
+    learned.filter((candidate) => {
+      if (candidate.source === 'iptv') return candidate.score >= RESOLUTION_EXACT_SCORE;
+      /* Canal suelto: detrás de la IPTV solo las hermanas ≥ 92. */
+      if (scope === 'channel') return candidate.score >= RESOLUTION_EXACT_SCORE;
+      return candidate.score >= minimumResolutionScore(candidate, semanticResult.used);
+    }),
   );
   const candidates = mergeResolutionCandidates(
     qualified,
     research
       ? {
-          sourceOrder: ['favorites', 'm3u', 'acestream'],
+          sourceOrder: ['iptv', 'favorites', 'm3u', 'acestream'],
           sourceStats: state.sourceStats ?? null,
           requestedChannels: channels,
         }
       : { sourceStats: state.sourceStats ?? null, requestedChannels: channels },
   );
   const ai: AiInfo = {
-    enabled: semanticEnabled,
+    enabled: deps.semantic.enabled,
     used: semanticResult.used,
-    model: semanticEnabled ? deps.model : null,
+    model: deps.semantic.enabled ? deps.model : null,
     catalogSize: semanticResult.catalogSize,
     error: semanticResult.error,
   };
-  if (!candidates.length) {
+  /* Canal suelto sin ninguna IPTV: `not_found` y la web sigue como hoy (§5.2). */
+  const noIptv =
+    scope === 'channel' && !candidates.some((candidate) => candidate.source === 'iptv');
+  if (!candidates.length || noIptv) {
     return {
       status: 'not_found',
       channels,
       checked,
       candidates: [],
+      ...(noIptv ? { candidate: null } : {}),
       engineAvailable,
       ai,
       program,

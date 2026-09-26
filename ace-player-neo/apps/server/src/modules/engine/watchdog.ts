@@ -129,18 +129,23 @@ export class EngineWatchdog {
     this.stopped = false;
     const { bus, clock } = this.deps;
     this.subscriptions.push(
-      bus.on('playback.activity', (activity) => this.setWatching(activity.watching)),
+      /* Con solo IPTV el motor está libre: no cuenta como «alguien viendo» (docs/iptv.md §6.4). */
+      bus.on('playback.activity', (activity) =>
+        this.setWatching(activity.engineWatching ?? activity.watching),
+      ),
       /* Las estadísticas que publica playback cada 2 s: la misma evidencia que
          ve el cliente, por si las lee por otro camino. */
-      bus.on('stream.stats', (stats) =>
+      bus.on('stream.stats', (stats) => {
+        /* Las de una IPTV las da el relé, no el motor: no son evidencia del motor. */
+        if (stats.status === 'iptv') return;
         this.noteStat(`session:${stats.sessionId}`, {
           status: stats.status,
           peers: stats.peers,
           speedDown: stats.speedDown,
           speedUp: stats.speedUp,
           downloaded: stats.downloaded,
-        }),
-      ),
+        });
+      }),
     );
     this.interval = clock.setInterval(() => void this.probeNow(), ENGINE_WATCHDOG.intervalMs, {
       unref: true,

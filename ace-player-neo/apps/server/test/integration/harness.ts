@@ -22,14 +22,19 @@ import type { AddressInfo } from 'node:net';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../../src/app.js';
 import type { DomainEvents, DomainEventType } from '../../src/core/bus.js';
+import type { Logger } from '../../src/core/logger.js';
 import { FakeClock } from '../../src/core/clock.js';
 import { startServices, stopServices } from '../../src/main.js';
 import { createEngineRuntime, type EngineRuntime } from '../../src/modules/engine/service.js';
 import { createHub, type EventsHubInternal } from '../../src/modules/events/hub.js';
+import { IptvServiceImpl } from '../../src/modules/iptv/service.js';
+import { createNetClient } from '../../src/modules/net/index.js';
+import type { NetResolver, NetTransport } from '../../src/modules/net/types.js';
 import { FakeSink } from '../../src/modules/events/test-support.js';
 import { createPlaybackRuntime, type PlaybackRuntime } from '../../src/modules/playback/service.js';
 import { createRemuxRuntime, type RemuxRuntime } from '../../src/modules/remux/service.js';
 import { createFakeLauncher, type FakeLauncher } from '../../src/modules/remux/test-support.js';
+import type { ProcessLauncher } from '../../src/modules/remux/types.js';
 import { createScannerService } from '../../src/modules/scanner/index.js';
 import {
   createHttpScannerTransport,
@@ -146,6 +151,14 @@ export interface HarnessOptions {
   readonly idleTimeoutMs?: number;
   /** Variables de entorno de más. */
   readonly env?: Record<string, string>;
+  /** DNS y transporte del cliente saliente (la IPTV contra el proveedor falso). */
+  readonly net?: { readonly resolver: NetResolver; readonly transport: NetTransport };
+  /** Lanzador de ffmpeg propio (por defecto, el falso que escribe segmentos al lanzarse). */
+  readonly launcher?: (fallback: FakeLauncher) => ProcessLauncher;
+  /** Reloj del backend (para crear antes piezas que lo comparten). */
+  readonly clock?: FakeClock;
+  /** Logger del backend (por defecto, mudo). */
+  readonly logger?: Logger;
 }
 
 /** Lo que llega por el bus, en orden (para comprobar el cableado entre módulos). */
@@ -176,6 +189,7 @@ export interface Harness {
   readonly remux: RemuxRuntime;
   readonly ffmpeg: FakeLauncher;
   readonly hub: EventsHubInternal;
+  readonly iptv: IptvServiceImpl;
   readonly bus: BusRecorder;
   /** Abre una conexión SSE simulada contra el hub real. */
   sse(options?: {
@@ -196,7 +210,7 @@ export interface Harness {
 
 export async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
   const host = await loopbackHost();
-  const clock = new FakeClock();
+  const clock = options.clock ?? new FakeClock();
   const engineClock = new FakeClock();
   const fake = await createFakeEngine({
     host,
@@ -211,6 +225,7 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
 
   const base = createTestCore({
     clock,
+    ...(options.logger ? { logger: options.logger } : {}),
     env: {
       ...(scannerEngine ? { ACESTREAM_SCANNER_HOST: 'comprobador' } : {}),
       ...options.env,
@@ -234,17 +249,29 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
 
   const engine = createEngineRuntime(core);
   const ffmpeg = createFakeLauncher();
+  const state = createStateService(core);
+  const net = createNetClient({
+    ...core,
+    ...(options.net ? { resolver: options.net.resolver, transport: options.net.transport } : {}),
+  });
+  const iptv = new IptvServiceImpl({
+    ...core,
+    state,
+    net,
+    relayHost: host === '::1' ? '::1' : '127.0.0.1',
+  });
   const remux = createRemuxRuntime({
     ...core,
     engine: engine.service,
-    launcher: ffmpeg.launcher,
+    launcher: options.launcher ? options.launcher(ffmpeg) : ffmpeg.launcher,
     procRoot: null,
     watchFiles: false,
+    redact: (text) => iptv.redact(text),
   });
-  const state = createStateService(core);
   const scanner = createScannerService({
     ...core,
     engine: engine.service,
+    iptv,
     ...(scannerEngine
       ? {
           transport: createHttpScannerTransport({
@@ -262,6 +289,7 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
     remux: remux.service,
     state,
     scanner,
+    iptv,
   });
   const hub = createHub(core);
 
@@ -281,6 +309,8 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
     'diagnostics.report',
     'diagnostics.new',
     'devices.changed',
+    'iptv.status',
+    'stream.stats',
   ];
   for (const type of types) {
     core.bus.on(type, (data) => recorded.push({ type, data, at: clock.now() }));
@@ -290,6 +320,8 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
     engine: engine.service,
     remux: remux.service,
     state,
+    net,
+    iptv,
     scanner,
     playback: playback.service,
     events: hub,
@@ -329,6 +361,7 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
     remux,
     ffmpeg,
     hub,
+    iptv,
     bus: {
       all: recorded,
       of: <T extends DomainEventType>(type: T) =>

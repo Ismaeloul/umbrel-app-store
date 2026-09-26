@@ -67,22 +67,26 @@ import {
   type PreheatRecord,
   type PreheatStage,
 } from './preheat.js';
-import { ProgrammingCatalog } from './programming.js';
+import { ProgrammingCatalog, channelName } from './programming.js';
 import {
   resolutionChannels,
   resolveFootballChannel,
+  scoreResolutionCandidate,
   type BaseCandidate,
   type ResolutionCore,
+  type ResolutionIptv,
   type ResolutionState,
   type ResolvableItem,
+  type ResolveScope,
 } from './resolution.js';
+import type { IptvProgramInput } from '../iptv/types.js';
 import {
   computeLiveScores,
   pruneScoresCache,
   type LegacyScores,
   type ScoresCache,
 } from './scores.js';
-import { isoDateInMadrid } from './time.js';
+import { isoDateInMadrid, madridLocalToEpoch } from './time.js';
 import type { FootballAiHealth, FootballDeps, FootballService, ResolveOptions } from './types.js';
 
 type Loose = Record<string, unknown>;
@@ -357,6 +361,47 @@ export class FootballServiceImpl implements FootballService {
     }
   }
 
+  /** El partido para la guía de la IPTV (con el saque aunque la agenda no traiga `start`). */
+  private iptvProgram(program: Readonly<Record<string, unknown>> | null): IptvProgramInput | null {
+    if (!program) return null;
+    const start = Number(program.start) || madridLocalToEpoch(program.date, program.time) || null;
+    const channels = (Array.isArray(program.channels) ? (program.channels as unknown[]) : [])
+      .map((channel) => channelName(channel))
+      .filter(Boolean);
+    return {
+      id: String(program.id ?? ''),
+      home: String(program.home ?? ''),
+      away: String(program.away ?? ''),
+      competition: String(program.competition ?? ''),
+      title: String(program.title ?? ''),
+      start,
+      channels,
+    };
+  }
+
+  /** Capa IPTV de la resolución (docs/iptv.md §4.3), si hay IPTV activa. */
+  private iptvLayer(): ResolutionIptv | undefined {
+    const { iptv, sources } = this.deps;
+    if (!iptv?.active()) return undefined;
+    return {
+      resolve: (channels, program) =>
+        iptv.resolve({
+          channels,
+          program: this.iptvProgram(program),
+          scorer: (wanted, item) => scoreResolutionCandidate(wanted, item, 'iptv'),
+          reliability: (id) => {
+            try {
+              return sources.reliability({ id, title: '', listaId: null, source: 'iptv' });
+            } catch {
+              return null;
+            }
+          },
+        }),
+      classify: (id) => iptv.classify(id),
+      convert: (id, match) => iptv.candidateFor(id, match),
+    };
+  }
+
   private resolveChannels(
     state: ResolutionState,
     values: unknown,
@@ -364,9 +409,11 @@ export class FootballServiceImpl implements FootballService {
       readonly program?: Readonly<Record<string, unknown>> | null;
       readonly mode?: 'research' | 'default';
       readonly signal?: AbortSignal;
+      readonly scope?: ResolveScope;
     },
   ): Promise<ResolutionCore> {
     const { config, search, sources } = this.deps;
+    const iptv = this.iptvLayer();
     return resolveFootballChannel(
       state,
       values,
@@ -382,8 +429,13 @@ export class FootballServiceImpl implements FootballService {
         semantic: { enabled: config.ai.enabled, embed: this.embed, cache: this.vectors },
         model: config.ai.embedModel,
         programChannels: this.programming.channels,
+        ...(iptv ? { iptv } : {}),
       },
-      { program: options.program ?? null, mode: options.mode ?? 'default' },
+      {
+        program: options.program ?? null,
+        mode: options.mode ?? 'default',
+        scope: options.scope ?? 'match',
+      },
     );
   }
 
@@ -408,9 +460,17 @@ export class FootballServiceImpl implements FootballService {
     const input = asRecord(query);
     const research = String(input.research ?? '') === '1';
     const matchId = typeof input.match === 'string' ? input.match : '';
+    /* Una resolución va a usar la IPTV: lista y cuenta frescas, de fondo (docs/iptv.md §3.5). */
+    this.deps.iptv?.touch(research ? 'research' : 'default');
+    /* Canal suelto (docs/iptv.md §5.2): solo vínculos, biblioteca e IPTV. */
+    if (input.scope === 'channel') return this.resolveLooseChannel(input, options);
     /* Los canales salen de la agenda real si el partido está en ella (B-231). */
     const program = this.programming.match(matchId);
     const announced = program?.channels.length ? program.channels : channelList(input.channel);
+    /* Partido sin canales con IPTV activa: solo la guía (docs/iptv.md §4.5). */
+    if (program && !announced.length && this.iptvLayer()) {
+      return this.resolveByGuide(input, program, options);
+    }
     /* "Rebuscar" siempre hace una pasada nueva (B-180, B-214). */
     const preheated = research ? null : reusablePreheat(this.preheats, matchId, clock.now());
     let result: ResolutionCore & { preheated?: true };
@@ -462,6 +522,87 @@ export class FootballServiceImpl implements FootballService {
         })
       : null;
     return { ...result, preheat: publicPreheatRecord(preheated), scan } as Resolution;
+  }
+
+  /* Trabajo del comprobador de una resolución IPTV: las AceStream y la
+     comprobación de cuenta de las IPTV (su carril; nunca una sonda de stream
+     IPTV desde una resolución interactiva, docs/iptv.md §5.2 y §7.3). */
+  private scanFor(
+    result: ResolutionCore,
+    input: Record<string, unknown>,
+    matchId: string,
+  ): ScanRef | null {
+    if (result.status === 'not_found' || !result.candidates.length) return null;
+    return this.enqueueScan({
+      kind: 'interactive',
+      candidates: result.candidates.map((candidate) => ({
+        id: candidate.id,
+        ih: candidate.ih,
+        title: candidate.title,
+      })),
+      clientKey: clientKeyOf(input.client),
+      matchId,
+      force: false,
+      priority: true,
+    });
+  }
+
+  /**
+   * `footballResolve` con `scope=channel` (docs/iptv.md §5.2): el título del
+   * canal que se abre como único canal pedido. Sin ninguna IPTV responde
+   * `not_found` sin trabajo del comprobador y la web sigue como hoy.
+   */
+  private async resolveLooseChannel(
+    input: Record<string, unknown>,
+    options: ResolveOptions,
+  ): Promise<Resolution> {
+    const channels = channelList(input.channel);
+    if (!this.iptvLayer()) {
+      const clean = resolutionChannels(channels);
+      if (!clean.length) throw new AppError('channel_required');
+      return {
+        status: 'not_found',
+        channels: clean,
+        checked: [],
+        candidate: null,
+        candidates: [],
+        engineAvailable: true,
+        ai: {
+          enabled: this.deps.config.ai.enabled,
+          used: false,
+          model: this.deps.config.ai.enabled ? this.deps.config.ai.embedModel : null,
+          catalogSize: 0,
+          error: null,
+        },
+        program: null,
+        research: false,
+        preheat: null,
+        scan: null,
+      };
+    }
+    const result = await this.resolveChannels(this.deps.state.get(), channels, {
+      scope: 'channel',
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+    return { ...result, preheat: null, scan: this.scanFor(result, input, '') } as Resolution;
+  }
+
+  /** Partido sin canales anunciados: solo la guía de la IPTV y sus pistas (docs/iptv.md §4.5). */
+  private async resolveByGuide(
+    input: Record<string, unknown>,
+    program: NonNullable<ReturnType<ProgrammingCatalog['match']>>,
+    options: ResolveOptions,
+  ): Promise<Resolution> {
+    const result = await this.resolveChannels(this.deps.state.get(), [], {
+      program: { ...program },
+      scope: 'guide',
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+    return {
+      ...result,
+      preheat: null,
+      scan: this.scanFor(result, input, program.id),
+    } as Resolution;
   }
 
   // --- Vínculos ---

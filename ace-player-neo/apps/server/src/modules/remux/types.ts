@@ -40,6 +40,11 @@ export interface RemuxDeps extends CoreDeps {
   readonly killPid?: (pid: number) => void;
   /** Vigilar la carpeta con `fs.watch` para enterarse antes de los segmentos nuevos. Por defecto sí. */
   readonly watchFiles?: boolean;
+  /**
+   * Limpia un texto de secretos antes de escribirlo (la cola del registro de
+   * ffmpeg). Lo da la IPTV (docs/iptv.md §2.4); sin él, la redacción genérica.
+   */
+  readonly redact?: (text: string) => string;
 }
 
 /** Proceso ffmpeg lanzado (el real o el falso de los tests). */
@@ -88,6 +93,15 @@ export interface RemuxSource {
   /** `playbackUrl` relativa de la sesión (`/ace/r/…` o `/ace/m/…`). */
   readonly playbackUrl: string;
   readonly mode: 'progressive' | 'hls';
+  /**
+   * URL absoluta de la entrada, en vez de `motor + playbackUrl`: la del relé
+   * de la IPTV (`http://127.0.0.1:<p>/r/<ticket>/…`, docs/iptv.md §6.3).
+   */
+  readonly inputUrl?: string;
+  /** De dónde sale la entrada (por defecto, el motor). */
+  readonly origin?: 'engine' | 'iptv';
+  /** La entrada del relé es una lista HLS. */
+  readonly isHls?: boolean;
 }
 
 export interface RemuxHandle {
@@ -133,6 +147,13 @@ export interface RemuxService extends Lifecycle {
    * fichas, y espera a que haya colchón. `null` si la sesión no tenía remux.
    */
   retarget(source: RemuxSource, signal?: AbortSignal): Promise<RemuxHandle | null>;
+  /**
+   * Reinicio en la misma sesión (docs/iptv.md §6.3): mata ffmpeg, vacía la
+   * carpeta y arranca otro con la misma entrada y los mismos visores. Lo pide
+   * el relé de la IPTV cuando cambia la base de tiempos o la variante. `null`
+   * si la sesión no tenía remux.
+   */
+  restart(sessionId: string, signal?: AbortSignal): Promise<RemuxHandle | null>;
   /** Un visor deja la sesión; sin visores, ffmpeg se para. */
   detach(sessionId: string, viewerId: string): Promise<void>;
   /** Sirve un fichero de la sesión con Range (206/416) y `no-store`; en m3u8, reescribe las URI con `?t=`. */
@@ -174,6 +195,8 @@ export interface RemuxService extends Lifecycle {
     readonly url: string;
     readonly dir: string;
     readonly sessionId: string;
+    readonly origin?: 'engine' | 'iptv';
+    readonly isHls?: boolean;
   }): string[];
   /** `parseByteRange` (server.js:346): `{start,end}` o false si no se puede servir (T-003). */
   parseByteRange(header: string | undefined, size: number): ByteRange | false | null;

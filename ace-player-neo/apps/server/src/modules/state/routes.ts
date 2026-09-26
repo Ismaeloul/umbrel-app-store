@@ -154,6 +154,15 @@ export function bootstrap(services: Services, ctx: RequestContext): BootstrapRes
       scanner: config.scanner.enabled,
       ai: config.ai.enabled,
       demoSchedule: config.football.demoOnly,
+      /* docs/iptv.md §5.1: hay IPTV activa con catálogo cargado (ausente = no). */
+      ...(safely(
+        services,
+        'iptv',
+        () => services.iptv.active(),
+        () => false,
+      )
+        ? { iptv: true }
+        : {}),
     },
   };
 }
