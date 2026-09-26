@@ -37,6 +37,11 @@ texto o quedó fuera:
   web; medir el arranque con un proveedor real; la renovación del token de las listas M3U y la vuelta a la guía corta,
   sin probar contra un proveedor real.
 
+**Probado con una lista pública real (26-sep-2026)**, solo en la pila local y eliminada al acabar: 7 arreglos (guía en
+la segunda cabecera, audio muxeado de las maestras, ffmpeg y el relé esperándose con segmentos grandes, «GEO», URLs con
+macros, canales de la agenda y el ensayo). Arranque medido: primera imagen en ~4 s desde el toque. Cómo repetirlo con
+otra lista: §15.
+
 **D10 resuelto (26-sep-2026) e implementado el mismo día en `rediseno/iptv`:** la IPTV entra en el buscador junto con AceStream. El anexo
 §14 lo diseña y **manda** sobre lo que digan de favoritos, recientes y buscador §4.4, §4.6, §8.1 y §8.4.
 
@@ -2529,3 +2534,101 @@ dueño):
    principal, libre mientras suena la IPTV.
 4. **Favoritos que se van.** Solo tras 24 h sin pareja y con sincronizaciones correctas; en pausa o sin proveedor nunca.
 5. **Memoria y CPU.** La búsqueda usa el índice que ya existe; el test de 100 000 canales la vigila.
+
+---
+
+## 15. Cómo probar tu propia lista en local
+
+Para meter una lista de verdad (con credenciales) **solo en el PC**, sin tocar el Umbrel. El backend es el real de la
+rama, con la red de verdad (agenda de hoy, listas de AceStream y tu IPTV); el motor AceStream es el falso, que hace
+sonar cualquier hash: sirve para ver el respaldo. Las credenciales se escriben **solo** en Ajustes → IPTV de la web
+local; se guardan cifradas en `ace-player-neo\.data\pila-local` (ignorada por git) y no salen en la consola, en los
+registros ni en las respuestas.
+
+**1. Backend** (PowerShell, en una copia con la rama `rediseno/iptv`):
+
+```powershell
+cd "C:\Users\Isma\Desktop\Actualización aceplayer\umbrel-app-store\ace-player-neo"
+corepack pnpm@10.18.2 install
+$env:Path = "C:\Program Files\Lian-Li\L-Connect 3\x64;" + $env:Path   # ffmpeg, solo en esta terminal
+corepack pnpm@10.18.2 exec tsx apps/server/scripts/pila-local.ts
+```
+
+Escucha en `http://[::1]:3100` y escribe en la consola la orden exacta de la web (con la `127.0.0.N` del motor falso
+que le haya tocado, normalmente la `.60`). Los registros van a `.data\pila-local\registro.jsonl`.
+
+**2. Web** (otra terminal, copiando las dos variables que dice el backend):
+
+```powershell
+cd "C:\Users\Isma\Desktop\Actualización aceplayer\umbrel-app-store\ace-player-neo\apps\web"
+$env:VITE_BACKEND = "http://[::1]:3100"; $env:VITE_ENGINE = "http://127.0.0.60:6878"
+corepack pnpm@10.18.2 exec vite --host 127.0.0.1 --port 5174
+```
+
+Abre **http://127.0.0.1:5174/?vista=ajustes/iptv**, elige «Lista M3U» o «Xtream Codes» y guarda. (Los puertos 3000,
+5173 y 6878 se dejan libres para la instancia de siempre.)
+
+**3. Mirar los resultados sin ver las credenciales:**
+- La tarjeta de Ajustes → IPTV: host, número de canales y la línea «Guía: N canales con programación».
+- Buscar y Canales: los canales de tu IPTV salen con el distintivo «IPTV».
+- El ensayo, con la agenda de hoy y de mañana (qué IPTV saldría en cada partido, sin URLs y sin abrir ningún stream):
+
+  ```powershell
+  cd "C:\Users\Isma\Desktop\Actualización aceplayer\umbrel-app-store\ace-player-neo"
+  $env:DATA_DIR = "$PWD\.data\pila-local"
+  corepack pnpm@10.18.2 exec tsx apps/server/scripts/iptv-ensayo.ts --api "http://[::1]:3100"
+  ```
+
+- Los registros de la IPTV (solo host, id de canal y códigos): `Select-String -Path .data\pila-local\registro.jsonl -Pattern '"module":"iptv"'`.
+  Para comprobar que tu usuario no aparece en ningún sitio sin sacarlo por pantalla, cuenta las veces (tiene que dar 0):
+  `(Get-ChildItem .data\pila-local -Recurse -File | Select-String -SimpleMatch 'TU_USUARIO').Count`.
+- El respaldo: con un canal IPTV sonando, corta la red y mira cómo pasa a AceStream con el aviso; al devolverla,
+  «Volver a la IPTV» (la `127.0.0.N` es la que dijo el backend):
+
+  ```powershell
+  Invoke-RestMethod -Method Post "http://127.0.0.60:3002/__red/cortar"      # toda la red saliente
+  Invoke-RestMethod -Method Post "http://127.0.0.60:3002/__red/restaurar"
+  ```
+
+  Con `?host=<host>` corta solo ese host (y sus subdominios): si el canal tiene otra variante en otro host, el relé
+  sigue por ella sin dejar la IPTV.
+
+**4. Eliminarla al acabar:** Ajustes → IPTV → la papelera → «¿Borrar?». Borra la configuración, el catálogo, la guía y
+el `.bak`. Compruébalo con:
+
+```powershell
+Get-Content .data\pila-local\v2\iptv.json            # "provider": null
+Get-ChildItem .data\pila-local\v2\iptv               # sin catalogo.enc ni guia.enc
+Test-Path .data\pila-local\v2\iptv.json.bak          # False
+```
+
+Luego Ctrl+C en las dos terminales. Si quieres borrar también la clave local y los registros, borra la carpeta
+`.data\pila-local` entera.
+
+**Prueba con una lista pública de canales en abierto (26-sep, solo en local y eliminada al acabar).** Lo que salió y se
+arregló, cada cosa con su prueba sobre datos inventados con la misma forma:
+- **Dos líneas `#EXTM3U`** (la primera de firma y la guía en la segunda): se leía solo la primera y se perdía la guía.
+  Ahora se suman (`m3u.ts`). Con la guía `.gz` de unos 600 KB: 1,5 s entre descarga y lectura, 925 programas útiles.
+- **Audio de las televisiones públicas en la maestra HLS:** un grupo `#EXT-X-MEDIA TYPE=AUDIO` con el audio principal
+  sin `URI` (muxeado) y el original y la audiodescripción aparte se tomaba como «todo aparte» → `iptv_unsupported`.
+  Ahora un grupo con alguna rendición sin `URI` es audio muxeado (`hls.ts`).
+- **ffmpeg y el relé se esperaban el uno al otro** con segmentos de 2 MB: ffmpeg pide el segmento siguiente antes de
+  leer entero el actual y el relé los sirve de uno en uno, así que todo canal HLS con segmentos grandes acababa en
+  `iptv_timeout` a los 20 s. `-http_multiple 0` en la entrada HLS del remux (`remux/args.ts`): primera imagen en 4 s.
+- **«Canal GEO»** (solo desde España) salía como otro canal: «GEO» al final es una marca; con zona («GEO CAT») cuenta
+  como reserva (`names.ts`).
+- **URLs con macros sin sustituir** (`[IP]`, `[UA]`, `[CACHEBUSTER]`… de los servidores de anuncios): se usan tal
+  cual, porque esos servidores responden igual (las 12 de la lista daban 200), pero van **detrás** de una variante sin
+  macros del mismo canal (`catalog.ts`, `match.ts`). Un canal con solo esa URL sigue funcionando.
+- **Agenda:** «La 1 TVE» no casaba con «La 1» de la IPTV, ni por nombre ni para la guía; «RTVE Play» casaba al 100 con
+  un canal eventual «En Play (RTVE)»; y «TV Canaria» no casaba con «TV Canaria (RTVC)». Ahora la IPTV busca los canales
+  de la agenda sin la cadena del final (TVE/RTVE), no empareja por nombre las plataformas de internet (Play, App,
+  YouTube, PPV…) y no tiene en cuenta la nota entre paréntesis del final salvo que nombre una competición, un número o
+  un deporte («LaLiga TV (Hypermotion)» sigue sin ser «LaLiga TV») (`names.ts`, `match.ts`, `layer.ts`).
+- **El ensayo pedía la agenda a `/api/v1/football/schedule`** (404): la ruta es `/api/v1/football`, y `--api` acepta
+  ya el backend a secas (`ensayo.ts`).
+- **Buscar:** si tu biblioteca o tu IPTV tenían el canal y el motor no, salía debajo el vacío grande «Sin resultados
+  para…». Ahora es una línea: «El motor AceStream no tiene nada más para «…».».
+- La guía real no emparejó nada por error: resúmenes, fútbol sala, baloncesto, balonmano femenino, Liga F con un
+  partido masculino y repeticiones sin marca quedan fuera; el partido de la Nations League en «La 1» y el Mundial
+  Sub-20 femenino en Teledeporte sí salen (`guide-match.test.ts`, `match.test.ts`).
