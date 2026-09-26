@@ -171,8 +171,11 @@ final class FlujoTeatroUITests: XCTestCase {
         XCTAssertTrue(segundo.waitForExistence(timeout: 20), "La sesión de fuentes no da carteles")
         XCTAssertTrue(esperarElegido(primero, plazo: 20), "El arranque automático no pone la fuente 1")
         let video = elementoUI(app, IDUI.videoTeatro)
+        captura(app, "teatro-antes-de-deslizar")
         arrastrar(video, desde: CGVector(dx: 0.8, dy: 0.5), hasta: CGVector(dx: 0.1, dy: 0.5))
-        XCTAssertTrue(esperarElegido(segundo, plazo: 10), "Deslizar a la izquierda no pasa a la fuente 2")
+        let paso = esperarElegido(segundo, plazo: 10)
+        captura(app, "teatro-tras-deslizar")
+        XCTAssertTrue(paso, "Deslizar a la izquierda no pasa a la fuente 2")
         XCTAssertFalse(primero.isSelected, "La fuente 1 sigue elegida")
     }
 
