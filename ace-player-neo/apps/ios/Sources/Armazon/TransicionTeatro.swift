@@ -26,9 +26,22 @@ struct ClaveMarco: Hashable, Sendable {
     var partido: String
 }
 
-/// Lo que viaja: una foto de la pantalla (escudos) o el hueco `.vuelo` del vídeo (`VueloVideo`).
+/// Lo que pinta una pieza al volar: la vista de Palco de verdad con sus datos (la «foto nueva» de la web, que en
+/// el momento del vuelo aún no se ve y no se puede fotografiar). La publica quien pinta la pieza (`.piezaVuelo`).
+enum ContenidoPieza: Equatable {
+    /// `.versus__crests` de la tarjeta o del héroe (`BloqueEscudos`, isla oscura).
+    case escudos(DatosVersus, tamano: CGFloat)
+    /// `.mc-head__teams` del teatro (`FilaEquiposPartido`).
+    case filaEquipos(local: DatosEquipo, visitante: DatosEquipo, encendido: Bool)
+}
+
+/// Lo que viaja: una foto de la pantalla (escudos), el cruce de la web entre la foto vieja y la pieza nueva, o el
+/// hueco `.vuelo` del vídeo (`VueloVideo`).
 enum ContenidoVuelo {
     case foto(UIView)
+    /// a3 §4.8: la foto vieja se apaga y la nueva se enciende a la vez, en `plus-lighter`, ancladas arriba y
+    /// estiradas al ancho del grupo, que va de un marco al otro.
+    case cruce(vieja: UIView, nueva: ContenidoPieza)
     case video(SuperficieVideo)
 }
 
@@ -44,6 +57,7 @@ struct VueloPieza: Identifiable {
 
 @MainActor @Observable final class TransicionTeatro {
     @ObservationIgnored private(set) var marcos: [ClaveMarco: CGRect] = [:]  // coordenadas de la ventana
+    @ObservationIgnored private(set) var contenidos: [ClaveMarco: ContenidoPieza] = [:]
     private(set) var progreso: Double = 1  // 0 = en el origen, 1 = teatro colocado
     private(set) var ida = true
     private(set) var activa = false
@@ -64,6 +78,8 @@ struct VueloPieza: Identifiable {
     private(set) var opacidadDebajo: Double = 1
     private(set) var entradaDebajo: Double = 0
     private(set) var vuelos: [VueloPieza] = []
+    /// Los vuelos se funden con el teatro si se cierra a mitad de la ida.
+    private(set) var opacidadVuelos: Double = 1
     /// Piezas que no se pintan mientras vuela su foto.
     private(set) var ocultas: Set<ClaveMarco> = []
 
@@ -77,7 +93,12 @@ struct VueloPieza: Identifiable {
 
     func publicar(_ marco: CGRect, para clave: ClaveMarco) { marcos[clave] = marco }
 
-    func olvidar(_ clave: ClaveMarco) { marcos[clave] = nil }
+    func publicar(_ contenido: ContenidoPieza?, para clave: ClaveMarco) { contenidos[clave] = contenido }
+
+    func olvidar(_ clave: ClaveMarco) {
+        marcos[clave] = nil
+        contenidos[clave] = nil
+    }
 
     /// Ida (§3.5): zoom de la capa desde el origen + vuelo de escudos, muelle estándar.
     func abrir(_ destino: Destino, desde origen: OrigenApertura, reducido: Bool) async {
@@ -120,17 +141,23 @@ struct VueloPieza: Identifiable {
             return
         }
         let duracion: Double = reducido ? 0.12 : 0.34
-        if !reducido { prepararVuelta(haciaMini: haciaMini, marcoVideo: marcoVideo) }
-        opacidadDebajo = 0
-        entradaDebajo = GeometriaVuelo.entradaVista(.atras, reducido: reducido)  // a2 §11: la pestaña entra desde −16
+        // Cerrar a mitad de la ida: el zoom y los vuelos de la ida siguen su curva mientras todo se funde (volver a
+        // poner `progreso = 0` con el origen puesto devolvía de golpe el teatro al tamaño de la tarjeta).
+        let aMitadDeLaIda: Bool = origen != nil || !vuelos.isEmpty
+        if !aMitadDeLaIda {
+            if !reducido { prepararVuelta(haciaMini: haciaMini, marcoVideo: marcoVideo) }
+            opacidadDebajo = 0
+            entradaDebajo = GeometriaVuelo.entradaVista(.atras, reducido: reducido)  // a2 §11: entra desde −16
+        }
         try? await Task.sleep(for: .milliseconds(17))
         guard mio == turno else { return }
         withAnimation(.easeOut(duration: duracion)) {  // a2 §11: fundido de vista 340 ms (reducido 120)
             opacidadTeatro = 0
             opacidadDebajo = 1
             entradaDebajo = 0
+            if aMitadDeLaIda { opacidadVuelos = 0 }
         }
-        if !vuelos.isEmpty { withAnimation(Movimiento.estandar(false)) { progreso = 1 } }
+        if !vuelos.isEmpty && !aMitadDeLaIda { withAnimation(Movimiento.estandar(false)) { progreso = 1 } }
         let espera: Int = vuelos.isEmpty ? Int(duracion * 1000) : TransicionTeatro.muelleMs
         try? await Task.sleep(for: .milliseconds(espera))
         guard mio == turno else { return }
@@ -159,7 +186,7 @@ struct VueloPieza: Identifiable {
     /// Al soltar: true si vuelve (la capa termina de salir y quien llama hace `navegador.atras()`).
     func soltarBorde(dx: Double, vx: Double, reducido: Bool) -> Bool {
         let ancho = maquetacion.ancho
-        let vuelve = GeometriaVuelo.vuelveConElBorde(dx: dx, vx: vx, ancho: ancho)
+        let vuelve = Volver.decide(dx: dx, vx: vx, ancho: ancho)  // a2 §2.4 (M2, §2.1.5)
         let velocidad: Double = ancho > 0 ? vx / ancho : 0
         if vuelve {
             saliendoPorBorde = true
@@ -223,14 +250,32 @@ struct VueloPieza: Identifiable {
         opacidadTeatro = 1
     }
 
-    /// Los escudos de la tarjeta vuelan a la fila de equipos del teatro (la de verdad se ve al llegar).
+    /// Los escudos de la tarjeta vuelan a la fila de equipos del teatro (a3 §4.8).
     private func prepararEscudosIda(_ id: String) {
-        let clave = ClaveMarco(pieza: .escudos, partido: id)
-        guard let desde = marcos[clave], let hasta = marcos[ClaveMarco(pieza: .filaEquipos, partido: id)],
+        let origen = ClaveMarco(pieza: .escudos, partido: id)
+        let destino = ClaveMarco(pieza: .filaEquipos, partido: id)
+        guard let vuelo = vueloEscudos(de: origen, a: destino, fundirSinPieza: true) else { return }
+        vuelos = [vuelo.pieza]
+        ocultas = vuelo.tapadas
+    }
+
+    /// El grupo de la web entre dos piezas: la foto de la que se ve ahora y la pieza de llegada, en cruce
+    /// `plus-lighter` (las dos de verdad se ocultan). Sin la pieza de llegada, solo la foto (plan B).
+    private func vueloEscudos(
+        de origen: ClaveMarco, a destino: ClaveMarco, fundirSinPieza: Bool
+    ) -> (pieza: VueloPieza, tapadas: Set<ClaveMarco>)? {
+        guard let desde = marcos[origen], let hasta = marcos[destino], enVentana(hasta),
             let foto = Instantanea.tomar(desde)
-        else { return }
-        vuelos = [nuevoVuelo(.foto(foto), desde: desde, hasta: hasta, fundir: true)]
-        ocultas = [clave]
+        else { return nil }
+        if let nueva = contenidos[destino] {
+            return (nuevoVuelo(.cruce(vieja: foto, nueva: nueva), desde: desde, hasta: hasta, fundir: false), [origen, destino])
+        }
+        return (nuevoVuelo(.foto(foto), desde: desde, hasta: hasta, fundir: fundirSinPieza), [origen])
+    }
+
+    /// «Si la tarjeta sigue en pantalla» (a3 §4.8 paso 5: sin pareja, no hay vuelo).
+    private func enVentana(_ marco: CGRect) -> Bool {
+        marco.intersects(CGRect(x: 0, y: 0, width: maquetacion.ancho, height: maquetacion.alto))
     }
 
     /// Vuelta: la fila de equipos vuelve a los escudos de la tarjeta (si sigue en pantalla) y el vídeo al mini.
@@ -238,12 +283,10 @@ struct VueloPieza: Identifiable {
         var nuevos: [VueloPieza] = []
         var tapadas: Set<ClaveMarco> = []
         if case .partido(let id) = mostrado {
-            let destino = ClaveMarco(pieza: .escudos, partido: id)
-            if let desde = marcos[ClaveMarco(pieza: .filaEquipos, partido: id)], let hasta = marcos[destino],
-                let foto = Instantanea.tomar(desde)
-            {
-                nuevos.append(nuevoVuelo(.foto(foto), desde: desde, hasta: hasta, fundir: false))
-                tapadas.insert(destino)
+            let origen = ClaveMarco(pieza: .filaEquipos, partido: id)
+            if let vuelo = vueloEscudos(de: origen, a: ClaveMarco(pieza: .escudos, partido: id), fundirSinPieza: false) {
+                nuevos.append(vuelo.pieza)
+                tapadas = vuelo.tapadas
             }
         }
         if haciaMini, let superficie, let marcoVideo {
@@ -305,6 +348,7 @@ struct VueloPieza: Identifiable {
         fotoOrigen = nil
         opacidadFoto = 1
         vuelos = []
+        opacidadVuelos = 1
         ocultas = []
         opacidadTeatro = 1
         entradaTeatro = 0
@@ -316,22 +360,25 @@ struct VueloPieza: Identifiable {
 }
 
 extension View {
-    /// Publica el marco de esta pieza (onGeometryChange en .global) y lo olvida al desaparecer. Mientras su foto
-    /// vuela, la pieza no se pinta (la foto ocupa su sitio).
-    func piezaVuelo(_ pieza: PiezaVuelo, partido: String) -> some View {
-        modifier(PublicarMarco(clave: ClaveMarco(pieza: pieza, partido: partido)))
+    /// Publica el marco de esta pieza (onGeometryChange en .global) y lo olvida al desaparecer. Mientras vuela,
+    /// la pieza no se pinta (el vuelo ocupa su sitio). Con `contenido`, el vuelo que LLEGA a esta pieza la pinta
+    /// de verdad en el cruce `plus-lighter` de la web (a3 §4.8); sin él, solo vuela la foto de la otra.
+    func piezaVuelo(_ pieza: PiezaVuelo, partido: String, contenido: ContenidoPieza? = nil) -> some View {
+        modifier(PublicarMarco(clave: ClaveMarco(pieza: pieza, partido: partido), contenido: contenido))
     }
 }
 
 /// Cada cambio de marco, en coordenadas de la ventana, va a `TransicionTeatro` (sin observar: nadie se repinta).
 private struct PublicarMarco: ViewModifier {
     let clave: ClaveMarco
+    let contenido: ContenidoPieza?
     @Environment(TransicionTeatro.self) private var transicion
 
     func body(content: Content) -> some View {
         content
             .opacity(transicion.ocultas.contains(clave) ? 0 : 1)
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { transicion.publicar($0, para: clave) }
+            .onChange(of: contenido, initial: true) { _, nuevo in transicion.publicar(nuevo, para: clave) }
             .onDisappear { transicion.olvidar(clave) }
     }
 }
