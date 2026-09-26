@@ -986,7 +986,7 @@ recorre:
   - cada fichero de `variantes/` valida con su esquema.
   - No existe un `fixtures.test.ts` aparte: todo va en `contracts.test.ts`.
 - **Otros ficheros generados y de documentación:**
-  - `pnpm --filter @ace/shared openapi` regenera `docs/openapi.yaml`;
+  - `pnpm --filter @ace/shared openapi` regenera `docs/openapi-v2.yaml` (`docs/openapi.yaml` es la 0.6.59, a mano);
   - `docs/api.md` gana una sección «IPTV» con las rutas, `scope=channel` y la ruta `video` abierta a la web;
   - `docs/contratos.md` gana una línea sobre los ids sintéticos.
 
@@ -1736,7 +1736,7 @@ Lo que **sí** la rompe, porque los generadores de la app leen `packages/shared`
   `errors.ts`, `state/v2.ts` y `constants/` (`IPTV_REASONS`, `IPTV_MIN_SCORE`, `IPTV_USER_AGENT`, límites de §3);
 - `packages/shared/scripts/fixtures.ts` y `packages/shared/fixtures/**` (con `web/` y `variantes/`);
 - `packages/shared/test/**` (`contracts.test.ts` adaptado, §5.7);
-- `docs/openapi.yaml` (regenerado), `docs/api.md` y `docs/contratos.md`.
+- `docs/openapi-v2.yaml` (regenerado), `docs/api.md` y `docs/contratos.md`.
 
 **Entrega:**
 - todo lo de §5;

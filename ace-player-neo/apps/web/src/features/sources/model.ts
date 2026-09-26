@@ -435,6 +435,8 @@ const TYPE_LABEL: Record<SourceOrigin, string> = {
   favorites: 'Favorito',
   history: 'Reciente',
   acestream: 'AceStream',
+  /* docs/iptv.md §8.1. El resto de la IPTV en la web (distintivo, puente…) es de la parte «web». */
+  iptv: 'IPTV',
   manual: 'Externa',
 };
 

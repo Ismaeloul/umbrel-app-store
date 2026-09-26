@@ -5,7 +5,9 @@
    (el comprobador avisando a fuentes, precalentado y playback; el motor
    avisando a la web) va por el bus de dominio, que se crea antes que nadie.
 
-     state, net, engine
+     state, net
+     iptv         → state, net (docs/iptv.md §11.2)
+     engine
      scanner      → engine
      search       → engine, scanner
      sources      → state, scanner
@@ -34,6 +36,7 @@ import { createEngineService, type EngineService } from './modules/engine/index.
 import { createEventsHub, type EventsHub } from './modules/events/index.js';
 import { createFootballService, type FootballService } from './modules/football/index.js';
 import { createHealthService, type HealthService } from './modules/health/index.js';
+import { createIptvService, type IptvService } from './modules/iptv/index.js';
 import { createNetClient, type NetClient } from './modules/net/index.js';
 import { createPlaybackService, type PlaybackService } from './modules/playback/index.js';
 import { createRemuxService, type RemuxService } from './modules/remux/index.js';
@@ -50,6 +53,7 @@ export interface Services {
   readonly bus: DomainBus;
   readonly state: StateService;
   readonly net: NetClient;
+  readonly iptv: IptvService;
   readonly engine: EngineService;
   readonly scanner: ScannerService;
   readonly search: SearchService;
@@ -71,6 +75,7 @@ export type ServiceName = Exclude<keyof Services, keyof CoreDeps>;
 export const SERVICE_ORDER: readonly ServiceName[] = [
   'state',
   'net',
+  'iptv',
   'engine',
   'scanner',
   'search',
@@ -96,6 +101,7 @@ export function createServices(
 ): Services {
   const state = overrides.state ?? createStateService(core);
   const net = overrides.net ?? createNetClient(core);
+  const iptv = overrides.iptv ?? createIptvService({ ...core, state, net });
   const engine = overrides.engine ?? createEngineService(core);
   const scanner = overrides.scanner ?? createScannerService({ ...core, engine });
   const search = overrides.search ?? createSearchService({ ...core, engine, scanner });
@@ -132,6 +138,7 @@ export function createServices(
     ...core,
     state,
     net,
+    iptv,
     engine,
     scanner,
     search,

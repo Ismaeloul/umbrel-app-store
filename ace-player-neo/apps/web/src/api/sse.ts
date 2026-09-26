@@ -36,6 +36,8 @@ export const SSE_TYPES = [
   'state.changed',
   'diagnostics.new',
   'devices.changed',
+  /* Solo web (docs/iptv.md §5.5). Su efecto en la caché (invalidar iptvGet y bootstrap) es de la parte «web». */
+  'iptv.status',
   'resync',
 ] as const satisfies readonly SseEventType[];
 

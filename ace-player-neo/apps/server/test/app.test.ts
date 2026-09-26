@@ -270,7 +270,7 @@ describe('origen native (arquitectura §5.12)', () => {
     expect(conToken.json().error.code).toBe('not_found');
   });
 
-  it('el vídeo firmado es solo para native y exige ?t=', async () => {
+  it('el vídeo exige ?t= desde native; la web entra sin token (IPTV, docs/iptv.md §5.4)', async () => {
     const { app } = await createTestApp({ services: { auth: fakeAuth() } });
     const url = '/api/v1/video/s_abcdefgh12/index.m3u8';
     const desdeWeb = await app.inject({
@@ -278,7 +278,9 @@ describe('origen native (arquitectura §5.12)', () => {
       url: `${url}?t=${'x'.repeat(20)}`,
       headers: web(),
     });
-    expect(desdeWeb.statusCode).toBe(403);
+    /* Sin remux para ese sid: el error de siempre, no un 403 de origen. */
+    expect(desdeWeb.statusCode).toBe(410);
+    expect(desdeWeb.json().error.code).toBe('session_expired');
     const sinT = await app.inject({ method: 'GET', url: `/native${url}`, headers: native() });
     expect(sinT.statusCode).toBe(401);
     expect(sinT.json().error.code).toBe('video_token_invalid');

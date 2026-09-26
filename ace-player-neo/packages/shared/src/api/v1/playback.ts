@@ -23,9 +23,19 @@ export const PlaybackModeSchema = z.enum(PLAYBACK_MODES);
  * - `mpegts`: progresivo del motor (`/ace/r/…`), web con mpegts.js. Un solo consumidor.
  * - `hls`: HLS del motor (`/ace/m/…`), web con hls.js. Compartible.
  * - `hls-fmp4`: remux del backend para AVPlayer (`/native/api/v1/video/…`).
+ * Una IPTV siempre pasa por el remux: la web la recibe como `hls`
+ * (`/api/v1/video/…`, sin token) y el iPhone como `hls-fmp4` (docs/iptv.md §6.4).
  */
 export const StreamProtocolSchema = z.enum(['mpegts', 'hls', 'hls-fmp4']);
 export type StreamProtocol = z.infer<typeof StreamProtocolSchema>;
+
+/**
+ * De dónde sale el vídeo de una sesión (docs/iptv.md §5.1): el motor
+ * AceStream o la IPTV (relé local + remux). Opcional en la concesión y en el
+ * resumen de sesión: ausente es `engine`, como hasta la 0.8.1.
+ */
+export const StreamSourceSchema = z.enum(['engine', 'iptv']);
+export type StreamSource = z.infer<typeof StreamSourceSchema>;
 
 export const ChannelStreamParamsSchema = z.strictObject({ id: HashSchema });
 
@@ -96,6 +106,8 @@ export const StreamGrantSchema = z.strictObject({
   stats: z.strictObject({ via: z.literal('sse') }),
   /** Si al entrar se ha traspasado el canal de otro dispositivo (política `handoff` o canal distinto). */
   handoff: z.boolean(),
+  /** `iptv` si el vídeo sale de la IPTV (textos del reproductor); ausente = `engine`. */
+  source: StreamSourceSchema.optional(),
 });
 export type StreamGrant = z.infer<typeof StreamGrantSchema>;
 
@@ -184,6 +196,8 @@ export const SessionSummarySchema = z.strictObject({
   title: z.string().max(200),
   /** Cómo lo recibe: `hls-fmp4` si solo lo ven apps de iOS (remux); si no, el del motor. */
   protocol: StreamProtocolSchema,
+  /** `iptv` si la sesión es de la IPTV («Dónde se está reproduciendo» suma « · IPTV»); ausente = `engine`. */
+  source: StreamSourceSchema.optional(),
 });
 export type SessionSummary = z.infer<typeof SessionSummarySchema>;
 
@@ -197,15 +211,25 @@ export const PlaybackStatusSchema = z.strictObject({
 export type PlaybackStatus = z.infer<typeof PlaybackStatusSchema>;
 
 /**
- * GET /api/v1/video/:sid/:file?t=…: lista y segmentos del remux para
- * AVPlayer. Solo los ficheros que genera ffmpeg (nunca `ffmpeg.log`, que hoy
- * se puede descargar por /remux/, api.md §6.22).
+ * GET /api/v1/video/:sid/:file?t=…: lista y segmentos del remux. Solo los
+ * ficheros que genera ffmpeg (nunca `ffmpeg.log`, que hoy se puede descargar
+ * por /remux/, api.md §6.22).
+ *
+ * Desde la IPTV (docs/iptv.md §5.4) la ruta es `access: 'any'`:
+ * - origen `native` (AVPlayer): `t` es obligatorio y se comprueba, como
+ *   siempre (sin él, 401 `video_token_invalid`);
+ * - origen `web` (hls.js tras el login de Umbrel): `t` es opcional y se
+ *   IGNORA; la lista sale sin `?t=` en sus URIs.
  */
 export const VideoParamsSchema = z.strictObject({
   sid: SessionIdSchema,
   file: z.string().regex(/^(?:index\.m3u8|init\.mp4|index\d{1,9}\.m4s)$/, 'fichero del remux'),
 });
 export const VideoQuerySchema = z.strictObject({
-  /** `base64url(payload).HMAC`, payload `{ sid, dev, exp }` (arquitectura §5.12). */
-  t: z.string().min(10).max(2048),
+  /**
+   * `base64url(payload).HMAC`, payload `{ sid, dev, exp }` (arquitectura
+   * §5.12). Obligatorio desde /native (lo exige app.ts antes de validar);
+   * opcional e ignorado desde la web.
+   */
+  t: z.string().min(10).max(2048).optional(),
 });

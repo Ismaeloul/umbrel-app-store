@@ -5,16 +5,31 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import {
   ApiErrorSchema,
+  BootstrapResponseSchema,
   COMMON_V1_ERRORS,
   ERROR_CATALOG,
+  HashSchema,
+  IPTV_ERROR_CODES,
+  IPTV_REASONS,
+  IptvFileSchema,
+  IptvSaveBodySchema,
+  IptvStatusSchema,
+  IptvUpdateBodySchema,
+  IptvViewSchema,
   NATIVE_PUBLIC_ROUTE_IDS,
   PairingCreateBodySchema,
+  ResolutionCandidateSchema,
+  ResolveQuerySchema,
   SSE_EVENT_TYPES,
   SseEventSchema,
+  StreamGrantSchema,
   V1_ROUTES,
   V1_ROUTE_IDS,
+  VideoQuerySchema,
+  WEB_ONLY_EVENT_TYPES,
   describeError,
   errorMessage,
   isErrorCode,
@@ -25,6 +40,8 @@ import {
 import {
   FIXTURES_DIR,
   NON_JSON_ROUTE_IDS,
+  VARIANT_FIXTURES,
+  WEB_FIXTURE_ROUTE_IDS,
   fixtureFiles,
   type JsonRouteId,
 } from '../scripts/fixtures.js';
@@ -130,19 +147,32 @@ describe('catálogo de errores', () => {
   });
 });
 
-describe('ejemplos de fixtures/', () => {
+describe('ejemplos de fixtures/ (reparto de docs/iptv.md §5.7)', () => {
   const files = fixtureFiles();
+  const namesIn = (sub: string) =>
+    readdirSync(path.join(FIXTURES_DIR, sub)).map((file) => file.replace(/\.json$/, ''));
+  const webRoutes: readonly string[] = WEB_FIXTURE_ROUTE_IDS;
+  const jsonRoutes = V1_ROUTE_IDS.filter((id) => !NON_JSON_ROUTE_IDS.includes(id));
+  /** Carpeta del ejemplo de una ruta JSON. */
+  const fixtureOf = (id: string) =>
+    webRoutes.includes(id) ? `web/v1/${id}.json` : `v1/${id}.json`;
+  const eventOf = (type: string) =>
+    WEB_ONLY_EVENT_TYPES.has(type as never) ? `web/events/${type}.json` : `events/${type}.json`;
 
-  it('hay un ejemplo por cada ruta JSON y por cada evento, y ninguno sobra', () => {
-    const jsonRoutes = V1_ROUTE_IDS.filter((id) => !NON_JSON_ROUTE_IDS.includes(id));
-    const v1 = readdirSync(path.join(FIXTURES_DIR, 'v1')).map((file) =>
-      file.replace(/\.json$/, ''),
-    );
-    expect(v1.sort()).toEqual([...jsonRoutes].sort());
-    const events = readdirSync(path.join(FIXTURES_DIR, 'events')).map((file) =>
-      file.replace(/\.json$/, ''),
-    );
-    expect(events.sort()).toEqual([...SSE_EVENT_TYPES].sort());
+  it('v1/ = rutas JSON menos las solo web con ejemplo aparte; web/v1/ = esas; ninguno sobra', () => {
+    expect(namesIn('v1').sort()).toEqual(jsonRoutes.filter((id) => !webRoutes.includes(id)).sort());
+    expect(namesIn('web/v1').sort()).toEqual([...webRoutes].sort());
+    /* Las de web/v1/ son rutas JSON solo web (la app no las llama). */
+    for (const id of webRoutes) {
+      expect(jsonRoutes, id).toContain(id);
+      expect(V1_ROUTES[id as JsonRouteId].access, id).toBe('web');
+    }
+  });
+
+  it('events/ = eventos menos los solo web; web/events/ = los solo web; ninguno sobra', () => {
+    const shared = SSE_EVENT_TYPES.filter((type) => !WEB_ONLY_EVENT_TYPES.has(type));
+    expect(namesIn('events').sort()).toEqual([...shared].sort());
+    expect(namesIn('web/events').sort()).toEqual([...WEB_ONLY_EVENT_TYPES].sort());
   });
 
   it('lo que hay en disco es lo que genera scripts/fixtures.ts', () => {
@@ -150,26 +180,246 @@ describe('ejemplos de fixtures/', () => {
       expect(existsSync(path.join(FIXTURES_DIR, rel)), rel).toBe(true);
       expect(readJson(rel), rel).toEqual(JSON.parse(JSON.stringify(value)));
     }
+    /* Y no hay variantes de más en disco. */
+    const variants = [...files.keys()].filter((rel) => rel.startsWith('variantes/'));
+    expect(
+      namesIn('variantes')
+        .map((name) => `variantes/${name}.json`)
+        .sort(),
+    ).toEqual(variants.sort());
   });
 
   it('cada respuesta de ejemplo valida con el esquema de su ruta', () => {
-    for (const id of V1_ROUTE_IDS) {
-      if (NON_JSON_ROUTE_IDS.includes(id)) continue;
+    for (const id of jsonRoutes) {
       const schema = V1_ROUTES[id as JsonRouteId].response;
-      const result = schema.safeParse(readJson(`v1/${id}.json`));
+      const result = schema.safeParse(readJson(fixtureOf(id)));
       expect(result.success ? 'ok' : result.error.message, id).toBe('ok');
+    }
+  });
+
+  it('cada variante valida con el esquema de la ruta que va antes del primer punto', () => {
+    const names = namesIn('variantes');
+    expect(names.length).toBeGreaterThan(0);
+    for (const name of names) {
+      const id = name.split('.')[0] ?? '';
+      expect(jsonRoutes, name).toContain(id);
+      const schema = V1_ROUTES[id as JsonRouteId].response;
+      const result = schema.safeParse(readJson(`variantes/${name}.json`));
+      expect(result.success ? 'ok' : result.error.message, name).toBe('ok');
     }
   });
 
   it('cada evento de ejemplo valida con el esquema SSE', () => {
     for (const type of SSE_EVENT_TYPES) {
-      const result = SseEventSchema.safeParse(readJson(`events/${type}.json`));
+      const result = SseEventSchema.safeParse(readJson(eventOf(type)));
       expect(result.success ? 'ok' : result.error.message, type).toBe('ok');
     }
   });
 
+  it('lo que ve la app no cambia con la IPTV: bootstrap, footballResolve y channelStream', () => {
+    const bootstrap = readJson('v1/bootstrap.json') as { features: Record<string, unknown> };
+    expect(Object.keys(bootstrap.features).sort()).toEqual(['ai', 'demoSchedule', 'scanner']);
+    const resolve = readJson('v1/footballResolve.json') as {
+      candidates: { source: string; iptv?: unknown }[];
+      checked: string[];
+    };
+    expect(resolve.checked).not.toContain('iptv');
+    for (const candidate of resolve.candidates) {
+      expect(candidate.source).not.toBe('iptv');
+      expect(candidate).not.toHaveProperty('iptv');
+    }
+    expect(readJson('v1/channelStream.json')).not.toHaveProperty('source');
+  });
+
   it('el error de ejemplo valida', () => {
     expect(ApiErrorSchema.safeParse(readJson('errors/api-error.json')).success).toBe(true);
+  });
+});
+
+describe('contrato de la IPTV (docs/iptv.md §5)', () => {
+  const iptvResolve = VARIANT_FIXTURES['footballResolve.iptv'];
+  const iptvCandidate = iptvResolve.candidates[0]!;
+
+  it('una candidata IPTV es una candidata más: source iptv, id de 40 hex y su campo iptv', () => {
+    expect(ResolutionCandidateSchema.safeParse(iptvCandidate).success).toBe(true);
+    expect(HashSchema.safeParse(iptvCandidate.id).success).toBe(true);
+    const bad = (iptv: unknown) =>
+      ResolutionCandidateSchema.safeParse({ ...iptvCandidate, iptv }).success;
+    expect(bad({ ...iptvCandidate.iptv, url: 'http://x' })).toBe(false);
+    expect(bad({ ...iptvCandidate.iptv, quality: '8k' })).toBe(false);
+    expect(bad({ ...iptvCandidate.iptv, provider: 'x'.repeat(41) })).toBe(false);
+    /* Opcional: las candidatas de siempre no lo llevan. */
+    const { iptv: _iptv, ...plain } = iptvCandidate;
+    expect(ResolutionCandidateSchema.safeParse({ ...plain, source: 'm3u' }).success).toBe(true);
+  });
+
+  it('la variante de la resolución: IPTV primero (guía y nombre), 2 como mucho, y luego AceStream', () => {
+    const sources = iptvResolve.candidates.map((candidate) => candidate.source);
+    expect(sources).toEqual(['iptv', 'iptv', 'm3u', 'acestream']);
+    expect(iptvResolve.candidates[0]?.iptv?.guide).toBe(true);
+    expect(iptvResolve.candidates[1]?.iptv?.guide).toBe(false);
+    expect(iptvResolve.candidate).toEqual(iptvResolve.candidates[0]);
+    expect(iptvResolve.checked).toContain('iptv');
+  });
+
+  it('IptvSaveBody: ausente = el guardado; claves de más, tipos cruzados o secretos vacíos no pasan', () => {
+    const ok = (body: unknown) => IptvSaveBodySchema.safeParse(body).success;
+    expect(ok({ kind: 'm3u', name: 'Casa', url: 'https://proveedor.example/lista.m3u' })).toBe(
+      true,
+    );
+    expect(ok({ kind: 'm3u' })).toBe(true);
+    expect(
+      ok({
+        kind: 'xtream',
+        name: 'Casa',
+        server: 'http://proveedor.example:8080',
+        username: 'usuario',
+        password: 'clave',
+      }),
+    ).toBe(true);
+    expect(ok({ kind: 'xtream', name: 'Otro nombre' })).toBe(true);
+    expect(ok({ kind: 'xtream', url: 'https://proveedor.example/lista.m3u' })).toBe(false);
+    expect(ok({ kind: 'm3u', password: 'clave' })).toBe(false);
+    expect(ok({ kind: 'm3u', url: 'https://x', extra: true })).toBe(false);
+    expect(ok({ kind: 'xtream', password: '' })).toBe(false);
+    expect(ok({ kind: 'xtream', name: '   ' })).toBe(false);
+    expect(ok({ kind: 'xtream', name: 'x'.repeat(41) })).toBe(false);
+    expect(ok({ kind: 'rtmp' })).toBe(false);
+    expect(IptvSaveBodySchema.parse({ kind: 'm3u', name: '  Casa  ' }).name).toBe('Casa');
+  });
+
+  it('IptvUpdateBody: solo enabled y name', () => {
+    expect(IptvUpdateBodySchema.safeParse({ enabled: false }).success).toBe(true);
+    expect(IptvUpdateBodySchema.safeParse({ name: 'Casa' }).success).toBe(true);
+    expect(IptvUpdateBodySchema.safeParse({ enabled: true, password: 'x' }).success).toBe(false);
+  });
+
+  it('ninguna respuesta ni evento IPTV tiene un campo url, username ni password', () => {
+    const forbidden = new Set(['url', 'username', 'password', 'secret', 'server']);
+    const keysOf = (node: unknown, found: Set<string>): Set<string> => {
+      if (Array.isArray(node)) for (const child of node) keysOf(child, found);
+      else if (node && typeof node === 'object') {
+        for (const [key, value] of Object.entries(node)) {
+          if (key === 'properties' && value && typeof value === 'object') {
+            for (const name of Object.keys(value)) found.add(name);
+          }
+          keysOf(value, found);
+        }
+      }
+      return found;
+    };
+    for (const [name, schema] of [
+      ['IptvView', IptvViewSchema],
+      ['IptvStatus', IptvStatusSchema],
+      ['candidata', ResolutionCandidateSchema],
+    ] as const) {
+      const keys = keysOf(z.toJSONSchema(schema, { io: 'output' }), new Set());
+      expect(
+        [...keys].filter((key) => forbidden.has(key)),
+        name,
+      ).toEqual([]);
+    }
+  });
+
+  it('iptv.status es un evento solo web (y el único)', () => {
+    expect(SSE_EVENT_TYPES).toContain('iptv.status');
+    expect([...WEB_ONLY_EVENT_TYPES]).toEqual(['iptv.status']);
+  });
+
+  it('5 rutas solo web del módulo iptv, sin iptvTest; video pasa a any con t opcional', () => {
+    const iptv = listV1Routes().filter((route) => route.module === 'iptv');
+    expect(iptv.map((route) => `${route.id} ${route.method} ${route.path}`)).toEqual([
+      'iptvGet GET /api/v1/iptv',
+      'iptvSave PUT /api/v1/iptv',
+      'iptvUpdate PATCH /api/v1/iptv',
+      'iptvSync POST /api/v1/iptv/sync',
+      'iptvDelete DELETE /api/v1/iptv',
+    ]);
+    for (const route of iptv) {
+      expect(route.access, route.id).toBe('web');
+      expect(route.credential, route.id).toBe('bearer');
+    }
+    expect(V1_ROUTE_IDS).not.toContain('iptvTest');
+    expect(V1_ROUTES.video).toMatchObject({ access: 'any', credential: 'video-token' });
+    expect(VideoQuerySchema.safeParse({}).success).toBe(true);
+    expect(VideoQuerySchema.safeParse({ t: 'corto' }).success).toBe(false);
+    for (const code of ['iptv_gone', 'iptv_disabled', 'iptv_removed'] as const) {
+      expect(V1_ROUTES.channelStream.errors).toContain(code);
+    }
+  });
+
+  it('16 códigos iptv_*, públicos, sin estado antiguo y con el HTTP del diseño', () => {
+    expect(IPTV_ERROR_CODES).toHaveLength(16);
+    const statuses = Object.fromEntries(
+      IPTV_ERROR_CODES.map((code) => [code, ERROR_CATALOG[code].status]),
+    );
+    expect(statuses).toEqual({
+      iptv_not_configured: 409,
+      iptv_disabled: 409,
+      iptv_removed: 410,
+      iptv_credentials_required: 400,
+      iptv_secret_unreadable: 409,
+      iptv_auth_failed: 502,
+      iptv_account_expired: 502,
+      iptv_unreachable: 502,
+      iptv_timeout: 504,
+      iptv_busy: 503,
+      iptv_gone: 404,
+      iptv_dropped: 502,
+      iptv_unsupported: 422,
+      iptv_bad_list: 422,
+      iptv_empty: 422,
+      iptv_too_large: 502,
+    });
+    for (const code of IPTV_ERROR_CODES) {
+      expect(ERROR_CATALOG[code].public, code).toBe(true);
+      expect(ERROR_CATALOG[code].legacyStatus, code).toBeNull();
+    }
+  });
+
+  it('motivos IPTV: códigos del catálogo y sin iptv_ready', () => {
+    expect(IPTV_REASONS).not.toContain('iptv_ready');
+    for (const reason of IPTV_REASONS) expect(isErrorCode(reason), reason).toBe(true);
+  });
+
+  it('campos opcionales nuevos: features.iptv, scope, source de la concesión', () => {
+    const bootstrap = readJson('v1/bootstrap.json') as { features: object };
+    const withIptv = { ...bootstrap, features: { ...bootstrap.features, iptv: true } };
+    expect(BootstrapResponseSchema.safeParse(withIptv).success).toBe(true);
+    expect(ResolveQuerySchema.safeParse({ channel: 'Antena 3', scope: 'channel' }).success).toBe(
+      true,
+    );
+    expect(ResolveQuerySchema.safeParse({ scope: 'todo' }).success).toBe(false);
+    const grant = VARIANT_FIXTURES['channelStream.iptv'];
+    expect(grant).toMatchObject({ protocol: 'hls', source: 'iptv', remux: true });
+    expect(grant.url).toMatch(/^\/api\/v1\/video\/s_[A-Za-z0-9_-]+\/index\.m3u8$/);
+    expect(StreamGrantSchema.safeParse({ ...grant, source: 'otro' }).success).toBe(false);
+  });
+
+  it('v2/iptv.json: sin IPTV, con proveedor y sin listas de ids', () => {
+    expect(IptvFileSchema.safeParse({ version: 1, provider: null }).success).toBe(true);
+    const provider = {
+      id: 'p_Ab3dE5gH',
+      revision: 3,
+      kind: 'xtream',
+      name: 'Casa',
+      enabled: true,
+      host: 'proveedor.example:8080',
+      origin: 'http://proveedor.example:8080',
+      secret: { alg: 'A256GCM', iv: 'A'.repeat(16), tag: 'B'.repeat(22), data: 'Q2lmcmFkbw' },
+      createdAt: '2026-09-23T18:30:00.000Z',
+      updatedAt: '2026-09-23T18:30:00.000Z',
+      lastSync: null,
+      guide: null,
+      account: null,
+    };
+    expect(IptvFileSchema.safeParse({ version: 1, provider }).success).toBe(true);
+    expect(
+      IptvFileSchema.safeParse({ version: 1, provider: { ...provider, retiredIds: [] } }).success,
+    ).toBe(false);
+    expect(
+      IptvFileSchema.safeParse({ version: 1, provider: { ...provider, id: 'p_corto' } }).success,
+    ).toBe(false);
   });
 });
 

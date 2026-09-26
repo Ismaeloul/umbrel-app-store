@@ -9,6 +9,7 @@ export * from './errors.js';
 export * from './events.js';
 export * from './routes.js';
 
+export * from './constants/iptv.js';
 export * from './constants/limits.js';
 export * from './constants/playback.js';
 export * from './constants/timeouts.js';
@@ -28,6 +29,7 @@ export * from './api/v1/auth.js';
 export * from './api/v1/diagnostics.js';
 export * from './api/v1/engine.js';
 export * from './api/v1/football.js';
+export * from './api/v1/iptv.js';
 export * from './api/v1/library.js';
 export * from './api/v1/playback.js';
 export * from './api/v1/search.js';

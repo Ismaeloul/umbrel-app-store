@@ -12,6 +12,7 @@ servers:
 tags:
   - name: state
   - name: net
+  - name: iptv
   - name: directories
   - name: engine
   - name: playback
@@ -506,6 +507,11 @@ paths:
                                 - mpegts
                                 - hls
                                 - hls-fmp4
+                            source:
+                              type: string
+                              enum:
+                                - engine
+                                - iptv
                           required:
                             - id
                             - hash
@@ -602,6 +608,8 @@ paths:
                       ai:
                         type: boolean
                       demoSchedule:
+                        type: boolean
+                      iptv:
                         type: boolean
                     required:
                       - scanner
@@ -1379,7 +1387,7 @@ paths:
       tags:
         - playback
       summary: Abrir (o unirse a) la sesión del motor de un canal y recibir su URL
-      description: Espera a que la URL sea reproducible (la sesión abierta o, en iOS, el remux listo). Si el cliente cuelga, se cancela. Arquitectura §6.3.
+      description: "Espera a que la URL sea reproducible (la sesión abierta o, en iOS, el remux listo). Si el cliente cuelga, se cancela. Arquitectura §6.3. Con un id IPTV (docs/iptv.md §6.4) la sesión sale del relé y del remux: la web recibe `hls` en `/api/v1/video/<sid>/index.m3u8` sin token y el iPhone `hls-fmp4`, los dos con `source: iptv`."
       parameters:
         - name: id
           in: path
@@ -1555,6 +1563,11 @@ paths:
                     additionalProperties: false
                   handoff:
                     type: boolean
+                  source:
+                    type: string
+                    enum:
+                      - engine
+                      - iptv
                 required:
                   - session
                   - url
@@ -1603,6 +1616,36 @@ paths:
         - code: handoff_denied
           status: 409
           message: Otro dispositivo tiene el mando y no se ha podido pasar a este.
+        - code: iptv_gone
+          status: 404
+          message: Ese canal ya no está en tu IPTV.
+        - code: iptv_disabled
+          status: 409
+          message: Tu IPTV está en pausa.
+        - code: iptv_removed
+          status: 410
+          message: Has eliminado tu IPTV.
+        - code: iptv_secret_unreadable
+          status: 409
+          message: No se pueden leer los datos guardados de tu IPTV. Vuelve a escribirlos.
+        - code: iptv_busy
+          status: 503
+          message: Tu IPTV ya tiene todas sus conexiones en uso. Cierra la otra reproducción o espera un momento.
+        - code: iptv_auth_failed
+          status: 502
+          message: Tu proveedor de IPTV no acepta ese usuario y contraseña.
+        - code: iptv_account_expired
+          status: 502
+          message: La cuenta de tu IPTV ha caducado o está desactivada.
+        - code: iptv_unreachable
+          status: 502
+          message: Tu proveedor de IPTV no responde.
+        - code: iptv_timeout
+          status: 504
+          message: Tu IPTV no respondió a tiempo.
+        - code: iptv_unsupported
+          status: 422
+          message: Ese canal de tu IPTV usa un formato que no se puede reproducir aquí.
         - code: validation_error
           status: 400
           message: Falta algún dato o no tiene el formato esperado.
@@ -1977,6 +2020,11 @@ paths:
                             - mpegts
                             - hls
                             - hls-fmp4
+                        source:
+                          type: string
+                          enum:
+                            - engine
+                            - iptv
                       required:
                         - id
                         - hash
@@ -2041,8 +2089,8 @@ paths:
       operationId: video
       tags:
         - remux
-      summary: Lista y segmentos del remux para AVPlayer (Range, 206/416, no-store)
-      description: El backend reescribe cada m3u8 y añade `?t=` a cada URI, también a `#EXT-X-MAP:URI` (arquitectura §5.12).
+      summary: Lista y segmentos del remux para AVPlayer y, con la IPTV, para hls.js (Range, 206/416, no-store)
+      description: "Desde /native, `?t=` obligatorio: el backend reescribe cada m3u8 y añade `?t=` a cada URI, también a `#EXT-X-MAP:URI` (arquitectura §5.12). Desde la web (docs/iptv.md §5.4), sin token: `t` se ignora y la lista sale sin `?t=`. La sesión tiene que existir y tener remux vivo; si no, error como hoy."
       parameters:
         - name: sid
           in: path
@@ -2058,14 +2106,14 @@ paths:
             pattern: ^(?:index\.m3u8|init\.mp4|index\d{1,9}\.m4s)$
         - name: t
           in: query
-          required: true
+          required: false
           schema:
             type: string
             minLength: 10
             maxLength: 2048
       responses:
         "200":
-          description: Lista m3u8 reescrita con `?t=` o segmento fMP4. Admite Range (206/416).
+          description: Lista m3u8 (reescrita con `?t=` desde /native; tal cual desde la web) o segmento fMP4. Admite Range (206/416).
           content:
             application/vnd.apple.mpegurl:
               schema:
@@ -2085,8 +2133,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
       security:
+        - umbrelGateway: []
         - videoToken: []
-      x-access: native
+      x-access: any
       x-native-path: /native/api/v1/video/{sid}/{file}
       x-side-effects: false
       x-legacy-twin: GET /remux/{hash}/{fichero}
@@ -2272,6 +2321,1195 @@ paths:
       x-side-effects: true
       x-legacy-twin: null
       x-errors:
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
+  /api/v1/iptv:
+    get:
+      operationId: iptvGet
+      tags:
+        - iptv
+      summary: "Tu IPTV: tipo, nombre, host, estado, cuenta y guía (nunca URL, usuario ni contraseña)"
+      parameters: []
+      responses:
+        "200":
+          description: Correcto
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  provider:
+                    anyOf:
+                      - type: object
+                        properties:
+                          kind:
+                            type: string
+                            enum:
+                              - m3u
+                              - xtream
+                          name:
+                            type: string
+                            minLength: 1
+                            maxLength: 40
+                          enabled:
+                            type: boolean
+                          host:
+                            type: string
+                          origin:
+                            type:
+                              - string
+                              - "null"
+                          hasUrl:
+                            type: boolean
+                          hasUsername:
+                            type: boolean
+                          hasPassword:
+                            type: boolean
+                          status:
+                            type: string
+                            enum:
+                              - syncing
+                              - ok
+                              - error
+                              - disabled
+                          channels:
+                            type: integer
+                            minimum: 0
+                            maximum: 9007199254740991
+                          updatedAt:
+                            anyOf:
+                              - type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                              - type: "null"
+                          error:
+                            anyOf:
+                              - type: object
+                                properties:
+                                  code:
+                                    type: string
+                                    pattern: ^[a-z0-9_]{1,40}$
+                                  message:
+                                    type: string
+                                required:
+                                  - code
+                                  - message
+                                additionalProperties: false
+                              - type: "null"
+                          staleSince:
+                            anyOf:
+                              - type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                              - type: "null"
+                          account:
+                            anyOf:
+                              - type: object
+                                properties:
+                                  status:
+                                    type: string
+                                    enum:
+                                      - active
+                                      - expired
+                                      - banned
+                                      - disabled
+                                      - unknown
+                                  expiresAt:
+                                    anyOf:
+                                      - type: string
+                                        format: date-time
+                                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                      - type: "null"
+                                  maxConnections:
+                                    anyOf:
+                                      - type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                  activeConnections:
+                                    anyOf:
+                                      - type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                  ours:
+                                    type: integer
+                                    minimum: 0
+                                    maximum: 9007199254740991
+                                required:
+                                  - status
+                                  - expiresAt
+                                  - maxConnections
+                                  - activeConnections
+                                  - ours
+                                additionalProperties: false
+                              - type: "null"
+                          guide:
+                            type: object
+                            properties:
+                              available:
+                                type: boolean
+                              channelsWithGuide:
+                                type: integer
+                                minimum: 0
+                                maximum: 9007199254740991
+                              updatedAt:
+                                anyOf:
+                                  - type: string
+                                    format: date-time
+                                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                  - type: "null"
+                              failedAt:
+                                anyOf:
+                                  - type: string
+                                    format: date-time
+                                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                  - type: "null"
+                            required:
+                              - available
+                              - channelsWithGuide
+                              - updatedAt
+                              - failedAt
+                            additionalProperties: false
+                        required:
+                          - kind
+                          - name
+                          - enabled
+                          - host
+                          - origin
+                          - hasUrl
+                          - hasUsername
+                          - hasPassword
+                          - status
+                          - channels
+                          - updatedAt
+                          - error
+                          - staleSince
+                          - account
+                          - guide
+                        additionalProperties: false
+                      - type: "null"
+                  refreshHours:
+                    type: number
+                    const: 6
+                required:
+                  - provider
+                  - refreshHours
+                additionalProperties: false
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+      x-access: web
+      x-native-path: /native/api/v1/iptv
+      x-side-effects: false
+      x-legacy-twin: null
+      x-errors:
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
+    put:
+      operationId: iptvSave
+      tags:
+        - iptv
+      summary: "Conectar o cambiar la IPTV (M3U o Xtream): prueba rápida, cifra, guarda y sincroniza de fondo"
+      description: Un secreto ausente es «el guardado». Al crear, o si cambia el tipo o el origen del servidor, son obligatorios (`iptv_credentials_required`). Si la prueba rápida falla no guarda nada. Responde `syncing`; el recuento llega por SSE (`iptv.status`). Aborta la sincronización en curso.
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  properties:
+                    kind:
+                      type: string
+                      const: m3u
+                    name:
+                      type: string
+                      minLength: 1
+                      maxLength: 40
+                    url:
+                      type: string
+                      maxLength: 2048
+                  required:
+                    - kind
+                  additionalProperties: false
+                - type: object
+                  properties:
+                    kind:
+                      type: string
+                      const: xtream
+                    name:
+                      type: string
+                      minLength: 1
+                      maxLength: 40
+                    server:
+                      type: string
+                      maxLength: 2048
+                    username:
+                      type: string
+                      minLength: 1
+                      maxLength: 200
+                    password:
+                      type: string
+                      minLength: 1
+                      maxLength: 200
+                  required:
+                    - kind
+                  additionalProperties: false
+      responses:
+        "200":
+          description: Correcto
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  provider:
+                    anyOf:
+                      - type: object
+                        properties:
+                          kind:
+                            type: string
+                            enum:
+                              - m3u
+                              - xtream
+                          name:
+                            type: string
+                            minLength: 1
+                            maxLength: 40
+                          enabled:
+                            type: boolean
+                          host:
+                            type: string
+                          origin:
+                            type:
+                              - string
+                              - "null"
+                          hasUrl:
+                            type: boolean
+                          hasUsername:
+                            type: boolean
+                          hasPassword:
+                            type: boolean
+                          status:
+                            type: string
+                            enum:
+                              - syncing
+                              - ok
+                              - error
+                              - disabled
+                          channels:
+                            type: integer
+                            minimum: 0
+                            maximum: 9007199254740991
+                          updatedAt:
+                            anyOf:
+                              - type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                              - type: "null"
+                          error:
+                            anyOf:
+                              - type: object
+                                properties:
+                                  code:
+                                    type: string
+                                    pattern: ^[a-z0-9_]{1,40}$
+                                  message:
+                                    type: string
+                                required:
+                                  - code
+                                  - message
+                                additionalProperties: false
+                              - type: "null"
+                          staleSince:
+                            anyOf:
+                              - type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                              - type: "null"
+                          account:
+                            anyOf:
+                              - type: object
+                                properties:
+                                  status:
+                                    type: string
+                                    enum:
+                                      - active
+                                      - expired
+                                      - banned
+                                      - disabled
+                                      - unknown
+                                  expiresAt:
+                                    anyOf:
+                                      - type: string
+                                        format: date-time
+                                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                      - type: "null"
+                                  maxConnections:
+                                    anyOf:
+                                      - type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                  activeConnections:
+                                    anyOf:
+                                      - type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                  ours:
+                                    type: integer
+                                    minimum: 0
+                                    maximum: 9007199254740991
+                                required:
+                                  - status
+                                  - expiresAt
+                                  - maxConnections
+                                  - activeConnections
+                                  - ours
+                                additionalProperties: false
+                              - type: "null"
+                          guide:
+                            type: object
+                            properties:
+                              available:
+                                type: boolean
+                              channelsWithGuide:
+                                type: integer
+                                minimum: 0
+                                maximum: 9007199254740991
+                              updatedAt:
+                                anyOf:
+                                  - type: string
+                                    format: date-time
+                                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                  - type: "null"
+                              failedAt:
+                                anyOf:
+                                  - type: string
+                                    format: date-time
+                                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                  - type: "null"
+                            required:
+                              - available
+                              - channelsWithGuide
+                              - updatedAt
+                              - failedAt
+                            additionalProperties: false
+                        required:
+                          - kind
+                          - name
+                          - enabled
+                          - host
+                          - origin
+                          - hasUrl
+                          - hasUsername
+                          - hasPassword
+                          - status
+                          - channels
+                          - updatedAt
+                          - error
+                          - staleSince
+                          - account
+                          - guide
+                        additionalProperties: false
+                      - type: "null"
+                  refreshHours:
+                    type: number
+                    const: 6
+                required:
+                  - provider
+                  - refreshHours
+                additionalProperties: false
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+      x-access: web
+      x-native-path: /native/api/v1/iptv
+      x-side-effects: true
+      x-legacy-twin: null
+      x-errors:
+        - code: bad_url
+          status: 400
+          message: "La dirección no es válida: tiene que empezar por http:// o https://."
+        - code: private_url
+          status: 400
+          message: Por seguridad, las direcciones de tu red local están bloqueadas. Usa una lista publicada en internet.
+        - code: dns_failed
+          status: 502
+          message: No se pudo resolver el dominio de esa fuente.
+        - code: redirect_limit
+          status: 502
+          message: La fuente entra en un bucle o encadena demasiadas redirecciones.
+        - code: redirect_loop
+          status: 502
+          message: La fuente entra en un bucle o encadena demasiadas redirecciones.
+        - code: unsupported_encoding
+          status: 502
+          message: La fuente envía la lista comprimida de una forma que no se admite.
+        - code: iptv_credentials_required
+          status: 400
+          message: Si cambias el servidor o el tipo, vuelve a escribir el usuario y la contraseña.
+        - code: iptv_secret_unreadable
+          status: 409
+          message: No se pueden leer los datos guardados de tu IPTV. Vuelve a escribirlos.
+        - code: iptv_auth_failed
+          status: 502
+          message: Tu proveedor de IPTV no acepta ese usuario y contraseña.
+        - code: iptv_account_expired
+          status: 502
+          message: La cuenta de tu IPTV ha caducado o está desactivada.
+        - code: iptv_unreachable
+          status: 502
+          message: Tu proveedor de IPTV no responde.
+        - code: iptv_timeout
+          status: 504
+          message: Tu IPTV no respondió a tiempo.
+        - code: iptv_bad_list
+          status: 422
+          message: La dirección respondió, pero no es una lista M3U con canales en directo.
+        - code: iptv_empty
+          status: 422
+          message: La lista no trae ningún canal en directo que se pueda usar.
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
+    patch:
+      operationId: iptvUpdate
+      tags:
+        - iptv
+      summary: Pausar o reanudar la IPTV, o cambiarle el nombre
+      description: En pausa se guarda pero no se ofrece; cierra las sesiones IPTV vivas y conserva el catálogo.
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 40
+              additionalProperties: false
+      responses:
+        "200":
+          description: Correcto
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  provider:
+                    anyOf:
+                      - type: object
+                        properties:
+                          kind:
+                            type: string
+                            enum:
+                              - m3u
+                              - xtream
+                          name:
+                            type: string
+                            minLength: 1
+                            maxLength: 40
+                          enabled:
+                            type: boolean
+                          host:
+                            type: string
+                          origin:
+                            type:
+                              - string
+                              - "null"
+                          hasUrl:
+                            type: boolean
+                          hasUsername:
+                            type: boolean
+                          hasPassword:
+                            type: boolean
+                          status:
+                            type: string
+                            enum:
+                              - syncing
+                              - ok
+                              - error
+                              - disabled
+                          channels:
+                            type: integer
+                            minimum: 0
+                            maximum: 9007199254740991
+                          updatedAt:
+                            anyOf:
+                              - type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                              - type: "null"
+                          error:
+                            anyOf:
+                              - type: object
+                                properties:
+                                  code:
+                                    type: string
+                                    pattern: ^[a-z0-9_]{1,40}$
+                                  message:
+                                    type: string
+                                required:
+                                  - code
+                                  - message
+                                additionalProperties: false
+                              - type: "null"
+                          staleSince:
+                            anyOf:
+                              - type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                              - type: "null"
+                          account:
+                            anyOf:
+                              - type: object
+                                properties:
+                                  status:
+                                    type: string
+                                    enum:
+                                      - active
+                                      - expired
+                                      - banned
+                                      - disabled
+                                      - unknown
+                                  expiresAt:
+                                    anyOf:
+                                      - type: string
+                                        format: date-time
+                                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                      - type: "null"
+                                  maxConnections:
+                                    anyOf:
+                                      - type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                  activeConnections:
+                                    anyOf:
+                                      - type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                  ours:
+                                    type: integer
+                                    minimum: 0
+                                    maximum: 9007199254740991
+                                required:
+                                  - status
+                                  - expiresAt
+                                  - maxConnections
+                                  - activeConnections
+                                  - ours
+                                additionalProperties: false
+                              - type: "null"
+                          guide:
+                            type: object
+                            properties:
+                              available:
+                                type: boolean
+                              channelsWithGuide:
+                                type: integer
+                                minimum: 0
+                                maximum: 9007199254740991
+                              updatedAt:
+                                anyOf:
+                                  - type: string
+                                    format: date-time
+                                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                  - type: "null"
+                              failedAt:
+                                anyOf:
+                                  - type: string
+                                    format: date-time
+                                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                  - type: "null"
+                            required:
+                              - available
+                              - channelsWithGuide
+                              - updatedAt
+                              - failedAt
+                            additionalProperties: false
+                        required:
+                          - kind
+                          - name
+                          - enabled
+                          - host
+                          - origin
+                          - hasUrl
+                          - hasUsername
+                          - hasPassword
+                          - status
+                          - channels
+                          - updatedAt
+                          - error
+                          - staleSince
+                          - account
+                          - guide
+                        additionalProperties: false
+                      - type: "null"
+                  refreshHours:
+                    type: number
+                    const: 6
+                required:
+                  - provider
+                  - refreshHours
+                additionalProperties: false
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+      x-access: web
+      x-native-path: /native/api/v1/iptv
+      x-side-effects: true
+      x-legacy-twin: null
+      x-errors:
+        - code: iptv_not_configured
+          status: 409
+          message: Todavía no has conectado ninguna IPTV.
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
+    delete:
+      operationId: iptvDelete
+      tags:
+        - iptv
+      summary: Eliminar la IPTV y todos sus datos del Umbrel (copias incluidas)
+      description: Aborta los trabajos en curso, cierra las sesiones IPTV y borra configuración, catálogo, guía, `.bak` y copias apartadas. Los ids de antes dan 410 `iptv_removed`.
+      parameters: []
+      responses:
+        "200":
+          description: Correcto
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  provider:
+                    anyOf:
+                      - type: object
+                        properties:
+                          kind:
+                            type: string
+                            enum:
+                              - m3u
+                              - xtream
+                          name:
+                            type: string
+                            minLength: 1
+                            maxLength: 40
+                          enabled:
+                            type: boolean
+                          host:
+                            type: string
+                          origin:
+                            type:
+                              - string
+                              - "null"
+                          hasUrl:
+                            type: boolean
+                          hasUsername:
+                            type: boolean
+                          hasPassword:
+                            type: boolean
+                          status:
+                            type: string
+                            enum:
+                              - syncing
+                              - ok
+                              - error
+                              - disabled
+                          channels:
+                            type: integer
+                            minimum: 0
+                            maximum: 9007199254740991
+                          updatedAt:
+                            anyOf:
+                              - type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                              - type: "null"
+                          error:
+                            anyOf:
+                              - type: object
+                                properties:
+                                  code:
+                                    type: string
+                                    pattern: ^[a-z0-9_]{1,40}$
+                                  message:
+                                    type: string
+                                required:
+                                  - code
+                                  - message
+                                additionalProperties: false
+                              - type: "null"
+                          staleSince:
+                            anyOf:
+                              - type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                              - type: "null"
+                          account:
+                            anyOf:
+                              - type: object
+                                properties:
+                                  status:
+                                    type: string
+                                    enum:
+                                      - active
+                                      - expired
+                                      - banned
+                                      - disabled
+                                      - unknown
+                                  expiresAt:
+                                    anyOf:
+                                      - type: string
+                                        format: date-time
+                                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                      - type: "null"
+                                  maxConnections:
+                                    anyOf:
+                                      - type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                  activeConnections:
+                                    anyOf:
+                                      - type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                  ours:
+                                    type: integer
+                                    minimum: 0
+                                    maximum: 9007199254740991
+                                required:
+                                  - status
+                                  - expiresAt
+                                  - maxConnections
+                                  - activeConnections
+                                  - ours
+                                additionalProperties: false
+                              - type: "null"
+                          guide:
+                            type: object
+                            properties:
+                              available:
+                                type: boolean
+                              channelsWithGuide:
+                                type: integer
+                                minimum: 0
+                                maximum: 9007199254740991
+                              updatedAt:
+                                anyOf:
+                                  - type: string
+                                    format: date-time
+                                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                  - type: "null"
+                              failedAt:
+                                anyOf:
+                                  - type: string
+                                    format: date-time
+                                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                  - type: "null"
+                            required:
+                              - available
+                              - channelsWithGuide
+                              - updatedAt
+                              - failedAt
+                            additionalProperties: false
+                        required:
+                          - kind
+                          - name
+                          - enabled
+                          - host
+                          - origin
+                          - hasUrl
+                          - hasUsername
+                          - hasPassword
+                          - status
+                          - channels
+                          - updatedAt
+                          - error
+                          - staleSince
+                          - account
+                          - guide
+                        additionalProperties: false
+                      - type: "null"
+                  refreshHours:
+                    type: number
+                    const: 6
+                required:
+                  - provider
+                  - refreshHours
+                additionalProperties: false
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+      x-access: web
+      x-native-path: /native/api/v1/iptv
+      x-side-effects: true
+      x-legacy-twin: null
+      x-errors:
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
+  /api/v1/iptv/sync:
+    post:
+      operationId: iptvSync
+      tags:
+        - iptv
+      summary: Actualizar ya la lista de la IPTV (responde syncing; el recuento llega por SSE)
+      parameters: []
+      responses:
+        "200":
+          description: Correcto
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  provider:
+                    anyOf:
+                      - type: object
+                        properties:
+                          kind:
+                            type: string
+                            enum:
+                              - m3u
+                              - xtream
+                          name:
+                            type: string
+                            minLength: 1
+                            maxLength: 40
+                          enabled:
+                            type: boolean
+                          host:
+                            type: string
+                          origin:
+                            type:
+                              - string
+                              - "null"
+                          hasUrl:
+                            type: boolean
+                          hasUsername:
+                            type: boolean
+                          hasPassword:
+                            type: boolean
+                          status:
+                            type: string
+                            enum:
+                              - syncing
+                              - ok
+                              - error
+                              - disabled
+                          channels:
+                            type: integer
+                            minimum: 0
+                            maximum: 9007199254740991
+                          updatedAt:
+                            anyOf:
+                              - type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                              - type: "null"
+                          error:
+                            anyOf:
+                              - type: object
+                                properties:
+                                  code:
+                                    type: string
+                                    pattern: ^[a-z0-9_]{1,40}$
+                                  message:
+                                    type: string
+                                required:
+                                  - code
+                                  - message
+                                additionalProperties: false
+                              - type: "null"
+                          staleSince:
+                            anyOf:
+                              - type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                              - type: "null"
+                          account:
+                            anyOf:
+                              - type: object
+                                properties:
+                                  status:
+                                    type: string
+                                    enum:
+                                      - active
+                                      - expired
+                                      - banned
+                                      - disabled
+                                      - unknown
+                                  expiresAt:
+                                    anyOf:
+                                      - type: string
+                                        format: date-time
+                                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                      - type: "null"
+                                  maxConnections:
+                                    anyOf:
+                                      - type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                  activeConnections:
+                                    anyOf:
+                                      - type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                  ours:
+                                    type: integer
+                                    minimum: 0
+                                    maximum: 9007199254740991
+                                required:
+                                  - status
+                                  - expiresAt
+                                  - maxConnections
+                                  - activeConnections
+                                  - ours
+                                additionalProperties: false
+                              - type: "null"
+                          guide:
+                            type: object
+                            properties:
+                              available:
+                                type: boolean
+                              channelsWithGuide:
+                                type: integer
+                                minimum: 0
+                                maximum: 9007199254740991
+                              updatedAt:
+                                anyOf:
+                                  - type: string
+                                    format: date-time
+                                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                  - type: "null"
+                              failedAt:
+                                anyOf:
+                                  - type: string
+                                    format: date-time
+                                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                  - type: "null"
+                            required:
+                              - available
+                              - channelsWithGuide
+                              - updatedAt
+                              - failedAt
+                            additionalProperties: false
+                        required:
+                          - kind
+                          - name
+                          - enabled
+                          - host
+                          - origin
+                          - hasUrl
+                          - hasUsername
+                          - hasPassword
+                          - status
+                          - channels
+                          - updatedAt
+                          - error
+                          - staleSince
+                          - account
+                          - guide
+                        additionalProperties: false
+                      - type: "null"
+                  refreshHours:
+                    type: number
+                    const: 6
+                required:
+                  - provider
+                  - refreshHours
+                additionalProperties: false
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+      x-access: web
+      x-native-path: /native/api/v1/iptv/sync
+      x-side-effects: true
+      x-legacy-twin: null
+      x-errors:
+        - code: iptv_not_configured
+          status: 409
+          message: Todavía no has conectado ninguna IPTV.
+        - code: iptv_disabled
+          status: 409
+          message: Tu IPTV está en pausa.
         - code: validation_error
           status: 400
           message: Falta algún dato o no tiene el formato esperado.
@@ -5019,6 +6257,14 @@ paths:
           schema:
             type: string
             pattern: ^[a-zA-Z0-9_-]{1,40}$
+        - name: scope
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - match
+              - channel
       responses:
         "200":
           description: Correcto
@@ -5064,6 +6310,7 @@ paths:
                               - favorites
                               - history
                               - acestream
+                              - iptv
                           score:
                             type: number
                           matchedChannel:
@@ -5130,6 +6377,31 @@ paths:
                             const: true
                           semanticSimilarity:
                             type: number
+                          iptv:
+                            type: object
+                            properties:
+                              provider:
+                                type: string
+                                maxLength: 40
+                              quality:
+                                anyOf:
+                                  - type: string
+                                    enum:
+                                      - uhd
+                                      - fhd
+                                      - hd
+                                      - sd
+                                  - type: "null"
+                              backup:
+                                type: boolean
+                              guide:
+                                type: boolean
+                            required:
+                              - provider
+                              - quality
+                              - backup
+                              - guide
+                            additionalProperties: false
                         required:
                           - id
                           - title
@@ -5173,6 +6445,7 @@ paths:
                             - favorites
                             - history
                             - acestream
+                            - iptv
                         score:
                           type: number
                         matchedChannel:
@@ -5239,6 +6512,31 @@ paths:
                           const: true
                         semanticSimilarity:
                           type: number
+                        iptv:
+                          type: object
+                          properties:
+                            provider:
+                              type: string
+                              maxLength: 40
+                            quality:
+                              anyOf:
+                                - type: string
+                                  enum:
+                                    - uhd
+                                    - fhd
+                                    - hd
+                                    - sd
+                                - type: "null"
+                            backup:
+                              type: boolean
+                            guide:
+                              type: boolean
+                          required:
+                            - provider
+                            - quality
+                            - backup
+                            - guide
+                          additionalProperties: false
                       required:
                         - id
                         - title
@@ -7072,6 +8370,11 @@ components:
                           - mpegts
                           - hls
                           - hls-fmp4
+                      source:
+                        type: string
+                        enum:
+                          - engine
+                          - iptv
                     required:
                       - id
                       - hash
@@ -7636,6 +8939,133 @@ components:
               required:
                 - reason
                 - deviceId
+              additionalProperties: false
+          required:
+            - type
+            - data
+          additionalProperties: false
+        - type: object
+          properties:
+            type:
+              type: string
+              const: iptv.status
+            data:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum:
+                    - syncing
+                    - ok
+                    - error
+                    - disabled
+                channels:
+                  type: integer
+                  minimum: 0
+                  maximum: 9007199254740991
+                updatedAt:
+                  anyOf:
+                    - type: string
+                      format: date-time
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                    - type: "null"
+                error:
+                  anyOf:
+                    - type: object
+                      properties:
+                        code:
+                          type: string
+                          pattern: ^[a-z0-9_]{1,40}$
+                        message:
+                          type: string
+                      required:
+                        - code
+                        - message
+                      additionalProperties: false
+                    - type: "null"
+                staleSince:
+                  anyOf:
+                    - type: string
+                      format: date-time
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                    - type: "null"
+                account:
+                  anyOf:
+                    - type: object
+                      properties:
+                        status:
+                          type: string
+                          enum:
+                            - active
+                            - expired
+                            - banned
+                            - disabled
+                            - unknown
+                        expiresAt:
+                          anyOf:
+                            - type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                            - type: "null"
+                        maxConnections:
+                          anyOf:
+                            - type: integer
+                              minimum: 0
+                              maximum: 9007199254740991
+                            - type: "null"
+                        activeConnections:
+                          anyOf:
+                            - type: integer
+                              minimum: 0
+                              maximum: 9007199254740991
+                            - type: "null"
+                        ours:
+                          type: integer
+                          minimum: 0
+                          maximum: 9007199254740991
+                      required:
+                        - status
+                        - expiresAt
+                        - maxConnections
+                        - activeConnections
+                        - ours
+                      additionalProperties: false
+                    - type: "null"
+                guide:
+                  type: object
+                  properties:
+                    available:
+                      type: boolean
+                    channelsWithGuide:
+                      type: integer
+                      minimum: 0
+                      maximum: 9007199254740991
+                    updatedAt:
+                      anyOf:
+                        - type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                        - type: "null"
+                    failedAt:
+                      anyOf:
+                        - type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                        - type: "null"
+                  required:
+                    - available
+                    - channelsWithGuide
+                    - updatedAt
+                    - failedAt
+                  additionalProperties: false
+              required:
+                - status
+                - channels
+                - updatedAt
+                - error
+                - staleSince
+                - account
+                - guide
               additionalProperties: false
           required:
             - type

@@ -23,6 +23,7 @@ import {
 } from './api/common.js';
 import { EngineStatusSchema } from './api/v1/engine.js';
 import { DiagnosticEntrySchema } from './api/v1/diagnostics.js';
+import { IptvStatusSchema } from './api/v1/iptv.js';
 import { SessionSummarySchema, StreamProtocolSchema } from './api/v1/playback.js';
 
 // --- Reproducción ---
@@ -83,7 +84,12 @@ export const StreamReadyEventSchema = z.strictObject({
   }),
 });
 
-/** Tras un reinicio del motor, playback reabre la sesión y avisa con la URL nueva (arquitectura §5.5). */
+/**
+ * Tras un reinicio del motor, playback reabre la sesión y avisa con la URL
+ * nueva (arquitectura §5.5). `remux_restart` también cuando el relé de la
+ * IPTV reconecta y llega otra base de tiempos, o cambia de variante: mismo
+ * `sid`, ffmpeg nuevo (docs/iptv.md §5.5 y §6.1).
+ */
 export const StreamReopenedEventSchema = z.strictObject({
   type: z.literal('stream.reopened'),
   data: z.strictObject({
@@ -123,12 +129,21 @@ export const StreamClosedEventSchema = z.strictObject({
       'revoked',
       'shutdown',
     ]),
-    /** Código del catálogo de errores si se cerró por un fallo. */
+    /**
+     * Código del catálogo de errores si se cerró por un fallo. Una sesión IPTV
+     * se cierra siempre con `reason: 'remux_failed'` y un `iptv_*`
+     * (`iptv_dropped`, `iptv_disabled`, `iptv_removed`, `iptv_busy`), sin
+     * valores de enum nuevos (docs/iptv.md §5.5).
+     */
     code: z.string().optional(),
   }),
 });
 
-/** Cada 2 s mientras haya visores: lo que da `stat_url` del motor (velocidades en KB/s). */
+/**
+ * Cada 2 s mientras haya visores: lo que da `stat_url` del motor (velocidades
+ * en KB/s). En una IPTV lo da el relé: `status: 'iptv'`, `peers: 0`,
+ * `speedUp: 0`, `speedDown` = KB/s que entran y `downloaded` = bytes.
+ */
 export const StreamStatsEventSchema = z.strictObject({
   type: z.literal('stream.stats'),
   data: z.strictObject({
@@ -222,6 +237,17 @@ export const DevicesChangedEventSchema = z.strictObject({
   }),
 });
 
+/**
+ * Estado de la IPTV (docs/iptv.md §5.5): al empezar y terminar una
+ * sincronización, al cambiar la guía o la cuenta y al activar, pausar o
+ * eliminar. SOLO web (`WEB_ONLY_EVENT_TYPES`): la web invalida `iptvGet` y
+ * `bootstrap`. Tras eliminar llega `status: 'disabled'` con `channels: 0`.
+ */
+export const IptvStatusEventSchema = z.strictObject({
+  type: z.literal('iptv.status'),
+  data: IptvStatusSchema,
+});
+
 /** El cliente reconecta tarde y lo que le falta ya no está en el búfer: que recargue. */
 export const ResyncEventSchema = z.strictObject({
   type: z.literal('resync'),
@@ -245,6 +271,7 @@ export const SseEventSchema = z.discriminatedUnion('type', [
   StateChangedEventSchema,
   DiagnosticsNewEventSchema,
   DevicesChangedEventSchema,
+  IptvStatusEventSchema,
   ResyncEventSchema,
 ]);
 export type SseEvent = z.infer<typeof SseEventSchema>;
@@ -256,11 +283,20 @@ export const SSE_EVENT_TYPES: readonly SseEventType[] = SseEventSchema.options.m
 );
 
 /**
- * Eventos que solo recibe el origen `web`. Vacío desde la 0.8.1:
- * `devices.changed` llega también a los iPhone (Ajustes › Dispositivos en la
- * app). El filtro se queda para eventos de administración futuros.
+ * Eventos que solo recibe el origen `web`, como lista (para tipar). Desde la
+ * 0.8.1 `devices.changed` llega también a los iPhone; `iptv.status` no,
+ * porque la IPTV solo se configura en la web (docs/iptv.md §5.5, D13).
+ * Sus ejemplos van en `fixtures/web/events/`, que la app no recorre.
  */
-export const WEB_ONLY_EVENT_TYPES: ReadonlySet<SseEventType> = new Set<SseEventType>([]);
+export const WEB_ONLY_EVENT_TYPE_LIST = ['iptv.status'] as const satisfies readonly SseEventType[];
+export type WebOnlyEventType = (typeof WEB_ONLY_EVENT_TYPE_LIST)[number];
+/** Lo que reciben también los iPhone. */
+export type SharedEventType = Exclude<SseEventType, WebOnlyEventType>;
+
+/** Eventos que solo recibe el origen `web` (el filtro de events/). */
+export const WEB_ONLY_EVENT_TYPES: ReadonlySet<SseEventType> = new Set<SseEventType>(
+  WEB_ONLY_EVENT_TYPE_LIST,
+);
 
 /** Eventos dirigidos a visores concretos: cada conexión recibe solo los de su dispositivo. */
 export const TARGETED_EVENT_TYPES: ReadonlySet<SseEventType> = new Set<SseEventType>([

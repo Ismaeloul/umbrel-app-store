@@ -55,6 +55,7 @@ import * as engineRoutes from './modules/engine/routes.js';
 import * as eventsRoutes from './modules/events/routes.js';
 import * as footballRoutes from './modules/football/routes.js';
 import * as healthRoutes from './modules/health/routes.js';
+import * as iptvRoutes from './modules/iptv/routes.js';
 import * as netRoutes from './modules/net/routes.js';
 import * as playbackRoutes from './modules/playback/routes.js';
 import * as remuxRoutes from './modules/remux/routes.js';
@@ -84,6 +85,7 @@ declare module 'fastify' {
 export const MODULE_ROUTES = [
   stateRoutes,
   netRoutes,
+  iptvRoutes,
   engineRoutes,
   scannerRoutes,
   searchRoutes,

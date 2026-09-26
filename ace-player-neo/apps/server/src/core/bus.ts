@@ -91,6 +91,11 @@ export interface DomainEvents {
   'diagnostics.new': DiagnosticEntry;
   /** Alta, baja o cambio de un dispositivo emparejado (desde la 0.8.1 va a todos los orígenes). */
   'devices.changed': SseEventData<'devices.changed'>;
+  /**
+   * Estado de la IPTV (lo emite el módulo iptv; docs/iptv.md §5.5). El hub lo
+   * manda solo a la web (`WEB_ONLY_EVENT_TYPES`).
+   */
+  'iptv.status': SseEventData<'iptv.status'>;
 }
 
 export type DomainEventType = keyof DomainEvents;

@@ -180,12 +180,19 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
     expect(failures).toEqual([]);
   });
 
-  it('con token válido, la única ruta solo web (healthLive) da 403 origin_forbidden', async () => {
+  it('con token válido, las rutas solo web (healthLive y Ajustes → IPTV) dan 403 origin_forbidden', async () => {
     const s = await setup();
     const failures: string[] = [];
     const webOnly = V1.filter(([, route]) => route.access === 'web');
     /* Fija el conjunto: si se abre (o se cierra) una ruta por accidente, se ve aquí. */
-    expect(webOnly.map(([id]) => id)).toEqual(['healthLive']);
+    expect(webOnly.map(([id]) => id)).toEqual([
+      'healthLive',
+      'iptvGet',
+      'iptvSave',
+      'iptvUpdate',
+      'iptvSync',
+      'iptvDelete',
+    ]);
     for (const [id, route] of webOnly) {
       for (const url of nativeForms(concretePath(route))) {
         const { status, code } = await send(s, route.method, url, native(s.good.token));
@@ -384,11 +391,17 @@ describe('seguridad · URLs de vídeo firmadas', () => {
     }
   });
 
-  it('web no puede usar la ruta de vídeo firmada, ni native la de /remux/', async () => {
+  it('IPTV (docs/iptv.md §5.4): la web entra en la ruta de vídeo sin token; /native sin t sigue dando video_token_invalid', async () => {
     const s = await setup();
     const t = s.services.auth.signVideoToken({ sessionId: SID, deviceId: s.good.deviceId });
-    const fromWeb = await send(s, 'GET', `/api/v1/video/${SID}/index.m3u8?t=${t}`, web());
-    expect(fromWeb).toEqual({ status: 403, code: 'origin_forbidden' });
+    /* Sin remux vivo para ese sid: el error de siempre, no un 403 de origen. */
+    const bare = await send(s, 'GET', `/api/v1/video/${SID}/index.m3u8`, web());
+    expect(bare).toEqual({ status: 410, code: 'session_expired' });
+    /* Con `t` desde la web: se ignora, mismo resultado. */
+    const withT = await send(s, 'GET', `/api/v1/video/${SID}/index.m3u8?t=${t}`, web());
+    expect(withT).toEqual({ status: 410, code: 'session_expired' });
+    const nativeBare = await send(s, 'GET', `/native/api/v1/video/${SID}/index.m3u8`, native());
+    expect(nativeBare).toEqual({ status: 401, code: 'video_token_invalid' });
   });
 });
 

@@ -75,6 +75,7 @@ export const FORWARDED_EVENTS = [
   'state.changed',
   'diagnostics.new',
   'devices.changed',
+  'iptv.status',
 ] as const satisfies readonly (DomainEventType & SseEventType)[];
 
 /** Cabeceras de la respuesta SSE (el hijack se salta onSend: se ponen aquí las de siempre). */

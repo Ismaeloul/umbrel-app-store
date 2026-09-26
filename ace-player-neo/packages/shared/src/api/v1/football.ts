@@ -21,7 +21,15 @@ export const FootballScheduleResponseSchema = FootballScheduleSchema;
  * nueva sin vínculos ni precalentado, con `current` (y `currentIh=1`) para
  * seguir comprobando la fuente que se ve. `client` cancela el trabajo
  * anterior del mismo cliente.
+ *
+ * `scope=channel` (docs/iptv.md §5.2): canal suelto, sin `match`. Solo
+ * vínculos guardados, biblioteca e IPTV; ni buscador del motor ni IA. Sin
+ * ninguna IPTV responde `not_found` sin trabajo del comprobador. Ausente es
+ * `match`, lo de siempre.
  */
+export const ResolveScopeSchema = z.enum(['match', 'channel']);
+export type ResolveScope = z.infer<typeof ResolveScopeSchema>;
+
 export const ResolveQuerySchema = z.strictObject({
   match: z.string().max(100).optional(),
   channel: z.union([z.string().max(200), z.array(z.string().max(200)).max(32)]).optional(),
@@ -32,6 +40,7 @@ export const ResolveQuerySchema = z.strictObject({
     .string()
     .regex(/^[a-zA-Z0-9_-]{1,40}$/)
     .optional(),
+  scope: ResolveScopeSchema.optional(),
 });
 export type ResolveQuery = z.infer<typeof ResolveQuerySchema>;
 
