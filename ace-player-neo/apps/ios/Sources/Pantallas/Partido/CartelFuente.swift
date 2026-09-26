@@ -48,8 +48,8 @@ struct CartelFuente: View {
         case .copiarHash: video.copiar(hash, bien: "Hash copiado", mal: "No se pudo copiar el hash")
         case .abrir: video.abrirEnAceStream(hash)
         case .correcto:
-            let fuentes = video.fuentes
-            Task { await fuentes.confirmar(hash) }
+            let fuentes: SesionFuentes = video.fuentes
+            Task<Void, Never> { await fuentes.confirmar(hash) }
         case .reportar: hojas.abrir(.reportar(hash: hash, numero: fila.numero))
         }
     }

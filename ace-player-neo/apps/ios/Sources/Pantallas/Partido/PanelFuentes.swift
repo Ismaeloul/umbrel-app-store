@@ -29,7 +29,7 @@ struct PanelFuentes: View {
     /// La sesión es la de esta vista (`useSession`): la de este partido o canal, o la del canal del que este es
     /// hermano (se vuelve del mini tras elegir una hermana: la sesión sigue siendo la del primero).
     private var esLaSesion: Bool {
-        let fuentes = video.fuentes
+        let fuentes: SesionFuentes = video.fuentes
         if fuentes.clave == claveSesion { return true }
         guard let canalHash, fuentes.tipo == .canal else { return false }
         return fuentes.entradas.contains { $0.id == canalHash }
@@ -63,7 +63,7 @@ struct PanelFuentes: View {
     /// Las filas de la sesión (M3: número, estado, medidor, frase y descripción) y cuáles se ven o se pliegan.
     private func calcular() -> VistaFuentes {
         guard deSesion else { return VistaFuentes() }
-        let fuentes = video.fuentes
+        let fuentes: SesionFuentes = video.fuentes
         let ahora: Date = reloj.ahora
         let filas: [FilaFuente] = fuentes.filas(ahora: ahora)
         let visibles = Set(fuentes.filasVisibles(ahora: ahora).map(\.id))
@@ -146,8 +146,8 @@ private struct CabeceraFuentes: View {
     private var rebuscar: some View {
         let rebuscando: Bool = video.fuentes.rebuscando
         return Button {
-            let fuentes = video.fuentes
-            Task { await fuentes.rebuscar() }
+            let fuentes: SesionFuentes = video.fuentes
+            Task<Void, Never> { await fuentes.rebuscar() }
         } label: {
             IconoGiratorio(icono: .refresh, girando: rebuscando, tamano: 24)
                 .frame(width: 44, height: 44)
@@ -249,8 +249,8 @@ private struct AvisoFallo: View {
             HStack(spacing: 8) {
                 BotonPalco(rebuscando ? "Rebuscando…" : "Rebuscar", icono: .refresh, variante: .quieto, tamano: .sm,
                            ocupado: rebuscando) {
-                    let fuentes = video.fuentes
-                    Task { await fuentes.rebuscar() }
+                    let fuentes: SesionFuentes = video.fuentes
+                    Task<Void, Never> { await fuentes.rebuscar() }
                 }
                 BotonPalco("Pegar hash", icono: .paste, variante: .quieto, tamano: .sm, accion: pegar)
             }
