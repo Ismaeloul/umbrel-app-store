@@ -37,6 +37,7 @@ struct TiraDias: View {
             .padding(.top, 4)
             .padding(.bottom, 6)
             .subeConLaBarraDeEstado(false)
+            .carrilSoloHorizontal()
         }
         .scrollIndicators(.hidden)
         .scrollPosition($posicion, anchor: .center)

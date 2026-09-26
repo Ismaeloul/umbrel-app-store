@@ -31,6 +31,7 @@ struct CarrilCarteles<Datos: RandomAccessCollection, Celda: View>: View where Da
             .padding(.top, 6)
             .padding(.bottom, 14)
             .subeConLaBarraDeEstado(false)
+            .carrilSoloHorizontal()
         }
         .scrollIndicators(.hidden)
         .scrollTargetBehavior(.viewAligned)

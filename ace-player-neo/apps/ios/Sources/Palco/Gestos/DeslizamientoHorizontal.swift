@@ -1,9 +1,16 @@
 import SwiftUI
 import UIKit
 
-/// Pan horizontal con bloqueo de eje (8 pt) que convive con un ScrollView vertical, cede a los carriles
-/// horizontales y al gesto del borde. Lo usan el panel de partidos (cambiar de día), la barra «emitiendo» y el vídeo.
+/// Pan horizontal que convive con un ScrollView vertical, cede a los carriles horizontales y al gesto del borde.
+/// Lo usan el panel de partidos (cambiar de día), las pestañas de Canales y la barra «emitiendo».
 /// (b-arquitectura §2.2.8; canario C3). Los umbrales de qué hace al soltar son puros (Core/Reglas/Gestos).
+///
+/// Prueba de Isma en su iPhone: la lista no subía ni bajaba hasta mover antes el dedo de lado. Antes el
+/// ScrollView vertical ESPERABA a que este pan fallara (y este, a los carriles): mientras tanto no se desplazaba
+/// nada. Ahora nadie espera a nadie: los dos pan empiezan a la vez y, si este arranca (el gesto es claramente
+/// horizontal, `EjeGesto`), cancela el del ScrollView para que la página no se mueva en vertical. Un gesto
+/// sobre todo vertical no lo arranca nunca, así que la página se desplaza desde el primer punto.
+/// La coordinación la deciden los métodos del delegado (SwiftUI los respeta en los reconocedores de UIKit).
 struct DeslizamientoHorizontal: UIGestureRecognizerRepresentable {
     var activo = true
     var cedeACarriles = true
@@ -11,50 +18,70 @@ struct DeslizamientoHorizontal: UIGestureRecognizerRepresentable {
     var alMover: (_ dx: CGFloat) -> Void
     var alSoltar: (_ dx: CGFloat, _ dy: CGFloat, _ vx: CGFloat) -> Void
 
-    /// Bloqueo de eje: el pan solo empieza si, pasados 8 pt, lo horizontal manda.
-    static let bloqueoEje: CGFloat = 8
-
     final class Coordinador: NSObject, UIGestureRecognizerDelegate {
         var cedeAlBorde = true
         var cedeACarriles = true
+        /// El pan del ScrollView vertical que se mueve a la vez (se cancela si este arranca).
+        weak var desplazable: UIGestureRecognizer?
+        /// El toque empezó dentro de un carril horizontal: el carril se lo queda.
+        private var empiezaEnCarril = false
+
+        func gestureRecognizer(_ reconocedor: UIGestureRecognizer, shouldReceive toque: UITouch) -> Bool {
+            empiezaEnCarril = cedeACarriles && Coordinador.dentroDeCarril(toque.view)
+            return true
+        }
 
         func gestureRecognizerShouldBegin(_ reconocedor: UIGestureRecognizer) -> Bool {
             guard let pan = reconocedor as? UIPanGestureRecognizer else { return true }
+            guard !empiezaEnCarril else { return false }
             let t = pan.translation(in: pan.view)
             let v = pan.velocity(in: pan.view)
-            let dx = abs(t.x) > 0 ? abs(t.x) : abs(v.x)
-            let dy = abs(t.y) > 0 ? abs(t.y) : abs(v.y)
-            return dx > dy
+            return EjeGesto.horizontal(dx: Double(t.x), dy: Double(t.y), vx: Double(v.x), vy: Double(v.y))
         }
 
-        /// El borde (volver) y los carriles horizontales van primero: este pan espera a que fallen.
+        /// Solo el borde (volver) va primero: este pan espera a que falle.
         func gestureRecognizer(
             _ reconocedor: UIGestureRecognizer, shouldRequireFailureOf otro: UIGestureRecognizer
         ) -> Bool {
-            if cedeAlBorde && otro is UIScreenEdgePanGestureRecognizer { return true }
-            return cedeACarriles && Coordinador.esCarril(otro)
+            cedeAlBorde && otro is UIScreenEdgePanGestureRecognizer
         }
 
-        /// El ScrollView vertical espera a que este pan decida (así el eje queda bloqueado).
-        func gestureRecognizer(
-            _ reconocedor: UIGestureRecognizer, shouldBeRequiredToFailBy otro: UIGestureRecognizer
-        ) -> Bool {
-            guard let scroll = otro.view as? UIScrollView, otro === scroll.panGestureRecognizer else { return false }
-            return !Coordinador.esCarril(otro)
-        }
-
+        /// Con el ScrollView vertical, a la vez (nadie espera; ver arriba). Con lo demás, uno u otro.
         func gestureRecognizer(
             _ reconocedor: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otro: UIGestureRecognizer
         ) -> Bool {
-            false
+            guard Coordinador.esDesplazableVertical(otro) else { return false }
+            desplazable = otro
+            return true
         }
 
-        /// El pan de un ScrollView que se desplaza en horizontal (carriles de carteles, tira de días…).
-        static func esCarril(_ reconocedor: UIGestureRecognizer) -> Bool {
+        /// Arranca el pan horizontal: el ScrollView vertical suelta este toque (deshabilitarlo lo reinicia y ya
+        /// no recibe el dedo que está puesto).
+        func soltarDesplazable() {
+            guard let desplazable, desplazable.isEnabled else { return }
+            desplazable.isEnabled = false
+            desplazable.isEnabled = true
+        }
+
+        static func esDesplazableVertical(_ reconocedor: UIGestureRecognizer) -> Bool {
             guard let scroll = reconocedor.view as? UIScrollView, reconocedor === scroll.panGestureRecognizer else {
                 return false
             }
-            return scroll.contentSize.width > scroll.bounds.width + 1
+            return !esCarril(scroll)
+        }
+
+        /// Un ScrollView que se desplaza en horizontal (carriles de carteles, tira de días…).
+        static func esCarril(_ scroll: UIScrollView) -> Bool {
+            scroll.contentSize.width > scroll.bounds.width + 1
+        }
+
+        static func dentroDeCarril(_ vista: UIView?) -> Bool {
+            var actual = vista
+            while let v = actual {
+                if let scroll = v as? UIScrollView, esCarril(scroll) { return true }
+                actual = v.superview
+            }
+            return false
         }
     }
 
@@ -78,6 +105,9 @@ struct DeslizamientoHorizontal: UIGestureRecognizerRepresentable {
     func handleUIGestureRecognizerAction(_ reconocedor: UIPanGestureRecognizer, context: Context) {
         let t = reconocedor.translation(in: reconocedor.view)
         switch reconocedor.state {
+        case .began:
+            context.coordinator.soltarDesplazable()
+            alMover(t.x)
         case .changed:
             alMover(t.x)
         case .ended, .cancelled:
