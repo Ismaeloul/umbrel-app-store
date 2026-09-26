@@ -4540,7 +4540,7 @@ cambia.
 - **Web:** `search/matches.test.ts` y seis casos nuevos en `SearchView.test.tsx`.
 - **E2E** (`e2e/buscador-google.spec.ts`, los cuatro proyectos): «inglatera» encuentra el partido de Inglaterra
   (añadido a la agenda en el navegador) y lo abre; «esp», «barsa», «Barça»; con la IPTV falsa, «champions» y «m+
-  liga de campeone» (partido y canal), «telecinko», «telcnco» → «Quizás quisiste decir «telecinco»» tocable; la
+  liga de campeone» (partido y canal), «telecinko», «telcnco» → «Quizás quisiste decir «Telecinco»» tocable; la
   pestaña IPTV con «telecinko» y «t5». Capturas con `BUSCADOR_CAPTURAS=<carpeta>`.
 
 ### 20.7 Banco (149 consultas reales + 24 erratas y abreviaturas de Isma)

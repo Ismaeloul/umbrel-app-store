@@ -8,7 +8,8 @@
      en el navegador) y tocarlo abre el partido.
    - «esp» encuentra España; «barsa», el Barça; «champions», la Liga de
      Campeones (partido y canal); «m+ liga de campeone», lo mismo;
-     «telecinko», Telecinco de la IPTV; sin nada, «Quizás quisiste decir».
+     «telecinko», Telecinco de la IPTV; sin nada, «Quizás quisiste decir
+     «Telecinco»» (escrito como en la tabla de alias).
    - Capturas de Buscar con partidos y erratas, en claro y oscuro, con
      BUSCADOR_CAPTURAS=<carpeta> (la CI no las hace). */
 
@@ -153,11 +154,11 @@ test('con IPTV: «champions», «m+ liga de campeone» y «telecinko»; sin nada
   await expect(enTuIptv.getByRole('link', { name: 'Telecinco', exact: true })).toBeVisible();
 
   await buscar(page, 'telcnco');
-  const quizas = page.getByRole('button', { name: 'telecinco', exact: true });
+  const quizas = page.getByRole('button', { name: 'Telecinco', exact: true });
   await expect(quizas).toBeVisible();
   await expect(page.getByText(/Quizás quisiste decir/)).toBeVisible();
   await quizas.click();
-  await expect(page.getByRole('searchbox').first()).toHaveValue('telecinco');
+  await expect(page.getByRole('searchbox').first()).toHaveValue('Telecinco');
   await expect(enTuIptv.getByRole('link', { name: 'Telecinco', exact: true })).toBeVisible();
 });
 
