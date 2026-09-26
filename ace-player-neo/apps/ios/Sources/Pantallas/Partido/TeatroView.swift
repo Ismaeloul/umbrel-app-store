@@ -142,24 +142,21 @@ struct DesplazableTeatro<Cabecera: View, Panel: View>: View {
     }
 }
 
-/// Paneles montados (`hidden` de TheaterTabs.tsx): el elegido se ve; los demás siguen vivos (estado,
-/// desplazamientos) sin ocupar sitio. Como `.mc-tabs__panel`: el que llega se funde (`ace-funde`, 340 ms con
-/// `--ease-out`; reducido 120) y el que se va desaparece al momento.
+/// El panel de una pestaña (`hidden` de TheaterTabs.tsx): solo se pinta el elegido. Como `.mc-tabs__panel`, el que
+/// llega se funde (`ace-funde`, 340 ms con `--ease-out`; reducido 120) y el que se va desaparece al momento. En la
+/// web los escondidos siguen montados por los atajos de teclado (N, 1-9), que aquí no hay; mantenerlos montados
+/// con alto 0 los dejaba en el árbol de accesibilidad (VoiceOver los leía). Al volver, como en la web (que pasa de
+/// `display: none` a verse), las animaciones de entrada vuelven a empezar; los datos son de la sesión y no se piden.
 struct PanelMontado<Contenido: View>: View {
     let visible: Bool
     @ViewBuilder let contenido: () -> Contenido
     @Environment(\.movimientoReducido) private var reducido
 
     var body: some View {
-        let funde: Animation? = visible ? .timingCurve(0.2, 0.7, 0.3, 1, duration: reducido ? 0.12 : 0.34) : nil
-        contenido()
-            .frame(maxHeight: visible ? nil : 0, alignment: .top)
-            .clipped()
-            .animation(funde) { $0.opacity(visible ? 1 : 0) }
-            .allowsHitTesting(visible)
-            // Oculto de verdad para VoiceOver (y para XCUITest): con solo `accessibilityHidden` los hijos del panel
-            // escondido seguían en el árbol con su marco sin recortar.
-            .accessibilityElement(children: visible ? .contain : .ignore)
-            .accessibilityHidden(!visible)
+        let funde: Animation = .timingCurve(0.2, 0.7, 0.3, 1, duration: reducido ? 0.12 : 0.34)
+        if visible {
+            contenido()
+                .transition(.asymmetric(insertion: .opacity.animation(funde), removal: .identity))
+        }
     }
 }
