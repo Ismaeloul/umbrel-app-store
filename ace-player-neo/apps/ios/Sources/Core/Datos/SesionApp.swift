@@ -35,10 +35,6 @@ struct AvisoSesion: Sendable, Equatable {
     private(set) var versionServidor: String?
     private(set) var capacidades = Capacidades()
     private(set) var olvidando = false
-    /// Lo que impidió «Olvidar este iPhone» (red, plazo, 403 de un servidor 0.8.0…): si tras
-    /// `olvidarEsteIPhone()` la sesión sigue en la app, Ajustes lo enseña en el toast «No se pudo olvidar este
-    /// iPhone. {motivo}» (a6 §8.10.3). `nil` si no hubo fallo. (Añadido aditivo de M7; lo rellena M1.)
-    private(set) var falloOlvidar: APIError?
     /// aceneo://pair con la app ya emparejada → hoja «¿Emparejar con otro servidor?».
     var enlacePendiente: PairingLink?
     /// aceneo://pair sin emparejar: rellena la pantalla de emparejar (de `RootView.enlacePendiente`).
@@ -51,6 +47,8 @@ struct AvisoSesion: Sendable, Equatable {
     /// Al salir y al emparejar: lo que se sabía del servidor anterior (señales del comprobador, versión base)
     /// se olvida. Lo engancha el repartidor.
     @ObservationIgnored var alOlvidarServidor: (() -> Void)?
+    /// El reloj de la app (-AceNeoReloj en Debug): cuánto estuvo en segundo plano (contrato aditivo, ronda 2).
+    @ObservationIgnored var reloj: any Reloj = RelojSistema()
 
     let entorno: Entorno
     @ObservationIgnored private weak var datos: DatosApp?
@@ -272,7 +270,7 @@ struct AvisoSesion: Sendable, Equatable {
             avisar(AvisoSesion(texto: Self.textoOlvidarViejo, tono: .err))
         default:
             let motivo = APIError.describirFallo(error)
-            avisar(AvisoSesion(texto: "No se pudo olvidar este iPhone. \(motivo)", tono: .err))
+            avisar(AvisoSesion(texto: OpcionesDispositivo.olvidadoMal(motivo: motivo), tono: .err))
         }
     }
 
@@ -292,7 +290,7 @@ struct AvisoSesion: Sendable, Equatable {
     // MARK: Primer plano y segundo plano
 
     func volvioAPrimerPlano() {
-        let fuera = enSegundoPlanoDesde.map { Date().timeIntervalSince($0) } ?? 0
+        let fuera = enSegundoPlanoDesde.map { reloj.ahora.timeIntervalSince($0) } ?? 0
         enSegundoPlanoDesde = nil
         guard fase == .app else { return }
         datos?.volverActiva()
@@ -306,7 +304,7 @@ struct AvisoSesion: Sendable, Equatable {
 
     /// La hora se apunta al pasar a segundo plano, no a inactiva (el Centro de Control, a7 §5.2).
     func pasoASegundoPlano() {
-        enSegundoPlanoDesde = Date()
+        enSegundoPlanoDesde = reloj.ahora
     }
 
     // MARK: Capacidades

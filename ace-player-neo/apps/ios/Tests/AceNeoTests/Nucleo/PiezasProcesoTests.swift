@@ -35,6 +35,21 @@ final class PiezasProcesoTests: XCTestCase {
         XCTAssertFalse(compartido.enMarcha)
     }
 
+    /// El reloj del contenedor (-AceNeoReloj) llega a los datos, a las señales y a la sesión (decisión 4).
+    @MainActor
+    func testElRelojDelContenedorLlegaATodos() throws {
+        let t0 = Date(timeIntervalSince1970: 1_790_000_000)
+        let reloj = RelojMovil(t0)
+        let (entorno, _, _) = PruebaDatos.entorno()
+        let contenedor = ContenedorApp(entorno: entorno, reloj: reloj, motor: MotorFalso())
+        reloj.avanzar(90)
+        XCTAssertEqual(contenedor.datos.reloj.ahora, reloj.ahora)
+        XCTAssertEqual(contenedor.datos.agenda.reloj.ahora, reloj.ahora, "Y la frescura de cada consulta")
+        XCTAssertEqual(contenedor.datos.busqueda("liga").reloj.ahora, reloj.ahora)
+        XCTAssertEqual(contenedor.senales.reloj.ahora, reloj.ahora)
+        XCTAssertEqual(contenedor.sesion.reloj.ahora, reloj.ahora)
+    }
+
     /// `scan.progress` vale 20 min; `cancelled` lo borra (agenda/data.ts).
     @MainActor
     func testSenalPartidos() throws {
