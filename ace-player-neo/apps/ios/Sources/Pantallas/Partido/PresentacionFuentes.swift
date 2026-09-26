@@ -9,7 +9,7 @@ import Foundation
    («AceStream» si es infohash, «Fuente» si no). */
 
 /// Una fuente lista para pintar (`SourceRow` de useSources.ts).
-struct FilaFuente: Hashable, Sendable, Identifiable {
+struct FilaCartel: Hashable, Sendable, Identifiable {
     var entrada: EntradaFuente
     /// Posición en la lista completa: no cambia al plegar (regla 1).
     var numero: Int
@@ -94,7 +94,7 @@ enum PresentacionFuentes {
     static func filas(
         _ entradas: [EntradaFuente], activa: String?, pantalla: EnPantalla, ahora: Date,
         listas: [WebSourceSummary], hayComprobador: Bool
-    ) -> [FilaFuente] {
+    ) -> [FilaCartel] {
         entradas.enumerated().map { indice, entrada in
             fila(entrada, numero: indice + 1, activa: activa, pantalla: pantalla, ahora: ahora, listas: listas,
                  hayComprobador: hayComprobador)
@@ -104,7 +104,7 @@ enum PresentacionFuentes {
     static func fila(
         _ entrada: EntradaFuente, numero: Int, activa: String?, pantalla: EnPantalla, ahora: Date,
         listas: [WebSourceSummary], hayComprobador: Bool
-    ) -> FilaFuente {
+    ) -> FilaCartel {
         let efectivo = ReglasFuentes.efectivo(entrada, pantalla: pantalla, ahora: ahora)
         let senal = ReglasFuentes.senal(efectivo, entrada)
         let tipo = tipo(origen: entrada.origen, ih: entrada.ih)
@@ -112,7 +112,7 @@ enum PresentacionFuentes {
         let quien = proveedor(entrada.titulo)
         let detalle = quien.isEmpty ? lista : quien
         let etiqueta = detalle.isEmpty ? tipo : "\(tipo) · \(detalle)"
-        var fila = FilaFuente(
+        var fila = FilaCartel(
             entrada: entrada, numero: numero, efectivo: efectivo, senal: senal.estado, palabra: senal.palabra,
             detalle: ReglasFuentes.detalle(efectivo, entrada), tipo: tipo, corto: detalle.isEmpty ? tipo : detalle,
             etiqueta: etiqueta, lista: lista, activa: entrada.id == activa, enPantalla: entrada.id == pantalla.id,
@@ -122,7 +122,7 @@ enum PresentacionFuentes {
     }
 
     /// Nombre largo del cartel para VoiceOver (`describeSource`, model.ts).
-    static func describir(_ fila: FilaFuente, proveedor: String, hayComprobador: Bool) -> String {
+    static func describir(_ fila: FilaCartel, proveedor: String, hayComprobador: Bool) -> String {
         let entrada = fila.entrada
         let pares = Int(entrada.sonda?.pares ?? 0)
         let porcentaje = ReglasFuentes.porcentaje(entrada.disponibilidad)
@@ -138,7 +138,7 @@ enum PresentacionFuentes {
     }
 
     /// Estado del anillo: el del medidor, salvo la reportada (dibujo propio) y la que está en pantalla (oro).
-    static func anillo(_ fila: FilaFuente) -> EstadoAnillo {
+    static func anillo(_ fila: FilaCartel) -> EstadoAnillo {
         if fila.enPantalla { return .activa }
         if fila.efectivo.reportada { return .reportada }
         return .senal(fila.senal)
@@ -153,7 +153,7 @@ enum PresentacionFuentes {
     }
 
     /// Texto del progreso (`scanProgressText`, model.ts; a4 §12.2).
-    static func textoProgreso(_ trabajo: ScanJob?, filas: [FilaFuente], precalentado: PreheatPublic?) -> String {
+    static func textoProgreso(_ trabajo: ScanJob?, filas: [FilaCartel], precalentado: PreheatPublic?) -> String {
         if filas.isEmpty && trabajo == nil { return "Preparando fuentes" }
         let total = max(trabajo?.total ?? 0, filas.count)
         let vivas = filas.filter(viva)
@@ -173,19 +173,19 @@ enum PresentacionFuentes {
     }
 
     /// Verificada o floja y no reportada.
-    static func viva(_ fila: FilaFuente) -> Bool {
+    static func viva(_ fila: FilaCartel) -> Bool {
         guard !fila.efectivo.reportada, let estado = fila.efectivo.estado else { return false }
         return estado == .working || estado == .weak
     }
 
     /// La fuente que el comprobador está probando ahora (no la de pantalla), para « · la 3 se está probando ahora».
-    static func probandoAhora(_ visibles: [FilaFuente], trabajo: ScanJob?) -> Int? {
+    static func probandoAhora(_ visibles: [FilaCartel], trabajo: ScanJob?) -> Int? {
         guard let trabajo, trabajo.status != .complete else { return nil }
         return visibles.first { $0.efectivo.estado == .checking && $0.efectivo.motivo != "player_check" }?.numero
     }
 
     /// «Ver 3 más sin señal» / «Ver 3 más (1 sin señal, 2 en cola)» / «Ver 3 más en cola» / «Ocultar…».
-    static func textoPlegadas(_ plegadas: [FilaFuente], abiertas: Bool) -> String {
+    static func textoPlegadas(_ plegadas: [FilaCartel], abiertas: Bool) -> String {
         if abiertas { return "Ocultar las que no dan señal" }
         let sinSenal = plegadas.filter { $0.senal == .fail }.count
         let n = plegadas.count
@@ -195,7 +195,7 @@ enum PresentacionFuentes {
     }
 
     /// El menú «Fuente n» del cartel (`rowMenu`, SourcePoster.tsx; a4 §12.6). Abrirlo no vibra; ninguna opción vibra.
-    static func opcionesCartel(_ fila: FilaFuente, enPartido: Bool) -> [OpcionMenu] {
+    static func opcionesCartel(_ fila: FilaCartel, enPartido: Bool) -> [OpcionMenu] {
         var opciones: [OpcionMenu] = [
             OpcionMenu(
                 id: "ver", titulo: fila.enPantalla ? "Ya está en pantalla" : "Ver esta fuente", icono: .play,

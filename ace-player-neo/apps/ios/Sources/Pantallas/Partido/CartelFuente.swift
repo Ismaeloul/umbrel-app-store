@@ -4,10 +4,10 @@ import SwiftUI
    arriba a la derecha y «En pantalla» en oro abajo a la izquierda si es la que suena; alrededor, el filo del
    estado (oro en la que suena); debajo, el proveedor, el anillo con su palabra, la calidad y el tipo, y la
    frase. Toque: háptica rígida y elegir. Pulsación larga: menú «Fuente n» (sin háptica); las mismas opciones
-   van a VoiceOver como acciones. Sirve igual para cualquier tipo de fuente (FilaFuente). */
+   van a VoiceOver como acciones. Sirve igual para cualquier tipo de fuente (FilaCartel). */
 
 struct CartelFuente: View {
-    let fila: FilaFuente
+    let fila: FilaCartel
     let enPartido: Bool
     var espacio: Namespace.ID?
     let video = EntornoVideo()
@@ -56,7 +56,7 @@ struct CartelFuente: View {
 
 /// La tesela con su filo, el número y «En pantalla».
 private struct TeselaCartel: View {
-    let fila: FilaFuente
+    let fila: FilaCartel
     let espacio: Namespace.ID?
     @State private var alto: CGFloat = 90
 
@@ -112,7 +112,7 @@ private struct NumeroCartel: View {
 /// El filo del estado alrededor de la tesela (2; 3 en la activa y en la que suena), a 2 de ella, radio 16:
 /// continuo (ok, sin señal, en pantalla oro), discontinuo (floja, comprobando) o punteado (pendiente, reportada).
 private struct FiloCartel: View {
-    let fila: FilaFuente
+    let fila: FilaCartel
 
     private enum Trazo { case continuo, discontinuo, punteado }
 
@@ -146,7 +146,7 @@ private struct FiloCartel: View {
 
 /// Nombre (15/650/88), meta (anillo 14 + palabra · calidad · tipo) y frase (12, dos líneas como mucho).
 private struct CuerpoCartel: View {
-    let fila: FilaFuente
+    let fila: FilaCartel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {

@@ -20,9 +20,9 @@ struct EntornoVideo: DynamicProperty {
     @Environment(\.servidores) var servidores
 
     /// La foto del reproductor que leen las reglas puras (EstadoEscenario).
-    var foto: FotoReproductor {
+    var foto: FotoEscenario {
         let canal = reproductor.canal
-        return FotoReproductor(
+        return FotoEscenario(
             titulo: canal?.titulo, hash: canal?.id, fase: reproductor.fase, conexion: reproductor.conexion,
             mensaje: reproductor.mensaje, intento: reproductor.intento, directo: reproductor.directo,
             arranco: reproductor.arranco, motivoParada: reproductor.motivoParada,

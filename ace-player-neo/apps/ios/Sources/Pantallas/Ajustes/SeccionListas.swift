@@ -78,7 +78,7 @@ struct SeccionListas: View {
     private var notaEstilo: EstiloTexto { EstiloTexto(tamano: 13, peso: 450, altoLinea: 1.45) }
 
     private func tarjeta(_ lista: WebSourceSummary, activa: String) -> some View {
-        TarjetaLista(
+        TarjetaListaAjustes(
             lista: lista, activa: lista.id == activa, armada: confirmar.armado == lista.id,
             ocupado: ocupado, hayOperacion: ocupado != nil,
             usar: { Task { await activar(lista) } },

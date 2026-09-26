@@ -7,10 +7,10 @@ import SwiftUI
 
 /// Lo que pinta el panel, ya decidido.
 struct VistaFuentes {
-    var filas: [FilaFuente] = []
-    var visibles: [FilaFuente] = []
-    var plegadas: [FilaFuente] = []
-    var activa: FilaFuente?
+    var filas: [FilaCartel] = []
+    var visibles: [FilaCartel] = []
+    var plegadas: [FilaCartel] = []
+    var activa: FilaCartel?
 }
 
 struct PanelFuentes: View {

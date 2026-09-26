@@ -101,7 +101,7 @@ struct EscenarioVideo: View {
 
     // MARK: Capas
 
-    @ViewBuilder private func capaToques(_ foto: FotoReproductor) -> some View {
+    @ViewBuilder private func capaToques(_ foto: FotoEscenario) -> some View {
         let toques = CapaToquesVideo(
             abajoMinimiza: variante.deslizarAbajoMinimiza && alArrastrar != nil,
             ladosCambian: video.idsFuentesVisibles.count > 1,
@@ -116,7 +116,7 @@ struct EscenarioVideo: View {
         }
     }
 
-    @ViewBuilder private func capasMensaje(_ foto: FotoReproductor) -> some View {
+    @ViewBuilder private func capasMensaje(_ foto: FotoEscenario) -> some View {
         if let mensaje = EstadoEscenario.mensaje(foto) {
             PanelMensajeVideo(
                 mensaje: mensaje, grande: variante.mensajeGrande, boton: EstadoEscenario.botonMensaje(foto),
@@ -130,7 +130,7 @@ struct EscenarioVideo: View {
         }
     }
 
-    @ViewBuilder private func datosSobreVideo(_ foto: FotoReproductor) -> some View {
+    @ViewBuilder private func datosSobreVideo(_ foto: FotoEscenario) -> some View {
         if variante.datosSobreVideo && video.presentacion.datosTecnicosAbiertos && foto.hayCanal {
             PanelDatosSobreVideo(seguras: seguras, anchoMarco: maquetacion.ancho, altoMarco: maquetacion.alto) {
                 video.presentacion.cerrarDatosTecnicos()
@@ -138,7 +138,7 @@ struct EscenarioVideo: View {
         }
     }
 
-    private func estado(_ foto: FotoReproductor, relleno: Margenes) -> some View {
+    private func estado(_ foto: FotoEscenario, relleno: Margenes) -> some View {
         let abajo = foto.hayCanal && foto.fase != .error && (video.presentacion.controlesVisibles || voiceOver)
         return CapsulaEstadoVideo(
             variante: variante, relleno: relleno, hayPanel: EstadoEscenario.mensaje(foto) != nil, controlesAbajo: abajo)

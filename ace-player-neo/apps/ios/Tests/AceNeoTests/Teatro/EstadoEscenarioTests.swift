@@ -10,8 +10,8 @@ private func foto(
     _ fase: FaseReproductor, conexion: FaseConexion = .activa, titulo: String? = "DAZN 1", arranco: Bool = true,
     directo: InfoDirecto = .nada, demo: Bool = false, motivo: MotivoParada? = nil, espera: String? = nil,
     lead: String? = nil, mensaje: String? = nil
-) -> FotoReproductor {
-    FotoReproductor(
+) -> FotoEscenario {
+    FotoEscenario(
         titulo: titulo, hash: titulo == nil ? nil : "a1b2", fase: fase, conexion: conexion, mensaje: mensaje,
         directo: directo, arranco: arranco, motivoParada: motivo, demo: demo, espera: espera, lead: lead)
 }

@@ -26,7 +26,7 @@ struct FilaInferiorControles: View {
         .modifier(RutasAirPlay(hay: $hayRutas))
     }
 
-    @ViewBuilder private func izquierda(_ foto: FotoReproductor) -> some View {
+    @ViewBuilder private func izquierda(_ foto: FotoEscenario) -> some View {
         if variante.detenerEnFila {
             BotonIcono(.stop, etiqueta: "Detener", variante: .video) { video.detener() }
                 .accessibilityIdentifier(IDUI.botonDetener)
@@ -39,7 +39,7 @@ struct FilaInferiorControles: View {
         .accessibilityIdentifier(IDUI.botonSilencio)
     }
 
-    @ViewBuilder private func derecha(_ foto: FotoReproductor) -> some View {
+    @ViewBuilder private func derecha(_ foto: FotoEscenario) -> some View {
         let boton = EstadoEscenario.directo(foto)
         let ancho = variante.anchoDirecto(boton.modo)
         BotonDirectoVideo(
@@ -60,7 +60,7 @@ struct FilaInferiorControles: View {
 /// Pausa grande (`.player-play`): círculo de 52 blanco al 92 %, icono 24 relleno `#0C0C0E`, sombra
 /// `0 6 18 −6 rgba(0,0,0,.6)`. Conectando: deshabilitado al 60 %, ⏸ y «Conectando…» (a4 §5.2).
 private struct BotonPausaGrande: View {
-    let foto: FotoReproductor
+    let foto: FotoEscenario
     let accion: () -> Void
 
     private var icono: NombreIcono { foto.quiereSonar || foto.conectando ? .pause : .play }

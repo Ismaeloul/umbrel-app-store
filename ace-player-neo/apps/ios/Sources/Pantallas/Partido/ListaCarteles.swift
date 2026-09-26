@@ -6,8 +6,8 @@ import SwiftUI
    Las plegadas van al final tras «Ver n más…». */
 
 struct ListaCarteles: View {
-    let visibles: [FilaFuente]
-    let plegadas: [FilaFuente]
+    let visibles: [FilaCartel]
+    let plegadas: [FilaCartel]
     let enPartido: Bool
     @State private var abiertas = false
     @Namespace private var espacio
@@ -51,7 +51,7 @@ struct ListaCarteles: View {
 }
 
 private struct RejillaCarteles: View {
-    let filas: [FilaFuente]
+    let filas: [FilaCartel]
     let enPartido: Bool
     let espacio: Namespace.ID
 

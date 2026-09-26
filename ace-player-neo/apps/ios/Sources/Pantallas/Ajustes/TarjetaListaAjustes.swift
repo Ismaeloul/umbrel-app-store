@@ -6,7 +6,7 @@ import SwiftUI
    y el error del catálogo debajo). Acciones: «Usar»/«Activo», «Actualizar» y la papelera que se arma «¿Borrar?»
    durante 5 s (pegada a la derecha; en horizontal ≥ 620 van a la derecha en la misma fila). */
 
-struct TarjetaLista: View {
+struct TarjetaListaAjustes: View {
     let lista: WebSourceSummary
     let activa: Bool
     let armada: Bool
