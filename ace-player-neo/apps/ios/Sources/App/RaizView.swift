@@ -81,14 +81,28 @@ private struct FasesDeLaSesion: ViewModifier {
     let reducido: Bool
 
     func body(content: Content) -> some View {
-        content.onChange(of: contenedor.sesion.fase) { _, fase in
-            let raiz = contenedor.raiz
-            switch fase {
+        content.onChange(of: contenedor.sesion.fase) { _, _ in
+            let contenedor = self.contenedor
+            let reducido = self.reducido
+            Task { await FasesDeLaSesion.seguir(contenedor, reducido: reducido) }
+        }
+    }
+
+    /// Lleva la raíz a la fase de la sesión. Si la fase cambia mientras la raíz cruza (p. ej. un 401 durante los
+    /// ~940 ms de entrar en la app, cuando `Raiz` ignora otra petición), al acabar se vuelve a mirar (I1).
+    @MainActor static func seguir(_ contenedor: ContenedorApp, reducido: Bool) async {
+        let raiz = contenedor.raiz
+        for _ in 0..<3 {
+            guard !raiz.cambiando else { return }  // la que está cruzando volverá a mirar al acabar
+            switch contenedor.sesion.fase {
             case .app:
+                guard !raiz.app else { return }
+                contenedor.reproductor.dispositivoId = contenedor.sesion.dispositivo
                 let host: String = FasesDeLaSesion.host(contenedor.entorno.configuracion.leer())
-                Task { await raiz.entrarEnLaApp(host: host, reducido: reducido) }
+                await raiz.entrarEnLaApp(host: host, reducido: reducido)
             case .emparejar(let motivo):
-                Task { await raiz.volverAEmparejar(motivo: motivo ?? .olvidadoAqui, reducido: reducido) }
+                guard raiz.app else { return }
+                await raiz.volverAEmparejar(motivo: motivo ?? .olvidadoAqui, reducido: reducido)
             }
         }
     }

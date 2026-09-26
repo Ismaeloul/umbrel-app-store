@@ -71,8 +71,10 @@ import Foundation
         self.avisos = avisos
         let reproductor: Reproductor = Self.crearReproductor(entorno, motor: motor, modo: preferencias.modo)
         self.reproductor = reproductor
-        presentacion = PresentacionReproductor(reproductor: reproductor)
-        pip = GestorPiP()
+        // Una sola capa de vídeo: la presentación (M3) y el entorno (M6) comparten el MISMO GestorPiP.
+        let pip: GestorPiP = GestorPiP()
+        self.pip = pip
+        presentacion = PresentacionReproductor(reproductor: reproductor, pip: pip)
         let fuentes: SesionFuentes = SesionFuentes()
         self.fuentes = fuentes
         let senales: SenalPartidos = SenalPartidos()
@@ -117,13 +119,13 @@ import Foundation
             // -AceNeoEscena <vista> (flujos de M6; EscenasCaptura de I2 lo completará) abre esa ruta de la web.
             if let escena = ModoEjecucion.escena, let destino = Destino(vista: escena) { navegador.ir(destino) }
         #endif
-        // 2. Acceso perdido → la raíz vuelve a Emparejar y el reproductor se para.
-        sesion.alPerderAcceso = { [weak self] motivo in
-            guard let self else { return }
-            let reducido = ModoEjecucion.movimientoReducido
-            Task { await self.raiz.volverAEmparejar(motivo: motivo, reducido: reducido) }
-            self.reproductor.detener()
-        }
+        // 2. Acceso perdido → el reproductor se para. La raíz vuelve a Emparejar siguiendo a `sesion.fase`
+        //    (FasesDeLaSesion en RaizView, con «reducir movimiento» y «preferir fundidos»): una sola vía.
+        sesion.alPerderAcceso = { [weak reproductor] _ in reproductor?.detener() }
+        reproductor.dispositivoId = sesion.dispositivo
+        // El reloj de la app (-AceNeoReloj en Debug) también para la frescura y las señales (M1, decisión 4).
+        datos.reloj = reloj
+        senales.reloj = reloj
         // 3. Eventos del SSE al repartidor; un 401 del SSE es acceso perdido.
         tiempoReal.alEvento = { [weak repartidor] evento in repartidor?.aplicar(evento) }
         tiempoReal.alPerderAcceso = { [weak sesion] in
@@ -134,7 +136,7 @@ import Foundation
         fuentes.conectar(self)
         reproductor.alFallarFuente = { [weak fuentes] fallo in fuentes?.alFallarFuente(fallo) ?? false }
         ControlesSistema().conectar(reproductor)
-        pip.conectar(reproductor.motor.avPlayer)
+        cablearReproduccion()
         // 5. Fases de la escena (a8 §3.5). El reproductor (pausa del sistema) lo engancha M3.
         cicloVida.alCambiar.append { [weak sesion] antes, despues in
             if despues == .segundoPlano {
@@ -160,6 +162,30 @@ import Foundation
             }
         }
         // 6. `datos.tiempoRealAbierto` sigue a `tiempoReal.estado`: lo hace el repartidor (M1).
+    }
+
+    /// Lo que une la reproducción con la navegación y los marcadores (integración I1).
+    private func cablearReproduccion() {
+        // Marcadores: el partido que suena es el que sale tapado; cambiar de partido o detener vuelve a tapar
+        // (`fijarViendo`, el `playerPresence` de la web).
+        reproductor.escuchar { [weak destapados] suceso in
+            switch suceso {
+            case .empezo(let canal): destapados?.fijarViendo(canal.partido?.id)
+            case .parado: destapados?.fijarViendo(nil)
+            case .arranco: break
+            }
+        }
+        // Zapping (← →, pantalla de bloqueo): la web navega a `partido/canal/<hash>` (player/index.tsx › zap).
+        reproductor.alZapear = { [weak navegador] canal in navegador?.ir(.canal(hash: canal.id)) }
+        // «Volver» en la ventanita del PiP: se enseña el teatro de lo que suena para que el vídeo vuelva a su sitio.
+        pip.alRestaurar = { [weak navegador, weak reproductor] in
+            guard let navegador, let canal = reproductor?.canal else { return }
+            if let partido = canal.partido {
+                navegador.ir(.partido(id: partido.id))
+            } else {
+                navegador.ir(.canal(hash: canal.id))
+            }
+        }
     }
 
     /// Arranque de proceso (orden de M1/M4): repartidor y sesión.

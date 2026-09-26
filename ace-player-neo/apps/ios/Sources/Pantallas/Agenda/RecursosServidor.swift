@@ -18,10 +18,11 @@ enum RecursosServidor {
 
     private static var memoria: (hasta: TimeInterval, base: URL?)?
 
-    /// `/api/v1/football/teams/…/crest?v=…` → `https://…/native/api/v1/football/teams/…/crest?v=…`.
+    /// `/api/v1/football/teams/…/crest?v=…` → la URL simbólica de `RutaImagen` (M1): `CacheImagenes` la cambia por
+    /// la dirección que responda AHORA (casa o Tailscale), no por la primera guardada (integración I1).
     static func imagen(_ relativa: String?) -> URL? {
-        guard let relativa, relativa.hasPrefix("/"), !relativa.hasPrefix("//"), let base else { return nil }
-        return URL(string: "/native" + relativa, relativeTo: base)?.absoluteURL
+        guard let relativa, relativa.hasPrefix("/"), !relativa.hasPrefix("//") else { return nil }
+        return RutaImagen.url(relativa)
     }
 
     /// El origen (`scheme://host:puerto`) para la URL del stream.

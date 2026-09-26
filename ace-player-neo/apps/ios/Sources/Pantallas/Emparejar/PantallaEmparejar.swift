@@ -71,11 +71,9 @@ struct PantallaEmparejar: View {
         servicios.vibrar = { (tipo: TipoHaptico) in haptica.disparar(tipo) }
         servicios.anunciar = { (texto: String) in AccessibilityNotification.Announcement(texto).post() }
         let sesion = self.sesion
-        let raiz = self.raiz
-        let reducido = self.reducido
-        servicios.alEmparejar = { (respuesta: PairingClaimResponse, servidores: [URL], host: String) in
+        // La raíz entra en la app siguiendo a `sesion.fase` (FasesDeLaSesion en RaizView): una sola vía (I1).
+        servicios.alEmparejar = { (respuesta: PairingClaimResponse, servidores: [URL], _: String) in
             await sesion.emparejado(respuesta, servidores: servidores)
-            await raiz.entrarEnLaApp(host: host, reducido: reducido)
         }
         return ModeloEmparejar(servicios: servicios, guardadas: entorno?.configuracion.leer() ?? ServerConfig())
     }
