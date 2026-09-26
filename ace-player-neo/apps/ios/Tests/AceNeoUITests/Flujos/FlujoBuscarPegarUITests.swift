@@ -6,7 +6,7 @@ import XCTest
 final class FlujoBuscarPegarUITests: XCTestCase {
     private let idPrueba = "a1b2c3d4e5f60718293a4b5c6d7e8f90abcdef12"
     /// «DAZN 1 HD», el resultado del motor de la demo.
-    private let resultadoDazn = "d4e5f60718293a4b5c6d7e8f9012345678901a2b"
+    private let resultadoDazn = "ebede4dced345c3820c16fed5eca45ddbaa581c8"  // fakeHash («DAZN 1 HD»#n) de search/demo.ts
 
     override func setUpWithError() throws {
         continueAfterFailure = false

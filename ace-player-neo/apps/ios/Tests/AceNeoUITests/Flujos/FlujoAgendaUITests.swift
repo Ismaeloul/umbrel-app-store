@@ -44,7 +44,7 @@ final class FlujoAgendaUITests: XCTestCase {
         captura(app, "agenda-hoy")
 
         elementoUI(app, IDUI.dia(dia(1))).tap()
-        let tarjetaManana = elementoUI(app, IDUI.tarjetaPartido("sim-3"))
+        let tarjetaManana = elementoUI(app, IDUI.tarjetaPartido("demo-6"))
         XCTAssertTrue(tarjetaManana.waitForExistence(timeout: 10), "Mañana no enseña su partido")
         XCTAssertTrue(elementoUI(app, IDUI.dia(dia(1))).isSelected)
 
@@ -54,7 +54,7 @@ final class FlujoAgendaUITests: XCTestCase {
         arrastrar(pantalla, desde: CGVector(dx: 0.5, dy: 0.75), hasta: CGVector(dx: 0.5, dy: 0.35))
         XCTAssertTrue(tarjetaManana.isHittable, "La tarjeta de mañana no queda a la vista")
         arrastrar(tarjetaManana, desde: CGVector(dx: 0.2, dy: 0.3), hasta: CGVector(dx: 1.2, dy: 0.3))
-        XCTAssertTrue(elementoUI(app, IDUI.tarjetaPartido("sim-1")).waitForExistence(timeout: 10), "Deslizar no vuelve a hoy")
+        XCTAssertTrue(elementoUI(app, IDUI.tarjetaPartido("demo-12")).waitForExistence(timeout: 10), "Deslizar no vuelve a hoy")
         XCTAssertTrue(elementoUI(app, IDUI.dia(dia(0))).isSelected)
         captura(app, "agenda-deslizada")
     }
@@ -65,17 +65,17 @@ final class FlujoAgendaUITests: XCTestCase {
         let paraTi = elementoUI(app, IDUI.filtroParaTi)
         XCTAssertTrue(paraTi.waitForExistence(timeout: 10))
         XCTAssertTrue(paraTi.isSelected, "Con gustos y sin tocar, «Para ti»")
-        let reserva = elementoUI(app, IDUI.tarjetaPartido("sim-9"))
-        XCTAssertFalse(reserva.exists, "Las reservas argentinas no son de «Para ti»")
+        let reserva = elementoUI(app, IDUI.tarjetaPartido("demo-2"))
+        XCTAssertFalse(reserva.exists, "Barcelona SC – Emelec (amistoso) no es de «Para ti»")
 
         elementoUI(app, IDUI.filtroTodos).tap()
         XCTAssertTrue(elementoUI(app, IDUI.filtroTodos).isSelected)
         let visible = reserva.waitForExistence(timeout: 5) || app.desplazarHasta(reserva)
-        XCTAssertTrue(visible || elementoUI(app, IDUI.tarjetaPartido("sim-9")).exists, "«Todos» enseña las reservas")
+        XCTAssertTrue(visible || elementoUI(app, IDUI.tarjetaPartido("demo-2")).exists, "«Todos» enseña el amistoso")
         captura(app, "agenda-todos")
 
         elementoUI(app, IDUI.filtroParaTi).tap()
-        XCTAssertTrue(esperarQueDesaparezca(elementoUI(app, IDUI.tarjetaPartido("sim-9"))), "«Para ti» vuelve a filtrar")
+        XCTAssertTrue(esperarQueDesaparezca(elementoUI(app, IDUI.tarjetaPartido("demo-2"))), "«Para ti» vuelve a filtrar")
     }
 
     @MainActor
@@ -120,8 +120,8 @@ final class FlujoAgendaUITests: XCTestCase {
     func testTarjetaAbreElTeatro() throws {
         let app = arrancar()
         elementoUI(app, IDUI.filtroTodos).tap()
-        let tarjeta = elementoUI(app, IDUI.tarjetaPartido("sim-1"))
-        XCTAssertTrue(tarjeta.waitForExistence(timeout: 10), "No hay tarjeta de sim-1")
+        let tarjeta = elementoUI(app, IDUI.tarjetaPartido("demo-1"))
+        XCTAssertTrue(tarjeta.waitForExistence(timeout: 10), "No hay tarjeta de demo-1")
         XCTAssertTrue(tarjeta.label.contains("canal para"), tarjeta.label)
         tarjeta.tap()
         XCTAssertTrue(elementoUI(app, IDUI.teatro).waitForExistence(timeout: 10), "La tarjeta no abre el partido")

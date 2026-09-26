@@ -6,7 +6,7 @@ import XCTest
 final class FlujoCanalesUITests: XCTestCase {
     /// «M+ LaLiga» de la lista de la demo (categoría «Deportes»).
     private let mLaLiga = "b2c3d4e5f60718293a4b5c6d7e8f901234567890"
-    /// «Canal Favorito», el favorito con el que arranca la demo.
+    /// «DAZN 1», el favorito con el que arranca la demo de la web (fixtures v1/libraryGet).
     private let favorito = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
 
     override func setUpWithError() throws {
@@ -36,28 +36,31 @@ final class FlujoCanalesUITests: XCTestCase {
     func testPestanasYListasPorCategorias() throws {
         let app = arrancarEnCanales()
         XCTAssertTrue(elementoUI(app, IDUI.pestanaFavoritos).isSelected, "Con favoritos se abre en Favoritos")
-        XCTAssertTrue(elementoUI(app, IDUI.filaCanal(favorito)).waitForExistence(timeout: 10), "No sale «Canal Favorito»")
+        XCTAssertTrue(elementoUI(app, IDUI.filaCanal(favorito)).waitForExistence(timeout: 10), "No sale «DAZN 1»")
         captura(app, "biblioteca-favoritos")
 
         elementoUI(app, IDUI.pestanaListas).tap()
         let deportes = elementoUI(app, IDUI.categoria("Deportes"))
         XCTAssertTrue(deportes.waitForExistence(timeout: 10), "No hay categoría Deportes")
-        XCTAssertFalse(elementoUI(app, IDUI.filaCanal(mLaLiga)).exists, "Las categorías empiezan plegadas")
+        // Con una sola categoría la web la abre (LibraryView.tsx); con varias empiezan plegadas.
+        XCTAssertTrue(elementoUI(app, IDUI.filaCanal(mLaLiga)).waitForExistence(timeout: 5), "Una sola categoría sale abierta")
+        deportes.tap()
+        XCTAssertTrue(esperarQueDesaparezca(elementoUI(app, IDUI.filaCanal(mLaLiga))), "Tocar la categoría la pliega")
         deportes.tap()
         XCTAssertTrue(elementoUI(app, IDUI.filaCanal(mLaLiga)).waitForExistence(timeout: 5), "Desplegar no enseña los canales")
         captura(app, "biblioteca-listas")
 
         elementoUI(app, IDUI.pestanaRecientes).tap()
         XCTAssertTrue(elementoUI(app, IDUI.pestanaRecientes).isSelected)
-        XCTAssertTrue(conTextoUI(app, "Canal Reciente").waitForExistence(timeout: 5))
+        XCTAssertTrue(conTextoUI(app, "Canal de prueba").waitForExistence(timeout: 5))
     }
 
     @MainActor
     func testGuardarFavoritoDesdeElMenuYSaltarAFavoritos() throws {
         let app = arrancarEnCanales()
         elementoUI(app, IDUI.pestanaListas).tap()
-        elementoUI(app, IDUI.categoria("Deportes")).tap()
         let fila = elementoUI(app, IDUI.filaCanal(mLaLiga))
+        if !fila.waitForExistence(timeout: 5) { elementoUI(app, IDUI.categoria("Deportes")).tap() }
         XCTAssertTrue(fila.waitForExistence(timeout: 5))
         fila.press(forDuration: 1.0)
         let anadir = app.buttons["Añadir a favoritos"].firstMatch
@@ -105,7 +108,7 @@ final class FlujoCanalesUITests: XCTestCase {
         XCTAssertTrue(elementoUI(app, IDUI.hojaRenombrar).waitForExistence(timeout: 5), "No se abre «Renombrar canal»")
         let campo = app.textFields.firstMatch
         XCTAssertTrue(campo.waitForExistence(timeout: 5))
-        XCTAssertEqual(campo.value as? String, "Canal Favorito", "El campo no empieza con el nombre actual")
+        XCTAssertEqual(campo.value as? String, "DAZN 1", "El campo no empieza con el nombre actual")
         captura(app, "renombrar")
         app.buttons["Guardar cambios"].firstMatch.tap()
         XCTAssertTrue(esperarQueDesaparezca(elementoUI(app, IDUI.hojaRenombrar)), "«Guardar cambios» no cierra la hoja")

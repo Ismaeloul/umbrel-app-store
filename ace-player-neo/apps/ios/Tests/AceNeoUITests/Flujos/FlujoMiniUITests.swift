@@ -43,9 +43,9 @@ final class FlujoMiniUITests: XCTestCase {
         for tema in ["oscuro", "claro"] {
             let app = abrirCanal(tema: tema)
             minimizar(app)
-            XCTAssertTrue(conTextoUI(app, "Canal Favorito").exists, "El mini no dice el canal")
+            XCTAssertTrue(conTextoUI(app, "DAZN 1").exists, "El mini no dice el canal")
             captura(app, "mini-reproductor-\(tema)")
-            app.buttons["Volver al vídeo: Canal Favorito"].firstMatch.tap()
+            app.buttons["Volver al vídeo: DAZN 1"].firstMatch.tap()
             XCTAssertTrue(elementoUI(app, IDUI.videoTeatro).waitForExistence(timeout: 10), "Tocar el mini no abre el teatro")
             XCTAssertTrue(esperarQueDesaparezca(elementoUI(app, IDUI.miniPausa), plazo: 5), "El mini sigue con el teatro")
             app.terminate()
@@ -78,7 +78,7 @@ final class FlujoMiniUITests: XCTestCase {
     func testDeslizarALadoDescartaConDeshacer() throws {
         let app = abrirCanal()
         minimizar(app)
-        let texto = app.buttons["Volver al vídeo: Canal Favorito"].firstMatch
+        let texto = app.buttons["Volver al vídeo: DAZN 1"].firstMatch
         arrastrar(texto, desde: CGVector(dx: 0.2, dy: 0.5), hasta: CGVector(dx: 1.6, dy: 0.5))
         XCTAssertTrue(esperarQueDesaparezca(elementoUI(app, IDUI.miniPausa), plazo: 8), "Deslizar a un lado no quita el mini")
         let deshacer = app.buttons["Deshacer"].firstMatch

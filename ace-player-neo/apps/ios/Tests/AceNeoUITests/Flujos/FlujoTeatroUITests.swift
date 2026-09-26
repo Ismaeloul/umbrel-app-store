@@ -4,10 +4,10 @@ import XCTest
 /// `-AceNeoEscena` (partido o canal suelto) para no depender de la agenda. Lo que necesita fuentes de la sesión
 /// (elegir un cartel, deslizar a otra fuente) se salta si la sesión de fuentes aún no las da (M3).
 final class FlujoTeatroUITests: XCTestCase {
-    /// «Canal Favorito» de la demo (ServidorSimulado.favoritoInicial).
+    /// «DAZN 1», el favorito de la demo de la web (fixtures v1/libraryGet).
     private let canal = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
 
-    /// Hoy a las 18:45 en Madrid: el partido «sim-1» de la demo (18:30, con marcador de ESPN) va en directo.
+    /// Hoy a las 18:45 en Madrid (la demo ancla sus partidos de hoy a la hora de arranque).
     private func relojDemo() -> String {
         var calendario = Calendar(identifier: .gregorian)
         calendario.timeZone = TimeZone(identifier: "Europe/Madrid") ?? .current
@@ -54,9 +54,9 @@ final class FlujoTeatroUITests: XCTestCase {
     @MainActor
     func testAbrirPartidoDemo() throws {
         for tema in ["oscuro", "claro"] {
-            let app = abrir("partido/sim-1", tema: tema)
+            let app = abrir("partido/demo-4", tema: tema)
             XCTAssertTrue(elementoUI(app, IDUI.cabeceraPartido).waitForExistence(timeout: 15), "Sin cabecera del partido")
-            XCTAssertTrue(conTextoUI(app, "Equipo Local").exists, "La cabecera no dice los equipos")
+            XCTAssertTrue(conTextoUI(app, "Real Sociedad").exists, "La cabecera no dice los equipos")
             XCTAssertTrue(elementoUI(app, IDUI.pestanaFuentes).exists, "Sin pestaña Fuentes")
             XCTAssertTrue(elementoUI(app, IDUI.capsulaMarcador).waitForExistence(timeout: 10), "Sin cápsula del marcador")
             captura(app, "teatro-partido-\(tema)")
@@ -83,7 +83,7 @@ final class FlujoTeatroUITests: XCTestCase {
         for tema in ["oscuro", "claro"] {
             let app = abrir("partido/canal/\(canal)", tema: tema)
             XCTAssertTrue(elementoUI(app, IDUI.cabeceraCanal).waitForExistence(timeout: 15), "Sin cabecera del canal")
-            XCTAssertTrue(conTextoUI(app, "Canal Favorito").exists, "La cabecera no dice el canal")
+            XCTAssertTrue(conTextoUI(app, "DAZN 1").exists, "La cabecera no dice el canal")
             XCTAssertTrue(conTextoUI(app, "En tus favoritos").exists, "No dice de dónde viene")
             XCTAssertTrue(controles(app, IDUI.botonPausa).waitForExistence(timeout: 15), "Sin pausa grande")
             XCTAssertTrue(conTextoUI(app, "Solo esta").waitForExistence(timeout: 5), "La ficha no dice «Solo esta»")
@@ -127,18 +127,18 @@ final class FlujoTeatroUITests: XCTestCase {
     /// Deslizar el vídeo a un lado cambia de fuente (necesita dos fuentes visibles en la sesión).
     @MainActor
     func testDeslizarDeLadoCambiaDeFuente() throws {
-        let app = abrir("partido/sim-1")
+        let app = abrir("partido/demo-1")
         let segundo = elementoUI(app, IDUI.cartelFuente(2))
         try XCTSkipUnless(segundo.waitForExistence(timeout: 20), "La sesión de fuentes aún no da carteles (M3)")
         let video = elementoUI(app, IDUI.videoTeatro)
         arrastrar(video, desde: CGVector(dx: 0.8, dy: 0.5), hasta: CGVector(dx: 0.1, dy: 0.5))
-        XCTAssertTrue(conTextoUI(app, "Fuente 2 de").waitForExistence(timeout: 10), "No pasa a la fuente 2")
+        XCTAssertTrue(conTextoUI(app, "Fuente 2, ").waitForExistence(timeout: 10), "No pasa a la fuente 2")
     }
 
     /// Elegir un cartel lo pone «En pantalla».
     @MainActor
     func testElegirFuente() throws {
-        let app = abrir("partido/sim-1")
+        let app = abrir("partido/demo-1")
         let primero = elementoUI(app, IDUI.cartelFuente(1))
         try XCTSkipUnless(primero.waitForExistence(timeout: 20), "La sesión de fuentes aún no da carteles (M3)")
         primero.tap()
