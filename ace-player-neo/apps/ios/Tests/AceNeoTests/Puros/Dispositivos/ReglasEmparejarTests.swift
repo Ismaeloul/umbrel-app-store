@@ -11,7 +11,7 @@ import Testing
    errores del canje, código, host y direcciones del enlace. */
 
 struct ReglasEmparejarTests {
-    @Test func capsulaYMarcoDeCadaEstado() {
+    @Test func capsulaDeCadaEstado() {
         #expect(ReglasEmparejar.capsula(.preparando)?.texto == "Preparando la cámara…")
         #expect(ReglasEmparejar.capsula(.escaneando)?.texto == "Apunta al QR de la web: Ajustes › Dispositivos")
         #expect(ReglasEmparejar.capsula(.qrAjeno)?.tinta == .ambar)
@@ -22,6 +22,10 @@ struct ReglasEmparejarTests {
         #expect(ReglasEmparejar.capsula(.pausa)?.icono == .clock)
         #expect(ReglasEmparejar.capsula(.ocupada)?.texto == "La cámara la está usando otra app")
         #expect(ReglasEmparejar.capsula(.sinPermiso) == nil)
+    }
+
+    /// Aparte de las cápsulas: juntas tardaban 456 ms en tiparse en la CI (límite 400; CI 36225403342).
+    @Test func marcoDeCadaEstado() {
         #expect(ReglasEmparejar.marco(.qrAjeno) == .rojo)
         #expect(ReglasEmparejar.marco(.emparejado(host: "x")) == .verde)
         #expect(ReglasEmparejar.marco(.pausa) == .oroApagado)
