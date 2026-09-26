@@ -238,6 +238,7 @@ describe('el claim de un cliente 0.6.x en la v2 (arquitectura §5.6, B-005)', ()
         hash: Y,
         title: 'Otro',
         reason: 'other_channel',
+        byDeviceName: 'App antigua (0.6)',
       },
     ]);
     expect(fakeEngine.control.metrics().sessionsOpen).toBe(0);

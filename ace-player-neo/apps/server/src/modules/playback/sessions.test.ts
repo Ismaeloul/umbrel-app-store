@@ -347,6 +347,7 @@ describe('cambio de canal sin carreras (arquitectura §5.6)', () => {
         hash: Y,
         title: 'Dos',
         reason: 'other_channel',
+        byDeviceName: 'Navegador',
       },
     ]);
     expect(metrics(setup)).toMatchObject({
