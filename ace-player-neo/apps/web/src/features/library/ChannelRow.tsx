@@ -14,7 +14,8 @@
 
    Buscador con IPTV (docs/iptv.md §14.5): un canal de tu IPTV lleva el
    distintivo «IPTV» (el del cartel de la fuente: cápsula neutra con la tele)
-   y su subtítulo propio («Casa · 1080p», «Tu IPTV»…). */
+   y su subtítulo propio («Casa · 1080p», «Tu IPTV»…). En la pestaña IPTV
+   (§16.6), sus calidades van como etiquetas delante del subtítulo. */
 
 import type { LibraryCollection } from '@ace/shared';
 import { useEffect, useId, useRef, type CSSProperties, type MouseEvent } from 'react';
@@ -68,6 +69,8 @@ export interface ChannelRowProps {
   iptv?: boolean;
   /** Subtítulo propio (el de una fila IPTV); si no, el de siempre. */
   subtitle?: string | undefined;
+  /** Etiquetas delante del subtítulo: las calidades de un canal IPTV («1080p», «720p»), §16.6. */
+  tags?: readonly string[] | undefined;
 }
 
 function scoreText(home: number, away: number): string {
@@ -189,6 +192,7 @@ export function ChannelRow({
   enterIndex = null,
   iptv = false,
   subtitle: ownSubtitle,
+  tags,
 }: ChannelRowProps) {
   const { bind, menu } = useContextMenu();
   // El marcador del partido que ves va tapado (regla 29). El «destapado» es
@@ -296,7 +300,18 @@ export function ChannelRow({
                 </span>
               </>
             ) : (
-              <span className="ch__sub">{subtitle}</span>
+              <>
+                {tags && tags.length > 0 ? (
+                  <span className="ch__tags">
+                    {tags.map((tag) => (
+                      <Capsule key={tag} tone="neutral" size="sm" className="ch__tag">
+                        {tag}
+                      </Capsule>
+                    ))}
+                  </span>
+                ) : null}
+                <span className="ch__sub">{subtitle}</span>
+              </>
             )}
           </span>
         </span>

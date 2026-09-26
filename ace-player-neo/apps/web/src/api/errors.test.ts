@@ -67,5 +67,16 @@ describe('errorFromResponse', () => {
     const error = await errorFromResponse(html, 'x');
     expect(error.code).toBe('http_502');
     expect(error.message).toMatch(/502/);
+    expect(error.data).toBeNull();
+  });
+
+  it('los datos extra del error (`error.data`), si llegan como objeto', async () => {
+    const body = (data: unknown) => ({
+      error: { code: 'iptv_unreachable', message: 'No responde.', requestId: 'r', data },
+    });
+    const twice = await errorFromResponse(json(body({ attempts: 2 }), 502), 'iptvSave');
+    expect(twice.data).toEqual({ attempts: 2 });
+    expect((await errorFromResponse(json(body([2]), 502), 'iptvSave')).data).toBeNull();
+    expect((await errorFromResponse(json(body('2'), 502), 'iptvSave')).data).toBeNull();
   });
 });

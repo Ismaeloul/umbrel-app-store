@@ -19,7 +19,11 @@
    - Con IPTV activa y 2 letras o más (docs/iptv.md §14.5): debajo de la lista
      filtrada, «En tu IPTV» con 3 canales como mucho (sin los que ya son filas
      de la pestaña) y «Ver todo en Buscar». Pregunta con el texto estable
-     450 ms, como Buscar, y comparte su consulta en caché. */
+     450 ms, como Buscar, y comparte su consulta en caché.
+   - Con IPTV activa, una cuarta pestaña «IPTV» a la derecha de Listas
+     (docs/iptv.md §16): recorre tu IPTV por categorías, con buscador y
+     filtros (iptv/IptvTab.tsx). En ella el campo busca en tu IPTV y no sale
+     «Emitiendo ahora». */
 
 import { IPTV_SEARCH, type Item, type LibraryCollection } from '@ace/shared';
 import { useQueryClient } from '@tanstack/react-query';
@@ -54,13 +58,14 @@ import { canSearch, cleanQuery, ENGINE_SEARCH_DELAY_MS } from '../search/model.t
 import { goToEngineSearch } from '../search/navigation.ts';
 import { ChannelRow } from './ChannelRow.tsx';
 import { usePendingKeys } from './data.ts';
+import { IptvTab } from './iptv/IptvTab.tsx';
+import { searchInCategory, IPTV_TAB_TEXT } from './iptv/texts.ts';
 import {
   ENGINE_SEARCH_MIN,
   filterItems,
   groupByCategory,
   initialTab,
   isFallenFavorite,
-  isLibraryTab,
   itemsFor,
   LIBRARY_TABS,
   libraryFooter,
@@ -68,8 +73,11 @@ import {
   recentGroups,
   rowKey,
   shortDate,
+  shownTab,
   TAB_COLLECTION,
   TAB_LABEL,
+  tabsFor,
+  type CollectionTab,
   type LibraryTab,
 } from './model.ts';
 import { onAirEntries, OnAirStrip } from './OnAirStrip.tsx';
@@ -85,7 +93,7 @@ type Row =
   | { type: 'heading'; label: string }
   | { type: 'category'; category: string; count: number; open: boolean };
 
-const TAB_ICON = { favoritos: 'star', recientes: 'clock', listas: 'list' } as const;
+const TAB_ICON = { favoritos: 'star', recientes: 'clock', listas: 'list', iptv: 'tv' } as const;
 
 /** Cuánto dura la aparición escalonada tras abrir una pestaña. */
 const ENTER_MS = 900;
@@ -110,7 +118,9 @@ export default function LibraryView({ active }: ViewProps) {
   const library = useApiQuery('libraryGet');
   const pending = usePendingKeys();
   const [tabParam, setTabParam] = useSearchParam('pestana');
-  const [firstTab, setFirstTab] = useState<LibraryTab | null>(null);
+  const [firstTab, setFirstTab] = useState<CollectionTab | null>(null);
+  /* El nombre de la categoría abierta en la pestaña IPTV (para «Buscar en {categoría}»). */
+  const [iptvCategory, setIptvCategory] = useState<string | null>(null);
   const [text, setText] = useState('');
   const [query, setQuery] = useState('');
   const [openCats, setOpenCats] = useState<ReadonlySet<string>>(() => new Set());
@@ -148,7 +158,11 @@ export default function LibraryView({ active }: ViewProps) {
   const iptvSearch = useApiQuery(
     'iptvChannels',
     { query: { q: iptvText, limit: IPTV_SEARCH.limit } },
-    { enabled: active && withIptv && canSearch(iptvText), retry: false, staleTime: 60_000 },
+    {
+      enabled: active && withIptv && tabParam !== 'iptv' && canSearch(iptvText),
+      retry: false,
+      staleTime: 60_000,
+    },
   );
 
   const data = library.data;
@@ -169,7 +183,10 @@ export default function LibraryView({ active }: ViewProps) {
   useEffect(() => {
     if (firstTab === null && visible) setFirstTab(initialTab(visible));
   }, [firstTab, visible]);
-  const tab: LibraryTab = isLibraryTab(tabParam) ? tabParam : (firstTab ?? 'favoritos');
+  const tab: LibraryTab = shownTab(tabParam, withIptv, firstTab ?? 'favoritos');
+  /* La pestaña si es una colección (Favoritos, Recientes o Listas); null en «IPTV». */
+  const collectionTab: CollectionTab | null = tab === 'iptv' ? null : tab;
+  const tabs = tabsFor(withIptv);
 
   // Canales de la lista activa por hash: sirve para el «canal caído» y para
   // poner categoría a un reciente que llegó sin ella.
@@ -184,12 +201,13 @@ export default function LibraryView({ active }: ViewProps) {
   // `channelCount` cuenta los canales que encajan aunque su categoría esté
   // plegada: una lista con todo plegado NO está vacía.
   const { rows, channelCount } = useMemo<{ rows: Row[]; channelCount: number }>(() => {
-    if (!visible) return { rows: [], channelCount: 0 };
-    const collection = TAB_COLLECTION[tab];
-    const items = filterItems(itemsFor(visible, tab), q);
+    if (!visible || collectionTab === null) return { rows: [], channelCount: 0 };
+    const collection = TAB_COLLECTION[collectionTab];
+    const items = filterItems(itemsFor(visible, collectionTab), q);
     const channel = (item: Item): Row => ({ type: 'channel', collection, item });
-    if (tab === 'favoritos') return { rows: items.map(channel), channelCount: items.length };
-    if (tab === 'recientes')
+    if (collectionTab === 'favoritos')
+      return { rows: items.map(channel), channelCount: items.length };
+    if (collectionTab === 'recientes')
       return {
         rows: recentGroups(items).flatMap((group) => [
           { type: 'heading', label: group.label } as Row,
@@ -209,12 +227,13 @@ export default function LibraryView({ active }: ViewProps) {
       }),
       channelCount: items.length,
     };
-  }, [visible, tab, q, openCats]);
+  }, [visible, collectionTab, q, openCats]);
 
   // Con la ficha a la vista, siempre hay un canal elegido: el que suena si
   // está en la biblioteca y, si no, el primero de la pestaña.
   useEffect(() => {
-    if (!selectOnClick || !active || !visible) return;
+    // En «IPTV» los canales no son de la biblioteca: se deja lo elegido como estaba.
+    if (!selectOnClick || !active || !visible || collectionTab === null) return;
     const exists = (collection: LibraryCollection, id: string) =>
       itemsFor(
         visible,
@@ -239,15 +258,15 @@ export default function LibraryView({ active }: ViewProps) {
     selectChannel(
       first?.type === 'channel' ? { collection: first.collection, id: first.item.id } : null,
     );
-  }, [selectOnClick, active, visible, selection, rows, onScreen]);
+  }, [selectOnClick, active, visible, selection, rows, onScreen, collectionTab]);
 
   // Deslizar a los lados cambia de pestaña en el móvil (como los días de la agenda).
   useSwipe(panelRef, {
     enabled: layout.kind === 'mobile',
     onSwipe: (direction) => {
-      const index = LIBRARY_TABS.indexOf(tab);
+      const index = tabs.indexOf(tab);
       const next = direction === 'left' ? index + 1 : direction === 'right' ? index - 1 : index;
-      const target = LIBRARY_TABS[next];
+      const target = tabs[next];
       if (target && target !== tab) setTab(target);
     },
   });
@@ -348,16 +367,22 @@ export default function LibraryView({ active }: ViewProps) {
     />
   );
 
+  const fieldLabel =
+    tab === 'iptv'
+      ? iptvCategory
+        ? searchInCategory(iptvCategory)
+        : IPTV_TAB_TEXT.searchRoot
+      : 'Buscar canal';
   const search = (
     <TextField
       className="lib-search"
       variant="search"
       type="search"
-      label="Buscar canal"
+      label={fieldLabel}
       hideLabel
       icon="buscar"
       kbd="/"
-      placeholder="Buscar canal…"
+      placeholder={`${fieldLabel}…`}
       focusTarget="buscar-biblioteca"
       autoComplete="off"
       enterKeyHint="search"
@@ -400,7 +425,7 @@ export default function LibraryView({ active }: ViewProps) {
     );
   }
 
-  const counts: Record<LibraryTab, number> = {
+  const counts: Record<CollectionTab, number> = {
     favoritos: visible?.favorites.length ?? 0,
     recientes: visible?.history.length ?? 0,
     listas: visible?.web.length ?? 0,
@@ -418,13 +443,17 @@ export default function LibraryView({ active }: ViewProps) {
     withIptv && q.length >= ENGINE_SEARCH_MIN && iptvSearch.data?.query === cleanQuery(q)
       ? iptvSearch.data
       : undefined;
-  const tabIds = new Set(filterItems(itemsFor(visible ?? data, tab), q).map((item) => item.id));
+  const tabIds = new Set(
+    collectionTab
+      ? filterItems(itemsFor(visible ?? data, collectionTab), q).map((item) => item.id)
+      : [],
+  );
   const iptvChannels = (iptvData?.channels ?? []).filter(
     (channel) => !tabIds.has(channel.id) && !channel.library.some((id) => tabIds.has(id)),
   );
   const iptvShown = iptvChannels.slice(0, IPTV_SEARCH.shownInLibrary);
   const iptvSection =
-    iptvShown.length > 0 ? (
+    iptvShown.length > 0 && collectionTab !== null ? (
       <section className="lib-iptv" aria-labelledby="bib-iptv-titulo">
         <h2 id="bib-iptv-titulo" className="lib-iptv__title">
           {IPTV_TEXT.section}
@@ -472,7 +501,7 @@ export default function LibraryView({ active }: ViewProps) {
     ) : null;
 
   const empty = (() => {
-    if (channelCount > 0) return null;
+    if (channelCount > 0 || collectionTab === null) return null;
     if (q.length >= ENGINE_SEARCH_MIN)
       return (
         <EmptyState
@@ -565,7 +594,7 @@ export default function LibraryView({ active }: ViewProps) {
     <div className="lib" data-tab={tab}>
       {header}
       {search}
-      {q ? null : (
+      {q || tab === 'iptv' ? null : (
         <OnAirStrip
           entries={onAirNow}
           onScreen={onScreen}
@@ -577,15 +606,16 @@ export default function LibraryView({ active }: ViewProps) {
         label="Secciones de la biblioteca"
         idPrefix="bib"
         block
-        className="lib-tabs"
+        className={tabs.length > 3 ? 'lib-tabs lib-tabs--4' : 'lib-tabs'}
         value={tab}
         onChange={setTab}
-        items={LIBRARY_TABS.map((value) => ({
+        items={tabs.map((value) => ({
           value,
           label: TAB_LABEL[value],
           // Iconos solo con sitio: en el móvil de 360 px cortaban «Favoritos».
           ...(layout.kind === 'mobile' ? {} : { icon: TAB_ICON[value] }),
-          count: counts[value],
+          // «IPTV» sin contador: 27.687 no cabe a 360 px; va en la cabecera del panel (D35).
+          ...(value === 'iptv' ? {} : { count: counts[value] }),
         }))}
       />
       <div ref={panelRef} className="lib-panel" {...tabPanelProps('bib', tab)}>
@@ -612,20 +642,31 @@ export default function LibraryView({ active }: ViewProps) {
             </Button>
           </div>
         ) : null}
-        {empty ?? (
-          <VirtualList
-            key={tab}
-            rows={rows}
-            rowKey={rowId}
-            estimate={estimateRow}
-            renderRow={renderRow}
-            label={TAB_LABEL[tab]}
-            className="lib-list"
-            rowClassName={(row) => `lib-row lib-row--${row.type}`}
+        {tab === 'iptv' ? (
+          <IptvTab
+            text={text}
+            active={active}
+            actions={actions}
+            onScreen={onScreen}
+            onAir={onAir}
+            onCategoryName={setIptvCategory}
           />
+        ) : (
+          (empty ?? (
+            <VirtualList
+              key={tab}
+              rows={rows}
+              rowKey={rowId}
+              estimate={estimateRow}
+              renderRow={renderRow}
+              label={TAB_LABEL[tab]}
+              className="lib-list"
+              rowClassName={(row) => `lib-row lib-row--${row.type}`}
+            />
+          ))
         )}
         {iptvSection}
-        {q.length >= ENGINE_SEARCH_MIN && channelCount > 0 ? (
+        {collectionTab !== null && q.length >= ENGINE_SEARCH_MIN && channelCount > 0 ? (
           <Button
             variant="quiet"
             icon="buscar"

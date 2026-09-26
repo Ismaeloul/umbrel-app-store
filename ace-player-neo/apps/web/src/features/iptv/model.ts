@@ -51,6 +51,17 @@ export const IPTV_DELETE_NOTE = 'Eliminar la IPTV borra sus datos de tu Umbrel.'
 export const IPTV_SAVING = 'Guardando y sincronizando la lista…';
 export const IPTV_DEMO_MESSAGE =
   'En modo demo no hay backend: esta acción funcionará en el Umbrel.';
+/**
+ * Se añade al mensaje cuando el servidor ya lo intentó dos veces con un fallo
+ * pasajero (docs/iptv.md §16.8): el panel no respondió bien ni a la segunda.
+ */
+export const IPTV_SAVE_RETRIED_HINT = ' Lo he intentado dos veces: prueba otra vez en un momento.';
+/** Los fallos pasajeros con los que el servidor reintenta la prueba rápida. */
+const RETRIED_HINT_CODES: ReadonlySet<string> = new Set([
+  'iptv_unreachable',
+  'iptv_busy',
+  'dns_failed',
+]);
 export const IPTV_FALLBACK_ERROR = 'No se pudo guardar la IPTV. Inténtalo de nuevo.';
 export const IPTV_URL_USERINFO =
   'Esa dirección lleva el usuario y la contraseña delante del servidor (usuario:contraseña@) y así no se puede usar. Si tu proveedor te los da aparte, elige Xtream.';
@@ -242,8 +253,12 @@ export function iptvErrorMessage(error: unknown, kind?: IptvKind): string {
   // Una get.php enorme (con películas y series) sí cabe como Xtream, que solo pide el directo.
   if (error.code === 'iptv_too_large' && kind === 'm3u')
     return `${errorMessage('iptv_too_large')} ${IPTV_TOO_LARGE_HINT}`;
-  if (isAnyErrorCode(error.code) && error.code !== 'internal_error')
-    return errorMessage(error.code);
+  if (isAnyErrorCode(error.code) && error.code !== 'internal_error') {
+    const retried = error.data?.attempts === 2 && RETRIED_HINT_CODES.has(error.code);
+    return retried
+      ? `${errorMessage(error.code)}${IPTV_SAVE_RETRIED_HINT}`
+      : errorMessage(error.code);
+  }
   return IPTV_FALLBACK_ERROR;
 }
 

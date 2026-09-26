@@ -11,11 +11,23 @@
 
 import type { Item, LibraryCollection, LibraryView } from '@ace/shared';
 
-export type LibraryTab = 'favoritos' | 'recientes' | 'listas';
+/** Las pestañas que son una colección de la biblioteca. */
+export type CollectionTab = 'favoritos' | 'recientes' | 'listas';
+/**
+ * Pestañas de Canales. «IPTV» (docs/iptv.md §16.6) no es una colección:
+ * recorre tu IPTV por el servidor y solo sale con IPTV activa, a la derecha
+ * de Listas.
+ */
+export type LibraryTab = CollectionTab | 'iptv';
 
-export const LIBRARY_TABS: readonly LibraryTab[] = ['favoritos', 'recientes', 'listas'];
+export const LIBRARY_TABS: readonly CollectionTab[] = ['favoritos', 'recientes', 'listas'];
 
-export const TAB_COLLECTION: Record<LibraryTab, LibraryCollection> = {
+/** Las pestañas a la vista: con IPTV activa, «IPTV» a la derecha de Listas. */
+export function tabsFor(iptvActive: boolean): readonly LibraryTab[] {
+  return iptvActive ? [...LIBRARY_TABS, 'iptv'] : LIBRARY_TABS;
+}
+
+export const TAB_COLLECTION: Record<CollectionTab, LibraryCollection> = {
   favoritos: 'favorites',
   recientes: 'history',
   listas: 'web',
@@ -25,6 +37,7 @@ export const TAB_LABEL: Record<LibraryTab, string> = {
   favoritos: 'Favoritos',
   recientes: 'Recientes',
   listas: 'Listas',
+  iptv: 'IPTV',
 };
 
 /** Espera del filtro local tras cada tecla (0.6.59: 140 ms, index.html:6075). */
@@ -35,14 +48,29 @@ export const ENGINE_SEARCH_MIN = 2;
 export const UNDO_MS = 6000;
 
 export function isLibraryTab(value: unknown): value is LibraryTab {
-  return value === 'favoritos' || value === 'recientes' || value === 'listas';
+  return value === 'favoritos' || value === 'recientes' || value === 'listas' || value === 'iptv';
+}
+
+/**
+ * La pestaña que se enseña: la de la URL si vale (y «IPTV» solo con IPTV
+ * activa: un enlace viejo con `&pestana=iptv` abre la de siempre), si no la
+ * inicial.
+ */
+export function shownTab(
+  param: string | null,
+  iptvActive: boolean,
+  fallback: CollectionTab,
+): LibraryTab {
+  if (!isLibraryTab(param)) return fallback;
+  if (param === 'iptv' && !iptvActive) return fallback;
+  return param;
 }
 
 /**
  * La pestaña con la que se abre (regla 32): Favoritos si hay favoritos; si
  * no, Recientes si hay historial; si no, Listas (index.html:6131-6132).
  */
-export function initialTab(library: Pick<LibraryView, 'favorites' | 'history'>): LibraryTab {
+export function initialTab(library: Pick<LibraryView, 'favorites' | 'history'>): CollectionTab {
   if (library.favorites.length > 0) return 'favoritos';
   if (library.history.length > 0) return 'recientes';
   return 'listas';
@@ -50,7 +78,7 @@ export function initialTab(library: Pick<LibraryView, 'favorites' | 'history'>):
 
 export function itemsFor(
   library: Pick<LibraryView, 'favorites' | 'history' | 'web'>,
-  tab: LibraryTab,
+  tab: CollectionTab,
 ): Item[] {
   if (tab === 'favoritos') return library.favorites;
   if (tab === 'recientes') return library.history;
