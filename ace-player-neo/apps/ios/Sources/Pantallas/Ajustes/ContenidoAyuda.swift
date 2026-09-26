@@ -4,8 +4,8 @@ import SwiftUI
    orden es Gestos · Teclado · Ratón, separados 32. Titular de bloque con la pastilla de 34 en oro lavado y el
    título 22/800/125. Filas de 48 como mínimo con la línea de abajo; por debajo de 480 de ancho, una columna (la
    «tecla de palabra» y debajo lo que hace), desde 480 dos columnas. En «Gestos», las filas de la web más las de
-   los gestos que la app añade (b-arquitectura §0.5, A-7) con el mismo formato; las del mini dicen los gestos del
-   mini de la app (abajo lo detiene, a los lados cambia de fuente: §3.7). */
+   los gestos que la app añade (b-arquitectura §0.5, A-7) con el mismo formato; las del mini son las de la web
+   (help/gestures.ts: arriba lo abre y a un lado lo detiene, como hace el mini de la app, §3.7). */
 
 struct ContenidoAyuda: View {
     @Environment(CentroHojas.self) private var hojas
@@ -23,8 +23,7 @@ struct ContenidoAyuda: View {
         ("Toca dos veces el vídeo", "Pantalla completa"),
         ("Desliza desde el borde izquierdo", "Partido: vuelve atrás"),
         ("Desliza hacia arriba", "Mini-reproductor: lo abre en grande"),
-        ("Desliza hacia abajo", "Mini-reproductor: lo detiene (con «Deshacer»)"),
-        ("Desliza a los lados", "Mini-reproductor: pasa a otra fuente"),
+        ("Desliza a un lado", "Mini-reproductor: lo detiene (con «Deshacer»)"),
         ("Desliza el asa hacia abajo", "Una hoja: la cierra"),
         ("Mantén pulsado", "Un partido, un canal, un dispositivo o el vídeo: sus opciones"),
         ("Toca la pestaña activa", "Vuelve arriba"),

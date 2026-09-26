@@ -2907,11 +2907,14 @@ del reloj (minuto, marcadores, «hace N min») se porta como código en `DemoNuc
   - toque: controles; **doble toque**: pantalla completa (el toque simple exige que falle el doble);
   - arrastrar abajo el vídeo: minimizar (1:1, `Deslizamiento.clasificar`), solo en vertical y fuera del inmersivo;
   - deslizar de lado el vídeo: fuente anterior/siguiente (`SesionFuentes.paso`), con bloqueo de eje de 8 pt;
-  - mini: arriba abre, abajo descarta (umbral 72, `fuerte` al cruzar), lados cambian de fuente.
+  - mini, como la web (MiniPlayer.tsx, `GestosMini` de M2): arriba abre, a un lado descarta (detiene con
+    «Reproducción detenida» y «Deshacer»; umbral 72, `fuerte` al cruzar) y abajo vuelve a su sitio (la barra).
+    Corregido en la ronda 2: antes decía «abajo descarta, lados cambian de fuente», que no es lo que hace la web.
 - **Pruebas unitarias**: `VarianteEscenarioTests` (369/419/479/579 y compacto).
 - **UITests**: `FlujoTeatroUITests` (abrir partido demo, elegir fuente, reportar, datos técnicos, doble toque a
   pantalla completa y vuelta, deslizar de lado cambia de fuente, borde izquierdo sale con el mini sonando),
-  `FlujoMiniUITests` (tocar abre; deslizar abajo descarta; pausa y detener).
+  `FlujoMiniUITests` (tocar abre; arrastrar el vídeo abajo minimiza; deslizar a un lado descarta con «Deshacer»;
+  pausa y detener).
 - **Hecho cuando**: `partido`, `reproductor`, `mini-reproductor` y `biblioteca-sonando` pasan la comparación en los dos
   temas y el partido a 844×390 (inmersivo) en oscuro.
 
