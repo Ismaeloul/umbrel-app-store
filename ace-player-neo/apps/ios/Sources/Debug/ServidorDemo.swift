@@ -37,7 +37,10 @@
         static let direccion = URL(string: DispositivosDemo.direccion)
 
         /* El `URLProtocol` lo crea URLSession por su clase: no se le puede pasar el estado, así que vive aquí
-           (solo Debug; lo fija `entorno(opciones:)` una vez por arranque). */
+           (solo Debug; lo fija `entorno(opciones:)` una vez por arranque). Es la única excepción a la regla 8 de
+           §5.1: la petición la arma `APIClient` (no hay dónde poner `URLProtocol.setProperty`) y la configuración
+           de la sesión no lleva objetos. Cada llamada a `entorno(opciones:)` empieza una demo nueva; en la app solo la
+           llama `Entorno.actual()` al crear el contenedor. */
         private static let activo = Mutex<ServidorActivo?>(nil)
 
         static var servidor: ServidorActivo? { activo.withLock { $0 } }
@@ -94,36 +97,71 @@
         }
     }
 
-    /// Lo que la tarea de una respuesta necesita del `URLProtocol` (el cliente de URLSession es seguro entre hilos).
-    struct EnvioDemo: @unchecked Sendable {
-        let protocolo: URLProtocol
+    /* Lo que la tarea de una respuesta necesita del `URLProtocol`. La documentación de URLProtocol pide hablar
+       con el cliente desde el hilo de `startLoading` (ahí llega también `stopLoading`): cada envío se encola en
+       ese hilo, en su modo del bucle, y allí se tira si ya se paró. Así el cliente nunca recibe nada después de
+       `stopLoading`, aunque la tarea que responde se cancele a mitad (el patrón de OHHTTPStubs). */
+    final class EnvioDemo: NSObject, @unchecked Sendable {  // permitido: el protocolo solo se toca en su hilo
+        private let protocolo: URLProtocol
+        private let hilo: Thread
+        private let modos: [String]
+        private let parado = Mutex(false)
 
-        func cabecera(_ estado: Int, tipo: String) {
-            guard let url = protocolo.request.url,
-                let respuesta = HTTPURLResponse(
-                    url: url, statusCode: estado, httpVersion: "HTTP/1.1",
-                    headerFields: ["Content-Type": tipo, "Cache-Control": "no-store"])
-            else {
-                protocolo.client?.urlProtocol(protocolo, didFailWithError: URLError(.badURL))
-                return
-            }
-            protocolo.client?.urlProtocol(protocolo, didReceive: respuesta, cacheStoragePolicy: .notAllowed)
+        init(protocolo: URLProtocol) {
+            self.protocolo = protocolo
+            hilo = Thread.current
+            var modos = [RunLoop.Mode.default.rawValue]
+            if let actual = RunLoop.current.currentMode, actual != .default { modos.append(actual.rawValue) }
+            self.modos = modos
         }
 
-        func datos(_ datos: Data) { protocolo.client?.urlProtocol(protocolo, didLoad: datos) }
-        func fin() { protocolo.client?.urlProtocolDidFinishLoading(protocolo) }
-        func fallo(_ error: Error) { protocolo.client?.urlProtocol(protocolo, didFailWithError: error) }
+        /// `stopLoading`: lo que quede encolado ya no llega al cliente.
+        func parar() { parado.withLock { $0 = true } }
+
+        func cabecera(_ estado: Int, tipo: String) {
+            enHilo { protocolo in
+                guard let url = protocolo.request.url,
+                    let respuesta = HTTPURLResponse(
+                        url: url, statusCode: estado, httpVersion: "HTTP/1.1",
+                        headerFields: ["Content-Type": tipo, "Cache-Control": "no-store"])
+                else {
+                    protocolo.client?.urlProtocol(protocolo, didFailWithError: URLError(.badURL))
+                    return
+                }
+                protocolo.client?.urlProtocol(protocolo, didReceive: respuesta, cacheStoragePolicy: .notAllowed)
+            }
+        }
+
+        func datos(_ datos: Data) { enHilo { $0.client?.urlProtocol($0, didLoad: datos) } }
+        func fin() { enHilo { $0.client?.urlProtocolDidFinishLoading($0) } }
+        func fallo(_ error: URLError) { enHilo { $0.client?.urlProtocol($0, didFailWithError: error) } }
+
+        private func enHilo(_ paso: @escaping @Sendable (URLProtocol) -> Void) {
+            perform(#selector(correr(_:)), on: hilo, with: PasoDemo(paso), waitUntilDone: false, modes: modos)
+        }
+
+        @objc private func correr(_ paso: PasoDemo) {
+            guard !parado.withLock({ $0 }) else { return }
+            paso.hacer(protocolo)
+        }
+    }
+
+    /// Un envío encolado en el hilo del cliente (`perform(_:on:with:…)` solo pasa objetos).
+    final class PasoDemo: NSObject {
+        let hacer: @Sendable (URLProtocol) -> Void
+        init(_ hacer: @escaping @Sendable (URLProtocol) -> Void) { self.hacer = hacer }
     }
 
     /// `URLProtocol` que contesta con la demo sin salir a la red.
     final class ProtocoloDemo: URLProtocol {
-        private let tarea = Mutex<Task<Void, Never>?>(nil)
+        private let carga = Mutex<(tarea: Task<Void, Never>?, envio: EnvioDemo?)>((nil, nil))
 
         override class func canInit(with request: URLRequest) -> Bool { true }
         override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
         override func startLoading() {
             let envio = EnvioDemo(protocolo: self)
+            carga.withLock { $0.envio = envio }
             guard let servidor = ServidorDemo.servidor else {
                 envio.fallo(URLError(.cannotConnectToHost))
                 return
@@ -132,7 +170,7 @@
             if peticion.ruta.hasSuffix("/api/v1/events") && servidor.tiempoReal {
                 let ultimo = request.value(forHTTPHeaderField: "Last-Event-ID").flatMap { Int($0) }
                 let flujo = SSEDemo.transmitir(envio, servidor: servidor, desde: ultimo)
-                tarea.withLock { $0 = flujo }
+                carga.withLock { $0.tarea = flujo }
                 return
             }
             let respuesta = RutasDemo.responder(peticion, estado: servidor.estado, ahora: servidor.reloj.ahora)
@@ -143,13 +181,14 @@
                 envio.datos(respuesta.cuerpo)
                 envio.fin()
             }
-            tarea.withLock { $0 = trabajo }
+            carga.withLock { $0.tarea = trabajo }
         }
 
         override func stopLoading() {
-            tarea.withLock { tarea in
-                tarea?.cancel()
-                tarea = nil
+            carga.withLock { carga in
+                carga.envio?.parar()
+                carga.tarea?.cancel()
+                carga = (tarea: nil, envio: nil)
             }
         }
     }

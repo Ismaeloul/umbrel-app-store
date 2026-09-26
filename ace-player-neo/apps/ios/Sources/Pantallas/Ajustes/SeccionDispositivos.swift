@@ -229,13 +229,11 @@ struct SeccionDispositivos: View {
     }
 
     /// «Olvidar este iPhone»: lo hace la sesión (marca `olvidando`, `DELETE` del propio y vuelta a emparejar sin
-    /// aviso, a6 §8.10.3). Si seguimos en la app, no se pudo: toast con el motivo.
+    /// aviso, a6 §8.10.3). Si no se pudo, el toast «No se pudo olvidar este iPhone. {motivo}» lo da la sesión
+    /// (`alAvisar`, a9 §3.5.2): aquí solo vuelve el botón a reposo.
     private func olvidar(_ d: Device) async {
         ocupado = d.id
         await sesion.olvidarEsteIPhone()
         ocupado = nil
-        guard sesion.fase == .app, let fallo = sesion.falloOlvidar else { return }
-        let motivo = fallo.codigo == "origin_forbidden" ? AvisoVersion.base : fallo.mensaje
-        avisos.avisar(OpcionesDispositivo.olvidadoMal(motivo: motivo), tono: .err)
     }
 }

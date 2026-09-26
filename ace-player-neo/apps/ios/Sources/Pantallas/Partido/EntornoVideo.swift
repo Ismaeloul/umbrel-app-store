@@ -35,7 +35,10 @@ struct EntornoVideo: DynamicProperty {
         foto.motivoParada = reproductor.motivoParada
         foto.quiereReproducir = reproductor.quiereReproducir
         foto.demo = demo
-        foto.espera = fuentes.textoEspera
+        // Con su tipo escrito: leído de pasada rozó los 200 ms de tipar (CI 36226749363).
+        let sesionFuentes: SesionFuentes = fuentes
+        let espera: String? = sesionFuentes.textoEspera
+        foto.espera = espera
         foto.lead = lead(canal)
         return foto
     }

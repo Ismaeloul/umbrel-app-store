@@ -1,6 +1,10 @@
 import Foundation
 import Testing
 
+#if canImport(FoundationNetworking)
+    import FoundationNetworking
+#endif
+
 #if SWIFT_PACKAGE
     @testable import NucleoPuro
 #else
@@ -134,5 +138,25 @@ struct RedaccionTests {
         let textos = ErrorCatalog.entries.values.filter(\.isPublic).map(\.message)
         for texto in textos { #expect(Redaccion.valido(texto), "«\(texto)» habla de \(Redaccion.palabrasDeJerga(texto))") }
         #expect(textos.count > 20)
+    }
+
+    /// §5.1.2: la regla pasa por TODOS los catálogos de avisos (a7 §12.2-§12.5), no solo por el del servidor:
+    /// los del cliente, los propios de la app (a8 §3.4.4), los del reproductor y las fuentes (M3) y la demo.
+    @Test func todosLosCatalogosSinJerga() {
+        for texto in Self.catalogos { #expect(Redaccion.valido(texto), "«\(texto)» habla de \(Redaccion.palabrasDeJerga(texto))") }
+        #expect(Self.catalogos.count > 60)
+    }
+
+    private static var catalogos: [String] {
+        let cliente = [TextosCliente.red, TextosCliente.plazo, TextosCliente.respuestaIlegible, TextosCliente.demo]
+        let propios: [APIError] = [
+            .sinServidor, .servidorInalcanzable, .noEsAcePlayerNeo, .versionIncompatible(3),
+            .red(.appTransportSecurityRequiresSecureConnection), .necesitaEmparejar(codigo: "device_revoked"),
+        ]
+        var todos = cliente + propios.map(\.mensaje) + TextosReproductor.fijos
+        #if DEBUG
+            todos += TextosDemo.todos
+        #endif
+        return todos
     }
 }

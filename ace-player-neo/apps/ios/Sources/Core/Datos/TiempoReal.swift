@@ -26,7 +26,7 @@ enum EstadoTiempoReal: Sendable { case inactivo, conectando, abierto, respaldo, 
     /// El código del 401 que cortó la conexión (`unauthorized` o `device_revoked`).
     @ObservationIgnored private(set) var codigoAccesoPerdido: String?
     /// `SSE_FALLBACK_AFTER_MS` (api/sse.ts). Los tests lo acortan.
-    @ObservationIgnored var plazoRespaldo: Duration = .seconds(10)
+    @ObservationIgnored var plazoRespaldo: Duration = .seconds(EsperaSSE.respaldoTras)
 
     private let cliente: SSEClient
     private let esDemo: Bool

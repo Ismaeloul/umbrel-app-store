@@ -24,7 +24,7 @@ import SwiftUI
     @ObservationIgnored var reloj: any Reloj = RelojSistema()
     /// Espera antes del reintento n (0, 1…): 1 s y 2 s (`retryDelay` de query.ts). Los tests la acortan.
     @ObservationIgnored var esperarReintento: @Sendable (Int) async throws -> Void = { intento in
-        try await Task.sleep(for: .seconds(min(8, Double(1 << intento))))
+        try await Task.sleep(for: .seconds(Reintentos.espera(intento: intento)))
     }
     /// Cada dato nuevo (de la red o escrito): caché en disco, versión del servidor…
     @ObservationIgnored var alEscribir: ((Valor) -> Void)?

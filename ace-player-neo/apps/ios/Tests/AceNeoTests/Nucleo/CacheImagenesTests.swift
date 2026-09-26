@@ -30,9 +30,10 @@ final class CacheImagenesTests: XCTestCase {
 
     func testMemoriaDiscoYPeticionesUnidas() async throws {
         let descargas = Contador()
+        let escudo = Self.png(lado: 8)
         MockURLProtocol.responder { _ in
             descargas.sumar()
-            return (200, ["Content-Type": "image/png"], PNGSimulado.circulo(lado: 8, color: (10, 20, 30)))
+            return (200, ["Content-Type": "image/png"], escudo)
         }
         let url = URL(string: "http://umbrel.local:7792/native/api/v1/football/teams/1/crest?v=a")!
         let primera = cache()
@@ -84,10 +85,20 @@ final class CacheImagenesTests: XCTestCase {
         XCTAssertEqual(enCurso, 0)
     }
 
-    func testElPNGSimuladoEsUnaImagen() {
-        let datos = PNGSimulado.circulo(lado: 16, color: (255, 0, 0))
-        let imagen = UIImage(data: datos)
+    func testElPNGDePruebaEsUnaImagen() {
+        let imagen = UIImage(data: Self.png(lado: 16))
         XCTAssertNotNil(imagen)
         XCTAssertEqual(imagen?.size.width, 16)
+    }
+
+    /// Un PNG de verdad de `lado`×`lado` puntos a escala 1 (la demo, como la web, no sirve escudos: 404).
+    private static func png(lado: Int) -> Data {
+        let formato = UIGraphicsImageRendererFormat()
+        formato.scale = 1
+        let tamano = CGSize(width: lado, height: lado)
+        return UIGraphicsImageRenderer(size: tamano, format: formato).pngData { contexto in
+            UIColor.systemTeal.setFill()
+            contexto.fill(CGRect(origin: .zero, size: tamano))
+        }
     }
 }

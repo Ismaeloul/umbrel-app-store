@@ -13,11 +13,9 @@ import Testing
 struct GestosTests {
     @Test func clasificarComoClassifySwipe() {
         for caso in VectoresComunes.lote.gestos {
-            // La web mide px/ms sobre el mayor de los dos recorridos: velocidad = recorrido / ms × 1000.
-            let ms = max(caso.ms, 1)
+            // La web mide px/ms sobre el mayor de los dos recorridos: la forma con `ms` es classifySwipe tal cual.
             let eje: EjeDeslizar = caso.eje == "x" ? .horizontal : (caso.eje == "y" ? .vertical : .ambos)
-            let resultado = Deslizamiento.clasificar(
-                dx: caso.dx, dy: caso.dy, vx: caso.dx / ms * 1000, vy: caso.dy / ms * 1000, eje: eje, umbral: caso.umbral)
+            let resultado = Deslizamiento.clasificar(dx: caso.dx, dy: caso.dy, ms: caso.ms, eje: eje, umbral: caso.umbral)
             let esperado: ResultadoDeslizar =
                 switch caso.resultado {
                 case "left": .izquierda
@@ -36,6 +34,19 @@ struct GestosTests {
         #expect(Deslizamiento.clasificar(dx: 30, dy: 0, vx: 500, vy: 0) == .derecha)
         #expect(Deslizamiento.clasificar(dx: 20, dy: 0, vx: 2000, vy: 0) == .ninguno)
         #expect(Deslizamiento.clasificar(dx: 60, dy: 50, vx: 0, vy: 0) == .ninguno, "ningún eje domina")
+    }
+
+    /// La forma con `ms` es la de la web: sin eje, solo el horizontal; velocidad media con ms ≥ 1.
+    @Test func conDuracionComoClassifySwipe() {
+        #expect(Deslizamiento.clasificar(dx: 0, dy: -60, ms: 100) == .ninguno, "axis = 'x' por defecto")
+        #expect(Deslizamiento.clasificar(dx: 0, dy: -60, ms: 100, eje: .ambos) == .arriba)
+        #expect(Deslizamiento.clasificar(dx: 24, dy: 0, ms: 53) == .derecha, "24/53 px/ms ≥ 0,45")
+        #expect(Deslizamiento.clasificar(dx: 24, dy: 0, ms: 54) == .ninguno)
+        #expect(Deslizamiento.clasificar(dx: 30, dy: 0, ms: 0) == .derecha, "ms 0 cuenta como 1")
+        #expect(GestosMini.soltar(dx: 30, dy: 0, ms: 40) == .descartar)
+        #expect(GestosMini.soltar(dx: 0, dy: -30, ms: 40) == .abrir)
+        #expect(GestosMini.soltar(dx: 30, dy: 0, ms: 400) == .volver)
+        #expect(GestosMini.divisorOpacidad == 320)
     }
 
     @Test func volverDesdeElBorde() {

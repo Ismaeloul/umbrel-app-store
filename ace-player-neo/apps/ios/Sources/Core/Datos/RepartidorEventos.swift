@@ -22,8 +22,8 @@ import Foundation
     let vigiaVersion: VigiaVersion
 
     /// `FALLBACK_PLAYBACK_MS` y `FALLBACK_ENGINE_MS` (api/sse.ts).
-    static let sondeoReproduccion: Duration = .seconds(5)
-    static let ticsPorSondeoMotor = 4  // 20 s = 4 × 5 s
+    static let sondeoReproduccion: Duration = .seconds(EsperaSSE.sondeoReproduccion)
+    static let ticsPorSondeoMotor = Int(EsperaSSE.sondeoMotor / EsperaSSE.sondeoReproduccion)  // 20 s = 4 × 5 s
 
     init(
         datos: DatosApp, tiempoReal: TiempoReal, sesion: SesionApp, reproductor: Reproductor, fuentes: SesionFuentes,
@@ -148,7 +148,7 @@ import Foundation
 
     /// Tras un corte se pudo perder algo: se refresca lo que cambia solo (y la versión, a7 §5.2).
     private func trasCorte() {
-        datos.invalidar([.playbackStatus, .engineStatus])
+        datos.invalidar(EfectosEvento.trasCorte)
         let vigia = vigiaVersion
         Task { await vigia.revisar(motivo: "reconexión") }
     }

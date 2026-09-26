@@ -78,6 +78,10 @@ enum EfectosEvento {
         }
     }
 
+    /// Al abrir tras un corte (venía de respaldo o de reintentos) se pudo perder algo: lo que cambia solo
+    /// (`es.onopen` de api/sse.ts con `wasDegraded`). Contrato aditivo de M1 (ronda 2).
+    static let trasCorte: Set<RutaConsulta> = [.playbackStatus, .engineStatus]
+
     /// `SCOPE_ROUTES` (a7 §6.4).
     static func rutas(de ambito: StateScope) -> Set<RutaConsulta> {
         switch ambito {

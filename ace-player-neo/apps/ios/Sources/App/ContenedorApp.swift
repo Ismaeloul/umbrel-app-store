@@ -81,6 +81,11 @@ import Foundation
         self.senales = senales
         repartidor = Self.crearRepartidor(
             datos, tiempoReal, sesion, reproductor, fuentes, senales, avisos, cicloVida)
+        // El reloj de la app (-AceNeoReloj en Debug) también para la frescura, las señales y el segundo plano
+        // (M1, decisión 4). Aquí y no en `cablear()`: los tests que crean el contenedor lo ven igual.
+        datos.reloj = reloj
+        senales.reloj = reloj
+        sesion.reloj = reloj
     }
 
     private static func crearReproductor(_ entorno: Entorno, motor: any MotorVideo, modo: PlaybackMode)
@@ -123,9 +128,6 @@ import Foundation
         //    (FasesDeLaSesion en RaizView, con «reducir movimiento» y «preferir fundidos»): una sola vía.
         sesion.alPerderAcceso = { [weak reproductor] _ in reproductor?.detener() }
         reproductor.dispositivoId = sesion.dispositivo
-        // El reloj de la app (-AceNeoReloj en Debug) también para la frescura y las señales (M1, decisión 4).
-        datos.reloj = reloj
-        senales.reloj = reloj
         // 3. Eventos del SSE al repartidor; un 401 del SSE es acceso perdido.
         tiempoReal.alEvento = { [weak repartidor] evento in repartidor?.aplicar(evento) }
         tiempoReal.alPerderAcceso = { [weak sesion] in
