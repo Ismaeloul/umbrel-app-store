@@ -72,13 +72,25 @@ export function registerV1Routes(router: V1Router, services: Services): void {
   router.handle('settingsUpdate', ({ body }) => services.state.updateSettings(body));
   router.handle('libraryGet', () => withIptvIds(services, services.state.libraryView()));
   router.handle('libraryMutate', async ({ body }) => {
-    const result = await services.state.mutateLibrary(body);
+    const result = await services.state.mutateLibrary(body, {
+      isIptvId: (id) => iptvIdOf(services, id),
+    });
     return withIptvIds(services, libraryView(result.state));
   });
   router.handle('preferencesGet', () => ({ preferences: services.state.get().preferences }));
   router.handle('preferencesUpdate', async ({ body }) => ({
     preferences: await services.state.updatePreferences(body),
   }));
+}
+
+/** ¿Es un id de tu IPTV? Si la IPTV no responde, no (renombrar sigue igual que siempre). */
+function iptvIdOf(services: Services, id: string): boolean {
+  if (!services.iptv) return false;
+  try {
+    return services.iptv.classify(id) !== 'engine';
+  } catch {
+    return false;
+  }
 }
 
 /**

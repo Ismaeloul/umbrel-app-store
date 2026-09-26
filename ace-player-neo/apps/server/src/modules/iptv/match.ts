@@ -207,12 +207,74 @@ export function sameChannelScore(base: string, other: string, scorer: ChannelSco
   const wanted = base.trim();
   const text = other.trim();
   if (!wanted || !text) return 0;
-  const variants = new Set([text, iptvSpelling(text)]);
   const clean = cleanIptvTitle(text);
+  /* Otro idioma al final («Real Madrid TV EN») es otro canal: la función de
+     la resolución no ve «EN» (es una palabra vacía en español). */
+  if (trailingLanguage(wanted) !== trailingLanguage(clean.key || text)) {
+    return Math.min(sameChannelCore(wanted, text, clean, scorer), LANGUAGE_MISMATCH_MAX);
+  }
+  return sameChannelCore(wanted, text, clean, scorer);
+}
+
+/** Tope de dos nombres que solo se diferencian en el idioma del final (como Hypermotion). */
+const LANGUAGE_MISMATCH_MAX = 58;
+/* Marcas de idioma al final de un nombre, ya con `normalizeChannelKey` (sin paréntesis). */
+const LANGUAGE_TOKENS: Readonly<Record<string, string>> = {
+  en: 'en',
+  eng: 'en',
+  english: 'en',
+  ingles: 'en',
+  fr: 'fr',
+  fra: 'fr',
+  french: 'fr',
+  frances: 'fr',
+  ger: 'de',
+  german: 'de',
+  aleman: 'de',
+  ita: 'it',
+  italian: 'it',
+  italiano: 'it',
+  por: 'pt',
+  portugues: 'pt',
+};
+
+/** El idioma que dice la última palabra de un nombre («Real Madrid TV EN» → «en»), o ''. */
+function trailingLanguage(name: string): string {
+  const words = normalizeChannelKey(name).split(' ');
+  if (words.length < 2) return '';
+  return LANGUAGE_TOKENS[words[words.length - 1] as string] ?? '';
+}
+
+/*
+ * «Esport3», «La1» o «Antena3»: letras y número pegados al final de una
+ * palabra se separan («Esport 3»), para que la regla de los números los
+ * compare como lo que son. Solo con 2 letras o más delante («F1» se queda).
+ */
+const GLUED_NUMBER = /(\p{L}{2,})(\d+)(?=\s|$)/gu;
+function splitGluedNumbers(value: string): string {
+  return value.replace(GLUED_NUMBER, '$1 $2');
+}
+
+function sameChannelCore(
+  wanted: string,
+  text: string,
+  clean: ReturnType<typeof cleanIptvTitle>,
+  scorer: ChannelScorer,
+): number {
+  const variants = new Set([text, iptvSpelling(text)]);
   if (clean.display && (clean.country === null || clean.country === 'ES')) variants.add(clean.base);
   const score = (a: string, b: string): number => scorer([a], { id: '', title: b }).score;
   let best = 0;
   for (const variant of variants) best = Math.max(best, score(wanted, variant));
+  if (best >= 100) return best;
+  /* Números pegados en alguno de los dos: se prueba con ellos separados. */
+  const wantedSplit = splitGluedNumbers(wanted);
+  for (const variant of variants) {
+    const variantSplit = splitGluedNumbers(variant);
+    if (wantedSplit !== wanted || variantSplit !== variant) {
+      best = Math.max(best, score(wantedSplit, variantSplit));
+    }
+  }
   if (best >= 100) return best;
   const baseKey = normalizeChannelKey(iptvSpelling(wanted));
   const otherKey = clean.key || normalizeChannelKey(text);

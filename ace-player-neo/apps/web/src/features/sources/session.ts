@@ -219,6 +219,12 @@ export interface SessionState {
   reverse: 'none' | 'running' | 'done';
   /** El canal tocado ya entró en Recientes en esta sesión (§14.6). */
   recorded: boolean;
+  /**
+   * Canal abierto con el enlace antes de que llegue la biblioteca: se espera
+   * a saber si es un id IPTV (`iptvIds`) antes de arrancarlo, porque un id
+   * IPTV nunca va directo al motor (docs/iptv.md §14.4).
+   */
+  waitingLibrary: boolean;
 }
 
 const EMPTY: SessionState = {
@@ -246,6 +252,7 @@ const EMPTY: SessionState = {
   bridgeJumps: [],
   reverse: 'none',
   recorded: false,
+  waitingLibrary: false,
 };
 
 export const sessionStore = createStore<SessionState>(EMPTY);
@@ -606,6 +613,8 @@ export interface ChannelEntry {
   title: string;
   siblings: readonly Item[];
   activeListId: string | null;
+  /** La biblioteca ya respondió (o falló). Sin ella no se sabe si el canal es un id IPTV. */
+  libraryReady?: boolean;
 }
 
 /**
@@ -613,7 +622,13 @@ export interface ChannelEntry {
  * hermanas del mismo canal (regla 23) y, si nada suena todavía (la página
  * se abrió con ese enlace), lo reproduce. Tras un «Detener» no lo relanza.
  */
-export function enterChannel({ hash, title, siblings, activeListId }: ChannelEntry): void {
+export function enterChannel({
+  hash,
+  title,
+  siblings,
+  activeListId,
+  libraryReady = true,
+}: ChannelEntry): void {
   const key = `c:${hash}`;
   const entries =
     siblings.length > 1
@@ -638,7 +653,14 @@ export function enterChannel({ hash, title, siblings, activeListId }: ChannelEnt
     patch({ channelTitle: title || current.channelTitle });
     return;
   }
-  if (current.key === key) {
+  if (current.key === key && current.waitingLibrary) {
+    // Abierto con el enlace esperando a la biblioteca: hasta que llegue, nada.
+    if (!libraryReady) {
+      patch({ channelTitle: title || current.channelTitle, entries });
+      return;
+    }
+    // Ya llegó: se decide abajo, como si se acabara de abrir.
+  } else if (current.key === key) {
     // La biblioteca llegó o cambió: se rehacen las hermanas conservando lo visto.
     const previous = new Map(current.entries.map((entry) => [entry.id, entry]));
     patch({
@@ -652,7 +674,11 @@ export function enterChannel({ hash, title, siblings, activeListId }: ChannelEnt
   }
   // Un canal que ya es fuente de la sesión actual (volver del mini-reproductor
   // tras elegir una hermana) no abre otra sesión.
-  if (current.kind === 'channel' && current.entries.some((entry) => entry.id === hash)) {
+  if (
+    !current.waitingLibrary &&
+    current.kind === 'channel' &&
+    current.entries.some((entry) => entry.id === hash)
+  ) {
     patch({ channelTitle: title || current.channelTitle });
     return;
   }
@@ -662,12 +688,32 @@ export function enterChannel({ hash, title, siblings, activeListId }: ChannelEnt
     player.channel?.hash !== hash &&
     idle &&
     (player.idleReason === 'inicio' || player.idleReason === null);
+  if (autoStarts && !libraryReady && !iptvActive()) {
+    // Sin la biblioteca no se sabe si es un id IPTV (que nunca va al motor): se espera.
+    begin({
+      key,
+      kind: 'channel',
+      channelTitle: title,
+      entries,
+      activeHash: hash,
+      phase: 'ready',
+      waitingLibrary: true,
+    });
+    return;
+  }
   // Abierto con el enlace y con IPTV activa: también suena primero la IPTV (§8.4).
   // Un id IPTV de tu biblioteca nunca va directo al motor, ni con la IPTV en pausa (§14.4).
   const knownIptv = Object.hasOwn(libraryNow()?.iptvIds ?? {}, hash);
   if (autoStarts && (iptvActive() || knownIptv)) {
     const item = siblings.find((sibling) => sibling.id === hash);
     const ih = knownIptv ? false : item ? (item.ih ?? false) : null;
+    const known = libraryNow();
+    const alias = knownIptv
+      ? (
+          known?.favorites?.find((entry) => entry.id === hash) ??
+          known?.history?.find((entry) => entry.id === hash)
+        )?.alias
+      : undefined;
     startChannel({
       hash,
       title,
@@ -675,6 +721,7 @@ export function enterChannel({ hash, title, siblings, activeListId }: ChannelEnt
       record: true,
       ih,
       iptv: knownIptv ? hash : null,
+      ...(alias ? { alias } : {}),
     });
     return;
   }
@@ -738,6 +785,16 @@ function tappedIsIptv(tapped: TappedChannel | null): boolean {
   return Boolean(tapped && tapped.iptv && tapped.iptv === tapped.hash);
 }
 
+/**
+ * El canal que se pide al servidor: el nombre en tu IPTV de un id IPTV
+ * renombrado (`alias`, §14.6) o, si no, el título. Con la IPTV en pausa o con
+ * un id que ya no vale, «Mi T5» no encontraría en AceStream lo que sí
+ * encuentra «Telecinco».
+ */
+function channelAsked(tapped: TappedChannel): string {
+  return tappedIsIptv(tapped) && tapped.alias ? tapped.alias : tapped.title;
+}
+
 /** Fuentes de AceStream de la sesión (las que no son IPTV). */
 function aceCount(entries: readonly SourceEntry[]): number {
   return entries.filter((entry) => !isIptv(entry)).length;
@@ -754,7 +811,7 @@ async function resolveChannel(tapped: TappedChannel): Promise<void> {
   try {
     data = await api('footballResolve', {
       query: {
-        channel: tapped.title,
+        channel: channelAsked(tapped),
         scope: 'channel',
         client: getViewerId(),
         ...iptvQueryOf(tapped),
@@ -810,7 +867,7 @@ async function reverseChannel(tapped: TappedChannel): Promise<void> {
   try {
     data = await api('footballResolve', {
       query: {
-        channel: tapped.title,
+        channel: channelAsked(tapped),
         scope: 'channel',
         client: getViewerId(),
         engine: '1',
@@ -883,7 +940,8 @@ function nothingForIptvId(tapped: TappedChannel): void {
         ? 'Has eliminado tu IPTV y este canal no está en AceStream.'
         : 'Este canal ya no está en tu IPTV y no lo encuentro en AceStream.';
   patch({ phase: 'ready', entries: [], activeHash: null });
-  setWaitingMessage(text);
+  // Es lo que queda, no una espera: sin «Buscando señal» ni «Comprobando».
+  setWaitingMessage(text, { final: true });
 }
 
 /** En Recientes entra el canal tocado, una vez por sesión y al arrancar la primera fuente (§14.6). */

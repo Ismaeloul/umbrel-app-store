@@ -38,6 +38,11 @@ export interface PlayRequest {
   origin: PlayOrigin;
   /** El canal IPTV que es esta fila (§14.4); igual a `hash` si lo tocado es un id IPTV. */
   iptv?: string | null;
+  /**
+   * El nombre del canal en tu IPTV de un id IPTV renombrado (`Item.alias`,
+   * §14.6): se busca por él, no por el nombre que le pusiste.
+   */
+  alias?: string | null;
 }
 
 /** Lo que se tocó, para la sesión del canal (preguntar por la IPTV y volver a él si cae). */
@@ -49,6 +54,8 @@ export interface TappedChannel {
   ih: boolean | null;
   /** El canal IPTV tocado (§14.4), o null si no se sabe (se manda el hash tocado). */
   iptv: string | null;
+  /** El nombre en tu IPTV de un id IPTV renombrado: el que se busca (§14.6). */
+  alias?: string | null;
 }
 
 /** Ventana en la que un segundo «reproducir» del mismo canal se ignora. */
@@ -95,6 +102,7 @@ export function playChannel(navigate: Navigate, request: PlayRequest): void {
       record: request.record,
       ih: request.ih,
       iptv,
+      ...(request.alias ? { alias: request.alias } : {}),
     };
     if (channelStarter) channelStarter(tapped);
     else pendingTap = { ...tapped, at: now };

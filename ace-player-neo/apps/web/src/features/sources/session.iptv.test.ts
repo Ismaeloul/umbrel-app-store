@@ -689,7 +689,61 @@ describe('buscador: el canal IPTV tocado (docs/iptv.md §14.4 y §14.6)', () => 
     expect(playerStore.get().waiting).toBe(
       'Tu IPTV está en pausa y este canal no está en AceStream.',
     );
+    // Es lo que queda, no una espera: sin «Buscando señal · Comprobando».
+    expect(playerStore.get().waitingFinal).toBe(true);
     expect(getPlayer().channel).toBeNull();
+  });
+
+  it('un favorito IPTV renombrado se busca por su nombre en la IPTV (alias), no por el tuyo', async () => {
+    setIptvActive(false);
+    queryClient.setQueryData(routeKey('libraryGet'), {
+      ...fixture('libraryGet'),
+      iptvIds: { [TELE]: 'iptv_disabled' },
+    });
+    first = nothing;
+    reverse = () => found([ace(21)]);
+    playChannel(vi.fn(), {
+      hash: TELE,
+      title: 'Mi T5',
+      ih: false,
+      record: true,
+      origin: 'biblioteca',
+      iptv: TELE,
+      alias: 'Telecinco',
+    });
+    await flush();
+    await flush();
+    const all = calls('/api/v1/football/resolve');
+    expect(all.map((call) => queryOf(call).get('channel'))).toEqual(['Telecinco', 'Telecinco']);
+    expect(queryOf(all[1]!).get('engine')).toBe('1');
+    // El título que ves sigue siendo el tuyo.
+    expect(getSession().channelTitle).toBe('Mi T5');
+    expect(getPlayer().channel?.hash).toBe(hash(21));
+  });
+
+  it('abierto con el enlace antes de que llegue la biblioteca: espera a saber si es un id IPTV y nunca va al motor', async () => {
+    setIptvActive(false);
+    queryClient.removeQueries({ queryKey: routeKey('libraryGet') });
+    first = nothing;
+    reverse = nothing;
+    enterChannel({ hash: TELE, title: '', siblings: [], activeListId: null, libraryReady: false });
+    await flush();
+    expect(getPlayer().channel).toBeNull();
+    expect(getSession()).toMatchObject({ key: `c:${TELE}`, waitingLibrary: true });
+    expect(calls('/api/v1/football/resolve')).toHaveLength(0);
+    // Llega la biblioteca: es un favorito IPTV con la IPTV en pausa.
+    queryClient.setQueryData(routeKey('libraryGet'), {
+      ...fixture('libraryGet'),
+      iptvIds: { [TELE]: 'iptv_disabled' },
+    });
+    enterChannel({ hash: TELE, title: 'Mi T5', siblings: [], activeListId: null });
+    await flush();
+    await flush();
+    expect(getPlayer().channel).toBeNull();
+    expect(calls('/api/v1/football/resolve').length).toBeGreaterThan(0);
+    expect(playerStore.get().waiting).toBe(
+      'Tu IPTV está en pausa y este canal no está en AceStream.',
+    );
   });
 
   it('un id IPTV que ya no está y sí en AceStream: arranca la AceStream', async () => {

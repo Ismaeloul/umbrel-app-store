@@ -159,6 +159,11 @@ export interface PlayerState {
   ttffMs: number | null;
   /** Lo que el centro de partido dice mientras espera una fuente («Comprobando 5 fuentes…»). */
   waiting: string | null;
+  /**
+   * `waiting` es la frase FINAL (ya no se busca nada: un id IPTV que no está en
+   * ningún sitio, docs/iptv.md §14.5). El panel dice «Sin señal», no «Buscando señal».
+   */
+  waitingFinal: boolean;
   /** Panel «Datos técnicos» (tecla S) abierto. */
   nerdOpen: boolean;
 }
@@ -191,6 +196,7 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
   demo: false,
   ttffMs: null,
   waiting: null,
+  waitingFinal: false,
   nerdOpen: false,
 };
 
@@ -286,6 +292,7 @@ export function stop(): void {
     muted: state.muted,
     volume: state.volume,
     waiting: state.waiting,
+    waitingFinal: state.waitingFinal,
   }));
   setPlayerPresence({ active: false, immersive: false });
 }
@@ -376,8 +383,17 @@ export function notifySourceFailed(failure: SourceFailure): {
  * enseña en el vídeo («Comprobando 5 fuentes: arranca la primera que
  * funcione…»). null para quitarlo.
  */
-export function setWaitingMessage(text: string | null): void {
-  playerStore.set((state) => (state.waiting === text ? state : { ...state, waiting: text }));
+/**
+ * La frase del centro de partido mientras espera una fuente. Con `final`, ya
+ * no espera nada: es lo que queda (el panel dice «Sin señal», sin pulso).
+ */
+export function setWaitingMessage(text: string | null, options: { final?: boolean } = {}): void {
+  const waitingFinal = text !== null && options.final === true;
+  playerStore.set((state) =>
+    state.waiting === text && state.waitingFinal === waitingFinal
+      ? state
+      : { ...state, waiting: text, waitingFinal },
+  );
 }
 
 export function setNerdOpen(open: boolean): void {

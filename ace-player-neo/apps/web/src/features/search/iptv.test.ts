@@ -13,6 +13,7 @@ import {
   iptvCountText,
   iptvSubtitle,
   liveText,
+  searchLiveText,
   mergeSearch,
   showMoreText,
   visibleIptv,
@@ -135,7 +136,37 @@ describe('mergeSearch (§14.3)', () => {
       'Hay más canales con «tele» en tu IPTV: escribe algo más concreto.',
     );
     expect(liveText(2, 5, 'la 1')).toBe('2 en tu IPTV y 5 en el motor para «la 1».');
+    expect(liveText(0, 0, 'tele', 1)).toBe(
+      '1 en tu biblioteca, 0 en tu IPTV y 0 en el motor para «tele».',
+    );
     expect(emptyTitle('zzz')).toBe('Sin resultados para «zzz».');
     expect(iptvSubtitle({ provider: 'Casa', quality: null }, false)).toBe('Casa');
+  });
+});
+
+describe('región viva de Buscar (§14.5)', () => {
+  const base = { q: 'tele', library: 0, iptv: 0, engine: 0, iptvFailed: false };
+  it('cuenta tu biblioteca: con solo «Mi tele» de la biblioteca no dice «Sin resultados»', () => {
+    expect(searchLiveText({ ...base, library: 1 })).toBe(
+      '1 en tu biblioteca, 0 en tu IPTV y 0 en el motor para «tele».',
+    );
+    expect(searchLiveText({ ...base, library: 1, iptv: null })).toBe(
+      '1 en tu biblioteca y ninguno en el motor para «tele».',
+    );
+  });
+  it('IPTV y motor; sin IPTV, los resultados del motor; nada, «Sin resultados»', () => {
+    expect(searchLiveText({ ...base, iptv: 1, engine: 2 })).toBe(
+      '1 en tu IPTV y 2 en el motor para «tele».',
+    );
+    expect(searchLiveText({ ...base, iptv: null, engine: 1 })).toBe('1 resultado para «tele».');
+    expect(searchLiveText(base)).toBe('Sin resultados para «tele».');
+  });
+  it('con tu IPTV en error no afirma que no haya nada', () => {
+    expect(searchLiveText({ ...base, iptv: null, iptvFailed: true })).toBe(
+      'No se pudo buscar en tu IPTV. El motor AceStream no tiene nada para «tele».',
+    );
+    expect(searchLiveText({ ...base, iptv: null, engine: 3, iptvFailed: true })).toBe(
+      '3 resultados para «tele». No se pudo buscar en tu IPTV.',
+    );
   });
 });

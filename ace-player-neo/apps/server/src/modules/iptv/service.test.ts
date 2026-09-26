@@ -504,6 +504,24 @@ describe('buscador y biblioteca (docs/iptv.md §14)', () => {
     );
   });
 
+  it('solo calidad («hd», «4k»): nada del catálogo, pero sí el canal IPTV de lo que tu biblioteca enseña', async () => {
+    const r = await rig();
+    await saveXtream(r);
+    await favorite(r, ACE, 'Antena 3 HD');
+    const hd = r.service.searchChannels('hd');
+    expect(hd.channels.map((channel) => channel.title)).toEqual(['Antena 3']);
+    expect(hd.channels[0]?.library).toEqual([ACE]);
+    expect(hd.total).toBe(1);
+    /* Sin nada en la biblioteca con ese texto, vacío como siempre. */
+    expect(r.service.searchChannels('4k').channels).toEqual([]);
+    /* «tv» ya no trae los favoritos IPTV por su categoría «IPTV». */
+    const antena = r.service.searchChannels('antena').channels[0]?.id as string;
+    await favorite(r, antena, 'Mi Antena');
+    expect(r.service.searchChannels('tv').channels.some((c) => c.library.includes(antena))).toBe(
+      false,
+    );
+  });
+
   it('iptvIds: ok, iptv_disabled, iptv_gone e iptv_removed; lo que no es IPTV no sale', async () => {
     const r = await rig();
     await saveXtream(r);
@@ -669,5 +687,30 @@ describe('renombrar un favorito IPTV (§14.6)', () => {
       title: 'T5',
     });
     expect(r.state.get().favorites.find((item) => item.id === IPTV)?.alias).toBe('Telecinco');
+  });
+
+  it('un reciente que es un id IPTV también conserva su nombre al renombrarlo (lo dice `isIptvId`)', async () => {
+    const r = await rig();
+    const IPTV = 'f'.repeat(40);
+    const ACE = 'a'.repeat(40);
+    for (const [id, title] of [
+      [IPTV, 'Telecinco'],
+      [ACE, 'Antena 3 HD'],
+    ] as const) {
+      await r.state.mutateLibrary({ action: 'history-upsert', item: { id, title, ih: false } });
+    }
+    const options = { isIptvId: (id: string) => id === IPTV };
+    for (const [id, title] of [
+      [IPTV, 'Mi tele'],
+      [ACE, 'A3'],
+    ] as const) {
+      await r.state.mutateLibrary({ action: 'rename', collection: 'history', id, title }, options);
+    }
+    const history = r.state.get().history;
+    expect(history.find((item) => item.id === IPTV)).toMatchObject({
+      title: 'Mi tele',
+      alias: 'Telecinco',
+    });
+    expect(history.find((item) => item.id === ACE)).not.toHaveProperty('alias');
   });
 });

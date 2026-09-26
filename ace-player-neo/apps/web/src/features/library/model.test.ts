@@ -34,6 +34,12 @@ describe('filtro local', () => {
     expect(filterItems(items, '  ')).toHaveLength(3);
     expect(filterItems(items, 'nada')).toEqual([]);
   });
+  it('la categoría «IPTV» de tus canales IPTV es una marca: «tv» no los saca, «iptv» sí', () => {
+    const withIptv = [...items, makeItem('Mi tele', 'fav', { category: 'IPTV' })];
+    expect(filterItems(withIptv, 'tv').map((i) => i.title)).toEqual([]);
+    expect(filterItems(withIptv, 'iptv').map((i) => i.title)).toEqual(['Mi tele']);
+    expect(filterItems(withIptv, 'mi te').map((i) => i.title)).toEqual(['Mi tele']);
+  });
 });
 
 describe('agrupados', () => {

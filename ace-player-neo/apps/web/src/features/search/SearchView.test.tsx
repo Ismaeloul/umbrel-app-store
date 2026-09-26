@@ -462,6 +462,31 @@ describe('buscador con IPTV (docs/iptv.md §14.5)', () => {
     ).toBeInTheDocument();
   });
 
+  it('si solo hay filas de tu biblioteca, la región viva las cuenta y no dice «Sin resultados»', async () => {
+    setupIptv({});
+    type('dazn');
+    await screen.findByRole('region', { name: 'En tu biblioteca' });
+    expect(
+      await screen.findByText(/^\d+ en tu biblioteca, 0 en tu IPTV y 0 en el motor para «dazn»\.$/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Sin resultados para «dazn».')).toBeNull();
+  });
+
+  it('con tu IPTV en error y el motor vacío no afirma «Sin resultados»: una línea solo del motor', async () => {
+    setupIptv({ iptvStatus: 500 });
+    type('zzz');
+    expect(await screen.findByText('No se pudo buscar en tu IPTV.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('El motor AceStream no tiene nada para «zzz».'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Sin resultados para «zzz».' })).toBeNull();
+    expect(
+      screen.getByText(
+        'No se pudo buscar en tu IPTV. El motor AceStream no tiene nada para «zzz».',
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('tocar un canal de «En tu IPTV» no llama a play(): abre la sesión del canal con su id IPTV', async () => {
     setupIptv({ channels: () => [channel(IPTV_TELE, 'Telecinco')] });
     type('tele');

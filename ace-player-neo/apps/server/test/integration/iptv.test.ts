@@ -30,8 +30,9 @@
        `engine=1` y el motor sin Telecinco, la IPTV sola sin error; «La 1»
        con `engine=1`, la IPTV y las dos AceStream.
    14. De Xtream a la M3U del mismo proveedor falso → el favorito y el
-       reciente de Telecinco tienen el id nuevo y se reproducen (el 24 h de
-       un favorito que se va lo cubre iptv/service.test.ts con reloj falso).
+       reciente de Telecinco tienen el id nuevo y se reproducen; el favorito
+       de Antena 3, que se quita de la lista falsa, sigue 24 h de
+       sincronizaciones correctas (reloj falso) con `iptv_gone` y luego se va.
    15. Fugas: `iptvChannels` y `search` con `iptv` no llevan nada del
        proveedor. */
 
@@ -325,6 +326,10 @@ describe('buscador: IPTV y AceStream juntos (docs/iptv.md §14.9)', () => {
     const short = await inject(r.h, 'GET', '/api/v1/iptv/channels?q=t');
     expect(short.statusCode).toBe(400);
     expect(short.json().error.code).toBe('empty_query');
+    /* Ni en un 400 se escribe lo que buscas en el registro. */
+    const logged = r.logs.join('');
+    expect(logged).toContain('/api/v1/iptv/channels?[consulta]');
+    expect(logged).not.toContain('channels?q=');
     /* 15 · fugas: nada del proveedor en la respuesta. */
     for (const text of [JSON.stringify(tele), JSON.stringify(antena)]) {
       for (const secret of [FAKE_IPTV_PASSWORD, FAKE_IPTV_USER, 'ES |', 'XXX', '.es', 'http']) {
@@ -396,10 +401,16 @@ describe('buscador: IPTV y AceStream juntos (docs/iptv.md §14.9)', () => {
     expect(quick.candidates.map((candidate) => candidate.id)).toEqual([la1]);
   });
 
-  it('14 · de Xtream a la M3U del mismo proveedor: favorito y reciente de Telecinco pasan al id nuevo y se reproducen', async () => {
+  it('14 · de Xtream a la M3U del mismo proveedor: favorito y reciente de Telecinco pasan al id nuevo y se reproducen; el favorito de un canal que se va dura 24 h', async () => {
     const r = await setup();
     await saveXtream(r);
     const tele = (await channels(r.h, 'telecinco')).channels[0]?.id as string;
+    const antena = (await channels(r.h, 'antena')).channels[0]?.id as string;
+    expect(antena).toBeTruthy();
+    await libraryMutate(r.h, {
+      action: 'favorite-upsert',
+      item: { id: antena, title: 'Mi Antena', category: 'IPTV', alias: 'Antena 3', ih: false },
+    });
     await libraryMutate(r.h, {
       action: 'favorite-upsert',
       item: { id: tele, title: 'Telecinco', category: 'IPTV', alias: 'Telecinco', ih: false },
@@ -408,7 +419,9 @@ describe('buscador: IPTV y AceStream juntos (docs/iptv.md §14.9)', () => {
       action: 'history-upsert',
       item: { id: tele, title: 'Telecinco', ih: false },
     });
-    expect(before.iptvIds).toEqual({ [tele]: 'ok' });
+    expect(before.iptvIds).toEqual({ [tele]: 'ok', [antena]: 'ok' });
+    /* Antena 3 ya no está en la lista del proveedor nuevo. */
+    r.provider.quitar(108);
     const m3u = await inject(r.h, 'PUT', '/api/v1/iptv', {
       kind: 'm3u',
       url: `${SERVER}/lista.m3u`,
@@ -419,12 +432,32 @@ describe('buscador: IPTV y AceStream juntos (docs/iptv.md §14.9)', () => {
     await r.h.iptv.relinkIdle();
     const fresh = (await channels(r.h, 'telecinco')).channels[0]?.id as string;
     expect(fresh).not.toBe(tele);
-    const view = LibraryViewSchema.parse((await inject(r.h, 'GET', '/api/v1/library')).json());
-    expect(view.favorites.map((item) => item.id)).toEqual([fresh]);
+    const library = async () =>
+      LibraryViewSchema.parse((await inject(r.h, 'GET', '/api/v1/library')).json());
+    const view = await library();
+    expect(view.favorites.map((item) => item.id)).toEqual([fresh, antena]);
     expect(view.history.map((item) => item.id)).toEqual([fresh]);
-    expect(view.iptvIds).toEqual({ [fresh]: 'ok' });
+    expect(view.iptvIds).toEqual({ [fresh]: 'ok', [antena]: 'iptv_gone' });
     const grant = await openDriven(r.h, fresh, 'visor_relink');
     expect(grant.source).toBe('iptv');
+
+    /* 24 h de gracia con sincronizaciones correctas: a las 12 h sigue; pasadas las 24 h, se va sin errores. */
+    const syncAfter = async (ms: number) => {
+      await r.h.clock.advanceAsync(ms);
+      await r.h.iptv.idle();
+      const res = await inject(r.h, 'POST', '/api/v1/iptv/sync');
+      expect(res.statusCode, res.body).toBe(200);
+      await r.h.iptv.idle();
+      await r.h.iptv.relinkIdle();
+    };
+    await syncAfter(12 * 3_600_000);
+    const half = await library();
+    expect(half.favorites.map((item) => item.id)).toEqual([fresh, antena]);
+    expect(half.favorites[1]).toMatchObject({ title: 'Mi Antena', alias: 'Antena 3' });
+    await syncAfter(13 * 3_600_000);
+    const after = await library();
+    expect(after.favorites.map((item) => item.id)).toEqual([fresh]);
+    expect(after.iptvIds).toEqual({ [fresh]: 'ok' });
   });
 });
 

@@ -16,7 +16,7 @@ import { kindFromIh, play, usePlayerSelector } from '../../player/api.ts';
 import { Button, ChannelMark, IconButton, Num } from '../../ui/index.ts';
 import { findKnownItem } from '../library/model.ts';
 import { librarySiblings } from '../sources/model.ts';
-import { enterChannel, leaveSession, useSession } from '../sources/session.ts';
+import { enterChannel, leaveSession, startChannel, useSession } from '../sources/session.ts';
 import { SourcesPanel } from '../sources/SourcesPanel.tsx';
 import type { InspectorTarget } from '../sources/SourceInspector.tsx';
 import type { SourceListVariant } from '../sources/SourceList.tsx';
@@ -30,6 +30,11 @@ export interface ChannelContext {
   siblings: Item[];
   target: InspectorTarget;
   library: LibraryView | undefined;
+  /**
+   * Es un canal de tu IPTV (id sintético de favoritos o recientes, `iptvIds`):
+   * sin Content ID que enseñar, copiar ni abrir en AceStream (docs/iptv.md §14.5).
+   */
+  iptvId: boolean;
 }
 
 /** Lo que se sabe del canal: su ficha en la biblioteca (si está) y lo que dice el reproductor. */
@@ -41,12 +46,20 @@ export function useChannelContext(hash: string): ChannelContext {
   return useMemo(() => {
     const item = findKnownItem(library, hash) ?? null;
     const title = item?.title || playerTitle || `Canal ${hash.slice(0, 8)}`;
+    const iptvId = Object.hasOwn(library?.iptvIds ?? {}, hash);
     return {
       title,
       item,
       siblings: librarySiblings(library, hash),
-      target: { hash, title, ih: item?.ih === true, learned: false },
+      target: {
+        hash,
+        title,
+        ih: iptvId ? false : item?.ih === true,
+        learned: false,
+        ...(iptvId ? { iptv: true, iptvId: true } : {}),
+      },
       library,
+      iptvId,
     };
   }, [library, hash, playerTitle]);
 }
@@ -68,7 +81,7 @@ function siblingCount(siblings: readonly Item[]): number {
   return siblings.length > 1 ? siblings.length : 0;
 }
 
-/** La ficha del canal (pestaña «Canal»): de dónde viene, cuántas hermanas y su Content ID. */
+/** La ficha del canal (pestaña «Canal»): de dónde viene, cuántas hermanas y su Content ID (no si es de tu IPTV). */
 function ChannelDetails({ hash, context }: { hash: string; context: ChannelContext }) {
   const count = siblingCount(context.siblings);
   return (
@@ -82,10 +95,12 @@ function ChannelDetails({ hash, context }: { hash: string; context: ChannelConte
           <dt>Fuentes del mismo canal</dt>
           <dd>{count ? <Num value={count} /> : 'Solo esta'}</dd>
         </div>
-        <div className="mc-facts__row mc-facts__row--hash">
-          <dt>{context.target.ih ? 'Infohash' : 'Content ID'}</dt>
-          <dd className="mono">{hash}</dd>
-        </div>
+        {context.iptvId ? null : (
+          <div className="mc-facts__row mc-facts__row--hash">
+            <dt>{context.target.ih ? 'Infohash' : 'Content ID'}</dt>
+            <dd className="mono">{hash}</dd>
+          </div>
+        )}
       </dl>
       <ShortcutHints hints={CHANNEL_HINTS} />
     </div>
@@ -171,13 +186,21 @@ export function ChannelCenter({ hash, active }: { hash: string; active: boolean 
      normal, ya pintado) y al llenarse empujaban lo de debajo fuera de la
      pantalla (CLS 0,05 en el móvil; revisión de rendimiento de la Fase 2). */
   const [entered, setEntered] = useState(false);
+  // Sin la biblioteca no se sabe si es un id IPTV (que nunca va al motor, §14.4).
+  const libraryReady = useApiQuery('libraryGet').status !== 'pending';
   useLayoutEffect(() => {
     if (!active) return;
-    enterChannel({ hash, title, siblings, activeListId: library?.activeWebSourceId ?? null });
+    enterChannel({
+      hash,
+      title,
+      siblings,
+      activeListId: library?.activeWebSourceId ?? null,
+      libraryReady,
+    });
     setEntered(true);
     return () => leaveSession();
-    // Se vuelve a entrar si cambian el canal, su nombre o sus hermanas (no por identidad).
-  }, [active, hash, title, siblingsKey]);
+    // Se vuelve a entrar si cambian el canal, su nombre, sus hermanas (no por identidad) o llega la biblioteca.
+  }, [active, hash, title, siblingsKey, libraryReady]);
 
   const count = siblingCount(siblings);
   const desktop = layout.kind === 'desktop' || layout.kind === 'wide';
@@ -201,10 +224,21 @@ export function ChannelCenter({ hash, active }: { hash: string; active: boolean 
             icon="play"
             className="mc-channel__play"
             onClick={() =>
-              play(
-                { hash, title, kind: kindFromIh(item?.ih) },
-                { origin: 'library', route: { vista: 'partido', id: null, canal: hash } },
-              )
+              // Un id IPTV no va nunca al motor: pasa por la sesión del canal (§14.4).
+              context.iptvId
+                ? startChannel({
+                    hash,
+                    title,
+                    kind: 'id',
+                    record: true,
+                    ih: false,
+                    iptv: hash,
+                    ...(item?.alias ? { alias: item.alias } : {}),
+                  })
+                : play(
+                    { hash, title, kind: kindFromIh(item?.ih) },
+                    { origin: 'library', route: { vista: 'partido', id: null, canal: hash } },
+                  )
             }
           >
             Reproducir

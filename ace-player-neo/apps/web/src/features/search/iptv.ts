@@ -53,13 +53,45 @@ export const IPTV_TEXT = {
 export const showMoreText = (n: number): string => `Ver ${n} más de tu IPTV`;
 export const cappedText = (q: string): string =>
   `Hay más canales con «${q}» en tu IPTV: escribe algo más concreto.`;
-export const liveText = (n: number, m: number, q: string): string =>
-  `${n} en tu IPTV y ${m} en el motor para «${q}».`;
+/** Región viva con IPTV (§14.5); con filas de tu biblioteca, las cuenta delante. */
+export const liveText = (n: number, m: number, q: string, library = 0): string =>
+  library > 0
+    ? `${library} en tu biblioteca, ${n} en tu IPTV y ${m} en el motor para «${q}».`
+    : `${n} en tu IPTV y ${m} en el motor para «${q}».`;
 export const emptyTitle = (q: string): string => `Sin resultados para «${q}».`;
 /** El motor no da nada, pero arriba (biblioteca o IPTV) sí hay filas: una línea, no el vacío grande. */
 export const engineEmptyBelowText = (q: string): string =>
   `El motor AceStream no tiene nada más para «${q}».`;
-export const bothButtonText = (q: string): string => `Buscar «${q}» en tu IPTV y en el motor`;
+/** El motor no da nada y tu IPTV falló: no se sabe si está en la IPTV, así que nada de «Sin resultados». */
+export const engineEmptyText = (q: string): string =>
+  `El motor AceStream no tiene nada para «${q}».`;
+
+export interface SearchLiveInput {
+  q: string;
+  /** Filas de «En tu biblioteca». */
+  library: number;
+  /** Filas de «En tu IPTV», o null sin IPTV activa o sin respuesta todavía. */
+  iptv: number | null;
+  /** Filas del motor a la vista. */
+  engine: number;
+  iptvFailed: boolean;
+}
+
+/**
+ * La región viva de Buscar con la búsqueda hecha (§14.5). Cuenta TODO lo que
+ * se ve: si la única fila es de tu biblioteca, no dice «Sin resultados».
+ */
+export function searchLiveText(input: SearchLiveInput): string {
+  const { q, library, iptv, engine, iptvFailed } = input;
+  const failed = iptvFailed && iptv === null ? ` ${IPTV_TEXT.failed}` : '';
+  if (iptv !== null && library + iptv + engine > 0) return liveText(iptv, engine, q, library);
+  if (engine > 0)
+    return `${engine} ${engine === 1 ? 'resultado' : 'resultados'} para «${q}».${failed}`;
+  if (library > 0) return `${library} en tu biblioteca y ninguno en el motor para «${q}».${failed}`;
+  if (iptvFailed) return `${IPTV_TEXT.failed} ${engineEmptyText(q)}`;
+  return emptyTitle(q);
+}
+export const bothButtonText = (q: string): string => `Buscar «${q}» en tu IPTV y el motor`;
 
 /** Contador de la sección «En tu IPTV»: el total, o «200+» si hay más. */
 export function iptvCountText(total: number, capped: boolean): string {

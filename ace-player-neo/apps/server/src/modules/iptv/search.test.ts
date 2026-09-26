@@ -118,6 +118,13 @@ describe('searchCatalog (§14.3)', () => {
     expect(isAdultChannel('Telecinco', 'ES | GENERALISTAS')).toBe(false);
     expect(isAdultChannel('Sexta', '')).toBe(false);
     expect(isAdultChannel('Canal 180', '')).toBe(false);
+    /* El «+» de una marca seguido de un número no es «+18». */
+    expect(isAdultChannel('Canal+ 18', '')).toBe(false);
+    expect(isAdultChannel('M+ 18 Series', '')).toBe(false);
+    expect(isAdultChannel('Movistar+ 18', '')).toBe(false);
+    expect(isAdultChannel('+18', '')).toBe(true);
+    expect(isAdultChannel('XXX +18', '')).toBe(true);
+    expect(isAdultChannel('Canal', '+ 18 ADULTOS')).toBe(true);
   });
 
   it('total y capped con 250 coincidencias; la respuesta, 50 como mucho', () => {
@@ -194,6 +201,13 @@ describe('library de cada fila (§14.3, regla 5)', () => {
     expect(
       libraryCandidates([{ id: A, title: 'Otro', category: 'Teledeportes' }], 'tele'),
     ).toHaveLength(1);
+  });
+
+  it('la categoría «IPTV» es una marca: casa con «iptv», no con «tv»', () => {
+    const items = [{ id: IPTV_OWN, title: 'Mi tele', category: 'IPTV' }];
+    expect(libraryCandidates(items, 'tv')).toEqual([]);
+    expect(libraryCandidates(items, 'iptv')).toHaveLength(1);
+    expect(libraryCandidates(items, 'mi te')).toHaveLength(1);
   });
 });
 

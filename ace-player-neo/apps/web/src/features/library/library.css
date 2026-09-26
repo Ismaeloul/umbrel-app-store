@@ -402,6 +402,7 @@
 /* ---- Pie y botones bajo la lista ------------------------------------------ */
 .lib-engine {
   justify-content: center;
+  text-wrap: balance;
 }
 .lib-foot {
   display: flex;

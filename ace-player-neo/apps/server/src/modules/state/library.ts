@@ -23,10 +23,17 @@ import type { LegacyLibraryCollection } from './projections.js';
  * sobrevivan a la siguiente sincronización (T-036). Devuelve la colección
  * tocada (la respuesta la arma `libraryResponse`).
  */
+/** Lo que la biblioteca no sabe por sí misma y le dice quien la llama. */
+export interface LibraryMutationOptions {
+  /** ¿Es un id de un canal de tu IPTV (docs/iptv.md §4.1)? Lo sabe el módulo `iptv`. */
+  readonly isIptvId?: (id: string) => boolean;
+}
+
 export function applyLibraryMutation(
   draft: StateV1,
   body: unknown,
   ctx: NormalizeContext,
+  options: LibraryMutationOptions = {},
 ): LegacyLibraryCollection {
   const action = String(field(body, 'action') || '');
   if (action === 'history-upsert' || action === 'favorite-upsert') {
@@ -79,12 +86,14 @@ export function applyLibraryMutation(
     if (!title) throw new AppError('bad_title');
     draft[collection] = draft[collection].map((entry) => {
       if (entry.id !== id) return entry;
-      /* Un canal guardado desde el buscador IPTV conserva su nombre en la IPTV
-         como `alias` al renombrarlo: es el que usa el re-emparejado
-         (docs/iptv.md §14.6). Al guardarlo, el alias igual al título no se
-         guarda (normalizeItem), así que aquí se recupera del título viejo. */
-      const keepName =
-        entry.category === 'IPTV' && !entry.alias && entry.title && entry.title !== title;
+      /* Un canal de tu IPTV (guardado desde el buscador, categoría «IPTV», o
+         un reciente que es un id IPTV) conserva su nombre en la IPTV como
+         `alias` al renombrarlo: es el que usa el re-emparejado y el que se
+         busca al tocarlo (docs/iptv.md §14.6). Al guardarlo, el alias igual al
+         título no se guarda (normalizeItem), así que aquí se recupera del
+         título viejo. */
+      const iptvChannel = entry.category === 'IPTV' || options.isIptvId?.(entry.id) === true;
+      const keepName = iptvChannel && !entry.alias && entry.title && entry.title !== title;
       return { ...entry, title, ...(keepName ? { alias: entry.title } : {}) };
     });
   } else {

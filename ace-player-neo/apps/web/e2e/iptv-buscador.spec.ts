@@ -289,7 +289,7 @@ test(
     const seccion = page.getByRole('region', { name: 'En tu IPTV' });
     await expect(seccion.getByRole('link', { name: 'Telecinco', exact: true })).toBeVisible();
     await expect(
-      page.getByRole('button', { name: 'Buscar «tele» en tu IPTV y en el motor' }),
+      page.getByRole('button', { name: 'Buscar «tele» en tu IPTV y el motor' }),
     ).toBeVisible();
   },
 );

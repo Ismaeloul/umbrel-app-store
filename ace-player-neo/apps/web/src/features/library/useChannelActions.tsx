@@ -96,6 +96,8 @@ export function useChannelActions({
       record: true,
       origin,
       ...(iptv ? { iptv } : {}),
+      // Un id IPTV renombrado se busca por su nombre en la IPTV (§14.6).
+      ...(iptv === channel.id && channel.alias ? { alias: channel.alias } : {}),
     });
   };
 
@@ -105,14 +107,15 @@ export function useChannelActions({
       removeWithUndo({ client, kind: 'unfavorite', collection: 'favorites', item: existing });
       return;
     }
-    // Un canal de «En tu IPTV»: su nombre limpio queda como alias (§14.6).
-    if (channel.iptv === channel.id) {
+    // Un canal de tu IPTV (de «En tu IPTV», o un reciente que es un id IPTV):
+    // su nombre en la IPTV queda como alias (§14.6), también si ya lo renombraste.
+    if (iptvOf(channel) === channel.id) {
       setFavoriteTarget({
         id: channel.id,
         title: channel.title,
         category: 'IPTV',
         ih: false,
-        alias: channel.title,
+        alias: channel.alias || channel.title,
       });
       return;
     }

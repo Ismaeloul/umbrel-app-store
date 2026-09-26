@@ -33,6 +33,7 @@ import type {
 } from '@ace/shared';
 import type { z } from 'zod';
 import type { CoreDeps, Lifecycle } from '../../core/module.js';
+import type { LibraryMutationOptions } from './library.js';
 
 export type StateDeps = CoreDeps;
 
@@ -112,6 +113,7 @@ export interface StateService extends Lifecycle {
    */
   mutateLibrary(
     body: LibraryMutationBody | Record<string, unknown>,
+    options?: LibraryMutationOptions,
   ): Promise<LibraryMutationResult>;
   /** PUT /api/state de los clientes 0.6.8: solo altas y el mando (T-034, B-205). */
   mergeLegacyState(body: z.infer<typeof LegacyPutStateBodySchema>): Promise<LegacyPublicState>;

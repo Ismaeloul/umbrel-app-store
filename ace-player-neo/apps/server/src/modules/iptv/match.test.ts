@@ -236,6 +236,26 @@ describe('sameChannel: la regla única del buscador (docs/iptv.md §14.3)', () =
     expect(same('M+ LaLiga TV 2', 'M+ LaLiga TV 1')).toBe(false);
   });
 
+  it('otro idioma al final es otro canal: «Real Madrid TV EN» no es «Real Madrid TV»', () => {
+    expect(score('Real Madrid TV', 'Real Madrid TV EN')).toBeLessThanOrEqual(58);
+    expect(score('Real Madrid TV EN', 'Real Madrid TV')).toBeLessThanOrEqual(58);
+    expect(same('Real Madrid TV', 'Real Madrid TV (ENG)')).toBe(false);
+    expect(same('Real Madrid TV EN', 'Real Madrid TV (EN)')).toBe(true);
+    expect(same('Real Madrid TV', 'Real Madrid TV HD')).toBe(true);
+  });
+
+  it('números pegados: «Esport3» es «Esport 3» y «Antena3» es «Antena 3»; «DAZN 1» sigue sin ser «DAZN12» ni «DAZN F1»', () => {
+    expect(same('Esport 3', 'Esport3')).toBe(true);
+    expect(same('Esport3', 'Esport 3')).toBe(true);
+    expect(same('Esport 3', 'ESPORT3 HD')).toBe(true);
+    expect(same('Antena 3', 'Antena3')).toBe(true);
+    expect(same('La 1', 'La1')).toBe(true);
+    expect(same('DAZN 1', 'DAZN1')).toBe(true);
+    expect(same('DAZN 1', 'DAZN12')).toBe(false);
+    expect(same('DAZN 1', 'DAZN F1')).toBe(false);
+    expect(same('Esport 3', 'Esport2')).toBe(false);
+  });
+
   it('otro país no se limpia: «UK: DAZN 1» no pasa por «DAZN 1» limpio', () => {
     expect(score('DAZN 1', 'UK: DAZN 1')).toBeLessThan(score('DAZN 1', 'ES: DAZN 1'));
     expect(same('Telecinco', '')).toBe(false);

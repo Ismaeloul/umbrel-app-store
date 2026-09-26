@@ -73,6 +73,18 @@ describe('línea de estado bajo el vídeo', () => {
       text: 'Comprobando 5 fuentes…',
       signal: 'checking',
     });
+    /* La frase final (un id IPTV que no está en ningún sitio): sin «Comprobando». */
+    const done = 'Has eliminado tu IPTV y este canal no está en AceStream.';
+    expect(statusFor({ ...INITIAL_PLAYER_STATE, waiting: done, waitingFinal: true })).toEqual({
+      text: done,
+      signal: 'fail',
+      tone: 'err',
+    });
+    expect(stageMessage({ ...INITIAL_PLAYER_STATE, waiting: done, waitingFinal: true })).toEqual({
+      title: 'Sin señal',
+      text: done,
+      tone: 'idle',
+    });
   });
 });
 

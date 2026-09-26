@@ -4,10 +4,11 @@
    sin partido, un vacío con salidas. También el canal suelto y el panel
    lateral de escritorio. */
 
+import type { LibraryView } from '@ace/shared';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createQueryClient } from '../../api/query.ts';
+import { createQueryClient, queryClient, routeKey } from '../../api/query.ts';
 import { resetMode, setMode } from '../../api/mode.ts';
 import { realtimeStore } from '../../api/realtime-store.ts';
 import { LayoutContext } from '../../app/layout.tsx';
@@ -145,6 +146,51 @@ describe('centro de partido', () => {
     const group = screen.getByRole('group', { name: 'Acciones de la fuente' });
     expect(within(group).queryByRole('button', { name: 'Rebuscar' })).toBeNull();
     expect(within(group).getByRole('button', { name: 'Reportar' })).toBeInTheDocument();
+  });
+
+  it('un canal de tu IPTV (id sintético) sin fuente: sin Content ID, «Copiar hash» ni «Abrir en…»; nunca al motor', async () => {
+    const tele = 'f1'.repeat(20);
+    const library = fixture<LibraryView>('libraryGet');
+    const favorite = {
+      ...library.favorites[0]!,
+      id: tele,
+      title: 'Mi tele',
+      category: 'IPTV',
+      ih: false,
+    };
+    const withTele = { ...library, favorites: [favorite], iptvIds: { [tele]: 'iptv_removed' } };
+    /* La sesión lee la biblioteca de la caché de la app (la de siempre). */
+    queryClient.setQueryData(routeKey('libraryGet'), withTele);
+    net.restore();
+    net = mockFetch({
+      'GET /api/v1/football': scheduleOf({ [TODAY]: [match] }),
+      'GET /api/v1/library': () => json(withTele),
+      'GET /api/v1/scores': {
+        available: false,
+        generatedAt: null,
+        source: 'espn',
+        attribution: null,
+        leagues: 0,
+        scores: {},
+      },
+      'GET /api/v1/football/resolve': () =>
+        json({
+          ...resolution(0, { scan: null }),
+          status: 'not_found',
+          candidate: null,
+          candidates: [],
+        }),
+    });
+    renderWithApp(<MatchCenter route={{ vista: 'partido', id: null, canal: tele }} active />);
+    expect(await screen.findByRole('heading', { level: 1, name: 'Mi tele' })).toBeInTheDocument();
+    const group = await screen.findByRole('group', { name: 'Acciones de la fuente' });
+    expect(within(group).getByRole('button', { name: 'En favoritos' })).toBeInTheDocument();
+    expect(within(group).queryByRole('button', { name: 'Copiar hash' })).toBeNull();
+    expect(within(group).queryByRole('button', { name: 'Abrir en…' })).toBeNull();
+    expect(screen.queryByText('Content ID')).toBeNull();
+    expect(screen.queryByText(tele)).toBeNull();
+    expect(getPlayer().channel).toBeNull();
+    queryClient.removeQueries({ queryKey: routeKey('libraryGet') });
   });
 
   it('con el panel lateral a la vista, las fuentes van en el panel (rack) y no en la vista', async () => {

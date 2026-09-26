@@ -427,9 +427,9 @@ export function createStateService(deps: StateDeps): StateService & {
       return ensureLoaded().channelFeedback.length;
     },
 
-    async mutateLibrary(body): Promise<LibraryMutationResult> {
+    async mutateLibrary(body, options = {}): Promise<LibraryMutationResult> {
       const { result, state } = await run(
-        (draft) => applyLibraryMutation(draft, body, ctx),
+        (draft) => applyLibraryMutation(draft, body, ctx, options),
         (collection) => (collection === 'web' ? ['library', 'directories'] : ['library']),
       );
       return { collection: result, state };

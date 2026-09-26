@@ -2317,7 +2317,8 @@ AceStream.
 | Botón bajo las 5 primeras | «Ver {N} más de tu IPTV» / «Ver menos» |
 | Nota con `capped` o `total` > 50, al desplegar | «Hay más canales con «{q}» en tu IPTV: escribe algo más concreto.» |
 | Fallo de `iptvChannels` (dentro de la sección, sin toast) | «No se pudo buscar en tu IPTV.» + botón quiet «Reintentar» |
-| Región viva con resultados | «{n} en tu IPTV y {m} en el motor para «{q}».» |
+| Región viva con resultados | «{n} en tu IPTV y {m} en el motor para «{q}».»; con filas de tu biblioteca, «{l} en tu biblioteca, {n} en tu IPTV y {m} en el motor para «{q}».» |
+| Motor vacío con tu IPTV en error (en vez del vacío grande) | «El motor AceStream no tiene nada para «{q}».» |
 | Vacío en los dos (sustituye al vacío de hoy) | título «Sin resultados para «{q}».», texto «No está en tu IPTV ni en el motor AceStream. Prueba con otro nombre o menos palabras.» |
 
 - Si solo la IPTV tiene resultados, la sección del motor enseña su vacío de hoy («Sin resultados para «{q}».»); si el
@@ -2331,7 +2332,7 @@ AceStream.
 |---|---|
 | Sección al final de la lista filtrada (3 filas como mucho, sin las representadas por filas de esa pestaña) | «En tu IPTV» |
 | Botón bajo la sección si hay más | «Ver todo en Buscar» (`goToEngineSearch(navigate, q)`) |
-| El botón de hoy «Buscar «{q}» en el motor AceStream» | «Buscar «{q}» en tu IPTV y en el motor» |
+| El botón de hoy «Buscar «{q}» en el motor AceStream» | «Buscar «{q}» en tu IPTV y el motor» (sin el segundo «en»: así cabe en un renglón a 390 px con consultas cortas) |
 | El vacío de hoy «Nada en esta pestaña con «{q}».» | igual; la sección «En tu IPTV» sale debajo si hay |
 
 **Filas que son un id IPTV (Favoritos, Recientes, «En tu biblioteca»)**, según `iptvIds`:
@@ -2534,6 +2535,39 @@ dueño):
    principal, libre mientras suena la IPTV.
 4. **Favoritos que se van.** Solo tras 24 h sin pareja y con sincronizaciones correctas; en pausa o sin proveedor nunca.
 5. **Memoria y CPU.** La búsqueda usa el índice que ya existe; el test de 100 000 canales la vigila.
+
+### 14.12 Revisión del buscador (26-sep): menores arreglados
+
+- **Región viva de Buscar:** cuenta también «En tu biblioteca» (`searchLiveText`). Con solo «Mi tele» de tu
+  biblioteca ya no dice «Sin resultados para «tele».».
+- **Consulta que es solo calidad** («hd», «fhd», «4k»): la clave limpia queda vacía y no se busca en el catálogo, pero
+  `iptvChannels` devuelve los canales IPTV de lo que tu biblioteca enseña con ese texto, con su `library`. Así «Antena
+  3 HD» de tu biblioteca lleva «IPTV» y el motor no la repite.
+- **Categoría «IPTV»:** es una marca, no una categoría tuya. En el filtro local (`filterItems`) y en
+  `libraryCandidates` solo casa con «ipt» o «iptv»; «tv» ya no saca todos tus favoritos IPTV.
+- **Nombre en la IPTV (`alias`):** un id IPTV renombrado se busca por su `alias` («Telecinco»), no por el nombre que le
+  pusiste («Mi T5»), en la primera llamada y en la búsqueda inversa (`TappedChannel.alias`). Sirve con la IPTV en
+  pausa o con un id que ya no vale.
+- **Recientes IPTV:** la estrella de un reciente que es un id IPTV lo guarda con `category: 'IPTV'` y su `alias`
+  (usa `iptvIds`, no solo las filas de «En tu IPTV»). Renombrar un reciente IPTV también guarda el nombre de antes
+  como `alias`: la ruta `libraryMutate` le pasa a la biblioteca `isIptvId`.
+- **Un id IPTV que no está en ningún sitio:** la frase final va como espera terminada (`setWaitingMessage(texto, {
+  final: true })`): el panel del vídeo dice «Sin señal» y la línea de estado no dice «Comprobando».
+- **Pestaña «Canal» de un id IPTV:** sin «Content ID», «Copiar hash» ni «Abrir en…» (conserva «Favorito»), y
+  «Reproducir» pasa por la sesión del canal, nunca por el motor. Abierto con el enlace antes de que llegue la
+  biblioteca (IPTV en pausa), el canal espera a saber si es un id IPTV antes de arrancar.
+- **`sameChannel`:** otro idioma al final («Real Madrid TV EN», «(ENG)») es otro canal (≤ 58, como Hypermotion); los
+  números pegados se separan antes de puntuar («Esport3» = «Esport 3», «Antena3» = «Antena 3»; «DAZN 1» sigue sin ser
+  «DAZN12» ni «DAZN F1»).
+- **Adultos:** «+18» suelto sigue fuera, pero el «+» de una marca seguido de un número no («Canal+ 18», «M+ 18…»).
+- **Registro:** `iptvChannels` escribe su URL como `/api/v1/iptv/channels?[consulta]`, también en los 400.
+- **Re-emparejado en fila:** dos sincronizaciones seguidas no re-emparejan a la vez (la segunda leía la biblioteca
+  antes de guardarse la primera y daba otras 24 h a un favorito recién quitado). El caso 14 de integración cubre ya
+  las 24 h con reloj falso.
+- **Botón del filtro de Canales:** «Buscar «{q}» en tu IPTV y el motor» (sin el segundo «en») y reparto equilibrado
+  si parte en dos renglones.
+- **Sin cambiar:** la línea del partido en directo de una fila IPTV sustituye al subtítulo, igual que en cualquier otra
+  fila; falta probarlo con la IPTV real de Isma.
 
 ---
 

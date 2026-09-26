@@ -448,7 +448,7 @@ describe('filtro de Canales con IPTV (docs/iptv.md §14.5)', () => {
     expect(within(row).getByText('IPTV')).toBeInTheDocument();
     expect(within(row).getByText('Casa · 1080p')).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Buscar «tele» en tu IPTV y en el motor' }),
+      screen.getByRole('button', { name: 'Buscar «tele» en tu IPTV y el motor' }),
     ).toBeInTheDocument();
     /* Una sola petición, con el texto estable (450 ms), no una por tecla. */
     expect(net.calls.filter((c) => c.url.startsWith('/api/v1/iptv/channels'))).toHaveLength(1);
@@ -491,6 +491,22 @@ describe('filtro de Canales con IPTV (docs/iptv.md §14.5)', () => {
     expect(within(teleRow).getByText('IPTV')).toBeInTheDocument();
     const goneRow = screen.getByRole('link', { name: 'Canal que se fue' }).closest('article')!;
     expect(within(goneRow).getByText('Ya no está en tu IPTV')).toBeInTheDocument();
+  });
+
+  it('la estrella en un reciente que es un canal de tu IPTV lo guarda como canal IPTV (categoría «IPTV» y alias)', async () => {
+    const tele = makeItem('Mi tele', 'recent', { alias: 'Telecinco' });
+    setup(makeLibrary({ favorites: [], history: [tele], iptvIds: { [tele.id]: 'ok' } }), {
+      search: '?vista=biblioteca&pestana=recientes',
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Añadir Mi tele a favoritos' }));
+    await screen.findByRole('dialog', { name: 'Guardar favorito' });
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar en favoritos' }));
+    await waitFor(() =>
+      expect(net.calls.find((c) => c.method === 'POST')?.body).toMatchObject({
+        action: 'favorite-upsert',
+        item: { id: tele.id, title: 'Mi tele', category: 'IPTV', alias: 'Telecinco', ih: false },
+      }),
+    );
   });
 
   it('sin IPTV activa, ni sección ni petición, y el botón de siempre', async () => {

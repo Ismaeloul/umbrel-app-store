@@ -25,6 +25,8 @@ export function statusFor(state: PlayerState): StatusContent | null {
   const lead = state.channel?.lead;
   switch (state.phase) {
     case 'idle':
+      if (state.waiting && state.waitingFinal)
+        return { text: state.waiting, signal: 'fail', tone: 'err' };
       if (state.waiting) return { text: state.waiting, signal: 'checking' };
       if (state.idleReason === 'traspasado' && state.message)
         return { text: state.message, icon: 'movil' };
@@ -135,6 +137,8 @@ export function stageMessage(state: PlayerState): {
 } | null {
   switch (state.phase) {
     case 'idle':
+      if (state.waiting && state.waitingFinal)
+        return { title: 'Sin señal', text: state.waiting, tone: 'idle' };
       if (state.waiting) return { title: 'Buscando señal', text: state.waiting, tone: 'busy' };
       if (state.idleReason === 'traspasado')
         return { title: 'En otro dispositivo', text: state.message ?? '', tone: 'idle' };

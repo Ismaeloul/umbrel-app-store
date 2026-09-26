@@ -37,8 +37,12 @@ export function foldText(value: string): string {
   return value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 }
 
+/*
+ * «+18» y «18+» sueltos, no el «+» de una marca seguido de un número:
+ * «Canal+ 18» o «M+ 18 Series» no son para adultos («+» pegado a una letra).
+ */
 const ADULT_RE =
-  /(?:^|[^a-z0-9])(?:xxx|adults?|adult[oa]s?|porn\w*)(?:$|[^a-z0-9])|\+\s?18|18\s?\+/;
+  /(?:^|[^a-z0-9])(?:xxx|adults?|adult[oa]s?|porn\w*)(?:$|[^a-z0-9])|(?:^|[^a-z0-9+])\+\s?18(?!\d)|(?<!\d)18\s?\+/;
 
 /** ¿Es un canal (o un grupo) para adultos? Por palabra y sin tildes (§14.3). */
 export function isAdultChannel(title: string, group: string): boolean {
@@ -232,6 +236,16 @@ export function searchCatalog(
 export type LibraryCandidate = Pick<Item, 'id' | 'title' | 'category'>;
 
 /**
+ * ¿Casa la categoría con la consulta plegada? «IPTV» (la de los canales de tu
+ * IPTV guardados desde el buscador) es una marca: solo con «ipt» o «iptv»,
+ * no con «tv». Lo mismo que el filtro de la web (`categoryMatches`).
+ */
+function categoryMatches(category: string | undefined, q: string): boolean {
+  if (category === 'IPTV') return q.length >= 3 && 'iptv'.startsWith(q);
+  return foldText(category || '').includes(q);
+}
+
+/**
  * Elementos de la biblioteca que contienen la consulta en el título o la
  * categoría (lo que enseñan «En tu biblioteca» y el filtro de Canales), sin
  * repetir y 200 como mucho.
@@ -247,7 +261,7 @@ export function libraryCandidates(
   for (const item of items) {
     if (out.length >= IPTV_SEARCH.libraryCandidatesMax) break;
     if (seen.has(item.id)) continue;
-    if (!foldText(item.title).includes(q) && !foldText(item.category || '').includes(q)) continue;
+    if (!foldText(item.title).includes(q) && !categoryMatches(item.category, q)) continue;
     seen.add(item.id);
     out.push(item);
   }

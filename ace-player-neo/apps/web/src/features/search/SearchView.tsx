@@ -62,13 +62,14 @@ import { registerSearchDemo } from './demo.ts';
 import {
   emptyTitle,
   engineEmptyBelowText,
+  engineEmptyText,
   IPTV_ID_SUBTITLE,
   IPTV_TEXT,
   cappedText,
   iptvCountText,
   iptvSubtitle,
-  liveText,
   mergeSearch,
+  searchLiveText,
   showMoreText,
   visibleIptv,
 } from './iptv.ts';
@@ -217,6 +218,8 @@ export default function SearchView({ active }: ViewProps) {
     iptvData.channels.length === 0;
   // Si arriba ya hay filas, «Sin resultados» sería falso: el vacío del motor queda en una línea.
   const shownAbove = merged.local.length > 0 || merged.iptv.length > 0;
+  // Con tu IPTV en error tampoco se sabe si hay resultados: una línea, solo del motor.
+  const iptvUnknown = iptvFailed && !iptvData;
   const iptvRows = visibleIptv(merged.iptv, iptvExpanded, IPTV_SEARCH.shownInSearch);
   const iptvHidden = merged.iptv.length - iptvRows.length;
 
@@ -310,18 +313,17 @@ export default function SearchView({ active }: ViewProps) {
       <p className="sr-only" aria-live="polite">
         {detected
           ? `Enlace detectado: ${known ? known.title : `Content ID ${detected}`}.`
-          : withIptv &&
-              iptvData &&
-              (phase.kind === 'results' || phase.kind === 'empty') &&
-              (merged.iptv.length > 0 || engineRows.length > 0)
-            ? liveText(merged.iptv.length, engineRows.length, phase.query)
-            : phase.kind === 'loading'
-              ? `Buscando «${phase.query}» en el motor…`
-              : phase.kind === 'results'
-                ? `${phase.count} ${phase.count === 1 ? 'resultado' : 'resultados'} para «${phase.query}».`
-                : phase.kind === 'empty'
-                  ? `Sin resultados para «${phase.query}».`
-                  : ''}
+          : phase.kind === 'loading'
+            ? `Buscando «${phase.query}» en el motor…`
+            : phase.kind === 'results' || phase.kind === 'empty'
+              ? searchLiveText({
+                  q: phase.query,
+                  library: merged.local.length,
+                  iptv: withIptv && iptvData ? merged.iptv.length : null,
+                  engine: engineRows.length,
+                  iptvFailed: iptvFailed && !iptvData,
+                })
+              : ''}
       </p>
 
       {detected ? (
@@ -496,12 +498,12 @@ export default function SearchView({ active }: ViewProps) {
               <SkeletonRows rows={4} label={`Buscando «${phase.query}» en el motor…`} />
             </div>
           ) : null}
-          {phase.kind === 'empty' && shownAbove ? (
+          {phase.kind === 'empty' && (shownAbove || iptvUnknown) ? (
             <p className="search-hint__text search-sec__empty">
-              {engineEmptyBelowText(phase.query)}
+              {shownAbove ? engineEmptyBelowText(phase.query) : engineEmptyText(phase.query)}
             </p>
           ) : null}
-          {phase.kind === 'empty' && !shownAbove ? (
+          {phase.kind === 'empty' && !shownAbove && !iptvUnknown ? (
             <EmptyState
               title={emptyTitle(phase.query)}
               actions={

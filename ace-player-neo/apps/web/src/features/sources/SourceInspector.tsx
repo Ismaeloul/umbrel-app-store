@@ -15,6 +15,8 @@
      «Pegar hash», «Es el canal correcto» y «Reportar»: un id IPTV no es un
      hash de AceStream que copiar o abrir fuera, ni se guarda en Favoritos
      (el favorito es el canal de AceStream, que ya trae la IPTV primero).
+     Un canal de tu IPTV guardado en favoritos o recientes (§14.6) tampoco
+     tiene hash que copiar ni abrir fuera, pero sí conserva «Favorito».
 
    Es un componente de React normal: si ni la fuente ni las acciones
    cambian, el DOM no se toca y la fila no vuelve al principio al
@@ -40,6 +42,12 @@ export interface InspectorTarget {
   learned: boolean;
   /** Es una fuente de la IPTV. */
   iptv?: boolean;
+  /**
+   * Es un canal de tu IPTV guardado en favoritos o recientes (id sintético,
+   * docs/iptv.md §14.6): sin hash que copiar ni abrir fuera, pero sí se
+   * guarda en favoritos como canal de tu IPTV.
+   */
+  iptvId?: boolean;
 }
 
 export interface SourceInspectorProps {
@@ -162,7 +170,7 @@ export function SourceInspector({
       data-edge={layout === 'row' ? scroll.edge : undefined}
       onScroll={layout === 'row' ? scroll.onScroll : undefined}
     >
-      {iptv ? null : (
+      {iptv && !target.iptvId ? null : (
         <Button
           size="sm"
           icon={isFavorite ? 'star-f' : 'star'}
@@ -172,8 +180,9 @@ export function SourceInspector({
             actions.toggleFavorite({
               id: target.hash,
               title: target.title,
-              category: 'Fútbol',
+              category: target.iptvId ? 'IPTV' : 'Fútbol',
               ih: target.ih,
+              ...(target.iptvId ? { iptv: target.hash } : {}),
             })
           }
         >
