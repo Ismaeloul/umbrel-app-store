@@ -31,7 +31,7 @@ export interface AppErrorOptions {
   readonly cause?: unknown;
   /**
    * Intentos que hizo el servidor antes de rendirse (2 o más): sale en la
-   * respuesta v1 como `error.attempts` (hoy, «Guardar IPTV», docs/iptv.md §16.8).
+   * respuesta v1 como `error.data.attempts` (hoy, «Guardar IPTV», docs/iptv.md §16.8).
    */
   readonly attempts?: number;
 }
@@ -130,7 +130,7 @@ export function toV1Error(error: unknown, requestId: string): SerializedError<Ap
           code,
           message: definition.message,
           requestId,
-          ...(attempts !== undefined ? { attempts } : {}),
+          ...(attempts !== undefined ? { data: { attempts } } : {}),
         },
       },
       internal: definition.status >= 500 && code === 'internal_error',

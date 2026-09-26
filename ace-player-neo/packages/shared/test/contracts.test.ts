@@ -594,9 +594,16 @@ describe('buscador: IPTV y AceStream juntos (docs/iptv.md §14.2)', () => {
   it('ApiError puede decir cuántos intentos hizo el servidor (Guardar IPTV, §16.8); el ejemplo no lo lleva', () => {
     const base = { error: { code: 'iptv_unreachable', message: 'x', requestId: 'r' } };
     expect(ApiErrorSchema.safeParse(base).success).toBe(true);
-    expect(ApiErrorSchema.safeParse({ error: { ...base.error, attempts: 2 } }).success).toBe(true);
-    expect(ApiErrorSchema.safeParse({ error: { ...base.error, attempts: 1 } }).success).toBe(false);
-    expect(readJson('errors/api-error.json')).not.toHaveProperty('error.attempts');
+    expect(
+      ApiErrorSchema.safeParse({ error: { ...base.error, data: { attempts: 2 } } }).success,
+    ).toBe(true);
+    expect(
+      ApiErrorSchema.safeParse({ error: { ...base.error, data: { attempts: 1 } } }).success,
+    ).toBe(false);
+    expect(ApiErrorSchema.safeParse({ error: { ...base.error, data: { otra: 1 } } }).success).toBe(
+      false,
+    );
+    expect(readJson('errors/api-error.json')).not.toHaveProperty('error.data');
   });
 
   it('SearchResult con y sin iptv; v1/search.json sigue sin iptv', () => {

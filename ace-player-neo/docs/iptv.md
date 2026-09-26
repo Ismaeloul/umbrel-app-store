@@ -3489,7 +3489,7 @@ en el `PATH` solo para estas órdenes):
 - `iptvBrowse` responde 403 desde `/native` mientras sea `access: 'web'`: la app no la llama.
 - Un favorito guardado desde la pestaña es un favorito IPTV como los del buscador (§14.6 y §14.10): sale en su lista y
   se reproduce por `channelStream`, con lo que ya se sabe que falla sin cambios (sin distintivo y con acciones de hash).
-- Ningún formato cambia: ni `v1/`, ni eventos, ni ids. `ApiError` gana `error.attempts` **opcional** (solo en un
+- Ningún formato cambia: ni `v1/`, ni eventos, ni ids. `ApiError` gana `error.data` **opcional** (solo en un
   «Guardar IPTV» que falla dos veces, que la app no hace): los decodificadores de Swift ignoran claves de más y el
   ejemplo `errors/api-error.json` no lo lleva.
 - El país de la pestaña puede tener **4 letras** (`EXYU`): el modelo de la app lo trata como `String`.
@@ -3547,7 +3547,7 @@ dueño):
 | Pieza | Dónde |
 |---|---|
 | Constantes `IPTV_BROWSE`, `IPTV_TYPES`, `IPTV_SPORTS`, `IPTV_BROWSE_QUALITIES`, `IPTV_CLIENT.browseMs` / `browseDebounceMs` / `browseFilterDebounceMs` y el reintento de `IPTV_QUICK_TEST` | `packages/shared/src/constants/iptv.ts` |
-| Esquemas `IptvBrowseQuery`, `IptvBrowseResponse`, `IptvCategory`, `IptvFacets`, `IptvBrowseChannel`; ruta `iptvBrowse` (`web`); `ApiError.error.attempts` opcional | `packages/shared/src/api/v1/iptv.ts`, `routes.ts`, `errors.ts` |
+| Esquemas `IptvBrowseQuery`, `IptvBrowseResponse`, `IptvCategory`, `IptvFacets`, `IptvBrowseChannel`; ruta `iptvBrowse` (`web`); `ApiError.error.data.attempts` opcional | `packages/shared/src/api/v1/iptv.ts`, `routes.ts`, `errors.ts` |
 | Ejemplos: `fixtures/web/v1/iptvBrowse.json` y `variantes/iptvBrowse.{categoria,inactiva,categoria-perdida}.json`; `WEB_FIXTURE_ROUTE_IDS` con 7; `openapi-v2.yaml` y `docs/api.md` §7.7 | `packages/shared`, `docs/` |
 | Deducción de país, idioma, tipo, deporte y calidad (tablas de §16.4, NFKC, frases que gastan palabras, adultos excluyente) | `apps/server/src/modules/iptv/facets.ts` |
 | Índice (mapas de bits por valor, categorías como listas, texto) y consulta (O/Y, recuentos disyuntivos, niveles, LRU de 16, cursor) | `modules/iptv/browse.ts` |
@@ -3570,8 +3570,9 @@ dueño):
 
 **Lo que cambia respecto al diseño** (y por qué):
 - **País de hasta 4 letras** (`[A-Z]{2,4}` en la consulta y en la fila): la tabla de §16.4 tiene `EXYU`.
-- **`error.attempts`** en vez de `data: { attempts: 2 }`: `AppError.data` solo va al registro y `ApiError` es estricto;
-  el campo es opcional y solo sale en un «Guardar» que falla dos veces por algo pasajero.
+- **`error.data: { attempts: 2 }`** como decía el diseño, pero declarado en `ApiError` (que es estricto) y sacado de
+  un campo propio de `AppError` (`AppError.data` solo va al registro). Solo sale en un «Guardar» que falla dos veces
+  por algo pasajero.
 - **Registro del reintento:** `{ host, kind, errorCode, detail, attempt, ms }` (el registro redacta una clave `code`).
   El `detail` de un corte es ahora `fetch_failed:ECONNRESET` (antes, el nombre de la clase).
 - **El índice se monta 2 s después** de aplicar la lista o de cargarla (`IPTV_BROWSE.buildDelayMs`), para no sumarse al
@@ -3602,7 +3603,7 @@ facetas, páginas, cursor y rendimiento con 30 000 y 100 000), `catalog.test.ts`
 sin red, el canal tocado por país y los casos del 502) e integración 16-21 (`test/integration/iptv.test.ts`).
 
 **Pendiente:**
-- **Web** (§16.6, §16.7 y E2E 14-20): la pestaña, `IPTV_SAVE_RETRIED_HINT` leyendo `error.attempts`, la demo
+- **Web** (§16.6, §16.7 y E2E 14-20): la pestaña, `IPTV_SAVE_RETRIED_HINT` leyendo `error.data.attempts`, la demo
   (`api/demo`) con `iptvBrowse` y `TIMEOUTS.iptvBrowse = IPTV_CLIENT.browseMs`.
 - **Fusión hecha** con el trabajo «todo desbloqueado + variantes» (`rediseno/iptv` `9e8a99e`, ahora anexo **§17**; sus
   referencias «§16» en el código pasan a «§17»). Queda fusionar la web de la pestaña (`iptv/pestana-web`) y que su

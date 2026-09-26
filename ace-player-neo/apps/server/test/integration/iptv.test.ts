@@ -46,7 +46,7 @@
    19. Sincronizar en medio: un cursor viejo da la primera página con `stale`.
    20. Fugas: nada del proveedor en las respuestas ni la consulta en el registro.
    21. El 502 del primer «Guardar»: cada fallo pasajero se arregla al segundo
-       intento; dos seguidos, 502 con `attempts: 2`; `auth: 0`, un intento. */
+       intento; dos seguidos, 502 con `data.attempts: 2`; `auth: 0`, un intento. */
 
 import { readFileSync } from 'node:fs';
 import http from 'node:http';
@@ -524,13 +524,16 @@ describe('pestaña IPTV en Canales (docs/iptv.md §16.9)', () => {
     r.provider.fallarPrimera(2, '502');
     const twice = await saveDriven(r, { ...XTREAM_BODY, name: 'Otra' });
     expect(twice.statusCode).toBe(502);
-    expect(twice.json().error).toMatchObject({ code: 'iptv_unreachable', attempts: 2 });
+    expect(twice.json().error).toMatchObject({
+      code: 'iptv_unreachable',
+      data: { attempts: 2 },
+    });
     r.provider.limpiarPeticiones();
     r.provider.fallarPrimera(1, 'auth0');
     const auth = await saveDriven(r, { ...XTREAM_BODY, name: 'Otra' });
     expect(auth.statusCode).toBe(502);
     expect(auth.json().error.code).toBe('iptv_auth_failed');
-    expect(auth.json().error).not.toHaveProperty('attempts');
+    expect(auth.json().error).not.toHaveProperty('data');
     expect(pings()).toBe(1);
     const warned = r.logs.filter((line) => line.includes('Prueba de la IPTV fallida'));
     expect(warned.length).toBeGreaterThanOrEqual(8);

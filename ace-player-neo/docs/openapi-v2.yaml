@@ -8740,10 +8740,16 @@ components:
               type: string
               minLength: 1
               maxLength: 128
-            attempts:
-              type: integer
-              minimum: 2
-              maximum: 9
+            data:
+              type: object
+              properties:
+                attempts:
+                  type: integer
+                  minimum: 2
+                  maximum: 9
+              required:
+                - attempts
+              additionalProperties: false
           required:
             - code
             - message
