@@ -26,6 +26,9 @@ struct ServidorDePruebas: Sendable {
     /// ATS lo deja ir en claro con `NSAllowsLocalNetworking`, igual que un `.local`.
     var direccionApp: String { "localhost:\(puerto)" }
 
+    /// La misma, con esquema: lo que pide el campo «Red de casa» (ejemplo de la web: http://umbrel.local:7792).
+    var direccionConEsquema: String { "http://\(direccionApp)" }
+
     struct Codigo: Sendable {
         let codigo: String
         /// `aceneo://pair?u=…&c=…`: lo que lleva el QR de la web.
@@ -53,6 +56,38 @@ struct ServidorDePruebas: Sendable {
             throw Fallo.formato(respuesta.texto)
         }
         return Codigo(codigo: codigo, enlace: enlace)
+    }
+
+    /// Un dispositivo emparejado, como lo ve la web (`GET /api/v1/devices`).
+    struct Dispositivo: Sendable {
+        let id: String
+        let nombre: String
+        let plataforma: String
+        let revocado: Bool
+    }
+
+    /// Todos los dispositivos (vivos y revocados).
+    func dispositivos() async throws -> [Dispositivo] {
+        let lista = try await HTTPCrudo.enviar("GET", puerto: puerto, ruta: "/api/v1/devices").json()
+        guard let crudos = lista["devices"] as? [[String: Any]] else { throw Fallo.formato("sin «devices»") }
+        return crudos.compactMap { (d: [String: Any]) -> Dispositivo? in
+            guard let id = d["id"] as? String else { return nil }
+            let revocado = !(d["revokedAt"] == nil || d["revokedAt"] is NSNull)
+            let nombre = d["name"] as? String ?? ""
+            let plataforma = d["platform"] as? String ?? ""
+            return Dispositivo(id: id, nombre: nombre, plataforma: plataforma, revocado: revocado)
+        }
+    }
+
+    /// Empareja OTRO aparato (como un iPad): código de la web y `POST /native/api/v1/pairing/claim` con el
+    /// prefijo /native (origen `native`, como detrás de nginx). Devuelve su id.
+    func emparejarOtro(nombre: String) async throws -> String {
+        let codigo = try await crearCodigo()
+        let objeto: [String: String] = ["code": codigo.codigo, "name": nombre, "platform": "ipados"]
+        let cuerpo = try JSONSerialization.data(withJSONObject: objeto)
+        let respuesta = try await HTTPCrudo.enviar("POST", puerto: puerto, ruta: "/native/api/v1/pairing/claim", cuerpo: cuerpo)
+        guard let id = try respuesta.json()["deviceId"] as? String else { throw Fallo.formato(respuesta.texto) }
+        return id
     }
 
     /// Revoca todos los dispositivos vivos (`DELETE /api/v1/devices/:id`) y dice cuántos.

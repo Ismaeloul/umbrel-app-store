@@ -1,30 +1,224 @@
 import XCTest
 
-/// La app DE VERDAD (Llavero, red y AVPlayer) contra el backend DE VERDAD de
-/// la pila E2E que la CI levanta en el runner (`scripts/pila-e2e.mjs`: motor
-/// AceStream falso + backend del monorepo + ffmpeg para el remux). Recorre:
+/// La app DE VERDAD (Llavero, red y AVPlayer) contra el backend DE VERDAD de la pila E2E que la CI levanta en el
+/// runner (`scripts/pila-e2e.mjs`: motor AceStream falso + backend del monorepo + ffmpeg para el remux). Es la
+/// prueba de integración de I1 (b-arquitectura §4.3) y recorre, en este orden y con la misma app:
 ///
-/// 1. emparejar tecleando la dirección y un código recién creado (como desde
-///    la web) → agenda de demostración del backend;
-/// 2. abrir un partido (el escenario) → el comprobador verifica las fuentes del
-///    motor falso → arranque automático → el backend prepara el HLS fMP4 con
-///    ffmpeg → AVPlayer lo reproduce en el simulador (primer fotograma real);
-/// 3. Ajustes → «Dónde se está reproduciendo» enseña la sesión de este iPhone
-///    («Este dispositivo») con los datos del backend de verdad;
-/// 4. revocar el dispositivo desde «la web» → la app vuelve a emparejar y
-///    explica por qué;
-/// 5. volver a emparejar con el enlace del QR (`aceneo://pair?u=…&c=…`).
+/// 1. Emparejar tecleando la dirección de casa y un código recién creado desde «la web» (`POST /api/v1/pairing`);
+/// 2. la agenda de demostración del backend (`FOOTBALL_DEMO_ONLY`) carga con sus tarjetas;
+/// 3. abrir un partido → el comprobador verifica las fuentes del motor falso → arranque → el backend prepara el
+///    HLS con ffmpeg → AVPlayer llega a reproducir (fase `reproduciendo` con imagen) y se sostiene;
+/// 4. minimizar y Ajustes › Salud (los servicios del backend de verdad) y › Dispositivos («Este iPhone» y el
+///    otro aparato que se empareja por la API);
+/// 5. «Olvidar este iPhone» con segundo toque → vuelve a Emparejar sin aviso y el backend lo da por revocado.
 ///
-/// Fuera de la CI (sin `ACE_E2E_PUERTO`) se salta.
-///
-/// FASE 0 (b-arquitectura §4.1.5): recorre la interfaz VIEJA (`campo-lan`, `video-grande`…), borrada en la poda.
-/// Se salta entero hasta que I1 lo reescriba contra la app nueva, para que la CI completa no quede en rojo
-/// toda la fase 1.
+/// Fuera de la CI (sin `ACE_E2E_PUERTO`) se salta. En la CI corre con los UITests completos o con
+/// `solo_uitests=ServidorRealUITests` (ios.yml arranca la pila si el filtro lo nombra).
 final class ServidorRealUITests: XCTestCase {
+    /// El partido de la agenda de demostración con fuentes en el motor falso (apps/web/e2e/support/catalogo.ts):
+    /// Real Madrid – Manchester City (M+ Liga de Campeones, 3 fuentes), y de reserva los otros tres.
+    private static let partidos = ["demo-5", "demo-1", "demo-4", "demo-3"]
+
     override func setUpWithError() throws {
         continueAfterFailure = false
-        throw XCTSkip("Interfaz vieja: se reescribe en I1 (b-arquitectura §4.3)")
     }
+
+    @MainActor
+    func testEmparejarAgendaReproducirSaludDispositivosYOlvidar() async throws {
+        guard let servidor = ServidorDePruebas.desdeEntorno() else {
+            throw XCTSkip("Sin backend de pruebas (ACE_E2E_PUERTO): solo corre en la CI, con scripts/pila-e2e.mjs")
+        }
+        let app = XCUIApplication()
+        app.launchArguments = ["-AceNeoEmpezarDeCero"]
+        app.launch()
+
+        try await emparejar(app, servidor)
+        try await agendaCarga(app)
+        try await reproducir(app)
+        try await saludYDispositivos(app, servidor)
+        try await olvidar(app, servidor)
+    }
+
+    // MARK: 1. Emparejar
+
+    @MainActor
+    private func emparejar(_ app: XCUIApplication, _ servidor: ServidorDePruebas) async throws {
+        XCTAssertTrue(elementoUI(app, IDUI.pantalla("emparejar")).waitForExistence(timeout: 60), "No arranca en Emparejar")
+        let codigo = try await servidor.crearCodigo()
+        // En el simulador no hay cámara: el bloque «No hay cámara disponible» y «Escribir el código».
+        let escribir = elementoUI(app, IDUI.botonEscribirCodigo)
+        if escribir.waitForExistence(timeout: 5), escribir.isHittable { escribir.tap() }
+        let campoCodigo = elementoUI(app, IDUI.campoCodigo)
+        XCTAssertTrue(campoCodigo.waitForExistence(timeout: 10), "No hay campo del código")
+        campoCodigo.tap()
+        campoCodigo.typeText(codigo.codigo)
+        let casa = elementoUI(app, IDUI.campoLan).textFields.firstMatch
+        XCTAssertTrue(casa.waitForExistence(timeout: 5), "No hay campo de la dirección de casa")
+        if !(casa.value(forKey: "hasKeyboardFocus") as? Bool ?? false) { casa.tap() }
+        casa.typeText(servidor.direccionConEsquema)
+        captura(app, "e2e-01-emparejar")
+        enviar(app)
+
+        let dentro = await esperar(45) { elementoUI(app, IDUI.armazon).exists }
+        XCTAssertTrue(dentro, "No entra en la app tras emparejar con el backend real. \(estado(app))")
+        XCTAssertTrue(esperarQueDesaparezca(elementoUI(app, IDUI.pantalla("emparejar"))), "Emparejar no se va")
+        let vivos = try await servidor.dispositivos().filter { !$0.revocado && $0.plataforma == "ios" }
+        XCTAssertFalse(vivos.isEmpty, "El backend no tiene ningún iPhone emparejado tras el canje")
+    }
+
+    /// «Emparejar»; si el botón no se deja tocar (teclado encima), «ir» del teclado.
+    @MainActor
+    private func enviar(_ app: XCUIApplication) {
+        let boton = elementoUI(app, IDUI.botonEmparejar)
+        if boton.exists, boton.isHittable, boton.isEnabled {
+            boton.tap()
+        } else {
+            app.typeText("\n")
+        }
+    }
+
+    // MARK: 2. Agenda
+
+    @MainActor
+    private func agendaCarga(_ app: XCUIApplication) async throws {
+        XCTAssertTrue(elementoUI(app, IDUI.pantalla("agenda")).waitForExistence(timeout: 30), "No se ve la agenda")
+        let tarjetas = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "tarjeta-partido-"))
+        let cargada = await esperar(60) { tarjetas.count > 0 }
+        captura(app, "e2e-02-agenda")
+        XCTAssertTrue(cargada, "La agenda del backend no enseña ninguna tarjeta de partido. \(estado(app))")
+        XCTAssertTrue(elementoUI(app, IDUI.tiraDias).exists, "Falta la tira de días con la agenda real")
+    }
+
+    // MARK: 3. Reproducir
+
+    @MainActor
+    private func reproducir(_ app: XCUIApplication) async throws {
+        let tarjeta = try XCTUnwrap(buscarTarjeta(app), "La agenda del backend no enseña los partidos con fuentes")
+        tarjeta.tap()
+        let video = elementoUI(app, IDUI.videoTeatro)
+        XCTAssertTrue(video.waitForExistence(timeout: 20), "No abre el teatro del partido")
+        XCTAssertTrue(elementoUI(app, IDUI.cabeceraPartido).waitForExistence(timeout: 20), "El teatro no enseña el partido")
+
+        // Arranque solo: la primera fuente verificada por el comprobador. Si no arranca, se elige a mano la primera.
+        var suena = await esperar(90) { self.suena(video) }
+        if !suena {
+            captura(app, "e2e-03-sin-arranque-solo")
+            let primera = elementoUI(app, IDUI.cartelFuente(1))
+            if primera.waitForExistence(timeout: 30) {
+                primera.tap()
+                suena = await esperar(90) { self.suena(video) }
+            }
+        }
+        captura(app, "e2e-03-teatro")
+        XCTAssertTrue(suena, "AVPlayer no llega a reproducir el HLS del backend. \(estado(app))")
+        // Sigue con imagen unos segundos: no es solo el colchón inicial.
+        try await Task.sleep(for: .seconds(6))
+        let valor = fase(video)
+        XCTAssertTrue(valor.contains("imagen") && !valor.contains("error") && !valor.contains("idle"),
+                      "La reproducción no se sostiene. \(estado(app))")
+        captura(app, "e2e-03-reproduciendo-video-real")
+    }
+
+    /// La tarjeta de un partido con fuentes, desplazando la agenda si hace falta.
+    @MainActor
+    private func buscarTarjeta(_ app: XCUIApplication) -> XCUIElement? {
+        let todos = elementoUI(app, IDUI.filtroTodos)
+        if todos.exists, todos.isHittable, !todos.isSelected { todos.tap() }
+        let pantalla = elementoUI(app, IDUI.pantalla("agenda"))
+        for _ in 0..<10 {
+            for id in Self.partidos {
+                let tarjeta = elementoUI(app, IDUI.tarjetaPartido(id))
+                if tarjeta.exists, tarjeta.isHittable, tarjeta.frame.midY < app.frame.maxY - 140 { return tarjeta }
+            }
+            arrastrar(pantalla, desde: CGVector(dx: 0.5, dy: 0.75), hasta: CGVector(dx: 0.5, dy: 0.4))
+        }
+        return nil
+    }
+
+    /// La fase del reproductor que el escenario publica en Debug (`data-phase` de la web): «reproduciendo imagen».
+    @MainActor
+    private func fase(_ video: XCUIElement) -> String {
+        guard video.exists else { return "" }
+        return (video.value as? String) ?? ""
+    }
+
+    @MainActor
+    private func suena(_ video: XCUIElement) -> Bool {
+        fase(video).hasPrefix("reproduciendo imagen")
+    }
+
+    // MARK: 4. Salud y Dispositivos
+
+    @MainActor
+    private func saludYDispositivos(_ app: XCUIApplication, _ servidor: ServidorDePruebas) async throws {
+        // Otro aparato emparejado desde la API: la lista trae más que «Este iPhone».
+        let otro = try await servidor.emparejarOtro(nombre: "iPad de pruebas")
+        minimizar(app)
+        tocarPestana(app, "ajustes")
+        XCTAssertTrue(elementoUI(app, IDUI.pantalla("ajustes")).waitForExistence(timeout: 15), "No sale Ajustes")
+
+        tocarChip(app, "salud")
+        let conSalud = await esperar(30) { conTextoUI(app, "Motor principal").exists && conTextoUI(app, "Segundo motor").exists }
+        captura(app, "e2e-04-salud")
+        XCTAssertTrue(conSalud, "Salud no enseña los servicios del backend. \(estado(app))")
+        XCTAssertTrue(conTextoUI(app, "Backend").exists, "Falta la tarjeta del backend en Salud")
+        XCTAssertFalse(conTextoUI(app, "No se pudo leer la salud").exists, "Salud no se pudo leer")
+
+        tocarChip(app, "dispositivos")
+        let este = elementoUI(app, IDUI.filaEsteIPhone)
+        let fila = elementoUI(app, IDUI.filaDispositivo(otro))
+        let conLista = await esperar(30) { este.exists && fila.exists }
+        captura(app, "e2e-05-dispositivos")
+        XCTAssertTrue(conLista, "Dispositivos no enseña «Este iPhone» y el iPad emparejado. \(estado(app))")
+        XCTAssertTrue(conTextoUI(app, "iPad de pruebas").exists, "Falta el nombre del otro aparato")
+        XCTAssertTrue(elementoUI(app, IDUI.botonOlvidarEsteIPhone).exists, "Falta «Olvidar este iPhone»")
+    }
+
+    @MainActor
+    private func minimizar(_ app: XCUIApplication) {
+        let boton = elementoUI(app, IDUI.botonMinimizar)
+        if !boton.waitForExistence(timeout: 5) || !boton.isHittable { elementoUI(app, IDUI.videoTeatro).tap() }
+        XCTAssertTrue(boton.waitForExistence(timeout: 5), "Sin ⌄ Minimizar")
+        boton.tap()
+        XCTAssertTrue(elementoUI(app, IDUI.mini).waitForExistence(timeout: 10), "Al minimizar no sale el mini")
+    }
+
+    /// Toca un chip del índice de Ajustes (desplazando la fila si hace falta).
+    @MainActor
+    private func tocarChip(_ app: XCUIApplication, _ seccion: String) {
+        let chip = elementoUI(app, IDUI.chip(seccion))
+        XCTAssertTrue(chip.waitForExistence(timeout: 10), "No hay chip \(seccion)")
+        let indice = elementoUI(app, IDUI.indiceAjustes)
+        var intentos = 0
+        while chip.frame.maxX > app.frame.maxX - 8 && intentos < 8 {
+            arrastrar(indice, desde: CGVector(dx: 0.8, dy: 0.5), hasta: CGVector(dx: 0.3, dy: 0.5))
+            intentos += 1
+        }
+        chip.tap()
+        XCTAssertTrue(elementoUI(app, IDUI.seccion(seccion)).waitForExistence(timeout: 10), "No hay tarjeta \(seccion)")
+        Thread.sleep(forTimeInterval: 0.8)
+    }
+
+    // MARK: 5. Olvidar este iPhone
+
+    @MainActor
+    private func olvidar(_ app: XCUIApplication, _ servidor: ServidorDePruebas) async throws {
+        let antes = try await servidor.dispositivos().filter { !$0.revocado && $0.plataforma == "ios" }.map(\.id)
+        let boton = elementoUI(app, IDUI.botonOlvidarEsteIPhone)
+        boton.tap()
+        XCTAssertTrue(conTextoUI(app, "¿Olvidar? Pulsa otra vez").waitForExistence(timeout: 3), "No se arma")
+        captura(app, "e2e-06-olvidar-armado")
+        boton.tap()
+        let fuera = elementoUI(app, IDUI.pantalla("emparejar")).waitForExistence(timeout: 20)
+        captura(app, "e2e-07-vuelta-a-emparejar")
+        XCTAssertTrue(fuera, "«Olvidar este iPhone» no vuelve a Emparejar. \(estado(app))")
+        XCTAssertFalse(elementoUI(app, IDUI.avisoAcceso).exists, "Tras olvidar no hay aviso (a2 §23.3)")
+        XCTAssertFalse(elementoUI(app, IDUI.mini).exists, "Tras olvidar sigue el mini")
+        let despues = try await servidor.dispositivos().filter { !$0.revocado && $0.plataforma == "ios" }.map(\.id)
+        XCTAssertLessThan(despues.count, antes.count, "El backend sigue dando por emparejado este iPhone")
+    }
+
+    // MARK: Ayudas
 
     @MainActor
     private func captura(_ app: XCUIApplication, _ nombre: String) {
@@ -32,16 +226,6 @@ final class ServidorRealUITests: XCTestCase {
         adjunto.name = nombre
         adjunto.lifetime = .keepAlways
         add(adjunto)
-    }
-
-    @MainActor
-    private func elemento(_ app: XCUIApplication, _ identificador: String) -> XCUIElement {
-        app.descendants(matching: .any).matching(identifier: identificador).firstMatch
-    }
-
-    @MainActor
-    private func conTexto(_ app: XCUIApplication, _ texto: String) -> XCUIElement {
-        app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", texto)).firstMatch
     }
 
     /// Espera sin bloquear a que se cumpla una condición (cada medio segundo).
@@ -58,149 +242,17 @@ final class ServidorRealUITests: XCTestCase {
     /// Lo que dice la pantalla ahora mismo (para que un fallo se entienda en el log de la CI).
     @MainActor
     private func estado(_ app: XCUIApplication) -> String {
-        let reproductor = elemento(app, "video-grande")
-        let linea = elemento(app, "linea-estado")
-        let error = elemento(app, "error-emparejar")
+        let video = elementoUI(app, IDUI.videoTeatro)
+        let capsula = elementoUI(app, IDUI.capsulaEstado)
+        let panel = elementoUI(app, IDUI.panelMensajeVideo)
+        let error = elementoUI(app, IDUI.errorEmparejar)
+        let aviso = elementoUI(app, IDUI.avisoAcceso)
         return [
-            reproductor.exists ? "reproductor: «\(reproductor.label)»" : "sin reproductor",
-            linea.exists ? "línea de estado: «\(linea.label)»" : "sin línea de estado",
+            video.exists ? "vídeo: «\(video.label)» fase «\(fase(video))»" : "sin vídeo",
+            capsula.exists ? "cápsula: «\(capsula.label)»" : "",
+            panel.exists ? "panel: «\(panel.label)»" : "",
             error.exists ? "error al emparejar: «\(error.label)»" : "",
+            aviso.exists ? "aviso: «\(aviso.label)»" : "",
         ].filter { !$0.isEmpty }.joined(separator: "; ")
-    }
-
-    @MainActor
-    private func teclear(_ campo: XCUIElement, _ texto: String) {
-        campo.tap()
-        if let actual = campo.value as? String, !actual.isEmpty, actual != campo.placeholderValue {
-            campo.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: actual.count))
-        }
-        campo.typeText(texto)
-    }
-
-    @MainActor
-    func testEmparejarReproducirDeVerdadRevocarYVolverPorElQR() async throws {
-        guard let servidor = ServidorDePruebas.desdeEntorno() else {
-            throw XCTSkip("Sin backend de pruebas (ACE_E2E_PUERTO): solo corre en la CI, con scripts/pila-e2e.mjs")
-        }
-
-        // 1. Emparejar tecleando, como la primera vez en casa.
-        let app = XCUIApplication()
-        app.launchArguments = ["-AceNeoEmpezarDeCero"]
-        app.launch()
-        let lan = app.textFields["campo-lan"]
-        XCTAssertTrue(lan.waitForExistence(timeout: 60), "No arranca en la pantalla de emparejar")
-        let codigo = try await servidor.crearCodigo()
-        teclear(lan, servidor.direccionApp)
-        teclear(app.textFields["campo-codigo"], codigo.codigo)
-        captura(app, "e2e-01-emparejar")
-        app.buttons["boton-emparejar"].tap()
-
-        let agenda = app.navigationBars["Agenda"]
-        let emparejada = await esperar(45) { agenda.exists }
-        XCTAssertTrue(emparejada, "No llega a la agenda tras emparejar con el backend real. \(estado(app))")
-
-        // La tira de días con la agenda real (varios días): hay días, se pueden
-        // pulsar y el elegido se pinta. Si no, se sigue igualmente para probar
-        // el resto y el fallo queda anotado.
-        let falloTira = comprobarTiraDeDias(app)
-        if falloTira != nil { captura(app, "e2e-02-fallo-tira-de-dias") }
-        continueAfterFailure = true
-        XCTAssertNil(falloTira, "La tira de días no está bien con la agenda real")
-        continueAfterFailure = false
-        // Cambiar de día con la tira y volver al de antes.
-        let dias = diasDeLaAgenda(app)
-        let elegidoAntes = dias.matching(NSPredicate(format: "selected == true")).firstMatch.identifier
-        if dias.count > 1 {
-            let otro = dias.element(boundBy: dias.element(boundBy: 0).identifier == elegidoAntes ? 1 : 0)
-            if otro.isHittable {
-                otro.tap()
-                try await Task.sleep(for: .seconds(1.5))
-                captura(app, "e2e-02-agenda-otro-dia")
-                let antes = elemento(app, elegidoAntes)
-                if antes.exists, antes.isHittable { antes.tap() }
-                try await Task.sleep(for: .seconds(1.5))
-            }
-        }
-
-        // La agenda de demostración del backend: un partido con fuentes en el motor falso.
-        var partido: XCUIElement?
-        let lista = elemento(app, "lista-agenda")
-        for _ in 0..<8 {
-            for nombre in ["Real Madrid", "Real Sociedad", "Marruecos"] {
-                let fila = conTexto(app, nombre)
-                if fila.waitForExistence(timeout: 3), fila.isHittable {
-                    partido = fila
-                    break
-                }
-            }
-            if partido != nil { break }
-            if lista.exists { lista.swipeUp() } else { app.swipeUp() }
-        }
-        let fila = try XCTUnwrap(partido, "La agenda del backend no enseña los partidos de demostración")
-        captura(app, "e2e-02-agenda")
-        fila.tap()
-
-        // 2. El escenario del partido: fuentes del motor falso, comprobador y arranque automático.
-        XCTAssertTrue(elemento(app, "reproductor-grande").waitForExistence(timeout: 30), "No abre el escenario")
-        XCTAssertTrue(elemento(app, "cabecera-partido").waitForExistence(timeout: 30), "El escenario no enseña el partido")
-        XCTAssertTrue(elemento(app, "selector-fuentes").waitForExistence(timeout: 60), "No hay fuentes")
-        let reproductor = elemento(app, "video-grande")
-        var suena = await esperar(90) {
-            reproductor.exists && reproductor.label.contains("Reproduciendo")
-        }
-        if !suena {
-            // Sin arranque automático (p. ej. el comprobador no terminó): se elige a mano la primera.
-            let fuente = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "fuente-")).firstMatch
-            if fuente.exists {
-                fuente.tap()
-                suena = await esperar(90) { reproductor.exists && reproductor.label.contains("Reproduciendo") }
-            }
-        }
-        XCTAssertTrue(suena, "AVPlayer no llega a reproducir el HLS del backend. \(estado(app))")
-        // Sigue sonando unos segundos (no es solo el colchón inicial).
-        try await Task.sleep(for: .seconds(6))
-        XCTAssertTrue(
-            reproductor.label.contains("Reproduciendo"), "La reproducción no se sostiene. \(estado(app))")
-        captura(app, "e2e-03-reproduciendo-video-real")
-
-        // 3. «Dónde se está reproduciendo» con el backend de verdad (GET
-        //    /native/api/v1/playback y el evento playback.sessions): la sesión
-        //    de este iPhone, con su canal, y «Este dispositivo». Antes se
-        //    minimiza el escenario (tapa las pestañas).
-        elemento(app, "boton-minimizar").tap()
-        XCTAssertTrue(elemento(app, "mini-reproductor").waitForExistence(timeout: 10), "Al minimizar sale el mini")
-        app.tabBars.buttons["Ajustes"].tap()
-        let este = elemento(app, "visor-este-dispositivo")
-        let visto = await esperar(30) { este.exists }
-        captura(app, "e2e-04-donde-se-esta-reproduciendo")
-        XCTAssertTrue(visto, "Ajustes no enseña este iPhone en «Dónde se está reproduciendo». \(estado(app))")
-        let sesion = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "sesion-"))
-            .firstMatch
-        XCTAssertTrue(sesion.exists, "Falta la sesión en «Dónde se está reproduciendo»")
-        // El vídeo sigue en el mini mientras tanto.
-        XCTAssertTrue(elemento(app, "mini-reproductor").waitForExistence(timeout: 10), "Fuera del partido sale el mini")
-        app.tabBars.buttons["Agenda"].tap()
-
-        // 4. Revocar desde «la web»: la app pierde el acceso y lo explica.
-        let revocados = try await servidor.revocarTodos()
-        // Uno (o dos si es el reintento de la CI y el primer intento no llegó a revocar).
-        XCTAssertGreaterThanOrEqual(revocados, 1, "No había ningún iPhone emparejado")
-        let aviso = conTexto(app, "retirado el acceso")
-        let fuera = await esperar(60) { app.textFields["campo-codigo"].exists && aviso.exists }
-        XCTAssertTrue(fuera, "Tras revocar no vuelve a la pantalla de emparejar con el aviso. \(estado(app))")
-        captura(app, "e2e-05-acceso-retirado")
-
-        // 5. Volver a emparejar con el enlace del QR (lo que abre la Cámara).
-        let otro = try await servidor.crearCodigo()
-        let enlace = try XCTUnwrap(URL(string: otro.enlace), "Enlace del QR no válido: \(otro.enlace)")
-        app.open(enlace)
-        let relleno = await esperar(20) {
-            (app.textFields["campo-codigo"].value as? String) == otro.codigo
-        }
-        XCTAssertTrue(relleno, "El enlace del QR no rellena el código")
-        app.buttons["boton-emparejar"].tap()
-        let otraVez = await esperar(45) { app.navigationBars["Agenda"].exists }
-        XCTAssertTrue(otraVez, "No vuelve a la agenda tras emparejar por el QR. \(estado(app))")
-        captura(app, "e2e-06-emparejada-por-qr")
     }
 }
