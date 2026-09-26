@@ -12,6 +12,9 @@ import Foundation
 public final class MotorAVPlayer: MotorVideo {
     public var alEvento: ((EventoMotor) -> Void)?
     public let player: AVPlayer
+    /// ¿La capa de vídeo ya pinta (`AVPlayerLayer.isReadyForDisplay`)? nil sin capa en pantalla (PiP,
+    /// segundo plano, AirPlay): entonces basta con que el cabezal avance (a8 §3.11.7). Lo pone la presentación.
+    var listoParaPintar: (@MainActor () -> Bool?)?
     public var avPlayer: AVPlayer? { player }
 
     private var item: AVPlayerItem?
@@ -118,6 +121,10 @@ public final class MotorAVPlayer: MotorVideo {
         player.replaceCurrentItem(with: nil)
     }
 
+    public func silenciar(_ silencio: Bool) {
+        player.isMuted = silencio
+    }
+
     // MARK: Interno
 
     private func configurar(_ item: AVPlayerItem, perfil: IosPlaybackProfile) {
@@ -186,11 +193,13 @@ public final class MotorAVPlayer: MotorVideo {
             ultimoEstado = estado
             emitir(.estado(estado))
         }
-        // Primer fotograma: el cabezal avanza de verdad con el reproductor en marcha.
+        // Primer fotograma (a8 §3.11.7): la capa ya pinta, el reproductor está en marcha y el cabezal avanzó
+        // 0,05 s desde que empezó a reproducir (el respaldo de la web sin requestVideoFrameCallback).
         if !avisadoPrimerFotograma, estado == .reproduciendo {
             let t = tiempoActual
             if let inicio = tiempoAlEmpezar {
-                if t - inicio > UmbralesReproductor.avanceMinimoS {
+                let pinta = listoParaPintar?() ?? true
+                if pinta && t - inicio >= Self.avancePrimerFotograma {
                     avisadoPrimerFotograma = true
                     emitir(.primerFotograma)
                 }
@@ -199,6 +208,9 @@ public final class MotorAVPlayer: MotorVideo {
             }
         }
     }
+
+    /// Avance del cabezal que cuenta como primer fotograma (runtime.ts › watchFirstFrame: 0,05 s).
+    static let avancePrimerFotograma = 0.05
 
     private func fallo(_ mensaje: String) {
         guard !avisadoFallo, item != nil else { return }

@@ -136,6 +136,15 @@ import Foundation
                 tiempoReal?.reconectarYa()
             }
         }
+        // M3: sin PiP la capa suelta el reproductor en segundo plano (sigue el audio); al volver, la recupera,
+        // cierra el PiP y el reproductor comprueba la señal (latido y medio roto).
+        cicloVida.alCambiar.append { [weak presentacion] antes, despues in
+            if despues == .segundoPlano {
+                presentacion?.pasoASegundoPlano()
+            } else if antes == .segundoPlano {
+                presentacion?.volvioAPrimerPlano()
+            }
+        }
         // 6. `datos.tiempoRealAbierto` sigue a `tiempoReal.estado`: lo hace el repartidor (M1).
     }
 
