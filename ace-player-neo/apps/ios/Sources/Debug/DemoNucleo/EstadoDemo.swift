@@ -17,6 +17,8 @@
         var historialCapturas = false
         /// `-AceNeoListaLarga`: 240 favoritos más, para medir el desplazamiento de Canales (UITest de rendimiento).
         var listaLarga = false
+        /// `-AceNeoOtroDispositivo`: un iPad emparejado además de este iPhone, para revocar otro (UITest de Ajustes).
+        var otroDispositivo = false
     }
 
     /// Un evento del tiempo real simulado (`id`, `event`, `data`).
@@ -60,6 +62,7 @@
                 azar: AleatorioDemo(semilla: semilla))
             if modo.historialCapturas { EstadoDemo.precargarHistorial(&inicial, ahora: AgendaDemo.ms(ahora)) }
             if modo.listaLarga { EstadoDemo.precargarListaLarga(&inicial, ahora: AgendaDemo.ms(ahora)) }
+            if modo.otroDispositivo { inicial.dispositivos.append(EstadoDemo.otroDispositivo) }
             datos = Mutex(inicial)
         }
 
@@ -120,6 +123,13 @@
             let previos = d.biblioteca["history"]?.lista ?? []
             d.biblioteca["history"] = .lista([dazn1, dazn] + previos)
         }
+
+        /// El iPad de `-AceNeoOtroDispositivo`, con la forma de devicesList.json.
+        static let otroDispositivo: JSON = .obj([
+            "id": .texto("dev_ipad01"), "name": .texto("iPad del salón"), "platform": .texto("ios"),
+            "createdAt": .texto("2026-09-22T18:30:00.000Z"), "lastSeenAt": .texto("2026-09-23T18:00:00.000Z"),
+            "revokedAt": .nulo,
+        ])
 
         /// 240 favoritos de más («Canal n --> NEW ERA», Deportes) detrás de los de la demo.
         private static func precargarListaLarga(_ d: inout Datos, ahora: Double) {

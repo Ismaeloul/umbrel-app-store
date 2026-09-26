@@ -117,21 +117,24 @@ final class FlujoAjustesUITests: XCTestCase {
         XCTAssertTrue(conTextoUI(app, "¿Olvidar? Pulsa otra vez").waitForExistence(timeout: 3), "No se arma")
         XCTAssertTrue(conTextoUI(app, "Este iPhone dejará de poder entrar").exists, "Falta la línea de aviso")
         captura(app, "dispositivos-olvidar-armado")
-        olvidar.tap()
-        guard elementoUI(app, IDUI.pantalla("emparejar")).waitForExistence(timeout: 15) else {
-            throw XCTSkip("La sesión (M1) aún no hace «Olvidar este iPhone»: se prueba al integrar")
+        // El botón armado se desarma a los 3 s y en la CI la captura puede pasar de ahí (como en el E2E): si el
+        // segundo toque llega tarde, vuelve a armar y se toca otra vez, hasta tres veces.
+        let emparejar = elementoUI(app, IDUI.pantalla("emparejar"))
+        for _ in 0..<3 {
+            if !olvidar.label.contains("Pulsa otra vez"), !conTextoUI(app, "¿Olvidar? Pulsa otra vez").exists { olvidar.tap() }
+            olvidar.tap()
+            if emparejar.waitForExistence(timeout: 8) { break }
         }
+        XCTAssertTrue(emparejar.waitForExistence(timeout: 7), "«Olvidar este iPhone» no vuelve a Emparejar")
         XCTAssertFalse(elementoUI(app, IDUI.avisoAcceso).exists, "Tras olvidar no hay aviso (a2 §23.3)")
     }
 
     @MainActor
     func testRevocarOtroConSegundoToque() throws {
-        let app = abrirAjustes()
+        let app = abrirAjustes(["-AceNeoOtroDispositivo"])
         tocarChip(app, "dispositivos")
         let botones = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "boton-revocar-"))
-        guard botones.firstMatch.waitForExistence(timeout: 8) else {
-            throw XCTSkip("La demo aún no sirve otros dispositivos (M1 + M2): se prueba al integrar")
-        }
+        XCTAssertTrue(botones.firstMatch.waitForExistence(timeout: 8), "La demo con -AceNeoOtroDispositivo no enseña el iPad")
         let revocar = botones.firstMatch
         revocar.tap()
         XCTAssertTrue(conTextoUI(app, "¿Revocar? Pulsa otra vez").waitForExistence(timeout: 3), "No se arma")
