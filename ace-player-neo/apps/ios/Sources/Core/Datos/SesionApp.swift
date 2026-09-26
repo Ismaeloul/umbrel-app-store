@@ -35,6 +35,10 @@ struct AvisoSesion: Sendable, Equatable {
     private(set) var versionServidor: String?
     private(set) var capacidades = Capacidades()
     private(set) var olvidando = false
+    /// Lo que impidió «Olvidar este iPhone» (red, plazo, 403 de un servidor 0.8.0…): si tras
+    /// `olvidarEsteIPhone()` la sesión sigue en la app, Ajustes lo enseña en el toast «No se pudo olvidar este
+    /// iPhone. {motivo}» (a6 §8.10.3). `nil` si no hubo fallo. (Añadido aditivo de M7; lo rellena M1.)
+    private(set) var falloOlvidar: APIError?
     /// aceneo://pair con la app ya emparejada → hoja «¿Emparejar con otro servidor?».
     var enlacePendiente: PairingLink?
     /// aceneo://pair sin emparejar: rellena la pantalla de emparejar (de `RootView.enlacePendiente`).
