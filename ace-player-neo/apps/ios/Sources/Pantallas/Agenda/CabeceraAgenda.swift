@@ -6,11 +6,13 @@ import SwiftUI
 
 struct CabeceraAgenda: View {
     let sobreHeroe: Bool
+    /// `.agenda-head__lede`: la frase del día bajo el titular, solo en ≥ 768 (en el móvil va oculta).
+    var entradilla: String?
     let cargando: Bool
     let actualizar: () -> Void
 
     var body: some View {
-        CabeceraVista("Agenda", sobreOscuro: sobreHeroe) {
+        CabeceraVista("Agenda", subtitulo: entradilla, sobreOscuro: sobreHeroe) {
             BotonActualizar(cargando: cargando, accion: actualizar)
         }
         .padding(.bottom, -16)  // agenda.css `.agenda-head.view-head { padding-bottom: 0 }`

@@ -125,7 +125,7 @@ private struct ColumnaAgenda: View {
             desplazamiento = nuevo
             publicarBarraDeEstado()
         }
-        .refreshable { await datos.agenda.refrescar() }
+        .refreshable { await datos.agenda.refrescar() }  // la háptica al soltar la da el sistema (b2 §B.7: «si no, nada»)
         .ignoresSafeArea(edges: .top)
         .background(Palco.bg.ignoresSafeArea())
         .onChange(of: navegador.subirArriba[.agenda]) { _, _ in subir() }
@@ -187,7 +187,10 @@ private struct FilaSuperiorAgenda: View {
     }
 
     private var cabecera: some View {
-        CabeceraAgenda(sobreHeroe: hayHeroe && maquetacion.tipo == .movil, cargando: datos.agenda.cargando) {
+        let entradilla = maquetacion.tipo == .tableta ? foto.dia.map { ReglasAgenda.entradilla($0, hoy: foto.hoy) } : nil
+        return CabeceraAgenda(
+            sobreHeroe: hayHeroe && maquetacion.tipo == .movil, entradilla: entradilla, cargando: datos.agenda.cargando
+        ) {
             Task { await datos.agenda.refrescar() }
         }
     }

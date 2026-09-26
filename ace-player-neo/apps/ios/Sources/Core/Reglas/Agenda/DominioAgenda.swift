@@ -79,12 +79,14 @@ enum ReglasAgenda {
         diaPorDefecto(fechas, hoy: RelojMadrid(ahora).fecha)
     }
 
-    /// Días desde el 1-1-1970 de una fecha `YYYY-MM-DD` (sin husos).
+    /// Días desde el 1-1-1970 de una fecha `YYYY-MM-DD` (sin husos); nil si no tiene ese formato o el mes o el día
+    /// se salen de rango.
     static func numeroDia(_ texto: String) -> Int? {
         let partes = texto.split(separator: "-", omittingEmptySubsequences: false)
         guard partes.count == 3, partes[0].count == 4, partes[1].count == 2, partes[2].count == 2,
             partes.allSatisfy({ $0.allSatisfy { $0.isASCII && $0.isNumber } }),
-            let a = Int(partes[0]), let m = Int(partes[1]), let d = Int(partes[2])
+            let a = Int(partes[0]), let m = Int(partes[1]), let d = Int(partes[2]),
+            (1...12).contains(m), (1...31).contains(d)  // mes y día en rango: «2026-13-01» no indexa fuera de `meses`
         else { return nil }
         // Días desde la época civil (algoritmo de Howard Hinnant).
         let y = m <= 2 ? a - 1 : a
@@ -254,6 +256,13 @@ enum ReglasAgenda {
     /// `matchTitle`: «Local vs Visitante» o el `title` si no hay visitante.
     static func titulo(_ partido: FootballMatch) -> String {
         partido.away.isEmpty ? partido.title : "\(partido.home) vs \(partido.away)"
+    }
+
+    /// `.agenda-head__lede` (solo ≥ 768): «Mañana · Jueves, 25 de septiembre»; sin prefijo si la fecha no es válida.
+    static func entradilla(_ fecha: String, hoy: String) -> String {
+        let etiqueta = etiquetaDia(fecha, hoy: hoy)
+        let larga = etiqueta.larga.prefix(1).uppercased() + etiqueta.larga.dropFirst()
+        return etiqueta.principal == etiqueta.larga ? larga : "\(etiqueta.principal) · \(larga)"
     }
 
     /// `dayLabel`: «Hoy», «Mañana», «Ayer» o el día abreviado; el número y la etiqueta larga.
