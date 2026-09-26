@@ -241,7 +241,7 @@ test(
     await esperarQueAvance(page);
     await proveedor.modo('*', 'down');
     await expect(
-      page.getByText(/^Tu IPTV no responde: seguimos por AceStream \(fuente \d\)/),
+      page.getByText(/^Tu IPTV no responde: seguimos por AceStream \(fuente \d\)/).first(),
     ).toBeVisible({ timeout: 60_000 });
     const volver = page.getByRole('button', { name: 'Volver a la IPTV' });
     await expect(volver).toBeVisible();
@@ -318,7 +318,9 @@ test(
       true,
     );
     await proveedor.modo('*', 'down');
-    await expect(page.getByText(/^Tu IPTV no responde: seguimos por AceStream/)).toBeVisible({
+    await expect(
+      page.getByText(/^Tu IPTV no responde: seguimos por AceStream/).first(),
+    ).toBeVisible({
       timeout: 60_000,
     });
     await expect.poll(async () => (await motor.activasDe(ANTENA3.id)).length).toBe(1);
@@ -397,7 +399,7 @@ test(
     });
     await esperarQueAvance(page);
     await proveedor.modo('*', 'down');
-    await expect(page.getByText(/^Tu IPTV no responde/)).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText(/^Tu IPTV no responde/).first()).toBeVisible({ timeout: 60_000 });
     await proveedor.modo('*', 'ok');
     await page.getByRole('button', { name: 'Volver a la IPTV' }).click();
     await expect(cartelIptv(page)).toHaveAttribute('aria-label', /reproduciendo ahora/, {

@@ -2,8 +2,10 @@
    reproducir. Lo que se comprueba es que la app lo dice claro, no se queda
    «cargando» para siempre, no deja sesiones abiertas en el motor y sigue
    siendo usable. (Safari de verdad, en Mac o iPhone, sí tiene HLS nativo.)
-   - Perfil de iPhone: la app va por HLS nativo, que el WebKit de Playwright no
-     tiene en ningún sistema. Se prueba siempre.
+   - Perfil de iPhone: la app pide el remux fMP4 y lo reproduce con HLS nativo
+     (que el WebKit de Playwright no tiene) o con hls.js sobre MediaSource. En
+     Windows no hay ninguno de los dos y se prueba; en Linux (CI, con ffmpeg)
+     sí hay MediaSource, el canal se reproduce y la prueba se salta.
    - Escritorio: la app va por MediaSource (mpegts.js). El WebKit de Playwright
      en Windows no lo tiene; el de Linux (CI) sí, y allí el canal se reproduce
      sin más, así que la prueba se salta (ese recorrido lo cubren los Chrome). */
@@ -18,7 +20,9 @@ test(
     const puedeReproducir = await page.evaluate((iphone) => {
       const hlsNativo =
         document.createElement('video').canPlayType('application/vnd.apple.mpegurl') !== '';
-      if (iphone) return hlsNativo;
+      /* iPhone: remux fMP4 por HLS nativo o, si no lo hay, por hls.js sobre
+         MediaSource (el WebKit de Linux lo tiene y la CI ya trae ffmpeg). */
+      if (iphone) return hlsNativo || 'MediaSource' in window;
       return hlsNativo || 'MediaSource' in window || 'ManagedMediaSource' in window;
     }, isMobile);
     test.skip(puedeReproducir, 'este WebKit sí puede reproducir: aquí no se da el caso sin vídeo');

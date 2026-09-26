@@ -89,10 +89,11 @@ describe('ids.ts', () => {
     );
   });
 
-  it('un hash AceStream al azar no pasa (10⁶ muestras)', () => {
+  it('un hash AceStream al azar no pasa (10⁵ muestras; la etiqueta es de 32 bits)', () => {
     let hits = 0;
     const pool = randomBytes(20 * 1000);
-    for (let round = 0; round < 1000; round += 1) {
+    /* 10⁵ y no 10⁶: con 10⁶ HMAC el runner de CI pasaba de los 20 s. */
+    for (let round = 0; round < 100; round += 1) {
       for (let index = 0; index < 1000; index += 1) {
         const start = ((round * 7 + index * 13) % 1000) * 20;
         const id = Buffer.from(pool.subarray(start, start + 20));
