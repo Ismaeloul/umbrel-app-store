@@ -28,7 +28,7 @@ private struct BotonActualizar: View {
 
     var body: some View {
         Button(action: accion) {
-            IconoGiratorio(girando: cargando && !reducido)
+            IconoGiratorioAgenda(girando: cargando && !reducido)
                 .opacity(cargando && reducido ? 0.6 : 1)
                 .frame(width: 44, height: 44)
                 .contentShape(Circle())
@@ -42,7 +42,7 @@ private struct BotonActualizar: View {
 }
 
 /// `agenda-gira`: 360° en 900 ms, lineal, sin fin.
-private struct IconoGiratorio: View {
+private struct IconoGiratorioAgenda: View {
     let girando: Bool
 
     var body: some View {

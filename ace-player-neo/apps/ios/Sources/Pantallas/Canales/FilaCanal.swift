@@ -200,7 +200,7 @@ private struct MetaFila: View {
 struct CapsulaEnPantalla: View {
     var body: some View {
         HStack(spacing: 6) {
-            Ecualizador()
+            EcualizadorFila()
             Text("En pantalla").estilo(EstiloTexto(tamano: 11, peso: 650, anchura: 88, altoLinea: 1.45))
         }
         .padding(.horizontal, 8)
@@ -212,7 +212,7 @@ struct CapsulaEnPantalla: View {
 }
 
 /// Tres barras 3 × 10 separadas 2 que laten `scaleY 0,3 ↔ 1` en 1,1 s (desfases 0, −0,4, −0,8 s).
-private struct Ecualizador: View {
+private struct EcualizadorFila: View {
     @Environment(\.movimientoReducido) private var reducido
     private static let desfases: [Double] = [0, 0.4, 0.8]
     private static let quietas: [Double] = [1, 0.5, 0.75]
@@ -233,8 +233,8 @@ private struct Ecualizador: View {
     }
 
     private func escala(_ i: Int, _ t: Double) -> Double {
-        if reducido { return Ecualizador.quietas[i] }
-        let fase = ((t + Ecualizador.desfases[i]).truncatingRemainder(dividingBy: 2.2)) / 1.1  // ida y vuelta
+        if reducido { return EcualizadorFila.quietas[i] }
+        let fase = ((t + EcualizadorFila.desfases[i]).truncatingRemainder(dividingBy: 2.2)) / 1.1  // ida y vuelta
         let x = fase <= 1 ? fase : 2 - fase
         return 0.3 + 0.7 * x
     }

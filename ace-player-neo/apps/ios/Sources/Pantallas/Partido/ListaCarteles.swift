@@ -61,7 +61,7 @@ private struct RejillaCarteles: View {
         LazyVGrid(columns: columnas, alignment: .leading, spacing: 20) {
             ForEach(Array(filas.enumerated()), id: \.element.id) { indice, fila in
                 CartelFuente(fila: fila, enPartido: enPartido, espacio: espacio)
-                    .modifier(AparicionEscalonada(indice: indice))
+                    .modifier(AparicionEscalonadaCarteles(indice: indice))
             }
         }
         .padding(.horizontal, 4)
@@ -72,7 +72,7 @@ private struct RejillaCarteles: View {
 
 /// `ace-aparece` (de `opacity 0, translateY(8)` a normal, 520 ms muelle estándar) con `min(i, 10)·36 ms` de
 /// retraso, solo al aparecer. Con movimiento reducido, sin escalonado.
-private struct AparicionEscalonada: ViewModifier {
+private struct AparicionEscalonadaCarteles: ViewModifier {
     let indice: Int
     @Environment(\.movimientoReducido) private var reducido
     @State private var visible = false
