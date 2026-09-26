@@ -46,4 +46,35 @@ describe('ChannelMark', () => {
     expect(container.querySelector('b')).toHaveTextContent('1');
     expect(parseOklch(mark.style.getPropertyValue('--tone'))?.h).toBe(hueFromName('DAZN 1'));
   });
+
+  it('`label` cambia la etiqueta de la tesela; el tono y la cifra siguen saliendo del nombre', () => {
+    const { container } = render(
+      <ChannelMark name="Movistar LaLiga 2" size={54} shape="tile" label="New Era" />,
+    );
+    const mark = container.querySelector('.dorsal') as HTMLElement;
+    const tag = container.querySelector('.dorsal__abbrev');
+    expect(tag).toHaveTextContent('New Era');
+    expect(tag).not.toHaveTextContent('MOVIST');
+    expect(tag).not.toHaveClass('dorsal__abbrev--long');
+    expect(container.querySelector('b')).toHaveTextContent('2');
+    expect(parseOklch(mark.style.getPropertyValue('--tone'))?.h).toBe(
+      hueFromName('Movistar LaLiga 2'),
+    );
+  });
+
+  it('una etiqueta larga va entera (sin cortar a mitad de palabra) y con letra menor', () => {
+    const { container } = render(
+      <ChannelMark name="DAZN 1" shape="tile" label="Proveedor Muy Largo" />,
+    );
+    const tag = container.querySelector('.dorsal__abbrev');
+    expect(tag).toHaveTextContent('Proveedor Muy Largo');
+    expect(tag).toHaveClass('dorsal__abbrev--long');
+  });
+
+  it('una etiqueta vacía vuelve a la sigla; en `round` no hay etiqueta', () => {
+    const tile = render(<ChannelMark name="DAZN 1" shape="tile" label="  " />);
+    expect(tile.container.querySelector('.dorsal__abbrev')).toHaveTextContent('DAZN');
+    const round = render(<ChannelMark name="DAZN 1" label="Elcano" />);
+    expect(round.container.querySelector('.dorsal__abbrev')).toBeNull();
+  });
 });

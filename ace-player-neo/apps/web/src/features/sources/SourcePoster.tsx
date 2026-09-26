@@ -4,7 +4,9 @@
    vive en el reproductor), el número de fuente arriba a la derecha y «En
    pantalla» en oro abajo a la izquierda cuando es la que suena. Alrededor de
    la tesela, un filo con el color y el trazo del estado (oro en la que
-   suena); debajo, el proveedor, el anillo de estado con su palabra
+   suena). Isma (26-sep): el PROVEEDOR («Elcano», «New Era») va dentro de la
+   tesela, donde iba la sigla, y debajo solo el NOMBRE DEL CANAL, sin el
+   proveedor (posterNameOf); luego el anillo de estado con su palabra
    (SignalRing: Verificada · Floja · Comprobando · Pendiente · Sin señal ·
    Reportada), la calidad («1080p», «720p», «SD», «HEVC») y el tipo, y la
    frase humana. Estado siempre con forma + palabra + color.
@@ -18,7 +20,7 @@
 
    IPTV (docs/iptv.md §8.1): `data-origin="iptv"`, la cápsula «IPTV» (neutra,
    con el icono de la tele) arriba a la izquierda de la tesela, el proveedor
-   («Casa») debajo y la calidad que declara («1080p»). Su menú no ofrece
+   («Casa») dentro, bajo la cápsula, y la calidad que declara («1080p»). Su menú no ofrece
    «Copiar hash» ni «Abrir en la app de AceStream»: no es un hash de AceStream. */
 
 import { useEffect, useRef, type CSSProperties, type KeyboardEvent } from 'react';
@@ -36,7 +38,7 @@ import {
   type MenuItem,
   type SignalRingState,
 } from '../../ui/index.ts';
-import { channelNameOf, isIptv, qualityLabel } from './model.ts';
+import { channelNameOf, channelNameWithoutProvider, isIptv, qualityLabel } from './model.ts';
 import { confirmSource, openReport, selectSource } from './session.ts';
 import type { SourceRow } from './useSources.ts';
 
@@ -93,6 +95,12 @@ export function rowMenu(row: SourceRow, inMatch: boolean): MenuItem[] {
   return items;
 }
 
+/** Lo que va debajo del cartel: el canal sin el proveedor que ya lleva la tesela. */
+export function posterNameOf(row: Pick<SourceRow, 'entry' | 'presentation'>): string {
+  const { short, provider, list } = row.presentation;
+  return channelNameWithoutProvider(channelNameOf(row.entry), [short, provider, list]);
+}
+
 /** Estado del anillo: el del medidor, salvo la reportada, que tiene dibujo propio. */
 export function ringStateOf(row: Pick<SourceRow, 'effective' | 'signal'>): SignalRingState {
   return row.effective.reported ? 'reported' : row.signal.state;
@@ -118,6 +126,7 @@ export function SourcePoster({ row, inMatch, index, onArrow }: SourcePosterProps
   const quality = qualityLabel(row.entry);
   const type = row.presentation.type !== row.presentation.short ? row.presentation.type : null;
   const extras = [quality, type].filter(Boolean).join(' · ');
+  const channel = channelNameOf(row.entry);
   return (
     <li className="src-item" style={{ '--i': index } as CSSProperties}>
       <button
@@ -143,7 +152,8 @@ export function SourcePoster({ row, inMatch, index, onArrow }: SourcePosterProps
       >
         <span className="src-poster__tile" aria-hidden="true">
           <ChannelMark
-            name={channelNameOf(row.entry)}
+            name={channel}
+            label={row.presentation.short}
             shape="tile"
             size={90}
             className="src-poster__mark"
@@ -163,7 +173,7 @@ export function SourcePoster({ row, inMatch, index, onArrow }: SourcePosterProps
           ) : null}
         </span>
         <span className="src-poster__body" aria-hidden="true">
-          <span className="src-poster__name">{row.presentation.short}</span>
+          <span className="src-poster__name">{posterNameOf(row)}</span>
           <span className="src-poster__meta">
             <SignalRing
               state={ring}

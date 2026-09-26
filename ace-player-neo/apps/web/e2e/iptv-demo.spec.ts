@@ -51,7 +51,9 @@ test('demo-5: la IPTV es la fuente 1, arranca sola y nunca se pliega', async ({ 
   await expect(iptv).toHaveCount(1);
   await expect(fuentes.locator('.src-poster').first()).toHaveAttribute('data-origin', 'iptv');
   await expect(iptv).toContainText('IPTV');
-  await expect(iptv).toContainText('Casa');
+  // «Casa» (su proveedor) va dentro de la tesela; debajo, solo el canal.
+  await expect(iptv.locator('.src-poster__tile .dorsal__abbrev')).toHaveText('Casa');
+  await expect(iptv.locator('.src-poster__name')).not.toHaveText(/casa/i);
   await expect(iptv).toHaveAttribute('aria-label', /^Fuente 1: .* · IPTV · Casa · 1080p/);
   await expect(iptv).not.toHaveAttribute('aria-label', /Hash/);
   await expect(iptv).toHaveAttribute('aria-label', /reproduciendo ahora/, { timeout: 15_000 });

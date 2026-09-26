@@ -154,7 +154,7 @@ describe('lista (móvil)', () => {
     expect(getPlayer().channel?.hash).toBe(hash(2));
   });
 
-  it('cartel: proveedor, calidad y tipo; las flechas pasan de un cartel a otro', () => {
+  it('cartel: proveedor en la tesela, canal debajo, calidad y tipo; las flechas pasan de un cartel a otro', () => {
     prepare(['working', 'working', 'weak'], { activeHash: hash(1) });
     act(() =>
       sessionStore.set((s) => ({
@@ -169,7 +169,8 @@ describe('lista (móvil)', () => {
     renderWithApp(<SourcesPanel variant="list" />);
     const list = screen.getByRole('list', { name: 'Fuentes del partido' });
     const [first, second, third] = within(list).getAllByRole('button');
-    expect(within(first!).getByText('Elcano')).toBeInTheDocument();
+    expect(first!.querySelector('.dorsal__abbrev')).toHaveTextContent(/^Elcano$/);
+    expect(first!.querySelector('.src-poster__name')).toHaveTextContent(/^M\+ Liga de Campeones$/);
     expect(within(first!).getByText('· 1080p · HEVC · M3U')).toBeInTheDocument();
     first!.focus();
     fireEvent.keyDown(first!, { key: 'ArrowRight' });
@@ -178,6 +179,41 @@ describe('lista (móvil)', () => {
     expect(third).toHaveFocus();
     fireEvent.keyDown(third!, { key: 'ArrowLeft' });
     expect(second).toHaveFocus();
+  });
+
+  it('Isma, 26-sep: arriba (en la tesela) el proveedor y debajo SOLO el canal, sin repetirlo', () => {
+    prepare(['working', 'working']);
+    act(() =>
+      sessionStore.set((s) => ({
+        ...s,
+        entries: s.entries.map((entry, i) =>
+          i === 0 ? { ...entry, title: 'Movistar LaLiga [NEW ERA] --> New Era III' } : entry,
+        ),
+      })),
+    );
+    renderWithApp(<SourcesPanel variant="list" />);
+    const list = screen.getByRole('list', { name: 'Fuentes del partido' });
+    const [first, second] = within(list).getAllByRole('button');
+    // El orden del cartel: la tesela (con el proveedor) y después el nombre del canal.
+    const tag = first!.querySelector('.src-poster__tile .dorsal__abbrev')!;
+    const name = first!.querySelector('.src-poster__body .src-poster__name')!;
+    expect(tag).toHaveTextContent(/^New Era III$/);
+    expect(name).toHaveTextContent(/^Movistar LaLiga$/);
+    expect(tag.compareDocumentPosition(name) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Ni la sigla recortada («MOVIST») ni el proveedor repetido debajo.
+    expect(first).not.toHaveTextContent('MOVIST');
+    expect(name).not.toHaveTextContent(/new era/i);
+    // La cifra grande, el número de fuente y el aria-label largo no cambian.
+    expect(first!.querySelector('.dorsal b')).toHaveTextContent(/^M$/);
+    expect(first!.querySelector('.src-poster__num')).toHaveTextContent('1');
+    expect(first).toHaveAttribute(
+      'aria-label',
+      expect.stringMatching(
+        /^Fuente 1: Movistar LaLiga \[NEW ERA\] --> New Era III · M3U · New Era III/,
+      ),
+    );
+    expect(second!.querySelector('.dorsal__abbrev')).toHaveTextContent(/^Faro$/);
+    expect(second!.querySelector('.src-poster__name')).toHaveTextContent(/^M\+ Liga de Campeones$/);
   });
 
   it('atajos: N pasa a la siguiente y los números eligen', () => {
@@ -447,7 +483,8 @@ describe('IPTV', () => {
     const iptv = within(list).getAllByRole('button')[0]!;
     expect(iptv).toHaveAttribute('data-origin', 'iptv');
     expect(within(iptv).getByText('IPTV')).toBeInTheDocument();
-    expect(within(iptv).getByText('Casa')).toBeInTheDocument();
+    expect(iptv.querySelector('.dorsal__abbrev')).toHaveTextContent(/^Casa$/);
+    expect(iptv.querySelector('.src-poster__name')).toHaveTextContent(/^M\+ Liga de Campeones$/);
     expect(within(iptv).getByText('· 1080p · IPTV')).toBeInTheDocument();
     expect(iptv.getAttribute('aria-label')).toMatch(
       /^Fuente 1: M\+ Liga de Campeones · IPTV · Casa · 1080p · no arrancó en el reproductor/,

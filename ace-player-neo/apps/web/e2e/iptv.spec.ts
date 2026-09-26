@@ -217,6 +217,9 @@ test(
     });
     await expect(listaDeFuentes(page).locator('.src-poster[data-origin="iptv"]')).toHaveCount(2);
     await expect(cartelIptv(page)).toContainText('IPTV');
+    // El proveedor va en la tesela; debajo, solo el canal (Isma, 26-sep).
+    await expect(cartelIptv(page).locator('.dorsal__abbrev')).toHaveText('Casa');
+    await expect(cartelIptv(page).locator('.src-poster__name')).not.toHaveText(/casa/i);
     await expect(cartelIptv(page)).toHaveAttribute('aria-label', /reproduciendo ahora/, {
       timeout: 45_000,
     });

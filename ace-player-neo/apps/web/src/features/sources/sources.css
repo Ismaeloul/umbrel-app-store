@@ -277,7 +277,12 @@
   max-width: calc(100% - 60px);
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.18);
 }
-/* La sigla del canal baja bajo el distintivo (si no, quedaba tapada a medias). */
+/* El proveedor (Isma, 26-sep: va en la tesela, donde iba la sigla) no se mete
+   bajo el número de la fuente: acaba en puntos suspensivos antes. */
+.src-poster .dorsal__abbrev {
+  max-width: calc(100% - var(--s) * 0.12 - 46px);
+}
+/* En la IPTV baja bajo el distintivo (si no, quedaba tapado a medias). */
 .src-poster[data-origin='iptv'] .dorsal__abbrev {
   top: 36px;
 }
@@ -297,14 +302,19 @@
   min-width: 0;
   padding: 0 2px;
 }
+/* El nombre del canal, sin el proveedor (que va en la tesela): 2 líneas como
+   mucho y puntos suspensivos. */
 .src-poster__name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: break-word;
   font-size: var(--fs-15);
   font-weight: var(--wght-strong);
   font-stretch: var(--w-tight);
   line-height: var(--lh-tight);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .src-poster__meta {
   display: flex;
@@ -485,7 +495,7 @@
 }
 .src-report__which {
   font-size: var(--fs-13);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .src-report {
   display: grid;
@@ -611,7 +621,7 @@
 }
 .src-resolve__choice-text strong {
   font-size: var(--fs-15);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .src-resolve__choice-text small {
   font-size: var(--fs-12);
@@ -671,7 +681,7 @@
   min-width: 0;
   font-family: var(--mono);
   font-size: var(--fs-13);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 @media (prefers-reduced-motion: reduce) {

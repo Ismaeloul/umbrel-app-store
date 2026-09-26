@@ -581,6 +581,92 @@ export function channelNameOf(entry: Pick<SourceEntry, 'title' | 'matchedChannel
   return channelPartOf(entry.title) || entry.matchedChannel || entry.title;
 }
 
+/** Minúsculas y sin tildes, letra a letra (mismo largo, para cortar el original por las mismas posiciones). */
+function foldForMatch(text: string): string {
+  return Array.from(text, (char) => {
+    const base = char.normalize('NFD').replace(/\p{M}/gu, '');
+    const lower = (base.length === 1 ? base : char).toLowerCase();
+    return lower.length === char.length ? lower : char;
+  }).join('');
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Separadores con los que las listas pegan el proveedor al canal. */
+const PROVIDER_SEPARATOR = String.raw`(?:-{1,2}>|={1,2}>|[→⇒➜➝⟶⟹»|·:/–—-])`;
+/** «NEW ERA III», «Elcano 2»: el proveedor con su numeral detrás. */
+const PROVIDER_SUFFIX = String.raw`(?:\s+(?:[ivx]{1,4}|\d{1,2}))?`;
+const EDGE_JUNK = /^[\s\-–—|»·:/<>=→⇒➜➝⟶⟹,]+|[\s\-–—|»·:/<>=→⇒➜➝⟶⟹,]+$/g;
+
+/**
+ * Nombre del canal para debajo del cartel, SIN el proveedor (Isma, 26-sep:
+ * «si ya pones New Era o Elcano arriba, de nada sirve volver a ponerlo
+ * abajo»). Quita cada proveedor (y su variante con o sin numeral: «NEW ERA»
+ * frente a «NEW ERA III») junto con su separador: flechas, «»», «|», guion o
+ * raya, paréntesis y corchetes. Sin distinguir mayúsculas ni tildes y solo por
+ * palabras enteras. Si al quitarlo no queda nada, devuelve el nombre tal cual.
+ *
+ * «MOVISTAR PLUS FHD --> NEW ERA III» → «MOVISTAR PLUS FHD»,
+ * «DAZN 1 HD | ELCANO» → «DAZN 1 HD», «M+ LaLiga (NEW ERA)» → «M+ LaLiga»,
+ * «LaLiga TV [Elcano] 1080» → «LaLiga TV 1080».
+ */
+export function channelNameWithoutProvider(
+  name: string,
+  providers: readonly (string | null | undefined)[],
+): string {
+  const original = name.replace(/\s+/g, ' ').trim();
+  const variants = new Set<string>();
+  for (const raw of providers) {
+    const provider = foldForMatch(
+      String(raw ?? '')
+        .replace(/\s+/g, ' ')
+        .trim(),
+    );
+    if (!provider) continue;
+    variants.add(provider);
+    const base = provider.replace(/\s+(?:[ivx]{1,4}|\d{1,2})$/, '');
+    if (base && base !== provider) variants.add(base);
+  }
+  if (!original || variants.size === 0) return original;
+  let result = original;
+  // Los largos primero: «NEW ERA III» antes que «NEW ERA».
+  for (const variant of [...variants].sort((a, b) => b.length - a.length)) {
+    const word = `${escapeRegExp(variant).replace(/ /g, String.raw`\s+`)}${PROVIDER_SUFFIX}`;
+    const edge = String.raw`(?![\p{L}\p{N}])`;
+    const patterns = [
+      // «(NEW ERA)», «[Elcano]», «{Faro}»
+      new RegExp(String.raw`\s*[([{]\s*${word}\s*[)\]}]`, 'gu'),
+      // «… --> NEW ERA III», «… | ELCANO», «… - Faro»
+      new RegExp(String.raw`\s*${PROVIDER_SEPARATOR}\s*${word}${edge}`, 'gu'),
+      // «ELCANO | DAZN 1»
+      new RegExp(String.raw`(?<![\p{L}\p{N}])${word}\s*${PROVIDER_SEPARATOR}\s*`, 'gu'),
+      // «DAZN 1 ELCANO»
+      new RegExp(String.raw`(?<![\p{L}\p{N}])${word}${edge}`, 'gu'),
+    ];
+    for (const pattern of patterns) {
+      // Se busca en la copia plegada y se corta el original por las mismas posiciones.
+      const folded = foldForMatch(result);
+      let next = '';
+      let last = 0;
+      for (const match of folded.matchAll(pattern)) {
+        const start = match.index;
+        next += `${result.slice(last, start)} `;
+        last = start + match[0].length;
+      }
+      if (last > 0) result = next + result.slice(last);
+    }
+  }
+  const cleaned = result
+    .replace(/[([{]\s*[)\]}]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(EDGE_JUNK, '')
+    .trim();
+  // Sin una letra («DAZN 1» con el proveedor «DAZN» dejaría «1») no es un nombre.
+  return /\p{L}/u.test(cleaned) ? cleaned : original;
+}
+
 /**
  * Nombre largo de la fuente para el `title` y el lector de pantalla (§7.1):
  * título · tipo y detalle · lista · hash · prueba · pares · Mbit/s ·

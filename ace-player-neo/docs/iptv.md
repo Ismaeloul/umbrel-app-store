@@ -1428,8 +1428,10 @@ reproduce. Por eso:
 - **Atributos.** `data-origin="iptv"` en el `<button class="src-poster">`, que es el localizador de las e2e.
 - **Distintivo.** `<Capsule tone="neutral" icon="tv">IPTV</Capsule>` arriba a la izquierda de la tesela. «En pantalla»
   sigue en oro.
+- **Dentro de la tesela**, bajo el distintivo y donde los demás carteles llevan su proveedor (Isma, 26-sep):
+  `presentation.short` = `iptv.provider` («Casa»), con `ChannelMark label`.
 - **Debajo:**
-  - `presentation.short` = `iptv.provider` («Casa»);
+  - solo el nombre del canal, sin el proveedor (`channelNameWithoutProvider(channelNameOf(entry), …)`);
   - `TYPE_LABEL.iptv = 'IPTV'`, así que `presentation.label` = «IPTV · Casa»;
   - la calidad sale de `iptv.quality` si no hay `bitrate`/códec: `fhd` → «1080p», `hd` → «720p», `uhd` → «4K»,
     `sd` → «SD»;
