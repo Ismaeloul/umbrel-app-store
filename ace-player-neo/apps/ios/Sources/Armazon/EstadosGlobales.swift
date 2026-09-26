@@ -17,18 +17,22 @@ struct EstadosGlobales: ViewModifier {
     @Environment(CentroHojas.self) private var hojas
     @Environment(\.modoDemo) private var modoDemo
 
+    /// Por pasos y con tipos: en una sola cadena pasaba de 200 ms de tipar en la CI (36234808056).
     func body(content: Content) -> some View {
-        let navegador = self.navegador
-        content
-            .environment(\.estadoMotor, EstadosGlobales.estadoMotor(datos.motor.datos?.status, fallo: fallo))
-            .environment(\.abrirSaludMotor, AccionPalco { navegador.ir(.ajustes(.salud)) })
+        let navegador: Navegador = self.navegador
+        let estado: EstadoMotorVista = EstadosGlobales.estadoMotor(datos.motor.datos?.status, fallo: fallo)
+        let abrirSalud: AccionPalco = AccionPalco { navegador.ir(Destino.ajustes(.salud)) }
+        let conEntorno = content.environment(\.estadoMotor, estado).environment(\.abrirSaludMotor, abrirSalud)
+        return conEntorno
             .mira(datos.motor)
             .task { await arrancar() }
-            .onChange(of: sesion.enlacePendiente, initial: true) { _, enlace in
-                guard let enlace else { return }
-                hojas.abrir(.otroServidor(enlace))
-                sesion.enlacePendiente = nil
-            }
+            .onChange(of: sesion.enlacePendiente, initial: true) { _, enlace in abrirEnlace(enlace) }
+    }
+
+    private func abrirEnlace(_ enlace: PairingLink?) {
+        guard let enlace else { return }
+        hojas.abrir(.otroServidor(enlace))
+        sesion.enlacePendiente = nil
     }
 
     /// «Motor sin respuesta» si la consulta falló sin datos o no hay servidor (`summarizeEngine(…, failed)`).
