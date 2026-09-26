@@ -125,6 +125,7 @@ import {
   entryFromItem,
   failureVerdict,
   INVALID_HASH_TEXT,
+  iptvQualityText,
   isIptv,
   isIptvAccountFailure,
   isReported,
@@ -136,6 +137,7 @@ import {
   onScreenOf,
   pickAutoSource,
   pickBridgeTarget,
+  pickNextIptvVariant,
   pickInitialSwitch,
   presentationOf,
   reportFollowUp,
@@ -1479,6 +1481,23 @@ function handleSourceFailed(failure: SourceFailure): SourceFailedReply {
   const finished = scanFinished(state.scan);
   const hasIptv = entries.some(isIptv);
 
+  // §16: si cae una variante IPTV (la 1080p), la siguiente variante IPTV antes
+  // que AceStream (4K, 720p, SD…). No cuenta en el tope del puente: cada una se
+  // prueba una vez. Un fallo de cuenta, o la IPTV en pausa, vale para todas.
+  const iptvDown =
+    accountDown || failure.code === 'iptv_disabled' || failure.code === 'iptv_removed';
+  if (isIptv(failed) && !iptvDown && !state.stopped && drives(state)) {
+    const next = pickNextIptvVariant(entries, effective, failed, now);
+    if (next) {
+      const number = entries.findIndex((entry) => entry.id === next.id) + 1;
+      patch({ autoVerified: true, manualChosen: false, switchArmed: false });
+      haptic('warning');
+      markAutoTried(next.id);
+      playEntry(next, 'auto');
+      return { next: true, message: nextVariantText(failure.code, failed, next, number) };
+    }
+  }
+
   // P16.6, el puente: «si uno no va, va el otro» (también en manual y en canales sueltos).
   if (hasIptv && !state.stopped && drives(state) && bridgeAllowed(state.bridgeJumps, now)) {
     const reply = bridge(state, entries, effective, failed, failure, finished, now);
@@ -1567,6 +1586,24 @@ function iptvDownLead(code: string | undefined): string {
 }
 
 /**
+ * Cae una variante IPTV y se pasa a la siguiente (§16): «Tu IPTV no responde
+ * en 1080p: probamos en 4K (fuente 2)»; sin calidades, «Tu IPTV no responde:
+ * probamos otra señal de tu IPTV (fuente 2)».
+ */
+export function nextVariantText(
+  code: string | undefined,
+  failed: Pick<SourceEntry, 'iptv'>,
+  next: Pick<SourceEntry, 'iptv'>,
+  number: number,
+): string {
+  const from = iptvQualityText(failed);
+  const to = iptvQualityText(next);
+  const lead = iptvDownLead(code);
+  if (from && to && from !== to) return `${lead} en ${from}: probamos en ${to} (fuente ${number})`;
+  return `${lead}: probamos otra señal de tu IPTV (fuente ${number})`;
+}
+
+/**
  * A pantalla completa no se pinta ningún toast (`data-immersive`), que es
  * justo como se ve el fútbol: ahí «Volver a la IPTV» es una cápsula tocable
  * sobre el vídeo (showBackToast). Con teclado, además, la línea dice la
@@ -1632,6 +1669,8 @@ function bridge(
   now: number,
 ): SourceFailedReply | null {
   if (isIptv(failed)) {
+    // «Volver a la IPTV» vuelve al primer cartel IPTV (la mejor variante, §16), no al último que cayó.
+    const back = entries.find(isIptv)?.id ?? failed.id;
     const paused = failure.code === 'iptv_disabled' || failure.code === 'iptv_removed';
     let target = pickBridgeTarget(entries, effective, 'iptv', finished, now);
     let numbered = true;
@@ -1662,9 +1701,9 @@ function bridge(
       haptic('warning');
       markAutoTried(target.id);
       playEntry(target, 'auto');
-      if (!paused) showBackToast(failed.id);
+      if (!paused) showBackToast(back);
       const text = `${lead}: seguimos por AceStream${numbered ? ` (fuente ${number})` : ''}`;
-      return { next: true, message: paused ? text : withBackHint(text, entries, failed.id) };
+      return { next: true, message: paused ? text : withBackHint(text, entries, back) };
     }
     const iptvOnly = state.kind === 'channel' && tappedIsIptv(state.tapped);
     const searching = iptvOnly && state.reverse === 'running';
@@ -1677,22 +1716,20 @@ function bridge(
         switchArmed: false,
       });
       haptic('warning');
-      if (!paused) showBackToast(failed.id);
+      if (!paused) showBackToast(back);
       const text =
         iptvOnly && !paused
           ? IPTV_ONLY_WAIT_TEXT
           : `${lead}. Sigo comprobando las fuentes de AceStream y arranco la primera que funcione.`;
-      return { message: paused ? text : withBackHint(text, entries, failed.id) };
+      return { message: paused ? text : withBackHint(text, entries, back) };
     }
     if (iptvOnly && !aceCount(entries)) {
       // La búsqueda inversa terminó sin ninguna AceStream (§14.4).
       patch({ autoVerified: false, failureText: IPTV_ONLY_DOWN_TEXT });
       haptic('error');
-      if (!paused) showBackToast(failed.id);
+      if (!paused) showBackToast(back);
       return {
-        message: paused
-          ? IPTV_ONLY_DOWN_TEXT
-          : withBackHint(IPTV_ONLY_DOWN_TEXT, entries, failed.id),
+        message: paused ? IPTV_ONLY_DOWN_TEXT : withBackHint(IPTV_ONLY_DOWN_TEXT, entries, back),
       };
     }
     return null;

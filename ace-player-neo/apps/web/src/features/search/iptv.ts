@@ -98,15 +98,28 @@ export function iptvCountText(total: number, capped: boolean): string {
   return capped ? `${IPTV_SEARCH.totalCap}+` : String(total);
 }
 
-/** Subtítulo de una fila IPTV: «Casa · 1080p», más « · también en AceStream» si lo está. */
-export function iptvSubtitle(
-  channel: Pick<IptvChannel, 'provider' | 'quality'>,
-  alsoAce: boolean,
-): string {
-  const base = [channel.provider, channel.quality ? IPTV_QUALITY_TEXT[channel.quality] : null]
-    .filter(Boolean)
-    .join(' · ');
-  return `${base}${alsoAce ? IPTV_TEXT.alsoAce : ''}`;
+/**
+ * Subtítulo de una fila IPTV: «Casa», más « · también en AceStream» si lo
+ * está. Las calidades van aparte, como etiquetas (`iptvTags`, §16).
+ */
+export function iptvSubtitle(channel: Pick<IptvChannel, 'provider'>, alsoAce: boolean): string {
+  return `${channel.provider}${alsoAce ? IPTV_TEXT.alsoAce : ''}`;
+}
+
+/**
+ * Etiquetas pequeñas de una fila IPTV (§16): el país si no es España («DE»)
+ * y las calidades que tiene el canal, de mayor a menor resolución («4K»,
+ * «1080p», «720p», «SD»): una fila por canal, no una por variante. Un
+ * servidor sin `qualities` da la de su variante.
+ */
+export function iptvTags(
+  channel: Pick<IptvChannel, 'quality'> & Partial<Pick<IptvChannel, 'qualities' | 'country'>>,
+): string[] {
+  const qualities = channel.qualities ?? (channel.quality ? [channel.quality] : []);
+  return [
+    ...(channel.country ? [channel.country] : []),
+    ...qualities.map((quality) => IPTV_QUALITY_TEXT[quality]),
+  ];
 }
 
 /** Subtítulo de una fila de la biblioteca que es un id IPTV, según `iptvIds` (§14.5). */

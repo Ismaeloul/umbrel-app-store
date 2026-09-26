@@ -69,7 +69,7 @@ export interface ChannelRowProps {
   iptv?: boolean;
   /** Subtítulo propio (el de una fila IPTV); si no, el de siempre. */
   subtitle?: string | undefined;
-  /** Etiquetas delante del subtítulo: las calidades de un canal IPTV («1080p», «720p»), §16.6. */
+  /** Etiquetas pequeñas tras el subtítulo: el país y las calidades de un canal IPTV («4K · 1080p · 720p», §16). */
   tags?: readonly string[] | undefined;
 }
 
@@ -300,19 +300,17 @@ export function ChannelRow({
                 </span>
               </>
             ) : (
-              <>
-                {tags && tags.length > 0 ? (
-                  <span className="ch__tags">
-                    {tags.map((tag) => (
-                      <Capsule key={tag} tone="neutral" size="sm" className="ch__tag">
-                        {tag}
-                      </Capsule>
-                    ))}
-                  </span>
-                ) : null}
-                <span className="ch__sub">{subtitle}</span>
-              </>
+              <span className="ch__sub">{subtitle}</span>
             )}
+            {tags?.length ? (
+              <span className="ch__tags">
+                {tags.map((tag) => (
+                  <Capsule key={tag} tone="neutral" size="sm" className="ch__tag">
+                    {tag}
+                  </Capsule>
+                ))}
+              </span>
+            ) : null}
           </span>
         </span>
       </a>

@@ -399,7 +399,7 @@ export class FootballServiceImpl implements FootballService {
         }),
       classify: (id) => iptv.classify(id),
       convert: (id, match) => iptv.candidateFor(id, match),
-      tapped: (id) => iptv.tappedCandidate(id),
+      tapped: (id) => iptv.tappedCandidates(id),
       sameChannel: (channel, title) => iptv.sameChannelScore(channel, title),
     };
   }
@@ -414,7 +414,7 @@ export class FootballServiceImpl implements FootballService {
       resolve: () => ({ candidates: [], hints: [], consulted: false }),
       classify: (id) => iptv.classify(id),
       convert: () => null,
-      tapped: () => null,
+      tapped: () => [],
       sameChannel: (channel, title) => iptv.sameChannelScore(channel, title),
     };
   }

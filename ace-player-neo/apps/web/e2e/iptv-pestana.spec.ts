@@ -377,10 +377,16 @@ test.describe('con la ruta real y el proveedor falso', () => {
         'ES | GENERALISTAS',
         'UK | SPORTS',
       ]);
-      // Buscar en la raíz: «DAZN 1» de Reino Unido es otra fila que «DAZN LaLiga» de España.
+      // Buscar en la raíz: «DAZN 1» sale una fila por país (España con sus 4 calidades, Reino
+      // Unido y Alemania aparte), y «DAZN LaLiga» en la suya.
+      await page.getByRole('searchbox', { name: 'Buscar en tu IPTV' }).fill('dazn 1');
+      const dazn1 = page.locator('article.ch').filter({
+        has: page.getByRole('link', { name: 'DAZN 1', exact: true }),
+      });
+      await expect(dazn1).toHaveCount(3);
+      await expect(dazn1.filter({ hasText: '4K' })).toHaveCount(1);
       await page.getByRole('searchbox', { name: 'Buscar en tu IPTV' }).fill('dazn');
       await expect(page.getByRole('link', { name: 'DAZN LaLiga', exact: true })).toBeVisible();
-      await expect(page.getByRole('link', { name: 'DAZN 1', exact: true })).toBeVisible();
       await page.getByRole('searchbox', { name: 'Buscar en tu IPTV' }).fill('');
       await abrirCategoria(page, 'ES | DEPORTES');
       const fila = page

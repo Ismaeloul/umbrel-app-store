@@ -3613,6 +3613,22 @@ paths:
                                 - hd
                                 - sd
                             - type: "null"
+                        qualities:
+                          maxItems: 4
+                          type: array
+                          items:
+                            type: string
+                            enum:
+                              - uhd
+                              - fhd
+                              - hd
+                              - sd
+                        country:
+                          anyOf:
+                            - type: string
+                              minLength: 2
+                              maxLength: 8
+                            - type: "null"
                         provider:
                           type: string
                           maxLength: 40
@@ -6922,6 +6938,12 @@ paths:
                                 type: boolean
                               guide:
                                 type: boolean
+                              country:
+                                anyOf:
+                                  - type: string
+                                    minLength: 2
+                                    maxLength: 8
+                                  - type: "null"
                             required:
                               - provider
                               - quality
@@ -7057,6 +7079,12 @@ paths:
                               type: boolean
                             guide:
                               type: boolean
+                            country:
+                              anyOf:
+                                - type: string
+                                  minLength: 2
+                                  maxLength: 8
+                                - type: "null"
                           required:
                             - provider
                             - quality

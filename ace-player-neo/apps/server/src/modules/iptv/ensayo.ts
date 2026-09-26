@@ -157,10 +157,14 @@ export async function runIptvEnsayo(options: EnsayoOptions): Promise<number> {
       }
       withIptv += 1;
       layer.matches.forEach((item, index) => {
+        /* Un cartel por variante de resolución (§16): «1080p · 4K · 720p · SD reserva». */
+        const posters = item.posters
+          .map((entry) => `${quality(entry.quality)}${entry.backup ? ' reserva' : ''}`)
+          .join(' · ');
         print(
-          `   ${index + 1}. ${item.best.display}${item.guide ? ' [guía]' : ''} · ${item.score} · ${quality(
-            item.best.quality,
-          )}${item.best.backup ? ' · reserva' : ''}${item.variants.length ? ` · ${item.variants.length} de respaldo` : ''}`,
+          `   ${index + 1}. ${item.best.display}${item.bucket ? ` (${item.bucket})` : ''}${
+            item.guide ? ' [guía]' : ''
+          } · ${item.score} · ${posters}${item.hidden.length ? ` · ${item.hidden.length} de respaldo` : ''}`,
         );
       });
       if (layer.hints.length) print(`   pistas para AceStream: ${layer.hints.join(', ')}`);

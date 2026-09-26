@@ -110,10 +110,11 @@ describe('pestaña IPTV (§16)', () => {
       'ES | GENERALISTAS',
       'UK | SPORTS',
       'XXX',
+      /* Los canales de otros países del proveedor falso (todo desbloqueado, §17). */
+      'DE | SPORT',
+      'FR | SPORT',
       'ES | DAZN',
       'ES | LALIGA',
-      'ES | MOVISTAR',
-      '|FR| SPORT',
     ]);
     expect(new Set(names).size).toBe(names.length);
     expect(root.catalogTotal).toBeGreaterThan(150);
@@ -145,8 +146,8 @@ describe('pestaña IPTV (§16)', () => {
       'DAZN ACB 7',
     ]);
     expect(page.channels[1]).toMatchObject({ qualities: ['fhd', 'hd'], country: 'ES' });
-    /* «DAZN 1» está también en «ES | DEPORTES» (sin calidad): una sola fila con sus calidades. */
-    expect(page.channels[0]?.qualities).toEqual(['fhd', 'hd']);
+    /* «DAZN 1» está también en «ES | DEPORTES» con sus 5 variantes (§17): una sola fila con todas sus calidades. */
+    expect(page.channels[0]?.qualities).toEqual(['uhd', 'fhd', 'hd', 'sd']);
     const text = JSON.stringify(page);
     for (const secret of [FAKE_IPTV_USER, FAKE_IPTV_PASSWORD, 'player_api', 'http']) {
       expect(text).not.toContain(secret);
@@ -255,12 +256,16 @@ describe('el canal tocado respeta el país (§16.3, D31)', () => {
     const catalog = r.service.catalogForTests()!;
     const uk = catalog.entries.find((entry) => entry.title === 'UK: DAZN 1')!;
     const esHd = catalog.entries.find((entry) => entry.title === 'DAZN 1 ᴴᴰ')!;
-    const esFhd = catalog.entries.find((entry) => entry.title === 'DAZN 1 ᶠᴴᴰ')!;
     expect(uk.key).toBe(esHd.key);
-    expect(r.service.tappedCandidate(uk.id)?.id).toBe(uk.id);
-    expect(r.service.tappedCandidate(esHd.id)?.id).toBe(esFhd.id);
+    expect(r.service.tappedCandidates(uk.id)[0]?.id).toBe(uk.id);
+    /* De España, la variante que arranca primero en su canal (la 1080p, §17): nunca la de Reino Unido. */
+    const esFirst = catalog.entries.find(
+      (entry) => entry.id === r.service.tappedCandidates(esHd.id)[0]?.id,
+    );
+    expect(esFirst?.quality).toBe('fhd');
+    expect(esFirst?.title).not.toMatch(/^(?:UK|DE|FR|[IT])/);
     const it = catalog.entries.find((entry) => entry.title === '[IT] DAZN 1')!;
-    expect(r.service.tappedCandidate(it.id)?.id).toBe(it.id);
+    expect(r.service.tappedCandidates(it.id)[0]?.id).toBe(it.id);
   });
 });
 

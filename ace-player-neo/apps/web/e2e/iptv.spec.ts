@@ -215,7 +215,8 @@ test(
     await expect(carteles(page).first()).toHaveAttribute('data-origin', 'iptv', {
       timeout: 45_000,
     });
-    await expect(listaDeFuentes(page).locator('.src-poster[data-origin="iptv"]')).toHaveCount(2);
+    // Un cartel por variante de resolución (§16): M+ LaLiga TV 2 (guía) y DAZN LaLiga 1080p, 720p y reserva.
+    await expect(listaDeFuentes(page).locator('.src-poster[data-origin="iptv"]')).toHaveCount(4);
     await expect(cartelIptv(page)).toContainText('IPTV');
     // El proveedor va en la tesela; debajo, solo el canal (Isma, 26-sep).
     await expect(cartelIptv(page).locator('.dorsal__abbrev')).toHaveText('Casa');
@@ -402,7 +403,10 @@ test(
     });
     await esperarQueAvance(page);
     await proveedor.modo('*', 'down');
-    await expect(page.getByText(/^Tu IPTV no responde/).first()).toBeVisible({ timeout: 60_000 });
+    // Antes de AceStream prueba las otras variantes IPTV (§16): se espera al salto a AceStream.
+    await expect(
+      page.getByText(/^Tu IPTV no responde: seguimos por AceStream/).first(),
+    ).toBeVisible({ timeout: 60_000 });
     await proveedor.modo('*', 'ok');
     await page.getByRole('button', { name: 'Volver a la IPTV' }).click();
     await expect(cartelIptv(page)).toHaveAttribute('aria-label', /reproduciendo ahora/, {

@@ -123,6 +123,8 @@ export interface IptvCheckResult {
   readonly audioCodecs?: readonly string[];
   readonly rateKbps?: number | null;
   readonly playableOn?: { readonly web: boolean; readonly ios: boolean };
+  /** Altura del vídeo medida por la sonda (no va al veredicto: la apunta el servicio, §16). */
+  readonly height?: number | null;
 }
 
 /** Cómo se pasa ffprobe sobre un fichero (lo da el comprobador, `transport.inspectFile`). */
@@ -135,6 +137,8 @@ export type IptvInspectFile = (
   readonly videoCodec: string;
   readonly audioCodecs: readonly string[];
   readonly mediaReason: string;
+  /** Altura del vídeo (1080, 720…), si ffprobe la da: la calidad real manda sobre la del nombre (§16). */
+  readonly height?: number | null;
 }>;
 
 export interface IptvCheckOptions {
@@ -176,10 +180,11 @@ export interface IptvService extends Lifecycle {
   titleOf(id: string): string | null;
   /**
    * El canal IPTV tocado en el buscador, Favoritos o Recientes (docs/iptv.md
-   * §14.4): si es del catálogo vigente, la candidata de SU grupo (la mejor
-   * variante) con puntuación 100 y su nombre limpio; si no, null.
+   * §14.4 y §16): si es del catálogo vigente, los carteles de SU canal (una
+   * variante por resolución, la que arranca primero) con puntuación 100 y su
+   * nombre limpio; si no, una lista vacía.
    */
-  tappedCandidate(id: string): IptvResolutionCandidate | null;
+  tappedCandidates(id: string): IptvResolutionCandidate[];
   /** `sameChannelScore` con el `scorer` de la resolución (docs/iptv.md §14.3). */
   sameChannelScore(base: string, other: string): number;
 

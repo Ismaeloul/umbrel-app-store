@@ -239,16 +239,26 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Calidades de un canal IPTV (docs/iptv.md §16.6): una etiqueta por calidad,
-   como en los carteles de fuente; no encogen, encoge el subtítulo. */
+/* Calidades (y país) de un canal de tu IPTV (docs/iptv.md §16): una fila por
+   canal con «4K · 1080p · 720p» en etiquetas pequeñas, siempre enteras (como
+   las del cartel de una fuente); el subtítulo es lo que se recorta. */
 .ch__tags {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
   flex: none;
+  gap: 3px;
 }
-.ch__tag {
-  font-variant-numeric: normal;
+.ch__tags .ch__tag {
+  --cap-ink: var(--text-2);
+  flex: none;
+  max-width: none;
+  height: 18px;
+  padding: 0 6px;
+  font-size: var(--fs-caption);
+}
+.ch__tag .capsule__text {
+  overflow: visible;
+  text-overflow: clip;
 }
 .ch__min {
   display: inline-flex;

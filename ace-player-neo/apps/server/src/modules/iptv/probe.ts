@@ -104,6 +104,7 @@ export async function probeIptvStream(input: ProbeInput): Promise<IptvCheckResul
       audioCodecs: media.audioCodecs,
       rateKbps,
       playableOn,
+      ...(media.height ? { height: media.height } : {}),
     };
   } catch (error) {
     if (input.signal.aborted) throw input.signal.reason ?? error;

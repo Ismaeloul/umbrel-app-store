@@ -13,6 +13,7 @@ import {
   ERROR_CATALOG,
   HashSchema,
   IPTV_ERROR_CODES,
+  IPTV_MAX_CANDIDATES,
   IPTV_REASONS,
   IPTV_BROWSE,
   IPTV_SEARCH,
@@ -265,11 +266,19 @@ describe('contrato de la IPTV (docs/iptv.md §5)', () => {
     expect(ResolutionCandidateSchema.safeParse({ ...plain, source: 'm3u' }).success).toBe(true);
   });
 
-  it('la variante de la resolución: IPTV primero (guía y nombre), 2 como mucho, y luego AceStream', () => {
+  it('la variante de la resolución: IPTV primero (guía y nombre, un cartel por resolución, 4 como mucho) y luego AceStream', () => {
     const sources = iptvResolve.candidates.map((candidate) => candidate.source);
-    expect(sources).toEqual(['iptv', 'iptv', 'm3u', 'acestream']);
+    expect(sources).toEqual(['iptv', 'iptv', 'iptv', 'm3u', 'acestream']);
+    expect(sources.filter((source) => source === 'iptv').length).toBeLessThanOrEqual(
+      IPTV_MAX_CANDIDATES,
+    );
     expect(iptvResolve.candidates[0]?.iptv?.guide).toBe(true);
     expect(iptvResolve.candidates[1]?.iptv?.guide).toBe(false);
+    /* Las variantes de resolución del mismo canal: 1080p y luego 720p (§16). */
+    expect(iptvResolve.candidates.slice(1, 3).map((candidate) => candidate.iptv?.quality)).toEqual([
+      'fhd',
+      'hd',
+    ]);
     expect(iptvResolve.candidate).toEqual(iptvResolve.candidates[0]);
     expect(iptvResolve.checked).toContain('iptv');
   });

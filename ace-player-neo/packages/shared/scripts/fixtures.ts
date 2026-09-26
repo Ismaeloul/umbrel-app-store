@@ -688,10 +688,35 @@ export const WEB_V1_FIXTURES = {
     query: 'la',
     total: 3,
     capped: false,
+    /* Una fila por canal con sus calidades (§16): «DAZN LaLiga» tiene 4K, 1080p y 720p y arranca por la 1080p. */
     channels: [
-      { id: IPTV_ID_LA1, title: 'La 1', quality: 'hd', provider: 'Casa', library: [HASH_C] },
-      { id: IPTV_ID_NAME, title: 'DAZN LaLiga', quality: 'fhd', provider: 'Casa', library: [] },
-      { id: IPTV_ID_GUIDE, title: 'M+ LaLiga TV 2', quality: 'fhd', provider: 'Casa', library: [] },
+      {
+        id: IPTV_ID_LA1,
+        title: 'La 1',
+        quality: 'hd',
+        qualities: ['hd'],
+        country: null,
+        provider: 'Casa',
+        library: [HASH_C],
+      },
+      {
+        id: IPTV_ID_NAME,
+        title: 'DAZN LaLiga',
+        quality: 'fhd',
+        qualities: ['uhd', 'fhd', 'hd'],
+        country: null,
+        provider: 'Casa',
+        library: [],
+      },
+      {
+        id: IPTV_ID_GUIDE,
+        title: 'M+ LaLiga TV 2',
+        quality: 'fhd',
+        qualities: ['fhd'],
+        country: null,
+        provider: 'Casa',
+        library: [],
+      },
     ],
   },
   iptvGet: iptvView,
@@ -732,10 +757,16 @@ const iptvCandidate = (
 });
 
 /* La guía confirma el partido en «M+ LaLiga TV 2» aunque la agenda diga
-   «DAZN LaLiga»: va primera. Luego la IPTV por nombre (un solo cartel, la
-   FHD) y detrás las AceStream. El comprobador solo lleva las AceStream. */
+   «DAZN LaLiga»: va primera. Luego la IPTV por nombre, un cartel por
+   variante de resolución (1080p y 720p, §16), y detrás las AceStream. El
+   comprobador solo lleva las AceStream. */
 const iptvGuideCandidate = iptvCandidate(IPTV_ID_GUIDE, 'M+ LaLiga TV 2', 'MLaLigaTV2.es', true);
 const iptvNameCandidate = iptvCandidate(IPTV_ID_NAME, 'DAZN LaLiga', 'DAZNLaLiga.es', false);
+const IPTV_ID_NAME_HD = '18293a4b5c6d7e8f9012345678abcdef45f06712';
+const iptvNameHdCandidate: ResolutionCandidate = {
+  ...iptvCandidate(IPTV_ID_NAME_HD, 'DAZN LaLiga', 'DAZNLaLiga.es', false),
+  iptv: { provider: 'Casa', quality: 'hd', backup: false, guide: false },
+};
 /* Canal solo de la IPTV tocado en el buscador (§14.4): su IPTV con puntuación 100. */
 const iptvTelecinco: ResolutionCandidate = {
   ...iptvCandidate(IPTV_ID_TELECINCO, 'Telecinco', 'Telecinco.es', false),
@@ -934,6 +965,7 @@ export const VARIANT_FIXTURES = {
     candidates: [
       iptvGuideCandidate,
       iptvNameCandidate,
+      iptvNameHdCandidate,
       { ...candidate, id: HASH_A, title: 'DAZN LaLiga FHD', matchedChannel: 'DAZN LaLiga' },
       {
         ...candidate,
