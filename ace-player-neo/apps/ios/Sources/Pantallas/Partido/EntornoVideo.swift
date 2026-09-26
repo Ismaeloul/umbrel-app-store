@@ -21,13 +21,23 @@ struct EntornoVideo: DynamicProperty {
 
     /// La foto del reproductor que leen las reglas puras (EstadoEscenario).
     var foto: FotoEscenario {
-        let canal = reproductor.canal
-        return FotoEscenario(
-            titulo: canal?.titulo, hash: canal?.id, fase: reproductor.fase, conexion: reproductor.conexion,
-            mensaje: reproductor.mensaje, intento: reproductor.intento, directo: reproductor.directo,
-            arranco: reproductor.arranco, motivoParada: reproductor.motivoParada,
-            quiereReproducir: reproductor.quiereReproducir, demo: demo, espera: fuentes.textoEspera,
-            lead: lead(canal))
+        // Campo a campo: el init con trece argumentos pasaba de los 200 ms de tipar (CI 36220129061).
+        let canal: CanalReproducible? = reproductor.canal
+        var foto: FotoEscenario = FotoEscenario()
+        foto.titulo = canal?.titulo
+        foto.hash = canal?.id
+        foto.fase = reproductor.fase
+        foto.conexion = reproductor.conexion
+        foto.mensaje = reproductor.mensaje
+        foto.intento = reproductor.intento
+        foto.directo = reproductor.directo
+        foto.arranco = reproductor.arranco
+        foto.motivoParada = reproductor.motivoParada
+        foto.quiereReproducir = reproductor.quiereReproducir
+        foto.demo = demo
+        foto.espera = fuentes.textoEspera
+        foto.lead = lead(canal)
+        return foto
     }
 
     /// «Fuente n verificada.» / «Fuente n, señal floja.» / «Fuente n.» (solo en partidos; a4 §20.9).

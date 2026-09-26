@@ -11,9 +11,17 @@ private func foto(
     directo: InfoDirecto = .nada, demo: Bool = false, motivo: MotivoParada? = nil, espera: String? = nil,
     lead: String? = nil, mensaje: String? = nil
 ) -> FotoEscenario {
-    FotoEscenario(
-        titulo: titulo, hash: titulo == nil ? nil : "a1b2", fase: fase, conexion: conexion, mensaje: mensaje,
-        directo: directo, arranco: arranco, motivoParada: motivo, demo: demo, espera: espera, lead: lead)
+    var f: FotoEscenario = FotoEscenario(fase: fase, conexion: conexion)
+    f.titulo = titulo
+    f.hash = titulo == nil ? nil : "a1b2"
+    f.mensaje = mensaje
+    f.directo = directo
+    f.arranco = arranco
+    f.motivoParada = motivo
+    f.demo = demo
+    f.espera = espera
+    f.lead = lead
+    return f
 }
 
 private let enElBorde = InfoDirecto(disponible: true, enDirecto: true, retraso: 6, recuperable: 1)
