@@ -14,6 +14,7 @@ export * from './constants/limits.js';
 export * from './constants/playback.js';
 export * from './constants/timeouts.js';
 
+export * from './domain/channel-names.js';
 export * from './domain/channels.js';
 export * from './domain/for-you.js';
 export * from './domain/hash.js';

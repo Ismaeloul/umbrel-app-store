@@ -14,13 +14,21 @@
    cifra siguen saliendo de `name`. */
 
 import type { CSSProperties } from 'react';
+import { isQualityNumber, stripQualityMarks } from '@ace/shared';
 import { channelTone, oklchCss } from '../lib/color.ts';
 import { cx } from '../lib/cx.ts';
 import './ChannelMark.css';
 
-/** «DAZN 1» → «1», «M+ Liga de Campeones 2» → «2», «Eurosport» → «E». */
+/**
+ * «DAZN 1» → «1», «M+ Liga de Campeones 2» → «2», «Eurosport» → «E». Las
+ * cifras de resolución, códec y fotogramas no son el número del canal (Isma,
+ * 26-sep; docs/iptv.md §18): «La 1 TVE 720p» → «1», «DAZN 2 1080p50 H265» →
+ * «2», «Eurosport 4K» → «E».
+ */
 export function channelDorsal(name: string): string {
-  const numbers = name.match(/\d+/g);
+  const numbers = stripQualityMarks(name)
+    .match(/\d+/g)
+    ?.filter((number) => !isQualityNumber(number));
   const last = numbers?.at(-1);
   if (last) return last.slice(0, 3);
   const letter = name

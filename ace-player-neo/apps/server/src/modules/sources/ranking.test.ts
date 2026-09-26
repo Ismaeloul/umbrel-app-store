@@ -255,6 +255,18 @@ describe('marca, familia y procedencia (B-042, B-043)', () => {
     expect(marca.map((c) => c.title)).toEqual(['DAZN LaLiga', 'DAZN']);
   });
 
+  it('una IPTV nunca es «lo genérico»: «La 1» de la IPTV va antes que «La 1 TVE 720p *» (§18)', () => {
+    const tocado = 'La 1 TVE 720p *';
+    const orden = mergeResolutionCandidates(
+      [
+        señalDe(1, tocado, { matchedChannel: tocado }),
+        señalDe(2, 'LA 1', { matchedChannel: 'La 1', source: 'iptv' }),
+      ],
+      { requestedChannels: [tocado] },
+    );
+    expect(orden.map((c) => c.source)).toEqual(['iptv', 'm3u']);
+  });
+
   it('contraste con la 0.6.59 sobre 400 listas generadas', () => {
     let state = 99;
     const next = (): number => {

@@ -244,6 +244,12 @@ describe('hls.js', () => {
     expect(hls.config).toEqual({
       manifestLoadingTimeOut: 20_000,
       fragLoadingTimeOut: 20_000,
+      manifestLoadingMaxRetry: 4,
+      manifestLoadingRetryDelay: 500,
+      manifestLoadingMaxRetryTimeout: 2_000,
+      levelLoadingMaxRetry: 4,
+      levelLoadingRetryDelay: 500,
+      levelLoadingMaxRetryTimeout: 2_000,
       liveSyncDurationCount: 3,
       liveMaxLatencyDurationCount: 7,
       maxBufferLength: 30,
@@ -252,6 +258,9 @@ describe('hls.js', () => {
     expect(hlsConfig(PLAYBACK_PROFILES.stable)).toMatchObject({
       maxBufferLength: 90,
       maxLiveSyncPlaybackRate: 1,
+      /* La lista que aún no está (503 del remux) se reintenta sola (docs/iptv.md §18). */
+      manifestLoadingMaxRetry: 4,
+      levelLoadingMaxRetry: 4,
     });
     expect(hls.source).toBe(new URL('/ace/m/abc/s_1.m3u8', location.href).href);
     expect(engine.liveSyncPosition()).toBe(42);

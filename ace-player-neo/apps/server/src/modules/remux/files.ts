@@ -8,8 +8,7 @@
    - `rewritePlaylist` añade `?t=<token>` a cada URI de la lista (también a
      `#EXT-X-MAP:URI`) para la app iOS (arquitectura §5.12). */
 
-import { createReadStream } from 'node:fs';
-import { readFile, stat } from 'node:fs/promises';
+import { open, readFile, type FileHandle } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { finished } from 'node:stream';
@@ -116,7 +115,19 @@ export function rewritePlaylist(text: string, token: string): string {
 export interface SendOptions {
   readonly rangeHeader?: string | undefined;
   readonly head?: boolean | undefined;
+  /**
+   * El fichero puede no estar TODAVÍA (la lista de un remux que arranca o se
+   * reinicia, docs/iptv.md §18): si falta, 503 con `Retry-After: 1` («aún no
+   * está», hls.js lo reintenta) en vez de 404.
+   */
+  readonly notYet?: boolean | undefined;
 }
+
+/** «Aún no está»: la lista del remux mientras arranca o se reinicia (docs/iptv.md §18). */
+export const NOT_YET_HEADERS: Readonly<Record<string, string>> = {
+  'cache-control': 'no-store',
+  'retry-after': '1',
+};
 
 /* Espera a que la respuesta termine (o se corte) para que la capa HTTP la
    dé por enviada: con un stream, `reply.sent` no es verdadero hasta el final. */
@@ -180,17 +191,37 @@ export async function sendFile(
 ): Promise<FileObservation | null> {
   let size: number;
   let mtimeMs: number;
+  /* Se abre ANTES de medir y se lee de ese mismo descriptor: si el remux se
+     reinicia y borra la carpeta entre medias, ya no hay un ENOENT al abrir el
+     stream (que salía como 500 «error interno», docs/iptv.md §18). */
+  let handle: FileHandle;
   try {
-    const info = await stat(file);
+    handle = await open(file, 'r');
+  } catch {
+    sendEmpty(
+      reply,
+      options.notYet ? 503 : 404,
+      options.notYet ? { ...NOT_YET_HEADERS } : { 'cache-control': 'no-store' },
+    );
+    await settle(reply);
+    return null;
+  }
+  try {
+    const info = await handle.stat();
     if (!info.isFile()) throw new Error('not_file');
     size = info.size;
     mtimeMs = info.mtimeMs;
   } catch {
+    await handle.close().catch(() => undefined);
     sendEmpty(reply, 404, { 'cache-control': 'no-store' });
     await settle(reply);
     return null;
   }
+  const close = (): void => {
+    void handle.close().catch(() => undefined);
+  };
   if (size === 0 && !options.rangeHeader) {
+    close();
     sendEmpty(reply, 200, {
       'content-type': remuxContentType(file),
       'content-length': '0',
@@ -203,6 +234,7 @@ export async function sendFile(
   }
   const range = parseByteRange(options.rangeHeader, size);
   if (range === false) {
+    close();
     sendEmpty(reply, 416, { 'content-range': `bytes */${size}`, 'cache-control': 'no-store' });
     await settle(reply);
     return { size, mtimeMs };
@@ -210,9 +242,11 @@ export async function sendFile(
   const out = rangeHeaders(file, size, range);
   reply.code(out.status).headers(out.headers);
   if (options.head) {
+    close();
     void reply.send();
   } else {
-    const stream = createReadStream(file, { start: out.start, end: out.end });
+    /* `autoClose`: el stream cierra el descriptor al acabar o al fallar. */
+    const stream = handle.createReadStream({ start: out.start, end: out.end, autoClose: true });
     stream.on('error', () => reply.raw.destroy());
     void reply.send(stream);
   }

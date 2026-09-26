@@ -657,7 +657,7 @@ class HlsSession extends BaseSession {
           }
         }
         if (!this.cache) {
-          res.writeHead(503).end();
+          res.writeHead(503, { 'retry-after': '1', 'cache-control': 'no-store' }).end();
           return;
         }
       }

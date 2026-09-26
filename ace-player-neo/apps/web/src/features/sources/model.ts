@@ -466,7 +466,8 @@ export function detailOf(effective: Effective, entry: SourceEntry): string {
 
 const TYPE_LABEL: Record<SourceOrigin, string> = {
   saved: 'Guardada',
-  m3u: 'M3U',
+  /* Isma, 26-sep: «M3U» confundía (la IPTV también sale de una lista M3U): lo de las listas es AceStream. */
+  m3u: 'AceStream',
   favorites: 'Favorito',
   history: 'Reciente',
   acestream: 'AceStream',
@@ -503,7 +504,7 @@ export interface SourcePresentation {
   type: string;
   list: string;
   provider: string;
-  /** «M3U · Elcano» */
+  /** «AceStream · Elcano» */
   label: string;
   /** El proveedor en una palabra: tras la flecha, si no la lista, si no el tipo. */
   short: string;

@@ -660,6 +660,11 @@ del mismo nombre; con la misma puntuación, el de España o sin país va antes. 
 DAZN 1», pero si solo existe el extranjero y casa por nombre, sale. El umbral 92 y Hypermotion no cambian. La guía sigue
 exigiendo España (§4.5, regla 5): es lo que pone un canal primero sin que la agenda lo anuncie.
 
+**Lista real (§18).** Con la lista de Isma del 26-sep la limpieza suma: cabeceras y «NO MATCH» fuera del catálogo,
+«ES TI - », «ES-» pegado, la «Ñ» final, el país de `CONTINENTE | PAÍS | TEMA`, ᴿᴬᵂ como reserva, notas entre
+corchetes, «(BK-1)» como reserva y la grafía única `channelSpelling` (@ace/shared: «M.», «M+», «MOVISTAR PLUS+» →
+Movistar; «LA SEXTA» = «LASEXTA»; «LALIGA+» → «LaLiga Plus»…). Detalle en §18.2.
+
 **Variantes (§17).** Además de lo de arriba, la limpieza reconoce `1080p50`/`720p60`, `HD+`, `H264`/`AVC`, `HDR`,
 `VIP`, la reserva con número pegado (`bk2`), la copia del final entre paréntesis (`(1)`, `(2)`: de la 2 en adelante,
 reserva), España al final entre corchetes o barras (`[ES]`, `|ES|`) y lo que va delante del país sin serlo (`VIP |
@@ -1768,8 +1773,8 @@ el PC contra una copia de `/data`.
 
 ## 10. Impacto en la app nativa (`rediseno/nativa`)
 
-El buscador con IPTV (D10) suma lo de §14.10 a esta sección, y las variantes de resolución y el «todo desbloqueado»,
-lo de §17.9.
+El buscador con IPTV (D10) suma lo de §14.10 a esta sección, las variantes de resolución y el «todo desbloqueado»,
+lo de §17.9, y la normalización con la lista real, la etiqueta «AceStream» y el dorsal sin resolución, lo de §18.8.
 
 **Sin cambiar nada, incluida la 0.8.0 publicada:**
 - La IPTV llega en cabeza de `candidates` y como `candidate`, se puede elegir a mano con un toque y se reproduce por la
@@ -3894,3 +3899,186 @@ La app **calcará** esto cuando haga su panel de fuentes y su buscador (fase 3).
 4. **Todo desbloqueado en el buscador:** con catálogos de decenas de miles de canales repetidos por país, una búsqueda
    corta da muchas filas; siguen los topes de §14.7 (50 por respuesta, 5 a la vista) y el orden pone primero lo de
    España o sin país.
+
+## 18. Anexo: buscador y emparejado con la lista real de Isma (26-sep)
+
+Isma metió su lista de verdad (Xtream, 27 687 canales) en su pila local y vio que «movistar laliga», «m+ laliga» y
+«movistar liga de campeones» daban 0, que «laliga» no ponía arriba los M. LALIGA, que «tdt» daba 0 y que «futbol» solo
+traía «M. FUTBOL». En el Umbrel, además, «La 1» salía dos veces y el cartel de «La 1 TVE 720p» enseñaba «720» de
+dorsal. Este anexo lo arregla con una sola normalización para el buscador y el emparejado, medida con un banco de 149
+consultas y el ensayo contra la agenda real. **Implementado** en `iptv-busqueda` (sobre `rediseno/iptv`).
+
+### 18.1 En pocas palabras
+
+1. **Una grafía única** (`channelSpelling`, `@ace/shared`): «M.», «M .», «M.» pegado, «M+», «MOVISTAR+», «MOVISTAR
+   PLUS+», «MOVIESTAR» → Movistar; «LA LIGA» = «LALIGA»; «LALIGA+» es otra marca; «LA SEXTA» = «LASEXTA», «TELE CINCO»
+   = «TELECINCO» y demás compuestos; «SUPER CUPA» → Supercopa; «R. MADRID» → Real Madrid. La usan el buscador y el
+   emparejado; la web y la app la portan tal cual.
+2. **El buscador encuentra aunque la lista use abreviaturas, prefijos o puntos**, busca también por **categoría** (con
+   sinónimos) y **ordena por parecido**: igual, misma familia, empieza por, mismo orden, cualquier orden, sin Movistar y
+   por categoría.
+3. **El emparejado automático sigue estricto** (umbral 92, Hypermotion ≤ 58, los números): solo gana las grafías
+   seguras de arriba, la lista limpia (cabeceras fuera, país bien leído, Tivify visible) y protecciones nuevas
+   (plataformas, «DAZN» a secas, marca de cadena en la regla del « 1»). Las erratas y los alias «humanos» (Champions,
+   Barça…) **no** entran aquí.
+4. **El nombre de una lista de AceStream se limpia antes de buscarlo en la IPTV**: «La 1 TVE 720p \*» y «LA 1 4K -->
+   NEW ERA» son «La 1». Así la biblioteca se enlaza con su IPTV (una fila, no dos) y al tocarla va la IPTV primero.
+5. **Carteles:** la etiqueta de tipo de las listas dice «AceStream» (no «M3U»); el dorsal se salta la resolución y el
+   códec («La 1 TVE 720p» → «1»); el nombre de debajo no repite la calidad que ya va en su etiqueta.
+6. **Remux:** la lista `index.m3u8` que aún no está (arranca o se reinicia) responde 503 con `Retry-After: 1` y hls.js
+   la reintenta; ya no hay 500 por un ENOENT.
+
+### 18.2 Limpieza de nombres (`names.ts`, `channel-names.ts`)
+
+| Qué | Antes | Ahora |
+|---|---|---|
+| Cabeceras «##### … #####», «==== … ====», «XX - NO MATCH», «NO EVENT» | canales (salían en el buscador y casaban: «##### FANSEAT #####», «###### DE - APPLE TV ######») | fuera del catálogo (`filler`) |
+| Filas de evento «ESPN PLUS 12 : … 3:00 PM ET / 8:00 PM UK» | un canal más | `event`: al final del orden |
+| «ES TI - TELEMADRID HD» | país «ES», nombre «TI - TELEMADRID» | país ES; «TI» es la plataforma |
+| «ES-M.LALIGA 4 HD» | clave `m laliga 4` | `movistar laliga 4` |
+| Categoría «EU \| ES \| TDT ESPAÑA VIP» (con NBSP a veces) | país EU | país ES (el primer tramo es el continente); «VIP \| …» sin país; «AR \| …» es árabe |
+| «BEIN SPORTS Ñ FHD» | clave `bein sports n` | «BEIN SPORTS», país ES |
+| «LASEXTA ᴿᴬᵂ», «MOVISTAR DEPORTES ᵛᶦᵖ» | ᴿᴬᵂ y ᵛᶦᵖ en la clave | ᴿᴬᵂ = reserva del mismo canal; los demás superíndices, adorno; «⁴ᴷ» = 4K |
+| «LA 1 4K/UHD» | «LA 1 /» | «LA 1» (4K) |
+| «[ PREMIERELEAGUE ]», «(SOLO EVENTOS)», «(not 24/7)», «[ LIVE EVENT ]» | parte del nombre | nota: fuera |
+| «M. LALIGA HD (BK-1)», «BK-2» | «M. LALIGA ( -1)», clave `m laliga 1`: **se juntaba con M. LALIGA 1** | reserva de «M. LALIGA» |
+| «#VAMOS», «M. ELLAS #V» | «#» en el nombre | sin «#» |
+| Plataformas (VIX, Pluto TV, Rakuten TV, GOLD TV 24/7…, por el nombre o la categoría) | canales normales | `platform`: no se emparejan por nombre y van detrás en el buscador |
+
+La grafía única (`channelSpelling`) es segura para el emparejado: dos nombres que dan lo mismo son el mismo canal.
+«M6», «M95», «MTV» y «M LALIGA» (sin punto) no se tocan en la lista. En el **buscador**, además, «m laliga» y «mov
+laliga» son Movistar (`iptvSearchSpelling`), y la consulta **no** pasa por los alias curados del emparejado
+(`IPTV_CHANNEL_ALIASES`), que añadían «tv» y daban 0.
+
+### 18.3 Buscador (`search.ts`)
+
+**Qué casa:**
+1. **Por el nombre:** cada palabra de la consulta es el principio de una palabra de la clave, en cualquier orden. «tv»,
+   «canal», «canales», «channel» y «channels» no hace falta encontrarlas. Un número casa **entero** («la 1» ya no trae
+   «LALIGA+ PPV 10»). Por dentro de una palabra, solo en compuestos conocidos («liga» en «laliga», «sexta» en
+   «lasexta»…) o con 5 letras o más («nba» ya no casa con «dazn baloncesto»). La consulta pegada vale desde el principio
+   de una palabra («antena3», «la1»).
+2. **Sin Movistar:** «movistar vamos» y «m+ vamos» encuentran «#VAMOS» (las listas no siempre escriben la marca).
+3. **Por la categoría:** las palabras del tema (sin continente ni país) con sinónimos en su forma única
+   (`IPTV_CATEGORY_SYNONYMS`: futbol = football = soccer; deportes = sports; infantil = niños = kids; cine =
+   películas = movies; documental; tenis = tennis; noticias = news; ciclismo; baloncesto = basket; música; series;
+   entretenimiento = general). «tdt» trae los canales de «EU | ES | TDT ESPAÑA VIP»; «futbol», los de «TV FOOTBALL
+   PPV» detrás de «M. FUTBOL».
+
+**Orden por parecido:** nivel (0 igual; 1 misma familia: sin el número del final o sin la marca de delante, «laliga» →
+«DAZN LaLiga» y «M. LALIGA 3»; 2 empieza por la consulta; 3 las palabras en orden; 4 en cualquier orden o por dentro; 5
+sin Movistar; 6 por la categoría). Dentro de cada nivel: España o sin país → América en español → el resto; el canal
+principal antes que bar, PPV, replay, resúmenes, reservas ᴿᴬᵂ, plataformas y eventos; la familia junta y en orden
+numérico («M. LALIGA 1, 2, 3…»); la clave más corta (en la categoría, el orden del catálogo); el orden del catálogo.
+
+**Contrato:** no cambia (`iptvChannels` devuelve lo mismo). La píldora «Categoría: TDT España (75)» y el «Quizás
+quisiste decir…» son del buscador «como Google» (otro trabajo).
+
+### 18.4 Emparejado automático (`match.ts`, `names.ts`, `sources/ranking.ts`)
+
+- **Gana** (seguro): la grafía única; «TVG» = «TV Galicia» (alias curado; «TVG 2» sigue siendo otro); la limpieza de
+  §18.2 (Tivify visible: IB3, La 7, TVG; «BEIN SPORTS Ñ»; «LASEXTA ᴿᴬᵂ» dentro de «LA SEXTA»); las mismas letras juntas
+  o separadas son el mismo canal («laSexta» = «LA SEXTA»).
+- **Protecciones nuevas:**
+  - una **plataforma** de la lista (VIX, Pluto TV, Rakuten TV…) no casa por nombre: «M+ LaLiga TV» ya no es «LA LIGA 1»
+    de Rakuten;
+  - la regla del « 1» final exige la **misma marca de cadena** (Movistar o DAZN) si el canal pedido la lleva;
+  - **«DAZN» a secas** (la marca paraguas) no casa con nada, ni con un canal que la lista llame «DAZN»;
+  - **plataformas de la agenda** que nunca casan por nombre: Disney+, Prime Video, Apple TV, Netflix, HBO Max,
+    SkyShowtime, Filmin, Atresplayer, Mitele, FANSEAT, FANPLAY, Peacock, ViX, Pluto TV, Rakuten y «…Play» pegado
+    (Movistar Plus+ **sí** es un canal).
+- **Canal suelto de AceStream (`scope=channel`, biblioteca, `sameChannel`):** el título se limpia con
+  `aceChannelTitle` (sin « --> LISTA», asteriscos, calidad, códec ni fotogramas en cualquier sitio, y sin
+  «TVE»/«RTVE» detrás de La 1, La 2, Clan, 24h o Teledeporte). En la resolución, una IPTV **nunca es «lo genérico»**:
+  «La 1» de la IPTV ya no va detrás de «La 1 TVE 720p \*» de la lista.
+- **Sin cambiar:** umbral 92, Hypermotion ≤ 58, «DAZN 1» ≠ «DAZN 2» ≠ «DAZN F1», Liga de Campeones ≠ LaLiga, LALIGA+ PPV
+  y REPLAY nunca son LaLiga TV. **Pendiente de Isma:** «LaLiga TV M2…M5» (Primera Federación) ↔ «M. LALIGA 2…5» no se
+  empareja hasta que lo confirme.
+
+### 18.5 Carteles de fuente (web)
+
+- **Etiqueta de tipo:** las fuentes de las listas dicen «AceStream» (antes «M3U», que confundía: la IPTV también sale
+  de una lista M3U); las de la IPTV, «IPTV». «Guardada», «Favorito» y «Reciente» no cambian.
+- **Dorsal** (`channelDorsal`, `ChannelMark.tsx`): se salta 240/360/480/540/576/720/1080/1440/2160/4320 (con «p», «i»
+  o los fps pegados), 4K, 8K, «50 fps», H264/H265/x265/HEVC/AVC/HDR: «La 1 TVE 720p» → «1», «DAZN 2 1080p50 H265» → «2»,
+  «Eurosport 4K» → «E». Funciones de `@ace/shared`: `stripQualityMarks` e `isQualityNumber`.
+- **Nombre de debajo** (`posterNameOf`): sin los asteriscos de copia y, si la calidad ya sale en su etiqueta, sin la
+  marca de calidad: «La 1 TVE 720p» → «La 1 TVE». Sin etiqueta de calidad (AceStream sin medir), se queda.
+
+### 18.6 La lista del remux que aún no está
+
+El registro de la pila de Isma tenía `ENOENT … open '/data/remux/<hash>/index.m3u8'` respondido como 500 «error
+interno»: `sendFile` medía el fichero con `stat` y lo abría después; si entre medias el remux se reiniciaba (borra y
+rehace la carpeta), el stream fallaba al abrir. Ahora:
+- `sendFile` abre primero y lee de ese descriptor (sin carrera);
+- la **lista** de una sesión viva que aún no está responde **503 con `Retry-After: 1`** y `no-store` (web y
+  `/remux/`); un segmento que falta sigue siendo 404; la app nativa (con `?t=`) recibe su 404 de siempre, ahora con
+  `Retry-After`;
+- el relé IPTV, sin lista todavía, también responde 503 con `Retry-After`;
+- hls.js reintenta la lista maestra y la de nivel 4 veces (0,5 s, hasta 2 s: `HLS_PLAYLIST_RETRY`) sin avisar.
+
+### 18.7 Medidas con la lista real
+
+Servidor de la rama arrancado en otro puerto, sin red, contra una **copia** de los datos de la pila (misma semilla);
+«antes» = `origin/rediseno/iptv` (9e8a99e, ya con «todo desbloqueado»), «después» = esta rama. Solo nombres; ni
+URLs, ni credenciales, ni ids de stream; ningún canal reproducido.
+
+**Banco (149 consultas, 124 con lo esperado en el top 10):**
+
+| | Antes | Después |
+|---|---|---|
+| Aciertos en el top 10 | 80 | **102** |
+| Empeoran | — | **0** |
+| Consultas con 0 resultados | 38 | 31 |
+| Mediana / máximo por HTTP | 5,3 / 199 ms | 6,4 / 53 ms |
+
+Mejoran 22: movistar laliga, m+ laliga, mov laliga, movistar plus laliga, movistar la liga, m+ laliga tv, laliga, la
+liga, movistar liga de campeones, m+ liga de campeones, m+ liga de campeone, movistar deportes, m+ deportes, movistar
+futbol, m+ vamos, movistar vamos, movistar golf, m+ supercopa, tdt, canales tdt, barca tv e infantil. Siguen mal las
+erratas y los alias (dasn, telecinko, champions, ucl, tele 5, t5, la 6, tdp, rmtv, segunda division, 1 rfef…) y los
+partidos: son del buscador «como Google».
+
+**Ensayo (agenda real de hoy y mañana, 273 partidos):** antes 45 con IPTV, pero 21 eran cabeceras («##### FANSEAT
+#####» ×7, «###### DE - APPLE TV ######» ×14) → **24 de verdad**; después **27**, todos de verdad: los 24 de antes y
+Lugo – Racing Ferrol (TVG → TV GALICIA), Poblense – Valencia-Mestalla (IB3) y Mansillés – Mirandés B (La 7). Del 28-sep
+al 5-oct, el falso positivo «Disney+» → «DISNEY CHANNEL» desaparece.
+
+**«La 1» (8.3 del banco):** `resolve?channel=La 1 TVE 720p *&scope=channel` daba `not_found`; ahora `found` con la IPTV
+«La 1» (y primera). `iptvChannels?q=la 1` enlaza la biblioteca con la fila «LA 1» (`library` 0 → 1): una fila, no dos.
+
+### 18.8 Impacto en la app nativa (actualiza §10, §14.10 y §17.9)
+
+Nadie de `rediseno/iptv` toca `apps/ios`. **Sin cambiar nada** (incluida la 0.8.0): el servidor ya empareja mejor y la
+lista del remux responde 503 en web; la ruta nativa (`?t=`) sigue con su 404, ahora con `Retry-After`.
+
+**Cuando exista la pantalla**, la app porta:
+
+| Módulo | Fichero o carpeta | Cambio |
+|---|---|---|
+| M3 | `Sources/Core/Reglas/Nombres/GrafiaCanal.swift`* | `channelSpelling`, `stripQualityMarks` e `isQualityNumber` de `packages/shared/src/domain/channel-names.ts`, con vectores generados desde sus pruebas (`lista-real.test.ts`, «channelSpelling») |
+| M3 | `Sources/Core/Reglas/Fuentes/ReglasFuentes.swift` | etiqueta de tipo «AceStream» para las fuentes de listas (antes «M3U»); nombre del cartel sin la calidad si ya va en la etiqueta |
+| M6 | `Sources/UI/Dorsal.swift`* (o donde viva el dorsal) | el dorsal se salta la resolución y el códec («La 1 TVE 720p» → «1») |
+| M6 | `Sources/Pantallas/Buscar/`* y `Canales/`* | el filtro local con `channelSpelling` («m+ laliga» encuentra «M. LALIGA» en la biblioteca) |
+
+### 18.9 Pruebas
+
+- **Servidor:** `lista-real.test.ts` (nuevo, 90+ casos con una lista **sintética** de la misma forma que la real:
+  limpieza, país, cabeceras, eventos, plataformas, lado AceStream, buscador —familia M. LALIGA en orden con 9 formas de
+  escribirlo, categoría, números enteros, compuestos, pegados, orden por país y penalizaciones— y emparejado —lo que
+  casa y lo que no: Rakuten, Liga de Campeones frente a LaLiga, Hypermotion, DAZN 1/2/F1, PPV y replay, «DAZN» a secas,
+  Disney+, Apple TV, FANSEAT); `search.test.ts` (orden por país dentro de la familia); `remux/routes.test.ts` (503 con
+  Retry-After en la lista, 404 en el segmento, 404 con Retry-After en la nativa); `sources/ranking.test.ts` (la IPTV no
+  es «lo genérico»).
+- **Web:** `ChannelMark.test.tsx` (13 casos de dorsal), `SourcePoster.test.ts` (nombre sin calidad), etiqueta
+  «AceStream» en `model.test.ts`, `SourcesPanel.test.tsx` y `e2e/fuentes-demo.spec.ts`; `engines.test.ts`
+  (reintentos de la lista).
+
+### 18.10 Riesgos
+
+1. **Cabeceras fuera del catálogo:** el recuento de canales baja (27 685 → 26 051 en la lista de Isma). Una fila que
+   empiece y acabe con 3 o más «#», «=», «-», «\*», «~», «_» o «★» se toma como cabecera.
+2. **Categorías amplias:** «cine» o «series» traen categorías enteras detrás de lo que casa por nombre; siguen los topes
+   de §14.7.
+3. **Plataformas:** un canal de VIX o Pluto TV ya no se empareja por nombre con la agenda; sí se busca y se reproduce.
+4. **«LaLiga 1» pedido por la agenda** sigue casando con «M. LALIGA 1» (Movistar es relleno en `channelMatchScore`,
+   matriz 0.6.59 congelada); al revés ya no («M+ LaLiga TV» no es «LA LIGA 1» de Rakuten).
