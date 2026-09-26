@@ -53,39 +53,60 @@ struct InspectorFuente: View {
         .accessibilityLabel("Pegar hash")
     }
 
+    /// Partidas en piezas pequeñas y con los textos calculados fuera del constructor de vistas: juntas tardaban más
+    /// de 200 ms en tiparse en la CI (36230716702, 36232368558).
     @ViewBuilder private func acciones(_ o: ObjetivoInspector) -> some View {
-        // Títulos e iconos con su tipo, fuera de la llamada: con los ternarios dentro tardaba más de 200 ms en
-        // tiparse en la CI (36230716702).
-        let favorito: Bool = video.datos.biblioteca.datos?.favorites.contains { $0.id == o.hash } ?? false
-        let tituloFavorito: String = favorito ? "En favoritos" : "Favorito"
-        let iconoFavorito: NombreIcono = favorito ? .starF : .star
-        AccionInspector(tituloFavorito, icono: iconoFavorito, pulsado: favorito) {
-            alternarFavorito(o, guardado: favorito)
-        }
-        if enPartido {
-            let rebuscando: Bool = video.fuentes.rebuscando
-            let tituloRebuscar: String = rebuscando ? "Rebuscando…" : "Rebuscar"
-            AccionInspector(tituloRebuscar, icono: NombreIcono.refresh, girando: rebuscando) {
-                let fuentes = video.fuentes
-                Task { await fuentes.rebuscar() }
-            }
-            .disabled(rebuscando)
-        }
+        accionFavorito(o)
+        if enPartido { accionRebuscar }
         AccionInspector("Pegar hash", icono: .paste) { pegar() }
-        AccionInspector("Copiar hash", icono: .copy) {
-            video.copiar(o.hash, bien: "Hash copiado", mal: "No se pudo copiar el hash")
-        }
-        if enPartido {
-            let tituloAprendida: String = o.aprendida ? "✓ Canal aprendido" : "Es el canal correcto"
-            let iconoAprendida: NombreIcono = o.aprendida ? .check : .learn
-            AccionInspector(tituloAprendida, icono: iconoAprendida, pulsado: o.aprendida) {
-                let fuentes = video.fuentes
-                Task { await fuentes.confirmar(o.hash) }
-            }
-            .disabled(o.aprendida)
-        }
-        AccionInspector("Reportar", icono: .flag) { hojas.abrir(.reportar(hash: o.hash, numero: o.numero)) }
+        AccionInspector("Copiar hash", icono: .copy) { copiarHash(o) }
+        if enPartido { accionAprendida(o) }
+        AccionInspector("Reportar", icono: .flag) { reportar(o) }
         AbrirEnOtraApp(hash: o.hash, ih: o.ih)
+    }
+
+    private func esFavorito(_ o: ObjetivoInspector) -> Bool {
+        let favoritos: [Item] = video.datos.biblioteca.datos?.favorites ?? []
+        return favoritos.contains { (item: Item) -> Bool in item.id == o.hash }
+    }
+
+    private func accionFavorito(_ o: ObjetivoInspector) -> some View {
+        let favorito: Bool = esFavorito(o)
+        let titulo: String = favorito ? "En favoritos" : "Favorito"
+        let icono: NombreIcono = favorito ? .starF : .star
+        return AccionInspector(titulo, icono: icono, pulsado: favorito) { alternarFavorito(o, guardado: favorito) }
+    }
+
+    private var accionRebuscar: some View {
+        let rebuscando: Bool = video.fuentes.rebuscando
+        let titulo: String = rebuscando ? "Rebuscando…" : "Rebuscar"
+        return AccionInspector(titulo, icono: .refresh, girando: rebuscando) { rebuscar() }.disabled(rebuscando)
+    }
+
+    private func accionAprendida(_ o: ObjetivoInspector) -> some View {
+        let aprendida: Bool = o.aprendida
+        let titulo: String = aprendida ? "✓ Canal aprendido" : "Es el canal correcto"
+        let icono: NombreIcono = aprendida ? .check : .learn
+        return AccionInspector(titulo, icono: icono, pulsado: aprendida) { confirmar(o) }.disabled(aprendida)
+    }
+
+    private func rebuscar() {
+        let fuentes = video.fuentes
+        Task { await fuentes.rebuscar() }
+    }
+
+    private func confirmar(_ o: ObjetivoInspector) {
+        let fuentes = video.fuentes
+        let hash = o.hash
+        Task { await fuentes.confirmar(hash) }
+    }
+
+    private func copiarHash(_ o: ObjetivoInspector) {
+        video.copiar(o.hash, bien: "Hash copiado", mal: "No se pudo copiar el hash")
+    }
+
+    private func reportar(_ o: ObjetivoInspector) {
+        hojas.abrir(.reportar(hash: o.hash, numero: o.numero))
     }
 
     private func pegar() {
