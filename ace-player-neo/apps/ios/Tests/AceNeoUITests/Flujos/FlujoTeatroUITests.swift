@@ -40,6 +40,12 @@ final class FlujoTeatroUITests: XCTestCase {
         add(adjunto)
     }
 
+    /// «Dónde se emite» del panel Partido (va en mayúsculas con `textCase`: se busca sin distinguirlas).
+    @MainActor
+    private func dondeSeEmite(_ app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[cd] %@", "donde se emite")).firstMatch
+    }
+
     /// Los controles vuelven si se habían escondido (un toque en el vídeo los alterna).
     @MainActor
     private func controles(_ app: XCUIApplication, _ id: String) -> XCUIElement {
@@ -63,16 +69,30 @@ final class FlujoTeatroUITests: XCTestCase {
             // La demo de la fase 0 pone el partido a una hora fija de HOY: el marcador solo se pide cerca de esa
             // hora (`scoresWanted`), así que tapado y destapado se prueban cuando lo hay.
             let marcador = app.buttons["Ver marcador"]
+            // Destapar vale para ESA reproducción: si la demo arranca la fuente (o cambia de fuente) justo después del
+            // toque, `fijarViendo`/`resetScoreReveal` lo vuelven a tapar, como en la web. Se reintenta el toque.
             if marcador.waitForExistence(timeout: 5) {
-                marcador.tap()
-                XCTAssertTrue(
-                    app.buttons["Tapar el marcador (tu emisión va por detrás)"].waitForExistence(timeout: 5), "No se destapa")
+                let tapar = app.buttons["Tapar el marcador (tu emisión va por detrás)"]
+                var destapado = false
+                for _ in 0..<4 where !destapado {
+                    if marcador.exists { marcador.tap() }
+                    destapado = tapar.waitForExistence(timeout: 4)
+                }
+                XCTAssertTrue(destapado, "No se destapa")
             }
+            // Tocar una pestaña cambia el panel de debajo (Isma: «Canal» y «Datos técnicos» no hacían nada).
             elementoUI(app, IDUI.pestanaPartido).tap()
-            XCTAssertTrue(conTextoUI(app, "M+ LaLiga").waitForExistence(timeout: 5), "Sin la pestaña Partido (Dónde se emite)")
+            XCTAssertTrue(esperarElegido(elementoUI(app, IDUI.pestanaPartido), plazo: 5), "La pestaña Partido no queda elegida")
+            XCTAssertTrue(dondeSeEmite(app).waitForExistence(timeout: 5), "Sin la pestaña Partido (Dónde se emite)")
             captura(app, "teatro-partido-pestana-partido-\(tema)")
             elementoUI(app, IDUI.pestanaDatos).tap()
+            XCTAssertTrue(esperarElegido(elementoUI(app, IDUI.pestanaDatos), plazo: 5), "La pestaña Datos técnicos no queda elegida")
             XCTAssertTrue(elementoUI(app, IDUI.panelDatosTecnicos).waitForExistence(timeout: 5), "Sin datos técnicos")
+            XCTAssertFalse(dondeSeEmite(app).exists, "El panel Partido sigue a la vista")
+            captura(app, "teatro-partido-pestana-datos-\(tema)")
+            elementoUI(app, IDUI.pestanaFuentes).tap()
+            XCTAssertTrue(esperarElegido(elementoUI(app, IDUI.pestanaFuentes), plazo: 5), "No se vuelve a Fuentes")
+            XCTAssertFalse(elementoUI(app, IDUI.panelDatosTecnicos).exists, "Los datos técnicos siguen a la vista")
             app.terminate()
         }
     }
@@ -89,8 +109,13 @@ final class FlujoTeatroUITests: XCTestCase {
             XCTAssertTrue(conTextoUI(app, "Solo esta").waitForExistence(timeout: 5), "La ficha no dice «Solo esta»")
             captura(app, "teatro-canal-\(tema)")
             elementoUI(app, IDUI.pestanaDatos).tap()
+            XCTAssertTrue(esperarElegido(elementoUI(app, IDUI.pestanaDatos), plazo: 5), "La pestaña Datos técnicos no queda elegida")
             XCTAssertTrue(elementoUI(app, IDUI.panelDatosTecnicos).waitForExistence(timeout: 5), "Sin datos técnicos")
+            XCTAssertFalse(conTextoUI(app, "Solo esta").exists, "La ficha del canal sigue a la vista")
             captura(app, "teatro-canal-datos-\(tema)")
+            elementoUI(app, IDUI.pestanaCanal).tap()
+            XCTAssertTrue(esperarElegido(elementoUI(app, IDUI.pestanaCanal), plazo: 5), "La pestaña Canal no queda elegida")
+            XCTAssertTrue(conTextoUI(app, "Solo esta").waitForExistence(timeout: 5), "No vuelve la ficha del canal")
             app.terminate()
         }
     }
@@ -124,15 +149,34 @@ final class FlujoTeatroUITests: XCTestCase {
         XCTAssertTrue(esperarQueDesaparezca(salir, plazo: 8), "El segundo doble toque no quita la pantalla completa")
     }
 
-    /// Deslizar el vídeo a un lado cambia de fuente (necesita dos fuentes visibles en la sesión).
+    /// El cartel es el de la fuente elegida (`.isSelected`, la activa de la sesión).
+    @MainActor
+    private func esperarElegido(_ elemento: XCUIElement, plazo: TimeInterval) -> Bool {
+        let limite = Date().addingTimeInterval(plazo)
+        while Date() < limite {
+            if elemento.exists && elemento.isSelected { return true }
+            Thread.sleep(forTimeInterval: 0.25)
+        }
+        return elemento.exists && elemento.isSelected
+    }
+
+    /// Deslizar el vídeo a un lado cambia de fuente (`stepSource`). En demo-1 el comprobador verifica Elcano y
+    /// Faro en el paso 2 (2,7 s) y el arranque automático pone la 1; hasta entonces no hay activa y deslizar a la
+    /// izquierda elegiría la primera (como la web). Por eso se espera a que la 1 sea la elegida.
     @MainActor
     func testDeslizarDeLadoCambiaDeFuente() throws {
         let app = abrir("partido/demo-1")
+        let primero = elementoUI(app, IDUI.cartelFuente(1))
         let segundo = elementoUI(app, IDUI.cartelFuente(2))
-        try XCTSkipUnless(segundo.waitForExistence(timeout: 20), "La sesión de fuentes aún no da carteles (M3)")
+        XCTAssertTrue(segundo.waitForExistence(timeout: 20), "La sesión de fuentes no da carteles")
+        XCTAssertTrue(esperarElegido(primero, plazo: 20), "El arranque automático no pone la fuente 1")
         let video = elementoUI(app, IDUI.videoTeatro)
+        captura(app, "teatro-antes-de-deslizar")
         arrastrar(video, desde: CGVector(dx: 0.8, dy: 0.5), hasta: CGVector(dx: 0.1, dy: 0.5))
-        XCTAssertTrue(conTextoUI(app, "Fuente 2, ").waitForExistence(timeout: 10), "No pasa a la fuente 2")
+        let paso = esperarElegido(segundo, plazo: 10)
+        captura(app, "teatro-tras-deslizar")
+        XCTAssertTrue(paso, "Deslizar a la izquierda no pasa a la fuente 2")
+        XCTAssertFalse(primero.isSelected, "La fuente 1 sigue elegida")
     }
 
     /// Elegir un cartel lo pone «En pantalla».

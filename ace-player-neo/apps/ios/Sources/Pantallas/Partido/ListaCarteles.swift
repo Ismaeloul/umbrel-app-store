@@ -6,11 +6,28 @@ import SwiftUI
    Las plegadas van al final tras «Ver n más…». */
 
 struct ListaCarteles: View {
-    let visibles: [FilaCartel]
-    let plegadas: [FilaCartel]
+    let visibles: [FilaFuente]
+    let plegadas: [FilaFuente]
     let enPartido: Bool
-    @State private var abiertas = false
+    /// La sesión del teatro: con ella, abrir las plegadas sobrevive a cambiar de pestaña (MemoriaPestanasTeatro).
+    var clave: String? = nil
+    @State private var abiertasAqui = false
+    private let memoria = MemoriaPestanasTeatro.compartida
     @Namespace private var espacio
+
+    private var abiertas: Bool {
+        guard let clave else { return abiertasAqui }
+        return memoria.plegadasAbiertas.contains(clave)
+    }
+
+    private func alternarPlegadas() {
+        let nuevas: Bool = !abiertas
+        if let clave {
+            memoria.plegadas(abiertas: nuevas, en: clave)
+        } else {
+            abiertasAqui = nuevas
+        }
+    }
     @Environment(\.movimientoReducido) private var reducido
 
     /// «En pantalla» viaja del cartel viejo al nuevo (FLIP de SourceList.tsx; con movimiento reducido, aparece sin más).
@@ -34,10 +51,10 @@ struct ListaCarteles: View {
 
     /// Alto 44, relleno 0 12 0 8, separación 6, píldora, 13/650 `--text-2`, icono 18.
     private var botonPlegadas: some View {
-        Button { abiertas.toggle() } label: {
+        Button { alternarPlegadas() } label: {
             HStack(spacing: 6) {
                 IconoPalco(abiertas ? .chevU : .chevD, tamano: 18)
-                Text(PresentacionFuentes.textoPlegadas(plegadas, abiertas: abiertas)).estilo(.botonSm)
+                Text(Self.textoPlegadas(plegadas, abiertas: abiertas)).estilo(.botonSm)
             }
             .padding(.leading, 8)
             .padding(.trailing, 12)
@@ -48,10 +65,21 @@ struct ListaCarteles: View {
         .foregroundStyle(Palco.text2)
         .accessibilityAddTraits(abiertas ? .isSelected : [])
     }
+
+    /// «Ver 3 más sin señal» / «Ver 3 más (1 sin señal, 2 en cola)» / «Ver 3 más en cola» / «Ocultar…»
+    /// (el botón de SourceList.tsx).
+    static func textoPlegadas(_ plegadas: [FilaFuente], abiertas: Bool) -> String {
+        if abiertas { return "Ocultar las que no dan señal" }
+        let sinSenal: Int = plegadas.filter { $0.senal == .fail }.count
+        let n: Int = plegadas.count
+        if sinSenal == n { return "Ver \(n) más sin señal" }
+        if sinSenal > 0 { return "Ver \(n) más (\(sinSenal) sin señal, \(n - sinSenal) en cola)" }
+        return "Ver \(n) más en cola"
+    }
 }
 
 private struct RejillaCarteles: View {
-    let filas: [FilaCartel]
+    let filas: [FilaFuente]
     let enPartido: Bool
     let espacio: Namespace.ID
 

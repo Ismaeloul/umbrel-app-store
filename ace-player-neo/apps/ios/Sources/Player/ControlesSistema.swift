@@ -158,46 +158,46 @@ public final class ControlesSistema: ControlesDelSistema {
 
     // MARK: Comandos remotos
 
+    /// Los mandos de la pantalla de bloqueo. El sistema puede llamar a los manejadores desde otro hilo: son
+    /// `@Sendable` y saltan al actor principal con una tarea (nada de `assumeIsolated`, que cerraría la app).
     private func registrarComandos() {
         guard !comandosRegistrados else { return }
         comandosRegistrados = true
         let comandos = MPRemoteCommandCenter.shared()
-        comandos.playCommand.addTarget { [weak self] _ in
-            MainActor.assumeIsolated { self?.reproductor?.reanudar() }
-            return .success
-        }
-        comandos.pauseCommand.addTarget { [weak self] _ in
-            MainActor.assumeIsolated { self?.reproductor?.pausar() }
-            return .success
-        }
+        let caja = CajaReproductor(reproductor)
+        comandos.playCommand.addTarget(handler: Self.mando(caja) { $0.reanudar() })
+        comandos.pauseCommand.addTarget(handler: Self.mando(caja) { $0.pausar() })
         // Auriculares con un solo botón (diferencia consciente e inocua, a8 §3.11.6).
-        comandos.togglePlayPauseCommand.addTarget { [weak self] _ in
-            MainActor.assumeIsolated { self?.reproductor?.alternar() }
-            return .success
-        }
-        comandos.stopCommand.addTarget { [weak self] _ in
-            MainActor.assumeIsolated { self?.reproductor?.detener() }
-            return .success
-        }
+        comandos.togglePlayPauseCommand.addTarget(handler: Self.mando(caja) { $0.alternar() })
+        comandos.stopCommand.addTarget(handler: Self.mando(caja) { $0.detener() })
         comandos.skipBackwardCommand.preferredIntervals = [NSNumber(value: UmbralesReproductor.retrocesoS)]
         comandos.skipBackwardCommand.isEnabled = true
-        comandos.skipBackwardCommand.addTarget { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let reproductor = self?.reproductor else { return }
-                Task { await reproductor.retroceder() }
-            }
-            return .success
-        }
-        comandos.nextTrackCommand.addTarget { [weak self] _ in
-            MainActor.assumeIsolated { self?.reproductor?.cambiarCanal(1) }
-            return .success
-        }
-        comandos.previousTrackCommand.addTarget { [weak self] _ in
-            MainActor.assumeIsolated { self?.reproductor?.cambiarCanal(-1) }
-            return .success
-        }
+        comandos.skipBackwardCommand.addTarget(handler: Self.mando(caja) { r in Task { await r.retroceder() } })
+        comandos.nextTrackCommand.addTarget(handler: Self.mando(caja) { $0.cambiarCanal(1) })
+        comandos.previousTrackCommand.addTarget(handler: Self.mando(caja) { $0.cambiarCanal(-1) })
         // En directo no hay avance ni barra que arrastrar.
         comandos.changePlaybackPositionCommand.isEnabled = false
         comandos.skipForwardCommand.isEnabled = false
     }
+
+    /// Un manejador de mando: responde `.success` en el hilo que sea y hace la acción en el actor principal.
+    private nonisolated static func mando(
+        _ caja: CajaReproductor, _ accion: @escaping @MainActor @Sendable (Reproductor) -> Void
+    ) -> @Sendable (MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {
+        { _ in
+            Task { @MainActor in
+                guard let reproductor = caja.reproductor else { return }
+                accion(reproductor)
+            }
+            return .success
+        }
+    }
+}
+
+/// El reproductor sin retenerlo, para los manejadores de los mandos (viven en el centro de mandos del sistema).
+@MainActor
+final class CajaReproductor {
+    weak var reproductor: Reproductor?
+
+    init(_ reproductor: Reproductor?) { self.reproductor = reproductor }
 }

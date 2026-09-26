@@ -1,7 +1,11 @@
 import Foundation
 import Testing
 
-@testable import AceNeo
+#if SWIFT_PACKAGE
+    @testable import NucleoPuro
+#else
+    @testable import AceNeo
+#endif
 
 /* Textos del escenario calcados de player/status.ts (statusFor, liveButton, stageMessage) y de MiniPlayer.tsx
    (miniKicker), con los casos de status.test.ts y a4 §5.4, §7.3, §8.1. */

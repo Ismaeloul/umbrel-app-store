@@ -118,10 +118,13 @@ import Foundation
         case .trabajo(let id):
             datos.trabajos[id]?.invalidar()
         case .senalPartido(let progreso):
-            senales.anotar(progreso, ahora: senales.reloj.ahora)
-            fuentes.procesar(.scanProgress(progreso))
+            let ahora: Date = senales.reloj.ahora  // en su línea: tipado en 237 ms (CI 36230463114)
+            senales.anotar(progreso, ahora: ahora)
+            let evento: SSEEvent = SSEEvent.scanProgress(progreso)  // tipo explícito: 220 ms en CI 36241843368
+            fuentes.procesar(evento)
         case .veredicto(let veredicto):
-            fuentes.procesar(.scanVerdict(veredicto))
+            let evento: SSEEvent = SSEEvent.scanVerdict(veredicto)
+            fuentes.procesar(evento)
         case .dispositivos(let cambio):
             revocadoDesdeOtro(cambio)
         case .alReproductor(let evento):
@@ -186,7 +189,7 @@ import Foundation
         guard habia, let ahora = consulta.datos, ahora.nowPlaying != antes else { return }
         let sintetico = SSEEvent.playbackNowPlaying(
             PlaybackNowPlayingData(nowPlaying: ahora.nowPlaying, learningCount: ahora.learningCount))
-        reproductor.procesar(sintetico)
+        reproductor.procesar(sintetico, sintetico: true)
         for oyente in oyentes.values { oyente(sintetico) }
     }
 }

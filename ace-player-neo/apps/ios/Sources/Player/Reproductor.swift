@@ -74,6 +74,11 @@ public final class Reproductor {
     public internal(set) var reconexiones = 0
     /// Lista de zapping (favoritos + lista activa, `zappingList`): la pantalla de bloqueo y ‹ › la recorren.
     public var lista: [CanalReproducible] = []
+    /// La lista de zapping al momento, como el `useMemo` de player/index.tsx sobre la biblioteca (lo engancha la
+    /// sesión de fuentes con `Zapping.lista`). Si está, manda sobre `lista`.
+    @ObservationIgnored var listaViva: (() -> [CanalReproducible])?
+    /// La lista que se recorre ahora.
+    var listaZapping: [CanalReproducible] { listaViva?() ?? lista }
     /// Quién pidió lo que suena.
     var origen: OrigenReproduccion?
     /// Lo que la sesión de fuentes dice mientras espera una fuente (`waiting`): panel «Buscando señal».
@@ -214,7 +219,8 @@ public final class Reproductor {
 
     /// Hay lista de zapping con otro canal (`canZap`).
     var puedeZapear: Bool {
-        lista.count > 1 || (lista.count == 1 && lista.first?.id != canal?.id)
+        let lista: [CanalReproducible] = listaZapping
+        return lista.count > 1 || (lista.count == 1 && lista.first?.id != canal?.id)
     }
 
     /// Se puede retroceder 30 s (`conn === 'activa' && started && !demo`).
@@ -392,7 +398,7 @@ public final class Reproductor {
     /// Zapping (← → y la pantalla de bloqueo): háptica rigid, aviso «Zapping: <canal>» y el canal siguiente de
     /// la lista (`zapTarget`: si el actual no está, el primero; en bucle; nunca el mismo).
     public func cambiarCanal(_ paso: Int) {
-        guard let destino = Self.destinoZapeo(lista, actual: canal?.id, paso: paso) else { return }
+        guard let destino = Self.destinoZapeo(listaZapping, actual: canal?.id, paso: paso) else { return }
         vibrar?(.rigida)
         notificar(TextosReproductor.zapping(destino.titulo), icono: .tv)
         reproducir(destino, origen: .zapping)

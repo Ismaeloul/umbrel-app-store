@@ -195,8 +195,13 @@ enum DatosTeatro {
 
     /// `channelInfo`: los canales anunciados y si están en tu biblioteca (≥ 70 por nombre o tvg-id).
     static func canales(_ partido: FootballMatch, biblioteca: [Item]) -> [CanalEmision] {
-        let claves = biblioteca.flatMap { item in [item.title] + (item.alias.map { [$0] } ?? []) }
-            .map { Canales.clave($0) }.filter { !$0.isEmpty }
+        // En pasos con tipos: la cadena de una línea tardaba 211 ms en tipar (CI 36242409344).
+        var nombres: [String] = []
+        for item in biblioteca {
+            nombres.append(item.title)
+            if let alias = item.alias { nombres.append(alias) }
+        }
+        let claves: [String] = nombres.map { (nombre: String) -> String in Canales.clave(nombre) }.filter { !$0.isEmpty }
         var vistos = Set<String>()
         return partido.channels.map(\.name).filter { !$0.isEmpty && vistos.insert($0).inserted }.map { nombre in
             let buscada = Canales.clave(nombre)

@@ -200,24 +200,11 @@ enum EstadoVisible {
 
     // MARK: «Datos técnicos» (player/NerdPanel.tsx)
 
-    /// `formatSpeed`: KB/s → «214 KB/s» o «1,92 MB/s».
-    static func velocidad(_ kbs: Double?) -> String {
-        guard let kbs, kbs.isFinite else { return "—" }
-        if kbs >= 1000 {
-            return String(format: "%.2f", kbs / 1024).replacingOccurrences(of: ".", with: ",") + " MB/s"
-        }
-        return "\(Int(kbs.rounded(.toNearestOrAwayFromZero))) KB/s"
-    }
+    /// `formatSpeed`: KB/s → «214 KB/s» o «1,92 MB/s» (el port de M2, probado con los vectores de la web).
+    static func velocidad(_ kbs: Double?) -> String { NumerosES.velocidad(kbs: kbs) }
 
-    /// `seconds` de NerdPanel: hasta un decimal, sin ceros de más («6 s», «2,5 s»).
-    static func segundos(_ valor: Double?) -> String {
-        guard let valor, valor.isFinite else { return "—" }
-        let redondo = (valor * 10).rounded(.toNearestOrAwayFromZero) / 10
-        let texto =
-            redondo == redondo.rounded()
-            ? String(Int(redondo)) : String(format: "%.1f", redondo).replacingOccurrences(of: ".", with: ",")
-        return "\(texto) s"
-    }
+    /// `seconds` de NerdPanel: hasta un decimal, sin ceros de más («6 s», «2,5 s»; M2, con el redondeo de ICU).
+    static func segundos(_ valor: Double?) -> String { NumerosES.segundosDato(valor) }
 
     /// Entrega según el protocolo (`DELIVERY`).
     static func entrega(_ protocolo: StreamProtocol?) -> String {

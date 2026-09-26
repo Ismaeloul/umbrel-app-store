@@ -5,12 +5,12 @@ import SwiftUI
    carteles con las plegadas) y el inspector. En un canal suelto las fuentes son sus hermanas de la biblioteca
    (§0.0 punto 1); sin hermanas no hay cabecera y solo queda el inspector («Acciones del canal»). */
 
-/// Lo que pinta el panel, ya decidido.
+/// Lo que pinta el panel, ya decidido (las filas de `useSourcesView`: las de la sesión de fuentes, M3).
 struct VistaFuentes {
-    var filas: [FilaCartel] = []
-    var visibles: [FilaCartel] = []
-    var plegadas: [FilaCartel] = []
-    var activa: FilaCartel?
+    var filas: [FilaFuente] = []
+    var visibles: [FilaFuente] = []
+    var plegadas: [FilaFuente] = []
+    var activa: FilaFuente?
 }
 
 struct PanelFuentes: View {
@@ -26,20 +26,16 @@ struct PanelFuentes: View {
         if let partidoId { return "partido:\(partidoId)" }
         return canalHash.map { "canal:\($0)" }
     }
-    /// ¿La sesión de fuentes es la de esta vista? (Por pasos: la comparación de opcionales tipaba lenta.)
+    /// La sesión es la de esta vista (`useSession`): la de este partido o canal, o la del canal del que este es
+    /// hermano (se vuelve del mini tras elegir una hermana: la sesión sigue siendo la del primero).
     private var esLaSesion: Bool {
-        let clave: String? = video.fuentes.clave
-        let propia: String? = claveSesion
-        return clave == propia
+        let fuentes: SesionFuentes = video.fuentes
+        if fuentes.clave == claveSesion { return true }
+        guard let canalHash, fuentes.tipo == .canal else { return false }
+        return fuentes.entradas.contains { $0.id == canalHash }
     }
-    private var deSesion: Bool {
-        let hayEntradas: Bool = !video.fuentes.entradas.isEmpty
-        return esLaSesion && hayEntradas
-    }
-    private var fase: FaseSesionFuentes {
-        guard esLaSesion else { return FaseSesionFuentes.reposo }
-        return video.fuentes.fase
-    }
+    private var deSesion: Bool { esLaSesion && !video.fuentes.entradas.isEmpty }
+    private var fase: FaseSesionFuentes { esLaSesion ? video.fuentes.fase : .reposo }
 
     var body: some View {
         let vista = calcular()
@@ -64,29 +60,16 @@ struct PanelFuentes: View {
 
     // MARK: Datos
 
+    /// Las filas de la sesión (M3: número, estado, medidor, frase y descripción) y cuáles se ven o se pliegan.
     private func calcular() -> VistaFuentes {
-        let listas = video.datos.biblioteca.datos?.webSources ?? []
-        let pantalla = video.enPantalla
-        if deSesion {
-            let f = video.fuentes
-            let filas = PresentacionFuentes.filas(
-                f.entradas, activa: f.activa, pantalla: pantalla, ahora: reloj.ahora, listas: listas,
-                hayComprobador: f.trabajo != nil)
-            let visibles = Set(f.visibles.map(\.id))
-            let plegadas = Set(f.plegadas.map(\.id))
-            return VistaFuentes(
-                filas: filas, visibles: filas.filter { visibles.contains($0.id) },
-                plegadas: filas.filter { plegadas.contains($0.id) }, activa: filas.first { $0.activa })
-        }
-        guard let canalHash else { return VistaFuentes() }
-        let biblioteca = video.datos.biblioteca.datos
-        let hermanas = OtrasFuentes.hermanas(biblioteca, hash: canalHash)
-        guard hermanas.count > 1 else { return VistaFuentes() }
-        let entradas = hermanas.map { OtrasFuentes.entrada($0, listaActiva: biblioteca?.activeWebSourceId) }
-        let activa = video.reproductor.canal?.id
-        let filas = PresentacionFuentes.filas(
-            entradas, activa: activa, pantalla: pantalla, ahora: reloj.ahora, listas: listas, hayComprobador: false)
-        return VistaFuentes(filas: filas, visibles: filas, plegadas: [], activa: filas.first { $0.activa })
+        guard deSesion else { return VistaFuentes() }
+        let fuentes: SesionFuentes = video.fuentes
+        let ahora: Date = reloj.ahora
+        let filas: [FilaFuente] = fuentes.filas(ahora: ahora)
+        let visibles = Set(fuentes.filasVisibles(ahora: ahora).map(\.id))
+        return VistaFuentes(
+            filas: filas, visibles: filas.filter { visibles.contains($0.id) },
+            plegadas: filas.filter { !visibles.contains($0.id) }, activa: filas.first { $0.activa })
     }
 
     private func objetivo(_ vista: VistaFuentes) -> ObjetivoInspector? {
@@ -111,7 +94,7 @@ struct PanelFuentes: View {
             vacioResolucion
         } else if !vista.filas.isEmpty {
             barra(vista)
-            ListaCarteles(visibles: vista.visibles, plegadas: vista.plegadas, enPartido: enPartido)
+            ListaCarteles(visibles: vista.visibles, plegadas: vista.plegadas, enPartido: enPartido, clave: claveSesion)
         }
     }
 
@@ -161,10 +144,10 @@ private struct CabeceraFuentes: View {
     }
 
     private var rebuscar: some View {
-        let rebuscando = video.fuentes.rebuscando
+        let rebuscando: Bool = video.fuentes.rebuscando
         return Button {
-            let fuentes = video.fuentes
-            Task { await fuentes.rebuscar() }
+            let fuentes: SesionFuentes = video.fuentes
+            Task<Void, Never> { await fuentes.rebuscar() }
         } label: {
             IconoGiratorio(icono: .refresh, girando: rebuscando, tamano: 24)
                 .frame(width: 44, height: 44)
@@ -183,22 +166,28 @@ private struct ProgresoComprobador: View {
     let resolviendo: Bool
     let video = EntornoVideo()
 
+    @Environment(RelojCompartido.self) private var reloj
+
     var body: some View {
-        let trabajo = video.fuentes.trabajo
-        let valor = resolviendo ? 0 : PresentacionFuentes.progreso(trabajo, entradas: vista.filas.count)
-        let enMarcha = trabajo.map { $0.status != .complete } ?? false
+        let comprobador: EstadoComprobador? = video.fuentes.comprobador
+        let valor = resolviendo ? 0 : video.fuentes.progreso
+        let enMarcha = comprobador.map { $0.estado != .complete } ?? false
         VStack(alignment: .leading, spacing: 8) {
             BarraFina(valor: valor, latiendo: enMarcha)
-            texto(trabajo)
+            texto(comprobador)
         }
         .accessibilityElement(children: .combine)
     }
 
-    private func texto(_ trabajo: ScanJob?) -> some View {
-        let base = resolviendo
-            ? "Preparando fuentes"
-            : PresentacionFuentes.textoProgreso(trabajo, filas: vista.filas, precalentado: video.fuentes.resolucion?.preheat)
-        let ahora = PresentacionFuentes.probandoAhora(vista.visibles, trabajo: trabajo)
+    /// «· la 3 se está probando ahora» (SourcesPanel.tsx): la que el comprobador prueba, no la de pantalla.
+    static func probandoAhora(_ visibles: [FilaFuente], comprobador: EstadoComprobador?) -> Int? {
+        guard let comprobador, comprobador.estado != .complete else { return nil }
+        return visibles.first { $0.efectivo.estado == .checking && $0.efectivo.motivo != "player_check" }?.numero
+    }
+
+    private func texto(_ comprobador: EstadoComprobador?) -> some View {
+        let base = resolviendo ? "Preparando fuentes" : video.fuentes.textoProgreso(ahora: reloj.ahora)
+        let ahora = Self.probandoAhora(vista.visibles, comprobador: comprobador)
         let estilo = EstiloTexto(tamano: 13, peso: 450, altoLinea: 1.25)
         return HStack(spacing: 0) {
             Text(base).estilo(estilo)
@@ -254,14 +243,14 @@ private struct AvisoFallo: View {
 
     var body: some View {
         let forma = RoundedRectangle(cornerRadius: R.l, style: .circular)
-        let rebuscando = video.fuentes.rebuscando
+        let rebuscando: Bool = video.fuentes.rebuscando
         VStack(alignment: .leading, spacing: 12) {
             Text(texto).estilo(EstiloTexto(tamano: 15, peso: 450, altoLinea: 1.25)).foregroundStyle(Palco.text)
             HStack(spacing: 8) {
                 BotonPalco(rebuscando ? "Rebuscando…" : "Rebuscar", icono: .refresh, variante: .quieto, tamano: .sm,
                            ocupado: rebuscando) {
-                    let fuentes = video.fuentes
-                    Task { await fuentes.rebuscar() }
+                    let fuentes: SesionFuentes = video.fuentes
+                    Task<Void, Never> { await fuentes.rebuscar() }
                 }
                 BotonPalco("Pegar hash", icono: .paste, variante: .quieto, tamano: .sm, accion: pegar)
             }

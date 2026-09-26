@@ -3,7 +3,9 @@ import SwiftUI
 /* El teatro (match-center/index.tsx y ChannelCenter.tsx; a4 §4, §16): la franja negra de la zona segura, el
    escenario fijo arriba (16:9 a todo el ancho) y, debajo, lo que se desplaza: la cabecera (partido o canal) y
    las pestañas pegadas bajo el vídeo con sus paneles montados. Arrastrar el vídeo hacia abajo lo lleva al mini
-   siguiendo al dedo (decisión 3). Mientras se ve: barra de estado clara sobre la franja negra, estado base del
+   como YouTube (decisión 3; Isma 26-sep): el vídeo baja con el dedo y se encoge hacia el mini mientras la página
+   se funde, con háptica al cruzar el umbral; al soltar pasado el umbral vuela al mini con el muelle y, si no,
+   vuelve a su sitio (TransicionTeatro.alMini, VueloAlMini). Mientras se ve: barra de estado clara sobre la franja negra, estado base del
    reproductor en la cápsula de estado y la sesión de fuentes de este partido o canal. */
 
 struct TeatroView: View {
@@ -12,21 +14,23 @@ struct TeatroView: View {
     @Environment(\.maquetacion) private var maquetacion
     @Environment(\.movimientoReducido) private var reducido
     @Environment(EstadoVentana.self) private var estadoVentana
-    @State private var arrastre = DesplazamientoGesto()
+    @Environment(TransicionTeatro.self) private var transicion
+    @State private var umbral = UmbralAlMini()
 
     var body: some View {
         let ancho: CGFloat = CGFloat(maquetacion.ancho - maquetacion.seguras.izquierda - maquetacion.seguras.derecha)
         VStack(spacing: 0) {
-            Color.black.frame(height: CGFloat(maquetacion.seguras.arriba))
-            EscenarioVideo(inmersivo: false) { gesto in arrastrar(gesto) }
+            Color.black.frame(height: CGFloat(maquetacion.seguras.arriba)).fundidoAlMini()
+            EscenarioVideo(inmersivo: false) { gesto in arrastrar(gesto, ancho: ancho) }
                 .frame(width: ancho, height: ancho * 9 / 16)
+                .escenarioAlMini()
                 .piezaVuelo(.escenario, partido: claveVuelo)
-            contenido
+                .zIndex(1)
+            contenido.fundidoAlMini()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Palco.bg)
+        .fondoAlMini(Palco.bg)
         .ignoresSafeArea(edges: .vertical)
-        .modifier(SigueAlDedo(gesto: arrastre, eje: .vertical))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(IDUI.teatro)
         .modifier(EstadoBaseTeatro())
@@ -60,20 +64,39 @@ struct TeatroView: View {
         }
     }
 
-    /// Arrastrar el vídeo hacia abajo (1:1): al soltar, minimiza (el vídeo pasa al mini) o vuelve con muelle.
-    private func arrastrar(_ gesto: ArrastreVideo) {
+    /// Arrastrar el vídeo hacia abajo: sigue al dedo y se encoge hacia el mini; al cruzar el umbral (56, el de
+    /// `classifySwipe`), háptica rígida (una vez por cruce, como el umbral de lado); al soltar, vuela al mini y
+    /// minimiza (`ligera`) o vuelve a su sitio con el muelle.
+    private func arrastrar(_ gesto: ArrastreVideo, ancho: CGFloat) {
         switch gesto {
         case .mover(let dy):
-            arrastre.valor = max(0, dy)
+            let sigue: Bool = transicion.arrastrarAlMini(Double(max(0, dy)), escenario: marcoEscenario(ancho: ancho))
+            let pasado: Bool = sigue && Double(dy) >= GeometriaVuelo.umbralAlMini
+            if pasado != umbral.pasado {
+                umbral.pasado = pasado
+                if pasado { video.haptica.disparar(.rigida) }
+            }
         case .soltar(let minimiza):
+            umbral.pasado = false
             if minimiza {
+                transicion.soltarAlMini(reducido: reducido)
                 video.minimizar()
-                arrastre.valor = 0
             } else {
-                withAnimation(Movimiento.estandar(reducido)) { arrastre.valor = 0 }
+                transicion.devolverAlTeatro(reducido: reducido)
             }
         }
     }
+
+    /// El marco del escenario en la ventana: bajo la franja de la zona segura, centrado, 16:9.
+    private func marcoEscenario(ancho: CGFloat) -> CGRect {
+        let x: CGFloat = (CGFloat(maquetacion.ancho) - ancho) / 2
+        return CGRect(x: x, y: CGFloat(maquetacion.seguras.arriba), width: ancho, height: ancho * 9 / 16)
+    }
+}
+
+/// Si el arrastre ya ha cruzado el umbral (para la háptica de una vez por cruce). No se observa: no repinta.
+private final class UmbralAlMini {
+    var pasado = false
 }
 
 /// El estado base de la cápsula de estado lo pone el reproductor mientras se ve el teatro (`setStatusBase`); al
@@ -119,19 +142,21 @@ struct DesplazableTeatro<Cabecera: View, Panel: View>: View {
     }
 }
 
-/// Paneles montados: el elegido se ve; los demás siguen vivos (estado, desplazamientos) sin ocupar sitio.
+/// El panel de una pestaña (`hidden` de TheaterTabs.tsx): solo se pinta el elegido. Como `.mc-tabs__panel`, el que
+/// llega se funde (`ace-funde`, 340 ms con `--ease-out`; reducido 120) y el que se va desaparece al momento. En la
+/// web los escondidos siguen montados por los atajos de teclado (N, 1-9), que aquí no hay; mantenerlos montados
+/// con alto 0 los dejaba en el árbol de accesibilidad (VoiceOver los leía). Al volver, como en la web (que pasa de
+/// `display: none` a verse), las animaciones de entrada vuelven a empezar; los datos son de la sesión y no se piden.
 struct PanelMontado<Contenido: View>: View {
     let visible: Bool
     @ViewBuilder let contenido: () -> Contenido
     @Environment(\.movimientoReducido) private var reducido
 
     var body: some View {
-        contenido()
-            .frame(maxHeight: visible ? nil : 0, alignment: .top)
-            .clipped()
-            .opacity(visible ? 1 : 0)
-            .allowsHitTesting(visible)
-            .accessibilityHidden(!visible)
-            .animation(.timingCurve(0.2, 0.7, 0.3, 1, duration: reducido ? 0.12 : 0.34), value: visible)
+        let funde: Animation = .timingCurve(0.2, 0.7, 0.3, 1, duration: reducido ? 0.12 : 0.34)
+        if visible {
+            contenido()
+                .transition(.asymmetric(insertion: .opacity.animation(funde), removal: .identity))
+        }
     }
 }

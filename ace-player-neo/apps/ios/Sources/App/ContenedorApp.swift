@@ -44,7 +44,8 @@ import Foundation
     }
 
     /// Crea los objetos sin cablearlos (lo hace `crear()`). Los tests pueden pasar su motor de vídeo.
-    /// Tipos escritos y dos ayudantes: todo en línea tardaba 453 ms en tiparse (CI 36177994191).
+    /// Tipos escritos y ayudantes: todo en línea tardaba 453 ms en tiparse (CI 36177994191) y aún 474 ms con dos
+    /// ayudantes en una CI lenta (36234695778).
     init(entorno: Entorno, reloj: any Reloj, motor: any MotorVideo) {
         self.entorno = entorno
         self.reloj = reloj
@@ -69,12 +70,12 @@ import Foundation
         self.tiempoReal = tiempoReal
         let avisos: Avisos = Avisos()
         self.avisos = avisos
-        let reproductor: Reproductor = Self.crearReproductor(entorno, motor: motor, modo: preferencias.modo)
+        let reproduccion: Reproduccion = Self.crearReproduccion(
+            entorno, motor: motor, modo: preferencias.modo, reloj: reloj)
+        let reproductor: Reproductor = reproduccion.reproductor
         self.reproductor = reproductor
-        // Una sola capa de vídeo: la presentación (M3) y el entorno (M6) comparten el MISMO GestorPiP.
-        let pip: GestorPiP = GestorPiP()
-        self.pip = pip
-        presentacion = PresentacionReproductor(reproductor: reproductor, pip: pip)
+        pip = reproduccion.pip
+        presentacion = reproduccion.presentacion
         let fuentes: SesionFuentes = SesionFuentes()
         self.fuentes = fuentes
         let senales: SenalPartidos = SenalPartidos()
@@ -88,12 +89,32 @@ import Foundation
         sesion.reloj = reloj
     }
 
-    private static func crearReproductor(_ entorno: Entorno, motor: any MotorVideo, modo: PlaybackMode)
-        -> Reproductor
-    {
+    /// El reproductor, la única capa de vídeo con su PiP y la presentación que los junta.
+    private struct Reproduccion {
+        let reproductor: Reproductor
+        let pip: GestorPiP
+        let presentacion: PresentacionReproductor
+    }
+
+    /// Una sola capa de vídeo: la presentación (M3) y el entorno (M6) comparten el MISMO GestorPiP.
+    private static func crearReproduccion(
+        _ entorno: Entorno, motor: any MotorVideo, modo: PlaybackMode, reloj: any Reloj
+    ) -> Reproduccion {
+        let reproductor: Reproductor = crearReproductor(entorno, motor: motor, modo: modo, reloj: reloj)
+        let pip: GestorPiP = GestorPiP()
+        let presentacion = PresentacionReproductor(reproductor: reproductor, pip: pip)
+        return Reproduccion(reproductor: reproductor, pip: pip, presentacion: presentacion)
+    }
+
+    /// El reproductor con el reloj de la app (-AceNeoReloj en Debug; §5.1 regla 7): primera imagen, ventana de
+    /// reconexiones y el `at` de las estadísticas de la demo.
+    private static func crearReproductor(
+        _ entorno: Entorno, motor: any MotorVideo, modo: PlaybackMode, reloj: any Reloj
+    ) -> Reproductor {
         let servicio: ServicioReproduccionAPI = ServicioReproduccionAPI(api: entorno.api)
         let visor: String = IdentidadVisor.id()
-        return Reproductor(motor: motor, servicio: servicio, visor: visor, modo: modo)
+        let ahora: @Sendable () -> Date = { reloj.ahora }
+        return Reproductor(motor: motor, servicio: servicio, visor: visor, modo: modo, reloj: ahora)
     }
 
     private static func crearRepartidor(
@@ -162,6 +183,7 @@ import Foundation
             } else if antes == .segundoPlano {
                 presentacion?.volvioAPrimerPlano()
             }
+            if despues == .activa { presentacion?.seActivoLaEscena() }
         }
         // 6. `datos.tiempoRealAbierto` sigue a `tiempoReal.estado`: lo hace el repartidor (M1).
     }
@@ -179,15 +201,9 @@ import Foundation
         }
         // Zapping (← →, pantalla de bloqueo): la web navega a `partido/canal/<hash>` (player/index.tsx › zap).
         reproductor.alZapear = { [weak navegador] canal in navegador?.ir(.canal(hash: canal.id)) }
-        // «Volver» en la ventanita del PiP: se enseña el teatro de lo que suena para que el vídeo vuelva a su sitio.
-        pip.alRestaurar = { [weak navegador, weak reproductor] in
-            guard let navegador, let canal = reproductor?.canal else { return }
-            if let partido = canal.partido {
-                navegador.ir(.partido(id: partido.id))
-            } else {
-                navegador.ir(.canal(hash: canal.id))
-            }
-        }
+        // Al cerrarse el PiP (volver a la app o «volver» en la ventanita) el vídeo vuelve a donde estaba, el teatro o
+        // el mini, sin navegar (Isma, 26-sep: como YouTube). Siempre hay uno de los dos con su hueco mientras suena.
+        pip.alRestaurar = nil
     }
 
     /// Arranque de proceso (orden de M1/M4): repartidor y sesión.

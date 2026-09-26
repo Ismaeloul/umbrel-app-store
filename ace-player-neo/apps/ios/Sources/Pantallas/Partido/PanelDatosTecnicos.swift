@@ -1,8 +1,9 @@
 import SwiftUI
 
 /* «Datos técnicos» (NerdSection.tsx y NerdPanel.tsx; a4 §15): la pestaña del teatro (tarjeta 24 con la cabecera,
-   el resumen «48 pares · 1,92 MB/s» y la tabla) y, en inmersivo, el panel de cristal de vídeo sobre la imagen
-   con su ✕. Lo único técnico del reproductor: Martian para los valores. Sin la tecla «S» (táctil). */
+   el resumen «48 pares · 1,92 MB/s» y la tabla), siempre en la página, debajo del vídeo. Nunca sobre la imagen:
+   ni en vertical ni en pantalla completa (Isma, 26-sep; la web saca su panel de cristal en inmersivo). Lo único
+   técnico del reproductor: Martian para los valores. Sin la tecla «S» (táctil). */
 
 /// Una fila de la tabla.
 struct FilaDatoTecnico: Identifiable {
@@ -123,42 +124,6 @@ struct SeccionDatosTecnicos: View {
         .background(Palco.surface, in: RoundedRectangle(cornerRadius: R.xl, style: .circular))
         .bordeInterior(Palco.lineSoft, forma: RoundedRectangle(cornerRadius: R.xl, style: .circular))
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier(IDUI.panelDatosTecnicos)
-    }
-}
-
-/// El panel sobre el vídeo en inmersivo (`.player-nerd--overlay`): cristal de vídeo, radio 18, arriba
-/// `max(64, safeT + 64)`, izquierda `max(12, safeL)`, ancho `min(340, 100 % − 24)`, alto máx `100 % − 140`,
-/// desplazable, relleno 10 10 12 16, cabecera «Datos técnicos» 15/800 con ✕.
-struct PanelDatosSobreVideo: View {
-    let seguras: Margenes
-    let anchoMarco: Double
-    let altoMarco: Double
-    let alCerrar: () -> Void
-
-    var body: some View {
-        let forma = RoundedRectangle(cornerRadius: R.l, style: .circular)
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("Datos técnicos").estilo(EstiloTexto(tamano: 15, peso: 800, anchura: 125, altoLinea: 1.1))
-                Spacer(minLength: 0)
-                BotonIcono(.x, etiqueta: "Cerrar los datos técnicos", variante: .video, accion: alCerrar)
-            }
-            ScrollView { TablaDatos(sobreVideo: true) }
-        }
-        .foregroundStyle(Palco.onVideo)
-        .padding(.leading, 16).padding(.trailing, 10).padding(.top, 10).padding(.bottom, 12)
-        .frame(width: CGFloat(min(340, anchoMarco - 24)))
-        .frame(maxHeight: CGFloat(max(120, altoMarco - 140)))
-        .fixedSize(horizontal: false, vertical: true)
-        .cristal(.video, en: forma)
-        .bordeInterior(Color.white.opacity(0.16), forma: forma)
-        .padding(.top, CGFloat(max(64, seguras.arriba + 64)))
-        .padding(.leading, CGFloat(max(12, seguras.izquierda)))
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .transition(.opacity.combined(with: .offset(y: 8)))
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Datos técnicos")
         .accessibilityIdentifier(IDUI.panelDatosTecnicos)
     }
 }

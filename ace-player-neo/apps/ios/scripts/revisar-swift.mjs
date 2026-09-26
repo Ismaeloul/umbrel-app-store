@@ -98,12 +98,11 @@ const REGLAS = [
   },
   {
     id: 'R5',
-    texto: 'una sola puerta: VistaVideo( solo en el escenario, el mini y el vuelo',
+    texto: 'una sola puerta: VistaVideo( solo en el escenario y el mini',
     patron: /\bVistaVideo\(/,
     excepto: [
       'Pantallas/Partido/EscenarioVideo.swift',
       'Pantallas/Mini/MiniReproductor.swift',
-      'Armazon/VueloVideo.swift',
       'Player/SuperficieVideo.swift',
     ],
   },

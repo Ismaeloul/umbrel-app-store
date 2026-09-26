@@ -9,7 +9,6 @@ struct MarcadorGrande: View {
     let partido: FootballMatch
     let marcador: LiveScore?
     let estado: EstadoTeatro?
-    let base: URL?
     @Environment(MarcadoresDestapados.self) private var destapados
     @Environment(Haptica.self) private var haptica
     @State private var anterior: [Int]?
@@ -25,14 +24,14 @@ struct MarcadorGrande: View {
         let visto: [Int]? = tapado ? nil : pintable.map { [$0.home, $0.away] }
         HStack(alignment: .center, spacing: 8) {
             LadoMarcador(
-                equipo: EquiposTeatro.equipo(partido, local: true, base: base), encendido: enDirecto, terminado: terminado,
+                equipo: DatosEquipo.de(partido, .local), encendido: enDirecto, terminado: terminado,
                 goles: golesLocal)
             centro.frame(minWidth: 92)
             if partido.away.isEmpty {
                 Color.clear.frame(maxWidth: .infinity)
             } else {
                 LadoMarcador(
-                    equipo: EquiposTeatro.equipo(partido, local: false, base: base), encendido: enDirecto, terminado: terminado,
+                    equipo: DatosEquipo.de(partido, .visitante), encendido: enDirecto, terminado: terminado,
                     goles: golesVisitante)
             }
         }

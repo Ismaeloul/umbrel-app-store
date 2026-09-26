@@ -20,7 +20,7 @@ struct CapaPartido: View {
                 contenido(destino)
                     .id(destino)
                     .frame(width: maquetacion.ancho, height: maquetacion.alto, alignment: .topLeading)
-                    .background(Palco.bg)
+                    .fondoAlMini(Palco.bg)
                     .modifier(ZoomTeatro(progreso: transicion.progreso, origen: transicion.origen,
                                          radio: transicion.radioOrigen, foto: transicion.fotoOrigen,
                                          opacidadFoto: transicion.opacidadFoto,
@@ -67,8 +67,7 @@ struct CapaPartido: View {
         guard let ahora else {
             guard transicion.mostrado != nil else { return }
             let suena: Bool = reproductor.canal != nil
-            let marcoVideo: CGRect? = escenario(de: transicion.mostrado)
-            Task { await transicion.cerrar(haciaMini: suena, desde: marcoVideo, reducido: reducido) }
+            Task { await transicion.cerrar(haciaMini: suena, reducido: reducido) }
             return
         }
         if transicion.mostrado == nil && antes == ahora {  // arranque con la capa ya puesta
@@ -79,11 +78,6 @@ struct CapaPartido: View {
         } else {
             transicion.mostrarYa(ahora)  // de un teatro a otro (zapping, «Otras fuentes»)
         }
-    }
-
-    private func escenario(de destino: Destino?) -> CGRect? {
-        guard case .partido(let id) = destino else { return nil }
-        return transicion.marcos[ClaveMarco(pieza: .escenario, partido: id)]
     }
 }
 

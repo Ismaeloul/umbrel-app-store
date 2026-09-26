@@ -9,8 +9,7 @@ import SwiftUI
 struct ContenidoCanal: View {
     let hash: String
     let video = EntornoVideo()
-    @SceneStorage("aceneo-teatro-pestana-canal") private var guardada = PestanaTeatro.fuentes.rawValue
-    @State private var ultimaNormal = PestanaTeatro.fuentes
+    private let memoria = MemoriaPestanasTeatro.compartida
 
     private var biblioteca: LibraryView? { video.datos.biblioteca.datos }
     private var item: Item? { OtrasFuentes.item(biblioteca, hash: hash) }
@@ -39,12 +38,15 @@ struct ContenidoCanal: View {
             paneles
         }
         .task(id: "\(hash)-\(titulo)-\(hermanas.map(\.id).joined(separator: ","))") { await entrar() }
-        .onDisappear { video.fuentes.salirVista() }
-        .modifier(SincronizarDatosTecnicos(guardada: $guardada, ultimaNormal: $ultimaNormal))
+        .onDisappear {
+            video.fuentes.salirVista()
+            memoria.olvidarPlegadas()
+        }
+        .modifier(SincronizarDatosTecnicos(tipo: .canal))
     }
 
     private var seleccion: PestanaTeatro {
-        let elegida = PestanaTeatro(rawValue: guardada) ?? .fuentes
+        let elegida = memoria.canal
         if elegida == .partido { return cuenta > 0 ? .fuentes : .canal }
         if elegida == .fuentes && cuenta == 0 { return .canal }
         return elegida
@@ -55,7 +57,9 @@ struct ContenidoCanal: View {
         if cuenta > 0 { opciones.append(OpcionPestanaTeatro(valor: .fuentes, titulo: "Fuentes", cuenta: cuenta)) }
         opciones.append(OpcionPestanaTeatro(valor: .canal, titulo: "Canal"))
         opciones.append(OpcionPestanaTeatro(valor: .datos, titulo: "Datos técnicos"))
-        return PestanasTeatro(opciones: opciones, seleccion: seleccion, etiqueta: "Panel del canal") { elegir($0) }
+        return PestanasTeatro(opciones: opciones, seleccion: seleccion, etiqueta: "Panel del canal") {
+            ElegirPestanaTeatro.elegir($0, en: .canal, video: video)
+        }
     }
 
     private var objetivo: ObjetivoInspector {
@@ -82,18 +86,8 @@ struct ContenidoCanal: View {
         }
     }
 
-    private func elegir(_ pestana: PestanaTeatro) {
-        video.haptica.disparar(.seleccion)
-        guardada = pestana.rawValue
-        if pestana == .datos {
-            video.presentacion.abrirDatosTecnicos()
-        } else {
-            ultimaNormal = pestana
-            if video.presentacion.datosTecnicosAbiertos { video.presentacion.cerrarDatosTecnicos() }
-        }
-    }
-
-    /// `enterChannel`: la sesión del canal con sus hermanas y, en reposo desde el inicio, suena (origen biblioteca).
+    /// `enterChannel` (M3): la sesión del canal con sus hermanas y, si el reproductor está en reposo desde el
+    /// inicio, suena (origen biblioteca). Tras «Detener» no lo relanza.
     private func entrar() async {
         let datos = video.datos
         await datos.biblioteca.asegurar(tiempoRealAbierto: datos.tiempoRealAbierto)
@@ -106,9 +100,5 @@ struct ContenidoCanal: View {
             }
         let canal = RefCanal(hash: hash, titulo: titulo, coleccion: coleccion, ih: item?.ih)
         await video.fuentes.entrarCanal(canal, listaActiva: biblioteca?.activeWebSourceId)
-        let r = video.reproductor
-        if r.fase == .idle && r.canal?.id != hash && r.motivoParada == nil {
-            r.reproducir(CanalReproducible(id: hash, titulo: titulo, ih: item?.ih))
-        }
     }
 }

@@ -10,18 +10,16 @@ struct PanelPartido: View {
     let marcador: LiveScore?
     let ahora: Date
     @Environment(DatosApp.self) private var datos
-    @State private var base: URL?
 
     private var estado: EstadoTeatro? { DatosTeatro.estado(partido, marcador: marcador, ahora: ahora) }
     private var hoy: String { DatosTeatro.relojMadrid(ahora).fecha }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            TarjetaMarcador(partido: partido, marcador: marcador, estado: estado, ahora: ahora, base: base)
+            TarjetaMarcador(partido: partido, marcador: marcador, estado: estado, ahora: ahora)
             competicion
             DondeSeEmite(partido: partido, canales: canales, pie: DatosTeatro.pieEmision(partido, hoy: hoy))
         }
-        .modifier(BaseServidor(base: $base))
     }
 
     private var canales: [CanalEmision] {
@@ -32,7 +30,7 @@ struct PanelPartido: View {
         HStack(spacing: 12) {
             if !partido.competition.isEmpty {
                 PastillaCompeticion(
-                    nombre: partido.competition, logo: EquiposTeatro.url(partido.competitionBadge?.logo, base: base),
+                    nombre: partido.competition, logo: ImagenesPartido.logoCompeticion(partido),
                     tamano: 28)
             }
             VStack(alignment: .leading, spacing: 0) {
@@ -56,7 +54,6 @@ private struct TarjetaMarcador: View {
     let marcador: LiveScore?
     let estado: EstadoTeatro?
     let ahora: Date
-    let base: URL?
     @State private var tamano: CGSize = .zero
 
     private var luz: Double { estado?.fase == .directo ? 1 : (estado?.fase == .terminado ? 0.4 : 0.8) }
@@ -64,7 +61,7 @@ private struct TarjetaMarcador: View {
     var body: some View {
         let forma = RoundedRectangle(cornerRadius: R.xl, style: .circular)
         VStack(spacing: 16) {
-            MarcadorGrande(partido: partido, marcador: marcador, estado: estado, base: base)
+            MarcadorGrande(partido: partido, marcador: marcador, estado: estado)
             if estado?.fase == .directo || estado?.fase == .terminado { barra }
         }
         .padding(.vertical, 20)
@@ -78,8 +75,8 @@ private struct TarjetaMarcador: View {
     }
 
     private var luces: some View {
-        let local = EquiposTeatro.equipo(partido, local: true, base: nil).primario.color
-        let visitante = partido.away.isEmpty ? local : EquiposTeatro.equipo(partido, local: false, base: nil).primario.color
+        let local: Color = DatosEquipo.de(partido, .local).primario.color
+        let visitante: Color = partido.away.isEmpty ? local : DatosEquipo.de(partido, .visitante).primario.color
         let rx: CGFloat = tamano.width * 0.6
         let ry: CGFloat = tamano.height * 0.8
         return ZStack {

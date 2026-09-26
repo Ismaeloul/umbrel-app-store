@@ -22,7 +22,7 @@ struct MiniReproductor: View {
     private var titulo: String { reproductor.canal?.titulo ?? "Ace Player Neo" }
 
     var body: some View {
-        let d = GestosTeatro.desplazamientoMini(dx: Double(arrastre.width), dy: Double(arrastre.height))
+        let d = GestosMini.arrastre(dx: Double(arrastre.width), dy: Double(arrastre.height))
         HStack(spacing: 12) {
             imagen
             InfoMini(titulo: titulo) { abrir() }
@@ -76,7 +76,7 @@ struct MiniReproductor: View {
         DragGesture(minimumDistance: 8)
             .onChanged { valor in
                 arrastre = valor.translation
-                let cruza = GestosTeatro.cruzaDescarte(dx: Double(valor.translation.width), dy: Double(valor.translation.height))
+                let cruza = GestosMini.pasado(dx: Double(valor.translation.width), dy: Double(valor.translation.height))
                 if cruza != armado {
                     armado = cruza
                     if cruza { haptica.disparar(.fuerte) }
@@ -89,13 +89,15 @@ struct MiniReproductor: View {
         armado = false
         let v = valor.velocity
         let t = valor.translation
-        switch GestosTeatro.soltarMini(dx: Double(t.width), dy: Double(t.height), vx: Double(v.width), vy: Double(v.height)) {
+        let ancho: Double = maquetacion.ancho
+        switch GestosMini.soltar(dx: Double(t.width), dy: Double(t.height), vx: Double(v.width), vy: Double(v.height), ancho: ancho) {
         case .abrir:
             withAnimation(Movimiento.estandar(reducido)) { arrastre = .zero }
             haptica.disparar(.ligera)
             abrir()
-        case .descartarIzquierda: descartar(-1)
-        case .descartarDerecha: descartar(1)
+        case .descartar:
+            // A un lado lo detiene, como la web (MiniPlayer.tsx: `dismiss(direction === 'right' ? 1 : -1)`).
+            descartar(t.width >= 0 ? 1 : -1)
         case .volver:
             withAnimation(Movimiento.estandar(reducido)) { arrastre = .zero }
         }

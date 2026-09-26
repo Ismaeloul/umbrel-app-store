@@ -4,7 +4,8 @@ import SwiftUI
    (`MiniReproductor`); aquí, su marco (`Maquetacion.marcoMini`: móvil a 12 del borde y safeB + 82 del fondo;
    tableta abajo a la izquierda, ≤ 440) y su entrada: de opacidad 0 y 12 más abajo a su sitio con el muelle
    estándar (`player-sube`; reducido, fundido). Se monta cuando algo suena fuera del teatro y del inmersivo; durante
-   la vuelta del teatro espera a que acabe (plan B de §3.5 sin el vuelo del vídeo). */
+   la vuelta del teatro espera a que acabe y, si el vídeo ha volado hasta su sitio (`TransicionTeatro.alMini`),
+   aparece ya colocado, sin entrada. */
 
 struct CapaMini: View {
     let inmersivo: Bool
@@ -23,7 +24,7 @@ struct CapaMini: View {
                 MiniReproductor()
                     .frame(width: marco.ancho, height: marco.alto)
                     .offset(x: marco.x, y: marco.y)
-                    .transition(entrada)
+                    .transition(transicion.miniSinEntrada ? .identity : entrada)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

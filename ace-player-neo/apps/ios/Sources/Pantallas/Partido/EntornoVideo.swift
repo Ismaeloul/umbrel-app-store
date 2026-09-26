@@ -35,54 +35,19 @@ struct EntornoVideo: DynamicProperty {
         foto.motivoParada = reproductor.motivoParada
         foto.quiereReproducir = reproductor.quiereReproducir
         foto.demo = demo
-        // Con su tipo escrito: leído de pasada rozó los 200 ms de tipar (CI 36226749363).
-        let sesionFuentes: SesionFuentes = fuentes
-        let espera: String? = sesionFuentes.textoEspera
-        foto.espera = espera
-        foto.lead = lead(canal)
+        foto.espera = fuentes.esperaParaFoto  // `textoEspera` directo tardaba > 200 ms en tiparse (CI 36234006734)
+        // «Fuente n verificada.» · «Fuente n, señal floja.» · «Fuente n.»: la pone la sesión al reproducir
+        // (`leadFor` → `channel.lead`, lo que lee statusFor en la web).
+        foto.lead = canal?.lead
         return foto
     }
 
-    /// «Fuente n verificada.» / «Fuente n, señal floja.» / «Fuente n.» (solo en partidos; a4 §20.9).
-    private func lead(_ canal: CanalReproducible?) -> String? {
-        guard let canal, canal.partido != nil, let i = fuentes.entradas.firstIndex(where: { $0.id == canal.id }) else {
-            return nil
-        }
-        let n = i + 1
-        switch fuentes.entradas[i].sonda?.estado {
-        case .some(.working): return "Fuente \(n) verificada."
-        case .some(.weak): return "Fuente \(n), señal floja."
-        default: return "Fuente \(n)."
-        }
-    }
+    /// Subtítulo de lo que suena (a4 §20.9; `channel.subtitle` de la web): lo pone la sesión de fuentes al
+    /// reproducir («Fuente {n}, {proveedor corto}» o «Fuente {n} de {total}»). Nunca el marcador.
+    var subtitulo: String? { reproductor.canal?.subtitulo }
 
-    /// Subtítulo de lo que suena (a4 §20.9): partido «Fuente {n}, {proveedor corto}»; canal con hermanas
-    /// «Fuente {n} de {total}»; si no, ninguno. Nunca el marcador.
-    var subtitulo: String? {
-        guard let canal = reproductor.canal, let i = fuentes.entradas.firstIndex(where: { $0.id == canal.id }) else {
-            return nil
-        }
-        let entrada = fuentes.entradas[i]
-        if canal.partido != nil {
-            let listas = datos.biblioteca.datos?.webSources ?? []
-            let quien = PresentacionFuentes.proveedor(entrada.titulo)
-            let lista = PresentacionFuentes.nombreLista(entrada.listaId, listas: listas)
-            let corto = !quien.isEmpty ? quien : (!lista.isEmpty ? lista : PresentacionFuentes.tipo(origen: entrada.origen, ih: entrada.ih))
-            return "Fuente \(i + 1), \(corto)"
-        }
-        return fuentes.entradas.count > 1 ? "Fuente \(i + 1) de \(fuentes.entradas.count)" : nil
-    }
-
-    /// Lo que hay en pantalla para la regla «la que se ve manda» (`onScreenOf`, model.ts).
-    var enPantalla: EnPantalla {
-        let fase = reproductor.fase
-        guard fase != .idle, fase != .error, let id = reproductor.canal?.id else { return .nada }
-        let fasesSonando: [FaseReproductor] = [.reproduciendo, .pausado, .buffer, .buscando]
-        let fasesConectando: [FaseReproductor] = [.cargando, .reconectando, .buffer]
-        let sonando: Bool = reproductor.arranco && fasesSonando.contains(fase)
-        let conectando: Bool = !sonando && fasesConectando.contains(fase)
-        return EnPantalla(id: id, sonando: sonando, conectando: conectando)
-    }
+    /// Lo que hay en pantalla para la regla «la que se ve manda» (`onScreenOf`, model.ts; M3).
+    var enPantalla: EnPantalla { reproductor.enPantalla }
 
     var esFavorito: Bool {
         guard let hash = reproductor.canal?.id else { return false }
@@ -91,43 +56,20 @@ struct EntornoVideo: DynamicProperty {
 
     // MARK: Fuentes
 
-    /// Las que se ven, en orden: las de la sesión de fuentes; en un canal suelto con la sesión aún vacía, sus
-    /// hermanas de la biblioteca («Otras fuentes», §0.0 punto 1).
-    var idsFuentesVisibles: [String] {
-        if !fuentes.entradas.isEmpty { return fuentes.visibles.map(\.id) }
-        guard case .canal(let hash) = navegador.capa else { return [] }
-        let hermanas = OtrasFuentes.hermanas(datos.biblioteca.datos, hash: hash)
-        return hermanas.count > 1 ? hermanas.map(\.id) : []
-    }
+    /// Las que se ven, en orden: las de la sesión de fuentes (en un canal suelto, sus hermanas de la biblioteca:
+    /// «Otras fuentes», §0.0 punto 1, que la sesión ya tiene al entrar).
+    var idsFuentesVisibles: [String] { fuentes.visibles.map(\.id) }
 
-    /// ‹ › de «Emitiendo» y deslizar el vídeo a los lados: la siguiente o anterior en bucle (háptica rígida).
-    /// Con la sesión llena manda la regla de la sesión (`stepSource`, M3); solo las hermanas de un canal con la
-    /// sesión vacía se recorren aquí.
+    /// ‹ › de «Emitiendo» y deslizar el vídeo a los lados: la siguiente o anterior en bucle (háptica rígida;
+    /// `stepSource` de la sesión, M3).
     func pasoFuente(_ delta: Int) {
-        if !fuentes.entradas.isEmpty {
-            guard fuentes.visibles.count > 1 else { return }
-            haptica.disparar(.rigida)
-            fuentes.paso(delta)
-            return
-        }
-        let ids = idsFuentesVisibles
-        let activa = fuentes.activa ?? reproductor.canal?.id
-        guard ids.count > 1, let destino = GestosTeatro.paso(ids, activa: activa, delta: delta) else { return }
+        guard fuentes.visibles.count > 1 else { return }
         haptica.disparar(.rigida)
-        elegirFuente(destino)
+        fuentes.paso(delta)
     }
 
-    /// Elegir una fuente a mano (`selectSource`): la sesión de fuentes; en un canal suelto con la sesión aún
-    /// vacía, la hermana suena como canal propio (nunca salta sola).
-    func elegirFuente(_ hash: String) {
-        if !fuentes.entradas.isEmpty {
-            fuentes.elegir(hash)
-            return
-        }
-        guard case .canal = navegador.capa, let item = OtrasFuentes.item(datos.biblioteca.datos, hash: hash) else { return }
-        let titulo = item.title.isEmpty ? "Canal \(hash.prefix(8))" : item.title
-        reproductor.reproducir(CanalReproducible(id: hash, titulo: titulo, ih: item.ih))
-    }
+    /// Elegir una fuente a mano (`selectSource` de la sesión): desde aquí nunca salta sola.
+    func elegirFuente(_ hash: String) { fuentes.elegir(hash) }
 
     /// «Reintentar» y «Reproducir aquí» del panel del vídeo (`actions.retry`): vuelve a pedir lo que sonaba.
     func reintentar() {
@@ -162,14 +104,14 @@ struct EntornoVideo: DynamicProperty {
         Task { await reproductor.retroceder() }
     }
 
-    /// Silencio: un solo estado para las dos filas de controles (vertical e inmersivo), aplicado al AVPlayer de
-    /// verdad (en la demo no hay).
+    /// Silencio: el estado es del reproductor (M3, como `state.muted` de la web en PlayerSurface.tsx), así que las
+    /// dos filas de controles (vertical e inmersivo) pintan lo mismo; el motor lo aplica al AVPlayer.
     func alternarSilencio() {
         haptica.disparar(.ligera)
-        SilencioVideo.compartido.alternar(reproductor.motor.avPlayer)
+        reproductor.silenciar(!reproductor.silenciado)
     }
 
-    var silenciadoAhora: Bool { SilencioVideo.compartido.silenciado }
+    var silenciadoAhora: Bool { reproductor.silenciado }
 
     /// ⛶ = inmersivo en horizontal con nuestros controles (decisión 3; a4 §23.2). Háptica media.
     func alternarPantallaCompleta() {
@@ -229,20 +171,11 @@ struct EntornoVideo: DynamicProperty {
         }
     }
 
-    /// Canal anterior o siguiente de la lista de zapping (háptica rígida, aviso y teatro del canal; a4 §21).
-    func zapping(_ paso: Int) {
-        let lista = ListaZappingTeatro.de(datos.biblioteca.datos)
-        guard let destino = ListaZappingTeatro.destino(lista, actual: reproductor.canal?.id, paso: paso) else { return }
-        haptica.disparar(.rigida)
-        avisos.avisar("Zapping: \(destino.title)", clase: .senal, icono: .tv)
-        reproductor.reproducir(CanalReproducible(id: destino.id, titulo: destino.title, ih: destino.ih))
-        navegador.ir(.canal(hash: destino.id))
-    }
+    /// Canal anterior o siguiente de la lista de zapping (a4 §21; `zap` de player/index.tsx): el reproductor (M3)
+    /// recorre `zappingList` (M5) con su háptica rígida y su aviso, y lleva al teatro del canal.
+    func zapping(_ paso: Int) { reproductor.cambiarCanal(paso) }
 
-    var puedeZapear: Bool {
-        let lista = ListaZappingTeatro.de(datos.biblioteca.datos)
-        return lista.count > 1 || (lista.count == 1 && lista.first?.id != reproductor.canal?.id)
-    }
+    var puedeZapear: Bool { reproductor.puedeZapear }
 
     // MARK: Copiar y abrir fuera
 
@@ -280,49 +213,5 @@ struct EntornoVideo: DynamicProperty {
             origen = "\(esquema)://\(host)\(puerto)"
         }
         return "\(origen)/ace/getstream?\(parametro)=\(hash)"
-    }
-}
-
-/// El silencio del vídeo (la web lee `state.muted` del reproductor, PlayerSurface.tsx). `Reproductor` no tiene
-/// silencio y el AVPlayer (uno solo, el del motor) no se puede observar: lo que pintan los botones sale de aquí,
-/// compartido por todas las filas de controles montadas, y se aplica al AVPlayer.
-@MainActor @Observable final class SilencioVideo {
-    static let compartido = SilencioVideo()
-    private(set) var silenciado = false
-
-    func alternar(_ avPlayer: AVPlayer?) {
-        silenciado.toggle()
-        avPlayer?.isMuted = silenciado
-    }
-}
-
-/// Lista de zapping (player/zapping.ts): favoritos y después el directorio activo agrupado por categorías en el
-/// orden en que llegan, sin repetidos y sin los recientes. Si el actual no está, el siguiente es el primero.
-/// (Cuando M5 publique `Zapping`, este se sustituye por él.)
-enum ListaZappingTeatro {
-    static func de(_ biblioteca: LibraryView?) -> [Item] {
-        guard let biblioteca else { return [] }
-        var orden: [String] = []
-        var grupos: [String: [Item]] = [:]
-        for item in biblioteca.web {
-            let categoria = item.category.isEmpty ? "General" : item.category
-            if grupos[categoria] == nil { orden.append(categoria) }
-            grupos[categoria, default: []].append(item)
-        }
-        let plana = biblioteca.favorites + orden.flatMap { grupos[$0] ?? [] }
-        var vistos = Set<String>()
-        return plana.filter { vistos.insert($0.id).inserted }
-    }
-
-    static func destino(_ lista: [Item], actual: String?, paso: Int) -> Item? {
-        guard !lista.isEmpty else { return nil }
-        let total: Int = lista.count
-        var siguiente: Int = 0
-        if let actual, let indice = lista.firstIndex(where: { $0.id == actual }) {
-            let bruto: Int = (indice + paso) % total
-            siguiente = (bruto + total) % total
-        }
-        let item: Item = lista[siguiente]
-        return item.id == actual ? nil : item
     }
 }

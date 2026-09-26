@@ -3,9 +3,66 @@ import SwiftUI
 /* Pestañas del teatro (TheaterTabs.tsx; a4 §11): «Fuentes n · Partido · Datos técnicos» o «[Fuentes n] · Canal ·
    Datos técnicos», segmentado a todo el ancho con la gota que se desliza (muelle estándar), pestañas de 44
    (padding 0 8; ≤ 400: 0 4 y anchura 88 %), la cuenta en `--text-3`. Se queda pegado bajo el vídeo con fondo
-   `--bg` y relleno 8 16. Cambiar: háptica de selección. */
+   `--bg` y relleno 8 16. Cambiar: háptica de selección. Sin deslizar entre paneles (la web tampoco). */
 
 enum PestanaTeatro: String, CaseIterable, Sendable { case fuentes, partido, canal, datos }
+
+/// La pestaña elegida por tipo de teatro (`theaterTabStore` de TheaterTabs.tsx): una para los partidos y otra para
+/// los canales, mientras dura la app (la web la guarda en sessionStorage, que dura lo que la pestaña del
+/// navegador). Antes era `@SceneStorage`, que con la raíz en un UIHostingController no guardaba nada: tocar
+/// «Canal» o «Datos técnicos» no cambiaba el panel. «Datos técnicos» va de la mano del menú del vídeo
+/// (`nerdOpen`): abrirlo elige esa pestaña y cerrarlo vuelve a la última que no lo era.
+@MainActor @Observable final class MemoriaPestanasTeatro {
+    enum Tipo: Sendable { case partido, canal }
+
+    static let compartida = MemoriaPestanasTeatro()
+
+    private(set) var partido: PestanaTeatro = .fuentes
+    private(set) var canal: PestanaTeatro = .fuentes
+    /// La última que no era «Datos técnicos», por tipo (`lastPlain`).
+    @ObservationIgnored private var ultimaPartido: PestanaTeatro = .fuentes
+    @ObservationIgnored private var ultimaCanal: PestanaTeatro = .fuentes
+
+    func elegida(_ tipo: Tipo) -> PestanaTeatro { tipo == .partido ? partido : canal }
+
+    /// `remember`: apunta la pestaña (y la última normal si no es «Datos técnicos»).
+    func recordar(_ pestana: PestanaTeatro, en tipo: Tipo) {
+        switch tipo {
+        case .partido:
+            if pestana != .datos { ultimaPartido = pestana }
+            if partido != pestana { partido = pestana }
+        case .canal:
+            if pestana != .datos { ultimaCanal = pestana }
+            if canal != pestana { canal = pestana }
+        }
+    }
+
+    /// Las sesiones (`partido:<id>`, `canal:<hash>`) con las plegadas abiertas. En la web los paneles siguen
+    /// montados con `hidden` y al volver a «Fuentes» siguen abiertas; aquí el panel se desmonta, así que se apunta
+    /// aquí y se olvida al salir del teatro (cuando la web también desmonta).
+    private(set) var plegadasAbiertas: Set<String> = []
+
+    func plegadas(abiertas: Bool, en clave: String) {
+        if abiertas {
+            plegadasAbiertas.insert(clave)
+        } else {
+            plegadasAbiertas.remove(clave)
+        }
+    }
+
+    func olvidarPlegadas() {
+        if !plegadasAbiertas.isEmpty { plegadasAbiertas.removeAll() }
+    }
+
+    /// El menú del vídeo abre o cierra «Datos técnicos» (`nerdOpen` de TheaterTabs.tsx).
+    func datosTecnicos(abiertos: Bool, en tipo: Tipo) {
+        if abiertos {
+            recordar(.datos, en: tipo)
+        } else if elegida(tipo) == .datos {
+            recordar(tipo == .partido ? ultimaPartido : ultimaCanal, en: tipo)
+        }
+    }
+}
 
 struct OpcionPestanaTeatro: Identifiable, Hashable {
     var valor: PestanaTeatro

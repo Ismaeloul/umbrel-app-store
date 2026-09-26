@@ -89,71 +89,170 @@ private func marcador(_ estado: String, reloj: String = "72'", detalle: String =
         #expect(ReglasBiblioteca.porcentajeDisponible(nil) == nil)
     }
 
-    private static let viejo = item("Viejo", .fav, id: String(repeating: "a", count: 40), lista: true)
-    private static let reciente = item("Canal de prueba", .recent, id: String(repeating: "b", count: 40))
-    private static let ahora = Date(timeIntervalSince1970: 1_790_000_000)
-
-    private static func biblioteca() -> LibraryView {
-        let web: [Item] = [item("L1"), item("L2"), item("L3")]
-        let favoritos: [Item] = [viejo, item("F2", .fav)]
-        return LibraryView(
-            web: web, webSyncedAt: "2026-09-23T10:00:00.000Z", webSources: [], activeWebSourceId: "",
-            favorites: favoritos, history: [reciente])
-    }
-
     @Test func canalCaido() {
-        let viejo: Item = Self.viejo
+        let viejo = item("Viejo", .fav, id: String(repeating: "a", count: 40), lista: true)
         #expect(ReglasBiblioteca.caido(viejo, idsLista: ["otro"]))
         #expect(!ReglasBiblioteca.caido(viejo, idsLista: [viejo.id]))
-        var noSincronizado: Item = viejo
+        var noSincronizado = viejo
         noSincronizado.fromWebSync = false
         #expect(!ReglasBiblioteca.caido(noSincronizado, idsLista: ["otro"]))
         #expect(!ReglasBiblioteca.caido(viejo, idsLista: []))
     }
 
+    /// Partido de canalCaido: con todo junto pasaba de los 400 ms de tipar (CI 36226729698).
     @Test func pieYConocido() {
-        let biblioteca: LibraryView = Self.biblioteca()
-        let pie: String = ReglasBiblioteca.pie(biblioteca, demo: true)
-        #expect(pie.hasPrefix("6 canales en biblioteca · lista sincronizada 23 sept"))
-        #expect(pie.hasSuffix(" · demo"))
-        var sinFecha: LibraryView = biblioteca
+        let viejo = item("Viejo", .fav, id: String(repeating: "a", count: 40), lista: true)
+        let reciente = item("Canal de prueba", .recent, id: String(repeating: "b", count: 40))
+        let biblioteca = LibraryView(
+            web: [item("L1"), item("L2"), item("L3")], webSyncedAt: "2026-09-23T10:00:00.000Z", webSources: [],
+            activeWebSourceId: "", favorites: [viejo, item("F2", .fav)], history: [reciente])
+        #expect(ReglasBiblioteca.pie(biblioteca, demo: true).hasPrefix("6 canales en biblioteca · lista sincronizada 23 sept"))
+        #expect(ReglasBiblioteca.pie(biblioteca, demo: true).hasSuffix(" · demo"))
+        var sinFecha = biblioteca
         sinFecha.webSyncedAt = nil
         #expect(ReglasBiblioteca.pie(sinFecha, demo: false) == "6 canales en biblioteca")
-        #expect(ReglasBiblioteca.conocido(biblioteca, hash: Self.reciente.id)?.title == "Canal de prueba")
+        #expect(ReglasBiblioteca.conocido(biblioteca, hash: reciente.id)?.title == "Canal de prueba")
         #expect(ReglasBiblioteca.conocido(biblioteca, hash: String(repeating: "f", count: 40)) == nil)
         #expect(ReglasBiblioteca.conocido(nil, hash: "x") == nil)
-        #expect(ReglasBiblioteca.enTuBiblioteca(biblioteca, texto: "l").map(\.title) == ["Canal de prueba", "L1", "L2", "L3"])
-        #expect(ReglasBiblioteca.enTuBiblioteca(biblioteca, texto: "e").map(\.title) == ["Viejo", "Canal de prueba"])
+        #expect(ReglasBiblioteca.tituloFavoritoPorDefecto("abcdef0123") == "Canal abcdef")
     }
 
-    @Test func favoritoNuevoDeRecientes() {
-        #expect(ReglasBiblioteca.tituloFavoritoPorDefecto("abcdef0123") == "Canal abcdef")
-        let deRecientes: Item = ReglasBiblioteca.favoritoNuevo(
-            hash: Self.reciente.id, escrito: "  Mi   canal ", categoria: "Deportes", ih: nil, biblioteca: Self.biblioteca(),
-            ahora: Self.ahora)
+    /// Otra parte más: con el pie y lo conocido pasaba de los 400 ms de tipar (CI 36234006734).
+    @Test func favoritoNuevoYEnTuBiblioteca() {
+        let viejo = item("Viejo", .fav, id: String(repeating: "a", count: 40), lista: true)
+        let reciente = item("Canal de prueba", .recent, id: String(repeating: "b", count: 40))
+        let biblioteca = LibraryView(
+            web: [item("L1"), item("L2"), item("L3")], webSyncedAt: "2026-09-23T10:00:00.000Z", webSources: [],
+            activeWebSourceId: "", favorites: [viejo, item("F2", .fav)], history: [reciente])
+        let ahora = Date(timeIntervalSince1970: 1_790_000_000)
+        let deRecientes = ReglasBiblioteca.favoritoNuevo(
+            hash: reciente.id, escrito: "  Mi   canal ", categoria: "Deportes", ih: nil, biblioteca: biblioteca, ahora: ahora)
         #expect(deRecientes.title == "Mi canal")
         #expect(deRecientes.category == "Deportes")
         #expect(deRecientes.type == .fav)
-        #expect(deRecientes.date == FechaISO.texto(Self.ahora))
+        #expect(deRecientes.date == FechaISO.texto(ahora))
         #expect(deRecientes.fromWebSync == false)
         #expect(deRecientes.ih == false)
-    }
-
-    @Test func favoritoNuevoSinCategoriaYDeLaLista() {
-        let sinCategoria: Item = ReglasBiblioteca.favoritoNuevo(
-            hash: "abcdef0123", escrito: " ", categoria: "", ih: true, biblioteca: nil, ahora: Self.ahora)
+        let sinCategoria = ReglasBiblioteca.favoritoNuevo(
+            hash: "abcdef0123", escrito: " ", categoria: "", ih: true, biblioteca: nil, ahora: ahora)
         #expect(sinCategoria.title == "Canal abcdef")
         #expect(sinCategoria.category == "Guardado")
         #expect(sinCategoria.ih == true)
-        let sinNada: Item = ReglasBiblioteca.favoritoNuevo(
-            hash: "x", escrito: "", categoria: nil, ih: nil, biblioteca: nil, ahora: Self.ahora)
-        #expect(sinNada.category == "Guardado")
-        let biblioteca: LibraryView = Self.biblioteca()
+        #expect(ReglasBiblioteca.favoritoNuevo(hash: "x", escrito: "", categoria: nil, ih: nil, biblioteca: nil, ahora: ahora).category == "Guardado")
         if let deLaLista = biblioteca.web.first {
-            let nuevo: Item = ReglasBiblioteca.favoritoNuevo(
-                hash: deLaLista.id, escrito: "", categoria: "Cine", ih: false, biblioteca: biblioteca, ahora: Self.ahora)
-            #expect(nuevo.fromWebSync == true)
-            #expect(nuevo.category == "Cine")
+            let item = ReglasBiblioteca.favoritoNuevo(
+                hash: deLaLista.id, escrito: "", categoria: "Cine", ih: false, biblioteca: biblioteca, ahora: ahora)
+            #expect(item.fromWebSync == true)
+            #expect(item.category == "Cine")
         }
+        #expect(ReglasBiblioteca.enTuBiblioteca(biblioteca, texto: "l").map(\.title) == ["Canal de prueba", "L1", "L2", "L3"])
+        #expect(ReglasBiblioteca.enTuBiblioteca(biblioteca, texto: "e").map(\.title) == ["Viejo", "Canal de prueba"])
+    }
+}
+
+@Suite struct EnAntenaTests {
+    @Test func estadoConVentanaDeDosHoras() {
+        #expect(IndiceAntena.fase(faltan: 30, marcador: nil) == .proximo)
+        #expect(IndiceAntena.fase(faltan: -30, marcador: nil) == .directo)
+        #expect(IndiceAntena.fase(faltan: -130, marcador: nil) == .terminado)
+        #expect(IndiceAntena.fase(faltan: nil, marcador: nil) == .proximo)
+        #expect(IndiceAntena.fase(faltan: 20, marcador: marcador("in")) == .directo)
+        #expect(IndiceAntena.fase(faltan: -30, marcador: marcador("post")) == .terminado)
+    }
+
+    @Test func soloElMismoCanalSinDuda() {
+        let reloj = RelojMadrid(fecha: "2026-09-23", minutos: 20 * 60)
+        let indice = IndiceAntena(agenda: agenda([("2026-09-23", [partido("a", "21:00", ["DAZN"])])]), reloj: reloj)
+        #expect(indice.para(titulo: "DAZN", alias: nil, marcadores: [:]).siguiente?.partido.id == "a")
+        #expect(indice.para(titulo: "DAZN 1", alias: nil, marcadores: [:]) == .vacio)
+        let conAlias = IndiceAntena(agenda: agenda([("2026-09-23", [partido("b", "21:00", ["M+ LaLiga"])])]), reloj: reloj)
+        #expect(conAlias.para(titulo: "M. LaLiga", alias: "M+ LaLiga", marcadores: [:]).siguiente?.partido.id == "b")
+    }
+
+    @Test func directoSiguienteYDespues() {
+        let reloj = RelojMadrid(fecha: "2026-09-23", minutos: 21 * 60)
+        let partidos = [
+            partido("tarde", "18:00", ["DAZN 1"]), partido("ahora", "20:30", ["DAZN 1"]),
+            partido("luego", "23:00", ["DAZN 1"]), partido("antes", "21:45", ["DAZN 1"]),
+            partido("otro", "21:10", ["La 1"]),
+        ]
+        let indice = IndiceAntena(agenda: agenda([("2026-09-23", partidos)]), reloj: reloj)
+        let resultado = indice.para(titulo: "DAZN 1 HD", alias: nil, marcadores: [:])
+        #expect(resultado.directo?.partido.id == "ahora")
+        #expect(resultado.siguiente == nil)
+        #expect(resultado.despues.map(\.partido.id) == ["antes", "luego"])
+        let tranquilo = IndiceAntena(agenda: agenda([("2026-09-23", Array(partidos[2...]))]), reloj: reloj)
+            .para(titulo: "DAZN 1", alias: nil, marcadores: [:])
+        #expect(tranquilo.directo == nil)
+        #expect(tranquilo.siguiente?.partido.id == "antes")
+        #expect(tranquilo.despues.map(\.partido.id) == ["luego"])
+    }
+
+    @Test func partidosDeHoyYVentanaDeMarcadores() {
+        let reloj = RelojMadrid(fecha: "2026-09-23", minutos: 30)
+        let dias = agenda([
+            ("2026-09-22", [partido("ayer-tarde", "22:45", ["X"], fecha: "2026-09-22"), partido("ayer", "18:00", ["X"], fecha: "2026-09-22")]),
+            ("2026-09-23", [partido("hoy", "21:00", ["X"])]),
+        ])
+        #expect(IndiceAntena(agenda: dias, reloj: reloj).partidos.map(\.id) == ["ayer-tarde", "hoy"])
+        let hoy = agenda([("2026-09-23", [partido("hoy", "21:00", ["X"])])])
+        #expect(IndiceAntena(agenda: hoy, reloj: RelojMadrid(fecha: "2026-09-23", minutos: 20 * 60 + 50)).hacenFaltaMarcadores())
+        #expect(!IndiceAntena(agenda: hoy, reloj: RelojMadrid(fecha: "2026-09-23", minutos: 18 * 60)).hacenFaltaMarcadores())
+    }
+
+    @Test func minutoYDescanso() {
+        #expect(IndiceAntena.minuto(marcador("in", reloj: "72'")) == "72'")
+        #expect(IndiceAntena.minuto(marcador("in", reloj: "45+2\u{2019}")) == "45+2'")
+        #expect(IndiceAntena.minuto(marcador("in", reloj: "")) == nil)
+        #expect(IndiceAntena.minuto(nil) == nil)
+        #expect(IndiceAntena.descanso(marcador("in", reloj: "HT", detalle: "Halftime")))
+        #expect(!IndiceAntena.descanso(marcador("in")))
+    }
+
+    @Test func emitiendoAhoraSinRepetir() {
+        let reloj = RelojMadrid(fecha: "2026-09-23", minutos: 21 * 60)
+        let indice = IndiceAntena(agenda: agenda([("2026-09-23", [partido("ahora", "20:30", ["DAZN 1"])])]), reloj: reloj)
+        let dazn = item("DAZN 1 HD", .fav, id: String(repeating: "d", count: 40))
+        let otro = item("La 1", .recent)
+        let entradas = ReglasEmitiendo.entradas([dazn, otro, dazn], indice: indice, marcadores: [:])
+        #expect(entradas.map(\.item.id) == [dazn.id])
+        #expect(ReglasEmitiendo.entradas([dazn], indice: .vacio, marcadores: [:]).isEmpty)
+    }
+}
+
+@Suite struct ZappingYMenuTests {
+    @Test func listaDeZapping() {
+        let fav = item("Fav", .fav, id: "f")
+        let web = [
+            item("D1", id: "d1", categoria: "Deportes"), item("G1", id: "g1", categoria: "Generalistas"),
+            item("D2", id: "d2", categoria: "Deportes"), item("Fav", id: "f", categoria: "Deportes"),
+            item("S", id: "s"),
+        ]
+        let lista = Zapping.lista(favoritos: [fav], web: web)
+        #expect(lista.map(\.id) == ["f", "d1", "d2", "g1", "s"])
+        #expect(Zapping.destino(lista, actual: "d2", paso: 1)?.id == "g1")
+        #expect(Zapping.destino(lista, actual: "f", paso: -1)?.id == "s")
+        #expect(Zapping.destino(lista, actual: "otro", paso: 1)?.id == "f")
+        #expect(Zapping.destino([], actual: nil, paso: 1) == nil)
+        #expect(Zapping.destino(Array(lista.prefix(1)), actual: "f", paso: 1) == nil)
+    }
+
+    @Test func menuDeCanal() {
+        let favorito = OpcionesCanal.menu(origen: .coleccion(.favorites), esFavorito: true, enBiblioteca: true)
+        #expect(favorito.map(\.opcion.titulo) == [
+            "Quitar de favoritos", "Abrir en la app de AceStream", "Copiar URL del stream (VLC)",
+            "Copiar enlace acestream://", "Copiar hash", "Copiar nombre", "Renombrar",
+        ])
+        #expect(favorito[1].opcion.separadaAntes && favorito[6].opcion.separadaAntes)
+        let reciente = OpcionesCanal.menu(origen: .coleccion(.history), esFavorito: false, enBiblioteca: true)
+        #expect(reciente.first?.opcion.titulo == "Añadir a favoritos")
+        #expect(reciente.last?.opcion.titulo == "Quitar de recientes")
+        #expect(reciente.last?.opcion.peligro == true)
+        #expect(reciente.last?.opcion.separadaAntes == false)
+        #expect(OpcionesCanal.menu(origen: .coleccion(.web), esFavorito: false, enBiblioteca: true).last?.opcion.titulo == "Eliminar de la lista")
+        #expect(OpcionesCanal.menu(origen: .busqueda, esFavorito: false, enBiblioteca: false).count == 6)
+        #expect(OpcionesCanal.urlStream(origen: "http://umbrel.local:7792", hash: "ab", ih: true) == "http://umbrel.local:7792/ace/getstream?infohash=ab")
+        #expect(OpcionesCanal.urlStream(origen: "http://x", hash: "ab", ih: false) == "http://x/ace/getstream?id=ab")
+        #expect(OpcionesCanal.enlace("ab") == "acestream://ab")
     }
 }

@@ -29,7 +29,7 @@ struct BarraEmitiendo: View {
         .gesture(
             DeslizamientoHorizontal(
                 activo: puedeCambiar,
-                alMover: { dx in desplazamiento.valor = CGFloat(GestosTeatro.desplazamientoTexto(Double(dx))) },
+                alMover: { dx in desplazamiento.valor = CGFloat(Self.arrastreTexto(Double(dx))) },
                 alSoltar: { dx, dy, vx in soltar(dx: dx, dy: dy, vx: vx) }))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(IDUI.barraEmitiendo)
@@ -65,9 +65,12 @@ struct BarraEmitiendo: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// El texto sigue al dedo `clamp(dx / 3, −60, 60)` (`move` de SourcesPanel.tsx; el vídeo hace lo mismo).
+    static func arrastreTexto(_ dx: Double) -> Double { max(-60, min(60, dx / 3)) }
+
     private func soltar(dx: CGFloat, dy: CGFloat, vx: CGFloat) {
         withAnimation(Movimiento.rapido(reducido)) { desplazamiento.valor = 0 }
-        switch GestosTeatro.clasificar(dx: Double(dx), dy: Double(dy), vx: Double(vx), vy: 0) {
+        switch Deslizamiento.clasificar(dx: Double(dx), dy: Double(dy), vx: Double(vx), vy: 0, eje: .horizontal) {
         case .izquierda: video.pasoFuente(1)
         case .derecha: video.pasoFuente(-1)
         default: break

@@ -2,8 +2,8 @@ import SwiftUI
 
 /* El escenario (a4 §5): el marco negro con el ÚNICO `VistaVideo` del teatro (vertical: hueco `.teatro`;
    inmersivo: `.inmersivo`) y sus capas en el orden de la web: vídeo · corte a negro · capa de toques · panel
-   de mensaje / spinner / rótulo de la demo · controles · datos técnicos sobre el vídeo (inmersivo) · cápsula de
-   estado. Todo lo que va sobre el vídeo es isla oscura. La pulsación larga abre «Opciones del reproductor»
+   de mensaje / spinner / rótulo de la demo · controles · cápsula de estado. «Datos técnicos» nunca va sobre la
+   imagen: es una pestaña de la página (PanelDatosTecnicos). Todo lo que va sobre el vídeo es isla oscura. La pulsación larga abre «Opciones del reproductor»
    (menú del sistema, sin háptica propia) con la vista previa de la tesela. */
 
 enum ArrastreVideo: Sendable { case mover(CGFloat), soltar(minimiza: Bool) }
@@ -79,9 +79,9 @@ struct EscenarioVideo: View {
             capaToques(foto)
             capasMensaje(foto)
             ControlesVideo(variante: variante, relleno: relleno, partido: partido, marcador: marcador, ahora: reloj.ahora)
-            datosSobreVideo(foto)
+                .fundidoAlMini(rapido: true)
         }
-        .overlay(alignment: .bottomLeading) { estado(foto, relleno: relleno) }
+        .overlay(alignment: .bottomLeading) { estado(foto, relleno: relleno).fundidoAlMini(rapido: true) }
         .clipped()
         .islaOscura()
         .accessibilityElement(children: .contain)
@@ -101,7 +101,9 @@ struct EscenarioVideo: View {
 
     // MARK: Capas
 
-    @ViewBuilder private func capaToques(_ foto: FotoEscenario) -> some View {
+    /// Siempre la MISMA vista (sin `if`): si el menú apareciera al llegar el título, la capa de toques se
+    /// recrearía y un arrastre en marcha se cancelaría (sin título no hay acciones y el menú no sale).
+    private func capaToques(_ foto: FotoEscenario) -> some View {
         let toques = CapaToquesVideo(
             abajoMinimiza: variante.deslizarAbajoMinimiza && alArrastrar != nil,
             ladosCambian: video.idsFuentesVisibles.count > 1,
@@ -109,11 +111,9 @@ struct EscenarioVideo: View {
             alDobleToque: { video.alternarPantallaCompleta() },
             alMover: { dx, dy in mover(dx: dx, dy: dy) },
             alSoltar: { direccion in soltar(direccion) })
-        if let titulo = foto.titulo {
-            toques.menuContextual(video.accionesMenu()) { VistaPreviaVideo(titulo: titulo, fase: foto.fase) }
-        } else {
-            toques
-        }
+        let acciones: [AccionMenu] = foto.titulo == nil ? [] : video.accionesMenu()
+        let titulo: String = foto.titulo ?? ""
+        return toques.menuContextual(acciones) { VistaPreviaVideo(titulo: titulo, fase: foto.fase) }
     }
 
     @ViewBuilder private func capasMensaje(_ foto: FotoEscenario) -> some View {
@@ -135,14 +135,6 @@ struct EscenarioVideo: View {
         }
     }
 
-    @ViewBuilder private func datosSobreVideo(_ foto: FotoEscenario) -> some View {
-        if variante.datosSobreVideo && video.presentacion.datosTecnicosAbiertos && foto.hayCanal {
-            PanelDatosSobreVideo(seguras: seguras, anchoMarco: maquetacion.ancho, altoMarco: maquetacion.alto) {
-                video.presentacion.cerrarDatosTecnicos()
-            }
-        }
-    }
-
     private func estado(_ foto: FotoEscenario, relleno: Margenes) -> some View {
         let abajo = foto.hayCanal && foto.fase != .error && (video.presentacion.controlesVisibles || voiceOver)
         return CapsulaEstadoVideo(
@@ -153,13 +145,13 @@ struct EscenarioVideo: View {
 
     private func mover(dx: CGFloat, dy: CGFloat) {
         if dx != 0 {
-            desplazamiento.valor = CGFloat(GestosTeatro.desplazamientoTexto(Double(dx)))
+            desplazamiento.valor = CGFloat(BarraEmitiendo.arrastreTexto(Double(dx)))
         } else {
             alArrastrar?(.mover(dy))
         }
     }
 
-    private func soltar(_ direccion: DireccionGesto) {
+    private func soltar(_ direccion: ResultadoDeslizar) {
         withAnimation(Movimiento.rapido(reducido)) { desplazamiento.valor = 0 }
         switch direccion {
         case .izquierda: video.pasoFuente(1)

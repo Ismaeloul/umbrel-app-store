@@ -34,8 +34,6 @@ struct VarianteEscenario: Hashable, Sendable {
     var capsulaCanal: Bool { !compacto }
     /// Deslizar hacia abajo minimiza solo en «compacto» y fuera del inmersivo (a4 §5.3, §18.1).
     var deslizarAbajoMinimiza: Bool { compacto && !inmersivo }
-    /// «Datos técnicos» en cristal sobre el vídeo: solo en inmersivo en el iPhone (a4 §15, §18.1).
-    var datosSobreVideo: Bool { inmersivo }
     /// Cuánto sube la cápsula de estado con los controles de abajo: 64 desde 768 de ventana, 60 si no (a4 §7.1, §18.1).
     var subidaEstado: Double { compacto ? 60 : 64 }
 

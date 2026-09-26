@@ -87,4 +87,27 @@ struct GeometriaVueloTests {
         #expect(GeometriaVuelo.vuelveConElBorde(dx: 24, vx: 450, ancho: 390))
         #expect(!GeometriaVuelo.vuelveConElBorde(dx: 23, vx: 900, ancho: 390))
     }
+
+    @Test func elVideoAlMiniSigueAlDedo() {
+        let escenario = Marco(x: 0, y: 59, ancho: 390, alto: 219.375)
+        let mini = Marco(x: 22, y: 699, ancho: 96, alto: 54)
+        #expect(GeometriaVuelo.progresoAlMini(dy: 0, desde: escenario, hasta: mini) == 0)
+        #expect(casi(GeometriaVuelo.progresoAlMini(dy: 320, desde: escenario, hasta: mini), 0.5))
+        #expect(GeometriaVuelo.progresoAlMini(dy: 900, desde: escenario, hasta: mini) == 1)
+        #expect(GeometriaVuelo.progresoAlMini(dy: -40, desde: escenario, hasta: mini) == 0)
+        #expect(GeometriaVuelo.progresoAlMini(dy: 10, desde: mini, hasta: escenario) == 1)
+        #expect(GeometriaVuelo.alMini(desde: escenario, hasta: mini, progreso: 0) == .identidad)
+        let llegada = GeometriaVuelo.alMini(desde: escenario, hasta: mini, progreso: 1)
+        #expect(casi(llegada.escala, 96.0 / 390) && casi(llegada.dx, 22) && casi(llegada.dy, 640))
+        #expect(GeometriaVuelo.alMini(desde: Marco(x: 0, y: 0, ancho: 0, alto: 0), hasta: mini, progreso: 1) == .identidad)
+    }
+
+    @Test func alrededorDelVideoAlMini() {
+        #expect(GeometriaVuelo.opacidadTeatroAlMini(0) == 1)
+        #expect(casi(GeometriaVuelo.opacidadTeatroAlMini(0.4), 0.4))
+        #expect(GeometriaVuelo.opacidadTeatroAlMini(0.8) == 0)
+        #expect(GeometriaVuelo.opacidadControlesAlMini(0.25) == 0 && GeometriaVuelo.opacidadControlesAlMini(0) == 1)
+        #expect(GeometriaVuelo.radioAlMini(0) == 0 && GeometriaVuelo.radioAlMini(1) == 10 && GeometriaVuelo.radioAlMini(1.2) == 10)
+        #expect(GeometriaVuelo.umbralAlMini == Deslizamiento.distancia)
+    }
 }

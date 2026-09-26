@@ -1,7 +1,11 @@
 import Foundation
 import Testing
 
-@testable import AceNeo
+#if SWIFT_PACKAGE
+    @testable import NucleoPuro
+#else
+    @testable import AceNeo
+#endif
 
 /* Reglas del escenario por el ancho del vídeo (b-arquitectura §3.7: 369/419/479/579 y compacto) con las medidas
    de la web (a4 §4.1, §5.4, §6.2, §18, §18.1). */
@@ -45,7 +49,7 @@ struct VarianteEscenarioTests {
         #expect(vertical.subidaEstado == 60)
         let se = variante(667, inmersivo: true)
         #expect(se.compacto && se.minimizarVisible && !se.deslizarAbajoMinimiza)
-        #expect(se.datosSobreVideo && se.subidaEstado == 60)
+        #expect(se.subidaEstado == 60)
         let horizontal = variante(844, inmersivo: true)
         #expect(!horizontal.compacto && horizontal.capsulaCanal && !horizontal.minimizarVisible)
         #expect(horizontal.subidaEstado == 64)

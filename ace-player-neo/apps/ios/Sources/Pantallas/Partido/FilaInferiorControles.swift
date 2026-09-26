@@ -1,20 +1,19 @@
-import AVFoundation
-import Combine
-import AVKit
 import SwiftUI
 
 /* Fila de abajo de los controles (a4 §5.2, §18): pausa grande 52 · [Detener] · −30 · silencio a la izquierda y
    [Directo · AirPlay · pantalla completa] a la derecha. Detener solo fuera de «compacto» con el vídeo ≥ 580;
-   AirPlay solo si hay rutas (`AVRouteDetector`, decisión 6); a 375 con «Reanudar» y AirPlay el Directo pasa a
-   solo icono antes que solaparse. Sin volumen deslizante (táctil). */
+   AirPlay solo si hay rutas (`DetectorRutas` de M3, decisión 6: busca solo mientras la fila está a la vista);
+   a 375 con «Reanudar» y AirPlay el Directo pasa a solo icono antes que solaparse. Sin volumen deslizante. */
 
 struct FilaInferiorControles: View {
     let variante: VarianteEscenario
     let video = EntornoVideo()
-    @State private var hayRutas = false
+
+    private var hayRutas: Bool { video.presentacion.rutas.hayRutas }
 
     var body: some View {
         let foto = video.foto
+        let rutas = video.presentacion.rutas
         HStack(spacing: 8) {
             HStack(spacing: 8) {
                 BotonPausaGrande(foto: foto) { video.alternar() }
@@ -23,7 +22,8 @@ struct FilaInferiorControles: View {
             Spacer(minLength: 0)
             CapsulaVideo { derecha(foto) }.layoutPriority(1)
         }
-        .modifier(RutasAirPlay(hay: $hayRutas))
+        .onAppear { rutas.activar() }
+        .onDisappear { rutas.desactivar() }
     }
 
     @ViewBuilder private func izquierda(_ foto: FotoEscenario) -> some View {
@@ -106,30 +106,5 @@ private struct BotonRetroceder: View {
         .opacity(habilitado ? 1 : 0.45)
         .accessibilityLabel("Retroceder 30 segundos")
         .accessibilityIdentifier(IDUI.botonRetroceder)
-    }
-}
-
-/// ¿Hay adónde mandar el vídeo por AirPlay? (`AVRouteDetector.multipleRoutesDetected`, por notificación).
-private struct RutasAirPlay: ViewModifier {
-    @Binding var hay: Bool
-    @State private var detector = AVRouteDetector()
-
-    /// El aviso de AVFoundation, entregado en el hilo principal.
-    private var avisosRutas: AnyPublisher<Notification, Never> {
-        NotificationCenter.default.publisher(for: .AVRouteDetectorMultipleRoutesDetectedDidChange)
-            .receive(on: RunLoop.main)
-            .eraseToAnyPublisher()
-    }
-
-    func body(content: Content) -> some View {
-        content
-            .onAppear {
-                detector.isRouteDetectionEnabled = true
-                hay = detector.multipleRoutesDetected
-            }
-            .onDisappear { detector.isRouteDetectionEnabled = false }
-            .onReceive(avisosRutas) { _ in
-                hay = detector.multipleRoutesDetected
-            }
     }
 }

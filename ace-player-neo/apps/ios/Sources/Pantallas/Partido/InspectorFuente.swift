@@ -59,10 +59,10 @@ struct InspectorFuente: View {
             alternarFavorito(o, guardado: favorito)
         }
         if enPartido {
-            let rebuscando = video.fuentes.rebuscando
+            let rebuscando: Bool = video.fuentes.rebuscando
             AccionInspector(rebuscando ? "Rebuscando…" : "Rebuscar", icono: .refresh, girando: rebuscando) {
-                let fuentes = video.fuentes
-                Task { await fuentes.rebuscar() }
+                let fuentes: SesionFuentes = video.fuentes
+                Task<Void, Never> { await fuentes.rebuscar() }
             }
             .disabled(rebuscando)
         }
@@ -73,8 +73,8 @@ struct InspectorFuente: View {
         if enPartido {
             AccionInspector(o.aprendida ? "✓ Canal aprendido" : "Es el canal correcto", icono: o.aprendida ? .check : .learn,
                             pulsado: o.aprendida) {
-                let fuentes = video.fuentes
-                Task { await fuentes.confirmar(o.hash) }
+                let fuentes: SesionFuentes = video.fuentes
+                Task<Void, Never> { await fuentes.confirmar(o.hash) }
             }
             .disabled(o.aprendida)
         }

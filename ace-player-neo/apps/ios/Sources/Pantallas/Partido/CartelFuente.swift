@@ -1,13 +1,14 @@
 import SwiftUI
 
-/* Cartel de fuente (SourcePoster.tsx, sources.css; a4 §12.6): tesela 16:9 con la marca del canal, su número
-   arriba a la derecha y «En pantalla» en oro abajo a la izquierda si es la que suena; alrededor, el filo del
-   estado (oro en la que suena); debajo, el proveedor, el anillo con su palabra, la calidad y el tipo, y la
-   frase. Toque: háptica rígida y elegir. Pulsación larga: menú «Fuente n» (sin háptica); las mismas opciones
-   van a VoiceOver como acciones. Sirve igual para cualquier tipo de fuente (FilaCartel). */
+/* Cartel de fuente (SourcePoster.tsx, sources.css; a4 §12.6): tesela 16:9 con la marca del canal (tono y dorsal
+   del canal; arriba, en el sitio de la sigla, el PROVEEDOR), su número arriba a la derecha y «En pantalla» en oro
+   abajo a la izquierda si es la que suena; alrededor, el filo del estado (oro en la que suena); debajo, el nombre
+   del canal SIN el proveedor (dos líneas como mucho; NombreCartel, Isma 26-sep), el anillo con su palabra, la
+   calidad y el tipo, y la frase. Toque: háptica rígida y elegir. Pulsación larga: menú «Fuente n» (sin háptica); las mismas opciones
+   van a VoiceOver como acciones. Sirve igual para cualquier tipo de fuente (`FilaFuente` de la sesión, M3). */
 
 struct CartelFuente: View {
-    let fila: FilaCartel
+    let fila: FilaFuente
     let enPartido: Bool
     var espacio: Namespace.ID?
     let video = EntornoVideo()
@@ -32,44 +33,47 @@ struct CartelFuente: View {
         .accessibilityIdentifier(IDUI.cartelFuente(fila.numero))
     }
 
-    /// Las opciones del menú «Fuente n» con su acción (ninguna vibra).
+    /// Las opciones del menú «Fuente n» (`rowMenu`, M3) con su acción (ninguna vibra).
     private var acciones: [AccionMenu] {
-        PresentacionFuentes.opcionesCartel(fila, enPartido: enPartido).map { opcion in
+        OpcionesFuente.menu(fila, enPartido: enPartido).map { (opcion: OpcionMenu) -> AccionMenu in
             AccionMenu(opcion) { ejecutar(opcion.id) }
         }
     }
 
     private func ejecutar(_ id: String) {
         let hash = fila.id
-        switch id {
-        case "ver": video.elegirFuente(hash)
-        case "copiar-hash": video.copiar(hash, bien: "Hash copiado", mal: "No se pudo copiar el hash")
-        case "abrir": video.abrirEnAceStream(hash)
-        case "correcto": confirmar(hash)
-        case "reportar": hojas.abrir(.reportar(hash: hash, numero: fila.numero))
-        default: break
+        guard let opcion = OpcionFuente(rawValue: id) else { return }
+        switch opcion {
+        case .ver: video.elegirFuente(hash)
+        case .copiarHash: video.copiar(hash, bien: "Hash copiado", mal: "No se pudo copiar el hash")
+        case .abrir: video.abrirEnAceStream(hash)
+        case .correcto:
+            let fuentes: SesionFuentes = video.fuentes
+            Task<Void, Never> { await fuentes.confirmar(hash) }
+        case .reportar: hojas.abrir(.reportar(hash: hash, numero: fila.numero))
         }
-    }
-
-    /// «Funciona bien» (tipos escritos: en línea tardaba 204 ms en tiparse, CI 36226033650).
-    private func confirmar(_ hash: String) {
-        let fuentes: SesionFuentes = video.fuentes
-        Task { () async -> Void in await fuentes.confirmar(hash) }
     }
 }
 
 /// La tesela con su filo, el número y «En pantalla».
 private struct TeselaCartel: View {
-    let fila: FilaCartel
+    let fila: FilaFuente
     let espacio: Namespace.ID?
     @State private var alto: CGFloat = 90
+
+    /// `.src-poster .dorsal__abbrev { max-width: calc(100% - var(--s) * 0.12 - 46px) }`: el proveedor acaba en «…»
+    /// antes del número. MarcaCanal ya quita 0,24·s, así que aquí van 46 − 0,12·s.
+    private var reserva: CGFloat { 46 - alto * 0.12 }
 
     var body: some View {
         let forma = RoundedRectangle(cornerRadius: R.m, style: .circular)
         ZStack {
             forma.fill(Palco.surface2)
-            MarcaCanal(nombre: fila.nombreCanal, forma: .tesela, tamano: alto)
-                .clipShape(forma)
+            MarcaCanal(
+                nombre: ReglasFuentes.nombreCanal(fila.entrada), forma: .tesela, tamano: alto,
+                sigla: NombreCartel.proveedorTesela(fila.presentacion), reservaDerecha: reserva
+            )
+            .clipShape(forma)
         }
         .aspectRatio(16 / 9, contentMode: .fit)
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { alto = max(1, $0) }
@@ -116,7 +120,7 @@ private struct NumeroCartel: View {
 /// El filo del estado alrededor de la tesela (2; 3 en la activa y en la que suena), a 2 de ella, radio 16:
 /// continuo (ok, sin señal, en pantalla oro), discontinuo (floja, comprobando) o punteado (pendiente, reportada).
 private struct FiloCartel: View {
-    let fila: FilaCartel
+    let fila: FilaFuente
 
     private enum Trazo { case continuo, discontinuo, punteado }
 
@@ -148,33 +152,69 @@ private struct FiloCartel: View {
     }
 }
 
-/// Nombre (15/650/88), meta (anillo 14 + palabra · calidad · tipo) y frase (12, dos líneas como mucho).
+/// De arriba abajo (SourcePoster.tsx, web 613f80e): el nombre del canal sin el proveedor (15/650/88, dos líneas con
+/// «…»); el anillo 14 con su palabra, en su línea; los datos técnicos, una etiqueta entera por dato que baja de línea
+/// si no cabe (sin datos, sin línea); y la frase (12, dos líneas) solo si no repite el estado.
 private struct CuerpoCartel: View {
-    let fila: FilaCartel
+    let fila: FilaFuente
+
+    /// El anillo del medidor (`ringStateOf`): la reportada tiene dibujo propio y la que está en pantalla, oro.
+    private var anillo: EstadoAnillo {
+        if fila.enPantalla { return .activa }
+        if fila.efectivo.reportada { return .reportada }
+        return .senal(fila.senal)
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(fila.corto)
+        let etiquetas: [DatosCartel.Etiqueta] = DatosCartel.etiquetas(fila.entrada, fila.presentacion)
+        let frase: String? = DatosCartel.frase(palabra: fila.palabra, detalle: fila.detalle)
+        VStack(alignment: .leading, spacing: 0) {
+            Text(NombreCartel.nombre(fila.entrada, fila.presentacion))
                 .estilo(EstiloTexto(tamano: 15, peso: 650, anchura: 88, altoLinea: 1.1))
                 .foregroundStyle(Palco.text)
-                .lineLimit(1)
-            HStack(spacing: 6) {
-                AnilloSenal(PresentacionFuentes.anillo(fila), tamano: 14, palabra: fila.palabra)
-                if !fila.extras.isEmpty {
-                    Text("· \(fila.extras)").estilo(EstiloTexto(tamano: 12, peso: 650, anchura: 88, altoLinea: 1.15))
-                        .foregroundStyle(Palco.text2).lineLimit(1)
-                }
-            }
-            Text(fila.detalle)
-                .estilo(EstiloTexto(tamano: 12, peso: 450, altoLinea: 1.25))
-                .foregroundStyle(Palco.text2)
                 .lineLimit(2)
+                .truncationMode(.tail)
                 .fixedSize(horizontal: false, vertical: true)
+            AnilloSenal(anillo, tamano: 14, palabra: fila.palabra)
+                .padding(.top, 3)
+            if !etiquetas.isEmpty {
+                Flujo(horizontal: 4, vertical: 4) {
+                    ForEach(etiquetas, id: \.self) { EtiquetaCartel(etiqueta: $0) }
+                }
+                .padding(.top, 5)
+            }
+            if let frase {
+                Text(frase)
+                    .estilo(EstiloTexto(tamano: 12, peso: 450, altoLinea: 1.25))
+                    .foregroundStyle(Palco.text2)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 5)
+            }
         }
         .padding(.horizontal, 2)
         .frame(maxWidth: .infinity, alignment: .leading)
         .multilineTextAlignment(.leading)
         .accessibilityHidden(true)
+    }
+}
+
+/// `.src-poster__tag`: la cápsula sm neutra a 20 de alto y relleno 0 7, tinta `--text-2`, siempre entera. La calidad,
+/// rellena (`--line-soft`); el tipo de fuente, solo con el filo (`inset 0 0 0 1px --line-strong`).
+private struct EtiquetaCartel: View {
+    let etiqueta: DatosCartel.Etiqueta
+
+    var body: some View {
+        let tipo: Bool = etiqueta.clase == .tipo
+        Text(etiqueta.texto)
+            .estilo(.capsulaSm)
+            .lineLimit(1)
+            .fixedSize()
+            .foregroundStyle(Palco.text2)
+            .padding(.horizontal, 7)
+            .frame(height: 20)
+            .background(Capsule().fill(tipo ? Color.clear : Palco.lineSoft))
+            .overlay { if tipo { Capsule().strokeBorder(Palco.lineStrong, lineWidth: 1) } }
     }
 }
 

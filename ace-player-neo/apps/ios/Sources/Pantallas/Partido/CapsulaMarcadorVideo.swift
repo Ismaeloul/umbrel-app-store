@@ -172,18 +172,16 @@ private struct CifrasMarcador: View {
     let goles: Int
     let terminado: Bool
     @Environment(\.movimientoReducido) private var reducido
-    @State private var base: URL?
 
     var body: some View {
         HStack(spacing: 8) {
-            if conEscudos { MarcaEquipo(EquiposTeatro.equipo(partido, local: true, base: base), tamano: 24) }
+            if conEscudos { MarcaEquipo(DatosEquipo.de(partido, .local), tamano: 24) }
             cifras
             if conEscudos && !partido.away.isEmpty {
-                MarcaEquipo(EquiposTeatro.equipo(partido, local: false, base: base), tamano: 24)
+                MarcaEquipo(DatosEquipo.de(partido, .visitante), tamano: 24)
             }
         }
         .padding(.leading, conEscudos ? 8 : 14)
-        .modifier(BaseServidor(base: $base))
     }
 
     private var cifras: some View {

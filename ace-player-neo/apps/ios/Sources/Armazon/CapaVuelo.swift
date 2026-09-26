@@ -2,8 +2,7 @@ import SwiftUI
 import UIKit
 
 /* La capa de los vuelos (b-arquitectura §2.4.6 y §3.5, M4; z 45): los escudos que viajan de la tarjeta a la fila de
-   equipos del teatro (y de vuelta) y el hueco `.vuelo` del vídeo que viaja del escenario al mini (`VueloVideo`,
-   cuando M3 da la superficie). Cada pieza pasa de su marco de salida al de llegada con una escala uniforme por el
+   equipos del teatro (y de vuelta). El vídeo no pasa por aquí: vuela el propio escenario (`alMini`). Cada pieza pasa de su marco de salida al de llegada con una escala uniforme por el
    ancho y el muelle estándar: la posición y la escala salen de `progreso` con funciones lineales, así que SwiftUI
    las anima con la misma curva. No recibe toques ni sale en VoiceOver. */
 
@@ -44,7 +43,6 @@ private struct PiezaEnVuelo: View {
     @ViewBuilder private var contenido: some View {
         switch vuelo.contenido {
         case .foto(let foto): FotoVuelo(foto: foto)
-        case .video(let superficie): VueloVideo(superficie: superficie)
         }
     }
 
