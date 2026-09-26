@@ -9,8 +9,7 @@ struct ContenidoPartido: View {
     let id: String
     let video = EntornoVideo()
     @Environment(RelojCompartido.self) private var reloj
-    @SceneStorage("aceneo-teatro-pestana-partido") private var guardada = PestanaTeatro.fuentes.rawValue
-    @State private var ultimaNormal = PestanaTeatro.fuentes
+    private let memoria = MemoriaPestanasTeatro.compartida
 
     private var partido: FootballMatch? { BuscarPartido.en(video.datos.agenda.datos, id: id) }
     private var marcador: LiveScore? { video.datos.marcadores.datos?.scores[id] }
@@ -34,7 +33,7 @@ struct ContenidoPartido: View {
         .task(id: id) { await entrar() }
         .task(id: "\(id)-\(partido != nil)") { await sondearMarcadores() }
         .onDisappear { video.fuentes.salirVista() }
-        .modifier(SincronizarDatosTecnicos(guardada: $guardada, ultimaNormal: $ultimaNormal))
+        .modifier(SincronizarDatosTecnicos(tipo: .partido))
     }
 
     /// «Ya no está» o el error de la agenda; si había sesión de ese partido, debajo siguen las pestañas.
@@ -55,42 +54,34 @@ struct ContenidoPartido: View {
         }
     }
 
-    private var seleccion: PestanaTeatro {
-        let elegida = PestanaTeatro(rawValue: guardada) ?? .fuentes
-        return elegida == .canal ? .fuentes : elegida
+    /// La pestaña que se ve: la elegida si está entre las de ahora (sin partido no hay «Partido»); si no, «Fuentes».
+    private func seleccion(conPartido: Bool) -> PestanaTeatro {
+        let elegida = memoria.partido
+        if elegida == .canal || (elegida == .partido && !conPartido) { return .fuentes }
+        return elegida
     }
 
     private func pestanas(conPartido: Bool) -> PestanasTeatro {
         var opciones = [OpcionPestanaTeatro(valor: .fuentes, titulo: "Fuentes", cuenta: cuentaFuentes)]
         if conPartido { opciones.append(OpcionPestanaTeatro(valor: .partido, titulo: "Partido")) }
         opciones.append(OpcionPestanaTeatro(valor: .datos, titulo: "Datos técnicos"))
-        let actual = opciones.contains { $0.valor == seleccion } ? seleccion : .fuentes
-        return PestanasTeatro(opciones: opciones, seleccion: actual, etiqueta: "Panel del partido") { elegir($0) }
-    }
-
-    @ViewBuilder private func paneles(_ partido: FootballMatch?) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            PanelMontado(visible: seleccion == .fuentes) {
-                PanelFuentes(enPartido: true, partidoId: id, canalHash: nil, objetivoCanal: nil)
-            }
-            if let partido {
-                PanelMontado(visible: seleccion == .partido) {
-                    PanelPartido(partido: partido, marcador: marcador, ahora: reloj.ahora)
-                }
-            }
-            PanelMontado(visible: seleccion == .datos) { SeccionDatosTecnicos() }
+        return PestanasTeatro(opciones: opciones, seleccion: seleccion(conPartido: conPartido), etiqueta: "Panel del partido") {
+            ElegirPestanaTeatro.elegir($0, en: .partido, video: video)
         }
     }
 
-    /// Cambiar de pestaña: háptica de selección; «Datos técnicos» va de la mano del menú del vídeo (TheaterTabs.tsx).
-    private func elegir(_ pestana: PestanaTeatro) {
-        video.haptica.disparar(.seleccion)
-        guardada = pestana.rawValue
-        if pestana == .datos {
-            video.presentacion.abrirDatosTecnicos()
-        } else {
-            ultimaNormal = pestana
-            if video.presentacion.datosTecnicosAbiertos { video.presentacion.cerrarDatosTecnicos() }
+    @ViewBuilder private func paneles(_ partido: FootballMatch?) -> some View {
+        let actual = seleccion(conPartido: partido != nil)
+        VStack(alignment: .leading, spacing: 0) {
+            PanelMontado(visible: actual == .fuentes) {
+                PanelFuentes(enPartido: true, partidoId: id, canalHash: nil, objetivoCanal: nil)
+            }
+            if let partido {
+                PanelMontado(visible: actual == .partido) {
+                    PanelPartido(partido: partido, marcador: marcador, ahora: reloj.ahora)
+                }
+            }
+            PanelMontado(visible: actual == .datos) { SeccionDatosTecnicos() }
         }
     }
 
@@ -116,27 +107,37 @@ struct ContenidoPartido: View {
     }
 }
 
+/// Cambiar de pestaña (`onChange` de TheaterTabs.tsx): háptica de selección, se apunta y el reproductor abre o
+/// cierra «Datos técnicos» con ella (`setNerdOpen(next === 'datos')`).
+@MainActor enum ElegirPestanaTeatro {
+    static func elegir(_ pestana: PestanaTeatro, en tipo: MemoriaPestanasTeatro.Tipo, video: EntornoVideo) {
+        video.haptica.disparar(.seleccion)
+        MemoriaPestanasTeatro.compartida.recordar(pestana, en: tipo)
+        let presentacion = video.presentacion
+        if pestana == .datos && !presentacion.datosTecnicosAbiertos {
+            presentacion.abrirDatosTecnicos()
+        } else if pestana != .datos && presentacion.datosTecnicosAbiertos {
+            presentacion.cerrarDatosTecnicos()
+        }
+    }
+}
+
 /// «Datos técnicos» del menú del vídeo abre esta pestaña; cerrarlo vuelve a la última que no era «Datos técnicos».
+/// Al volver a un teatro con «Datos técnicos» elegida, el reproductor lo sabe.
 struct SincronizarDatosTecnicos: ViewModifier {
-    @Binding var guardada: String
-    @Binding var ultimaNormal: PestanaTeatro
+    let tipo: MemoriaPestanasTeatro.Tipo
     @Environment(PresentacionReproductor.self) private var presentacion
+    private let memoria = MemoriaPestanasTeatro.compartida
 
     func body(content: Content) -> some View {
         content
             .onAppear {
-                if guardada == PestanaTeatro.datos.rawValue && !presentacion.datosTecnicosAbiertos {
+                if memoria.elegida(tipo) == .datos && !presentacion.datosTecnicosAbiertos {
                     presentacion.abrirDatosTecnicos()
                 }
             }
             .onChange(of: presentacion.datosTecnicosAbiertos) { _, abiertos in
-                let enDatos = guardada == PestanaTeatro.datos.rawValue
-                if abiertos && !enDatos {
-                    ultimaNormal = PestanaTeatro(rawValue: guardada) ?? .fuentes
-                    guardada = PestanaTeatro.datos.rawValue
-                } else if !abiertos && enDatos {
-                    guardada = ultimaNormal.rawValue
-                }
+                memoria.datosTecnicos(abiertos: abiertos, en: tipo)
             }
     }
 }

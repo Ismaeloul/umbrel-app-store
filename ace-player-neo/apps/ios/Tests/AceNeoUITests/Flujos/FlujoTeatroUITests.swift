@@ -40,6 +40,12 @@ final class FlujoTeatroUITests: XCTestCase {
         add(adjunto)
     }
 
+    /// «Dónde se emite» del panel Partido (va en mayúsculas con `textCase`: se busca sin distinguirlas).
+    @MainActor
+    private func dondeSeEmite(_ app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[cd] %@", "donde se emite")).firstMatch
+    }
+
     /// Los controles vuelven si se habían escondido (un toque en el vídeo los alterna).
     @MainActor
     private func controles(_ app: XCUIApplication, _ id: String) -> XCUIElement {
@@ -68,11 +74,19 @@ final class FlujoTeatroUITests: XCTestCase {
                 XCTAssertTrue(
                     app.buttons["Tapar el marcador (tu emisión va por detrás)"].waitForExistence(timeout: 5), "No se destapa")
             }
+            // Tocar una pestaña cambia el panel de debajo (Isma: «Canal» y «Datos técnicos» no hacían nada).
             elementoUI(app, IDUI.pestanaPartido).tap()
-            XCTAssertTrue(conTextoUI(app, "M+ LaLiga").waitForExistence(timeout: 5), "Sin la pestaña Partido (Dónde se emite)")
+            XCTAssertTrue(esperarElegido(elementoUI(app, IDUI.pestanaPartido), plazo: 5), "La pestaña Partido no queda elegida")
+            XCTAssertTrue(dondeSeEmite(app).waitForExistence(timeout: 5), "Sin la pestaña Partido (Dónde se emite)")
             captura(app, "teatro-partido-pestana-partido-\(tema)")
             elementoUI(app, IDUI.pestanaDatos).tap()
+            XCTAssertTrue(esperarElegido(elementoUI(app, IDUI.pestanaDatos), plazo: 5), "La pestaña Datos técnicos no queda elegida")
             XCTAssertTrue(elementoUI(app, IDUI.panelDatosTecnicos).waitForExistence(timeout: 5), "Sin datos técnicos")
+            XCTAssertFalse(dondeSeEmite(app).exists, "El panel Partido sigue a la vista")
+            captura(app, "teatro-partido-pestana-datos-\(tema)")
+            elementoUI(app, IDUI.pestanaFuentes).tap()
+            XCTAssertTrue(esperarElegido(elementoUI(app, IDUI.pestanaFuentes), plazo: 5), "No se vuelve a Fuentes")
+            XCTAssertFalse(elementoUI(app, IDUI.panelDatosTecnicos).exists, "Los datos técnicos siguen a la vista")
             app.terminate()
         }
     }
@@ -89,8 +103,13 @@ final class FlujoTeatroUITests: XCTestCase {
             XCTAssertTrue(conTextoUI(app, "Solo esta").waitForExistence(timeout: 5), "La ficha no dice «Solo esta»")
             captura(app, "teatro-canal-\(tema)")
             elementoUI(app, IDUI.pestanaDatos).tap()
+            XCTAssertTrue(esperarElegido(elementoUI(app, IDUI.pestanaDatos), plazo: 5), "La pestaña Datos técnicos no queda elegida")
             XCTAssertTrue(elementoUI(app, IDUI.panelDatosTecnicos).waitForExistence(timeout: 5), "Sin datos técnicos")
+            XCTAssertFalse(conTextoUI(app, "Solo esta").exists, "La ficha del canal sigue a la vista")
             captura(app, "teatro-canal-datos-\(tema)")
+            elementoUI(app, IDUI.pestanaCanal).tap()
+            XCTAssertTrue(esperarElegido(elementoUI(app, IDUI.pestanaCanal), plazo: 5), "La pestaña Canal no queda elegida")
+            XCTAssertTrue(conTextoUI(app, "Solo esta").waitForExistence(timeout: 5), "No vuelve la ficha del canal")
             app.terminate()
         }
     }

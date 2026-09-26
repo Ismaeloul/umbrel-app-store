@@ -2,8 +2,8 @@ import SwiftUI
 
 /* El escenario (a4 §5): el marco negro con el ÚNICO `VistaVideo` del teatro (vertical: hueco `.teatro`;
    inmersivo: `.inmersivo`) y sus capas en el orden de la web: vídeo · corte a negro · capa de toques · panel
-   de mensaje / spinner / rótulo de la demo · controles · datos técnicos sobre el vídeo (inmersivo) · cápsula de
-   estado. Todo lo que va sobre el vídeo es isla oscura. La pulsación larga abre «Opciones del reproductor»
+   de mensaje / spinner / rótulo de la demo · controles · cápsula de estado. «Datos técnicos» nunca va sobre la
+   imagen: es una pestaña de la página (PanelDatosTecnicos). Todo lo que va sobre el vídeo es isla oscura. La pulsación larga abre «Opciones del reproductor»
    (menú del sistema, sin háptica propia) con la vista previa de la tesela. */
 
 enum ArrastreVideo: Sendable { case mover(CGFloat), soltar(minimiza: Bool) }
@@ -79,9 +79,9 @@ struct EscenarioVideo: View {
             capaToques(foto)
             capasMensaje(foto)
             ControlesVideo(variante: variante, relleno: relleno, partido: partido, marcador: marcador, ahora: reloj.ahora)
-            datosSobreVideo(foto)
+                .fundidoAlMini(rapido: true)
         }
-        .overlay(alignment: .bottomLeading) { estado(foto, relleno: relleno) }
+        .overlay(alignment: .bottomLeading) { estado(foto, relleno: relleno).fundidoAlMini(rapido: true) }
         .clipped()
         .islaOscura()
         .accessibilityElement(children: .contain)
@@ -132,14 +132,6 @@ struct EscenarioVideo: View {
             #else
                 RotuloDemo(titulo: titulo, grande: variante.mensajeGrande)
             #endif
-        }
-    }
-
-    @ViewBuilder private func datosSobreVideo(_ foto: FotoEscenario) -> some View {
-        if variante.datosSobreVideo && video.presentacion.datosTecnicosAbiertos && foto.hayCanal {
-            PanelDatosSobreVideo(seguras: seguras, anchoMarco: maquetacion.ancho, altoMarco: maquetacion.alto) {
-                video.presentacion.cerrarDatosTecnicos()
-            }
         }
     }
 

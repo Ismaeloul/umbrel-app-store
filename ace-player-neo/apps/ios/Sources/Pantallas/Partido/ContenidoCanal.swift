@@ -9,8 +9,7 @@ import SwiftUI
 struct ContenidoCanal: View {
     let hash: String
     let video = EntornoVideo()
-    @SceneStorage("aceneo-teatro-pestana-canal") private var guardada = PestanaTeatro.fuentes.rawValue
-    @State private var ultimaNormal = PestanaTeatro.fuentes
+    private let memoria = MemoriaPestanasTeatro.compartida
 
     private var biblioteca: LibraryView? { video.datos.biblioteca.datos }
     private var item: Item? { OtrasFuentes.item(biblioteca, hash: hash) }
@@ -40,11 +39,11 @@ struct ContenidoCanal: View {
         }
         .task(id: "\(hash)-\(titulo)-\(hermanas.map(\.id).joined(separator: ","))") { await entrar() }
         .onDisappear { video.fuentes.salirVista() }
-        .modifier(SincronizarDatosTecnicos(guardada: $guardada, ultimaNormal: $ultimaNormal))
+        .modifier(SincronizarDatosTecnicos(tipo: .canal))
     }
 
     private var seleccion: PestanaTeatro {
-        let elegida = PestanaTeatro(rawValue: guardada) ?? .fuentes
+        let elegida = memoria.canal
         if elegida == .partido { return cuenta > 0 ? .fuentes : .canal }
         if elegida == .fuentes && cuenta == 0 { return .canal }
         return elegida
@@ -55,7 +54,9 @@ struct ContenidoCanal: View {
         if cuenta > 0 { opciones.append(OpcionPestanaTeatro(valor: .fuentes, titulo: "Fuentes", cuenta: cuenta)) }
         opciones.append(OpcionPestanaTeatro(valor: .canal, titulo: "Canal"))
         opciones.append(OpcionPestanaTeatro(valor: .datos, titulo: "Datos técnicos"))
-        return PestanasTeatro(opciones: opciones, seleccion: seleccion, etiqueta: "Panel del canal") { elegir($0) }
+        return PestanasTeatro(opciones: opciones, seleccion: seleccion, etiqueta: "Panel del canal") {
+            ElegirPestanaTeatro.elegir($0, en: .canal, video: video)
+        }
     }
 
     private var objetivo: ObjetivoInspector {
@@ -79,17 +80,6 @@ struct ContenidoCanal: View {
                 }
             }
             PanelMontado(visible: seleccion == .datos) { SeccionDatosTecnicos() }
-        }
-    }
-
-    private func elegir(_ pestana: PestanaTeatro) {
-        video.haptica.disparar(.seleccion)
-        guardada = pestana.rawValue
-        if pestana == .datos {
-            video.presentacion.abrirDatosTecnicos()
-        } else {
-            ultimaNormal = pestana
-            if video.presentacion.datosTecnicosAbiertos { video.presentacion.cerrarDatosTecnicos() }
         }
     }
 

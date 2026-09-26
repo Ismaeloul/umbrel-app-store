@@ -45,7 +45,7 @@ struct VarianteEscenarioTests {
         #expect(vertical.subidaEstado == 60)
         let se = variante(667, inmersivo: true)
         #expect(se.compacto && se.minimizarVisible && !se.deslizarAbajoMinimiza)
-        #expect(se.datosSobreVideo && se.subidaEstado == 60)
+        #expect(se.subidaEstado == 60)
         let horizontal = variante(844, inmersivo: true)
         #expect(!horizontal.compacto && horizontal.capsulaCanal && !horizontal.minimizarVisible)
         #expect(horizontal.subidaEstado == 64)
