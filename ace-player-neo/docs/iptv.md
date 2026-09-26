@@ -37,6 +37,9 @@ texto o quedó fuera:
   web; medir el arranque con un proveedor real; la renovación del token de las listas M3U y la vuelta a la guía corta,
   sin probar contra un proveedor real.
 
+**D10 resuelto (26-sep-2026), pendiente de implementar:** la IPTV entra en el buscador junto con AceStream. El anexo
+§14 lo diseña y **manda** sobre lo que digan de favoritos, recientes y buscador §4.4, §4.6, §8.1 y §8.4.
+
 Las rutas de ficheros son relativas a `ace-player-neo/` salvo que se diga otra cosa. Los textos entre «comillas» son
 **literales**: se copian tal cual en el código, porque la app nativa los genera desde la web (`generar-textos.mjs`) y
 los compara en `TextosTests`.
@@ -669,13 +672,19 @@ está activa y el catálogo cargado. No depende del motor, así que también fun
 Es la misma capa, llamada con `scope=channel` (§5.2) y con el título del canal que se abre (por ejemplo «Antena 3»)
 como único canal pedido. Umbral 92, los mismos desempates, un cartel por canal y 2 IPTV como mucho.
 
-**Alcance:** la IPTV **complementa** canales y partidos que ya existen.
-- No entra en la biblioteca, ni en «Listas», ni en el buscador, ni en la agenda.
-- Un canal que solo está en la IPTV no se ve en ningún sitio.
-- **Pregunta abierta para Isma antes de implementar** (§12, D10). Su propio ejemplo es Antena 3, y los canales en
-  abierto muchas veces no vienen en las listas de AceStream: si sus listas no lo traen, no podrá ver Antena 3 por su
-  IPTV. Si lo quiere, se adelanta lo que hoy está aparcado: un grupo discreto «En tu IPTV», con 5 resultados como mucho,
-  al final del buscador de Canales, solo con 3 letras o más y cuando AceStream da menos de 3 resultados.
+**Alcance (D10, resuelto por Isma el 26-sep; diseño en §14):** la IPTV complementa los canales y partidos que ya
+existen **y además entra en el buscador**.
+- En **Buscar** y en el **filtro de Canales** salen a la vez los canales de tu IPTV y los de AceStream. Un canal que
+  solo está en la IPTV (Antena 3, si tus listas no la traen) también sale.
+- Si el mismo canal está en los dos sitios, sale **una vez**, con el distintivo «IPTV». Al tocarlo se reproduce como un
+  partido: IPTV primero, sus fuentes de AceStream comprobándose de fondo y el puente de §7.2.
+- Si solo está en la IPTV, se reproduce por la IPTV y el servidor busca además, de fondo, ese canal en AceStream con
+  este mismo emparejado (umbral 92 y protección Hypermotion) para tener respaldo (§14.4).
+- Un canal de la IPTV se puede guardar en **Favoritos** y entra en **Recientes**, con su id de §4.1 (§14.6).
+- Todo es automático: no hay que elegir «IPTV» o «AceStream» en ningún sitio.
+- Sigue **sin** entrar en la agenda ni en «Listas», y nunca se listan canales IPTV sin buscar (2 letras o más, §14.7).
+- Queda anulada la condición aparcada del primer diseño («5 como mucho», «solo con 3 letras», «solo si AceStream da
+  menos de 3 resultados»).
 
 ### 4.5 La guía para encontrar el canal del partido (`modules/iptv/guide-match.ts`, puro)
 
@@ -784,6 +793,10 @@ deduplicar:
 Además, la web y la app no llenan Favoritos ni Recientes de ids IPTV: una IPTV se reproduce con `record: false` y su
 cartel no ofrece «Favorito» (§8.1). Un canal de AceStream favorito que tiene IPTV ya la trae primero al tocarlo
 (§8.4).
+- **Cambia con §14.6:** un canal IPTV del **buscador** sí se guarda en Favoritos y el canal **tocado** entra en
+  Recientes, con su id IPTV. El cartel de fuente IPTV del reproductor sigue sin «Favorito» y las fuentes que suenan
+  por el puente siguen sin apuntarse. Un id IPTV guardado que ya no es del catálogo se sigue descartando aquí; el
+  re-emparejado por nombre lo hace la sincronización (§14.6).
 
 `status`:
 - `found` si la primera es IPTV (≥ 92) o lo de siempre;
@@ -1438,7 +1451,8 @@ reproduce. Por eso:
   - se quedan «Rebuscar», «Pegar hash», «Es el canal correcto» y «Reportar»;
   - **se quitan** «Favorito», «Copiar hash» y «Abrir en…» (con sus tres opciones). Un id IPTV no se guarda en
     Favoritos: el favorito es el canal de AceStream, que ya trae la IPTV primero al tocarlo (§4.6, §8.4).
-- **Reproducir una IPTV** siempre con `record: false`: no entra en Recientes.
+- **Reproducir una IPTV** siempre con `record: false`: no entra en Recientes. (Con §14.6 lo que entra en Recientes es
+  el canal **tocado**, una vez por sesión de canal, sea un hash de AceStream o un canal IPTV del buscador.)
 - **Datos técnicos** (`player/NerdPanel.tsx`): «Origen: IPTV · {Casa}». «Pares» pasa a «—» y la fila «Hash» no sale.
   La velocidad sale de `stream.stats.speedDown`.
 - **«Dónde se está reproduciendo»** (`features/where-playing`): con `SessionSummary.source === 'iptv'`, la línea del
@@ -1490,7 +1504,9 @@ decisión se lleva a `playChannel`:
 
 **Favoritos y Recientes** no guardan ids IPTV (§4.6, §8.1). Si queda alguno de antes, el servidor lo convierte o lo
 descarta en la resolución, y `channelStream` con un id IPTV que ya no vale da `iptv_gone`, `iptv_disabled` o
-`iptv_removed`, que agotan la fuente y el puente pasa a las hermanas.
+`iptv_removed`, que agotan la fuente y el puente pasa a las hermanas. **Cambia con §14:** el buscador guarda canales
+IPTV en Favoritos y Recientes, y tocar un id IPTV nunca llega a `channelStream` sin pasar antes por la resolución
+(§14.5).
 
 ### 8.5 Ficheros de la web
 
@@ -1707,6 +1723,8 @@ el PC contra una copia de `/data`.
 
 ## 10. Impacto en la app nativa (`rediseno/nativa`)
 
+El buscador con IPTV (D10) suma lo de §14.10 a esta sección.
+
 **Sin cambiar nada, incluida la 0.8.0 publicada:**
 - La IPTV llega en cabeza de `candidates` y como `candidate`, se puede elegir a mano con un toque y se reproduce por la
   ruta nativa de siempre (`hls-fmp4`).
@@ -1871,7 +1889,7 @@ comprobar el 403 de `/native` y la ruta `video`, y los fixtures del contrato par
 | D7 | **Volver a la IPTV solo con un toque**, nunca solo | evita ir y volver sin parar; el aviso lleva el botón |
 | D8 | **Umbral 92 para la IPTV** (70 para las listas), con limpieza de grafías propia | catálogos de miles de canales: mejor no emparejar que emparejar mal |
 | D9 | **Filtro de país: ES o sin país; para la guía, ES explícito** (o sin país que case con la agenda) | «IT: DAZN 1» no es «DAZN 1»; si hace falta, se abre como ajuste |
-| D10 | **La IPTV no entra en biblioteca, buscador ni agenda** — **pendiente de confirmar con Isma** (§4.4) | alcance pedido; pero su ejemplo es Antena 3, que puede no estar en sus listas de AceStream |
+| D10 | **Resuelto por Isma (26-sep): la IPTV entra en el buscador** (Buscar y el filtro de Canales), junto con AceStream; un canal solo de la IPTV también sale y se guarda en Favoritos. Sigue fuera de la agenda y de «Listas» (§4.4, §14) | «quiero que en el buscador salgan los dos»: su ejemplo es Antena 3, que puede no estar en sus listas de AceStream |
 | D11 | **Cambiar servidor o tipo exige reescribir credenciales y crea otro `provider.id`** | nadie puede mandar la contraseña guardada a otro host, y nada de un servidor se aplica a otro |
 | D12 | **Lista cada 6 h, guía cada 8 h, cuenta cada 10 min** | «unas pocas veces al día»; los tres se retrasan si se está viendo |
 | D13 | **`iptv.status` solo para la web; sin ámbito nuevo en `state.changed`** | el iPhone no tiene nada que invalidar y así no hay enums nuevos |
@@ -1886,6 +1904,10 @@ comprobar el 403 de `/native` y la ruta `video`, y los fixtures del contrato par
 | D22 | **Sin «Probar conexión»**: «Guardar IPTV» prueba rápido y el recuento llega por SSE | como «Listas»; sin peticiones de 130 s ni `location` especial en nginx |
 | D23 | **Un cartel por canal IPTV y 2 como mucho**; las variantes, dentro del servidor | «una fuente más con su distintivo» |
 | D24 | **Sin sonda de stream en resoluciones interactivas**; solo de fondo, en Xtream y con `active_cons == 0` | la reproducción es la prueba y no se molesta a la tele de Isma |
+| D25 | **El buscador IPTV enseña solo canales de España o sin país** (D9) y nunca los grupos para adultos (§14.2) | catálogos de decenas de miles de canales repetidos por país; se abre como ajuste si hace falta |
+| D26 | **Un canal, una fila**: si está en tu biblioteca, manda su fila (con «IPTV»); si no, la fila IPTV; los resultados del motor que son ese canal se esconden (§14.3) | «sale una vez y lleva el distintivo IPTV»; tus favoritos no desaparecen del buscador |
+| D27 | **`iptvChannels` nace con `access: 'web'`** y pasa a `any` cuando la app calque el buscador (§14.10) | no rompe `FixturesTests` de la app antes de tiempo; el contenido no tiene nada secreto |
+| D28 | **Re-emparejado de favoritos y recientes IPTV al sincronizar**; un favorito que no casa se quita a las 24 h, un reciente al momento (§14.6) | «se vuelve a emparejar por nombre o se descarta sin errores feos», sin perder un favorito por una sincronización rara |
 
 ### 12.2 Riesgos
 
@@ -1980,9 +2002,11 @@ parte, va con su motivo.
 
 ### 13.3 Pendiente de Isma
 
-- **P16 · Canales que solo están en la IPTV (D10).** No se ha implementado nada nuevo: hay que preguntarle antes. Si
-  quiere ver Antena 3 aunque sus listas de AceStream no la traigan, se adelanta el grupo discreto «En tu IPTV» del
-  buscador de Canales (§4.4).
+- **P16 · Canales que solo están en la IPTV (D10). Resuelto el 26-sep.** Isma: «quiero que en el buscador salgan los
+  dos, o sea que sea automático cuando seleccione un partido pero si quiero buscar otro canal que sea automático». Se
+  descarta el grupo discreto aparcado (5 como mucho, solo si AceStream daba menos de 3): la IPTV y AceStream salen
+  juntas en Buscar y en el filtro de Canales, un canal por fila, y un canal solo de la IPTV se reproduce, se guarda en
+  Favoritos y tiene respaldo de AceStream buscado de fondo. Diseño en §14, **pendiente de implementar**.
 
 ### 13.4 Descartado
 
@@ -1994,3 +2018,496 @@ parte, va con su motivo.
 - **Conjunto compacto o Bloom de ids retirados en un fichero aparte** (alternativa de S5). La etiqueta en el id lo
   resuelve sin estado.
 - **`scanCancel`** (parte de S16): ver §13.2.
+
+---
+
+## 14. Anexo: Buscador: IPTV y AceStream juntos (D10 resuelto)
+
+Lo pidió Isma el 26-sep, al responder a D10: «quiero que en el buscador salgan los dos, o sea que sea automático cuando
+seleccione un partido pero si quiero buscar otro canal que sea automático, ¿sabes?». **Pendiente de implementar.**
+Este anexo manda sobre lo que digan §4.4, §4.6, §8.1 y §8.4 de favoritos, recientes y buscador.
+
+### 14.1 En pocas palabras
+
+1. **Buscar** (y el **filtro de Canales**) enseñan a la vez tu IPTV y AceStream. Un canal que solo está en la IPTV
+   también sale. No hay pestañas ni filtros «IPTV / AceStream»: todo es automático.
+2. **Un canal, una fila** (D26). Si el canal está en tu biblioteca, sale su fila de siempre con el distintivo «IPTV»;
+   si no, sale la fila IPTV. Los resultados del motor que son ese mismo canal se esconden.
+3. **Tocar un canal IPTV es como tocar un partido:** IPTV primero, las fuentes de AceStream de ese canal comprobándose
+   de fondo, el puente de §7.2 si una cae y «Volver a la IPTV» con un toque.
+4. **Un canal solo de la IPTV** se reproduce por la IPTV y el servidor lo busca además, de fondo, en AceStream (listas
+   y motor) con el mismo emparejado de §4.3: umbral 92 y protección Hypermotion. Si aparece, es su respaldo.
+5. **Favoritos y Recientes** guardan canales IPTV con su id de §4.1. Si cambia el proveedor, la sincronización los
+   vuelve a emparejar por nombre; si no casan, se quitan sin errores (D28).
+6. **Sin inundar:** nunca se listan canales IPTV sin buscar (2 letras o más), 5 filas IPTV a la vista con «Ver más» y
+   50 como mucho por búsqueda.
+7. Sigue en pie: la IPTV se configura **solo en la web** y nada del proveedor sale del Umbrel. El buscador solo
+   devuelve nombres limpios, el nombre que Isma puso al proveedor e ids sintéticos.
+
+### 14.2 Contrato (`packages/shared`, zod)
+
+Cuatro cambios: una ruta nueva y tres campos opcionales en rutas que ya existen. Ningún formato de id cambia.
+
+**1. Ruta nueva `iptvChannels`** (`packages/shared/src/api/v1/iptv.ts`, `routes.ts`, módulo `iptv`):
+
+| id | método y ruta | acceso | consulta | respuesta | errores |
+|---|---|---|---|---|---|
+| `iptvChannels` | `GET /api/v1/iptv/channels` | **`web`** (D27; pasa a `any` en §14.10) | `IptvChannelsQuery` | `IptvChannelsResponse` | `empty_query` |
+
+```ts
+// packages/shared/src/constants/iptv.ts
+export const IPTV_SEARCH = {
+  /** Filas por búsqueda: por defecto y como mucho. */
+  limit: 50,
+  /** `total` cuenta hasta aquí; si hay más, `capped: true`. */
+  totalCap: 200,
+  /** Filas IPTV a la vista antes de «Ver más»: en Buscar y en el filtro de Canales. */
+  shownInSearch: 5,
+  shownInLibrary: 3,
+  /** Ids de tu biblioteca que se devuelven por canal IPTV, y cuántos de la biblioteca se miran como mucho. */
+  libraryMatchesMax: 20,
+  libraryCandidatesMax: 200,
+  /** Consultas al motor de la búsqueda inversa (§14.4). */
+  reverseQueriesMax: 2,
+  /** Con menos fuentes de AceStream que esto, la sesión del canal pide la búsqueda inversa. */
+  reverseBelowAce: 3,
+  /** Un favorito IPTV que no casa tras cambiar de proveedor se quita pasado esto (§14.6). */
+  relinkGraceMs: 24 * HOUR,
+} as const;
+// IPTV_CLIENT gana:
+//   searchMs: 4_000          → TIMEOUTS.iptvChannels de la web
+//   channelEngineMs: 20_000  → la llamada con engine=1 (§14.4)
+
+// packages/shared/src/api/v1/iptv.ts
+export const IptvChannelsQuerySchema = z.strictObject({
+  /** Se limpia como en `search` (espacios colapsados, recorte, 80); con menos de 2 letras, 400 `empty_query`. */
+  q: z.string().max(500).default(''),
+  limit: z.coerce.number().int().min(1).max(IPTV_SEARCH.limit).optional(),   // por defecto 50
+});
+
+export const IptvChannelSchema = z.strictObject({
+  /** Id de §4.1 de la mejor variante del grupo (§4.3): el mismo que usa la resolución. */
+  id: HashSchema,
+  /** Nombre limpio («Antena 3»): sin país, adornos, calidad ni reserva. */
+  title: z.string().min(1).max(120),
+  quality: IptvQualitySchema.nullable(),
+  /** El nombre que Isma puso al proveedor («Casa»). */
+  provider: z.string().max(IPTV_NAME_MAX),
+  /** Ids de tu biblioteca (favoritos, recientes o la lista activa) que son este canal (≥ 92), de mejor a peor. */
+  library: z.array(HashSchema).max(IPTV_SEARCH.libraryMatchesMax),
+});
+
+export const IptvChannelsResponseSchema = z.strictObject({
+  query: z.string().max(SEARCH_QUERY_MAX),
+  /** Canales que casan, hasta `totalCap`. */
+  total: z.number().int().nonnegative(),
+  capped: z.boolean(),
+  channels: z.array(IptvChannelSchema).max(IPTV_SEARCH.limit),
+});
+```
+
+- **Sin IPTV activa** (sin proveedor, en pausa o sin catálogo cargado: `iptv.active()` falso), responde `200` con
+  `{ query, total: 0, capped: false, channels: [] }`. No es un error: la web puede preguntar justo mientras se pausa.
+- **Nunca** lleva URL, `ref`, `stream_id`, `tvg-id`, grupo ni nada del proveedor aparte de `provider`. El test de
+  fugas (§9.2, caso 8) suma esta ruta.
+- La respuesta no se registra (como las demás `iptv*`), porque la consulta es lo que Isma escribe.
+
+**2. `SearchResultSchema` (`api/common.ts`) gana un campo opcional:**
+
+```ts
+/** Solo en /api/v1/search y con IPTV activa: el canal de tu IPTV que es este resultado (≥ 92, §14.3). */
+iptv: HashSchema.optional(),
+```
+
+- La ruta antigua `/api/search` no lo lleva (como `playableOn`, que solo va en v1).
+- El servidor lo calcula para **todos** los resultados (100 como mucho) y para cualquier origen: la 0.8.0 ignora la
+  clave. `v1/search.json` **no cambia**; el caso con IPTV va en `fixtures/variantes/search.iptv.json`.
+
+**3. `ResolveQuerySchema` (`api/v1/football.ts`) gana dos campos opcionales, solo con `scope=channel`:**
+
+```ts
+/** El canal IPTV tocado, o el hash tocado si no se sabe (el servidor lo ignora si no es un id IPTV, §4.1). */
+iptv: HashSchema.optional(),
+/** '1': busca también en el motor AceStream (búsqueda inversa, §14.4). Sin él, < 300 ms como hoy. */
+engine: z.enum(['0', '1']).optional(),
+```
+
+**4. `LibraryViewSchema` (`api/v1/library.ts`, solo la respuesta; el estado persistido no cambia) gana:**
+
+```ts
+/** Solo si hay ids IPTV en favoritos o recientes: el estado de cada uno ahora (§14.6). */
+iptvIds: z.record(HashSchema, z.enum(['ok', 'iptv_gone', 'iptv_disabled', 'iptv_removed'])).optional(),
+```
+
+- Lo llevan `libraryGet` y la respuesta de `libraryMutate`. `ItemSchema` **no** cambia: es `strictObject` y está en el
+  estado que lee la 0.8.0.
+- `v1/libraryGet.json` no cambia; el caso va en `fixtures/variantes/libraryGet.iptv.json`.
+
+**Ejemplos y generados** (reparto de §5.7):
+- `fixtures/web/v1/iptvChannels.json` y `iptvChannels` en `WEB_FIXTURE_ROUTE_IDS` (son ya 6);
+- `fixtures/variantes/search.iptv.json`, `libraryGet.iptv.json` y `footballResolve.iptv-canal.json` (un canal solo de
+  la IPTV con dos AceStream de la búsqueda inversa detrás);
+- `v1/` y `events/` no cambian: ni tipos Swift nuevos obligatorios ni eventos nuevos;
+- `TIMEOUTS.iptvChannels = 4_000` en `api/client.ts`;
+- `openapi-v2.yaml` regenerado y `docs/api.md` §7 con la ruta, los campos nuevos y un ejemplo.
+
+### 14.3 Cómo busca y cómo se mezcla
+
+**En el servidor** (`modules/iptv/search.ts`, puro; lo llama `iptv.search()`):
+
+1. **Qué casa.** La consulta pasa por la misma limpieza que un nombre IPTV (`cleanIptvTitle` e `iptvSpelling`, así
+   «m+ la liga» es «movistar laliga») y se trocea en palabras. Un **grupo** del catálogo casa si **cada** palabra de la
+   consulta es el principio de alguna palabra de su clave (`normalizeChannelKey(base)`, en cualquier orden), o si la
+   clave contiene la consulta entera.
+   - Se usa el índice de palabras de la preselección (§3.4): para cada palabra de la consulta se juntan los grupos de
+     las palabras del índice que empiezan por ella y se intersecan. Nada recorre las 100 000 entradas.
+2. **Qué no sale nunca:**
+   - canales con país distinto de ES o sin país (D25, el mismo filtro que D9);
+   - grupos para adultos: `group-title` o nombre con `xxx`, `adult`, `adults`, `adulto(s)`, `adulta(s)`, `+18`, `18+`
+     o `porn…` (por palabra, sin tildes);
+   - el VOD (ya no está en el catálogo, §3.2).
+3. **Una fila por grupo** (D23): el id es el de la mejor variante (§4.3), con su `quality`.
+4. **Orden:** clave igual a la consulta → clave que empieza por la consulta → palabras en el mismo orden → el resto;
+   dentro de cada nivel, la clave más corta y luego el orden del catálogo.
+5. **`library` de cada fila.** Se miran los elementos de favoritos, recientes y la lista activa cuyo título o categoría
+   contiene la consulta sin tildes ni mayúsculas (lo mismo que enseñan «En tu biblioteca» y el filtro de Canales), 200
+   como mucho, y se quedan los que son **ese canal** según `sameChannel` (abajo). Un id IPTV de la biblioteca cuenta si
+   es del mismo grupo.
+6. **Objetivo:** menos de **50 ms** con 100 000 canales (test de §14.9).
+
+**`sameChannel(base, otroTitulo, scorer)`** (`modules/iptv/match.ts`, puro). Es la regla única de «es el mismo canal»
+del buscador, la búsqueda inversa y el re-emparejado:
+- `max(scorer([base], { title: otro }), scorer([base], { title: iptvSpelling(otro) }))`, con la regla del « 1» final
+  de §4.2;
+- `scorer` es `scoreResolutionCandidate` inyectado desde `services.ts` (el módulo `iptv` no importa `football`), así
+  que hereda Hypermotion (≤ 58), la regla de los números («DAZN 1» ≠ «DAZN 2») y la de la familia;
+- umbral **92** (`IPTV_MIN_SCORE`).
+- «LaLiga TV Hypermotion» nunca es «LaLiga TV»; «DAZN LA LIGA 1080» sí es «DAZN LaLiga».
+
+**`SearchResult.iptv`** (`search/routes.ts`, con `iptv` como dependencia opcional de `search`, que ya se crea después).
+Con la IPTV activa, para cada resultado del motor se preseleccionan grupos por palabras (50 como mucho) y se queda el de
+mayor `sameChannel(grupo.base, resultado.title)` ≥ 92 (desempate: orden del catálogo). Su id va en `iptv`.
+
+**En la web** (`features/search/iptv.ts`, puro: `mergeSearch({ local, iptv, engine, iptvIds })`). Reglas, en orden:
+
+1. **Biblioteca primero.** Una fila de «En tu biblioteca» (5 como mucho, como hoy) lleva el distintivo «IPTV» si su id
+   está en el `library` de algún canal IPTV de la respuesta, o si es un id IPTV (`iptvIds`). Ese canal queda
+   **representado** por ella.
+2. **«En tu IPTV»:** los canales de la respuesta que no están representados, en el orden del servidor. Se ven 5; el
+   resto, con «Ver más».
+3. **«En el motor AceStream»:** un resultado con `iptv` cuyo canal está representado (fila de la biblioteca o de «En tu
+   IPTV», también si está detrás de «Ver más») **se esconde** y suma al contador de ese canal. Si su canal no está (por
+   ejemplo, pasó del límite de 50), se queda **el primero** de ese canal con el distintivo «IPTV» y se esconden los
+   demás.
+4. El contador de la sección del motor cuenta solo los que se ven.
+
+Así «Antena 3 HD» de tu biblioteca sale una vez con «IPTV», «Telecinco» (solo en la IPTV) sale en «En tu IPTV», y «La 1»
+de la IPTV sale una vez con «también en AceStream» aunque el motor tenga cinco «La 1 HD --> …».
+
+**Llamadas de la web.** Con `iptvActive()` (el `features.iptv` de siempre), Buscar lanza a la vez `search` (el motor,
+como hoy) e `iptvChannels` con el mismo texto confirmado (450 ms tras la última tecla, o Intro) y `limit` 50, así el
+filtro de Canales comparte la misma consulta en caché. Sin IPTV activa, `iptvChannels` no se llama y todo es como hoy.
+- `staleTime` de 60 s, como el motor. Se invalidan con `iptv.status` y con los cambios de la biblioteca (el `library` de
+  cada fila depende de ella). `libraryGet` se invalida también con `iptv.status` (por `iptvIds`).
+- Las respuestas atrasadas no pintan nunca: una consulta por texto, como hoy.
+- El filtro de Canales usa su propia espera de 140 ms para la lista, pero pregunta a `iptvChannels` con el texto
+  estable 450 ms, como Buscar, para no lanzar una petición por tecla.
+
+### 14.4 Tocar un resultado
+
+Todas las filas pasan por `playChannel`. `PlayRequest` gana `iptv?: string` (el id IPTV del canal, si se sabe) y
+`TappedChannel` gana `iptv: string | null`.
+
+| Se toca… | `playChannel` recibe | Qué pasa |
+|---|---|---|
+| Fila de «En tu IPTV» | `hash` = `iptv` = id IPTV, título limpio, `ih: false`, `record: true` | sesión de canal (§8.4) con `iptv` |
+| Fila de la biblioteca con «IPTV» | su hash de siempre y `iptv` = el canal IPTV que la representa | igual que hoy con IPTV activa (§8.4), con `iptv` |
+| Resultado del motor con «IPTV» | su infohash (`ih: true`) y `iptv` = `result.iptv` | igual, con `iptv` |
+| Favorito o reciente que es un id IPTV | `hash` = `iptv` = ese id | sesión de canal con `iptv`, **aunque la IPTV no esté activa** |
+| Cualquier otra fila | lo de hoy | lo de hoy (§8.4) |
+
+`playChannel` toma el camino de la sesión de canal si `origin !== 'pegado'` **y** (`iptvActive()` **o** `iptv ===
+hash`). Un id IPTV nunca se manda a `play()` directamente: el motor no lo entiende y `channelStream` daría un error de
+reproductor.
+
+**Primera llamada (rápida, la de hoy):**
+`footballResolve { channel: título, scope: 'channel', iptv: tapped.iptv ?? tapped.hash, client }`, con los 2,5 s de
+`IPTV_CLIENT.channelResolveMs`.
+- En el servidor, si `iptv` es del catálogo vigente (`classify` = `owned`), se convierte en la candidata de **su
+  grupo** (la mejor variante, §4.3) con puntuación 100 y `matchedChannel` = su nombre limpio, y va **primera**. Cuenta
+  dentro del tope de 2 IPTV. Si no es un id IPTV, o ya no es del catálogo, se ignora y manda el emparejado por nombre
+  de siempre: así un favorito de otro proveedor encuentra su canal nuevo.
+- Lo demás es §5.2: vínculos, biblioteca e IPTV, sin motor ni IA, < 300 ms.
+- Abrir `partido/canal/<id IPTV>` con el enlace (sin tocar nada) también manda `iptv` = ese id, así que suena la IPTV
+  aunque la web no sepa todavía que es un canal IPTV.
+
+**Segunda llamada, la búsqueda inversa (`engine=1`),** de fondo, con `IPTV_CLIENT.channelEngineMs` (20 s). La web la
+pide si:
+- la primera trajo IPTV y la sesión tiene **menos de 3** fuentes de AceStream (`IPTV_SEARCH.reverseBelowAce`); o
+- lo tocado es un id IPTV y la primera **no trajo nada** (`not_found`, error o plazo).
+
+En el servidor, con `scope=channel&engine=1`:
+- **Canales pedidos:** el título y, si `iptv` es del catálogo, también su nombre limpio (sin repetir).
+- **Consultas al motor:** `aceSearchQueries` de esos canales, **2 como mucho**, por `via: 'auto'`. Con solo IPTV
+  sonando, el motor principal está libre (§6.4).
+- **Puntuación:** cada resultado con `sameChannel` contra cada canal pedido, y entra solo con **≥ 92**, con las reglas
+  aprendidas aplicadas («Canal incorrecto» aparta). Los ids IPTV que devuelva el motor se descartan (§4.1).
+- **Deja de valer la regla «sin IPTV, `not_found`» de §5.2:** con `engine=1` se devuelve lo que haya (IPTV, biblioteca
+  y motor), y `not_found` solo si no hay nada.
+- **Comprobador:** un trabajo `interactive` nuevo para el mismo `clientKey` con todas las candidatas. Sustituye al de la
+  primera llamada, y el comprobador reutiliza los veredictos en caché, así que lo ya comprobado no se vuelve a sondear.
+  Ninguna sonda de stream IPTV (§7.3).
+- **Motor caído:** `engineAvailable: false` y lo demás igual; la web no avisa de nada.
+
+**En la web** (`features/sources/session.ts`):
+- La respuesta de `engine=1` se **mezcla** con lo que hay: las entradas que ya estaban conservan su estado, su número y
+  su veredicto, y las AceStream nuevas se añaden **al final** en el orden del servidor. Nada se reordena mientras
+  suena algo. `watchJob` pasa al trabajo nuevo.
+- Si llega tarde (otro canal, salir), se descarta por `generation`, como la primera.
+- Sin ruido: no hay aviso cuando llega el respaldo; los carteles nuevos aparecen en el panel de fuentes.
+- Si lo tocado es un id IPTV y **las dos** llamadas vuelven vacías, no se abre el reproductor con un error: se queda
+  en espera con el texto de §14.5 según `iptvIds`.
+
+**El puente en un canal solo de la IPTV** (filas nuevas de la tabla de §7.2; el resto de §7.2 no cambia):
+
+| Cae… | y hay… | Qué pasa | Línea de estado | Toast con acción |
+|---|---|---|---|---|
+| IPTV de un canal solo de la IPTV | la búsqueda inversa en marcha, o AceStream sin ninguna verificada | espera a la primera `working`, como en un partido | «Tu IPTV no responde. Busco este canal en AceStream y arranco la primera fuente que funcione.» | «Volver a la IPTV» |
+| ídem | la búsqueda inversa terminó sin ninguna AceStream | `failureText` | «Tu IPTV no responde y este canal no está en AceStream. Prueba otra vez en unos minutos.» | «Volver a la IPTV» |
+| ídem | una AceStream `working` | la fila 1 de §7.2 («Tu IPTV no responde: seguimos por AceStream (fuente {N})») | — | «Volver a la IPTV» |
+
+La fila «IPTV en un canal suelto → se prueba el hash que se tocó» de §7.2 sigue valiendo cuando lo tocado es un hash de
+AceStream.
+
+### 14.5 Textos (literales, en `features/search/*`, `features/library/*` y `features/sources/session.ts`)
+
+**Buscar, con IPTV activa** (sin IPTV activa, los textos de hoy):
+
+| Dónde | Texto |
+|---|---|
+| Etiqueta del campo (oculta) | «Buscar en tu IPTV y en el motor AceStream» |
+| Pista sin texto (sustituye a «Busca canales publicados en el motor AceStream.») | «Busca canales en tu IPTV y en el motor AceStream.» |
+| Título de la sección nueva, entre «En tu biblioteca» y «En el motor AceStream» | «En tu IPTV», con el contador (`total`, o «200+» si `capped`) |
+| Distintivo de fila (el de `SourcePoster`: `Capsule` neutra, icono `tv`) | «IPTV» |
+| Subtítulo de una fila IPTV | «{Casa} · {1080p}» (calidad como en §8.1; sin calidad, solo «{Casa}») |
+| … si también está en AceStream (`library` no vacío o resultados del motor escondidos) | añade « · también en AceStream» |
+| Botón bajo las 5 primeras | «Ver {N} más de tu IPTV» / «Ver menos» |
+| Nota con `capped` o `total` > 50, al desplegar | «Hay más canales con «{q}» en tu IPTV: escribe algo más concreto.» |
+| Fallo de `iptvChannels` (dentro de la sección, sin toast) | «No se pudo buscar en tu IPTV.» + botón quiet «Reintentar» |
+| Región viva con resultados | «{n} en tu IPTV y {m} en el motor para «{q}».» |
+| Vacío en los dos (sustituye al vacío de hoy) | título «Sin resultados para «{q}».», texto «No está en tu IPTV ni en el motor AceStream. Prueba con otro nombre o menos palabras.» |
+
+- Si solo la IPTV tiene resultados, la sección del motor enseña su vacío de hoy («Sin resultados para «{q}».»); si el
+  motor falla, su error de hoy y el toast «La búsqueda falló. ¿Está el motor AceStream en línea?». La IPTV se ve igual.
+- Sin resultados IPTV y sin error, la sección «En tu IPTV» no sale.
+- Mientras carga `iptvChannels` no se pinta nada de la sección (es rápida): sin esqueleto, para que no salte.
+
+**Filtro de Canales, con IPTV activa** (texto de 2 letras o más):
+
+| Dónde | Texto |
+|---|---|
+| Sección al final de la lista filtrada (3 filas como mucho, sin las representadas por filas de esa pestaña) | «En tu IPTV» |
+| Botón bajo la sección si hay más | «Ver todo en Buscar» (`goToEngineSearch(navigate, q)`) |
+| El botón de hoy «Buscar «{q}» en el motor AceStream» | «Buscar «{q}» en tu IPTV y en el motor» |
+| El vacío de hoy «Nada en esta pestaña con «{q}».» | igual; la sección «En tu IPTV» sale debajo si hay |
+
+**Filas que son un id IPTV (Favoritos, Recientes, «En tu biblioteca»)**, según `iptvIds`:
+
+| Estado | Subtítulo |
+|---|---|
+| `ok` | «Tu IPTV» |
+| `iptv_gone` | «Ya no está en tu IPTV» |
+| `iptv_disabled` | «Tu IPTV está en pausa» |
+| `iptv_removed` | «Has eliminado tu IPTV» |
+
+**Menú «Más» de una fila IPTV** (fila de «En tu IPTV» o id IPTV de la biblioteca): «Ver canal», «Añadir a favoritos» /
+«Quitar de favoritos», «Copiar nombre», y en la biblioteca «Renombrar» y «Eliminar». **Sin** «Abrir en la app de
+AceStream», «Copiar URL del stream (VLC)», «Copiar enlace acestream://» ni «Copiar hash» (`channelMenuItems` gana
+`iptv: true`). La ficha de escritorio (`ChannelDetail`) de un id IPTV no enseña el hash.
+
+**Sesión de un canal tocado que es un id IPTV:**
+
+| Momento | Texto (línea de espera) |
+|---|---|
+| Primera llamada | «Buscando el canal en tu IPTV…» (el de hoy) |
+| Sin nada en la primera, con la búsqueda inversa en marcha | «Buscando este canal en AceStream…» |
+| Nada en ninguna, IPTV activa | «Este canal ya no está en tu IPTV y no lo encuentro en AceStream.» |
+| Nada en ninguna, IPTV en pausa | «Tu IPTV está en pausa y este canal no está en AceStream.» |
+| Nada en ninguna, IPTV eliminada | «Has eliminado tu IPTV y este canal no está en AceStream.» |
+
+### 14.6 Favoritos y Recientes con ids IPTV
+
+**Guardar.** La estrella de una fila IPTV abre la hoja de favorito de siempre y hace `favorite-upsert` con
+`{ id: <id IPTV>, title: <nombre limpio>, category: 'IPTV', alias: <nombre limpio>, ih: false }`.
+- `alias` guarda el nombre del canal en la IPTV aunque Isma lo renombre después: es el que usa el re-emparejado.
+- El **identificador estable** es el id de §4.1 de la mejor variante: no cambia entre sincronizaciones mientras el
+  proveedor sea el mismo (§4.1).
+- La 0.8.0 lo ve como un favorito más y lo reproduce por `channelStream`, que ya sabe abrir un id IPTV (§4.1).
+
+**Recientes.** Lo que entra es el canal **tocado**, una vez por sesión de canal, cuando arranca la primera fuente de
+esa sesión (sea la IPTV o una AceStream): `history-upsert { id: tapped.hash, title: tapped.title, ih }`, solo si
+`tapped.record`. Los cambios de fuente, el puente y «Volver a la IPTV» no apuntan nada. Así, además, un canal de
+AceStream tocado vuelve a entrar en Recientes cuando suena su IPTV (hoy no entraba).
+
+**`iptvIds`.** Al montar `LibraryView`, el servidor pasa cada id de favoritos y recientes por `isIptvId` (es un HMAC
+por id: nada que guardar) y, a los que lo son, por `classify`: `owned` → `ok`, y los otros tres con su código.
+
+**Re-emparejado** (`modules/iptv/relink.ts`, puro, más un gancho en `service.ts`; D28):
+- **Cuándo:** tras aplicar una sincronización correcta con la IPTV activa (también la primera tras cambiar de
+  proveedor). Nunca en pausa, sin proveedor ni tras una sincronización fallida.
+- **A quién:** favoritos y recientes con `isIptvId(id)` que no están en el catálogo vigente, o que están pero ya no son
+  la mejor variante de su grupo.
+- **Cómo:** con `matchIptvChannels(catalog, [alias || title])` (≥ 92, ES o sin país, la regla del « 1»):
+  - si casa: se cambia el `id` por el de la mejor variante del grupo **en su sitio** (mismo título, categoría, alias,
+    fecha y posición); si ese id ya estaba en la colección, se quita el viejo;
+  - si no casa, en **Recientes** se quita;
+  - si no casa, en **Favoritos** se apunta en memoria desde cuándo falta y se quita en la primera sincronización
+    correcta pasadas **24 h**. Si el servidor se reinicia, la cuenta vuelve a empezar: el favorito dura más, nunca
+    menos. Mientras tanto sale con «Ya no está en tu IPTV» y, al tocarlo, se busca por nombre (§14.4).
+- **Todo en un `state.enqueue`**, con el aviso de cambio de biblioteca de siempre. No hay ningún aviso visible.
+- Los vínculos guardados (`channelBindings`) no se tocan: una IPTV no se vincula a mano.
+
+### 14.7 Límites
+
+| Qué | Límite |
+|---|---|
+| Letras para buscar | 2 (`SEARCH_QUERY_MIN`), 80 como mucho; menos → `empty_query` y la web no pregunta |
+| Canales listados sin buscar | **ninguno**: no hay ruta para recorrer el catálogo |
+| Filas por respuesta | 50 (`IPTV_SEARCH.limit`); `total` hasta 200 con `capped` |
+| Filas IPTV a la vista | 5 en Buscar y 3 en Canales, con «Ver más» / «Ver todo en Buscar» |
+| Ids de biblioteca por canal | 20; se miran 200 elementos de la biblioteca como mucho |
+| Resultados del motor anotados con `iptv` | todos (100 como mucho), 50 grupos preseleccionados por resultado |
+| Tiempo de `iptvChannels` en el servidor | objetivo < 50 ms con 100 000 canales; la web espera 4 s |
+| Búsqueda inversa | 2 consultas al motor, umbral 92, 20 s de plazo en la web; solo con menos de 3 AceStream o sin nada |
+| País | ES o sin país (D25) |
+| Grupos para adultos | nunca |
+| Re-emparejado | tras cada sincronización correcta; favoritos que no casan fuera a las 24 h, recientes al momento |
+
+### 14.8 Ficheros
+
+| Dónde | Cambio |
+|---|---|
+| `packages/shared/src/api/v1/iptv.ts`, `routes.ts`, `api/common.ts`, `api/v1/football.ts`, `api/v1/library.ts`, `constants/iptv.ts` | §14.2 |
+| `packages/shared/scripts/fixtures.ts`, `fixtures/web/v1/`, `fixtures/variantes/`, `test/contracts.test.ts` | ejemplos de §14.2 |
+| `apps/server/src/modules/iptv/{search, relink}.ts` (nuevos), `match.ts` (`sameChannel`), `catalog.ts` (búsqueda por prefijo en el índice), `service.ts`, `routes.ts`, `types.ts` | búsqueda, re-emparejado, `iptvIds` |
+| `apps/server/src/modules/search/{routes, types}.ts`, `services.ts` | `SearchResult.iptv`; `search` recibe `iptv` y `iptv` recibe el `scorer` |
+| `apps/server/src/modules/football/{service, resolution}.ts` | `iptv` y `engine=1` en `scope=channel` |
+| módulo de la biblioteca en el servidor (donde se monta `LibraryView`) | `iptvIds` |
+| `apps/server/test/fake-iptv/provider.ts` | canal nuevo «ES: Telecinco HD» (id 110, categoría 2), que no está en el motor falso ni en la biblioteca E2E, y un grupo «XXX» con un canal |
+| `apps/web/src/features/search/{SearchView.tsx, iptv.ts (nuevo), model.ts, demo.ts, search.css}` | sección «En tu IPTV», mezcla, textos |
+| `apps/web/src/features/library/{LibraryView, ChannelRow, ChannelDetail, actions, useChannelActions, play, model}.ts(x)` | sección en el filtro, distintivo, subtítulos de `iptvIds`, menú sin hash, `PlayRequest.iptv` |
+| `apps/web/src/features/sources/session.ts` | `iptv` en la primera llamada, búsqueda inversa y mezcla, textos de §14.4 y §14.5, Recientes del canal tocado |
+| `apps/web/src/api/{client.ts, query.ts, demo/**}` | `TIMEOUTS.iptvChannels`, invalidaciones, demo |
+| `apps/web/e2e/iptv.spec.ts` | casos de §14.9 |
+
+**Demo (`?demo=1`):** `iptvChannels` responde con los canales de la «IPTV de ejemplo» de demo-5 (por ejemplo «DAZN
+LaLiga», «M+ LaLiga TV», «Telecinco» y «laSexta») y la demo del motor anota `iptv` en sus resultados de «DAZN LaLiga».
+demo-4 no cambia.
+
+### 14.9 Pruebas
+
+**Unitarias, `packages/shared`** (`contracts.test.ts`):
+- `IptvChannelsResponse` válida; `IptvChannel` no tiene ningún campo `url`, `ref`, `streamId`, `tvgId` ni `group`;
+- `SearchResult` con y sin `iptv`; `v1/search.json` sin `iptv`; `ResolveQuery` con `iptv` y `engine`;
+  `LibraryView` con y sin `iptvIds`; `v1/libraryGet.json` sin `iptvIds`;
+- reparto: `web/v1/` con 6 rutas (todas `access: 'web'`) y las 3 variantes nuevas validando con su esquema.
+
+**Unitarias, servidor:**
+
+| Fichero | Qué cubre |
+|---|---|
+| `iptv/search.test.ts` | prefijos en cualquier orden («liga m+» encuentra «M+ LaLiga TV»); «la liga» = «laliga»; sin tildes; orden (igual → empieza → en orden → resto; más corta); una fila por grupo con la mejor variante; solo ES o sin país («UK: DAZN 1» no sale); grupo «XXX» y «Adultos» fuera; `total` y `capped` con 250 coincidencias; `library` con favorito, reciente y canal de la lista, y sin «LaLiga TV» para «LaLiga TV Hypermotion»; 100 000 canales en < 50 ms (`@lento`, con margen en CI) |
+| `iptv/match.test.ts` | `sameChannel`: «DAZN LA LIGA 1080» = «DAZN LaLiga»; Hypermotion ≤ 58; «DAZN 1» ≠ «DAZN 2» y ≠ «DAZN F1»; « 1» final solo si el pedido no lleva número |
+| `iptv/relink.test.ts` | cambio de proveedor: favorito y reciente re-emparejados en su sitio (título renombrado, `alias` manda); id nuevo repetido → se quita el viejo; reciente sin pareja fuera; favorito sin pareja fuera solo pasadas 24 h; variante que deja de ser la mejor → la mejor; en pausa o con sincronización fallida no toca nada |
+| `iptv/service.test.ts` | `iptvIds` con los cuatro estados; `iptvChannels` sin IPTV activa → 200 vacío |
+| `search/routes.test.ts` | con IPTV activa, `iptv` en los resultados que casan y no en «LaLiga TV» frente a «LaLiga TV Hypermotion»; sin IPTV, sin la clave; la ruta antigua nunca la lleva |
+| `football/resolution.test.ts` e `iptv.test.ts` | `scope=channel&iptv=<id>` → esa IPTV primera (su mejor variante) aunque el título no case; `iptv` de otro proveedor → emparejado por nombre; `iptv` con un hash de AceStream → ignorado; `engine=1` → AceStream del motor ≥ 92 detrás, «LaLiga TV» fuera para «LaLiga TV Hypermotion»; `engine=1` sin IPTV → `found` con AceStream; `engine=1` con el motor caído → IPTV y biblioteca, `engineAvailable: false`; `engine=0` sigue sin llamar al motor |
+
+**Unitarias, web:**
+- `search/iptv.test.ts` (`mergeSearch`): biblioteca con «IPTV» y sin fila IPTV repetida; fila IPTV cuando no está en la
+  biblioteca; resultados del motor escondidos y contados («también en AceStream»); canal IPTV fuera de los 50 → el
+  primero del motor con «IPTV» y los demás escondidos; 5 a la vista y «Ver {N} más de tu IPTV».
+- `SearchView.test.tsx`: con y sin `features.iptv` (sin él, ni una llamada a `iptvChannels` y los textos de hoy);
+  textos de §14.5; fallo de la IPTV sin toast; vacío de los dos; región viva.
+- `LibraryView.test.tsx`: sección «En tu IPTV» en el filtro, 3 como mucho, sin las filas de la pestaña; «Ver todo en
+  Buscar»; botón del motor con el texto nuevo.
+- `play.test.ts`: un id IPTV nunca llama a `play()`, ni con la IPTV en pausa; `iptv` llega a la sesión.
+- `session.test.ts`: `iptv` en la primera llamada (y el hash tocado si no se sabe); `engine=1` solo con menos de 3
+  AceStream o tras un vacío con id IPTV; la mezcla no reordena y cambia de trabajo; respuesta atrasada descartada;
+  filas nuevas del puente con sus textos; los textos de espera de §14.5; Recientes una vez por sesión, con el canal
+  tocado, también cuando suena la IPTV.
+- `actions.test.ts` (o el de `ChannelRow`): menú IPTV sin «Copiar hash», «Abrir en la app de AceStream», «Copiar URL del
+  stream (VLC)» ni «Copiar enlace acestream://»; subtítulos de `iptvIds`.
+
+**Integración** (`apps/server/test/integration/iptv.test.ts`, casos nuevos):
+11. `iptvChannels?q=tele` → «Telecinco» con `library: []`; `?q=antena` → «Antena 3» con el id de la biblioteca E2E en
+    `library`; desde `/native` → 403 `origin_forbidden`; sin IPTV → 200 vacío; ninguna petición al proveedor.
+12. `search?q=la 1` con IPTV activa → los «La 1 HD --> …» del motor llevan el id IPTV de «La 1».
+13. `footballResolve?channel=Telecinco&scope=channel&iptv=<id>` → la IPTV sola; con `engine=1` y el motor sin
+    Telecinco → la IPTV sola, sin error. Con «La 1» y `engine=1` → la IPTV y las dos AceStream.
+14. Cambiar de Xtream a la M3U del mismo proveedor falso (otro `provider.id`) → tras sincronizar, el favorito y el
+    reciente de «Telecinco» tienen el id nuevo y se reproducen; un favorito de un canal que se quita de la lista falsa
+    sigue 24 h (reloj falso) y luego se va.
+15. Fugas: el caso 8 suma `iptvChannels` y `search` con `iptv`.
+
+**E2E** (`apps/web/e2e/iptv.spec.ts`, casos nuevos, con la pila y el proveedor falso):
+8. **Solo en la IPTV:** Buscar «tele» → sección «En tu IPTV» con «Telecinco» y el distintivo «IPTV»; tocarlo → suena
+   por hls.js; Recientes tiene «Telecinco»; la estrella lo guarda y Favoritos lo enseña con «Tu IPTV».
+9. **En los dos:** Buscar «la 1» → una sola fila «La 1» con «también en AceStream» y ningún «La 1 HD --> …» a la vista
+   en el motor; tocarla → suena la IPTV y, tras la búsqueda inversa, el panel de fuentes tiene 2 AceStream;
+   `/__iptv/modo(107,'down')` → «Tu IPTV no responde: seguimos por AceStream (fuente N)» y «Volver a la IPTV».
+10. **Ya en tu biblioteca:** Buscar «antena» → la fila «Antena 3 HD» de la biblioteca con «IPTV» y ninguna fila
+    «Antena 3» en «En tu IPTV».
+11. **Solo en la IPTV y se cae:** Telecinco con `modo(110,'down')` → «Tu IPTV no responde y este canal no está en
+    AceStream. Prueba otra vez en unos minutos.».
+12. **Canales:** filtro «tele» en Favoritos vacío → «Nada en esta pestaña con «tele».» y debajo «En tu IPTV» con
+    «Telecinco».
+13. **Pausa:** «Usar la IPTV» apagado → Buscar sin sección IPTV y con los textos de hoy; el favorito «Telecinco» dice
+    «Tu IPTV está en pausa» y, al tocarlo, «Tu IPTV está en pausa y este canal no está en AceStream.», sin error de
+    reproductor.
+
+### 14.10 Impacto en la app nativa (actualiza §10)
+
+**La app calcará el buscador de la web** cuando haga su pestaña Buscar (fase 3), con las mismas secciones, reglas y
+textos. Hasta entonces nadie de `rediseno/iptv` toca `apps/ios`.
+
+**Sin cambiar nada, incluida la 0.8.0 publicada:**
+- `SearchResult.iptv` y `LibraryView.iptvIds` son claves que no conoce: las ignora.
+- Un favorito o reciente IPTV guardado desde la web sale en su lista y se reproduce por `channelStream` (el servidor
+  abre la IPTV). Lo que falla: sin distintivo, con «Copiar hash» y «Abrir en la app de AceStream», y si el id ya no
+  vale, la fuente se agota con «Ese canal ya no está en tu IPTV.» (`iptv_gone`), sin romper nada. El re-emparejado
+  (§14.6) hace que casi nunca pase.
+- `iptvChannels` responde 403 desde `/native` mientras sea `access: 'web'`: la app no la llama.
+
+**Cambios cuando exista la pantalla** (los ficheros con * no existen aún en `rediseno/nativa`; el nombre lo pone su
+dueño):
+
+| Módulo | Fichero o carpeta | Cambio |
+|---|---|---|
+| M1 | `Sources/Core/Models/Buscar.swift`* (o donde viva `SearchResult`) | `iptv: String?` en `SearchResult`; tipos `CanalIptv` (`id`, `title`, `quality`, `provider`, `library`) y `RespuestaCanalesIptv` (`query`, `total`, `capped`, `channels`) |
+| M1 | modelo de la biblioteca | `iptvIds: [String: EstadoIdIptv]?` (tolerante a valores nuevos) |
+| M1 | `Sources/Core/Models/Futbol.swift` | `iptv` y `engine` en la consulta de `footballResolve` |
+| M1 | `Sources/Core/Networking/` | regenerar `RutaID` (ruta `iptvChannels`) y `PlazosWeb` (`iptvChannels: 4_000`) con los generadores de §10.1 |
+| M3 | `Sources/Core/Reglas/Buscar/MezclaBuscador.swift`* | `mergeSearch` de §14.3 tal cual, con vectores generados desde `scripts/vectores/buscador.ts` (nuevo, a partir de `features/search/iptv.ts`) |
+| M3 | `Sources/Player/Fuentes/SesionFuentes.swift` | `iptv` en la primera llamada, búsqueda inversa `engine=1` y su mezcla, filas nuevas del puente, textos de espera de §14.5 y Recientes del canal tocado |
+| M3 | `Sources/Core/Reglas/Fuentes/OpcionesFuente.swift`* | menú de fila IPTV sin acciones de hash |
+| M6 | `Sources/Pantallas/Buscar/`* y `Sources/Pantallas/Canales/`* | sección «En tu IPTV» (5 y «Ver más»; 3 en Canales), distintivo «IPTV» (`Capsula` neutra, icono `tv`), subtítulos de `iptvIds`; textos regenerados en `textos-web.json` |
+| M2 | `Sources/Debug/ServidorDemo.swift` | `iptvChannels` y `search` con `iptv` si la demo de la app copia la de la web |
+
+**Orden** (se suma a §10.1):
+5. Cuando la app vaya a calcar el buscador, un commit pequeño del «contrato» pasa `iptvChannels` a `access: 'any'`,
+   mueve su ejemplo de `fixtures/web/v1/` a `fixtures/v1/` y lo quita de `WEB_FIXTURE_ROUTE_IDS`. El mismo día, el
+   dueño de `rediseno/nativa` (M1) añade `RespuestaCanalesIptv` para `FixturesTests` y regenera `RutaID`. Antes de ese
+   paso, `ios.yml` solo puede salir rojo en los `--check` de §10.1, como ya se espera.
+
+### 14.11 Riesgos
+
+1. **Resultados que parecen el mismo canal y no lo son.** Lo evita `sameChannel` con el umbral 92, Hypermotion y la
+   regla de los números. Si pasa, la fila del motor escondida sigue disponible como fuente en el panel al tocar la
+   IPTV, y «Reportar → Canal incorrecto» aprende.
+2. **Resultados que son el mismo canal y no se juntan** (grafías raras del motor). Sale una fila más con «IPTV» (regla
+   3 de §14.3): feo, pero nunca se pierde nada. El corpus de §4.2 suma nombres del motor.
+3. **Carga del motor.** La búsqueda inversa son 2 consultas como mucho, solo con menos de 3 AceStream, y van al motor
+   principal, libre mientras suena la IPTV.
+4. **Favoritos que se van.** Solo tras 24 h sin pareja y con sincronizaciones correctas; en pausa o sin proveedor nunca.
+5. **Memoria y CPU.** La búsqueda usa el índice que ya existe; el test de 100 000 canales la vigila.
