@@ -1,6 +1,9 @@
 /* Consultas que usa más de una vista (y el propio armazón). */
 
 import type { EngineState } from '@ace/shared';
+import { useQueryClient } from '@tanstack/react-query';
+import { useSyncExternalStore } from 'react';
+import { iptvActive } from './boot.ts';
 import { useApiQuery } from './query.ts';
 
 /** Estado del motor: llega por SSE (`engine.status`) o, en respaldo, cada 20 s. */
@@ -40,4 +43,18 @@ export function useEngineSummary(): EngineSummary {
 /** Todo lo de la primera pantalla (sembrado al arrancar desde /api/v1/bootstrap). */
 export function useBootstrap() {
   return useApiQuery('bootstrap');
+}
+
+/**
+ * `iptvActive()` que repinta cuando cambia (`bootstrap.features.iptv`, que el
+ * evento `iptv.status` vuelve a pedir). Sin pedir nada: solo mira la caché, así
+ * que no cambia cuándo se pide el bootstrap (docs/iptv.md §14.3).
+ */
+export function useIptvActive(): boolean {
+  const client = useQueryClient();
+  return useSyncExternalStore(
+    (onChange) => client.getQueryCache().subscribe(onChange),
+    () => iptvActive(client),
+    () => false,
+  );
 }

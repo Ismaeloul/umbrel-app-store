@@ -27,6 +27,7 @@ import { FakeClock } from '../../src/core/clock.js';
 import { startServices, stopServices } from '../../src/main.js';
 import { createEngineRuntime, type EngineRuntime } from '../../src/modules/engine/service.js';
 import { createHub, type EventsHubInternal } from '../../src/modules/events/hub.js';
+import { scoreResolutionCandidate } from '../../src/modules/football/resolution.js';
 import { IptvServiceImpl } from '../../src/modules/iptv/service.js';
 import { createNetClient } from '../../src/modules/net/index.js';
 import type { NetResolver, NetTransport } from '../../src/modules/net/types.js';
@@ -259,6 +260,8 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
     state,
     net,
     relayHost: host === '::1' ? '::1' : '127.0.0.1',
+    /* Como services.ts: la IPTV puntúa con la función de la resolución (§14.3). */
+    scorer: (channels, item) => scoreResolutionCandidate(channels, item, 'iptv'),
   });
   const remux = createRemuxRuntime({
     ...core,

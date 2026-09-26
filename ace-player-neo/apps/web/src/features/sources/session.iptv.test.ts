@@ -25,6 +25,8 @@ import { fixture, json, mockFetch, type MockCall } from '../../test/fetch.ts';
 import { playChannel, resetPlayGuard } from '../library/play.ts';
 import {
   BOTH_DOWN_TEXT,
+  IPTV_ONLY_DOWN_TEXT,
+  IPTV_ONLY_WAIT_TEXT,
   endSession,
   enterChannel,
   enterMatch,
@@ -402,6 +404,9 @@ describe('canal suelto con IPTV (§8.4)', () => {
     expect(query.get('scope')).toBe('channel');
     expect(query.get('channel')).toBe('DAZN 1');
     expect(query.get('match')).toBeNull();
+    // Sin saber si es un canal IPTV, se manda el hash tocado (§14.4).
+    expect(query.get('iptv')).toBe(hash(1));
+    expect(query.get('engine')).toBeNull();
     expect(getSession()).toMatchObject({ kind: 'channel', iptvBridge: true, key: `c:${hash(1)}` });
     // IPTV, el que se tocó y sus hermanas.
     expect(getSession().entries.map((entry) => entry.id)).toEqual([IPTV, hash(1), hash(2)]);
@@ -414,7 +419,10 @@ describe('canal suelto con IPTV (§8.4)', () => {
       activeListId: null,
     });
     expect(getSession().iptvBridge).toBe(true);
-    expect(calls('/api/v1/football/resolve')).toHaveLength(1);
+    // Menos de 3 AceStream: la búsqueda inversa de fondo (§14.4), y nada más.
+    const resolves = calls('/api/v1/football/resolve');
+    expect(resolves).toHaveLength(2);
+    expect(new URLSearchParams(resolves[1]!.url.split('?')[1]).get('engine')).toBe('1');
     // Cae la IPTV sin ninguna verificada: el hash que se tocó.
     const reply = failNow({ code: 'iptv_dropped' });
     expect(reply).toEqual({ next: true, message: 'Tu IPTV no responde: seguimos por AceStream' });
@@ -503,5 +511,212 @@ describe('partido sin canales en la agenda (§4.5)', () => {
     await flush();
     expect(calls('/api/v1/football/resolve')).toHaveLength(0);
     expect(getSession().phase).toBe('no_channels');
+  });
+});
+
+describe('buscador: el canal IPTV tocado (docs/iptv.md §14.4 y §14.6)', () => {
+  const TELE = hash(110);
+  const teleIptv = () =>
+    iptvCandidate(110, { title: 'Telecinco --> Casa', matchedChannel: 'Telecinco' });
+  const ace = (n: number) =>
+    candidate(n, {
+      title: `Telecinco HD --> Proveedor ${n}`,
+      source: 'acestream',
+      ih: true,
+      score: 96,
+      matchedChannel: 'Telecinco',
+    });
+  const found = (candidates: ResolutionCandidate[]): Resolution => ({
+    ...resolution(0, { scan: null }),
+    channels: ['Telecinco'],
+    checked: ['iptv', 'saved', 'library'],
+    candidate: candidates[0] ?? null,
+    candidates,
+  });
+  const nothing = (): Resolution => ({
+    ...resolution(0, { scan: null }),
+    status: 'not_found',
+    channels: ['Telecinco'],
+    candidate: null,
+    candidates: [],
+  });
+
+  let first: () => Resolution | Promise<Resolution> = () => found([teleIptv()]);
+  let reverse: () => Resolution | Promise<Resolution> = () => found([teleIptv()]);
+  const queryOf = (call: MockCall) => new URLSearchParams(call.url.split('?')[1]);
+
+  function installTele(library: Record<string, unknown> = {}) {
+    net.restore();
+    install({
+      'GET /api/v1/football/resolve': async (call: MockCall) =>
+        json(await (queryOf(call).get('engine') === '1' ? reverse() : first())),
+      'POST /api/v1/library': () =>
+        json({ ...fixture<Record<string, unknown>>('libraryGet'), ...library }),
+    });
+  }
+
+  function tapTele() {
+    playChannel(vi.fn(), {
+      hash: TELE,
+      title: 'Telecinco',
+      ih: false,
+      record: true,
+      origin: 'buscar',
+      iptv: TELE,
+    });
+  }
+
+  beforeEach(() => {
+    first = () => found([teleIptv()]);
+    reverse = () => found([teleIptv()]);
+    queryClient.setQueryData(routeKey('libraryGet'), {
+      ...fixture('libraryGet'),
+      favorites: [],
+      history: [],
+    });
+    installTele();
+  });
+  afterEach(() => queryClient.removeQueries({ queryKey: ['v1', 'libraryGet'] }));
+
+  it('suena su IPTV; manda su id; sin AceStream pide de fondo la búsqueda inversa y lo nuevo va al final', async () => {
+    setIptvActive(true);
+    reverse = () => found([teleIptv(), ace(21), ace(22)]);
+    tapTele();
+    await flush();
+    const resolves = calls('/api/v1/football/resolve');
+    expect(queryOf(resolves[0]!).get('iptv')).toBe(TELE);
+    expect(queryOf(resolves[0]!).get('engine')).toBeNull();
+    expect(getPlayer().channel).toMatchObject({ hash: TELE, iptv: true, title: 'Telecinco' });
+    await flush();
+    const all = calls('/api/v1/football/resolve');
+    expect(all).toHaveLength(2);
+    expect(queryOf(all[1]!).get('engine')).toBe('1');
+    expect(queryOf(all[1]!).get('iptv')).toBe(TELE);
+    // Ningún «hash» de AceStream inventado con el id IPTV; lo nuevo, al final y sin reordenar.
+    expect(getSession().entries.map((entry) => entry.id)).toEqual([TELE, hash(21), hash(22)]);
+    expect(getSession().reverse).toBe('done');
+    expect(getPlayer().channel?.hash).toBe(TELE);
+  });
+
+  it('con 3 AceStream o más no pide la búsqueda inversa', async () => {
+    setIptvActive(true);
+    first = () => found([teleIptv(), ace(21), ace(22), ace(23)]);
+    tapTele();
+    await flush();
+    await flush();
+    expect(calls('/api/v1/football/resolve')).toHaveLength(1);
+  });
+
+  it('en Recientes entra el canal tocado, una vez por sesión, aunque suene su IPTV', async () => {
+    setIptvActive(true);
+    reverse = () => found([teleIptv(), ace(21)]);
+    tapTele();
+    await flush();
+    await flush();
+    const posts = calls('/api/v1/library').filter((call) => call.method === 'POST');
+    expect(posts).toHaveLength(1);
+    expect(posts[0]!.body).toEqual({
+      action: 'history-upsert',
+      item: { id: TELE, title: 'Telecinco', ih: false },
+    });
+    // Pasar a otra fuente de la misma sesión no apunta nada más, ni con otro hash.
+    selectSource(hash(21));
+    await flush();
+    expect(getPlayer().channel?.hash).toBe(hash(21));
+    expect(calls('/api/v1/library').filter((call) => call.method === 'POST')).toHaveLength(1);
+  });
+
+  it('canal solo de la IPTV que cae mientras busca en AceStream: espera; si no está, lo dice', async () => {
+    setIptvActive(true);
+    let finish: (value: Resolution) => void = () => {};
+    reverse = () => new Promise<Resolution>((resolve) => (finish = resolve));
+    tapTele();
+    await flush();
+    expect(getPlayer().channel?.hash).toBe(TELE);
+    const reply = failNow({ code: 'iptv_dropped' });
+    expect(reply).toEqual({ next: false, message: IPTV_ONLY_WAIT_TEXT });
+    expect(toasts()).toContain('Seguimos por AceStream');
+    finish(found([teleIptv()]));
+    await flush();
+    expect(getSession().failureText).toBe(IPTV_ONLY_DOWN_TEXT);
+  });
+
+  it('canal solo de la IPTV que cae cuando la búsqueda inversa ya no encontró nada', async () => {
+    setIptvActive(true);
+    tapTele();
+    await flush();
+    await flush();
+    expect(getSession().reverse).toBe('done');
+    const reply = failNow({ code: 'iptv_dropped' });
+    expect(reply).toEqual({ next: false, message: IPTV_ONLY_DOWN_TEXT });
+    expect(getSession().failureText).toBe(IPTV_ONLY_DOWN_TEXT);
+  });
+
+  it('cae y la búsqueda inversa encontró una AceStream: sigue por ella (fila 1 del puente)', async () => {
+    setIptvActive(true);
+    reverse = () => ({
+      ...found([teleIptv(), ace(1)]),
+      scan: { id: JOB, statusUrl: `/api/v1/football/scans/${JOB}`, total: 1, initialCount: 1 },
+    });
+    scan = scanJob(['working']);
+    tapTele();
+    await flush();
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(getSession().entries.map((entry) => entry.id)).toEqual([TELE, hash(1)]);
+    const reply = failNow({ code: 'iptv_dropped' });
+    expect(reply).toEqual({
+      next: true,
+      message: 'Tu IPTV no responde: seguimos por AceStream (fuente 2)',
+    });
+  });
+
+  it('un favorito IPTV con la IPTV en pausa: nunca play() directo; busca en AceStream y, sin nada, lo dice', async () => {
+    setIptvActive(false);
+    queryClient.setQueryData(routeKey('libraryGet'), {
+      ...fixture('libraryGet'),
+      iptvIds: { [TELE]: 'iptv_disabled' },
+    });
+    first = nothing;
+    reverse = nothing;
+    let finish: (value: Resolution) => void = () => {};
+    reverse = () => new Promise<Resolution>((resolve) => (finish = resolve));
+    tapTele();
+    expect(getPlayer().channel).toBeNull();
+    await flush();
+    expect(playerStore.get().waiting).toBe('Buscando este canal en AceStream…');
+    finish(nothing());
+    await flush();
+    expect(playerStore.get().waiting).toBe(
+      'Tu IPTV está en pausa y este canal no está en AceStream.',
+    );
+    expect(getPlayer().channel).toBeNull();
+  });
+
+  it('un id IPTV que ya no está y sí en AceStream: arranca la AceStream', async () => {
+    setIptvActive(true);
+    queryClient.setQueryData(routeKey('libraryGet'), {
+      ...fixture('libraryGet'),
+      iptvIds: { [TELE]: 'iptv_gone' },
+    });
+    first = nothing;
+    reverse = () => found([ace(21)]);
+    tapTele();
+    await flush();
+    await flush();
+    expect(getSession().entries.map((entry) => entry.id)).toEqual([hash(21)]);
+    expect(getPlayer().channel?.hash).toBe(hash(21));
+  });
+
+  it('una búsqueda inversa que llega tarde (otro canal) se descarta', async () => {
+    setIptvActive(true);
+    let finish: (value: Resolution) => void = () => {};
+    reverse = () => new Promise<Resolution>((resolve) => (finish = resolve));
+    tapTele();
+    await flush();
+    endSession();
+    finish(found([teleIptv(), ace(21)]));
+    await flush();
+    expect(getSession().entries).toEqual([]);
+    expect(getSession().key).toBeNull();
   });
 });

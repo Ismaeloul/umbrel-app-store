@@ -1,0 +1,31 @@
+{
+  "query": "la 1",
+  "results": [
+    {
+      "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+      "title": "La 1 HD --> ELCANO",
+      "category": "Busqueda",
+      "availability": 0.9,
+      "bitrate": 450000,
+      "ih": true,
+      "iptv": "f60718293a4b5c6d7e8f9012345678ab23cd45ef"
+    },
+    {
+      "id": "b2c3d4e5f60718293a4b5c6d7e8f901234567890",
+      "title": "La 1 HD --> NEW ERA",
+      "category": "Busqueda",
+      "availability": 0.7,
+      "bitrate": null,
+      "ih": true,
+      "iptv": "f60718293a4b5c6d7e8f9012345678ab23cd45ef"
+    },
+    {
+      "id": "c3d4e5f60718293a4b5c6d7e8f9012345678901a",
+      "title": "La 10 Deportes",
+      "category": "Busqueda",
+      "availability": 0.4,
+      "bitrate": null,
+      "ih": true
+    }
+  ]
+}

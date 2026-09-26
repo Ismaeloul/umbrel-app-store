@@ -77,9 +77,16 @@ export function applyLibraryMutation(
   if (action === 'rename') {
     const title = cleanTitle(field(body, 'title'), '');
     if (!title) throw new AppError('bad_title');
-    draft[collection] = draft[collection].map((entry) =>
-      entry.id === id ? { ...entry, title } : entry,
-    );
+    draft[collection] = draft[collection].map((entry) => {
+      if (entry.id !== id) return entry;
+      /* Un canal guardado desde el buscador IPTV conserva su nombre en la IPTV
+         como `alias` al renombrarlo: es el que usa el re-emparejado
+         (docs/iptv.md §14.6). Al guardarlo, el alias igual al título no se
+         guarda (normalizeItem), así que aquí se recupera del título viejo. */
+      const keepName =
+        entry.category === 'IPTV' && !entry.alias && entry.title && entry.title !== title;
+      return { ...entry, title, ...(keepName ? { alias: entry.title } : {}) };
+    });
   } else {
     draft[collection] = draft[collection].filter((entry) => entry.id !== id);
   }

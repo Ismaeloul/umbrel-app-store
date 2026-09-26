@@ -170,6 +170,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Distintivo «IPTV» de un canal de tu IPTV (docs/iptv.md §14.5): no encoge. */
+.ch__iptv {
+  flex: none;
+}
 .ch__fallen {
   display: inline-grid;
   place-items: center;
@@ -778,4 +782,31 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ---- «En tu IPTV» en el filtro (docs/iptv.md §14.5) -------------------------- */
+.lib-iptv {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
+  margin-top: var(--s-4);
+}
+/* Sin esto la lista toma el ancho de su nombre más largo y ensancha la página en el móvil. */
+.lib-iptv > * {
+  min-width: 0;
+}
+.lib-iptv__title {
+  padding-inline: var(--s-1);
+  font-size: var(--fs-15);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: var(--tracking-head);
+}
+.lib-iptv__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.lib-iptv__all {
+  justify-self: start;
 }

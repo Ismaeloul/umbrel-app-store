@@ -2,10 +2,15 @@
    capa IPTV de mentira: IPTV primera, la guía gana, la pista de la guía no
    adelanta a AceStream ≥ 92, canal suelto sin IPTV → not_found sin buscar,
    partido sin canales → solo guía, ids IPTV de favoritos e historial
-   convertidos o descartados, y con el motor caído sigue la IPTV. */
+   convertidos o descartados, y con el motor caído sigue la IPTV.
+
+   Buscador (docs/iptv.md §14.4): el canal IPTV tocado sale primero aunque el
+   título no case; uno de otro proveedor o un hash de AceStream se ignoran;
+   la búsqueda inversa (`engine`) trae AceStream ≥ 92 (sin Hypermotion) y
+   funciona sin IPTV y con el motor caído; sin ella, el motor no se toca. */
 
 import { describe, expect, it } from 'vitest';
-import type { ResolutionCandidate } from '@ace/shared';
+import { channelMatchScore, type ResolutionCandidate } from '@ace/shared';
 import {
   resolveFootballChannel,
   type BaseCandidate,
@@ -66,6 +71,13 @@ function layer(
     },
     convert(id, match) {
       return iptvCandidate(id, 'Favorito IPTV', match.score, false, match.matchedChannel);
+    },
+    tapped(id) {
+      if (!id.startsWith('f')) return null;
+      return iptvCandidate(id, 'Telecinco', 100, false, 'Telecinco');
+    },
+    sameChannel(channel, title) {
+      return channelMatchScore(channel, title);
     },
   };
 }
@@ -232,6 +244,116 @@ describe('resolveFootballChannel con IPTV', () => {
     expect(result.engineAvailable).toBe(false);
     expect(result.status).toBe('found');
     expect(result.candidate?.id).toBe(IPTV_ID);
+  });
+
+  it('§14.4 · el canal IPTV tocado sale primero aunque el título no case, y su nombre limpio se pide', async () => {
+    const d = deps(layer());
+    const result = await resolveFootballChannel({}, ['Tele 5'], d, {
+      scope: 'channel',
+      iptvId: IPTV_ID,
+    });
+    expect(result.status).toBe('found');
+    expect(result.candidates.map((c) => c.id)).toEqual([IPTV_ID]);
+    expect(result.candidate?.id).toBe(IPTV_ID);
+    expect(result.channels).toEqual(['Tele 5', 'Telecinco']);
+    expect(d.searched).toEqual([]);
+  });
+
+  it('§14.4 · el tocado va delante de otra IPTV que también da 100 (y cuenta en el tope de 2)', async () => {
+    const d = deps(
+      layer({ candidates: [iptvCandidate(IPTV_GUIDE_ID, 'Telecinco', 100, false, 'Telecinco')] }),
+    );
+    const result = await resolveFootballChannel({}, ['Telecinco'], d, {
+      scope: 'channel',
+      iptvId: IPTV_ID,
+    });
+    expect(result.candidates.map((c) => c.id)).toEqual([IPTV_ID, IPTV_GUIDE_ID]);
+  });
+
+  it('§14.4 · un id IPTV de otro proveedor o un hash de AceStream se ignoran: manda el nombre', async () => {
+    for (const iptvId of [IPTV_OLD, ACE]) {
+      const d = deps(
+        layer({ candidates: [iptvCandidate(IPTV_GUIDE_ID, 'Antena 3', 100, false, 'Antena 3')] }),
+      );
+      const result = await resolveFootballChannel({}, ['Antena 3'], d, {
+        scope: 'channel',
+        iptvId,
+      });
+      expect(
+        result.candidates.map((c) => c.id),
+        iptvId,
+      ).toEqual([IPTV_GUIDE_ID]);
+      expect(result.channels).toEqual(['Antena 3']);
+    }
+  });
+
+  it('§14.4 · búsqueda inversa: AceStream del motor ≥ 92 detrás de la IPTV, sin Hypermotion, 2 consultas como mucho', async () => {
+    const d = deps(
+      layer({ candidates: [iptvCandidate(IPTV_ID, 'LaLiga TV', 100, false, 'LaLiga TV')] }),
+      found([
+        { id: ACE, title: 'LaLiga TV --> ELCANO', ih: true, availability: 40 },
+        { id: ACE_HINT, title: 'LaLiga TV Hypermotion --> NEW ERA', ih: true, availability: 90 },
+        { id: IPTV_OLD, title: 'LaLiga TV', ih: true },
+      ]),
+    );
+    const result = await resolveFootballChannel({}, ['LaLiga TV'], d, {
+      scope: 'channel',
+      iptvId: IPTV_ID,
+      engine: true,
+    });
+    expect(result.candidates.map((c) => `${c.source}:${c.id}`)).toEqual([
+      `iptv:${IPTV_ID}`,
+      `acestream:${ACE}`,
+    ]);
+    expect(result.checked).toEqual(['iptv', 'saved', 'library', 'acestream']);
+    expect(d.searched.length).toBeLessThanOrEqual(2);
+    expect(d.searched).toContain('LaLiga TV');
+  });
+
+  it('§14.4 · búsqueda inversa sin IPTV: found con las AceStream; sin nada, not_found', async () => {
+    const d = deps(undefined, found([{ id: ACE, title: 'Telecinco HD --> ELCANO', ih: true }]));
+    const result = await resolveFootballChannel({}, ['Telecinco'], d, {
+      scope: 'channel',
+      engine: true,
+    });
+    expect(result.status).toBe('found');
+    expect(result.candidates.map((c) => c.id)).toEqual([ACE]);
+    const none = await resolveFootballChannel({}, ['Telecinco'], deps(undefined), {
+      scope: 'channel',
+      engine: true,
+    });
+    expect(none.status).toBe('not_found');
+    expect(none.candidates).toEqual([]);
+  });
+
+  it('§14.4 · búsqueda inversa con el motor caído: la IPTV y la biblioteca, engineAvailable false', async () => {
+    const d = deps(
+      layer({ candidates: [iptvCandidate(IPTV_ID, 'Antena 3', 100, false, 'Antena 3')] }),
+      async () => {
+        throw new Error('engine_unavailable');
+      },
+    );
+    const state = { favorites: [{ id: ACE, title: 'Antena 3 HD' }] };
+    const result = await resolveFootballChannel(state, ['Antena 3'], d, {
+      scope: 'channel',
+      engine: true,
+    });
+    expect(result.engineAvailable).toBe(false);
+    expect(result.candidates.map((c) => c.id)).toEqual([IPTV_ID, ACE]);
+  });
+
+  it('§14.4 · sin engine el canal suelto sigue sin tocar el motor', async () => {
+    const d = deps(
+      layer({ candidates: [iptvCandidate(IPTV_ID, 'Antena 3', 100, false, 'Antena 3')] }),
+      found([{ id: ACE, title: 'Antena 3 --> ELCANO', ih: true }]),
+    );
+    const result = await resolveFootballChannel({}, ['Antena 3'], d, {
+      scope: 'channel',
+      engine: false,
+      iptvId: IPTV_ID,
+    });
+    expect(d.searched).toEqual([]);
+    expect(result.candidates.map((c) => c.id)).toEqual([IPTV_ID]);
   });
 
   it('sin capa IPTV todo como siempre (y sin canales, channel_required)', async () => {

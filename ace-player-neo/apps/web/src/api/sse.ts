@@ -53,7 +53,8 @@ const TARGETED: ReadonlySet<SseEventType> = new Set([
 
 /** `state.changed` → rutas que hay que volver a pedir. */
 export const SCOPE_ROUTES: Record<StateScope, readonly JsonRouteId[]> = {
-  library: ['libraryGet', 'bootstrap'],
+  /* `iptvChannels` lleva los ids de tu biblioteca que son cada canal (docs/iptv.md §14.3). */
+  library: ['libraryGet', 'bootstrap', 'iptvChannels'],
   preferences: ['preferencesGet', 'bootstrap'],
   directories: ['directoriesGet', 'libraryGet', 'bootstrap'],
   bindings: ['footballResolve'],
@@ -158,6 +159,9 @@ export function applyToCache(client: QueryClient, type: SseEventType, data: unkn
       // Ajustes → IPTV (recuento, guía, cuenta) y `bootstrap.features.iptv`, que
       // decide si al tocar un canal se pregunta antes por la IPTV (docs/iptv.md §1.5 y §8.4).
       void client.invalidateQueries({ queryKey: routePrefix('iptvGet') });
+      // El buscador IPTV y `iptvIds` de la biblioteca dependen de la IPTV (§14.3 y §14.6).
+      void client.invalidateQueries({ queryKey: routePrefix('iptvChannels') });
+      void client.invalidateQueries({ queryKey: routePrefix('libraryGet') });
       // El bootstrap casi nunca tiene una vista suscrita (se siembra al
       // arrancar): 'all' lo vuelve a pedir igual, porque iptvActive() lo lee.
       void client.invalidateQueries({ queryKey: routePrefix('bootstrap'), refetchType: 'all' });

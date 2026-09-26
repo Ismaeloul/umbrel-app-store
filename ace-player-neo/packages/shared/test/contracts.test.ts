@@ -14,16 +14,22 @@ import {
   HashSchema,
   IPTV_ERROR_CODES,
   IPTV_REASONS,
+  IPTV_SEARCH,
+  IptvChannelSchema,
+  IptvChannelsQuerySchema,
+  IptvChannelsResponseSchema,
   IptvFileSchema,
   IptvSaveBodySchema,
   IptvStatusSchema,
   IptvUpdateBodySchema,
   IptvViewSchema,
+  LibraryViewSchema,
   NATIVE_PUBLIC_ROUTE_IDS,
   PairingCreateBodySchema,
   ResolutionCandidateSchema,
   ResolveQuerySchema,
   SSE_EVENT_TYPES,
+  SearchResultSchema,
   SseEventSchema,
   StreamGrantSchema,
   V1_ROUTES,
@@ -42,6 +48,7 @@ import {
   NON_JSON_ROUTE_IDS,
   VARIANT_FIXTURES,
   WEB_FIXTURE_ROUTE_IDS,
+  WEB_V1_FIXTURES,
   fixtureFiles,
   type JsonRouteId,
 } from '../scripts/fixtures.js';
@@ -341,7 +348,7 @@ describe('contrato de la IPTV (docs/iptv.md §5)', () => {
     expect([...WEB_ONLY_EVENT_TYPES]).toEqual(['iptv.status']);
   });
 
-  it('5 rutas solo web del módulo iptv, sin iptvTest; video pasa a any con t opcional', () => {
+  it('6 rutas solo web del módulo iptv (las 5 de Ajustes y el buscador), sin iptvTest; video pasa a any con t opcional', () => {
     const iptv = listV1Routes().filter((route) => route.module === 'iptv');
     expect(iptv.map((route) => `${route.id} ${route.method} ${route.path}`)).toEqual([
       'iptvGet GET /api/v1/iptv',
@@ -349,6 +356,7 @@ describe('contrato de la IPTV (docs/iptv.md §5)', () => {
       'iptvUpdate PATCH /api/v1/iptv',
       'iptvSync POST /api/v1/iptv/sync',
       'iptvDelete DELETE /api/v1/iptv',
+      'iptvChannels GET /api/v1/iptv/channels',
     ]);
     for (const route of iptv) {
       expect(route.access, route.id).toBe('web');
@@ -437,6 +445,120 @@ describe('contrato de la IPTV (docs/iptv.md §5)', () => {
     ).toBe(false);
   });
 });
+
+describe('buscador: IPTV y AceStream juntos (docs/iptv.md §14.2)', () => {
+  const keysOf = (node: unknown, found: Set<string>): Set<string> => {
+    if (Array.isArray(node)) for (const child of node) keysOf(child, found);
+    else if (node && typeof node === 'object') {
+      for (const [key, value] of Object.entries(node)) {
+        if (key === 'properties' && value && typeof value === 'object') {
+          for (const name of Object.keys(value)) found.add(name);
+        }
+        keysOf(value, found);
+      }
+    }
+    return found;
+  };
+
+  it('iptvChannels: ruta web del módulo iptv con empty_query; la respuesta de ejemplo valida', () => {
+    expect(V1_ROUTES.iptvChannels).toMatchObject({
+      method: 'GET',
+      path: '/api/v1/iptv/channels',
+      access: 'web',
+      module: 'iptv',
+      errors: ['empty_query'],
+    });
+    expect(WEB_FIXTURE_ROUTE_IDS).toHaveLength(6);
+    expect(WEB_FIXTURE_ROUTE_IDS).toContain('iptvChannels');
+    const example = WEB_V1_FIXTURES.iptvChannels;
+    expect(IptvChannelsResponseSchema.safeParse(example).success).toBe(true);
+    expect(example.channels.length).toBeLessThanOrEqual(IPTV_SEARCH.limit);
+  });
+
+  it('IptvChannelsQuery: q por defecto vacía, limit de 1 a 50 y nada más', () => {
+    expect(IptvChannelsQuerySchema.parse({})).toEqual({ q: '' });
+    expect(IptvChannelsQuerySchema.parse({ q: 'tele', limit: '10' }).limit).toBe(10);
+    expect(IptvChannelsQuerySchema.safeParse({ q: 'tele', limit: '51' }).success).toBe(false);
+    expect(IptvChannelsQuerySchema.safeParse({ q: 'tele', limit: '0' }).success).toBe(false);
+    expect(IptvChannelsQuerySchema.safeParse({ q: 'tele', grupo: 'x' }).success).toBe(false);
+  });
+
+  it('un canal IPTV del buscador no lleva nada del proveedor: ni url, ref, streamId, tvgId ni group', () => {
+    const keys = keysOf(z.toJSONSchema(IptvChannelsResponseSchema, { io: 'output' }), new Set());
+    for (const forbidden of [
+      'url',
+      'ref',
+      'streamId',
+      'stream_id',
+      'tvgId',
+      'group',
+      'username',
+      'password',
+    ]) {
+      expect(keys.has(forbidden), forbidden).toBe(false);
+    }
+    const channel = WEB_V1_FIXTURES.iptvChannels.channels[0]!;
+    expect(IptvChannelSchema.safeParse({ ...channel, url: 'http://x' }).success).toBe(false);
+    expect(IptvChannelSchema.safeParse({ ...channel, group: 'ES | DEPORTES' }).success).toBe(false);
+    expect(
+      IptvChannelSchema.safeParse({ ...channel, library: Array(21).fill(channel.id) }).success,
+    ).toBe(false);
+  });
+
+  it('SearchResult con y sin iptv; v1/search.json sigue sin iptv', () => {
+    const plain = (readJson('v1/search.json') as { results: object[] }).results;
+    for (const result of plain) {
+      expect(result).not.toHaveProperty('iptv');
+      expect(SearchResultSchema.safeParse(result).success).toBe(true);
+    }
+    const withIptv = VARIANT_FIXTURES['search.iptv'].results;
+    expect(withIptv.filter((result) => 'iptv' in result)).toHaveLength(2);
+    for (const result of withIptv) expect(SearchResultSchema.safeParse(result).success).toBe(true);
+    expect(SearchResultSchema.safeParse({ ...withIptv[0], iptv: 'corto' }).success).toBe(false);
+  });
+
+  it('ResolveQuery con iptv y engine', () => {
+    const iptv = WEB_V1_FIXTURES.iptvChannels.channels[0]!.id;
+    expect(
+      ResolveQuerySchema.safeParse({ channel: 'Telecinco', scope: 'channel', iptv, engine: '1' })
+        .success,
+    ).toBe(true);
+    expect(ResolveQuerySchema.safeParse({ channel: 'x', engine: 'si' }).success).toBe(false);
+    expect(ResolveQuerySchema.safeParse({ channel: 'x', iptv: 'no-es-un-hash' }).success).toBe(
+      false,
+    );
+  });
+
+  it('LibraryView con y sin iptvIds; v1/libraryGet.json sigue sin iptvIds', () => {
+    const plain = readJson('v1/libraryGet.json');
+    expect(plain).not.toHaveProperty('iptvIds');
+    expect(LibraryViewSchema.safeParse(plain).success).toBe(true);
+    const withIds = VARIANT_FIXTURES['libraryGet.iptv'];
+    expect(LibraryViewSchema.safeParse(withIds).success).toBe(true);
+    expect(Object.values(withIds.iptvIds ?? {}).sort()).toEqual(['iptv_gone', 'ok']);
+    expect(
+      LibraryViewSchema.safeParse({ ...withIds, iptvIds: { [firstFavoriteId(withIds)]: 'raro' } })
+        .success,
+    ).toBe(false);
+  });
+
+  it('la variante del canal solo de la IPTV: su IPTV primera y detrás AceStream del motor ≥ 92', () => {
+    const resolution = VARIANT_FIXTURES['footballResolve.iptv-canal'];
+    expect(resolution.candidates.map((candidate) => candidate.source)).toEqual([
+      'iptv',
+      'acestream',
+      'acestream',
+    ]);
+    for (const candidate of resolution.candidates.slice(1)) {
+      expect(candidate.score).toBeGreaterThanOrEqual(92);
+    }
+  });
+});
+
+/** Un id de favorito de la variante (para probar valores de iptvIds que no valen). */
+function firstFavoriteId(view: { favorites: readonly { id: string }[] }): string {
+  return view.favorites[0]!.id;
+}
 
 describe('docs/openapi-v2.yaml', () => {
   const onDisk = readFileSync(OPENAPI_FILE, 'utf8').replace(/\r\n/g, '\n');

@@ -390,6 +390,18 @@ paths:
                             - fromWebSync
                             - ih
                           additionalProperties: false
+                      iptvIds:
+                        type: object
+                        propertyNames:
+                          type: string
+                          pattern: ^[a-f0-9]{40}$
+                        additionalProperties:
+                          type: string
+                          enum:
+                            - ok
+                            - iptv_gone
+                            - iptv_disabled
+                            - iptv_removed
                     required:
                       - web
                       - webSyncedAt
@@ -3602,6 +3614,135 @@ paths:
         - code: internal_error
           status: 500
           message: Algo ha fallado en el servidor. Queda anotado en el registro.
+  /api/v1/iptv/channels:
+    get:
+      operationId: iptvChannels
+      tags:
+        - iptv
+      summary: Buscar canales en tu IPTV (2 a 80 letras; hasta 50, España o sin país, sin adultos)
+      description: "Buscador de la web (docs/iptv.md §14): una fila por canal (la mejor variante) con su nombre limpio, la calidad, el nombre del proveedor y los ids de tu biblioteca que son ese canal. Nunca lleva URL, grupo ni nada más del proveedor. Sin IPTV activa responde 200 con la lista vacía. Nada se lista sin escribir al menos 2 letras."
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            default: ""
+            type: string
+            maxLength: 500
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+      responses:
+        "200":
+          description: Correcto
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  query:
+                    type: string
+                    maxLength: 80
+                  total:
+                    type: integer
+                    minimum: 0
+                    maximum: 9007199254740991
+                  capped:
+                    type: boolean
+                  channels:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          pattern: ^[a-f0-9]{40}$
+                        title:
+                          type: string
+                          minLength: 1
+                          maxLength: 120
+                        quality:
+                          anyOf:
+                            - type: string
+                              enum:
+                                - uhd
+                                - fhd
+                                - hd
+                                - sd
+                            - type: "null"
+                        provider:
+                          type: string
+                          maxLength: 40
+                        library:
+                          maxItems: 20
+                          type: array
+                          items:
+                            type: string
+                            pattern: ^[a-f0-9]{40}$
+                      required:
+                        - id
+                        - title
+                        - quality
+                        - provider
+                        - library
+                      additionalProperties: false
+                required:
+                  - query
+                  - total
+                  - capped
+                  - channels
+                additionalProperties: false
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+      x-access: web
+      x-native-path: /native/api/v1/iptv/channels
+      x-side-effects: false
+      x-legacy-twin: null
+      x-errors:
+        - code: empty_query
+          status: 400
+          message: Escribe al menos 2 letras para buscar.
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
   /api/v1/pairing:
     post:
       operationId: pairingCreate
@@ -4597,6 +4738,18 @@ paths:
                         - fromWebSync
                         - ih
                       additionalProperties: false
+                  iptvIds:
+                    type: object
+                    propertyNames:
+                      type: string
+                      pattern: ^[a-f0-9]{40}$
+                    additionalProperties:
+                      type: string
+                      enum:
+                        - ok
+                        - iptv_gone
+                        - iptv_disabled
+                        - iptv_removed
                 required:
                   - web
                   - webSyncedAt
@@ -4963,6 +5116,18 @@ paths:
                         - fromWebSync
                         - ih
                       additionalProperties: false
+                  iptvIds:
+                    type: object
+                    propertyNames:
+                      type: string
+                      pattern: ^[a-f0-9]{40}$
+                    additionalProperties:
+                      type: string
+                      enum:
+                        - ok
+                        - iptv_gone
+                        - iptv_disabled
+                        - iptv_removed
                 required:
                   - web
                   - webSyncedAt
@@ -6327,6 +6492,20 @@ paths:
             enum:
               - match
               - channel
+        - name: iptv
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[a-f0-9]{40}$
+        - name: engine
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - "0"
+              - "1"
       responses:
         "200":
           description: Correcto
@@ -8158,6 +8337,9 @@ paths:
                         ih:
                           type: boolean
                           const: true
+                        iptv:
+                          type: string
+                          pattern: ^[a-f0-9]{40}$
                       required:
                         - id
                         - title

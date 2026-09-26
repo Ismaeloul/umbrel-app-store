@@ -26,7 +26,13 @@
    `/__iptv/modo?id=&modo=`, `/__iptv/conexiones`, `/__iptv/peticiones`,
    `/__iptv/ajustes?colchon=&gop=` (colchón al abrir y GOP, para medir la
    latencia: docs/multidispositivo.md §6.3) y `/__iptv/reset` (todo en `ok`,
-   cuenta activa, sin historial y con el colchón y el GOP del principio). */
+   cuenta activa, sin historial y con el colchón y el GOP del principio).
+   `quitar(id)` / `/__iptv/quitar?id=` saca un canal de la lista y de
+   `get_live_streams` (el re-emparejado de §14.6); `reset` lo devuelve.
+
+   Buscador (docs/iptv.md §14.9): «ES: Telecinco HD» (110) solo está en la
+   IPTV (ni en el motor falso ni en la biblioteca E2E) y hay un grupo «XXX»
+   con un canal que el buscador no debe enseñar nunca. */
 
 import http from 'node:http';
 import type { AddressInfo, Socket } from 'node:net';
@@ -56,12 +62,15 @@ export const FAKE_IPTV_CHANNELS: readonly FakeIptvChannel[] = [
   { id: 107, name: 'ES: La 1 HD', epg: 'La1.es', category: 2 },
   { id: 108, name: 'ES: Antena 3 FHD', epg: 'Antena3.es', category: 2 },
   { id: 109, name: 'UK: DAZN 1', epg: 'DAZN1.uk', category: 3 },
+  { id: 110, name: 'ES: Telecinco HD', epg: 'Telecinco.es', category: 2 },
+  { id: 111, name: 'ES: Tele Noche HD', epg: 'TeleNoche.es', category: 4 },
 ];
 
 const CATEGORIES = [
   { category_id: '1', category_name: 'ES | DEPORTES', parent_id: 0 },
   { category_id: '2', category_name: 'ES | GENERALISTAS', parent_id: 0 },
   { category_id: '3', category_name: 'UK | SPORTS', parent_id: 0 },
+  { category_id: '4', category_name: 'XXX', parent_id: 0 },
 ];
 
 export type FakeIptvMode =
@@ -110,6 +119,8 @@ export interface FakeIptv {
   readonly m3uUrl: string;
   readonly getPhpUrl: string;
   modo(id: number | '*', mode: FakeIptvMode): void;
+  /** Saca un canal de la lista y de `get_live_streams` (o lo devuelve con `false`). */
+  quitar(id: number, quitado?: boolean): void;
   /** Conexiones de stream abiertas ahora (y las retenidas si se pide). */
   conexiones(options?: { readonly retenidas?: boolean }): number;
   /** URLs recibidas (con query), por orden. */
@@ -223,6 +234,8 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
   const held: number[] = [];
   const account = { status: 'Active', auth: 1 as 0 | 1 };
   const sockets = new Set<Socket>();
+  const hidden = new Set<number>();
+  const listed = (): FakeIptvChannel[] => FAKE_IPTV_CHANNELS.filter((c) => !hidden.has(c.id));
   let publicHost = options.publicHost ?? '';
 
   const clockNow = options.now ?? (() => Date.now());
@@ -244,7 +257,7 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
       ? `${base()}/xmltv.php?username=${FAKE_IPTV_USER}&password=${FAKE_IPTV_PASSWORD}`
       : `${base()}/guia.xml.gz`;
     const lines = [`#EXTM3U url-tvg="${guide}"`];
-    for (const c of FAKE_IPTV_CHANNELS) {
+    for (const c of listed()) {
       const group =
         CATEGORIES.find((cat) => cat.category_id === String(c.category))?.category_name ?? '';
       lines.push(
@@ -451,12 +464,19 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
             ),
             ...tuning,
           });
+        } else if (path === '/__iptv/quitar') {
+          controller.quitar(
+            Number(url.searchParams.get('id') ?? 0),
+            url.searchParams.get('quitado') !== '0',
+          );
+          json(res, { ok: true });
         } else if (path === '/__iptv/conexiones')
           json(res, { conexiones: controller.conexiones() });
         else if (path === '/__iptv/peticiones') json(res, { peticiones: controller.peticiones() });
         else if (path === '/__iptv/reset') {
           /* Entre recorridos E2E: todos los canales bien, la cuenta activa y sin historial. */
           controller.modo('*', 'ok');
+          hidden.clear();
           controller.cuenta({ status: 'Active', auth: 1 });
           controller.limpiarPeticiones();
           controller.ajustes(initialTuning);
@@ -522,7 +542,7 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
         if (action === 'get_live_streams') {
           json(
             res,
-            FAKE_IPTV_CHANNELS.map((c, index) => ({
+            listed().map((c, index) => ({
               num: index + 1,
               name: c.name,
               stream_type: 'live',
@@ -606,6 +626,10 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
           state.cutFirst = live.length === 0 || mode === 'ok';
         }
       }
+    },
+    quitar(id, quitado = true) {
+      if (quitado) hidden.add(id);
+      else hidden.delete(id);
     },
     conexiones(opts = {}) {
       return open.size + (opts.retenidas ? heldNow() : 0);

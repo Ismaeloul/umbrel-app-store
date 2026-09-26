@@ -18,6 +18,7 @@
 import {
   ENGINE_MAX_AUTO_RESTARTS_PER_HOUR,
   type BootstrapResponse,
+  type LibraryView,
   type Device,
   type DeviceRecord,
   type EngineStatus,
@@ -69,15 +70,32 @@ export function registerV1Routes(router: V1Router, services: Services): void {
   router.handle('bootstrap', (_input, ctx) => bootstrap(services, ctx));
   router.handle('settingsGet', () => services.state.settings());
   router.handle('settingsUpdate', ({ body }) => services.state.updateSettings(body));
-  router.handle('libraryGet', () => services.state.libraryView());
+  router.handle('libraryGet', () => withIptvIds(services, services.state.libraryView()));
   router.handle('libraryMutate', async ({ body }) => {
     const result = await services.state.mutateLibrary(body);
-    return libraryView(result.state);
+    return withIptvIds(services, libraryView(result.state));
   });
   router.handle('preferencesGet', () => ({ preferences: services.state.get().preferences }));
   router.handle('preferencesUpdate', async ({ body }) => ({
     preferences: await services.state.updatePreferences(body),
   }));
+}
+
+/**
+ * `LibraryView.iptvIds` (docs/iptv.md §14.6): el estado ahora de cada id IPTV
+ * de favoritos y recientes. Sin ninguno, la vista de siempre. Si la IPTV no
+ * responde, también (no tumba la biblioteca).
+ */
+export function withIptvIds(services: Services, view: LibraryView): LibraryView {
+  const ids = [...view.favorites, ...view.history].map((item) => item.id);
+  if (!ids.length || !services.iptv) return view;
+  try {
+    const states = services.iptv.libraryIdStates(ids);
+    return states ? { ...view, iptvIds: states } : view;
+  } catch (error) {
+    services.logger.warn({ err: error }, 'biblioteca: sin el estado de los ids IPTV');
+    return view;
+  }
 }
 
 // --- bootstrap ---
@@ -141,7 +159,7 @@ export function bootstrap(services: Services, ctx: RequestContext): BootstrapRes
     origin: ctx.origin,
     device: ctx.device ? publicDevice(ctx.device.device) : null,
     preferences: current.preferences,
-    library: libraryView(current),
+    library: withIptvIds(services, libraryView(current)),
     playback: safely(
       services,
       'playback',

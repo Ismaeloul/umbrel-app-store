@@ -5,6 +5,8 @@
 
 import { z } from 'zod';
 import { ItemSchema, PreferencesSchema, WebSourceTypeSchema } from '../../state/v1.js';
+import { IPTV_ID_STATES } from '../../constants/iptv.js';
+import { HashSchema } from '../../primitives.js';
 import { WebSourceSummarySchema } from '../common.js';
 
 /** Directorios: los canales del activo y el resumen de todos. */
@@ -16,10 +18,18 @@ export const DirectoryViewSchema = z.strictObject({
 });
 export type DirectoryView = z.infer<typeof DirectoryViewSchema>;
 
+/** Estado ahora de un id IPTV de favoritos o recientes (docs/iptv.md §14.6). */
+export const IptvIdStateSchema = z.enum(IPTV_ID_STATES);
+
 /** Biblioteca completa: favoritos, recientes y directorios. */
 export const LibraryViewSchema = DirectoryViewSchema.extend({
   favorites: z.array(ItemSchema),
   history: z.array(ItemSchema),
+  /**
+   * Solo si hay ids IPTV en favoritos o recientes: el estado de cada uno ahora
+   * (docs/iptv.md §14.6). `ItemSchema` no cambia (lo lee la app 0.8.0).
+   */
+  iptvIds: z.record(HashSchema, IptvIdStateSchema).optional(),
 });
 export type LibraryView = z.infer<typeof LibraryViewSchema>;
 

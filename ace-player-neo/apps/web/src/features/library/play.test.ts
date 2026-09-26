@@ -105,6 +105,7 @@ describe('con IPTV activa', () => {
       kind: 'infohash',
       record: true,
       ih: true,
+      iptv: null,
     });
     // Una sola vez.
     expect(takeChannelTap(OTHER)).toBeNull();
@@ -132,5 +133,48 @@ describe('con IPTV activa', () => {
     iptvActive(false);
     playChannel(vi.fn(), tap);
     expect(getPlayer().channel).toMatchObject({ hash: HASH, kind: 'id' });
+  });
+});
+
+describe('un canal de tu IPTV (docs/iptv.md §14.4)', () => {
+  const IPTV = 'f1'.repeat(20);
+
+  it('un id IPTV nunca llama a play(), ni con la IPTV en pausa; el encargo lleva su id', () => {
+    for (const active of [true, false]) {
+      resetPlayback();
+      iptvActive(active);
+      const navigate = vi.fn();
+      playChannel(navigate, {
+        hash: IPTV,
+        title: 'Telecinco',
+        ih: false,
+        record: true,
+        origin: 'buscar',
+        iptv: IPTV,
+      });
+      expect(getPlayer().channel, String(active)).toBeNull();
+      expect(navigate).toHaveBeenCalledWith({ vista: 'partido', id: null, canal: IPTV });
+      expect(takeChannelTap(IPTV)).toEqual({
+        hash: IPTV,
+        title: 'Telecinco',
+        kind: 'id',
+        record: true,
+        ih: false,
+        iptv: IPTV,
+      });
+    }
+  });
+
+  it('una fila de AceStream que es un canal de tu IPTV lleva su id a la sesión', () => {
+    iptvActive(true);
+    playChannel(vi.fn(), {
+      hash: HASH,
+      title: 'Antena 3 HD',
+      ih: false,
+      record: true,
+      origin: 'buscar',
+      iptv: IPTV,
+    });
+    expect(takeChannelTap(HASH)?.iptv).toBe(IPTV);
   });
 });
