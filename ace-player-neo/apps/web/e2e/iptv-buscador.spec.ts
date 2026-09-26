@@ -15,7 +15,14 @@ import http from 'node:http';
 import type { Page } from '@playwright/test';
 import { FUENTES } from './support/catalogo.ts';
 import { readPorts } from './support/puertos.ts';
-import { backend, esperarQueAvance, expect, motor, test } from './support/pruebas.ts';
+import {
+  backend,
+  detenerReproductor,
+  esperarQueAvance,
+  expect,
+  motor,
+  test,
+} from './support/pruebas.ts';
 
 const ports = readPorts();
 const CONTROL = `http://[::1]:${ports.iptv}`;
@@ -162,7 +169,13 @@ test.beforeEach(async () => {
   await backend.pedir('/api/v1/iptv', { method: 'DELETE' });
   await limpiarBiblioteca();
 });
-test.afterEach(async () => {
+/* Primero se para lo que suena: si se borrara la IPTV con la página aún en
+   ella, la web saltaría a su AceStream de respaldo y esa sesión (a medio abrir
+   cuando el fixture para el reproductor) seguiría en casa; con varios
+   dispositivos (docs/multidispositivo.md) el recorrido siguiente se uniría a
+   ella en vez de abrir el canal. */
+test.afterEach(async ({ page }) => {
+  await detenerReproductor(page);
   await backend.pedir('/api/v1/iptv', { method: 'DELETE' });
   await proveedor.reset();
 });

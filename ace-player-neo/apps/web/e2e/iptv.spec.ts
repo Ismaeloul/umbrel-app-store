@@ -25,6 +25,7 @@ import {
   abrirPartido,
   backend,
   contenidoSonando,
+  detenerReproductor,
   esperarQueAvance,
   expect,
   listaDeFuentes,
@@ -151,7 +152,13 @@ test.beforeEach(async () => {
   await proveedor.reset();
   await borrarIptv();
 });
-test.afterEach(async () => {
+/* Primero se para lo que suena: si se borrara la IPTV con la página aún en
+   ella, la web saltaría a su AceStream de respaldo y esa sesión (a medio abrir
+   cuando el fixture para el reproductor) seguiría en casa; con varios
+   dispositivos (docs/multidispositivo.md) el recorrido siguiente se uniría a
+   ella en vez de abrir el canal. */
+test.afterEach(async ({ page }) => {
+  await detenerReproductor(page);
   await borrarIptv();
   await proveedor.reset();
 });
