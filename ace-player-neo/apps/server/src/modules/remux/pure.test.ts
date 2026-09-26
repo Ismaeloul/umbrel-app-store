@@ -4,10 +4,18 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { REMUX_LOG_BYTES, normalizeHash } from '@ace/shared';
+import { REMUX_LOG_BYTES, REMUX_SEGMENT, normalizeHash, remuxReadySeconds } from '@ace/shared';
 import { tempDir } from '../../../test/helpers/index.js';
 import { buildRemuxArgs, hlsFlags, playlistPath } from './args.js';
-import { playlistStatsFromText, rewritePlaylist } from './files.js';
+import {
+  initialTargetDuration,
+  maxRoundedExtinf,
+  pinTargetDuration,
+  playlistStatsFromText,
+  rewritePlaylist,
+  segmentSpread,
+  withStartOffset,
+} from './files.js';
 import {
   elegirSesionRemuxADesalojar,
   parseByteRange,
@@ -124,18 +132,30 @@ describe('T-125 · el iPhone arranca con colchon y el adaptador sobrevive a los 
       contains(args, ['-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_at_eof', '1']),
     ).toBe(true);
     expect(contains(args, ['-rw_timeout', '20000000'])).toBe(true);
-    expect(contains(args, ['-hls_time', '2', '-hls_list_size', '15'])).toBe(true);
-    expect(args).toContain('delete_segments+independent_segments+temp_file+omit_endlist');
+    /* B-225 cambia en la 0.8.1 (docs/multidispositivo.md §4.3): segmentos de
+       0,5 s en ventana de 64 en vez de 2 s en ventana de 15. */
+    expect(contains(args, ['-hls_time', '0.5', '-hls_list_size', '64'])).toBe(true);
+    expect(args).toContain(
+      'delete_segments+independent_segments+temp_file+omit_endlist+program_date_time',
+    );
     /* La espera de 2 segmentos y 6 s y el `stop` con ficha vieja (`stale`) se
        prueban sobre el gestor en service.test.ts; las aserciones de texto de
        index.html son del reproductor (Fase 2). */
   });
 
-  it('buildRemuxArgs es la línea de la 0.6.59 más -threads 2 y -metadata ace_session=<id>', () => {
+  it('buildRemuxArgs es la línea de la 0.6.59 más -threads 2, -metadata ace_session=<id> y la segmentación de la 0.8.1', () => {
     const dir = path.join('/data', 'remux', ID_A);
     const url = `http://motor:6878/ace/r/${ID_A}/sesion`;
     const args = buildRemuxArgs({ url, dir, sessionId: 's_abcdefgh12', platform: 'linux' });
-    const original = ORIGINAL_0659(url, playlistPath(dir));
+    /* Lo único que cambia de la 0.6.59, además de lo de la v2: segmentos de
+       0,5 s en ventana de 64 y la hora en cada segmento (docs/multidispositivo.md
+       §4.2 y §4.3). El análisis del motor sigue en 5 MB / 5 s. */
+    const original = ORIGINAL_0659(url, playlistPath(dir)).map((value, index, all) => {
+      if (all[index - 1] === '-hls_time') return '0.5';
+      if (all[index - 1] === '-hls_list_size') return '64';
+      if (all[index - 1] === '-hls_flags') return `${value}+program_date_time`;
+      return value;
+    });
     const extra = ['-threads', '2', '-metadata', 'ace_session=s_abcdefgh12'];
     const at = original.indexOf('-f');
     expect(args).toEqual([...original.slice(0, at), ...extra, ...original.slice(at)]);
@@ -151,10 +171,96 @@ describe('T-125 · el iPhone arranca con colchon y el adaptador sobrevive a los 
       origin: 'iptv',
       platform: 'win32',
     });
-    expect(args).toContain('delete_segments+independent_segments+omit_endlist');
+    expect(args).toContain('delete_segments+independent_segments+omit_endlist+program_date_time');
     expect(args.join(' ')).not.toContain('temp_file');
     expect(args.at(-1)).toBe('C:/datos/remux/h/index.m3u8');
     expect(hlsFlags('linux')).toContain('temp_file');
+  });
+});
+
+describe('segmentación y análisis de la 0.8.1 (docs/multidispositivo.md §4.3 y §4.5)', () => {
+  const value = (args: readonly string[], flag: string) => args[args.indexOf(flag) + 1];
+
+  it('IPTV con análisis corto (2 MB / 2 s) y, en el reinicio, largo; el motor siempre largo', () => {
+    const base = { url: 'http://127.0.0.1:1/r/t/in.ts', dir: '/x', sessionId: 's_prueba123' };
+    const iptv = buildRemuxArgs({ ...base, origin: 'iptv' });
+    expect(value(iptv, '-probesize')).toBe('2000000');
+    expect(value(iptv, '-analyzeduration')).toBe('2000000');
+    const fallback = buildRemuxArgs({ ...base, origin: 'iptv', probe: 'fallback' });
+    expect(value(fallback, '-probesize')).toBe('5000000');
+    expect(value(fallback, '-analyzeduration')).toBe('5000000');
+    const engine = buildRemuxArgs({ ...base, url: 'http://motor/ace/r/1', probe: 'short' });
+    expect(value(engine, '-probesize')).toBe('5000000');
+    /* Lo demás, idéntico: misma segmentación para AceStream e IPTV. */
+    for (const args of [iptv, fallback, engine]) {
+      expect(value(args, '-hls_time')).toBe('0.5');
+      expect(value(args, '-hls_list_size')).toBe('64');
+      expect(value(args, '-hls_delete_threshold')).toBe('2');
+      expect(value(args, '-hls_flags')).toContain('program_date_time');
+    }
+  });
+
+  const lista = (durations: readonly number[], target = 1, sequence = 0): string =>
+    [
+      '#EXTM3U',
+      '#EXT-X-VERSION:7',
+      `#EXT-X-TARGETDURATION:${target}`,
+      `#EXT-X-MEDIA-SEQUENCE:${sequence}`,
+      '#EXT-X-MAP:URI="init.mp4"',
+      ...durations.flatMap((d, i) => [`#EXTINF:${d.toFixed(6)},`, `index${sequence + i}.m4s`]),
+      '',
+    ].join('\n');
+
+  it('TARGETDURATION redondeado: 1,48 s da 1 y 1,52 s da 2', () => {
+    expect(maxRoundedExtinf(lista([0.96, 1.48]))).toBe(1);
+    expect(maxRoundedExtinf(lista([0.96, 1.52]))).toBe(2);
+    expect(initialTargetDuration(lista([0.4, 0.48]))).toBe(1);
+    expect(initialTargetDuration('')).toBe(1);
+  });
+
+  it('pinTargetDuration: fija el valor, nunca baja y sube (con raised) si un segmento no cabe', () => {
+    expect(pinTargetDuration(lista([1], 3), null)).toEqual({
+      text: lista([1], 3),
+      pinned: null,
+      raised: false,
+    });
+    /* ffmpeg lo baja al salir de la ventana un segmento largo: se sigue sirviendo el fijado. */
+    const lowered = pinTargetDuration(lista([0.96, 0.96], 1), 2);
+    expect(lowered).toMatchObject({ pinned: 2, raised: false });
+    expect(lowered.text).toContain('#EXT-X-TARGETDURATION:2\n');
+    /* Sube si llega un #EXTINF redondeado mayor. */
+    const raised = pinTargetDuration(lista([1, 2.2], 2), 1);
+    expect(raised).toMatchObject({ pinned: 2, raised: true });
+    expect(raised.text).toContain('#EXT-X-TARGETDURATION:2\n');
+    /* Igual con 1,48 (cabe en 1) y 1,52 (no cabe). */
+    expect(pinTargetDuration(lista([1.48]), 1)).toMatchObject({ pinned: 1, raised: false });
+    expect(pinTargetDuration(lista([1.52]), 1)).toMatchObject({ pinned: 2, raised: true });
+    /* Con la lista ya firmada (?t=) funciona igual. */
+    const signed = rewritePlaylist(lista([0.8, 0.8], 1), 'firma');
+    expect(pinTargetDuration(signed, 1).text).toBe(signed);
+  });
+
+  it('segmentSpread: duración real de la ventana sin el primer segmento de la sesión', () => {
+    expect(segmentSpread(lista([0.2, 0.96, 1.2]))).toEqual({ minS: 0.96, maxS: 1.2 });
+    expect(segmentSpread(lista([0.2, 0.96, 1.2], 1, 5))).toEqual({ minS: 0.2, maxS: 1.2 });
+    expect(segmentSpread(lista([0.2]))).toBeNull();
+  });
+
+  it('las listas de /remux/ arrancan a 6 s del final (EXT-X-START, una vez)', () => {
+    const text = withStartOffset(lista([1, 1]));
+    expect(text.split('\n')[1]).toBe('#EXT-X-START:TIME-OFFSET=-6.0,PRECISE=NO');
+    expect(withStartOffset(text)).toBe(text);
+    expect(withStartOffset('#EXTM3U\r\n#EXTINF:1,\r\na\r\n')).toBe(
+      '#EXTM3U\r\n#EXT-X-START:TIME-OFFSET=-6.0,PRECISE=NO\r\n#EXTINF:1,\r\na\r\n',
+    );
+  });
+
+  it('lista lista: max(4 s, 3 × TD + 1 s)', () => {
+    expect(remuxReadySeconds(1)).toBe(4);
+    expect(remuxReadySeconds(2)).toBe(7);
+    expect(remuxReadySeconds(4)).toBe(13);
+    expect(remuxReadySeconds(0.4)).toBe(4);
+    expect(REMUX_SEGMENT).toEqual({ hlsTimeS: 0.5, listSize: 64, deleteThreshold: 2 });
   });
 });
 

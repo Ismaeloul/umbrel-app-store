@@ -35,7 +35,12 @@ import { randomBytes } from 'node:crypto';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { Readable } from 'node:stream';
-import { IPTV_BUSY_STATUSES, IPTV_RELAY, type IptvReason } from '@ace/shared';
+import {
+  IPTV_BUSY_STATUSES,
+  IPTV_PROBE_RETAIN_BYTES,
+  IPTV_RELAY,
+  type IptvReason,
+} from '@ace/shared';
 import type { Clock, TimerHandle } from '../../core/clock.js';
 import { AppError, errorCodeOf } from '../../core/errors.js';
 import type { Logger } from '../../core/logger.js';
@@ -79,6 +84,8 @@ export interface RelayDeps {
   readonly pendingMaxBytes?: number;
   /** Espera a que ffmpeg se reenganche tras un reinicio (por defecto 20 s). */
   readonly reattachMs?: number;
+  /** Cola de lo último entregado a ffmpeg que se guarda para `prepareRestart` (por defecto 5 MiB). */
+  readonly retainBytes?: number;
   /**
    * Dirección de escucha: SIEMPRE `127.0.0.1` en producción. Los tests del PC
    * de Isma usan `::1` (su 127.0.0.1 corta conexiones al azar, ver
@@ -99,6 +106,12 @@ export interface RelayStats {
   /** KB/s de los últimos segundos. */
   readonly kbps: number;
   readonly lastByteAt: number | null;
+  /**
+   * Primer byte ENTREGADO al ffmpeg de ahora (no el primero del proveedor: en
+   * TS la conexión se abre antes que ffmpeg). Desde aquí cuenta el plazo del
+   * remux (docs/multidispositivo.md §4.5). Null si aún ninguno.
+   */
+  readonly firstByteAt: number | null;
 }
 
 export interface RelaySession {
@@ -109,6 +122,14 @@ export interface RelaySession {
   stats(): RelayStats;
   onDropped(listener: (code: IptvReason) => void): void;
   onRestart(listener: () => void): void;
+  /**
+   * El remux va a relanzar ffmpeg (análisis largo, §4.5): que su salida no
+   * cierre la conexión con el proveedor. En TS se deja de entregar, se guarda
+   * lo que llegue y se vuelve a poner delante lo último entregado (hasta
+   * `IPTV_PROBE_RETAIN_BYTES`) para que el ffmpeg nuevo lo analice sin esperar
+   * vídeo nuevo. `false` si la sesión ya está cerrada.
+   */
+  prepareRestart(): boolean;
   /** Aborta la conexión con el proveedor y espera a que se suelte. Idempotente. */
   close(): Promise<void>;
 }
@@ -121,6 +142,30 @@ const HLS_SEGMENT_MS = 30_000;
 const HLS_KEY_MAX = 4096;
 /** Bytes que se leen tras reconectar buscando el primer PCR. */
 const PCR_PROBE_BYTES = 256 * 1024;
+
+const TS_SYNC = 0x47;
+const TS_PACKET = 188;
+
+/**
+ * Los últimos `max` bytes de `chunks` empezando en un paquete TS entero: el
+ * primer 0x47 seguido de otros dos a 188 y 376 bytes (docs/multidispositivo.md
+ * §4.5). Sin sincronía, vacío (el ffmpeg nuevo analiza lo que llegue).
+ */
+export function alignedTail(chunks: readonly Buffer[], max: number): Buffer {
+  if (!chunks.length || max <= 0) return Buffer.alloc(0);
+  const all = Buffer.concat(chunks as Buffer[]);
+  const tail = all.length > max ? all.subarray(all.length - max) : all;
+  for (let at = 0; at + 2 * TS_PACKET < tail.length; at += 1) {
+    if (
+      tail[at] === TS_SYNC &&
+      tail[at + TS_PACKET] === TS_SYNC &&
+      tail[at + 2 * TS_PACKET] === TS_SYNC
+    ) {
+      return Buffer.from(tail.subarray(at));
+    }
+  }
+  return Buffer.alloc(0);
+}
 
 function newTicket(): string {
   return randomBytes(16).toString('base64url');
@@ -221,9 +266,23 @@ abstract class BaseSession implements RelaySession {
     this.meter = new RateMeter(relay.deps.clock);
   }
 
+  /** Primer byte entregado al ffmpeg de ahora (ver `RelayStats.firstByteAt`). */
+  protected firstByteAt: number | null = null;
+
   stats(): RelayStats {
-    return { bytes: this.meter.total, kbps: this.meter.kbps(), lastByteAt: this.meter.lastAt };
+    return {
+      bytes: this.meter.total,
+      kbps: this.meter.kbps(),
+      lastByteAt: this.meter.lastAt,
+      firstByteAt: this.firstByteAt,
+    };
   }
+
+  protected noteDelivered(): void {
+    if (this.firstByteAt === null) this.firstByteAt = this.relay.deps.clock.now();
+  }
+
+  abstract prepareRestart(): boolean;
 
   onDropped(listener: (code: IptvReason) => void): void {
     this.dropped.push(listener);
@@ -291,6 +350,9 @@ class TsSession extends BaseSession {
   private lastPcrAt: number | null = null;
   /** Bytes entregados al ffmpeg de ahora (sin nada, no hace falta reiniciar tras reconectar). */
   private delivered = 0;
+  /** Lo último entregado a ffmpeg (hasta `retainMax`), para volver a dárselo tras `prepareRestart`. */
+  private retained: Buffer[] = [];
+  private retainedBytes = 0;
 
   constructor(
     ticket: string,
@@ -345,6 +407,41 @@ class TsSession extends BaseSession {
     if (body.destroyed || body.readableEnded) queueMicrotask(lost);
   }
 
+  /** Apunta lo entregado a ffmpeg: la cola de los últimos bytes y el primer byte. */
+  private retain(chunk: Buffer): void {
+    this.noteDelivered();
+    const max = this.relay.deps.retainBytes ?? IPTV_PROBE_RETAIN_BYTES;
+    if (max <= 0) return;
+    this.retained.push(chunk);
+    this.retainedBytes += chunk.length;
+    while (
+      this.retained.length > 1 &&
+      this.retainedBytes - (this.retained[0]?.length ?? 0) >= max
+    ) {
+      this.retainedBytes -= (this.retained.shift() as Buffer).length;
+    }
+  }
+
+  prepareRestart(): boolean {
+    if (this.closed) return false;
+    const { clock } = this.relay.deps;
+    this.restartPending = true;
+    this.firstByteAt = null;
+    clock.clearTimeout(this.reattachTimer);
+    this.reattachTimer = clock.setTimeout(() => {
+      if (this.closed || !this.restartPending) return;
+      this.emitDropped('iptv_dropped');
+    }, this.relay.deps.reattachMs ?? REATTACH_MS);
+    /* Lo último entregado, desde el primer paquete TS entero, vuelve delante
+       de lo que espera: no cuenta para el tope de `pending` (no pausa al
+       proveedor solo por eso). */
+    const tail = alignedTail(this.retained, this.relay.deps.retainBytes ?? IPTV_PROBE_RETAIN_BYTES);
+    this.retained = [];
+    this.retainedBytes = 0;
+    if (tail.length) this.pending.unshift(tail);
+    return true;
+  }
+
   private deliver(chunk: Buffer): void {
     const res = this.downstream;
     if (!res || this.restartPending || res.writableEnded || res.destroyed) {
@@ -352,6 +449,7 @@ class TsSession extends BaseSession {
       return;
     }
     this.delivered += chunk.length;
+    this.retain(chunk);
     if (!res.write(chunk)) {
       this.upstream?.body.pause();
       res.once('drain', () => {
@@ -379,12 +477,14 @@ class TsSession extends BaseSession {
     this.restartPending = false;
     this.downstream = res;
     this.delivered = 0;
+    this.firstByteAt = null;
     res.writeHead(200, { 'content-type': 'video/mp2t', 'cache-control': 'no-store' });
     const flush = this.pending;
     this.pending = [];
     this.pendingBytes = 0;
     for (const chunk of flush) {
       this.delivered += chunk.length;
+      this.retain(chunk);
       res.write(chunk);
     }
     const onClose = (): void => {
@@ -540,6 +640,8 @@ class TsSession extends BaseSession {
     upstream?.body.destroy();
     this.pending = [];
     this.pendingBytes = 0;
+    this.retained = [];
+    this.retainedBytes = 0;
     const res = this.downstream;
     this.downstream = null;
     res?.destroy();
@@ -606,6 +708,14 @@ class HlsSession extends BaseSession {
 
   connections(): number {
     return this.inFlight;
+  }
+
+  /* En HLS no hay conexión continua que proteger: el ffmpeg nuevo vuelve a
+     pedir la lista (y `-live_start_index -3` le da colchón). */
+  prepareRestart(): boolean {
+    if (this.closed) return false;
+    this.firstByteAt = null;
+    return true;
   }
 
   handle(kind: string, rest: string, _req: http.IncomingMessage, res: http.ServerResponse): void {
@@ -724,6 +834,7 @@ class HlsSession extends BaseSession {
       });
       if (head) {
         this.meter.add(head.length);
+        this.noteDelivered();
         res.write(head);
       }
       this.open.add(opened.body);

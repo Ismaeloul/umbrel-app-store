@@ -256,6 +256,86 @@ describe('relé TS: reconexión (§6.1)', () => {
     await session.close();
   });
 
+  it('firstByteAt es el primer byte ENTREGADO a ffmpeg, no el primero del proveedor', async () => {
+    const r = await rig();
+    r.setHandler((req, res) =>
+      req.url === '/live/1.ts' ? void tsStream(res) : void res.writeHead(404).end(),
+    );
+    const session = await r.relay.open({ variants: [variant('/live/1.ts')] });
+    /* La conexión con el proveedor ya está abierta (y con bytes), pero ffmpeg aún no ha llegado. */
+    expect(session.stats().firstByteAt).toBeNull();
+    r.clock.advance(7_000);
+    const attachedAt = r.clock.now();
+    let received = 0;
+    const ffmpeg = http.get(session.inputUrl, { agent: false }, (res) =>
+      res.on('data', (c: Buffer) => (received += c.length)),
+    );
+    ffmpeg.on('error', () => undefined);
+    await waitFor('bytes', () => received > 0);
+    expect(session.stats().firstByteAt).toBe(attachedAt);
+    ffmpeg.destroy();
+    await session.close();
+  });
+
+  it('prepareRestart: la salida de ffmpeg no cierra la conexión; el nuevo recibe antes los últimos bytes, alineados a 188', async () => {
+    const r = await rig();
+    let opens = 0;
+    r.setHandler((req, res) => {
+      if (req.url !== '/live/1.ts') return void res.writeHead(404).end();
+      opens += 1;
+      tsStream(res);
+    });
+    const session = await r.relay.open({ variants: [variant('/live/1.ts')] });
+    const chunks: Buffer[] = [];
+    const first = http.get(session.inputUrl, { agent: false }, (res) =>
+      res.on('data', (c: Buffer) => chunks.push(c)),
+    );
+    first.on('error', () => undefined);
+    await waitFor('bytes', () => chunks.reduce((n, c) => n + c.length, 0) > 60_000);
+    const seenByFirst = Buffer.concat(chunks);
+    const peak: number[] = [];
+    const sampler = setInterval(() => peak.push(r.relay.connections()), 5);
+    expect(session.prepareRestart()).toBe(true);
+    first.destroy();
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    /* Sigue la única conexión con el proveedor. */
+    expect(r.relay.connections()).toBe(1);
+    const again: Buffer[] = [];
+    const second = http.get(session.inputUrl, { agent: false }, (res) =>
+      res.on('data', (c: Buffer) => again.push(c)),
+    );
+    second.on('error', () => undefined);
+    await waitFor('bytes al nuevo', () => again.reduce((n, c) => n + c.length, 0) > 20_000);
+    clearInterval(sampler);
+    const head = Buffer.concat(again);
+    /* Empieza en un paquete TS entero... */
+    expect(head[0]).toBe(0x47);
+    expect(head[188]).toBe(0x47);
+    /* ...que ya había recibido el ffmpeg viejo (se vuelve a analizar sin esperar vídeo nuevo). */
+    expect(seenByFirst.includes(head.subarray(0, 188 * 4))).toBe(true);
+    expect(opens).toBe(1);
+    expect(Math.max(...peak)).toBeLessThanOrEqual(1);
+    second.destroy();
+    await session.close();
+    expect(session.prepareRestart()).toBe(false);
+  });
+
+  it('alignedTail: los últimos bytes desde el primer paquete TS con sincronía', async () => {
+    const { alignedTail } = await import('./relay.js');
+    const packet = (n: number) => Buffer.concat([Buffer.from([0x47, n]), Buffer.alloc(186, n)]);
+    const stream = Buffer.concat([packet(1), packet(2), packet(3), packet(4), packet(5)]);
+    /* Tres trozos arbitrarios; con tope de 3,5 paquetes se queda con los 3 últimos enteros. */
+    const tail = alignedTail(
+      [stream.subarray(0, 100), stream.subarray(100, 500), stream.subarray(500)],
+      188 * 3 + 94,
+    );
+    expect(tail.length).toBe(188 * 3);
+    expect(tail[0]).toBe(0x47);
+    expect(tail[1]).toBe(3);
+    expect(alignedTail([], 1000).length).toBe(0);
+    expect(alignedTail([Buffer.alloc(1000, 1)], 1000).length).toBe(0);
+  });
+
   it('una segunda petición a in.ts → 409 y nunca abre otra conexión', async () => {
     const r = await rig();
     r.setHandler((req, res) =>

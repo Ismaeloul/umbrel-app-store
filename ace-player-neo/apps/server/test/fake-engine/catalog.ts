@@ -28,6 +28,8 @@ export interface FakeContent {
   /* Velocidad de bajada respecto al bitrate del canal. Por debajo de 0,85 el
      comprobador de la 0.6.59 lo daría por "starved". */
   intakeRatio: number;
+  /* Cuadros por GOP (sin él, 25 = 1 s). Docs/multidispositivo.md §6.2. */
+  gopFrames?: number;
 }
 
 export interface FakeContentInput {
@@ -41,6 +43,7 @@ export interface FakeContentInput {
   bitrateKbps?: number;
   peers?: number;
   intakeRatio?: number;
+  gopFrames?: number;
 }
 
 export const DEFAULT_CONTENT = {
@@ -94,6 +97,12 @@ export function normalizeContent(input: FakeContentInput): FakeContent {
   const intakeRatio = Number(input.intakeRatio ?? DEFAULT_CONTENT.intakeRatio);
   if (!(intakeRatio > 0 && intakeRatio <= 20))
     throw new Error(`intakeRatio fuera de rango: ${String(input.intakeRatio)}`);
+  const gopFrames = input.gopFrames === undefined ? undefined : Number(input.gopFrames);
+  if (
+    gopFrames !== undefined &&
+    !(Number.isInteger(gopFrames) && gopFrames >= 1 && gopFrames <= 250)
+  )
+    throw new Error(`gopFrames fuera de rango (1-250): ${String(input.gopFrames)}`);
   const title = String(input.title ?? `Contenido ${id.slice(0, 8)}`)
     .trim()
     .slice(0, 200);
@@ -108,6 +117,7 @@ export function normalizeContent(input: FakeContentInput): FakeContent {
     bitrateKbps,
     peers,
     intakeRatio,
+    ...(gopFrames === undefined ? {} : { gopFrames }),
   };
 }
 

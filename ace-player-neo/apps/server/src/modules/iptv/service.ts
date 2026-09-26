@@ -1399,6 +1399,7 @@ export class IptvServiceImpl implements IptvService {
     const entry = (this.catalog as Catalog).get(id) as CatalogEntry;
     const variants = this.variantsOf(entry);
     const revocations = this.revocations;
+    const openedAt = this.deps.clock.now();
     const session = await this.relay.open({
       variants,
       signal: options.signal,
@@ -1426,9 +1427,11 @@ export class IptvServiceImpl implements IptvService {
       inputUrl: session.inputUrl,
       isHls: session.isHls,
       title,
+      openedAt,
       stats: () => session.stats(),
       onDropped: (listener) => session.onDropped(listener),
       onRestart: (listener) => session.onRestart(listener),
+      prepareRestart: () => !closed && session.prepareRestart(),
       close: async () => {
         if (closed) return;
         closed = true;
