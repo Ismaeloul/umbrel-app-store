@@ -39,12 +39,12 @@ enum EjemploAgenda {
 }
 
 @Suite struct RelojYEstadoTests {
-    typealias E = EjemploAgenda
+    typealias Ejm = EjemploAgenda
 
     @Test func relojDeMadrid() {
-        #expect(E.reloj == RelojMadrid(fecha: E.hoy, minutos: 20 * 60 + 30))
+        #expect(Ejm.reloj == RelojMadrid(fecha: Ejm.hoy, minutos: 20 * 60 + 30))
         #expect(RelojMadrid(Date(timeIntervalSince1970: 1_790_202_600)).fecha == "2026-09-24")  // 22:30 UTC
-        #expect(FechasAgenda.hora(E.ahora) == "20:30")
+        #expect(FechasAgenda.hora(Ejm.ahora) == "20:30")
         #expect(FechasAgenda.hora(iso: nil) == nil)
         #expect(FechasAgenda.hora(iso: "no es fecha") == nil)
     }
@@ -52,20 +52,20 @@ enum EjemploAgenda {
     @Test func minutosYEstados() {
         let a = { (hora: String) in
             FootballMatch(
-                id: "x", date: E.hoy, time: hora, start: nil, title: "", home: "", away: "", competition: "", country: "",
+                id: "x", date: Ejm.hoy, time: hora, start: nil, title: "", home: "", away: "", competition: "", country: "",
                 channels: [])
         }
-        #expect(ReglasAgenda.minutosParaPartido(a("21:00"), reloj: E.reloj) == 30)
-        #expect(ReglasAgenda.minutosParaPartido(a("Por confirmar"), reloj: E.reloj) == nil)
-        #expect(ReglasAgenda.estado(a("20:30"), reloj: E.reloj, marcador: nil) == EstadoPartido(fase: .directo, texto: "En directo"))
-        #expect(ReglasAgenda.estado(a("18:31"), reloj: E.reloj, marcador: nil)?.fase == .directo)
-        #expect(ReglasAgenda.estado(a("18:30"), reloj: E.reloj, marcador: nil) == EstadoPartido(fase: .terminado, texto: "Terminado"))
-        #expect(ReglasAgenda.estado(a("21:18"), reloj: E.reloj, marcador: nil) == EstadoPartido(fase: .pronto, texto: "En 48 min"))
-        #expect(ReglasAgenda.estado(a("21:30"), reloj: E.reloj, marcador: nil)?.texto == "En 60 min")
-        #expect(ReglasAgenda.estado(a("21:48"), reloj: E.reloj, marcador: nil) == EstadoPartido(fase: .proximo, texto: "En 1 h 18 min"))
-        #expect(ReglasAgenda.estado(a("18:00"), reloj: E.reloj, marcador: E.marcador(0, 0))?.fase == .directo)
-        #expect(ReglasAgenda.estado(a("20:00"), reloj: E.reloj, marcador: E.marcador(0, 0, estado: "post"))?.fase == .terminado)
-        #expect(ReglasAgenda.estado(a("20:00"), reloj: E.reloj, marcador: E.marcador(0, 0, estado: "pre"))?.fase == .directo)
+        #expect(ReglasAgenda.minutosParaPartido(a("21:00"), reloj: Ejm.reloj) == 30)
+        #expect(ReglasAgenda.minutosParaPartido(a("Por confirmar"), reloj: Ejm.reloj) == nil)
+        #expect(ReglasAgenda.estado(a("20:30"), reloj: Ejm.reloj, marcador: nil) == EstadoPartido(fase: .directo, texto: "En directo"))
+        #expect(ReglasAgenda.estado(a("18:31"), reloj: Ejm.reloj, marcador: nil)?.fase == .directo)
+        #expect(ReglasAgenda.estado(a("18:30"), reloj: Ejm.reloj, marcador: nil) == EstadoPartido(fase: .terminado, texto: "Terminado"))
+        #expect(ReglasAgenda.estado(a("21:18"), reloj: Ejm.reloj, marcador: nil) == EstadoPartido(fase: .pronto, texto: "En 48 min"))
+        #expect(ReglasAgenda.estado(a("21:30"), reloj: Ejm.reloj, marcador: nil)?.texto == "En 60 min")
+        #expect(ReglasAgenda.estado(a("21:48"), reloj: Ejm.reloj, marcador: nil) == EstadoPartido(fase: .proximo, texto: "En 1 h 18 min"))
+        #expect(ReglasAgenda.estado(a("18:00"), reloj: Ejm.reloj, marcador: Ejm.marcador(0, 0))?.fase == .directo)
+        #expect(ReglasAgenda.estado(a("20:00"), reloj: Ejm.reloj, marcador: Ejm.marcador(0, 0, estado: "post"))?.fase == .terminado)
+        #expect(ReglasAgenda.estado(a("20:00"), reloj: Ejm.reloj, marcador: Ejm.marcador(0, 0, estado: "pre"))?.fase == .directo)
     }
 
     @Test func unidadesJuntas() {
@@ -86,26 +86,26 @@ enum EjemploAgenda {
     }
 
     @Test func dias() {
-        #expect(ReglasAgenda.etiquetaDia(E.hoy, hoy: E.hoy).principal == "Hoy")
-        #expect(ReglasAgenda.etiquetaDia(E.hoy, hoy: E.hoy).numero == "23")
-        #expect(ReglasAgenda.etiquetaDia("2026-09-24", hoy: E.hoy).principal == "Mañana")
-        #expect(ReglasAgenda.etiquetaDia("2026-09-22", hoy: E.hoy).principal == "Ayer")
-        #expect(ReglasAgenda.etiquetaDia("2026-09-25", hoy: E.hoy).principal == "Vie")
-        #expect(ReglasAgenda.etiquetaDia("2026-09-25", hoy: E.hoy).larga == "viernes, 25 de septiembre")
-        #expect(ReglasAgenda.etiquetaDia("2026-09-30", hoy: E.hoy).principal == "Mié")
+        #expect(ReglasAgenda.etiquetaDia(Ejm.hoy, hoy: Ejm.hoy).principal == "Hoy")
+        #expect(ReglasAgenda.etiquetaDia(Ejm.hoy, hoy: Ejm.hoy).numero == "23")
+        #expect(ReglasAgenda.etiquetaDia("2026-09-24", hoy: Ejm.hoy).principal == "Mañana")
+        #expect(ReglasAgenda.etiquetaDia("2026-09-22", hoy: Ejm.hoy).principal == "Ayer")
+        #expect(ReglasAgenda.etiquetaDia("2026-09-25", hoy: Ejm.hoy).principal == "Vie")
+        #expect(ReglasAgenda.etiquetaDia("2026-09-25", hoy: Ejm.hoy).larga == "viernes, 25 de septiembre")
+        #expect(ReglasAgenda.etiquetaDia("2026-09-30", hoy: Ejm.hoy).principal == "Mié")
         #expect(ReglasAgenda.sumarDias("2026-12-31", 1) == "2027-01-01")
         #expect(ReglasAgenda.sumarDias("2024-03-01", -1) == "2024-02-29")
-        let dias = ["2026-09-22", E.hoy, "2026-09-24"]
-        #expect(ReglasAgenda.diaPorDefecto(dias, hoy: E.hoy) == E.hoy)
-        #expect(ReglasAgenda.diaPorDefecto(["2026-09-24"], hoy: E.hoy) == "2026-09-24")
-        #expect(ReglasAgenda.diaPorDefecto([], hoy: E.hoy) == nil)
-        #expect(ReglasAgenda.resolverDia(dias, elegido: "2026-09-24", hoy: E.hoy) == "2026-09-24")
-        #expect(ReglasAgenda.resolverDia(dias, elegido: "2026-01-01", hoy: E.hoy) == E.hoy)
+        let dias = ["2026-09-22", Ejm.hoy, "2026-09-24"]
+        #expect(ReglasAgenda.diaPorDefecto(dias, hoy: Ejm.hoy) == Ejm.hoy)
+        #expect(ReglasAgenda.diaPorDefecto(["2026-09-24"], hoy: Ejm.hoy) == "2026-09-24")
+        #expect(ReglasAgenda.diaPorDefecto([], hoy: Ejm.hoy) == nil)
+        #expect(ReglasAgenda.resolverDia(dias, elegido: "2026-09-24", hoy: Ejm.hoy) == "2026-09-24")
+        #expect(ReglasAgenda.resolverDia(dias, elegido: "2026-01-01", hoy: Ejm.hoy) == Ejm.hoy)
     }
 }
 
 @Suite struct ParaTiYGruposTests {
-    typealias E = EjemploAgenda
+    typealias Ejm = EjemploAgenda
     let gustos = GustosFutbol(leagues: ["LaLiga"], teams: ["Barcelona"], nationalities: ["España"])
 
     @Test func modoEfectivo() {
@@ -116,11 +116,11 @@ enum EjemploAgenda {
     }
 
     @Test func esLaUnion() {
-        let barca = E.partido(0, id: "barca", local: "FC Barcelona", visitante: "Juventus", competicion: "Amistoso")
-        let barcaSc = E.partido(0, id: "sc", local: "Barcelona SC", visitante: "Emelec", competicion: "Amistoso")
-        let liga = E.partido(0, id: "liga", local: "Real Sociedad", visitante: "Villarreal", competicion: "La Liga EA Sports")
-        let espana = E.partido(0, id: "esp", local: "España", visitante: "Marruecos", competicion: "Amistoso")
-        let premier = E.partido(0, id: "pl", local: "Arsenal", visitante: "Liverpool", competicion: "Premier League")
+        let barca = Ejm.partido(0, id: "barca", local: "FC Barcelona", visitante: "Juventus", competicion: "Amistoso")
+        let barcaSc = Ejm.partido(0, id: "sc", local: "Barcelona SC", visitante: "Emelec", competicion: "Amistoso")
+        let liga = Ejm.partido(0, id: "liga", local: "Real Sociedad", visitante: "Villarreal", competicion: "La Liga EA Sports")
+        let espana = Ejm.partido(0, id: "esp", local: "España", visitante: "Marruecos", competicion: "Amistoso")
+        let premier = Ejm.partido(0, id: "pl", local: "Arsenal", visitante: "Liverpool", competicion: "Premier League")
         let todos = [barca, barcaSc, liga, espana, premier]
         #expect(ReglasAgenda.visibles(todos, modo: .paraTi, gustos: gustos).map(\.id) == ["barca", "liga", "esp"])
         #expect(ReglasAgenda.visibles(todos, modo: .todos, gustos: gustos).count == 5)
@@ -129,33 +129,33 @@ enum EjemploAgenda {
     }
 
     @Test func bloquesPorCompeticion() {
-        let terminado = E.partido(-200, id: "done", competicion: "LaLiga")
-        let directo = E.partido(-30, id: "live", competicion: "LaLiga")
-        let proximo = E.partido(60, id: "next", competicion: "LaLiga")
-        let ucl = E.partido(15, id: "ucl", competicion: "Champions League")
-        let soloTerminado = E.partido(-300, id: "seriea", competicion: "Serie A")
-        let grupos = ReglasAgenda.porCompeticion([terminado, soloTerminado, proximo, ucl, directo], reloj: E.reloj)
+        let terminado = Ejm.partido(-200, id: "done", competicion: "LaLiga")
+        let directo = Ejm.partido(-30, id: "live", competicion: "LaLiga")
+        let proximo = Ejm.partido(60, id: "next", competicion: "LaLiga")
+        let ucl = Ejm.partido(15, id: "ucl", competicion: "Champions League")
+        let soloTerminado = Ejm.partido(-300, id: "seriea", competicion: "Serie A")
+        let grupos = ReglasAgenda.porCompeticion([terminado, soloTerminado, proximo, ucl, directo], reloj: Ejm.reloj)
         #expect(grupos.map(\.competicion) == ["LaLiga", "Champions League", "Serie A"])
         #expect(grupos.first?.partidos.map(\.id) == ["live", "next", "done"])
-        #expect(ReglasAgenda.porCompeticion([E.partido(10, competicion: "")], reloj: E.reloj).first?.competicion == "Fútbol")
+        #expect(ReglasAgenda.porCompeticion([Ejm.partido(10, competicion: "")], reloj: Ejm.reloj).first?.competicion == "Fútbol")
     }
 
     @Test func directosYDestacado() {
-        let a = E.partido(-20, id: "a", local: "Girona")
-        let b = E.partido(-10, id: "b", local: "Real Madrid")
-        let c = E.partido(40, id: "c")
+        let a = Ejm.partido(-20, id: "a", local: "Girona")
+        let b = Ejm.partido(-10, id: "b", local: "Real Madrid")
+        let c = Ejm.partido(40, id: "c")
         let mios = GustosFutbol(teams: ["Real Madrid"])
-        #expect(ReglasAgenda.enDirecto([a, b, c], reloj: E.reloj, marcadores: [:]) == 2)
-        #expect(ReglasAgenda.destacado([a, b, c], reloj: E.reloj, marcadores: [:], gustos: mios)?.id == "b")
-        #expect(ReglasAgenda.destacado([a, b, c], reloj: E.reloj, marcadores: [:], gustos: .vacios)?.id == "a")
-        #expect(ReglasAgenda.destacado([c], reloj: E.reloj, marcadores: [:], gustos: .vacios)?.id == "c")
-        let terminado = E.partido(-300, id: "t")
-        #expect(ReglasAgenda.destacado([terminado], reloj: E.reloj, marcadores: [:], gustos: .vacios)?.id == "t")
-        #expect(ReglasAgenda.destacado([], reloj: E.reloj, marcadores: [:], gustos: .vacios) == nil)
+        #expect(ReglasAgenda.enDirecto([a, b, c], reloj: Ejm.reloj, marcadores: [:]) == 2)
+        #expect(ReglasAgenda.destacado([a, b, c], reloj: Ejm.reloj, marcadores: [:], gustos: mios)?.id == "b")
+        #expect(ReglasAgenda.destacado([a, b, c], reloj: Ejm.reloj, marcadores: [:], gustos: .vacios)?.id == "a")
+        #expect(ReglasAgenda.destacado([c], reloj: Ejm.reloj, marcadores: [:], gustos: .vacios)?.id == "c")
+        let terminado = Ejm.partido(-300, id: "t")
+        #expect(ReglasAgenda.destacado([terminado], reloj: Ejm.reloj, marcadores: [:], gustos: .vacios)?.id == "t")
+        #expect(ReglasAgenda.destacado([], reloj: Ejm.reloj, marcadores: [:], gustos: .vacios) == nil)
     }
 
     @Test func titulo() {
-        var partido = E.partido(0, local: "A", visitante: "B")
+        var partido = Ejm.partido(0, local: "A", visitante: "B")
         partido.title = "A - B"
         #expect(ReglasAgenda.titulo(partido) == "A vs B")
         partido.away = ""
@@ -164,42 +164,42 @@ enum EjemploAgenda {
 }
 
 @Suite struct MarcadoresTests {
-    typealias E = EjemploAgenda
+    typealias Ejm = EjemploAgenda
 
     @Test func cuandoSePiden() {
-        #expect(Marcadores.hacenFalta([E.partido(14)], ahora: E.ahora))
-        #expect(!Marcadores.hacenFalta([E.partido(16)], ahora: E.ahora))
-        #expect(Marcadores.hacenFalta([E.partido(-209)], ahora: E.ahora))
-        #expect(!Marcadores.hacenFalta([E.partido(-211)], ahora: E.ahora))
-        #expect(!Marcadores.hacenFalta([E.partido(0, conInicio: false)], ahora: E.ahora))
-        #expect(Marcadores.intervalo(["a": E.marcador(0, 0)]) == 8)
-        #expect(Marcadores.intervalo(["a": E.marcador(0, 0, estado: "pre")]) == 45)
+        #expect(Marcadores.hacenFalta([Ejm.partido(14)], ahora: Ejm.ahora))
+        #expect(!Marcadores.hacenFalta([Ejm.partido(16)], ahora: Ejm.ahora))
+        #expect(Marcadores.hacenFalta([Ejm.partido(-209)], ahora: Ejm.ahora))
+        #expect(!Marcadores.hacenFalta([Ejm.partido(-211)], ahora: Ejm.ahora))
+        #expect(!Marcadores.hacenFalta([Ejm.partido(0, conInicio: false)], ahora: Ejm.ahora))
+        #expect(Marcadores.intervalo(["a": Ejm.marcador(0, 0)]) == 8)
+        #expect(Marcadores.intervalo(["a": Ejm.marcador(0, 0, estado: "pre")]) == 45)
         #expect(Marcadores.intervalo(nil) == 45)
     }
 
     @Test func pintableYMinuto() {
-        #expect(Marcadores.pintable(E.marcador(0, 0, estado: "pre")) == nil)
-        #expect(Marcadores.pintable(E.marcador(1, 0, estado: "post")) != nil)
+        #expect(Marcadores.pintable(Ejm.marcador(0, 0, estado: "pre")) == nil)
+        #expect(Marcadores.pintable(Ejm.marcador(1, 0, estado: "post")) != nil)
         #expect(Marcadores.pintable(nil) == nil)
-        #expect(Marcadores.minuto(E.marcador(0, 0, reloj: "72'")) == MinutoDirecto(minuto: "72", descanso: false))
-        #expect(Marcadores.minuto(E.marcador(0, 0, reloj: "45'+2'")) == MinutoDirecto(minuto: "45+2", descanso: false))
-        #expect(Marcadores.minuto(E.marcador(0, 0, reloj: "45'", detalle: "HT")) == MinutoDirecto(minuto: "45", descanso: true))
-        #expect(Marcadores.minuto(E.marcador(0, 0, reloj: "", detalle: "Final")) == nil)
-        #expect(Marcadores.minuto(E.marcador(0, 0, estado: "post")) == nil)
+        #expect(Marcadores.minuto(Ejm.marcador(0, 0, reloj: "72'")) == MinutoDirecto(minuto: "72", descanso: false))
+        #expect(Marcadores.minuto(Ejm.marcador(0, 0, reloj: "45'+2'")) == MinutoDirecto(minuto: "45+2", descanso: false))
+        #expect(Marcadores.minuto(Ejm.marcador(0, 0, reloj: "45'", detalle: "HT")) == MinutoDirecto(minuto: "45", descanso: true))
+        #expect(Marcadores.minuto(Ejm.marcador(0, 0, reloj: "", detalle: "Final")) == nil)
+        #expect(Marcadores.minuto(Ejm.marcador(0, 0, estado: "post")) == nil)
     }
 
     @Test func progreso() {
-        let partido = E.partido(-30)
-        #expect(abs(Marcadores.progreso(partido, ahora: E.ahora, marcador: E.marcador(0, 0, reloj: "45'")) - 0.5) < 0.001)
-        #expect(abs(Marcadores.progreso(partido, ahora: E.ahora, marcador: nil) - 30.0 / 90) < 0.001)
-        #expect(Marcadores.progreso(partido, ahora: E.ahora, marcador: E.marcador(0, 0, estado: "post")) == 1)
-        #expect(Marcadores.progreso(E.partido(-52), ahora: E.ahora, marcador: nil) == 0.5)
+        let partido = Ejm.partido(-30)
+        #expect(abs(Marcadores.progreso(partido, ahora: Ejm.ahora, marcador: Ejm.marcador(0, 0, reloj: "45'")) - 0.5) < 0.001)
+        #expect(abs(Marcadores.progreso(partido, ahora: Ejm.ahora, marcador: nil) - 30.0 / 90) < 0.001)
+        #expect(Marcadores.progreso(partido, ahora: Ejm.ahora, marcador: Ejm.marcador(0, 0, estado: "post")) == 1)
+        #expect(Marcadores.progreso(Ejm.partido(-52), ahora: Ejm.ahora, marcador: nil) == 0.5)
     }
 
     @Test func destapado() {
-        #expect(Destapado.estado(E.marcador(1, 0), destapado: false) == .tapado)
-        #expect(Destapado.estado(E.marcador(1, 0), destapado: true) == .destapado)
-        #expect(Destapado.estado(E.marcador(0, 0, estado: "pre"), destapado: true) == nil)
+        #expect(Destapado.estado(Ejm.marcador(1, 0), destapado: false) == .tapado)
+        #expect(Destapado.estado(Ejm.marcador(1, 0), destapado: true) == .destapado)
+        #expect(Destapado.estado(Ejm.marcador(0, 0, estado: "pre"), destapado: true) == nil)
         #expect(Destapado.estado(nil, destapado: false) == nil)
         let conPartido = CanalReproducible(
             id: "h", titulo: "t", partido: ContextoPartido(id: "p", titulo: "", competicion: "", canal: ""))
@@ -213,7 +213,7 @@ enum EjemploAgenda {
 }
 
 @Suite struct SenalPartidoTests {
-    typealias E = EjemploAgenda
+    typealias Ejm = EjemploAgenda
 
     private func precalentado(_ estado: PreheatStatus, jugables: Int = 0) -> PreheatPublic {
         PreheatPublic(
@@ -228,10 +228,10 @@ enum EjemploAgenda {
     }
 
     @Test func ventana() {
-        #expect(SenalesPartido.enVentana(E.partido(45), ahora: E.ahora))
-        #expect(!SenalesPartido.enVentana(E.partido(46), ahora: E.ahora))
-        #expect(SenalesPartido.enVentana(E.partido(-120), ahora: E.ahora))
-        #expect(!SenalesPartido.enVentana(E.partido(-121), ahora: E.ahora))
+        #expect(SenalesPartido.enVentana(Ejm.partido(45), ahora: Ejm.ahora))
+        #expect(!SenalesPartido.enVentana(Ejm.partido(46), ahora: Ejm.ahora))
+        #expect(SenalesPartido.enVentana(Ejm.partido(-120), ahora: Ejm.ahora))
+        #expect(!SenalesPartido.enVentana(Ejm.partido(-121), ahora: Ejm.ahora))
     }
 
     @Test func desdePrecalentado() {
@@ -257,42 +257,42 @@ enum EjemploAgenda {
     }
 
     @Test func peticion() {
-        #expect(SenalesPartido.peticion(E.partido(10, canales: []), ahora: E.ahora, terminado: false, comprobacion: nil) == .ninguna)
-        #expect(SenalesPartido.peticion(E.partido(10), ahora: E.ahora, terminado: true, comprobacion: nil) == .ninguna)
-        #expect(SenalesPartido.peticion(E.partido(10), ahora: E.ahora, terminado: false, comprobacion: nil) == .precalentado)
-        #expect(SenalesPartido.peticion(E.partido(120), ahora: E.ahora, terminado: false, comprobacion: nil) == .fija(SenalesPartido.desdePrecalentado(nil)))
-        #expect(SenalesPartido.peticion(E.partido(400), ahora: E.ahora, terminado: false, comprobacion: nil) == .ninguna)
+        #expect(SenalesPartido.peticion(Ejm.partido(10, canales: []), ahora: Ejm.ahora, terminado: false, comprobacion: nil) == .ninguna)
+        #expect(SenalesPartido.peticion(Ejm.partido(10), ahora: Ejm.ahora, terminado: true, comprobacion: nil) == .ninguna)
+        #expect(SenalesPartido.peticion(Ejm.partido(10), ahora: Ejm.ahora, terminado: false, comprobacion: nil) == .precalentado)
+        #expect(SenalesPartido.peticion(Ejm.partido(120), ahora: Ejm.ahora, terminado: false, comprobacion: nil) == .fija(SenalesPartido.desdePrecalentado(nil)))
+        #expect(SenalesPartido.peticion(Ejm.partido(400), ahora: Ejm.ahora, terminado: false, comprobacion: nil) == .ninguna)
         let viva = progreso(.running, jugables: 1)
-        #expect(SenalesPartido.peticion(E.partido(400), ahora: E.ahora, terminado: false, comprobacion: viva) == .fija(SenalesPartido.desdeComprobacion(viva)!))
+        #expect(SenalesPartido.peticion(Ejm.partido(400), ahora: Ejm.ahora, terminado: false, comprobacion: viva) == .fija(SenalesPartido.desdeComprobacion(viva)!))
         #expect(SenalesPartido.palabra(SenalPartido(estado: .ok, resumen: "")) == "Señal")
         #expect(SenalesPartido.palabra(SenalPartido(estado: .fail, etiqueta: "Sin fuentes", resumen: "")) == "Sin fuentes")
     }
 }
 
 @Suite struct TarjetasYBibliotecaTests {
-    typealias E = EjemploAgenda
+    typealias Ejm = EjemploAgenda
 
     private func item(_ titulo: String, id: String, alias: String? = nil) -> Item {
         Item(id: id, title: titulo, alias: alias, type: .web, category: "", date: "2026-09-23T18:30:00.000Z", fromWebSync: true, ih: false)
     }
 
     @Test func cuando() {
-        #expect(TarjetasAgenda.cuando(E.partido(60), reloj: E.reloj, marcador: nil).rotulo == "Hoy 21:30")
-        #expect(TarjetasAgenda.cuando(E.partido(1440), reloj: E.reloj, marcador: nil).rotulo == "Mañana 20:30")
-        #expect(TarjetasAgenda.cuando(E.partido(-10), reloj: E.reloj, marcador: E.marcador(0, 0, reloj: "13'")).rotulo == "En directo · 13'")
-        #expect(TarjetasAgenda.cuando(E.partido(-50), reloj: E.reloj, marcador: E.marcador(0, 0, reloj: "45'", detalle: "HT")).rotulo == "Descanso")
-        #expect(TarjetasAgenda.cuando(E.partido(-10), reloj: E.reloj, marcador: nil).rotulo == "En directo")
-        #expect(TarjetasAgenda.cuando(E.partido(-300), reloj: E.reloj, marcador: nil).rotulo == "Final")
-        var sinHora = E.partido(60)
+        #expect(TarjetasAgenda.cuando(Ejm.partido(60), reloj: Ejm.reloj, marcador: nil).rotulo == "Hoy 21:30")
+        #expect(TarjetasAgenda.cuando(Ejm.partido(1440), reloj: Ejm.reloj, marcador: nil).rotulo == "Mañana 20:30")
+        #expect(TarjetasAgenda.cuando(Ejm.partido(-10), reloj: Ejm.reloj, marcador: Ejm.marcador(0, 0, reloj: "13'")).rotulo == "En directo · 13'")
+        #expect(TarjetasAgenda.cuando(Ejm.partido(-50), reloj: Ejm.reloj, marcador: Ejm.marcador(0, 0, reloj: "45'", detalle: "HT")).rotulo == "Descanso")
+        #expect(TarjetasAgenda.cuando(Ejm.partido(-10), reloj: Ejm.reloj, marcador: nil).rotulo == "En directo")
+        #expect(TarjetasAgenda.cuando(Ejm.partido(-300), reloj: Ejm.reloj, marcador: nil).rotulo == "Final")
+        var sinHora = Ejm.partido(60)
         sinHora.time = "Por confirmar"
-        #expect(TarjetasAgenda.cuando(sinHora, reloj: E.reloj, marcador: nil).rotulo == "Por confirmar")
+        #expect(TarjetasAgenda.cuando(sinHora, reloj: Ejm.reloj, marcador: nil).rotulo == "Por confirmar")
     }
 
     @Test func tonosYLados() {
         #expect(TarjetasAgenda.tono(.ok) == .ok)
         #expect(TarjetasAgenda.tono(.checking) == .neutral)
         #expect(TarjetasAgenda.tono(.pending) == .neutral)
-        var partido = E.partido(0, local: "Real Madrid", visitante: "")
+        var partido = Ejm.partido(0, local: "Real Madrid", visitante: "")
         partido.title = "Real Madrid (amistoso)"
         #expect(TarjetasAgenda.lado(partido, local: true).nombre == "Real Madrid")
         #expect(TarjetasAgenda.lado(partido, local: false).nombre == "…")
@@ -327,18 +327,18 @@ enum EjemploAgenda {
         #expect(!busqueda.tiene("DAZN 2"))
         #expect(busqueda.tiene("M+ LaLiga TV"))
         #expect(!busqueda.tiene("LaLiga TV Hypermotion"))
-        let partido = E.partido(0, canales: ["DAZN", "GOL Play"])
+        let partido = Ejm.partido(0, canales: ["DAZN", "GOL Play"])
         #expect(busqueda.canales(partido) == [InfoCanal(nombre: "DAZN", enBiblioteca: true), InfoCanal(nombre: "GOL Play", enBiblioteca: false)])
     }
 
     @Test func menuDeLaTarjeta() {
-        let partido = E.partido(-10, local: "Real Madrid", visitante: "Getafe", competicion: "Copa del Rey")
+        let partido = Ejm.partido(-10, local: "Real Madrid", visitante: "Getafe", competicion: "Copa del Rey")
         let gustos = Preferences(onboardingComplete: true, country: "Spain", leagues: [], teams: ["Real Madrid"], nationalities: [])
         let menu = OpcionesPartido.menu(partido, disponible: true, marcador: .tapado, gustos: gustos)
         #expect(menu.map(\.opcion.titulo) == ["Ver canal", "Ver marcador", "Dejar de seguir a Real Madrid", "Seguir a Getafe", "Seguir Copa del Rey"])
         #expect(menu[2].opcion.separadaAntes)
         #expect(!menu[3].opcion.separadaAntes)
-        let sinCanales = E.partido(10, local: "A", visitante: "B", competicion: "Fútbol", canales: [])
+        let sinCanales = Ejm.partido(10, local: "A", visitante: "B", competicion: "Fútbol", canales: [])
         let otro = OpcionesPartido.menu(sinCanales, disponible: false, marcador: nil, gustos: nil)
         #expect(otro.map(\.opcion.titulo) == ["Seguir a A", "Seguir a B"])
         #expect(!otro[0].opcion.separadaAntes)
