@@ -89,19 +89,29 @@ private func marcador(_ estado: String, reloj: String = "72'", detalle: String =
         #expect(ReglasBiblioteca.porcentajeDisponible(nil) == nil)
     }
 
-    @Test func canalCaidoPieYConocido() {
-        let viejo = item("Viejo", .fav, id: String(repeating: "a", count: 40), lista: true)
+    /// El favorito «Viejo» que venía de la lista sincronizada.
+    private var viejo: Item { item("Viejo", .fav, id: String(repeating: "a", count: 40), lista: true) }
+    private var reciente: Item { item("Canal de prueba", .recent, id: String(repeating: "b", count: 40)) }
+    private var biblioteca: LibraryView {
+        LibraryView(
+            web: [item("L1"), item("L2"), item("L3")], webSyncedAt: "2026-09-23T10:00:00.000Z", webSources: [],
+            activeWebSourceId: "", favorites: [viejo, item("F2", .fav)], history: [reciente])
+    }
+
+    /// Partida en tres: junta tardaba 420 ms en tiparse en la CI (límite 400; CI 36226198913).
+    @Test func canalCaido() {
+        let viejo = self.viejo
         #expect(ReglasBiblioteca.caido(viejo, idsLista: ["otro"]))
         #expect(!ReglasBiblioteca.caido(viejo, idsLista: [viejo.id]))
         var noSincronizado = viejo
         noSincronizado.fromWebSync = false
         #expect(!ReglasBiblioteca.caido(noSincronizado, idsLista: ["otro"]))
         #expect(!ReglasBiblioteca.caido(viejo, idsLista: []))
+    }
 
-        let reciente = item("Canal de prueba", .recent, id: String(repeating: "b", count: 40))
-        let biblioteca = LibraryView(
-            web: [item("L1"), item("L2"), item("L3")], webSyncedAt: "2026-09-23T10:00:00.000Z", webSources: [],
-            activeWebSourceId: "", favorites: [viejo, item("F2", .fav)], history: [reciente])
+    @Test func pieYConocido() {
+        let reciente = self.reciente
+        let biblioteca = self.biblioteca
         #expect(ReglasBiblioteca.pie(biblioteca, demo: true).hasPrefix("6 canales en biblioteca · lista sincronizada 23 sept"))
         #expect(ReglasBiblioteca.pie(biblioteca, demo: true).hasSuffix(" · demo"))
         var sinFecha = biblioteca
@@ -110,6 +120,11 @@ private func marcador(_ estado: String, reloj: String = "72'", detalle: String =
         #expect(ReglasBiblioteca.conocido(biblioteca, hash: reciente.id)?.title == "Canal de prueba")
         #expect(ReglasBiblioteca.conocido(biblioteca, hash: String(repeating: "f", count: 40)) == nil)
         #expect(ReglasBiblioteca.conocido(nil, hash: "x") == nil)
+    }
+
+    @Test func favoritoNuevoYEnTuBiblioteca() {
+        let reciente = self.reciente
+        let biblioteca = self.biblioteca
         #expect(ReglasBiblioteca.tituloFavoritoPorDefecto("abcdef0123") == "Canal abcdef")
         let ahora = Date(timeIntervalSince1970: 1_790_000_000)
         let deRecientes = ReglasBiblioteca.favoritoNuevo(
