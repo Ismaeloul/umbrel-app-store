@@ -70,9 +70,9 @@ struct PresentacionFuenteTests {
 
     @Test func nombreCortoProveedorListaOTipo() {
         let conProveedor = ReglasFuentes.presentacion(EntradaFuente(candidata(1), ahora: ahora), listas: listas)
-        #expect(conProveedor.tipo == "M3U" && conProveedor.corto == "Prov1" && conProveedor.etiqueta == "M3U · Prov1")
+        #expect(conProveedor.tipo == "AceStream" && conProveedor.corto == "Prov1" && conProveedor.etiqueta == "AceStream · Prov1")
         let llana = ReglasFuentes.presentacion(EntradaFuente(candidata(2, titulo: "DAZN 1"), ahora: ahora), listas: listas)
-        #expect(llana.corto == "Elcano" && llana.etiqueta == "M3U · Elcano")
+        #expect(llana.corto == "Elcano" && llana.etiqueta == "AceStream · Elcano")
         let pelada = EntradaFuente(candidata(3, titulo: "DAZN 1", fuente: .saved, listaId: nil), ahora: ahora)
         #expect(ReglasFuentes.presentacion(pelada, listas: listas).corto == "Guardada")
         #expect(ReglasFuentes.presentacion(.manual(id: hash(9), titulo: "Stream", canal: ""), listas: []).corto == "Externa")

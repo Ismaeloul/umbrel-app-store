@@ -72,12 +72,12 @@ struct DatosCartelTests {
         #expect(etiquetas(e) == [
             DatosCartel.Etiqueta(clase: .calidad, texto: "1080p"),
             DatosCartel.Etiqueta(clase: .calidad, texto: "HEVC"),
-            DatosCartel.Etiqueta(clase: .tipo, texto: "M3U"),
+            DatosCartel.Etiqueta(clase: .tipo, texto: "AceStream"),
         ])
     }
 
     @Test func sinMedirSoloElTipo() {
-        #expect(etiquetas(entrada()) == [DatosCartel.Etiqueta(clase: .tipo, texto: "M3U")])
+        #expect(etiquetas(entrada()) == [DatosCartel.Etiqueta(clase: .tipo, texto: "AceStream")])
     }
 
     @Test func elTipoNoSeRepiteSiYaVaEnLaTesela() {

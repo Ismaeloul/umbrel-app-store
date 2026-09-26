@@ -27,10 +27,15 @@ enum NombreCartel {
         return texto.isEmpty ? nil : texto
     }
 
-    /// `posterNameOf`: el nombre del canal (`channelNameOf`) sin el proveedor que ya lleva la tesela.
+    /// `posterNameOf`: el nombre del canal (`channelNameOf`) sin el proveedor que ya lleva la tesela y, si la calidad
+    /// ya sale en su etiqueta, sin la marca de calidad ni los asteriscos de copia (Isma, 26-sep; docs/iptv.md §18):
+    /// «La 1 TVE 720p *» → «La 1 TVE».
     static func nombre(_ entrada: EntradaFuente, _ presentacion: PresentacionFuente) -> String {
         let proveedores = [presentacion.corto, presentacion.proveedor, presentacion.lista]
-        return sinProveedor(ReglasFuentes.nombreCanal(entrada), proveedores: proveedores)
+        let nombre = sinProveedor(ReglasFuentes.nombreCanal(entrada), proveedores: proveedores)
+        let sinCopia = recortar(reemplazar(nombre, "(?:\\s*\\*)+\\s*$", por: ""))
+        let desnudo = sinCopia.isEmpty ? nombre : sinCopia
+        return ReglasFuentes.etiquetasCalidad(entrada.sonda).isEmpty ? desnudo : CalidadNombre.sinMarcas(desnudo)
     }
 
     /// `channelNameWithoutProvider(name, providers)`.

@@ -2,7 +2,7 @@ import Foundation
 
 /* Las líneas de debajo del cartel de fuente (Isma, 26-sep; web 613f80e en origin/rediseno/iptv, SourcePoster.tsx y
    model.ts): bajo el nombre, el anillo con su palabra en su línea; debajo, los datos técnicos, una etiqueta por dato
-   (`posterTagsOf`: «1080p», «HEVC» y el tipo «M3U»), siempre enteras; y la frase solo si dice algo más que el estado
+   (`posterTagsOf`: «1080p», «HEVC» y el tipo «AceStream»), siempre enteras; y la frase solo si dice algo más que el estado
    (`posterDetailOf`). La app no tiene IPTV: `qualityTags` sin su rama de calidad declarada y «reserva».
    Puro [L]: DatosCartelTests, con los casos de model.test.ts y SourcePoster.test.ts. */
 

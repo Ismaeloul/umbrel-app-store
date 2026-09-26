@@ -206,8 +206,10 @@ enum ReglasFuentes {
 
     // MARK: Presentación
 
+    /// `TYPE_LABEL`. Isma, 26-sep: «M3U» confundía (la IPTV también sale de una lista M3U): lo de las listas es
+    /// AceStream (origin/rediseno/iptv, model.ts).
     private static let tipos: [String: String] = [
-        "saved": "Guardada", "m3u": "M3U", "favorites": "Favorito", "history": "Reciente", "acestream": "AceStream",
+        "saved": "Guardada", "m3u": "AceStream", "favorites": "Favorito", "history": "Reciente", "acestream": "AceStream",
         "manual": "Externa",
     ]
 

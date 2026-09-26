@@ -418,7 +418,7 @@ final class SesionFuentesTests: XCTestCase {
         XCTAssertFalse(sesion.automatico)
         XCTAssertTrue(sesion.eleccionManual)
         XCTAssertEqual(entorno.reproductor.canal?.id, GuionFuentes.hash(3))
-        XCTAssertTrue(entorno.textos.contains("M3U · Norte · \(GuionFuentes.hash(3).prefix(10))"))
+        XCTAssertTrue(entorno.textos.contains("AceStream · Norte · \(GuionFuentes.hash(3).prefix(10))"))
         await primeraImagen(entorno, motor)
         await agotar(entorno, motor, servicio: servicio)
 
@@ -630,7 +630,7 @@ final class SesionFuentesTests: XCTestCase {
         XCTAssertEqual(entorno.reproductor.canal?.id, GuionFuentes.hash(1), "Desde el inicio lo reproduce")
         XCTAssertEqual(entorno.reproductor.origen, .biblioteca)
         let filas = sesion.filas(ahora: Date())
-        XCTAssertEqual(filas[0].presentacion.etiqueta, "M3U · Isma")
+        XCTAssertEqual(filas[0].presentacion.etiqueta, "AceStream · Isma")
 
         // Elegir una hermana: «Fuente 2 de 2»; nunca salta sola.
         await primeraImagen(entorno, motor)

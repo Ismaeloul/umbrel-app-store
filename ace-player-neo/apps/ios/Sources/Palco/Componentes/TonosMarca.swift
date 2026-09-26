@@ -39,24 +39,8 @@ enum TonosMarca {
         (0.5, 0.12, tono(nombre))
     }
 
-    /// `channelDorsal`: el último grupo de cifras (hasta 3) o la primera letra sin tilde, o «·».
-    static func dorsal(_ nombre: String) -> String {
-        var grupos: [String] = []
-        var actual = ""
-        for caracter in nombre {
-            if caracter.isASCII && caracter.isNumber {
-                actual.append(caracter)
-            } else if !actual.isEmpty {
-                grupos.append(actual)
-                actual = ""
-            }
-        }
-        if !actual.isEmpty { grupos.append(actual) }
-        if let ultimo = grupos.last { return String(ultimo.prefix(3)) }
-        let sinTildes = nombre.folding(options: .diacriticInsensitive, locale: Locale(identifier: "es_ES"))
-        if let letra = sinTildes.first(where: { $0.isASCII && $0.isLetter }) { return String(letra).uppercased() }
-        return "·"
-    }
+    /// `channelDorsal`: la regla pura de Core (se salta calidad, códec, reserva y tamaño; «DAZN F1» → «F1»).
+    static func dorsal(_ nombre: String) -> String { TonoCanal.dorsal(nombre) }
 
     /// Palabras que no dan inicial (`SKIP` de lib/teams.ts).
     static let palabrasVacias: Set<String> = [
@@ -86,12 +70,6 @@ enum TonosMarca {
         return texto.isEmpty ? String(limpio.prefix(10)) : String(texto.prefix(4))
     }
 
-    /// `channelAbbrev`: primera palabra (o artículo + la siguiente), 6 caracteres, mayúsculas.
-    static func sigla(_ nombre: String) -> String {
-        let palabras = nombre.split(whereSeparator: { $0.isWhitespace }).map(String.init)
-        guard let primera = palabras.first else { return "" }
-        let articulos: Set<String> = ["la", "el", "los", "las"]
-        let base = articulos.contains(primera.lowercased()) && palabras.count > 1 ? "\(primera) \(palabras[1])" : primera
-        return String(base.prefix(6)).uppercased()
-    }
+    /// `channelAbbrev`: la regla pura de Core («La 1 HD» → «LA 1», «DAZN ACB 1» → «DAZN ACB»).
+    static func sigla(_ nombre: String) -> String { TonoCanal.sigla(nombre) }
 }

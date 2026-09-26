@@ -6,17 +6,40 @@
    Palco (fase 2, corrección 2) añade la forma `tile`: una tesela 16:9 con la
    misma cifra grande y la sigla del canal arriba, para los carteles de fuente
    y de canal (que no llevan miniatura). `size` es el lado en `round` y el ALTO
-   en `tile` (el ancho sale de 16:9). */
+   en `tile` (el ancho sale de 16:9).
+
+   Los carteles de FUENTE (Isma, 26-sep) cambian esa etiqueta por el proveedor
+   («Elcano», «New Era») con `label`: mismo sitio y misma tipografía; si no
+   cabe, puntos suspensivos (y una letra algo menor si es larga). El tono y la
+   cifra siguen saliendo de `name`. */
 
 import type { CSSProperties } from 'react';
+import { isQualityNumber, stripQualityMarks } from '@ace/shared';
 import { channelTone, oklchCss } from '../lib/color.ts';
 import { cx } from '../lib/cx.ts';
 import './ChannelMark.css';
 
-/** «DAZN 1» → «1», «M+ Liga de Campeones 2» → «2», «Eurosport» → «E». */
+/**
+ * «DAZN 1» → «1», «M+ Liga de Campeones 2» → «2», «Eurosport» → «E». Las
+ * cifras de resolución, códec y fotogramas no son el número del canal (Isma,
+ * 26-sep; docs/iptv.md §18): «La 1 TVE 720p» → «1», «DAZN 2 1080p50 H265» →
+ * «2», «Eurosport 4K» → «E».
+ */
+const DORSAL_BACKUP_RE =
+  /[([]\s*(?:bk|bkp|backup)\s*[-_]?\s*\d{0,2}\s*[)\]]|\b(?:bk|bkp|backup)\s*[-_]?\s*\d{1,2}\b/giu;
+const DORSAL_SIZE_RE = /\b\d{3,4}\s*[x×]\s*\d{3,4}\b/giu;
+
+/* Un número, con la letra suelta que lleve pegada delante («F1», «M4»; en «TV3», solo «3»). */
+const DORSAL_NUMBER_RE = /(?:(?<!\p{L})(\p{L}))?(\d+)/gu;
+
 export function channelDorsal(name: string): string {
-  const numbers = name.match(/\d+/g);
-  const last = numbers?.at(-1);
+  /* Tampoco la reserva («(BK-2)», «[BK 1]», «BK-1») ni una resolución escrita «1920x1080» (docs/iptv.md §19). */
+  const bare = name.replace(DORSAL_BACKUP_RE, ' ').replace(DORSAL_SIZE_RE, ' ');
+  /* «DAZN F1» → «F1», no «1» como «DAZN 1» (docs/iptv.md §16.16). */
+  const numbers = [...stripQualityMarks(bare).matchAll(DORSAL_NUMBER_RE)]
+    .filter((match) => !isQualityNumber(match[2] as string))
+    .map((match) => `${(match[1] ?? '').toUpperCase()}${match[2] as string}`);
+  const last = numbers.at(-1);
   if (last) return last.slice(0, 3);
   const letter = name
     .normalize('NFD')
@@ -31,8 +54,14 @@ export function channelAbbrev(name: string): string {
   if (words.length === 0) return '';
   const first = words[0] ?? '';
   // Un artículo solo («La 1») se lleva la siguiente palabra.
-  const abbrev = /^(la|el|los|las)$/i.test(first) && words[1] ? `${first} ${words[1]}` : first;
-  return abbrev.slice(0, 6).toUpperCase();
+  if (/^(la|el|los|las)$/i.test(first) && words[1])
+    return `${first} ${words[1]}`.slice(0, 6).toUpperCase();
+  // Una sigla entre la marca y el número también: «DAZN ACB 1» no es «DAZN 1» (docs/iptv.md §16.16).
+  const second = words[1] ?? '';
+  if (words.length >= 3 && /^\d+$/.test(words.at(-1) ?? '') && /^\p{Lu}{2,4}$/u.test(second)) {
+    return `${first.slice(0, 6)} ${second}`.toUpperCase();
+  }
+  return first.slice(0, 6).toUpperCase();
 }
 
 export interface ChannelMarkProps {
@@ -41,9 +70,17 @@ export interface ChannelMarkProps {
   /** `round` (dorsal cuadrado redondeado) o `tile` (tesela 16:9). */
   shape?: 'round' | 'tile';
   className?: string;
+  /** Solo en `tile`: la etiqueta de arriba en lugar de la sigla del canal. */
+  label?: string | undefined;
 }
 
-export function ChannelMark({ name, size = 52, shape = 'round', className }: ChannelMarkProps) {
+export function ChannelMark({
+  name,
+  size = 52,
+  shape = 'round',
+  className,
+  label,
+}: ChannelMarkProps) {
   const tone = channelTone(name);
   const style = {
     '--s': `${size}px`,
@@ -54,6 +91,7 @@ export function ChannelMark({ name, size = 52, shape = 'round', className }: Cha
   // Una cifra se recorta por abajo; una letra, por la derecha (una «E»
   // cortada por abajo se lee «F»).
   const letter = !/\d/.test(dorsal);
+  const tag = label?.trim() || channelAbbrev(name);
   return (
     <span
       className={cx(
@@ -67,7 +105,11 @@ export function ChannelMark({ name, size = 52, shape = 'round', className }: Cha
       data-shape={shape}
       aria-hidden="true"
     >
-      {shape === 'tile' ? <small className="dorsal__abbrev">{channelAbbrev(name)}</small> : null}
+      {shape === 'tile' ? (
+        <small className={cx('dorsal__abbrev', tag.length > 9 && 'dorsal__abbrev--long')}>
+          {tag}
+        </small>
+      ) : null}
       <b>{dorsal}</b>
     </span>
   );

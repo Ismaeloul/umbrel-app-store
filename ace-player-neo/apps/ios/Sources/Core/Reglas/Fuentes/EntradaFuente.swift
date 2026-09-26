@@ -216,11 +216,11 @@ struct MotivoReporte: Sendable, Hashable, Identifiable {
 
 /// Cómo se presenta una fuente (`SourcePresentation`).
 struct PresentacionFuente: Sendable, Hashable {
-    /// «M3U», «Guardada», «Externa»…
+    /// «AceStream», «Guardada», «Externa»…
     var tipo: String
     var lista: String
     var proveedor: String
-    /// «M3U · Elcano».
+    /// «AceStream · Elcano».
     var etiqueta: String
     /// El proveedor en una palabra: tras la flecha, si no la lista, si no el tipo.
     var corto: String

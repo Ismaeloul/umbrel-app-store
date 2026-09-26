@@ -37,10 +37,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov1",
-        "label": "M3U · Prov1",
+        "label": "AceStream · Prov1",
         "short": "Prov1"
       },
       "calidad": null,
@@ -65,8 +65,8 @@
           "detalle": "disponibilidad sin medir",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 1: M+ Liga de Campeones --> Prov1 · M3U · Prov1 · Lista Isma · Hash 0000000000000000000000000000000000000001 · disponibilidad sin medir",
-          "descripcionSinComprobador": "Fuente 1: M+ Liga de Campeones --> Prov1 · M3U · Prov1 · Lista Isma · Hash 0000000000000000000000000000000000000001 · disponibilidad sin medir · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 1: M+ Liga de Campeones --> Prov1 · AceStream · Prov1 · Lista Isma · Hash 0000000000000000000000000000000000000001 · disponibilidad sin medir",
+          "descripcionSinComprobador": "Fuente 1: M+ Liga de Campeones --> Prov1 · AceStream · Prov1 · Lista Isma · Hash 0000000000000000000000000000000000000001 · disponibilidad sin medir · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -86,8 +86,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 1: M+ Liga de Campeones --> Prov1 · M3U · Prov1 · Lista Isma · Hash 0000000000000000000000000000000000000001 · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 1: M+ Liga de Campeones --> Prov1 · M3U · Prov1 · Lista Isma · Hash 0000000000000000000000000000000000000001 · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 1: M+ Liga de Campeones --> Prov1 · AceStream · Prov1 · Lista Isma · Hash 0000000000000000000000000000000000000001 · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 1: M+ Liga de Campeones --> Prov1 · AceStream · Prov1 · Lista Isma · Hash 0000000000000000000000000000000000000001 · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -107,8 +107,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 1: M+ Liga de Campeones --> Prov1 · M3U · Prov1 · Lista Isma · Hash 0000000000000000000000000000000000000001 · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 1: M+ Liga de Campeones --> Prov1 · M3U · Prov1 · Lista Isma · Hash 0000000000000000000000000000000000000001 · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 1: M+ Liga de Campeones --> Prov1 · AceStream · Prov1 · Lista Isma · Hash 0000000000000000000000000000000000000001 · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 1: M+ Liga de Campeones --> Prov1 · AceStream · Prov1 · Lista Isma · Hash 0000000000000000000000000000000000000001 · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     },
@@ -130,10 +130,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov2",
-        "label": "M3U · Prov2",
+        "label": "AceStream · Prov2",
         "short": "Prov2"
       },
       "calidad": null,
@@ -158,8 +158,8 @@
           "detalle": "75% disponible",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 2: M+ Liga de Campeones --> Prov2 · M3U · Prov2 · Lista Isma · Hash 0000000000000000000000000000000000000002 · 75% disponible",
-          "descripcionSinComprobador": "Fuente 2: M+ Liga de Campeones --> Prov2 · M3U · Prov2 · Lista Isma · Hash 0000000000000000000000000000000000000002 · 75% disponible · 75% disponible"
+          "descripcionConComprobador": "Fuente 2: M+ Liga de Campeones --> Prov2 · AceStream · Prov2 · Lista Isma · Hash 0000000000000000000000000000000000000002 · 75% disponible",
+          "descripcionSinComprobador": "Fuente 2: M+ Liga de Campeones --> Prov2 · AceStream · Prov2 · Lista Isma · Hash 0000000000000000000000000000000000000002 · 75% disponible · 75% disponible"
         },
         {
           "pantalla": {
@@ -179,8 +179,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 2: M+ Liga de Campeones --> Prov2 · M3U · Prov2 · Lista Isma · Hash 0000000000000000000000000000000000000002 · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 2: M+ Liga de Campeones --> Prov2 · M3U · Prov2 · Lista Isma · Hash 0000000000000000000000000000000000000002 · reproduciendo ahora · 75% disponible"
+          "descripcionConComprobador": "Fuente 2: M+ Liga de Campeones --> Prov2 · AceStream · Prov2 · Lista Isma · Hash 0000000000000000000000000000000000000002 · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 2: M+ Liga de Campeones --> Prov2 · AceStream · Prov2 · Lista Isma · Hash 0000000000000000000000000000000000000002 · reproduciendo ahora · 75% disponible"
         },
         {
           "pantalla": {
@@ -200,8 +200,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 2: M+ Liga de Campeones --> Prov2 · M3U · Prov2 · Lista Isma · Hash 0000000000000000000000000000000000000002 · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 2: M+ Liga de Campeones --> Prov2 · M3U · Prov2 · Lista Isma · Hash 0000000000000000000000000000000000000002 · comprobando en pantalla · 75% disponible"
+          "descripcionConComprobador": "Fuente 2: M+ Liga de Campeones --> Prov2 · AceStream · Prov2 · Lista Isma · Hash 0000000000000000000000000000000000000002 · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 2: M+ Liga de Campeones --> Prov2 · AceStream · Prov2 · Lista Isma · Hash 0000000000000000000000000000000000000002 · comprobando en pantalla · 75% disponible"
         }
       ]
     },
@@ -223,10 +223,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov3",
-        "label": "M3U · Prov3",
+        "label": "AceStream · Prov3",
         "short": "Prov3"
       },
       "calidad": null,
@@ -251,8 +251,8 @@
           "detalle": "45% disponible",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 3: M+ Liga de Campeones --> Prov3 · M3U · Prov3 · Lista Isma · Hash 0000000000000000000000000000000000000003 · 45% disponible",
-          "descripcionSinComprobador": "Fuente 3: M+ Liga de Campeones --> Prov3 · M3U · Prov3 · Lista Isma · Hash 0000000000000000000000000000000000000003 · 45% disponible · 45% disponible"
+          "descripcionConComprobador": "Fuente 3: M+ Liga de Campeones --> Prov3 · AceStream · Prov3 · Lista Isma · Hash 0000000000000000000000000000000000000003 · 45% disponible",
+          "descripcionSinComprobador": "Fuente 3: M+ Liga de Campeones --> Prov3 · AceStream · Prov3 · Lista Isma · Hash 0000000000000000000000000000000000000003 · 45% disponible · 45% disponible"
         },
         {
           "pantalla": {
@@ -272,8 +272,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 3: M+ Liga de Campeones --> Prov3 · M3U · Prov3 · Lista Isma · Hash 0000000000000000000000000000000000000003 · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 3: M+ Liga de Campeones --> Prov3 · M3U · Prov3 · Lista Isma · Hash 0000000000000000000000000000000000000003 · reproduciendo ahora · 45% disponible"
+          "descripcionConComprobador": "Fuente 3: M+ Liga de Campeones --> Prov3 · AceStream · Prov3 · Lista Isma · Hash 0000000000000000000000000000000000000003 · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 3: M+ Liga de Campeones --> Prov3 · AceStream · Prov3 · Lista Isma · Hash 0000000000000000000000000000000000000003 · reproduciendo ahora · 45% disponible"
         },
         {
           "pantalla": {
@@ -293,8 +293,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 3: M+ Liga de Campeones --> Prov3 · M3U · Prov3 · Lista Isma · Hash 0000000000000000000000000000000000000003 · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 3: M+ Liga de Campeones --> Prov3 · M3U · Prov3 · Lista Isma · Hash 0000000000000000000000000000000000000003 · comprobando en pantalla · 45% disponible"
+          "descripcionConComprobador": "Fuente 3: M+ Liga de Campeones --> Prov3 · AceStream · Prov3 · Lista Isma · Hash 0000000000000000000000000000000000000003 · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 3: M+ Liga de Campeones --> Prov3 · AceStream · Prov3 · Lista Isma · Hash 0000000000000000000000000000000000000003 · comprobando en pantalla · 45% disponible"
         }
       ]
     },
@@ -316,10 +316,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov4",
-        "label": "M3U · Prov4",
+        "label": "AceStream · Prov4",
         "short": "Prov4"
       },
       "calidad": null,
@@ -344,8 +344,8 @@
           "detalle": "0% disponible",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 4: M+ Liga de Campeones --> Prov4 · M3U · Prov4 · Lista Isma · Hash 0000000000000000000000000000000000000004 · 0% disponible",
-          "descripcionSinComprobador": "Fuente 4: M+ Liga de Campeones --> Prov4 · M3U · Prov4 · Lista Isma · Hash 0000000000000000000000000000000000000004 · 0% disponible · 0% disponible"
+          "descripcionConComprobador": "Fuente 4: M+ Liga de Campeones --> Prov4 · AceStream · Prov4 · Lista Isma · Hash 0000000000000000000000000000000000000004 · 0% disponible",
+          "descripcionSinComprobador": "Fuente 4: M+ Liga de Campeones --> Prov4 · AceStream · Prov4 · Lista Isma · Hash 0000000000000000000000000000000000000004 · 0% disponible · 0% disponible"
         },
         {
           "pantalla": {
@@ -365,8 +365,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 4: M+ Liga de Campeones --> Prov4 · M3U · Prov4 · Lista Isma · Hash 0000000000000000000000000000000000000004 · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 4: M+ Liga de Campeones --> Prov4 · M3U · Prov4 · Lista Isma · Hash 0000000000000000000000000000000000000004 · reproduciendo ahora · 0% disponible"
+          "descripcionConComprobador": "Fuente 4: M+ Liga de Campeones --> Prov4 · AceStream · Prov4 · Lista Isma · Hash 0000000000000000000000000000000000000004 · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 4: M+ Liga de Campeones --> Prov4 · AceStream · Prov4 · Lista Isma · Hash 0000000000000000000000000000000000000004 · reproduciendo ahora · 0% disponible"
         },
         {
           "pantalla": {
@@ -386,8 +386,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 4: M+ Liga de Campeones --> Prov4 · M3U · Prov4 · Lista Isma · Hash 0000000000000000000000000000000000000004 · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 4: M+ Liga de Campeones --> Prov4 · M3U · Prov4 · Lista Isma · Hash 0000000000000000000000000000000000000004 · comprobando en pantalla · 0% disponible"
+          "descripcionConComprobador": "Fuente 4: M+ Liga de Campeones --> Prov4 · AceStream · Prov4 · Lista Isma · Hash 0000000000000000000000000000000000000004 · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 4: M+ Liga de Campeones --> Prov4 · AceStream · Prov4 · Lista Isma · Hash 0000000000000000000000000000000000000004 · comprobando en pantalla · 0% disponible"
         }
       ]
     },
@@ -409,10 +409,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov5",
-        "label": "M3U · Prov5",
+        "label": "AceStream · Prov5",
         "short": "Prov5"
       },
       "calidad": null,
@@ -437,8 +437,8 @@
           "detalle": "100% disponible",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 5: M+ Liga de Campeones --> Prov5 · M3U · Prov5 · Lista Isma · Hash 0000000000000000000000000000000000000005 · 100% disponible",
-          "descripcionSinComprobador": "Fuente 5: M+ Liga de Campeones --> Prov5 · M3U · Prov5 · Lista Isma · Hash 0000000000000000000000000000000000000005 · 100% disponible · 100% disponible"
+          "descripcionConComprobador": "Fuente 5: M+ Liga de Campeones --> Prov5 · AceStream · Prov5 · Lista Isma · Hash 0000000000000000000000000000000000000005 · 100% disponible",
+          "descripcionSinComprobador": "Fuente 5: M+ Liga de Campeones --> Prov5 · AceStream · Prov5 · Lista Isma · Hash 0000000000000000000000000000000000000005 · 100% disponible · 100% disponible"
         },
         {
           "pantalla": {
@@ -458,8 +458,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 5: M+ Liga de Campeones --> Prov5 · M3U · Prov5 · Lista Isma · Hash 0000000000000000000000000000000000000005 · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 5: M+ Liga de Campeones --> Prov5 · M3U · Prov5 · Lista Isma · Hash 0000000000000000000000000000000000000005 · reproduciendo ahora · 100% disponible"
+          "descripcionConComprobador": "Fuente 5: M+ Liga de Campeones --> Prov5 · AceStream · Prov5 · Lista Isma · Hash 0000000000000000000000000000000000000005 · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 5: M+ Liga de Campeones --> Prov5 · AceStream · Prov5 · Lista Isma · Hash 0000000000000000000000000000000000000005 · reproduciendo ahora · 100% disponible"
         },
         {
           "pantalla": {
@@ -479,8 +479,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 5: M+ Liga de Campeones --> Prov5 · M3U · Prov5 · Lista Isma · Hash 0000000000000000000000000000000000000005 · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 5: M+ Liga de Campeones --> Prov5 · M3U · Prov5 · Lista Isma · Hash 0000000000000000000000000000000000000005 · comprobando en pantalla · 100% disponible"
+          "descripcionConComprobador": "Fuente 5: M+ Liga de Campeones --> Prov5 · AceStream · Prov5 · Lista Isma · Hash 0000000000000000000000000000000000000005 · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 5: M+ Liga de Campeones --> Prov5 · AceStream · Prov5 · Lista Isma · Hash 0000000000000000000000000000000000000005 · comprobando en pantalla · 100% disponible"
         }
       ]
     },
@@ -514,10 +514,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov6",
-        "label": "M3U · Prov6",
+        "label": "AceStream · Prov6",
         "short": "Prov6"
       },
       "calidad": "1080p",
@@ -542,8 +542,8 @@
           "detalle": "verificada",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 6: M+ Liga de Campeones --> Prov6 · M3U · Prov6 · Lista Isma · Hash 0000000000000000000000000000000000000006 · verificada · 31 pares en la prueba · 5,1 Mbit/s del enjambre para un canal de 4,8",
-          "descripcionSinComprobador": "Fuente 6: M+ Liga de Campeones --> Prov6 · M3U · Prov6 · Lista Isma · Hash 0000000000000000000000000000000000000006 · verificada · 31 pares en la prueba · 5,1 Mbit/s del enjambre para un canal de 4,8 · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 6: M+ Liga de Campeones --> Prov6 · AceStream · Prov6 · Lista Isma · Hash 0000000000000000000000000000000000000006 · verificada · 31 pares en la prueba · 5,1 Mbit/s del enjambre para un canal de 4,8",
+          "descripcionSinComprobador": "Fuente 6: M+ Liga de Campeones --> Prov6 · AceStream · Prov6 · Lista Isma · Hash 0000000000000000000000000000000000000006 · verificada · 31 pares en la prueba · 5,1 Mbit/s del enjambre para un canal de 4,8 · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -563,8 +563,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 6: M+ Liga de Campeones --> Prov6 · M3U · Prov6 · Lista Isma · Hash 0000000000000000000000000000000000000006 · reproduciendo ahora · 31 pares en la prueba · 5,1 Mbit/s del enjambre para un canal de 4,8",
-          "descripcionSinComprobador": "Fuente 6: M+ Liga de Campeones --> Prov6 · M3U · Prov6 · Lista Isma · Hash 0000000000000000000000000000000000000006 · reproduciendo ahora · 31 pares en la prueba · 5,1 Mbit/s del enjambre para un canal de 4,8 · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 6: M+ Liga de Campeones --> Prov6 · AceStream · Prov6 · Lista Isma · Hash 0000000000000000000000000000000000000006 · reproduciendo ahora · 31 pares en la prueba · 5,1 Mbit/s del enjambre para un canal de 4,8",
+          "descripcionSinComprobador": "Fuente 6: M+ Liga de Campeones --> Prov6 · AceStream · Prov6 · Lista Isma · Hash 0000000000000000000000000000000000000006 · reproduciendo ahora · 31 pares en la prueba · 5,1 Mbit/s del enjambre para un canal de 4,8 · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -584,8 +584,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 6: M+ Liga de Campeones --> Prov6 · M3U · Prov6 · Lista Isma · Hash 0000000000000000000000000000000000000006 · comprobando en pantalla · 31 pares en la prueba · 5,1 Mbit/s del enjambre para un canal de 4,8",
-          "descripcionSinComprobador": "Fuente 6: M+ Liga de Campeones --> Prov6 · M3U · Prov6 · Lista Isma · Hash 0000000000000000000000000000000000000006 · comprobando en pantalla · 31 pares en la prueba · 5,1 Mbit/s del enjambre para un canal de 4,8 · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 6: M+ Liga de Campeones --> Prov6 · AceStream · Prov6 · Lista Isma · Hash 0000000000000000000000000000000000000006 · comprobando en pantalla · 31 pares en la prueba · 5,1 Mbit/s del enjambre para un canal de 4,8",
+          "descripcionSinComprobador": "Fuente 6: M+ Liga de Campeones --> Prov6 · AceStream · Prov6 · Lista Isma · Hash 0000000000000000000000000000000000000006 · comprobando en pantalla · 31 pares en la prueba · 5,1 Mbit/s del enjambre para un canal de 4,8 · Disponibilidad sin medir"
         }
       ]
     },
@@ -619,10 +619,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov7",
-        "label": "M3U · Prov7",
+        "label": "AceStream · Prov7",
         "short": "Prov7"
       },
       "calidad": "720p · HEVC",
@@ -647,8 +647,8 @@
           "detalle": "verificada",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 7: M+ Liga de Campeones --> Prov7 · M3U · Prov7 · Lista Isma · Hash 0000000000000000000000000000000000000007 · verificada",
-          "descripcionSinComprobador": "Fuente 7: M+ Liga de Campeones --> Prov7 · M3U · Prov7 · Lista Isma · Hash 0000000000000000000000000000000000000007 · verificada · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 7: M+ Liga de Campeones --> Prov7 · AceStream · Prov7 · Lista Isma · Hash 0000000000000000000000000000000000000007 · verificada",
+          "descripcionSinComprobador": "Fuente 7: M+ Liga de Campeones --> Prov7 · AceStream · Prov7 · Lista Isma · Hash 0000000000000000000000000000000000000007 · verificada · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -668,8 +668,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 7: M+ Liga de Campeones --> Prov7 · M3U · Prov7 · Lista Isma · Hash 0000000000000000000000000000000000000007 · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 7: M+ Liga de Campeones --> Prov7 · M3U · Prov7 · Lista Isma · Hash 0000000000000000000000000000000000000007 · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 7: M+ Liga de Campeones --> Prov7 · AceStream · Prov7 · Lista Isma · Hash 0000000000000000000000000000000000000007 · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 7: M+ Liga de Campeones --> Prov7 · AceStream · Prov7 · Lista Isma · Hash 0000000000000000000000000000000000000007 · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -689,8 +689,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 7: M+ Liga de Campeones --> Prov7 · M3U · Prov7 · Lista Isma · Hash 0000000000000000000000000000000000000007 · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 7: M+ Liga de Campeones --> Prov7 · M3U · Prov7 · Lista Isma · Hash 0000000000000000000000000000000000000007 · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 7: M+ Liga de Campeones --> Prov7 · AceStream · Prov7 · Lista Isma · Hash 0000000000000000000000000000000000000007 · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 7: M+ Liga de Campeones --> Prov7 · AceStream · Prov7 · Lista Isma · Hash 0000000000000000000000000000000000000007 · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     },
@@ -724,10 +724,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov8",
-        "label": "M3U · Prov8",
+        "label": "AceStream · Prov8",
         "short": "Prov8"
       },
       "calidad": "720p",
@@ -752,8 +752,8 @@
           "detalle": "llega menos señal de la que el canal necesita",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 8: M+ Liga de Campeones --> Prov8 · M3U · Prov8 · Lista Isma · Hash 0000000000000000000000000000000000000008 · llega menos señal de la que el canal necesita · 9 pares en la prueba · 2,1 Mbit/s del enjambre para un canal de 2,6",
-          "descripcionSinComprobador": "Fuente 8: M+ Liga de Campeones --> Prov8 · M3U · Prov8 · Lista Isma · Hash 0000000000000000000000000000000000000008 · llega menos señal de la que el canal necesita · 9 pares en la prueba · 2,1 Mbit/s del enjambre para un canal de 2,6 · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 8: M+ Liga de Campeones --> Prov8 · AceStream · Prov8 · Lista Isma · Hash 0000000000000000000000000000000000000008 · llega menos señal de la que el canal necesita · 9 pares en la prueba · 2,1 Mbit/s del enjambre para un canal de 2,6",
+          "descripcionSinComprobador": "Fuente 8: M+ Liga de Campeones --> Prov8 · AceStream · Prov8 · Lista Isma · Hash 0000000000000000000000000000000000000008 · llega menos señal de la que el canal necesita · 9 pares en la prueba · 2,1 Mbit/s del enjambre para un canal de 2,6 · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -773,8 +773,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 8: M+ Liga de Campeones --> Prov8 · M3U · Prov8 · Lista Isma · Hash 0000000000000000000000000000000000000008 · reproduciendo ahora · 9 pares en la prueba · 2,1 Mbit/s del enjambre para un canal de 2,6",
-          "descripcionSinComprobador": "Fuente 8: M+ Liga de Campeones --> Prov8 · M3U · Prov8 · Lista Isma · Hash 0000000000000000000000000000000000000008 · reproduciendo ahora · 9 pares en la prueba · 2,1 Mbit/s del enjambre para un canal de 2,6 · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 8: M+ Liga de Campeones --> Prov8 · AceStream · Prov8 · Lista Isma · Hash 0000000000000000000000000000000000000008 · reproduciendo ahora · 9 pares en la prueba · 2,1 Mbit/s del enjambre para un canal de 2,6",
+          "descripcionSinComprobador": "Fuente 8: M+ Liga de Campeones --> Prov8 · AceStream · Prov8 · Lista Isma · Hash 0000000000000000000000000000000000000008 · reproduciendo ahora · 9 pares en la prueba · 2,1 Mbit/s del enjambre para un canal de 2,6 · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -794,8 +794,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 8: M+ Liga de Campeones --> Prov8 · M3U · Prov8 · Lista Isma · Hash 0000000000000000000000000000000000000008 · comprobando en pantalla · 9 pares en la prueba · 2,1 Mbit/s del enjambre para un canal de 2,6",
-          "descripcionSinComprobador": "Fuente 8: M+ Liga de Campeones --> Prov8 · M3U · Prov8 · Lista Isma · Hash 0000000000000000000000000000000000000008 · comprobando en pantalla · 9 pares en la prueba · 2,1 Mbit/s del enjambre para un canal de 2,6 · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 8: M+ Liga de Campeones --> Prov8 · AceStream · Prov8 · Lista Isma · Hash 0000000000000000000000000000000000000008 · comprobando en pantalla · 9 pares en la prueba · 2,1 Mbit/s del enjambre para un canal de 2,6",
+          "descripcionSinComprobador": "Fuente 8: M+ Liga de Campeones --> Prov8 · AceStream · Prov8 · Lista Isma · Hash 0000000000000000000000000000000000000008 · comprobando en pantalla · 9 pares en la prueba · 2,1 Mbit/s del enjambre para un canal de 2,6 · Disponibilidad sin medir"
         }
       ]
     },
@@ -829,10 +829,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov9",
-        "label": "M3U · Prov9",
+        "label": "AceStream · Prov9",
         "short": "Prov9"
       },
       "calidad": null,
@@ -857,8 +857,8 @@
           "detalle": "probándose en el segundo motor",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 9: M+ Liga de Campeones --> Prov9 · M3U · Prov9 · Lista Isma · Hash 0000000000000000000000000000000000000009 · probándose en el segundo motor",
-          "descripcionSinComprobador": "Fuente 9: M+ Liga de Campeones --> Prov9 · M3U · Prov9 · Lista Isma · Hash 0000000000000000000000000000000000000009 · probándose en el segundo motor · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 9: M+ Liga de Campeones --> Prov9 · AceStream · Prov9 · Lista Isma · Hash 0000000000000000000000000000000000000009 · probándose en el segundo motor",
+          "descripcionSinComprobador": "Fuente 9: M+ Liga de Campeones --> Prov9 · AceStream · Prov9 · Lista Isma · Hash 0000000000000000000000000000000000000009 · probándose en el segundo motor · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -878,8 +878,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 9: M+ Liga de Campeones --> Prov9 · M3U · Prov9 · Lista Isma · Hash 0000000000000000000000000000000000000009 · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 9: M+ Liga de Campeones --> Prov9 · M3U · Prov9 · Lista Isma · Hash 0000000000000000000000000000000000000009 · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 9: M+ Liga de Campeones --> Prov9 · AceStream · Prov9 · Lista Isma · Hash 0000000000000000000000000000000000000009 · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 9: M+ Liga de Campeones --> Prov9 · AceStream · Prov9 · Lista Isma · Hash 0000000000000000000000000000000000000009 · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -899,8 +899,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 9: M+ Liga de Campeones --> Prov9 · M3U · Prov9 · Lista Isma · Hash 0000000000000000000000000000000000000009 · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 9: M+ Liga de Campeones --> Prov9 · M3U · Prov9 · Lista Isma · Hash 0000000000000000000000000000000000000009 · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 9: M+ Liga de Campeones --> Prov9 · AceStream · Prov9 · Lista Isma · Hash 0000000000000000000000000000000000000009 · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 9: M+ Liga de Campeones --> Prov9 · AceStream · Prov9 · Lista Isma · Hash 0000000000000000000000000000000000000009 · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     },
@@ -934,10 +934,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov10",
-        "label": "M3U · Prov10",
+        "label": "AceStream · Prov10",
         "short": "Prov10"
       },
       "calidad": null,
@@ -962,8 +962,8 @@
           "detalle": "en cola",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 10: M+ Liga de Campeones --> Prov10 · M3U · Prov10 · Lista Isma · Hash 000000000000000000000000000000000000000a · en cola",
-          "descripcionSinComprobador": "Fuente 10: M+ Liga de Campeones --> Prov10 · M3U · Prov10 · Lista Isma · Hash 000000000000000000000000000000000000000a · en cola · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 10: M+ Liga de Campeones --> Prov10 · AceStream · Prov10 · Lista Isma · Hash 000000000000000000000000000000000000000a · en cola",
+          "descripcionSinComprobador": "Fuente 10: M+ Liga de Campeones --> Prov10 · AceStream · Prov10 · Lista Isma · Hash 000000000000000000000000000000000000000a · en cola · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -983,8 +983,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 10: M+ Liga de Campeones --> Prov10 · M3U · Prov10 · Lista Isma · Hash 000000000000000000000000000000000000000a · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 10: M+ Liga de Campeones --> Prov10 · M3U · Prov10 · Lista Isma · Hash 000000000000000000000000000000000000000a · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 10: M+ Liga de Campeones --> Prov10 · AceStream · Prov10 · Lista Isma · Hash 000000000000000000000000000000000000000a · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 10: M+ Liga de Campeones --> Prov10 · AceStream · Prov10 · Lista Isma · Hash 000000000000000000000000000000000000000a · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -1004,8 +1004,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 10: M+ Liga de Campeones --> Prov10 · M3U · Prov10 · Lista Isma · Hash 000000000000000000000000000000000000000a · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 10: M+ Liga de Campeones --> Prov10 · M3U · Prov10 · Lista Isma · Hash 000000000000000000000000000000000000000a · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 10: M+ Liga de Campeones --> Prov10 · AceStream · Prov10 · Lista Isma · Hash 000000000000000000000000000000000000000a · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 10: M+ Liga de Campeones --> Prov10 · AceStream · Prov10 · Lista Isma · Hash 000000000000000000000000000000000000000a · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     },
@@ -1039,10 +1039,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov11",
-        "label": "M3U · Prov11",
+        "label": "AceStream · Prov11",
         "short": "Prov11"
       },
       "calidad": null,
@@ -1067,8 +1067,8 @@
           "detalle": "en cola",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 11: M+ Liga de Campeones --> Prov11 · M3U · Prov11 · Lista Isma · Hash 000000000000000000000000000000000000000b · en cola",
-          "descripcionSinComprobador": "Fuente 11: M+ Liga de Campeones --> Prov11 · M3U · Prov11 · Lista Isma · Hash 000000000000000000000000000000000000000b · en cola · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 11: M+ Liga de Campeones --> Prov11 · AceStream · Prov11 · Lista Isma · Hash 000000000000000000000000000000000000000b · en cola",
+          "descripcionSinComprobador": "Fuente 11: M+ Liga de Campeones --> Prov11 · AceStream · Prov11 · Lista Isma · Hash 000000000000000000000000000000000000000b · en cola · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -1088,8 +1088,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 11: M+ Liga de Campeones --> Prov11 · M3U · Prov11 · Lista Isma · Hash 000000000000000000000000000000000000000b · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 11: M+ Liga de Campeones --> Prov11 · M3U · Prov11 · Lista Isma · Hash 000000000000000000000000000000000000000b · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 11: M+ Liga de Campeones --> Prov11 · AceStream · Prov11 · Lista Isma · Hash 000000000000000000000000000000000000000b · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 11: M+ Liga de Campeones --> Prov11 · AceStream · Prov11 · Lista Isma · Hash 000000000000000000000000000000000000000b · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -1109,8 +1109,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 11: M+ Liga de Campeones --> Prov11 · M3U · Prov11 · Lista Isma · Hash 000000000000000000000000000000000000000b · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 11: M+ Liga de Campeones --> Prov11 · M3U · Prov11 · Lista Isma · Hash 000000000000000000000000000000000000000b · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 11: M+ Liga de Campeones --> Prov11 · AceStream · Prov11 · Lista Isma · Hash 000000000000000000000000000000000000000b · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 11: M+ Liga de Campeones --> Prov11 · AceStream · Prov11 · Lista Isma · Hash 000000000000000000000000000000000000000b · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     },
@@ -1144,10 +1144,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov12",
-        "label": "M3U · Prov12",
+        "label": "AceStream · Prov12",
         "short": "Prov12"
       },
       "calidad": null,
@@ -1172,8 +1172,8 @@
           "detalle": "sin señal; reintento a las 20:36",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 12: M+ Liga de Campeones --> Prov12 · M3U · Prov12 · Lista Isma · Hash 000000000000000000000000000000000000000c · sin señal; reintento a las 20:36",
-          "descripcionSinComprobador": "Fuente 12: M+ Liga de Campeones --> Prov12 · M3U · Prov12 · Lista Isma · Hash 000000000000000000000000000000000000000c · sin señal; reintento a las 20:36 · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 12: M+ Liga de Campeones --> Prov12 · AceStream · Prov12 · Lista Isma · Hash 000000000000000000000000000000000000000c · sin señal; reintento a las 20:36",
+          "descripcionSinComprobador": "Fuente 12: M+ Liga de Campeones --> Prov12 · AceStream · Prov12 · Lista Isma · Hash 000000000000000000000000000000000000000c · sin señal; reintento a las 20:36 · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -1193,8 +1193,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 12: M+ Liga de Campeones --> Prov12 · M3U · Prov12 · Lista Isma · Hash 000000000000000000000000000000000000000c · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 12: M+ Liga de Campeones --> Prov12 · M3U · Prov12 · Lista Isma · Hash 000000000000000000000000000000000000000c · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 12: M+ Liga de Campeones --> Prov12 · AceStream · Prov12 · Lista Isma · Hash 000000000000000000000000000000000000000c · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 12: M+ Liga de Campeones --> Prov12 · AceStream · Prov12 · Lista Isma · Hash 000000000000000000000000000000000000000c · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -1214,8 +1214,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 12: M+ Liga de Campeones --> Prov12 · M3U · Prov12 · Lista Isma · Hash 000000000000000000000000000000000000000c · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 12: M+ Liga de Campeones --> Prov12 · M3U · Prov12 · Lista Isma · Hash 000000000000000000000000000000000000000c · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 12: M+ Liga de Campeones --> Prov12 · AceStream · Prov12 · Lista Isma · Hash 000000000000000000000000000000000000000c · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 12: M+ Liga de Campeones --> Prov12 · AceStream · Prov12 · Lista Isma · Hash 000000000000000000000000000000000000000c · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     },
@@ -1249,10 +1249,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov13",
-        "label": "M3U · Prov13",
+        "label": "AceStream · Prov13",
         "short": "Prov13"
       },
       "calidad": null,
@@ -1277,8 +1277,8 @@
           "detalle": "sin pista de vídeo",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 13: M+ Liga de Campeones --> Prov13 · M3U · Prov13 · Lista Isma · Hash 000000000000000000000000000000000000000d · sin pista de vídeo",
-          "descripcionSinComprobador": "Fuente 13: M+ Liga de Campeones --> Prov13 · M3U · Prov13 · Lista Isma · Hash 000000000000000000000000000000000000000d · sin pista de vídeo · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 13: M+ Liga de Campeones --> Prov13 · AceStream · Prov13 · Lista Isma · Hash 000000000000000000000000000000000000000d · sin pista de vídeo",
+          "descripcionSinComprobador": "Fuente 13: M+ Liga de Campeones --> Prov13 · AceStream · Prov13 · Lista Isma · Hash 000000000000000000000000000000000000000d · sin pista de vídeo · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -1298,8 +1298,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 13: M+ Liga de Campeones --> Prov13 · M3U · Prov13 · Lista Isma · Hash 000000000000000000000000000000000000000d · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 13: M+ Liga de Campeones --> Prov13 · M3U · Prov13 · Lista Isma · Hash 000000000000000000000000000000000000000d · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 13: M+ Liga de Campeones --> Prov13 · AceStream · Prov13 · Lista Isma · Hash 000000000000000000000000000000000000000d · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 13: M+ Liga de Campeones --> Prov13 · AceStream · Prov13 · Lista Isma · Hash 000000000000000000000000000000000000000d · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -1319,8 +1319,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 13: M+ Liga de Campeones --> Prov13 · M3U · Prov13 · Lista Isma · Hash 000000000000000000000000000000000000000d · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 13: M+ Liga de Campeones --> Prov13 · M3U · Prov13 · Lista Isma · Hash 000000000000000000000000000000000000000d · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 13: M+ Liga de Campeones --> Prov13 · AceStream · Prov13 · Lista Isma · Hash 000000000000000000000000000000000000000d · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 13: M+ Liga de Campeones --> Prov13 · AceStream · Prov13 · Lista Isma · Hash 000000000000000000000000000000000000000d · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     },
@@ -1357,10 +1357,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov14",
-        "label": "M3U · Prov14",
+        "label": "AceStream · Prov14",
         "short": "Prov14"
       },
       "calidad": null,
@@ -1385,8 +1385,8 @@
           "detalle": "apartada por tu reporte (canal incorrecto)",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 14: M+ Liga de Campeones --> Prov14 · M3U · Prov14 · Lista Isma · Hash 000000000000000000000000000000000000000e · apartada por tu reporte (canal incorrecto)",
-          "descripcionSinComprobador": "Fuente 14: M+ Liga de Campeones --> Prov14 · M3U · Prov14 · Lista Isma · Hash 000000000000000000000000000000000000000e · apartada por tu reporte (canal incorrecto) · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 14: M+ Liga de Campeones --> Prov14 · AceStream · Prov14 · Lista Isma · Hash 000000000000000000000000000000000000000e · apartada por tu reporte (canal incorrecto)",
+          "descripcionSinComprobador": "Fuente 14: M+ Liga de Campeones --> Prov14 · AceStream · Prov14 · Lista Isma · Hash 000000000000000000000000000000000000000e · apartada por tu reporte (canal incorrecto) · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -1406,8 +1406,8 @@
           "detalle": "apartada por tu reporte (canal incorrecto)",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 14: M+ Liga de Campeones --> Prov14 · M3U · Prov14 · Lista Isma · Hash 000000000000000000000000000000000000000e · apartada por tu reporte (canal incorrecto)",
-          "descripcionSinComprobador": "Fuente 14: M+ Liga de Campeones --> Prov14 · M3U · Prov14 · Lista Isma · Hash 000000000000000000000000000000000000000e · apartada por tu reporte (canal incorrecto) · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 14: M+ Liga de Campeones --> Prov14 · AceStream · Prov14 · Lista Isma · Hash 000000000000000000000000000000000000000e · apartada por tu reporte (canal incorrecto)",
+          "descripcionSinComprobador": "Fuente 14: M+ Liga de Campeones --> Prov14 · AceStream · Prov14 · Lista Isma · Hash 000000000000000000000000000000000000000e · apartada por tu reporte (canal incorrecto) · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -1427,8 +1427,8 @@
           "detalle": "apartada por tu reporte (canal incorrecto)",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 14: M+ Liga de Campeones --> Prov14 · M3U · Prov14 · Lista Isma · Hash 000000000000000000000000000000000000000e · apartada por tu reporte (canal incorrecto)",
-          "descripcionSinComprobador": "Fuente 14: M+ Liga de Campeones --> Prov14 · M3U · Prov14 · Lista Isma · Hash 000000000000000000000000000000000000000e · apartada por tu reporte (canal incorrecto) · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 14: M+ Liga de Campeones --> Prov14 · AceStream · Prov14 · Lista Isma · Hash 000000000000000000000000000000000000000e · apartada por tu reporte (canal incorrecto)",
+          "descripcionSinComprobador": "Fuente 14: M+ Liga de Campeones --> Prov14 · AceStream · Prov14 · Lista Isma · Hash 000000000000000000000000000000000000000e · apartada por tu reporte (canal incorrecto) · Disponibilidad sin medir"
         }
       ]
     },
@@ -1465,10 +1465,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov15",
-        "label": "M3U · Prov15",
+        "label": "AceStream · Prov15",
         "short": "Prov15"
       },
       "calidad": null,
@@ -1493,8 +1493,8 @@
           "detalle": "verificada",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 15: M+ Liga de Campeones --> Prov15 · M3U · Prov15 · Lista Isma · Hash 000000000000000000000000000000000000000f · verificada",
-          "descripcionSinComprobador": "Fuente 15: M+ Liga de Campeones --> Prov15 · M3U · Prov15 · Lista Isma · Hash 000000000000000000000000000000000000000f · verificada · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 15: M+ Liga de Campeones --> Prov15 · AceStream · Prov15 · Lista Isma · Hash 000000000000000000000000000000000000000f · verificada",
+          "descripcionSinComprobador": "Fuente 15: M+ Liga de Campeones --> Prov15 · AceStream · Prov15 · Lista Isma · Hash 000000000000000000000000000000000000000f · verificada · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -1514,8 +1514,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 15: M+ Liga de Campeones --> Prov15 · M3U · Prov15 · Lista Isma · Hash 000000000000000000000000000000000000000f · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 15: M+ Liga de Campeones --> Prov15 · M3U · Prov15 · Lista Isma · Hash 000000000000000000000000000000000000000f · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 15: M+ Liga de Campeones --> Prov15 · AceStream · Prov15 · Lista Isma · Hash 000000000000000000000000000000000000000f · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 15: M+ Liga de Campeones --> Prov15 · AceStream · Prov15 · Lista Isma · Hash 000000000000000000000000000000000000000f · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -1535,8 +1535,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 15: M+ Liga de Campeones --> Prov15 · M3U · Prov15 · Lista Isma · Hash 000000000000000000000000000000000000000f · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 15: M+ Liga de Campeones --> Prov15 · M3U · Prov15 · Lista Isma · Hash 000000000000000000000000000000000000000f · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 15: M+ Liga de Campeones --> Prov15 · AceStream · Prov15 · Lista Isma · Hash 000000000000000000000000000000000000000f · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 15: M+ Liga de Campeones --> Prov15 · AceStream · Prov15 · Lista Isma · Hash 000000000000000000000000000000000000000f · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     },
@@ -1574,10 +1574,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov16",
-        "label": "M3U · Prov16",
+        "label": "AceStream · Prov16",
         "short": "Prov16"
       },
       "calidad": null,
@@ -1602,8 +1602,8 @@
           "detalle": "no arrancó en el reproductor",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 16: M+ Liga de Campeones --> Prov16 · M3U · Prov16 · Lista Isma · Hash 0000000000000000000000000000000000000010 · no arrancó en el reproductor",
-          "descripcionSinComprobador": "Fuente 16: M+ Liga de Campeones --> Prov16 · M3U · Prov16 · Lista Isma · Hash 0000000000000000000000000000000000000010 · no arrancó en el reproductor · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 16: M+ Liga de Campeones --> Prov16 · AceStream · Prov16 · Lista Isma · Hash 0000000000000000000000000000000000000010 · no arrancó en el reproductor",
+          "descripcionSinComprobador": "Fuente 16: M+ Liga de Campeones --> Prov16 · AceStream · Prov16 · Lista Isma · Hash 0000000000000000000000000000000000000010 · no arrancó en el reproductor · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -1623,8 +1623,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 16: M+ Liga de Campeones --> Prov16 · M3U · Prov16 · Lista Isma · Hash 0000000000000000000000000000000000000010 · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 16: M+ Liga de Campeones --> Prov16 · M3U · Prov16 · Lista Isma · Hash 0000000000000000000000000000000000000010 · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 16: M+ Liga de Campeones --> Prov16 · AceStream · Prov16 · Lista Isma · Hash 0000000000000000000000000000000000000010 · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 16: M+ Liga de Campeones --> Prov16 · AceStream · Prov16 · Lista Isma · Hash 0000000000000000000000000000000000000010 · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -1644,8 +1644,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 16: M+ Liga de Campeones --> Prov16 · M3U · Prov16 · Lista Isma · Hash 0000000000000000000000000000000000000010 · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 16: M+ Liga de Campeones --> Prov16 · M3U · Prov16 · Lista Isma · Hash 0000000000000000000000000000000000000010 · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 16: M+ Liga de Campeones --> Prov16 · AceStream · Prov16 · Lista Isma · Hash 0000000000000000000000000000000000000010 · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 16: M+ Liga de Campeones --> Prov16 · AceStream · Prov16 · Lista Isma · Hash 0000000000000000000000000000000000000010 · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     },
@@ -1683,10 +1683,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov17",
-        "label": "M3U · Prov17",
+        "label": "AceStream · Prov17",
         "short": "Prov17"
       },
       "calidad": null,
@@ -1711,8 +1711,8 @@
           "detalle": "sin señal; reintento a las 20:36",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 17: M+ Liga de Campeones --> Prov17 · M3U · Prov17 · Lista Isma · Hash 0000000000000000000000000000000000000011 · sin señal; reintento a las 20:36",
-          "descripcionSinComprobador": "Fuente 17: M+ Liga de Campeones --> Prov17 · M3U · Prov17 · Lista Isma · Hash 0000000000000000000000000000000000000011 · sin señal; reintento a las 20:36 · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 17: M+ Liga de Campeones --> Prov17 · AceStream · Prov17 · Lista Isma · Hash 0000000000000000000000000000000000000011 · sin señal; reintento a las 20:36",
+          "descripcionSinComprobador": "Fuente 17: M+ Liga de Campeones --> Prov17 · AceStream · Prov17 · Lista Isma · Hash 0000000000000000000000000000000000000011 · sin señal; reintento a las 20:36 · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -1732,8 +1732,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 17: M+ Liga de Campeones --> Prov17 · M3U · Prov17 · Lista Isma · Hash 0000000000000000000000000000000000000011 · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 17: M+ Liga de Campeones --> Prov17 · M3U · Prov17 · Lista Isma · Hash 0000000000000000000000000000000000000011 · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 17: M+ Liga de Campeones --> Prov17 · AceStream · Prov17 · Lista Isma · Hash 0000000000000000000000000000000000000011 · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 17: M+ Liga de Campeones --> Prov17 · AceStream · Prov17 · Lista Isma · Hash 0000000000000000000000000000000000000011 · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -1753,8 +1753,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 17: M+ Liga de Campeones --> Prov17 · M3U · Prov17 · Lista Isma · Hash 0000000000000000000000000000000000000011 · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 17: M+ Liga de Campeones --> Prov17 · M3U · Prov17 · Lista Isma · Hash 0000000000000000000000000000000000000011 · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 17: M+ Liga de Campeones --> Prov17 · AceStream · Prov17 · Lista Isma · Hash 0000000000000000000000000000000000000011 · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 17: M+ Liga de Campeones --> Prov17 · AceStream · Prov17 · Lista Isma · Hash 0000000000000000000000000000000000000011 · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     },
@@ -1780,10 +1780,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov18",
-        "label": "M3U · Prov18",
+        "label": "AceStream · Prov18",
         "short": "Prov18"
       },
       "calidad": null,
@@ -1808,8 +1808,8 @@
           "detalle": "se cortó en el reproductor",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 18: M+ Liga de Campeones --> Prov18 · M3U · Prov18 · Lista Isma · Hash 0000000000000000000000000000000000000012 · se cortó en el reproductor",
-          "descripcionSinComprobador": "Fuente 18: M+ Liga de Campeones --> Prov18 · M3U · Prov18 · Lista Isma · Hash 0000000000000000000000000000000000000012 · se cortó en el reproductor · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 18: M+ Liga de Campeones --> Prov18 · AceStream · Prov18 · Lista Isma · Hash 0000000000000000000000000000000000000012 · se cortó en el reproductor",
+          "descripcionSinComprobador": "Fuente 18: M+ Liga de Campeones --> Prov18 · AceStream · Prov18 · Lista Isma · Hash 0000000000000000000000000000000000000012 · se cortó en el reproductor · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -1829,8 +1829,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 18: M+ Liga de Campeones --> Prov18 · M3U · Prov18 · Lista Isma · Hash 0000000000000000000000000000000000000012 · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 18: M+ Liga de Campeones --> Prov18 · M3U · Prov18 · Lista Isma · Hash 0000000000000000000000000000000000000012 · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 18: M+ Liga de Campeones --> Prov18 · AceStream · Prov18 · Lista Isma · Hash 0000000000000000000000000000000000000012 · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 18: M+ Liga de Campeones --> Prov18 · AceStream · Prov18 · Lista Isma · Hash 0000000000000000000000000000000000000012 · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -1850,8 +1850,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 18: M+ Liga de Campeones --> Prov18 · M3U · Prov18 · Lista Isma · Hash 0000000000000000000000000000000000000012 · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 18: M+ Liga de Campeones --> Prov18 · M3U · Prov18 · Lista Isma · Hash 0000000000000000000000000000000000000012 · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 18: M+ Liga de Campeones --> Prov18 · AceStream · Prov18 · Lista Isma · Hash 0000000000000000000000000000000000000012 · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 18: M+ Liga de Campeones --> Prov18 · AceStream · Prov18 · Lista Isma · Hash 0000000000000000000000000000000000000012 · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     },
@@ -2524,10 +2524,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "",
         "provider": "B --> C",
-        "label": "M3U · B --> C",
+        "label": "AceStream · B --> C",
         "short": "B --> C"
       },
       "calidad": null,
@@ -2552,8 +2552,8 @@
           "detalle": "disponibilidad sin medir",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 26: A -> B --> C · M3U · B --> C · Hash 000000000000000000000000000000000000001a · disponibilidad sin medir",
-          "descripcionSinComprobador": "Fuente 26: A -> B --> C · M3U · B --> C · Hash 000000000000000000000000000000000000001a · disponibilidad sin medir · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 26: A -> B --> C · AceStream · B --> C · Hash 000000000000000000000000000000000000001a · disponibilidad sin medir",
+          "descripcionSinComprobador": "Fuente 26: A -> B --> C · AceStream · B --> C · Hash 000000000000000000000000000000000000001a · disponibilidad sin medir · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -2573,8 +2573,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 26: A -> B --> C · M3U · B --> C · Hash 000000000000000000000000000000000000001a · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 26: A -> B --> C · M3U · B --> C · Hash 000000000000000000000000000000000000001a · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 26: A -> B --> C · AceStream · B --> C · Hash 000000000000000000000000000000000000001a · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 26: A -> B --> C · AceStream · B --> C · Hash 000000000000000000000000000000000000001a · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -2594,8 +2594,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 26: A -> B --> C · M3U · B --> C · Hash 000000000000000000000000000000000000001a · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 26: A -> B --> C · M3U · B --> C · Hash 000000000000000000000000000000000000001a · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 26: A -> B --> C · AceStream · B --> C · Hash 000000000000000000000000000000000000001a · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 26: A -> B --> C · AceStream · B --> C · Hash 000000000000000000000000000000000000001a · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     },
@@ -2617,10 +2617,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "",
         "provider": "Vega",
-        "label": "M3U · Vega",
+        "label": "AceStream · Vega",
         "short": "Vega"
       },
       "calidad": null,
@@ -2645,8 +2645,8 @@
           "detalle": "disponibilidad sin medir",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 27: Liga ===> Vega · M3U · Vega · Hash 000000000000000000000000000000000000001b · disponibilidad sin medir",
-          "descripcionSinComprobador": "Fuente 27: Liga ===> Vega · M3U · Vega · Hash 000000000000000000000000000000000000001b · disponibilidad sin medir · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 27: Liga ===> Vega · AceStream · Vega · Hash 000000000000000000000000000000000000001b · disponibilidad sin medir",
+          "descripcionSinComprobador": "Fuente 27: Liga ===> Vega · AceStream · Vega · Hash 000000000000000000000000000000000000001b · disponibilidad sin medir · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -2666,8 +2666,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 27: Liga ===> Vega · M3U · Vega · Hash 000000000000000000000000000000000000001b · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 27: Liga ===> Vega · M3U · Vega · Hash 000000000000000000000000000000000000001b · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 27: Liga ===> Vega · AceStream · Vega · Hash 000000000000000000000000000000000000001b · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 27: Liga ===> Vega · AceStream · Vega · Hash 000000000000000000000000000000000000001b · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -2687,8 +2687,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 27: Liga ===> Vega · M3U · Vega · Hash 000000000000000000000000000000000000001b · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 27: Liga ===> Vega · M3U · Vega · Hash 000000000000000000000000000000000000001b · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 27: Liga ===> Vega · AceStream · Vega · Hash 000000000000000000000000000000000000001b · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 27: Liga ===> Vega · AceStream · Vega · Hash 000000000000000000000000000000000000001b · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     },
@@ -2710,10 +2710,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "",
-        "label": "M3U · Isma",
+        "label": "AceStream · Isma",
         "short": "Isma"
       },
       "calidad": null,
@@ -2738,8 +2738,8 @@
           "detalle": "disponibilidad sin medir",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 28: Solo el canal --> · M3U · Isma · Lista Isma · Hash 000000000000000000000000000000000000001c · disponibilidad sin medir",
-          "descripcionSinComprobador": "Fuente 28: Solo el canal --> · M3U · Isma · Lista Isma · Hash 000000000000000000000000000000000000001c · disponibilidad sin medir · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 28: Solo el canal --> · AceStream · Isma · Lista Isma · Hash 000000000000000000000000000000000000001c · disponibilidad sin medir",
+          "descripcionSinComprobador": "Fuente 28: Solo el canal --> · AceStream · Isma · Lista Isma · Hash 000000000000000000000000000000000000001c · disponibilidad sin medir · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -2759,8 +2759,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 28: Solo el canal --> · M3U · Isma · Lista Isma · Hash 000000000000000000000000000000000000001c · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 28: Solo el canal --> · M3U · Isma · Lista Isma · Hash 000000000000000000000000000000000000001c · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 28: Solo el canal --> · AceStream · Isma · Lista Isma · Hash 000000000000000000000000000000000000001c · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 28: Solo el canal --> · AceStream · Isma · Lista Isma · Hash 000000000000000000000000000000000000001c · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -2780,8 +2780,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 28: Solo el canal --> · M3U · Isma · Lista Isma · Hash 000000000000000000000000000000000000001c · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 28: Solo el canal --> · M3U · Isma · Lista Isma · Hash 000000000000000000000000000000000000001c · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 28: Solo el canal --> · AceStream · Isma · Lista Isma · Hash 000000000000000000000000000000000000001c · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 28: Solo el canal --> · AceStream · Isma · Lista Isma · Hash 000000000000000000000000000000000000001c · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     },
@@ -2803,10 +2803,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Proveedor",
-        "label": "M3U · Proveedor",
+        "label": "AceStream · Proveedor",
         "short": "Proveedor"
       },
       "calidad": null,
@@ -2831,8 +2831,8 @@
           "detalle": "disponibilidad sin medir",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 29: --> Proveedor · M3U · Proveedor · Lista Isma · Hash 000000000000000000000000000000000000001d · disponibilidad sin medir",
-          "descripcionSinComprobador": "Fuente 29: --> Proveedor · M3U · Proveedor · Lista Isma · Hash 000000000000000000000000000000000000001d · disponibilidad sin medir · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 29: --> Proveedor · AceStream · Proveedor · Lista Isma · Hash 000000000000000000000000000000000000001d · disponibilidad sin medir",
+          "descripcionSinComprobador": "Fuente 29: --> Proveedor · AceStream · Proveedor · Lista Isma · Hash 000000000000000000000000000000000000001d · disponibilidad sin medir · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -2852,8 +2852,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 29: --> Proveedor · M3U · Proveedor · Lista Isma · Hash 000000000000000000000000000000000000001d · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 29: --> Proveedor · M3U · Proveedor · Lista Isma · Hash 000000000000000000000000000000000000001d · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 29: --> Proveedor · AceStream · Proveedor · Lista Isma · Hash 000000000000000000000000000000000000001d · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 29: --> Proveedor · AceStream · Proveedor · Lista Isma · Hash 000000000000000000000000000000000000001d · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -2873,8 +2873,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 29: --> Proveedor · M3U · Proveedor · Lista Isma · Hash 000000000000000000000000000000000000001d · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 29: --> Proveedor · M3U · Proveedor · Lista Isma · Hash 000000000000000000000000000000000000001d · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 29: --> Proveedor · AceStream · Proveedor · Lista Isma · Hash 000000000000000000000000000000000000001d · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 29: --> Proveedor · AceStream · Proveedor · Lista Isma · Hash 000000000000000000000000000000000000001d · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     },
@@ -2896,10 +2896,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Tarifa ⇒ X",
-        "label": "M3U · Tarifa ⇒ X",
+        "label": "AceStream · Tarifa ⇒ X",
         "short": "Tarifa ⇒ X"
       },
       "calidad": null,
@@ -2924,8 +2924,8 @@
           "detalle": "disponibilidad sin medir",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 30: DAZN ⟶ Tarifa ⇒ X · M3U · Tarifa ⇒ X · Lista Isma · Hash 000000000000000000000000000000000000001e · disponibilidad sin medir",
-          "descripcionSinComprobador": "Fuente 30: DAZN ⟶ Tarifa ⇒ X · M3U · Tarifa ⇒ X · Lista Isma · Hash 000000000000000000000000000000000000001e · disponibilidad sin medir · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 30: DAZN ⟶ Tarifa ⇒ X · AceStream · Tarifa ⇒ X · Lista Isma · Hash 000000000000000000000000000000000000001e · disponibilidad sin medir",
+          "descripcionSinComprobador": "Fuente 30: DAZN ⟶ Tarifa ⇒ X · AceStream · Tarifa ⇒ X · Lista Isma · Hash 000000000000000000000000000000000000001e · disponibilidad sin medir · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -2945,8 +2945,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 30: DAZN ⟶ Tarifa ⇒ X · M3U · Tarifa ⇒ X · Lista Isma · Hash 000000000000000000000000000000000000001e · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 30: DAZN ⟶ Tarifa ⇒ X · M3U · Tarifa ⇒ X · Lista Isma · Hash 000000000000000000000000000000000000001e · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 30: DAZN ⟶ Tarifa ⇒ X · AceStream · Tarifa ⇒ X · Lista Isma · Hash 000000000000000000000000000000000000001e · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 30: DAZN ⟶ Tarifa ⇒ X · AceStream · Tarifa ⇒ X · Lista Isma · Hash 000000000000000000000000000000000000001e · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -2966,8 +2966,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 30: DAZN ⟶ Tarifa ⇒ X · M3U · Tarifa ⇒ X · Lista Isma · Hash 000000000000000000000000000000000000001e · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 30: DAZN ⟶ Tarifa ⇒ X · M3U · Tarifa ⇒ X · Lista Isma · Hash 000000000000000000000000000000000000001e · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 30: DAZN ⟶ Tarifa ⇒ X · AceStream · Tarifa ⇒ X · Lista Isma · Hash 000000000000000000000000000000000000001e · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 30: DAZN ⟶ Tarifa ⇒ X · AceStream · Tarifa ⇒ X · Lista Isma · Hash 000000000000000000000000000000000000001e · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     },
@@ -3001,10 +3001,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov31",
-        "label": "M3U · Prov31",
+        "label": "AceStream · Prov31",
         "short": "Prov31"
       },
       "calidad": null,
@@ -3029,8 +3029,8 @@
           "detalle": "vídeo no compatible",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 31: M+ Liga de Campeones --> Prov31 · M3U · Prov31 · Lista Isma · Hash 000000000000000000000000000000000000001f · vídeo no compatible",
-          "descripcionSinComprobador": "Fuente 31: M+ Liga de Campeones --> Prov31 · M3U · Prov31 · Lista Isma · Hash 000000000000000000000000000000000000001f · vídeo no compatible · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 31: M+ Liga de Campeones --> Prov31 · AceStream · Prov31 · Lista Isma · Hash 000000000000000000000000000000000000001f · vídeo no compatible",
+          "descripcionSinComprobador": "Fuente 31: M+ Liga de Campeones --> Prov31 · AceStream · Prov31 · Lista Isma · Hash 000000000000000000000000000000000000001f · vídeo no compatible · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -3050,8 +3050,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 31: M+ Liga de Campeones --> Prov31 · M3U · Prov31 · Lista Isma · Hash 000000000000000000000000000000000000001f · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 31: M+ Liga de Campeones --> Prov31 · M3U · Prov31 · Lista Isma · Hash 000000000000000000000000000000000000001f · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 31: M+ Liga de Campeones --> Prov31 · AceStream · Prov31 · Lista Isma · Hash 000000000000000000000000000000000000001f · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 31: M+ Liga de Campeones --> Prov31 · AceStream · Prov31 · Lista Isma · Hash 000000000000000000000000000000000000001f · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -3071,8 +3071,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 31: M+ Liga de Campeones --> Prov31 · M3U · Prov31 · Lista Isma · Hash 000000000000000000000000000000000000001f · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 31: M+ Liga de Campeones --> Prov31 · M3U · Prov31 · Lista Isma · Hash 000000000000000000000000000000000000001f · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 31: M+ Liga de Campeones --> Prov31 · AceStream · Prov31 · Lista Isma · Hash 000000000000000000000000000000000000001f · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 31: M+ Liga de Campeones --> Prov31 · AceStream · Prov31 · Lista Isma · Hash 000000000000000000000000000000000000001f · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     },
@@ -3106,10 +3106,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov32",
-        "label": "M3U · Prov32",
+        "label": "AceStream · Prov32",
         "short": "Prov32"
       },
       "calidad": null,
@@ -3134,8 +3134,8 @@
           "detalle": "intermitente: falló la última prueba",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 32: M+ Liga de Campeones --> Prov32 · M3U · Prov32 · Lista Isma · Hash 0000000000000000000000000000000000000020 · intermitente: falló la última prueba",
-          "descripcionSinComprobador": "Fuente 32: M+ Liga de Campeones --> Prov32 · M3U · Prov32 · Lista Isma · Hash 0000000000000000000000000000000000000020 · intermitente: falló la última prueba · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 32: M+ Liga de Campeones --> Prov32 · AceStream · Prov32 · Lista Isma · Hash 0000000000000000000000000000000000000020 · intermitente: falló la última prueba",
+          "descripcionSinComprobador": "Fuente 32: M+ Liga de Campeones --> Prov32 · AceStream · Prov32 · Lista Isma · Hash 0000000000000000000000000000000000000020 · intermitente: falló la última prueba · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -3155,8 +3155,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 32: M+ Liga de Campeones --> Prov32 · M3U · Prov32 · Lista Isma · Hash 0000000000000000000000000000000000000020 · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 32: M+ Liga de Campeones --> Prov32 · M3U · Prov32 · Lista Isma · Hash 0000000000000000000000000000000000000020 · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 32: M+ Liga de Campeones --> Prov32 · AceStream · Prov32 · Lista Isma · Hash 0000000000000000000000000000000000000020 · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 32: M+ Liga de Campeones --> Prov32 · AceStream · Prov32 · Lista Isma · Hash 0000000000000000000000000000000000000020 · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -3176,8 +3176,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 32: M+ Liga de Campeones --> Prov32 · M3U · Prov32 · Lista Isma · Hash 0000000000000000000000000000000000000020 · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 32: M+ Liga de Campeones --> Prov32 · M3U · Prov32 · Lista Isma · Hash 0000000000000000000000000000000000000020 · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 32: M+ Liga de Campeones --> Prov32 · AceStream · Prov32 · Lista Isma · Hash 0000000000000000000000000000000000000020 · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 32: M+ Liga de Campeones --> Prov32 · AceStream · Prov32 · Lista Isma · Hash 0000000000000000000000000000000000000020 · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     },
@@ -3211,10 +3211,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov33",
-        "label": "M3U · Prov33",
+        "label": "AceStream · Prov33",
         "short": "Prov33"
       },
       "calidad": null,
@@ -3239,8 +3239,8 @@
           "detalle": "reintentando; reintento a las 01:05",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 33: M+ Liga de Campeones --> Prov33 · M3U · Prov33 · Lista Isma · Hash 0000000000000000000000000000000000000021 · reintentando; reintento a las 01:05",
-          "descripcionSinComprobador": "Fuente 33: M+ Liga de Campeones --> Prov33 · M3U · Prov33 · Lista Isma · Hash 0000000000000000000000000000000000000021 · reintentando; reintento a las 01:05 · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 33: M+ Liga de Campeones --> Prov33 · AceStream · Prov33 · Lista Isma · Hash 0000000000000000000000000000000000000021 · reintentando; reintento a las 01:05",
+          "descripcionSinComprobador": "Fuente 33: M+ Liga de Campeones --> Prov33 · AceStream · Prov33 · Lista Isma · Hash 0000000000000000000000000000000000000021 · reintentando; reintento a las 01:05 · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -3260,8 +3260,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 33: M+ Liga de Campeones --> Prov33 · M3U · Prov33 · Lista Isma · Hash 0000000000000000000000000000000000000021 · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 33: M+ Liga de Campeones --> Prov33 · M3U · Prov33 · Lista Isma · Hash 0000000000000000000000000000000000000021 · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 33: M+ Liga de Campeones --> Prov33 · AceStream · Prov33 · Lista Isma · Hash 0000000000000000000000000000000000000021 · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 33: M+ Liga de Campeones --> Prov33 · AceStream · Prov33 · Lista Isma · Hash 0000000000000000000000000000000000000021 · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -3281,8 +3281,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 33: M+ Liga de Campeones --> Prov33 · M3U · Prov33 · Lista Isma · Hash 0000000000000000000000000000000000000021 · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 33: M+ Liga de Campeones --> Prov33 · M3U · Prov33 · Lista Isma · Hash 0000000000000000000000000000000000000021 · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 33: M+ Liga de Campeones --> Prov33 · AceStream · Prov33 · Lista Isma · Hash 0000000000000000000000000000000000000021 · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 33: M+ Liga de Campeones --> Prov33 · AceStream · Prov33 · Lista Isma · Hash 0000000000000000000000000000000000000021 · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     },
@@ -3316,10 +3316,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov34",
-        "label": "M3U · Prov34",
+        "label": "AceStream · Prov34",
         "short": "Prov34"
       },
       "calidad": "SD",
@@ -3344,8 +3344,8 @@
           "detalle": "señal detectada · vídeo sin confirmar",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 34: M+ Liga de Campeones --> Prov34 · M3U · Prov34 · Lista Isma · Hash 0000000000000000000000000000000000000022 · señal detectada · vídeo sin confirmar",
-          "descripcionSinComprobador": "Fuente 34: M+ Liga de Campeones --> Prov34 · M3U · Prov34 · Lista Isma · Hash 0000000000000000000000000000000000000022 · señal detectada · vídeo sin confirmar · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 34: M+ Liga de Campeones --> Prov34 · AceStream · Prov34 · Lista Isma · Hash 0000000000000000000000000000000000000022 · señal detectada · vídeo sin confirmar",
+          "descripcionSinComprobador": "Fuente 34: M+ Liga de Campeones --> Prov34 · AceStream · Prov34 · Lista Isma · Hash 0000000000000000000000000000000000000022 · señal detectada · vídeo sin confirmar · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -3365,8 +3365,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 34: M+ Liga de Campeones --> Prov34 · M3U · Prov34 · Lista Isma · Hash 0000000000000000000000000000000000000022 · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 34: M+ Liga de Campeones --> Prov34 · M3U · Prov34 · Lista Isma · Hash 0000000000000000000000000000000000000022 · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 34: M+ Liga de Campeones --> Prov34 · AceStream · Prov34 · Lista Isma · Hash 0000000000000000000000000000000000000022 · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 34: M+ Liga de Campeones --> Prov34 · AceStream · Prov34 · Lista Isma · Hash 0000000000000000000000000000000000000022 · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -3386,8 +3386,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 34: M+ Liga de Campeones --> Prov34 · M3U · Prov34 · Lista Isma · Hash 0000000000000000000000000000000000000022 · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 34: M+ Liga de Campeones --> Prov34 · M3U · Prov34 · Lista Isma · Hash 0000000000000000000000000000000000000022 · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 34: M+ Liga de Campeones --> Prov34 · AceStream · Prov34 · Lista Isma · Hash 0000000000000000000000000000000000000022 · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 34: M+ Liga de Campeones --> Prov34 · AceStream · Prov34 · Lista Isma · Hash 0000000000000000000000000000000000000022 · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     },
@@ -3421,10 +3421,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov35",
-        "label": "M3U · Prov35",
+        "label": "AceStream · Prov35",
         "short": "Prov35"
       },
       "calidad": "720p · HEVC",
@@ -3449,8 +3449,8 @@
           "detalle": "verificada",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 35: M+ Liga de Campeones --> Prov35 · M3U · Prov35 · Lista Isma · Hash 0000000000000000000000000000000000000023 · verificada",
-          "descripcionSinComprobador": "Fuente 35: M+ Liga de Campeones --> Prov35 · M3U · Prov35 · Lista Isma · Hash 0000000000000000000000000000000000000023 · verificada · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 35: M+ Liga de Campeones --> Prov35 · AceStream · Prov35 · Lista Isma · Hash 0000000000000000000000000000000000000023 · verificada",
+          "descripcionSinComprobador": "Fuente 35: M+ Liga de Campeones --> Prov35 · AceStream · Prov35 · Lista Isma · Hash 0000000000000000000000000000000000000023 · verificada · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -3470,8 +3470,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 35: M+ Liga de Campeones --> Prov35 · M3U · Prov35 · Lista Isma · Hash 0000000000000000000000000000000000000023 · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 35: M+ Liga de Campeones --> Prov35 · M3U · Prov35 · Lista Isma · Hash 0000000000000000000000000000000000000023 · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 35: M+ Liga de Campeones --> Prov35 · AceStream · Prov35 · Lista Isma · Hash 0000000000000000000000000000000000000023 · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 35: M+ Liga de Campeones --> Prov35 · AceStream · Prov35 · Lista Isma · Hash 0000000000000000000000000000000000000023 · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -3491,8 +3491,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 35: M+ Liga de Campeones --> Prov35 · M3U · Prov35 · Lista Isma · Hash 0000000000000000000000000000000000000023 · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 35: M+ Liga de Campeones --> Prov35 · M3U · Prov35 · Lista Isma · Hash 0000000000000000000000000000000000000023 · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 35: M+ Liga de Campeones --> Prov35 · AceStream · Prov35 · Lista Isma · Hash 0000000000000000000000000000000000000023 · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 35: M+ Liga de Campeones --> Prov35 · AceStream · Prov35 · Lista Isma · Hash 0000000000000000000000000000000000000023 · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     },
@@ -3526,10 +3526,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov36",
-        "label": "M3U · Prov36",
+        "label": "AceStream · Prov36",
         "short": "Prov36"
       },
       "calidad": "720p · HEVC",
@@ -3554,8 +3554,8 @@
           "detalle": "verificada",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 36: M+ Liga de Campeones --> Prov36 · M3U · Prov36 · Lista Isma · Hash 0000000000000000000000000000000000000024 · verificada",
-          "descripcionSinComprobador": "Fuente 36: M+ Liga de Campeones --> Prov36 · M3U · Prov36 · Lista Isma · Hash 0000000000000000000000000000000000000024 · verificada · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 36: M+ Liga de Campeones --> Prov36 · AceStream · Prov36 · Lista Isma · Hash 0000000000000000000000000000000000000024 · verificada",
+          "descripcionSinComprobador": "Fuente 36: M+ Liga de Campeones --> Prov36 · AceStream · Prov36 · Lista Isma · Hash 0000000000000000000000000000000000000024 · verificada · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -3575,8 +3575,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 36: M+ Liga de Campeones --> Prov36 · M3U · Prov36 · Lista Isma · Hash 0000000000000000000000000000000000000024 · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 36: M+ Liga de Campeones --> Prov36 · M3U · Prov36 · Lista Isma · Hash 0000000000000000000000000000000000000024 · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 36: M+ Liga de Campeones --> Prov36 · AceStream · Prov36 · Lista Isma · Hash 0000000000000000000000000000000000000024 · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 36: M+ Liga de Campeones --> Prov36 · AceStream · Prov36 · Lista Isma · Hash 0000000000000000000000000000000000000024 · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -3596,8 +3596,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 36: M+ Liga de Campeones --> Prov36 · M3U · Prov36 · Lista Isma · Hash 0000000000000000000000000000000000000024 · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 36: M+ Liga de Campeones --> Prov36 · M3U · Prov36 · Lista Isma · Hash 0000000000000000000000000000000000000024 · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 36: M+ Liga de Campeones --> Prov36 · AceStream · Prov36 · Lista Isma · Hash 0000000000000000000000000000000000000024 · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 36: M+ Liga de Campeones --> Prov36 · AceStream · Prov36 · Lista Isma · Hash 0000000000000000000000000000000000000024 · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     },
@@ -3631,10 +3631,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov37",
-        "label": "M3U · Prov37",
+        "label": "AceStream · Prov37",
         "short": "Prov37"
       },
       "calidad": "HEVC",
@@ -3659,8 +3659,8 @@
           "detalle": "verificada",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 37: M+ Liga de Campeones --> Prov37 · M3U · Prov37 · Lista Isma · Hash 0000000000000000000000000000000000000025 · verificada",
-          "descripcionSinComprobador": "Fuente 37: M+ Liga de Campeones --> Prov37 · M3U · Prov37 · Lista Isma · Hash 0000000000000000000000000000000000000025 · verificada · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 37: M+ Liga de Campeones --> Prov37 · AceStream · Prov37 · Lista Isma · Hash 0000000000000000000000000000000000000025 · verificada",
+          "descripcionSinComprobador": "Fuente 37: M+ Liga de Campeones --> Prov37 · AceStream · Prov37 · Lista Isma · Hash 0000000000000000000000000000000000000025 · verificada · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -3680,8 +3680,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 37: M+ Liga de Campeones --> Prov37 · M3U · Prov37 · Lista Isma · Hash 0000000000000000000000000000000000000025 · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 37: M+ Liga de Campeones --> Prov37 · M3U · Prov37 · Lista Isma · Hash 0000000000000000000000000000000000000025 · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 37: M+ Liga de Campeones --> Prov37 · AceStream · Prov37 · Lista Isma · Hash 0000000000000000000000000000000000000025 · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 37: M+ Liga de Campeones --> Prov37 · AceStream · Prov37 · Lista Isma · Hash 0000000000000000000000000000000000000025 · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -3701,8 +3701,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 37: M+ Liga de Campeones --> Prov37 · M3U · Prov37 · Lista Isma · Hash 0000000000000000000000000000000000000025 · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 37: M+ Liga de Campeones --> Prov37 · M3U · Prov37 · Lista Isma · Hash 0000000000000000000000000000000000000025 · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 37: M+ Liga de Campeones --> Prov37 · AceStream · Prov37 · Lista Isma · Hash 0000000000000000000000000000000000000025 · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 37: M+ Liga de Campeones --> Prov37 · AceStream · Prov37 · Lista Isma · Hash 0000000000000000000000000000000000000025 · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     },
@@ -3736,10 +3736,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov38",
-        "label": "M3U · Prov38",
+        "label": "AceStream · Prov38",
         "short": "Prov38"
       },
       "calidad": null,
@@ -3764,8 +3764,8 @@
           "detalle": "verificada",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 38: M+ Liga de Campeones --> Prov38 · M3U · Prov38 · Lista Isma · Hash 0000000000000000000000000000000000000026 · verificada",
-          "descripcionSinComprobador": "Fuente 38: M+ Liga de Campeones --> Prov38 · M3U · Prov38 · Lista Isma · Hash 0000000000000000000000000000000000000026 · verificada · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 38: M+ Liga de Campeones --> Prov38 · AceStream · Prov38 · Lista Isma · Hash 0000000000000000000000000000000000000026 · verificada",
+          "descripcionSinComprobador": "Fuente 38: M+ Liga de Campeones --> Prov38 · AceStream · Prov38 · Lista Isma · Hash 0000000000000000000000000000000000000026 · verificada · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -3785,8 +3785,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 38: M+ Liga de Campeones --> Prov38 · M3U · Prov38 · Lista Isma · Hash 0000000000000000000000000000000000000026 · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 38: M+ Liga de Campeones --> Prov38 · M3U · Prov38 · Lista Isma · Hash 0000000000000000000000000000000000000026 · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 38: M+ Liga de Campeones --> Prov38 · AceStream · Prov38 · Lista Isma · Hash 0000000000000000000000000000000000000026 · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 38: M+ Liga de Campeones --> Prov38 · AceStream · Prov38 · Lista Isma · Hash 0000000000000000000000000000000000000026 · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -3806,8 +3806,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 38: M+ Liga de Campeones --> Prov38 · M3U · Prov38 · Lista Isma · Hash 0000000000000000000000000000000000000026 · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 38: M+ Liga de Campeones --> Prov38 · M3U · Prov38 · Lista Isma · Hash 0000000000000000000000000000000000000026 · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 38: M+ Liga de Campeones --> Prov38 · AceStream · Prov38 · Lista Isma · Hash 0000000000000000000000000000000000000026 · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 38: M+ Liga de Campeones --> Prov38 · AceStream · Prov38 · Lista Isma · Hash 0000000000000000000000000000000000000026 · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     },
@@ -3841,10 +3841,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov39",
-        "label": "M3U · Prov39",
+        "label": "AceStream · Prov39",
         "short": "Prov39"
       },
       "calidad": null,
@@ -3869,8 +3869,8 @@
           "detalle": "no arrancó en el reproductor",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 39: M+ Liga de Campeones --> Prov39 · M3U · Prov39 · Lista Isma · Hash 0000000000000000000000000000000000000027 · no arrancó en el reproductor",
-          "descripcionSinComprobador": "Fuente 39: M+ Liga de Campeones --> Prov39 · M3U · Prov39 · Lista Isma · Hash 0000000000000000000000000000000000000027 · no arrancó en el reproductor · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 39: M+ Liga de Campeones --> Prov39 · AceStream · Prov39 · Lista Isma · Hash 0000000000000000000000000000000000000027 · no arrancó en el reproductor",
+          "descripcionSinComprobador": "Fuente 39: M+ Liga de Campeones --> Prov39 · AceStream · Prov39 · Lista Isma · Hash 0000000000000000000000000000000000000027 · no arrancó en el reproductor · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -3890,8 +3890,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 39: M+ Liga de Campeones --> Prov39 · M3U · Prov39 · Lista Isma · Hash 0000000000000000000000000000000000000027 · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 39: M+ Liga de Campeones --> Prov39 · M3U · Prov39 · Lista Isma · Hash 0000000000000000000000000000000000000027 · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 39: M+ Liga de Campeones --> Prov39 · AceStream · Prov39 · Lista Isma · Hash 0000000000000000000000000000000000000027 · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 39: M+ Liga de Campeones --> Prov39 · AceStream · Prov39 · Lista Isma · Hash 0000000000000000000000000000000000000027 · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -3911,8 +3911,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 39: M+ Liga de Campeones --> Prov39 · M3U · Prov39 · Lista Isma · Hash 0000000000000000000000000000000000000027 · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 39: M+ Liga de Campeones --> Prov39 · M3U · Prov39 · Lista Isma · Hash 0000000000000000000000000000000000000027 · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 39: M+ Liga de Campeones --> Prov39 · AceStream · Prov39 · Lista Isma · Hash 0000000000000000000000000000000000000027 · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 39: M+ Liga de Campeones --> Prov39 · AceStream · Prov39 · Lista Isma · Hash 0000000000000000000000000000000000000027 · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     },
@@ -3937,10 +3937,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov40",
-        "label": "M3U · Prov40",
+        "label": "AceStream · Prov40",
         "short": "Prov40"
       },
       "calidad": null,
@@ -3965,8 +3965,8 @@
           "detalle": "apartada por tu reporte (no arranca)",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 40: M+ Liga de Campeones --> Prov40 · M3U · Prov40 · Lista Isma · Hash 0000000000000000000000000000000000000028 · apartada por tu reporte (no arranca)",
-          "descripcionSinComprobador": "Fuente 40: M+ Liga de Campeones --> Prov40 · M3U · Prov40 · Lista Isma · Hash 0000000000000000000000000000000000000028 · apartada por tu reporte (no arranca) · 80% disponible"
+          "descripcionConComprobador": "Fuente 40: M+ Liga de Campeones --> Prov40 · AceStream · Prov40 · Lista Isma · Hash 0000000000000000000000000000000000000028 · apartada por tu reporte (no arranca)",
+          "descripcionSinComprobador": "Fuente 40: M+ Liga de Campeones --> Prov40 · AceStream · Prov40 · Lista Isma · Hash 0000000000000000000000000000000000000028 · apartada por tu reporte (no arranca) · 80% disponible"
         },
         {
           "pantalla": {
@@ -3986,8 +3986,8 @@
           "detalle": "apartada por tu reporte (no arranca)",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 40: M+ Liga de Campeones --> Prov40 · M3U · Prov40 · Lista Isma · Hash 0000000000000000000000000000000000000028 · apartada por tu reporte (no arranca)",
-          "descripcionSinComprobador": "Fuente 40: M+ Liga de Campeones --> Prov40 · M3U · Prov40 · Lista Isma · Hash 0000000000000000000000000000000000000028 · apartada por tu reporte (no arranca) · 80% disponible"
+          "descripcionConComprobador": "Fuente 40: M+ Liga de Campeones --> Prov40 · AceStream · Prov40 · Lista Isma · Hash 0000000000000000000000000000000000000028 · apartada por tu reporte (no arranca)",
+          "descripcionSinComprobador": "Fuente 40: M+ Liga de Campeones --> Prov40 · AceStream · Prov40 · Lista Isma · Hash 0000000000000000000000000000000000000028 · apartada por tu reporte (no arranca) · 80% disponible"
         },
         {
           "pantalla": {
@@ -4007,8 +4007,8 @@
           "detalle": "apartada por tu reporte (no arranca)",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 40: M+ Liga de Campeones --> Prov40 · M3U · Prov40 · Lista Isma · Hash 0000000000000000000000000000000000000028 · apartada por tu reporte (no arranca)",
-          "descripcionSinComprobador": "Fuente 40: M+ Liga de Campeones --> Prov40 · M3U · Prov40 · Lista Isma · Hash 0000000000000000000000000000000000000028 · apartada por tu reporte (no arranca) · 80% disponible"
+          "descripcionConComprobador": "Fuente 40: M+ Liga de Campeones --> Prov40 · AceStream · Prov40 · Lista Isma · Hash 0000000000000000000000000000000000000028 · apartada por tu reporte (no arranca)",
+          "descripcionSinComprobador": "Fuente 40: M+ Liga de Campeones --> Prov40 · AceStream · Prov40 · Lista Isma · Hash 0000000000000000000000000000000000000028 · apartada por tu reporte (no arranca) · 80% disponible"
         }
       ]
     },
@@ -4042,10 +4042,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov41",
-        "label": "M3U · Prov41",
+        "label": "AceStream · Prov41",
         "short": "Prov41"
       },
       "calidad": null,
@@ -4070,8 +4070,8 @@
           "detalle": "verificada",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 41: M+ Liga de Campeones --> Prov41 · M3U · Prov41 · Lista Isma · Hash 0000000000000000000000000000000000000029 · verificada · 12 pares en la prueba · 1,0 Mbit/s del enjambre",
-          "descripcionSinComprobador": "Fuente 41: M+ Liga de Campeones --> Prov41 · M3U · Prov41 · Lista Isma · Hash 0000000000000000000000000000000000000029 · verificada · 12 pares en la prueba · 1,0 Mbit/s del enjambre · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 41: M+ Liga de Campeones --> Prov41 · AceStream · Prov41 · Lista Isma · Hash 0000000000000000000000000000000000000029 · verificada · 12 pares en la prueba · 1,0 Mbit/s del enjambre",
+          "descripcionSinComprobador": "Fuente 41: M+ Liga de Campeones --> Prov41 · AceStream · Prov41 · Lista Isma · Hash 0000000000000000000000000000000000000029 · verificada · 12 pares en la prueba · 1,0 Mbit/s del enjambre · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -4091,8 +4091,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 41: M+ Liga de Campeones --> Prov41 · M3U · Prov41 · Lista Isma · Hash 0000000000000000000000000000000000000029 · reproduciendo ahora · 12 pares en la prueba · 1,0 Mbit/s del enjambre",
-          "descripcionSinComprobador": "Fuente 41: M+ Liga de Campeones --> Prov41 · M3U · Prov41 · Lista Isma · Hash 0000000000000000000000000000000000000029 · reproduciendo ahora · 12 pares en la prueba · 1,0 Mbit/s del enjambre · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 41: M+ Liga de Campeones --> Prov41 · AceStream · Prov41 · Lista Isma · Hash 0000000000000000000000000000000000000029 · reproduciendo ahora · 12 pares en la prueba · 1,0 Mbit/s del enjambre",
+          "descripcionSinComprobador": "Fuente 41: M+ Liga de Campeones --> Prov41 · AceStream · Prov41 · Lista Isma · Hash 0000000000000000000000000000000000000029 · reproduciendo ahora · 12 pares en la prueba · 1,0 Mbit/s del enjambre · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -4112,8 +4112,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 41: M+ Liga de Campeones --> Prov41 · M3U · Prov41 · Lista Isma · Hash 0000000000000000000000000000000000000029 · comprobando en pantalla · 12 pares en la prueba · 1,0 Mbit/s del enjambre",
-          "descripcionSinComprobador": "Fuente 41: M+ Liga de Campeones --> Prov41 · M3U · Prov41 · Lista Isma · Hash 0000000000000000000000000000000000000029 · comprobando en pantalla · 12 pares en la prueba · 1,0 Mbit/s del enjambre · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 41: M+ Liga de Campeones --> Prov41 · AceStream · Prov41 · Lista Isma · Hash 0000000000000000000000000000000000000029 · comprobando en pantalla · 12 pares en la prueba · 1,0 Mbit/s del enjambre",
+          "descripcionSinComprobador": "Fuente 41: M+ Liga de Campeones --> Prov41 · AceStream · Prov41 · Lista Isma · Hash 0000000000000000000000000000000000000029 · comprobando en pantalla · 12 pares en la prueba · 1,0 Mbit/s del enjambre · Disponibilidad sin medir"
         }
       ]
     },
@@ -4135,10 +4135,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov42",
-        "label": "M3U · Prov42",
+        "label": "AceStream · Prov42",
         "short": "Prov42"
       },
       "calidad": null,
@@ -4163,8 +4163,8 @@
           "detalle": "60% disponible",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 42: M+ Liga de Campeones --> Prov42 · M3U · Prov42 · Lista Isma · Hash 000000000000000000000000000000000000002a · 60% disponible",
-          "descripcionSinComprobador": "Fuente 42: M+ Liga de Campeones --> Prov42 · M3U · Prov42 · Lista Isma · Hash 000000000000000000000000000000000000002a · 60% disponible · 60% disponible"
+          "descripcionConComprobador": "Fuente 42: M+ Liga de Campeones --> Prov42 · AceStream · Prov42 · Lista Isma · Hash 000000000000000000000000000000000000002a · 60% disponible",
+          "descripcionSinComprobador": "Fuente 42: M+ Liga de Campeones --> Prov42 · AceStream · Prov42 · Lista Isma · Hash 000000000000000000000000000000000000002a · 60% disponible · 60% disponible"
         },
         {
           "pantalla": {
@@ -4184,8 +4184,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 42: M+ Liga de Campeones --> Prov42 · M3U · Prov42 · Lista Isma · Hash 000000000000000000000000000000000000002a · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 42: M+ Liga de Campeones --> Prov42 · M3U · Prov42 · Lista Isma · Hash 000000000000000000000000000000000000002a · reproduciendo ahora · 60% disponible"
+          "descripcionConComprobador": "Fuente 42: M+ Liga de Campeones --> Prov42 · AceStream · Prov42 · Lista Isma · Hash 000000000000000000000000000000000000002a · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 42: M+ Liga de Campeones --> Prov42 · AceStream · Prov42 · Lista Isma · Hash 000000000000000000000000000000000000002a · reproduciendo ahora · 60% disponible"
         },
         {
           "pantalla": {
@@ -4205,8 +4205,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 42: M+ Liga de Campeones --> Prov42 · M3U · Prov42 · Lista Isma · Hash 000000000000000000000000000000000000002a · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 42: M+ Liga de Campeones --> Prov42 · M3U · Prov42 · Lista Isma · Hash 000000000000000000000000000000000000002a · comprobando en pantalla · 60% disponible"
+          "descripcionConComprobador": "Fuente 42: M+ Liga de Campeones --> Prov42 · AceStream · Prov42 · Lista Isma · Hash 000000000000000000000000000000000000002a · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 42: M+ Liga de Campeones --> Prov42 · AceStream · Prov42 · Lista Isma · Hash 000000000000000000000000000000000000002a · comprobando en pantalla · 60% disponible"
         }
       ]
     },
@@ -4228,10 +4228,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov43",
-        "label": "M3U · Prov43",
+        "label": "AceStream · Prov43",
         "short": "Prov43"
       },
       "calidad": null,
@@ -4256,8 +4256,8 @@
           "detalle": "1% disponible",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 43: M+ Liga de Campeones --> Prov43 · M3U · Prov43 · Lista Isma · Hash 000000000000000000000000000000000000002b · 1% disponible",
-          "descripcionSinComprobador": "Fuente 43: M+ Liga de Campeones --> Prov43 · M3U · Prov43 · Lista Isma · Hash 000000000000000000000000000000000000002b · 1% disponible · 1% disponible"
+          "descripcionConComprobador": "Fuente 43: M+ Liga de Campeones --> Prov43 · AceStream · Prov43 · Lista Isma · Hash 000000000000000000000000000000000000002b · 1% disponible",
+          "descripcionSinComprobador": "Fuente 43: M+ Liga de Campeones --> Prov43 · AceStream · Prov43 · Lista Isma · Hash 000000000000000000000000000000000000002b · 1% disponible · 1% disponible"
         },
         {
           "pantalla": {
@@ -4277,8 +4277,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 43: M+ Liga de Campeones --> Prov43 · M3U · Prov43 · Lista Isma · Hash 000000000000000000000000000000000000002b · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 43: M+ Liga de Campeones --> Prov43 · M3U · Prov43 · Lista Isma · Hash 000000000000000000000000000000000000002b · reproduciendo ahora · 1% disponible"
+          "descripcionConComprobador": "Fuente 43: M+ Liga de Campeones --> Prov43 · AceStream · Prov43 · Lista Isma · Hash 000000000000000000000000000000000000002b · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 43: M+ Liga de Campeones --> Prov43 · AceStream · Prov43 · Lista Isma · Hash 000000000000000000000000000000000000002b · reproduciendo ahora · 1% disponible"
         },
         {
           "pantalla": {
@@ -4298,8 +4298,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 43: M+ Liga de Campeones --> Prov43 · M3U · Prov43 · Lista Isma · Hash 000000000000000000000000000000000000002b · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 43: M+ Liga de Campeones --> Prov43 · M3U · Prov43 · Lista Isma · Hash 000000000000000000000000000000000000002b · comprobando en pantalla · 1% disponible"
+          "descripcionConComprobador": "Fuente 43: M+ Liga de Campeones --> Prov43 · AceStream · Prov43 · Lista Isma · Hash 000000000000000000000000000000000000002b · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 43: M+ Liga de Campeones --> Prov43 · AceStream · Prov43 · Lista Isma · Hash 000000000000000000000000000000000000002b · comprobando en pantalla · 1% disponible"
         }
       ]
     },
@@ -4321,10 +4321,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov44",
-        "label": "M3U · Prov44",
+        "label": "AceStream · Prov44",
         "short": "Prov44"
       },
       "calidad": null,
@@ -4349,8 +4349,8 @@
           "detalle": "100% disponible",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 44: M+ Liga de Campeones --> Prov44 · M3U · Prov44 · Lista Isma · Hash 000000000000000000000000000000000000002c · 100% disponible",
-          "descripcionSinComprobador": "Fuente 44: M+ Liga de Campeones --> Prov44 · M3U · Prov44 · Lista Isma · Hash 000000000000000000000000000000000000002c · 100% disponible · 100% disponible"
+          "descripcionConComprobador": "Fuente 44: M+ Liga de Campeones --> Prov44 · AceStream · Prov44 · Lista Isma · Hash 000000000000000000000000000000000000002c · 100% disponible",
+          "descripcionSinComprobador": "Fuente 44: M+ Liga de Campeones --> Prov44 · AceStream · Prov44 · Lista Isma · Hash 000000000000000000000000000000000000002c · 100% disponible · 100% disponible"
         },
         {
           "pantalla": {
@@ -4370,8 +4370,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 44: M+ Liga de Campeones --> Prov44 · M3U · Prov44 · Lista Isma · Hash 000000000000000000000000000000000000002c · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 44: M+ Liga de Campeones --> Prov44 · M3U · Prov44 · Lista Isma · Hash 000000000000000000000000000000000000002c · reproduciendo ahora · 100% disponible"
+          "descripcionConComprobador": "Fuente 44: M+ Liga de Campeones --> Prov44 · AceStream · Prov44 · Lista Isma · Hash 000000000000000000000000000000000000002c · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 44: M+ Liga de Campeones --> Prov44 · AceStream · Prov44 · Lista Isma · Hash 000000000000000000000000000000000000002c · reproduciendo ahora · 100% disponible"
         },
         {
           "pantalla": {
@@ -4391,8 +4391,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 44: M+ Liga de Campeones --> Prov44 · M3U · Prov44 · Lista Isma · Hash 000000000000000000000000000000000000002c · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 44: M+ Liga de Campeones --> Prov44 · M3U · Prov44 · Lista Isma · Hash 000000000000000000000000000000000000002c · comprobando en pantalla · 100% disponible"
+          "descripcionConComprobador": "Fuente 44: M+ Liga de Campeones --> Prov44 · AceStream · Prov44 · Lista Isma · Hash 000000000000000000000000000000000000002c · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 44: M+ Liga de Campeones --> Prov44 · AceStream · Prov44 · Lista Isma · Hash 000000000000000000000000000000000000002c · comprobando en pantalla · 100% disponible"
         }
       ]
     },
@@ -4414,10 +4414,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov45",
-        "label": "M3U · Prov45",
+        "label": "AceStream · Prov45",
         "short": "Prov45"
       },
       "calidad": null,
@@ -4442,8 +4442,8 @@
           "detalle": "0% disponible",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 45: M+ Liga de Campeones --> Prov45 · M3U · Prov45 · Lista Isma · Hash 000000000000000000000000000000000000002d · 0% disponible",
-          "descripcionSinComprobador": "Fuente 45: M+ Liga de Campeones --> Prov45 · M3U · Prov45 · Lista Isma · Hash 000000000000000000000000000000000000002d · 0% disponible · 0% disponible"
+          "descripcionConComprobador": "Fuente 45: M+ Liga de Campeones --> Prov45 · AceStream · Prov45 · Lista Isma · Hash 000000000000000000000000000000000000002d · 0% disponible",
+          "descripcionSinComprobador": "Fuente 45: M+ Liga de Campeones --> Prov45 · AceStream · Prov45 · Lista Isma · Hash 000000000000000000000000000000000000002d · 0% disponible · 0% disponible"
         },
         {
           "pantalla": {
@@ -4463,8 +4463,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 45: M+ Liga de Campeones --> Prov45 · M3U · Prov45 · Lista Isma · Hash 000000000000000000000000000000000000002d · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 45: M+ Liga de Campeones --> Prov45 · M3U · Prov45 · Lista Isma · Hash 000000000000000000000000000000000000002d · reproduciendo ahora · 0% disponible"
+          "descripcionConComprobador": "Fuente 45: M+ Liga de Campeones --> Prov45 · AceStream · Prov45 · Lista Isma · Hash 000000000000000000000000000000000000002d · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 45: M+ Liga de Campeones --> Prov45 · AceStream · Prov45 · Lista Isma · Hash 000000000000000000000000000000000000002d · reproduciendo ahora · 0% disponible"
         },
         {
           "pantalla": {
@@ -4484,8 +4484,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 45: M+ Liga de Campeones --> Prov45 · M3U · Prov45 · Lista Isma · Hash 000000000000000000000000000000000000002d · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 45: M+ Liga de Campeones --> Prov45 · M3U · Prov45 · Lista Isma · Hash 000000000000000000000000000000000000002d · comprobando en pantalla · 0% disponible"
+          "descripcionConComprobador": "Fuente 45: M+ Liga de Campeones --> Prov45 · AceStream · Prov45 · Lista Isma · Hash 000000000000000000000000000000000000002d · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 45: M+ Liga de Campeones --> Prov45 · AceStream · Prov45 · Lista Isma · Hash 000000000000000000000000000000000000002d · comprobando en pantalla · 0% disponible"
         }
       ]
     },
@@ -4519,10 +4519,10 @@
         "autoTried": false
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "Prov46",
-        "label": "M3U · Prov46",
+        "label": "AceStream · Prov46",
         "short": "Prov46"
       },
       "calidad": null,
@@ -4547,8 +4547,8 @@
           "detalle": "verificada",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 46: M+ Liga de Campeones --> Prov46 · M3U · Prov46 · Lista Isma · Hash 000000000000000000000000000000000000002e · verificada",
-          "descripcionSinComprobador": "Fuente 46: M+ Liga de Campeones --> Prov46 · M3U · Prov46 · Lista Isma · Hash 000000000000000000000000000000000000002e · verificada · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 46: M+ Liga de Campeones --> Prov46 · AceStream · Prov46 · Lista Isma · Hash 000000000000000000000000000000000000002e · verificada",
+          "descripcionSinComprobador": "Fuente 46: M+ Liga de Campeones --> Prov46 · AceStream · Prov46 · Lista Isma · Hash 000000000000000000000000000000000000002e · verificada · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -4568,8 +4568,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 46: M+ Liga de Campeones --> Prov46 · M3U · Prov46 · Lista Isma · Hash 000000000000000000000000000000000000002e · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 46: M+ Liga de Campeones --> Prov46 · M3U · Prov46 · Lista Isma · Hash 000000000000000000000000000000000000002e · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 46: M+ Liga de Campeones --> Prov46 · AceStream · Prov46 · Lista Isma · Hash 000000000000000000000000000000000000002e · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 46: M+ Liga de Campeones --> Prov46 · AceStream · Prov46 · Lista Isma · Hash 000000000000000000000000000000000000002e · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -4589,8 +4589,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": false,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 46: M+ Liga de Campeones --> Prov46 · M3U · Prov46 · Lista Isma · Hash 000000000000000000000000000000000000002e · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 46: M+ Liga de Campeones --> Prov46 · M3U · Prov46 · Lista Isma · Hash 000000000000000000000000000000000000002e · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 46: M+ Liga de Campeones --> Prov46 · AceStream · Prov46 · Lista Isma · Hash 000000000000000000000000000000000000002e · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 46: M+ Liga de Campeones --> Prov46 · AceStream · Prov46 · Lista Isma · Hash 000000000000000000000000000000000000002e · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     },
@@ -4624,10 +4624,10 @@
         "autoTried": true
       },
       "presentacion": {
-        "type": "M3U",
+        "type": "AceStream",
         "list": "Isma",
         "provider": "NEW ERA",
-        "label": "M3U · NEW ERA",
+        "label": "AceStream · NEW ERA",
         "short": "NEW ERA"
       },
       "calidad": null,
@@ -4652,8 +4652,8 @@
           "detalle": "en cola",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 47: DAZN 1 FHD --> NEW ERA · M3U · NEW ERA · Lista Isma · Hash 000000000000000000000000000000000000002f · en cola",
-          "descripcionSinComprobador": "Fuente 47: DAZN 1 FHD --> NEW ERA · M3U · NEW ERA · Lista Isma · Hash 000000000000000000000000000000000000002f · en cola · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 47: DAZN 1 FHD --> NEW ERA · AceStream · NEW ERA · Lista Isma · Hash 000000000000000000000000000000000000002f · en cola",
+          "descripcionSinComprobador": "Fuente 47: DAZN 1 FHD --> NEW ERA · AceStream · NEW ERA · Lista Isma · Hash 000000000000000000000000000000000000002f · en cola · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -4673,8 +4673,8 @@
           "detalle": "reproduciendo ahora",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 47: DAZN 1 FHD --> NEW ERA · M3U · NEW ERA · Lista Isma · Hash 000000000000000000000000000000000000002f · reproduciendo ahora",
-          "descripcionSinComprobador": "Fuente 47: DAZN 1 FHD --> NEW ERA · M3U · NEW ERA · Lista Isma · Hash 000000000000000000000000000000000000002f · reproduciendo ahora · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 47: DAZN 1 FHD --> NEW ERA · AceStream · NEW ERA · Lista Isma · Hash 000000000000000000000000000000000000002f · reproduciendo ahora",
+          "descripcionSinComprobador": "Fuente 47: DAZN 1 FHD --> NEW ERA · AceStream · NEW ERA · Lista Isma · Hash 000000000000000000000000000000000000002f · reproduciendo ahora · Disponibilidad sin medir"
         },
         {
           "pantalla": {
@@ -4694,8 +4694,8 @@
           "detalle": "comprobando en pantalla",
           "visibleSinActiva": true,
           "visibleActiva": true,
-          "descripcionConComprobador": "Fuente 47: DAZN 1 FHD --> NEW ERA · M3U · NEW ERA · Lista Isma · Hash 000000000000000000000000000000000000002f · comprobando en pantalla",
-          "descripcionSinComprobador": "Fuente 47: DAZN 1 FHD --> NEW ERA · M3U · NEW ERA · Lista Isma · Hash 000000000000000000000000000000000000002f · comprobando en pantalla · Disponibilidad sin medir"
+          "descripcionConComprobador": "Fuente 47: DAZN 1 FHD --> NEW ERA · AceStream · NEW ERA · Lista Isma · Hash 000000000000000000000000000000000000002f · comprobando en pantalla",
+          "descripcionSinComprobador": "Fuente 47: DAZN 1 FHD --> NEW ERA · AceStream · NEW ERA · Lista Isma · Hash 000000000000000000000000000000000000002f · comprobando en pantalla · Disponibilidad sin medir"
         }
       ]
     }
