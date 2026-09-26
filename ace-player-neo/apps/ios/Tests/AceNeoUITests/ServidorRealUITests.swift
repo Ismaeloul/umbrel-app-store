@@ -284,8 +284,8 @@ final class ServidorRealUITests: XCTestCase {
         try await emparejarAsentado(app)
     }
 
-    /// e2e-07 salía con la mitad de abajo más ancha que la pantalla y cortada por los lados. Pasado el cruce
-    /// (a2 §27.2), otra captura y las medidas, para saber si es el cruce a medias o la maquetación.
+    /// Pasado el cruce (a2 §27.2), Emparejar cabe en la pantalla. Antes se quedaba en 776 pt de ancho en un iPhone
+    /// de 390, con el formulario cortado por los lados (5b52d32, e2e-08): PantallaEmparejar se medía a sí misma.
     @MainActor
     private func emparejarAsentado(_ app: XCUIApplication) async throws {
         try await Task.sleep(for: .seconds(3))
@@ -301,6 +301,10 @@ final class ServidorRealUITests: XCTestCase {
         adjunto.lifetime = .keepAlways
         add(adjunto)
         print("E2E medidas tras olvidar:\n" + medidas)
+        let campo: XCUIElement = elementoUI(app, IDUI.campoCodigo)
+        try exigir(campo.exists, "Tras olvidar, Emparejar no tiene el campo del código")
+        let cabe: Bool = campo.frame.minX >= 0 && campo.frame.maxX <= app.frame.maxX
+        try exigir(cabe, "Tras olvidar, Emparejar no cabe en la pantalla. \(medidas)")
     }
 
     @MainActor
