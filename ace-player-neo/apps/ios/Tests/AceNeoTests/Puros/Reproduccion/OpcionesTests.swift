@@ -23,20 +23,25 @@ private func contexto(
 
 struct OpcionesReproductorTests {
     @Test func catorceOpcionesConZappingEnSuOrden() {
-        let menu = OpcionesReproductor.menu(contexto(zapeo: true))
-        #expect(
-            menu.map(\.titulo) == [
-                "Pausar", "Retroceder 30 s", "Ir al directo", "Detener", "Canal anterior", "Canal siguiente",
-                "Datos técnicos", "Dónde se está reproduciendo", "Pantalla completa", "Imagen dentro de imagen",
-                "Abrir en la app de AceStream", "Copiar URL del stream (VLC)", "Copiar enlace acestream://",
-                "Copiar hash",
-            ])
-        #expect(menu.map(\.icono) == [
+        let menu: [OpcionMenu] = OpcionesReproductor.menu(contexto(zapeo: true))
+        let titulos: [String] = menu.map(\.titulo)
+        let esperados: [String] = [
+            "Pausar", "Retroceder 30 s", "Ir al directo", "Detener", "Canal anterior", "Canal siguiente",
+            "Datos técnicos", "Dónde se está reproduciendo", "Pantalla completa", "Imagen dentro de imagen",
+            "Abrir en la app de AceStream", "Copiar URL del stream (VLC)", "Copiar enlace acestream://",
+            "Copiar hash",
+        ]
+        #expect(titulos == esperados)
+        let iconos: [NombreIcono] = menu.compactMap(\.icono)
+        let iconosEsperados: [NombreIcono] = [
             .pause, .back, .directo, .stop, .chevL, .chevR, .nerd, .tv, .full, .pip, .externo, .link, .copy, .hash,
-        ])
+        ]
+        #expect(iconos == iconosEsperados)
         // Separadores: «Canal anterior» y «Abrir en la app de AceStream».
-        #expect(menu.filter(\.separadaAntes).map(\.id) == ["anterior", "abrir"])
-        #expect(menu.filter(\.peligro).map(\.id) == ["detener"])
+        let separadas: [String] = menu.filter(\.separadaAntes).map(\.id)
+        #expect(separadas == ["anterior", "abrir"])
+        let peligrosas: [String] = menu.filter(\.peligro).map(\.id)
+        #expect(peligrosas == ["detener"])
     }
 
     @Test func sinZappingDoceYElSeparadorVaEnDatosTecnicos() {
