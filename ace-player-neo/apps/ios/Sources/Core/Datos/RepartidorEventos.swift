@@ -118,7 +118,8 @@ import Foundation
         case .trabajo(let id):
             datos.trabajos[id]?.invalidar()
         case .senalPartido(let progreso):
-            senales.anotar(progreso, ahora: senales.reloj.ahora)
+            let ahora: Date = senales.reloj.ahora  // en su línea: tipado en 237 ms (CI 36230463114)
+            senales.anotar(progreso, ahora: ahora)
             fuentes.procesar(.scanProgress(progreso))
         case .veredicto(let veredicto):
             fuentes.procesar(.scanVerdict(veredicto))
