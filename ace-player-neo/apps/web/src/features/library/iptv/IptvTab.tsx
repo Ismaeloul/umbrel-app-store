@@ -54,7 +54,7 @@ import {
   channelSubtitle,
   hasFilters,
   NO_FILTERS,
-  qualityTags,
+  rowTags,
   screenOf,
 } from './model.ts';
 import {
@@ -319,7 +319,7 @@ export function IptvTab({ text, active, actions, onScreen, onAir, onCategoryName
                     onScreen={onScreen === channel.id}
                     onAir={onAir(row)}
                     iptv
-                    tags={qualityTags(channel.qualities)}
+                    tags={rowTags(channel)}
                     subtitle={channelSubtitle(channel, {
                       inCategory: screen === 'category',
                       provider: first.provider,

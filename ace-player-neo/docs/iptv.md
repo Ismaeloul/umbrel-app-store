@@ -3670,6 +3670,12 @@ dos intentos); y con la ruta real y el proveedor falso, 15-17 (categorías en el
 DAZN 1» aparte de «DAZN LaLiga», «1080p» y «720p» en la fila y tocar suena por hls.js, `@video`) y 20 (`fallar-primera`
 con un 502: se guarda al segundo intento sin error a la vista). Capturas a 390×844 y 1440×900, en claro y oscuro.
 
+**Para la app nativa** (se suma a §16.11): la pestaña se calca con estos mismos valores — parámetros `cat`, `pais`,
+`idioma`, `tipo`, `deporte`, `calidad` y `cat=todos` si la app guarda estado en enlaces; esperas de 450 ms (texto) y
+200 ms (filtros); páginas de 60 y la siguiente al aparecer las 10 últimas filas; «Más…» de escritorio no aplica (la app
+usa la hoja con alturas); los textos de `texts.ts` entran en `textos-web.json`; y `IPTV_SAVE_RETRIED_HINT` no cambia
+nada en la app (la IPTV solo se configura en la web).
+
 ### 16.15 Estado: la unión (26-sep, `iptv/pestana`, con `iptv/pestana-servidor`, `iptv/pestana-web` y `rediseno/iptv`)
 
 Las dos ramas de la pestaña se habían unido ya entre sí y con `rediseno/iptv`, cada una por su lado. Al juntarlas en
@@ -3691,12 +3697,38 @@ Las dos ramas de la pestaña se habían unido ya entre sí y con `rediseno/iptv`
 - Proveedor falso con los dos: `grande` y `fallarPrimera` (pestaña) y las 5 variantes de «DAZN 1» y los canales de
   otros países (§17).
 
+**Con la lista real (§18, `rediseno/iptv` hasta `778a27a`)** y lo que salió al probarlo a mano:
+- **ᴿᴬᵂ fuera del nombre:** la fila de «DIRECTO ANTENA 3 ᴿᴬᵂ» se llama «DIRECTO ANTENA 3» (es una reserva, §18).
+- **El texto de la pestaña se limpia como el del buscador:** `searchQueryKey` (grafía de §18 **sin** los alias curados
+  del emparejado: «m+ la liga», «m. laliga» y «mov laliga» son «movistar laliga»), «tv», «canal» y «channel» no hace
+  falta encontrarlas si hay otras palabras (`significant`), y un nivel más al final, **sin Movistar delante** («m+ la
+  liga» también trae «LA LIGA TV BAR» y «DAZN LaLiga», detrás). El test que compara con el buscador suma nombres de
+  la lista real (Movistar, LaLiga+, La Sexta).
+- **España y sin país primero dentro de cada nivel de texto**, como el buscador: «dazn 1» da antes el de aquí que los
+  de Reino Unido, Alemania o Italia.
+- **El país como etiqueta en la fila** (`rowTags`: «UK», «DE»… si no es España ni sin país, y luego las calidades),
+  igual que la fila del buscador. Hacía falta: con «DAZN 1» de cinco países y la guía a la vista, el subtítulo enseña
+  el partido y las cinco filas se veían iguales.
+- **Rendimiento en la tanda entera:** el test de 30 000 canales mira la **mediana** (< 20 ms en frío, < 2 ms la página
+  siguiente) y cada consulta < 100 ms; calienta el código con un índice pequeño antes de medir. Con `-r test` en
+  paralelo (servidor y web a la vez) una consulta suelta llegaba a 57-64 ms.
 
-**Para la app nativa** (se suma a §16.11): la pestaña se calca con estos mismos valores — parámetros `cat`, `pais`,
-`idioma`, `tipo`, `deporte`, `calidad` y `cat=todos` si la app guarda estado en enlaces; esperas de 450 ms (texto) y
-200 ms (filtros); páginas de 60 y la siguiente al aparecer las 10 últimas filas; «Más…» de escritorio no aplica (la app
-usa la hoja con alturas); los textos de `texts.ts` entran en `textos-web.json`; y `IPTV_SAVE_RETRIED_HINT` no cambia
-nada en la app (la IPTV solo se configura en la web).
+**Probado a mano (26-sep)** con `pila-local.ts` (`ALLOW_PRIVATE_SYNC_URLS=true`, ffmpeg de L-Connect) y el proveedor
+falso en modo grande (`--grande 30000`, en la IP del adaptador solo-anfitrión: la de Tailscale, 100.64/10, está
+bloqueada como CGNAT): con `fallar-primera?veces=1&como=502`, el primer «Guardar IPTV» de la web guarda sin error a la
+vista (registro: `warn` `http_502` intento 1 en 3 ms, `info` «bien al segundo intento» 1,5 s después, 30 018 canales en
+644 ms). La pestaña: 27 009 filas y 154 categorías; respuestas de `/api/v1/iptv/browse` de 1,5 a 10 ms (la más cara,
+«canal»). Tocar «DAZN 1» (España) suena por la IPTV 1080p con las otras tres variantes y la AceStream detrás. 22
+capturas (raíz, categoría, filtros, búsquedas, a 1440×900 y 390×844, claro y oscuro), sin desplazamiento lateral.
+
+**Falta:**
+- `docs/comportamientos.md` y la tabla de §12.1 al cerrar; publicar (0.8.2) cuando Isma lo diga.
+- La guía de «DAZN 1» de España sale también en las filas de Reino Unido, Alemania e Italia (el «en directo» va por el
+  nombre del canal): hay que mirarlo en `onAir` / la guía de §4.5 teniendo en cuenta el país.
+- El riesgo pequeño de arriba (país sacado de la categoría) sigue anotado.
+
+**Impacto en la app nativa** (se suma a §16.11): la fila lleva el país como etiqueta antes de las calidades (si no es
+España ni sin país) y el orden con texto (España primero) ya viene del servidor; el texto se manda tal cual.
 
 ## 17. Anexo: todo desbloqueado y variantes de resolución (26-sep)
 

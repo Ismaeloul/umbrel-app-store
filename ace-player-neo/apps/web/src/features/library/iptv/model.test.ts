@@ -14,6 +14,7 @@ import {
   facetLabel,
   NO_FILTERS,
   qualityTags,
+  rowTags,
   readIptvState,
   screenOf,
   selectedCount,
@@ -114,6 +115,9 @@ describe('etiquetas y textos (§16.4 y §16.7)', () => {
     expect(facetLabel('quality', 'none')).toBe('Sin marca');
     expect(qualityTags(['hd', 'uhd', 'fhd'])).toEqual(['4K', '1080p', '720p']);
     expect(qualityTags([])).toEqual([]);
+    expect(rowTags({ country: 'DE', qualities: ['fhd'] })).toEqual(['DE', '1080p']);
+    expect(rowTags({ country: 'ES', qualities: ['uhd', 'sd'] })).toEqual(['4K', 'SD']);
+    expect(rowTags({ country: null, qualities: [] })).toEqual([]);
   });
 
   it('plurales, «{n} de {N}» y los números a la española', () => {

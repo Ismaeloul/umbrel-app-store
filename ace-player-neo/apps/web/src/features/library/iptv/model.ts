@@ -200,6 +200,18 @@ export function qualityTags(qualities: readonly IptvQuality[]): string[] {
   );
 }
 
+/**
+ * Etiquetas de una fila, como en el buscador (§17): el país si no es España ni
+ * «sin país» («DE», «UK»; con «DAZN 1» de cinco países, lo único que las
+ * distingue cuando el subtítulo enseña lo que se emite) y sus calidades.
+ */
+export function rowTags(channel: Pick<IptvBrowseChannel, 'country' | 'qualities'>): string[] {
+  return [
+    ...(channel.country && channel.country !== 'ES' ? [channel.country] : []),
+    ...qualityTags(channel.qualities),
+  ];
+}
+
 // ---- Estado de la URL ------------------------------------------------------------------
 
 /** «Todos los canales»: la lista entera, sin categoría. */

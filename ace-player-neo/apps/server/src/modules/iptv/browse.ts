@@ -722,11 +722,17 @@ function compute(
   /* Orden: el del proveedor; con texto, por niveles y luego el del proveedor. */
   const rows = rowsOf(result);
   if (!text) return { order: Int32Array.from(rows), categories, facets, text: query };
-  /* Por niveles sin comparar: cinco cubos que ya vienen en el orden del proveedor. */
+  /* Por niveles sin comparar: cinco cubos que ya vienen en el orden del proveedor y, dentro de
+     cada uno, España y sin país primero (como el buscador, §18: «dazn 1» da antes el de aquí). */
   const order = new Int32Array(rows.length);
   let at = 0;
+  const home = (row: number): boolean => {
+    const country = index.country[row];
+    return country === null || country === undefined || country === 'ES';
+  };
   for (let level = 0; level <= 4; level += 1) {
-    for (const row of rows) if (text.rank[row] === level) order[at++] = row;
+    for (const row of rows) if (text.rank[row] === level && home(row)) order[at++] = row;
+    for (const row of rows) if (text.rank[row] === level && !home(row)) order[at++] = row;
   }
   return { order, categories, facets, text: query };
 }

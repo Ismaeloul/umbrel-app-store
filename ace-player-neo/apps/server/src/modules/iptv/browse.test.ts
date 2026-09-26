@@ -154,9 +154,9 @@ describe('texto (§16.3)', () => {
     const index = buildBrowseIndex(catalogOf(SMALL));
     expect(titles(index, query(index, { q: 'dazn' }).rows)).toEqual([
       'DAZN 1/ES',
-      'DAZN 1/UK',
       'DAZN LaLiga/ES',
       'DAZN F1/ES',
+      'DAZN 1/UK',
     ]);
     /* «liga» está dentro de «laliga» en las dos (nivel 3): el orden del proveedor. */
     expect(titles(index, query(index, { q: 'liga' }).rows)).toEqual([
@@ -180,6 +180,19 @@ describe('texto (§16.3)', () => {
       'SUPER DAZN 1/ES',
       '1 DAZN/ES',
     ]);
+  });
+
+  it('dentro de cada nivel, España y sin país antes que otro país (como el buscador, §18)', () => {
+    const channels = [
+      raw(1, 'UK: DAZN 1', 'UK | SPORTS'),
+      raw(2, 'DE: DAZN 1 HD', 'DE | SPORT'),
+      raw(3, 'ES: DAZN 1 FHD', 'ES | DEPORTES'),
+      raw(4, 'DAZN 1', ''),
+    ];
+    const index = buildBrowseIndex(catalogOf(channels));
+    const rows = titles(index, query(index, { q: 'dazn 1' }).rows);
+    expect(rows.slice(0, 2).sort()).toEqual(['DAZN 1/-', 'DAZN 1/ES']);
+    expect(rows.slice(2)).toEqual(['DAZN 1/UK', 'DAZN 1/DE']);
   });
 
   it('las mismas claves que el buscador para la misma consulta (en lo que el buscador enseña)', () => {
