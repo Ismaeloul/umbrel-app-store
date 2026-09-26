@@ -59,12 +59,24 @@ struct PanelSeccion: View {
         let canal = CanalFila(conCategoria)
         let antena = indice.para(titulo: item.title, alias: item.alias, marcadores: marcadores)
         let partido = antena.directo?.partido.id ?? ""
+        let subtitulo = ReglasBiblioteca.subtitulo(conCategoria, coleccion: coleccion)
         return FilaCanal(
-            canal: canal, subtitulo: ReglasBiblioteca.subtitulo(conCategoria, coleccion: coleccion),
+            canal: canal, subtitulo: subtitulo,
             caido: coleccion == .favorites && ReglasBiblioteca.caido(item, idsLista: Set(biblioteca.web.map(\.id))),
             enPantalla: reproductor.canal?.id == item.id, antena: antena, tapado: tapado(partido, item.id),
             acciones: acciones.menu(canal, origen: .coleccion(coleccion)), reproducir: { reproducir(canal) },
-            identificador: IDUI.filaCanal(item.id))
+            identificador: IDUI.filaCanal(item.id),
+            nombreVisible: ReglasBiblioteca.nombreFila(item.title, yaSeLee: yaSeLee(conCategoria, subtitulo: subtitulo)))
+    }
+
+    /// Lo que ya nombra al proveedor alrededor de la fila: la categoría (cabecera encima en Listas o subtítulo
+    /// debajo) y, en Listas, la lista activa de arriba («NEW ERA», «Elcano»…). Petición de Isma.
+    private func yaSeLee(_ item: Item, subtitulo: String) -> [String] {
+        var textos: [String] = [subtitulo, item.category]
+        if seccion == .listas, let activa = biblioteca.webSources.first(where: { $0.id == biblioteca.activeWebSourceId }) {
+            textos.append(activa.name)
+        }
+        return textos
     }
 
     /// Un reciente sin categoría toma la del mismo hash en la lista activa.

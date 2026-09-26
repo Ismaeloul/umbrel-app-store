@@ -133,18 +133,16 @@ struct ResultadosBuscar: View {
     private func listaResultados(_ q: String) -> some View {
         let resultados = consulta?.datos?.results ?? []
         let indice = self.indice
-        let forma = RoundedRectangle(cornerRadius: R.xl, style: .circular)
+        let ultima = resultados.count - 1
         return LazyVStack(spacing: 0) {
             ForEach(Array(resultados.enumerated()), id: \.element.id) { (par: (offset: Int, element: SearchResult)) in
                 filaResultado(par.element, indice: indice)
                     .modifier(AparicionEscalonada(indice: modelo.entrando ? min(par.offset, ReglasBiblioteca.topeEscalonado) : nil))
                     .overlay(alignment: .top) { if par.offset > 0 { Rectangle().fill(Palco.lineSoft).frame(height: 1) } }
+                    .modifier(EsquinasFila(arriba: par.offset == 0, abajo: par.offset == ultima))
             }
         }
-        .background(Palco.surface, in: forma)
-        .clipShape(forma)
-        .bordeInterior(Palco.lineSoft, forma: forma)
-        .sombra(.s1, forma: forma)
+        .fondoTarjetaLista()  // sin recortar ni sombrear la lista entera (tirones al desplazar)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Resultados para «\(q)»")
         .id(q)
@@ -155,11 +153,13 @@ struct ResultadosBuscar: View {
     private func filaLocal(_ item: Item, coleccion: LibraryCollection, indice: IndiceAntena) -> some View {
         let canal = CanalFila(item)
         let antena = antenaDe(item.title, alias: item.alias, indice: indice)
+        let subtitulo = ReglasBiblioteca.subtitulo(item, coleccion: coleccion)
         return FilaCanal(
-            canal: canal, subtitulo: ReglasBiblioteca.subtitulo(item, coleccion: coleccion), caido: false,
+            canal: canal, subtitulo: subtitulo, caido: false,
             enPantalla: reproductor.canal?.id == item.id, antena: antena, tapado: tapado(antena, hash: item.id),
             acciones: acciones.menu(canal, origen: .coleccion(coleccion)), reproducir: { reproducir(canal, ih: item.ih) },
-            identificador: IDUI.filaCanal(item.id))
+            identificador: IDUI.filaCanal(item.id),
+            nombreVisible: ReglasBiblioteca.nombreFila(item.title, yaSeLee: [subtitulo]))
     }
 
     private func filaResultado(_ resultado: SearchResult, indice: IndiceAntena) -> some View {
