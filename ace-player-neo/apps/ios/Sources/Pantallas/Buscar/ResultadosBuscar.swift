@@ -153,13 +153,11 @@ struct ResultadosBuscar: View {
     private func filaLocal(_ item: Item, coleccion: LibraryCollection, indice: IndiceAntena) -> some View {
         let canal = CanalFila(item)
         let antena = antenaDe(item.title, alias: item.alias, indice: indice)
-        let subtitulo = ReglasBiblioteca.subtitulo(item, coleccion: coleccion)
         return FilaCanal(
-            canal: canal, subtitulo: subtitulo, caido: false,
+            canal: canal, subtitulo: ReglasBiblioteca.subtitulo(item, coleccion: coleccion), caido: false,
             enPantalla: reproductor.canal?.id == item.id, antena: antena, tapado: tapado(antena, hash: item.id),
             acciones: acciones.menu(canal, origen: .coleccion(coleccion)), reproducir: { reproducir(canal, ih: item.ih) },
-            identificador: IDUI.filaCanal(item.id),
-            nombreVisible: ReglasBiblioteca.nombreFila(item.title, yaSeLee: [subtitulo]))
+            identificador: IDUI.filaCanal(item.id))
     }
 
     private func filaResultado(_ resultado: SearchResult, indice: IndiceAntena) -> some View {

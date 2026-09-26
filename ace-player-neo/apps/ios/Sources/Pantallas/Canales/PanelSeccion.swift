@@ -10,6 +10,8 @@ struct PanelSeccion: View {
     let items: [Item]
     let acciones: AccionesCanal
     let indice: IndiceAntena
+    /// El «ahora» de Canales (30 s); la lista no mira el reloj compartido.
+    let ahora: Date
     let marcadores: [String: LiveScore]
     let tapado: (String, String) -> Bool
     let reproducir: (CanalFila) -> Void
@@ -17,12 +19,11 @@ struct PanelSeccion: View {
     @Environment(Navegador.self) private var navegador
     @Environment(CentroHojas.self) private var hojas
     @Environment(Reproductor.self) private var reproductor
-    @Environment(RelojCompartido.self) private var reloj
 
     private var consulta: String { modelo.consultaLimpia }
 
     var body: some View {
-        let contenido = FilaLista.de(items, seccion: seccion, consulta: consulta, abiertas: modelo.abiertas, ahora: reloj.ahora)
+        let contenido = FilaLista.de(items, seccion: seccion, consulta: consulta, abiertas: modelo.abiertas, ahora: ahora)
         // Una vez por pintada, no por fila: con listas de miles de canales, rehacer este conjunto en cada fila que
         // aparece al desplazar costaba en cada fotograma (tirones en Canales, prueba de Isma).
         let idsLista: Set<String> = seccion == .favoritos ? Set(biblioteca.web.map(\.id)) : []
@@ -68,18 +69,7 @@ struct PanelSeccion: View {
             caido: coleccion == .favorites && ReglasBiblioteca.caido(item, idsLista: idsLista),
             enPantalla: reproductor.canal?.id == item.id, antena: antena, tapado: tapado(partido, item.id),
             acciones: acciones.menu(canal, origen: .coleccion(coleccion)), reproducir: { reproducir(canal) },
-            identificador: IDUI.filaCanal(item.id),
-            nombreVisible: ReglasBiblioteca.nombreFila(item.title, yaSeLee: yaSeLee(conCategoria, subtitulo: subtitulo)))
-    }
-
-    /// Lo que ya nombra al proveedor alrededor de la fila: la categoría (cabecera encima en Listas o subtítulo
-    /// debajo) y, en Listas, la lista activa de arriba («NEW ERA», «Elcano»…). Petición de Isma.
-    private func yaSeLee(_ item: Item, subtitulo: String) -> [String] {
-        var textos: [String] = [subtitulo, item.category]
-        if seccion == .listas, let activa = biblioteca.webSources.first(where: { $0.id == biblioteca.activeWebSourceId }) {
-            textos.append(activa.name)
-        }
-        return textos
+            identificador: IDUI.filaCanal(item.id))
     }
 
     /// Un reciente sin categoría toma la del mismo hash en la lista activa.

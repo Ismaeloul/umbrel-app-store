@@ -15,15 +15,9 @@ struct FilaCanal: View {
     let acciones: [AccionMenu]
     let reproducir: () -> Void
     let identificador: String
-    /// El nombre que se lee, si no es el título entero (sin el proveedor que ya se lee encima: `nombreFila`).
-    var nombreVisible: String?
     @Environment(\.maquetacion) private var maquetacion
 
     private var titulo: String { canal.titulo.isEmpty ? "Canal sin nombre" : canal.titulo }
-    private var nombreLeido: String {
-        guard let nombreVisible, !nombreVisible.isEmpty else { return titulo }
-        return nombreVisible
-    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -32,11 +26,11 @@ struct FilaCanal: View {
                 .onTapGesture(perform: reproducir)
                 .menuContextual(acciones)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(enPantalla ? "\(nombreLeido), en pantalla" : nombreLeido)
+                .accessibilityLabel(enPantalla ? "\(titulo), en pantalla" : titulo)
                 .accessibilityHint(LineaAntena.texto(antena, tapado: tapado) ?? subtitulo)
                 .accessibilityAddTraits(.isButton)
                 .accessibilityIdentifier(identificador)
-            BotonMas(etiqueta: "Más acciones para \(nombreLeido)") { acciones }
+            BotonMas(etiqueta: "Más acciones para \(titulo)") { acciones }
                 .frame(width: 44, height: 44)
                 .padding(.trailing, 6)
         }
@@ -45,7 +39,6 @@ struct FilaCanal: View {
     private var principal: some View {
         HStack(spacing: 14) {
             MarcaCanal(nombre: titulo, forma: .tesela, tamano: 36)
-                .drawingGroup()  // una sola imagen por tesela (recortes y filos por dentro): las filas nuevas no dan tirones
                 .sombra([CapaSombra(y: 4, desenfoque: 12, expansion: -4, color: Color.black.opacity(0.5))],
                         forma: RoundedRectangle(cornerRadius: 5.76, style: .circular))
             VStack(alignment: .leading, spacing: 3) {
@@ -63,7 +56,7 @@ struct FilaCanal: View {
 
     private var nombre: some View {
         HStack(spacing: 6) {
-            Text(nombreLeido)
+            Text(titulo)
                 .estilo(EstiloTexto(tamano: 15, peso: 800, anchura: 125, trackingEm: -0.012, altoLinea: 1.2))
                 .foregroundStyle(Palco.text)
                 .lineLimit(1)
