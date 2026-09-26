@@ -154,6 +154,28 @@ describe('parseM3uStream', () => {
     expect(result.learnedSecrets).toContain('Cl4ve-Secreta-E2E');
   });
 
+  it('tvg-country y tvg-language (pestaña IPTV, §16.4): tal cual, 64 como mucho y nada con caracteres de control', async () => {
+    const long = 'x'.repeat(80);
+    const text = [
+      '#EXTM3U',
+      '#EXTINF:-1 tvg-id="T" tvg-country="ES" tvg-language="Spanish;English" group-title="Deportes",Teledeporte',
+      'http://p.example/1',
+      `#EXTINF:-1 tvg-country="${long}" tvg-language="  cat  ",Otro`,
+      'http://p.example/2',
+      '#EXTINF:-1 tvg-country="E\u0001S",Raro',
+      'http://p.example/3',
+      '#EXTINF:-1,Sin atributos',
+      'http://p.example/4',
+    ].join('\n');
+    const { entries } = await parseM3uStream(bytes(text));
+    expect(entries.map((entry) => [entry.tvgCountry, entry.tvgLanguage])).toEqual([
+      ['ES', 'Spanish;English'],
+      ['x'.repeat(64), 'cat'],
+      [null, null],
+      [null, null],
+    ]);
+  });
+
   it('titleComma: la primera coma fuera de comillas', () => {
     expect(titleComma('#EXTINF:-1 group-title="a,b",Nombre, con coma')).toBe(28);
     expect(titleComma('sin coma')).toBe(-1);

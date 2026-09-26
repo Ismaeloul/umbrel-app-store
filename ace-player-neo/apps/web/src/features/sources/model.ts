@@ -380,6 +380,11 @@ const STATE_SIGNAL: Record<ScanCandidateState, SourceSignal> = {
  */
 export function signalOf(effective: Effective, entry: SourceEntry): SourceSignal {
   if (effective.reported) return { state: 'fail', word: 'Reportada' };
+  // Una IPTV «en cola» del comprobador es una IPTV sin comprobar (§7.3 y §8.3):
+  // el comprobador no sondea su stream; se prueba al reproducirla. Con varios
+  // carteles IPTV (§17), «Pendiente · en cola» parecía un atasco.
+  if (effective.state === 'queued' && isIptv(entry))
+    return { state: 'pending', word: 'Sin comprobar' };
   if (effective.state !== 'none') return STATE_SIGNAL[effective.state];
   const percent = availabilityPercent(entry.availability);
   if (percent === null) return { state: 'pending', word: 'Sin comprobar' };
@@ -425,6 +430,11 @@ const REASON_PHRASE: Record<string, string> = {
   iptv_unsupported: 'formato no compatible',
 };
 
+/** La frase de un motivo de la IPTV («se cortó en el proveedor»), o null si no es de la IPTV (§19). */
+export function iptvReasonText(reason: string): string | null {
+  return reason.startsWith('iptv_') ? (REASON_PHRASE[reason] ?? null) : null;
+}
+
 /* Lo que se lee cuando el motivo no dice nada más. Las de «en cola» y
    «probándose» son las de la maqueta: al lado ya está la palabra del medidor,
    así que repetir «comprobando» no aportaba nada. */
@@ -442,7 +452,8 @@ export function detailOf(effective: Effective, entry: SourceEntry): string {
     return `apartada por tu reporte (${reportReasonLabel(entry.reported.reason).toLowerCase()})`;
   // Una IPTV sin comprobar es lo normal (la cuenta activa no es un stream
   // visto, §7.3): no hay disponibilidad que medir.
-  if (effective.state === 'none' && isIptv(entry)) return 'se prueba al reproducirla';
+  if ((effective.state === 'none' || effective.state === 'queued') && isIptv(entry))
+    return 'se prueba al reproducirla';
   if (effective.state === 'none') {
     const percent = availabilityPercent(entry.availability);
     return percent === null ? 'disponibilidad sin medir' : `${percent}% disponible`;
@@ -460,7 +471,8 @@ export function detailOf(effective: Effective, entry: SourceEntry): string {
 
 const TYPE_LABEL: Record<SourceOrigin, string> = {
   saved: 'Guardada',
-  m3u: 'M3U',
+  /* Isma, 26-sep: «M3U» confundía (la IPTV también sale de una lista M3U): lo de las listas es AceStream. */
+  m3u: 'AceStream',
   favorites: 'Favorito',
   history: 'Reciente',
   acestream: 'AceStream',
@@ -497,7 +509,7 @@ export interface SourcePresentation {
   type: string;
   list: string;
   provider: string;
-  /** «M3U · Elcano» */
+  /** «AceStream · Elcano» */
   label: string;
   /** El proveedor en una palabra: tras la flecha, si no la lista, si no el tipo. */
   short: string;
@@ -558,9 +570,12 @@ const IPTV_QUALITY_LABEL: Record<string, string> = {
 export function qualityTags(entry: Pick<SourceEntry, 'probe' | 'iptv'>): string[] {
   const probe = entry.probe;
   const measured = probe && (probe.rateKbps || probe.streamKbps || probe.videoCodec);
-  // IPTV sin medir: la calidad que declara su nombre (§8.1), y «reserva» si lo es.
+  // IPTV sin medir por el comprobador: la calidad que da el servidor (la del
+  // stream real si la conoce; si no, la del nombre: §8.1 y §17), «reserva» si
+  // lo es, y el país si no es España («DE»).
   if (entry.iptv && !measured) {
     return [
+      entry.iptv.country ?? null,
       entry.iptv.quality ? (IPTV_QUALITY_LABEL[entry.iptv.quality] ?? null) : null,
       entry.iptv.backup ? 'reserva' : null,
     ].filter((part): part is string => Boolean(part));
@@ -836,9 +851,12 @@ export function pickAutoSource(
   finished: boolean,
   { iptv = true }: { iptv?: boolean } = {},
 ): SourceEntry | null {
+  /* El gemelo de otro país («DE: DAZN 1» junto a «DAZN 1») no arranca solo (§17). */
   const pool = entries.filter(
     (entry) =>
-      !entry.autoTried && !effectiveById.get(entry.id)?.reported && (iptv || !isIptv(entry)),
+      !entry.autoTried &&
+      !effectiveById.get(entry.id)?.reported &&
+      (iptv ? !isForeignTwin(entry, entries) : !isIptv(entry)),
   );
   const firstIptv = pool.find(
     (entry) => isIptv(entry) && effectiveById.get(entry.id)?.state !== 'failed',
@@ -870,6 +888,7 @@ export function pickInitialSwitch(
       (entry) =>
         entry.id !== current.id &&
         !isReported(entry, now) &&
+        !isForeignTwin(entry, entries) &&
         (entry.probe?.state === 'working' || entry.probe?.state === 'weak'),
     ) ?? null
   );
@@ -912,12 +931,81 @@ export function pickBridgeTarget(
   if (from === 'iptv') return pickAutoSource(entries, effectiveById, finished, { iptv: false });
   return (
     entries.find((entry) => {
-      if (!isIptv(entry)) return false;
+      if (!isIptv(entry) || isForeignTwin(entry, entries)) return false;
       const effective = effectiveById.get(entry.id);
       if (!effective || effective.reported || effective.state === 'failed') return false;
       return !entry.failedAt || now - entry.failedAt >= BRIDGE_RECENT_TRY_MS;
     }) ?? null
   );
+}
+
+/**
+ * Canal de un cartel IPTV: su clave (la del servidor, `iptv.channel`, o si no
+ * la trae, su nombre) y su país. Dos carteles con el mismo son variantes del
+ * mismo canal (1080p, 720p, la reserva…); «DE: DAZN 1» y «DAZN 1», no (§17).
+ */
+function iptvChannelOf(entry: Pick<SourceEntry, 'title' | 'iptv'>): string {
+  const key = entry.iptv?.channel || foldForMatch(channelPartOf(entry.title)).trim();
+  return `${key}\u0000${entry.iptv?.country ?? ''}`;
+}
+
+/** ¿Son variantes del mismo canal IPTV (misma clave y mismo país)? */
+export function sameIptvChannel(
+  a: Pick<SourceEntry, 'title' | 'iptv' | 'origin'>,
+  b: Pick<SourceEntry, 'title' | 'iptv' | 'origin'>,
+): boolean {
+  return isIptv(a) && isIptv(b) && iptvChannelOf(a) === iptvChannelOf(b);
+}
+
+/**
+ * ¿Es el gemelo de otro país de un canal que también está en España o sin
+ * país? («DE: DAZN 1» junto a «DAZN 1»). Se enseña y se puede tocar, pero lo
+ * automático (arranque, variantes y puente) no lo elige: es otro canal, con
+ * otra programación (§17). Si solo está la extranjera, sí.
+ */
+export function isForeignTwin(
+  entry: Pick<SourceEntry, 'title' | 'iptv' | 'origin'>,
+  entries: readonly Pick<SourceEntry, 'title' | 'iptv' | 'origin'>[],
+): boolean {
+  if (!isIptv(entry) || !entry.iptv?.country) return false;
+  const key = iptvChannelOf(entry).split('\u0000')[0];
+  return entries.some(
+    (other) =>
+      isIptv(other) && !other.iptv?.country && iptvChannelOf(other).split('\u0000')[0] === key,
+  );
+}
+
+/**
+ * Variantes de la IPTV (docs/iptv.md §17): si cae un cartel IPTV (la 1080p),
+ * antes de saltar a AceStream se prueba el siguiente cartel IPTV DEL MISMO
+ * CANAL (misma clave y mismo país) en el orden del servidor (4K, 720p, SD, la
+ * reserva) que no se haya probado ya, no esté «Sin señal» ni reportado, y no
+ * haya caído en los últimos 60 s. Otro canal o el mismo nombre de otro país
+ * («DE: DAZN 1») no es una variante: ahí decide el puente (AceStream). null si
+ * no queda ninguna. Un fallo de cuenta vale para toda la IPTV: con él no se
+ * llama.
+ */
+export function pickNextIptvVariant(
+  entries: readonly SourceEntry[],
+  effectiveById: ReadonlyMap<string, Effective>,
+  failed: Pick<SourceEntry, 'id' | 'title' | 'iptv' | 'origin'>,
+  now: number,
+): SourceEntry | null {
+  return (
+    entries.find((entry) => {
+      if (entry.id === failed.id || !isIptv(entry) || entry.autoTried) return false;
+      if (!sameIptvChannel(entry, failed)) return false;
+      const effective = effectiveById.get(entry.id);
+      if (effective?.reported || effective?.state === 'failed') return false;
+      return !entry.failedAt || now - entry.failedAt >= BRIDGE_RECENT_TRY_MS;
+    }) ?? null
+  );
+}
+
+/** La calidad de un cartel IPTV para decirla («1080p», «4K»…), o null. */
+export function iptvQualityText(entry: Pick<SourceEntry, 'iptv'>): string | null {
+  const quality = entry.iptv?.quality;
+  return quality ? (IPTV_QUALITY_LABEL[quality] ?? null) : null;
 }
 
 /** Qué veredicto deja el reproductor al agotar una fuente (index.html:4953-4964, regla 21). */
@@ -1038,7 +1126,7 @@ export function resolutionSourceLabel(source: CandidateSource | string): string 
     (
       {
         saved: 'Asociación guardada',
-        m3u: 'Directorio M3U',
+        m3u: 'Lista de AceStream',
         favorites: 'Favoritos',
         history: 'Recientes',
         acestream: 'Buscador AceStream',
@@ -1055,7 +1143,7 @@ export function checkedLabel(value: string): string {
         saved: 'Vínculos',
         favorites: 'Favoritos',
         history: 'Recientes',
-        m3u: 'M3U',
+        m3u: 'Listas de AceStream',
         library: 'Biblioteca',
         acestream: 'AceStream',
         iptv: 'IPTV',

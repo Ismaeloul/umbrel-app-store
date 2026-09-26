@@ -8,8 +8,7 @@
    - `rewritePlaylist` añade `?t=<token>` a cada URI de la lista (también a
      `#EXT-X-MAP:URI`) para la app iOS (arquitectura §5.12). */
 
-import { createReadStream } from 'node:fs';
-import { readFile, stat } from 'node:fs/promises';
+import { open, readFile, type FileHandle } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { finished } from 'node:stream';
@@ -116,6 +115,70 @@ export function rewritePlaylist(text: string, token: string): string {
 export interface SendOptions {
   readonly rangeHeader?: string | undefined;
   readonly head?: boolean | undefined;
+  /**
+   * El fichero puede no estar TODAVÍA (la lista de un remux que arranca o se
+   * reinicia, docs/iptv.md §18): si falta, 503 con `Retry-After: 1` («aún no
+   * está», hls.js lo reintenta) en vez de 404.
+   */
+  readonly notYet?: boolean | undefined;
+  /** Cuánto esperar a que aparezca antes del 503 (por defecto `NOT_YET_WAIT_MS`; los tests, 0). */
+  readonly notYetWaitMs?: number | undefined;
+}
+
+/** «Aún no está»: la lista del remux mientras arranca o se reinicia (docs/iptv.md §18). */
+export const NOT_YET_HEADERS: Readonly<Record<string, string>> = {
+  'cache-control': 'no-store',
+  'retry-after': '1',
+};
+
+/**
+ * Lo que se espera a una lista que aún no está antes de responder 503 (docs/iptv.md §19): así un
+ * reproductor que no reintenta un 503 (el HLS nativo de Safari) casi nunca lo ve, y hls.js tampoco.
+ */
+export const NOT_YET_WAIT_MS = 2_500;
+const NOT_YET_POLL_MS = 150;
+
+/** ¿Es «el fichero no está» (y no un permiso, un límite de descriptores…)? */
+export function isMissing(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code;
+  return code === 'ENOENT' || code === 'ENOTDIR';
+}
+
+/**
+ * Abre un fichero y, si es una lista que aún no está (`notYet`), lo reintenta cada 150 ms hasta
+ * `NOT_YET_WAIT_MS` (o hasta que el cliente se vaya). null si sigue sin estar; otro error (EACCES, EMFILE)
+ * se lanza: eso es un error de verdad, no «aún no está».
+ */
+async function openWhenReady(
+  file: string,
+  notYet: boolean,
+  gone: () => boolean,
+  waitMs: number,
+): Promise<FileHandle | null> {
+  const until = Date.now() + (notYet ? waitMs : 0);
+  for (;;) {
+    try {
+      return await open(file, 'r');
+    } catch (error) {
+      if (!isMissing(error)) throw error;
+      if (Date.now() >= until || gone()) return null;
+      await new Promise((resolve) => setTimeout(resolve, NOT_YET_POLL_MS));
+    }
+  }
+}
+
+/** El texto de una lista que puede no estar todavía (la ruta nativa, que la reescribe con el token). */
+export async function readWhenReady(
+  file: string,
+  waitMs = NOT_YET_WAIT_MS,
+): Promise<string | null> {
+  const handle = await openWhenReady(file, true, () => false, waitMs);
+  if (!handle) return null;
+  try {
+    return await handle.readFile('utf8');
+  } finally {
+    await handle.close().catch(() => undefined);
+  }
 }
 
 /* Espera a que la respuesta termine (o se corte) para que la capa HTTP la
@@ -180,17 +243,41 @@ export async function sendFile(
 ): Promise<FileObservation | null> {
   let size: number;
   let mtimeMs: number;
+  /* Se abre ANTES de medir y se lee de ese mismo descriptor: si el remux se
+     reinicia y borra la carpeta entre medias, ya no hay un ENOENT al abrir el
+     stream (que salía como 500 «error interno», docs/iptv.md §18). */
+  const found = await openWhenReady(
+    file,
+    Boolean(options.notYet),
+    () => reply.raw.destroyed,
+    options.notYetWaitMs ?? NOT_YET_WAIT_MS,
+  );
+  if (!found) {
+    sendEmpty(
+      reply,
+      options.notYet ? 503 : 404,
+      options.notYet ? { ...NOT_YET_HEADERS } : { 'cache-control': 'no-store' },
+    );
+    await settle(reply);
+    return null;
+  }
+  const handle = found;
   try {
-    const info = await stat(file);
+    const info = await handle.stat();
     if (!info.isFile()) throw new Error('not_file');
     size = info.size;
     mtimeMs = info.mtimeMs;
   } catch {
+    await handle.close().catch(() => undefined);
     sendEmpty(reply, 404, { 'cache-control': 'no-store' });
     await settle(reply);
     return null;
   }
+  const close = (): void => {
+    void handle.close().catch(() => undefined);
+  };
   if (size === 0 && !options.rangeHeader) {
+    close();
     sendEmpty(reply, 200, {
       'content-type': remuxContentType(file),
       'content-length': '0',
@@ -203,6 +290,7 @@ export async function sendFile(
   }
   const range = parseByteRange(options.rangeHeader, size);
   if (range === false) {
+    close();
     sendEmpty(reply, 416, { 'content-range': `bytes */${size}`, 'cache-control': 'no-store' });
     await settle(reply);
     return { size, mtimeMs };
@@ -210,9 +298,11 @@ export async function sendFile(
   const out = rangeHeaders(file, size, range);
   reply.code(out.status).headers(out.headers);
   if (options.head) {
+    close();
     void reply.send();
   } else {
-    const stream = createReadStream(file, { start: out.start, end: out.end });
+    /* `autoClose`: el stream cierra el descriptor al acabar o al fallar. */
+    const stream = handle.createReadStream({ start: out.start, end: out.end, autoClose: true });
     stream.on('error', () => reply.raw.destroy());
     void reply.send(stream);
   }

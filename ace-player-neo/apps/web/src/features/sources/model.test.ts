@@ -119,12 +119,15 @@ describe('presentación de la fuente', () => {
   it('nombre corto: proveedor, si no la lista sin «Directorio (de)», si no el tipo', () => {
     const lists = [{ id: 'principal', name: 'Directorio de Elcano' }];
     expect(presentationOf(entryFromCandidate(candidate(1)), lists)).toMatchObject({
-      type: 'M3U',
+      type: 'AceStream',
       short: 'Prov1',
-      label: 'M3U · Prov1',
+      label: 'AceStream · Prov1',
     });
     const plain = entryFromCandidate(candidate(2, { title: 'DAZN 1' }));
-    expect(presentationOf(plain, lists)).toMatchObject({ short: 'Elcano', label: 'M3U · Elcano' });
+    expect(presentationOf(plain, lists)).toMatchObject({
+      short: 'Elcano',
+      label: 'AceStream · Elcano',
+    });
     const bare = entryFromCandidate(
       candidate(3, { title: 'DAZN 1', listaId: null, source: 'saved' }),
     );

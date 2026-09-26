@@ -4,16 +4,16 @@ escritorio). El código está en `src/features/library/`; «Pegar hash» en
 `src/features/paste-hash/`. Capturas y revisión de 11 tamaños en
 `docs/capturas/fase2/biblioteca/`.
 
-| Fichero (`library/`) | Qué |
-|---|---|
-| `LibraryView.tsx` | Pestañas (abre en la que tiene contenido, viaja en `&pestana=`), filtro local de 140 ms, «Buscar «q» en el motor», acordeones de categorías, vacíos con salida, pie |
-| `ChannelRow.tsx` | Tarjeta con dorsal (C2), lo que da hoy, «En pantalla», estrella y «Más» (también clic derecho y pulsación larga) |
-| `OnAirStrip.tsx` / `on-air.ts` | «Emitiendo ahora» (C1): cruce canal ↔ agenda con `channelMatchScore ≥ 92`, hora de Madrid, marcadores 8 s / 45 s |
-| `ChannelDetail.tsx` | Ficha del panel lateral (≥ 1024): Ver canal, acciones, «Ahora» con anillo, «Después», hash |
-| `data.ts` | Cambios optimistas; borrar y quitar favorito con DESHACER de 6 s (se mandan con `keepalive` si se cierra la página) |
-| `actions.ts` / `clipboard.ts` | Menú: favorito, «Abrir en la app AceStream», «Copiar URL del stream (VLC)», copiar enlace/hash/nombre (con respaldo `execCommand` por HTTP) |
-| `play.ts` | Reproducir (API del reproductor + `partido/canal/<hash>`); un doble clic navega una sola vez |
-| `VirtualList.tsx` | Lista virtualizada sobre el scroll de la página |
+| Fichero (`library/`)           | Qué                                                                                                                                                                 |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LibraryView.tsx`              | Pestañas (abre en la que tiene contenido, viaja en `&pestana=`), filtro local de 140 ms, «Buscar «q» en el motor», acordeones de categorías, vacíos con salida, pie |
+| `ChannelRow.tsx`               | Tarjeta con dorsal (C2), lo que da hoy, «En pantalla», estrella y «Más» (también clic derecho y pulsación larga)                                                    |
+| `OnAirStrip.tsx` / `on-air.ts` | «Emitiendo ahora» (C1): cruce canal ↔ agenda con `channelMatchScore ≥ 92`, hora de Madrid, marcadores 8 s / 45 s                                                    |
+| `ChannelDetail.tsx`            | Ficha del panel lateral (≥ 1024): Ver canal, acciones, «Ahora» con anillo, «Después», hash                                                                          |
+| `data.ts`                      | Cambios optimistas; borrar y quitar favorito con DESHACER de 6 s (se mandan con `keepalive` si se cierra la página)                                                 |
+| `actions.ts` / `clipboard.ts`  | Menú: favorito, «Abrir en la app AceStream», «Copiar URL del stream (VLC)», copiar enlace/hash/nombre (con respaldo `execCommand` por HTTP)                         |
+| `play.ts`                      | Reproducir (API del reproductor + `partido/canal/<hash>`); un doble clic navega una sola vez                                                                        |
+| `VirtualList.tsx`              | Lista virtualizada sobre el scroll de la página                                                                                                                     |
 
 Decisiones (modo autónomo, 23-sep):
 

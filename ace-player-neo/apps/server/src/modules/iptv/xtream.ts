@@ -13,7 +13,11 @@
    - `get_short_epg`: guía de respaldo, con `title`/`description` en base64.
    - Los números llegan a menudo como texto (`"1"`): se aceptan los dos.
    - `auth: 0` o un 401/403 dan `iptv_auth_failed`; `status` distinto de
-     `Active`, `iptv_account_expired`.
+     `Active`, `iptv_account_expired`. Una respuesta sin `user_info` es
+     `iptv_unreachable` con `detail: sin_user_info` (§16.8), no un fallo de
+     contraseña.
+   - `get_live_categories` da también el ORDEN de las categorías (la pestaña
+     IPTV las enseña así, §16.3); un canal con `category_ids` usa el primero.
    - URL de stream: `{server}/live/{U}/{P}/{stream_id}.{ext}` con `ts` si está
      en `allowed_output_formats` (o si viene vacía) y si no `m3u8`. No se usa
      `direct_source` ni `server_info.url`: manda el servidor que escribió Isma. */
@@ -191,6 +195,7 @@ export async function xtreamUserInfo(
   credentials: XtreamCredentials,
   options: XtreamCallOptions,
 ): Promise<XtreamAccount> {
+  let body: unknown;
   try {
     const response = await net.fetchJson(xtreamApiUrl(credentials), {
       maxBytes: IPTV_XTREAM_LIMITS.userInfo.maxBytes,
@@ -199,13 +204,30 @@ export async function xtreamUserInfo(
       iptv: options.policy,
       ...(options.signal ? { signal: options.signal } : {}),
     });
-    return parseUserInfo(response.body);
+    body = response.body;
   } catch (error) {
     throw toIptvError(error, 'account');
   }
+  /* Sin `user_info` («[]», «{}», una portada en JSON) el panel no ha contestado
+     bien: NO es «usuario y contraseña que no valen» (§16.8). Solo `auth: 0`,
+     un 401 o un 403 lo son. */
+  if (!hasUserInfo(body)) {
+    throw new AppError('iptv_unreachable', { detail: 'sin_user_info' });
+  }
+  return parseUserInfo(body);
 }
 
-/** `get_live_categories`: id → nombre. Un fallo aquí no tumba la sincronización. */
+/** ¿Trae la respuesta sin `action` un objeto `user_info`? */
+export function hasUserInfo(body: unknown): boolean {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return false;
+  const info = (body as Record<string, unknown>).user_info;
+  return Boolean(info && typeof info === 'object' && !Array.isArray(info));
+}
+
+/**
+ * `get_live_categories`: id → nombre, en el orden del panel (el `Map`
+ * conserva el de inserción). Un fallo aquí no tumba la sincronización.
+ */
 export async function xtreamCategories(
   net: NetClient,
   credentials: XtreamCredentials,
@@ -233,6 +255,29 @@ export async function xtreamCategories(
     throw toIptvError(error, 'list');
   }
   return out;
+}
+
+/**
+ * Categoría de un canal de `get_live_streams`: `category_id` o, si falta,
+ * el primero de `category_ids` (hay paneles que mandan la lista; §16.3).
+ */
+export function streamCategoryId(item: Record<string, unknown>): string {
+  const direct = looseString(item.category_id);
+  if (direct) return direct;
+  const list = Array.isArray(item.category_ids) ? (item.category_ids as unknown[]) : [];
+  for (const value of list) {
+    const id = looseString(value);
+    if (id) return id;
+  }
+  return '';
+}
+
+/**
+ * Nombres de las categorías en el orden de `get_live_categories`, sin
+ * repetir (dos categorías con el mismo nombre se juntan en una, §16.3).
+ */
+export function categoryOrder(categories: ReadonlyMap<string, string>): string[] {
+  return [...new Set(categories.values())];
 }
 
 /**
@@ -276,7 +321,7 @@ export async function xtreamLiveStreams(
           streamId,
           name: name.slice(0, 200),
           epgChannelId: looseString(item.epg_channel_id).slice(0, 200),
-          categoryId: looseString(item.category_id),
+          categoryId: streamCategoryId(item),
         });
       },
       { maxObjectBytes: IPTV_XTREAM_LIMITS.maxObjectBytes },

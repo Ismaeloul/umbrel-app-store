@@ -1,7 +1,7 @@
 {
   "name": "@ace/server",
   "private": true,
-  "version": "0.8.1",
+  "version": "0.8.2",
   "type": "module",
   "description": "Backend de Ace Player Neo (Fastify + TypeScript)",
   "scripts": {

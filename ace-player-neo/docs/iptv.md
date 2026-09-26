@@ -44,6 +44,22 @@ otra lista: §15.
 **D10 resuelto (26-sep-2026) e implementado el mismo día en `rediseno/iptv`:** la IPTV entra en el buscador junto con AceStream. El anexo
 §14 lo diseña y **manda** sobre lo que digan de favoritos, recientes y buscador §4.4, §4.6, §8.1 y §8.4.
 
+**Pestaña IPTV en Canales (26-sep-2026, para la 0.8.2; diseño en `iptv/pestana`; contrato y servidor en
+`iptv/pestana-servidor`, web en `iptv/pestana-web`, todo unido en `iptv/pestana` con `rediseno/iptv`):** recorrer la
+IPTV por las categorías del proveedor, con buscador y filtros de país, idioma, tipo, deporte y calidad calculados en el
+servidor, y el arreglo del 502 del primer «Guardar». El anexo §16 lo diseña y **manda** sobre §14.7 (canales listados
+sin buscar) y sobre «nunca lleva grupo» de §14.2. Lo que ya está y lo que falta, en §16.13 (servidor), §16.14 (web) y
+§16.15 (la unión).
+
+**Todo desbloqueado y variantes de resolución (Isma, 26-sep-2026; implementado el mismo día en `rediseno/iptv`):**
+«mejor déjalo todo desbloqueado» y «en las IPTV hay muchos canales que se llaman igual pero tienen una resolución
+diferente». El buscador enseña todos los canales de la IPTV (cualquier país y los grupos para adultos); el país pasa a
+ser una **preferencia de orden** en el emparejado automático; las variantes de un canal («DAZN 1 FHD», «DAZN 1 HD»,
+«ES: DAZN 1 1080p», «DAZN 1 (backup)»…) son **una fila** en el buscador, con sus calidades, y **un cartel por
+resolución** en el panel de fuentes (4 como mucho), que arranca por la 1080p y pasa a la siguiente variante IPTV antes
+de saltar a AceStream. El anexo §17 lo diseña y **manda** sobre §0.3, §3.4, §4.2 a §4.4, §6.1, §8.1, §14.2, §14.3,
+§14.7 y D9, D23 y D25.
+
 Las rutas de ficheros son relativas a `ace-player-neo/` salvo que se diga otra cosa. Los textos entre «comillas» son
 **literales**: se copian tal cual en el código, porque la app nativa los genera desde la web (`generar-textos.mjs`) y
 los compara en `TextosTests`.
@@ -60,8 +76,9 @@ los compara en `TextosTests`.
    ya reproduce IPTV sin cambios**, aunque sin distintivo.
 3. El servidor empareja la IPTV con los canales de los partidos y con los de las listas de AceStream usando el mismo
    `channelMatchScore` y la protección Hypermotion, pero con un **umbral de 92** y una limpieza de nombres propia de la
-   IPTV. La IPTV va **primera**, con **un cartel por canal y 2 como mucho**. La guía (XMLTV), que se usa solo por
-   dentro, puede poner primero el canal que de verdad emite el partido.
+   IPTV. La IPTV va **primera**, con **un cartel por variante de resolución (1080p, 4K, 720p, SD) y 4 como mucho**
+   (§17; antes, «un cartel por canal y 2 como mucho»). La guía (XMLTV), que se usa solo por dentro, puede poner primero
+   el canal que de verdad emite el partido.
 4. El vídeo IPTV **siempre pasa por el servidor**. Un relé local en `127.0.0.1` descarga del proveedor (con la
    protección SSRF) y se lo da a ffmpeg, así que las credenciales nunca aparecen en los argumentos. ffmpeg lo remuxa a
    HLS fMP4 (vídeo copiado y audio a AAC). La web lo reproduce con **hls.js** (protocolo `hls`) y el iPhone con AVPlayer,
@@ -476,8 +493,9 @@ Cliente: `modules/iptv/xtream.ts`. Todas las llamadas son `GET {server}/player_a
   - `base`, `quality`, `backup`, `hevc` y `country` salen de `cleanIptvTitle()` (§4.2).
 - **Índice.** Por `normalizeChannelKey(base)` y por palabras, para no pasar `channelMatchScore` sobre 30 000 entradas
   en cada resolución: primero se filtra por palabras compartidas y luego se puntúa.
-- **Variantes.** Las entradas con la misma `base` (FHD, HD, reserva) forman un **grupo**. Hacia fuera solo sale el id
-  de la mejor variante (§4.3); las demás quedan dentro del servidor como respaldo del relé.
+- **Variantes.** Las entradas con la misma `base` (FHD, HD, reserva) forman un **grupo**. **Cambia con §17:** dentro
+  del grupo, España y sin país son un canal y cada otro país es otro (`buckets`); de cada canal sale un cartel por
+  resolución (4 como mucho) y las copias de una resolución que ya tiene cartel quedan dentro como respaldo del relé.
 - **Topes.** 100 000 canales en directo (`iptv_too_large` si pasa, sin guardar nada). La lista M3U pesa 64 MiB como
   mucho comprimida y 160 MiB descomprimida. El tiempo total es de 120 s.
 - **Aplicación de un resultado.**
@@ -635,8 +653,23 @@ número** y la entrada IPTV acaba en « 1», se puntúa también sin ese « 1»,
 (anonimizados, sin URLs) con el resultado esperado. Las trampas medidas deben seguir fuera: Hypermotion contra LaLiga
 TV (58), «Bar» (58), «Antena 3 Internacional» (58), «DAZN 1» contra «DAZN F1» (0).
 
-**Filtro de país.** Solo entran en el emparejado las entradas con `country` ES o `null`. «UK: Sky Sports» o «IT: DAZN
-1» no pueden casar con «DAZN 1». Es una decisión por defecto (§12).
+**País: preferencia, no filtro (cambia con §17, Isma 26-sep: «déjalo todo desbloqueado»).** Antes solo entraban en
+el emparejado las entradas ES o sin país. Ahora entran todas: España y sin país son un canal y cada otro país es otro
+del mismo nombre; con la misma puntuación, el de España o sin país va antes. Así «DAZN 1» de España va antes que «DE:
+DAZN 1», pero si solo existe el extranjero y casa por nombre, sale. El umbral 92 y Hypermotion no cambian. La guía sigue
+exigiendo España (§4.5, regla 5): es lo que pone un canal primero sin que la agenda lo anuncie. **Cambia otra vez con
+§19.5:** con la lista real, el mismo nombre en otro país es otra programación («DAZN 2 (FR)», «TV3 (SW)»), así que el
+emparejado automático vuelve a coger solo España o sin país; el buscador sigue enseñándolo todo.
+
+**Lista real (§18).** Con la lista de Isma del 26-sep la limpieza suma: cabeceras y «NO MATCH» fuera del catálogo,
+«ES TI - », «ES-» pegado, la «Ñ» final, el país de `CONTINENTE | PAÍS | TEMA`, ᴿᴬᵂ como reserva, notas entre
+corchetes, «(BK-1)» como reserva y la grafía única `channelSpelling` (@ace/shared: «M.», «M+», «MOVISTAR PLUS+» →
+Movistar; «LA SEXTA» = «LASEXTA»; «LALIGA+» → «LaLigaPlus»…). Detalle en §18.2 y §19.5.
+
+**Variantes (§17).** Además de lo de arriba, la limpieza reconoce `1080p50`/`720p60`, `HD+`, `H264`/`AVC`, `HDR`,
+`VIP`, la reserva con número pegado (`bk2`), la copia del final entre paréntesis (`(1)`, `(2)`: de la 2 en adelante,
+reserva), España al final entre corchetes o barras (`[ES]`, `|ES|`) y lo que va delante del país sin serlo (`VIP |
+ES: …`, `FHD | ES: …`). Un «Canal Sur (2)» sin ningún «Canal Sur» al lado es «Canal Sur 2», no una copia.
 
 ### 4.3 IPTV ↔ canal emisor de un partido
 
@@ -667,6 +700,10 @@ está activa y el catálogo cargado. No depende del motor, así que también fun
      `iptv_account_expired`), no se prueban variantes: se salta directamente a AceStream.
 5. **Tope: 2 candidatas IPTV en total** por resolución (dos canales distintos, por ejemplo «DAZN LaLiga» y «M+ LaLiga
    TV»). Es «una fuente más con su distintivo», no una fila de carteles del mismo canal.
+   - **Cambian con §17 (Isma, 26-sep):** los puntos 4 y 5. Sale **un cartel IPTV por variante de resolución**, en el
+     orden 1080p, 4K, 720p, SD y detrás las reservas y las URLs con macros (HEVC solo si el canal no tiene otra cosa),
+     **4 carteles como mucho** entre todos los canales (los 2 primeros canales de verdad tienen uno asegurado). Las
+     copias de una resolución que ya tiene cartel quedan dentro, de respaldo del relé.
 6. **Guía (§4.5).** Una IPTV confirmada por la guía ocupa una de esas 2 plazas, con puntuación 100 y `matchedChannel` =
    el nombre del canal IPTV limpio. Si la guía y el nombre dan el mismo canal (misma `base`), sale una vez, con
    `guide: true`.
@@ -674,7 +711,8 @@ está activa y el catálogo cargado. No depende del motor, así que también fun
 ### 4.4 IPTV ↔ canales de las listas de AceStream (canales sueltos)
 
 Es la misma capa, llamada con `scope=channel` (§5.2) y con el título del canal que se abre (por ejemplo «Antena 3»)
-como único canal pedido. Umbral 92, los mismos desempates, un cartel por canal y 2 IPTV como mucho.
+como único canal pedido. Umbral 92, los mismos desempates, un cartel por canal y 2 IPTV como mucho (**cambia con
+§17**: un cartel por variante de resolución, 4 como mucho).
 
 **Alcance (D10, resuelto por Isma el 26-sep; diseño en §14):** la IPTV complementa los canales y partidos que ya
 existen **y además entra en el buscador**.
@@ -1095,6 +1133,11 @@ proveedor ──(net: SSRF, IP fijada, UA)──► relé 127.0.0.1:<p>/r/<ticke
   AVPlayer.
 - **Variantes.** Si el canal da `iptv_gone`, `iptv_timeout` o `iptv_dropped` y tiene otra variante (§4.3), el relé la
   prueba **una vez** (con reinicio de remux, como arriba) antes de dar la IPTV por caída. Con un fallo de cuenta, no.
+  **Cambia con §17:** el relé solo prueba detrás de un cartel las variantes **sin cartel propio** que le tocan (las
+  copias de su misma resolución; las que no tienen cartel de su resolución, detrás del último), 2 como mucho. Las
+  variantes con cartel las prueba la web, una tras otra, antes de saltar a AceStream: así se ve en cuál estás.
+  Además, al aplanar una maestra el relé avisa al servicio de la `RESOLUTION` elegida: es la calidad real de esa
+  variante.
 - **Si se agota:** primero se cierra la sesión en playback con `iptv_dropped` (§7.4) y **después** se mata ffmpeg. Así
   gana `iptv_dropped` y no un `remux_died` que la web o la 0.8.0 reintentarían 3 veces contra un proveedor caído.
 
@@ -1440,6 +1483,8 @@ reproduce. Por eso:
   - la calidad sale de `iptv.quality` si no hay `bitrate`/códec: `fhd` → «1080p», `hd` → «720p», `uhd` → «4K»,
     `sd` → «SD»;
   - `backup` añade «reserva» (solo si la mejor variante es una reserva: las demás no salen, §4.3).
+  - **Cambia con §17:** hay un cartel por variante de resolución, cada uno con su etiqueta de calidad (la del stream
+    real si el servidor la conoce), «reserva» en el de la reserva y el país delante si no es España («DE»).
 - **Estado:** el mismo `SignalRing` con los estados de siempre. `REASON_PHRASE` suma:
   - `iptv_busy: 'conexión ocupada'`
   - `iptv_auth_failed: 'la cuenta no entra'`
@@ -1729,7 +1774,9 @@ el PC contra una copia de `/data`.
 
 ## 10. Impacto en la app nativa (`rediseno/nativa`)
 
-El buscador con IPTV (D10) suma lo de §14.10 a esta sección.
+El buscador con IPTV (D10) suma lo de §14.10 a esta sección, las variantes de resolución y el «todo desbloqueado»,
+lo de §17.9, la normalización con la lista real, la etiqueta «AceStream» y el dorsal sin resolución, lo de §18.8, y la
+fila de canal con etiquetas de origen, la IPTV ocupada y el origen en Datos técnicos, lo de §19.8.
 
 **Sin cambiar nada, incluida la 0.8.0 publicada:**
 - La IPTV llega en cabeza de `candidates` y como `candidate`, se puede elegir a mano con un toque y se reproduce por la
@@ -1894,7 +1941,7 @@ comprobar el 403 de `/native` y la ruta `video`, y los fixtures del contrato par
 | D6 | **El puente IPTV ↔ AceStream vale también en manual y en canales sueltos** | «si uno no va, va el otro»; los saltos entre dos AceStream siguen como hoy (P16.3 y P16.4) |
 | D7 | **Volver a la IPTV solo con un toque**, nunca solo | evita ir y volver sin parar; el aviso lleva el botón |
 | D8 | **Umbral 92 para la IPTV** (70 para las listas), con limpieza de grafías propia | catálogos de miles de canales: mejor no emparejar que emparejar mal |
-| D9 | **Filtro de país: ES o sin país; para la guía, ES explícito** (o sin país que case con la agenda) | «IT: DAZN 1» no es «DAZN 1»; si hace falta, se abre como ajuste |
+| D9 | **Resuelto por Isma (26-sep): país como preferencia, no como filtro** (§17). Entran todos los países; España y sin país son un canal y cada otro país es otro del mismo nombre; con la misma puntuación, España o sin país va antes. **Lo automático no cambia de país** (§17.6): el gemelo de otro país de un canal que también está en España («DE: DAZN 1» junto a «DAZN 1») sale como cartel y se puede tocar, pero ni arranca solo ni recibe el salto entre variantes ni el del puente. **La guía sigue exigiendo ES explícito** (o sin país que case con la agenda), y la guía solo guarda programas de canales ES o sin país (por dentro, no se ve) | «mejor déjalo todo desbloqueado»; «DAZN 1» de España antes que «DE: DAZN 1», pero si solo existe el extranjero y casa por nombre, sale |
 | D10 | **Resuelto por Isma (26-sep): la IPTV entra en el buscador** (Buscar y el filtro de Canales), junto con AceStream; un canal solo de la IPTV también sale y se guarda en Favoritos. Sigue fuera de la agenda y de «Listas» (§4.4, §14) | «quiero que en el buscador salgan los dos»: su ejemplo es Antena 3, que puede no estar en sus listas de AceStream |
 | D11 | **Cambiar servidor o tipo exige reescribir credenciales y crea otro `provider.id`** | nadie puede mandar la contraseña guardada a otro host, y nada de un servidor se aplica a otro |
 | D12 | **Lista cada 6 h, guía cada 8 h, cuenta cada 10 min** | «unas pocas veces al día»; los tres se retrasan si se está viendo |
@@ -1908,12 +1955,14 @@ comprobar el 403 de `/native` y la ruta `video`, y los fixtures del contrato par
 | D20 | **demo-5 gana una IPTV; demo-4 no cambia** | la demo enseña la función sin borrar el único caso de «probamos la fuente 3» |
 | D21 | **HEVC no se transcodifica**: fuera de la web, válido en el iPhone | la CPU del N300; es la misma regla D6 que AceStream |
 | D22 | **Sin «Probar conexión»**: «Guardar IPTV» prueba rápido y el recuento llega por SSE | como «Listas»; sin peticiones de 130 s ni `location` especial en nginx |
-| D23 | **Un cartel por canal IPTV y 2 como mucho**; las variantes, dentro del servidor | «una fuente más con su distintivo» |
+| D23 | **Cambiada por Isma (26-sep): un cartel IPTV por variante de resolución, 4 como mucho** (1080p, 4K, 720p, SD y detrás las reservas y las URLs con macros); las copias de una resolución que ya tiene cartel, dentro del servidor como respaldo del relé (§17). Antes: un cartel por canal y 2 como mucho | «para saber cuál va a 1080 y cuál a 720» |
 | D24 | **Sin sonda de stream en resoluciones interactivas**; solo de fondo, en Xtream y con `active_cons == 0` | la reproducción es la prueba y no se molesta a la tele de Isma |
-| D25 | **El buscador IPTV enseña solo canales de España o sin país** (D9) y nunca los grupos para adultos (§14.2) | catálogos de decenas de miles de canales repetidos por país; se abre como ajuste si hace falta |
-| D26 | **Un canal, una fila**: si está en tu biblioteca, manda su fila (con «IPTV»); si no, la fila IPTV; los resultados del motor que son ese canal se esconden (§14.3) | «sale una vez y lleva el distintivo IPTV»; tus favoritos no desaparecen del buscador |
+| D25 | **Resuelto por Isma (26-sep): el buscador enseña todo** (§17): canales de cualquier país (con su país en una etiqueta) y también los grupos para adultos. Una fila por canal: las variantes de resolución van juntas, con sus calidades; el mismo nombre en otro país es otra fila | «mejor déjalo todo desbloqueado» |
+| D26 | **Un canal, una fila** (rehecho en §19): la fila es el CANAL con su nombre limpio y etiquetas de dónde se ve («IPTV» con sus calidades, «AceStream» con cuántas fuentes); una entrada de AceStream de tu biblioteca que es ese canal se junta con él, nunca lleva «IPTV» encima; un canal de tu IPTV guardado es su propia fila; los resultados del motor que son ese canal se esconden y suman (§14.3 y §19) | Isma, 26-sep: vio «LA 1 4K --> NEW ERA» con «IPTV» y lo leyó como un error; «si no es de la IPTV, esto es 100 % de AceStream» |
 | D27 | **`iptvChannels` nace con `access: 'web'`** y pasa a `any` cuando la app calque el buscador (§14.10) | no rompe `FixturesTests` de la app antes de tiempo; el contenido no tiene nada secreto |
 | D28 | **Re-emparejado de favoritos y recientes IPTV al sincronizar**; un favorito que no casa se quita a las 24 h, un reciente al momento (§14.6) | «se vuelve a emparejar por nombre o se descarta sin errores feos», sin perder un favorito por una sincronización rara |
+| D29-D36 | **Pestaña IPTV en Canales** (§16.12): ruta `iptvBrowse` `web`; una ruta con categorías, facetas y página; fila = clave + país; facetas disyuntivas; categorías por nombre; tablas propias; pestaña sin contador; reintento del «Guardar» solo con fallos rápidos y pasajeros | lo pidió Isma el 26-sep para la 0.8.2 |
+| D37 | **Todo país pasa por la tabla de §16.4**, también el que saca del nombre la limpieza de §18; «AR» y «LA» nunca son país (ni con separador), los continentes delante tampoco, y Canadá no da idioma (§16.16) | una lista real con sección árabe llenaba la pestaña de filas «AR» que parecían Argentina |
 
 ### 12.2 Riesgos
 
@@ -2053,8 +2102,9 @@ Este anexo manda sobre lo que digan §4.4, §4.6, §8.1 y §8.4 de favoritos, re
 
 1. **Buscar** (y el **filtro de Canales**) enseñan a la vez tu IPTV y AceStream. Un canal que solo está en la IPTV
    también sale. No hay pestañas ni filtros «IPTV / AceStream»: todo es automático.
-2. **Un canal, una fila** (D26). Si el canal está en tu biblioteca, sale su fila de siempre con el distintivo «IPTV»;
-   si no, sale la fila IPTV. Los resultados del motor que son ese mismo canal se esconden.
+2. **Un canal, una fila** (D26, rehecho en §19). La fila es el canal («La 1») con etiquetas de dónde se ve: «IPTV»
+   con sus calidades y «AceStream» con cuántas fuentes. Una entrada de AceStream de tu biblioteca que es ese canal se
+   junta con él (nunca «IPTV» encima de ella); los resultados del motor que son ese mismo canal se esconden y suman.
 3. **Tocar un canal IPTV es como tocar un partido:** IPTV primero, las fuentes de AceStream de ese canal comprobándose
    de fondo, el puente de §7.2 si una cae y «Volver a la IPTV» con un toque.
 4. **Un canal solo de la IPTV** se reproduce por la IPTV y el servidor lo busca además, de fondo, en AceStream (listas
@@ -2113,6 +2163,10 @@ export const IptvChannelSchema = z.strictObject({
   /** Nombre limpio («Antena 3»): sin país, adornos, calidad ni reserva. */
   title: z.string().min(1).max(120),
   quality: IptvQualitySchema.nullable(),
+  /** §17: todas las calidades del canal, de mayor a menor resolución («4K · 1080p · 720p»). */
+  qualities: z.array(IptvQualitySchema).max(4).optional(),
+  /** §17: país si no es España ni sin país («DE»). */
+  country: z.string().min(2).max(8).nullable().optional(),
   /** El nombre que Isma puso al proveedor («Casa»). */
   provider: z.string().max(IPTV_NAME_MAX),
   /** Ids de tu biblioteca (favoritos, recientes o la lista activa) que son este canal (≥ 92), de mejor a peor. */
@@ -2183,14 +2237,14 @@ iptvIds: z.record(HashSchema, z.enum(['ok', 'iptv_gone', 'iptv_disabled', 'iptv_
    clave contiene la consulta entera.
    - Se usa el índice de palabras de la preselección (§3.4): para cada palabra de la consulta se juntan los grupos de
      las palabras del índice que empiezan por ella y se intersecan. Nada recorre las 100 000 entradas.
-2. **Qué no sale nunca:**
-   - canales con país distinto de ES o sin país (D25, el mismo filtro que D9);
-   - grupos para adultos: `group-title` o nombre con `xxx`, `adult`, `adults`, `adulto(s)`, `adulta(s)`, `+18`, `18+`
-     o `porn…` (por palabra, sin tildes);
-   - el VOD (ya no está en el catálogo, §3.2).
-3. **Una fila por grupo** (D23): el id es el de la mejor variante (§4.3), con su `quality`.
+2. **Qué no sale nunca:** solo el VOD (ya no está en el catálogo, §3.2). **Cambia con §17 (D25):** ya no se quitan
+   los canales de otros países ni los grupos para adultos.
+3. **Una fila por canal** (§17): las variantes de resolución de un canal son una fila; el mismo nombre en otro país
+   es otra fila. El id es el de la variante que arranca primero (la 1080p si la hay), con su `quality`, y `qualities`
+   trae todas las del canal.
 4. **Orden:** clave igual a la consulta → clave que empieza por la consulta → palabras en el mismo orden → el resto;
-   dentro de cada nivel, la clave más corta y luego el orden del catálogo.
+   dentro de cada nivel, la clave más corta, los canales del mismo nombre juntos (España o sin país primero) y luego
+   el orden del catálogo.
 5. **`library` de cada fila.** Se miran los elementos de favoritos, recientes y la lista activa cuyo título o categoría
    contiene la consulta sin tildes ni mayúsculas (lo mismo que enseñan «En tu biblioteca» y el filtro de Canales), 200
    como mucho, y se quedan los que son **ese canal** según `sameChannel` (abajo). Un id IPTV de la biblioteca cuenta si
@@ -2311,7 +2365,7 @@ AceStream.
 | Pista sin texto (sustituye a «Busca canales publicados en el motor AceStream.») | «Busca canales en tu IPTV y en el motor AceStream.» |
 | Título de la sección nueva, entre «En tu biblioteca» y «En el motor AceStream» | «En tu IPTV», con el contador (`total`, o «200+» si `capped`) |
 | Distintivo de fila (el de `SourcePoster`: `Capsule` neutra, icono `tv`) | «IPTV» |
-| Subtítulo de una fila IPTV | «{Casa} · {1080p}» (calidad como en §8.1; sin calidad, solo «{Casa}») |
+| Subtítulo de una fila IPTV | «{Casa}»; las calidades van detrás en etiquetas pequeñas, de mayor a menor resolución («4K» «1080p» «720p» «SD»), con el país delante si no es España («DE») (§17; antes «{Casa} · {1080p}») |
 | … si también está en AceStream (`library` no vacío o resultados del motor escondidos) | añade « · también en AceStream» |
 | Botón bajo las 5 primeras | «Ver {N} más de tu IPTV» / «Ver menos» |
 | Nota con `capped` o `total` > 50, al desplegar | «Hay más canales con «{q}» en tu IPTV: escribe algo más concreto.» |
@@ -2395,15 +2449,15 @@ por id: nada que guardar) y, a los que lo son, por `classify`: `owned` → `ok`,
 | Qué | Límite |
 |---|---|
 | Letras para buscar | 2 (`SEARCH_QUERY_MIN`), 80 como mucho; menos → `empty_query` y la web no pregunta |
-| Canales listados sin buscar | **ninguno**: no hay ruta para recorrer el catálogo |
+| Canales listados sin buscar | **ninguno** en el buscador; la pestaña IPTV de Canales (§16) sí recorre el catálogo, paginado |
 | Filas por respuesta | 50 (`IPTV_SEARCH.limit`); `total` hasta 200 con `capped` |
 | Filas IPTV a la vista | 5 en Buscar y 3 en Canales, con «Ver más» / «Ver todo en Buscar» |
 | Ids de biblioteca por canal | 20; se miran 200 elementos de la biblioteca como mucho |
 | Resultados del motor anotados con `iptv` | todos (100 como mucho), 50 grupos preseleccionados por resultado |
 | Tiempo de `iptvChannels` en el servidor | objetivo < 50 ms con 100 000 canales; la web espera 4 s |
 | Búsqueda inversa | 2 consultas al motor, umbral 92, 20 s de plazo en la web; solo con menos de 3 AceStream o sin nada |
-| País | ES o sin país (D25) |
-| Grupos para adultos | nunca |
+| País | todos, con su país en una etiqueta (D25, §17) |
+| Grupos para adultos | salen (D25, §17) |
 | Re-emparejado | tras cada sincronización correcta; favoritos que no casan fuera a las 24 h, recientes al momento |
 
 ### 14.8 Ficheros
@@ -2665,3 +2719,1707 @@ arregló, cada cosa con su prueba sobre datos inventados con la misma forma:
 - La guía real no emparejó nada por error: resúmenes, fútbol sala, baloncesto, balonmano femenino, Liga F con un
   partido masculino y repeticiones sin marca quedan fuera; el partido de la Nations League en «La 1» y el Mundial
   Sub-20 femenino en Teledeporte sí salen (`guide-match.test.ts`, `match.test.ts`).
+
+---
+
+## 16. Anexo: Pestaña IPTV en Canales (0.8.2)
+
+Lo pidió Isma el 26-sep, para la **0.8.2**: en Canales, una pestaña «IPTV» a la derecha de Favoritos, Recientes y
+Listas para **recorrer su IPTV como la ordena su proveedor** (categorías, sus canales y un buscador), con filtros de
+país, idioma, tipo, deporte y calidad. Rama `iptv/pestana`, que sale de `rediseno/iptv` (`2c69fcc`). **Contrato y
+servidor implementados** en `iptv/pestana-servidor` (§16.13); la web, en su rama. La 0.8.1 ya está preparada aparte y
+**no cambia**: nada de este anexo toca versiones, `releases/`, la tienda ni `apps/ios`.
+
+**Datos reales con los que se diseña** (la IPTV de Isma en su pila local, vista por la API y sin credenciales): Xtream,
+**27 687 canales**, sincroniza en 2 s, guía para 51 canales y 1 conexión como máximo. Sus nombres tienen esta forma:
+«DAZN 1», «DAZN F1», «DAZN ACB 1…7», «LA LIGA 1», «LALIGA+ PPV 1…9», «LA LIGA TV BAR», «MOVISTAR», «MOVISTAR PLUS +2»,
+«MOVISTAR 2022 1», «ANTENA 3», «ANTENA 3 INTERNACIONAL» y «DIRECTO ANTENA 3 ᴿᴬᵂ» (con letras en superíndice).
+
+**Qué cambia de lo anterior.** Este anexo manda sobre:
+- **§14.7 («Canales listados sin buscar: ninguno»)**: la pestaña sí recorre el catálogo, siempre **paginado** y con
+  el filtrado hecho en el servidor. El buscador y el filtro de Canales siguen como en §14.
+- **§14.2 («nunca lleva grupo»)**: la pestaña enseña el **nombre de la categoría** del proveedor, porque es justo lo
+  que Isma pide. Sigue sin salir nunca una URL, `ref`, `stream_id`, `tvg-id`, usuario ni contraseña.
+- **D25 (solo España y sin adultos)**: en paralelo, otro trabajo de `rediseno/iptv` («todo desbloqueado + variantes de
+  resolución») quita el filtro de país y el de adultos, y pone un cartel por variante. La pestaña nace ya así: enseña
+  **todos** los países, y «Adultos» es un tipo más (§16.4).
+
+### 16.1 En pocas palabras
+
+1. **Solo con IPTV activa** (`bootstrap.features.iptv`, lo de siempre) sale una cuarta pestaña «IPTV», a la derecha de
+   «Listas». Sin IPTV, Canales queda exactamente como hoy.
+2. **Primero, las categorías del proveedor**, en su orden y con su número de canales (Xtream: `get_live_categories`;
+   M3U: `group-title`, por orden de aparición). Arriba va «Todos los canales». Al tocar una categoría se ven sus
+   canales, en el orden del proveedor.
+3. **Un buscador dentro de la pestaña.** En la raíz busca en toda la IPTV; dentro de una categoría, solo en ella.
+4. **Filtros con facetas**: País, Idioma, Tipo, Deporte y Calidad. Cada valor dice cuántos canales tiene con lo demás
+   que esté elegido, y los filtros se combinan: dentro de un filtro suman (España **o** Reino Unido) y entre filtros
+   restan (España **y** Fútbol). Se deducen de lo que traiga la lista (§16.4).
+5. **Un canal, una fila**, con el distintivo «IPTV» y sus calidades como etiquetas («1080p», «720p»), como en el
+   buscador. Al tocarla pasa lo mismo que en el buscador (§14.4): IPTV primero, AceStream de respaldo si existe con ese
+   nombre y todo automático. La estrella lo guarda en Favoritos como un canal IPTV del buscador (§14.6).
+6. **Hecho para 30 000 canales y más.** El servidor monta un índice en memoria al sincronizar, filtra, pagina y cuenta
+   las facetas; la web pide páginas de 60 filas y virtualiza la lista. Objetivo: **menos de 100 ms** por respuesta con
+   30 000 canales. El catálogo nunca baja entero al navegador.
+7. **De paso**, el primer «Guardar» de la IPTV que dio 502 se vuelve robusto: un reintento interno si el fallo es
+   rápido y pasajero, y un mensaje claro si no (§16.8).
+
+### 16.2 Contrato (`packages/shared`, zod)
+
+Una ruta nueva y constantes. Ningún formato de id cambia y ninguna ruta que ya existe cambia de forma.
+
+| id | método y ruta | acceso | consulta | respuesta | errores |
+|---|---|---|---|---|---|
+| `iptvBrowse` | `GET /api/v1/iptv/browse` | **`web`** (D29; pasa a `any` cuando la app calque la pestaña, §16.11) | `IptvBrowseQuery` | `IptvBrowseResponse` | `validation_error` |
+
+```ts
+// packages/shared/src/constants/iptv.ts
+export const IPTV_BROWSE = {
+  /** Filas por página: por defecto y como mucho. `limit=0` pide solo categorías y facetas. */
+  limit: 60,
+  limitMax: 100,
+  /** Categorías devueltas como mucho (las del proveedor, en su orden). */
+  categoriesMax: 2_000,
+  /** Valores por faceta como mucho (País puede pasar de 100). */
+  facetValuesMax: 250,
+  /** Valores elegidos por faceta en una consulta. */
+  selectedMax: 16,
+  /** Consultas ya calculadas que el servidor guarda para servir las páginas siguientes. */
+  cacheEntries: 16,
+  /** Nombre de categoría enseñado: como mucho. */
+  categoryNameMax: 120,
+} as const;
+
+/** Tipos (§16.4). El orden es el de la hoja de filtros cuando empatan en número. */
+export const IPTV_TYPES = [
+  'generalistas', 'deportes', 'cine', 'series', 'noticias', 'infantil',
+  'documentales', 'musica', 'entretenimiento', 'religion', 'adultos',
+] as const;
+export type IptvType = (typeof IPTV_TYPES)[number];
+
+/** Deportes (§16.4). */
+export const IPTV_SPORTS = [
+  'futbol', 'baloncesto', 'f1', 'motos', 'motor', 'tenis', 'padel', 'golf', 'ciclismo',
+  'balonmano', 'rugby', 'lucha', 'futbol-americano', 'hockey', 'beisbol', 'toros',
+] as const;
+export type IptvSport = (typeof IPTV_SPORTS)[number];
+
+// IPTV_CLIENT gana:
+//   browseMs: 6_000   → TIMEOUTS.iptvBrowse de la web
+//   browseDebounceMs: 450 (texto) y 200 (cambio de filtro)
+```
+
+```ts
+// packages/shared/src/api/v1/iptv.ts
+
+/** Lista separada por comas de códigos válidos («ES,UK»), 16 como mucho. */
+const csv = (item: string) =>
+  z.string().regex(new RegExp(`^(?:${item})(?:,(?:${item})){0,${IPTV_BROWSE.selectedMax - 1}}$`));
+
+/** Id de una categoría: 12 hex (estable mientras el proveedor sea el mismo) o `none` («Sin categoría»). */
+export const IptvCategoryIdSchema = z.string().regex(/^(?:[a-f0-9]{12}|none)$/);
+
+export const IptvBrowseQuerySchema = z.strictObject({
+  /** Categoría; sin ella, toda la IPTV. */
+  category: IptvCategoryIdSchema.optional(),
+  /** Se limpia como en `iptvChannels`. Con menos de 2 letras se IGNORA (aquí no es un error: se puede navegar sin texto). */
+  q: z.string().max(500).default(''),
+  /** País: códigos de §16.4 (2 a 4 letras: `EXYU`) o `none` («Sin país»). */
+  country: csv('[A-Z]{2,4}|none').optional(),
+  /** Idioma: ISO 639-1 o `none` («Sin idioma»). */
+  language: csv('[a-z]{2}|none').optional(),
+  type: csv([...IPTV_TYPES, 'none'].join('|')).optional(),
+  sport: csv(IPTV_SPORTS.join('|')).optional(),
+  /** `none`: canales sin ninguna marca de calidad. */
+  quality: csv('uhd|fhd|hd|sd|none').optional(),
+  /** Opaco (el de `nextCursor`). Sin él, primera página con categorías y facetas. */
+  cursor: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).optional(),
+  /** Por defecto 60. `0`: solo categorías y facetas (la raíz sin texto). */
+  limit: z.coerce.number().int().min(0).max(IPTV_BROWSE.limitMax).optional(),
+});
+export type IptvBrowseQuery = z.infer<typeof IptvBrowseQuerySchema>;
+
+export const IptvCategorySchema = z.strictObject({
+  id: IptvCategoryIdSchema,
+  /** Nombre del proveedor tal cual, redactado (§2.4) y a 120. Con `id: 'none'`, vacío: la web pone «Sin categoría». */
+  name: z.string().max(IPTV_BROWSE.categoryNameMax),
+  /** Canales (filas, §16.3) de la categoría con el texto y los filtros de ahora. */
+  count: z.number().int().nonnegative(),
+});
+export type IptvCategory = z.infer<typeof IptvCategorySchema>;
+
+export const IptvFacetValueSchema = z.strictObject({
+  /** Código (`ES`, `es`, `deportes`, `f1`, `fhd`) o `none`. La web pone el texto (§16.6). */
+  value: z.string().min(1).max(20),
+  /** Canales con este valor, con el texto, la categoría y los DEMÁS filtros de ahora. */
+  count: z.number().int().nonnegative(),
+  /** Está elegido. Un valor elegido sale siempre, aunque cuente 0, para poder quitarlo. */
+  selected: z.boolean(),
+});
+
+export const IptvFacetsSchema = z.strictObject({
+  country: z.array(IptvFacetValueSchema).max(IPTV_BROWSE.facetValuesMax),
+  language: z.array(IptvFacetValueSchema).max(IPTV_BROWSE.facetValuesMax),
+  type: z.array(IptvFacetValueSchema).max(IPTV_TYPES.length + 1),
+  sport: z.array(IptvFacetValueSchema).max(IPTV_SPORTS.length),
+  quality: z.array(IptvFacetValueSchema).max(5),
+});
+export type IptvFacets = z.infer<typeof IptvFacetsSchema>;
+
+export const IptvBrowseChannelSchema = z.strictObject({
+  /** Id de §4.1 de la mejor variante de la fila (§16.3): el que se toca y se guarda en Favoritos. */
+  id: HashSchema,
+  /** Nombre limpio («DAZN F1»): sin país, adornos, calidad ni reserva. */
+  title: z.string().min(1).max(120),
+  /** Calidades de sus variantes, de mejor a peor para enseñar: uhd, fhd, hd, sd. Vacío = sin marca. */
+  qualities: z.array(IptvQualitySchema).max(4),
+  /** País deducido (§16.4), o null. */
+  country: z.string().regex(/^[A-Z]{2,4}$/).nullable(),
+  /** Categoría de la mejor variante (la web la enseña fuera de una categoría). */
+  category: IptvCategoryIdSchema,
+});
+export type IptvBrowseChannel = z.infer<typeof IptvBrowseChannelSchema>;
+
+export const IptvBrowseResponseSchema = z.strictObject({
+  /** Falso sin IPTV activa (sin proveedor, en pausa o sin catálogo): todo lo demás vacío. No es un error. */
+  active: z.boolean(),
+  /** El nombre que Isma puso al proveedor («Casa»). */
+  provider: z.string().max(IPTV_NAME_MAX),
+  /** Sello del catálogo: cambia con cada sincronización aplicada. */
+  catalog: z.string().regex(/^[a-z0-9]{1,16}$/),
+  /** La consulta limpia que se ha usado (vacía si tenía menos de 2 letras). */
+  query: z.string().max(SEARCH_QUERY_MAX),
+  /** La categoría pedida con su recuento; null si no se pidió o si ya no existe (la web lo distingue: la pidió). */
+  category: IptvCategorySchema.nullable(),
+  /** Filas que casan con todo (categoría, texto y filtros). */
+  total: z.number().int().nonnegative(),
+  /** Filas de todo el catálogo, sin nada (para «27.687 canales»). */
+  catalogTotal: z.number().int().nonnegative(),
+  /** Solo en la primera página y sin `category`: las categorías con al menos un canal, en el orden del proveedor. */
+  categories: z.array(IptvCategorySchema).max(IPTV_BROWSE.categoriesMax).optional(),
+  /** Solo en la primera página. */
+  facets: IptvFacetsSchema.optional(),
+  channels: z.array(IptvBrowseChannelSchema).max(IPTV_BROWSE.limitMax),
+  /** null = no hay más. */
+  nextCursor: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).nullable(),
+  /** El cursor era de otro catálogo (hubo sincronización): esta es la PRIMERA página, con categorías y facetas. */
+  stale: z.boolean(),
+});
+export type IptvBrowseResponse = z.infer<typeof IptvBrowseResponseSchema>;
+```
+
+**Reglas de la ruta:**
+- **Sin IPTV activa:** `200` con `active: false`, `catalog: '0'`, todo a cero y listas vacías (como `iptvChannels`,
+  §14.2): la web puede preguntar justo mientras se pausa.
+- **Categoría que ya no existe** (otra sincronización, otro proveedor, un enlace viejo): `200` con `category: null`,
+  `total: 0` y sin canales. No es un 404: la web enseña «Esta categoría ya no está en tu IPTV.».
+- **Cursor de otro catálogo:** se responde la primera página con `stale: true` (y con categorías y facetas). Un cursor
+  mal formado es `400 validation_error` como cualquier consulta mala.
+- **Cursor:** `base64url(<catalog>.<offset>)`. El orden es determinista con el catálogo y la consulta, así que la
+  página N se calcula igual aunque el servidor se reinicie.
+- **Registro:** la URL se escribe como `/api/v1/iptv/browse?[consulta]` (§14.12) y la respuesta no se registra.
+- **Fugas:** nunca URL, `ref`, `stream_id`, `tvg-id`, `epg_channel_id`, usuario ni contraseña. Los nombres de
+  categoría pasan por el redactor (§2.4), por si un proveedor mete ahí el usuario.
+
+**Ejemplos y generados** (reparto de §5.7):
+- `fixtures/web/v1/iptvBrowse.json` (raíz con `limit=0`: categorías y facetas) e `iptvBrowse` en
+  `WEB_FIXTURE_ROUTE_IDS` (son ya 7);
+- `fixtures/variantes/iptvBrowse.categoria.json` (una categoría con canales y `nextCursor`),
+  `iptvBrowse.inactiva.json` y `iptvBrowse.categoria-perdida.json`;
+- `v1/` y `events/` no cambian: ni tipos Swift nuevos obligatorios ni eventos nuevos;
+- `TIMEOUTS.iptvBrowse = IPTV_CLIENT.browseMs` en `api/client.ts`;
+- `openapi-v2.yaml` regenerado y `docs/api.md` §7 con la ruta y un ejemplo.
+
+### 16.3 Qué es una fila, una categoría y el orden
+
+**Fila = un canal**, como en el buscador: las variantes con la misma clave limpia (§3.4, `normalizeChannelKey(base)`)
+**y el mismo país deducido** (§16.4). «ES: DAZN 1 FHD», «ES: DAZN 1 HD» y «ES: DAZN 1 (Backup)» son una fila con
+«1080p» y «720p»; «UK: DAZN 1» es otra fila, de Reino Unido.
+- Hoy el grupo de variantes es solo por clave, y el filtro D9/D25 escondía el problema. Con todo desbloqueado, «UK:
+  DAZN 1» y «ES: DAZN 1» caen en el mismo grupo. Por eso **`tappedCandidate(id)`** (§14.4) tiene que elegir la mejor
+  variante **del mismo país que el id tocado**, no de toda la clave. Se coordina con el trabajo de variantes
+  (§16.10).
+- `id` es la mejor variante de la fila (§4.3). `qualities` son las calidades distintas de sus variantes (HEVC incluido:
+  qué cartel suena en cada sitio lo decide la sesión, como en el buscador).
+
+**Categoría = un nombre de grupo del proveedor.**
+- **Xtream:** el nombre de `get_live_categories` de su `category_id`. Si el panel manda `category_ids` (lista), vale el
+  primero. Un `category_id` que no está en `get_live_categories` va a «Sin categoría».
+- **M3U:** `group-title` (o `#EXTGRP`).
+- **Id:** `hex(SHA-256(provider.id + '\n' + nombre)).slice(0, 12)`; sin nombre, `none`. Es estable entre
+  sincronizaciones mientras el nombre no cambie, no dice nada del proveedor y otro proveedor da otros ids. Dos
+  categorías de Xtream con el mismo nombre se juntan en una (pasa en paneles reales, y así es mejor).
+- **Una fila está en todas las categorías de sus variantes**: «DAZN LaLiga FHD» en «ES | DEPORTES» y «DAZN LaLiga HD»
+  en «ES | DAZN» hacen que la fila cuente y salga en las dos. Su `category` es la de su mejor variante.
+- Si `get_live_categories` falla en una sincronización (hoy se sigue con un mapa vacío), todo cae en «Sin categoría»
+  hasta la siguiente. Se conserva el orden de categorías de la sincronización anterior si la hay (§16.5).
+
+**Orden:**
+- **Categorías:** el del proveedor. Xtream: el de la respuesta de `get_live_categories`; M3U: la primera aparición de
+  cada `group-title`. «Sin categoría», al final.
+- **Filas sin texto** (en «Todos los canales» y dentro de una categoría): el orden del proveedor, es decir, la primera
+  aparición de cualquiera de sus variantes en la lista (`get_live_streams` o el fichero M3U).
+- **Filas con texto:** los niveles del buscador (§14.3: clave igual → empieza por → palabras en orden → el resto) y,
+  dentro de cada nivel, el orden del proveedor. El texto casa como en el buscador: cada palabra es principio de alguna
+  palabra de la clave (con 3 letras o más, también dentro: «liga» en «laliga»), con `iptvSpelling` («m+ la liga»).
+
+**En la raíz con texto** se buscan también las **categorías** cuyo nombre contiene el texto (sin tildes ni
+mayúsculas, 5 como mucho): salen arriba, en «Categorías con «{q}»». Es barato (cientos de nombres) y responde a «quiero
+ver lo de DAZN».
+
+### 16.4 Cómo se deducen país, idioma, tipo, deporte y calidad (`modules/iptv/facets.ts`, puro)
+
+Todo sale de lo que ya trae la lista: atributos M3U, prefijos del nombre y de la categoría, y palabras. Nada se
+pregunta fuera. Se calcula **una vez por sincronización** (con el índice, §16.5) y lo que depende solo de la categoría
+se calcula una vez por nombre de categoría (una lista de 27 687 canales tiene unos pocos cientos).
+
+**Texto con el que se busca.** Nombre y categoría pasan por:
+1. **NFKC**, que convierte las letras en superíndice en letras normales: «ᴿᴬᵂ» → «RAW», «ᶠᴴᴰ» → «FHD», «⁴ᴷ» → «4K»;
+2. minúsculas y sin tildes (`foldText`);
+3. `iptvSpelling` («la liga» → «laliga»);
+4. troceado en palabras por lo que no sea letra o cifra. «+» se queda pegado a la palabra de delante («m+», «laliga+»),
+   así «LALIGA+ PPV 4» da «laliga+», «ppv», «4» y «laliga+» casa con «laliga».
+- Una **frase** de la tabla («premier league», «serie a», «tour de francia») casa con palabras seguidas y **gasta** esas
+  palabras: «SERIE A» es fútbol y no cuenta como «serie» (tipo Series).
+- «Cómo casa» en las tablas: **palabra** (palabra completa), **prefijo** (una palabra que empieza así) o **dentro**
+  (también dentro de otra palabra, para compuestos como «teledeporte»).
+
+#### País
+
+Valor: el código canónico de la tabla (`ES`, `UK`, `LAT`…) o `none` («Sin país»). **Uno por fila.** Gana la primera
+fuente que dé algo:
+
+| Orden | Fuente | Ejemplos |
+|---|---|---|
+| 1 | M3U `tvg-country` (el primer código de la lista separada por `;` o `,`; también nombres en inglés o español) | `tvg-country="ES"`, `"es;ad"`, `"Spain"` → ES |
+| 2 | Prefijo del **nombre** con separador | «ES: DAZN 1», «ES \| DAZN 1», «\|ES\| DAZN 1», «[ES] DAZN 1», «(ES) DAZN 1», «ES - DAZN 1», «ESPAÑA \| …» |
+| 3 | Prefijo de la **categoría** con separador | «ES \| DEPORTES», «ES: DEPORTES», «\|UK\| SPORTS», «[IT] CALCIO» |
+| 4 | Primera palabra de la categoría **sin** separador, solo con los códigos marcados «sin separador» y con los nombres de país | «UK SPORTS», «USA NEWS», «SPAIN SPORTS», «ESPAÑA», «LATINO DEPORTES», «FRANCE» |
+| 5 | Código entre barras o corchetes **en cualquier sitio** del nombre o la categoría | «DEPORTES \|ES\|», «SKY SPORTS [UK]» |
+| 6 | El país que la limpieza de la lista real (§18, `cleanIptvTitle`) saca del nombre, **pasado por esta misma tabla** (y por la lista de «nunca son país») | «DAZN 1 ES», «ES DAZN 1», «EU \| ES \| TDT» → ES; «USA» → US; «AR», «EN», «LA» o un continente → nada |
+
+- **Solo cuentan los códigos de la tabla** (ISO 3166-1 alfa-2 y los alias de la tabla). Así «VIP \| DAZN 1», «HD:
+  …», «PPV \| …» o «4K \| …» no inventan un país. Nunca son país, ni con separador: `HD`, `SD`, `FHD`, `UHD`, `4K`,
+  `8K`, `VIP`, `PPV`, `TV`, `NEW`, `HEVC`, `RAW`, `VOD`, `EPG`, `24/7`, `BAR`, `TOP`, `ALL`, `AR` y `LA` (ver trampas).
+- **Continentes delante** («EU \| ES \| TDT», «AM \| USA \| ESPN PLUS»): `EU`, `AM`, `AS`, `AF`, `OC`, `EUR` y `AME`
+  no son país (aunque «AM», «AS» y «AF» sean siglas ISO) ni idioma («EU» no es euskera): se mira el tramo de detrás.
+  `LATAM` sí es país (LAT).
+- **Trampas:** «AR» en las listas casi siempre es **árabe** («AR \| BEIN SPORTS»), no Argentina: da idioma `ar` y país
+  `none` salvo `tvg-country`; Argentina es «ARG». «CA» es Canadá; catalán es «CAT» (país ES, idioma `ca`). «LA» no es
+  país **ni con separador** («LA LIGA» no es un país y «LA \| GENERAL» es latino o Los Ángeles; Laos no sale en las
+  listas). «IN» solo con separador. «EN» es un idioma, nunca un país.
+- **Comunidades con lengua propia** como categoría o prefijo: «CATALUNYA» / «CATALUÑA» / «CATALONIA», «EUSKADI» /
+  «PAIS VASCO» y «GALICIA» son España (alias de ES) y dan su idioma por palabra («TV3» en «CATALUNYA» → ES, `ca`;
+  «ETB 1» en «PAIS VASCO» → ES, `eu`).
+- «ANTENA 3 INTERNACIONAL» no tiene país en el nombre («INTERNACIONAL» no es un código): el país lo da su categoría.
+
+| Código | Alias que dan ese código | Sin separador | Texto |
+|---|---|---|---|
+| ES | ES, ESP, SPA, SP, ESPAÑA, ESPANA, SPAIN, CAT, CATALUNYA, CATALUÑA, CATALONIA, EUSKADI, PAIS VASCO, GALICIA | sí | «España» |
+| UK | UK, GB, ENG, UNITED KINGDOM | sí | «Reino Unido» |
+| US | US, USA, UNITED STATES | sí | «Estados Unidos» |
+| LAT | LAT, LATAM, LATINO, LATINOAMERICA, LATIN | sí | «Latinoamérica» |
+| MX | MX, MEX, MEXICO | sí | «México» |
+| ARG | ARG, ARGENTINA | sí | «Argentina» |
+| CO | CO, COL, COLOMBIA | no | «Colombia» |
+| CL | CL, CHI, CHILE | no | «Chile» |
+| PE | PE, PER, PERU | no | «Perú» |
+| PT | PT, POR, PRT, PORTUGAL | sí | «Portugal» |
+| BR | BR, BRA, BRASIL, BRAZIL | sí | «Brasil» |
+| FR | FR, FRA, FRANCE, FRANCIA | sí | «Francia» |
+| IT | IT, ITA, ITALIA, ITALY | sí | «Italia» |
+| DE | DE, GER, DEU, GERMANY, DEUTSCHLAND, ALEMANIA | sí | «Alemania» |
+| NL | NL, NED, HOL, NETHERLANDS, HOLANDA | sí | «Países Bajos» |
+| BE | BE, BEL, BELGIUM, BELGICA | no | «Bélgica» |
+| CH | CH, SUI, SWISS, SUIZA | no | «Suiza» |
+| AT | AT, AUT, AUSTRIA | no | «Austria» |
+| IE | IE, IRL, IRELAND, IRLANDA | no | «Irlanda» |
+| PL | PL, POL, POLAND, POLONIA | sí | «Polonia» |
+| RO | RO, ROM, ROU, ROMANIA, RUMANIA | sí | «Rumanía» |
+| TR | TR, TUR, TURKEY, TURQUIA | sí | «Turquía» |
+| GR | GR, GRE, GREECE, GRECIA | sí | «Grecia» |
+| AL | AL, ALB, ALBANIA | sí | «Albania» |
+| RU | RU, RUS, RUSSIA, RUSIA | sí | «Rusia» |
+| UA | UA, UKR, UKRAINE, UCRANIA | no | «Ucrania» |
+| SE | SE, SWE, SWEDEN, SUECIA | no | «Suecia» |
+| NO | NO, NOR, NORWAY, NORUEGA | no | «Noruega» |
+| DK | DK, DEN, DENMARK, DINAMARCA | no | «Dinamarca» |
+| FI | FI, FIN, FINLAND, FINLANDIA | no | «Finlandia» |
+| CA | CA, CAN, CANADA | no | «Canadá» |
+| IN | IN, IND, INDIA | no | «India» |
+| PK | PK, PAK, PAKISTAN | no | «Pakistán» |
+| MA | MA, MAR, MOROCCO, MARRUECOS | no | «Marruecos» |
+| EXYU | EXYU, EX-YU, BALKAN, BALCANES | sí | «Balcanes» |
+| (otro ISO 3166-1 alfa-2) | el código | no | el código tal cual («HU») |
+
+#### Idioma
+
+Valor: ISO 639-1 (`es`, `en`, `ca`…) o `none` («Sin idioma»). **Puede haber varios por fila.** Se suman las fuentes 1
+y 2; la 3 solo si no dieron nada:
+
+| Orden | Fuente | Ejemplos |
+|---|---|---|
+| 1 | M3U `tvg-language` (separado por `;` o `,`; nombres o códigos) | `"Spanish;English"` → es, en; `"cat"` → ca |
+| 2 | Marca de idioma en el nombre o la categoría: prefijo de idioma («AR \|», «CAT:»), código al final o entre paréntesis («(ENG)», «[EN]», « EN» al final) o palabra | «REAL MADRID TV EN» → en; «AR \| BEIN SPORTS» → ar; «LATINO» → es |
+| 3 | El idioma del país (tabla de abajo) | ES → es; UK → en |
+
+| Idioma | Nombres, códigos y palabras que lo dan | Países que lo dan (fuente 3) | Texto |
+|---|---|---|---|
+| es | spanish, español, espanol, castellano, spa, esp, es, latino, lat | ES, MX, ARG, CO, CL, PE, LAT (y el resto de Hispanoamérica) | «Español» |
+| en | english, inglés, ingles, eng, en | UK, US, IE, AU, NZ | «Inglés» |
+| ca | catalan, català, catala, catalán, cat, ca, catalunya, cataluña, catalonia | — | «Catalán» |
+| eu | basque, euskera, euskara, eus, eu, euskadi, vasco | — | «Euskera» |
+| gl | galician, galego, gallego, glg, gl, galicia | — | «Gallego» |
+| pt | portuguese, português, portugues, por, pt | PT, BR | «Portugués» |
+| fr | french, français, francais, francés, fra, fre, fr | FR | «Francés» |
+| it | italian, italiano, ita, it | IT | «Italiano» |
+| de | german, deutsch, alemán, ger, deu, de | DE, AT | «Alemán» |
+| ar | arabic, árabe, arabe, ara, ar | MA y países árabes | «Árabe» |
+| nl | dutch, nederlands, neerlandés, nld, nl | NL | «Neerlandés» |
+| pl | polish, polski, polaco, pol, pl | PL | «Polaco» |
+| ro | romanian, română, rumano, ron, ro | RO | «Rumano» |
+| tr | turkish, türkçe, turco, tur, tr | TR | «Turco» |
+| el | greek, griego, ell, el | GR | «Griego» |
+| sq | albanian, shqip, albanés, sqi, sq | AL | «Albanés» |
+| ru | russian, русский, ruso, rus, ru | RU | «Ruso» |
+| (otro ISO 639-1) | el código | — | el código en mayúsculas («HU») |
+
+- BE, CH, **CA**, IN, EXYU y los países sin fila no dan idioma por país: tienen varios («CA: RDS» es en francés).
+- «CAT» da país ES **y** idioma `ca`: «CAT: ESPORT3» → ES, ca (y no es).
+
+#### Tipo
+
+Valor: los de `IPTV_TYPES` o `none` («Sin tipo»). **Puede haber varios por fila**, con dos reglas:
+- **Adultos es excluyente**: si una fila es «adultos», no tiene otro tipo ni deporte (no sale en Cine).
+- **Un deporte implica «deportes»**: si la fila tiene algún deporte (abajo), también es «deportes».
+
+Se suman las palabras de la **categoría** y las del **nombre**. La categoría suele ser la más fiable («ES |
+DEPORTES»); el nombre añade lo que la categoría no dice («MOVISTAR» en «ES | MOVISTAR» no dice nada y queda sin tipo,
+que es la verdad).
+
+| Tipo | Palabras (cómo casa) | Marcas y canales (palabra o frase) | Texto |
+|---|---|---|---|
+| generalistas | generalista (prefijo), general, nacional (prefijo), tdt, autonomic (prefijo), regional (prefijo), abierto (prefijo) | la 1, la 2, antena 3, cuatro, telecinco, lasexta, la sexta, trece, tv3, telemadrid, canal sur, etb, a punt, tvg, aragon tv, cmm, ib3, bbc one, bbc two, itv, channel 4, tf1, france 2, rai 1, rai 2, rai 3, canale 5, rtp 1, sic, tvi, das erste, zdf | «Generalistas» |
+| deportes | deport (dentro), sport (dentro), esport (prefijo), futbol, football, soccer | dazn, laliga, gol, goltv, teledeporte, eurosport, bein, espn, sky sports, tnt sports, bt sport, arena sport, sportklub, sport tv, canal+ sport, canal+ foot, rmc sport, setanta, fox sports, tudn, tyc sports, win sports, directv sports, real madrid tv, barca tv | «Deportes» |
+| cine | cine (prefijo), cinema (prefijo), movie (prefijo), film (prefijo), pelicula (prefijo) | tcm, cinemax, hollywood, sundance, m+ estrenos, xtrm | «Cine» |
+| series | serie, series, sitcom, novela (prefijo), telenovela (prefijo), 24/7, comedia, comedy | axn, calle 13, cosmo, syfy, warner tv, hbo, fox | «Series» |
+| noticias | noticia (prefijo), news, informativo (prefijo), 24h, 24 horas | cnn, bbc news, euronews, france 24, al jazeera, bloomberg, sky news, fox news, cnbc, dw, rt | «Noticias» |
+| infantil | infantil (prefijo), kids, niños, ninos, children, cartoon (prefijo), dibujos | clan, boing, disney junior, disney channel, nickelodeon, nick jr, nick, baby tv, cartoon network | «Infantil» |
+| documentales | document (prefijo), docu (prefijo), historia, history, naturaleza, nature, ciencia, science | discovery, national geographic, nat geo, odisea, viajar, animal planet, dmax, canal historia | «Documentales» |
+| musica | musica (prefijo), music (prefijo), radio (prefijo), hits | mtv, vh1, los40, sol musica, mezzo, stingray, clubbing tv | «Música» |
+| entretenimiento | entretenimiento, entertainment, variedades, lifestyle, cocina, food, viajes, travel, reality (prefijo) | movistar plus, divinity, energy, fdf, neox, nova, mega, paramount, comedy central | «Entretenimiento» |
+| religion | religion (prefijo), religious, iglesia, catolic (prefijo), cristian (prefijo), evangel (prefijo), islam (prefijo), quran | 13tv, ewtn | «Religión» |
+| adultos | la regla `isAdultChannel` de §14.3 (xxx, adult, adulto/a, +18 y 18+ sueltos, porn…) | playboy, brazzers, hustler, dorcel, private, redlight, vivid | «Adultos» |
+
+- «Canal+ 18» y «M+ 18…» **no** son adultos (§14.12): se reutiliza `isAdultChannel` tal cual. **«Adult Swim»**
+  tampoco (es un canal de dibujos): su tipo sale de la categoría.
+- **Marcas locales:** «nova» solo es la marca española (Entretenimiento) con país ES o sin país; «GR: NOVA SPORTS 1»
+  es Grecia y solo deportes.
+- «CANAL+ FOOT» es deportes y fútbol (marca y frase de las dos tablas, como «real madrid tv»).
+- «ESPN», «BEIN» o «DAZN» solos dan «deportes» aunque no digan qué deporte.
+- «24h» es noticias («Canal 24 horas»); «24/7» (canales que emiten una serie en bucle) es series.
+- Los números de canal no dan tipo («DAZN 1», «MOVISTAR 2022 1»).
+
+#### Deporte
+
+Valor: los de `IPTV_SPORTS`. **Varios por fila** si los hay; sin deporte, la fila no sale en ningún valor (no hay
+«Sin deporte»: el filtro Deporte solo estrecha). Palabras de la categoría y del nombre:
+
+| Deporte | Palabras y frases (palabra, salvo que se diga) | Texto |
+|---|---|---|
+| futbol | futbol, football (salvo «american football»), soccer, calcio, futebol, laliga, laliga+, hypermotion, smartbank, premier league, epl, serie a, bundesliga, ligue 1, liga de campeones, champions, europa league, conference league, copa del rey, supercopa, liga f, mls, liga mx, eredivisie, gol, goltv, real madrid tv, barca tv, canal+ foot | «Fútbol» |
+| baloncesto | baloncesto, basket (prefijo), acb, liga endesa, nba, euroliga, euroleague, eurocup, fiba, wnba | «Baloncesto» |
+| f1 | f1, formula 1, formula1, formula uno | «F1» |
+| motos | motogp, moto gp, moto2, moto3, motoe, superbike (prefijo), sbk, motociclismo | «Motos» |
+| motor | motor, motorsport (prefijo), nascar, indycar, rally (prefijo), wrc, wec, le mans, dakar, dtm, formula e | «Motor» |
+| tenis | tenis, tennis, atp, wta, wimbledon, roland garros, supertennis | «Tenis» |
+| padel | padel, premier padel, world padel tour, wpt | «Pádel» |
+| golf | golf, pga, lpga, ryder cup, dp world tour | «Golf» |
+| ciclismo | ciclismo, cycling, tour de francia, tour de france, la vuelta, giro, gcn | «Ciclismo» |
+| balonmano | balonmano, handball, asobal | «Balonmano» |
+| rugby | rugby, six nations, seis naciones | «Rugby» |
+| lucha | boxeo, boxing, ufc, mma, wwe, lucha, kickboxing | «Lucha» |
+| futbol-americano | nfl, futbol americano, american football, redzone | «Fútbol americano» |
+| hockey | hockey, nhl | «Hockey» |
+| beisbol | beisbol, baseball, mlb | «Béisbol» |
+| toros | toros, toros tv, tauromaquia | «Toros» |
+
+- **Frases antes que palabras**: «premier padel» es pádel (y no fútbol por «premier»); «liga endesa» es baloncesto;
+  «american football» no es fútbol; «serie a» no es el tipo Series.
+- **«liga» sola no da nada** (Liga Endesa, Liga F, Liga de Campeones van por frase). Tampoco «premier» sola.
+- «F1» solo como palabra entera: «DAZN F1» sí, «SRF1» no. «DAZN 1» nunca es F1 (la trampa de §4.2).
+
+#### Calidad
+
+Valor: `uhd`, `fhd`, `hd`, `sd` o `none` («Sin marca»). Sale de las calidades de las **variantes** de la fila (§4.2,
+con los superíndices y NFKC). Una fila casa con «1080p» si alguna de sus variantes es `fhd`. `none` es para las filas
+en las que **ninguna** variante lleva marca.
+
+#### Casos que tienen que salir así (tabla del test `facets.test.ts`)
+
+| Nombre | Categoría | País | Idioma | Tipo | Deporte | Calidad |
+|---|---|---|---|---|---|---|
+| «DAZN F1» | «ES \| DAZN» | ES | es | deportes | f1 | — |
+| «DAZN ACB 3» | «ES \| DAZN» | ES | es | deportes | baloncesto | — |
+| «DAZN 1» | «ES \| DEPORTES» | ES | es | deportes | — | — |
+| «LALIGA+ PPV 4» | «ES \| LALIGA» | ES | es | deportes | futbol | — |
+| «LA LIGA TV BAR» | «ES \| LALIGA» | ES (no «BAR») | es | deportes | futbol | — |
+| «LA LIGA 1» | «ES \| DEPORTES» | ES | es | deportes | futbol | — |
+| «MOVISTAR PLUS +2» | «ES \| MOVISTAR» | ES | es | entretenimiento | — | — |
+| «MOVISTAR 2022 1» | «ES \| MOVISTAR» | ES | es | none | — | — |
+| «ANTENA 3 INTERNACIONAL» | «ES \| GENERALISTAS» | ES | es | generalistas | — | — |
+| «DIRECTO ANTENA 3 ᴿᴬᵂ» | «ES \| GENERALISTAS» | ES | es | generalistas | — | none («RAW» no es calidad) |
+| «UK: SKY SPORTS F1 ᶠᴴᴰ» | «UK \| SPORTS» | UK | en | deportes | f1 | fhd |
+| «AR \| BEIN SPORTS 1» | «AR \| BEIN» | none | ar | deportes | — | — |
+| «\|FR\| CANAL+ SPORT 360» | «FRANCE» | FR | fr | deportes | — | — |
+| «[IT] SKY CALCIO 1 HD» | «[IT] CALCIO» | IT | it | deportes | futbol | hd |
+| «LAT \| ESPN 2» | «LATINO DEPORTES» | LAT | es | deportes | — | — |
+| «VIP \| DAZN 1» | «VIP» | none (no «VIP») | none | deportes | — | — |
+| «CAT: ESPORT3» | «CATALUNYA» | ES | ca | deportes | — | — |
+| «US: NBA TV» | «USA SPORTS» | US | en | deportes | baloncesto | — |
+| «REAL MADRID TV EN» | «ES \| DEPORTES» | ES | en (la marca manda sobre el país) | deportes | futbol | — |
+| «PREMIER PADEL 1» | «ES \| DEPORTES» | ES | es | deportes | padel (no futbol) | — |
+| «DE: SKY BUNDESLIGA 1» | «DE \| SPORT» | DE | de | deportes | futbol | — |
+| «CLAN» | «ES \| INFANTIL» | ES | es | infantil | — | — |
+| «CANAL 24 HORAS» | «ES \| NOTICIAS» | ES | es | noticias | — | — |
+| «CANAL+ 18» | «FR \| CINEMA» | FR | fr | cine (no adultos) | — | — |
+| «XXX: HOT 1» | «XXX \| ADULTS» | none | none | adultos (solo) | — | — |
+| «4K: DAZN LALIGA UHD» | «4K \| UHD» | none (no «4K») | none | deportes | futbol | uhd |
+| (M3U) `tvg-country="ES" tvg-language="Spanish;English"` «Teledeporte» | «Deportes» | ES | es, en | deportes | — | — |
+
+### 16.5 Servidor: índice, consulta y rendimiento
+
+**Lo que hay que guardar más** (hoy no se guarda):
+- **Orden de las categorías** del proveedor: `StoredCatalog` gana `groupOrder?: string[]` (nombres en el orden de
+  `get_live_categories`, o de primera aparición en M3U). `v` sigue en 1: un `catalogo.enc` sin él se carga igual y
+  usa la primera aparición.
+- **`tvg-country` y `tvg-language`** de la M3U (hoy `m3u.ts` no los lee): dos posiciones más, opcionales, en la tupla
+  de `entries` (`[8]` y `[9]`, 64 caracteres como mucho, sin control). Xtream no trae nada parecido.
+- El resto (nombre, grupo, orden, calidad, variantes) ya está en el catálogo (§3.4).
+
+**Índice** (`modules/iptv/browse.ts`, puro, más un gancho en `service.ts`):
+- Se monta **al aplicar una sincronización y al cargar `catalogo.enc`**, en trozos de 5 000 canales con
+  `setImmediate` para no parar el servidor. Una petición que llega mientras se monta espera a esa promesa (nunca a
+  una sincronización).
+- **Filas:** para cada grupo del catálogo, sus variantes se reparten por país deducido; cada reparto es una fila con su
+  mejor variante, sus calidades, su orden (la primera aparición), sus categorías (índices) y sus facetas (§16.4).
+- **Facetas como mapas de bits:** un `Uint32Array` de `ceil(filas / 32)` palabras por cada valor de cada faceta
+  (incluido `none`). Con 30 000 filas son 3,7 KB por valor; con 300 valores, ~1,1 MB. Con 100 000 filas, ~3,8 MB.
+- **Categorías como listas:** un `Int32Array` ordenado de filas por categoría (una categoría como mapa de bits
+  gastaría demasiado con 2 000 categorías).
+- **Texto:** el índice de palabras del buscador (§14.3, `searchIndex`) se reutiliza sobre las claves de las filas; la
+  función que casa las palabras se saca de `search.ts` a una compartida para que los dos casen igual.
+- Se tira con el catálogo (WeakMap, como `searchIndex`).
+
+**Consulta** (sin nada que recorra el catálogo entero más de una vez):
+1. `base` = la categoría (lista → mapa de bits) o todas las filas.
+2. `texto` = las filas que casan con `q` (vacío = todas).
+3. Para cada faceta con valores elegidos: el **O** de sus mapas de bits.
+4. Resultado = `base` **Y** `texto` **Y** cada faceta elegida.
+5. **Recuentos de facetas** (facetas «disyuntivas»): para cada faceta F, el resultado **sin** F; y para cada valor de F,
+   los bits que tiene en común con él (`popcount`). Así «España 2 310» dice cuántas filas habría si además eliges
+   España, con lo demás que esté elegido. Los valores elegidos salen aunque cuenten 0; los demás, solo con ≥ 1.
+   Orden: de más a menos canales (Calidad, en su orden fijo: 4K, 1080p, 720p, SD, Sin marca; `none` siempre al
+   final).
+6. **Recuentos de categorías** (solo en la raíz): se recorren los bits del resultado y se suma cada fila a sus
+   categorías.
+7. **Orden y página:** sin texto, el orden de las filas ya es el del proveedor (se crean ordenadas); con texto, los
+   niveles de §16.3. Las filas ordenadas se guardan en una caché de 16 consultas (clave: sello del catálogo y
+   consulta sin cursor ni `limit`), y las páginas siguientes son un trozo de ese array.
+
+**Presupuesto** (tests de §16.9):
+
+| Qué | Objetivo |
+|---|---|
+| Montar el índice | < 300 ms con 30 000 canales; < 1,5 s con 100 000 (troceado, sin bloquear más de 50 ms seguidos) |
+| Consulta en frío (sin caché), dentro del servidor | < 20 ms con 30 000; < 60 ms con 100 000 |
+| Página siguiente (con caché) | < 2 ms |
+| Respuesta HTTP de la ruta en el PC, p95 de 50 peticiones variadas | **< 100 ms** con 30 000 |
+| Memoria extra del índice | < 15 MB con 100 000 canales (el contenedor tiene `mem_limit: 768m`, §12.2) |
+| Tamaño de respuesta | 60 filas ≈ 8 KB; facetas ≈ 6 KB; categorías ≈ 60 B cada una |
+
+### 16.6 Web: la pestaña
+
+**Dónde.** `LibraryTab` gana `'iptv'`. `LIBRARY_TABS` no cambia; la vista usa
+`tabs = iptvActive ? [...LIBRARY_TABS, 'iptv'] : LIBRARY_TABS`, así que la pestaña sale **a la derecha de Listas** solo
+con IPTV activa, y el deslizamiento entre pestañas la incluye. Con `&pestana=iptv` en la URL y sin IPTV activa, se abre
+la pestaña de siempre (`initialTab`). La pestaña **no lleva contador** (el número va en la cabecera del panel: 27 687
+no cabe en una pestaña a 360 px); `Tabs` ya lo permite con `count` sin definir.
+
+**Estado en la URL** (volver y recargar lo conservan):
+- `&pestana=iptv&cat=<id>` — entrar en una categoría **añade** una entrada al historial (Atrás vuelve a las
+  categorías);
+- `&pais=ES,UK`, `&idioma=es`, `&tipo=deportes`, `&deporte=futbol,f1`, `&calidad=fhd` — **reemplazan** la entrada
+  (no llenan el historial).
+- El texto, como hoy en Canales, no va en la URL: vive en la vista y se conserva mientras está oculta (Activity).
+- El campo de texto de Canales es el mismo; en la pestaña IPTV busca en la IPTV (450 ms tras la última tecla, 2 letras
+  o más) en vez de filtrar la biblioteca. «Emitiendo ahora» no sale en esta pestaña.
+
+**Pantallas:**
+1. **Raíz sin texto:** cabecera «{N} canales · {M} categorías» (con filtros, «{n} de {N} canales»), filtros, y la lista
+   de categorías: primero «Todos los canales», luego las del proveedor en su orden, cada una con su número. Con
+   filtros, solo las que tienen algún canal. Una petición: `limit=0`.
+2. **Raíz con texto:** «Categorías con «{q}»» (5 como mucho, si las hay) y debajo los canales que casan de toda la
+   IPTV, paginados.
+3. **Categoría:** botón «Categorías» para volver, título con el nombre y el número, filtros (con recuentos de dentro de
+   la categoría) y los canales, paginados. El campo dice «Buscar en {categoría}».
+
+**Fila de canal:** la `ChannelRow` del buscador (`kind="search"`), con:
+- el distintivo «IPTV» (la `Capsule` neutra con la tele, §14.5);
+- las **calidades como etiquetas**, una por calidad, de mejor a peor («4K», «1080p», «720p», «SD»), como en el buscador
+  tras el trabajo de variantes;
+- subtítulo: dentro de una categoría, «{País} · {Idioma}» (lo que se sepa; si nada, el nombre del proveedor); fuera
+  de una categoría (todos o con texto), el nombre de la categoría;
+- la estrella: `favorite-upsert` con `{ id, title, category: 'IPTV', alias: title, ih: false }` (§14.6); el estado sale
+  de `actions.favoriteIds`;
+- tocarla: `actions.play({ id, title, category: 'IPTV', ih: false, iptv: id })`, el mismo camino que una fila de «En tu
+  IPTV» (§14.4): sesión de canal con `iptv`, IPTV primero, búsqueda inversa en AceStream si hace falta y el puente de
+  §7.2. Menú «Más» de fila IPTV de §14.5 (sin acciones de hash).
+
+**Paginación y lista:** `useInfiniteQuery` (`getNextPageParam: nextCursor`) sobre `iptvBrowse`, con la
+`VirtualList` de Canales. `VirtualList` gana `onEndReached` (cuando se pinta una de las 10 últimas filas se pide la
+página siguiente) y, al final, filas esqueleto mientras llega. Para teclado y lector de pantalla, al final de la lista
+sale además el botón «Cargar más canales» mientras haya `nextCursor`. Con `stale: true` la lista se vacía y empieza de
+nuevo sin avisar. `staleTime` de 60 s; se invalida con `iptv.status`.
+
+**Filtros:**
+- **Móvil** (`layout.kind === 'mobile'`): bajo el campo, una fila de chips con desplazamiento lateral (dentro de la
+  fila, nunca de la página): «Filtros» (con el número de elegidos) abre una **hoja** (`Sheet`); luego los elegidos, cada
+  uno con su ×; y, sin nada elegido, los 4 tipos con más canales como atajo. La hoja tiene una sección por faceta (País
+  con los 8 primeros y «Ver todos los países ({N})», que despliega el resto con un campo para filtrar la lista;
+  Deporte solo si tiene valores) y abajo, fijos, «Quitar filtros» y «Ver {N} canales». Cada toque cambia los recuentos
+  al momento (200 ms de espera para juntar toques).
+- **Escritorio y tableta:** los filtros **a la vista**, sobre la lista: una línea por faceta con su nombre y los
+  valores que caben en una línea (los elegidos siempre), y «Más…» para ver todos en un menú con casillas y recuentos.
+  La línea de Deporte solo sale si la faceta tiene valores. «Quitar filtros» al final si hay alguno elegido.
+- Cada valor es un `Chip` con `pressed` y `count` («Fútbol 1.204»).
+
+**Estados** (piel Palco, como Canales):
+
+| Estado | Qué se ve |
+|---|---|
+| Cargando la primera vez | 6 filas esqueleto (`Skeleton`), como Canales; en la raíz, esqueletos de categoría |
+| Cargando otra página | 3 filas esqueleto al final |
+| Error de la primera página | `EmptyState` «No se pudo cargar tu IPTV.» con «Reintentar» |
+| Error de una página siguiente | al final de la lista, «No se pudieron cargar más canales.» con «Reintentar» (quiet) |
+| Nada con los filtros | `EmptyState` «Ningún canal con estos filtros.» con «Quitar filtros» |
+| Nada con el texto (raíz) | `EmptyState` «Nada en tu IPTV con «{q}».» con «Buscar «{q}» en tu IPTV y el motor» (a Buscar) |
+| Nada con el texto (categoría) | `EmptyState` «Nada en {categoría} con «{q}».» con «Buscar en toda tu IPTV» |
+| Categoría que ya no existe | `EmptyState` «Esta categoría ya no está en tu IPTV.» con «Ver categorías» |
+| IPTV en pausa (`active: false`) | `EmptyState` «Tu IPTV está en pausa.», texto «Reanúdala en Ajustes → IPTV para ver sus canales.» y «Ir a Ajustes» |
+
+**Accesibilidad:**
+- Zonas táctiles de 44 px (filas, chips, botones). Foco visible de siempre.
+- Las categorías son una lista de botones con nombre «{Categoría}, {n} canales». Al entrar en una, el foco va al título
+  de la categoría (`h2` con `tabIndex=-1`); al volver, a la categoría de la que se salió.
+- Cada faceta es un `role="group"` con `aria-labelledby` a su nombre; cada valor, un botón con `aria-pressed` y nombre
+  «{Valor}, {n} canales».
+- Región viva (educada), tras cada cambio de texto o filtro: «{N} canales», «{N} canales con «{q}»» o «Ningún canal
+  con estos filtros.».
+- Las filas llevan `aria-setsize` = `total` y `aria-posinset`, porque la lista virtual solo pinta las de la vista.
+- La hoja de filtros atrapa el foco y se cierra con Escape (`Sheet` ya lo hace); al cerrarla, el foco vuelve a
+  «Filtros».
+
+### 16.7 Textos (literales, en `features/library/iptv/texts.ts`)
+
+| Dónde | Texto |
+|---|---|
+| Pestaña | «IPTV» |
+| Cabecera de la raíz | «{N} canales · {M} categorías»; con filtros o texto, «{n} de {N} canales» (1: «1 canal», «1 categoría») |
+| Primera fila de la raíz | «Todos los canales» |
+| Categoría sin nombre | «Sin categoría» |
+| Recuento de una categoría | «{n} canales» / «1 canal» |
+| Sección de categorías con texto | «Categorías con «{q}»» |
+| Volver | «Categorías» (nombre accesible «Volver a las categorías») |
+| Campo en la raíz / en una categoría | «Buscar en tu IPTV» / «Buscar en {categoría}» |
+| Botón y título de la hoja | «Filtros» |
+| Nombres de las facetas | «País», «Idioma», «Tipo», «Deporte», «Calidad» |
+| Valores `none` | «Sin país», «Sin idioma», «Sin tipo», «Sin marca» |
+| Valores | los de las tablas de §16.4 (países, idiomas, tipos y deportes); calidad «4K», «1080p», «720p», «SD» |
+| Ver más países | «Ver todos los países ({N})» / «Ver menos» |
+| Campo de la lista de países | «Buscar país» |
+| Más valores (escritorio) | «Más…» |
+| Pie de la hoja | «Quitar filtros» y «Ver {N} canales» («Ver 1 canal»; con 0, «Sin canales», desactivado) |
+| Región viva | «{N} canales» / «{N} canales con «{q}»» / «Ningún canal con estos filtros.» |
+| Cargar más | «Cargar más canales» (y, para el lector, «Cargando más canales…») |
+| Estados | los de la tabla de §16.6, tal cual |
+
+Los números van con `toLocaleString('es-ES')` y `Num`, como el resto de la web.
+
+### 16.8 El 502 del primer «Guardar»
+
+**Qué pasó.** En la pila local de Isma, el primer `PUT /api/v1/iptv` respondió **502 en 58 ms** y el segundo, 6 s
+después, funcionó. El registro de acceso solo guarda estado y tiempo: el código y el `detail` de un `AppError` se
+escriben en `debug` (`app.ts`), así que la línea no dice cuál fue. Esa pila local ya no está en este PC.
+
+**Qué puede ser, leyendo el código.** 58 ms es demasiado poco para un plazo (`iptv_timeout` es 504 y tarda 8 s), así que
+fue una respuesta rápida que no sirvió o una conexión que se cortó al momento. Los 502 posibles de `save()` →
+`quickTest()` → `xtreamUserInfo()`:
+
+| Causa | Qué devuelve hoy | Mensaje que ve Isma |
+|---|---|---|
+| El panel responde HTML, cuerpo vacío o JSON que no es objeto (portada de Cloudflare, «anti-flood», panel arrancando) | `bad_response` → `iptv_unreachable` | «Tu proveedor de IPTV no responde.» |
+| El panel responde JSON **sin `user_info`** (`[]`, `{}`), típico de la primera petición de una sesión nueva | `parseUserInfo` da `auth: false` → **`iptv_auth_failed`** | «Tu proveedor de IPTV no acepta ese usuario y contraseña.» (**falso**) |
+| 5xx del panel o de su CDN (500, 502, 503, 520-526) | `http_5xx` → `iptv_unreachable` | «Tu proveedor de IPTV no responde.» |
+| Conexión cortada (ECONNRESET, «socket hang up», TLS cortado) o IPv6 que no llega | `fetch_failed` → `iptv_unreachable` | ídem |
+| DNS que falla la primera vez (EAI_AGAIN) | `dns_failed` (se deja tal cual al guardar) | «No se pudo resolver el dominio de esa fuente.» |
+| Redirección en bucle o de más | `redirect_*` (502) | «La fuente entra en un bucle…» |
+
+Una redirección a una IP privada da `private_url` (400), no 502. Lo más probable, por el tiempo y porque al segundo
+funcionó, es una de las tres primeras filas. La segunda además es un **error de mensaje**: dice que la contraseña está
+mal cuando el panel solo no ha contestado bien.
+
+**Qué se hace:**
+1. **`parseUserInfo` sin `user_info`** deja de ser «usuario y contraseña que no valen»: es una respuesta mala
+   (`bad_response`, `detail: 'sin_user_info'`). Solo `auth: 0` explícito, 401 o 403 son `iptv_auth_failed`.
+2. **Un reintento interno en la prueba rápida** (`quickTest`), solo si el primer intento falló **rápido (< 5 s)** y con
+   un fallo **pasajero**: `bad_response` (incluido `sin_user_info`), `fetch_failed`, `http_5xx`, `http_429`,
+   `dns_failed` o `redirect_*`. Espera **1,5 s** (se puede abortar con la señal) y repite **desde la URL original**
+   (§3.3). El segundo intento tiene el tiempo que quede de un presupuesto de 25 s (la web espera 30 s,
+   `TIMEOUTS.iptvSave`). Vale igual para M3U (cuerpo vacío, 5xx, HTML en vez de `#EXTM3U` la primera vez).
+   - **Nunca** se reintenta `auth: 0`, 401 ni 403 (los paneles bloquean tras varios intentos fallidos), ni la cuenta
+     caducada, ni un plazo agotado.
+3. **Registro:** cada intento fallido de la prueba rápida escribe en `warn` `{ host, kind, code, detail, attempt, ms }`
+   con el mensaje «Prueba de la IPTV fallida» (el `detail` solo lleva códigos y estados, §2.4), y un acierto al
+   segundo intento, en `info`, «Prueba de la IPTV: bien al segundo intento». Así la próxima vez se sabe la causa.
+4. **Mensaje claro en la web** si falla también el segundo intento con un fallo pasajero: al mensaje del catálogo se le
+   añade « Lo he intentado dos veces: prueba otra vez en un momento.» (`IPTV_SAVE_RETRIED_HINT` en
+   `features/iptv/model.ts`, para `iptv_unreachable`, `iptv_busy` y `dns_failed`). Para eso la respuesta de error lleva
+   `data: { attempts: 2 }` (campo que ya existe en `AppError`).
+
+**Cómo se prueba** con el proveedor falso (`apps/server/test/fake-iptv/provider.ts`): un control nuevo
+`fallarPrimera(veces, como)` y `/__iptv/fallar-primera?veces=&como=` que hace fallar las primeras peticiones a
+`player_api.php` sin `action` (y a la lista M3U) de una de estas formas: `502`, `503`, `corte` (cierra el socket),
+`vacio` (200 sin cuerpo), `html` (200 con una portada), `sin-user-info` (`[]`) y `auth0` (`{"user_info":{"auth":0}}`).
+Los casos están en §16.9.
+
+### 16.9 Pruebas
+
+**Unitarias, `packages/shared`** (`contracts.test.ts`):
+- `IptvBrowseQuery`: listas con 1 y 16 valores; 17 → error; `country=es` (minúsculas) → error; `type=cine,none` válido;
+  `sport=none` → error (no existe); `limit=0` válido; cursor con caracteres fuera de base64url → error.
+- `IptvBrowseResponse`: ninguna fila ni categoría tiene `url`, `ref`, `streamId`, `tvgId` ni `group`; los ejemplos de
+  `web/v1/` (7 rutas, todas `access: 'web'`) y las 3 variantes nuevas validan con su esquema.
+
+**Unitarias, servidor:**
+
+| Fichero | Qué cubre |
+|---|---|
+| `iptv/facets.test.ts` | la tabla de casos de §16.4, entera; NFKC de los superíndices («ᴿᴬᵂ» no es calidad, «ᶠᴴᴰ» sí); frases antes que palabras; adultos excluyente; deporte → deportes; códigos fuera de la tabla no dan país; «AR», «CA», «CAT», «LA» |
+| `iptv/browse.test.ts` | filas por clave y país («UK: DAZN 1» aparte de «ES: DAZN 1»); una fila en dos categorías cuenta en las dos; orden del proveedor en categorías y filas; niveles con texto; facetas disyuntivas (el recuento de «España» con «Fútbol» elegido, y el de «Fútbol» sin contar su propio filtro); valor elegido con 0 sigue saliendo; `none` en cada faceta; recorrer todas las páginas da `total` filas sin repetir; cursor de otro sello → primera página con `stale`; categoría desconocida → `category: null`; categorías con texto (5 como mucho); rendimiento con 30 000 (< 20 ms en frío, < 2 ms la página siguiente) y 100 000 (`@lento`); montaje del índice troceado |
+| `iptv/catalog.test.ts` | `groupOrder` y `tvg-country` / `tvg-language` van y vuelven de `catalogo.enc`; un `catalogo.enc` sin ellos se carga |
+| `iptv/m3u.test.ts` | lee `tvg-country` y `tvg-language` (64 caracteres, sin control) |
+| `iptv/xtream.test.ts` (o el de `service`) | el orden de `get_live_categories` se conserva; `category_ids` usa el primero; un `category_id` desconocido va a «Sin categoría»; `user_info` ausente → `bad_response` (no `iptv_auth_failed`) |
+| `iptv/service.test.ts` | el índice se monta al aplicar y al cargar; sin IPTV activa o en pausa → `active: false`; la prueba rápida: 502, 503, corte, vacío, HTML y `sin-user-info` la primera vez → guarda al segundo intento con un registro `warn` y otro `info`; dos fallos → el código con `data.attempts = 2`; `auth0` y 401 → un solo intento; un fallo lento (> 5 s) no se repite; abortar durante la espera de 1,5 s no deja nada guardado |
+| `iptv/routes.test.ts` | consulta mala → 400 `validation_error`; desde `/native` → 403 `origin_forbidden`; la URL en el registro es `/api/v1/iptv/browse?[consulta]` |
+| `football/resolution.test.ts` | `scope=channel&iptv=<id de «UK: DAZN 1»>` → la mejor variante de Reino Unido, no la de España |
+
+**Unitarias, web:**
+- `library/iptv/model.test.ts`: leer y escribir el estado de la URL; textos de §16.7 (plurales, «{n} de {N}»);
+  etiquetas de países, idiomas, tipos y deportes, con código desconocido tal cual; orden de las facetas.
+- `library/iptv/IptvTab.test.tsx`: la pestaña solo con `features.iptv` y a la derecha de Listas; raíz con
+  «Todos los canales» y categorías; entrar y volver con el foco donde toca; chips con `aria-pressed` y recuento; la
+  hoja en móvil y la línea por faceta en escritorio; los estados de §16.6 con sus textos; `stale` vacía la lista;
+  «Cargar más canales»; tocar una fila llama a `play` con `iptv`; la estrella guarda con `category: 'IPTV'` y `alias`.
+- `library/VirtualList.test.tsx`: `onEndReached` una vez por página.
+- `iptv/IptvSection.test.tsx`: el mensaje con « Lo he intentado dos veces…» cuando llega `attempts: 2`.
+
+**Integración** (`apps/server/test/integration/iptv.test.ts`, casos nuevos). El proveedor falso gana un modo
+**catálogo grande** (`grande: 30_000`, también en el CLI) con categorías y nombres como los reales: «ES | DEPORTES»,
+«ES | DAZN» («DAZN 1», «DAZN F1», «DAZN ACB 1…7»), «ES | LALIGA» («LA LIGA 1», «LALIGA+ PPV 1…9», «LA LIGA TV BAR»),
+«ES | MOVISTAR» («MOVISTAR», «MOVISTAR PLUS +2», «MOVISTAR 2022 1»), «ES | GENERALISTAS» («ANTENA 3», «ANTENA 3
+INTERNACIONAL», «DIRECTO ANTENA 3 ᴿᴬᵂ»), «UK | SPORTS», «\|FR\| SPORT», «[IT] CALCIO», «LATINO DEPORTES», «AR \| BEIN»,
+«XXX \| ADULTS» y «4K \| UHD», con variantes ᴴᴰ / ᶠᴴᴰ / ᵁᴴᴰ, y relleno hasta 30 000.
+
+16. **Navegar:** raíz → categorías en el orden de `get_live_categories` con sus recuentos; «ES | DAZN» → sus filas en
+    el orden del proveedor; «DAZN F1» con `qualities` y sin nada del proveedor; recorrer las páginas da `total` sin
+    repetir; ninguna petición al proveedor durante la navegación.
+17. **Filtros y texto:** Deporte «f1» + País «ES» → «DAZN F1»; «acb» → los 7 «DAZN ACB»; Tipo «adultos» → solo los de
+    «XXX | ADULTS»; recuentos disyuntivos iguales a los calculados a mano sobre la lista falsa.
+18. **Rendimiento:** 50 peticiones variadas con 30 000 canales, p95 **< 100 ms** (en CI con margen, `@lento`).
+19. **Sincronizar en medio:** con un cursor de la página 2, otra sincronización → `stale: true` y la primera página.
+20. **Fugas:** el caso 8 suma `iptvBrowse` (ni usuario, ni contraseña, ni `stream_id`, ni URL en ninguna respuesta ni
+    en el registro).
+21. **El 502:** `fallarPrimera(1, como)` con cada forma → «Guardar IPTV» responde 200 y `/__iptv/peticiones` tiene una
+    petición de más; `fallarPrimera(2, '502')` → 502 `iptv_unreachable` con `attempts: 2`; `auth0` → 502
+    `iptv_auth_failed` con una sola petición.
+
+**E2E** (`apps/web/e2e/iptv-pestana.spec.ts`, con la pila y el proveedor falso en modo grande; `ffmpeg` de L-Connect 3
+en el `PATH` solo para estas órdenes):
+14. **Pestaña:** sin IPTV no hay pestaña «IPTV»; con IPTV sale a la derecha de «Listas».
+15. **Recorrer y tocar:** «ES | DAZN» → «DAZN F1» con «IPTV» y «1080p» → suena por hls.js; la estrella → Favoritos lo
+    enseña con «Tu IPTV».
+16. **Filtros:** Deporte «Fútbol» y País «España» combinados, con los recuentos cambiando; «Quitar filtros».
+17. **Buscar dentro:** «acb» en la raíz → los 7; dentro de «ES | GENERALISTAS», «antena» → las tres «Antena 3».
+18. **Móvil (390 px):** la hoja de filtros, «Ver {N} canales», sin desplazamiento lateral de la página.
+19. **Teclado y lector:** recorrer con Tab, entrar con Intro, volver con el foco en la categoría; revisión axe sin
+    fallos.
+20. **Guardar con fallo la primera vez:** Ajustes → IPTV con `fallar-primera=1` → se guarda sin error a la vista.
+
+### 16.10 Reparto servidor / web
+
+**«contrato»** (primero; objetivo: unas horas):
+- `packages/shared`: `constants/iptv.ts` (`IPTV_BROWSE`, `IPTV_TYPES`, `IPTV_SPORTS`, `IPTV_CLIENT.browseMs`),
+  `api/v1/iptv.ts` (esquemas de §16.2), `routes.ts` (`iptvBrowse`), ejemplos (`fixtures/web/v1/iptvBrowse.json`, 3
+  variantes), `WEB_FIXTURE_ROUTE_IDS`, `contracts.test.ts`, `openapi-v2.yaml` y `docs/api.md` §7.
+- Web: `TIMEOUTS.iptvBrowse` y la demo (`api/demo/*`): `iptvBrowse` sobre la «IPTV de ejemplo» de demo-5, con unas
+  cuantas categorías y facetas, para que la web avance sin servidor.
+
+**«servidor»** (en cuanto el contrato esté subido):
+
+| Fichero | Cambio |
+|---|---|
+| `modules/iptv/facets.ts` (nuevo) | §16.4, puro, con las tablas exportadas |
+| `modules/iptv/browse.ts` (nuevo) | índice y consulta de §16.5, puro |
+| `modules/iptv/search.ts` | sacar la función que casa las palabras a una compartida (sin cambiar lo que devuelve el buscador) |
+| `modules/iptv/catalog.ts` | `groupOrder`, `tvgCountry` y `tvgLanguage` en `RawChannel`, `CatalogEntry` y `StoredCatalog` |
+| `modules/iptv/m3u.ts` | leer `tvg-country` y `tvg-language` |
+| `modules/iptv/xtream.ts` | conservar el orden de `get_live_categories`; `category_ids`; `user_info` ausente → `bad_response` |
+| `modules/iptv/service.ts`, `types.ts` | montar el índice al aplicar y al cargar; `browse(query)`; `tappedCandidate` por clave **y país**; reintento de `quickTest` y su registro (§16.8) |
+| `modules/iptv/routes.ts` | la ruta `iptvBrowse` |
+| `test/fake-iptv/provider.ts`, `cli.ts` | modo grande con nombres reales y `fallarPrimera` |
+| tests | los de §16.9 del servidor e integración 16-21 |
+
+**«web»** (en paralelo con el servidor):
+
+| Fichero | Cambio |
+|---|---|
+| `features/library/model.ts` | `LibraryTab` con `'iptv'`, `TAB_LABEL.iptv = 'IPTV'`, `TAB_COLLECTION` sin `iptv` (no es una colección), `isLibraryTab` |
+| `features/library/LibraryView.tsx` | la cuarta pestaña con IPTV activa (`TAB_ICON.iptv = 'tv'`); en ella, el campo busca en la IPTV y no sale «Emitiendo ahora» |
+| `features/library/iptv/{IptvTab, IptvCategories, IptvChannels, IptvFilters, IptvFilterSheet}.tsx` (nuevos) | §16.6 |
+| `features/library/iptv/{model, texts, data}.ts` (nuevos) | estado de la URL, textos y etiquetas (§16.7), `useInfiniteQuery` |
+| `features/library/VirtualList.tsx` | `onEndReached`, `aria-setsize` / `aria-posinset` |
+| `features/library/library.css` | estilos Palco de categorías y filtros (los mismos tokens que Canales) |
+| `features/iptv/model.ts` | `IPTV_SAVE_RETRIED_HINT` (§16.8) |
+| `api/client.ts`, `api/query.ts` | `TIMEOUTS.iptvBrowse`, invalidación con `iptv.status` |
+| `e2e/iptv-pestana.spec.ts` (nuevo) | casos 14-20 |
+
+**Cierre** (quien termine último):
+- Fusionar con `rediseno/iptv` **después** del trabajo «todo desbloqueado + variantes de resolución». Lo que puede
+  chocar: `search.ts` (filtros de país y adultos que desaparecen, la función compartida), `names.ts` (superíndices),
+  `IptvChannelSchema` (calidades de la fila), `tappedCandidate` (variantes y país) y los textos de la fila del
+  buscador. La fila de la pestaña tiene que verse igual que la del buscador.
+- `corepack pnpm@10.18.2 -r typecheck`, `-r lint`, `-r test` (el fallo intermitente de Windows 0xC0000409 se repite) y
+  los E2E de la IPTV.
+- Actualizar el estado de este anexo, `docs/comportamientos.md` y la tabla de §12.1.
+
+### 16.11 Impacto en la app nativa (actualiza §10 y §14.10)
+
+**La app calcará la pestaña** en su Canales, con las mismas pantallas, reglas y textos. Hasta entonces nadie de
+`iptv/pestana` ni de `rediseno/iptv` toca `apps/ios`.
+
+**Sin cambiar nada, incluidas la 0.8.0 publicada y la 0.8.1:**
+- `iptvBrowse` responde 403 desde `/native` mientras sea `access: 'web'`: la app no la llama.
+- Un favorito guardado desde la pestaña es un favorito IPTV como los del buscador (§14.6 y §14.10): sale en su lista y
+  se reproduce por `channelStream`, con lo que ya se sabe que falla sin cambios (sin distintivo y con acciones de hash).
+- Ningún formato cambia: ni `v1/`, ni eventos, ni ids. `ApiError` gana `error.data` **opcional** (solo en un
+  «Guardar IPTV» que falla dos veces, que la app no hace): los decodificadores de Swift ignoran claves de más y el
+  ejemplo `errors/api-error.json` no lo lleva.
+- El país de la pestaña puede tener **4 letras** (`EXYU`): el modelo de la app lo trata como `String`.
+
+**Cambios cuando exista la pantalla** (los ficheros con * no existen aún en `rediseno/nativa`; el nombre lo pone su
+dueño):
+
+| Módulo | Fichero o carpeta | Cambio |
+|---|---|---|
+| M1 | `Sources/Core/Models/Iptv.swift`* | `RespuestaExplorarIptv`, `CategoriaIptv`, `FacetasIptv`, `ValorFaceta`, `CanalExplorarIptv`; los valores de tipo, deporte, país e idioma como `String` (tolerantes: un valor nuevo del servidor no rompe nada, se enseña su código) |
+| M1 | `Sources/Core/Networking/` | regenerar `RutaID` (`iptvBrowse`) y `PlazosWeb` (`iptvBrowse: 6_000`) con los generadores de §10.1 |
+| M3 | `Sources/Core/Reglas/Canales/EstadoExplorarIptv.swift`* | estado de la pestaña (categoría, texto, filtros, páginas, `stale`), igual que `features/library/iptv/model.ts`, con vectores generados desde `scripts/vectores/explorar-iptv.ts` (nuevo) |
+| M6 | `Sources/Pantallas/Canales/`* | cuarto segmento «IPTV» solo con `features.iptv`; categorías, canales paginados (la página siguiente al aparecer las últimas filas), `searchable` dentro de la pestaña, filtros en una hoja con alturas (`presentationDetents`) y chips arriba; fila con la `Capsula` «IPTV» y las calidades como etiquetas; tocar = la sesión de canal con `iptv` (§14.4); estrella = favorito IPTV (§14.6); textos regenerados en `textos-web.json` |
+| M6 | extras nativos | háptica suave al elegir un filtro y al entrar en una categoría; deslizar una fila para la estrella, como en el resto de Canales |
+| M2 | `Sources/Debug/ServidorDemo.swift` | `iptvBrowse` si la demo de la app copia la de la web |
+
+**Orden** (se suma a §10.1 y §14.10):
+6. Cuando la app vaya a calcar la pestaña, un commit pequeño del «contrato» pasa `iptvBrowse` a `access: 'any'`, mueve
+   su ejemplo de `fixtures/web/v1/` a `fixtures/v1/` y lo quita de `WEB_FIXTURE_ROUTE_IDS`. El mismo día, el dueño de
+   `rediseno/nativa` (M1) añade `RespuestaExplorarIptv` para `FixturesTests` y regenera `RutaID`. Antes de ese paso,
+   `ios.yml` solo puede salir rojo en los `--check` de §10.1, como ya se espera.
+
+### 16.12 Decisiones y riesgos
+
+**Decisiones por defecto** (también en §12.1; Isma puede cambiarlas):
+
+| # | Decisión | Por qué |
+|---|---|---|
+| D29 | **`iptvBrowse` nace `web`** y pasa a `any` cuando la app calque la pestaña | como D27: no rompe `FixturesTests` antes de tiempo |
+| D30 | **Una ruta con categorías, facetas y página**, con `limit=0` para la raíz | una petición por pantalla y un solo sitio que cuenta |
+| D31 | **Fila = clave limpia + país**; `tappedCandidate` respeta el país | con todo desbloqueado, «UK: DAZN 1» no es «ES: DAZN 1» |
+| D32 | **Facetas disyuntivas** (O dentro de un filtro, Y entre filtros); el valor elegido sale aunque cuente 0 | es lo que se espera de unos filtros que «se combinan», y siempre se puede quitar lo elegido |
+| D33 | **Categorías por nombre**, con id de 12 hex sobre el nombre | estable entre sincronizaciones y entre catálogos viejos y nuevos; dos categorías con el mismo nombre se juntan |
+| D34 | **Deducción solo con tablas propias** (sin servicios externos ni dependencias) | la regla del repo (D16); se amplían con casos reales |
+| D35 | **La pestaña sin contador** | 27 687 no cabe a 360 px; el número va en la cabecera del panel |
+| D36 | **Reintento solo con fallos rápidos y pasajeros**, nunca con `auth: 0`, 401 o 403 | arregla el 502 sin arriesgar un bloqueo del panel por intentos fallidos |
+
+**Riesgos:**
+1. **Deducciones equivocadas.** Un nombre raro puede caer en otro tipo o país («M+ VAMOS» sin categoría no dice que es
+   deportes). Mitigado con las tablas, la prioridad de la categoría y los tests; se corrige ampliando tablas con casos
+   reales de la lista de Isma (sin credenciales ni URLs).
+2. **Marcas que no son nombre.** «DIRECTO ANTENA 3 ᴿᴬᵂ» queda como fila aparte de «ANTENA 3» porque «DIRECTO» y «RAW»
+   forman parte de la clave. No rompe nada (sale en Generalistas); si molesta, `names.ts` puede tratar «RAW» como
+   reserva y «DIRECTO» delante como adorno, con el corpus de §4.2 y coordinado con el trabajo de variantes.
+3. **Memoria.** El índice suma unos MB (tabla de §16.5); el test de memoria de §12.2 lo suma a su cuenta.
+4. **Catálogo que cambia mientras se navega.** `stale` lo resuelve volviendo a la primera página; se pierde la posición
+   de desplazamiento, cosa rara (cada 6 h).
+5. **Choques al fusionar con el trabajo de variantes** (§16.10): la pestaña va detrás y se adapta a lo que quede de la
+   fila del buscador.
+
+### 16.13 Estado: contrato y servidor (26-sep, rama `iptv/pestana-servidor`)
+
+**Hecho** (contrato de §16.2 y la parte «servidor» de §16.10):
+
+| Pieza | Dónde |
+|---|---|
+| Constantes `IPTV_BROWSE`, `IPTV_TYPES`, `IPTV_SPORTS`, `IPTV_BROWSE_QUALITIES`, `IPTV_CLIENT.browseMs` / `browseDebounceMs` / `browseFilterDebounceMs` y el reintento de `IPTV_QUICK_TEST` | `packages/shared/src/constants/iptv.ts` |
+| Esquemas `IptvBrowseQuery`, `IptvBrowseResponse`, `IptvCategory`, `IptvFacets`, `IptvBrowseChannel`; ruta `iptvBrowse` (`web`); `ApiError.error.data.attempts` opcional | `packages/shared/src/api/v1/iptv.ts`, `routes.ts`, `errors.ts` |
+| Ejemplos: `fixtures/web/v1/iptvBrowse.json` y `variantes/iptvBrowse.{categoria,inactiva,categoria-perdida}.json`; `WEB_FIXTURE_ROUTE_IDS` con 7; `openapi-v2.yaml` y `docs/api.md` §7.7 | `packages/shared`, `docs/` |
+| Deducción de país, idioma, tipo, deporte y calidad (tablas de §16.4, NFKC, frases que gastan palabras, adultos excluyente) | `apps/server/src/modules/iptv/facets.ts` |
+| Índice (mapas de bits por valor, categorías como listas, texto) y consulta (O/Y, recuentos disyuntivos, niveles, LRU de 16, cursor) | `modules/iptv/browse.ts` |
+| `groupOrder`, `tvg-country` y `tvg-language` en el catálogo y en `catalogo.enc` (un catálogo viejo se carga igual) | `catalog.ts`, `m3u.ts` |
+| Xtream: orden de `get_live_categories`, `category_ids`, respuesta sin `user_info` = `iptv_unreachable` (`detail: sin_user_info`) | `xtream.ts` |
+| Servicio: `browse()`, índice al aplicar y al cargar, reintento de la prueba rápida con su registro (el canal tocado y los respaldos del relé respetan el país con los `buckets` de §17) | `service.ts`, `routes.ts`, `app.ts` (consulta fuera del registro) |
+| Proveedor falso: `grande: N` (CLI `--grande`) con los nombres reales de §16.9 y `fallarPrimera(veces, como)` (HTTP `/__iptv/fallar-primera`) | `apps/server/test/fake-iptv/{provider,catalogo-grande,cli}.ts` |
+
+**Números** (este PC, Node 24):
+
+| Qué | Objetivo | Medido |
+|---|---|---|
+| Montar el índice, 30 000 canales | < 300 ms | ~215 ms (27 000 filas) |
+| Montar el índice, 100 000 canales | < 1,5 s | ~0,7-0,8 s |
+| Consulta en frío dentro del servidor, 30 000 | < 20 ms | 0,3-8 ms (la más cara, «canal», que casa con casi todo) |
+| Consulta en frío, 100 000 | < 60 ms | 0,5-22 ms |
+| Página siguiente (caché) | < 2 ms | < 1 ms |
+| Respuesta HTTP, p95 de 50 peticiones variadas con 30 000 | < 100 ms | ~2 ms (máximo ~11 ms, la primera) |
+| Memoria que se queda el índice | < 15 MB con 100 000 | unos pocos MB (arrays paralelos, sin un objeto por clave) |
+
+**Lo que cambia respecto al diseño** (y por qué):
+- **País de hasta 4 letras** (`[A-Z]{2,4}` en la consulta y en la fila): la tabla de §16.4 tiene `EXYU`.
+- **`error.data: { attempts: 2 }`** como decía el diseño, pero declarado en `ApiError` (que es estricto) y sacado de
+  un campo propio de `AppError` (`AppError.data` solo va al registro). Solo sale en un «Guardar» que falla dos veces
+  por algo pasajero.
+- **Registro del reintento:** `{ host, kind, errorCode, detail, attempt, ms }` (el registro redacta una clave `code`).
+  El `detail` de un corte es ahora `fetch_failed:ECONNRESET` (antes, el nombre de la clase).
+- **El índice se monta 2 s después** de aplicar la lista o de cargarla (`IPTV_BROWSE.buildDelayMs`), para no sumarse al
+  pico de memoria de la lectura de 100 000 canales (el test de memoria de §12.2 lo pedía). Si alguien abre la pestaña
+  antes, se monta en ese momento (una petición espera a esa promesa, nunca a una sincronización).
+- **Categorías con texto** (raíz): cuentan con los filtros pero **sin** el texto, que es lo que se verá al entrar.
+- **Un texto que solo es calidad** («hd», «4k») no casa con nada en la pestaña (`total: 0`).
+- **`search.ts` no se ha tocado**: `browse.ts` lleva su propio emparejado de texto con las mismas reglas, y un test
+  comprueba que casa con las mismas claves que el buscador. Se puede pasar a una función compartida más adelante.
+- **Fila y canal tocado (D31) tras fusionar con §17.** La fila de la pestaña es clave limpia + país **deducido**
+  (§16.4: distingue «España» de «Sin país»). Al tocarla, `tappedCandidates` y los respaldos del relé usan los canales
+  de §17 (`buckets`: España y sin país son un canal, cada otro país es otro). Así «UK: DAZN 1» nunca abre «ES: DAZN 1»
+  (probado), y una fila «Sin país» puede arrancar por la variante de España del mismo nombre, que es el mismo canal.
+- **Adultos:** el buscador ya no filtra adultos (§17), así que la regla de §14.3 vive ahora en `facets.ts`
+  (`isAdultChannel`) solo para el tipo «Adultos».
+
+**El 502 del primer «Guardar» (§16.8), lo que se ha podido ver.** El registro de la pila local sí seguía en este PC
+(contenedor `aceneo-local-storage-1`, 0.8.1): `PUT /api/v1/iptv` → **502 en 58 ms** a las 13:11:27 y, 6 s después,
+«IPTV guardada» y «lista sincronizada» (27 687 canales en 2 031 ms). El registro estaba en `info` y el código del fallo
+solo se escribía en `debug`, así que no dice cuál de los 502 posibles fue. 58 ms es demasiado poco para un plazo: fue
+una respuesta inmediata que no sirvió (5xx, HTML, `[]`) o un corte. No se ha sondeado el panel de Isma (no se toca un
+servicio ajeno desde aquí). Desde ahora cada intento fallido deja en `warn` su `errorCode` y `detail`, así que la próxima vez se sabrá; y los seis casos pasajeros del proveedor falso
+(502, 503, corte, vacío, HTML y `[]`) se guardan al segundo intento.
+
+**Pruebas:** `facets.test.ts` (la tabla de 27 casos entera y 26 más), `browse.test.ts` (filas, categorías, texto,
+facetas, páginas, cursor y rendimiento con 30 000 y 100 000), `catalog.test.ts`, `errors.test.ts`, `m3u.test.ts`,
+`routes.test.ts`, `service-pestana.test.ts` (servicio contra el proveedor falso: navegar, filtrar, `stale`, arranque
+sin red, el canal tocado por país y los casos del 502) e integración 16-21 (`test/integration/iptv.test.ts`).
+
+**Pendiente:**
+- **Web:** hecha en `iptv/pestana-web` (§16.14) y **unida** (§16.15): el contrato que queda es el de esta rama (el
+  mismo de §16.2, con el país de hasta 4 letras en los dos), la fila de la pestaña pinta las calidades como la del
+  buscador (etiquetas tras el subtítulo, §17) y `IPTV_SAVE_RETRIED_HINT` lee el `error.data.attempts` que manda el
+  servidor.
+- **Fusión hecha** con el trabajo «todo desbloqueado + variantes» (`rediseno/iptv`, ahora anexo **§17**; sus
+  referencias «§16» en el código pasan a «§17»).
+- `docs/comportamientos.md` y la tabla de §12.1 al cerrar.
+
+### 16.14 Estado (26-sep): contrato y web hechos en `iptv/pestana-web`
+
+**Contrato** (`packages/shared`), tal como §16.2 salvo lo marcado:
+- `iptvBrowse` (`GET /api/v1/iptv/browse`, `access: 'web'`), `IptvBrowseQuerySchema`, `IptvBrowseResponseSchema`,
+  `IptvCategorySchema`, `IptvFacetsSchema`, `IptvBrowseChannelSchema`, `IPTV_BROWSE`, `IPTV_TYPES`, `IPTV_SPORTS` e
+  `IPTV_CLIENT.browseMs` (6 s). Ejemplo en `fixtures/web/v1/iptvBrowse.json` (son 7 rutas en `WEB_FIXTURE_ROUTE_IDS`) y
+  las 3 variantes (`iptvBrowse.categoria`, `.inactiva`, `.categoria-perdida`); `openapi-v2.yaml` regenerado, `api.md`
+  §7.6 bis y la ruta en la lista de solo web de `apps/server/test/security.test.ts`.
+- **Cambio:** el código de país acepta **2 a 4 letras** (`[A-Z]{2,4}`, en la consulta y en `channels[].country`),
+  porque la tabla de §16.4 tiene `EXYU`. El servidor usa la misma forma.
+- El manejador de la ruta y `error.data = { attempts: 2 }` (declarado en `ApiErrorSchema` y escrito por `toV1Error`)
+  son del servidor (§16.13). La web usa las categorías con texto tal como llegan (el servidor ya las filtra) y
+  `IPTV_CLIENT.browseDebounceMs` y `browseFilterDebounceMs`.
+
+**Web** (`apps/web/src/features/library/iptv/`):
+
+| Fichero | Qué |
+|---|---|
+| `IptvTab.tsx` | la pestaña: cabecera, filtros, región viva, las 4 pantallas (`root`, `search`, `all`, `category`), estados y la hoja del móvil |
+| `IptvCategories.tsx` | «Todos los canales» y las categorías (botones «{Categoría}, {n} canales», sin virtualizar: son cientos) |
+| `IptvFilters.tsx` | líneas por faceta en escritorio (con «Más…» en un menú con casillas), fila de chips en el móvil y el cuerpo de la hoja |
+| `data.ts` | estado de la URL (`cat` con historial; filtros sin él), `useIptvRoot` (`limit=0`), `useIptvPages` (`useInfiniteQuery`, `stale` → vuelve a la primera página) y las esperas (texto 450 ms, filtros 200 ms) |
+| `model.ts`, `texts.ts` | reglas puras y los textos literales de §16.7 |
+| `demo.ts`, `demo-register.ts` | `iptvBrowse` en `?demo=1` sobre la «IPTV de ejemplo» (812 canales con nombres de lista real) |
+
+Además: `LibraryView` (cuarta pestaña, campo «Buscar en tu IPTV» / «Buscar en {categoría}», sin «Emitiendo ahora»),
+`model.ts` (`CollectionTab`, `tabsFor`, `shownTab`), `VirtualList` (`onEndReached`, `setSize`), `ChannelRow` (`tags`
+para las calidades), `Chip` (`label` para el nombre accesible), `api/client.ts` (`TIMEOUTS.iptvBrowse`), `api/sse.ts`
+(`iptv.status` invalida `iptvBrowse`), `api/errors.ts` (`ApiError.data`, de `error.data`) y
+`features/iptv/model.ts` (`IPTV_SAVE_RETRIED_HINT` para `iptv_unreachable`, `iptv_busy` y `dns_failed` con 2 intentos).
+
+**Decisiones de la implementación** (dentro de lo que dice §16.6):
+- «Todos los canales» viaja en la URL como `&cat=todos` (a la API va **sin** `category`).
+- Subtítulo dentro de una categoría: el **país** (o el nombre del proveedor). El idioma no sale porque la fila del
+  contrato no lo trae; si se quiere, `IptvBrowseChannel` tendría que ganar `languages`.
+- «Categorías con «{q}»» son las `categories` de la primera página en la raíz con texto (el servidor ya las filtra
+  por nombre, 5 como mucho, y las cuenta sin el texto; la demo hace lo mismo).
+- Con la ficha de escritorio a la vista, una fila de la pestaña **reproduce** al primer clic (como «En tu IPTV»): no es
+  un canal de tu biblioteca y la ficha no sabría enseñarlo.
+- En el móvil, con cuatro pestañas, `lib-tabs--4` quita aire lateral (y a ≤ 380 px baja a 12 px) para que «Favoritos
+  12» quepa entero a 360 px.
+
+**Pruebas:** `library/iptv/model.test.ts` (URL, consulta, etiquetas, textos y la demo: facetas disyuntivas, páginas sin
+repetir, `stale`, categoría perdida, adultos excluyente, «UK: DAZN 1» ≠ «ES: DAZN 1»), `library/iptv/IptvTab.test.tsx`
+(16 casos de §16.9 web), `library/VirtualList.test.tsx`, `library/model.test.ts`, `api/errors.test.ts`,
+`iptv/model.test.ts` e `iptv/IptvSection.test.tsx` (la frase de los dos intentos); `packages/shared` (consulta,
+respuesta, fugas y variantes). E2E `apps/web/e2e/iptv-pestana.spec.ts`: 14 a 19 con la demo, y contra la pila de
+verdad 14 (sin IPTV no hay pestaña), la ruta interceptada (raíz, páginas con cursor y `stale`) y 20 (el mensaje de los
+dos intentos); y con la ruta real y el proveedor falso, 15-17 (categorías en el orden de `get_live_categories`, «UK:
+DAZN 1» aparte de «DAZN LaLiga», «1080p» y «720p» en la fila y tocar suena por hls.js, `@video`) y 20 (`fallar-primera`
+con un 502: se guarda al segundo intento sin error a la vista). Capturas a 390×844 y 1440×900, en claro y oscuro.
+
+**Para la app nativa** (se suma a §16.11): la pestaña se calca con estos mismos valores — parámetros `cat`, `pais`,
+`idioma`, `tipo`, `deporte`, `calidad` y `cat=todos` si la app guarda estado en enlaces; esperas de 450 ms (texto) y
+200 ms (filtros); páginas de 60 y la siguiente al aparecer las 10 últimas filas; «Más…» de escritorio no aplica (la app
+usa la hoja con alturas); los textos de `texts.ts` entran en `textos-web.json`; y `IPTV_SAVE_RETRIED_HINT` no cambia
+nada en la app (la IPTV solo se configura en la web).
+
+### 16.15 Estado: la unión (26-sep, `iptv/pestana`, con `iptv/pestana-servidor`, `iptv/pestana-web` y `rediseno/iptv`)
+
+Las dos ramas de la pestaña se habían unido ya entre sí y con `rediseno/iptv`, cada una por su lado. Al juntarlas en
+`iptv/pestana` manda lo de `iptv/pestana-servidor` en el servidor y el contrato, y lo de `iptv/pestana-web` en la web:
+- **Intentos de «Guardar»:** `error.data.attempts`, como decía el diseño (§16.8) y como escribe el servidor
+  (`ApiErrorSchema`, `toV1Error`). La web lee `ApiError.data` (la versión con `error.attempts` de la web se descarta).
+- **Referencias:** el anexo de variantes es el **§17** también en los comentarios del código (la web los había
+  dejado en «§16»).
+- **Categorías con texto:** las filtra y las cuenta el servidor; la web (y la demo, que imita al servidor) las pinta tal
+  cual, sin volver a filtrarlas.
+- El canal tocado y los respaldos del relé usan lo de §17 (`tappedCandidates` y los canales de `buckets`): España y
+  sin país son un canal, cada otro país es otro; «UK: DAZN 1» nunca abre «ES: DAZN 1». Si una fila de la pestaña saca
+  su país de la categoría (y §17 no lo ve en el nombre), al tocarla arranca la mejor variante de su canal de §17: puede
+  no coincidir en casos raros (riesgo pequeño, anotado).
+- `isAdultChannel` sale del buscador (§17 lo quita) y vive en `facets.ts`, que lo usa para el tipo «Adultos».
+- `CatalogEntry` lleva las dos cosas: `mirror`/`keepMirror` (§17) y `tvgCountry`/`tvgLanguage` (pestaña).
+- La fila: `ChannelRow.tags` de §17 (etiquetas detrás del subtítulo); la pestaña le pasa las calidades, así se ve
+  igual que la del buscador.
+- Proveedor falso con los dos: `grande` y `fallarPrimera` (pestaña) y las 5 variantes de «DAZN 1» y los canales de
+  otros países (§17).
+
+**Con la lista real (§18, `rediseno/iptv` hasta `778a27a`)** y lo que salió al probarlo a mano:
+- **ᴿᴬᵂ fuera del nombre:** la fila de «DIRECTO ANTENA 3 ᴿᴬᵂ» se llama «DIRECTO ANTENA 3» (es una reserva, §18).
+- **El texto de la pestaña se limpia como el del buscador:** `searchQueryKey` (grafía de §18 **sin** los alias curados
+  del emparejado: «m+ la liga», «m. laliga» y «mov laliga» son «movistar laliga»), «tv», «canal» y «channel» no hace
+  falta encontrarlas si hay otras palabras (`significant`), y un nivel más al final, **sin Movistar delante** («m+ la
+  liga» también trae «LA LIGA TV BAR» y «DAZN LaLiga», detrás). El test que compara con el buscador suma nombres de
+  la lista real (Movistar, LaLiga+, La Sexta).
+- **España y sin país primero dentro de cada nivel de texto**, como el buscador: «dazn 1» da antes el de aquí que los
+  de Reino Unido, Alemania o Italia.
+- **El país que la limpieza de §18 saca del nombre** («DAZN 1 ES», «ES DAZN 1») es el último recurso del país de la
+  fila (`FacetInput.nameCountry`): «DAZN 1 ES» cae en la fila de España y no en una «Sin país» aparte.
+- **El país como etiqueta en la fila** (`rowTags`: «UK», «DE»… si no es España ni sin país, y luego las calidades),
+  igual que la fila del buscador. Hacía falta: con «DAZN 1» de cinco países y la guía a la vista, el subtítulo enseña
+  el partido y las cinco filas se veían iguales.
+- **Rendimiento en la tanda entera:** el test de 30 000 canales mira la **mediana** (< 20 ms en frío, < 2 ms la página
+  siguiente) y cada consulta < 100 ms; calienta el código con un índice pequeño antes de medir. Con `-r test` en
+  paralelo (servidor y web a la vez) una consulta suelta llegaba a 57-64 ms.
+
+**Probado a mano (26-sep)** con `pila-local.ts` (`ALLOW_PRIVATE_SYNC_URLS=true`, ffmpeg de L-Connect) y el proveedor
+falso en modo grande (`--grande 30000`, en la IP del adaptador solo-anfitrión: la de Tailscale, 100.64/10, está
+bloqueada como CGNAT): con `fallar-primera?veces=1&como=502`, el primer «Guardar IPTV» de la web guarda sin error a la
+vista (registro: `warn` `http_502` intento 1 en 3 ms, `info` «bien al segundo intento» 1,5 s después, 30 018 canales en
+644 ms). La pestaña: 27 009 filas y 154 categorías; respuestas de `/api/v1/iptv/browse` de 1,5 a 10 ms (la más cara,
+«canal»). Tocar «DAZN 1» (España) suena por la IPTV 1080p con las otras tres variantes y la AceStream detrás. 22
+capturas (raíz, categoría, filtros, búsquedas, a 1440×900 y 390×844, claro y oscuro), sin desplazamiento lateral.
+
+**Falta:**
+- Publicar (0.8.2) cuando Isma lo diga (`docs/comportamientos.md` §19 y la tabla de §12.1, al día con §16.16).
+- La guía de «DAZN 1» de España sale también en las filas de Reino Unido, Alemania e Italia (el «en directo» va por el
+  nombre del canal): hay que mirarlo en `onAir` / la guía de §4.5 teniendo en cuenta el país.
+- El riesgo pequeño de arriba (país sacado de la categoría) sigue anotado.
+
+**Impacto en la app nativa** (se suma a §16.11): la fila lleva el país como etiqueta antes de las calidades (si no es
+España ni sin país) y el orden con texto (España primero) ya viene del servidor; el texto se manda tal cual.
+
+### 16.16 Revisión (26-sep): país del nombre por la tabla y menores
+
+**Bloqueante arreglado.** Desde `390f652` el país que la limpieza de §18 saca del nombre (`FacetInput.nameCountry`)
+entraba en la fila con solo mirar que fueran 2 a 4 mayúsculas. Con la lista real: «AR \| BEIN SPORTS 1» y «BEIN SPORTS
+1» de «AR \| BEIN» salían con país `AR` (en la faceta, `AR:2`, y en la fila, la etiqueta «AR», que parece Argentina),
+«EN \| REAL MADRID TV» con `EN` (un idioma) y «LA 1» de «LA \| GENERAL» con `LA`. Ahora (`facets.ts`,
+`nameCountryCode`) ese país pasa por la **misma tabla** que el resto (fuente 6 de §16.4): lo que nunca es país (`AR`,
+`LA`…), los continentes de «EU \| …» y lo que no es ni alias ni ISO («EN») se quedan sin país; «USA» sale `US`. El test
+de `browse.test.ts` pasa por `Catalog` (antes solo había `deriveFacets` sin `nameCountry`).
+- «LA» deja de ser país **también con separador** (antes «LA \| GENERAL» daba Laos por la categoría).
+- Los continentes delante («EU \| ES \| TDT», «AM \| USA \| …») se saltan como las marcas: el país es el tramo de
+  detrás, y «EU» ya no da euskera ni «AM» Armenia.
+
+**Deducciones corregidas** (§16.4 al día y con test): «ADULT SWIM» no es Adultos; «nova» solo suma Entretenimiento en
+España o sin país («GR: NOVA SPORTS 1», solo deportes); Canadá no da idioma («CA: RDS» es en francés); «CATALUNYA»,
+«PAIS VASCO», «EUSKADI» y «GALICIA» son España con su idioma («TV3» → ES, `ca`; «ETB 1» → ES, `eu`); «CANAL+ FOOT»
+es deportes y fútbol.
+
+**Web:**
+- **Texto y filtros sin resultados:** «Nada en tu IPTV con «q» y estos filtros.» (o «Nada en {categoría} con «q» y
+  estos filtros.») con **«Quitar filtros»** primero y el botón de siempre detrás. Las «Categorías con «q»» que se
+  quedan con 0 canales por los filtros no se ofrecen.
+- **Móvil:** con dos filtros o más, «Quitar filtros» también en la fila de chips (con uno, su «×» basta).
+- **Estrella:** quitar un favorito la vacía al momento (las bajas que esperan el «Deshacer» ya no cuentan en
+  `favoriteIds`) y otro toque durante esos 6 s lo recupera y quita el aviso (`cancelRemoval`), sin hoja ni petición.
+- **«Guardar favorito» de un canal IPTV:** enseña «En tu IPTV» con su nombre en la IPTV en vez de «Hash» con el id
+  interno; vacío, se guarda con ese nombre (no «Canal 1a2b3c»).
+- **Dorsal:** una letra suelta pegada al número va con él («DAZN F1» → «F1», «M4 SPORT» → «M4»; «TV3» sigue «3») y una
+  sigla de 2 a 4 mayúsculas entre la marca y el número va en la sigla de la tesela («DAZN ACB 1» → «DAZN ACB»). Así
+  «DAZN 1», «DAZN F1» y «DAZN ACB 1» ya no llevan el mismo logotipo.
+- **«Lo he intentado dos veces…»** también con `iptv_bad_list` (M3U que devuelve HTML o nada dos veces) y con
+  `redirect_limit` / `redirect_loop`: los mismos códigos que el servidor reintenta (`isTransientSaveFailure`), que son
+  los únicos con `attempts: 2`.
+
+**Rendimiento:** la prueba de 100 000 canales mira la **mediana de 5 consultas en frío** (< 60 ms) y cada una < 250 ms;
+una sola medida fallaba a veces en la tanda normal (62 ms). «@lento» es solo una etiqueta: corre en la tanda normal.
+El índice de 30 000 canales en un proceso nuevo tarda más que en caliente (unos 550 ms frente a 215 ms): no afecta a la
+API porque se monta a trozos y 2 s después de cargar.
+
+**Sigue pendiente:** la guía de «DAZN 1» de España en filas de otros países (el «en directo» va por el nombre) y el
+riesgo pequeño del canal tocado (la fila usa el país de `facets.ts`; el arranque, el cubo de §17 de `names.ts`). Con el
+país del nombre ya filtrado por la tabla, las dos fuentes solo divergen cuando la categoría dice un país que el nombre
+no dice (p. ej. «TV3» en «CATALUNYA»: fila ES, cubo sin país, que para §17 es lo mismo).
+
+**Impacto en la app nativa** (se suma a §16.11): nada del contrato cambia. Al calcar la pestaña: el vacío con texto y
+filtros, «Quitar filtros» en la fila de chips con dos o más, la estrella que se vacía al quitar y se recupera con otro
+toque durante el «Deshacer», «En tu IPTV» en la hoja de guardar favorito y el dorsal con «F1» y la sigla con «ACB».
+
+## 17. Anexo: todo desbloqueado y variantes de resolución (26-sep)
+
+> Numeración: en la rama `rediseno/iptv` este anexo era el §16; al unirlo con la pestaña IPTV (que ya era el §16) pasa a §17.
+
+Lo pidió Isma el 26-sep: «mejor déjalo todo desbloqueado y también ten en cuenta que en las IPTV hay muchos canales que
+se llaman igual pero tienen una resolución diferente o cosas así». **Implementado el mismo día en `rediseno/iptv`**
+(contrato, servidor y web, con unitarias, integración y E2E). Este anexo **manda** sobre lo que digan §0.3, §3.4,
+§4.2 a §4.4, §6.1, §8.1, §14.2, §14.3, §14.5, §14.7 y D9, D23 y D25.
+
+### 17.1 En pocas palabras
+
+1. **Todo desbloqueado.** El buscador (y el filtro de Canales) enseña **todos** los canales de tu IPTV: de cualquier
+   país (con su país en una etiqueta, «DE») y también los grupos para adultos. No hay ningún filtro de país que
+   esconda nada.
+2. **El país es una preferencia, no un filtro** (D9). En el emparejado automático (partido o canal de AceStream → la
+   IPTV que sale primero) entran todos los países; España y sin país son un canal y cada otro país es otro del mismo
+   nombre; con la misma puntuación, el de España o sin país va antes. «DAZN 1» de España va antes que «DE: DAZN 1»;
+   si solo existe el extranjero y casa por nombre, sale. El umbral 92 y la protección Hypermotion no cambian. La guía
+   sigue exigiendo España (§4.5, regla 5).
+3. **Variantes de un canal = un canal.** «DAZN 1 FHD», «DAZN 1 HD», «DAZN 1 SD», «DAZN 1 4K», «DAZN 1 (backup)», «ES:
+   DAZN 1 1080p», «DAZN 1 HEVC», «DAZN 1 50fps», «|ES| DAZN 1», «DAZN 1 [ES]», «VIP | ES: DAZN 1 FHD»… dan la misma
+   clave (§17.2). Nunca se juntan canales distintos: «DAZN 1» ≠ «DAZN 2» ≠ «DAZN F1», «LaLiga TV» ≠ «LaLiga TV
+   Hypermotion», «M+ LaLiga» ≠ «M+ LaLiga 2».
+4. **Buscador: una fila por canal**, con sus calidades en etiquetas pequeñas, de mayor a menor resolución («4K»
+   «1080p» «720p» «SD»). Nunca una fila por variante.
+5. **Panel de fuentes: un cartel IPTV por variante de resolución**, cada uno con su etiqueta de calidad: primero 1080p,
+   luego 4K, 720p y SD, y las reservas y las URLs con macros al final. **4 carteles IPTV como mucho**; los demás,
+   dentro del servidor como respaldo.
+6. **Al abrir, arranca sola la mejor** (la primera). **Si una variante falla, pasa a la siguiente variante IPTV DEL
+   MISMO CANAL antes de saltar a AceStream** (misma clave y mismo país: «DE: DAZN 1» es otro canal, no una variante de
+   «DAZN 1»). Tocar un cartel de otra resolución cambia a esa variante con un toque.
+7. **La calidad sale del nombre y, cuando se conoce por el stream** (la `RESOLUTION` de la maestra HLS que abre el
+   relé, o la altura que da ffprobe en la sonda de fondo), **del stream real, que manda**.
+8. **Una sola conexión con el proveedor**: cambiar de variante cierra la anterior antes de abrir la nueva (§6.5, sin
+   cambios).
+
+### 17.2 Grupos de variantes (`names.ts`, `catalog.ts`)
+
+**Lo que se quita del nombre** (y cómo se lee), además de §4.2:
+
+| Marca | Ejemplos | Qué da |
+|---|---|---|
+| País delante | `ES:` `ES \|` `\|ES\|` `[ES]` `(ES)` `ES -` `ES •` `ES »` `ES ➤` `ESPAÑA \|` · España sin separador: `ES DAZN 1` | `country` (ES y sin país, el mismo canal) |
+| España al final | `DAZN 1 [ES]` `DAZN 1 \|ES\|` `DAZN 1 (ESP)` `DAZN 1 ES` `DAZN 1 - ES` | `country: 'ES'` |
+| Cadena delante | `TVE - La 1` | fuera, sin país |
+| Lo que va delante del país sin serlo | `VIP \| ES: …` `FHD \| ES: …` | marca fuera; la calidad cuenta |
+| Calidad | `FHD` `Full HD` `FullHD` `1080p` `1080i` `1080p50` `FHD50` `1080 50` · `UHD` `4K` `2160p` · `HD` `HD+` `HD50` `720p` `720p60` · `SD` `480p` `576p` · superíndices `ᶠᴴᴰ` `⁴ᴷ` | `quality` |
+| Códec y técnica | `HEVC` `H265` `H.265` (→ `hevc`) · `H264` `AVC` `HDR` `50FPS` `50 fps` `VIP` | fuera |
+| Reserva | `backup` `(backup)` `[BK]` `bk2` `BK 2` `alt` `ALT 1` `alternativo` `reserva` `respaldo` `multi` | `backup` |
+| Copia del final | `(1)` `(2)` `[3]` · tras la calidad, si el canal ya acaba en número: `DAZN 1 HD 2` | fuera; de la 2 en adelante, `backup` |
+| Zona | `GEO` (fuera) · `GEO CAT` (`backup`) | como §4.2 |
+
+- Un grupo del catálogo tiene su **clave** (`normalizeChannelKey(base)`) y, dentro, **un canal por país**
+  (`Catalog.buckets(key)`): el de España o sin país (`bucket` `''`) primero y luego cada otro país. «DE: DAZN 1» no es
+  una variante de «DAZN 1»: es otro canal del mismo nombre, con su fila en el buscador y sus carteles.
+- **La copia del final solo es copia si hay con quién.** Un «Canal Sur (2)» sin ningún «Canal Sur» al lado es «Canal
+  Sur 2»: el catálogo lo vuelve a indexar con el número al acabar la sincronización (`rekeyLoneMirrors`). Vale igual
+  con varias resoluciones del mismo número («Canal Sur (2) HD» y «Canal Sur (2) FHD», sin «Canal Sur», son «Canal Sur
+  2» en 720p y 1080p). Con «Canal Sur» al lado, o con números distintos («(1)» y «(2)»), son copias. **Un «(1)» nunca
+  es parte del nombre**: una lista que numera todo con «(1)» deja «Antena 3 (1)» en «Antena 3».
+- **País, solo si es un país.** Con 2 letras vale cualquier sigla que no sea una marca o una calidad (`VIP`, `XXX`,
+  `PPV`, `TV`, `HD`…); con 3, solo una lista de siglas de país (`USA`, `GER`, `FRA`, `ITA`, `POR`, `ARG`, `MEX`…,
+  `COUNTRY_3` en `names.ts`). Así «TDT \| NACIONALES», «DOC \| …», «NBA: …», «RAI - 1» o «TNT - Sports 1» no se leen
+  como país (antes «La 1» del grupo TDT salía en otra fila, «La 1 · TDT», sin la preferencia española), y «RAI - 1»
+  deja «rai 1». «CAT \| …» (Cataluña) tampoco: esos canales son de España.
+- Los números sueltos no se tocan nunca: «DAZN 1» y «DAZN 12», «M+ LaLiga» y «M+ LaLiga 2» son otros canales.
+- El grupo «XXX \| ADULTOS», «VIP \| DEPORTES» o «PPV \| …» no declara país.
+
+### 17.3 Carteles y respaldo (`match.ts`: `planVariants`, `relayVariants`)
+
+**Orden de las variantes de un canal:** HEVC al final (la web no lo reproduce, D6); luego las reservas y las URLs con
+macros; entre las demás, **1080p > 4K > 720p > SD > sin marca**; entre iguales, la fiabilidad aprendida y el orden del
+catálogo. La calidad es la que manda (§17.5).
+
+**Carteles:** se recorre ese orden y cada **resolución** nueva (o «sin marca») tiene su cartel, hasta 4:
+- una reserva o una URL con macros solo tiene cartel si su resolución no lo tiene ya (así «DAZN LaLiga (Backup)», sin
+  marca, sale al final como «reserva»; una «1080p (2)» con una 1080p al lado, no);
+- una HEVC solo tiene cartel si el canal no tiene nada más;
+- lo que no tiene cartel es **respaldo del relé**.
+
+**Reparto entre canales (`layer.ts`, `allotPosters`):** 4 carteles IPTV en total por resolución. Los 2 primeros
+canales «de verdad» (el de la guía y el del nombre, como antes) tienen uno asegurado; el gemelo de otro país de un
+canal que ya está («DE: DAZN 1» con «DAZN 1») no cuenta y solo entra si sobra sitio; el resto se llena en orden, así el
+primer canal enseña todas sus resoluciones. Lo que no cabe pasa a respaldo. El gemelo que entra es un cartel para
+tocarlo a mano: la web no salta a él sola (§17.6).
+
+**Respaldo del relé:** al abrir un cartel, el relé lleva detrás las variantes sin cartel que le tocan: las copias de
+su misma resolución (la no reserva primero) y, las que no tienen cartel de su resolución, detrás del último cartel; 2
+como mucho. Las variantes **con** cartel no se prueban ahí: si la 1080p cae, la web pasa a la 4K (§17.6) y se ve.
+
+**En la resolución** (`football/resolution.ts`): el tope `IPTV_MAX_CANDIDATES` pasa de 2 a **4**; entre dos IPTV
+manda el orden de la capa IPTV (`sources/ranking.ts` ya no las reordena por fiabilidad: la fiabilidad desempata dentro
+de la capa); el canal IPTV tocado (§14.4) trae **todos** sus carteles delante y en su orden
+(`tappedCandidates`).
+
+### 17.4 Contrato (`packages/shared`)
+
+Todo opcional o de tope; ningún formato cambia y la 0.8.0 lo decodifica:
+- `IPTV_MAX_CANDIDATES = 4` (antes 2) y `IPTV_MAX_MATCHED_CHANNELS = 2` (canales con sitio asegurado).
+- `CandidateIptvInfo.country?: string | null`: país del canal si no es España («DE»).
+- `CandidateIptvInfo.channel?: string` (verificador, 26-sep): la clave del canal («dazn 1»). Dos carteles con la
+  misma clave y el mismo país son variantes del mismo canal; es lo que mira la web para el salto entre variantes.
+- `IptvChannel.qualities?: IptvQuality[]` (todas las del canal, de mayor a menor resolución, 4 como mucho) y
+  `IptvChannel.country?: string | null`.
+- `IptvChannel.quality` y `CandidateIptvInfo.quality` son la calidad **que manda** (la del stream real si se conoce).
+- Ejemplos: `fixtures/web/v1/iptvChannels.json` con `qualities` y `country`; `fixtures/variantes/footballResolve.iptv.json`
+  con dos carteles de «DAZN LaLiga» (1080p y 720p). `v1/` y `events/` no cambian.
+
+### 17.5 La calidad real manda
+
+- **Maestra HLS:** al aplanarla, el relé avisa al servicio (`onMedia`) de la `RESOLUTION` de la variante que elige
+  (§6.1); el servicio la apunta como la calidad de esa variante del catálogo (`noteQuality`, en memoria, 5000 como
+  mucho; los ids ya llevan el proveedor dentro).
+- **ffprobe:** la sonda de fondo (§7.3) pide también `height` (`FFPROBE_ARGS`) y el servicio la apunta igual. No va al
+  veredicto.
+- Altura → calidad: 1800 o más → 4K; 1000 o más (1080, 1440) → 1080p; 700 o más → 720p; menos → SD.
+- Cambia el orden y los carteles: una «SD» que en realidad es 720 pasa a ser una copia de la 720p (sin cartel si la
+  720p ya lo tiene), y las etiquetas del buscador lo dicen.
+
+### 17.6 Web
+
+- **Buscador** (`features/search/iptv.ts`, `ChannelRow`): la fila IPTV lleva «{Casa}» (+ « · también en AceStream»)
+  y detrás las etiquetas `iptvTags` (el país si no es España y las calidades, de mayor a menor resolución), como las
+  del cartel: pequeñas y siempre enteras; lo que se recorta es el subtítulo. Igual en el filtro de Canales.
+- **Carteles** (`qualityTags`): el país delante si no es España, la calidad y «reserva». Una IPTV que el comprobador
+  deja «en cola» (su carril no sondea el stream, §7.3) se lee «Sin comprobar · se prueba al reproducirla», como dice
+  §8.3: con varios carteles IPTV, «Pendiente · en cola» parecía un atasco.
+- **Si cae una variante IPTV** (`handleSourceFailed` → `pickNextIptvVariant`), antes del puente: la siguiente IPTV **del
+  mismo canal** (`sameIptvChannel`: misma `iptv.channel` y mismo `iptv.country`) en el orden del servidor que no se
+  haya probado, no esté «Sin señal» ni reportada y no haya caído en 60 s. Otro canal, o el mismo nombre en otro país,
+  no es una variante: ahí decide el puente (AceStream). Antes cogía el siguiente cartel IPTV fuera cual fuera: con
+  «DAZN 1 SD», «DE: DAZN 1 FHD» y «UK: DAZN 1 4K», si caía la española se ponía sola DAZN Alemania.
+- **Gemelos de otro país** (`isForeignTwin`: un cartel con país cuyo canal también está en España o sin país): se
+  enseñan y se tocan, pero ni el arranque (`pickAutoSource`), ni el salto de entrada (`pickInitialSwitch`), ni el
+  puente desde AceStream (`pickBridgeTarget`) los eligen. Si solo está la extranjera, es la que hay y arranca. No cuenta en
+  el tope de saltos del puente (cada una se prueba una vez) y no saca el toast «Volver a la IPTV» (seguimos en tu
+  IPTV). Con un fallo de cuenta (`iptv_busy`, `iptv_auth_failed`, `iptv_account_expired`) o la IPTV en pausa, no: vale
+  para todas. Vale en automático, en manual y en canales sueltos con IPTV, como el puente.
+- Cuando ya no queda variante, el puente de §7.2 como siempre; **«Volver a la IPTV» vuelve al primer cartel IPTV** (la
+  mejor variante), no al último que cayó.
+- **Tocar otro cartel** es `selectSource`: el servidor cierra la variante anterior antes de abrir la nueva (§6.5).
+
+**Textos** (literales):
+
+| Momento | Línea de estado |
+|---|---|
+| Cae una variante y hay otra con calidad distinta | «Tu IPTV no responde en {1080p}: probamos en {4K} (fuente {N})» |
+| … sin calidades que decir | «Tu IPTV no responde: probamos otra señal de tu IPTV (fuente {N})» |
+| … por conexión ocupada | no se prueban variantes (fallo de cuenta): el puente de §7.2 |
+
+### 17.7 Proveedor falso (`apps/server/test/fake-iptv/provider.ts`)
+
+- «DAZN 1» con 5 variantes, cada una con su stream: «ES: DAZN 1 FHD» (112), «ES: DAZN 1 HD» (113), «ES: DAZN 1 SD»
+  (114), «ES: DAZN 1 4K» (115) y «ES: DAZN 1 (backup)» (116). Por HLS (la M3U), una maestra con su `RESOLUTION` de
+  verdad (1920×1080, 1280×720, 720×576, 3840×2160 y 1920×1080); por TS, un caudal acorde (4000, 2500, 1500 y 800
+  kbit/s).
+- Otros países: «UK: DAZN 1» (109), «DE: DAZN 1 HD» (117, grupo «DE | SPORT») y «FR: Canal+ Sport» (118, «FR | SPORT»).
+- El grupo «XXX» (111, «ES: Tele Noche HD») sigue ahí: ahora sale en el buscador.
+
+### 17.8 Pruebas
+
+- **Unitarias del servidor:** `names.test.ts` (35 nombres reales de variantes: calidad, reserva, país, HEVC; el orden
+  1080p > 4K > 720p > SD; altura → calidad; grupos que no son país); `match.test.ts` (corpus de variantes que dan la
+  misma clave y pares que nunca se juntan: «DAZN 1»/«DAZN 2»/«DAZN F1»/«DAZN 12», «LaLiga TV»/«LaLiga TV
+  Hypermotion», «M+ LaLiga»/«M+ LaLiga 2», «La 1»/«La 2», «Antena 3»/«Antena 3 Internacional»…; países como
+  preferencia; `planVariants` y `relayVariants`; la calidad real manda; «Canal Sur (2)» solo; y, tras el verificador,
+  «FHD50», «1080 50», «ES DAZN 1», «ES » / ➤», «DAZN 1 ES», «BK 2», «HD 2», «⁴ᴷ», «Canal Sur (2) HD/FHD», «Antena 3
+  (1)», «TDT \| NACIONALES», «TVE - La 1», «RAI - 1» y los gemelos del catálogo del verificador con su país); `search.test.ts` (todo
+  desbloqueado, una fila por canal, otro país otra fila); `service.test.ts` (filas con `qualities` y `country`, 4
+  carteles 1080p, 4K, 720p y SD, la maestra HLS y ffprobe mandan); `football/iptv.test.ts` (tope 4 en el orden de la
+  capa; el canal tocado trae todos sus carteles).
+- **Integración** (`test/integration/iptv.test.ts`): caso 1 con los 4 carteles (guía + 1080p, 720p, reserva); **caso
+  16**: «dazn 1» da una fila con «4K · 1080p · 720p · SD» y las de UK y DE; `footballResolve` del canal tocado y el
+  emparejado por nombre dan los 4 carteles en orden; con la 1080p caída, abrirla da un `iptv_*` y el relé no pide
+  ninguna otra variante; la 4K abre; tocar la 720p cierra la 4K (una conexión, una sesión); caso 11 con el grupo XXX.
+- **Web:** `session.iptv.test.ts` (cae la 1080p → la 4K → la 720p → AceStream, con sus textos; «Volver a la IPTV» a
+  la primera; tocar otro cartel; un fallo de cuenta no prueba variantes; el tope del puente sin contar las variantes;
+  **cae la DAZN 1 española → AceStream, nunca «DE: DAZN 1» ni «UK: DAZN 1»**, y el gemelo se puede tocar);
+  `model.iptv.test.ts` (el salto no sale del canal ni del país; el arranque y el puente no eligen gemelos; si solo
+  está la extranjera, arranca);
+  `SearchView.test.tsx` (una fila con 4 etiquetas; otro país con «DE»); `iptv.test.ts` (`iptvTags`).
+- **E2E** (`e2e/iptv-buscador.spec.ts`, **caso 14**): «dazn 1» da una fila con «4K» «1080p» «720p» «SD» (y la de
+  Alemania con «DE»); tocarla arranca la 1080p con 4 carteles IPTV en orden; `modo(112,'down')` → «Tu IPTV no responde
+  en 1080p: probamos en 4K (fuente 2)», suena la 4K y el motor AceStream no abre nada; tocar la 720p cambia y queda una
+  conexión. El caso 8 enseña también el canal del grupo XXX; `iptv.spec.ts` espera 4 carteles IPTV en el partido.
+  Capturas del buscador y del panel con `IPTV_CAPTURAS=<carpeta>` (no en la CI).
+
+### 17.9 Impacto en la app nativa (actualiza §10 y §14.10)
+
+La app **calcará** esto cuando haga su panel de fuentes y su buscador (fase 3). Nadie de `rediseno/iptv` toca
+`apps/ios`.
+
+**Sin cambiar nada, incluida la 0.8.0 publicada:**
+- Recibe hasta 4 candidatas IPTV (antes 2) en cabeza de `candidates`, todas con `source: 'iptv'`: las decodifica y las
+  enseña como fuentes («Fuente» sin distintivo, §10). `iptv.country` es una clave que no conoce: la ignora.
+- Si cae una variante, su regla de siempre salta a la siguiente fuente, que suele ser la siguiente variante IPTV (van
+  seguidas en el orden del servidor). Ojo: sin la regla nueva puede acabar en un gemelo de otro país («DE: DAZN 1»),
+  que va detrás; la app que calque la web usará `iptv.channel` e `iptv.country` como ella.
+- `iptvChannels` sigue siendo `access: 'web'` (D27): no le llega.
+
+**Cambios cuando exista la pantalla** (los ficheros con * no existen aún en `rediseno/nativa`):
+
+| Módulo | Fichero o carpeta | Cambio |
+|---|---|---|
+| M1 | `Sources/Core/Models/Futbol.swift` | `country: String?` y `channel: String?` en `CandidateIptvInfo` |
+| M1 | `Sources/Core/Models/Buscar.swift`* | `qualities: [CalidadIptv]?` y `country: String?` en `CanalIptv` (tolerantes) |
+| M3 | `Sources/Core/Reglas/Fuentes/ReglasFuentes.swift` | `pickNextIptvVariant` (siguiente cartel IPTV **del mismo canal y país** antes del puente, sin contar en el tope; no con fallo de cuenta ni en pausa); `isForeignTwin` fuera del arranque, del salto de entrada y del puente; «Volver a la IPTV» al primer cartel IPTV; etiquetas del cartel con el país; vectores regenerados desde `scripts/vectores/fuentes.ts` |
+| M3 | `Sources/Core/Reglas/Avisos/LineaEstado.swift` | los dos textos de §17.6 (regenerados en `textos-web.json`) |
+| M6 | `Sources/Pantallas/Partido/` | un cartel por variante con su etiqueta de calidad (y país), 4 IPTV como mucho, en el orden del servidor; tocar uno cambia de variante |
+| M6 | `Sources/Pantallas/Buscar/`* y `Sources/Pantallas/Canales/`* | una fila por canal con las etiquetas `iptvTags` (país y calidades de mayor a menor resolución) y «{Casa}» de subtítulo; sin filtro de país ni de adultos |
+| M2 | `Sources/Debug/ServidorDemo.swift` | `qualities` en `iptvChannels` si la demo de la app copia la de la web |
+
+### 17.10 Riesgos
+
+1. **Más carteles IPTV:** hasta 4 en vez de 2. Todos del mismo proveedor y con una sola conexión: cambiar de uno a
+   otro cierra antes el anterior; un panel que tarde en soltar la plaza se cubre con los reintentos 2-4-8 s de §6.5.
+2. **Nombres que parecen variantes y no lo son:** «(2)» se toma como copia si hay otra variante al lado; un canal que
+   se llame de verdad «X (2)» junto a un «X» se leería como su reserva (sale al final, como «reserva»). Los números
+   sueltos nunca se tocan.
+3. **Canales extranjeros en el emparejado:** con la misma puntuación va antes el de España, pero un canal que solo
+   exista fuera y case por nombre (≥ 92) sale, con su país en el cartel. Si no es el que se quiere, «Reportar → Canal
+   incorrecto» lo aparta para ese canal.
+4. **Todo desbloqueado en el buscador:** con catálogos de decenas de miles de canales repetidos por país, una búsqueda
+   corta da muchas filas; siguen los topes de §14.7 (50 por respuesta, 5 a la vista) y el orden pone primero lo de
+   España o sin país.
+5. **«Multi» / «(MULTI)» (multiaudio) cuenta como reserva** y va al final: suele ser el mismo partido con otras pistas
+   de audio, no la señal buena. Es una decisión (Isma puede pedir que cuente como una variante normal).
+6. **Canales solo HEVC:** si un canal no tiene más que variantes HEVC, todas tienen cartel aunque la web no reproduzca
+   HEVC (D6); la app nativa sí. A vigilar.
+7. **La calidad medida mueve los carteles:** `noteQuality` apunta la altura real al ver un canal; una «1080p» que
+   resulta ser 720 pasa a ser copia de la 720p en la siguiente resolución. La web se queda con el orden de cuando
+   resolvió; entre dos resoluciones seguidas los carteles pueden cambiar sin que nadie haga nada.
+8. **Nombres ambiguos:** «LaLiga TV HD 2» se lee «LaLiga TV 2» (el canal no acaba en número); «DAZN 1 HD 2» sí es la
+   copia 2 de DAZN 1. Un «X HD 2» solo, sin ningún «X», se lee como «X 2» (igual que «X (2)»).
+
+## 18. Anexo: buscador y emparejado con la lista real de Isma (26-sep)
+
+Isma metió su lista de verdad (Xtream, 27 687 canales) en su pila local y vio que «movistar laliga», «m+ laliga» y
+«movistar liga de campeones» daban 0, que «laliga» no ponía arriba los M. LALIGA, que «tdt» daba 0 y que «futbol» solo
+traía «M. FUTBOL». En el Umbrel, además, «La 1» salía dos veces y el cartel de «La 1 TVE 720p» enseñaba «720» de
+dorsal. Este anexo lo arregla con una sola normalización para el buscador y el emparejado, medida con un banco de 149
+consultas y el ensayo contra la agenda real. **Implementado** en `iptv-busqueda` (sobre `rediseno/iptv`).
+
+### 18.1 En pocas palabras
+
+1. **Una grafía única** (`channelSpelling`, `@ace/shared`): «M.», «M .», «M.» pegado, «M+», «MOVISTAR+», «MOVISTAR
+   PLUS+», «MOVIESTAR» → Movistar; «LA LIGA» = «LALIGA»; «LALIGA+» es otra marca; «LA SEXTA» = «LASEXTA», «TELE CINCO»
+   = «TELECINCO» y demás compuestos; «SUPER CUPA» → Supercopa; «R. MADRID» → Real Madrid. La usan el buscador y el
+   emparejado; la web y la app la portan tal cual.
+2. **El buscador encuentra aunque la lista use abreviaturas, prefijos o puntos**, busca también por **categoría** (con
+   sinónimos) y **ordena por parecido**: igual, misma familia, empieza por, mismo orden, cualquier orden, sin Movistar y
+   por categoría.
+3. **El emparejado automático sigue estricto** (umbral 92, Hypermotion ≤ 58, los números): solo gana las grafías
+   seguras de arriba, la lista limpia (cabeceras fuera, país bien leído, Tivify visible) y protecciones nuevas
+   (plataformas, «DAZN» a secas, marca de cadena en la regla del « 1»). Las erratas y los alias «humanos» (Champions,
+   Barça…) **no** entran aquí.
+4. **El nombre de una lista de AceStream se limpia antes de buscarlo en la IPTV**: «La 1 TVE 720p \*» y «LA 1 4K -->
+   NEW ERA» son «La 1». Así la biblioteca se enlaza con su IPTV (una fila, no dos) y al tocarla va la IPTV primero.
+5. **Carteles:** la etiqueta de tipo de las listas dice «AceStream» (no «M3U»); el dorsal se salta la resolución y el
+   códec («La 1 TVE 720p» → «1»); el nombre de debajo no repite la calidad que ya va en su etiqueta.
+6. **Remux:** la lista `index.m3u8` que aún no está (arranca o se reinicia) responde 503 con `Retry-After: 1` y hls.js
+   la reintenta; ya no hay 500 por un ENOENT.
+
+### 18.2 Limpieza de nombres (`names.ts`, `channel-names.ts`)
+
+| Qué | Antes | Ahora |
+|---|---|---|
+| Cabeceras «##### … #####», «==== … ====», «XX - NO MATCH», «NO EVENT» | canales (salían en el buscador y casaban: «##### FANSEAT #####», «###### DE - APPLE TV ######») | fuera del catálogo (`filler`) |
+| Filas de evento «ESPN PLUS 12 : … 3:00 PM ET / 8:00 PM UK» | un canal más | `event`: al final del orden |
+| «ES TI - TELEMADRID HD» | país «ES», nombre «TI - TELEMADRID» | país ES; «TI» es la plataforma |
+| «ES-M.LALIGA 4 HD» | clave `m laliga 4` | `movistar laliga 4` |
+| Categoría «EU \| ES \| TDT ESPAÑA VIP» (con NBSP a veces) | país EU | país ES (el primer tramo es el continente); «VIP \| …» sin país; «AR \| …» es árabe |
+| «BEIN SPORTS Ñ FHD» | clave `bein sports n` | «BEIN SPORTS», país ES |
+| «LASEXTA ᴿᴬᵂ», «MOVISTAR DEPORTES ᵛᶦᵖ» | ᴿᴬᵂ y ᵛᶦᵖ en la clave | ᴿᴬᵂ = reserva del mismo canal; los demás superíndices, adorno; «⁴ᴷ» = 4K |
+| «LA 1 4K/UHD» | «LA 1 /» | «LA 1» (4K) |
+| «[ PREMIERELEAGUE ]», «(SOLO EVENTOS)», «(not 24/7)», «[ LIVE EVENT ]» | parte del nombre | nota: fuera |
+| «M. LALIGA HD (BK-1)», «BK-2» | «M. LALIGA ( -1)», clave `m laliga 1`: **se juntaba con M. LALIGA 1** | reserva de «M. LALIGA» |
+| «#VAMOS», «M. ELLAS #V» | «#» en el nombre | sin «#» |
+| Plataformas (VIX, Pluto TV, Rakuten TV, GOLD TV 24/7…, por el nombre o la categoría) | canales normales | `platform`: no se emparejan por nombre y van detrás en el buscador |
+
+La grafía única (`channelSpelling`) es segura para el emparejado: dos nombres que dan lo mismo son el mismo canal.
+«M6», «M95», «MTV» y «M LALIGA» (sin punto) no se tocan en la lista. En el **buscador**, además, «m laliga» y «mov
+laliga» son Movistar (`iptvSearchSpelling`), y la consulta **no** pasa por los alias curados del emparejado
+(`IPTV_CHANNEL_ALIASES`), que añadían «tv» y daban 0.
+
+### 18.3 Buscador (`search.ts`)
+
+**Qué casa:**
+1. **Por el nombre:** cada palabra de la consulta es el principio de una palabra de la clave, en cualquier orden. «tv»,
+   «canal», «canales», «channel» y «channels» no hace falta encontrarlas. Un número casa **entero** («la 1» ya no trae
+   «LALIGA+ PPV 10»). Por dentro de una palabra, solo en compuestos conocidos («liga» en «laliga», «sexta» en
+   «lasexta»…) o con 5 letras o más («nba» ya no casa con «dazn baloncesto»). La consulta pegada vale desde el principio
+   de una palabra («antena3», «la1»).
+2. **Sin Movistar:** «movistar vamos» y «m+ vamos» encuentran «#VAMOS» (las listas no siempre escriben la marca).
+3. **Por la categoría:** las palabras del tema (sin continente ni país) con sinónimos en su forma única
+   (`IPTV_CATEGORY_SYNONYMS`: futbol = football = soccer; deportes = sports; infantil = niños = kids; cine =
+   películas = movies; documental; tenis = tennis; noticias = news; ciclismo; baloncesto = basket; música; series;
+   entretenimiento = general). «tdt» trae los canales de «EU | ES | TDT ESPAÑA VIP»; «futbol», los de «TV FOOTBALL
+   PPV» detrás de «M. FUTBOL».
+
+**Orden por parecido:** nivel (0 igual; 1 misma familia: sin el número del final o sin la marca de delante, «laliga» →
+«DAZN LaLiga» y «M. LALIGA 3»; 2 empieza por la consulta; 3 las palabras en orden; 4 en cualquier orden o por dentro; 5
+sin Movistar; 6 por la categoría). Dentro de cada nivel: España o sin país → América en español → el resto; el canal
+principal antes que bar, PPV, replay, resúmenes, reservas ᴿᴬᵂ, plataformas y eventos; la familia junta y en orden
+numérico («M. LALIGA 1, 2, 3…»); la clave más corta (en la categoría, el orden del catálogo); el orden del catálogo.
+
+**Contrato:** no cambia (`iptvChannels` devuelve lo mismo). La píldora «Categoría: TDT España (75)» y el «Quizás
+quisiste decir…» son del buscador «como Google» (otro trabajo).
+
+### 18.4 Emparejado automático (`match.ts`, `names.ts`, `sources/ranking.ts`)
+
+- **Gana** (seguro): la grafía única; «TVG» = «TV Galicia» (alias curado; «TVG 2» sigue siendo otro); la limpieza de
+  §18.2 (Tivify visible: IB3, La 7, TVG; «BEIN SPORTS Ñ»; «LASEXTA ᴿᴬᵂ» dentro de «LA SEXTA»); las mismas letras juntas
+  o separadas son el mismo canal («laSexta» = «LA SEXTA»).
+- **Protecciones nuevas:**
+  - una **plataforma** de la lista (VIX, Pluto TV, Rakuten TV…) no casa por nombre: «M+ LaLiga TV» ya no es «LA LIGA 1»
+    de Rakuten;
+  - la regla del « 1» final exige la **misma marca de cadena** (Movistar o DAZN) si el canal pedido la lleva;
+  - **«DAZN» a secas** (la marca paraguas) no casa con nada, ni con un canal que la lista llame «DAZN»;
+  - **plataformas de la agenda** que nunca casan por nombre: Disney+, Prime Video, Apple TV, Netflix, HBO Max,
+    SkyShowtime, Filmin, Atresplayer, Mitele, FANSEAT, FANPLAY, Peacock, ViX, Pluto TV, Rakuten y «…Play» pegado
+    (Movistar Plus+ **sí** es un canal).
+- **Canal suelto de AceStream (`scope=channel`, biblioteca, `sameChannel`):** el título se limpia con
+  `aceChannelTitle` (sin « --> LISTA», asteriscos, calidad, códec ni fotogramas en cualquier sitio, y sin
+  «TVE»/«RTVE» detrás de La 1, La 2, Clan, 24h o Teledeporte). En la resolución, una IPTV **nunca es «lo genérico»**:
+  «La 1» de la IPTV ya no va detrás de «La 1 TVE 720p \*» de la lista.
+- **Sin cambiar:** umbral 92, Hypermotion ≤ 58, «DAZN 1» ≠ «DAZN 2» ≠ «DAZN F1», Liga de Campeones ≠ LaLiga, LALIGA+ PPV
+  y REPLAY nunca son LaLiga TV. **Pendiente de Isma:** «LaLiga TV M2…M5» (Primera Federación) ↔ «M. LALIGA 2…5» no se
+  empareja hasta que lo confirme.
+
+### 18.5 Carteles de fuente (web)
+
+- **Etiqueta de tipo:** las fuentes de las listas dicen «AceStream» (antes «M3U», que confundía: la IPTV también sale
+  de una lista M3U); las de la IPTV, «IPTV». «Guardada», «Favorito» y «Reciente» no cambian.
+- **Dorsal** (`channelDorsal`, `ChannelMark.tsx`): se salta 240/360/480/540/576/720/1080/1440/2160/4320 (con «p», «i»
+  o los fps pegados), 4K, 8K, «50 fps», H264/H265/x265/HEVC/AVC/HDR: «La 1 TVE 720p» → «1», «DAZN 2 1080p50 H265» → «2»,
+  «Eurosport 4K» → «E». Funciones de `@ace/shared`: `stripQualityMarks` e `isQualityNumber`.
+- **Nombre de debajo** (`posterNameOf`): sin los asteriscos de copia y, si la calidad ya sale en su etiqueta, sin la
+  marca de calidad: «La 1 TVE 720p» → «La 1 TVE». Sin etiqueta de calidad (AceStream sin medir), se queda.
+
+### 18.6 La lista del remux que aún no está
+
+El registro de la pila de Isma tenía `ENOENT … open '/data/remux/<hash>/index.m3u8'` respondido como 500 «error
+interno»: `sendFile` medía el fichero con `stat` y lo abría después; si entre medias el remux se reiniciaba (borra y
+rehace la carpeta), el stream fallaba al abrir. Ahora:
+- `sendFile` abre primero y lee de ese descriptor (sin carrera);
+- la **lista** de una sesión viva que aún no está responde **503 con `Retry-After: 1`** y `no-store` (web y
+  `/remux/`); un segmento que falta sigue siendo 404; la app nativa (con `?t=`) recibe su 404 de siempre, ahora con
+  `Retry-After`;
+- el relé IPTV, sin lista todavía, también responde 503 con `Retry-After`;
+- hls.js reintenta la lista maestra y la de nivel 4 veces (0,5 s, hasta 2 s: `HLS_PLAYLIST_RETRY`) sin avisar.
+
+### 18.7 Medidas con la lista real
+
+Servidor de la rama arrancado en otro puerto, sin red, contra una **copia** de los datos de la pila (misma semilla);
+«antes» = `origin/rediseno/iptv` (9e8a99e, ya con «todo desbloqueado»), «después» = esta rama. Solo nombres; ni
+URLs, ni credenciales, ni ids de stream; ningún canal reproducido.
+
+**Banco (149 consultas, 124 con lo esperado en el top 10):**
+
+| | Antes | Después |
+|---|---|---|
+| Aciertos en el top 10 | 80 | **102** |
+| Empeoran | — | **0** |
+| Consultas con 0 resultados | 38 | 31 |
+| Mediana / máximo por HTTP | 5,3 / 199 ms | 6,4 / 53 ms |
+
+Mejoran 22: movistar laliga, m+ laliga, mov laliga, movistar plus laliga, movistar la liga, m+ laliga tv, laliga, la
+liga, movistar liga de campeones, m+ liga de campeones, m+ liga de campeone, movistar deportes, m+ deportes, movistar
+futbol, m+ vamos, movistar vamos, movistar golf, m+ supercopa, tdt, canales tdt, barca tv e infantil. Siguen mal las
+erratas y los alias (dasn, telecinko, champions, ucl, tele 5, t5, la 6, tdp, rmtv, segunda division, 1 rfef…) y los
+partidos: son del buscador «como Google».
+
+**Ensayo (agenda real de hoy y mañana, 273 partidos):** antes 45 con IPTV, pero 21 eran cabeceras («##### FANSEAT
+#####» ×7, «###### DE - APPLE TV ######» ×14) → **24 de verdad**; después **27**, todos de verdad: los 24 de antes y
+Lugo – Racing Ferrol (TVG → TV GALICIA), Poblense – Valencia-Mestalla (IB3) y Mansillés – Mirandés B (La 7). Del 28-sep
+al 5-oct, el falso positivo «Disney+» → «DISNEY CHANNEL» desaparece.
+
+**«La 1» (8.3 del banco):** `resolve?channel=La 1 TVE 720p *&scope=channel` daba `not_found`; ahora `found` con la IPTV
+«La 1» (y primera). `iptvChannels?q=la 1` enlaza la biblioteca con la fila «LA 1» (`library` 0 → 1): una fila, no dos.
+
+### 18.8 Impacto en la app nativa (actualiza §10, §14.10 y §17.9)
+
+Nadie de `rediseno/iptv` toca `apps/ios`. **Sin cambiar nada** (incluida la 0.8.0): el servidor ya empareja mejor y la
+lista del remux responde 503 en web; la ruta nativa (`?t=`) sigue con su 404, ahora con `Retry-After`.
+
+**Cuando exista la pantalla**, la app porta:
+
+| Módulo | Fichero o carpeta | Cambio |
+|---|---|---|
+| M3 | `Sources/Core/Reglas/Nombres/GrafiaCanal.swift`* | `channelSpelling`, `stripQualityMarks` e `isQualityNumber` de `packages/shared/src/domain/channel-names.ts`, con vectores generados desde sus pruebas (`lista-real.test.ts`, «channelSpelling») |
+| M3 | `Sources/Core/Reglas/Fuentes/ReglasFuentes.swift` | etiqueta de tipo «AceStream» para las fuentes de listas (antes «M3U»); nombre del cartel sin la calidad si ya va en la etiqueta |
+| M6 | `Sources/UI/Dorsal.swift`* (o donde viva el dorsal) | el dorsal se salta la resolución y el códec («La 1 TVE 720p» → «1») |
+| M6 | `Sources/Pantallas/Buscar/`* y `Canales/`* | el filtro local con `channelSpelling` («m+ laliga» encuentra «M. LALIGA» en la biblioteca) |
+
+### 18.9 Pruebas
+
+- **Servidor:** `lista-real.test.ts` (nuevo, 90+ casos con una lista **sintética** de la misma forma que la real:
+  limpieza, país, cabeceras, eventos, plataformas, lado AceStream, buscador —familia M. LALIGA en orden con 9 formas de
+  escribirlo, categoría, números enteros, compuestos, pegados, orden por país y penalizaciones— y emparejado —lo que
+  casa y lo que no: Rakuten, Liga de Campeones frente a LaLiga, Hypermotion, DAZN 1/2/F1, PPV y replay, «DAZN» a secas,
+  Disney+, Apple TV, FANSEAT); `search.test.ts` (orden por país dentro de la familia); `remux/routes.test.ts` (503 con
+  Retry-After en la lista, 404 en el segmento, 404 con Retry-After en la nativa); `sources/ranking.test.ts` (la IPTV no
+  es «lo genérico»).
+- **Web:** `ChannelMark.test.tsx` (13 casos de dorsal), `SourcePoster.test.ts` (nombre sin calidad), etiqueta
+  «AceStream» en `model.test.ts`, `SourcesPanel.test.tsx` y `e2e/fuentes-demo.spec.ts`; `engines.test.ts`
+  (reintentos de la lista).
+
+### 18.10 Riesgos
+
+1. **Cabeceras fuera del catálogo:** el recuento de canales baja (27 685 → 26 051 en la lista de Isma). Una fila que
+   empiece y acabe con 3 o más «#», «=», «-», «\*», «~», «_» o «★» se toma como cabecera.
+2. **Categorías amplias:** «cine» o «series» traen categorías enteras detrás de lo que casa por nombre; siguen los topes
+   de §14.7.
+3. **Plataformas:** un canal de VIX o Pluto TV ya no se empareja por nombre con la agenda; sí se busca y se reproduce.
+4. **«LaLiga 1» pedido por la agenda** sigue casando con «M. LALIGA 1» (Movistar es relleno en `channelMatchScore`,
+   matriz 0.6.59 congelada); al revés ya no («M+ LaLiga TV» no es «LA LIGA 1» de Rakuten).
+
+---
+
+## 19. Anexo: «la 1» en el Umbrel de Isma, la IPTV ocupada y las protecciones con la lista real (26-sep)
+
+Isma probó la 0.8.1 en su Umbrel. Buscó «la 1» y le salió **una sola fila, «LA 1 4K --> NEW ERA», con el distintivo
+«IPTV»**: era una entrada de su biblioteca de AceStream (la lista NEW ERA) que D26 marcaba con «IPTV» porque su IPTV
+tiene «LA 1». En «En tu IPTV» no salía nada. Al tocarla sonó AceStream. A la vez tenía abierta la app de IPTV de su PC
+(TPTV) con la misma cuenta, que admite **1 conexión**. Este anexo lo arregla y cierra lo que quedaba de §18.
+**Implementado** en `iptv-busqueda` (sobre `rediseno/iptv`); manda sobre D26, §14.3, §14.5 y §18.4.
+
+### 19.1 En pocas palabras
+
+1. **La fila es el CANAL** («La 1»), con etiquetas separadas de dónde se ve: «IPTV» con sus calidades y «AceStream» con
+   cuántas fuentes («AceStream · 3»). Nunca «IPTV» encima de una entrada que es de AceStream. Si solo está en uno, solo
+   su etiqueta. El canal IPTV siempre se ve en «En tu IPTV», aunque tengas su AceStream en la biblioteca.
+2. **Tocar la fila hace lo automático:** IPTV primero y, de respaldo, tus entradas de AceStream de ese canal.
+3. **Por qué sonó AceStream (reproducido):** con la plaza de la cuenta ocupada por otra app, la 0.8.1 SÍ intentaba la
+   IPTV (`/api/v1/channels/<id IPTV>/stream`, 503 `iptv_busy`, por eso no hay ningún `/api/v1/video`) y caía a
+   AceStream avisando solo con «conexión ocupada» en el cartel. Si hacía menos de 2 min que habíamos cerrado otra
+   IPTV, además esperaba 14 s a que se liberara.
+4. **IPTV ocupada, dicho al momento:** «Tu IPTV está ocupada en otro aparato (tu cuenta admite 1 conexión): seguimos
+   por AceStream (fuente 2)» en la línea de estado, y «IPTV ocupada en otro aparato: seguimos por AceStream» en el
+   aviso con «Volver a la IPTV». Sin esperar 14 s si no la acabamos de soltar nosotros.
+5. **Datos técnicos dice SIEMPRE de dónde viene lo que suena:** «IPTV · Casa · 720p» o «AceStream · NEW ERA»; y si
+   suena AceStream estando el canal en tu IPTV, una fila «IPTV» con el porqué.
+6. **El emparejado automático ya no coge canales de otro país** («DAZN 2 (FR)», «TV3 (SW)», «PER - MOVISTAR
+   DEPORTES», «UK - LA LIGA TV»): si cae el de España no suena otra programación.
+7. Menores de §18: país en minúsculas y «TVE» en el buscador, «LaLiga+» como otra marca, «TVG 2» de vuelta, el nombre
+   de las listas de AceStream sin flecha, orden con España delante, dorsal sin «(BK-2)» ni «1920x1080», «Listas de
+   AceStream» en vez de «M3U», la lista del remux que espera antes del 503.
+
+### 19.2 La fila de canal del buscador (`search/iptv.ts`, `SearchView.tsx`, `ChannelRow.tsx`)
+
+`mergeSearch`, rehecho:
+
+| Qué llega | Antes (D26) | Ahora |
+|---|---|---|
+| Una entrada de AceStream de tu biblioteca que es un canal de tu IPTV («LA 1 4K --> NEW ERA») | su fila, con «IPTV» y el nombre de la lista; el canal IPTV desaparecía de «En tu IPTV» | se junta con su canal: no sale suelta; cuenta en su «AceStream» y es su respaldo al tocarlo |
+| El canal IPTV («La 1») | escondido si alguna fila lo «representaba» | siempre en «En tu IPTV», con su nombre limpio, «IPTV», sus calidades y «AceStream · N» |
+| Un canal de tu IPTV guardado (id IPTV) | su fila, con «IPTV» | igual (es el canal): «IPTV», calidades, «Tu IPTV» y «AceStream · N» si el motor lo tiene |
+| Una entrada de AceStream que no es de tu IPTV | su fila | su fila, con «AceStream» (con IPTV activa) |
+| Resultados del motor de un canal que ya tiene fila | escondidos («también en AceStream») | escondidos, suman a su «AceStream · N» |
+| Resultado del motor de un canal IPTV que no vino (pasó de 50) | ese resultado con «IPTV» | fila de canal con el nombre limpio («LA 1»), «IPTV» y «AceStream · N» |
+
+- Las etiquetas van en la meta, nunca junto al nombre: «IPTV» (cápsula neutra con la tele, la del cartel de la
+  fuente), las calidades («720p») y «AceStream» (con el número si son 2 o más).
+- El subtítulo de una fila IPTV es solo el nombre de tu IPTV («Casa»): «· también en AceStream» pasa a ser la etiqueta.
+- **Filtro de Canales:** el canal IPTV sale en «En tu IPTV» aunque su AceStream sea una fila de la pestaña (antes se
+  escondía); tu fila de AceStream sigue siendo tuya y sin «IPTV».
+- Tocar la fila IPTV manda a la sesión del canal el id IPTV y sus entradas de AceStream de tu biblioteca
+  (`TappedChannel.ace`): van detrás de la IPTV en las fuentes, y si la IPTV cae suenan sin esperar al comprobador.
+
+### 19.3 Por qué no sonó la IPTV y qué se ha cambiado (`session.ts`, `iptv/service.ts`)
+
+Reproducido en E2E con el proveedor falso (1 plaza) y la entrada «LA 1 4K --> NEW ERA» en favoritos:
+
+| | Petición | Resultado |
+|---|---|---|
+| IPTV libre, 0.8.1 y rama | `football/resolve?…&iptv=<id>` → `channels/<id IPTV>/stream` → `video/…` | suena la IPTV |
+| Plaza ocupada por otra app, 0.8.1 | `football/resolve` → `channels/<id IPTV>/stream` **503 `iptv_busy`** (14 s si soltamos otra IPTV hace < 2 min; si no, al momento) → `channels/<hash AceStream>/stream` | suena AceStream; solo «conexión ocupada» en el cartel |
+| Plaza ocupada, rama | igual, pero el 503 llega en ~20 ms si no la acabamos de soltar | aviso claro y AceStream de tu biblioteca al momento |
+
+El id IPTV y el hash de AceStream son los dos de 40 hexadecimales: en el registro de nginx las dos peticiones de
+`channels/…/stream` parecen la misma. La hipótesis del plazo de 2,5 s (`channelResolveMs`) se descarta: la resolución
+respondió en milisegundos; la de la 0.8.1 funcionando distinto, también (el mismo recorrido con la IPTV libre suena).
+
+Cambios:
+- **Texto:** `iptv_busy` → «Tu IPTV está ocupada en otro aparato (tu cuenta admite 1 conexión): seguimos por AceStream
+  (fuente N)». El «(tu cuenta admite N conexión)» sale del estado de la IPTV (`iptvGet`, que se pide de fondo al
+  arrancar una IPTV); sin él, «Tu IPTV está ocupada en otro aparato: …». El aviso con «Volver a la IPTV» dice «IPTV
+  ocupada en otro aparato: seguimos por AceStream» (antes, solo «Seguimos por AceStream»); en Datos técnicos, la frase
+  entera.
+- **Al momento:** mientras se conecta con la IPTV, si el comprobador ya sabe por la cuenta que otro aparato tiene la
+  plaza, se dice «Tu IPTV parece ocupada en otro aparato…: si no se libera enseguida, seguimos por AceStream».
+- **Sin 14 s de espera:** el servidor solo reintenta «ocupada» (2-4-8 s) si soltó una IPTV hace menos de 20 s
+  (`IPTV_SESSION.busyRetryWindowMs`), que es lo que tarda un panel en descontarla. Antes, cualquier cierre de los
+  últimos 2 minutos.
+- **Respaldo inmediato:** con la fila de canal, si la IPTV cae antes de que el comprobador verifique nada, suena tu
+  entrada de AceStream de ese canal (como ya pasaba con el hash tocado de un canal suelto).
+
+### 19.4 Datos técnicos (`player/NerdPanel.tsx`)
+
+- **Origen**, siempre que suena algo: «IPTV · Casa · 720p» (proveedor y calidad del cartel) o «AceStream · NEW ERA»
+  (la lista o el proveedor de la fuente; «AceStream» a secas si no se sabe).
+- **IPTV**, solo si suena AceStream y el canal está en tu IPTV y cayó: «Tu IPTV está ocupada en otro aparato (tu cuenta
+  admite 1 conexión)», «Tu IPTV no suena: se cortó en el proveedor», «… cuenta caducada», etc.
+- Lo lleva el reproductor en el canal que suena (`PlayChannel.quality` e `iptvNote`), así que sale igual en la pestaña
+  del teatro y en el panel sobre el vídeo.
+
+### 19.5 Emparejado automático con la lista real (`match.ts`, `names.ts`, `catalog.ts`, `sources/ranking.ts`)
+
+- **Otro país, nunca solo.** `matchIptvChannels` solo coge España o sin país. El mismo nombre en otro país es otra
+  programación: «DAZN 2» ya no ofrece «DAZN 2 (FR)», «(PT)» ni «(DE)» como siguiente IPTV antes que AceStream; «TV3»,
+  ni el sueco ni el noruego; «M+ Deportes», no «PER - MOVISTAR DEPORTES»; «M+ LaLiga TV» y «LaLiga TV», no «UK - LA
+  LIGA TV». En el buscador salen todos (todo desbloqueado) y tocar uno lo reproduce. El re-emparejado de favoritos y
+  recientes (§14.6) sí los mira (`anyCountry`), detrás del de España.
+  Queda además, de segunda protección, la regla de la web de §17 (el salto entre variantes no sale del canal ni del
+  país), para cualquier cartel de otro país que llegue por otra vía (un favorito, la guía).
+- **El nombre del país en la categoría** («AM | LATINO», «EU | LATVIA», «AS | THAILAND», «AF | AFRICA») ya no deja el
+  canal «sin país» (= España): «LATINO» y «LATAM» son `LAT` (América en español), «MEXICO…» es `MX` y el resto, el
+  continente.
+- **«LaLiga+» es otra marca de verdad.** La grafía única la escribe «LaLigaPlus» (una palabra): «plus» suelto es
+  relleno al puntuar y «LaLiga+» de la agenda casaba al 100 con «Movistar LaLiga», «M. LALIGA 1» y «UK - LA LIGA TV».
+- **Categorías de plataforma que mezclan la TDT.** «EU | ES | RAKUTEN TV» de la lista real trae «ES - LA 2», «ES -
+  ANTENA 3», «ES - TVG 2»… La categoría solo hace «plataforma» a un canal si es de solo plataforma: si al menos 3 de sus
+  canales (y 1 de cada 5) están también en una categoría normal, es mixta y sus canales son canales («TVG 2» vuelve a
+  casar). En ellas, solo el nombre tal cual: sin la regla del « 1» («LaLiga TV» no es «LA LIGA 1») y un canal con marca
+  pedido («M+ LaLiga TV 3») solo casa con uno que la lleve («LA LIGA 3» de Rakuten no es Movistar). El nombre de
+  plataforma se reconoce también con el país delante («ES - RAKUTEN TV ACCION»). En el buscador, lo de estas
+  categorías va detrás.
+- **`sources/ranking.ts`:** una IPTV no es «lo genérico» frente a AceStream (§18.4), pero entre IPTV vuelve a mandar la
+  regla de la marca (B-174): «DAZN» de la IPTV va detrás de «DAZN LaLiga» de la IPTV.
+
+### 19.6 Buscador: lo que escribe una persona (`search.ts`)
+
+- **País delante en cualquier caja:** «es-m.laliga», «es: laliga», «es| dazn 1», «[es] dazn 1», «es - m. laliga» y «es
+  dazn 1» (con espacio, solo «es» y «esp»: «de», «la» o «tv» son palabras). Con un país pedido que no es España («uk:
+  la liga tv»), ese país va el primero.
+- **RTVE como la agenda:** «la 1 tve», «tve 1», «tve1», «La 2 TVE» → «LA 1», «LA 2».
+- **Orden:** España o sin país delante de TODO, luego América en español y luego el resto; dentro, el nivel de §18.3.
+  «la liga tv» ya no pone «UK - LA LIGA TV» por delante de «DAZN LaLiga» y «M. LALIGA»; «kids» ya no pone OSN ni los franceses por delante de los de España.
+- **«movistar ellas» ya no trae «LAS ESTRELLAS»:** sin la marca, solo por el principio de una palabra.
+- **Nombre de las listas de AceStream sin flecha** (`aceChannelTitle`): «LA 1 FHD [NEW ERA]», «LA 1 (NEW ERA)», «LA 1 |
+  NEW ERA», «LA 1 - NEW ERA», «LA 1 1080 NEW ERA» son «LA 1». Solo si lo de detrás va en mayúsculas o entre corchetes
+  y no distingue el canal: «LaLiga TV (Hypermotion)», «M+ LaLiga TV - Bar» y «Real Madrid TV EN» no se tocan.
+
+### 19.7 Carteles, dorsal y la lista del remux
+
+- `channelDorsal` se salta la reserva («M. LALIGA 1 FHD (BK-2)» → «1», «M. LALIGA HD (BK-1)» → «M») y la resolución con
+  «x» («La 1 HD 1920x1080» → «1»).
+- «Encontrar canal»: la procedencia `m3u` dice «Lista de AceStream» y «Listas de AceStream» (antes «Directorio M3U» y
+  «M3U»).
+- **La lista del remux que aún no está** (§18.6): antes del 503 el servidor espera hasta 2,5 s a que aparezca
+  (`NOT_YET_WAIT_MS`), así un HLS nativo que no reintenta un 503 (Safari) casi nunca lo ve. Solo es «aún no está» un
+  `ENOENT`/`ENOTDIR`; `EACCES`, `EMFILE` y demás son errores de verdad (500). La ruta nativa (`?t=`) espera igual.
+
+### 19.8 Impacto en la app nativa (actualiza §10, §14.10, §17.9 y §18.8)
+
+Nadie de `rediseno/iptv` toca `apps/ios`. **Sin cambiar nada:** el servidor ya no ofrece IPTV de otro país en el
+emparejado automático, empareja «TVG 2» y deja de juntar «LaLiga+» con LaLiga TV; una IPTV ocupada falla al momento.
+
+**Cuando exista la pantalla**, la app porta:
+
+| Módulo | Fichero o carpeta | Cambio |
+|---|---|---|
+| M3 | `Sources/Core/Reglas/Nombres/GrafiaCanal.swift`* | `channelSpelling` con «LaLigaPlus» en una palabra (vectores de `lista-real.test.ts`) |
+| M3 | `Sources/Core/Reglas/Fuentes/ReglasFuentes.swift` | «Tu IPTV está ocupada en otro aparato (tu cuenta admite N conexión): seguimos por AceStream» en la línea de estado y «IPTV ocupada en otro aparato: seguimos por AceStream» en el aviso de volver; respaldo inmediato a la entrada de AceStream tocada; «Lista de AceStream» en la procedencia `m3u` |
+| M6 | `Sources/Pantallas/Buscar/`* y `Canales/`* | la fila de canal: nombre limpio y etiquetas «IPTV» (con calidades) y «AceStream · N» en la meta; una entrada de AceStream de tu biblioteca que es un canal de tu IPTV se junta con él (nunca «IPTV» encima); al tocar, IPTV y esas entradas de respaldo |
+| M6 | `Sources/Pantallas/Partido/` (Datos técnicos) | «Origen» siempre: «IPTV · Casa · 720p» o «AceStream · NEW ERA»; fila «IPTV» con el porqué si suena AceStream |
+| M6 | `Sources/UI/Dorsal.swift`* | el dorsal se salta «(BK-2)» y «1920x1080» |
+
+### 19.9 Medidas con la lista real
+
+Como en §18.7: servidor y scripts de la rama contra una **copia** de los datos de la pila de Isma (misma semilla), sin
+red; solo nombres; ningún canal reproducido.
+
+**Sonda del emparejado** (90 canales como los escribe la agenda): 24 dejan de ofrecer canales de otro país, 2 ganan
+(«TVG 2» → TVG 2; «LaLiga+» → nada, antes Movistar LaLiga) y ninguno pierde el de España. Antes y después:
+
+| Canal pedido | Antes | Después |
+|---|---|---|
+| DAZN 2 | DAZN 2 · DAZN 2 (FR) · (PT) · (DE) | DAZN 2 |
+| TV3 | TV3 · TV3 (SW) · TV3 (NO) · TV3 (LV) | TV3 |
+| M+ Deportes / Movistar Deportes | M. DEPORTES 1 · M. DEPORTES · MOVISTAR DEPORTES (PER) | M. DEPORTES 1 · M. DEPORTES |
+| M+ LaLiga TV / Movistar LaLiga / LaLiga TV | MOVISTAR LALIGA · M. LALIGA 1 · LA LIGA TV (UK) | MOVISTAR LALIGA · M. LALIGA 1 |
+| DAZN LaLiga | DAZN LaLIGA · DAZN LALIGA 1 (FR) | DAZN LaLIGA |
+| LaLiga+ | MOVISTAR LALIGA · M. LALIGA 1 · LA LIGA TV (UK) | — |
+| TVG 2 | — | TVG 2 |
+| M+ Golf, M+ Fútbol, Antena 3, GOL, TVG, Eurosport 1/2, beIN Sports, Real Madrid TV | con gemelos de FR, CH, PL, EC, RO, MX, US, PT, IT, AR | solo el de España |
+
+**Ensayo (agenda real de hoy y mañana, 273 partidos):** 27 con IPTV antes y después, los mismos. Desaparecen solo
+los respaldos de otro país: «DAZN 2 (FR/PT/DE)» en los 4 partidos de Liga F, «DAZN 1 (FR/PT/DE)», «TV GALICIA (PT)»
+en Lugo – Racing Ferrol y «Real Madrid (MX)».
+
+**Buscador:** «es-m.laliga», «es - m. laliga» → M. LALIGA primero; «es| dazn 1», «[es] dazn 1», «es dazn 1» → DAZN 1;
+«la 1 tve», «tve 1» → LA 1; «tvg 2» → TVG 2; «la liga tv» → DAZN LaLiga, M. LALIGA… y «UK - LA LIGA TV» detrás; «uk -
+la liga tv» → el de UK primero; «movistar ellas» → solo M. ELLAS V. Cada consulta en 1-17 ms sobre 26 051 canales
+(el índice, 100-240 ms, una vez; medido con el PC cargado por las E2E).
+
+**Recorrido de Isma (E2E, proveedor falso, dos Chrome):** «la 1» con «LA 1 4K --> NEW ERA» en favoritos → una fila «La
+1» en «En tu IPTV» con «IPTV · 720p · AceStream · 3» y ninguna «LA 1 4K --> NEW ERA» suelta; tocarla suena la IPTV
+(Datos técnicos: «IPTV · Casa · 720p»); con la plaza ocupada por otra app: 503 en ~20 ms, «Tu IPTV está ocupada en
+otro aparato (tu cuenta admite 1 conexión): seguimos por AceStream (fuente 2)» y suena «LA 1 4K --> NEW ERA» (Datos
+técnicos: «AceStream · NEW ERA» y la fila «IPTV» con el porqué).
+
+### 19.10 Pruebas
+
+- **Servidor:** `proteccion.test.ts` (nuevo, lista sintética con la forma de la real: otro país, «AM | LATINO»,
+  «LaLiga+», «RAKUTEN TV» mixta, consultas con país en minúsculas y TVE, orden, «LAS ESTRELLAS», nombres de lista sin
+  flecha), `match.test.ts` (otro país solo con `anyCountry`), `search.test.ts` y `service.test.ts` (España delante),
+  `service.test.ts` (ocupada sin cierre reciente: `iptv_busy` sin reintentos), `ranking.test.ts` (marca entre IPTV),
+  `remux/routes.test.ts` (la lista que aparece durante la espera sale 200; `ENOENT` frente a `EACCES`).
+- **Web:** `search/iptv.test.ts` (la mezcla nueva, el caso de Isma), `SearchView.test.tsx` (fila de canal, etiquetas,
+  el toque lleva `ace`), `LibraryView.test.tsx` (el canal IPTV se ve aunque su AceStream esté en la pestaña),
+  `session.iptv.test.ts` (texto de ocupada, con y sin la cuenta; `iptvNote`), `wiring.test.ts` (Origen siempre y fila
+  IPTV), `ChannelMark.test.tsx` (dorsal con BK y WxH).
+- **E2E** (`iptv-buscador.spec.ts`): 9 y 10 al día; **15** (el caso de Isma: fila de canal, suena la IPTV, Datos
+  técnicos) y **16** (plaza ocupada por otra app: aviso, AceStream de respaldo, Datos técnicos).
+
+### 19.11 Riesgos
+
+1. **Tu entrada de AceStream se junta con su canal** y deja de salir suelta en Buscar: si alguien busca su favorito de
+   AceStream por el nombre de la lista, lo encuentra dentro del canal («AceStream · N») y al tocarlo suena la IPTV
+   primero. En Canales (su pestaña) sigue saliendo como siempre.
+2. **Otro país fuera del emparejado automático:** un canal que solo exista con otro país y que la agenda pida ya no
+   sale solo; se busca y se toca a mano.
+3. **Categoría mixta:** el umbral «3 canales y 1 de cada 5» sale de la lista real; una categoría de plataforma pequeña
+   con 3 canales repetidos también pasaría a mixta (sus canales, emparejables solo por el nombre tal cual).
+4. **«(tu cuenta admite N conexión)»** solo si el estado de la IPTV ya se pudo pedir; si no, la frase sin paréntesis.

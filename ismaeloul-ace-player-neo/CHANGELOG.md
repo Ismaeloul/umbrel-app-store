@@ -2,6 +2,40 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 0.8.2 (2026-09-26)
+
+Pestaña IPTV en Canales: con tu IPTV conectada, Canales tiene una pestaña
+nueva con las categorias de tu proveedor, en su orden, un buscador y
+filtros por pais, idioma, tipo, deporte y calidad.
+
+Buscar: el buscador entiende como escriben las listas IPTV. "M." es
+Movistar, los prefijos de pais ("ES:", "|ES|") no estorban y tambien
+encuentra por categoria, como TDT o futbol. Cada canal sale una sola vez y
+dice de donde se ve: "IPTV" con sus calidades y "AceStream" con cuantas
+fuentes tiene.
+
+Todo desbloqueado: el buscador enseña todos los canales de tu IPTV, de
+todos los paises (con su pais en una etiqueta) y de todos los grupos. En lo
+automatico, como el canal de cada partido, va primero España y nunca el
+mismo canal de otro pais, que echa otra programacion.
+
+Calidades: las resoluciones de un mismo canal (4K, 1080p, 720p...) van
+juntas, con un cartel por resolucion, hasta 4. Si una se cae, se prueba
+otra de tu IPTV antes que AceStream, sin saltar a otro pais.
+
+IPTV ocupada: si tu cuenta admite una sola conexion y la esta usando otro
+aparato, te lo dice claro al momento y sigue por AceStream.
+
+Datos tecnicos: dice siempre de donde viene lo que suena, tu IPTV o
+AceStream, y si suena AceStream teniendo el canal en tu IPTV, por que.
+
+Carteles de fuente: dicen "AceStream" en vez de "M3U", el numero grande ya
+no lleva la resolucion y el nombre de debajo no repite la calidad.
+
+Arreglos: guardar la IPTV lo intenta otra vez si el panel de tu proveedor
+falla a la primera, y el video de la IPTV ya no da error mientras se
+prepara al arrancar.
+
 ## 0.8.1 (2026-09-26)
 
 Tu IPTV, primero. En Ajustes > IPTV, desde el navegador, conectas tu lista

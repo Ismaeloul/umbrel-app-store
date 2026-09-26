@@ -1,7 +1,7 @@
 {
   "name": "ace-player-neo",
   "private": true,
-  "version": "0.8.1",
+  "version": "0.8.2",
   "type": "module",
   "description": "Ace Player Neo v2: backend, web y app iOS del reproductor AceStream del Umbrel",
   "packageManager": "pnpm@10.18.2",

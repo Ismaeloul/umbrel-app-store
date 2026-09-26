@@ -78,7 +78,7 @@ export const FFPROBE_ARGS: readonly string[] = [
   '-analyzeduration',
   '5000000',
   '-show_entries',
-  'stream=codec_type,codec_name',
+  'stream=codec_type,codec_name,height',
   '-of',
   'json',
 ];

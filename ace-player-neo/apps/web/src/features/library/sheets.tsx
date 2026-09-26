@@ -67,6 +67,9 @@ export function SaveFavoriteBody({
   const [value, setValue] = useState(target.title);
   const hashId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
+  // Un canal de tu IPTV no tiene hash de AceStream: su id es interno; se enseña su nombre en la IPTV.
+  const iptvName = target.category === 'IPTV' && target.ih === false ? target.alias?.trim() : '';
+  const fallback = iptvName || defaultFavoriteTitle(target.id);
   const submit = (event: FormEvent) => {
     event.preventDefault();
     onSave(value);
@@ -81,17 +84,28 @@ export function SaveFavoriteBody({
         maxLength={120}
         autoComplete="off"
         enterKeyHint="done"
-        hint={value.trim() ? undefined : `Si lo dejas vacío: «${defaultFavoriteTitle(target.id)}»`}
+        hint={value.trim() ? undefined : `Si lo dejas vacío: «${fallback}»`}
         onChange={(event) => setValue(event.target.value)}
       />
-      <div className="lib-hashbox">
-        <span id={hashId} className="lib-hashbox__label">
-          Hash
-        </span>
-        <code className="mono lib-hashbox__value" aria-labelledby={hashId}>
-          {target.id}
-        </code>
-      </div>
+      {iptvName ? (
+        <div className="lib-hashbox">
+          <span id={hashId} className="lib-hashbox__label">
+            En tu IPTV
+          </span>
+          <span className="lib-hashbox__value" aria-labelledby={hashId}>
+            {iptvName}
+          </span>
+        </div>
+      ) : (
+        <div className="lib-hashbox">
+          <span id={hashId} className="lib-hashbox__label">
+            Hash
+          </span>
+          <code className="mono lib-hashbox__value" aria-labelledby={hashId}>
+            {target.id}
+          </code>
+        </div>
+      )}
     </form>
   );
 }

@@ -243,10 +243,11 @@ export interface ResolutionIptv {
     match: { readonly score: number; readonly matchedChannel: string },
   ): BaseCandidate | null;
   /**
-   * El canal IPTV tocado (docs/iptv.md §14.4): si es del catálogo vigente, la
-   * candidata de su grupo con 100 y su nombre limpio en `matchedChannel`.
+   * El canal IPTV tocado (docs/iptv.md §14.4 y §17): si es del catálogo
+   * vigente, los carteles de su canal (una variante por resolución) con 100 y
+   * su nombre limpio en `matchedChannel`; si no, ninguno.
    */
-  tapped(id: string): BaseCandidate | null;
+  tapped(id: string): readonly BaseCandidate[];
   /** «¿Es el mismo canal?» de la IPTV (`sameChannelScore`, ≥ 92): la búsqueda inversa. */
   sameChannel(channel: string, title: string): number;
 }
@@ -352,7 +353,11 @@ function withGuideHints(
   });
 }
 
-/** Como mucho 2 IPTV (docs/iptv.md §4.3): primero la guía, luego la puntuación. */
+/**
+ * Como mucho 4 carteles IPTV (docs/iptv.md §17): primero la guía, luego la
+ * puntuación y, entre iguales, el orden de la capa IPTV (las variantes de un
+ * canal ya vienen 1080p, 4K, 720p, SD y reserva).
+ */
 function capIptv<
   T extends { readonly id: string; readonly source: string; readonly score: number },
 >(candidates: readonly T[]): T[] {
@@ -389,9 +394,10 @@ export async function resolveFootballChannel(
   options: ResolveOptions = {},
 ): Promise<ResolutionCore> {
   const scope: ResolveScope = options.scope ?? 'match';
-  /* Canal suelto tocado como canal IPTV: su candidata primero y su nombre limpio pedido (§14.4). */
-  const pinned =
-    scope === 'channel' && options.iptvId && deps.iptv ? deps.iptv.tapped(options.iptvId) : null;
+  /* Canal suelto tocado como canal IPTV: sus carteles primero y su nombre limpio pedido (§14.4 y §17). */
+  const pinnedList =
+    scope === 'channel' && options.iptvId && deps.iptv ? deps.iptv.tapped(options.iptvId) : [];
+  const pinned = pinnedList[0] ?? null;
   const requested = Array.isArray(values) ? (values as unknown[]) : [values];
   const channels = resolutionChannels(
     pinned?.matchedChannel ? [...requested, pinned.matchedChannel] : requested,
@@ -538,8 +544,12 @@ export async function resolveFootballChannel(
         deps.semantic,
       )
     : { candidates: [...local, ...remote], used: false, catalogSize: 0, error: null };
-  const iptvCandidates = pinned
-    ? [pinned, ...(iptvLayer?.candidates ?? []).filter((candidate) => candidate.id !== pinned.id)]
+  const pinnedIds = new Set(pinnedList.map((candidate) => candidate.id));
+  const iptvCandidates = pinnedList.length
+    ? [
+        ...pinnedList,
+        ...(iptvLayer?.candidates ?? []).filter((candidate) => !pinnedIds.has(candidate.id)),
+      ]
     : (iptvLayer?.candidates ?? []);
   /* Lo aprendido se aplica UNA vez, sobre todas las capas y antes del umbral:
      la subida a 98 de una fuente confirmada cuenta para pasar el corte (B-181).
@@ -575,10 +585,14 @@ export async function resolveFootballChannel(
     catalogSize: semanticResult.catalogSize,
     error: semanticResult.error,
   };
-  /* El canal IPTV tocado va el primero (§14.4), aunque otra IPTV también dé 100. */
-  if (pinned) {
-    const at = candidates.findIndex((candidate) => candidate.id === pinned.id);
-    if (at > 0) candidates.unshift(...candidates.splice(at, 1));
+  /* Los carteles del canal IPTV tocado van los primeros y en su orden (§14.4 y §17), aunque otra IPTV también
+     dé 100. */
+  if (pinnedList.length) {
+    const mine = pinnedList
+      .map((item) => candidates.find((candidate) => candidate.id === item.id))
+      .filter((candidate): candidate is (typeof candidates)[number] => Boolean(candidate));
+    const rest = candidates.filter((candidate) => !pinnedIds.has(candidate.id));
+    candidates.splice(0, candidates.length, ...mine, ...rest);
   }
   /* Canal suelto sin ninguna IPTV: `not_found` y la web sigue como hoy (§5.2).
      Con la búsqueda inversa se devuelve lo que haya (§14.4). */

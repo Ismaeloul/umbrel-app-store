@@ -804,6 +804,12 @@
   white-space: normal;
   word-break: break-all;
 }
+/* Por qué no suena tu IPTV (docs/iptv.md §19): una frase, entera. */
+.nerd-stats__row--note dd {
+  font-family: inherit;
+  white-space: normal;
+  text-wrap: pretty;
+}
 
 /* ---- Mini-reproductor «Sonando» ----------------------------------------------------- */
 .player[data-presentation='mini'] {

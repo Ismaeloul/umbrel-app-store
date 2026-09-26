@@ -9,10 +9,16 @@
    Las filas se colocan con transform (nada de top animado) y se miden solas
    (`measureElement`), porque una tarjeta con partido es más alta que otra sin
    él. Oculta (Activity), la vista no tiene efectos: el virtualizador deja de
-   escuchar el scroll y vuelve a medir al enseñarse. */
+   escuchar el scroll y vuelve a medir al enseñarse.
+
+   Listas por páginas (la pestaña IPTV, docs/iptv.md §16.6): `onEndReached` se
+   llama UNA vez por cada largo de la lista cuando se pinta una de las
+   `endThreshold` últimas filas (así se pide la página siguiente), y
+   `setSize` pone `aria-setsize`/`aria-posinset` en cada fila, porque el
+   lector de pantalla solo ve las que están pintadas. */
 
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { cx } from '../../lib/cx.ts';
 
 export interface VirtualListProps<T> {
@@ -27,6 +33,12 @@ export interface VirtualListProps<T> {
   className?: string;
   rowClassName?(row: T): string | undefined;
   overscan?: number;
+  /** Se pinta una de las últimas filas: pide la página siguiente (una vez por largo). */
+  onEndReached?(): void;
+  /** Cuántas filas del final cuentan como «el final». */
+  endThreshold?: number;
+  /** Total de filas aunque no estén cargadas (aria-setsize); sin él, no se pone. */
+  setSize?: number;
 }
 
 export function VirtualList<T>({
@@ -39,6 +51,9 @@ export function VirtualList<T>({
   className,
   rowClassName,
   overscan = 8,
+  onEndReached,
+  endThreshold = 10,
+  setSize,
 }: VirtualListProps<T>) {
   const listRef = useRef<HTMLDivElement>(null);
   const [margin, setMargin] = useState(0);
@@ -68,6 +83,17 @@ export function VirtualList<T>({
   });
 
   const items = virtualizer.getVirtualItems();
+  const lastIndex = items.at(-1)?.index ?? -1;
+  const reachedFor = useRef(-1);
+  const endReached = useRef(onEndReached);
+  endReached.current = onEndReached;
+  useEffect(() => {
+    if (rows.length === 0 || lastIndex < rows.length - endThreshold) return;
+    if (reachedFor.current === rows.length) return;
+    reachedFor.current = rows.length;
+    endReached.current?.();
+  }, [lastIndex, rows.length, endThreshold]);
+
   return (
     <div
       ref={listRef}
@@ -85,6 +111,8 @@ export function VirtualList<T>({
             data-index={virtual.index}
             ref={virtualizer.measureElement}
             role={role === 'list' ? 'listitem' : undefined}
+            aria-setsize={role === 'list' && setSize !== undefined ? setSize : undefined}
+            aria-posinset={role === 'list' && setSize !== undefined ? virtual.index + 1 : undefined}
             className={cx('vlist__row', rowClassName?.(row))}
             style={{
               position: 'absolute',

@@ -200,6 +200,10 @@ export function mergeResolutionCandidates<T extends RankableCandidate>(
     const guideA = a.iptv?.guide === true ? 1 : 0;
     const guideB = b.iptv?.guide === true ? 1 : 0;
     if (guideA !== guideB) return guideB - guideA;
+    /* Entre dos IPTV manda el orden de la capa IPTV (docs/iptv.md §17): las
+       variantes de un canal ya vienen 1080p, 4K, 720p, SD y reserva, y la
+       fiabilidad ya desempató allí entre variantes iguales. */
+    if (a.source === 'iptv' && b.source === 'iptv') return 0;
     /* Lo aprendido ordena entre iguales; nunca decide QUÉ canal es (B-061). */
     const fiaA = fiabilidadDeCandidato(a, stats) ?? STATS_NEUTRAL;
     const fiaB = fiabilidadDeCandidato(b, stats) ?? STATS_NEUTRAL;
@@ -227,8 +231,16 @@ export function mergeResolutionCandidates<T extends RankableCandidate>(
     conExacto.size > 0 &&
     (Boolean(candidate.soloFamilia) || candidate.source === 'saved') &&
     !conExacto.has(normalizeChannelKey(candidate.matchedChannel));
-  const esGenerica = (candidate: T): boolean =>
+  const generica = (candidate: T): boolean =>
     canalEsGenerico(candidate.matchedChannel, pedidos) || sinExacto(candidate);
+  /* Una IPTV (≥ 92 por su propia regla) no es «lo genérico» frente a AceStream: «La 1» de la IPTV no va detrás
+     de «La 1 TVE 720p *» de una lista, que es el mismo canal con adornos (docs/iptv.md §4.6 y §18). Entre IPTV
+     sí manda la regla de la marca (B-174): con una IPTV concreta, la genérica va detrás (§19). */
+  const iptvConcreta = vivas.some(
+    (candidate) => candidate.source === 'iptv' && !generica(candidate),
+  );
+  const esGenerica = (candidate: T): boolean =>
+    generica(candidate) && (candidate.source !== 'iptv' || iptvConcreta);
   const concretas = vivas.filter((candidate) => !esGenerica(candidate));
   const genericas = concretas.length ? vivas.filter(esGenerica) : [];
   const porNivel = concretas.length ? [concretas, genericas] : [vivas];

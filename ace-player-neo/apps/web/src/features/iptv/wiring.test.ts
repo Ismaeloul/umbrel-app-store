@@ -121,8 +121,38 @@ describe('reproductor y «Dónde se está reproduciendo»', () => {
     expect(rows[0]).toEqual(['Origen', 'IPTV · Casa']);
     expect(rows.find(([term]) => term === 'Pares')).toEqual(['Pares', '—']);
     expect(rows.find(([term]) => term === 'Bajada')?.[1]).toBe('900 KB/s');
-    // Sin la IPTV, como siempre.
+    // Sin nada sonando, sin origen.
     expect(nerdRows(INITIAL_PLAYER_STATE, 'en línea')[0]?.[0]).toBe('Motor');
+  });
+
+  it('«Datos técnicos» dice SIEMPRE de dónde viene lo que suena, y por qué no suena la IPTV (§19)', () => {
+    const base = iptvState({ streamSource: 'iptv' });
+    const channel = base.channel!;
+    expect(nerdRows({ ...base, channel: { ...channel, quality: '1080p' } }, 'en línea')[0]).toEqual(
+      ['Origen', 'IPTV · Casa · 1080p'],
+    );
+    const ace = {
+      ...base,
+      streamSource: 'engine' as const,
+      channel: {
+        ...channel,
+        iptv: false,
+        source: 'NEW ERA',
+        iptvNote: 'Tu IPTV está ocupada en otro aparato (tu cuenta admite 1 conexión)',
+      },
+    };
+    const rows = nerdRows(ace, 'en línea');
+    expect(rows[0]).toEqual(['Origen', 'AceStream · NEW ERA']);
+    expect(rows[1]).toEqual([
+      'IPTV',
+      'Tu IPTV está ocupada en otro aparato (tu cuenta admite 1 conexión)',
+    ]);
+    const bare = nerdRows(
+      { ...ace, channel: { ...ace.channel, source: 'AceStream', iptvNote: undefined } },
+      'en línea',
+    );
+    expect(bare[0]).toEqual(['Origen', 'AceStream']);
+    expect(bare.some(([term]) => term === 'IPTV')).toBe(false);
   });
 
   it('la línea del canal suma « · IPTV»', () => {

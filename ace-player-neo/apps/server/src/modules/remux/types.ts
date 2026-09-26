@@ -45,6 +45,11 @@ export interface RemuxDeps extends CoreDeps {
    * ffmpeg). Lo da la IPTV (docs/iptv.md §2.4); sin él, la redacción genérica.
    */
   readonly redact?: (text: string) => string;
+  /**
+   * Cuánto se espera a una lista que aún no está antes del 503 «aún no está» (docs/iptv.md §19). Por
+   * defecto `NOT_YET_WAIT_MS` (2,5 s); los tests que miran el 503, menos.
+   */
+  readonly notYetWaitMs?: number;
 }
 
 /** Proceso ffmpeg lanzado (el real o el falso de los tests). */

@@ -8,9 +8,10 @@
    - Cabecera `#EXTM3U`: `url-tvg` / `x-tvg-url` (separadas por comas: las 2
      primeras http(s)) y `tvg-shift` global. Si hay más de una línea `#EXTM3U`
      (una de firma y otra con la guía, por ejemplo), se suman.
-   - `#EXTINF:-1 …,Título`: `tvg-id`, `tvg-name`, `group-title`, `tvg-shift` y
-     el título tras la primera coma que no esté entre comillas (un título
-     puede llevar comas).
+   - `#EXTINF:-1 …,Título`: `tvg-id`, `tvg-name`, `group-title`, `tvg-shift`,
+     `tvg-country` y `tvg-language` (para los filtros de la pestaña IPTV,
+     §16.4) y el título tras la primera coma que no esté entre comillas (un
+     título puede llevar comas).
    - `#EXTGRP:` hace de `group-title` si falta. `#EXTVLCOPT:` solo
      `http-user-agent=` y `http-referrer=`, 256 caracteres como mucho y sin
      caracteres de control. El resto se ignora.
@@ -36,6 +37,10 @@ export interface M3uEntry {
   readonly url: string;
   readonly userAgent: string | null;
   readonly referrer: string | null;
+  /** `tvg-country` (64 como mucho, sin caracteres de control), o null (docs/iptv.md §16.5). */
+  readonly tvgCountry: string | null;
+  /** `tvg-language` (ídem), o null. */
+  readonly tvgLanguage: string | null;
 }
 
 export interface M3uHeader {
@@ -92,6 +97,12 @@ export function titleComma(text: string): number {
     else if (char === ',' && !inQuotes) return index;
   }
   return -1;
+}
+
+/** `tvg-country` / `tvg-language`: 64 caracteres como mucho y sin caracteres de control; vacío = null. */
+function tvgAttribute(value: string | undefined): string | null {
+  if (!value || CONTROL_RE.test(value)) return null;
+  return value.trim().slice(0, 64) || null;
 }
 
 function parseShift(value: string | undefined): number | null {
@@ -173,6 +184,8 @@ export async function parseM3uStream(
     tvgName: string;
     group: string;
     tvgShift: number | null;
+    tvgCountry: string | null;
+    tvgLanguage: string | null;
   } | null = null;
   let extGroup = '';
   let userAgent: string | null = null;
@@ -213,6 +226,8 @@ export async function parseM3uStream(
           tvgName: attributes.get('tvg-name') ?? '',
           group: attributes.get('group-title') ?? '',
           tvgShift: parseShift(attributes.get('tvg-shift')),
+          tvgCountry: tvgAttribute(attributes.get('tvg-country')),
+          tvgLanguage: tvgAttribute(attributes.get('tvg-language')),
         };
         extGroup = '';
         userAgent = null;
@@ -241,6 +256,8 @@ export async function parseM3uStream(
       url: line,
       userAgent,
       referrer,
+      tvgCountry: current.tvgCountry,
+      tvgLanguage: current.tvgLanguage,
     };
     count += 1;
     if (count > maxChannels) throw new AppError('iptv_too_large');

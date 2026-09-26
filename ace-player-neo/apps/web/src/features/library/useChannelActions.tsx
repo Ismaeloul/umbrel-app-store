@@ -17,7 +17,14 @@ import { useNavigate } from '../../app/router.tsx';
 import { haptic } from '../../lib/haptics.ts';
 import { Sheet, type MenuItem } from '../../ui/index.ts';
 import { channelMenuItems } from './actions.ts';
-import { removeWithUndo, renameChannel, saveFavorite } from './data.ts';
+import {
+  cancelRemoval,
+  isPendingRemoval,
+  removeWithUndo,
+  renameChannel,
+  saveFavorite,
+  usePendingKeys,
+} from './data.ts';
 import { playChannel, type PlayOrigin } from './play.ts';
 import {
   RenameFooter,
@@ -45,7 +52,12 @@ interface RenameState {
 export interface ChannelActions {
   library: LibraryView | undefined;
   favoriteIds: ReadonlySet<string>;
-  play(channel: ActionableChannel, origin?: PlayOrigin): void;
+  /** `ace`: las entradas de AceStream de tu biblioteca que son ese canal IPTV (respaldo, §19). */
+  play(
+    channel: ActionableChannel,
+    origin?: PlayOrigin,
+    extra?: { readonly ace?: readonly string[] },
+  ): void;
   /** ¿Es un canal de tu IPTV (id sintético)? Sin hash de AceStream que copiar. */
   isIptvId(id: string): boolean;
   toggleFavorite(channel: ActionableChannel): void;
@@ -77,16 +89,27 @@ export function useChannelActions({
   const renameForm = useId();
   const favoriteForm = useId();
 
+  // Un favorito quitado que espera los 6 s del «Deshacer» ya no cuenta: la estrella se vacía al momento.
+  const pending = usePendingKeys();
   const favoriteIds = useMemo(
-    () => new Set((data?.favorites ?? []).map((item) => item.id)),
-    [data?.favorites],
+    () =>
+      new Set(
+        (data?.favorites ?? [])
+          .filter((item) => !isPendingRemoval(pending, 'favorites', item.id))
+          .map((item) => item.id),
+      ),
+    [data?.favorites, pending],
   );
 
   const isIptvId = (id: string): boolean => Object.hasOwn(data?.iptvIds ?? {}, id);
   const iptvOf = (channel: ActionableChannel): string | null =>
     channel.iptv ?? (isIptvId(channel.id) ? channel.id : null);
 
-  const play = (channel: ActionableChannel, origin: PlayOrigin = 'biblioteca') => {
+  const play = (
+    channel: ActionableChannel,
+    origin: PlayOrigin = 'biblioteca',
+    extra: { readonly ace?: readonly string[] } = {},
+  ) => {
     const iptv = iptvOf(channel);
     playChannel(navigate, {
       hash: channel.id,
@@ -98,12 +121,15 @@ export function useChannelActions({
       ...(iptv ? { iptv } : {}),
       // Un id IPTV renombrado se busca por su nombre en la IPTV (§14.6).
       ...(iptv === channel.id && channel.alias ? { alias: channel.alias } : {}),
+      ...(iptv && extra.ace?.length ? { ace: extra.ace } : {}),
     });
   };
 
   const toggleFavorite = (channel: ActionableChannel) => {
     const existing = data?.favorites.find((item) => item.id === channel.id);
     if (existing) {
+      // Segundo toque durante el «Deshacer»: vuelve a ser favorito, como si se deshiciera.
+      if (cancelRemoval('favorites', existing.id)) return;
       removeWithUndo({ client, kind: 'unfavorite', collection: 'favorites', item: existing });
       return;
     }

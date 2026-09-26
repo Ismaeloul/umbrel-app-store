@@ -61,6 +61,25 @@
       "iptv": { "provider": "Casa", "quality": "fhd", "backup": false, "guide": false }
     },
     {
+      "id": "18293a4b5c6d7e8f9012345678abcdef45f06712",
+      "title": "DAZN LaLiga --> Casa",
+      "alias": "DAZNLaLiga.es",
+      "ih": false,
+      "source": "iptv",
+      "score": 100,
+      "matchedChannel": "DAZN LaLiga",
+      "soloFamilia": false,
+      "familyFallbackAllowed": false,
+      "listaId": "p_Ab3dE5gH",
+      "availability": null,
+      "bitrate": null,
+      "learned": null,
+      "reported": null,
+      "rejectedByLearning": false,
+      "quarantined": false,
+      "iptv": { "provider": "Casa", "quality": "hd", "backup": false, "guide": false }
+    },
+    {
       "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
       "title": "DAZN LaLiga FHD",
       "alias": null,

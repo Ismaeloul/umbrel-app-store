@@ -74,6 +74,8 @@ const TIMEOUTS: Partial<Record<JsonRouteId, number>> = {
   iptvSync: 12_000,
   /* El buscador IPTV (§14.2): el servidor tarda < 50 ms; si no, mejor no esperar. */
   iptvChannels: IPTV_CLIENT.searchMs,
+  /* La pestaña IPTV de Canales (§16.2): el servidor responde en < 100 ms con 30 000 canales. */
+  iptvBrowse: IPTV_CLIENT.browseMs,
   engineRestart: 20_000,
   healthLive: 4_000,
 };

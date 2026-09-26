@@ -73,6 +73,14 @@ export interface PlayChannel {
    * `grant.source` (`PlayerState.streamSource`).
    */
   iptv?: boolean;
+  /** Calidad de la IPTV que suena («1080p»), para Datos técnicos (docs/iptv.md §19). */
+  quality?: string;
+  /**
+   * Suena AceStream pero el canal está en tu IPTV: por qué no suena ella
+   * («Tu IPTV está ocupada en otro aparato (tu cuenta admite 1 conexión)»),
+   * para Datos técnicos (§19).
+   */
+  iptvNote?: string;
 }
 
 export interface PlayOptions {

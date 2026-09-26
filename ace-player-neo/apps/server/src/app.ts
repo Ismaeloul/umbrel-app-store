@@ -115,9 +115,10 @@ const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,128}$/;
 
 /**
  * Rutas cuya consulta es lo que Isma escribe en el buscador de su IPTV
- * (docs/iptv.md §14.2): ni en un 400 se escribe en el registro.
+ * (docs/iptv.md §14.2) o en la pestaña IPTV de Canales (§16.2): ni en un
+ * 400 se escribe en el registro.
  */
-const QUIET_QUERY_ROUTES: ReadonlySet<string> = new Set(['iptvChannels']);
+const QUIET_QUERY_ROUTES: ReadonlySet<string> = new Set(['iptvChannels', 'iptvBrowse']);
 
 /** La URL para el registro: redactada y, en esas rutas, sin la consulta. */
 export function loggedUrl(url: string, routeId: string | undefined): string {

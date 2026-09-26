@@ -1,0 +1,314 @@
+/* ==========================================================================
+   Pestaña IPTV de Canales (docs/iptv.md §16.6) con la piel «Palco»: los
+   mismos tokens, la misma tarjeta con separadores y los mismos rótulos que
+   el resto de Canales. Objetivos de 44 px; nada por debajo de 11 px;
+   animaciones solo con transform y opacity.
+   ========================================================================== */
+
+.iptv {
+  display: grid;
+  gap: var(--s-3);
+  min-width: 0;
+}
+
+/* ---- Cabeceras ---------------------------------------------------------------- */
+.iptv-head {
+  padding-inline: var(--s-1);
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  font-weight: var(--wght-medium);
+}
+.iptv-cat-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    'back back'
+    'title count';
+  align-items: baseline;
+  column-gap: var(--s-3);
+  row-gap: 2px;
+  min-width: 0;
+}
+.iptv-cat-head__back {
+  grid-area: back;
+  justify-self: start;
+  margin-inline-start: -8px;
+}
+.iptv-cat-head__title {
+  grid-area: title;
+  min-width: 0;
+  padding-inline-start: var(--s-1);
+  font-size: var(--fs-22);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: var(--tracking-head);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  outline: none;
+}
+.iptv-cat-head__title:focus-visible {
+  outline: 2px solid var(--accent-edge);
+  outline-offset: 3px;
+  border-radius: var(--r-s);
+}
+.iptv-cat-head__count {
+  grid-area: count;
+  justify-self: end;
+  color: var(--text-3);
+  font-size: var(--fs-13);
+  white-space: nowrap;
+}
+
+/* ---- Categorías ---------------------------------------------------------------- */
+.iptv-cats {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.iptv-cat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 14px 0 16px;
+  color: var(--text);
+  text-align: left;
+  font-size: var(--fs-15);
+  font-weight: var(--wght-medium);
+  outline: none;
+  position: relative;
+  isolation: isolate;
+}
+.iptv-cat::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--surface-2);
+  opacity: 0;
+  transition: opacity var(--dur-rapido) var(--ease-rapido);
+}
+.iptv-cat:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent-edge);
+  border-radius: var(--r-l);
+}
+@media (hover: hover) and (pointer: fine) {
+  .iptv-cat:hover::before {
+    opacity: 0.55;
+  }
+}
+.iptv-cats__row--all .iptv-cat {
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+}
+.iptv-cat__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.iptv-cat__count {
+  flex: none;
+  color: var(--text-3);
+  font-size: var(--fs-13);
+}
+.iptv-cat__chev {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  margin-inline: 2px 4px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  color: var(--text-3);
+  transform: rotate(-45deg);
+}
+.iptv-cat--skeleton {
+  justify-content: space-between;
+}
+.iptv-cat--skeleton + .iptv-cat--skeleton {
+  box-shadow: inset 0 1px 0 var(--line-soft);
+}
+
+/* «Categorías con «q»» sobre los canales. */
+.iptv-found {
+  display: grid;
+  gap: var(--s-2);
+}
+.iptv-found__title {
+  padding: 4px var(--s-1) 0;
+  font-size: var(--fs-kicker);
+  font-weight: 700;
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+/* ---- Filtros: escritorio y tableta (a la vista) ----------------------------------- */
+.iptv-lines {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  box-shadow:
+    inset 0 0 0 1px var(--line-soft),
+    var(--shadow-1);
+}
+.iptv-line {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.iptv-line__title {
+  font-size: var(--fs-kicker);
+  font-weight: 700;
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.iptv-line__values {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 6px;
+  min-width: 0;
+  padding-block: 6px;
+}
+.iptv-lines__foot {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 2px;
+  box-shadow: inset 0 1px 0 var(--line-soft);
+}
+.iptv-chip,
+.iptv-more {
+  position: relative;
+}
+.iptv-more .chip__label {
+  color: var(--text);
+}
+
+/* ---- Filtros: móvil (fila de chips con desplazamiento lateral) --------------------- */
+.iptv-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  /* Desplaza la fila, nunca la página; el relleno deja sitio a la zona táctil. */
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  touch-action: pan-x pan-y;
+  margin-inline: calc(var(--s-1) * -1);
+  padding: 8px var(--s-1);
+  scroll-padding-inline: var(--s-1);
+}
+.iptv-row::-webkit-scrollbar {
+  display: none;
+}
+.iptv-row > * {
+  flex: none;
+}
+.iptv-row__open {
+  position: relative;
+  gap: 6px;
+}
+/* Tres rayas que menguan: el dibujo de «filtrar», hecho con un degradado. */
+.iptv-row__icon {
+  width: 14px;
+  height: 10px;
+  background:
+    linear-gradient(currentColor, currentColor) 0 0 / 14px 2px no-repeat,
+    linear-gradient(currentColor, currentColor) 2px 4px / 10px 2px no-repeat,
+    linear-gradient(currentColor, currentColor) 4px 8px / 6px 2px no-repeat;
+}
+.iptv-row__badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding-inline: 5px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: var(--fs-label);
+  font-weight: var(--wght-strong);
+}
+.iptv-chip--chosen {
+  gap: 4px;
+}
+.iptv-chip__x {
+  font-size: 1.1em;
+  line-height: 1;
+  opacity: 0.8;
+}
+
+/* ---- Hoja de filtros (móvil) --------------------------------------------------- */
+.iptv-sheet {
+  display: grid;
+  gap: var(--s-5);
+  padding-bottom: var(--s-2);
+}
+.iptv-sheet__facet {
+  display: grid;
+  gap: var(--s-2);
+}
+.iptv-sheet__title {
+  font-size: var(--fs-kicker);
+  font-weight: 700;
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.iptv-sheet__values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 8px;
+  padding-block: 6px;
+}
+.iptv-sheet__all {
+  justify-self: start;
+}
+.iptv-sheet__input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: var(--r-l);
+  border: 0;
+  background: var(--bg-sunk);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  color: var(--text);
+  font: inherit;
+}
+.iptv-sheet__input:focus-visible {
+  outline: 2px solid var(--accent-edge);
+  outline-offset: 1px;
+}
+.iptv-sheet__foot {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--s-2);
+  width: 100%;
+}
+
+/* ---- Lista y pie ------------------------------------------------------------------ */
+.iptv-list {
+  min-width: 0;
+}
+.iptv-load-more {
+  justify-content: center;
+}
+.iptv-more-failed {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  padding: 8px var(--s-1);
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}

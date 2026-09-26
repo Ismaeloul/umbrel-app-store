@@ -194,13 +194,33 @@ describe('el puente (P16.6)', () => {
     await iptvPlaying(['working', 'working', 'working']);
     const reply = failNow({ code: 'iptv_busy' });
     expect(reply.message).toBe(
-      'Tu IPTV tiene la conexión ocupada: seguimos por AceStream (fuente 2)',
+      'Tu IPTV está ocupada en otro aparato: seguimos por AceStream (fuente 2)',
     );
     // Ocupada es dudosa: «Floja», no «Sin señal».
     expect(getSession().entries[0]?.playerVerdict).toMatchObject({
       state: 'weak',
       reason: 'iptv_busy',
     });
+    // Se dice al momento y bien a la vista (§19): el toast lleva el motivo, no solo «Seguimos por AceStream».
+    expect(toasts()).toContain('IPTV ocupada en otro aparato: seguimos por AceStream');
+    // Datos técnicos: suena AceStream y por qué no suena la IPTV.
+    expect(getPlayer().channel?.iptv).toBeUndefined();
+    expect(getPlayer().channel?.iptvNote).toBe('Tu IPTV está ocupada en otro aparato');
+  });
+
+  it('con la cuenta conocida dice cuántas conexiones admite (§19)', async () => {
+    queryClient.setQueryData(routeKey('iptvGet'), {
+      provider: { account: { maxConnections: 1 } },
+    });
+    await iptvPlaying(['working', 'working', 'working']);
+    const reply = failNow({ code: 'iptv_busy' });
+    expect(reply.message).toBe(
+      'Tu IPTV está ocupada en otro aparato (tu cuenta admite 1 conexión): seguimos por AceStream (fuente 2)',
+    );
+    expect(getPlayer().channel?.iptvNote).toBe(
+      'Tu IPTV está ocupada en otro aparato (tu cuenta admite 1 conexión)',
+    );
+    queryClient.removeQueries({ queryKey: routeKey('iptvGet') });
   });
 
   it('en pausa o eliminada durante la reproducción: sin toast de volver', async () => {
@@ -280,18 +300,102 @@ describe('el puente (P16.6)', () => {
     expect(reply.next).toBe(true);
   });
 
-  it('tope: 2 saltos del puente cada 3 min; después, solo entre AceStream', async () => {
+  it('tope: 2 saltos del puente cada 3 min; después, solo entre AceStream (pasar de una variante IPTV a otra no cuenta)', async () => {
     resolve = () => json(withIptv(3, [iptvCandidate(100), iptvCandidate(101)]));
     await iptvPlaying(['working', 'working', 'working']);
+    failNow({ code: 'iptv_dropped' }); // la otra variante IPTV, sin gastar el puente
+    expect(getPlayer().channel?.hash).toBe(IPTV_2);
+    expect(getSession().bridgeJumps).toHaveLength(0);
     failNow({ code: 'iptv_dropped' }); // 1: IPTV → AceStream 1
     expect(getPlayer().channel?.hash).toBe(hash(1));
-    failNow(); // 2: AceStream 1 → la otra IPTV
-    expect(getPlayer().channel?.hash).toBe(IPTV_2);
-    const reply = failNow({ code: 'iptv_dropped' }); // tope: ya no salta por el puente
+    /* A mano, otra vez la primera IPTV; vuelve a caer y ya no queda variante sin probar. */
+    selectSource(IPTV);
+    expect(getPlayer().channel?.hash).toBe(IPTV);
+    failNow({ code: 'iptv_dropped' }); // 2: IPTV → AceStream 2
+    expect(getPlayer().channel?.hash).toBe(hash(2));
     expect(getSession().bridgeJumps).toHaveLength(2);
+    const reply = failNow(); // tope: ya no salta por el puente, sigue P16 entre AceStream
     expect(reply.next).toBe(true);
     expect(reply.message).toBeNull();
+    expect(getPlayer().channel?.hash).toBe(hash(3));
+  });
+
+  it('variantes (§17): cae la 1080p → la 4K antes que AceStream, con su calidad en la línea; luego la 720p; después AceStream', async () => {
+    const quality = (q: 'fhd' | 'uhd' | 'hd') => ({
+      iptv: { provider: 'Casa', quality: q, backup: false, guide: false },
+    });
+    resolve = () =>
+      json(
+        withIptv(2, [
+          iptvCandidate(100, quality('fhd')),
+          iptvCandidate(101, quality('uhd')),
+          iptvCandidate(102, quality('hd')),
+        ]),
+      );
+    await iptvPlaying(['working', 'working']);
+    const first = failNow({ code: 'iptv_dropped' });
+    expect(getPlayer().channel?.hash).toBe(IPTV_2);
+    expect(first.message).toBe('Tu IPTV no responde en 1080p: probamos en 4K (fuente 2)');
+    /* Sin toast «Volver a la IPTV»: seguimos en tu IPTV. */
+    expect(toasts()).not.toContain('Seguimos por AceStream');
+    const second = failNow({ code: 'iptv_timeout' });
+    expect(getPlayer().channel?.hash).toBe(hash(102));
+    expect(second.message).toBe('Tu IPTV no responde en 4K: probamos en 720p (fuente 3)');
+    const third = failNow({ code: 'iptv_dropped' });
+    expect(getPlayer().channel?.hash).toBe(hash(1));
+    expect(third.message).toMatch(/^Tu IPTV no responde: seguimos por AceStream \(fuente 4\)/);
+    /* «Volver a la IPTV» vuelve a la primera variante (la mejor), no a la última que cayó. */
+    const back = toastStore.get().find((t) => t.text === 'Seguimos por AceStream');
+    back?.action?.onAction();
+    expect(getPlayer().channel?.hash).toBe(IPTV);
+  });
+
+  it('variantes: cae la DAZN 1 española → AceStream, no «DE: DAZN 1» ni «UK: DAZN 1» (otro canal, §17)', async () => {
+    const dazn = (q: 'sd' | 'fhd' | 'uhd', country?: string) => ({
+      title: 'DAZN 1 --> Casa',
+      iptv: {
+        provider: 'Casa',
+        quality: q,
+        backup: false,
+        guide: false,
+        ...(country ? { country } : {}),
+        channel: 'dazn 1',
+      },
+    });
+    resolve = () =>
+      json(
+        withIptv(2, [
+          iptvCandidate(100, dazn('sd')),
+          iptvCandidate(101, dazn('fhd', 'DE')),
+          iptvCandidate(102, dazn('uhd', 'UK')),
+        ]),
+      );
+    await iptvPlaying(['working', 'working']);
+    const reply = failNow({ code: 'iptv_dropped' });
+    expect(getPlayer().channel?.hash).toBe(hash(1));
+    expect(reply.message).toMatch(/seguimos por AceStream/);
+    /* Cae también la AceStream: la otra, no el gemelo alemán. */
+    failNow();
     expect(getPlayer().channel?.hash).toBe(hash(2));
+    /* El gemelo sigue ahí para tocarlo a mano. */
+    selectSource(IPTV_2);
+    expect(getPlayer().channel?.hash).toBe(IPTV_2);
+  });
+
+  it('variantes: tocar el cartel de otra resolución cambia a esa variante con un toque', async () => {
+    resolve = () => json(withIptv(2, [iptvCandidate(100), iptvCandidate(101)]));
+    await iptvPlaying(['working', 'working']);
+    selectSource(IPTV_2);
+    expect(getPlayer().channel?.hash).toBe(IPTV_2);
+    expect(getSession().activeHash).toBe(IPTV_2);
+    expect(getSession().manualChosen).toBe(true);
+  });
+
+  it('variantes: un fallo de cuenta no prueba las demás variantes (misma cuenta)', async () => {
+    resolve = () => json(withIptv(3, [iptvCandidate(100), iptvCandidate(101)]));
+    await iptvPlaying(['working', 'working', 'working']);
+    failNow({ code: 'iptv_busy' });
+    expect(getPlayer().channel?.hash).toBe(hash(1));
   });
 
   it('el toast se quita al cambiar de partido y su acción ya no hace nada', async () => {

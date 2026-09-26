@@ -1,0 +1,47 @@
+{
+  "active": true,
+  "provider": "Casa",
+  "catalog": "mfz3k1a01",
+  "query": "",
+  "category": { "id": "8e1d0a6b2c93", "name": "ES | DAZN", "count": 12 },
+  "total": 12,
+  "catalogTotal": 812,
+  "facets": {
+    "country": [{ "value": "ES", "count": 12, "selected": false }],
+    "language": [{ "value": "es", "count": 12, "selected": false }],
+    "type": [{ "value": "deportes", "count": 12, "selected": false }],
+    "sport": [
+      { "value": "baloncesto", "count": 7, "selected": false },
+      { "value": "f1", "count": 1, "selected": false }
+    ],
+    "quality": [
+      { "value": "fhd", "count": 3, "selected": false },
+      { "value": "hd", "count": 12, "selected": false }
+    ]
+  },
+  "channels": [
+    {
+      "id": "293a4b5c6d7e8f9012345678abcdef0156071823",
+      "title": "DAZN 1",
+      "qualities": ["fhd", "hd"],
+      "country": "ES",
+      "category": "8e1d0a6b2c93"
+    },
+    {
+      "id": "18293a4b5c6d7e8f9012345678abcdef45f60712",
+      "title": "DAZN F1",
+      "qualities": ["fhd", "hd"],
+      "country": "ES",
+      "category": "8e1d0a6b2c93"
+    },
+    {
+      "id": "3a4b5c6d7e8f9012345678abcdef012367182934",
+      "title": "DAZN ACB 1",
+      "qualities": ["hd"],
+      "country": "ES",
+      "category": "8e1d0a6b2c93"
+    }
+  ],
+  "nextCursor": "bWZ6M2sxYTAxLjM",
+  "stale": false
+}

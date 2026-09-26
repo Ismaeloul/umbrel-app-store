@@ -11,9 +11,11 @@
    - iptvDelete: DELETE /api/v1/iptv
    - iptvChannels: GET  /api/v1/iptv/channels?q= (el buscador, docs/iptv.md
      §14.2; sin IPTV activa, 200 con la lista vacía)
+   - iptvBrowse: GET    /api/v1/iptv/browse (la pestaña IPTV de Canales,
+     docs/iptv.md §16.2; sin IPTV activa, 200 con `active: false`)
    Ni el cuerpo ni la respuesta se registran: el cuerpo de iptvSave lleva
-   credenciales (docs/iptv.md §2.4) y la consulta del buscador es lo que
-   escribe Isma. */
+   credenciales (docs/iptv.md §2.4) y la consulta del buscador y de la
+   pestaña es lo que escribe Isma. */
 
 import type { LegacyRouter, V1Router } from '../../core/router.js';
 import type { Services } from '../../services.js';
@@ -29,6 +31,7 @@ export const V1_ROUTE_IDS: readonly string[] = [
   'iptvSync',
   'iptvDelete',
   'iptvChannels',
+  'iptvBrowse',
 ];
 
 export function registerLegacyRoutes(_router: LegacyRouter, _services: Services): void {}
@@ -42,4 +45,5 @@ export function registerV1Routes(router: V1Router, services: Services): void {
   router.handle('iptvChannels', (input) =>
     services.iptv.searchChannels(input.query.q, input.query.limit),
   );
+  router.handle('iptvBrowse', (input) => services.iptv.browse(input.query));
 }

@@ -62,6 +62,7 @@
 
 import type {
   FootballMatch,
+  IptvView,
   Item,
   LibraryView,
   PreheatPublic,
@@ -125,6 +126,8 @@ import {
   entryFromItem,
   failureVerdict,
   INVALID_HASH_TEXT,
+  iptvQualityText,
+  iptvReasonText,
   isIptv,
   isIptvAccountFailure,
   isReported,
@@ -136,6 +139,7 @@ import {
   onScreenOf,
   pickAutoSource,
   pickBridgeTarget,
+  pickNextIptvVariant,
   pickInitialSwitch,
   presentationOf,
   reportFollowUp,
@@ -763,6 +767,49 @@ function localSiblings(hash: string): SourceEntry[] {
   return siblings.map((item) => entryFromItem(item, library?.activeWebSourceId ?? null));
 }
 
+/** Las entradas de AceStream de tu biblioteca que son el canal IPTV tocado (fila de canal del buscador, §19). */
+function aceFallback(tapped: TappedChannel): SourceEntry[] {
+  return (tapped.ace ?? []).flatMap((id) => localSiblings(id));
+}
+
+/** Pide de fondo el estado de la IPTV (con su cuenta) si no está ya en la caché. */
+function prefetchIptvAccount(): void {
+  if (queryClient.getQueryData(routeKey('iptvGet'))) return;
+  void queryClient
+    .prefetchQuery({ queryKey: routeKey('iptvGet'), queryFn: () => api('iptvGet') })
+    .catch(() => undefined);
+}
+
+/** Cuántas conexiones a la vez admite tu cuenta IPTV (Xtream), si se sabe. */
+function iptvMaxConnections(): number | null {
+  const view = queryClient.getQueryData<IptvView>(routeKey('iptvGet'));
+  const max = view?.provider?.account?.maxConnections ?? null;
+  return typeof max === 'number' && max > 0 ? max : null;
+}
+
+/** «ocupada en otro aparato (tu cuenta admite 1 conexión)» (§19). */
+export function iptvBusyPhrase(max: number | null = iptvMaxConnections()): string {
+  return max
+    ? `ocupada en otro aparato (tu cuenta admite ${max} ${max === 1 ? 'conexión' : 'conexiones'})`
+    : 'ocupada en otro aparato';
+}
+
+/**
+ * Por qué no suena tu IPTV cuando suena AceStream y el canal está en ella
+ * (Datos técnicos, §19): el motivo de su primer cartel, o null si no cayó.
+ */
+export function iptvAbsenceNote(entries: readonly SourceEntry[]): string | null {
+  const first = entries.find(isIptv);
+  if (!first) return null;
+  const reason = first.playerVerdict?.reason ?? first.probe?.reason ?? '';
+  if (reason === 'iptv_busy') return `Tu IPTV está ${iptvBusyPhrase()}`;
+  const text = iptvReasonText(reason);
+  if (text) return `Tu IPTV no suena: ${text}`;
+  if (first.reported && first.reported.until > clock())
+    return 'Tu IPTV no suena: la marcaste como incorrecta';
+  return null;
+}
+
 /** La entrada del canal tocado: la de la biblioteca si está; si no (buscador), una de AceStream. */
 function tappedEntry(tapped: TappedChannel): SourceEntry {
   const known = localSiblings(tapped.hash).find((entry) => entry.id === tapped.hash);
@@ -889,6 +936,14 @@ async function reverseChannel(tapped: TappedChannel): Promise<void> {
   const found = data && data.status !== 'not_found' ? data.candidates : [];
   if (!state.entries.length) {
     if (!data || !found.length) {
+      // La fila de canal del buscador trae sus AceStream de tu biblioteca (§19): suenan ellas.
+      const fallback = dedupeEntries(aceFallback(tapped));
+      if (fallback.length) {
+        setWaitingMessage(null);
+        patch({ phase: 'ready', entries: fallback, activeHash: null });
+        playEntry(fallback[0] as SourceEntry, 'auto');
+        return;
+      }
       nothingForIptvId(tapped);
       return;
     }
@@ -994,7 +1049,11 @@ function applyChannelResolution(data: Resolution, tapped: TappedChannel): void {
     ...(iptvTap ? [] : [tappedEntry(tapped)]),
     ...fromServer.filter((entry) => !isIptv(entry)),
     ...(iptvTap ? [] : localSiblings(tapped.hash)),
+    // La fila de canal del buscador (§19): sus entradas de AceStream de tu biblioteca, de respaldo.
+    ...aceFallback(tapped),
   ]);
+  // Para decir «tu cuenta admite 1 conexión» si la IPTV está ocupada (§19): el estado de la cuenta, de fondo.
+  if (entries.some(isIptv)) prefetchIptvAccount();
   patch({
     phase: 'ready',
     resolution: data,
@@ -1213,8 +1272,34 @@ function onMainScanError(): void {
 }
 
 function afterScanChange(): void {
+  noteIptvBusyWhileConnecting();
   if (tryAutoStart()) return;
   maybeInitialSwitch();
+}
+
+/* La sesión y el cartel de la IPTV de los que ya se avisó que está ocupada. */
+let busyNoted = '';
+
+/**
+ * Mientras se conecta con tu IPTV, el comprobador ya sabe por la cuenta si
+ * otro aparato tiene la plaza (`iptv_busy`): se dice al momento, sin esperar
+ * a que falle el arranque (docs/iptv.md §19).
+ */
+function noteIptvBusyWhileConnecting(): void {
+  const state = sessionStore.get();
+  const screen = screenNow();
+  if (!screen.connecting || !screen.hash) return;
+  const active = state.entries.find((entry) => entry.id === screen.hash);
+  if (!active || !isIptv(active) || active.probe?.reason !== 'iptv_busy') return;
+  const key = `${state.key}|${active.id}`;
+  if (busyNoted === key) return;
+  busyNoted = key;
+  notify(`Tu IPTV parece ${iptvBusyPhrase()}: si no se libera enseguida, seguimos por AceStream`, {
+    kind: 'signal',
+    tone: 'warn',
+    icon: 'tv',
+    signal: 'weak',
+  });
 }
 
 /**
@@ -1363,6 +1448,8 @@ function playEntry(entry: SourceEntry, origin: PlayOrigin): void {
   // Canal tocado con IPTV (§14.6): en Recientes entra el canal tocado, una vez, no cada fuente.
   const tappedSession = state.kind === 'channel' && state.iptvBridge && state.tapped !== null;
   if (tappedSession) recordTapped();
+  // Si la IPTV que va a sonar sale ocupada, se dirá cuántas conexiones admite tu cuenta (§19).
+  if (iptv) prefetchIptvAccount();
   play(
     {
       hash: entry.id,
@@ -1378,6 +1465,11 @@ function playEntry(entry: SourceEntry, origin: PlayOrigin): void {
         : {}),
       // La IPTV: textos «tu IPTV» y fallos sin reintentos en el reproductor (§8.3).
       ...(iptv ? { iptv: true } : {}),
+      // Datos técnicos (§19): la calidad de la IPTV y, si suena AceStream, por qué no suena la IPTV.
+      ...(iptv && iptvQualityText(entry) ? { quality: iptvQualityText(entry) as string } : {}),
+      ...(!iptv && iptvAbsenceNote(state.entries)
+        ? { iptvNote: iptvAbsenceNote(state.entries) as string }
+        : {}),
     },
     {
       origin,
@@ -1479,6 +1571,23 @@ function handleSourceFailed(failure: SourceFailure): SourceFailedReply {
   const finished = scanFinished(state.scan);
   const hasIptv = entries.some(isIptv);
 
+  // §17: si cae una variante IPTV (la 1080p), la siguiente variante IPTV antes
+  // que AceStream (4K, 720p, SD…). No cuenta en el tope del puente: cada una se
+  // prueba una vez. Un fallo de cuenta, o la IPTV en pausa, vale para todas.
+  const iptvDown =
+    accountDown || failure.code === 'iptv_disabled' || failure.code === 'iptv_removed';
+  if (isIptv(failed) && !iptvDown && !state.stopped && drives(state)) {
+    const next = pickNextIptvVariant(entries, effective, failed, now);
+    if (next) {
+      const number = entries.findIndex((entry) => entry.id === next.id) + 1;
+      patch({ autoVerified: true, manualChosen: false, switchArmed: false });
+      haptic('warning');
+      markAutoTried(next.id);
+      playEntry(next, 'auto');
+      return { next: true, message: nextVariantText(failure.code, failed, next, number) };
+    }
+  }
+
   // P16.6, el puente: «si uno no va, va el otro» (también en manual y en canales sueltos).
   if (hasIptv && !state.stopped && drives(state) && bridgeAllowed(state.bridgeJumps, now)) {
     const reply = bridge(state, entries, effective, failed, failure, finished, now);
@@ -1548,6 +1657,9 @@ function playerVerdictFor(
   return { state: failure.code === 'iptv_busy' ? 'weak' : verdict.state, reason: failure.code };
 }
 
+/** El aviso con «Volver a la IPTV» cuando la IPTV está ocupada en otro aparato (§19). */
+export const BUSY_TOAST_TEXT = 'IPTV ocupada en otro aparato: seguimos por AceStream';
+
 /** Cuando ya no queda nada que probar, ni la IPTV ni AceStream. */
 export const BOTH_DOWN_TEXT =
   'Ni tu IPTV ni las fuentes de AceStream dan señal ahora mismo. Prueba «Rebuscar» en unos minutos.';
@@ -1561,9 +1673,27 @@ export const IPTV_ONLY_DOWN_TEXT =
 
 /** Lo que dice la línea de estado según por qué cayó la IPTV. */
 function iptvDownLead(code: string | undefined): string {
-  if (code === 'iptv_busy') return 'Tu IPTV tiene la conexión ocupada';
+  if (code === 'iptv_busy') return `Tu IPTV está ${iptvBusyPhrase()}`;
   if (code === 'iptv_disabled' || code === 'iptv_removed') return 'Tu IPTV está en pausa';
   return 'Tu IPTV no responde';
+}
+
+/**
+ * Cae una variante IPTV y se pasa a la siguiente (§17): «Tu IPTV no responde
+ * en 1080p: probamos en 4K (fuente 2)»; sin calidades, «Tu IPTV no responde:
+ * probamos otra señal de tu IPTV (fuente 2)».
+ */
+export function nextVariantText(
+  code: string | undefined,
+  failed: Pick<SourceEntry, 'iptv'>,
+  next: Pick<SourceEntry, 'iptv'>,
+  number: number,
+): string {
+  const from = iptvQualityText(failed);
+  const to = iptvQualityText(next);
+  const lead = iptvDownLead(code);
+  if (from && to && from !== to) return `${lead} en ${from}: probamos en ${to} (fuente ${number})`;
+  return `${lead}: probamos otra señal de tu IPTV (fuente ${number})`;
 }
 
 /**
@@ -1586,7 +1716,7 @@ function withBackHint(text: string, entries: readonly SourceEntry[], iptvId: str
  * inmersivo) y la cápsula sobre el vídeo (en inmersivo, donde no hay
  * toasts); cada una se ve solo en su modo, así girar el móvil no la pierde.
  */
-function showBackToast(iptvId: string): void {
+function showBackToast(iptvId: string, text = 'Seguimos por AceStream'): void {
   dismissBackToast();
   const gen = generation;
   const key = sessionStore.get().key;
@@ -1601,14 +1731,14 @@ function showBackToast(iptvId: string): void {
     dismissBackToast();
     back();
   };
-  backToastId = toast('Seguimos por AceStream', {
+  backToastId = toast(text, {
     tone: 'warn',
     icon: 'tv',
     ms: IPTV_CLIENT.backToastMs,
     action: { label: 'Volver a la IPTV', onAction },
   });
   backPillId = showImmersiveAction(
-    { text: 'Seguimos por AceStream', label: 'Volver a la IPTV', onAction },
+    { text, label: 'Volver a la IPTV', onAction },
     IPTV_CLIENT.backToastMs,
   );
 }
@@ -1632,22 +1762,27 @@ function bridge(
   now: number,
 ): SourceFailedReply | null {
   if (isIptv(failed)) {
+    // «Volver a la IPTV» vuelve al primer cartel IPTV (la mejor variante, §17), no al último que cayó.
+    const back = entries.find(isIptv)?.id ?? failed.id;
     const paused = failure.code === 'iptv_disabled' || failure.code === 'iptv_removed';
     let target = pickBridgeTarget(entries, effective, 'iptv', finished, now);
     let numbered = true;
-    // Canal suelto sin ninguna verificada: el hash que se tocó (§7.2).
+    // Canal suelto sin ninguna verificada: el hash que se tocó (§7.2) o, si se tocó la fila de canal del
+    // buscador, su AceStream de tu biblioteca (§19): sin esperar al comprobador.
     if (!target && state.kind === 'channel' && state.tapped) {
-      const tappedHash = state.tapped.hash;
-      const tapped = entries.find(
-        (entry) =>
-          entry.id === tappedHash &&
-          !entry.autoTried &&
-          !effective.get(entry.id)?.reported &&
-          effective.get(entry.id)?.state !== 'failed',
-      );
+      const fallbackIds = [state.tapped.hash, ...(state.tapped.ace ?? [])];
+      const tapped = fallbackIds
+        .map((id) => entries.find((entry) => entry.id === id && !isIptv(entry)))
+        .find(
+          (entry): entry is SourceEntry =>
+            entry !== undefined &&
+            !entry.autoTried &&
+            !effective.get(entry.id)?.reported &&
+            effective.get(entry.id)?.state !== 'failed',
+        );
       if (tapped) {
         target = tapped;
-        numbered = false;
+        numbered = tapped.id !== state.tapped.hash;
       }
     }
     const lead = iptvDownLead(failure.code);
@@ -1662,9 +1797,11 @@ function bridge(
       haptic('warning');
       markAutoTried(target.id);
       playEntry(target, 'auto');
-      if (!paused) showBackToast(failed.id);
       const text = `${lead}: seguimos por AceStream${numbered ? ` (fuente ${number})` : ''}`;
-      return { next: true, message: paused ? text : withBackHint(text, entries, failed.id) };
+      // Ocupada en otro aparato: se dice al momento y bien a la vista, no solo en el cartel (§19). El aviso,
+      // corto (lo entero va en la línea de estado y en Datos técnicos).
+      if (!paused) showBackToast(back, failure.code === 'iptv_busy' ? BUSY_TOAST_TEXT : undefined);
+      return { next: true, message: paused ? text : withBackHint(text, entries, back) };
     }
     const iptvOnly = state.kind === 'channel' && tappedIsIptv(state.tapped);
     const searching = iptvOnly && state.reverse === 'running';
@@ -1677,22 +1814,23 @@ function bridge(
         switchArmed: false,
       });
       haptic('warning');
-      if (!paused) showBackToast(failed.id);
       const text =
         iptvOnly && !paused
-          ? IPTV_ONLY_WAIT_TEXT
+          ? failure.code === 'iptv_busy'
+            ? `${lead}. Busco este canal en AceStream y arranco la primera fuente que funcione.`
+            : IPTV_ONLY_WAIT_TEXT
           : `${lead}. Sigo comprobando las fuentes de AceStream y arranco la primera que funcione.`;
-      return { message: paused ? text : withBackHint(text, entries, failed.id) };
+      // Ocupada en otro aparato: el aviso lleva el motivo (§19).
+      if (!paused) showBackToast(back, failure.code === 'iptv_busy' ? BUSY_TOAST_TEXT : undefined);
+      return { message: paused ? text : withBackHint(text, entries, back) };
     }
     if (iptvOnly && !aceCount(entries)) {
       // La búsqueda inversa terminó sin ninguna AceStream (§14.4).
       patch({ autoVerified: false, failureText: IPTV_ONLY_DOWN_TEXT });
       haptic('error');
-      if (!paused) showBackToast(failed.id);
+      if (!paused) showBackToast(back);
       return {
-        message: paused
-          ? IPTV_ONLY_DOWN_TEXT
-          : withBackHint(IPTV_ONLY_DOWN_TEXT, entries, failed.id),
+        message: paused ? IPTV_ONLY_DOWN_TEXT : withBackHint(IPTV_ONLY_DOWN_TEXT, entries, back),
       };
     }
     return null;

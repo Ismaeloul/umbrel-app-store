@@ -35,7 +35,10 @@ test('partido: el proveedor en la tesela y debajo solo el canal', async ({ page 
   await comprobarCartel(primero, 'Elcano', 'DAZN');
   await expect(primero.locator('.src-poster__num')).toHaveText('1');
   await expect(primero.locator('.dorsal b')).toHaveText('D');
-  await expect(primero).toHaveAttribute('aria-label', /^Fuente 1: DAZN --> Elcano · M3U · Elcano/);
+  await expect(primero).toHaveAttribute(
+    'aria-label',
+    /^Fuente 1: DAZN --> Elcano · AceStream · Elcano/,
+  );
   await comprobarCartel(fuentes.locator('.src-poster').nth(1), 'Faro', 'DAZN');
 });
 
@@ -64,7 +67,7 @@ test('datos técnicos en su propia línea, enteros, y la rejilla alineada', asyn
   await expect(faro.locator('.src-poster__tags .src-poster__tag')).toHaveText([
     '1080p',
     'HEVC',
-    'M3U',
+    'AceStream',
   ]);
   // «verificada» bajo «Verificada» repetiría el estado: no sale.
   await expect(faro.locator('.src-poster__detail')).toHaveCount(0);

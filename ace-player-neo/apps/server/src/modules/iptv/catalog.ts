@@ -8,9 +8,11 @@
      `channelMatchScore` sobre 30 000 entradas en cada resolución: primero se
      preselecciona por palabras compartidas y luego se puntúa.
    - Variantes: las entradas con la misma `key` (FHD, HD, reserva) forman un
-     grupo, ordenado de mejor a peor (no HEVC, URL sin macros de plantilla,
-     fhd > hd > uhd > sd > sin marca, no reserva, orden del catálogo). Hacia
-     fuera solo sale la mejor.
+     grupo, ordenado de mejor a peor (no HEVC; reservas y URLs con macros de
+     plantilla al final; 1080p > 4K > 720p > SD > sin marca; orden del
+     catálogo). Dentro del grupo, España y sin país son un canal y cada otro
+     país es otro (`buckets`, docs/iptv.md §17): «DE: DAZN 1» no es una
+     variante de «DAZN 1».
    - Memoria (docs/iptv.md §12.2, riesgo 6): entradas de forma fija (clase),
      índices con arrays y valores sueltos en vez de `Set`, y los textos que se
      repiten (grupos, User-Agent) compartidos.
@@ -18,7 +20,14 @@
      guía, que llevan credenciales) y se carga al arrancar sin red. */
 
 import { CHANNEL_FILLER_TOKENS, type IptvKind, type IptvQuality } from '@ace/shared';
-import { cleanIptvTitle, iptvSpelling, qualityRank } from './names.js';
+import {
+  cleanIptvTitle,
+  countryBucket,
+  iptvGroupPlatform,
+  iptvSpelling,
+  iptvTitlePlatform,
+  qualityRank,
+} from './names.js';
 
 export interface RawChannel {
   /** Id de 40 hex ya calculado (ids.ts). */
@@ -32,6 +41,10 @@ export interface RawChannel {
   readonly tvgShift: number | null;
   readonly userAgent: string | null;
   readonly referrer: string | null;
+  /** M3U `tvg-country` tal cual (64 como mucho), o null (Xtream no trae nada parecido). */
+  readonly tvgCountry?: string | null;
+  /** M3U `tvg-language` tal cual (64 como mucho), o null. */
+  readonly tvgLanguage?: string | null;
 }
 
 /** Una entrada del catálogo (forma fija para no gastar memoria de más). */
@@ -53,16 +66,28 @@ export class CatalogEntry implements RawChannel {
     readonly country: string | null,
     /** Orden en el catálogo (desempate final). */
     readonly order: number,
+    /** Número de copia del final («(2)»), o null (docs/iptv.md §17). */
+    readonly mirror: number | null = null,
+    /** La copia del final es parte del nombre: no hay otra variante sin ella. */
+    readonly keepMirror = false,
+    /** M3U `tvg-country` y `tvg-language` (pestaña IPTV, §16.4), o null. */
+    readonly tvgCountry: string | null = null,
+    readonly tvgLanguage: string | null = null,
   ) {}
 
   /** Nombre para enseñar («DAZN LaLiga»), sin país, adornos, calidad ni reserva. */
   get display(): string {
-    return cleanIptvTitle(this.title, this.group).display;
+    return cleanIptvTitle(this.title, this.group, { keepMirror: this.keepMirror }).display;
   }
 
   /** Nombre para emparejar: `display` con las grafías de la IPTV. */
   get base(): string {
     return iptvSpelling(this.display);
+  }
+
+  /** '' para España o sin país; si no, el código del país (docs/iptv.md §17). */
+  get bucket(): string {
+    return countryBucket(this.country);
   }
 }
 
@@ -78,17 +103,59 @@ export interface StoredCatalog {
   readonly guideUrls: readonly string[];
   /** Xtream: extensión de los streams (`ts` o `m3u8`). */
   readonly streamExt: 'ts' | 'm3u8' | null;
-  /** `[id, título, grupo, tvgId, ref, tvgShift, userAgent, referrer]`. */
-  readonly entries: readonly (readonly [
-    string,
-    string,
-    string,
-    string,
-    string,
-    number | null,
-    string | null,
-    string | null,
-  ])[];
+  /**
+   * Nombres de las categorías en el orden del proveedor (Xtream: el de
+   * `get_live_categories`; docs/iptv.md §16.5). Un `catalogo.enc` sin él se
+   * carga igual y usa la primera aparición.
+   */
+  readonly groupOrder?: readonly string[];
+  /**
+   * `[id, título, grupo, tvgId, ref, tvgShift, userAgent, referrer,
+   * tvgCountry?, tvgLanguage?]` (las dos últimas, solo M3U y si las trae).
+   */
+  readonly entries: readonly StoredEntry[];
+}
+
+type StoredEntry =
+  | readonly [string, string, string, string, string, number | null, string | null, string | null]
+  | readonly [
+      string,
+      string,
+      string,
+      string,
+      string,
+      number | null,
+      string | null,
+      string | null,
+      string | null,
+      string | null,
+    ];
+
+/** `tvg-country` / `tvg-language`: 64 como mucho, sin caracteres de control; vacío = null. */
+export function cleanTvgAttribute(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const text = value
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .trim()
+    .slice(0, 64);
+  return text || null;
+}
+
+function storedEntry(entry: CatalogEntry): StoredEntry {
+  const base = [
+    entry.id,
+    entry.title,
+    entry.group,
+    entry.tvgId,
+    entry.ref,
+    entry.tvgShift,
+    entry.userAgent,
+    entry.referrer,
+  ] as const;
+  return entry.tvgCountry !== null || entry.tvgLanguage !== null
+    ? [...base, entry.tvgCountry, entry.tvgLanguage]
+    : base;
 }
 
 /** Palabras que sirven para preseleccionar (sin relleno ni números sueltos). */
@@ -113,12 +180,38 @@ export function hasUrlMacros(ref: string): boolean {
   return URL_MACRO_RE.test(ref);
 }
 
-/** Orden de las variantes de un grupo, sin la fiabilidad (docs/iptv.md §4.3). */
-export function compareVariants(a: CatalogEntry, b: CatalogEntry): number {
+/**
+ * Identidad de un canal IPTV para el buscador y la biblioteca: su clave y su
+ * país (docs/iptv.md §17). Nunca sale del servidor.
+ */
+export function channelIdOf(entry: Pick<CatalogEntry, 'key' | 'bucket'>): string {
+  return `${entry.key}\u0000${entry.bucket}`;
+}
+
+/** ¿Va al final entre las variantes? Una reserva o una URL con macros de plantilla (docs/iptv.md §17). */
+export function isLastResort(entry: Pick<CatalogEntry, 'backup' | 'ref'>): boolean {
+  return entry.backup || hasUrlMacros(entry.ref);
+}
+
+/** La calidad que manda de una variante (la del stream real si se conoce; si no, la del nombre). */
+export type QualityOf = (entry: CatalogEntry) => IptvQuality | null;
+export const nameQuality: QualityOf = (entry) => entry.quality;
+
+/**
+ * Orden de las variantes de un canal, sin la fiabilidad (docs/iptv.md §17):
+ * HEVC al final (la web no lo reproduce, D6); luego las reservas y las URLs
+ * con macros; entre las demás, 1080p > 4K > 720p > SD > sin marca; y el
+ * orden del catálogo.
+ */
+export function compareVariants(
+  a: CatalogEntry,
+  b: CatalogEntry,
+  qualityOf: QualityOf = nameQuality,
+): number {
   if (a.hevc !== b.hevc) return a.hevc ? 1 : -1;
-  const macros = Number(hasUrlMacros(a.ref)) - Number(hasUrlMacros(b.ref));
-  if (macros) return macros;
-  const quality = qualityRank(b.quality) - qualityRank(a.quality);
+  const last = Number(isLastResort(a)) - Number(isLastResort(b));
+  if (last) return last;
+  const quality = qualityRank(qualityOf(b)) - qualityRank(qualityOf(a));
   if (quality) return quality;
   if (a.backup !== b.backup) return a.backup ? 1 : -1;
   return a.order - b.order;
@@ -148,6 +241,8 @@ export class CatalogBuilder {
   readonly groups = new Map<string, OneOrMany<CatalogEntry>>();
   readonly tokens = new Map<string, string[]>();
   readonly tvg = new Map<string, OneOrMany<string>>();
+  /** Orden de las categorías del proveedor (Xtream); vacío = primera aparición. */
+  groupOrder: readonly string[] = [];
   /* Textos que se repiten en miles de entradas: una sola copia. */
   private readonly pool = new Map<string, string>();
   private order = 0;
@@ -169,7 +264,8 @@ export class CatalogBuilder {
     const order = this.order++;
     if (this.byId.has(channel.id)) return;
     const clean = cleanIptvTitle(channel.title, channel.group);
-    if (!clean.key) return;
+    /* Cabeceras «##### … #####» y «NO MATCH» no son canales (docs/iptv.md §18): ni se buscan ni se emparejan. */
+    if (!clean.key || clean.filler) return;
     const entry = new CatalogEntry(
       channel.id,
       channel.title,
@@ -185,9 +281,17 @@ export class CatalogBuilder {
       clean.hevc,
       clean.country,
       order,
+      clean.mirror,
+      false,
+      this.intern(cleanTvgAttribute(channel.tvgCountry)),
+      this.intern(cleanTvgAttribute(channel.tvgLanguage)),
     );
     this.entries.push(entry);
     this.byId.set(entry.id, entry);
+    this.index(entry);
+  }
+
+  private index(entry: CatalogEntry): void {
     const known = this.groups.has(entry.key);
     push(this.groups, entry.key, entry);
     if (!known) {
@@ -201,13 +305,83 @@ export class CatalogBuilder {
     if (tvgId && !many(this.tvg.get(tvgId)).includes(entry.key)) push(this.tvg, tvgId, entry.key);
   }
 
+  /**
+   * «Canal Sur (2)» sin ningún «Canal Sur» al lado: el número es parte del
+   * nombre, no una copia (docs/iptv.md §17). Se vuelve a indexar con él. Vale
+   * también con varias resoluciones del mismo número («Canal Sur (2) HD» y
+   * «Canal Sur (2) FHD» son Canal Sur 2 en 720p y 1080p), no con números
+   * distintos («(1)» y «(2)» son copias). Un «(1)» solo nunca es parte del
+   * nombre: «Antena 3 (1)» es Antena 3.
+   */
+  private rekeyLoneMirrors(): void {
+    const lone: CatalogEntry[] = [];
+    for (const value of this.groups.values()) {
+      const entries = many(value);
+      const number = entries[0]?.mirror ?? null;
+      if (number === null || number < 2) continue;
+      if (entries.every((entry) => entry.mirror === number)) lone.push(...entries);
+    }
+    if (!lone.length) return;
+    const replaced = new Map<string, CatalogEntry>();
+    for (const entry of lone) {
+      const clean = cleanIptvTitle(entry.title, entry.group, { keepMirror: true });
+      if (!clean.key || clean.key === entry.key) continue;
+      this.groups.delete(entry.key);
+      for (const token of indexTokens(entry.key)) {
+        const list = this.tokens.get(token);
+        if (!list) continue;
+        const at = list.indexOf(entry.key);
+        if (at >= 0) list.splice(at, 1);
+        if (!list.length) this.tokens.delete(token);
+      }
+      const tvgId = entry.tvgId.trim().toLowerCase();
+      if (tvgId) {
+        const rest = many(this.tvg.get(tvgId)).filter((key) => key !== entry.key);
+        if (!rest.length) this.tvg.delete(tvgId);
+        else this.tvg.set(tvgId, rest.length === 1 ? (rest[0] as string) : rest);
+      }
+      const next = new CatalogEntry(
+        entry.id,
+        entry.title,
+        entry.group,
+        entry.tvgId,
+        entry.ref,
+        entry.tvgShift,
+        entry.userAgent,
+        entry.referrer,
+        clean.key,
+        clean.quality,
+        clean.backup,
+        clean.hevc,
+        clean.country,
+        entry.order,
+        clean.mirror,
+        true,
+        entry.tvgCountry,
+        entry.tvgLanguage,
+      );
+      replaced.set(entry.id, next);
+      this.byId.set(next.id, next);
+      this.index(next);
+    }
+    for (let i = 0; i < this.entries.length; i += 1) {
+      const next = replaced.get((this.entries[i] as CatalogEntry).id);
+      if (next) this.entries[i] = next;
+    }
+  }
+
   /** Ordena las variantes de cada grupo (una vez, al terminar). */
   finish(): this {
     if (this.sorted) return this;
     this.sorted = true;
     this.pool.clear();
+    this.rekeyLoneMirrors();
     for (const [key, value] of this.groups) {
-      if (Array.isArray(value)) this.groups.set(key, value.sort(compareVariants));
+      if (Array.isArray(value))
+        this.groups.set(
+          key,
+          value.sort((a, b) => compareVariants(a, b)),
+        );
     }
     return this;
   }
@@ -219,6 +393,8 @@ export class Catalog {
   private readonly groups: Map<string, OneOrMany<CatalogEntry>>;
   private readonly tokens: Map<string, string[]>;
   private readonly tvg: Map<string, OneOrMany<string>>;
+  /** Orden de las categorías del proveedor (§16.5); vacío = primera aparición. */
+  readonly groupOrder: readonly string[];
 
   constructor(
     readonly providerId: string,
@@ -228,6 +404,7 @@ export class Catalog {
     readonly guideUrls: readonly string[],
     readonly streamExt: 'ts' | 'm3u8' | null,
     raw: readonly RawChannel[] | CatalogBuilder,
+    groupOrder?: readonly string[],
   ) {
     let builder: CatalogBuilder;
     if (raw instanceof CatalogBuilder) builder = raw;
@@ -235,6 +412,7 @@ export class Catalog {
       builder = new CatalogBuilder();
       for (const channel of raw) builder.add(channel);
     }
+    this.groupOrder = [...(groupOrder ?? builder.groupOrder)];
     builder.finish();
     this.entries = builder.entries;
     this.byId = builder.byId;
@@ -251,6 +429,54 @@ export class Catalog {
     return this.byId.get(id.toLowerCase()) ?? null;
   }
 
+  /* Categorías con nombre de plataforma que en realidad mezclan canales de la TDT (§19). */
+  private mixedPlatformGroups: ReadonlySet<string> | null = null;
+
+  /**
+   * Categorías con nombre de plataforma («RAKUTEN TV», «PLUTO TV»…) que mezclan canales de siempre: al menos 3
+   * de sus canales (y 1 de cada 5) están también en una categoría normal («ES - LA 2», «ES - ANTENA 3»). En
+   * ellas la categoría no dice que un canal sea de la plataforma («ES - TVG 2» es la TVG 2 de siempre).
+   */
+  private mixedGroups(): ReadonlySet<string> {
+    if (this.mixedPlatformGroups) return this.mixedPlatformGroups;
+    const normalKeys = new Set<string>();
+    const byGroup = new Map<string, Set<string>>();
+    for (const entry of this.entries) {
+      if (iptvTitlePlatform(entry.title)) continue;
+      if (!iptvGroupPlatform(entry.group)) {
+        normalKeys.add(entry.key);
+        continue;
+      }
+      const keys = byGroup.get(entry.group) ?? new Set<string>();
+      keys.add(entry.key);
+      byGroup.set(entry.group, keys);
+    }
+    const mixed = new Set<string>();
+    for (const [group, keys] of byGroup) {
+      let shared = 0;
+      for (const key of keys) if (normalKeys.has(key)) shared += 1;
+      if (shared >= 3 && shared * 5 >= keys.size) mixed.add(group);
+    }
+    this.mixedPlatformGroups = mixed;
+    return mixed;
+  }
+
+  /**
+   * La plataforma de internet de una entrada (docs/iptv.md §18 y §19): la del nombre o, si su categoría es solo
+   * de una plataforma, la de la categoría. null si es un canal de televisión.
+   */
+  platformOf(entry: CatalogEntry): string | null {
+    const byTitle = iptvTitlePlatform(entry.title);
+    if (byTitle) return byTitle;
+    const byGroup = iptvGroupPlatform(entry.group);
+    return byGroup && !this.mixedGroups().has(entry.group) ? byGroup : null;
+  }
+
+  /** ¿Está en una categoría con nombre de plataforma (aunque la mezcle con canales de siempre)? */
+  inPlatformGroup(entry: CatalogEntry): boolean {
+    return Boolean(iptvTitlePlatform(entry.title) ?? iptvGroupPlatform(entry.group));
+  }
+
   has(id: string): boolean {
     return this.byId.has(id.toLowerCase());
   }
@@ -258,6 +484,30 @@ export class Catalog {
   /** Variantes de un grupo, de mejor a peor. */
   group(key: string): readonly CatalogEntry[] {
     return many(this.groups.get(key));
+  }
+
+  /**
+   * Los canales de un grupo por país (docs/iptv.md §17): primero el de España
+   * o sin país (`bucket` ''), luego cada otro país en el orden del catálogo.
+   * Cada uno con sus variantes de mejor a peor.
+   */
+  buckets(key: string): { readonly bucket: string; readonly entries: readonly CatalogEntry[] }[] {
+    const byBucket = new Map<string, CatalogEntry[]>();
+    for (const entry of this.group(key)) {
+      const list = byBucket.get(entry.bucket);
+      if (list) list.push(entry);
+      else byBucket.set(entry.bucket, [entry]);
+    }
+    const first = (list: readonly CatalogEntry[]): number =>
+      list.reduce((min, entry) => Math.min(min, entry.order), Number.POSITIVE_INFINITY);
+    return [...byBucket]
+      .sort(([a, la], [b, lb]) => (a === '' ? -1 : b === '' ? 1 : first(la) - first(lb)))
+      .map(([bucket, entries]) => ({ bucket, entries }));
+  }
+
+  /** Las variantes del mismo canal que `entry` (mismo grupo y mismo país), de mejor a peor. */
+  channelOf(entry: CatalogEntry): readonly CatalogEntry[] {
+    return this.group(entry.key).filter((item) => item.bucket === entry.bucket);
   }
 
   /** Claves de todos los grupos, en el orden del catálogo (el buscador monta su índice con ellas). */
@@ -312,23 +562,13 @@ export class Catalog {
       builtAt: this.builtAt,
       guideUrls: this.guideUrls,
       streamExt: this.streamExt,
+      ...(this.groupOrder.length ? { groupOrder: this.groupOrder } : {}),
     });
     yield `${head.slice(0, -1)},"entries":[`;
     for (let start = 0; start < this.entries.length; start += batch) {
       const part = this.entries
         .slice(start, start + batch)
-        .map((entry) =>
-          JSON.stringify([
-            entry.id,
-            entry.title,
-            entry.group,
-            entry.tvgId,
-            entry.ref,
-            entry.tvgShift,
-            entry.userAgent,
-            entry.referrer,
-          ]),
-        )
+        .map((entry) => JSON.stringify(storedEntry(entry)))
         .join(',');
       yield start + batch < this.entries.length ? `${part},` : part;
     }
@@ -345,16 +585,8 @@ export class Catalog {
       builtAt: this.builtAt,
       guideUrls: [...this.guideUrls],
       streamExt: this.streamExt,
-      entries: this.entries.map((entry) => [
-        entry.id,
-        entry.title,
-        entry.group,
-        entry.tvgId,
-        entry.ref,
-        entry.tvgShift,
-        entry.userAgent,
-        entry.referrer,
-      ]),
+      ...(this.groupOrder.length ? { groupOrder: [...this.groupOrder] } : {}),
+      entries: this.entries.map(storedEntry),
     };
   }
 
@@ -385,6 +617,8 @@ export class Catalog {
         tvgShift: typeof item[5] === 'number' ? item[5] : null,
         userAgent: typeof item[6] === 'string' ? item[6] : null,
         referrer: typeof item[7] === 'string' ? item[7] : null,
+        tvgCountry: typeof item[8] === 'string' ? item[8] : null,
+        tvgLanguage: typeof item[9] === 'string' ? item[9] : null,
       });
     }
     return new Catalog(
@@ -397,6 +631,9 @@ export class Catalog {
         : [],
       stored.streamExt === 'ts' || stored.streamExt === 'm3u8' ? stored.streamExt : null,
       raw,
+      Array.isArray(stored.groupOrder)
+        ? stored.groupOrder.filter((name): name is string => typeof name === 'string')
+        : [],
     );
   }
 }

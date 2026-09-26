@@ -1,0 +1,52 @@
+{
+  "active": true,
+  "provider": "Casa",
+  "catalog": "mfz3k1a01",
+  "query": "",
+  "category": null,
+  "total": 812,
+  "catalogTotal": 812,
+  "categories": [
+    { "id": "3f2a9c1b7d40", "name": "ES | DEPORTES", "count": 164 },
+    { "id": "8e1d0a6b2c93", "name": "ES | DAZN", "count": 12 },
+    { "id": "c45b7e20f1a8", "name": "ES | LALIGA", "count": 11 },
+    { "id": "0b9f4d3e6a21", "name": "ES | GENERALISTAS", "count": 58 },
+    { "id": "5a7c2e9d0f16", "name": "UK | SPORTS", "count": 96 },
+    { "id": "none", "name": "", "count": 3 }
+  ],
+  "facets": {
+    "country": [
+      { "value": "ES", "count": 590, "selected": false },
+      { "value": "UK", "count": 142, "selected": false },
+      { "value": "LAT", "count": 41, "selected": false },
+      { "value": "none", "count": 39, "selected": false }
+    ],
+    "language": [
+      { "value": "es", "count": 631, "selected": false },
+      { "value": "en", "count": 150, "selected": false },
+      { "value": "ca", "count": 6, "selected": false },
+      { "value": "none", "count": 25, "selected": false }
+    ],
+    "type": [
+      { "value": "deportes", "count": 402, "selected": false },
+      { "value": "generalistas", "count": 88, "selected": false },
+      { "value": "cine", "count": 61, "selected": false },
+      { "value": "adultos", "count": 12, "selected": false },
+      { "value": "none", "count": 190, "selected": false }
+    ],
+    "sport": [
+      { "value": "futbol", "count": 118, "selected": false },
+      { "value": "baloncesto", "count": 14, "selected": false },
+      { "value": "f1", "count": 4, "selected": false }
+    ],
+    "quality": [
+      { "value": "uhd", "count": 9, "selected": false },
+      { "value": "fhd", "count": 310, "selected": false },
+      { "value": "hd", "count": 402, "selected": false },
+      { "value": "none", "count": 120, "selected": false }
+    ]
+  },
+  "channels": [],
+  "nextCursor": null,
+  "stale": false
+}
