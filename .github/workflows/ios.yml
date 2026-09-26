@@ -434,6 +434,11 @@ jobs:
             xcrun xcresulttool get test-results summary --path "$RESULTADO" --compact > "build/$NOMBRE-resumen.json" || true
             cat "build/$NOMBRE-resumen.json" || true
             echo "::endgroup::"
+            # Métricas de las pruebas de rendimiento (measure: tirones al desplazar, etc.), si las hay.
+            echo "::group::Métricas de $NOMBRE"
+            xcrun xcresulttool get test-results metrics --path "$RESULTADO" --compact || true
+            echo
+            echo "::endgroup::"
             # Detalle (mensaje y línea) de cada test que falla.
             RESULTADO="$RESULTADO" NOMBRE="$NOMBRE" python3 - <<'PY' || true
           import json, os, subprocess

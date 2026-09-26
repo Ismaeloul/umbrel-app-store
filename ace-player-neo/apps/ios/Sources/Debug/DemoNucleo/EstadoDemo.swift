@@ -15,6 +15,8 @@
         var servidor080 = false
         /// `-AceNeoHistorialCapturas`: el historial que deja el recorrido de capturas (a7 §13.3).
         var historialCapturas = false
+        /// `-AceNeoListaLarga`: 240 favoritos más, para medir el desplazamiento de Canales (UITest de rendimiento).
+        var listaLarga = false
     }
 
     /// Un evento del tiempo real simulado (`id`, `event`, `data`).
@@ -57,6 +59,7 @@
                 dispositivos: SemillasDemo.fixture("devicesList")["devices"]?.lista ?? [],
                 azar: AleatorioDemo(semilla: semilla))
             if modo.historialCapturas { EstadoDemo.precargarHistorial(&inicial, ahora: AgendaDemo.ms(ahora)) }
+            if modo.listaLarga { EstadoDemo.precargarListaLarga(&inicial, ahora: AgendaDemo.ms(ahora)) }
             datos = Mutex(inicial)
         }
 
@@ -116,6 +119,18 @@
                 ahora: ahora - 1000)
             let previos = d.biblioteca["history"]?.lista ?? []
             d.biblioteca["history"] = .lista([dazn1, dazn] + previos)
+        }
+
+        /// 240 favoritos de más («Canal n --> NEW ERA», Deportes) detrás de los de la demo.
+        private static func precargarListaLarga(_ d: inout Datos, ahora: Double) {
+            var extra: [JSON] = []
+            for n in 1...240 {
+                let id = String(repeating: "0", count: 40 - String(n, radix: 16).count) + String(n, radix: 16)
+                extra.append(RutasDemo.elementoBiblioteca(
+                    id: id, titulo: "Canal \(n) --> NEW ERA", categoria: "Deportes", tipo: "fav", ahora: ahora - Double(n) * 1000))
+            }
+            let previos = d.biblioteca["favorites"]?.lista ?? []
+            d.biblioteca["favorites"] = .lista(previos + extra)
         }
     }
 #endif
