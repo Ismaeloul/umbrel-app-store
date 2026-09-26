@@ -125,9 +125,9 @@ private struct ChipGusto: View {
 
     /// Monograma de 22 con el color del nombre (las opciones no traen escudo).
     private var equipo: DatosEquipo {
-        let paleta = ColoresPartido.paleta(nombre: nombre, colores: nil)
+        let paleta = Equipos.paleta(nombre: nombre, primario: nil, secundario: nil)  // M2 (`paletteOf`)
         return DatosEquipo(
-            nombre: nombre, siglas: ColoresPartido.iniciales(nombre, corto: nil), primario: paleta.primario,
+            nombre: nombre, siglas: Equipos.iniciales(nombre), primario: TarjetasAgenda.rgb(paleta.primario),
             secundario: nil, escudo: nil, halo: nil)
     }
 

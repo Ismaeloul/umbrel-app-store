@@ -27,6 +27,9 @@ struct AppShell: View {
             CapaVuelo().zIndex(Capa.vuelo)
             CapaAvisos(inmersivo: inmersivo).zIndex(Capa.avisos)
             CapaInmersiva(inmersivo: inmersivo).zIndex(Capa.inmersivo)
+            #if DEBUG
+                if ArgumentosArmazon.medirTirones { SondaTirones().frame(width: 1, height: 1).allowsHitTesting(false) }
+            #endif
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()
@@ -46,6 +49,7 @@ private struct BarrasDelArmazon: View {
     @Environment(PresentacionReproductor.self) private var presentacion
     @Environment(\.maquetacion) private var maquetacion
     @Environment(\.movimientoReducido) private var reducido
+    @Environment(\.cristalOpaco) private var opaco
 
     var body: some View {
         let teatro: Bool = navegador.teatroVisible
@@ -54,7 +58,10 @@ private struct BarrasDelArmazon: View {
         let mini: Bool = presentacion.miniVisible(teatroVisible: teatro, inmersivo: inmersivo)
         ZStack(alignment: .topLeading) {
             if inferior {
-                VeloInferior(mini: mini).zIndex(Capa.velo).transition(.opacity)
+                // Con Liquid Glass de verdad no hay velo (Isma: aquí manda el cristal sobre el calco de la web): el
+                // velo opaco de `--bg` dejaba el vidrio sobre un color liso y la barra se veía blanca, sin nada que
+                // transparentar ni refractar. Con la transparencia reducida la barra es sólida y el velo vuelve.
+                if opaco { VeloInferior(mini: mini).zIndex(Capa.velo).transition(.opacity) }
                 BarraPestanas().zIndex(Capa.barra).transition(.opacity)
             }
             if superior && !teatro {

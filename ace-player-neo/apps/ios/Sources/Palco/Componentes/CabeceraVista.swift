@@ -23,6 +23,8 @@ struct CabeceraVista<Acciones: View>: View {
     let subtitulo: String?
     let sobreOscuro: Bool
     let ocultarMotor: Bool
+    /// Titular de 30 también en tableta (la agenda en pantalla baja: agenda.css `max-height: 540px`).
+    var titularBajo = false
     let acciones: Acciones
     @Environment(\.maquetacion) private var maquetacion
     @Environment(\.modoDemo) private var modoDemo
@@ -36,6 +38,13 @@ struct CabeceraVista<Acciones: View>: View {
         self.sobreOscuro = sobreOscuro
         self.ocultarMotor = ocultarMotor
         self.acciones = acciones()
+    }
+
+    /// El titular de 30 en tableta (la agenda en pantalla baja, a3 §12).
+    func conTitularBajo(_ bajo: Bool) -> CabeceraVista {
+        var copia = self
+        copia.titularBajo = bajo
+        return copia
     }
 
     private var ancha: Bool { maquetacion.tipo == .tableta }
@@ -58,7 +67,7 @@ struct CabeceraVista<Acciones: View>: View {
     private var titulos: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(titulo)
-                .estilo(ancha ? .titularVistaAncha : .titularVista)
+                .estilo(ancha && !titularBajo ? .titularVistaAncha : .titularVista)
                 .foregroundStyle(Palco.text)
                 .lineLimit(1)
                 .accessibilityAddTraits(.isHeader)
@@ -71,7 +80,7 @@ struct CabeceraVista<Acciones: View>: View {
     @ViewBuilder private var estado: some View {
         if modoDemo {
             EtiquetaModoDemo()
-        } else if !ocultarMotor, let estadoMotor {
+        } else if !ocultarMotor, !ancha, let estadoMotor {  // ≥ 768 el motor va en la barra superior (view-header.css)
             IndicadorMotor(estadoMotor, soloIcono: maquetacion.estrecho380) { abrirSaludMotor?.ejecutar() }
         }
     }

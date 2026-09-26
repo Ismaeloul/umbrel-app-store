@@ -105,11 +105,8 @@ private struct FondoCartel: View {
     @State private var caja = CGSize(width: 1, height: 1)
 
     private var tonoClaro: Color {
-        let h = ColoresPartido.tono(nombre)
-        let calido = h >= 40 && h <= 115
-        let l: Double = calido ? 0.56 : 0.46
-        let c: Double = calido ? 0.13 : 0.11
-        return ColoresPartido.oklch(min(0.9, l + 0.16), c, h).color
+        let tono = TonoCanal.tono(nombre)  // `channelTone` (M2)
+        return ColorOKLab.rgb(Oklch(l: min(0.9, tono.l + 0.16), c: tono.c, h: tono.h)).color
     }
 
     private static let velo: [Gradient.Stop] = [

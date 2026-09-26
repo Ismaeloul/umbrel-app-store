@@ -133,18 +133,16 @@ struct ResultadosBuscar: View {
     private func listaResultados(_ q: String) -> some View {
         let resultados = consulta?.datos?.results ?? []
         let indice = self.indice
-        let forma = RoundedRectangle(cornerRadius: R.xl, style: .circular)
+        let ultima = resultados.count - 1
         return LazyVStack(spacing: 0) {
             ForEach(Array(resultados.enumerated()), id: \.element.id) { (par: (offset: Int, element: SearchResult)) in
                 filaResultado(par.element, indice: indice)
                     .modifier(AparicionEscalonada(indice: modelo.entrando ? min(par.offset, ReglasBiblioteca.topeEscalonado) : nil))
                     .overlay(alignment: .top) { if par.offset > 0 { Rectangle().fill(Palco.lineSoft).frame(height: 1) } }
+                    .modifier(EsquinasFila(arriba: par.offset == 0, abajo: par.offset == ultima))
             }
         }
-        .background(Palco.surface, in: forma)
-        .clipShape(forma)
-        .bordeInterior(Palco.lineSoft, forma: forma)
-        .sombra(.s1, forma: forma)
+        .fondoTarjetaLista()  // sin recortar ni sombrear la lista entera (tirones al desplazar)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Resultados para «\(q)»")
         .id(q)

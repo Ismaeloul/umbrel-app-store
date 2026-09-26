@@ -22,11 +22,21 @@ struct SubeConLaBarra: UIViewRepresentable {
 
     func updateUIView(_ sonda: Sonda, context: Context) {
         sonda.activo = activo
+        sonda.accesible = context.environment.vistaActiva
         sonda.aplicar()
     }
 
+    /// La sonda de una vista que pasa a ser la que se ve avisa con su ScrollView (`object`). La barra superior
+    /// lo usa para vigilar esa lista sin recorrer el árbol de la ventana a cada rato.
+    static let seActiva = Notification.Name("AceNeo.SubeConLaBarra.seActiva")
+
     final class Sonda: UIView {
         var activo = false
+        /// Las listas de una pestaña oculta salen del árbol de accesibilidad: la ScrollView es una vista de UIKit y
+        /// `accessibilityHidden` de SwiftUI no la alcanza (XCUITest, y un toque de VoiceOver en un hueco de la
+        /// pestaña que se ve, llegaban a la Agenda oculta).
+        var accesible = true
+        private weak var anunciada: UIScrollView?
 
         override func didMoveToWindow() {
             super.didMoveToWindow()
@@ -36,7 +46,19 @@ struct SubeConLaBarra: UIViewRepresentable {
         func aplicar() {
             var vista = superview
             while let actual = vista, !(actual is UIScrollView) { vista = actual.superview }
-            (vista as? UIScrollView)?.scrollsToTop = activo
+            let desplazable = vista as? UIScrollView
+            desplazable?.scrollsToTop = activo
+            if let desplazable, desplazable.accessibilityElementsHidden == accesible {
+                desplazable.accessibilityElementsHidden = !accesible
+            }
+            guard activo, window != nil, let desplazable else {
+                anunciada = nil
+                return
+            }
+            guard desplazable !== anunciada else { return }
+            anunciada = desplazable
+            // Fuera de la pasada de maquetación (esto corre en `updateUIView`): quien escucha cambia su estado.
+            Task { NotificationCenter.default.post(name: SubeConLaBarra.seActiva, object: desplazable) }
         }
     }
 }

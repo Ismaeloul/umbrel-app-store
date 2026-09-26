@@ -10,7 +10,8 @@
 
        Argumentos que lee aquí (además de los de `ModoEjecucion`, a7 §5.1 y b2 §F.4):
        - `-AceNeoHistorialCapturas`: precarga el historial del recorrido de capturas (a7 §13.3);
-       - `-AceNeoServidor080`: responde 403 `origin_forbidden` en las cinco rutas de la 0.8.1 (a9 §2). */
+       - `-AceNeoServidor080`: responde 403 `origin_forbidden` en las cinco rutas de la 0.8.1 (a9 §2);
+       - `-AceNeoListaLarga`: 240 favoritos más (UITest de rendimiento del desplazamiento de Canales). */
 
     struct OpcionesSimulado: Sendable {
         var sinEmparejar = false  // arranca en Emparejar
@@ -51,7 +52,8 @@
             let modo = ModoDemo(
                 demo: !opciones.tiempoReal,
                 servidor080: opciones.servidor080 || argumentos.contains("-AceNeoServidor080"),
-                historialCapturas: opciones.historialCapturas || argumentos.contains("-AceNeoHistorialCapturas"))
+                historialCapturas: opciones.historialCapturas || argumentos.contains("-AceNeoHistorialCapturas"),
+                listaLarga: argumentos.contains("-AceNeoListaLarga"))
             let estado = EstadoDemo(modo: modo, ahora: reloj.ahora, semilla: opciones.semilla)
             let servidor = ServidorActivo(estado: estado, reloj: reloj, tiempoReal: opciones.tiempoReal)
             activo.withLock { $0 = servidor }

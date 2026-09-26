@@ -58,7 +58,10 @@ struct ToastVista: View {
         .frame(maxWidth: 420, minHeight: Alturas.toast)
         .cristal(.denso, en: forma)
         .sombra(.s2, forma: forma)
-        .accessibilityElement(children: .combine)
+        // Como el `role="status"` de la web: el texto y sus dos botones, cada uno por separado (con `.combine`
+        // los botones no llegaban a VoiceOver ni a XCUITest por su nombre).
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(IDUI.toast)
     }
 
     private var texto: some View {
@@ -84,12 +87,14 @@ struct ToastVista: View {
             }
             .buttonStyle(EstiloPulsar())
             .foregroundStyle(Palco.accentInk)
+            .accessibilityIdentifier(IDUI.toastAccion)
             Button(action: alCerrar) {
                 IconoPalco(.x, tamano: 18).frame(width: 44, height: 44)
             }
             .buttonStyle(EstiloPulsar(forma: AnyShape(Circle())))
             .foregroundStyle(Palco.text2)
             .accessibilityLabel("Cerrar aviso")
+            .accessibilityIdentifier(IDUI.toastCerrar)
         }
     }
 }

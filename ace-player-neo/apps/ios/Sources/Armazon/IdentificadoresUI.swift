@@ -11,6 +11,8 @@ enum IDUI {
     static func pantalla(_ id: String) -> String { "pantalla-\(id)" }
     static let mini = "mini-reproductor", miniPausa = "mini-pausa", miniDetener = "mini-detener", miniDonde = "mini-donde"
     static let toastAccion = "toast-accion", toastCerrar = "toast-cerrar", capsulaEstado = "capsula-estado"
+    static let toast = "toast"  // (M4, aditivo: el marco del toast para los flujos)
+    static let medidorTirones = "medidor-tirones"  // (M4, aditivo: -AceNeoMedirTirones, solo Debug)
     // Emparejar (a2 §22.9)
     static let visorCamara = "visor-camara", botonAjustesCamara = "boton-ajustes-camara"
     static let botonEscribirCodigo = "boton-escribir-codigo", campoCodigo = "campo-codigo"

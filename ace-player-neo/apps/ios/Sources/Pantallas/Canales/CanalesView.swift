@@ -6,14 +6,16 @@ import SwiftUI
 
 struct CanalesView: View {
     @State private var modelo = ModeloCanales()
+    /// «Ahora» de Canales: cada 30 s mientras se ve (on-air.ts `useNow(30_000)`), no el tic de 20 s de la agenda.
+    @State private var ahora: Date?
     @Environment(DatosApp.self) private var datos
     @Environment(Navegador.self) private var navegador
-    @Environment(RelojCompartido.self) private var reloj
     @Environment(TiempoReal.self) private var tiempoReal
     @Environment(\.vistaActiva) private var vistaActiva
 
     var body: some View {
         ColumnaCanales(modelo: modelo)
+            .environment(\.ahoraCanales, ahora ?? RelojCanales.ahora())
             .mira(datos.biblioteca)
             .mira(datos.agenda)
             .task(id: vistaActiva) {
@@ -32,20 +34,18 @@ struct CanalesView: View {
             }
     }
 
-    private var indice: IndiceAntena { IndiceAntena(agenda: datos.agenda.datos, reloj: RelojMadrid(reloj.ahora)) }
+    private var indice: IndiceAntena {
+        IndiceAntena(agenda: datos.agenda.datos, reloj: RelojMadrid(ahora ?? RelojCanales.ahora()))
+    }
 
     private var claveMarcadores: String { "\(vistaActiva)|\(indice.hacenFaltaMarcadores())" }
 
-    /// El reloj de «Emitiendo ahora» avanza cada 30 s (on-air.ts `useNow(30_000)`).
+    /// El reloj de «Emitiendo ahora» (on-air.ts `useNow(30_000)`): avanza cada 30 s solo mientras la vista se ve.
     private func relojDeCanales() async {
         guard vistaActiva else { return }
-        reloj.empezarAMirar()
-        defer { reloj.dejarDeMirar() }
         while !Task.isCancelled {
+            ahora = RelojCanales.ahora()
             try? await Task.sleep(for: .seconds(IndiceAntena.tic))
-            guard !Task.isCancelled else { return }
-            reloj.empezarAMirar()
-            reloj.dejarDeMirar()
         }
     }
 
@@ -107,4 +107,14 @@ private struct ColumnaCanales: View {
             .textInputAutocapitalization(.never)
             .accessibilityIdentifier(IDUI.buscadorBiblioteca)
     }
+}
+
+/// La hora de la app (la de la demo en las pruebas) para el reloj de Canales.
+@MainActor enum RelojCanales {
+    static func ahora() -> Date { (ContenedorApp.actual?.reloj ?? RelojSistema()).ahora }
+}
+
+extension EnvironmentValues {
+    /// «Ahora» de Canales (lo pone `CanalesView`, cada 30 s): «Emitiendo ahora», las antenas y los tramos de fecha.
+    @Entry var ahoraCanales: Date = .distantPast
 }

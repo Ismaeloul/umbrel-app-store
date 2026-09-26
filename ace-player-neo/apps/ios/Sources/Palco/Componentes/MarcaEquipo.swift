@@ -32,15 +32,19 @@ struct MarcaEquipo: View {
 
     var body: some View {
         ZStack {
-            HaloEquipo(color: (equipo.halo ?? equipo.primario).color, tamano: tamano)
-                .opacity(encendido ? 1 : 0)
-                .animation(reducido ? .easeOut(duration: 0.15) : .timingCurve(0.2, 0.7, 0.3, 1, duration: 0.52), value: encendido)
+            // El halo solo existe encendido: apagado a opacidad 0 se seguía pintando su lienzo desenfocado en
+            // cada escudo de la agenda (tirones al desplazar, prueba de Isma).
+            if encendido {
+                HaloEquipo(color: (equipo.halo ?? equipo.primario).color, tamano: tamano)
+                    .transition(.opacity)
+            }
             ImagenServidor(equipo.escudo, tamano: CGSize(width: tamano, height: tamano)) {
                 MonogramaEquipo(equipo: equipo, tamano: tamano, patron: patron)
             }
             .shadow(color: Color.black.opacity(equipo.escudo == nil ? 0 : 0.5), radius: 8, y: 8)  // --shadow-crest
         }
         .frame(width: tamano, height: tamano)
+        .animation(reducido ? .easeOut(duration: 0.15) : .timingCurve(0.2, 0.7, 0.3, 1, duration: 0.52), value: encendido)
         .accessibilityHidden(true)
     }
 }

@@ -12,7 +12,7 @@ struct ContenidoCanales: View {
     @Environment(Haptica.self) private var haptica
     @Environment(Reproductor.self) private var reproductor
     @Environment(BajasPendientes.self) private var bajas
-    @Environment(RelojCompartido.self) private var reloj
+    @Environment(\.ahoraCanales) private var ahora
     @Environment(MarcadoresDestapados.self) private var destapados
     @Environment(\.maquetacion) private var maquetacion
 
@@ -39,7 +39,7 @@ struct ContenidoCanales: View {
     @ViewBuilder private func cargada(_ biblioteca: LibraryView) -> some View {
         let visibles = Visibles(biblioteca: biblioteca, bajas: bajas)
         let marcadores = datos.marcadores.datos?.scores ?? [:]
-        let indice = IndiceAntena(agenda: datos.agenda.datos, reloj: RelojMadrid(reloj.ahora))
+        let indice = IndiceAntena(agenda: datos.agenda.datos, reloj: RelojMadrid(ahora))
         if modelo.consultaLimpia.isEmpty {
             let entradas = ReglasEmitiendo.entradas(visibles.favoritos + visibles.recientes, indice: indice, marcadores: marcadores)
             if !entradas.isEmpty {
@@ -70,7 +70,7 @@ struct ContenidoCanales: View {
     {
         PanelSeccion(
             modelo: modelo, biblioteca: biblioteca, seccion: seccion, items: visibles.items(seccion), acciones: acciones,
-            indice: indice, marcadores: marcadores, tapado: tapado(partido:hash:), reproducir: reproducir,
+            indice: indice, ahora: ahora, marcadores: marcadores, tapado: tapado(partido:hash:), reproducir: reproducir,
             cambiarPestana: cambiarPestana
         )
         .gesture(

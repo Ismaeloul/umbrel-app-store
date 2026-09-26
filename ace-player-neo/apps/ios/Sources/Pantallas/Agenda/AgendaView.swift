@@ -45,16 +45,14 @@ struct AgendaView: View {
         await consulta.asegurar(tiempoRealAbierto: tiempoReal.abierto)
     }
 
-    /// «Ahora» avanza cada 20 s mientras la agenda se ve (a3 §9.1).
+    /// «Ahora» avanza cada 20 s mientras la agenda se ve (a3 §9.1; data.ts TICK_MS): el tic es el del reloj
+    /// compartido (M1), que corre mientras alguien lo mira. Aquí solo se mira mientras la vista está activa.
     private func relojDeLaAgenda() async {
         guard vistaActiva else { return }
         reloj.empezarAMirar()
         defer { reloj.dejarDeMirar() }
         while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(20))  // data.ts TICK_MS
-            guard !Task.isCancelled else { return }
-            reloj.empezarAMirar()  // el tic del reloj compartido (lee la hora del reloj de la app)
-            reloj.dejarDeMirar()
+            try? await Task.sleep(for: .seconds(3600))  // hasta que la vista deje de verse (cancela la tarea)
         }
     }
 
@@ -96,17 +94,26 @@ private struct ColumnaAgenda: View {
     @Environment(\.maquetacion) private var maquetacion
     @Environment(\.vistaActiva) private var vistaActiva
     @State private var posicion = ScrollPosition(edge: .top)
-    @State private var desplazamiento: Double = 0
+    // Nada de esto cambia en cada fotograma (prueba de Isma: la agenda iba a tirones). Antes el desplazamiento
+    // y el marco de la tira se guardaban en cada fotograma y repintaban la columna entera; ahora solo se anota
+    // cuando algo CRUZA un borde (el héroe deja la barra de estado, la tira pasa por encima) y la posición de
+    // la tira dentro del contenido, que solo cambia al maquetar.
     @State private var yTira: Double = 0
+    @State private var tiraArriba = false
+    @State private var sobreHeroe = true
 
     private var hayHeroe: Bool { datos.agenda.datos == nil ? datos.agenda.error == nil : foto.destacado != nil }
 
     var body: some View {
+        let arriba: Double = maquetacion.seguras.arriba
+        let limiteHeroe: Double = maquetacion.altoHeroe - arriba
+        let espacio = "contenidoAgenda"
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 FilaSuperiorAgenda(modelo: modelo, foto: foto, hayHeroe: hayHeroe)
-                BarraDiasAgenda(modelo: modelo, foto: foto, tiraArriba: yTira < desplazamiento + maquetacion.seguras.arriba)
-                    .onGeometryChange(for: Double.self) { Double($0.frame(in: .scrollView).minY) } action: { yTira = $0 + desplazamiento }
+                BarraDiasAgenda(modelo: modelo, foto: foto, tiraArriba: tiraArriba)
+                    .onGeometryChange(for: Double.self) { Double($0.frame(in: .named(espacio)).minY) } action: { yTira = $0 }
+                    .onGeometryChange(for: Bool.self) { Double($0.frame(in: .scrollView).minY) < arriba } action: { tiraArriba = $0 }
                     .id("tira")
                 PrimerUsoAgenda(modelo: modelo)
                 CuerpoAgenda(modelo: modelo, foto: foto)
@@ -117,12 +124,13 @@ private struct ColumnaAgenda: View {
             .padding(.leading, CGFloat(maquetacion.rellenoIzquierdo))
             .padding(.trailing, CGFloat(maquetacion.rellenoDerecho))
             .padding(.bottom, CGFloat(maquetacion.rellenoInferiorContenido(mini: miniVisible, teatro: false)))
+            .coordinateSpace(.named(espacio))
             .subeConLaBarraDeEstado(vistaActiva)
         }
         .scrollPosition($posicion)
         .scrollDismissesKeyboard(.interactively)
-        .onScrollGeometryChange(for: Double.self) { Double($0.contentOffset.y + $0.contentInsets.top) } action: { _, nuevo in
-            desplazamiento = nuevo
+        .onScrollGeometryChange(for: Bool.self) { Double($0.contentOffset.y + $0.contentInsets.top) < limiteHeroe } action: { _, nuevo in
+            sobreHeroe = nuevo
             publicarBarraDeEstado()
         }
         .refreshable { await datos.agenda.refrescar() }  // la háptica al soltar la da el sistema (b2 §B.7: «si no, nada»)
@@ -144,7 +152,7 @@ private struct ColumnaAgenda: View {
 
     /// Barra de estado blanca mientras el héroe está debajo (a3 §4.7; b §0.4).
     private func publicarBarraDeEstado() {
-        let bajo = vistaActiva && hayHeroe && maquetacion.tipo == .movil && desplazamiento < maquetacion.altoHeroe - maquetacion.seguras.arriba
+        let bajo = vistaActiva && hayHeroe && maquetacion.tipo == .movil && sobreHeroe
         if estadoVentana.heroeBajoBarra != bajo { estadoVentana.heroeBajoBarra = bajo }
     }
 

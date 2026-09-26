@@ -296,25 +296,29 @@ enum EjemploAgenda {
         partido.title = "Real Madrid (amistoso)"
         #expect(TarjetasAgenda.lado(partido, local: true).nombre == "Real Madrid")
         #expect(TarjetasAgenda.lado(partido, local: false).nombre == "…")
-        #expect(ColoresPartido.iniciales("Atlético de Madrid", corto: nil) == "AM")
-        #expect(ColoresPartido.iniciales("Tottenham", corto: nil) == "TOT")
-        #expect(ColoresPartido.iniciales("Real Madrid", corto: "rma") == "RMA")
-        #expect(ColoresPartido.mismoOrigen("/api/v1/x") == "/api/v1/x")
-        #expect(ColoresPartido.mismoOrigen("//cdn/x") == nil)
-        #expect(ColoresPartido.mismoOrigen("https://x") == nil)
+        // Siglas y escudo de mismo origen: los de `Equipos` (M2).
+        #expect(TarjetasAgenda.lado(partido, local: true).siglas == "RM")
+        #expect(TarjetasAgenda.lado(partido, local: true).escudo == nil)
+    }
+
+    @Test func coloresDeLaTarjetaSonLosDeEquipos() {
+        let partido = Ejm.partido(0, local: "Real Madrid", visitante: "Getafe")
+        let par = Equipos.versus(partido)
+        let mitades = TarjetasAgenda.mitades(partido)
+        #expect(mitades.local == ColorOKLab.desdeHex(par.local))
+        #expect(mitades.visitante == ColorOKLab.desdeHex(par.visitante))
+        #expect(TarjetasAgenda.lado(partido, local: false).primario == ColorOKLab.desdeHex(Equipos.paleta(partido, .visitante).primario))
     }
 
     @Test func parVersus() {
         // Dos rojos (Sevilla–Girona): el visitante pasa a su segundo color.
-        let sevilla = ColoresPartido.Paleta(primario: ColoresPartido.hex("#d80919")!, secundario: nil)
-        let girona = ColoresPartido.Paleta(primario: ColoresPartido.hex("#cd2534")!, secundario: ColoresPartido.hex("#ffffff"))
-        let par = ColoresPartido.parVersus(sevilla, girona)
-        #expect(par.visitante == ColoresPartido.hex("#ffffff"))
+        let sevilla = Equipos.paleta(nombre: "Sevilla", primario: "#d80919", secundario: nil)
+        let girona = Equipos.paleta(nombre: "Girona", primario: "#cd2534", secundario: "#ffffff")
+        let par = Equipos.versus(sevilla, girona)
+        #expect(par.visitante == "#ffffff")
         // Sin segundo color: se oscurece la mitad más clara.
-        let sinSegundo = ColoresPartido.parVersus(sevilla, ColoresPartido.Paleta(primario: ColoresPartido.hex("#cd2534")!, secundario: nil))
-        #expect(ColoresPartido.distancia(sinSegundo.local, sinSegundo.visitante) >= 0.1)
-        #expect(ColoresPartido.hex("#abc") == ColoresPartido.hex("#aabbcc"))
-        #expect(ColoresPartido.hex("nope") == nil)
+        let sinSegundo = Equipos.versus(sevilla, Equipos.paleta(nombre: "Girona", primario: "#cd2534", secundario: nil))
+        #expect(Equipos.distancia(sinSegundo.local, sinSegundo.visitante) >= 0.1)
     }
 
     @Test func biblioteca70() {
