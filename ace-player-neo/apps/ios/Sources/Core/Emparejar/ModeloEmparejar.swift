@@ -38,7 +38,7 @@ import Observation
             if ReglasEmparejar.esEnlace(newValue), let url = URL(string: newValue.trimmingCharacters(in: .whitespacesAndNewlines)),
                 let enlace = PairingLink(url: url)
             {
-                aplicar(enlace, servidores: ReglasEmparejar.servidores(de: url))
+                aplicar(enlace)
                 Task { await emparejar() }
                 return
             }
@@ -67,6 +67,12 @@ import Observation
     private(set) var peticionFila = 0
     /// La imagen de la cámara ya ha llegado (fundido de 320 ms).
     private(set) var hayImagen = false
+    /// Un QR recién leído que aún espera su canje: la cámara sigue parada (imagen congelada, a2 §22.3.1) aunque
+    /// `emparejar()` no haya empezado todavía.
+    private(set) var leyendoQR = false
+    /// Cambia cuando la cámara puede volver a leer el mismo QR: tras un fallo que no es del código (red, no es
+    /// un Ace Player Neo…), al volver la cápsula a la de escanear (4,5 s) o al acabar la pausa.
+    private(set) var vecesReleer = 0
 
     @ObservationIgnored private var fallosSeguidos = 0
     @ObservationIgnored private var ignorarHasta = false
@@ -75,6 +81,7 @@ import Observation
     @ObservationIgnored private var tareaIgnorar: Task<Void, Never>?
     @ObservationIgnored private var hostQR: String?
     @ObservationIgnored private var servidoresQR: [URL] = []
+    @ObservationIgnored private var releerPendiente = false
 
     private let servicios: Servicios
     private let plazos: Plazos
@@ -106,7 +113,7 @@ import Observation
     }
 
     /// La cámara lee solo escaneando (se para al leer, en la pausa y emparejando).
-    var camaraLeyendo: Bool { !enviando && !hecho && !enPausa }
+    var camaraLeyendo: Bool { !enviando && !leyendoQR && !hecho && !enPausa }
 
     var hayDireccion: Bool {
         !(direccionCasa.trimmingCharacters(in: .whitespaces).isEmpty
@@ -132,7 +139,8 @@ import Observation
             return false
         }
         servicios.vibrar(.ligera)
-        aplicar(enlace, servidores: ReglasEmparejar.servidores(de: url))
+        aplicar(enlace)
+        leyendoQR = true
         Task { await emparejar() }
         return true
     }
@@ -160,15 +168,17 @@ import Observation
             try? await Task.sleep(for: espera)
             guard !Task.isCancelled, let self, self.superpuesto == estado else { return }
             self.superpuesto = nil
+            if estado == .errorEmparejar { self.dejarReleer() }
         }
     }
 
     // MARK: Enlace y campos
 
     /// Rellena desde un enlace: cada dirección a su hueco por `ServerVia.clasificar` (con varias `u=`, la
-    /// primera de cada tipo) y el código. Quita la fila de error.
+    /// primera de cada tipo; a2 §22.4, a9 §3.4) y el código. Quita la fila de error. Sin `servidores`, todas las
+    /// del enlace (también el que llega desde fuera, `aceneo://pair` con la Cámara del sistema).
     func aplicar(_ enlace: PairingLink, servidores: [URL] = []) {
-        let todas = servidores.isEmpty ? [enlace.servidor] : servidores
+        let todas = servidores.isEmpty ? enlace.servidores : servidores
         let huecos = ReglasEmparejar.huecos(todas)
         if let casa = huecos.casa { direccionCasa = casa.absoluteString }
         if let tailscale = huecos.tailscale { direccionTailscale = tailscale.absoluteString }
@@ -189,6 +199,9 @@ import Observation
     /// Canjea el código. Devuelve `true` si ha quedado emparejado.
     @discardableResult
     func emparejar() async -> Bool {
+        // Hasta la primera espera todo va en el mismo turno: la cámara pasa de `leyendoQR` a `enviando` sin
+        // volver a arrancar entre medias.
+        leyendoQR = false
         guard !enviando, !hecho, !enPausa else { return false }
         let leidas = ReglasEmparejar.direcciones(casa: direccionCasa, tailscale: direccionTailscale)
         guard leidas.errores.isEmpty else {
@@ -199,6 +212,7 @@ import Observation
         let host = hostQR ?? [leidas.config.lan, leidas.config.tailscale].compactMap { $0 }.first.map(ReglasEmparejar.host) ?? ""
         let servidores = servidoresQR.isEmpty ? [leidas.config.lan, leidas.config.tailscale].compactMap { $0 } : servidoresQR
         enviando = true
+        releerPendiente = false
         fila = nil
         superpuesto = .emparejando(host: host)
         tareaCapsula?.cancel()
@@ -233,6 +247,7 @@ import Observation
         peticionFila += 1
         bordeCodigo = fallo.bordeCodigo
         if fallo.vaciarCodigo { codigoLimpio = "" }
+        releerPendiente = ReglasEmparejar.releerTrasFallo(fallo)
         servicios.vibrar(.error)
         servicios.anunciar(fallo.texto)
         fallosSeguidos += 1
@@ -255,6 +270,14 @@ import Observation
             try? await Task.sleep(for: espera)
             guard !Task.isCancelled else { return }
             self?.enPausa = false
+            self?.dejarReleer()
         }
+    }
+
+    /// Tras un fallo que no es del código, el mismo QR se puede volver a leer (sin escribir nada a mano).
+    private func dejarReleer() {
+        guard releerPendiente else { return }
+        releerPendiente = false
+        vecesReleer += 1
     }
 }

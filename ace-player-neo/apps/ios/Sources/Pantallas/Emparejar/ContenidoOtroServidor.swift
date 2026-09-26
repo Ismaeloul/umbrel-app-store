@@ -3,8 +3,9 @@ import SwiftUI
 /* Hoja «¿Emparejar con otro servidor?» (b-arquitectura §2.8, M7; a2 §22.8): llega un enlace `aceneo://pair…`
    con la app ya emparejada. Dos notas (estilo de la nota de origen de a6 §8.8: fondo `--line-soft`, 13 pt,
    icono 18 en `--accent-ink`, el dato en 650 `--text`) y el botón «danger» «Emparejar de nuevo»: la hoja se
-   cierra (háptica media), se olvida el servidor actual (token, direcciones y cachés), la app vuelve a
-   emparejar con la transición «atrás» y el enlace se canjea solo. Cerrar sin confirmar no hace nada más. */
+   cierra (háptica media), `sesion.desemparejar()` (para la reproducción y borra token, direcciones y cachés), la
+   app vuelve a emparejar con la transición «atrás» y el enlace se canjea solo. Cerrar sin confirmar no hace nada
+   más. */
 
 struct ContenidoOtroServidor: View {
     let enlace: PairingLink
@@ -44,7 +45,7 @@ struct ContenidoOtroServidor: View {
 
     /// El servidor al que se habla ahora (el que respondió), o la primera dirección guardada.
     private func leerServidorActual() async {
-        guard let entorno = AccesoProceso.entorno else { return }
+        let entorno = sesion.entorno
         if let activo = await entorno.servidores.conocido() {
             ahora = ReglasEmparejar.host(activo.url)
             return
@@ -56,10 +57,13 @@ struct ContenidoOtroServidor: View {
     private func emparejarDeNuevo() {
         hojas.cerrar()
         haptica.disparar(.media)
-        AccesoProceso.entorno?.configuracion.borrar()
-        sesion.enlaceParaEmparejar = enlace
         let sesion = self.sesion
-        Task { await sesion.accesoPerdido(.olvidadoAqui) }
+        let enlace = self.enlace
+        Task {
+            await sesion.desemparejar()
+            // Ya en emparejar, la pantalla lo aplica (todas sus `u=`) y lo canjea sola (a2 §22.1).
+            if sesion.fase != .app { sesion.enlaceParaEmparejar = enlace }
+        }
     }
 }
 

@@ -144,6 +144,12 @@ enum ReglasEmparejar {
         }
     }
 
+    /// ¿Se puede volver a leer el mismo QR tras este fallo? Sí si no es del código (red, ATS, no es un Ace Player
+    /// Neo…): el reintento puede salir bien. Con un código incorrecto, caducado o en pausa, no (a2 §22.5).
+    static func releerTrasFallo(_ fallo: FalloCanje) -> Bool {
+        !fallo.bordeCodigo && !fallo.vaciarCodigo && !fallo.pausa
+    }
+
     /// El error de una dirección mal escrita, en su campo (a2 §22.4).
     static func errorDireccion(_ hueco: HuecoDireccion) -> String {
         switch hueco {

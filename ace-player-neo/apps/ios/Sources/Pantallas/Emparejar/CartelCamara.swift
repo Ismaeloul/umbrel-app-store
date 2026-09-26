@@ -17,6 +17,8 @@ struct CartelCamara: View {
     }
 
     let modelo: ModeloEmparejar
+    /// La cámara de la pantalla: la misma en vertical y en horizontal (al girar no se reinicia, a2 §22.7).
+    let camara: CamaraQR
     let medidas: Medidas
     let recomprobar: Int
     let activa: Bool
@@ -55,7 +57,8 @@ struct CartelCamara: View {
     /// La imagen de la cámara con su nombre accesible (el valor es el texto de la cápsula).
     private var camara: some View {
         EscanerQR(
-            activo: activa && modelo.camaraLeyendo, ventana: ventana, recomprobar: recomprobar,
+            camara: camara, activo: activa && modelo.camaraLeyendo, ventana: ventana, recomprobar: recomprobar,
+            releer: modelo.vecesReleer,
             alCambiar: { (nuevo: EstadoCaptura) in modelo.cambioCaptura(nuevo) },
             alPrimeraImagen: { modelo.primeraImagen() },
             alLeer: { (texto: String) -> Bool in modelo.leido(texto) }

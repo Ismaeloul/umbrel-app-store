@@ -4,7 +4,9 @@ import SwiftUI
    no tiene. En vertical, el cartel de la cámara a sangre (alto `min(max(360, 0,6 × alto), 500)`) y debajo la
    columna (texto de entrada, aviso de acceso perdido, fila de error y la tarjeta «Escribir el código»); en
    horizontal, dos columnas: la cámara en una tarjeta cuadrada y el formulario con su propio desplazamiento
-   (a2 §22.7). La decisión la toma el tamaño medido, con el MISMO modelo (el estado no se pierde al girar). */
+   (a2 §22.7). La decisión la toma el tamaño medido, con el MISMO modelo y la MISMA cámara (al girar no se
+   pierden ni el estado ni la sesión de la cámara). Las zonas seguras salen de `Maquetacion` (medida de la
+   ventana, no GeometryReader + ignoresSafeArea: §5 y a2 §27.1). */
 
 struct PantallaEmparejar: View {
     let motivo: MotivoEmparejar?
@@ -14,9 +16,10 @@ struct PantallaEmparejar: View {
     @Environment(CicloVida.self) private var cicloVida
     @Environment(EstadoVentana.self) private var estadoVentana
     @Environment(\.movimientoReducido) private var reducido
+    @Environment(\.maquetacion) private var maquetacion
     @State private var modelo: ModeloEmparejar?
+    @State private var camara: CamaraQR?
     @State private var tamano: CGSize = .zero
-    @State private var seguras: UIEdgeInsets = .zero
 
     init(motivo: MotivoEmparejar?) {
         self.motivo = motivo
@@ -25,47 +28,63 @@ struct PantallaEmparejar: View {
     var body: some View {
         ZStack {
             Palco.bg.ignoresSafeArea()
-            if let modelo, tamano.width > 0 {
-                VistaEmparejar(modelo: modelo, motivo: motivo, tamano: tamano, seguras: seguras)
+            if let modelo, let camara, tamano.width > 0 {
+                VistaEmparejar(modelo: modelo, camara: camara, motivo: motivo, tamano: tamano, seguras: seguras)
             }
         }
         .background {
             // Medida de la ventana entera (sin restar el teclado: el cartel no cambia de alto al escribir).
             Color.clear
                 .ignoresSafeArea()
-                .onGeometryChange(for: CGSize.self) { $0.size } action: { nuevo in
-                    tamano = nuevo
-                    seguras = AccesoProceso.zonasSeguras
-                }
+                .onGeometryChange(for: CGSize.self) { $0.size } action: { nuevo in tamano = nuevo }
         }
         .ignoresSafeArea(.container)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(IDUI.pantalla("emparejar"))
         .onAppear {
             if modelo == nil { modelo = crearModelo() }
-            seguras = AccesoProceso.zonasSeguras
+            if camara == nil { camara = CamaraQR() }
             aplicarEnlacePendiente()
         }
         .onChange(of: sesion.enlaceParaEmparejar) { _, _ in aplicarEnlacePendiente() }
-        .onDisappear { estadoVentana.fondoOscuroArriba = false }
+        .task(id: motivo) { await anunciarAviso() }
+        .onDisappear {
+            estadoVentana.fondoOscuroArriba = false
+            camara?.detener()
+        }
+    }
+
+    /// Las zonas seguras de la ventana (las mide la raíz con `MedidaVentana`).
+    private var seguras: UIEdgeInsets {
+        let zonas = maquetacion.seguras
+        return UIEdgeInsets(top: CGFloat(zonas.arriba), left: CGFloat(zonas.izquierda), bottom: CGFloat(zonas.abajo),
+                            right: CGFloat(zonas.derecha))
+    }
+
+    /// VoiceOver anuncia el aviso de acceso perdido al entrar (a2 §23.3 punto 6), cuando acaba la transición
+    /// «atrás» (340 ms, punto 5). «Olvidar este iPhone» no tiene aviso.
+    private func anunciarAviso() async {
+        guard let motivo, let aviso = ReglasEmparejar.avisoAcceso(MotivoEmparejarPuro.de(motivo)) else { return }
+        try? await Task.sleep(for: .milliseconds(340))
+        guard !Task.isCancelled else { return }
+        AccessibilityNotification.Announcement(aviso).post()
     }
 
     /// Un enlace `aceneo://pair` abierto con esta pantalla delante se aplica y se empareja solo (a2 §22.1).
     private func aplicarEnlacePendiente() {
         guard let enlace = sesion.enlaceParaEmparejar, let modelo else { return }
         sesion.enlaceParaEmparejar = nil
-        modelo.aplicar(enlace)
+        modelo.aplicar(enlace)  // todas sus `u=` (a2 §22.4, a9 §3.4)
         Task { await modelo.emparejar() }
     }
 
     /// El modelo con sus servicios: el canje del núcleo, la háptica central, VoiceOver y la raíz (a2 §22.6).
     private func crearModelo() -> ModeloEmparejar {
-        let entorno = AccesoProceso.entorno
-        let servicio = entorno.map { PairingService(api: $0.api, configuracion: $0.configuracion) }
+        let entorno = sesion.entorno
+        let servicio = PairingService(api: entorno.api, configuracion: entorno.configuracion)
         let nombre = AccesoProceso.nombreDispositivo
         var servicios = ModeloEmparejar.Servicios(canjear: { (config: ServerConfig, codigo: String) in
-            guard let servicio else { throw APIError.sinServidor }
-            return try await servicio.emparejar(config: config, codigo: codigo, nombre: nombre)
+            try await servicio.emparejar(config: config, codigo: codigo, nombre: nombre)
         })
         let haptica = self.haptica
         servicios.vibrar = { (tipo: TipoHaptico) in haptica.disparar(tipo) }
@@ -75,13 +94,14 @@ struct PantallaEmparejar: View {
         servicios.alEmparejar = { (respuesta: PairingClaimResponse, servidores: [URL], _: String) in
             await sesion.emparejado(respuesta, servidores: servidores)
         }
-        return ModeloEmparejar(servicios: servicios, guardadas: entorno?.configuracion.leer() ?? ServerConfig())
+        return ModeloEmparejar(servicios: servicios, guardadas: entorno.configuracion.leer())
     }
 }
 
 /// El contenido con el modelo ya hecho: vertical u horizontal según el tamaño medido.
 private struct VistaEmparejar: View {
     let modelo: ModeloEmparejar
+    let camara: CamaraQR
     let motivo: MotivoEmparejar?
     let tamano: CGSize
     let seguras: UIEdgeInsets
@@ -184,7 +204,7 @@ private struct VistaEmparejar: View {
 
     private func cartel(_ medidas: CartelCamara.Medidas) -> some View {
         CartelCamara(
-            modelo: modelo, medidas: medidas, recomprobar: recomprobar, activa: cicloVida.fase == .activa,
+            modelo: modelo, camara: camara, medidas: medidas, recomprobar: recomprobar, activa: cicloVida.fase == .activa,
             alAbrirAjustes: abrirAjustes, alEscribirCodigo: escribirCodigo)
     }
 

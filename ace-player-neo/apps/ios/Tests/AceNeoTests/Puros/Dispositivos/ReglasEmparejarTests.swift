@@ -56,6 +56,16 @@ struct ReglasEmparejarTests {
             == "El servidor usa la versión 2 de la API y esta app no la entiende. Actualiza la app o el servidor.")
     }
 
+    @Test func releerElMismoQRSoloSiElFalloNoEsDelCodigo() {
+        #expect(ReglasEmparejar.releerTrasFallo(ReglasEmparejar.fallo(.sinServidor)))
+        #expect(!ReglasEmparejar.releerTrasFallo(
+            ReglasEmparejar.fallo(.servidor(codigo: "pairing_invalid", estado: 401, mensaje: nil, requestId: nil))))
+        #expect(!ReglasEmparejar.releerTrasFallo(
+            ReglasEmparejar.fallo(.servidor(codigo: "pairing_expired", estado: 410, mensaje: nil, requestId: nil))))
+        #expect(!ReglasEmparejar.releerTrasFallo(
+            ReglasEmparejar.fallo(.servidor(codigo: "pairing_rate_limited", estado: 429, mensaje: nil, requestId: nil))))
+    }
+
     @Test func codigoHostYEnlace() {
         #expect(ReglasEmparejar.filtrarCodigo("48 29-13x9") == "482913")
         #expect(ReglasEmparejar.filtrarCodigo("١٢٣456") == "456")
