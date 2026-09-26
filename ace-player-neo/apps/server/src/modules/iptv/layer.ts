@@ -14,9 +14,11 @@ import { confirmByGuide, type GuideChannelCandidate } from './guide-match.js';
 import {
   matchIptvChannels,
   pickVariants,
+  withoutTrailingNote,
   type ChannelScorer,
   type IptvGroupMatch,
 } from './match.js';
+import { iptvAskedChannel } from './names.js';
 import type { IptvProgramInput } from './types.js';
 
 /** Canales IPTV confirmados por la guía para un partido. */
@@ -44,11 +46,18 @@ export function guideGroupMatches(
     const country = entries.some((entry) => entry.country === 'ES') ? 'ES' : best.country;
     candidates.push({ key, display: best.display, country, programmes });
   }
-  const agendaScore = (display: string): number =>
-    program.channels.reduce(
-      (max, channel) => Math.max(max, channelMatchScore(channel, display)),
+  /* Los canales de la agenda como los busca la IPTV: «La 1 TVE» es «La 1» y «RTVE Play» no cuenta. */
+  const asked = program.channels
+    .map((channel) => iptvAskedChannel(channel))
+    .filter((channel): channel is string => Boolean(channel));
+  const agendaScore = (display: string): number => {
+    const bare = withoutTrailingNote(display);
+    return asked.reduce(
+      (max, channel) =>
+        Math.max(max, channelMatchScore(channel, display), channelMatchScore(channel, bare)),
       0,
     );
+  };
   const confirmed = confirmByGuide(
     {
       home: program.home,

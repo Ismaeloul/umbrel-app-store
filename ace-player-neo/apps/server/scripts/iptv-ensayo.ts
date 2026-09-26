@@ -1,7 +1,7 @@
 /* Ensayo de la IPTV con los datos guardados (docs/iptv.md §9.2): dice qué
    IPTV saldría para cada partido de hoy y mañana, sin tocar ningún stream.
 
-     DATA_DIR=./copia-de-data ACE_SEED=… tsx apps/server/scripts/iptv-ensayo.ts [--agenda agenda.json] [--api URL]
+     DATA_DIR=./copia-de-data ACE_SEED=… tsx apps/server/scripts/iptv-ensayo.ts [--agenda agenda.json] [--api http://[::1]:3100]
 
    Sin `--agenda` pide la agenda al backend (`--api`, por defecto el de
    `PORT` en 127.0.0.1). Dentro del contenedor de la app es lo mismo con

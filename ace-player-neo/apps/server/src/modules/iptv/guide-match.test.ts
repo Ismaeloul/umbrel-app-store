@@ -289,6 +289,112 @@ describe('confirmByGuide', () => {
   });
 });
 
+/* Formas de la guía de una lista pública de canales en abierto (títulos «Competición: A - B», categoría
+   SPORTS), con un partido de fútbol inventado a la misma hora y con los mismos nombres. */
+describe('guía de canales en abierto: nada por error', () => {
+  const at = (
+    home: string,
+    away: string,
+    competition: string,
+    title: string,
+    minutes = 115,
+  ): string[] =>
+    confirmByGuide(
+      { home, away, competition, start: KICKOFF, channels: ['Deportes Uno'] },
+      [
+        channel('Deportes Uno', [
+          programme(title, { categories: ['SPORTS'], stop: KICKOFF - 5 * MIN + minutes * MIN }),
+        ]),
+      ],
+      { agendaScore: () => 100 },
+    ).map((item) => item.display);
+
+  it('resúmenes de 15 min, fútbol sala, baloncesto y balonmano femenino: no', () => {
+    expect(
+      at(
+        'Girona',
+        'Albacete',
+        'LaLiga Hypermotion',
+        'Resúmenes LALIGA HyperMotion: Girona - Albacete BP',
+        15,
+      ),
+    ).toEqual([]);
+    expect(
+      at(
+        'Girona',
+        'Albacete',
+        'LaLiga Hypermotion',
+        'Resúmenes LALIGA HyperMotion: Girona - Albacete BP',
+      ),
+    ).toEqual([]);
+    expect(
+      at('Real Jaén', 'Inter', 'Segunda Federación', 'Liga Prime Futsal: Jaén - Inter'),
+    ).toEqual([]);
+    expect(
+      at(
+        'Real Zaragoza',
+        'Valencia',
+        'LaLiga Hypermotion',
+        'Supercopa LF Endesa: Casademont Zaragoza - Valencia Basket',
+      ),
+    ).toEqual([]);
+    expect(
+      at(
+        'CD Tenerife',
+        'Real Zaragoza',
+        'LaLiga Hypermotion',
+        'Liga Endesa: La Laguna Tenerife - Basket Zaragoza',
+      ),
+    ).toEqual([]);
+    expect(
+      at('España', 'Alemania', 'Partido amistoso', 'Amistoso de balonmano F: España - Alemania'),
+    ).toEqual([]);
+  });
+
+  it('Liga F con un partido masculino: no; una repetición de 30 min sin marca: no', () => {
+    expect(
+      at('SD Logroñés', 'FC Barcelona', 'LaLiga EA Sports', 'Liga F: DUX Logroño - Barcelona'),
+    ).toEqual([]);
+    expect(
+      at(
+        'Inglaterra',
+        'España',
+        'UEFA Nations League',
+        'UEFA Nations League: Inglaterra - España',
+        30,
+      ),
+    ).toEqual([]);
+  });
+
+  it('el partido de verdad sí: Nations League en directo y el Mundial Sub-20 femenino con su partido', () => {
+    expect(
+      at(
+        'Inglaterra',
+        'España',
+        'UEFA Nations League',
+        'UEFA Nations League: Inglaterra - España',
+        125,
+      ),
+    ).toEqual(['Deportes Uno']);
+    expect(
+      at(
+        'España',
+        'Corea del Norte',
+        'FIFA Mundial Femenino Sub-20',
+        'Mundial Sub-20 F: España - Corea del Norte',
+      ),
+    ).toEqual(['Deportes Uno']);
+    expect(
+      at(
+        'CD Tenerife',
+        'Cádiz CF',
+        'LaLiga Hypermotion',
+        'LALIGA HYPERMOTION: CD Tenerife - Cádiz CF',
+      ),
+    ).toEqual(['Deportes Uno']);
+  });
+});
+
 describe('piezas', () => {
   it('alias de equipos sin los débiles', () => {
     expect(teamAliases('Real Madrid')).toEqual(['real madrid']);

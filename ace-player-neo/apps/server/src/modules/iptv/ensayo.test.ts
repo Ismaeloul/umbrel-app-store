@@ -8,7 +8,7 @@ import type { FootballSchedule } from '@ace/shared';
 import { FAKE_IPTV_PASSWORD, FAKE_IPTV_USER } from '../../../test/fake-iptv/provider.js';
 import { FAKE_IPTV_HOST } from '../../../test/fake-iptv/net.js';
 import { isoDateInMadrid } from '../football/time.js';
-import { runIptvEnsayo } from './ensayo.js';
+import { AGENDA_PATH, agendaUrl, runIptvEnsayo } from './ensayo.js';
 import { IPTV_TEST_MATCH_OFFSET_MS, createIptvTestRig, type IptvTestRig } from './test-support.js';
 
 let rig: IptvTestRig | null = null;
@@ -76,15 +76,25 @@ describe('iptv-ensayo', () => {
     await rig.service.idle();
     rig.fake.limpiarPeticiones();
     const lines: string[] = [];
+    const asked: string[] = [];
     const now = rig.core.clock.now();
     const code = await runIptvEnsayo({
-      env: { DATA_DIR: rig.core.config.dataDir, ACE_SEED: 'semilla-de-prueba-0123456789' },
+      env: {
+        DATA_DIR: rig.core.config.dataDir,
+        ACE_SEED: 'semilla-de-prueba-0123456789',
+        PORT: '3100',
+      },
       now,
-      fetchJson: async () => schedule(now + IPTV_TEST_MATCH_OFFSET_MS),
+      fetchJson: async (url) => {
+        asked.push(url);
+        return schedule(now + IPTV_TEST_MATCH_OFFSET_MS);
+      },
       print: (line) => lines.push(line),
     });
     const text = lines.join('\n');
     expect(code, text).toBe(0);
+    /* La agenda es `footballSchedule` (GET /api/v1/football) del backend de este contenedor. */
+    expect(asked).toEqual(['http://127.0.0.1:3100/api/v1/football']);
     expect(text).toContain('IPTV «Casa» (Xtream');
     expect(text).toContain('1. M+ LaLiga TV 2 [guía] · 100');
     expect(text).toContain('2. DAZN LaLiga · 100 · 1080p');
@@ -95,6 +105,15 @@ describe('iptv-ensayo', () => {
     expect(text).not.toContain(FAKE_IPTV_USER);
     expect(text).not.toContain('http');
     expect(rig.fake.peticiones()).toEqual([]);
+  });
+
+  it('--api acepta el backend a secas o la URL entera de la agenda', () => {
+    expect(agendaUrl('http://[::1]:3100')).toBe('http://[::1]:3100/api/v1/football');
+    expect(agendaUrl('http://[::1]:3100/')).toBe('http://[::1]:3100/api/v1/football');
+    expect(agendaUrl('http://127.0.0.1:3000/api/v1/football')).toBe(
+      'http://127.0.0.1:3000/api/v1/football',
+    );
+    expect(AGENDA_PATH).toBe('/api/v1/football');
   });
 
   it('sin IPTV guardada o con otra semilla: lo dice y sale con 1', async () => {

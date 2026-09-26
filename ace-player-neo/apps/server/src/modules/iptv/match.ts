@@ -1,7 +1,8 @@
 /* Emparejado IPTV ↔ canales pedidos (docs/iptv.md §4.3 y §4.4). Puro.
 
    1. Canales pedidos: los de la resolución (8 como mucho) o el título del
-      canal suelto (`scope=channel`).
+      canal suelto (`scope=channel`), sin las plataformas de internet («RTVE
+      Play») y sin la cadena del final («La 1 TVE» → «La 1»; `iptvAskedChannel`).
    2. Para cada canal y cada grupo preseleccionado por palabras se puntúa con
       la MISMA función de la resolución (`scoreResolutionCandidate`, que se
       inyecta: `scorer`) sobre `{ title: base, alias: tvgId }`. Así se hereda
@@ -23,8 +24,8 @@ import {
   normalizeChannelKey,
 } from '@ace/shared';
 import type { Catalog, CatalogEntry } from './catalog.js';
-import { compareVariants } from './catalog.js';
-import { cleanIptvTitle, iptvSpelling } from './names.js';
+import { compareVariants, hasUrlMacros } from './catalog.js';
+import { cleanIptvTitle, iptvAskedChannel, iptvSpelling } from './names.js';
 
 /** Lo que devuelve la función de puntuación de la resolución. */
 export interface ChannelScore {
@@ -63,7 +64,7 @@ export const defaultCountryOk = (country: string | null): boolean =>
 
 /**
  * Mejor variante de un grupo y sus respaldos (docs/iptv.md §4.3). La
- * fiabilidad desempata después de HEVC, calidad y reserva.
+ * fiabilidad desempata después de HEVC, macros sin sustituir, calidad y reserva.
  */
 export function pickVariants(
   entries: readonly CatalogEntry[],
@@ -71,7 +72,12 @@ export function pickVariants(
 ): { best: CatalogEntry; variants: CatalogEntry[] } | null {
   if (!entries.length) return null;
   const sorted = [...entries].sort((a, b) => {
-    if (a.hevc !== b.hevc || a.quality !== b.quality || a.backup !== b.backup) {
+    if (
+      a.hevc !== b.hevc ||
+      hasUrlMacros(a.ref) !== hasUrlMacros(b.ref) ||
+      a.quality !== b.quality ||
+      a.backup !== b.backup
+    ) {
       return compareVariants(a, b);
     }
     const ra = reliability?.(a.id) ?? null;
@@ -96,6 +102,22 @@ export function pickVariants(
 
 const HAS_DIGIT = /\d/;
 const TRAILING_ONE = /\s+1$/;
+const TRAILING_NOTE = /\s*\(([^()]*)\)\s*$/u;
+/* Una nota que distingue canales no se quita nunca: «LaLiga TV (Hypermotion)» NO es «LaLiga TV». */
+const DISTINCTIVE_NOTE =
+  /\d|hyper|smartbank|segunda|liga|champions|campeones|europa|conference|premier|copa|f1|moto|femen|women|bar\b|ppv|evento|uhd|4k/iu;
+
+/**
+ * El nombre sin la nota entre paréntesis del final cuando es la cadena o la plataforma: «TV Canaria (RTVC)» →
+ * «TV Canaria», «Castilla-La Mancha Media (CMM)» → «Castilla-La Mancha Media». Una nota con números, una
+ * competición o un deporte se queda. Solo para puntuar contra la agenda: el nombre que se enseña y la clave del
+ * grupo no cambian.
+ */
+export function withoutTrailingNote(name: string): string {
+  const note = TRAILING_NOTE.exec(name);
+  if (!note || DISTINCTIVE_NOTE.test(note[1] ?? '')) return name;
+  return name.slice(0, note.index).trim() || name;
+}
 
 /* Mejor puntuación de una entrada contra UN canal pedido. */
 function scoreAgainst(
@@ -108,8 +130,13 @@ function scoreAgainst(
   const spelled = iptvSpelling(channel);
   const asked = spelled === channel ? [channel] : [channel, spelled];
   let best = 0;
+  const bare = withoutTrailingNote(base);
   for (const wanted of asked) {
     best = Math.max(best, scorer([wanted], { id: entry.id, title: base, alias }).score);
+    /* La cadena entre paréntesis del final («TV Canaria (RTVC)») no la pone la agenda. */
+    if (bare !== base) {
+      best = Math.max(best, scorer([wanted], { id: entry.id, title: bare, alias: null }).score);
+    }
     /* Nunca con la marca paraguas («DAZN» no es «DAZN 1»). */
     if (
       !HAS_DIGIT.test(wanted) &&
@@ -134,7 +161,13 @@ export function matchIptvChannels(
 ): IptvGroupMatch[] {
   const minScore = options.minScore ?? IPTV_MIN_SCORE;
   const countryOk = options.countryOk ?? defaultCountryOk;
-  const wanted = channels.map((channel) => channel.trim()).filter(Boolean);
+  const wanted = [
+    ...new Set(
+      channels
+        .map((channel) => iptvAskedChannel(channel))
+        .filter((channel): channel is string => Boolean(channel)),
+    ),
+  ];
   if (!wanted.length) return [];
   const out: IptvGroupMatch[] = [];
   for (const key of catalog.preselect(wanted)) {

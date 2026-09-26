@@ -1,7 +1,13 @@
 /* Limpieza de nombres de la IPTV (docs/iptv.md §4.2) y redactor (§2.4). */
 
 import { describe, expect, it } from 'vitest';
-import { cleanIptvTitle, groupCountry, iptvSpelling, qualityRank } from './names.js';
+import {
+  cleanIptvTitle,
+  groupCountry,
+  iptvAskedChannel,
+  iptvSpelling,
+  qualityRank,
+} from './names.js';
 import { IptvRedactor } from './redact.js';
 
 describe('cleanIptvTitle', () => {
@@ -60,6 +66,39 @@ describe('cleanIptvTitle', () => {
     expect(groupCountry('DEPORTES')).toBe(null);
     expect(groupCountry('España')).toBe('ES');
     expect(groupCountry('ESP: Deportes')).toBe('ES');
+  });
+
+  it('«GEO» al final es una marca, no otro canal; con zona detrás cuenta como reserva', () => {
+    const plain = cleanIptvTitle('Deportes Uno GEO');
+    expect(plain.display).toBe('Deportes Uno');
+    expect(plain.backup).toBe(false);
+    expect(plain.key).toBe(cleanIptvTitle('Deportes Uno').key);
+    const zone = cleanIptvTitle('Deportes Uno GEO CAT');
+    expect(zone.display).toBe('Deportes Uno');
+    expect(zone.backup).toBe(true);
+    expect(cleanIptvTitle('Canal Tres GEO HD').display).toBe('Canal Tres');
+    /* «Geo» como nombre, o «GEO» delante, no se toca. */
+    expect(cleanIptvTitle('Geo News').display).toBe('Geo News');
+    expect(cleanIptvTitle('GEO TV').display).toBe('GEO TV');
+    expect(cleanIptvTitle('Canal Geo').display).toBe('Canal Geo');
+  });
+
+  it('iptvAskedChannel: sin plataformas de internet y sin la cadena del final', () => {
+    expect(iptvAskedChannel('La 1 TVE')).toBe('La 1');
+    expect(iptvAskedChannel('Clan RTVE')).toBe('Clan');
+    expect(iptvAskedChannel('TVE')).toBe('TVE');
+    expect(iptvAskedChannel('Teledeporte')).toBe('Teledeporte');
+    for (const platform of [
+      'RTVE Play',
+      'LPF Play',
+      'DAZN App Gratis',
+      'Real Betis TV YouTube',
+      'OneFootball PPV',
+      'Twitter @Club',
+      'Facebook Live Club',
+    ]) {
+      expect(iptvAskedChannel(platform)).toBe(null);
+    }
   });
 
   it('orden de calidad: fhd > hd > uhd > sd > sin marca', () => {

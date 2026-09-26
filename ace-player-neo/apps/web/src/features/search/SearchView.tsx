@@ -61,6 +61,7 @@ import { PasteHashSheet, pastedTitle } from '../paste-hash/index.ts';
 import { registerSearchDemo } from './demo.ts';
 import {
   emptyTitle,
+  engineEmptyBelowText,
   IPTV_ID_SUBTITLE,
   IPTV_TEXT,
   cappedText,
@@ -214,6 +215,8 @@ export default function SearchView({ active }: ViewProps) {
     !engineAllShown &&
     iptvData !== undefined &&
     iptvData.channels.length === 0;
+  // Si arriba ya hay filas, «Sin resultados» sería falso: el vacío del motor queda en una línea.
+  const shownAbove = merged.local.length > 0 || merged.iptv.length > 0;
   const iptvRows = visibleIptv(merged.iptv, iptvExpanded, IPTV_SEARCH.shownInSearch);
   const iptvHidden = merged.iptv.length - iptvRows.length;
 
@@ -493,7 +496,12 @@ export default function SearchView({ active }: ViewProps) {
               <SkeletonRows rows={4} label={`Buscando «${phase.query}» en el motor…`} />
             </div>
           ) : null}
-          {phase.kind === 'empty' ? (
+          {phase.kind === 'empty' && shownAbove ? (
+            <p className="search-hint__text search-sec__empty">
+              {engineEmptyBelowText(phase.query)}
+            </p>
+          ) : null}
+          {phase.kind === 'empty' && !shownAbove ? (
             <EmptyState
               title={emptyTitle(phase.query)}
               actions={

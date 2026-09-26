@@ -12,7 +12,8 @@
    3. Calidad: FHD/1080p/Full HD → fhd; UHD/4K/2160p → uhd; HD/720p → hd;
       SD/480p/576p → sd. HEVC/H265/H.265 → `hevc`. 50FPS/60FPS fuera.
    4. Reserva: backup, bkp, bk, alt, alternativo/a, reserva, respaldo, multi.
-      Los números NO se tocan: «DAZN LaLiga 2» es otro canal.
+      Los números NO se tocan: «DAZN LaLiga 2» es otro canal. «GEO» al final
+      (restringido a España) se quita; con zona («GEO CAT») cuenta como reserva.
    5. Grafías de la IPTV (solo aquí, no en el `normalizeChannelKey`
       compartido, que tiene la matriz 0.6.59 congelada): «la liga» → «laliga»
       y los alias curados `IPTV_CHANNEL_ALIASES`.
@@ -57,6 +58,8 @@ const QUALITY_TOKENS: readonly (readonly [RegExp, IptvQuality])[] = [
   [/\b(?:sd|480p?|576[pi]?)\b/giu, 'sd'],
 ];
 
+/* Mayúsculas y al final: «Geo News» o «GEO TV» son nombres de canal. */
+const GEO_RE = /\s+GEO(?:\s+([A-Z]{2,3}))?\s*$/u;
 const HEVC_RE = /\b(?:hevc|h\.?265|x265)\b/giu;
 const FPS_RE = /\b(?:25|30|50|60)\s*fps\b/giu;
 const BACKUP_RE =
@@ -149,7 +152,11 @@ export function cleanIptvTitle(title: string, group?: string | null): CleanIptvT
   }
   const backupStep = strip(text, BACKUP_RE);
   text = backupStep.text;
-  const backup = backupStep.found;
+  /* «GEO» al final (solo se ve desde España) es una marca técnica, no otro canal: «Teledeporte GEO» y
+     «Teledeporte» son el mismo. Con zona detrás («Esport3 GEO CAT», solo desde Cataluña) cuenta como reserva. */
+  const geo = GEO_RE.exec(text);
+  if (geo) text = text.slice(0, geo.index);
+  const backup = backupStep.found || Boolean(geo?.[1]);
   const display = collapse(text);
   country ??= groupCountry(group);
   const base = iptvSpelling(display);
@@ -162,6 +169,24 @@ export function cleanIptvTitle(title: string, group?: string | null): CleanIptvT
     hevc,
     country,
   };
+}
+
+/* Plataformas de internet, no canales de televisión: «RTVE Play», «LPF Play», «DAZN App Gratis», «Real Betis TV
+   YouTube», «OneFootball PPV»… Con ellas no se sabe qué canal IPTV es (en una lista hay decenas de «En Play»). */
+const PLATFORM_RE =
+  /\b(?:play|app|youtube|twitch|facebook|twitter|instagram|tiktok|ppv|web|online)\b|@/iu;
+/* La cadena detrás del canal en la agenda: «La 1 TVE», «Clan RTVE». */
+const BROADCASTER_SUFFIX_RE = /\s+r?tve$/iu;
+
+/**
+ * Cómo busca la IPTV un canal de la agenda (docs/iptv.md §4.3): null si es una plataforma de internet (no se
+ * empareja por nombre: solo la guía puede confirmarla) y sin la cadena del final («La 1 TVE» → «La 1»), que las
+ * listas no ponen. Solo para la IPTV: el emparejado de AceStream no cambia.
+ */
+export function iptvAskedChannel(channel: string): string | null {
+  const text = String(channel ?? '').trim();
+  if (!text || PLATFORM_RE.test(text)) return null;
+  return text.replace(BROADCASTER_SUFFIX_RE, '').trim() || text;
 }
 
 /** Orden de calidad al elegir la mejor variante: fhd > hd > uhd > sd > sin marca (docs/iptv.md §4.3). */

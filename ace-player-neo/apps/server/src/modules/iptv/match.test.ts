@@ -4,12 +4,15 @@
 
 import { describe, expect, it } from 'vitest';
 import { scoreResolutionCandidate } from '../football/resolution.js';
-import { Catalog, type RawChannel } from './catalog.js';
+import { Catalog, hasUrlMacros, type RawChannel } from './catalog.js';
+import { windowFrom, type StoredProgramme } from './guide.js';
+import { guideGroupMatches } from './layer.js';
 import {
   matchIptvChannels,
   pickVariants,
   sameChannel,
   sameChannelScore,
+  withoutTrailingNote,
   type ChannelScorer,
 } from './match.js';
 
@@ -236,5 +239,107 @@ describe('sameChannel: la regla única del buscador (docs/iptv.md §14.3)', () =
   it('otro país no se limpia: «UK: DAZN 1» no pasa por «DAZN 1» limpio', () => {
     expect(score('DAZN 1', 'UK: DAZN 1')).toBeLessThan(score('DAZN 1', 'ES: DAZN 1'));
     expect(same('Telecinco', '')).toBe(false);
+  });
+});
+
+/* Formas de una lista pública real de canales en abierto (sin copiarla): el mismo canal dos veces, una con la
+   URL oficial y otra con macros de un servidor de anuncios sin sustituir; «GEO» al final; la cadena entre
+   paréntesis; y la agenda con «La 1 TVE», «RTVE Play» o «TV Canaria». */
+describe('lista pública de canales en abierto', () => {
+  const at = (title: string, url: string, tvgId = ''): RawChannel => ({
+    ...raw(title, '', tvgId),
+    ref: url,
+  });
+
+  it('la URL con macros sin sustituir va detrás de la oficial del mismo canal, aunque salga antes', () => {
+    const list = catalog([
+      at('Uno', 'https://ads.example/playlist.m3u8?id=7&ip=[IP]&ua=[UA]&did=[DEVICE_ID]'),
+      at('Uno', 'https://oficial.example/uno/main.m3u8'),
+      at('Deportes Uno GEO', 'https://oficial.example/dep/main.m3u8'),
+      at('Deportes Uno', 'https://ads.example/playlist.m3u8?id=8&is_lat=[LMT]'),
+      at('Solo Anuncios', 'https://ads.example/playlist.m3u8?cb=[CACHEBUSTER]'),
+    ]);
+    const uno = pickVariants(list.group(list.entries[0]?.key as string));
+    expect(uno?.best.ref).toBe('https://oficial.example/uno/main.m3u8');
+    expect(uno?.variants.map((entry) => entry.ref)).toEqual([
+      'https://ads.example/playlist.m3u8?id=7&ip=[IP]&ua=[UA]&did=[DEVICE_ID]',
+    ]);
+    /* «Deportes Uno GEO» y «Deportes Uno» son un solo grupo. */
+    const deportes = matchIptvChannels(list, ['Deportes Uno'], { scorer });
+    expect(deportes).toHaveLength(1);
+    expect(deportes[0]?.best.ref).toBe('https://oficial.example/dep/main.m3u8');
+    expect(deportes[0]?.variants).toHaveLength(1);
+    /* Un canal con solo la URL con macros sigue saliendo (esos servidores responden con el texto tal cual). */
+    expect(names(matchIptvChannels(list, ['Solo Anuncios'], { scorer }))).toEqual([
+      'Solo Anuncios',
+    ]);
+    expect(hasUrlMacros('https://ads.example/p.m3u8?cb=[CACHEBUSTER]')).toBe(true);
+    expect(hasUrlMacros('https://oficial.example/uno/main.m3u8')).toBe(false);
+    expect(hasUrlMacros('12345')).toBe(false);
+  });
+
+  it('agenda: «La 1 TVE» es «La 1»; «RTVE Play» (una plataforma) no empareja por nombre', () => {
+    const list = catalog(['La 1', 'La 1 Canarias', 'En Play (RTVE)', 'Clan']);
+    expect(names(matchIptvChannels(list, ['La 1 TVE'], { scorer }))).toEqual(['La 1']);
+    expect(matchIptvChannels(list, ['RTVE Play'], { scorer })).toEqual([]);
+    expect(names(matchIptvChannels(list, ['RTVE Play', 'Clan RTVE'], { scorer }))).toEqual([
+      'Clan',
+    ]);
+  });
+
+  it('la cadena entre paréntesis del final no la pone la agenda; una nota con competición sí cuenta', () => {
+    const list = catalog(['TV Canaria (RTVC)', 'LaLiga TV (Hypermotion)', 'Canal Sur (2)']);
+    expect(names(matchIptvChannels(list, ['TV Canaria'], { scorer }))).toEqual([
+      'TV Canaria (RTVC)',
+    ]);
+    expect(matchIptvChannels(list, ['LaLiga TV'], { scorer })).toEqual([]);
+    expect(matchIptvChannels(list, ['Canal Sur'], { scorer })).toEqual([]);
+    expect(withoutTrailingNote('TV Canaria (RTVC)')).toBe('TV Canaria');
+    expect(withoutTrailingNote('LaLiga TV (Hypermotion)')).toBe('LaLiga TV (Hypermotion)');
+    expect(withoutTrailingNote('(RTVE)')).toBe('(RTVE)');
+  });
+
+  it('guía: un generalista sin país se confirma si la agenda lo anuncia como «La 1 TVE»', () => {
+    const kickoff = Date.UTC(2026, 8, 26, 18, 45);
+    const list = catalog([
+      at('La 1', 'https://oficial.example/la1.m3u8', 'Uno.TV'),
+      at('Otro', 'https://oficial.example/otro.m3u8', 'Otro.TV'),
+    ]);
+    const programme = (start: number, minutes: number): StoredProgramme => ({
+      channel: 'uno.tv',
+      start,
+      stop: start + minutes * 60_000,
+      title: 'UEFA Nations League: Inglaterra - España',
+      subTitle: '',
+      desc: '',
+      categories: ['SPORTS'],
+      previouslyShown: false,
+      live: false,
+    });
+    const replay = kickoff + 14 * 3_600_000;
+    const window = windowFrom(
+      [
+        programme(kickoff - 10 * 60_000, 125),
+        /* La repetición de la mañana siguiente, de 30 min y sin marca. */
+        programme(replay - 10 * 60_000, 30),
+      ],
+      kickoff - 3_600_000,
+    );
+    const match = {
+      id: 'm1',
+      home: 'Inglaterra',
+      away: 'España',
+      competition: 'UEFA Nations League',
+      title: 'Inglaterra - España',
+      start: kickoff,
+      channels: ['La 1 TVE', 'RTVE Play'],
+    };
+    expect(guideGroupMatches(list, window, match).map((item) => item.best.display)).toEqual([
+      'La 1',
+    ]);
+    /* Si la agenda solo dice «RTVE Play», un canal sin país no se pone primero por la guía. */
+    expect(guideGroupMatches(list, window, { ...match, channels: ['RTVE Play'] })).toEqual([]);
+    /* Con el saque a la hora de la repetición tampoco: dura 30 min. */
+    expect(guideGroupMatches(list, window, { ...match, start: replay })).toEqual([]);
   });
 });

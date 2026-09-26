@@ -56,6 +56,9 @@ export const cappedText = (q: string): string =>
 export const liveText = (n: number, m: number, q: string): string =>
   `${n} en tu IPTV y ${m} en el motor para «${q}».`;
 export const emptyTitle = (q: string): string => `Sin resultados para «${q}».`;
+/** El motor no da nada, pero arriba (biblioteca o IPTV) sí hay filas: una línea, no el vacío grande. */
+export const engineEmptyBelowText = (q: string): string =>
+  `El motor AceStream no tiene nada más para «${q}».`;
 export const bothButtonText = (q: string): string => `Buscar «${q}» en tu IPTV y en el motor`;
 
 /** Contador de la sección «En tu IPTV»: el total, o «200+» si hay más. */

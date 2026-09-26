@@ -6,7 +6,8 @@
    acumularlo.
 
    - Cabecera `#EXTM3U`: `url-tvg` / `x-tvg-url` (separadas por comas: las 2
-     primeras http(s)) y `tvg-shift` global.
+     primeras http(s)) y `tvg-shift` global. Si hay más de una línea `#EXTM3U`
+     (una de firma y otra con la guía, por ejemplo), se suman.
    - `#EXTINF:-1 …,Título`: `tvg-id`, `tvg-name`, `group-title`, `tvg-shift` y
      el título tras la primera coma que no esté entre comillas (un título
      puede llevar comas).
@@ -192,7 +193,17 @@ export async function parseM3uStream(
     }
     if (line.startsWith('#')) {
       const upper = line.slice(0, 12).toUpperCase();
-      if (upper.startsWith('#EXTINF:')) {
+      if (/^#EXTM3U\b/i.test(line)) {
+        /* Otra cabecera más abajo (hay listas con una primera línea de firma y la guía en la
+           segunda): suma sus URLs de guía hasta 2 y su `tvg-shift` si aún no había. */
+        const attributes = parseAttributes(line);
+        header = {
+          guideUrls: [...header.guideUrls, ...guideUrlsOf(attributes)]
+            .filter((url, index, all) => all.indexOf(url) === index)
+            .slice(0, 2),
+          tvgShift: header.tvgShift ?? parseShift(attributes.get('tvg-shift')),
+        };
+      } else if (upper.startsWith('#EXTINF:')) {
         const comma = titleComma(line);
         const attributes = parseAttributes(comma >= 0 ? line.slice(0, comma) : line);
         const title = comma >= 0 ? line.slice(comma + 1).trim() : '';
