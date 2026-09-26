@@ -281,6 +281,33 @@ final class ServidorRealUITests: XCTestCase {
         try exigir(!(elementoUI(app, IDUI.mini).exists), "Tras olvidar sigue el mini")
         let despues = try await servidor.dispositivos().filter { !$0.revocado && $0.plataforma == "ios" }.map(\.id)
         try exigir(despues.count < antes.count, "El backend sigue dando por emparejado este iPhone")
+        try await emparejarAsentado(app)
+    }
+
+    /// e2e-07 salía con la mitad de abajo más ancha que la pantalla y cortada por los lados. Pasado el cruce
+    /// (a2 §27.2), otra captura y las medidas, para saber si es el cruce a medias o la maquetación.
+    @MainActor
+    private func emparejarAsentado(_ app: XCUIApplication) async throws {
+        try await Task.sleep(for: .seconds(3))
+        captura(app, "e2e-08-emparejar-asentado")
+        let medidas: String = [
+            "app " + marco(app),
+            "emparejar " + marco(elementoUI(app, IDUI.pantalla("emparejar"))),
+            "campo del código " + marco(elementoUI(app, IDUI.campoCodigo)),
+            "«Escribir el código» " + marco(elementoUI(app, IDUI.botonEscribirCodigo)),
+        ].joined(separator: "\n")
+        let adjunto = XCTAttachment(string: medidas)
+        adjunto.name = "e2e-08-medidas"
+        adjunto.lifetime = .keepAlways
+        add(adjunto)
+        print("E2E medidas tras olvidar:\n" + medidas)
+    }
+
+    @MainActor
+    private func marco(_ elemento: XCUIElement) -> String {
+        guard elemento.exists else { return "no está" }
+        let f: CGRect = elemento.frame
+        return "x \(Int(f.minX)) y \(Int(f.minY)) ancho \(Int(f.width)) alto \(Int(f.height))"
     }
 
     // MARK: Ayudas
