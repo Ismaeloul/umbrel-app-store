@@ -36,7 +36,7 @@ export const SSE_TYPES = [
   'state.changed',
   'diagnostics.new',
   'devices.changed',
-  /* Solo web (docs/iptv.md §5.5). Su efecto en la caché (invalidar iptvGet y bootstrap) es de la parte «web». */
+  /* Solo web (docs/iptv.md §5.5): Ajustes → IPTV y `features.iptv` del bootstrap. */
   'iptv.status',
   'resync',
 ] as const satisfies readonly SseEventType[];
@@ -153,6 +153,14 @@ export function applyToCache(client: QueryClient, type: SseEventType, data: unkn
     case 'diagnostics.new':
       void client.invalidateQueries({ queryKey: routePrefix('diagnosticsList') });
       void client.invalidateQueries({ queryKey: routePrefix('health') });
+      break;
+    case 'iptv.status':
+      // Ajustes → IPTV (recuento, guía, cuenta) y `bootstrap.features.iptv`, que
+      // decide si al tocar un canal se pregunta antes por la IPTV (docs/iptv.md §1.5 y §8.4).
+      void client.invalidateQueries({ queryKey: routePrefix('iptvGet') });
+      // El bootstrap casi nunca tiene una vista suscrita (se siembra al
+      // arrancar): 'all' lo vuelve a pedir igual, porque iptvActive() lo lee.
+      void client.invalidateQueries({ queryKey: routePrefix('bootstrap'), refetchType: 'all' });
       break;
     case 'resync':
       // Lo que faltaba ya no está en el búfer del servidor: se pide todo otra vez.

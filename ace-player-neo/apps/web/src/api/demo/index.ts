@@ -10,12 +10,17 @@
      del 23-sep-2026) para que la demo nunca salga vacía.
    - Sincronizar, activar y borrar directorios no funcionan en demo (igual que
      en la 0.6.59): dan el error `demo_unsupported`.
+   - IPTV (docs/iptv.md §1.6): `iptvGet` enseña una «IPTV de ejemplo»
+     (Xtream, 812 canales, guía con 640, activa) y el bootstrap la da por
+     activa (`features.iptv`); guardar, actualizar, pausar y eliminar dan
+     `demo_unsupported`, como los directorios.
    - Una vista puede afinar cualquier respuesta con registerDemoHandler. */
 
 import type {
   BootstrapResponse,
   Device,
   DevicesListResponse,
+  IptvView,
   LibraryMutationBody,
   LibraryView,
   Preferences,
@@ -178,7 +183,42 @@ const UNSUPPORTED: ReadonlySet<JsonRouteId> = new Set([
   'directoriesSync',
   'directoriesActivate',
   'directoriesDelete',
+  'iptvSave',
+  'iptvUpdate',
+  'iptvSync',
+  'iptvDelete',
 ]);
+
+/** La IPTV de la demo (§1.6): la de demo-5 («Casa» en sus carteles) se llama aquí «IPTV de ejemplo». */
+export function demoIptvView(now = Date.now()): IptvView {
+  const hoursAgo = (h: number) => new Date(now - h * 3_600_000).toISOString();
+  return {
+    provider: {
+      kind: 'xtream',
+      name: 'IPTV de ejemplo',
+      enabled: true,
+      host: 'proveedor.example:8080',
+      origin: 'http://proveedor.example:8080',
+      hasUrl: false,
+      hasUsername: true,
+      hasPassword: true,
+      status: 'ok',
+      channels: 812,
+      updatedAt: hoursAgo(2),
+      error: null,
+      staleSince: null,
+      account: {
+        status: 'active',
+        expiresAt: new Date(now + 68 * DAY_MS).toISOString(),
+        maxConnections: 1,
+        activeConnections: 0,
+        ours: 0,
+      },
+      guide: { available: true, channelsWithGuide: 640, updatedAt: hoursAgo(5), failedAt: null },
+    },
+    refreshHours: 6,
+  };
+}
 
 export async function handleDemo<Id extends JsonRouteId>(
   id: Id,
@@ -201,10 +241,13 @@ export async function handleDemo<Id extends JsonRouteId>(
         library: structuredClone(current.library),
         preferences: structuredClone(current.preferences),
         settings: structuredClone(current.settings),
-        features: { ...base.features, demoSchedule: true },
+        features: { ...base.features, demoSchedule: true, iptv: true },
       } satisfies BootstrapResponse;
       break;
     }
+    case 'iptvGet':
+      result = demoIptvView();
+      break;
     case 'libraryGet':
       result = structuredClone(current.library);
       break;
