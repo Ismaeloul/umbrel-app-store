@@ -6944,6 +6944,9 @@ paths:
                                     minLength: 2
                                     maxLength: 8
                                   - type: "null"
+                              channel:
+                                type: string
+                                maxLength: 200
                             required:
                               - provider
                               - quality
@@ -7085,6 +7088,9 @@ paths:
                                   minLength: 2
                                   maxLength: 8
                                 - type: "null"
+                            channel:
+                              type: string
+                              maxLength: 200
                           required:
                             - provider
                             - quality
