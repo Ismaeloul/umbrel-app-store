@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 import UIKit
 
@@ -34,15 +35,16 @@ struct BarraSuperior: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Principal")
         .accessibilityIdentifier(IDUI.barraSuperior)
+        // Sin sondear: la lista que pasa a verse avisa al montarse o al activarse (`SubeConLaBarra.seActiva`,
+        // también si llega después: primera carga, error → lista). Al cambiar de pestaña se busca una vez, ya
+        // maquetada, por si la vista nueva no lleva la sonda.
+        .onReceive(NotificationCenter.default.publisher(for: SubeConLaBarra.seActiva)) { aviso in
+            if let lista = aviso.object as? UIScrollView { vigia.vigilar(lista) }
+        }
         .task(id: navegador.pestana) {
-            // La lista puede llegar después (primera carga, error → lista) o cambiar de vista: se vuelve a mirar
-            // cada medio segundo mientras la barra se ve (solo en horizontal ≥ 768). La primera, cuando la
-            // pestaña nueva ya está maquetada.
             try? await Task.sleep(for: .milliseconds(60))
-            while !Task.isCancelled {
-                vigia.vigilar()
-                try? await Task.sleep(for: .milliseconds(500))
-            }
+            guard !Task.isCancelled else { return }
+            vigia.buscar()
         }
     }
 
@@ -145,21 +147,26 @@ private struct FondoBarraSuperior: View {
 }
 
 /// ¿La vista que se ve ha bajado más de 32 pt? (el centinela de 32 px de la web, app/Nav.tsx › useScrolledPast).
-/// Mira con KVO la vista desplazable de la pestaña que se ve (`SubirArriba.vistaVisible`, nunca una oculta).
+/// Mira con KVO la vista desplazable de la pestaña que se ve: la que avisa su sonda al activarse o, al cambiar de
+/// pestaña, la única que se ve (`SubirArriba.vistaVisible`, nunca una oculta). Nada periódico.
 @MainActor @Observable final class VigiaDesplazamiento {
     private(set) var bajada = false
     @ObservationIgnored private var observacion: NSKeyValueObservation?
     @ObservationIgnored private weak var vista: UIScrollView?
 
-    func vigilar() {
-        guard let nueva = SubirArriba.vistaVisible() else {
-            // Sin una vista clara (p. ej. a mitad de un cambio): se sigue con la de antes mientras esté puesta.
-            if let vista, vista.window != nil { return }
+    /// Una sola búsqueda en el árbol de la ventana (al cambiar de pestaña).
+    func buscar() {
+        if let nueva = SubirArriba.vistaVisible() {
+            vigilar(nueva)
+        } else if vista?.window == nil {
+            // Sin una vista clara ni la de antes: barra de cristal hasta que una lista avise.
             observacion = nil
             vista = nil
             bajada = false
-            return
         }
+    }
+
+    func vigilar(_ nueva: UIScrollView) {
         guard nueva !== vista else { return }
         vista = nueva
         observacion = nueva.observe(\.contentOffset, options: [.initial, .new]) { [weak self] desplazable, _ in

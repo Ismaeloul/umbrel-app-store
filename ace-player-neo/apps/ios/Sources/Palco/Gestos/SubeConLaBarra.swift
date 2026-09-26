@@ -25,8 +25,13 @@ struct SubeConLaBarra: UIViewRepresentable {
         sonda.aplicar()
     }
 
+    /// La sonda de una vista que pasa a ser la que se ve avisa con su ScrollView (`object`). La barra superior
+    /// lo usa para vigilar esa lista sin recorrer el árbol de la ventana a cada rato.
+    static let seActiva = Notification.Name("AceNeo.SubeConLaBarra.seActiva")
+
     final class Sonda: UIView {
         var activo = false
+        private weak var anunciada: UIScrollView?
 
         override func didMoveToWindow() {
             super.didMoveToWindow()
@@ -36,7 +41,16 @@ struct SubeConLaBarra: UIViewRepresentable {
         func aplicar() {
             var vista = superview
             while let actual = vista, !(actual is UIScrollView) { vista = actual.superview }
-            (vista as? UIScrollView)?.scrollsToTop = activo
+            let desplazable = vista as? UIScrollView
+            desplazable?.scrollsToTop = activo
+            guard activo, window != nil, let desplazable else {
+                anunciada = nil
+                return
+            }
+            guard desplazable !== anunciada else { return }
+            anunciada = desplazable
+            // Fuera de la pasada de maquetación (esto corre en `updateUIView`): quien escucha cambia su estado.
+            Task { NotificationCenter.default.post(name: SubeConLaBarra.seActiva, object: desplazable) }
         }
     }
 }
