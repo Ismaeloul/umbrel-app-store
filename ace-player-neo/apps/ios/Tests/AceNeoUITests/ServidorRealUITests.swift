@@ -306,8 +306,8 @@ final class ServidorRealUITests: XCTestCase {
     @MainActor
     private func marco(_ elemento: XCUIElement) -> String {
         guard elemento.exists else { return "no está" }
-        let f: CGRect = elemento.frame
-        return "x \(Int(f.minX)) y \(Int(f.minY)) ancho \(Int(f.width)) alto \(Int(f.height))"
+        let caja: CGRect = elemento.frame
+        return "x \(Int(caja.minX)) y \(Int(caja.minY)) ancho \(Int(caja.width)) alto \(Int(caja.height))"
     }
 
     // MARK: Ayudas
