@@ -4465,9 +4465,9 @@ Puro y sin estado (salvo la tabla de alias plegada una vez). Lo usan el servidor
 
 | Pieza | Qué hace |
 |---|---|
-| `searchFold` / `searchWords` | `channelSpelling` (M+/M./Movistar, LaLiga, laSexta…), NFKD sin marcas, minúsculas, «+» → «plus», números y letras separados («antena3» → «antena 3», «t5» → «t 5») |
+| `searchFold` / `searchWords` | `channelSpelling` (M+/M./Movistar, LaLiga, laSexta…) y, solo para buscar, «M+»/«M.» en cualquier sitio («[ES] M+ LaLiga»), NFKD sin marcas, minúsculas, «+» → «plus», números y letras separados («antena3» → «antena 3», «dazn1» → «dazn 1») salvo los códigos de una letra y un número («F1», «T5», «A3»: una palabra; §20.11) |
 | `documentWords` | además, las partes de los compuestos del texto («LaLiga» también es «liga»; «laSexta», «sexta») |
-| `requiredWords` | artículos opcionales con 2 palabras de verdad («atlético de madrid» = «Atlético Madrid»; «la 1» pide el «la»); «tv», «canal», «club» con una |
+| `requiredWords` | artículos opcionales con 2 palabras de verdad («atlético de madrid» = «Atlético Madrid»; «la 1» pide el «la»); «tv», «canal», «club», «selección» con una |
 | `phoneticKey` | «ch» se queda; qu/k/c dura → k; c suave/z/s → s; g suave → j; ll → y; v → b; h fuera; x → ks; dobles → sencillas |
 | `typoBudget`, `editDistance`, `typoDistance` | presupuesto por letras sin contar las dobles (0 hasta 3, 1 desde 4, 2 desde 8); Damerau (alineamiento óptimo) con corte; misma fonética = distancia 0 |
 | `FuzzyVocabulary` | palabras ordenadas (prefijos por búsqueda binaria), clave fonética y **índice de trigramas** de esa clave: solo las que comparten trigramas se comparan con Damerau |
@@ -4600,3 +4600,69 @@ las ignora; el emparejado no cambia.
 4. **Coste:** el vocabulario de erratas del catálogo se monta la primera vez que una palabra no casa (≈ 100 ms con
    30 000 canales) y se queda con el catálogo; la pestaña IPTV sigue igual de rápida sin erratas.
 5. **El banco con la lista real** queda pendiente: esta medida es con un catálogo sintético.
+
+### 20.11 Revisión (26-sep): lo que empeoraba frente a la base y lo que faltaba
+
+La revisión de `iptv/google` encontró dos bloqueantes y varios menores. Todos arreglados en la misma rama, con
+`origin/rediseno/iptv` unido antes (7e8b165, 9b7238c y 384dcaf: el país del nombre por la tabla, «Quitar filtros» y
+el dorsal «F1»; se unen sin conflictos y las pruebas se han repetido después).
+
+**Bloqueantes:**
+1. **«laliga 2» tapaba los canales con número.** El alias suelto «~LaLiga 2» del grupo Hypermotion hacía que
+   «laliga 2», «la liga 2» y «m+ laliga 2» sacasen primero LALIGA HYPERMOTION y M+ LALIGA TV HYPERMOTION, y dejasen
+   M. LALIGA 2 y DAZN LALIGA 2 detrás (la misma trampa que DAZN 1 frente a DAZN 2). Fuera de la tabla, con una prueba
+   de tabla («ningún nombre es otro grupo con un número detrás») y pruebas de que «laliga 2» da primero M. LALIGA 2 y
+   DAZN LALIGA 2 en `searchCatalog`, en la pestaña IPTV y en la web. En la web, además, la consulta seguida dentro
+   del texto va delante («laliga 2» en «M. LALIGA 2», no en «LaLiga Hypermotion 2»).
+2. **«barsa» y «barsa tv» no encontraban Barça TV.** «barsa» solo se leía como Barcelona (y «BARÇA TV» nombra otro
+   grupo) y, al estar en la tabla, no se probaba como errata. Ahora:
+   - un alias que ningún texto tiene («barsa») se prueba también como errata de lo que sí hay («barca», de «BARÇA
+     TV»), en el buscador, en la pestaña IPTV y en la web;
+   - «~Barsa TV» y «~Barsa One» van en el grupo de Barça TV.
+
+**Menores:**
+- **«F1» es una palabra:** los códigos de una letra y un número («F1», «T5», «A3», «M6») ya no se separan al plegar,
+  así que «dazn 1», «dazn1» y «dasn 1» ya no sacan DAZN F1 (la base tampoco). «dazn1» sigue siendo «dazn 1».
+- **«M+» y «M.» con algo delante** («[ES] M+ LaLiga», «ES: M. LALIGA 3»): `searchFold` los lee como Movistar en
+  cualquier sitio. `channelSpelling` (el del emparejado) no cambia.
+- **Por dentro de una palabra**, como la búsqueda por trozo de la base: «sport» → Eurosport 1, «tv» → SporTV (con 2
+  letras, solo al final), «liga» → LaLiga+ (y «laligaplus» ya se parte en «la», «liga» y «plus»). Va detrás de por el
+  principio y nunca con un artículo ni con un nombre de la tabla («ing» es Inglaterra, no el final de «Sporting»).
+  Las partes de un compuesto («madrid» de «Telemadrid») cuentan como por el principio, no como exactas.
+- **Otro nombre «de verdad» de lo mismo va justo detrás de lo escrito:** «barça tv» da Barça TV y luego Barça One;
+  «dazn formula 1», DAZN FORMULA 1 y luego DAZN F1. Solo un alias «~» escrito entero («madrid», «esp», «t5»,
+  «segunda») cuenta como exacto y va delante.
+- **Palabras juntas y números con letras:** «realmadrid» → Real Madrid (antes, 0 y «Quizás quisiste decir
+  Telemadrid»); «dazn uno» → DAZN 1 (de «uno» a «diez», detrás de otra palabra: «Cuatro» sigue siendo el canal).
+- **Alias demasiado amplios:**
+  - «~Selección» solo cuenta sola («selección» y «la selección» son España; «selección argentina» son todos los
+    partidos de Argentina, sin preferir España–Argentina);
+  - «~Inter» y «~Athletic» pasan a ser solo de la consulta: «internazionale» ya no trae el Inter Miami ni «athletic
+    bilbao», el Charlton o el Wigan Athletic (y «Inter Milan» es un nombre «de verdad» del Inter);
+  - «Valencia Basket» tiene su propio grupo y, dentro de un nombre «de verdad» de varias palabras escrito entero,
+    todas hacen falta y van seguidas: «valencia cf» no es el Valencia Basket, «athletic club» no es el Charlton
+    Athletic y «real madrid» no es «Atlético de Madrid – Real Betis».
+- **Menos ruido con erratas:** solo entran las correcciones más cercanas (misma distancia y, letra a letra, la
+  misma): «la sesta» es laSexta y ya no también Alavés–Celta.
+- **«Quizás quisiste decir» bien escrito:** en el servidor y en el motor, como en la tabla de alias o, si no, como
+  en tu biblioteca o tu IPTV («Telecinco», no «telecinco»). En la web, el botón tiene una zona táctil de 44 px sin
+  mover la línea.
+- **«Partidos»:** debajo de cada tarjeta pequeña (que enseña las siglas, «ING vs. ESP») van los nombres enteros
+  («Inglaterra – España»), para que quien busca «inglatera» vea «Inglaterra» escrito.
+- **Faltaban:** «submarino» solo (Villarreal), «femenina» sola (Liga F) y «dazn uno».
+- **Rendimiento:** el «@lento 100 000 canales» ya mide la mediana de 5 (llegó con 7e8b165). El banco (§20.7) queda
+  en 2,7 / 7,9 / 14,8 ms (mediana / p95 / máximo) con 30 000 canales, muy por debajo de 50 ms.
+- **Dos consultas al motor:** con un alias o una errata, `/api/v1/search` sigue preguntando lo escrito y lo añadido
+  a la vez (una sola más como mucho): en serie tardaría el doble. Con un motor lento, es lo primero que se puede
+  cambiar (por ejemplo, preguntar lo añadido solo si lo escrito no trae nada).
+
+**Banco** repetido con esta revisión (mismo catálogo sintético y agenda): canales 136 de 140 y partidos 34 de 37,
+igual que la rama sin revisar, y **0 empeoran** frente a la base. Cambian el orden «laliga hypermotion» (LALIGA
+HYPERMOTION TV primero) y «dazn formula 1» (DAZN FORMULA 1 primero). **Ensayo** del emparejado con la base nueva
+(`origin/rediseno/iptv`, 384dcaf) y con esta rama: iguales byte a byte (§20.8).
+
+**Impacto en la app nativa** (añade a §20.9): el portado de `fuzzy.ts` lleva también `spelledNumberReading`,
+`splitJoinedWord`, `displayWords`/`displayQuery`/`aliasDisplayWords`, la regla de «F1» en el plegado, «M+» en
+cualquier sitio, la búsqueda por dentro, las frases seguidas de los nombres «de verdad» y el orden (alias «~»
+delante; otros nombres «de verdad» a 0,5). En «Partidos», los nombres enteros bajo cada tarjeta; el botón del
+«Quizás» con 44 pt de zona táctil.

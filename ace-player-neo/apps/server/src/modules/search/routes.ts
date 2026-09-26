@@ -16,7 +16,13 @@
      trajo algo) y, sin resultados, `suggestion` es el «Quizás quisiste
      decir». */
 
-import type { FuzzyVocabulary, SearchResponse, StateV1 } from '@ace/shared';
+import {
+  displayWords,
+  searchFold,
+  type FuzzyVocabulary,
+  type SearchResponse,
+  type StateV1,
+} from '@ace/shared';
 import type { LegacyRouter, V1Router } from '../../core/router.js';
 import type { Services } from '../../services.js';
 import {
@@ -42,21 +48,31 @@ export function registerLegacyRoutes(router: LegacyRouter, services: Services): 
 
 export function registerV1Routes(router: V1Router, services: Services): void {
   /* Las palabras de tu biblioteca, las mismas mientras no cambie el estado. */
-  let library: { state: Readonly<StateV1>; vocabulary: FuzzyVocabulary } | null = null;
+  let library: {
+    state: Readonly<StateV1>;
+    vocabulary: FuzzyVocabulary;
+    display: ReadonlyMap<string, string>;
+  } | null = null;
+  const libraryWords = () => {
+    const state = services.state.get();
+    if (library?.state !== state) {
+      const titles = [...state.favorites, ...state.history, ...state.web].map((item) => item.title);
+      library = { state, vocabulary: titlesVocabulary(titles), display: displayWords(titles) };
+    }
+    return library;
+  };
   const vocabularies = (): FuzzyVocabulary[] => {
     const out: FuzzyVocabulary[] = [];
     const iptv = services.iptv?.active() ? services.iptv.searchVocabulary() : null;
     if (iptv) out.push(iptv);
-    const state = services.state.get();
-    if (library?.state !== state) {
-      library = {
-        state,
-        vocabulary: titlesVocabulary(
-          [...state.favorites, ...state.history, ...state.web].map((item) => item.title),
-        ),
-      };
-    }
-    out.push(library.vocabulary);
+    out.push(libraryWords().vocabulary);
+    return out;
+  };
+  /* Cómo se escriben las palabras (tu biblioteca y tu IPTV), para el «Quizás quisiste decir». */
+  const displays = (): ReadonlyMap<string, string>[] => {
+    const out: ReadonlyMap<string, string>[] = [libraryWords().display];
+    const iptv = services.iptv?.active() ? services.iptv.searchDisplayWords?.() : null;
+    if (iptv) out.push(iptv);
     return out;
   };
 
@@ -84,7 +100,16 @@ export function registerV1Routes(router: V1Router, services: Services): void {
     } else {
       response = await ask(shown);
     }
-    const suggestion = response.results.length ? null : suggestEngineQuery(shown, known);
+    let suggestion: string | null = null;
+    if (!response.results.length) {
+      let shownAs: ReadonlyMap<string, string>[];
+      try {
+        shownAs = displays();
+      } catch {
+        shownAs = [];
+      }
+      suggestion = suggestEngineQuery(shown, known, shownAs);
+    }
     const iptv = services.iptv;
     const results =
       iptv?.active() && response.results.length
@@ -94,7 +119,9 @@ export function registerV1Routes(router: V1Router, services: Services): void {
       ...response,
       results,
       ...(searched ? { searched: searched.slice(0, 80) } : {}),
-      ...(suggestion && suggestion !== searched ? { suggestion: suggestion.slice(0, 80) } : {}),
+      ...(suggestion && searchFold(suggestion) !== searchFold(searched ?? '')
+        ? { suggestion: suggestion.slice(0, 80) }
+        : {}),
     };
   });
 }

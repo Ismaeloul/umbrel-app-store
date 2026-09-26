@@ -29,6 +29,17 @@
    - Nunca juntar dos cosas distintas: «Liga F» no es «LaLiga», «Hypermotion»
      (Segunda) no es «Primera», «Real Madrid» no es «Real Sociedad», «DAZN 1»
      no es «DAZN 2». Un nombre no puede estar en dos grupos (hay prueba).
+   - Nada que un canal lleve con su número: «~LaLiga 2» (Segunda) tapaba
+     los canales «M. LALIGA 2» y «DAZN LALIGA 2» (la misma trampa que DAZN 1
+     frente a DAZN 2; hay prueba).
+   - Un nombre suelto que también es parte de otros nombres va con «~»
+     («~Inter»: no es el Inter Miami; «~Athletic»: no es el Charlton
+     Athletic), y un club que empieza igual que otro tiene su propio grupo
+     («Valencia Basket»), para que un texto no nombre el grupo equivocado.
+   - Una palabra de relleno («~Selección», como «tv» o «club») solo es alias
+     si va SOLA: «selección» (o «la selección») es España, pero «selección
+     argentina» son los partidos de Argentina, no solo España–Argentina
+     (`aliasReadings` y las palabras que no hace falta encontrar de `fuzzy.ts`).
    - «Madrid» va con el Real Madrid: sale primero y el Atlético después (el
      Atlético casa igual por la palabra «Madrid»). */
 
@@ -59,7 +70,7 @@ const sport = group('sport');
 // prettier-ignore
 export const SEARCH_ALIASES: readonly SearchAliasGroup[] = [
   /* --- Selecciones --- */
-  national('espana', 'España', 'Spain', 'Selección Española', '~ESP', '~la Roja', '~Selección'),
+  national('espana', 'España', 'Spain', 'Selección Española', '~ESP', '~la Roja', '~Selección', '~la Selección'),
   national('inglaterra', 'Inglaterra', 'England', '~ING', '~ENG'),
   national('francia', 'Francia', 'France', '~FRA'),
   national('italia', 'Italia', 'Italy', '~ITA', '~la Azzurra'),
@@ -83,10 +94,12 @@ export const SEARCH_ALIASES: readonly SearchAliasGroup[] = [
   team('atletico-madrid', 'Atlético de Madrid', 'Atlético Madrid', 'Atleti', '~ATM', '~Atlético', '~Colchoneros'),
   team('betis', 'Real Betis', 'Betis', '~BET', '~RBB', '~Béticos'),
   team('real-sociedad', 'Real Sociedad', '~la Real', '~RSO', '~Txuri-urdin'),
-  team('villarreal', 'Villarreal', '~el Submarino', '~Submarino Amarillo', '~VIL'),
-  team('athletic', 'Athletic Club', 'Athletic Bilbao', 'Athletic', '~ATH', '~los Leones'),
+  team('villarreal', 'Villarreal', '~el Submarino', '~Submarino', '~Submarino Amarillo', '~VIL'),
+  team('athletic', 'Athletic Club', 'Athletic Bilbao', '~Athletic', '~ATH', '~los Leones'),
   team('sevilla', 'Sevilla', 'Sevilla FC', '~SEV'),
   team('valencia', 'Valencia', 'Valencia CF', '~VAL', '~el Che'),
+  // Otro club: con su nombre entero, «Valencia Basket» nombra este grupo y no el del Valencia CF.
+  team('valencia-basket', 'Valencia Basket', 'Valencia Basket Club'),
   team('celta', 'Celta de Vigo', 'Celta', 'RC Celta', '~CEL'),
   team('deportivo', 'Deportivo de La Coruña', 'Deportivo La Coruña', '~Depor', '~Deportivo', '~DEP'),
   team('espanyol', 'Espanyol', 'RCD Espanyol', '~Español', '~Periquitos'),
@@ -111,7 +124,7 @@ export const SEARCH_ALIASES: readonly SearchAliasGroup[] = [
   team('manchester-united', 'Manchester United', 'Man United', 'Man Utd', '~MUN'),
   team('psg', 'Paris Saint-Germain', 'PSG', 'París SG', 'Paris SG'),
   team('bayern', 'Bayern de Múnich', 'Bayern Múnich', 'Bayern München', 'Bayern'),
-  team('inter', 'Inter de Milán', 'Inter', 'Internazionale'),
+  team('inter', 'Inter de Milán', 'Inter Milan', 'Internazionale', '~Inter'),
   team('milan', 'AC Milan', '~Milan', '~MIL'),
   team('juventus', 'Juventus', '~Juve', '~JUV'),
 
@@ -120,10 +133,10 @@ export const SEARCH_ALIASES: readonly SearchAliasGroup[] = [
   competition('uel', 'Europa League', 'UEFA Europa League', 'Liga Europa', '~UEL'),
   competition('uecl', 'Conference League', 'UEFA Conference League', '~Conference', '~UECL', '~Liga Conferencia'),
   competition('laliga', 'LaLiga', 'LaLiga EA Sports', 'Liga EA Sports', '~Primera', '~Primera División', '~Liga Española'),
-  competition('hypermotion', 'LaLiga Hypermotion', 'Hypermotion', 'LaLiga TV Hypermotion', 'LaLiga SmartBank', 'Segunda División', '~Segunda', '~LaLiga 2', '~SmartBank'),
+  competition('hypermotion', 'LaLiga Hypermotion', 'Hypermotion', 'LaLiga TV Hypermotion', 'LaLiga SmartBank', 'Segunda División', '~Segunda', '~SmartBank'),
   competition('primera-federacion', 'Primera Federación', '1 Federación', 'Primera RFEF', '~1 RFEF', '~1ª Federación'),
   competition('segunda-federacion', 'Segunda Federación', '2 Federación', 'Segunda RFEF', '~2 RFEF', '~2ª Federación'),
-  competition('liga-f', 'Liga F', 'Liga F Moeve', 'Primera División Femenina', '~Liga Femenina'),
+  competition('liga-f', 'Liga F', 'Liga F Moeve', 'Primera División Femenina', '~Liga Femenina', '~Femenina'),
   competition('copa-del-rey', 'Copa del Rey', 'Copa de SM el Rey'),
   competition('supercopa', 'Supercopa de España', 'Supercopa'),
   competition('unl', 'Nations League', 'UEFA Nations League', 'Liga de Naciones', '~UNL'),
@@ -149,7 +162,7 @@ export const SEARCH_ALIASES: readonly SearchAliasGroup[] = [
   channel('gol', 'Gol', 'Gol Play'),
   channel('bein', 'beIN Sports', 'beIN', '~Bein Sport', '~Be In Sports'),
   channel('eurosport', 'Eurosport', '~Euro Sport'),
-  channel('barca-tv', 'Barça TV', 'Barça One'),
+  channel('barca-tv', 'Barça TV', 'Barça One', '~Barsa TV', '~Barsa One'),
   channel('tvg', 'TVG', 'TV Galicia', 'Televisión de Galicia'),
   channel('etb', 'ETB', 'Euskal Telebista'),
 

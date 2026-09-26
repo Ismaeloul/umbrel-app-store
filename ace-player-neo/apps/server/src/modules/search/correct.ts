@@ -20,7 +20,9 @@
 import {
   FuzzyVocabulary,
   SEARCH_ALIASES,
+  aliasDisplayWords,
   canonicalAliasText,
+  displayQuery,
   searchFold,
   searchWords,
   type SearchResult,
@@ -105,16 +107,21 @@ export function planEngineQuery(
   };
 }
 
-/** «Quizás quisiste decir» para el motor: con un error más de tolerancia; null si no cambia nada. */
+/**
+ * «Quizás quisiste decir» para el motor: con un error más de tolerancia;
+ * null si no cambia nada. Escrito como en la tabla de alias o, si no, como
+ * en `displays` (tu biblioteca, tu IPTV): «Telecinco», no «telecinco».
+ */
 export function suggestEngineQuery(
   query: string,
   vocabularies: readonly FuzzyVocabulary[],
+  displays: readonly ReadonlyMap<string, string>[] = [],
 ): string | null {
   const fixed = correctAcross(query, [...vocabularies, aliasNamesVocabulary()], {
     extra: 1,
     strict: false,
   });
-  return fixed.changed ? fixed.text : null;
+  return fixed.changed ? displayQuery(fixed.text, [aliasDisplayWords(), ...displays]) : null;
 }
 
 /**

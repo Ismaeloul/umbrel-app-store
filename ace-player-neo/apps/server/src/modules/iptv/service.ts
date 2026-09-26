@@ -101,6 +101,7 @@ import {
   searchCatalog,
   searchIndex,
   searchVocabulary,
+  catalogDisplayWords,
   suggestCatalog,
   titleBucket,
   type LibraryCandidate,
@@ -1546,6 +1547,11 @@ export class IptvServiceImpl implements IptvService {
   searchVocabulary(): FuzzyVocabulary | null {
     if (!this.active()) return null;
     return searchVocabulary(searchIndex(this.catalog as Catalog));
+  }
+
+  searchDisplayWords(): ReadonlyMap<string, string> | null {
+    if (!this.active()) return null;
+    return catalogDisplayWords(searchIndex(this.catalog as Catalog));
   }
 
   // --- Pestaña IPTV de Canales (§16) ---

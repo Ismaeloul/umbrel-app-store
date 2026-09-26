@@ -34,8 +34,13 @@ import {
   SEARCH_QUERY_MIN,
   aliasReadings,
   aliasVocabulary,
+  aliasDisplayWords,
   aliasWords,
   correctQuery,
+  displayQuery,
+  displayWords,
+  spelledNumberReading,
+  splitJoinedWord,
   wordTypos,
   filterLibrary,
   namedGroups,
@@ -586,18 +591,43 @@ export function searchCatalog(
 
   /* Por un alias (§20): «t5» → «Telecinco», «champions» → «Liga de Campeones». Solo los canales que de verdad
      nombran ese grupo («primera» no trae «LALIGA HYPERMOTION»). */
-  const aliasHits = (words: readonly string[], rank: (tier: number) => number, max = 8): void => {
+  const aliasHits = (
+    words: readonly string[],
+    rank: (tier: number, loose: boolean) => number,
+    max = 8,
+  ): void => {
     for (const reading of aliasReadings(words, max)) {
       const readingKey = searchQueryKey(reading.text);
       if (!readingKey || readingKey === key) continue;
       for (const [position, tier] of collectMatches(index, readingKey).tiers) {
         const group = index.groups[position] as SearchGroup;
         if (!reading.groups.every((id) => namedGroupsOf(group).has(id))) continue;
-        put(position, rank(tier));
+        put(position, rank(tier, reading.loose));
       }
     }
   };
   aliasHits(searchWords(askedText.text), aliasTier);
+
+  /* Otra forma de escribir lo mismo (§20): una palabra junta que son dos («realmadrid» → «real madrid») y
+     los números con letras detrás de otra palabra («dazn uno» → «dazn 1»). */
+  const rewrites: string[][] = [];
+  let split = false;
+  const separated = plain.words.flatMap((word) => {
+    if (plain.matched.has(word)) return [word];
+    const parts = splitJoinedWord(word, (part) => index.byToken.has(part));
+    if (!parts) return [word];
+    split = true;
+    return parts;
+  });
+  if (split) rewrites.push(separated);
+  const numbered = spelledNumberReading(plain.words);
+  if (numbered) rewrites.push(numbered);
+  for (const words of rewrites) {
+    for (const [position, tier] of collectMatches(index, words.join(' ')).tiers) {
+      put(position, aliasTier(tier, false));
+    }
+    aliasHits(words, aliasTier, 4);
+  }
 
   /* Con erratas (§20): solo las palabras que no casan con nada, 1 error desde 4 letras y 2 desde 8. */
   let corrected: string | null = null;
@@ -610,7 +640,7 @@ export function searchCatalog(
       any = true;
     }
     const before = tiers.size;
-    aliasHits(variant, (tier) => TYPO_BASE + aliasTier(tier), 4);
+    aliasHits(variant, (tier, loose) => TYPO_BASE + aliasTier(tier, loose), 4);
     if ((any || tiers.size > before) && corrected === null) corrected = variantKey;
   }
 
@@ -650,15 +680,18 @@ export function searchCatalog(
 
 /*
  * Niveles de lo que sale por un alias o con erratas (§20), entre los de §18
- * (0 igual … 6 categoría): un alias escrito entero que da el canal igual o
- * su familia cuenta como igual (0; dentro, manda el orden de siempre: el
- * canal principal antes que sus reservas); el resto
- * del alias, detrás de todo lo que casa por el nombre (4,5); y con erratas,
+ * (0 igual … 6 categoría): un alias «~» escrito entero («t5», «madrid») que
+ * da el canal igual o su familia cuenta como igual (0; dentro, manda el
+ * orden de siempre: el canal principal antes que sus reservas); otro nombre
+ * «de verdad» de lo mismo («barça tv» → «Barça One», «champions» → «Liga de
+ * Campeones») va justo detrás de lo escrito tal cual (0,5); el resto del
+ * alias, detrás de todo lo que casa por el nombre (4,5); y con erratas,
  * detrás de todo (7 y más).
  */
 const TYPO_BASE = 7;
-function aliasTier(tier: number): number {
-  return tier <= 1 ? 0 : 4.5;
+function aliasTier(tier: number, loose: boolean): number {
+  if (tier > 1) return 4.5;
+  return loose ? 0 : 0.5;
 }
 
 /* Lo que nombra un canal del buscador (sus alias «de verdad»), con caché por índice. */
@@ -701,6 +734,16 @@ function typoVariants(
   const options = words.map((word) => {
     const exact = index.byToken.has(word);
     if (exact || /\d/.test(word)) return [word];
+    /* Un alias que ningún canal tiene («barsa») también se prueba como errata de lo que sí hay («barca», de
+       «BARÇA TV»): su lectura por el alias no encuentra un canal que nombra otro grupo. */
+    if (!matched.has(word) && aliasVocabulary().has(word)) {
+      const found = wordTypos(word, searchVocabulary(index), {
+        exact: false,
+        plain: false,
+        evenIfKnown: true,
+      });
+      return [word, ...found];
+    }
     /* El vocabulario del catálogo solo se monta (una vez) si alguna palabra no casa con nada. */
     const plain = matched.has(word) || aliasVocabulary().matchesPlain(word);
     const vocabulary = plain ? aliasVocabulary() : searchVocabulary(index);
@@ -818,7 +861,20 @@ export function suggestCatalog(catalog: Catalog, query: string): string | null {
   const index = searchIndex(catalog);
   const corrected = correctQuery(key, searchVocabulary(index), { extra: 1 });
   if (!corrected.changed || corrected.text === key) return null;
-  return searchCatalog(catalog, corrected.text, 1).total > 0 ? corrected.text : null;
+  if (searchCatalog(catalog, corrected.text, 1).total === 0) return null;
+  /* Escrita como en la tabla de alias o en la lista («Telecinco», no «telecinco»). */
+  return displayQuery(corrected.text, [aliasDisplayWords(), catalogDisplayWords(index)]);
+}
+
+/* Cómo escribe la lista cada palabra plegada (la primera vez que sale), con caché por índice. */
+const DISPLAYS = new WeakMap<SearchIndex, ReadonlyMap<string, string>>();
+export function catalogDisplayWords(index: SearchIndex): ReadonlyMap<string, string> {
+  let known = DISPLAYS.get(index);
+  if (!known) {
+    known = displayWords(index.groups.map((group) => group.best.display));
+    DISPLAYS.set(index, known);
+  }
+  return known;
 }
 
 /** Lo que se mira de la biblioteca para `library` (§14.3, regla 5). */

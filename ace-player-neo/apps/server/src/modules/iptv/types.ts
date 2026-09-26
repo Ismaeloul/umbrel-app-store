@@ -202,6 +202,12 @@ export interface IptvService extends Lifecycle {
    * motor AceStream (§20); null sin IPTV activa. SOLO para buscar.
    */
   searchVocabulary(): FuzzyVocabulary | null;
+  /**
+   * Cómo escribe la lista cada palabra plegada («telecinco» → «TELECINCO»),
+   * para escribir bien el «Quizás quisiste decir» del motor; null sin IPTV
+   * activa.
+   */
+  searchDisplayWords?(): ReadonlyMap<string, string> | null;
   /** `LibraryView.iptvIds`: el estado de cada id IPTV de la lista, o null si no hay ninguno. */
   libraryIdStates(ids: readonly string[]): Record<string, IptvIdState> | null;
 

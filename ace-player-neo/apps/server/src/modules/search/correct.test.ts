@@ -39,7 +39,7 @@ describe('planEngineQuery', () => {
   });
 
   it('«Quizás quisiste decir» con un error más', () => {
-    expect(suggestEngineQuery('telcnco', known)).toBe('telecinco');
+    expect(suggestEngineQuery('telcnco', known)).toBe('Telecinco');
     expect(suggestEngineQuery('telecinco', known)).toBeNull();
   });
 
@@ -105,7 +105,7 @@ describe('GET /api/v1/search con erratas y alias (§20)', () => {
   it('sin nada: «Quizás quisiste decir» con los nombres de la tabla', async () => {
     const { body } = await get('champiosn liga');
     expect(body.results).toEqual([]);
-    expect(body.suggestion).toBe('champions liga');
+    expect(body.suggestion).toBe('Champions Liga');
   });
 
   it('la ruta antigua nunca corrige ni sugiere', async () => {

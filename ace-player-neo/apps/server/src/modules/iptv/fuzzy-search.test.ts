@@ -146,7 +146,7 @@ describe('alias (§20)', () => {
     expect(searchCatalog(cat, 'tlcnco').total).toBe(0);
     expect(suggestCatalog(cat, 'tlcnco')).toBeNull();
     expect(searchCatalog(cat, 'eurspot').total).toBe(0);
-    expect(suggestCatalog(cat, 'eurspot')).toBe('eurosport');
+    expect(suggestCatalog(cat, 'eurspot')).toBe('Eurosport');
   });
 });
 
@@ -233,5 +233,89 @@ describe('@lento rendimiento (§20)', () => {
     const sorted = [...times].sort((a, b) => a - b);
     /* Con margen en la CI: la mediana por debajo de 50 ms (en este PC, 2-12 ms). */
     expect(sorted[Math.floor(sorted.length / 2)]).toBeLessThan(50);
+  });
+});
+
+/* Revisión (26-sep): lo que empeoraba frente a la base y lo que faltaba, en el buscador y en la pestaña. */
+describe('revisión: buscador y pestaña IPTV (§20)', () => {
+  const REV: readonly (readonly [string, string])[] = [
+    ['M. LALIGA', MOV],
+    ['M. LALIGA 1', MOV],
+    ['M. LALIGA 2', MOV],
+    ['M+ LALIGA TV HYPERMOTION', MOV],
+    ['DAZN LALIGA 2', DEP],
+    ['LALIGA HYPERMOTION 1', DEP],
+    ['LALIGA HYPERMOTION 2', DEP],
+    ['DAZN 1', DEP],
+    ['DAZN 2', DEP],
+    ['DAZN F1', DEP],
+    ['BARÇA TV', DEP],
+    ['R. MADRID TV', DEP],
+    ['VILLARREAL TV', DEP],
+    ['LIGA F TV', DEP],
+    ['LA SEXTA', TDT],
+    ['TELEMADRID', TDT],
+    ['CELTA TV', DEP],
+  ];
+  const rev = new Catalog(
+    'p_Ab3dE5gH',
+    3,
+    'xtream',
+    0,
+    [],
+    'ts',
+    REV.map(([title, group]) => raw(title, group)),
+  );
+  const found = (q: string): string[] => searchCatalog(rev, q).groups.map((g) => g.best.display);
+  const index = buildBrowseIndex(rev);
+  const tab = (q: string): string[] =>
+    browseIndex(index, { q, offset: 0, limit: 50, withSummary: false }).rows.map(
+      (row) => (index.best[row] as { display: string }).display,
+    );
+
+  it.each([['laliga 2'], ['la liga 2']])(
+    '«%s» da primero M. LALIGA 2 y DAZN LALIGA 2 (el buscador y la pestaña)',
+    (q) => {
+      const two = new Set(['M. LALIGA 2', 'DAZN LALIGA 2']);
+      expect(new Set(found(q).slice(0, 2))).toEqual(two);
+      expect(new Set(tab(q).slice(0, 2))).toEqual(two);
+    },
+  );
+
+  it('«m+ laliga 2»: M. LALIGA 2 y DAZN LALIGA 2 antes que la Hypermotion', () => {
+    for (const list of [found('m+ laliga 2'), tab('m+ laliga 2')]) {
+      expect(list[0]).toBe('M. LALIGA 2');
+      const hyper = list.indexOf('M+ LALIGA TV HYPERMOTION');
+      if (hyper >= 0) expect(list.indexOf('DAZN LALIGA 2')).toBeLessThan(hyper);
+    }
+  });
+
+  it.each([['barsa'], ['barsa tv'], ['barça tv']])('«%s» encuentra BARÇA TV', (q) => {
+    expect(found(q)[0]).toBe('BARÇA TV');
+    expect(tab(q)[0]).toBe('BARÇA TV');
+  });
+
+  it.each([
+    ['realmadrid', 'R. MADRID TV'],
+    ['dazn uno', 'DAZN 1'],
+    ['submarino', 'VILLARREAL TV'],
+    ['femenina', 'LIGA F TV'],
+    ['la sesta', 'LA SEXTA'],
+  ])('«%s» → %s primero', (q, title) => {
+    expect(found(q)[0]).toBe(title);
+  });
+
+  it('lo que NO debe casar: «dazn uno» no es DAZN 2, «la sesta» no es Celta', () => {
+    expect(found('dazn uno')).not.toContain('DAZN 2');
+    expect(tab('dazn uno')).toEqual(['DAZN 1']);
+    expect(found('la sesta')).not.toContain('CELTA TV');
+    expect(found('dazn 1')).toEqual(['DAZN 1']);
+  });
+
+  it('SEGURIDAD: los canales con número no emparejan por el alias', () => {
+    const names = (channels: string[]) =>
+      matchIptvChannels(rev, channels, { scorer }).map((m) => m.best.display);
+    expect(names(['Barsa TV'])).toEqual([]);
+    expect(names(['LaLiga 2'])).not.toContain('LALIGA HYPERMOTION 2');
   });
 });

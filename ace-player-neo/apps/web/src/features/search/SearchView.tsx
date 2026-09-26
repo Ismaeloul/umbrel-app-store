@@ -464,17 +464,23 @@ export default function SearchView({ active }: ViewProps) {
           </h2>
           <div className="search-matches__grid">
             {matchRows.map(({ match }) => (
-              <MatchRow
-                key={match.id}
-                match={match}
-                now={now}
-                score={null}
-                channels={channelInfo(match, lookup)}
-                mine={isMine(match, preferences)}
-                compact
-                interaction="open"
-                onOpen={openMatch}
-              />
+              <div key={match.id} className="search-matches__item">
+                <MatchRow
+                  match={match}
+                  now={now}
+                  score={null}
+                  channels={channelInfo(match, lookup)}
+                  mine={isMine(match, preferences)}
+                  compact
+                  interaction="open"
+                  onOpen={openMatch}
+                />
+                {/* La tarjeta pequeña enseña las siglas («ING vs. ESP»): debajo, los nombres enteros, para
+                    que quien busca «inglatera» vea escrito «Inglaterra» (el nombre accesible ya es entero). */}
+                <p className="search-matches__names" aria-hidden="true">
+                  {match.home} – {match.away}
+                </p>
+              </div>
             ))}
           </div>
           {matchHits.length > MATCHES_SHOWN ? (

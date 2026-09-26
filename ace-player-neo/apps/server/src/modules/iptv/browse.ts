@@ -39,6 +39,8 @@ import {
   aliasWords,
   namedGroups,
   searchWords,
+  spelledNumberReading,
+  wordTypos,
   type IptvFacetName,
   type IptvQuality,
 } from '@ace/shared';
@@ -530,14 +532,25 @@ function textMatch(
   };
   aliasPass(searchWords(searchQueryText(query).text), 0, 8);
 
-  /* Con erratas, solo las palabras que no casan con nada. */
+  /* Los números con letras detrás de otra palabra («dazn uno» → «dazn 1»), como un alias. */
+  const numbered = spelledNumberReading(key.split(' ').filter(Boolean));
+  if (numbered) {
+    keyMatch(index, numbered.join(' '), (position, level) =>
+      markKey(index, position, level <= 1 ? 1 : 9, mark),
+    );
+  }
+
+  /* Con erratas, solo las palabras que no casan con nada (y un alias que ningún canal tiene: «barsa» →
+     «barca», de «BARÇA TV»); solo las correcciones más cercanas. */
   const words = significant([...new Set(key.split(' ').filter(Boolean))]);
   const options = words.map((word) => {
     if (/\d/.test(word) || matchedWords.has(word)) return [word];
     /* El vocabulario de erratas solo se monta (una vez) si alguna palabra no casa con nada. */
-    const found = browseVocabulary(index)
-      .corrections(word, { max: 3 })
-      .map((item) => item.token);
+    const found = wordTypos(word, browseVocabulary(index), {
+      exact: false,
+      plain: false,
+      evenIfKnown: true,
+    });
     return found.length ? found : [word];
   });
   if (options.some((list, i) => list.length > 1 || list[0] !== words[i])) {

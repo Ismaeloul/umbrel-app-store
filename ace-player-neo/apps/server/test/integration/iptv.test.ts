@@ -609,7 +609,7 @@ describe('buscador: IPTV y AceStream juntos (docs/iptv.md §14.9)', () => {
     expect(await first('antenna tres')).toBe('Antena 3');
     const missing = await channels(r.h, 'telcnco');
     expect(missing.total).toBe(0);
-    expect(missing.suggestion).toBe('telecinco');
+    expect(missing.suggestion).toBe('Telecinco');
     expect(r.provider.peticiones()).toEqual([]);
   });
 

@@ -659,6 +659,8 @@ describe('buscador «como Google» (docs/iptv.md §20)', () => {
     const section = await screen.findByRole('region', { name: /Partidos/ });
     const card = within(section).getByRole('button', { name: /Inglaterra vs España/ });
     expect(within(section).queryByRole('button', { name: /Noruega/ })).toBeNull();
+    /* La tarjeta enseña las siglas; debajo, los nombres enteros («Inglaterra», bien escrito). */
+    expect(within(section).getByText('Inglaterra – España')).toBeInTheDocument();
     fireEvent.click(card);
     await waitFor(() =>
       expect(new URLSearchParams(location.search).get('vista')).toBe('partido/m-ing'),

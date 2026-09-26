@@ -91,6 +91,12 @@ describe('SEARCH_ALIASES', () => {
     ['basket', 'baloncesto'],
     ['F1', 'f1'],
     ['Liga F', 'liga-f'],
+    ['Femenina', 'liga-f'],
+    ['Submarino', 'villarreal'],
+    ['Barsa TV', 'barca-tv'],
+    ['Barça TV', 'barca-tv'],
+    ['Inter Milan', 'inter'],
+    ['Valencia Basket', 'valencia-basket'],
   ])('«%s» es %s', (name, id) => {
     expect(aliasOf(name)?.id).toBe(id);
   });
@@ -102,5 +108,31 @@ describe('SEARCH_ALIASES', () => {
     expect(aliasOf('Getafe')?.id).not.toBe('girona');
     expect(aliasOf('DAZN 1')).toBeNull();
     expect(aliasOf('Primera Federación')?.id).toBe('primera-federacion');
+    /* «LaLiga 2» es el canal M. LALIGA 2 (o DAZN LALIGA 2), no la Segunda. */
+    expect(aliasOf('LaLiga 2')).toBeNull();
+    /* «Selección» sola es España (y con otra palabra, relleno: ver fuzzy.test.ts). */
+    expect(aliasOf('Selección')?.id).toBe('espana');
+  });
+
+  it('ningún nombre es otro grupo con un número detrás («~LaLiga 2» tapaba «M. LALIGA 2»)', () => {
+    const owner = new Map<string, string>();
+    for (const group of SEARCH_ALIASES) {
+      for (const name of group.names) owner.set(searchFold(aliasDisplayName(name)), group.id);
+    }
+    for (const group of SEARCH_ALIASES) {
+      for (const name of group.names) {
+        const words = searchWords(aliasDisplayName(name));
+        if (words.length < 2 || !/^\d+$/.test(words[words.length - 1] as string)) continue;
+        const before = owner.get(words.slice(0, -1).join(' '));
+        if (before && before !== group.id) throw new Error(`«${name}» es ${before} con un número`);
+      }
+    }
+  });
+
+  it('los nombres sueltos que son parte de otros van con «~» (solo de la consulta)', () => {
+    const loose = (id: string, name: string) =>
+      SEARCH_ALIASES.find((group) => group.id === id)?.names.includes(`~${name}`);
+    expect(loose('inter', 'Inter')).toBe(true);
+    expect(loose('athletic', 'Athletic')).toBe(true);
   });
 });
