@@ -208,7 +208,7 @@ final class ServidorRealUITests: XCTestCase {
         let punto = boton.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         for _ in 0..<3 {
             punto.tap()
-            Thread.sleep(forTimeInterval: 0.3)
+            try await Task.sleep(for: .milliseconds(300))
             if mini.exists { break }
             punto.tap()
             if await esperar(3, { mini.exists }) { break }
