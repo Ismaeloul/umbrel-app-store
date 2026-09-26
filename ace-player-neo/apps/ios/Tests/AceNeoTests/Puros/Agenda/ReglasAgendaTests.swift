@@ -28,6 +28,14 @@ final class ReglasAgendaTests: XCTestCase {
         XCTAssertEqual(ReglasAgenda.numeroDia("2024-02-29"), 19782)
         XCTAssertEqual(ReglasAgenda.numeroDia("2000-03-01"), 11017)
         XCTAssertNil(ReglasAgenda.numeroDia("23/09/2026"))
+        // Mes o día fuera de rango: nil, y las etiquetas devuelven el texto tal cual (sin salirse de `meses`).
+        XCTAssertNil(ReglasAgenda.numeroDia("2026-00-10"))
+        XCTAssertNil(ReglasAgenda.numeroDia("2026-13-01"))
+        XCTAssertNil(ReglasAgenda.numeroDia("2026-09-00"))
+        XCTAssertEqual(ReglasAgenda.etiquetaDia("2026-13-01", hoy: "2026-09-23").principal, "2026-13-01")
+        XCTAssertEqual(ReglasAgenda.entradilla("2026-09-24", hoy: "2026-09-23"), "Mañana · Jueves, 24 de septiembre")
+        XCTAssertEqual(ReglasAgenda.entradilla("2026-09-26", hoy: "2026-09-23"), "Sáb · Sábado, 26 de septiembre")
+        XCTAssertEqual(ReglasAgenda.entradilla("2026-13-01", hoy: "2026-09-23"), "2026-13-01")
         XCTAssertNil(ReglasAgenda.minutosDeHora("Por confirmar"))
         XCTAssertEqual(ReglasAgenda.minutosDeHora("18:30"), 1110)
     }

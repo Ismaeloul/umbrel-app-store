@@ -93,22 +93,20 @@ final class SeccionesAgendaTests: XCTestCase {
         XCTAssertTrue(ReglasAgenda.porFase([], reloj: reloj).vacio)
     }
 
+    /// `featuredMatch` de la web: tu equipo en directo → cualquiera en directo → el próximo → el primero.
     func testDestacadoDeLaPortada() {
         let gustos = GustosFutbol(leagues: ["LaLiga"], teams: ["Real Madrid"])
-        // Lo que se ve manda.
-        XCTAssertEqual(
-            ReglasAgenda.destacado(partidos, viendo: "proximo2", reloj: reloj, marcadores: [:], gustos: gustos)?.id, "proximo2")
-        // Si no, el primero en directo de «Para ti» (la Premier no es tuya)… no hay: el próximo tuyo.
-        XCTAssertEqual(ReglasAgenda.destacado(partidos, viendo: nil, reloj: reloj, marcadores: [:], gustos: gustos)?.id, "proximo1")
-        // Sin gustos: el primero en directo de todos.
-        XCTAssertEqual(ReglasAgenda.destacado(partidos, viendo: nil, reloj: reloj, marcadores: [:], gustos: .vacios)?.id, "directo")
-        // Un partido tuyo en directo por ESPN gana.
-        let enJuego = ["proximo2": marcador(0, 0)]
-        XCTAssertEqual(ReglasAgenda.destacado(partidos, viendo: nil, reloj: reloj, marcadores: enJuego, gustos: gustos)?.id, "proximo2")
-        // Solo terminados: el último.
-        XCTAssertEqual(
-            ReglasAgenda.destacado([partidos[0]], viendo: nil, reloj: reloj, marcadores: [:], gustos: .vacios)?.id, "terminado")
-        XCTAssertNil(ReglasAgenda.destacado([], viendo: nil, reloj: reloj, marcadores: [:], gustos: .vacios))
+        // En directo solo va la Premier (no es tuya): gana igual, porque va en directo.
+        XCTAssertEqual(ReglasAgenda.destacado(partidos, reloj: reloj, marcadores: [:], gustos: gustos)?.id, "directo")
+        // Tu equipo en directo por ESPN gana al otro directo.
+        let enJuego = ["proximo1": marcador(0, 0)]
+        XCTAssertEqual(ReglasAgenda.destacado(partidos, reloj: reloj, marcadores: enJuego, gustos: gustos)?.id, "proximo1")
+        // Sin directos: el próximo por hora de inicio.
+        let sinDirecto = partidos.filter { $0.id != "directo" }
+        XCTAssertEqual(ReglasAgenda.destacado(sinDirecto, reloj: reloj, marcadores: [:], gustos: .vacios)?.id, "proximo1")
+        // Solo terminados: el primero de la lista.
+        XCTAssertEqual(ReglasAgenda.destacado([partidos[0]], reloj: reloj, marcadores: [:], gustos: .vacios)?.id, "terminado")
+        XCTAssertNil(ReglasAgenda.destacado([], reloj: reloj, marcadores: [:], gustos: .vacios))
     }
 
     func testPrecalentables() {

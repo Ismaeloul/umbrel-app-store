@@ -1,12 +1,11 @@
 import Foundation
 
-// Rescatado en la poda (fase 0.2, b-arquitectura §1.11) de Features/Agenda/AgendaViewModel.swift, sin
-// cambiar el comportamiento: ReglasAgenda y FormatoAgenda (RelojMadrid va en RelojMadrid.swift).
-// M5 lo revalida con los vectores de agenda/domain.ts. El `AgendaViewModel` se borró con la interfaz
-// vieja; su `diaInicial` pasa a `ReglasAgenda.diaInicial`. Sin `Date.now` por defecto (R14): quien
-// llama pasa la hora.
+// Port de apps/web/src/features/agenda/domain.ts (M5; a3 §9). Parte vino rescatada en la poda (fase 0.2,
+// b-arquitectura §1.11) de Features/Agenda/AgendaViewModel.swift; M5 la revalida con los casos de
+// domain.test.ts (Tests/AceNeoTests/Puros/Agenda). Todo con la hora de MADRID (regla 28): quien llama pasa
+// la hora (R14). `FormatoAgenda.equipos` lo usa también la sesión de fuentes rescatada (M3).
 
-/// Los partidos de una competición dentro de un día.
+/// Los partidos de una competición dentro de un día (`CompetitionGroup`).
 struct GrupoLiga: Hashable, Identifiable {
     var competicion: String
     var pais: String
@@ -14,14 +13,14 @@ struct GrupoLiga: Hashable, Identifiable {
     var id: String { competicion }
 }
 
-/// «Para ti» o «Todos».
-enum ModoAgenda: String, Hashable, CaseIterable {
+/// «Para ti» o «Todos» (`AgendaMode`).
+enum ModoAgenda: String, Hashable, CaseIterable, Sendable {
     case paraTi
     case todos
 }
 
-/// Fase de un partido para su insignia y el orden de la agenda.
-enum FasePartido: Equatable {
+/// Fase de un partido (`MatchPhase`: live · done · soon · next).
+enum FasePartido: Equatable, Sendable {
     case directo
     case terminado
     /// Faltan 60 min o menos.
@@ -30,29 +29,64 @@ enum FasePartido: Equatable {
     case proximo
 }
 
-struct EstadoPartido: Equatable {
+/// `MatchStatus`.
+struct EstadoPartido: Equatable, Sendable {
     var fase: FasePartido
     /// «En directo», «Terminado», «En 48 min», «En 1 h 18 min».
     var texto: String
 }
 
-/// Reglas de la agenda portadas de apps/web/src/features/agenda/domain.ts:
-/// el reloj de Madrid (no el del teléfono), la insignia de estado, el orden
-/// de los grupos y el filtro de «Para ti».
+/// Minuto de un partido en juego (`LiveMinute`): «72», «45+2» (sin comillas).
+struct MinutoDirecto: Equatable, Sendable {
+    var minuto: String
+    var descanso: Bool
+}
+
+/// Etiquetas de un día (`DayLabel`).
+struct EtiquetaDia: Equatable, Sendable {
+    /// «Hoy», «Mañana», «Ayer» o el día abreviado («Jue»).
+    var principal: String
+    /// Número del día («23»).
+    var numero: String
+    /// «jueves, 24 de septiembre» (lectores de pantalla y resumen).
+    var larga: String
+}
+
+/// Un canal del partido y si está en tu biblioteca (`ChannelInfo`).
+struct InfoCanal: Equatable, Hashable, Sendable {
+    var nombre: String
+    var enBiblioteca: Bool
+}
+
 enum ReglasAgenda {
-    /// El día que se enseña al abrir: hoy si hay partidos; si no, el primero que venga.
-    static func diaInicial(_ fechas: [String], ahora: Date) -> String? {
-        let hoy = FormatoAgenda.clave(ahora)
+    /// Minutos de ventana de un partido sin marcador (en directo hasta 120 min después del inicio).
+    static let ventanaDirecto = 120
+
+    /// `defaultDay`: hoy si la agenda lo trae; si no, el primero.
+    static func diaPorDefecto(_ fechas: [String], hoy: String) -> String? {
         if fechas.contains(hoy) { return hoy }
-        return fechas.first { $0 > hoy } ?? fechas.last
+        return fechas.first
     }
 
-    /// Días desde el 1-1-1970 de una fecha `YYYY-MM-DD` (sin husos).
+    /// `resolveDay`: el elegido sigue existiendo; si no, el de por defecto.
+    static func resolverDia(_ fechas: [String], elegido: String?, hoy: String) -> String? {
+        if let elegido, fechas.contains(elegido) { return elegido }
+        return diaPorDefecto(fechas, hoy: hoy)
+    }
+
+    /// El día que se enseña al abrir (compatibilidad: `defaultDay` con la hora).
+    static func diaInicial(_ fechas: [String], ahora: Date) -> String? {
+        diaPorDefecto(fechas, hoy: RelojMadrid(ahora).fecha)
+    }
+
+    /// Días desde el 1-1-1970 de una fecha `YYYY-MM-DD` (sin husos); nil si no tiene ese formato o el mes o el día
+    /// se salen de rango.
     static func numeroDia(_ texto: String) -> Int? {
         let partes = texto.split(separator: "-", omittingEmptySubsequences: false)
         guard partes.count == 3, partes[0].count == 4, partes[1].count == 2, partes[2].count == 2,
             partes.allSatisfy({ $0.allSatisfy { $0.isASCII && $0.isNumber } }),
-            let a = Int(partes[0]), let m = Int(partes[1]), let d = Int(partes[2])
+            let a = Int(partes[0]), let m = Int(partes[1]), let d = Int(partes[2]),
+            (1...12).contains(m), (1...31).contains(d)  // mes y día en rango: «2026-13-01» no indexa fuera de `meses`
         else { return nil }
         // Días desde la época civil (algoritmo de Howard Hinnant).
         let y = m <= 2 ? a - 1 : a
@@ -61,6 +95,26 @@ enum ReglasAgenda {
         let diaAno = (153 * ((m + 9) % 12) + 2) / 5 + d - 1
         let diaEra = anoEra * 365 + anoEra / 4 - anoEra / 100 + diaAno
         return era * 146_097 + diaEra - 719_468
+    }
+
+    /// `YYYY-MM-DD` de un número de día (inverso de `numeroDia`).
+    static func fecha(numeroDia z0: Int) -> String {
+        let z = z0 + 719_468
+        let era = (z >= 0 ? z : z - 146_096) / 146_097
+        let doe = z - era * 146_097
+        let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365
+        let doy = doe - (365 * yoe + yoe / 4 - yoe / 100)
+        let mp = (5 * doy + 2) / 153
+        let d = doy - (153 * mp + 2) / 5 + 1
+        let m = mp < 10 ? mp + 3 : mp - 9
+        let y = yoe + era * 400 + (m <= 2 ? 1 : 0)
+        return String(format: "%04d-%02d-%02d", y, m, d)
+    }
+
+    /// `addDays`: YYYY-MM-DD desplazado `dias` días.
+    static func sumarDias(_ fecha: String, _ dias: Int) -> String {
+        guard let base = numeroDia(fecha) else { return fecha }
+        return self.fecha(numeroDia: base + dias)
     }
 
     /// «HH:MM» → minutos desde medianoche (nil con «Por confirmar»).
@@ -87,12 +141,28 @@ enum ReglasAgenda {
         if marcador?.state == "post" { return EstadoPartido(fase: .terminado, texto: "Terminado") }
         guard let faltan = minutosParaPartido(partido, reloj: reloj) else { return nil }
         if faltan <= 0 {
-            return faltan > -120
+            return faltan > -ventanaDirecto
                 ? EstadoPartido(fase: .directo, texto: "En directo") : EstadoPartido(fase: .terminado, texto: "Terminado")
         }
         if faltan <= 60 { return EstadoPartido(fase: .pronto, texto: "En \(faltan) min") }
         if faltan <= 360 { return EstadoPartido(fase: .proximo, texto: "En \(faltan / 60) h \(faltan % 60) min") }
         return nil
+    }
+
+    /// `keepUnitsTogether`: cifra y unidad unidas por espacio duro al pintar («En 2 h 28 min»).
+    static func unidadesJuntas(_ texto: String) -> String {
+        let palabras = texto.split(separator: " ", omittingEmptySubsequences: false).map(String.init)
+        var salida = ""
+        for (i, palabra) in palabras.enumerated() {
+            if i > 0 {
+                let anterior = palabras[i - 1]
+                let esUnidad = palabra == "h" || palabra == "min"
+                let esCifra = !anterior.isEmpty && anterior.allSatisfy { $0.isASCII && $0.isNumber }
+                salida += esUnidad && esCifra ? "\u{00A0}" : " "
+            }
+            salida += palabra
+        }
+        return salida
     }
 
     private static func rango(_ estado: EstadoPartido?) -> Int {
@@ -103,7 +173,8 @@ enum ReglasAgenda {
         }
     }
 
-    private static func inicio(_ partido: FootballMatch) -> Double {
+    /// `startOf`: inicio en ms (o fecha + hora aproximada, solo para ordenar el mismo día).
+    static func inicio(_ partido: FootballMatch) -> Double {
         if let start = partido.start { return Double(start) }
         guard let minutos = minutosDeHora(partido.time), let dia = numeroDia(partido.date) else { return .infinity }
         return Double(dia) * 86_400_000 + Double(minutos) * 60_000
@@ -148,6 +219,28 @@ enum ReglasAgenda {
         return grupos
     }
 
+    /// `countLive`: cuántos van en directo.
+    static func enDirecto(_ partidos: [FootballMatch], reloj: RelojMadrid, marcadores: [String: LiveScore]) -> Int {
+        partidos.filter { estado($0, reloj: reloj, marcador: marcadores[$0.id])?.fase == .directo }.count
+    }
+
+    /// `featuredMatch`: tu equipo en directo → cualquiera en directo → el próximo no terminado → el primero.
+    static func destacado(
+        _ partidos: [FootballMatch], reloj: RelojMadrid, marcadores: [String: LiveScore], gustos: GustosFutbol
+    ) -> FootballMatch? {
+        let conEstado = partidos.map { ($0, estado($0, reloj: reloj, marcador: marcadores[$0.id])) }
+        let directos = conEstado.filter { $0.1?.fase == .directo }.map(\.0)
+        if let mio = directos.first(where: { ParaTi.destacado($0, gustos) }) { return mio }
+        if let primero = directos.first { return primero }
+        let pendientes = conEstado.filter { $0.1?.fase != .terminado }.map(\.0)
+        let ordenados = pendientes.enumerated().sorted { a, b in
+            let ia = inicio(a.element)
+            let ib = inicio(b.element)
+            return ia != ib ? ia < ib : a.offset < b.offset
+        }
+        return ordenados.first?.element ?? partidos.first
+    }
+
     /// `effectiveMode`: «Para ti» solo si hay gustos; si no se ha tocado, con gustos se abre en «Para ti».
     static func modoEfectivo(_ querido: ModoAgenda?, gustos: GustosFutbol) -> ModoAgenda {
         guard ParaTi.tieneGustos(gustos) else { return .todos }
@@ -159,32 +252,130 @@ enum ReglasAgenda {
         guard modo == .paraTi, ParaTi.tieneGustos(gustos) else { return partidos }
         return partidos.filter { ParaTi.enParaTi($0, gustos) }
     }
+
+    /// `matchTitle`: «Local vs Visitante» o el `title` si no hay visitante.
+    static func titulo(_ partido: FootballMatch) -> String {
+        partido.away.isEmpty ? partido.title : "\(partido.home) vs \(partido.away)"
+    }
+
+    /// `.agenda-head__lede` (solo ≥ 768): «Mañana · Jueves, 25 de septiembre»; sin prefijo si la fecha no es válida.
+    static func entradilla(_ fecha: String, hoy: String) -> String {
+        let etiqueta = etiquetaDia(fecha, hoy: hoy)
+        let larga = etiqueta.larga.prefix(1).uppercased() + etiqueta.larga.dropFirst()
+        return etiqueta.principal == etiqueta.larga ? larga : "\(etiqueta.principal) · \(larga)"
+    }
+
+    /// `dayLabel`: «Hoy», «Mañana», «Ayer» o el día abreviado; el número y la etiqueta larga.
+    static func etiquetaDia(_ fecha: String, hoy: String) -> EtiquetaDia {
+        guard let dia = numeroDia(fecha) else { return EtiquetaDia(principal: fecha, numero: "", larga: fecha) }
+        let partes = fecha.split(separator: "-")
+        let numero = String(Int(partes[2]) ?? 0)
+        let mes = Int(partes[1]) ?? 1
+        // 1-1-1970 fue jueves: 0 = jueves.
+        let semana = ((dia % 7) + 7 + 4) % 7  // 0 = domingo
+        let principal: String
+        if fecha == hoy {
+            principal = "Hoy"
+        } else if fecha == sumarDias(hoy, 1) {
+            principal = "Mañana"
+        } else if fecha == sumarDias(hoy, -1) {
+            principal = "Ayer"
+        } else {
+            principal = FechasAgenda.diasCortos[semana]
+        }
+        let larga = "\(FechasAgenda.diasLargos[semana]), \(numero) de \(FechasAgenda.meses[mes - 1])"
+        return EtiquetaDia(principal: principal, numero: numero, larga: larga)
+    }
+}
+
+/// Deslizar a los lados para cambiar de día (agenda) o de pestaña (Canales): `classifySwipe` de lib/gestures.ts
+/// con el eje x (a3 §6.7, a5 §3.4). Propio de M5 hasta que llegue `Deslizamiento` (M2, Core/Reglas/Gestos).
+enum GestoLateral {
+    /// Distancia que cuenta (`threshold`), velocidad (0,45 pt/ms) con al menos 24 pt, y eje dominante 1,4×.
+    static let umbral = 56.0
+    static let velocidad = 450.0
+    static let minimoRapido = 24.0
+
+    /// +1 = siguiente (el dedo va a la izquierda), −1 = anterior, 0 = nada.
+    static func paso(dx: Double, dy: Double, vx: Double) -> Int {
+        let ax = abs(dx)
+        let ay = abs(dy)
+        let lejos = max(ax, ay) >= umbral || (abs(vx) >= velocidad && max(ax, ay) >= minimoRapido)
+        guard lejos, ax > ay * 1.4 else { return 0 }
+        return dx < 0 ? 1 : -1
+    }
+
+    /// Mientras arrastras la lista de la agenda: `clamp(dx × 0,3, −60, +60)`.
+    static func resistencia(_ dx: Double) -> Double { min(60, max(-60, dx * 0.3)) }
+}
+
+/// Tablas propias (como `Intl` en es-ES: «Jue», «jueves», «septiembre»): no dependen del idioma del iPhone.
+enum FechasAgenda {
+    static let diasCortos = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"]
+    static let diasLargos = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"]
+    static let meses = [
+        "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre",
+        "noviembre", "diciembre",
+    ]
+
+    /// «20:51» en hora de Madrid (`madridHour`).
+    static func hora(_ fecha: Date) -> String {
+        let reloj = RelojMadrid(fecha)
+        return String(format: "%02d:%02d", reloj.minutos / 60, reloj.minutos % 60)
+    }
+
+    /// `madridHour` de un texto ISO (nil si no es fecha).
+    static func hora(iso: String?) -> String? {
+        guard let iso, let fecha = FechaISO.parse(iso) else { return nil }
+        return hora(fecha)
+    }
+}
+
+/// «¿Está este canal en tu biblioteca?» (`buildLibraryLookup`): directorio activo + favoritos + recientes,
+/// sin repetir, por título y alias, con `channelMatchScore ≥ 70` (`LIBRARY_MIN_SCORE`).
+struct BusquedaBiblioteca: Sendable {
+    static let puntuacionMinima = 70
+    static let vacia = BusquedaBiblioteca(biblioteca: nil)
+
+    private let claves: [String]
+    let tamano: Int
+
+    init(biblioteca: LibraryView?) {
+        var vistos = Set<String>()
+        var claves: [String] = []
+        let todos = (biblioteca?.web ?? []) + (biblioteca?.favorites ?? []) + (biblioteca?.history ?? [])
+        for item in todos where !item.id.isEmpty && !vistos.contains(item.id) {
+            vistos.insert(item.id)
+            for nombre in [item.title, item.alias].compactMap({ $0 }) {
+                let clave = Canales.clave(nombre)
+                if !clave.isEmpty { claves.append(clave) }
+            }
+        }
+        self.claves = claves
+        tamano = vistos.count
+    }
+
+    func tiene(_ canal: String) -> Bool {
+        let buscada = Canales.clave(canal)
+        guard !buscada.isEmpty else { return false }
+        return claves.contains { Canales.puntuacionDeClaves(buscada, $0) >= Self.puntuacionMinima }
+    }
+
+    /// `channelInfo`: los canales del partido y si están en tu biblioteca.
+    func canales(_ partido: FootballMatch) -> [InfoCanal] {
+        partido.channels.map(\.name).filter { !$0.isEmpty }.map { InfoCanal(nombre: $0, enBiblioteca: tiene($0)) }
+    }
 }
 
 /// Textos de la agenda (fechas en hora de Madrid, como las da el servidor).
 enum FormatoAgenda {
     /// `YYYY-MM-DD` de una fecha en Madrid.
-    static func clave(_ fecha: Date) -> String {
-        let c = calendario.dateComponents([.year, .month, .day], from: fecha)
-        return String(format: "%04d-%02d-%02d", c.year ?? 2026, c.month ?? 1, c.day ?? 1)
-    }
+    static func clave(_ fecha: Date) -> String { RelojMadrid(fecha).fecha }
 
     /// Para la tira de días: «Hoy», «Mañana», «Ayer» o «Jue», y el número del día.
     static func partesDia(_ texto: String, ahora: Date) -> (arriba: String, numero: String) {
-        guard let fecha = dia(texto) else { return ("", texto) }
-        let cal = calendario
-        let numero = String(cal.component(.day, from: fecha))
-        if cal.isDate(fecha, inSameDayAs: ahora) { return ("Hoy", numero) }
-        if let manana = cal.date(byAdding: .day, value: 1, to: ahora), cal.isDate(fecha, inSameDayAs: manana) {
-            return ("Mañana", numero)
-        }
-        if let ayer = cal.date(byAdding: .day, value: -1, to: ahora), cal.isDate(fecha, inSameDayAs: ayer) {
-            return ("Ayer", numero)
-        }
-        let estilo = Date.FormatStyle(locale: Locale(identifier: "es_ES"), calendar: cal, timeZone: zona)
-            .weekday(.abbreviated)
-        let corto = fecha.formatted(estilo).replacingOccurrences(of: ".", with: "")
-        return (corto.prefix(1).uppercased() + corto.dropFirst(), numero)
+        let etiqueta = ReglasAgenda.etiquetaDia(texto, hoy: clave(ahora))
+        return (etiqueta.principal, etiqueta.numero.isEmpty ? texto : etiqueta.numero)
     }
 
     static var zona: TimeZone { TimeZone(identifier: "Europe/Madrid") ?? .current }
@@ -196,32 +387,16 @@ enum FormatoAgenda {
         return calendario
     }
 
-    /// `YYYY-MM-DD` → mediodía de ese día en Madrid.
-    static func dia(_ texto: String) -> Date? {
-        let partes = texto.split(separator: "-").compactMap { Int($0) }
-        guard partes.count == 3 else { return nil }
-        return calendario.date(
-            from: DateComponents(year: partes[0], month: partes[1], day: partes[2], hour: 12))
-    }
-
-    /// «Hoy», «Mañana», «Ayer» o «jueves, 24 sept».
+    /// «Hoy», «Mañana», «Ayer» o «sábado, 26 sept» (etiqueta corta de un día).
     static func etiqueta(dia texto: String, ahora: Date) -> String {
-        guard let fecha = dia(texto) else { return texto }
-        let cal = Self.calendario
-        if cal.isDate(fecha, inSameDayAs: ahora) { return "Hoy" }
-        if let manana = cal.date(byAdding: .day, value: 1, to: ahora),
-            cal.isDate(fecha, inSameDayAs: manana)
-        {
-            return "Mañana"
-        }
-        if let ayer = cal.date(byAdding: .day, value: -1, to: ahora),
-            cal.isDate(fecha, inSameDayAs: ayer)
-        {
-            return "Ayer"
-        }
-        let estilo = Date.FormatStyle(locale: Locale(identifier: "es_ES"), calendar: cal, timeZone: zona)
-            .weekday(.wide).day().month(.abbreviated)
-        return fecha.formatted(estilo)
+        guard let numero = ReglasAgenda.numeroDia(texto) else { return texto }
+        let hoy = clave(ahora)
+        let etiqueta = ReglasAgenda.etiquetaDia(texto, hoy: hoy)
+        if ["Hoy", "Mañana", "Ayer"].contains(etiqueta.principal) { return etiqueta.principal }
+        let semana = ((numero % 7) + 7 + 4) % 7
+        let mes = Int(texto.split(separator: "-")[1]) ?? 1
+        let corto = FechasAgenda.meses[mes - 1] == "septiembre" ? "sept" : String(FechasAgenda.meses[mes - 1].prefix(3))
+        return "\(FechasAgenda.diasLargos[semana]), \(etiqueta.numero) \(corto)"
     }
 
     /// «Local – Visitante», o el título si no se pudo separar.

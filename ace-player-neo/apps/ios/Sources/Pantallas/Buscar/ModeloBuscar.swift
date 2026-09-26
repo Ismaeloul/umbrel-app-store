@@ -1,51 +1,62 @@
 import Foundation
 import Observation
 
-// Rescatado en la poda (fase 0.2, b-arquitectura §1.11) de `BuscarModelo` (Features/Search/BuscarView.swift),
-// sin cambiar el comportamiento. M5 lo completa (fases, anuncios; a5 §4) y lo pasa a DatosApp.
+/* Estado de «Buscar» (M5; a5 §4; search/SearchView.tsx): lo escrito, lo comprometido (tras 450 ms o con Intro;
+   viaja en la ruta como `q`), la consulta al motor de ese texto (`DatosApp.busqueda`: caché de 60 s, sin
+   reintentos, las atrasadas nunca pintan porque cada texto es su consulta), el aviso de fallo una vez por
+   búsqueda fallida y la ventana de entrada escalonada. Rescatado en la poda de `BuscarModelo` y reescrito. */
 
-/// Búsqueda en el motor AceStream (`GET search?q=`): con espera de 450 ms
-/// mientras se escribe y cancelando la anterior.
-@MainActor
-@Observable
-final class ModeloBuscar {
-    private(set) var resultados: [SearchResult] = []
-    private(set) var buscando = false
-    private(set) var fallo: String?
-    private(set) var buscado = ""
+@MainActor @Observable final class ModeloBuscar {
+    /// Lo escrito en el campo.
+    var texto = ""
+    /// Lo que se busca (limpio: espacios colapsados, a 80).
+    private(set) var comprometido = ""
+    /// Aparición escalonada al llegar resultados nuevos (900 ms).
+    private(set) var entrando = false
+    @ObservationIgnored private var ultimoAvisado: String?
+    @ObservationIgnored private var tareaEntrada: Task<Void, Never>?
+    @ObservationIgnored private var guarda = GuardaReproducir.compartida
 
-    private let entorno: Entorno
-
-    init(entorno: Entorno) {
-        self.entorno = entorno
+    /// `commit`: fija lo que se busca (y lo deja en la ruta).
+    func comprometer(_ valor: String, navegador: Navegador) {
+        let limpio = ModeloBusqueda.limpiar(valor)
+        comprometido = limpio
+        navegador.textoBuscar = limpio
     }
 
-    /// Busca `texto` (vacío = limpia). Pensado para `.task(id:)`, que cancela la anterior.
-    func buscar(_ texto: String, esperar: Bool = true) async {
-        let consulta = texto.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard consulta.count >= 2, ReglasFuentes.hashValido(consulta) == nil else {
-            resultados = []
-            fallo = nil
-            buscado = ""
-            buscando = false
-            return
-        }
-        if esperar {
-            try? await Task.sleep(for: .milliseconds(450))  // a5 §4 (espera de 450 ms)
-            if Task.isCancelled { return }
-        }
-        buscando = true
-        defer { buscando = false }
-        do {
-            let respuesta = try await entorno.api.enviar(API.buscar(consulta))
+    /// 450 ms tras la última tecla (la llama la vista en `.task(id: texto)`).
+    func comprometerConEspera(navegador: Navegador) async {
+        guard ModeloBusqueda.limpiar(texto) != comprometido else { return }
+        try? await Task.sleep(for: .seconds(ModeloBusqueda.espera))
+        guard !Task.isCancelled else { return }
+        comprometer(texto, navegador: navegador)
+    }
+
+    /// Si otra vista manda aquí un texto (`&q=`), se pone y se busca al momento.
+    func recibir(_ q: String) {
+        guard q != comprometido else { return }
+        texto = q
+        comprometido = ModeloBusqueda.limpiar(q)
+    }
+
+    /// El aviso de fallo sale una vez por búsqueda fallida (no por repintado).
+    func debeAvisarFallo(_ q: String) -> Bool {
+        guard ultimoAvisado != q else { return false }
+        ultimoAvisado = q
+        return true
+    }
+
+    func olvidarFallo() { ultimoAvisado = nil }
+
+    func entrarResultados() {
+        entrando = true
+        tareaEntrada?.cancel()
+        tareaEntrada = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(ModeloBusqueda.ventanaEntrada))
             guard !Task.isCancelled else { return }
-            resultados = respuesta.results
-            buscado = consulta
-            fallo = nil
-        } catch {
-            let convertido = APIError.desde(error)
-            if case .cancelado = convertido { return }
-            fallo = convertido.mensaje
+            self?.entrando = false
         }
     }
+
+    func puedeReproducir(_ hash: String) -> Bool { guarda.permitir(hash) }
 }

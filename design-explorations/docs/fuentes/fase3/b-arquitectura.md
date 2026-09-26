@@ -2130,6 +2130,11 @@ struct RefCanal: Hashable, Sendable {
     var titulo: String
     var coleccion: LibraryCollection?
     var ih: Bool?
+    /// La categoría de la fila (Recientes, lista o resultado del motor): «Guardar favorito» la guarda
+    /// (`input.category || 'Guardado'`). Aditivo de M5.
+    var categoria: String?
+    /// Al guardar el favorito, la biblioteca salta a Favoritos (`onFavoriteSaved`, solo desde Canales). Aditivo de M5.
+    var alGuardarIrAFavoritos = false
 }
 
 enum DetentsHoja: Sendable { case medido, grande, medioYGrande }
@@ -2487,6 +2492,7 @@ enum EstadoConexion: Hashable, Sendable { case conectando, conectado(ServerVia),
 @MainActor @Observable final class MarcadoresDestapados {
     func destapado(_ partido: String) -> Bool { … }
     func destapar(_ partido: String) { … }
+    func tapar(_ partido: String) { … }                      // (M5, contrato aditivo) segundo toque en «Marcador»
     func vaciar() { … }
 }
 @MainActor @Observable final class RelojCompartido {         // tic de 20 s mientras haya quien mire

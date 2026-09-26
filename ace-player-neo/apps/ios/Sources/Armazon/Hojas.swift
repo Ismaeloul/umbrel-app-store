@@ -12,6 +12,11 @@ struct RefCanal: Hashable, Sendable {
     var titulo: String
     var coleccion: LibraryCollection?
     var ih: Bool?
+    /// La categoría de la fila (Recientes, lista o resultado del motor): «Guardar favorito» la guarda
+    /// (`input.category || 'Guardado'`). Aditivo de M5.
+    var categoria: String?
+    /// Al guardar el favorito, la biblioteca salta a Favoritos (`onFavoriteSaved`, solo desde Canales). Aditivo de M5.
+    var alGuardarIrAFavoritos = false
 }
 
 enum DetentsHoja: Sendable { case medido, grande, medioYGrande }

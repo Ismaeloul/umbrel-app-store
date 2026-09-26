@@ -14,7 +14,7 @@ import Observation
 
     func destapado(_ partido: String) -> Bool { destapados.contains(partido) }
     func destapar(_ partido: String) { destapados.insert(partido) }
-    /// Volver a tapar uno (`hideScore`).
+    /// Vuelve a tapar UN partido (segundo toque en la cápsula «Marcador»; `hideScore` de score-reveal.ts).
     func tapar(_ partido: String) { destapados.remove(partido) }
     /// Vuelve a tapar todos (`resetScoreReveal`: al cambiar de fuente o de canal).
     func vaciar() { if !destapados.isEmpty { destapados = [] } }
