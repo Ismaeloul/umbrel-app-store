@@ -195,13 +195,22 @@ enum DatosTeatro {
 
     /// `channelInfo`: los canales anunciados y si están en tu biblioteca (≥ 70 por nombre o tvg-id).
     static func canales(_ partido: FootballMatch, biblioteca: [Item]) -> [CanalEmision] {
-        let claves = biblioteca.flatMap { item in [item.title] + (item.alias.map { [$0] } ?? []) }
-            .map { Canales.clave($0) }.filter { !$0.isEmpty }
-        var vistos = Set<String>()
-        return partido.channels.map(\.name).filter { !$0.isEmpty && vistos.insert($0).inserted }.map { nombre in
-            let buscada = Canales.clave(nombre)
-            let esta = !buscada.isEmpty && claves.contains { Canales.puntuacionDeClaves(buscada, $0) >= puntuacionBiblioteca }
-            return CanalEmision(nombre: nombre, enBiblioteca: esta)
+        // Por pasos y con tipos: en una sola cadena tardaba 220 ms en tiparse en la CI (36228460732).
+        var nombres: [String] = []
+        for item in biblioteca {
+            nombres.append(item.title)
+            if let alias = item.alias { nombres.append(alias) }
         }
+        let claves: [String] = nombres.map { (nombre: String) -> String in Canales.clave(nombre) }.filter { !$0.isEmpty }
+        var vistos = Set<String>()
+        var resultado: [CanalEmision] = []
+        for canal in partido.channels where !canal.name.isEmpty && vistos.insert(canal.name).inserted {
+            let buscada: String = Canales.clave(canal.name)
+            let esta: Bool = !buscada.isEmpty && claves.contains { (clave: String) -> Bool in
+                Canales.puntuacionDeClaves(buscada, clave) >= puntuacionBiblioteca
+            }
+            resultado.append(CanalEmision(nombre: canal.name, enBiblioteca: esta))
+        }
+        return resultado
     }
 }
