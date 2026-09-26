@@ -25,11 +25,12 @@ struct ContenidoReportar: View {
             hojas.cerrar()
         } cuerpo: {
             VStack(alignment: .leading, spacing: 12) {
-                if let titulo { cual(titulo).padding(.top, -14) }
+                if numero > 0, let titulo { cual(titulo).padding(.top, -14) }
                 motivos
                 Text("La fuente se apartará temporalmente y el segundo motor la comprobará en segundo plano.")
                     .estilo(EstiloTexto(tamano: 13, peso: 450, altoLinea: 1.45))
                     .foregroundStyle(Palco.text2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         } pie: {
             BotonPalco("Reportar y comprobar", icono: .flag, bloque: true, ocupado: ocupado) { enviar() }
@@ -45,7 +46,7 @@ struct ContenidoReportar: View {
         return Text("\(base)\(mono)")
             .estilo(EstiloTexto(tamano: 13, peso: 450, altoLinea: 1.45))
             .foregroundStyle(Palco.text2)
-            .padding(.horizontal, 0)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     /// Caja de relleno 4, separación 2, radio 18, `--surface-2`; filas de 48, relleno 0 14, separación 12, radio 14,
