@@ -27,7 +27,7 @@ final class FlujoTeatroUITests: XCTestCase {
             "-AceNeoReloj", relojDemo(),
         ]
         app.launch()
-        XCTAssertTrue(elementoUI(app, IDUI.teatro).waitForExistence(timeout: 20), "No se abre el teatro de \(vista)")
+        XCTAssertTrue(elementoUI(app, IDUI.videoTeatro).waitForExistence(timeout: 20), "No se abre el teatro de \(vista)")
         return app
     }
 

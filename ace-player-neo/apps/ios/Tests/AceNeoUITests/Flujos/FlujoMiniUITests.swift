@@ -16,7 +16,7 @@ final class FlujoMiniUITests: XCTestCase {
             "-AceNeoDemo", "-AceNeoMovimientoReducido", "-AceNeoApariencia", tema, "-AceNeoEscena", "partido/canal/\(canal)",
         ]
         app.launch()
-        XCTAssertTrue(elementoUI(app, IDUI.teatro).waitForExistence(timeout: 20), "No se abre el teatro del canal")
+        XCTAssertTrue(elementoUI(app, IDUI.videoTeatro).waitForExistence(timeout: 20), "No se abre el teatro del canal")
         return app
     }
 
@@ -35,7 +35,7 @@ final class FlujoMiniUITests: XCTestCase {
         if !boton.waitForExistence(timeout: 10) || !boton.isHittable { elementoUI(app, IDUI.videoTeatro).tap() }
         XCTAssertTrue(boton.waitForExistence(timeout: 5), "Sin ⌄ Minimizar")
         boton.tap()
-        XCTAssertTrue(elementoUI(app, IDUI.mini).waitForExistence(timeout: 10), "No aparece el mini")
+        XCTAssertTrue(elementoUI(app, IDUI.miniPausa).waitForExistence(timeout: 10), "No aparece el mini")
     }
 
     @MainActor
@@ -46,8 +46,8 @@ final class FlujoMiniUITests: XCTestCase {
             XCTAssertTrue(conTextoUI(app, "Canal Favorito").exists, "El mini no dice el canal")
             captura(app, "mini-reproductor-\(tema)")
             app.buttons["Volver al vídeo: Canal Favorito"].firstMatch.tap()
-            XCTAssertTrue(elementoUI(app, IDUI.teatro).waitForExistence(timeout: 10), "Tocar el mini no abre el teatro")
-            XCTAssertTrue(esperarQueDesaparezca(elementoUI(app, IDUI.mini), plazo: 5), "El mini sigue con el teatro")
+            XCTAssertTrue(elementoUI(app, IDUI.videoTeatro).waitForExistence(timeout: 10), "Tocar el mini no abre el teatro")
+            XCTAssertTrue(esperarQueDesaparezca(elementoUI(app, IDUI.miniPausa), plazo: 5), "El mini sigue con el teatro")
             app.terminate()
         }
     }
@@ -58,7 +58,7 @@ final class FlujoMiniUITests: XCTestCase {
         let video = elementoUI(app, IDUI.videoTeatro)
         XCTAssertTrue(video.waitForExistence(timeout: 10))
         arrastrar(video, desde: CGVector(dx: 0.5, dy: 0.4), hasta: CGVector(dx: 0.5, dy: 2.6))
-        XCTAssertTrue(elementoUI(app, IDUI.mini).waitForExistence(timeout: 10), "Arrastrar hacia abajo no minimiza")
+        XCTAssertTrue(elementoUI(app, IDUI.miniPausa).waitForExistence(timeout: 10), "Arrastrar hacia abajo no minimiza")
     }
 
     @MainActor
@@ -71,21 +71,21 @@ final class FlujoMiniUITests: XCTestCase {
         pausa.tap()
         XCTAssertNotEqual(elementoUI(app, IDUI.miniPausa).label, antes, "La pausa del mini no cambia")
         elementoUI(app, IDUI.miniDetener).tap()
-        XCTAssertTrue(esperarQueDesaparezca(elementoUI(app, IDUI.mini), plazo: 8), "Detener no quita el mini")
+        XCTAssertTrue(esperarQueDesaparezca(elementoUI(app, IDUI.miniPausa), plazo: 8), "Detener no quita el mini")
     }
 
     @MainActor
     func testDeslizarALadoDescartaConDeshacer() throws {
         let app = abrirCanal()
         minimizar(app)
-        let mini = elementoUI(app, IDUI.mini)
-        arrastrar(mini, desde: CGVector(dx: 0.3, dy: 0.5), hasta: CGVector(dx: 1.4, dy: 0.5))
-        XCTAssertTrue(esperarQueDesaparezca(mini, plazo: 8), "Deslizar a un lado no quita el mini")
+        let texto = app.buttons["Volver al vídeo: Canal Favorito"].firstMatch
+        arrastrar(texto, desde: CGVector(dx: 0.2, dy: 0.5), hasta: CGVector(dx: 1.6, dy: 0.5))
+        XCTAssertTrue(esperarQueDesaparezca(elementoUI(app, IDUI.miniPausa), plazo: 8), "Deslizar a un lado no quita el mini")
         let deshacer = app.buttons["Deshacer"].firstMatch
         XCTAssertTrue(deshacer.waitForExistence(timeout: 5), "Sin «Deshacer»")
         XCTAssertTrue(conTextoUI(app, "Reproducción detenida").exists)
         captura(app, "mini-toast-deshacer")
         deshacer.tap()
-        XCTAssertTrue(elementoUI(app, IDUI.mini).waitForExistence(timeout: 10), "«Deshacer» no vuelve a poner el canal")
+        XCTAssertTrue(elementoUI(app, IDUI.miniPausa).waitForExistence(timeout: 10), "«Deshacer» no vuelve a poner el canal")
     }
 }
