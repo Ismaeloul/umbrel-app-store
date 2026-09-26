@@ -16,7 +16,11 @@ struct ContenidoEncontrarCanal: View {
     @State private var error: String?
     @State private var ocupado = false
 
-    private var resolucion: Resolution? { fuentes.resolucion }
+    private var resolucion: Resolution? {
+        let sesion: SesionFuentes = fuentes
+        let valor: Resolution? = sesion.resolucion
+        return valor
+    }
     private var candidatas: [ResolutionCandidate] { resolucion?.candidates ?? [] }
     private var noEncontrado: Bool { resolucion?.status != .choices }
 
