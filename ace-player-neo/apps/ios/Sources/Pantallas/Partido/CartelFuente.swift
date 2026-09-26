@@ -61,13 +61,17 @@ private struct TeselaCartel: View {
     let espacio: Namespace.ID?
     @State private var alto: CGFloat = 90
 
+    /// `.src-poster .dorsal__abbrev { max-width: calc(100% - var(--s) * 0.12 - 46px) }`: el proveedor acaba en «…»
+    /// antes del número. MarcaCanal ya quita 0,24·s, así que aquí van 46 − 0,12·s.
+    private var reserva: CGFloat { 46 - alto * 0.12 }
+
     var body: some View {
         let forma = RoundedRectangle(cornerRadius: R.m, style: .circular)
         ZStack {
             forma.fill(Palco.surface2)
             MarcaCanal(
                 nombre: ReglasFuentes.nombreCanal(fila.entrada), forma: .tesela, tamano: alto,
-                sigla: NombreCartel.proveedorTesela(fila.presentacion), reservaDerecha: 32
+                sigla: NombreCartel.proveedorTesela(fila.presentacion), reservaDerecha: reserva
             )
             .clipShape(forma)
         }

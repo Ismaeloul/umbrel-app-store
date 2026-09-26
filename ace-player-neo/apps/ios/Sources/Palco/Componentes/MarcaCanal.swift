@@ -41,17 +41,25 @@ struct MarcaCanal: View {
         .accessibilityHidden(true)
     }
 
+    /// `label?.trim() || channelAbbrev(name)`: un texto vacío vuelve a la sigla.
+    private var textoTesela: String {
+        let propio = (sigla ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return propio.isEmpty ? TonosMarca.sigla(nombre) : propio
+    }
+
     /// `.dorsal__abbrev`: arriba 0,1·s, izquierda 0,12·s, `max(11, 0,17·s)` · 760 · wdth 88 · +0,08 em; lo que no
-    /// cabe acaba en «…» (`text-overflow: ellipsis`).
+    /// cabe acaba en «…» (`text-overflow: ellipsis`). `--long` (más de 9 letras, un proveedor largo): `max(10, 0,14·s)`
+    /// y +0,05 em. En mayúsculas, como `text-transform: uppercase`.
     private var siglaTesela: some View {
         let s: CGFloat = tamano
-        let letra: CGFloat = max(11, s * 0.17)
+        let texto: String = textoTesela
+        let largo: Bool = texto.count > 9
+        let letra: CGFloat = largo ? max(10, s * 0.14) : max(11, s * 0.17)
         let anchoMaximo: CGFloat = max(0, ancho - s * 0.24 - reservaDerecha)
         let arriba: CGFloat = s * 0.1
         let izquierda: CGFloat = s * 0.12
-        let estilo = EstiloTexto(tamano: Double(letra), peso: 760, anchura: 88, trackingEm: 0.08)
-        let texto: String = sigla ?? TonosMarca.sigla(nombre)
-        return Text(texto)
+        let estilo = EstiloTexto(tamano: Double(letra), peso: 760, anchura: 88, trackingEm: largo ? 0.05 : 0.08)
+        return Text(texto.uppercased())
             .estilo(estilo)
             .foregroundStyle(Color.white.opacity(0.9))
             .lineLimit(1)
