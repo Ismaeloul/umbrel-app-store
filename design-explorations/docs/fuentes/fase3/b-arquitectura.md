@@ -128,7 +128,7 @@ ejecutando la demo **real** de la web, `CristalPalco.vidrio(_:)` como único sit
 | AirPlay | a4 §24.2 lo proponía arriba a la derecha | en la cápsula de abajo a la derecha `[Directo · AirPlay · pantalla completa]`, **solo** con `AVRouteDetector.multipleRoutesDetected`; a 375 con «Reanudar» el botón Directo pasa a solo icono antes que solaparse (M6) |
 | Texto de ayuda del modo | «El botón LIVE…» | «El botón «Directo»…» (a6 §5.1) |
 | Visor | persistente (app 0.8.0) | `v_` + 14 base64url por proceso (a8 §3.11.5) |
-| Icono | variante oscura por defecto (a8 §7.4) | `AppIcon` actual **intacto** (decisión 8); `Marca.imageset` con una sola variante (la oscura de `apps/web/public/icon.svg`) |
+| Icono | variante oscura por defecto (a8 §7.4) | `AppIcon` = **el icono de la app de Umbrel** (`ismaeloul-ace-player-neo/icon.svg`, a sangre; tintado en grises), por petición de Isma del 26-sep (sustituye a «intacto» de la decisión 8); `Marca.imageset` con una sola variante (la oscura de `apps/web/public/icon.svg`) |
 | Dynamic Type | a8 §12.2 proponía `.dynamicTypeSize(.large)` | tamaños fijos por `Mona`, sin `dynamicTypeSize` (a2 §26) |
 | `NavigationStack` | a5 §8.1 lo proponía con la barra oculta | prohibido (linter) |
 | iPad | pendiente (a8 §13) | solo iPhone (`TARGETED_DEVICE_FAMILY "1"`) |
