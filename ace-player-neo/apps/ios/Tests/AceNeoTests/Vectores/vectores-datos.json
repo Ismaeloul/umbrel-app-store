@@ -1,0 +1,1212 @@
+{
+  "ambitos": {
+    "library": [
+      "libraryGet",
+      "bootstrap"
+    ],
+    "preferences": [
+      "preferencesGet",
+      "bootstrap"
+    ],
+    "directories": [
+      "directoriesGet",
+      "libraryGet",
+      "bootstrap"
+    ],
+    "bindings": [
+      "footballResolve"
+    ],
+    "reports": [
+      "footballResolve",
+      "health"
+    ],
+    "learning": [
+      "playbackStatus",
+      "health"
+    ],
+    "stats": [
+      "health"
+    ],
+    "nowPlaying": [
+      "playbackStatus"
+    ],
+    "settings": [
+      "settingsGet",
+      "bootstrap"
+    ]
+  },
+  "eventos": [
+    {
+      "fixture": "devices.changed",
+      "cache": [
+        "invalidar devicesList"
+      ]
+    },
+    {
+      "fixture": "diagnostics.new",
+      "cache": [
+        "invalidar diagnosticsList",
+        "invalidar health"
+      ]
+    },
+    {
+      "fixture": "engine.status",
+      "cache": [
+        "escribir engineStatus"
+      ]
+    },
+    {
+      "fixture": "playback.handoff",
+      "cache": []
+    },
+    {
+      "fixture": "playback.nowPlaying",
+      "cache": [
+        "escribir playbackStatus"
+      ]
+    },
+    {
+      "fixture": "playback.sessions",
+      "cache": [
+        "escribir playbackStatus"
+      ]
+    },
+    {
+      "fixture": "resync",
+      "cache": [
+        "invalidar *"
+      ]
+    },
+    {
+      "fixture": "scan.progress",
+      "cache": [
+        "invalidar footballScan:0123456789abcdef01234567"
+      ]
+    },
+    {
+      "fixture": "scan.verdict",
+      "cache": [
+        "invalidar footballScan:0123456789abcdef01234567"
+      ]
+    },
+    {
+      "fixture": "state.changed",
+      "cache": [
+        "invalidar bootstrap",
+        "invalidar libraryGet",
+        "invalidar playbackStatus"
+      ]
+    },
+    {
+      "fixture": "stream.closed",
+      "cache": []
+    },
+    {
+      "fixture": "stream.modeChanged",
+      "cache": []
+    },
+    {
+      "fixture": "stream.ready",
+      "cache": []
+    },
+    {
+      "fixture": "stream.reopened",
+      "cache": []
+    },
+    {
+      "fixture": "stream.stats",
+      "cache": []
+    }
+  ],
+  "dirigidos": [
+    {
+      "fixture": "devices.changed",
+      "visores": null,
+      "evento": {
+        "type": "devices.changed",
+        "data": {
+          "reason": "paired",
+          "deviceId": "dev_iphone01"
+        }
+      },
+      "llega": true
+    },
+    {
+      "fixture": "diagnostics.new",
+      "visores": null,
+      "evento": {
+        "type": "diagnostics.new",
+        "data": {
+          "id": "diag_000001",
+          "at": "2026-09-23T18:30:00.000Z",
+          "cause": "source",
+          "code": "source_no_peers",
+          "message": "La fuente no tiene pares.",
+          "hash": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+          "channel": "DAZN 1",
+          "sessionId": "s_Q2FuYWxEZVBydWViYQ"
+        }
+      },
+      "llega": true
+    },
+    {
+      "fixture": "engine.status",
+      "visores": null,
+      "evento": {
+        "type": "engine.status",
+        "data": {
+          "status": "online",
+          "online": true,
+          "since": "2026-09-23T18:30:00.000Z",
+          "checkedAt": "2026-09-23T18:30:00.000Z",
+          "engineVersion": "3.2.3",
+          "autoRestarts": {
+            "lastHour": 0,
+            "max": 3,
+            "nextAllowedAt": null,
+            "exhausted": false
+          }
+        }
+      },
+      "llega": true
+    },
+    {
+      "fixture": "playback.handoff",
+      "visores": [
+        "v_propio"
+      ],
+      "evento": {
+        "type": "playback.handoff",
+        "data": {
+          "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+          "viewerIds": [
+            "v_propio"
+          ],
+          "byDeviceId": "dev_iphone01",
+          "byClient": "ios",
+          "hash": "b2c3d4e5f60718293a4b5c6d7e8f901234567890",
+          "title": "M+ LaLiga",
+          "reason": "other_channel"
+        }
+      },
+      "llega": true
+    },
+    {
+      "fixture": "playback.handoff",
+      "visores": [
+        "v_otro"
+      ],
+      "evento": {
+        "type": "playback.handoff",
+        "data": {
+          "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+          "viewerIds": [
+            "v_otro"
+          ],
+          "byDeviceId": "dev_iphone01",
+          "byClient": "ios",
+          "hash": "b2c3d4e5f60718293a4b5c6d7e8f901234567890",
+          "title": "M+ LaLiga",
+          "reason": "other_channel"
+        }
+      },
+      "llega": false
+    },
+    {
+      "fixture": "playback.handoff",
+      "visores": [],
+      "evento": {
+        "type": "playback.handoff",
+        "data": {
+          "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+          "viewerIds": [],
+          "byDeviceId": "dev_iphone01",
+          "byClient": "ios",
+          "hash": "b2c3d4e5f60718293a4b5c6d7e8f901234567890",
+          "title": "M+ LaLiga",
+          "reason": "other_channel"
+        }
+      },
+      "llega": true
+    },
+    {
+      "fixture": "playback.handoff",
+      "visores": [
+        "v_otro",
+        "v_propio"
+      ],
+      "evento": {
+        "type": "playback.handoff",
+        "data": {
+          "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+          "viewerIds": [
+            "v_otro",
+            "v_propio"
+          ],
+          "byDeviceId": "dev_iphone01",
+          "byClient": "ios",
+          "hash": "b2c3d4e5f60718293a4b5c6d7e8f901234567890",
+          "title": "M+ LaLiga",
+          "reason": "other_channel"
+        }
+      },
+      "llega": true
+    },
+    {
+      "fixture": "playback.nowPlaying",
+      "visores": null,
+      "evento": {
+        "type": "playback.nowPlaying",
+        "data": {
+          "nowPlaying": {
+            "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "title": "DAZN 1",
+            "dev": "salon",
+            "token": "tok_abc123",
+            "at": 1790188200000
+          },
+          "learningCount": 4
+        }
+      },
+      "llega": true
+    },
+    {
+      "fixture": "playback.sessions",
+      "visores": null,
+      "evento": {
+        "type": "playback.sessions",
+        "data": {
+          "sessions": [
+            {
+              "id": "s_Q2FuYWxEZVBydWViYQ",
+              "hash": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+              "mode": "hls",
+              "openedAt": "2026-09-23T18:30:00.000Z",
+              "viewers": [
+                {
+                  "client": "web",
+                  "deviceId": "web_salon01",
+                  "lastBeatAt": "2026-09-23T18:30:00.000Z",
+                  "viewerId": "viewer_tab01",
+                  "deviceName": "Chrome · Windows",
+                  "platform": "web",
+                  "playing": true
+                },
+                {
+                  "client": "ios",
+                  "deviceId": "dev_iphone01",
+                  "lastBeatAt": "2026-09-23T18:30:00.000Z",
+                  "viewerId": "viewer_iphone01",
+                  "deviceName": "iPhone de Isma",
+                  "platform": "ios",
+                  "playing": false
+                }
+              ],
+              "title": "DAZN 1",
+              "protocol": "hls"
+            }
+          ]
+        }
+      },
+      "llega": true
+    },
+    {
+      "fixture": "resync",
+      "visores": null,
+      "evento": {
+        "type": "resync",
+        "data": {
+          "reason": "buffer_miss"
+        }
+      },
+      "llega": true
+    },
+    {
+      "fixture": "scan.progress",
+      "visores": null,
+      "evento": {
+        "type": "scan.progress",
+        "data": {
+          "jobId": "0123456789abcdef01234567",
+          "kind": "interactive",
+          "status": "running",
+          "total": 2,
+          "checked": 1,
+          "playable": 1,
+          "failed": 0,
+          "waiting": 0,
+          "retryAt": null,
+          "matchId": "fltv-2026-09-23-3"
+        }
+      },
+      "llega": true
+    },
+    {
+      "fixture": "scan.verdict",
+      "visores": null,
+      "evento": {
+        "type": "scan.verdict",
+        "data": {
+          "jobId": "0123456789abcdef01234567",
+          "hash": "b2c3d4e5f60718293a4b5c6d7e8f901234567890",
+          "state": "working",
+          "reason": "playable_media",
+          "by": "scanner",
+          "checkedAt": "2026-09-23T18:30:00.000Z",
+          "playableOn": {
+            "web": true,
+            "ios": true
+          }
+        }
+      },
+      "llega": true
+    },
+    {
+      "fixture": "state.changed",
+      "visores": null,
+      "evento": {
+        "type": "state.changed",
+        "data": {
+          "scopes": [
+            "library",
+            "nowPlaying"
+          ],
+          "at": "2026-09-23T18:30:00.000Z"
+        }
+      },
+      "llega": true
+    },
+    {
+      "fixture": "stream.closed",
+      "visores": [
+        "v_propio"
+      ],
+      "evento": {
+        "type": "stream.closed",
+        "data": {
+          "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+          "viewerIds": [
+            "v_propio"
+          ],
+          "reason": "engine_failed",
+          "code": "engine_unavailable"
+        }
+      },
+      "llega": true
+    },
+    {
+      "fixture": "stream.closed",
+      "visores": [
+        "v_otro"
+      ],
+      "evento": {
+        "type": "stream.closed",
+        "data": {
+          "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+          "viewerIds": [
+            "v_otro"
+          ],
+          "reason": "engine_failed",
+          "code": "engine_unavailable"
+        }
+      },
+      "llega": false
+    },
+    {
+      "fixture": "stream.closed",
+      "visores": [],
+      "evento": {
+        "type": "stream.closed",
+        "data": {
+          "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+          "viewerIds": [],
+          "reason": "engine_failed",
+          "code": "engine_unavailable"
+        }
+      },
+      "llega": true
+    },
+    {
+      "fixture": "stream.closed",
+      "visores": [
+        "v_otro",
+        "v_propio"
+      ],
+      "evento": {
+        "type": "stream.closed",
+        "data": {
+          "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+          "viewerIds": [
+            "v_otro",
+            "v_propio"
+          ],
+          "reason": "engine_failed",
+          "code": "engine_unavailable"
+        }
+      },
+      "llega": true
+    },
+    {
+      "fixture": "stream.modeChanged",
+      "visores": [
+        "v_propio"
+      ],
+      "evento": {
+        "type": "stream.modeChanged",
+        "data": {
+          "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+          "viewerIds": [
+            "v_propio"
+          ],
+          "from": "mpegts",
+          "to": "hls",
+          "url": "/ace/m/a1b2c3d4e5f60718293a4b5c6d7e8f9012345678/s_Q2FuYWxEZVBydWViYQ.m3u8",
+          "reason": "shared"
+        }
+      },
+      "llega": true
+    },
+    {
+      "fixture": "stream.modeChanged",
+      "visores": [
+        "v_otro"
+      ],
+      "evento": {
+        "type": "stream.modeChanged",
+        "data": {
+          "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+          "viewerIds": [
+            "v_otro"
+          ],
+          "from": "mpegts",
+          "to": "hls",
+          "url": "/ace/m/a1b2c3d4e5f60718293a4b5c6d7e8f9012345678/s_Q2FuYWxEZVBydWViYQ.m3u8",
+          "reason": "shared"
+        }
+      },
+      "llega": false
+    },
+    {
+      "fixture": "stream.modeChanged",
+      "visores": [],
+      "evento": {
+        "type": "stream.modeChanged",
+        "data": {
+          "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+          "viewerIds": [],
+          "from": "mpegts",
+          "to": "hls",
+          "url": "/ace/m/a1b2c3d4e5f60718293a4b5c6d7e8f9012345678/s_Q2FuYWxEZVBydWViYQ.m3u8",
+          "reason": "shared"
+        }
+      },
+      "llega": true
+    },
+    {
+      "fixture": "stream.modeChanged",
+      "visores": [
+        "v_otro",
+        "v_propio"
+      ],
+      "evento": {
+        "type": "stream.modeChanged",
+        "data": {
+          "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+          "viewerIds": [
+            "v_otro",
+            "v_propio"
+          ],
+          "from": "mpegts",
+          "to": "hls",
+          "url": "/ace/m/a1b2c3d4e5f60718293a4b5c6d7e8f9012345678/s_Q2FuYWxEZVBydWViYQ.m3u8",
+          "reason": "shared"
+        }
+      },
+      "llega": true
+    },
+    {
+      "fixture": "stream.ready",
+      "visores": [
+        "v_propio"
+      ],
+      "evento": {
+        "type": "stream.ready",
+        "data": {
+          "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+          "viewerIds": [
+            "v_propio"
+          ],
+          "url": "/ace/r/a1b2c3d4e5f60718293a4b5c6d7e8f9012345678/s_Q2FuYWxEZVBydWViYQ",
+          "protocol": "mpegts"
+        }
+      },
+      "llega": true
+    },
+    {
+      "fixture": "stream.ready",
+      "visores": [
+        "v_otro"
+      ],
+      "evento": {
+        "type": "stream.ready",
+        "data": {
+          "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+          "viewerIds": [
+            "v_otro"
+          ],
+          "url": "/ace/r/a1b2c3d4e5f60718293a4b5c6d7e8f9012345678/s_Q2FuYWxEZVBydWViYQ",
+          "protocol": "mpegts"
+        }
+      },
+      "llega": false
+    },
+    {
+      "fixture": "stream.ready",
+      "visores": [],
+      "evento": {
+        "type": "stream.ready",
+        "data": {
+          "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+          "viewerIds": [],
+          "url": "/ace/r/a1b2c3d4e5f60718293a4b5c6d7e8f9012345678/s_Q2FuYWxEZVBydWViYQ",
+          "protocol": "mpegts"
+        }
+      },
+      "llega": true
+    },
+    {
+      "fixture": "stream.ready",
+      "visores": [
+        "v_otro",
+        "v_propio"
+      ],
+      "evento": {
+        "type": "stream.ready",
+        "data": {
+          "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+          "viewerIds": [
+            "v_otro",
+            "v_propio"
+          ],
+          "url": "/ace/r/a1b2c3d4e5f60718293a4b5c6d7e8f9012345678/s_Q2FuYWxEZVBydWViYQ",
+          "protocol": "mpegts"
+        }
+      },
+      "llega": true
+    },
+    {
+      "fixture": "stream.reopened",
+      "visores": [
+        "v_propio"
+      ],
+      "evento": {
+        "type": "stream.reopened",
+        "data": {
+          "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+          "viewerIds": [
+            "v_propio"
+          ],
+          "url": "/ace/m/a1b2c3d4e5f60718293a4b5c6d7e8f9012345678/s_Q2FuYWxEZVBydWViYQ.m3u8",
+          "protocol": "hls",
+          "reason": "engine_restart"
+        }
+      },
+      "llega": true
+    },
+    {
+      "fixture": "stream.reopened",
+      "visores": [
+        "v_otro"
+      ],
+      "evento": {
+        "type": "stream.reopened",
+        "data": {
+          "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+          "viewerIds": [
+            "v_otro"
+          ],
+          "url": "/ace/m/a1b2c3d4e5f60718293a4b5c6d7e8f9012345678/s_Q2FuYWxEZVBydWViYQ.m3u8",
+          "protocol": "hls",
+          "reason": "engine_restart"
+        }
+      },
+      "llega": false
+    },
+    {
+      "fixture": "stream.reopened",
+      "visores": [],
+      "evento": {
+        "type": "stream.reopened",
+        "data": {
+          "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+          "viewerIds": [],
+          "url": "/ace/m/a1b2c3d4e5f60718293a4b5c6d7e8f9012345678/s_Q2FuYWxEZVBydWViYQ.m3u8",
+          "protocol": "hls",
+          "reason": "engine_restart"
+        }
+      },
+      "llega": true
+    },
+    {
+      "fixture": "stream.reopened",
+      "visores": [
+        "v_otro",
+        "v_propio"
+      ],
+      "evento": {
+        "type": "stream.reopened",
+        "data": {
+          "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+          "viewerIds": [
+            "v_otro",
+            "v_propio"
+          ],
+          "url": "/ace/m/a1b2c3d4e5f60718293a4b5c6d7e8f9012345678/s_Q2FuYWxEZVBydWViYQ.m3u8",
+          "protocol": "hls",
+          "reason": "engine_restart"
+        }
+      },
+      "llega": true
+    },
+    {
+      "fixture": "stream.stats",
+      "visores": [
+        "v_propio"
+      ],
+      "evento": {
+        "type": "stream.stats",
+        "data": {
+          "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+          "viewerIds": [
+            "v_propio"
+          ],
+          "status": "dl",
+          "peers": 14,
+          "speedDown": 820,
+          "speedUp": 95,
+          "downloaded": 52428800,
+          "at": "2026-09-23T18:30:00.000Z"
+        }
+      },
+      "llega": true
+    },
+    {
+      "fixture": "stream.stats",
+      "visores": [
+        "v_otro"
+      ],
+      "evento": {
+        "type": "stream.stats",
+        "data": {
+          "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+          "viewerIds": [
+            "v_otro"
+          ],
+          "status": "dl",
+          "peers": 14,
+          "speedDown": 820,
+          "speedUp": 95,
+          "downloaded": 52428800,
+          "at": "2026-09-23T18:30:00.000Z"
+        }
+      },
+      "llega": false
+    },
+    {
+      "fixture": "stream.stats",
+      "visores": [],
+      "evento": {
+        "type": "stream.stats",
+        "data": {
+          "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+          "viewerIds": [],
+          "status": "dl",
+          "peers": 14,
+          "speedDown": 820,
+          "speedUp": 95,
+          "downloaded": 52428800,
+          "at": "2026-09-23T18:30:00.000Z"
+        }
+      },
+      "llega": true
+    },
+    {
+      "fixture": "stream.stats",
+      "visores": [
+        "v_otro",
+        "v_propio"
+      ],
+      "evento": {
+        "type": "stream.stats",
+        "data": {
+          "sessionId": "s_Q2FuYWxEZVBydWViYQ",
+          "viewerIds": [
+            "v_otro",
+            "v_propio"
+          ],
+          "status": "dl",
+          "peers": 14,
+          "speedDown": 820,
+          "speedUp": 95,
+          "downloaded": 52428800,
+          "at": "2026-09-23T18:30:00.000Z"
+        }
+      },
+      "llega": true
+    }
+  ],
+  "tiempoReal": {
+    "respaldoTras": 10000,
+    "esperas": [
+      3000,
+      6000,
+      12000,
+      24000,
+      48000,
+      60000,
+      60000,
+      60000
+    ],
+    "abrirTrasCorte": [
+      "invalidar engineStatus",
+      "invalidar playbackStatus"
+    ],
+    "sondeoReproduccion": 5000,
+    "sondeoMotor": 20000,
+    "respaldo": 10000
+  },
+  "consultas": {
+    "reintentos": [
+      {
+        "codigo": "network",
+        "estado": 0,
+        "fallos": 0,
+        "reintenta": true
+      },
+      {
+        "codigo": "network",
+        "estado": 0,
+        "fallos": 1,
+        "reintenta": true
+      },
+      {
+        "codigo": "network",
+        "estado": 0,
+        "fallos": 2,
+        "reintenta": false
+      },
+      {
+        "codigo": "network",
+        "estado": 0,
+        "fallos": 3,
+        "reintenta": false
+      },
+      {
+        "codigo": "timeout",
+        "estado": 0,
+        "fallos": 0,
+        "reintenta": true
+      },
+      {
+        "codigo": "timeout",
+        "estado": 0,
+        "fallos": 1,
+        "reintenta": true
+      },
+      {
+        "codigo": "timeout",
+        "estado": 0,
+        "fallos": 2,
+        "reintenta": false
+      },
+      {
+        "codigo": "timeout",
+        "estado": 0,
+        "fallos": 3,
+        "reintenta": false
+      },
+      {
+        "codigo": "bad_response",
+        "estado": 200,
+        "fallos": 0,
+        "reintenta": false
+      },
+      {
+        "codigo": "bad_response",
+        "estado": 200,
+        "fallos": 1,
+        "reintenta": false
+      },
+      {
+        "codigo": "bad_response",
+        "estado": 200,
+        "fallos": 2,
+        "reintenta": false
+      },
+      {
+        "codigo": "bad_response",
+        "estado": 200,
+        "fallos": 3,
+        "reintenta": false
+      },
+      {
+        "codigo": "validation_error",
+        "estado": 400,
+        "fallos": 0,
+        "reintenta": false
+      },
+      {
+        "codigo": "validation_error",
+        "estado": 400,
+        "fallos": 1,
+        "reintenta": false
+      },
+      {
+        "codigo": "validation_error",
+        "estado": 400,
+        "fallos": 2,
+        "reintenta": false
+      },
+      {
+        "codigo": "validation_error",
+        "estado": 400,
+        "fallos": 3,
+        "reintenta": false
+      },
+      {
+        "codigo": "unauthorized",
+        "estado": 401,
+        "fallos": 0,
+        "reintenta": false
+      },
+      {
+        "codigo": "unauthorized",
+        "estado": 401,
+        "fallos": 1,
+        "reintenta": false
+      },
+      {
+        "codigo": "unauthorized",
+        "estado": 401,
+        "fallos": 2,
+        "reintenta": false
+      },
+      {
+        "codigo": "unauthorized",
+        "estado": 401,
+        "fallos": 3,
+        "reintenta": false
+      },
+      {
+        "codigo": "origin_forbidden",
+        "estado": 403,
+        "fallos": 0,
+        "reintenta": false
+      },
+      {
+        "codigo": "origin_forbidden",
+        "estado": 403,
+        "fallos": 1,
+        "reintenta": false
+      },
+      {
+        "codigo": "origin_forbidden",
+        "estado": 403,
+        "fallos": 2,
+        "reintenta": false
+      },
+      {
+        "codigo": "origin_forbidden",
+        "estado": 403,
+        "fallos": 3,
+        "reintenta": false
+      },
+      {
+        "codigo": "not_found",
+        "estado": 404,
+        "fallos": 0,
+        "reintenta": false
+      },
+      {
+        "codigo": "not_found",
+        "estado": 404,
+        "fallos": 1,
+        "reintenta": false
+      },
+      {
+        "codigo": "not_found",
+        "estado": 404,
+        "fallos": 2,
+        "reintenta": false
+      },
+      {
+        "codigo": "not_found",
+        "estado": 404,
+        "fallos": 3,
+        "reintenta": false
+      },
+      {
+        "codigo": "http_429",
+        "estado": 429,
+        "fallos": 0,
+        "reintenta": true
+      },
+      {
+        "codigo": "http_429",
+        "estado": 429,
+        "fallos": 1,
+        "reintenta": true
+      },
+      {
+        "codigo": "http_429",
+        "estado": 429,
+        "fallos": 2,
+        "reintenta": false
+      },
+      {
+        "codigo": "http_429",
+        "estado": 429,
+        "fallos": 3,
+        "reintenta": false
+      },
+      {
+        "codigo": "internal_error",
+        "estado": 500,
+        "fallos": 0,
+        "reintenta": true
+      },
+      {
+        "codigo": "internal_error",
+        "estado": 500,
+        "fallos": 1,
+        "reintenta": true
+      },
+      {
+        "codigo": "internal_error",
+        "estado": 500,
+        "fallos": 2,
+        "reintenta": false
+      },
+      {
+        "codigo": "internal_error",
+        "estado": 500,
+        "fallos": 3,
+        "reintenta": false
+      },
+      {
+        "codigo": "http_502",
+        "estado": 502,
+        "fallos": 0,
+        "reintenta": true
+      },
+      {
+        "codigo": "http_502",
+        "estado": 502,
+        "fallos": 1,
+        "reintenta": true
+      },
+      {
+        "codigo": "http_502",
+        "estado": 502,
+        "fallos": 2,
+        "reintenta": false
+      },
+      {
+        "codigo": "http_502",
+        "estado": 502,
+        "fallos": 3,
+        "reintenta": false
+      },
+      {
+        "codigo": "engine_unavailable",
+        "estado": 503,
+        "fallos": 0,
+        "reintenta": true
+      },
+      {
+        "codigo": "engine_unavailable",
+        "estado": 503,
+        "fallos": 1,
+        "reintenta": true
+      },
+      {
+        "codigo": "engine_unavailable",
+        "estado": 503,
+        "fallos": 2,
+        "reintenta": false
+      },
+      {
+        "codigo": "engine_unavailable",
+        "estado": 503,
+        "fallos": 3,
+        "reintenta": false
+      }
+    ],
+    "esperasReintento": [
+      {
+        "intento": 0,
+        "ms": 1000
+      },
+      {
+        "intento": 1,
+        "ms": 2000
+      },
+      {
+        "intento": 2,
+        "ms": 4000
+      },
+      {
+        "intento": 3,
+        "ms": 8000
+      },
+      {
+        "intento": 4,
+        "ms": 8000
+      },
+      {
+        "intento": 5,
+        "ms": 8000
+      }
+    ],
+    "frescura": {
+      "conTiempoReal": null,
+      "sinTiempoReal": 30000
+    },
+    "alVolver": {
+      "conTiempoReal": false,
+      "sinTiempoReal": true
+    },
+    "gcTime": 300000
+  },
+  "errores": {
+    "respuestas": [
+      {
+        "estado": 404,
+        "cuerpo": "{\"error\":{\"code\":\"not_found\",\"message\":\"Esa dirección no existe.\",\"requestId\":\"req_01\"}}",
+        "codigo": "not_found",
+        "mensaje": "Esa dirección no existe.",
+        "requestId": "req_01",
+        "reintentable": false
+      },
+      {
+        "estado": 403,
+        "cuerpo": "{\"error\":{\"code\":\"origin_forbidden\",\"message\":\"Mensaje propio del servidor.\"}}",
+        "codigo": "origin_forbidden",
+        "mensaje": "Mensaje propio del servidor.",
+        "requestId": null,
+        "reintentable": false
+      },
+      {
+        "estado": 500,
+        "cuerpo": "{\"error\":{\"code\":\"internal_error\"}}",
+        "codigo": "internal_error",
+        "mensaje": "Algo ha fallado en el servidor. Queda anotado en el registro.",
+        "requestId": null,
+        "reintentable": true
+      },
+      {
+        "estado": 502,
+        "cuerpo": "{\"error\":{\"message\":\"Sin código.\"}}",
+        "codigo": "http_502",
+        "mensaje": "Sin código.",
+        "requestId": null,
+        "reintentable": true
+      },
+      {
+        "estado": 400,
+        "cuerpo": "{\"error\":{\"code\":\"validation_error\",\"message\":\"\"}}",
+        "codigo": "validation_error",
+        "mensaje": "Falta algún dato o no tiene el formato esperado.",
+        "requestId": null,
+        "reintentable": false
+      },
+      {
+        "estado": 500,
+        "cuerpo": "{\"error\":{\"code\":12,\"message\":7,\"requestId\":3}}",
+        "codigo": "http_500",
+        "mensaje": "El servidor respondió con un error 500.",
+        "requestId": null,
+        "reintentable": true
+      },
+      {
+        "estado": 401,
+        "cuerpo": "{\"error\":\"unauthorized\"}",
+        "codigo": "unauthorized",
+        "mensaje": "Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.",
+        "requestId": null,
+        "reintentable": false
+      },
+      {
+        "estado": 401,
+        "cuerpo": "{\"error\":\"device_revoked\"}",
+        "codigo": "device_revoked",
+        "mensaje": "Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.",
+        "requestId": null,
+        "reintentable": false
+      },
+      {
+        "estado": 400,
+        "cuerpo": "{\"error\":\"http_404\"}",
+        "codigo": "http_404",
+        "mensaje": "El servidor respondió con un error 404.",
+        "requestId": null,
+        "reintentable": false
+      },
+      {
+        "estado": 400,
+        "cuerpo": "{\"error\":\"no_existe\"}",
+        "codigo": "http_400",
+        "mensaje": "El servidor respondió con un error 400.",
+        "requestId": null,
+        "reintentable": false
+      },
+      {
+        "estado": 429,
+        "cuerpo": "{\"error\":{\"code\":\"http_429\"}}",
+        "codigo": "http_429",
+        "mensaje": "Ese servidor limita las descargas (429). Vuelve a intentarlo en unos minutos.",
+        "requestId": null,
+        "reintentable": true
+      },
+      {
+        "estado": 404,
+        "cuerpo": "{\"otro\":true}",
+        "codigo": "http_404",
+        "mensaje": "El servidor respondió con un error 404.",
+        "requestId": null,
+        "reintentable": false
+      },
+      {
+        "estado": 500,
+        "cuerpo": "{\"error\":null}",
+        "codigo": "http_500",
+        "mensaje": "El servidor respondió con un error 500.",
+        "requestId": null,
+        "reintentable": true
+      },
+      {
+        "estado": 502,
+        "cuerpo": "<html><body>Bad Gateway</body></html>",
+        "codigo": "http_502",
+        "mensaje": "El servidor respondió con un error 502.",
+        "requestId": null,
+        "reintentable": true
+      },
+      {
+        "estado": 503,
+        "cuerpo": "",
+        "codigo": "http_503",
+        "mensaje": "El servidor respondió con un error 503.",
+        "requestId": null,
+        "reintentable": true
+      }
+    ],
+    "textosCliente": {
+      "network": "No hay conexión con el Umbrel. Comprueba la red; la app seguirá reintentando.",
+      "timeout": "El servidor tarda demasiado en responder. Vuelve a intentarlo en un momento.",
+      "bad_response": "El servidor ha respondido algo que no se entiende.",
+      "invalid_response": "La respuesta del servidor no cumple el contrato de la API (solo se comprueba en desarrollo).",
+      "demo_unsupported": "Esto no se puede hacer en el modo demo."
+    }
+  }
+}

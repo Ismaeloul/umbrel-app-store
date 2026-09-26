@@ -8,7 +8,7 @@ enum AlVolverActiva: Sendable { case siempre, soloSinTiempoReal, nunca }
 struct PoliticaConsulta: Sendable {
     var frescuraConTiempoReal: Duration? = nil  // nil = no caduca (el SSE avisa)
     var frescuraSinTiempoReal: Duration = .seconds(30)
-    var reintentos = 2  // a 1 s y 2 s, solo si el error es reintentable
+    var reintentos = Reintentos.maximo  // a 1 s y 2 s, solo si el error es reintentable
     var alVolverActiva: AlVolverActiva = .soloSinTiempoReal
     var siempreAlMontar = false
 

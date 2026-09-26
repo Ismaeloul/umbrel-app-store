@@ -152,23 +152,12 @@ public final class APIClient: Sendable {
                 throw APIError.formato("\(endpoint.ruta): \(error)")
             }
         }
-        let sobre = try? JSONDecoder().decode(ApiErrorEnvelope.self, from: datos)
-        let codigo = sobre?.error.code ?? Self.codigoAntiguo(datos) ?? "http_\(http.statusCode)"
+        let error = APIError.deRespuesta(estado: http.statusCode, datos: datos)
         if http.statusCode == 401 && endpoint.conToken {
+            let codigo = error.codigo ?? "http_401"
             await perderAcceso(codigo: codigo, borrar: true)
             throw APIError.necesitaEmparejar(codigo: codigo)
         }
-        throw APIError.servidor(
-            codigo: codigo, estado: http.statusCode, mensaje: sobre?.error.message,
-            requestId: sobre?.error.requestId)
-    }
-
-    /// Forma antigua `{ "error": "<código>" }` con un código del catálogo (errorFromResponse de la web).
-    private static func codigoAntiguo(_ datos: Data) -> String? {
-        struct Antiguo: Decodable { let error: String }
-        guard let antiguo = try? JSONDecoder().decode(Antiguo.self, from: datos),
-            ErrorCatalog.entries[antiguo.error] != nil
-        else { return nil }
-        return antiguo.error
+        throw error
     }
 }
