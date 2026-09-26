@@ -72,6 +72,11 @@
   font-size: var(--fs-13);
   text-wrap: pretty;
 }
+/* El motor no da nada más, pero arriba sí hay filas: una línea discreta. */
+.search-sec__empty {
+  margin: 0;
+  padding: 0 var(--s-1);
+}
 .search-loading {
   display: grid;
   gap: var(--s-3);

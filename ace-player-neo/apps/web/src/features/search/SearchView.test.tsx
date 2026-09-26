@@ -130,6 +130,17 @@ describe('reglas del buscador (§15)', () => {
     expect(screen.getByText('Prueba con otro nombre o menos palabras.')).toBeInTheDocument();
   });
 
+  it('si tu biblioteca sí tiene el canal, el motor vacío es una línea y no «Sin resultados»', async () => {
+    setup();
+    fireEvent.change(field(), { target: { value: 'eurosport' } });
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    expect(
+      await screen.findByText('El motor AceStream no tiene nada más para «eurosport».'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Eurosport 1' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Sin resultados para «eurosport».' })).toBeNull();
+  });
+
   it('una respuesta atrasada no pinta encima de la nueva', async () => {
     const pending: Array<() => void> = [];
     setup('?vista=buscar', (call) => {
