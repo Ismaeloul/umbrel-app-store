@@ -239,6 +239,16 @@ struct AvisoSesion: Sendable, Equatable {
         return .noAutorizado
     }
 
+    /// «Emparejar de nuevo» de la hoja de otro servidor (a2 §22.8; contrato aditivo de M7): para la reproducción
+    /// (`alPerderAcceso`), borra token, direcciones y cachés y vuelve a emparejar sin aviso. No revoca nada en el
+    /// servidor. A diferencia de `accesoPerdido`, sirve cuantas veces se pida mientras la app esté emparejada.
+    func desemparejar() async {
+        guard fase == .app, !olvidando else { return }
+        entorno.configuracion.borrar()
+        await entorno.servidores.actualizar(ServerConfig())
+        salir(motivo: .olvidadoAqui)
+    }
+
     /// Revoca el propio, borra token y cachés y vuelve a emparejar (sin aviso, a2 §23.3).
     func olvidarEsteIPhone() async {
         guard fase == .app, !olvidando else { return }
