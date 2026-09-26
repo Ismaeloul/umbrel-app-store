@@ -76,15 +76,15 @@ struct SeccionMotor: View {
     }
 
     /// El reinicio (health/engine.ts `restartEngine`): estado «restarting» al momento, `POST engine/restart`,
-    /// toast y la comprobación a los 2,5 s (motor; quien llama refresca también la salud).
-    static func reiniciar(datos: DatosApp, avisos: Avisos) async {
+    /// toast y la comprobación a los 2,5 s (motor; desde Salud, también la salud, como health/engine.ts).
+    static func reiniciar(datos: DatosApp, avisos: Avisos, desdeSalud: Bool = false) async {
         if var motor = datos.motor.datos {
             motor.status = .restarting
             motor.online = false
             datos.motor.escribir(motor)
         }
         do {
-            _ = try await datos.reiniciarMotor()
+            _ = try await datos.reiniciarMotor(desdeSalud: desdeSalud)
             avisos.avisar("Reiniciando el motor AceStream…", tono: .info, icono: .motor)
         } catch {
             avisos.avisar("No se pudo reiniciar el motor. \(APIError.desde(error).mensaje)", tono: .err)

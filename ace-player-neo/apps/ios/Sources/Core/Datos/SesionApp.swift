@@ -244,6 +244,7 @@ struct AvisoSesion: Sendable, Equatable {
         guard fase == .app, !olvidando else { return }
         entorno.configuracion.borrar()
         await entorno.servidores.actualizar(ServerConfig())
+        guard fase == .app else { return }  // un 401 durante la espera ya ha salido con su aviso
         salir(motivo: .olvidadoAqui)
     }
 

@@ -188,7 +188,7 @@ struct SeccionSalud: View {
         confirmar.tocar("motor", plazo: SeccionMotor.plazo) {
             Task {
                 reiniciando = true
-                await SeccionMotor.reiniciar(datos: datos, avisos: avisos)
+                await SeccionMotor.reiniciar(datos: datos, avisos: avisos, desdeSalud: true)
                 reiniciando = false
                 await datos.salud.refrescar()
             }

@@ -308,7 +308,7 @@ tal cual.
   `Config/Local.xcconfig` (no se sube a git).
 - **Tests**: `xcodegen generate` y
   `xcodebuild test -project AceNeo.xcodeproj -scheme AceNeo -destination 'platform=iOS Simulator,name=iPhone 16'`.
-  Los de interfaz lanzan la app con `-AceNeoServidorSimulado` (servidor falso
+  Los de interfaz lanzan la app con `-AceNeoServidorSimulado` (`ServidorDemo` + `SSEDemo`
   dentro de la app, solo en Debug; código válido `482913`), y con
   `-AceNeoEmparejado` ya emparejada; el vídeo lo pone `MotorSimulado`.
 - **E2E contra el backend de verdad** (`ServidorRealUITests`): la CI levanta en

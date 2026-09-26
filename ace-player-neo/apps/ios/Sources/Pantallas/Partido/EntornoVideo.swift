@@ -131,10 +131,13 @@ struct EntornoVideo: DynamicProperty {
         pip.alternar()
     }
 
+    /// «Datos técnicos» nunca se pinta sobre el vídeo (Isma, 26-sep): elegirlo con la pantalla completa puesta la
+    /// quita, para que la pestaña se vea debajo del vídeo en vez de quedarse marcada sin enseñarse (I1).
     func alternarDatosTecnicos() {
         if presentacion.datosTecnicosAbiertos {
             presentacion.cerrarDatosTecnicos()
         } else {
+            presentacion.quitarPantallaCompleta()
             presentacion.abrirDatosTecnicos()
         }
     }

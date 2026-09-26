@@ -67,10 +67,14 @@ struct TeatroView: View {
     /// Arrastrar el vídeo hacia abajo: sigue al dedo y se encoge hacia el mini; al cruzar el umbral (56, el de
     /// `classifySwipe`), háptica rígida (una vez por cruce, como el umbral de lado); al soltar, vuela al mini y
     /// minimiza (`ligera`) o vuelve a su sitio con el muelle.
+    /// Sin nada sonando no hay mini al que ir (I1): el escenario no se encoge y, pasado el umbral, se vuelve atrás
+    /// con el fundido de siempre (la vista «atrás» de la web).
     private func arrastrar(_ gesto: ArrastreVideo, ancho: CGFloat) {
+        let hayVideo: Bool = video.reproductor.canal != nil
         switch gesto {
         case .mover(let dy):
-            let sigue: Bool = transicion.arrastrarAlMini(Double(max(0, dy)), escenario: marcoEscenario(ancho: ancho))
+            let sigue: Bool =
+                hayVideo && transicion.arrastrarAlMini(Double(max(0, dy)), escenario: marcoEscenario(ancho: ancho))
             let pasado: Bool = sigue && Double(dy) >= GeometriaVuelo.umbralAlMini
             if pasado != umbral.pasado {
                 umbral.pasado = pasado
@@ -78,7 +82,9 @@ struct TeatroView: View {
             }
         case .soltar(let minimiza):
             umbral.pasado = false
-            if minimiza {
+            if minimiza && !hayVideo {
+                video.minimizar()
+            } else if minimiza {
                 transicion.soltarAlMini(reducido: reducido)
                 video.minimizar()
             } else {

@@ -92,7 +92,7 @@ final class FlujoAgendaUITests: XCTestCase {
         let app = arrancar()
         let capsula = elementoUI(app, IDUI.capsulaMarcador)
         guard capsula.waitForExistence(timeout: 12) else {
-            throw XCTSkip("La demo provisional (ServidorSimulado) no trae `start`: no se piden marcadores (llega con la demo de M2)")
+            throw XCTSkip("La demo (ServidorDemo) no trae ningún partido con marcador que destapar")
         }
         XCTAssertTrue(capsula.label.hasPrefix("Ver marcador"), capsula.label)
         capsula.tap()
