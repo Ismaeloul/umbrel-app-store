@@ -102,7 +102,7 @@ describe('cleanIptvTitle', () => {
     }
   });
 
-  it('orden de las variantes (§16): 1080p > 4K > 720p > SD > sin marca', () => {
+  it('orden de las variantes (§17): 1080p > 4K > 720p > SD > sin marca', () => {
     expect(qualityRank('fhd')).toBeGreaterThan(qualityRank('uhd'));
     expect(qualityRank('uhd')).toBeGreaterThan(qualityRank('hd'));
     expect(qualityRank('hd')).toBeGreaterThan(qualityRank('sd'));
@@ -156,6 +156,20 @@ describe('cleanIptvTitle', () => {
     ['DAZN 12', 'DAZN 12', null, false, null, false],
     ['M+ LaLiga 2 FHD', 'M+ LaLiga 2', 'fhd', false, null, false],
     ['Canal Tres (Andalucía)', 'Canal Tres (Andalucía)', null, false, null, false],
+    ['DAZN 1 FHD50', 'DAZN 1', 'fhd', false, null, false],
+    ['DAZN 1 HD50', 'DAZN 1', 'hd', false, null, false],
+    ['DAZN 1 1080 50', 'DAZN 1', 'fhd', false, null, false],
+    ['ES DAZN 1', 'DAZN 1', null, false, 'ES', false],
+    ['ES » DAZN 1', 'DAZN 1', null, false, 'ES', false],
+    ['ES ➤ DAZN 1', 'DAZN 1', null, false, 'ES', false],
+    ['DAZN 1 ES', 'DAZN 1', null, false, 'ES', false],
+    ['DAZN 1 - ES', 'DAZN 1', null, false, 'ES', false],
+    ['DAZN 1 BK 2', 'DAZN 1', null, true, null, false],
+    ['DAZN 1 HD 2', 'DAZN 1', 'hd', true, null, false],
+    ['DAZN F1 FHD 2', 'DAZN F1', 'fhd', true, null, false],
+    ['LaLiga TV HD 2', 'LaLiga TV 2', 'hd', false, null, false],
+    ['DAZN 1 ⁴ᴷ', 'DAZN 1', 'uhd', false, null, false],
+    ['DE PELICULA', 'DE PELICULA', null, false, null, false],
   ])('variante: %s', (title, display, quality, backup, country, hevc) => {
     const clean = cleanIptvTitle(title);
     expect([clean.display, clean.quality, clean.backup, clean.country, clean.hevc]).toEqual([
@@ -171,6 +185,19 @@ describe('cleanIptvTitle', () => {
     expect(groupCountry('XXX | ADULTOS')).toBe(null);
     expect(groupCountry('VIP | DEPORTES')).toBe(null);
     expect(groupCountry('DE | SPORT')).toBe('DE');
+  });
+
+  it('con 3 letras solo es país una sigla de país («TDT», «DOC», «NBA», «CAT» no)', () => {
+    expect(groupCountry('TDT | NACIONALES')).toBe(null);
+    expect(groupCountry('DOC | DOCUMENTALES')).toBe(null);
+    expect(groupCountry('CAT | AUTONOMICAS')).toBe(null);
+    expect(groupCountry('USA | SPORTS')).toBe('USA');
+    expect(groupCountry('ESP | DEPORTES')).toBe('ES');
+    expect(groupCountry('EU | TDT | NACIONALES')).toBe(null);
+    expect(cleanIptvTitle('NBA: Lakers').country).toBe(null);
+    expect(cleanIptvTitle('RAI - 1').display).toBe('RAI - 1');
+    expect(cleanIptvTitle('TVE - La 1').display).toBe('La 1');
+    expect(cleanIptvTitle('GER: DAZN 1').country).toBe('GER');
   });
 });
 

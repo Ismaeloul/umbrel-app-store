@@ -92,7 +92,7 @@ export function guideGroupMatches(
 export interface IptvLayerResult {
   /**
    * Los canales con sitio, primero los de la guía, cada uno con los carteles
-   * que le tocan: 4 carteles en total como mucho (§16).
+   * que le tocan: 4 carteles en total como mucho (§17).
    */
   readonly matches: readonly IptvGroupMatch[];
   /** Nombres de canal confirmados por la guía (pistas para AceStream). */
@@ -100,7 +100,7 @@ export interface IptvLayerResult {
 }
 
 /**
- * Reparte los 4 carteles IPTV entre los canales, ya en orden (§16): los 2
+ * Reparte los 4 carteles IPTV entre los canales, ya en orden (§17): los 2
  * primeros canales «de verdad» tienen uno asegurado cada uno (el gemelo de
  * otro país de un canal que ya está, «DE: DAZN 1» con «DAZN 1», no cuenta:
  * solo entra si sobra sitio) y el resto se llena en orden, así el primer
@@ -135,7 +135,7 @@ export function allotPosters(ordered: readonly IptvGroupMatch[]): IptvGroupMatch
     });
 }
 
-/** Junta la guía y el nombre: un canal una vez (la guía primero) y 4 carteles como mucho (§16). */
+/** Junta la guía y el nombre: un canal una vez (la guía primero) y 4 carteles como mucho (§17). */
 export function mergeIptvMatches(
   byGuide: readonly IptvGroupMatch[],
   byName: readonly IptvGroupMatch[],

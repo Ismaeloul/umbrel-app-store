@@ -243,7 +243,7 @@ export interface ResolutionIptv {
     match: { readonly score: number; readonly matchedChannel: string },
   ): BaseCandidate | null;
   /**
-   * El canal IPTV tocado (docs/iptv.md §14.4 y §16): si es del catálogo
+   * El canal IPTV tocado (docs/iptv.md §14.4 y §17): si es del catálogo
    * vigente, los carteles de su canal (una variante por resolución) con 100 y
    * su nombre limpio en `matchedChannel`; si no, ninguno.
    */
@@ -354,7 +354,7 @@ function withGuideHints(
 }
 
 /**
- * Como mucho 4 carteles IPTV (docs/iptv.md §16): primero la guía, luego la
+ * Como mucho 4 carteles IPTV (docs/iptv.md §17): primero la guía, luego la
  * puntuación y, entre iguales, el orden de la capa IPTV (las variantes de un
  * canal ya vienen 1080p, 4K, 720p, SD y reserva).
  */
@@ -394,7 +394,7 @@ export async function resolveFootballChannel(
   options: ResolveOptions = {},
 ): Promise<ResolutionCore> {
   const scope: ResolveScope = options.scope ?? 'match';
-  /* Canal suelto tocado como canal IPTV: sus carteles primero y su nombre limpio pedido (§14.4 y §16). */
+  /* Canal suelto tocado como canal IPTV: sus carteles primero y su nombre limpio pedido (§14.4 y §17). */
   const pinnedList =
     scope === 'channel' && options.iptvId && deps.iptv ? deps.iptv.tapped(options.iptvId) : [];
   const pinned = pinnedList[0] ?? null;
@@ -585,7 +585,7 @@ export async function resolveFootballChannel(
     catalogSize: semanticResult.catalogSize,
     error: semanticResult.error,
   };
-  /* Los carteles del canal IPTV tocado van los primeros y en su orden (§14.4 y §16), aunque otra IPTV también
+  /* Los carteles del canal IPTV tocado van los primeros y en su orden (§14.4 y §17), aunque otra IPTV también
      dé 100. */
   if (pinnedList.length) {
     const mine = pinnedList

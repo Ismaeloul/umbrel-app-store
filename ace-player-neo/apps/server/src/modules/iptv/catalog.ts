@@ -11,7 +11,7 @@
      grupo, ordenado de mejor a peor (no HEVC; reservas y URLs con macros de
      plantilla al final; 1080p > 4K > 720p > SD > sin marca; orden del
      catálogo). Dentro del grupo, España y sin país son un canal y cada otro
-     país es otro (`buckets`, docs/iptv.md §16): «DE: DAZN 1» no es una
+     país es otro (`buckets`, docs/iptv.md §17): «DE: DAZN 1» no es una
      variante de «DAZN 1».
    - Memoria (docs/iptv.md §12.2, riesgo 6): entradas de forma fija (clase),
      índices con arrays y valores sueltos en vez de `Set`, y los textos que se
@@ -41,6 +41,10 @@ export interface RawChannel {
   readonly tvgShift: number | null;
   readonly userAgent: string | null;
   readonly referrer: string | null;
+  /** M3U `tvg-country` tal cual (64 como mucho), o null (Xtream no trae nada parecido). */
+  readonly tvgCountry?: string | null;
+  /** M3U `tvg-language` tal cual (64 como mucho), o null. */
+  readonly tvgLanguage?: string | null;
 }
 
 /** Una entrada del catálogo (forma fija para no gastar memoria de más). */
@@ -62,10 +66,13 @@ export class CatalogEntry implements RawChannel {
     readonly country: string | null,
     /** Orden en el catálogo (desempate final). */
     readonly order: number,
-    /** Número de copia del final («(2)»), o null (docs/iptv.md §16). */
+    /** Número de copia del final («(2)»), o null (docs/iptv.md §17). */
     readonly mirror: number | null = null,
     /** La copia del final es parte del nombre: no hay otra variante sin ella. */
     readonly keepMirror = false,
+    /** M3U `tvg-country` y `tvg-language` (pestaña IPTV, §16.4), o null. */
+    readonly tvgCountry: string | null = null,
+    readonly tvgLanguage: string | null = null,
   ) {}
 
   /** Nombre para enseñar («DAZN LaLiga»), sin país, adornos, calidad ni reserva. */
@@ -78,7 +85,7 @@ export class CatalogEntry implements RawChannel {
     return iptvSpelling(this.display);
   }
 
-  /** '' para España o sin país; si no, el código del país (docs/iptv.md §16). */
+  /** '' para España o sin país; si no, el código del país (docs/iptv.md §17). */
   get bucket(): string {
     return countryBucket(this.country);
   }
@@ -96,17 +103,59 @@ export interface StoredCatalog {
   readonly guideUrls: readonly string[];
   /** Xtream: extensión de los streams (`ts` o `m3u8`). */
   readonly streamExt: 'ts' | 'm3u8' | null;
-  /** `[id, título, grupo, tvgId, ref, tvgShift, userAgent, referrer]`. */
-  readonly entries: readonly (readonly [
-    string,
-    string,
-    string,
-    string,
-    string,
-    number | null,
-    string | null,
-    string | null,
-  ])[];
+  /**
+   * Nombres de las categorías en el orden del proveedor (Xtream: el de
+   * `get_live_categories`; docs/iptv.md §16.5). Un `catalogo.enc` sin él se
+   * carga igual y usa la primera aparición.
+   */
+  readonly groupOrder?: readonly string[];
+  /**
+   * `[id, título, grupo, tvgId, ref, tvgShift, userAgent, referrer,
+   * tvgCountry?, tvgLanguage?]` (las dos últimas, solo M3U y si las trae).
+   */
+  readonly entries: readonly StoredEntry[];
+}
+
+type StoredEntry =
+  | readonly [string, string, string, string, string, number | null, string | null, string | null]
+  | readonly [
+      string,
+      string,
+      string,
+      string,
+      string,
+      number | null,
+      string | null,
+      string | null,
+      string | null,
+      string | null,
+    ];
+
+/** `tvg-country` / `tvg-language`: 64 como mucho, sin caracteres de control; vacío = null. */
+export function cleanTvgAttribute(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const text = value
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .trim()
+    .slice(0, 64);
+  return text || null;
+}
+
+function storedEntry(entry: CatalogEntry): StoredEntry {
+  const base = [
+    entry.id,
+    entry.title,
+    entry.group,
+    entry.tvgId,
+    entry.ref,
+    entry.tvgShift,
+    entry.userAgent,
+    entry.referrer,
+  ] as const;
+  return entry.tvgCountry !== null || entry.tvgLanguage !== null
+    ? [...base, entry.tvgCountry, entry.tvgLanguage]
+    : base;
 }
 
 /** Palabras que sirven para preseleccionar (sin relleno ni números sueltos). */
@@ -133,13 +182,13 @@ export function hasUrlMacros(ref: string): boolean {
 
 /**
  * Identidad de un canal IPTV para el buscador y la biblioteca: su clave y su
- * país (docs/iptv.md §16). Nunca sale del servidor.
+ * país (docs/iptv.md §17). Nunca sale del servidor.
  */
 export function channelIdOf(entry: Pick<CatalogEntry, 'key' | 'bucket'>): string {
   return `${entry.key}\u0000${entry.bucket}`;
 }
 
-/** ¿Va al final entre las variantes? Una reserva o una URL con macros de plantilla (docs/iptv.md §16). */
+/** ¿Va al final entre las variantes? Una reserva o una URL con macros de plantilla (docs/iptv.md §17). */
 export function isLastResort(entry: Pick<CatalogEntry, 'backup' | 'ref'>): boolean {
   return entry.backup || hasUrlMacros(entry.ref);
 }
@@ -149,7 +198,7 @@ export type QualityOf = (entry: CatalogEntry) => IptvQuality | null;
 export const nameQuality: QualityOf = (entry) => entry.quality;
 
 /**
- * Orden de las variantes de un canal, sin la fiabilidad (docs/iptv.md §16):
+ * Orden de las variantes de un canal, sin la fiabilidad (docs/iptv.md §17):
  * HEVC al final (la web no lo reproduce, D6); luego las reservas y las URLs
  * con macros; entre las demás, 1080p > 4K > 720p > SD > sin marca; y el
  * orden del catálogo.
@@ -192,6 +241,8 @@ export class CatalogBuilder {
   readonly groups = new Map<string, OneOrMany<CatalogEntry>>();
   readonly tokens = new Map<string, string[]>();
   readonly tvg = new Map<string, OneOrMany<string>>();
+  /** Orden de las categorías del proveedor (Xtream); vacío = primera aparición. */
+  groupOrder: readonly string[] = [];
   /* Textos que se repiten en miles de entradas: una sola copia. */
   private readonly pool = new Map<string, string>();
   private order = 0;
@@ -231,6 +282,9 @@ export class CatalogBuilder {
       clean.country,
       order,
       clean.mirror,
+      false,
+      this.intern(cleanTvgAttribute(channel.tvgCountry)),
+      this.intern(cleanTvgAttribute(channel.tvgLanguage)),
     );
     this.entries.push(entry);
     this.byId.set(entry.id, entry);
@@ -253,12 +307,19 @@ export class CatalogBuilder {
 
   /**
    * «Canal Sur (2)» sin ningún «Canal Sur» al lado: el número es parte del
-   * nombre, no una copia (docs/iptv.md §16). Se vuelve a indexar con él.
+   * nombre, no una copia (docs/iptv.md §17). Se vuelve a indexar con él. Vale
+   * también con varias resoluciones del mismo número («Canal Sur (2) HD» y
+   * «Canal Sur (2) FHD» son Canal Sur 2 en 720p y 1080p), no con números
+   * distintos («(1)» y «(2)» son copias). Un «(1)» solo nunca es parte del
+   * nombre: «Antena 3 (1)» es Antena 3.
    */
   private rekeyLoneMirrors(): void {
     const lone: CatalogEntry[] = [];
     for (const value of this.groups.values()) {
-      if (!Array.isArray(value) && value.mirror !== null) lone.push(value);
+      const entries = many(value);
+      const number = entries[0]?.mirror ?? null;
+      if (number === null || number < 2) continue;
+      if (entries.every((entry) => entry.mirror === number)) lone.push(...entries);
     }
     if (!lone.length) return;
     const replaced = new Map<string, CatalogEntry>();
@@ -296,6 +357,8 @@ export class CatalogBuilder {
         entry.order,
         clean.mirror,
         true,
+        entry.tvgCountry,
+        entry.tvgLanguage,
       );
       replaced.set(entry.id, next);
       this.byId.set(next.id, next);
@@ -330,6 +393,8 @@ export class Catalog {
   private readonly groups: Map<string, OneOrMany<CatalogEntry>>;
   private readonly tokens: Map<string, string[]>;
   private readonly tvg: Map<string, OneOrMany<string>>;
+  /** Orden de las categorías del proveedor (§16.5); vacío = primera aparición. */
+  readonly groupOrder: readonly string[];
 
   constructor(
     readonly providerId: string,
@@ -339,6 +404,7 @@ export class Catalog {
     readonly guideUrls: readonly string[],
     readonly streamExt: 'ts' | 'm3u8' | null,
     raw: readonly RawChannel[] | CatalogBuilder,
+    groupOrder?: readonly string[],
   ) {
     let builder: CatalogBuilder;
     if (raw instanceof CatalogBuilder) builder = raw;
@@ -346,6 +412,7 @@ export class Catalog {
       builder = new CatalogBuilder();
       for (const channel of raw) builder.add(channel);
     }
+    this.groupOrder = [...(groupOrder ?? builder.groupOrder)];
     builder.finish();
     this.entries = builder.entries;
     this.byId = builder.byId;
@@ -420,7 +487,7 @@ export class Catalog {
   }
 
   /**
-   * Los canales de un grupo por país (docs/iptv.md §16): primero el de España
+   * Los canales de un grupo por país (docs/iptv.md §17): primero el de España
    * o sin país (`bucket` ''), luego cada otro país en el orden del catálogo.
    * Cada uno con sus variantes de mejor a peor.
    */
@@ -495,23 +562,13 @@ export class Catalog {
       builtAt: this.builtAt,
       guideUrls: this.guideUrls,
       streamExt: this.streamExt,
+      ...(this.groupOrder.length ? { groupOrder: this.groupOrder } : {}),
     });
     yield `${head.slice(0, -1)},"entries":[`;
     for (let start = 0; start < this.entries.length; start += batch) {
       const part = this.entries
         .slice(start, start + batch)
-        .map((entry) =>
-          JSON.stringify([
-            entry.id,
-            entry.title,
-            entry.group,
-            entry.tvgId,
-            entry.ref,
-            entry.tvgShift,
-            entry.userAgent,
-            entry.referrer,
-          ]),
-        )
+        .map((entry) => JSON.stringify(storedEntry(entry)))
         .join(',');
       yield start + batch < this.entries.length ? `${part},` : part;
     }
@@ -528,16 +585,8 @@ export class Catalog {
       builtAt: this.builtAt,
       guideUrls: [...this.guideUrls],
       streamExt: this.streamExt,
-      entries: this.entries.map((entry) => [
-        entry.id,
-        entry.title,
-        entry.group,
-        entry.tvgId,
-        entry.ref,
-        entry.tvgShift,
-        entry.userAgent,
-        entry.referrer,
-      ]),
+      ...(this.groupOrder.length ? { groupOrder: [...this.groupOrder] } : {}),
+      entries: this.entries.map(storedEntry),
     };
   }
 
@@ -568,6 +617,8 @@ export class Catalog {
         tvgShift: typeof item[5] === 'number' ? item[5] : null,
         userAgent: typeof item[6] === 'string' ? item[6] : null,
         referrer: typeof item[7] === 'string' ? item[7] : null,
+        tvgCountry: typeof item[8] === 'string' ? item[8] : null,
+        tvgLanguage: typeof item[9] === 'string' ? item[9] : null,
       });
     }
     return new Catalog(
@@ -580,6 +631,9 @@ export class Catalog {
         : [],
       stored.streamExt === 'ts' || stored.streamExt === 'm3u8' ? stored.streamExt : null,
       raw,
+      Array.isArray(stored.groupOrder)
+        ? stored.groupOrder.filter((name): name is string => typeof name === 'string')
+        : [],
     );
   }
 }

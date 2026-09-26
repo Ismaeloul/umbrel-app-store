@@ -401,7 +401,7 @@ describe('relé (§6.1) y plaza (§6.5)', () => {
     await input.close();
   });
 
-  it('calidad real (§16): la RESOLUTION de la maestra HLS manda sobre el nombre; la de ffprobe también', async () => {
+  it('calidad real (§17): la RESOLUTION de la maestra HLS manda sobre el nombre; la de ffprobe también', async () => {
     const r = await rig();
     await r.service.save({ kind: 'm3u', name: 'Casa', url: `${SERVER}/lista.m3u` }, signal());
     await r.service.idle();

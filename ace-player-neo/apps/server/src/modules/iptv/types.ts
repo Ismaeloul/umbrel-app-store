@@ -14,6 +14,8 @@
 
 import type {
   CandidateIptvInfo,
+  IptvBrowseQuery,
+  IptvBrowseResponse,
   IptvChannelsResponse,
   IptvIdState,
   IptvReason,
@@ -121,7 +123,7 @@ export interface IptvCheckResult {
   readonly audioCodecs?: readonly string[];
   readonly rateKbps?: number | null;
   readonly playableOn?: { readonly web: boolean; readonly ios: boolean };
-  /** Altura del vídeo medida por la sonda (no va al veredicto: la apunta el servicio, §16). */
+  /** Altura del vídeo medida por la sonda (no va al veredicto: la apunta el servicio, §17). */
   readonly height?: number | null;
 }
 
@@ -135,7 +137,7 @@ export type IptvInspectFile = (
   readonly videoCodec: string;
   readonly audioCodecs: readonly string[];
   readonly mediaReason: string;
-  /** Altura del vídeo (1080, 720…), si ffprobe la da: la calidad real manda sobre la del nombre (§16). */
+  /** Altura del vídeo (1080, 720…), si ffprobe la da: la calidad real manda sobre la del nombre (§17). */
   readonly height?: number | null;
 }>;
 
@@ -178,7 +180,7 @@ export interface IptvService extends Lifecycle {
   titleOf(id: string): string | null;
   /**
    * El canal IPTV tocado en el buscador, Favoritos o Recientes (docs/iptv.md
-   * §14.4 y §16): si es del catálogo vigente, los carteles de SU canal (una
+   * §14.4 y §17): si es del catálogo vigente, los carteles de SU canal (una
    * variante por resolución, la que arranca primero) con puntuación 100 y su
    * nombre limpio; si no, una lista vacía.
    */
@@ -196,6 +198,14 @@ export interface IptvService extends Lifecycle {
   annotateSearch(results: readonly SearchResult[]): SearchResult[];
   /** `LibraryView.iptvIds`: el estado de cada id IPTV de la lista, o null si no hay ninguno. */
   libraryIdStates(ids: readonly string[]): Record<string, IptvIdState> | null;
+
+  // --- Pestaña IPTV de Canales (docs/iptv.md §16) ---
+  /**
+   * GET /api/v1/iptv/browse: categorías, canales por páginas, texto y
+   * filtros con facetas sobre el índice en memoria. Sin IPTV activa, 200 con
+   * `active: false`; un cursor mal formado, `validation_error`.
+   */
+  browse(query: IptvBrowseQuery): Promise<IptvBrowseResponse>;
   /**
    * Una resolución la va a usar: refresca en segundo plano la lista si tiene
    * más de 6 h (30 min con «Rebuscar») y la cuenta si tiene más de 2 min.

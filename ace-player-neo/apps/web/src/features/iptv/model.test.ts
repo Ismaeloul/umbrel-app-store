@@ -12,6 +12,7 @@ import {
   guideLine,
   hostLine,
   IPTV_DEMO_MESSAGE,
+  IPTV_SAVE_RETRIED_HINT,
   IPTV_TOO_LARGE_HINT,
   IPTV_URL_USERINFO,
   iptvErrorMessage,
@@ -182,6 +183,23 @@ describe('formulario', () => {
     );
     expect(iptvErrorMessage(new Error('x'))).toBe(
       'No se pudo guardar la IPTV. Inténtalo de nuevo.',
+    );
+  });
+
+  it('dos intentos con un fallo pasajero: la frase de §16.8; nunca con el usuario y la contraseña', () => {
+    const twice = (code: string) => new ApiError({ code, status: 502, data: { attempts: 2 } });
+    expect(iptvErrorMessage(twice('iptv_unreachable'))).toBe(
+      `${errorMessage('iptv_unreachable')}${IPTV_SAVE_RETRIED_HINT}`,
+    );
+    expect(iptvErrorMessage(twice('dns_failed'))).toBe(
+      `${errorMessage('dns_failed')}${IPTV_SAVE_RETRIED_HINT}`,
+    );
+    expect(iptvErrorMessage(twice('iptv_auth_failed'))).toBe(errorMessage('iptv_auth_failed'));
+    expect(iptvErrorMessage(new ApiError({ code: 'iptv_unreachable', status: 502 }))).toBe(
+      errorMessage('iptv_unreachable'),
+    );
+    expect(IPTV_SAVE_RETRIED_HINT).toBe(
+      ' Lo he intentado dos veces: prueba otra vez en un momento.',
     );
   });
 });

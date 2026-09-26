@@ -24,6 +24,21 @@
     display: none;
   }
 }
+/* Cuatro pestañas (con «IPTV», docs/iptv.md §16.6) en el móvil: menos aire
+   para que «Favoritos 12» quepa entero en su cuarto (a 390 y a 360 px). */
+@media (max-width: 599px) {
+  .lib-tabs--4 .seg__item {
+    gap: 3px;
+    padding-inline: 3px;
+  }
+}
+@media (max-width: 380px) {
+  .lib-tabs--4 .seg__item,
+  .lib-tabs--4 .seg__count {
+    font-size: var(--fs-12);
+    letter-spacing: -0.01em;
+  }
+}
 .lib-panel {
   display: grid;
   gap: var(--s-3);
@@ -238,7 +253,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Calidades (y país) de un canal de tu IPTV (docs/iptv.md §16): una fila por
+/* Calidades (y país) de un canal de tu IPTV (docs/iptv.md §17; también en la pestaña IPTV, §16.6): una fila por
    canal con «4K · 1080p · 720p» en etiquetas pequeñas, siempre enteras (como
    las del cartel de una fuente); el subtítulo es lo que se recorta. */
 .ch__tags {

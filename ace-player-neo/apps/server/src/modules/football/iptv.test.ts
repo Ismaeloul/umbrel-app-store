@@ -216,7 +216,7 @@ describe('resolveFootballChannel con IPTV', () => {
     expect(result.candidates[0]?.iptv?.provider).toBe('Casa');
   });
 
-  it('como mucho 4 carteles IPTV en total (capa + convertidas), en el orden de la capa (§16)', async () => {
+  it('como mucho 4 carteles IPTV en total (capa + convertidas), en el orden de la capa (§17)', async () => {
     const state = { favorites: [{ id: IPTV_FAV, title: 'DAZN LaLiga' }] };
     const variant = (n: number) => `${'f'.repeat(38)}a${n}`;
     const d = deps(

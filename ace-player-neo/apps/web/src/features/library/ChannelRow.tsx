@@ -16,7 +16,8 @@
    puede ver el canal con etiquetas separadas en la meta, nunca sobre el
    nombre: «IPTV» (cápsula neutra con la tele, como en el cartel de la
    fuente) con sus calidades detrás, y «AceStream» con cuántas fuentes
-   («AceStream · 3»). Si solo está en uno, solo su etiqueta. */
+   («AceStream · 3»). Si solo está en uno, solo su etiqueta. En la pestaña
+   IPTV (§16.6), lo mismo. */
 
 import type { LibraryCollection } from '@ace/shared';
 import { useEffect, useId, useRef, type CSSProperties, type MouseEvent } from 'react';
@@ -73,7 +74,10 @@ export interface ChannelRowProps {
   ace?: number | undefined;
   /** Subtítulo propio (el de una fila IPTV); si no, el de siempre. */
   subtitle?: string | undefined;
-  /** Etiquetas pequeñas tras el subtítulo: el país y las calidades de un canal IPTV («4K · 1080p · 720p», §16). */
+  /**
+   * Etiquetas pequeñas tras el subtítulo: el país y las calidades de un canal
+   * IPTV («4K · 1080p · 720p»), en el buscador (§17) y en la pestaña IPTV (§16.6).
+   */
   tags?: readonly string[] | undefined;
 }
 

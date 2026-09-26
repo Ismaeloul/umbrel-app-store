@@ -48,7 +48,7 @@ export interface ScannerMediaResult {
   readonly videoCodec: string;
   readonly audioCodecs: readonly string[];
   readonly mediaReason: string;
-  /** Altura del vídeo si ffprobe la da (la IPTV la usa como calidad real, docs/iptv.md §16). */
+  /** Altura del vídeo si ffprobe la da (la IPTV la usa como calidad real, docs/iptv.md §17). */
   readonly height?: number;
 }
 

@@ -2,9 +2,11 @@
    guardado, las 5 rutas responden con el contrato. La parte «servidor»
    sustituye estos casos por los de service.test.ts y la integración. */
 
+import { Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
-import { IptvViewSchema } from '@ace/shared';
-import { createTestApp, web } from '../../../test/helpers/index.js';
+import { IptvBrowseResponseSchema, IptvViewSchema } from '@ace/shared';
+import { createLogger } from '../../core/logger.js';
+import { FAKE_TOKEN, createTestApp, native, web } from '../../../test/helpers/index.js';
 
 const EMPTY = { provider: null, refreshHours: 6 };
 
@@ -31,6 +33,56 @@ describe('rutas de la IPTV (esqueleto del contrato)', () => {
     const sync = await app.inject({ method: 'POST', url: '/api/v1/iptv/sync', headers: web() });
     expect(sync.statusCode).toBe(409);
     expect(sync.json().error.code).toBe('iptv_not_configured');
+  });
+
+  it('pestaña (§16.2): sin IPTV, active false; consulta o cursor malos → 400; desde /native, 403; la consulta no va al registro', async () => {
+    const logs: string[] = [];
+    const logger = createLogger({
+      level: 'debug',
+      destination: new Writable({
+        write(chunk: Buffer, _encoding, done) {
+          logs.push(chunk.toString());
+          done();
+        },
+      }),
+    });
+    const { app } = await createTestApp({ logger });
+    const ok = await app.inject({
+      method: 'GET',
+      url: '/api/v1/iptv/browse?q=dazn&country=ES&limit=0',
+      headers: web(),
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(IptvBrowseResponseSchema.parse(ok.json())).toMatchObject({
+      active: false,
+      catalog: '0',
+      query: 'dazn',
+      channels: [],
+    });
+    for (const query of ['country=es', 'sport=none', 'limit=101', 'grupo=x', 'cursor=no%2Bvale']) {
+      const bad = await app.inject({
+        method: 'GET',
+        url: `/api/v1/iptv/browse?${query}`,
+        headers: web(),
+      });
+      expect(bad.statusCode, query).toBe(400);
+      expect(bad.json().error.code).toBe('validation_error');
+    }
+    const cursor = await app.inject({
+      method: 'GET',
+      url: '/api/v1/iptv/browse?cursor=bm8tdmFsZQ',
+      headers: web(),
+    });
+    expect(cursor.statusCode).toBe(400);
+    const nativeRes = await app.inject({
+      method: 'GET',
+      url: '/native/api/v1/iptv/browse',
+      headers: native(FAKE_TOKEN),
+    });
+    expect([401, 403]).toContain(nativeRes.statusCode);
+    const logged = logs.join('');
+    expect(logged).toContain('/api/v1/iptv/browse?[consulta]');
+    expect(logged).not.toContain('q=dazn');
   });
 
   it('guardar valida el cuerpo (claves de más → 400) sin repetir la entrada en el error', async () => {

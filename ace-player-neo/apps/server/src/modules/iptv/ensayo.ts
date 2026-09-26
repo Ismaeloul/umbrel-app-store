@@ -157,7 +157,7 @@ export async function runIptvEnsayo(options: EnsayoOptions): Promise<number> {
       }
       withIptv += 1;
       layer.matches.forEach((item, index) => {
-        /* Un cartel por variante de resolución (§16): «1080p · 4K · 720p · SD reserva». */
+        /* Un cartel por variante de resolución (§17): «1080p · 4K · 720p · SD reserva». */
         const posters = item.posters
           .map((entry) => `${quality(entry.quality)}${entry.backup ? ' reserva' : ''}`)
           .join(' · ');

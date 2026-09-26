@@ -1,4 +1,4 @@
-/* Limpieza de los nombres de la IPTV (docs/iptv.md §4.2 y §16, `cleanIptvTitle`).
+/* Limpieza de los nombres de la IPTV (docs/iptv.md §4.2 y §17, `cleanIptvTitle`).
 
    Los nombres IPTV traen prefijos y adornos que, con el tope de 58 de
    `distinctiveTokens`, romperían el emparejado: «ES: DAZN LaLiga FHD»
@@ -77,18 +77,38 @@ export interface CleanOptions {
   /**
    * Deja la copia del final en el nombre: el catálogo lo pide para un
    * «Canal Sur (2)» que no tiene al lado un «Canal Sur»: ahí el número es
-   * parte del nombre, no una copia (docs/iptv.md §16).
+   * parte del nombre, no una copia (docs/iptv.md §17).
    */
   readonly keepMirror?: boolean;
 }
 
 const ES_CODES = new Set(['ES', 'ESP', 'SPA', 'SP', 'ESPAÑA', 'ESPANA', 'SPAIN']);
+/*
+ * Siglas de 3 letras que sí son un país (o una zona de idioma) en las listas.
+ * Con 2 letras vale cualquiera (menos `NOT_COUNTRY`); con 3, solo estas: si
+ * no, «TDT | NACIONALES», «DOC | …», «NBA: …», «RAI - 1» o «TNT - Sports 1»
+ * se leían como país (TDT, DOC, NBA…) y partían el canal en dos filas. «CAT»
+ * (Cataluña) no es otro país: esos canales son de España.
+ */
+const COUNTRY_3 = new Set([
+  'USA', 'GBR', 'ENG', 'DEU', 'GER', 'FRA', 'ITA', 'POR', 'PRT', 'NLD', 'HOL', 'BEL', 'CHE', 'SUI',
+  'AUT', 'POL', 'ROU', 'ROM', 'RUS', 'UKR', 'TUR', 'GRC', 'GRE', 'SWE', 'NOR', 'DNK', 'DEN', 'FIN',
+  'IRL', 'ISL', 'CZE', 'SVK', 'HUN', 'HRV', 'CRO', 'SRB', 'SVN', 'BIH', 'MKD', 'ALB', 'BGR', 'BUL',
+  'ARG', 'MEX', 'BRA', 'COL', 'CHL', 'PER', 'VEN', 'URU', 'URY', 'ECU', 'BOL', 'PAR', 'PRY', 'CUB',
+  'DOM', 'CRI', 'PAN', 'GTM', 'HND', 'SLV', 'NIC', 'CAN', 'AUS', 'NZL', 'IND', 'PAK', 'CHN', 'JPN',
+  'KOR', 'PHI', 'PHL', 'THA', 'VNM', 'IDN', 'MYS', 'ARB', 'ARA', 'AFR', 'LAT', 'LAM', 'MAR', 'MOR',
+  'DZA', 'ALG', 'TUN', 'EGY', 'KSA', 'SAU', 'UAE', 'ARE', 'QAT', 'ISR', 'IRN', 'IRQ', 'KUR',
+]); // prettier-ignore
 
-/* «ES: », «|ES| », «[ES] », «(ES) », «ES - », «ESPAÑA | », «ES • », «ES TI - » (la segunda sigla es la plataforma). */
+/* «ES: », «|ES| », «[ES] », «(ES) », «ES - », «ESPAÑA | », «ES • », «ES » », «ES ➤ », «ES TI - » (la segunda sigla es la plataforma). */
 const TITLE_COUNTRY_RE =
-  /^\s*[|[(]?\s*([A-Z]{2,3}|ESPAÑA|ESPANA|SPAIN)(?:\s+[A-Z]{2,3})?\s*[|\]):\-–•·▎┃]+\s*/u;
-/* España al final, entre corchetes, paréntesis o barras: «DAZN 1 [ES]», «DAZN 1 |ES|», «DAZN 1 (ESP)». */
-const TITLE_SPAIN_SUFFIX_RE = /\s*[|[(]\s*(?:ES|ESP|SPA|ESPAÑA|ESPANA|SPAIN)\s*[|\])]?\s*$/u;
+  /^\s*[|[(]?\s*([A-Z]{2,3}|ESPAÑA|ESPANA|SPAIN)(?:\s+[A-Z]{2,3})?\s*[|\]):\-–•·▎┃»➤➜→>]+\s*/u;
+/* España delante sin separador: «ES DAZN 1», «ESP DAZN 1» (solo España: «DE PELÍCULA» es un canal). */
+const TITLE_SPAIN_BARE_RE = /^\s*(?:ES|ESP|SPAIN|ESPAÑA|ESPANA)\s+(?=[\p{L}\p{N}])/u;
+/* España al final, entre corchetes, paréntesis o barras: «DAZN 1 [ES]», «DAZN 1 |ES|», «DAZN 1 (ESP)»;
+   o suelta en mayúsculas: «DAZN 1 ES», «DAZN 1 - ES». */
+const TITLE_SPAIN_SUFFIX_RE =
+  /\s*[|[(]\s*(?:ES|ESP|SPA|ESPAÑA|ESPANA|SPAIN)\s*[|\])]?\s*$|\s+(?:[-–:|]\s*)?(?:ES|ESP|ESPAÑA|ESPANA|SPAIN)\s*$/u;
 /* Grupo o categoría: «ES | DEPORTES», «ES: DEPORTES», «UK| SPORTS», «SPAIN SPORTS», «España». */
 const GROUP_COUNTRY_RE = /^\s*[|[(]?\s*([A-Z]{2,3})\s*[|\]):\-–]/u;
 const GROUP_SPAIN_RE = /^\s*[|[(]?\s*(?:españa|espana|spain)\b/iu;
@@ -109,6 +129,8 @@ const NOT_COUNTRY: Readonly<Record<string, IptvQuality | null>> = {
   PPV: null,
   VOD: null,
   TV: null,
+  /* La cadena delante del canal: «TVE - La 1» es La 1. */
+  TVE: null,
   HD: 'hd',
   FHD: 'fhd',
   UHD: 'uhd',
@@ -146,13 +168,22 @@ const PLATFORM_TITLE_RE =
 const PLATFORM_GROUP_RE =
   /\b(vix|pluto(?:\s*tv)?|rakuten(?:\s*tv)?|gold\s*tv|samsung\s*tv\s*plus|fast\s*channels?)\b/iu;
 
-/* Con los fps pegados («1080p50», «720p60») y el «+» de «HD+». */
+/* Los fps detrás de la calidad, pegados o no: «1080p50», «720p60», «FHD50», «HD 50», «1080 50». */
+const FPS_TAIL = String.raw`(?:\s?(?:25|30|50|60)(?!\d))?`;
+/* Con los fps y el «+» de «HD+». */
 const QUALITY_TOKENS: readonly (readonly [RegExp, IptvQuality])[] = [
-  [/\b(?:uhd|4k|2160[pi]?(?:25|30|50|60)?)\b\+?/giu, 'uhd'],
-  [/\b(?:fhd|full\s*hd|1080[pi]?(?:25|30|50|60)?)\b\+?/giu, 'fhd'],
-  [/\b(?:hd|720[pi]?(?:25|30|50|60)?)\b\+?/giu, 'hd'],
-  [/\b(?:sd|480[pi]?|576[pi]?)\b/giu, 'sd'],
+  [new RegExp(String.raw`\b(?:uhd|4k|2160[pi]?)${FPS_TAIL}\b\+?`, 'giu'), 'uhd'],
+  [new RegExp(String.raw`\b(?:fhd|full\s*hd|1080[pi]?)${FPS_TAIL}\b\+?`, 'giu'), 'fhd'],
+  [new RegExp(String.raw`\b(?:hd|720[pi]?)${FPS_TAIL}\b\+?`, 'giu'), 'hd'],
+  [new RegExp(String.raw`\b(?:sd|480[pi]?|576[pi]?)${FPS_TAIL}\b`, 'giu'), 'sd'],
 ];
+/*
+ * El número de copia detrás de la calidad, cuando el canal ya acaba en número:
+ * «DAZN 1 HD 2», «DAZN F1 FHD 2» son la copia 2 de DAZN 1 y DAZN F1 (se
+ * reescribe como «(2)» para la regla de las copias). «LaLiga HD 2» no se toca.
+ */
+const QUALITY_COPY_RE =
+  /(\d)\s+((?:uhd|4k|fhd|full\s*hd|hd|sd|2160[pi]?|1080[pi]?|720[pi]?|480[pi]?|576[pi]?)\+?)\s+(?!(?:25|30|50|60)\s*$)(\d{1,2})\s*$/iu;
 
 /* Mayúsculas y al final: «Geo News» o «GEO TV» son nombres de canal. */
 const GEO_RE = /\s+GEO(?:\s+([A-Z]{2,3}))?\s*$/u;
@@ -160,8 +191,9 @@ const HEVC_RE = /\b(?:hevc|h\.?265|x265)\b/giu;
 const FPS_RE = /\b(?:25|30|50|60)\s*fps\b/giu;
 /* Marcas técnicas que no cambian el canal: el códec normal, el HDR y «VIP». */
 const TECH_RE = /\b(?:h\.?264|x264|avc|hdr(?:10)?|vip)\b/giu;
+/* Con el número pegado o suelto detrás: «bk2», «BK 2», «ALT 1». */
 const BACKUP_RE =
-  /\b(?:backup|back\s*up|bkp|bk|alt|alternativ[oa]|reserva|respaldo|multi(?:audio)?)\d{0,2}\b/giu;
+  /\b(?:backup|back\s*up|bkp|bk|alt|alternativ[oa]|reserva|respaldo|multi(?:audio)?)(?:\s?\d{1,2})?\b/giu;
 /* La copia entre paréntesis o corchetes del final: «DAZN 1 (2)», «DAZN 1 [1]». */
 const MIRROR_RE = /\s*[([]\s*(\d{1,2})\s*[)\]]\s*$/u;
 
@@ -232,18 +264,30 @@ export function groupCountry(group: string | null | undefined): string | null {
       if (/^MEXIC/u.test(code)) return 'MX';
       return parts[0] as string;
     }
-    if (!/^[A-Z]{2,4}$/.test(code) || Object.hasOwn(NOT_COUNTRY, code)) return null;
+    if (!/^[A-Z]{2,4}$/.test(code) || !isCountryCode(code)) return null;
     return countryCode(code);
   }
   const match = GROUP_COUNTRY_RE.exec(text);
-  if (!match?.[1] || Object.hasOwn(NOT_COUNTRY, match[1])) return null;
+  if (!match?.[1] || !isCountryCode(match[1])) return null;
   return countryCode(match[1]);
+}
+
+/**
+ * ¿Esta sigla es un país? 2 letras, cualquiera que no sea una marca o una
+ * calidad (`NOT_COUNTRY`); 3, solo las de `COUNTRY_3` y las de España.
+ */
+export function isCountryCode(value: string): boolean {
+  const upper = value.trim().toUpperCase();
+  if (ES_CODES.has(upper)) return true;
+  if (Object.hasOwn(NOT_COUNTRY, upper)) return false;
+  if (/^[A-Z]{2}$/.test(upper)) return true;
+  return COUNTRY_3.has(upper);
 }
 
 /**
  * El «país» de un canal para juntar variantes: España y sin país son el mismo
  * (`''`); otro país, su código. «ES: DAZN 1» y «DAZN 1» son el mismo canal;
- * «DE: DAZN 1» es otro (docs/iptv.md §16).
+ * «DE: DAZN 1» es otro (docs/iptv.md §17).
  */
 export function countryBucket(country: string | null): string {
   return country === null || country === 'ES' ? '' : country;
@@ -327,13 +371,23 @@ export function cleanIptvTitle(
     const prefix = TITLE_COUNTRY_RE.exec(text);
     if (!prefix?.[1]) break;
     const code = prefix[1].toUpperCase();
-    text = text.slice(prefix[0].length);
     if (Object.hasOwn(NOT_COUNTRY, code)) {
+      text = text.slice(prefix[0].length);
       quality ??= NOT_COUNTRY[code] ?? null;
       continue;
     }
+    /* «RAI - 1», «NBA: …», «TNT - Sports 1»: la sigla es parte del nombre, no un país. */
+    if (!isCountryCode(code)) break;
+    text = text.slice(prefix[0].length);
     country = countryCode(code);
     break;
+  }
+  if (country === null) {
+    const bare = TITLE_SPAIN_BARE_RE.exec(text);
+    if (bare) {
+      country = 'ES';
+      text = text.slice(bare[0].length);
+    }
   }
   const suffix = TITLE_SPAIN_SUFFIX_RE.exec(text);
   if (suffix && suffix.index > 0) {
@@ -347,6 +401,7 @@ export function cleanIptvTitle(
   text = hevcStep.text;
   const hevc = hevcStep.found;
   text = text.replace(FPS_RE, ' ').replace(TECH_RE, ' ');
+  text = text.replace(QUALITY_COPY_RE, '$1 $2 ($3)');
   for (const [re, value] of QUALITY_TOKENS) {
     const step = strip(text, re);
     text = step.text;
@@ -488,7 +543,7 @@ export function iptvAskedChannel(channel: string): string | null {
 const LALIGA_PLUS_RE = /\bla\s*liga\s*(?:\+|plus\b)/giu;
 
 /**
- * Orden de las variantes de un canal (Isma, 26-sep; docs/iptv.md §16): 1080p
+ * Orden de las variantes de un canal (Isma, 26-sep; docs/iptv.md §17): 1080p
  * primero, luego 4K, 720p y SD; sin marca, al final.
  */
 export function qualityRank(quality: IptvQuality | null): number {

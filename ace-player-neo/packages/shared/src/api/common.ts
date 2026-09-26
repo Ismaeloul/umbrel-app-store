@@ -158,7 +158,7 @@ export const IptvQualitySchema = z.enum(['uhd', 'fhd', 'hd', 'sd']);
 export type IptvQuality = z.infer<typeof IptvQualitySchema>;
 
 /**
- * Lo propio de una candidata `source: 'iptv'` (docs/iptv.md §5.1 y §16). Sale
+ * Lo propio de una candidata `source: 'iptv'` (docs/iptv.md §5.1 y §17). Sale
  * una por variante de resolución de cada canal (1080p, 4K, 720p, SD y la
  * reserva, 4 carteles como mucho); las copias de la misma resolución se
  * quedan en el servidor como respaldo del relé. Nunca lleva URLs ni
@@ -172,8 +172,14 @@ export const CandidateIptvInfoSchema = z.strictObject({
   backup: z.boolean(),
   /** Confirmada por la guía (no se enseña; diagnóstico y tests). */
   guide: z.boolean(),
-  /** País del canal si no es España ni sin país («DE» en «DE: DAZN 1»); ausente o null si lo es (§16). */
+  /** País del canal si no es España ni sin país («DE» en «DE: DAZN 1»); ausente o null si lo es (§17). */
   country: z.string().min(2).max(8).nullable().optional(),
+  /**
+   * Clave del canal («dazn 1»): los carteles con la misma clave y el mismo
+   * país son variantes de un canal. El salto automático entre variantes no
+   * sale de ellas (§17): «DE: DAZN 1» es otro canal, no una variante de «DAZN 1».
+   */
+  channel: z.string().max(200).optional(),
 });
 export type CandidateIptvInfo = z.infer<typeof CandidateIptvInfoSchema>;
 

@@ -78,7 +78,7 @@ export interface RelayDeps {
   /**
    * Lo que se sabe del vídeo real de una variante al abrirla (la `RESOLUTION`
    * de la maestra HLS elegida): el servicio lo apunta como su calidad real
-   * (docs/iptv.md §16).
+   * (docs/iptv.md §17).
    */
   readonly onMedia?: (entryId: string, media: { readonly height: number | null }) => void;
   /** Tope de bytes que se guardan mientras ffmpeg no lee (por defecto 4 MiB). */
@@ -959,7 +959,7 @@ export class IptvRelayImpl implements IptvRelay {
       throw new AppError('iptv_unsupported', { detail: 'no es una lista HLS' });
     if (isMasterPlaylist(text)) {
       const chosen = pickMasterVariant(masterVariants(text));
-      /* La resolución real de lo que se va a ver manda sobre la del nombre (docs/iptv.md §16). */
+      /* La resolución real de lo que se va a ver manda sobre la del nombre (docs/iptv.md §17). */
       try {
         this.deps.onMedia?.(variant.entryId, { height: chosen.height });
       } catch {}

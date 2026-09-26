@@ -9,9 +9,9 @@
       índice de palabras propio (todas las palabras de cada clave, también
       «la» o «1», que la preselección de §3.4 no guarda) y otro de
       categorías: nada recorre las 100 000 entradas.
-   2. Sale TODO (Isma, 26-sep: «déjalo todo desbloqueado»; D25 y §16): los
+   2. Sale TODO (Isma, 26-sep: «déjalo todo desbloqueado»; D25 y §17): los
       canales de cualquier país y también los grupos para adultos.
-   3. Una fila por CANAL (§16): las variantes de resolución («DAZN 1 FHD»,
+   3. Una fila por CANAL (§17): las variantes de resolución («DAZN 1 FHD»,
       «DAZN 1 HD», «ES: DAZN 1 1080p», «DAZN 1 (backup)»…) son una fila, con
       sus calidades. España y sin país son un canal; cada otro país, otro
       («DE: DAZN 1» es otra fila, con su país).
@@ -45,7 +45,7 @@ import {
   isEventTitle,
 } from './names.js';
 
-/** El país de un título cualquiera, como el de un canal IPTV: '' para España o sin país (§16). */
+/** El país de un título cualquiera, como el de un canal IPTV: '' para España o sin país (§17). */
 export function titleBucket(title: string): string {
   return countryBucket(cleanIptvTitle(title).country);
 }
@@ -256,7 +256,8 @@ export function categorySearchWords(group: string): string[] {
 
 const INDEXES = new WeakMap<Catalog, SearchIndex>();
 
-function significant(words: readonly string[]): string[] {
+/** Las palabras que hay que encontrar: sin «tv», «canal» ni «channel» si hay otras (también la pestaña IPTV, §16.3). */
+export function significant(words: readonly string[]): string[] {
   const out = words.filter((word) => !OPTIONAL_WORDS.has(word));
   return out.length ? out : [...words];
 }

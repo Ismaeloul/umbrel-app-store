@@ -382,7 +382,7 @@ export default function SearchView({ active }: ViewProps) {
             {merged.local.map(({ item, iptv, ace }) => {
               const idState = actions.library?.iptvIds?.[item.id];
               const channel = { ...item, iptv };
-              /* Tu fila que es un canal de tu IPTV lleva también sus calidades (§16). */
+              /* Tu fila que es un canal de tu IPTV lleva también sus calidades (§17). */
               const iptvChannel = iptv
                 ? iptvData?.channels.find((candidate) => candidate.id === iptv)
                 : undefined;

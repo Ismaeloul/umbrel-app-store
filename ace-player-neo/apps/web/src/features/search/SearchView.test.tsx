@@ -324,7 +324,7 @@ describe('buscador con IPTV (docs/iptv.md §14.5)', () => {
     ...extra,
   });
 
-  it('un canal con 5 variantes sale en UNA fila con sus calidades («4K · 1080p · 720p · SD»); otro país, en otra con el suyo (§16)', async () => {
+  it('un canal con 5 variantes sale en UNA fila con sus calidades («4K · 1080p · 720p · SD»); otro país, en otra con el suyo (§17)', async () => {
     const DAZN1 = 'f5'.repeat(20);
     const DAZN1_DE = 'f6'.repeat(20);
     setupIptv({

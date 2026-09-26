@@ -1,4 +1,4 @@
-/* Emparejado IPTV ↔ canales pedidos (docs/iptv.md §4.3, §4.4 y §16). Puro.
+/* Emparejado IPTV ↔ canales pedidos (docs/iptv.md §4.3, §4.4 y §17). Puro.
 
    1. Canales pedidos: los de la resolución (8 como mucho) o el título del
       canal suelto (`scope=channel`), sin las plataformas de internet («RTVE
@@ -20,7 +20,7 @@
       solos si cae el de España. En el buscador salen todos (todo
       desbloqueado) y tocarlos los reproduce; el re-emparejado de la
       biblioteca (`anyCountry`) también los mira.
-   5. Variantes de resolución (§16, `planVariants`): de cada canal, un cartel
+   5. Variantes de resolución (§17, `planVariants`): de cada canal, un cartel
       por resolución (1080p, 4K, 720p, SD, en ese orden) y detrás las reservas
       y las URLs con macros; 4 como mucho. Las copias de la misma resolución
       no tienen cartel: son el respaldo del relé (`relayVariants`). */
@@ -101,7 +101,7 @@ export interface IptvGroupMatch {
 }
 
 /**
- * Orden de las variantes de un canal (§16): el de `compareVariants` y, entre
+ * Orden de las variantes de un canal (§17): el de `compareVariants` y, entre
  * dos iguales (misma calidad, HEVC y reserva), la fiabilidad aprendida y el
  * orden del catálogo.
  */
@@ -134,7 +134,7 @@ function posterSignature(entry: CatalogEntry, qualityOf: QualityOf): string {
 }
 
 /**
- * Carteles y respaldo de las variantes de un canal (§16). `entries` son las
+ * Carteles y respaldo de las variantes de un canal (§17). `entries` son las
  * variantes de UN canal (mismo grupo y mismo país). null si no hay ninguna.
  */
 export function planVariants(
@@ -160,7 +160,7 @@ export function planVariants(
 }
 
 /**
- * Lo que abre el relé para un cartel (§16 y §6.1): esa variante primero y,
+ * Lo que abre el relé para un cartel (§17 y §6.1): esa variante primero y,
  * detrás, las variantes SIN cartel que le tocan (las copias de su misma
  * resolución; las que no tienen un cartel de su resolución van detrás del
  * último), 2 como mucho. Las variantes con cartel propio no se prueban aquí:

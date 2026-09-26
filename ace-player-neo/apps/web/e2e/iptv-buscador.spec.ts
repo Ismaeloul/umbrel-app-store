@@ -6,7 +6,7 @@
    en el motor falso ni en la biblioteca E2E); «ES: La 1 HD» (107) está en la
    IPTV y en el motor («La 1 HD --> ELCANO» y «--> NEW ERA»); «ES: Antena 3
    FHD» (108) está en la IPTV y en el motor como «Antena 3 HD». Hay un grupo
-   «XXX» con un canal que sale como todo lo demás (§16, todo desbloqueado).
+   «XXX» con un canal que sale como todo lo demás (§17, todo desbloqueado).
    «DAZN 1» tiene 5 variantes (FHD 112, HD 113, SD 114, 4K 115 y la reserva
    116) y hay otro «DAZN 1» en Alemania (117) y en el Reino Unido (109). */
 
@@ -178,7 +178,7 @@ test(
     await expect(tele.getByText('IPTV', { exact: true })).toBeVisible();
     await expect(tele.getByText('Casa', { exact: true })).toBeVisible();
     await expect(tele.locator('.ch__tag')).toHaveText(['720p']);
-    // Todo desbloqueado (§16): también el canal del grupo «XXX».
+    // Todo desbloqueado (§17): también el canal del grupo «XXX».
     await expect(fila(page, enTuIptv(page), 'Tele Noche')).toBeVisible();
     // La estrella lo guarda en Favoritos (hoja «Guardar favorito»).
     // En el móvil estrecho la estrella va dentro de «Más».
@@ -257,7 +257,7 @@ const cartelDe = (page: Page, calidad: string) =>
   cartelesIptv(page).filter({ has: page.locator('.src-poster__tag', { hasText: calidad }) });
 
 test(
-  '14 · variantes (§16): «dazn 1» sale en UNA fila con 4K · 1080p · 720p · SD (y «DE» aparte); 4 carteles IPTV ordenados; si cae la 1080p pasa a la 4K, no a AceStream; tocar la 720p cambia',
+  '14 · variantes (§17): «dazn 1» sale en UNA fila con 4K · 1080p · 720p · SD (y «DE» aparte); 4 carteles IPTV ordenados; si cae la 1080p pasa a la 4K, no a AceStream; tocar la 720p cambia',
   { tag: '@video' },
   async ({ page }) => {
     test.setTimeout(180_000);
@@ -305,12 +305,12 @@ test(
   },
 );
 
-/* Capturas del buscador y del panel de fuentes con variantes (§16), en claro y
+/* Capturas del buscador y del panel de fuentes con variantes (§17), en claro y
    oscuro, al tamaño del proyecto (390×844 o 1440×900). Solo a mano, con
    IPTV_CAPTURAS=<carpeta>: la CI no las hace. */
 const CAPTURAS = process.env.IPTV_CAPTURAS ?? '';
 test(
-  'capturas §16: buscador y panel con las variantes de «DAZN 1», en claro y oscuro',
+  'capturas §17: buscador y panel con las variantes de «DAZN 1», en claro y oscuro',
   { tag: '@video' },
   async ({ page }, info) => {
     test.skip(!CAPTURAS, 'solo con IPTV_CAPTURAS=<carpeta>');

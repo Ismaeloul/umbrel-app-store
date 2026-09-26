@@ -1571,7 +1571,7 @@ function handleSourceFailed(failure: SourceFailure): SourceFailedReply {
   const finished = scanFinished(state.scan);
   const hasIptv = entries.some(isIptv);
 
-  // §16: si cae una variante IPTV (la 1080p), la siguiente variante IPTV antes
+  // §17: si cae una variante IPTV (la 1080p), la siguiente variante IPTV antes
   // que AceStream (4K, 720p, SD…). No cuenta en el tope del puente: cada una se
   // prueba una vez. Un fallo de cuenta, o la IPTV en pausa, vale para todas.
   const iptvDown =
@@ -1679,7 +1679,7 @@ function iptvDownLead(code: string | undefined): string {
 }
 
 /**
- * Cae una variante IPTV y se pasa a la siguiente (§16): «Tu IPTV no responde
+ * Cae una variante IPTV y se pasa a la siguiente (§17): «Tu IPTV no responde
  * en 1080p: probamos en 4K (fuente 2)»; sin calidades, «Tu IPTV no responde:
  * probamos otra señal de tu IPTV (fuente 2)».
  */
@@ -1762,7 +1762,7 @@ function bridge(
   now: number,
 ): SourceFailedReply | null {
   if (isIptv(failed)) {
-    // «Volver a la IPTV» vuelve al primer cartel IPTV (la mejor variante, §16), no al último que cayó.
+    // «Volver a la IPTV» vuelve al primer cartel IPTV (la mejor variante, §17), no al último que cayó.
     const back = entries.find(isIptv)?.id ?? failed.id;
     const paused = failure.code === 'iptv_disabled' || failure.code === 'iptv_removed';
     let target = pickBridgeTarget(entries, effective, 'iptv', finished, now);

@@ -102,14 +102,14 @@ export function iptvCountText(total: number, capped: boolean): string {
 /**
  * Subtítulo de una fila IPTV: «Casa» (el nombre de tu IPTV). De dónde más se
  * puede ver y en qué calidades va aparte, como etiquetas: «IPTV», «1080p»,
- * «AceStream · 2» (`iptvTags`, §16 y §19).
+ * «AceStream · 2» (`iptvTags`, §17 y §19).
  */
 export function iptvSubtitle(channel: Pick<IptvChannel, 'provider'>): string {
   return channel.provider;
 }
 
 /**
- * Etiquetas pequeñas de una fila IPTV (§16): el país si no es España («DE»)
+ * Etiquetas pequeñas de una fila IPTV (§17): el país si no es España («DE»)
  * y las calidades que tiene el canal, de mayor a menor resolución («4K»,
  * «1080p», «720p», «SD»): una fila por canal, no una por variante. Un
  * servidor sin `qualities` da la de su variante.

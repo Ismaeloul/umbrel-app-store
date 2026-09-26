@@ -14,9 +14,9 @@ armazón: `index.tsx`. El código está en
 que recibe `ViewProps` y **sin cabecera propia** (el título lo pone Ajustes).
 Carpetas que se miran:
 
-| Sección | Carpetas |
-|---|---|
-| `ajustes/salud` | `health`, `salud` |
+| Sección                | Carpetas                             |
+| ---------------------- | ------------------------------------ |
+| `ajustes/salud`        | `health`, `salud`                    |
 | `ajustes/dispositivos` | `pairing`, `devices`, `dispositivos` |
 
 (también valen `seccion.tsx` y `section.tsx`). Ajustes las encuentra sola con

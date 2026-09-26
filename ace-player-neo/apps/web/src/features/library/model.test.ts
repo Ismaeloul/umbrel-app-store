@@ -6,9 +6,13 @@ import {
   groupByCategory,
   initialTab,
   isFallenFavorite,
+  isLibraryTab,
   libraryFooter,
   recentGroups,
+  shownTab,
   subtitleFor,
+  TAB_LABEL,
+  tabsFor,
 } from './model.ts';
 import { makeItem, makeLibrary } from './test-utils.tsx';
 
@@ -119,5 +123,22 @@ describe('canal caído y pie', () => {
     expect(findKnownItem(library, library.history[0]!.id)?.title).toBe('Canal de prueba');
     expect(findKnownItem(library, 'f'.repeat(40))).toBeNull();
     expect(findKnownItem(undefined, 'x')).toBeNull();
+  });
+});
+
+describe('pestaña IPTV (docs/iptv.md §16.6)', () => {
+  it('solo con IPTV activa, a la derecha de Listas', () => {
+    expect(tabsFor(false)).toEqual(['favoritos', 'recientes', 'listas']);
+    expect(tabsFor(true)).toEqual(['favoritos', 'recientes', 'listas', 'iptv']);
+    expect(TAB_LABEL.iptv).toBe('IPTV');
+    expect(isLibraryTab('iptv')).toBe(true);
+  });
+
+  it('`&pestana=iptv` sin IPTV activa abre la de siempre', () => {
+    expect(shownTab('iptv', true, 'favoritos')).toBe('iptv');
+    expect(shownTab('iptv', false, 'favoritos')).toBe('favoritos');
+    expect(shownTab('listas', false, 'favoritos')).toBe('listas');
+    expect(shownTab('otra', true, 'recientes')).toBe('recientes');
+    expect(shownTab(null, true, 'listas')).toBe('listas');
   });
 });

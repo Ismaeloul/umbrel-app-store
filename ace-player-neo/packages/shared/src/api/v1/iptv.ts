@@ -9,10 +9,14 @@
 import { z } from 'zod';
 import { HashSchema, IsoDateTimeSchema, ShortCodeSchema } from '../../primitives.js';
 import {
+  IPTV_BROWSE,
+  IPTV_BROWSE_QUALITIES,
   IPTV_NAME_MAX,
   IPTV_REFRESH_HOURS,
   IPTV_SEARCH,
   IPTV_SECRET_MAX,
+  IPTV_SPORTS,
+  IPTV_TYPES,
   IPTV_URL_MAX,
 } from '../../constants/iptv.js';
 import { SEARCH_QUERY_MAX } from '../../constants/limits.js';
@@ -153,10 +157,10 @@ export const IptvChannelSchema = z.strictObject({
   quality: IptvQualitySchema.nullable(),
   /**
    * Todas las calidades que tiene el canal, de mayor a menor resolución
-   * («4K · 1080p · 720p»; docs/iptv.md §16): una fila por canal, no por variante.
+   * («4K · 1080p · 720p»; docs/iptv.md §17): una fila por canal, no por variante.
    */
   qualities: z.array(IptvQualitySchema).max(4).optional(),
-  /** País del canal si no es España ni sin país («DE»); ausente o null si lo es (§16). */
+  /** País del canal si no es España ni sin país («DE»); ausente o null si lo es (§17). */
   country: z.string().min(2).max(8).nullable().optional(),
   /** El nombre que Isma puso al proveedor («Casa»). */
   provider: z.string().max(IPTV_NAME_MAX),
@@ -174,3 +178,126 @@ export const IptvChannelsResponseSchema = z.strictObject({
   channels: z.array(IptvChannelSchema).max(IPTV_SEARCH.limit),
 });
 export type IptvChannelsResponse = z.infer<typeof IptvChannelsResponseSchema>;
+
+/* --- Pestaña IPTV en Canales (docs/iptv.md §16.2) ---
+
+   `GET /api/v1/iptv/browse` recorre la IPTV como la ordena su proveedor:
+   categorías con su número de canales, sus canales por páginas, un texto y
+   filtros con facetas (país, idioma, tipo, deporte y calidad). El servidor
+   filtra, pagina y cuenta; el catálogo nunca baja entero. Nace `web` (D29).
+   Nunca lleva URL, `ref`, `stream_id`, `tvg-id`, usuario ni contraseña; el
+   nombre de la categoría pasa por el redactor. */
+
+/** Lista separada por comas de códigos válidos («ES,UK»), `IPTV_BROWSE.selectedMax` como mucho. */
+const csv = (item: string) =>
+  z.string().regex(new RegExp(`^(?:${item})(?:,(?:${item})){0,${IPTV_BROWSE.selectedMax - 1}}$`));
+
+/** Código de país de la pestaña (§16.4): 2 a 4 mayúsculas («ES», «LAT», «EXYU»). */
+const COUNTRY_CODE = '[A-Z]{2,4}';
+/** Cursor opaco de `nextCursor` (base64url). */
+const CursorSchema = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
+
+/** Id de una categoría: 12 hex (estable mientras el proveedor y el nombre sean los mismos) o `none` («Sin categoría»). */
+export const IptvCategoryIdSchema = z.string().regex(/^(?:[a-f0-9]{12}|none)$/);
+
+export const IptvBrowseQuerySchema = z.strictObject({
+  /** Categoría; sin ella, toda la IPTV. */
+  category: IptvCategoryIdSchema.optional(),
+  /** Se limpia como en `iptvChannels`. Con menos de 2 letras se IGNORA (aquí no es un error: se navega sin texto). */
+  q: z.string().max(500).default(''),
+  /** País: códigos de §16.4 o `none` («Sin país»). */
+  country: csv(`${COUNTRY_CODE}|none`).optional(),
+  /** Idioma: ISO 639-1 o `none` («Sin idioma»). */
+  language: csv('[a-z]{2}|none').optional(),
+  type: csv([...IPTV_TYPES, 'none'].join('|')).optional(),
+  sport: csv(IPTV_SPORTS.join('|')).optional(),
+  /** `none`: canales sin ninguna marca de calidad. */
+  quality: csv([...IPTV_BROWSE_QUALITIES, 'none'].join('|')).optional(),
+  /** Opaco (el de `nextCursor`). Sin él, primera página con categorías y facetas. */
+  cursor: CursorSchema.optional(),
+  /** Por defecto 60. `0`: solo categorías y facetas (la raíz sin texto). */
+  limit: z.coerce.number().int().min(0).max(IPTV_BROWSE.limitMax).optional(),
+});
+export type IptvBrowseQuery = z.infer<typeof IptvBrowseQuerySchema>;
+
+export const IptvCategorySchema = z.strictObject({
+  id: IptvCategoryIdSchema,
+  /** Nombre del proveedor tal cual, redactado (§2.4) y a 120. Con `id: 'none'`, vacío: la web pone «Sin categoría». */
+  name: z.string().max(IPTV_BROWSE.categoryNameMax),
+  /**
+   * Canales (filas, §16.3) de la categoría con los filtros de ahora y, en
+   * `categories` sin texto y en `category`, también con el texto. Las
+   * categorías que casan por nombre en la raíz con texto cuentan sin el
+   * texto: es lo que se verá al entrar.
+   */
+  count: z.number().int().nonnegative(),
+});
+export type IptvCategory = z.infer<typeof IptvCategorySchema>;
+
+export const IptvFacetValueSchema = z.strictObject({
+  /** Código (`ES`, `es`, `deportes`, `f1`, `fhd`) o `none`. La web pone el texto (§16.6). */
+  value: z.string().min(1).max(20),
+  /** Canales con este valor, con el texto, la categoría y los DEMÁS filtros de ahora. */
+  count: z.number().int().nonnegative(),
+  /** Está elegido. Un valor elegido sale siempre, aunque cuente 0, para poder quitarlo. */
+  selected: z.boolean(),
+});
+export type IptvFacetValue = z.infer<typeof IptvFacetValueSchema>;
+
+export const IptvFacetsSchema = z.strictObject({
+  country: z.array(IptvFacetValueSchema).max(IPTV_BROWSE.facetValuesMax),
+  language: z.array(IptvFacetValueSchema).max(IPTV_BROWSE.facetValuesMax),
+  type: z.array(IptvFacetValueSchema).max(IPTV_TYPES.length + 1),
+  sport: z.array(IptvFacetValueSchema).max(IPTV_SPORTS.length),
+  quality: z.array(IptvFacetValueSchema).max(IPTV_BROWSE_QUALITIES.length + 1),
+});
+export type IptvFacets = z.infer<typeof IptvFacetsSchema>;
+export type IptvFacetName = keyof IptvFacets;
+
+export const IptvBrowseChannelSchema = z.strictObject({
+  /** Id de §4.1 de la mejor variante de la fila (§16.3): el que se toca y se guarda en Favoritos. */
+  id: HashSchema,
+  /** Nombre limpio («DAZN F1»): sin país, adornos, calidad ni reserva. */
+  title: z.string().min(1).max(120),
+  /** Calidades de sus variantes, de mejor a peor para enseñar: uhd, fhd, hd, sd. Vacío = sin marca. */
+  qualities: z.array(IptvQualitySchema).max(IPTV_BROWSE_QUALITIES.length),
+  /** País deducido (§16.4), o null. */
+  country: z
+    .string()
+    .regex(new RegExp(`^${COUNTRY_CODE}$`))
+    .nullable(),
+  /** Categoría de la mejor variante (la web la enseña fuera de una categoría). */
+  category: IptvCategoryIdSchema,
+});
+export type IptvBrowseChannel = z.infer<typeof IptvBrowseChannelSchema>;
+
+export const IptvBrowseResponseSchema = z.strictObject({
+  /** Falso sin IPTV activa (sin proveedor, en pausa o sin catálogo): todo lo demás vacío. No es un error. */
+  active: z.boolean(),
+  /** El nombre que Isma puso al proveedor («Casa»); vacío sin IPTV. */
+  provider: z.string().max(IPTV_NAME_MAX),
+  /** Sello del catálogo: cambia con cada sincronización aplicada. `0` sin IPTV activa. */
+  catalog: z.string().regex(/^[a-z0-9]{1,16}$/),
+  /** La consulta limpia que se ha usado (vacía si tenía menos de 2 letras). */
+  query: z.string().max(SEARCH_QUERY_MAX),
+  /** La categoría pedida con su recuento; null si no se pidió o si ya no existe (la web lo distingue: la pidió). */
+  category: IptvCategorySchema.nullable(),
+  /** Filas que casan con todo (categoría, texto y filtros). */
+  total: z.number().int().nonnegative(),
+  /** Filas de todo el catálogo, sin nada (para «27.687 canales»). */
+  catalogTotal: z.number().int().nonnegative(),
+  /**
+   * Solo en la primera página y sin `category`. Sin texto: las categorías con
+   * al menos un canal, en el orden del proveedor. Con texto: las que tienen
+   * el texto en el nombre (5 como mucho, «Categorías con «{q}»»).
+   */
+  categories: z.array(IptvCategorySchema).max(IPTV_BROWSE.categoriesMax).optional(),
+  /** Solo en la primera página. */
+  facets: IptvFacetsSchema.optional(),
+  channels: z.array(IptvBrowseChannelSchema).max(IPTV_BROWSE.limitMax),
+  /** null = no hay más. */
+  nextCursor: CursorSchema.nullable(),
+  /** El cursor era de otro catálogo (hubo sincronización): esta es la PRIMERA página, con categorías y facetas. */
+  stale: z.boolean(),
+});
+export type IptvBrowseResponse = z.infer<typeof IptvBrowseResponseSchema>;

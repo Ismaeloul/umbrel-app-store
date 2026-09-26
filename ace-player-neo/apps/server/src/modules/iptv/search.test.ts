@@ -1,4 +1,4 @@
-/* El buscador de la IPTV (docs/iptv.md §14.3, §14.9 y §16): prefijos en
+/* El buscador de la IPTV (docs/iptv.md §14.3, §14.9 y §17): prefijos en
    cualquier orden, grafías de la IPTV, sin tildes, orden, una fila por canal
    (las variantes de resolución juntas; otro país, otra fila), todo
    desbloqueado (cualquier país y los grupos para adultos), `total` y

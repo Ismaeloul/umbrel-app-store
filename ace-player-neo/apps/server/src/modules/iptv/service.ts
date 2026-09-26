@@ -20,6 +20,7 @@ import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import {
   ERROR_CATALOG,
+  IPTV_BROWSE,
   IPTV_DEFAULT_NAME,
   IPTV_GUIDE_LIMITS,
   IPTV_M3U_LIMITS,
@@ -34,6 +35,8 @@ import {
   channelMatchScore,
   normalizeChannelKey,
   type IptvAccountState,
+  type IptvBrowseQuery,
+  type IptvBrowseResponse,
   type IptvChannel,
   type IptvChannelsResponse,
   type IptvIdState,
@@ -52,9 +55,20 @@ import type { TimerHandle } from '../../core/clock.js';
 import { AppError, errorCodeOf, isAppError } from '../../core/errors.js';
 import type { IptvKeys } from '../../config/keys.js';
 import type { IptvFetchPolicy } from '../net/types.js';
+import {
+  browseIndex,
+  buildBrowseIndexSteps,
+  catalogStamp,
+  cleanBrowseQuery,
+  decodeCursor,
+  encodeCursor,
+  rowQualities,
+  type BrowseCategory,
+  type BrowseIndex,
+} from './browse.js';
 import { Catalog, CatalogBuilder, channelIdOf, type CatalogEntry } from './catalog.js';
 import { loadIptvKeys, openJson, sealJson, secretAad } from './crypto.js';
-import { toIptvError } from './errors.js';
+import { failureDetail, isTransientSaveFailure, toIptvError } from './errors.js';
 import {
   buildGuideWindow,
   trimWindow,
@@ -106,6 +120,7 @@ import type {
 } from './types.js';
 import {
   assertAccountUsable,
+  categoryOrder,
   xtreamCategories,
   xtreamExtension,
   xtreamGuideUrl,
@@ -243,10 +258,17 @@ export class IptvServiceImpl implements IptvService {
   /**
    * Calidad real de una variante (id → calidad), sabida por el stream: la
    * `RESOLUTION` de la maestra HLS que abre el relé o la altura que da
-   * ffprobe en la sonda de fondo. Manda sobre la del nombre (§16). Solo en
+   * ffprobe en la sonda de fondo. Manda sobre la del nombre (§17). Solo en
    * memoria y con tope; los ids ya llevan el proveedor dentro (§4.1).
    */
   private readonly measured = new Map<string, IptvQuality>();
+  /** Índice de la pestaña IPTV del catálogo vigente (§16.5): se monta al aplicar y al cargar. */
+  private browseState: {
+    readonly catalog: Catalog;
+    readonly promise: Promise<BrowseIndex>;
+  } | null = null;
+  /** Nombres de categoría ya redactados, por índice. */
+  private readonly categoryNames = new WeakMap<BrowseIndex, Map<number, string>>();
   private started = false;
   private stopped = false;
   readonly files: IptvFiles;
@@ -269,11 +291,11 @@ export class IptvServiceImpl implements IptvService {
 
   private readonly logger: IptvDeps['logger'];
 
-  /** La calidad que manda de una variante: la del stream real si se conoce; si no, la del nombre (§16). */
+  /** La calidad que manda de una variante: la del stream real si se conoce; si no, la del nombre (§17). */
   private readonly qualityOf = (entry: CatalogEntry): IptvQuality | null =>
     this.measured.get(entry.id) ?? entry.quality;
 
-  /** Apunta la calidad real de una variante por la altura de su vídeo (§16). */
+  /** Apunta la calidad real de una variante por la altura de su vídeo (§17). */
   noteQuality(entryId: string, height: number | null | undefined): void {
     const quality = qualityFromHeight(height);
     if (!quality) return;
@@ -287,7 +309,7 @@ export class IptvServiceImpl implements IptvService {
     }
   }
 
-  /** Carteles y respaldo del canal de una variante (mismo grupo y país), con la calidad real (§16). */
+  /** Carteles y respaldo del canal de una variante (mismo grupo y país), con la calidad real (§17). */
   private planOf(entry: CatalogEntry, reliability?: (id: string) => number | null) {
     const catalog = this.catalog as Catalog;
     return planVariants(catalog.channelOf(entry), {
@@ -376,6 +398,7 @@ export class IptvServiceImpl implements IptvService {
     if (!record || this.unreadable) return;
     void this.refreshLan();
     this.catalog = await this.files.loadCatalog(record.id);
+    if (this.catalog) this.scheduleBrowse(this.catalog);
     this.guide = this.catalog ? await this.files.loadGuide(record.id) : null;
     this.scheduleAll(true);
   }
@@ -668,7 +691,7 @@ export class IptvServiceImpl implements IptvService {
       redactor.add(secrets.username);
       redactor.add(secrets.password);
     }
-    const account = await this.quickTest(secrets, { lan }, signal);
+    const account = await this.quickTest(secrets, { lan }, signal, host);
 
     const providerId = sameProvider && current ? current.id : newProviderId();
     const now = this.deps.clock.date().toISOString();
@@ -727,22 +750,84 @@ export class IptvServiceImpl implements IptvService {
     return this.view();
   }
 
-  /** Prueba rápida de «Guardar IPTV» (§5.3). No guarda nada si falla. */
+  /**
+   * Prueba rápida de «Guardar IPTV» (§5.3). No guarda nada si falla.
+   *
+   * Un solo reintento interno (§16.8, D36) si el primer intento falló por
+   * algo pasajero (`isTransientSaveFailure`) y rápido (< 5 s): espera 1,5 s
+   * (abortable) y repite desde la URL original. Nunca con `auth: 0`, 401 ni
+   * 403. Cada fallo va al registro en `warn` con su código (nunca la URL), y
+   * si el segundo también falla por algo pasajero, el error lleva
+   * `attempts: 2` para que la web lo diga.
+   */
   private async quickTest(
     secrets: Secrets,
     policy: IptvFetchPolicy,
     signal: AbortSignal,
+    host: string,
+  ): Promise<XtreamAccount | null> {
+    const { clock } = this.deps;
+    const startedAt = clock.now();
+    for (let attempt = 1; ; attempt += 1) {
+      const attemptAt = clock.now();
+      try {
+        const budget = IPTV_QUICK_TEST.budgetMs - (attemptAt - startedAt);
+        const account = await this.quickTestOnce(secrets, policy, signal, budget);
+        if (attempt > 1) {
+          this.logger.info(
+            { host, kind: secrets.kind, attempt },
+            'Prueba de la IPTV: bien al segundo intento',
+          );
+        }
+        return account;
+      } catch (error) {
+        const ms = clock.now() - attemptAt;
+        const failure = isAppError(error) ? error : toIptvError(error, 'account');
+        if (signal.aborted) throw error;
+        this.logger.warn(
+          {
+            host,
+            kind: secrets.kind,
+            errorCode: failure.code,
+            detail: failure.detail ?? failureDetail(error),
+            attempt,
+            ms,
+          },
+          'Prueba de la IPTV fallida',
+        );
+        const transient = isTransientSaveFailure(failure);
+        if (attempt >= 2) {
+          throw transient
+            ? new AppError(failure.code, {
+                ...(failure.detail ? { detail: failure.detail } : {}),
+                attempts: attempt,
+              })
+            : failure;
+        }
+        if (!transient || ms >= IPTV_QUICK_TEST.retryFastMs) throw failure;
+        await clock.sleep(IPTV_QUICK_TEST.retryDelayMs, signal);
+      }
+    }
+  }
+
+  /** Un intento de la prueba rápida (`maxMs`: lo que queda del presupuesto de 25 s). */
+  private async quickTestOnce(
+    secrets: Secrets,
+    policy: IptvFetchPolicy,
+    signal: AbortSignal,
+    maxMs: number,
   ): Promise<XtreamAccount | null> {
     if (secrets.kind === 'xtream') {
       const account = await xtreamUserInfo(this.deps.net, secrets, { policy, signal });
       assertAccountUsable(account);
       return account;
     }
+    const m3uMs = Math.max(1_000, Math.min(IPTV_QUICK_TEST.m3uMs, maxMs));
     let text: string;
     try {
       const opened = await this.deps.net.openStream(secrets.url, {
-        idleMs: IPTV_QUICK_TEST.m3uMs,
-        totalMs: IPTV_QUICK_TEST.m3uMs,
+        idleMs: m3uMs,
+        totalMs: m3uMs,
         headers: { 'User-Agent': IPTV_USER_AGENT },
         accept: 'audio/x-mpegurl,application/x-mpegURL,text/plain,*/*;q=0.5',
         iptv: { ...policy, maxDecompressedBytes: IPTV_M3U_LIMITS.maxDecompressedBytes },
@@ -923,6 +1008,13 @@ export class IptvServiceImpl implements IptvService {
             return new Map<string, string>();
           },
         );
+        /* El orden de las categorías del panel (la pestaña IPTV las enseña así, §16.3).
+           Si `get_live_categories` falló, se conserva el de la sincronización anterior. */
+        builder.groupOrder = categories.size
+          ? categoryOrder(categories)
+          : this.catalog?.providerId === providerId
+            ? this.catalog.groupOrder
+            : [];
         await xtreamLiveStreams(
           this.deps.net,
           secrets,
@@ -976,6 +1068,8 @@ export class IptvServiceImpl implements IptvService {
                 tvgShift: entry.tvgShift,
                 userAgent: entry.userAgent,
                 referrer: entry.referrer,
+                tvgCountry: entry.tvgCountry,
+                tvgLanguage: entry.tvgLanguage,
               });
             },
           });
@@ -1024,6 +1118,7 @@ export class IptvServiceImpl implements IptvService {
         this.logger.warn({ err: error }, 'no se pudo guardar el catálogo IPTV');
       });
       this.catalog = catalog;
+      this.scheduleBrowse(catalog);
       this.guideCache.clear();
       this.listFailures = 0;
       await this.persist((draft) => {
@@ -1384,7 +1479,7 @@ export class IptvServiceImpl implements IptvService {
         return entry ? channelIdOf(entry) : null;
       },
     };
-    /* Una fila por canal (§16): el id es el de la variante que arranca primero y
+    /* Una fila por canal (§17): el id es el de la variante que arranca primero y
        `qualities`, todas las que tiene, de mayor a menor resolución. */
     const row = (group: SearchGroup, library: string[]): IptvChannel => {
       const plan = planVariants(group.entries, { qualityOf: this.qualityOf });
@@ -1429,6 +1524,160 @@ export class IptvServiceImpl implements IptvService {
     };
   }
 
+  // --- Pestaña IPTV de Canales (§16) ---
+
+  /**
+   * El índice de la pestaña se monta `IPTV_BROWSE.buildDelayMs` después de
+   * aplicar una sincronización o de cargar `catalogo.enc`: así no se suma al
+   * pico de memoria de la propia lectura de la lista (100 000 canales, §12.2).
+   * Si alguien abre la pestaña antes, se monta en ese momento.
+   */
+  private scheduleBrowse(catalog: Catalog): void {
+    this.schedule('browse-index', IPTV_BROWSE.buildDelayMs, () => {
+      if (this.catalog === catalog) void this.prepareBrowse(catalog).catch(() => undefined);
+    });
+  }
+
+  /**
+   * Monta el índice de la pestaña a trozos (`IPTV_BROWSE.buildChunk`),
+   * cediendo el hilo con `setImmediate` entre trozo y trozo para no parar el
+   * servidor. Una petición que llega mientras se monta espera a esta promesa
+   * (nunca a una sincronización).
+   */
+  private prepareBrowse(catalog: Catalog): Promise<BrowseIndex> {
+    const current = this.browseState;
+    if (current?.catalog === catalog) return current.promise;
+    const startedAt = performance.now();
+    const promise = (async () => {
+      const steps = buildBrowseIndexSteps(catalog, IPTV_BROWSE.buildChunk);
+      for (;;) {
+        const next = steps.next();
+        if (next.done) return next.value;
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      }
+    })();
+    this.browseState = { catalog, promise };
+    promise.then(
+      (index) => {
+        this.logger.debug(
+          {
+            rows: index.rowCount,
+            categories: index.categories.length,
+            ms: Math.round(performance.now() - startedAt),
+          },
+          'IPTV: índice de la pestaña montado',
+        );
+      },
+      (error: unknown) => {
+        this.logger.warn({ err: error }, 'IPTV: no se pudo montar el índice de la pestaña');
+        if (this.browseState?.promise === promise) this.browseState = null;
+      },
+    );
+    return promise;
+  }
+
+  /** Nombre enseñado de una categoría: redactado (§2.4) y a 120; vacío = «Sin categoría». */
+  private categoryName(index: BrowseIndex, category: BrowseCategory): string {
+    if (!category.name) return '';
+    let names = this.categoryNames.get(index);
+    if (!names) {
+      names = new Map();
+      this.categoryNames.set(index, names);
+    }
+    let name = names.get(category.index);
+    if (name === undefined) {
+      name = this.redact(category.name).slice(0, IPTV_BROWSE.categoryNameMax);
+      names.set(category.index, name);
+    }
+    return name;
+  }
+
+  async browse(query: IptvBrowseQuery): Promise<IptvBrowseResponse> {
+    const q = cleanBrowseQuery(query.q);
+    /* Un cursor mal formado es 400 aunque no haya IPTV (como cualquier consulta mala). */
+    const cursor = query.cursor === undefined ? null : decodeCursor(query.cursor);
+    if (query.cursor !== undefined && !cursor) {
+      throw new AppError('validation_error', { detail: 'cursor' });
+    }
+    const inactive: IptvBrowseResponse = {
+      active: false,
+      provider: '',
+      catalog: '0',
+      query: q,
+      category: null,
+      total: 0,
+      catalogTotal: 0,
+      channels: [],
+      nextCursor: null,
+      stale: false,
+    };
+    if (!this.active()) return inactive;
+    const catalog = this.catalog as Catalog;
+    const index = await this.prepareBrowse(catalog);
+    if (!this.active()) return inactive;
+    const record = this.record as IptvProviderRecord;
+    const stamp = catalogStamp(catalog);
+    const stale = cursor !== null && cursor.stamp !== stamp;
+    const offset = cursor && !stale ? cursor.offset : 0;
+    const list = (value: string | undefined) => (value ? value.split(',') : undefined);
+    const result = browseIndex(index, {
+      category: query.category,
+      q,
+      country: list(query.country),
+      language: list(query.language),
+      type: list(query.type),
+      sport: list(query.sport),
+      quality: list(query.quality),
+      offset,
+      limit: query.limit ?? IPTV_BROWSE.limit,
+      withSummary: cursor === null || stale,
+    });
+    const category = result.category === 'missing' ? null : result.category;
+    return {
+      active: true,
+      provider: record.name,
+      catalog: stamp,
+      query: result.query,
+      category: category
+        ? { id: category.id, name: this.categoryName(index, category), count: result.total }
+        : null,
+      total: result.total,
+      catalogTotal: index.rowCount,
+      ...(result.categories
+        ? {
+            categories: result.categories.map((item) => ({
+              id: item.category.id,
+              name: this.categoryName(index, item.category),
+              count: item.count,
+            })),
+          }
+        : {}),
+      ...(result.facets
+        ? {
+            facets: {
+              country: [...result.facets.country],
+              language: [...result.facets.language],
+              type: [...result.facets.type],
+              sport: [...result.facets.sport],
+              quality: [...result.facets.quality],
+            },
+          }
+        : {}),
+      channels: result.rows.map((row) => {
+        const best = index.best[row] as CatalogEntry;
+        return {
+          id: best.id,
+          title: (best.display || (index.key[row] as string)).slice(0, 120),
+          qualities: rowQualities(index, row),
+          country: index.country[row] ?? null,
+          category: (index.categories[index.category[row] as number] as BrowseCategory).id,
+        };
+      }),
+      nextCursor: result.nextOffset === null ? null : encodeCursor(stamp, result.nextOffset),
+      stale,
+    };
+  }
+
   /**
    * Los canales de tu IPTV que son elementos de tu biblioteca (un id IPTV, su
    * grupo; si no, el mejor grupo ≥ 92 por nombre), en el orden de la
@@ -1459,7 +1708,7 @@ export class IptvServiceImpl implements IptvService {
 
   /**
    * El canal del buscador que es un título (≥ 92, desempate por orden del
-   * catálogo), con caché. El país cuenta (§16): un título sin país o de España
+   * catálogo), con caché. El país cuenta (§17): un título sin país o de España
    * es un canal de España o sin país, y «DE: DAZN 1», el canal alemán.
    */
   private bestGroupFinder(): (title: string) => SearchGroup | null {
@@ -1525,7 +1774,7 @@ export class IptvServiceImpl implements IptvService {
     const catalog = this.catalog;
     if (!catalog || !this.active()) return;
     const keys = this.ensureKeys();
-    /* La variante que arranca primero en su canal (la del buscador, §16). */
+    /* La variante que arranca primero en su canal (la del buscador, §17). */
     const bestOf = (id: string): string | null => {
       const entry = catalog.get(id);
       if (!entry) return null;
@@ -1579,7 +1828,7 @@ export class IptvServiceImpl implements IptvService {
     }
   }
 
-  /** Una candidata por variante (cartel, §16): su calidad, si es de reserva y el país si no es España. */
+  /** Una candidata por variante (cartel, §17): su calidad, si es de reserva y el país si no es España. */
   private toCandidate(match: IptvGroupMatch, entry: CatalogEntry): IptvResolutionCandidate {
     const record = this.record as IptvProviderRecord;
     return {
@@ -1601,11 +1850,12 @@ export class IptvServiceImpl implements IptvService {
         backup: entry.backup,
         guide: match.guide,
         ...(match.bucket ? { country: match.bucket } : {}),
+        channel: match.key.slice(0, 200),
       },
     };
   }
 
-  /** Los carteles de un canal emparejado, en orden (§16). */
+  /** Los carteles de un canal emparejado, en orden (§17). */
   private toCandidates(match: IptvGroupMatch): IptvResolutionCandidate[] {
     return match.posters.map((entry) => this.toCandidate(match, entry));
   }
@@ -1656,7 +1906,7 @@ export class IptvServiceImpl implements IptvService {
     const catalog = this.catalog as Catalog;
     const entry = catalog.get(id);
     if (!entry) return null;
-    /* La variante que arranca primero en su canal (§16): la misma que sale en la capa IPTV. */
+    /* La variante que arranca primero en su canal (§17): la misma que sale en la capa IPTV. */
     const found = groupMatch(
       entry.key,
       entry.bucket,
@@ -1681,7 +1931,7 @@ export class IptvServiceImpl implements IptvService {
     const catalog = this.catalog as Catalog;
     const secrets = this.secrets as Secrets;
     /* El id pedido va primero (es el cartel que se eligió); detrás, SOLO las
-       variantes sin cartel propio que le tocan (§16). Las que tienen cartel las
+       variantes sin cartel propio que le tocan (§17). Las que tienen cartel las
        prueba la web, que así enseña en cuál estás. */
     const plan = this.planOf(entry);
     const ordered = plan ? relayVariants(plan, entry, { qualityOf: this.qualityOf }) : [entry];
@@ -1864,7 +2114,7 @@ export class IptvServiceImpl implements IptvService {
     this.probe = { controller, promise };
     try {
       const result = await promise;
-      /* La altura que da ffprobe es la calidad real de esa variante (§16); no va al veredicto. */
+      /* La altura que da ffprobe es la calidad real de esa variante (§17); no va al veredicto. */
       if (result.height) {
         this.noteQuality(variant.entryId, result.height);
         const { height: _height, ...verdict } = result;
@@ -1906,6 +2156,11 @@ export class IptvServiceImpl implements IptvService {
 
   catalogForTests(): Catalog | null {
     return this.catalog;
+  }
+
+  /** Espera al índice de la pestaña del catálogo vigente (tests). */
+  async browseIndexForTests(): Promise<BrowseIndex | null> {
+    return this.catalog ? this.prepareBrowse(this.catalog) : null;
   }
 
   guideForTests(): GuideWindow | null {
