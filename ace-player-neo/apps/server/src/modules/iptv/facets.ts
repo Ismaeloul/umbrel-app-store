@@ -31,16 +31,18 @@
 
 import type { IptvQuality, IptvSport, IptvType } from '@ace/shared';
 import { IPTV_SPORTS, IPTV_TYPES } from '@ace/shared';
+import { IPTV_CONTINENTS } from './names.js';
 import { foldText } from './search.js';
 
 /*
  * Canales para adultos (la regla de §14.3, que el buscador ya no usa como
  * filtro desde §17 pero que aquí es el tipo «Adultos»): xxx, adult, adulto/a,
  * porn… y «+18» / «18+» sueltos, no el «+» de una marca seguido de un número
- * («Canal+ 18» o «M+ 18 Series» no son para adultos).
+ * («Canal+ 18» o «M+ 18 Series» no son para adultos). «Adult Swim» es un
+ * canal de dibujos, no para adultos.
  */
 const ADULT_RE =
-  /(?:^|[^a-z0-9])(?:xxx|adults?|adult[oa]s?|porn\w*)(?:$|[^a-z0-9])|(?:^|[^a-z0-9+])\+\s?18(?!\d)|(?<!\d)18\s?\+/;
+  /(?:^|[^a-z0-9])(?:xxx|(?!adult\s*swim)adults?|adult[oa]s?|porn\w*)(?:$|[^a-z0-9])|(?:^|[^a-z0-9+])\+\s?18(?!\d)|(?<!\d)18\s?\+/;
 
 /** ¿Es un canal (o un grupo) para adultos? Por palabra y sin tildes. */
 export function isAdultChannel(title: string, group: string): boolean {
@@ -104,7 +106,23 @@ interface CountryRow {
 export const IPTV_COUNTRY_TABLE: readonly CountryRow[] = [
   {
     code: 'ES',
-    aliases: ['ES', 'ESP', 'SPA', 'SP', 'ESPAÑA', 'ESPANA', 'SPAIN', 'CAT'],
+    /* Y las comunidades con lengua propia que las listas usan como categoría («CATALUNYA», «PAIS VASCO»). */
+    aliases: [
+      'ES',
+      'ESP',
+      'SPA',
+      'SP',
+      'ESPAÑA',
+      'ESPANA',
+      'SPAIN',
+      'CAT',
+      'CATALUNYA',
+      'CATALUÑA',
+      'CATALONIA',
+      'EUSKADI',
+      'PAIS VASCO',
+      'GALICIA',
+    ],
     noSeparator: true,
   },
   { code: 'UK', aliases: ['UK', 'GB', 'ENG', 'UNITED KINGDOM'], noSeparator: true },
@@ -166,7 +184,8 @@ const ISO_3166 = new Set(
 
 /**
  * Nunca son país, ni con separador (§16.4): marcas técnicas y de paquete,
- * y «AR», que en las listas es árabe.
+ * «AR», que en las listas es árabe, y «LA» («LA | GENERAL» es latino o Los
+ * Ángeles; Laos no sale en las listas).
  */
 export const NEVER_COUNTRY: ReadonlySet<string> = new Set([
   'HD',
@@ -187,6 +206,7 @@ export const NEVER_COUNTRY: ReadonlySet<string> = new Set([
   'TOP',
   'ALL',
   'AR',
+  'LA',
   'XXX',
   'LIVE',
   'HQ',
@@ -219,10 +239,18 @@ function tableCountry(value: string): string | null {
   return COUNTRY_BY_ALIAS.get(key)?.code ?? null;
 }
 
+/**
+ * ¿Es el continente de «EU | ES | TDT» o «AM | USA | ESPN» (el país va detrás)? «AM», «AS» y «AF» también son
+ * siglas ISO (Armenia, Samoa, Afganistán) y «EU», euskera. «LATAM» no: está en la tabla.
+ */
+function isContinent(key: string): boolean {
+  return IPTV_CONTINENTS.has(key) && !COUNTRY_BY_ALIAS.has(key);
+}
+
 /** País de un texto marcado como código (con separador o entre barras): tabla o ISO en mayúsculas. */
 function markedCountry(raw: string): string | null {
   const key = aliasKey(raw);
-  if (NEVER_COUNTRY.has(key)) return null;
+  if (NEVER_COUNTRY.has(key) || isContinent(key)) return null;
   const known = COUNTRY_BY_ALIAS.get(key);
   if (known) return known.code;
   /* Otro ISO alfa-2, solo si viene en mayúsculas («HU:»; no «la:»). */
@@ -231,8 +259,9 @@ function markedCountry(raw: string): string | null {
 }
 
 /**
- * Prefijos con separador del principio (hasta 2: «VIP | ES: …» mira el
- * segundo si el primero es una marca que nunca es país).
+ * Prefijos con separador del principio (hasta 2: «VIP | ES: …» o «EU | ES |
+ * TDT» miran el segundo si el primero es una marca que nunca es país o un
+ * continente).
  */
 function prefixes(text: string): string[] {
   const out: string[] = [];
@@ -241,7 +270,8 @@ function prefixes(text: string): string[] {
     const match = PREFIX_RE.exec(rest);
     if (!match?.[1]) break;
     out.push(match[1]);
-    if (!NEVER_COUNTRY.has(aliasKey(match[1]))) break;
+    const key = aliasKey(match[1]);
+    if (!NEVER_COUNTRY.has(key) && !isContinent(key)) break;
     rest = rest.slice(match[0].length);
   }
   return out;
@@ -281,6 +311,19 @@ function bracketCountry(text: string): string | null {
     if (code) return code;
   }
   return null;
+}
+
+/**
+ * El país que ya sacó del nombre la limpieza de la lista real (`cleanIptvTitle`, §18), pasado por la misma
+ * tabla que el resto de fuentes: «USA» → US; «AR» (árabe), «LA», «EN» (un idioma) o el continente de «EU |
+ * LATVIA» («AM», «AS» y «AF» también son siglas ISO) → sin país.
+ */
+function nameCountryCode(value: string | null | undefined): string | null {
+  const raw = String(value ?? '')
+    .trim()
+    .toUpperCase();
+  if (!raw) return null;
+  return markedCountry(raw);
 }
 
 /** `tvg-country`: el primer valor de la lista (`;`, `,` o `|`), código o nombre. */
@@ -343,11 +386,27 @@ export const IPTV_LANGUAGE_TABLE: readonly LanguageRow[] = [
     code: 'en',
     codes: ['en', 'eng'],
     words: ['english', 'ingles'],
-    countries: ['UK', 'GB', 'US', 'IE', 'CA', 'AU', 'NZ'],
+    /* Sin «CA»: Canadá es bilingüe («CA: RDS» o «CA: TVA» son en francés). */
+    countries: ['UK', 'GB', 'US', 'IE', 'AU', 'NZ'],
   },
-  { code: 'ca', codes: ['cat'], words: ['catalan', 'catala'], countries: [] },
-  { code: 'eu', codes: ['eu', 'eus'], words: ['basque', 'euskera', 'euskara'], countries: [] },
-  { code: 'gl', codes: ['gl', 'glg'], words: ['galician', 'galego', 'gallego'], countries: [] },
+  {
+    code: 'ca',
+    codes: ['cat'],
+    words: ['catalan', 'catala', 'catalunya', 'cataluna', 'catalonia'],
+    countries: [],
+  },
+  {
+    code: 'eu',
+    codes: ['eu', 'eus'],
+    words: ['basque', 'euskera', 'euskara', 'euskadi', 'vasco'],
+    countries: [],
+  },
+  {
+    code: 'gl',
+    codes: ['gl', 'glg'],
+    words: ['galician', 'galego', 'gallego', 'galicia'],
+    countries: [],
+  },
   {
     code: 'pt',
     codes: ['pt', 'por'],
@@ -448,6 +507,8 @@ export function tvgLanguageCodes(value: string | null | undefined): string[] {
 function prefixLanguage(list: readonly string[]): string | null {
   for (const prefix of list) {
     const key = aliasKey(prefix);
+    /* «EU | ES | TDT» o «EU | LATVIA»: «EU» es el continente, no euskera. */
+    if (isContinent(key)) continue;
     if (key === 'CAT') return 'ca';
     if (key === 'AR') return 'ar';
     if (COUNTRY_BY_ALIAS.has(key)) return null;
@@ -573,6 +634,7 @@ export const IPTV_TYPE_TERMS: Readonly<Record<Exclude<IptvType, 'adultos'>, read
     'sportklub',
     'sport tv',
     'canal+ sport',
+    'canal+ foot',
     'rmc sport',
     'setanta',
     'fox sports',
@@ -754,6 +816,7 @@ export const IPTV_SPORT_TERMS: Readonly<Record<IptvSport, readonly string[]>> = 
     'goltv',
     'real madrid tv',
     'barca tv',
+    'canal+ foot',
   ],
   baloncesto: [
     'baloncesto',
@@ -971,6 +1034,21 @@ interface GroupFacets {
 }
 
 const TYPE_ORDER = new Map(IPTV_TYPES.map((type, index) => [type, index]));
+
+/*
+ * Marcas del nombre que solo son esa marca en su país (o sin país): «nova» es la de Atresmedia en España, pero
+ * «GR: NOVA SPORTS 1» es Grecia y no suma Entretenimiento.
+ */
+const LOCAL_BRANDS: ReadonlyMap<string, string> = new Map([['nova', 'ES']]);
+
+/** Las palabras del nombre sin las marcas locales de otro país. */
+function brandTokens(tokens: readonly string[], country: string | null): readonly string[] {
+  if (country === null) return tokens;
+  return tokens.filter((token) => {
+    const home = LOCAL_BRANDS.get(bare(token));
+    return home === undefined || home === country;
+  });
+}
 const SPORT_ORDER = new Map(IPTV_SPORTS.map((sport, index) => [sport, index]));
 
 /**
@@ -1010,7 +1088,7 @@ export class FacetDeriver {
       group.firstWordCountry ??
       bracketCountry(input.title) ??
       group.bracketCountry ??
-      (input.nameCountry && /^[A-Z]{2,4}$/.test(input.nameCountry) ? input.nameCountry : null)
+      nameCountryCode(input.nameCountry)
     );
   }
 
@@ -1031,7 +1109,7 @@ export class FacetDeriver {
     for (const code of group.languages) addLanguage(code);
     if (!languages.length && country) addLanguage(LANGUAGE_BY_COUNTRY.get(country));
 
-    const name = matchTerms(tokens);
+    const name = matchTerms(brandTokens(tokens, country));
     const adult = group.adult || name.adult || group.match.adult || isAdultChannel(input.title, '');
     if (adult) {
       return { country, languages, types: ['adultos'], sports: [], quality };
