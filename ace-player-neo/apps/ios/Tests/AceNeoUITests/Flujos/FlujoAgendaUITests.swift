@@ -49,12 +49,15 @@ final class FlujoAgendaUITests: XCTestCase {
         XCTAssertTrue(elementoUI(app, IDUI.dia(dia(1))).isSelected)
 
         // Deslizar a la derecha sobre la lista vuelve al día anterior. Mañana tiene dos partidos de LaLiga en un
-        // carril que se desplaza de lado, así que se desliza sobre la cabecera del bloque («LaLiga · 2», justo
-        // encima de la tarjeta), que no se mueve. Antes se sube la página para que quede a la vista.
+        // carril que se desplaza de lado, así que se desliza sobre la cabecera del bloque («LaLiga · 2»), que no se
+        // mueve. Su elemento es el de la cabecera (el marco de la tarjeta lleva la sombra y empieza por encima
+        // del bloque: desde ahí el dedo caía fuera del panel, CI 36232007098). Antes se sube la página.
         let pantalla = elementoUI(app, IDUI.pantalla("agenda"))
         arrastrar(pantalla, desde: CGVector(dx: 0.5, dy: 0.75), hasta: CGVector(dx: 0.5, dy: 0.35))
         XCTAssertTrue(tarjetaManana.isHittable, "La tarjeta de mañana no queda a la vista")
-        let cabecera = tarjetaManana.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0)).withOffset(CGVector(dx: 0, dy: -14))
+        let rotulo = app.staticTexts.matching(NSPredicate(format: "label == %@", "LaLiga, 2 partidos")).firstMatch
+        XCTAssertTrue(rotulo.waitForExistence(timeout: 5), "No se ve la cabecera del bloque de LaLiga")
+        let cabecera = rotulo.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         cabecera.press(forDuration: 0.05, thenDragTo: cabecera.withOffset(CGVector(dx: 260, dy: 0)))
         XCTAssertTrue(elementoUI(app, IDUI.tarjetaPartido("demo-12")).waitForExistence(timeout: 10), "Deslizar no vuelve a hoy")
         XCTAssertTrue(elementoUI(app, IDUI.dia(dia(0))).isSelected)
