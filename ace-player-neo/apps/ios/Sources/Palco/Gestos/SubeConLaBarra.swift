@@ -22,6 +22,7 @@ struct SubeConLaBarra: UIViewRepresentable {
 
     func updateUIView(_ sonda: Sonda, context: Context) {
         sonda.activo = activo
+        sonda.accesible = context.environment.vistaActiva
         sonda.aplicar()
     }
 
@@ -31,6 +32,10 @@ struct SubeConLaBarra: UIViewRepresentable {
 
     final class Sonda: UIView {
         var activo = false
+        /// Las listas de una pestaña oculta salen del árbol de accesibilidad: la ScrollView es una vista de UIKit y
+        /// `accessibilityHidden` de SwiftUI no la alcanza (XCUITest, y un toque de VoiceOver en un hueco de la
+        /// pestaña que se ve, llegaban a la Agenda oculta).
+        var accesible = true
         private weak var anunciada: UIScrollView?
 
         override func didMoveToWindow() {
@@ -43,6 +48,9 @@ struct SubeConLaBarra: UIViewRepresentable {
             while let actual = vista, !(actual is UIScrollView) { vista = actual.superview }
             let desplazable = vista as? UIScrollView
             desplazable?.scrollsToTop = activo
+            if let desplazable, desplazable.accessibilityElementsHidden == accesible {
+                desplazable.accessibilityElementsHidden = !accesible
+            }
             guard activo, window != nil, let desplazable else {
                 anunciada = nil
                 return
