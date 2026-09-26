@@ -244,6 +244,11 @@ export class Catalog {
     return many(this.groups.get(key));
   }
 
+  /** Claves de todos los grupos, en el orden del catálogo (el buscador monta su índice con ellas). */
+  groupKeys(): IterableIterator<string> {
+    return this.groups.keys();
+  }
+
   /** Grupos con ese `tvg-id` (para la guía). */
   groupsByTvgId(tvgId: string): string[] {
     return [...many(this.tvg.get(tvgId.trim().toLowerCase()))];

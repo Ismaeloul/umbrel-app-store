@@ -9,6 +9,7 @@
 import http from 'node:http';
 import { Writable } from 'node:stream';
 import { createLogger } from '../../core/logger.js';
+import { scoreResolutionCandidate } from '../football/resolution.js';
 import { createNetClient } from '../net/index.js';
 import { createStateService } from '../state/index.js';
 import type { StateService } from '../state/types.js';
@@ -72,6 +73,8 @@ export async function createIptvTestRig(
     state,
     net,
     relayHost: host === '::1' ? '::1' : '127.0.0.1',
+    /* La puntuación de la resolución, como en services.ts (buscador y re-emparejado, §14). */
+    scorer: (channels, item) => scoreResolutionCandidate(channels, item, 'iptv'),
   });
   return {
     core,

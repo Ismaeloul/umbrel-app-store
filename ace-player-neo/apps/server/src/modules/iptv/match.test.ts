@@ -5,7 +5,13 @@
 import { describe, expect, it } from 'vitest';
 import { scoreResolutionCandidate } from '../football/resolution.js';
 import { Catalog, type RawChannel } from './catalog.js';
-import { matchIptvChannels, pickVariants, type ChannelScorer } from './match.js';
+import {
+  matchIptvChannels,
+  pickVariants,
+  sameChannel,
+  sameChannelScore,
+  type ChannelScorer,
+} from './match.js';
 
 const scorer: ChannelScorer = (channels, item) => scoreResolutionCandidate(channels, item, 'iptv');
 
@@ -194,5 +200,41 @@ describe('catálogo', () => {
     expect(again?.size).toBe(2);
     expect(again?.groupsByTvgId('daznlaliga.es')).toEqual(['dazn laliga']);
     expect(Catalog.fromStored({ v: 2 })).toBe(null);
+  });
+});
+
+describe('sameChannel: la regla única del buscador (docs/iptv.md §14.3)', () => {
+  const same = (base: string, other: string) => sameChannel(base, other, scorer);
+  const score = (base: string, other: string) => sameChannelScore(base, other, scorer);
+
+  it('«DAZN LA LIGA 1080» es «DAZN LaLiga»; «La 1 HD --> ELCANO» es «La 1»', () => {
+    expect(same('DAZN LaLiga', 'DAZN LA LIGA 1080')).toBe(true);
+    expect(same('DAZN LaLiga', 'ES: DAZN LA LIGA FHD')).toBe(true);
+    expect(same('La 1', 'La 1 HD --> ELCANO')).toBe(true);
+    expect(same('Antena 3', 'Antena 3 HD')).toBe(true);
+  });
+
+  it('Hypermotion ≤ 58: «LaLiga TV Hypermotion» nunca es «LaLiga TV»', () => {
+    expect(score('LaLiga TV', 'LaLiga TV Hypermotion --> NEW ERA')).toBeLessThanOrEqual(58);
+    expect(score('LaLiga TV Hypermotion', 'LaLiga TV')).toBeLessThanOrEqual(58);
+    expect(same('LaLiga TV', 'M+ Hypermotion')).toBe(false);
+  });
+
+  it('los números: «DAZN 1» no es «DAZN 2» ni «DAZN F1»; «DAZN» no es «DAZN 1»', () => {
+    expect(same('DAZN 1', 'DAZN 2')).toBe(false);
+    expect(same('DAZN 1', 'DAZN F1')).toBe(false);
+    expect(same('DAZN', 'DAZN 1')).toBe(false);
+    expect(same('DAZN 1', 'DAZN')).toBe(false);
+  });
+
+  it('« 1» final solo si el otro no lleva número', () => {
+    expect(same('M+ LaLiga TV', 'M+ LaLiga TV 1 HD')).toBe(true);
+    expect(same('M+ LaLiga TV 1', 'M+ LaLiga TV')).toBe(true);
+    expect(same('M+ LaLiga TV 2', 'M+ LaLiga TV 1')).toBe(false);
+  });
+
+  it('otro país no se limpia: «UK: DAZN 1» no pasa por «DAZN 1» limpio', () => {
+    expect(score('DAZN 1', 'UK: DAZN 1')).toBeLessThan(score('DAZN 1', 'ES: DAZN 1'));
+    expect(same('Telecinco', '')).toBe(false);
   });
 });

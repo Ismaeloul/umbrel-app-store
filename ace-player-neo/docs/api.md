@@ -945,6 +945,24 @@ Las 5 rutas son `access: 'web'`: desde `/native` dan `403 origin_forbidden`. No 
 - **SSE.** `iptv.status` solo a la web (lo mismo que `iptvGet`, sin secretos). En una sesión IPTV, `stream.stats` lo da el relé (`status: 'iptv'`, `peers: 0`, `speedUp: 0`) y la sesión se cierra siempre con `stream.closed` `reason: 'remux_failed'` y un código `iptv_*` (`iptv_dropped`, `iptv_disabled`, `iptv_removed`, `iptv_busy`) para que el reproductor salte al momento. Cuando el relé reconecta con otra base de tiempos o cambia de variante llega `stream.reopened` con `reason: 'remux_restart'` (mismo `sid`, ffmpeg nuevo), que no cuenta como fallo.
 - **`footballResolve`.** Las candidatas IPTV van primero, dos como mucho, con `source: 'iptv'` y `iptv: { provider, quality, backup, guide }` (`guide: true` si la confirmó la guía XMLTV). Su `title` es «<canal> --> <proveedor>» y nunca lleva la URL ni el id del proveedor.
 
-### 7.6 Estado (26-sep-2026)
+### 7.6 Buscador: IPTV y AceStream juntos (`docs/iptv.md` §14)
+
+| id | Método y ruta | Consulta | Respuesta | Errores propios |
+|---|---|---|---|---|
+| `iptvChannels` | `GET /api/v1/iptv/channels` (`access: 'web'` hasta que la app calque el buscador) | `q` (2 a 80 letras, limpia como `search`), `limit` (1 a 50, por defecto 50) | `IptvChannelsResponse` | `empty_query` |
+
+- **Qué devuelve.** Una fila por canal de tu IPTV (la mejor variante): `{ id, title, quality, provider, library }`. `title` es el nombre limpio («Antena 3»), `provider` el nombre que pusiste («Casa») y `library` los ids de tu biblioteca que son ese canal (≥ 92, 20 como mucho). `total` cuenta hasta 200 y `capped` dice si hay más. Solo canales de España o sin país y nunca los grupos para adultos. Nunca lleva URL, grupo, `tvg-id` ni `stream_id`. Sin IPTV activa: `200` con `channels: []`.
+- **`search`** gana `iptv` (opcional) en cada resultado de `/api/v1/search`: el canal de tu IPTV que es ese resultado (≥ 92, con la protección Hypermotion). La ruta antigua `/api/search` nunca lo lleva.
+- **`footballResolve` con `scope=channel`** gana `iptv` (el canal IPTV tocado: si es del catálogo vigente sale primero con su mejor variante; si no, se ignora y manda el nombre) y `engine=1` (búsqueda inversa en el motor: 2 consultas como mucho, solo lo que es ese canal con ≥ 92; con ella se devuelve lo que haya aunque no haya IPTV, y `not_found` solo si no hay nada).
+- **`libraryGet`, `libraryMutate` y `bootstrap.library`** ganan `iptvIds` (opcional): el estado ahora de cada id IPTV de favoritos y recientes (`ok`, `iptv_gone`, `iptv_disabled`, `iptv_removed`). Tras cada sincronización correcta, los favoritos y recientes IPTV de otro proveedor se re-emparejan por nombre (`alias` o título): un reciente que no casa se quita al momento y un favorito, pasadas 24 h.
+
+Ejemplo (`fixtures/web/v1/iptvChannels.json`):
+
+```json
+{ "query": "la", "total": 3, "capped": false,
+  "channels": [{ "id": "f607…45ef", "title": "La 1", "quality": "hd", "provider": "Casa", "library": ["c3d4…901a"] }] }
+```
+
+### 7.7 Estado (26-sep-2026)
 
 Implementado en la rama `rediseno/iptv` (servidor y web), para la 0.8.1 sin publicar. Pruebas: unitarias del contrato, del servidor y de la web; integración del servidor con el proveedor falso (`apps/server/test/fake-iptv`); E2E `apps/web/e2e/iptv.spec.ts` contra la pila entera con ffmpeg de verdad (configurar M3U y Xtream, la IPTV primero en un partido y en un canal suelto, el puente en los dos sentidos, volver con un toque y la búsqueda de la contraseña y el usuario en todas las respuestas, el SSE, la página y los ficheros de datos y logs).

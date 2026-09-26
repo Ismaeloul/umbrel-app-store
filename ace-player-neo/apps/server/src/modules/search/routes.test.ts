@@ -6,20 +6,43 @@ import { SearchResponseSchema } from '@ace/shared';
 import { createTestApp, createTestCore, web } from '../../../test/helpers/index.js';
 import { AppError } from '../../core/errors.js';
 import type { EngineService } from '../engine/types.js';
+import type { IptvService } from '../iptv/types.js';
 import type { ScannerService } from '../scanner/types.js';
 import { createSearchService } from './index.js';
 
 const ID_A = 'a'.repeat(40);
 const BODY = JSON.stringify({ result: [{ content_id: ID_A, name: 'DAZN 1', availability: 1 }] });
 
-async function appWith(searchRaw: (query: string, signal?: AbortSignal) => Promise<string>) {
+async function appWith(
+  searchRaw: (query: string, signal?: AbortSignal) => Promise<string>,
+  iptv?: IptvService,
+) {
   const core = createTestCore();
   const raw = vi.fn(searchRaw);
   const engine = { client: () => ({ searchRaw: raw }) } as unknown as EngineService;
   const scanner = { isEnabled: () => false } as unknown as ScannerService;
   const search = createSearchService({ ...core, engine, scanner });
-  const { app } = await createTestApp({ services: { search } });
+  const { app } = await createTestApp({ services: { search, ...(iptv ? { iptv } : {}) } });
   return { app, raw };
+}
+
+const IPTV_LA1 = 'f'.repeat(40);
+const LA1_BODY = JSON.stringify({
+  result: [
+    { content_id: 'b'.repeat(40), name: 'La 1 HD --> ELCANO', availability: 0.9 },
+    { content_id: 'c'.repeat(40), name: 'LaLiga TV Hypermotion', availability: 0.5 },
+  ],
+});
+
+/* La IPTV de mentira: el cálculo de verdad está en iptv/service.test.ts. */
+function fakeIptv(active: boolean): IptvService {
+  return {
+    active: () => active,
+    annotateSearch: (results) =>
+      results.map((result) =>
+        result.title.startsWith('La 1') ? { ...result, iptv: IPTV_LA1 } : result,
+      ),
+  } as Partial<IptvService> as IptvService;
 }
 
 describe('GET /api/search (api.md §4.20)', () => {
@@ -100,5 +123,32 @@ describe('GET /api/v1/search', () => {
     const down = await app.inject({ method: 'GET', url: '/api/v1/search?q=DAZN', headers: web() });
     expect(down.statusCode).toBe(503);
     expect(down.json().error.code).toBe('engine_unavailable');
+  });
+});
+
+describe('SearchResult.iptv (docs/iptv.md §14.3)', () => {
+  it('con IPTV activa, /api/v1/search anota los resultados que son un canal de tu IPTV', async () => {
+    const { app } = await appWith(async () => LA1_BODY, fakeIptv(true));
+    const res = await app.inject({ method: 'GET', url: '/api/v1/search?q=la%201', headers: web() });
+    expect(res.statusCode).toBe(200);
+    const results = SearchResponseSchema.parse(res.json()).results;
+    expect(results.map((result) => result.iptv ?? null)).toEqual([IPTV_LA1, null]);
+  });
+
+  it('la ruta antigua nunca lo lleva; sin IPTV activa, v1 tampoco', async () => {
+    const withIptv = await appWith(async () => LA1_BODY, fakeIptv(true));
+    const legacy = await withIptv.app.inject({
+      method: 'GET',
+      url: '/api/search?q=la%201',
+      headers: web(),
+    });
+    expect(JSON.stringify(legacy.json())).not.toContain('iptv');
+    const paused = await appWith(async () => LA1_BODY, fakeIptv(false));
+    const v1 = await paused.app.inject({
+      method: 'GET',
+      url: '/api/v1/search?q=la%201',
+      headers: web(),
+    });
+    expect(JSON.stringify(v1.json())).not.toContain('iptv');
   });
 });

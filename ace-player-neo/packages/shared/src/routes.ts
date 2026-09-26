@@ -17,9 +17,10 @@
      `credential` sea `none`.
      Desde la 0.8.1 el iPhone emparejado administra como la web (Salud,
      Dispositivos, emparejar otro y ajustes v2): solo `healthLive` (es el
-     healthcheck de Docker; la app usa `ping`) y las 5 rutas de Ajustes →
+     healthcheck de Docker; la app usa `ping`), las 5 rutas de Ajustes →
      IPTV (`iptv*`, docs/iptv.md §5.3: la IPTV solo se configura en la web)
-     son `web`.
+     y `iptvChannels` (el buscador IPTV, §14.2; pasa a `any` cuando la app
+     calque el buscador, D27) son `web`.
      `video` es `any` desde la IPTV (docs/iptv.md §5.4): la web entra sin
      token (el login de Umbrel basta) y el iPhone con `video-token`.
 
@@ -87,7 +88,13 @@ import {
   VideoParamsSchema,
   VideoQuerySchema,
 } from './api/v1/playback.js';
-import { IptvSaveBodySchema, IptvUpdateBodySchema, IptvViewSchema } from './api/v1/iptv.js';
+import {
+  IptvChannelsQuerySchema,
+  IptvChannelsResponseSchema,
+  IptvSaveBodySchema,
+  IptvUpdateBodySchema,
+  IptvViewSchema,
+} from './api/v1/iptv.js';
 import { SearchQuerySchema, SearchResponseSchema } from './api/v1/search.js';
 import { SettingsResponseSchema, SettingsUpdateBodySchema } from './api/v1/settings.js';
 import {
@@ -564,6 +571,25 @@ export const V1_ROUTES = {
     content: 'json',
     sideEffects: true,
     errors: [],
+    legacyTwin: null,
+  }),
+
+  iptvChannels: defineRoute({
+    method: 'GET',
+    path: '/api/v1/iptv/channels',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary: 'Buscar canales en tu IPTV (2 a 80 letras; hasta 50, España o sin país, sin adultos)',
+    description:
+      'Buscador de la web (docs/iptv.md §14): una fila por canal (la mejor variante) con su nombre limpio, la calidad, el nombre del proveedor y los ids de tu biblioteca que son ese canal. ' +
+      'Nunca lleva URL, grupo ni nada más del proveedor. Sin IPTV activa responde 200 con la lista vacía. Nada se lista sin escribir al menos 2 letras.',
+    query: IptvChannelsQuerySchema,
+    response: IptvChannelsResponseSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: false,
+    errors: ['empty_query'],
     legacyTwin: null,
   }),
 

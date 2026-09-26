@@ -14,12 +14,15 @@
 
 import type {
   CandidateIptvInfo,
+  IptvChannelsResponse,
+  IptvIdState,
   IptvReason,
   IptvSaveBody,
   IptvUpdateBody,
   IptvView,
   ResolutionCandidate,
   ScanJobKind,
+  SearchResult,
   VerdictState,
 } from '@ace/shared';
 import type { CoreDeps, Lifecycle } from '../../core/module.js';
@@ -34,6 +37,13 @@ export interface IptvDeps extends CoreDeps {
   readonly net: NetClient;
   /** Escucha del relé: '127.0.0.1' (defecto) o '::1' (tests); nunca otra cosa. */
   readonly relayHost?: '127.0.0.1' | '::1';
+  /**
+   * `scoreResolutionCandidate` de la resolución, inyectada desde services.ts
+   * (este módulo no importa `football`): el buscador, la búsqueda inversa y
+   * el re-emparejado heredan así Hypermotion y la regla de los números
+   * (docs/iptv.md §14.3). Sin ella (tests), `channelMatchScore` a secas.
+   */
+  readonly scorer?: ChannelScorer;
 }
 
 /**
@@ -162,6 +172,25 @@ export interface IptvService extends Lifecycle {
   ): IptvResolutionCandidate | null;
   /** Nombre limpio de un canal IPTV del catálogo (para el título de la sesión). */
   titleOf(id: string): string | null;
+  /**
+   * El canal IPTV tocado en el buscador, Favoritos o Recientes (docs/iptv.md
+   * §14.4): si es del catálogo vigente, la candidata de SU grupo (la mejor
+   * variante) con puntuación 100 y su nombre limpio; si no, null.
+   */
+  tappedCandidate(id: string): IptvResolutionCandidate | null;
+  /** `sameChannelScore` con el `scorer` de la resolución (docs/iptv.md §14.3). */
+  sameChannelScore(base: string, other: string): number;
+
+  // --- Buscador (docs/iptv.md §14) ---
+  /**
+   * GET /api/v1/iptv/channels. Limpia la consulta como `search` (menos de 2
+   * letras: `empty_query`). Sin IPTV activa, 200 con la lista vacía.
+   */
+  searchChannels(query: string, limit?: number): IptvChannelsResponse;
+  /** `SearchResult.iptv` de /api/v1/search: el canal de tu IPTV que es cada resultado (≥ 92). */
+  annotateSearch(results: readonly SearchResult[]): SearchResult[];
+  /** `LibraryView.iptvIds`: el estado de cada id IPTV de la lista, o null si no hay ninguno. */
+  libraryIdStates(ids: readonly string[]): Record<string, IptvIdState> | null;
   /**
    * Una resolución la va a usar: refresca en segundo plano la lista si tiene
    * más de 6 h (30 min con «Rebuscar») y la cuenta si tiene más de 2 min.

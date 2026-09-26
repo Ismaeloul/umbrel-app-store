@@ -399,6 +399,23 @@ export class FootballServiceImpl implements FootballService {
         }),
       classify: (id) => iptv.classify(id),
       convert: (id, match) => iptv.candidateFor(id, match),
+      tapped: (id) => iptv.tappedCandidate(id),
+      sameChannel: (channel, title) => iptv.sameChannelScore(channel, title),
+    };
+  }
+
+  /* Sin IPTV activa pero con la búsqueda inversa (un favorito IPTV con la IPTV
+     en pausa, §14.4): la decisión de §4.1 sigue valiendo para descartar ids
+     IPTV que devuelva el motor. */
+  private iptvClassifier(): ResolutionIptv | undefined {
+    const { iptv } = this.deps;
+    if (!iptv) return undefined;
+    return {
+      resolve: () => ({ candidates: [], hints: [], consulted: false }),
+      classify: (id) => iptv.classify(id),
+      convert: () => null,
+      tapped: () => null,
+      sameChannel: (channel, title) => iptv.sameChannelScore(channel, title),
     };
   }
 
@@ -410,10 +427,14 @@ export class FootballServiceImpl implements FootballService {
       readonly mode?: 'research' | 'default';
       readonly signal?: AbortSignal;
       readonly scope?: ResolveScope;
+      readonly iptvId?: string | null;
+      readonly engine?: boolean;
     },
   ): Promise<ResolutionCore> {
     const { config, search, sources } = this.deps;
-    const iptv = this.iptvLayer();
+    const iptv =
+      this.iptvLayer() ??
+      (options.scope === 'channel' && options.engine ? this.iptvClassifier() : undefined);
     return resolveFootballChannel(
       state,
       values,
@@ -435,6 +456,8 @@ export class FootballServiceImpl implements FootballService {
         program: options.program ?? null,
         mode: options.mode ?? 'default',
         scope: options.scope ?? 'match',
+        ...(options.iptvId ? { iptvId: options.iptvId } : {}),
+        ...(options.engine ? { engine: true } : {}),
       },
     );
   }
@@ -557,7 +580,10 @@ export class FootballServiceImpl implements FootballService {
     options: ResolveOptions,
   ): Promise<Resolution> {
     const channels = channelList(input.channel);
-    if (!this.iptvLayer()) {
+    /* §14.4: el canal IPTV tocado (si no es un id IPTV vigente se ignora) y la búsqueda inversa. */
+    const iptvId = typeof input.iptv === 'string' ? normalizeHash(input.iptv) || null : null;
+    const engine = String(input.engine ?? '') === '1';
+    if (!this.iptvLayer() && !engine) {
       const clean = resolutionChannels(channels);
       if (!clean.length) throw new AppError('channel_required');
       return {
@@ -582,6 +608,8 @@ export class FootballServiceImpl implements FootballService {
     }
     const result = await this.resolveChannels(this.deps.state.get(), channels, {
       scope: 'channel',
+      ...(iptvId ? { iptvId } : {}),
+      ...(engine ? { engine: true } : {}),
       ...(options.signal ? { signal: options.signal } : {}),
     });
     return { ...result, preheat: null, scan: this.scanFor(result, input, '') } as Resolution;

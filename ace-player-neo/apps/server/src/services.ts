@@ -34,7 +34,11 @@ import { createDiagnosticsService, type DiagnosticsService } from './modules/dia
 import { createDirectoriesService, type DirectoriesService } from './modules/directories/index.js';
 import { createEngineService, type EngineService } from './modules/engine/index.js';
 import { createEventsHub, type EventsHub } from './modules/events/index.js';
-import { createFootballService, type FootballService } from './modules/football/index.js';
+import {
+  createFootballService,
+  scoreResolutionCandidate,
+  type FootballService,
+} from './modules/football/index.js';
 import { createHealthService, type HealthService } from './modules/health/index.js';
 import { createIptvService, type IptvService } from './modules/iptv/index.js';
 import { createNetClient, type NetClient } from './modules/net/index.js';
@@ -101,7 +105,15 @@ export function createServices(
 ): Services {
   const state = overrides.state ?? createStateService(core);
   const net = overrides.net ?? createNetClient(core);
-  const iptv = overrides.iptv ?? createIptvService({ ...core, state, net });
+  /* La IPTV puntúa con la MISMA función que la resolución (docs/iptv.md §14.3). */
+  const iptv =
+    overrides.iptv ??
+    createIptvService({
+      ...core,
+      state,
+      net,
+      scorer: (channels, item) => scoreResolutionCandidate(channels, item, 'iptv'),
+    });
   const engine = overrides.engine ?? createEngineService(core);
   const scanner = overrides.scanner ?? createScannerService({ ...core, engine, iptv });
   const search = overrides.search ?? createSearchService({ ...core, engine, scanner });

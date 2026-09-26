@@ -391,6 +391,11 @@ export const SearchResultSchema = z.strictObject({
   bitrate: z.number().nullable(),
   /** Siempre true: el buscador da infohashes. */
   ih: z.literal(true),
+  /**
+   * Solo en /api/v1/search y con IPTV activa: el canal de tu IPTV que es este
+   * resultado (≥ 92, docs/iptv.md §14.3). La ruta antigua nunca lo lleva.
+   */
+  iptv: HashSchema.optional(),
 });
 export type SearchResult = z.infer<typeof SearchResultSchema>;
 

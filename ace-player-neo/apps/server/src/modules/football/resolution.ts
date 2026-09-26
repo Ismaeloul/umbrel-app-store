@@ -14,6 +14,7 @@
 
 import {
   IPTV_MAX_CANDIDATES,
+  IPTV_SEARCH,
   LIBRARY_MIN_SCORE,
   RESOLUTION_EXACT_SCORE,
   channelAllowsFamilyFallback,
@@ -241,6 +242,13 @@ export interface ResolutionIptv {
     id: string,
     match: { readonly score: number; readonly matchedChannel: string },
   ): BaseCandidate | null;
+  /**
+   * El canal IPTV tocado (docs/iptv.md §14.4): si es del catálogo vigente, la
+   * candidata de su grupo con 100 y su nombre limpio en `matchedChannel`.
+   */
+  tapped(id: string): BaseCandidate | null;
+  /** «¿Es el mismo canal?» de la IPTV (`sameChannelScore`, ≥ 92): la búsqueda inversa. */
+  sameChannel(channel: string, title: string): number;
 }
 
 /** Lo que la resolución necesita de fuera. */
@@ -280,6 +288,18 @@ export interface ResolveOptions {
   /** Canales de parrilla para la IA; por defecto, los del catálogo. */
   readonly programChannels?: readonly unknown[];
   readonly scope?: ResolveScope;
+  /**
+   * Solo con `scope: 'channel'` (docs/iptv.md §14.4): el canal IPTV tocado.
+   * Si es del catálogo vigente, sale primero (su mejor variante) y su nombre
+   * limpio se suma a los canales pedidos; si no, se ignora.
+   */
+  readonly iptvId?: string | null;
+  /**
+   * Solo con `scope: 'channel'`: búsqueda inversa en el motor (2 consultas,
+   * ≥ 92 con la regla de la IPTV). Con ella se devuelve lo que haya aunque no
+   * haya IPTV, y `not_found` solo si no hay nada.
+   */
+  readonly engine?: boolean;
 }
 
 export interface AiInfo {
@@ -369,8 +389,15 @@ export async function resolveFootballChannel(
   options: ResolveOptions = {},
 ): Promise<ResolutionCore> {
   const scope: ResolveScope = options.scope ?? 'match';
-  const channels = resolutionChannels(values);
+  /* Canal suelto tocado como canal IPTV: su candidata primero y su nombre limpio pedido (§14.4). */
+  const pinned =
+    scope === 'channel' && options.iptvId && deps.iptv ? deps.iptv.tapped(options.iptvId) : null;
+  const requested = Array.isArray(values) ? (values as unknown[]) : [values];
+  const channels = resolutionChannels(
+    pinned?.matchedChannel ? [...requested, pinned.matchedChannel] : requested,
+  );
   if (!channels.length && scope !== 'guide') throw new AppError('channel_required');
+  const reverse = scope === 'channel' && options.engine === true;
 
   const research = options.mode === 'research' && scope === 'match';
   const program = options.program || null;
@@ -384,7 +411,8 @@ export async function resolveFootballChannel(
   );
 
   let checked: string[];
-  if (scope === 'channel') checked = ['saved', 'library'];
+  if (scope === 'channel')
+    checked = reverse ? ['saved', 'library', 'acestream'] : ['saved', 'library'];
   else if (scope === 'guide') checked = ['library'];
   else if (research) checked = ['favorites', 'm3u', 'acestream'];
   else checked = ['saved', 'm3u', 'library', 'acestream'];
@@ -461,6 +489,41 @@ export async function resolveFootballChannel(
         (candidate) => !deps.iptv || deps.iptv.classify(candidate.id) === 'engine',
       ),
     );
+  } else if (reverse) {
+    /* Búsqueda inversa de un canal suelto (§14.4): 2 consultas como mucho y
+       solo lo que es ESE canal (≥ 92 con la regla de la IPTV: Hypermotion,
+       números y familia). Los ids IPTV que devuelva el motor se descartan. */
+    const queries = aceSearchQueries(channels).slice(0, IPTV_SEARCH.reverseQueriesMax);
+    const searched = await Promise.allSettled(queries.map((query) => deps.search(query)));
+    engineAvailable = !queries.length || searched.some((result) => result.status === 'fulfilled');
+    const same =
+      deps.iptv?.sameChannel.bind(deps.iptv) ??
+      ((channel: string, title: string) =>
+        scoreResolutionCandidate([channel], { id: '', title }, 'acestream').score);
+    const seen = new Set<string>();
+    for (const result of searched) {
+      if (result.status !== 'fulfilled') continue;
+      for (const item of result.value) {
+        if (seen.has(item.id)) continue;
+        seen.add(item.id);
+        if (deps.iptv && deps.iptv.classify(item.id) !== 'engine') continue;
+        let score = 0;
+        let matchedChannel = channels[0] ?? '';
+        for (const channel of channels) {
+          const value = same(channel, item.title);
+          if (value > score) {
+            score = value;
+            matchedChannel = channel;
+          }
+        }
+        if (score < RESOLUTION_EXACT_SCORE) continue;
+        remote.push({
+          ...scoreResolutionCandidate(channels, item, 'acestream'),
+          score,
+          matchedChannel,
+        });
+      }
+    }
   }
 
   const programChannels = [
@@ -475,7 +538,9 @@ export async function resolveFootballChannel(
         deps.semantic,
       )
     : { candidates: [...local, ...remote], used: false, catalogSize: 0, error: null };
-  const iptvCandidates = iptvLayer?.candidates ?? [];
+  const iptvCandidates = pinned
+    ? [pinned, ...(iptvLayer?.candidates ?? []).filter((candidate) => candidate.id !== pinned.id)]
+    : (iptvLayer?.candidates ?? []);
   /* Lo aprendido se aplica UNA vez, sobre todas las capas y antes del umbral:
      la subida a 98 de una fuente confirmada cuenta para pasar el corte (B-181).
      Un «Canal incorrecto» aparta también una IPTV. */
@@ -510,9 +575,15 @@ export async function resolveFootballChannel(
     catalogSize: semanticResult.catalogSize,
     error: semanticResult.error,
   };
-  /* Canal suelto sin ninguna IPTV: `not_found` y la web sigue como hoy (§5.2). */
+  /* El canal IPTV tocado va el primero (§14.4), aunque otra IPTV también dé 100. */
+  if (pinned) {
+    const at = candidates.findIndex((candidate) => candidate.id === pinned.id);
+    if (at > 0) candidates.unshift(...candidates.splice(at, 1));
+  }
+  /* Canal suelto sin ninguna IPTV: `not_found` y la web sigue como hoy (§5.2).
+     Con la búsqueda inversa se devuelve lo que haya (§14.4). */
   const noIptv =
-    scope === 'channel' && !candidates.some((candidate) => candidate.source === 'iptv');
+    scope === 'channel' && !reverse && !candidates.some((candidate) => candidate.source === 'iptv');
   if (!candidates.length || noIptv) {
     return {
       status: 'not_found',

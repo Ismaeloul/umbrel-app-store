@@ -7,14 +7,17 @@
    Xtream, el `origin` para rellenar «Servidor». Un test de forma lo vigila. */
 
 import { z } from 'zod';
-import { IsoDateTimeSchema, ShortCodeSchema } from '../../primitives.js';
+import { HashSchema, IsoDateTimeSchema, ShortCodeSchema } from '../../primitives.js';
 import {
   IPTV_NAME_MAX,
   IPTV_REFRESH_HOURS,
+  IPTV_SEARCH,
   IPTV_SECRET_MAX,
   IPTV_URL_MAX,
 } from '../../constants/iptv.js';
+import { SEARCH_QUERY_MAX } from '../../constants/limits.js';
 import { IptvAccountStatusSchema, IptvKindSchema } from '../../state/v2.js';
+import { IptvQualitySchema } from '../common.js';
 
 const NameSchema = z.string().trim().min(1).max(IPTV_NAME_MAX);
 const UrlSchema = z.string().trim().max(IPTV_URL_MAX);
@@ -124,3 +127,42 @@ export const IptvViewSchema = z.strictObject({
   refreshHours: z.literal(IPTV_REFRESH_HOURS),
 });
 export type IptvView = z.infer<typeof IptvViewSchema>;
+
+/* --- Buscador: IPTV y AceStream juntos (docs/iptv.md §14.2) ---
+
+   `GET /api/v1/iptv/channels?q=` busca en el catálogo IPTV vigente. Nace con
+   `access: 'web'` (D27) y pasa a `any` cuando la app calque el buscador.
+   Nunca lleva URL, `ref`, `stream_id`, `tvg-id`, grupo ni nada del proveedor
+   aparte del nombre que Isma le puso (`provider`). Sin IPTV activa responde
+   200 con la lista vacía: no es un error. */
+
+/** La consulta se limpia como en `search` (espacios colapsados, recorte, 80); con menos de 2 letras, 400 `empty_query`. */
+export const IptvChannelsQuerySchema = z.strictObject({
+  q: z.string().max(500).default(''),
+  /** Por defecto (y como mucho) 50. */
+  limit: z.coerce.number().int().min(1).max(IPTV_SEARCH.limit).optional(),
+});
+export type IptvChannelsQuery = z.infer<typeof IptvChannelsQuerySchema>;
+
+export const IptvChannelSchema = z.strictObject({
+  /** Id de §4.1 de la mejor variante del grupo (§4.3): el mismo que usa la resolución. */
+  id: HashSchema,
+  /** Nombre limpio («Antena 3»): sin país, adornos, calidad ni reserva. */
+  title: z.string().min(1).max(120),
+  quality: IptvQualitySchema.nullable(),
+  /** El nombre que Isma puso al proveedor («Casa»). */
+  provider: z.string().max(IPTV_NAME_MAX),
+  /** Ids de tu biblioteca (favoritos, recientes o la lista activa) que son este canal (≥ 92), de mejor a peor. */
+  library: z.array(HashSchema).max(IPTV_SEARCH.libraryMatchesMax),
+});
+export type IptvChannel = z.infer<typeof IptvChannelSchema>;
+
+export const IptvChannelsResponseSchema = z.strictObject({
+  query: z.string().max(SEARCH_QUERY_MAX),
+  /** Canales que casan, hasta `IPTV_SEARCH.totalCap`. */
+  total: z.number().int().nonnegative(),
+  /** Hay más de `totalCap`. */
+  capped: z.boolean(),
+  channels: z.array(IptvChannelSchema).max(IPTV_SEARCH.limit),
+});
+export type IptvChannelsResponse = z.infer<typeof IptvChannelsResponseSchema>;

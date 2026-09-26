@@ -56,8 +56,9 @@ export type JsonRouteId = {
 
 /**
  * Rutas solo web cuyo ejemplo va en `web/v1/` (docs/iptv.md §5.7): las 5 de
- * la IPTV. `healthLive` y las demás rutas `web` de antes se quedan en `v1/`,
- * donde la app ya las conoce.
+ * la IPTV y el buscador IPTV (`iptvChannels`, §14.2; pasa a `v1/` cuando la
+ * app calque el buscador, §14.10). `healthLive` y las demás rutas `web` de
+ * antes se quedan en `v1/`, donde la app ya las conoce.
  */
 export const WEB_FIXTURE_ROUTE_IDS = [
   'iptvGet',
@@ -65,6 +66,7 @@ export const WEB_FIXTURE_ROUTE_IDS = [
   'iptvUpdate',
   'iptvSync',
   'iptvDelete',
+  'iptvChannels',
 ] as const satisfies readonly JsonRouteId[];
 export type WebFixtureRouteId = (typeof WEB_FIXTURE_ROUTE_IDS)[number];
 /** Rutas con ejemplo en `v1/`. */
@@ -606,7 +608,25 @@ const iptvSyncing: IptvView = {
   refreshHours: 6,
 };
 
+/** Id sintético de un canal IPTV (32 hex de HMAC + 8 de etiqueta, docs/iptv.md §4.1). */
+const IPTV_ID_GUIDE = 'd4e5f60718293a4b5c6d7e8f9012345601a2b3c4';
+const IPTV_ID_NAME = 'e5f60718293a4b5c6d7e8f901234567812ab34cd';
+/* Canales del buscador IPTV (§14): «La 1» está en tu biblioteca y en el
+   motor; «Telecinco», solo en la IPTV. */
+const IPTV_ID_LA1 = 'f60718293a4b5c6d7e8f9012345678ab23cd45ef';
+const IPTV_ID_TELECINCO = '0718293a4b5c6d7e8f9012345678abcd34ef5601';
+
 export const WEB_V1_FIXTURES = {
+  iptvChannels: {
+    query: 'la',
+    total: 3,
+    capped: false,
+    channels: [
+      { id: IPTV_ID_LA1, title: 'La 1', quality: 'hd', provider: 'Casa', library: [HASH_C] },
+      { id: IPTV_ID_NAME, title: 'DAZN LaLiga', quality: 'fhd', provider: 'Casa', library: [] },
+      { id: IPTV_ID_GUIDE, title: 'M+ LaLiga TV 2', quality: 'fhd', provider: 'Casa', library: [] },
+    ],
+  },
   iptvGet: iptvView,
   iptvSave: iptvSyncing,
   iptvUpdate: {
@@ -618,10 +638,6 @@ export const WEB_V1_FIXTURES = {
 } satisfies { [K in WebFixtureRouteId]: V1ResponseInput<K> };
 
 // --- Variantes (variantes/<ruta>.<caso>.json) ---
-
-/** Id sintético de un canal IPTV (32 hex de HMAC + 8 de etiqueta, docs/iptv.md §4.1). */
-const IPTV_ID_GUIDE = 'd4e5f60718293a4b5c6d7e8f9012345601a2b3c4';
-const IPTV_ID_NAME = 'e5f60718293a4b5c6d7e8f901234567812ab34cd';
 
 const iptvCandidate = (
   id: string,
@@ -653,8 +669,122 @@ const iptvCandidate = (
    FHD) y detrás las AceStream. El comprobador solo lleva las AceStream. */
 const iptvGuideCandidate = iptvCandidate(IPTV_ID_GUIDE, 'M+ LaLiga TV 2', 'MLaLigaTV2.es', true);
 const iptvNameCandidate = iptvCandidate(IPTV_ID_NAME, 'DAZN LaLiga', 'DAZNLaLiga.es', false);
+/* Canal solo de la IPTV tocado en el buscador (§14.4): su IPTV con puntuación 100. */
+const iptvTelecinco: ResolutionCandidate = {
+  ...iptvCandidate(IPTV_ID_TELECINCO, 'Telecinco', 'Telecinco.es', false),
+  iptv: { provider: 'Casa', quality: 'hd', backup: false, guide: false },
+};
 
 export const VARIANT_FIXTURES = {
+  /* Canal solo de la IPTV con la búsqueda inversa (`engine=1`, §14.4): su IPTV
+     primera y detrás dos AceStream del motor que casan ≥ 92. */
+  'footballResolve.iptv-canal': {
+    status: 'found',
+    channels: ['Telecinco'],
+    checked: ['iptv', 'saved', 'library', 'acestream'],
+    candidate: iptvTelecinco,
+    candidates: [
+      iptvTelecinco,
+      {
+        ...candidate,
+        id: HASH_C,
+        title: 'Telecinco --> NEW ERA',
+        ih: true,
+        source: 'acestream',
+        score: 100,
+        matchedChannel: 'Telecinco',
+        listaId: null,
+        availability: 0.7,
+      },
+      {
+        ...candidate,
+        id: HASH_A,
+        title: 'Telecinco HD --> ELCANO',
+        ih: true,
+        source: 'acestream',
+        score: 96,
+        matchedChannel: 'Telecinco',
+        listaId: null,
+        availability: 0.9,
+      },
+    ],
+    engineAvailable: true,
+    ai: { enabled: false, used: false, model: null, catalogSize: 0, error: null },
+    program: null,
+    research: false,
+    preheat: null,
+    scan: {
+      id: SCAN_ID,
+      statusUrl: `/api/v1/football/scans/${SCAN_ID}`,
+      total: 3,
+      initialCount: 3,
+    },
+  },
+  /* Buscar con IPTV activa (§14.3): los resultados del motor que son un canal
+     de tu IPTV llevan su id; los demás, no. */
+  'search.iptv': {
+    query: 'la 1',
+    results: [
+      {
+        id: HASH_A,
+        title: 'La 1 HD --> ELCANO',
+        category: 'Busqueda',
+        availability: 0.9,
+        bitrate: 450000,
+        ih: true,
+        iptv: IPTV_ID_LA1,
+      },
+      {
+        id: HASH_B,
+        title: 'La 1 HD --> NEW ERA',
+        category: 'Busqueda',
+        availability: 0.7,
+        bitrate: null,
+        ih: true,
+        iptv: IPTV_ID_LA1,
+      },
+      {
+        id: HASH_C,
+        title: 'La 10 Deportes',
+        category: 'Busqueda',
+        availability: 0.4,
+        bitrate: null,
+        ih: true,
+      },
+    ],
+  },
+  /* Biblioteca con canales IPTV guardados desde el buscador (§14.6): un
+     favorito renombrado y un reciente que ya no está en tu IPTV. */
+  'libraryGet.iptv': {
+    ...library,
+    favorites: [
+      ...library.favorites,
+      {
+        /* Renombrado por Isma: el nombre del canal en la IPTV queda aparte. */
+        id: IPTV_ID_TELECINCO,
+        title: 'Tele 5',
+        type: 'fav',
+        category: 'IPTV',
+        alias: 'Telecinco',
+        date: AT,
+        fromWebSync: false,
+        ih: false,
+      },
+    ],
+    history: [
+      {
+        id: IPTV_ID_NAME,
+        title: 'DAZN LaLiga',
+        type: 'recent',
+        category: '',
+        date: AT,
+        fromWebSync: false,
+        ih: false,
+      },
+      ...library.history,
+    ],
+    iptvIds: { [IPTV_ID_TELECINCO]: 'ok', [IPTV_ID_NAME]: 'iptv_gone' },
+  },
   'footballResolve.iptv': {
     status: 'found',
     channels: ['DAZN LaLiga'],
@@ -703,6 +833,9 @@ export const VARIANT_FIXTURES = {
     source: 'iptv',
   },
 } satisfies {
+  'footballResolve.iptv-canal': V1ResponseInput<'footballResolve'>;
+  'search.iptv': V1ResponseInput<'search'>;
+  'libraryGet.iptv': V1ResponseInput<'libraryGet'>;
   'footballResolve.iptv': V1ResponseInput<'footballResolve'>;
   'channelStream.iptv': V1ResponseInput<'channelStream'>;
 };

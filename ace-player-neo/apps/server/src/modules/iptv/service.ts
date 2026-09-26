@@ -26,11 +26,16 @@ import {
   IPTV_PROBE,
   IPTV_QUICK_TEST,
   IPTV_REFRESH,
+  IPTV_MIN_SCORE,
   IPTV_REFRESH_HOURS,
+  IPTV_SEARCH,
   IPTV_SESSION,
   IPTV_USER_AGENT,
+  channelMatchScore,
   normalizeChannelKey,
   type IptvAccountState,
+  type IptvChannelsResponse,
+  type IptvIdState,
   type IptvFile,
   type IptvKind,
   type IptvProviderRecord,
@@ -39,6 +44,7 @@ import {
   type IptvStatus,
   type IptvUpdateBody,
   type IptvView,
+  type SearchResult,
 } from '@ace/shared';
 import type { TimerHandle } from '../../core/clock.js';
 import { AppError, errorCodeOf, isAppError } from '../../core/errors.js';
@@ -57,9 +63,23 @@ import {
 import { iptvChannelId, isIptvId, m3uKey, xtreamKey } from './ids.js';
 import { guideGroupMatches, mergeIptvMatches } from './layer.js';
 import { parseM3uStream } from './m3u.js';
-import { matchIptvChannels, pickVariants, type IptvGroupMatch } from './match.js';
+import {
+  matchIptvChannels,
+  pickVariants,
+  sameChannelScore,
+  type ChannelScorer,
+  type IptvGroupMatch,
+} from './match.js';
 import { probeIptvStream } from './probe.js';
 import { IptvRedactor } from './redact.js';
+import { relinkLibrary } from './relink.js';
+import {
+  cleanChannelsQuery,
+  libraryCandidates,
+  libraryMatches,
+  searchCatalog,
+  searchIndex,
+} from './search.js';
 import { createIptvRelay, type IptvRelayImpl, type RelayVariant } from './relay.js';
 import { IptvFiles } from './store.js';
 import type {
@@ -156,6 +176,22 @@ function serverString(url: URL): string {
   return `${url.origin}${url.pathname === '/' ? '' : url.pathname}`;
 }
 
+/* Sin el `scorer` de la resolución (tests del módulo): `channelMatchScore` a secas. */
+const plainScorer: ChannelScorer = (channels, item) => {
+  let score = 0;
+  let matchedChannel = channels[0] ?? '';
+  for (const channel of channels) {
+    for (const name of item.alias ? [item.title, item.alias] : [item.title]) {
+      const value = channelMatchScore(channel, name);
+      if (value > score) {
+        score = value;
+        matchedChannel = channel;
+      }
+    }
+  }
+  return { score, matchedChannel, soloFamilia: false };
+};
+
 function backoff(failures: number, min: number, max: number): number {
   return Math.min(max, min * 2 ** Math.max(0, failures - 1));
 }
@@ -192,6 +228,9 @@ export class IptvServiceImpl implements IptvService {
   private readonly probedAt = new Map<string, number>();
   private readonly guideCache = new Map<string, { at: number; result: IptvGroupMatch[] }>();
   private unsubscribe: (() => void) | null = null;
+  /** Favoritos IPTV que no casan tras sincronizar: id → desde cuándo (§14.6, solo en memoria). */
+  private readonly missingFavorites = new Map<string, number>();
+  private relinking: Promise<void> | null = null;
   private started = false;
   private stopped = false;
   readonly files: IptvFiles;
@@ -212,6 +251,10 @@ export class IptvServiceImpl implements IptvService {
   }
 
   private readonly logger: IptvDeps['logger'];
+
+  private get scorer(): ChannelScorer {
+    return this.deps.scorer ?? plainScorer;
+  }
 
   // --- Arranque ---
 
@@ -966,6 +1009,10 @@ export class IptvServiceImpl implements IptvService {
       this.syncing = false;
       this.emitStatus();
       this.schedule('list', IPTV_REFRESH.listMs, () => this.periodicSync());
+      /* Favoritos y recientes de otro proveedor (o de otra variante), por nombre (§14.6). */
+      this.relinking = this.relinkLibrary().catch((error: unknown) => {
+        this.logger.warn({ err: error }, 'IPTV: no se pudo re-emparejar la biblioteca');
+      });
       const guideChanged = previousGuideUrls !== catalog.guideUrls.join('\n');
       if (catalog.guideUrls.length && (guideChanged || !this.guide)) {
         this.schedule('guide', 1_000, () => void this.startGuide());
@@ -1248,6 +1295,151 @@ export class IptvServiceImpl implements IptvService {
   titleOf(id: string): string | null {
     const entry = this.catalog?.get(id);
     return entry ? entry.display : null;
+  }
+
+  tappedCandidate(id: string): IptvResolutionCandidate | null {
+    if (this.classify(id) !== 'owned') return null;
+    const entry = (this.catalog as Catalog).get(id);
+    if (!entry) return null;
+    return this.candidateFor(id, { score: 100, matchedChannel: entry.display || entry.key });
+  }
+
+  sameChannelScore(base: string, other: string): number {
+    return sameChannelScore(base, other, this.scorer);
+  }
+
+  // --- Buscador (§14) ---
+
+  searchChannels(query: string, limit: number = IPTV_SEARCH.limit): IptvChannelsResponse {
+    const q = cleanChannelsQuery(query);
+    if (!this.active()) return { query: q, total: 0, capped: false, channels: [] };
+    const catalog = this.catalog as Catalog;
+    const record = this.record as IptvProviderRecord;
+    const found = searchCatalog(catalog, q, Math.min(limit, IPTV_SEARCH.limit));
+    const state = this.deps.state.get();
+    const candidates = libraryCandidates([...state.favorites, ...state.history, ...state.web], q);
+    const keys = this.ensureKeys();
+    const matchOptions = {
+      scorer: this.scorer,
+      isIptvId: (id: string) => isIptvId(keys, id),
+      groupOf: (id: string) => catalog.get(id)?.key ?? null,
+    };
+    return {
+      query: q,
+      total: found.total,
+      capped: found.capped,
+      channels: found.groups.map((group) => ({
+        id: group.best.id,
+        title: (group.best.display || group.key).slice(0, 120),
+        quality: group.best.quality,
+        provider: record.name,
+        library: candidates.length ? libraryMatches(group, candidates, matchOptions) : [],
+      })),
+    };
+  }
+
+  annotateSearch(results: readonly SearchResult[]): SearchResult[] {
+    if (!results.length || !this.active()) return [...results];
+    const catalog = this.catalog as Catalog;
+    const index = searchIndex(catalog);
+    const scorer = this.scorer;
+    /* Muchos resultados son el mismo canal con otro proveedor detrás de la flecha. */
+    const byKey = new Map<string, string | null>();
+    const bestFor = (title: string): string | null => {
+      const key = normalizeChannelKey(title);
+      const known = byKey.get(key);
+      if (known !== undefined) return known;
+      let bestId: string | null = null;
+      let bestScore = 0;
+      let bestOrder = Number.POSITIVE_INFINITY;
+      for (const groupKey of catalog.preselect([title], IPTV_SEARCH.annotatePreselect)) {
+        const group = index.byKey.get(groupKey);
+        if (!group) continue;
+        const score = sameChannelScore(group.best.base, title, scorer);
+        if (score < IPTV_MIN_SCORE) continue;
+        if (score > bestScore || (score === bestScore && group.best.order < bestOrder)) {
+          bestId = group.best.id;
+          bestScore = score;
+          bestOrder = group.best.order;
+        }
+      }
+      byKey.set(key, bestId);
+      return bestId;
+    };
+    return results.map((result) => {
+      const iptv = bestFor(result.title);
+      return iptv ? { ...result, iptv } : result;
+    });
+  }
+
+  libraryIdStates(ids: readonly string[]): Record<string, IptvIdState> | null {
+    if (!ids.length) return null;
+    const out: Record<string, IptvIdState> = {};
+    let any = false;
+    for (const id of ids) {
+      if (Object.hasOwn(out, id)) continue;
+      const kind = this.classify(id);
+      if (kind === 'engine') continue;
+      out[id] = kind === 'owned' ? 'ok' : kind;
+      any = true;
+    }
+    return any ? out : null;
+  }
+
+  /** Re-emparejado de favoritos y recientes IPTV tras una sincronización correcta (§14.6). */
+  private async relinkLibrary(): Promise<void> {
+    const catalog = this.catalog;
+    if (!catalog || !this.active()) return;
+    const keys = this.ensureKeys();
+    const bestOf = (id: string): string | null => {
+      const entry = catalog.get(id);
+      if (!entry) return null;
+      const picked = pickVariants(
+        catalog.group(entry.key).filter((item) => item.country === null || item.country === 'ES'),
+      );
+      return (picked?.best ?? entry).id;
+    };
+    const byName = new Map<string, string | null>();
+    const options = {
+      isIptvId: (id: string) => isIptvId(keys, id),
+      currentBest: bestOf,
+      matchByName: (name: string): string | null => {
+        const known = byName.get(name);
+        if (known !== undefined) return known;
+        const match = matchIptvChannels(catalog, [name], { scorer: this.scorer })[0];
+        const id = match ? match.best.id : null;
+        byName.set(name, id);
+        return id;
+      },
+      now: this.deps.clock.now(),
+    };
+    /* Primero sin tocar nada: casi siempre no hay nada que cambiar y no se escribe. */
+    const preview = relinkLibrary(this.deps.state.get(), {
+      ...options,
+      missingSince: new Map(this.missingFavorites),
+    });
+    if (!preview.changed) {
+      relinkLibrary(this.deps.state.get(), { ...options, missingSince: this.missingFavorites });
+      return;
+    }
+    const result = await this.deps.state.enqueue(
+      (draft) => {
+        if (this.catalog !== catalog) return null;
+        const next = relinkLibrary(draft, { ...options, missingSince: this.missingFavorites });
+        if (next.changed) {
+          draft.favorites = next.favorites;
+          draft.history = next.history;
+        }
+        return next;
+      },
+      { scopes: ['library'] },
+    );
+    if (result?.changed) {
+      this.logger.info(
+        { relinked: result.relinked, removed: result.removed },
+        'IPTV: favoritos y recientes re-emparejados',
+      );
+    }
   }
 
   private toCandidate(match: IptvGroupMatch): IptvResolutionCandidate {
@@ -1547,6 +1739,11 @@ export class IptvServiceImpl implements IptvService {
   // --- Tests ---
 
   /** Espera a que termine el trabajo pesado en curso (tests). */
+  /** Espera al re-emparejado en curso (tests). */
+  async relinkIdle(): Promise<void> {
+    await this.relinking;
+  }
+
   async idle(): Promise<void> {
     for (let round = 0; round < 10; round += 1) {
       const job = this.heavy;

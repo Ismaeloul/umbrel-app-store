@@ -7,7 +7,9 @@
 
    v1 (tabla de @ace/shared/routes.ts):
    - search: GET /api/v1/search?q=… → la misma respuesta; los errores con su
-     HTTP de v1 (504 `ace_timeout`). */
+     HTTP de v1 (504 `ace_timeout`). Con IPTV activa, cada resultado que es
+     un canal de tu IPTV lleva su id en `iptv` (docs/iptv.md §14.3); la ruta
+     antigua nunca lo lleva. */
 
 import type { LegacyRouter, V1Router } from '../../core/router.js';
 import type { Services } from '../../services.js';
@@ -26,7 +28,10 @@ export function registerLegacyRoutes(router: LegacyRouter, services: Services): 
 }
 
 export function registerV1Routes(router: V1Router, services: Services): void {
-  router.handle('search', (input, ctx) =>
-    services.search.search(input.query.q, { signal: ctx.signal }),
-  );
+  router.handle('search', async (input, ctx) => {
+    const response = await services.search.search(input.query.q, { signal: ctx.signal });
+    const iptv = services.iptv;
+    if (!iptv?.active()) return response;
+    return { ...response, results: iptv.annotateSearch(response.results) };
+  });
 }

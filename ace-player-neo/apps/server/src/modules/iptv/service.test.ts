@@ -85,7 +85,7 @@ describe('guardar (§5.3)', () => {
     await r.service.idle();
     const view = await r.service.view();
     expect(view.provider?.status).toBe('ok');
-    expect(view.provider?.channels).toBe(9);
+    expect(view.provider?.channels).toBe(11);
     expect(view.provider?.account?.status).toBe('active');
     expect(view.provider?.account?.maxConnections).toBe(1);
     expect(r.service.active()).toBe(true);
@@ -175,7 +175,7 @@ describe('guardar (§5.3)', () => {
     const view = await r.service.view();
     expect(view.provider?.hasUrl).toBe(true);
     expect(view.provider?.hasPassword).toBe(false);
-    expect(view.provider?.channels).toBe(9);
+    expect(view.provider?.channels).toBe(11);
     expect(r.service.redact(`/${FAKE_IPTV_USER}/${FAKE_IPTV_PASSWORD}/104`)).not.toContain(
       FAKE_IPTV_PASSWORD,
     );
@@ -189,7 +189,7 @@ describe('otra lista del mismo host y revocaciones a destiempo', () => {
     await r.service.save({ kind: 'm3u', name: 'Mala', url: r.fake.m3uUrl }, signal());
     await r.service.idle();
     const first = r.state.iptv().read().provider;
-    expect((await r.service.view()).provider?.channels).toBe(9);
+    expect((await r.service.view()).provider?.channels).toBe(11);
     /* Solo renombrar (sin URL): el mismo proveedor. */
     await r.service.save({ kind: 'm3u', name: 'Renombrada' }, signal());
     await r.service.idle();
@@ -448,5 +448,226 @@ describe('relé (§6.1) y plaza (§6.5)', () => {
       'iptv_gone',
     );
     expect(r.fake.peticionesDeStream()).toEqual([]);
+  });
+});
+
+describe('buscador y biblioteca (docs/iptv.md §14)', () => {
+  const ACE = 'e2e0'.padEnd(40, '5');
+
+  async function favorite(r: IptvTestRig, id: string, title: string, alias?: string) {
+    await r.state.mutateLibrary({
+      action: 'favorite-upsert',
+      item: { id, title, category: 'IPTV', ih: false, ...(alias ? { alias } : {}) },
+    });
+  }
+
+  it('sin IPTV activa: 200 vacío (con la consulta limpia); menos de 2 letras, empty_query', async () => {
+    const r = await rig();
+    expect(r.service.searchChannels('  tele  ')).toEqual({
+      query: 'tele',
+      total: 0,
+      capped: false,
+      channels: [],
+    });
+    expect(await codeOf(Promise.resolve().then(() => r.service.searchChannels('t')))).toBe(
+      'empty_query',
+    );
+  });
+
+  it('«tele» saca Telecinco (solo en la IPTV), sin el canal del grupo XXX ni nada del proveedor', async () => {
+    const r = await rig();
+    await saveXtream(r);
+    const found = r.service.searchChannels('tele');
+    expect(found.channels.map((channel) => channel.title)).toEqual(['Telecinco']);
+    expect(found.channels[0]).toMatchObject({ quality: 'hd', provider: 'Casa', library: [] });
+    expect(r.service.classify(found.channels[0]?.id as string)).toBe('owned');
+    const text = JSON.stringify(found);
+    for (const secret of [FAKE_IPTV_USER, FAKE_IPTV_PASSWORD, 'XXX', 'Telecinco.es', '110']) {
+      expect(text).not.toContain(secret);
+    }
+    /* «dazn»: la de España (un cartel, la FHD); la de UK no. */
+    const dazn = r.service.searchChannels('dazn');
+    expect(dazn.channels.map((channel) => channel.title)).toEqual(['DAZN LaLiga']);
+    expect(dazn.channels[0]?.quality).toBe('fhd');
+  });
+
+  it('library: el favorito «Antena 3 HD» de AceStream es ese canal; el id IPTV también cuenta', async () => {
+    const r = await rig();
+    await saveXtream(r);
+    await favorite(r, ACE, 'Antena 3 HD');
+    const antena = r.service.searchChannels('antena').channels[0];
+    expect(antena?.title).toBe('Antena 3');
+    expect(antena?.library).toEqual([ACE]);
+    await favorite(r, antena?.id as string, 'Mi Antena');
+    expect(r.service.searchChannels('antena').channels[0]?.library.sort()).toEqual(
+      [ACE, antena?.id].sort(),
+    );
+  });
+
+  it('iptvIds: ok, iptv_disabled, iptv_gone e iptv_removed; lo que no es IPTV no sale', async () => {
+    const r = await rig();
+    await saveXtream(r);
+    const tele = r.service.searchChannels('telecinco').channels[0]?.id as string;
+    expect(r.service.libraryIdStates([])).toBe(null);
+    expect(r.service.libraryIdStates([ACE])).toBe(null);
+    expect(r.service.libraryIdStates([tele, ACE, tele])).toEqual({ [tele]: 'ok' });
+    await r.service.update({ enabled: false });
+    expect(r.service.libraryIdStates([tele])).toEqual({ [tele]: 'iptv_disabled' });
+    await r.service.update({ enabled: true });
+    await r.service.save({ kind: 'm3u', url: `${SERVER}/lista.m3u` }, signal());
+    await r.service.idle();
+    await r.service.relinkIdle();
+    expect(r.service.libraryIdStates([tele])).toEqual({ [tele]: 'iptv_gone' });
+    await r.service.remove();
+    expect(r.service.libraryIdStates([tele])).toEqual({ [tele]: 'iptv_removed' });
+  });
+
+  it('el canal tocado: la candidata de su grupo con 100 y su nombre limpio; un id ajeno, null', async () => {
+    const r = await rig();
+    await saveXtream(r);
+    const la1 = r.service.searchChannels('la 1').channels[0];
+    expect(la1?.title).toBe('La 1');
+    const tapped = r.service.tappedCandidate(la1?.id as string);
+    expect(tapped).toMatchObject({
+      id: la1?.id,
+      score: 100,
+      matchedChannel: 'La 1',
+      source: 'iptv',
+    });
+    expect(r.service.tappedCandidate(ACE)).toBe(null);
+  });
+
+  it('anotar los resultados del motor: «La 1 HD --> …» lleva el id de «La 1»; «LaLiga TV» no es Hypermotion', async () => {
+    const r = await rig();
+    await saveXtream(r);
+    const la1 = r.service.searchChannels('la 1').channels[0]?.id;
+    const result = (id: string, title: string) => ({
+      id,
+      title,
+      category: 'Busqueda',
+      availability: null,
+      bitrate: null,
+      ih: true as const,
+    });
+    const annotated = r.service.annotateSearch([
+      result('a'.repeat(40), 'La 1 HD --> ELCANO'),
+      result('b'.repeat(40), 'La 1 HD --> NEW ERA'),
+      result('c'.repeat(40), 'LaLiga TV --> ELCANO'),
+      result('d'.repeat(40), 'Canal Lista E2E Uno'),
+    ]);
+    expect(annotated.map((item) => item.iptv ?? null)).toEqual([la1, la1, null, null]);
+    await r.service.update({ enabled: false });
+    expect(r.service.annotateSearch([result('a'.repeat(40), 'La 1 HD')])[0]).not.toHaveProperty(
+      'iptv',
+    );
+  });
+
+  it('re-emparejado: al cambiar de proveedor, favorito (renombrado) y reciente pasan al id nuevo en su sitio; uno que se quita sigue 24 h', async () => {
+    const r = await rig();
+    await saveXtream(r);
+    const tele = r.service.searchChannels('telecinco').channels[0]?.id as string;
+    const antena = r.service.searchChannels('antena').channels[0]?.id as string;
+    await favorite(r, antena, 'Antena 3');
+    await favorite(r, tele, 'Tele 5 (mío)', 'Telecinco');
+    await favorite(r, ACE, 'Canal de AceStream');
+    await r.state.mutateLibrary({
+      action: 'history-upsert',
+      item: { id: tele, title: 'Telecinco', ih: false },
+    });
+    const before = r.state.get().favorites.map((item) => item.id);
+    /* La lista M3U del mismo proveedor, sin Antena 3. */
+    r.fake.quitar(108);
+    await r.service.save({ kind: 'm3u', url: `${SERVER}/lista.m3u` }, signal());
+    await r.service.idle();
+    await r.service.relinkIdle();
+    const newTele = r.service.searchChannels('telecinco').channels[0]?.id as string;
+    expect(newTele).not.toBe(tele);
+    const favorites = r.state.get().favorites;
+    expect(favorites.map((item) => item.id)).toEqual(
+      before.map((id) => (id === tele ? newTele : id)),
+    );
+    expect(favorites.find((item) => item.id === newTele)).toMatchObject({
+      title: 'Tele 5 (mío)',
+      alias: 'Telecinco',
+      category: 'IPTV',
+    });
+    expect(r.state.get().history.map((item) => item.id)).toEqual([newTele]);
+    expect(r.service.classify(newTele)).toBe('owned');
+    /* Antena 3 ya no está: el favorito sigue (iptv_gone) hasta pasadas 24 h de sincronizaciones correctas. */
+    expect(r.service.libraryIdStates([antena])).toEqual({ [antena]: 'iptv_gone' });
+    await r.core.clock.advanceAsync(12 * 3_600_000);
+    await r.service.sync();
+    await r.service.idle();
+    await r.service.relinkIdle();
+    expect(r.state.get().favorites.some((item) => item.id === antena)).toBe(true);
+    await r.core.clock.advanceAsync(13 * 3_600_000);
+    await r.service.sync();
+    await r.service.idle();
+    await r.service.relinkIdle();
+    expect(r.state.get().favorites.some((item) => item.id === antena)).toBe(false);
+    expect(r.state.get().favorites.some((item) => item.id === ACE)).toBe(true);
+  });
+
+  it('en pausa o con una sincronización fallida no se toca la biblioteca', async () => {
+    const r = await rig();
+    await saveXtream(r);
+    const tele = r.service.searchChannels('telecinco').channels[0]?.id as string;
+    await r.state.mutateLibrary({
+      action: 'history-upsert',
+      item: { id: tele, title: 'Telecinco', ih: false },
+    });
+    r.fake.cuenta({ auth: 0 });
+    r.fake.quitar(110);
+    await r.service.sync();
+    await r.service.idle();
+    await r.service.relinkIdle();
+    expect(r.state.get().history.map((item) => item.id)).toEqual([tele]);
+    r.fake.cuenta({ auth: 1 });
+    await r.service.update({ enabled: false });
+    expect(await codeOf(r.service.sync())).toBe('iptv_disabled');
+    expect(r.state.get().history.map((item) => item.id)).toEqual([tele]);
+  });
+});
+
+describe('renombrar un favorito IPTV (§14.6)', () => {
+  it('conserva el nombre del canal en la IPTV como alias; un favorito de AceStream no cambia', async () => {
+    const r = await rig();
+    const IPTV = 'f'.repeat(40);
+    const ACE = 'a'.repeat(40);
+    await r.state.mutateLibrary({
+      action: 'favorite-upsert',
+      item: { id: IPTV, title: 'Telecinco', category: 'IPTV', alias: 'Telecinco', ih: false },
+    });
+    await r.state.mutateLibrary({
+      action: 'favorite-upsert',
+      item: { id: ACE, title: 'Antena 3 HD', category: 'Deportes', ih: true },
+    });
+    /* Igual que el título: no se guarda (normalizeItem). */
+    expect(r.state.get().favorites.find((item) => item.id === IPTV)?.alias).toBeUndefined();
+    await r.state.mutateLibrary({
+      action: 'rename',
+      collection: 'favorites',
+      id: IPTV,
+      title: 'Tele 5',
+    });
+    await r.state.mutateLibrary({
+      action: 'rename',
+      collection: 'favorites',
+      id: ACE,
+      title: 'A3',
+    });
+    const favorites = r.state.get().favorites;
+    expect(favorites.find((item) => item.id === IPTV)).toMatchObject({
+      title: 'Tele 5',
+      alias: 'Telecinco',
+    });
+    expect(favorites.find((item) => item.id === ACE)).not.toHaveProperty('alias');
+    await r.state.mutateLibrary({
+      action: 'rename',
+      collection: 'favorites',
+      id: IPTV,
+      title: 'T5',
+    });
+    expect(r.state.get().favorites.find((item) => item.id === IPTV)?.alias).toBe('Telecinco');
   });
 });

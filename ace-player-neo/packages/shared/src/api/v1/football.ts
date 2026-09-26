@@ -3,7 +3,7 @@
    §4.8-4.13), sin `success` y con los ids en la ruta en vez de en la query. */
 
 import { z } from 'zod';
-import { ScanJobIdSchema, IsoDateTimeSchema, SafeIdSchema } from '../../primitives.js';
+import { HashSchema, ScanJobIdSchema, IsoDateTimeSchema, SafeIdSchema } from '../../primitives.js';
 import { ChannelBindingSchema } from '../../state/v1.js';
 import {
   FootballScheduleSchema,
@@ -41,6 +41,14 @@ export const ResolveQuerySchema = z.strictObject({
     .regex(/^[a-zA-Z0-9_-]{1,40}$/)
     .optional(),
   scope: ResolveScopeSchema.optional(),
+  /**
+   * Solo con `scope=channel` (docs/iptv.md §14.4): el canal IPTV tocado, o el
+   * hash tocado si no se sabe. Si es del catálogo vigente, sale primero con su
+   * mejor variante; si no, se ignora y manda el emparejado por nombre.
+   */
+  iptv: HashSchema.optional(),
+  /** Solo con `scope=channel`: '1' busca también en el motor AceStream (búsqueda inversa, 2 consultas, ≥ 92). */
+  engine: z.enum(['0', '1']).optional(),
 });
 export type ResolveQuery = z.infer<typeof ResolveQuerySchema>;
 

@@ -18,15 +18,33 @@
    8. Fugas: usuario y contraseña ausentes de respuestas, SSE, registros,
       diagnóstico, iptv.json y argumentos de ffmpeg.
    9. Motor caído → la IPTV se resuelve (canal suelto) y se reproduce.
-   10. Eliminar → ids de antes con 410 `iptv_removed` sin tocar el motor. */
+   10. Eliminar → ids de antes con 410 `iptv_removed` sin tocar el motor.
+
+   Buscador (docs/iptv.md §14.9):
+   11. `iptvChannels`: «tele» → Telecinco sin biblioteca; «antena» → Antena 3
+       con el favorito de AceStream en `library`; desde /native, 403; sin
+       IPTV, 200 vacío; ninguna petición al proveedor.
+   12. `search?q=la 1` con IPTV → los «La 1 HD --> …» del motor llevan el id
+       IPTV de «La 1».
+   13. `footballResolve` con `scope=channel&iptv=<id>` → la IPTV sola; con
+       `engine=1` y el motor sin Telecinco, la IPTV sola sin error; «La 1»
+       con `engine=1`, la IPTV y las dos AceStream.
+   14. De Xtream a la M3U del mismo proveedor falso → el favorito y el
+       reciente de Telecinco tienen el id nuevo y se reproducen (el 24 h de
+       un favorito que se va lo cubre iptv/service.test.ts con reloj falso).
+   15. Fugas: `iptvChannels` y `search` con `iptv` no llevan nada del
+       proveedor. */
 
 import { readFileSync } from 'node:fs';
 import http from 'node:http';
 import { Writable } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  IptvChannelsResponseSchema,
   IptvViewSchema,
+  LibraryViewSchema,
   ResolutionSchema,
+  SearchResponseSchema,
   StreamGrantSchema,
   type Resolution,
   type StreamGrant,
@@ -56,10 +74,19 @@ function e2eId(n: number): string {
 /* Fuentes AceStream del partido «DAZN LaLiga» y un canal cualquiera. */
 const ACE_LALIGA = e2eId(21);
 const ACE_OTRO = e2eId(41);
+const ACE_ANTENA = e2eId(51);
 const CATALOG = [
   { id: ACE_LALIGA, title: 'DAZN LaLiga --> ELCANO', bitrateKbps: 2500, peers: 12 },
   { id: e2eId(22), title: 'DAZN LaLiga --> NEW ERA', bitrateKbps: 2500, peers: 12 },
   { id: ACE_OTRO, title: 'Canal Lista E2E Uno', bitrateKbps: 2500, peers: 12 },
+];
+/* Las del buscador (§14.9): solo en los casos que las piden, para no cambiar
+   las fuentes del partido de «La 1» del caso §7.7. */
+const SEARCH_CATALOG = [
+  { id: e2eId(31), title: 'La 1 HD --> ELCANO', bitrateKbps: 2500, peers: 12 },
+  { id: e2eId(32), title: 'La 1 HD --> NEW ERA', bitrateKbps: 2500, peers: 12 },
+  { id: e2eId(33), title: 'LaLiga TV Hypermotion --> ELCANO', bitrateKbps: 2500, peers: 12 },
+  { id: ACE_ANTENA, title: 'Antena 3 HD', bitrateKbps: 2500, peers: 12 },
 ];
 
 /** ffmpeg falso que lee su `-i` (el relé) y cuenta bytes; escribe segmentos al lanzarse. */
@@ -125,7 +152,9 @@ afterEach(async () => {
   await current.provider.close();
 });
 
-async function setup(options: { readonly retenerPlazaMs?: number } = {}): Promise<Rig> {
+async function setup(
+  options: { readonly retenerPlazaMs?: number; readonly search?: boolean } = {},
+): Promise<Rig> {
   const clock = new FakeClock();
   const host = await loopbackHost();
   const provider = await createFakeIptv({
@@ -149,7 +178,7 @@ async function setup(options: { readonly retenerPlazaMs?: number } = {}): Promis
   const h = await createHarness({
     clock,
     logger,
-    catalog: CATALOG,
+    catalog: options.search ? [...CATALOG, ...SEARCH_CATALOG] : CATALOG,
     net: {
       resolver: fakeIptvResolver(),
       transport: fakeIptvTransport({ host, port: provider.port }),
@@ -252,6 +281,152 @@ async function iptvIdFor(h: Harness, channel: string): Promise<string> {
   expect(candidate, JSON.stringify(result)).toBeDefined();
   return (candidate as { id: string }).id;
 }
+
+async function channels(
+  h: Harness,
+  q: string,
+): Promise<ReturnType<typeof IptvChannelsResponseSchema.parse>> {
+  const res = await inject(h, 'GET', `/api/v1/iptv/channels?q=${encodeURIComponent(q)}`);
+  expect(res.statusCode, res.body).toBe(200);
+  return IptvChannelsResponseSchema.parse(res.json());
+}
+
+async function libraryMutate(h: Harness, body: unknown) {
+  const res = await inject(h, 'POST', '/api/v1/library', body);
+  expect(res.statusCode, res.body).toBe(200);
+  return LibraryViewSchema.parse(res.json());
+}
+
+describe('buscador: IPTV y AceStream juntos (docs/iptv.md §14.9)', () => {
+  it('11 · iptvChannels: Telecinco solo en la IPTV, Antena 3 con tu favorito, 403 desde /native, vacío sin IPTV y sin tocar al proveedor', async () => {
+    const r = await setup({ search: true });
+    const none = await channels(r.h, 'tele');
+    expect(none).toEqual({ query: 'tele', total: 0, capped: false, channels: [] });
+    await saveXtream(r);
+    await libraryMutate(r.h, {
+      action: 'favorite-upsert',
+      item: { id: ACE_ANTENA, title: 'Antena 3 HD', ih: false },
+    });
+    r.provider.limpiarPeticiones();
+    const tele = await channels(r.h, 'tele');
+    expect(tele.channels.map((channel) => channel.title)).toEqual(['Telecinco']);
+    expect(tele.channels[0]?.library).toEqual([]);
+    const antena = await channels(r.h, 'antena');
+    expect(antena.channels[0]).toMatchObject({ title: 'Antena 3', library: [ACE_ANTENA] });
+    expect(r.provider.peticiones()).toEqual([]);
+    const native = await r.h.app.inject({
+      method: 'GET',
+      url: '/native/api/v1/iptv/channels?q=tele',
+      headers: { 'x-ace-origin': 'native' },
+    });
+    /* Sin token, 401; con token, 403 origin_forbidden (lo mira test/security.test.ts en todas las rutas web). */
+    expect([401, 403]).toContain(native.statusCode);
+    expect(native.body).not.toContain('Telecinco');
+    const short = await inject(r.h, 'GET', '/api/v1/iptv/channels?q=t');
+    expect(short.statusCode).toBe(400);
+    expect(short.json().error.code).toBe('empty_query');
+    /* 15 · fugas: nada del proveedor en la respuesta. */
+    for (const text of [JSON.stringify(tele), JSON.stringify(antena)]) {
+      for (const secret of [FAKE_IPTV_PASSWORD, FAKE_IPTV_USER, 'ES |', 'XXX', '.es', 'http']) {
+        expect(text).not.toContain(secret);
+      }
+    }
+  });
+
+  it('12 · search con IPTV activa: los «La 1 HD --> …» del motor llevan el id IPTV de «La 1»; Hypermotion no', async () => {
+    const r = await setup({ search: true });
+    await saveXtream(r);
+    const la1 = (await channels(r.h, 'la 1')).channels[0];
+    expect(la1?.title).toBe('La 1');
+    const res = await inject(r.h, 'GET', '/api/v1/search?q=la%201');
+    expect(res.statusCode, res.body).toBe(200);
+    /* El motor falso da un infohash por fuente y el nombre sin proveedor («La 1 HD»). */
+    const results = SearchResponseSchema.parse(res.json()).results;
+    const la1Results = results.filter((result) => result.title.startsWith('La 1'));
+    expect(la1Results).toHaveLength(2);
+    for (const result of la1Results) expect(result.iptv).toBe(la1?.id);
+    /* «LaLiga TV Hypermotion» del motor es SU canal IPTV, nunca otro. */
+    const hyperIptv = (await channels(r.h, 'hypermotion')).channels[0];
+    expect(hyperIptv?.title).toBe('LaLiga TV Hypermotion');
+    const hyper = await inject(r.h, 'GET', '/api/v1/search?q=hypermotion');
+    const hyperResults = SearchResponseSchema.parse(hyper.json()).results;
+    expect(hyperResults.length).toBeGreaterThan(0);
+    for (const result of hyperResults) expect(result.iptv).toBe(hyperIptv?.id);
+    const text = res.body;
+    expect(text).not.toContain(FAKE_IPTV_PASSWORD);
+    /* La ruta antigua nunca lo lleva. */
+    const legacy = await inject(r.h, 'GET', '/api/search?q=la%201');
+    expect(legacy.body).not.toContain('"iptv"');
+  });
+
+  it('13 · canal tocado del buscador: la IPTV sola; con engine=1 y el motor sin Telecinco, sin error; «La 1» con engine=1, la IPTV y las dos AceStream', async () => {
+    const r = await setup({ search: true });
+    await saveXtream(r);
+    const tele = (await channels(r.h, 'telecinco')).channels[0]?.id as string;
+    const first = await resolve(r.h, `channel=Telecinco&scope=channel&iptv=${tele}&client=web_b`);
+    expect(first.status).toBe('found');
+    expect(first.candidates.map((candidate) => candidate.id)).toEqual([tele]);
+    const reverse = await resolve(
+      r.h,
+      `channel=Telecinco&scope=channel&iptv=${tele}&engine=1&client=web_b`,
+    );
+    expect(reverse.status).toBe('found');
+    expect(reverse.candidates.map((candidate) => candidate.id)).toEqual([tele]);
+    expect(reverse.engineAvailable).toBe(true);
+    /* Renombrado por Isma («Tele 5»): el id manda igual. */
+    const renamed = await resolve(r.h, `channel=Tele%205&scope=channel&iptv=${tele}&client=web_b`);
+    expect(renamed.candidate?.id).toBe(tele);
+    const la1 = (await channels(r.h, 'la 1')).channels[0]?.id as string;
+    const both = await resolve(
+      r.h,
+      `channel=La%201&scope=channel&iptv=${la1}&engine=1&client=web_b`,
+    );
+    expect(both.candidates.map((candidate) => candidate.source)).toEqual([
+      'iptv',
+      'acestream',
+      'acestream',
+    ]);
+    expect(both.candidates[0]?.id).toBe(la1);
+    for (const candidate of both.candidates.slice(1)) {
+      expect(candidate.title).toMatch(/^La 1 HD/);
+      expect(candidate.score).toBeGreaterThanOrEqual(92);
+    }
+    /* Sin engine=1 el motor no se toca: solo la IPTV. */
+    const quick = await resolve(r.h, `channel=La%201&scope=channel&iptv=${la1}&client=web_b`);
+    expect(quick.candidates.map((candidate) => candidate.id)).toEqual([la1]);
+  });
+
+  it('14 · de Xtream a la M3U del mismo proveedor: favorito y reciente de Telecinco pasan al id nuevo y se reproducen', async () => {
+    const r = await setup();
+    await saveXtream(r);
+    const tele = (await channels(r.h, 'telecinco')).channels[0]?.id as string;
+    await libraryMutate(r.h, {
+      action: 'favorite-upsert',
+      item: { id: tele, title: 'Telecinco', category: 'IPTV', alias: 'Telecinco', ih: false },
+    });
+    const before = await libraryMutate(r.h, {
+      action: 'history-upsert',
+      item: { id: tele, title: 'Telecinco', ih: false },
+    });
+    expect(before.iptvIds).toEqual({ [tele]: 'ok' });
+    const m3u = await inject(r.h, 'PUT', '/api/v1/iptv', {
+      kind: 'm3u',
+      url: `${SERVER}/lista.m3u`,
+    });
+    expect(m3u.statusCode, m3u.body).toBe(200);
+    await r.h.iptv.idle();
+    await until('m3u activa', () => r.h.iptv.active());
+    await r.h.iptv.relinkIdle();
+    const fresh = (await channels(r.h, 'telecinco')).channels[0]?.id as string;
+    expect(fresh).not.toBe(tele);
+    const view = LibraryViewSchema.parse((await inject(r.h, 'GET', '/api/v1/library')).json());
+    expect(view.favorites.map((item) => item.id)).toEqual([fresh]);
+    expect(view.history.map((item) => item.id)).toEqual([fresh]);
+    expect(view.iptvIds).toEqual({ [fresh]: 'ok' });
+    const grant = await openDriven(r.h, fresh, 'visor_relink');
+    expect(grant.source).toBe('iptv');
+  });
+});
 
 describe('IPTV de punta a punta (docs/iptv.md §9.2)', () => {
   it('1 · guardar Xtream y resolver el partido: la guía primero, un cartel por canal, sin trampas ni sondas', async () => {
