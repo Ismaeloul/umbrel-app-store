@@ -18,8 +18,10 @@ export * from './constants/timeouts.js';
 export * from './domain/channel-names.js';
 export * from './domain/channels.js';
 export * from './domain/for-you.js';
+export * from './domain/fuzzy.js';
 export * from './domain/hash.js';
 export * from './domain/live.js';
+export * from './domain/search-aliases.js';
 export * from './domain/text.js';
 
 export * from './state/v1.js';

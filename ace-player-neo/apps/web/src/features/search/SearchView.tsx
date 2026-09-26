@@ -31,10 +31,22 @@
    limpio («La 1») aunque tengas en tu biblioteca una entrada de AceStream de
    ese canal («LA 1 4K --> NEW ERA», que se junta con él). Tocar la fila de
    un canal es como tocar un partido: IPTV primero y AceStream de respaldo.
-   Sin IPTV activa, ni una llamada a `iptvChannels` y los textos de siempre. */
+   Sin IPTV activa, ni una llamada a `iptvChannels` y los textos de siempre.
 
-import { IPTV_SEARCH, type Item, type SearchResult } from '@ace/shared';
-import { useEffect, useMemo, useRef, useState } from 'react';
+   Buscador «como Google» (docs/iptv.md §20): todo lo local (biblioteca y
+   partidos) usa el buscador de @ace/shared, con erratas, alias y prefijos, y
+   el servidor hace lo mismo con tu IPTV y con lo que pregunta al motor.
+   - «Partidos», arriba: buscar un equipo, una selección o una competición
+     encuentra sus partidos de la agenda (`matches.ts`), con las tarjetas de
+     la agenda; tocar una abre el partido. Primero el que está en directo o el
+     más próximo.
+   - «Quizás quisiste decir «…»», solo cuando no sale nada en ningún sitio,
+     con la corrección tocable.
+   - Si el servidor preguntó al motor otra cosa (una errata corregida o el
+     nombre de siempre de un alias), una línea lo dice. */
+
+import { IPTV_SEARCH, type FootballMatch, type Item, type SearchResult } from '@ace/shared';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { isAbortError, useApiQuery, useIptvActive } from '../../api/index.ts';
 import type { ViewProps } from '../../app/contracts.ts';
 import { requestFocus } from '../../app/focus.ts';
@@ -53,14 +65,19 @@ import {
   SkeletonRows,
   TextField,
 } from '../../ui/index.ts';
+import { useLibraryLookup, useNow, useSchedule } from '../agenda/data.ts';
+import { channelInfo, isMine } from '../agenda/domain.ts';
+import { MatchRow } from '../agenda/MatchRow.tsx';
+import '../agenda/agenda.css';
 import { ChannelRow } from '../library/ChannelRow.tsx';
-import { filterItems, findKnownItem } from '../library/model.ts';
+import { findKnownItem, searchItems, suggestItems } from '../library/model.ts';
 import { useOnAir } from '../library/on-air.ts';
 import { playChannel, useOnScreenHash } from '../library/play.ts';
 import { useChannelActions } from '../library/useChannelActions.tsx';
 import { VirtualList } from '../library/VirtualList.tsx';
 import '../library/library.css';
 import { PasteHashSheet, pastedTitle } from '../paste-hash/index.ts';
+import { usePreferences } from '../preferences/usePreferences.ts';
 import { registerSearchDemo } from './demo.ts';
 import {
   aceChannelName,
@@ -86,6 +103,16 @@ import {
   SEARCH_FAILED_TOAST,
   searchPhase,
 } from './model.ts';
+import {
+  MATCHES_SHOWN,
+  matchIndex,
+  matchesLiveText,
+  moreMatchesText,
+  scheduleMatches,
+  searchMatches,
+  searchedText,
+} from './matches.ts';
+import { Suggestion } from './Suggestion.tsx';
 import { SEARCH_PARAM } from './navigation.ts';
 import './search.css';
 
@@ -103,6 +130,7 @@ export default function SearchView({ active }: ViewProps) {
   const [committed, setCommitted] = useState(() => param ?? '');
   const [pasteOpen, setPasteOpen] = useState(false);
   const [iptvExpanded, setIptvExpanded] = useState(false);
+  const [matchesExpanded, setMatchesExpanded] = useState(false);
   const lastParam = useRef(param);
   const withIptv = useIptvActive();
   const actions = useChannelActions();
@@ -174,8 +202,11 @@ export default function SearchView({ active }: ViewProps) {
   );
   const iptvData = withIptv && iptvSearch.data?.query === query ? iptvSearch.data : undefined;
   const iptvFailed = withIptv && iptvSearch.isError && !isAbortError(iptvSearch.error);
-  // Cada búsqueda nueva empieza con «En tu IPTV» plegada.
-  useEffect(() => setIptvExpanded(false), [query]);
+  // Cada búsqueda nueva empieza con «En tu IPTV» y «Partidos» plegadas.
+  useEffect(() => {
+    setIptvExpanded(false);
+    setMatchesExpanded(false);
+  }, [query]);
 
   // El aviso de fallo, una vez por búsqueda fallida (no por repintado).
   const failedAt = search.isError && !isAbortError(search.error) ? search.errorUpdatedAt : 0;
@@ -185,14 +216,41 @@ export default function SearchView({ active }: ViewProps) {
 
   const results: SearchResult[] = search.data?.results ?? [];
 
-  const local = useMemo(() => {
+  // Toda tu biblioteca en una lista (la misma mientras no cambie: el buscador guarda su índice por lista).
+  const libraryItems = useMemo(() => {
     const data = actions.library;
-    if (!data || !canSearch(query) || detected) return [];
+    return data ? [...data.favorites, ...data.history, ...data.web] : [];
+  }, [actions.library]);
+
+  // Lo local se busca con el texto aplazado: escribir nunca espera al buscador.
+  const localQuery = useDeferredValue(query);
+  const local = useMemo(() => {
+    if (!canSearch(localQuery) || detected) return [];
     const seen = new Set<string>();
-    return filterItems([...data.favorites, ...data.history, ...data.web], query)
+    return searchItems(libraryItems, localQuery)
       .filter((item) => (seen.has(item.id) ? false : (seen.add(item.id), true)))
       .slice(0, LOCAL_LIMIT);
-  }, [actions.library, query, detected]);
+  }, [libraryItems, localQuery, detected]);
+
+  // «Partidos» (§20): la agenda, con el mismo buscador.
+  const schedule = useSchedule();
+  const now = useNow();
+  const lookup = useLibraryLookup();
+  const { preferences } = usePreferences();
+  const agendaIndex = useMemo(() => matchIndex(scheduleMatches(schedule.data)), [schedule.data]);
+  const matchHits = useMemo(
+    () => (canSearch(localQuery) && !detected ? searchMatches(agendaIndex, localQuery, now) : []),
+    [agendaIndex, localQuery, detected, now],
+  );
+  const matchRows = matchesExpanded ? matchHits : matchHits.slice(0, MATCHES_SHOWN);
+  const openMatch = (match: FootballMatch) => {
+    if (!match.channels?.length) {
+      notify('El canal todavía no está anunciado', { tone: 'info' });
+      return;
+    }
+    haptic('light');
+    navigate({ vista: 'partido', id: match.id, canal: null });
+  };
 
   // Un canal, una fila (§14.3): biblioteca, «En tu IPTV» y el motor, sin repetir.
   const merged = useMemo(
@@ -222,11 +280,35 @@ export default function SearchView({ active }: ViewProps) {
     iptvData !== undefined &&
     iptvData.channels.length === 0;
   // Si arriba ya hay filas, «Sin resultados» sería falso: el vacío del motor queda en una línea.
-  const shownAbove = merged.local.length > 0 || merged.iptv.length > 0;
+  const shownAbove = merged.local.length > 0 || merged.iptv.length > 0 || matchHits.length > 0;
   // Con tu IPTV en error tampoco se sabe si hay resultados: una línea, solo del motor.
   const iptvUnknown = iptvFailed && !iptvData;
   const iptvRows = visibleIptv(merged.iptv, iptvExpanded, IPTV_SEARCH.shownInSearch);
   const iptvHidden = merged.iptv.length - iptvRows.length;
+
+  // «Quizás quisiste decir» (§20): solo si no sale nada en ningún sitio. Primero lo de tu biblioteca y la
+  // agenda (aquí mismo), luego tu IPTV y el motor (lo dice el servidor).
+  const nothing =
+    phase.kind === 'empty' &&
+    !shownAbove &&
+    !iptvUnknown &&
+    !engineAllShown &&
+    (!withIptv || iptvData !== undefined);
+  const suggestion = useMemo(() => {
+    if (!nothing) return null;
+    return (
+      suggestItems(libraryItems, query) ??
+      agendaIndex.suggest(query) ??
+      iptvData?.suggestion ??
+      search.data?.suggestion ??
+      null
+    );
+  }, [nothing, libraryItems, query, agendaIndex, iptvData, search.data]);
+  const trySuggestion = (value: string) => {
+    haptic('selection');
+    setText(value);
+    commit(value);
+  };
 
   // Aparición escalonada solo al llegar resultados nuevos, no al desplazarse.
   const enter = useRef({ key: '', until: 0 });
@@ -321,7 +403,8 @@ export default function SearchView({ active }: ViewProps) {
           : phase.kind === 'loading'
             ? `Buscando «${phase.query}» en el motor…`
             : phase.kind === 'results' || phase.kind === 'empty'
-              ? searchLiveText({
+              ? matchesLiveText(matchHits.length) +
+                searchLiveText({
                   q: phase.query,
                   library: merged.local.length,
                   iptv: withIptv && iptvData ? merged.iptv.length : null,
@@ -370,6 +453,47 @@ export default function SearchView({ active }: ViewProps) {
               Limpiar
             </Button>
           </div>
+        </section>
+      ) : null}
+
+      {!detected && matchHits.length > 0 ? (
+        <section className="search-sec search-matches" aria-labelledby="buscar-partidos">
+          <h2 id="buscar-partidos" className="search-sec__title">
+            Partidos
+            <span className="search-sec__count">{matchHits.length}</span>
+          </h2>
+          <div className="search-matches__grid">
+            {matchRows.map(({ match }) => (
+              <div key={match.id} className="search-matches__item">
+                <MatchRow
+                  match={match}
+                  now={now}
+                  score={null}
+                  channels={channelInfo(match, lookup)}
+                  mine={isMine(match, preferences)}
+                  compact
+                  interaction="open"
+                  onOpen={openMatch}
+                />
+                {/* La tarjeta pequeña enseña las siglas («ING vs. ESP»): debajo, los nombres enteros, para
+                    que quien busca «inglatera» vea escrito «Inglaterra» (el nombre accesible ya es entero). */}
+                <p className="search-matches__names" aria-hidden="true">
+                  {match.home} – {match.away}
+                </p>
+              </div>
+            ))}
+          </div>
+          {matchHits.length > MATCHES_SHOWN ? (
+            <Button
+              variant="quiet"
+              size="sm"
+              className="search-matches__more"
+              aria-expanded={matchesExpanded}
+              onClick={() => setMatchesExpanded((open) => !open)}
+            >
+              {matchesExpanded ? 'Ver menos' : moreMatchesText(matchHits.length - MATCHES_SHOWN)}
+            </Button>
+          ) : null}
         </section>
       ) : null}
 
@@ -498,6 +622,11 @@ export default function SearchView({ active }: ViewProps) {
               <span className="search-sec__count">{phase.count}</span>
             ) : null}
           </h2>
+          {phase.kind === 'results' && search.data?.searched ? (
+            <p className="search-hint__text search-sec__searched">
+              {searchedText(search.data.searched)}
+            </p>
+          ) : null}
           {phase.kind === 'idle' || phase.kind === 'short' ? (
             <div className="search-hint">
               <p className="search-hint__title">
@@ -529,7 +658,13 @@ export default function SearchView({ active }: ViewProps) {
                 </Button>
               }
             >
-              {bothEmpty ? IPTV_TEXT.emptyText : 'Prueba con otro nombre o menos palabras.'}
+              {suggestion ? (
+                <Suggestion value={suggestion} onPick={trySuggestion} />
+              ) : bothEmpty ? (
+                IPTV_TEXT.emptyText
+              ) : (
+                'Prueba con otro nombre o menos palabras.'
+              )}
             </EmptyState>
           ) : null}
           {phase.kind === 'error' ? (

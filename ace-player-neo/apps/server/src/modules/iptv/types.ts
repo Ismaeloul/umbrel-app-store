@@ -14,6 +14,7 @@
 
 import type {
   CandidateIptvInfo,
+  FuzzyVocabulary,
   IptvBrowseQuery,
   IptvBrowseResponse,
   IptvChannelsResponse,
@@ -208,6 +209,17 @@ export interface IptvService extends Lifecycle {
   searchChannels(query: string, limit?: number): IptvChannelsResponse;
   /** `SearchResult.iptv` de /api/v1/search: el canal de tu IPTV que es cada resultado (≥ 92). */
   annotateSearch(results: readonly SearchResult[]): SearchResult[];
+  /**
+   * Las palabras del catálogo para corregir erratas de lo que se pregunta al
+   * motor AceStream (§20); null sin IPTV activa. SOLO para buscar.
+   */
+  searchVocabulary(): FuzzyVocabulary | null;
+  /**
+   * Cómo escribe la lista cada palabra plegada («telecinco» → «TELECINCO»),
+   * para escribir bien el «Quizás quisiste decir» del motor; null sin IPTV
+   * activa.
+   */
+  searchDisplayWords?(): ReadonlyMap<string, string> | null;
   /** `LibraryView.iptvIds`: el estado de cada id IPTV de la lista, o null si no hay ninguno. */
   libraryIdStates(ids: readonly string[]): Record<string, IptvIdState> | null;
 

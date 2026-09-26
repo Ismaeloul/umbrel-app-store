@@ -34,6 +34,7 @@ import {
   IPTV_USER_AGENT,
   channelMatchScore,
   normalizeChannelKey,
+  type FuzzyVocabulary,
   type IptvAccountState,
   type IptvBrowseQuery,
   type IptvBrowseResponse,
@@ -99,6 +100,9 @@ import {
   libraryMatches,
   searchCatalog,
   searchIndex,
+  searchVocabulary,
+  catalogDisplayWords,
+  suggestCatalog,
   titleBucket,
   type LibraryCandidate,
   type SearchGroup,
@@ -269,6 +273,11 @@ export class IptvServiceImpl implements IptvService {
   } | null = null;
   /** Nombres de categoría ya redactados, por índice. */
   private readonly categoryNames = new WeakMap<BrowseIndex, Map<number, string>>();
+  /** La biblioteca en una lista, la misma mientras no cambie el estado (el filtro guarda su índice por lista). */
+  private libraryList: {
+    readonly state: object;
+    readonly items: readonly LibraryCandidate[];
+  } | null = null;
   private started = false;
   private stopped = false;
   readonly files: IptvFiles;
@@ -1468,8 +1477,7 @@ export class IptvServiceImpl implements IptvService {
     const record = this.record as IptvProviderRecord;
     const max = Math.min(limit, IPTV_SEARCH.limit);
     const found = searchCatalog(catalog, q, max);
-    const state = this.deps.state.get();
-    const candidates = libraryCandidates([...state.favorites, ...state.history, ...state.web], q);
+    const candidates = libraryCandidates(this.libraryItems(), q);
     const keys = this.ensureKeys();
     const matchOptions = {
       scorer: this.scorer,
@@ -1514,6 +1522,8 @@ export class IptvServiceImpl implements IptvService {
         channels: linked.slice(0, max).map(({ group, library }) => row(group, library)),
       };
     }
+    /* Nada: «Quizás quisiste decir» con tu IPTV y los alias (§20). */
+    const suggestion = found.groups.length ? null : suggestCatalog(catalog, q);
     return {
       query: q,
       total: found.total,
@@ -1521,7 +1531,27 @@ export class IptvServiceImpl implements IptvService {
       channels: found.groups.map((group) =>
         row(group, candidates.length ? libraryMatches(group, candidates, matchOptions) : []),
       ),
+      ...(suggestion ? { suggestion } : {}),
     };
+  }
+
+  /** Favoritos, recientes y la lista activa en una lista, la misma mientras no cambie el estado. */
+  private libraryItems(): readonly LibraryCandidate[] {
+    const state = this.deps.state.get();
+    if (this.libraryList?.state !== state) {
+      this.libraryList = { state, items: [...state.favorites, ...state.history, ...state.web] };
+    }
+    return this.libraryList.items;
+  }
+
+  searchVocabulary(): FuzzyVocabulary | null {
+    if (!this.active()) return null;
+    return searchVocabulary(searchIndex(this.catalog as Catalog));
+  }
+
+  searchDisplayWords(): ReadonlyMap<string, string> | null {
+    if (!this.active()) return null;
+    return catalogDisplayWords(searchIndex(this.catalog as Catalog));
   }
 
   // --- Pestaña IPTV de Canales (§16) ---
@@ -1675,7 +1705,15 @@ export class IptvServiceImpl implements IptvService {
       }),
       nextCursor: result.nextOffset === null ? null : encodeCursor(stamp, result.nextOffset),
       stale,
+      ...this.browseSuggestion(result.query, result.total),
     };
+  }
+
+  /* «Quizás quisiste decir» en la pestaña (§20): solo con texto y sin nada. */
+  private browseSuggestion(query: string, total: number): { suggestion?: string } {
+    if (!query || total > 0 || !this.catalog) return {};
+    const suggestion = suggestCatalog(this.catalog, query);
+    return suggestion ? { suggestion } : {};
   }
 
   /**

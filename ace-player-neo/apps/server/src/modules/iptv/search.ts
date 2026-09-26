@@ -26,12 +26,26 @@
    El índice se monta una vez por catálogo (WeakMap) y se tira con él. */
 
 import {
+  FuzzyVocabulary,
   IPTV_MIN_SCORE,
   IPTV_SEARCH,
   MOVISTAR_WORDS,
   SEARCH_QUERY_MAX,
   SEARCH_QUERY_MIN,
+  aliasReadings,
+  aliasVocabulary,
+  aliasDisplayWords,
+  aliasWords,
+  correctQuery,
+  displayQuery,
+  displayWords,
+  spelledNumberReading,
+  splitJoinedWord,
+  wordTypos,
+  filterLibrary,
+  namedGroups,
   normalizeChannelKey,
+  searchWords,
   type Item,
 } from '@ace/shared';
 import { AppError } from '../../core/errors.js';
@@ -296,6 +310,8 @@ function penaltyOf(group: SearchGroup, catalog: Catalog): number {
 export function searchIndex(catalog: Catalog): SearchIndex {
   const known = INDEXES.get(catalog);
   if (known) return known;
+  /* La tabla de alias (§20) se pliega al montar el índice, no en la primera consulta. */
+  void aliasWords();
   const groups: SearchGroup[] = [];
   const facts: GroupFacts[] = [];
   const byKey = new Map<string, SearchGroup[]>();
@@ -529,6 +545,8 @@ export interface CatalogSearchResult {
   readonly capped: boolean;
   /** Los primeros `limit`, en orden. */
   readonly groups: readonly SearchGroup[];
+  /** Si solo ha salido algo corrigiendo erratas: la clave corregida (§20). */
+  readonly corrected: string | null;
 }
 
 /**
@@ -556,10 +574,206 @@ export function searchCatalog(
   limit: number = IPTV_SEARCH.limit,
 ): CatalogSearchResult {
   const key = searchQueryKey(query);
-  if (!key) return { key, total: 0, capped: false, groups: [] };
+  if (!key) return { key, total: 0, capped: false, groups: [], corrected: null };
   /* «uk: la liga tv»: el país pedido va el primero (§19). */
-  const askedCountry = searchQueryText(query).country;
+  const askedText = searchQueryText(query);
+  const askedCountry = askedText.country;
   const index = searchIndex(catalog);
+  const tiers = new Map<number, number>();
+  const put = (position: number, tier: number): void => {
+    const current = tiers.get(position);
+    if (current === undefined || tier < current) tiers.set(position, tier);
+  };
+
+  /* La consulta tal cual (§18). */
+  const plain = collectMatches(index, key);
+  for (const [position, tier] of plain.tiers) put(position, tier);
+
+  /* Por un alias (§20): «t5» → «Telecinco», «champions» → «Liga de Campeones». Solo los canales que de verdad
+     nombran ese grupo («primera» no trae «LALIGA HYPERMOTION»). */
+  const aliasHits = (
+    words: readonly string[],
+    rank: (tier: number, loose: boolean) => number,
+    max = 8,
+  ): void => {
+    for (const reading of aliasReadings(words, max)) {
+      const readingKey = searchQueryKey(reading.text);
+      if (!readingKey || readingKey === key) continue;
+      for (const [position, tier] of collectMatches(index, readingKey).tiers) {
+        const group = index.groups[position] as SearchGroup;
+        if (!reading.groups.every((id) => namedGroupsOf(group).has(id))) continue;
+        put(position, rank(tier, reading.loose));
+      }
+    }
+  };
+  aliasHits(searchWords(askedText.text), aliasTier);
+
+  /* Otra forma de escribir lo mismo (§20): una palabra junta que son dos («realmadrid» → «real madrid») y
+     los números con letras detrás de otra palabra («dazn uno» → «dazn 1»). */
+  const rewrites: string[][] = [];
+  let split = false;
+  const separated = plain.words.flatMap((word) => {
+    if (plain.matched.has(word)) return [word];
+    const parts = splitJoinedWord(word, (part) => index.byToken.has(part));
+    if (!parts) return [word];
+    split = true;
+    return parts;
+  });
+  if (split) rewrites.push(separated);
+  const numbered = spelledNumberReading(plain.words);
+  if (numbered) rewrites.push(numbered);
+  for (const words of rewrites) {
+    for (const [position, tier] of collectMatches(index, words.join(' ')).tiers) {
+      put(position, aliasTier(tier, false));
+    }
+    aliasHits(words, aliasTier, 4);
+  }
+
+  /* Con erratas (§20): solo las palabras que no casan con nada, 1 error desde 4 letras y 2 desde 8. */
+  let corrected: string | null = null;
+  const variants = typoVariants(index, plain.words, plain.matched);
+  for (const variant of variants) {
+    const variantKey = variant.join(' ');
+    let any = false;
+    for (const [position, tier] of collectMatches(index, variantKey).tiers) {
+      put(position, TYPO_BASE + tier);
+      any = true;
+    }
+    const before = tiers.size;
+    aliasHits(variant, (tier, loose) => TYPO_BASE + aliasTier(tier, loose), 4);
+    if ((any || tiers.size > before) && corrected === null) corrected = variantKey;
+  }
+
+  const familyOrderOf = (fact: GroupFacts): number =>
+    index.familyOrder.get(fact.family) ?? fact.keyOrder;
+  /* España o sin país delante de todo (también de un canal extranjero que se llame igual: «LA LIGA TV» de UK
+     detrás de «DAZN LaLiga» y «M. LALIGA», §19); con un país pedido, ese país el primero. */
+  const regionOf = (item: { group: SearchGroup; fact: GroupFacts }): number =>
+    askedCountry && item.group.bucket === askedCountry ? -1 : item.fact.countryRank;
+  const ranked = [...tiers]
+    .map(([position, tier]) => ({
+      group: index.groups[position] as SearchGroup,
+      fact: index.facts[position] as GroupFacts,
+      tier,
+    }))
+    .sort(
+      (a, b) =>
+        regionOf(a) - regionOf(b) ||
+        a.tier - b.tier ||
+        a.fact.penalty - b.fact.penalty ||
+        (a.tier === 6 ? 0 : a.fact.family.length - b.fact.family.length) ||
+        familyOrderOf(a.fact) - familyOrderOf(b.fact) ||
+        a.fact.number - b.fact.number ||
+        a.group.key.length - b.group.key.length ||
+        a.fact.keyOrder - b.fact.keyOrder ||
+        Number(a.group.bucket !== '') - Number(b.group.bucket !== '') ||
+        a.group.best.order - b.group.best.order,
+    );
+  return {
+    key,
+    total: Math.min(ranked.length, IPTV_SEARCH.totalCap),
+    capped: ranked.length > IPTV_SEARCH.totalCap,
+    groups: ranked.slice(0, Math.max(0, limit)).map((item) => item.group),
+    corrected: plain.tiers.size ? null : corrected,
+  };
+}
+
+/*
+ * Niveles de lo que sale por un alias o con erratas (§20), entre los de §18
+ * (0 igual … 6 categoría): un alias «~» escrito entero («t5», «madrid») que
+ * da el canal igual o su familia cuenta como igual (0; dentro, manda el
+ * orden de siempre: el canal principal antes que sus reservas); otro nombre
+ * «de verdad» de lo mismo («barça tv» → «Barça One», «champions» → «Liga de
+ * Campeones») va justo detrás de lo escrito tal cual (0,5); el resto del
+ * alias, detrás de todo lo que casa por el nombre (4,5); y con erratas,
+ * detrás de todo (7 y más).
+ */
+const TYPO_BASE = 7;
+function aliasTier(tier: number, loose: boolean): number {
+  if (tier > 1) return 4.5;
+  return loose ? 0 : 0.5;
+}
+
+/* Lo que nombra un canal del buscador (sus alias «de verdad»), con caché por índice. */
+const NAMED = new WeakMap<SearchGroup, ReadonlySet<string>>();
+function namedGroupsOf(group: SearchGroup): ReadonlySet<string> {
+  let known = NAMED.get(group);
+  if (!known) {
+    known = namedGroups(searchWords(group.best.display || group.key));
+    for (const id of namedGroups(group.key.split(' '))) (known as Set<string>).add(id);
+    NAMED.set(group, known);
+  }
+  return known;
+}
+
+/** Vocabulario de erratas del catálogo (palabras de los nombres, de las categorías y de los alias), con caché. */
+const VOCABULARIES = new WeakMap<SearchIndex, FuzzyVocabulary>();
+export function searchVocabulary(index: SearchIndex): FuzzyVocabulary {
+  let known = VOCABULARIES.get(index);
+  if (!known) {
+    const weights = new Map<string, number>();
+    for (const [token, list] of index.byToken) weights.set(token, list.length);
+    const words: string[] = [...index.byToken.keys(), ...aliasWords()];
+    for (const info of index.categories.values()) words.push(...info.words);
+    known = new FuzzyVocabulary(words, weights);
+    VOCABULARIES.set(index, known);
+  }
+  return known;
+}
+
+/*
+ * La consulta con las palabras que no casan con nada cambiadas por sus
+ * erratas (3 por palabra y 6 lecturas como mucho). Una palabra que casa por
+ * el principio, por dentro de un compuesto o por la categoría no se toca.
+ */
+function typoVariants(
+  index: SearchIndex,
+  words: readonly string[],
+  matched: ReadonlySet<string>,
+): string[][] {
+  const options = words.map((word) => {
+    const exact = index.byToken.has(word);
+    if (exact || /\d/.test(word)) return [word];
+    /* Un alias que ningún canal tiene («barsa») también se prueba como errata de lo que sí hay («barca», de
+       «BARÇA TV»): su lectura por el alias no encuentra un canal que nombra otro grupo. */
+    if (!matched.has(word) && aliasVocabulary().has(word)) {
+      const found = wordTypos(word, searchVocabulary(index), {
+        exact: false,
+        plain: false,
+        evenIfKnown: true,
+      });
+      return [word, ...found];
+    }
+    /* El vocabulario del catálogo solo se monta (una vez) si alguna palabra no casa con nada. */
+    const plain = matched.has(word) || aliasVocabulary().matchesPlain(word);
+    const vocabulary = plain ? aliasVocabulary() : searchVocabulary(index);
+    const found = wordTypos(word, vocabulary, {
+      exact,
+      plain: plain || vocabulary.matchesPlain(word),
+    });
+    if (!found.length) return [word];
+    /* Si ya casaba (por el principio, por dentro o por la categoría), también tal cual. */
+    return plain ? [word, ...found] : found;
+  });
+  if (options.every((list, i) => list.length === 1 && list[0] === words[i])) return [];
+  let variants: string[][] = [[]];
+  for (const list of options) {
+    const next: string[][] = [];
+    for (const variant of variants) for (const word of list) next.push([...variant, word]);
+    variants = next.slice(0, 6);
+  }
+  return variants.filter((variant) => variant.some((word, i) => word !== words[i]));
+}
+
+/**
+ * Lo que casa con una clave limpia (§18): por el nombre, sin Movistar y por
+ * la categoría, con su nivel (0 igual … 6 categoría). Devuelve también las
+ * palabras de la clave y las que han casado con algo (para las erratas).
+ */
+function collectMatches(
+  index: SearchIndex,
+  key: string,
+): { tiers: Map<number, number>; words: string[]; matched: Set<string> } {
   const words = [...new Set(key.split(' ').filter(Boolean))];
   const required = significant(words);
   const sig = significant(key.split(' ').filter(Boolean));
@@ -570,6 +784,7 @@ export function searchCatalog(
     compact: key.replace(/ /g, ''),
   };
   const tiers = new Map<number, number>();
+  const matched = new Set<string>();
   const put = (position: number, tier: number): void => {
     const current = tiers.get(position);
     if (current === undefined || tier < current) tiers.set(position, tier);
@@ -577,6 +792,7 @@ export function searchCatalog(
 
   /* 1. Por el nombre. */
   const byWord = new Map(required.map((word) => [word, groupsForWord(index, word)] as const));
+  for (const [word, set] of byWord) if (set.size) matched.add(word);
   for (const position of intersect([...byWord.values()])) {
     put(
       position,
@@ -613,6 +829,15 @@ export function searchCatalog(
   /* 3. Por la categoría. */
   const categoryWords = required.map(categoryWord);
   for (const info of index.categories.values()) {
+    categoryWords.forEach((word, i) => {
+      if (
+        info.words.some((token) =>
+          NUMBER_RE.test(word) ? token === word : token.startsWith(word) && word.length >= 2,
+        )
+      ) {
+        matched.add(required[i] as string);
+      }
+    });
     const matches = categoryWords.every((word) =>
       info.words.some((token) =>
         NUMBER_RE.test(word) ? token === word : token.startsWith(word) && word.length >= 2,
@@ -621,70 +846,56 @@ export function searchCatalog(
     if (!matches) continue;
     for (const position of info.groups) put(position, 6);
   }
+  return { tiers, words: required, matched };
+}
 
-  const familyOrderOf = (fact: GroupFacts): number =>
-    index.familyOrder.get(fact.family) ?? fact.keyOrder;
-  /* España o sin país delante de todo (también de un canal extranjero que se llame igual: «LA LIGA TV» de UK
-     detrás de «DAZN LaLiga» y «M. LALIGA», §19); con un país pedido, ese país el primero. */
-  const regionOf = (item: { group: SearchGroup; fact: GroupFacts }): number =>
-    askedCountry && item.group.bucket === askedCountry ? -1 : item.fact.countryRank;
-  const ranked = [...tiers]
-    .map(([position, tier]) => ({
-      group: index.groups[position] as SearchGroup,
-      fact: index.facts[position] as GroupFacts,
-      tier,
-    }))
-    .sort(
-      (a, b) =>
-        regionOf(a) - regionOf(b) ||
-        a.tier - b.tier ||
-        a.fact.penalty - b.fact.penalty ||
-        (a.tier === 6 ? 0 : a.fact.family.length - b.fact.family.length) ||
-        familyOrderOf(a.fact) - familyOrderOf(b.fact) ||
-        a.fact.number - b.fact.number ||
-        a.group.key.length - b.group.key.length ||
-        a.fact.keyOrder - b.fact.keyOrder ||
-        Number(a.group.bucket !== '') - Number(b.group.bucket !== '') ||
-        a.group.best.order - b.group.best.order,
-    );
-  return {
-    key,
-    total: Math.min(ranked.length, IPTV_SEARCH.totalCap),
-    capped: ranked.length > IPTV_SEARCH.totalCap,
-    groups: ranked.slice(0, Math.max(0, limit)).map((item) => item.group),
-  };
+/**
+ * «Quizás quisiste decir» (§20) cuando la búsqueda no da nada: la consulta
+ * con cada palabra que no casa cambiada por la más parecida del catálogo o de
+ * los alias, con un error más de lo que tolera la búsqueda. Solo si con ella
+ * sale algo; si no, null.
+ */
+export function suggestCatalog(catalog: Catalog, query: string): string | null {
+  const key = searchQueryKey(query);
+  if (!key) return null;
+  const index = searchIndex(catalog);
+  const corrected = correctQuery(key, searchVocabulary(index), { extra: 1 });
+  if (!corrected.changed || corrected.text === key) return null;
+  if (searchCatalog(catalog, corrected.text, 1).total === 0) return null;
+  /* Escrita como en la tabla de alias o en la lista («Telecinco», no «telecinco»). */
+  return displayQuery(corrected.text, [aliasDisplayWords(), catalogDisplayWords(index)]);
+}
+
+/* Cómo escribe la lista cada palabra plegada (la primera vez que sale), con caché por índice. */
+const DISPLAYS = new WeakMap<SearchIndex, ReadonlyMap<string, string>>();
+export function catalogDisplayWords(index: SearchIndex): ReadonlyMap<string, string> {
+  let known = DISPLAYS.get(index);
+  if (!known) {
+    known = displayWords(index.groups.map((group) => group.best.display));
+    DISPLAYS.set(index, known);
+  }
+  return known;
 }
 
 /** Lo que se mira de la biblioteca para `library` (§14.3, regla 5). */
 export type LibraryCandidate = Pick<Item, 'id' | 'title' | 'category'>;
 
 /**
- * ¿Casa la categoría con la consulta plegada? «IPTV» (la de los canales de tu
- * IPTV guardados desde el buscador) es una marca: solo con «ipt» o «iptv»,
- * no con «tv». Lo mismo que el filtro de la web (`categoryMatches`).
- */
-function categoryMatches(category: string | undefined, q: string): boolean {
-  if (category === 'IPTV') return q.length >= 3 && 'iptv'.startsWith(q);
-  return foldText(category || '').includes(q);
-}
-
-/**
- * Elementos de la biblioteca que contienen la consulta en el título o la
- * categoría (lo que enseñan «En tu biblioteca» y el filtro de Canales), sin
- * repetir y 200 como mucho.
+ * Elementos de la biblioteca que casan con la consulta (lo que enseñan «En tu
+ * biblioteca» y el filtro de Canales): el buscador «como Google» de la web
+ * (`filterLibrary`: erratas, alias, prefijos; la categoría «IPTV» solo con
+ * «ipt» o «iptv»), sin repetir y 200 como mucho.
  */
 export function libraryCandidates(
   items: readonly LibraryCandidate[],
   query: string,
 ): LibraryCandidate[] {
-  const q = foldText(query);
-  if (!q) return [];
+  if (!foldText(query)) return [];
   const seen = new Set<string>();
   const out: LibraryCandidate[] = [];
-  for (const item of items) {
+  for (const item of filterLibrary(items, query)) {
     if (out.length >= IPTV_SEARCH.libraryCandidatesMax) break;
     if (seen.has(item.id)) continue;
-    if (!foldText(item.title).includes(q) && !categoryMatches(item.category, q)) continue;
     seen.add(item.id);
     out.push(item);
   }

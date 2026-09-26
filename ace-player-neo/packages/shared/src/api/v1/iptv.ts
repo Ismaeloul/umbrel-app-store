@@ -176,6 +176,11 @@ export const IptvChannelsResponseSchema = z.strictObject({
   /** Hay más de `totalCap`. */
   capped: z.boolean(),
   channels: z.array(IptvChannelSchema).max(IPTV_SEARCH.limit),
+  /**
+   * Solo sin ningún canal (§20): la consulta con las erratas corregidas contra
+   * tu IPTV y los alias, si con ella sale algo («Quizás quisiste decir»).
+   */
+  suggestion: z.string().min(1).max(SEARCH_QUERY_MAX).optional(),
 });
 export type IptvChannelsResponse = z.infer<typeof IptvChannelsResponseSchema>;
 
@@ -299,5 +304,7 @@ export const IptvBrowseResponseSchema = z.strictObject({
   nextCursor: CursorSchema.nullable(),
   /** El cursor era de otro catálogo (hubo sincronización): esta es la PRIMERA página, con categorías y facetas. */
   stale: z.boolean(),
+  /** Solo con texto y ningún canal (§20): «Quizás quisiste decir», como en `iptvChannels`. */
+  suggestion: z.string().min(1).max(SEARCH_QUERY_MAX).optional(),
 });
 export type IptvBrowseResponse = z.infer<typeof IptvBrowseResponseSchema>;

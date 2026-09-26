@@ -38,6 +38,7 @@ const LA1_BODY = JSON.stringify({
 function fakeIptv(active: boolean): IptvService {
   return {
     active: () => active,
+    searchVocabulary: () => null,
     annotateSearch: (results) =>
       results.map((result) =>
         result.title.startsWith('La 1') ? { ...result, iptv: IPTV_LA1 } : result,

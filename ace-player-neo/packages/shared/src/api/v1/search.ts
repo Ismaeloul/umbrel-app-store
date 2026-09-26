@@ -14,5 +14,14 @@ export const SearchResponseSchema = z.strictObject({
   query: z.string().max(SEARCH_QUERY_MAX),
   /** Hasta 100, por disponibilidad de mayor a menor. Todos infohash. */
   results: z.array(SearchResultSchema).max(100),
+  /**
+   * Lo que se le ha preguntado al motor si no es `query` (docs/iptv.md §20):
+   * la consulta con las erratas corregidas («telecinko» → «telecinco») o el
+   * nombre de siempre de un alias («t5» → «Telecinco», que se pregunta junto
+   * con la consulta tal cual). Solo en v1.
+   */
+  searched: z.string().min(1).max(SEARCH_QUERY_MAX).optional(),
+  /** Solo sin resultados: «Quizás quisiste decir», con más tolerancia que la corrección. Solo en v1. */
+  suggestion: z.string().min(1).max(SEARCH_QUERY_MAX).optional(),
 });
 export type SearchResponse = z.infer<typeof SearchResponseSchema>;

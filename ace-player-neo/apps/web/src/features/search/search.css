@@ -193,3 +193,56 @@
   color: var(--text-2);
   font-size: var(--fs-13);
 }
+
+/* ---- Partidos (buscador «como Google», docs/iptv.md §20) -------------------------
+   Las tarjetas pequeñas de la agenda («Luego»): dos por fila en el móvil y las
+   que quepan en escritorio. Tocar una abre el partido. */
+.search-matches__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+.search-matches .agenda-row--compact .versus {
+  aspect-ratio: 3 / 2;
+}
+.search-matches__item {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.search-matches__names {
+  margin: 0;
+  padding-inline: var(--s-1);
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.search-matches__more {
+  justify-self: start;
+}
+
+/* ---- Lo que se preguntó al motor y «Quizás quisiste decir» ------------------------ */
+.search-sec__searched {
+  margin-top: calc(-1 * var(--s-2));
+  padding-inline: var(--s-1);
+}
+/* Zona táctil de 44 px sin mover la línea: el relleno se come con un margen negativo igual. */
+.search-suggest__link {
+  display: inline-block;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 10px 4px;
+  margin: -10px -4px;
+  border: 0;
+  background: none;
+  color: var(--accent-ink);
+  font: inherit;
+  font-weight: var(--wght-head);
+  line-height: 24px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}

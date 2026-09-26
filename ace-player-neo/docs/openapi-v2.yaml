@@ -3713,6 +3713,10 @@ paths:
                         - provider
                         - library
                       additionalProperties: false
+                  suggestion:
+                    type: string
+                    minLength: 1
+                    maxLength: 80
                 required:
                   - query
                   - total
@@ -4057,6 +4061,10 @@ paths:
                       - type: "null"
                   stale:
                     type: boolean
+                  suggestion:
+                    type: string
+                    minLength: 1
+                    maxLength: 80
                 required:
                   - active
                   - provider
@@ -8735,6 +8743,14 @@ paths:
                         - bitrate
                         - ih
                       additionalProperties: false
+                  searched:
+                    type: string
+                    minLength: 1
+                    maxLength: 80
+                  suggestion:
+                    type: string
+                    minLength: 1
+                    maxLength: 80
                 required:
                   - query
                   - results
