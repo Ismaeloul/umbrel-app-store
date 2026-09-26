@@ -14,6 +14,8 @@
 
 import type {
   CandidateIptvInfo,
+  IptvBrowseQuery,
+  IptvBrowseResponse,
   IptvChannelsResponse,
   IptvIdState,
   IptvReason,
@@ -191,6 +193,14 @@ export interface IptvService extends Lifecycle {
   annotateSearch(results: readonly SearchResult[]): SearchResult[];
   /** `LibraryView.iptvIds`: el estado de cada id IPTV de la lista, o null si no hay ninguno. */
   libraryIdStates(ids: readonly string[]): Record<string, IptvIdState> | null;
+
+  // --- Pestaña IPTV de Canales (docs/iptv.md §16) ---
+  /**
+   * GET /api/v1/iptv/browse: categorías, canales por páginas, texto y
+   * filtros con facetas sobre el índice en memoria. Sin IPTV activa, 200 con
+   * `active: false`; un cursor mal formado, `validation_error`.
+   */
+  browse(query: IptvBrowseQuery): Promise<IptvBrowseResponse>;
   /**
    * Una resolución la va a usar: refresca en segundo plano la lista si tiene
    * más de 6 h (30 min con «Rebuscar») y la cuenta si tiene más de 2 min.
