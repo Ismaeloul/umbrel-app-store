@@ -12,9 +12,11 @@ struct SeccionDonde: View {
     @Environment(Navegador.self) private var navegador
     @Environment(\.vistaActiva) private var vistaActiva
     @Environment(\.modoDemo) private var modoDemo
+    /// El id que dice el token del Llavero, leído una vez al aparecer (no en cada `body`).
+    @State private var idDelToken: String?
 
     private var dispositivo: String? {
-        datos.arranque.datos?.device?.id ?? sesion.dispositivo ?? AccesoProceso.idDelToken
+        datos.arranque.datos?.device?.id ?? sesion.dispositivo ?? idDelToken
     }
 
     var body: some View {
@@ -27,6 +29,7 @@ struct SeccionDonde: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .onAppear { idDelToken = AccesoProceso.idDelToken(sesion.entorno) }
         .task(id: vistaActiva) {
             guard vistaActiva else { return }
             await datos.reproduccion.refrescar()

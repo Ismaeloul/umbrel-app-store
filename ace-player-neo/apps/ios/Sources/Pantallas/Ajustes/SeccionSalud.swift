@@ -87,7 +87,9 @@ struct SeccionSalud: View {
 
     private func avisosDelBackend(_ lista: [HealthResponse.Warning]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(lista, id: \.code) { (aviso: HealthResponse.Warning) in
+            // Por posición: el backend puede mandar dos avisos con el mismo `code`.
+            ForEach(Array(lista.enumerated()), id: \.offset) { (par: (offset: Int, element: HealthResponse.Warning)) in
+                let aviso = par.element
                 let forma = RoundedRectangle(cornerRadius: 8, style: .circular)
                 HStack(alignment: .top, spacing: 8) {
                     IconoPalco(.aviso, tamano: 18).foregroundStyle(Palco.weakInk)
@@ -157,7 +159,7 @@ struct SeccionSalud: View {
 
     private func vigilar() async {
         guard vistaActiva else { return }
-        ahora = AccesoProceso.reloj.ahora
+        ahora = datos.reloj.ahora
         let salud = datos.salud
         let registro = datos.diagnosticos
         async let pedirSalud: Void = salud.refrescar()
@@ -168,7 +170,7 @@ struct SeccionSalud: View {
         }
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(60))
-            ahora = AccesoProceso.reloj.ahora
+            ahora = datos.reloj.ahora
         }
     }
 
