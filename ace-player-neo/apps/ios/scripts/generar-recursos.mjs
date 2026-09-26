@@ -5,8 +5,8 @@
    carátula de Now Playing.
 
    Lo que ya NO hace (fase 0.4): los colores salen de Palco/Tokens/ColoresPalco.generado.swift
-   (generar-tokens.mjs), así que no escribe colorsets; el AppIcon (claro, oscuro y tintado) se queda
-   intacto (decisión 8) y no se toca. `Colores/Bg.colorset` (lo exige UILaunchScreen) y
+   (generar-tokens.mjs), así que no escribe colorsets; el AppIcon (claro, oscuro y tintado) es el icono
+   de la app de Umbrel (ismaeloul-ace-player-neo/icon.svg; petición de Isma del 26-sep) y aquí no se toca. `Colores/Bg.colorset` (lo exige UILaunchScreen) y
    `AccentColor.colorset` tampoco se tocan.
 
    Los PNG se pintan con Chrome (Playwright, `channel: 'chrome'`) dibujando el SVG en un canvas del
