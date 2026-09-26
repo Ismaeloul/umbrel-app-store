@@ -846,9 +846,12 @@ export function pickAutoSource(
   finished: boolean,
   { iptv = true }: { iptv?: boolean } = {},
 ): SourceEntry | null {
+  /* El gemelo de otro país («DE: DAZN 1» junto a «DAZN 1») no arranca solo (§16). */
   const pool = entries.filter(
     (entry) =>
-      !entry.autoTried && !effectiveById.get(entry.id)?.reported && (iptv || !isIptv(entry)),
+      !entry.autoTried &&
+      !effectiveById.get(entry.id)?.reported &&
+      (iptv ? !isForeignTwin(entry, entries) : !isIptv(entry)),
   );
   const firstIptv = pool.find(
     (entry) => isIptv(entry) && effectiveById.get(entry.id)?.state !== 'failed',
@@ -880,6 +883,7 @@ export function pickInitialSwitch(
       (entry) =>
         entry.id !== current.id &&
         !isReported(entry, now) &&
+        !isForeignTwin(entry, entries) &&
         (entry.probe?.state === 'working' || entry.probe?.state === 'weak'),
     ) ?? null
   );
@@ -922,7 +926,7 @@ export function pickBridgeTarget(
   if (from === 'iptv') return pickAutoSource(entries, effectiveById, finished, { iptv: false });
   return (
     entries.find((entry) => {
-      if (!isIptv(entry)) return false;
+      if (!isIptv(entry) || isForeignTwin(entry, entries)) return false;
       const effective = effectiveById.get(entry.id);
       if (!effective || effective.reported || effective.state === 'failed') return false;
       return !entry.failedAt || now - entry.failedAt >= BRIDGE_RECENT_TRY_MS;
@@ -931,22 +935,61 @@ export function pickBridgeTarget(
 }
 
 /**
+ * Canal de un cartel IPTV: su clave (la del servidor, `iptv.channel`, o si no
+ * la trae, su nombre) y su país. Dos carteles con el mismo son variantes del
+ * mismo canal (1080p, 720p, la reserva…); «DE: DAZN 1» y «DAZN 1», no (§16).
+ */
+function iptvChannelOf(entry: Pick<SourceEntry, 'title' | 'iptv'>): string {
+  const key = entry.iptv?.channel || foldForMatch(channelPartOf(entry.title)).trim();
+  return `${key}\u0000${entry.iptv?.country ?? ''}`;
+}
+
+/** ¿Son variantes del mismo canal IPTV (misma clave y mismo país)? */
+export function sameIptvChannel(
+  a: Pick<SourceEntry, 'title' | 'iptv' | 'origin'>,
+  b: Pick<SourceEntry, 'title' | 'iptv' | 'origin'>,
+): boolean {
+  return isIptv(a) && isIptv(b) && iptvChannelOf(a) === iptvChannelOf(b);
+}
+
+/**
+ * ¿Es el gemelo de otro país de un canal que también está en España o sin
+ * país? («DE: DAZN 1» junto a «DAZN 1»). Se enseña y se puede tocar, pero lo
+ * automático (arranque, variantes y puente) no lo elige: es otro canal, con
+ * otra programación (§16). Si solo está la extranjera, sí.
+ */
+export function isForeignTwin(
+  entry: Pick<SourceEntry, 'title' | 'iptv' | 'origin'>,
+  entries: readonly Pick<SourceEntry, 'title' | 'iptv' | 'origin'>[],
+): boolean {
+  if (!isIptv(entry) || !entry.iptv?.country) return false;
+  const key = iptvChannelOf(entry).split('\u0000')[0];
+  return entries.some(
+    (other) =>
+      isIptv(other) && !other.iptv?.country && iptvChannelOf(other).split('\u0000')[0] === key,
+  );
+}
+
+/**
  * Variantes de la IPTV (docs/iptv.md §16): si cae un cartel IPTV (la 1080p),
- * antes de saltar a AceStream se prueba el siguiente cartel IPTV en el orden
- * del servidor (4K, 720p, SD, la reserva) que no se haya probado ya, no esté
- * «Sin señal» ni reportado, y no haya caído en los últimos 60 s. null si no
- * queda ninguno (entonces decide el puente). Un fallo de cuenta vale para
- * toda la IPTV: con él no se llama.
+ * antes de saltar a AceStream se prueba el siguiente cartel IPTV DEL MISMO
+ * CANAL (misma clave y mismo país) en el orden del servidor (4K, 720p, SD, la
+ * reserva) que no se haya probado ya, no esté «Sin señal» ni reportado, y no
+ * haya caído en los últimos 60 s. Otro canal o el mismo nombre de otro país
+ * («DE: DAZN 1») no es una variante: ahí decide el puente (AceStream). null si
+ * no queda ninguna. Un fallo de cuenta vale para toda la IPTV: con él no se
+ * llama.
  */
 export function pickNextIptvVariant(
   entries: readonly SourceEntry[],
   effectiveById: ReadonlyMap<string, Effective>,
-  failed: Pick<SourceEntry, 'id'>,
+  failed: Pick<SourceEntry, 'id' | 'title' | 'iptv' | 'origin'>,
   now: number,
 ): SourceEntry | null {
   return (
     entries.find((entry) => {
       if (entry.id === failed.id || !isIptv(entry) || entry.autoTried) return false;
+      if (!sameIptvChannel(entry, failed)) return false;
       const effective = effectiveById.get(entry.id);
       if (effective?.reported || effective?.state === 'failed') return false;
       return !entry.failedAt || now - entry.failedAt >= BRIDGE_RECENT_TRY_MS;

@@ -1598,6 +1598,7 @@ export class IptvServiceImpl implements IptvService {
         backup: entry.backup,
         guide: match.guide,
         ...(match.bucket ? { country: match.bucket } : {}),
+        channel: match.key.slice(0, 200),
       },
     };
   }

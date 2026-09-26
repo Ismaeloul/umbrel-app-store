@@ -330,6 +330,38 @@ describe('el puente (P16.6)', () => {
     expect(getPlayer().channel?.hash).toBe(IPTV);
   });
 
+  it('variantes: cae la DAZN 1 española → AceStream, no «DE: DAZN 1» ni «UK: DAZN 1» (otro canal, §16)', async () => {
+    const dazn = (q: 'sd' | 'fhd' | 'uhd', country?: string) => ({
+      title: 'DAZN 1 --> Casa',
+      iptv: {
+        provider: 'Casa',
+        quality: q,
+        backup: false,
+        guide: false,
+        ...(country ? { country } : {}),
+        channel: 'dazn 1',
+      },
+    });
+    resolve = () =>
+      json(
+        withIptv(2, [
+          iptvCandidate(100, dazn('sd')),
+          iptvCandidate(101, dazn('fhd', 'DE')),
+          iptvCandidate(102, dazn('uhd', 'UK')),
+        ]),
+      );
+    await iptvPlaying(['working', 'working']);
+    const reply = failNow({ code: 'iptv_dropped' });
+    expect(getPlayer().channel?.hash).toBe(hash(1));
+    expect(reply.message).toMatch(/seguimos por AceStream/);
+    /* Cae también la AceStream: la otra, no el gemelo alemán. */
+    failNow();
+    expect(getPlayer().channel?.hash).toBe(hash(2));
+    /* El gemelo sigue ahí para tocarlo a mano. */
+    selectSource(IPTV_2);
+    expect(getPlayer().channel?.hash).toBe(IPTV_2);
+  });
+
   it('variantes: tocar el cartel de otra resolución cambia a esa variante con un toque', async () => {
     resolve = () => json(withIptv(2, [iptvCandidate(100), iptvCandidate(101)]));
     await iptvPlaying(['working', 'working']);

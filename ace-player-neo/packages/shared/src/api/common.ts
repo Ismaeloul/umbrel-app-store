@@ -174,6 +174,12 @@ export const CandidateIptvInfoSchema = z.strictObject({
   guide: z.boolean(),
   /** País del canal si no es España ni sin país («DE» en «DE: DAZN 1»); ausente o null si lo es (§16). */
   country: z.string().min(2).max(8).nullable().optional(),
+  /**
+   * Clave del canal («dazn 1»): los carteles con la misma clave y el mismo
+   * país son variantes de un canal. El salto automático entre variantes no
+   * sale de ellas (§16): «DE: DAZN 1» es otro canal, no una variante de «DAZN 1».
+   */
+  channel: z.string().max(200).optional(),
 });
 export type CandidateIptvInfo = z.infer<typeof CandidateIptvInfoSchema>;
 

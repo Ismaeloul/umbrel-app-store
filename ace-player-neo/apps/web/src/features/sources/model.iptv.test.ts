@@ -183,6 +183,67 @@ describe('IPTV: entradas y presentación', () => {
     expect(pickNextIptvVariant(fallen, effects(fallen), entries[0]!, NOW)).toBeNull();
   });
 
+  it('variantes (§16): nunca salta a otro canal ni al gemelo de otro país («DE: DAZN 1»)', () => {
+    const dazn = (n: number, quality: 'sd' | 'fhd' | 'uhd', country?: string) =>
+      entryFromCandidate(
+        iptvCandidate(n, {
+          title: 'DAZN 1 --> Casa',
+          iptv: {
+            provider: 'Casa',
+            quality,
+            backup: false,
+            guide: false,
+            ...(country ? { country } : {}),
+            channel: 'dazn 1',
+          },
+        }),
+        NOW,
+      );
+    // El catálogo del verificador: ['DAZN 1 SD', 'DE: DAZN 1 FHD', 'UK: DAZN 1 4K'].
+    const entries = [
+      dazn(1, 'sd'),
+      dazn(2, 'fhd', 'DE'),
+      dazn(3, 'uhd', 'UK'),
+      {
+        ...entryFromCandidate(
+          candidate(4, { source: 'acestream', title: 'DAZN 1 --> Elcano' }),
+          NOW,
+        ),
+        probe: probeOf('working'),
+      },
+    ];
+    const ok = effects(entries);
+    expect(pickNextIptvVariant(entries, ok, entries[0]!, NOW)).toBeNull();
+    // Ni el arranque ni el puente desde AceStream eligen los gemelos.
+    const tried = entries.map((entry, i) => (i === 0 ? { ...entry, autoTried: true } : entry));
+    expect(pickAutoSource(tried, effects(tried), true)?.id).toBe(hash(4));
+    const fallen = entries.map((entry, i) =>
+      i === 0 ? { ...entry, failedAt: NOW - 5_000 } : entry,
+    );
+    expect(pickBridgeTarget(fallen, effects(fallen), 'acestream', true, NOW)).toBeNull();
+    // Otro canal español tampoco es una variante (lo decide el puente).
+    const other = entryFromCandidate(
+      iptvCandidate(5, {
+        title: 'DAZN LaLiga --> Casa',
+        iptv: {
+          provider: 'Casa',
+          quality: 'fhd',
+          backup: false,
+          guide: false,
+          channel: 'dazn laliga',
+        },
+      }),
+      NOW,
+    );
+    expect(pickNextIptvVariant([...entries, other], ok, entries[0]!, NOW)).toBeNull();
+    // La misma DAZN 1 en otra resolución sí.
+    const hd = dazn(6, 'fhd');
+    expect(pickNextIptvVariant([...entries, hd], ok, entries[0]!, NOW)?.id).toBe(hash(6));
+    // Si solo está la extranjera, es la que hay: arranca sola.
+    const onlyForeign = [dazn(2, 'fhd', 'DE'), entries[3]!];
+    expect(pickAutoSource(onlyForeign, effects(onlyForeign), false)?.id).toBe(hash(2));
+  });
+
   it('«Tu IPTV» en «Encontrar canal» y «IPTV» en lo consultado', () => {
     expect(resolutionSourceLabel('iptv')).toBe('Tu IPTV');
     expect(checkedLabel('iptv')).toBe('IPTV');

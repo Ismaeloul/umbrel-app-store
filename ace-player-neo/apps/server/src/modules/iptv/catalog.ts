@@ -246,12 +246,19 @@ export class CatalogBuilder {
 
   /**
    * «Canal Sur (2)» sin ningún «Canal Sur» al lado: el número es parte del
-   * nombre, no una copia (docs/iptv.md §16). Se vuelve a indexar con él.
+   * nombre, no una copia (docs/iptv.md §16). Se vuelve a indexar con él. Vale
+   * también con varias resoluciones del mismo número («Canal Sur (2) HD» y
+   * «Canal Sur (2) FHD» son Canal Sur 2 en 720p y 1080p), no con números
+   * distintos («(1)» y «(2)» son copias). Un «(1)» solo nunca es parte del
+   * nombre: «Antena 3 (1)» es Antena 3.
    */
   private rekeyLoneMirrors(): void {
     const lone: CatalogEntry[] = [];
     for (const value of this.groups.values()) {
-      if (!Array.isArray(value) && value.mirror !== null) lone.push(value);
+      const entries = many(value);
+      const number = entries[0]?.mirror ?? null;
+      if (number === null || number < 2) continue;
+      if (entries.every((entry) => entry.mirror === number)) lone.push(...entries);
     }
     if (!lone.length) return;
     const replaced = new Map<string, CatalogEntry>();

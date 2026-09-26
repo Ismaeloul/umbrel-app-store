@@ -481,9 +481,9 @@ describe('IPTV de punta a punta (docs/iptv.md §9.2)', () => {
     ]);
     expect(result.candidates[0]?.iptv?.guide).toBe(true);
     expect(result.candidates.slice(1, 4).map((c) => c.iptv)).toEqual([
-      { provider: 'Casa', quality: 'fhd', backup: false, guide: false },
-      { provider: 'Casa', quality: 'hd', backup: false, guide: false },
-      { provider: 'Casa', quality: null, backup: true, guide: false },
+      { provider: 'Casa', quality: 'fhd', backup: false, guide: false, channel: 'dazn laliga' },
+      { provider: 'Casa', quality: 'hd', backup: false, guide: false, channel: 'dazn laliga' },
+      { provider: 'Casa', quality: null, backup: true, guide: false, channel: 'dazn laliga' },
     ]);
     expect(result.candidate?.source).toBe('iptv');
     expect(titles.filter((title) => title.startsWith('iptv:'))).toHaveLength(4);
