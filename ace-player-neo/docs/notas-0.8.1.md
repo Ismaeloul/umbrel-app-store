@@ -1,10 +1,16 @@
-# Notas preparadas para la 0.8.1 (sin publicar)
+# Notas de la 0.8.1
 
 El CHANGELOG de la app vive en el paquete de la tienda
 (`ismaeloul-ace-player-neo/CHANGELOG.md`), que solo se toca al publicar. Hasta
 entonces, la entrada de la 0.8.1 se prepara aquí; al montar la release se copia
 tal cual en el CHANGELOG y en `releaseNotes` de `umbrel-app.yml`, con su fecha.
-La versión NO está subida.
+
+**Montada el 26-09 en la rama `release/0.8.1`.** Lo de abajo es el borrador
+largo; lo que se publica es la versión corta que está en el CHANGELOG y en
+`releaseNotes` (entrada «0.8.1 (2026-09-26)»), con lo que trae la 0.8.1: IPTV
+con AceStream de respaldo en los dos sentidos, la guía, el buscador con los
+dos juntos, los carteles de fuente nuevos y la app emparejada con Salud,
+Dispositivos y «Un solo dispositivo a la vez».
 
 ---
 
