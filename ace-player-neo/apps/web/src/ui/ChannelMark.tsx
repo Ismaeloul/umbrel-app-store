@@ -29,13 +29,17 @@ const DORSAL_BACKUP_RE =
   /[([]\s*(?:bk|bkp|backup)\s*[-_]?\s*\d{0,2}\s*[)\]]|\b(?:bk|bkp|backup)\s*[-_]?\s*\d{1,2}\b/giu;
 const DORSAL_SIZE_RE = /\b\d{3,4}\s*[x×]\s*\d{3,4}\b/giu;
 
+/* Un número, con la letra suelta que lleve pegada delante («F1», «M4»; en «TV3», solo «3»). */
+const DORSAL_NUMBER_RE = /(?:(?<!\p{L})(\p{L}))?(\d+)/gu;
+
 export function channelDorsal(name: string): string {
   /* Tampoco la reserva («(BK-2)», «[BK 1]», «BK-1») ni una resolución escrita «1920x1080» (docs/iptv.md §19). */
   const bare = name.replace(DORSAL_BACKUP_RE, ' ').replace(DORSAL_SIZE_RE, ' ');
-  const numbers = stripQualityMarks(bare)
-    .match(/\d+/g)
-    ?.filter((number) => !isQualityNumber(number));
-  const last = numbers?.at(-1);
+  /* «DAZN F1» → «F1», no «1» como «DAZN 1» (docs/iptv.md §16.16). */
+  const numbers = [...stripQualityMarks(bare).matchAll(DORSAL_NUMBER_RE)]
+    .filter((match) => !isQualityNumber(match[2] as string))
+    .map((match) => `${(match[1] ?? '').toUpperCase()}${match[2] as string}`);
+  const last = numbers.at(-1);
   if (last) return last.slice(0, 3);
   const letter = name
     .normalize('NFD')
@@ -50,8 +54,14 @@ export function channelAbbrev(name: string): string {
   if (words.length === 0) return '';
   const first = words[0] ?? '';
   // Un artículo solo («La 1») se lleva la siguiente palabra.
-  const abbrev = /^(la|el|los|las)$/i.test(first) && words[1] ? `${first} ${words[1]}` : first;
-  return abbrev.slice(0, 6).toUpperCase();
+  if (/^(la|el|los|las)$/i.test(first) && words[1])
+    return `${first} ${words[1]}`.slice(0, 6).toUpperCase();
+  // Una sigla entre la marca y el número también: «DAZN ACB 1» no es «DAZN 1» (docs/iptv.md §16.16).
+  const second = words[1] ?? '';
+  if (words.length >= 3 && /^\d+$/.test(words.at(-1) ?? '') && /^\p{Lu}{2,4}$/u.test(second)) {
+    return `${first.slice(0, 6)} ${second}`.toUpperCase();
+  }
+  return first.slice(0, 6).toUpperCase();
 }
 
 export interface ChannelMarkProps {

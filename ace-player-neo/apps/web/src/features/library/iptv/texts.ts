@@ -72,6 +72,11 @@ export function seeChannelsText(n: number): string {
 export const nothingInIptv = (q: string): string => `Nada en tu IPTV con «${q}».`;
 export const nothingInCategory = (category: string, q: string): string =>
   `Nada en ${category} con «${q}».`;
+/** Con texto y filtros: «Nada en tu IPTV con «dazn» y estos filtros.» */
+export const nothingInIptvFiltered = (q: string): string =>
+  `Nada en tu IPTV con «${q}» y estos filtros.`;
+export const nothingInCategoryFiltered = (category: string, q: string): string =>
+  `Nada en ${category} con «${q}» y estos filtros.`;
 export const searchBothText = (q: string): string => `Buscar «${q}» en tu IPTV y el motor`;
 /** Nombre accesible de un valor de faceta: «Fútbol, 1204 canales». */
 export const facetValueLabel = (label: string, count: number): string =>

@@ -63,7 +63,9 @@ import {
   IPTV_TAB_TEXT,
   iptvLiveText,
   nothingInCategory,
+  nothingInCategoryFiltered,
   nothingInIptv,
+  nothingInIptvFiltered,
   rootHeaderText,
   searchBothText,
   seeChannelsText,
@@ -256,28 +258,54 @@ export function IptvTab({ text, active, actions, onScreen, onAir, onCategoryName
         />
       );
     }
+    /* Con filtros, una categoría que casa con el texto pero se queda sin canales no se ofrece («0 canales»). */
     const matching: IptvCategory[] =
-      screen === 'search' ? (first.categories ?? []).slice(0, IPTV_BROWSE.categoriesMatchMax) : [];
+      screen === 'search'
+        ? (first.categories ?? [])
+            .filter((category) => !hasFilters(filters) || category.count > 0)
+            .slice(0, IPTV_BROWSE.categoriesMatchMax)
+        : [];
     if (total === 0 && matching.length === 0) {
+      /* Con filtros, lo primero es quitarlos (también en el móvil, sin abrir la hoja). */
+      const filtered = hasFilters(filters);
+      const clearButton = filtered ? (
+        <Button variant="primary" icon="x" onClick={clearFilters}>
+          {IPTV_TAB_TEXT.clearFilters}
+        </Button>
+      ) : null;
       if (q && screen === 'category')
         return (
           <EmptyState
-            title={nothingInCategory(openName ?? '', q)}
+            title={
+              filtered
+                ? nothingInCategoryFiltered(openName ?? '', q)
+                : nothingInCategory(openName ?? '', q)
+            }
             actions={
-              <Button variant="primary" icon="buscar" onClick={back}>
-                {IPTV_TAB_TEXT.searchAllIptv}
-              </Button>
+              <>
+                {clearButton}
+                <Button variant={filtered ? 'quiet' : 'primary'} icon="buscar" onClick={back}>
+                  {IPTV_TAB_TEXT.searchAllIptv}
+                </Button>
+              </>
             }
           />
         );
       if (q)
         return (
           <EmptyState
-            title={nothingInIptv(q)}
+            title={filtered ? nothingInIptvFiltered(q) : nothingInIptv(q)}
             actions={
-              <Button variant="primary" icon="buscar" onClick={() => goToEngineSearch(navigate, q)}>
-                {searchBothText(q)}
-              </Button>
+              <>
+                {clearButton}
+                <Button
+                  variant={filtered ? 'quiet' : 'primary'}
+                  icon="buscar"
+                  onClick={() => goToEngineSearch(navigate, q)}
+                >
+                  {searchBothText(q)}
+                </Button>
+              </>
             }
           />
         );

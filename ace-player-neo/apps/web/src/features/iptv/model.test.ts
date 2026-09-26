@@ -194,6 +194,13 @@ describe('formulario', () => {
     expect(iptvErrorMessage(twice('dns_failed'))).toBe(
       `${errorMessage('dns_failed')}${IPTV_SAVE_RETRIED_HINT}`,
     );
+    /* Una M3U que devuelve HTML o nada dos veces también (el servidor la reintenta, §16.8). */
+    expect(iptvErrorMessage(twice('iptv_bad_list'))).toBe(
+      `${errorMessage('iptv_bad_list')}${IPTV_SAVE_RETRIED_HINT}`,
+    );
+    expect(iptvErrorMessage(twice('redirect_loop'))).toBe(
+      `${errorMessage('redirect_loop')}${IPTV_SAVE_RETRIED_HINT}`,
+    );
     expect(iptvErrorMessage(twice('iptv_auth_failed'))).toBe(errorMessage('iptv_auth_failed'));
     expect(iptvErrorMessage(new ApiError({ code: 'iptv_unreachable', status: 502 }))).toBe(
       errorMessage('iptv_unreachable'),

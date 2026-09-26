@@ -56,11 +56,17 @@ export const IPTV_DEMO_MESSAGE =
  * pasajero (docs/iptv.md §16.8): el panel no respondió bien ni a la segunda.
  */
 export const IPTV_SAVE_RETRIED_HINT = ' Lo he intentado dos veces: prueba otra vez en un momento.';
-/** Los fallos pasajeros con los que el servidor reintenta la prueba rápida. */
+/**
+ * Los fallos pasajeros con los que el servidor reintenta la prueba rápida (los de `isTransientSaveFailure`):
+ * solo con ellos manda `attempts: 2`. También una M3U que devuelve HTML o nada dos veces.
+ */
 const RETRIED_HINT_CODES: ReadonlySet<string> = new Set([
   'iptv_unreachable',
   'iptv_busy',
+  'iptv_bad_list',
   'dns_failed',
+  'redirect_limit',
+  'redirect_loop',
 ]);
 export const IPTV_FALLBACK_ERROR = 'No se pudo guardar la IPTV. Inténtalo de nuevo.';
 export const IPTV_URL_USERINFO =

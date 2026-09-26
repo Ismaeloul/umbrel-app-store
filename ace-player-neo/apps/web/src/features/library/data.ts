@@ -15,7 +15,7 @@
 import type { Item, LibraryCollection, LibraryView } from '@ace/shared';
 import type { QueryClient } from '@tanstack/react-query';
 import { api, describeFailure, routeKey } from '../../api/index.ts';
-import { notify, toast } from '../../notices/index.ts';
+import { dismissToast, notify, toast } from '../../notices/index.ts';
 import { createStore, useStore } from '../../lib/store.ts';
 import { rowKey, UNDO_MS } from './model.ts';
 
@@ -29,6 +29,8 @@ interface PendingRemoval {
   sourceId?: string;
   client: QueryClient;
   timer: ReturnType<typeof setTimeout> | null;
+  /** El aviso con «Deshacer», para quitarlo si la baja se anula por otro lado. */
+  toastId?: number;
 }
 
 /** Filas que se han quitado y esperan los 6 s del deshacer. */
@@ -129,12 +131,35 @@ export function removeWithUndo({ client, kind, collection, item, sourceId }: Rem
   entry.timer = setTimeout(() => void commit(key), UNDO_MS);
   pendingStore.set((map) => new Map(map).set(key, entry));
   const title = item.title || 'Canal';
-  toast(kind === 'unfavorite' ? `«${title}» quitado de favoritos` : `«${title}» eliminado`, {
-    tone: 'warn',
-    icon: kind === 'unfavorite' ? 'star' : 'trash',
-    ms: UNDO_MS,
-    action: { label: 'Deshacer', onAction: () => void dropPending(key) },
-  });
+  entry.toastId = toast(
+    kind === 'unfavorite' ? `«${title}» quitado de favoritos` : `«${title}» eliminado`,
+    {
+      tone: 'warn',
+      icon: kind === 'unfavorite' ? 'star' : 'trash',
+      ms: UNDO_MS,
+      action: { label: 'Deshacer', onAction: () => void dropPending(key) },
+    },
+  );
+}
+
+/** ¿Está esta fila quitada y esperando los 6 s del deshacer? */
+export function isPendingRemoval(
+  pending: ReadonlyMap<string, unknown>,
+  collection: LibraryCollection,
+  id: string,
+): boolean {
+  return pending.has(rowKey(collection, id));
+}
+
+/**
+ * Anula una baja pendiente sin esperar al «Deshacer» del aviso (el segundo toque de la estrella) y quita el
+ * aviso. Devuelve si había una.
+ */
+export function cancelRemoval(collection: LibraryCollection, id: string): boolean {
+  const entry = dropPending(rowKey(collection, id));
+  if (!entry) return false;
+  if (entry.toastId !== undefined) dismissToast(entry.toastId);
+  return true;
 }
 
 /** Solo para los tests: manda ya las bajas pendientes. */
@@ -204,10 +229,11 @@ export function defaultFavoriteTitle(hash: string): string {
 }
 
 export async function saveFavorite(client: QueryClient, input: FavoriteInput): Promise<boolean> {
-  const title = input.title.replace(/\s+/g, ' ').trim() || defaultFavoriteTitle(input.id);
+  const alias = input.alias?.replace(/\s+/g, ' ').trim();
+  // Vacío: el nombre en tu IPTV si lo es (su id no dice nada), o «Canal <hash>».
+  const title = input.title.replace(/\s+/g, ' ').trim() || alias || defaultFavoriteTitle(input.id);
   const previous = libraryData(client);
   const fromWebSync = previous?.web.some((w) => w.id === input.id) ?? false;
-  const alias = input.alias?.replace(/\s+/g, ' ').trim();
   const item: Item = {
     id: input.id,
     title,

@@ -37,6 +37,13 @@ describe('channelDorsal', () => {
     expect(channelDorsal('DAZN 1 1280×720')).toBe('1');
     expect(channelDorsal('Canal 24 Horas')).toBe('24');
   });
+
+  it('una letra suelta pegada al número va con él: «DAZN F1» no es «DAZN 1» (§16.16)', () => {
+    expect(channelDorsal('DAZN F1')).toBe('F1');
+    expect(channelDorsal('SKY SPORTS F1 FHD')).toBe('F1');
+    expect(channelDorsal('M4 SPORT')).toBe('M4');
+    expect(channelDorsal('DAZN ACB 1')).toBe('1');
+  });
 });
 
 describe('channelAbbrev', () => {
@@ -46,6 +53,14 @@ describe('channelAbbrev', () => {
     expect(channelAbbrev('La 1 HD')).toBe('LA 1');
     expect(channelAbbrev('Eurosport 1')).toBe('EUROSP');
     expect(channelAbbrev('')).toBe('');
+  });
+
+  it('una sigla entre la marca y el número va en la sigla: «DAZN ACB 1» (§16.16)', () => {
+    expect(channelAbbrev('DAZN ACB 1')).toBe('DAZN ACB');
+    expect(channelAbbrev('DAZN 1')).toBe('DAZN');
+    expect(channelAbbrev('DAZN F1')).toBe('DAZN');
+    expect(channelAbbrev('MOVISTAR PLUS +2')).toBe('MOVIST');
+    expect(channelAbbrev('LA LIGA 1')).toBe('LA LIG');
   });
 });
 

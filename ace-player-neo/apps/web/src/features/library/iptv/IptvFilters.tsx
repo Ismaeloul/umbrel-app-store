@@ -219,6 +219,12 @@ export function IptvFilterRow({
           </span>
         </Chip>
       ))}
+      {/* Con uno, su «×» basta; con más, quitarlos todos sin abrir la hoja. */}
+      {chosen.length > 1 ? (
+        <Chip icon="x" onClick={() => onChange(NO_FILTERS)} className="iptv-chip iptv-chip--clear">
+          {IPTV_TAB_TEXT.clearFilters}
+        </Chip>
+      ) : null}
       {shortcuts.map((value) => (
         <FacetChip
           key={value.value}
