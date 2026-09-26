@@ -504,7 +504,6 @@ Sources/Pantallas/
 │  ├─ PanelMensajeVideo.swift           stageMessage, spinner, rótulo de demo
 │  ├─ CorteNegro.swift                  560 ms (opacidad 1 hasta el 55 %, luego ease-out) con keyframes
 │  ├─ VistaPreviaVideo.swift            tesela + título + cápsula de fase (vista previa del menú del vídeo)
-│  ├─ VarianteEscenario.swift           reglas por ancho del marco (369/419/479/579) y «compacto»
 │  ├─ CabeceraPartido.swift             kicker + FilaEquiposPartido (destino del vuelo)
 │  ├─ CabeceraCanal.swift               a4 §16
 │  ├─ PestanasTeatro.swift              «Fuentes n · Partido · Datos técnicos», fijadas bajo el vídeo
@@ -514,7 +513,7 @@ Sources/Pantallas/
 │  ├─ InspectorFuente.swift             acciones de la fuente activa
 │  ├─ OtrasSenales.swift                «Otras fuentes» (calcado de la web, §0.0 punto 1) (canal suelto, añadido de Isma)
 │  ├─ PanelPartido.swift                marcador grande, competición, dónde se emite (a4 §14)
-│  ├─ PanelDatosTecnicos.swift          pestaña y panel sobre el vídeo (a4 §15)
+│  ├─ PanelDatosTecnicos.swift          pestaña «Datos técnicos» (a4 §15; nunca sobre el vídeo, ronda 2)
 │  ├─ FichaCanal.swift                  pestaña «Canal» (a4 §16)
 │  ├─ EstadosPartido.swift              esqueleto, «ya no está», error (a4 §17)
 │  ├─ ContenidoReportar.swift           hoja «Reportar fuente» (a4 §13.2)
@@ -585,7 +584,7 @@ Tests/AceNeoTests/
 │                                            SesionFuentesTests, PresentacionReproductorTests
 ├─ Palco/                               P · TokensTests, FuentesTests, IconosTests, NumTests, EstiloTextoTests
 ├─ Armazon/                             M4 · NavegadorTests, CentroHojasTests, AvisosTests, EstadoVentanaTests, RaizTests
-├─ Teatro/                              M6 · VarianteEscenarioTests
+├─ Teatro/                              M6 · PlegadasTests (Puros/Teatro: VarianteEscenarioTests, EstadoEscenarioTests, …)
 └─ Ajustes/                             M7 · ModeloEmparejarTests, ModeloEmparejarDispositivoTests, QRPalcoTests
 Tests/AceNeoUITests/
 ├─ Ayudas/AyudasUI.swift                [M] I0→M4 · elementoUI, conTextoUI, arrastrar, sePinta; tocarPestana por IDUI
@@ -2860,10 +2859,15 @@ del reloj (minuto, marcadores, «hace N min») se porta como código en `DemoNuc
     muelle estándar; el contenido de la tarjeta se funde (`1 − min(1, 2p)`); los escudos vuelan de `.escudos` a
     `.filaEquipos` en `CapaVuelo` con `plusLighter`; la pestaña de debajo se funde en 340 ms.
   - *Vuelta* (la de la web): el teatro se funde, la pestaña entra desde −16, los escudos vuelven a la tarjeta si sigue en
-    pantalla (si no, se funden) y, si algo suena, el vídeo vuela del escenario al mini (hueco `.vuelo`, z 45).
+    pantalla (si no, se funden) y, si algo suena, el vídeo vuela del escenario al mini. Ronda 2 (Isma, 26-sep): el que
+    vuela es el propio escenario, que escala y baja hasta el vídeo del mini mientras la página se funde
+    (`TransicionTeatro.alMini`, `VueloAlMini.swift`); el mini aparece donde aterriza, sin entrada. Arrastrar el vídeo
+    hacia abajo hace lo mismo con el dedo (como YouTube): háptica `rigida` al cruzar 56 pt; al soltar pasado vuela con el
+    muelle y, si no, vuelve. El hueco `.vuelo` y `VueloVideo` quedan sin uso.
   - *Borde*: `offset(x:)` 1:1 con el dedo; al soltar, `Volver.decide`; si no, vuelve con `Movimiento.soltar(velocidad:)`.
   - *Movimiento reducido*: fundidos de 120 ms, sin zoom ni vuelos.
-  - *Plan B* (si el vuelo del vídeo da saltos en el iPhone): el vídeo aparece en el mini al acabar la vuelta, sin volar.
+  - *Plan B* (si el vuelo del vídeo da saltos en el iPhone): el vídeo aparece en el mini al acabar la vuelta, sin volar
+    (ya no hace falta: se escala el escenario, la `AVPlayerLayer` no cambia de hueco a mitad de vuelo).
 - **Pruebas unitarias**: `DestinoTests` (ida y vuelta de `vista` para todos los casos), `MaquetacionTests` (390×844,
   375×667, 375×812, 402×874, 844×390, 667×375 con sus zonas seguras: barra, mini, toasts, velo, rellenos, inmersivo),
   `GeometriaVueloTests`, `MigracionClavesTests`, `NavegadorTests` (tocar la activa sube; atrás sin capa va a la agenda),
@@ -2895,23 +2899,29 @@ del reloj (minuto, marcadores, «hace N min») se porta como código en `DemoNuc
 
 ### 3.7 M6 · Teatro y mini
 
-- **Carpetas**: `Pantallas/{Partido,Mini}/**`, `Tests/AceNeoTests/Teatro/**`,
+- **Carpetas**: `Pantallas/{Partido,Mini}/**`, `Core/Reglas/Teatro/**` (reglas puras: EstadoEscenario, DatosTeatro,
+  OtrasFuentes, VarianteEscenario; ronda 2), `Tests/AceNeoTests/{Teatro,Puros/Teatro}/**`,
   `Tests/AceNeoUITests/Flujos/Flujo{Teatro,Mini}UITests.swift`.
 - **Especificación**: a4 entero; a2 §7 (mini y barra), §16.5 y §16.6.4 (inmersivo); a7 §8.2-§8.5.
 - **Entra**: `SesionFuentes`, `Reproductor`, `PresentacionReproductor`, `SuperficieVideo`/`VistaVideo`, `DatosApp`,
   `Navegador`, `CentroHojas`, `Avisos`, `TransicionTeatro` (solo `.piezaVuelo`), Palco.
 - **Sale**: `TeatroView` (partido y canal suelto), `EscenarioVideo` (vertical e inmersivo), controles del vídeo, cápsulas,
   pestañas Fuentes · Partido · Datos técnicos, carteles de fuente con menú contextual, «Otras fuentes» (calcado de la web, §0.0 punto 1),
+  «Datos técnicos» solo en su pestaña, nunca sobre la imagen (tampoco en pantalla completa; Isma, 26-sep), la pestaña elegida
+  en `MemoriaPestanasTeatro` (`@SceneStorage` no guarda con la raíz en un UIHostingController), y en el cartel de fuente el
+  proveedor dentro de la tesela y debajo el nombre del canal sin él (`NombreCartel`, Isma 26-sep),
   `ContenidoReportar`, `ContenidoEncontrarCanal`, `MiniReproductor`.
 - **Gestos (decisión 3)**, todos en `CapaToquesVideo` salvo el mini:
   - toque: controles; **doble toque**: pantalla completa (el toque simple exige que falle el doble);
-  - arrastrar abajo el vídeo: minimizar (1:1, `Deslizamiento.clasificar`), solo en vertical y fuera del inmersivo;
+  - arrastrar abajo el vídeo: minimizar (`Deslizamiento.clasificar`), solo en vertical y fuera del inmersivo; el vídeo
+    sigue al dedo y se encoge hacia el mini (`TransicionTeatro.alMini`, §3.5), `rigida` al cruzar el umbral;
   - deslizar de lado el vídeo: fuente anterior/siguiente (`SesionFuentes.paso`), con bloqueo de eje de 8 pt;
   - mini, como la web (MiniPlayer.tsx, `GestosMini` de M2): arriba abre, a un lado descarta (detiene con
     «Reproducción detenida» y «Deshacer»; umbral 72, `fuerte` al cruzar) y abajo vuelve a su sitio (la barra).
     Corregido en la ronda 2: antes decía «abajo descarta, lados cambian de fuente», que no es lo que hace la web.
-- **Pruebas unitarias**: `VarianteEscenarioTests` (369/419/479/579 y compacto).
-- **UITests**: `FlujoTeatroUITests` (abrir partido demo, elegir fuente, reportar, datos técnicos, doble toque a
+- **Pruebas unitarias**: `VarianteEscenarioTests` (369/419/479/579 y compacto), `EstadoEscenarioTests`, `DatosTeatroTests`,
+  `OtrasFuentesTests` (en Linux) y `NombreCartelTests` (M3, en Linux).
+- **UITests**: `FlujoTeatroUITests` (abrir partido demo, elegir fuente, reportar, tocar cada pestaña cambia el panel, datos técnicos, doble toque a
   pantalla completa y vuelta, deslizar de lado cambia de fuente, borde izquierdo sale con el mini sonando),
   `FlujoMiniUITests` (tocar abre; arrastrar el vídeo abajo minimiza; deslizar a un lado descarta con «Deshacer»;
   pausa y detener).
