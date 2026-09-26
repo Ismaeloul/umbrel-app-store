@@ -21,8 +21,12 @@ const SERVIDOR = 'http://iptv.ace-e2e.example:8080';
 const USUARIO = 'usuario-e2e';
 const CLAVE = 'Cl4ve-Secreta-E2E';
 const ANTENA3 = FUENTES.generalistas[0];
-/** Títulos que estos recorridos meten en Favoritos y Recientes (se limpian antes de cada uno). */
-const NUESTROS = new Set(['Telecinco', 'La 1', 'Antena 3', 'Antena 3 HD']);
+/**
+ * Canales de estos recorridos en Favoritos y Recientes (se quitan antes de cada
+ * uno): también los que dejan otros recorridos («La 1 HD --> ELCANO» del
+ * partido de La 1), que harían salir el canal en «En tu biblioteca».
+ */
+const NUESTROS = /^(?:telecinco|la 1\b|antena 3)/i;
 
 function hayFfmpeg(): boolean {
   try {
@@ -85,11 +89,11 @@ async function mutar(body: unknown): Promise<void> {
 async function limpiarBiblioteca(): Promise<void> {
   const vista = await biblioteca();
   for (const item of vista.history) {
-    if (NUESTROS.has(item.title) || item.category === 'IPTV')
+    if (NUESTROS.test(item.title) || item.category === 'IPTV')
       await mutar({ action: 'delete', collection: 'history', id: item.id });
   }
   for (const item of vista.favorites) {
-    if (NUESTROS.has(item.title) || item.category === 'IPTV')
+    if (NUESTROS.test(item.title) || item.category === 'IPTV')
       await mutar({ action: 'delete', collection: 'favorites', id: item.id });
   }
 }
