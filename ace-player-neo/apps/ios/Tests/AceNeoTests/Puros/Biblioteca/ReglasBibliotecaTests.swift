@@ -89,7 +89,7 @@ private func marcador(_ estado: String, reloj: String = "72'", detalle: String =
         #expect(ReglasBiblioteca.porcentajeDisponible(nil) == nil)
     }
 
-    @Test func canalCaidoPieYConocido() {
+    @Test func canalCaido() {
         let viejo = item("Viejo", .fav, id: String(repeating: "a", count: 40), lista: true)
         #expect(ReglasBiblioteca.caido(viejo, idsLista: ["otro"]))
         #expect(!ReglasBiblioteca.caido(viejo, idsLista: [viejo.id]))
@@ -97,7 +97,11 @@ private func marcador(_ estado: String, reloj: String = "72'", detalle: String =
         noSincronizado.fromWebSync = false
         #expect(!ReglasBiblioteca.caido(noSincronizado, idsLista: ["otro"]))
         #expect(!ReglasBiblioteca.caido(viejo, idsLista: []))
+    }
 
+    /// Partido de canalCaido: con todo junto pasaba de los 400 ms de tipar (CI 36226729698).
+    @Test func pieConocidoYFavoritoNuevo() {
+        let viejo = item("Viejo", .fav, id: String(repeating: "a", count: 40), lista: true)
         let reciente = item("Canal de prueba", .recent, id: String(repeating: "b", count: 40))
         let biblioteca = LibraryView(
             web: [item("L1"), item("L2"), item("L3")], webSyncedAt: "2026-09-23T10:00:00.000Z", webSources: [],
