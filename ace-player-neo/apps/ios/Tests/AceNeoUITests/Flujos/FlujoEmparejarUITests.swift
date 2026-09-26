@@ -55,6 +55,32 @@ final class FlujoEmparejarUITests: XCTestCase {
         captura(app, "emparejar-hecho")
     }
 
+    /// a2 §22.7: al girar se conserva todo (campos y estado); la sesión de la cámara (CamaraQR) no se ve en el
+    /// simulador, que no tiene cámara.
+    @MainActor
+    func testAlGirarSeConservanLosCampos() throws {
+        let app = arrancarSinEmparejar()
+        defer { XCUIDevice.shared.orientation = .portrait }
+        elementoUI(app, IDUI.botonEscribirCodigo).tap()
+        let campoCodigo = elementoUI(app, IDUI.campoCodigo)
+        XCTAssertTrue(campoCodigo.waitForExistence(timeout: 10), "No hay campo del código")
+        campoCodigo.tap()
+        campoCodigo.typeText("482913")
+        let casa = elementoUI(app, IDUI.campoLan).textFields.firstMatch
+        XCTAssertTrue(casa.waitForExistence(timeout: 5), "No hay campo de la dirección de casa")
+        if !(casa.value(forKey: "hasKeyboardFocus") as? Bool ?? false) { casa.tap() }
+        casa.typeText("http://umbrel.local:7792")
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let girada = elementoUI(app, IDUI.campoLan).textFields.firstMatch
+        XCTAssertTrue(girada.waitForExistence(timeout: 5), "En horizontal no está el campo de casa")
+        XCTAssertEqual(girada.value as? String, "http://umbrel.local:7792", "Al girar se pierde la dirección")
+        XCTAssertTrue(elementoUI(app, IDUI.botonEmparejar).isEnabled, "Al girar se pierde el código")
+        captura(app, "emparejar-844x390")
+        XCUIDevice.shared.orientation = .portrait
+        XCTAssertTrue(elementoUI(app, IDUI.botonEmparejar).waitForExistence(timeout: 5))
+        XCTAssertTrue(elementoUI(app, IDUI.botonEmparejar).isEnabled, "Al volver a vertical se pierde el código")
+    }
+
     @MainActor
     func testCodigoMaloDaElErrorDeLaWeb() throws {
         let app = arrancarSinEmparejar()
