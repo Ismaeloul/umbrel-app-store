@@ -2,6 +2,7 @@
   display: grid;
   justify-items: center;
   gap: var(--s-3);
+  min-width: 0;
   padding: var(--s-8) var(--s-5);
   text-align: center;
 }
@@ -52,4 +53,10 @@
   justify-content: center;
   gap: var(--s-2);
   margin-top: var(--s-2);
+}
+/* Un botón con texto largo («Buscar «…» en tu IPTV y en el motor») parte en
+   dos renglones en vez de ensanchar la página en el móvil. */
+.empty__actions > .btn {
+  max-width: 100%;
+  white-space: normal;
 }

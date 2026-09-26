@@ -37,7 +37,7 @@ texto o quedó fuera:
   web; medir el arranque con un proveedor real; la renovación del token de las listas M3U y la vuelta a la guía corta,
   sin probar contra un proveedor real.
 
-**D10 resuelto (26-sep-2026), pendiente de implementar:** la IPTV entra en el buscador junto con AceStream. El anexo
+**D10 resuelto (26-sep-2026) e implementado el mismo día en `rediseno/iptv`:** la IPTV entra en el buscador junto con AceStream. El anexo
 §14 lo diseña y **manda** sobre lo que digan de favoritos, recientes y buscador §4.4, §4.6, §8.1 y §8.4.
 
 Las rutas de ficheros son relativas a `ace-player-neo/` salvo que se diga otra cosa. Los textos entre «comillas» son
@@ -2008,7 +2008,7 @@ parte, va con su motivo.
   dos, o sea que sea automático cuando seleccione un partido pero si quiero buscar otro canal que sea automático». Se
   descarta el grupo discreto aparcado (5 como mucho, solo si AceStream daba menos de 3): la IPTV y AceStream salen
   juntas en Buscar y en el filtro de Canales, un canal por fila, y un canal solo de la IPTV se reproduce, se guarda en
-  Favoritos y tiene respaldo de AceStream buscado de fondo. Diseño en §14, **pendiente de implementar**.
+  Favoritos y tiene respaldo de AceStream buscado de fondo. Diseño en §14, **implementado** (26-sep).
 
 ### 13.4 Descartado
 
@@ -2026,7 +2026,23 @@ parte, va con su motivo.
 ## 14. Anexo: Buscador: IPTV y AceStream juntos (D10 resuelto)
 
 Lo pidió Isma el 26-sep, al responder a D10: «quiero que en el buscador salgan los dos, o sea que sea automático cuando
-seleccione un partido pero si quiero buscar otro canal que sea automático, ¿sabes?». **Pendiente de implementar.**
+seleccione un partido pero si quiero buscar otro canal que sea automático, ¿sabes?». **Implementado (26-sep-2026)**
+en `rediseno/iptv`: contrato, servidor y web, con unitarias, integración (casos 11 a 14) y E2E
+(`apps/web/e2e/iptv-buscador.spec.ts`, casos 8 a 13). Lo que se desvía del texto:
+
+- La búsqueda en el catálogo usa un índice propio con **todas** las palabras de cada clave (también «la» o «1», que
+  la preselección de §3.4 no guarda) y, con 3 letras o más, una palabra también casa dentro de otra («liga» en
+  «laliga»): así «liga m+» encuentra «M+ LaLiga TV» y «la 1» encuentra «La 1».
+- `sameChannel` puntúa además el otro nombre limpio como un nombre IPTV (si no dice otro país): «DAZN LA LIGA 1080»
+  es «DAZN LaLiga». La regla del « 1» final vale en los dos sentidos.
+- Renombrar un favorito guardado desde el buscador (categoría «IPTV») guarda el nombre de antes como `alias` si no lo
+  tenía: al guardarlo, un alias igual al título no se guarda (`normalizeItem`), y el re-emparejado lo necesita.
+- El filtro de Canales enseña «Ver todo en Buscar» también si el servidor tiene más canales que los 50 devueltos.
+- La demo anota con `iptv` todos los resultados del motor que son un canal de la «IPTV de ejemplo», no solo «DAZN
+  LaLiga», para que se vea que un canal sale una vez.
+- Si todo lo que da el motor ya sale arriba (biblioteca o «En tu IPTV»), la sección del motor no se pinta.
+- Un id IPTV que no está en tu IPTV y sí en AceStream, sin comprobador, arranca la mejor AceStream como un partido
+  sin comprobador.
 Este anexo manda sobre lo que digan §4.4, §4.6, §8.1 y §8.4 de favoritos, recientes y buscador.
 
 ### 14.1 En pocas palabras

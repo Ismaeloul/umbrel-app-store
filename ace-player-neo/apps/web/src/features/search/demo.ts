@@ -5,9 +5,10 @@
    Solo se registra una vez, al cargar el trozo del buscador.
 
    IPTV (docs/iptv.md §14.8): `iptvChannels` contesta con los canales de la
-   «IPTV de ejemplo» de demo-5 («Casa») y los resultados del motor de «DAZN
-   LaLiga» llevan su id (`iptv`), así se ven las tres secciones y el
-   distintivo. Los ids son los mismos que da la resolución de la demo. */
+   «IPTV de ejemplo» de demo-5 («Casa») y los resultados del motor que son
+   uno de esos canales («DAZN LaLiga», «M+ LaLiga TV»…) llevan su id
+   (`iptv`), así se ve cómo un canal sale una sola vez. Los ids son los mismos
+   que da la resolución de la demo. */
 
 import type { IptvChannelsResponse, SearchResponse } from '@ace/shared';
 import { registerDemoHandler } from '../../api/index.ts';
@@ -68,7 +69,7 @@ export function demoSearch(query: string): SearchResponse {
       availability,
       bitrate: null,
       ih: true as const,
-      ...(title === 'DAZN LaLiga' ? { iptv: demoIptvId(title) } : {}),
+      ...(DEMO_IPTV_SEARCH.some(([name]) => name === title) ? { iptv: demoIptvId(title) } : {}),
     }));
   return { query: q, results };
 }
