@@ -80,15 +80,8 @@ enum PresentacionFuentes {
         return limpio.trimmingCharacters(in: .whitespaces)
     }
 
-    /// «1080p», «720p», «SD» y «HEVC» con lo que midió el comprobador (`qualityLabel`, umbrales 3800 y 1700).
-    static func calidad(_ sonda: SondaFuente?) -> String? {
-        guard let sonda else { return nil }
-        let kbps = sonda.kbps ?? 0
-        let hevc = sonda.codec.range(of: #"hevc|h\.?265|hvc1|hev1"#, options: [.regularExpression, .caseInsensitive]) != nil
-        let definicion: String? = kbps >= 3800 ? "1080p" : kbps >= 1700 ? "720p" : kbps > 0 ? "SD" : nil
-        let partes = [definicion, hevc ? "HEVC" : nil].compactMap { $0 }
-        return partes.isEmpty ? nil : partes.joined(separator: " · ")
-    }
+    /// «1080p», «720p», «SD» y «HEVC» con lo que midió el comprobador (`qualityLabel`): la regla de M3.
+    static func calidad(_ sonda: SondaFuente?) -> String? { ReglasFuentes.calidad(sonda) }
 
     /// Las filas de la sesión (`useSourcesView`).
     static func filas(

@@ -72,10 +72,10 @@ struct PresentacionFuentesTests {
 
     @Test func calidadComoLaWeb() {
         #expect(PresentacionFuentes.calidad(nil) == nil)
-        #expect(PresentacionFuentes.calidad(SondaFuente(estado: .working, kbps: 4000)) == "1080p")
-        #expect(PresentacionFuentes.calidad(SondaFuente(estado: .working, kbps: 1700)) == "720p")
-        #expect(PresentacionFuentes.calidad(SondaFuente(estado: .working, kbps: 900)) == "SD")
-        #expect(PresentacionFuentes.calidad(SondaFuente(estado: .working, codec: "hevc", kbps: 5000)) == "1080p · HEVC")
+        #expect(PresentacionFuentes.calidad(SondaFuente(estado: .working, rateKbps: 4000)) == "1080p")
+        #expect(PresentacionFuentes.calidad(SondaFuente(estado: .working, rateKbps: 1700)) == "720p")
+        #expect(PresentacionFuentes.calidad(SondaFuente(estado: .working, rateKbps: 900)) == "SD")
+        #expect(PresentacionFuentes.calidad(SondaFuente(estado: .working, rateKbps: 5000, codec: "hevc")) == "1080p · HEVC")
         #expect(PresentacionFuentes.calidad(SondaFuente(estado: .working)) == nil)
     }
 

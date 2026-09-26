@@ -95,7 +95,7 @@ struct ModeloEmparejarDispositivoTests {
         registro.fallo = .red(.timedOut)
         let m = ModeloEmparejarDispositivo(servicios: registro.servicios())
         m.crear()
-        #expect(await SoporteAjustes.esperar { m.fase == .fallo("El servidor ha tardado demasiado en responder.") })
+        #expect(await SoporteAjustes.esperar { m.fase == .fallo("El servidor tarda demasiado en responder. Vuelve a intentarlo en un momento.") })
         #expect(registro.cerrados.isEmpty)
         m.cancelar()
         #expect(m.fase == .reposo)

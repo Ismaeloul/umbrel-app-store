@@ -54,7 +54,7 @@ struct ModeloListasTests {
         #expect(ModeloListas.mensajeError(servidor("demo_unsupported", 409)) == ModeloListas.mensajeDemo)
         #expect(ModeloListas.mensajeError(servidor("internal_error", 500)) == ModeloListas.errorGenerico)
         #expect(ModeloListas.mensajeError(nil) == ModeloListas.errorGenerico)
-        #expect(ModeloListas.mensajeError(.red(.timedOut)) == "El servidor ha tardado demasiado en responder.")
+        #expect(ModeloListas.mensajeError(.red(.timedOut)) == "El servidor tarda demasiado en responder. Vuelve a intentarlo en un momento.")
     }
 
     @Test func pistaDeLaRedLocal() {
