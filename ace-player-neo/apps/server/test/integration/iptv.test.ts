@@ -432,7 +432,8 @@ describe('pestaña IPTV en Canales (docs/iptv.md §16.9)', () => {
     expect(antena.channels.map((channel) => channel.title)).toEqual([
       'Antena 3',
       'ANTENA 3 INTERNACIONAL',
-      'DIRECTO ANTENA 3 ᴿᴬᵂ',
+      /* ᴿᴬᵂ sale del nombre (es una reserva del mismo canal, §18). */
+      'DIRECTO ANTENA 3',
     ]);
     expect(r.provider.peticiones()).toEqual([]);
   }, 120_000);

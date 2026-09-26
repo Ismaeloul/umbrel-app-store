@@ -256,7 +256,8 @@ export function categorySearchWords(group: string): string[] {
 
 const INDEXES = new WeakMap<Catalog, SearchIndex>();
 
-function significant(words: readonly string[]): string[] {
+/** Las palabras que hay que encontrar: sin «tv», «canal» ni «channel» si hay otras (también la pestaña IPTV, §16.3). */
+export function significant(words: readonly string[]): string[] {
   const out = words.filter((word) => !OPTIONAL_WORDS.has(word));
   return out.length ? out : [...words];
 }

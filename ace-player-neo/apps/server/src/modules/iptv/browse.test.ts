@@ -192,6 +192,32 @@ describe('texto (§16.3)', () => {
     }
   });
 
+  it('con la grafía de la lista real (§18): «m+ la liga», «mov laliga» o «movistar plus» casan como en el buscador', () => {
+    const catalog = catalogOf([
+      raw(1, 'M+ LALIGA HD', 'ES | DEPORTES'),
+      raw(2, 'MOVISTAR LALIGA 2', 'ES | DEPORTES'),
+      raw(3, 'MOVISTAR PLUS +2', 'ES | MOVISTAR'),
+      raw(4, 'LALIGA+ PPV 1', 'ES | DEPORTES'),
+      raw(5, 'LA LIGA TV BAR', 'ES | DEPORTES'),
+      raw(6, 'MOVISTAR 2022 1', 'ES | MOVISTAR'),
+      raw(7, 'LA SEXTA', 'ES | GENERALISTAS'),
+    ]);
+    const index = buildBrowseIndex(catalog);
+    for (const q of [
+      'm+ la liga',
+      'mov laliga',
+      'm. laliga',
+      'movistar plus',
+      'la sexta',
+      'laliga+',
+    ]) {
+      const fromSearch = new Set(searchCatalog(catalog, q, 50).groups.map((group) => group.key));
+      const fromBrowse = new Set(query(index, { q, limit: 100 }).rows.map((row) => index.key[row]));
+      expect(fromSearch.size, q).toBeGreaterThan(0);
+      for (const key of fromSearch) expect(fromBrowse.has(key), `${q}: ${key}`).toBe(true);
+    }
+  });
+
   it('en la raíz con texto, las categorías con el texto en el nombre (5 como mucho), contadas sin el texto', () => {
     const channels = Array.from({ length: 8 }, (_, i) =>
       raw(i + 1, `CANAL ${i}`, `ES | DAZN ${i}`),
@@ -356,6 +382,8 @@ describe('rendimiento (§16.5)', () => {
     const index = buildBrowseIndex(catalog);
     const buildMs = performance.now() - started;
     expect(buildMs).toBeLessThan(1_500);
+    /* «En frío» es sin la caché de consultas, no con el código sin compilar: se calienta con un índice pequeño. */
+    query(buildBrowseIndex(catalogOf(SMALL)), { q: 'dazn canal', country: ['ES'] });
     const requests: Partial<BrowseRequest>[] = [
       {},
       { limit: 0 },

@@ -31,6 +31,7 @@ import {
   IPTV_BROWSE_QUALITIES,
   IPTV_SPORTS,
   IPTV_TYPES,
+  MOVISTAR_WORDS,
   SEARCH_QUERY_MAX,
   SEARCH_QUERY_MIN,
   type IptvFacetName,
@@ -38,8 +39,7 @@ import {
 } from '@ace/shared';
 import { compareVariants, type Catalog, type CatalogEntry } from './catalog.js';
 import { FacetDeriver, variantQuality } from './facets.js';
-import { cleanIptvTitle } from './names.js';
-import { foldText } from './search.js';
+import { foldText, searchQueryKey, significant } from './search.js';
 
 export const FACET_NAMES: readonly IptvFacetName[] = [
   'country',
@@ -464,7 +464,10 @@ function inOrder(words: readonly string[], key: string): boolean {
 
 /**
  * Filas que casan con el texto (mapa de bits) y el nivel de cada una
- * (0 clave igual, 1 empieza por, 2 palabras en orden, 3 el resto).
+ * (0 clave igual, 1 empieza por, 2 palabras en orden, 3 el resto, 4 sin la
+ * marca: «m+ la liga» → «LA LIGA TV BAR»). La consulta se limpia como en el
+ * buscador (`searchQueryKey`, §18) y, como allí, «tv», «canal» y «channel»
+ * no hace falta encontrarlas si hay otras palabras.
  */
 function textMatch(
   index: BrowseIndex,
@@ -472,17 +475,25 @@ function textMatch(
 ): { readonly bits: Uint32Array; readonly rank: Uint8Array } {
   const bits = new Uint32Array(index.words);
   const rank = new Uint8Array(index.words * 32);
-  const key = cleanIptvTitle(query).key;
+  const key = searchQueryKey(query);
   if (!key) return { bits, rank };
-  const words = [...new Set(key.split(' ').filter(Boolean))].slice(0, 32);
+  const words = significant([...new Set(key.split(' ').filter(Boolean))]).slice(0, 32);
+  /* Sin Movistar delante (como el buscador): las listas no siempre lo escriben. */
+  const branded = words.map((word) => MOVISTAR_WORDS.has(word));
+  const brandlessCount = branded.filter((brand) => !brand).length;
+  const brandless =
+    brandlessCount < words.length &&
+    words.some((word, i) => !branded[i] && word.length >= 3 && !/^\d+$/.test(word));
   /* Cada palabra tiene que casar: se cuenta cuántas palabras casan con cada clave. */
   const count = index.keyText.length;
   const hits = new Uint8Array(count);
+  const hitsBrandless = new Uint8Array(count);
   const last = new Int8Array(count).fill(-1);
   const hit = (item: number, position: number): void => {
     if (last[item] === position) return;
     last[item] = position;
     hits[item] = (hits[item] as number) + 1;
+    if (!branded[position]) hitsBrandless[item] = (hitsBrandless[item] as number) + 1;
   };
   words.forEach((word, position) => {
     for (const token of tokensForWord(index, word)) {
@@ -499,14 +510,18 @@ function textMatch(
     rank[row] = level;
   };
   for (let position = 0; position < count; position += 1) {
+    let level: number;
     if (
-      hits[position] !== words.length &&
-      !(byCompact && (index.keyCompact[position] as string).includes(compact))
+      hits[position] === words.length ||
+      (byCompact && (index.keyCompact[position] as string).includes(compact))
     ) {
+      const text = index.keyText[position] as string;
+      level = text === key ? 0 : text.startsWith(key) ? 1 : inOrder(words, text) ? 2 : 3;
+    } else if (brandless && hitsBrandless[position] === brandlessCount) {
+      level = 4;
+    } else {
       continue;
     }
-    const text = index.keyText[position] as string;
-    const level = text === key ? 0 : text.startsWith(key) ? 1 : inOrder(words, text) ? 2 : 3;
     mark(index.keyRow[position] as number, level);
     for (const row of index.keyMoreRows.get(position) ?? []) mark(row, level);
   }
@@ -707,10 +722,10 @@ function compute(
   /* Orden: el del proveedor; con texto, por niveles y luego el del proveedor. */
   const rows = rowsOf(result);
   if (!text) return { order: Int32Array.from(rows), categories, facets, text: query };
-  /* Por niveles sin comparar: cuatro cubos que ya vienen en el orden del proveedor. */
+  /* Por niveles sin comparar: cinco cubos que ya vienen en el orden del proveedor. */
   const order = new Int32Array(rows.length);
   let at = 0;
-  for (let level = 0; level <= 3; level += 1) {
+  for (let level = 0; level <= 4; level += 1) {
     for (const row of rows) if (text.rank[row] === level) order[at++] = row;
   }
   return { order, categories, facets, text: query };
