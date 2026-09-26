@@ -74,7 +74,7 @@ public actor CacheImagenes {
         let tarea = Task<UIImage?, Never> { [session, peticion, directorio] in
             let fichero = directorio.appendingPathComponent("\(clave).png", isDirectory: false)
             if let datos = try? Data(contentsOf: fichero), let imagen = UIImage(data: datos) {
-                return imagen
+                return await CacheImagenes.preparada(imagen)
             }
             do {
                 let solicitud = try await peticion(url)
@@ -84,7 +84,7 @@ public actor CacheImagenes {
                 else { return nil }
                 try? FileManager.default.createDirectory(at: directorio, withIntermediateDirectories: true)
                 try? datos.write(to: fichero, options: [.atomic])
-                return imagen
+                return await CacheImagenes.preparada(imagen)
             } catch {
                 return nil
             }
@@ -94,6 +94,11 @@ public actor CacheImagenes {
         enCurso[clave] = nil
         if let resultado { memoria.guardar(resultado, clave: clave) }
         return resultado
+    }
+
+    /// Decodificada fuera del hilo principal antes de pintarla (a8 §3.7): el primer pintado no da tirón.
+    private static func preparada(_ imagen: UIImage) async -> UIImage {
+        await imagen.byPreparingForDisplay() ?? imagen
     }
 
     /// Pide varias sin esperar (los escudos de los partidos del día).

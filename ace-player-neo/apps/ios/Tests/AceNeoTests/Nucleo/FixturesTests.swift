@@ -157,16 +157,18 @@ final class FixturesTests: XCTestCase {
         XCTAssertEqual(sobre.error.code, "engine_unavailable")
         XCTAssertEqual(sobre.error.requestId, "req-7f3a9c")
         XCTAssertNil(try ComparadorJSON.idaYVuelta(ApiErrorEnvelope.self, datos))
-        // El código está en el catálogo generado y es público: la app enseña el
-        // texto del catálogo (el `message` del ejemplo es inventado y no tiene
-        // por qué coincidir palabra por palabra).
+        // El código está en el catálogo generado y es público. Como la web (errors.ts), la app enseña
+        // el `message` que manda el servidor; sin él, el del catálogo.
         let definicion = try XCTUnwrap(ErrorCatalog.describir(sobre.error.code))
         XCTAssertTrue(definicion.isPublic)
         XCTAssertFalse(sobre.error.message.isEmpty)
         let error = APIError.servidor(
             codigo: sobre.error.code, estado: definicion.status, mensaje: sobre.error.message,
             requestId: sobre.error.requestId)
-        XCTAssertEqual(error.mensaje, definicion.message)
+        XCTAssertEqual(error.mensaje, sobre.error.message)
+        let sinMensaje = APIError.servidor(
+            codigo: sobre.error.code, estado: definicion.status, mensaje: nil, requestId: sobre.error.requestId)
+        XCTAssertEqual(sinMensaje.mensaje, definicion.message)
     }
 
     func testDetallesQueLaAppUsa() throws {

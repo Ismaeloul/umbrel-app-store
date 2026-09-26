@@ -37,14 +37,14 @@ public struct Endpoint<Response: Decodable & Sendable>: Sendable {
     public var cuerpo: Data?
     /// Si hace falta el token del dispositivo.
     public var conToken: Bool
-    /// Plazo de la petición, en segundos.
+    /// Plazo total de la petición, en segundos (`timeoutFor` de la web, PlazosWeb).
     public var plazo: TimeInterval
-    /// Si se puede repetir tal cual contra la otra dirección tras un fallo de red.
+    /// Si se puede repetir tal cual contra la otra dirección tras un fallo de red (solo los GET, a8 §3.11.1).
     public var idempotente: Bool
 
     public init(
         _ metodo: HTTPMethod, _ ruta: String, query: [QueryParam] = [], cuerpo: Data? = nil,
-        conToken: Bool = true, plazo: TimeInterval = 15, idempotente: Bool? = nil
+        conToken: Bool = true, plazo: TimeInterval = 12, idempotente: Bool? = nil  // DEFAULT_GET_TIMEOUT
     ) {
         self.metodo = metodo
         self.ruta = ruta
@@ -58,7 +58,7 @@ public struct Endpoint<Response: Decodable & Sendable>: Sendable {
     /// Igual, con un cuerpo JSON.
     public init<Body: Encodable>(
         _ metodo: HTTPMethod, _ ruta: String, json: Body, conToken: Bool = true,
-        plazo: TimeInterval = 15, idempotente: Bool = false
+        plazo: TimeInterval = 12, idempotente: Bool = false  // DEFAULT_MUTATION_TIMEOUT
     ) {
         let codificador = JSONEncoder()
         codificador.outputFormatting = [.sortedKeys]
@@ -85,10 +85,14 @@ public struct Endpoint<Response: Decodable & Sendable>: Sendable {
         return url
     }
 
-    /// Petición lista para `URLSession`.
+    /// Petición lista para `URLSession`. `timeoutInterval` es de inactividad (el plazo total lo pone
+    /// `APIClient`). Caché como la web (a7 §3.1): los GET siguen las cabeceras del servidor (el JSON de la API
+    /// va con `no-store` y no se guarda; lo que lleve `no-cache` y ETag se revalida) y el resto no usa la caché
+    /// (`no-store`). No `.reloadRevalidatingCacheData`: NSURLRequest.h la marca «Unimplemented».
     public func peticion(base: URL, token: String?) throws -> URLRequest {
         var peticion = URLRequest(url: try url(base: base), timeoutInterval: plazo)
         peticion.httpMethod = metodo.rawValue
+        peticion.cachePolicy = metodo == .get ? .useProtocolCachePolicy : .reloadIgnoringLocalCacheData
         peticion.setValue("application/json", forHTTPHeaderField: "Accept")
         if let cuerpo {
             peticion.httpBody = cuerpo
@@ -118,5 +122,38 @@ public enum Codificacion {
     /// `+` como espacio, y «M+ LaLiga» tiene que llegar tal cual.
     public static func query(_ texto: String) -> String {
         texto.addingPercentEncoding(withAllowedCharacters: permitidos()) ?? texto
+    }
+}
+
+/// Escudos y logos del servidor (a7 §2.5: «iOS antepone su base y /native al crest/logo»).
+///
+/// La agenda los da como `/api/v1/football/teams/…/crest?v=…`. La URL que sale de aquí lleva un anfitrión
+/// simbólico (`aceneo-servidor://servidor/native/api/v1/…`): la petición de `CacheImagenes` (en `Entorno`)
+/// lo cambia en el último momento por la dirección que responda (casa o Tailscale), y su clave solo mira
+/// la ruta y la consulta, así que la misma imagen vale por las dos redes.
+enum RutaImagen {
+    static let esquema = "aceneo-servidor"
+
+    /// URL para `ImagenServidor` y `CacheImagenes`; nil si no hay ruta.
+    static func url(_ ruta: String?) -> URL? {
+        guard let ruta, !ruta.isEmpty else { return nil }
+        if ruta.hasPrefix("http://") || ruta.hasPrefix("https://") { return URL(string: ruta) }
+        guard ruta.hasPrefix("/") else { return nil }
+        let camino = ruta.hasPrefix("/native/") ? ruta : "/native" + ruta
+        return URL(string: "\(esquema)://servidor\(camino)")
+    }
+
+    /// La URL de verdad contra una dirección base; las que no son simbólicas se quedan como están.
+    static func resolver(_ url: URL, base: URL) -> URL? {
+        guard url.scheme == esquema else { return url }
+        guard var partes = URLComponents(url: base, resolvingAgainstBaseURL: false),
+            let simbolica = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        else { return nil }
+        var camino = partes.percentEncodedPath
+        while camino.hasSuffix("/") { camino.removeLast() }
+        partes.percentEncodedPath = camino + simbolica.percentEncodedPath
+        partes.percentEncodedQuery = simbolica.percentEncodedQuery
+        partes.fragment = nil
+        return partes.url
     }
 }

@@ -8,14 +8,16 @@ public enum SSEUpdate: Sendable, Equatable {
     case evento(SSEEnvelope)
     /// Se ha cortado; se reintentará solo tras `reintentoEn` segundos.
     case desconectado(APIError?, reintentoEn: TimeInterval)
-    /// El token ya no vale: hay que volver a emparejar (la conexión se acaba).
-    case necesitaEmparejar
+    /// El token ya no vale (401 con su código del catálogo, `unauthorized` o `device_revoked`; nil si no
+    /// hay token): hay que volver a emparejar y la conexión se acaba. El token lo borra `SesionApp`
+    /// (que sabe si es «Olvidar este iPhone», a9 §3.5.3), no este cliente.
+    case necesitaEmparejar(codigo: String?)
 }
 
 /// Cliente SSE de `GET /native/api/v1/events` sobre `URLSession.bytes`.
 ///
-/// - Reconecta solo con espera exponencial (1 s, 2 s, 4 s… hasta 30 s), o lo
-///   que pida el servidor con `retry:` si es más.
+/// - Reconecta solo con las esperas de la web (`EsperaSSE`: 3, 6, 12, 24, 48, 60, 60… s, a7 §6.2),
+///   o lo que pida el servidor con `retry:` si es más (hasta 60 s).
 /// - Reanuda con `Last-Event-ID`: si lo perdido ya no está en el búfer del
 ///   servidor, llega un `resync` y hay que recargar.
 /// - El plazo de la petición es de inactividad: el servidor manda `: ping`
@@ -26,19 +28,17 @@ public final class SSEClient: Sendable {
     private let session: URLSession
     private let servidores: ServerResolver
     private let tokens: any TokenStore
-    private let esperaInicial: TimeInterval
-    private let esperaMaxima: TimeInterval
+    private let escalaEsperas: Double
     private let plazoInactividad: TimeInterval
 
     public init(
         session: URLSession, servidores: ServerResolver, tokens: any TokenStore,
-        esperaInicial: TimeInterval = 1, esperaMaxima: TimeInterval = 30, plazoInactividad: TimeInterval = 45
+        escalaEsperas: Double = 1, plazoInactividad: TimeInterval = 45
     ) {
         self.session = session
         self.servidores = servidores
         self.tokens = tokens
-        self.esperaInicial = esperaInicial
-        self.esperaMaxima = esperaMaxima
+        self.escalaEsperas = escalaEsperas
         self.plazoInactividad = plazoInactividad
     }
 
@@ -50,11 +50,11 @@ public final class SSEClient: Sendable {
         }
     }
 
-    /// Espera antes del intento número `intento` (1, 2, 3…).
+    /// Espera antes del intento número `intento` (1, 2, 3…). `escalaEsperas` solo la cambian los tests.
     func espera(intento: Int, retryServidorMs: Int?) -> TimeInterval {
-        let exponencial = min(esperaMaxima, esperaInicial * pow(2, Double(max(0, intento - 1))))
+        let web = EsperaSSE.espera(intento: intento)
         let delServidor = retryServidorMs.map { TimeInterval($0) / 1000 } ?? 0
-        return max(exponencial, min(delServidor, esperaMaxima))
+        return max(web, min(delServidor, 60)) * escalaEsperas
     }
 
     private func bucle(desde ultimoIdInicial: String?, continuacion: AsyncStream<SSEUpdate>.Continuation) async {
@@ -69,7 +69,7 @@ public final class SSEClient: Sendable {
                 token = nil
             }
             guard let token, !token.isEmpty else {
-                continuacion.yield(.necesitaEmparejar)
+                continuacion.yield(.necesitaEmparejar(codigo: nil))
                 break bucle
             }
 
@@ -87,8 +87,7 @@ public final class SSEClient: Sendable {
                     throw APIError.formato("La respuesta del tiempo real no es HTTP")
                 }
                 if http.statusCode == 401 {
-                    try? tokens.borrarToken()
-                    continuacion.yield(.necesitaEmparejar)
+                    continuacion.yield(.necesitaEmparejar(codigo: await Self.codigoDeError(bytes)))
                     break bucle
                 }
                 guard http.statusCode == 200 else {
@@ -127,5 +126,19 @@ public final class SSEClient: Sendable {
             }
         }
         continuacion.finish()
+    }
+
+    /// El código de un cuerpo de error v1 (`{ error: { code } }`), leyendo como mucho 4 KB.
+    private static func codigoDeError(_ bytes: URLSession.AsyncBytes) async -> String? {
+        var datos = Data()
+        do {
+            for try await byte in bytes {
+                datos.append(byte)
+                if datos.count > 4096 { break }
+            }
+        } catch {
+            return nil
+        }
+        return (try? JSONDecoder().decode(ApiErrorEnvelope.self, from: datos))?.error.code
     }
 }

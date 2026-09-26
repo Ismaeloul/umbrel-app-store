@@ -5,9 +5,10 @@ public enum ServerVia: String, Codable, Sendable, Hashable, CaseIterable {
     case lan
     case tailscale
 
+    /// Nombre para enseñar (b-arquitectura §1.4: «Red de casa»).
     public var etiqueta: String {
         switch self {
-        case .lan: "Red local"
+        case .lan: "Red de casa"
         case .tailscale: "Tailscale"
         }
     }
@@ -120,22 +121,48 @@ public struct ServerConfigStore: Sendable {
     }
 }
 
-/// Enlace de emparejamiento del QR: `aceneo://pair?u=<URL base>&c=<código>`.
+extension ServerConfig {
+    /// Las direcciones de un QR (a7 §8.9.1, a9 §3.4): la primera de cada tipo (casa o Tailscale).
+    init(servidores: [URL]) {
+        self.init()
+        for url in servidores {
+            switch ServerVia.clasificar(url) {
+            case .lan where lan == nil: lan = url
+            case .tailscale where tailscale == nil: tailscale = url
+            default: break
+            }
+        }
+    }
+}
+
+/// Enlace de emparejamiento del QR: `aceneo://pair?u=<URL base>[&u=<otra>…]&c=<código>`.
+/// Desde la 0.8.1 puede traer varias `u` (una por dirección; la primera es la que funciona al lado de
+/// quien enseña el QR, a9 §3.4). Una `u` que no es un origen http(s) se ignora.
 public struct PairingLink: Sendable, Hashable {
+    /// La primera dirección (la que usaba la app de la 0.8.0).
     public let servidor: URL
     public let codigo: String
+    /// Todas las direcciones, en su orden y sin repetidas.
+    public let servidores: [URL]
 
     public init?(url: URL) {
         guard url.scheme?.lowercased() == "aceneo", url.host()?.lowercased() == "pair",
             let partes = URLComponents(url: url, resolvingAgainstBaseURL: false)
         else { return nil }
         let items = partes.queryItems ?? []
-        guard let u = items.first(where: { $0.name == "u" })?.value,
+        var servidores: [URL] = []
+        for item in items where item.name == "u" {
+            guard let valor = item.value, let normalizada = ServerConfig.normalizar(valor),
+                !servidores.contains(normalizada)
+            else { continue }
+            servidores.append(normalizada)
+        }
+        guard let primero = servidores.first,
             let c = items.first(where: { $0.name == "c" })?.value,
-            let servidor = ServerConfig.normalizar(u),
             PairingLink.codigoValido(c)
         else { return nil }
-        self.servidor = servidor
+        self.servidor = primero
+        self.servidores = servidores
         self.codigo = c
     }
 

@@ -112,7 +112,7 @@ final class SSEClientTests: XCTestCase {
         }
         let cliente = SSEClient(
             session: MockURLProtocol.sesion(), servidores: try Prueba.servidores(),
-            tokens: MemoryTokenStore(token: Prueba.token), esperaInicial: 0.01, esperaMaxima: 0.05)
+            tokens: MemoryTokenStore(token: Prueba.token), escalaEsperas: 0.003)
 
         let recibidos = try await conPlazo(10) {
             var eventos: [SSEEnvelope] = []
@@ -150,7 +150,7 @@ final class SSEClientTests: XCTestCase {
         let tokens = MemoryTokenStore(token: Prueba.token)
         let cliente = SSEClient(
             session: MockURLProtocol.sesion(), servidores: try Prueba.servidores(), tokens: tokens,
-            esperaInicial: 0.01)
+            escalaEsperas: 0.003)
 
         let cambios = try await conPlazo(10) {
             var todos: [SSEUpdate] = []
@@ -158,8 +158,9 @@ final class SSEClientTests: XCTestCase {
             return todos
         }
 
-        XCTAssertEqual(cambios, [.necesitaEmparejar])
-        XCTAssertNil(try tokens.leerToken())
+        // El código del 401 llega a la sesión; el token lo borra ella (sabe si es «Olvidar este iPhone»).
+        XCTAssertEqual(cambios, [.necesitaEmparejar(codigo: "unauthorized")])
+        XCTAssertEqual(try tokens.leerToken(), Prueba.token)
     }
 
     func testSinTokenNiSiquieraConecta() async throws {
@@ -170,17 +171,18 @@ final class SSEClientTests: XCTestCase {
             for await cambio in cliente.conectar() { todos.append(cambio) }
             return todos
         }
-        XCTAssertEqual(cambios, [.necesitaEmparejar])
+        XCTAssertEqual(cambios, [.necesitaEmparejar(codigo: nil)])
         XCTAssertTrue(MockURLProtocol.peticiones.isEmpty)
     }
 
+    /// Las de la web (a7 §6.2): 3, 6, 12, 24, 48, 60, 60… s; el `retry:` del servidor si es mayor (hasta 60).
     func testEsperaExponencialConTopeYRetryDelServidor() throws {
         let cliente = SSEClient(
             session: MockURLProtocol.sesion(), servidores: try Prueba.servidores(), tokens: MemoryTokenStore())
-        XCTAssertEqual(cliente.espera(intento: 1, retryServidorMs: nil), 1)
-        XCTAssertEqual(cliente.espera(intento: 3, retryServidorMs: nil), 4)
-        XCTAssertEqual(cliente.espera(intento: 10, retryServidorMs: nil), 30)
+        XCTAssertEqual((1...7).map { cliente.espera(intento: $0, retryServidorMs: nil) }, [3, 6, 12, 24, 48, 60, 60])
+        XCTAssertEqual(cliente.espera(intento: 1, retryServidorMs: 3000), 3)
         XCTAssertEqual(cliente.espera(intento: 1, retryServidorMs: 5000), 5)
+        XCTAssertEqual(cliente.espera(intento: 1, retryServidorMs: 600_000), 60)
     }
 }
 
