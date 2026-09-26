@@ -6,7 +6,9 @@
    en el motor falso ni en la biblioteca E2E); «ES: La 1 HD» (107) está en la
    IPTV y en el motor («La 1 HD --> ELCANO» y «--> NEW ERA»); «ES: Antena 3
    FHD» (108) está en la IPTV y en el motor como «Antena 3 HD». Hay un grupo
-   «XXX» con un canal que no sale nunca. */
+   «XXX» con un canal que sale como todo lo demás (§17, todo desbloqueado).
+   «DAZN 1» tiene 5 variantes (FHD 112, HD 113, SD 114, 4K 115 y la reserva
+   116) y hay otro «DAZN 1» en Alemania (117) y en el Reino Unido (109). */
 
 import { execFileSync } from 'node:child_process';
 import type { Page } from '@playwright/test';
@@ -26,7 +28,7 @@ const ANTENA3 = FUENTES.generalistas[0];
  * uno): también los que dejan otros recorridos («La 1 HD --> ELCANO» del
  * partido de La 1), que harían salir el canal en «En tu biblioteca».
  */
-const NUESTROS = /^(?:telecinco|la 1\b|antena 3)/i;
+const NUESTROS = /^(?:telecinco|la 1\b|antena 3|dazn 1\b)/i;
 
 function hayFfmpeg(): boolean {
   try {
@@ -40,13 +42,13 @@ function hayFfmpeg(): boolean {
 const falta = !hayFfmpeg() ? 'falta ffmpeg en el PATH (el remux IPTV lo necesita)' : null;
 test.skip(falta !== null, falta ?? '');
 
-async function control(ruta: string): Promise<void> {
+async function control<T = unknown>(ruta: string): Promise<T> {
   let ultimo: unknown;
   for (let i = 0; i < 5; i++) {
     try {
       const res = await fetch(`${CONTROL}/__iptv/${ruta}`, { signal: AbortSignal.timeout(15_000) });
       if (!res.ok) throw new Error(`/__iptv/${ruta} → ${res.status}`);
-      return;
+      return (await res.json()) as T;
     } catch (error) {
       ultimo = error;
       await new Promise((resolve) => setTimeout(resolve, 250 * (i + 1)));
@@ -57,6 +59,7 @@ async function control(ruta: string): Promise<void> {
 const proveedor = {
   modo: (id: number | '*', modo: 'ok' | 'down') => control(`modo?id=${id}&modo=${modo}`),
   reset: () => control('reset'),
+  conexiones: () => control<{ conexiones: number }>('conexiones').then((r) => r.conexiones),
 };
 
 interface ItemBiblioteca {
@@ -172,9 +175,10 @@ test(
     const tele = fila(page, enTuIptv(page), 'Telecinco');
     await expect(tele).toBeVisible();
     await expect(tele.getByText('IPTV', { exact: true })).toBeVisible();
-    await expect(tele.getByText('Casa · 720p')).toBeVisible();
-    // El canal del grupo «XXX» no sale nunca.
-    await expect(page.getByText('Tele Noche')).toHaveCount(0);
+    await expect(tele.getByText('Casa', { exact: true })).toBeVisible();
+    await expect(tele.locator('.ch__tag')).toHaveText(['720p']);
+    // Todo desbloqueado (§17): también el canal del grupo «XXX».
+    await expect(fila(page, enTuIptv(page), 'Tele Noche')).toBeVisible();
     // La estrella lo guarda en Favoritos (hoja «Guardar favorito»).
     // En el móvil estrecho la estrella va dentro de «Más».
     const estrella = tele.getByRole('button', { name: 'Añadir Telecinco a favoritos' });
@@ -189,7 +193,10 @@ test(
     const tuyo = fila(page, enTuBiblioteca(page), 'Telecinco');
     await expect(tuyo.getByText('IPTV', { exact: true })).toBeVisible();
     await expect(tuyo.getByText('Tu IPTV')).toBeVisible();
-    await expect(enTuIptv(page)).toHaveCount(0);
+    // En «En tu IPTV» ya no está (sigue la sección por «Tele Noche», del grupo XXX).
+    await expect(enTuIptv(page).getByRole('link', { name: 'Telecinco', exact: true })).toHaveCount(
+      0,
+    );
     // Tocarlo: suena su IPTV por hls.js, sin pasar por el motor.
     await tuyo.getByRole('link', { name: 'Telecinco', exact: true }).click();
     await page.waitForURL(/vista=partido/);
@@ -216,7 +223,8 @@ test(
     await conectarXtream(page);
     await buscar(page, 'la 1');
     const la1 = fila(page, enTuIptv(page), 'La 1');
-    await expect(la1.getByText('Casa · 720p · también en AceStream')).toBeVisible();
+    await expect(la1.getByText('Casa · también en AceStream')).toBeVisible();
+    await expect(la1.locator('.ch__tag')).toHaveText(['720p']);
     // El motor tiene dos «La 1 HD»: ninguno a la vista (son ese mismo canal).
     await expect(page.getByRole('link', { name: 'La 1 HD', exact: true })).toHaveCount(0);
     await la1.getByRole('link', { name: 'La 1', exact: true }).click();
@@ -235,6 +243,102 @@ test(
     await expect.poll(async () => (await motor.sesiones('active')).length).toBe(1);
     await esperarQueAvance(page);
     expect(await suenaIptv(page)).toBe(false);
+  },
+);
+
+/** Los carteles IPTV del panel de fuentes de un canal. */
+const cartelesIptv = (page: Page) =>
+  page.getByRole('list', { name: 'Fuentes del canal' }).locator('.src-poster[data-origin="iptv"]');
+/** El cartel IPTV de una calidad («1080p», «4K»…), por su etiqueta. */
+const cartelDe = (page: Page, calidad: string) =>
+  cartelesIptv(page).filter({ has: page.locator('.src-poster__tag', { hasText: calidad }) });
+
+test(
+  '14 · variantes (§17): «dazn 1» sale en UNA fila con 4K · 1080p · 720p · SD (y «DE» aparte); 4 carteles IPTV ordenados; si cae la 1080p pasa a la 4K, no a AceStream; tocar la 720p cambia',
+  { tag: '@video' },
+  async ({ page }) => {
+    test.setTimeout(180_000);
+    await conectarXtream(page);
+    await buscar(page, 'dazn 1');
+    const filas = enTuIptv(page).getByRole('link', { name: 'DAZN 1', exact: true });
+    // Una fila por canal: la de España (5 variantes) y la de Alemania; también la de UK (sin calidad).
+    await expect(filas).toHaveCount(3);
+    const espana = filas.nth(0).locator('xpath=ancestor::article[1]');
+    await expect(espana.locator('.ch__tag')).toHaveText(['4K', '1080p', '720p', 'SD']);
+    await expect(espana.getByText('IPTV', { exact: true })).toBeVisible();
+    const alemania = filas.nth(2).locator('xpath=ancestor::article[1]');
+    await expect(alemania.locator('.ch__tag')).toHaveText(['DE', '720p']);
+    // Tocarla: arranca sola la mejor (1080p) y el panel enseña 4 carteles IPTV en orden.
+    await filas.nth(0).click();
+    await page.waitForURL(/vista=partido/);
+    await expect(cartelesIptv(page)).toHaveCount(4, { timeout: 45_000 });
+    const calidades = cartelesIptv(page).locator('.src-poster__tag--quality');
+    await expect(calidades).toHaveText(['1080p', '4K', '720p', 'SD']);
+    await expect(cartelDe(page, '1080p')).toHaveAttribute('aria-label', /reproduciendo ahora/, {
+      timeout: 45_000,
+    });
+    await esperarQueAvance(page);
+    expect(await suenaIptv(page)).toBe(true);
+    expect(await proveedor.conexiones()).toBe(1);
+    // Cae la 1080p (112): pasa a la 4K (otra variante IPTV) antes que a AceStream.
+    await proveedor.modo(112, 'down');
+    await expect(
+      page.getByText('Tu IPTV no responde en 1080p: probamos en 4K (fuente 2)').first(),
+    ).toBeVisible({ timeout: 60_000 });
+    await expect(cartelDe(page, '4K')).toHaveAttribute('aria-label', /reproduciendo ahora/, {
+      timeout: 45_000,
+    });
+    await esperarQueAvance(page);
+    expect(await suenaIptv(page)).toBe(true);
+    expect(await motor.sesiones('active')).toHaveLength(0);
+    // Tocar el cartel de 720p cambia a esa variante: una sola conexión con el proveedor.
+    await cartelDe(page, '720p').click();
+    await expect(cartelDe(page, '720p')).toHaveAttribute('aria-label', /reproduciendo ahora/, {
+      timeout: 45_000,
+    });
+    await esperarQueAvance(page);
+    expect(await suenaIptv(page)).toBe(true);
+    await expect.poll(() => proveedor.conexiones(), { timeout: 30_000 }).toBe(1);
+  },
+);
+
+/* Capturas del buscador y del panel de fuentes con variantes (§17), en claro y
+   oscuro, al tamaño del proyecto (390×844 o 1440×900). Solo a mano, con
+   IPTV_CAPTURAS=<carpeta>: la CI no las hace. */
+const CAPTURAS = process.env.IPTV_CAPTURAS ?? '';
+test(
+  'capturas §17: buscador y panel con las variantes de «DAZN 1», en claro y oscuro',
+  { tag: '@video' },
+  async ({ page }, info) => {
+    test.skip(!CAPTURAS, 'solo con IPTV_CAPTURAS=<carpeta>');
+    test.setTimeout(240_000);
+    const tamano = info.project.name.includes('iphone') ? '390x844' : '1440x900';
+    await conectarXtream(page);
+    /* Una sola pasada (tocar el canal lo mete en Recientes y la segunda búsqueda ya lo pintaría en tu biblioteca):
+       cada pantalla se captura en claro y en oscuro. */
+    const capturar = async (nombre: string) => {
+      for (const tema of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme: tema });
+        await page.waitForTimeout(700);
+        await page.screenshot({ path: `${CAPTURAS}/${nombre}-${tamano}-${tema}.png` });
+      }
+    };
+    await buscar(page, 'dazn 1');
+    const fila1 = enTuIptv(page).getByRole('link', { name: 'DAZN 1', exact: true }).first();
+    await expect(fila1).toBeVisible();
+    await expect(
+      fila1.locator('xpath=ancestor::article[1]').locator('.ch__tag').first(),
+    ).toBeVisible();
+    await capturar('buscador');
+    await fila1.click();
+    await page.waitForURL(/vista=partido/);
+    await expect(cartelesIptv(page)).toHaveCount(4, { timeout: 45_000 });
+    await expect(cartelDe(page, '1080p')).toHaveAttribute('aria-label', /reproduciendo ahora/, {
+      timeout: 45_000,
+    });
+    await esperarQueAvance(page);
+    await cartelesIptv(page).first().scrollIntoViewIfNeeded();
+    await capturar('panel');
   },
 );
 

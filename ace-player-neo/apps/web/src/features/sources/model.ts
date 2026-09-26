@@ -380,6 +380,11 @@ const STATE_SIGNAL: Record<ScanCandidateState, SourceSignal> = {
  */
 export function signalOf(effective: Effective, entry: SourceEntry): SourceSignal {
   if (effective.reported) return { state: 'fail', word: 'Reportada' };
+  // Una IPTV «en cola» del comprobador es una IPTV sin comprobar (§7.3 y §8.3):
+  // el comprobador no sondea su stream; se prueba al reproducirla. Con varios
+  // carteles IPTV (§17), «Pendiente · en cola» parecía un atasco.
+  if (effective.state === 'queued' && isIptv(entry))
+    return { state: 'pending', word: 'Sin comprobar' };
   if (effective.state !== 'none') return STATE_SIGNAL[effective.state];
   const percent = availabilityPercent(entry.availability);
   if (percent === null) return { state: 'pending', word: 'Sin comprobar' };
@@ -442,7 +447,8 @@ export function detailOf(effective: Effective, entry: SourceEntry): string {
     return `apartada por tu reporte (${reportReasonLabel(entry.reported.reason).toLowerCase()})`;
   // Una IPTV sin comprobar es lo normal (la cuenta activa no es un stream
   // visto, §7.3): no hay disponibilidad que medir.
-  if (effective.state === 'none' && isIptv(entry)) return 'se prueba al reproducirla';
+  if ((effective.state === 'none' || effective.state === 'queued') && isIptv(entry))
+    return 'se prueba al reproducirla';
   if (effective.state === 'none') {
     const percent = availabilityPercent(entry.availability);
     return percent === null ? 'disponibilidad sin medir' : `${percent}% disponible`;
@@ -558,9 +564,12 @@ const IPTV_QUALITY_LABEL: Record<string, string> = {
 export function qualityTags(entry: Pick<SourceEntry, 'probe' | 'iptv'>): string[] {
   const probe = entry.probe;
   const measured = probe && (probe.rateKbps || probe.streamKbps || probe.videoCodec);
-  // IPTV sin medir: la calidad que declara su nombre (§8.1), y «reserva» si lo es.
+  // IPTV sin medir por el comprobador: la calidad que da el servidor (la del
+  // stream real si la conoce; si no, la del nombre: §8.1 y §17), «reserva» si
+  // lo es, y el país si no es España («DE»).
   if (entry.iptv && !measured) {
     return [
+      entry.iptv.country ?? null,
       entry.iptv.quality ? (IPTV_QUALITY_LABEL[entry.iptv.quality] ?? null) : null,
       entry.iptv.backup ? 'reserva' : null,
     ].filter((part): part is string => Boolean(part));
@@ -918,6 +927,36 @@ export function pickBridgeTarget(
       return !entry.failedAt || now - entry.failedAt >= BRIDGE_RECENT_TRY_MS;
     }) ?? null
   );
+}
+
+/**
+ * Variantes de la IPTV (docs/iptv.md §17): si cae un cartel IPTV (la 1080p),
+ * antes de saltar a AceStream se prueba el siguiente cartel IPTV en el orden
+ * del servidor (4K, 720p, SD, la reserva) que no se haya probado ya, no esté
+ * «Sin señal» ni reportado, y no haya caído en los últimos 60 s. null si no
+ * queda ninguno (entonces decide el puente). Un fallo de cuenta vale para
+ * toda la IPTV: con él no se llama.
+ */
+export function pickNextIptvVariant(
+  entries: readonly SourceEntry[],
+  effectiveById: ReadonlyMap<string, Effective>,
+  failed: Pick<SourceEntry, 'id'>,
+  now: number,
+): SourceEntry | null {
+  return (
+    entries.find((entry) => {
+      if (entry.id === failed.id || !isIptv(entry) || entry.autoTried) return false;
+      const effective = effectiveById.get(entry.id);
+      if (effective?.reported || effective?.state === 'failed') return false;
+      return !entry.failedAt || now - entry.failedAt >= BRIDGE_RECENT_TRY_MS;
+    }) ?? null
+  );
+}
+
+/** La calidad de un cartel IPTV para decirla («1080p», «4K»…), o null. */
+export function iptvQualityText(entry: Pick<SourceEntry, 'iptv'>): string | null {
+  const quality = entry.iptv?.quality;
+  return quality ? (IPTV_QUALITY_LABEL[quality] ?? null) : null;
 }
 
 /** Qué veredicto deja el reproductor al agotar una fuente (index.html:4953-4964, regla 21). */

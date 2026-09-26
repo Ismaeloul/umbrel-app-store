@@ -200,6 +200,10 @@ export function mergeResolutionCandidates<T extends RankableCandidate>(
     const guideA = a.iptv?.guide === true ? 1 : 0;
     const guideB = b.iptv?.guide === true ? 1 : 0;
     if (guideA !== guideB) return guideB - guideA;
+    /* Entre dos IPTV manda el orden de la capa IPTV (docs/iptv.md §17): las
+       variantes de un canal ya vienen 1080p, 4K, 720p, SD y reserva, y la
+       fiabilidad ya desempató allí entre variantes iguales. */
+    if (a.source === 'iptv' && b.source === 'iptv') return 0;
     /* Lo aprendido ordena entre iguales; nunca decide QUÉ canal es (B-061). */
     const fiaA = fiabilidadDeCandidato(a, stats) ?? STATS_NEUTRAL;
     const fiaB = fiabilidadDeCandidato(b, stats) ?? STATS_NEUTRAL;

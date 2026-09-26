@@ -153,7 +153,15 @@ export const IptvChannelSchema = z.strictObject({
   id: HashSchema,
   /** Nombre limpio («Antena 3»): sin país, adornos, calidad ni reserva. */
   title: z.string().min(1).max(120),
+  /** Calidad de la variante del `id` (la que arranca primero: 1080p antes que 4K, 720p y SD). */
   quality: IptvQualitySchema.nullable(),
+  /**
+   * Todas las calidades que tiene el canal, de mayor a menor resolución
+   * («4K · 1080p · 720p»; docs/iptv.md §17): una fila por canal, no por variante.
+   */
+  qualities: z.array(IptvQualitySchema).max(4).optional(),
+  /** País del canal si no es España ni sin país («DE»); ausente o null si lo es (§17). */
+  country: z.string().min(2).max(8).nullable().optional(),
   /** El nombre que Isma puso al proveedor («Casa»). */
   provider: z.string().max(IPTV_NAME_MAX),
   /** Ids de tu biblioteca (favoritos, recientes o la lista activa) que son este canal (≥ 92), de mejor a peor. */

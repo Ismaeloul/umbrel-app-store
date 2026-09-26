@@ -110,10 +110,10 @@ describe('pestaña IPTV (§16)', () => {
       'ES | GENERALISTAS',
       'UK | SPORTS',
       'XXX',
+      'DE | SPORT',
+      'FR | SPORT',
       'ES | DAZN',
       'ES | LALIGA',
-      'ES | MOVISTAR',
-      '|FR| SPORT',
     ]);
     expect(new Set(names).size).toBe(names.length);
     expect(root.catalogTotal).toBeGreaterThan(150);
@@ -145,8 +145,8 @@ describe('pestaña IPTV (§16)', () => {
       'DAZN ACB 7',
     ]);
     expect(page.channels[1]).toMatchObject({ qualities: ['fhd', 'hd'], country: 'ES' });
-    /* «DAZN 1» está también en «ES | DEPORTES» (sin calidad): una sola fila con sus calidades. */
-    expect(page.channels[0]?.qualities).toEqual(['fhd', 'hd']);
+    /* «DAZN 1» está también en «ES | DEPORTES» (sus 5 variantes y una sin calidad): una sola fila con todas. */
+    expect(page.channels[0]?.qualities).toEqual(['uhd', 'fhd', 'hd', 'sd']);
     const text = JSON.stringify(page);
     for (const secret of [FAKE_IPTV_USER, FAKE_IPTV_PASSWORD, 'player_api', 'http']) {
       expect(text).not.toContain(secret);
@@ -248,19 +248,25 @@ describe('pestaña IPTV (§16)', () => {
 });
 
 describe('el canal tocado respeta el país (§16.3, D31)', () => {
-  it('«UK: DAZN 1» da la variante de Reino Unido; «DAZN 1 ᴴᴰ» de España, la mejor de España', async () => {
+  it('«UK: DAZN 1» da carteles de Reino Unido; «DAZN 1 ᴴᴰ» de España, primero la 1080p de España; «[IT] DAZN 1», Italia', async () => {
     const r = await rig({ fake: { grande: 200 } });
     await save(r);
     await r.service.idle();
     const catalog = r.service.catalogForTests()!;
     const uk = catalog.entries.find((entry) => entry.title === 'UK: DAZN 1')!;
     const esHd = catalog.entries.find((entry) => entry.title === 'DAZN 1 ᴴᴰ')!;
-    const esFhd = catalog.entries.find((entry) => entry.title === 'DAZN 1 ᶠᴴᴰ')!;
     expect(uk.key).toBe(esHd.key);
-    expect(r.service.tappedCandidate(uk.id)?.id).toBe(uk.id);
-    expect(r.service.tappedCandidate(esHd.id)?.id).toBe(esFhd.id);
+    const ukCards = r.service.tappedCandidates(uk.id);
+    expect(ukCards.map((card) => card.id)).toEqual([uk.id]);
+    const esCards = r.service.tappedCandidates(esHd.id);
+    expect(esCards.length).toBeGreaterThan(1);
+    for (const card of esCards) {
+      expect(catalog.get(card.id)?.country ?? 'ES').toBe('ES');
+      expect(card.id).not.toBe(uk.id);
+    }
+    expect(esCards[0]?.iptv?.quality).toBe('fhd');
     const it = catalog.entries.find((entry) => entry.title === '[IT] DAZN 1')!;
-    expect(r.service.tappedCandidate(it.id)?.id).toBe(it.id);
+    expect(r.service.tappedCandidates(it.id).map((card) => card.id)).toEqual([it.id]);
   });
 });
 

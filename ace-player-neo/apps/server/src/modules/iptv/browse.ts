@@ -378,19 +378,6 @@ export function rowQualities(index: BrowseIndex, row: number): IptvQuality[] {
   return IPTV_BROWSE_QUALITIES.filter((quality) => bits & QUALITY_BIT[quality]);
 }
 
-/**
- * Las variantes de la fila de una entrada (§16.3, D31): las de su misma
- * clave y su mismo país deducido, de mejor a peor. Con todo desbloqueado,
- * «UK: DAZN 1» no es «ES: DAZN 1»: tocar uno nunca abre el otro.
- */
-export function rowVariants(catalog: Catalog, entry: CatalogEntry): CatalogEntry[] {
-  const deriver = new FacetDeriver();
-  const country = deriver.country(entry);
-  return catalog
-    .group(entry.key)
-    .filter((item) => item === entry || deriver.country(item) === country);
-}
-
 // --- Consulta ---
 
 export interface BrowseRequest {

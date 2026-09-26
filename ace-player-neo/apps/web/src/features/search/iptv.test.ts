@@ -12,6 +12,7 @@ import {
   IPTV_ID_SUBTITLE,
   iptvCountText,
   iptvSubtitle,
+  iptvTags,
   liveText,
   searchLiveText,
   mergeSearch,
@@ -82,7 +83,7 @@ describe('mergeSearch (§14.3)', () => {
     expect(merged.engine.map((row) => row.result.id)).toEqual([h(22)]);
     expect(merged.hiddenEngine).toBe(2);
     expect(iptvSubtitle(merged.iptv[0]!.channel, merged.iptv[0]!.alsoAce)).toBe(
-      'Casa · 1080p · también en AceStream',
+      'Casa · también en AceStream',
     );
   });
 
@@ -140,7 +141,15 @@ describe('mergeSearch (§14.3)', () => {
       '1 en tu biblioteca, 0 en tu IPTV y 0 en el motor para «tele».',
     );
     expect(emptyTitle('zzz')).toBe('Sin resultados para «zzz».');
-    expect(iptvSubtitle({ provider: 'Casa', quality: null }, false)).toBe('Casa');
+    expect(iptvSubtitle({ provider: 'Casa' }, false)).toBe('Casa');
+    expect(iptvTags({ quality: 'fhd', qualities: ['uhd', 'fhd', 'hd'], country: null })).toEqual([
+      '4K',
+      '1080p',
+      '720p',
+    ]);
+    expect(iptvTags({ quality: 'hd', qualities: ['hd'], country: 'DE' })).toEqual(['DE', '720p']);
+    expect(iptvTags({ quality: 'sd' })).toEqual(['SD']);
+    expect(iptvTags({ quality: null, qualities: [] })).toEqual([]);
   });
 });
 

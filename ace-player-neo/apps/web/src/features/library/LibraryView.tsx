@@ -49,7 +49,13 @@ import {
 } from '../../ui/index.ts';
 import { applyDirectoryView, directoryErrorMessage } from '../directories/model.ts';
 import { PasteHashSheet } from '../paste-hash/index.ts';
-import { bothButtonText, IPTV_ID_SUBTITLE, IPTV_TEXT, iptvSubtitle } from '../search/iptv.ts';
+import {
+  bothButtonText,
+  IPTV_ID_SUBTITLE,
+  IPTV_TEXT,
+  iptvSubtitle,
+  iptvTags,
+} from '../search/iptv.ts';
 import { canSearch, cleanQuery, ENGINE_SEARCH_DELAY_MS } from '../search/model.ts';
 import { goToEngineSearch } from '../search/navigation.ts';
 import { ChannelRow } from './ChannelRow.tsx';
@@ -449,6 +455,7 @@ export default function LibraryView({ active }: ViewProps) {
                   onAir={onAir(iptvRow)}
                   iptv
                   subtitle={iptvSubtitle(channel, channel.library.length > 0)}
+                  tags={iptvTags(channel)}
                   onPlay={() => actions.play(iptvRow)}
                   onToggleFavorite={() => actions.toggleFavorite(iptvRow)}
                   menuItems={actions.menuFor(iptvRow, 'search')}

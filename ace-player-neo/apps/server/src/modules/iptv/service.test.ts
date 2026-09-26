@@ -10,7 +10,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { IptvViewSchema } from '@ace/shared';
 import { AppError } from '../../core/errors.js';
 import { scoreResolutionCandidate } from '../football/resolution.js';
-import { FAKE_IPTV_PASSWORD, FAKE_IPTV_USER } from '../../../test/fake-iptv/provider.js';
+import {
+  FAKE_IPTV_CHANNELS,
+  FAKE_IPTV_PASSWORD,
+  FAKE_IPTV_USER,
+} from '../../../test/fake-iptv/provider.js';
 import { FAKE_IPTV_HOST } from '../../../test/fake-iptv/net.js';
 import {
   IPTV_TEST_MATCH_OFFSET_MS,
@@ -85,7 +89,7 @@ describe('guardar (§5.3)', () => {
     await r.service.idle();
     const view = await r.service.view();
     expect(view.provider?.status).toBe('ok');
-    expect(view.provider?.channels).toBe(11);
+    expect(view.provider?.channels).toBe(FAKE_IPTV_CHANNELS.length);
     expect(view.provider?.account?.status).toBe('active');
     expect(view.provider?.account?.maxConnections).toBe(1);
     expect(r.service.active()).toBe(true);
@@ -175,7 +179,7 @@ describe('guardar (§5.3)', () => {
     const view = await r.service.view();
     expect(view.provider?.hasUrl).toBe(true);
     expect(view.provider?.hasPassword).toBe(false);
-    expect(view.provider?.channels).toBe(11);
+    expect(view.provider?.channels).toBe(FAKE_IPTV_CHANNELS.length);
     expect(r.service.redact(`/${FAKE_IPTV_USER}/${FAKE_IPTV_PASSWORD}/104`)).not.toContain(
       FAKE_IPTV_PASSWORD,
     );
@@ -189,7 +193,7 @@ describe('otra lista del mismo host y revocaciones a destiempo', () => {
     await r.service.save({ kind: 'm3u', name: 'Mala', url: r.fake.m3uUrl }, signal());
     await r.service.idle();
     const first = r.state.iptv().read().provider;
-    expect((await r.service.view()).provider?.channels).toBe(11);
+    expect((await r.service.view()).provider?.channels).toBe(FAKE_IPTV_CHANNELS.length);
     /* Solo renombrar (sin URL): el mismo proveedor. */
     await r.service.save({ kind: 'm3u', name: 'Renombrada' }, signal());
     await r.service.idle();
@@ -301,7 +305,7 @@ describe('trabajos (§3.4 y §3.5)', () => {
 });
 
 describe('emparejado con guía (§4.3 a §4.6)', () => {
-  it('la guía pone primero M+ LaLiga TV 2; luego DAZN LaLiga (FHD, un cartel); nada de Champions, Hypermotion ni UK', async () => {
+  it('la guía pone primero M+ LaLiga TV 2; luego DAZN LaLiga (un cartel por resolución: 1080p, 720p y la reserva); nada de Champions, Hypermotion ni UK', async () => {
     const r = await rig();
     await r.service.save({ kind: 'm3u', name: 'Casa', url: `${SERVER}/lista.m3u.gz` }, signal());
     await r.service.idle();
@@ -326,11 +330,14 @@ describe('emparejado con guía (§4.3 a §4.6)', () => {
       scorer,
     });
     expect(result.consulted).toBe(true);
-    expect(result.candidates.map((c) => [c.title, c.iptv.guide, c.score])).toEqual([
-      ['M+ LaLiga TV 2 --> Casa', true, 100],
-      ['DAZN LaLiga --> Casa', false, 100],
+    expect(
+      result.candidates.map((c) => [c.title, c.iptv.guide, c.score, c.iptv.quality, c.iptv.backup]),
+    ).toEqual([
+      ['M+ LaLiga TV 2 --> Casa', true, 100, 'fhd', false],
+      ['DAZN LaLiga --> Casa', false, 100, 'fhd', false],
+      ['DAZN LaLiga --> Casa', false, 100, 'hd', false],
+      ['DAZN LaLiga --> Casa', false, 100, null, true],
     ]);
-    expect(result.candidates[1]?.iptv.quality).toBe('fhd');
     expect(result.hints).toEqual(['M+ LaLiga TV 2']);
     /* Sin partido (canal suelto): solo por nombre. */
     const channel = r.service.resolve({ channels: ['Antena 3'], scorer });
@@ -392,6 +399,31 @@ describe('relé (§6.1) y plaza (§6.5)', () => {
     await relayGet(input.inputUrl, { maxBytes: 20_000 });
     await waitFor('proveedor suelto', () => r.fake.conexiones() === 0);
     await input.close();
+  });
+
+  it('calidad real (§17): la RESOLUTION de la maestra HLS manda sobre el nombre; la de ffprobe también', async () => {
+    const r = await rig();
+    await r.service.save({ kind: 'm3u', name: 'Casa', url: `${SERVER}/lista.m3u` }, signal());
+    await r.service.idle();
+    const catalog = r.service.catalogForTests();
+    const idOf = (title: string) =>
+      catalog?.entries.find((entry) => entry.title === title)?.id as string;
+    const backup = idOf('ES: DAZN 1 (backup)');
+    const sd = idOf('ES: DAZN 1 SD');
+    /* La reserva no dice su calidad en el nombre; su maestra dice 1920x1080. */
+    const input = await r.service.openInput(backup, { signal: signal() });
+    expect(input.isHls).toBe(true);
+    await input.close();
+    const dazn1 = r.service.tappedCandidates(backup);
+    const reserve = dazn1.find((c) => c.id === backup);
+    /* Es una copia de la 1080p: ya no tiene cartel (sus 4 son 1080p, 4K, 720p y SD). */
+    expect(reserve).toBeUndefined();
+    expect(dazn1.map((c) => c.iptv.quality)).toEqual(['fhd', 'uhd', 'hd', 'sd']);
+    /* ffprobe (o la maestra) dice que la «SD» es 720: entonces es una copia de la 720p. */
+    r.service.noteQuality(sd, 720);
+    const after = r.service.tappedCandidates(backup);
+    expect(after.map((c) => c.iptv.quality)).toEqual(['fhd', 'uhd', 'hd']);
+    expect(r.service.searchChannels('dazn 1').channels[0]?.qualities).toEqual(['uhd', 'fhd', 'hd']);
   });
 
   it('HLS: la maestra/lista se reescribe con URIs del relé (sin URLs del proveedor) y los segmentos .php salen como .ts', async () => {
@@ -474,21 +506,64 @@ describe('buscador y biblioteca (docs/iptv.md §14)', () => {
     );
   });
 
-  it('«tele» saca Telecinco (solo en la IPTV), sin el canal del grupo XXX ni nada del proveedor', async () => {
+  it('«tele» saca Telecinco (solo en la IPTV) y también el canal del grupo XXX (todo desbloqueado), sin nada del proveedor', async () => {
     const r = await rig();
     await saveXtream(r);
     const found = r.service.searchChannels('tele');
-    expect(found.channels.map((channel) => channel.title)).toEqual(['Telecinco']);
-    expect(found.channels[0]).toMatchObject({ quality: 'hd', provider: 'Casa', library: [] });
+    expect(found.channels.map((channel) => channel.title)).toEqual(['Telecinco', 'Tele Noche']);
+    expect(found.channels[0]).toMatchObject({
+      quality: 'hd',
+      qualities: ['hd'],
+      country: null,
+      provider: 'Casa',
+      library: [],
+    });
     expect(r.service.classify(found.channels[0]?.id as string)).toBe('owned');
     const text = JSON.stringify(found);
     for (const secret of [FAKE_IPTV_USER, FAKE_IPTV_PASSWORD, 'XXX', 'Telecinco.es', '110']) {
       expect(text).not.toContain(secret);
     }
-    /* «dazn»: la de España (un cartel, la FHD); la de UK no. */
+  });
+
+  it('«dazn»: una fila por canal con sus calidades; cualquier país, con el suyo, y el de España primero', async () => {
+    const r = await rig();
+    await saveXtream(r);
     const dazn = r.service.searchChannels('dazn');
-    expect(dazn.channels.map((channel) => channel.title)).toEqual(['DAZN LaLiga']);
+    expect(
+      dazn.channels.map((channel) => [channel.title, channel.country, channel.qualities]),
+    ).toEqual([
+      ['DAZN 1', null, ['uhd', 'fhd', 'hd', 'sd']],
+      ['DAZN 1', 'UK', []],
+      ['DAZN 1', 'DE', ['hd']],
+      ['DAZN LaLiga', null, ['fhd', 'hd']],
+    ]);
+    /* La fila de «DAZN 1» arranca por la 1080p. */
     expect(dazn.channels[0]?.quality).toBe('fhd');
+    const catalog = r.service.catalogForTests();
+    expect(catalog?.get(dazn.channels[0]?.id as string)?.title).toBe('ES: DAZN 1 FHD');
+    expect(r.service.searchChannels('canal+').channels.map((channel) => channel.country)).toEqual([
+      'FR',
+    ]);
+  });
+
+  it('un canal con 5 variantes: 4 carteles 1080p, 4K, 720p y SD; la reserva, de respaldo del relé', async () => {
+    const r = await rig();
+    await saveXtream(r);
+    const result = r.service.resolve({ channels: ['DAZN 1'], scorer });
+    const catalog = r.service.catalogForTests();
+    expect(
+      result.candidates.map((c) => [catalog?.get(c.id)?.title, c.iptv.quality, c.iptv.country]),
+    ).toEqual([
+      ['ES: DAZN 1 FHD', 'fhd', undefined],
+      ['ES: DAZN 1 4K', 'uhd', undefined],
+      ['ES: DAZN 1 HD', 'hd', undefined],
+      ['ES: DAZN 1 SD', 'sd', undefined],
+    ]);
+    /* El canal tocado (la fila del buscador) trae los mismos 4 carteles. */
+    const row = r.service.searchChannels('dazn 1').channels[0];
+    expect(r.service.tappedCandidates(row?.id as string).map((c) => c.id)).toEqual(
+      result.candidates.map((c) => c.id),
+    );
   });
 
   it('library: el favorito «Antena 3 HD» de AceStream es ese canal; el id IPTV también cuenta', async () => {
@@ -540,19 +615,20 @@ describe('buscador y biblioteca (docs/iptv.md §14)', () => {
     expect(r.service.libraryIdStates([tele])).toEqual({ [tele]: 'iptv_removed' });
   });
 
-  it('el canal tocado: la candidata de su grupo con 100 y su nombre limpio; un id ajeno, null', async () => {
+  it('el canal tocado: los carteles de su canal con 100 y su nombre limpio; un id ajeno, ninguno', async () => {
     const r = await rig();
     await saveXtream(r);
     const la1 = r.service.searchChannels('la 1').channels[0];
     expect(la1?.title).toBe('La 1');
-    const tapped = r.service.tappedCandidate(la1?.id as string);
-    expect(tapped).toMatchObject({
+    const tapped = r.service.tappedCandidates(la1?.id as string);
+    expect(tapped).toHaveLength(1);
+    expect(tapped[0]).toMatchObject({
       id: la1?.id,
       score: 100,
       matchedChannel: 'La 1',
       source: 'iptv',
     });
-    expect(r.service.tappedCandidate(ACE)).toBe(null);
+    expect(r.service.tappedCandidates(ACE)).toEqual([]);
   });
 
   it('anotar los resultados del motor: «La 1 HD --> …» lleva el id de «La 1»; «LaLiga TV» no es Hypermotion', async () => {

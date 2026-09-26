@@ -31,7 +31,21 @@
 
 import type { IptvQuality, IptvSport, IptvType } from '@ace/shared';
 import { IPTV_SPORTS, IPTV_TYPES } from '@ace/shared';
-import { isAdultChannel } from './search.js';
+import { foldText } from './search.js';
+
+/*
+ * Canales para adultos (la regla de §14.3, que el buscador ya no usa como
+ * filtro desde §17 pero que aquí es el tipo «Adultos»): xxx, adult, adulto/a,
+ * porn… y «+18» / «18+» sueltos, no el «+» de una marca seguido de un número
+ * («Canal+ 18» o «M+ 18 Series» no son para adultos).
+ */
+const ADULT_RE =
+  /(?:^|[^a-z0-9])(?:xxx|adults?|adult[oa]s?|porn\w*)(?:$|[^a-z0-9])|(?:^|[^a-z0-9+])\+\s?18(?!\d)|(?<!\d)18\s?\+/;
+
+/** ¿Es un canal (o un grupo) para adultos? Por palabra y sin tildes. */
+export function isAdultChannel(title: string, group: string): boolean {
+  return ADULT_RE.test(foldText(`${group} ${title}`));
+}
 
 // --- Texto ---
 

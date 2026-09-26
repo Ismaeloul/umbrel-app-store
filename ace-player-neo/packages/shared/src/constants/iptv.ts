@@ -22,9 +22,18 @@ const HOUR = 60 * MINUTE;
 export const IPTV_MIN_SCORE = RESOLUTION_EXACT_SCORE;
 /** Puntuación de una IPTV confirmada por la guía (§4.3 y §4.5). */
 export const IPTV_GUIDE_SCORE = 100;
-/** Candidatas IPTV por resolución como mucho: un cartel por canal y 2 en total (§4.3, D23). */
-export const IPTV_MAX_CANDIDATES = 2;
-/** Variantes de respaldo (FHD, HD, reserva) que guarda el servidor por canal, además de la principal (§4.3). */
+/**
+ * Carteles IPTV por resolución como mucho (§17, D23): un cartel por variante
+ * de resolución de cada canal (1080p, 4K, 720p, SD, reserva), 4 en total.
+ */
+export const IPTV_MAX_CANDIDATES = 4;
+/** Canales IPTV distintos que tienen sitio asegurado entre esos 4 carteles (el de la guía y el del nombre, §17). */
+export const IPTV_MAX_MATCHED_CHANNELS = 2;
+/**
+ * Variantes sin cartel propio (otra copia de la misma resolución, la quinta
+ * variante…) que el relé prueba detrás de un cartel antes de darlo por caído
+ * (§17 y §6.1).
+ */
 export const IPTV_MAX_BACKUP_VARIANTS = 2;
 /** Nombres de canal confirmados por la guía que se usan como pista para AceStream (§4.5). */
 export const IPTV_MAX_GUIDE_HINTS = 2;

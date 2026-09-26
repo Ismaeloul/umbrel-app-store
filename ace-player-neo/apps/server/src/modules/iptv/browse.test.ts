@@ -17,7 +17,6 @@ import {
   decodeCursor,
   encodeCursor,
   rowQualities,
-  rowVariants,
   type BrowseIndex,
   type BrowseRequest,
 } from './browse.js';
@@ -147,18 +146,6 @@ describe('filas y categorías (§16.3)', () => {
     const index = buildBrowseIndex(catalogOf(channels));
     expect(titles(index, query(index).rows)).toEqual(['B/ES', 'A/ES', 'C/ES']);
     expect(index.best[0]?.id).toBe(hexId(3));
-  });
-
-  it('rowVariants: la fila del id tocado (su clave y su país), de mejor a peor', () => {
-    const catalog = catalogOf(SMALL);
-    const uk = catalog.get(hexId(4))!;
-    expect(rowVariants(catalog, uk).map((entry) => entry.id)).toEqual([hexId(4)]);
-    const esHd = catalog.get(hexId(2))!;
-    expect(rowVariants(catalog, esHd).map((entry) => entry.id)).toEqual([
-      hexId(1),
-      hexId(2),
-      hexId(3),
-    ]);
   });
 });
 

@@ -446,7 +446,7 @@ describe('filtro de Canales con IPTV (docs/iptv.md §14.5)', () => {
     const section = await screen.findByRole('region', { name: 'En tu IPTV' });
     const row = within(section).getByRole('link', { name: 'Telecinco' }).closest('article')!;
     expect(within(row).getByText('IPTV')).toBeInTheDocument();
-    expect(within(row).getByText('Casa · 1080p')).toBeInTheDocument();
+    expect(within(row).getByText('Casa')).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Buscar «tele» en tu IPTV y el motor' }),
     ).toBeInTheDocument();

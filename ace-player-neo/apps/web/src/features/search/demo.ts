@@ -74,6 +74,12 @@ export function demoSearch(query: string): SearchResponse {
   return { query: q, results };
 }
 
+/* Calidades de los canales de la IPTV de ejemplo (una fila por canal, §17): «DAZN 1» y «DAZN LaLiga» tienen varias. */
+const DEMO_QUALITIES: Readonly<Record<string, ('uhd' | 'fhd' | 'hd' | 'sd')[]>> = {
+  'DAZN 1': ['uhd', 'fhd', 'hd', 'sd'],
+  'DAZN LaLiga': ['fhd', 'hd'],
+};
+
 export function demoIptvChannels(query: string): IptvChannelsResponse {
   const q = foldText(query).slice(0, 80);
   const channels = DEMO_IPTV_SEARCH.filter(([title]) => foldText(title).includes(q)).map(
@@ -81,6 +87,8 @@ export function demoIptvChannels(query: string): IptvChannelsResponse {
       id: demoIptvId(title),
       title,
       quality,
+      qualities: DEMO_QUALITIES[title] ?? [quality],
+      country: null,
       provider: 'Casa',
       library: [],
     }),

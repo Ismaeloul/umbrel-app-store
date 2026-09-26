@@ -42,6 +42,7 @@ import {
   type IptvIdState,
   type IptvFile,
   type IptvKind,
+  type IptvQuality,
   type IptvProviderRecord,
   type IptvProviderView,
   type IptvSaveBody,
@@ -62,11 +63,10 @@ import {
   decodeCursor,
   encodeCursor,
   rowQualities,
-  rowVariants,
   type BrowseCategory,
   type BrowseIndex,
 } from './browse.js';
-import { Catalog, CatalogBuilder, type CatalogEntry } from './catalog.js';
+import { Catalog, CatalogBuilder, channelIdOf, type CatalogEntry } from './catalog.js';
 import { loadIptvKeys, openJson, sealJson, secretAad } from './crypto.js';
 import { failureDetail, isTransientSaveFailure, toIptvError } from './errors.js';
 import {
@@ -80,12 +80,16 @@ import { iptvChannelId, isIptvId, m3uKey, xtreamKey } from './ids.js';
 import { guideGroupMatches, mergeIptvMatches } from './layer.js';
 import { parseM3uStream } from './m3u.js';
 import {
+  groupMatch,
   matchIptvChannels,
-  pickVariants,
+  planVariants,
+  relayVariants,
   sameChannelScore,
   type ChannelScorer,
   type IptvGroupMatch,
+  type VariantOptions,
 } from './match.js';
+import { qualityFromHeight, qualityHeightRank } from './names.js';
 import { probeIptvStream } from './probe.js';
 import { IptvRedactor } from './redact.js';
 import { relinkLibrary } from './relink.js';
@@ -95,6 +99,7 @@ import {
   libraryMatches,
   searchCatalog,
   searchIndex,
+  titleBucket,
   type LibraryCandidate,
   type SearchGroup,
 } from './search.js';
@@ -250,6 +255,13 @@ export class IptvServiceImpl implements IptvService {
   /** Favoritos IPTV que no casan tras sincronizar: id → desde cuándo (§14.6, solo en memoria). */
   private readonly missingFavorites = new Map<string, number>();
   private relinking: Promise<void> | null = null;
+  /**
+   * Calidad real de una variante (id → calidad), sabida por el stream: la
+   * `RESOLUTION` de la maestra HLS que abre el relé o la altura que da
+   * ffprobe en la sonda de fondo. Manda sobre la del nombre (§17). Solo en
+   * memoria y con tope; los ids ya llevan el proveedor dentro (§4.1).
+   */
+  private readonly measured = new Map<string, IptvQuality>();
   /** Índice de la pestaña IPTV del catálogo vigente (§16.5): se monta al aplicar y al cargar. */
   private browseState: {
     readonly catalog: Catalog;
@@ -272,11 +284,39 @@ export class IptvServiceImpl implements IptvService {
       net: deps.net,
       policy: () => this.policy(),
       refreshRef: (entryId) => this.refreshRef(entryId),
+      onMedia: (entryId, media) => this.noteQuality(entryId, media.height),
       ...(deps.relayHost ? { host: deps.relayHost } : {}),
     });
   }
 
   private readonly logger: IptvDeps['logger'];
+
+  /** La calidad que manda de una variante: la del stream real si se conoce; si no, la del nombre (§17). */
+  private readonly qualityOf = (entry: CatalogEntry): IptvQuality | null =>
+    this.measured.get(entry.id) ?? entry.quality;
+
+  /** Apunta la calidad real de una variante por la altura de su vídeo (§17). */
+  noteQuality(entryId: string, height: number | null | undefined): void {
+    const quality = qualityFromHeight(height);
+    if (!quality) return;
+    const id = entryId.toLowerCase();
+    if (this.measured.get(id) === quality) return;
+    this.measured.delete(id);
+    this.measured.set(id, quality);
+    if (this.measured.size > 5000) {
+      const oldest = this.measured.keys().next().value;
+      if (oldest !== undefined) this.measured.delete(oldest);
+    }
+  }
+
+  /** Carteles y respaldo del canal de una variante (mismo grupo y país), con la calidad real (§17). */
+  private planOf(entry: CatalogEntry, reliability?: (id: string) => number | null) {
+    const catalog = this.catalog as Catalog;
+    return planVariants(catalog.channelOf(entry), {
+      qualityOf: this.qualityOf,
+      ...(reliability ? { reliability } : {}),
+    });
+  }
 
   private get scorer(): ChannelScorer {
     return this.deps.scorer ?? plainScorer;
@@ -1401,11 +1441,18 @@ export class IptvServiceImpl implements IptvService {
     return entry ? entry.display : null;
   }
 
-  tappedCandidate(id: string): IptvResolutionCandidate | null {
-    if (this.classify(id) !== 'owned') return null;
+  tappedCandidates(id: string): IptvResolutionCandidate[] {
+    if (this.classify(id) !== 'owned') return [];
     const entry = (this.catalog as Catalog).get(id);
-    if (!entry) return null;
-    return this.candidateFor(id, { score: 100, matchedChannel: entry.display || entry.key });
+    if (!entry) return [];
+    const match = groupMatch(
+      entry.key,
+      entry.bucket,
+      (this.catalog as Catalog).channelOf(entry),
+      { score: 100, matchedChannel: entry.display || entry.key, guide: false },
+      { qualityOf: this.qualityOf },
+    );
+    return match ? this.toCandidates(match) : [];
   }
 
   sameChannelScore(base: string, other: string): number {
@@ -1427,15 +1474,33 @@ export class IptvServiceImpl implements IptvService {
     const matchOptions = {
       scorer: this.scorer,
       isIptvId: (id: string) => isIptvId(keys, id),
-      groupOf: (id: string) => catalog.get(id)?.key ?? null,
+      channelOf: (id: string) => {
+        const entry = catalog.get(id);
+        return entry ? channelIdOf(entry) : null;
+      },
     };
-    const row = (group: SearchGroup, library: string[]): IptvChannel => ({
-      id: group.best.id,
-      title: (group.best.display || group.key).slice(0, 120),
-      quality: group.best.quality,
-      provider: record.name,
-      library,
-    });
+    /* Una fila por canal (§17): el id es el de la variante que arranca primero y
+       `qualities`, todas las que tiene, de mayor a menor resolución. */
+    const row = (group: SearchGroup, library: string[]): IptvChannel => {
+      const plan = planVariants(group.entries, { qualityOf: this.qualityOf });
+      const first = plan?.posters[0] ?? group.best;
+      const qualities = [
+        ...new Set(
+          group.entries
+            .map((entry) => this.qualityOf(entry))
+            .filter((quality): quality is IptvQuality => quality !== null),
+        ),
+      ].sort((a, b) => qualityHeightRank(b) - qualityHeightRank(a));
+      return {
+        id: first.id,
+        title: (group.best.display || group.key).slice(0, 120),
+        quality: this.qualityOf(first),
+        qualities,
+        country: group.bucket || null,
+        provider: record.name,
+        library,
+      };
+    };
     if (!found.key && candidates.length) {
       /* La consulta es solo calidad o adornos («hd», «4k»): no hay nombre que
          buscar en el catálogo, pero lo que tu biblioteca enseña con ese texto
@@ -1625,23 +1690,27 @@ export class IptvServiceImpl implements IptvService {
     const index = searchIndex(this.catalog as Catalog);
     const bestFor = this.bestGroupFinder();
     const order: string[] = [];
-    const byKey = new Map<string, SearchGroup>();
+    const byChannel = new Map<string, SearchGroup>();
     for (const item of candidates) {
-      const key = options.isIptvId(item.id)
-        ? options.groupOf(item.id)
-        : (bestFor(item.title)?.key ?? null);
-      const group = key ? index.byKey.get(key) : undefined;
-      if (!group || byKey.has(group.key)) continue;
-      byKey.set(group.key, group);
-      order.push(group.key);
+      const channel = options.isIptvId(item.id)
+        ? options.channelOf(item.id)
+        : (bestFor(item.title)?.channel ?? null);
+      const group = channel ? index.byChannel.get(channel) : undefined;
+      if (!group || byChannel.has(group.channel)) continue;
+      byChannel.set(group.channel, group);
+      order.push(group.channel);
     }
-    return order.map((key) => {
-      const group = byKey.get(key) as SearchGroup;
+    return order.map((channel) => {
+      const group = byChannel.get(channel) as SearchGroup;
       return { group, library: libraryMatches(group, candidates, options) };
     });
   }
 
-  /** El grupo del buscador que es un título (≥ 92, desempate por orden del catálogo), con caché. */
+  /**
+   * El canal del buscador que es un título (≥ 92, desempate por orden del
+   * catálogo), con caché. El país cuenta (§17): un título sin país o de España
+   * es un canal de España o sin país, y «DE: DAZN 1», el canal alemán.
+   */
   private bestGroupFinder(): (title: string) => SearchGroup | null {
     const catalog = this.catalog as Catalog;
     const index = searchIndex(catalog);
@@ -1649,13 +1718,14 @@ export class IptvServiceImpl implements IptvService {
     /* Muchos resultados son el mismo canal con otro proveedor detrás de la flecha. */
     const byKey = new Map<string, SearchGroup | null>();
     return (title: string): SearchGroup | null => {
-      const key = normalizeChannelKey(title);
+      const bucket = titleBucket(title);
+      const key = `${normalizeChannelKey(title)}\u0000${bucket}`;
       const known = byKey.get(key);
       if (known !== undefined) return known;
       let best: SearchGroup | null = null;
       let bestScore = 0;
       for (const groupKey of catalog.preselect([title], IPTV_SEARCH.annotatePreselect)) {
-        const group = index.byKey.get(groupKey);
+        const group = index.byKey.get(groupKey)?.find((item) => item.bucket === bucket);
         if (!group) continue;
         const score = sameChannelScore(group.best.base, title, scorer);
         if (score < IPTV_MIN_SCORE) continue;
@@ -1676,7 +1746,11 @@ export class IptvServiceImpl implements IptvService {
     if (!results.length || !this.active()) return [...results];
     const bestFor = this.bestGroupFinder();
     return results.map((result) => {
-      const iptv = bestFor(result.title)?.best.id;
+      const group = bestFor(result.title);
+      /* El mismo id que la fila del canal en `iptvChannels` (la variante que arranca primero). */
+      const iptv = group
+        ? (planVariants(group.entries, { qualityOf: this.qualityOf })?.posters[0] ?? group.best).id
+        : undefined;
       return iptv ? { ...result, iptv } : result;
     });
   }
@@ -1700,13 +1774,13 @@ export class IptvServiceImpl implements IptvService {
     const catalog = this.catalog;
     if (!catalog || !this.active()) return;
     const keys = this.ensureKeys();
+    /* La variante que arranca primero en su canal (la del buscador, §17). */
     const bestOf = (id: string): string | null => {
       const entry = catalog.get(id);
       if (!entry) return null;
-      const picked = pickVariants(
-        catalog.group(entry.key).filter((item) => item.country === null || item.country === 'ES'),
-      );
-      return (picked?.best ?? entry).id;
+      return (
+        planVariants(catalog.channelOf(entry), { qualityOf: this.qualityOf })?.posters[0] ?? entry
+      ).id;
     };
     const byName = new Map<string, string | null>();
     const options = {
@@ -1751,13 +1825,13 @@ export class IptvServiceImpl implements IptvService {
     }
   }
 
-  private toCandidate(match: IptvGroupMatch): IptvResolutionCandidate {
+  /** Una candidata por variante (cartel, §17): su calidad, si es de reserva y el país si no es España. */
+  private toCandidate(match: IptvGroupMatch, entry: CatalogEntry): IptvResolutionCandidate {
     const record = this.record as IptvProviderRecord;
-    const best = match.best;
     return {
-      id: best.id,
-      title: `${best.display} --> ${record.name}`,
-      alias: best.tvgId || null,
+      id: entry.id,
+      title: `${entry.display} --> ${record.name}`,
+      alias: entry.tvgId || null,
       ih: false,
       source: 'iptv',
       score: match.score,
@@ -1769,34 +1843,41 @@ export class IptvServiceImpl implements IptvService {
       bitrate: null,
       iptv: {
         provider: record.name,
-        quality: best.quality,
-        backup: best.backup,
+        quality: this.qualityOf(entry),
+        backup: entry.backup,
         guide: match.guide,
+        ...(match.bucket ? { country: match.bucket } : {}),
       },
     };
+  }
+
+  /** Los carteles de un canal emparejado, en orden (§17). */
+  private toCandidates(match: IptvGroupMatch): IptvResolutionCandidate[] {
+    return match.posters.map((entry) => this.toCandidate(match, entry));
   }
 
   resolve(request: IptvResolveRequest): IptvResolveResult {
     if (!this.active()) return { candidates: [], hints: [], consulted: false };
     const catalog = this.catalog as Catalog;
+    const variantOptions = {
+      qualityOf: this.qualityOf,
+      ...(request.reliability ? { reliability: request.reliability } : {}),
+    };
     const byName = matchIptvChannels(catalog, request.channels, {
       scorer: request.scorer,
-      ...(request.reliability ? { reliability: request.reliability } : {}),
+      ...variantOptions,
     });
-    const byGuide = request.program ? this.guideMatches(request.program, request.reliability) : [];
+    const byGuide = request.program ? this.guideMatches(request.program, variantOptions) : [];
     const layer = mergeIptvMatches(byGuide, byName);
     return {
-      candidates: layer.matches.map((match) => this.toCandidate(match)),
+      candidates: layer.matches.flatMap((match) => this.toCandidates(match)),
       hints: layer.hints,
       consulted: true,
     };
   }
 
   /** Canales confirmados por la guía para un partido (caché de 10 min). */
-  private guideMatches(
-    program: IptvProgramInput,
-    reliability?: (id: string) => number | null,
-  ): IptvGroupMatch[] {
+  private guideMatches(program: IptvProgramInput, options: VariantOptions = {}): IptvGroupMatch[] {
     const window = this.guide;
     const catalog = this.catalog;
     if (!window || !catalog || program.start === null || !program.home || !program.away) return [];
@@ -1804,7 +1885,7 @@ export class IptvServiceImpl implements IptvService {
     const cacheKey = `${program.id}|${program.start}|${program.channels.join(',')}|${catalog.builtAt}|${window.builtAt}`;
     const cached = this.guideCache.get(cacheKey);
     if (cached && now - cached.at < 10 * MINUTE) return cached.result;
-    const result = guideGroupMatches(catalog, window, program, reliability);
+    const result = guideGroupMatches(catalog, window, program, options);
     this.guideCache.set(cacheKey, { at: now, result });
     if (this.guideCache.size > 64) {
       const oldest = this.guideCache.keys().next().value;
@@ -1821,17 +1902,15 @@ export class IptvServiceImpl implements IptvService {
     const catalog = this.catalog as Catalog;
     const entry = catalog.get(id);
     if (!entry) return null;
-    /* La fila del id tocado: su clave y su país (§16.3, D31). «UK: DAZN 1» no abre «ES: DAZN 1». */
-    const picked = pickVariants(rowVariants(catalog, entry));
-    const best = picked?.best ?? entry;
-    return this.toCandidate({
-      key: entry.key,
-      best,
-      variants: picked?.variants ?? [],
-      score: match.score,
-      matchedChannel: match.matchedChannel,
-      guide: false,
-    });
+    /* La variante que arranca primero en su canal (§17): la misma que sale en la capa IPTV. */
+    const found = groupMatch(
+      entry.key,
+      entry.bucket,
+      catalog.channelOf(entry),
+      { score: match.score, matchedChannel: match.matchedChannel, guide: false },
+      { qualityOf: this.qualityOf },
+    );
+    return found ? this.toCandidate(found, found.best) : null;
   }
 
   touch(mode: 'default' | 'research'): void {
@@ -1847,13 +1926,12 @@ export class IptvServiceImpl implements IptvService {
   private variantsOf(entry: CatalogEntry): RelayVariant[] {
     const catalog = this.catalog as Catalog;
     const secrets = this.secrets as Secrets;
-    /* Respaldos de la misma fila: su clave y su país (§16.3, D31). */
-    const picked = pickVariants(rowVariants(catalog, entry));
-    /* El id pedido va primero (es el que se enseñó); detrás, sus respaldos. */
-    const ordered = [entry, ...(picked ? [picked.best, ...picked.variants] : [])].filter(
-      (item, index, list) => list.findIndex((other) => other.id === item.id) === index,
-    );
-    return ordered.slice(0, 3).map((item) => ({
+    /* El id pedido va primero (es el cartel que se eligió); detrás, SOLO las
+       variantes sin cartel propio que le tocan (§17). Las que tienen cartel las
+       prueba la web, que así enseña en cuál estás. */
+    const plan = this.planOf(entry);
+    const ordered = plan ? relayVariants(plan, entry, { qualityOf: this.qualityOf }) : [entry];
+    return ordered.map((item) => ({
       entryId: item.id,
       url:
         secrets.kind === 'xtream'
@@ -2025,7 +2103,14 @@ export class IptvServiceImpl implements IptvService {
     });
     this.probe = { controller, promise };
     try {
-      return await promise;
+      const result = await promise;
+      /* La altura que da ffprobe es la calidad real de esa variante (§17); no va al veredicto. */
+      if (result.height) {
+        this.noteQuality(variant.entryId, result.height);
+        const { height: _height, ...verdict } = result;
+        return verdict;
+      }
+      return result;
     } catch {
       return null;
     } finally {
