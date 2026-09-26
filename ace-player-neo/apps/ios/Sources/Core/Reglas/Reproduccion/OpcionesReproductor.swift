@@ -64,7 +64,9 @@ enum OpcionesReproductor {
 
     /// `/^[a-f0-9]{40}$/` (la web solo deja copiar un hash de verdad).
     static func esHashMinusculas(_ texto: String) -> Bool {
-        texto.count == 40 && texto.allSatisfy { $0.isHexDigit && !$0.isUppercase }
+        // Solo ASCII: `isHexDigit` también acepta los dígitos de ancho completo («０»).
+        let escalares: String.UnicodeScalarView = texto.unicodeScalars
+        return escalares.count == 40 && escalares.allSatisfy { ReglasFuentes.esHexASCII($0, mayusculas: false) }
     }
 
     // MARK: «Abrir en…» (D7, player/clipboard.ts)

@@ -264,10 +264,9 @@ enum ReglasFuentes {
             corto: quien.isEmpty ? (lista.isEmpty ? tipo : lista) : quien)
     }
 
-    /// Kbit/s → «6,2» (es-ES, un decimal).
-    static func mbit(_ kbps: Double) -> String {
-        String(format: "%.1f", kbps / 1000).replacingOccurrences(of: ".", with: ",")
-    }
+    /// Kbit/s → «6,2» (`mbit`: `toLocaleString('es-ES')` con un decimal y el redondeo de ICU, M2). Con
+    /// `String(format:)` 950 salía «0,9» y la web dice «1,0» (vectores-fuentes.json).
+    static func mbit(_ kbps: Double) -> String { NumerosES.mbit(kbps: kbps) }
 
     /// `swarmMbit`: Mbit/s del enjambre en la prueba; nil si no se midió.
     static func mbitEnjambre(_ entrada: EntradaFuente) -> String? {
@@ -488,7 +487,16 @@ enum ReglasFuentes {
 
     /// `HASH_RE`: 40 hexadecimales en cualquier caja.
     static func esHash(_ texto: String) -> Bool {
-        texto.count == 40 && texto.allSatisfy(\.isHexDigit)
+        let escalares: String.UnicodeScalarView = texto.unicodeScalars
+        return escalares.count == 40 && escalares.allSatisfy { esHexASCII($0, mayusculas: true) }
+    }
+
+    /// `[a-f0-9]` (o `[a-fA-F0-9]`) de las expresiones de la web: solo ASCII (`isHexDigit` acepta «０»).
+    static func esHexASCII(_ escalar: Unicode.Scalar, mayusculas: Bool) -> Bool {
+        let valor: UInt32 = escalar.value
+        if valor >= 0x30 && valor <= 0x39 { return true }
+        if valor >= 0x61 && valor <= 0x66 { return true }
+        return mayusculas && valor >= 0x41 && valor <= 0x46
     }
 
     /// Un Content ID o enlace `acestream://` de 40 hex EXACTOS → el hash (lo usa la búsqueda de M5). Para pegar
