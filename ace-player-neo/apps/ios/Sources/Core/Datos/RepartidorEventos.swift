@@ -120,9 +120,11 @@ import Foundation
         case .senalPartido(let progreso):
             let ahora: Date = senales.reloj.ahora  // en su línea: tipado en 237 ms (CI 36230463114)
             senales.anotar(progreso, ahora: ahora)
-            fuentes.procesar(.scanProgress(progreso))
+            let evento: SSEEvent = SSEEvent.scanProgress(progreso)  // tipo explícito: 220 ms en CI 36241843368
+            fuentes.procesar(evento)
         case .veredicto(let veredicto):
-            fuentes.procesar(.scanVerdict(veredicto))
+            let evento: SSEEvent = SSEEvent.scanVerdict(veredicto)
+            fuentes.procesar(evento)
         case .dispositivos(let cambio):
             revocadoDesdeOtro(cambio)
         case .alReproductor(let evento):
