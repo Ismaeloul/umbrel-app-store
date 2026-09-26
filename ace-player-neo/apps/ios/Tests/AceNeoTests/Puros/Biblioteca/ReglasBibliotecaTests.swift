@@ -111,6 +111,27 @@ private func marcador(_ estado: String, reloj: String = "72'", detalle: String =
         #expect(ReglasBiblioteca.conocido(biblioteca, hash: String(repeating: "f", count: 40)) == nil)
         #expect(ReglasBiblioteca.conocido(nil, hash: "x") == nil)
         #expect(ReglasBiblioteca.tituloFavoritoPorDefecto("abcdef0123") == "Canal abcdef")
+        let ahora = Date(timeIntervalSince1970: 1_790_000_000)
+        let deRecientes = ReglasBiblioteca.favoritoNuevo(
+            hash: reciente.id, escrito: "  Mi   canal ", categoria: "Deportes", ih: nil, biblioteca: biblioteca, ahora: ahora)
+        #expect(deRecientes.title == "Mi canal")
+        #expect(deRecientes.category == "Deportes")
+        #expect(deRecientes.type == .fav)
+        #expect(deRecientes.date == FechaISO.texto(ahora))
+        #expect(deRecientes.fromWebSync == false)
+        #expect(deRecientes.ih == false)
+        let sinCategoria = ReglasBiblioteca.favoritoNuevo(
+            hash: "abcdef0123", escrito: " ", categoria: "", ih: true, biblioteca: nil, ahora: ahora)
+        #expect(sinCategoria.title == "Canal abcdef")
+        #expect(sinCategoria.category == "Guardado")
+        #expect(sinCategoria.ih == true)
+        #expect(ReglasBiblioteca.favoritoNuevo(hash: "x", escrito: "", categoria: nil, ih: nil, biblioteca: nil, ahora: ahora).category == "Guardado")
+        if let deLaLista = biblioteca.web.first {
+            let item = ReglasBiblioteca.favoritoNuevo(
+                hash: deLaLista.id, escrito: "", categoria: "Cine", ih: false, biblioteca: biblioteca, ahora: ahora)
+            #expect(item.fromWebSync == true)
+            #expect(item.category == "Cine")
+        }
         #expect(ReglasBiblioteca.enTuBiblioteca(biblioteca, texto: "l").map(\.title) == ["Canal de prueba", "L1", "L2", "L3"])
         #expect(ReglasBiblioteca.enTuBiblioteca(biblioteca, texto: "e").map(\.title) == ["Viejo", "Canal de prueba"])
     }

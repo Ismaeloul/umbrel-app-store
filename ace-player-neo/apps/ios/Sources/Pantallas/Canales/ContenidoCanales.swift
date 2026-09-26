@@ -19,7 +19,7 @@ struct ContenidoCanales: View {
     private var acciones: AccionesCanal {
         AccionesCanal(
             datos: datos, navegador: navegador, hojas: hojas, avisos: avisos, haptica: haptica, reproductor: reproductor,
-            bajas: bajas)
+            bajas: bajas, alGuardarIrAFavoritos: true)
     }
 
     private var seccion: SeccionBiblioteca { SeccionBiblioteca(navegador.pestanaCanales) }

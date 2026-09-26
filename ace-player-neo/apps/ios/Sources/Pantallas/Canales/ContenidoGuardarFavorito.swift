@@ -3,7 +3,7 @@ import SwiftUI
 /* Hoja «Guardar favorito» (M5; a5 §3.10; library/sheets.tsx y data.ts `saveFavorite`): «Nombre del canal»
    (máx. 120; la pista «Si lo dejas vacío: «Canal {6}»» con el campo vacío), la caja «Hash» y «Guardar en
    favoritos». Al guardar: se cierra, aparece arriba de Favoritos al instante, aviso y háptica de éxito, y la
-   biblioteca salta a Favoritos (desde el buscador, no). */
+   biblioteca salta a Favoritos si viene de Canales (desde Buscar, no). */
 
 struct ContenidoGuardarFavorito: View {
     let canal: RefCanal
@@ -55,28 +55,29 @@ struct ContenidoGuardarFavorito: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// `saveFavorite`: optimista (arriba de Favoritos, categoría «Guardado» si no traía) y, si falla, se deshace.
+    /// `saveFavorite`: optimista (arriba de Favoritos con la categoría de la fila o «Guardado») y, si falla, se
+    /// deshace. Solo desde Canales (`onFavoriteSaved`) la biblioteca salta a Favoritos al guardar.
     private func guardar() {
-        let escrito = ModeloGustos.colapsar(valor)
-        let titulo = escrito.isEmpty ? ReglasBiblioteca.tituloFavoritoPorDefecto(canal.hash) : escrito
-        hojas.cerrar()
+        guard !ocupado else { return }
         let anterior = datos.biblioteca.datos
-        let deLista = anterior?.web.first { $0.id == canal.hash }
-        let categoria = deLista?.category.isEmpty == false ? deLista?.category ?? "Guardado" : "Guardado"
+        let reloj: any Reloj = ContenedorApp.actual?.reloj ?? RelojSistema()
+        let nuevo = ReglasBiblioteca.favoritoNuevo(
+            hash: canal.hash, escrito: valor, categoria: canal.categoria, ih: canal.ih, biblioteca: anterior,
+            ahora: reloj.ahora)
         let entrada = ItemInput(
-            id: canal.hash, title: titulo, category: categoria, fromWebSync: deLista != nil, ih: canal.ih == true)
+            id: nuevo.id, title: nuevo.title, category: nuevo.category, fromWebSync: nuevo.fromWebSync, ih: nuevo.ih)
+        ocupado = true
+        hojas.cerrar()
         if var optimista = anterior {
-            let nuevo = Item(
-                id: canal.hash, title: titulo, alias: nil, type: .fav, category: categoria, date: "", fromWebSync: deLista != nil,
-                ih: canal.ih == true)
-            optimista.favorites = [nuevo] + optimista.favorites.filter { $0.id != canal.hash }
+            optimista.favorites = [nuevo] + optimista.favorites.filter { $0.id != nuevo.id }
             datos.biblioteca.escribir(optimista)
         }
-        let saltar = canal.coleccion != nil
+        let saltar = canal.alGuardarIrAFavoritos
         Task {
+            defer { ocupado = false }
             do {
                 try await datos.mutarBiblioteca(.favoriteUpsert(entrada))
-                avisos.avisar(TextosCanal.guardado(titulo), tono: .ok, icono: .star)
+                avisos.avisar(TextosCanal.guardado(nuevo.title), tono: .ok, icono: .star)
                 haptica.disparar(.exito)
                 if saltar { navegador.pestanaCanales = .favoritos }
             } catch {

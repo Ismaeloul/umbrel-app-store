@@ -42,6 +42,9 @@ struct AccionesCanal {
     let haptica: Haptica
     let reproductor: Reproductor
     let bajas: BajasPendientes
+    /// Al guardar un favorito nuevo, la biblioteca salta a Favoritos (`onFavoriteSaved`: solo Canales lo pasa;
+    /// Buscar no, ni para sus filas «En tu biblioteca»).
+    var alGuardarIrAFavoritos = false
 
     private var biblioteca: LibraryView? { datos.biblioteca.datos }
 
@@ -56,14 +59,17 @@ struct AccionesCanal {
         navegador.ir(.canal(hash: canal.id))
     }
 
-    /// Favorito: si lo es, se quita con «Deshacer»; si no, la hoja «Guardar favorito» (con la colección de la
-    /// fila: desde la biblioteca, al guardar se salta a Favoritos; desde el buscador, no).
+    /// Favorito: si lo es, se quita con «Deshacer»; si no, la hoja «Guardar favorito» con la categoría de la
+    /// fila (`toggleFavorite`: Recientes, lista o resultado del motor) y el salto a Favoritos si lo pide Canales.
     func alternarFavorito(_ canal: CanalFila, coleccion: LibraryCollection?) {
         if let existente = biblioteca?.favorites.first(where: { $0.id == canal.id }) {
             bajas.quitar(RefCanal(hash: existente.id, titulo: existente.title, coleccion: .favorites, ih: existente.ih), datos: datos, avisos: avisos)
             return
         }
-        hojas.abrir(.guardarFavorito(RefCanal(hash: canal.id, titulo: canal.titulo, coleccion: coleccion, ih: canal.ih)))
+        let ref = RefCanal(
+            hash: canal.id, titulo: canal.titulo, coleccion: coleccion, ih: canal.ih, categoria: canal.categoria,
+            alGuardarIrAFavoritos: alGuardarIrAFavoritos)
+        hojas.abrir(.guardarFavorito(ref))
     }
 
     /// El menú de «…» y de la pulsación larga (a5 §3.9), con las mismas opciones para VoiceOver.

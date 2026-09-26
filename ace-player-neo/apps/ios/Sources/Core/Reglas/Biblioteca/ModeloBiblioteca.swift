@@ -233,6 +233,20 @@ enum ReglasBiblioteca {
     /// `defaultFavoriteTitle`: «Canal {6 del hash}».
     static func tituloFavoritoPorDefecto(_ hash: String) -> String { "Canal \(hash.prefix(6))" }
 
+    /// `saveFavorite`: el favorito nuevo. Título colapsado o «Canal {6}», la categoría de la fila o «Guardado»
+    /// (`input.category || 'Guardado'`), la fecha ISO de ahora y `fromWebSync` si el canal está en la lista.
+    static func favoritoNuevo(
+        hash: String, escrito: String, categoria: String?, ih: Bool?, biblioteca: LibraryView?, ahora: Date
+    ) -> Item {
+        let colapsado = ModeloGustos.colapsar(escrito)
+        let titulo = colapsado.isEmpty ? tituloFavoritoPorDefecto(hash) : colapsado
+        let deLista = biblioteca?.web.contains { $0.id == hash } ?? false
+        let categoriaFinal = (categoria?.isEmpty ?? true) ? "Guardado" : categoria ?? "Guardado"
+        return Item(
+            id: hash, title: titulo, alias: nil, type: .fav, category: categoriaFinal, date: FechaISO.texto(ahora),
+            fromWebSync: deLista, ih: ih == true)
+    }
+
     /// Contador accesible de una categoría o de «Emitiendo ahora»: «1 canal» / «2 canales».
     static func canales(_ n: Int) -> String { n == 1 ? "1 canal" : "\(n) canales" }
 }

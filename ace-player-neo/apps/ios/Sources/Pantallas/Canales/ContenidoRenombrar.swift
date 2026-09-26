@@ -32,13 +32,15 @@ struct ContenidoRenombrar: View {
     /// `renameChannel`.
     private func guardar() {
         let titulo = ModeloGustos.colapsar(valor)
-        guard !titulo.isEmpty else { return }
+        guard !titulo.isEmpty, !ocupado else { return }
         hojas.cerrar()
         guard titulo != canal.titulo, let coleccion = canal.coleccion else { return }
         let anterior = datos.biblioteca.datos
         if let anterior { datos.biblioteca.escribir(Self.renombrado(anterior, id: canal.hash, coleccion: coleccion, titulo: titulo)) }
         let fuente = coleccion == .web ? anterior?.activeWebSourceId : nil
+        ocupado = true
         Task {
+            defer { ocupado = false }
             do {
                 try await datos.mutarBiblioteca(.rename(collection: coleccion, id: canal.hash, title: titulo, sourceId: fuente))
                 avisos.avisar(TextosCanal.renombrado, tono: .ok)
