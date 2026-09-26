@@ -49,6 +49,11 @@ import Foundation
         let vigia = vigiaVersion
         sesion.conectar(datos: datos, tiempoReal: tiempoReal)
         sesion.vigiaVersion = vigia
+        let senales = self.senales
+        sesion.alOlvidarServidor = { [weak senales, weak vigia] in
+            senales?.vaciar()
+            vigia?.olvidarBase()
+        }
         sesion.alAvisar = { [weak avisos] aviso in
             avisos?.avisar(aviso.texto, tono: aviso.tono, icono: aviso.icono, duracion: aviso.duracion)
         }

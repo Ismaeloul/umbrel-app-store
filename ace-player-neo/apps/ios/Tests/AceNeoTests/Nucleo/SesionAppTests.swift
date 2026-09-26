@@ -75,6 +75,12 @@ final class SesionAppTests: XCTestCase {
     func testAccesoPerdidoConservaLasDirecciones() async throws {
         let (c, almacen, tokens) = PruebaDatos.contenedor()
         c.datos.sembrar(con: try PruebaDatos.arranque())
+        c.repartidor.vigiaVersion.leida("0.8.0")
+        let progreso = ScanProgressData(
+            jobId: "job-1", kind: .interactive, status: .running, total: 4, checked: 1, playable: 1, failed: 0,
+            waiting: 0, retryAt: nil, matchId: "demo-1")
+        c.senales.anotar(progreso, ahora: c.senales.reloj.ahora)
+        XCTAssertNotNil(c.senales.senal(partido: "demo-1"))
         var motivos: [MotivoEmparejar] = []
         c.sesion.alPerderAcceso = { motivos.append($0) }
         await c.sesion.accesoPerdido(.dispositivoRetirado)
@@ -85,6 +91,10 @@ final class SesionAppTests: XCTestCase {
         XCTAssertEqual(almacen.leer(), ServerConfig(lan: Prueba.base))
         XCTAssertNil(c.datos.biblioteca.datos)
         XCTAssertEqual(c.tiempoReal.estado, .inactivo)
+        // Lo del servidor anterior tampoco se queda: ni la señal del comprobador ni la versión base (otro
+        // servidor de otra versión no es «Tu Umbrel tiene ahora…»).
+        XCTAssertNil(c.senales.senal(partido: "demo-1"))
+        XCTAssertNil(c.repartidor.vigiaVersion.base)
     }
 
     /// Un 401 `device_revoked` de cualquier petición es acceso perdido con ese motivo (a2 §23.3).

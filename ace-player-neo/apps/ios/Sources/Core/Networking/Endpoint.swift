@@ -86,12 +86,13 @@ public struct Endpoint<Response: Decodable & Sendable>: Sendable {
     }
 
     /// Petición lista para `URLSession`. `timeoutInterval` es de inactividad (el plazo total lo pone
-    /// `APIClient`). Caché como la web (a7 §3.1): los GET revalidan con el ETag (`cache: no-cache`) y el
-    /// resto no usa la caché (`no-store`).
+    /// `APIClient`). Caché como la web (a7 §3.1): los GET siguen las cabeceras del servidor (el JSON de la API
+    /// va con `no-store` y no se guarda; lo que lleve `no-cache` y ETag se revalida) y el resto no usa la caché
+    /// (`no-store`). No `.reloadRevalidatingCacheData`: NSURLRequest.h la marca «Unimplemented».
     public func peticion(base: URL, token: String?) throws -> URLRequest {
         var peticion = URLRequest(url: try url(base: base), timeoutInterval: plazo)
         peticion.httpMethod = metodo.rawValue
-        peticion.cachePolicy = metodo == .get ? .reloadRevalidatingCacheData : .reloadIgnoringLocalCacheData
+        peticion.cachePolicy = metodo == .get ? .useProtocolCachePolicy : .reloadIgnoringLocalCacheData
         peticion.setValue("application/json", forHTTPHeaderField: "Accept")
         if let cuerpo {
             peticion.httpBody = cuerpo

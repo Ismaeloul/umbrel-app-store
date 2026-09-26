@@ -42,10 +42,10 @@ struct RutasTests {
         #expect(API.guardarAjustes(SettingsUpdateBody()).metodo == .put)
     }
 
-    /// Caché como la web (a7 §3.1): los GET revalidan con el ETag, el resto no usa la caché.
+    /// Caché como la web (a7 §3.1): los GET siguen las cabeceras del servidor, el resto no usa la caché.
     @Test func politicaDeCache() throws {
         let base = try #require(URL(string: "http://umbrel.local:7792"))
-        #expect(try API.agenda.peticion(base: base, token: nil).cachePolicy == .reloadRevalidatingCacheData)
+        #expect(try API.agenda.peticion(base: base, token: nil).cachePolicy == .useProtocolCachePolicy)
         #expect(try API.reiniciarMotor.peticion(base: base, token: nil).cachePolicy == .reloadIgnoringLocalCacheData)
     }
 

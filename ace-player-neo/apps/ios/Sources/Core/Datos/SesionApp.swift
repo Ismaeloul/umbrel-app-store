@@ -44,6 +44,9 @@ struct AvisoSesion: Sendable, Equatable {
     @ObservationIgnored var alAvisar: ((AvisoSesion) -> Void)?
     /// Pregunta la versión al volver tras ≥ 30 min fuera (a7 §5.2). Lo pone el repartidor.
     @ObservationIgnored var vigiaVersion: VigiaVersion?
+    /// Al salir y al emparejar: lo que se sabía del servidor anterior (señales del comprobador, versión base)
+    /// se olvida. Lo engancha el repartidor.
+    @ObservationIgnored var alOlvidarServidor: (() -> Void)?
 
     let entorno: Entorno
     @ObservationIgnored private weak var datos: DatosApp?
@@ -180,6 +183,7 @@ struct AvisoSesion: Sendable, Equatable {
         }
         dispositivo = respuesta.deviceId
         capacidades.olvidar()
+        alOlvidarServidor?()
         enlaceParaEmparejar = nil
         fase = .app
         await arrancar()
@@ -274,6 +278,7 @@ struct AvisoSesion: Sendable, Equatable {
         tiempoReal?.parar()
         try? entorno.tokens.borrarToken()
         datos?.vaciar()
+        alOlvidarServidor?()
         conexion = .conectando
         versionServidor = nil
         fase = .emparejar(motivo)

@@ -32,6 +32,9 @@ import SwiftUI
     @ObservationIgnored var alFallar: ((APIError) -> Void)?
     /// Sube al vaciar o forzar: una respuesta de una generación vieja se tira.
     @ObservationIgnored private var generacion = 0
+    /// Desde cuándo nadie la mira: al soltarla el último (`dejarDeMirar`) o, en las consultas con parámetro,
+    /// al crearla (`DatosApp`). Sin hora, nunca es recogible.
+    @ObservationIgnored var inactivaDesde: Date?
 
     init(_ politica: PoliticaConsulta = .porDefecto, pedir: @escaping @Sendable () async throws -> Valor) {
         self.politica = politica
@@ -110,7 +113,17 @@ import SwiftUI
 
     func empezarAMirar() { observadores += 1 }
 
-    func dejarDeMirar() { observadores = max(0, observadores - 1) }
+    func dejarDeMirar() {
+        observadores = max(0, observadores - 1)
+        if observadores == 0 { inactivaDesde = reloj.ahora }
+    }
+
+    /// Nadie la mira ni se está pidiendo desde hace `tras` (el `gcTime` de TanStack, 5 min en query.ts): se
+    /// puede tirar. `DatosApp` solo recoge las consultas con parámetro (búsquedas, precalentados, trabajos).
+    func recogible(ahora: Date, tras: TimeInterval) -> Bool {
+        guard observadores == 0, enVuelo == nil, let inactivaDesde else { return false }
+        return ahora.timeIntervalSince(inactivaDesde) >= tras
+    }
 
     /// La app vuelve a primer plano (`refetchOnWindowFocus`): solo las que alguien mira y estén caducadas.
     func volverActiva(tiempoRealAbierto: Bool) {
@@ -178,6 +191,19 @@ extension View {
     }
 }
 
+/// La clave de la tarea de `.mira(_:)`: si la vista pasa a mirar OTRA consulta (otra `q` en Buscar, una fila
+/// reutilizada con otro partido), la tarea vuelve a empezar con la nueva, como `useApiQuery` al cambiar su
+/// clave (`['v1','search',{q}]`, `['v1','footballPreheat',{matchId}]`).
+struct ClaveMira: Hashable {
+    let activa: Bool
+    let consulta: ObjectIdentifier
+
+    init<V: Sendable>(activa: Bool, consulta: Consulta<V>) {
+        self.activa = activa
+        self.consulta = ObjectIdentifier(consulta)
+    }
+}
+
 /// El `useApiQuery` de `.mira(_:)`.
 private struct MiraConsulta<V: Sendable>: ViewModifier {
     let consulta: Consulta<V>
@@ -185,7 +211,7 @@ private struct MiraConsulta<V: Sendable>: ViewModifier {
     @Environment(DatosApp.self) private var datos
 
     func body(content: Content) -> some View {
-        content.task(id: activa) { await mirar() }
+        content.task(id: ClaveMira(activa: activa, consulta: consulta)) { await mirar() }
     }
 
     private func mirar() async {

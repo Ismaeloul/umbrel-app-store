@@ -97,6 +97,74 @@ final class DatosAppTests: XCTestCase {
         XCTAssertEqual(datos.motor.datos?.online, false)
     }
 
+    /// A los 2,5 s: desde Ajustes solo el motor (SettingsView.tsx); desde Salud, motor y salud (health/engine.ts).
+    @MainActor
+    func testReiniciarMotorVuelveAMirarLoQueMiraLaWeb() async throws {
+        try PruebaDatos.servir([
+            "POST /native/api/v1/engine/restart": try PruebaDatos.fixture("engineRestart"),
+            "GET /native/api/v1/engine/status": try PruebaDatos.fixture("engineStatus"),
+            "GET /native/api/v1/health": try PruebaDatos.fixture("health"),
+        ])
+        let (datos, _) = datos()
+        datos.sembrar(con: try PruebaDatos.arranque())
+        datos.motor.empezarAMirar()
+        datos.salud.empezarAMirar()
+        _ = try await datos.reiniciarMotor()
+        let motorDeNuevo = await llegaA(5) { PruebaDatos.peticiones("GET", "engine/status") == 1 }
+        XCTAssertTrue(motorDeNuevo)
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(PruebaDatos.peticiones("GET", "health"), 0, "Desde Ajustes la salud no se invalida")
+
+        _ = try await datos.reiniciarMotor(desdeSalud: true)
+        let saludDeNuevo = await llegaA(5) { PruebaDatos.peticiones("GET", "health") == 1 }
+        XCTAssertTrue(saludDeNuevo)
+        let motorOtraVez = await llegaA { PruebaDatos.peticiones("GET", "engine/status") == 2 }
+        XCTAssertTrue(motorOtraVez)
+    }
+
+    /// La lista de dispositivos se vuelve a pedir aunque revocar falle (el `finally` de DevicesSection.tsx):
+    /// un 404 `device_not_found` porque la web ya lo revocó también quita la fila.
+    @MainActor
+    func testRevocarQueFallaTambienVuelveAPedirLaLista() async throws {
+        try PruebaDatos.servir([
+            "DELETE /native/api/v1/devices/dev_otro": (404, Prueba.errorJSON("device_not_found")),
+            "GET /native/api/v1/devices": try PruebaDatos.fixture("devicesList"),
+        ])
+        let (datos, _) = datos()
+        datos.dispositivos.empezarAMirar()
+        do {
+            try await datos.revocar(dispositivo: "dev_otro")
+            XCTFail("Un 404 debe llegar a quien llama (toast «No se pudo revocar…»)")
+        } catch {
+            XCTAssertEqual(APIError.desde(error).codigo, "device_not_found")
+        }
+        let pidioLaLista = await llegaA { PruebaDatos.peticiones("GET", "devices") == 1 }
+        XCTAssertTrue(pidioLaLista)
+    }
+
+    /// Las consultas con parámetro que nadie mira desde hace 5 min se tiran al crear otra (`gcTime`); las
+    /// que alguien mira o son recientes se quedan.
+    @MainActor
+    func testLasBusquedasViejasSinMirarSeRecogen() {
+        let (datos, _) = datos()
+        let reloj = RelojMovil(Date(timeIntervalSince1970: 1_790_000_000))
+        datos.reloj = reloj
+        let vieja = datos.busqueda("dazn")
+        let mirada = datos.busqueda("m+")
+        mirada.empezarAMirar()
+        let soltada = datos.busqueda("gol")
+        soltada.empezarAMirar()
+        reloj.avanzar(4 * 60)
+        soltada.dejarDeMirar()  // inactiva desde el minuto 4
+        reloj.avanzar(60)
+        _ = datos.busqueda("liga")  // minuto 5: «dazn» lleva 5 min sin nadie
+        XCTAssertNil(datos.busquedas["dazn"])
+        XCTAssertTrue(datos.busquedas["m+"] === mirada)
+        XCTAssertTrue(datos.busquedas["gol"] === soltada)
+        XCTAssertNotNil(datos.busquedas["liga"])
+        XCTAssertFalse(datos.busqueda("dazn") === vieja, "Volver a «dazn» crea otra")
+    }
+
     /// Un 403 `origin_forbidden` (servidor 0.8.0) se apunta, sin reintentos (es un 4xx).
     @MainActor
     func testUnServidorViejoCierraLaSalud() async throws {

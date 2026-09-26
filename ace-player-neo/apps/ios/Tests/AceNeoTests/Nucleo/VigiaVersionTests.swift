@@ -42,6 +42,21 @@ final class VigiaVersionTests: XCTestCase {
         XCTAssertEqual(cambios, ["0.8.1", "0.8.0"])
     }
 
+    /// Tras salir o emparejar con otro servidor, su versión es la nueva base: sin toast ni `alCambiar`.
+    @MainActor
+    func testOlvidarLaBaseNoAvisaDelServidorNuevo() {
+        let (vigia, avisos) = vigia()
+        var cambios: [String] = []
+        vigia.alCambiar = { cambios.append($0) }
+        vigia.leida("0.8.0")
+        vigia.olvidarBase()
+        XCTAssertNil(vigia.base)
+        vigia.leida("0.9.0")
+        XCTAssertEqual(vigia.base, "0.9.0")
+        XCTAssertTrue(cambios.isEmpty)
+        XCTAssertTrue(PruebaDatos.toasts(avisos).isEmpty)
+    }
+
     @MainActor
     func testRevisarPreguntaPing() async throws {
         try PruebaDatos.servir([:])  // ping: 0.7.0

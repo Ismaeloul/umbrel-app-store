@@ -15,15 +15,21 @@ import Network
     init(servidores: ServerResolver, alCambiar: @escaping () -> Void) {
         self.servidores = servidores
         self.alCambiar = alCambiar
-        monitor.pathUpdateHandler = { [weak self] camino in
-            let nueva = VigiaRed.firma(de: camino)
-            guard let vigia = self else { return }
-            Task { @MainActor in vigia.recibir(nueva) }
-        }
+        monitor.pathUpdateHandler = Self.manejador(para: self)
         monitor.start(queue: DispatchQueue(label: "es.ismaeloul.aceplayerneo.red"))  // permitido: NWPathMonitor exige una cola
     }
 
     deinit { monitor.cancel() }
+
+    /// Se crea fuera del actor principal (como `alCambiarLaRed` de la 0.8.0): Network llama al manejador en su
+    /// cola, así que el cierre no puede heredar el aislamiento del `init`.
+    private nonisolated static func manejador(para vigia: VigiaRed) -> @Sendable (NWPath) -> Void {
+        { [weak vigia] camino in
+            let nueva = firma(de: camino)
+            guard let vigia else { return }
+            Task { @MainActor in vigia.recibir(nueva) }
+        }
+    }
 
     /// Lo que distingue una red de otra: si hay salida y por qué interfaces.
     nonisolated static func firma(de camino: NWPath) -> String {

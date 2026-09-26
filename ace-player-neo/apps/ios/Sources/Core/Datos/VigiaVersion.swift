@@ -37,6 +37,13 @@ import Foundation
         leida(ping.version)
     }
 
+    /// Salir o emparejar de nuevo: la versión del servidor anterior no cuenta (otro servidor de otra versión no
+    /// es «Tu Umbrel tiene ahora…»). La próxima lectura vuelve a ser la base.
+    func olvidarBase() {
+        base = nil
+        anunciadas = []
+    }
+
     /// Una lectura de versión (de `ping` o de un `bootstrap`).
     func leida(_ version: String) {
         guard let actual = base else {

@@ -23,9 +23,10 @@ import Observation
     let dispositivos: Consulta<DevicesListResponse>
     let salud: Consulta<HealthResponse>
     let diagnosticos: Consulta<DiagnosticsListResponse>
-    private(set) var precalentados: [String: Consulta<PreheatResponse>] = [:]
-    private(set) var trabajos: [String: Consulta<ScanJob>] = [:]
-    private(set) var busquedas: [String: Consulta<SearchResponse>] = [:]
+    // Sin observar: cada vista mira su consulta, no la tabla (crear una no repinta las demás).
+    @ObservationIgnored private(set) var precalentados: [String: Consulta<PreheatResponse>] = [:]
+    @ObservationIgnored private(set) var trabajos: [String: Consulta<ScanJob>] = [:]
+    @ObservationIgnored private(set) var busquedas: [String: Consulta<SearchResponse>] = [:]
     var tiempoRealAbierto = false
 
     /// 403 `origin_forbidden` (u otro fallo) de una ruta de administración: lo apunta `SesionApp`.
@@ -43,6 +44,9 @@ import Observation
     static let limiteDiagnosticos = 200
     /// Tras «Reiniciar el motor» se vuelve a mirar a los 2,5 s (a7 §4.3).
     static let esperaTrasReiniciar: Duration = .milliseconds(2500)
+    /// Una consulta con parámetro que nadie mira desde hace 5 min se tira al crear otra (`gcTime` de
+    /// api/query.ts): así `busquedas` no crece con cada `q` tecleada.
+    static let recogerTras: TimeInterval = 5 * 60
 
     private let api: APIClient
     private let cache: DiskCache
@@ -182,29 +186,48 @@ import Observation
 
     func precalentado(partido id: String) -> Consulta<PreheatResponse> {
         if let hecha = precalentados[id] { return hecha }
+        precalentados = recoger(precalentados)
         let api = self.api
         let nueva = Consulta<PreheatResponse> { try await api.enviar(API.precalentado(partido: id)) }
-        nueva.reloj = reloj
+        preparar(nueva)
         precalentados[id] = nueva
         return nueva
     }
 
     func trabajo(_ id: String) -> Consulta<ScanJob> {
         if let hecha = trabajos[id] { return hecha }
+        trabajos = recoger(trabajos)
         let api = self.api
         let nueva = Consulta<ScanJob> { try await api.enviar(API.comprobacion(id: id)) }
-        nueva.reloj = reloj
+        preparar(nueva)
         trabajos[id] = nueva
         return nueva
     }
 
     func busqueda(_ q: String) -> Consulta<SearchResponse> {
         if let hecha = busquedas[q] { return hecha }
+        busquedas = recoger(busquedas)
         let api = self.api
         let nueva = Consulta<SearchResponse>(.busqueda) { try await api.enviar(API.buscar(q)) }
-        nueva.reloj = reloj
+        preparar(nueva)
         busquedas[q] = nueva
         return nueva
+    }
+
+    /// Reloj de la app y hora de creación (cuenta como inactiva hasta que alguien la mire).
+    private func preparar<V: Sendable>(_ consulta: Consulta<V>) {
+        consulta.reloj = reloj
+        consulta.inactivaDesde = reloj.ahora
+    }
+
+    /// La tabla sin las consultas que nadie mira desde hace `recogerTras`.
+    private func recoger<V: Sendable>(_ tabla: [String: Consulta<V>]) -> [String: Consulta<V>] {
+        let ahora = reloj.ahora
+        var quedan: [String: Consulta<V>] = [:]
+        for (clave, consulta) in tabla where !consulta.recogible(ahora: ahora, tras: Self.recogerTras) {
+            quedan[clave] = consulta
+        }
+        return quedan
     }
 
     // MARK: Mutaciones (a7 §4.3): escritura directa con la respuesta + lo que dependa. Sin reintentos.
@@ -244,30 +267,34 @@ import Observation
         aplicar(try await api.enviar(API.borrarDirectorio(id: id)))
     }
 
-    /// Al pulsar, el motor pasa a «reiniciando»; a los 2,5 s se vuelve a mirar (motor y salud).
-    func reiniciarMotor() async throws -> EngineRestartResponse {
+    /// Al pulsar, el motor pasa a «reiniciando»; a los 2,5 s, salga bien o mal, se vuelve a mirar el motor y,
+    /// desde Salud, también la salud (a7 §4.3): Ajustes solo invalida `engineStatus` (SettingsView.tsx) y
+    /// Salud, `engineStatus` y `health` (features/health/engine.ts).
+    func reiniciarMotor(desdeSalud: Bool = false) async throws -> EngineRestartResponse {
         motor.modificar { estado in
             estado.status = .restarting
             estado.online = false
         }
         defer {
             let motor = self.motor
-            let salud = self.salud
+            let salud: Consulta<HealthResponse>? = desdeSalud ? self.salud : nil
             Task {
                 try? await Task.sleep(for: Self.esperaTrasReiniciar)
                 motor.invalidar()
-                salud.invalidar()
+                salud?.invalidar()
             }
         }
         return try await api.enviar(API.reiniciarMotor)
     }
 
-    /// Revocar otro aparato (o el propio: eso lo hace `SesionApp.olvidarEsteIPhone`).
+    /// Revocar otro aparato (o el propio: eso lo hace `SesionApp.olvidarEsteIPhone`). La lista se vuelve a
+    /// pedir salga bien o mal (el `finally` de DevicesSection.tsx): un 404 `device_not_found` porque otro
+    /// ya lo revocó también quita la fila.
     func revocar(dispositivo id: String) async throws {
+        defer { dispositivos.invalidar() }
         _ = try await administrar(.deviceRevoke) { [api] in
             try await api.enviar(API.revocarDispositivo(id: id))
         }
-        dispositivos.invalidar()
     }
 
     /// Código y QR para emparejar otro aparato (0.8.1). El cuerpo lo arma `SesionApp.cuerpoParaCodigo()`.
