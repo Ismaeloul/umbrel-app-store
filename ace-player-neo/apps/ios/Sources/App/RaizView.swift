@@ -145,12 +145,13 @@ private struct ObjetosDeDatos: ViewModifier {
     }
 }
 
-/// Reproductor, presentación, sesión de fuentes, reloj compartido y bajas pendientes.
+/// Reproductor, presentación, sesión de fuentes, reloj compartido, bajas pendientes y la capa de vídeo con su PiP.
 private struct ObjetosDeReproduccion: ViewModifier {
     let contenedor: ContenedorApp
     func body(content: Content) -> some View {
         content.environment(contenedor.reproductor).environment(contenedor.presentacion)
             .environment(contenedor.fuentes).environment(contenedor.relojCompartido)
-            .environment(contenedor.bajas)
+            .environment(contenedor.bajas).environment(contenedor.pip)
+            .environment(\.servidores, contenedor.entorno.servidores)
     }
 }
