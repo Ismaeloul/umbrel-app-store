@@ -59,7 +59,7 @@ struct InspectorFuente: View {
             alternarFavorito(o, guardado: favorito)
         }
         if enPartido {
-            let rebuscando = video.fuentes.rebuscando
+            let rebuscando: Bool = video.fuentes.rebuscando
             AccionInspector(rebuscando ? "Rebuscando…" : "Rebuscar", icono: .refresh, girando: rebuscando) {
                 let fuentes = video.fuentes
                 Task { await fuentes.rebuscar() }

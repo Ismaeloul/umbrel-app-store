@@ -53,10 +53,10 @@ enum ErrorFuentes: Error, Sendable, Equatable {
     private(set) var trabajo: ScanJob?
     private(set) var resolucion: Resolution?
     /// Arranque por verificadas activo (`autoVerified`).
-    private(set) var automatico = false
-    private(set) var eleccionManual = false
-    private(set) var rebuscando = false
-    private(set) var detenida = false
+    private(set) var automatico: Bool = false
+    private(set) var eleccionManual: Bool = false
+    private(set) var rebuscando: Bool = false
+    private(set) var detenida: Bool = false
     private(set) var textoFallo: String?
     private(set) var textoEspera: String?
     /// `textoEspera` para `EntornoVideo.foto`: leído desde fuera a través del macro de `@Observable` tardaba más de
@@ -64,31 +64,31 @@ enum ErrorFuentes: Error, Sendable, Equatable {
     var esperaParaFoto: String? { textoEspera }
     /// Sin uso desde §0.0 punto 1: «Otras fuentes» del canal suelto son `entradas` (las hermanas de la biblioteca).
     private(set) var otrasSenales: [ResolutionCandidate] = []
-    private(set) var buscandoOtras = false
+    private(set) var buscandoOtras: Bool = false
 
     // Lo demás de `SessionState` (session.ts).
     private(set) var tipo: TipoSesionFuentes?
     private(set) var partido: FootballMatch?
     /// Nombre del canal (canal suelto).
-    private(set) var tituloCanal = ""
+    private(set) var tituloCanal: String = ""
     /// El trabajo del comprobador tal como lo guarda la web (`scan`).
     private(set) var comprobador: EstadoComprobador?
     private(set) var precalentado: PreheatPublic?
     /// Salto de entrada armado (`switchArmed`).
-    private(set) var saltoArmado = false
+    private(set) var saltoArmado: Bool = false
     /// La hoja «Encontrar canal» tiene que estar abierta (`resolverOpen`).
-    private(set) var resolverAbierto = false
+    private(set) var resolverAbierto: Bool = false
 
     @ObservationIgnored private weak var entorno: (any EntornoSesionFuentes)?
     /// Sondeo del comprobador sin SSE (SCAN_POLL_MS); los tests lo acortan.
     @ObservationIgnored var intervaloSondeo: Duration = .milliseconds(1500)
-    @ObservationIgnored private var generacion = 0
+    @ObservationIgnored private var generacion: Int = 0
     @ObservationIgnored private var tareaResolver: Task<Void, Never>?
     @ObservationIgnored private var seguimiento: SeguimientoTrabajo?
-    @ObservationIgnored private var fallosComprobador = 0
+    @ObservationIgnored private var fallosComprobador: Int = 0
     @ObservationIgnored private var reportesSeguidos: [String: ReporteSeguido] = [:]
     @ObservationIgnored private var rebusqueda: (antes: Set<String>, ia: Bool)?
-    @ObservationIgnored private var vistaAbierta = false
+    @ObservationIgnored private var vistaAbierta: Bool = false
 
     /// Plazos de la resolución (RESOLVE_TIMEOUT_MS / RESEARCH_TIMEOUT_MS): 20 s al entrar, 30 s al rebuscar.
     static let plazoResolver: TimeInterval = 20

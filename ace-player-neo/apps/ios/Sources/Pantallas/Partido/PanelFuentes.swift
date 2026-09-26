@@ -144,7 +144,7 @@ private struct CabeceraFuentes: View {
     }
 
     private var rebuscar: some View {
-        let rebuscando = video.fuentes.rebuscando
+        let rebuscando: Bool = video.fuentes.rebuscando
         return Button {
             let fuentes = video.fuentes
             Task { await fuentes.rebuscar() }
@@ -169,7 +169,7 @@ private struct ProgresoComprobador: View {
     @Environment(RelojCompartido.self) private var reloj
 
     var body: some View {
-        let comprobador = video.fuentes.comprobador
+        let comprobador: EstadoComprobador? = video.fuentes.comprobador
         let valor = resolviendo ? 0 : video.fuentes.progreso
         let enMarcha = comprobador.map { $0.estado != .complete } ?? false
         VStack(alignment: .leading, spacing: 8) {
@@ -243,7 +243,7 @@ private struct AvisoFallo: View {
 
     var body: some View {
         let forma = RoundedRectangle(cornerRadius: R.l, style: .circular)
-        let rebuscando = video.fuentes.rebuscando
+        let rebuscando: Bool = video.fuentes.rebuscando
         VStack(alignment: .leading, spacing: 12) {
             Text(texto).estilo(EstiloTexto(tamano: 15, peso: 450, altoLinea: 1.25)).foregroundStyle(Palco.text)
             HStack(spacing: 8) {
