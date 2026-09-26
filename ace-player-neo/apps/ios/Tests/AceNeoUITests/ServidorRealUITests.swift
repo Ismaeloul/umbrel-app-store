@@ -197,17 +197,21 @@ final class ServidorRealUITests: XCTestCase {
     }
 
     /// ⌄ Minimizar. Los controles se esconden a los 3,2 s de reproducir (PresentacionReproductor) y, escondidos, el
-    /// primer toque solo los enseña (a4 §5.1). Así que, si al segundo no se ha ido el teatro, se vuelve a tocar
-    /// enseguida, dentro del plazo en que se ven.
+    /// primer toque solo los enseña (a4 §5.1). Cada consulta de XCUITest tarda cerca de un segundo con el vídeo en
+    /// marcha, así que se toca por coordenada y, si el mini no ha salido, se vuelve a tocar enseguida (dentro del
+    /// plazo en que ya se ven). El árbol de accesibilidad da el botón por visible aunque esté escondido.
     @MainActor
     private func minimizar(_ app: XCUIApplication) async throws {
         let boton = elementoUI(app, IDUI.botonMinimizar)
         let mini = elementoUI(app, IDUI.mini)
-        let teatro = elementoUI(app, IDUI.teatro)
-        for _ in 0..<4 where !mini.exists {
-            guard teatro.exists else { break }
-            if boton.exists, boton.isHittable { boton.tap() } else { elementoUI(app, IDUI.videoTeatro).tap() }
-            _ = await esperar(1.2) { mini.exists || !teatro.exists }
+        try exigir(boton.waitForExistence(timeout: 5), "Sin ⌄ Minimizar. \(estado(app))")
+        let punto = boton.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        for _ in 0..<3 {
+            punto.tap()
+            Thread.sleep(forTimeInterval: 0.3)
+            if mini.exists { break }
+            punto.tap()
+            if await esperar(3, { mini.exists }) { break }
         }
         let sale = mini.waitForExistence(timeout: 10)
         captura(app, "e2e-04-mini")
