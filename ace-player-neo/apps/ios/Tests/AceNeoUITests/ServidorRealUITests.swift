@@ -196,23 +196,34 @@ final class ServidorRealUITests: XCTestCase {
         try exigir(elementoUI(app, IDUI.botonOlvidarEsteIPhone).exists, "Falta «Olvidar este iPhone»")
     }
 
-    /// ⌄ Minimizar. Con los controles ya ocultos, el primer toque solo los enseña (a4 §5.1): se reintenta, y si
-    /// aun así no sale el mini, se desliza el vídeo hacia abajo (el mismo gesto de a4 §5.2).
+    /// ⌄ Minimizar. Los controles se esconden a los 3,2 s de reproducir (PresentacionReproductor) y, escondidos, el
+    /// primer toque solo los enseña (a4 §5.1). Así que, si al segundo no se ha ido el teatro, se vuelve a tocar
+    /// enseguida, dentro del plazo en que se ven.
     @MainActor
     private func minimizar(_ app: XCUIApplication) async throws {
         let boton = elementoUI(app, IDUI.botonMinimizar)
         let mini = elementoUI(app, IDUI.mini)
-        for _ in 0..<3 where !mini.exists {
+        let teatro = elementoUI(app, IDUI.teatro)
+        for _ in 0..<4 where !mini.exists {
+            guard teatro.exists else { break }
             if boton.exists, boton.isHittable { boton.tap() } else { elementoUI(app, IDUI.videoTeatro).tap() }
-            _ = await esperar(3) { mini.exists }
-        }
-        if !mini.exists {
-            let video = elementoUI(app, IDUI.videoTeatro)
-            if video.exists { arrastrar(video, desde: CGVector(dx: 0.5, dy: 0.3), hasta: CGVector(dx: 0.5, dy: 1.6)) }
+            _ = await esperar(1.2) { mini.exists || !teatro.exists }
         }
         let sale = mini.waitForExistence(timeout: 10)
         captura(app, "e2e-04-mini")
         try exigir(sale, "Al minimizar no sale el mini. \(estado(app))")
+    }
+
+    /// Sube Ajustes hasta que el elemento quede entre la barra de estado y el mini (que tapa lo de abajo).
+    @MainActor
+    private func traerALaVista(_ app: XCUIApplication, _ elemento: XCUIElement) {
+        let pantalla = elementoUI(app, IDUI.pantalla("ajustes"))
+        let mini = elementoUI(app, IDUI.mini)
+        for _ in 0..<10 {
+            let limite = mini.exists ? mini.frame.minY - 12 : app.frame.maxY - 140
+            guard elemento.exists, elemento.frame.maxY > limite else { return }
+            arrastrar(pantalla, desde: CGVector(dx: 0.5, dy: 0.6), hasta: CGVector(dx: 0.5, dy: 0.4))
+        }
     }
 
     /// Toca un chip del índice de Ajustes (desplazando la fila si hace falta).
@@ -237,6 +248,7 @@ final class ServidorRealUITests: XCTestCase {
     private func olvidar(_ app: XCUIApplication, _ servidor: ServidorDePruebas) async throws {
         let antes = try await servidor.dispositivos().filter { !$0.revocado && $0.plataforma == "ios" }.map(\.id)
         let boton = elementoUI(app, IDUI.botonOlvidarEsteIPhone)
+        traerALaVista(app, boton)
         boton.tap()
         try exigir(conTextoUI(app, "¿Olvidar? Pulsa otra vez").waitForExistence(timeout: 3), "No se arma")
         captura(app, "e2e-06-olvidar-armado")
