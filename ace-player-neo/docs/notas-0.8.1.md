@@ -38,3 +38,11 @@ IPTV. Sin guia, todo funciona igual.
 La app emparejada del iPhone puede usar Salud, Dispositivos y "Un solo
 dispositivo a la vez", y revocar otros iPhone o a si misma. El codigo QR de
 emparejar lleva tambien tu otra direccion (casa y Tailscale).
+
+Menos retraso en el iPhone y los tres modos tambien con la IPTV. Tu Umbrel corta
+el video en trozos tan cortos como deja cada canal (uno por fotograma clave,
+normalmente de 1 s): en "Baja latencia" el iPhone pasa de unos 8-11 s a unos 4 s
+por detras cuando el canal lo permite, y en el navegador la IPTV va a 3, 6 o 10 s
+segun el modo, como AceStream. La IPTV arranca antes. Las apps 0.6 siguen
+arrancando con el margen de siempre, pero tras un paron pueden quedarse mas cerca
+del directo (y pararse algo mas con redes P2P justas).

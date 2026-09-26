@@ -182,6 +182,7 @@ describe('hls.js', () => {
         MANIFEST_PARSED: 'hlsManifestParsed',
         FRAG_LOADED: 'hlsFragLoaded',
         ERROR: 'hlsError',
+        LEVEL_UPDATED: 'hlsLevelUpdated',
       };
       static ErrorTypes = { NETWORK_ERROR: 'networkError', MEDIA_ERROR: 'mediaError' };
       config: Record<string, unknown>;
@@ -305,6 +306,79 @@ describe('hls.js', () => {
     expect(calls.ready).toBe(1);
     engine.destroy();
     expect(hls.destroyed).toBe(true);
+  });
+
+  describe('sobre el remux del servidor (IPTV, docs/multidispositivo.md §4.4)', () => {
+    function startRemux(
+      mode: 'low' | 'balanced' | 'stable',
+      liveSync: { targetS: number; maxS: number; rate: number } | null,
+    ) {
+      const fake = fakeHls();
+      const { cb } = callbacks();
+      const engine = createHlsEngine(fake.Hls, {
+        video: video(),
+        url: '/api/v1/video/s_1/index.m3u8',
+        profile: PLAYBACK_PROFILES[mode],
+        callbacks: cb,
+        remux: { mode, liveSync },
+      });
+      engine.start();
+      return { engine, hls: fake.instances[0]! };
+    }
+
+    it('en segundos (liveSyncDuration), nunca en segmentos; también en «Estable»', () => {
+      const { hls } = startRemux('low', { targetS: 3, maxS: 7, rate: 1.05 });
+      expect(hls.config).toEqual({
+        manifestLoadingTimeOut: 20_000,
+        fragLoadingTimeOut: 20_000,
+        liveSyncDuration: 3,
+        liveMaxLatencyDuration: 7,
+        maxLiveSyncPlaybackRate: 1.05,
+        maxBufferLength: 10,
+        lowLatencyMode: false,
+        backBufferLength: 30,
+      });
+      expect(hls.config).not.toHaveProperty('liveSyncDurationCount');
+      expect(
+        hlsConfig(PLAYBACK_PROFILES.stable, {
+          mode: 'stable',
+          liveSync: { targetS: 10, maxS: 24, rate: 1 },
+        }),
+      ).toMatchObject({ liveSyncDuration: 10, liveMaxLatencyDuration: 24, maxBufferLength: 60 });
+      /* Sin seguimiento en la concesión (servidor de antes): la regla con TD 2. */
+      expect(hlsConfig(PLAYBACK_PROFILES.low, { mode: 'low', liveSync: null })).toMatchObject({
+        liveSyncDuration: 4,
+        liveMaxLatencyDuration: 8,
+      });
+    });
+
+    it('LEVEL_UPDATED con otro TARGETDURATION recalcula liveSyncDuration y liveMaxLatencyDuration', () => {
+      const { hls, engine } = startRemux('low', { targetS: 3, maxS: 7, rate: 1.05 });
+      hls.emit('hlsLevelUpdated', {
+        details: { targetduration: 1, fragments: [{ duration: 0.96 }, { duration: 0.96 }] },
+      });
+      expect(hls.config.liveSyncDuration).toBe(3);
+      expect(engine.info().segment).toEqual({ targetS: 1, minS: 0.96, maxS: 0.96 });
+      hls.emit('hlsLevelUpdated', {
+        details: { targetduration: 2, fragments: [{ duration: 1.52 }, { duration: 1.2 }] },
+      });
+      expect(hls.config).toMatchObject({ liveSyncDuration: 4, liveMaxLatencyDuration: 8 });
+      expect(engine.info().segment).toEqual({ targetS: 2, minS: 1.2, maxS: 1.52 });
+    });
+
+    it('el HLS del motor sigue en segmentos y no toca la configuración con LEVEL_UPDATED', () => {
+      const { hls } = start();
+      hls.emit('hlsLevelUpdated', { details: { targetduration: 6, fragments: [] } });
+      expect(hls.config.liveSyncDurationCount).toBe(3);
+      expect(hls.config).not.toHaveProperty('liveSyncDuration');
+    });
+
+    it('info(): el retraso que da hls.js (hls.latency)', () => {
+      const { hls, engine } = startRemux('balanced', { targetS: 6, maxS: 14, rate: 1.03 });
+      expect(engine.info().latencyS).toBeUndefined();
+      (hls as unknown as { latency: number }).latency = 5.4;
+      expect(engine.info().latencyS).toBe(5.4);
+    });
   });
 });
 

@@ -3,7 +3,8 @@
 Rama `rediseno/multi`, que sale de `rediseno/iptv` en `246fa67`, con el servidor 0.8.1 todavía sin publicar. Lo pidió
 Isma el 26-sep-2026, después de probar a la vez el PC (web) y el iPhone (app 0.8.0) contra su Umbrel.
 
-**Estado: diseño cerrado tras la revisión del 26-sep (§11), sin implementar.** Lo implementan dos agentes en paralelo,
+**Estado: diseño cerrado tras la revisión del 26-sep (§11). C (latencia) implementado en `multi/latencia` (§4.9,
+con las medidas); A y B, en `multi/casa`.** Lo implementan dos agentes en paralelo,
 «multi» (A y B) y «latencia» (C), con el reparto de §8. No toca `apps/ios` ni el buscador de la IPTV (§14 de
 `docs/iptv.md`), que se hace en paralelo en `rediseno/iptv`.
 
@@ -928,6 +929,59 @@ Notas:
   1080p en directo. Descartado.
 - **`automaticallyWaitsToMinimizeStalling = false`** en «Baja latencia» del iPhone: arranca antes pero se para más; se
   prueba en el laboratorio de la app (§7), no se decide aquí.
+
+### 4.9 Hecho y medido (26-sep, `multi/latencia`)
+
+**Segmentación con el ffmpeg de verdad** (7.0 de L-Connect 3, TS del proveedor falso con GOP variable, 70 s, lista
+entera; `node --import tsx apps/server/test/integration/medir-segmentos.ts`). Confirma §1.5 con otro generador de
+vídeo:
+
+| GOP | `-hls_time 2` (hasta la 0.8.0) | `-hls_time 0.5` (0.8.1) |
+|---|---|---|
+| 0,24 s | TD 2 · 1,92 y 2,16 s | TD 1 · 0,48 s (y 0,72 s de vez en cuando) |
+| 0,48 s | TD 2 · 1,92 y 2,40 s | TD 1 · 0,48 s (y 0,96 s de vez en cuando) |
+| 0,8 s | TD 2 · 1,60 y 2,40 s | TD 1 · 0,80 s |
+| 0,96 s | **TD 3** · 1,92 y 2,88 s | TD 1 · 0,96 s |
+| 1 s | TD 2 · 2,00 s | TD 1 · 1,00 s |
+| 1,2 s | TD 2 · 2,40 y 1,20 s | TD 1 · 1,20 s |
+| 1,48 s | **TD 3** · 1,48 y 2,96 s | TD 1 · 1,48 s |
+| 1,52 s | **TD 3** · 1,52 y 3,04 s | TD 2 · 1,52 s |
+| 2 s | TD 2 · 2,00 s | TD 2 · 2,00 s |
+| 4 s | TD 4 · 4,00 s | TD 4 · 4,00 s |
+
+`test/integration/segmentos.test.ts` lo comprueba en cada ejecución con ffmpeg en el PATH (se salta sin él), y
+también el GOP que cambia a mitad (1 s → 2 s: el TD fijado sube una vez a 2 y no vuelve a bajar).
+
+**Web con la IPTV** (`e2e/latencia.spec.ts`, Chrome de escritorio, proveedor falso con TS, GOP 1 s y 0,2 s de
+colchón, 40 muestras en 20 s por modo, sin ninguna pausa):
+
+| Modo | Objetivo | hls.js detrás del final de la lista (mediana · p90) | Segmento en aparecer desde su último cuadro | Retraso de verdad sobre el proveedor |
+|---|---|---|---|---|
+| Baja latencia | 3 s | 3,58 · 3,96 s | 0,22 s | ~3,8 s + hasta un GOP (el directo del proveedor va por delante del último segmento cerrado): **~4,3 s** de media |
+| Equilibrado | 6 s | 5,64 · 6,06 s | 0,24 s | **~6,4 s** |
+| Estable | 10 s | 9,62 · 10,07 s | 0,21 s | **~10,3 s** |
+
+Con GOP de 0,96 s: «Segmento: 1 s · reales 0,96 s» y 4,15 s en «Baja latencia»; con GOP de 1,52 s: TD 2 y 3,79 s
+(objetivo 4 s = 2 × TD). **iPhone:** no se puede medir aquí (AVPlayer); con TD 1 la concesión nativa pide 3 / 6 / 10 s
+del final, así que le tocarían ~3,7 / 6,7 / 10,7 s de media si AVPlayer acepta los 3 s (pendiente del laboratorio,
+§7).
+
+**Arranque de la IPTV hasta la primera imagen** (toque → imagen, «Equilibrado», en frío): sin colchón del proveedor,
+**6,6-6,7 s** (hoy 15-20 s); con el colchón de 8 s de la pila, **0,9-1,7 s**. Objetivos de §4.5: ≤ 12 s y ≤ 5 s.
+
+**Desviaciones del diseño:**
+- El reinicio con 5 MB / 5 s se dispara con «Could not find codec parameters» (por stderr al momento o en la cola al
+  morir ffmpeg). «Sale sin audio cuando la PMT lo anuncia» **no** está: con `-loglevel warning` ffmpeg no lo dice y
+  habría que leer la PMT en el relé.
+- «Segmento» y «Retraso» de «Datos técnicos» salen de hls.js (`levelDetails` y `hls.latency`); con mpegts.js,
+  «Segmento: —».
+- `REMUX_TIMINGS.readySeconds` sigue en 6 (el número de la 0.6.59 que comprueba `numeros-0659.test.ts`); la regla
+  nueva usa `readyMinSeconds` (4) y `remuxReadySeconds(td)`.
+- `iptvInput` se ha subido aquí, sin esperar al contrato de «multi» (no se pisan: es otro campo).
+- C.4 está hecho detrás de `SHARE_VIA_REMUX = false` (`playback/sharing.ts`); `PlaybackDeps.shareViaRemux` lo
+  enciende en las pruebas.
+- El proveedor falso mandaba al 85 % del tiempo real en Windows (`setInterval(40)` salta cada ~47 ms): el final de la
+  lista se quedaba atrás y hls.js lo alcanzaba. Ahora va por el reloj de pared.
 
 ---
 

@@ -43,6 +43,7 @@
 
 import {
   errorMessage,
+  IPTV_SLOW_START_MS,
   isAnyErrorCode,
   liveBufferSafety,
   PLAYBACK_PROFILES,
@@ -208,6 +209,8 @@ interface Connection {
   rebuffer: { startedAt: number; targetS: number } | null;
   firstFrameCleanup: (() => void) | null;
   profile: PlaybackProfile;
+  /** IPTV: a los 10 s sin imagen, «Tu IPTV está tardando en arrancar…» (docs/multidispositivo.md §4.5). */
+  slowTimer?: ReturnType<typeof setTimeout> | null;
 }
 
 interface SessionInfo {
@@ -233,6 +236,8 @@ const SYSTEM_ERRORS = new Set([
 
 /** Una IPTV que falla sin alternativa (§8.3). */
 export const IPTV_IDLE_MESSAGE = 'Tu IPTV no da señal ahora mismo.';
+/** A los 10 s sin imagen con la IPTV (docs/multidispositivo.md §4.5). */
+export const IPTV_SLOW_START_TEXT = 'Tu IPTV está tardando en arrancar…';
 
 /** ¿Es un fallo de la IPTV que agota la fuente sin reintentos? (`iptv_*` siempre; `remux_*` y ffmpeg con fuente IPTV). */
 export function isIptvSourceError(code: string | undefined, iptvSource: boolean): boolean {
@@ -449,6 +454,8 @@ export class PlayerRuntime {
       ttffMs: null,
       stats: null,
       streamSource: null,
+      iptvInput: null,
+      segment: null,
       live: IDLE_LIVE,
       bufferAheadS: 0,
       rebuffering: null,
@@ -483,6 +490,8 @@ export class PlayerRuntime {
       engine: null,
       protocol: null,
       streamSource: null,
+      iptvInput: null,
+      segment: null,
       codec: null,
       sessionId: null,
       ttffMs: null,
@@ -726,7 +735,16 @@ export class PlayerRuntime {
           ? 'Reconectando con AceStream…'
           : 'Conectando con AceStream…',
       rebuffering: null,
+      segment: null,
     });
+    if (iptv && !recovery && !this.demo()) {
+      connection.slowTimer = setTimeout(() => {
+        connection.slowTimer = null;
+        if (!this.isCurrent(connection) || this.conn === 'activa') return;
+        if (this.conn === 'reconectando' || this.conn === 'idle') return;
+        this.setState({ message: IPTV_SLOW_START_TEXT });
+      }, IPTV_SLOW_START_MS);
+    }
 
     if (this.demo()) {
       this.transition('concedida');
@@ -763,6 +781,7 @@ export class PlayerRuntime {
         this.setState({
           protocol: grant.protocol,
           streamSource: grant.source ?? 'engine',
+          iptvInput: grant.iptvInput ?? null,
           codec: { video: grant.codec.video, audio: grant.codec.audio },
           sessionId: grant.session.id,
         });
@@ -882,6 +901,11 @@ export class PlayerRuntime {
           url,
           profile,
           demoFails,
+          /* hls.js sobre el remux del servidor (la IPTV en la web): en segundos (§4.4). */
+          remux:
+            grant?.remux && grant.protocol === 'hls'
+              ? { mode: grant.latency.mode, liveSync: grant.latency.liveSync }
+              : null,
           callbacks: {
             onReady: () => {
               if (this.isCurrent(connection)) this.onEngineReady(connection);
@@ -1303,6 +1327,8 @@ export class PlayerRuntime {
     if (!connection) return;
     this.connection = null;
     connection.abort.abort(new DOMException('Conexión sustituida', 'AbortError'));
+    if (connection.slowTimer) clearTimeout(connection.slowTimer);
+    connection.slowTimer = null;
     if (connection.bufferTimer) clearInterval(connection.bufferTimer);
     if (connection.watchdog) clearInterval(connection.watchdog);
     connection.firstFrameCleanup?.();
@@ -1682,12 +1708,15 @@ export class PlayerRuntime {
     if (!source || this.conn !== 'activa') return;
     const live = this.measureLive();
     const ahead = bufferAhead(this.video);
+    /* hls.js dice él mismo a cuánto va del final de la lista y qué segmentos ve (§4.2). */
+    const engineInfo = this.connection?.engine?.info() ?? {};
+    const delay = engineInfo.latencyS ?? live?.delay ?? null;
     const info: LiveInfo = live
       ? {
           available: true,
           atLive: live.behind <= LIVE_DISPLAY_S,
           behindS: Math.ceil(live.behind),
-          delayS: Math.round(live.delay),
+          delayS: delay === null ? null : Math.round(delay),
         }
       : { ...IDLE_LIVE, available: false };
     if (live && !this.video.paused) {
@@ -1698,6 +1727,7 @@ export class PlayerRuntime {
       live: info,
       bufferAheadS: Math.round(ahead * 10) / 10,
       following: this.controller.state.followingLiveEdge,
+      segment: engineInfo.segment ?? null,
     });
   }
 

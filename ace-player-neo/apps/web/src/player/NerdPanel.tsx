@@ -46,19 +46,45 @@ function seconds(value: number | null | undefined): string {
   return `${value.toLocaleString('es-ES', { maximumFractionDigits: 1 })} s`;
 }
 
+function decimal(value: number): string {
+  return value.toLocaleString('es-ES', { maximumFractionDigits: 2 });
+}
+
+/**
+ * «Segmento» (docs/multidispositivo.md §4.2): el TARGETDURATION de la lista
+ * que ve hls.js y, si no coincide, lo que duran de verdad: «1 s» o «1 s ·
+ * reales 1,2-1,5 s». Con mpegts.js no hay segmentos: «—».
+ */
+export function segmentText(segment: PlayerState['segment']): string {
+  if (!segment) return '—';
+  const target = `${decimal(segment.targetS)} s`;
+  const { minS, maxS } = segment;
+  if (minS === null || maxS === null) return target;
+  const near = (value: number) => Math.abs(value - segment.targetS) <= 0.02;
+  if (near(minS) && near(maxS)) return target;
+  const real =
+    Math.abs(maxS - minS) <= 0.02 ? `${decimal(maxS)} s` : `${decimal(minS)}-${decimal(maxS)} s`;
+  return `${target} · reales ${real}`;
+}
+
+/** «IPTV · Casa · TS» (§8.1 y docs/multidispositivo.md §4.4): el proveedor y lo que entrega. */
+function originText(state: PlayerState): string {
+  const parts = ['IPTV'];
+  if (state.channel?.source) parts.push(state.channel.source);
+  if (state.iptvInput) parts.push(state.iptvInput.toUpperCase());
+  return parts.join(' · ');
+}
+
 export function nerdRows(state: PlayerState, engineText: string): Array<[string, string]> {
   const stats = state.stats;
-  // IPTV (§8.1): «Origen: IPTV · Casa», sin pares (no hay enjambre) ni hash.
+  // IPTV (§8.1): «Origen: IPTV · Casa · TS», sin pares (no hay enjambre) ni hash.
   const iptv = isIptvPlayback(state);
   return [
-    ...(iptv
-      ? ([['Origen', state.channel?.source ? `IPTV · ${state.channel.source}` : 'IPTV']] as Array<
-          [string, string]
-        >)
-      : []),
+    ...(iptv ? ([['Origen', originText(state)]] as Array<[string, string]>) : []),
     ['Motor', engineText],
     ['Reproductor', state.engine ? ENGINE_NAME[state.engine] : '—'],
     ['Entrega', state.protocol ? (DELIVERY[state.protocol] ?? state.protocol) : '—'],
+    ['Segmento', segmentText(state.segment)],
     ['Pares', stats && !iptv ? String(stats.peers) : '—'],
     ['Bajada', formatSpeed(stats?.speedDown)],
     ['Subida', formatSpeed(stats?.speedUp)],
