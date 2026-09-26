@@ -113,7 +113,16 @@ const TITLE_SPAIN_SUFFIX_RE =
 const GROUP_COUNTRY_RE = /^\s*[|[(]?\s*([A-Z]{2,3})\s*[|\]):\-–]/u;
 const GROUP_SPAIN_RE = /^\s*[|[(]?\s*(?:españa|espana|spain)\b/iu;
 /* El primer tramo de «EU | ES | TDT» es el continente: el país va en el segundo. */
-const CONTINENTS = new Set(['EU', 'AM', 'AS', 'AF', 'OC', 'EUR', 'AME', 'LATAM']);
+export const IPTV_CONTINENTS: ReadonlySet<string> = new Set([
+  'EU',
+  'AM',
+  'AS',
+  'AF',
+  'OC',
+  'EUR',
+  'AME',
+  'LATAM',
+]);
 /*
  * Lo que va delante como un país sin serlo: una marca («VIP | ES: …»), una
  * calidad («FHD | ES: …», que cuenta como calidad) o un grupo («XXX |
@@ -254,7 +263,7 @@ export function groupCountry(group: string | null | undefined): string | null {
   if (GROUP_SPAIN_RE.test(text)) return 'ES';
   /* «EU | ES | TDT», «AM | USA | ESPN PLUS»: el país es el segundo tramo. */
   const parts = text.split('|').map((part) => part.trim().toUpperCase());
-  if (parts.length >= 2 && CONTINENTS.has(parts[0] as string)) {
+  if (parts.length >= 2 && IPTV_CONTINENTS.has(parts[0] as string)) {
     const code = parts[1] as string;
     /* «AM | LATINO», «EU | LATVIA», «AS | THAILAND»: el nombre del país en vez de su sigla (docs/iptv.md §19).
        No es España: los latinos y México cuentan como América en español; el resto, con el continente. */

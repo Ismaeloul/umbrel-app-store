@@ -17,7 +17,14 @@ import { useNavigate } from '../../app/router.tsx';
 import { haptic } from '../../lib/haptics.ts';
 import { Sheet, type MenuItem } from '../../ui/index.ts';
 import { channelMenuItems } from './actions.ts';
-import { removeWithUndo, renameChannel, saveFavorite } from './data.ts';
+import {
+  cancelRemoval,
+  isPendingRemoval,
+  removeWithUndo,
+  renameChannel,
+  saveFavorite,
+  usePendingKeys,
+} from './data.ts';
 import { playChannel, type PlayOrigin } from './play.ts';
 import {
   RenameFooter,
@@ -82,9 +89,16 @@ export function useChannelActions({
   const renameForm = useId();
   const favoriteForm = useId();
 
+  // Un favorito quitado que espera los 6 s del «Deshacer» ya no cuenta: la estrella se vacía al momento.
+  const pending = usePendingKeys();
   const favoriteIds = useMemo(
-    () => new Set((data?.favorites ?? []).map((item) => item.id)),
-    [data?.favorites],
+    () =>
+      new Set(
+        (data?.favorites ?? [])
+          .filter((item) => !isPendingRemoval(pending, 'favorites', item.id))
+          .map((item) => item.id),
+      ),
+    [data?.favorites, pending],
   );
 
   const isIptvId = (id: string): boolean => Object.hasOwn(data?.iptvIds ?? {}, id);
@@ -114,6 +128,8 @@ export function useChannelActions({
   const toggleFavorite = (channel: ActionableChannel) => {
     const existing = data?.favorites.find((item) => item.id === channel.id);
     if (existing) {
+      // Segundo toque durante el «Deshacer»: vuelve a ser favorito, como si se deshiciera.
+      if (cancelRemoval('favorites', existing.id)) return;
       removeWithUndo({ client, kind: 'unfavorite', collection: 'favorites', item: existing });
       return;
     }

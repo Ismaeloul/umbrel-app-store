@@ -1963,6 +1963,7 @@ comprobar el 403 de `/native` y la ruta `video`, y los fixtures del contrato par
 | D27 | **`iptvChannels` nace con `access: 'web'`** y pasa a `any` cuando la app calque el buscador (§14.10) | no rompe `FixturesTests` de la app antes de tiempo; el contenido no tiene nada secreto |
 | D28 | **Re-emparejado de favoritos y recientes IPTV al sincronizar**; un favorito que no casa se quita a las 24 h, un reciente al momento (§14.6) | «se vuelve a emparejar por nombre o se descarta sin errores feos», sin perder un favorito por una sincronización rara |
 | D29-D36 | **Pestaña IPTV en Canales** (§16.12): ruta `iptvBrowse` `web`; una ruta con categorías, facetas y página; fila = clave + país; facetas disyuntivas; categorías por nombre; tablas propias; pestaña sin contador; reintento del «Guardar» solo con fallos rápidos y pasajeros | lo pidió Isma el 26-sep para la 0.8.2 |
+| D37 | **Todo país pasa por la tabla de §16.4**, también el que saca del nombre la limpieza de §18; «AR» y «LA» nunca son país (ni con separador), los continentes delante tampoco, y Canadá no da idioma (§16.16) | una lista real con sección árabe llenaba la pestaña de filas «AR» que parecían Argentina |
 
 ### 12.2 Riesgos
 
@@ -2824,8 +2825,8 @@ export const IptvBrowseQuerySchema = z.strictObject({
   category: IptvCategoryIdSchema.optional(),
   /** Se limpia como en `iptvChannels`. Con menos de 2 letras se IGNORA (aquí no es un error: se puede navegar sin texto). */
   q: z.string().max(500).default(''),
-  /** País: códigos de §16.4 o `none` («Sin país»). */
-  country: csv('[A-Z]{2,3}|none').optional(),
+  /** País: códigos de §16.4 (2 a 4 letras: `EXYU`) o `none` («Sin país»). */
+  country: csv('[A-Z]{2,4}|none').optional(),
   /** Idioma: ISO 639-1 o `none` («Sin idioma»). */
   language: csv('[a-z]{2}|none').optional(),
   type: csv([...IPTV_TYPES, 'none'].join('|')).optional(),
@@ -2874,7 +2875,7 @@ export const IptvBrowseChannelSchema = z.strictObject({
   /** Calidades de sus variantes, de mejor a peor para enseñar: uhd, fhd, hd, sd. Vacío = sin marca. */
   qualities: z.array(IptvQualitySchema).max(4),
   /** País deducido (§16.4), o null. */
-  country: z.string().regex(/^[A-Z]{2,3}$/).nullable(),
+  country: z.string().regex(/^[A-Z]{2,4}$/).nullable(),
   /** Categoría de la mejor variante (la web la enseña fuera de una categoría). */
   category: IptvCategoryIdSchema,
 });
@@ -2996,18 +2997,26 @@ fuente que dé algo:
 | 3 | Prefijo de la **categoría** con separador | «ES \| DEPORTES», «ES: DEPORTES», «\|UK\| SPORTS», «[IT] CALCIO» |
 | 4 | Primera palabra de la categoría **sin** separador, solo con los códigos marcados «sin separador» y con los nombres de país | «UK SPORTS», «USA NEWS», «SPAIN SPORTS», «ESPAÑA», «LATINO DEPORTES», «FRANCE» |
 | 5 | Código entre barras o corchetes **en cualquier sitio** del nombre o la categoría | «DEPORTES \|ES\|», «SKY SPORTS [UK]» |
+| 6 | El país que la limpieza de la lista real (§18, `cleanIptvTitle`) saca del nombre, **pasado por esta misma tabla** (y por la lista de «nunca son país») | «DAZN 1 ES», «ES DAZN 1», «EU \| ES \| TDT» → ES; «USA» → US; «AR», «EN», «LA» o un continente → nada |
 
 - **Solo cuentan los códigos de la tabla** (ISO 3166-1 alfa-2 y los alias de la tabla). Así «VIP \| DAZN 1», «HD:
   …», «PPV \| …» o «4K \| …» no inventan un país. Nunca son país, ni con separador: `HD`, `SD`, `FHD`, `UHD`, `4K`,
-  `8K`, `VIP`, `PPV`, `TV`, `NEW`, `HEVC`, `RAW`, `VOD`, `EPG`, `24/7`, `BAR`, `TOP`, `ALL`, y `AR` (ver trampas).
+  `8K`, `VIP`, `PPV`, `TV`, `NEW`, `HEVC`, `RAW`, `VOD`, `EPG`, `24/7`, `BAR`, `TOP`, `ALL`, `AR` y `LA` (ver trampas).
+- **Continentes delante** («EU \| ES \| TDT», «AM \| USA \| ESPN PLUS»): `EU`, `AM`, `AS`, `AF`, `OC`, `EUR` y `AME`
+  no son país (aunque «AM», «AS» y «AF» sean siglas ISO) ni idioma («EU» no es euskera): se mira el tramo de detrás.
+  `LATAM` sí es país (LAT).
 - **Trampas:** «AR» en las listas casi siempre es **árabe** («AR \| BEIN SPORTS»), no Argentina: da idioma `ar` y país
-  `none` salvo `tvg-country`; Argentina es «ARG». «CA» es Canadá; catalán es «CAT» (país ES, idioma `ca`). «LA» (Laos)
-  no cuenta sin separador («LA LIGA» no es un país). «IN» solo con separador.
+  `none` salvo `tvg-country`; Argentina es «ARG». «CA» es Canadá; catalán es «CAT» (país ES, idioma `ca`). «LA» no es
+  país **ni con separador** («LA LIGA» no es un país y «LA \| GENERAL» es latino o Los Ángeles; Laos no sale en las
+  listas). «IN» solo con separador. «EN» es un idioma, nunca un país.
+- **Comunidades con lengua propia** como categoría o prefijo: «CATALUNYA» / «CATALUÑA» / «CATALONIA», «EUSKADI» /
+  «PAIS VASCO» y «GALICIA» son España (alias de ES) y dan su idioma por palabra («TV3» en «CATALUNYA» → ES, `ca`;
+  «ETB 1» en «PAIS VASCO» → ES, `eu`).
 - «ANTENA 3 INTERNACIONAL» no tiene país en el nombre («INTERNACIONAL» no es un código): el país lo da su categoría.
 
 | Código | Alias que dan ese código | Sin separador | Texto |
 |---|---|---|---|
-| ES | ES, ESP, SPA, SP, ESPAÑA, ESPANA, SPAIN, CAT | sí | «España» |
+| ES | ES, ESP, SPA, SP, ESPAÑA, ESPANA, SPAIN, CAT, CATALUNYA, CATALUÑA, CATALONIA, EUSKADI, PAIS VASCO, GALICIA | sí | «España» |
 | UK | UK, GB, ENG, UNITED KINGDOM | sí | «Reino Unido» |
 | US | US, USA, UNITED STATES | sí | «Estados Unidos» |
 | LAT | LAT, LATAM, LATINO, LATINOAMERICA, LATIN | sí | «Latinoamérica» |
@@ -3058,10 +3067,10 @@ y 2; la 3 solo si no dieron nada:
 | Idioma | Nombres, códigos y palabras que lo dan | Países que lo dan (fuente 3) | Texto |
 |---|---|---|---|
 | es | spanish, español, espanol, castellano, spa, esp, es, latino, lat | ES, MX, ARG, CO, CL, PE, LAT (y el resto de Hispanoamérica) | «Español» |
-| en | english, inglés, ingles, eng, en | UK, US, IE, CA, AU, NZ | «Inglés» |
-| ca | catalan, català, catala, catalán, cat, ca | — | «Catalán» |
-| eu | basque, euskera, euskara, eus, eu | — | «Euskera» |
-| gl | galician, galego, gallego, glg, gl | — | «Gallego» |
+| en | english, inglés, ingles, eng, en | UK, US, IE, AU, NZ | «Inglés» |
+| ca | catalan, català, catala, catalán, cat, ca, catalunya, cataluña, catalonia | — | «Catalán» |
+| eu | basque, euskera, euskara, eus, eu, euskadi, vasco | — | «Euskera» |
+| gl | galician, galego, gallego, glg, gl, galicia | — | «Gallego» |
 | pt | portuguese, português, portugues, por, pt | PT, BR | «Portugués» |
 | fr | french, français, francais, francés, fra, fre, fr | FR | «Francés» |
 | it | italian, italiano, ita, it | IT | «Italiano» |
@@ -3076,7 +3085,7 @@ y 2; la 3 solo si no dieron nada:
 | ru | russian, русский, ruso, rus, ru | RU | «Ruso» |
 | (otro ISO 639-1) | el código | — | el código en mayúsculas («HU») |
 
-- BE, CH, IN, EXYU y los países sin fila no dan idioma por país: tienen varios.
+- BE, CH, **CA**, IN, EXYU y los países sin fila no dan idioma por país: tienen varios («CA: RDS» es en francés).
 - «CAT» da país ES **y** idioma `ca`: «CAT: ESPORT3» → ES, ca (y no es).
 
 #### Tipo
@@ -3092,7 +3101,7 @@ que es la verdad).
 | Tipo | Palabras (cómo casa) | Marcas y canales (palabra o frase) | Texto |
 |---|---|---|---|
 | generalistas | generalista (prefijo), general, nacional (prefijo), tdt, autonomic (prefijo), regional (prefijo), abierto (prefijo) | la 1, la 2, antena 3, cuatro, telecinco, lasexta, la sexta, trece, tv3, telemadrid, canal sur, etb, a punt, tvg, aragon tv, cmm, ib3, bbc one, bbc two, itv, channel 4, tf1, france 2, rai 1, rai 2, rai 3, canale 5, rtp 1, sic, tvi, das erste, zdf | «Generalistas» |
-| deportes | deport (dentro), sport (dentro), esport (prefijo), futbol, football, soccer | dazn, laliga, gol, goltv, teledeporte, eurosport, bein, espn, sky sports, tnt sports, bt sport, arena sport, sportklub, sport tv, canal+ sport, rmc sport, setanta, fox sports, tudn, tyc sports, win sports, directv sports, real madrid tv, barca tv | «Deportes» |
+| deportes | deport (dentro), sport (dentro), esport (prefijo), futbol, football, soccer | dazn, laliga, gol, goltv, teledeporte, eurosport, bein, espn, sky sports, tnt sports, bt sport, arena sport, sportklub, sport tv, canal+ sport, canal+ foot, rmc sport, setanta, fox sports, tudn, tyc sports, win sports, directv sports, real madrid tv, barca tv | «Deportes» |
 | cine | cine (prefijo), cinema (prefijo), movie (prefijo), film (prefijo), pelicula (prefijo) | tcm, cinemax, hollywood, sundance, m+ estrenos, xtrm | «Cine» |
 | series | serie, series, sitcom, novela (prefijo), telenovela (prefijo), 24/7, comedia, comedy | axn, calle 13, cosmo, syfy, warner tv, hbo, fox | «Series» |
 | noticias | noticia (prefijo), news, informativo (prefijo), 24h, 24 horas | cnn, bbc news, euronews, france 24, al jazeera, bloomberg, sky news, fox news, cnbc, dw, rt | «Noticias» |
@@ -3103,7 +3112,11 @@ que es la verdad).
 | religion | religion (prefijo), religious, iglesia, catolic (prefijo), cristian (prefijo), evangel (prefijo), islam (prefijo), quran | 13tv, ewtn | «Religión» |
 | adultos | la regla `isAdultChannel` de §14.3 (xxx, adult, adulto/a, +18 y 18+ sueltos, porn…) | playboy, brazzers, hustler, dorcel, private, redlight, vivid | «Adultos» |
 
-- «Canal+ 18» y «M+ 18…» **no** son adultos (§14.12): se reutiliza `isAdultChannel` tal cual.
+- «Canal+ 18» y «M+ 18…» **no** son adultos (§14.12): se reutiliza `isAdultChannel` tal cual. **«Adult Swim»**
+  tampoco (es un canal de dibujos): su tipo sale de la categoría.
+- **Marcas locales:** «nova» solo es la marca española (Entretenimiento) con país ES o sin país; «GR: NOVA SPORTS 1»
+  es Grecia y solo deportes.
+- «CANAL+ FOOT» es deportes y fútbol (marca y frase de las dos tablas, como «real madrid tv»).
 - «ESPN», «BEIN» o «DAZN» solos dan «deportes» aunque no digan qué deporte.
 - «24h» es noticias («Canal 24 horas»); «24/7» (canales que emiten una serie en bucle) es series.
 - Los números de canal no dan tipo («DAZN 1», «MOVISTAR 2022 1»).
@@ -3115,7 +3128,7 @@ Valor: los de `IPTV_SPORTS`. **Varios por fila** si los hay; sin deporte, la fil
 
 | Deporte | Palabras y frases (palabra, salvo que se diga) | Texto |
 |---|---|---|
-| futbol | futbol, football (salvo «american football»), soccer, calcio, futebol, laliga, laliga+, hypermotion, smartbank, premier league, epl, serie a, bundesliga, ligue 1, liga de campeones, champions, europa league, conference league, copa del rey, supercopa, liga f, mls, liga mx, eredivisie, gol, goltv, real madrid tv, barca tv | «Fútbol» |
+| futbol | futbol, football (salvo «american football»), soccer, calcio, futebol, laliga, laliga+, hypermotion, smartbank, premier league, epl, serie a, bundesliga, ligue 1, liga de campeones, champions, europa league, conference league, copa del rey, supercopa, liga f, mls, liga mx, eredivisie, gol, goltv, real madrid tv, barca tv, canal+ foot | «Fútbol» |
 | baloncesto | baloncesto, basket (prefijo), acb, liga endesa, nba, euroliga, euroleague, eurocup, fiba, wnba | «Baloncesto» |
 | f1 | f1, formula 1, formula1, formula uno | «F1» |
 | motos | motogp, moto gp, moto2, moto3, motoe, superbike (prefijo), sbk, motociclismo | «Motos» |
@@ -3728,13 +3741,61 @@ vista (registro: `warn` `http_502` intento 1 en 3 ms, `info` «bien al segundo i
 capturas (raíz, categoría, filtros, búsquedas, a 1440×900 y 390×844, claro y oscuro), sin desplazamiento lateral.
 
 **Falta:**
-- `docs/comportamientos.md` y la tabla de §12.1 al cerrar; publicar (0.8.2) cuando Isma lo diga.
+- Publicar (0.8.2) cuando Isma lo diga (`docs/comportamientos.md` §19 y la tabla de §12.1, al día con §16.16).
 - La guía de «DAZN 1» de España sale también en las filas de Reino Unido, Alemania e Italia (el «en directo» va por el
   nombre del canal): hay que mirarlo en `onAir` / la guía de §4.5 teniendo en cuenta el país.
 - El riesgo pequeño de arriba (país sacado de la categoría) sigue anotado.
 
 **Impacto en la app nativa** (se suma a §16.11): la fila lleva el país como etiqueta antes de las calidades (si no es
 España ni sin país) y el orden con texto (España primero) ya viene del servidor; el texto se manda tal cual.
+
+### 16.16 Revisión (26-sep): país del nombre por la tabla y menores
+
+**Bloqueante arreglado.** Desde `390f652` el país que la limpieza de §18 saca del nombre (`FacetInput.nameCountry`)
+entraba en la fila con solo mirar que fueran 2 a 4 mayúsculas. Con la lista real: «AR \| BEIN SPORTS 1» y «BEIN SPORTS
+1» de «AR \| BEIN» salían con país `AR` (en la faceta, `AR:2`, y en la fila, la etiqueta «AR», que parece Argentina),
+«EN \| REAL MADRID TV» con `EN` (un idioma) y «LA 1» de «LA \| GENERAL» con `LA`. Ahora (`facets.ts`,
+`nameCountryCode`) ese país pasa por la **misma tabla** que el resto (fuente 6 de §16.4): lo que nunca es país (`AR`,
+`LA`…), los continentes de «EU \| …» y lo que no es ni alias ni ISO («EN») se quedan sin país; «USA» sale `US`. El test
+de `browse.test.ts` pasa por `Catalog` (antes solo había `deriveFacets` sin `nameCountry`).
+- «LA» deja de ser país **también con separador** (antes «LA \| GENERAL» daba Laos por la categoría).
+- Los continentes delante («EU \| ES \| TDT», «AM \| USA \| …») se saltan como las marcas: el país es el tramo de
+  detrás, y «EU» ya no da euskera ni «AM» Armenia.
+
+**Deducciones corregidas** (§16.4 al día y con test): «ADULT SWIM» no es Adultos; «nova» solo suma Entretenimiento en
+España o sin país («GR: NOVA SPORTS 1», solo deportes); Canadá no da idioma («CA: RDS» es en francés); «CATALUNYA»,
+«PAIS VASCO», «EUSKADI» y «GALICIA» son España con su idioma («TV3» → ES, `ca`; «ETB 1» → ES, `eu`); «CANAL+ FOOT»
+es deportes y fútbol.
+
+**Web:**
+- **Texto y filtros sin resultados:** «Nada en tu IPTV con «q» y estos filtros.» (o «Nada en {categoría} con «q» y
+  estos filtros.») con **«Quitar filtros»** primero y el botón de siempre detrás. Las «Categorías con «q»» que se
+  quedan con 0 canales por los filtros no se ofrecen.
+- **Móvil:** con dos filtros o más, «Quitar filtros» también en la fila de chips (con uno, su «×» basta).
+- **Estrella:** quitar un favorito la vacía al momento (las bajas que esperan el «Deshacer» ya no cuentan en
+  `favoriteIds`) y otro toque durante esos 6 s lo recupera y quita el aviso (`cancelRemoval`), sin hoja ni petición.
+- **«Guardar favorito» de un canal IPTV:** enseña «En tu IPTV» con su nombre en la IPTV en vez de «Hash» con el id
+  interno; vacío, se guarda con ese nombre (no «Canal 1a2b3c»).
+- **Dorsal:** una letra suelta pegada al número va con él («DAZN F1» → «F1», «M4 SPORT» → «M4»; «TV3» sigue «3») y una
+  sigla de 2 a 4 mayúsculas entre la marca y el número va en la sigla de la tesela («DAZN ACB 1» → «DAZN ACB»). Así
+  «DAZN 1», «DAZN F1» y «DAZN ACB 1» ya no llevan el mismo logotipo.
+- **«Lo he intentado dos veces…»** también con `iptv_bad_list` (M3U que devuelve HTML o nada dos veces) y con
+  `redirect_limit` / `redirect_loop`: los mismos códigos que el servidor reintenta (`isTransientSaveFailure`), que son
+  los únicos con `attempts: 2`.
+
+**Rendimiento:** la prueba de 100 000 canales mira la **mediana de 5 consultas en frío** (< 60 ms) y cada una < 250 ms;
+una sola medida fallaba a veces en la tanda normal (62 ms). «@lento» es solo una etiqueta: corre en la tanda normal.
+El índice de 30 000 canales en un proceso nuevo tarda más que en caliente (unos 550 ms frente a 215 ms): no afecta a la
+API porque se monta a trozos y 2 s después de cargar.
+
+**Sigue pendiente:** la guía de «DAZN 1» de España en filas de otros países (el «en directo» va por el nombre) y el
+riesgo pequeño del canal tocado (la fila usa el país de `facets.ts`; el arranque, el cubo de §17 de `names.ts`). Con el
+país del nombre ya filtrado por la tabla, las dos fuentes solo divergen cuando la categoría dice un país que el nombre
+no dice (p. ej. «TV3» en «CATALUNYA»: fila ES, cubo sin país, que para §17 es lo mismo).
+
+**Impacto en la app nativa** (se suma a §16.11): nada del contrato cambia. Al calcar la pestaña: el vacío con texto y
+filtros, «Quitar filtros» en la fila de chips con dos o más, la estrella que se vacía al quitar y se recupera con otro
+toque durante el «Deshacer», «En tu IPTV» en la hoja de guardar favorito y el dorsal con «F1» y la sigla con «ACB».
 
 ## 17. Anexo: todo desbloqueado y variantes de resolución (26-sep)
 

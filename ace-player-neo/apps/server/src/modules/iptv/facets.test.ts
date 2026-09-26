@@ -419,6 +419,63 @@ describe('país', () => {
     expect(country('hu: m4 sport')).toBe(null);
     expect(country('HU M4 SPORT')).toBe(null);
   });
+
+  it('«LA» no es país ni con separador («LA | GENERAL»)', () => {
+    expect(country('LA 1', 'LA | GENERAL')).toBe(null);
+    expect(country('LA: KTLA 5')).toBe(null);
+  });
+
+  it('las comunidades con lengua propia como categoría son España, con su idioma', () => {
+    expect(deriveFacets({ title: 'TV3', group: 'CATALUNYA' })).toMatchObject({
+      country: 'ES',
+      languages: ['ca'],
+    });
+    expect(deriveFacets({ title: 'ETB 1', group: 'PAIS VASCO' })).toMatchObject({
+      country: 'ES',
+      languages: ['eu'],
+    });
+    expect(deriveFacets({ title: 'TVG', group: 'GALICIA' })).toMatchObject({
+      country: 'ES',
+      languages: ['gl'],
+    });
+  });
+
+  it('el país que saca del nombre la limpieza de la lista real pasa por la misma tabla (§16.4, §18)', () => {
+    /* Con lo que `cleanIptvTitle` saca de verdad del nombre y la categoría. */
+    const withName = (title: string, group: string) =>
+      new FacetDeriver().country({
+        title,
+        group,
+        nameCountry: cleanIptvTitle(title, group).country,
+      });
+    expect(withName('DAZN 1 ES', 'DEPORTES')).toBe('ES');
+    expect(withName('DAZN 1', 'EU | ES | DEPORTES')).toBe('ES');
+    /* «AR» es árabe, «EN» un idioma, «LA» no cuenta y el continente de «AM | …» no es Armenia. */
+    expect(withName('AR | BEIN SPORTS 1', 'AR | BEIN')).toBe(null);
+    expect(withName('BEIN SPORTS 1', 'AR | BEIN')).toBe(null);
+    expect(withName('EN | REAL MADRID TV', 'DEPORTES')).toBe(null);
+    expect(withName('LA 1', 'LA | GENERAL')).toBe(null);
+    expect(withName('ESPN', 'AM | LATVIA')).toBe(null);
+    expect(withName('ESPN', 'AM | USA | ESPN PLUS')).toBe('US');
+    /* «EU» delante es el continente, no euskera. */
+    expect(deriveFacets({ title: 'LA 1', group: 'EU | ES | TDT' })).toMatchObject({
+      country: 'ES',
+      languages: ['es'],
+    });
+    expect(deriveFacets({ title: 'LTV 1', group: 'EU | LATVIA' }).languages).toEqual([]);
+    /* Una sigla de 3 letras de la tabla sale con su código canónico. */
+    expect(withName('CNN', 'USA | NEWS')).toBe('US');
+    const direct = (nameCountry: string) =>
+      new FacetDeriver().country({ title: 'CANAL', group: '', nameCountry });
+    expect(direct('AR')).toBe(null);
+    expect(direct('EN')).toBe(null);
+    expect(direct('LA')).toBe(null);
+    expect(direct('AM')).toBe(null);
+    expect(direct('EU')).toBe(null);
+    expect(direct('USA')).toBe('US');
+    expect(direct('HU')).toBe('HU');
+    expect(direct('LATAM')).toBe('LAT');
+  });
 });
 
 describe('idioma', () => {
@@ -447,15 +504,17 @@ describe('idioma', () => {
   it('sin marcas, el idioma del país; los países con varios idiomas no dan ninguno', () => {
     expect(languages('BBC ONE', 'UK | GENERALISTAS')).toEqual(['en']);
     expect(languages('RTP 1', 'PT | CANAIS')).toEqual(['pt']);
-    expect(languages('TSN 1', 'CA: SPORTS')).toEqual(['en']);
     expect(languages('RTS UN', 'CH | TV')).toEqual([]);
+    /* Canadá es bilingüe: «CA: RDS» es en francés. */
+    expect(languages('TSN 1', 'CA: SPORTS')).toEqual([]);
+    expect(languages('RDS', 'CA | SPORTS')).toEqual([]);
     expect(languages('ARENA SPORT 1', 'EXYU | SPORT')).toEqual([]);
     expect(languages('DAZN 1', 'VIP')).toEqual([]);
   });
 
-  it('«CA» al final o entre paréntesis no es catalán (entre paréntesis es Canadá: inglés)', () => {
+  it('«CA» al final o entre paréntesis no es catalán (entre paréntesis es Canadá, que no da idioma)', () => {
     expect(languages('TSN 1 CA')).toEqual([]);
-    expect(languages('TSN 1 (CA)')).toEqual(['en']);
+    expect(languages('TSN 1 (CA)')).toEqual([]);
     expect(languages('TSN 1 (CAT)')).toEqual(['ca']);
   });
 });
@@ -504,6 +563,19 @@ describe('tipo y deporte', () => {
     expect(facets('CANAL +18').types).toEqual(['adultos']);
     expect(facets('M+ 18 SERIES').types).toEqual(['series']);
     expect(facets('CANAL+ 18', 'FR | CINEMA').types).toEqual(['cine']);
+    /* «Adult Swim» es un canal de dibujos: su tipo sale de la categoría. */
+    expect(facets('ADULT SWIM', 'US | KIDS').types).toEqual(['infantil']);
+    expect(facets('ADULT SWIM').types).toEqual([]);
+    expect(facets('ADULTS ONLY').types).toEqual(['adultos']);
+  });
+
+  it('«nova» solo es la marca española en España o sin país; «CANAL+ FOOT» es fútbol', () => {
+    expect(facets('NOVA').types).toEqual(['entretenimiento']);
+    expect(facets('NOVA', 'ES | ENTRETENIMIENTO').types).toEqual(['entretenimiento']);
+    expect(facets('GR: NOVA SPORTS 1', 'GR | SPORTS').types).toEqual(['deportes']);
+    const foot = facets('CANAL+ FOOT', 'FRANCE');
+    expect(foot.types).toEqual(['deportes']);
+    expect(foot.sports).toEqual(['futbol']);
   });
 
   it('«24h» es noticias y «24/7» series; los números de canal no dan tipo', () => {

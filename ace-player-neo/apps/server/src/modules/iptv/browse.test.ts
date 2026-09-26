@@ -189,6 +189,34 @@ describe('texto (§16.3)', () => {
     expect(titles(index, query(index, { q: 'dazn 1' }).rows)).toEqual(['DAZN 1/ES']);
   });
 
+  it('el país del nombre pasa por la tabla de §16.4: «AR» es árabe, «EN» un idioma, «LA» nada (con el catálogo)', () => {
+    const index = buildBrowseIndex(
+      catalogOf([
+        raw(1, 'AR | BEIN SPORTS 1', 'AR | BEIN'),
+        raw(2, 'BEIN SPORTS 1', 'AR | BEIN'),
+        raw(3, 'EN | REAL MADRID TV', 'DEPORTES'),
+        raw(4, 'LA 1', 'LA | GENERAL'),
+        raw(5, 'DAZN 1 ES', 'DEPORTES'),
+      ]),
+    );
+    const result = query(index, { limit: 100 });
+    expect(titles(index, result.rows)).toEqual([
+      'BEIN SPORTS 1/-',
+      'REAL MADRID TV/-',
+      'LA 1/-',
+      'DAZN 1/ES',
+    ]);
+    const countries = Object.fromEntries(
+      (result.facets?.country ?? []).map((item) => [item.value, item.count]),
+    );
+    expect(countries).toEqual({ ES: 1, none: 3 });
+    const languages = Object.fromEntries(
+      (result.facets?.language ?? []).map((item) => [item.value, item.count]),
+    );
+    expect(languages.ar).toBe(1);
+    expect(languages.en).toBe(1);
+  });
+
   it('dentro de cada nivel, España y sin país antes que otro país (como el buscador, §18)', () => {
     const channels = [
       raw(1, 'UK: DAZN 1', 'UK | SPORTS'),
@@ -437,11 +465,28 @@ describe('rendimiento (§16.5)', () => {
     expect(median(warms)).toBeLessThan(2);
   });
 
-  it('@lento 100 000 canales: consulta en frío < 60 ms', () => {
+  /* «@lento» es solo la etiqueta (tarda unos segundos en montar el índice): corre en la tanda normal. */
+  it('@lento 100 000 canales: consulta en frío < 60 ms (mediana de 5)', () => {
     const index = buildBrowseIndex(big(100_000));
-    index.cache.clear();
-    const cold = performance.now();
-    query(index, { country: ['ES'], q: 'canal' });
-    expect(performance.now() - cold).toBeLessThan(60);
+    query(buildBrowseIndex(catalogOf(SMALL)), { q: 'dazn canal', country: ['ES'] });
+    const requests: Partial<BrowseRequest>[] = [
+      { country: ['ES'], q: 'canal' },
+      { q: 'dazn' },
+      { country: ['ES'], sport: ['futbol'] },
+      { type: ['deportes'], quality: ['fhd', 'hd'] },
+      {},
+    ];
+    const colds: number[] = [];
+    for (const request of requests) {
+      index.cache.clear();
+      const cold = performance.now();
+      query(index, request);
+      const coldMs = performance.now() - cold;
+      colds.push(coldMs);
+      /* Una suelta puede ir lenta si la máquina va cargada; ninguna pasa del presupuesto de la API (§16.5). */
+      expect(coldMs, JSON.stringify(request)).toBeLessThan(250);
+    }
+    const median = [...colds].sort((a, b) => a - b)[Math.floor(colds.length / 2)] as number;
+    expect(median).toBeLessThan(60);
   }, 30_000);
 });

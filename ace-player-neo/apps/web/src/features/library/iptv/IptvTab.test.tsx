@@ -2,7 +2,12 @@
    Canales con un `iptvBrowse` simulado que contesta como el servidor (la
    lógica de la demo sobre la «IPTV de ejemplo»). */
 
-import type { BootstrapResponse, IptvBrowseQuery, IptvBrowseResponse } from '@ace/shared';
+import type {
+  BootstrapResponse,
+  IptvBrowseQuery,
+  IptvBrowseResponse,
+  LibraryView as LibraryData,
+} from '@ace/shared';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetMode, setMode } from '../../../api/mode.ts';
@@ -13,7 +18,7 @@ import LibraryView from '../LibraryView.tsx';
 import { resetPending } from '../data.ts';
 import { takeChannelTap } from '../play.ts';
 import { selectionStore } from '../selection.ts';
-import { makeLibrary, renderWithApp, resetPlayback } from '../test-utils.tsx';
+import { makeItem, makeLibrary, renderWithApp, resetPlayback } from '../test-utils.tsx';
 import { demoCategoryId, demoIptvBrowse } from './demo.ts';
 
 let net: ReturnType<typeof mockFetch>;
@@ -32,9 +37,11 @@ function setup({
   iptv = true,
   browse = (call: MockCall) => json(demoIptvBrowse(queryOf(call))),
   layout = {},
+  library = makeLibrary(),
 }: {
   search?: string;
   iptv?: boolean;
+  library?: LibraryData;
   browse?: (call: MockCall) => Response | Promise<Response>;
   layout?: Parameters<typeof renderWithApp>[1] extends infer O
     ? O extends { layout?: infer L }
@@ -42,7 +49,6 @@ function setup({
       : never
     : never;
 } = {}) {
-  const library = makeLibrary();
   net = mockFetch({
     'GET /api/v1/library': library,
     'POST /api/v1/library': library,
@@ -166,6 +172,35 @@ describe('categorías y canales', () => {
     });
   });
 
+  it('la hoja «Guardar favorito» de un canal IPTV enseña su nombre en la IPTV, no un «Hash»', async () => {
+    setup({ search: `?vista=biblioteca&pestana=iptv&cat=${demoCategoryId('ES | DAZN')}` });
+    await screen.findByRole('link', { name: 'DAZN F1' });
+    fireEvent.click(screen.getByRole('button', { name: 'Añadir DAZN F1 a favoritos' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Guardar favorito' });
+    expect(within(dialog).getByText('En tu IPTV')).toBeInTheDocument();
+    expect(within(dialog).queryByText('Hash')).not.toBeInTheDocument();
+  });
+
+  it('quitar un favorito vacía la estrella al momento; otro toque durante el «Deshacer» lo recupera', async () => {
+    const id = demoIptvBrowse({ q: 'dazn f1' }).channels[0]!.id;
+    const favorite = makeItem('DAZN F1', 'fav', { id, category: 'IPTV', ih: false });
+    setup({
+      search: `?vista=biblioteca&pestana=iptv&cat=${demoCategoryId('ES | DAZN')}`,
+      library: makeLibrary({ favorites: [favorite] }),
+    });
+    await screen.findByRole('link', { name: 'DAZN F1' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Quitar DAZN F1 de favoritos' }));
+    const add = await screen.findByRole('button', { name: 'Añadir DAZN F1 a favoritos' });
+    expect(await screen.findByText('«DAZN F1» quitado de favoritos')).toBeInTheDocument();
+    fireEvent.click(add);
+    expect(
+      await screen.findByRole('button', { name: 'Quitar DAZN F1 de favoritos' }),
+    ).toBeInTheDocument();
+    // Sin hoja de «Guardar favorito» y sin baja en el servidor.
+    expect(screen.queryByRole('dialog', { name: 'Guardar favorito' })).not.toBeInTheDocument();
+    expect(net.calls.some((c) => c.method === 'POST')).toBe(false);
+  });
+
   it('«Cargar más canales» pide la página siguiente con su cursor', async () => {
     setup({ search: '?vista=biblioteca&pestana=iptv&cat=todos' });
     await screen.findByRole('heading', { name: 'Todos los canales', level: 2 });
@@ -242,6 +277,24 @@ describe('buscador dentro de la pestaña', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Buscar «zzzz» en tu IPTV y el motor' }));
     await waitFor(() => expect(screen.getByTestId('ruta').textContent).toBe('buscar'));
   });
+
+  it('nada con el texto y filtros: lo dice y ofrece «Quitar filtros» primero (también en el móvil)', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    setup({ search: '?vista=biblioteca&pestana=iptv&tipo=adultos' });
+    await screen.findByRole('button', { name: 'Filtros, 1 elegido' });
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Buscar en tu IPTV' }), {
+      target: { value: 'dazn' },
+    });
+    await act(() => vi.advanceTimersByTimeAsync(500));
+    expect(
+      await screen.findByText('Nada en tu IPTV con «dazn» y estos filtros.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Buscar «dazn» en tu IPTV y el motor' }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Quitar filtros' }));
+    expect(new URLSearchParams(location.search).get('tipo')).toBeNull();
+  });
 });
 
 describe('filtros', () => {
@@ -276,6 +329,14 @@ describe('filtros', () => {
     // En la fila de chips, el elegido con su ×.
     expect(screen.getByRole('button', { name: 'Quitar el filtro Adultos' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Filtros, 1 elegido' })).toBeInTheDocument();
+  });
+
+  it('móvil: con dos filtros o más, «Quitar filtros» también en la fila de chips', async () => {
+    setup({ search: '?vista=biblioteca&pestana=iptv&tipo=deportes&pais=ES' });
+    await screen.findByRole('button', { name: 'Filtros, 2 elegidos' });
+    fireEvent.click(screen.getByRole('button', { name: 'Quitar filtros' }));
+    expect(new URLSearchParams(location.search).get('tipo')).toBeNull();
+    expect(new URLSearchParams(location.search).get('pais')).toBeNull();
   });
 
   it('ningún canal con estos filtros: el vacío con «Quitar filtros»', async () => {
