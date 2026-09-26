@@ -277,13 +277,18 @@ enum ReglasFuentes {
     /// `qualityLabel`: «1080p», «720p» o «SD» por el bitrate medido (o el del canal) y «HEVC» si el códec no es
     /// H.264; nil sin nada medido.
     static func calidad(_ sonda: SondaFuente?) -> String? {
-        guard let sonda else { return nil }
+        let etiquetas = etiquetasCalidad(sonda)
+        return etiquetas.isEmpty ? nil : etiquetas.joined(separator: " · ")
+    }
+
+    /// `qualityTags`: los mismos datos, uno por etiqueta (`["1080p", "HEVC"]`); vacío sin nada que decir.
+    static func etiquetasCalidad(_ sonda: SondaFuente?) -> [String] {
+        guard let sonda else { return [] }
         let kbps = (sonda.rateKbps ?? 0) > 0 ? (sonda.rateKbps ?? 0) : sonda.streamKbps
         let hevc =
             sonda.codec.range(of: #"hevc|h\.?265|hvc1|hev1"#, options: [.regularExpression, .caseInsensitive]) != nil
         let definicion: String? = kbps >= kbpsFullHD ? "1080p" : (kbps >= kbpsHD ? "720p" : (kbps > 0 ? "SD" : nil))
-        guard definicion != nil || hevc else { return nil }
-        return [definicion, hevc ? "HEVC" : nil].compactMap { $0 }.joined(separator: " · ")
+        return [definicion, hevc ? "HEVC" : nil].compactMap { $0 }
     }
 
     /// `describeSource`: nombre largo para VoiceOver.

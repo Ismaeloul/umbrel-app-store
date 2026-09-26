@@ -152,16 +152,11 @@ private struct FiloCartel: View {
     }
 }
 
-/// Nombre del canal sin el proveedor (15/650/88, dos líneas con «…»), meta (anillo 14 + palabra · calidad · tipo) y frase (12, dos líneas como mucho).
+/// De arriba abajo (SourcePoster.tsx, web 613f80e): el nombre del canal sin el proveedor (15/650/88, dos líneas con
+/// «…»); el anillo 14 con su palabra, en su línea; los datos técnicos, una etiqueta entera por dato que baja de línea
+/// si no cabe (sin datos, sin línea); y la frase (12, dos líneas) solo si no repite el estado.
 private struct CuerpoCartel: View {
     let fila: FilaFuente
-
-    /// «1080p · M3U»: la calidad (`qualityLabel`) y el tipo, este solo si no es ya el nombre (SourcePoster.tsx).
-    private var extras: String {
-        let presentacion = fila.presentacion
-        let tipo: String? = presentacion.tipo != presentacion.corto ? presentacion.tipo : nil
-        return [ReglasFuentes.calidad(fila.entrada.sonda), tipo].compactMap { $0 }.joined(separator: " · ")
-    }
 
     /// El anillo del medidor (`ringStateOf`): la reportada tiene dibujo propio y la que está en pantalla, oro.
     private var anillo: EstadoAnillo {
@@ -171,31 +166,55 @@ private struct CuerpoCartel: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        let etiquetas: [DatosCartel.Etiqueta] = DatosCartel.etiquetas(fila.entrada, fila.presentacion)
+        let frase: String? = DatosCartel.frase(palabra: fila.palabra, detalle: fila.detalle)
+        VStack(alignment: .leading, spacing: 0) {
             Text(NombreCartel.nombre(fila.entrada, fila.presentacion))
                 .estilo(EstiloTexto(tamano: 15, peso: 650, anchura: 88, altoLinea: 1.1))
                 .foregroundStyle(Palco.text)
                 .lineLimit(2)
                 .truncationMode(.tail)
                 .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 6) {
-                AnilloSenal(anillo, tamano: 14, palabra: fila.palabra)
-                let extras = self.extras
-                if !extras.isEmpty {
-                    Text("· \(extras)").estilo(EstiloTexto(tamano: 12, peso: 650, anchura: 88, altoLinea: 1.15))
-                        .foregroundStyle(Palco.text2).lineLimit(1)
+            AnilloSenal(anillo, tamano: 14, palabra: fila.palabra)
+                .padding(.top, 3)
+            if !etiquetas.isEmpty {
+                Flujo(horizontal: 4, vertical: 4) {
+                    ForEach(etiquetas, id: \.self) { EtiquetaCartel(etiqueta: $0) }
                 }
+                .padding(.top, 5)
             }
-            Text(fila.detalle)
-                .estilo(EstiloTexto(tamano: 12, peso: 450, altoLinea: 1.25))
-                .foregroundStyle(Palco.text2)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+            if let frase {
+                Text(frase)
+                    .estilo(EstiloTexto(tamano: 12, peso: 450, altoLinea: 1.25))
+                    .foregroundStyle(Palco.text2)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 5)
+            }
         }
         .padding(.horizontal, 2)
         .frame(maxWidth: .infinity, alignment: .leading)
         .multilineTextAlignment(.leading)
         .accessibilityHidden(true)
+    }
+}
+
+/// `.src-poster__tag`: la cápsula sm neutra a 20 de alto y relleno 0 7, tinta `--text-2`, siempre entera. La calidad,
+/// rellena (`--line-soft`); el tipo de fuente, solo con el filo (`inset 0 0 0 1px --line-strong`).
+private struct EtiquetaCartel: View {
+    let etiqueta: DatosCartel.Etiqueta
+
+    var body: some View {
+        let tipo: Bool = etiqueta.clase == .tipo
+        Text(etiqueta.texto)
+            .estilo(.capsulaSm)
+            .lineLimit(1)
+            .fixedSize()
+            .foregroundStyle(Palco.text2)
+            .padding(.horizontal, 7)
+            .frame(height: 20)
+            .background(Capsule().fill(tipo ? Color.clear : Palco.lineSoft))
+            .overlay { if tipo { Capsule().strokeBorder(Palco.lineStrong, lineWidth: 1) } }
     }
 }
 
