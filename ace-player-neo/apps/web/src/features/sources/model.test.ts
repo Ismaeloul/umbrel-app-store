@@ -24,11 +24,13 @@ import {
   onScreenOf,
   pickAutoSource,
   pickInitialSwitch,
+  posterDetailOf,
   PLAYER_VERDICT_MS,
   presentationOf,
   providerOf,
   QUALITY_KBPS,
   qualityLabel,
+  qualityTags,
   reportFollowUp,
   resolutionSourceLabel,
   scanFinished,
@@ -201,6 +203,16 @@ describe('calidad y canal del cartel (Palco, corrección 2)', () => {
     expect(qualityLabel(withProbe({ streamKbps: 4800, videoCodec: 'hevc' }))).toBe('1080p · HEVC');
     expect(qualityLabel(withProbe({ streamKbps: 4800, videoCodec: 'h264' }))).toBe('1080p');
     expect(qualityLabel(withProbe({ videoCodec: 'H.265' }))).toBe('HEVC');
+  });
+
+  it('una etiqueta por dato: qualityTags da la lista y qualityLabel la une', () => {
+    expect(qualityTags(entryFromCandidate(candidate(1), NOW))).toEqual([]);
+    expect(qualityTags(withProbe({ streamKbps: 4800, videoCodec: 'hevc' }))).toEqual([
+      '1080p',
+      'HEVC',
+    ]);
+    expect(qualityTags(withProbe({ rateKbps: 2400 }))).toEqual(['720p']);
+    expect(qualityTags(withProbe({ videoCodec: 'hev1' }))).toEqual(['HEVC']);
   });
 
   it('la tesela lleva el nombre del canal, sin el proveedor', () => {
@@ -575,5 +587,65 @@ describe('hermanas de la biblioteca (regla 23)', () => {
       origin: 'favorites',
       listaId: null,
     });
+  });
+});
+
+describe('la frase del cartel, solo si no repite el estado (Isma, 26-sep)', () => {
+  it('no sale si repite la palabra del estado, sin mirar mayúsculas, tildes ni el punto', () => {
+    expect(posterDetailOf('Verificada', 'verificada')).toBeNull();
+    expect(posterDetailOf('Comprobando', 'comprobando')).toBeNull();
+    expect(posterDetailOf('Sin señal', 'sin senal')).toBeNull();
+    expect(posterDetailOf('Sin señal', 'SIN SEÑAL.')).toBeNull();
+    expect(posterDetailOf('70% disponible', '70%  disponible')).toBeNull();
+    expect(posterDetailOf('Verificada', '  ')).toBeNull();
+    expect(posterDetailOf('Verificada', null)).toBeNull();
+  });
+
+  it('sale cuando dice algo más', () => {
+    expect(posterDetailOf('Comprobando', 'probándose en el segundo motor')).toBe(
+      'probándose en el segundo motor',
+    );
+    expect(posterDetailOf('Sin comprobar', 'disponibilidad sin medir')).toBe(
+      'disponibilidad sin medir',
+    );
+    expect(posterDetailOf('Comprobando', 'comprobando en pantalla')).toBe(
+      'comprobando en pantalla',
+    );
+    expect(posterDetailOf('Pendiente', 'en cola')).toBe('en cola');
+    expect(posterDetailOf('Floja', 'señal detectada · vídeo sin confirmar')).toBe(
+      'señal detectada · vídeo sin confirmar',
+    );
+    expect(posterDetailOf('Verificada', 'reproduciendo ahora')).toBe('reproduciendo ahora');
+    // Sin palabra de estado, la frase tal cual.
+    expect(posterDetailOf('', 'en cola')).toBe('en cola');
+  });
+
+  it('si empieza repitiendo el estado, queda lo nuevo', () => {
+    expect(posterDetailOf('Sin señal', 'sin señal; reintento a las 21:30')).toBe(
+      'reintento a las 21:30',
+    );
+    expect(posterDetailOf('Verificada', 'verificada · ')).toBeNull();
+  });
+
+  it('con las frases de verdad del modelo', () => {
+    const entry = entryFromCandidate(candidate(1), NOW);
+    const at = (state: Effective['state'], reason = ''): Effective => ({
+      state,
+      reason,
+      reported: false,
+    });
+    const shown = (effective: Effective) =>
+      posterDetailOf(signalOf(effective, entry).word, detailOf(effective, entry));
+    expect(shown(at('working'))).toBeNull();
+    expect(shown(at('failed'))).toBeNull();
+    expect(shown(at('checking'))).toBe('probándose en el segundo motor');
+    expect(shown(at('checking', 'player_check'))).toBe('comprobando en pantalla');
+    expect(shown(at('queued'))).toBe('en cola');
+    expect(shown(at('none'))).toBe('disponibilidad sin medir');
+    expect(signalOf(at('none'), entry).word).toBe('Sin comprobar');
+    const available = { ...entry, availability: 0.7 };
+    expect(
+      posterDetailOf(signalOf(at('none'), available).word, detailOf(at('none'), available)),
+    ).toBeNull();
   });
 });

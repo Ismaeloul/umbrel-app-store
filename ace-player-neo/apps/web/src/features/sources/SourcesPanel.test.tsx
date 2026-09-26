@@ -171,7 +171,8 @@ describe('lista (móvil)', () => {
     const [first, second, third] = within(list).getAllByRole('button');
     expect(first!.querySelector('.dorsal__abbrev')).toHaveTextContent(/^Elcano$/);
     expect(first!.querySelector('.src-poster__name')).toHaveTextContent(/^M\+ Liga de Campeones$/);
-    expect(within(first!).getByText('· 1080p · HEVC · M3U')).toBeInTheDocument();
+    const tags = [...first!.querySelectorAll('.src-poster__tags .src-poster__tag')];
+    expect(tags.map((tag) => tag.textContent)).toEqual(['1080p', 'HEVC', 'M3U']);
     first!.focus();
     fireEvent.keyDown(first!, { key: 'ArrowRight' });
     expect(second).toHaveFocus();
@@ -214,6 +215,66 @@ describe('lista (móvil)', () => {
     );
     expect(second!.querySelector('.dorsal__abbrev')).toHaveTextContent(/^Faro$/);
     expect(second!.querySelector('.src-poster__name')).toHaveTextContent(/^M\+ Liga de Campeones$/);
+  });
+
+  it('Isma, 26-sep: canal, estado, datos técnicos (una etiqueta por dato) y la frase, por ese orden', () => {
+    prepare(['working', 'checking', 'weak'], { activeHash: hash(1) });
+    act(() =>
+      sessionStore.set((s) => ({
+        ...s,
+        entries: s.entries.map((entry, i) =>
+          i === 0 && entry.probe
+            ? { ...entry, probe: { ...entry.probe, rateKbps: 4200, videoCodec: 'hevc' } }
+            : entry,
+        ),
+      })),
+    );
+    renderWithApp(<SourcesPanel variant="list" />);
+    const list = screen.getByRole('list', { name: 'Fuentes del partido' });
+    const [first, second] = within(list).getAllByRole('button');
+    const lines = (poster: HTMLElement) =>
+      [...poster.querySelector('.src-poster__body')!.children].map((child) => child.className);
+    // Verificada con datos: la frase «verificada» repetiría el estado y no sale.
+    expect(lines(first!)).toEqual(['src-poster__name', 'src-poster__state', 'src-poster__tags']);
+    expect(first!.querySelector('.src-poster__state')).toHaveTextContent(/^Verificada$/);
+    const tags = [...first!.querySelectorAll('.src-poster__tag')].map((tag) => tag.textContent);
+    expect(tags).toEqual(['1080p', 'HEVC', 'M3U']);
+    // Cada dato en su etiqueta, sin «·» ni «…» pegados.
+    expect(first!.querySelector('.src-poster__tags')).not.toHaveTextContent(/[·…]/);
+    // Comprobando: la frase dice algo más que el estado y sí sale, al final.
+    expect(second!.querySelector('.src-poster__state')).toHaveTextContent(/^Comprobando$/);
+    expect(second!.querySelector('.src-poster__detail')).toHaveTextContent(
+      /^probándose en el segundo motor$/,
+    );
+    expect(lines(second!).at(-1)).toBe('src-poster__detail');
+    // El aria-label largo no cambia: sigue diciendo la frase entera.
+    expect(first).toHaveAttribute(
+      'aria-label',
+      expect.stringMatching(
+        /^Fuente 1: M\+ Liga de Campeones --> Elcano · M3U · Elcano · Hash .* · verificada/,
+      ),
+    );
+  });
+
+  it('sin datos técnicos la línea de etiquetas no aparece', () => {
+    prepare(['working']);
+    act(() =>
+      sessionStore.set((s) => ({
+        ...s,
+        entries: s.entries.map((entry) => ({
+          ...entry,
+          origin: 'saved',
+          listaId: null,
+          title: 'M+ Liga de Campeones',
+        })),
+      })),
+    );
+    renderWithApp(<SourcesPanel variant="list" />);
+    const list = screen.getByRole('list', { name: 'Fuentes del partido' });
+    const [first] = within(list).getAllByRole('button');
+    expect(first!.querySelector('.dorsal__abbrev')).toHaveTextContent(/^Guardada$/);
+    expect(first!.querySelector('.src-poster__tags')).toBeNull();
+    expect(first!.querySelector('.src-poster__state')).toHaveTextContent(/^Verificada$/);
   });
 
   it('atajos: N pasa a la siguiente y los números eligen', () => {
@@ -482,10 +543,11 @@ describe('IPTV', () => {
     const list = screen.getByRole('list', { name: 'Fuentes del partido' });
     const iptv = within(list).getAllByRole('button')[0]!;
     expect(iptv).toHaveAttribute('data-origin', 'iptv');
-    expect(within(iptv).getByText('IPTV')).toBeInTheDocument();
+    expect(iptv.querySelector('.src-poster__tile')).toHaveTextContent('IPTV');
     expect(iptv.querySelector('.dorsal__abbrev')).toHaveTextContent(/^Casa$/);
     expect(iptv.querySelector('.src-poster__name')).toHaveTextContent(/^M\+ Liga de Campeones$/);
-    expect(within(iptv).getByText('· 1080p · IPTV')).toBeInTheDocument();
+    const tags = [...iptv.querySelectorAll('.src-poster__tags .src-poster__tag')];
+    expect(tags.map((tag) => tag.textContent)).toEqual(['1080p', 'IPTV']);
     expect(iptv.getAttribute('aria-label')).toMatch(
       /^Fuente 1: M\+ Liga de Campeones · IPTV · Casa · 1080p · no arrancó en el reproductor/,
     );

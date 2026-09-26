@@ -550,18 +550,22 @@ const IPTV_QUALITY_LABEL: Record<string, string> = {
   sd: 'SD',
 };
 
-export function qualityLabel(entry: Pick<SourceEntry, 'probe' | 'iptv'>): string | null {
+/**
+ * Los datos técnicos de la calidad, uno por etiqueta (Isma, 26-sep: el
+ * cartel los enseña enteros, cada uno en su cápsula): `['1080p', 'HEVC']`,
+ * `['720p']`, `['SD', 'reserva']`… Vacío si no hay nada que decir.
+ */
+export function qualityTags(entry: Pick<SourceEntry, 'probe' | 'iptv'>): string[] {
   const probe = entry.probe;
   const measured = probe && (probe.rateKbps || probe.streamKbps || probe.videoCodec);
   // IPTV sin medir: la calidad que declara su nombre (§8.1), y «reserva» si lo es.
   if (entry.iptv && !measured) {
-    const parts = [
-      entry.iptv.quality ? IPTV_QUALITY_LABEL[entry.iptv.quality] : null,
+    return [
+      entry.iptv.quality ? (IPTV_QUALITY_LABEL[entry.iptv.quality] ?? null) : null,
       entry.iptv.backup ? 'reserva' : null,
-    ].filter(Boolean);
-    return parts.length ? parts.join(' · ') : null;
+    ].filter((part): part is string => Boolean(part));
   }
-  if (!probe) return null;
+  if (!probe) return [];
   const kbps = probe.rateKbps && probe.rateKbps > 0 ? probe.rateKbps : probe.streamKbps;
   const hevc = /hevc|h\.?265|hvc1|hev1/i.test(probe.videoCodec);
   const definition =
@@ -572,8 +576,51 @@ export function qualityLabel(entry: Pick<SourceEntry, 'probe' | 'iptv'>): string
         : kbps > 0
           ? 'SD'
           : null;
-  if (!definition && !hevc) return null;
-  return [definition, hevc ? 'HEVC' : null].filter(Boolean).join(' · ');
+  return [definition, hevc ? 'HEVC' : null].filter((part): part is string => Boolean(part));
+}
+
+/** La calidad en una línea («1080p · HEVC»), para el aria-label y el rack; null si no hay. */
+export function qualityLabel(entry: Pick<SourceEntry, 'probe' | 'iptv'>): string | null {
+  const tags = qualityTags(entry);
+  return tags.length ? tags.join(' · ') : null;
+}
+
+/** Minúsculas, sin tildes ni espacios de más ni punto final: para comparar frases. */
+function plainPhrase(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLocaleLowerCase('es')
+    .replace(/\s+/g, ' ')
+    .replace(/[\s.…]+$/, '')
+    .trim();
+}
+
+const PHRASE_SEPARATOR = /\s*[;:,·—–]\s*/;
+
+/**
+ * La frase del cartel (row.detail) SOLO si dice algo que no dice ya la
+ * palabra del estado (Isma, 26-sep). «verificada» bajo «Verificada»,
+ * «sin señal» bajo «Sin señal» o «70% disponible» bajo «70% disponible» no
+ * salen (null); «probándose en el segundo motor», «disponibilidad sin
+ * medir» o «comprobando en pantalla» sí. Si empieza repitiendo el estado y
+ * sigue tras un separador («sin señal; reintento a las 21:30»), queda lo
+ * nuevo: «reintento a las 21:30». Sin distinguir mayúsculas ni tildes.
+ */
+export function posterDetailOf(
+  word: string | null | undefined,
+  detail: string | null | undefined,
+): string | null {
+  const phrase = String(detail ?? '').trim();
+  if (!phrase) return null;
+  const state = plainPhrase(String(word ?? ''));
+  if (!state) return phrase;
+  if (plainPhrase(phrase) === state) return null;
+  const separator = PHRASE_SEPARATOR.exec(phrase);
+  if (separator && plainPhrase(phrase.slice(0, separator.index)) === state) {
+    return posterDetailOf(word, phrase.slice(separator.index + separator[0].length));
+  }
+  return phrase;
 }
 
 /** Nombre del canal para la tesela del cartel: el título sin el proveedor o el canal con el que casó. */
