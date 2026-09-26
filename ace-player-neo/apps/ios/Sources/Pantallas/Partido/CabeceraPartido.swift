@@ -23,21 +23,13 @@ struct CabeceraPartido: View {
             }
             .accessibilityElement(children: .combine)
             equipos
-                .piezaVuelo(.filaEquipos, partido: partido.id, contenido: contenidoVuelo)
+                .piezaVuelo(.filaEquipos, partido: partido.id)
         }
         .padding(.top, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .modifier(BaseServidor(base: $base))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(IDUI.cabeceraPartido)
-    }
-
-    /// Lo que pinta la fila de equipos cuando el vuelo de escudos llega a ella (el cruce de la web, a3 §4.8).
-    private var contenidoVuelo: ContenidoPieza? {
-        guard !partido.away.isEmpty else { return nil }
-        return .filaEquipos(
-            local: EquiposTeatro.equipo(partido, local: true, base: base),
-            visitante: EquiposTeatro.equipo(partido, local: false, base: base), encendido: enDirecto)
     }
 
     @ViewBuilder private var equipos: some View {

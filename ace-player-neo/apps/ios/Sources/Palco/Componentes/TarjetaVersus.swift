@@ -82,8 +82,7 @@ struct TarjetaVersus<Senal: View>: View {
             ColocarEnFraccion(x: 0.5, y: d.centroEscudos ?? m.centroEscudos) {
                 BloqueEscudos(datos, tamano: m.escudo)
                     .scaleEffect(d.escalaEscudos ?? m.escalaEscudos)
-                    .modifier(OrigenVuelo(pieza: .escudos, partido: d.origenVuelo,
-                                          contenido: .escudos(datos, tamano: m.escudo)))
+                    .modifier(OrigenVuelo(pieza: .escudos, partido: d.origenVuelo))
             }
             capas(m)
         }
@@ -96,7 +95,7 @@ struct TarjetaVersus<Senal: View>: View {
         .sombra(d.sombraGrande ? .s2 : .s3, forma: forma)
         .foregroundStyle(Color.white)
         .islaOscura()
-        .modifier(OrigenVuelo(pieza: .tarjeta, partido: d.origenVuelo, contenido: nil))
+        .modifier(OrigenVuelo(pieza: .tarjeta, partido: d.origenVuelo))
     }
 
     /// «En pantalla» deja el 34 % a la derecha salvo que el sitio reserve lo suyo (la cápsula «Marcador»).
@@ -213,11 +212,10 @@ private struct MarcoTarjetaVersus: ViewModifier {
 private struct OrigenVuelo: ViewModifier {
     let pieza: PiezaVuelo
     let partido: String?
-    let contenido: ContenidoPieza?
 
     func body(content: Content) -> some View {
         if let partido {
-            content.piezaVuelo(pieza, partido: partido, contenido: contenido)
+            content.piezaVuelo(pieza, partido: partido)
         } else {
             content
         }

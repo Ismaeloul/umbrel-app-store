@@ -13,71 +13,12 @@ struct CapaVuelo: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             ForEach(transicion.vuelos) { vuelo in
-                if case .cruce(let vieja, let nueva) = vuelo.contenido {
-                    CruceEnVuelo(vuelo: vuelo, vieja: vieja, nueva: nueva, progreso: transicion.progreso)
-                } else {
-                    PiezaEnVuelo(vuelo: vuelo, progreso: transicion.progreso)
-                }
+                PiezaEnVuelo(vuelo: vuelo, progreso: transicion.progreso)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .opacity(transicion.opacidadVuelos)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-    }
-}
-
-/* El grupo de la web (a3 §4.8, `::view-transition-group` + `image-pair`): la caja va del marco de salida al de
-   llegada (posición y ancho) y, dentro, cada imagen se estira al ANCHO del grupo conservando su proporción,
-   anclada arriba; la vieja se apaga (1 − p) y la nueva se enciende (p) a la vez, en `plus-lighter` entre ellas
-   (grupo aislado: `compositingGroup`), así la suma no «baja» a media animación. */
-private struct CruceEnVuelo: View {
-    let vuelo: VueloPieza
-    let vieja: UIView
-    let nueva: ContenidoPieza
-    let progreso: Double
-
-    var body: some View {
-        let desde = vuelo.desde
-        let hasta = vuelo.hasta
-        let p: Double = min(1, max(0, progreso))
-        let ancho: Double = GeometriaVuelo.mezclar(Double(desde.width), Double(hasta.width), progreso)
-        let alto: Double = GeometriaVuelo.mezclar(Double(desde.height), Double(hasta.height), progreso)
-        let x: Double = GeometriaVuelo.mezclar(Double(desde.minX), Double(hasta.minX), progreso)
-        let y: Double = GeometriaVuelo.mezclar(Double(desde.minY), Double(hasta.minY), progreso)
-        ZStack(alignment: .top) {
-            FotoVuelo(foto: vieja)
-                .frame(width: desde.width, height: desde.height)
-                .scaleEffect(escala(ancho, desde.width), anchor: .top)
-                .opacity(1 - p)
-                .blendMode(.plusLighter)
-            PiezaDeVerdad(pieza: nueva)
-                .frame(width: hasta.width, height: hasta.height, alignment: .topLeading)
-                .scaleEffect(escala(ancho, hasta.width), anchor: .top)
-                .opacity(p)
-                .blendMode(.plusLighter)
-        }
-        .compositingGroup()
-        .frame(width: CGFloat(max(1, ancho)), height: CGFloat(max(1, alto)), alignment: .top)
-        .offset(x: CGFloat(x), y: CGFloat(y))
-    }
-
-    private func escala(_ ancho: Double, _ base: CGFloat) -> CGFloat {
-        base > 0 ? CGFloat(ancho) / base : 1
-    }
-}
-
-/// La pieza de llegada, pintada con su vista de Palco (la tarjeta es una isla oscura; el teatro, del tema).
-private struct PiezaDeVerdad: View {
-    let pieza: ContenidoPieza
-
-    var body: some View {
-        switch pieza {
-        case .escudos(let datos, let tamano):
-            BloqueEscudos(datos, tamano: tamano).islaOscura()
-        case .filaEquipos(let local, let visitante, let encendido):
-            FilaEquiposPartido(local: local, visitante: visitante, encendido: encendido)
-        }
     }
 }
 
@@ -102,7 +43,7 @@ private struct PiezaEnVuelo: View {
 
     @ViewBuilder private var contenido: some View {
         switch vuelo.contenido {
-        case .foto(let foto), .cruce(let foto, _): FotoVuelo(foto: foto)
+        case .foto(let foto): FotoVuelo(foto: foto)
         case .video(let superficie): VueloVideo(superficie: superficie)
         }
     }
