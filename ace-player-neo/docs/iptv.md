@@ -23,11 +23,18 @@ texto o quedó fuera:
   arranca en ~6 s. Conviene medirlo con un proveedor real antes de publicar.
 - En la cabecera de un canal suelto, «Reproducir» ya no sale mientras suena la IPTV de ese canal (el selector de
   `useStore` se quedaba con la lista de fuentes vacía del primer render).
-- Pendiente: «mantener caliente» el canal que funciona; una `location /api/v1/video/` propia en el nginx de
-  `deploy/umbrel`, sin buffer ni registro como `/remux/` (hoy el vídeo de la web va por `location /api/`, con buffer
-  y una línea de log por segmento); comprobar de quién es la sesión en
-  `/api/v1/video` desde la web; cerrar las sesiones vivas al cambiar de proveedor; la renovación del token de las
-  listas M3U y la vuelta a la guía corta, sin probar contra un proveedor real.
+- Tras la revisión (26-sep): la guía exige la competición del partido (en el texto o, si el texto no nombra
+  ninguna, en el canal) y descarta otros deportes, el femenino y las categorías inferiores (§4.5); «Un solo
+  dispositivo a la vez» en el mismo canal IPTV echa al otro visor y **conserva** la sesión y la conexión con el
+  proveedor (§7.6); el bootstrap no caduca en la caché de la web (`iptvActive()` seguía en falso a los 5 min sin
+  Ajustes); en inmersivo «Volver a la IPTV» es una cápsula tocable sobre el vídeo (§7.2); el puente solo espera 60 s
+  tras un **fallo** de la IPTV; pausar, eliminar o cambiar de proveedor corta también lo que se estaba abriendo y lo
+  que suena del proveedor anterior; otra lista M3U del mismo host es otro proveedor; `location /api/v1/video/` propia
+  en el nginx; `-rw_timeout` a 55 s (el relé con cambio de variante llega a 49 s); las redes de Docker del Umbrel
+  (10.21.0.0/16 y 172.17.0.0/16) nunca cuentan como casa; y una línea de log (host y código) si la guía no baja.
+- Pendiente: «mantener caliente» el canal que funciona; comprobar de quién es la sesión en `/api/v1/video` desde la
+  web; medir el arranque con un proveedor real; la renovación del token de las listas M3U y la vuelta a la guía corta,
+  sin probar contra un proveedor real.
 
 Las rutas de ficheros son relativas a `ace-player-neo/` salvo que se diga otra cosa. Los textos entre «comillas» son
 **literales**: se copian tal cual en el código, porque la app nativa los genera desde la web (`generar-textos.mjs`) y
@@ -705,10 +712,16 @@ IPTV queda **confirmada por la guía** solo si **todo** esto se cumple:
    - También lo descartan el elemento `<previously-shown/>` y una `<category>` News/Magazine/Talk/Noticias.
    - `<live/>`, «directo», «en vivo» o «(L)» no son obligatorios: solo desempatan entre dos programas válidos.
 4. **Competición.**
-   - Si el texto nombra una competición de `COMPETITION_FAMILIES` (LaLiga Primera, Hypermotion/Segunda, Liga F,
-     Champions, Europa League, Conference, Copa del Rey, Supercopa, Premier, Serie A, Bundesliga, Ligue 1, Nations
-     League, Mundial, Eurocopa) y es **otra** familia que la del partido, se descarta.
-   - Si no nombra ninguna, vale: con los dos equipos basta.
+   - El texto (título, subtítulo, descripción y categorías) tiene que nombrar la familia del partido de
+     `COMPETITION_FAMILIES` (LaLiga Primera, Hypermotion/Segunda, Liga F, Champions, Europa League, Conference, Copa
+     del Rey, Supercopa, Premier, Serie A, Bundesliga, Ligue 1, Nations League, Mundial, Eurocopa) **y ninguna otra**.
+   - Si no nombra ninguna, solo vale si la nombra el canal («DAZN LaLiga», «M+ LaLiga TV 2»). En un generalista
+     («La 1», «DAZN 1») sin la competición en la guía, no se confirma: mejor no emparejar que emparejar mal.
+   - Sin familia conocida del partido (un amistoso), no se exige.
+   - Tampoco valen, en ningún campo ni categoría: otros deportes (baloncesto, ACB, Liga Endesa, Euroliga, fútbol
+     sala, futsal, balonmano, voleibol, hockey, rugby, tenis, pádel…), el femenino («Femenino», «(Fem.)», «Femenina»,
+     «Women»; salvo que el partido sea de Liga F) ni las categorías inferiores (Youth League, juvenil, Sub-19…).
+     «(Dif.)» cuenta como diferido y «Barcelona SC» como otro equipo.
 5. **Canal.**
    - **País ES explícito**, más estricto que el filtro general: un canal sin país (`null`) solo vale si además casa
      (≥ 70) con algún canal emisor de la agenda. Si la agenda no trae canales, solo valen canales ES explícitos. Así un
@@ -1054,8 +1067,9 @@ proveedor ──(net: SSRF, IP fijada, UA)──► relé 127.0.0.1:<p>/r/<ticke
   3. 403, 429, 456, 458 y 509 cuentan como «plaza ocupada» (el proveedor aún cuenta el socket viejo) y se reintentan
      igual, sin gastar variantes;
   4. mientras tanto **no cierra** la conexión con ffmpeg.
-  - El peor caso son 10 + (1 + 8) + (2 + 8) + (4 + 8) = **41 s** sin bytes, por debajo del `-rw_timeout` de ffmpeg
-    (45 s, §6.3). ffmpeg nunca muere antes de que el relé termine de intentarlo.
+  - El peor caso son 10 + (1 + 8) + (2 + 8) + (4 + 8) = **41 s** sin bytes (49 s si después abre otra variante),
+    por debajo del `-rw_timeout` de ffmpeg (55 s, §6.3). ffmpeg nunca muere antes de que el relé termine de
+    intentarlo.
 - **Otra base de tiempos tras reconectar.** El relé mira el primer PTS y el PCR de lo que llega tras reconectar. Si
   saltan más de **5 s** respecto a lo último que pasó (hacia delante o hacia atrás), **no empalma**: corta la entrada
   de ese ffmpeg y playback reinicia el remux en la misma sesión, con `stream.reopened { reason: 'remux_restart' }`
@@ -1116,8 +1130,9 @@ HLS H.264 con AAC. No entra ahora.
   cumple `HASH_RE`.
 - **`buildRemuxArgs` con `origin: 'iptv'`:**
   - sin `-reconnect*` (reconecta el relé);
-  - con `-rw_timeout 45000000` (**en microsegundos**, como el `20000000` de hoy en `args.ts`; «15s» no es un valor
-    válido y haría fallar la apertura). 45 s es más que el peor caso del relé (41 s, §6.1);
+  - con `-rw_timeout 55000000` (**en microsegundos**, como el `20000000` de hoy en `args.ts`; «15s» no es un valor
+    válido y haría fallar la apertura). 55 s es más que el peor caso del relé (41 s, y 49 s si además abre otra
+    variante, §6.1);
   - con `-protocol_whitelist http,tcp,crypto` (solo le llegan URLs del relé en `127.0.0.1`);
   - con `-live_start_index -3` si la entrada es HLS;
   - con `-metadata ace_session=<sid>` como hoy (los huérfanos se siguen encontrando);
@@ -1204,7 +1219,7 @@ HLS H.264 con AAC. No entra ahora.
 | `channelStream` completo | 5–10 s | 60 s (el de hoy) | — |
 | Corte: sin bytes | — | 10 s | reconexión del relé |
 | Reconexión del relé | < 3 s | esperas de 1, 2 y 4 s, 8 s de cabeceras cada una, 3 en 60 s (peor caso 41 s) | otra variante si la hay; si no, `stream.closed remux_failed` + `iptv_dropped` |
-| ffmpeg sin datos (`-rw_timeout`) | — | 45 s | nunca antes que el relé |
+| ffmpeg sin datos (`-rw_timeout`) | — | 55 s | nunca antes que el relé (41 s, 49 s con otra variante) |
 | Base de tiempos distinta tras reconectar | — | salto > 5 s | reinicio del remux + `stream.reopened remux_restart` |
 | Del corte definitivo a pedir AceStream | inmediato | — | la web salta sin sus 3 reconexiones (§7.2) |
 
@@ -1247,7 +1262,7 @@ responde: probando la siguiente…») y, solo si hace falta un botón, un **toas
 | IPTV con `iptv_busy` | ídem | ídem | «Tu IPTV tiene la conexión ocupada: seguimos por AceStream (fuente {N})» | «Volver a la IPTV» |
 | IPTV | ninguna verificada todavía, comprobador en marcha | espera a la primera `working`, como hoy | «Tu IPTV no responde. Sigo comprobando las fuentes de AceStream y arranco la primera que funcione.» | «Volver a la IPTV» |
 | IPTV en un canal suelto | ninguna verificada | se prueba el hash que se tocó en la biblioteca (el `initial`) | «Tu IPTV no responde: seguimos por AceStream» | «Volver a la IPTV» |
-| AceStream (auto o manual) | una IPTV no fallida y no probada en los últimos 60 s | se pasa a la IPTV | «Esta fuente no responde: pasamos a tu IPTV» | — |
+| AceStream (auto o manual) | una IPTV no «Sin señal» y no **caída** en los últimos 60 s (una que sonaba bien y se dejó a mano, sí) | se pasa a la IPTV | «Esta fuente no responde: pasamos a tu IPTV» | — |
 | AceStream por `engine_unavailable` | una IPTV | se trata como fuente agotada, no como error de sistema → IPTV | «El motor AceStream no responde: pasamos a tu IPTV» | — |
 | las dos, y no queda **ninguna** fuente sin probar | nada | `failureText` | «Ni tu IPTV ni las fuentes de AceStream dan señal ahora mismo. Prueba «Rebuscar» en unos minutos.» | — |
 | IPTV en pausa o eliminada durante la reproducción | AceStream | como la primera fila | «Tu IPTV está en pausa: seguimos por AceStream (fuente {N})» | — |
@@ -1256,10 +1271,14 @@ responde: probando la siguiente…») y, solo si hace falta un botón, un **toas
   estado **en lugar** del genérico. El toast no repite el texto largo: es el botón. Texto del toast: «Seguimos por
   AceStream» · acción **«Volver a la IPTV»**, con `icon: 'tv'`, `tone: 'warn'` y `ms: 8000`, para que dé tiempo a
   tocar.
-- **En pantalla completa** el `Toaster` no pinta nada (`data-immersive`), que es justo como se ve el fútbol. Por eso el
-  toast solo sale fuera de pantalla completa, y en pantalla completa la línea de estado añade cómo volver:
-  « Para volver a la IPTV, pulsa {1}.» en escritorio (la tecla de su número) y « Para volver a la IPTV, toca su
-  cartel.» en táctil. El cartel, su número y el gesto de deslizar valen siempre (§7.5).
+- **En inmersivo** (móvil en horizontal, pantalla completa o modo teatro) el `Toaster` no pinta nada
+  (`data-immersive`), que es justo como se ve el fútbol, y los carteles no están en pantalla. Por eso «Volver a la
+  IPTV» va dos veces con la misma acción y el mismo plazo de 8 s: el toast (fuera de inmersivo) y una **cápsula
+  tocable sobre el vídeo**, arriba y al centro («Seguimos por AceStream» · **«Volver a la IPTV»**,
+  `notices/immersiveAction.ts`, la pinta `PlayerSurface`). Cada una se ve solo en su modo, así girar el móvil no la
+  pierde, y un toque quita las dos. Con teclado, la línea de estado añade además « Para volver, pulsa {1}.». Bajo el
+  vídeo la línea parte en dos renglones en vez de cortarse a 390 px. El cartel, su número y el gesto de deslizar
+  valen siempre (§7.5).
 - **El toast va atado** al id de la sesión de fuentes y al partido o canal. Si Isma navega a otro partido o canal, o la
   sesión de fuentes cambia, el toast se descarta y su acción no hace nada. «Volver a la IPTV» solo actúa si esa IPTV
   sigue en la lista de esa misma sesión.
@@ -1369,7 +1388,7 @@ AceStream `working`** del trabajo de ese visor (`scanner.refreshWorking(jobId, 2
 
 | Situación | `share` (por defecto) | `handoff` (interruptor activado) |
 |---|---|---|
-| Web e iPhone, mismo canal IPTV (mismo id) | comparten sesión, ffmpeg y **una** conexión al proveedor | el último manda; el otro recibe `playback.handoff same_channel` |
+| Web e iPhone, mismo canal IPTV (mismo id) | comparten sesión, ffmpeg y **una** conexión al proveedor | el último manda; el otro recibe `playback.handoff same_channel` y la sesión IPTV **se conserva** (sin cerrar ni reabrir la conexión con el proveedor: muchos paneles siguen contando la plaza 30-120 s y el segundo se quedaría sin IPTV) |
 | Web en IPTV, iPhone abre otro canal (IPTV o AceStream) | traspaso: la web se para (`other_channel`), como hoy | ídem |
 | Web en IPTV, iPhone abre el mismo partido | el iPhone arranca la IPTV (misma primera) → comparten | el iPhone manda |
 | Web en AceStream del partido, iPhone en la IPTV del mismo partido | ids distintos → traspaso (regla de hoy) | ídem |

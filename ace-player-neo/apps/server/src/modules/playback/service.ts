@@ -1040,7 +1040,21 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     }
     if (session && policy() === 'handoff') {
       const others = [...session.viewers.values()].filter((v) => v.viewerId !== request.viewerId);
-      if (others.length) {
+      if (others.length && session.source === 'iptv') {
+        /* IPTV (docs/iptv.md §6.5): la sesión vive en el servidor. Se echa a
+           los demás y se conserva: cerrar y reabrir la conexión con el
+           proveedor dejaría al nuevo sin plaza en los paneles que la retienen. */
+        emitHandoff(session, others, by, 'same_channel');
+        handoff = true;
+        for (const other of others) {
+          session.viewers.delete(other.viewerId);
+          if (viewers.get(other.viewerId) === other) viewers.delete(other.viewerId);
+          if (other.consumes !== 'remux') continue;
+          /* El remux sigue hasta que se engancha el nuevo (como en la gracia). */
+          if (request.consumes === 'remux') session.pendingDetach.push(other.viewerId);
+          else await remux.detach(session.id, other.viewerId).catch(() => undefined);
+        }
+      } else if (others.length) {
         /* El último manda y la sesión se reabre para él, en vez de dejar que
            el motor mate la del otro con un 403 (arquitectura §5.6). */
         emitHandoff(session, others, by, 'same_channel');

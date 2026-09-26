@@ -14,10 +14,17 @@
       Nunca valen solos real, madrid, sporting, racing, union, deportivo,
       club ni city. Un alias seguido de B, C, II, Femenino, Sub-19, Juvenil,
       Castilla, Atlético, Deportivo, Promesas… es el filial: no cuenta.
-   3. Marcas de «no es el partido»: (R), [R], «R:», (D), repetición,
+   3. Marcas de «no es el partido»: (R), [R], «R:», (D), (Dif.), repetición,
       diferido, resumen, previa, rueda de prensa, análisis…, el elemento
-      `<previously-shown/>` o una categoría de noticias/magazine.
-   4. Competición: si el texto nombra otra familia que la del partido, fuera.
+      `<previously-shown/>` o una categoría de noticias/magazine. Tampoco
+      valen otros deportes (baloncesto, ACB, Euroliga, fútbol sala,
+      balonmano…), el femenino (salvo que el partido lo sea) ni las
+      categorías inferiores (Youth League, juvenil, Sub-19…), en cualquier
+      campo o categoría.
+   4. Competición: el texto (título, subtítulo, descripción o categorías)
+      nombra la familia del partido y ninguna otra; si no nombra ninguna, la
+      tiene que nombrar el canal («DAZN LaLiga»). Sin familia conocida del
+      partido (un amistoso), no se exige.
    5. Canal: país ES explícito (o sin país si casa ≥ 70 con un canal de la
       agenda) y su nombre no puede nombrar otra competición (la regla
       Hypermotion ampliada a todas las familias).
@@ -171,7 +178,7 @@ export const EPG_TEAM_ALIASES: Readonly<Record<string, readonly string[]>> = {
 
 /* Lo que va detrás del alias y lo convierte en el filial o el femenino. */
 const RESERVE_AFTER_RE =
-  /^\s*(?:b|c|ii|iii|femenino|fem|femeni|sub[\s-]?\d{2}|u[\s-]?\d{2}|juvenil|atletic|castilla|atletico|deportivo|promesas|mestalla|academy)\b/;
+  /^\s*[([]?\s*(?:b|c|ii|iii|femenino|femenina|fem|femeni|women|sub[\s-]?\d{2}|u[\s-]?\d{2}|juvenil|atletic|castilla|atletico|deportivo|promesas|mestalla|academy|sc)\b/;
 /* Lo que va delante del alias y lo convierte en otro equipo («Bilbao Athletic»). */
 const RESERVE_BEFORE_RE = /\b(?:bilbao)\s*$/;
 
@@ -287,6 +294,7 @@ const NOT_LIVE_RE = new RegExp(
     '\\[(?:r|d)\\]',
     '^r:',
     '\\b(?:repeticion|reemision|diferido|grabado|replay)\\b',
+    '\\(dif\\.?\\)|\\[dif\\.?\\]|\\bdif\\.',
     '\\b(?:resumen|resumenes|highlights|mejores momentos|goles de)\\b',
     '\\b(?:previa|prepartido|pre-partido|postpartido|post partido|post-partido)\\b',
     '\\b(?:rueda de prensa|analisis|tertulia|magazine)\\b',
@@ -303,6 +311,35 @@ export function isNotLive(programme: GuideProgramme): boolean {
   }
   return programme.categories.some((category) =>
     NOT_LIVE_CATEGORY_RE.test(normalizeGuideText(category)),
+  );
+}
+
+// --- Otros deportes, femenino y categorías inferiores ---
+
+/* Mismos equipos, otro deporte: el Real Madrid - Barça de la ACB o del balonmano. */
+const OTHER_SPORT_RE =
+  /\b(?:baloncesto|basket|basketball|basquet|acb|liga endesa|euroliga|euroleague|eurocup|nba|futsal|futbol sala|balonmano|handball|asobal|voleibol|voley|volleyball|waterpolo|hockey|rugby|tenis|padel|futbol playa|beach soccer)\b/;
+/* El femenino, también entre paréntesis: «(Femenino)», «(Fem.)». */
+const WOMEN_RE = /\b(?:femenino|femenina|femeni|fem|women|womens|ladies)\b/;
+/* Categorías inferiores. */
+const YOUTH_RE = /\b(?:youth league|juvenil|sub[\s-]?\d{2}|u[\s-]?\d{2})\b/;
+
+function programmeTexts(programme: GuideProgramme): string[] {
+  return [programme.title, programme.subTitle, programme.desc, ...programme.categories].map(
+    (field) => normalizeGuideText(field),
+  );
+}
+
+/** ¿El programa es de otro deporte, del femenino o de una categoría inferior (y el partido no)? */
+export function isOtherEvent(programme: GuideProgramme, input: GuideMatchInput): boolean {
+  const matchText = normalizeGuideText(`${input.competition} ${input.title ?? ''}`);
+  const womenMatch = WOMEN_RE.test(matchText) || matchFamily(input) === 'ligaf';
+  const youthMatch = YOUTH_RE.test(matchText);
+  return programmeTexts(programme).some(
+    (text) =>
+      OTHER_SPORT_RE.test(text) ||
+      (!womenMatch && WOMEN_RE.test(text)) ||
+      (!youthMatch && YOUTH_RE.test(text)),
   );
 }
 
@@ -334,7 +371,10 @@ export type CompetitionFamily =
 
 /* Orden: las más concretas antes (Hypermotion antes que LaLiga, Liga F antes que LaLiga). */
 export const COMPETITION_FAMILIES: readonly (readonly [CompetitionFamily, RegExp])[] = [
-  ['hypermotion', /\b(?:hypermotion|smartbank|segunda division|laliga 2)\b/],
+  [
+    'hypermotion',
+    /\b(?:(?:laliga |la liga )?(?:hypermotion|smartbank)|segunda division|laliga 2)\b/,
+  ],
   ['ligaf', /\b(?:liga f|primera (?:division )?femenina|liga femenina)\b/],
   ['champions', /\b(?:champions(?: league)?|liga de campeones)\b/],
   ['europa', /\beuropa league\b/],
@@ -357,6 +397,23 @@ export function competitionFamily(value: string): CompetitionFamily | null {
   if (!text) return null;
   for (const [family, re] of COMPETITION_FAMILIES) if (re.test(text)) return family;
   return null;
+}
+
+/**
+ * Todas las familias que nombra un texto. Cada acierto se quita antes de
+ * seguir, para que «LaLiga Hypermotion» no cuente también como LaLiga.
+ */
+export function competitionFamilies(value: string): Set<CompetitionFamily> {
+  let text = normalizeGuideText(value);
+  const out = new Set<CompetitionFamily>();
+  if (!text) return out;
+  for (const [family, re] of COMPETITION_FAMILIES) {
+    const global = new RegExp(re.source, 'g');
+    if (!global.test(text)) continue;
+    out.add(family);
+    text = text.replace(new RegExp(re.source, 'g'), ' ');
+  }
+  return out;
 }
 
 /** Familia del partido (competición y título; Hypermotion también por el título). */
@@ -391,9 +448,12 @@ export function programmeShowsMatch(
     readonly awayAbbr: string[];
   },
   family: CompetitionFamily | null,
+  /** Familia que nombra el canal («DAZN LaLiga» → laliga), o null. */
+  channelFamily: CompetitionFamily | null = null,
 ): boolean {
   if (!programmeFitsKickoff(programme, input.start)) return false;
   if (isNotLive(programme)) return false;
+  if (isOtherEvent(programme, input)) return false;
   let teams = false;
   for (const field of [programme.title, programme.subTitle, programme.desc]) {
     const text = normalizeGuideText(field);
@@ -413,8 +473,11 @@ export function programmeShowsMatch(
   }
   if (!teams) return false;
   if (family) {
-    const named = competitionFamily(`${programme.title} ${programme.subTitle} ${programme.desc}`);
-    if (named && named !== family) return false;
+    /* La familia del partido sale en el texto (y ninguna otra) o, si el texto
+       no nombra ninguna, en el nombre del canal. Mejor no emparejar que mal. */
+    const named = competitionFamilies(programmeTexts(programme).join(' | '));
+    if (named.size) return named.size === 1 && named.has(family);
+    return channelFamily === family;
   }
   return true;
 }
@@ -445,12 +508,10 @@ export function confirmByGuide(
     if (candidate.country !== 'ES') {
       if (candidate.country !== null || !hasAgenda || agendaScore < LIBRARY_MIN_SCORE) continue;
     }
-    if (family) {
-      const channelFamily = competitionFamily(candidate.display);
-      if (channelFamily && channelFamily !== family) continue;
-    }
+    const channelFamily = competitionFamily(candidate.display);
+    if (family && channelFamily && channelFamily !== family) continue;
     const shows = candidate.programmes.filter((programme) =>
-      programmeShowsMatch(programme, input, cache, family),
+      programmeShowsMatch(programme, input, cache, family, channelFamily),
     );
     if (!shows.length) continue;
     const best =

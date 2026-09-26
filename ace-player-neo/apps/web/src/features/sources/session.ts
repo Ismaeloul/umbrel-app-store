@@ -36,8 +36,8 @@
    - IPTV (docs/iptv.md §7 y §8.4, regla P16.6 del README):
        · la IPTV arranca la primera, sin esperar a «Verificada»;
        · PUENTE: si cae la IPTV, se pasa sola a la mejor AceStream verificada
-         (con un aviso en la línea de estado y un toast «Volver a la IPTV»,
-         atado a esta sesión); si cae una AceStream y hay IPTV, a la IPTV.
+         (con un aviso en la línea de estado y «Volver a la IPTV» en un toast
+         o, en inmersivo, en una cápsula sobre el vídeo, atado a esta sesión); si cae una AceStream y hay IPTV, a la IPTV.
          Vale en automático, en manual y en los canales sueltos. Como mucho
          2 saltos del puente cada 3 min; después, P16 entre AceStream;
        · al tocar un canal con IPTV activa (`bootstrap.features.iptv`), se
@@ -70,7 +70,13 @@ import { haptic } from '../../lib/haptics.ts';
 import { matches, MEDIA } from '../../lib/media.ts';
 import { matchVersusPair } from '../../lib/teams.ts';
 import { createStore, useStore } from '../../lib/store.ts';
-import { dismissToast, notify, toast } from '../../notices/index.ts';
+import {
+  dismissImmersiveAction,
+  dismissToast,
+  notify,
+  showImmersiveAction,
+  toast,
+} from '../../notices/index.ts';
 import { noticeFlags } from '../../notices/notify.ts';
 import {
   getPlayer,
@@ -341,10 +347,14 @@ let offPlayer: (() => void) | null = null;
 let lastPlayer: PlayerState = getPlayer();
 /** El toast «Volver a la IPTV» (atado a esta sesión: se quita al acabarla). */
 let backToastId: number | null = null;
+/** Su gemela en inmersivo: la cápsula tocable sobre el vídeo. */
+let backPillId: number | null = null;
 
 function dismissBackToast(): void {
   if (backToastId !== null) dismissToast(backToastId);
+  if (backPillId !== null) dismissImmersiveAction(backPillId);
   backToastId = null;
+  backPillId = null;
 }
 
 function attach(): void {
@@ -1114,14 +1124,10 @@ function playEntry(entry: SourceEntry, origin: PlayOrigin): void {
       ...(entry.origin === 'manual' || iptv ? { record: false } : {}),
     },
   );
-  const now = clock();
   patch({
     activeHash: entry.id,
     stopped: false,
     failureText: null,
-    entries: sessionStore
-      .get()
-      .entries.map((item) => (item.id === entry.id ? { ...item, triedAt: now } : item)),
   });
 }
 
@@ -1195,10 +1201,15 @@ function handleSourceFailed(failure: SourceFailure): SourceFailedReply {
     ? state.entries
     : state.entries.map((entry, i) =>
         i === index
-          ? { ...entry, playerVerdict: { ...verdict, at: now } }
+          ? {
+              ...entry,
+              playerVerdict: { ...verdict, at: now },
+              // El puente no vuelve a una IPTV recién caída (60 s, §7.2).
+              ...(isIptv(entry) ? { failedAt: now } : {}),
+            }
           : accountDown && isIptv(entry)
             ? // Ni el arranque ni el puente vuelven a ellas en los próximos 60 s.
-              { ...entry, autoTried: true, triedAt: now }
+              { ...entry, autoTried: true, failedAt: now }
             : entry,
       );
   if (!engineDown) patch({ entries });
@@ -1288,43 +1299,49 @@ function iptvDownLead(code: string | undefined): string {
 
 /**
  * A pantalla completa no se pinta ningún toast (`data-immersive`), que es
- * justo como se ve el fútbol: la línea de estado dice cómo volver (§7.2).
+ * justo como se ve el fútbol: ahí «Volver a la IPTV» es una cápsula tocable
+ * sobre el vídeo (showBackToast). Con teclado, además, la línea dice la
+ * tecla, corta para que quepa (§7.2).
  */
 function withBackHint(text: string, entries: readonly SourceEntry[], iptvId: string): string {
-  if (!noticeFlags.get().immersive) return text;
+  if (!noticeFlags.get().immersive || !matches(MEDIA.finePointer)) return text;
   const number = entries.findIndex((entry) => entry.id === iptvId) + 1;
-  const hint =
-    matches(MEDIA.finePointer) && number > 0 && number <= 9
-      ? ` Para volver a la IPTV, pulsa ${number}.`
-      : ' Para volver a la IPTV, toca su cartel.';
-  return `${text}${text.endsWith('.') ? '' : '.'}${hint}`;
+  if (number <= 0 || number > 9) return text;
+  return `${text}${text.endsWith('.') ? '' : '.'} Para volver, pulsa ${number}.`;
 }
 
 /**
- * «Seguimos por AceStream» · «Volver a la IPTV» (8 s). Solo fuera de
- * pantalla completa, y atado a ESTA sesión de fuentes: si se va a otro
- * partido o canal, se quita y su acción ya no hace nada.
+ * «Seguimos por AceStream» · «Volver a la IPTV» (8 s), atado a ESTA sesión
+ * de fuentes: si se va a otro partido o canal, se quita y su acción ya no
+ * hace nada. Va dos veces con la misma acción: el toast (fuera de
+ * inmersivo) y la cápsula sobre el vídeo (en inmersivo, donde no hay
+ * toasts); cada una se ve solo en su modo, así girar el móvil no la pierde.
  */
 function showBackToast(iptvId: string): void {
   dismissBackToast();
-  if (noticeFlags.get().immersive) return;
   const gen = generation;
   const key = sessionStore.get().key;
+  const back = () => {
+    const current = sessionStore.get();
+    if (gen !== generation || current.key !== key) return;
+    if (!current.entries.some((entry) => entry.id === iptvId)) return;
+    selectSource(iptvId);
+  };
+  const onAction = () => {
+    // La otra copia ya no hace falta.
+    dismissBackToast();
+    back();
+  };
   backToastId = toast('Seguimos por AceStream', {
     tone: 'warn',
     icon: 'tv',
     ms: IPTV_CLIENT.backToastMs,
-    action: {
-      label: 'Volver a la IPTV',
-      onAction: () => {
-        backToastId = null;
-        const current = sessionStore.get();
-        if (gen !== generation || current.key !== key) return;
-        if (!current.entries.some((entry) => entry.id === iptvId)) return;
-        selectSource(iptvId);
-      },
-    },
+    action: { label: 'Volver a la IPTV', onAction },
   });
+  backPillId = showImmersiveAction(
+    { text: 'Seguimos por AceStream', label: 'Volver a la IPTV', onAction },
+    IPTV_CLIENT.backToastMs,
+  );
 }
 
 function recentJumps(state: Pick<SessionState, 'bridgeJumps'>, now: number): number[] {
@@ -1627,18 +1644,24 @@ export async function reportSource(hash: string, reason: SourceReportReason): Pr
         : undefined;
     // Reportar no cambia de fuente sola (index.html:4034-4038); se ofrece hacerlo.
     haptic('success');
-    toast('Fuente apartada; el segundo motor ya la está comprobando', {
-      tone: 'info',
-      icon: 'refresh',
-      ...(alternative
-        ? {
-            action: {
-              label: `Ver la ${numberOf(latest, alternative.id)}`,
-              onAction: () => selectSource(alternative.id),
-            },
-          }
-        : {}),
-    });
+    // La IPTV no la comprueba el segundo motor, sino su carril del comprobador.
+    toast(
+      isIptv(entry)
+        ? 'Fuente apartada; ya se está comprobando tu IPTV'
+        : 'Fuente apartada; el segundo motor ya la está comprobando',
+      {
+        tone: 'info',
+        icon: 'refresh',
+        ...(alternative
+          ? {
+              action: {
+                label: `Ver la ${numberOf(latest, alternative.id)}`,
+                onAction: () => selectSource(alternative.id),
+              },
+            }
+          : {}),
+      },
+    );
     if (result.scan) followReport(hash, reason, result.scan.id);
     return true;
   } catch (error) {

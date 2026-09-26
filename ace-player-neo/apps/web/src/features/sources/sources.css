@@ -265,8 +265,6 @@
   line-height: 1;
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.14);
 }
-/* «En pantalla»: abajo a la izquierda; al cambiar de fuente se desliza de un
-   cartel al otro (FLIP con transform en SourceList). */
 /* Distintivo de la IPTV (docs/iptv.md §8.1), arriba a la izquierda. Va sobre
    el tono del canal, que cambia con cada nombre: el mismo velo oscuro que el
    dorsal, con tinta blanca, para que el contraste no dependa del tono. */
@@ -283,6 +281,8 @@
 .src-poster[data-origin='iptv'] .dorsal__abbrev {
   top: 36px;
 }
+/* «En pantalla»: abajo a la izquierda; al cambiar de fuente se desliza de un
+   cartel al otro (FLIP con transform en SourceList). */
 .src-poster__onair {
   position: absolute;
   left: 6px;

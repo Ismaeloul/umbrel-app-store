@@ -51,11 +51,12 @@ de §26. Capturas y revisión de 11 tamaños en `docs/capturas/fase2/partido/`.
      (fuente N)», o «tiene la conexión ocupada», o «está en pausa») y un toast
      «Seguimos por AceStream» · **«Volver a la IPTV»** (8 s, atado a la sesión
      de fuentes: al cambiar de partido o canal se quita y no hace nada).
-     A pantalla completa no hay toasts: la línea añade «Para volver a la IPTV,
-     pulsa N» (ratón) o «toca su cartel» (táctil). Sin ninguna verificada
+     En inmersivo (móvil en horizontal, pantalla completa) no hay toasts: la
+     misma acción va en una cápsula tocable sobre el vídeo, y con ratón la
+     línea añade «Para volver, pulsa N». Sin ninguna verificada
      todavía, se espera a la primera; en un canal suelto, el hash que se tocó.
    - **Cae una AceStream** (auto o manual) y hay una IPTV no «Sin señal» ni
-     probada en los últimos 60 s → la IPTV («Esta fuente no responde: pasamos
+     caída en los últimos 60 s → la IPTV («Esta fuente no responde: pasamos
      a tu IPTV»). Con el motor caído (`engine_unavailable`), igual («El motor
      AceStream no responde: pasamos a tu IPTV»), y si no hay IPTV se espera
      al motor como siempre.

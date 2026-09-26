@@ -33,6 +33,8 @@ import {
 import { useEngineSummary } from '../api/hooks.ts';
 import { useApiQuery } from '../api/query.ts';
 import { useSwipe } from '../lib/gestures.ts';
+import { useStore } from '../lib/store.ts';
+import { immersiveActionStore } from '../notices/immersiveAction.ts';
 import { Button, IconButton } from '../ui/Button.tsx';
 import { Icon } from '../ui/Icon.tsx';
 import { LiveDot } from '../ui/LiveRing.tsx';
@@ -50,6 +52,25 @@ function publishStageSlot(node: HTMLDivElement | null) {
   if (!node) return;
   stageSlotStore.set(node);
   return () => stageSlotStore.set((current) => (current === node ? null : current));
+}
+
+/**
+ * En inmersivo no hay toasts: lo que pide un toque («Volver a la IPTV») va en
+ * una cápsula sobre el vídeo, arriba y al centro, siempre visible aunque los
+ * controles se escondan (notices/immersiveAction.ts).
+ */
+function ImmersivePill() {
+  const action = useStore(immersiveActionStore);
+  if (!action) return null;
+  return (
+    <div className="player-pill glass--video" key={action.id}>
+      <Icon name="tv" size={18} className="player-pill__icon" />
+      <span className="player-pill__text">{action.text}</span>
+      <button type="button" className="player-pill__action press" onClick={action.onAction}>
+        {action.label}
+      </button>
+    </div>
+  );
 }
 
 /** Barras de «sonando» (ecualizador). Quietas con movimiento reducido. */
@@ -306,6 +327,7 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
         aria-hidden="true"
       />
       <StageMessage state={state} ctx={ctx} />
+      {ctx.immersive ? <ImmersivePill /> : null}
       {state.phase === 'bloqueado' ? (
         <button type="button" className="player-tap press" onClick={actions.tapToPlay}>
           <span className="player-tap__icon" aria-hidden="true">

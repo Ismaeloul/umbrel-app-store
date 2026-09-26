@@ -535,6 +535,14 @@
   max-width: none;
   padding: 0 max(12px, var(--safe-right)) max(12px, var(--safe-bottom)) max(12px, var(--safe-left));
 }
+/* Bajo el vídeo, un aviso largo («Tu IPTV no responde: seguimos por
+   AceStream (fuente 2)») parte en dos líneas en vez de cortarse a 390 px. */
+.stage__status .status-line__text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+}
 .app[data-immersive='true'] .topbar,
 .app[data-immersive='true'] .tabbar,
 .app[data-immersive='true'] .bottom-veil {

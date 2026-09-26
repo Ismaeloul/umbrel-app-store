@@ -182,12 +182,15 @@ describe('IPTV primero y el puente', () => {
     expect(pickBridgeTarget(weakOnly, effects(weakOnly), 'iptv', true, NOW)?.id).toBe(hash(3));
   });
 
-  it('cae una AceStream → la IPTV no «Sin señal», no reportada y no probada hace < 60 s', () => {
+  it('cae una AceStream → la IPTV no «Sin señal», no reportada y no caída hace < 60 s', () => {
     const iptv = entryFromCandidate(iptvCandidate(1), NOW);
-    const entries = [{ ...iptv, autoTried: true, triedAt: NOW - 61_000 }, ace(2, 'working')];
+    const entries = [{ ...iptv, autoTried: true, failedAt: NOW - 61_000 }, ace(2, 'working')];
     expect(pickBridgeTarget(entries, effects(entries), 'acestream', true, NOW)?.id).toBe(hash(1));
-    const recent = [{ ...iptv, triedAt: NOW - 30_000 }, ace(2, 'working')];
+    const recent = [{ ...iptv, failedAt: NOW - 30_000 }, ace(2, 'working')];
     expect(pickBridgeTarget(recent, effects(recent), 'acestream', true, NOW)).toBeNull();
+    // Sonaba bien hace 30 s y se dejó a mano: sí se vuelve a ella.
+    const left = [{ ...iptv, autoTried: true }, ace(2, 'working')];
+    expect(pickBridgeTarget(left, effects(left), 'acestream', true, NOW)?.id).toBe(hash(1));
     const failed = [
       { ...iptv, playerVerdict: { state: 'failed' as const, reason: 'player_failed', at: NOW } },
       ace(2, 'working'),

@@ -148,7 +148,7 @@ describe('nginx.conf: blindaje de la ruta nativa (arquitectura §8.2)', () => {
       ),
     );
     expect(toStorage.map((candidate) => candidate.match).sort()).toEqual(
-      ['/native/', '= /api/v1/events', '/api/', '/remux/'].sort(),
+      ['/native/', '= /api/v1/events', '/api/', '/api/v1/video/', '/remux/'].sort(),
     );
     for (const candidate of toStorage) {
       const headers = proxyHeaders(candidate.block);
@@ -172,6 +172,19 @@ describe('nginx.conf: blindaje de la ruta nativa (arquitectura §8.2)', () => {
     expect(argsOf(block, 'proxy_http_version')).toEqual(['1.1']);
     expect(proxyHeaders(block).get('connection')).toBe('');
     expect(argsOf(block, 'proxy_read_timeout')).toEqual(['3600s']);
+  });
+
+  it('vídeo IPTV de la web /api/v1/video/: sin buffer, sin gzip, sin log y 120 s (docs/iptv.md §6.6)', () => {
+    const block = location(TREE, '/api/v1/video/');
+    expect(argsOf(block, 'proxy_buffering')).toEqual(['off']);
+    expect(argsOf(block, 'proxy_request_buffering')).toEqual(['off']);
+    expect(argsOf(block, 'gzip')).toEqual(['off']);
+    expect(argsOf(block, 'access_log')).toEqual(['off']);
+    expect(argsOf(block, 'proxy_http_version')).toEqual(['1.1']);
+    expect(argsOf(block, 'proxy_read_timeout')).toEqual(['120s']);
+    expect(argsOf(block, 'proxy_pass')).toEqual([
+      'http://ismaeloul-ace-player-neo_storage_1:3000/api/v1/video/',
+    ]);
   });
 
   it('cargas para romper el blindaje: nativa ⇒ 400 o origen native (simulado)', () => {

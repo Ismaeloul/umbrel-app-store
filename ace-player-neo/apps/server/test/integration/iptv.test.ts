@@ -471,6 +471,30 @@ describe('IPTV de punta a punta (docs/iptv.md §9.2)', () => {
     expect(r.provider.conexiones()).toBeLessThanOrEqual(1);
   });
 
+  it('«Un solo dispositivo a la vez» en el mismo canal IPTV: traspaso sin reabrir, aunque el panel retenga la plaza', async () => {
+    const r = await setup({ retenerPlazaMs: 30_000 });
+    const put = await inject(r.h, 'PUT', '/api/v1/settings', { sameChannelPolicy: 'handoff' });
+    expect(put.statusCode, put.body).toBe(200);
+    await saveXtream(r);
+    const antena = await iptvIdFor(r.h, 'Antena 3');
+    const first = await open(r.h, antena, 'visor_web_a');
+    await until('conectado', () => r.provider.conexiones() === 1);
+    r.provider.limpiarPeticiones();
+    const second = await open(r.h, antena, 'visor_ios_b');
+    /* El primero recibe el traspaso; la sesión y la conexión con el proveedor siguen. */
+    expect(second.source).toBe('iptv');
+    expect(second.session.id).toBe(first.session.id);
+    expect(r.provider.peticionesDeStream()).toEqual([]);
+    expect(r.provider.conexiones()).toBe(1);
+    const handoffs = r.h.bus.of('playback.handoff');
+    expect(handoffs.at(-1)).toMatchObject({ reason: 'same_channel', viewerIds: ['visor_web_a'] });
+    expect(r.h.bus.of('stream.closed')).toEqual([]);
+    const sessions = r.h.playback.inspect().sessions;
+    expect(sessions).toHaveLength(1);
+    await r.h.settle();
+    expect(r.h.iptv.connections()).toBe(1);
+  });
+
   it('§7.7 · un partido que solo tiene IPTV queda «discovered» en el precalentamiento, no «no_sources»', async () => {
     const r = await setup();
     await saveXtream(r);

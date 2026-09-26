@@ -12,6 +12,8 @@ import {
   guideLine,
   hostLine,
   IPTV_DEMO_MESSAGE,
+  IPTV_TOO_LARGE_HINT,
+  IPTV_URL_USERINFO,
   iptvErrorMessage,
   metaLine,
   needsSecrets,
@@ -107,10 +109,40 @@ describe('formulario', () => {
       username: '',
       password: '',
     });
+    // El servidor sin tocar no se manda: el guardado puede llevar ruta base (/panel).
     expect(validateForm({ ...form, name: 'Salón' }, saved)).toEqual({
       ok: true,
-      body: { kind: 'xtream', name: 'Salón', server: 'http://proveedor.example:8080' },
+      body: { kind: 'xtream', name: 'Salón' },
     });
+    expect(validateForm({ ...form, server: 'http://proveedor.example:8080/' }, saved)).toEqual({
+      ok: true,
+      body: { kind: 'xtream', name: 'Casa' },
+    });
+    // Tocado (otra ruta del mismo origen), sí.
+    expect(validateForm({ ...form, server: 'http://proveedor.example:8080/panel' }, saved)).toEqual(
+      {
+        ok: true,
+        body: { kind: 'xtream', name: 'Casa', server: 'http://proveedor.example:8080/panel' },
+      },
+    );
+  });
+
+  it('usuario:contraseña@ delante del host: aviso claro, no «tiene que empezar por http://»', () => {
+    expect(
+      validateForm({ ...EMPTY_FORM, url: 'http://yo:secreta@listas.example/l.m3u' }, null),
+    ).toMatchObject({ ok: false, errors: { url: IPTV_URL_USERINFO } });
+    expect(
+      validateForm(
+        {
+          ...EMPTY_FORM,
+          kind: 'xtream',
+          server: 'http://yo:x@p.example',
+          username: 'u',
+          password: 'p',
+        },
+        null,
+      ),
+    ).toMatchObject({ ok: false, errors: { server: IPTV_URL_USERINFO } });
   });
 
   it('otro origen u otro tipo exigen los secretos otra vez (§1.4)', () => {
@@ -131,6 +163,14 @@ describe('formulario', () => {
       ok: false,
       first: 'username',
     });
+  });
+
+  it('lista M3U demasiado grande: sugiere Xtream (solo con M3U)', () => {
+    const tooLarge = new ApiError({ code: 'iptv_too_large', status: 502 });
+    expect(iptvErrorMessage(tooLarge, 'm3u')).toBe(
+      `${errorMessage('iptv_too_large')} ${IPTV_TOO_LARGE_HINT}`,
+    );
+    expect(iptvErrorMessage(tooLarge, 'xtream')).toBe(errorMessage('iptv_too_large'));
   });
 
   it('errores: el catálogo, la demo y un fallo desconocido', () => {

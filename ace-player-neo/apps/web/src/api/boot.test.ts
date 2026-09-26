@@ -1,9 +1,9 @@
 import { QueryClient } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fixture, json } from '../test/fetch.ts';
-import { bootApi, seedFromBootstrap } from './boot.ts';
+import { bootApi, iptvActive, seedFromBootstrap } from './boot.ts';
 import { modeStore, resetMode } from './mode.ts';
-import { routeKey } from './query.ts';
+import { createQueryClient, routeKey } from './query.ts';
 import { realtimeStore } from './realtime-store.ts';
 
 afterEach(() => {
@@ -75,5 +75,23 @@ describe('arranque de la capa de datos', () => {
       text: 'Backend no disponible; la app seguirá reintentando',
     });
     offline.stop();
+  });
+
+  it('iptvActive() sigue en pie pasada media hora sin nadie que observe el bootstrap (gcTime)', () => {
+    vi.useFakeTimers();
+    try {
+      const client = createQueryClient();
+      const boot = fixture<Parameters<typeof seedFromBootstrap>[1]>('bootstrap');
+      seedFromBootstrap(client, { ...boot, features: { ...boot.features, iptv: true } });
+      expect(iptvActive(client)).toBe(true);
+      vi.advanceTimersByTime(30 * 60_000);
+      expect(iptvActive(client)).toBe(true);
+      // Las demás consultas siguen con la recogida normal.
+      client.setQueryData(routeKey('health'), { ok: true } as never);
+      vi.advanceTimersByTime(6 * 60_000);
+      expect(client.getQueryData(routeKey('health'))).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

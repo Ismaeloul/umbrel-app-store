@@ -183,6 +183,56 @@ describe('guardar (§5.3)', () => {
   });
 });
 
+describe('otra lista del mismo host y revocaciones a destiempo', () => {
+  it('M3U: otra URL del mismo host es otro proveedor (no hereda el catálogo con las credenciales viejas)', async () => {
+    const r = await rig();
+    await r.service.save({ kind: 'm3u', name: 'Mala', url: r.fake.m3uUrl }, signal());
+    await r.service.idle();
+    const first = r.state.iptv().read().provider;
+    expect((await r.service.view()).provider?.channels).toBe(9);
+    /* Solo renombrar (sin URL): el mismo proveedor. */
+    await r.service.save({ kind: 'm3u', name: 'Renombrada' }, signal());
+    await r.service.idle();
+    expect(r.state.iptv().read().provider?.id).toBe(first?.id);
+    /* Otra lista del mismo host: otro provider.id y catálogo nuevo. */
+    await r.service.save(
+      {
+        kind: 'm3u',
+        url: `${SERVER}/get.php?username=${FAKE_IPTV_USER}&password=${FAKE_IPTV_PASSWORD}&type=m3u_plus`,
+      },
+      signal(),
+    );
+    await r.service.idle();
+    expect(r.state.iptv().read().provider?.id).not.toBe(first?.id);
+  });
+
+  it('pausar mientras se abre un canal: no queda ninguna conexión viva con el proveedor', async () => {
+    const r = await rig();
+    await saveXtream(r);
+    const id = r.service.resolve({ channels: ['Antena 3'], scorer }).candidates[0]?.id as string;
+    r.fake.modo('*', 'lento');
+    const opening = codeOf(r.service.openInput(id, { signal: signal() }));
+    await waitFor('pedido al proveedor', () => r.fake.peticionesDeStream().length > 0);
+    await r.service.update({ enabled: false });
+    expect(await opening).toBe('iptv_disabled');
+    await waitFor('plaza libre', () => r.fake.conexiones() === 0, 15_000);
+    expect(r.service.connections()).toBe(0);
+  }, 30_000);
+
+  it('cambiar de proveedor corta lo que suena del anterior', async () => {
+    const r = await rig();
+    await saveXtream(r);
+    const revoked: string[] = [];
+    r.service.subscribe({ onRevoked: (code) => revoked.push(code) });
+    await r.service.save({ kind: 'm3u', name: 'Otra', url: r.fake.m3uUrl }, signal());
+    await r.service.idle();
+    expect(revoked).toEqual(['iptv_removed']);
+    /* Renombrar no corta nada. */
+    await r.service.save({ kind: 'm3u', name: 'Otra más' }, signal());
+    expect(revoked).toEqual(['iptv_removed']);
+  });
+});
+
 describe('trabajos (§3.4 y §3.5)', () => {
   it('un solo trabajo pesado: dos «Actualizar» seguidos hacen una sola descarga', async () => {
     const r = await rig();

@@ -86,6 +86,42 @@ test('el puente: cae la IPTV, sigue por AceStream y se vuelve con un toque', asy
   await expect.poll(async () => (await estado(page)).iptv).toBe(true);
 });
 
+test.describe('móvil en horizontal (inmersivo, sin toasts ni carteles)', () => {
+  test.use({ hasTouch: true });
+
+  test('cae la IPTV: «Volver a la IPTV» es una cápsula sobre el vídeo y vuelve con un toque', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/?demo=1&vista=partido/demo-5');
+    const fuentes = page.getByRole('list', { name: 'Fuentes del partido' });
+    const iptv = fuentes.locator('.src-poster[data-origin="iptv"]');
+    await expect(iptv).toHaveAttribute('aria-label', /reproduciendo ahora/, { timeout: 15_000 });
+    await expect(
+      fuentes.getByRole('button', { name: /^Fuente \d: .*Hash .* · verificada/ }).first(),
+    ).toBeVisible({ timeout: 20_000 });
+    // Se gira el móvil: el vídeo ocupa toda la pantalla.
+    await page.setViewportSize({ width: 844, height: 390 });
+    await expect(page.locator('.app')).toHaveAttribute('data-immersive', 'true');
+    await page.evaluate(() =>
+      (globalThis as { __acePlayer?: Gancho }).__acePlayer?.runtime?.fail('corte', {
+        retryable: false,
+        code: 'iptv_dropped',
+      }),
+    );
+    await expect.poll(async () => (await estado(page)).iptv).toBe(false);
+    const cápsula = page.locator('.player-pill');
+    const volver = cápsula.getByRole('button', { name: 'Volver a la IPTV' });
+    await expect(volver).toBeVisible();
+    // Dentro de la pantalla y encima de todo: se puede tocar.
+    const caja = await volver.boundingBox();
+    expect(caja && caja.y >= 0 && caja.y + caja.height <= 390).toBe(true);
+    await volver.tap();
+    await expect.poll(async () => (await estado(page)).iptv).toBe(true);
+    await expect(cápsula).toHaveCount(0);
+  });
+});
+
 test('Canales: un canal que está en la IPTV suena primero por ella', async ({ page }) => {
   await page.goto('/?demo=1&vista=biblioteca');
   await page.getByRole('link', { name: 'DAZN 1' }).first().click();

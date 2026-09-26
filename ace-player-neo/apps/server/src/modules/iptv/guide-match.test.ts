@@ -144,7 +144,7 @@ describe('confirmByGuide', () => {
     ).toEqual(['M+ LaLiga TV']);
   });
 
-  it('texto de otra competición: fuera; sin competición en el texto, vale', () => {
+  it('texto de otra competición: fuera; sin competición en el texto, solo si la nombra el canal', () => {
     expect(
       confirmed([
         channel('M+ LaLiga TV 2', [programme('UEFA Champions League: Real Sociedad - Villarreal')]),
@@ -153,6 +153,71 @@ describe('confirmByGuide', () => {
     expect(
       confirmed([channel('M+ LaLiga TV 2', [programme('Real Sociedad - Villarreal')])]),
     ).toEqual(['M+ LaLiga TV 2']);
+    /* Canal generalista: sin la competición en la guía, no se confirma. */
+    expect(confirmed([channel('La 1', [programme('Real Sociedad - Villarreal')])])).toEqual([]);
+    expect(confirmed([channel('DAZN 1', [programme('Real Sociedad - Villarreal')])])).toEqual([]);
+    expect(
+      confirmed([
+        channel('DAZN 1', [programme('Real Sociedad - Villarreal', { categories: ['LaLiga'] })]),
+      ]),
+    ).toEqual(['DAZN 1']);
+    /* Dos familias a la vez: dudoso, fuera. */
+    expect(
+      confirmed([
+        channel('DAZN 1', [
+          programme('LaLiga: Real Sociedad - Villarreal', {
+            desc: 'Tras su partido de Champions…',
+          }),
+        ]),
+      ]),
+    ).toEqual([]);
+  });
+
+  it('mismos equipos en otro deporte, en el femenino o en categorías inferiores: fuera (LaLiga, DAZN LaLiga, ES)', () => {
+    const clasico: GuideMatchInput = {
+      ...MATCH,
+      home: 'Real Madrid',
+      away: 'FC Barcelona',
+      channels: ['DAZN LaLiga'],
+    };
+    const dazn = (p: GuideProgramme): string[] => confirmed([channel('DAZN LaLiga', [p])], clasico);
+    for (const title of [
+      'Baloncesto: Real Madrid - Barcelona',
+      'ACB: Real Madrid - Barça',
+      'Liga Endesa: Real Madrid - Barça',
+      'Euroliga: Real Madrid - Barcelona',
+      'Futsal: Real Madrid - Barcelona',
+      'Fútbol sala: Real Madrid - Barcelona',
+      'Balonmano: Barça - Real Madrid',
+      'Fútbol femenino: Real Madrid - Barcelona',
+      'Real Madrid - Barcelona (Femenino)',
+      'Real Madrid - Barcelona (Fem.)',
+      'Real Madrid - Barcelona SC',
+      'UEFA Youth League: Real Madrid - Barcelona',
+      'Real Madrid - Barcelona (Dif.)',
+      'Real Madrid - Barcelona Sub-19',
+    ]) {
+      expect(dazn(programme(title)), title).toEqual([]);
+    }
+    expect(dazn(programme('Real Madrid - Barcelona', { categories: ['Baloncesto'] }))).toEqual([]);
+    expect(
+      dazn(programme('Real Madrid - Barcelona', { desc: 'Jornada 5 de la Liga F Moeve.' })),
+    ).toEqual([]);
+    /* El de verdad sí. */
+    expect(dazn(programme('LaLiga EA Sports: Real Madrid - Barcelona'))).toEqual(['DAZN LaLiga']);
+    expect(dazn(programme('Real Madrid - Barcelona'))).toEqual(['DAZN LaLiga']);
+    /* Un partido de Liga F casa con su programa aunque diga «femenino». */
+    const ligaF: GuideMatchInput = { ...clasico, competition: 'Liga F', channels: [] };
+    expect(
+      confirmed(
+        [
+          channel('DAZN 1', [
+            programme('Liga F: Real Madrid - Barcelona', { categories: ['Fútbol femenino'] }),
+          ]),
+        ],
+        ligaF,
+      ),
+    ).toEqual(['DAZN 1']);
   });
 
   it('canal de otra competición («M+ Liga de Campeones» con un partido de LaLiga) o Hypermotion con Primera: fuera', () => {
@@ -171,8 +236,10 @@ describe('confirmByGuide', () => {
     expect(confirmed([channel('LaLiga TV Hypermotion', segundaShows)], segunda)).toEqual([
       'LaLiga TV Hypermotion',
     ]);
-    /* Generalistas: pasan. */
-    expect(confirmed([channel('La 1', shows)])).toEqual(['La 1']);
+    /* Generalistas: pasan si la guía nombra la competición. */
+    expect(confirmed([channel('La 1', [programme('LaLiga: Real Sociedad - Villarreal')])])).toEqual(
+      ['La 1'],
+    );
   });
 
   it('canal sin país: solo si casa con la agenda; extranjero: nunca', () => {
@@ -190,7 +257,7 @@ describe('confirmByGuide', () => {
   });
 
   it('más de 3 canales distintos: solo los que casan con la agenda; si ninguno, nada', () => {
-    const shows = [programme('Real Sociedad - Villarreal')];
+    const shows = [programme('LaLiga: Real Sociedad - Villarreal')];
     const four = ['M+ LaLiga TV', 'M+ LaLiga TV 2', 'M+ Vamos', 'La 1'].map((name) =>
       channel(name, shows),
     );

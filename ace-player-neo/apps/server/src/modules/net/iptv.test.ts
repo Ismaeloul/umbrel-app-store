@@ -131,6 +131,11 @@ describe('filtro de la IPTV (resolveIptvAddresses)', () => {
     expect(isLanAddress('fd00::1')).toBe(true);
     expect(isLanAddress('127.0.0.1')).toBe(false);
     expect(isLanAddress('8.8.8.8')).toBe(false);
+    // Las redes de Docker del Umbrel no son casa aunque sean RFC1918.
+    expect(isLanAddress('10.21.21.9')).toBe(false);
+    expect(isLanAddress('172.17.0.2')).toBe(false);
+    expect(isLanAddress('::ffff:10.21.0.5')).toBe(false);
+    expect(isLanAddress('10.22.0.1')).toBe(true);
     expect(await hostIsLan('casa.example', resolver)).toBe(true);
     expect(await hostIsLan('iptv.example', resolver)).toBe(false);
     expect(await hostIsLan('mixta.example', resolver)).toBe(false);

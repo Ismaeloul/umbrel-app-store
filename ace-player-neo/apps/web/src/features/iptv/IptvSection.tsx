@@ -19,8 +19,8 @@
 
 import { IPTV_CLIENT, type IptvProviderView, type IptvView } from '@ace/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
-import { api, routeKey, useApiQuery, useRealtimeStatus } from '../../api/index.ts';
+import { useEffect, useId, useRef, useState, type FormEvent, type Ref } from 'react';
+import { api, routeKey, routePrefix, useApiQuery, useRealtimeStatus } from '../../api/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { notify } from '../../notices/index.ts';
@@ -137,16 +137,34 @@ export function IptvSection() {
   const confirm = useSecondTap(CONFIRM_DELETE_MS);
   const fieldRefs = useRef<Partial<Record<IptvField, HTMLInputElement | null>>>({});
   const titleId = useId();
+  /* Foco al cambiar entre la tarjeta y el formulario: sin esto se queda en
+     <body> y un lector de pantalla pierde el sitio. */
+  const titleRef = useRef<HTMLHeadingElement | null>(null);
+  const editRef = useRef<HTMLButtonElement | null>(null);
+  const focusAfter = useRef<'title' | 'edit' | null>(null);
+  const hasProvider = provider !== null;
+  useEffect(() => {
+    const target = focusAfter.current;
+    focusAfter.current = null;
+    if (target === 'title') titleRef.current?.focus();
+    else if (target === 'edit') editRef.current?.focus();
+  }, [editing, hasProvider]);
 
   // Al ocultarse (Activity) o desmontarse, fuera los secretos escritos.
   useEffect(() => () => setForm(withoutSecrets), []);
 
   const apply = (next: IptvView) => client.setQueryData(routeKey('iptvGet'), next);
+  /* `bootstrap.features.iptv` (iptvActive) lo refresca el SSE; sin SSE, aquí. */
+  const refreshBoot = () => {
+    if (realtime !== 'open')
+      void client.invalidateQueries({ queryKey: routePrefix('bootstrap'), refetchType: 'all' });
+  };
 
   // Lo que llega por SSE (o por el sondeo) cierra el «Descargando los canales…».
   useEffect(() => {
     if (!awaiting || !provider || provider.status === 'syncing') return;
     setAwaiting(null);
+    refreshBoot();
     if (provider.status === 'ok') {
       setNote({
         tone: 'ok',
@@ -181,6 +199,7 @@ export function IptvSection() {
     setForm(editForm(target));
     setErrors({});
     setNote(null);
+    focusAfter.current = 'title';
     setEditing(true);
   };
 
@@ -188,6 +207,7 @@ export function IptvSection() {
     setForm(EMPTY_FORM);
     setErrors({});
     setNote(null);
+    focusAfter.current = 'edit';
     setEditing(false);
   };
 
@@ -211,6 +231,7 @@ export function IptvSection() {
       const next = await api('iptvSave', { body: result.body });
       apply(next);
       // Guardado: los secretos se van del formulario y del DOM.
+      focusAfter.current = 'edit';
       setForm(EMPTY_FORM);
       setEditing(false);
       const name = next.provider?.name ?? result.body.name ?? 'IPTV';
@@ -226,7 +247,7 @@ export function IptvSection() {
       }
       haptic('success');
     } catch (error) {
-      const message = iptvErrorMessage(error);
+      const message = iptvErrorMessage(error, form.kind);
       setNote({ tone: 'err', text: message });
       notify(IPTV_TOASTS.saveFailed(message), { tone: 'err' });
       haptic('error');
@@ -239,6 +260,7 @@ export function IptvSection() {
     setBusy('toggle');
     try {
       apply(await api('iptvUpdate', { body: { enabled } }));
+      refreshBoot();
       haptic('selection');
       notify(enabled ? IPTV_TOASTS.enabled : IPTV_TOASTS.paused, {
         tone: 'ok',
@@ -269,6 +291,8 @@ export function IptvSection() {
     setBusy('delete');
     try {
       apply(await api('iptvDelete'));
+      refreshBoot();
+      focusAfter.current = 'title';
       setAwaiting(null);
       setNote(null);
       setEditing(false);
@@ -332,13 +356,14 @@ export function IptvSection() {
           onToggle={(enabled) => void toggle(enabled)}
           onSync={() => void sync(provider)}
           onEdit={() => openEdit(provider)}
+          editRef={editRef}
           onDelete={() => confirm.tap('iptv', () => void remove())}
         />
       ) : null}
 
       {showForm ? (
         <form className="dir-form iptv-form" onSubmit={submit} noValidate aria-labelledby={titleId}>
-          <h3 id={titleId} className="dir-form__title">
+          <h3 id={titleId} ref={titleRef} tabIndex={-1} className="dir-form__title">
             {editing ? IPTV_EDIT_TITLE : IPTV_FORM_TITLE}
           </h3>
           <Segmented
@@ -459,6 +484,7 @@ interface IptvCardProps {
   onSync(): void;
   onEdit(): void;
   onDelete(): void;
+  editRef: Ref<HTMLButtonElement>;
 }
 
 function IptvCard({
@@ -470,6 +496,7 @@ function IptvCard({
   onSync,
   onEdit,
   onDelete,
+  editRef,
 }: IptvCardProps) {
   const capsule = capsuleOf(provider);
   const stale = staleLine(provider);
@@ -477,6 +504,18 @@ function IptvCard({
   const guide = guideLine(provider.guide);
   const failed = provider.status === 'error' && !stale && provider.error;
   const noteId = useId();
+  /* La papelera se convierte en «¿Borrar?» (otro botón): el foco la sigue, y
+     vuelve a la papelera si se desarma con el foco perdido. */
+  const confirmRef = useRef<HTMLButtonElement | null>(null);
+  const trashRef = useRef<HTMLButtonElement | null>(null);
+  const wasArmed = useRef(armed);
+  useEffect(() => {
+    if (armed === wasArmed.current) return;
+    wasArmed.current = armed;
+    const lost = document.activeElement === document.body || document.activeElement === null;
+    if (armed) confirmRef.current?.focus();
+    else if (lost) trashRef.current?.focus();
+  }, [armed]);
   return (
     <div className="iptv-card-wrap">
       <div className="dir-card iptv-card" data-active={provider.enabled || undefined}>
@@ -521,8 +560,11 @@ function IptvCard({
         label="Usar la IPTV"
         description={IPTV_PAUSE_HELP}
         checked={provider.enabled}
-        disabled={busy !== null}
-        onChange={onToggle}
+        /* Mientras cambia no se desactiva (perdería el foco): se ignora el toque. */
+        disabled={busy !== null && busy !== 'toggle'}
+        onChange={(enabled) => {
+          if (busy === null) onToggle(enabled);
+        }}
       />
       <div className="dir-form__acts iptv-card__acts">
         <Button
@@ -535,11 +577,19 @@ function IptvCard({
         >
           Actualizar
         </Button>
-        <Button size="sm" variant="quiet" icon="pencil" disabled={busy !== null} onClick={onEdit}>
+        <Button
+          ref={editRef}
+          size="sm"
+          variant="quiet"
+          icon="pencil"
+          disabled={busy !== null}
+          onClick={onEdit}
+        >
           Cambiar datos
         </Button>
         {armed ? (
           <Button
+            ref={confirmRef}
             size="sm"
             variant="danger"
             icon="trash"
@@ -553,6 +603,7 @@ function IptvCard({
           </Button>
         ) : (
           <IconButton
+            ref={trashRef}
             icon="trash"
             className="dir-card__delete"
             label={`Eliminar ${provider.name}`}

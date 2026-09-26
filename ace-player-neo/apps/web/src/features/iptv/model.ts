@@ -52,6 +52,10 @@ export const IPTV_SAVING = 'Guardando y sincronizando la lista…';
 export const IPTV_DEMO_MESSAGE =
   'En modo demo no hay backend: esta acción funcionará en el Umbrel.';
 export const IPTV_FALLBACK_ERROR = 'No se pudo guardar la IPTV. Inténtalo de nuevo.';
+export const IPTV_URL_USERINFO =
+  'Esa dirección lleva el usuario y la contraseña delante del servidor (usuario:contraseña@) y así no se puede usar. Si tu proveedor te los da aparte, elige Xtream.';
+export const IPTV_TOO_LARGE_HINT =
+  'Si tu proveedor te da servidor, usuario y contraseña, conéctala como Xtream: solo trae los canales en directo.';
 
 export const IPTV_EMPTY_FIELD = {
   url: 'Escribe la dirección de la lista',
@@ -125,6 +129,16 @@ export function editForm(provider: Pick<IptvProviderView, 'kind' | 'name' | 'ori
 export type IptvField = 'url' | 'server' | 'username' | 'password';
 export type IptvFieldErrors = Partial<Record<IptvField, string>>;
 
+/** ¿La URL lleva `usuario:contraseña@` delante del host? El servidor no la acepta. */
+export function hasUserinfo(value: string): boolean {
+  try {
+    const url = new URL(value.trim());
+    return Boolean(url.username || url.password);
+  } catch {
+    return false;
+  }
+}
+
 /** Origen `esquema://host[:puerto]` de una URL, en minúsculas; null si no es http(s). */
 export function originOf(value: string): string | null {
   try {
@@ -173,6 +187,7 @@ export function validateForm(
     if (!url) {
       if (required) errors.url = IPTV_EMPTY_FIELD.url;
     } else if (!isHttpUrl(url)) errors.url = errorMessage('bad_url');
+    else if (hasUserinfo(url)) errors.url = IPTV_URL_USERINFO;
     const first = firstError(errors);
     if (first) return { ok: false, errors, first };
     return {
@@ -187,17 +202,25 @@ export function validateForm(
   const server = form.server.trim();
   if (!server) errors.server = IPTV_EMPTY_FIELD.server;
   else if (!isHttpUrl(server)) errors.server = errorMessage('bad_url');
+  else if (hasUserinfo(server)) errors.server = IPTV_URL_USERINFO;
   // El usuario y la contraseña NO se recortan: pueden llevar espacios a propósito.
   if (!form.username && required) errors.username = IPTV_EMPTY_FIELD.username;
   if (!form.password && required) errors.password = IPTV_EMPTY_FIELD.password;
   const first = firstError(errors);
   if (first) return { ok: false, errors, first };
+  /* «Cambiar datos» rellena el servidor con el origen guardado, sin la ruta
+     base (`http://host:8080/panel`): si no se ha tocado, no se manda y el
+     servidor conserva el guardado entero. */
+  const untouched =
+    saved?.kind === 'xtream' &&
+    Boolean(saved.origin) &&
+    server.replace(/\/+$/, '').toLowerCase() === (saved.origin ?? '').toLowerCase();
   return {
     ok: true,
     body: {
       kind: 'xtream',
       ...(name ? { name } : {}),
-      server: server.slice(0, IPTV_URL_MAX),
+      ...(untouched ? {} : { server: server.slice(0, IPTV_URL_MAX) }),
       ...(form.username ? { username: form.username.slice(0, IPTV_SECRET_MAX) } : {}),
       ...(form.password ? { password: form.password.slice(0, IPTV_SECRET_MAX) } : {}),
     },
@@ -211,11 +234,14 @@ function firstError(errors: IptvFieldErrors): IptvField | null {
 }
 
 /** Mensaje de un fallo de las rutas IPTV (el `message` del catálogo, §5.6). */
-export function iptvErrorMessage(error: unknown): string {
+export function iptvErrorMessage(error: unknown, kind?: IptvKind): string {
   if (!isApiError(error)) return IPTV_FALLBACK_ERROR;
   if (error.code === 'demo_unsupported') return IPTV_DEMO_MESSAGE;
   // Sin red o plazo agotado: el mensaje del cliente ya dice qué pasa.
   if (error.isClientSide) return error.message;
+  // Una get.php enorme (con películas y series) sí cabe como Xtream, que solo pide el directo.
+  if (error.code === 'iptv_too_large' && kind === 'm3u')
+    return `${errorMessage('iptv_too_large')} ${IPTV_TOO_LARGE_HINT}`;
   if (isAnyErrorCode(error.code) && error.code !== 'internal_error')
     return errorMessage(error.code);
   return IPTV_FALLBACK_ERROR;

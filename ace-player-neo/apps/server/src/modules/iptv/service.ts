@@ -121,6 +121,15 @@ function hostOf(url: URL): string {
   return url.host.slice(0, 260);
 }
 
+/** Host de la URL de una guía para el log («?» si no se entiende). */
+function guideHost(value: string): string {
+  try {
+    return hostOf(new URL(value));
+  } catch {
+    return '?';
+  }
+}
+
 /** Valida y normaliza la URL de una lista o de un servidor Xtream. */
 function parseProviderUrl(value: string, kind: 'm3u' | 'xtream'): URL {
   let url: URL;
@@ -173,6 +182,10 @@ export class IptvServiceImpl implements IptvService {
   private expiredSince: number | null = null;
   private readonly recentCloses: number[] = [];
   private openInputs = 0;
+  /* Sube con cada revocación: un canal que se estaba abriendo en ese momento no se queda vivo. */
+  private revocations = 0;
+  private lastRevocation: 'iptv_disabled' | 'iptv_removed' | 'iptv_account_expired' =
+    'iptv_removed';
   private lastTokenRefreshAt = 0;
   private lastGoneRefreshAt = 0;
   private probe: { controller: AbortController; promise: Promise<unknown> } | null = null;
@@ -528,7 +541,15 @@ export class IptvServiceImpl implements IptvService {
       secrets = { kind: 'm3u', url: url.toString() };
       host = hostOf(url);
       origin = null;
-      sameProvider = Boolean(current && sameKind && current.host === host);
+      /* La URL entera (ruta y query llevan las credenciales): otra lista del
+         mismo host es otro proveedor, y su catálogo viejo no se reutiliza. */
+      sameProvider = Boolean(
+        current &&
+        sameKind &&
+        current.host === host &&
+        currentSecrets?.kind === 'm3u' &&
+        currentSecrets.url === secrets.url,
+      );
     } else {
       const rawServer =
         body.server ??
@@ -604,6 +625,8 @@ export class IptvServiceImpl implements IptvService {
     this.expiredSince = null;
     this.accountCheckedAt = account ? this.deps.clock.now() : 0;
     if (!sameProvider) {
+      /* Lo que suena del proveedor anterior se corta (su conexión y sus credenciales). */
+      if (current) this.revoke('iptv_removed');
       this.catalog = null;
       this.guide = null;
       this.guideCache.clear();
@@ -727,6 +750,8 @@ export class IptvServiceImpl implements IptvService {
   }
 
   private revoke(code: 'iptv_disabled' | 'iptv_removed' | 'iptv_account_expired'): void {
+    this.revocations += 1;
+    this.lastRevocation = code;
     for (const listener of [...this.listeners]) {
       try {
         listener.onRevoked?.(code);
@@ -1027,6 +1052,8 @@ export class IptvServiceImpl implements IptvService {
         if (signal.aborted) return;
         failure = toIptvError(error, 'guide').code;
       }
+      /* Para diagnosticar: solo el host y el código, nunca la URL (lleva credenciales). */
+      this.logger.warn({ host: guideHost(url), errorCode: failure }, 'IPTV: guía no descargada');
     }
     /* Respaldo en Xtream: get_short_epg de 40 canales deportivos como mucho. */
     if (!window && secrets.kind === 'xtream' && !signal.aborted) {
@@ -1371,11 +1398,22 @@ export class IptvServiceImpl implements IptvService {
     }
     const entry = (this.catalog as Catalog).get(id) as CatalogEntry;
     const variants = this.variantsOf(entry);
+    const revocations = this.revocations;
     const session = await this.relay.open({
       variants,
       signal: options.signal,
       busyRetryMs: this.closedRecently() ? IPTV_SESSION.busyRetryMs : [],
     });
+    /* Pausa, eliminar o cambio de proveedor mientras se abría (§7.4): no se
+       queda una conexión viva con el proveedor ni con credenciales borradas. */
+    if (this.revocations !== revocations) {
+      await session.close().catch(() => undefined);
+      this.noteClose();
+      const verdictNow = this.classify(id);
+      throw new AppError(
+        verdictNow === 'owned' || verdictNow === 'engine' ? this.lastRevocation : verdictNow,
+      );
+    }
     this.openInputs += 1;
     this.logger.info(
       { host: this.record?.host, channel: entry.display, hls: session.isHls },

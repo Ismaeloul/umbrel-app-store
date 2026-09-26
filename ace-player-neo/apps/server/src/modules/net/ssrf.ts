@@ -175,14 +175,24 @@ LAN_NETWORKS.addSubnet('10.0.0.0', 8, 'ipv4');
 LAN_NETWORKS.addSubnet('172.16.0.0', 12, 'ipv4');
 LAN_NETWORKS.addSubnet('192.168.0.0', 16, 'ipv4');
 LAN_NETWORKS.addSubnet('fc00::', 7, 'ipv6');
+/* Las redes de Docker del propio Umbrel (umbrel_main_network 10.21.0.0/16 y
+   docker0 172.17.0.0/16) nunca cuentan como casa: una lista hostil haría que
+   el relé o ffmpeg pidieran cosas a los otros contenedores. */
+const DOCKER_NETWORKS = new BlockList();
+DOCKER_NETWORKS.addSubnet('10.21.0.0', 16, 'ipv4');
+DOCKER_NETWORKS.addSubnet('172.17.0.0', 16, 'ipv4');
 
-/** ¿Es una dirección de la red de casa (RFC1918 o ULA)? Las v4 mapeadas en v6 cuentan como v4. */
+/**
+ * ¿Es una dirección de la red de casa (RFC1918 o ULA, sin las redes de Docker
+ * del Umbrel)? Las v4 mapeadas en v6 cuentan como v4.
+ */
 export function isLanAddress(value: unknown): boolean {
   const address = normalizedIp(value);
   const mapped = address.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
   if (mapped) return isLanAddress(mapped[1]);
   const family = isIP(address);
-  if (family === 4) return LAN_NETWORKS.check(address, 'ipv4');
+  if (family === 4)
+    return LAN_NETWORKS.check(address, 'ipv4') && !DOCKER_NETWORKS.check(address, 'ipv4');
   if (family === 6) return LAN_NETWORKS.check(address, 'ipv6');
   return false;
 }

@@ -58,6 +58,12 @@
 }
 .iptv-card__acts {
   align-items: center;
+  /* A 390 px «Actualizar», «Cambiar datos» y la papelera caben en una fila
+     (con 8 px de hueco la papelera caía sola a una segunda). */
+  column-gap: var(--s-1);
+}
+.iptv-card__acts .btn--sm {
+  padding: 0 12px;
 }
 .iptv-card__acts .dir-card__delete {
   margin-left: auto;

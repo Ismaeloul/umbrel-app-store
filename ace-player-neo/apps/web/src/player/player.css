@@ -295,6 +295,50 @@
   }
 }
 
+/* ---- Acción en inmersivo («Volver a la IPTV») --------------------------------------
+   Sin toasts a pantalla completa: una cápsula tocable arriba y al centro,
+   por encima de los controles y visible aunque se escondan. */
+.player-pill {
+  position: absolute;
+  z-index: 6;
+  top: calc(max(12px, var(--safe-top)) + var(--tap) + 8px);
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+  padding: 0 4px 0 14px;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-15);
+  font-weight: var(--wght-medium);
+  transform: translateX(-50%);
+  animation: ace-funde var(--dur-rapido) var(--ease-out) both;
+}
+.player-pill__icon {
+  flex: none;
+  color: var(--weak);
+}
+.player-pill__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.player-pill__action {
+  flex: none;
+  min-height: var(--tap);
+  padding: 0 14px;
+  border-radius: var(--r-pill);
+  color: var(--accent-ink);
+  font-weight: var(--wght-strong);
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .player-pill__text {
+    display: none;
+  }
+}
+
 /* ---- «Toca para reproducir» ------------------------------------------------------ */
 .player-tap {
   position: absolute;

@@ -255,11 +255,8 @@ describe('con IPTV: tarjeta y acciones', () => {
     fireEvent.change(screen.getByLabelText('Nombre'), { target: { value: 'Salón' } });
     fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
     await waitFor(() => expect(calls('PUT')).toHaveLength(1));
-    expect(calls('PUT')[0]?.body).toEqual({
-      kind: 'xtream',
-      name: 'Salón',
-      server: 'http://proveedor.example:8080',
-    });
+    // El servidor sin tocar tampoco va: el guardado puede llevar una ruta base.
+    expect(calls('PUT')[0]?.body).toEqual({ kind: 'xtream', name: 'Salón' });
   });
 
   it('«Cambiar datos» con otro servidor pide el usuario y la contraseña antes de mandar', async () => {
@@ -331,6 +328,6 @@ describe('higiene', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Cambiar datos' }));
     fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
     await waitFor(() => expect(seen).toHaveLength(1));
-    expect(Object.keys(seen[0]?.body as object)).toEqual(['kind', 'name', 'server']);
+    expect(Object.keys(seen[0]?.body as object)).toEqual(['kind', 'name']);
   });
 });

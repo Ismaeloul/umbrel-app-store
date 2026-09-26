@@ -96,8 +96,8 @@ export interface SourceEntry {
   autoTried: boolean;
   /** Solo IPTV: proveedor («Casa»), calidad, reserva y si la confirmó la guía (§5.1). */
   iptv?: CandidateIptvInfo | null;
-  /** Cuándo la mandó reproducir la sesión por última vez (epoch ms; el puente no vuelve a una IPTV probada hace < 60 s). */
-  triedAt?: number | null;
+  /** Solo IPTV: cuándo FALLÓ por última vez (epoch ms). El puente no vuelve a una IPTV caída hace < 60 s; una que sonaba bien y se dejó a mano, sí. */
+  failedAt?: number | null;
 }
 
 /** ¿Es una fuente de la IPTV? (distintivo, sin hash, nunca plegada, puente). */
@@ -724,7 +724,7 @@ export function isIptvAccountFailure(code: string | null | undefined): boolean {
   return IPTV_ACCOUNT_CODES.has(String(code ?? ''));
 }
 
-/** Una IPTV probada hace menos de esto no recibe el salto desde AceStream (§7.2). */
+/** Una IPTV caída hace menos de esto no recibe el salto desde AceStream (§7.2). */
 export const BRIDGE_RECENT_TRY_MS = 60_000;
 /** Saltos automáticos del puente IPTV ↔ AceStream como mucho en la ventana (§7.2, contra los bucles). */
 export const BRIDGE_MAX_JUMPS = 2;
@@ -740,7 +740,8 @@ export function bridgeAllowed(jumps: readonly number[], now: number): boolean {
  * - cae una IPTV → la mejor AceStream (verificada; con el comprobador
  *   terminado, también floja) no probada todavía;
  * - cae una AceStream → la primera IPTV no reportada, no «Sin señal» y no
- *   probada en los últimos 60 s (aunque ya la probara el arranque).
+ *   caída en los últimos 60 s (aunque ya la probara el arranque, y aunque
+ *   sonara hace nada: dejarla a mano por una AceStream no cuenta como fallo).
  * null si no hay a quién saltar (la sesión decide qué decir).
  */
 export function pickBridgeTarget(
@@ -756,7 +757,7 @@ export function pickBridgeTarget(
       if (!isIptv(entry)) return false;
       const effective = effectiveById.get(entry.id);
       if (!effective || effective.reported || effective.state === 'failed') return false;
-      return !entry.triedAt || now - entry.triedAt >= BRIDGE_RECENT_TRY_MS;
+      return !entry.failedAt || now - entry.failedAt >= BRIDGE_RECENT_TRY_MS;
     }) ?? null
   );
 }

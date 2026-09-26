@@ -34,7 +34,7 @@ export const ACE_SESSION_MARK = 'ace_session=';
 /**
  * Entrada con origen IPTV (docs/iptv.md §6.3): sin `-reconnect*` (reconecta
  * el relé), `-rw_timeout` en MICROsegundos por encima del peor caso del relé
- * (41 s), solo los protocolos del relé en 127.0.0.1 y, con HLS, empezando 3
+ * (49 s con el cambio de variante), solo los protocolos del relé en 127.0.0.1 y, con HLS, empezando 3
  * segmentos antes del final. La URL es la del relé: sin credenciales.
  */
 function iptvInputArgs(input: RemuxArgsInput): string[] {

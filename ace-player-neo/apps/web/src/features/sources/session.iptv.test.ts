@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetMode, setMode } from '../../api/mode.ts';
 import { queryClient, routeKey } from '../../api/query.ts';
 import { realtimeStore } from '../../api/realtime-store.ts';
+import { immersiveActionStore } from '../../notices/immersiveAction.ts';
 import { noticeFlags } from '../../notices/notify.ts';
 import { resetToasts, toastStore } from '../../notices/toasts.ts';
 import {
@@ -233,12 +234,18 @@ describe('el puente (P16.6)', () => {
     expect(getPlayer().channel?.hash).toBe(IPTV);
   });
 
-  it('una IPTV probada hace menos de 60 s no recibe el salto', async () => {
+  it('una IPTV que sonaba bien y se dejó a mano sí recibe el salto; una caída hace < 60 s, no', async () => {
     await iptvPlaying(['working', 'working', 'working']);
+    // Sonaba bien y se eligió a mano una AceStream que cae: se vuelve sola a la IPTV.
     selectSource(hash(1));
+    expect(failNow()).toEqual({
+      next: true,
+      message: 'Esta fuente no responde: pasamos a tu IPTV',
+    });
+    // La IPTV cae → AceStream, y esa AceStream cae enseguida: la IPTV recién caída no.
+    failNow({ code: 'iptv_dropped' });
     const reply = failNow();
-    expect(reply.next).toBe(false);
-    expect(reply.message).toContain('Tienes');
+    expect(reply.message ?? '').not.toContain('pasamos a tu IPTV');
   });
 
   it('motor caído con una AceStream: a la IPTV; sin IPTV, que espere al motor', async () => {
@@ -297,14 +304,31 @@ describe('el puente (P16.6)', () => {
     expect(getPlayer().channel?.hash).toBe(before);
   });
 
-  it('a pantalla completa no hay toast: la línea de estado dice cómo volver', async () => {
+  it('a pantalla completa (móvil en horizontal): «Volver a la IPTV» es una cápsula tocable sobre el vídeo', async () => {
     await iptvPlaying(['working', 'working', 'working']);
     noticeFlags.set({ watching: true, immersive: true });
     const reply = failNow({ code: 'iptv_dropped' });
-    expect(reply.message).toBe(
-      'Tu IPTV no responde: seguimos por AceStream (fuente 2). Para volver a la IPTV, toca su cartel.',
+    // Con el dedo, la línea no añade nada (cabe) y la cápsula lleva la acción.
+    expect(reply.message).toBe('Tu IPTV no responde: seguimos por AceStream (fuente 2)');
+    const pill = immersiveActionStore.get();
+    expect(pill?.label).toBe('Volver a la IPTV');
+    expect(getPlayer().channel?.hash).not.toBe(IPTV);
+    pill?.onAction();
+    expect(getPlayer().channel?.hash).toBe(IPTV);
+    // Un toque quita las dos copias.
+    expect(immersiveActionStore.get()).toBeNull();
+    expect(toastStore.get().find((t) => t.text === 'Seguimos por AceStream')?.leaving ?? true).toBe(
+      true,
     );
-    expect(toasts()).not.toContain('Seguimos por AceStream');
+  });
+
+  it('la cápsula caduca con el toast y se quita al acabar la sesión', async () => {
+    await iptvPlaying(['working', 'working', 'working']);
+    noticeFlags.set({ watching: true, immersive: true });
+    failNow({ code: 'iptv_dropped' });
+    expect(immersiveActionStore.get()).not.toBeNull();
+    endSession();
+    expect(immersiveActionStore.get()).toBeNull();
   });
 
   it('ni la IPTV ni AceStream: el texto final solo cuando no queda ninguna', async () => {
