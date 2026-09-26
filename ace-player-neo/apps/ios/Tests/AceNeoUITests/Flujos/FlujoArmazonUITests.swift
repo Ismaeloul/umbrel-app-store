@@ -95,9 +95,12 @@ final class FlujoArmazonUITests: XCTestCase {
         let pantalla = elementoUI(app, IDUI.pantalla(id))
         XCTAssertTrue(pantalla.waitForExistence(timeout: 10), "No se ve la pantalla \(id)")
         // Las pestañas visitadas siguen montadas (vivas, a2 §12): XCUITest las encuentra aunque estén ocultas y fuera
-        // de VoiceOver (SwiftUI las deja en sus elementos de automatización). Lo que cuenta es que no se puedan tocar.
+        // de VoiceOver (SwiftUI las deja en sus elementos de automatización). Lo que cuenta es que no se puedan tocar
+        // una vez acabado el cambio (la de antes se funde durante unos 340 ms: se le dan 2 s).
         for otra in ["agenda", "biblioteca", "buscar", "ajustes"] where otra != id {
             let oculta = elementoUI(app, IDUI.pantalla(otra))
+            let limite = Date().addingTimeInterval(2)
+            while Date() < limite && oculta.exists && oculta.isHittable { Thread.sleep(forTimeInterval: 0.2) }
             XCTAssertFalse(oculta.exists && oculta.isHittable, "Se ve \(otra) estando en \(id)")
         }
         XCTAssertTrue(elementoUI(app, IDUI.pestana(id)).isSelected, "La pestaña \(id) no está marcada")
