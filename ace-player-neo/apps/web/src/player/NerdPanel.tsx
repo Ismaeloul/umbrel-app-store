@@ -99,7 +99,10 @@ export function PlayerNerdStats({ className }: { className?: string }) {
   return (
     <dl className={className ? `nerd-stats ${className}` : 'nerd-stats'}>
       {rows.map(([term, value]) => (
-        <div className="nerd-stats__row" key={term}>
+        <div
+          className={term === 'IPTV' ? 'nerd-stats__row nerd-stats__row--note' : 'nerd-stats__row'}
+          key={term}
+        >
           <dt>{term}</dt>
           <dd className="mono">{value}</dd>
         </div>

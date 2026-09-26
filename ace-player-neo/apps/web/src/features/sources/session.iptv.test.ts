@@ -202,9 +202,7 @@ describe('el puente (P16.6)', () => {
       reason: 'iptv_busy',
     });
     // Se dice al momento y bien a la vista (§19): el toast lleva el motivo, no solo «Seguimos por AceStream».
-    expect(toasts()).toContain(
-      'Tu IPTV está ocupada en otro aparato: seguimos por AceStream (fuente 2)',
-    );
+    expect(toasts()).toContain('IPTV ocupada en otro aparato: seguimos por AceStream');
     // Datos técnicos: suena AceStream y por qué no suena la IPTV.
     expect(getPlayer().channel?.iptv).toBeUndefined();
     expect(getPlayer().channel?.iptvNote).toBe('Tu IPTV está ocupada en otro aparato');

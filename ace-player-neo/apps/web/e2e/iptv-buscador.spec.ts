@@ -461,6 +461,14 @@ async function buscarLa1ComoIsma(page: Page): Promise<ReturnType<typeof fila>> {
   return canal;
 }
 
+/** Captura a mano (IPTV_CAPTURAS=<carpeta>), al tamaño del proyecto; la CI no la hace. */
+async function capturaSi(page: Page, nombre: string, proyecto: string): Promise<void> {
+  if (!CAPTURAS) return;
+  const tamano = proyecto.includes('iphone') ? '390' : '1440';
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: `${CAPTURAS}/${nombre}-${tamano}.png` });
+}
+
 const datosTecnicos = async (page: Page): Promise<string> => {
   const pestana = page.getByRole('tab', { name: /Datos técnicos/ });
   if (await pestana.count()) await pestana.first().click();
@@ -470,22 +478,24 @@ const datosTecnicos = async (page: Page): Promise<string> => {
 test(
   '15 · el caso de Isma (§19): «La 1» es una fila de canal con «IPTV» y «AceStream»; al tocarla suena la IPTV y Datos técnicos dice «IPTV · Casa · 720p»',
   { tag: '@video' },
-  async ({ page }) => {
+  async ({ page }, info) => {
     test.setTimeout(180_000);
     const canal = await buscarLa1ComoIsma(page);
+    await capturaSi(page, 'buscar-la1-isma', info.project.name);
     await canal.getByRole('link', { name: 'La 1', exact: true }).click();
     await page.waitForURL(/vista=partido/);
     await esperarQueAvance(page);
     expect(await suenaIptv(page)).toBe(true);
     expect(await motor.sesiones('active')).toHaveLength(0);
     await expect.poll(() => datosTecnicos(page)).toContain('Origen IPTV · Casa · 720p');
+    await capturaSi(page, 'datos-la1-iptv', info.project.name);
   },
 );
 
 test(
   '16 · la IPTV ocupada en otra app (§19): se dice al momento, suena tu AceStream de respaldo y Datos técnicos dice de dónde viene y por qué',
   { tag: '@video' },
-  async ({ page }) => {
+  async ({ page }, info) => {
     test.setTimeout(180_000);
     const canal = await buscarLa1ComoIsma(page);
     const otraApp = ocuparPlaza();
@@ -502,12 +512,14 @@ test(
         /* Al momento si la plaza la tiene otra app desde hace rato; si otro recorrido acaba de soltar la suya,
            el servidor la reintenta hasta 14 s por si es la nuestra que el panel aún cuenta (§19). */
       ).toBeVisible({ timeout: 30_000 });
+      await capturaSi(page, 'ocupada-aviso', info.project.name);
       await expect.poll(async () => (await motor.activasDe(LA1_NEW_ERA.id)).length).toBe(1);
       await esperarQueAvance(page);
       expect(await suenaIptv(page)).toBe(false);
       const datos = await datosTecnicos(page);
       expect(datos).toContain('Origen AceStream · NEW ERA');
       expect(datos).toContain('Tu IPTV está ocupada en otro aparato (tu cuenta admite 1 conexión)');
+      await capturaSi(page, 'datos-ocupada', info.project.name);
     } finally {
       otraApp.soltar();
     }

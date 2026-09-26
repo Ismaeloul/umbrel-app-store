@@ -1657,6 +1657,9 @@ function playerVerdictFor(
   return { state: failure.code === 'iptv_busy' ? 'weak' : verdict.state, reason: failure.code };
 }
 
+/** El aviso con «Volver a la IPTV» cuando la IPTV está ocupada en otro aparato (§19). */
+export const BUSY_TOAST_TEXT = 'IPTV ocupada en otro aparato: seguimos por AceStream';
+
 /** Cuando ya no queda nada que probar, ni la IPTV ni AceStream. */
 export const BOTH_DOWN_TEXT =
   'Ni tu IPTV ni las fuentes de AceStream dan señal ahora mismo. Prueba «Rebuscar» en unos minutos.';
@@ -1795,8 +1798,9 @@ function bridge(
       markAutoTried(target.id);
       playEntry(target, 'auto');
       const text = `${lead}: seguimos por AceStream${numbered ? ` (fuente ${number})` : ''}`;
-      // Ocupada en otro aparato: se dice al momento y bien a la vista, no solo en el cartel (§19).
-      if (!paused) showBackToast(back, failure.code === 'iptv_busy' ? text : undefined);
+      // Ocupada en otro aparato: se dice al momento y bien a la vista, no solo en el cartel (§19). El aviso,
+      // corto (lo entero va en la línea de estado y en Datos técnicos).
+      if (!paused) showBackToast(back, failure.code === 'iptv_busy' ? BUSY_TOAST_TEXT : undefined);
       return { next: true, message: paused ? text : withBackHint(text, entries, back) };
     }
     const iptvOnly = state.kind === 'channel' && tappedIsIptv(state.tapped);
@@ -1817,11 +1821,7 @@ function bridge(
             : IPTV_ONLY_WAIT_TEXT
           : `${lead}. Sigo comprobando las fuentes de AceStream y arranco la primera que funcione.`;
       // Ocupada en otro aparato: el aviso lleva el motivo (§19).
-      if (!paused)
-        showBackToast(
-          back,
-          failure.code === 'iptv_busy' ? `Tu IPTV está ${iptvBusyPhrase()}` : undefined,
-        );
+      if (!paused) showBackToast(back, failure.code === 'iptv_busy' ? BUSY_TOAST_TEXT : undefined);
       return { message: paused ? text : withBackHint(text, entries, back) };
     }
     if (iptvOnly && !aceCount(entries)) {

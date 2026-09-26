@@ -651,12 +651,14 @@ TV (58), «Bar» (58), «Antena 3 Internacional» (58), «DAZN 1» contra «DAZN
 el emparejado las entradas ES o sin país. Ahora entran todas: España y sin país son un canal y cada otro país es otro
 del mismo nombre; con la misma puntuación, el de España o sin país va antes. Así «DAZN 1» de España va antes que «DE:
 DAZN 1», pero si solo existe el extranjero y casa por nombre, sale. El umbral 92 y Hypermotion no cambian. La guía sigue
-exigiendo España (§4.5, regla 5): es lo que pone un canal primero sin que la agenda lo anuncie.
+exigiendo España (§4.5, regla 5): es lo que pone un canal primero sin que la agenda lo anuncie. **Cambia otra vez con
+§19.5:** con la lista real, el mismo nombre en otro país es otra programación («DAZN 2 (FR)», «TV3 (SW)»), así que el
+emparejado automático vuelve a coger solo España o sin país; el buscador sigue enseñándolo todo.
 
 **Lista real (§18).** Con la lista de Isma del 26-sep la limpieza suma: cabeceras y «NO MATCH» fuera del catálogo,
 «ES TI - », «ES-» pegado, la «Ñ» final, el país de `CONTINENTE | PAÍS | TEMA`, ᴿᴬᵂ como reserva, notas entre
 corchetes, «(BK-1)» como reserva y la grafía única `channelSpelling` (@ace/shared: «M.», «M+», «MOVISTAR PLUS+» →
-Movistar; «LA SEXTA» = «LASEXTA»; «LALIGA+» → «LaLiga Plus»…). Detalle en §18.2.
+Movistar; «LA SEXTA» = «LASEXTA»; «LALIGA+» → «LaLigaPlus»…). Detalle en §18.2 y §19.5.
 
 **Variantes (§16).** Además de lo de arriba, la limpieza reconoce `1080p50`/`720p60`, `HD+`, `H264`/`AVC`, `HDR`,
 `VIP`, la reserva con número pegado (`bk2`), la copia del final entre paréntesis (`(1)`, `(2)`: de la 2 en adelante,
@@ -1767,7 +1769,8 @@ el PC contra una copia de `/data`.
 ## 10. Impacto en la app nativa (`rediseno/nativa`)
 
 El buscador con IPTV (D10) suma lo de §14.10 a esta sección, las variantes de resolución y el «todo desbloqueado»,
-lo de §16.9, y la normalización con la lista real, la etiqueta «AceStream» y el dorsal sin resolución, lo de §18.8.
+lo de §16.9, la normalización con la lista real, la etiqueta «AceStream» y el dorsal sin resolución, lo de §18.8, y la
+fila de canal con etiquetas de origen, la IPTV ocupada y el origen en Datos técnicos, lo de §19.8.
 
 **Sin cambiar nada, incluida la 0.8.0 publicada:**
 - La IPTV llega en cabeza de `candidates` y como `candidate`, se puede elegir a mano con un toque y se reproduce por la
@@ -1949,7 +1952,7 @@ comprobar el 403 de `/native` y la ruta `video`, y los fixtures del contrato par
 | D23 | **Cambiada por Isma (26-sep): un cartel IPTV por variante de resolución, 4 como mucho** (1080p, 4K, 720p, SD y detrás las reservas y las URLs con macros); las copias de una resolución que ya tiene cartel, dentro del servidor como respaldo del relé (§16). Antes: un cartel por canal y 2 como mucho | «para saber cuál va a 1080 y cuál a 720» |
 | D24 | **Sin sonda de stream en resoluciones interactivas**; solo de fondo, en Xtream y con `active_cons == 0` | la reproducción es la prueba y no se molesta a la tele de Isma |
 | D25 | **Resuelto por Isma (26-sep): el buscador enseña todo** (§16): canales de cualquier país (con su país en una etiqueta) y también los grupos para adultos. Una fila por canal: las variantes de resolución van juntas, con sus calidades; el mismo nombre en otro país es otra fila | «mejor déjalo todo desbloqueado» |
-| D26 | **Un canal, una fila**: si está en tu biblioteca, manda su fila (con «IPTV»); si no, la fila IPTV; los resultados del motor que son ese canal se esconden (§14.3) | «sale una vez y lleva el distintivo IPTV»; tus favoritos no desaparecen del buscador |
+| D26 | **Un canal, una fila** (rehecho en §19): la fila es el CANAL con su nombre limpio y etiquetas de dónde se ve («IPTV» con sus calidades, «AceStream» con cuántas fuentes); una entrada de AceStream de tu biblioteca que es ese canal se junta con él, nunca lleva «IPTV» encima; un canal de tu IPTV guardado es su propia fila; los resultados del motor que son ese canal se esconden y suman (§14.3 y §19) | Isma, 26-sep: vio «LA 1 4K --> NEW ERA» con «IPTV» y lo leyó como un error; «si no es de la IPTV, esto es 100 % de AceStream» |
 | D27 | **`iptvChannels` nace con `access: 'web'`** y pasa a `any` cuando la app calque el buscador (§14.10) | no rompe `FixturesTests` de la app antes de tiempo; el contenido no tiene nada secreto |
 | D28 | **Re-emparejado de favoritos y recientes IPTV al sincronizar**; un favorito que no casa se quita a las 24 h, un reciente al momento (§14.6) | «se vuelve a emparejar por nombre o se descarta sin errores feos», sin perder un favorito por una sincronización rara |
 
@@ -2091,8 +2094,9 @@ Este anexo manda sobre lo que digan §4.4, §4.6, §8.1 y §8.4 de favoritos, re
 
 1. **Buscar** (y el **filtro de Canales**) enseñan a la vez tu IPTV y AceStream. Un canal que solo está en la IPTV
    también sale. No hay pestañas ni filtros «IPTV / AceStream»: todo es automático.
-2. **Un canal, una fila** (D26). Si el canal está en tu biblioteca, sale su fila de siempre con el distintivo «IPTV»;
-   si no, sale la fila IPTV. Los resultados del motor que son ese mismo canal se esconden.
+2. **Un canal, una fila** (D26, rehecho en §19). La fila es el canal («La 1») con etiquetas de dónde se ve: «IPTV»
+   con sus calidades y «AceStream» con cuántas fuentes. Una entrada de AceStream de tu biblioteca que es ese canal se
+   junta con él (nunca «IPTV» encima de ella); los resultados del motor que son ese mismo canal se esconden y suman.
 3. **Tocar un canal IPTV es como tocar un partido:** IPTV primero, las fuentes de AceStream de ese canal comprobándose
    de fondo, el puente de §7.2 si una cae y «Volver a la IPTV» con un toque.
 4. **Un canal solo de la IPTV** se reproduce por la IPTV y el servidor lo busca además, de fondo, en AceStream (listas
@@ -3092,3 +3096,211 @@ lista del remux responde 503 en web; la ruta nativa (`?t=`) sigue con su 404, ah
 3. **Plataformas:** un canal de VIX o Pluto TV ya no se empareja por nombre con la agenda; sí se busca y se reproduce.
 4. **«LaLiga 1» pedido por la agenda** sigue casando con «M. LALIGA 1» (Movistar es relleno en `channelMatchScore`,
    matriz 0.6.59 congelada); al revés ya no («M+ LaLiga TV» no es «LA LIGA 1» de Rakuten).
+
+---
+
+## 19. Anexo: «la 1» en el Umbrel de Isma, la IPTV ocupada y las protecciones con la lista real (26-sep)
+
+Isma probó la 0.8.1 en su Umbrel. Buscó «la 1» y le salió **una sola fila, «LA 1 4K --> NEW ERA», con el distintivo
+«IPTV»**: era una entrada de su biblioteca de AceStream (la lista NEW ERA) que D26 marcaba con «IPTV» porque su IPTV
+tiene «LA 1». En «En tu IPTV» no salía nada. Al tocarla sonó AceStream. A la vez tenía abierta la app de IPTV de su PC
+(TPTV) con la misma cuenta, que admite **1 conexión**. Este anexo lo arregla y cierra lo que quedaba de §18.
+**Implementado** en `iptv-busqueda` (sobre `rediseno/iptv`); manda sobre D26, §14.3, §14.5 y §18.4.
+
+### 19.1 En pocas palabras
+
+1. **La fila es el CANAL** («La 1»), con etiquetas separadas de dónde se ve: «IPTV» con sus calidades y «AceStream» con
+   cuántas fuentes («AceStream · 3»). Nunca «IPTV» encima de una entrada que es de AceStream. Si solo está en uno, solo
+   su etiqueta. El canal IPTV siempre se ve en «En tu IPTV», aunque tengas su AceStream en la biblioteca.
+2. **Tocar la fila hace lo automático:** IPTV primero y, de respaldo, tus entradas de AceStream de ese canal.
+3. **Por qué sonó AceStream (reproducido):** con la plaza de la cuenta ocupada por otra app, la 0.8.1 SÍ intentaba la
+   IPTV (`/api/v1/channels/<id IPTV>/stream`, 503 `iptv_busy`, por eso no hay ningún `/api/v1/video`) y caía a
+   AceStream avisando solo con «conexión ocupada» en el cartel. Si hacía menos de 2 min que habíamos cerrado otra
+   IPTV, además esperaba 14 s a que se liberara.
+4. **IPTV ocupada, dicho al momento:** «Tu IPTV está ocupada en otro aparato (tu cuenta admite 1 conexión): seguimos
+   por AceStream (fuente 2)» en la línea de estado, y «IPTV ocupada en otro aparato: seguimos por AceStream» en el
+   aviso con «Volver a la IPTV». Sin esperar 14 s si no la acabamos de soltar nosotros.
+5. **Datos técnicos dice SIEMPRE de dónde viene lo que suena:** «IPTV · Casa · 720p» o «AceStream · NEW ERA»; y si
+   suena AceStream estando el canal en tu IPTV, una fila «IPTV» con el porqué.
+6. **El emparejado automático ya no coge canales de otro país** («DAZN 2 (FR)», «TV3 (SW)», «PER - MOVISTAR
+   DEPORTES», «UK - LA LIGA TV»): si cae el de España no suena otra programación.
+7. Menores de §18: país en minúsculas y «TVE» en el buscador, «LaLiga+» como otra marca, «TVG 2» de vuelta, el nombre
+   de las listas de AceStream sin flecha, orden con España delante, dorsal sin «(BK-2)» ni «1920x1080», «Listas de
+   AceStream» en vez de «M3U», la lista del remux que espera antes del 503.
+
+### 19.2 La fila de canal del buscador (`search/iptv.ts`, `SearchView.tsx`, `ChannelRow.tsx`)
+
+`mergeSearch`, rehecho:
+
+| Qué llega | Antes (D26) | Ahora |
+|---|---|---|
+| Una entrada de AceStream de tu biblioteca que es un canal de tu IPTV («LA 1 4K --> NEW ERA») | su fila, con «IPTV» y el nombre de la lista; el canal IPTV desaparecía de «En tu IPTV» | se junta con su canal: no sale suelta; cuenta en su «AceStream» y es su respaldo al tocarlo |
+| El canal IPTV («La 1») | escondido si alguna fila lo «representaba» | siempre en «En tu IPTV», con su nombre limpio, «IPTV», sus calidades y «AceStream · N» |
+| Un canal de tu IPTV guardado (id IPTV) | su fila, con «IPTV» | igual (es el canal): «IPTV», calidades, «Tu IPTV» y «AceStream · N» si el motor lo tiene |
+| Una entrada de AceStream que no es de tu IPTV | su fila | su fila, con «AceStream» (con IPTV activa) |
+| Resultados del motor de un canal que ya tiene fila | escondidos («también en AceStream») | escondidos, suman a su «AceStream · N» |
+| Resultado del motor de un canal IPTV que no vino (pasó de 50) | ese resultado con «IPTV» | fila de canal con el nombre limpio («LA 1»), «IPTV» y «AceStream · N» |
+
+- Las etiquetas van en la meta, nunca junto al nombre: «IPTV» (cápsula neutra con la tele, la del cartel de la
+  fuente), las calidades («720p») y «AceStream» (con el número si son 2 o más).
+- El subtítulo de una fila IPTV es solo el nombre de tu IPTV («Casa»): «· también en AceStream» pasa a ser la etiqueta.
+- **Filtro de Canales:** el canal IPTV sale en «En tu IPTV» aunque su AceStream sea una fila de la pestaña (antes se
+  escondía); tu fila de AceStream sigue siendo tuya y sin «IPTV».
+- Tocar la fila IPTV manda a la sesión del canal el id IPTV y sus entradas de AceStream de tu biblioteca
+  (`TappedChannel.ace`): van detrás de la IPTV en las fuentes, y si la IPTV cae suenan sin esperar al comprobador.
+
+### 19.3 Por qué no sonó la IPTV y qué se ha cambiado (`session.ts`, `iptv/service.ts`)
+
+Reproducido en E2E con el proveedor falso (1 plaza) y la entrada «LA 1 4K --> NEW ERA» en favoritos:
+
+| | Petición | Resultado |
+|---|---|---|
+| IPTV libre, 0.8.1 y rama | `football/resolve?…&iptv=<id>` → `channels/<id IPTV>/stream` → `video/…` | suena la IPTV |
+| Plaza ocupada por otra app, 0.8.1 | `football/resolve` → `channels/<id IPTV>/stream` **503 `iptv_busy`** (14 s si soltamos otra IPTV hace < 2 min; si no, al momento) → `channels/<hash AceStream>/stream` | suena AceStream; solo «conexión ocupada» en el cartel |
+| Plaza ocupada, rama | igual, pero el 503 llega en ~20 ms si no la acabamos de soltar | aviso claro y AceStream de tu biblioteca al momento |
+
+El id IPTV y el hash de AceStream son los dos de 40 hexadecimales: en el registro de nginx las dos peticiones de
+`channels/…/stream` parecen la misma. La hipótesis del plazo de 2,5 s (`channelResolveMs`) se descarta: la resolución
+respondió en milisegundos; la de la 0.8.1 funcionando distinto, también (el mismo recorrido con la IPTV libre suena).
+
+Cambios:
+- **Texto:** `iptv_busy` → «Tu IPTV está ocupada en otro aparato (tu cuenta admite 1 conexión): seguimos por AceStream
+  (fuente N)». El «(tu cuenta admite N conexión)» sale del estado de la IPTV (`iptvGet`, que se pide de fondo al
+  arrancar una IPTV); sin él, «Tu IPTV está ocupada en otro aparato: …». El aviso con «Volver a la IPTV» dice «IPTV
+  ocupada en otro aparato: seguimos por AceStream» (antes, solo «Seguimos por AceStream»); en Datos técnicos, la frase
+  entera.
+- **Al momento:** mientras se conecta con la IPTV, si el comprobador ya sabe por la cuenta que otro aparato tiene la
+  plaza, se dice «Tu IPTV parece ocupada en otro aparato…: si no se libera enseguida, seguimos por AceStream».
+- **Sin 14 s de espera:** el servidor solo reintenta «ocupada» (2-4-8 s) si soltó una IPTV hace menos de 20 s
+  (`IPTV_SESSION.busyRetryWindowMs`), que es lo que tarda un panel en descontarla. Antes, cualquier cierre de los
+  últimos 2 minutos.
+- **Respaldo inmediato:** con la fila de canal, si la IPTV cae antes de que el comprobador verifique nada, suena tu
+  entrada de AceStream de ese canal (como ya pasaba con el hash tocado de un canal suelto).
+
+### 19.4 Datos técnicos (`player/NerdPanel.tsx`)
+
+- **Origen**, siempre que suena algo: «IPTV · Casa · 720p» (proveedor y calidad del cartel) o «AceStream · NEW ERA»
+  (la lista o el proveedor de la fuente; «AceStream» a secas si no se sabe).
+- **IPTV**, solo si suena AceStream y el canal está en tu IPTV y cayó: «Tu IPTV está ocupada en otro aparato (tu cuenta
+  admite 1 conexión)», «Tu IPTV no suena: se cortó en el proveedor», «… cuenta caducada», etc.
+- Lo lleva el reproductor en el canal que suena (`PlayChannel.quality` e `iptvNote`), así que sale igual en la pestaña
+  del teatro y en el panel sobre el vídeo.
+
+### 19.5 Emparejado automático con la lista real (`match.ts`, `names.ts`, `catalog.ts`, `sources/ranking.ts`)
+
+- **Otro país, nunca solo.** `matchIptvChannels` solo coge España o sin país. El mismo nombre en otro país es otra
+  programación: «DAZN 2» ya no ofrece «DAZN 2 (FR)», «(PT)» ni «(DE)» como siguiente IPTV antes que AceStream; «TV3»,
+  ni el sueco ni el noruego; «M+ Deportes», no «PER - MOVISTAR DEPORTES»; «M+ LaLiga TV» y «LaLiga TV», no «UK - LA
+  LIGA TV». En el buscador salen todos (todo desbloqueado) y tocar uno lo reproduce. El re-emparejado de favoritos y
+  recientes (§14.6) sí los mira (`anyCountry`), detrás del de España.
+- **El nombre del país en la categoría** («AM | LATINO», «EU | LATVIA», «AS | THAILAND», «AF | AFRICA») ya no deja el
+  canal «sin país» (= España): «LATINO» y «LATAM» son `LAT` (América en español), «MEXICO…» es `MX` y el resto, el
+  continente.
+- **«LaLiga+» es otra marca de verdad.** La grafía única la escribe «LaLigaPlus» (una palabra): «plus» suelto es
+  relleno al puntuar y «LaLiga+» de la agenda casaba al 100 con «Movistar LaLiga», «M. LALIGA 1» y «UK - LA LIGA TV».
+- **Categorías de plataforma que mezclan la TDT.** «EU | ES | RAKUTEN TV» de la lista real trae «ES - LA 2», «ES -
+  ANTENA 3», «ES - TVG 2»… La categoría solo hace «plataforma» a un canal si es de solo plataforma: si al menos 3 de sus
+  canales (y 1 de cada 5) están también en una categoría normal, es mixta y sus canales son canales («TVG 2» vuelve a
+  casar). En ellas, solo el nombre tal cual: sin la regla del « 1» («LaLiga TV» no es «LA LIGA 1») y un canal con marca
+  pedido («M+ LaLiga TV 3») solo casa con uno que la lleve («LA LIGA 3» de Rakuten no es Movistar). El nombre de
+  plataforma se reconoce también con el país delante («ES - RAKUTEN TV ACCION»). En el buscador, lo de estas
+  categorías va detrás.
+- **`sources/ranking.ts`:** una IPTV no es «lo genérico» frente a AceStream (§18.4), pero entre IPTV vuelve a mandar la
+  regla de la marca (B-174): «DAZN» de la IPTV va detrás de «DAZN LaLiga» de la IPTV.
+
+### 19.6 Buscador: lo que escribe una persona (`search.ts`)
+
+- **País delante en cualquier caja:** «es-m.laliga», «es: laliga», «es| dazn 1», «[es] dazn 1», «es - m. laliga» y «es
+  dazn 1» (con espacio, solo «es» y «esp»: «de», «la» o «tv» son palabras). Con un país pedido que no es España («uk:
+  la liga tv»), ese país va el primero.
+- **RTVE como la agenda:** «la 1 tve», «tve 1», «tve1», «La 2 TVE» → «LA 1», «LA 2».
+- **Orden:** España o sin país delante de TODO, luego América en español y luego el resto; dentro, el nivel de §18.3.
+  «la liga tv» ya no pone «UK - LA LIGA TV» por delante de «DAZN LaLiga» y «M. LALIGA»; «kids» ya no pone OSN ni los franceses por delante de los de España.
+- **«movistar ellas» ya no trae «LAS ESTRELLAS»:** sin la marca, solo por el principio de una palabra.
+- **Nombre de las listas de AceStream sin flecha** (`aceChannelTitle`): «LA 1 FHD [NEW ERA]», «LA 1 (NEW ERA)», «LA 1 |
+  NEW ERA», «LA 1 - NEW ERA», «LA 1 1080 NEW ERA» son «LA 1». Solo si lo de detrás va en mayúsculas o entre corchetes
+  y no distingue el canal: «LaLiga TV (Hypermotion)», «M+ LaLiga TV - Bar» y «Real Madrid TV EN» no se tocan.
+
+### 19.7 Carteles, dorsal y la lista del remux
+
+- `channelDorsal` se salta la reserva («M. LALIGA 1 FHD (BK-2)» → «1», «M. LALIGA HD (BK-1)» → «M») y la resolución con
+  «x» («La 1 HD 1920x1080» → «1»).
+- «Encontrar canal»: la procedencia `m3u` dice «Lista de AceStream» y «Listas de AceStream» (antes «Directorio M3U» y
+  «M3U»).
+- **La lista del remux que aún no está** (§18.6): antes del 503 el servidor espera hasta 2,5 s a que aparezca
+  (`NOT_YET_WAIT_MS`), así un HLS nativo que no reintenta un 503 (Safari) casi nunca lo ve. Solo es «aún no está» un
+  `ENOENT`/`ENOTDIR`; `EACCES`, `EMFILE` y demás son errores de verdad (500). La ruta nativa (`?t=`) espera igual.
+
+### 19.8 Impacto en la app nativa (actualiza §10, §14.10, §16.9 y §18.8)
+
+Nadie de `rediseno/iptv` toca `apps/ios`. **Sin cambiar nada:** el servidor ya no ofrece IPTV de otro país en el
+emparejado automático, empareja «TVG 2» y deja de juntar «LaLiga+» con LaLiga TV; una IPTV ocupada falla al momento.
+
+**Cuando exista la pantalla**, la app porta:
+
+| Módulo | Fichero o carpeta | Cambio |
+|---|---|---|
+| M3 | `Sources/Core/Reglas/Nombres/GrafiaCanal.swift`* | `channelSpelling` con «LaLigaPlus» en una palabra (vectores de `lista-real.test.ts`) |
+| M3 | `Sources/Core/Reglas/Fuentes/ReglasFuentes.swift` | «Tu IPTV está ocupada en otro aparato (tu cuenta admite N conexión): seguimos por AceStream» en la línea de estado y «IPTV ocupada en otro aparato: seguimos por AceStream» en el aviso de volver; respaldo inmediato a la entrada de AceStream tocada; «Lista de AceStream» en la procedencia `m3u` |
+| M6 | `Sources/Pantallas/Buscar/`* y `Canales/`* | la fila de canal: nombre limpio y etiquetas «IPTV» (con calidades) y «AceStream · N» en la meta; una entrada de AceStream de tu biblioteca que es un canal de tu IPTV se junta con él (nunca «IPTV» encima); al tocar, IPTV y esas entradas de respaldo |
+| M6 | `Sources/Pantallas/Partido/` (Datos técnicos) | «Origen» siempre: «IPTV · Casa · 720p» o «AceStream · NEW ERA»; fila «IPTV» con el porqué si suena AceStream |
+| M6 | `Sources/UI/Dorsal.swift`* | el dorsal se salta «(BK-2)» y «1920x1080» |
+
+### 19.9 Medidas con la lista real
+
+Como en §18.7: servidor y scripts de la rama contra una **copia** de los datos de la pila de Isma (misma semilla), sin
+red; solo nombres; ningún canal reproducido.
+
+**Sonda del emparejado** (90 canales como los escribe la agenda): 24 dejan de ofrecer canales de otro país, 2 ganan
+(«TVG 2» → TVG 2; «LaLiga+» → nada, antes Movistar LaLiga) y ninguno pierde el de España. Antes y después:
+
+| Canal pedido | Antes | Después |
+|---|---|---|
+| DAZN 2 | DAZN 2 · DAZN 2 (FR) · (PT) · (DE) | DAZN 2 |
+| TV3 | TV3 · TV3 (SW) · TV3 (NO) · TV3 (LV) | TV3 |
+| M+ Deportes / Movistar Deportes | M. DEPORTES 1 · M. DEPORTES · MOVISTAR DEPORTES (PER) | M. DEPORTES 1 · M. DEPORTES |
+| M+ LaLiga TV / Movistar LaLiga / LaLiga TV | MOVISTAR LALIGA · M. LALIGA 1 · LA LIGA TV (UK) | MOVISTAR LALIGA · M. LALIGA 1 |
+| DAZN LaLiga | DAZN LaLIGA · DAZN LALIGA 1 (FR) | DAZN LaLIGA |
+| LaLiga+ | MOVISTAR LALIGA · M. LALIGA 1 · LA LIGA TV (UK) | — |
+| TVG 2 | — | TVG 2 |
+| M+ Golf, M+ Fútbol, Antena 3, GOL, TVG, Eurosport 1/2, beIN Sports, Real Madrid TV | con gemelos de FR, CH, PL, EC, RO, MX, US, PT, IT, AR | solo el de España |
+
+**Ensayo (agenda real de hoy y mañana, 273 partidos):** 27 con IPTV antes y después, los mismos. Desaparecen solo
+los respaldos de otro país: «DAZN 2 (FR/PT/DE)» en los 4 partidos de Liga F, «DAZN 1 (FR/PT/DE)», «TV GALICIA (PT)»
+en Lugo – Racing Ferrol y «Real Madrid (MX)».
+
+**Buscador:** «es-m.laliga», «es - m. laliga» → M. LALIGA primero; «es| dazn 1», «[es] dazn 1», «es dazn 1» → DAZN 1;
+«la 1 tve», «tve 1» → LA 1; «tvg 2» → TVG 2; «la liga tv» → DAZN LaLiga, M. LALIGA… y «UK - LA LIGA TV» detrás; «uk -
+la liga tv» → el de UK primero; «movistar ellas» → solo M. ELLAS V. Cada consulta en 1-17 ms sobre 26 051 canales
+(el índice, 100-240 ms, una vez; medido con el PC cargado por las E2E).
+
+**Recorrido de Isma (E2E, proveedor falso, dos Chrome):** «la 1» con «LA 1 4K --> NEW ERA» en favoritos → una fila «La
+1» en «En tu IPTV» con «IPTV · 720p · AceStream · 3» y ninguna «LA 1 4K --> NEW ERA» suelta; tocarla suena la IPTV
+(Datos técnicos: «IPTV · Casa · 720p»); con la plaza ocupada por otra app: 503 en ~20 ms, «Tu IPTV está ocupada en
+otro aparato (tu cuenta admite 1 conexión): seguimos por AceStream (fuente 2)» y suena «LA 1 4K --> NEW ERA» (Datos
+técnicos: «AceStream · NEW ERA» y la fila «IPTV» con el porqué).
+
+### 19.10 Pruebas
+
+- **Servidor:** `proteccion.test.ts` (nuevo, lista sintética con la forma de la real: otro país, «AM | LATINO»,
+  «LaLiga+», «RAKUTEN TV» mixta, consultas con país en minúsculas y TVE, orden, «LAS ESTRELLAS», nombres de lista sin
+  flecha), `match.test.ts` (otro país solo con `anyCountry`), `search.test.ts` y `service.test.ts` (España delante),
+  `service.test.ts` (ocupada sin cierre reciente: `iptv_busy` sin reintentos), `ranking.test.ts` (marca entre IPTV),
+  `remux/routes.test.ts` (la lista que aparece durante la espera sale 200; `ENOENT` frente a `EACCES`).
+- **Web:** `search/iptv.test.ts` (la mezcla nueva, el caso de Isma), `SearchView.test.tsx` (fila de canal, etiquetas,
+  el toque lleva `ace`), `LibraryView.test.tsx` (el canal IPTV se ve aunque su AceStream esté en la pestaña),
+  `session.iptv.test.ts` (texto de ocupada, con y sin la cuenta; `iptvNote`), `wiring.test.ts` (Origen siempre y fila
+  IPTV), `ChannelMark.test.tsx` (dorsal con BK y WxH).
+- **E2E** (`iptv-buscador.spec.ts`): 9 y 10 al día; **15** (el caso de Isma: fila de canal, suena la IPTV, Datos
+  técnicos) y **16** (plaza ocupada por otra app: aviso, AceStream de respaldo, Datos técnicos).
+
+### 19.11 Riesgos
+
+1. **Tu entrada de AceStream se junta con su canal** y deja de salir suelta en Buscar: si alguien busca su favorito de
+   AceStream por el nombre de la lista, lo encuentra dentro del canal («AceStream · N») y al tocarlo suena la IPTV
+   primero. En Canales (su pestaña) sigue saliendo como siempre.
+2. **Otro país fuera del emparejado automático:** un canal que solo exista con otro país y que la agenda pida ya no
+   sale solo; se busca y se toca a mano.
+3. **Categoría mixta:** el umbral «3 canales y 1 de cada 5» sale de la lista real; una categoría de plataforma pequeña
+   con 3 canales repetidos también pasaría a mixta (sus canales, emparejables solo por el nombre tal cual).
+4. **«(tu cuenta admite N conexión)»** solo si el estado de la IPTV ya se pudo pedir; si no, la frase sin paréntesis.
