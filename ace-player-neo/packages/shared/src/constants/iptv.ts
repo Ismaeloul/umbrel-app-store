@@ -22,9 +22,18 @@ const HOUR = 60 * MINUTE;
 export const IPTV_MIN_SCORE = RESOLUTION_EXACT_SCORE;
 /** Puntuación de una IPTV confirmada por la guía (§4.3 y §4.5). */
 export const IPTV_GUIDE_SCORE = 100;
-/** Candidatas IPTV por resolución como mucho: un cartel por canal y 2 en total (§4.3, D23). */
-export const IPTV_MAX_CANDIDATES = 2;
-/** Variantes de respaldo (FHD, HD, reserva) que guarda el servidor por canal, además de la principal (§4.3). */
+/**
+ * Carteles IPTV por resolución como mucho (§17, D23): un cartel por variante
+ * de resolución de cada canal (1080p, 4K, 720p, SD, reserva), 4 en total.
+ */
+export const IPTV_MAX_CANDIDATES = 4;
+/** Canales IPTV distintos que tienen sitio asegurado entre esos 4 carteles (el de la guía y el del nombre, §17). */
+export const IPTV_MAX_MATCHED_CHANNELS = 2;
+/**
+ * Variantes sin cartel propio (otra copia de la misma resolución, la quinta
+ * variante…) que el relé prueba detrás de un cartel antes de darlo por caído
+ * (§17 y §6.1).
+ */
 export const IPTV_MAX_BACKUP_VARIANTS = 2;
 /** Nombres de canal confirmados por la guía que se usan como pista para AceStream (§4.5). */
 export const IPTV_MAX_GUIDE_HINTS = 2;
@@ -137,6 +146,14 @@ export const IPTV_QUICK_TEST = {
   xtreamMs: 8 * SECOND,
   m3uMs: 20 * SECOND,
   m3uBytes: 256 * KIB,
+  /**
+   * Un solo reintento interno (§16.8) si el primer intento falló por algo
+   * pasajero y en menos de `retryFastMs`, tras `retryDelayMs`. Los dos
+   * intentos caben en `budgetMs` (la web espera 30 s, `TIMEOUTS.iptvSave`).
+   */
+  retryFastMs: 5 * SECOND,
+  retryDelayMs: 1_500,
+  budgetMs: 25 * SECOND,
 } as const;
 
 /** Refrescos (§3.5, §3.6 y §7.4). */
@@ -258,6 +275,11 @@ export const IPTV_CLIENT = {
   searchMs: 4 * SECOND,
   /** `footballResolve` con `engine=1` (búsqueda inversa de fondo, §14.4). */
   channelEngineMs: 20 * SECOND,
+  /** `iptvBrowse` (la pestaña IPTV de Canales, §16.2): `TIMEOUTS.iptvBrowse` de la web. */
+  browseMs: 6 * SECOND,
+  /** Espera tras la última tecla del campo de la pestaña y tras un cambio de filtro (juntar toques). */
+  browseDebounceMs: 450,
+  browseFilterDebounceMs: 200,
 } as const;
 
 // --- Buscador: IPTV y AceStream juntos (§14) ---
@@ -286,3 +308,67 @@ export const IPTV_SEARCH = {
 /** Estado de un id IPTV de favoritos o recientes (`LibraryView.iptvIds`, §14.6). */
 export const IPTV_ID_STATES = ['ok', 'iptv_gone', 'iptv_disabled', 'iptv_removed'] as const;
 export type IptvIdState = (typeof IPTV_ID_STATES)[number];
+
+// --- Pestaña IPTV en Canales (§16) ---
+
+export const IPTV_BROWSE = {
+  /** Filas por página: por defecto y como mucho. `limit=0` pide solo categorías y facetas. */
+  limit: 60,
+  limitMax: 100,
+  /** Categorías devueltas como mucho (las del proveedor, en su orden). */
+  categoriesMax: 2_000,
+  /** Categorías cuyo nombre contiene el texto, en la raíz con texto (§16.3). */
+  categoriesMatchMax: 5,
+  /** Valores por faceta como mucho (País puede pasar de 100). */
+  facetValuesMax: 250,
+  /** Valores elegidos por faceta en una consulta. */
+  selectedMax: 16,
+  /** Consultas ya calculadas que el servidor guarda para servir las páginas siguientes. */
+  cacheEntries: 16,
+  /** Nombre de categoría enseñado: como mucho. */
+  categoryNameMax: 120,
+  /** El índice se monta a trozos de este tamaño, cediendo el hilo entre trozo y trozo. */
+  buildChunk: 5_000,
+  /** …y este rato después de aplicar la lista (o antes, si alguien abre la pestaña). */
+  buildDelayMs: 2 * SECOND,
+} as const;
+
+/** Tipos (§16.4). El orden es el de la hoja de filtros cuando empatan en número. */
+export const IPTV_TYPES = [
+  'generalistas',
+  'deportes',
+  'cine',
+  'series',
+  'noticias',
+  'infantil',
+  'documentales',
+  'musica',
+  'entretenimiento',
+  'religion',
+  'adultos',
+] as const;
+export type IptvType = (typeof IPTV_TYPES)[number];
+
+/** Deportes (§16.4). */
+export const IPTV_SPORTS = [
+  'futbol',
+  'baloncesto',
+  'f1',
+  'motos',
+  'motor',
+  'tenis',
+  'padel',
+  'golf',
+  'ciclismo',
+  'balonmano',
+  'rugby',
+  'lucha',
+  'futbol-americano',
+  'hockey',
+  'beisbol',
+  'toros',
+] as const;
+export type IptvSport = (typeof IPTV_SPORTS)[number];
+
+/** Calidades de la faceta Calidad, en su orden fijo (4K, 1080p, 720p, SD). */
+export const IPTV_BROWSE_QUALITIES = ['uhd', 'fhd', 'hd', 'sd'] as const;

@@ -12,15 +12,18 @@ import {
   detailOf,
   effectiveOf,
   entryFromCandidate,
+  iptvQualityText,
   isIptv,
   isIptvAccountFailure,
   isShownWhileScanning,
   NOTHING_ON_SCREEN,
   pickAutoSource,
   pickBridgeTarget,
+  pickNextIptvVariant,
   presentationOf,
   qualityLabel,
   resolutionSourceLabel,
+  signalOf,
   type Effective,
   type SourceEntry,
 } from './model.ts';
@@ -135,6 +138,49 @@ describe('IPTV: entradas y presentación', () => {
       const failed = { ...entry, probe: probeOf('failed', reason) };
       expect(detailOf(effectiveOf(failed, NOTHING_ON_SCREEN, NOW), failed)).toBe(phrase);
     }
+  });
+
+  it('una IPTV «en cola» del comprobador se lee «Sin comprobar · se prueba al reproducirla»; el país va en su etiqueta', () => {
+    const entry = { ...entryFromCandidate(iptvCandidate(1), NOW), probe: probeOf('queued') };
+    const effective = effectiveOf(entry, NOTHING_ON_SCREEN, NOW);
+    expect(signalOf(effective, entry)).toEqual({ state: 'pending', word: 'Sin comprobar' });
+    expect(detailOf(effective, entry)).toBe('se prueba al reproducirla');
+    const german = entryFromCandidate(
+      iptvCandidate(2, {
+        iptv: { provider: 'Casa', quality: 'hd', backup: false, guide: false, country: 'DE' },
+      }),
+      NOW,
+    );
+    expect(qualityLabel(german)).toBe('DE · 720p');
+  });
+
+  it('variantes (§17): la siguiente IPTV no probada ni caída en 60 s, en el orden del servidor', () => {
+    const entries = [
+      entryFromCandidate(iptvCandidate(1), NOW),
+      {
+        ...entryFromCandidate(
+          iptvCandidate(2, {
+            iptv: { provider: 'Casa', quality: 'uhd', backup: false, guide: false },
+          }),
+          NOW,
+        ),
+        autoTried: true,
+      },
+      entryFromCandidate(
+        iptvCandidate(3, {
+          iptv: { provider: 'Casa', quality: 'hd', backup: false, guide: false },
+        }),
+        NOW,
+      ),
+      entryFromCandidate(candidate(4, { source: 'acestream' }), NOW),
+    ];
+    const next = pickNextIptvVariant(entries, effects(entries), entries[0]!, NOW);
+    expect(next?.id).toBe(hash(3));
+    expect(iptvQualityText(next!)).toBe('720p');
+    const fallen = entries.map((entry) =>
+      entry.id === hash(3) ? { ...entry, failedAt: NOW - 10_000 } : entry,
+    );
+    expect(pickNextIptvVariant(fallen, effects(fallen), entries[0]!, NOW)).toBeNull();
   });
 
   it('«Tu IPTV» en «Encontrar canal» y «IPTV» en lo consultado', () => {

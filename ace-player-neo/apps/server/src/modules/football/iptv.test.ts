@@ -73,8 +73,8 @@ function layer(
       return iptvCandidate(id, 'Favorito IPTV', match.score, false, match.matchedChannel);
     },
     tapped(id) {
-      if (!id.startsWith('f')) return null;
-      return iptvCandidate(id, 'Telecinco', 100, false, 'Telecinco');
+      if (!id.startsWith('f')) return [];
+      return [iptvCandidate(id, 'Telecinco', 100, false, 'Telecinco')];
     },
     sameChannel(channel, title) {
       return channelMatchScore(channel, title);
@@ -216,13 +216,16 @@ describe('resolveFootballChannel con IPTV', () => {
     expect(result.candidates[0]?.iptv?.provider).toBe('Casa');
   });
 
-  it('como mucho 2 IPTV en total (capa + convertidas)', async () => {
+  it('como mucho 4 carteles IPTV en total (capa + convertidas), en el orden de la capa (§17)', async () => {
     const state = { favorites: [{ id: IPTV_FAV, title: 'DAZN LaLiga' }] };
+    const variant = (n: number) => `${'f'.repeat(38)}a${n}`;
     const d = deps(
       layer({
         candidates: [
           iptvCandidate(IPTV_GUIDE_ID, 'M+ LaLiga TV 2', 100, true, 'M+ LaLiga TV 2'),
           iptvCandidate(IPTV_ID, 'DAZN LaLiga', 100, false, 'DAZN LaLiga'),
+          iptvCandidate(variant(1), 'DAZN LaLiga', 100, false, 'DAZN LaLiga'),
+          iptvCandidate(variant(2), 'DAZN LaLiga', 100, false, 'DAZN LaLiga'),
         ],
       }),
     );
@@ -230,7 +233,31 @@ describe('resolveFootballChannel con IPTV', () => {
     expect(result.candidates.filter((c) => c.source === 'iptv').map((c) => c.id)).toEqual([
       IPTV_GUIDE_ID,
       IPTV_ID,
+      variant(1),
+      variant(2),
     ]);
+  });
+
+  it('el canal IPTV tocado trae todos sus carteles delante y en su orden', async () => {
+    const v1 = `${'f'.repeat(38)}b1`;
+    const v2 = `${'f'.repeat(38)}b2`;
+    const iptv: ResolutionIptv = {
+      ...layer({
+        candidates: [iptvCandidate(IPTV_ID, 'Otro canal', 100, false, 'Telecinco')],
+      }),
+      tapped: (id) =>
+        id.startsWith('f')
+          ? [
+              iptvCandidate(v1, 'Telecinco', 100, false, 'Telecinco'),
+              iptvCandidate(v2, 'Telecinco', 100, false, 'Telecinco'),
+            ]
+          : [],
+    };
+    const result = await resolveFootballChannel({}, ['Telecinco'], deps(iptv), {
+      scope: 'channel',
+      iptvId: v1,
+    });
+    expect(result.candidates.map((c) => c.id)).toEqual([v1, v2, IPTV_ID]);
   });
 
   it('con el motor caído (el buscador falla) la IPTV sigue', async () => {

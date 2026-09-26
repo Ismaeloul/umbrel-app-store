@@ -56,8 +56,9 @@ export type JsonRouteId = {
 
 /**
  * Rutas solo web cuyo ejemplo va en `web/v1/` (docs/iptv.md §5.7): las 5 de
- * la IPTV y el buscador IPTV (`iptvChannels`, §14.2; pasa a `v1/` cuando la
- * app calque el buscador, §14.10). `healthLive` y las demás rutas `web` de
+ * la IPTV, el buscador IPTV (`iptvChannels`, §14.2; pasa a `v1/` cuando la
+ * app calque el buscador, §14.10) y la pestaña IPTV de Canales
+ * (`iptvBrowse`, §16.2; ídem, §16.11). `healthLive` y las demás rutas `web` de
  * antes se quedan en `v1/`, donde la app ya las conoce.
  */
 export const WEB_FIXTURE_ROUTE_IDS = [
@@ -67,6 +68,7 @@ export const WEB_FIXTURE_ROUTE_IDS = [
   'iptvSync',
   'iptvDelete',
   'iptvChannels',
+  'iptvBrowse',
 ] as const satisfies readonly JsonRouteId[];
 export type WebFixtureRouteId = (typeof WEB_FIXTURE_ROUTE_IDS)[number];
 /** Rutas con ejemplo en `v1/`. */
@@ -616,15 +618,105 @@ const IPTV_ID_NAME = 'e5f60718293a4b5c6d7e8f901234567812ab34cd';
 const IPTV_ID_LA1 = 'f60718293a4b5c6d7e8f9012345678ab23cd45ef';
 const IPTV_ID_TELECINCO = '0718293a4b5c6d7e8f9012345678abcd34ef5601';
 
+/* Pestaña IPTV de Canales (§16): categorías como las de un panel real, en su
+   orden, y facetas con sus recuentos. Ids de categoría de 12 hex. */
+const CAT_DEPORTES = '3f2a9c1b7d40';
+const CAT_DAZN = '8e1d0a6b2c93';
+const CAT_LALIGA = 'c45b7e20f1a8';
+const CAT_GENERALISTAS = '0b9f4d3e6a21';
+const CAT_UK = '5a7c2e9d0f16';
+const IPTV_ID_DAZN_F1 = '18293a4b5c6d7e8f9012345678abcdef45f60712';
+const IPTV_ID_DAZN_1 = '293a4b5c6d7e8f9012345678abcdef0156071823';
+const IPTV_ID_ACB_1 = '3a4b5c6d7e8f9012345678abcdef012367182934';
+
+const iptvBrowseRoot: V1ResponseInput<'iptvBrowse'> = {
+  active: true,
+  provider: 'Casa',
+  catalog: 'mfz3k1a01',
+  query: '',
+  category: null,
+  total: 812,
+  catalogTotal: 812,
+  categories: [
+    { id: CAT_DEPORTES, name: 'ES | DEPORTES', count: 164 },
+    { id: CAT_DAZN, name: 'ES | DAZN', count: 12 },
+    { id: CAT_LALIGA, name: 'ES | LALIGA', count: 11 },
+    { id: CAT_GENERALISTAS, name: 'ES | GENERALISTAS', count: 58 },
+    { id: CAT_UK, name: 'UK | SPORTS', count: 96 },
+    { id: 'none', name: '', count: 3 },
+  ],
+  facets: {
+    country: [
+      { value: 'ES', count: 590, selected: false },
+      { value: 'UK', count: 142, selected: false },
+      { value: 'LAT', count: 41, selected: false },
+      { value: 'none', count: 39, selected: false },
+    ],
+    language: [
+      { value: 'es', count: 631, selected: false },
+      { value: 'en', count: 150, selected: false },
+      { value: 'ca', count: 6, selected: false },
+      { value: 'none', count: 25, selected: false },
+    ],
+    type: [
+      { value: 'deportes', count: 402, selected: false },
+      { value: 'generalistas', count: 88, selected: false },
+      { value: 'cine', count: 61, selected: false },
+      { value: 'adultos', count: 12, selected: false },
+      { value: 'none', count: 190, selected: false },
+    ],
+    sport: [
+      { value: 'futbol', count: 118, selected: false },
+      { value: 'baloncesto', count: 14, selected: false },
+      { value: 'f1', count: 4, selected: false },
+    ],
+    quality: [
+      { value: 'uhd', count: 9, selected: false },
+      { value: 'fhd', count: 310, selected: false },
+      { value: 'hd', count: 402, selected: false },
+      { value: 'none', count: 120, selected: false },
+    ],
+  },
+  channels: [],
+  nextCursor: null,
+  stale: false,
+};
+
 export const WEB_V1_FIXTURES = {
+  iptvBrowse: iptvBrowseRoot,
   iptvChannels: {
     query: 'la',
     total: 3,
     capped: false,
+    /* Una fila por canal con sus calidades (§17): «DAZN LaLiga» tiene 4K, 1080p y 720p y arranca por la 1080p. */
     channels: [
-      { id: IPTV_ID_LA1, title: 'La 1', quality: 'hd', provider: 'Casa', library: [HASH_C] },
-      { id: IPTV_ID_NAME, title: 'DAZN LaLiga', quality: 'fhd', provider: 'Casa', library: [] },
-      { id: IPTV_ID_GUIDE, title: 'M+ LaLiga TV 2', quality: 'fhd', provider: 'Casa', library: [] },
+      {
+        id: IPTV_ID_LA1,
+        title: 'La 1',
+        quality: 'hd',
+        qualities: ['hd'],
+        country: null,
+        provider: 'Casa',
+        library: [HASH_C],
+      },
+      {
+        id: IPTV_ID_NAME,
+        title: 'DAZN LaLiga',
+        quality: 'fhd',
+        qualities: ['uhd', 'fhd', 'hd'],
+        country: null,
+        provider: 'Casa',
+        library: [],
+      },
+      {
+        id: IPTV_ID_GUIDE,
+        title: 'M+ LaLiga TV 2',
+        quality: 'fhd',
+        qualities: ['fhd'],
+        country: null,
+        provider: 'Casa',
+        library: [],
+      },
     ],
   },
   iptvGet: iptvView,
@@ -665,10 +757,16 @@ const iptvCandidate = (
 });
 
 /* La guía confirma el partido en «M+ LaLiga TV 2» aunque la agenda diga
-   «DAZN LaLiga»: va primera. Luego la IPTV por nombre (un solo cartel, la
-   FHD) y detrás las AceStream. El comprobador solo lleva las AceStream. */
+   «DAZN LaLiga»: va primera. Luego la IPTV por nombre, un cartel por
+   variante de resolución (1080p y 720p, §17), y detrás las AceStream. El
+   comprobador solo lleva las AceStream. */
 const iptvGuideCandidate = iptvCandidate(IPTV_ID_GUIDE, 'M+ LaLiga TV 2', 'MLaLigaTV2.es', true);
 const iptvNameCandidate = iptvCandidate(IPTV_ID_NAME, 'DAZN LaLiga', 'DAZNLaLiga.es', false);
+const IPTV_ID_NAME_HD = '18293a4b5c6d7e8f9012345678abcdef45f06712';
+const iptvNameHdCandidate: ResolutionCandidate = {
+  ...iptvCandidate(IPTV_ID_NAME_HD, 'DAZN LaLiga', 'DAZNLaLiga.es', false),
+  iptv: { provider: 'Casa', quality: 'hd', backup: false, guide: false },
+};
 /* Canal solo de la IPTV tocado en el buscador (§14.4): su IPTV con puntuación 100. */
 const iptvTelecinco: ResolutionCandidate = {
   ...iptvCandidate(IPTV_ID_TELECINCO, 'Telecinco', 'Telecinco.es', false),
@@ -676,6 +774,80 @@ const iptvTelecinco: ResolutionCandidate = {
 };
 
 export const VARIANT_FIXTURES = {
+  /* Pestaña IPTV (§16.2): dentro de «ES | DAZN», primera página con más detrás. */
+  'iptvBrowse.categoria': {
+    active: true,
+    provider: 'Casa',
+    catalog: 'mfz3k1a01',
+    query: '',
+    category: { id: CAT_DAZN, name: 'ES | DAZN', count: 12 },
+    total: 12,
+    catalogTotal: 812,
+    facets: {
+      country: [{ value: 'ES', count: 12, selected: false }],
+      language: [{ value: 'es', count: 12, selected: false }],
+      type: [{ value: 'deportes', count: 12, selected: false }],
+      sport: [
+        { value: 'baloncesto', count: 7, selected: false },
+        { value: 'f1', count: 1, selected: false },
+      ],
+      quality: [
+        { value: 'fhd', count: 3, selected: false },
+        { value: 'hd', count: 12, selected: false },
+      ],
+    },
+    channels: [
+      {
+        id: IPTV_ID_DAZN_1,
+        title: 'DAZN 1',
+        qualities: ['fhd', 'hd'],
+        country: 'ES',
+        category: CAT_DAZN,
+      },
+      {
+        id: IPTV_ID_DAZN_F1,
+        title: 'DAZN F1',
+        qualities: ['fhd', 'hd'],
+        country: 'ES',
+        category: CAT_DAZN,
+      },
+      {
+        id: IPTV_ID_ACB_1,
+        title: 'DAZN ACB 1',
+        qualities: ['hd'],
+        country: 'ES',
+        category: CAT_DAZN,
+      },
+    ],
+    nextCursor: 'bWZ6M2sxYTAxLjM',
+    stale: false,
+  },
+  /* Sin IPTV activa (en pausa, sin proveedor o sin catálogo): no es un error. */
+  'iptvBrowse.inactiva': {
+    active: false,
+    provider: '',
+    catalog: '0',
+    query: '',
+    category: null,
+    total: 0,
+    catalogTotal: 0,
+    channels: [],
+    nextCursor: null,
+    stale: false,
+  },
+  /* Una categoría que ya no está (otra sincronización u otro proveedor). */
+  'iptvBrowse.categoria-perdida': {
+    active: true,
+    provider: 'Casa',
+    catalog: 'mfz3k1a01',
+    query: '',
+    category: null,
+    total: 0,
+    catalogTotal: 812,
+    channels: [],
+    nextCursor: null,
+    stale: false,
+  },
   /* Canal solo de la IPTV con la búsqueda inversa (`engine=1`, §14.4): su IPTV
      primera y detrás dos AceStream del motor que casan ≥ 92. */
   'footballResolve.iptv-canal': {
@@ -793,6 +965,7 @@ export const VARIANT_FIXTURES = {
     candidates: [
       iptvGuideCandidate,
       iptvNameCandidate,
+      iptvNameHdCandidate,
       { ...candidate, id: HASH_A, title: 'DAZN LaLiga FHD', matchedChannel: 'DAZN LaLiga' },
       {
         ...candidate,
@@ -833,6 +1006,9 @@ export const VARIANT_FIXTURES = {
     source: 'iptv',
   },
 } satisfies {
+  'iptvBrowse.categoria': V1ResponseInput<'iptvBrowse'>;
+  'iptvBrowse.inactiva': V1ResponseInput<'iptvBrowse'>;
+  'iptvBrowse.categoria-perdida': V1ResponseInput<'iptvBrowse'>;
   'footballResolve.iptv-canal': V1ResponseInput<'footballResolve'>;
   'search.iptv': V1ResponseInput<'search'>;
   'libraryGet.iptv': V1ResponseInput<'libraryGet'>;

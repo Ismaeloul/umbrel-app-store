@@ -7,9 +7,11 @@
    siempre loopback (docs/iptv.md §3.1). El backend tiene que arrancar con
    ALLOW_PRIVATE_SYNC_URLS=true para aceptar una IP de casa.
 
-   Opciones: --host, --port (7300), --max-conexiones (1), --retener-ms (0).
+   Opciones: --host, --port (7300), --max-conexiones (1), --retener-ms (0) y
+   --grande N (catálogo grande de la pestaña IPTV, docs/iptv.md §16.9: N
+   canales más, con nombres como los de una lista real).
    Control por HTTP: /__iptv/modo?id=104&modo=down, /__iptv/conexiones,
-   /__iptv/peticiones. */
+   /__iptv/peticiones y /__iptv/fallar-primera?veces=1&como=502 (§16.8). */
 
 import os from 'node:os';
 import { FAKE_IPTV_PASSWORD, FAKE_IPTV_USER, createFakeIptv } from './provider.js';
@@ -34,14 +36,22 @@ const host = option('host', lanIp());
 const port = Number(option('port', '7300'));
 const maxConnections = Number(option('max-conexiones', '1'));
 const retenerPlazaMs = Number(option('retener-ms', '0'));
+const grande = Number(option('grande', '0'));
 
 const print = (line: string): void => {
   process.stdout.write(`${line}\n`);
 };
 
 try {
-  const fake = await createFakeIptv({ host, port, maxConnections, retenerPlazaMs });
+  const fake = await createFakeIptv({
+    host,
+    port,
+    maxConnections,
+    retenerPlazaMs,
+    ...(grande > 0 ? { grande } : {}),
+  });
   print(`proveedor IPTV falso en ${fake.baseUrl}`);
+  if (grande > 0) print(`  Catálogo grande: ${fake.grandes.length} canales más`);
   print(`  Lista M3U:     ${fake.m3uUrl}`);
   print(`  M3U get.php:   ${fake.getPhpUrl}`);
   print(

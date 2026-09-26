@@ -191,6 +191,32 @@ describe('sin IPTV: «Conectar tu IPTV»', () => {
     // El formulario sigue ahí para corregir.
     expect(screen.getByRole('heading', { name: 'Conectar tu IPTV' })).toBeInTheDocument();
   });
+
+  it('si el servidor ya lo intentó dos veces (el 502 del primer «Guardar», §16.8), lo dice', async () => {
+    setup(view(null), {
+      'PUT /api/v1/iptv': () =>
+        json(
+          {
+            error: {
+              code: 'iptv_unreachable',
+              message: 'Tu proveedor de IPTV no responde.',
+              requestId: 'r1',
+              data: { attempts: 2 },
+            },
+          },
+          502,
+        ),
+    });
+    await screen.findByRole('heading', { name: 'Conectar tu IPTV' });
+    fireEvent.change(screen.getByLabelText('Dirección de la lista'), {
+      target: { value: 'https://listas.example/lista.m3u' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar IPTV' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(
+      `${errorMessage('iptv_unreachable')} Lo he intentado dos veces: prueba otra vez en un momento.`,
+    );
+  });
 });
 
 describe('con IPTV: tarjeta y acciones', () => {

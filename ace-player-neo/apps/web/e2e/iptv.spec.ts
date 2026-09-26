@@ -215,7 +215,8 @@ test(
     await expect(carteles(page).first()).toHaveAttribute('data-origin', 'iptv', {
       timeout: 45_000,
     });
-    await expect(listaDeFuentes(page).locator('.src-poster[data-origin="iptv"]')).toHaveCount(2);
+    // Un cartel por variante de resolución (§17): M+ LaLiga TV 2 (guía) y DAZN LaLiga 1080p, 720p y reserva.
+    await expect(listaDeFuentes(page).locator('.src-poster[data-origin="iptv"]')).toHaveCount(4);
     await expect(cartelIptv(page)).toContainText('IPTV');
     // El proveedor va en la tesela; debajo, solo el canal (Isma, 26-sep).
     await expect(cartelIptv(page).locator('.dorsal__abbrev')).toHaveText('Casa');

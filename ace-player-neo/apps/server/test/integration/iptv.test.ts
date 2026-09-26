@@ -34,15 +34,30 @@
        de Antena 3, que se quita de la lista falsa, sigue 24 h de
        sincronizaciones correctas (reloj falso) con `iptv_gone` y luego se va.
    15. Fugas: `iptvChannels` y `search` con `iptv` no llevan nada del
-       proveedor. */
+       proveedor.
+
+   Pestaña IPTV en Canales (docs/iptv.md §16.9), con el catálogo grande del
+   proveedor falso (nombres como los de la lista real):
+   16 y 17. Navegar: categorías en el orden de `get_live_categories`, «ES |
+       DAZN» con sus filas en el orden del proveedor, recorrer las páginas sin
+       repetir; filtros (f1 + ES, adultos), texto («acb», «antena» dentro de
+       una categoría) y recuentos disyuntivos; ninguna petición al proveedor.
+   18. Rendimiento: 50 peticiones variadas con 30 000 canales, p95 < 100 ms.
+   19. Sincronizar en medio: un cursor viejo da la primera página con `stale`.
+   20. Fugas: nada del proveedor en las respuestas ni la consulta en el registro.
+   21. El 502 del primer «Guardar»: cada fallo pasajero se arregla al segundo
+       intento; dos seguidos, 502 con `data.attempts: 2`; `auth: 0`, un intento. */
 
 import { readFileSync } from 'node:fs';
 import http from 'node:http';
 import { Writable } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  IPTV_QUICK_TEST,
+  IptvBrowseResponseSchema,
   IptvChannelsResponseSchema,
   IptvViewSchema,
+  type IptvBrowseResponse,
   LibraryViewSchema,
   ResolutionSchema,
   SearchResponseSchema,
@@ -52,6 +67,7 @@ import {
 } from '@ace/shared';
 import { FakeClock } from '../../src/core/clock.js';
 import { createLogger } from '../../src/core/logger.js';
+import { scoreResolutionCandidate } from '../../src/modules/football/resolution.js';
 import { FakeFfmpeg, type FakeLauncher } from '../../src/modules/remux/test-support.js';
 import type { ProcessLauncher } from '../../src/modules/remux/types.js';
 import type { FakeSink } from '../../src/modules/events/test-support.js';
@@ -154,7 +170,12 @@ afterEach(async () => {
 });
 
 async function setup(
-  options: { readonly retenerPlazaMs?: number; readonly search?: boolean } = {},
+  options: {
+    readonly retenerPlazaMs?: number;
+    readonly search?: boolean;
+    /** Catálogo grande del proveedor falso (pestaña IPTV, §16.9). */
+    readonly grande?: number;
+  } = {},
 ): Promise<Rig> {
   const clock = new FakeClock();
   const host = await loopbackHost();
@@ -164,6 +185,7 @@ async function setup(
     now: () => clock.now(),
     matchStart: demoMatchStart(clock.now()),
     retenerPlazaMs: options.retenerPlazaMs ?? 0,
+    ...(options.grande ? { grande: options.grande } : {}),
   });
   const logs: string[] = [];
   const logger = createLogger({
@@ -298,6 +320,229 @@ async function libraryMutate(h: Harness, body: unknown) {
   return LibraryViewSchema.parse(res.json());
 }
 
+async function browse(
+  h: Harness,
+  query: Record<string, string | number> = {},
+): Promise<IptvBrowseResponse> {
+  const search = new URLSearchParams(
+    Object.entries(query).map(([key, value]): [string, string] => [key, String(value)]),
+  ).toString();
+  const res = await inject(h, 'GET', `/api/v1/iptv/browse${search ? `?${search}` : ''}`);
+  expect(res.statusCode, res.body).toBe(200);
+  return IptvBrowseResponseSchema.parse(res.json());
+}
+
+/**
+ * «Guardar» con el reloj falso: cada vez que el registro dice «Prueba de la
+ * IPTV fallida», avanza la espera del reintento (1,5 s, §16.8).
+ */
+async function saveDriven(r: Rig, body: unknown) {
+  const failures = () => r.logs.filter((line) => line.includes('Prueba de la IPTV fallida')).length;
+  let done = false;
+  const pending = inject(r.h, 'PUT', '/api/v1/iptv', body).finally(() => {
+    done = true;
+  });
+  let seen = 0;
+  while (!done) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    if (failures() > seen) {
+      seen = failures();
+      r.h.clock.advance(IPTV_QUICK_TEST.retryDelayMs);
+    }
+  }
+  return pending;
+}
+
+const XTREAM_BODY = {
+  kind: 'xtream',
+  name: 'Casa',
+  server: SERVER,
+  username: FAKE_IPTV_USER,
+  password: FAKE_IPTV_PASSWORD,
+};
+
+describe('pestaña IPTV en Canales (docs/iptv.md §16.9)', () => {
+  it('16 y 17 · navegar, filtrar y buscar con 30 000 canales: categorías en su orden, filas del proveedor, sin repetir y sin tocar al proveedor', async () => {
+    const r = await setup({ grande: 30_000 });
+    await saveXtream(r);
+    r.provider.limpiarPeticiones();
+    const root = await browse(r.h, { limit: 0 });
+    expect(root.active).toBe(true);
+    expect(root.provider).toBe('Casa');
+    expect(root.catalogTotal).toBeGreaterThan(25_000);
+    const names = (root.categories ?? []).map((item) => item.name);
+    expect(names.slice(0, 6)).toEqual([
+      'ES | DEPORTES',
+      'ES | GENERALISTAS',
+      'UK | SPORTS',
+      'XXX',
+      'DE | SPORT',
+      'FR | SPORT',
+    ]);
+    expect(names.slice(6, 8)).toEqual(['ES | DAZN', 'ES | LALIGA']);
+    const dazn = root.categories?.find((item) => item.name === 'ES | DAZN');
+    const inDazn = await browse(r.h, { category: dazn!.id });
+    expect(inDazn.channels.slice(0, 3).map((channel) => channel.title)).toEqual([
+      'DAZN 1',
+      'DAZN F1',
+      'DAZN ACB 1',
+    ]);
+    expect(inDazn.channels[1]).toMatchObject({ qualities: ['fhd', 'hd'], country: 'ES' });
+
+    /* Recorrer todas las páginas de España da `total` sin repetir. */
+    const seen = new Set<string>();
+    let cursor: string | null = null;
+    let total: number;
+    do {
+      const page: IptvBrowseResponse = await browse(r.h, {
+        country: 'ES',
+        limit: 100,
+        ...(cursor ? { cursor } : {}),
+      });
+      total = page.total;
+      for (const channel of page.channels) {
+        expect(seen.has(channel.id)).toBe(false);
+        seen.add(channel.id);
+      }
+      cursor = page.nextCursor;
+    } while (cursor);
+    expect(seen.size).toBe(total);
+    expect(total).toBeGreaterThan(1_000);
+
+    const f1 = await browse(r.h, { sport: 'f1', country: 'ES' });
+    expect(f1.channels.map((channel) => channel.title)).toEqual(['DAZN F1']);
+    const acb = await browse(r.h, { q: 'acb' });
+    expect(acb.channels.map((channel) => channel.title)).toEqual(
+      [1, 2, 3, 4, 5, 6, 7].map((n) => `DAZN ACB ${n}`),
+    );
+    const adults = await browse(r.h, { type: 'adultos' });
+    expect(adults.channels.map((channel) => channel.title).sort()).toEqual([
+      'HOT 1',
+      'HOT 2',
+      'Tele Noche',
+    ]);
+    /* Recuentos disyuntivos: el de cada país con «deportes» elegido es el total de ese país con «deportes». */
+    const sports = await browse(r.h, { type: 'deportes', limit: 0 });
+    for (const value of (sports.facets?.country ?? []).slice(0, 4)) {
+      const alone = await browse(r.h, { type: 'deportes', country: value.value, limit: 0 });
+      expect(alone.total, value.value).toBe(value.count);
+    }
+    const generalistas = root.categories?.find((item) => item.name === 'ES | GENERALISTAS');
+    const antena = await browse(r.h, { category: generalistas!.id, q: 'antena' });
+    expect(antena.channels.map((channel) => channel.title)).toEqual([
+      'Antena 3',
+      'ANTENA 3 INTERNACIONAL',
+      'DIRECTO ANTENA 3 ᴿᴬᵂ',
+    ]);
+    expect(r.provider.peticiones()).toEqual([]);
+  }, 120_000);
+
+  it('18 · rendimiento: 50 peticiones variadas con 30 000 canales, p95 < 100 ms', async () => {
+    const r = await setup({ grande: 30_000 });
+    await saveXtream(r);
+    const root = await browse(r.h, { limit: 0 });
+    const categories = root.categories ?? [];
+    const queries: Record<string, string | number>[] = [];
+    for (let i = 0; i < 50; i += 1) {
+      const pick = i % 10;
+      if (pick === 0) queries.push({ limit: 0 });
+      else if (pick === 1)
+        queries.push({ q: ['dazn', 'canal', 'sports', 'liga', 'antena'][i % 5]! });
+      else if (pick === 2) queries.push({ country: ['ES', 'UK', 'FR', 'IT', 'LAT'][i % 5]! });
+      else if (pick === 3) queries.push({ type: 'deportes', sport: 'futbol' });
+      else if (pick === 4) queries.push({ category: categories[i % categories.length]!.id });
+      else if (pick === 5) queries.push({ language: 'en', quality: 'fhd,hd' });
+      else if (pick === 6) queries.push({ q: `canal ${i * 37}`, country: 'ES' });
+      else if (pick === 7) queries.push({ type: 'noticias,infantil', country: 'UK,US' });
+      else if (pick === 8)
+        queries.push({ category: categories[(i * 7) % categories.length]!.id, q: 'tv' });
+      else queries.push({ quality: 'none', language: 'none' });
+    }
+    const times: number[] = [];
+    for (const query of queries) {
+      const started = performance.now();
+      await browse(r.h, query);
+      times.push(performance.now() - started);
+    }
+    times.sort((a, b) => a - b);
+    const p95 = times[Math.floor(times.length * 0.95) - 1] as number;
+    expect(p95).toBeLessThan(100);
+  }, 120_000);
+
+  it('19 · sincronizar en medio: el cursor de la página 2 da la primera página con stale', async () => {
+    const r = await setup({ grande: 2_000 });
+    await saveXtream(r);
+    const first = await browse(r.h, { limit: 50 });
+    expect(first.nextCursor).not.toBe(null);
+    await r.h.clock.advanceAsync(60_000);
+    const sync = await inject(r.h, 'POST', '/api/v1/iptv/sync');
+    expect(sync.statusCode, sync.body).toBe(200);
+    await r.h.iptv.idle();
+    const stale = await browse(r.h, { limit: 50, cursor: first.nextCursor! });
+    expect(stale.stale).toBe(true);
+    expect(stale.catalog).not.toBe(first.catalog);
+    expect(stale.channels[0]?.id).toBe(first.channels[0]?.id);
+    expect(stale.facets).toBeDefined();
+  }, 60_000);
+
+  it('20 · fugas: ni usuario, ni contraseña, ni stream_id, ni URL en las respuestas de la pestaña ni en el registro', async () => {
+    const r = await setup({ grande: 500 });
+    await saveXtream(r);
+    const texts = [
+      JSON.stringify(await browse(r.h, { limit: 100 })),
+      JSON.stringify(await browse(r.h, { q: 'dazn' })),
+      JSON.stringify(await browse(r.h, { type: 'adultos' })),
+    ];
+    const streamIds = r.provider.grandes.slice(0, 50).map((channel) => `"${channel.streamId}"`);
+    for (const text of texts) {
+      for (const secret of [FAKE_IPTV_PASSWORD, FAKE_IPTV_USER, 'http', 'player_api', '.big']) {
+        expect(text).not.toContain(secret);
+      }
+      for (const id of streamIds) expect(text).not.toContain(id);
+    }
+    const logged = r.logs.join('');
+    expect(logged).not.toContain(FAKE_IPTV_PASSWORD);
+    expect(logged).toContain('/api/v1/iptv/browse?[consulta]');
+    expect(logged).not.toContain('browse?q=');
+  }, 60_000);
+
+  it('21 · el 502 del primer «Guardar»: cada fallo pasajero se arregla al segundo intento; dos seguidos, 502 con attempts 2; auth 0, un solo intento', async () => {
+    const r = await setup();
+    const pings = () =>
+      r.provider
+        .peticiones()
+        .filter((line) => line.startsWith('/player_api.php?') && !line.includes('action=')).length;
+    for (const como of ['502', '503', 'corte', 'vacio', 'html', 'sin-user-info'] as const) {
+      r.provider.limpiarPeticiones();
+      r.provider.fallarPrimera(1, como);
+      const res = await saveDriven(r, XTREAM_BODY);
+      expect(res.statusCode, `${como}: ${res.body}`).toBe(200);
+      await r.h.iptv.idle();
+      /* La prueba rápida hizo dos (una fallida y la buena) y la sincronización, otra. */
+      expect(pings(), como).toBe(3);
+    }
+    r.provider.fallarPrimera(2, '502');
+    const twice = await saveDriven(r, { ...XTREAM_BODY, name: 'Otra' });
+    expect(twice.statusCode).toBe(502);
+    expect(twice.json().error).toMatchObject({
+      code: 'iptv_unreachable',
+      data: { attempts: 2 },
+    });
+    r.provider.limpiarPeticiones();
+    r.provider.fallarPrimera(1, 'auth0');
+    const auth = await saveDriven(r, { ...XTREAM_BODY, name: 'Otra' });
+    expect(auth.statusCode).toBe(502);
+    expect(auth.json().error.code).toBe('iptv_auth_failed');
+    expect(auth.json().error).not.toHaveProperty('data');
+    expect(pings()).toBe(1);
+    const warned = r.logs.filter((line) => line.includes('Prueba de la IPTV fallida'));
+    expect(warned.length).toBeGreaterThanOrEqual(8);
+    expect(warned.join('')).toContain('"detail":"http_502"');
+    expect(warned.join('')).toContain('"detail":"sin_user_info"');
+    expect(warned.join('')).not.toContain(FAKE_IPTV_PASSWORD);
+  }, 60_000);
+});
+
 describe('buscador: IPTV y AceStream juntos (docs/iptv.md §14.9)', () => {
   it('11 · iptvChannels: Telecinco solo en la IPTV, Antena 3 con tu favorito, 403 desde /native, vacío sin IPTV y sin tocar al proveedor', async () => {
     const r = await setup({ search: true });
@@ -310,7 +555,8 @@ describe('buscador: IPTV y AceStream juntos (docs/iptv.md §14.9)', () => {
     });
     r.provider.limpiarPeticiones();
     const tele = await channels(r.h, 'tele');
-    expect(tele.channels.map((channel) => channel.title)).toEqual(['Telecinco']);
+    /* Todo desbloqueado (§17): también el canal del grupo «XXX». */
+    expect(tele.channels.map((channel) => channel.title)).toEqual(['Telecinco', 'Tele Noche']);
     expect(tele.channels[0]?.library).toEqual([]);
     const antena = await channels(r.h, 'antena');
     expect(antena.channels[0]).toMatchObject({ title: 'Antena 3', library: [ACE_ANTENA] });
@@ -462,7 +708,7 @@ describe('buscador: IPTV y AceStream juntos (docs/iptv.md §14.9)', () => {
 });
 
 describe('IPTV de punta a punta (docs/iptv.md §9.2)', () => {
-  it('1 · guardar Xtream y resolver el partido: la guía primero, un cartel por canal, sin trampas ni sondas', async () => {
+  it('1 · guardar Xtream y resolver el partido: la guía primero, un cartel por resolución (1080p, 720p, reserva), sin trampas ni sondas', async () => {
     const r = await setup();
     await saveXtream(r);
     await withGuide(r);
@@ -471,19 +717,20 @@ describe('IPTV de punta a punta (docs/iptv.md §9.2)', () => {
     expect(result.checked[0]).toBe('iptv');
     expect(result.status).toBe('found');
     const titles = result.candidates.map((c) => `${c.source}:${c.title}`);
-    expect(titles.slice(0, 2)).toEqual([
+    expect(titles.slice(0, 4)).toEqual([
       'iptv:M+ LaLiga TV 2 --> Casa',
+      'iptv:DAZN LaLiga --> Casa',
+      'iptv:DAZN LaLiga --> Casa',
       'iptv:DAZN LaLiga --> Casa',
     ]);
     expect(result.candidates[0]?.iptv?.guide).toBe(true);
-    expect(result.candidates[1]?.iptv).toEqual({
-      provider: 'Casa',
-      quality: 'fhd',
-      backup: false,
-      guide: false,
-    });
+    expect(result.candidates.slice(1, 4).map((c) => c.iptv)).toEqual([
+      { provider: 'Casa', quality: 'fhd', backup: false, guide: false },
+      { provider: 'Casa', quality: 'hd', backup: false, guide: false },
+      { provider: 'Casa', quality: null, backup: true, guide: false },
+    ]);
     expect(result.candidate?.source).toBe('iptv');
-    expect(titles.filter((title) => title.startsWith('iptv:'))).toHaveLength(2);
+    expect(titles.filter((title) => title.startsWith('iptv:'))).toHaveLength(4);
     expect(titles.some((title) => title.startsWith('acestream:DAZN LaLiga'))).toBe(true);
     const text = JSON.stringify(result);
     for (const trap of ['Liga de Campeones', 'Hypermotion', 'UK', 'Previa', 'Resumen']) {
@@ -538,6 +785,76 @@ describe('IPTV de punta a punta (docs/iptv.md §9.2)', () => {
     expect(r.h.playback.inspect().sessions).toHaveLength(1);
     expect(r.provider.conexiones()).toBeLessThanOrEqual(1);
     expect(r.h.bus.of('playback.handoff').length).toBeLessThanOrEqual(1);
+  });
+
+  it('16 · variantes de resolución (§17): una fila con sus calidades; 4 carteles 1080p, 4K, 720p y SD; la 1080p caída no gasta las demás; cambiar de variante cierra la anterior', async () => {
+    const r = await setup();
+    await saveXtream(r);
+    /* Todo desbloqueado: el de España con sus 4 calidades y, detrás, los de otros países con el suyo. */
+    const found = await channels(r.h, 'dazn 1');
+    expect(
+      found.channels.map((channel) => [channel.title, channel.country ?? null, channel.qualities]),
+    ).toEqual([
+      ['DAZN 1', null, ['uhd', 'fhd', 'hd', 'sd']],
+      ['DAZN 1', 'UK', []],
+      ['DAZN 1', 'DE', ['hd']],
+    ]);
+    const row = found.channels[0] as (typeof found.channels)[number];
+    const result = await resolve(
+      r.h,
+      `channel=${encodeURIComponent('DAZN 1')}&scope=channel&iptv=${row.id}&client=web_v`,
+    );
+    const iptv = result.candidates.filter((candidate) => candidate.source === 'iptv');
+    expect(iptv.map((candidate) => candidate.iptv?.quality)).toEqual(['fhd', 'uhd', 'hd', 'sd']);
+    expect(iptv.every((candidate) => candidate.title === 'DAZN 1 --> Casa')).toBe(true);
+    expect(iptv[0]?.id).toBe(row.id);
+    /* El emparejado automático (el canal de la agenda «DAZN 1») da lo mismo, con el de España delante. */
+    const byName = r.h.iptv.resolve({
+      channels: ['DAZN 1'],
+      scorer: (wanted, item) => scoreResolutionCandidate(wanted, item, 'iptv'),
+    });
+    expect(byName.candidates.map((candidate) => candidate.id)).toEqual(iptv.map((c) => c.id));
+    /* Cae la 1080p: abrirla falla con un iptv_* y el relé no gasta las variantes que tienen su cartel. */
+    r.provider.modo(112, 'down');
+    r.provider.limpiarPeticiones();
+    /* El relé espera con el reloj falso entre intentos: se mueve mientras tanto. */
+    let settled = false;
+    const pending = inject(
+      r.h,
+      'GET',
+      `/api/v1/channels/${iptv[0]?.id}/stream?client=web&viewer=visor_v&device=dev_v`,
+    ).finally(() => {
+      settled = true;
+    });
+    for (let step = 0; step < 90 && !settled; step += 1) {
+      await new Promise((done) => setTimeout(done, 20));
+      if (!settled) await r.h.clock.advanceAsync(1_000);
+    }
+    const failed = await pending;
+    expect(failed.statusCode).toBeGreaterThanOrEqual(400);
+    expect(String(failed.json().error.code)).toMatch(/^iptv_/);
+    expect(r.provider.peticionesDeStream().every((line) => /\/112(?:\.ts)?$/.test(line))).toBe(
+      true,
+    );
+    expect(r.provider.conexiones()).toBe(0);
+    /* La siguiente variante (4K) abre. */
+    const uhd = await open(r.h, iptv[1]?.id as string, 'visor_v');
+    expect(uhd.source).toBe('iptv');
+    await until('bytes de la 4K', () => r.launcher.all.some((proc) => proc.bytesRead > 20_000));
+    expect(r.provider.conexiones()).toBe(1);
+    /* Tocar la 720p cambia a ella: la 4K se cierra (una sola conexión con el proveedor). */
+    /* El proveedor puede tardar un momento en soltar la plaza de la 4K: el relé reintenta (reloj falso). */
+    const hd = await openDriven(r.h, iptv[2]?.id as string, 'visor_v');
+    expect(hd.session.id).not.toBe(uhd.session.id);
+    await until(
+      'la 720p sola',
+      () =>
+        r.provider.conexiones() === 1 &&
+        r.provider.peticionesDeStream().some((line) => /\/113(?:\.ts)?$/.test(line)),
+      5_000,
+    );
+    expect(r.h.iptv.connections()).toBe(1);
+    expect(r.h.playback.inspect().sessions).toHaveLength(1);
   });
 
   it('5 · corte del proveedor: el relé reconecta sin cerrar ffmpeg; con otra base de PTS reinicia el remux; caído del todo → iptv_dropped', async () => {

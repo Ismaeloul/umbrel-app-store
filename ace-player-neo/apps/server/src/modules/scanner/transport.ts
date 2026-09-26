@@ -48,6 +48,8 @@ export interface ScannerMediaResult {
   readonly videoCodec: string;
   readonly audioCodecs: readonly string[];
   readonly mediaReason: string;
+  /** Altura del vídeo si ffprobe la da (la IPTV la usa como calidad real, docs/iptv.md §17). */
+  readonly height?: number;
 }
 
 /** Lo que usa la sonda del motor comprobador; en los tests se sustituye. */
@@ -107,8 +109,13 @@ export function mediaFromFfprobe(stdout: string): ScannerMediaResult {
     const parsed = JSON.parse(stdout || '{}') as { streams?: unknown } | null;
     streams = Array.isArray(parsed?.streams) ? parsed.streams : [];
   } catch {}
-  const typed = streams as ({ codec_type?: unknown; codec_name?: unknown } | null)[];
+  const typed = streams as ({
+    codec_type?: unknown;
+    codec_name?: unknown;
+    height?: unknown;
+  } | null)[];
   const video = typed.find((stream) => stream?.codec_type === 'video');
+  const height = Number(video?.height);
   const videoCodec = String(video?.codec_name || '')
     .toLowerCase()
     .slice(0, 24);
@@ -138,6 +145,7 @@ export function mediaFromFfprobe(stdout: string): ScannerMediaResult {
       : browserCompatible
         ? 'playable_media'
         : 'unsupported_codec',
+    ...(Number.isInteger(height) && height > 0 && height <= 8640 ? { height } : {}),
   };
 }
 

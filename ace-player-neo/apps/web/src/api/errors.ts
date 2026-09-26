@@ -27,6 +27,11 @@ export class ApiError extends Error {
   readonly status: number;
   readonly requestId: string | null;
   readonly route: string | null;
+  /**
+   * Datos extra del error, si el servidor los manda (`error.data`): hoy, los
+   * intentos de la prueba rápida de «Guardar IPTV» (docs/iptv.md §16.8).
+   */
+  readonly data: Readonly<Record<string, unknown>> | null;
 
   constructor(options: {
     code: string;
@@ -35,6 +40,7 @@ export class ApiError extends Error {
     requestId?: string | null;
     route?: string | null;
     cause?: unknown;
+    data?: Readonly<Record<string, unknown>> | null;
   }) {
     super(
       options.message || messageFor(options.code),
@@ -44,6 +50,7 @@ export class ApiError extends Error {
     this.status = options.status ?? 0;
     this.requestId = options.requestId ?? null;
     this.route = options.route ?? null;
+    this.data = options.data ?? null;
   }
 
   /** Error del propio cliente (sin red, plazo...) y no del servidor. */
@@ -82,7 +89,13 @@ export function describeFailure(error: unknown): string {
 }
 
 interface V1ErrorBody {
-  error: { code?: unknown; message?: unknown; requestId?: unknown } | string;
+  error: { code?: unknown; message?: unknown; requestId?: unknown; data?: unknown } | string;
+}
+
+function plainObject(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
 }
 
 /** Convierte una respuesta de error (v1 o antigua) en ApiError. */
@@ -100,6 +113,7 @@ export async function errorFromResponse(response: Response, route: string): Prom
       requestId: typeof raw.requestId === 'string' ? raw.requestId : null,
       status: response.status,
       route,
+      data: plainObject(raw.data),
     });
   }
   // Forma antigua `{ error: "<código>" }` o cuerpo que no es JSON (la pasarela de Umbrel).

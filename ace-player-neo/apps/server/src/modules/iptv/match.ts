@@ -1,4 +1,4 @@
-/* Emparejado IPTV ↔ canales pedidos (docs/iptv.md §4.3 y §4.4). Puro.
+/* Emparejado IPTV ↔ canales pedidos (docs/iptv.md §4.3, §4.4 y §17). Puro.
 
    1. Canales pedidos: los de la resolución (8 como mucho) o el título del
       canal suelto (`scope=channel`), sin las plataformas de internet («RTVE
@@ -12,19 +12,25 @@
       « 1», la entrada sin ese « 1». Nunca al revés, y nunca con la marca
       paraguas («DAZN», la de la familia 78: «DAZN» no es «DAZN 1»).
    3. Umbral estricto: 92. Mejor no emparejar que emparejar mal.
-   4. Filtro de país: solo ES o sin país.
-   5. Un cartel por grupo: la mejor variante (no HEVC, fhd > hd > uhd > sd,
-      no reserva, fiabilidad, orden) y hasta 2 variantes de respaldo (la mejor
-      reserva incluida si existe) que no salen del servidor. */
+   4. País (Isma, 26-sep: «déjalo todo desbloqueado»): no se excluye ninguno.
+      España y sin país son un canal y cada otro país es otro («DE: DAZN 1» no
+      es una variante de «DAZN 1»). Con la misma puntuación, el de España o sin
+      país va antes: es una preferencia de orden, no un filtro. Si solo existe
+      el extranjero y casa por nombre, sale.
+   5. Variantes de resolución (§17, `planVariants`): de cada canal, un cartel
+      por resolución (1080p, 4K, 720p, SD, en ese orden) y detrás las reservas
+      y las URLs con macros; 4 como mucho. Las copias de la misma resolución
+      no tienen cartel: son el respaldo del relé (`relayVariants`). */
 
 import {
   IPTV_MAX_BACKUP_VARIANTS,
+  IPTV_MAX_CANDIDATES,
   IPTV_MIN_SCORE,
   channelAllowsFamilyFallback,
   normalizeChannelKey,
 } from '@ace/shared';
-import type { Catalog, CatalogEntry } from './catalog.js';
-import { compareVariants, hasUrlMacros } from './catalog.js';
+import type { Catalog, CatalogEntry, QualityOf } from './catalog.js';
+import { compareVariants, isLastResort, nameQuality } from './catalog.js';
 import { cleanIptvTitle, iptvAskedChannel, iptvSpelling } from './names.js';
 
 /** Lo que devuelve la función de puntuación de la resolución. */
@@ -40,64 +46,134 @@ export type ChannelScorer = (
   item: { readonly id: string; readonly title: string; readonly alias?: string | null },
 ) => ChannelScore;
 
-export interface IptvMatchOptions {
+export interface VariantOptions {
+  /** Fiabilidad aprendida de un id (Wilson), para desempatar variantes iguales. */
+  readonly reliability?: ((id: string) => number | null) | undefined;
+  /** La calidad que manda (la del stream real si se conoce; si no, la del nombre). */
+  readonly qualityOf?: QualityOf | undefined;
+}
+
+export interface IptvMatchOptions extends VariantOptions {
   readonly scorer: ChannelScorer;
   readonly minScore?: number;
-  /** Fiabilidad aprendida de un id (Wilson), para ordenar variantes. */
-  readonly reliability?: (id: string) => number | null;
-  /** Países que valen (por defecto ES o sin país). */
-  readonly countryOk?: (country: string | null) => boolean;
+}
+
+/** Las variantes de UN canal (mismo grupo y mismo país) repartidas en carteles y respaldo. */
+export interface VariantPlan {
+  /**
+   * Un cartel por resolución (1080p, 4K, 720p, SD y sin marca), luego las
+   * reservas y las URLs con macros, y lo que solo existe en HEVC; 4 como
+   * mucho. El primero es el que arranca.
+   */
+  readonly posters: readonly CatalogEntry[];
+  /** El resto (otra copia de una resolución que ya tiene cartel…): respaldo del relé, nunca sale. */
+  readonly hidden: readonly CatalogEntry[];
 }
 
 export interface IptvGroupMatch {
+  /** Clave del grupo (`normalizeChannelKey(base)`). */
   readonly key: string;
+  /** '' para España o sin país; si no, el código del país. */
+  readonly bucket: string;
+  /** El primer cartel (el que arranca solo). */
   readonly best: CatalogEntry;
-  /** Respaldo del relé (como mucho 2), de mejor a peor. */
-  readonly variants: readonly CatalogEntry[];
+  /** Los carteles de este canal, en orden (el primero es `best`). */
+  readonly posters: readonly CatalogEntry[];
+  /** Variantes sin cartel (respaldo del relé). */
+  readonly hidden: readonly CatalogEntry[];
   readonly score: number;
   readonly matchedChannel: string;
   readonly guide: boolean;
 }
 
-export const defaultCountryOk = (country: string | null): boolean =>
-  country === null || country === 'ES';
-
 /**
- * Mejor variante de un grupo y sus respaldos (docs/iptv.md §4.3). La
- * fiabilidad desempata después de HEVC, macros sin sustituir, calidad y reserva.
+ * Orden de las variantes de un canal (§17): el de `compareVariants` y, entre
+ * dos iguales (misma calidad, HEVC y reserva), la fiabilidad aprendida y el
+ * orden del catálogo.
  */
-export function pickVariants(
+export function sortVariants(
   entries: readonly CatalogEntry[],
-  reliability?: (id: string) => number | null,
-): { best: CatalogEntry; variants: CatalogEntry[] } | null {
-  if (!entries.length) return null;
-  const sorted = [...entries].sort((a, b) => {
+  options: VariantOptions = {},
+): CatalogEntry[] {
+  const qualityOf = options.qualityOf ?? nameQuality;
+  return [...entries].sort((a, b) => {
+    const order = compareVariants(a, b, qualityOf);
     if (
       a.hevc !== b.hevc ||
-      hasUrlMacros(a.ref) !== hasUrlMacros(b.ref) ||
-      a.quality !== b.quality ||
+      isLastResort(a) !== isLastResort(b) ||
+      qualityOf(a) !== qualityOf(b) ||
       a.backup !== b.backup
     ) {
-      return compareVariants(a, b);
+      return order;
     }
-    const ra = reliability?.(a.id) ?? null;
-    const rb = reliability?.(b.id) ?? null;
+    const ra = options.reliability?.(a.id) ?? null;
+    const rb = options.reliability?.(b.id) ?? null;
     if (ra !== null && rb !== null && ra !== rb) return rb - ra;
     return a.order - b.order;
   });
-  const [best, ...rest] = sorted as [CatalogEntry, ...CatalogEntry[]];
-  const variants: CatalogEntry[] = [];
-  const bestBackup = rest.find((entry) => entry.backup);
-  for (const entry of rest) {
-    if (variants.length >= IPTV_MAX_BACKUP_VARIANTS) break;
-    if (entry.backup && entry !== bestBackup) continue;
-    variants.push(entry);
+}
+
+/* Lo que distingue un cartel de otro del mismo canal: su resolución. Una reserva, una URL con macros o una copia
+   HEVC de una resolución que ya tiene cartel es respaldo; con una resolución nueva (o sin marca), cartel al final. */
+function posterSignature(entry: CatalogEntry, qualityOf: QualityOf): string {
+  return qualityOf(entry) ?? '-';
+}
+
+/**
+ * Carteles y respaldo de las variantes de un canal (§17). `entries` son las
+ * variantes de UN canal (mismo grupo y mismo país). null si no hay ninguna.
+ */
+export function planVariants(
+  entries: readonly CatalogEntry[],
+  options: VariantOptions & { readonly max?: number } = {},
+): VariantPlan | null {
+  if (!entries.length) return null;
+  const qualityOf = options.qualityOf ?? nameQuality;
+  const max = Math.max(1, options.max ?? IPTV_MAX_CANDIDATES);
+  const posters: CatalogEntry[] = [];
+  const hidden: CatalogEntry[] = [];
+  const seen = new Set<string>();
+  /* HEVC solo tiene cartel si el canal no tiene otra cosa: la web no lo reproduce (D6). */
+  const plain = entries.some((entry) => !entry.hevc);
+  for (const entry of sortVariants(entries, options)) {
+    const signature = posterSignature(entry, qualityOf);
+    if (posters.length < max && !seen.has(signature) && !(entry.hevc && plain)) {
+      posters.push(entry);
+      seen.add(signature);
+    } else hidden.push(entry);
   }
-  if (bestBackup && !variants.includes(bestBackup)) {
-    if (variants.length >= IPTV_MAX_BACKUP_VARIANTS) variants.pop();
-    variants.push(bestBackup);
+  return { posters, hidden };
+}
+
+/**
+ * Lo que abre el relé para un cartel (§17 y §6.1): esa variante primero y,
+ * detrás, las variantes SIN cartel que le tocan (las copias de su misma
+ * resolución; las que no tienen un cartel de su resolución van detrás del
+ * último), 2 como mucho. Las variantes con cartel propio no se prueban aquí:
+ * si esta cae, la web pasa al siguiente cartel IPTV antes de saltar a
+ * AceStream, y así se ve en qué variante estás.
+ */
+export function relayVariants(
+  plan: VariantPlan,
+  entry: CatalogEntry,
+  options: Pick<VariantOptions, 'qualityOf'> = {},
+): CatalogEntry[] {
+  const qualityOf = options.qualityOf ?? nameQuality;
+  const max = 1 + IPTV_MAX_BACKUP_VARIANTS;
+  const quality = qualityOf(entry);
+  if (!plan.posters.some((poster) => poster.id === entry.id)) {
+    /* Un id sin cartel (un favorito antiguo, un enlace): sus copias de la misma resolución. */
+    return [
+      entry,
+      ...plan.hidden.filter((item) => item.id !== entry.id && qualityOf(item) === quality),
+    ].slice(0, max);
   }
-  return { best, variants };
+  const last = plan.posters[plan.posters.length - 1] as CatalogEntry;
+  const home = (item: CatalogEntry): CatalogEntry =>
+    plan.posters.find((poster) => qualityOf(poster) === qualityOf(item) && !isLastResort(poster)) ??
+    plan.posters.find((poster) => qualityOf(poster) === qualityOf(item)) ??
+    last;
+  return [entry, ...plan.hidden.filter((item) => home(item).id === entry.id)].slice(0, max);
 }
 
 const HAS_DIGIT = /\d/;
@@ -150,9 +226,31 @@ function scoreAgainst(
   return best;
 }
 
+/** Un canal emparejado con sus carteles, a partir de sus variantes. */
+export function groupMatch(
+  key: string,
+  bucket: string,
+  entries: readonly CatalogEntry[],
+  match: { readonly score: number; readonly matchedChannel: string; readonly guide: boolean },
+  options: VariantOptions = {},
+): IptvGroupMatch | null {
+  const plan = planVariants(entries, options);
+  if (!plan) return null;
+  return {
+    key,
+    bucket,
+    best: plan.posters[0] as CatalogEntry,
+    posters: plan.posters,
+    hidden: plan.hidden,
+    ...match,
+  };
+}
+
 /**
- * Grupos IPTV que casan (≥ 92) con alguno de los canales, de mejor a peor
- * puntuación. Sin tope: el de 2 lo aplica quien junta con la guía.
+ * Canales IPTV que casan (≥ 92) con alguno de los canales, de mejor a peor
+ * puntuación y, con la misma, España o sin país antes que otro país. Un
+ * resultado por canal (grupo y país), con sus carteles. Sin tope: el de 4
+ * carteles lo aplica quien junta con la guía.
  */
 export function matchIptvChannels(
   catalog: Catalog,
@@ -160,7 +258,6 @@ export function matchIptvChannels(
   options: IptvMatchOptions,
 ): IptvGroupMatch[] {
   const minScore = options.minScore ?? IPTV_MIN_SCORE;
-  const countryOk = options.countryOk ?? defaultCountryOk;
   const wanted = [
     ...new Set(
       channels
@@ -171,8 +268,7 @@ export function matchIptvChannels(
   if (!wanted.length) return [];
   const out: IptvGroupMatch[] = [];
   for (const key of catalog.preselect(wanted)) {
-    const entries = catalog.group(key).filter((entry) => countryOk(entry.country));
-    const representative = entries[0];
+    const representative = catalog.group(key)[0];
     if (!representative) continue;
     let score = 0;
     let matchedChannel = wanted[0] as string;
@@ -186,11 +282,23 @@ export function matchIptvChannels(
       }
     }
     if (score < minScore) continue;
-    const picked = pickVariants(entries, options.reliability);
-    if (!picked) continue;
-    out.push({ key, ...picked, score, matchedChannel, guide: false });
+    for (const { bucket, entries } of catalog.buckets(key)) {
+      const match = groupMatch(
+        key,
+        bucket,
+        entries,
+        { score, matchedChannel, guide: false },
+        options,
+      );
+      if (match) out.push(match);
+    }
   }
-  return out.sort((a, b) => b.score - a.score || a.best.order - b.best.order);
+  return out.sort(
+    (a, b) =>
+      b.score - a.score ||
+      Number(a.bucket !== '') - Number(b.bucket !== '') ||
+      a.best.order - b.best.order,
+  );
 }
 
 /**

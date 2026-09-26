@@ -29,6 +29,11 @@ export interface AppErrorOptions {
   /** Datos para el log (por ejemplo, los fallos de validación). */
   readonly data?: unknown;
   readonly cause?: unknown;
+  /**
+   * Intentos que hizo el servidor antes de rendirse (2 o más): sale en la
+   * respuesta v1 como `error.data.attempts` (hoy, «Guardar IPTV», docs/iptv.md §16.8).
+   */
+  readonly attempts?: number;
 }
 
 export class AppError extends Error {
@@ -43,10 +48,13 @@ export class AppError extends Error {
     this.code = code;
     this.data = options.data;
     if (options.detail) this.detail = options.detail;
+    if (options.attempts !== undefined && options.attempts >= 2) this.attempts = options.attempts;
   }
 
   /** Explicación para el log. */
   detail?: string;
+  /** Intentos hechos (2 o más) si los hubo; va a la respuesta v1. */
+  attempts?: number;
 }
 
 /** Lo que lanza cualquier función del esqueleto que aún no se ha portado. */
@@ -111,9 +119,20 @@ export function toV1Error(error: unknown, requestId: string): SerializedError<Ap
   const code = errorCodeOf(error);
   const definition = code ? describeError(code) : null;
   if (code && definition?.public) {
+    const attempts =
+      error instanceof AppError && error.attempts !== undefined
+        ? Math.min(9, Math.max(2, Math.floor(error.attempts)))
+        : undefined;
     return {
       status: definition.status,
-      body: { error: { code, message: definition.message, requestId } },
+      body: {
+        error: {
+          code,
+          message: definition.message,
+          requestId,
+          ...(attempts !== undefined ? { data: { attempts } } : {}),
+        },
+      },
       internal: definition.status >= 500 && code === 'internal_error',
     };
   }

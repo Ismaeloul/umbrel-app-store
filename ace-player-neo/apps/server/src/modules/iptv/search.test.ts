@@ -1,20 +1,16 @@
-/* El buscador de la IPTV (docs/iptv.md §14.3 y §14.9): prefijos en cualquier
-   orden, grafías de la IPTV, sin tildes, orden, una fila por grupo, solo ES
-   o sin país, sin adultos, `total` y `capped`, `library` con la regla única
-   de «es el mismo canal» y 100 000 canales en menos de 50 ms. */
+/* El buscador de la IPTV (docs/iptv.md §14.3, §14.9 y §17): prefijos en
+   cualquier orden, grafías de la IPTV, sin tildes, orden, una fila por canal
+   (las variantes de resolución juntas; otro país, otra fila), todo
+   desbloqueado (cualquier país y los grupos para adultos), `total` y
+   `capped`, `library` con la regla única de «es el mismo canal» y 100 000
+   canales en menos de 50 ms. */
 
 import { describe, expect, it } from 'vitest';
 import { IPTV_SEARCH } from '@ace/shared';
 import { scoreResolutionCandidate } from '../football/resolution.js';
 import { Catalog, type RawChannel } from './catalog.js';
 import type { ChannelScorer } from './match.js';
-import {
-  cleanChannelsQuery,
-  isAdultChannel,
-  libraryCandidates,
-  libraryMatches,
-  searchCatalog,
-} from './search.js';
+import { cleanChannelsQuery, libraryCandidates, libraryMatches, searchCatalog } from './search.js';
 
 const scorer: ChannelScorer = (channels, item) => scoreResolutionCandidate(channels, item, 'iptv');
 
@@ -87,8 +83,11 @@ describe('searchCatalog (§14.3)', () => {
   it('orden: clave igual → empieza por → en orden → el resto; dentro, la más corta', () => {
     expect(titles(LIST, 'la 1')[0]).toBe('La 1');
     expect(titles(LIST, 'antena 3')).toEqual(['Antena 3', 'Antena 3 Internacional']);
-    /* «tele»: todos empiezan por «tele…»; primero la clave más corta. */
-    expect(titles(LIST, 'tele')).toEqual(['Telecinco', 'Teledeporte']);
+    /* «tele»: todos empiezan por «tele…»; primero la clave más corta (y, con la misma, España antes). */
+    expect(titles(LIST, 'teled')).toEqual(['Teledeporte']);
+    const tele = titles(LIST, 'tele');
+    expect(tele.slice(0, 2)).toEqual(['Telecinco', 'Tele Rosa']);
+    expect(tele.indexOf('Teledeporte')).toBeLessThan(tele.indexOf('Telecinco Italia'));
     expect(titles(LIST, 'sexta')).toEqual(['laSexta']);
     expect(titles(LIST, 'la sexta')).toEqual(['laSexta']);
   });
@@ -101,30 +100,42 @@ describe('searchCatalog (§14.3)', () => {
     expect(la1[0]?.best.title).toBe('ES: La 1 FHD');
   });
 
-  it('solo ES o sin país: «UK: DAZN 1» e «IT: Telecinco Italia» no salen; «Cuatro» (sin país) sí', () => {
-    expect(titles(LIST, 'dazn 1')).toEqual([]);
-    expect(titles(LIST, 'italia')).toEqual([]);
+  it('todo desbloqueado: cualquier país sale, con su país; «Cuatro» (sin país) también', () => {
+    const dazn = searchCatalog(LIST, 'dazn 1').groups;
+    expect(dazn.map((group) => [group.best.display, group.bucket])).toEqual([['DAZN 1', 'UK']]);
+    expect(titles(LIST, 'italia')).toEqual(['Telecinco Italia']);
     expect(titles(LIST, 'cuatro')).toEqual(['Cuatro']);
   });
 
-  it('grupos «XXX» y «Adultos» y nombres «porno» fuera, siempre', () => {
-    expect(titles(LIST, 'tele noche')).toEqual([]);
-    expect(titles(LIST, 'rosa')).toEqual([]);
-    expect(titles(LIST, 'porno')).toEqual([]);
-    expect(isAdultChannel('Canal', 'XXX | ADULTOS')).toBe(true);
-    expect(isAdultChannel('Canal +18', '')).toBe(true);
-    expect(isAdultChannel('Canal 18+', '')).toBe(true);
-    expect(isAdultChannel('Adulta TV', '')).toBe(true);
-    expect(isAdultChannel('Telecinco', 'ES | GENERALISTAS')).toBe(false);
-    expect(isAdultChannel('Sexta', '')).toBe(false);
-    expect(isAdultChannel('Canal 180', '')).toBe(false);
-    /* El «+» de una marca seguido de un número no es «+18». */
-    expect(isAdultChannel('Canal+ 18', '')).toBe(false);
-    expect(isAdultChannel('M+ 18 Series', '')).toBe(false);
-    expect(isAdultChannel('Movistar+ 18', '')).toBe(false);
-    expect(isAdultChannel('+18', '')).toBe(true);
-    expect(isAdultChannel('XXX +18', '')).toBe(true);
-    expect(isAdultChannel('Canal', '+ 18 ADULTOS')).toBe(true);
+  it('todo desbloqueado: los grupos «XXX» y «Adultos» y los nombres «porno» también salen', () => {
+    expect(titles(LIST, 'tele noche')).toEqual(['Tele Noche']);
+    expect(titles(LIST, 'rosa')).toEqual(['Tele Rosa']);
+    expect(titles(LIST, 'porno')).toEqual(['Tele Porno 24']);
+  });
+
+  it('una fila por canal: las 5 variantes de «DAZN 1» son una fila; otro país, otra fila detrás', () => {
+    const c = catalog([
+      'DE: DAZN 1 HD',
+      'ES: DAZN 1 FHD',
+      'ES: DAZN 1 HD',
+      'DAZN 1 SD',
+      '|ES| DAZN 1 4K',
+      'ES: DAZN 1 (backup)',
+      'ES: DAZN 2 FHD',
+      'ES: DAZN F1 FHD',
+    ]);
+    const found = searchCatalog(c, 'dazn 1').groups;
+    expect(found.map((group) => [group.best.display, group.bucket, group.entries.length])).toEqual([
+      ['DAZN 1', '', 5],
+      ['DAZN 1', 'DE', 1],
+    ]);
+    /* «DAZN 2» y «DAZN F1» son otros canales (otras filas con «dazn»). */
+    expect(searchCatalog(c, 'dazn').groups.map((group) => group.key)).toEqual([
+      'dazn 1',
+      'dazn 1',
+      'dazn 2',
+      'dazn f1',
+    ]);
   });
 
   it('total y capped con 250 coincidencias; la respuesta, 50 como mucho', () => {
@@ -168,7 +179,7 @@ describe('library de cada fila (§14.3, regla 5)', () => {
       { id: D, title: 'LaLiga TV', category: 'Deportes' },
     ];
     const antena = searchCatalog(c, 'antena').groups[0]!;
-    const options = { scorer, isIptvId: () => false, groupOf: () => null };
+    const options = { scorer, isIptvId: () => false, channelOf: () => null };
     expect(libraryMatches(antena, libraryCandidates(items, 'antena'), options).sort()).toEqual(
       [A, B].sort(),
     );
@@ -177,7 +188,7 @@ describe('library de cada fila (§14.3, regla 5)', () => {
     expect(libraryMatches(hyper, libraryCandidates(items, 'laliga'), options)).toEqual([]);
   });
 
-  it('un id IPTV de la biblioteca cuenta si es del mismo grupo', () => {
+  it('un id IPTV de la biblioteca cuenta si es del mismo canal (grupo y país)', () => {
     const c = catalog(['ES: Telecinco HD']);
     const group = searchCatalog(c, 'tele').groups[0]!;
     const items = [{ id: IPTV_OWN, title: 'Tele 5 (mío)', category: 'IPTV' }];
@@ -185,7 +196,7 @@ describe('library de cada fila (§14.3, regla 5)', () => {
       libraryMatches(group, libraryCandidates(items, 'tele'), {
         scorer,
         isIptvId: (id) => id === IPTV_OWN,
-        groupOf: () => group.key,
+        channelOf: () => group.channel,
       }),
     ).toEqual([IPTV_OWN]);
   });

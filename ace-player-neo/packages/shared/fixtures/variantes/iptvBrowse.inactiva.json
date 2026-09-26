@@ -1,0 +1,12 @@
+{
+  "active": false,
+  "provider": "",
+  "catalog": "0",
+  "query": "",
+  "category": null,
+  "total": 0,
+  "catalogTotal": 0,
+  "channels": [],
+  "nextCursor": null,
+  "stale": false
+}

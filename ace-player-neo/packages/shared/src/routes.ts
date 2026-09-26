@@ -20,7 +20,8 @@
      healthcheck de Docker; la app usa `ping`), las 5 rutas de Ajustes →
      IPTV (`iptv*`, docs/iptv.md §5.3: la IPTV solo se configura en la web)
      y `iptvChannels` (el buscador IPTV, §14.2; pasa a `any` cuando la app
-     calque el buscador, D27) son `web`.
+     calque el buscador, D27) e `iptvBrowse` (la pestaña IPTV de Canales,
+     §16.2; D29) son `web`.
      `video` es `any` desde la IPTV (docs/iptv.md §5.4): la web entra sin
      token (el login de Umbrel basta) y el iPhone con `video-token`.
 
@@ -89,6 +90,8 @@ import {
   VideoQuerySchema,
 } from './api/v1/playback.js';
 import {
+  IptvBrowseQuerySchema,
+  IptvBrowseResponseSchema,
   IptvChannelsQuerySchema,
   IptvChannelsResponseSchema,
   IptvSaveBodySchema,
@@ -590,6 +593,28 @@ export const V1_ROUTES = {
     content: 'json',
     sideEffects: false,
     errors: ['empty_query'],
+    legacyTwin: null,
+  }),
+  iptvBrowse: defineRoute({
+    method: 'GET',
+    path: '/api/v1/iptv/browse',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary:
+      'Recorrer tu IPTV como la ordena el proveedor: categorías, canales por páginas, texto y filtros con facetas',
+    description:
+      'La pestaña IPTV de Canales (docs/iptv.md §16): categorías del proveedor en su orden y con su número de canales, una fila por canal (nombre limpio y país) con sus calidades, ' +
+      'filtros de país, idioma, tipo, deporte y calidad (O dentro de un filtro, Y entre filtros) con sus recuentos, y páginas de 60 con `nextCursor`. ' +
+      'El servidor filtra, pagina y cuenta sobre un índice en memoria. Sin IPTV activa responde 200 con `active: false`; una categoría que ya no existe, `category: null`; un cursor de otro catálogo, la primera página con `stale: true`. ' +
+      'Nunca lleva URL, `stream_id`, `tvg-id` ni credenciales.',
+    query: IptvBrowseQuerySchema,
+    response: IptvBrowseResponseSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: false,
+    /* Una consulta o un cursor mal formados: `validation_error` (de COMMON_V1_ERRORS). */
+    errors: [],
     legacyTwin: null,
   }),
 

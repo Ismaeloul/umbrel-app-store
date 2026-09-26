@@ -149,23 +149,31 @@ export const CandidateSourceSchema = z.enum([
 ]);
 export type CandidateSource = z.infer<typeof CandidateSourceSchema>;
 
-/** Calidad que declara el nombre del canal IPTV (FHD, HD, 4K, SD); `null` si no lleva marca. */
+/**
+ * Calidad de un canal IPTV (4K, 1080p, 720p, SD): la del stream real si el
+ * servidor la conoce (ffprobe o la maestra HLS) y, si no, la que declara su
+ * nombre (FHD, HD, 4K, SD); `null` si no se sabe.
+ */
 export const IptvQualitySchema = z.enum(['uhd', 'fhd', 'hd', 'sd']);
 export type IptvQuality = z.infer<typeof IptvQualitySchema>;
 
 /**
- * Lo propio de una candidata `source: 'iptv'` (docs/iptv.md §5.1). Sale una
- * por canal: las demás variantes (HD, reserva) se quedan en el servidor como
- * respaldo del relé. Nunca lleva URLs ni credenciales.
+ * Lo propio de una candidata `source: 'iptv'` (docs/iptv.md §5.1 y §17). Sale
+ * una por variante de resolución de cada canal (1080p, 4K, 720p, SD y la
+ * reserva, 4 carteles como mucho); las copias de la misma resolución se
+ * quedan en el servidor como respaldo del relé. Nunca lleva URLs ni
+ * credenciales.
  */
 export const CandidateIptvInfoSchema = z.strictObject({
   /** Nombre que puso Isma al proveedor («Casa»). */
   provider: z.string().max(IPTV_NAME_MAX),
   quality: IptvQualitySchema.nullable(),
-  /** La mejor variante es una reserva («Backup», «Alt»…). */
+  /** Esta variante es una reserva («Backup», «Alt», «(2)»…). */
   backup: z.boolean(),
   /** Confirmada por la guía (no se enseña; diagnóstico y tests). */
   guide: z.boolean(),
+  /** País del canal si no es España ni sin país («DE» en «DE: DAZN 1»); ausente o null si lo es (§17). */
+  country: z.string().min(2).max(8).nullable().optional(),
 });
 export type CandidateIptvInfo = z.infer<typeof CandidateIptvInfoSchema>;
 

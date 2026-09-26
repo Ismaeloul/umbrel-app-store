@@ -27,6 +27,8 @@ export interface ChipProps {
   tone?: 'soft' | 'mine' | 'live';
   onClick?: MouseEventHandler<HTMLButtonElement>;
   title?: string;
+  /** Nombre accesible si el texto a la vista no basta («Fútbol, 1204 canales»). */
+  label?: string;
   className?: string;
   disabled?: boolean;
 }
@@ -40,6 +42,7 @@ export function Chip({
   tone = 'soft',
   onClick,
   title,
+  label,
   className,
   disabled,
 }: ChipProps) {
@@ -57,6 +60,7 @@ export function Chip({
         type="button"
         className={cx(classes, 'chip--button', 'press')}
         aria-pressed={pressed}
+        aria-label={label}
         onClick={onClick}
         title={title}
         disabled={disabled}
