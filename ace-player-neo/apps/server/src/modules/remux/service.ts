@@ -9,9 +9,18 @@
    - como mucho 3 sesiones y NUNCA se expulsa a un espectador (503
      `remux_busy`, T-112);
    - grupo de procesos, nice 10, log en un búfer de 64 KiB y huérfanos;
-   - espera del arranque (2 segmentos y 6 s, o 1 y 20 s, 45 s como máximo)
-     sin `readFileSync` cada 400 ms: vigila la carpeta y relee sin bloquear,
-     y se corta si el cliente cuelga;
+   - espera del arranque (3 segmentos y la distancia que pide el reproductor,
+     `max(4 s, 3 × TARGETDURATION + 1 s)`, o 1 segmento pasados 20 s; 45 s
+     como máximo; docs/multidispositivo.md §4.3) sin `readFileSync` cada
+     400 ms: vigila la carpeta y relee sin bloquear, y se corta si el cliente
+     cuelga;
+   - `EXT-X-TARGETDURATION` fijado al quedar lista la lista y servido igual en
+     las tres formas de entregarla (con token, sin token y `/remux/`); las
+     listas de `/remux/` llevan además `EXT-X-START` con los 6 s de antes;
+   - IPTV: plazo desde el primer byte entregado a ffmpeg, tope desde que se
+     abrió el relé y, si el análisis corto (2 MB / 2 s) no encuentra los
+     parámetros, UN reinicio con 5 MB / 5 s sin soltar la conexión con el
+     proveedor (el relé se prepara antes, §4.5);
    - reengancharse a la misma sesión reutiliza el ffmpeg vivo (P9);
    - sin ffmpeg, `ffmpeg_missing` y el resto sigue funcionando.
 
@@ -24,11 +33,13 @@ import { mkdir, readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import {
   HASH_RE,
+  IPTV_REMUX_OPEN_MAX_MS,
   IPTV_REMUX_READY_MS,
   MAX_REMUX_SESSIONS,
   REMUX_TIMINGS,
   TIMEOUTS,
   normalizeHash,
+  remuxReadySeconds,
 } from '@ace/shared';
 import type { TimerHandle } from '../../core/clock.js';
 import { AppError } from '../../core/errors.js';
@@ -36,13 +47,18 @@ import { redactText } from '../../core/logger.js';
 import { buildRemuxArgs } from './args.js';
 import { elegirSesionRemuxADesalojar, type EvictionCandidate } from './eviction.js';
 import {
+  initialTargetDuration,
   parseByteRange,
-  readPlaylistStats,
+  pinTargetDuration,
+  playlistStatsFromText,
   rewritePlaylist,
+  segmentSpread,
   sendBare,
   sendBuffer,
   sendFile,
+  withStartOffset,
   type FileObservation,
+  type SegmentSpread,
 } from './files.js';
 import { SerialLock } from './lock.js';
 import { RingLog, createSpawnLauncher, findOrphanPids, killProcessTree } from './process.js';
@@ -102,6 +118,26 @@ interface Entry {
   readonly log: RingLog;
   readonly wakers: Set<() => void>;
   watcher: FSWatcher | null;
+  /** TARGETDURATION fijado al quedar lista la lista (docs/multidispositivo.md §4.3). */
+  targetS: number | null;
+  /** Lo que duran de verdad los segmentos de la ventana (§4.2). */
+  segments: SegmentSpread | null;
+  /** Última línea de registro de los segmentos (para no repetirla). */
+  segLogKey: string;
+  segLogAt: number;
+  /** Análisis de la entrada IPTV con el que se lanzó (§4.5). */
+  readonly probe: 'short' | 'fallback';
+  /** Ya se probó el reinicio con 5 MB / 5 s desde esta entrada. */
+  probeRetried: boolean;
+  /** La entrada que la sustituye tras ese reinicio (quien espera la lista la sigue). */
+  replacedBy: Promise<Entry> | null;
+  /** Lanzada al abrir la sesión (no en un reinicio): solo aquí cuenta el tope desde la apertura del relé. */
+  readonly firstLaunch: boolean;
+}
+
+interface LaunchOptions {
+  readonly probe?: 'short' | 'fallback';
+  readonly firstLaunch?: boolean;
 }
 
 interface Carry {
@@ -118,6 +154,8 @@ export interface RemuxEntryInfo {
   readonly ready: boolean;
   readonly viewers: readonly string[];
   readonly log: string;
+  readonly targetS: number | null;
+  readonly args: readonly string[];
 }
 
 export interface RemuxRuntime {
@@ -152,6 +190,17 @@ function clearViewers(entry: Entry): void {
   entry.lingering.clear();
 }
 
+function carryOf(entry: Entry): Carry {
+  return {
+    viewers: [...entry.viewers],
+    legacyClients: [...entry.legacyClients],
+    lingering: [...entry.lingering],
+  };
+}
+
+/** «ffmpeg no encontró los parámetros de un stream» con el análisis corto de la IPTV. */
+const PROBE_FAILED_RE = /Could not find codec parameters/i;
+
 export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
   const { config, clock, bus } = deps;
   const logger = deps.logger.child({ module: 'remux' });
@@ -166,6 +215,8 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
   const redact = deps.redact ?? redactText;
   const inputKeyOf = (source: RemuxSource): string => source.inputUrl ?? source.playbackUrl;
   const byHash = new Map<string, Entry>();
+  /** Argumentos con los que se lanzó cada ffmpeg (para los tests y la salud). */
+  const entryArgs = new WeakMap<Entry, readonly string[]>();
   const listeners = new Set<RemuxListener>();
   const registry = new SerialLock();
   let ffmpegMissing = false;
@@ -272,6 +323,9 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
        termine sus peticiones; el recolector lo borra después. */
     entry.lastAccess = clock.now();
     if (entry.killed) return;
+    /* IPTV con el análisis corto: si murió por no encontrar los parámetros, se
+       relanza con 5 MB / 5 s en vez de dejar a los visores sin vídeo. */
+    if (maybeProbeRetry(entry)) return;
     const tail = redact(entry.log.tail(300));
     const cause = /codec|decoder|encoder|invalid data|unsupported|not supported/i.test(tail)
       ? 'codec'
@@ -310,11 +364,57 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     void registry.run(() => closeLocked(entry, 'died', !entry.missing));
   }
 
+  /**
+   * El análisis corto de la IPTV (2 MB / 2 s) no ha encontrado los parámetros
+   * de un stream: UN reinicio con 5 MB / 5 s (docs/multidispositivo.md §4.5).
+   * Antes se prepara el relé para que no suelte la conexión con el proveedor
+   * al irse este ffmpeg; si ya no está, no se reinicia y sigue el error normal.
+   */
+  function maybeProbeRetry(entry: Entry): boolean {
+    if (
+      entry.origin !== 'iptv' ||
+      entry.probe !== 'short' ||
+      entry.ready ||
+      entry.probeRetried ||
+      entry.closed ||
+      entry.replacedBy ||
+      byHash.get(entry.hash) !== entry
+    )
+      return false;
+    if (!PROBE_FAILED_RE.test(entry.log.tail(4096))) return false;
+    entry.probeRetried = true;
+    let prepared: boolean;
+    try {
+      prepared = entry.source.prepareRestart?.() ?? false;
+    } catch {
+      prepared = false;
+    }
+    if (!prepared) return false;
+    logger.info(
+      { sessionId: entry.sessionId },
+      'remux IPTV: el análisis corto no encontró los parámetros; se relanza con 5 MB / 5 s',
+    );
+    const replaced = registry.run(async () => {
+      const carry = carryOf(entry);
+      clearViewers(entry);
+      await closeLocked(entry, 'stopped', false);
+      return startLocked(entry.source, entry.hash, carry, {
+        probe: 'fallback',
+        firstLaunch: entry.firstLaunch,
+      });
+    });
+    entry.replacedBy = replaced;
+    replaced.catch(() => undefined);
+    wake(entry);
+    return true;
+  }
+
   /** Lanza ffmpeg para una sesión. Con la cola del registro tomada. */
   async function startLocked(
     source: RemuxSource,
     hash: string,
     carry: Carry | null,
+    launch: LaunchOptions = {},
   ): Promise<Entry> {
     const dir = path.join(remuxDir, hash);
     await rm(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 }).catch(
@@ -348,6 +448,14 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       log: new RingLog(),
       wakers: new Set(),
       watcher: null,
+      targetS: null,
+      segments: null,
+      segLogKey: '',
+      segLogAt: 0,
+      probe: launch.probe ?? 'short',
+      probeRetried: false,
+      replacedBy: null,
+      firstLaunch: launch.firstLaunch === true,
     };
     const args = buildRemuxArgs({
       url: source.inputUrl ?? `${engineBase}${source.playbackUrl}`,
@@ -355,7 +463,9 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       sessionId: source.sessionId,
       origin,
       ...(source.isHls ? { isHls: true } : {}),
+      ...(origin === 'iptv' ? { probe: entry.probe } : {}),
     });
+    entryArgs.set(entry, args);
     let proc: RemuxProcess;
     try {
       proc = launcher.spawn(args);
@@ -367,7 +477,11 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     }
     entry.proc = proc;
     byHash.set(hash, entry);
-    proc.onStderr((chunk) => entry.log.push(chunk));
+    proc.onStderr((chunk) => {
+      entry.log.push(chunk);
+      if (entry.origin === 'iptv' && PROBE_FAILED_RE.test(chunk.toString('latin1')))
+        maybeProbeRetry(entry);
+    });
     proc.onError((error) => onError(entry, error));
     proc.onExit((code, signal) => onExit(entry, code, signal));
     if (watchFiles) {
@@ -377,7 +491,13 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       } catch {}
     }
     logger.info(
-      { sessionId: source.sessionId, pid: proc.pid, mode: source.mode, origin },
+      {
+        sessionId: source.sessionId,
+        pid: proc.pid,
+        mode: source.mode,
+        origin,
+        ...(origin === 'iptv' ? { probe: entry.probe } : {}),
+      },
       'remux lanzado',
     );
     return entry;
@@ -451,38 +571,140 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     });
   }
 
-  /** Espera del arranque (server.js:4914-4924; B-105): 2 segmentos y 6 s, o 1 y 20 s, 45 s como máximo. */
-  async function waitReady(entry: Entry, signal?: AbortSignal): Promise<void> {
-    if (entry.ready) {
+  /**
+   * Plazo de la espera de una IPTV (docs/multidispositivo.md §4.5): 20 s desde
+   * el primer byte entregado a este ffmpeg (desde que se lanzó si aún no le ha
+   * llegado nada), 28 s desde que se abrió el relé (solo al abrir la sesión) y
+   * el tope de la petición.
+   */
+  function iptvDeadline(entry: Entry, deadlineAt: number | undefined): number {
+    const first = entry.source.firstByteAt?.() ?? null;
+    const base = first === null ? entry.startedAt : Math.max(first, entry.startedAt);
+    let limit = base + IPTV_REMUX_READY_MS;
+    if (entry.firstLaunch && entry.source.openedAt !== undefined) {
+      limit = Math.min(limit, entry.source.openedAt + IPTV_REMUX_OPEN_MAX_MS);
+    }
+    if (deadlineAt !== undefined) limit = Math.min(limit, deadlineAt);
+    return limit;
+  }
+
+  async function readText(file: string): Promise<string | null> {
+    try {
+      return await readFile(file, 'utf8');
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Espera del arranque (server.js:4914-4924; B-105; docs/multidispositivo.md
+   * §4.3): 3 segmentos y `max(4 s, 3 × TD + 1 s)` de vídeo, o 1 segmento
+   * pasados 20 s, 45 s como máximo. IPTV: la misma lista lista o
+   * `iptv_timeout` (§4.5). Devuelve la entrada que queda lista (otra si hubo
+   * que relanzar ffmpeg con el análisis largo).
+   */
+  async function waitReady(
+    start: Entry,
+    signal?: AbortSignal,
+    deadlineAt?: number,
+  ): Promise<Entry> {
+    let entry = start;
+    if (entry.ready && !entry.replacedBy) {
       throwIfGone(entry);
-      return;
+      return entry;
     }
     const t0 = clock.now();
+    let text: string | null = null;
     for (;;) {
-      throwIfGone(entry);
-      const ready = await readPlaylistStats(path.join(entry.dir, 'index.m3u8'));
-      throwIfGone(entry);
-      const waited = clock.now() - t0;
-      /* IPTV (docs/iptv.md §6.3): 2 segmentos o 20 s como mucho; pasado eso, iptv_timeout. */
-      if (entry.origin === 'iptv') {
-        if (ready && ready.segments >= REMUX_TIMINGS.readySegments) break;
-        if (waited > IPTV_REMUX_READY_MS) throw new AppError('iptv_timeout');
-        await waitChange(entry, READY_POLL_MS, signal);
+      if (entry.replacedBy) {
+        entry = await entry.replacedBy;
+        if (entry.ready) break;
         continue;
       }
-      if (
-        ready &&
-        ready.segments >= REMUX_TIMINGS.readySegments &&
-        ready.seconds >= REMUX_TIMINGS.readySeconds
-      )
-        break;
-      if (ready && ready.segments >= 1 && waited > REMUX_TIMINGS.readyFallbackAfterMs) break;
+      throwIfGone(entry);
+      text = await readText(path.join(entry.dir, 'index.m3u8'));
+      if (entry.replacedBy) continue;
+      throwIfGone(entry);
+      const stats = text === null ? null : playlistStatsFromText(text);
+      const need = remuxReadySeconds(text === null ? 1 : initialTargetDuration(text));
+      const enough =
+        stats !== null && stats.segments >= REMUX_TIMINGS.readySegments && stats.seconds >= need;
+      if (enough) break;
+      const now = clock.now();
+      if (entry.origin === 'iptv') {
+        const limit = iptvDeadline(entry, deadlineAt);
+        if (now >= limit) throw new AppError('iptv_timeout');
+        await waitChange(entry, Math.max(1, Math.min(READY_POLL_MS, limit - now)), signal);
+        continue;
+      }
+      const waited = now - t0;
+      if (stats && stats.segments >= 1 && waited > REMUX_TIMINGS.readyFallbackAfterMs) break;
       if (waited > TIMEOUTS.remuxStartServerMs) throw new AppError('remux_timeout');
       await waitChange(entry, READY_POLL_MS, signal);
     }
-    entry.ready = true;
-    /* Primera observación de la lista: desde aquí cuenta el atasco. */
-    await observe(entry);
+    if (!entry.ready) {
+      entry.ready = true;
+      entry.targetS = initialTargetDuration(text ?? '');
+      entry.segments = text === null ? null : segmentSpread(text);
+      logSegments(entry, false, true);
+      /* Primera observación de la lista: desde aquí cuenta el atasco. */
+      await observe(entry);
+    }
+    return entry;
+  }
+
+  /**
+   * Una línea de registro con la duración real de los segmentos (§4.2): al
+   * quedar lista la lista, al subir el TARGETDURATION y, como mucho una vez
+   * por minuto, cuando cambia algo. Sin hash ni URL.
+   */
+  function logSegments(entry: Entry, raised: boolean, first = false): void {
+    const now = clock.now();
+    const spread = entry.segments;
+    const key = `${spread?.minS.toFixed(1) ?? '-'}:${spread?.maxS.toFixed(1) ?? '-'}:${entry.targetS ?? '-'}`;
+    if (!first && !raised) {
+      if (key === entry.segLogKey || now - entry.segLogAt < REMUX_TIMINGS.segmentLogMs) return;
+    }
+    entry.segLogKey = key;
+    entry.segLogAt = now;
+    logger.info(
+      {
+        sessionId: entry.sessionId,
+        origin: entry.origin,
+        input: entry.origin === 'iptv' ? (entry.source.isHls ? 'hls' : 'ts') : entry.source.mode,
+        segMinS: spread ? Math.round(spread.minS * 100) / 100 : null,
+        segMaxS: spread ? Math.round(spread.maxS * 100) / 100 : null,
+        targetS: entry.targetS,
+        raised,
+      },
+      raised ? 'remux: TARGETDURATION sube (un segmento no cabía)' : 'remux: segmentos',
+    );
+  }
+
+  /**
+   * La lista tal como se sirve: con el TARGETDURATION fijado (§4.3) y, de
+   * paso, la duración real de los segmentos al día (§4.2).
+   */
+  function adoptPlaylist(entry: Entry, text: string): string {
+    if (!entry.ready || entry.targetS === null) return text;
+    const pinned = pinTargetDuration(text, entry.targetS);
+    entry.targetS = pinned.pinned;
+    const spread = segmentSpread(text);
+    if (spread) entry.segments = spread;
+    logSegments(entry, pinned.raised);
+    return pinned.text;
+  }
+
+  /** Lee la lista para servirla (y la cuenta como observada para el atasco). Null si no existe. */
+  async function playlistBody(entry: Entry, file: string): Promise<string | null> {
+    try {
+      const info = await stat(file);
+      noteObservation(entry, { size: info.size, mtimeMs: info.mtimeMs });
+    } catch {
+      return null;
+    }
+    const text = await readText(file);
+    return text === null ? null : adoptPlaylist(entry, text);
   }
 
   function handleOf(entry: Entry, token: string): RemuxHandle {
@@ -493,6 +715,8 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       startedAt: entry.startedAt,
       ready: entry.ready,
       ...(token ? { legacyToken: token } : {}),
+      targetDurationS: () => entry.targetS,
+      segments: () => (entry.segments ? { ...entry.segments } : null),
     };
   }
 
@@ -551,11 +775,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
             !(await isStalled(current));
           if (!reusable) {
             if (sameSession) {
-              carry = {
-                viewers: [...current.viewers],
-                legacyClients: [...current.legacyClients],
-                lingering: [...current.lingering],
-              };
+              carry = carryOf(current);
               clearViewers(current);
             }
             await closeLocked(current, 'stopped', !sameSession);
@@ -565,14 +785,14 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
         if (!current) {
           await makeRoomLocked();
           if (ffmpegMissing) throw new AppError('ffmpeg_missing');
-          current = await startLocked(source, hash, carry);
+          current = await startLocked(source, hash, carry, { firstLaunch: carry === null });
         }
         const attached = attach(current, viewerId, options.legacy);
         current.lastAccess = clock.now();
         return { entry: current, token: attached };
       });
-      await waitReady(entry, signal);
-      return handleOf(entry, token);
+      const ready = await waitReady(entry, signal, options.deadlineAt);
+      return handleOf(ready, token);
     },
 
     async retarget(source, signal) {
@@ -581,18 +801,13 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
         const current = findBySession(source.sessionId);
         if (!current) return null;
         if (current.inputKey === inputKeyOf(source) && !current.exited) return current;
-        const carry: Carry = {
-          viewers: [...current.viewers],
-          legacyClients: [...current.legacyClients],
-          lingering: [...current.lingering],
-        };
+        const carry = carryOf(current);
         clearViewers(current);
         await closeLocked(current, 'stopped', false);
-        return startLocked(source, current.hash, carry);
+        return startLocked(source, current.hash, carry, { probe: current.probe });
       });
       if (!entry) return null;
-      await waitReady(entry, signal);
-      return handleOf(entry, '');
+      return handleOf(await waitReady(entry, signal), '');
     },
 
     async restart(sessionId, signal) {
@@ -600,18 +815,13 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       const entry = await registry.run(async () => {
         const current = findBySession(sessionId);
         if (!current) return null;
-        const carry: Carry = {
-          viewers: [...current.viewers],
-          legacyClients: [...current.legacyClients],
-          lingering: [...current.lingering],
-        };
+        const carry = carryOf(current);
         clearViewers(current);
         await closeLocked(current, 'stopped', false);
-        return startLocked(current.source, current.hash, carry);
+        return startLocked(current.source, current.hash, carry, { probe: current.probe });
       });
       if (!entry) return null;
-      await waitReady(entry, signal);
-      return handleOf(entry, '');
+      return handleOf(await waitReady(entry, signal), '');
     },
 
     async detach(sessionId, viewerId) {
@@ -634,20 +844,19 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       touch(entry, options.deviceId ?? null);
       const full = path.join(entry.dir, file);
       const send = { rangeHeader: options.rangeHeader, head: options.head };
-      if (file === 'index.m3u8' && options.videoToken) {
-        let text: string | null = null;
-        try {
-          text = await readFile(full, 'utf8');
-        } catch {}
+      if (file === 'index.m3u8') {
+        /* Con token (app nativa) o sin él (hls.js de la web con la IPTV): la
+           lista con el TARGETDURATION fijado (docs/multidispositivo.md §4.3). */
+        const text = await playlistBody(entry, full);
         if (text === null) {
           await sendBare(reply, 404, { 'cache-control': 'no-store' });
           return;
         }
-        await sendBuffer(reply, full, Buffer.from(rewritePlaylist(text, options.videoToken)), send);
+        const body = options.videoToken ? rewritePlaylist(text, options.videoToken) : text;
+        await sendBuffer(reply, full, Buffer.from(body), send);
         return;
       }
-      const seen = await sendFile(reply, full, send);
-      if (seen && file === 'index.m3u8') noteObservation(entry, seen);
+      await sendFile(reply, full, send);
     },
 
     async serveLegacyFile(reply, url, options) {
@@ -672,8 +881,17 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
         await sendBare(reply, 403);
         return;
       }
-      const seen = await sendFile(reply, file, options);
-      if (seen && entry && path.basename(file) === 'index.m3u8') noteObservation(entry, seen);
+      if (entry && file === path.resolve(entry.dir, 'index.m3u8')) {
+        /* 0.6.x: el TARGETDURATION fijado y el arranque a 6 s del final (§4.3). */
+        const text = await playlistBody(entry, file);
+        if (text === null) {
+          await sendBare(reply, 404, { 'cache-control': 'no-store' });
+          return;
+        }
+        await sendBuffer(reply, file, Buffer.from(withStartOffset(text)), options);
+        return;
+      }
+      await sendFile(reply, file, options);
     },
 
     async legacyStop(body) {
@@ -766,6 +984,8 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
         ready: entry.ready,
         viewers: allViewers(entry),
         log: entry.log.text(),
+        targetS: entry.targetS,
+        args: entryArgs.get(entry) ?? [],
       })),
     reap,
     idle: () => registry.idle(),

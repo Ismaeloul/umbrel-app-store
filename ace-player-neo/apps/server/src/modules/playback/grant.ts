@@ -5,6 +5,7 @@
 import {
   IOS_PLAYBACK_PROFILES,
   PLAYBACK_PROFILES,
+  remuxLatency,
   type EngineSessionMode,
   type PlaybackMode,
   type StreamLatency,
@@ -32,16 +33,44 @@ export function legacyVideoPath(hash: string): string {
   return `/remux/${hash}/index.m3u8`;
 }
 
+/** Lo que sabe la concesión del remux de quien lo lee (docs/multidispositivo.md §4.4). */
+export interface RemuxLatencyInput {
+  /** TARGETDURATION fijado al quedar lista la lista (null si no se sabe: se toma 2). */
+  readonly targetDurationS: number | null;
+}
+
 /**
  * `latency` de la respuesta: `initial`/`rebuild` del perfil; seguimiento del
  * directo de mpegts.js en segundos (null en Estable); en iOS, los valores de
  * AVPlayer (P11) y sin seguimiento por velocidad.
+ *
+ * Con el remux (docs/multidispositivo.md §4.4) la distancia sale de
+ * `remuxLatency` con el TARGETDURATION real: en el iPhone nunca menos de 3 TD
+ * (lo que aguanta AVPlayer); en la web (hls.js, IPTV) en segundos y también en
+ * «Estable».
  */
-export function latencyFor(mode: PlaybackMode, protocol: StreamProtocol): StreamLatency {
+export function latencyFor(
+  mode: PlaybackMode,
+  protocol: StreamProtocol,
+  remux: RemuxLatencyInput | null = null,
+): StreamLatency {
   const profile = PLAYBACK_PROFILES[mode];
   const base = { mode, initialBufferS: profile.initial, rebuildS: profile.rebuild };
   if (protocol === 'hls-fmp4') {
-    return { ...base, liveSync: null, ios: { ...IOS_PLAYBACK_PROFILES[mode] } };
+    if (!remux) return { ...base, liveSync: null, ios: { ...IOS_PLAYBACK_PROFILES[mode] } };
+    const ios = remuxLatency(mode, remux.targetDurationS, 'ios');
+    return {
+      ...base,
+      liveSync: null,
+      ios: {
+        preferredForwardBufferDuration: Math.max(profile.rebuild, ios.targetS),
+        liveEdgeOffsetS: ios.targetS,
+      },
+    };
+  }
+  if (remux) {
+    const web = remuxLatency(mode, remux.targetDurationS, 'web');
+    return { ...base, liveSync: { targetS: web.targetS, maxS: web.maxS, rate: web.rate } };
   }
   const mpegts = profile.mpegts;
   const liveSync = mpegts.liveSync
@@ -55,6 +84,11 @@ export function latencyFor(mode: PlaybackMode, protocol: StreamProtocol): Stream
       }
     : null;
   return { ...base, liveSync };
+}
+
+/** `iptvInput` de la concesión: qué entrega el proveedor (solo IPTV, docs/multidispositivo.md §4.4). */
+export function iptvInputOf(input: { readonly isHls: boolean }): 'ts' | 'hls' {
+  return input.isHls ? 'hls' : 'ts';
 }
 
 export interface StreamCodec {

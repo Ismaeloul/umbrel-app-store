@@ -475,6 +475,46 @@ describe('iOS: remux sobre la sesión del backend (arquitectura §5.7, D5.3)', (
     expect(metrics(setup).sessionsOpen).toBe(0);
   });
 
+  it('C.4 encendido: iPhone primero + web → la web lee el remux, el motor sigue en progresivo con un lector', async () => {
+    const setup = await setupPlayback({ shareViaRemux: true });
+    const { runtime, ffmpeg, events } = setup;
+    await runtime.service.acquire(X, query({ client: 'ios' }), ios('visor-ios-1'), live());
+    const pc = await runtime.service.acquire(
+      X,
+      query({ mode: 'low' }),
+      web('visor-pc', 'pc'),
+      live(),
+    );
+    expect(pc).toMatchObject({
+      url: `/api/v1/video/${pc.session.id}/index.m3u8`,
+      protocol: 'hls',
+      remux: true,
+      /* TD 1 del ffmpeg falso: «Baja latencia» a 3 s, como el iPhone. */
+      latency: { liveSync: { targetS: 3, maxS: 7, rate: 1.05 } },
+    });
+    await runtime.idle();
+    expect(runtime.inspect().sessions[0]?.mode).toBe('progressive');
+    expect(ffmpeg.spawned).toHaveLength(1);
+    expect(events.of('stream.modeChanged')).toEqual([]);
+    /* La reconexión de la web no la suelta (consumes pegajoso) aunque se vaya el iPhone. */
+    await runtime.service.releaseDevice('iphone-1');
+    const again = await runtime.service.acquire(X, query(), web('visor-pc', 'pc'), live());
+    expect(again.session.id).toBe(pc.session.id);
+    expect(again.url).toBe(pc.url);
+    expect(ffmpeg.spawned).toHaveLength(1);
+    expect(runtime.inspect().sessions[0]?.mode).toBe('progressive');
+  });
+
+  it('C.4 encendido pero la web primero: como hoy (el motor pasa a HLS)', async () => {
+    const setup = await setupPlayback({ shareViaRemux: true });
+    const { runtime } = setup;
+    const pc = await runtime.service.acquire(X, query(), web('visor-pc', 'pc'), live());
+    expect(pc.protocol).toBe('mpegts');
+    await runtime.service.acquire(X, query({ client: 'ios' }), ios('visor-ios-1'), live());
+    await runtime.idle();
+    expect(runtime.inspect().sessions[0]?.mode).toBe('hls');
+  });
+
   it('una web que se une al iPhone: la sesión pasa a HLS y el remux se relanza sobre ella', async () => {
     const setup = await setupPlayback();
     const { runtime, ffmpeg, events } = setup;

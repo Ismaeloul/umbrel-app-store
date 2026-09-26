@@ -56,7 +56,7 @@ function readingLauncher(fallback: FakeLauncher): ProcessLauncher {
     spawn(args) {
       const proc = new FakeFfmpeg(args);
       fallback.spawned.push(proc);
-      proc.writeSegments([2, 2, 2]);
+      proc.writeSegments([1, 1, 1, 1]);
       if (args.includes('-protocol_whitelist')) {
         const req = http.get(proc.input, { agent: false }, (res) => {
           res.on('data', () => undefined);

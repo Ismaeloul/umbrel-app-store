@@ -206,6 +206,8 @@ export interface PlaybackSetupOptions {
   readonly state?: StateService;
   /** Sin `start()` del SessionManager (se prueba a mano). */
   readonly noStart?: boolean;
+  /** C.4 encendido (docs/multidispositivo.md §4.6). */
+  readonly shareViaRemux?: boolean;
 }
 
 export async function setupPlayback(options: PlaybackSetupOptions = {}): Promise<PlaybackSetup> {
@@ -238,6 +240,7 @@ export async function setupPlayback(options: PlaybackSetupOptions = {}): Promise
     remux: remux.service,
     state,
     scanner,
+    ...(options.shareViaRemux === undefined ? {} : { shareViaRemux: options.shareViaRemux }),
   });
   if (!options.noStart) await runtime.service.start();
   cleanups.push(async () => {

@@ -49,9 +49,12 @@ async function drive<T>(clock: FakeClock, promise: Promise<T>): Promise<T> {
     () => (settled = true),
     () => (settled = true),
   );
-  for (let step = 0; step < 40 && !settled; step += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    if (!settled) await clock.advanceAsync(READY_POLL_MS);
+  /* Hasta 10 s reales (y un cuarto de relectura por paso, sin llegar a los 45 s
+     del plazo): con toda la batería en paralelo, lanzar node en Windows tarda a
+     veces más de 2 s. */
+  for (let step = 0; step < 160 && !settled; step += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    if (!settled) await clock.advanceAsync(READY_POLL_MS / 4);
   }
   return promise;
 }

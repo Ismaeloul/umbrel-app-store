@@ -68,6 +68,13 @@ interface ReadingFfmpeg extends FakeFfmpeg {
   readError: string | null;
 }
 
+/**
+ * El próximo ffmpeg IPTV con el análisis corto (2 MB / 2 s) no encuentra los
+ * parámetros: no escribe segmentos y se queja por stderr, como el de verdad
+ * (docs/multidispositivo.md §4.5).
+ */
+let probeFailNext = false;
+
 function readingLauncher(
   fallback: FakeLauncher,
 ): ProcessLauncher & { readonly all: ReadingFfmpeg[] } {
@@ -80,7 +87,14 @@ function readingLauncher(
       all.push(proc);
       proc.bytesRead = 0;
       proc.readError = null;
-      proc.writeSegments([2, 2, 2]);
+      const shortProbe = args[args.indexOf('-probesize') + 1] === '2000000';
+      if (probeFailNext && shortProbe) {
+        probeFailNext = false;
+        setTimeout(
+          () => proc.stderr('[mpegts] Could not find codec parameters for stream 1 (Audio: ac3)'),
+          150,
+        );
+      } else proc.writeSegments([1, 1, 1, 1]);
       if (args.includes('-protocol_whitelist')) {
         const input = proc.input;
         const readOnce = (url: string): http.ClientRequest => {
@@ -314,6 +328,32 @@ describe('IPTV de punta a punta (docs/iptv.md §9.2)', () => {
     await until('plaza suelta', () => r.provider.conexiones() === 0);
     expect(r.h.iptv.connections()).toBe(0);
     expect(r.h.bus.of('playback.handoff').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('análisis corto sin parámetros: un reinicio con 5 MB / 5 s sin abrir otra conexión con el proveedor (§4.5)', async () => {
+    const r = await setup();
+    await saveXtream(r);
+    const id = await iptvIdFor(r.h, 'Antena 3');
+    probeFailNext = true;
+    const peak: number[] = [];
+    const sampler = setInterval(() => peak.push(r.provider.conexiones()), 100);
+    let grant: StreamGrant;
+    try {
+      grant = await openDriven(r.h, id, 'visor_probe');
+      await until('bytes al ffmpeg nuevo', () => (r.launcher.all.at(-1)?.bytesRead ?? 0) > 20_000);
+    } finally {
+      clearInterval(sampler);
+    }
+    expect(grant.source).toBe('iptv');
+    expect(grant.iptvInput).toBe('ts');
+    const probes = r.launcher.all
+      .filter((proc) => proc.args.includes('-protocol_whitelist'))
+      .map((proc) => proc.args[proc.args.indexOf('-probesize') + 1]);
+    expect(probes).toEqual(['2000000', '5000000']);
+    expect(Math.max(0, ...peak)).toBeLessThanOrEqual(1);
+    /* La misma conexión de siempre: una sola petición de stream al proveedor. */
+    expect(r.provider.peticionesDeStream()).toHaveLength(1);
+    expect(r.h.bus.of('stream.closed')).toEqual([]);
   });
 
   it('4 · dos aperturas a la vez (IPTV y AceStream en dos dispositivos): una sola sesión viva y como mucho una conexión', async () => {

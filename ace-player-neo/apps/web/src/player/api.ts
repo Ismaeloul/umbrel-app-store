@@ -194,6 +194,13 @@ export interface PlayerState {
   protocol: StreamProtocol | null;
   /** De dónde sale el vídeo según la concesión (`grant.source`): el motor AceStream o la IPTV. */
   streamSource: 'engine' | 'iptv' | null;
+  /** Solo IPTV: lo que entrega el proveedor (`grant.iptvInput`), TS continuo o HLS. */
+  iptvInput: 'ts' | 'hls' | null;
+  /**
+   * hls.js: TARGETDURATION de la lista que ve y lo que duran de verdad los
+   * segmentos (docs/multidispositivo.md §4.2). Null con mpegts.js o sin lista.
+   */
+  segment: { targetS: number; minS: number | null; maxS: number | null } | null;
   codec: { video: string; audio: string } | null;
   sessionId: string | null;
   stats: PlayerStats | null;
@@ -232,6 +239,8 @@ export const INITIAL_PLAYER_STATE: PlayerState = {
   engine: null,
   protocol: null,
   streamSource: null,
+  iptvInput: null,
+  segment: null,
   codec: null,
   sessionId: null,
   stats: null,

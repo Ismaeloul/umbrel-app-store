@@ -201,8 +201,32 @@ export const IPTV_BUSY_STATUSES: readonly number[] = [403, 429, 456, 458, 509];
  * variante (49 s). Si ffmpeg muriera antes, la sesión se cerraría sin probarla.
  */
 export const IPTV_FFMPEG_RW_TIMEOUT_US = 55_000_000;
-/** Espera del remux IPTV: 2 segmentos o este tope (`iptv_timeout`, §6.3). */
+/**
+ * Espera del remux IPTV (`iptv_timeout`, §6.3): la lista tiene que quedar lista
+ * (docs/multidispositivo.md §4.3) este rato después del PRIMER BYTE ENTREGADO A
+ * FFMPEG (hasta la 0.8.1 contaba desde que arrancaba ffmpeg). §4.5.
+ */
 export const IPTV_REMUX_READY_MS = 20 * SECOND;
+/** Tope desde que se abre el relé (reintentos de «ocupado» de 2, 4 y 8 s incluidos) hasta la lista lista. */
+export const IPTV_REMUX_OPEN_MAX_MS = 28 * SECOND;
+/**
+ * Tope total de una petición de canal IPTV, cerrojo de la casa incluido
+ * (esperar a que se cierre la sesión anterior y el relé suelte la plaza). Por
+ * debajo de `remuxStartClientMs` (55 s) y de los 60 s de nginx: el cliente
+ * siempre recibe `iptv_timeout`, nunca un corte (docs/multidispositivo.md §4.5).
+ */
+export const IPTV_ACQUIRE_MAX_MS = 50 * SECOND;
+/**
+ * Análisis de la entrada con origen IPTV: 2 MB / 2 s (el motor sigue con los
+ * 5 MB / 5 s de la 0.6.59). Si ffmpeg no encuentra los parámetros, UN reinicio
+ * con `IPTV_PROBE_FALLBACK` sin soltar la conexión con el proveedor (§4.5).
+ */
+export const IPTV_PROBE_ARGS = { probesize: 2_000_000, analyzeduration: 2_000_000 } as const;
+export const IPTV_PROBE_FALLBACK = { probesize: 5_000_000, analyzeduration: 5_000_000 } as const;
+/** Cola de lo último entregado a ffmpeg que el relé guarda para volver a dárselo tras ese reinicio. */
+export const IPTV_PROBE_RETAIN_BYTES = 5 * MIB;
+/** Sin imagen en este rato, la web pasa de «Conectando con tu IPTV…» a «Tu IPTV está tardando en arrancar…». */
+export const IPTV_SLOW_START_MS = 10 * SECOND;
 
 /** Sesión y plaza del proveedor (§6.4 y §6.5). */
 export const IPTV_SESSION = {

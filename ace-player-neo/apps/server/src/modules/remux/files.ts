@@ -89,6 +89,77 @@ export async function readPlaylistStats(file: string): Promise<PlaylistStats | n
   return playlistStatsFromText(text);
 }
 
+/** `#EXTINF` más largo de la lista, redondeado al entero más cercano (como pide la norma para TARGETDURATION). */
+export function maxRoundedExtinf(text: string): number {
+  let max = 0;
+  for (const match of text.matchAll(/^#EXTINF:([\d.]+)/gm)) {
+    const value = Math.round(Number(match[1]) || 0);
+    if (value > max) max = value;
+  }
+  return max;
+}
+
+/** TARGETDURATION con el que se fija la lista al quedar lista: el mayor `#EXTINF` redondeado, 1 como poco. */
+export function initialTargetDuration(text: string): number {
+  return Math.max(1, maxRoundedExtinf(text));
+}
+
+export interface PinnedPlaylist {
+  readonly text: string;
+  /** El TARGETDURATION que queda fijado (null si aún no se ha fijado). */
+  readonly pinned: number | null;
+  /** Ha habido que subirlo: un segmento no cabía en el fijado. */
+  readonly raised: boolean;
+}
+
+/**
+ * `EXT-X-TARGETDURATION` fijo por sesión (docs/multidispositivo.md §4.3): se
+ * sirve siempre el valor fijado al quedar lista la lista, aunque ffmpeg lo
+ * baje cuando un segmento largo sale de la ventana (la norma no deja que
+ * cambie). Solo SUBE si llega un `#EXTINF` que, redondeado, no cabe: una lista
+ * con un segmento mayor que TARGETDURATION es peor, AVPlayer puede rechazarla.
+ * Sin valor fijado (`null`, antes de estar lista), el texto sale tal cual.
+ */
+export function pinTargetDuration(text: string, pinned: number | null): PinnedPlaylist {
+  if (pinned === null) return { text, pinned: null, raised: false };
+  const longest = maxRoundedExtinf(text);
+  const value = Math.max(pinned, longest);
+  const out = text.replace(/^#EXT-X-TARGETDURATION:\d+/m, `#EXT-X-TARGETDURATION:${value}`);
+  return { text: out, pinned: value, raised: value > pinned };
+}
+
+export interface SegmentSpread {
+  readonly minS: number;
+  readonly maxS: number;
+}
+
+/**
+ * Duración real de los segmentos de la ventana (docs/multidispositivo.md
+ * §4.2), sin el primero de la sesión (`EXT-X-MEDIA-SEQUENCE:0`), que sale más
+ * corto. Null si no queda ninguno.
+ */
+export function segmentSpread(text: string): SegmentSpread | null {
+  const sequence = Number(/^#EXT-X-MEDIA-SEQUENCE:(\d+)/m.exec(text)?.[1] ?? 0);
+  const values = [...text.matchAll(/^#EXTINF:([\d.]+)/gm)].map((match) => Number(match[1]) || 0);
+  if (sequence === 0) values.shift();
+  if (!values.length) return null;
+  return { minS: Math.min(...values), maxS: Math.max(...values) };
+}
+
+/** Margen con el que arrancan las apps 0.6.x por `/remux/` (los 3 × 2 s de antes de C.1). */
+export const LEGACY_START_OFFSET_S = 6;
+
+/**
+ * `#EXT-X-START:TIME-OFFSET=-6.0,PRECISE=NO` tras `#EXTM3U` (una vez): las
+ * apps 0.6.x no fijan `configuredTimeOffsetFromLive`, y con TARGETDURATION 1
+ * AVPlayer las pondría a 3 s del final en vez de a 6 s (§4.3).
+ */
+export function withStartOffset(text: string, offsetS: number = LEGACY_START_OFFSET_S): string {
+  if (/^#EXT-X-START:/m.test(text)) return text;
+  const tag = `#EXT-X-START:TIME-OFFSET=-${offsetS.toFixed(1)},PRECISE=NO`;
+  return text.replace(/^#EXTM3U[^\r\n]*(\r?\n)/, (head, eol: string) => `${head}${tag}${eol}`);
+}
+
 function withToken(uri: string, token: string): string {
   if (/[?&]t=/.test(uri)) return uri;
   return `${uri}${uri.includes('?') ? '&' : '?'}t=${encodeURIComponent(token)}`;

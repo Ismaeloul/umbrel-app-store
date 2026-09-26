@@ -83,6 +83,12 @@ export interface RemuxEnsureOptions {
    * cliente de la sesión, como en `ensureRemux` (server.js:237-245, B-222).
    */
   readonly legacy?: { readonly device: string };
+  /**
+   * Tope absoluto (reloj del backend) para esperar la lista: el de la petición
+   * del canal IPTV (`IPTV_ACQUIRE_MAX_MS`, cerrojo incluido). Pasado,
+   * `iptv_timeout` (docs/multidispositivo.md §4.5).
+   */
+  readonly deadlineAt?: number;
 }
 
 /** Lo que necesita el remux de la sesión del motor que le da playback. */
@@ -102,6 +108,24 @@ export interface RemuxSource {
   readonly origin?: 'engine' | 'iptv';
   /** La entrada del relé es una lista HLS. */
   readonly isHls?: boolean;
+  /**
+   * IPTV: cuándo empezó a abrirse el relé (reintentos de «ocupado» incluidos):
+   * desde ahí cuenta `IPTV_REMUX_OPEN_MAX_MS` (docs/multidispositivo.md §4.5).
+   */
+  readonly openedAt?: number;
+  /** IPTV: primer byte entregado al ffmpeg de ahora (null si aún ninguno). */
+  readonly firstByteAt?: () => number | null;
+  /**
+   * IPTV: prepara el relé para un reinicio de ffmpeg sin soltar la conexión
+   * con el proveedor. `false` si el relé ya no está (§4.5).
+   */
+  readonly prepareRestart?: () => boolean;
+}
+
+export interface RemuxSegments {
+  /** Duración real del segmento más corto y del más largo de la ventana (sin el primero de la sesión). */
+  readonly minS: number;
+  readonly maxS: number;
 }
 
 export interface RemuxHandle {
@@ -114,6 +138,10 @@ export interface RemuxHandle {
   readonly ready: boolean;
   /** Ficha de 16 hex del enganche antiguo (solo con `options.legacy`). */
   readonly legacyToken?: string;
+  /** TARGETDURATION fijado al quedar lista la lista (null antes). Docs/multidispositivo.md §4.3. */
+  targetDurationS(): number | null;
+  /** Lo que duran de verdad los segmentos (null si aún no hay). §4.2. */
+  segments(): RemuxSegments | null;
 }
 
 export interface RemuxStats {
@@ -197,6 +225,7 @@ export interface RemuxService extends Lifecycle {
     readonly sessionId: string;
     readonly origin?: 'engine' | 'iptv';
     readonly isHls?: boolean;
+    readonly probe?: 'short' | 'fallback';
   }): string[];
   /** `parseByteRange` (server.js:346): `{start,end}` o false si no se puede servir (T-003). */
   parseByteRange(header: string | undefined, size: number): ByteRange | false | null;

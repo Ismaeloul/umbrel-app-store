@@ -125,13 +125,42 @@ describe('arranque y espera del manifiesto (B-105, B-217)', () => {
     expect((await pending).ready).toBe(true);
   });
 
-  it('con 2 segmentos que suman 6 s se da por lista en la siguiente lectura', async () => {
+  it('con TD 1: 3 segmentos y 4 s de vídeo; se da por lista en la siguiente lectura (§4.3)', async () => {
     const { service, fake, clock } = setup({ launcher: { autoSegments: null } });
-    const pending = service.ensure(source(1), 'visor-1');
+    let done = false;
+    const pending = service.ensure(source(1), 'visor-1').then((handle) => {
+      done = true;
+      return handle;
+    });
     await parked(clock);
-    fake.last().writeSegments([2.5, 3.5]);
+    /* 3 segmentos de 0,96 s: 2,88 s, menos de los 4 s que pide TD 1. */
+    fake.last().writeSegments([0.96, 0.96, 0.96]);
+    await advanceParked(clock, READY_POLL_MS * 2);
+    await parked(clock);
+    expect(done).toBe(false);
+    fake.last().writeSegments([0.96, 0.96]);
     await clock.advanceAsync(READY_POLL_MS);
-    expect((await pending).ready).toBe(true);
+    const handle = await pending;
+    expect(handle.ready).toBe(true);
+    expect(handle.targetDurationS()).toBe(1);
+    expect(handle.segments()).toEqual({ minS: 0.96, maxS: 0.96 });
+  });
+
+  it('con TD 2 pide 7 s (3 × TD + 1): 3 segmentos de 2 s no bastan, 4 sí', async () => {
+    const { service, fake, clock } = setup({ launcher: { autoSegments: null } });
+    let done = false;
+    const pending = service.ensure(source(1), 'visor-1').then((handle) => {
+      done = true;
+      return handle;
+    });
+    await parked(clock);
+    fake.last().writeSegments([2, 2, 2]);
+    await advanceParked(clock, READY_POLL_MS * 2);
+    await parked(clock);
+    expect(done).toBe(false);
+    fake.last().writeSegments([2]);
+    await clock.advanceAsync(READY_POLL_MS);
+    expect((await pending).targetDurationS()).toBe(2);
   });
 
   it('dos segmentos que no llegan a 6 s no bastan (server.js:4920)', async () => {
@@ -179,6 +208,208 @@ describe('arranque y espera del manifiesto (B-105, B-217)', () => {
     await expect(service.ensure(source(1), 'visor-2', aborted.signal)).rejects.toThrow(
       'ya_cortado',
     );
+  });
+});
+
+describe('TARGETDURATION fijado en las tres formas de servir la lista (docs/multidispositivo.md §4.3)', () => {
+  it('se fija al quedar lista, nunca baja aunque ffmpeg lo baje y sube si un segmento no cabe', async () => {
+    const { service, fake, runtime, clock } = setup({ launcher: { autoSegments: null } });
+    const pending = service.ensure(source(1), 'visor-1');
+    await parked(clock);
+    fake.last().writeSegments([2, 2, 2, 2]);
+    await clock.advanceAsync(READY_POLL_MS);
+    const handle = await pending;
+    expect(handle.targetDurationS()).toBe(2);
+    const dir = handle.dir;
+    const readServed = async (via: 'token' | 'bare' | 'legacy'): Promise<string> => {
+      const { default: Fastify } = await import('fastify');
+      const app = Fastify();
+      app.get('/x', async (_req, reply) => {
+        if (via === 'legacy')
+          await service.serveLegacyFile(reply, `/remux/${hex(1)}/index.m3u8`, {});
+        else
+          await service.serveFile(reply, 's_sesion0001', 'index.m3u8', {
+            ...(via === 'token' ? { videoToken: 'firma' } : {}),
+          });
+      });
+      const res = await app.inject({ method: 'GET', url: '/x' });
+      await app.close();
+      return res.body;
+    };
+    /* Ventana con solo los segmentos de 1 s: ffmpeg escribe TD 1, se sirve 2. */
+    fake.last().writeSegments([1, 1, 1, 1]);
+    fake.last().setWindow(4);
+    for (const via of ['token', 'bare', 'legacy'] as const) {
+      const text = await readServed(via);
+      expect(text, via).toContain('#EXT-X-TARGETDURATION:2\n');
+    }
+    expect(await readServed('legacy')).toContain('#EXT-X-START:TIME-OFFSET=-6.0,PRECISE=NO');
+    expect(await readServed('token')).not.toContain('#EXT-X-START');
+    expect(await readServed('token')).toContain('index4.m4s?t=firma');
+    /* Llega un segmento de 3 s: sube a 3 y no vuelve a bajar. */
+    fake.last().writeSegments([3]);
+    expect(await readServed('bare')).toContain('#EXT-X-TARGETDURATION:3\n');
+    expect(handle.targetDurationS()).toBe(3);
+    fake.last().writeSegments([1, 1, 1, 1, 1]);
+    expect(await readServed('bare')).toContain('#EXT-X-TARGETDURATION:3\n');
+    expect(runtime.entries()[0]?.targetS).toBe(3);
+    expect(dir).toBeTruthy();
+  });
+
+  it('antes de estar lista la lista sale tal cual (sin fijar)', async () => {
+    const { service, fake, clock } = setup({ launcher: { autoSegments: null } });
+    const pending = service.ensure(source(1), 'visor-1').catch(() => undefined);
+    await parked(clock);
+    fake.last().writeSegments([2]);
+    const { default: Fastify } = await import('fastify');
+    const app = Fastify();
+    app.get('/x', async (_req, reply) => {
+      await service.serveFile(reply, 's_sesion0001', 'index.m3u8', {});
+    });
+    const res = await app.inject({ method: 'GET', url: '/x' });
+    await app.close();
+    expect(res.body).toContain('#EXT-X-TARGETDURATION:2\n');
+    await service.stopAll();
+    await pending;
+  });
+});
+
+describe('IPTV: plazos y análisis largo sin perder la conexión (docs/multidispositivo.md §4.5)', () => {
+  const iptvSource = (over: Partial<RemuxSource> = {}): RemuxSource =>
+    source(7, {
+      mode: 'hls',
+      inputUrl: 'http://127.0.0.1:1/r/ticketdeprueba0000000/in.ts',
+      origin: 'iptv',
+      ...over,
+    });
+
+  async function settle<T>(
+    clock: ReturnType<typeof setup>['clock'],
+    promise: Promise<T>,
+    stepMs = 1000,
+    maxSteps = 40,
+  ): Promise<{ value?: T; code?: string; at: number }> {
+    let result: { value?: T; code?: string } | null = null;
+    const start = clock.now();
+    void promise.then(
+      (value) => {
+        result = { value };
+      },
+      (error: unknown) => {
+        result = { code: isAppError(error) ? error.code : String(error) };
+      },
+    );
+    for (let step = 0; step < maxSteps && !result; step += 1) {
+      await parked(clock, 1, 500);
+      await clock.advanceAsync(stepMs);
+    }
+    await parked(clock, 0, 50);
+    return { ...(result ?? {}), at: clock.now() - start };
+  }
+
+  it('iptv_timeout a los 20 s del PRIMER BYTE entregado a ffmpeg, no de cuando arrancó', async () => {
+    const { service, clock } = setup({ launcher: { autoSegments: null } });
+    const t0 = clock.now();
+    let firstByteAt: number | null = null;
+    const pending = service.ensure(iptvSource({ firstByteAt: () => firstByteAt }), 'v');
+    /* El primer byte llega a los 6 s: el plazo acaba a los 26 s. */
+    await advanceParked(clock, 6000);
+    firstByteAt = clock.now();
+    const out = await settle(clock, pending);
+    expect(out.code).toBe('iptv_timeout');
+    expect(clock.now() - t0).toBeGreaterThanOrEqual(26_000);
+    expect(clock.now() - t0).toBeLessThan(28_000);
+  });
+
+  it('tope de 28 s desde la apertura del relé y tope de la petición (deadlineAt)', async () => {
+    const { service, clock } = setup({ launcher: { autoSegments: null } });
+    /* El relé tardó 14 s en abrir (reintentos de ocupado): quedan 14 s. */
+    const openedAt = clock.now() - 14_000;
+    const first = settle(
+      clock,
+      service.ensure(iptvSource({ openedAt, firstByteAt: () => clock.now() }), 'v'),
+    );
+    const out = await first;
+    expect(out.code).toBe('iptv_timeout');
+    expect(out.at).toBeGreaterThanOrEqual(14_000);
+    expect(out.at).toBeLessThan(16_000);
+    await service.stopAll();
+    const again = await settle(
+      clock,
+      service.ensure(iptvSource(), 'v2', undefined, { deadlineAt: clock.now() + 5000 }),
+    );
+    expect(again.code).toBe('iptv_timeout');
+    expect(again.at).toBeLessThan(7000);
+  });
+
+  it('«Could not find codec parameters» con 2 MB / 2 s: prepareRestart ANTES y un reinicio con 5 MB / 5 s', async () => {
+    const { service, fake, clock, runtime, detached } = setup({
+      launcher: { autoSegments: null },
+    });
+    const calls: string[] = [];
+    const pending = service.ensure(
+      iptvSource({
+        prepareRestart: () => {
+          calls.push(`prepare:${fake.alive()}`);
+          return true;
+        },
+      }),
+      'v',
+    );
+    await parked(clock);
+    const first = fake.last();
+    expect(first.args[first.args.indexOf('-probesize') + 1]).toBe('2000000');
+    first.stderr('[mpegts] Could not find codec parameters for stream 1 (Audio: ac3)');
+    await runtime.idle();
+    /* Se preparó el relé con el ffmpeg viejo aún vivo (antes de matarlo). */
+    expect(calls).toEqual(['prepare:1']);
+    expect(first.killed).toBe(true);
+    const second = fake.last();
+    expect(second).not.toBe(first);
+    expect(second.args[second.args.indexOf('-probesize') + 1]).toBe('5000000');
+    second.writeSegments([1, 1, 1, 1]);
+    const out = await settle(clock, pending);
+    expect(out.value?.ready).toBe(true);
+    expect(service.viewersOf('s_sesion0007')).toEqual(['v']);
+    expect(detached).toEqual([]);
+    /* Un solo reinicio: si el largo vuelve a quejarse, no hay otro. */
+    second.stderr('Could not find codec parameters for stream 1');
+    await runtime.idle();
+    expect(fake.spawned).toHaveLength(2);
+  });
+
+  it('sin relé (prepareRestart da false) no se reinicia y sigue el error de siempre', async () => {
+    const { service, fake, clock, runtime } = setup({ launcher: { autoSegments: null } });
+    const pending = codeOf(service.ensure(iptvSource({ prepareRestart: () => false }), 'v'));
+    await parked(clock);
+    fake.last().stderr('Could not find codec parameters for stream 1');
+    fake.last().exit(1);
+    await runtime.idle();
+    expect(fake.spawned).toHaveLength(1);
+    expect(await pending).toBe('remux_died');
+  });
+
+  it('el motor (AceStream) nunca se reinicia por eso: ya analiza con 5 MB / 5 s', async () => {
+    const { service, fake, clock, runtime } = setup({ launcher: { autoSegments: null } });
+    let prepared = 0;
+    const pending = codeOf(
+      service.ensure(
+        source(8, {
+          prepareRestart: () => {
+            prepared += 1;
+            return true;
+          },
+        }),
+        'v',
+      ),
+    );
+    await parked(clock);
+    fake.last().stderr('Could not find codec parameters for stream 1');
+    fake.last().exit(1);
+    await runtime.idle();
+    expect(prepared).toBe(0);
+    expect(fake.spawned).toHaveLength(1);
+    expect(await pending).toBe('remux_died');
   });
 });
 

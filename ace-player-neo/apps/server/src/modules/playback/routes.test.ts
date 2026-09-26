@@ -487,7 +487,9 @@ describe('rutas v1 de reproducción (arquitectura §6.2-6.3)', () => {
     expect(grant.url).toBe(
       `/native/api/v1/video/${sid}/index.m3u8?t=${encodeURIComponent(`firma.${sid}.iphone-1`)}`,
     );
-    expect(grant.latency.ios).toEqual({ preferredForwardBufferDuration: 12, liveEdgeOffsetS: 12 });
+    /* «Estable» con TARGETDURATION 1 (el ffmpeg falso corta en 1 s): 10 s del
+       directo y 12 s de colchón (docs/multidispositivo.md §4.4). */
+    expect(grant.latency.ios).toEqual({ preferredForwardBufferDuration: 12, liveEdgeOffsetS: 10 });
     const beat = await app.inject({
       method: 'POST',
       url: `/native/api/v1/sessions/${sid}/heartbeat`,

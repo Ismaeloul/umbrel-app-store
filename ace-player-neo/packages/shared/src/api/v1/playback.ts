@@ -141,6 +141,12 @@ export const StreamGrantSchema = z.strictObject({
   handoff: z.boolean(),
   /** `iptv` si el vídeo sale de la IPTV (textos del reproductor); ausente = `engine`. */
   source: StreamSourceSchema.optional(),
+  /**
+   * Solo IPTV: lo que entrega el proveedor, TS continuo o una lista HLS (con
+   * HLS el retraso lo marca el segmento del proveedor). «Datos técnicos»
+   * (docs/multidispositivo.md §4.4). Ausente = no es IPTV o servidor anterior.
+   */
+  iptvInput: z.enum(['ts', 'hls']).optional(),
 });
 export type StreamGrant = z.infer<typeof StreamGrantSchema>;
 

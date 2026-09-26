@@ -1615,6 +1615,11 @@ paths:
                     enum:
                       - engine
                       - iptv
+                  iptvInput:
+                    type: string
+                    enum:
+                      - ts
+                      - hls
                 required:
                   - session
                   - url

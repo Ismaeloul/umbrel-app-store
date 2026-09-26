@@ -12,10 +12,22 @@
        · error de medio fatal: hasta 2 `recoverMediaError()`; el segundo,
          además, `swapAudioCodec()`;
        · lo demás: reconexión completa «HLS no pudo recuperarse (…)».
-   - Solo errores `fatal`: los demás los arregla hls.js solo. */
+   - Solo errores `fatal`: los demás los arregla hls.js solo.
+   - Con el remux del servidor (la IPTV en la web, docs/multidispositivo.md
+     §4.4) va EN SEGUNDOS y no en segmentos: `liveSyncDuration` y
+     `liveMaxLatencyDuration` de la concesión (o de `remuxLatency` con el
+     TARGETDURATION real), así los tres modos valen lo mismo que con
+     mpegts.js sea cual sea el GOP del canal. Si el TARGETDURATION cambia
+     (`LEVEL_UPDATED`), se recalcula sin reenganchar. */
 
-import { HLS_RECOVERY } from '@ace/shared';
-import { absoluteUrl, type Engine, type EngineArgs } from './types.ts';
+import { HLS_RECOVERY, remuxLatency } from '@ace/shared';
+import {
+  absoluteUrl,
+  type Engine,
+  type EngineArgs,
+  type EngineInfo,
+  type RemuxTuning,
+} from './types.ts';
 
 export interface HlsLike {
   loadSource(url: string): void;
@@ -26,12 +38,21 @@ export interface HlsLike {
   swapAudioCodec(): void;
   destroy(): void;
   readonly liveSyncPosition: number | null;
+  /** La configuración viva (hls.js relee `liveSyncDuration` y compañía en cada cálculo). */
+  readonly config?: Record<string, unknown>;
+  /** Segundos por detrás del final de la lista (hls.js ≥ 1.1). */
+  readonly latency?: number;
 }
 
 export interface HlsLib {
   new (config: Record<string, unknown>): HlsLike;
   isSupported(): boolean;
-  readonly Events: { MANIFEST_PARSED: string; FRAG_LOADED: string; ERROR: string };
+  readonly Events: {
+    MANIFEST_PARSED: string;
+    FRAG_LOADED: string;
+    ERROR: string;
+    LEVEL_UPDATED?: string;
+  };
   readonly ErrorTypes: { NETWORK_ERROR: string; MEDIA_ERROR: string };
 }
 
@@ -41,12 +62,39 @@ interface HlsErrorData {
   details?: string;
 }
 
+interface LevelUpdatedData {
+  details?: { targetduration?: number; fragments?: ReadonlyArray<{ duration?: number }> };
+}
+
+/** Lo que se persigue con el remux: de la concesión o, si no trae, de `remuxLatency`. */
+function remuxLive(tuning: RemuxTuning, targetDurationS: number | null) {
+  const calc = remuxLatency(tuning.mode, targetDurationS, 'web');
+  const live = targetDurationS === null && tuning.liveSync ? tuning.liveSync : calc;
+  return { targetS: live.targetS, maxS: live.maxS, rate: live.rate, bufferS: calc.bufferS };
+}
+
 /** La configuración que recibe hls.js (exportada para el test). */
-export function hlsConfig(profile: EngineArgs['profile']): Record<string, unknown> {
+export function hlsConfig(
+  profile: EngineArgs['profile'],
+  remux: RemuxTuning | null = null,
+): Record<string, unknown> {
+  if (!remux) {
+    return {
+      manifestLoadingTimeOut: 20_000,
+      fragLoadingTimeOut: 20_000,
+      ...profile.hls,
+    };
+  }
+  const live = remuxLive(remux, null);
   return {
     manifestLoadingTimeOut: 20_000,
     fragLoadingTimeOut: 20_000,
-    ...profile.hls,
+    liveSyncDuration: live.targetS,
+    liveMaxLatencyDuration: live.maxS,
+    maxLiveSyncPlaybackRate: live.rate,
+    maxBufferLength: live.bufferS,
+    lowLatencyMode: false,
+    backBufferLength: 30,
   };
 }
 
@@ -57,19 +105,52 @@ export function createHlsEngine(Hls: HlsLib, args: EngineArgs): Engine {
   let networkRetries = 0;
   let mediaRecoveries = 0;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
+  const remux = args.remux ?? null;
+  /** Lo que dice la lista que ve hls.js: TARGETDURATION y lo que duran de verdad los segmentos. */
+  let segment: { targetS: number; minS: number | null; maxS: number | null } | null = null;
+
+  /* El TARGETDURATION de la lista ha cambiado (o se sabe por primera vez):
+     misma regla que el servidor, escrita en la configuración viva. */
+  function onLevelUpdated(instance: HlsLike, raw: unknown): void {
+    const details = (raw as LevelUpdatedData | undefined)?.details;
+    const target = details?.targetduration;
+    if (typeof target !== 'number' || !Number.isFinite(target) || target <= 0) return;
+    const values = (details?.fragments ?? [])
+      .map((fragment) => fragment.duration)
+      .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+    const previous = segment?.targetS ?? null;
+    segment = {
+      targetS: target,
+      minS: values.length ? Math.min(...values) : null,
+      maxS: values.length ? Math.max(...values) : null,
+    };
+    if (!remux || target === previous) return;
+    const config = instance.config;
+    if (!config) return;
+    const live = remuxLive(remux, target);
+    if (config.liveSyncDuration === live.targetS && config.liveMaxLatencyDuration === live.maxS)
+      return;
+    config.liveSyncDuration = live.targetS;
+    config.liveMaxLatencyDuration = live.maxS;
+  }
 
   return {
     kind: 'hls',
     preloads: true,
     start() {
       if (destroyed || hls) return;
-      const instance = new Hls(hlsConfig(args.profile));
+      const instance = new Hls(hlsConfig(args.profile, remux));
       hls = instance;
       instance.loadSource(absoluteUrl(args.url));
       instance.attachMedia(args.video);
       instance.on(Hls.Events.FRAG_LOADED, () => {
         networkRetries = 0;
       });
+      if (Hls.Events.LEVEL_UPDATED) {
+        instance.on(Hls.Events.LEVEL_UPDATED, (_event, data) => {
+          if (!destroyed && hls === instance) onLevelUpdated(instance, data);
+        });
+      }
       instance.on(Hls.Events.MANIFEST_PARSED, () => {
         if (destroyed || ready) return;
         ready = true;
@@ -123,6 +204,14 @@ export function createHlsEngine(Hls: HlsLib, args: EngineArgs): Engine {
       const position = hls?.liveSyncPosition;
       return typeof position === 'number' && Number.isFinite(position) ? position : null;
     },
-    info: () => ({}),
+    info(): EngineInfo {
+      const latency = hls?.latency;
+      return {
+        ...(typeof latency === 'number' && Number.isFinite(latency) && latency >= 0
+          ? { latencyS: latency }
+          : {}),
+        ...(segment ? { segment: { ...segment } } : {}),
+      };
+    },
   };
 }

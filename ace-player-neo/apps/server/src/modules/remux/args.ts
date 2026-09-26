@@ -11,7 +11,12 @@
    `-hide_banner -loglevel warning -nostdin` ya estaban en la 0.6.59. */
 
 import path from 'node:path';
-import { IPTV_FFMPEG_RW_TIMEOUT_US } from '@ace/shared';
+import {
+  IPTV_FFMPEG_RW_TIMEOUT_US,
+  IPTV_PROBE_ARGS,
+  IPTV_PROBE_FALLBACK,
+  REMUX_SEGMENT,
+} from '@ace/shared';
 
 export interface RemuxArgsInput {
   /** URL absoluta de la entrada: la `playbackUrl` en el motor principal o la del relé IPTV. */
@@ -26,6 +31,12 @@ export interface RemuxArgsInput {
   readonly isHls?: boolean;
   /** Sistema en el que corre ffmpeg (por defecto, el del proceso). */
   readonly platform?: NodeJS.Platform;
+  /**
+   * Análisis de la entrada IPTV: `short` (2 MB / 2 s, por defecto) o
+   * `fallback` (5 MB / 5 s, el reinicio único de docs/multidispositivo.md
+   * §4.5). El motor siempre usa los 5 MB / 5 s de la 0.6.59.
+   */
+  readonly probe?: 'short' | 'fallback';
 }
 
 /** Marca que lleva cada ffmpeg del remux en su línea de órdenes. */
@@ -48,7 +59,9 @@ function iptvInputArgs(input: RemuxArgsInput): string[] {
 }
 
 /**
- * `-hls_flags` de la 0.6.59. En Windows (solo el PC de desarrollo y el E2E) sin
+ * `-hls_flags` de la 0.6.59 más `program_date_time` (cada segmento lleva la
+ * hora del servidor: permite medir el retraso real, docs/multidispositivo.md
+ * §4.2; no cambia la reproducción). En Windows (solo el PC de desarrollo y el E2E) sin
  * `temp_file`: ffmpeg escribe index.m3u8.tmp y lo renombra encima de la lista,
  * y en Windows ese renombrado falla en cuanto el backend la está leyendo (lo
  * hace en cada aviso de la carpeta); ffmpeg no lo reintenta y la lista se queda
@@ -56,13 +69,24 @@ function iptvInputArgs(input: RemuxArgsInput): string[] {
  */
 export function hlsFlags(platform: NodeJS.Platform): string {
   return platform === 'win32'
-    ? 'delete_segments+independent_segments+omit_endlist'
-    : 'delete_segments+independent_segments+temp_file+omit_endlist';
+    ? 'delete_segments+independent_segments+omit_endlist+program_date_time'
+    : 'delete_segments+independent_segments+temp_file+omit_endlist+program_date_time';
 }
 
 /** Ruta de index.m3u8 para ffmpeg, siempre con «/» (también en Windows). */
 export function playlistPath(dir: string): string {
   return path.join(dir, 'index.m3u8').replaceAll(path.win32.sep, path.posix.sep);
+}
+
+/** `-probesize` y `-analyzeduration` según el origen (§4.5). */
+function probeArgs(input: RemuxArgsInput): string[] {
+  const probe =
+    input.origin !== 'iptv'
+      ? IPTV_PROBE_FALLBACK
+      : input.probe === 'fallback'
+        ? IPTV_PROBE_FALLBACK
+        : IPTV_PROBE_ARGS;
+  return ['-probesize', String(probe.probesize), '-analyzeduration', String(probe.analyzeduration)];
 }
 
 export function buildRemuxArgs(input: RemuxArgsInput): string[] {
@@ -94,11 +118,8 @@ export function buildRemuxArgs(input: RemuxArgsInput): string[] {
     '-fflags',
     '+genpts+discardcorrupt',
     ...reconnect,
-    // server.js:272-273
-    '-probesize',
-    '5000000',
-    '-analyzeduration',
-    '5000000',
+    // server.js:272-273 (con IPTV, 2 MB / 2 s: docs/multidispositivo.md §4.5)
+    ...probeArgs(input),
     '-thread_queue_size',
     '512',
     // server.js:274 (la entrada, ahora la de la sesión del backend)
@@ -126,15 +147,17 @@ export function buildRemuxArgs(input: RemuxArgsInput): string[] {
     '2',
     '-metadata',
     `${ACE_SESSION_MARK}${input.sessionId}`,
-    // server.js:313-317: HLS fMP4 de 2 s en ventana de 15 (B-225)
+    /* server.js:313-317 (B-225) con segmentos de 0,5 s en ventana de 64
+       (docs/multidispositivo.md §4.3): con -c copy cada GOP de 0,5 s o más es
+       un segmento, y TARGETDURATION queda en 1 con GOP de menos de 1,5 s. */
     '-f',
     'hls',
     '-hls_time',
-    '2',
+    String(REMUX_SEGMENT.hlsTimeS),
     '-hls_list_size',
-    '15',
+    String(REMUX_SEGMENT.listSize),
     '-hls_delete_threshold',
-    '2',
+    String(REMUX_SEGMENT.deleteThreshold),
     '-hls_flags',
     hlsFlags(input.platform ?? process.platform),
     '-hls_segment_type',

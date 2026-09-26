@@ -155,7 +155,39 @@ describe('mini-reproductor y datos técnicos', () => {
       Pares: '48',
       Bajada: '1,92 MB/s',
       Subida: '214 KB/s',
+      Segmento: '—',
     });
+  });
+
+  it('IPTV por el remux: «Origen: IPTV · Casa · TS», «Segmento» y «Retraso» (docs/multidispositivo.md §4.2)', () => {
+    const rows = (patch: Partial<PlayerState>) =>
+      Object.fromEntries(
+        nerdRows(
+          playing({
+            engine: 'hls',
+            protocol: 'hls',
+            streamSource: 'iptv',
+            channel: { hash: HASH, title: 'Antena 3', source: 'Casa', iptv: true },
+            live: { available: true, atLive: true, behindS: 0, delayS: 3 },
+            ...patch,
+          }),
+          'en línea',
+        ),
+      );
+    expect(rows({ iptvInput: 'ts', segment: { targetS: 1, minS: 1, maxS: 1 } })).toMatchObject({
+      Origen: 'IPTV · Casa · TS',
+      Segmento: '1 s',
+      Retraso: '3 s',
+    });
+    expect(
+      rows({ iptvInput: 'hls', segment: { targetS: 1, minS: 0.96, maxS: 0.96 } }),
+    ).toMatchObject({ Origen: 'IPTV · Casa · HLS', Segmento: '1 s · reales 0,96 s' });
+    expect(rows({ segment: { targetS: 1, minS: 1.2, maxS: 1.48 } }).Segmento).toBe(
+      '1 s · reales 1,2-1,48 s',
+    );
+    expect(rows({ segment: { targetS: 2, minS: null, maxS: null } }).Segmento).toBe('2 s');
+    /* Servidor de antes, sin `iptvInput`: como hasta ahora. */
+    expect(rows({ iptvInput: null }).Origen).toBe('IPTV · Casa');
   });
 });
 

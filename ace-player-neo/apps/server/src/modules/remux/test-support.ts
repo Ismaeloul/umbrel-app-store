@@ -84,15 +84,34 @@ export class FakeFfmpeg implements RemuxProcess {
       );
       this.durations.push(duration);
     }
+    this.writePlaylist();
+  }
+
+  /** Solo los últimos `size` segmentos en la lista (la ventana de ffmpeg), con su MEDIA-SEQUENCE. */
+  private window: number | null = null;
+
+  setWindow(size: number | null): void {
+    this.window = size;
+    this.writePlaylist();
+  }
+
+  /** Reescribe la lista como ffmpeg: TARGETDURATION = el mayor #EXTINF de la ventana, redondeado. */
+  private writePlaylist(): void {
+    if (!this.alive) return;
+    const first = this.window === null ? 0 : Math.max(0, this.durations.length - this.window);
+    const shown = this.durations.slice(first);
+    const target = Math.max(1, ...shown.map((duration) => Math.round(duration)));
     const lines = [
       '#EXTM3U',
       '#EXT-X-VERSION:7',
-      '#EXT-X-TARGETDURATION:2',
+      `#EXT-X-TARGETDURATION:${target}`,
+      `#EXT-X-MEDIA-SEQUENCE:${first}`,
       '#EXT-X-MAP:URI="init.mp4"',
     ];
-    this.durations.forEach((duration, index) => {
-      lines.push(`#EXTINF:${duration.toFixed(3)},`, `index${index}.m4s`);
+    shown.forEach((duration, index) => {
+      lines.push(`#EXTINF:${duration.toFixed(3)},`, `index${first + index}.m4s`);
     });
+    mkdirSync(this.dir, { recursive: true });
     writeFileSync(path.join(this.dir, 'index.m3u8'), `${lines.join('\n')}\n`);
   }
 
@@ -136,8 +155,11 @@ export class FakeFfmpeg implements RemuxProcess {
   }
 }
 
+/** Lo que escribe el ffmpeg falso al lanzarse: 4 segmentos de 1 s, lista lista al momento (TD 1 pide 3 y 4 s). */
+export const DEFAULT_FAKE_SEGMENTS: readonly number[] = [1, 1, 1, 1];
+
 export interface FakeLauncherOptions {
-  /** Segmentos que escribe nada más lanzarse (por defecto 3 de 2 s: listo al momento). `null` = ninguno. */
+  /** Segmentos que escribe nada más lanzarse (por defecto `DEFAULT_FAKE_SEGMENTS`). `null` = ninguno. */
   readonly autoSegments?: readonly number[] | null;
   /** Sin ffmpeg: cada lanzamiento da ENOENT. */
   readonly missing?: boolean;
@@ -155,7 +177,7 @@ export interface FakeLauncher {
 
 export function createFakeLauncher(options: FakeLauncherOptions = {}): FakeLauncher {
   const spawned: FakeFfmpeg[] = [];
-  const auto = options.autoSegments === undefined ? [2, 2, 2] : options.autoSegments;
+  const auto = options.autoSegments === undefined ? DEFAULT_FAKE_SEGMENTS : options.autoSegments;
   let missing = options.missing === true;
   return {
     spawned,
@@ -181,7 +203,7 @@ export function createFakeLauncher(options: FakeLauncherOptions = {}): FakeLaunc
 }
 
 /**
- * Script de node que hace de ffmpeg: escribe 3 segmentos de 2 s en la
+ * Script de node que hace de ffmpeg: escribe 4 segmentos de 1 s en la
  * carpeta del último argumento, deja algo en stderr y se queda vivo hasta que
  * lo maten.
  */
@@ -192,10 +214,10 @@ const out = process.argv[process.argv.length - 1];
 const dir = path.dirname(out);
 fs.mkdirSync(dir, { recursive: true });
 fs.writeFileSync(path.join(dir, 'init.mp4'), 'init');
-const lines = ['#EXTM3U', '#EXT-X-TARGETDURATION:2', '#EXT-X-MAP:URI="init.mp4"'];
-for (let i = 0; i < 3; i += 1) {
+const lines = ['#EXTM3U', '#EXT-X-TARGETDURATION:1', '#EXT-X-MAP:URI="init.mp4"'];
+for (let i = 0; i < 4; i += 1) {
   fs.writeFileSync(path.join(dir, 'index' + i + '.m4s'), 'seg' + i);
-  lines.push('#EXTINF:2.000,', 'index' + i + '.m4s');
+  lines.push('#EXTINF:1.000,', 'index' + i + '.m4s');
 }
 fs.writeFileSync(out, lines.join('\\n') + '\\n');
 process.stderr.write('ffmpeg falso: ' + process.argv.slice(2).join(' ') + '\\n');

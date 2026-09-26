@@ -1024,6 +1024,31 @@ describe('IPTV', () => {
     expect(engine.kind).toBe('hls');
     expect(engine.args.url).toBe(`/api/v1/video/${IPTV_SID}/index.m3u8`);
     expect(t.state).toMatchObject({ protocol: 'hls', streamSource: 'iptv' });
+    /* hls.js en segundos con el seguimiento de la concesión (docs/multidispositivo.md §4.4). */
+    expect(engine.args.remux).toEqual({
+      mode: 'balanced',
+      liveSync: iptvGrant().latency.liveSync,
+    });
+  });
+
+  it('«Tu IPTV está tardando en arrancar…» a los 10 s sin imagen; con iptvInput en el estado', async () => {
+    const t = iptvSetup();
+    t.handlers.channelStream = () => ({ ...iptvGrant(), iptvInput: 'ts' as const });
+    playIptv(t);
+    await flush();
+    expect(t.state.iptvInput).toBe('ts');
+    await vi.advanceTimersByTimeAsync(9_000);
+    expect(t.state.message).not.toBe('Tu IPTV está tardando en arrancar…');
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(t.state.message).toBe('Tu IPTV está tardando en arrancar…');
+  });
+
+  it('una fuente de AceStream nunca dice que la IPTV tarda', async () => {
+    const t = setup();
+    t.runtime.play({ hash: 'a'.repeat(40), title: 'Canal' }, { origin: 'user' });
+    await flush();
+    await vi.advanceTimersByTimeAsync(11_000);
+    expect(t.state.message).not.toBe('Tu IPTV está tardando en arrancar…');
   });
 
   it('un iptv_* al abrir agota la fuente al momento, sin reconexiones', async () => {

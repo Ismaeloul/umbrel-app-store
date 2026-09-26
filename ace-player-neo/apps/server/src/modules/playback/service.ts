@@ -26,6 +26,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import {
   DEFAULT_PLAYBACK_MODE,
+  IPTV_ACQUIRE_MAX_MS,
   IPTV_SESSION,
   LEGACY_DEVICE_NAME,
   MULTI_TIMINGS,
@@ -59,11 +60,13 @@ import type { RemuxCloseReason, RemuxHandle, RemuxSource } from '../remux/types.
 import {
   codecFor,
   directProtocol,
+  iptvInputOf,
   latencyFor,
   legacyVideoPath,
   nativeVideoPath,
   webVideoPath,
 } from './grant.js';
+import { SHARE_VIA_REMUX, consumesFor } from './sharing.js';
 import { cleanDeviceName } from './device-name.js';
 import { decideClaim, decideRelease, type Tombstones } from './mando.js';
 import type { PlaybackDeps, PlaybackService, ViewerIdentity } from './types.js';
@@ -172,6 +175,12 @@ interface AcquireRequest {
   readonly join: boolean;
   readonly matchId: string | null;
   readonly follows: boolean;
+  /**
+   * IPTV: tope absoluto de la petición (`IPTV_ACQUIRE_MAX_MS`, cerrojo
+   * incluido). Cada espera usa el menor de su plazo y lo que quede de este
+   * (docs/multidispositivo.md §4.5).
+   */
+  readonly deadlineAt?: number;
 }
 
 interface Placement {
@@ -325,6 +334,37 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     return direct + (all.some((viewer) => viewer.consumes === 'remux') ? 1 : 0);
   }
 
+  /** Qué leerá el visor que pide (sharing.ts, docs/multidispositivo.md §4.6). */
+  function consumesOf(
+    hash: string,
+    client: ClientKind,
+    source: 'engine' | 'iptv',
+    viewerId: string,
+  ): 'direct' | 'remux' {
+    const previous = viewers.get(viewerId);
+    const live = [...sessions.values()].find((candidate) => candidate.hash === hash) ?? null;
+    return consumesFor({
+      client,
+      source,
+      hash,
+      previous: previous
+        ? {
+            hash: previous.hash,
+            consumes: previous.consumes,
+            sessionAlive: previous.sessionId !== null && sessions.has(previous.sessionId),
+          }
+        : null,
+      session: live
+        ? {
+            mode: live.mode,
+            remux: remuxViewers(live).length > 0,
+            direct: directViewers(live).length > 0,
+          }
+        : null,
+      shareViaRemux: deps.shareViaRemux ?? SHARE_VIA_REMUX,
+    });
+  }
+
   function sourceOf(session: SessionRec): RemuxSource {
     const base = {
       sessionId: session.id,
@@ -333,30 +373,40 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       mode: session.mode,
     };
     if (session.source !== 'iptv' || !session.input) return base;
+    const input = session.input;
     return {
       ...base,
-      inputUrl: session.input.inputUrl,
+      inputUrl: input.inputUrl,
       origin: 'iptv',
-      ...(session.input.isHls ? { isHls: true } : {}),
+      ...(input.isHls ? { isHls: true } : {}),
+      openedAt: input.openedAt,
+      firstByteAt: () => input.stats().firstByteAt,
+      prepareRestart: () => !session.closed && input.prepareRestart(),
     };
   }
 
-  /* Visor web de una IPTV: hls.js sobre /api/v1/video (docs/iptv.md §5.4 y §6.4). */
-  function webIptvViewer(session: SessionRec, viewer: ViewerRec): boolean {
-    return session.source === 'iptv' && !viewer.native && viewer.client !== 'legacy';
+  /*
+   * Visor web que lee el remux con hls.js por /api/v1/video: una IPTV
+   * (docs/iptv.md §5.4 y §6.4) o, con C.4, un AceStream que ya tenía remux
+   * porque llegó antes un iPhone (docs/multidispositivo.md §4.6).
+   */
+  function webRemuxViewer(session: SessionRec, viewer: ViewerRec): boolean {
+    if (viewer.native || viewer.client === 'legacy') return false;
+    if (session.source === 'iptv') return true;
+    return viewer.client === 'web' && viewer.consumes === 'remux';
   }
 
   function urlFor(session: SessionRec, viewer: ViewerRec): string {
     if (viewer.consumes !== 'remux') return session.meta.playbackUrl;
     if (viewer.native) return nativeVideoPath(session.id);
-    return webIptvViewer(session, viewer)
+    return webRemuxViewer(session, viewer)
       ? webVideoPath(session.id)
       : legacyVideoPath(session.hash);
   }
 
   function protocolFor(session: SessionRec, viewer: ViewerRec): StreamProtocol {
     if (viewer.consumes !== 'remux') return directProtocol(session.mode);
-    return webIptvViewer(session, viewer) ? 'hls' : 'hls-fmp4';
+    return webRemuxViewer(session, viewer) ? 'hls' : 'hls-fmp4';
   }
 
   function sessionInfo(session: SessionRec) {
@@ -426,7 +476,7 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       return {
         ...common,
         /* Una IPTV siempre pasa por el remux: `hls` si la ve alguna web, `hls-fmp4` si solo iPhones. */
-        protocol: list.some((viewer) => webIptvViewer(session, viewer)) ? 'hls' : 'hls-fmp4',
+        protocol: list.some((viewer) => webRemuxViewer(session, viewer)) ? 'hls' : 'hls-fmp4',
         source: 'iptv',
         ...(matchId ? { matchId } : {}),
       };
@@ -658,6 +708,35 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
   }
 
   /**
+   * La señal de la petición más su tope IPTV (docs/multidispositivo.md §4.5):
+   * vencido el tope, se aborta con `iptv_timeout` (el cliente recibe ese
+   * código, nunca un corte de nginx).
+   */
+  function deadlineSignal(request: AcquireRequest): {
+    readonly signal: AbortSignal;
+    dispose(): void;
+  } {
+    if (request.deadlineAt === undefined) return { signal: request.signal, dispose: () => {} };
+    const controller = new AbortController();
+    const onAbort = (): void => controller.abort(request.signal.reason);
+    if (request.signal.aborted) onAbort();
+    else request.signal.addEventListener('abort', onAbort, { once: true });
+    const left = request.deadlineAt - clock.now();
+    const expire = (): void =>
+      controller.abort(new AppError('iptv_timeout', { detail: 'tope de la petición IPTV' }));
+    let timer: TimerHandle | null = null;
+    if (left <= 0) expire();
+    else timer = clock.setTimeout(expire, left, { unref: true });
+    return {
+      signal: controller.signal,
+      dispose: () => {
+        clock.clearTimeout(timer);
+        request.signal.removeEventListener('abort', onAbort);
+      },
+    };
+  }
+
+  /**
    * Abre una sesión IPTV (docs/iptv.md §6.4): el relé en vez del motor. Sin
    * `reportOpen*`, sin `stat_url` y sin sessions.json (el ffmpeg huérfano ya
    * lo mata la marca `ace_session=`). Con el cerrojo de la casa tomado.
@@ -665,7 +744,13 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
   async function openIptvLocked(request: AcquireRequest): Promise<SessionRec> {
     const iptv = deps.iptv;
     if (!iptv) throw new AppError('iptv_removed');
-    const input = await iptv.openInput(request.hash, { signal: request.signal });
+    const limited = deadlineSignal(request);
+    let input: IptvInput;
+    try {
+      input = await iptv.openInput(request.hash, { signal: limited.signal });
+    } finally {
+      limited.dispose();
+    }
     if (stopped) {
       await input.close();
       throw new AppError('engine_unavailable', { detail: 'apagando' });
@@ -1199,12 +1284,10 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     for (let attempt = 0; ; attempt += 1) {
       const url = session.meta.playbackUrl;
       try {
-        return await remux.ensure(
-          sourceOf(session),
-          viewer.viewerId,
-          request.signal,
-          legacy ? { legacy } : undefined,
-        );
+        return await remux.ensure(sourceOf(session), viewer.viewerId, request.signal, {
+          ...(legacy ? { legacy } : {}),
+          ...(request.deadlineAt === undefined ? {} : { deadlineAt: request.deadlineAt }),
+        });
       } catch (error) {
         /* La sesión ha pasado a HLS mientras arrancaba: se engancha a la nueva. */
         const moved =
@@ -1627,8 +1710,10 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
         deviceId,
         client,
         source,
-        /* Una IPTV siempre pasa por el remux, también en la web (docs/iptv.md §6.4). */
-        consumes: client === 'ios' || source === 'iptv' ? 'remux' : 'direct',
+        /* Una IPTV siempre pasa por el remux, también en la web (docs/iptv.md
+           §6.4); una reconexión conserva lo que leía (docs/multidispositivo.md §4.6). */
+        consumes: consumesOf(hash, client, source, identity.viewerId),
+        ...(source === 'iptv' ? { deadlineAt: clock.now() + IPTV_ACQUIRE_MAX_MS } : {}),
         heartbeat: true,
         native: identity.device !== null,
         title: label || `Stream ${hash.slice(0, 8)}`,
@@ -1659,10 +1744,20 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
         protocol,
         remux: viewer.consumes === 'remux',
         codec: codecFor(scanner, hash),
-        latency: latencyFor(mode, protocol),
+        /* Con el remux, la distancia al directo sale del TARGETDURATION fijado (§4.4). */
+        latency: latencyFor(
+          mode,
+          protocol,
+          viewer.consumes === 'remux'
+            ? { targetDurationS: placed.remux?.targetDurationS() ?? null }
+            : null,
+        ),
         stats: { via: 'sse' },
         handoff: placed.handoff,
         ...(session.source === 'iptv' ? { source: 'iptv' as const } : {}),
+        ...(session.source === 'iptv' && session.input
+          ? { iptvInput: iptvInputOf(session.input) }
+          : {}),
       };
       return grant;
     },
