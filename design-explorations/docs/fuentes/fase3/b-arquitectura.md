@@ -435,8 +435,7 @@ Sources/Armazon/
 ├─ CapaInmersiva.swift                  contenedor del inmersivo (z 100), fuera de cualquier gesto de volver
 ├─ CapaMini.swift                       posición (Maquetacion.marcoMini) y entrada del mini
 ├─ CapaAvisos.swift                     toasts: posición, entrada y salida, recolocación con muelle, inmersivo
-├─ CapaVuelo.swift                      vuelo de escudos (plusLighter) + VueloVideo (z 45)
-├─ VueloVideo.swift                     el hueco `.vuelo` que viaja escenario → mini (ÚNICO VistaVideo fuera de Pantallas)
+├─ CapaVuelo.swift                      vuelo de escudos (plusLighter) (z 45); el vídeo vuela escalando el escenario (VueloAlMini)
 ├─ TransicionTeatro.swift               [I0→M4] marcos publicados, progreso, secuencias de ida y vuelta
 ├─ BordeAtras.swift                     UIScreenEdgePanGestureRecognizer (a2 §27.4)
 ├─ BarraPestanas.swift                  la barra de la web: glassEffect, píldora, 4 destinos
@@ -2315,7 +2314,7 @@ ZStack (ignora las zonas seguras; mide Maquetacion con onGeometryChange: tamaño
 ├─ VeloInferior            z 39    móvil, con barra
 ├─ BarraPestanas           z 40    móvil (Maquetacion.barraInferior) · BarraSuperior en tableta
 ├─ CapaMini                z 41    MiniReproductor si presentacion.miniVisible
-├─ CapaVuelo               z 45    escudos y VueloVideo durante la transición
+├─ CapaVuelo               z 45    escudos durante la transición
 ├─ CapaAvisos              z 60    toasts (la línea de estado la pinta el teatro)
 └─ CapaInmersiva           z 100   EscenarioVideo(inmersivo: true) cuando Maquetacion.inmersivo
 .hojasDeLaApp(hojas)
@@ -2863,7 +2862,8 @@ del reloj (minuto, marcadores, «hace N min») se porta como código en `DemoNuc
     vuela es el propio escenario, que escala y baja hasta el vídeo del mini mientras la página se funde
     (`TransicionTeatro.alMini`, `VueloAlMini.swift`); el mini aparece donde aterriza, sin entrada. Arrastrar el vídeo
     hacia abajo hace lo mismo con el dedo (como YouTube): háptica `rigida` al cruzar 56 pt; al soltar pasado vuela con el
-    muelle y, si no, vuelve. El hueco `.vuelo` y `VueloVideo` quedan sin uso.
+    muelle y, si no, vuelve; si nadie cierra en 650 ms, el vídeo vuelve a su sitio. `VueloVideo` y
+    `ContenidoVuelo.video` se quitaron (ronda 2b); el hueco `.vuelo` queda sin uso.
   - *Borde*: `offset(x:)` 1:1 con el dedo; al soltar, `Volver.decide`; si no, vuelve con `Movimiento.soltar(velocidad:)`.
   - *Movimiento reducido*: fundidos de 120 ms, sin zoom ni vuelos.
   - *Plan B* (si el vuelo del vídeo da saltos en el iPhone): el vídeo aparece en el mini al acabar la vuelta, sin volar
@@ -3279,7 +3279,7 @@ mira solo las carpetas nuevas; desde la poda, todo `Sources` («todo» en la tab
 | R2 | sin ramas de versión | `#available\|#unavailable\|@available\(iOS` | todo | `@available(*, unavailable)` |
 | R3 | sin `GeometryReader` | `GeometryReader` | todo | — |
 | R4 | sin `AnyView` | `\bAnyView\b` | todo | `Palco/Componentes/ImagenServidor.swift` |
-| R5 | una sola puerta | `\.glassEffect\(` · `\.sensoryFeedback\(` · `\.sheet\(` · `\.contextMenu\(` · `VistaVideo\(` | todo | `Palco/Cristal/Cristal.swift` (+ `Galeria/LaboratorioView.swift`) · `Palco/Haptica/HapticaRaiz.swift` · `Armazon/Hojas.swift` · `Armazon/Menus.swift` · `Pantallas/Partido/EscenarioVideo.swift`, `Pantallas/Mini/MiniReproductor.swift`, `Armazon/VueloVideo.swift` (y su definición en `Player/SuperficieVideo.swift`) |
+| R5 | una sola puerta | `\.glassEffect\(` · `\.sensoryFeedback\(` · `\.sheet\(` · `\.contextMenu\(` · `VistaVideo\(` | todo | `Palco/Cristal/Cristal.swift` (+ `Galeria/LaboratorioView.swift`) · `Palco/Haptica/HapticaRaiz.swift` · `Armazon/Hojas.swift` · `Armazon/Menus.swift` · `Pantallas/Partido/EscenarioVideo.swift`, `Pantallas/Mini/MiniReproductor.swift` (y su definición en `Player/SuperficieVideo.swift`) |
 | R6 | colores solo de Palco | `Color\((red\|\.sRGB\|hex)\|UIColor\((red\|hex)\|#colorLiteral\|0x[0-9A-Fa-f]{6}\b` | todo | `Palco/Tokens/**` |
 | R7 | fuentes solo de Mona | `Font\.system\|\.font\(\.system\|Font\.custom\|UIFont\.systemFont\|UIFont\(name` | todo | `Palco/Tipografia/**` |
 | R8 | háptica solo por `Haptica` | `UI(Impact\|Selection\|Notification)FeedbackGenerator` | todo | — |

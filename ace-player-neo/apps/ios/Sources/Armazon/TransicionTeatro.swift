@@ -28,10 +28,10 @@ struct ClaveMarco: Hashable, Sendable {
     var partido: String
 }
 
-/// Lo que viaja: una foto de la pantalla (escudos) o el hueco `.vuelo` del vídeo (`VueloVideo`).
+/// Lo que viaja: una foto de la pantalla (los escudos). El vídeo no viaja por aquí: se escala el propio escenario
+/// (`alMini`, `EscenarioAlMini`), así que la `AVPlayerLayer` no cambia de hueco a mitad de vuelo.
 enum ContenidoVuelo {
     case foto(UIView)
-    case video(SuperficieVideo)
 }
 
 /// Una pieza que viaja por encima de todo entre dos marcos de la ventana.
@@ -203,19 +203,23 @@ struct VueloPieza: Identifiable {
     // MARK: Arrastrar el vídeo al mini (decisión 3; Isma 26-sep)
 
     /// Mientras se arrastra el vídeo hacia abajo: el vídeo baja con el dedo y se encoge hacia el mini, la página se
-    /// funde y deja ver la pestaña de debajo. `escenario`: el marco del vídeo en la ventana al empezar.
-    func arrastrarAlMini(_ dy: Double, escenario: CGRect) {
-        guard !activa else { return }
+    /// funde y deja ver la pestaña de debajo. `escenario`: el marco del vídeo en la ventana al empezar. false si no
+    /// hace nada porque hay otra transición en marcha (y entonces tampoco vibra).
+    @discardableResult func arrastrarAlMini(_ dy: Double, escenario: CGRect) -> Bool {
+        guard !activa else { return false }
         if alMini == 0 || desdeAlMini == nil { desdeAlMini = escenario }
         guard let desde = desdeAlMini else { return }
         let hasta: Marco = maquetacion.marcoVideoMini()
         alMini = GeometriaVuelo.progresoAlMini(dy: dy, desde: TransicionTeatro.marco(desde), hasta: hasta)
         opacidadDebajo = 1
         entradaDebajo = 0
+        return true
     }
 
     /// Al soltar pasado el umbral: termina de volar al mini con el muelle y quien llama minimiza
     /// (`navegador.atras()`); `cerrar` solo espera a que aterrice. Con movimiento reducido, la vuelta de siempre.
+    /// Salida de emergencia: si nadie cierra en `rescateMs` (minimizar no navegó: nada sonando, u otra navegación
+    /// ganó la carrera), el vídeo vuelve a su sitio en vez de quedarse encogido.
     func soltarAlMini(reducido: Bool) {
         guard !reducido, desdeAlMini != nil else {
             withAnimation(.easeOut(duration: 0.12)) { alMini = 0 }
@@ -223,7 +227,17 @@ struct VueloPieza: Identifiable {
         }
         saliendoAlMini = true
         withAnimation(Movimiento.estandar(false)) { alMini = 1 }
+        let mio = turno
+        Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(TransicionTeatro.rescateMs))
+            guard let self, mio == self.turno, self.saliendoAlMini else { return }
+            self.saliendoAlMini = false
+            self.devolverAlTeatro(reducido: false)
+        }
     }
+
+    /// Lo que espera `soltarAlMini` a que llegue `cerrar` antes de devolver el vídeo a su sitio.
+    static let rescateMs = 650
 
     /// Al soltar sin llegar al umbral: el vídeo vuelve a su sitio con el muelle.
     func devolverAlTeatro(reducido: Bool) {

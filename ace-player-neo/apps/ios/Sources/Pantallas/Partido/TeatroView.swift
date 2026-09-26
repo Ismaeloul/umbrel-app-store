@@ -70,12 +70,12 @@ struct TeatroView: View {
     private func arrastrar(_ gesto: ArrastreVideo, ancho: CGFloat) {
         switch gesto {
         case .mover(let dy):
-            let pasado: Bool = Double(dy) >= GeometriaVuelo.umbralAlMini
+            let sigue: Bool = transicion.arrastrarAlMini(Double(max(0, dy)), escenario: marcoEscenario(ancho: ancho))
+            let pasado: Bool = sigue && Double(dy) >= GeometriaVuelo.umbralAlMini
             if pasado != umbral.pasado {
                 umbral.pasado = pasado
                 if pasado { video.haptica.disparar(.rigida) }
             }
-            transicion.arrastrarAlMini(Double(max(0, dy)), escenario: marcoEscenario(ancho: ancho))
         case .soltar(let minimiza):
             umbral.pasado = false
             if minimiza {
