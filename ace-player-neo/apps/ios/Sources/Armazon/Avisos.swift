@@ -33,8 +33,8 @@ struct AccionAviso {
         switch destino {
         case .linea:
             let contenido = ContenidoLinea(texto: texto, tono: tono, senal: senal, icono: icono, dato: dato)
-            _ = linea.mostrar(contenido)
-            programarLinea(duracion ?? LineaEstado.duracion)
+            let id = linea.mostrar(contenido)
+            programarLinea(id, duracion ?? LineaEstado.duracion)
         case .toast:
             let puesto = cola.poner(texto, tono: tono, icono: icono, tituloAccion: accion?.titulo)
             if let accion { acciones[puesto.id] = accion.hacer }
@@ -87,8 +87,8 @@ struct AccionAviso {
         cola.quitar(id)
     }
 
-    /// statusLine.ts: 4,5 s y luego el fundido de 320 ms; al acabar se quita (queda la base).
-    private func programarLinea(_ segundos: Double) {
+    /// statusLine.ts: 4,5 s y luego el fundido de 320 ms; al acabar se quita ESE aviso (queda la base, M2).
+    private func programarLinea(_ id: Int, _ segundos: Double) {
         relojLinea?.cancel()
         relojLinea = Task { [weak self] in
             try? await Task.sleep(for: .seconds(segundos))
@@ -96,7 +96,7 @@ struct AccionAviso {
             self?.linea.empezarSalida()
             try? await Task.sleep(for: .seconds(ColaToasts.salida))
             guard !Task.isCancelled else { return }
-            self?.linea.vaciar()
+            self?.linea.quitar(id)
         }
     }
 }
