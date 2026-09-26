@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /* Emparejado de nombres de canal, portado FIELMENTE de
    packages/shared/src/domain/channels.ts (`normalizeChannelKey` y
@@ -29,18 +30,23 @@ public enum Canales {
     private static let limite = "(?:(?<=[A-Za-z0-9_])(?![A-Za-z0-9_])|(?<![A-Za-z0-9_])(?=[A-Za-z0-9_]))"
 
     private static func patron(_ texto: String) -> NSRegularExpression {
-        // swiftlint:disable:next force_try
-        try! NSRegularExpression(pattern: texto)
+        if let expresion = try? NSRegularExpression(pattern: texto) { return expresion }
+        preconditionFailure("Expresión de canal no válida: \(texto)")
     }
 
-    /// Lo que va tras la flecha es QUIÉN sirve el canal, no qué canal es.
-    nonisolated(unsafe) private static let flecha = patron(#"\s*(?:--?>|={1,2}>|[→⇒➜➝⟶⟹])\s*.*$"#)
-    nonisolated(unsafe) private static let asteriscos = patron(#"[*#]+"#)
-    nonisolated(unsafe) private static let mMas = patron(antes + #"m\s*\+"#)
-    nonisolated(unsafe) private static let movistarPlus = patron(antes + #"movistar\s*plus\+?"# + limite)
-    nonisolated(unsafe) private static let calidad = patron(
-        antes + #"(full\s*hd|fhd|uhd|hd|sd|4k|1080p|720p)"# + despues)
-    nonisolated(unsafe) private static let pais = patron(antes + #"(espana|spain)"# + despues)
+    /// Las expresiones de `normalizeChannelKey`, compiladas una vez. `NSRegularExpression` no es `Sendable`:
+    /// viven dentro de un `Mutex` (sin `nonisolated(unsafe)`, b-arquitectura §1.12) y solo se usan bajo él.
+    private struct Expresiones {
+        /// Lo que va tras la flecha es QUIÉN sirve el canal, no qué canal es.
+        let flecha = patron(#"\s*(?:--?>|={1,2}>|[→⇒➜➝⟶⟹])\s*.*$"#)
+        let asteriscos = patron(#"[*#]+"#)
+        let mMas = patron(antes + #"m\s*\+"#)
+        let movistarPlus = patron(antes + #"movistar\s*plus\+?"# + limite)
+        let calidad = patron(antes + #"(full\s*hd|fhd|uhd|hd|sd|4k|1080p|720p)"# + despues)
+        let pais = patron(antes + #"(espana|spain)"# + despues)
+    }
+
+    private static let expresiones = Mutex(Expresiones())
 
     private static func cambiar(_ texto: String, _ expresion: NSRegularExpression, por sustituto: String) -> String {
         expresion.stringByReplacingMatches(
@@ -49,18 +55,21 @@ public enum Canales {
 
     /// `normalizeChannelKey`: sin operador, calidad, país ni proveedor.
     public static func clave(_ valor: String?) -> String {
-        var texto = ParaTi.sinMarcas(valor ?? "").lowercased()
-        // Solo la primera flecha (sin /g en la web): se lleva todo lo que sigue.
-        if let primera = flecha.firstMatch(in: texto, range: NSRange(texto.startIndex..., in: texto)),
-            let rango = Range(primera.range, in: texto)
-        {
-            texto.replaceSubrange(rango, with: " ")
+        let minusculas = ParaTi.sinMarcas(valor ?? "").lowercased()
+        let texto = expresiones.withLock { e -> String in
+            var texto = minusculas
+            // Solo la primera flecha (sin /g en la web): se lleva todo lo que sigue.
+            if let primera = e.flecha.firstMatch(in: texto, range: NSRange(texto.startIndex..., in: texto)),
+                let rango = Range(primera.range, in: texto)
+            {
+                texto.replaceSubrange(rango, with: " ")
+            }
+            texto = cambiar(texto, e.asteriscos, por: " ")
+            texto = cambiar(texto, e.mMas, por: " movistar ")
+            texto = cambiar(texto, e.movistarPlus, por: " movistar ")
+            texto = cambiar(texto, e.calidad, por: " ")
+            return cambiar(texto, e.pais, por: " ")
         }
-        texto = cambiar(texto, asteriscos, por: " ")
-        texto = cambiar(texto, mMas, por: " movistar ")
-        texto = cambiar(texto, movistarPlus, por: " movistar ")
-        texto = cambiar(texto, calidad, por: " ")
-        texto = cambiar(texto, pais, por: " ")
         return ParaTi.colapsar(texto, sustituto: " ").trimmingCharacters(in: .whitespaces)
     }
 

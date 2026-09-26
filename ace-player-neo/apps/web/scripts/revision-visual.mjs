@@ -32,6 +32,17 @@
 //             --axe  --movimiento  --teclado  --vistas a,b  --tamanos 390x844,1440x900  --no-build
 //             --paralelo <n> (contextos a la vez, 3 por defecto)
 //             --indice (con --capturas: solo rehace README.md desde su revision.json)
+//   Para calcar la app nativa (fase 3, b-arquitectura §3.3; a7 §5.1):
+//             --reloj <ISO>        el reloj de la página ARRANCA en esa hora en cada vista y avanza (no se
+//                                  congela: el latido y la cuenta atrás del QR lo necesitan). Capturas:
+//                                  --reloj 2026-09-24T19:00:00+02:00 (la app: -AceNeoReloj con la misma hora)
+//             --escala <n>         deviceScaleFactor (3 = @3x, como el simulador del iPhone)
+//             --safe-top <px> --safe-bottom <px> --safe-left <px> --safe-right <px>
+//                                  zonas seguras inyectadas (--safe-*) en los tamaños en vertical, como las
+//                                  del iPhone (47 y 34 en 390×844)
+//             --safe-horizontal <arriba,derecha,abajo,izquierda>
+//                                  las de los tamaños en horizontal (p. ej. 0,47,21,47 en 844×390)
+//   node scripts/revision-visual.mjs --reloj 2026-09-24T19:00:00+02:00 --escala 3 --safe-top 47 //        --safe-bottom 34 --safe-horizontal 0,47,21,47 --tamanos 390x844,844x390 --movimiento //        --capturas ../../../design-explorations/capturas/_revision/web-palco/calco
 // Deja el informe en <capturas o carpeta temporal>/revision.json.
 
 import { execFileSync, spawn } from 'node:child_process';
@@ -69,6 +80,20 @@ const PARALLEL = Math.max(1, Number(option('paralelo', '3')) || 3);
 const ONLY_VIEWS = option('vistas')?.split(',') ?? null;
 const ONLY_SIZES = option('tamanos')?.split(',') ?? null;
 const PREVIEW_PORT = Number(option('puerto', '4181'));
+const RELOJ = option('reloj');
+if (RELOJ && Number.isNaN(Date.parse(RELOJ)))
+  throw new Error(`--reloj no es una fecha ISO: ${RELOJ}`);
+const ESCALA = Math.max(1, Number(option('escala', '1')) || 1);
+const numero = (valor) => (Number.isFinite(Number(valor)) ? Number(valor) : 0);
+/** Zonas seguras [arriba, derecha, abajo, izquierda] en vertical y en horizontal (null: las del navegador). */
+const SAFE_VERTICAL = ['safe-top', 'safe-right', 'safe-bottom', 'safe-left'].some(
+  (n) => option(n) !== null,
+)
+  ? [option('safe-top'), option('safe-right'), option('safe-bottom'), option('safe-left')].map(
+      numero,
+    )
+  : null;
+const SAFE_HORIZONTAL = option('safe-horizontal')?.split(',').map(numero) ?? null;
 
 // ---------------------------------------------------------------------------
 // Tamaños (prompt): móvil vertical y horizontal, tableta, portátil, escritorio
@@ -799,6 +824,8 @@ async function openView(page, base, view, size) {
           return route.fulfill({ response, json: edit(await response.json()) });
         });
       }
+      // Cada vista empieza a la misma hora (sin disparar temporizadores; setFixedTime congelaría el latido).
+      if (RELOJ) await page.clock.setSystemTime(new Date(RELOJ));
       await page.goto(urlFor(base, view), { waitUntil: 'load', timeout: 30_000 });
       await page.waitForSelector('.app', { timeout: 15_000 });
       await page.evaluate(() => document.fonts.ready);
@@ -831,10 +858,33 @@ async function openView(page, base, view, size) {
   throw lastError;
 }
 
+/** Las zonas seguras del iPhone como las variables --safe-* de tokens.css (en vez de env(), que en
+    Chrome de escritorio vale 0). */
+async function injectSafeAreas(context, size) {
+  const safe = size.width > size.height ? SAFE_HORIZONTAL : SAFE_VERTICAL;
+  if (!safe) return;
+  const [top = 0, right = 0, bottom = 0, left = 0] = safe;
+  await context.addInitScript(
+    ({ top, right, bottom, left }) => {
+      const apply = () => {
+        const root = document.documentElement;
+        if (!root) return false;
+        root.style.setProperty('--safe-top', `${top}px`);
+        root.style.setProperty('--safe-right', `${right}px`);
+        root.style.setProperty('--safe-bottom', `${bottom}px`);
+        root.style.setProperty('--safe-left', `${left}px`);
+        return true;
+      };
+      if (!apply()) document.addEventListener('readystatechange', apply, { once: true });
+    },
+    { top, right, bottom, left },
+  );
+}
+
 async function runCombo(browser, base, size, scheme, extras) {
   const context = await browser.newContext({
     viewport: { width: size.width, height: size.height },
-    deviceScaleFactor: 1,
+    deviceScaleFactor: ESCALA,
     isMobile: size.touch && size.width < 1024,
     hasTouch: size.touch,
     colorScheme: scheme,
@@ -842,6 +892,9 @@ async function runCombo(browser, base, size, scheme, extras) {
     locale: 'es-ES',
     timezoneId: 'Europe/Madrid',
   });
+  // Reloj de la página (no se congela: arranca en RELOJ y avanza; openView lo vuelve a poner en cada vista).
+  if (RELOJ) await context.clock.install({ time: new Date(RELOJ) });
+  await injectSafeAreas(context, size);
   if (extras.transparency)
     await context.addInitScript(() => {
       try {

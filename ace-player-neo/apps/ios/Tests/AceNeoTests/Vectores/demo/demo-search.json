@@ -1,0 +1,421 @@
+{
+  "aviso": "Generado por apps/ios/scripts/generar-demo.ts ejecutando la demo de la web. No se edita a mano.",
+  "descripcion": "Buscador de muestra",
+  "t0": "2026-09-24T17:00:00.000Z",
+  "pasos": [
+    {
+      "t": 0,
+      "ruta": "search",
+      "params": {},
+      "query": [
+        [
+          "q",
+          "dazn"
+        ]
+      ],
+      "cuerpo": null,
+      "respuesta": {
+        "query": "dazn",
+        "results": [
+          {
+            "id": "80979d013c4a00aa41edb796bfef6e452f48a4cd",
+            "title": "DAZN LaLiga",
+            "category": "Deportes",
+            "availability": 0.95,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "ebede4dced345c3820c16fed5eca45ddbaa581c8",
+            "title": "DAZN 1 HD",
+            "category": "Deportes",
+            "availability": 0.92,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "6216cab76ec04c6a636596bcf9966d69cf9dceb7",
+            "title": "DAZN 2 HD",
+            "category": "Deportes",
+            "availability": 0.81,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "3644bc2ff214a6f6b2135128244ae281c61e1317",
+            "title": "DAZN LaLiga 2",
+            "category": "Deportes",
+            "availability": 0.58,
+            "bitrate": null,
+            "ih": true
+          }
+        ]
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "search",
+      "params": {},
+      "query": [
+        [
+          "q",
+          "deportes"
+        ]
+      ],
+      "cuerpo": null,
+      "respuesta": {
+        "query": "deportes",
+        "results": []
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "search",
+      "params": {},
+      "query": [
+        [
+          "q",
+          ""
+        ]
+      ],
+      "cuerpo": null,
+      "respuesta": {
+        "query": "",
+        "results": [
+          {
+            "id": "80979d013c4a00aa41edb796bfef6e452f48a4cd",
+            "title": "DAZN LaLiga",
+            "category": "Deportes",
+            "availability": 0.95,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "ebede4dced345c3820c16fed5eca45ddbaa581c8",
+            "title": "DAZN 1 HD",
+            "category": "Deportes",
+            "availability": 0.92,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "f443cd446fe710f65de35a496d234361ab38f5bc",
+            "title": "M+ LaLiga TV",
+            "category": "Deportes",
+            "availability": 0.9,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "3cfa17712950435a8bec729418dc5541a1ff26d1",
+            "title": "M+ Liga de Campeones",
+            "category": "Deportes",
+            "availability": 0.87,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "0e01c8f2e02ce88a6267d25f28e3a2c10b54ac22",
+            "title": "La 1",
+            "category": "Generalistas",
+            "availability": 0.83,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "6216cab76ec04c6a636596bcf9966d69cf9dceb7",
+            "title": "DAZN 2 HD",
+            "category": "Deportes",
+            "availability": 0.81,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "7ad6c44bef6933f6870b1490fcf0c369a35953a3",
+            "title": "Teledeporte",
+            "category": "Generalistas",
+            "availability": 0.77,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "51b60c66e7fe9c54ffcc43ab868bc7c1e069e2c6",
+            "title": "Eurosport 1",
+            "category": "Deportes",
+            "availability": 0.71,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "2559b14e261752c6558fef0b49a549c9c8f49e76",
+            "title": "Gol Play",
+            "category": "Deportes",
+            "availability": 0.66,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "184d9dfc54b25b8a0caae6fd818199cde826b9b8",
+            "title": "M+ Vamos",
+            "category": "Deportes",
+            "availability": 0.63,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "3644bc2ff214a6f6b2135128244ae281c61e1317",
+            "title": "DAZN LaLiga 2",
+            "category": "Deportes",
+            "availability": 0.58,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "fefcb272723869a09722856ba2b7bd59248ecbb2",
+            "title": "LaLiga TV Hypermotion",
+            "category": "Deportes",
+            "availability": 0.52,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "5e80bbffda16443e98bda88263b67349ecb37bcf",
+            "title": "M+ Liga de Campeones 2",
+            "category": "Deportes",
+            "availability": 0.44,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "21074c17914385cee43c4e4843f49e614391660f",
+            "title": "Eurosport 2",
+            "category": "Deportes",
+            "availability": 0.36,
+            "bitrate": null,
+            "ih": true
+          }
+        ]
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "search",
+      "params": {},
+      "query": [
+        [
+          "q",
+          "LIGA"
+        ]
+      ],
+      "cuerpo": null,
+      "respuesta": {
+        "query": "liga",
+        "results": [
+          {
+            "id": "80979d013c4a00aa41edb796bfef6e452f48a4cd",
+            "title": "DAZN LaLiga",
+            "category": "Deportes",
+            "availability": 0.95,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "f443cd446fe710f65de35a496d234361ab38f5bc",
+            "title": "M+ LaLiga TV",
+            "category": "Deportes",
+            "availability": 0.9,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "3cfa17712950435a8bec729418dc5541a1ff26d1",
+            "title": "M+ Liga de Campeones",
+            "category": "Deportes",
+            "availability": 0.87,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "3644bc2ff214a6f6b2135128244ae281c61e1317",
+            "title": "DAZN LaLiga 2",
+            "category": "Deportes",
+            "availability": 0.58,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "fefcb272723869a09722856ba2b7bd59248ecbb2",
+            "title": "LaLiga TV Hypermotion",
+            "category": "Deportes",
+            "availability": 0.52,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "5e80bbffda16443e98bda88263b67349ecb37bcf",
+            "title": "M+ Liga de Campeones 2",
+            "category": "Deportes",
+            "availability": 0.44,
+            "bitrate": null,
+            "ih": true
+          }
+        ]
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "search",
+      "params": {},
+      "query": [
+        [
+          "q",
+          "Líga de campeones"
+        ]
+      ],
+      "cuerpo": null,
+      "respuesta": {
+        "query": "liga de campeones",
+        "results": [
+          {
+            "id": "3cfa17712950435a8bec729418dc5541a1ff26d1",
+            "title": "M+ Liga de Campeones",
+            "category": "Deportes",
+            "availability": 0.87,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "5e80bbffda16443e98bda88263b67349ecb37bcf",
+            "title": "M+ Liga de Campeones 2",
+            "category": "Deportes",
+            "availability": 0.44,
+            "bitrate": null,
+            "ih": true
+          }
+        ]
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "search",
+      "params": {},
+      "query": [
+        [
+          "q",
+          "ñ"
+        ]
+      ],
+      "cuerpo": null,
+      "respuesta": {
+        "query": "n",
+        "results": [
+          {
+            "id": "80979d013c4a00aa41edb796bfef6e452f48a4cd",
+            "title": "DAZN LaLiga",
+            "category": "Deportes",
+            "availability": 0.95,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "ebede4dced345c3820c16fed5eca45ddbaa581c8",
+            "title": "DAZN 1 HD",
+            "category": "Deportes",
+            "availability": 0.92,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "3cfa17712950435a8bec729418dc5541a1ff26d1",
+            "title": "M+ Liga de Campeones",
+            "category": "Deportes",
+            "availability": 0.87,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "6216cab76ec04c6a636596bcf9966d69cf9dceb7",
+            "title": "DAZN 2 HD",
+            "category": "Deportes",
+            "availability": 0.81,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "3644bc2ff214a6f6b2135128244ae281c61e1317",
+            "title": "DAZN LaLiga 2",
+            "category": "Deportes",
+            "availability": 0.58,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "fefcb272723869a09722856ba2b7bd59248ecbb2",
+            "title": "LaLiga TV Hypermotion",
+            "category": "Deportes",
+            "availability": 0.52,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "5e80bbffda16443e98bda88263b67349ecb37bcf",
+            "title": "M+ Liga de Campeones 2",
+            "category": "Deportes",
+            "availability": 0.44,
+            "bitrate": null,
+            "ih": true
+          }
+        ]
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "search",
+      "params": {},
+      "query": [
+        [
+          "q",
+          "m+"
+        ]
+      ],
+      "cuerpo": null,
+      "respuesta": {
+        "query": "m+",
+        "results": [
+          {
+            "id": "f443cd446fe710f65de35a496d234361ab38f5bc",
+            "title": "M+ LaLiga TV",
+            "category": "Deportes",
+            "availability": 0.9,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "3cfa17712950435a8bec729418dc5541a1ff26d1",
+            "title": "M+ Liga de Campeones",
+            "category": "Deportes",
+            "availability": 0.87,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "184d9dfc54b25b8a0caae6fd818199cde826b9b8",
+            "title": "M+ Vamos",
+            "category": "Deportes",
+            "availability": 0.63,
+            "bitrate": null,
+            "ih": true
+          },
+          {
+            "id": "5e80bbffda16443e98bda88263b67349ecb37bcf",
+            "title": "M+ Liga de Campeones 2",
+            "category": "Deportes",
+            "availability": 0.44,
+            "bitrate": null,
+            "ih": true
+          }
+        ]
+      }
+    }
+  ]
+}

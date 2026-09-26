@@ -9,7 +9,7 @@ import XCTest
 
 /// El port de Swift de las reglas de @ace/shared tiene que dar EXACTAMENTE lo
 /// mismo que las funciones de TypeScript. Los vectores los genera
-/// `scripts/generar-vectores.mjs` ejecutando for-you.ts y channels.ts de
+/// `scripts/generar-vectores.ts` (vectores/dominio.ts) ejecutando for-you.ts y channels.ts de
 /// verdad; la CI comprueba que el JSON está al día (`--check`).
 final class VectoresDominioTests: XCTestCase {
     private struct Lote: Decodable {

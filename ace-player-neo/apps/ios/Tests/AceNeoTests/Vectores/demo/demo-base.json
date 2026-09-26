@@ -1,0 +1,335 @@
+{
+  "aviso": "Generado por apps/ios/scripts/generar-demo.ts ejecutando la demo de la web. No se edita a mano.",
+  "descripcion": "Lo que sale del ejemplo base tal cual (y el arranque de la web, que la app adapta)",
+  "t0": "2026-09-24T17:00:00.000Z",
+  "pasos": [
+    {
+      "t": 0,
+      "ruta": "bootstrap",
+      "params": {},
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "version": "0.7.0",
+        "serverTime": 1790269200000,
+        "origin": "web",
+        "device": null,
+        "preferences": {
+          "onboardingComplete": true,
+          "country": "Spain",
+          "leagues": [
+            "LaLiga",
+            "Champions League"
+          ],
+          "teams": [
+            "Real Madrid"
+          ],
+          "nationalities": [
+            "España"
+          ]
+        },
+        "library": {
+          "web": [
+            {
+              "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+              "title": "DAZN 1",
+              "type": "web",
+              "category": "Deportes",
+              "date": "2026-09-23T18:30:00.000Z",
+              "fromWebSync": true,
+              "ih": false
+            },
+            {
+              "id": "b2c3d4e5f60718293a4b5c6d7e8f901234567890",
+              "title": "M+ LaLiga",
+              "type": "web",
+              "category": "Deportes",
+              "date": "2026-09-23T18:30:00.000Z",
+              "fromWebSync": true,
+              "ih": false
+            }
+          ],
+          "webSyncedAt": "2026-09-23T18:30:00.000Z",
+          "webSources": [
+            {
+              "id": "principal",
+              "name": "Principal",
+              "url": "https://example.com/lista.m3u",
+              "type": "m3u",
+              "count": 2,
+              "syncedAt": "2026-09-23T18:30:00.000Z",
+              "lastErrorAt": null,
+              "lastError": null
+            }
+          ],
+          "activeWebSourceId": "principal",
+          "favorites": [
+            {
+              "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+              "title": "DAZN 1",
+              "type": "fav",
+              "category": "",
+              "date": "2026-09-23T18:30:00.000Z",
+              "fromWebSync": false,
+              "ih": false
+            }
+          ],
+          "history": [
+            {
+              "id": "c3d4e5f60718293a4b5c6d7e8f9012345678901a",
+              "title": "Canal de prueba",
+              "type": "recent",
+              "category": "",
+              "date": "2026-09-23T18:30:00.000Z",
+              "fromWebSync": false,
+              "ih": false
+            }
+          ]
+        },
+        "playback": {
+          "nowPlaying": null,
+          "learningCount": 4,
+          "serverTime": 1790188200000,
+          "sessions": []
+        },
+        "engine": {
+          "status": "online",
+          "online": true,
+          "since": "2026-09-23T18:30:00.000Z",
+          "checkedAt": "2026-09-23T18:30:00.000Z",
+          "engineVersion": "3.2.3",
+          "autoRestarts": {
+            "lastHour": 0,
+            "max": 3,
+            "nextAllowedAt": null,
+            "exhausted": false
+          }
+        },
+        "settings": {
+          "sameChannelPolicy": "share"
+        },
+        "features": {
+          "scanner": true,
+          "ai": false,
+          "demoSchedule": true
+        }
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "ping",
+      "params": {},
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "ok": true,
+        "app": "ace-player-neo",
+        "version": "0.7.0",
+        "apiVersion": 1,
+        "serverTime": 1790188200000
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "engineStatus",
+      "params": {},
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "status": "online",
+        "online": true,
+        "since": "2026-09-23T18:30:00.000Z",
+        "checkedAt": "2026-09-23T18:30:00.000Z",
+        "engineVersion": "3.2.3",
+        "autoRestarts": {
+          "lastHour": 0,
+          "max": 3,
+          "nextAllowedAt": null,
+          "exhausted": false
+        }
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "engineRestart",
+      "params": {},
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "restarted": true
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "playbackStatus",
+      "params": {},
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "nowPlaying": {
+          "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+          "title": "DAZN 1",
+          "dev": "salon",
+          "token": "tok_abc123",
+          "at": 1790188200000
+        },
+        "learningCount": 4,
+        "serverTime": 1790188200000,
+        "sessions": [
+          {
+            "id": "s_Q2FuYWxEZVBydWViYQ",
+            "hash": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "mode": "hls",
+            "openedAt": "2026-09-23T18:30:00.000Z",
+            "viewers": [
+              {
+                "client": "web",
+                "deviceId": "web_salon01",
+                "lastBeatAt": "2026-09-23T18:30:00.000Z",
+                "viewerId": "viewer_tab01",
+                "deviceName": "Chrome · Windows",
+                "platform": "web",
+                "playing": true
+              },
+              {
+                "client": "ios",
+                "deviceId": "dev_iphone01",
+                "lastBeatAt": "2026-09-23T18:30:00.000Z",
+                "viewerId": "viewer_iphone01",
+                "deviceName": "iPhone de Isma",
+                "platform": "ios",
+                "playing": false
+              }
+            ],
+            "title": "DAZN 1",
+            "protocol": "hls"
+          }
+        ]
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "sourcesOutcome",
+      "params": {},
+      "query": [],
+      "cuerpo": {},
+      "respuesta": {
+        "hash": {
+          "intentos": 3.5,
+          "exitos": 2.8,
+          "caidas": 0.4,
+          "segundos": 5400,
+          "ultimo": 1790188200000
+        },
+        "proveedor": {
+          "intentos": 10,
+          "exitos": 8,
+          "caidas": 0.4,
+          "segundos": 5400,
+          "ultimo": 1790188200000
+        }
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "sourcesFeedback",
+      "params": {},
+      "query": [],
+      "cuerpo": {},
+      "respuesta": {
+        "feedback": {
+          "id": "c3d4e5f60718293a4b5c6d7e8f9012345678901a",
+          "title": "Canal equivocado",
+          "channel": "DAZN 1",
+          "channelKey": "dazn 1",
+          "verdict": "incorrect",
+          "reason": "wrong_channel",
+          "corrections": 1,
+          "updatedAt": "2026-09-23T18:30:00.000Z"
+        },
+        "learningCount": 5
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "diagnosticsReport",
+      "params": {},
+      "query": [],
+      "cuerpo": {},
+      "respuesta": {
+        "accepted": true,
+        "id": "diag_000002"
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "sessionHeartbeat",
+      "params": {
+        "sid": "s_demo"
+      },
+      "query": [],
+      "cuerpo": {},
+      "respuesta": {
+        "session": {
+          "id": "s_Q2FuYWxEZVBydWViYQ",
+          "heartbeatMs": 15000,
+          "expiresAfterMs": 45000
+        },
+        "url": "/ace/m/a1b2c3d4e5f60718293a4b5c6d7e8f9012345678/s_Q2FuYWxEZVBydWViYQ.m3u8",
+        "protocol": "hls",
+        "viewers": 2
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "sessionRelease",
+      "params": {
+        "sid": "s_demo"
+      },
+      "query": [],
+      "cuerpo": {},
+      "respuesta": {
+        "released": true,
+        "sessionClosed": false
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "channelStream",
+      "params": {
+        "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "session": {
+          "id": "s_Q2FuYWxEZVBydWViYQ",
+          "heartbeatMs": 15000,
+          "expiresAfterMs": 45000
+        },
+        "url": "/native/api/v1/video/s_Q2FuYWxEZVBydWViYQ/index.m3u8?t=eyJzaWQiOiJzX1EyRnVZV3cifQ.firma",
+        "protocol": "hls-fmp4",
+        "remux": true,
+        "codec": {
+          "video": "hevc",
+          "audio": "aac",
+          "source": "ffprobe"
+        },
+        "latency": {
+          "mode": "balanced",
+          "initialBufferS": 6,
+          "rebuildS": 8,
+          "liveSync": null,
+          "ios": {
+            "preferredForwardBufferDuration": 8,
+            "liveEdgeOffsetS": 8
+          }
+        },
+        "stats": {
+          "via": "sse"
+        },
+        "handoff": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,225 @@
+{
+  "aviso": "Generado por apps/ios/scripts/generar-demo.ts ejecutando la demo de la web. No se edita a mano.",
+  "descripcion": "Precalentado de cada partido",
+  "t0": "2026-09-24T17:00:00.000Z",
+  "pasos": [
+    {
+      "t": 0,
+      "ruta": "footballPreheat",
+      "params": {
+        "matchId": "demo-1"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "preheat": {
+          "matchId": "demo-1",
+          "stage": "scan",
+          "updatedAt": "2026-09-24T17:00:00.000Z",
+          "error": "",
+          "status": "ready",
+          "checked": 6,
+          "playable": 3,
+          "total": 6,
+          "candidateCount": 6
+        }
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "footballPreheat",
+      "params": {
+        "matchId": "demo-2"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "preheat": {
+          "matchId": "demo-2",
+          "stage": "scan",
+          "updatedAt": "2026-09-24T17:00:00.000Z",
+          "error": "",
+          "status": "discovered",
+          "checked": 0,
+          "playable": 0,
+          "total": 0,
+          "candidateCount": 2
+        }
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "footballPreheat",
+      "params": {
+        "matchId": "demo-3"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "preheat": null
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "footballPreheat",
+      "params": {
+        "matchId": "demo-4"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "preheat": {
+          "matchId": "demo-4",
+          "stage": "scan",
+          "updatedAt": "2026-09-24T17:00:00.000Z",
+          "error": "",
+          "status": "scanning",
+          "checked": 2,
+          "playable": 0,
+          "total": 5,
+          "candidateCount": 5
+        }
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "footballPreheat",
+      "params": {
+        "matchId": "demo-5"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "preheat": {
+          "matchId": "demo-5",
+          "stage": "scan",
+          "updatedAt": "2026-09-24T17:00:00.000Z",
+          "error": "",
+          "status": "scanning",
+          "checked": 3,
+          "playable": 2,
+          "total": 6,
+          "candidateCount": 6
+        }
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "footballPreheat",
+      "params": {
+        "matchId": "demo-6"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "preheat": null
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "footballPreheat",
+      "params": {
+        "matchId": "demo-7"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "preheat": null
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "footballPreheat",
+      "params": {
+        "matchId": "demo-8"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "preheat": null
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "footballPreheat",
+      "params": {
+        "matchId": "demo-9"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "preheat": null
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "footballPreheat",
+      "params": {
+        "matchId": "demo-10"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "preheat": null
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "footballPreheat",
+      "params": {
+        "matchId": "demo-11"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "preheat": null
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "footballPreheat",
+      "params": {
+        "matchId": "demo-12"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "preheat": {
+          "matchId": "demo-12",
+          "stage": "scan",
+          "updatedAt": "2026-09-24T17:00:00.000Z",
+          "error": "",
+          "status": "ready",
+          "checked": 4,
+          "playable": 0,
+          "total": 4,
+          "candidateCount": 4
+        }
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "footballPreheat",
+      "params": {
+        "matchId": "demo-13"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "preheat": null
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "footballPreheat",
+      "params": {
+        "matchId": "demo-99"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "preheat": null
+      }
+    }
+  ]
+}

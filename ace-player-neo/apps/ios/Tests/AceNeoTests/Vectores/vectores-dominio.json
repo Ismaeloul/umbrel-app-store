@@ -1,5 +1,5 @@
 {
-  "aviso": "Generado por apps/ios/scripts/generar-vectores.mjs desde packages/shared/src/domain. No se edita a mano.",
+  "aviso": "Generado por apps/ios/scripts/generar-vectores.ts (vectores/dominio.ts) desde packages/shared/src/domain. No se edita a mano.",
   "claves": [
     {
       "texto": "",

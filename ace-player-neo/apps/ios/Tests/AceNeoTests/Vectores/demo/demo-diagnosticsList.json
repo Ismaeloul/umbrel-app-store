@@ -1,0 +1,246 @@
+{
+  "aviso": "Generado por apps/ios/scripts/generar-demo.ts ejecutando la demo de la web. No se edita a mano.",
+  "descripcion": "Registro de muestra con y sin filtro",
+  "t0": "2026-09-24T17:00:00.000Z",
+  "pasos": [
+    {
+      "t": 0,
+      "ruta": "diagnosticsList",
+      "params": {},
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "entries": [
+          {
+            "id": "demo_0001",
+            "at": "2026-09-24T16:56:00.000Z",
+            "cause": "source",
+            "code": "source_no_peers",
+            "message": "La fuente no tiene pares.",
+            "channel": "DAZN 1",
+            "hash": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
+          },
+          {
+            "id": "demo_0002",
+            "at": "2026-09-24T16:49:00.000Z",
+            "cause": "client",
+            "code": "player_metrics",
+            "message": "",
+            "channel": "DAZN 1",
+            "hash": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "metrics": {
+              "timeToFirstFrameMs": 2300,
+              "rebuffers": 2,
+              "rebufferMs": 4100,
+              "reconnects": 1,
+              "liveLatencyS": 14
+            }
+          },
+          {
+            "id": "demo_0003",
+            "at": "2026-09-24T16:34:00.000Z",
+            "cause": "source",
+            "code": "source_no_peers",
+            "message": "La fuente no tiene pares.",
+            "channel": "DAZN 1",
+            "hash": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
+          },
+          {
+            "id": "demo_0004",
+            "at": "2026-09-24T16:12:00.000Z",
+            "cause": "codec",
+            "code": "unsupported_codec",
+            "message": "El audio viene en AC-3 y este navegador no lo descodifica.",
+            "channel": "M+ LaLiga TV",
+            "hash": "0f1e2d3c4b5a69788796a5b4c3d2e1f001234567"
+          },
+          {
+            "id": "demo_0005",
+            "at": "2026-09-24T15:25:00.000Z",
+            "cause": "engine",
+            "code": "engine_auto_restart",
+            "message": "Reinicio automático del motor: no respondía."
+          },
+          {
+            "id": "demo_0006",
+            "at": "2026-09-24T14:40:00.000Z",
+            "cause": "network",
+            "code": "http_503",
+            "message": "Directorio «Deportes extra»: El servidor respondió con un error 503."
+          },
+          {
+            "id": "demo_0007",
+            "at": "2026-09-24T11:50:00.000Z",
+            "cause": "client",
+            "code": "autoplay_blocked",
+            "message": "El navegador bloqueó la reproducción automática.",
+            "channel": "Teledeporte"
+          },
+          {
+            "id": "demo_0008",
+            "at": "2026-09-24T07:00:00.000Z",
+            "cause": "source",
+            "code": "source_stalled",
+            "message": "La fuente se quedó sin datos durante 20 s.",
+            "channel": "M+ LaLiga TV",
+            "hash": "0f1e2d3c4b5a69788796a5b4c3d2e1f001234567"
+          },
+          {
+            "id": "demo_0009",
+            "at": "2026-09-23T15:00:00.000Z",
+            "cause": "engine",
+            "code": "engine_stalled",
+            "message": "El motor responde pero lleva 30 s sin entregar datos."
+          }
+        ],
+        "counts24h": {
+          "engine": 1,
+          "source": 3,
+          "network": 1,
+          "codec": 1,
+          "client": 2,
+          "state": 0
+        },
+        "total": 9
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "diagnosticsList",
+      "params": {},
+      "query": [
+        [
+          "cause",
+          "source"
+        ]
+      ],
+      "cuerpo": null,
+      "respuesta": {
+        "entries": [
+          {
+            "id": "demo_0001",
+            "at": "2026-09-24T16:56:00.000Z",
+            "cause": "source",
+            "code": "source_no_peers",
+            "message": "La fuente no tiene pares.",
+            "channel": "DAZN 1",
+            "hash": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
+          },
+          {
+            "id": "demo_0003",
+            "at": "2026-09-24T16:34:00.000Z",
+            "cause": "source",
+            "code": "source_no_peers",
+            "message": "La fuente no tiene pares.",
+            "channel": "DAZN 1",
+            "hash": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
+          },
+          {
+            "id": "demo_0008",
+            "at": "2026-09-24T07:00:00.000Z",
+            "cause": "source",
+            "code": "source_stalled",
+            "message": "La fuente se quedó sin datos durante 20 s.",
+            "channel": "M+ LaLiga TV",
+            "hash": "0f1e2d3c4b5a69788796a5b4c3d2e1f001234567"
+          }
+        ],
+        "counts24h": {
+          "engine": 1,
+          "source": 3,
+          "network": 1,
+          "codec": 1,
+          "client": 2,
+          "state": 0
+        },
+        "total": 3
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "diagnosticsList",
+      "params": {},
+      "query": [
+        [
+          "limit",
+          "2"
+        ]
+      ],
+      "cuerpo": null,
+      "respuesta": {
+        "entries": [
+          {
+            "id": "demo_0001",
+            "at": "2026-09-24T16:56:00.000Z",
+            "cause": "source",
+            "code": "source_no_peers",
+            "message": "La fuente no tiene pares.",
+            "channel": "DAZN 1",
+            "hash": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
+          },
+          {
+            "id": "demo_0002",
+            "at": "2026-09-24T16:49:00.000Z",
+            "cause": "client",
+            "code": "player_metrics",
+            "message": "",
+            "channel": "DAZN 1",
+            "hash": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "metrics": {
+              "timeToFirstFrameMs": 2300,
+              "rebuffers": 2,
+              "rebufferMs": 4100,
+              "reconnects": 1,
+              "liveLatencyS": 14
+            }
+          }
+        ],
+        "counts24h": {
+          "engine": 1,
+          "source": 3,
+          "network": 1,
+          "codec": 1,
+          "client": 2,
+          "state": 0
+        },
+        "total": 9
+      }
+    },
+    {
+      "t": 0,
+      "ruta": "diagnosticsList",
+      "params": {},
+      "query": [
+        [
+          "cause",
+          "engine"
+        ],
+        [
+          "limit",
+          "1"
+        ]
+      ],
+      "cuerpo": null,
+      "respuesta": {
+        "entries": [
+          {
+            "id": "demo_0005",
+            "at": "2026-09-24T15:25:00.000Z",
+            "cause": "engine",
+            "code": "engine_auto_restart",
+            "message": "Reinicio automático del motor: no respondía."
+          }
+        ],
+        "counts24h": {
+          "engine": 1,
+          "source": 3,
+          "network": 1,
+          "codec": 1,
+          "client": 2,
+          "state": 0
+        },
+        "total": 2
+      }
+    }
+  ]
+}

@@ -1,0 +1,771 @@
+{
+  "aviso": "Generado por apps/ios/scripts/generar-demo.ts ejecutando la demo de la web. No se edita a mano.",
+  "descripcion": "Biblioteca, sus mutaciones y las listas",
+  "t0": "2026-09-24T17:00:00.000Z",
+  "pasos": [
+    {
+      "t": 0,
+      "ruta": "libraryGet",
+      "params": {},
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "web": [
+          {
+            "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "title": "DAZN 1",
+            "type": "web",
+            "category": "Deportes",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": true,
+            "ih": false
+          },
+          {
+            "id": "b2c3d4e5f60718293a4b5c6d7e8f901234567890",
+            "title": "M+ LaLiga",
+            "type": "web",
+            "category": "Deportes",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": true,
+            "ih": false
+          }
+        ],
+        "webSyncedAt": "2026-09-23T18:30:00.000Z",
+        "webSources": [
+          {
+            "id": "principal",
+            "name": "Principal",
+            "url": "https://example.com/lista.m3u",
+            "type": "m3u",
+            "count": 2,
+            "syncedAt": "2026-09-23T18:30:00.000Z",
+            "lastErrorAt": null,
+            "lastError": null
+          }
+        ],
+        "activeWebSourceId": "principal",
+        "favorites": [
+          {
+            "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "title": "DAZN 1",
+            "type": "fav",
+            "category": "",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": false,
+            "ih": false
+          }
+        ],
+        "history": [
+          {
+            "id": "c3d4e5f60718293a4b5c6d7e8f9012345678901a",
+            "title": "Canal de prueba",
+            "type": "recent",
+            "category": "",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": false,
+            "ih": false
+          }
+        ]
+      }
+    },
+    {
+      "t": 1000,
+      "ruta": "libraryMutate",
+      "params": {},
+      "query": [],
+      "cuerpo": {
+        "action": "favorite-upsert",
+        "item": {
+          "id": "ABCDEF0123456789ABCDEF0123456789ABCDEF01",
+          "title": "Nuevo favorito",
+          "ih": true
+        }
+      },
+      "respuesta": {
+        "web": [
+          {
+            "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "title": "DAZN 1",
+            "type": "web",
+            "category": "Deportes",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": true,
+            "ih": false
+          },
+          {
+            "id": "b2c3d4e5f60718293a4b5c6d7e8f901234567890",
+            "title": "M+ LaLiga",
+            "type": "web",
+            "category": "Deportes",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": true,
+            "ih": false
+          }
+        ],
+        "webSyncedAt": "2026-09-23T18:30:00.000Z",
+        "webSources": [
+          {
+            "id": "principal",
+            "name": "Principal",
+            "url": "https://example.com/lista.m3u",
+            "type": "m3u",
+            "count": 2,
+            "syncedAt": "2026-09-23T18:30:00.000Z",
+            "lastErrorAt": null,
+            "lastError": null
+          }
+        ],
+        "activeWebSourceId": "principal",
+        "favorites": [
+          {
+            "id": "abcdef0123456789abcdef0123456789abcdef01",
+            "title": "Nuevo favorito",
+            "type": "fav",
+            "category": "Sin categoría",
+            "date": "2026-09-24T17:00:01.000Z",
+            "fromWebSync": false,
+            "ih": false
+          },
+          {
+            "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "title": "DAZN 1",
+            "type": "fav",
+            "category": "",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": false,
+            "ih": false
+          }
+        ],
+        "history": [
+          {
+            "id": "c3d4e5f60718293a4b5c6d7e8f9012345678901a",
+            "title": "Canal de prueba",
+            "type": "recent",
+            "category": "",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": false,
+            "ih": false
+          }
+        ]
+      }
+    },
+    {
+      "t": 2000,
+      "ruta": "libraryMutate",
+      "params": {},
+      "query": [],
+      "cuerpo": {
+        "action": "favorite-upsert",
+        "item": {
+          "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+          "category": "Deportes"
+        }
+      },
+      "respuesta": {
+        "web": [
+          {
+            "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "title": "DAZN 1",
+            "type": "web",
+            "category": "Deportes",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": true,
+            "ih": false
+          },
+          {
+            "id": "b2c3d4e5f60718293a4b5c6d7e8f901234567890",
+            "title": "M+ LaLiga",
+            "type": "web",
+            "category": "Deportes",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": true,
+            "ih": false
+          }
+        ],
+        "webSyncedAt": "2026-09-23T18:30:00.000Z",
+        "webSources": [
+          {
+            "id": "principal",
+            "name": "Principal",
+            "url": "https://example.com/lista.m3u",
+            "type": "m3u",
+            "count": 2,
+            "syncedAt": "2026-09-23T18:30:00.000Z",
+            "lastErrorAt": null,
+            "lastError": null
+          }
+        ],
+        "activeWebSourceId": "principal",
+        "favorites": [
+          {
+            "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "title": "Canal sin nombre",
+            "type": "fav",
+            "category": "Deportes",
+            "date": "2026-09-24T17:00:02.000Z",
+            "fromWebSync": false,
+            "ih": false
+          },
+          {
+            "id": "abcdef0123456789abcdef0123456789abcdef01",
+            "title": "Nuevo favorito",
+            "type": "fav",
+            "category": "Sin categoría",
+            "date": "2026-09-24T17:00:01.000Z",
+            "fromWebSync": false,
+            "ih": false
+          }
+        ],
+        "history": [
+          {
+            "id": "c3d4e5f60718293a4b5c6d7e8f9012345678901a",
+            "title": "Canal de prueba",
+            "type": "recent",
+            "category": "",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": false,
+            "ih": false
+          }
+        ]
+      }
+    },
+    {
+      "t": 3000,
+      "ruta": "libraryMutate",
+      "params": {},
+      "query": [],
+      "cuerpo": {
+        "action": "history-upsert",
+        "item": {
+          "id": "0feeabf0888811b8dd55c807eef65f8d85fa4cce",
+          "title": "DAZN",
+          "ih": false
+        }
+      },
+      "respuesta": {
+        "web": [
+          {
+            "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "title": "DAZN 1",
+            "type": "web",
+            "category": "Deportes",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": true,
+            "ih": false
+          },
+          {
+            "id": "b2c3d4e5f60718293a4b5c6d7e8f901234567890",
+            "title": "M+ LaLiga",
+            "type": "web",
+            "category": "Deportes",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": true,
+            "ih": false
+          }
+        ],
+        "webSyncedAt": "2026-09-23T18:30:00.000Z",
+        "webSources": [
+          {
+            "id": "principal",
+            "name": "Principal",
+            "url": "https://example.com/lista.m3u",
+            "type": "m3u",
+            "count": 2,
+            "syncedAt": "2026-09-23T18:30:00.000Z",
+            "lastErrorAt": null,
+            "lastError": null
+          }
+        ],
+        "activeWebSourceId": "principal",
+        "favorites": [
+          {
+            "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "title": "Canal sin nombre",
+            "type": "fav",
+            "category": "Deportes",
+            "date": "2026-09-24T17:00:02.000Z",
+            "fromWebSync": false,
+            "ih": false
+          },
+          {
+            "id": "abcdef0123456789abcdef0123456789abcdef01",
+            "title": "Nuevo favorito",
+            "type": "fav",
+            "category": "Sin categoría",
+            "date": "2026-09-24T17:00:01.000Z",
+            "fromWebSync": false,
+            "ih": false
+          }
+        ],
+        "history": [
+          {
+            "id": "0feeabf0888811b8dd55c807eef65f8d85fa4cce",
+            "title": "DAZN",
+            "type": "recent",
+            "category": "Sin categoría",
+            "date": "2026-09-24T17:00:03.000Z",
+            "fromWebSync": false,
+            "ih": false
+          },
+          {
+            "id": "c3d4e5f60718293a4b5c6d7e8f9012345678901a",
+            "title": "Canal de prueba",
+            "type": "recent",
+            "category": "",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": false,
+            "ih": false
+          }
+        ]
+      }
+    },
+    {
+      "t": 4000,
+      "ruta": "libraryMutate",
+      "params": {},
+      "query": [],
+      "cuerpo": {
+        "action": "history-upsert",
+        "item": {
+          "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+          "title": "DAZN 1",
+          "ih": false
+        }
+      },
+      "respuesta": {
+        "web": [
+          {
+            "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "title": "DAZN 1",
+            "type": "web",
+            "category": "Deportes",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": true,
+            "ih": false
+          },
+          {
+            "id": "b2c3d4e5f60718293a4b5c6d7e8f901234567890",
+            "title": "M+ LaLiga",
+            "type": "web",
+            "category": "Deportes",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": true,
+            "ih": false
+          }
+        ],
+        "webSyncedAt": "2026-09-23T18:30:00.000Z",
+        "webSources": [
+          {
+            "id": "principal",
+            "name": "Principal",
+            "url": "https://example.com/lista.m3u",
+            "type": "m3u",
+            "count": 2,
+            "syncedAt": "2026-09-23T18:30:00.000Z",
+            "lastErrorAt": null,
+            "lastError": null
+          }
+        ],
+        "activeWebSourceId": "principal",
+        "favorites": [
+          {
+            "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "title": "Canal sin nombre",
+            "type": "fav",
+            "category": "Deportes",
+            "date": "2026-09-24T17:00:02.000Z",
+            "fromWebSync": false,
+            "ih": false
+          },
+          {
+            "id": "abcdef0123456789abcdef0123456789abcdef01",
+            "title": "Nuevo favorito",
+            "type": "fav",
+            "category": "Sin categoría",
+            "date": "2026-09-24T17:00:01.000Z",
+            "fromWebSync": false,
+            "ih": false
+          }
+        ],
+        "history": [
+          {
+            "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "title": "DAZN 1",
+            "type": "recent",
+            "category": "Sin categoría",
+            "date": "2026-09-24T17:00:04.000Z",
+            "fromWebSync": false,
+            "ih": false
+          },
+          {
+            "id": "0feeabf0888811b8dd55c807eef65f8d85fa4cce",
+            "title": "DAZN",
+            "type": "recent",
+            "category": "Sin categoría",
+            "date": "2026-09-24T17:00:03.000Z",
+            "fromWebSync": false,
+            "ih": false
+          },
+          {
+            "id": "c3d4e5f60718293a4b5c6d7e8f9012345678901a",
+            "title": "Canal de prueba",
+            "type": "recent",
+            "category": "",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": false,
+            "ih": false
+          }
+        ]
+      }
+    },
+    {
+      "t": 5000,
+      "ruta": "libraryMutate",
+      "params": {},
+      "query": [],
+      "cuerpo": {
+        "action": "rename",
+        "collection": "web",
+        "id": "B2C3D4E5F60718293A4B5C6D7E8F901234567890",
+        "title": "M+ LaLiga TV"
+      },
+      "respuesta": {
+        "web": [
+          {
+            "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "title": "DAZN 1",
+            "type": "web",
+            "category": "Deportes",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": true,
+            "ih": false
+          },
+          {
+            "id": "b2c3d4e5f60718293a4b5c6d7e8f901234567890",
+            "title": "M+ LaLiga TV",
+            "type": "web",
+            "category": "Deportes",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": true,
+            "ih": false
+          }
+        ],
+        "webSyncedAt": "2026-09-23T18:30:00.000Z",
+        "webSources": [
+          {
+            "id": "principal",
+            "name": "Principal",
+            "url": "https://example.com/lista.m3u",
+            "type": "m3u",
+            "count": 2,
+            "syncedAt": "2026-09-23T18:30:00.000Z",
+            "lastErrorAt": null,
+            "lastError": null
+          }
+        ],
+        "activeWebSourceId": "principal",
+        "favorites": [
+          {
+            "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "title": "Canal sin nombre",
+            "type": "fav",
+            "category": "Deportes",
+            "date": "2026-09-24T17:00:02.000Z",
+            "fromWebSync": false,
+            "ih": false
+          },
+          {
+            "id": "abcdef0123456789abcdef0123456789abcdef01",
+            "title": "Nuevo favorito",
+            "type": "fav",
+            "category": "Sin categoría",
+            "date": "2026-09-24T17:00:01.000Z",
+            "fromWebSync": false,
+            "ih": false
+          }
+        ],
+        "history": [
+          {
+            "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "title": "DAZN 1",
+            "type": "recent",
+            "category": "Sin categoría",
+            "date": "2026-09-24T17:00:04.000Z",
+            "fromWebSync": false,
+            "ih": false
+          },
+          {
+            "id": "0feeabf0888811b8dd55c807eef65f8d85fa4cce",
+            "title": "DAZN",
+            "type": "recent",
+            "category": "Sin categoría",
+            "date": "2026-09-24T17:00:03.000Z",
+            "fromWebSync": false,
+            "ih": false
+          },
+          {
+            "id": "c3d4e5f60718293a4b5c6d7e8f9012345678901a",
+            "title": "Canal de prueba",
+            "type": "recent",
+            "category": "",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": false,
+            "ih": false
+          }
+        ]
+      }
+    },
+    {
+      "t": 6000,
+      "ruta": "libraryMutate",
+      "params": {},
+      "query": [],
+      "cuerpo": {
+        "action": "delete",
+        "collection": "favorites",
+        "id": "abcdef0123456789abcdef0123456789abcdef01"
+      },
+      "respuesta": {
+        "web": [
+          {
+            "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "title": "DAZN 1",
+            "type": "web",
+            "category": "Deportes",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": true,
+            "ih": false
+          },
+          {
+            "id": "b2c3d4e5f60718293a4b5c6d7e8f901234567890",
+            "title": "M+ LaLiga TV",
+            "type": "web",
+            "category": "Deportes",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": true,
+            "ih": false
+          }
+        ],
+        "webSyncedAt": "2026-09-23T18:30:00.000Z",
+        "webSources": [
+          {
+            "id": "principal",
+            "name": "Principal",
+            "url": "https://example.com/lista.m3u",
+            "type": "m3u",
+            "count": 2,
+            "syncedAt": "2026-09-23T18:30:00.000Z",
+            "lastErrorAt": null,
+            "lastError": null
+          }
+        ],
+        "activeWebSourceId": "principal",
+        "favorites": [
+          {
+            "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "title": "Canal sin nombre",
+            "type": "fav",
+            "category": "Deportes",
+            "date": "2026-09-24T17:00:02.000Z",
+            "fromWebSync": false,
+            "ih": false
+          }
+        ],
+        "history": [
+          {
+            "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "title": "DAZN 1",
+            "type": "recent",
+            "category": "Sin categoría",
+            "date": "2026-09-24T17:00:04.000Z",
+            "fromWebSync": false,
+            "ih": false
+          },
+          {
+            "id": "0feeabf0888811b8dd55c807eef65f8d85fa4cce",
+            "title": "DAZN",
+            "type": "recent",
+            "category": "Sin categoría",
+            "date": "2026-09-24T17:00:03.000Z",
+            "fromWebSync": false,
+            "ih": false
+          },
+          {
+            "id": "c3d4e5f60718293a4b5c6d7e8f9012345678901a",
+            "title": "Canal de prueba",
+            "type": "recent",
+            "category": "",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": false,
+            "ih": false
+          }
+        ]
+      }
+    },
+    {
+      "t": 7000,
+      "ruta": "libraryGet",
+      "params": {},
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "web": [
+          {
+            "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "title": "DAZN 1",
+            "type": "web",
+            "category": "Deportes",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": true,
+            "ih": false
+          },
+          {
+            "id": "b2c3d4e5f60718293a4b5c6d7e8f901234567890",
+            "title": "M+ LaLiga TV",
+            "type": "web",
+            "category": "Deportes",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": true,
+            "ih": false
+          }
+        ],
+        "webSyncedAt": "2026-09-23T18:30:00.000Z",
+        "webSources": [
+          {
+            "id": "principal",
+            "name": "Principal",
+            "url": "https://example.com/lista.m3u",
+            "type": "m3u",
+            "count": 2,
+            "syncedAt": "2026-09-23T18:30:00.000Z",
+            "lastErrorAt": null,
+            "lastError": null
+          }
+        ],
+        "activeWebSourceId": "principal",
+        "favorites": [
+          {
+            "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "title": "Canal sin nombre",
+            "type": "fav",
+            "category": "Deportes",
+            "date": "2026-09-24T17:00:02.000Z",
+            "fromWebSync": false,
+            "ih": false
+          }
+        ],
+        "history": [
+          {
+            "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "title": "DAZN 1",
+            "type": "recent",
+            "category": "Sin categoría",
+            "date": "2026-09-24T17:00:04.000Z",
+            "fromWebSync": false,
+            "ih": false
+          },
+          {
+            "id": "0feeabf0888811b8dd55c807eef65f8d85fa4cce",
+            "title": "DAZN",
+            "type": "recent",
+            "category": "Sin categoría",
+            "date": "2026-09-24T17:00:03.000Z",
+            "fromWebSync": false,
+            "ih": false
+          },
+          {
+            "id": "c3d4e5f60718293a4b5c6d7e8f9012345678901a",
+            "title": "Canal de prueba",
+            "type": "recent",
+            "category": "",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": false,
+            "ih": false
+          }
+        ]
+      }
+    },
+    {
+      "t": 8000,
+      "ruta": "directoriesGet",
+      "params": {},
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "web": [
+          {
+            "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "title": "DAZN 1",
+            "type": "web",
+            "category": "Deportes",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": true,
+            "ih": false
+          },
+          {
+            "id": "b2c3d4e5f60718293a4b5c6d7e8f901234567890",
+            "title": "M+ LaLiga TV",
+            "type": "web",
+            "category": "Deportes",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": true,
+            "ih": false
+          }
+        ],
+        "webSyncedAt": "2026-09-23T18:30:00.000Z",
+        "webSources": [
+          {
+            "id": "principal",
+            "name": "Principal",
+            "url": "https://example.com/lista.m3u",
+            "type": "m3u",
+            "count": 2,
+            "syncedAt": "2026-09-23T18:30:00.000Z",
+            "lastErrorAt": null,
+            "lastError": null
+          }
+        ],
+        "activeWebSourceId": "principal"
+      }
+    },
+    {
+      "t": 9000,
+      "ruta": "directoriesSync",
+      "params": {},
+      "query": [],
+      "cuerpo": {
+        "url": "https://example.com/lista.m3u"
+      },
+      "error": {
+        "code": "demo_unsupported",
+        "status": 409
+      }
+    },
+    {
+      "t": 9000,
+      "ruta": "directoriesActivate",
+      "params": {
+        "id": "principal"
+      },
+      "query": [],
+      "cuerpo": null,
+      "error": {
+        "code": "demo_unsupported",
+        "status": 409
+      }
+    },
+    {
+      "t": 9000,
+      "ruta": "directoriesDelete",
+      "params": {
+        "id": "principal"
+      },
+      "query": [],
+      "cuerpo": null,
+      "error": {
+        "code": "demo_unsupported",
+        "status": 409
+      }
+    }
+  ]
+}

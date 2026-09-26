@@ -1,0 +1,125 @@
+{
+  "aviso": "Generado por apps/ios/scripts/generar-demo.ts ejecutando la demo de la web. No se edita a mano.",
+  "descripcion": "Gustos y ajustes guardados en la demo",
+  "t0": "2026-09-24T17:00:00.000Z",
+  "pasos": [
+    {
+      "t": 0,
+      "ruta": "preferencesGet",
+      "params": {},
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "preferences": {
+          "onboardingComplete": true,
+          "country": "Spain",
+          "leagues": [
+            "LaLiga",
+            "Champions League"
+          ],
+          "teams": [
+            "Real Madrid"
+          ],
+          "nationalities": [
+            "España"
+          ]
+        }
+      }
+    },
+    {
+      "t": 1000,
+      "ruta": "preferencesUpdate",
+      "params": {},
+      "query": [],
+      "cuerpo": {
+        "leagues": [
+          "LaLiga"
+        ],
+        "teams": [
+          "Real Madrid",
+          "Girona"
+        ]
+      },
+      "respuesta": {
+        "preferences": {
+          "onboardingComplete": true,
+          "country": "Spain",
+          "leagues": [
+            "LaLiga"
+          ],
+          "teams": [
+            "Real Madrid",
+            "Girona"
+          ],
+          "nationalities": [
+            "España"
+          ]
+        }
+      }
+    },
+    {
+      "t": 2000,
+      "ruta": "preferencesGet",
+      "params": {},
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "preferences": {
+          "onboardingComplete": true,
+          "country": "Spain",
+          "leagues": [
+            "LaLiga"
+          ],
+          "teams": [
+            "Real Madrid",
+            "Girona"
+          ],
+          "nationalities": [
+            "España"
+          ]
+        }
+      }
+    },
+    {
+      "t": 3000,
+      "ruta": "settingsGet",
+      "params": {},
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "settings": {
+          "sameChannelPolicy": "share"
+        },
+        "source": "saved"
+      }
+    },
+    {
+      "t": 4000,
+      "ruta": "settingsUpdate",
+      "params": {},
+      "query": [],
+      "cuerpo": {
+        "sameChannelPolicy": "exclusive"
+      },
+      "respuesta": {
+        "settings": {
+          "sameChannelPolicy": "exclusive"
+        },
+        "source": "saved"
+      }
+    },
+    {
+      "t": 5000,
+      "ruta": "settingsGet",
+      "params": {},
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "settings": {
+          "sameChannelPolicy": "exclusive"
+        },
+        "source": "saved"
+      }
+    }
+  ]
+}

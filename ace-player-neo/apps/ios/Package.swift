@@ -30,6 +30,7 @@ let package = Package(
                 "Player/Directo.swift",
                 "Player/TiposReproduccion.swift",
                 "App/MigracionClaves.swift",
+                "Debug/DemoNucleo",
             ],
             swiftSettings: [.swiftLanguageMode(.v6), .define("DEBUG")]
         ),

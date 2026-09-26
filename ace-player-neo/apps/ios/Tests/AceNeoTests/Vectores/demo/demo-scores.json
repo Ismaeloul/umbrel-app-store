@@ -1,0 +1,247 @@
+{
+  "aviso": "Generado por apps/ios/scripts/generar-demo.ts ejecutando la demo de la web. No se edita a mano.",
+  "descripcion": "Marcadores de muestra según el reloj",
+  "t0": "2026-09-24T17:00:00.000Z",
+  "pasos": [
+    {
+      "t": 0,
+      "ruta": "scores",
+      "params": {},
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "available": true,
+        "generatedAt": "2026-09-24T17:00:00.000Z",
+        "source": "espn",
+        "attribution": "Datos de muestra",
+        "leagues": 3,
+        "scores": {
+          "demo-1": {
+            "home": 1,
+            "away": 1,
+            "state": "in",
+            "clock": "57'",
+            "detail": "2ª parte",
+            "confidence": 0.92
+          },
+          "demo-4": {
+            "home": 0,
+            "away": 0,
+            "state": "in",
+            "clock": "45'",
+            "detail": "HT",
+            "confidence": 0.92
+          },
+          "demo-12": {
+            "home": 1,
+            "away": 1,
+            "state": "in",
+            "clock": "31'",
+            "detail": "1ª parte",
+            "confidence": 0.92
+          },
+          "demo-13": {
+            "home": 1,
+            "away": 0,
+            "state": "post",
+            "clock": "",
+            "detail": "FT",
+            "confidence": 0.92
+          }
+        }
+      }
+    },
+    {
+      "t": 300000,
+      "ruta": "scores",
+      "params": {},
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "available": true,
+        "generatedAt": "2026-09-24T17:05:00.000Z",
+        "source": "espn",
+        "attribution": "Datos de muestra",
+        "leagues": 3,
+        "scores": {
+          "demo-1": {
+            "home": 1,
+            "away": 1,
+            "state": "in",
+            "clock": "62'",
+            "detail": "2ª parte",
+            "confidence": 0.92
+          },
+          "demo-4": {
+            "home": 0,
+            "away": 0,
+            "state": "in",
+            "clock": "45'",
+            "detail": "HT",
+            "confidence": 0.92
+          },
+          "demo-12": {
+            "home": 1,
+            "away": 1,
+            "state": "in",
+            "clock": "36'",
+            "detail": "1ª parte",
+            "confidence": 0.92
+          },
+          "demo-13": {
+            "home": 1,
+            "away": 0,
+            "state": "post",
+            "clock": "",
+            "detail": "FT",
+            "confidence": 0.92
+          }
+        }
+      }
+    },
+    {
+      "t": 2700000,
+      "ruta": "scores",
+      "params": {},
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "available": true,
+        "generatedAt": "2026-09-24T17:45:00.000Z",
+        "source": "espn",
+        "attribution": "Datos de muestra",
+        "leagues": 3,
+        "scores": {
+          "demo-1": {
+            "home": 2,
+            "away": 1,
+            "state": "post",
+            "clock": "",
+            "detail": "FT",
+            "confidence": 0.92
+          },
+          "demo-4": {
+            "home": 0,
+            "away": 0,
+            "state": "in",
+            "clock": "82'",
+            "detail": "2ª parte",
+            "confidence": 0.92
+          },
+          "demo-12": {
+            "home": 1,
+            "away": 1,
+            "state": "in",
+            "clock": "61'",
+            "detail": "2ª parte",
+            "confidence": 0.92
+          },
+          "demo-13": {
+            "home": 1,
+            "away": 0,
+            "state": "post",
+            "clock": "",
+            "detail": "FT",
+            "confidence": 0.92
+          }
+        }
+      }
+    },
+    {
+      "t": 7200000,
+      "ruta": "scores",
+      "params": {},
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "available": true,
+        "generatedAt": "2026-09-24T19:00:00.000Z",
+        "source": "espn",
+        "attribution": "Datos de muestra",
+        "leagues": 3,
+        "scores": {
+          "demo-1": {
+            "home": 2,
+            "away": 1,
+            "state": "post",
+            "clock": "",
+            "detail": "FT",
+            "confidence": 0.92
+          },
+          "demo-4": {
+            "home": 0,
+            "away": 0,
+            "state": "post",
+            "clock": "",
+            "detail": "FT",
+            "confidence": 0.92
+          },
+          "demo-12": {
+            "home": 1,
+            "away": 1,
+            "state": "post",
+            "clock": "",
+            "detail": "FT",
+            "confidence": 0.92
+          },
+          "demo-13": {
+            "home": 1,
+            "away": 0,
+            "state": "post",
+            "clock": "",
+            "detail": "FT",
+            "confidence": 0.92
+          }
+        }
+      }
+    },
+    {
+      "t": 18000000,
+      "ruta": "scores",
+      "params": {},
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "available": true,
+        "generatedAt": "2026-09-24T22:00:00.000Z",
+        "source": "espn",
+        "attribution": "Datos de muestra",
+        "leagues": 3,
+        "scores": {
+          "demo-1": {
+            "home": 2,
+            "away": 1,
+            "state": "post",
+            "clock": "",
+            "detail": "FT",
+            "confidence": 0.92
+          },
+          "demo-4": {
+            "home": 0,
+            "away": 0,
+            "state": "post",
+            "clock": "",
+            "detail": "FT",
+            "confidence": 0.92
+          },
+          "demo-12": {
+            "home": 1,
+            "away": 1,
+            "state": "post",
+            "clock": "",
+            "detail": "FT",
+            "confidence": 0.92
+          },
+          "demo-13": {
+            "home": 1,
+            "away": 0,
+            "state": "post",
+            "clock": "",
+            "detail": "FT",
+            "confidence": 0.92
+          }
+        }
+      }
+    }
+  ]
+}

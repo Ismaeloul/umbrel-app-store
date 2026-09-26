@@ -1,0 +1,69 @@
+{
+  "aviso": "Generado por apps/ios/scripts/generar-demo.ts ejecutando la demo de la web. No se edita a mano.",
+  "descripcion": "«Es el canal correcto»",
+  "t0": "2026-09-24T17:00:00.000Z",
+  "pasos": [
+    {
+      "t": 0,
+      "ruta": "footballBind",
+      "params": {},
+      "query": [],
+      "cuerpo": {
+        "channel": "DAZN LaLiga",
+        "id": "ABCDEF0123456789ABCDEF0123456789ABCDEF01",
+        "title": "DAZN LaLiga FHD",
+        "ih": true
+      },
+      "respuesta": {
+        "binding": {
+          "channel": "DAZN LaLiga",
+          "channelKey": "dazn laliga",
+          "id": "abcdef0123456789abcdef0123456789abcdef01",
+          "title": "DAZN LaLiga FHD",
+          "ih": true,
+          "updatedAt": "2026-09-24T17:00:00.000Z"
+        },
+        "channelBindings": [
+          {
+            "channel": "DAZN LaLiga",
+            "channelKey": "dazn laliga",
+            "id": "abcdef0123456789abcdef0123456789abcdef01",
+            "title": "DAZN LaLiga FHD",
+            "ih": true,
+            "updatedAt": "2026-09-24T17:00:00.000Z"
+          }
+        ]
+      }
+    },
+    {
+      "t": 1,
+      "ruta": "footballBind",
+      "params": {},
+      "query": [],
+      "cuerpo": {
+        "channel": "***",
+        "id": "abcdef0123456789abcdef0123456789abcdef01"
+      },
+      "respuesta": {
+        "binding": {
+          "channel": "***",
+          "channelKey": "canal",
+          "id": "abcdef0123456789abcdef0123456789abcdef01",
+          "title": "***",
+          "ih": false,
+          "updatedAt": "2026-09-24T17:00:00.001Z"
+        },
+        "channelBindings": [
+          {
+            "channel": "***",
+            "channelKey": "canal",
+            "id": "abcdef0123456789abcdef0123456789abcdef01",
+            "title": "***",
+            "ih": false,
+            "updatedAt": "2026-09-24T17:00:00.001Z"
+          }
+        ]
+      }
+    }
+  ]
+}

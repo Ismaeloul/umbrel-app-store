@@ -1,0 +1,31 @@
+{
+  "aviso": "Generado por apps/ios/scripts/generar-demo.ts ejecutando la demo de la web. No se edita a mano.",
+  "descripcion": "Un trabajo que no existe sale cancelado",
+  "t0": "2026-09-24T17:00:00.000Z",
+  "pasos": [
+    {
+      "t": 0,
+      "ruta": "footballScan",
+      "params": {
+        "id": "de0000000000000000000000"
+      },
+      "query": [],
+      "cuerpo": null,
+      "respuesta": {
+        "id": "de0000000000000000000000",
+        "kind": "interactive",
+        "status": "cancelled",
+        "createdAt": "2026-09-24T17:00:00.000Z",
+        "updatedAt": "2026-09-24T17:00:00.000Z",
+        "total": 0,
+        "checked": 0,
+        "playable": 0,
+        "failed": 0,
+        "waiting": 0,
+        "retryAt": null,
+        "initialCount": 0,
+        "candidates": []
+      }
+    }
+  ]
+}
