@@ -10,11 +10,11 @@ final class FlujoMiniUITests: XCTestCase {
     }
 
     @MainActor
-    private func abrirCanal(tema: String = "oscuro") -> XCUIApplication {
+    private func abrirCanal(tema: String = "oscuro", reducido: Bool = true) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [
-            "-AceNeoDemo", "-AceNeoMovimientoReducido", "-AceNeoApariencia", tema, "-AceNeoEscena", "partido/canal/\(canal)",
-        ]
+            "-AceNeoDemo", "-AceNeoApariencia", tema, "-AceNeoEscena", "partido/canal/\(canal)",
+        ] + (reducido ? ["-AceNeoMovimientoReducido"] : [])
         app.launch()
         XCTAssertTrue(elementoUI(app, IDUI.videoTeatro).waitForExistence(timeout: 20), "No se abre el teatro del canal")
         return app
@@ -65,6 +65,39 @@ final class FlujoMiniUITests: XCTestCase {
         Thread.sleep(forTimeInterval: 2.5)
         arrastrar(video, desde: CGVector(dx: 0.5, dy: 0.4), hasta: CGVector(dx: 0.5, dy: 2.6))
         XCTAssertTrue(elementoUI(app, IDUI.miniPausa).waitForExistence(timeout: 10), "Arrastrar hacia abajo no minimiza")
+    }
+
+    /// Con las animaciones: el vídeo vuela al mini con el muelle y el mini queda en su sitio; un arrastre corto
+    /// (sin llegar al umbral) lo deja en el teatro.
+    @MainActor
+    func testArrastrarElVideoAbajoVuelaAlMiniConAnimacion() throws {
+        let app = abrirCanal(reducido: false)
+        let video = elementoUI(app, IDUI.videoTeatro)
+        let conCanal = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label == %@", "Reproductor: DAZN 1")).firstMatch
+        XCTAssertTrue(conCanal.waitForExistence(timeout: 15), "El canal no llega al escenario")
+        Thread.sleep(forTimeInterval: 2.5)
+        arrastrar(video, desde: CGVector(dx: 0.5, dy: 0.4), hasta: CGVector(dx: 0.5, dy: 0.5))
+        Thread.sleep(forTimeInterval: 1)
+        XCTAssertFalse(elementoUI(app, IDUI.miniPausa).exists, "Un arrastre corto no debe minimizar")
+        XCTAssertTrue(elementoUI(app, IDUI.videoTeatro).isHittable, "El vídeo no vuelve a su sitio")
+        arrastrar(video, desde: CGVector(dx: 0.5, dy: 0.4), hasta: CGVector(dx: 0.5, dy: 2.6))
+        XCTAssertTrue(elementoUI(app, IDUI.miniPausa).waitForExistence(timeout: 10), "Arrastrar hacia abajo no vuela al mini")
+        XCTAssertTrue(esperarQueDesaparezca(elementoUI(app, IDUI.teatro), plazo: 5), "El teatro sigue tras aterrizar")
+        captura(app, "mini-tras-arrastrar")
+    }
+
+    /// §3.7: volver deslizando desde el borde izquierdo con algo sonando deja el mini.
+    @MainActor
+    func testBordeIzquierdoSaleConElMiniSonando() throws {
+        let app = abrirCanal()
+        let conCanal = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label == %@", "Reproductor: DAZN 1")).firstMatch
+        XCTAssertTrue(conCanal.waitForExistence(timeout: 15), "El canal no llega al escenario")
+        let teatro = elementoUI(app, IDUI.teatro)
+        let inicio = teatro.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.6))
+        inicio.press(forDuration: 0.05, thenDragTo: teatro.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.6)))
+        XCTAssertTrue(elementoUI(app, IDUI.miniPausa).waitForExistence(timeout: 10), "El borde izquierdo no deja el mini")
     }
 
     @MainActor
