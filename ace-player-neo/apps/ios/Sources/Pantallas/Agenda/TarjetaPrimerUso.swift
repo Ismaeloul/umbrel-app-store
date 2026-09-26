@@ -7,21 +7,34 @@ struct TarjetaPrimerUso: View {
     let ocupado: Bool
     let personalizar: () -> Void
     let ahoraNo: () -> Void
+    @Environment(\.maquetacion) private var maquetacion
+
+    private var ancha: Bool { maquetacion.tipo == .tableta }
 
     var body: some View {
         let forma = RoundedRectangle(cornerRadius: R.l, style: .circular)
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .center, spacing: 16) {
-                marca
-                textos
-            }
-            HStack(spacing: 8) {
-                Spacer(minLength: 0)
-                BotonPalco("Ahora no", variante: .fantasma, tamano: .sm, accion: ahoraNo).disabled(ocupado)
-                BotonPalco("Personalizar", variante: .primario, tamano: .sm, accion: personalizar)
+        Group {
+            if ancha {
+                // ≥ 768: tres columnas (marca | texto | botones) y relleno 24 (agenda.css, a3 §12).
+                HStack(alignment: .center, spacing: 16) {
+                    marca
+                    textos.frame(maxWidth: .infinity, alignment: .leading)
+                    botones.fixedSize()
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack(alignment: .center, spacing: 16) {
+                        marca
+                        textos
+                    }
+                    HStack(spacing: 8) {
+                        Spacer(minLength: 0)
+                        botones
+                    }
+                }
             }
         }
-        .padding(20)
+        .padding(ancha ? 24 : 20)
         .background { LuzDorada() }
         .background(Palco.glassVideoSolid)
         .clipShape(forma)
@@ -32,6 +45,14 @@ struct TarjetaPrimerUso: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Personaliza tu agenda")
         .accessibilityIdentifier(IDUI.tarjetaPrimerUso)
+    }
+
+    /// «Ahora no» y «Personalizar», separación 8.
+    private var botones: some View {
+        HStack(spacing: 8) {
+            BotonPalco("Ahora no", variante: .fantasma, tamano: .sm, accion: ahoraNo).disabled(ocupado)
+            BotonPalco("Personalizar", variante: .primario, tamano: .sm, accion: personalizar)
+        }
     }
 
     /// Círculo de 56, `rgba(255,214,10,.16)` con filo al 40 % y la estrella rellena de 28.

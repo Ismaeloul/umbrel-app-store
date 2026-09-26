@@ -84,8 +84,10 @@ struct VersusAgenda<Senal: View>: View {
             // Los degradados elípticos se escalan más allá de la tarjeta: no deben recibir toques.
             FondoVersusAgenda(datos: datos.versus, valla: valla).allowsHitTesting(false)
             ColocarEnFraccion(x: 0.5, y: centroEscudos) {  // --versus-crest-y
-                BloqueEscudos(datos.versus, tamano: heroe ? 84 : 56)
-                    .modifier(PiezaVueloSi(activa: origenVuelo, partido: datos.partido))
+                BloqueEscudos(datos.versus, tamano: tamanoEscudos)
+                    .modifier(PiezaVueloSi(
+                        activa: origenVuelo, pieza: .escudos, partido: datos.partido,
+                        contenido: .escudos(datos.versus, tamano: tamanoEscudos)))
             }
             filaArriba
             pie
@@ -99,7 +101,10 @@ struct VersusAgenda<Senal: View>: View {
         .sombra(heroe ? .s2 : .s3, forma: forma)
         .foregroundStyle(Color.white)
         .islaOscura()
+        .modifier(PiezaVueloSi(activa: origenVuelo, pieza: .tarjeta, partido: datos.partido))
     }
+
+    private var tamanoEscudos: CGFloat { heroe ? 84 : 56 }
 
     private var centroEscudos: CGFloat {
         switch tamano {
@@ -157,14 +162,18 @@ private struct MarcoVersus: ViewModifier {
     }
 }
 
-/// `.piezaVuelo(.escudos…)` solo en el elemento desde el que se abre el partido.
+/// `.piezaVuelo` solo en el elemento desde el que se abre el partido (único en la página, a3 §4.8): la tarjeta
+/// entera (origen del zoom de la ida, decisión 3) o su bloque de escudos (el que vuela, con lo que pinta para
+/// que la vuelta llegue a él en el cruce de la web).
 struct PiezaVueloSi: ViewModifier {
     let activa: Bool
+    let pieza: PiezaVuelo
     let partido: String
+    var contenido: ContenidoPieza?
 
     func body(content: Content) -> some View {
         if activa {
-            content.piezaVuelo(.escudos, partido: partido)
+            content.piezaVuelo(pieza, partido: partido, contenido: contenido)
         } else {
             content
         }

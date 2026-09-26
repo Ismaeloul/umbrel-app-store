@@ -36,16 +36,14 @@ struct CanalesView: View {
 
     private var claveMarcadores: String { "\(vistaActiva)|\(indice.hacenFaltaMarcadores())" }
 
-    /// El reloj de «Emitiendo ahora» avanza cada 30 s (on-air.ts `useNow(30_000)`).
+    /// El reloj de «Emitiendo ahora» (on-air.ts `useNow(30_000)`): el tic es el del reloj compartido (M1, cada
+    /// 20 s, el de la agenda), que corre mientras alguien lo mira; aquí solo se mira mientras la vista está activa.
     private func relojDeCanales() async {
         guard vistaActiva else { return }
         reloj.empezarAMirar()
         defer { reloj.dejarDeMirar() }
         while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(IndiceAntena.tic))
-            guard !Task.isCancelled else { return }
-            reloj.empezarAMirar()
-            reloj.dejarDeMirar()
+            try? await Task.sleep(for: .seconds(3600))  // hasta que la vista deje de verse (cancela la tarea)
         }
     }
 

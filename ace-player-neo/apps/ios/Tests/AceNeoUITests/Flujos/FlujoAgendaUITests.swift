@@ -48,12 +48,14 @@ final class FlujoAgendaUITests: XCTestCase {
         XCTAssertTrue(tarjetaManana.waitForExistence(timeout: 10), "Mañana no enseña su partido")
         XCTAssertTrue(elementoUI(app, IDUI.dia(dia(1))).isSelected)
 
-        // Deslizar a la derecha sobre la lista vuelve al día anterior (el carril de una tarjeta no se desplaza).
-        // Antes se sube la página para que la tarjeta quede a la vista (con la barra de pestañas debajo).
+        // Deslizar a la derecha sobre la lista vuelve al día anterior. Mañana tiene dos partidos de LaLiga en un
+        // carril que se desplaza de lado, así que se desliza sobre la cabecera del bloque («LaLiga · 2», justo
+        // encima de la tarjeta), que no se mueve. Antes se sube la página para que quede a la vista.
         let pantalla = elementoUI(app, IDUI.pantalla("agenda"))
         arrastrar(pantalla, desde: CGVector(dx: 0.5, dy: 0.75), hasta: CGVector(dx: 0.5, dy: 0.35))
         XCTAssertTrue(tarjetaManana.isHittable, "La tarjeta de mañana no queda a la vista")
-        arrastrar(tarjetaManana, desde: CGVector(dx: 0.2, dy: 0.3), hasta: CGVector(dx: 1.2, dy: 0.3))
+        let cabecera = tarjetaManana.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0)).withOffset(CGVector(dx: 0, dy: -14))
+        cabecera.press(forDuration: 0.05, thenDragTo: cabecera.withOffset(CGVector(dx: 260, dy: 0)))
         XCTAssertTrue(elementoUI(app, IDUI.tarjetaPartido("demo-12")).waitForExistence(timeout: 10), "Deslizar no vuelve a hoy")
         XCTAssertTrue(elementoUI(app, IDUI.dia(dia(0))).isSelected)
         captura(app, "agenda-deslizada")

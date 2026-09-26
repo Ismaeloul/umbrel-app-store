@@ -10,11 +10,16 @@ struct CabeceraAgenda: View {
     var entradilla: String?
     let cargando: Bool
     let actualizar: () -> Void
+    @Environment(\.maquetacion) private var maquetacion
 
     var body: some View {
-        CabeceraVista("Agenda", subtitulo: entradilla, sobreOscuro: sobreHeroe) {
+        // Pantalla baja (≥ 768 y alto ≤ 540, el iPhone en horizontal): titular de 30 y sin la entradilla
+        // (agenda.css, a3 §12).
+        let bajo: Bool = maquetacion.tipo == .tableta && maquetacion.bajo
+        CabeceraVista("Agenda", subtitulo: bajo ? nil : entradilla, sobreOscuro: sobreHeroe) {
             BotonActualizar(cargando: cargando, accion: actualizar)
         }
+        .conTitularBajo(bajo)
         .padding(.bottom, -16)  // agenda.css `.agenda-head.view-head { padding-bottom: 0 }`
         .accessibilityElement(children: .contain)
     }

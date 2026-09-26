@@ -34,6 +34,12 @@ struct Heroe: View {
                 accion: AccionHeroe.de(canales: canales, viendo: viendo, enDirecto: estado?.fase == .directo),
                 canales: canales, marcador: marcador, destapado: destapados.destapado(partido.id), abrir: abrir)
         }
+        .background {
+            if !movil {
+                HaloHeroe(local: datos.versus.local.halo, visitante: datos.versus.visitante.halo,
+                          apagado: estado?.fase == .terminado)
+            }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(ReglasAgenda.titulo(partido))
         .accessibilityIdentifier(IDUI.heroe)
@@ -59,6 +65,38 @@ struct Heroe: View {
         }
         .padding(.leading, movil ? -CGFloat(maquetacion.rellenoIzquierdo) : 0)
         .padding(.trailing, movil ? -CGFloat(maquetacion.rellenoDerecho) : 0)
+    }
+}
+
+/// `.agenda-hero__light` (≥ 768; a3 §12): la luz de los dos clubes detrás de la valla, fija. Caja con `inset: 4 % 0
+/// 14 %` y `radial(46 % 70 % at 22 % 50 %, luzLocal 30 % → 72 %)` + `radial(46 % 70 % at 78 % 50 %, luzVisitante
+/// 26 % → 72 %)`; transparente si el partido ha terminado.
+private struct HaloHeroe: View {
+    let local: RGB?
+    let visitante: RGB?
+    let apagado: Bool
+    @State private var caja = CGSize(width: 1, height: 1)
+
+    var body: some View {
+        let ancho: CGFloat = caja.width
+        let alto: CGFloat = caja.height * 0.82  // 100 % − 4 % − 14 %
+        ZStack {
+            if !apagado, let local {
+                Degradado.elipse(local.color.opacity(0.3), radioX: 0.46 * ancho, radioY: 0.7 * alto, hasta: 0.72,
+                                 centro: UnitPoint(x: 0.22, y: 0.5))
+            }
+            if !apagado, let visitante {
+                Degradado.elipse(visitante.color.opacity(0.26), radioX: 0.46 * ancho, radioY: 0.7 * alto, hasta: 0.72,
+                                 centro: UnitPoint(x: 0.78, y: 0.5))
+            }
+        }
+        .frame(width: ancho, height: alto)
+        .clipped()
+        .padding(.top, caja.height * 0.04)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { caja = $0 }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 

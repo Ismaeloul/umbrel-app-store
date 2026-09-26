@@ -45,16 +45,14 @@ struct AgendaView: View {
         await consulta.asegurar(tiempoRealAbierto: tiempoReal.abierto)
     }
 
-    /// «Ahora» avanza cada 20 s mientras la agenda se ve (a3 §9.1).
+    /// «Ahora» avanza cada 20 s mientras la agenda se ve (a3 §9.1; data.ts TICK_MS): el tic es el del reloj
+    /// compartido (M1), que corre mientras alguien lo mira. Aquí solo se mira mientras la vista está activa.
     private func relojDeLaAgenda() async {
         guard vistaActiva else { return }
         reloj.empezarAMirar()
         defer { reloj.dejarDeMirar() }
         while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(20))  // data.ts TICK_MS
-            guard !Task.isCancelled else { return }
-            reloj.empezarAMirar()  // el tic del reloj compartido (lee la hora del reloj de la app)
-            reloj.dejarDeMirar()
+            try? await Task.sleep(for: .seconds(3600))  // hasta que la vista deje de verse (cancela la tarea)
         }
     }
 
