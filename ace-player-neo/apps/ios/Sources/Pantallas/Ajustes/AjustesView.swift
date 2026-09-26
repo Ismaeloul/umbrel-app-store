@@ -31,12 +31,12 @@ struct AjustesView: View {
                 .padding(.leading, maquetacion.rellenoIzquierdo)
                 .padding(.trailing, maquetacion.rellenoDerecho)
                 .padding(.bottom, maquetacion.rellenoInferiorContenido(mini: conMini, teatro: false))
+                .subeConLaBarraDeEstado(vistaActiva)  // en el CONTENIDO (fuera, la sonda no encontraba su lista)
             }
             // El armazón (M4) ignora las zonas seguras: la de arriba vuelve como margen de la lista, así la cabecera no
             // queda bajo la hora y el ancla de cada tarjeta cae a zona segura + 16 (a6 §2.4). Integración I1.
             .safeAreaPadding(.top, CGFloat(maquetacion.seguras.arriba))
             .scrollDismissesKeyboard(.interactively)
-            .subeConLaBarraDeEstado(vistaActiva)
             .onChange(of: navegador.peticionSeccion, initial: true) { _, _ in ir = navegador.seccionAjustes }
             .onChange(of: ir) { _, destino in desplazar(lector, a: destino) }
             .onChange(of: vistaActiva) { _, activa in if activa { ir = navegador.seccionAjustes } }

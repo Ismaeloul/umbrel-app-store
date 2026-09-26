@@ -35,8 +35,14 @@ struct BarraSuperior: View {
         .accessibilityLabel("Principal")
         .accessibilityIdentifier(IDUI.barraSuperior)
         .task(id: navegador.pestana) {
-            try? await Task.sleep(for: .milliseconds(60))  // la pestaña nueva ya está maquetada
-            vigia.vigilar()
+            // La lista puede llegar después (primera carga, error → lista) o cambiar de vista: se vuelve a mirar
+            // cada medio segundo mientras la barra se ve (solo en horizontal ≥ 768). La primera, cuando la
+            // pestaña nueva ya está maquetada.
+            try? await Task.sleep(for: .milliseconds(60))
+            while !Task.isCancelled {
+                vigia.vigilar()
+                try? await Task.sleep(for: .milliseconds(500))
+            }
         }
     }
 
@@ -139,7 +145,7 @@ private struct FondoBarraSuperior: View {
 }
 
 /// ¿La vista que se ve ha bajado más de 32 pt? (el centinela de 32 px de la web, app/Nav.tsx › useScrolledPast).
-/// Mira la vista desplazable visible (la de `scrollsToTop`, a2 §27.5) con KVO.
+/// Mira con KVO la vista desplazable de la pestaña que se ve (`SubirArriba.vistaVisible`, nunca una oculta).
 @MainActor @Observable final class VigiaDesplazamiento {
     private(set) var bajada = false
     @ObservationIgnored private var observacion: NSKeyValueObservation?
@@ -147,6 +153,8 @@ private struct FondoBarraSuperior: View {
 
     func vigilar() {
         guard let nueva = SubirArriba.vistaVisible() else {
+            // Sin una vista clara (p. ej. a mitad de un cambio): se sigue con la de antes mientras esté puesta.
+            if let vista, vista.window != nil { return }
             observacion = nil
             vista = nil
             bajada = false

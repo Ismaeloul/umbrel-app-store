@@ -57,13 +57,6 @@ enum GeometriaVuelo {
     /// El arrastre del borde nunca va a la izquierda de 0 (a2 §2.4: «hacia la izquierda no pasa de 0»).
     static func arrastreBorde(_ dx: Double) -> Double { max(0, dx) }
 
-    /// Soltar el borde izquierdo: vuelve si `dx ≥ 0,35·ancho` o (`vx ≥ 450 pt/s` y `dx ≥ 24`) (a2 §2.4; los
-    /// números de `classifySwipe`, lib/gestures.ts). Es `Volver.decide` de §2.1.5 (M2): cuando M2 lo publique en
-    /// Core/Reglas/Gestos, el integrador puede hacer que esto lo llame (mismos números, mismas pruebas).
-    static func vuelveConElBorde(dx: Double, vx: Double, ancho: Double) -> Bool {
-        dx >= 0.35 * ancho || (vx >= 450 && dx >= 24)
-    }
-
     /// Desplazamiento de entrada de una vista (a2 §11): +16 al ir adelante, −16 atrás, 0 con movimiento reducido.
     static func entradaVista(_ sentido: Sentido, reducido: Bool) -> Double {
         guard !reducido else { return 0 }

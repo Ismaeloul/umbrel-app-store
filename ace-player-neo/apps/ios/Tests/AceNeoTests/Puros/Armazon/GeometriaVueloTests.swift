@@ -81,10 +81,10 @@ struct GeometriaVueloTests {
     }
 
     @Test func soltarElBordeComoLaWeb() {
-        // a2 §2.4: vuelve con dx ≥ 0,35·ancho o (vx ≥ 450 y dx ≥ 24).
-        #expect(GeometriaVuelo.vuelveConElBorde(dx: 137, vx: 0, ancho: 390))
-        #expect(!GeometriaVuelo.vuelveConElBorde(dx: 136, vx: 0, ancho: 390))
-        #expect(GeometriaVuelo.vuelveConElBorde(dx: 24, vx: 450, ancho: 390))
-        #expect(!GeometriaVuelo.vuelveConElBorde(dx: 23, vx: 900, ancho: 390))
+        // a2 §2.4: vuelve con dx ≥ 0,35·ancho o (vx ≥ 450 y dx ≥ 24). El borde usa `Volver.decide` (M2, §2.1.5).
+        #expect(Volver.decide(dx: 137, vx: 0, ancho: 390))
+        #expect(!Volver.decide(dx: 136, vx: 0, ancho: 390))
+        #expect(Volver.decide(dx: 24, vx: 450, ancho: 390))
+        #expect(!Volver.decide(dx: 23, vx: 900, ancho: 390))
     }
 }

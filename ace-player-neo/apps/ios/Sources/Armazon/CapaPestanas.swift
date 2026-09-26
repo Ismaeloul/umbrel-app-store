@@ -54,6 +54,13 @@ struct CapaPestanas: View {
             return
         }
         guard antes != nueva else { return }
+        // Desde una capa (galería «Sistema», teatro) a otra pestaña: la web hace un único «atrás» (la capa de
+        // pestañas entera entra desde −16 con `TransicionTeatro`); la pestaña cambia debajo sin su propia entrada.
+        guard transicion.mostrado == nil else {
+            saliendo = nil
+            mostrada = nueva
+            return
+        }
         saliendo = antes
         withAnimation(Movimiento.vista(reducido)) {
             mostrada = nueva
@@ -95,33 +102,5 @@ private struct PantallaPestana: View {
         case .buscar: BuscarView()
         case .ajustes: AjustesView()
         }
-    }
-}
-
-/// Sube la vista desplazable que se ve: la única con `scrollsToTop` (la sonda de a2 §27.5 se lo pone a la de la
-/// pestaña visible y se lo quita al resto). Sin sonda no hace nada: la pantalla sube con `subirArriba`.
-@MainActor enum SubirArriba {
-    static func visible() {
-        guard let vista = vistaVisible() else { return }
-        let arriba = CGPoint(x: vista.contentOffset.x, y: -vista.adjustedContentInset.top)
-        vista.setContentOffset(arriba, animated: true)
-    }
-
-    /// La vista desplazable vertical que se ve (la de `scrollsToTop`), si la hay.
-    static func vistaVisible() -> UIScrollView? {
-        guard let ventana = Instantanea.ventanaClave() else { return nil }
-        return buscar(en: ventana)
-    }
-
-    private static func buscar(en vista: UIView) -> UIScrollView? {
-        if let desplazable = vista as? UIScrollView, desplazable.scrollsToTop, !desplazable.isHidden,
-            desplazable.window != nil, desplazable.contentSize.height > desplazable.bounds.height
-        {
-            return desplazable
-        }
-        for hija in vista.subviews {
-            if let hallada = buscar(en: hija) { return hallada }
-        }
-        return nil
     }
 }

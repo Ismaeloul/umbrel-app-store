@@ -1,9 +1,9 @@
+import UIKit
 import XCTest
 
-/// Flujos del armazón (b-arquitectura §3.5, M4), con la demo y las pantallas de otros módulos aún en stub:
-/// cambiar de pestaña, borde izquierdo para salir del partido, hoja que se cierra arrastrando, toast con «Deshacer»,
-/// giro a 844×390 con la barra superior, y tocar la pestaña activa / conservar el scroll (se saltan mientras la
-/// pantalla sea un stub sin nada que desplazar).
+/// Flujos del armazón (b-arquitectura §3.5, M4), con la demo: cambiar de pestaña, borde izquierdo para salir del
+/// partido, hoja que se cierra arrastrando, toast con «Deshacer», giro a 844×390 con la barra superior, tocar la
+/// pestaña activa sube (solo la que se ve), cada pestaña conserva su scroll, y la ida tarjeta → teatro y su vuelta.
 final class FlujoArmazonUITests: XCTestCase {
     override func setUp() async throws {
         continueAfterFailure = false
@@ -16,10 +16,43 @@ final class FlujoArmazonUITests: XCTestCase {
 
     @MainActor
     private func captura(_ app: XCUIApplication, _ nombre: String) {
-        let adjunto = XCTAttachment(screenshot: app.screenshot())
+        let adjunto: XCTAttachment
+        if app.frame.width > app.frame.height {
+            adjunto = XCTAttachment(image: capturaHorizontal())
+        } else {
+            adjunto = XCTAttachment(screenshot: app.screenshot())
+        }
         adjunto.name = nombre
         adjunto.lifetime = .keepAlways
         add(adjunto)
+    }
+
+    /// En horizontal, `app.screenshot()` recorta la foto de la pantalla (vertical, la del panel) con el marco
+    /// horizontal de la app: salía girada, cortada y con media imagen en negro. Se toma la pantalla entera y se
+    /// gira para que se lea como la ve la persona (para compararla con `agenda-844x390-*.png` de la web).
+    @MainActor
+    private func capturaHorizontal() -> UIImage {
+        let imagen = XCUIScreen.main.screenshot().image
+        let ancho = imagen.size.width
+        let alto = imagen.size.height
+        guard ancho < alto else { return imagen }  // ya viene en horizontal
+        // Girado a la izquierda (botón de inicio a la derecha), lo de arriba de la app queda en el borde derecho
+        // del panel: se gira 90° a la izquierda. Girado a la derecha, al revés.
+        let izquierda: Bool = XCUIDevice.shared.orientation != .landscapeRight
+        let formato = UIGraphicsImageRendererFormat()
+        formato.scale = imagen.scale
+        let lienzo = UIGraphicsImageRenderer(size: CGSize(width: alto, height: ancho), format: formato)
+        return lienzo.image { contexto in
+            let cg = contexto.cgContext
+            if izquierda {
+                cg.translateBy(x: 0, y: ancho)
+                cg.rotate(by: -CGFloat.pi / 2)
+            } else {
+                cg.translateBy(x: alto, y: 0)
+                cg.rotate(by: CGFloat.pi / 2)
+            }
+            imagen.draw(in: CGRect(x: 0, y: 0, width: ancho, height: alto))
+        }
     }
 
     @MainActor
@@ -112,24 +145,27 @@ final class FlujoArmazonUITests: XCTestCase {
         XCTAssertTrue(teatro.exists, "Un arrastre corto y lento no debe salir del partido")
     }
 
-    /// a2 §8.3: el toast con acción; «Deshacer» lo cierra antes de su tiempo (6 s).
+    /// a2 §8.3: el toast con acción; «Deshacer» lo cierra antes de su tiempo (el de prueba dura 30 s).
     @MainActor
     func testToastConDeshacer() throws {
         let app = abrir(["-AceNeoAvisoDeshacer"])
-        let toast = conTextoUI(app, "Reproducción detenida")
+        let toast = elementoUI(app, IDUI.toast)
         XCTAssertTrue(toast.waitForExistence(timeout: 20), "No sale el toast con «Deshacer»")
+        XCTAssertTrue(conTextoUI(app, "Reproducción detenida").exists, "El toast no dice «Reproducción detenida»")
         let barra = elementoUI(app, IDUI.barraPestanas)
-        XCTAssertTrue(barra.exists)
+        XCTAssertTrue(barra.waitForExistence(timeout: 5))
         Thread.sleep(forTimeInterval: 0.8)  // entrada del toast (muelle estándar, 520 ms)
         captura(app, "armazon-toast")
         // Los marcos de accesibilidad incluyen la sombra (`--shadow-2`, 60 de desenfoque): se comparan los centros.
         // Toast de dos líneas (68) a safeB + 94 y barra de 64 a safeB + 10: centros separados 34 + 8 + 32 + 10 = 84.
         XCTAssertLessThan(toast.frame.midY + 60, barra.frame.midY,
                           "El toast debe ir por encima de la barra (toast \(toast.frame), barra \(barra.frame))")
-        // «Deshacer» va a la izquierda del ✕ de 44 (a2 §8.3); el toast acaba a 12 del borde derecho.
-        let derecha = app.frame.width - 12
-        let punto = CGVector(dx: (derecha - 6 - 44 - 45) / app.frame.width, dy: toast.frame.midY / app.frame.height)
-        app.coordinate(withNormalizedOffset: punto).tap()
+        // «Deshacer» va a la izquierda del ✕ «Cerrar aviso» (a2 §8.3).
+        let deshacer = elementoUI(app, IDUI.toastAccion)
+        let cerrar = elementoUI(app, IDUI.toastCerrar)
+        XCTAssertTrue(deshacer.exists && cerrar.exists, "Faltan «Deshacer» o «Cerrar aviso»")
+        XCTAssertLessThan(deshacer.frame.midX, cerrar.frame.midX, "«Deshacer» va a la izquierda del ✕")
+        deshacer.tap()
         XCTAssertTrue(esperarQueDesaparezca(toast, plazo: 3), "«Deshacer» no cierra el toast")
     }
 
@@ -171,33 +207,88 @@ final class FlujoArmazonUITests: XCTestCase {
         XCTAssertTrue(esperarQueDesaparezca(hoja, plazo: 5), "La hoja no se cierra arrastrando el asa")
     }
 
+    /// El titular de una pantalla (la cabecera «Agenda», «Ajustes»…), buscado dentro de ella: las pestañas ocultas
+    /// siguen montadas y tienen el suyo.
+    @MainActor
+    private func titular(_ app: XCUIApplication, _ id: String, _ texto: String) -> XCUIElement {
+        let pantalla = elementoUI(app, IDUI.pantalla(id))
+        XCTAssertTrue(pantalla.waitForExistence(timeout: 20), "No se ve la pantalla \(id)")
+        let titulo = pantalla.staticTexts[texto].firstMatch
+        XCTAssertTrue(titulo.waitForExistence(timeout: 10), "No está el titular «\(texto)»")
+        return titulo
+    }
+
+    /// Baja la pantalla visible dos arrastres largos (encima de la barra de pestañas).
+    @MainActor
+    private func bajar(_ app: XCUIApplication, _ id: String) {
+        let pantalla = elementoUI(app, IDUI.pantalla(id))
+        for _ in 0..<2 {
+            arrastrar(pantalla, desde: CGVector(dx: 0.5, dy: 0.72), hasta: CGVector(dx: 0.5, dy: 0.22))
+        }
+        Thread.sleep(forTimeInterval: 1)  // la inercia del desplazamiento
+    }
+
+    /// Espera a que el titular llegue a `y` (±2) o se rinde.
+    @MainActor
+    private func esperarTitular(_ titulo: XCUIElement, en y: CGFloat, plazo: TimeInterval = 3) -> Bool {
+        let limite = Date().addingTimeInterval(plazo)
+        while Date() < limite {
+            if abs(titulo.frame.minY - y) <= 2 { return true }
+            Thread.sleep(forTimeInterval: 0.2)
+        }
+        return abs(titulo.frame.minY - y) <= 2
+    }
+
     /// Decisión 3: tocar la pestaña activa sube su vista arriba.
     @MainActor
     func testTocarLaPestanaActivaSube() throws {
         let app = abrir()
+        XCTAssertTrue(elementoUI(app, IDUI.barraPestanas).waitForExistence(timeout: 20))
         tocarPestana(app, "ajustes")
-        let lista = app.scrollViews.firstMatch
-        guard lista.waitForExistence(timeout: 5) else { throw XCTSkip("Ajustes aún es un stub sin nada que desplazar") }
-        let titulo = app.staticTexts["Ajustes"].firstMatch
-        lista.swipeUp()
-        lista.swipeUp()
+        let titulo = titular(app, "ajustes", "Ajustes")
+        let arriba = titulo.frame.minY
+        bajar(app, "ajustes")
+        XCTAssertLessThan(titulo.frame.minY, arriba - 200, "Ajustes no ha bajado (titular en \(titulo.frame.minY))")
         tocarPestana(app, "ajustes")
-        XCTAssertTrue(titulo.waitForExistence(timeout: 3) && titulo.isHittable, "No sube arriba al tocar la activa")
+        XCTAssertTrue(esperarTitular(titulo, en: arriba), "No sube arriba al tocar la activa (\(titulo.frame.minY))")
     }
 
     /// a2 §12: cada pestaña conserva su scroll al ir y volver.
     @MainActor
     func testCambiarDePestanaConservaElScroll() throws {
         let app = abrir()
+        XCTAssertTrue(elementoUI(app, IDUI.barraPestanas).waitForExistence(timeout: 20))
         tocarPestana(app, "ajustes")
-        let lista = app.scrollViews.firstMatch
-        guard lista.waitForExistence(timeout: 5) else { throw XCTSkip("Ajustes aún es un stub sin nada que desplazar") }
-        lista.swipeUp()
-        let titulo = app.staticTexts["Ajustes"].firstMatch
-        let tapadoAntes = !(titulo.exists && titulo.isHittable)
+        let titulo = titular(app, "ajustes", "Ajustes")
+        let arriba = titulo.frame.minY
+        bajar(app, "ajustes")
+        let bajado = titulo.frame.minY
+        XCTAssertLessThan(bajado, arriba - 200, "Ajustes no ha bajado")
         tocarPestana(app, "agenda")
+        comprobarPantalla(app, "agenda")
         tocarPestana(app, "ajustes")
-        let tapadoDespues = !(titulo.exists && titulo.isHittable)
-        XCTAssertEqual(tapadoAntes, tapadoDespues, "Al volver a Ajustes no se conserva el scroll")
+        comprobarPantalla(app, "ajustes")
+        Thread.sleep(forTimeInterval: 0.6)  // entrada de la pestaña (340 ms)
+        XCTAssertEqual(titulo.frame.minY, bajado, accuracy: 2, "Al volver a Ajustes no se conserva el scroll")
+    }
+
+    /// Tocar la pestaña activa sube SOLO la que se ve: la Agenda oculta conserva su scroll (a2 §12).
+    @MainActor
+    func testTocarLaActivaNoSubeLaOculta() throws {
+        let app = abrir()
+        XCTAssertTrue(elementoUI(app, IDUI.barraPestanas).waitForExistence(timeout: 20))
+        let titulo = titular(app, "agenda", "Agenda")
+        let arriba = titulo.frame.minY
+        bajar(app, "agenda")
+        let bajado = titulo.frame.minY
+        XCTAssertLessThan(bajado, arriba - 200, "La agenda no ha bajado")
+        tocarPestana(app, "biblioteca")
+        comprobarPantalla(app, "biblioteca")
+        tocarPestana(app, "biblioteca")  // la activa: sube Canales, no la Agenda de debajo
+        Thread.sleep(forTimeInterval: 0.8)
+        tocarPestana(app, "agenda")
+        comprobarPantalla(app, "agenda")
+        Thread.sleep(forTimeInterval: 0.6)
+        XCTAssertEqual(titulo.frame.minY, bajado, accuracy: 2, "La agenda oculta ha subido sin que nadie lo pidiera")
     }
 }
