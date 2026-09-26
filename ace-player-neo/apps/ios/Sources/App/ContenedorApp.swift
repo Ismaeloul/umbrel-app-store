@@ -8,28 +8,28 @@ import Foundation
 
     let entorno: Entorno
     let reloj: any Reloj
-    let haptica: Haptica
-    let estadoVentana: EstadoVentana
-    let cicloVida: CicloVida
-    let preferencias: PreferenciasLocales
+    let haptica: Haptica = Haptica()
+    let estadoVentana: EstadoVentana = EstadoVentana()
+    let cicloVida: CicloVida = CicloVida()
+    let preferencias: PreferenciasLocales = PreferenciasLocales()
     let sesion: SesionApp
     let datos: DatosApp
     let tiempoReal: TiempoReal
     let repartidor: RepartidorEventos
-    let navegador: Navegador
-    let hojas: CentroHojas
-    let avisos: Avisos
-    let transicion: TransicionTeatro
+    let navegador: Navegador = Navegador()
+    let hojas: CentroHojas = CentroHojas()
+    let avisos: Avisos = Avisos()
+    let transicion: TransicionTeatro = TransicionTeatro()
     let reproductor: Reproductor
     let presentacion: PresentacionReproductor
     /// La única capa de vídeo y su PiP (`GestorPiP` con su `SuperficieVideo`). Añadido por M6 (contrato aditivo):
     /// el escenario, el mini y el vuelo necesitan la MISMA superficie para `VistaVideo(superficie:prioridad:)`.
     let pip: GestorPiP
-    let fuentes: SesionFuentes
-    let senales: SenalPartidos
-    let destapados: MarcadoresDestapados
+    let fuentes: SesionFuentes = SesionFuentes()
+    let senales: SenalPartidos = SenalPartidos()
+    let destapados: MarcadoresDestapados = MarcadoresDestapados()
     let relojCompartido: RelojCompartido
-    let bajas: BajasPendientes
+    let bajas: BajasPendientes = BajasPendientes()
     let raiz: Raiz
 
     /// Entorno.actual() (real, demo o simulado), reloj de -AceNeoReloj y cableado de hooks (§2.5.7).
@@ -44,23 +44,13 @@ import Foundation
     }
 
     /// Crea los objetos sin cablearlos (lo hace `crear()`). Los tests pueden pasar su motor de vídeo.
-    /// Tipos escritos y ayudantes: todo en línea tardaba 453 ms en tiparse (CI 36177994191) y aún 474 ms con dos
-    /// ayudantes en una CI lenta (36234695778).
+    /// Tipos escritos, ayudantes y los objetos sin dependencias con su valor en la declaración: todo en línea
+    /// tardaba 453 ms en tiparse (CI 36177994191), 474 ms con dos ayudantes (36234695778) y 517 ms tras la
+    /// ronda 2 (36266079625).
     init(entorno: Entorno, reloj: any Reloj, motor: any MotorVideo) {
         self.entorno = entorno
         self.reloj = reloj
-        haptica = Haptica()
-        estadoVentana = EstadoVentana()
-        navegador = Navegador()
-        hojas = CentroHojas()
-        transicion = TransicionTeatro()
-        destapados = MarcadoresDestapados()
-        bajas = BajasPendientes()
         relojCompartido = RelojCompartido(reloj: reloj)
-        let cicloVida: CicloVida = CicloVida()
-        self.cicloVida = cicloVida
-        let preferencias: PreferenciasLocales = PreferenciasLocales()
-        self.preferencias = preferencias
         let sesion: SesionApp = SesionApp(entorno: entorno)
         self.sesion = sesion
         raiz = Raiz(faseInicial: sesion.fase)
@@ -68,22 +58,20 @@ import Foundation
         self.datos = datos
         let tiempoReal: TiempoReal = TiempoReal(cliente: entorno.tiempoReal, esDemo: ModoEjecucion.demo)
         self.tiempoReal = tiempoReal
-        let avisos: Avisos = Avisos()
-        self.avisos = avisos
         let reproduccion: Reproduccion = Self.crearReproduccion(
             entorno, motor: motor, modo: preferencias.modo, reloj: reloj)
         let reproductor: Reproductor = reproduccion.reproductor
         self.reproductor = reproductor
         pip = reproduccion.pip
         presentacion = reproduccion.presentacion
-        let fuentes: SesionFuentes = SesionFuentes()
-        self.fuentes = fuentes
-        let senales: SenalPartidos = SenalPartidos()
-        self.senales = senales
         repartidor = Self.crearRepartidor(
             datos, tiempoReal, sesion, reproductor, fuentes, senales, avisos, cicloVida)
         // El reloj de la app (-AceNeoReloj en Debug) también para la frescura, las señales y el segundo plano
         // (M1, decisión 4). Aquí y no en `cablear()`: los tests que crean el contenedor lo ven igual.
+        Self.ponerReloj(reloj, datos: datos, senales: senales, sesion: sesion)
+    }
+
+    private static func ponerReloj(_ reloj: any Reloj, datos: DatosApp, senales: SenalPartidos, sesion: SesionApp) {
         datos.reloj = reloj
         senales.reloj = reloj
         sesion.reloj = reloj
