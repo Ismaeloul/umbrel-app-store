@@ -19,7 +19,7 @@ struct PantallaEmparejar: View {
     @Environment(\.maquetacion) private var maquetacion
     @State private var modelo: ModeloEmparejar?
     @State private var camara: CamaraQR?
-    @State private var tamano: CGSize = .zero
+    @State private var medida: CGSize = .zero
 
     init(motivo: MotivoEmparejar?) {
         self.motivo = motivo
@@ -30,13 +30,14 @@ struct PantallaEmparejar: View {
             Palco.bg.ignoresSafeArea()
             if let modelo, let camara, tamano.width > 0 {
                 VistaEmparejar(modelo: modelo, camara: camara, motivo: motivo, tamano: tamano, seguras: seguras)
+                    .frame(width: tamano.width)
             }
         }
         .background {
             // Medida de la ventana entera (sin restar el teclado: el cartel no cambia de alto al escribir).
             Color.clear
                 .ignoresSafeArea()
-                .onGeometryChange(for: CGSize.self) { $0.size } action: { nuevo in tamano = nuevo }
+                .onGeometryChange(for: CGSize.self) { $0.size } action: { nuevo in medida = nuevo }
         }
         .ignoresSafeArea(.container)
         .accessibilityElement(children: .contain)
@@ -68,6 +69,16 @@ struct PantallaEmparejar: View {
         try? await Task.sleep(for: .milliseconds(340))
         guard !Task.isCancelled else { return }
         AccessibilityNotification.Announcement(aviso).post()
+    }
+
+    /// La medida, nunca más grande que la ventana (I1). Antes el cartel iba al ancho medido y la medida era la de
+    /// la propia pantalla: si una vez salía más ancha, el cartel la mantenía así. Al volver de «Olvidar este
+    /// iPhone» se quedaba en 776 pt en un iPhone de 390, con el formulario cortado por los lados (e2e-08).
+    private var tamano: CGSize {
+        let ancho: CGFloat = CGFloat(maquetacion.ancho)
+        let alto: CGFloat = CGFloat(maquetacion.alto)
+        guard ancho > 0, alto > 0 else { return medida }
+        return CGSize(width: min(medida.width, ancho), height: min(medida.height, alto))
     }
 
     /// Un enlace `aceneo://pair` abierto con esta pantalla delante se aplica y se empareja solo (a2 §22.1).

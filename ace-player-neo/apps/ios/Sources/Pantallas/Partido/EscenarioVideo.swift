@@ -38,6 +38,22 @@ private struct QuitaPantallaCompletaAlSalir: ViewModifier {
     }
 }
 
+/// Solo en Debug: la fase del reproductor (y «imagen» si ya hubo fotograma con esta fuente) como valor de
+/// accesibilidad del escenario, para que ServidorRealUITests sepa si AVPlayer llega a reproducir contra el backend
+/// de verdad. Es el `data-phase` del escenario de la web (player/index.tsx), que usa su batería E2E. En la IPA no está.
+private struct FaseParaPruebas: ViewModifier {
+    let fase: FaseReproductor
+    let arranco: Bool
+
+    func body(content: Content) -> some View {
+        #if DEBUG
+            content.accessibilityValue(arranco ? "\(fase.rawValue) imagen" : fase.rawValue)
+        #else
+            content
+        #endif
+    }
+}
+
 struct EscenarioVideo: View {
     let inmersivo: Bool
     private let alArrastrar: ((ArrastreVideo) -> Void)?
@@ -87,6 +103,7 @@ struct EscenarioVideo: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel(foto.titulo.map { "Reproductor: \($0)" } ?? "Reproductor")
         .accessibilityIdentifier(IDUI.videoTeatro)
+        .modifier(FaseParaPruebas(fase: foto.fase, arranco: foto.arranco))
         .onChange(of: foto.hash) { viejo, nuevo in
             if viejo != nil, nuevo != nil, viejo != nuevo { corte += 1 }
         }
