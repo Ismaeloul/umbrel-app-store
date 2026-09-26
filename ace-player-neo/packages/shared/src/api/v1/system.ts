@@ -57,6 +57,12 @@ export const BootstrapResponseSchema = z.strictObject({
      * cambiar la ida y vuelta de la app.
      */
     iptv: z.boolean().optional(),
+    /**
+     * El servidor entiende `others`, `from`, `join`, `match` y `follows` al
+     * pedir un canal (docs/multidispositivo.md §2.2). Un cliente solo los
+     * manda con `multi === true`. Opcional: ausente es «no».
+     */
+    multi: z.boolean().optional(),
   }),
 });
 export type BootstrapResponse = z.infer<typeof BootstrapResponseSchema>;

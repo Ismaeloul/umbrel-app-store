@@ -702,9 +702,52 @@ export const VARIANT_FIXTURES = {
     handoff: false,
     source: 'iptv',
   },
+  /* Varios dispositivos (docs/multidispositivo.md §2.2): el partido de la
+     sesión, quién sabe seguir y un visor sin latido desde hace 20 s. */
+  'playbackStatus.multi': {
+    nowPlaying: { id: HASH_A, title: 'DAZN 1', dev: 'salon', token: 'tok_abc123', at: AT_MS },
+    learningCount: 4,
+    serverTime: AT_MS,
+    sessions: [
+      {
+        ...sessionSummary,
+        viewers: [
+          { ...sessionSummary.viewers[0]!, follows: true },
+          { ...sessionSummary.viewers[1]!, away: true },
+        ],
+        matchId: match.id,
+      },
+    ],
+  },
 } satisfies {
   'footballResolve.iptv': V1ResponseInput<'footballResolve'>;
   'channelStream.iptv': V1ResponseInput<'channelStream'>;
+  'playbackStatus.multi': V1ResponseInput<'playbackStatus'>;
+};
+
+/**
+ * Variantes de eventos (`variantes/<tipo>.<caso>.json`, con `{ type, data }`
+ * como los de events/): validan con el esquema SSE del tipo.
+ */
+export const EVENT_VARIANT_FIXTURES = {
+  /* «Cambiar en los dos»: el visor debe pasar solo al canal nuevo (§2.4.3). */
+  'playback.handoff.follow': {
+    type: 'playback.handoff',
+    data: {
+      sessionId: SID,
+      viewerIds: [VIEWER],
+      byDeviceId: DEVICE_ID,
+      byClient: 'ios',
+      hash: HASH_B,
+      title: 'M+ LaLiga',
+      reason: 'other_channel',
+      byDeviceName: 'iPhone de Isma',
+      follow: true,
+      matchId: match.id,
+    },
+  },
+} satisfies {
+  [name: string]: { type: 'playback.handoff'; data: SseEventData<'playback.handoff'> };
 };
 
 // --- Un evento de cada tipo ---
@@ -813,6 +856,8 @@ export function fixtureFiles(): Map<string, unknown> {
   for (const [type, data] of Object.entries(WEB_EVENT_FIXTURES))
     files.set(`web/events/${type}.json`, { type, data });
   for (const [name, value] of Object.entries(VARIANT_FIXTURES))
+    files.set(`variantes/${name}.json`, value);
+  for (const [name, value] of Object.entries(EVENT_VARIANT_FIXTURES))
     files.set(`variantes/${name}.json`, value);
   return files;
 }
