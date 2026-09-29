@@ -23,7 +23,7 @@
       remux en disco cada 500 ms, el registro del backend y lo que hace el
       proveedor) y escribe el informe (lib/analyze.ts). */
 
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import {
   createWriteStream,
   existsSync,
@@ -73,6 +73,8 @@ interface Args {
   out: string | null;
   profile: 'balanced' | 'stable' | 'low';
   cache: string;
+  /** Carpeta con OTRO ffmpeg/ffprobe para el remux del backend (el de Alpine del Umbrel). */
+  ffmpegDir: string | null;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -85,6 +87,7 @@ function parseArgs(argv: string[]): Args {
     out: null,
     profile: 'balanced',
     cache: process.env.IPTV_LAB_CACHE ?? path.join(os.tmpdir(), 'iptv-lab-cache'),
+    ffmpegDir: process.env.IPTV_LAB_FFMPEG_DIR ?? null,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i] as string;
@@ -101,6 +104,7 @@ function parseArgs(argv: string[]): Args {
     else if (a === '--salida') args.out = next();
     else if (a === '--perfil') args.profile = next() as Args['profile'];
     else if (a === '--cache') args.cache = next();
+    else if (a === '--ffmpeg-dir') args.ffmpegDir = next();
     else if (a === '--lista') {
       for (const s of SCENARIOS) process.stdout.write(`${s.name.padEnd(20)} ${s.description}\n`);
       process.exit(0);
@@ -255,6 +259,10 @@ async function main(): Promise<void> {
   const chrome = findChrome(args);
   log(`escenario ${scenario.name}: ${scenario.description}`);
   log(`clip ${describeClip(scenario.clip)}; ${minutes} min; modo ${args.mode}; salida ${outDir}`);
+  const remuxFfmpeg = spawnSync(args.ffmpegDir ? path.join(args.ffmpegDir, 'ffmpeg') : 'ffmpeg', ['-version'], {
+    encoding: 'utf8',
+  }).stdout?.split('\n')[0];
+  log(`ffmpeg del remux: ${remuxFfmpeg ?? '¿?'}`);
 
   const clip = await ensureClip(args.cache, scenario.clip, log);
   const loop = await pickLoopback();
@@ -291,6 +299,7 @@ async function main(): Promise<void> {
     [TSX_CLI, path.join(HERE, 'lib/backend.ts')],
     {
       ...process.env,
+      ...(args.ffmpegDir ? { PATH: `${args.ffmpegDir}${path.delimiter}${process.env.PATH ?? ''}` } : {}),
       PORT: String(backendPort),
       DATA_DIR: dataDir,
       AUTO_SYNC: 'false',
@@ -369,9 +378,8 @@ async function main(): Promise<void> {
   const consoleLog = new Jsonl(path.join(outDir, 'consola.jsonl'));
   page.on('console', (msg) => consoleLog.write({ at: Date.now(), type: msg.type(), text: msg.text().slice(0, 800) }));
   page.on('pageerror', (err) => consoleLog.write({ at: Date.now(), type: 'pageerror', text: String(err).slice(0, 800) }));
-  await page.route(/hls(__js|\.mjs|\.js)(\?|$)|\/hls\.js\//, async (route) => {
+  await page.route((url) => /\/(?:hls__js\.js|hls\.mjs|hls\.js)$/.test(url.pathname), async (route) => {
     const url = route.request().url();
-    if (!/\.m?js(\?|$)/.test(url) && !/hls__js/.test(url)) return route.fallback();
     const response = await route.fetch();
     const body = await response.text();
     const patched = hlsPatch(body);

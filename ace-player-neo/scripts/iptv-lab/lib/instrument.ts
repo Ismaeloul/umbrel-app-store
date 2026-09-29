@@ -28,7 +28,7 @@ export function instrumentSource(): string {
   const CODE = ${JSON.stringify(code)};
   const lab = { samples: [], events: [], hls: null, hlsCount: 0, video: null };
   window.__lab = lab;
-  const push = (type, data) => { lab.events.push(Object.assign({ at: Date.now(), type }, data || {})); };
+  const push = (type, data) => { lab.events.push(Object.assign({}, data || {}, { at: Date.now(), type })); };
   lab.push = push;
   lab.drain = () => { const out = { samples: lab.samples, events: lab.events }; lab.samples = []; lab.events = []; return out; };
 
@@ -64,7 +64,7 @@ export function instrumentSource(): string {
   P.pause = function () { if (this.tagName === 'VIDEO' && !this.paused) push('call.pause', { ct: +this.currentTime.toFixed(3), by: stack().slice(0, 400) }); return origPause.apply(this, arguments); };
 
   /* --- Eventos del <video> --- */
-  const MEDIA_EVENTS = ['waiting','seeking','seeked','stalled','playing','pause','play','ratechange','emptied','loadstart','loadedmetadata','loadeddata','canplay','canplaythrough','ended','error','durationchange','abort'];
+  const MEDIA_EVENTS = ['waiting','seeking','seeked','stalled','playing','pause','play','ratechange','emptied','loadstart','loadedmetadata','loadeddata','canplay','canplaythrough','ended','error','abort'];
   const lite = (v) => ({ ct: +v.currentTime.toFixed(3), rs: v.readyState, paused: v.paused, buf: ranges(v.buffered) });
   const hookVideo = (v) => {
     if (v.__labHooked) return;
@@ -91,9 +91,9 @@ export function instrumentSource(): string {
       } else if (ev === 'hlsError') {
         Object.assign(out, { details: d.details, fatal: d.fatal, etype: d.type, reason: d.reason ? String(d.reason).slice(0, 200) : undefined, err: d.error ? String(d.error.message || d.error).slice(0, 300) : undefined, buffer: d.buffer, code: d.response?.code });
       } else if (ev === 'hlsLevelPtsUpdated') {
-        Object.assign(out, { drift: d.drift, start: d.start, end: d.end, type: d.type });
+        Object.assign(out, { drift: d.drift, start: d.start, end: d.end, track: d.type });
       } else if (ev === 'hlsBufferFlushing') {
-        Object.assign(out, { start: d.startOffset, end: d.endOffset, type: d.type });
+        Object.assign(out, { start: d.startOffset, end: d.endOffset, track: d.type });
       }
     } catch (e) { out.err = String(e); }
     push('hls.' + ev.replace(/^hls/, ''), out);
@@ -145,7 +145,8 @@ export function instrumentSource(): string {
     const v = document.querySelector('video');
     if (v) hookVideo(v);
     const n = noticeText();
-    if (n !== lastNotice) { lastNotice = n; push('notice', { text: n }); }
+    const key = n.replace(/\d+/g, '#');
+    if (key !== lastNotice) { lastNotice = key; push('notice', { text: n }); }
     if (!v) return;
     const h = lab.hls;
     let hs = null;
