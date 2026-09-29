@@ -71,8 +71,15 @@ export function instrumentSource(): string {
     v.__labHooked = true;
     lab.video = v;
     push('video.found', {});
-    for (const name of MEDIA_EVENTS) v.addEventListener(name, () => push('media.' + name, lite(v)));
   };
+  /* En fase de captura en window: llega ANTES que los manejadores de la web (el de 'error' de runtime.ts
+     vacía el <video> y después ya no se ve v.error). */
+  for (const name of MEDIA_EVENTS) window.addEventListener(name, (e) => {
+    const v = e.target;
+    if (!v || v.tagName !== 'VIDEO') return;
+    const extra = name === 'error' && v.error ? { code: v.error.code, message: String(v.error.message || '').slice(0, 300) } : {};
+    push('media.' + name, Object.assign(lite(v), extra));
+  }, true);
 
   /* --- hls.js (el módulo parcheado llama aquí en cada trigger) --- */
   const HLS_KEEP = new Set(['hlsMediaAttached','hlsMediaDetaching','hlsManifestLoading','hlsManifestParsed','hlsLevelLoaded','hlsLevelUpdated','hlsFragLoaded','hlsFragBuffered','hlsFragChanged','hlsError','hlsBufferFlushing','hlsBufferFlushed','hlsLevelPtsUpdated','hlsFragParsingInitSegment','hlsDestroying','hlsBufferEos','hlsLiveBackBufferReached','hlsBackBufferReached']);

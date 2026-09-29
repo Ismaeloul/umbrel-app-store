@@ -45,6 +45,7 @@ import { describeClip, ensureClip } from './lib/clips.ts';
 import { hlsPatch, instrumentSource } from './lib/instrument.ts';
 import { startLabProvider, type LabProvider } from './lib/provider.ts';
 import { findScenario, SCENARIOS, type Scenario } from './lib/scenarios.ts';
+import { probeSegment, type SegmentProbe } from './lib/segments.ts';
 import { soloPage } from './lib/solo.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -226,6 +227,19 @@ function launch(
   return child;
 }
 
+/** ffmpeg del remux que se quedaran vivos (su carpeta está en `work`): el backend siguiente los mataría como huérfanos. */
+function killStrays(work: string): void {
+  if (process.platform !== 'linux') return;
+  for (const pid of readdirSync('/proc')) {
+    if (!/^\d+$/.test(pid)) continue;
+    try {
+      const cmd = readFileSync(`/proc/${pid}/cmdline`, 'utf8');
+      if (cmd.includes('ace_session=') && cmd.includes(work)) process.kill(Number(pid), 'SIGKILL');
+    } catch {}
+  }
+}
+let workDirForCleanup = '';
+
 async function stopChildren(): Promise<void> {
   for (const child of children) {
     if (child.exitCode !== null) continue;
@@ -236,11 +250,37 @@ async function stopChildren(): Promise<void> {
   }
   await new Promise((r) => setTimeout(r, 1500));
   for (const child of children) if (child.exitCode === null) child.kill('SIGKILL');
+  if (workDirForCleanup) killStrays(workDirForCleanup);
 }
 
 // ---------------------------------------------------------------- principal
 
+/** `--analizar DIR`: rehace el informe de una grabación ya hecha (con el analizador de ahora). */
+function reanalyze(dir: string): void {
+  let meta: { scenario?: string; recordStart?: number; sessionId?: string | null } = {};
+  try {
+    meta = JSON.parse(readFileSync(path.join(dir, 'meta.json'), 'utf8')) as typeof meta;
+  } catch {}
+  const name = meta.scenario ?? SCENARIOS.map((s) => s.name).find((n) => path.basename(dir).startsWith(n)) ?? '';
+  const scenario = findScenario(name);
+  if (!scenario) throw new Error(`No sé de qué escenario es ${dir}`);
+  let recordStart = meta.recordStart ?? 0;
+  if (!recordStart) {
+    const first = readFileSync(path.join(dir, 'muestras.jsonl'), 'utf8').split('\n')[0] ?? '{}';
+    recordStart = ((JSON.parse(first) as { at?: number }).at ?? Date.now()) - 2000;
+  }
+  const report = analyze({ dir, scenario, recordStart, sessionId: meta.sessionId ?? null });
+  writeFileSync(path.join(dir, 'informe.txt'), report.text);
+  writeFileSync(path.join(dir, 'resumen.json'), JSON.stringify(report.summary, null, 2));
+  process.stdout.write(`${report.text}\n`);
+}
+
 async function main(): Promise<void> {
+  const analizar = process.argv.indexOf('--analizar');
+  if (analizar >= 0) {
+    reanalyze(process.argv[analizar + 1] ?? '.');
+    return;
+  }
   const args = parseArgs(process.argv.slice(2));
   const scenario = findScenario(args.scenario);
   if (!scenario) {
@@ -256,6 +296,7 @@ async function main(): Promise<void> {
   mkdirSync(outDir, { recursive: true });
   const work = path.join(outDir, 'trabajo');
   mkdirSync(work, { recursive: true });
+  workDirForCleanup = work;
   const chrome = findChrome(args);
   log(`escenario ${scenario.name}: ${scenario.description}`);
   log(`clip ${describeClip(scenario.clip)}; ${minutes} min; modo ${args.mode}; salida ${outDir}`);
@@ -414,6 +455,11 @@ async function main(): Promise<void> {
     stopSolo = solo.stop;
   }
 
+  writeFileSync(
+    path.join(outDir, 'meta.json'),
+    JSON.stringify({ scenario: scenario.name, recordStart, sessionId, mode: args.mode, channel: channel.id, chrome, remuxFfmpeg }, null, 2),
+  );
+
   // Grabación.
   const samples = new Jsonl(path.join(outDir, 'muestras.jsonl'));
   const pageEvents = new Jsonl(path.join(outDir, 'eventos.jsonl'));
@@ -421,6 +467,35 @@ async function main(): Promise<void> {
   const remuxRoot = path.join(dataDir, 'remux');
   let lastPlaylist = '';
   let lastDir = '';
+  /* Lo que hay dentro de cada segmento nuevo (ffprobe, en cola). */
+  const probed = new Set<string>();
+  let probeChain: Promise<void> = Promise.resolve();
+  let prevSeg: SegmentProbe | null = null;
+  const frameS = 1 / scenario.clip.fps;
+  const queueProbe = (dir: string, name: string): void => {
+    const key = `${dir}/${name}`;
+    if (probed.has(key)) return;
+    probed.add(key);
+    probeChain = probeChain.then(async () => {
+      const info = await probeSegment(path.join(remuxRoot, dir), name);
+      if (!info) return;
+      const gapV = prevSeg?.v && info.v ? +(info.v[0] - prevSeg.v[1] - frameS).toFixed(3) : null;
+      const gapA = prevSeg?.a && info.a ? +(info.a[0] - prevSeg.a[1] - 1024 / 48000).toFixed(3) : null;
+      remuxLog.write({
+        at: Date.now(),
+        type: 'remux.seg',
+        name,
+        v: info.v?.map((x) => +x.toFixed(3)),
+        a: info.a?.map((x) => +x.toFixed(3)),
+        gapV,
+        gapA,
+        holes: info.holes.map((h) => ({ ...h, from: +h.from.toFixed(3), to: +h.to.toFixed(3) })),
+        frames: info.vFrames,
+        keyFirst: info.keyFirst,
+      });
+      prevSeg = info;
+    });
+  };
   const remuxTimer = setInterval(() => {
     try {
       const dirs = existsSync(remuxRoot) ? readdirSync(remuxRoot) : [];
@@ -432,6 +507,7 @@ async function main(): Promise<void> {
       }
       if (dir !== lastDir) {
         lastDir = dir;
+        prevSeg = null;
         remuxLog.write({ at: Date.now(), type: 'remux.dir', dir });
       }
       const file = path.join(remuxRoot, dir, 'index.m3u8');
@@ -445,6 +521,7 @@ async function main(): Promise<void> {
       const disc = (text.match(/#EXT-X-DISCONTINUITY\b/g) ?? []).length;
       const segs = [...text.matchAll(/^(index\d+\.m4s)$/gm)].map((m) => m[1]);
       remuxLog.write({ at: Date.now(), type: 'remux.playlist', seq, td, n: durs.length, durs, disc, last: segs.at(-1) });
+      for (const name of segs) if (name) queueProbe(dir, name);
     } catch (error) {
       remuxLog.write({ at: Date.now(), type: 'remux.error', error: String(error) });
     }
@@ -460,6 +537,7 @@ async function main(): Promise<void> {
       const [, action] = pending.shift() as [number, string];
       if (action === 'cortar') provider.cutNow();
       else if (action.startsWith('parar:')) provider.pauseNow(Number(action.slice(6)));
+      else if (action.startsWith('salto-pts:')) provider.ptsJumpNow(Number(action.slice(10)));
       log(`acción: ${action}`);
     }
     const drained = await drain(page);
@@ -475,6 +553,7 @@ async function main(): Promise<void> {
   for (const s of last.samples) samples.write(s);
   for (const e of last.events) pageEvents.write(e);
   clearInterval(remuxTimer);
+  await probeChain;
   await Promise.all([samples.close(), pageEvents.close(), remuxLog.close(), providerLog.close(), consoleLog.close()]);
   await page.screenshot({ path: path.join(outDir, 'final.png') }).catch(() => undefined);
   await stopSolo?.();

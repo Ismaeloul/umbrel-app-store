@@ -67,6 +67,11 @@ export interface HlsNet {
   readonly segmentDelayMs?: readonly [number, number];
   /** Cada `everyS` la lista se congela `staleS` segundos (el CDN sirve una vieja). */
   readonly stale?: { readonly everyS: number; readonly staleS: number };
+  /**
+   * A los `atS` segundos el emisor HLS del proveedor se reinicia: otra secuencia (desde 0) y otra base de
+   * tiempos, como un codificador que se cae y vuelve. Mientras no hay lista nueva se sirve la última.
+   */
+  readonly restart?: { readonly atS: number; readonly gapS?: number };
 }
 
 export interface LabProviderOptions {
@@ -95,6 +100,8 @@ export interface LabProvider {
   cutNow(): void;
   /** Deja de mandar (TS) durante `seconds`. */
   pauseNow(seconds: number): void;
+  /** El codificador salta `seconds` en sus tiempos sin cortar las conexiones (TS). */
+  ptsJumpNow(seconds: number): void;
   close(): Promise<void>;
 }
 
@@ -135,6 +142,7 @@ class TsEmitter {
   private ring: Chunk[] = [];
   private readonly listeners = new Set<(chunk: Buffer) => void>();
   private offsetS = 0;
+  private startedAt = 0;
   private stopped = false;
   private paused = false;
 
@@ -146,6 +154,7 @@ class TsEmitter {
 
   start(offsetS = 0): void {
     this.offsetS = offsetS;
+    this.startedAt = Date.now();
     this.carry = Buffer.alloc(0);
     const args = [
       '-hide_banner',
@@ -189,6 +198,21 @@ class TsEmitter {
       this.paused = false;
       if (!this.stopped) this.start(offsetS);
     }, gapS * 1000);
+  }
+
+  /**
+   * Salto de tiempos SIN cortar a nadie: el codificador del proveedor cambia de base de tiempos (otra
+   * fuente, un reinicio del codificador) y los clientes conectados siguen recibiendo. `jumpS` es el salto
+   * del PTS respecto a donde iba (+4: hueco de 4 s; -3: vuelve 3 s atrás).
+   */
+  jump(jumpS: number): void {
+    const elapsed = (Date.now() - this.startedAt) / 1000;
+    const offset = Math.round((this.offsetS + elapsed + jumpS) * 1000) / 1000;
+    const old = this.child;
+    this.child = null;
+    old?.kill('SIGKILL');
+    this.event('emisor.salto', { jumpS, offsetS: offset });
+    this.start(offset);
   }
 
   private onData(data: Buffer): void {
@@ -280,6 +304,17 @@ class HlsEmitter {
     child.once('exit', (code) => this.event('emisor.exit', { code }));
   }
 
+  /** El codificador del proveedor se cae y vuelve: carpeta nueva, secuencia desde 0, tiempos desde 0. */
+  restart(gapS = 0): void {
+    const old = this.child;
+    this.child = null;
+    old?.kill('SIGKILL');
+    this.event('emisor.restart', { kind: 'hls', gapS });
+    setTimeout(() => {
+      if (!this.stopped) this.start();
+    }, gapS * 1000);
+  }
+
   stop(): void {
     this.stopped = true;
     this.child?.kill('SIGKILL');
@@ -307,6 +342,7 @@ export async function startLabProvider(options: LabProviderOptions): Promise<Lab
     options.kind === 'hls'
       ? new HlsEmitter(options.clip, path.join(options.workDir, 'hls-origen'), hlsNet, event)
       : null;
+  const startedAt = Date.now();
   ts?.start(0);
   hls?.start();
 
@@ -456,11 +492,15 @@ export async function startLabProvider(options: LabProviderOptions): Promise<Lab
       }
       try {
         text = await readFile(path.join(hls.dir, 'live.m3u8'), 'utf8');
+        hlsCache = { text, at: now };
       } catch {
-        res.writeHead(404).end();
-        return;
+        /* El emisor se está reiniciando: el proveedor sigue sirviendo la última lista. */
+        if (!hlsCache) {
+          res.writeHead(404).end();
+          return;
+        }
+        text = hlsCache.text;
       }
-      hlsCache = { text, at: now };
     }
     /* URIs absolutas a /lab/hls/: la lista se pide por /live/<u>/<p>/<id>.m3u8. */
     const body = text.replace(/^(seg\d+\.ts)$/gm, '/lab/hls/$1');
@@ -573,6 +613,25 @@ export async function startLabProvider(options: LabProviderOptions): Promise<Lab
     proxy(req, res);
   });
   await new Promise<void>((resolve) => server.listen(0, options.host ?? '::1', resolve));
+  /* Como un proveedor de verdad, la emisión ya está en marcha cuando llega el primer cliente:
+     el colchón del TS lleno y, en HLS, una ventana con 3 segmentos o más. */
+  const warmUntil = Date.now() + 60_000;
+  for (;;) {
+    if (ts && ts.recent(tsNet.burstS + 1).length && Date.now() - startedAt >= (tsNet.burstS + 1) * 1000) break;
+    if (hls) {
+      try {
+        const text = readFileSync(path.join(hls.dir, 'live.m3u8'), 'utf8');
+        if ((text.match(/#EXTINF/g) ?? []).length >= 3) break;
+      } catch {}
+    }
+    if (Date.now() > warmUntil) throw new Error('El emisor del proveedor no arrancó en 60 s');
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  event('provider.ready', { warmS: (Date.now() - startedAt) / 1000 });
+  /* El reinicio del emisor HLS cuenta desde que el proveedor está listo (≈ cuando empieza la prueba). */
+  const hlsRestart = hlsNet.restart;
+  const hlsRestartTimer =
+    hls && hlsRestart ? setTimeout(() => hls.restart(hlsRestart.gapS ?? 0), hlsRestart.atS * 1000) : null;
   const port = (server.address() as AddressInfo).port;
   event('provider.listen', { port, bytesPerSecond: Math.round(bytesPerSecond) });
 
@@ -586,11 +645,15 @@ export async function startLabProvider(options: LabProviderOptions): Promise<Lab
         res.destroy();
       }
     },
+    ptsJumpNow(seconds) {
+      ts?.jump(seconds);
+    },
     pauseNow(seconds) {
       globalPauseUntil = Date.now() + seconds * 1000;
       event('ts.pause', { manual: true, ms: seconds * 1000 });
     },
     async close() {
+      if (hlsRestartTimer) clearTimeout(hlsRestartTimer);
       ts?.stop();
       hls?.stop();
       for (const { res } of openTs.values()) res.destroy();

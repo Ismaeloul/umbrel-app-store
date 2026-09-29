@@ -204,6 +204,8 @@ export function analyze(input: AnalyzeInput): { text: string; summary: Record<st
       : reset
         ? 'nuevo MediaSource / nueva instancia de hls.js (reenganche)'
         : 'sin seek explícito (¿el navegador saltó un hueco o se quitó búfer?)';
+    /* El salto a la posición de arranque de hls.js (con el <video> aún sin empezar) no es un salto que se vea. */
+    if (near.length && near.every((e) => /seekToStartPos/.test(String(e.by ?? ''))) && a.ct === 0) continue;
     jumps.push({ t: t(b.at), at: b.at, kind, from: a.ct, to: b.ct, delta: dct - expected, cause, context: '' });
   }
 
@@ -280,7 +282,18 @@ export function analyze(input: AnalyzeInput): { text: string; summary: Record<st
     if (lastDur > scenario.clip.gopS * 1.6 + 2.1 && lastDur > 3) remuxNotes.push({ at: p.at, type: 'remux.extinf-raro', dur: lastDur, last: p.last });
     prevPl = p;
   }
-  for (const e of remux) if (e.type !== 'remux.playlist') remuxNotes.push(e);
+  const segProbes = remux.filter((e) => e.type === 'remux.seg');
+  const segIssues: Ev[] = [];
+  for (const e of segProbes) {
+    const holes = (e.holes as { track: string; from: number; to: number }[]) ?? [];
+    const gapV = e.gapV as number | null;
+    const gapA = e.gapA as number | null;
+    if (holes.length || (gapV !== null && Math.abs(gapV) > 0.1) || (gapA !== null && Math.abs(gapA) > 0.1) || e.keyFirst === false) {
+      segIssues.push({ at: e.at, type: 'remux.seg-raro', name: e.name, v: e.v, a: e.a, gapV, gapA, holes, keyFirst: e.keyFirst });
+    }
+  }
+  for (const e of segIssues) remuxNotes.push(e);
+  for (const e of remux) if (e.type !== 'remux.playlist' && e.type !== 'remux.seg') remuxNotes.push(e);
 
   // --- Línea de tiempo combinada.
   const skipPage = new Set(['hls.FragBuffered', 'hls.LevelLoaded', 'media.durationchange', 'media.canplaythrough', 'media.loadeddata', 'media.canplay']);
@@ -370,6 +383,7 @@ export function analyze(input: AnalyzeInput): { text: string; summary: Record<st
     erroresHls: errorCounts,
     sse: sseCounts,
     cambiosTargetDuration: tdChanges.length,
+    segmentosRaros: segIssues.length,
     fotogramasPerdidos: dropped,
     patronAdelantaParaAtras: patterns.length,
     avisos: notices.slice(0, 30),
@@ -384,7 +398,7 @@ export function analyze(input: AnalyzeInput): { text: string; summary: Record<st
   out.push(`Parones >1 s: ${summary.paronesMas1s} (congelado ${summary.paronesCongelado}, retenido por la web ${summary.paronesRetenido}, buscando ${summary.paronesBuscando}); ${summary.segundosParado} s parado en total`);
   out.push(`Saltos de contenido (lo que se ve ≠ lo que avanza el cabezal): ${summary.saltosDeContenido}`);
   out.push(`Retraso real respecto a la emisión: min ${f1(summary.retrasoS.min)} · mediana ${f1(summary.retrasoS.p50)} · p90 ${f1(summary.retrasoS.p90)} · max ${f1(summary.retrasoS.max)} s`);
-  out.push(`TARGETDURATION del remux cambió ${summary.cambiosTargetDuration} veces · fotogramas perdidos ${dropped ?? '-'}`);
+  out.push(`TARGETDURATION del remux cambió ${summary.cambiosTargetDuration} veces · segmentos con huecos ${segIssues.length} · fotogramas perdidos ${dropped ?? '-'}`);
   out.push(`Errores de hls.js: ${JSON.stringify(errorCounts)}`);
   out.push(`SSE: ${JSON.stringify(sseCounts)}`);
   if (notices.length) out.push(`Avisos vistos: ${notices.slice(0, 12).join(' || ')}`);
@@ -400,6 +414,11 @@ export function analyze(input: AnalyzeInput): { text: string; summary: Record<st
   if (contentJumps.length) {
     out.push('Saltos de contenido:');
     for (const c of contentJumps.slice(0, 40)) out.push(`  - t=${f1(c.t)} contenido ${f2(c.dContent)} s, cabezal ${f2(c.dct)} s (código ${c.codeA}→${c.codeB})`);
+    out.push('');
+  }
+  if (segIssues.length) {
+    out.push('Segmentos del remux con huecos (dentro o entre segmentos) o sin fotograma clave al principio:');
+    for (const e of segIssues.slice(0, 30)) out.push(`  - t=${f1(t(e.at))} ${e.name} v=${JSON.stringify(e.v)} a=${JSON.stringify(e.a)} huecoV=${e.gapV} huecoA=${e.gapA} internos=${JSON.stringify(e.holes)} clave=${e.keyFirst}`);
     out.push('');
   }
   if (tdChanges.length) {

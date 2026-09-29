@@ -20,8 +20,12 @@ node scripts/iptv-lab/run.mjs ts-irregular --modo sola   # solo hls.js (sin runt
 
 Opciones: `--minutos N`, `--modo web|sola`, `--perfil balanced|stable|low` (modo `sola`),
 `--salida DIR` (por defecto `$TMPDIR/iptv-lab/<escenario>-<modo>-<fecha>`), `--headed`,
-`--chrome RUTA`, `--cache DIR` (o `IPTV_LAB_CACHE`; por defecto `$TMPDIR/iptv-lab-cache`).
-`IPTV_LAB_LOOPBACK` fuerza `::1` o `127.0.0.1` (por defecto `::1` si hay IPv6).
+`--chrome RUTA`, `--cache DIR` (o `IPTV_LAB_CACHE`; por defecto `$TMPDIR/iptv-lab-cache`),
+`--ffmpeg-dir DIR` (o `IPTV_LAB_FFMPEG_DIR`: otro ffmpeg/ffprobe SOLO para el remux del backend, p. ej. el
+de Alpine 3.24 del Umbrel, ver abajo). `IPTV_LAB_LOOPBACK` fuerza `::1` o `127.0.0.1` (por defecto `::1`
+si hay IPv6).
+
+Rehacer el informe de una grabación con el analizador de ahora: `node scripts/iptv-lab/run.mjs --analizar DIR`.
 
 Hace falta:
 - **ffmpeg y ffprobe** en el PATH (los usa el remux del backend, igual que en el Umbrel, y el emisor).
@@ -33,9 +37,21 @@ Hace falta:
   dpkg-deb -x chrome.deb chrome        # queda en chrome/opt/google/chrome/chrome
   ```
 - **No lanzar dos laboratorios a la vez** en la misma máquina: el recolector del remux de un backend
-  mata los ffmpeg «huérfanos» (con `ace_session=`) del otro.
+  mata cada 15 s los ffmpeg «huérfanos» (cualquiera con `ace_session=` en su línea de órdenes) del otro.
+  Por eso `pruebas/empalme-ffmpeg.ts` quita esa marca.
 
 La primera vez codifica el clip del escenario (≈1-2 min) y lo deja en la caché.
+
+**El ffmpeg del Umbrel** (Alpine 3.24: ffmpeg 8.1.2) se puede sacar con Docker y usar sin instalar nada
+(binario musl con su cargador):
+```
+D=$IPTV_LAB_CACHE/ffmpeg-alpine; mkdir -p $D/bin
+docker run --rm --network host -v $D:/out mirror.gcr.io/library/alpine:3.24 sh -c \
+  'apk add --no-cache ffmpeg >/dev/null; mkdir -p /out/lib; cp -L /usr/bin/ffmpeg /usr/bin/ffprobe /lib/ld-musl-x86_64.so.1 /out/;
+   for b in ffmpeg ffprobe; do ldd /usr/bin/$b | awk "{print \$3}" | grep ^/; done | sort -u | xargs -I{} cp -L {} /out/lib/'
+for b in ffmpeg ffprobe; do printf '#!/bin/sh\nexec %s/ld-musl-x86_64.so.1 --library-path %s/lib %s/%s "$@"\n' $D $D $D $b > $D/bin/$b; chmod +x $D/bin/$b; done
+node scripts/iptv-lab/run.mjs ts-corte --ffmpeg-dir $D/bin
+```
 
 ## Qué monta (`lab.ts`)
 
@@ -91,6 +107,16 @@ Para validar un arreglo: el mismo escenario antes y después, y comparar `resume
 | `hls-limpio` | HLS del proveedor, segmentos de 6 s |
 | `hls-lento` | HLS con segmentos a 1,2× y retrasos en lista y segmentos |
 | `hls-congelada` | HLS con la lista congelada 12 s cada 40 s |
+
+## Pruebas aisladas (`pruebas/`)
+
+- `pruebas/rele-reconexion.ts [sin-pcr|con-pcr]`: el relé de verdad (`modules/iptv/relay.ts`) contra un
+  origen que corta a los 5 s. Dice si tras reconectar vuelve a mandar bytes a ffmpeg o se queda colgado
+  (`reconnecting=true` para siempre). Sale con código 1 si se cuelga.
+- `pruebas/empalme-ffmpeg.ts [--ffmpeg RUTA]...`: lo que hace el remux (argumentos exactos de
+  `buildRemuxArgs`) con una reconexión empalmada (solape o hueco de 0,5-4 s): EXTINF, TARGETDURATION,
+  huecos de vídeo/audio y errores del decodificador H.264. Se puede pasar varias veces `--ffmpeg` (el del
+  sistema y el de Alpine).
 
 ## Límites
 
