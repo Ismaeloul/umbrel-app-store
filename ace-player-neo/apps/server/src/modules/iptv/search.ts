@@ -33,11 +33,13 @@
    (`searchIndexStepper`), y si alguien busca antes se termina en ese momento. */
 
 import {
+  CHANNEL_SEARCH_KEY_MIN,
   IPTV_MIN_SCORE,
   IPTV_SEARCH,
   MOVISTAR_WORDS,
   SEARCH_QUERY_MAX,
   SEARCH_QUERY_MIN,
+  channelSearchKey,
   normalizeChannelKey,
   type Item,
 } from '@ace/shared';
@@ -851,8 +853,10 @@ function categoryMatches(category: string | undefined, q: string): boolean {
 
 /**
  * Elementos de la biblioteca que contienen la consulta en el título o la
- * categoría (lo que enseñan «En tu biblioteca» y el filtro de Canales), sin
- * repetir y 200 como mucho.
+ * categoría, o su clave en la del título (`channelSearchKey`, 3 letras o
+ * más: «m+ laliga» encuentra «M. LALIGA 1»); lo mismo que enseñan «En tu
+ * biblioteca» y el filtro de Canales (`filterItems`). Sin repetir y 200 como
+ * mucho.
  */
 export function libraryCandidates(
   items: readonly LibraryCandidate[],
@@ -860,12 +864,20 @@ export function libraryCandidates(
 ): LibraryCandidate[] {
   const q = foldText(query);
   if (!q) return [];
+  const key = channelSearchKey(query);
+  const byKey = key.length >= CHANNEL_SEARCH_KEY_MIN;
   const seen = new Set<string>();
   const out: LibraryCandidate[] = [];
   for (const item of items) {
     if (out.length >= IPTV_SEARCH.libraryCandidatesMax) break;
     if (seen.has(item.id)) continue;
-    if (!foldText(item.title).includes(q) && !categoryMatches(item.category, q)) continue;
+    if (
+      !foldText(item.title).includes(q) &&
+      !categoryMatches(item.category, q) &&
+      !(byKey && channelSearchKey(item.title).includes(key))
+    ) {
+      continue;
+    }
     seen.add(item.id);
     out.push(item);
   }

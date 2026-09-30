@@ -44,6 +44,29 @@ describe('filtro local', () => {
     expect(filterItems(withIptv, 'iptv').map((i) => i.title)).toEqual(['Mi tele']);
     expect(filterItems(withIptv, 'mi te').map((i) => i.title)).toEqual(['Mi tele']);
   });
+  it('también por la clave del nombre (diagnóstico 0.8.2, E3): «m+ laliga» encuentra «M. LALIGA 1»', () => {
+    const liga = [
+      makeItem('M. LALIGA 1', 'web', { category: 'Deportes' }),
+      makeItem('M+ LaLiga TV 2 --> NEW ERA', 'fav'),
+      makeItem('LASEXTA HD', 'web'),
+      makeItem('DAZN LaLiga', 'web'),
+    ];
+    expect(filterItems(liga, 'm+ laliga').map((i) => i.title)).toEqual([
+      'M. LALIGA 1',
+      'M+ LaLiga TV 2 --> NEW ERA',
+    ]);
+    expect(filterItems(liga, 'movistar la liga').map((i) => i.title)).toEqual([
+      'M. LALIGA 1',
+      'M+ LaLiga TV 2 --> NEW ERA',
+    ]);
+    expect(filterItems(liga, 'la sexta').map((i) => i.title)).toEqual(['LASEXTA HD']);
+    /* «m+» a secas es Movistar; «hd» deja la clave vacía: solo el texto plegado. */
+    expect(filterItems(liga, 'm+').map((i) => i.title)).toEqual([
+      'M. LALIGA 1',
+      'M+ LaLiga TV 2 --> NEW ERA',
+    ]);
+    expect(filterItems(liga, 'hd').map((i) => i.title)).toEqual(['LASEXTA HD']);
+  });
 });
 
 describe('agrupados', () => {

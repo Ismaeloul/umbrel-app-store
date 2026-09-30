@@ -23,9 +23,16 @@
    5. «R.» delante de un club → «Real» («R. MADRID TV»); «INT.» →
       «Internacional».
 
+   `channelSearchKey`: la clave para FILTRAR por nombre (el filtro de
+   Canales, «En tu biblioteca» del buscador y sus candidatos en el servidor):
+   esta grafía, «m» o «mov» sueltos delante como Movistar y
+   `normalizeChannelKey`.
+
    Además, las marcas de calidad y códec que NO son el número del canal
    («La 1 TVE 720p» → el canal es «La 1»): `stripQualityMarks` y
    `isQualityNumber`, que usan el dorsal y el nombre de los carteles. */
+
+import { normalizeChannelKey } from './channels.js';
 
 /* 1. Movistar al principio, seguido de otra palabra. */
 const MOVISTAR_PREFIX_RE =
@@ -70,6 +77,24 @@ export function channelSpelling(value: string): string {
   for (const [re, to] of FIXED_TYPOS) text = text.replace(re, to);
   text = text.replace(REAL_RE, 'Real ').replace(INTERNATIONAL_RE, 'Internacional');
   return text.replace(/\s+/g, ' ').trim();
+}
+
+/* «m laliga», «mov laliga»: lo que escribe una persona en un buscador (una lista no lo escribe así). */
+const SEARCH_MOVISTAR_RE = /^\s*(?:m|mov)\s+(?=[\p{L}\p{N}])/iu;
+
+/** Lo mínimo que tiene que tener la clave de lo escrito para filtrar con `channelSearchKey`. */
+export const CHANNEL_SEARCH_KEY_MIN = 3;
+
+/**
+ * La clave de un nombre, o de lo que se escribe, para filtrar por nombre
+ * (docs/diagnostico-iptv-0.8.2.md, E3): la grafía de `channelSpelling` (con
+ * «m» o «mov» sueltos delante como Movistar) y `normalizeChannelKey`. «m+
+ * laliga» y «M. LALIGA 1» dan «movistar laliga…»: el primero encuentra el
+ * segundo por la clave aunque el texto plegado no lo contenga.
+ */
+export function channelSearchKey(value: string): string {
+  const text = String(value ?? '').replace(SEARCH_MOVISTAR_RE, 'Movistar ');
+  return normalizeChannelKey(channelSpelling(text));
 }
 
 /* Resoluciones que un nombre lleva como marca de calidad (nunca como número de canal). */

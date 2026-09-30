@@ -311,6 +311,15 @@ describe('library de cada fila (§14.3, regla 5)', () => {
     ).toHaveLength(1);
   });
 
+  it('también por la clave del nombre, como el filtro de la web: «m+ laliga» encuentra «M. LALIGA 1»', () => {
+    const items = [
+      { id: A, title: 'M. LALIGA 1', category: '' },
+      { id: B, title: 'DAZN LaLiga', category: '' },
+    ];
+    expect(libraryCandidates(items, 'm+ laliga').map((item) => item.id)).toEqual([A]);
+    expect(libraryCandidates(items, 'la liga').map((item) => item.id)).toEqual([A, B]);
+  });
+
   it('la categoría «IPTV» es una marca: casa con «iptv», no con «tv»', () => {
     const items = [{ id: IPTV_OWN, title: 'Mi tele', category: 'IPTV' }];
     expect(libraryCandidates(items, 'tv')).toEqual([]);
