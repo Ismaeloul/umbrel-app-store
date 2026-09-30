@@ -1203,8 +1203,18 @@ HLS H.264 con AAC. No entra ahora.
 - `MAX_REMUX_SESSIONS` sigue en 3, compartido con el remux de AceStream del iPhone. Si se llena con una IPTV, el código
   es `remux_busy`, pero la web lo trata como fallo **de fuente** cuando la fuente es IPTV (§7.2).
 - **Reinicio en la misma sesión** (`remux.restart(sid)`): lo usa el relé cuando cambia la base de tiempos o la variante
-  (§6.1). Mata el ffmpeg, vacía la carpeta, arranca otro con la misma entrada del relé y emite `stream.reopened`
-  `remux_restart`.
+  (§6.1). Mata el ffmpeg, arranca otro con la misma entrada del relé y emite `stream.reopened` `remux_restart`.
+  Desde la 0.8.3 es **continuo** (diagnostico-iptv-0.8.2 B2): la carpeta no se vacía; el ffmpeg nuevo es otra
+  «generación» con `-start_number` (1 + el mayor `index<N>.m4s` de la carpeta), `discont_start` y su propio
+  `init_<n>.mp4`. Hasta que escribe su lista se sirve la vieja (congelada) y sus segmentos; cuando la nueva está, se
+  borran los ficheros viejos. `serveFile` añade el `#EXT-X-DISCONTINUITY-SEQUENCE` que ffmpeg no escribe (`n−2`
+  mientras se ve la discontinuidad, `n−1` cuando sale) y, a mitad de un reinicio sin entrada, responde «aún no está»
+  (503; 404 en /native) en vez de 410. El evento lleva `seamless: true`. Antes la lista volvía a
+  `MEDIA-SEQUENCE:0` con la misma URL y hls.js saltaba 30-58 s atrás.
+- **Vigilante de salida** (B3): una IPTV con visores, lista y viva cuya lista no cambia en `max(10 s, 3×TD)` avisa a
+  playback (una vez por atasco). Playback reinicia el remux (al morir el ffmpeg, el relé suelta la conexión con el
+  proveedor y reconecta cuando se engancha el nuevo) y, si en 10 s no hay lista nueva, cierra con `iptv_dropped`.
+  `ensure()` sobre una IPTV atascada avisa igual en vez de relanzar ffmpeg por su cuenta.
 - Si el remux de una sesión IPTV se cierra por su cuenta (desalojo, recolector, `onExit`), avisa al relé para que
   aborte la conexión con el proveedor (§6.1) y a playback, que cierra la sesión con `iptv_dropped`, no con
   `remux_died`.

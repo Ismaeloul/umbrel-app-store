@@ -70,6 +70,11 @@ import type { PlaybackDeps, PlaybackService, ViewerIdentity } from './types.js';
 const REOPEN_WINDOW_MS = 5 * 60 * 1000;
 const REOPEN_MAX = 3;
 /**
+ * IPTV cuya salida no avanza (B3): lo que se espera a la lista nueva tras reconectar el relé antes de
+ * cerrar con `iptv_dropped` (con los 10 s del vigilante, la web pasa a AceStream en unos 20 s).
+ */
+export const IPTV_STALL_RECOVER_MS = 10_000;
+/**
  * Fallos seguidos de `stat_url` con el motor `online` y CONTESTANDO (HTTP de
  * error o respuesta rara) para dar la sesión por perdida.
  */
@@ -228,6 +233,8 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
   const tombstones: Tombstones = new Map();
   const background = new Set<Promise<unknown>>();
   const statAborts = new Set<AbortController>();
+  /* Sesiones IPTV cuya salida atascada ya se está recuperando (B3): un aviso a la vez. */
+  const stallRecoveries = new Set<string>();
   let ticker: TimerHandle | null = null;
   let lastActivity = '';
   let lastEngineState: EngineState | null = null;
@@ -873,12 +880,17 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     });
   }
 
-  /** El relé pide reiniciar el remux (otra base de tiempos u otra variante, §6.1). */
-  async function restartIptv(session: SessionRec): Promise<void> {
+  /**
+   * El relé pide reiniciar el remux (otra base de tiempos u otra variante, §6.1), o la lista no avanza
+   * (B3). El reinicio de la IPTV es continuo (diagnostico-iptv-0.8.2 B2): misma lista con la numeración
+   * seguida, así que el `stream.reopened` va con `seamless` y la web no se reengancha (C3); la app iOS se
+   * reengancha igual que siempre. Con `signal`, se deja de esperar la lista nueva y se cierra.
+   */
+  async function restartIptv(session: SessionRec, signal?: AbortSignal): Promise<void> {
     if (session.closed) return;
     let handle: RemuxHandle | null = null;
     try {
-      handle = await remux.restart(session.id);
+      handle = await remux.restart(session.id, signal);
     } catch (error) {
       logger.warn(
         { sessionId: session.id, errorCode: errorCodeOf(error) },
@@ -891,8 +903,38 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       return;
     }
     for (const group of groupByUrl(session, remuxViewers(session))) {
-      bus.emit('stream.reopened', { sessionId: session.id, ...group, reason: 'remux_restart' });
+      bus.emit('stream.reopened', {
+        sessionId: session.id,
+        ...group,
+        reason: 'remux_restart',
+        ...(handle.seamless ? { seamless: true } : {}),
+      });
     }
+  }
+
+  /**
+   * La lista de una IPTV no avanza (vigilante del remux, B3; red del P2: el relé colgado en una
+   * reconexión). Un reinicio del remux mata ffmpeg, y con él el relé suelta la conexión con el proveedor y
+   * reconecta cuando el ffmpeg nuevo se engancha. Si en `IPTV_STALL_RECOVER_MS` tampoco hay lista nueva,
+   * `iptv_dropped`: la web pasa a AceStream en unos 20 s y no en 65.
+   */
+  function onRemuxStalled(sessionId: string): void {
+    const session = sessions.get(sessionId);
+    if (!session || session.closed || session.source !== 'iptv') return;
+    if (stallRecoveries.has(session.id)) return;
+    stallRecoveries.add(session.id);
+    logger.warn({ sessionId: session.id }, 'IPTV: la salida no avanza; se reconecta el relé');
+    const controller = new AbortController();
+    const timer = clock.setTimeout(
+      () => controller.abort(new AppError('iptv_dropped', { detail: 'la salida no avanza' })),
+      IPTV_STALL_RECOVER_MS,
+    );
+    track(
+      restartIptv(session, controller.signal).finally(() => {
+        clock.clearTimeout(timer);
+        stallRecoveries.delete(session.id);
+      }),
+    );
   }
 
   /** Pausa, eliminar o cuenta caducada: fuera todas las sesiones IPTV (§7.4). */
@@ -1498,7 +1540,11 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
         bus.on('devices.changed', (event) => {
           if (event.reason === 'revoked') track(service.releaseDevice(event.deviceId));
         }),
-        remux.subscribe({ onAccess: onRemuxAccess, onDetached: onRemuxDetached }),
+        remux.subscribe({
+          onAccess: onRemuxAccess,
+          onDetached: onRemuxDetached,
+          onStalled: onRemuxStalled,
+        }),
         ...(deps.iptv ? [deps.iptv.subscribe({ onRevoked: onIptvRevoked })] : []),
       ];
     },

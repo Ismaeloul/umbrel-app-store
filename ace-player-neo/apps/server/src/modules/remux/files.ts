@@ -6,9 +6,14 @@
      cabeceras y el fichero leído por trozos (nunca entero en memoria), ahora
      sobre la respuesta de Fastify.
    - `rewritePlaylist` añade `?t=<token>` a cada URI de la lista (también a
-     `#EXT-X-MAP:URI`) para la app iOS (arquitectura §5.12). */
+     `#EXT-X-MAP:URI`) para la app iOS (arquitectura §5.12).
+   - Reinicio continuo de la IPTV (diagnostico-iptv-0.8.2 B2): cada ffmpeg de
+     la misma sesión es una «generación» con su init (`init.mp4` la primera,
+     `init_<n>.mp4` las siguientes) y sigue la numeración de los segmentos;
+     `withDiscontinuitySequence` pone el `#EXT-X-DISCONTINUITY-SEQUENCE` que
+     ffmpeg nunca escribe. */
 
-import { open, readFile, type FileHandle } from 'node:fs/promises';
+import { open, readFile, readdir, type FileHandle } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { finished } from 'node:stream';
@@ -86,6 +91,109 @@ export async function readPlaylistStats(file: string): Promise<PlaylistStats | n
     return null;
   }
   return playlistStatsFromText(text);
+}
+
+/** Lo que se mira de una lista del remux: la cuenta, su init y su TARGETDURATION. */
+export interface PlaylistInfo extends PlaylistStats {
+  /** URI de `#EXT-X-MAP` (`init.mp4`, `init_2.mp4`…) o null. */
+  readonly init: string | null;
+  /** `#EXT-X-TARGETDURATION` en segundos, o null. */
+  readonly targetDuration: number | null;
+}
+
+export function playlistInfoFromText(text: string): PlaylistInfo {
+  const map = /^#EXT-X-MAP:.*?URI="([^"?]*)/m.exec(text);
+  const target = /^#EXT-X-TARGETDURATION:(\d+)/m.exec(text);
+  return {
+    ...playlistStatsFromText(text),
+    init: map?.[1] ?? null,
+    targetDuration: target ? Number(target[1]) : null,
+  };
+}
+
+export async function readPlaylistInfo(file: string): Promise<PlaylistInfo | null> {
+  let text: string;
+  try {
+    text = await readFile(file, 'utf8');
+  } catch {
+    return null;
+  }
+  return playlistInfoFromText(text);
+}
+
+/** Nombre del init de una generación: `init.mp4` la primera (como siempre), `init_<n>.mp4` las demás. */
+export function initFileName(generation: number): string {
+  return generation > 1 ? `init_${generation}.mp4` : 'init.mp4';
+}
+
+/** Generación de un init (`init.mp4` → 1, `init_3.mp4` → 3) o null si no es un init del remux. */
+export function generationOfInit(name: string | null): number | null {
+  if (name === 'init.mp4') return 1;
+  const match = /^init_(\d{1,6})\.mp4$/.exec(name ?? '');
+  return match ? Number(match[1]) : null;
+}
+
+/** Segmentos de ffmpeg, también el `.tmp` que deja a medias uno que se mata con `temp_file`. */
+const SEGMENT_FILE_RE = /^index(\d{1,9})\.m4s(?:\.tmp)?$/;
+
+/** Ficheros de la carpeta (vacío si no está). */
+async function listDir(dir: string): Promise<string[]> {
+  try {
+    return await readdir(dir);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Número del primer segmento de la generación siguiente: 1 + el mayor `index<N>.m4s` de la CARPETA (no de
+ * la lista, que puede ir por detrás de los ficheros). 0 si no hay ninguno.
+ */
+export async function nextSegmentNumber(dir: string): Promise<number> {
+  let max = -1;
+  for (const name of await listDir(dir)) {
+    const match = SEGMENT_FILE_RE.exec(name);
+    if (match) max = Math.max(max, Number(match[1]));
+  }
+  return max + 1;
+}
+
+/**
+ * Ficheros de las generaciones anteriores: los segmentos por debajo de `startNumber` y cualquier init que
+ * no sea `init`. Se borran cuando la lista nueva ya está (nunca antes: hasta entonces se sirve la vieja).
+ */
+export async function previousGenerationFiles(
+  dir: string,
+  startNumber: number,
+  init: string,
+): Promise<string[]> {
+  return (await listDir(dir)).filter((name) => {
+    const segment = SEGMENT_FILE_RE.exec(name);
+    if (segment) return Number(segment[1]) < startNumber;
+    return name !== init && generationOfInit(name) !== null;
+  });
+}
+
+/**
+ * `#EXT-X-DISCONTINUITY-SEQUENCE` de una lista de la generación `g` (la de su `#EXT-X-MAP`), que ffmpeg
+ * nunca escribe y AVPlayer necesita (RFC 8216 §6.2.1): cada reinicio añade una discontinuidad, así que vale
+ * `g−2` mientras se ve el `#EXT-X-DISCONTINUITY` de su primer segmento (el que pone `discont_start`) y
+ * `g−1` cuando ya ha salido de la ventana. La primera generación (`init.mp4`) sale tal cual, byte a byte.
+ */
+export function withDiscontinuitySequence(text: string): string {
+  const generation = generationOfInit(playlistInfoFromText(text).init);
+  if (generation === null || generation < 2) return text;
+  if (/^#EXT-X-DISCONTINUITY-SEQUENCE:/m.test(text)) return text;
+  const visible = /^#EXT-X-DISCONTINUITY\r?$/m.test(text);
+  const tag = `#EXT-X-DISCONTINUITY-SEQUENCE:${visible ? generation - 2 : generation - 1}`;
+  const lines = text.split('\n');
+  const cr = lines[0]?.endsWith('\r') ? '\r' : '';
+  /* Detrás de MEDIA-SEQUENCE (o de TARGETDURATION, o de #EXTM3U): siempre antes del primer segmento. */
+  let at = lines.findIndex((line) => line.startsWith('#EXT-X-MEDIA-SEQUENCE:'));
+  if (at < 0) at = lines.findIndex((line) => line.startsWith('#EXT-X-TARGETDURATION:'));
+  if (at < 0) at = 0;
+  lines.splice(at + 1, 0, `${tag}${cr}`);
+  return lines.join('\n');
 }
 
 function withToken(uri: string, token: string): string {

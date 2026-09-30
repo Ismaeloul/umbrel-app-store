@@ -79,6 +79,12 @@ export interface RemuxListener {
   onAccess?(sessionId: string, deviceId: string | null): void;
   /** Visores que se quedan sin remux: un `stop` antiguo, el recolector, ffmpeg muerto o un desalojo. */
   onDetached?(sessionId: string, viewerIds: readonly string[], reason: RemuxCloseReason): void;
+  /**
+   * Remux IPTV con visores, listo y vivo, cuya lista no cambia en `max(10 s, 3×TD)` (diagnostico-iptv-0.8.2
+   * B3): una vez por atasco (se rearma cuando la lista vuelve a cambiar). Playback reconecta el relé y, si
+   * tampoco avanza, cierra con `iptv_dropped`. AceStream no lo usa: su vigilante es el del motor.
+   */
+  onStalled?(sessionId: string): void;
 }
 
 export interface RemuxEnsureOptions {
@@ -112,13 +118,18 @@ export interface RemuxSource {
 export interface RemuxHandle {
   readonly sessionId: string;
   readonly hash: string;
-  /** Carpeta con index.m3u8, init.mp4 e index<N>.m4s. */
+  /** Carpeta con index.m3u8, init.mp4 (o `init_<n>.mp4` tras un reinicio continuo) e index<N>.m4s. */
   readonly dir: string;
   readonly startedAt: number;
   /** Lista lista para reproducir (arranque completado). */
   readonly ready: boolean;
   /** Ficha de 16 hex del enganche antiguo (solo con `options.legacy`). */
   readonly legacyToken?: string;
+  /**
+   * Solo en `restart()`: el ffmpeg nuevo sigue la MISMA lista (numeración continua, init nuevo y
+   * discontinuidad, diagnostico-iptv-0.8.2 B2), así que hls.js pasa la costura sin reengancharse.
+   */
+  readonly seamless?: boolean;
 }
 
 export interface RemuxStats {
@@ -153,9 +164,12 @@ export interface RemuxService extends Lifecycle {
    */
   retarget(source: RemuxSource, signal?: AbortSignal): Promise<RemuxHandle | null>;
   /**
-   * Reinicio en la misma sesión (docs/iptv.md §6.3): mata ffmpeg, vacía la
-   * carpeta y arranca otro con la misma entrada y los mismos visores. Lo pide
-   * el relé de la IPTV cuando cambia la base de tiempos o la variante. `null`
+   * Reinicio en la misma sesión (docs/iptv.md §6.3): mata ffmpeg y arranca
+   * otro con la misma entrada y los mismos visores. Lo pide el relé de la IPTV
+   * cuando cambia la base de tiempos o la variante (o playback, si la lista no
+   * avanza). Con IPTV es continuo (diagnostico-iptv-0.8.2 B2): la carpeta NO
+   * se vacía, se sigue sirviendo la lista vieja hasta que está la nueva, que
+   * sigue la numeración con otro init y una discontinuidad (`seamless`). `null`
    * si la sesión no tenía remux.
    */
   restart(sessionId: string, signal?: AbortSignal): Promise<RemuxHandle | null>;
@@ -202,6 +216,8 @@ export interface RemuxService extends Lifecycle {
     readonly sessionId: string;
     readonly origin?: 'engine' | 'iptv';
     readonly isHls?: boolean;
+    readonly generation?: number;
+    readonly startNumber?: number;
   }): string[];
   /** `parseByteRange` (server.js:346): `{start,end}` o false si no se puede servir (T-003). */
   parseByteRange(header: string | undefined, size: number): ByteRange | false | null;
