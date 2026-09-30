@@ -222,7 +222,8 @@
    Cristal, márgenes de 12, radio 24 y la sombra larga de Palco. La píldora
    (::before) es la única pieza que se mueve: translateX hasta la columna --i. */
 .tabbar {
-  --n: 4;
+  /* --n (destinos) y --i (el activo) los pone Nav.tsx en línea con la lista
+     que se pinta: 4 o 5 con «Pelis y series» (T17 de docs/vod.md). */
   --i: 0;
   --tabbar-pad: 6px;
   position: fixed;
@@ -305,7 +306,7 @@
     pointer-events: none;
   }
   .topbar {
-    --n: 4;
+    /* --n lo pone Nav.tsx en línea (4 o 5 destinos), como en la barra inferior. */
     --i: 0;
     --topbar-item-w: 116px;
     grid-area: top;
@@ -489,6 +490,17 @@
   }
   .topbar__item {
     padding: 0 8px;
+  }
+  /* Con «Pelis y series» (5 destinos) no caben los iconos: van todos sin él,
+     por igual (docs/vod.md §12.1), en huecos de 96 px («Pelis y series» mide
+     ~68 px a 13 px), y el estado del motor se queda en su icono (medido con
+     revision-visual a 768 px: si no, «Ajustes» pisaba el motor). */
+  .topbar[data-n='5'] {
+    --topbar-item-w: 96px;
+  }
+  .topbar[data-n='5'] .topbar__item .icon,
+  .topbar[data-n='5'] .topbar__engine .engine__text {
+    display: none;
   }
 }
 

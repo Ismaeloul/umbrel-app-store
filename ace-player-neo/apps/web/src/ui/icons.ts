@@ -69,6 +69,8 @@ export const ICONS = {
   directo:
     '<circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/><path d="M7.4 7.4a6.5 6.5 0 0 0 0 9.2M16.6 7.4a6.5 6.5 0 0 1 0 9.2"/>',
   subir: '<path d="M12 19V5M6 11l6-6 6 6"/>',
+  /* Películas y series (docs/vod.md §12.1): una claqueta. */
+  cine: '<rect x="3.5" y="10" width="17" height="10.5" rx="2.5"/><path d="M3.5 10l15.9-4.5-.9-2.9-15.8 4.5z"/><path d="M8.8 8.5l.3-3.2M14.1 7l.3-3.2"/>',
 } as const satisfies Record<string, string>;
 
 export type IconName = keyof typeof ICONS;
