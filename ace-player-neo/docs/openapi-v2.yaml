@@ -2115,7 +2115,7 @@ paths:
           required: true
           schema:
             type: string
-            pattern: ^(?:index\.m3u8|init\.mp4|index\d{1,9}\.m4s)$
+            pattern: ^(?:index\.m3u8|init(?:_\d{1,6})?\.mp4|index\d{1,9}\.m4s)$
         - name: t
           in: query
           required: false
