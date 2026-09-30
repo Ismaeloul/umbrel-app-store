@@ -9,7 +9,9 @@ import {
   capsuleOf,
   editForm,
   EMPTY_FORM,
+  agoText,
   guideLine,
+  vodLines,
   hostLine,
   IPTV_DEMO_MESSAGE,
   IPTV_SAVE_RETRIED_HINT,
@@ -281,5 +283,51 @@ describe('tarjeta', () => {
     expect(
       guideLine({ available: false, channelsWithGuide: 0, updatedAt: null, failedAt: null }),
     ).toBeNull();
+  });
+});
+
+describe('Películas y series en la tarjeta (docs/vod.md §12.10)', () => {
+  const NOW = Date.parse('2026-09-30T12:00:00.000Z');
+  const vod = {
+    state: 'ready' as const,
+    movies: 12_345,
+    series: 1_234,
+    builtAt: '2026-09-30T09:00:00.000Z',
+    truncated: false,
+    skipped: 0,
+    stale: false,
+  };
+
+  it('listo: «Películas: 12.345 · Series: 1234 · actualizado hace 3 h» (es-ES agrupa desde 5 cifras)', () => {
+    expect(vodLines({ kind: 'xtream', vod }, NOW)).toEqual([
+      { text: 'Películas: 12.345 · Series: 1234 · actualizado hace 3 h', tone: 'plain' },
+    ]);
+  });
+
+  it('preparando, sin VOD y títulos que no se pudieron leer', () => {
+    expect(vodLines({ kind: 'xtream', vod: { ...vod, state: 'preparing' } }, NOW)[0]?.text).toBe(
+      'Preparando películas y series…',
+    );
+    expect(vodLines({ kind: 'xtream', vod: { ...vod, state: 'none' } }, NOW)[0]?.text).toBe(
+      'Tu proveedor no ofrece películas ni series',
+    );
+    expect(vodLines({ kind: 'xtream', vod: { ...vod, skipped: 7 } }, NOW)[1]).toEqual({
+      text: '7 títulos no se han podido leer.',
+      tone: 'weak',
+    });
+  });
+
+  it('M3U: solo con Xtream; un servidor sin películas y series, nada', () => {
+    expect(vodLines({ kind: 'm3u', vod: undefined }, NOW)).toEqual([
+      { text: 'Las películas y series solo funcionan con cuentas Xtream Codes.', tone: 'plain' },
+    ]);
+    expect(vodLines({ kind: 'xtream', vod: undefined }, NOW)).toEqual([]);
+  });
+
+  it('hace cuánto', () => {
+    expect(agoText('2026-09-30T11:59:40.000Z', NOW)).toBe('hace un momento');
+    expect(agoText('2026-09-30T11:48:00.000Z', NOW)).toBe('hace 12 min');
+    expect(agoText('2026-09-29T12:00:00.000Z', NOW)).toBe('hace 1 día');
+    expect(agoText('2026-09-27T12:00:00.000Z', NOW)).toBe('hace 3 días');
   });
 });

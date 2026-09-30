@@ -6,8 +6,9 @@ para elegir entre pelis o series. Parte de la 0.8.2 publicada. La web va primero
 se diseña para las dos (§17).
 
 **Estado: propuesta (29-sep-2026), con las respuestas de Isma del 30-sep (§19.4).** Hecho: el contrato (VOD-1, rama
-`vod/1-contrato`: `packages/shared` y las 6 rutas como esqueleto que responde 501) y el guion del Paso 0
-(`scripts/vod-sondeo.mjs`, §3). Este documento sale de tres diseños hechos con lentes
+`vod/1-contrato`: `packages/shared` y las 6 rutas como esqueleto que responde 501), el guion del Paso 0
+(`scripts/vod-sondeo.mjs`, §3) y la web de navegar (VOD-3, rama `vod/3-web`: §12.1-§12.6, §12.10 y §12.11, con
+«Reproducir» como aviso «Próximamente» hasta VOD-6; se ve con `?demo=1&flag=cine`). Este documento sale de tres diseños hechos con lentes
 distintas (lo más simple y robusto, la mejor experiencia y la escala con seguridad) y de una revisión que los puntuó
 contra el código real. Gana el primero, con injertos de los otros dos. El anexo §20 dice qué viene de dónde y qué se
 descartó.

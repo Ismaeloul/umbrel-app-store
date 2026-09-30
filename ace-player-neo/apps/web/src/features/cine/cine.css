@@ -1,0 +1,687 @@
+/* ==========================================================================
+   Películas y series (docs/vod.md §12) con la piel «Palco»: carteles 2:3 con
+   la sombra de los carteles, carruseles, chips con desplazamiento y la ficha
+   con su fondo 16:9. Prefijo `.cine-`. Solo tokens; animaciones solo con
+   transform y opacity; el hover, solo con ratón de verdad; nada por debajo de
+   11 px; objetivos de 44 px.
+   ========================================================================== */
+
+.cine {
+  display: grid;
+  gap: var(--s-5);
+  align-content: start;
+  min-width: 0;
+  max-width: 1480px;
+  margin-inline: auto;
+}
+.cine-screen {
+  min-width: 0;
+}
+.cine-screen[hidden] {
+  display: none;
+}
+.cine-head {
+  display: grid;
+  gap: var(--s-3);
+  margin-top: var(--s-3);
+  min-width: 0;
+}
+@media (min-width: 768px) {
+  .cine-head {
+    grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+    align-items: center;
+  }
+}
+/* La pista «/» solo tiene sentido con teclado físico. */
+@media (hover: none) {
+  .cine-head .field__kbd {
+    display: none;
+  }
+}
+.cine-note {
+  padding-inline: var(--s-1);
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+
+/* ---- Secciones y carruseles ------------------------------------------------ */
+.cine-section {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.cine-section__title {
+  padding-inline: var(--s-1);
+  font-size: var(--fs-17);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: var(--tracking-head);
+  line-height: var(--lh-tight);
+}
+.cine-rail {
+  --prail-item-w: clamp(112px, 29vw, 164px);
+}
+.cine-continue {
+  --prail-item-w: clamp(220px, 68vw, 300px);
+}
+.cine-browse {
+  display: grid;
+  gap: var(--s-3);
+  min-width: 0;
+}
+
+/* ---- Imagen con relleno (Art.tsx) ------------------------------------------ */
+.cine-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  overflow: hidden;
+  border-radius: inherit;
+  background: var(--art-fill, var(--surface-2));
+  color: #fff;
+}
+.cine-art--poster {
+  aspect-ratio: 2 / 3;
+}
+.cine-art--backdrop,
+.cine-art--still {
+  aspect-ratio: 16 / 9;
+}
+.cine-art__mono {
+  font-size: clamp(22px, 30%, 44px);
+  font-weight: 800;
+  font-stretch: var(--w-head);
+  letter-spacing: 0.02em;
+  opacity: 0.9;
+}
+.cine-art--poster .cine-art__mono {
+  font-size: var(--fs-30);
+}
+.cine-art__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity var(--dur-rapido) var(--ease-out);
+}
+.cine-art[data-state='image'] .cine-art__img {
+  opacity: 1;
+}
+
+/* ---- Tarjeta (PosterCard.tsx) ---------------------------------------------- */
+.cine-card {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+  color: var(--text);
+  border-radius: var(--r-m);
+  outline: none;
+}
+.cine-card:focus-visible {
+  outline: 2px solid var(--accent-edge);
+  outline-offset: 3px;
+}
+.cine-card__poster {
+  position: relative;
+  display: block;
+  border-radius: var(--r-m);
+  overflow: hidden;
+  box-shadow: var(--shadow-poster);
+  margin-bottom: 4px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .cine-card__poster .cine-art {
+    transition: transform var(--dur-estandar) var(--ease-estandar);
+  }
+  .cine-card:hover .cine-card__poster .cine-art {
+    transform: scale(1.03);
+  }
+}
+.cine-card__adult {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+}
+.cine-card__progress {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+}
+.cine-card__title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: var(--fs-13);
+  font-weight: var(--wght-strong);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.cine-card__meta {
+  color: var(--text-3);
+  font-size: var(--fs-12);
+}
+.cine-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+.cine-card__tag.capsule--sm {
+  height: 20px;
+  padding: 0 6px;
+}
+
+/* ---- Rejilla (Grid.tsx) ----------------------------------------------------- */
+.cine-grid {
+  --cols: 3;
+  min-width: 0;
+}
+.cine-grid__cells {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  gap: 12px;
+  padding-bottom: 18px;
+}
+.cine-grid__cell {
+  min-width: 0;
+}
+.cine-load-more {
+  margin-top: var(--s-2);
+}
+.cine-more-failed {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding-inline: var(--s-1);
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+
+/* ---- Chips con desplazamiento, filtros y orden --------------------------------- */
+.cine-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.cine-chips--scroll {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  touch-action: pan-x pan-y;
+  margin-inline: calc(var(--s-1) * -1);
+  padding: 8px var(--s-1);
+  scroll-padding-inline: var(--s-1);
+}
+.cine-chips--scroll::-webkit-scrollbar {
+  display: none;
+}
+.cine-chips--scroll > * {
+  flex: none;
+}
+.cine-allcats {
+  justify-self: start;
+}
+.cine-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.cine-order {
+  flex: none;
+  width: max-content;
+  min-width: 200px;
+}
+
+/* ---- Categorías: lista de la hoja y del panel lateral --------------------------- */
+.cine-cats {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cine-cat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 12px;
+  border-radius: var(--r-s);
+  color: var(--text);
+  text-align: left;
+  font-size: var(--fs-15);
+  font-weight: var(--wght-medium);
+}
+.cine-cat[aria-pressed='true'] {
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+  font-weight: var(--wght-strong);
+}
+@media (hover: hover) and (pointer: fine) {
+  .cine-cat:hover {
+    background: var(--line-soft);
+  }
+}
+.cine-cat__name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.cine-cat__adult {
+  flex: none;
+  padding: 2px 6px;
+  border-radius: var(--r-pill);
+  background: var(--line-soft);
+  color: var(--text-2);
+  font-size: var(--fs-11);
+  font-weight: var(--wght-strong);
+}
+.cine-cat__count {
+  flex: none;
+  color: var(--text-3);
+  font-size: var(--fs-13);
+}
+.cine-aside {
+  display: grid;
+  gap: var(--s-2);
+  padding-top: var(--s-6);
+}
+.cine-aside__title {
+  padding-inline: 12px;
+  color: var(--text-3);
+  font-size: var(--fs-kicker);
+  font-weight: 700;
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+}
+
+/* ---- «Seguir viendo» (ContinueRail.tsx) --------------------------------------- */
+/* La tarjeta y su «Más opciones» uno al lado del otro (nunca encima: dos
+   controles pisados no se pueden tocar bien). */
+.cine-continue__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 2px;
+  min-width: 0;
+}
+.cine-continue__card {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  color: var(--text);
+  text-align: left;
+  border-radius: var(--r-m);
+}
+.cine-continue__art {
+  position: relative;
+  display: block;
+  border-radius: var(--r-m);
+  overflow: hidden;
+  box-shadow: var(--shadow-poster);
+  margin-bottom: 4px;
+}
+/* Siempre 16:9, aunque solo haya cartel (se recorta al centro). */
+.cine-continue__art .cine-art {
+  aspect-ratio: 16 / 9;
+}
+.cine-continue__progress {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+}
+.cine-continue__title {
+  font-size: var(--fs-15);
+  font-weight: var(--wght-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cine-continue__line {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cine-continue__more {
+  margin-right: -6px;
+}
+
+/* ---- Esqueletos --------------------------------------------------------------- */
+.cine-skeleton {
+  display: grid;
+  gap: var(--s-4);
+}
+.cine-skeleton__rail {
+  display: flex;
+  gap: 12px;
+  overflow: hidden;
+}
+.cine-skeleton__poster {
+  flex: none;
+  width: clamp(112px, 29vw, 164px);
+  height: auto !important;
+  aspect-ratio: 2 / 3;
+}
+
+/* ---- Ficha (Ficha.tsx) ----------------------------------------------------------- */
+.cine-ficha {
+  display: grid;
+  gap: var(--s-5);
+  align-content: start;
+  min-width: 0;
+  max-width: 1180px;
+  margin-inline: auto;
+  padding-bottom: var(--s-6);
+}
+.cine-ficha__skeleton {
+  width: 100%;
+  height: auto !important;
+  aspect-ratio: 16 / 9;
+  max-height: 420px;
+}
+.cine-ficha__head {
+  position: relative;
+  display: grid;
+  min-width: 0;
+}
+/* El fondo sangra hasta los bordes de la página en el móvil, con un
+   degradado hacia el color de la página para que el texto se lea encima. */
+.cine-ficha__backdrop {
+  position: relative;
+  margin-inline: calc(-1 * (var(--gutter) + var(--safe-left)))
+    calc(-1 * (var(--gutter) + var(--safe-right)));
+  overflow: hidden;
+}
+.cine-ficha__backdrop .cine-art {
+  aspect-ratio: 16 / 9;
+  max-height: 56vh;
+  border-radius: 0;
+}
+.cine-ficha__backdrop::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 35%,
+    color-mix(in oklab, var(--bg) 70%, transparent) 72%,
+    var(--bg) 100%
+  );
+  pointer-events: none;
+}
+.cine-ficha__back {
+  position: absolute;
+  top: calc(var(--safe-top) + var(--s-3));
+  left: 0;
+}
+.cine-ficha__intro {
+  position: relative;
+  display: grid;
+  gap: var(--s-4);
+  margin-top: -64px;
+  min-width: 0;
+}
+.cine-ficha__poster {
+  display: none;
+}
+.cine-ficha__titles {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.cine-ficha__title {
+  font-size: var(--fs-30);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: var(--tracking-head);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+  outline: none;
+}
+.cine-ficha__title:focus-visible {
+  outline: 2px solid var(--accent-edge);
+  outline-offset: 3px;
+  border-radius: var(--r-s);
+}
+.cine-ficha__original {
+  color: var(--text-3);
+  font-size: var(--fs-13);
+}
+.cine-ficha__meta {
+  color: var(--text-2);
+  font-size: var(--fs-15);
+  font-weight: var(--wght-medium);
+}
+.cine-ficha__capsules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cine-ficha__tech {
+  color: var(--text-3);
+  font-size: var(--fs-13);
+}
+@media (min-width: 1024px) {
+  .cine-ficha__backdrop {
+    margin-inline: 0;
+    border-radius: var(--r-xl);
+  }
+  .cine-ficha__backdrop .cine-art {
+    max-height: 420px;
+  }
+  .cine-ficha__back {
+    left: var(--s-3);
+  }
+  .cine-ficha__intro {
+    grid-template-columns: 200px minmax(0, 1fr);
+    align-items: end;
+    margin-top: -120px;
+    padding-inline: var(--s-5);
+  }
+  .cine-ficha__poster {
+    display: block;
+    border-radius: var(--r-m);
+    overflow: hidden;
+    box-shadow: var(--shadow-poster);
+  }
+  .cine-ficha__title {
+    font-size: var(--fs-44);
+  }
+}
+.cine-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+.cine-actions__reason {
+  flex-basis: 100%;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+.cine-ficha__failed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+.cine-synopsis {
+  display: grid;
+  gap: var(--s-2);
+  justify-items: start;
+  max-width: 72ch;
+}
+.cine-synopsis__text {
+  font-size: var(--fs-15);
+  line-height: var(--lh-text);
+}
+.cine-synopsis__text--clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+.cine-credits {
+  display: grid;
+  gap: var(--s-2);
+  max-width: 72ch;
+  margin: 0;
+}
+.cine-credits__row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: var(--s-3);
+  font-size: var(--fs-13);
+}
+.cine-credits dt {
+  color: var(--text-3);
+  font-weight: var(--wght-strong);
+}
+.cine-credits dd {
+  margin: 0;
+  color: var(--text-2);
+}
+
+/* ---- Temporadas y episodios (Seasons.tsx, EpisodeList.tsx) --------------------- */
+.cine-seasons {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.cine-seasons__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+.cine-seasons__menu {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: var(--wght-strong);
+}
+.cine-seasons__count {
+  padding-inline: var(--s-1);
+  color: var(--text-3);
+  font-size: var(--fs-13);
+}
+.cine-episodes {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cine-episode {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 2px;
+  min-width: 0;
+}
+.cine-episode + .cine-episode {
+  box-shadow: inset 0 1px 0 var(--line-soft);
+}
+.cine-episode__play {
+  display: grid;
+  grid-template-columns: minmax(120px, 38%) minmax(0, 1fr);
+  gap: var(--s-3);
+  align-items: start;
+  width: 100%;
+  padding: 12px 0;
+  color: var(--text);
+  text-align: left;
+}
+@media (min-width: 768px) {
+  .cine-episode__play {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+}
+.cine-episode__play:disabled {
+  cursor: not-allowed;
+}
+.cine-episode__art {
+  position: relative;
+  display: block;
+  border-radius: var(--r-s);
+  overflow: hidden;
+}
+.cine-episode__glyph {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--glass-video);
+  color: var(--on-video);
+}
+.cine-episode__play:disabled .cine-episode__glyph {
+  display: none;
+}
+.cine-episode__progress {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+}
+.cine-episode__body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.cine-episode__title {
+  font-size: var(--fs-15);
+  font-weight: var(--wght-strong);
+  overflow-wrap: anywhere;
+}
+.cine-episode__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  color: var(--text-3);
+  font-size: var(--fs-13);
+}
+.cine-episode__watched {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ok-ink);
+  font-weight: var(--wght-strong);
+}
+.cine-episode__blocked {
+  color: var(--text-2);
+  font-size: var(--fs-13);
+}
+.cine-episode__plot {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: var(--fs-13);
+  line-height: var(--lh-snug);
+}
+.cine-episode__more {
+  margin-top: 6px;
+  margin-right: -6px;
+}

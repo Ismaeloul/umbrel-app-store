@@ -159,6 +159,15 @@ export function setFetch(next: typeof fetch | null): void {
   fetchImpl = next ?? ((...args) => globalThis.fetch(...args));
 }
 
+/**
+ * El mismo fetch que usa api() (el simulado en los tests), para las rutas
+ * que no son JSON: hoy, `vodProgress`, que responde 204 sin cuerpo
+ * (features/cine/data.ts).
+ */
+export function apiFetch(input: string, init?: RequestInit): Promise<Response> {
+  return fetchImpl(input, init);
+}
+
 /** Valida con zod en desarrollo. En producción esta rama desaparece del build. */
 async function validateInDev(id: JsonRouteId, data: unknown): Promise<void> {
   if (!import.meta.env.DEV) return;
