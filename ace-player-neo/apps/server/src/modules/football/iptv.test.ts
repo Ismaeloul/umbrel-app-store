@@ -410,14 +410,14 @@ describe('overlayIptv: la IPTV de ahora sobre un precalentado (M1)', () => {
     expect(iptv.calls).toEqual([['DAZN LaLiga']]);
   });
 
-  it('las IPTV guardadas se quitan y se ponen las de ahora; un id IPTV que ya no vale, fuera', async () => {
+  it('las IPTV guardadas de la guía se quitan y se ponen las de ahora; un id IPTV que ya no vale, fuera', async () => {
     const iptv = dazn();
     const snapshot = await resolveFootballChannel(
       { favorites: [{ id: IPTV_OLD, title: 'DAZN LaLiga' }] },
       ['DAZN LaLiga'],
       deps(
         layer({
-          candidates: [iptvCandidate(IPTV_GUIDE_ID, 'DAZN LaLiga', 100, false, 'DAZN LaLiga')],
+          candidates: [iptvCandidate(IPTV_GUIDE_ID, 'DAZN LaLiga', 100, true, 'DAZN LaLiga')],
         }),
         engine,
       ),
@@ -442,6 +442,36 @@ describe('overlayIptv: la IPTV de ahora sobre un precalentado (M1)', () => {
       `iptv:${IPTV_FAV}`,
       `acestream:${ACE}`,
     ]);
+  });
+
+  it('un favorito IPTV del precalentado sigue aunque la capa de ahora no lo devuelva (como la pasada nueva)', async () => {
+    const library = { favorites: [{ id: IPTV_FAV, title: 'DAZN LaLiga' }] };
+    const snapshot = await resolveFootballChannel(library, ['DAZN LaLiga'], deps(layer(), engine));
+    expect(snapshot.candidates.map((c) => `${c.source}:${c.id}`)).toEqual([
+      `iptv:${IPTV_FAV}`,
+      `acestream:${ACE}`,
+    ]);
+    const fresh = await resolveFootballChannel(library, ['DAZN LaLiga'], deps(dazn(), engine));
+    const iptv = dazn();
+    const overlaid = overlayIptv(snapshot, snapshot.channels, null, iptv, deps(iptv).applyLearned);
+    expect(overlaid.candidates.map((c) => c.id)).toEqual(fresh.candidates.map((c) => c.id));
+    expect(overlaid.candidates.map((c) => c.id)).toContain(IPTV_FAV);
+  });
+
+  it('lo aprendido ve las pistas de la guía de ahora, como la pasada nueva', () => {
+    const iptv = layer({ hints: ['M+ LaLiga', 'dazn laliga'] });
+    const seen: string[][] = [];
+    overlayIptv(
+      { channels: ['DAZN LaLiga'], checked: [], candidates: [], candidate: null } as never,
+      ['DAZN LaLiga'],
+      null,
+      iptv,
+      (channels, candidates) => {
+        seen.push([...channels]);
+        return deps(iptv).applyLearned(channels, candidates);
+      },
+    );
+    expect(seen).toEqual([['DAZN LaLiga', 'M+ LaLiga']]);
   });
 
   it('sin capa IPTV consultada no nombra la IPTV y deja la elegida del precalentado', async () => {

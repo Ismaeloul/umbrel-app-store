@@ -98,6 +98,7 @@ import {
   toast,
 } from '../../notices/index.ts';
 import { noticeFlags } from '../../notices/notify.ts';
+import type { NoticeTone } from '../../ui/Toast.tsx';
 import {
   getPlayer,
   kindFromIh,
@@ -557,9 +558,11 @@ async function resolveMatch({
     // sin fuentes (antes, index.html:4154-4155).
     if (!isApiError(error) || error.retryable) {
       patch({ phase: 'error', resolverOpen: false, resolution: null, preheat: null });
+      // Lo que importa del toast es su acción: el mismo tiempo que «Volver a la IPTV».
       toast(RESOLVE_ERROR_TEXT, {
         tone: 'err',
         icon: 'aviso',
+        ms: IPTV_CLIENT.backToastMs,
         action: { label: 'Reintentar', onAction: retryResolve },
       });
       return;
@@ -1745,6 +1748,7 @@ function showBackToast(
   iptvId: string,
   text = 'Seguimos por AceStream',
   label = 'Volver a la IPTV',
+  tone: NoticeTone = 'warn',
 ): void {
   dismissBackToast();
   const gen = generation;
@@ -1761,7 +1765,7 @@ function showBackToast(
     back();
   };
   backToastId = toast(text, {
-    tone: 'warn',
+    tone,
     icon: 'tv',
     ms: IPTV_CLIENT.backToastMs,
     action: { label, onAction },
@@ -2066,7 +2070,8 @@ function offerNewIptv(entries: readonly SourceEntry[], previousIds: ReadonlySet<
   const offer = entries.find(
     (entry) => isIptv(entry) && !previousIds.has(entry.id) && !entry.autoTried,
   );
-  if (offer) showBackToast(offer.id, IPTV_OFFER_TEXT, IPTV_OFFER_LABEL);
+  // Es una oferta, no un aviso: tono informativo.
+  if (offer) showBackToast(offer.id, IPTV_OFFER_TEXT, IPTV_OFFER_LABEL, 'info');
 }
 
 /** «Reportar y comprobar» (`submitSourceReport`, index.html:4024-4041). */

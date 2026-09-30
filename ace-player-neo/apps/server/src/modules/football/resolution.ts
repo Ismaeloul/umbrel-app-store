@@ -758,10 +758,15 @@ export async function resolveFootballChannel(
  * su guía estuvieran listas (o con la IPTV en otro estado) y se reutiliza
  * hasta 20 min: sin esto, al entrar solo salía AceStream hasta «Rebuscar».
  *
- * - Fuera las IPTV guardadas; los ids IPTV que llegaron por otra vía pasan otra
- *   vez por la decisión de §4.1 (`adoptIptvCandidate`, como la pasada nueva).
- * - Dentro las candidatas IPTV de ahora (≥ 92), lo aprendido una vez sobre
- *   todo, el tope de carteles y el mismo orden que la pasada nueva: IPTV primero.
+ * - Todo lo guardado pasa otra vez por la decisión de §4.1
+ *   (`adoptIptvCandidate`, como la pasada nueva): un id IPTV de vínculos,
+ *   favoritos, listas o historial se vuelve a convertir y uno que ya no vale
+ *   (en pausa, quitado) sale. Las IPTV guardadas de la guía salen siempre: la
+ *   guía de ahora manda.
+ * - Dentro las candidatas IPTV de ahora (ganan a una guardada con el mismo id),
+ *   lo aprendido una vez sobre todo (con las pistas de la guía, como la pasada
+ *   nueva), el umbral de 92, el tope de carteles y el mismo orden que la pasada
+ *   nueva: IPTV primero.
  * - `checked` empieza por `iptv` si se consultó (y no la nombra si no).
  * - Sin IPTV que añadir, las AceStream y su orden no cambian.
  *
@@ -777,15 +782,27 @@ export function overlayIptv(
   options: { readonly sourceStats?: Partial<SourceStats> | null } = {},
 ): ResolutionCore {
   const layer = iptv ? iptv.resolve(channels, program) : null;
+  const fresh = layer?.candidates ?? [];
+  const freshIds = new Set(fresh.map((candidate) => candidate.id));
   const kept = (core.candidates || [])
-    .filter((candidate) => candidate.source !== 'iptv')
+    .filter(
+      (candidate) =>
+        !(
+          candidate.source === 'iptv' &&
+          (candidate as { iptv?: { guide?: boolean } }).iptv?.guide === true
+        ),
+    )
     .map((candidate) => adoptIptvCandidate(iptv, candidate))
-    .filter((candidate): candidate is BaseCandidate => candidate !== null);
-  const fresh = (layer?.candidates ?? []).filter(
-    (candidate) => candidate.score >= RESOLUTION_EXACT_SCORE,
-  );
+    .filter(
+      (candidate): candidate is BaseCandidate => candidate !== null && !freshIds.has(candidate.id),
+    );
+  const channelKeys = new Set(channels.map((channel) => normalizeChannelKey(channel)));
+  const hints = (layer?.hints ?? []).filter((hint) => !channelKeys.has(normalizeChannelKey(hint)));
   /* Lo aprendido se aplica UNA vez, sobre todo (un «Canal incorrecto» aparta también una IPTV). */
-  const learned = applyLearned(channels, [...fresh, ...kept]);
+  const learned = applyLearned(hints.length ? [...channels, ...hints] : channels, [
+    ...fresh,
+    ...kept,
+  ]);
   const qualified = capIptv(
     learned.filter(
       (candidate) => candidate.source !== 'iptv' || candidate.score >= RESOLUTION_EXACT_SCORE,

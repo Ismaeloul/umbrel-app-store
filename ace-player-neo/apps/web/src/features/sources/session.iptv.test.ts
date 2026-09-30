@@ -896,6 +896,8 @@ describe('«Rebuscar» encuentra tu IPTV mientras suena AceStream (M4)', () => {
     await research();
     const offer = toastStore.get().find((t) => t.text === IPTV_OFFER_TEXT);
     expect(offer?.action?.label).toBe(IPTV_OFFER_LABEL);
+    // Una oferta, no un aviso.
+    expect(offer?.tone).toBe('info');
     // Nunca sola (D7): sigue la AceStream y la dirección no cambia.
     expect(getPlayer().channel?.hash).toBe(ace);
     expect(window.location.hash).toBe(locationHash);

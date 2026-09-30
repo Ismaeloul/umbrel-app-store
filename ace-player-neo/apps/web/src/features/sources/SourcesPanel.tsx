@@ -226,7 +226,7 @@ export function SourcesPanel({
           </>
         }
       >
-        El servidor no ha contestado a tiempo. Vuelve a intentarlo o pega un Content ID.
+        No hemos podido hablar con el servidor. Vuelve a intentarlo o pega un Content ID.
       </EmptyState>
     );
   } else if ((state.phase === 'choices' || state.phase === 'not_found') && !state.entries.length) {
