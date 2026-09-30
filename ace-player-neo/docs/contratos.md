@@ -360,3 +360,32 @@ que TODA operación antigua y ruta v1 tiene manejador.
   regenera `RutaID` (5 rutas `web`, `video` a `any`, `PATCH`), `ErrorCatalog`
   (16 códigos) y `PlazosWeb` (cuando la web ponga `iptvSave` e `iptvSync` en
   `TIMEOUTS`).
+
+## 14. Películas y series (contrato de `docs/vod.md`, paquete VOD-1)
+
+- **Ids sellados.** Una película, una serie o un episodio tienen un id de 40
+  hex que cumple `HashSchema`: 32 hex de AES-256 de un bloque (tipo, huella
+  del proveedor, padre y `stream_id`/`series_id`/`episode_id`) y la MISMA
+  etiqueta de 8 hex que los canales IPTV (docs/vod.md §5). `IptvIdClass` no
+  gana miembros: `football/resolution.ts` no cambia.
+- **`@ace/shared`:** `constants/vod.ts` (`VOD_LIMITS`, `VOD_REFRESH_MS`,
+  `VOD_EXTENSIONS`, `VOD_UNSUPPORTED_REASONS`, `VOD_SEARCH`, `VOD_DETAILS`,
+  `VOD_ART`, `VOD_PLAY`, `VOD_TIMINGS`, `VOD_PROGRESS`, `VOD_PLAYER`,
+  `VOD_CLIENT`), `api/v1/vod.ts` (portada, rejilla, fichas, concesión y
+  cuerpo del progreso), `state/v2.ts` (`V2_FILES.vod`, `vodCatalog`,
+  `vodArt`; `VodCatalogStateSchema` y `VodDocSchema` de `v2/vod.json`),
+  `IptvStatus.vod`, `bootstrap.features.vod`, 8 errores `vod_*`,
+  `ApiError.data` con `reason` o `retryAfterS`, `CursorSchema` exportado y
+  el tipo de contenido `empty` (204) en la tabla de rutas.
+- **Sin módulo nuevo:** `vodHome`, `vodBrowse`, `vodTitle`, `vodArt` y
+  `vodProgress` son del módulo `iptv`; `vodStream`, de `playback`. Hoy son un
+  esqueleto: validan la entrada y responden 501 `not_implemented` hasta
+  VOD-2 (catálogo) y VOD-5 (enganches de la reproducción).
+- **`app.ts`:** una ruta `content: 'empty'` responde 204 sin cuerpo;
+  `vodBrowse` entra en `QUIET_QUERY_ROUTES`.
+- **Fixtures:** las 4 rutas JSON en `fixtures/web/v1/` (con 8 variantes en
+  `fixtures/variantes/`) y `vod` en `fixtures/web/events/iptv.status.json`;
+  `v1/` y `events/` no cambian.
+- **App nativa (docs/vod.md §17):** cuando se fusione, `rediseno/nativa`
+  regenera `RutaID` (6 rutas `web`), `ErrorCatalog` (8 `vod_*`) y
+  `PlazosWeb` (`VOD_CLIENT`).

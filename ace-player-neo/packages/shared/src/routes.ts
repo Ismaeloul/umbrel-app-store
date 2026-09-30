@@ -21,7 +21,9 @@
      IPTV (`iptv*`, docs/iptv.md §5.3: la IPTV solo se configura en la web)
      y `iptvChannels` (el buscador IPTV, §14.2; pasa a `any` cuando la app
      calque el buscador, D27) e `iptvBrowse` (la pestaña IPTV de Canales,
-     §16.2; D29) son `web`.
+     §16.2; D29) son `web`. Las 6 de Películas y series (`vod*`, docs/vod.md
+     §11.1) nacen `web` (D-VOD19) y pasan a `any` cuando la app copie la
+     pantalla.
      `video` es `any` desde la IPTV (docs/iptv.md §5.4): la web entra sin
      token (el login de Umbrel basta) y el iPhone con `video-token`.
 
@@ -99,6 +101,19 @@ import {
   IptvViewSchema,
 } from './api/v1/iptv.js';
 import { SearchQuerySchema, SearchResponseSchema } from './api/v1/search.js';
+import {
+  VodArtParamsSchema,
+  VodArtQuerySchema,
+  VodBrowseQuerySchema,
+  VodBrowseResponseSchema,
+  VodGrantSchema,
+  VodHomeSchema,
+  VodProgressBodySchema,
+  VodStreamQuerySchema,
+  VodTitleParamsSchema,
+  VodTitleQuerySchema,
+  VodTitleSchema,
+} from './api/v1/vod.js';
 import { SettingsResponseSchema, SettingsUpdateBodySchema } from './api/v1/settings.js';
 import {
   FeedbackBodySchema,
@@ -125,8 +140,12 @@ export const NATIVE_PREFIX = '/native';
 export type V1Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export type RouteAccess = 'web' | 'native' | 'any';
 export type NativeCredential = 'none' | 'bearer' | 'video-token';
-/** `json` = respuesta JSON validada; `sse` = text/event-stream; `binary` = ficheros del remux y escudos (PNG). */
-export type RouteContent = 'json' | 'sse' | 'binary';
+/**
+ * `json` = respuesta JSON validada; `sse` = text/event-stream; `binary` =
+ * ficheros del remux, escudos (PNG) y carteles VOD; `empty` = 204 sin cuerpo
+ * (hoy, `vodProgress`: docs/vod.md §11.1).
+ */
+export type RouteContent = 'json' | 'sse' | 'binary' | 'empty';
 
 /** Módulos del backend (arquitectura §5.2): quién aporta el manejador de cada ruta. */
 export const SERVER_MODULES = [
@@ -161,9 +180,10 @@ export interface V1RouteDefinition {
   readonly params?: z.ZodType;
   readonly query?: z.ZodType;
   readonly body?: z.ZodType;
-  /** Esquema de la respuesta de éxito; `null` si no es JSON (SSE o ficheros). */
+  /** Esquema de la respuesta de éxito; `null` si no es JSON (SSE, ficheros o 204). */
   readonly response: z.ZodType | null;
-  readonly status: 200 | 201;
+  /** 204 solo con `content: 'empty'`. */
+  readonly status: 200 | 201 | 204;
   readonly content: RouteContent;
   /**
    * GET con efectos (abre una sesión, lanza una comprobación…): desde el
@@ -258,6 +278,20 @@ const IPTV_STREAM_ERRORS = [
   'iptv_unreachable',
   'iptv_timeout',
   'iptv_unsupported',
+] as const satisfies readonly ErrorCode[];
+
+/* Abrir un título de Películas y series (docs/vod.md §11.3 y §9.12). Los
+   `vod_*` son suyos: nunca agotan una fuente ni pasan a AceStream. */
+const VOD_STREAM_ERRORS = [
+  'vod_unavailable',
+  'vod_not_found',
+  'vod_unsupported',
+  'vod_busy',
+  'vod_timeout',
+  'vod_dropped',
+  'vod_disk_full',
+  'vod_account',
+  'remux_busy',
 ] as const satisfies readonly ErrorCode[];
 
 export const V1_ROUTES = {
@@ -615,6 +649,122 @@ export const V1_ROUTES = {
     sideEffects: false,
     /* Una consulta o un cursor mal formados: `validation_error` (de COMMON_V1_ERRORS). */
     errors: [],
+    legacyTwin: null,
+  }),
+
+  // --- Películas y series (solo web por ahora, docs/vod.md §11.1, D-VOD19) ---
+  vodHome: defineRoute({
+    method: 'GET',
+    path: '/api/v1/vod',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary:
+      'Portada de Películas y series en una petición: «Seguir viendo», novedades, series actualizadas, categorías y distintivos',
+    description:
+      'Estado del catálogo VOD (docs/vod.md §4.8 y §6.4, D-VOD28). «Novedades en películas» y «Series actualizadas» van sin adultos (D-VOD7). ' +
+      'Sin IPTV activa, en pausa, con M3U o sin VOD responde 200 con `active: false` o su `state`: no es un error. Nunca lleva URL, `stream_id` ni credenciales.',
+    response: VodHomeSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: false,
+    errors: [],
+    legacyTwin: null,
+  }),
+  vodBrowse: defineRoute({
+    method: 'GET',
+    path: '/api/v1/vod/browse',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary:
+      'Rejilla y buscador de películas o series: categoría, distintivo, texto y orden, por páginas',
+    description:
+      'Por tipo (`kind`), con `otherKindTotal` para «Ver 3 series» (docs/vod.md §6, D-VOD5). Con `q` (2 a 80 letras) manda la relevancia; sin ella, `added` o `name`. ' +
+      'Los 2 000 mejores como mucho (`capped`); un cursor de otro catálogo da la primera página con `stale: true`. El texto buscado no va al registro.',
+    query: VodBrowseQuerySchema,
+    response: VodBrowseResponseSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: false,
+    /* Una consulta o un cursor mal formados: `validation_error` (de COMMON_V1_ERRORS). */
+    errors: ['empty_query'],
+    legacyTwin: null,
+  }),
+  vodTitle: defineRoute({
+    method: 'GET',
+    path: '/api/v1/vod/titles/:id',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary: 'Ficha de una película o una serie (con temporadas y episodios)',
+    description:
+      'Pide la ficha al proveedor por una cola (1 en vuelo, 300 ms, 60 por minuto; docs/vod.md §7, D-VOD30). Nunca queda en blanco: si el proveedor falla, ' +
+      'lo que se sabe por la lista con `info: failed`; con `pre=1` y la cola ocupada, `info: pending`.',
+    params: VodTitleParamsSchema,
+    query: VodTitleQuerySchema,
+    response: VodTitleSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: false,
+    errors: ['vod_not_found', 'vod_unavailable'],
+    legacyTwin: null,
+  }),
+  vodArt: defineRoute({
+    method: 'GET',
+    path: '/api/v1/vod/titles/:id/art/:art',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary: 'Cartel, fondo o fotograma de un título (JPEG, PNG o WebP) por el proxy propio',
+    description:
+      'Solo recibe ids, nunca URLs (docs/vod.md §8, D-VOD8). Con la `v` correcta, `private, max-age=31536000, immutable`; sin ella o con otra, `private, no-cache`. ' +
+      "`If-None-Match` da 304. Solo imágenes raster por bytes mágicos, con `nosniff` y `Content-Security-Policy: default-src 'none'`. Sin imagen, 404 `vod_not_found`.",
+    params: VodArtParamsSchema,
+    query: VodArtQuerySchema,
+    response: null,
+    status: 200,
+    content: 'binary',
+    sideEffects: false,
+    errors: ['vod_not_found'],
+    legacyTwin: null,
+  }),
+  vodStream: defineRoute({
+    method: 'GET',
+    path: '/api/v1/vod/titles/:id/stream',
+    access: 'web',
+    credential: 'bearer',
+    module: 'playback',
+    summary: 'Abrir una película o un episodio y recibir su lista HLS VOD completa',
+    description:
+      'Sesión IPTV del relé VOD y del productor (docs/vod.md §9): la web recibe `hls` en `/api/v1/video/<sid>/index.m3u8` sin token y el iPhone `hls-fmp4` con `?t=`, los dos con `source: iptv`. ' +
+      'No espera al primer segmento: la lista sale del índice. Tope de 40 s en el servidor (§9.12). Dos cosas por IPTV a la vez siguen la regla de la casa: la nueva corta la anterior.',
+    params: VodTitleParamsSchema,
+    query: VodStreamQuerySchema,
+    response: VodGrantSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: true,
+    errors: VOD_STREAM_ERRORS,
+    legacyTwin: null,
+  }),
+  vodProgress: defineRoute({
+    method: 'POST',
+    path: '/api/v1/vod/titles/:id/progress',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary: 'Guardar el progreso de una película o un episodio, o marcarlo (204 sin cuerpo)',
+    description:
+      'Progreso por casa en `v2/vod.json` (docs/vod.md §10, D-VOD17). `tick` se vuelca como mucho una vez por minuto; lo demás, al momento. ' +
+      'El servidor valida la posición contra la duración (`posS ≤ durS + 5`, ±10 % de la del índice); si no cumple, `validation_error` y no se guarda.',
+    params: VodTitleParamsSchema,
+    body: VodProgressBodySchema,
+    response: null,
+    status: 204,
+    content: 'empty',
+    sideEffects: true,
+    errors: ['vod_not_found'],
     legacyTwin: null,
   }),
 

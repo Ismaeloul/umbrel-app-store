@@ -135,6 +135,9 @@ describe('api()', () => {
     expect(timeoutFor('channelStream')).toBe(60_000);
     expect(timeoutFor('ping')).toBe(12_000);
     expect(timeoutFor('libraryMutate')).toBe(12_000);
+    /* Películas y series (docs/vod.md §9.12): 50 s para abrir, bajo los 60 s de nginx. */
+    expect(timeoutFor('vodStream')).toBe(50_000);
+    expect(timeoutFor('vodTitle')).toBe(25_000);
   });
 });
 

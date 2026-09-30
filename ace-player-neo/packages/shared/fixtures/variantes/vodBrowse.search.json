@@ -1,0 +1,38 @@
+{
+  "active": true,
+  "state": "ready",
+  "items": [
+    {
+      "id": "4b5c6d7e8f9012345678abcdef0123457a8b9c0d",
+      "kind": "movie",
+      "title": "Dune",
+      "year": 2021,
+      "rating": 8,
+      "poster": "3fa9c210",
+      "tags": ["castellano", "4k"],
+      "adult": false,
+      "progress": 0.28
+    },
+    {
+      "id": "23456789abcdef0123456789abcdef0115263748",
+      "kind": "movie",
+      "title": "Dune: Parte dos",
+      "year": 2024,
+      "rating": 8.5,
+      "poster": "9c3e1f52",
+      "tags": ["latino"],
+      "adult": false,
+      "progress": null
+    }
+  ],
+  "total": 2,
+  "capped": false,
+  "otherKindTotal": 1,
+  "tags": [
+    { "tag": "castellano", "count": 1 },
+    { "tag": "latino", "count": 1 },
+    { "tag": "4k", "count": 1 }
+  ],
+  "nextCursor": null,
+  "stale": false
+}

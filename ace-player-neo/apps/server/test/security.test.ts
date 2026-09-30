@@ -43,6 +43,8 @@ const PARAM_VALUES: Record<string, string> = {
   /* Escudos y logos (módulo teams): ids de TheSportsDB. */
   teamId: '133738',
   competitionId: '4335',
+  /* Cartel de Películas y series (docs/vod.md §8). */
+  art: 'poster',
 };
 
 function concretePath(route: V1RouteDefinition): string {
@@ -180,7 +182,7 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
     expect(failures).toEqual([]);
   });
 
-  it('con token válido, las rutas solo web (healthLive, Ajustes → IPTV, el buscador IPTV y la pestaña IPTV) dan 403 origin_forbidden', async () => {
+  it('con token válido, las rutas solo web (healthLive, Ajustes → IPTV, el buscador IPTV, la pestaña IPTV y Películas y series) dan 403 origin_forbidden', async () => {
     const s = await setup();
     const failures: string[] = [];
     const webOnly = V1.filter(([, route]) => route.access === 'web');
@@ -194,6 +196,12 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
       'iptvDelete',
       'iptvChannels',
       'iptvBrowse',
+      'vodHome',
+      'vodBrowse',
+      'vodTitle',
+      'vodArt',
+      'vodStream',
+      'vodProgress',
     ]);
     for (const [id, route] of webOnly) {
       for (const url of nativeForms(concretePath(route))) {

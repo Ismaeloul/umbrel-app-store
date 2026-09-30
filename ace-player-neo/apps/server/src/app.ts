@@ -115,10 +115,15 @@ const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,128}$/;
 
 /**
  * Rutas cuya consulta es lo que Isma escribe en el buscador de su IPTV
- * (docs/iptv.md §14.2) o en la pestaña IPTV de Canales (§16.2): ni en un
- * 400 se escribe en el registro.
+ * (docs/iptv.md §14.2), en la pestaña IPTV de Canales (§16.2) o en el
+ * buscador de Películas y series (docs/vod.md §6.3): ni en un 400 se
+ * escribe en el registro.
  */
-const QUIET_QUERY_ROUTES: ReadonlySet<string> = new Set(['iptvChannels', 'iptvBrowse']);
+const QUIET_QUERY_ROUTES: ReadonlySet<string> = new Set([
+  'iptvChannels',
+  'iptvBrowse',
+  'vodBrowse',
+]);
 
 /** La URL para el registro: redactada y, en esas rutas, sin la consulta. */
 export function loggedUrl(url: string, routeId: string | undefined): string {
@@ -325,6 +330,11 @@ function registerV1(app: FastifyInstance, collector: RouteCollector, services: S
         { params, query, body } as Parameters<typeof handler>[0],
         requestContext(request, reply),
       );
+      /* 204 sin cuerpo (`vodProgress`, docs/vod.md §11.1): el manejador no devuelve nada. */
+      if (route.content === 'empty') {
+        if (!reply.sent) reply.code(204).send();
+        return reply;
+      }
       if (route.response === null) {
         if (!reply.sent) throw new AppError('internal_error', { detail: `${id} no respondió` });
         return reply;

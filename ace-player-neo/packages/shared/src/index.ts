@@ -13,6 +13,7 @@ export * from './constants/iptv.js';
 export * from './constants/limits.js';
 export * from './constants/playback.js';
 export * from './constants/timeouts.js';
+export * from './constants/vod.js';
 
 export * from './domain/channel-names.js';
 export * from './domain/channels.js';
@@ -37,3 +38,4 @@ export * from './api/v1/search.js';
 export * from './api/v1/settings.js';
 export * from './api/v1/sources.js';
 export * from './api/v1/system.js';
+export * from './api/v1/vod.js';

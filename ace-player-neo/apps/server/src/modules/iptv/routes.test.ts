@@ -98,3 +98,99 @@ describe('rutas de la IPTV (esqueleto del contrato)', () => {
     expect(res.body).not.toContain('Cl4ve-Secreta-E2E');
   });
 });
+
+/* Películas y series (docs/vod.md §11.1): esqueleto del contrato (VOD-1).
+   Las rutas existen y validan su entrada; el catálogo (VOD-2) y la
+   reproducción (VOD-5) sustituyen el 501 por las respuestas de verdad. */
+describe('rutas de Películas y series (esqueleto del contrato)', () => {
+  const VOD_ID = '4b5c6d7e8f9012345678abcdef0123457a8b9c0d';
+
+  it('las 6 responden 501 not_implemented desde la web, con la entrada ya validada', async () => {
+    const { app } = await createTestApp();
+    const cases = [
+      '/api/v1/vod',
+      '/api/v1/vod/browse?kind=series&q=office',
+      `/api/v1/vod/titles/${VOD_ID}`,
+      `/api/v1/vod/titles/${VOD_ID}/art/poster?v=3fa9c210`,
+      `/api/v1/vod/titles/${VOD_ID}/stream?client=web&viewer=viewer_tab01`,
+    ];
+    for (const url of cases) {
+      const res = await app.inject({ method: 'GET', url, headers: web() });
+      expect(res.statusCode, url).toBe(501);
+      expect(res.json().error.code, url).toBe('not_implemented');
+    }
+    const progress = await app.inject({
+      method: 'POST',
+      url: `/api/v1/vod/titles/${VOD_ID}/progress`,
+      headers: web({ 'content-type': 'application/json' }),
+      payload: { event: 'tick', posS: 60, durS: 5400 },
+    });
+    expect(progress.statusCode).toBe(501);
+  });
+
+  it('entrada mala → 400 antes del manejador; desde /native, 403 o 401', async () => {
+    const { app } = await createTestApp();
+    for (const url of [
+      '/api/v1/vod/browse?kind=episode',
+      '/api/v1/vod/browse?limit=101',
+      '/api/v1/vod/titles/123',
+      `/api/v1/vod/titles/${VOD_ID}/art/logo`,
+      `/api/v1/vod/titles/${VOD_ID}/stream?client=web`,
+    ]) {
+      const res = await app.inject({ method: 'GET', url, headers: web() });
+      expect(res.statusCode, url).toBe(400);
+      expect(res.json().error.code, url).toBe('validation_error');
+    }
+    const badEvent = await app.inject({
+      method: 'POST',
+      url: `/api/v1/vod/titles/${VOD_ID}/progress`,
+      headers: web({ 'content-type': 'application/json' }),
+      payload: { event: 'play' },
+    });
+    expect(badEvent.statusCode).toBe(400);
+    const nativeRes = await app.inject({
+      method: 'GET',
+      url: '/native/api/v1/vod',
+      headers: native(FAKE_TOKEN),
+    });
+    expect([401, 403]).toContain(nativeRes.statusCode);
+  });
+
+  it('la búsqueda de vodBrowse no va al registro', async () => {
+    const logs: string[] = [];
+    const logger = createLogger({
+      level: 'debug',
+      destination: new Writable({
+        write(chunk: Buffer, _encoding, done) {
+          logs.push(chunk.toString());
+          done();
+        },
+      }),
+    });
+    const { app } = await createTestApp({ logger });
+    await app.inject({ method: 'GET', url: '/api/v1/vod/browse?q=oppenheimer', headers: web() });
+    const logged = logs.join('');
+    expect(logged).toContain('/api/v1/vod/browse?[consulta]');
+    expect(logged).not.toContain('oppenheimer');
+  });
+
+  it('una ruta `empty` (vodProgress) responde 204 sin cuerpo cuando el manejador no devuelve nada', async () => {
+    let seen: unknown = null;
+    const { app } = await createTestApp({
+      moduleRoutes: false,
+      register: (collector) =>
+        collector.v1.handle('vodProgress', (input) => {
+          seen = input.body;
+        }),
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/vod/titles/${VOD_ID}/progress`,
+      headers: web({ 'content-type': 'application/json' }),
+      payload: { event: 'pause', posS: 120, durS: 5400 },
+    });
+    expect(res.statusCode).toBe(204);
+    expect(res.body).toBe('');
+    expect(seen).toEqual({ event: 'pause', posS: 120, durS: 5400 });
+  });
+});
