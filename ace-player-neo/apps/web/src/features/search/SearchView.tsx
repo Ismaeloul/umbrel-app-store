@@ -31,6 +31,10 @@
    limpio («La 1») aunque tengas en tu biblioteca una entrada de AceStream de
    ese canal («LA 1 4K --> NEW ERA», que se junta con él). Tocar la fila de
    un canal es como tocar un partido: IPTV primero y AceStream de respaldo.
+   Si el motor falla y arriba ya hay filas (biblioteca o IPTV), el fallo es
+   una línea con «Reintentar» dentro de «En el motor AceStream», sin aviso
+   (docs/diagnostico-iptv-0.8.2.md, E3): lo que sí cargó no queda junto a
+   una tarjeta roja.
    Sin IPTV activa, ni una llamada a `iptvChannels` y los textos de siempre. */
 
 import { IPTV_SEARCH, type Item, type SearchResult } from '@ace/shared';
@@ -81,6 +85,7 @@ import {
 import {
   canSearch,
   cleanQuery,
+  ENGINE_FAILED_NOTE,
   ENGINE_SEARCH_DELAY_MS,
   isHashOrLink,
   SEARCH_FAILED_TOAST,
@@ -177,11 +182,7 @@ export default function SearchView({ active }: ViewProps) {
   // Cada búsqueda nueva empieza con «En tu IPTV» plegada.
   useEffect(() => setIptvExpanded(false), [query]);
 
-  // El aviso de fallo, una vez por búsqueda fallida (no por repintado).
   const failedAt = search.isError && !isAbortError(search.error) ? search.errorUpdatedAt : 0;
-  useEffect(() => {
-    if (failedAt) notify(SEARCH_FAILED_TOAST, { tone: 'err' });
-  }, [failedAt]);
 
   const results: SearchResult[] = search.data?.results ?? [];
 
@@ -225,6 +226,21 @@ export default function SearchView({ active }: ViewProps) {
   const shownAbove = merged.local.length > 0 || merged.iptv.length > 0;
   // Con tu IPTV en error tampoco se sabe si hay resultados: una línea, solo del motor.
   const iptvUnknown = iptvFailed && !iptvData;
+  // Tu IPTV aún buscando: el aviso del motor espera a saber si hay filas arriba.
+  const iptvPending = withIptv && canSearch(query) && detected === null && !iptvData && !iptvFailed;
+  // El aviso de fallo, una vez por búsqueda fallida (no por repintado) y solo si no hay nada arriba: con
+  // filas de tu biblioteca o de tu IPTV basta la línea de la sección del motor (E3).
+  const toastedAt = useRef(0);
+  useEffect(() => {
+    if (!failedAt || toastedAt.current === failedAt) return;
+    if (shownAbove) {
+      toastedAt.current = failedAt;
+      return;
+    }
+    if (iptvPending) return;
+    toastedAt.current = failedAt;
+    notify(SEARCH_FAILED_TOAST, { tone: 'err' });
+  }, [failedAt, shownAbove, iptvPending]);
   const iptvRows = visibleIptv(merged.iptv, iptvExpanded, IPTV_SEARCH.shownInSearch);
   const iptvHidden = merged.iptv.length - iptvRows.length;
 
@@ -532,7 +548,20 @@ export default function SearchView({ active }: ViewProps) {
               {bothEmpty ? IPTV_TEXT.emptyText : 'Prueba con otro nombre o menos palabras.'}
             </EmptyState>
           ) : null}
-          {phase.kind === 'error' ? (
+          {phase.kind === 'error' && shownAbove ? (
+            <div className="search-engine__error" role="status">
+              <p>{ENGINE_FAILED_NOTE}</p>
+              <Button
+                variant="quiet"
+                size="sm"
+                icon="refresh"
+                onClick={() => void search.refetch()}
+              >
+                {IPTV_TEXT.retry}
+              </Button>
+            </div>
+          ) : null}
+          {phase.kind === 'error' && !shownAbove ? (
             <EmptyState
               tone="error"
               title="La búsqueda falló"

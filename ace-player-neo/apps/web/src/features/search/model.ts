@@ -25,6 +25,8 @@ export function isHashOrLink(value: string): string | null {
 }
 
 export const SEARCH_FAILED_TOAST = 'La búsqueda falló. ¿Está el motor AceStream en línea?';
+/** El motor falla pero arriba hay filas (biblioteca o IPTV): una línea en su sección, sin aviso. */
+export const ENGINE_FAILED_NOTE = 'No se pudo buscar en el motor AceStream.';
 
 /** Texto listo para mandar: espacios colapsados, recortado y a 80. */
 export function cleanQuery(value: string): string {
