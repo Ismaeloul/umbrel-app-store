@@ -24,6 +24,7 @@ import { notImplemented } from '../../core/errors.js';
 import type { DomainEvents, DomainEventType } from '../../core/bus.js';
 import { createEngineRuntime } from '../engine/service.js';
 import type { EngineService } from '../engine/types.js';
+import type { IptvService } from '../iptv/types.js';
 import { SerialLock } from '../remux/lock.js';
 import { createRemuxRuntime, type RemuxRuntime } from '../remux/service.js';
 import {
@@ -71,7 +72,7 @@ async function sharedEngine(
 }
 
 /** Servicio que lanza `not_implemented` en lo que no se le ha dado. */
-function partial<T extends object>(name: string, impl: Partial<T>): T {
+export function partial<T extends object>(name: string, impl: Partial<T>): T {
   return new Proxy(impl as T, {
     get(target, property) {
       if (property in target) return (target as Record<PropertyKey, unknown>)[property];
@@ -206,6 +207,8 @@ export interface PlaybackSetupOptions {
   readonly state?: StateService;
   /** Sin `start()` del SessionManager (se prueba a mano). */
   readonly noStart?: boolean;
+  /** La IPTV (un doble del servicio: `partial()` con lo que use el test). */
+  readonly iptv?: IptvService;
 }
 
 export async function setupPlayback(options: PlaybackSetupOptions = {}): Promise<PlaybackSetup> {
@@ -238,6 +241,7 @@ export async function setupPlayback(options: PlaybackSetupOptions = {}): Promise
     remux: remux.service,
     state,
     scanner,
+    ...(options.iptv ? { iptv: options.iptv } : {}),
   });
   if (!options.noStart) await runtime.service.start();
   cleanups.push(async () => {

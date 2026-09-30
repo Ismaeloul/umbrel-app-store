@@ -12,6 +12,7 @@
 
 import path from 'node:path';
 import { IPTV_FFMPEG_RW_TIMEOUT_US } from '@ace/shared';
+import { initFileName } from './files.js';
 
 export interface RemuxArgsInput {
   /** URL absoluta de la entrada: la `playbackUrl` en el motor principal o la del relé IPTV. */
@@ -26,6 +27,13 @@ export interface RemuxArgsInput {
   readonly isHls?: boolean;
   /** Sistema en el que corre ffmpeg (por defecto, el del proceso). */
   readonly platform?: NodeJS.Platform;
+  /**
+   * Generación del remux en la misma carpeta (1, o nada, el primer ffmpeg). A partir de la 2 (reinicio
+   * continuo de la IPTV, diagnostico-iptv-0.8.2 B2): `-start_number`, `+discont_start` e `init_<n>.mp4`.
+   */
+  readonly generation?: number;
+  /** Número del primer segmento de esta generación (con `generation` > 1). */
+  readonly startNumber?: number;
 }
 
 /** Marca que lleva cada ffmpeg del remux en su línea de órdenes. */
@@ -59,10 +67,12 @@ function iptvInputArgs(input: RemuxArgsInput): string[] {
  * hace en cada aviso de la carpeta); ffmpeg no lo reintenta y la lista se queda
  * con el primer segmento para siempre. En Linux (el Umbrel) no cambia nada.
  */
-export function hlsFlags(platform: NodeJS.Platform): string {
-  return platform === 'win32'
-    ? 'delete_segments+independent_segments+omit_endlist'
-    : 'delete_segments+independent_segments+temp_file+omit_endlist';
+export function hlsFlags(platform: NodeJS.Platform, discontStart = false): string {
+  const flags =
+    platform === 'win32'
+      ? 'delete_segments+independent_segments+omit_endlist'
+      : 'delete_segments+independent_segments+temp_file+omit_endlist';
+  return discontStart ? `${flags}+discont_start` : flags;
 }
 
 /** Ruta de index.m3u8 para ffmpeg, siempre con «/» (también en Windows). */
@@ -70,7 +80,18 @@ export function playlistPath(dir: string): string {
   return path.join(dir, 'index.m3u8').replaceAll(path.win32.sep, path.posix.sep);
 }
 
+/**
+ * Salida de una generación que sigue a otra en la misma carpeta (B2): la numeración continúa donde la dejó
+ * la anterior (la MEDIA-SEQUENCE no vuelve a 0 y hls.js no salta 30-58 s atrás), el primer segmento lleva
+ * `#EXT-X-DISCONTINUITY` y su init es otro fichero (`init_<n>.mp4`), así que la lista nueva solo nombra lo
+ * suyo bajo su propio `#EXT-X-MAP`. Sin `append_list`: daría un MAP único con el init equivocado.
+ */
+function continuation(input: RemuxArgsInput): boolean {
+  return (input.generation ?? 1) > 1;
+}
+
 export function buildRemuxArgs(input: RemuxArgsInput): string[] {
+  const next = continuation(input);
   const reconnect =
     input.origin === 'iptv'
       ? iptvInputArgs(input)
@@ -114,7 +135,11 @@ export function buildRemuxArgs(input: RemuxArgsInput): string[] {
     '0:v:0',
     '-map',
     '0:a:0?',
-    // server.js:306-307: vídeo copiado con -copyinkf, audio AAC 160k estéreo (B-218, B-219)
+    /* server.js:306-307: vídeo copiado con -copyinkf, audio AAC 160k estéreo (B-218, B-219). Sin el
+       `first_pts=0` de la 0.6.59: rellenaba de silencio desde 0 hasta «ahora» cada vez que el grafo de
+       audio se rehacía (p. ej. al pasar de 2.0 a 5.1), miles de tramas AAC en un solo segmento y un
+       pico de CPU (diagnostico-iptv-0.8.2 P8, B1). Tampoco `-reinit_filter 0`: con un cambio de
+       disposición de canales es fatal. */
     '-c:v',
     'copy',
     '-copyinkf',
@@ -125,7 +150,7 @@ export function buildRemuxArgs(input: RemuxArgsInput): string[] {
     '-ac',
     '2',
     '-af',
-    'aresample=async=1000:min_hard_comp=0.100:first_pts=0',
+    'aresample=async=1000:min_hard_comp=0.100',
     // Nuevo en la v2 (arquitectura §5.7)
     '-threads',
     '2',
@@ -141,11 +166,12 @@ export function buildRemuxArgs(input: RemuxArgsInput): string[] {
     '-hls_delete_threshold',
     '2',
     '-hls_flags',
-    hlsFlags(input.platform ?? process.platform),
+    hlsFlags(input.platform ?? process.platform, next),
     '-hls_segment_type',
     'fmp4',
+    ...(next ? ['-start_number', String(input.startNumber ?? 0)] : []),
     '-hls_fmp4_init_filename',
-    'init.mp4',
+    initFileName(input.generation ?? 1),
     /* Con barras «/»: ffmpeg deja init.mp4 junto a la lista solo si encuentra
        una «/» en su ruta; con las «\» de Windows lo escribía en el directorio
        de trabajo del backend (en Linux, el del Umbrel, no cambia nada). */
