@@ -1960,6 +1960,15 @@ quita de `WEB_FIXTURE_ROUTE_IDS` y actualiza `security.test.ts`. El mismo día, 
 5. ¿Cuánto le importan los subtítulos (VOSE)? Decide si entran en la 0.9.0. (D-VOD15)
 6. ¿Puede lanzar el Paso 0 en su Umbrel con la app de IPTV del PC cerrada?
 
+### 19.4 Respuestas de Isma (30-sep)
+
+1. VOD: sí, su IPTV es **Xtream** (usuario, contraseña y servidor). D-VOD1 se mantiene.
+2. Nombre en la barra: **«Pelis y series»** (D-VOD21).
+3. **Que convivan si se puede** (cambia D-VOD11): una película por IPTV y un partido por AceStream pueden sonar a la
+   vez, porque no comparten conexión. Dos cosas por IPTV a la vez siguen sin poder ser con `max_connections = 1`:
+   ahí manda la regla de la casa (la nueva corta la anterior, con aviso).
+4. Subtítulos: **pueden esperar** (D-VOD15: fuera de la primera versión).
+
 ---
 
 ## 20. Anexo: de dónde sale este diseño
