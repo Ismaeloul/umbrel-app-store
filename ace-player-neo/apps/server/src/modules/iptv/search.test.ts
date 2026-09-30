@@ -10,7 +10,16 @@ import { IPTV_SEARCH } from '@ace/shared';
 import { scoreResolutionCandidate } from '../football/resolution.js';
 import { Catalog, type RawChannel } from './catalog.js';
 import type { ChannelScorer } from './match.js';
-import { cleanChannelsQuery, libraryCandidates, libraryMatches, searchCatalog } from './search.js';
+import {
+  buildSearchIndexSteps,
+  cleanChannelsQuery,
+  libraryCandidates,
+  libraryMatches,
+  searchCatalog,
+  searchIndex,
+  searchIndexStepper,
+  searchQueryAliases,
+} from './search.js';
 
 const scorer: ChannelScorer = (channels, item) => scoreResolutionCandidate(channels, item, 'iptv');
 
@@ -166,6 +175,101 @@ describe('searchCatalog (§14.3)', () => {
   });
 });
 
+describe('alias, relleno escrito y consulta pegada (diagnóstico 0.8.2, E1)', () => {
+  it('«laliga tv» y «laliga tv 2»: la familia que se llama «TV» antes que DAZN y que Rakuten', () => {
+    const c = catalog([
+      'ES: DAZN LaLiga FHD',
+      'ES: DAZN LaLiga 2 FHD',
+      raw('LA LIGA 2', 'EU | ES | RAKUTEN TV'),
+      'ES: M+ LaLiga TV FHD',
+      'ES: M+ LaLiga TV 2 FHD',
+    ]);
+    expect(titles(c, 'laliga tv').slice(0, 2)).toEqual(['M+ LaLiga TV', 'M+ LaLiga TV 2']);
+    expect(titles(c, 'laliga tv 2')).toEqual(['M+ LaLiga TV 2', 'DAZN LaLiga 2', 'LA LIGA 2']);
+    /* Sin «tv» escrito, el orden de siempre. */
+    expect(titles(c, 'laliga')[0]).toBe('DAZN LaLiga');
+  });
+
+  it('los alias salen de la clave limpia, y solo a secas para «tve», «rtve» y «a3»', () => {
+    expect(searchQueryAliases('champions').map((alias) => alias.key)).toEqual([
+      'liga de campeones',
+    ]);
+    expect(searchQueryAliases('la champions').map((alias) => alias.key)).toEqual([
+      'liga de campeones',
+    ]);
+    expect(searchQueryAliases('movistar champions league').map((alias) => alias.key)).toEqual([
+      'movistar liga de campeones',
+    ]);
+    expect(searchQueryAliases('ucl').map((alias) => alias.key)).toEqual(['liga de campeones']);
+    expect(searchQueryAliases('champions tour')).toEqual([]);
+    expect(searchQueryAliases('champions hockey league')).toEqual([]);
+    expect(searchQueryAliases('champions cup')).toEqual([]);
+    expect(searchQueryAliases('a3').map((alias) => alias.key)).toEqual(['antena 3']);
+    expect(searchQueryAliases('a3 series')).toEqual([]);
+    expect(searchQueryAliases('rtve').map((alias) => alias.key)).toContain('teledeporte');
+    expect(searchQueryAliases('tve internacional')).toEqual([]);
+  });
+
+  it('la consulta pegada: «tve» no es «REAL MADRID TV EN»; «antena3» y «lasexta» sí', () => {
+    const c = catalog(['ES: Real Madrid TV EN', 'ES: Antena 3 HD', 'ES: La Sexta HD']);
+    expect(titles(c, 'tve')).toEqual([]);
+    expect(titles(c, 'antena3')).toEqual(['Antena 3']);
+    expect(titles(c, 'lasexta')).toEqual(['La Sexta']);
+  });
+
+  it('el precio de la guarda: pegada que asoma una letra de la palabra siguiente no casa hasta escribir más', () => {
+    /* Buscado así (plan E1): escribiendo «realmadridtv» letra a letra, «realmadridt» se queda vacío un momento; lo
+       mismo «skysportsf» antes de «skysportsf1». No es una regresión: es lo que quita «tve» → «REAL MADRID TV EN». */
+    const c = catalog(['ES: Real Madrid TV HD', 'UK: Sky Sports F1 HD']);
+    expect(titles(c, 'realmadridt')).toEqual([]);
+    expect(titles(c, 'realmadridtv')).toEqual(['Real Madrid TV']);
+    expect(titles(c, 'skysportsf')).toEqual([]);
+    expect(titles(c, 'skysportsf1')).toEqual(['Sky Sports F1']);
+  });
+});
+
+describe('índice a trozos (diagnóstico 0.8.2, E4)', () => {
+  const many = (): Catalog =>
+    catalog(
+      Array.from({ length: 120 }, (_, i) =>
+        raw(`ES: Canal ${i % 7 === 0 ? 'Deportes' : 'Cine'} ${i} HD`, `ES | TEMA ${i % 5}`),
+      ),
+    );
+
+  it('montado a trozos es igual que de una vez', () => {
+    const c = many();
+    const steps = buildSearchIndexSteps(c, 7);
+    let next = steps.next();
+    let yields = 0;
+    while (!next.done) {
+      yields += 1;
+      next = steps.next();
+    }
+    expect(yields).toBeGreaterThan(10);
+    const whole = buildSearchIndexSteps(c, Number.POSITIVE_INFINITY).next();
+    expect(whole.done).toBe(true);
+    expect(next.value).toEqual(whole.value);
+  });
+
+  it('el precalentado deja el índice listo; una búsqueda a medias lo termina', () => {
+    const c = many();
+    const step = searchIndexStepper(c, 10);
+    expect(step()).toBe(false);
+    expect(step()).toBe(false);
+    /* Una búsqueda llega a medias: termina el mismo montaje y el precalentado ya no hace nada. */
+    const found = searchCatalog(c, 'deportes');
+    expect(found.groups.length).toBeGreaterThan(0);
+    expect(step()).toBe(true);
+    const warm = many();
+    const stepWarm = searchIndexStepper(warm, 50);
+    let rounds = 0;
+    while (!stepWarm()) rounds += 1;
+    expect(rounds).toBeGreaterThan(1);
+    expect(searchIndex(warm)).toBe(searchIndex(warm));
+    expect(searchCatalog(warm, 'cine 1', 1).groups[0]?.best.display).toBe('Canal Cine 1');
+  });
+});
+
 describe('library de cada fila (§14.3, regla 5)', () => {
   const A = 'a'.repeat(40);
   const B = 'b'.repeat(40);
@@ -215,6 +319,15 @@ describe('library de cada fila (§14.3, regla 5)', () => {
     expect(
       libraryCandidates([{ id: A, title: 'Otro', category: 'Teledeportes' }], 'tele'),
     ).toHaveLength(1);
+  });
+
+  it('también por la clave del nombre, como el filtro de la web: «m+ laliga» encuentra «M. LALIGA 1»', () => {
+    const items = [
+      { id: A, title: 'M. LALIGA 1', category: '' },
+      { id: B, title: 'DAZN LaLiga', category: '' },
+    ];
+    expect(libraryCandidates(items, 'm+ laliga').map((item) => item.id)).toEqual([A]);
+    expect(libraryCandidates(items, 'la liga').map((item) => item.id)).toEqual([A, B]);
   });
 
   it('la categoría «IPTV» es una marca: casa con «iptv», no con «tv»', () => {

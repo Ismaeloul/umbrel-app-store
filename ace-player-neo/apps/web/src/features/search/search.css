@@ -180,7 +180,9 @@
 .search-iptv__note {
   padding-inline: var(--s-1);
 }
-.search-iptv__error {
+/* El fallo de tu IPTV, y el del motor cuando arriba ya hay filas (una línea, no la tarjeta roja). */
+.search-iptv__error,
+.search-engine__error {
   display: flex;
   flex-wrap: wrap;
   align-items: center;

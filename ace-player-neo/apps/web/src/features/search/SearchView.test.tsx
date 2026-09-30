@@ -45,6 +45,20 @@ function setup(
   return renderWithApp(<SearchView route={{ vista: 'buscar' }} active />, { search });
 }
 
+/** El motor caído (503 con el formato de v1). */
+function engineDown(): Response {
+  return json(
+    {
+      error: {
+        code: 'engine_unavailable',
+        message: 'El motor AceStream no responde.',
+        requestId: 'r',
+      },
+    },
+    503,
+  );
+}
+
 const searchCalls = () => net.calls.filter((c) => c.url.startsWith('/api/v1/search'));
 const field = () => screen.getByRole('searchbox', { name: 'Buscar en el motor AceStream' });
 
@@ -165,26 +179,26 @@ describe('reglas del buscador (§15)', () => {
     expect(screen.queryByRole('link', { name: 'Eurosport viejo' })).toBeNull();
   });
 
-  it('si el motor falla: aviso de la 0.6.59 y «Reintentar»', async () => {
-    setup('?vista=buscar', () =>
-      json(
-        {
-          error: {
-            code: 'engine_unavailable',
-            message: 'El motor AceStream no responde.',
-            requestId: 'r',
-          },
-        },
-        503,
-      ),
-    );
-    fireEvent.change(field(), { target: { value: 'dazn' } });
+  it('si el motor falla y no hay nada más: aviso de la 0.6.59 y «Reintentar»', async () => {
+    setup('?vista=buscar', () => engineDown());
+    fireEvent.change(field(), { target: { value: 'zzz' } });
     fireEvent.keyDown(field(), { key: 'Enter' });
     expect(await screen.findByRole('heading', { name: 'La búsqueda falló' })).toBeInTheDocument();
     expect(toastStore.get().map((t) => t.text)).toContain(
       'La búsqueda falló. ¿Está el motor AceStream en línea?',
     );
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+  });
+
+  it('si el motor falla pero tu biblioteca tiene el canal: una línea en su sección, sin aviso (E3)', async () => {
+    setup('?vista=buscar', () => engineDown());
+    fireEvent.change(field(), { target: { value: 'dazn' } });
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    expect(await screen.findByText('No se pudo buscar en el motor AceStream.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'DAZN 1' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'La búsqueda falló' })).toBeNull();
+    expect(toastStore.get()).toHaveLength(0);
   });
 
   it('llega con `&q=` desde la biblioteca y busca sin esperar; lo tuyo sale arriba', async () => {
@@ -355,6 +369,9 @@ describe('buscador con IPTV (docs/iptv.md §14.5)', () => {
     library?: ReturnType<typeof makeLibrary>;
     channels?: (q: string) => ReturnType<typeof channel>[];
     engine?: (q: string) => ReturnType<typeof result>[];
+    engineDown?: boolean;
+    /** La respuesta de tu IPTV espera a esta promesa (para que el motor conteste antes). */
+    iptvGate?: Promise<void>;
     iptvStatus?: number;
     total?: number;
     capped?: boolean;
@@ -363,10 +380,12 @@ describe('buscador con IPTV (docs/iptv.md §14.5)', () => {
       'GET /api/v1/library': options.library ?? makeLibrary(),
       'GET /api/v1/search': (call) => {
         const q = new URL(call.url, 'http://x').searchParams.get('q') ?? '';
+        if (options.engineDown) return engineDown();
         return json({ query: q, results: options.engine?.(q) ?? [] });
       },
-      'GET /api/v1/iptv/channels': (call) => {
+      'GET /api/v1/iptv/channels': async (call) => {
         const q = new URL(call.url, 'http://x').searchParams.get('q') ?? '';
+        await options.iptvGate;
         if (options.iptvStatus)
           return json(
             { error: { code: 'internal_error', message: 'x', requestId: 'r1' } },
@@ -511,6 +530,45 @@ describe('buscador con IPTV (docs/iptv.md §14.5)', () => {
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
     expect(toastStore.get().map((t) => t.text)).not.toContain('No se pudo buscar en tu IPTV.');
     expect(await screen.findByRole('link', { name: 'Teledeporte' })).toBeInTheDocument();
+  });
+
+  it('si el motor falla y tu IPTV sí tiene el canal: una línea con «Reintentar» en la sección del motor, sin aviso (E3)', async () => {
+    setupIptv({ engineDown: true, channels: () => [channel(IPTV_TELE, 'Telecinco')] });
+    type('zzz tele');
+    const section = await screen.findByRole('region', { name: /^En tu IPTV/ });
+    expect(within(section).getByRole('link', { name: 'Telecinco' })).toBeInTheDocument();
+    expect(await screen.findByText('No se pudo buscar en el motor AceStream.')).toBeInTheDocument();
+    const engine = screen.getByRole('region', { name: 'En el motor AceStream' });
+    fireEvent.click(within(engine).getByRole('button', { name: 'Reintentar' }));
+    await waitFor(() => expect(searchCalls()).toHaveLength(2));
+    expect(screen.queryByRole('heading', { name: 'La búsqueda falló' })).toBeNull();
+    expect(toastStore.get()).toHaveLength(0);
+  });
+
+  it('si el motor falla antes de que conteste tu IPTV: una línea mientras tanto, nunca la tarjeta (E3)', async () => {
+    let answer = (): void => undefined;
+    const iptvGate = new Promise<void>((resolve) => (answer = resolve));
+    setupIptv({ engineDown: true, iptvGate, channels: () => [channel(IPTV_TELE, 'Telecinco')] });
+    type('zzz tele');
+    expect(await screen.findByText('No se pudo buscar en el motor AceStream.')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'La búsqueda falló' })).toBeNull();
+    act(() => answer());
+    const section = await screen.findByRole('region', { name: /^En tu IPTV/ });
+    expect(within(section).getByRole('link', { name: 'Telecinco' })).toBeInTheDocument();
+    expect(screen.getByText('No se pudo buscar en el motor AceStream.')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'La búsqueda falló' })).toBeNull();
+    expect(toastStore.get()).toHaveLength(0);
+  });
+
+  it('si el motor falla y tu IPTV no tiene nada: la tarjeta y el aviso de siempre', async () => {
+    setupIptv({ engineDown: true });
+    type('zzz');
+    expect(await screen.findByRole('heading', { name: 'La búsqueda falló' })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(toastStore.get().map((t) => t.text)).toContain(
+        'La búsqueda falló. ¿Está el motor AceStream en línea?',
+      ),
+    );
   });
 
   it('vacío en los dos: «No está en tu IPTV ni en el motor AceStream…»', async () => {
