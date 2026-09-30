@@ -468,6 +468,9 @@ describe('alias y orden del buscador (diagnóstico 0.8.2, E1)', () => {
     ['ES - RTVE PLAY', 'EU | ES | GENERAL'],
     ['UK - CHAMPIONS TOUR', 'EU | UK | SPORT'],
     ['ES - UEFA CHAMPIONS LEAGUE FHD', DEP],
+    /* Literales que empiezan por la palabra: igual van detrás del alias (la Liga de Campeones de verdad). */
+    ['ES - CHAMPIONS LEAGUE 1', DEP],
+    ['ES - CHAMPIONS TV', DEP],
   ]);
   const top = (q: string, n = 10): string[] =>
     searchCatalog(c, q)
@@ -483,8 +486,14 @@ describe('alias y orden del buscador (diagnóstico 0.8.2, E1)', () => {
 
   it('lo que casa al pie de la letra sigue saliendo; «champions tour» no es la Liga de Campeones', () => {
     expect(top('champions')).toEqual(
-      expect.arrayContaining(['UEFA CHAMPIONS LEAGUE', 'CHAMPIONS TOUR']),
+      expect.arrayContaining([
+        'UEFA CHAMPIONS LEAGUE',
+        'CHAMPIONS TOUR',
+        'CHAMPIONS LEAGUE 1',
+        'CHAMPIONS TV',
+      ]),
     );
+    expect(top('champions league', 3)[2]).toBe('CHAMPIONS LEAGUE 1');
     expect(top('champions league')).toContain('UEFA CHAMPIONS LEAGUE');
     expect(top('champions tour')).toEqual(['CHAMPIONS TOUR']);
   });

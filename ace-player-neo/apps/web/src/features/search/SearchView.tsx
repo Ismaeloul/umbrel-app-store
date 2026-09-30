@@ -548,7 +548,8 @@ export default function SearchView({ active }: ViewProps) {
               {bothEmpty ? IPTV_TEXT.emptyText : 'Prueba con otro nombre o menos palabras.'}
             </EmptyState>
           ) : null}
-          {phase.kind === 'error' && shownAbove ? (
+          {/* Con tu IPTV aún buscando, la línea: la tarjeta roja no aparece para quitarse al llegar sus filas. */}
+          {phase.kind === 'error' && (shownAbove || iptvPending) ? (
             <div className="search-engine__error" role="status">
               <p>{ENGINE_FAILED_NOTE}</p>
               <Button
@@ -561,7 +562,7 @@ export default function SearchView({ active }: ViewProps) {
               </Button>
             </div>
           ) : null}
-          {phase.kind === 'error' && !shownAbove ? (
+          {phase.kind === 'error' && !shownAbove && !iptvPending ? (
             <EmptyState
               tone="error"
               title="La búsqueda falló"

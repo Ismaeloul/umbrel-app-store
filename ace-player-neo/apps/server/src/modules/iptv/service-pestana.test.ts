@@ -3,7 +3,12 @@
    con su catálogo grande (categorías y nombres como los de la lista real). */
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { IPTV_QUICK_TEST, IptvBrowseResponseSchema, type IptvBrowseQuery } from '@ace/shared';
+import {
+  IPTV_BROWSE,
+  IPTV_QUICK_TEST,
+  IptvBrowseResponseSchema,
+  type IptvBrowseQuery,
+} from '@ace/shared';
 import { AppError } from '../../core/errors.js';
 import {
   FAKE_IPTV_PASSWORD,
@@ -12,6 +17,8 @@ import {
 } from '../../../test/fake-iptv/provider.js';
 import { FAKE_IPTV_HOST } from '../../../test/fake-iptv/net.js';
 import { catalogStamp, encodeCursor } from './browse.js';
+import type { Catalog } from './catalog.js';
+import { searchIndexReady } from './search.js';
 import { createIptvTestRig, type IptvTestRig } from './test-support.js';
 
 const rigs: IptvTestRig[] = [];
@@ -356,5 +363,49 @@ describe('el 502 del primer «Guardar» (§16.8)', () => {
     expect((await codeOf(promise)).code).toBe('iptv_timeout');
     expect((await r.service.view()).provider).toBe(null);
     expect(pings(r)).toHaveLength(1);
+  });
+});
+
+describe('el índice del buscador se precalienta tras la pestaña (diagnóstico 0.8.2, E4)', () => {
+  /* Espera de verdad (el montaje cede el hilo con `setImmediate`) hasta que se cumple o se agota. */
+  async function until(done: () => boolean, ms = 2_000): Promise<boolean> {
+    const end = Date.now() + ms;
+    while (!done() && Date.now() < end)
+      await new Promise<void>((resolve) => setTimeout(resolve, 5));
+    return done();
+  }
+
+  it('tras la sincronización y la espera de la pestaña, está montado sin buscar nada', async () => {
+    const r = await rig({ fake: { grande: 200 } });
+    await save(r);
+    await r.service.idle();
+    const catalog = r.service.catalogForTests();
+    expect(catalog).not.toBeNull();
+    expect(searchIndexReady(catalog as Catalog)).toBe(false);
+    r.core.clock.advance(IPTV_BROWSE.buildDelayMs);
+    expect(await until(() => searchIndexReady(catalog as Catalog))).toBe(true);
+  });
+
+  it('una búsqueda antes de tiempo lo monta en ese momento; el precalentado no vuelve a montarlo', async () => {
+    const r = await rig({ fake: { grande: 200 } });
+    await save(r);
+    await r.service.idle();
+    const catalog = r.service.catalogForTests() as Catalog;
+    r.core.clock.advance(IPTV_BROWSE.buildDelayMs);
+    const found = r.service.searchChannels('dazn 1');
+    expect(found.channels.length).toBeGreaterThan(0);
+    expect(searchIndexReady(catalog)).toBe(true);
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    expect(r.service.searchChannels('dazn 1')).toEqual(found);
+  });
+
+  it('con el servicio parado, el precalentado se deja', async () => {
+    const r = await rig({ fake: { grande: 200 } });
+    await save(r);
+    await r.service.idle();
+    const catalog = r.service.catalogForTests() as Catalog;
+    r.core.clock.advance(IPTV_BROWSE.buildDelayMs);
+    await r.service.stop();
+    expect(await until(() => searchIndexReady(catalog), 200)).toBe(false);
   });
 });

@@ -1548,14 +1548,16 @@ export class IptvServiceImpl implements IptvService {
    * trozos de `IPTV_BROWSE.buildChunk` claves, cediendo el hilo con
    * `setImmediate`: la primera búsqueda tras una sincronización ya no para el
    * servidor montándolo de golpe. Si llega antes, termina el mismo montaje; si
-   * cambia el catálogo, se deja (el montaje a medias se va con él).
+   * cambia el catálogo o se para el servicio, se deja (el montaje a medias se
+   * va con el catálogo).
    */
   private async prepareSearch(catalog: Catalog): Promise<void> {
     const startedAt = performance.now();
     const step = searchIndexStepper(catalog, IPTV_BROWSE.buildChunk);
-    while (!step()) {
+    for (;;) {
+      if (this.stopped || this.catalog !== catalog) return;
+      if (step()) break;
       await new Promise<void>((resolve) => setImmediate(resolve));
-      if (this.catalog !== catalog) return;
     }
     this.logger.debug(
       { ms: Math.round(performance.now() - startedAt) },

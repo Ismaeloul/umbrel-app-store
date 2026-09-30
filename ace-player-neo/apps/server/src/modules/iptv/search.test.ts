@@ -216,6 +216,16 @@ describe('alias, relleno escrito y consulta pegada (diagnóstico 0.8.2, E1)', ()
     expect(titles(c, 'antena3')).toEqual(['Antena 3']);
     expect(titles(c, 'lasexta')).toEqual(['La Sexta']);
   });
+
+  it('el precio de la guarda: pegada que asoma una letra de la palabra siguiente no casa hasta escribir más', () => {
+    /* Buscado así (plan E1): escribiendo «realmadridtv» letra a letra, «realmadridt» se queda vacío un momento; lo
+       mismo «skysportsf» antes de «skysportsf1». No es una regresión: es lo que quita «tve» → «REAL MADRID TV EN». */
+    const c = catalog(['ES: Real Madrid TV HD', 'UK: Sky Sports F1 HD']);
+    expect(titles(c, 'realmadridt')).toEqual([]);
+    expect(titles(c, 'realmadridtv')).toEqual(['Real Madrid TV']);
+    expect(titles(c, 'skysportsf')).toEqual([]);
+    expect(titles(c, 'skysportsf1')).toEqual(['Sky Sports F1']);
+  });
 });
 
 describe('índice a trozos (diagnóstico 0.8.2, E4)', () => {

@@ -310,11 +310,21 @@ export function searchIndex(catalog: Catalog): SearchIndex {
   const known = INDEXES.get(catalog);
   if (known) return known;
   const steps = BUILDING.get(catalog) ?? buildSearchIndexSteps(catalog, Number.POSITIVE_INFINITY);
-  let next = steps.next();
-  while (!next.done) next = steps.next();
-  BUILDING.delete(catalog);
+  let next: IteratorResult<void, SearchIndex>;
+  try {
+    do next = steps.next();
+    while (!next.done);
+  } finally {
+    /* Si el montaje falla, el generador queda cerrado: la próxima vez se empieza de cero. */
+    BUILDING.delete(catalog);
+  }
   INDEXES.set(catalog, next.value);
   return next.value;
+}
+
+/** ¿Está ya montado el índice del buscador de este catálogo? (para las pruebas del precalentado). */
+export function searchIndexReady(catalog: Catalog): boolean {
+  return INDEXES.has(catalog);
 }
 
 /**
@@ -331,7 +341,13 @@ export function searchIndexStepper(catalog: Catalog, chunk: number): () => boole
       steps = buildSearchIndexSteps(catalog, chunk);
       BUILDING.set(catalog, steps);
     }
-    const next = steps.next();
+    let next: IteratorResult<void, SearchIndex>;
+    try {
+      next = steps.next();
+    } catch (error) {
+      BUILDING.delete(catalog);
+      throw error;
+    }
     if (!next.done) return false;
     BUILDING.delete(catalog);
     INDEXES.set(catalog, next.value);
@@ -565,7 +581,12 @@ function compactJoinOk(words: readonly string[], from: number, compact: string):
   return rest >= Math.min(2, last.length) || NUMBER_RE.test(last.slice(0, rest));
 }
 
-/** Un alias de la consulta: otra clave que buscar y el peor nivel que se le acepta. */
+/**
+ * Un alias de la consulta: otra clave que buscar y el peor nivel que se le
+ * acepta. Lo que casa con él como igual o misma familia va delante de lo que
+ * casa al pie de la letra («champions» → «M+ Liga de Campeones» antes que
+ * «CHAMPIONS TV»).
+ */
 export interface QueryAlias {
   readonly key: string;
   readonly maxTier: number;
@@ -664,8 +685,8 @@ export interface CatalogSearchResult {
  * 3. Por la CATEGORÍA: «tdt» trae los canales de «EU | ES | TDT ESPAÑA
  *    VIP», con sinónimos («futbol» → «TV FOOTBALL»), detrás de los que casan
  *    por el nombre.
- * Orden: nivel (igual, familia, empieza, mismo orden, cualquier orden, sin
- * marca, categoría); dentro, España o sin país, luego América en español y
+ * Orden: lo que casa con un alias como igual o misma familia; nivel (igual,
+ * familia, empieza, mismo orden, cualquier orden, sin marca, categoría); dentro, España o sin país, luego América en español y
  * luego el resto; el canal principal antes que bar, PPV, replay, reservas
  * ᴿᴬᵂ, plataformas y eventos; la familia con las palabras de relleno que se
  * escribieron (con una escrita, «igual» y «familia» son un nivel); la clave
@@ -688,12 +709,16 @@ export function searchCatalog(
     const current = tiers.get(position);
     if (current === undefined || tier < current) tiers.set(position, tier);
   };
+  /* Lo que casa con un alias como igual o misma familia: delante (el alias es lo que se quería decir). */
+  const aliasLead = new Set<number>();
 
   /* 1 y 2. Por el nombre (y sin la marca), con la consulta y con cada alias. */
   matchByName(index, q, put);
   for (const alias of searchQueryAliases(key)) {
     matchByName(index, queryWords(alias.key), (position, tier) => {
-      if (tier <= alias.maxTier) put(position, tier);
+      if (tier > alias.maxTier) return;
+      put(position, tier);
+      if (tier <= 1) aliasLead.add(position);
     });
   }
   /* 3. Por la categoría. */
@@ -735,11 +760,13 @@ export function searchCatalog(
         fact,
         tier: tierOf(tier),
         miss: literalMiss(fact),
+        lead: aliasLead.has(position) ? 0 : 1,
       };
     })
     .sort(
       (a, b) =>
         regionOf(a) - regionOf(b) ||
+        a.lead - b.lead ||
         a.tier - b.tier ||
         a.fact.penalty - b.fact.penalty ||
         a.miss - b.miss ||
@@ -822,20 +849,28 @@ const LIST_SUFFIX_RE = /\s*(?:--?>|={1,2}>|[→⇒➜➝⟶⟹]).*$/u;
  * se mira sin lo que va tras «-->».
  */
 export function searchRelevance(query: string, title: string): number {
+  return searchRelevanceFor(query)(title);
+}
+
+/** `searchRelevance` con la consulta preparada una vez (para ordenar muchos títulos). */
+export function searchRelevanceFor(query: string): (title: string) => number {
   const qKey = searchQueryKey(query);
-  const tKey = searchQueryKey(String(title ?? '').replace(LIST_SUFFIX_RE, ''));
-  if (!qKey || !tKey) return 4;
+  if (!qKey) return () => 4;
   const q = queryWords(qKey);
-  const tWords = tKey.split(' ').filter(Boolean);
-  const tSig = significant(tWords);
-  const sig = tSig.join(' ');
-  if (sig === q.sig) return 0;
-  const all = q.required.every((word) => tWords.some((token) => wordMatch(token, word) > 0));
-  if (!all) return 4;
-  const family = familyOf(tSig);
-  const core = coreOf(family).join(' ');
-  if (family.join(' ') === q.sig || core === q.sig || core === q.core) return 1;
-  return sig === q.sig || sig.startsWith(`${q.sig} `) ? 2 : 3;
+  return (title) => {
+    const tKey = searchQueryKey(String(title ?? '').replace(LIST_SUFFIX_RE, ''));
+    if (!tKey) return 4;
+    const tWords = tKey.split(' ').filter(Boolean);
+    const tSig = significant(tWords);
+    const sig = tSig.join(' ');
+    if (sig === q.sig) return 0;
+    const all = q.required.every((word) => tWords.some((token) => wordMatch(token, word) > 0));
+    if (!all) return 4;
+    const family = familyOf(tSig);
+    const core = coreOf(family).join(' ');
+    if (family.join(' ') === q.sig || core === q.sig || core === q.core) return 1;
+    return sig.startsWith(`${q.sig} `) ? 2 : 3;
+  };
 }
 
 /** Lo que se mira de la biblioteca para `library` (§14.3, regla 5). */

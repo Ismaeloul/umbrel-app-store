@@ -15,7 +15,7 @@
 import type { SearchResult } from '@ace/shared';
 import type { LegacyRouter, V1Router } from '../../core/router.js';
 import type { Services } from '../../services.js';
-import { searchRelevance } from '../iptv/index.js';
+import { searchRelevanceFor } from '../iptv/index.js';
 
 /** Operaciones antiguas de este módulo (`MÉTODO ruta` como en LEGACY_OPERATIONS). */
 export const LEGACY_ROUTES: readonly string[] = ['GET /api/search'];
@@ -34,11 +34,12 @@ export const V1_ROUTE_IDS: readonly string[] = ['search'];
  * contraste con la 0.6.59 cuentan con su orden).
  */
 export function rankForQuery(results: readonly SearchResult[], query: string): SearchResult[] {
+  const relevance = searchRelevanceFor(query);
   return results
     .map((result, position) => ({
       result,
       position,
-      tier: searchRelevance(query, result.title),
+      tier: relevance(result.title),
       dead: (result.availability ?? 0) > 0 ? 0 : 1,
     }))
     .sort((a, b) => a.tier - b.tier || a.dead - b.dead || a.position - b.position)
