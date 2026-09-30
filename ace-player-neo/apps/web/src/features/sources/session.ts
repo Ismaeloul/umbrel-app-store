@@ -161,6 +161,8 @@ export const REPORT_MAX_WAIT_MS = 31 * 60_000;
 /** Plazos de la resolución (index.html:4080): 20 s al entrar, 30 s al rebuscar. */
 export const RESOLVE_TIMEOUT_MS = 20_000;
 export const RESEARCH_TIMEOUT_MS = 30_000;
+/** La entrada al partido no pudo buscar (sin red, plazo o fallo del servidor): no es «no encontrado». */
+export const RESOLVE_ERROR_TEXT = 'No hemos podido buscar las fuentes del partido';
 
 export interface MatchInfo {
   id: string;
@@ -175,7 +177,9 @@ export interface MatchInfo {
   colors?: readonly [string, string];
 }
 
-export type SessionPhase = 'idle' | 'resolving' | 'ready' | 'choices' | 'not_found' | 'no_channels';
+/** `error`: la resolución no llegó (sin red, plazo o fallo del servidor); se ofrece «Reintentar». */
+export type SessionPhase =
+  'idle' | 'resolving' | 'ready' | 'choices' | 'not_found' | 'no_channels' | 'error';
 
 export interface SessionScan extends ScanView {
   id: string;
@@ -545,15 +549,26 @@ async function resolveMatch({
       noChannels();
       return;
     }
-    // Error de red: el mismo modal, como «no encontrado» y sin buscador (index.html:4154-4155).
     setWaitingMessage(null);
+    // Sin red, plazo o fallo del servidor (M3): un error con «Reintentar», no un «no encontrado» inventado
+    // sin fuentes (antes, index.html:4154-4155).
+    if (!isApiError(error) || error.retryable) {
+      patch({ phase: 'error', resolverOpen: false, resolution: null, preheat: null });
+      toast(RESOLVE_ERROR_TEXT, {
+        tone: 'err',
+        icon: 'aviso',
+        action: { label: 'Reintentar', onAction: retryResolve },
+      });
+      return;
+    }
+    // Un 4xx: el mismo modal, como «no encontrado» y sin buscador; con la IPTV activa, también se miró.
     patch({
       phase: 'not_found',
       resolverOpen: true,
       resolution: {
         status: 'not_found',
         channels: match.channels,
-        checked: ['saved', 'm3u', 'library', 'acestream'],
+        checked: [...(iptvActive() ? ['iptv'] : []), 'saved', 'm3u', 'library', 'acestream'],
         candidates: [],
         engineAvailable: false,
         ai: { enabled: false, used: false, model: null, catalogSize: 0, error: null },
@@ -566,6 +581,13 @@ async function resolveMatch({
   } finally {
     if (resolveAbort === controller) resolveAbort = null;
   }
+}
+
+/** «Reintentar» tras un error de la entrada al partido. */
+export function retryResolve(): void {
+  const state = sessionStore.get();
+  if (state.kind !== 'match' || !state.match || state.phase !== 'error') return;
+  void resolveMatch();
 }
 
 function applyEntryResolution(data: Resolution): void {

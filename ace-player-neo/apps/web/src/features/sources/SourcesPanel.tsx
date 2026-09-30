@@ -18,7 +18,15 @@ import { prefersReducedMotion } from '../../lib/media.ts';
 import { usePlayerSelector } from '../../player/api.ts';
 import { Button, EmptyState, IconButton, Num, ProgressBar, SkeletonRows } from '../../ui/index.ts';
 import { isIptv, scanProgress, scanProgressText } from './model.ts';
-import { openPaste, openResolver, research, selectSource, stepSource } from './session.ts';
+import {
+  RESOLVE_ERROR_TEXT,
+  openPaste,
+  openResolver,
+  research,
+  retryResolve,
+  selectSource,
+  stepSource,
+} from './session.ts';
 import { SourceInspector, type InspectorTarget } from './SourceInspector.tsx';
 import { SourceList, type SourceListVariant } from './SourceList.tsx';
 import { useSourcesView, type SourceRow } from './useSources.ts';
@@ -201,6 +209,24 @@ export function SourcesPanel({
       >
         Este partido todavía no tiene canal anunciado. Si lo encuentras por tu cuenta, pega su
         Content ID.
+      </EmptyState>
+    );
+  } else if (state.phase === 'error' && !state.entries.length) {
+    body = (
+      <EmptyState
+        title={RESOLVE_ERROR_TEXT}
+        actions={
+          <>
+            <Button size="sm" variant="primary" icon="refresh" onClick={() => retryResolve()}>
+              Reintentar
+            </Button>
+            <Button size="sm" icon="paste" onClick={() => openPaste(true)}>
+              Pegar hash
+            </Button>
+          </>
+        }
+      >
+        El servidor no ha contestado a tiempo. Vuelve a intentarlo o pega un Content ID.
       </EmptyState>
     );
   } else if ((state.phase === 'choices' || state.phase === 'not_found') && !state.entries.length) {

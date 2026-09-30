@@ -878,3 +878,16 @@ describe('buscador: el canal IPTV tocado (docs/iptv.md §14.4 y §14.6)', () => 
     expect(getSession().key).toBeNull();
   });
 });
+
+describe('entrada al partido con la IPTV activa (M3)', () => {
+  it('M3 · con la IPTV activa, un «no encontrado» por un 4xx dice que también se miró la IPTV', async () => {
+    setIptvActive(true);
+    install({
+      'GET /api/v1/football/resolve': () =>
+        json({ error: { code: 'channel_required', message: 'No', requestId: 'r' } }, 400),
+    });
+    enterMatch(testMatch({ id: 'm9' }));
+    await flush();
+    expect(getSession().resolution?.checked[0]).toBe('iptv');
+  });
+});
