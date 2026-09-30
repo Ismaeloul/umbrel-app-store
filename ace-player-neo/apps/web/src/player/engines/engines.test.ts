@@ -418,6 +418,68 @@ describe('hls.js', () => {
     expect(hls.recovers).toBe(3);
   });
 
+  it('recoverInPlace mira 0,3 s por delante (el decodificador va adelantado) y el final de un segmento ya es el siguiente', () => {
+    const { engine, hls, media } = start();
+    hls.latestLevelDetails = details();
+    // 111,97 en el sn 45 (110-112): cuenta ya como el 46 (112-114).
+    media.currentTime = 111.97;
+    expect(engine.position?.()).toEqual({ sn: 46, offset: 0 });
+    expect(engine.recoverInPlace?.()).toBe(true);
+    expect(hls.positions.at(-1)).toBe(114);
+    // 111,8: el roto probablemente es el siguiente (el decodificador ya estaba en él).
+    media.currentTime = 111.8;
+    expect(engine.recoverInPlace?.()).toBe(true);
+    expect(hls.positions.at(-1)).toBe(114);
+  });
+
+  it('sin presupuesto, position() da el segmento de DESPUÉS del roto (la instancia siguiente no vuelve a caer en él)', () => {
+    const { engine, hls, media } = start();
+    hls.latestLevelDetails = details();
+    media.currentTime = 111.3;
+    expect(engine.recoverInPlace?.()).toBe(true);
+    expect(engine.recoverInPlace?.()).toBe(true);
+    expect(engine.position?.()).toEqual({ sn: 45, offset: expect.closeTo(1.3) });
+    expect(engine.recoverInPlace?.()).toBe(false);
+    expect(engine.position?.()).toEqual({ sn: 46, offset: 0 });
+
+    // Lo mismo si es hls.js el que se rinde con un error de medio.
+    const other = start();
+    other.hls.latestLevelDetails = details();
+    other.media.currentTime = 105;
+    const fatalMedia = { fatal: true, type: 'mediaError', details: 'bufferAppendError' };
+    for (let i = 0; i < 3; i += 1) other.hls.emit('hlsError', fatalMedia);
+    expect(other.calls.fatal).toHaveLength(1);
+    expect(other.engine.position?.()).toEqual({ sn: 43, offset: 0 });
+  });
+
+  it('un error de medio fatal justo después de recoverInPlace es el mismo fallo: no se recupera dos veces', () => {
+    const { engine, hls, media, calls } = start();
+    hls.latestLevelDetails = details();
+    media.currentTime = 105;
+    expect(engine.recoverInPlace?.()).toBe(true);
+    const fatalMedia = { fatal: true, type: 'mediaError', details: 'bufferAppendError' };
+    hls.emit('hlsError', fatalMedia);
+    expect([hls.recovers, hls.swaps]).toEqual([1, 0]);
+    expect(calls.fatal).toEqual([]);
+    // Pasado el margen, vuelve el camino de siempre.
+    vi.advanceTimersByTime(HLS_IN_PLACE.settleMs);
+    hls.emit('hlsError', fatalMedia);
+    expect(hls.recovers).toBe(2);
+  });
+
+  it('inPlaceUsed: el presupuesto gastado pasa a la instancia siguiente (reconectar no lo rellena)', () => {
+    const used = [
+      { at: Date.now(), position: 111 },
+      { at: Date.now(), position: 113 },
+    ];
+    const { engine, hls, media } = start({ inPlaceUsed: used });
+    hls.latestLevelDetails = details();
+    media.currentTime = 113.5;
+    expect(engine.inPlaceUsed?.()).toEqual(used);
+    expect(engine.recoverInPlace?.()).toBe(false);
+    expect(hls.recovers).toBe(0);
+  });
+
   it('startFrom (C3): espera a la lista y sigue en el mismo segmento; si ya no está, −1', () => {
     const { hls } = start({ startFrom: { sn: 48, offset: 0.7 } });
     expect(hls.config.autoStartLoad).toBe(false);

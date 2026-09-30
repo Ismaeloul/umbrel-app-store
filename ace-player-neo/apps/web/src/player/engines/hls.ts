@@ -17,9 +17,15 @@
        · `recoverInPlace()`: un vídeo que Chrome no puede decodificar (empalme
          roto, PIPELINE_ERROR_DECODE) se arregla con `recoverMediaError()` y
          siguiendo en el segmento de DESPUÉS del roto; 2 cada 60 s, y el
-         presupuesto vuelve cuando el cabezal avanza de verdad;
+         presupuesto vuelve cuando el cabezal avanza de verdad. Pasa de una
+         instancia a la siguiente (`inPlaceUsed`): reconectar no lo rellena.
+         Un error de medio fatal de hls.js justo después es el mismo fallo
+         (lo que quedaba por añadir al MediaSource viejo) y no se recupera
+         otra vez;
        · `startFrom`: otra instancia sobre el mismo remux sigue en el segmento
-         en el que iba la anterior, no 5 por detrás del borde;
+         en el que iba la anterior, no 5 por detrás del borde. Si esta acabó
+         porque el vídeo no se podía decodificar, `position()` ya apunta al
+         segmento de después: la siguiente no vuelve a caer en el roto;
        · `guardSequence`: si la MEDIA-SEQUENCE va hacia atrás (un servidor de
          antes reinicia el remux desde 0), no se deja a hls.js leer esa lista
          (buscaría 30-58 s atrás): se para y se avisa para reengancharlo. */
@@ -101,7 +107,24 @@ export const HLS_PLAYLIST_RETRY = {
  * decodificar nunca avanza: agota el presupuesto y acaba en `fail()` (y de
  * ahí, en AceStream), que es lo que tiene que pasar.
  */
-export const HLS_IN_PLACE = { budget: 2, windowMs: 60_000, progressS: 10 } as const;
+export const HLS_IN_PLACE = {
+  budget: 2,
+  windowMs: 60_000,
+  progressS: 10,
+  /**
+   * El decodificador va por delante de la imagen: el trozo roto puede ser el
+   * siguiente al del cabezal. Se mira 0,3 s más allá para elegir cuál saltar.
+   */
+  lookAheadS: 0.3,
+  /** Un error de medio fatal de hls.js en estos ms tras recuperar es el mismo fallo. */
+  settleMs: 3_000,
+} as const;
+
+/** Una recuperación en el sitio: cuándo y en qué punto del vídeo (pasa a la instancia siguiente). */
+export interface InPlaceRecord {
+  at: number;
+  position: number;
+}
 
 /** Con `startFrom`, no más atrás que borde − maxLatency + 2 s (si no, hls.js saltaría solo). */
 export const START_FROM_MARGIN_S = 2;
@@ -125,13 +148,16 @@ export function mediaSequenceOf(text: unknown): number | null {
   return match ? Number(match[1]) : null;
 }
 
-/** El fragmento que contiene `time` (con 50 ms de margen al final), o null. */
-function fragmentAt(details: HlsLevelDetails | null | undefined, time: number) {
-  if (!details || !Number.isFinite(time)) return null;
-  for (const fragment of details.fragments) {
-    if (time >= fragment.start && time < fragment.start + fragment.duration - 0.05) return fragment;
-  }
-  return null;
+/**
+ * El fragmento que contiene `time`, o null. En los últimos 50 ms de uno
+ * cuenta ya el siguiente (así un cabezal en 111,97 de un 110-112 no se
+ * queda sin segmento).
+ */
+export function fragmentIndexAt(details: HlsLevelDetails | null | undefined, time: number): number {
+  if (!details || !Number.isFinite(time)) return -1;
+  return details.fragments.findIndex(
+    (fragment) => time >= fragment.start - 0.05 && time < fragment.start + fragment.duration - 0.05,
+  );
 }
 
 /**
@@ -159,7 +185,10 @@ export function createHlsEngine(Hls: HlsLib, args: EngineArgs): Engine {
   let mediaRecoveries = 0;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
   /** Recuperaciones en el sitio: cuándo y en qué punto del vídeo. */
-  let inPlace: Array<{ at: number; position: number }> = [];
+  let inPlace: InPlaceRecord[] = [...(args.inPlaceUsed ?? [])];
+  let lastInPlaceAt = 0;
+  /** El vídeo no se pudo decodificar y se acabó el presupuesto: la siguiente instancia salta el trozo. */
+  let mediaBroken = false;
   let lastSequence: number | null = null;
   let resetSent = false;
   const maxLatencyOf = (instance: HlsLike | null) =>
@@ -262,6 +291,12 @@ export function createHlsEngine(Hls: HlsLib, args: EngineArgs): Engine {
         }
         if (
           data.type === Hls.ErrorTypes.MEDIA_ERROR &&
+          lastInPlaceAt &&
+          Date.now() - lastInPlaceAt < HLS_IN_PLACE.settleMs
+        )
+          return;
+        if (
+          data.type === Hls.ErrorTypes.MEDIA_ERROR &&
           mediaRecoveries < HLS_RECOVERY.mediaRecoveries
         ) {
           mediaRecoveries += 1;
@@ -269,6 +304,7 @@ export function createHlsEngine(Hls: HlsLib, args: EngineArgs): Engine {
           instance.recoverMediaError();
           return;
         }
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) mediaBroken = true;
         args.callbacks.onFatal(
           `HLS no pudo recuperarse (${data.details || data.type || 'error'})`,
           data.details || data.type,
@@ -295,12 +331,17 @@ export function createHlsEngine(Hls: HlsLib, args: EngineArgs): Engine {
       if (destroyed || !instance) return false;
       const now = Date.now();
       inPlace = inPlace.filter((entry) => now - entry.at < HLS_IN_PLACE.windowMs);
-      if (inPlace.length >= HLS_IN_PLACE.budget) return false;
+      if (inPlace.length >= HLS_IN_PLACE.budget) {
+        mediaBroken = true;
+        return false;
+      }
       const time = args.video.currentTime;
-      const bad = fragmentAt(instance.latestLevelDetails, time);
+      const details = instance.latestLevelDetails;
+      const bad = details?.fragments[fragmentIndexAt(details, time + HLS_IN_PLACE.lookAheadS)];
       // Se sigue en el segmento de después del roto; sin lista aún, donde estaba.
       const next = bad ? bad.start + bad.duration : Number.isFinite(time) ? time : -1;
       inPlace.push({ at: now, position: Number.isFinite(time) ? time : 0 });
+      lastInPlaceAt = now;
       try {
         instance.recoverMediaError();
         instance.startLoad(next);
@@ -323,9 +364,19 @@ export function createHlsEngine(Hls: HlsLib, args: EngineArgs): Engine {
     },
     position(): StreamPosition | null {
       const time = args.video.currentTime;
-      const fragment = fragmentAt(hls?.latestLevelDetails, time);
+      const details = hls?.latestLevelDetails;
+      if (mediaBroken) {
+        // El siguiente al roto (con el mismo margen que al recuperar), desde su principio.
+        const bad = details?.fragments[fragmentIndexAt(details, time + HLS_IN_PLACE.lookAheadS)];
+        return bad && typeof bad.sn === 'number' ? { sn: bad.sn + 1, offset: 0 } : null;
+      }
+      const fragment = details?.fragments[fragmentIndexAt(details, time)];
       if (!fragment || typeof fragment.sn !== 'number') return null;
-      return { sn: fragment.sn, offset: time - fragment.start };
+      return { sn: fragment.sn, offset: Math.max(0, time - fragment.start) };
+    },
+    inPlaceUsed(): InPlaceRecord[] {
+      const now = Date.now();
+      return inPlace.filter((entry) => now - entry.at < HLS_IN_PLACE.windowMs);
     },
     info: () => ({}),
   };

@@ -117,6 +117,7 @@ import {
   LIVE_TOLERANCE_S,
   METER_MS,
   OUTCOME_KEEPALIVE_MS,
+  PAUSED_REPLAY_MAX,
   PAUSED_REPLAY_TICKS,
   REBUFFER_MAX_WAIT_MS,
   REBUFFER_NOTICE_MS,
@@ -229,6 +230,8 @@ interface Connection {
   waitingTimer: ReturnType<typeof setTimeout> | null;
   /** Tics seguidos en pausa sin que nadie la haya pedido (red de seguridad, C2). */
   pausedTicks: number;
+  /** play() del vigilante desde que el cabezal avanzó por última vez (tope PAUSED_REPLAY_MAX). */
+  pausedReplays: number;
 }
 
 function newConnection(id: number, recovery: boolean, profile: PlaybackProfile): Connection {
@@ -249,14 +252,19 @@ function newConnection(id: number, recovery: boolean, profile: PlaybackProfile):
     profile,
     waitingTimer: null,
     pausedTicks: 0,
+    pausedReplays: 0,
   };
 }
 
-/** Dónde iba hls.js en el remux de una sesión: la siguiente instancia sigue ahí (C3). */
+/**
+ * Dónde iba hls.js en el remux de una sesión: la siguiente instancia sigue
+ * ahí y con las recuperaciones en el sitio que ya se gastaron (C3).
+ */
 interface CarriedPosition {
   sessionId: string;
   url: string;
-  position: StreamPosition;
+  position: StreamPosition | null;
+  inPlaceUsed: ReadonlyArray<{ at: number; position: number }>;
 }
 
 interface SessionInfo {
@@ -984,8 +992,10 @@ export class PlayerRuntime {
     const profile = grant ? PLAYBACK_PROFILES[grant.latency.mode] : connection.profile;
     connection.profile = profile;
     const demoFails = kind === 'demo' && /ca[ií]d/i.test(this.source?.channel.title ?? '');
-    const startFrom = kind === 'hls' ? this.takeCarry(url) : null;
-    this.carry = null;
+    // No se borra aquí: si esta instancia no llega a saber dónde va, la siguiente usa la misma.
+    const carried = kind === 'hls' ? this.takeCarry(url) : null;
+    const startFrom = carried?.position ?? null;
+    const inPlaceUsed = carried?.inPlaceUsed.length ? carried.inPlaceUsed : null;
     const guardSequence = kind === 'hls' && this.isIptvSource();
     this.loadEngine(kind)
       .then((factory) => {
@@ -996,6 +1006,7 @@ export class PlayerRuntime {
           profile,
           demoFails,
           ...(startFrom ? { startFrom } : {}),
+          ...(inPlaceUsed ? { inPlaceUsed } : {}),
           ...(guardSequence ? { guardSequence } : {}),
           callbacks: {
             onReady: () => {
@@ -1042,11 +1053,11 @@ export class PlayerRuntime {
    * sesión del remux y la misma URL (C3). hls.js la usa solo si ese
    * segmento sigue en la lista nueva.
    */
-  private takeCarry(url: string): StreamPosition | null {
+  private takeCarry(url: string): CarriedPosition | null {
     const carry = this.carry;
     const session = this.session;
     if (!carry || !session?.remux) return null;
-    return carry.sessionId === session.id && carry.url === url ? carry.position : null;
+    return carry.sessionId === session.id && carry.url === url ? carry : null;
   }
 
   private onEngineReady(connection: Connection): void {
@@ -1226,6 +1237,7 @@ export class PlayerRuntime {
       return;
     }
     connection.pausedTicks = 0;
+    connection.pausedReplays = 0;
     if (connection.graceTicks > 0) {
       connection.graceTicks -= 1;
       connection.lastPos = media.currentTime;
@@ -1252,7 +1264,9 @@ export class PlayerRuntime {
    * Red de seguridad (C2): en pausa con la persona queriendo que suene, sin
    * retención, sin bloqueo del navegador, sin play() en vuelo y sin salto
    * pendiente durante 2 tics → play(). Con el autoplay bloqueado no entra
-   * (`blocked`), así que nunca hace bucle sin un gesto de la persona.
+   * (`blocked`), así que nunca hace bucle sin un gesto de la persona. Un
+   * play() que falla de verdad (no un AbortError) tampoco; y como mucho
+   * PAUSED_REPLAY_MAX seguidos sin que el vídeo llegue a sonar.
    */
   private replayIfStuckPaused(connection: Connection): void {
     const state = this.controller.snapshot();
@@ -1264,15 +1278,22 @@ export class PlayerRuntime {
       !state.held &&
       !state.blocked &&
       !state.busy &&
-      !state.seeking;
-    if (!stuck) {
+      !state.seeking &&
+      // Un error del <video> sí deja reintentar (lo arregla recoverInPlace); uno de play(), no.
+      (!state.error || state.error === 'media-error');
+    if (!stuck || connection.pausedReplays >= PAUSED_REPLAY_MAX) {
       connection.pausedTicks = 0;
       return;
     }
     connection.pausedTicks += 1;
     if (connection.pausedTicks < PAUSED_REPLAY_TICKS) return;
     connection.pausedTicks = 0;
-    this.log('En pausa sin que nadie lo pidiera: se vuelve a reproducir');
+    connection.pausedReplays += 1;
+    if (connection.pausedReplays === PAUSED_REPLAY_MAX)
+      this.log(
+        `En pausa sin que nadie lo pidiera: último play() del vigilante (${PAUSED_REPLAY_MAX})`,
+      );
+    else this.log('En pausa sin que nadie lo pidiera: se vuelve a reproducir');
     void this.controller.requestPlay('watchdog');
   }
 
@@ -1512,16 +1533,25 @@ export class PlayerRuntime {
     this.stopDemoStats();
   }
 
-  /** Antes de destruir hls.js sobre un remux: en qué segmento iba (C3). */
+  /**
+   * Antes de destruir hls.js sobre un remux: en qué segmento iba y qué
+   * recuperaciones en el sitio gastó (C3). Si acabó porque el vídeo no se
+   * podía decodificar, el motor ya da el segmento de DESPUÉS del roto.
+   */
   private rememberPosition(connection: Connection): void {
     const session = this.session;
     if (connection.engineKind !== 'hls' || !session?.remux) return;
     let position: StreamPosition | null = null;
+    let inPlaceUsed: ReadonlyArray<{ at: number; position: number }> = [];
     try {
       position = connection.engine?.position?.() ?? null;
+      inPlaceUsed = connection.engine?.inPlaceUsed?.() ?? [];
     } catch {}
+    const previous = this.takeCarry(session.url);
     // Sin posición (el motor no llegó a cargar nada) se conserva la de antes.
-    if (position) this.carry = { sessionId: session.id, url: session.url, position };
+    const kept = position ?? previous?.position ?? null;
+    if (kept || inPlaceUsed.length)
+      this.carry = { sessionId: session.id, url: session.url, position: kept, inPlaceUsed };
   }
 
   private resetVideo(): void {
@@ -1536,13 +1566,15 @@ export class PlayerRuntime {
   }
 
   /** Cambiar de motor sin cortar la reproducción (D5 o motor reabierto): no cuenta como reconexión. */
-  private reattach(url: string, protocol: StreamProtocol, notice: string): void {
+  private reattach(url: string, protocol: StreamProtocol, notice: string): boolean {
     const source = this.source;
     const session = this.session;
     // Solo con un motor enganchado (con la URL aún en camino, el backend ya da la nueva).
-    if (!source || !session || !nextState(this.conn, 'reenganche')) return;
-    // Primero se cierra (y se apunta la posición con la URL de antes): solo sigue ahí si la URL no cambia.
+    if (!source || !session || !nextState(this.conn, 'reenganche')) return false;
     this.endConnection();
+    /* Un reenganche es otra lista (otro protocolo, o un remux que volvió a
+       empezar sin costura): los números de segmento de antes no valen (C3). */
+    this.carry = null;
     session.url = url;
     session.protocol = protocol;
     const connection = newConnection(++this.connectionSeq, true, PLAYBACK_PROFILES[this.mode()]);
@@ -1553,6 +1585,7 @@ export class PlayerRuntime {
     this.setState({ protocol, message: notice });
     this.notify(notice, { kind: 'signal', icon: 'refresh' });
     this.attachEngine(connection, chooseEngine(protocol, this.platform), url, null);
+    return true;
   }
 
   // ---- Sesión: latido y soltar -----------------------------------------------------
@@ -1744,14 +1777,22 @@ export class PlayerRuntime {
     const session = this.session;
     if (!session) return;
     this.log(reason);
-    this.listResetAt = Date.now();
-    this.reattach(
+    const reattached = this.reattach(
       session.url,
       session.protocol,
       this.isIptvSource()
         ? 'Tu IPTV se ha reconectado: reenganchando la señal…'
         : 'La conversión para iPhone se ha reiniciado: reenganchando…',
     );
+    if (reattached) {
+      this.listResetAt = Date.now();
+      return;
+    }
+    /* Sin reenganche posible (un estado sin motor enganchado) hls.js ya ha
+       dejado de cargar: se reconecta ya en vez de esperar al vigilante, y el
+       SSE que llegue detrás no se descarta. */
+    this.fail('La señal se ha cortado: reconectando', { detail: reason });
+    this.carry = null;
   }
 
   private onStats(data: SseEventData<'stream.stats'>): void {

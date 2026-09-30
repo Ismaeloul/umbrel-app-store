@@ -48,6 +48,8 @@ export const HOLE_SKIP_PAD_S = 0.1;
  * pedido (sin retención, sin bloqueo, sin play() en vuelo) 2 tics → play().
  */
 export const PAUSED_REPLAY_TICKS = 2;
+/** Como mucho 3 de esos play() mientras el cabezal no avanza: un play() que siempre falla no hace bucle. */
+export const PAUSED_REPLAY_MAX = 3;
 
 /** Colchón: se mira cada 250 ms (index.html:4390). */
 export const BUFFER_CHECK_MS = 250;

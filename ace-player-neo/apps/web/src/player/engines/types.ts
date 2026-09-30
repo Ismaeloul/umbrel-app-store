@@ -71,8 +71,14 @@ export interface Engine {
   recoverInPlace?(): boolean;
   /** Solo hls.js: la ventana de la lista (para el −30 s y los huecos). */
   liveWindow?(): LiveWindow | null;
-  /** Solo hls.js: en qué segmento va el cabezal (para seguir ahí con otra instancia, C3). */
+  /**
+   * Solo hls.js: en qué segmento va el cabezal (para seguir ahí con otra
+   * instancia, C3). Si acaba por un vídeo que no se puede decodificar, el
+   * segmento de después del roto.
+   */
   position?(): StreamPosition | null;
+  /** Solo hls.js: las recuperaciones en el sitio aún dentro de su ventana (pasan a la siguiente instancia). */
+  inPlaceUsed?(): ReadonlyArray<{ at: number; position: number }>;
 }
 
 export interface EngineArgs {
@@ -89,6 +95,8 @@ export interface EngineArgs {
    * lista, se arranca como siempre.
    */
   startFrom?: StreamPosition | null;
+  /** Solo hls.js, misma sesión del remux: las recuperaciones en el sitio que ya gastó la instancia anterior. */
+  inPlaceUsed?: ReadonlyArray<{ at: number; position: number }>;
   /** Solo hls.js con IPTV: vigilar que la MEDIA-SEQUENCE no vaya hacia atrás (C3). */
   guardSequence?: boolean;
 }
