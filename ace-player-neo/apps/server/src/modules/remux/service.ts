@@ -23,12 +23,15 @@
      carpeta, que sigue la numeración (`-start_number`), marca la costura
      (`discont_start`) y escribe su propio `init_<n>.mp4`. Mientras no hay
      lista nueva se sirve la vieja (congelada) y sus segmentos; los ficheros
-     viejos se borran cuando la nueva ya está. Así el hls.js que ya estaba no
-     ve la lista volver a 0 (el salto atrás de 30-58 s, P3).
-   - Vigilante de salida: una IPTV con visores cuya lista no cambia en
-     `max(10 s, 3×TD)` avisa `onStalled` (una vez por atasco) para que
-     playback reconecte el relé; `ensure()` con un ffmpeg atascado va por el
-     mismo camino en vez de relanzarlo por su cuenta. */
+     viejos se borran un TD después de que la nueva esté (lo que se estuviera
+     bajando de la vieja aún llega). Así el hls.js que ya estaba no ve la lista
+     volver a 0 (el salto atrás de 30-58 s, P3).
+   - Vigilante de salida: una IPTV con clientes cuya lista no cambia en
+     `max(10 s, 3×TD)` (el TD de la lista de ese momento) avisa `onStalled`
+     (una vez por atasco) para que playback reconecte el relé; `ensure()` con
+     un ffmpeg atascado va por el mismo camino en vez de relanzarlo por su
+     cuenta, salvo que el aviso lleve mucho sin efecto o nunca llegara a estar
+     lista (entonces se relanza como antes). */
 
 import { randomBytes } from 'node:crypto';
 import { watch, type FSWatcher } from 'node:fs';
@@ -50,8 +53,10 @@ import { elegirSesionRemuxADesalojar, type EvictionCandidate } from './eviction.
 import {
   NOT_YET_HEADERS,
   NOT_YET_WAIT_MS,
+  generationOfInit,
   initFileName,
   nextSegmentNumber,
+  playlistInfoFromText,
   parseByteRange,
   previousGenerationFiles,
   readPlaylistInfo,
@@ -86,6 +91,16 @@ export const IPTV_STALL_CHECK_MS = 2_000;
 /** Atasco de la IPTV: la lista sin cambiar en `max(IPTV_STALL_MIN_MS, IPTV_STALL_TD_FACTOR × TD)`. */
 export const IPTV_STALL_MIN_MS = 10_000;
 export const IPTV_STALL_TD_FACTOR = 3;
+/**
+ * `ensure()` sobre una IPTV avisada de atasco hace más de esto sin que la lista se haya movido: el aviso
+ * no ha servido (nadie lo atiende, o el reinicio no llegó a nada) y se relanza ffmpeg como antes.
+ */
+export const IPTV_ENSURE_RELAUNCH_MS = 40_000;
+/** Lo que se espera a que el ffmpeg matado termine antes de lanzar el siguiente (el relé da 409 mientras). */
+export const REPLACE_EXIT_WAIT_MS = 1_000;
+/** Gracia antes de borrar lo de la generación anterior: su TD, entre estos límites. */
+const STALE_GRACE_MIN_MS = 2_000;
+const STALE_GRACE_MAX_MS = 10_000;
 
 const LEGACY_PREFIX = '/remux/';
 
@@ -113,6 +128,8 @@ interface Entry {
   targetMs: number;
   /** Ya se avisó `onStalled` de este atasco (se rearma cuando la lista cambia). */
   stallNotified: boolean;
+  /** Cuándo se avisó (para relanzar en `ensure()` si el aviso no sirve). */
+  stallNotifiedAt: number;
   /** Generación en la carpeta: 1 el primer ffmpeg, +1 en cada reinicio continuo (B2). */
   readonly generation: number;
   /** Primer segmento de esta generación (0 en la primera). */
@@ -121,6 +138,16 @@ interface Entry {
   readonly initName: string;
   /** Quedan ficheros de generaciones anteriores por borrar (cuando esta esté lista). */
   stalePending: boolean;
+  /** Gracia antes de borrarlos (el TD de la generación anterior). */
+  readonly staleGraceMs: number;
+  staleTimer: TimerHandle | null;
+  /**
+   * DISCONTINUITY-SEQUENCE de cada generación de la carpeta (compartido entre ellas): las costuras que ha
+   * cruzado un cliente que llega a esa generación. Una generación que nunca se sirvió no cuenta.
+   */
+  readonly dsnBases: Map<number, number>;
+  /** Alguna lista de esta generación ha salido hacia un cliente (la primera cuenta como servida). */
+  served: boolean;
   proc: RemuxProcess | null;
   exited: boolean;
   exitCode: number | null;
@@ -151,6 +178,8 @@ interface Carry {
 interface Continuation {
   readonly generation: number;
   readonly startNumber: number;
+  readonly dsnBases: Map<number, number>;
+  readonly staleGraceMs: number;
 }
 
 export interface RemuxEntryInfo {
@@ -246,6 +275,7 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
   function emitStalled(entry: Entry): void {
     if (entry.stallNotified) return;
     entry.stallNotified = true;
+    entry.stallNotifiedAt = clock.now();
     logger.warn(
       { sessionId: entry.sessionId, stalledMs: clock.now() - entry.lastChangeAt },
       'remux IPTV: la lista no avanza',
@@ -306,33 +336,28 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     return Math.max(IPTV_STALL_MIN_MS, IPTV_STALL_TD_FACTOR * entry.targetMs);
   }
 
-  /** Mira la lista y, solo si ha cambiado, la relee para seguir su TARGETDURATION. */
-  async function observeIptv(entry: Entry): Promise<boolean> {
-    let seen: FileObservation;
-    try {
-      const info = await stat(path.join(entry.dir, 'index.m3u8'));
-      seen = { size: info.size, mtimeMs: info.mtimeMs };
-    } catch {
-      return false;
-    }
-    if (noteObservation(entry, seen)) {
-      const info = await readPlaylistInfo(path.join(entry.dir, 'index.m3u8'));
-      if (info?.targetDuration) entry.targetMs = info.targetDuration * 1000;
-    }
-    return true;
-  }
-
-  /** IPTV lista y viva cuya lista no cambia en `max(10 s, 3×TD)` (B3). */
+  /**
+   * IPTV lista y viva cuya lista no cambia en `max(10 s, 3×TD)` (B3). El TD se relee JUSTO antes de
+   * comparar, y no cuando se ve cambiar la lista: los cambios los ve casi siempre antes `serveFile` (hls.js
+   * pide la lista cada TD), y un TD congelado en el del arranque (alto por el primer segmento sin clave, P5,
+   * o bajo en un canal que luego alarga el GOP) daría un umbral equivocado.
+   */
   async function isIptvStalled(entry: Entry): Promise<boolean> {
     if (entry.origin !== 'iptv' || entry.closed || entry.exited || !entry.ready) return false;
-    if (!(await observeIptv(entry))) return false;
+    if (!(await observe(entry))) return false;
+    if (clock.now() - entry.lastChangeAt <= IPTV_STALL_MIN_MS) return false;
+    const info = await readPlaylistInfo(path.join(entry.dir, 'index.m3u8'));
+    if (info?.targetDuration) entry.targetMs = info.targetDuration * 1000;
     return clock.now() - entry.lastChangeAt > iptvStallMs(entry);
   }
 
-  /** Vigilante de salida (B3): solo IPTV con visores; AceStream lo vigila el motor. */
+  /**
+   * Vigilante de salida (B3): solo IPTV con clientes (un visor 0.6.x soltado con `keepAlive` no cuenta:
+   * nadie la está viendo); AceStream lo vigila el motor.
+   */
   async function watchStalls(): Promise<void> {
     for (const entry of [...byHash.values()]) {
-      if (entry.origin !== 'iptv' || !allViewers(entry).length) continue;
+      if (entry.origin !== 'iptv' || !clientsCount(entry)) continue;
       if (await isIptvStalled(entry)) emitStalled(entry);
     }
   }
@@ -364,6 +389,8 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     if (byHash.get(entry.hash) === entry) byHash.delete(entry.hash);
     const viewers = [...new Set([...extraViewers, ...allViewers(entry)])];
     clearViewers(entry);
+    clock.clearTimeout(entry.staleTimer);
+    entry.staleTimer = null;
     kill(entry);
     entry.watcher?.close();
     entry.watcher = null;
@@ -456,10 +483,15 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       observed: null,
       targetMs: 0,
       stallNotified: false,
+      stallNotifiedAt: 0,
       generation,
       startNumber: next?.startNumber ?? 0,
       initName: initFileName(generation),
       stalePending: next !== null,
+      staleGraceMs: next?.staleGraceMs ?? 0,
+      staleTimer: null,
+      dsnBases: next?.dsnBases ?? new Map([[1, 0]]),
+      served: next === null,
       proc: null,
       exited: false,
       exitCode: null,
@@ -523,14 +555,28 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
   async function replaceLocked(current: Entry, carry: Carry): Promise<Entry> {
     const startNumber = await nextSegmentNumber(current.dir);
     current.closed = true;
+    clock.clearTimeout(current.staleTimer);
+    current.staleTimer = null;
     kill(current);
     current.watcher?.close();
     current.watcher = null;
     wake(current);
+    /* El relé contesta 409 mientras no ha soltado la conexión del ffmpeg anterior: se espera (un poco) a que
+       termine, para que el nuevo no se encuentre la puerta cerrada y muera nada más nacer. */
+    const until = clock.now() + REPLACE_EXIT_WAIT_MS;
+    while (!current.exited && clock.now() < until) {
+      await waitChange(current, until - clock.now());
+    }
+    /* Costuras: una más que la generación que se deja, si algún cliente llegó a verla; si no, las mismas
+       (el cliente pasa de la anterior a esta cruzando un solo #EXT-X-DISCONTINUITY). */
+    const base = current.dsnBases.get(current.generation) ?? current.generation - 1;
+    current.dsnBases.set(current.generation + 1, current.served ? base + 1 : base);
     try {
       return await startLocked(current.source, current.hash, carry, {
         generation: current.generation + 1,
         startNumber,
+        dsnBases: current.dsnBases,
+        staleGraceMs: Math.min(STALE_GRACE_MAX_MS, Math.max(STALE_GRACE_MIN_MS, current.targetMs)),
       });
     } catch (error) {
       if (byHash.get(current.hash) === current) byHash.delete(current.hash);
@@ -538,7 +584,24 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     }
   }
 
-  /** Borra los ficheros de las generaciones anteriores cuando la lista nueva ya está (B2). */
+  /**
+   * Borra los ficheros de las generaciones anteriores (B2) un TD después de que la lista nueva esté: lo que
+   * hls.js estuviera bajando de la vieja en ese momento aún llega, y no un 404.
+   */
+  function scheduleStaleDrop(entry: Entry): void {
+    if (!entry.stalePending || entry.staleTimer) return;
+    entry.staleTimer = clock.setTimeout(
+      () => {
+        entry.staleTimer = null;
+        dropPreviousGenerations(entry).catch((error: unknown) =>
+          logger.error({ err: error }, 'borrado de la generación anterior del remux'),
+        );
+      },
+      entry.staleGraceMs,
+      { unref: true },
+    );
+  }
+
   async function dropPreviousGenerations(entry: Entry): Promise<void> {
     if (!entry.stalePending) return;
     await registry.run(async () => {
@@ -629,8 +692,13 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     });
   }
 
-  /** Espera del arranque (server.js:4914-4924; B-105): 2 segmentos y 6 s, o 1 y 20 s, 45 s como máximo. */
-  async function waitReady(entry: Entry, signal?: AbortSignal): Promise<void> {
+  /**
+   * Espera del arranque (server.js:4914-4924; B-105): 2 segmentos y 6 s, o 1 y 20 s, 45 s como máximo.
+   * Con `progressMs` (reinicio por salida atascada, B3), además `iptv_dropped` si en ese plazo la generación
+   * nueva no ha escrito ni un segmento: se mide que avance, no que esté lista (con un GOP de 6 s, dos
+   * segmentos tras reconectar pasan de 10 s aunque el relé se haya recuperado al momento).
+   */
+  async function waitReady(entry: Entry, signal?: AbortSignal, progressMs?: number): Promise<void> {
     if (entry.ready) {
       throwIfGone(entry);
       return;
@@ -646,7 +714,13 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       const waited = clock.now() - t0;
       /* IPTV (docs/iptv.md §6.3): 2 segmentos o 20 s como mucho; pasado eso, iptv_timeout. */
       if (entry.origin === 'iptv') {
-        if (ready && ready.segments >= REMUX_TIMINGS.readySegments) break;
+        if (ready && ready.segments >= REMUX_TIMINGS.readySegments) {
+          if (ready.targetDuration) entry.targetMs = ready.targetDuration * 1000;
+          break;
+        }
+        if (progressMs !== undefined && waited > progressMs && !(ready && ready.segments >= 1)) {
+          throw new AppError('iptv_dropped', { detail: 'la salida no avanza tras reconectar' });
+        }
         if (waited > IPTV_REMUX_READY_MS) throw new AppError('iptv_timeout');
         await waitChange(entry, READY_POLL_MS, signal);
         continue;
@@ -663,9 +737,8 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
     }
     entry.ready = true;
     /* Primera observación de la lista: desde aquí cuenta el atasco. */
-    if (entry.origin === 'iptv') await observeIptv(entry);
-    else await observe(entry);
-    await dropPreviousGenerations(entry);
+    await observe(entry);
+    scheduleStaleDrop(entry);
   }
 
   function handleOf(entry: Entry, token: string): RemuxHandle {
@@ -741,11 +814,26 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
           const sameInput =
             sameSession && current.inputKey === inputKeyOf(source) && !current.exited;
           /* IPTV atascada (B3): no se relanza aquí (otro ffmpeg sobre un relé atascado tampoco avanza);
-             se avisa a playback, que reconecta el relé con un reinicio continuo, y el visor se engancha ya. */
-          if (sameInput && current.origin === 'iptv' && (await isIptvStalled(current))) {
-            emitStalled(current);
+             se avisa a playback, que reconecta el relé con un reinicio continuo, y el visor se engancha ya.
+             Red: si el aviso ya lleva `IPTV_ENSURE_RELAUNCH_MS` sin efecto (nadie lo atiende, o no hay sesión
+             IPTV en playback), o nunca llegó a estar lista, se relanza como antes (`remuxStalled`). */
+          let reusable = sameInput;
+          if (sameInput && current.origin === 'iptv') {
+            if (await isIptvStalled(current)) {
+              if (
+                current.stallNotified &&
+                clock.now() - current.stallNotifiedAt > IPTV_ENSURE_RELAUNCH_MS
+              ) {
+                reusable = false;
+              } else {
+                emitStalled(current);
+              }
+            } else if (!current.ready && (await isStalled(current))) {
+              reusable = false;
+            }
+          } else if (sameInput) {
+            reusable = !(await isStalled(current));
           }
-          const reusable = sameInput && (current.origin === 'iptv' || !(await isStalled(current)));
           if (!reusable) {
             if (sameSession) {
               carry = carryOf(current);
@@ -786,24 +874,33 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
       });
     },
 
-    async restart(sessionId, signal) {
+    async restart(sessionId, signal, options = {}) {
       if (stopped) throw new AppError('remux_died', { detail: 'remux parado' });
       return withReplacing(sessionId, async () => {
+        let progressMs: number | undefined;
         const entry = await registry.run(async () => {
           const current = findBySession(sessionId);
           if (!current) return null;
           const carry = carryOf(current);
           clearViewers(current);
           /* IPTV: reinicio continuo en la misma carpeta (B2). El resto, como siempre. */
-          if (current.origin === 'iptv') return replaceLocked(current, carry);
+          if (current.origin === 'iptv') {
+            /* Por atasco (B3): el plazo para ver avanzar la generación nueva escala con el TD, como el umbral. */
+            if (options.stalled) progressMs = iptvStallMs(current);
+            return replaceLocked(current, carry);
+          }
           await closeLocked(current, 'stopped', false);
           return startLocked(current.source, current.hash, carry);
         });
         if (!entry) return null;
-        await waitReady(entry, signal);
+        await waitReady(entry, signal, progressMs);
         const handle = handleOf(entry, '');
         return entry.generation > 1 ? { ...handle, seamless: true } : handle;
       });
+    },
+
+    restarting(sessionId) {
+      return replacing.has(sessionId);
     },
 
     async detach(sessionId, viewerId) {
@@ -852,7 +949,10 @@ export function createRemuxRuntime(deps: RemuxDeps): RemuxRuntime {
           await sendBare(reply, options.videoToken ? 404 : 503, { ...NOT_YET_HEADERS });
           return;
         }
-        const body = withDiscontinuitySequence(text);
+        /* Lo que sale de la generación de ahora cuenta como servido (para las costuras de la siguiente). */
+        const generation = generationOfInit(playlistInfoFromText(text).init);
+        if (generation === entry.generation) entry.served = true;
+        const body = withDiscontinuitySequence(text, (g) => entry.dsnBases.get(g));
         await sendBuffer(
           reply,
           full,

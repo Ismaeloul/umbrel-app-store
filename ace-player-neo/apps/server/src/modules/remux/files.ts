@@ -147,7 +147,10 @@ async function listDir(dir: string): Promise<string[]> {
 
 /**
  * Número del primer segmento de la generación siguiente: 1 + el mayor `index<N>.m4s` de la CARPETA (no de
- * la lista, que puede ir por detrás de los ficheros). 0 si no hay ninguno.
+ * la lista, que puede ir por detrás de los ficheros). 0 si no hay ninguno. Cuenta también el `.tmp` que deja
+ * un ffmpeg matado a media escritura: así la generación nueva nunca escribe encima de un fichero a medias,
+ * aunque se salte un número (la lista vieja acaba en N−1 y la nueva empieza en N+1; hls.js no lo nota: las
+ * dos listas no se solapan igual).
  */
 export async function nextSegmentNumber(dir: string): Promise<number> {
   let max = -1;
@@ -176,16 +179,21 @@ export async function previousGenerationFiles(
 
 /**
  * `#EXT-X-DISCONTINUITY-SEQUENCE` de una lista de la generación `g` (la de su `#EXT-X-MAP`), que ffmpeg
- * nunca escribe y AVPlayer necesita (RFC 8216 §6.2.1): cada reinicio añade una discontinuidad, así que vale
- * `g−2` mientras se ve el `#EXT-X-DISCONTINUITY` de su primer segmento (el que pone `discont_start`) y
- * `g−1` cuando ya ha salido de la ventana. La primera generación (`init.mp4`) sale tal cual, byte a byte.
+ * nunca escribe y AVPlayer necesita (RFC 8216 §6.2.1). `baseOf(g)` es el valor cuando el
+ * `#EXT-X-DISCONTINUITY` de su primer segmento (el que pone `discont_start`) ya ha salido de la ventana:
+ * las costuras que ha cruzado el cliente. Mientras se ve, vale uno menos. Sin `baseOf`, `g−1` (cada
+ * generación anterior se llegó a servir). La primera generación (`init.mp4`) sale tal cual, byte a byte.
  */
-export function withDiscontinuitySequence(text: string): string {
+export function withDiscontinuitySequence(
+  text: string,
+  baseOf?: (generation: number) => number | undefined,
+): string {
   const generation = generationOfInit(playlistInfoFromText(text).init);
   if (generation === null || generation < 2) return text;
   if (/^#EXT-X-DISCONTINUITY-SEQUENCE:/m.test(text)) return text;
   const visible = /^#EXT-X-DISCONTINUITY\r?$/m.test(text);
-  const tag = `#EXT-X-DISCONTINUITY-SEQUENCE:${visible ? generation - 2 : generation - 1}`;
+  const base = baseOf?.(generation) ?? generation - 1;
+  const tag = `#EXT-X-DISCONTINUITY-SEQUENCE:${Math.max(0, visible ? base - 1 : base)}`;
   const lines = text.split('\n');
   const cr = lines[0]?.endsWith('\r') ? '\r' : '';
   /* Detrás de MEDIA-SEQUENCE (o de TARGETDURATION, o de #EXTM3U): siempre antes del primer segmento. */

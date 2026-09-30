@@ -115,6 +115,14 @@ export interface RemuxSource {
   readonly isHls?: boolean;
 }
 
+export interface RemuxRestartOptions {
+  /**
+   * Reinicio por salida atascada (diagnostico-iptv-0.8.2 B3): si la generación nueva no escribe ni un
+   * segmento en `max(10 s, 3×TD)`, `iptv_dropped` en vez de esperar los 20 s de `iptv_timeout`.
+   */
+  readonly stalled?: boolean;
+}
+
 export interface RemuxHandle {
   readonly sessionId: string;
   readonly hash: string;
@@ -172,7 +180,16 @@ export interface RemuxService extends Lifecycle {
    * sigue la numeración con otro init y una discontinuidad (`seamless`). `null`
    * si la sesión no tenía remux.
    */
-  restart(sessionId: string, signal?: AbortSignal): Promise<RemuxHandle | null>;
+  restart(
+    sessionId: string,
+    signal?: AbortSignal,
+    options?: RemuxRestartOptions,
+  ): Promise<RemuxHandle | null>;
+  /**
+   * Hay un `restart()`/`retarget()` en curso para la sesión. Si uno falla porque otro lo ha sustituido a
+   * mitad (dos avisos a la vez: el relé y el vigilante de salida), el resultado es el del otro.
+   */
+  restarting(sessionId: string): boolean;
   /** Un visor deja la sesión; sin visores, ffmpeg se para. */
   detach(sessionId: string, viewerId: string): Promise<void>;
   /** Sirve un fichero de la sesión con Range (206/416) y `no-store`; en m3u8, reescribe las URI con `?t=`. */

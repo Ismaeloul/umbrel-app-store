@@ -3,15 +3,17 @@
    - el reinicio que pide el relé es continuo y sale `stream.reopened` con
      `seamless: true`; el de AceStream (retarget) sigue sin él;
    - la salida atascada reinicia el remux (y con él la conexión del relé) y,
-     si tampoco avanza en `IPTV_STALL_RECOVER_MS`, cierra con `iptv_dropped`. */
+     si la generación nueva no escribe ni un segmento en `max(10 s, 3×TD)`,
+     cierra con `iptv_dropped`; si avanza (aunque tarde en estar lista), no;
+   - dos reinicios a la vez (vigilante y relé): manda el último, sin cierre. */
 
 import { performance } from 'node:perf_hooks';
 import { describe, expect, it } from 'vitest';
 import type { ChannelStreamQuery, IptvReason } from '@ace/shared';
+import type { FakeClock } from '../../core/clock.js';
 import { ioTurns } from '../remux/test-support.js';
 import { IPTV_STALL_MIN_MS } from '../remux/service.js';
 import type { IptvInput, IptvService } from '../iptv/types.js';
-import { IPTV_STALL_RECOVER_MS } from './service.js';
 import { partial, setupPlayback } from './test-support.js';
 import type { ViewerIdentity } from './types.js';
 
@@ -55,6 +57,28 @@ async function until(what: string, check: () => boolean): Promise<void> {
   expect(check(), what).toBe(true);
 }
 
+/**
+ * Avanza el reloj a pasos cortos dejando correr la E/S real entre paso y paso: la espera del remux relee la
+ * lista (E/S real) antes de volver a aparcarse en el reloj, y así no se salta ninguna vuelta.
+ */
+async function step(clock: FakeClock, ms: number): Promise<void> {
+  for (let left = ms; left > 0; left -= 250) {
+    await clock.advanceAsync(Math.min(250, left));
+    await ioTurns(10);
+  }
+}
+
+/** Como `step`, pero para en cuanto se cumple `check` (hasta `maxMs` de reloj y luego el tope de `until`). */
+async function stepUntil(
+  clock: FakeClock,
+  what: string,
+  check: () => boolean,
+  maxMs: number,
+): Promise<void> {
+  for (let left = maxMs; left > 0 && !check(); left -= 250) await step(clock, 250);
+  await until(what, check);
+}
+
 describe('IPTV: reinicio continuo del remux (B2)', () => {
   it('el relé pide reiniciar: ffmpeg nuevo con la numeración seguida y stream.reopened seamless', async () => {
     const iptv = fakeIptv();
@@ -83,7 +107,7 @@ describe('IPTV: reinicio continuo del remux (B2)', () => {
 });
 
 describe('IPTV: vigilante de salida (B3)', () => {
-  it('lista parada: reinicio continuo (el relé reconecta al engancharse el ffmpeg nuevo); sin lista nueva en 10 s, iptv_dropped', async () => {
+  it('lista parada: reinicio continuo (el relé reconecta al engancharse el ffmpeg nuevo); sin segmento nuevo en 10 s, iptv_dropped', async () => {
     const iptv = fakeIptv();
     const setup = await setupPlayback({ iptv: iptv.service });
     const { runtime, ffmpeg, events, remux, clock } = setup;
@@ -100,13 +124,13 @@ describe('IPTV: vigilante de salida (B3)', () => {
     /* Un segundo aviso del mismo atasco no lanza otro reinicio. */
     await remux.watchStalls();
     expect(ffmpeg.spawned).toHaveLength(2);
-    /* El ffmpeg nuevo tampoco escribe: justo antes de IPTV_STALL_RECOVER_MS sigue abierta; pasado ese
-       plazo (y mucho antes de los 20 s de `iptv_timeout`), iptv_dropped y no remux_died. El reloj ya no
-       avanza más: el cierre solo espera a la E/S real. */
-    await clock.advanceAsync(IPTV_STALL_RECOVER_MS - 500);
+    /* El ffmpeg nuevo tampoco escribe: justo antes de max(10 s, 3×TD) sigue abierta; pasado ese plazo (y
+       mucho antes de los 20 s de `iptv_timeout`), iptv_dropped y no remux_died. El reloj ya no avanza
+       más: el cierre solo espera a la E/S real. */
+    await step(clock, IPTV_STALL_MIN_MS - 500);
     await ioTurns(50);
     expect(events.of('stream.closed')).toEqual([]);
-    await clock.advanceAsync(1_000);
+    await step(clock, 1_500);
     await until('cerrada', () => events.of('stream.closed').length > 0);
     expect(events.of('stream.closed')).toEqual([
       expect.objectContaining({
@@ -133,6 +157,56 @@ describe('IPTV: vigilante de salida (B3)', () => {
       seamless: true,
     });
     expect(ffmpeg.spawned).toHaveLength(2);
+    expect(events.of('stream.closed')).toEqual([]);
+  });
+
+  it('el ffmpeg nuevo tarda en estar listo (GOP de 6 s) pero avanza: no se cierra y sale seamless', async () => {
+    const iptv = fakeIptv();
+    const setup = await setupPlayback({ iptv: iptv.service });
+    const { runtime, ffmpeg, events, remux, clock } = setup;
+    const grant = await runtime.service.acquire(CANAL, query(), web(), live());
+    ffmpeg.setAutoSegments(null);
+    await remux.watchStalls();
+    clock.advance(IPTV_STALL_MIN_MS + 1_000);
+    await remux.watchStalls();
+    await until('reinicio por atasco', () => ffmpeg.spawned.length === 2);
+    /* Relé reconectado, sondeo y el segmento 0 (sin clave) de 6 s: el primer segmento llega a los 8 s. */
+    await step(clock, 8_000);
+    ffmpeg.last().writeSegments([6]);
+    /* Pasados los 10 s todavía no está lista (le falta el segundo segmento), pero avanza: no se cierra. */
+    await step(clock, 6_000);
+    await ioTurns(50);
+    expect(events.of('stream.closed')).toEqual([]);
+    ffmpeg.last().writeSegments([6]);
+    await stepUntil(clock, 'reabierta', () => events.of('stream.reopened').length > 0, 4_000);
+    expect(events.of('stream.reopened')).toEqual([
+      expect.objectContaining({ sessionId: grant.session.id, seamless: true }),
+    ]);
+    expect(events.of('stream.closed')).toEqual([]);
+  });
+
+  it('el relé pide otro reinicio a mitad del de atasco: manda el último, sin iptv_dropped', async () => {
+    const iptv = fakeIptv();
+    const setup = await setupPlayback({ iptv: iptv.service });
+    const { runtime, ffmpeg, events, remux, clock } = setup;
+    const grant = await runtime.service.acquire(CANAL, query(), web(), live());
+    ffmpeg.setAutoSegments(null);
+    await remux.watchStalls();
+    clock.advance(IPTV_STALL_MIN_MS + 1_000);
+    await remux.watchStalls();
+    await until('reinicio por atasco', () => ffmpeg.spawned.length === 2);
+    /* El relé cambia de variante: otro reinicio mata la generación 2 antes de que escriba nada. */
+    iptv.restart();
+    await until('segundo reinicio', () => ffmpeg.spawned.length === 3);
+    expect(ffmpeg.spawned[1]?.killed).toBe(true);
+    expect(ffmpeg.last().args).toContain('init_3.mp4');
+    await ioTurns(50);
+    expect(events.of('stream.closed')).toEqual([]);
+    ffmpeg.last().writeSegments([2, 2]);
+    await stepUntil(clock, 'reabierta', () => events.of('stream.reopened').length > 0, 4_000);
+    expect(events.of('stream.reopened')).toEqual([
+      expect.objectContaining({ sessionId: grant.session.id, seamless: true }),
+    ]);
     expect(events.of('stream.closed')).toEqual([]);
   });
 });

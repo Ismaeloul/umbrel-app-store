@@ -17,7 +17,7 @@ import { AppError } from '../../core/errors.js';
 import { createTestApp, createTestCore, web } from '../../../test/helpers/index.js';
 import { buildRemuxArgs } from './args.js';
 import { withDiscontinuitySequence } from './files.js';
-import { IPTV_STALL_MIN_MS, createRemuxRuntime } from './service.js';
+import { IPTV_ENSURE_RELAUNCH_MS, IPTV_STALL_MIN_MS, createRemuxRuntime } from './service.js';
 import { advanceParked, createFakeLauncher, ioTurns, parked } from './test-support.js';
 import type { ProcessLauncher, RemuxSource } from './types.js';
 
@@ -268,6 +268,13 @@ describe('reinicio continuo de la IPTV: servido (B2)', () => {
     };
   }
 
+  /** Deja correr la E/S real (con un tope en tiempo real) hasta que se cumpla `check`. */
+  async function until(check: () => boolean): Promise<boolean> {
+    const limit = performance.now() + 3_000;
+    while (!check() && performance.now() < limit) await ioTurns(1);
+    return check();
+  }
+
   /** Deja correr la E/S real (readdir, mkdir) hasta que se haya lanzado el ffmpeg número `count`. */
   async function spawned(ffmpeg: { spawned: readonly unknown[] }, count: number): Promise<void> {
     const until = performance.now() + 3_000;
@@ -308,10 +315,13 @@ describe('reinicio continuo de la IPTV: servido (B2)', () => {
     const init = await get('init_2.mp4');
     expect(init.statusCode).toBe(200);
     expect(init.body).toBe('init-mp4-fake');
-    /* Lo de la generación anterior ya no está. */
-    for (const old of ['init.mp4', 'index0.m4s', 'index1.m4s', 'index2.m4s']) {
-      expect(existsSync(path.join(dir, old)), old).toBe(false);
-    }
+    /* Lo de la generación anterior aguanta un TD (lo que hls.js estuviera bajando aún llega)… */
+    expect((await get('index2.m4s')).statusCode).toBe(200);
+    expect((await get('init.mp4')).statusCode).toBe(200);
+    /* …y luego ya no está. */
+    await core.clock.advanceAsync(2_000);
+    const olds = ['init.mp4', 'index0.m4s', 'index1.m4s', 'index2.m4s'];
+    expect(await until(() => olds.every((old) => !existsSync(path.join(dir, old))))).toBe(true);
     expect(existsSync(path.join(dir, 'index3.m4s'))).toBe(true);
     /* La costura sale de la ventana (15 segmentos): DISCONTINUITY-SEQUENCE pasa a 1. */
     second.writeSegments(Array.from({ length: 15 }, () => 2));
@@ -329,7 +339,33 @@ describe('reinicio continuo de la IPTV: servido (B2)', () => {
     expect((await again)?.seamless).toBe(true);
     const third3 = await get('index.m3u8');
     expect(third3.body).toContain('#EXT-X-MEDIA-SEQUENCE:20\n#EXT-X-DISCONTINUITY-SEQUENCE:1\n');
-    expect(existsSync(path.join(dir, 'init_2.mp4'))).toBe(false);
+    await core.clock.advanceAsync(2_000);
+    expect(await until(() => !existsSync(path.join(dir, 'init_2.mp4')))).toBe(true);
+  });
+
+  it('una generación que nunca se sirvió no cuenta en el DISCONTINUITY-SEQUENCE', async () => {
+    const { core, ffmpeg, rt, get, stopAuto } = await rig();
+    stopAuto();
+    /* La generación 2 no llega a escribir nada: la sustituye otro reinicio (el relé y el vigilante a la vez). */
+    const first = rt.service.restart(SID).catch((error: unknown) => error);
+    await spawned(ffmpeg, 2);
+    /* Mientras, la web solo ve la lista vieja (generación 1). */
+    expect((await get('index.m3u8')).body).toContain('URI="init.mp4"');
+    const second = rt.service.restart(SID);
+    await spawned(ffmpeg, 3);
+    /* El primero falla porque lo han sustituido, y lo sabe quien pregunta: hay otro en curso. */
+    expect(((await first) as AppError).code).toBe('remux_died');
+    expect(rt.service.restarting(SID)).toBe(true);
+    ffmpeg.last().writeSegments([2, 2]);
+    await advanceParked(core.clock, 1_000);
+    expect((await second)?.seamless).toBe(true);
+    expect(rt.service.restarting(SID)).toBe(false);
+    /* El cliente pasa de la 1 a la 3 cruzando un solo #EXT-X-DISCONTINUITY: 0 con él a la vista (y no 1). */
+    const list = await get('index.m3u8');
+    expect(list.body).toContain('#EXT-X-MAP:URI="init_3.mp4"');
+    expect(list.body).toContain('#EXT-X-DISCONTINUITY-SEQUENCE:0\n');
+    ffmpeg.last().writeSegments(Array.from({ length: 15 }, () => 2));
+    expect((await get('index.m3u8')).body).toContain('#EXT-X-DISCONTINUITY-SEQUENCE:1\n');
   });
 
   it('la app nativa recibe la lista con ?t= y el DISCONTINUITY-SEQUENCE; init_2.mp4 sí, rutas raras no', async () => {
@@ -448,6 +484,70 @@ describe('vigilante de salida de la IPTV (B3)', () => {
     core.clock.advance(7_000);
     await rt.watchStalls();
     expect(stalled).toEqual([SID]);
+  });
+
+  it('el umbral sigue al TD de la lista aunque la web la pida entre vuelta y vuelta', async () => {
+    const { core, ffmpeg, rt, stalled } = rig();
+    /* Arranca con TD 2 (el que se lee al estar lista). */
+    await rt.service.ensure(source(), 'v_web');
+    const bare = Fastify();
+    stops.push(() => bare.close());
+    bare.get('/f/:file', async (request, reply) => {
+      const { file } = request.params as { file: string };
+      await rt.service.serveFile(reply, SID, file, {});
+      return reply;
+    });
+    /* El canal pasa a segmentos de 6 s y hls.js pide la lista tras cada uno: los cambios los ve `serveFile`. */
+    for (let index = 0; index < 3; index += 1) {
+      ffmpeg.last().writeSegments([6]);
+      expect((await bare.inject({ method: 'GET', url: '/f/index.m3u8' })).statusCode).toBe(200);
+      /* Que `serveFile` apunte lo visto (va detrás del envío) antes de que mire el vigilante. */
+      await ioTurns();
+      core.clock.advance(6_000);
+      await rt.watchStalls();
+    }
+    expect(stalled).toEqual([]);
+    /* 12 s sin cambios: con TD 6 el umbral es 18 s, no 10. */
+    core.clock.advance(6_000);
+    await rt.watchStalls();
+    expect(stalled).toEqual([]);
+    core.clock.advance(7_000);
+    await rt.watchStalls();
+    expect(stalled).toEqual([SID]);
+  });
+
+  it('ensure() relanza si el aviso lleva IPTV_ENSURE_RELAUNCH_MS sin efecto', async () => {
+    const { core, ffmpeg, rt, stalled } = rig();
+    await rt.service.ensure(source(), 'v_web');
+    const first = ffmpeg.last();
+    await rt.watchStalls();
+    core.clock.advance(IPTV_STALL_MIN_MS + 1_000);
+    await rt.watchStalls();
+    expect(stalled).toEqual([SID]);
+    /* Nadie atiende el aviso (o el reinicio no llegó a nada) y la lista sigue parada. */
+    core.clock.advance(IPTV_ENSURE_RELAUNCH_MS + 1_000);
+    await rt.service.ensure(source(), 'v_ios');
+    expect(ffmpeg.spawned).toHaveLength(2);
+    expect(first.killed).toBe(true);
+    expect([...rt.service.viewersOf(SID)].sort()).toEqual(['v_ios', 'v_web']);
+  });
+
+  it('un visor 0.6.x soltado con keepAlive no cuenta: sin clientes no avisa', async () => {
+    const { core, rt, stalled } = rig();
+    const handle = await rt.service.ensure(source(), 'v_old', undefined, {
+      legacy: { device: 'dev1' },
+    });
+    await rt.service.legacyStop({
+      id: HASH,
+      dev: 'dev1',
+      keepAlive: true,
+      token: handle.legacyToken,
+    });
+    expect([...rt.service.viewersOf(SID)]).toEqual(['v_old']);
+    await rt.watchStalls();
+    core.clock.advance(60_000);
+    await rt.watchStalls();
+    expect(stalled).toEqual([]);
   });
 
   it('sin visores o con AceStream: nunca avisa', async () => {

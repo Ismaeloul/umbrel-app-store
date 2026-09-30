@@ -70,11 +70,6 @@ import type { PlaybackDeps, PlaybackService, ViewerIdentity } from './types.js';
 const REOPEN_WINDOW_MS = 5 * 60 * 1000;
 const REOPEN_MAX = 3;
 /**
- * IPTV cuya salida no avanza (B3): lo que se espera a la lista nueva tras reconectar el relé antes de
- * cerrar con `iptv_dropped` (con los 10 s del vigilante, la web pasa a AceStream en unos 20 s).
- */
-export const IPTV_STALL_RECOVER_MS = 10_000;
-/**
  * Fallos seguidos de `stat_url` con el motor `online` y CONTESTANDO (HTTP de
  * error o respuesta rara) para dar la sesión por perdida.
  */
@@ -884,13 +879,13 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
    * El relé pide reiniciar el remux (otra base de tiempos u otra variante, §6.1), o la lista no avanza
    * (B3). El reinicio de la IPTV es continuo (diagnostico-iptv-0.8.2 B2): misma lista con la numeración
    * seguida, así que el `stream.reopened` va con `seamless` y la web no se reengancha (C3); la app iOS se
-   * reengancha igual que siempre. Con `signal`, se deja de esperar la lista nueva y se cierra.
+   * reengancha igual que siempre. Con `stalled` (B3), si la generación nueva no avanza, `iptv_dropped`.
    */
-  async function restartIptv(session: SessionRec, signal?: AbortSignal): Promise<void> {
+  async function restartIptv(session: SessionRec, stalled = false): Promise<void> {
     if (session.closed) return;
     let handle: RemuxHandle | null = null;
     try {
-      handle = await remux.restart(session.id, signal);
+      handle = await remux.restart(session.id, undefined, stalled ? { stalled: true } : {});
     } catch (error) {
       logger.warn(
         { sessionId: session.id, errorCode: errorCodeOf(error) },
@@ -898,6 +893,8 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       );
     }
     if (session.closed) return;
+    /* Otro reinicio (el relé y el vigilante a la vez) ha sustituido a este a mitad: su resultado manda. */
+    if (!handle && remux.restarting(session.id)) return;
     if (!handle) {
       await closeIptv(session, 'iptv_dropped');
       return;
@@ -915,8 +912,9 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
   /**
    * La lista de una IPTV no avanza (vigilante del remux, B3; red del P2: el relé colgado en una
    * reconexión). Un reinicio del remux mata ffmpeg, y con él el relé suelta la conexión con el proveedor y
-   * reconecta cuando el ffmpeg nuevo se engancha. Si en `IPTV_STALL_RECOVER_MS` tampoco hay lista nueva,
-   * `iptv_dropped`: la web pasa a AceStream en unos 20 s y no en 65.
+   * reconecta cuando el ffmpeg nuevo se engancha. Si la generación nueva no escribe ni un segmento en
+   * `max(10 s, 3×TD)` (el remux mide que avance, no que esté lista), `iptv_dropped`: la web pasa a
+   * AceStream en unos 20 s y no en 65.
    */
   function onRemuxStalled(sessionId: string): void {
     const session = sessions.get(sessionId);
@@ -924,14 +922,8 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     if (stallRecoveries.has(session.id)) return;
     stallRecoveries.add(session.id);
     logger.warn({ sessionId: session.id }, 'IPTV: la salida no avanza; se reconecta el relé');
-    const controller = new AbortController();
-    const timer = clock.setTimeout(
-      () => controller.abort(new AppError('iptv_dropped', { detail: 'la salida no avanza' })),
-      IPTV_STALL_RECOVER_MS,
-    );
     track(
-      restartIptv(session, controller.signal).finally(() => {
-        clock.clearTimeout(timer);
+      restartIptv(session, true).finally(() => {
         stallRecoveries.delete(session.id);
       }),
     );

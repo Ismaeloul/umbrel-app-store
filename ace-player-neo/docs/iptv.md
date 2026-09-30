@@ -1206,15 +1206,20 @@ HLS H.264 con AAC. No entra ahora.
   (§6.1). Mata el ffmpeg, arranca otro con la misma entrada del relé y emite `stream.reopened` `remux_restart`.
   Desde la 0.8.3 es **continuo** (diagnostico-iptv-0.8.2 B2): la carpeta no se vacía; el ffmpeg nuevo es otra
   «generación» con `-start_number` (1 + el mayor `index<N>.m4s` de la carpeta), `discont_start` y su propio
-  `init_<n>.mp4`. Hasta que escribe su lista se sirve la vieja (congelada) y sus segmentos; cuando la nueva está, se
-  borran los ficheros viejos. `serveFile` añade el `#EXT-X-DISCONTINUITY-SEQUENCE` que ffmpeg no escribe (`n−2`
-  mientras se ve la discontinuidad, `n−1` cuando sale) y, a mitad de un reinicio sin entrada, responde «aún no está»
-  (503; 404 en /native) en vez de 410. El evento lleva `seamless: true`. Antes la lista volvía a
+  `init_<n>.mp4`. Hasta que escribe su lista se sirve la vieja (congelada) y sus segmentos; un TD después de que la
+  nueva esté, se borran los ficheros viejos. `serveFile` añade el `#EXT-X-DISCONTINUITY-SEQUENCE` que ffmpeg no
+  escribe (las costuras que ha cruzado el cliente: `n−1` si se sirvieron todas las generaciones, una menos mientras
+  se ve la discontinuidad; una generación sustituida antes de servirse no cuenta). Si dos reinicios se pisan (el relé
+  y el vigilante), manda el último: el primero no cierra la sesión. A mitad de un reinicio sin entrada responde «aún
+  no está» (503; 404 en /native) en vez de 410. El evento lleva `seamless: true`. Antes la lista volvía a
   `MEDIA-SEQUENCE:0` con la misma URL y hls.js saltaba 30-58 s atrás.
-- **Vigilante de salida** (B3): una IPTV con visores, lista y viva cuya lista no cambia en `max(10 s, 3×TD)` avisa a
-  playback (una vez por atasco). Playback reinicia el remux (al morir el ffmpeg, el relé suelta la conexión con el
-  proveedor y reconecta cuando se engancha el nuevo) y, si en 10 s no hay lista nueva, cierra con `iptv_dropped`.
-  `ensure()` sobre una IPTV atascada avisa igual en vez de relanzar ffmpeg por su cuenta.
+- **Vigilante de salida** (B3): una IPTV con clientes, lista y viva cuya lista no cambia en `max(10 s, 3×TD)` (con el
+  TD de la lista de ese momento) avisa a playback (una vez por atasco). Playback reinicia el remux (al morir el
+  ffmpeg, el relé suelta la conexión con el proveedor y reconecta cuando se engancha el nuevo) y, si la generación
+  nueva no escribe ni un segmento en `max(10 s, 3×TD)`, cierra con `iptv_dropped` (se mide que avance, no que esté
+  lista: con GOP largos, dos segmentos tras reconectar pasan de 10 s). `ensure()` sobre una IPTV atascada avisa igual
+  en vez de relanzar ffmpeg por su cuenta; si el aviso lleva 40 s sin efecto, o nunca llegó a estar lista, relanza
+  como antes.
 - Si el remux de una sesión IPTV se cierra por su cuenta (desalojo, recolector, `onExit`), avisa al relé para que
   aborte la conexión con el proveedor (§6.1) y a playback, que cierra la sesión con `iptv_dropped`, no con
   `remux_died`.
