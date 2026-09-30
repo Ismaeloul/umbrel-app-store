@@ -2,6 +2,11 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 0.8.3 (2026-09-30)
+
+Versión de prueba basada en 0.8.2. Mejora la recuperación del reproductor AceStream tras una búsqueda o un corte.
+
+Añade «Pelis y Series» con búsqueda y filtros por tipo e idioma para títulos identificados en listas AceStream. Se conserva el soporte Xtream Codes de la versión 0.8.2.
 ## 0.8.2 (2026-09-26)
 
 Pestaña IPTV en Canales: con tu IPTV conectada, Canales tiene una pestaña
