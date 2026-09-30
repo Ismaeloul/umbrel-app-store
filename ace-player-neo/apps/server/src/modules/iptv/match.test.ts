@@ -197,6 +197,14 @@ describe('matchIptvChannels', () => {
     expect(matchIptvChannels(list, ['DAZN 1'], any)).toEqual([]);
   });
 
+  it('«Gol Play» de la agenda es un canal: casa con «ES: GOL PLAY» (no es una plataforma)', () => {
+    const list = catalog(CORPUS);
+    expect(names(matchIptvChannels(list, ['GOL Play'], { scorer }))[0]).toBe('GOL PLAY');
+    expect(names(matchIptvChannels(list, ['GOL PLAY HD --> NEW ERA'], { scorer }))[0]).toBe(
+      'GOL PLAY',
+    );
+  });
+
   it('trampas medidas: «Bar», «Antena 3 Internacional»', () => {
     expect(names(matchIptvChannels(cat, ['Antena 3'], { scorer }))).toEqual(['Antena 3']);
     expect(names(matchIptvChannels(cat, ['M+ LaLiga TV'], { scorer }))).not.toContain(
@@ -641,5 +649,43 @@ describe('lista pública de canales en abierto', () => {
     expect(guideGroupMatches(list, window, { ...match, channels: ['RTVE Play'] })).toEqual([]);
     /* Con el saque a la hora de la repetición tampoco: dura 30 min. */
     expect(guideGroupMatches(list, window, { ...match, start: replay })).toEqual([]);
+  });
+
+  it('guía: «Gol Play» en la agenda cuenta para confirmar su canal sin país (ya no es una plataforma)', () => {
+    const kickoff = Date.UTC(2026, 8, 27, 19, 0);
+    const list = catalog([
+      at('GOL PLAY', 'https://oficial.example/gol.m3u8', 'Gol.TV'),
+      at('Otro', 'https://oficial.example/otro.m3u8', 'Otro.TV'),
+    ]);
+    const window = windowFrom(
+      [
+        {
+          channel: 'gol.tv',
+          start: kickoff - 10 * 60_000,
+          stop: kickoff + 115 * 60_000,
+          title: 'UEFA Nations League: Inglaterra - España',
+          subTitle: '',
+          desc: '',
+          categories: ['SPORTS'],
+          previouslyShown: false,
+          live: false,
+        },
+      ],
+      kickoff - 3_600_000,
+    );
+    const match = {
+      id: 'm2',
+      home: 'Inglaterra',
+      away: 'España',
+      competition: 'UEFA Nations League',
+      title: 'Inglaterra - España',
+      start: kickoff,
+      channels: ['GOL Play'],
+    };
+    expect(guideGroupMatches(list, window, match).map((item) => item.best.display)).toEqual([
+      'GOL PLAY',
+    ]);
+    /* Sin el canal en la agenda, un canal sin país no lo confirma la guía sola. */
+    expect(guideGroupMatches(list, window, { ...match, channels: ['RTVE Play'] })).toEqual([]);
   });
 });
