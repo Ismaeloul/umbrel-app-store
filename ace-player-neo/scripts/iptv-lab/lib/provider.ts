@@ -42,7 +42,10 @@ export interface TsNet {
   /** Tope de caudal, en veces el del canal (1,2 = un 20 % más que lo que ocupa). Sin él, sin tope. */
   readonly capFactor?: number;
   /** Parones periódicos: cada `everyS` (aleatorio en el rango) se deja de mandar `pauseS` segundos. */
-  readonly jitter?: { readonly everyS: readonly [number, number]; readonly pauseS: readonly [number, number] };
+  readonly jitter?: {
+    readonly everyS: readonly [number, number];
+    readonly pauseS: readonly [number, number];
+  };
   /** Corte de la conexión a los `afterS` segundos (la primera, o todas con `every`). */
   readonly cut?: {
     readonly afterS: number;
@@ -108,9 +111,8 @@ export interface LabProvider {
 const rand = (range: readonly [number, number]): number =>
   range[0] + Math.random() * (range[1] - range[0]);
 
-/** Duración de un clip TS según ffprobe (para el caudal medio). */
-function clipBytesPerSecond(clip: string): number {
-  const size = statSync(clip).size;
+/** Duración de un clip TS según ffprobe. */
+function clipSeconds(clip: string): number {
   const probe = spawnSyncText('ffprobe', [
     '-v',
     'error',
@@ -120,8 +122,18 @@ function clipBytesPerSecond(clip: string): number {
     'default=nw=1:nk=1',
     clip,
   ]);
-  const seconds = Number(probe.trim()) || 1;
-  return size / seconds;
+  return Number(probe.trim()) || 1;
+}
+
+/** Caudal medio del clip (bytes/s). */
+function clipBytesPerSecond(clip: string): number {
+  return statSync(clip).size / clipSeconds(clip);
+}
+
+/** Dónde va la emisión «en directo» (s dentro del clip) si empezó en `firstStart`: un codificador que se
+    reinicia sigue emitiendo el mismo directo, no vuelve al principio. */
+function liveSeek(firstStart: number, seconds: number): number {
+  return ((Date.now() - firstStart) / 1000) % seconds;
 }
 
 function spawnSyncText(cmd: string, args: string[]): string {
@@ -143,23 +155,30 @@ class TsEmitter {
   private readonly listeners = new Set<(chunk: Buffer) => void>();
   private offsetS = 0;
   private startedAt = 0;
+  private firstStartedAt = 0;
   private stopped = false;
   private paused = false;
+  private readonly clipS: number;
 
   constructor(
     private readonly clip: string,
     private readonly keepS: number,
     private readonly event: (type: string, data?: Record<string, unknown>) => void,
-  ) {}
+  ) {
+    this.clipS = clipSeconds(clip);
+  }
 
   start(offsetS = 0): void {
     this.offsetS = offsetS;
+    const seek = this.firstStartedAt ? liveSeek(this.firstStartedAt, this.clipS) : 0;
     this.startedAt = Date.now();
+    if (!this.firstStartedAt) this.firstStartedAt = this.startedAt;
     this.carry = Buffer.alloc(0);
     const args = [
       '-hide_banner',
       '-loglevel',
       'error',
+      ...(seek > 0.5 ? ['-ss', seek.toFixed(2)] : []),
       '-re',
       '-stream_loop',
       '-1',
@@ -176,7 +195,7 @@ class TsEmitter {
     ];
     const child = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
     this.child = child;
-    this.event('emisor.start', { offsetS });
+    this.event('emisor.start', { offsetS, seekS: +seek.toFixed(2) });
     child.stdout?.on('data', (data: Buffer) => this.onData(data));
     child.stderr?.on('data', (data: Buffer) =>
       this.event('emisor.stderr', { text: data.toString().slice(0, 300) }),
@@ -206,6 +225,8 @@ class TsEmitter {
    * del PTS respecto a donde iba (+4: hueco de 4 s; -3: vuelve 3 s atrás).
    */
   jump(jumpS: number): void {
+    /* El proceso nuevo empieza en el mismo punto del directo (-ss) y ffmpeg lleva sus tiempos a 0 (+1,4 s):
+       con el desfase de antes, el salto real sería de -elapsed; se compensa para que sea `jumpS`. */
     const elapsed = (Date.now() - this.startedAt) / 1000;
     const offset = Math.round((this.offsetS + elapsed + jumpS) * 1000) / 1000;
     const old = this.child;
@@ -228,7 +249,8 @@ class TsEmitter {
     const chunk = Buffer.from(buf.subarray(0, usable));
     const now = Date.now();
     this.ring.push({ at: now, buf: chunk });
-    while (this.ring.length && now - (this.ring[0] as Chunk).at > this.keepS * 1000) this.ring.shift();
+    while (this.ring.length && now - (this.ring[0] as Chunk).at > this.keepS * 1000)
+      this.ring.shift();
     for (const listener of [...this.listeners]) listener(chunk);
   }
 
@@ -259,6 +281,7 @@ class TsEmitter {
 class HlsEmitter {
   private child: ChildProcess | null = null;
   private stopped = false;
+  private firstStartedAt = 0;
 
   constructor(
     private readonly clip: string,
@@ -270,10 +293,13 @@ class HlsEmitter {
   start(): void {
     rmSync(this.dir, { recursive: true, force: true });
     mkdirSync(this.dir, { recursive: true });
+    const seek = this.firstStartedAt ? liveSeek(this.firstStartedAt, clipSeconds(this.clip)) : 0;
+    if (!this.firstStartedAt) this.firstStartedAt = Date.now();
     const args = [
       '-hide_banner',
       '-loglevel',
       'error',
+      ...(seek > 0.5 ? ['-ss', seek.toFixed(2)] : []),
       '-re',
       '-stream_loop',
       '-1',
@@ -297,7 +323,7 @@ class HlsEmitter {
     ];
     const child = spawn('ffmpeg', args, { stdio: ['ignore', 'ignore', 'pipe'] });
     this.child = child;
-    this.event('emisor.start', { kind: 'hls' });
+    this.event('emisor.start', { kind: 'hls', seekS: +seek.toFixed(2) });
     child.stderr?.on('data', (data: Buffer) =>
       this.event('emisor.stderr', { text: data.toString().slice(0, 300) }),
     );
@@ -337,7 +363,10 @@ export async function startLabProvider(options: LabProviderOptions): Promise<Lab
   const bytesPerSecond = clipBytesPerSecond(options.clip);
   const tsNet: TsNet = options.ts ?? { burstS: 2 };
   const hlsNet: HlsNet = options.hls ?? { segmentS: 6, listSize: 6 };
-  const ts = options.kind === 'ts' ? new TsEmitter(options.clip, Math.max(30, tsNet.burstS + 5), event) : null;
+  const ts =
+    options.kind === 'ts'
+      ? new TsEmitter(options.clip, Math.max(30, tsNet.burstS + 5), event)
+      : null;
   const hls =
     options.kind === 'hls'
       ? new HlsEmitter(options.clip, path.join(options.workDir, 'hls-origen'), hlsNet, event)
@@ -474,7 +503,8 @@ export async function startLabProvider(options: LabProviderOptions): Promise<Lab
       return;
     }
     const net = hlsNet;
-    if (net.playlistDelayMs) await new Promise((r) => setTimeout(r, rand(net.playlistDelayMs as [number, number])));
+    if (net.playlistDelayMs)
+      await new Promise((r) => setTimeout(r, rand(net.playlistDelayMs as [number, number])));
     let text: string;
     const now = Date.now();
     const stale =
@@ -529,7 +559,8 @@ export async function startLabProvider(options: LabProviderOptions): Promise<Lab
       return;
     }
     const started = Date.now();
-    if (net.segmentDelayMs) await new Promise((r) => setTimeout(r, rand(net.segmentDelayMs as [number, number])));
+    if (net.segmentDelayMs)
+      await new Promise((r) => setTimeout(r, rand(net.segmentDelayMs as [number, number])));
     res.writeHead(200, { 'content-type': 'video/mp2t', 'content-length': String(body.length) });
     if (!net.capFactor) {
       res.end(body);
@@ -617,7 +648,12 @@ export async function startLabProvider(options: LabProviderOptions): Promise<Lab
      el colchón del TS lleno y, en HLS, una ventana con 3 segmentos o más. */
   const warmUntil = Date.now() + 60_000;
   for (;;) {
-    if (ts && ts.recent(tsNet.burstS + 1).length && Date.now() - startedAt >= (tsNet.burstS + 1) * 1000) break;
+    if (
+      ts &&
+      ts.recent(tsNet.burstS + 1).length &&
+      Date.now() - startedAt >= (tsNet.burstS + 1) * 1000
+    )
+      break;
     if (hls) {
       try {
         const text = readFileSync(path.join(hls.dir, 'live.m3u8'), 'utf8');
@@ -631,7 +667,9 @@ export async function startLabProvider(options: LabProviderOptions): Promise<Lab
   /* El reinicio del emisor HLS cuenta desde que el proveedor está listo (≈ cuando empieza la prueba). */
   const hlsRestart = hlsNet.restart;
   const hlsRestartTimer =
-    hls && hlsRestart ? setTimeout(() => hls.restart(hlsRestart.gapS ?? 0), hlsRestart.atS * 1000) : null;
+    hls && hlsRestart
+      ? setTimeout(() => hls.restart(hlsRestart.gapS ?? 0), hlsRestart.atS * 1000)
+      : null;
   const port = (server.address() as AddressInfo).port;
   event('provider.listen', { port, bytesPerSecond: Math.round(bytesPerSecond) });
 

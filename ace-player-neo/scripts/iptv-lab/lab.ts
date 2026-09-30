@@ -173,7 +173,8 @@ async function api<T>(base: string, pathname: string, init: RequestInit = {}): P
     headers: { 'content-type': 'application/json', ...(init.headers ?? {}) },
   });
   const text = await res.text();
-  if (!res.ok) throw new Error(`${init.method ?? 'GET'} ${pathname} → ${res.status}: ${text.slice(0, 300)}`);
+  if (!res.ok)
+    throw new Error(`${init.method ?? 'GET'} ${pathname} → ${res.status}: ${text.slice(0, 300)}`);
   return (text ? JSON.parse(text) : null) as T;
 }
 
@@ -261,7 +262,10 @@ function reanalyze(dir: string): void {
   try {
     meta = JSON.parse(readFileSync(path.join(dir, 'meta.json'), 'utf8')) as typeof meta;
   } catch {}
-  const name = meta.scenario ?? SCENARIOS.map((s) => s.name).find((n) => path.basename(dir).startsWith(n)) ?? '';
+  const name =
+    meta.scenario ??
+    SCENARIOS.map((s) => s.name).find((n) => path.basename(dir).startsWith(n)) ??
+    '';
   const scenario = findScenario(name);
   if (!scenario) throw new Error(`No sé de qué escenario es ${dir}`);
   let recordStart = meta.recordStart ?? 0;
@@ -300,9 +304,13 @@ async function main(): Promise<void> {
   const chrome = findChrome(args);
   log(`escenario ${scenario.name}: ${scenario.description}`);
   log(`clip ${describeClip(scenario.clip)}; ${minutes} min; modo ${args.mode}; salida ${outDir}`);
-  const remuxFfmpeg = spawnSync(args.ffmpegDir ? path.join(args.ffmpegDir, 'ffmpeg') : 'ffmpeg', ['-version'], {
-    encoding: 'utf8',
-  }).stdout?.split('\n')[0];
+  const remuxFfmpeg = spawnSync(
+    args.ffmpegDir ? path.join(args.ffmpegDir, 'ffmpeg') : 'ffmpeg',
+    ['-version'],
+    {
+      encoding: 'utf8',
+    },
+  ).stdout?.split('\n')[0];
   log(`ffmpeg del remux: ${remuxFfmpeg ?? '¿?'}`);
 
   const clip = await ensureClip(args.cache, scenario.clip, log);
@@ -327,7 +335,9 @@ async function main(): Promise<void> {
     workDir: work,
     onEvent: (e) => providerLog.write(e),
   });
-  log(`proveedor en ${urlHost(loop)}:${provider.port} (${Math.round((provider.bytesPerSecond * 8) / 1000)} kbit/s)`);
+  log(
+    `proveedor en ${urlHost(loop)}:${provider.port} (${Math.round((provider.bytesPerSecond * 8) / 1000)} kbit/s)`,
+  );
 
   // Backend de verdad.
   const backendPort = await freePort(loop);
@@ -340,7 +350,9 @@ async function main(): Promise<void> {
     [TSX_CLI, path.join(HERE, 'lib/backend.ts')],
     {
       ...process.env,
-      ...(args.ffmpegDir ? { PATH: `${args.ffmpegDir}${path.delimiter}${process.env.PATH ?? ''}` } : {}),
+      ...(args.ffmpegDir
+        ? { PATH: `${args.ffmpegDir}${path.delimiter}${process.env.PATH ?? ''}` }
+        : {}),
       PORT: String(backendPort),
       DATA_DIR: dataDir,
       AUTO_SYNC: 'false',
@@ -374,13 +386,14 @@ async function main(): Promise<void> {
   });
   const syncStarted = Date.now();
   for (;;) {
-    const view = await api<{ provider: { status: string; channels: number; error: unknown } | null }>(
-      backend,
-      '/api/v1/iptv',
-    );
+    const view = await api<{
+      provider: { status: string; channels: number; error: unknown } | null;
+    }>(backend, '/api/v1/iptv');
     if (view.provider?.status === 'ok' && view.provider.channels > 0) break;
-    if (view.provider?.status === 'error') throw new Error(`IPTV en error: ${JSON.stringify(view.provider.error)}`);
-    if (Date.now() - syncStarted > 60_000) throw new Error('La IPTV no terminó de sincronizar en 60 s');
+    if (view.provider?.status === 'error')
+      throw new Error(`IPTV en error: ${JSON.stringify(view.provider.error)}`);
+    if (Date.now() - syncStarted > 60_000)
+      throw new Error('La IPTV no terminó de sincronizar en 60 s');
     await new Promise((r) => setTimeout(r, 500));
   }
   const found = await api<{ channels: { id: string; title: string }[] }>(
@@ -398,7 +411,16 @@ async function main(): Promise<void> {
     launch(
       'web',
       process.execPath,
-      [VITE_CLI, '--config', VITE_CONFIG, '--host', '127.0.0.1', '--port', String(webPort), '--strictPort'],
+      [
+        VITE_CLI,
+        '--config',
+        VITE_CONFIG,
+        '--host',
+        '127.0.0.1',
+        '--port',
+        String(webPort),
+        '--strictPort',
+      ],
       { ...process.env, VITE_BACKEND: backend },
       path.join(outDir, 'vite.log'),
       WEB_DIR,
@@ -417,16 +439,23 @@ async function main(): Promise<void> {
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const page = await context.newPage();
   const consoleLog = new Jsonl(path.join(outDir, 'consola.jsonl'));
-  page.on('console', (msg) => consoleLog.write({ at: Date.now(), type: msg.type(), text: msg.text().slice(0, 800) }));
-  page.on('pageerror', (err) => consoleLog.write({ at: Date.now(), type: 'pageerror', text: String(err).slice(0, 800) }));
-  await page.route((url) => /\/(?:hls__js\.js|hls\.mjs|hls\.js)$/.test(url.pathname), async (route) => {
-    const url = route.request().url();
-    const response = await route.fetch();
-    const body = await response.text();
-    const patched = hlsPatch(body);
-    if (patched !== body) log(`hls.js parcheado (${url.replace(/\?.*/, '')})`);
-    await route.fulfill({ response, body: patched });
-  });
+  page.on('console', (msg) =>
+    consoleLog.write({ at: Date.now(), type: msg.type(), text: msg.text().slice(0, 800) }),
+  );
+  page.on('pageerror', (err) =>
+    consoleLog.write({ at: Date.now(), type: 'pageerror', text: String(err).slice(0, 800) }),
+  );
+  await page.route(
+    (url) => /\/(?:hls__js\.js|hls\.mjs|hls\.js)$/.test(url.pathname),
+    async (route) => {
+      const url = route.request().url();
+      const response = await route.fetch();
+      const body = await response.text();
+      const patched = hlsPatch(body);
+      if (patched !== body) log(`hls.js parcheado (${url.replace(/\?.*/, '')})`);
+      await route.fulfill({ response, body: patched });
+    },
+  );
   await page.addInitScript({ content: instrumentSource() });
 
   let sessionId: string | null = null;
@@ -457,7 +486,19 @@ async function main(): Promise<void> {
 
   writeFileSync(
     path.join(outDir, 'meta.json'),
-    JSON.stringify({ scenario: scenario.name, recordStart, sessionId, mode: args.mode, channel: channel.id, chrome, remuxFfmpeg }, null, 2),
+    JSON.stringify(
+      {
+        scenario: scenario.name,
+        recordStart,
+        sessionId,
+        mode: args.mode,
+        channel: channel.id,
+        chrome,
+        remuxFfmpeg,
+      },
+      null,
+      2,
+    ),
   );
 
   // Grabación.
@@ -480,7 +521,8 @@ async function main(): Promise<void> {
       const info = await probeSegment(path.join(remuxRoot, dir), name);
       if (!info) return;
       const gapV = prevSeg?.v && info.v ? +(info.v[0] - prevSeg.v[1] - frameS).toFixed(3) : null;
-      const gapA = prevSeg?.a && info.a ? +(info.a[0] - prevSeg.a[1] - 1024 / 48000).toFixed(3) : null;
+      const gapA =
+        prevSeg?.a && info.a ? +(info.a[0] - prevSeg.a[1] - 1024 / 48000).toFixed(3) : null;
       remuxLog.write({
         at: Date.now(),
         type: 'remux.seg',
@@ -520,7 +562,16 @@ async function main(): Promise<void> {
       const durs = [...text.matchAll(/#EXTINF:([\d.]+)/g)].map((m) => Number(m[1]));
       const disc = (text.match(/#EXT-X-DISCONTINUITY\b/g) ?? []).length;
       const segs = [...text.matchAll(/^(index\d+\.m4s)$/gm)].map((m) => m[1]);
-      remuxLog.write({ at: Date.now(), type: 'remux.playlist', seq, td, n: durs.length, durs, disc, last: segs.at(-1) });
+      remuxLog.write({
+        at: Date.now(),
+        type: 'remux.playlist',
+        seq,
+        td,
+        n: durs.length,
+        durs,
+        disc,
+        last: segs.at(-1),
+      });
       for (const name of segs) if (name) queueProbe(dir, name);
     } catch (error) {
       remuxLog.write({ at: Date.now(), type: 'remux.error', error: String(error) });
@@ -545,8 +596,11 @@ async function main(): Promise<void> {
     for (const e of drained.events) pageEvents.write(e);
     if (Date.now() - lastStatus > 15_000) {
       lastStatus = Date.now();
-      const s = drained.samples.at(-1) as { ct?: number; app?: { phase?: string; msg?: string } } | undefined;
-      log(`t=${elapsed.toFixed(0)}s ct=${s?.ct ?? '-'} fase=${s?.app?.phase ?? '-'} ${s?.app?.msg ?? ''}`);
+      const s = drained.samples.at(-1) as
+        { ct?: number; app?: { phase?: string; msg?: string } } | undefined;
+      log(
+        `t=${elapsed.toFixed(0)}s ct=${s?.ct ?? '-'} fase=${s?.app?.phase ?? '-'} ${s?.app?.msg ?? ''}`,
+      );
     }
   }
   const last = await drain(page);
@@ -554,7 +608,13 @@ async function main(): Promise<void> {
   for (const e of last.events) pageEvents.write(e);
   clearInterval(remuxTimer);
   await probeChain;
-  await Promise.all([samples.close(), pageEvents.close(), remuxLog.close(), providerLog.close(), consoleLog.close()]);
+  await Promise.all([
+    samples.close(),
+    pageEvents.close(),
+    remuxLog.close(),
+    providerLog.close(),
+    consoleLog.close(),
+  ]);
   await page.screenshot({ path: path.join(outDir, 'final.png') }).catch(() => undefined);
   await stopSolo?.();
   await browser.close();
@@ -571,7 +631,9 @@ async function main(): Promise<void> {
 async function drain(page: Page): Promise<{ samples: unknown[]; events: unknown[] }> {
   try {
     return await page.evaluate(() => {
-      const lab = (window as unknown as { __lab?: { drain(): { samples: unknown[]; events: unknown[] } } }).__lab;
+      const lab = (
+        window as unknown as { __lab?: { drain(): { samples: unknown[]; events: unknown[] } } }
+      ).__lab;
       return lab ? lab.drain() : { samples: [], events: [] };
     });
   } catch {

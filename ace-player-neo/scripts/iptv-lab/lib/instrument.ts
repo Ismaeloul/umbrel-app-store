@@ -152,7 +152,7 @@ export function instrumentSource(): string {
     const v = document.querySelector('video');
     if (v) hookVideo(v);
     const n = noticeText();
-    const key = n.replace(/\d+/g, '#');
+    const key = n.replace(/\\d+/g, '#');
     if (key !== lastNotice) { lastNotice = key; push('notice', { text: n }); }
     if (!v) return;
     const h = lab.hls;

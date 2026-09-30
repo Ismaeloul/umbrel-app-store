@@ -12,7 +12,11 @@ export interface SegmentProbe {
   readonly v: readonly [number, number] | null;
   readonly a: readonly [number, number] | null;
   /** Huecos dentro del segmento (> 0,15 s) o DTS que van hacia atrás. */
-  readonly holes: readonly { readonly track: 'v' | 'a'; readonly from: number; readonly to: number }[];
+  readonly holes: readonly {
+    readonly track: 'v' | 'a';
+    readonly from: number;
+    readonly to: number;
+  }[];
   readonly vFrames: number;
   readonly keyFirst: boolean | null;
 }
@@ -34,13 +38,25 @@ function run(cmd: string, args: string[], input: Buffer): Promise<string> {
 export async function probeSegment(dir: string, name: string): Promise<SegmentProbe | null> {
   let data: Buffer;
   try {
-    data = Buffer.concat([readFileSync(path.join(dir, 'init.mp4')), readFileSync(path.join(dir, name))]);
+    data = Buffer.concat([
+      readFileSync(path.join(dir, 'init.mp4')),
+      readFileSync(path.join(dir, name)),
+    ]);
   } catch {
     return null;
   }
   const out = await run(
     'ffprobe',
-    ['-v', 'error', '-show_entries', 'packet=stream_index,dts_time,flags', '-of', 'csv=p=0', '-i', 'pipe:0'],
+    [
+      '-v',
+      'error',
+      '-show_entries',
+      'packet=stream_index,dts_time,flags',
+      '-of',
+      'csv=p=0',
+      '-i',
+      'pipe:0',
+    ],
     data,
   );
   /* init.mp4 de ffmpeg: vídeo en el índice 0 y audio en el 1 (`-map 0:v:0 -map 0:a:0?`). */
@@ -60,7 +76,8 @@ export async function probeSegment(dir: string, name: string): Promise<SegmentPr
   const scan = (list: number[], track: 'v' | 'a', max: number): void => {
     for (let i = 1; i < list.length; i += 1) {
       const d = (list[i] as number) - (list[i - 1] as number);
-      if (d > max || d < -0.001) holes.push({ track, from: list[i - 1] as number, to: list[i] as number });
+      if (d > max || d < -0.001)
+        holes.push({ track, from: list[i - 1] as number, to: list[i] as number });
     }
   };
   scan(v, 'v', 0.15);

@@ -18,9 +18,13 @@ import path from 'node:path';
 import { buildRemuxArgs } from '../../../apps/server/src/modules/remux/args.js';
 
 const cache = process.env.IPTV_LAB_CACHE ?? path.join(os.tmpdir(), 'iptv-lab-cache');
-const clipPath = path.join(cache, readdirSync(cache).find((f) => /^clip-1920x1080-25-g2-.*\.ts$/.test(f)) ?? '');
+const clipPath = path.join(
+  cache,
+  readdirSync(cache).find((f) => /^clip-1920x1080-25-g2-.*\.ts$/.test(f)) ?? '',
+);
 const ffmpegs: string[] = [];
-for (let i = 2; i < process.argv.length; i += 1) if (process.argv[i] === '--ffmpeg') ffmpegs.push(process.argv[++i] as string);
+for (let i = 2; i < process.argv.length; i += 1)
+  if (process.argv[i] === '--ffmpeg') ffmpegs.push(process.argv[++i] as string);
 if (!ffmpegs.length) ffmpegs.push('ffmpeg');
 const work = path.join(os.tmpdir(), 'iptv-lab-empalme');
 rmSync(work, { recursive: true, force: true });
@@ -44,7 +48,10 @@ const CASES: Record<string, [number, number]> = {
 const files: Record<string, string> = {};
 for (const [name, [end, start]] of Object.entries(CASES)) {
   const file = `${name.replace(/[^a-z0-9]+/gi, '-')}.ts`;
-  writeFileSync(path.join(work, file), Buffer.concat([data.subarray(0, at(end)), data.subarray(at(start), at(start + 30))]));
+  writeFileSync(
+    path.join(work, file),
+    Buffer.concat([data.subarray(0, at(end)), data.subarray(at(start), at(start + 30))]),
+  );
   files[name] = file;
 }
 /* Servidor que aguanta varias peticiones a la vez (el de python se atascaba). */
@@ -63,20 +70,63 @@ const port = (server.address() as { port: number }).port;
 
 function probeHoles(dir: string, from: number, to: number): string[] {
   const out: string[] = [];
-  const names = Array.from({ length: to - from + 1 }, (_, k) => path.join(dir, `index${from + k}.m4s`));
-  const joined = Buffer.concat([readFileSync(path.join(dir, 'init.mp4')), ...names.map((n) => { try { return readFileSync(n); } catch { return Buffer.alloc(0); } })]);
+  const names = Array.from({ length: to - from + 1 }, (_, k) =>
+    path.join(dir, `index${from + k}.m4s`),
+  );
+  const joined = Buffer.concat([
+    readFileSync(path.join(dir, 'init.mp4')),
+    ...names.map((n) => {
+      try {
+        return readFileSync(n);
+      } catch {
+        return Buffer.alloc(0);
+      }
+    }),
+  ]);
   writeFileSync(path.join(dir, 'tramo.mp4'), joined);
-  for (const [idx, label, max] of [['v', 'vídeo', 0.15], ['a', 'audio', 0.15]] as const) {
-    const r = spawnSync('ffprobe', ['-v', 'error', '-select_streams', idx, '-show_entries', 'packet=dts_time', '-of', 'csv=p=0', path.join(dir, 'tramo.mp4')], { encoding: 'utf8' });
+  for (const [idx, label, max] of [
+    ['v', 'vídeo', 0.15],
+    ['a', 'audio', 0.15],
+  ] as const) {
+    const r = spawnSync(
+      'ffprobe',
+      [
+        '-v',
+        'error',
+        '-select_streams',
+        idx,
+        '-show_entries',
+        'packet=dts_time',
+        '-of',
+        'csv=p=0',
+        path.join(dir, 'tramo.mp4'),
+      ],
+      { encoding: 'utf8' },
+    );
     /* Sin líneas vacías (Number('') es 0 y saldría un «hueco» falso desde 0). */
-    const ts = r.stdout.split('\n').filter((l) => l.trim()).map(Number).filter(Number.isFinite).sort((a, b) => a - b);
+    const ts = r.stdout
+      .split('\n')
+      .filter((l) => l.trim())
+      .map(Number)
+      .filter(Number.isFinite)
+      .sort((a, b) => a - b);
     for (let i = 1; i < ts.length; i += 1) {
       const d = (ts[i] as number) - (ts[i - 1] as number);
-      if (d > max) out.push(`hueco de ${label} ${(ts[i - 1] as number).toFixed(2)}→${(ts[i] as number).toFixed(2)} (${d.toFixed(2)} s)`);
+      if (d > max)
+        out.push(
+          `hueco de ${label} ${(ts[i - 1] as number).toFixed(2)}→${(ts[i] as number).toFixed(2)} (${d.toFixed(2)} s)`,
+        );
     }
   }
-  const dec = spawnSync('ffmpeg', ['-hide_banner', '-v', 'error', '-i', path.join(dir, 'tramo.mp4'), '-f', 'null', '-'], { encoding: 'utf8' });
-  const errors = dec.stderr.split('\n').filter((l) => /h264|dts/i.test(l)).map((l) => l.replace(/ @ 0x[0-9a-f]+/, ''));
+  const dec = spawnSync(
+    'ffmpeg',
+    ['-hide_banner', '-v', 'error', '-i', path.join(dir, 'tramo.mp4'), '-f', 'null', '-'],
+    { encoding: 'utf8' },
+  );
+  const errors = dec.stderr
+    .split('\n')
+    .filter((l) => /h264|dts/i.test(l))
+    .map((l) => l.replace(/ @ 0x[0-9a-f]+/, ''));
   if (errors.length) out.push(`decodificador: ${[...new Set(errors)].slice(0, 3).join(' | ')}`);
   return out;
 }
@@ -95,19 +145,29 @@ function runAsync(cmd: string, args: string[]): Promise<{ status: number | null;
 }
 
 for (const ffmpeg of ffmpegs) {
-  const version = spawnSync(ffmpeg, ['-version'], { encoding: 'utf8' }).stdout.split('\n')[0]?.split(' ').slice(0, 3).join(' ');
+  const version = spawnSync(ffmpeg, ['-version'], { encoding: 'utf8' })
+    .stdout.split('\n')[0]
+    ?.split(' ')
+    .slice(0, 3)
+    .join(' ');
   process.stdout.write(`\n== ${version}\n`);
   for (const [name, file] of Object.entries(files)) {
     const dir = path.join(work, `${file}-${ffmpegs.indexOf(ffmpeg)}`);
     mkdirSync(dir, { recursive: true });
-    const args = buildRemuxArgs({ url: `http://127.0.0.1:${port}/${file}`, dir, sessionId: 's_lab', origin: 'iptv', platform: 'linux' });
+    const args = buildRemuxArgs({
+      url: `http://127.0.0.1:${port}/${file}`,
+      dir,
+      sessionId: 's_lab',
+      origin: 'iptv',
+      platform: 'linux',
+    });
     args[args.indexOf('-hls_list_size') + 1] = '0';
     /* Sin la marca `ace_session=`: el recolector de un backend que esté corriendo (el del laboratorio)
        mataría este ffmpeg como huérfano a los pocos segundos. */
     const mark = args.findIndex((a) => a.startsWith('ace_session='));
     if (mark >= 0) args[mark] = 'lab_empalme=1';
     const run = await runAsync(ffmpeg, args);
-    let playlist = '';
+    let playlist: string;
     try {
       playlist = readFileSync(path.join(dir, 'index.m3u8'), 'utf8');
     } catch {
@@ -115,13 +175,21 @@ for (const ffmpeg of ffmpegs) {
       continue;
     }
     const durs = [...playlist.matchAll(/#EXTINF:([\d.]+)/g)].map((m) => Number(m[1]));
-    const odd = durs.map((d, k) => [k, d] as const).filter(([k, d]) => Math.abs(d - 2) > 0.05 && k !== durs.length - 1 && k > 0);
+    const odd = durs
+      .map((d, k) => [k, d] as const)
+      .filter(([k, d]) => Math.abs(d - 2) > 0.05 && k !== durs.length - 1 && k > 0);
     const td = /#EXT-X-TARGETDURATION:(\d+)/.exec(playlist)?.[1];
-    const disc = run.stderr.split('\n').filter((l) => /discontinuity/.test(l)).map((l) => l.replace(/^\[[^\]]*\] /, '').trim());
-    process.stdout.write(`  ${name}: TARGETDURATION ${td}; EXTINF raros ${JSON.stringify(odd.map(([k, d]) => `#${k}=${d.toFixed(2)}`))}\n`);
+    const disc = run.stderr
+      .split('\n')
+      .filter((l) => /discontinuity/.test(l))
+      .map((l) => l.replace(/^\[[^\]]*\] /, '').trim());
+    process.stdout.write(
+      `  ${name}: TARGETDURATION ${td}; EXTINF raros ${JSON.stringify(odd.map(([k, d]) => `#${k}=${d.toFixed(2)}`))}\n`,
+    );
     for (const d of disc) process.stdout.write(`      ffmpeg: ${d}\n`);
     const center = odd[0]?.[0] ?? 29;
-    for (const h of probeHoles(dir, Math.max(1, center - 2), Math.min(durs.length - 1, center + 2))) process.stdout.write(`      ${h}\n`);
+    for (const h of probeHoles(dir, Math.max(1, center - 2), Math.min(durs.length - 1, center + 2)))
+      process.stdout.write(`      ${h}\n`);
   }
 }
 server.close();

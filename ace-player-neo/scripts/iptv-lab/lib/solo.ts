@@ -31,7 +31,9 @@ export interface SoloOptions {
 const VIEWER = 'lab-viewer-1';
 const DEVICE = 'lab-device-1';
 
-export async function soloPage(options: SoloOptions): Promise<{ sessionId: string; stop(): Promise<void> }> {
+export async function soloPage(
+  options: SoloOptions,
+): Promise<{ sessionId: string; stop(): Promise<void> }> {
   const { page, backend, channelId, profile, log } = options;
   const query = new URLSearchParams({
     client: 'web',
@@ -50,7 +52,9 @@ export async function soloPage(options: SoloOptions): Promise<{ sessionId: strin
     source?: string;
   };
   if (!res.ok) throw new Error(`channelStream → ${res.status}: ${JSON.stringify(grant)}`);
-  log(`sesión ${grant.session.id} (${grant.protocol}, ${grant.source}) en ${Date.now() - started} ms: ${grant.url}`);
+  log(
+    `sesión ${grant.session.id} (${grant.protocol}, ${grant.source}) en ${Date.now() - started} ms: ${grant.url}`,
+  );
   const beat = setInterval(() => {
     void fetch(`${backend}/api/v1/sessions/${grant.session.id}/heartbeat`, {
       method: 'POST',

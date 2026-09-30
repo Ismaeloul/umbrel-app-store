@@ -91,22 +91,32 @@ Para validar un arreglo: el mismo escenario antes y después, y comparar `resume
 
 ## Escenarios
 
-| Nombre | Qué prueba |
-|---|---|
-| `ts-limpio` | TS continuo, red perfecta, colchón de 2 s |
-| `ts-colchon8` | TS con colchón de 8 s al conectar |
-| `ts-irregular` | cada 8-20 s deja de llegar 1-4 s; luego ráfaga con tope 1,3× |
-| `ts-parones` | parones de 5-9 s (por debajo de los 10 s del relé) cada 25-40 s, tope 1,2× |
-| `ts-lento` | caudal justo (1,05×) con colchón de 8 s |
-| `ts-corte` | el proveedor corta a los 60 s; al volver, misma línea de tiempo |
-| `ts-corte-ocupado` | corte a los 60 s y 458 en las 2 reconexiones siguientes |
-| `ts-corte-pts` | corte a los 60 s y otra base de tiempos (+1000 s) al volver |
-| `ts-gop6` | GOP de 6 s |
-| `ts-gop6-irregular` | GOP de 6 s con la red de `ts-irregular` |
-| `ts-50fps` | 1080p50, GOP 1 s, 8 Mbit/s, E-AC-3 |
-| `hls-limpio` | HLS del proveedor, segmentos de 6 s |
-| `hls-lento` | HLS con segmentos a 1,2× y retrasos en lista y segmentos |
-| `hls-congelada` | HLS con la lista congelada 12 s cada 40 s |
+`node scripts/iptv-lab/run.mjs --lista` los enseña todos. Los que más dicen:
+
+| Nombre | Qué prueba | Qué pasó con la 0.8.2 (web entera, ffmpeg 6.1 salvo que se diga) |
+|---|---|---|
+| `ts-limpio` | TS continuo, red perfecta, colchón de 2 s | bien; retraso real ~8 s; la lista del remux arranca con TARGETDURATION 3-4 (primer segmento sin clave) |
+| `ts-irregular` | cada 8-20 s deja de llegar 1-4 s; luego ráfaga con tope 1,3× | bien |
+| `ts-parones` | parones de 5-9 s cada 25-40 s, tope 1,2× | un parón de 0,4 s del `<video>` se convierte en 6,5 s de imagen parada (rebuffer de runtime.ts) |
+| `ts-rafagas` | parones de 3-9 s y todo lo retenido de golpe | parada corta retenida por la web |
+| `ts-lento` | caudal justo (1,05×) con colchón de 8 s | |
+| `ts-corte` | el proveedor corta a los 60 s; al volver, misma línea de tiempo | a veces empalma (contenido 1 s atrás, TARGETDURATION 2→3); a veces el relé se CUELGA (con el ffmpeg 8.1.2: 45 s parada y «Tu IPTV no responde») |
+| `ts-corte-colchon4` | corte y colchón de 4 s: la reconexión repite ~3 s | empalme con hueco/errores H.264 → `MediaError` → «La señal se ha cortado: reconectando» |
+| `ts-colchon-grande` | corte y colchón de 10 s | el relé se cuelga al reconectar: 45 s parada, reconexión, y fin «Tu IPTV no responde» |
+| `ts-silencio` | a los 60 s deja de mandar 13 s sin cerrar (el relé reconecta) | igual: cuelgue del relé y canal perdido |
+| `ts-corte-ocupado` | corte y 458 en las 2 reconexiones siguientes | |
+| `ts-corte-pts` | corte y otra base de tiempos al volver | remux reiniciado; el hls.js VIEJO ve la lista nueva y salta 30 s ATRÁS antes del `stream.reopened` |
+| `ts-corte-pts-gop6` | lo mismo con GOP de 6 s | el hls.js viejo salta 58 s atrás y runtime.ts lo reanuda: 6,9 s de imagen VIEJA hasta el `stream.reopened`; luego el reenganche la lleva adelante |
+| `ts-salto-pts` / `ts-salto-pts-atras` | el codificador salta ±3-4 s sin cortar | huecos de vídeo de 3-5 s en el remux (imagen congelada con el reloj avanzando, la web no se entera), TARGETDURATION 2→4/6 |
+| `ts-panel-real` | mezcla de un panel barato (colchón 4 s, tope 1,5×, parones de 2-12 s, corte cada 75 s) | en las 3 grabaciones (web, web con ffmpeg 8.1.2 y `sola`) el canal MUERE en la primera reconexión del relé |
+| `ts-costura` | el origen pega dos trozos cada 60 s sin cortar (cambio de fuente) | el patrón de Isma entero: `PIPELINE_ERROR_DECODE` → «reconectando (1/3)» → la instancia nueva arranca 20 s atrás (TARGETDURATION 4) y vuelve a caer en el MISMO segmento (2/3) → cuando TARGETDURATION vuelve a 2, hls.js salta +10 s adelante → siguiente costura (3/3) → «Tu IPTV no responde» |
+| `ts-gop6`, `ts-gop6-irregular`, `ts-50fps` | GOP largo, 1080p50 E-AC-3 | |
+| `hls-limpio` | HLS del proveedor, segmentos de 6 s | bien (retraso ~12 s) |
+| `hls-lento` | segmentos a 1,2× y retrasos | bien (retraso ~25 s) |
+| `hls-reinicio` | el codificador HLS se reinicia (secuencia desde 0) | reenganche con ~6 s de imagen parada |
+| `hls-congelada` | la lista se congela 12 s cada 40 s | paradas retenidas de 3-8 s |
+
+Todos aceptan `--modo sola` (solo hls.js) y `--ffmpeg-dir`.
 
 ## Pruebas aisladas (`pruebas/`)
 

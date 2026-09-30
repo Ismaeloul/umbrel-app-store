@@ -67,7 +67,8 @@ export const SCENARIOS: readonly Scenario[] = [
   },
   {
     name: 'ts-lento',
-    description: 'TS con el caudal justo: tope de 1,05× el del canal y colchón de 8 s (tarda en llegar).',
+    description:
+      'TS con el caudal justo: tope de 1,05× el del canal y colchón de 8 s (tarda en llegar).',
     clip: BASE,
     kind: 'ts',
     ts: { burstS: 8, capFactor: 1.05 },
@@ -123,7 +124,8 @@ export const SCENARIOS: readonly Scenario[] = [
   },
   {
     name: 'ts-salto-pts-atras',
-    description: 'TS sin cortes cuyo codificador vuelve 3 s atrás en sus tiempos a los 60 s y a los 120 s.',
+    description:
+      'TS sin cortes cuyo codificador vuelve 3 s atrás en sus tiempos a los 60 s y a los 120 s.',
     clip: BASE,
     kind: 'ts',
     ts: { burstS: 2 },
@@ -141,6 +143,15 @@ export const SCENARIOS: readonly Scenario[] = [
     kind: 'ts',
     ts: { burstS: 2, cut: { afterS: 60, ptsJumpS: 1000, sourceGapS: 2 } },
     minutes: 3,
+  },
+  {
+    name: 'ts-costura',
+    description:
+      'TS sin cortes cuyo origen pega dos trozos cada 60 s (cambio de fuente en el proveedor): en cada costura hay fotogramas H.264 que no se pueden decodificar.',
+    clip: { ...BASE, seconds: 60 },
+    kind: 'ts',
+    ts: { burstS: 2 },
+    minutes: 4,
   },
   {
     name: 'ts-gop6',
@@ -200,7 +211,12 @@ export const SCENARIOS: readonly Scenario[] = [
       'Mezcla de un panel barato: colchón de 4 s, tope 1,5×, parones de 2-12 s cada 15-45 s (a veces más de los 10 s del relé) y un corte cada 75 s.',
     clip: BASE,
     kind: 'ts',
-    ts: { burstS: 4, capFactor: 1.5, jitter: { everyS: [15, 45], pauseS: [2, 12] }, cut: { afterS: 75, every: true } },
+    ts: {
+      burstS: 4,
+      capFactor: 1.5,
+      jitter: { everyS: [15, 45], pauseS: [2, 12] },
+      cut: { afterS: 75, every: true },
+    },
     minutes: 4,
   },
   {
@@ -237,7 +253,8 @@ export const SCENARIOS: readonly Scenario[] = [
   },
   {
     name: 'hls-congelada',
-    description: 'HLS de 6 s en el que cada 40 s la lista se queda congelada 12 s (CDN con una copia vieja).',
+    description:
+      'HLS de 6 s en el que cada 40 s la lista se queda congelada 12 s (CDN con una copia vieja).',
     clip: BASE,
     kind: 'hls',
     hls: { segmentS: 6, listSize: 6, stale: { everyS: 40, staleS: 12 } },

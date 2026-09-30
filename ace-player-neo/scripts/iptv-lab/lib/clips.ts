@@ -152,7 +152,9 @@ export async function ensureClip(
   if (existsSync(file) && statSync(file).size > 0) return file;
   const tmp = `${file}.tmp`;
   rmSync(tmp, { force: true });
-  log(`codificando el clip ${describeClip(spec)} (${spec.seconds} s): una sola vez, queda en ${cacheDir}`);
+  log(
+    `codificando el clip ${describeClip(spec)} (${spec.seconds} s): una sola vez, queda en ${cacheDir}`,
+  );
   const started = Date.now();
   await new Promise<void>((resolve, reject) => {
     const child = spawn('ffmpeg', clipArgs(spec, tmp), { stdio: ['ignore', 'ignore', 'pipe'] });

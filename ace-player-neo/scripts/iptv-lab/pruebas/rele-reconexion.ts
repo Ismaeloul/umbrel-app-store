@@ -75,7 +75,12 @@ const port = (origin.address() as { port: number }).port;
 process.env.DATA_DIR ??= path.join(os.tmpdir(), 'iptv-lab-rele');
 const clock = createSystemClock();
 const logger = createSilentLogger();
-const core = { config: loadConfig(process.env).config, clock, logger, bus: createDomainBus({ logger }) };
+const core = {
+  config: loadConfig(process.env).config,
+  clock,
+  logger,
+  bus: createDomainBus({ logger }),
+};
 const net = createNetClient({
   ...core,
   resolver: fakeIptvResolver(),
@@ -91,7 +96,12 @@ session.onDropped((code) => log(`relé: onDropped ${code}`));
 const internals = session as unknown as {
   reconnecting: boolean;
   upstream: unknown;
-  adopt: (opened: { body: NodeJS.ReadableStream & { readableFlowing: boolean | null; readableLength: number } }, force: boolean) => Promise<void>;
+  adopt: (
+    opened: {
+      body: NodeJS.ReadableStream & { readableFlowing: boolean | null; readableLength: number };
+    },
+    force: boolean,
+  ) => Promise<void>;
 };
 let adoptBody: { readableFlowing: boolean | null; readableLength: number } | null = null;
 const originalAdopt = internals.adopt.bind(session);
@@ -122,7 +132,9 @@ const tick = setInterval(() => {
   if (conns >= 2 && kbs === 0) zeroSeconds += 1;
   log(
     `«ffmpeg» recibe ${kbs.toFixed(0)} KB/s · reconnecting=${internals.reconnecting} upstream=${internals.upstream !== null}` +
-      (adoptBody ? ` · cuerpo nuevo flowing=${adoptBody.readableFlowing} en espera=${adoptBody.readableLength} B` : ''),
+      (adoptBody
+        ? ` · cuerpo nuevo flowing=${adoptBody.readableFlowing} en espera=${adoptBody.readableLength} B`
+        : ''),
   );
 }, 1000);
 setTimeout(async () => {

@@ -16,10 +16,7 @@ import { createLogger } from '../../../apps/server/src/core/logger.js';
 import { startServices, stopServices } from '../../../apps/server/src/main.js';
 import { createNetClient } from '../../../apps/server/src/modules/net/index.js';
 import { createServices } from '../../../apps/server/src/services.js';
-import {
-  fakeIptvResolver,
-  fakeIptvTransport,
-} from '../../../apps/server/test/fake-iptv/net.js';
+import { fakeIptvResolver, fakeIptvTransport } from '../../../apps/server/test/fake-iptv/net.js';
 
 const providerPort = Number(process.env.LAB_PROVIDER_PORT);
 if (!providerPort) throw new Error('Falta LAB_PROVIDER_PORT');
