@@ -325,6 +325,9 @@ export function bufferAhead(media: { currentTime: number; buffered: TimeRangesLi
  * Hueco en el búfer (C2): el cabezal está al final de lo que tiene cargado
  * (menos de 0,5 s por delante) y el rango siguiente empieza a `maxGap` s o
  * menos. Devuelve dónde empieza ese rango, o null si no hay hueco que saltar.
+ * Un rango que empieza por delante del cabezal no lo contiene, aunque sea a
+ * 0,1 s: el <video> no cruza huecos solo, y en pausa (retenido) hls.js
+ * tampoco los salta (lab ts-silencio: 57,984 → 58,08 y 22 s retenido).
  */
 export function nextBufferedStart(
   media: { currentTime: number; buffered: TimeRangesLike },
@@ -337,7 +340,7 @@ export function nextBufferedStart(
     for (let i = 0; i < ranges.length; i += 1) {
       const start = ranges.start(i);
       const end = ranges.end(i);
-      if (t >= start - 0.2 && t <= end && end - t > 0.5) return null;
+      if (t >= start - 0.01 && t <= end && end - t > 0.5) return null;
     }
     for (let i = 0; i < ranges.length; i += 1) {
       const start = ranges.start(i);
@@ -1173,6 +1176,8 @@ export class PlayerRuntime {
       maxWait: number;
       onReady: () => void;
       onTimeout: () => void;
+      /** En un rebuffer: lo cargado sigue tras un hueco pequeño (empieza en `start`). */
+      onHole?: (start: number) => void;
     },
   ): void {
     if (connection.bufferTimer) clearInterval(connection.bufferTimer);
@@ -1180,6 +1185,17 @@ export class PlayerRuntime {
     const check = () => {
       if (!this.isCurrent(connection)) {
         if (connection.bufferTimer) clearInterval(connection.bufferTimer);
+        return;
+      }
+      /* Lo que llega durante la retención puede empezar tras un hueco (el
+         remux reiniciado sin cortar sigue ~0,1 s más allá, lab ts-silencio):
+         `bufferAhead` solo cuenta el rango del cabezal y se quedaba en «0 de
+         8 s» hasta que hls.js saltaba solo +11 s al directo. */
+      const hole = options.onHole ? this.holeAhead(connection) : null;
+      if (hole !== null) {
+        if (connection.bufferTimer) clearInterval(connection.bufferTimer);
+        connection.bufferTimer = null;
+        options.onHole?.(hole);
         return;
       }
       const ahead = bufferAhead(this.video);
@@ -1365,6 +1381,10 @@ export class PlayerRuntime {
       onTimeout: () => {
         this.endRebuffer(connection, false);
         this.fail('La señal no se recupera: reconectando');
+      },
+      onHole: (start) => {
+        this.endRebuffer(connection, false);
+        this.skipHole(connection, start);
       },
     });
   }

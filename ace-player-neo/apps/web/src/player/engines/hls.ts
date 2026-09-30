@@ -138,6 +138,13 @@ export function hlsConfig(profile: EngineArgs['profile']): Record<string, unknow
        Retry-After (docs/iptv.md §18) y hls.js lo reintenta solo, sin error a la vista. */
     ...HLS_PLAYLIST_RETRY,
     ...profile.hls,
+    /* Sin intersticiales (ni el remux ni el motor los usan). El controlador de
+       intersticiales de hls.js 1.7, al volver a enganchar el <video> tras
+       `recoverMediaError()`, llama a `startLoad()` con el cabezal de antes y
+       pisa el `startLoad(siguiente)` de `recoverInPlace()`: hls.js volvía al
+       segmento roto y el vídeo fallaba otra vez (lab ts-costura: 2 errores
+       seguidos en el mismo trozo y «reconectando (1/3)» en cada costura). */
+    enableInterstitialPlayback: false,
   };
 }
 

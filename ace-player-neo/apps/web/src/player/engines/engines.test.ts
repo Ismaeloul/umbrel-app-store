@@ -309,6 +309,7 @@ describe('hls.js', () => {
       liveMaxLatencyDuration: 16,
       maxBufferLength: 30,
       maxLiveSyncPlaybackRate: 1.05,
+      enableInterstitialPlayback: false,
     });
     expect(hlsConfig(PLAYBACK_PROFILES.stable)).toMatchObject({
       maxBufferLength: 90,
@@ -340,6 +341,8 @@ describe('hls.js', () => {
       expect(real.config.liveMaxLatencyDuration).toBe(
         PLAYBACK_PROFILES[mode].hls.liveMaxLatencyDuration,
       );
+      /* Sin intersticiales: su controlador pisaba el startLoad(siguiente) de recoverInPlace (ts-costura). */
+      expect(real.config.enableInterstitialPlayback).toBe(false);
       real.destroy();
     }
     // Control: mezclar las dos formas sí rompe (lo que evita quitar los recuentos).

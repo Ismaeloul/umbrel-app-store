@@ -1235,6 +1235,32 @@ describe('IPTV', () => {
     expect(t.video.paused).toBe(false);
   });
 
+  it('C2 · retenido, lo que llega tras un hueco pequeño (remux reiniciado sin cortar) se salta al momento (ts-silencio)', async () => {
+    const t = iptvSetup();
+    await iptvPlaying(t);
+    t.video.seekable = ranges([[0, 64]]);
+    t.video._currentTime = 57.98;
+    t.video.setBuffered([[0, 57.984]]);
+    t.video.stall();
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(t.state.rebuffering).toEqual({ targetS: 8 });
+    expect(t.video.paused).toBe(true);
+    // Sin nada detrás, se sigue reteniendo.
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(t.state.rebuffering).not.toBeNull();
+    // La generación nueva del remux empieza 0,1 s más allá: antes, «0 de 8 s» hasta que hls.js saltaba +11 s.
+    t.video.setBuffered([
+      [0, 57.984],
+      [58.08, 64],
+    ]);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(t.state.rebuffering).toBeNull();
+    expect(t.video.currentTime).toBeCloseTo(58.18);
+    t.video.finishSeek();
+    await flush();
+    expect(t.video.paused).toBe(false);
+  });
+
   it('C2 · rebuffer: no se suelta en el mismo evento que lo pone (sin tormenta retener/soltar)', async () => {
     // mpegts.js retiene al momento: con el colchón justo lleno, antes se pausaba y se reanudaba a la vez.
     const t = setup();
