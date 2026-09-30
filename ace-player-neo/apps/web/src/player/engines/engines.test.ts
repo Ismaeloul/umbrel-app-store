@@ -2,7 +2,8 @@
    los perfiles de @ace/shared, URL absoluta, recuperación de hls.js y qué
    motor toca a cada protocolo y navegador. */
 
-import { HLS_RECOVERY, PLAYBACK_PROFILES } from '@ace/shared';
+import { HLS_RECOVERY, PLAYBACK_MODES, PLAYBACK_PROFILES } from '@ace/shared';
+import Hls from 'hls.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDemoEngine } from './demo.ts';
 import { createHlsEngine, hlsConfig, type HlsLib, type HlsLike } from './hls.ts';
@@ -250,8 +251,8 @@ describe('hls.js', () => {
       levelLoadingMaxRetry: 4,
       levelLoadingRetryDelay: 500,
       levelLoadingMaxRetryTimeout: 2_000,
-      liveSyncDurationCount: 3,
-      liveMaxLatencyDurationCount: 7,
+      liveSyncDuration: 6,
+      liveMaxLatencyDuration: 16,
       maxBufferLength: 30,
       maxLiveSyncPlaybackRate: 1.05,
     });
@@ -264,6 +265,33 @@ describe('hls.js', () => {
     });
     expect(hls.source).toBe(new URL('/ace/m/abc/s_1.m3u8', location.href).href);
     expect(engine.liveSyncPosition()).toBe(42);
+  });
+
+  it('la latencia va en segundos (C1) y el hls.js DE VERDAD acepta los tres perfiles', () => {
+    expect(hlsConfig(PLAYBACK_PROFILES.balanced)).toMatchObject({
+      liveSyncDuration: 10,
+      liveMaxLatencyDuration: 22,
+    });
+    expect(hlsConfig(PLAYBACK_PROFILES.stable)).toMatchObject({
+      liveSyncDuration: 14,
+      liveMaxLatencyDuration: 26,
+    });
+    for (const mode of PLAYBACK_MODES) {
+      const config = hlsConfig(PLAYBACK_PROFILES[mode]);
+      // hls.js lanza si se mezclan recuentos y segundos: no puede quedar ningún recuento.
+      expect(config).not.toHaveProperty('liveSyncDurationCount');
+      expect(config).not.toHaveProperty('liveMaxLatencyDurationCount');
+      const real = new Hls(config);
+      expect(real.config.liveSyncDuration).toBe(PLAYBACK_PROFILES[mode].hls.liveSyncDuration);
+      expect(real.config.liveMaxLatencyDuration).toBe(
+        PLAYBACK_PROFILES[mode].hls.liveMaxLatencyDuration,
+      );
+      real.destroy();
+    }
+    // Control: mezclar las dos formas sí rompe (lo que evita quitar los recuentos).
+    expect(
+      () => new Hls({ ...hlsConfig(PLAYBACK_PROFILES.low), liveSyncDurationCount: 3 }),
+    ).toThrow(/don't mix up/);
   });
 
   it('errores de red: 3 reintentos esperando 750 ms × 2ⁿ sin reiniciar el canal; el 4º reconecta', () => {

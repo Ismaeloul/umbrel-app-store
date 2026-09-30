@@ -2,7 +2,7 @@
 
    - Configuración EXACTA de la 0.6.59 (index.html:4750): 20 s de plazo para
      el manifiesto y los fragmentos, más el bloque `hls` del perfil de
-     @ace/shared (liveSyncDurationCount, liveMaxLatencyDurationCount,
+     @ace/shared (liveSyncDuration, liveMaxLatencyDuration, en segundos,
      maxBufferLength y maxLiveSyncPlaybackRate).
    - Recuperación SIN reiniciar el canal (index.html:4770-4789, B-071), con
      los números de HLS_RECOVERY de @ace/shared:
