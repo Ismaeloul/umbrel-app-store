@@ -9032,6 +9032,8 @@ components:
                     - engine_restart
                     - engine_recovered
                     - remux_restart
+                seamless:
+                  type: boolean
               required:
                 - sessionId
                 - viewerIds
