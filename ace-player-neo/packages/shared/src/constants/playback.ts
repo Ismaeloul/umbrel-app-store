@@ -1,7 +1,8 @@
 /* Modos de reproducción Estable / Equilibrado / Baja latencia.
    Los perfiles de la web son EXACTAMENTE los de `PB` en la 0.6.59
    (index.html:2387-2402, reproductor.md §3), con los mismos nombres de campo
-   para que el reproductor nuevo los pase tal cual a mpegts.js y a hls.js.
+   para que el reproductor nuevo los pase tal cual a mpegts.js y a hls.js,
+   salvo la latencia de hls.js, que ahora va en segundos (C1, abajo).
 
    mpegts.js 1.8 permite recuperar latencia acelerando un poco playbackRate.
    Se evita liveBufferLatencyChasing porque corrige saltando currentTime, y en
@@ -21,9 +22,18 @@ export interface MpegtsProfile {
   readonly liveSyncPlaybackRate?: number;
 }
 
+/* Latencia de hls.js en SEGUNDOS (docs/diagnostico-iptv-0.8.2.md, P5/C1).
+   Antes eran recuentos × TARGETDURATION (5 y 10 en Equilibrado): cada
+   segmento largo del remux (el 0 sin clave, un empalme, un hueco) subía el
+   TARGETDURATION a 3-10 unos 30 s, el objetivo se doblaba, DIRECTO se iba
+   20-30 s atrás y, al bajar otra vez, hls.js saltaba solo hacia delante.
+   `liveSyncDuration` = el recuento de antes × 2 s (el segmento normal del
+   remux); `liveMaxLatencyDuration` queda al menos 4 s por debajo de los 30 s
+   de ventana de la lista. hls.js no admite mezclar recuentos y segundos:
+   lanza un error al crear la instancia, así que aquí solo van los segundos. */
 export interface HlsProfile {
-  readonly liveSyncDurationCount: number;
-  readonly liveMaxLatencyDurationCount: number;
+  readonly liveSyncDuration: number;
+  readonly liveMaxLatencyDuration: number;
   readonly maxBufferLength: number;
   readonly maxLiveSyncPlaybackRate: number;
 }
@@ -49,8 +59,8 @@ export const PLAYBACK_PROFILES: Readonly<Record<PlaybackMode, PlaybackProfile>> 
     rebuild: 12,
     mpegts: { liveBufferLatencyChasing: false, liveSync: false },
     hls: {
-      liveSyncDurationCount: 7,
-      liveMaxLatencyDurationCount: 14,
+      liveSyncDuration: 14,
+      liveMaxLatencyDuration: 26,
       maxBufferLength: 90,
       maxLiveSyncPlaybackRate: 1,
     },
@@ -68,8 +78,8 @@ export const PLAYBACK_PROFILES: Readonly<Record<PlaybackMode, PlaybackProfile>> 
       liveSyncPlaybackRate: 1.03,
     },
     hls: {
-      liveSyncDurationCount: 5,
-      liveMaxLatencyDurationCount: 10,
+      liveSyncDuration: 10,
+      liveMaxLatencyDuration: 22,
       maxBufferLength: 60,
       maxLiveSyncPlaybackRate: 1.03,
     },
@@ -87,8 +97,8 @@ export const PLAYBACK_PROFILES: Readonly<Record<PlaybackMode, PlaybackProfile>> 
       liveSyncPlaybackRate: 1.05,
     },
     hls: {
-      liveSyncDurationCount: 3,
-      liveMaxLatencyDurationCount: 7,
+      liveSyncDuration: 6,
+      liveMaxLatencyDuration: 16,
       maxBufferLength: 30,
       maxLiveSyncPlaybackRate: 1.05,
     },

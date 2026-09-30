@@ -1153,4 +1153,414 @@ describe('IPTV', () => {
     expect(t.failures).toHaveLength(1);
     expect(t.state).toMatchObject({ phase: 'error', idleReason: 'sin-motor' });
   });
+
+  /* ---- 0.8.2: retención, DIRECTO y recuperación en el sitio (C2 y C3) ---- */
+
+  /** IPTV sonando: cabezal en 10 s y 7 s cargados por delante. */
+  async function iptvPlaying(t: Harness) {
+    playIptv(t, 'user');
+    await flush();
+    const engine = t.engines.last();
+    engine.args.callbacks.onReady();
+    t.video._currentTime = 10;
+    t.video.setBuffered([[0, 17]]);
+    await vi.advanceTimersByTimeAsync(250);
+    t.video.advance(0.1);
+    await flush();
+    expect(t.state.conn).toBe('activa');
+    return engine;
+  }
+
+  const reopened = (extra: Record<string, unknown> = {}) =>
+    dispatchSse(
+      'stream.reopened',
+      {
+        sessionId: IPTV_SID,
+        viewerIds: ['v_prueba'],
+        url: `/api/v1/video/${IPTV_SID}/index.m3u8`,
+        protocol: 'hls',
+        reason: 'remux_restart',
+        ...extra,
+      },
+      META,
+    );
+
+  it('C2 · hls.js: un `waiting` no pausa en 1,5 s si el cabezal se mueve (E2)', async () => {
+    const t = iptvSetup();
+    await iptvPlaying(t);
+    t.video.setBuffered([[0, 10.2]]);
+    t.video.stall();
+    // La rueda sale ya, pero sin pausar: hls.js tiene su margen.
+    expect(t.video.paused).toBe(false);
+    expect(t.state.rebuffering).toBeNull();
+    await vi.advanceTimersByTimeAsync(800);
+    t.video.advance(0.4);
+    await vi.advanceTimersByTimeAsync(700);
+    expect(t.video.paused).toBe(false);
+    expect(t.state.rebuffering).toBeNull();
+  });
+
+  it('C2 · hls.js: con el cabezal quieto 1,5 s, entonces sí retiene; con datos (readyState ≥ 3) ni lo mira', async () => {
+    const t = iptvSetup();
+    await iptvPlaying(t);
+    t.video.readyState = 4;
+    t.video.dispatchEvent(new Event('waiting'));
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(t.state.rebuffering).toBeNull();
+
+    t.video.setBuffered([[0, 10.2]]);
+    t.video.stall();
+    await vi.advanceTimersByTimeAsync(1_499);
+    expect(t.video.paused).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(t.video.paused).toBe(true);
+    expect(t.state.rebuffering).toEqual({ targetS: 8 });
+  });
+
+  it('C2 · un hueco en el búfer ([0, 20] y [20,6, 40]) se salta a ~20,7 en vez de retener (E2)', async () => {
+    const t = iptvSetup();
+    await iptvPlaying(t);
+    t.video._currentTime = 20;
+    t.video.setBuffered([
+      [0, 20],
+      [20.6, 40],
+    ]);
+    t.video.stall();
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(t.video.currentTime).toBeCloseTo(20.7);
+    expect(t.video.seeking).toBe(true);
+    expect(t.state.rebuffering).toBeNull();
+    t.video.finishSeek();
+    await flush();
+    expect(t.video.paused).toBe(false);
+  });
+
+  it('C2 · rebuffer: no se suelta en el mismo evento que lo pone (sin tormenta retener/soltar)', async () => {
+    // mpegts.js retiene al momento: con el colchón justo lleno, antes se pausaba y se reanudaba a la vez.
+    const t = setup();
+    await startPlaying(t);
+    const pauses = t.video.pauseCalls;
+    const plays = t.video.playCalls;
+    t.video.setBuffered([[0, 9]]);
+    t.video.stall();
+    expect(t.video.pauseCalls).toBe(pauses + 1);
+    expect(t.video.playCalls).toBe(plays);
+    expect(t.state.rebuffering).toEqual({ targetS: 8 });
+    await vi.advanceTimersByTimeAsync(250);
+    expect(t.video.paused).toBe(false);
+    expect(t.state.rebuffering).toBeNull();
+  });
+
+  it('C2 · el vigilante reanuda un vídeo en pausa que nadie ha pedido (2 tics); con el autoplay bloqueado, no', async () => {
+    const t = iptvSetup();
+    await iptvPlaying(t);
+    const plays = t.video.playCalls;
+    // Pausa técnica «perdida» (como la del play() viejo): la persona sigue queriendo que suene.
+    t.runtime.controller.pauseMedia();
+    expect(t.runtime.controller.state.desiredPlaying).toBe(true);
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(t.video.playCalls).toBe(plays);
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(t.video.playCalls).toBe(plays + 1);
+    expect(t.video.paused).toBe(false);
+
+    // Pausa de la persona: se respeta.
+    t.runtime.pause();
+    await vi.advanceTimersByTimeAsync(6_000);
+    expect(t.video.paused).toBe(true);
+  });
+
+  it('C2 · el vigilante no insiste: un play() que falla de verdad no se repite y hay tope de 3 sin que suene', async () => {
+    const t = iptvSetup();
+    await iptvPlaying(t);
+    const plays = t.video.playCalls;
+    for (let i = 0; i < 4; i += 1) {
+      t.runtime.controller.pauseMedia();
+      await vi.advanceTimersByTimeAsync(3_000);
+    }
+    expect(t.video.playCalls).toBe(plays + 3);
+    expect(t.video.paused).toBe(true);
+
+    const other = iptvSetup();
+    await iptvPlaying(other);
+    const before = other.video.playCalls;
+    other.video.playImpl = () =>
+      Promise.reject(Object.assign(new Error('no'), { name: 'NotSupportedError' }));
+    other.runtime.controller.pauseMedia();
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(other.video.playCalls).toBe(before + 1);
+    other.runtime.controller.pauseMedia();
+    await vi.advanceTimersByTimeAsync(9_000);
+    expect(other.video.playCalls).toBe(before + 1);
+  });
+
+  it('C2 · DIRECTO en plena retención con retraso: suelta, salta y no dice «Ya estabas» (E4)', async () => {
+    const t = iptvSetup();
+    const engine = await iptvPlaying(t);
+    engine.liveSyncPosition = () => 50;
+    t.video.seekable = ranges([[0, 60]]);
+    t.video._currentTime = 20;
+    t.video.setBuffered([[0, 20.2]]);
+    t.video.stall();
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(t.state.rebuffering).not.toBeNull();
+    const pending = t.runtime.goLive();
+    expect(t.video.currentTime).toBe(50);
+    expect(t.state.rebuffering).toBeNull();
+    t.video.finishSeek();
+    const result = await pending;
+    expect(result.ok).toBe(true);
+    expect(t.video.paused).toBe(false);
+    expect(t.notices).not.toContain('Ya estabas en el directo');
+    expect(t.notices.at(-1)).toBe('De vuelta al directo');
+  });
+
+  it('C2 · DIRECTO en plena retención con un hueco delante: salta pasado el hueco', async () => {
+    const t = iptvSetup();
+    await iptvPlaying(t);
+    t.video.seekable = ranges([[0, 21]]);
+    t.video._currentTime = 20;
+    t.video.setBuffered([[0, 20.2]]);
+    t.video.stall();
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(t.state.rebuffering).not.toBeNull();
+    // Mientras se retiene, llega emisión DETRÁS de un hueco.
+    t.video.setBuffered([
+      [0, 20.2],
+      [20.8, 26],
+    ]);
+    const pending = t.runtime.goLive();
+    expect(t.video.currentTime).toBeCloseTo(20.9);
+    t.video.finishSeek();
+    await pending;
+    expect(t.notices).not.toContain('Ya estabas en el directo');
+  });
+
+  it('C2 · DIRECTO en plena retención ya en el borde y sin hueco: no salta (T-133) y dice que se recupera', async () => {
+    const t = iptvSetup();
+    await iptvPlaying(t);
+    t.video.seekable = ranges([[0, 21]]);
+    t.video._currentTime = 20;
+    t.video.setBuffered([[0, 20.2]]);
+    t.video.stall();
+    await vi.advanceTimersByTimeAsync(1_500);
+    const result = await t.runtime.goLive();
+    expect(result.reason).toBe('held');
+    expect(t.video.currentTime).toBe(20);
+    expect(t.notices.at(-1)).toBe('Recuperando la imagen…');
+  });
+
+  it('C2 · −30 s con hls.js: no más atrás que borde − maxLatency + 3 s, y dice los segundos de verdad', async () => {
+    const t = iptvSetup();
+    const engine = await iptvPlaying(t);
+    engine.liveWindow = () => ({ start: 0, end: 60, targetDuration: 2, maxLatency: 22 });
+    t.video.seekable = ranges([[0, 60]]);
+    t.video._currentTime = 50;
+    const pending = t.runtime.back();
+    expect(t.video.currentTime).toBe(41);
+    t.video.finishSeek();
+    await pending;
+    expect(t.notices.at(-1)).toBe('Retrocedido 9 s · pulsa DIRECTO para volver');
+    // Ya en el suelo: no hay más.
+    t.video._currentTime = 41.5;
+    await t.runtime.back();
+    expect(t.notices.at(-1)).toBe('No hay más imagen guardada hacia atrás');
+  });
+
+  it('C3 · un error del vídeo con hls.js se recupera en el sitio; sin presupuesto, reconecta', async () => {
+    const t = iptvSetup();
+    const engine = await iptvPlaying(t);
+    const answers = [true, false];
+    let asked = 0;
+    engine.recoverInPlace = () => {
+      asked += 1;
+      return answers.shift() ?? false;
+    };
+    t.video.dispatchEvent(new Event('error'));
+    await flush();
+    expect(asked).toBe(1);
+    expect(t.state.conn).toBe('activa');
+    expect(t.engines.created).toHaveLength(1);
+    expect(t.notices.at(-1)).toBe('La imagen llegó dañada: saltando ese trozo…');
+
+    t.video.dispatchEvent(new Event('error'));
+    expect(asked).toBe(2);
+    expect(t.state.conn).toBe('reconectando');
+    expect(t.notices.at(-1)).toBe('La señal se ha cortado: reconectando (1/3)…');
+  });
+
+  it('C3 · sin presupuesto en el sitio, la instancia nueva sigue DESPUÉS del roto y con el presupuesto gastado', async () => {
+    const t = iptvSetup();
+    const engine = await iptvPlaying(t);
+    const used = [
+      { at: Date.now(), position: 10 },
+      { at: Date.now(), position: 10.1 },
+    ];
+    engine.recoverInPlace = () => false;
+    // El motor ya da el segmento de después del roto (sn 45 → 46).
+    engine.position = () => ({ sn: 46, offset: 0 });
+    engine.inPlaceUsed = () => used;
+    t.video.dispatchEvent(new Event('error'));
+    expect(t.state.conn).toBe('reconectando');
+    await vi.advanceTimersByTimeAsync(1_000);
+    const second = t.engines.last();
+    expect(second).not.toBe(engine);
+    expect(second.args.startFrom).toEqual({ sn: 46, offset: 0 });
+    expect(second.args.inPlaceUsed).toEqual(used);
+  });
+
+  it('C3 · una instancia que no llega a saber dónde va deja la posición de la anterior', async () => {
+    const t = iptvSetup();
+    const engine = await iptvPlaying(t);
+    engine.position = () => ({ sn: 40, offset: 1.2 });
+    engine.args.callbacks.onFatal('HLS no pudo recuperarse (x)', 'x');
+    await vi.advanceTimersByTimeAsync(1_000);
+    const second = t.engines.last();
+    expect(second.args.startFrom).toEqual({ sn: 40, offset: 1.2 });
+    // La segunda cae antes de cargar nada (sin position): la tercera sigue en el sn 40.
+    second.args.callbacks.onFatal('HLS no pudo recuperarse (x)', 'x');
+    await vi.advanceTimersByTimeAsync(2_000);
+    const third = t.engines.last();
+    expect(third).not.toBe(second);
+    expect(third.args.startFrom).toEqual({ sn: 40, offset: 1.2 });
+  });
+
+  it('C3 · un reenganche (otra lista) no se lleva la posición de la vieja', async () => {
+    const t = iptvSetup();
+    const engine = await iptvPlaying(t);
+    engine.position = () => ({ sn: 40, offset: 1.2 });
+    reopened();
+    await flush();
+    expect(engine.destroyed).toBe(true);
+    expect(t.engines.last().args.startFrom).toBeUndefined();
+  });
+
+  it('C3 · la reconexión sobre el mismo remux sigue en el mismo segmento (startFrom); con otra sesión, no', async () => {
+    const t = iptvSetup();
+    const engine = await iptvPlaying(t);
+    expect(engine.args.guardSequence).toBe(true);
+    expect(engine.args.startFrom).toBeUndefined();
+    engine.position = () => ({ sn: 40, offset: 1.2 });
+    engine.args.callbacks.onFatal('HLS no pudo recuperarse (x)', 'x');
+    await vi.advanceTimersByTimeAsync(1_000);
+    const second = t.engines.last();
+    expect(second).not.toBe(engine);
+    expect(second.args.startFrom).toEqual({ sn: 40, offset: 1.2 });
+
+    // Otra sesión del remux: la posición de la vieja no vale.
+    second.position = () => ({ sn: 41, offset: 0.5 });
+    t.handlers.channelStream = () => ({
+      ...iptvGrant(),
+      session: { id: 's_OtraSesion0001', heartbeatMs: 15_000, expiresAfterMs: 45_000 },
+      url: '/api/v1/video/s_OtraSesion0001/index.m3u8',
+    });
+    second.args.callbacks.onFatal('HLS no pudo recuperarse (x)', 'x');
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(t.engines.last()).not.toBe(second);
+    expect(t.engines.last().args.startFrom).toBeUndefined();
+  });
+
+  it('C3 · cambiar de modo con hls.js se lleva la posición (no arranca de cero)', async () => {
+    let mode: PlaybackMode = 'balanced';
+    const t = setup({ mode: () => mode });
+    t.handlers.channelStream = () => iptvGrant();
+    const engine = await iptvPlaying(t);
+    engine.position = () => ({ sn: 77, offset: 0.3 });
+    mode = 'low';
+    t.runtime.handle({ type: 'mode', mode: 'low' });
+    await flush();
+    expect(t.engines.last()).not.toBe(engine);
+    expect(t.engines.last().args.startFrom).toEqual({ sn: 77, offset: 0.3 });
+  });
+
+  it('C3 · stream.reopened `seamless` de la IPTV: no se destruye hls.js, solo se avisa', async () => {
+    const t = iptvSetup();
+    const engine = await iptvPlaying(t);
+    reopened({ seamless: true });
+    await flush();
+    expect(engine.destroyed).toBe(false);
+    expect(t.engines.created).toHaveLength(1);
+    expect(t.state.conn).toBe('activa');
+    expect(t.notices.at(-1)).toBe('Tu IPTV se ha reconectado sin cortar la imagen');
+    // Sin `seamless` (un servidor de antes): se reengancha como siempre.
+    reopened();
+    await flush();
+    expect(engine.destroyed).toBe(true);
+    expect(t.engines.created).toHaveLength(2);
+  });
+
+  it('C3 · el reinicio del remux de AceStream (retargetRemux) sí reengancha aunque diga `seamless`', async () => {
+    const t = setup();
+    await startPlaying(t);
+    const engine = t.engines.last();
+    expect(engine.args.guardSequence).toBeUndefined();
+    dispatchSse(
+      'stream.reopened',
+      {
+        sessionId: SID,
+        viewerIds: ['v_prueba'],
+        url: `/ace/r/${HASH}/${SID}`,
+        protocol: 'mpegts',
+        reason: 'remux_restart',
+        seamless: true,
+      },
+      META,
+    );
+    await flush();
+    expect(engine.destroyed).toBe(true);
+    expect(t.engines.created).toHaveLength(2);
+  });
+
+  it('C3 · el reinicio del remux de AceStream con hls.js (D5) sí reengancha aunque diga `seamless`', async () => {
+    const t = setup();
+    t.handlers.channelStream = () => grant('hls');
+    await startPlaying(t);
+    const engine = t.engines.last();
+    expect(engine.kind).toBe('hls');
+    dispatchSse(
+      'stream.reopened',
+      {
+        sessionId: SID,
+        viewerIds: ['v_prueba'],
+        url: `/ace/m/${HASH}/${SID}.m3u8`,
+        protocol: 'hls',
+        reason: 'remux_restart',
+        seamless: true,
+      },
+      META,
+    );
+    await flush();
+    expect(engine.destroyed).toBe(true);
+    expect(t.engines.created).toHaveLength(2);
+  });
+
+  it('C3 · lista que vuelve a empezar durante la precarga: también reengancha (y sin la posición vieja)', async () => {
+    const t = iptvSetup();
+    playIptv(t, 'user');
+    await flush();
+    const engine = t.engines.last();
+    engine.position = () => ({ sn: 40, offset: 1 });
+    engine.args.callbacks.onReady();
+    expect(t.state.conn).toBe('precarga');
+    engine.args.callbacks.onReset?.('La lista del remux ha vuelto a empezar (41 → 0)');
+    await flush();
+    expect(engine.destroyed).toBe(true);
+    expect(t.engines.created).toHaveLength(2);
+    expect(t.engines.last().args.startFrom).toBeUndefined();
+    expect(t.failures).toHaveLength(0);
+  });
+
+  it('C3 · lista que vuelve a empezar (servidor de antes): se reengancha una vez aunque luego llegue el SSE', async () => {
+    const t = iptvSetup();
+    const engine = await iptvPlaying(t);
+    engine.args.callbacks.onReset?.('La lista del remux ha vuelto a empezar (41 → 0)');
+    await flush();
+    expect(engine.destroyed).toBe(true);
+    expect(t.engines.created).toHaveLength(2);
+    expect(t.notices).toContain('Tu IPTV se ha reconectado: reenganchando la señal…');
+    reopened();
+    await flush();
+    expect(t.engines.created).toHaveLength(2);
+    expect(t.failures).toHaveLength(0);
+  });
 });
