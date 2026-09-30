@@ -254,8 +254,11 @@ export interface ResolutionIptv {
 
 /** Lo que la resolución necesita de fuera. */
 export interface ResolveDeps {
-  /** Una búsqueda en el motor (resultados `{ id, title, ih, availability… }`). */
-  readonly search: (query: string) => Promise<readonly ResolvableItem[]>;
+  /**
+   * Una búsqueda en el motor (resultados `{ id, title, ih, availability… }`).
+   * `signal` es el de la etapa del motor: corta la consulta al vencer su plazo.
+   */
+  readonly search: (query: string, signal?: AbortSignal) => Promise<readonly ResolvableItem[]>;
   /** `applyLearnedSourceRules` (sources): quita cuarentenas y rechazados, sube a 98 lo confirmado. */
   readonly applyLearned: (
     channels: readonly string[],
@@ -270,6 +273,11 @@ export interface ResolveDeps {
   readonly programChannels: readonly string[];
   /** Capa IPTV (docs/iptv.md §4.3): se consulta siempre que esté activa. */
   readonly iptv?: ResolutionIptv;
+  /**
+   * Un plazo con el reloj del servicio (se aborta su `signal` a los `ms`).
+   * Sin él, la etapa del motor no tiene plazo propio aunque se pida `engineBudget`.
+   */
+  readonly deadline?: (ms: number) => { readonly signal: AbortSignal; cancel(): void };
 }
 
 /**
@@ -301,6 +309,15 @@ export interface ResolveOptions {
    * haya IPTV, y `not_found` solo si no hay nada.
    */
   readonly engine?: boolean;
+  /**
+   * Plazo de la etapa del motor (buscador + IA) de una resolución interactiva
+   * (M3 del diagnóstico IPTV 0.8.2): uno para todas las consultas, más corto
+   * si la IPTV ya tiene candidatas. Al vencer se sigue con lo que haya; no es
+   * «motor caído». Sin él (precalentado), los plazos de siempre.
+   */
+  readonly engineBudget?: { readonly withIptv: number; readonly withoutIptv: number } | null;
+  /** La petición (la persona se fue): corta también la etapa del motor. */
+  readonly signal?: AbortSignal;
 }
 
 export interface AiInfo {
@@ -350,6 +367,72 @@ function withGuideHints(
       soloFamilia: byHint.soloFamilia,
       familyFallbackAllowed: byHint.familyFallbackAllowed,
     };
+  });
+}
+
+/**
+ * Decisión de §4.1 para un id que llega por otra vía (vínculos, favoritos,
+ * historial, el buscador o un precalentado guardado): AceStream tal cual, un
+ * id IPTV del catálogo vigente convertido en candidata IPTV y uno que ya no
+ * vale (IPTV en pausa, quitada o canal desaparecido), fuera.
+ */
+export function adoptIptvCandidate<T extends BaseCandidate>(
+  iptv: ResolutionIptv | undefined,
+  candidate: T,
+): T | BaseCandidate | null {
+  const kind = iptv ? iptv.classify(candidate.id) : 'engine';
+  if (kind === 'engine') return candidate;
+  if (kind !== 'owned' || !iptv) return null;
+  return iptv.convert(candidate.id, {
+    score: candidate.score,
+    matchedChannel: candidate.matchedChannel,
+  });
+}
+
+/** La etapa del motor con su plazo (o sin él), y si venció. */
+interface EngineStage {
+  readonly signal: AbortSignal | undefined;
+  expired(): boolean;
+  cancel(): void;
+}
+
+function engineStage(
+  deps: ResolveDeps,
+  budgetMs: number | null,
+  outer: AbortSignal | undefined,
+): EngineStage {
+  const timer = budgetMs !== null && deps.deadline ? deps.deadline(budgetMs) : null;
+  const signals = [outer, timer?.signal].filter((item): item is AbortSignal => Boolean(item));
+  return {
+    signal: signals.length > 1 ? AbortSignal.any(signals) : signals[0],
+    expired: () => timer?.signal.aborted === true,
+    cancel: () => timer?.cancel(),
+  };
+}
+
+/**
+ * La promesa, o su rechazo en cuanto se aborte `signal`: una consulta que no
+ * atiende la señal no alarga la etapa (lo suyo sigue de fondo y se ignora).
+ */
+function untilAborted<T>(work: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (!signal) return work;
+  if (signal.aborted) {
+    work.catch(() => {});
+    return Promise.reject(signal.reason as Error);
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = (): void => reject(signal.reason as Error);
+    signal.addEventListener('abort', onAbort, { once: true });
+    work.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error as Error);
+      },
+    );
   });
 }
 
@@ -428,17 +511,10 @@ export async function resolveFootballChannel(
   if (scope === 'match') deps.refreshLists();
 
   /* §4.1 y §4.6: un id IPTV que llega por otra vía se convierte o se descarta. */
-  const adopt = (candidate: BaseCandidate): BaseCandidate | null => {
-    const kind = deps.iptv ? deps.iptv.classify(candidate.id) : 'engine';
-    if (kind === 'engine') return candidate;
-    if (kind !== 'owned' || !deps.iptv) return null;
-    return deps.iptv.convert(candidate.id, {
-      score: candidate.score,
-      matchedChannel: candidate.matchedChannel,
-    });
-  };
   const adoptAll = (list: readonly BaseCandidate[]): BaseCandidate[] =>
-    list.map(adopt).filter((candidate): candidate is BaseCandidate => candidate !== null);
+    list
+      .map((candidate) => adoptIptvCandidate(deps.iptv, candidate))
+      .filter((candidate): candidate is BaseCandidate => candidate !== null);
 
   const bindings: BaseCandidate[] =
     research || scope === 'guide'
@@ -478,72 +554,102 @@ export async function resolveFootballChannel(
 
   const remote: BaseCandidate[] = [];
   let engineAvailable = true;
-  if (scope === 'match') {
-    /* Las pistas de la guía también se buscan (8 consultas como mucho). */
-    const queries = aceSearchQueries([...channels, ...hints], semanticEnabled);
-    const searched = await Promise.allSettled(queries.map((query) => deps.search(query)));
-    engineAvailable = searched.some((result) => result.status === 'fulfilled');
-    const found: BaseCandidate[] = [];
-    for (const result of searched) {
-      if (result.status !== 'fulfilled') continue;
-      for (const item of result.value)
-        found.push(scoreResolutionCandidate(channels, item, 'acestream'));
-    }
-    /* Un id IPTV no llega nunca al motor: del buscador se descarta. */
-    remote.push(
-      ...withGuideHints(found, hints).filter(
-        (candidate) => !deps.iptv || deps.iptv.classify(candidate.id) === 'engine',
-      ),
-    );
-  } else if (reverse) {
-    /* Búsqueda inversa de un canal suelto (§14.4): 2 consultas como mucho y
+  /* Un plazo para toda la etapa del motor (M3): más corto si la IPTV ya tiene algo que enseñar. */
+  const budget = options.engineBudget
+    ? iptvLayer?.candidates.some((candidate) => candidate.score >= RESOLUTION_EXACT_SCORE)
+      ? options.engineBudget.withIptv
+      : options.engineBudget.withoutIptv
+    : null;
+  const stage = engineStage(deps, scope === 'match' ? budget : null, options.signal);
+  let semanticResult: Awaited<ReturnType<typeof applySemanticCandidateScores<BaseCandidate>>>;
+  try {
+    if (scope === 'match') {
+      /* Las pistas de la guía también se buscan (8 consultas como mucho). */
+      const queries = aceSearchQueries([...channels, ...hints], semanticEnabled);
+      const searched = await Promise.allSettled(
+        queries.map((query) => untilAborted(deps.search(query, stage.signal), stage.signal)),
+      );
+      /* Un plazo vencido no es «motor caído»: se sigue con lo que haya llegado. */
+      engineAvailable = searched.some((result) => result.status === 'fulfilled') || stage.expired();
+      const found: BaseCandidate[] = [];
+      for (const result of searched) {
+        if (result.status !== 'fulfilled') continue;
+        for (const item of result.value)
+          found.push(scoreResolutionCandidate(channels, item, 'acestream'));
+      }
+      /* Un id IPTV no llega nunca al motor: del buscador se descarta. */
+      remote.push(
+        ...withGuideHints(found, hints).filter(
+          (candidate) => !deps.iptv || deps.iptv.classify(candidate.id) === 'engine',
+        ),
+      );
+    } else if (reverse) {
+      /* Búsqueda inversa de un canal suelto (§14.4): 2 consultas como mucho y
        solo lo que es ESE canal (≥ 92 con la regla de la IPTV: Hypermotion,
        números y familia). Los ids IPTV que devuelva el motor se descartan. */
-    const queries = aceSearchQueries(channels).slice(0, IPTV_SEARCH.reverseQueriesMax);
-    const searched = await Promise.allSettled(queries.map((query) => deps.search(query)));
-    engineAvailable = !queries.length || searched.some((result) => result.status === 'fulfilled');
-    const same =
-      deps.iptv?.sameChannel.bind(deps.iptv) ??
-      ((channel: string, title: string) =>
-        scoreResolutionCandidate([channel], { id: '', title }, 'acestream').score);
-    const seen = new Set<string>();
-    for (const result of searched) {
-      if (result.status !== 'fulfilled') continue;
-      for (const item of result.value) {
-        if (seen.has(item.id)) continue;
-        seen.add(item.id);
-        if (deps.iptv && deps.iptv.classify(item.id) !== 'engine') continue;
-        let score = 0;
-        let matchedChannel = channels[0] ?? '';
-        for (const channel of channels) {
-          const value = same(channel, item.title);
-          if (value > score) {
-            score = value;
-            matchedChannel = channel;
+      const queries = aceSearchQueries(channels).slice(0, IPTV_SEARCH.reverseQueriesMax);
+      const searched = await Promise.allSettled(
+        queries.map((query) => untilAborted(deps.search(query, stage.signal), stage.signal)),
+      );
+      engineAvailable = !queries.length || searched.some((result) => result.status === 'fulfilled');
+      const same =
+        deps.iptv?.sameChannel.bind(deps.iptv) ??
+        ((channel: string, title: string) =>
+          scoreResolutionCandidate([channel], { id: '', title }, 'acestream').score);
+      const seen = new Set<string>();
+      for (const result of searched) {
+        if (result.status !== 'fulfilled') continue;
+        for (const item of result.value) {
+          if (seen.has(item.id)) continue;
+          seen.add(item.id);
+          if (deps.iptv && deps.iptv.classify(item.id) !== 'engine') continue;
+          let score = 0;
+          let matchedChannel = channels[0] ?? '';
+          for (const channel of channels) {
+            const value = same(channel, item.title);
+            if (value > score) {
+              score = value;
+              matchedChannel = channel;
+            }
           }
+          if (score < RESOLUTION_EXACT_SCORE) continue;
+          remote.push({
+            ...scoreResolutionCandidate(channels, item, 'acestream'),
+            score,
+            matchedChannel,
+          });
         }
-        if (score < RESOLUTION_EXACT_SCORE) continue;
-        remote.push({
-          ...scoreResolutionCandidate(channels, item, 'acestream'),
-          score,
-          matchedChannel,
-        });
       }
     }
-  }
 
-  const programChannels = [
-    ...(Array.isArray(program?.channels) ? (program.channels as unknown[]) : []),
-    ...(Array.isArray(options.programChannels) ? options.programChannels : deps.programChannels),
-  ];
-  const semanticResult = semanticEnabled
-    ? await applySemanticCandidateScores(
-        channels,
-        [...local, ...remote],
-        programChannels,
-        deps.semantic,
-      )
-    : { candidates: [...local, ...remote], used: false, catalogSize: 0, error: null };
+    const programChannels = [
+      ...(Array.isArray(program?.channels) ? (program.channels as unknown[]) : []),
+      ...(Array.isArray(options.programChannels) ? options.programChannels : deps.programChannels),
+    ];
+    const unscored = {
+      candidates: [...local, ...remote],
+      used: false,
+      catalogSize: 0,
+      error: null,
+    };
+    /* La IA corre dentro del mismo plazo: si vence, sin su nota (lo del motor ya está). */
+    semanticResult = semanticEnabled
+      ? await untilAborted(
+          applySemanticCandidateScores(
+            channels,
+            [...local, ...remote],
+            programChannels,
+            deps.semantic,
+          ),
+          stage.signal,
+        ).catch((error: unknown) => {
+          if (!stage.signal?.aborted) throw error;
+          return { ...unscored, error: stage.expired() ? 'ai_timeout' : null };
+        })
+      : unscored;
+  } finally {
+    stage.cancel();
+  }
   const pinnedIds = new Set(pinnedList.map((candidate) => candidate.id));
   const iptvCandidates = pinnedList.length
     ? [
@@ -644,4 +750,77 @@ export async function resolveFootballChannel(
     program,
     research,
   };
+}
+
+/**
+ * La capa IPTV de AHORA sobre una resolución guardada del precalentado (M1 del
+ * diagnóstico IPTV 0.8.2). El precalentado pudo hacerse antes de que la IPTV o
+ * su guía estuvieran listas (o con la IPTV en otro estado) y se reutiliza
+ * hasta 20 min: sin esto, al entrar solo salía AceStream hasta «Rebuscar».
+ *
+ * - Todo lo guardado pasa otra vez por la decisión de §4.1
+ *   (`adoptIptvCandidate`, como la pasada nueva): un id IPTV de vínculos,
+ *   favoritos, listas o historial se vuelve a convertir y uno que ya no vale
+ *   (en pausa, quitado) sale. Las IPTV guardadas de la guía salen siempre: la
+ *   guía de ahora manda.
+ * - Dentro las candidatas IPTV de ahora (ganan a una guardada con el mismo id),
+ *   lo aprendido una vez sobre todo (con las pistas de la guía, como la pasada
+ *   nueva), el umbral de 92, el tope de carteles y el mismo orden que la pasada
+ *   nueva: IPTV primero.
+ * - `checked` empieza por `iptv` si se consultó (y no la nombra si no).
+ * - Sin IPTV que añadir, las AceStream y su orden no cambian.
+ *
+ * `candidate` queda en la primera IPTV si la hay; si no, la que eligió el
+ * precalentado (si sigue) o la primera. `status` lo pone quien llama.
+ */
+export function overlayIptv(
+  core: ResolutionCore,
+  channels: readonly string[],
+  program: Readonly<Record<string, unknown>> | null,
+  iptv: ResolutionIptv | undefined,
+  applyLearned: ResolveDeps['applyLearned'],
+  options: { readonly sourceStats?: Partial<SourceStats> | null } = {},
+): ResolutionCore {
+  const layer = iptv ? iptv.resolve(channels, program) : null;
+  const fresh = layer?.candidates ?? [];
+  const freshIds = new Set(fresh.map((candidate) => candidate.id));
+  const kept = (core.candidates || [])
+    .filter(
+      (candidate) =>
+        !(
+          candidate.source === 'iptv' &&
+          (candidate as { iptv?: { guide?: boolean } }).iptv?.guide === true
+        ),
+    )
+    .map((candidate) => adoptIptvCandidate(iptv, candidate))
+    .filter(
+      (candidate): candidate is BaseCandidate => candidate !== null && !freshIds.has(candidate.id),
+    );
+  const channelKeys = new Set(channels.map((channel) => normalizeChannelKey(channel)));
+  const hints = (layer?.hints ?? []).filter((hint) => !channelKeys.has(normalizeChannelKey(hint)));
+  /* Lo aprendido se aplica UNA vez, sobre todo (un «Canal incorrecto» aparta también una IPTV). */
+  const learned = applyLearned(hints.length ? [...channels, ...hints] : channels, [
+    ...fresh,
+    ...kept,
+  ]);
+  const qualified = capIptv(
+    learned.filter(
+      (candidate) => candidate.source !== 'iptv' || candidate.score >= RESOLUTION_EXACT_SCORE,
+    ),
+  );
+  const withIptv = qualified.some((candidate) => candidate.source === 'iptv');
+  const candidates = withIptv
+    ? mergeResolutionCandidates(qualified, {
+        sourceStats: options.sourceStats ?? null,
+        requestedChannels: channels,
+      })
+    : qualified;
+  const checked = core.checked.filter((item) => item !== 'iptv');
+  if (layer?.consulted) checked.unshift('iptv');
+  const chosenId = core.candidate?.id;
+  const candidate =
+    (withIptv ? candidates[0] : candidates.find((item) => item.id === chosenId)) ??
+    candidates[0] ??
+    null;
+  return { ...core, checked, candidates, candidate };
 }

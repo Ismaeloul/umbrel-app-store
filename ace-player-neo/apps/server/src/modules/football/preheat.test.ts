@@ -2,8 +2,9 @@
    B-029, B-180). */
 
 import { createHash } from 'node:crypto';
-import { PreheatPublicSchema } from '@ace/shared';
+import { PreheatPublicSchema, type ResolutionCandidate } from '@ace/shared';
 import { describe, expect, it } from 'vitest';
+import type { IptvResolutionCandidate, IptvService } from '../iptv/types.js';
 import {
   FLTV_URL,
   FOOTBALL_CACHE_MS,
@@ -52,9 +53,16 @@ function agenda(...matches: ReturnType<typeof match>[]) {
 
 let lastCore: FootballHarness['core'] | null = null;
 
-function harness(options: { scanner?: boolean; state?: ReturnType<typeof withStreams> } = {}) {
+function harness(
+  options: {
+    scanner?: boolean;
+    state?: ReturnType<typeof withStreams>;
+    iptv?: IptvService;
+  } = {},
+) {
   const created = createFootball({
     scanner: { enabled: options.scanner !== false },
+    ...(options.iptv ? { iptv: options.iptv } : {}),
     net: { [FLTV_URL]: fixture('futbolenlatv.html') },
     state:
       options.state ??
@@ -414,5 +422,114 @@ describe('Fachada antigua del precalentado', () => {
       runFootballPreheat({ payload, now: KICKOFF - 10 * MIN, search: async () => [] }),
       runFootballPreheat({ payload, now: KICKOFF - 10 * MIN }),
     ]);
+  });
+});
+
+const IPTV_NAME = 'f'.repeat(39) + '1';
+const IPTV_GUIDE = 'f'.repeat(39) + '2';
+
+function iptvCandidate(id: string, title: string, guide: boolean): IptvResolutionCandidate {
+  return {
+    id,
+    title,
+    alias: null,
+    ih: false,
+    source: 'iptv',
+    score: 100,
+    matchedChannel: title,
+    soloFamilia: false,
+    familyFallbackAllowed: false,
+    listaId: 'p_Ab3dE5gH',
+    availability: null,
+    bitrate: null,
+    iptv: { provider: 'Casa', quality: 'fhd', backup: false, guide },
+  };
+}
+
+/**
+ * IPTV de mentira con el estado que se puede cambiar entre el precalentado y la
+ * entrada: activa o no, y con la guía cargada o no. Por nombre casa «M+ Liga de
+ * Campeones»; la guía confirma otro canal para el partido.
+ */
+function fakeIptv() {
+  const state = { active: false, guide: false };
+  const service = {
+    active: () => state.active,
+    touch: () => undefined,
+    classify: (id: string) =>
+      id.startsWith('f') ? (state.active ? 'owned' : 'iptv_disabled') : 'engine',
+    resolve: (request: { channels: readonly string[]; program?: unknown }) => {
+      if (!state.active) return { candidates: [], hints: [], consulted: false };
+      const candidates: IptvResolutionCandidate[] = [];
+      if (state.guide && request.program)
+        candidates.push(iptvCandidate(IPTV_GUIDE, 'M+ LaLiga TV 2', true));
+      if (request.channels.some((channel) => /liga de campeones/i.test(channel)))
+        candidates.push(iptvCandidate(IPTV_NAME, 'M+ Liga de Campeones', false));
+      return { candidates, hints: [], consulted: true };
+    },
+    candidateFor: () => null,
+    tappedCandidates: () => [],
+    sameChannelScore: () => 0,
+  };
+  return { state, service: service as unknown as IptvService };
+}
+
+const ids = (list: readonly ResolutionCandidate[]) => list.map((candidate) => candidate.id);
+const aceIds = (list: readonly ResolutionCandidate[]) =>
+  list.filter((candidate) => candidate.source !== 'iptv').map((candidate) => candidate.id);
+
+describe('La IPTV de ahora encima del precalentado (M1, diagnóstico IPTV 0.8.2)', () => {
+  const payload = () => agenda(match('m1', KICKOFF, ['M+ Liga de Campeones']));
+
+  it('precalentado antes de que la IPTV estuviera activa: al entrar, la IPTV primero y `checked` empieza por iptv', async () => {
+    const iptv = fakeIptv();
+    const { football } = harness({ iptv: iptv.service });
+    await runAt(football, payload(), KICKOFF - 40 * MIN);
+    const before = football.preheat('m1');
+    iptv.state.active = true;
+    const result = await football.resolve({ match: 'm1', channel: 'M+ Liga de Campeones' });
+    expect(result).toMatchObject({
+      status: 'found',
+      preheated: true,
+      candidate: { id: IPTV_NAME, source: 'iptv' },
+    });
+    expect(result.checked[0]).toBe('iptv');
+    expect(ids(result.candidates)).toEqual([IPTV_NAME, ID_A]);
+    /* Las AceStream y el registro del precalentado, como estaban. */
+    expect(aceIds(result.candidates)).toEqual([ID_A]);
+    expect(football.preheat('m1')).toEqual(before);
+    expect(result.preheat).toEqual(before);
+  });
+
+  it('precalentado antes de la guía: la candidata de la guía aparece, y delante', async () => {
+    const iptv = fakeIptv();
+    iptv.state.active = true;
+    const { football } = harness({ iptv: iptv.service });
+    await runAt(football, payload(), KICKOFF - 40 * MIN);
+    iptv.state.guide = true;
+    const result = await football.resolve({ match: 'm1' });
+    expect(ids(result.candidates)).toEqual([IPTV_GUIDE, IPTV_NAME, ID_A]);
+    expect(result.candidate?.id).toBe(IPTV_GUIDE);
+    expect(result.checked.filter((item) => item === 'iptv')).toEqual(['iptv']);
+  });
+
+  it('IPTV en pausa después del precalentado: ningún id IPTV y `checked` sin iptv', async () => {
+    const iptv = fakeIptv();
+    iptv.state.active = true;
+    const { football } = harness({ iptv: iptv.service });
+    await runAt(football, payload(), KICKOFF - 40 * MIN);
+    iptv.state.active = false;
+    const result = await football.resolve({ match: 'm1' });
+    expect(ids(result.candidates)).toEqual([ID_A]);
+    expect(result.checked).not.toContain('iptv');
+    expect(result).toMatchObject({ status: 'found', preheated: true, candidate: { id: ID_A } });
+  });
+
+  it('sin IPTV, la rama precargada no cambia (ni el orden ni la elegida)', async () => {
+    const { football } = harness();
+    await runAt(football, payload(), KICKOFF - 40 * MIN);
+    const result = await football.resolve({ match: 'm1' });
+    expect(ids(result.candidates)).toEqual([ID_A]);
+    expect(result.checked).not.toContain('iptv');
   });
 });

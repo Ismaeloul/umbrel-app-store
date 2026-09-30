@@ -464,6 +464,9 @@ export function cleanIptvTitle(
    canal, no una plataforma. */
 const PLATFORM_RE =
   /\b(?:play|app|youtube|twitch|facebook|twitter|instagram|tiktok|ppv|web|online|netflix|skyshowtime|filmin|atresplayer|mitele|fanseat|fanplay|peacock|hbo\s*max|prime\s*video|amazon\s*prime|apple\s*tv|vix|pluto\s*tv|rakuten)\b|\bparamount\s*\+|\bdisney\s*(?:\+|plus\b)|^\s*max\s*$|[a-z]play\b|@/iu;
+/* «Gol Play» es un canal de la TDT (el antiguo Gol), no una plataforma: se mira antes que `PLATFORM_RE`, que lo
+   descartaba por el «Play» («GOL PLAY HD --> NEW ERA» también). */
+const TV_CHANNEL_PLAY_RE = /^\s*gol\s*play\b/iu;
 /* La cadena detrás del canal en la agenda: «La 1 TVE», «Clan RTVE». */
 const BROADCASTER_SUFFIX_RE = /\s+r?tve$/iu;
 /* … y en medio, detrás de un canal de RTVE: «La 1 TVE 720p *» (biblioteca de AceStream). */
@@ -543,7 +546,7 @@ export function iptvAskedChannel(channel: string): string | null {
   const text = String(channel ?? '').trim();
   if (!text) return null;
   const clean = aceChannelTitle(text);
-  if (PLATFORM_RE.test(clean)) return null;
+  if (!TV_CHANNEL_PLAY_RE.test(clean) && PLATFORM_RE.test(clean)) return null;
   /* «LaLiga+» es otra marca: en una palabra, para que el «+» no se pierda al puntuar (§19). */
   return clean.replace(LALIGA_PLUS_RE, 'LaLigaPlus ').replace(/\s+/g, ' ').trim();
 }

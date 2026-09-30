@@ -87,6 +87,14 @@ export const SEARCH_QUERY_CHARS = 80;
 export const REMOTE_MIN_SCORE_WITHOUT_AI = 58;
 /** "Muy probablemente" (server.js:3764): el nivel 1 de la resolución. */
 export const LIKELY_SCORE = 70;
+/**
+ * Plazo de la etapa del motor (buscador + IA) de una resolución INTERACTIVA
+ * (M3 del diagnóstico IPTV 0.8.2): 8 s si la IPTV ya tiene candidatas, 12 s si
+ * no. Uno solo para todas las consultas, en el comprobador y en el principal
+ * (antes, hasta 12 + 12 s por consulta, y la web se rendía a los 20 s). El
+ * precalentado no lo lleva: no hay nadie esperando.
+ */
+export const ENGINE_STAGE_MS = { withIptv: 8 * SECOND, withoutIptv: 12 * SECOND } as const;
 
 // --- Precalentado (server.js:113-117, 4337-4346, 4444-4446, 5143) ---
 

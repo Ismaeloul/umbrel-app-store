@@ -27,10 +27,13 @@ import {
   BOTH_DOWN_TEXT,
   IPTV_ONLY_DOWN_TEXT,
   IPTV_ONLY_WAIT_TEXT,
+  IPTV_OFFER_LABEL,
+  IPTV_OFFER_TEXT,
   endSession,
   enterChannel,
   enterMatch,
   getSession,
+  research,
   resetSessionForTests,
   selectSource,
 } from './session.ts';
@@ -876,5 +879,49 @@ describe('buscador: el canal IPTV tocado (docs/iptv.md §14.4 y §14.6)', () => 
     await flush();
     expect(getSession().entries).toEqual([]);
     expect(getSession().key).toBeNull();
+  });
+});
+
+describe('«Rebuscar» encuentra tu IPTV mientras suena AceStream (M4)', () => {
+  it('ofrece «Ver por IPTV» sin cambiar lo que suena; el toque la pone a mano', async () => {
+    resolve = () => json(resolution(3));
+    enterMatch(testMatch());
+    await flush();
+    scan = scanJob(['working', 'checking', 'checking']);
+    await vi.advanceTimersByTimeAsync(1500);
+    const ace = getPlayer().channel?.hash;
+    expect(ace).toBe(hash(1));
+    const locationHash = window.location.hash;
+    resolve = () => json(withIptv(3));
+    await research();
+    const offer = toastStore.get().find((t) => t.text === IPTV_OFFER_TEXT);
+    expect(offer?.action?.label).toBe(IPTV_OFFER_LABEL);
+    // Una oferta, no un aviso.
+    expect(offer?.tone).toBe('info');
+    // Nunca sola (D7): sigue la AceStream y la dirección no cambia.
+    expect(getPlayer().channel?.hash).toBe(ace);
+    expect(window.location.hash).toBe(locationHash);
+    offer?.action?.onAction();
+    await flush();
+    expect(getPlayer().channel?.hash).toBe(IPTV);
+    expect(getSession().manualChosen).toBe(true);
+  });
+
+  it('sin IPTV nueva (ya estaba) no ofrece nada', async () => {
+    await iptvPlaying(['working', 'working', 'working']);
+    selectSource(hash(2));
+    await research();
+    expect(toasts()).not.toContain(IPTV_OFFER_TEXT);
+  });
+
+  it('M3 · con la IPTV activa, un «no encontrado» por un 4xx dice que también se miró la IPTV', async () => {
+    setIptvActive(true);
+    install({
+      'GET /api/v1/football/resolve': () =>
+        json({ error: { code: 'channel_required', message: 'No', requestId: 'r' } }, 400),
+    });
+    enterMatch(testMatch({ id: 'm9' }));
+    await flush();
+    expect(getSession().resolution?.checked[0]).toBe('iptv');
   });
 });

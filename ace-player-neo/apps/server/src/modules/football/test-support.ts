@@ -13,6 +13,7 @@ import type { Env } from '../../config/index.js';
 import { AppError } from '../../core/errors.js';
 import type { DirectoriesService } from '../directories/types.js';
 import type { EngineService } from '../engine/types.js';
+import type { IptvService } from '../iptv/types.js';
 import type { FetchOptions, NetClient } from '../net/types.js';
 import type { ScanJobRequest, ScannerService } from '../scanner/types.js';
 import type { SearchOptions, SearchService } from '../search/types.js';
@@ -247,6 +248,8 @@ export function createFootball(
     readonly net?: Record<string, NetRoute | string>;
     readonly embed?: (texts: string[]) => Promise<unknown>;
     readonly ollamaFetch?: typeof fetch;
+    /** Una IPTV falsa (solo lo que usa `football`). */
+    readonly iptv?: IptvService;
   } = {},
 ): FootballHarness {
   const core = createTestCore({ env: { FOOTBALL_DEMO_ONLY: 'false', ...options.env } });
@@ -267,6 +270,7 @@ export function createFootball(
     directories,
     ...(options.embed ? { embed: options.embed } : {}),
     ...(options.ollamaFetch ? { ollamaFetch: options.ollamaFetch } : {}),
+    ...(options.iptv ? { iptv: options.iptv } : {}),
   });
   return { core, football, state, search, scanner, sources, directories, net };
 }
