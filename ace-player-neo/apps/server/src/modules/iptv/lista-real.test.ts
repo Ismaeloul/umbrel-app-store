@@ -461,6 +461,88 @@ describe('buscador con la forma de la lista real (§18)', () => {
   });
 });
 
+describe('alias y orden del buscador (diagnóstico 0.8.2, E1)', () => {
+  const c = lista([
+    ['ES - REAL MADRID TV EN', DEP],
+    ['ES - 24H HD', TDT],
+    ['ES - RTVE PLAY', 'EU | ES | GENERAL'],
+    ['UK - CHAMPIONS TOUR', 'EU | UK | SPORT'],
+    ['ES - UEFA CHAMPIONS LEAGUE FHD', DEP],
+  ]);
+  const top = (q: string, n = 10): string[] =>
+    searchCatalog(c, q)
+      .groups.slice(0, n)
+      .map((group) => group.best.display);
+
+  it.each(['champions', 'champions league', 'la champions', 'ucl', 'm+ champions', 'UCL'])(
+    '«%s» da M. LIGA DE CAMPEONES primero',
+    (q) => {
+      expect(top(q, 2)).toEqual(['M. LIGA DE CAMPEONES 1', 'M. LIGA DE CAMPEONES 2']);
+    },
+  );
+
+  it('lo que casa al pie de la letra sigue saliendo; «champions tour» no es la Liga de Campeones', () => {
+    expect(top('champions')).toEqual(
+      expect.arrayContaining(['UEFA CHAMPIONS LEAGUE', 'CHAMPIONS TOUR']),
+    );
+    expect(top('champions league')).toContain('UEFA CHAMPIONS LEAGUE');
+    expect(top('champions tour')).toEqual(['CHAMPIONS TOUR']);
+  });
+
+  it('«tve» y «rtve» a secas: la familia de RTVE; «tve» ya no es «REAL MADRID TV EN»', () => {
+    expect(top('tve')).not.toContain('REAL MADRID TV EN');
+    expect(top('tve')).toEqual(
+      expect.arrayContaining(['LA 1', 'LA 2', 'TELEDEPORTE', '24H', 'CLAN']),
+    );
+    const rtve = top('rtve');
+    expect(rtve.slice(0, 5)).toEqual(
+      expect.arrayContaining(['LA 1', 'LA 2', 'TELEDEPORTE', '24H', 'CLAN']),
+    );
+    expect(rtve).toContain('RTVE PLAY');
+    /* Con más palabras no es el alias: «tve 1» sigue siendo La 1 por la grafía de RTVE. */
+    expect(top('tve 1', 1)).toEqual(['LA 1']);
+  });
+
+  it('«a3» (con o sin «hd»): ANTENA 3 primero', () => {
+    expect(top('a3', 1)).toEqual(['ANTENA 3']);
+    expect(top('a3 hd', 1)).toEqual(['ANTENA 3']);
+  });
+
+  it('la consulta pegada no parte una palabra por una letra; con 2 letras o números, sí', () => {
+    expect(top('madridtve')).not.toContain('REAL MADRID TV EN');
+    expect(top('madridtven')).toEqual(['REAL MADRID TV EN']);
+    expect(top('antena3', 1)).toEqual(['ANTENA 3']);
+    expect(top('la2', 1)).toEqual(['LA 2']);
+  });
+
+  it('«laliga tv»: la familia M. LALIGA primero; «laliga tv 2»: M. LALIGA 2 primero', () => {
+    expect(top('laliga tv', 5)).toEqual([
+      'M. LALIGA',
+      'M. LALIGA 1',
+      'M. LALIGA 2',
+      'M. LALIGA 3',
+      'M.LALIGA 4',
+    ]);
+    const dos = top('laliga tv 2');
+    expect(dos[0]).toBe('M. LALIGA 2');
+    expect(dos.indexOf('LA LIGA 2')).toBeGreaterThan(dos.indexOf('DAZN LaLIGA 2'));
+  });
+
+  it('«laliga» y «la liga» no cambian: DAZN LaLIGA y la familia M. LALIGA delante', () => {
+    for (const q of ['laliga', 'la liga']) {
+      expect(top(q, 7)).toEqual([
+        'DAZN LaLIGA',
+        'DAZN LaLIGA 2',
+        'M. LALIGA',
+        'M. LALIGA 1',
+        'M. LALIGA 2',
+        'M. LALIGA 3',
+        'M.LALIGA 4',
+      ]);
+    }
+  });
+});
+
 describe('emparejado automático con la forma de la lista real (§18)', () => {
   const c = lista();
   const pick = (channel: string): string[] =>
