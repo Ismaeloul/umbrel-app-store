@@ -38,7 +38,7 @@ con FakeClock; el único tiempo real es el del proceso hijo de `spawn.test.ts`.
 |---|---|---|
 | B-217 | service "lanza ffmpeg sobre la playbackUrl…"; playback/routes "GET /api/remux … {url, token}"; playback/sessions "el iPhone recibe la lista de /native/api/v1/video…" | ✓ |
 | B-218 | pure "buildRemuxArgs es la línea de la 0.6.59 más…" (`-c:v copy -copyinkf`) | ✓ |
-| B-219 | ídem (`-c:a aac -b:a 160k -ac 2`, `aresample=async=1000:…`) | ✓ |
+| B-219 | ídem (`-c:a aac -b:a 160k -ac 2`, `aresample=async=1000:min_hard_comp=0.100`); pure "ningún directo lleva first_pts…" (P8 del diagnóstico 0.8.2) | ✓ |
 | B-220 | ídem (`-fflags +genpts+discardcorrupt`) | ✓ |
 | B-221 | T-003, T-035; routes "fichero completo, HEAD, 416, 404, 403 y 405…"; "segmentos con Range y 206…" | ✓ |
 | B-222 | T-035, T-125; service "POST /api/remux/stop de la 0.6.59" (4 tests); routes "…el stop de un enganche anterior da stale" | ✓ |

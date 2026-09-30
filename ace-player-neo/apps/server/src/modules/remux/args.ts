@@ -114,7 +114,11 @@ export function buildRemuxArgs(input: RemuxArgsInput): string[] {
     '0:v:0',
     '-map',
     '0:a:0?',
-    // server.js:306-307: vídeo copiado con -copyinkf, audio AAC 160k estéreo (B-218, B-219)
+    /* server.js:306-307: vídeo copiado con -copyinkf, audio AAC 160k estéreo (B-218, B-219). Sin el
+       `first_pts=0` de la 0.6.59: rellenaba de silencio desde 0 hasta «ahora» cada vez que el grafo de
+       audio se rehacía (p. ej. al pasar de 2.0 a 5.1), miles de tramas AAC en un solo segmento y un
+       pico de CPU (diagnostico-iptv-0.8.2 P8, B1). Tampoco `-reinit_filter 0`: con un cambio de
+       disposición de canales es fatal. */
     '-c:v',
     'copy',
     '-copyinkf',
@@ -125,7 +129,7 @@ export function buildRemuxArgs(input: RemuxArgsInput): string[] {
     '-ac',
     '2',
     '-af',
-    'aresample=async=1000:min_hard_comp=0.100:first_pts=0',
+    'aresample=async=1000:min_hard_comp=0.100',
     // Nuevo en la v2 (arquitectura §5.7)
     '-threads',
     '2',
