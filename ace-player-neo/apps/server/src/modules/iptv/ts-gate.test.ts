@@ -336,7 +336,14 @@ describe('puerta TS: costuras dentro de una conexión', () => {
       .subarray(500 * TS_PACKET);
     const gate = new TsGate();
     gate.wait({ forward: false, fresh: true });
-    const packets = parse(feed(gate, Buffer.concat([a, b])));
+    /* Hasta antes del IDR de la fuente nueva: esperando, y no es pérdida (el PTS salta). */
+    const cutAt = a.length + 300 * TS_PACKET;
+    const early = feed(gate, Buffer.concat([a, b]).subarray(0, cutAt));
+    expect(gate.mode).toBe('waitRap');
+    expect(gate.lossSeam).toBe(false);
+    const packets = parse(
+      Buffer.concat([early, feed(gate, Buffer.concat([a, b]).subarray(cutAt))]),
+    );
     expect(gate.seams).toBe(1);
     const pts = videoPts(packets);
     const jumpAt = pts.findIndex((value, i) => i > 0 && value - pts[i - 1]! > 90_000);
@@ -364,7 +371,13 @@ describe('puerta TS: costuras dentro de una conexión', () => {
     const holed = Buffer.concat(packets.filter((_, i) => !drop.has(i)).map((p) => p.bytes));
     const gate = new TsGate();
     gate.wait({ forward: false, fresh: true });
-    const out = parse(feed(gate, holed));
+    /* Antes del IDR del segundo 3: esperando, y marcado como pérdida (el PTS sigue su línea). */
+    const next = packets.findIndex((p) => p.pid === PID_VIDEO && p.pts === ptsAt(3));
+    const cutAt = (next - drop.size - 20) * TS_PACKET;
+    const early = feed(gate, holed.subarray(0, cutAt));
+    expect(gate.mode).toBe('waitRap');
+    expect(gate.lossSeam).toBe(true);
+    const out = parse(Buffer.concat([early, feed(gate, holed.subarray(cutAt))]));
     expect(gate.seams).toBe(1);
     const pts = videoPts(out);
     /* Del IDR roto del segundo 2 se salta al del segundo 3. */
@@ -393,5 +406,59 @@ describe('puerta TS: costuras dentro de una conexión', () => {
     );
     expect(gate.seams).toBe(1);
     expect(videoPts(packets)).toEqual([90_000, 180_000, 363_600]);
+  });
+});
+
+describe('puerta TS: audio al abrir', () => {
+  it('el audio muxeado detrás del IDR pero con PTS de antes no pasa; el de otro reloj (muy por detrás) sí', () => {
+    const hand = new HandMux(HandMux.psiPackets());
+    const idr = Buffer.concat([nal(0x67, 20), nal(0x65, 200)]);
+    const p = Buffer.concat([nal(0x41, 100)]);
+    const aac = Buffer.alloc(200, 0x21);
+    const rap = 900_000;
+    const gate = new TsGate();
+    gate.wait({ forward: false, fresh: true });
+    const packets = parse(
+      feed(
+        gate,
+        hand.withPsi(
+          hand.pes(PID_VIDEO, rap - 3_600, p),
+          hand.pes(PID_AUDIO_FIRST, rap - 30_000, aac),
+          hand.pes(PID_VIDEO, rap, idr, { rai: true }),
+          /* 0,5 s antes del IDR: fuera (adelantaría el audio a la imagen). */
+          hand.pes(PID_AUDIO_FIRST, rap - 45_000, aac),
+          hand.pes(PID_AUDIO_FIRST, rap - 20_000, aac),
+          /* 20 ms antes: dentro del margen. */
+          hand.pes(PID_AUDIO_FIRST, rap - 1_800, aac),
+          hand.pes(PID_AUDIO_FIRST, rap + 1_920, aac),
+          hand.pes(PID_VIDEO, rap + 3_600, p),
+        ),
+      ),
+    );
+    expect(videoPts(packets)).toEqual([rap, rap + 3_600]);
+    expect(audioPts(packets)).toEqual([rap - 1_800, rap + 1_920]);
+
+    /* Un audio con otro reloj (10 s por detrás del vídeo) no se queda fuera. */
+    const other = new HandMux(HandMux.psiPackets());
+    const second = new TsGate();
+    second.wait({ forward: false, fresh: true });
+    const skewed = parse(
+      feed(
+        second,
+        other.withPsi(
+          other.pes(PID_VIDEO, rap, idr, { rai: true }),
+          other.pes(PID_AUDIO_FIRST, rap - 900_000, aac),
+        ),
+      ),
+    );
+    expect(audioPts(skewed)).toEqual([rap - 900_000]);
+  });
+
+  it('cada paso a `waitRap` cuenta en `waits` (el plazo del relé va atado a la espera de ahora)', () => {
+    const gate = new TsGate();
+    expect(gate.waits).toBe(0);
+    gate.wait({ forward: false, fresh: true });
+    gate.wait({ forward: true, fresh: true });
+    expect(gate.waits).toBe(2);
   });
 });

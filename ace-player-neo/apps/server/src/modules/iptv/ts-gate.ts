@@ -17,7 +17,10 @@
    - `pass`: todo pasa. Dentro de una conexión, una costura en el vídeo (un
      salto del contador de continuidad, `discontinuity_indicator=1`, o el PTS
      que va atrás o adelante más de `seamPtsMs`) pasa a `waitRap` sin exigir
-     que el PTS avance (el origen puede haber cambiado de reloj).
+     que el PTS avance (el origen puede haber cambiado de reloj). Si solo ha
+     saltado el contador (y el PTS sigue su línea), se marca `lossSeam`: son
+     paquetes perdidos, no otra fuente, y el relé no reinicia el remux por
+     ella si no llega el fotograma clave.
    - `waitRap`: se tira todo hasta que un PES de vídeo con PUSI es un punto de
      acceso (RAI=1, o un NAL IDR/SPS en H.264, IRAP en HEVC o la cabecera de
      secuencia en MPEG-2, mirando sus 3 primeros paquetes). Con `forward` (una
@@ -26,7 +29,10 @@
      del suyo se sigue tirando. Al encontrarlo se reenvían la PAT y la PMT
      guardadas, IDÉNTICAS byte a byte (si cambiaran, ffmpeg sacaría un init
      nuevo sin discontinuidad y AVPlayer se rompe), y se vuelve a `pass`. Los
-     demás PID esperan a su siguiente PUSI.
+     demás PID esperan a su siguiente PUSI con el PTS por delante del punto de
+     acceso (menos `AUDIO_LEAD`): el audio muxeado detrás del IDR pero de
+     antes no se adelanta a la imagen (salvo que vaya más de `seamPtsMs` por
+     detrás: entonces es otro reloj y se deja pasar).
 
    Sin punto de acceso a tiempo (GOP abierto, refresco intra), quien la usa
    llama a `release()`: la PAT y la PMT y todo lo que venga (el relé reinicia
@@ -44,6 +50,9 @@ const PTS_HALF = 2 ** 32;
 const RAP_PACKETS = 3;
 /* Una PMT en más paquetes que esto no se guarda (no pasa en la práctica). */
 const PMT_MAX_PACKETS = 4;
+/* El audio puede empezar hasta esto antes del punto de acceso (unos 2 cuadros de AAC). */
+const AUDIO_LEAD = Math.round(0.05 * 90_000);
+const SEAM_TICKS = (IPTV_RELAY.seamPtsMs * 90_000) / 1000;
 
 const VIDEO_TYPES = new Set([0x01, 0x02, 0x10, 0x1b, 0x24, 0x42, 0xea]);
 
@@ -132,6 +141,13 @@ function psiSection(payloads: readonly Buffer[]): Buffer | null {
   return data.subarray(start, end);
 }
 
+/* Tras volver a `pass`, lo que tiene que superar el PTS de un PID: `hard`,
+   lo ya entregado (siempre); `soft`, el punto de acceso (solo si va cerca). */
+interface ResumeFloor {
+  readonly hard: number | null;
+  readonly soft: number | null;
+}
+
 interface Candidate {
   readonly packets: Buffer[];
   readonly payloads: Buffer[];
@@ -145,6 +161,10 @@ export class TsGate {
   waitedBytes = 0;
   /** Costuras vistas dentro de una conexión (para el registro). */
   seams = 0;
+  /** Cuántas veces se ha pasado a `waitRap` (el relé ata su plazo a la espera de ahora). */
+  waits = 0;
+  /** La espera de ahora es por paquetes perdidos (solo el contador, el PTS sigue su línea). */
+  lossSeam = false;
 
   private rest: Buffer | null = null;
   private pmtPid: number | null = null;
@@ -162,7 +182,7 @@ export class TsGate {
   private floorVideo: number | null = null;
   private candidate: Candidate | null = null;
   /* Tras volver a `pass`: PID que esperan a su siguiente PUSI (y el PTS que tiene que superar). */
-  private readonly resume = new Map<number, number | null>();
+  private readonly resume = new Map<number, ResumeFloor>();
   private out: Buffer[] = [];
   /* Lo que un paquete emite aparte (PAT/PMT y el punto de acceso retenido). */
   private pending: Buffer[] = [];
@@ -170,6 +190,8 @@ export class TsGate {
   /** Pasa a esperar un punto de acceso. */
   wait(options: TsGateWait): void {
     this.mode = 'waitRap';
+    this.waits += 1;
+    this.lossSeam = false;
     this.waitedBytes = 0;
     this.candidate = null;
     this.forward = options.forward;
@@ -210,8 +232,9 @@ export class TsGate {
     this.videoCc = null;
     this.lastVideoPts = null;
     this.resume.clear();
-    if (this.videoPid !== null) this.resume.set(this.videoPid, null);
-    for (const pid of this.elementary) this.resume.set(pid, null);
+    const free: ResumeFloor = { hard: null, soft: null };
+    if (this.videoPid !== null) this.resume.set(this.videoPid, free);
+    for (const pid of this.elementary) this.resume.set(pid, free);
     return head;
   }
 
@@ -335,7 +358,7 @@ export class TsGate {
       if (!pusi) return false;
       const start = payloadStart(data, offset);
       const pts = start === null ? null : pesPts(data, start, offset + TS_PACKET);
-      if (pending !== null && pts !== null && ptsDiff(pts, pending) <= 0) return false;
+      if (pts !== null && this.behind(pts, pending)) return false;
       this.resume.delete(pid);
       if (pts !== null) this.notePts(pid, pts);
       if (isVideo) this.videoCc = (data[offset + 3] as number) & 0x0f;
@@ -351,11 +374,12 @@ export class TsGate {
     }
     /* Vídeo: ¿costura dentro de la conexión? */
     let seam = (adaptationFlags(data, offset) & 0x80) !== 0;
+    let ccBreak = false;
     const start = payloadStart(data, offset);
     if (start !== null) {
       const cc = (data[offset + 3] as number) & 0x0f;
       if (this.videoCc !== null && cc !== this.videoCc && cc !== ((this.videoCc + 1) & 0x0f)) {
-        seam = true;
+        ccBreak = true;
       }
       this.videoCc = cc;
     }
@@ -363,13 +387,14 @@ export class TsGate {
     if (pusi && start !== null) {
       pts = pesPts(data, start, offset + TS_PACKET);
       if (pts !== null && this.lastVideoPts !== null) {
-        const jump = Math.abs(ptsDiff(pts, this.lastVideoPts));
-        if (jump > (IPTV_RELAY.seamPtsMs * 90_000) / 1000) seam = true;
+        if (Math.abs(ptsDiff(pts, this.lastVideoPts)) > SEAM_TICKS) seam = true;
       }
     }
-    if (seam) {
+    if (seam || ccBreak) {
       this.seams += 1;
       this.wait({ forward: false });
+      /* Solo el contador: paquetes perdidos (si luego salta el PTS, deja de serlo). */
+      this.lossSeam = !seam;
       this.waitedBytes = TS_PACKET;
       return this.waitPacket(data, offset, pid, pusi);
     }
@@ -384,6 +409,14 @@ export class TsGate {
       this.candidate = null;
       if (start === null) return false;
       const pts = pesPts(data, start, offset + TS_PACKET);
+      if (
+        this.lossSeam &&
+        pts !== null &&
+        this.lastVideoPts !== null &&
+        Math.abs(ptsDiff(pts, this.lastVideoPts)) > SEAM_TICKS
+      ) {
+        this.lossSeam = false;
+      }
       if (this.forward && this.floorVideo !== null && pts !== null) {
         if (ptsDiff(pts, this.floorVideo) <= 0) return false;
       }
@@ -435,12 +468,21 @@ export class TsGate {
     this.videoCc = candidate.cc;
     if (candidate.pts !== null) this.lastVideoPts = candidate.pts;
     this.resume.clear();
+    const soft = candidate.pts === null ? null : (candidate.pts - AUDIO_LEAD + PTS_WRAP) % PTS_WRAP;
     for (const pid of this.elementary) {
       const last = this.lastPts.get(pid);
-      this.resume.set(pid, this.forward && last !== undefined ? last : null);
+      this.resume.set(pid, { hard: this.forward && last !== undefined ? last : null, soft });
     }
     this.forward = false;
     this.floorVideo = null;
+  }
+
+  /* ¿Este PTS no supera lo que tiene que superar para volver a pasar? */
+  private behind(pts: number, floor: ResumeFloor): boolean {
+    if (floor.hard !== null && ptsDiff(pts, floor.hard) <= 0) return true;
+    if (floor.soft === null) return false;
+    const diff = ptsDiff(pts, floor.soft);
+    return diff <= 0 && -diff <= SEAM_TICKS;
   }
 
   private notePts(pid: number, pts: number): void {

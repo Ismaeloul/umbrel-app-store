@@ -25,15 +25,20 @@
    esperar 1 s); aun así, más de 12 reconexiones en 10 min cuentan como
    agotado. Tras reconectar se mira el PCR (con un solo plazo de 10 s para la
    sonda: la reconexión nunca se queda esperando): si salta más de 5 s
-   respecto a lo esperado, se pide reiniciar el remux (`onRestart`). Agotado:
-   otra variante una vez (con reinicio) y, si no, `onDropped`.
+   respecto a lo esperado, se pide reiniciar el remux (`onRestart`). Una
+   conexión que se cierra durante la sonda es un intento fallido, y una que
+   se cae mientras la reconexión aún no ha terminado vuelve a reconectar al
+   acabar (nunca queda el relé sin proveedor y sin nadie reconectando).
+   Agotado: otra variante una vez (con reinicio) y, si no, `onDropped`.
 
    Todo lo que va a ffmpeg pasa por la puerta TS (ts-gate.ts): al abrir, en
    cada empalme o reinicio tras reconectar y en cada costura dentro de una
    conexión (contador de continuidad, `discontinuity_indicator` o salto del PTS
    del vídeo), ffmpeg solo vuelve a recibir vídeo desde un fotograma clave, con
    la PAT y la PMT de antes delante y sin repetir lo que ya tenía. Sin
-   fotograma clave en 4 s u 8 MB, pasa todo y se reinicia el remux.
+   fotograma clave en 4 s u 8 MB (contados desde la espera de ahora), pasa
+   todo y, si ffmpeg ya tenía imagen y no era una simple pérdida de paquetes
+   (solo el contador, con el PTS en su línea), se reinicia el remux.
 
    Origen HLS: la lista maestra se aplana a una variante con audio muxeado
    (hls.ts); la de medios se reescribe por lista blanca con URIs del relé y se
@@ -42,7 +47,9 @@
    (secuencia o final de la ventana; un token nuevo no cuenta) en 15 s o 3
    duraciones de segmento, cuentan como corte, salvo con ENDLIST. Una lista
    un poco atrasada con segmentos ya conocidos es un borde del CDN que va por
-   detrás: se sigue con la de antes, y a la tercera seguida es un reinicio.
+   detrás: se sigue con la de antes. Solo si las atrasadas siguen (tres o más)
+   más de lo que tarda un borde en ponerse al día (segmentos de atraso + 1,
+   por la duración de segmento) es un reinicio.
    Reinicio del remux solo si la secuencia (o la de discontinuidades) vuelve
    atrás de verdad. */
 
@@ -141,8 +148,10 @@ const HLS_PLAYLIST_MAX = 2 * 1024 * 1024;
 const HLS_SEGMENT_MAX = 48 * 1024 * 1024;
 const HLS_SEGMENT_MS = 30_000;
 const HLS_KEY_MAX = 4096;
-/** Listas atrasadas seguidas que se toman por un borde del CDN; a la siguiente, reinicio. */
+/** Listas atrasadas seguidas que como poco hacen falta para tomarlas por un reinicio. */
 const STALE_EDGES_MAX = 3;
+/** Duración de segmento que se supone si la lista no trae TARGETDURATION. */
+const DEFAULT_TARGET_S = 6;
 /** Bytes que se leen tras reconectar buscando el primer PCR. */
 const PCR_PROBE_BYTES = 256 * 1024;
 
@@ -352,6 +361,10 @@ class TsSession extends BaseSession {
   /** Puerta de resincronía: ffmpeg solo recibe vídeo desde un punto de acceso. */
   private readonly gate = new TsGate();
   private gateTimer: TimerHandle | null = null;
+  /** La espera de la puerta (`gate.waits`) a la que va atado `gateTimer`. */
+  private gateTimerWait = -1;
+  /** La conexión adoptada se cayó mientras reconnect() aún no había acabado. */
+  private lostWhileReconnecting = false;
 
   constructor(
     ticket: string,
@@ -377,7 +390,7 @@ class TsSession extends BaseSession {
     for (const part of this.gate.push(chunk)) this.deliver(part);
     if (this.gate.seams !== seams) {
       this.relay.deps.logger.info(
-        { ticket: '•••' },
+        { ticket: '•••', lossSeam: this.gate.lossSeam },
         'relé IPTV: costura en la emisión; se espera a un fotograma clave',
       );
     }
@@ -387,7 +400,8 @@ class TsSession extends BaseSession {
   /*
    * Plazo de la puerta: sin punto de acceso en `rapWaitMs` (con ffmpeg
    * leyendo) o en `rapWaitBytes`, se deja pasar todo. Nunca se espera dentro
-   * de adopt(): es un temporizador.
+   * de adopt(): es un temporizador, atado a la espera de ahora (una espera
+   * nueva, en un empalme o una costura, empieza su plazo desde cero).
    */
   private watchGate(): void {
     const { clock } = this.relay.deps;
@@ -400,19 +414,37 @@ class TsSession extends BaseSession {
       this.giveUpRap();
       return;
     }
+    if (this.gateTimer && this.gateTimerWait !== this.gate.waits) {
+      clock.clearTimeout(this.gateTimer);
+      this.gateTimer = null;
+    }
     if (this.gateTimer || !this.downstream || this.restartPending) return;
+    this.gateTimerWait = this.gate.waits;
     this.gateTimer = clock.setTimeout(() => {
       this.gateTimer = null;
       if (!this.closed && this.gate.mode === 'waitRap') this.giveUpRap();
     }, IPTV_RELAY.rapWaitMs);
   }
 
-  /* Sin punto de acceso a tiempo (GOP abierto, refresco intra): pasa todo y, si ffmpeg ya tenía imagen, reinicio del remux. */
+  /*
+   * Sin punto de acceso a tiempo (GOP abierto, refresco intra): pasa todo y,
+   * si ffmpeg ya tenía imagen, reinicio del remux. Tras una simple pérdida de
+   * paquetes la línea de tiempo sigue: sin reinicio (como antes de la puerta,
+   * un poco de imagen rota), para que un proveedor que pierde paquetes no
+   * reinicie el remux cada vez.
+   */
   private giveUpRap(): void {
     this.relay.deps.clock.clearTimeout(this.gateTimer);
     this.gateTimer = null;
+    const loss = this.gate.lossSeam;
     const head = this.gate.release();
-    if (this.delivered === 0 || !this.downstream || this.restartPending) {
+    if (this.delivered === 0 || !this.downstream || this.restartPending || loss) {
+      if (loss) {
+        this.relay.deps.logger.info(
+          { ticket: '•••' },
+          'relé IPTV: paquetes perdidos y sin fotograma clave a tiempo; se sigue sin reiniciar',
+        );
+      }
       for (const part of head) this.deliver(part);
       return;
     }
@@ -477,6 +509,11 @@ class TsSession extends BaseSession {
     const lost = (): void => {
       if (this.upstream !== opened || this.closed) return;
       this.upstream = null;
+      /* Aún dentro de reconnect() (se cayó nada más adoptarla): se reconecta al acabar. */
+      if (this.reconnecting) {
+        this.lostWhileReconnecting = true;
+        return;
+      }
       void this.reconnect();
     };
     body.once('end', lost);
@@ -549,6 +586,7 @@ class TsSession extends BaseSession {
   private async reconnect(options: { readonly immediate?: boolean } = {}): Promise<void> {
     if (this.closed || this.reconnecting) return;
     this.reconnecting = true;
+    this.lostWhileReconnecting = false;
     const { clock } = this.relay.deps;
     let lastCode: IptvReason = 'iptv_dropped';
     let first = options.immediate === true;
@@ -602,6 +640,11 @@ class TsSession extends BaseSession {
       }
     } finally {
       this.reconnecting = false;
+      if (this.lostWhileReconnecting) {
+        this.lostWhileReconnecting = false;
+        /* Con las esperas y el presupuesto de siempre (no es la primera). */
+        if (!this.closed && !this.upstream) void this.reconnect();
+      }
     }
   }
 
@@ -652,10 +695,14 @@ class TsSession extends BaseSession {
       opened.body.destroy();
       return;
     }
-    /* Una conexión que no manda nada cuenta como intento fallido. */
-    if (!headBytes) {
+    /* Una conexión que no manda nada, o que se cierra durante la sonda, cuenta
+       como intento fallido (adoptarla dejaba el relé sin proveedor y sin nadie
+       reconectando). */
+    if (!headBytes || opened.body.destroyed || opened.body.readableEnded) {
       opened.body.destroy();
-      throw new AppError('iptv_dropped', { detail: 'reconexión sin datos' });
+      throw new AppError('iptv_dropped', {
+        detail: headBytes ? 'reconexión cortada' : 'reconexión sin datos',
+      });
     }
     const jump =
       forceRestart ||
@@ -677,6 +724,7 @@ class TsSession extends BaseSession {
       this.gate.resetTimeline();
       this.gate.wait({ forward: false, fresh: true });
       for (const chunk of head) {
+        this.meter.add(chunk.length);
         this.notePcr(chunk);
         this.feed(chunk);
       }
@@ -733,8 +781,9 @@ class HlsSession extends BaseSession {
   private lastDiscontinuity: number | null = null;
   private targetDuration: number | null = null;
   private endList = false;
-  /** Listas atrasadas seguidas (un borde del CDN que va por detrás). */
+  /** Listas atrasadas seguidas (un borde del CDN que va por detrás) y desde cuándo. */
   private staleEdges = 0;
+  private staleSince: number | null = null;
   /** Ya se ha dado la emisión por perdida (se avisa una sola vez). */
   private gaveUp = false;
   private inFlight = 0;
@@ -767,22 +816,32 @@ class HlsSession extends BaseSession {
       this.lastSequence !== null && playlist.mediaSequence < this.lastSequence
         ? this.lastSequence - playlist.mediaSequence
         : 0;
-    if (behind > 0 && this.cache && this.staleEdges < STALE_EDGES_MAX - 1) {
+    if (behind > 0 && this.cache) {
       /* Un poco atrás y con segmentos que ya se conocían: es un borde del CDN
          atrasado, no un reinicio. Se sigue con la lista de antes (sin tocar la
-         secuencia ni el reloj de «avanza»); a la tercera seguida, reinicio. */
+         secuencia ni el reloj de «avanza»). Un borde atrasado se pone al día
+         en (atraso + 1) segmentos: si las atrasadas siguen más que eso (y son
+         tres o más), sí es un reinicio. Contar solo respuestas seguidas daba
+         reinicios de más con un balanceador que reparte al 50 %. */
+      const now = clock.now();
+      const since = this.staleSince ?? now;
+      const catchUpMs =
+        (behind + 1) * (this.targetDuration ?? playlist.targetDuration ?? DEFAULT_TARGET_S) * 1000;
+      const persists = this.staleEdges + 1 >= STALE_EDGES_MAX && now - since > catchUpMs;
       const known =
         behind <= Math.max(this.lastWindow, seqs.length) &&
         seqs.every((seq) =>
           sameSegment(this.segments.get(seq)?.url, playlist.segments.get(seq)?.url),
         );
-      if (known) {
+      if (known && !persists) {
         this.staleEdges += 1;
-        this.cache = { playlist: this.cache.playlist, at: clock.now() };
+        this.staleSince = since;
+        this.cache = { playlist: this.cache.playlist, at: now };
         return this.cache.playlist;
       }
     }
     this.staleEdges = 0;
+    this.staleSince = null;
     /* Hacia atrás de verdad (la secuencia, o la de discontinuidades): el proveedor ha reiniciado la emisión. */
     const restarted =
       behind > 0 ||
@@ -923,8 +982,10 @@ class HlsSession extends BaseSession {
       this.keys.clear();
       this.lastSequence = null;
       this.lastEnd = null;
+      this.lastWindow = 0;
       this.lastDiscontinuity = null;
       this.staleEdges = 0;
+      this.staleSince = null;
       this.learn(resolved.text);
       this.failures = 0;
       this.emitRestart();
