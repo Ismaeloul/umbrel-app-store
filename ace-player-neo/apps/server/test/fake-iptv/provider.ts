@@ -22,7 +22,11 @@
 
    Control: `modo(id, …)` (`ok`, `down`, `401`, `404`, `busy`, `lento`,
    `corta-a-los:S` y `corta-a-los:S:pts`, que reanuda con otra base de
-   PTS/PCR), `conexiones()` y `peticiones()`; también por HTTP en
+   PTS/PCR; y, para la puerta del relé, `empalme:S[:prebuffer=P]`, que corta a
+   los S s y reanuda P s atrás (3 por defecto: repite imagen) y a mitad de GOP,
+   mandando esos P s de golpe, y `cut-mid-packet[:S]`, que corta a los S s (1
+   por defecto) a mitad de un paquete TS), `conexiones()` y `peticiones()`;
+   también por HTTP en
    `/__iptv/modo?id=&modo=`, `/__iptv/conexiones`, `/__iptv/peticiones` y
    `/__iptv/reset` (todo en `ok`, cuenta activa y sin historial).
    `quitar(id)` / `/__iptv/quitar?id=` saca un canal de la lista y de
@@ -151,7 +155,16 @@ const CATEGORIES = [
 ];
 
 export type FakeIptvMode =
-  'ok' | 'down' | '401' | '404' | 'busy' | 'lento' | `corta-a-los:${string}`;
+  | 'ok'
+  | 'down'
+  | '401'
+  | '404'
+  | 'busy'
+  | 'lento'
+  | `corta-a-los:${string}`
+  | `empalme:${string}`
+  | 'cut-mid-packet'
+  | `cut-mid-packet:${string}`;
 
 /**
  * Cómo falla la prueba de conexión las primeras veces (docs/iptv.md §16.8):
@@ -473,10 +486,21 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
     state.opens += 1;
     if (state.opens === 1) state.firstOpenAt = Date.now();
     const [, cutRaw, pts] = /^corta-a-los:([\d.]+)(?::(pts))?$/.exec(state.mode) ?? [];
-    const cutMs = cutRaw ? Number(cutRaw) * 1000 : null;
+    const [, spliceRaw, prebufferRaw] =
+      /^empalme:([\d.]+)(?::prebuffer=([\d.]+))?$/.exec(state.mode) ?? [];
+    const [midPacket, midRaw] = /^cut-mid-packet(?::([\d.]+))?$/.exec(state.mode) ?? [];
+    const cutRawAny = cutRaw ?? spliceRaw ?? (midPacket ? (midRaw ?? '1') : undefined);
+    const cutMs = cutRawAny ? Number(cutRawAny) * 1000 : null;
+    /* Empalme: la reapertura vuelve `prebuffer` s atrás y entra a mitad de GOP. */
+    const prebuffer = spliceRaw ? Number(prebufferRaw ?? '3') : 0;
+    const splice = spliceRaw !== undefined && state.opens > 1;
     /* Una reapertura sigue la misma línea de tiempo; con `:pts`, salta 1000 s. */
     const elapsed = Math.floor((Date.now() - state.firstOpenAt) / 1000);
-    const startSec = pts ? state.opens * 1000 : elapsed;
+    const startSec = pts
+      ? state.opens * 1000
+      : splice
+        ? Math.max(0, Math.floor((Date.now() - state.firstOpenAt) / 1000 - prebuffer))
+        : elapsed;
     const kbps = kbpsFor(FAKE_IPTV_CHANNELS.find((c) => c.id === id)?.resolution, bitrate);
     const muxer = new TsMuxer({
       video: 'h264',
@@ -501,12 +525,18 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
         Date.now() - startedAt >= cutMs
       ) {
         clearInterval(timer);
-        res.destroy();
+        /* A mitad de paquete: la reconexión no puede empezar donde acabó este trozo. */
+        if (midPacket) res.end(muxer.nextPackets(1).subarray(0, TS_PACKET_SIZE / 2));
+        else res.destroy();
         return;
       }
       res.write(muxer.nextPackets(perTick));
     }, 40);
-    res.write(muxer.nextPackets(perTick * burstTicks));
+    if (splice) {
+      /* Medio GOP fuera (se entra con cuadros P) y el colchón de golpe. */
+      muxer.nextPackets(perTick * 12);
+      res.write(muxer.nextPackets(perTick * Math.max(1, Math.round(prebuffer / 0.04))));
+    } else res.write(muxer.nextPackets(perTick * burstTicks));
     res.once('close', () => {
       clearInterval(timer);
       openIds.delete(res);
