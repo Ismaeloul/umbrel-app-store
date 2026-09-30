@@ -226,6 +226,177 @@ describe('relé HLS', () => {
   });
 });
 
+/* Lista de medios en directo: `count` segmentos desde `seq`. */
+function mediaList(
+  seq: number,
+  options: {
+    readonly count?: number;
+    readonly td?: number;
+    readonly token?: string;
+    readonly name?: string;
+    readonly discontinuity?: number;
+    readonly endList?: boolean;
+  } = {},
+): string {
+  const td = options.td ?? 2;
+  const lines = ['#EXTM3U', `#EXT-X-TARGETDURATION:${td}`, `#EXT-X-MEDIA-SEQUENCE:${seq}`];
+  if (options.discontinuity !== undefined) {
+    lines.push(`#EXT-X-DISCONTINUITY-SEQUENCE:${options.discontinuity}`);
+  }
+  for (let i = 0; i < (options.count ?? 5); i += 1) {
+    const token = options.token ? `?t=${options.token}` : '';
+    lines.push(`#EXTINF:${td},`, `${options.name ?? 'seg'}${seq + i}.ts${token}`);
+  }
+  if (options.endList) lines.push('#EXT-X-ENDLIST');
+  return `${lines.join('\n')}\n`;
+}
+
+interface HlsRig {
+  readonly r: Rig;
+  readonly session: Awaited<ReturnType<IptvRelayImpl['open']>>;
+  readonly restarts: number[];
+  readonly dropped: string[];
+  /** Pasa `ms` de reloj y ffmpeg pide la lista (con `text` como lista del proveedor). */
+  step(text: string, ms?: number): Promise<string>;
+}
+
+async function hlsRig(first: string): Promise<HlsRig> {
+  const r = await rig();
+  let current = first;
+  r.setHandler((req, res) => {
+    const url = req.url ?? '';
+    if (url.startsWith('/media.m3u8')) {
+      res.writeHead(200, { 'content-type': 'application/vnd.apple.mpegurl' });
+      res.end(current);
+      return;
+    }
+    if (/^\/\w+\d+\.ts/.test(url)) {
+      res.writeHead(200, { 'content-type': 'video/mp2t' });
+      res.end(
+        generateSegment({
+          video: 'h264',
+          audio: ['aac'],
+          bitrateKbps: 1500,
+          startSec: 0,
+          endSec: 1,
+          color: colorFromSeed('cd'),
+        }),
+      );
+      return;
+    }
+    res.writeHead(404).end();
+  });
+  const session = await r.relay.open({ variants: [variant('/media.m3u8')] });
+  const restarts: number[] = [];
+  const dropped: string[] = [];
+  session.onRestart(() => restarts.push(1));
+  session.onDropped((code) => dropped.push(code));
+  return {
+    r,
+    session,
+    restarts,
+    dropped,
+    async step(text, ms = 1_100) {
+      current = text;
+      r.clock.advance(ms);
+      const listed = await relayGet(session.inputUrl);
+      expect(listed.status).toBe(200);
+      return listed.body.toString('utf8');
+    },
+  };
+}
+
+describe('relé HLS: lista que se atrasa, se reinicia o se congela', () => {
+  it('un borde del CDN que alterna N y N−2 no reinicia: se sigue sirviendo la lista buena', async () => {
+    const h = await hlsRig(mediaList(100));
+    let good = '';
+    for (let k = 1; k <= 12; k += 1) {
+      const lagging = k % 2 === 0;
+      const served = await h.step(mediaList(lagging ? 100 + k - 2 : 100 + k));
+      if (lagging) expect(served).toBe(good);
+      else good = served;
+    }
+    expect(h.restarts).toEqual([]);
+    expect(h.dropped).toEqual([]);
+    await h.session.close();
+  });
+
+  it('tres listas atrasadas seguidas sí son un reinicio (uno)', async () => {
+    const h = await hlsRig(mediaList(100));
+    await h.step(mediaList(102));
+    await h.step(mediaList(100));
+    await h.step(mediaList(100));
+    expect(h.restarts).toEqual([]);
+    await h.step(mediaList(100));
+    expect(h.restarts).toEqual([1]);
+    await h.step(mediaList(101));
+    expect(h.restarts).toEqual([1]);
+    await h.session.close();
+  });
+
+  it('el codificador empieza de 0 con otros segmentos: exactamente un reinicio y el segmento 0 se sirve', async () => {
+    const h = await hlsRig(mediaList(500));
+    await h.step(mediaList(501));
+    const served = await h.step(mediaList(0, { name: 'nuevo' }));
+    expect(h.restarts).toEqual([1]);
+    expect(served).toContain(`/r/${h.session.ticket}/s/0.ts`);
+    await h.step(mediaList(1, { name: 'nuevo' }));
+    await h.step(mediaList(2, { name: 'nuevo' }));
+    expect(h.restarts).toEqual([1]);
+    const base = h.session.inputUrl.replace('index.m3u8', '');
+    const segment = await relayGet(`${base}s/2.ts`, { maxBytes: 5_000_000 });
+    expect(segment.status).toBe(200);
+    expect(h.r.requests).toContain('/nuevo2.ts');
+    expect(h.dropped).toEqual([]);
+    await h.session.close();
+  });
+
+  it('DISCONTINUITY-SEQUENCE: hacia delante no es nada; hacia atrás, reinicio', async () => {
+    const h = await hlsRig(mediaList(100, { discontinuity: 4 }));
+    await h.step(mediaList(101, { discontinuity: 5 }));
+    expect(h.restarts).toEqual([]);
+    await h.step(mediaList(102, { discontinuity: 0 }));
+    expect(h.restarts).toEqual([1]);
+    await h.session.close();
+  });
+
+  it('lista congelada más de 15 s: un solo onDropped (aunque la lista siga llegando)', async () => {
+    const h = await hlsRig(mediaList(100));
+    for (let k = 0; k < 13; k += 1) await h.step(mediaList(100));
+    expect(h.dropped).toEqual([]);
+    for (let k = 0; k < 8; k += 1) await h.step(mediaList(100));
+    expect(h.dropped).toEqual(['iptv_dropped']);
+    await h.session.close();
+  });
+
+  it('con TARGETDURATION 10, el plazo es 3 duraciones (30 s)', async () => {
+    const h = await hlsRig(mediaList(100, { td: 10 }));
+    for (let k = 0; k < 25; k += 1) await h.step(mediaList(100, { td: 10 }));
+    expect(h.dropped).toEqual([]);
+    for (let k = 0; k < 5; k += 1) await h.step(mediaList(100, { td: 10 }));
+    expect(h.dropped).toEqual(['iptv_dropped']);
+    await h.session.close();
+  });
+
+  it('tokens que cambian en cada petición con la secuencia avanzando: nada', async () => {
+    const h = await hlsRig(mediaList(100, { token: 'x0' }));
+    for (let k = 1; k <= 30; k += 1) {
+      await h.step(mediaList(100 + Math.floor(k / 3), { token: `x${k}` }));
+    }
+    expect(h.restarts).toEqual([]);
+    expect(h.dropped).toEqual([]);
+    await h.session.close();
+  });
+
+  it('una lista con ENDLIST que no cambia: nada', async () => {
+    const h = await hlsRig(mediaList(0, { endList: true }));
+    for (let k = 0; k < 30; k += 1) await h.step(mediaList(0, { endList: true }));
+    expect(h.restarts).toEqual([]);
+    expect(h.dropped).toEqual([]);
+    await h.session.close();
+  });
+});
+
 describe('relé TS: reconexión (§6.1)', () => {
   it('403/458 al reconectar cuentan como plaza ocupada: se reintenta sin gastar variantes y sin cerrar ffmpeg', async () => {
     const r = await rig();

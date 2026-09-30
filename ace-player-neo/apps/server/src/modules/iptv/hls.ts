@@ -163,6 +163,8 @@ export interface RewrittenPlaylist {
   readonly keys: ReadonlyMap<number, string>;
   readonly mediaSequence: number;
   readonly discontinuitySequence: number;
+  /** `#EXT-X-TARGETDURATION` en segundos (null si no viene o no vale). */
+  readonly targetDuration: number | null;
   readonly endList: boolean;
 }
 
@@ -205,6 +207,7 @@ export function rewriteMediaPlaylist(
   const keys = new Map<number, string>();
   let mediaSequence = 0;
   let discontinuitySequence = 0;
+  let targetDuration: number | null = null;
   let endList = false;
   let seq: number | null = null;
   let pendingInf: string | null = null;
@@ -243,6 +246,10 @@ export function rewriteMediaPlaylist(
       continue;
     }
     if (tag === '#EXT-X-ENDLIST') endList = true;
+    if (tag === '#EXT-X-TARGETDURATION') {
+      const seconds = Number(value);
+      targetDuration = Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+    }
     if (tag === '#EXT-X-KEY') {
       const attributes = hlsAttributes(value);
       const method = (attributes.get('METHOD') ?? '').toUpperCase();
@@ -285,6 +292,7 @@ export function rewriteMediaPlaylist(
     keys,
     mediaSequence,
     discontinuitySequence,
+    targetDuration,
     endList,
   };
 }

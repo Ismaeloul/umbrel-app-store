@@ -38,8 +38,13 @@
    Origen HLS: la lista maestra se aplana a una variante con audio muxeado
    (hls.ts); la de medios se reescribe por lista blanca con URIs del relé y se
    pide como mucho una vez por segundo; los segmentos se descargan por `net`
-   al pedirlos. Tres fallos seguidos de la lista, o 15 s sin lista nueva,
-   cuentan como corte. */
+   al pedirlos. Tres fallos seguidos de la lista, o una lista que no AVANZA
+   (secuencia o final de la ventana; un token nuevo no cuenta) en 15 s o 3
+   duraciones de segmento, cuentan como corte, salvo con ENDLIST. Una lista
+   un poco atrasada con segmentos ya conocidos es un borde del CDN que va por
+   detrás: se sigue con la de antes, y a la tercera seguida es un reinicio.
+   Reinicio del remux solo si la secuencia (o la de discontinuidades) vuelve
+   atrás de verdad. */
 
 import { randomBytes } from 'node:crypto';
 import http from 'node:http';
@@ -136,11 +141,19 @@ const HLS_PLAYLIST_MAX = 2 * 1024 * 1024;
 const HLS_SEGMENT_MAX = 48 * 1024 * 1024;
 const HLS_SEGMENT_MS = 30_000;
 const HLS_KEY_MAX = 4096;
+/** Listas atrasadas seguidas que se toman por un borde del CDN; a la siguiente, reinicio. */
+const STALE_EDGES_MAX = 3;
 /** Bytes que se leen tras reconectar buscando el primer PCR. */
 const PCR_PROBE_BYTES = 256 * 1024;
 
 function newTicket(): string {
   return randomBytes(16).toString('base64url');
+}
+
+/* El mismo segmento aunque cambie el token de la URL (la ruta manda). */
+function sameSegment(a: string | undefined, b: string | undefined): boolean {
+  if (a === undefined || b === undefined) return false;
+  return a.split(/[?#]/)[0] === b.split(/[?#]/)[0];
 }
 
 function isBusyError(error: unknown): boolean {
@@ -711,9 +724,19 @@ class HlsSession extends BaseSession {
   private readonly keys = new Map<number, string>();
   private guessExt: SegmentExt = 'ts';
   private failures = 0;
+  /** Última vez que la lista AVANZÓ (secuencia o final de la ventana), no que cambió el texto. */
   private lastNewAt: number;
   private lastSequence: number | null = null;
-  private lastText = '';
+  /** Secuencia del último segmento + 1, tamaño de la ventana y DISCONTINUITY-SEQUENCE de la última lista. */
+  private lastEnd: number | null = null;
+  private lastWindow = 0;
+  private lastDiscontinuity: number | null = null;
+  private targetDuration: number | null = null;
+  private endList = false;
+  /** Listas atrasadas seguidas (un borde del CDN que va por detrás). */
+  private staleEdges = 0;
+  /** Ya se ha dado la emisión por perdida (se avisa una sola vez). */
+  private gaveUp = false;
   private inFlight = 0;
   private readonly open = new Set<Readable>();
 
@@ -736,7 +759,38 @@ class HlsSession extends BaseSession {
   }
 
   private learn(text: string): RewrittenPlaylist {
+    const { clock } = this.relay.deps;
     const playlist = rewriteMediaPlaylist(text, this.mediaUrl, this.prefix(), this.guessExt);
+    const seqs = [...playlist.segments.keys()].filter((seq) => seq >= 0);
+    const end = playlist.mediaSequence + seqs.length;
+    const behind =
+      this.lastSequence !== null && playlist.mediaSequence < this.lastSequence
+        ? this.lastSequence - playlist.mediaSequence
+        : 0;
+    if (behind > 0 && this.cache && this.staleEdges < STALE_EDGES_MAX - 1) {
+      /* Un poco atrás y con segmentos que ya se conocían: es un borde del CDN
+         atrasado, no un reinicio. Se sigue con la lista de antes (sin tocar la
+         secuencia ni el reloj de «avanza»); a la tercera seguida, reinicio. */
+      const known =
+        behind <= Math.max(this.lastWindow, seqs.length) &&
+        seqs.every((seq) =>
+          sameSegment(this.segments.get(seq)?.url, playlist.segments.get(seq)?.url),
+        );
+      if (known) {
+        this.staleEdges += 1;
+        this.cache = { playlist: this.cache.playlist, at: clock.now() };
+        return this.cache.playlist;
+      }
+    }
+    this.staleEdges = 0;
+    /* Hacia atrás de verdad (la secuencia, o la de discontinuidades): el proveedor ha reiniciado la emisión. */
+    const restarted =
+      behind > 0 ||
+      (this.lastDiscontinuity !== null && playlist.discontinuitySequence < this.lastDiscontinuity);
+    if (restarted) {
+      /* Los números de antes ya no valen (y taparían a los nuevos en la memoria de 40). */
+      for (const seq of [...this.segments.keys()]) if (seq >= 0) this.segments.delete(seq);
+    }
     for (const [seq, segment] of playlist.segments) this.segments.set(seq, segment);
     for (const [n, url] of playlist.keys) this.keys.set(n, url);
     /* Solo los 40 últimos segmentos (y los MAP, que van en negativo). */
@@ -744,17 +798,48 @@ class HlsSession extends BaseSession {
     while (numbered.length > IPTV_RELAY.segmentMemory) {
       this.segments.delete(numbered.shift() as number);
     }
-    if (text !== this.lastText) {
-      this.lastText = text;
-      this.lastNewAt = this.relay.deps.clock.now();
+    /* Avanzar es que suba la secuencia o el final de la ventana; un texto distinto
+       (tokens que cambian en cada petición) no cuenta. */
+    if (
+      restarted ||
+      this.lastSequence === null ||
+      this.lastEnd === null ||
+      playlist.mediaSequence > this.lastSequence ||
+      end > this.lastEnd
+    ) {
+      this.lastNewAt = clock.now();
+      this.gaveUp = false;
     }
-    if (this.lastSequence !== null && playlist.mediaSequence < this.lastSequence) {
-      /* La secuencia vuelve atrás: el proveedor ha reiniciado la emisión. */
-      this.emitRestart();
-    }
+    if (restarted) this.emitRestart();
     this.lastSequence = playlist.mediaSequence;
-    this.cache = { playlist, at: this.relay.deps.clock.now() };
+    this.lastEnd = end;
+    this.lastWindow = seqs.length;
+    this.lastDiscontinuity = playlist.discontinuitySequence;
+    this.targetDuration = playlist.targetDuration;
+    this.endList = playlist.endList;
+    this.cache = { playlist, at: clock.now() };
     return playlist;
+  }
+
+  /* Sin lista que avance en este rato, cuenta como corte: 15 s o 3 duraciones de segmento. */
+  private staleMs(): number {
+    return Math.max(IPTV_RELAY.playlistStaleMs, 3 * (this.targetDuration ?? 0) * 1000);
+  }
+
+  /* Otra variante o, si no queda, la emisión se da por perdida (una sola vez). */
+  private async giveUp(error: unknown): Promise<void> {
+    if (this.gaveUp) return;
+    this.gaveUp = true;
+    if (await this.nextVariant()) return;
+    const code =
+      error === null ? 'iptv_dropped' : (toIptvError(error, 'stream').code as IptvReason);
+    this.emitDropped(
+      error !== null && isBusyError(error)
+        ? 'iptv_busy'
+        : code === 'iptv_gone'
+          ? 'iptv_gone'
+          : 'iptv_dropped',
+    );
   }
 
   connections(): number {
@@ -784,29 +869,24 @@ class HlsSession extends BaseSession {
     }
     const { clock } = this.relay.deps;
     if (!this.cache || clock.now() - this.cache.at >= IPTV_RELAY.playlistCacheMs) {
+      let fetched = false;
       try {
         const text = await this.fetchPlaylist(this.mediaUrl);
         this.learn(text);
         this.failures = 0;
+        fetched = true;
       } catch (error) {
         this.failures += 1;
-        const stale = clock.now() - this.lastNewAt > IPTV_RELAY.playlistStaleMs;
-        if (this.failures >= IPTV_RELAY.playlistFailures || stale) {
-          if (!(await this.nextVariant())) {
-            const code = toIptvError(error, 'stream').code as IptvReason;
-            this.emitDropped(
-              isBusyError(error)
-                ? 'iptv_busy'
-                : code === 'iptv_gone'
-                  ? 'iptv_gone'
-                  : 'iptv_dropped',
-            );
-          }
-        }
+        const stale = clock.now() - this.lastNewAt > this.staleMs();
+        if (this.failures >= IPTV_RELAY.playlistFailures || stale) await this.giveUp(error);
         if (!this.cache) {
           res.writeHead(503, { 'retry-after': '1', 'cache-control': 'no-store' }).end();
           return;
         }
+      }
+      /* La lista llega pero no avanza (congelada): también es un corte, salvo con ENDLIST. */
+      if (fetched && !this.endList && clock.now() - this.lastNewAt > this.staleMs()) {
+        await this.giveUp(null);
       }
     }
     const body = Buffer.from((this.cache as { playlist: RewrittenPlaylist }).playlist.text, 'utf8');
@@ -842,6 +922,9 @@ class HlsSession extends BaseSession {
       this.segments.clear();
       this.keys.clear();
       this.lastSequence = null;
+      this.lastEnd = null;
+      this.lastDiscontinuity = null;
+      this.staleEdges = 0;
       this.learn(resolved.text);
       this.failures = 0;
       this.emitRestart();
