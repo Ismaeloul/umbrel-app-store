@@ -34,6 +34,25 @@
      antes no se adelanta a la imagen (salvo que vaya más de `seamPtsMs` por
      detrás: entonces es otro reloj y se deja pasar).
 
+   Costura sin rastro en el TS (lab ts-costura, el patrón de Isma): el origen
+   pega dos trozos y se pierde el IDR de la costura, pero el contador y el PTS
+   siguen su línea (quien pega vuelve a muxear). Lo único que la delata es el
+   `frame_num` de H.264: cada cuadro de referencia lo sube en 1 desde el IDR
+   (que es 0), y el P de después de un IDR perdido lleva 1 donde tocaba el
+   siguiente del GOP anterior. Por eso, en `pass`, se lee el SPS
+   (`log2_max_frame_num`, `gaps_in_frame_num_value_allowed_flag`,
+   `frame_mbs_only_flag`) y la cabecera del primer slice de cada PES de
+   vídeo: un cuadro entero (de referencia o no) lleva el `frame_num` del
+   último de referencia + 1, y solo el segundo campo de un par repite el
+   mismo. Cualquier otro es una costura por pérdida (`lossSeam`: la línea de
+   tiempo sigue). En el lab el último de referencia lleva 1 y el P de después
+   también 1: dejar pasar «el mismo» a un cuadro entero no la veía. Si el
+   número cae justo en el siguiente (el GOP anterior acabó en 0 módulo
+   2^log2_max_frame_num), no hay forma de verla. Solo si la cabecera está en
+   el primer paquete del PES (lo normal en un P o un B; si no, se deja de
+   seguir hasta el siguiente): con el PES ya empezado no se puede tirar sin
+   dejar a ffmpeg medio cuadro. Solo H.264 (HEVC no tiene `frame_num`).
+
    Sin punto de acceso a tiempo (GOP abierto, refresco intra), quien la usa
    llama a `release()`: la PAT y la PMT y todo lo que venga (el relé reinicia
    el remux). La puerta no tiene relojes: el plazo lo lleva el relé. */
@@ -121,6 +140,129 @@ function hasRapNal(data: Buffer, streamType: number): boolean {
   return false;
 }
 
+/* Lo que se usa del SPS de H.264 para seguir el `frame_num`. */
+interface AvcSps {
+  readonly log2MaxFrameNum: number;
+  readonly separateColourPlane: boolean;
+  readonly gapsAllowed: boolean;
+  /* Sin cuadros por campos (progresivo o MBAFF): no hay `field_pic_flag`. */
+  readonly frameMbsOnly: boolean;
+}
+
+/* Perfiles de H.264 con los que se sabe leer el SPS (los demás no se siguen). */
+const AVC_PROFILES = new Set([
+  66, 77, 88, 100, 110, 122, 244, 44, 83, 86, 118, 128, 138, 139, 134, 135,
+]);
+const AVC_HIGH_PROFILES = new Set([100, 110, 122, 244, 44, 83, 86, 118, 128, 138, 139, 134, 135]);
+/* Bytes del NAL que se leen: lo que ocupa un SPS con listas de escalado. */
+const NAL_READ_BYTES = 96;
+
+/* Lector de bits del RBSP de un NAL (sin los bytes 0x03 de prevención). Lanza al pasarse. */
+class BitReader {
+  private readonly bytes: number[] = [];
+  private bit = 0;
+
+  constructor(data: Buffer, from: number, to: number) {
+    let zeros = 0;
+    for (let i = from; i < to && this.bytes.length < NAL_READ_BYTES; i += 1) {
+      const byte = data[i] as number;
+      if (zeros >= 2 && byte === 0x03) {
+        zeros = 0;
+        continue;
+      }
+      /* Otro código de inicio: el NAL se acaba aquí. */
+      if (zeros >= 2 && byte <= 0x01) break;
+      this.bytes.push(byte);
+      zeros = byte === 0 ? zeros + 1 : 0;
+    }
+  }
+
+  u(bits: number): number {
+    let value = 0;
+    for (let i = 0; i < bits; i += 1) {
+      const byte = this.bytes[this.bit >> 3];
+      if (byte === undefined) throw new RangeError('fin del NAL');
+      value = value * 2 + ((byte >> (7 - (this.bit & 7))) & 1);
+      this.bit += 1;
+    }
+    return value;
+  }
+
+  ue(): number {
+    let zeros = 0;
+    while (this.u(1) === 0) {
+      zeros += 1;
+      if (zeros > 31) throw new RangeError('ue inválido');
+    }
+    return 2 ** zeros - 1 + this.u(zeros);
+  }
+
+  se(): number {
+    const value = this.ue();
+    return value % 2 ? (value + 1) / 2 : -value / 2;
+  }
+}
+
+/* SPS de H.264 (lo que se usa), o null si no se entiende. */
+function parseAvcSps(data: Buffer, from: number, to: number): AvcSps | null {
+  try {
+    const r = new BitReader(data, from, to);
+    const profile = r.u(8);
+    if (!AVC_PROFILES.has(profile)) return null;
+    r.u(16); // constraint_set*, level_idc
+    if (r.ue() > 31) return null; // seq_parameter_set_id
+    let separateColourPlane = false;
+    if (AVC_HIGH_PROFILES.has(profile)) {
+      const chroma = r.ue();
+      if (chroma > 3) return null;
+      if (chroma === 3) separateColourPlane = r.u(1) === 1;
+      if (r.ue() > 6 || r.ue() > 6) return null; // bit_depth_*_minus8
+      r.u(1); // qpprime_y_zero_transform_bypass_flag
+      if (r.u(1)) {
+        for (let i = 0; i < (chroma === 3 ? 12 : 8); i += 1) {
+          if (!r.u(1)) continue;
+          let last = 8;
+          let next = 8;
+          for (let j = 0; j < (i < 6 ? 16 : 64); j += 1) {
+            if (next !== 0) next = (last + r.se() + 256) % 256;
+            last = next === 0 ? last : next;
+          }
+        }
+      }
+    }
+    const log2MaxFrameNum = r.ue() + 4;
+    if (log2MaxFrameNum > 16) return null;
+    const pocType = r.ue();
+    if (pocType === 0) {
+      if (r.ue() > 12) return null;
+    } else if (pocType === 1) {
+      r.u(1);
+      r.se();
+      r.se();
+      const cycle = r.ue();
+      if (cycle > 255) return null;
+      for (let i = 0; i < cycle; i += 1) r.se();
+    } else if (pocType !== 2) return null;
+    r.ue(); // max_num_ref_frames
+    const gapsAllowed = r.u(1) === 1;
+    r.ue(); // pic_width_in_mbs_minus1
+    r.ue(); // pic_height_in_map_units_minus1
+    const frameMbsOnly = r.u(1) === 1;
+    return { log2MaxFrameNum, separateColourPlane, gapsAllowed, frameMbsOnly };
+  } catch {
+    return null;
+  }
+}
+
+/* El primer slice de un PES de vídeo H.264 (tipo, nal_ref_idc y frame_num). */
+interface AvcSlice {
+  readonly idr: boolean;
+  readonly reference: boolean;
+  readonly frameNum: number;
+  /* Un campo suelto (`field_pic_flag`): el segundo campo repite el `frame_num` del primero. */
+  readonly field: boolean;
+}
+
 /* ¿El mismo paquete PSI salvo el contador de continuidad? Entonces se guarda
    el de antes: lo que se reenvía es idéntico a lo que ffmpeg ya vio. */
 function samePsi(cached: Buffer, data: Buffer, offset: number): boolean {
@@ -176,6 +318,11 @@ export class TsGate {
   private videoType = 0;
   private readonly elementary = new Set<number>();
   private lastVideoPts: number | null = null;
+  /* Seguimiento del `frame_num` (H.264): el SPS y el del último cuadro de referencia. */
+  private avcSps: AvcSps | null = null;
+  private prevRefFrameNum: number | null = null;
+  /* Primeros paquetes del PES de vídeo que está pasando (para ver su SPS). */
+  private pesPayloads: Buffer[] = [];
   private readonly lastPts = new Map<number, number>();
   private videoCc: number | null = null;
   private forward = false;
@@ -196,6 +343,7 @@ export class TsGate {
     this.candidate = null;
     this.forward = options.forward;
     this.floorVideo = options.forward ? this.lastVideoPts : null;
+    this.forgetFrameNum();
     if (options.fresh) this.rest = null;
   }
 
@@ -205,6 +353,7 @@ export class TsGate {
     this.lastPts.clear();
     this.videoCc = null;
     this.floorVideo = null;
+    this.forgetFrameNum();
     this.resume.clear();
   }
 
@@ -217,6 +366,8 @@ export class TsGate {
     this.pmtPayloads = [];
     this.videoPid = null;
     this.videoType = 0;
+    this.avcSps = null;
+    this.forgetFrameNum();
     this.elementary.clear();
   }
 
@@ -231,6 +382,7 @@ export class TsGate {
     this.waitedBytes = 0;
     this.videoCc = null;
     this.lastVideoPts = null;
+    this.forgetFrameNum();
     this.resume.clear();
     const free: ResumeFloor = { hard: null, soft: null };
     if (this.videoPid !== null) this.resume.set(this.videoPid, free);
@@ -390,16 +542,126 @@ export class TsGate {
         if (Math.abs(ptsDiff(pts, this.lastVideoPts)) > SEAM_TICKS) seam = true;
       }
     }
-    if (seam || ccBreak) {
+    let frameGap = false;
+    if (!seam && !ccBreak && start !== null && this.videoType === 0x1b) {
+      frameGap = this.followFrameNum(data, offset, start, pusi);
+    }
+    if (seam || ccBreak || frameGap) {
       this.seams += 1;
       this.wait({ forward: false });
-      /* Solo el contador: paquetes perdidos (si luego salta el PTS, deja de serlo). */
+      /* Solo el contador o el `frame_num`: paquetes perdidos, la línea de
+         tiempo sigue (si luego salta el PTS, deja de serlo). */
       this.lossSeam = !seam;
       this.waitedBytes = TS_PACKET;
       return this.waitPacket(data, offset, pid, pusi);
     }
     if (pts !== null) this.lastVideoPts = pts;
     return true;
+  }
+
+  private forgetFrameNum(): void {
+    this.prevRefFrameNum = null;
+    this.pesPayloads = [];
+  }
+
+  /*
+   * Sigue el `frame_num` de H.264 en un paquete de vídeo que pasa. Devuelve
+   * true si el primer slice de este PES delata cuadros de referencia
+   * perdidos (y el paquete, el primero del PES, aún no ha pasado).
+   */
+  private followFrameNum(data: Buffer, offset: number, start: number, pusi: boolean): boolean {
+    const end = offset + TS_PACKET;
+    if (pusi) {
+      if (start + 9 > end) {
+        this.forgetFrameNum();
+        return false;
+      }
+      const body = Math.min(start + 9 + (data[start + 8] as number), end);
+      const payload = data.subarray(body, end);
+      this.pesPayloads = [payload];
+      /* El SPS suele ir delante del slice: se mira primero en este paquete. */
+      this.learnSps(this.pesPayloads);
+      const slice = this.firstSlice(payload);
+      if (!slice) {
+        /* La cabecera no está en el primer paquete: no se puede actuar sobre este cuadro. */
+        this.prevRefFrameNum = null;
+        return false;
+      }
+      const sps = this.avcSps;
+      let gap = false;
+      if (!slice.idr && sps && !sps.gapsAllowed && this.prevRefFrameNum !== null) {
+        const max = 2 ** sps.log2MaxFrameNum;
+        const prev = this.prevRefFrameNum;
+        /* Un cuadro entero (de referencia o no) lleva siempre el siguiente;
+           el mismo solo lo repite el segundo campo de un par. */
+        gap = slice.frameNum !== (prev + 1) % max && !(slice.field && slice.frameNum === prev);
+      }
+      if (gap) return true;
+      if (slice.reference) this.prevRefFrameNum = slice.frameNum;
+      return false;
+    }
+    /* Paquetes 2 y 3 del PES: por si el SPS va partido o más adelante. */
+    if (this.pesPayloads.length && this.pesPayloads.length < RAP_PACKETS) {
+      this.pesPayloads.push(data.subarray(start, end));
+      if (this.pesPayloads.length === RAP_PACKETS) {
+        this.learnSps(this.pesPayloads);
+        this.pesPayloads = [];
+      }
+    }
+    return false;
+  }
+
+  /* Aprende el SPS de H.264 si aparece en estas cargas (seguidas). */
+  private learnSps(payloads: readonly Buffer[]): void {
+    const data = payloads.length === 1 ? (payloads[0] as Buffer) : Buffer.concat(payloads);
+    for (let i = 0; i + 3 < data.length; i += 1) {
+      if (data[i] !== 0 || data[i + 1] !== 0 || data[i + 2] !== 1) continue;
+      if (((data[i + 3] as number) & 0x1f) === 7) {
+        const sps = parseAvcSps(data, i + 4, data.length);
+        if (sps) {
+          /* Otro SPS (otra fuente): el `frame_num` de antes ya no vale. */
+          const old = this.avcSps;
+          if (
+            old &&
+            (old.log2MaxFrameNum !== sps.log2MaxFrameNum || old.gapsAllowed !== sps.gapsAllowed)
+          ) {
+            this.prevRefFrameNum = null;
+          }
+          this.avcSps = sps;
+        }
+        return;
+      }
+      i += 2;
+    }
+  }
+
+  /* El primer slice (tipo 1 o 5) de estos datos, si su cabecera está entera. */
+  private firstSlice(data: Buffer): AvcSlice | null {
+    const sps = this.avcSps;
+    if (!sps) return null;
+    for (let i = 0; i + 3 < data.length; i += 1) {
+      if (data[i] !== 0 || data[i + 1] !== 0 || data[i + 2] !== 1) continue;
+      const header = data[i + 3] as number;
+      const type = header & 0x1f;
+      if (type !== 1 && type !== 5) {
+        i += 2;
+        continue;
+      }
+      try {
+        const r = new BitReader(data, i + 4, data.length);
+        /* Solo el primer slice del cuadro (los demás repiten el frame_num). */
+        if (r.ue() !== 0) return null;
+        r.ue(); // slice_type
+        r.ue(); // pic_parameter_set_id
+        if (sps.separateColourPlane) r.u(2);
+        const frameNum = r.u(sps.log2MaxFrameNum);
+        const field = !sps.frameMbsOnly && r.u(1) === 1;
+        return { idr: type === 5, reference: (header & 0x60) !== 0, frameNum, field };
+      } catch {
+        return null;
+      }
+    }
+    return null;
   }
 
   private waitPacket(data: Buffer, offset: number, pid: number, pusi: boolean): boolean {
@@ -422,13 +684,13 @@ export class TsGate {
       }
       const packet = data.subarray(offset, offset + TS_PACKET);
       const cc = (data[offset + 3] as number) & 0x0f;
+      const headerEnd = start + 9 + (data[start + 8] as number);
+      const payload = data.subarray(Math.min(headerEnd, offset + TS_PACKET), offset + TS_PACKET);
       if ((adaptationFlags(data, offset) & 0x40) !== 0) {
-        this.open({ packets: [packet], payloads: [], pts, cc });
+        this.open({ packets: [packet], payloads: [payload], pts, cc });
         return false;
       }
       /* Sin RAI: se miran los NAL de los primeros paquetes (tras la cabecera PES). */
-      const headerEnd = start + 9 + (data[start + 8] as number);
-      const payload = data.subarray(Math.min(headerEnd, offset + TS_PACKET), offset + TS_PACKET);
       this.candidate = { packets: [packet], payloads: [payload], pts, cc };
       return this.check();
     }
@@ -467,6 +729,11 @@ export class TsGate {
     this.waitedBytes = 0;
     this.videoCc = candidate.cc;
     if (candidate.pts !== null) this.lastVideoPts = candidate.pts;
+    /* El punto de acceso sale entero por aquí: su SPS se aprende, y el
+       `frame_num` se vuelve a seguir desde el cuadro siguiente (un punto de
+       acceso sin IDR no tiene por qué empezar en 0). */
+    if (this.videoType === 0x1b) this.learnSps(candidate.payloads);
+    this.forgetFrameNum();
     this.resume.clear();
     const soft = candidate.pts === null ? null : (candidate.pts - AUDIO_LEAD + PTS_WRAP) % PTS_WRAP;
     for (const pid of this.elementary) {

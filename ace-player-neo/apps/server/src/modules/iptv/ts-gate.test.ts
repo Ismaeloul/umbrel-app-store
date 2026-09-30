@@ -3,6 +3,10 @@
    a mano para los casos raros (sin RAI, NAL partidos entre paquetes, vuelta
    del PTS, un flujo sin punto de acceso). */
 
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   PID_AUDIO_FIRST,
@@ -461,4 +465,133 @@ describe('puerta TS: audio al abrir', () => {
     gate.wait({ forward: true, fresh: true });
     expect(gate.waits).toBe(2);
   });
+});
+
+// --- H.264 de verdad (x264): el `frame_num` ---
+
+const HAS_X264 =
+  spawnSync('ffmpeg', ['-hide_banner', '-encoders'], { encoding: 'utf8' }).stdout?.includes(
+    'libx264',
+  ) ?? false;
+
+/* 4 s de 320x240 a 25 fps (GOP de `gop` cuadros), en MPEG-TS (vídeo 0x100, audio 0x101). */
+function x264Clip(dir: string, x264: string[], gop = 25): Buffer {
+  const file = path.join(dir, 'clip.ts');
+  const encode = spawnSync(
+    'ffmpeg',
+    [
+      ...['-hide_banner', '-nostdin', '-v', 'error', '-y'],
+      ...['-f', 'lavfi', '-i', 'testsrc2=size=320x240:rate=25:duration=4'],
+      ...['-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=4'],
+      ...['-c:v', 'libx264', '-preset', 'veryfast', '-g', `${gop}`, '-keyint_min', `${gop}`],
+      ...['-sc_threshold', '0', ...x264, '-c:a', 'aac', '-f', 'mpegts', file],
+    ],
+    { encoding: 'utf8' },
+  );
+  expect(encode.stderr).toBe('');
+  return readFileSync(file);
+}
+
+/* Errores del decodificador de ffmpeg al leer `data` (vacío si lo decodifica entero). */
+function decodeErrors(dir: string, data: Buffer): string {
+  const file = path.join(dir, 'out.ts');
+  writeFileSync(file, data);
+  const decode = spawnSync(
+    'ffmpeg',
+    ['-hide_banner', '-nostdin', '-v', 'error', '-i', file, '-f', 'null', '-'],
+    { encoding: 'utf8' },
+  );
+  return decode.stderr;
+}
+
+/*
+ * Quita el PES entero del IDR número `nth` (desde 0) y renumera el contador
+ * del vídeo: lo que deja una costura que pierde el IDR pero rehace el mux
+ * (el `-stream_loop` de ffmpeg del lab ts-costura). El PTS sigue su línea.
+ */
+function dropIdr(
+  data: Buffer,
+  nth: number,
+): { data: Buffer; idrPts: number; nextPts: number; nextAt: number } {
+  const packets = parse(data);
+  const raps = packets.flatMap((p, i) => (p.pid === PID_VIDEO && p.pusi && p.rai ? [i] : []));
+  const from = raps[nth]!;
+  let to = from + 1;
+  while (!(packets[to]!.pid === PID_VIDEO && packets[to]!.pusi)) to += 1;
+  let cc = 0;
+  const kept = packets
+    .filter((p, i) => !(p.pid === PID_VIDEO && i >= from && i < to))
+    .map((p) => {
+      const bytes = Buffer.from(p.bytes);
+      if (p.pid === PID_VIDEO && (bytes[3]! & 0x10) !== 0) {
+        bytes[3] = (bytes[3]! & 0xf0) | cc;
+        cc = (cc + 1) & 0x0f;
+      }
+      return bytes;
+    });
+  return {
+    data: Buffer.concat(kept),
+    idrPts: packets[from]!.pts!,
+    nextPts: packets[raps[nth + 1]!]!.pts!,
+    /* Dónde queda el siguiente IDR (en bytes) tras quitar el PES. */
+    nextAt: (raps[nth + 1]! - (to - from)) * TS_PACKET,
+  };
+}
+
+describe.skipIf(!HAS_X264)('puerta TS: costura sin rastro en el TS (frame_num de H.264)', () => {
+  const clean: readonly [string, string[]][] = [
+    ['sin B', ['-bf', '0']],
+    ['B en pirámide', ['-bf', '2', '-x264-params', 'b-pyramid=normal']],
+    ['entrelazado (MBAFF)', ['-bf', '2', '-flags', '+ildct+ilme', '-x264-params', 'tff=1']],
+  ];
+  for (const [label, x264] of clean) {
+    it(`x264 ${label} sin pérdidas: ninguna costura y sale idéntico byte a byte`, () => {
+      const dir = mkdtempSync(path.join(os.tmpdir(), 'ace-ts-gate-'));
+      try {
+        const input = x264Clip(dir, x264);
+        const gate = new TsGate();
+        gate.wait({ forward: false, fresh: true });
+        const out = feed(gate, input, 4096);
+        expect(gate.seams).toBe(0);
+        /* Todo menos la SDT de delante del primer IDR (ffmpeg la pone antes de la PAT). */
+        expect(parse(input)[0]!.pid).toBe(0x11);
+        expect(out.equals(input.subarray(TS_PACKET))).toBe(true);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }, 20_000);
+  }
+
+  /* Sin B, x264 cuenta el `frame_num` en 4 bits: el último cuadro antes del
+     IDR lleva (GOP − 1) % 16 y el P de después del IDR perdido, 1. Con GOP
+     de 18 es el MISMO número (el caso del lab ts-costura: «r1 r1»). */
+  const lost: readonly [number, string][] = [
+    [25, '8 → 1'],
+    [18, '1 → 1, el mismo'],
+  ];
+  for (const [gop, label] of lost) {
+    it(`el IDR de la costura se pierde con el contador y el PTS en su línea (frame_num ${label}): espera al siguiente IDR (lossSeam) y ffmpeg lo decodifica entero`, () => {
+      const dir = mkdtempSync(path.join(os.tmpdir(), 'ace-ts-gate-'));
+      try {
+        const holed = dropIdr(x264Clip(dir, ['-bf', '0'], gop), 1);
+        const gate = new TsGate();
+        gate.wait({ forward: false, fresh: true });
+        const early = feed(gate, holed.data.subarray(0, holed.nextAt), 4096);
+        /* A mitad del GOP roto: esperando, y como pérdida (el relé no reinicia el remux). */
+        expect(gate.mode).toBe('waitRap');
+        expect(gate.lossSeam).toBe(true);
+        const out = Buffer.concat([early, feed(gate, holed.data.subarray(holed.nextAt), 4096)]);
+        expect(gate.seams).toBe(1);
+        expect(gate.mode).toBe('pass');
+        const packets = parse(out);
+        const video = videoPts(packets);
+        expect(video).toContain(holed.nextPts);
+        expect(video.filter((pts) => pts > holed.idrPts && pts < holed.nextPts)).toEqual([]);
+        expectIncreasing(audioPts(packets));
+        expect(decodeErrors(dir, out)).toBe('');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }, 20_000);
+  }
 });
