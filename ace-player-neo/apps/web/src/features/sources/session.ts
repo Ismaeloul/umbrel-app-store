@@ -163,6 +163,9 @@ export const RESOLVE_TIMEOUT_MS = 20_000;
 export const RESEARCH_TIMEOUT_MS = 30_000;
 /** La entrada al partido no pudo buscar (sin red, plazo o fallo del servidor): no es «no encontrado». */
 export const RESOLVE_ERROR_TEXT = 'No hemos podido buscar las fuentes del partido';
+/** Oferta tras «Rebuscar» cuando aparece tu IPTV mientras suena una AceStream (M4): un toque, nunca sola. */
+export const IPTV_OFFER_TEXT = 'Tu IPTV tiene este partido';
+export const IPTV_OFFER_LABEL = 'Ver por IPTV';
 
 export interface MatchInfo {
   id: string;
@@ -1738,7 +1741,11 @@ function withBackHint(text: string, entries: readonly SourceEntry[], iptvId: str
  * inmersivo) y la cápsula sobre el vídeo (en inmersivo, donde no hay
  * toasts); cada una se ve solo en su modo, así girar el móvil no la pierde.
  */
-function showBackToast(iptvId: string, text = 'Seguimos por AceStream'): void {
+function showBackToast(
+  iptvId: string,
+  text = 'Seguimos por AceStream',
+  label = 'Volver a la IPTV',
+): void {
   dismissBackToast();
   const gen = generation;
   const key = sessionStore.get().key;
@@ -1757,12 +1764,9 @@ function showBackToast(iptvId: string, text = 'Seguimos por AceStream'): void {
     tone: 'warn',
     icon: 'tv',
     ms: IPTV_CLIENT.backToastMs,
-    action: { label: 'Volver a la IPTV', onAction },
+    action: { label, onAction },
   });
-  backPillId = showImmersiveAction(
-    { text, label: 'Volver a la IPTV', onAction },
-    IPTV_CLIENT.backToastMs,
-  );
+  backPillId = showImmersiveAction({ text, label, onAction }, IPTV_CLIENT.backToastMs);
 }
 
 function recentJumps(state: Pick<SessionState, 'bridgeJumps'>, now: number): number[] {
@@ -2035,6 +2039,7 @@ export async function research(): Promise<void> {
     );
     if (!data.scan) announceResearch();
     if (rearm) afterScanChange();
+    else offerNewIptv(combined, previousIds);
   } catch (error) {
     if (gen !== generation) return;
     toast(
@@ -2046,6 +2051,22 @@ export async function research(): Promise<void> {
   } finally {
     if (gen === generation) patch({ researching: false });
   }
+}
+
+/**
+ * Tras «Rebuscar» sin rearmar (M4): si ha aparecido una IPTV nueva y sin probar
+ * mientras suena una AceStream, se ofrece con un toque («Ver por IPTV»). Nunca
+ * se cambia sola (D7): la persona está viendo algo que funciona.
+ */
+function offerNewIptv(entries: readonly SourceEntry[], previousIds: ReadonlySet<string>): void {
+  const screen = screenNow();
+  if (!screen.hash || !(screen.playing || screen.connecting)) return;
+  const onScreen = entries.find((entry) => entry.id === screen.hash);
+  if (!onScreen || isIptv(onScreen)) return;
+  const offer = entries.find(
+    (entry) => isIptv(entry) && !previousIds.has(entry.id) && !entry.autoTried,
+  );
+  if (offer) showBackToast(offer.id, IPTV_OFFER_TEXT, IPTV_OFFER_LABEL);
 }
 
 /** «Reportar y comprobar» (`submitSourceReport`, index.html:4024-4041). */
