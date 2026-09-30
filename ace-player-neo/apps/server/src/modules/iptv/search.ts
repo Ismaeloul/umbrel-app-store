@@ -808,6 +808,34 @@ function matchByName(
   }
 }
 
+/* Lo que va tras la flecha de un título AceStream («La 1 HD --> ELCANO») es quién lo sirve, no el canal. */
+const LIST_SUFFIX_RE = /\s*(?:--?>|={1,2}>|[→⇒➜➝⟶⟹]).*$/u;
+
+/**
+ * Parecido de un título con la consulta, con la misma limpieza y grafía que
+ * el buscador de la IPTV (docs/diagnostico-iptv-0.8.2.md, E2; para ordenar
+ * los resultados del motor AceStream): 0 igual; 1 misma familia (sin el
+ * número del final o sin la marca de delante) y con todas las palabras; 2
+ * empieza por la consulta; 3 tiene todas las palabras; 4 el resto. El título
+ * se mira sin lo que va tras «-->».
+ */
+export function searchRelevance(query: string, title: string): number {
+  const qKey = searchQueryKey(query);
+  const tKey = searchQueryKey(String(title ?? '').replace(LIST_SUFFIX_RE, ''));
+  if (!qKey || !tKey) return 4;
+  const q = queryWords(qKey);
+  const tWords = tKey.split(' ').filter(Boolean);
+  const tSig = significant(tWords);
+  const sig = tSig.join(' ');
+  if (sig === q.sig) return 0;
+  const all = q.required.every((word) => tWords.some((token) => wordMatch(token, word) > 0));
+  if (!all) return 4;
+  const family = familyOf(tSig);
+  const core = coreOf(family).join(' ');
+  if (family.join(' ') === q.sig || core === q.sig || core === q.core) return 1;
+  return sig === q.sig || sig.startsWith(`${q.sig} `) ? 2 : 3;
+}
+
 /** Lo que se mira de la biblioteca para `library` (§14.3, regla 5). */
 export type LibraryCandidate = Pick<Item, 'id' | 'title' | 'category'>;
 
