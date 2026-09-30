@@ -52,6 +52,7 @@ import {
 } from './ai.js';
 import { buildChannelBinding, withBinding } from './bindings.js';
 import {
+  ENGINE_STAGE_MS,
   FOOTBALL_CACHE_MS,
   PREHEAT_FIRST_RUN_MS,
   PREHEAT_HEALTH_STATES,
@@ -69,6 +70,7 @@ import {
 } from './preheat.js';
 import { ProgrammingCatalog, channelName } from './programming.js';
 import {
+  overlayIptv,
   resolutionChannels,
   resolveFootballChannel,
   scoreResolutionCandidate,
@@ -429,9 +431,11 @@ export class FootballServiceImpl implements FootballService {
       readonly scope?: ResolveScope;
       readonly iptvId?: string | null;
       readonly engine?: boolean;
+      /** Resolución con alguien esperando: la etapa del motor lleva plazo (M3). */
+      readonly interactive?: boolean;
     },
   ): Promise<ResolutionCore> {
-    const { config, search, sources } = this.deps;
+    const { clock, config, search, sources } = this.deps;
     const iptv =
       this.iptvLayer() ??
       (options.scope === 'channel' && options.engine ? this.iptvClassifier() : undefined);
@@ -439,8 +443,8 @@ export class FootballServiceImpl implements FootballService {
       state,
       values,
       {
-        search: async (query): Promise<readonly ResolvableItem[]> =>
-          (await search.search(query, { via: 'auto', signal: options.signal })).results,
+        search: async (query, signal): Promise<readonly ResolvableItem[]> =>
+          (await search.search(query, { via: 'auto', ...(signal ? { signal } : {}) })).results,
         applyLearned: (channels, candidates) =>
           sources.applyLearnedRules(
             channels,
@@ -451,6 +455,16 @@ export class FootballServiceImpl implements FootballService {
         model: config.ai.embedModel,
         programChannels: this.programming.channels,
         ...(iptv ? { iptv } : {}),
+        deadline: (ms) => {
+          const controller = new AbortController();
+          const timer = clock.setTimeout(
+            () =>
+              controller.abort(new AppError('ace_timeout', { detail: 'plazo de la resolución' })),
+            ms,
+            { unref: true },
+          );
+          return { signal: controller.signal, cancel: () => clock.clearTimeout(timer) };
+        },
       },
       {
         program: options.program ?? null,
@@ -458,6 +472,8 @@ export class FootballServiceImpl implements FootballService {
         scope: options.scope ?? 'match',
         ...(options.iptvId ? { iptvId: options.iptvId } : {}),
         ...(options.engine ? { engine: true } : {}),
+        ...(options.interactive ? { engineBudget: ENGINE_STAGE_MS } : {}),
+        ...(options.signal ? { signal: options.signal } : {}),
       },
     );
   }
@@ -498,23 +514,32 @@ export class FootballServiceImpl implements FootballService {
     const preheated = research ? null : reusablePreheat(this.preheats, matchId, clock.now());
     let result: ResolutionCore & { preheated?: true };
     if (preheated?.result) {
-      const candidates = sources.applyLearnedRules(
-        resolutionChannels(announced),
-        preheated.result.candidates || [],
+      /* La IPTV de ahora encima de lo guardado (M1): el precalentado pudo ser de
+         antes de que la IPTV o su guía estuvieran listas. Con la IPTV en pausa,
+         el clasificador aparta sus ids. No se invalida con `iptv.status`: casi
+         cada entrada lo emite (`touch`). */
+      const overlaid = overlayIptv(
+        preheated.result,
+        program ? resolutionChannels(announced) : preheated.result.channels,
+        program ? { ...program } : preheated.result.program,
+        this.iptvLayer() ?? this.iptvClassifier(),
+        (channels, candidates) =>
+          sources.applyLearnedRules(
+            channels,
+            candidates as readonly BaseCandidate[] as readonly ResolutionCandidate[],
+          ),
+        { sourceStats: state.get().sourceStats ?? null },
       );
-      const chosenId = preheated.result.candidate?.id;
-      const candidate = candidates.find((item) => item.id === chosenId) || candidates[0] || null;
       result = {
-        ...preheated.result,
-        status: candidate ? 'found' : 'not_found',
-        candidate,
-        candidates,
+        ...overlaid,
+        status: overlaid.candidate ? 'found' : 'not_found',
         preheated: true,
       };
     } else {
       result = await this.resolveChannels(state.get(), announced, {
         program: program ? { ...program } : null,
         mode: research ? 'research' : 'default',
+        interactive: true,
         ...(options.signal ? { signal: options.signal } : {}),
       });
     }

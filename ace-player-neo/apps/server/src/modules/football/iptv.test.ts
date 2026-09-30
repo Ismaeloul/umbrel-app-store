@@ -12,13 +12,14 @@
 import { describe, expect, it } from 'vitest';
 import { channelMatchScore, type ResolutionCandidate } from '@ace/shared';
 import {
+  overlayIptv,
   resolveFootballChannel,
   type BaseCandidate,
   type ResolutionIptv,
   type ResolveDeps,
   type ResolvableItem,
 } from './resolution.js';
-import type { SemanticOptions } from './ai.js';
+import { SemanticVectorCache, type SemanticOptions } from './ai.js';
 
 const IPTV_ID = 'f'.repeat(39) + '1';
 const IPTV_GUIDE_ID = 'f'.repeat(39) + '2';
@@ -389,5 +390,191 @@ describe('resolveFootballChannel con IPTV', () => {
     await expect(resolveFootballChannel({}, [], deps(undefined))).rejects.toMatchObject({
       code: 'channel_required',
     });
+  });
+});
+
+describe('overlayIptv: la IPTV de ahora sobre un precalentado (M1)', () => {
+  const dazn = () =>
+    layer({ candidates: [iptvCandidate(IPTV_ID, 'DAZN LaLiga', 100, false, 'DAZN LaLiga')] });
+  const engine = found([{ id: ACE, title: 'DAZN LaLiga --> ELCANO', ih: true, availability: 30 }]);
+
+  it('la misma lista y el mismo `checked` que una pasada nueva con la IPTV', async () => {
+    const snapshot = await resolveFootballChannel({}, ['DAZN LaLiga'], deps(undefined, engine));
+    expect(snapshot.candidates.map((c) => c.id)).toEqual([ACE]);
+    const fresh = await resolveFootballChannel({}, ['DAZN LaLiga'], deps(dazn(), engine));
+    const iptv = dazn();
+    const overlaid = overlayIptv(snapshot, snapshot.channels, null, iptv, deps(iptv).applyLearned);
+    expect(overlaid.candidates.map((c) => c.id)).toEqual(fresh.candidates.map((c) => c.id));
+    expect(overlaid.checked).toEqual(fresh.checked);
+    expect(overlaid.candidate?.id).toBe(IPTV_ID);
+    expect(iptv.calls).toEqual([['DAZN LaLiga']]);
+  });
+
+  it('las IPTV guardadas se quitan y se ponen las de ahora; un id IPTV que ya no vale, fuera', async () => {
+    const iptv = dazn();
+    const snapshot = await resolveFootballChannel(
+      { favorites: [{ id: IPTV_OLD, title: 'DAZN LaLiga' }] },
+      ['DAZN LaLiga'],
+      deps(
+        layer({
+          candidates: [iptvCandidate(IPTV_GUIDE_ID, 'DAZN LaLiga', 100, false, 'DAZN LaLiga')],
+        }),
+        engine,
+      ),
+    );
+    expect(snapshot.candidates.map((c) => c.id)).toEqual([IPTV_GUIDE_ID, ACE]);
+    const overlaid = overlayIptv(snapshot, snapshot.channels, null, iptv, deps(iptv).applyLearned);
+    expect(overlaid.candidates.map((c) => c.id)).toEqual([IPTV_ID, ACE]);
+    /* Un favorito IPTV guardado cuando la IPTV no estaba: se convierte (§4.1). */
+    const withoutIptv = await resolveFootballChannel(
+      { favorites: [{ id: IPTV_FAV, title: 'DAZN LaLiga' }] },
+      ['DAZN LaLiga'],
+      deps(undefined, engine),
+    );
+    const converted = overlayIptv(
+      withoutIptv,
+      withoutIptv.channels,
+      null,
+      layer(),
+      deps(layer()).applyLearned,
+    );
+    expect(converted.candidates.map((c) => `${c.source}:${c.id}`)).toEqual([
+      `iptv:${IPTV_FAV}`,
+      `acestream:${ACE}`,
+    ]);
+  });
+
+  it('sin capa IPTV consultada no nombra la IPTV y deja la elegida del precalentado', async () => {
+    const snapshot = await resolveFootballChannel({}, ['DAZN LaLiga'], deps(dazn(), engine));
+    const paused: ResolutionIptv = {
+      ...layer(),
+      resolve: () => ({ candidates: [], hints: [], consulted: false }),
+      classify: (id) => (id.startsWith('f') ? 'iptv_disabled' : 'engine'),
+    };
+    const overlaid = overlayIptv(
+      { ...snapshot, candidate: snapshot.candidates[1] ?? null },
+      snapshot.channels,
+      null,
+      paused,
+      deps(paused).applyLearned,
+    );
+    expect(overlaid.candidates.map((c) => c.id)).toEqual([ACE]);
+    expect(overlaid.checked).not.toContain('iptv');
+    expect(overlaid.candidate?.id).toBe(ACE);
+  });
+});
+
+describe('plazo de la etapa del motor de una resolución interactiva (M3)', () => {
+  const budget = { withIptv: 8000, withoutIptv: 12000 };
+
+  /** Un plazo que vence cuando el test lo dice. */
+  function manualDeadline() {
+    const asked: number[] = [];
+    let controller: AbortController | null = null;
+    return {
+      asked,
+      fire: () => controller?.abort(new Error('plazo')),
+      deadline: (ms: number) => {
+        asked.push(ms);
+        controller = new AbortController();
+        return { signal: controller.signal, cancel: () => undefined };
+      },
+    };
+  }
+  const never = (): Promise<readonly ResolvableItem[]> => new Promise(() => {});
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it('con IPTV, 8 s: al vencer sigue con la IPTV y no dice «motor caído»', async () => {
+    const timer = manualDeadline();
+    const pending = resolveFootballChannel(
+      {},
+      ['DAZN LaLiga'],
+      {
+        ...deps(
+          layer({ candidates: [iptvCandidate(IPTV_ID, 'DAZN LaLiga', 100, false, 'DAZN LaLiga')] }),
+          never,
+        ),
+        deadline: timer.deadline,
+      },
+      { engineBudget: budget },
+    );
+    await tick();
+    expect(timer.asked).toEqual([8000]);
+    timer.fire();
+    const result = await pending;
+    expect(result).toMatchObject({ status: 'found', engineAvailable: true });
+    expect(result.candidate?.id).toBe(IPTV_ID);
+  });
+
+  it('sin IPTV, 12 s; lo de la biblioteca sale igual', async () => {
+    const timer = manualDeadline();
+    const pending = resolveFootballChannel(
+      { favorites: [{ id: ACE, title: 'DAZN LaLiga' }] },
+      ['DAZN LaLiga'],
+      { ...deps(undefined, never), deadline: timer.deadline },
+      { engineBudget: budget },
+    );
+    await tick();
+    expect(timer.asked).toEqual([12000]);
+    timer.fire();
+    const result = await pending;
+    expect(result).toMatchObject({ status: 'found', engineAvailable: true });
+    expect(result.candidate?.id).toBe(ACE);
+  });
+
+  it('el buscador recibe la señal del plazo y la de la petición; sin `engineBudget` (precalentado), sin plazo', async () => {
+    const timer = manualDeadline();
+    const signals: (AbortSignal | undefined)[] = [];
+    const outer = new AbortController();
+    await resolveFootballChannel(
+      {},
+      ['DAZN LaLiga'],
+      {
+        ...deps(undefined),
+        search: async (_query, signal) => {
+          signals.push(signal);
+          return [];
+        },
+        deadline: timer.deadline,
+      },
+      { engineBudget: budget, signal: outer.signal },
+    );
+    expect(signals[0]?.aborted).toBe(false);
+    outer.abort();
+    expect(signals[0]?.aborted).toBe(true);
+    const preheat = manualDeadline();
+    await resolveFootballChannel({}, ['DAZN LaLiga'], {
+      ...deps(undefined),
+      deadline: preheat.deadline,
+    });
+    expect(preheat.asked).toEqual([]);
+  });
+
+  it('la IA corre dentro del plazo: si vence, sin su nota y con `ai_timeout`', async () => {
+    const timer = manualDeadline();
+    const semantic: SemanticOptions = {
+      enabled: true,
+      cache: new SemanticVectorCache(),
+      embed: () => new Promise(() => {}),
+    };
+    const pending = resolveFootballChannel(
+      {},
+      ['M+ Liga de Campeones'],
+      {
+        ...deps(
+          undefined,
+          found([{ id: ACE, title: 'M+ Liga de Campeones', ih: true, availability: 30 }]),
+        ),
+        semantic,
+        deadline: timer.deadline,
+      },
+      { engineBudget: budget },
+    );
+    await tick();
+    await tick();
+    timer.fire();
+    const result = await pending;
+    expect(result.ai).toMatchObject({ used: false, error: 'ai_timeout' });
+    expect(result.candidate?.id).toBe(ACE);
   });
 });
