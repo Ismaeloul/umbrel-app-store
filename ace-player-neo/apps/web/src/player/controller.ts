@@ -19,6 +19,10 @@
      pleno rebuffer no reinicia el ciclo, T-133); si no, mide el retraso real
      y salta si hace falta. En la 0.6.59 el indicador decía DIRECTO con 40 s
      de retraso acumulado y el botón no hacía nada.
+   - C2 (docs/diagnostico-iptv-0.8.2.md, P4b): una promesa de play() vieja
+     que se resuelve tarde ya no pausa si la persona sigue queriendo que
+     suene; y un play() abortado por una pausa técnica ya pasada se
+     reintenta una vez.
 
    Las ventanas de directo (readSeekWindow) y el borde útil (resolveLiveTarget)
    vienen de @ace/shared: son las mismas en la web y en iOS. */
@@ -310,7 +314,11 @@ export class PlayerController {
     }
   }
 
-  private async playForCommand(command: number, origin: string): Promise<CommandResult> {
+  private async playForCommand(
+    command: number,
+    origin: string,
+    retried = false,
+  ): Promise<CommandResult> {
     if (
       command !== this.command ||
       !this.state.desiredPlaying ||
@@ -351,18 +359,29 @@ export class PlayerController {
       } else if (errorName(error) !== 'AbortError') {
         this.state.error = errorName(error) || 'play-failed';
         this.options.onError?.(error);
+      } else if (!retried && this.wantsToPlay() && this.media.paused) {
+        /* C2: un play() que abortó una pausa técnica ya pasada (el rebuffer
+           que se suelta, un cambio de fuente de hls.js) con la persona
+           queriendo que suene y nada que lo impida: se reintenta UNA vez en
+           la siguiente tarea. Nunca con NotAllowedError (arriba): sin gesto
+           de la persona solo sería un bucle. */
+        this.emit();
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        if (command !== this.command || !this.wantsToPlay() || !this.media.paused)
+          return { ok: false, reason: 'cancelled', error };
+        return this.playForCommand(command, `${origin}-retry`, true);
       }
       this.emit();
       return { ok: false, reason: this.state.blocked ? 'blocked' : 'failed', error };
     }
     this.internalPlay = false;
-    if (
-      command !== this.command ||
-      !this.state.desiredPlaying ||
-      this.holds.size ||
-      !this.isActive()
-    ) {
-      this.pauseMedia();
+    if (command !== this.command || !this.wantsToPlay()) {
+      /* C2 (P4b): una promesa de play() VIEJA que se resuelve tarde solo
+         pausa si de verdad ya no toca sonar (pausa de la persona, retención,
+         sesión cambiada). Si solo la ha adelantado otra orden que también
+         quería sonar, pausar dejaba el vídeo parado para siempre con
+         desiredPlaying=true y sin retención que lo reanudase. */
+      if (!this.wantsToPlay()) this.pauseMedia();
       return { ok: false, reason: 'superseded' };
     }
     this.state.busy = false;
@@ -371,6 +390,11 @@ export class PlayerController {
     this.state.error = '';
     this.emit();
     return { ok: true, reason: 'playing' };
+  }
+
+  /** La persona quiere que suene y nada lo impide (ni retención ni sesión cambiada). */
+  private wantsToPlay(): boolean {
+    return this.state.desiredPlaying && !this.holds.size && this.isActive();
   }
 
   requestPlay(origin = 'user'): Promise<CommandResult> {
