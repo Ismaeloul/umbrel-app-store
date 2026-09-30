@@ -195,6 +195,15 @@ export const IPTV_RELAY = {
   /** Intentos de reconexión como mucho en `attemptsWindowMs`. */
   maxAttempts: 3,
   attemptsWindowMs: 60 * SECOND,
+  /**
+   * Una conexión que lleva este rato mandando bytes devuelve el presupuesto de
+   * reconexiones (sin esto, la cuarta caída en 60 s acababa el canal aunque las
+   * tres anteriores se hubieran arreglado). Mayor que `idleMs`.
+   */
+  stableMs: 20 * SECOND,
+  /** Tope largo, aunque cada reconexión salga bien: un proveedor que no para de caerse. */
+  maxReconnectsLong: 12,
+  reconnectsLongWindowMs: 10 * MINUTE,
   /** Salto de PTS/PCR tras reconectar por encima del cual se reinicia el remux. */
   ptsJumpMs: 5 * SECOND,
   /** Segmentos HLS recordados (`seq → URL real`). */

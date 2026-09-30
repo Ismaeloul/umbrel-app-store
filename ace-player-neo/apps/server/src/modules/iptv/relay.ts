@@ -20,10 +20,13 @@
    llegan como `iptv_*` a quien pide el canal) y se entrega a ffmpeg al pedir
    `in.ts`. Si el origen se corta o no manda bytes en 10 s: se cierra el
    socket viejo, esperas de 1, 2 y 4 s (8 s para las cabeceras) y 3 intentos
-   en 60 s como mucho, sin cerrar la conexión con ffmpeg. Tras reconectar se
-   mira el PCR: si salta más de 5 s respecto a lo esperado, se pide reiniciar
-   el remux (`onRestart`). Agotado: otra variante una vez (con reinicio) y, si
-   no, `onDropped`.
+   en 60 s como mucho, sin cerrar la conexión con ffmpeg. Una conexión que
+   aguanta 20 s mandando devuelve el presupuesto (la siguiente caída vuelve a
+   esperar 1 s); aun así, más de 12 reconexiones en 10 min cuentan como
+   agotado. Tras reconectar se mira el PCR (con un solo plazo de 10 s para la
+   sonda: la reconexión nunca se queda esperando): si salta más de 5 s
+   respecto a lo esperado, se pide reiniciar el remux (`onRestart`). Agotado:
+   otra variante una vez (con reinicio) y, si no, `onDropped`.
 
    Origen HLS: la lista maestra se aplana a una variante con audio muxeado
    (hls.ts); la de medios se reescribe por lista blanca con URIs del relé y se
@@ -137,12 +140,22 @@ function isBusyError(error: unknown): boolean {
   return status !== null && IPTV_BUSY_STATUSES.includes(status);
 }
 
-/** Primer trozo del cuerpo (sin perder nada: el cuerpo queda en pausa). */
-function firstChunk(body: Readable): Promise<Buffer | null> {
+/**
+ * Primer trozo del cuerpo (sin perder nada: el cuerpo queda en pausa). Se
+ * puede llamar otra vez sobre el mismo cuerpo: `on('data')` no reanuda un
+ * flujo que se pausó a mano, así que se reanuda aquí (si no, la segunda
+ * llamada esperaba para siempre y el relé se quedaba colgado al reconectar).
+ * Un cuerpo que se cierra sin más da null; sin bytes en `ms`, `iptv_dropped`.
+ */
+function firstChunk(body: Readable, clock: Clock, ms: number): Promise<Buffer | null> {
   return new Promise((resolve, reject) => {
+    let timer: TimerHandle | null = null;
     const cleanup = (): void => {
+      clock.clearTimeout(timer);
+      timer = null;
       body.off('data', onData);
       body.off('end', onEnd);
+      body.off('close', onEnd);
       body.off('error', onError);
     };
     const onData = (chunk: Buffer | string): void => {
@@ -158,9 +171,22 @@ function firstChunk(body: Readable): Promise<Buffer | null> {
       cleanup();
       reject(error);
     };
+    if (body.destroyed || body.readableEnded) {
+      resolve(null);
+      return;
+    }
     body.on('data', onData);
     body.once('end', onEnd);
+    body.once('close', onEnd);
     body.once('error', onError);
+    timer = clock.setTimeout(() => {
+      cleanup();
+      body.pause();
+      /* Quien llama lo cierra; un error de después no debe tumbar el proceso. */
+      body.on('error', () => undefined);
+      reject(new AppError('iptv_dropped', { detail: 'reconexión sin datos' }));
+    }, ms);
+    body.resume();
   });
 }
 
@@ -297,6 +323,11 @@ class TsSession extends BaseSession {
   private lastPcrAt: number | null = null;
   /** Bytes entregados al ffmpeg de ahora (sin nada, no hace falta reiniciar tras reconectar). */
   private delivered = 0;
+  /** Cuándo se adoptó la conexión de ahora y cuánto ha mandado desde entonces. */
+  private adoptedAt: number;
+  private stableBytes = 0;
+  /** Todas las reconexiones de la variante en el tope largo (no se borran al aguantar). */
+  private reconnects: number[] = [];
 
   constructor(
     ticket: string,
@@ -308,6 +339,7 @@ class TsSession extends BaseSession {
     head: Buffer | null,
   ) {
     super(ticket, inputUrl, false, relay, variants, controller);
+    this.adoptedAt = relay.deps.clock.now();
     this.upstream = first;
     if (head) this.queue(head);
     this.wire(first);
@@ -329,12 +361,25 @@ class TsSession extends BaseSession {
       this.lastPcrAt = this.relay.deps.clock.now();
   }
 
+  /* Una conexión que aguanta `stableMs` mandando bytes devuelve el presupuesto de reconexiones. */
+  private noteStable(bytes: number): void {
+    this.stableBytes += bytes;
+    if (
+      this.attempts.length &&
+      this.stableBytes > 0 &&
+      this.relay.deps.clock.now() - this.adoptedAt >= IPTV_RELAY.stableMs
+    ) {
+      this.attempts = [];
+    }
+  }
+
   private wire(opened: OpenedStream): void {
     const body = opened.body;
     body.on('data', (value: Buffer | string) => {
       if (this.upstream !== opened || this.closed) return;
       const chunk = typeof value === 'string' ? Buffer.from(value) : value;
       this.meter.add(chunk.length);
+      this.noteStable(chunk.length);
       this.notePcr(chunk);
       this.deliver(chunk);
     });
@@ -420,7 +465,13 @@ class TsSession extends BaseSession {
         if (this.closed) return;
         const now = clock.now();
         this.attempts = this.attempts.filter((at) => now - at < IPTV_RELAY.attemptsWindowMs);
-        if (this.attempts.length >= IPTV_RELAY.maxAttempts) {
+        this.reconnects = this.reconnects.filter(
+          (at) => now - at < IPTV_RELAY.reconnectsLongWindowMs,
+        );
+        if (
+          this.attempts.length >= IPTV_RELAY.maxAttempts ||
+          this.reconnects.length >= IPTV_RELAY.maxReconnectsLong
+        ) {
           if (await this.nextVariant(lastCode)) return;
           this.emitDropped(lastCode === 'iptv_busy' ? 'iptv_busy' : 'iptv_dropped');
           return;
@@ -430,6 +481,7 @@ class TsSession extends BaseSession {
             IPTV_RELAY.backoffMs[Math.min(this.attempts.length, IPTV_RELAY.backoffMs.length - 1)] ??
             1000;
           this.attempts.push(clock.now());
+          this.reconnects.push(clock.now());
           try {
             await clock.sleep(wait, this.controller.signal);
           } catch {
@@ -467,6 +519,7 @@ class TsSession extends BaseSession {
     if (this.variantIndex + 1 >= this.variants.length) return false;
     this.variantIndex += 1;
     this.attempts = [];
+    this.reconnects = [];
     try {
       const opened = await this.relay.connect(this.variant(), this.controller.signal, []);
       if (this.closed) {
@@ -491,13 +544,21 @@ class TsSession extends BaseSession {
     const head: Buffer[] = [];
     let headBytes = 0;
     let firstPcr: number | null = null;
+    /* Un solo plazo para toda la sonda: reconnect() siempre acaba (y `reconnecting` vuelve a false). */
+    const deadline = clock.now() + IPTV_RELAY.idleMs;
     while (firstPcr === null && headBytes < PCR_PROBE_BYTES) {
-      const chunk = await firstChunk(opened.body).catch(() => null);
-      if (!chunk) break;
+      const left = deadline - clock.now();
+      if (left <= 0) break;
+      const chunk = await firstChunk(opened.body, clock, left).catch(() => null);
+      if (!chunk || this.closed) break;
       head.push(chunk);
       headBytes += chunk.length;
       probe.push(chunk);
       firstPcr = probe.first;
+    }
+    if (this.closed) {
+      opened.body.destroy();
+      return;
     }
     /* Una conexión que no manda nada cuenta como intento fallido. */
     if (!headBytes) {
@@ -512,6 +573,8 @@ class TsSession extends BaseSession {
         firstPcr !== null &&
         Math.abs(firstPcr - expected) * 1000 > IPTV_RELAY.ptsJumpMs);
     this.upstream = opened;
+    this.adoptedAt = clock.now();
+    this.stableBytes = 0;
     if (jump) {
       /* No se empalma: lo nuevo espera a que el remux se reinicie y ffmpeg vuelva. */
       this.restartPending = true;
@@ -721,7 +784,12 @@ class HlsSession extends BaseSession {
         [],
         { maxBytes: HLS_SEGMENT_MAX, totalMs: HLS_SEGMENT_MS },
       );
-      const head = await firstChunk(opened.body);
+      const head = await firstChunk(opened.body, this.relay.deps.clock, IPTV_RELAY.idleMs).catch(
+        (error: unknown) => {
+          opened.body.destroy();
+          throw error;
+        },
+      );
       const sniffed = head ? sniffSegment(head, opened.contentType) : null;
       if (sniffed && sniffed !== 'mp4' && seq !== null && seq >= 0) this.guessExt = sniffed;
       res.writeHead(200, {
@@ -1022,10 +1090,12 @@ export class IptvRelayImpl implements IptvRelay {
         let head: Buffer | null = null;
         let isHls = pathLooksHls || typeLooksHls;
         if (!isHls) {
-          head = await firstChunk(opened.body).catch((error: unknown) => {
-            lastError = error;
-            return null;
-          });
+          head = await firstChunk(opened.body, this.deps.clock, IPTV_RELAY.idleMs).catch(
+            (error: unknown) => {
+              lastError = error;
+              return null;
+            },
+          );
           if (!head) {
             opened.body.destroy();
             continue;

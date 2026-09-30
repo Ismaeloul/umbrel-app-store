@@ -101,6 +101,42 @@ function tsStream(res: http.ServerResponse, startSec = 0): () => void {
   };
 }
 
+/* TS al paso del reloj falso: el PCR sigue al reloj, así una reconexión que
+   sigue la misma línea de tiempo (`startSec`) empalma sin saltos. */
+function clockStream(res: http.ServerResponse, clock: FakeClock, startSec: number): () => void {
+  const muxer = new TsMuxer({
+    video: 'h264',
+    audio: ['aac'],
+    bitrateKbps: 1500,
+    startSec,
+    color: colorFromSeed('ab'),
+  });
+  const packetsPerSec = 1_500_000 / (188 * 8);
+  const t0 = clock.now();
+  let sent = 200;
+  if (!res.headersSent) res.writeHead(200, { 'content-type': 'video/mp2t' });
+  res.write(muxer.nextPackets(sent));
+  const timer = setInterval(() => {
+    if (res.destroyed) return;
+    const want = 200 + Math.floor(((clock.now() - t0) / 1000) * packetsPerSec);
+    if (want > sent) res.write(muxer.nextPackets(want - sent));
+    sent = Math.max(sent, want);
+  }, 10);
+  res.once('close', () => clearInterval(timer));
+  return () => {
+    clearInterval(timer);
+    res.destroy();
+  };
+}
+
+const NULL_PACKET = (() => {
+  const packet = Buffer.alloc(188, 0xff);
+  packet.set([0x47, 0x1f, 0xff, 0x10]);
+  return packet;
+})();
+
+const tick = (ms = 20): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
 const variant = (path: string, entryId = 'a'.repeat(40)) => ({
   entryId,
   url: `http://${HOST}${path}`,
@@ -252,6 +288,159 @@ describe('relé TS: reconexión (§6.1)', () => {
     expect(restarts).toEqual([1]);
     expect(r.requests.filter((line) => line === '/live/1.ts').length).toBe(4);
     expect(r.requests).toContain('/live/2.ts');
+    ffmpeg.destroy();
+    await session.close();
+  });
+
+  it('el primer trozo de la reconexión sin PCR y el segundo más tarde: la reconexión acaba y ffmpeg vuelve a recibir', async () => {
+    const r = await rig();
+    let opens = 0;
+    let cut: (() => void) | null = null;
+    r.setHandler((req, res) => {
+      if (req.url !== '/live/1.ts') return void res.writeHead(404).end();
+      opens += 1;
+      if (opens === 1) {
+        cut = clockStream(res, r.clock, 0);
+        return;
+      }
+      /* Diez paquetes nulos (sin PCR) y, un rato después, el TS normal. */
+      res.writeHead(200, { 'content-type': 'video/mp2t' });
+      res.write(Buffer.concat(Array.from({ length: 10 }, () => NULL_PACKET)));
+      setTimeout(() => {
+        if (!res.destroyed) clockStream(res, r.clock, 1);
+      }, 150);
+    });
+    const session = await r.relay.open({ variants: [variant('/live/1.ts')] });
+    const dropped: string[] = [];
+    session.onDropped((code) => dropped.push(code));
+    let received = 0;
+    const ffmpeg = http.get(session.inputUrl, { agent: false }, (res) =>
+      res.on('data', (c: Buffer) => (received += c.length)),
+    );
+    ffmpeg.on('error', () => undefined);
+    await waitFor('bytes', () => received > 10_000);
+    (cut as unknown as () => void)();
+    await waitFor('corte visto', () => r.relay.connections() === 0);
+    await tick(30);
+    await r.clock.advanceAsync(1_000);
+    await waitFor('reconectado', () => opens === 2);
+    const internals = session as unknown as { reconnecting: boolean };
+    await waitFor('reconexión terminada', () => !internals.reconnecting, 3_000);
+    const before = received;
+    for (let step = 0; step < 20 && received < before + 20_000; step += 1) {
+      await tick(30);
+      await r.clock.advanceAsync(200);
+    }
+    expect(received).toBeGreaterThan(before + 20_000);
+    expect(dropped).toEqual([]);
+    ffmpeg.destroy();
+    await session.close();
+  });
+
+  it('el primer trozo de la reconexión sin PCR y ninguno más: la sonda vence y `reconnecting` vuelve a false', async () => {
+    const r = await rig();
+    let opens = 0;
+    let cut: (() => void) | null = null;
+    r.setHandler((req, res) => {
+      if (req.url !== '/live/1.ts') return void res.writeHead(404).end();
+      opens += 1;
+      if (opens === 1) {
+        cut = clockStream(res, r.clock, 0);
+        return;
+      }
+      /* Diez paquetes nulos y silencio con la conexión abierta. */
+      res.writeHead(200, { 'content-type': 'video/mp2t' });
+      res.write(Buffer.concat(Array.from({ length: 10 }, () => NULL_PACKET)));
+    });
+    const session = await r.relay.open({ variants: [variant('/live/1.ts')] });
+    let received = 0;
+    const ffmpeg = http.get(session.inputUrl, { agent: false }, (res) =>
+      res.on('data', (c: Buffer) => (received += c.length)),
+    );
+    ffmpeg.on('error', () => undefined);
+    await waitFor('bytes', () => received > 10_000);
+    const internals = session as unknown as {
+      reconnecting: boolean;
+      adopt: (opened: unknown, force: boolean) => Promise<void>;
+    };
+    let adopted = 0;
+    const originalAdopt = internals.adopt.bind(session);
+    internals.adopt = async (opened, force) => {
+      try {
+        await originalAdopt(opened, force);
+      } finally {
+        adopted += 1;
+      }
+    };
+    (cut as unknown as () => void)();
+    await waitFor('corte visto', () => r.relay.connections() === 0);
+    await tick(30);
+    await r.clock.advanceAsync(1_000);
+    await waitFor('reconectado', () => opens === 2);
+    await tick(50);
+    expect(internals.reconnecting).toBe(true);
+    /* Sin más bytes: el plazo de la sonda (idleMs) la corta. */
+    for (let step = 0; step < 12 && !adopted; step += 1) {
+      await tick(20);
+      await r.clock.advanceAsync(1_000);
+    }
+    expect(adopted).toBe(1);
+    await waitFor('reconnecting a false', () => !internals.reconnecting || opens >= 3, 3_000);
+    ffmpeg.destroy();
+    await session.close();
+    expect(internals.reconnecting).toBe(false);
+  });
+
+  it('cortes a los 0, 20, 40 y 60 s con emisión sana entre medias: 5 aperturas, siempre 1 s de espera y nunca onDropped', async () => {
+    const r = await rig();
+    let opens = 0;
+    let cut: (() => void) | null = null;
+    const t0 = r.clock.now();
+    r.setHandler((req, res) => {
+      if (req.url !== '/live/1.ts') return void res.writeHead(404).end();
+      opens += 1;
+      cut = clockStream(res, r.clock, Math.floor((r.clock.now() - t0) / 1000));
+    });
+    const session = await r.relay.open({ variants: [variant('/live/1.ts')] });
+    const dropped: string[] = [];
+    session.onDropped((code) => dropped.push(code));
+    const restarts: number[] = [];
+    session.onRestart(() => restarts.push(1));
+    let received = 0;
+    const ffmpeg = http.get(session.inputUrl, { agent: false }, (res) =>
+      res.on('data', (c: Buffer) => (received += c.length)),
+    );
+    ffmpeg.on('error', () => undefined);
+    await waitFor('bytes', () => received > 10_000);
+    for (let round = 0; round < 4; round += 1) {
+      if (round > 0) {
+        /* 21 s de emisión sana, segundo a segundo. */
+        for (let second = 0; second < 21; second += 1) {
+          await tick(15);
+          await r.clock.advanceAsync(1_000);
+        }
+        await tick(30);
+      }
+      const opensBefore = opens;
+      (cut as unknown as () => void)();
+      await waitFor('corte visto', () => r.relay.connections() === 0);
+      await tick(30);
+      /* La espera es de 1 s: a los 999 ms todavía no se ha reconectado. */
+      await r.clock.advanceAsync(999);
+      await tick(50);
+      expect(opens).toBe(opensBefore);
+      await r.clock.advanceAsync(1);
+      await waitFor(`reconexión ${round + 1}`, () => opens === opensBefore + 1);
+      const before = received;
+      for (let step = 0; step < 20 && received < before + 10_000; step += 1) {
+        await tick(20);
+        await r.clock.advanceAsync(100);
+      }
+      expect(received).toBeGreaterThan(before + 10_000);
+    }
+    expect(opens).toBe(5);
+    expect(dropped).toEqual([]);
+    expect(restarts).toEqual([]);
     ffmpeg.destroy();
     await session.close();
   });
