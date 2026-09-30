@@ -206,6 +206,15 @@ export const IPTV_RELAY = {
   reconnectsLongWindowMs: 10 * MINUTE,
   /** Salto de PTS/PCR tras reconectar por encima del cual se reinicia el remux. */
   ptsJumpMs: 5 * SECOND,
+  /**
+   * Puerta TS (iptv/ts-gate.ts): tras un empalme o una costura, sin punto de
+   * acceso del vídeo en este rato (de reloj) o en estos bytes, se deja pasar
+   * todo y se reinicia el remux (GOP abierto o refresco intra).
+   */
+  rapWaitMs: 4 * SECOND,
+  rapWaitBytes: 8 * 1024 * 1024,
+  /** Salto del PTS del vídeo dentro de una conexión que cuenta como costura. */
+  seamPtsMs: 1500,
   /** Segmentos HLS recordados (`seq → URL real`). */
   segmentMemory: 40,
   /** La lista de medios del proveedor se pide como mucho una vez en este rato. */
