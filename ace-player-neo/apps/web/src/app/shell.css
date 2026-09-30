@@ -305,7 +305,7 @@
     pointer-events: none;
   }
   .topbar {
-    --n: 4;
+    --n: 5;
     --i: 0;
     --topbar-item-w: 116px;
     grid-area: top;
@@ -506,6 +506,24 @@
   :root {
     --column-w: 340px;
     --aside-w: 380px;
+  }
+}
+
+/* La quinta sección conserva la barra en tabletas: la marca y los rótulos se
+   compactan en anchos estrechos, y vuelven a su tamaño habitual en escritorio. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .topbar {
+    --topbar-item-w: 88px;
+    gap: var(--s-2);
+  }
+  .topbar__name,
+  .topbar__engine .engine__text {
+    display: none;
+  }
+  .topbar__item {
+    gap: 4px;
+    padding-inline: 4px;
+    font-size: var(--fs-12);
   }
 }
 @media (min-width: 2200px) {

@@ -14,10 +14,9 @@
    - P5: los contadores y temporizadores son del INTENTO de conexión (objeto
      `Connection`), no globales: cada conexión empieza con su margen entero.
    - P7/P8/P9: la sesión es del backend (GET /api/v1/channels/:id/stream, latido
-     cada 15 s, release al parar o con sendBeacon al cerrar). La primera
-     reconexión REUTILIZA la sesión (en iPhone no se mata el remux ni se
-     vuelven a esperar 45 s); las siguientes la sueltan antes para forzar una
-     sesión nueva del motor, como hacía la 0.6.59 en cada una.
+     cada 15 s, release al parar o con sendBeacon al cerrar). Una reconexión
+     abre sesión nueva en flujos directos para soltar un motor atascado; el
+     remux de iPhone conserva la suya para no volver a esperar 45 s.
    - P10: errores tipados del backend con su mensaje en español.
    - P12: el traspaso llega por SSE (`playback.handoff`) al momento; sin SSE,
      el latido (410) lo descubre.
@@ -203,6 +202,7 @@ interface Connection {
   stuckTicks: number;
   graceTicks: number;
   lastPos: number;
+  intentionalSeek: boolean;
   bufferTimer: ReturnType<typeof setInterval> | null;
   watchdog: ReturnType<typeof setInterval> | null;
   rebuffer: { startedAt: number; targetS: number } | null;
@@ -245,7 +245,7 @@ const IDLE_MESSAGES: Record<IdleReason, string> = {
   inicio: 'Elige un partido en la agenda o un canal de la biblioteca.',
   detenido: 'Reproducción detenida. Elige otro partido o canal.',
   traspasado: 'La reproducción ha pasado a otro dispositivo.',
-  fallo: 'Este canal no tiene pares ahora mismo. Puede que no esté emitiendo todavía.',
+  fallo: 'No se pudo recuperar esta señal tras varios intentos. Puede ser un corte temporal; vuelve a intentarlo o prueba otra señal.',
   'sin-motor': 'El motor AceStream no responde. Se reanudará solo cuando vuelva.',
 };
 
@@ -706,6 +706,7 @@ export class PlayerRuntime {
       stuckTicks: 0,
       graceTicks: 0,
       lastPos: 0,
+      intentionalSeek: false,
       bufferTimer: null,
       watchdog: null,
       rebuffer: null,
@@ -1086,20 +1087,27 @@ export class PlayerRuntime {
       return;
     }
     if (this.conn !== 'activa') return;
+    const position = Number.isFinite(media.currentTime) ? media.currentTime : connection.lastPos;
     if (media.paused || connection.rebuffer) {
       connection.stuckTicks = 0;
-      connection.lastPos = media.currentTime;
+      connection.lastPos = position;
+      return;
+    }
+    if (media.seeking || this.controller.state.seeking) {
+      connection.stuckTicks = 0;
+      connection.lastPos = position;
       return;
     }
     if (connection.graceTicks > 0) {
       connection.graceTicks -= 1;
-      connection.lastPos = media.currentTime;
+      connection.lastPos = position;
       return;
     }
-    if (Math.abs(media.currentTime - connection.lastPos) > ADVANCE_EPSILON_S) {
-      // Avanza. OJO (P4): esto YA NO perdona las reconexiones; las olvida la ventana.
+    if (position > connection.lastPos + ADVANCE_EPSILON_S) {
+      // Solo el avance real cuenta como progreso. Un salto hacia atrás o una oscilación
+      // del cabezal no puede reiniciar el detector de cortes.
       connection.stuckTicks = 0;
-      connection.lastPos = media.currentTime;
+      connection.lastPos = position;
       this.maybeSigue();
       return;
     }
@@ -1229,8 +1237,9 @@ export class PlayerRuntime {
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       if (this.source !== source || this.conn !== 'reconectando') return;
-      // La primera reconexión reutiliza la sesión (P9); las siguientes piden una nueva.
-      this.connect({ recovery: true, freshSession: n >= 2 && !this.session?.remux });
+      // Un flujo directo puede haberse atascado dentro del motor: vuelve a abrirlo
+      // desde la primera recuperación. El remux de iPhone conserva su sesión.
+      this.connect({ recovery: true, freshSession: !this.session?.remux });
     }, delay);
   }
 
@@ -1349,6 +1358,7 @@ export class PlayerRuntime {
       stuckTicks: 0,
       graceTicks: 0,
       lastPos: 0,
+      intentionalSeek: false,
       bufferTimer: null,
       watchdog: null,
       rebuffer: null,
@@ -1617,6 +1627,20 @@ export class PlayerRuntime {
     on('timeupdate', () => {
       const session = this.session;
       if (session && Date.now() - session.lastBeatAt >= session.heartbeatMs) this.beat();
+    });
+    on('seeking', () => {
+      const connection = this.connection;
+      if (!connection) return;
+      connection.intentionalSeek = this.controller.commandedSeek;
+    });
+    on('seeked', () => {
+      const connection = this.connection;
+      if (!connection || !connection.intentionalSeek) return;
+      connection.intentionalSeek = false;
+      connection.lastPos = Number.isFinite(media.currentTime)
+        ? media.currentTime
+        : connection.lastPos;
+      connection.stuckTicks = 0;
     });
     on('volumechange', () => this.setState({ muted: media.muted, volume: media.volume }));
   }

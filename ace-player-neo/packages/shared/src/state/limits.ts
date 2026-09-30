@@ -26,6 +26,7 @@ export const TEXT_LIMITS = {
   itemTitle: 120,
   itemAlias: 120,
   itemCategory: 48,
+  itemLanguage: 40,
   webSourceId: 48,
   webSourceName: 60,
   webSourceLastError: 40,

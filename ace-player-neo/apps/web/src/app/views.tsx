@@ -20,6 +20,7 @@ const PLAYERS = import.meta.glob<PlayerModule>('../player/index.tsx');
 export const FEATURE_FOLDER: Record<Exclude<Vista, 'sistema'>, string> = {
   agenda: 'agenda',
   biblioteca: 'biblioteca',
+  'pelis-series': 'pelis-series',
   buscar: 'buscar',
   ajustes: 'ajustes',
   partido: 'partido',

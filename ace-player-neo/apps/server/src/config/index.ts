@@ -7,8 +7,9 @@
 
    - `ACESTREAM_SCANNER_HOST` y `ENGINE_CONTROL_HOST` se sanean igual que
      `ACESTREAM_HOST` (backend-modulos §9.10: hoy no se sanean).
-   - Variables nuevas: `ACE_SEED`, `ACE_SAME_CHANNEL_POLICY`, `ACE_LOG_LEVEL`
-     y `APP_VERSION` (la inyecta el build, T-102).
+   - Variables nuevas: `ACE_SEED`, `ACE_SAME_CHANNEL_POLICY`, `ACE_LOG_LEVEL`,
+     `ACE_BIND_HOST` (defecto compatible: `0.0.0.0`) y `APP_VERSION` (la
+     inyecta el build, T-102).
    - Un valor que no vale se sustituye por el defecto y queda un aviso en
      `warnings` (main.ts los escribe en el log). Solo las de seguridad hacen
      fallar el arranque (`ConfigError`): un `ACE_SEED` demasiado corto. */
@@ -49,7 +50,7 @@ export const ENGINE_CONTROL_PORT = 3001;
 
 export interface AppConfig {
   readonly appVersion: string;
-  readonly host: '0.0.0.0';
+  readonly host: string;
   readonly port: number;
   readonly logLevel: LogLevel;
   readonly dataDir: string;
@@ -264,7 +265,7 @@ export function loadConfig(env: Env = process.env): LoadedConfig {
 
   const config: AppConfig = {
     appVersion: resolveVersion(env),
-    host: '0.0.0.0',
+    host: sanitizeHost(env.ACE_BIND_HOST, '0.0.0.0'),
     /* Como server.js:5158: `Number(PORT) || 3000`, sin comprobar el rango. */
     port: Number(env.PORT) || DEFAULTS.port,
     logLevel,

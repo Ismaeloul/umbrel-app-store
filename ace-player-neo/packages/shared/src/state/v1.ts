@@ -3,6 +3,10 @@
    atrás a la 0.6.59 lea el fichero sin perder nada (arquitectura §5.4,
    R-DATOS).
 
+   V3 añade `language` como metadato opcional de las listas M3U. La 0.6.59 puede
+   seguir reproduciendo esos elementos, aunque al volver a escribir el estado
+   no conservará ese metadato.
+
    Estos esquemas describen el resultado de normalizar; la lectura tolerante
    (aceptar `web` sin `webSources`, fechas raras en `syncedAt`, items sin
    hash que se descartan, recortes a los topes…) la hace el módulo `state`
@@ -53,6 +57,8 @@ export const ItemSchema = z.strictObject({
   title: z.string().max(TEXT_LIMITS.itemTitle),
   /** `tvg-id` del M3U; solo si existe y es distinto de `title`. */
   alias: z.string().min(1).max(TEXT_LIMITS.itemAlias).optional(),
+  /** Idioma declarado por la lista M3U, si lo incluye. */
+  language: z.string().min(1).max(TEXT_LIMITS.itemLanguage).optional(),
   type: ItemTypeSchema,
   category: z.string().max(TEXT_LIMITS.itemCategory),
   /** La del elemento si era válida; si no, la hora de normalizar. */

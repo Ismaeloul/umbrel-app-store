@@ -20,6 +20,7 @@ import {
   MAX_WEB_SOURCES,
   MAX_WEB_STREAMS,
   STATS_MAX_KEYS,
+  TEXT_LIMITS,
   cleanTitle,
   normalizeChannelKey,
   normalizeHash,
@@ -105,10 +106,15 @@ export function normalizeItem(
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 120);
+  const language = String(field(item, 'language') || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, TEXT_LIMITS.itemLanguage);
   return {
     id,
     title,
     ...(alias && alias !== title ? { alias } : {}),
+    ...(language ? { language } : {}),
     type,
     category,
     date,

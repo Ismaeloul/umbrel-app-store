@@ -58,10 +58,15 @@ export function normalizeItem(item: Loose, fallbackType: Item['type'], now: Date
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, TEXT_LIMITS.itemAlias);
+  const language = String(item?.language || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, TEXT_LIMITS.itemLanguage);
   return {
     id,
     title,
     ...(alias && alias !== title ? { alias } : {}),
+    ...(language ? { language } : {}),
     type,
     category,
     date,

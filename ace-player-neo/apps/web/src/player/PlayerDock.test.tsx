@@ -256,10 +256,10 @@ describe('reproductor en grande', () => {
       phase: 'error',
       conn: 'error',
       idleReason: 'fallo',
-      message: 'Este canal no tiene pares ahora mismo. Puede que no esté emitiendo todavía.',
+      message: 'No se pudo recuperar esta señal tras varios intentos. Puede ser un corte temporal; vuelve a intentarlo o prueba otra señal.',
     });
     expect(screen.getByText('No se pudo abrir')).toBeInTheDocument();
-    expect(screen.getByText(/no tiene pares ahora mismo/)).toBeInTheDocument();
+    expect(screen.getByText(/no se pudo recuperar esta señal/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
     // Sin nada que reproducir, fuera los controles de abajo (Detener sigue en el menú).
     expect(screen.queryByRole('button', { name: /Directo|Reanudar|directo/ })).toBeNull();

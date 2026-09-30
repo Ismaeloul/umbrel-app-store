@@ -157,7 +157,7 @@ const nav = () => screen.getAllByRole('navigation', { name: 'Principal' });
 const app = () => document.querySelector('.app') as HTMLElement;
 
 describe('armazón', () => {
-  it('navegación con los cuatro destinos (barra inferior y superior) y enlace para saltar al contenido', async () => {
+  it('navegación con los cinco destinos (barra inferior y superior) y enlace para saltar al contenido', async () => {
     renderApp();
     expect(nav()).toHaveLength(2);
     // La barra superior tiene la marca, los destinos y la ayuda de atajos.
@@ -166,7 +166,7 @@ describe('armazón', () => {
     for (const bar of nav()) {
       const links = within(bar).getAllByRole('link');
       expect(links.map((a) => a.textContent)).toEqual(
-        expect.arrayContaining(['Agenda', 'Canales', 'Buscar', 'Ajustes']),
+        expect.arrayContaining(['Agenda', 'Canales', 'Pelis', 'Buscar', 'Ajustes']),
       );
       expect(within(bar).getByRole('link', { name: 'Agenda' })).toHaveAttribute(
         'aria-current',
@@ -177,6 +177,10 @@ describe('armazón', () => {
       expect(within(bar).getByRole('link', { name: 'Canales' })).toHaveAttribute(
         'href',
         '?vista=biblioteca',
+      );
+      expect(within(bar).getByRole('link', { name: 'Pelis y Series' })).toHaveAttribute(
+        'href',
+        '?vista=pelis-series',
       );
     }
     expect(screen.getByRole('link', { name: 'Saltar al contenido' })).toHaveAttribute(

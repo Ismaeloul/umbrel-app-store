@@ -3,7 +3,7 @@
 
    Maquetación (docs/diseno/sistema.md §Maquetación, piel «Palco» W3):
    - Móvil (< 768): la vista a lo ancho, barra inferior flotante con los 4
-     destinos y el mini-reproductor encima. En el centro de partido no hay
+     cinco destinos y el mini-reproductor encima. En el centro de partido no hay
      barra: el vídeo va arriba, pegado, y se minimiza con la flecha o deslizando.
    - Tableta (768-1023): barra superior + la vista.
    - Escritorio (1024-1279): barra superior + vista + panel lateral de la vista.
@@ -60,6 +60,7 @@ import './shell.css';
 const WHAT: Record<Vista, string> = {
   agenda: 'la agenda',
   biblioteca: 'la biblioteca',
+  'pelis-series': 'películas y series',
   buscar: 'la búsqueda',
   ajustes: 'los ajustes',
   partido: 'el centro de partido',

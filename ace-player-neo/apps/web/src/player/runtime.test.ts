@@ -463,7 +463,7 @@ describe('vigilante y rebuffer', () => {
 });
 
 describe('reconexiones y paso de fuente', () => {
-  it('espera exponencial 1-2-4 s; la primera reutiliza la sesión, las siguientes piden otra; agotadas → cayo y onSourceFailed', async () => {
+  it('espera exponencial 1-2-4 s; renueva la sesión directa en cada intento; agotadas → cayo y onSourceFailed', async () => {
     const t = setup();
     t.reply.message =
       'Esta señal no responde. Tienes 4 fuentes para este canal: prueba otra en el selector.';
@@ -477,7 +477,10 @@ describe('reconexiones y paso de fuente', () => {
     expect(t.callsTo('channelStream')).toHaveLength(1);
     await vi.advanceTimersByTimeAsync(1);
     expect(t.callsTo('channelStream')).toHaveLength(2);
-    expect(t.callsTo('sessionRelease')).toHaveLength(0);
+    expect(t.callsTo('sessionRelease')[0]?.input.body).toEqual({
+      viewer: 'v_prueba',
+      reason: 'error',
+    });
 
     t.engines.last().args.callbacks.onFatal('La señal se ha cortado: reconectando');
     await vi.advanceTimersByTimeAsync(1_999);

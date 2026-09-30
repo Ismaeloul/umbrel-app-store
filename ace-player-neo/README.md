@@ -92,7 +92,7 @@ Tres procesos: el **motor AceStream falso**, el **backend** y la **web**
 | Pieza | Puerto | Notas |
 |---|---|---|
 | Motor falso | 6878 | el backend siempre busca el motor en el 6878, como en la 0.6.59 |
-| Backend | 3000 | `PORT` lo cambia |
+| Backend | 3000 | `PORT` lo cambia; `ACE_BIND_HOST` limita la interfaz de escucha (por defecto `0.0.0.0`) |
 | Web (Vite) | 5173 | reenvía `/api` al backend de `VITE_BACKEND` (por defecto `http://[::1]:3000`) |
 
 **Terminal 1, el motor falso** (ocho canales de prueba):

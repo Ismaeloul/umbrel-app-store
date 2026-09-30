@@ -91,8 +91,8 @@ useEffect(
 );
 ```
 
-Sin respuesta, el panel dice «Este canal no tiene pares ahora mismo. Puede que
-no esté emitiendo todavía.». El resultado (`fallo` o `cayo` con los segundos
+Sin respuesta tras agotar las reconexiones, el panel avisa que la señal no se
+pudo recuperar y sugiere volver a intentarlo o probar otra fuente. El resultado (`fallo` o `cayo` con los segundos
 vistos) ya lo ha mandado el reproductor. Llamar a `play()` **dentro** del
 oyente (como arriba) es lo esperado: la fuente nueva arranca limpia (sin el
 «fallo» de la anterior) y el panel dice «Esta fuente no responde: probando la
@@ -149,9 +149,9 @@ Reglas que cumple (inventario §8, §9, §11, §17, §18 y §26):
   baja > 50 KB/s, 54 s en iPhone); parado 4,5 s → rebuffer; en Safari/iOS,
   parado 6 s con vídeo por delante → salta al directo; 30 s (24 s) → reconecta.
 - **Reconexiones**: presupuesto de 3 en una ventana de 3 min (P4), 1 en
-  arranque automático, espera 1-2-4 s (`reconnectDelayMs`). La primera
-  reutiliza la sesión del backend (en iPhone no mata el remux, P9); las
-  siguientes piden una nueva.
+  arranque automático, espera 1-2-4 s (`reconnectDelayMs`). Cada intento abre
+  una sesión nueva para los flujos directos; el remux de iPhone conserva la
+  sesión existente para no repetir su preparación larga.
 - **Sesión**: latido cada 15 s (y desde `timeupdate` si los temporizadores van
   estrangulados), `release` al parar y `sendBeacon` en `pagehide`.
 - **SSE**: `stream.modeChanged` (pasa a hls.js solo), `stream.reopened`

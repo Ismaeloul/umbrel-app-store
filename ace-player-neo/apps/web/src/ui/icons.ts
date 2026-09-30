@@ -8,6 +8,7 @@ export const ICONS = {
     '<rect x="3.5" y="5" width="17" height="15.5" rx="4"/><path d="M3.5 10h17M8 3v4M16 3v4"/><circle cx="12" cy="15.2" r="2.1"/>',
   biblioteca:
     '<rect x="3.5" y="9" width="17" height="11.5" rx="3.5"/><path d="M6 5.8h12M8.5 2.8h7"/><path d="M10.5 12.6v4.3l3.7-2.15z"/>',
+  cine: '<path d="M4 7.5h16v13H4zM4 7.5l2.5-4 4 4 2.5-4 4 4 3-4"/><path d="M9 11v6l5-3z"/>',
   buscar: '<circle cx="10.8" cy="10.8" r="6.3"/><path d="M15.6 15.6l4.6 4.6"/>',
   ajustes:
     '<path d="M4 7.5h9M17.5 7.5H20M4 16.5h2.5M11 16.5h9"/><circle cx="15.2" cy="7.5" r="2.3"/><circle cx="8.8" cy="16.5" r="2.3"/>',

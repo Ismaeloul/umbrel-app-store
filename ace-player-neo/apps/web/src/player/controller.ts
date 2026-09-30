@@ -125,6 +125,7 @@ export class PlayerController {
   private readonly options: ControllerOptions;
   private sessionKey = '';
   private command = 0;
+  private commandedSeekCommand: number | null = null;
   private readonly holds = new Set<string>();
   readonly state: ControllerState = {
     desiredPlaying: false,
@@ -156,6 +157,11 @@ export class PlayerController {
   isActive(): boolean {
     if (!this.sessionKey) return false;
     return this.options.isActive ? Boolean(this.options.isActive(this.sessionKey)) : true;
+  }
+
+  /** True only while a seek requested by this controller still owns the command. */
+  get commandedSeek(): boolean {
+    return this.commandedSeekCommand !== null && this.commandedSeekCommand === this.command;
   }
 
   private bindMediaEvents(): void {
@@ -460,10 +466,12 @@ export class PlayerController {
     this.state.waiting = false;
     this.state.origin = options.origin || 'timeline';
     const command = ++this.command;
+    this.commandedSeekCommand = command;
     this.emit();
     try {
       this.media.currentTime = destination;
     } catch (error) {
+      this.commandedSeekCommand = null;
       this.state.seeking = false;
       this.state.busy = false;
       this.state.error = 'seek-failed';
@@ -479,6 +487,7 @@ export class PlayerController {
       );
     }
     if (command !== this.command) return { ok: false, reason: 'cancelled' };
+    this.commandedSeekCommand = null;
     this.state.seeking = false;
     this.state.busy = false;
     this.emit();

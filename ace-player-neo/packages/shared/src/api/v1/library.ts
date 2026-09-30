@@ -43,6 +43,7 @@ export const ItemInputSchema = z.strictObject({
   title: z.string().max(500).optional(),
   category: z.string().max(200).optional(),
   alias: z.string().max(500).optional(),
+  language: z.string().max(500).optional(),
   date: z.string().max(64).optional(),
   fromWebSync: z.boolean().optional(),
   ih: z.boolean().optional(),

@@ -6,6 +6,7 @@
    |----------------------------|---------------------------------------------|
    | (nada) · agenda            | { vista: 'agenda' }                         |
    | biblioteca                 | { vista: 'biblioteca' }                     |
+   | pelis-series                | { vista: 'pelis-series' }                   |
    | buscar                     | { vista: 'buscar' }                         |
    | ajustes · ajustes/<sección>| { vista: 'ajustes', seccion }               |
    | partido/<id>               | { vista: 'partido', id, canal: null }       |
@@ -18,20 +19,29 @@
 
 import { isSystemPageEnabled } from '../lib/flags.ts';
 
-export type Vista = 'agenda' | 'biblioteca' | 'buscar' | 'ajustes' | 'partido' | 'sistema';
+export type Vista =
+  | 'agenda'
+  | 'biblioteca'
+  | 'pelis-series'
+  | 'buscar'
+  | 'ajustes'
+  | 'partido'
+  | 'sistema';
 
 export type Route =
   | { vista: 'agenda' }
   | { vista: 'biblioteca' }
+  | { vista: 'pelis-series' }
   | { vista: 'buscar' }
   | { vista: 'ajustes'; seccion: string | null }
   | { vista: 'partido'; id: string | null; canal: string | null }
   | { vista: 'sistema' };
 
-/** Los cuatro destinos de la navegación, en su orden. */
+/** Los cinco destinos de la navegación, en su orden. */
 export const NAV_VISTAS = [
   'agenda',
   'biblioteca',
+  'pelis-series',
   'buscar',
   'ajustes',
 ] as const satisfies readonly Vista[];
@@ -42,6 +52,7 @@ export type NavVista = (typeof NAV_VISTAS)[number];
 export const VISTA_TITLE: Record<Vista, string> = {
   agenda: 'Agenda',
   biblioteca: 'Canales',
+  'pelis-series': 'Pelis y Series',
   buscar: 'Buscar',
   ajustes: 'Ajustes',
   partido: 'Partido',
@@ -65,6 +76,8 @@ export function parseVista(
       return { vista: 'agenda' };
     case 'biblioteca':
       return { vista: 'biblioteca' };
+    case 'pelis-series':
+      return { vista: 'pelis-series' };
     case 'buscar':
       return { vista: 'buscar' };
     case 'ajustes': {

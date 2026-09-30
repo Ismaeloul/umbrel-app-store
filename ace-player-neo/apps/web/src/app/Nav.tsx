@@ -1,5 +1,5 @@
-/* Navegación principal con los mismos cuatro destinos (Agenda · Canales ·
-   Buscar · Ajustes), en la forma de «Palco» (plan de la fase 2, decisión W3):
+/* Navegación principal (Agenda · Canales · Pelis y Series · Buscar · Ajustes),
+   en la forma de «Palco» (plan de la fase 2, decisión W3):
 
    - Móvil (< 768 px): barra inferior FLOTANTE de cristal (márgenes de 12,
      radio 24, sombra Palco) con una píldora que se desliza hasta el destino
@@ -36,6 +36,7 @@ import { preloadView } from './views.tsx';
 const NAV_ICON: Record<NavVista, IconName> = {
   agenda: 'agenda',
   biblioteca: 'biblioteca',
+  'pelis-series': 'cine',
   buscar: 'buscar',
   ajustes: 'ajustes',
 };
@@ -67,7 +68,7 @@ function useNavLink(current: Route) {
   });
 }
 
-/** Índice del destino activo (−1 fuera de los cuatro: partido, sistema). */
+/** Índice del destino activo (−1 fuera de navegación: partido, sistema). */
 function activeIndex(route: Route): number {
   return (NAV_VISTAS as readonly string[]).indexOf(route.vista);
 }
@@ -83,9 +84,14 @@ export function TabBar({ route, hidden }: { route: Route; hidden?: boolean }) {
       style={{ '--i': Math.max(0, index), '--n': NAV_VISTAS.length } as CSSProperties}
     >
       {NAV_VISTAS.map((vista) => (
-        <a key={vista} className="tabbar__item" {...link(vista)}>
+        <a
+          key={vista}
+          className="tabbar__item"
+          aria-label={vista === 'pelis-series' ? VISTA_TITLE[vista] : undefined}
+          {...link(vista)}
+        >
           <Icon name={NAV_ICON[vista]} size={24} />
-          <span>{VISTA_TITLE[vista]}</span>
+          <span>{vista === 'pelis-series' ? 'Pelis' : VISTA_TITLE[vista]}</span>
         </a>
       ))}
     </nav>
@@ -135,9 +141,14 @@ export function TopBar({ route, onHelp }: { route: Route; onHelp?: () => void })
         </a>
         <div className="topbar__items">
           {NAV_VISTAS.map((vista) => (
-            <a key={vista} className="topbar__item" {...link(vista)}>
+            <a
+              key={vista}
+              className="topbar__item"
+              aria-label={vista === 'pelis-series' ? VISTA_TITLE[vista] : undefined}
+              {...link(vista)}
+            >
               <Icon name={NAV_ICON[vista]} size={20} />
-              <span>{VISTA_TITLE[vista]}</span>
+              <span>{vista === 'pelis-series' ? 'Pelis' : VISTA_TITLE[vista]}</span>
             </a>
           ))}
         </div>

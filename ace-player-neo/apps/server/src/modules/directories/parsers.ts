@@ -1,7 +1,7 @@
 /* Parsers de directorios, portados tal cual (server.js:2751-2812).
 
-   Devuelven la forma CRUDA de la 0.6.59 (`{ id, title, alias, type, category }`
-   en M3U, sin `alias` en HTML). La normalización a `Item` (fecha, `ih`,
+   Devuelven la forma CRUDA de la 0.6.59 (`{ id, title, alias, language, type, category }`
+   en M3U, sin `alias` ni `language` en HTML). La normalización a `Item` (fecha, `ih`,
    `fromWebSync`, sin duplicados, categoría a 48) la hace `normalizeWebSource`
    al guardar, igual que `writeState` en la 0.6.59. */
 
@@ -12,6 +12,8 @@ export interface ParsedStream {
   readonly title: string;
   /** Solo en M3U: el `tvg-id` (puede ser ""). */
   readonly alias?: string;
+  /** Idioma declarado en el atributo M3U tvg-language. */
+  readonly language?: string;
   readonly type: 'web';
   readonly category: string;
 }
@@ -26,6 +28,7 @@ export function parseM3u(text: string): ParsedStream[] {
   const streams: ParsedStream[] = [];
   let currentTitle = '';
   let currentAlias = '';
+  let currentLanguage = '';
   let currentCategory = 'Importado';
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trim();
@@ -37,6 +40,7 @@ export function parseM3u(text: string): ParsedStream[] {
          ("DAZN 1 --> NEW ERA"); el tvg-id es el nombre canónico del canal
          ("DAZN 1 HD") y se guarda como alias para emparejar (server.js:2762-2766). */
       currentAlias = cleanTitle(line.match(/tvg-id="([^"]*)"/i)?.[1], '');
+      currentLanguage = cleanTitle(line.match(/tvg-language="([^"]*)"/i)?.[1], '');
       currentTitle = cleanTitle(line.split(',').slice(1).join(','), 'Stream M3U');
       continue;
     }
@@ -46,11 +50,13 @@ export function parseM3u(text: string): ParsedStream[] {
         id,
         title: currentTitle || `Stream ${id.slice(0, 8)}`,
         alias: currentAlias,
+        ...(currentLanguage ? { language: currentLanguage } : {}),
         type: 'web',
         category: currentCategory || 'Importado',
       });
       currentTitle = '';
       currentAlias = '';
+      currentLanguage = '';
     }
   }
   return streams;
