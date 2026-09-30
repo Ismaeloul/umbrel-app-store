@@ -2,18 +2,34 @@
    relé sigue él mismo las redirecciones, aplana la maestra, cachea la lista
    1 s, normaliza extensiones, solo escucha en loopback, reconecta con las
    esperas de §6.1 (403/458 cuentan como plaza ocupada y no gastan
-   variantes) y prueba otra variante antes de dar la IPTV por caída. */
+   variantes) y prueba otra variante antes de dar la IPTV por caída. Con el
+   proveedor falso y el ffmpeg del sistema: lo que sale de la puerta TS tras
+   un empalme a mitad de GOP se decodifica sin un solo error. */
 
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import type { AddressInfo, Socket } from 'node:net';
+import os from 'node:os';
+import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { FakeClock } from '../../core/clock.js';
+import { FakeClock, createSystemClock } from '../../core/clock.js';
 import { createSilentLogger } from '../../core/logger.js';
 import { createNetClient } from '../net/index.js';
 import { createTestCore } from '../../../test/helpers/index.js';
 import { loopbackHost } from '../../../test/fake-engine/test-utils.js';
 import { TsMuxer, colorFromSeed, generateSegment } from '../../../test/fake-engine/mpegts.js';
-import { fakeIptvResolver, fakeIptvTransport } from '../../../test/fake-iptv/net.js';
+import {
+  FAKE_IPTV_HOST,
+  fakeIptvResolver,
+  fakeIptvTransport,
+} from '../../../test/fake-iptv/net.js';
+import {
+  FAKE_IPTV_PASSWORD,
+  FAKE_IPTV_USER,
+  createFakeIptv,
+  type FakeIptvMode,
+} from '../../../test/fake-iptv/provider.js';
 import { createIptvRelay, type IptvRelayImpl } from './relay.js';
 import { relayGet, waitFor } from './test-support.js';
 
@@ -487,4 +503,132 @@ describe('relé TS: reconexión (§6.1)', () => {
       code: 'iptv_gone',
     });
   });
+});
+
+const HAS_FFMPEG =
+  spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0 &&
+  spawnSync('ffprobe', ['-version'], { stdio: 'ignore' }).status === 0;
+
+/* PTS (o DTS) de los paquetes de un tipo de flujo, según ffprobe. */
+function probeTimes(file: string, stream: 'v' | 'a'): number[] {
+  const probe = spawnSync(
+    'ffprobe',
+    [
+      '-v',
+      'error',
+      '-select_streams',
+      stream,
+      '-show_entries',
+      'packet=pts',
+      '-of',
+      'csv=p=0',
+      file,
+    ],
+    { encoding: 'utf8' },
+  );
+  expect(probe.status).toBe(0);
+  return probe.stdout
+    .split('\n')
+    .map((line) => line.trim().replace(/,$/, ''))
+    .filter((line) => /^\d+$/.test(line))
+    .map(Number);
+}
+
+/* Lo que el relé manda a ffmpeg durante `ms` con el proveedor falso en `mode` (reloj de verdad). */
+async function capture(mode: FakeIptvMode, ms: number): Promise<{ data: Buffer; opens: number }> {
+  const host = await loopbackHost();
+  const provider = await createFakeIptv({ host, publicHost: FAKE_IPTV_HOST });
+  const clock = createSystemClock();
+  const net = createNetClient({
+    ...createTestCore(),
+    clock,
+    resolver: fakeIptvResolver(),
+    transport: fakeIptvTransport({ host, port: provider.port }),
+  });
+  const relay = createIptvRelay({
+    clock,
+    logger: createSilentLogger(),
+    net,
+    policy: () => ({ lan: false }),
+    host: host === '::1' ? '::1' : '127.0.0.1',
+  });
+  try {
+    await relay.start();
+    provider.modo(107, mode);
+    const session = await relay.open({
+      variants: [
+        {
+          entryId: 'c'.repeat(40),
+          url: `http://${FAKE_IPTV_HOST}/live/${FAKE_IPTV_USER}/${FAKE_IPTV_PASSWORD}/107.ts`,
+          headers: {},
+        },
+      ],
+    });
+    const dropped: string[] = [];
+    const restarts: number[] = [];
+    session.onDropped((code) => dropped.push(code));
+    session.onRestart(() => restarts.push(1));
+    const chunks: Buffer[] = [];
+    const ffmpeg = http.get(session.inputUrl, { agent: false }, (res) =>
+      res.on('data', (c: Buffer) => chunks.push(c)),
+    );
+    ffmpeg.on('error', () => undefined);
+    await new Promise((resolve) => setTimeout(resolve, ms));
+    ffmpeg.destroy();
+    await session.close();
+    expect(dropped).toEqual([]);
+    expect(restarts).toEqual([]);
+    const opens = provider.peticionesDeStream().length;
+    return { data: Buffer.concat(chunks), opens };
+  } finally {
+    await relay.stop();
+    await provider.close();
+  }
+}
+
+/* Recorta al último inicio de PES de vídeo (lo de detrás está a medias). */
+function trimToLastVideoStart(data: Buffer): Buffer {
+  let end = data.length - (data.length % 188);
+  for (let offset = end - 188; offset >= 0; offset -= 188) {
+    const pid = ((data[offset + 1]! & 0x1f) << 8) | data[offset + 2]!;
+    if (pid === 0x100 && (data[offset + 1]! & 0x40) !== 0) {
+      end = offset;
+      break;
+    }
+  }
+  return data.subarray(0, end);
+}
+
+describe.skipIf(!HAS_FFMPEG)('relé TS + puerta con ffmpeg de verdad', () => {
+  const cases: readonly [FakeIptvMode, string][] = [
+    ['empalme:2:prebuffer=1.5', 'reconexión a mitad de GOP que repite 1,5 s'],
+    ['cut-mid-packet:2', 'corte a mitad de paquete TS'],
+  ];
+  for (const [mode, label] of cases) {
+    it(`${label}: ffmpeg -xerror lo decodifica entero y el PTS del vídeo y del audio solo avanza`, async () => {
+      const { data, opens } = await capture(mode, 5_500);
+      expect(opens).toBe(2);
+      const dir = mkdtempSync(path.join(os.tmpdir(), 'ace-ts-gate-'));
+      try {
+        const file = path.join(dir, 'in.ts');
+        writeFileSync(file, trimToLastVideoStart(data));
+        const decode = spawnSync(
+          'ffmpeg',
+          ['-hide_banner', '-nostdin', '-v', 'error', '-xerror', '-i', file, '-f', 'null', '-'],
+          { encoding: 'utf8' },
+        );
+        expect(decode.stderr).toBe('');
+        expect(decode.status).toBe(0);
+        for (const stream of ['v', 'a'] as const) {
+          const times = probeTimes(file, stream);
+          expect(times.length).toBeGreaterThan(20);
+          for (let i = 1; i < times.length; i += 1) {
+            expect(times[i]!).toBeGreaterThan(times[i - 1]!);
+          }
+        }
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }, 20_000);
+  }
 });

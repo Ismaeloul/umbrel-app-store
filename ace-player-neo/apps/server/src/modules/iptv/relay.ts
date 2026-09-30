@@ -28,6 +28,13 @@
    respecto a lo esperado, se pide reiniciar el remux (`onRestart`). Agotado:
    otra variante una vez (con reinicio) y, si no, `onDropped`.
 
+   Todo lo que va a ffmpeg pasa por la puerta TS (ts-gate.ts): al abrir, en
+   cada empalme o reinicio tras reconectar y en cada costura dentro de una
+   conexión (contador de continuidad, `discontinuity_indicator` o salto del PTS
+   del vídeo), ffmpeg solo vuelve a recibir vídeo desde un fotograma clave, con
+   la PAT y la PMT de antes delante y sin repetir lo que ya tenía. Sin
+   fotograma clave en 4 s u 8 MB, pasa todo y se reinicia el remux.
+
    Origen HLS: la lista maestra se aplana a una variante con audio muxeado
    (hls.ts); la de medios se reescribe por lista blanca con URIs del relé y se
    pide como mucho una vez por segundo; los segmentos se descargan por `net`
@@ -58,6 +65,7 @@ import {
   type RewrittenPlaylist,
   type SegmentExt,
 } from './hls.js';
+import { TsGate } from './ts-gate.js';
 
 /** Una variante del canal (la mejor primero). La URL nunca sale del relé. */
 export interface RelayVariant {
@@ -328,6 +336,9 @@ class TsSession extends BaseSession {
   private stableBytes = 0;
   /** Todas las reconexiones de la variante en el tope largo (no se borran al aguantar). */
   private reconnects: number[] = [];
+  /** Puerta de resincronía: ffmpeg solo recibe vídeo desde un punto de acceso. */
+  private readonly gate = new TsGate();
+  private gateTimer: TimerHandle | null = null;
 
   constructor(
     ticket: string,
@@ -341,8 +352,75 @@ class TsSession extends BaseSession {
     super(ticket, inputUrl, false, relay, variants, controller);
     this.adoptedAt = relay.deps.clock.now();
     this.upstream = first;
-    if (head) this.queue(head);
+    /* Desde el principio: ffmpeg empieza en un fotograma clave (sin segmento 0 sin clave). */
+    this.gate.wait({ forward: false, fresh: true });
+    if (head) this.feed(head);
     this.wire(first);
+  }
+
+  /* Un trozo del proveedor, por la puerta. */
+  private feed(chunk: Buffer): void {
+    const seams = this.gate.seams;
+    for (const part of this.gate.push(chunk)) this.deliver(part);
+    if (this.gate.seams !== seams) {
+      this.relay.deps.logger.info(
+        { ticket: '•••' },
+        'relé IPTV: costura en la emisión; se espera a un fotograma clave',
+      );
+    }
+    this.watchGate();
+  }
+
+  /*
+   * Plazo de la puerta: sin punto de acceso en `rapWaitMs` (con ffmpeg
+   * leyendo) o en `rapWaitBytes`, se deja pasar todo. Nunca se espera dentro
+   * de adopt(): es un temporizador.
+   */
+  private watchGate(): void {
+    const { clock } = this.relay.deps;
+    if (this.gate.mode !== 'waitRap') {
+      clock.clearTimeout(this.gateTimer);
+      this.gateTimer = null;
+      return;
+    }
+    if (this.gate.waitedBytes >= IPTV_RELAY.rapWaitBytes) {
+      this.giveUpRap();
+      return;
+    }
+    if (this.gateTimer || !this.downstream || this.restartPending) return;
+    this.gateTimer = clock.setTimeout(() => {
+      this.gateTimer = null;
+      if (!this.closed && this.gate.mode === 'waitRap') this.giveUpRap();
+    }, IPTV_RELAY.rapWaitMs);
+  }
+
+  /* Sin punto de acceso a tiempo (GOP abierto, refresco intra): pasa todo y, si ffmpeg ya tenía imagen, reinicio del remux. */
+  private giveUpRap(): void {
+    this.relay.deps.clock.clearTimeout(this.gateTimer);
+    this.gateTimer = null;
+    const head = this.gate.release();
+    if (this.delivered === 0 || !this.downstream || this.restartPending) {
+      for (const part of head) this.deliver(part);
+      return;
+    }
+    this.relay.deps.logger.warn(
+      { ticket: '•••' },
+      'relé IPTV: sin fotograma clave a tiempo; se reinicia el remux',
+    );
+    this.restartPending = true;
+    for (const part of head) this.queue(part);
+    this.armReattach();
+    this.emitRestart();
+  }
+
+  /* Tras pedir un reinicio, ffmpeg tiene `reattachMs` para volver; si no, la emisión se da por cortada. */
+  private armReattach(): void {
+    const { clock } = this.relay.deps;
+    clock.clearTimeout(this.reattachTimer);
+    this.reattachTimer = clock.setTimeout(() => {
+      if (this.closed || !this.restartPending) return;
+      this.emitDropped('iptv_dropped');
+    }, this.relay.deps.reattachMs ?? REATTACH_MS);
   }
 
   private queue(chunk: Buffer): void {
@@ -381,7 +459,7 @@ class TsSession extends BaseSession {
       this.meter.add(chunk.length);
       this.noteStable(chunk.length);
       this.notePcr(chunk);
-      this.deliver(chunk);
+      this.feed(chunk);
     });
     const lost = (): void => {
       if (this.upstream !== opened || this.closed) return;
@@ -451,6 +529,7 @@ class TsSession extends BaseSession {
     req.once('close', onClose);
     if (this.upstream) this.upstream.body.resume();
     else if (!this.reconnecting) void this.reconnect({ immediate: true });
+    this.watchGate();
   }
 
   /** Abre de nuevo desde la URL original (con las esperas de §6.1). */
@@ -575,28 +654,31 @@ class TsSession extends BaseSession {
     this.upstream = opened;
     this.adoptedAt = clock.now();
     this.stableBytes = 0;
+    /* Otra variante: su PAT/PMT puede ser otra. */
+    if (forceRestart) this.gate.resetPsi();
     if (jump) {
-      /* No se empalma: lo nuevo espera a que el remux se reinicie y ffmpeg vuelva. */
+      /* No se empalma: lo nuevo espera a que el remux se reinicie y ffmpeg vuelva
+         (y el ffmpeg nuevo empieza en un fotograma clave). */
       this.restartPending = true;
       this.pcr.reset();
+      this.gate.resetTimeline();
+      this.gate.wait({ forward: false, fresh: true });
       for (const chunk of head) {
-        this.pending.push(chunk);
-        this.pendingBytes += chunk.length;
         this.notePcr(chunk);
+        this.feed(chunk);
       }
       this.wire(opened);
       opened.body.pause();
-      this.reattachTimer = clock.setTimeout(() => {
-        if (this.closed || !this.restartPending) return;
-        this.emitDropped('iptv_dropped');
-      }, this.relay.deps.reattachMs ?? REATTACH_MS);
+      this.armReattach();
       this.emitRestart();
       return;
     }
+    /* Empalme: desde un fotograma clave y sin repetir lo que ffmpeg ya tiene. */
+    this.gate.wait({ forward: this.delivered > 0, fresh: true });
     for (const chunk of head) {
       this.meter.add(chunk.length);
       this.notePcr(chunk);
-      this.deliver(chunk);
+      this.feed(chunk);
     }
     this.wire(opened);
     if (this.downstream) opened.body.resume();
@@ -604,6 +686,8 @@ class TsSession extends BaseSession {
 
   protected teardown(): void {
     this.relay.deps.clock.clearTimeout(this.reattachTimer);
+    this.relay.deps.clock.clearTimeout(this.gateTimer);
+    this.gateTimer = null;
     const upstream = this.upstream;
     this.upstream = null;
     upstream?.body.destroy();
