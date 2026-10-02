@@ -13,7 +13,10 @@ Lo que no se pudo hacer esta noche, con el detalle para retomarlo.
 3. **Agenda (0.8.4):** ya hecha y revisada en la rama `fix/agenda-filtrado`; falta cortar la release.
 4. **Pelis y series (0.9.0):** plan en `docs/vod-estado.md` (rama `vod/1-contrato`). Pendiente de Isma: el
    Paso 0 en su Umbrel y si los títulos para adultos salen en la portada.
-5. La app de iPhone, al final, cuando la web esté pulida.
+5. **Agenda en PC: el partido destacado en grande (hero) ya no le gusta.** En el móvil se queda como está (queda
+   bien); en la versión de escritorio hay que darle una vuelta (menos protagonismo / otro diseño). Ejemplo visto:
+   Elche Academy–Getafe Academy en grande (eso además lo quita la 0.8.4).
+6. La app de iPhone, al final, cuando la web esté pulida.
 
 Nota: la IPTV de la 0.8.3 «parece que va bien» (Isma, 2-oct).
 
