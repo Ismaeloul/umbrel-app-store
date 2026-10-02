@@ -18,6 +18,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { V1_ROUTES } from '@ace/shared';
 import type { Page } from '@playwright/test';
+import { demoMatchStart } from '../../server/test/fake-iptv/provider.js';
 import { FUENTES, PARTIDOS } from './support/catalogo.ts';
 import { carpetaDeLaPila } from './support/pila.ts';
 import { readPorts } from './support/puertos.ts';
@@ -216,7 +217,12 @@ test(
       timeout: 45_000,
     });
     // Un cartel por variante de resolución (§17): M+ LaLiga TV 2 (guía) y DAZN LaLiga 1080p, 720p y reserva.
-    await expect(listaDeFuentes(page).locator('.src-poster[data-origin="iptv"]')).toHaveCount(4);
+    // El de la guía, mientras su programa siga en ella: el partido de la demo es a las 18:30 de Madrid y el
+    // programa acaba 115 min después; luego la guía lo quita (trimWindow) y quedan los tres de DAZN LaLiga.
+    const conGuia = Date.now() < demoMatchStart() + 115 * 60_000;
+    await expect(listaDeFuentes(page).locator('.src-poster[data-origin="iptv"]')).toHaveCount(
+      conGuia ? 4 : 3,
+    );
     await expect(cartelIptv(page)).toContainText('IPTV');
     // El proveedor va en la tesela; debajo, solo el canal (Isma, 26-sep).
     await expect(cartelIptv(page).locator('.dorsal__abbrev')).toHaveText('Casa');

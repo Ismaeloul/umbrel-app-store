@@ -346,6 +346,41 @@ describe('emparejado con guía (§4.3 a §4.6)', () => {
     expect(channel.candidates[0]?.listaId).toMatch(/^p_/);
   });
 
+  it('una guía descargada cuando el programa del partido ya acabó no lo confirma: quedan los 3 carteles de DAZN LaLiga', async () => {
+    /* Lo que ve la E2E «reproducir» de iptv.spec.ts después de las 20:25 de Madrid: la guía no guarda lo que ya
+       terminó (buildGuideWindow) y el cartel de M+ LaLiga TV 2 no sale. */
+    const r = await rig();
+    await r.service.save({ kind: 'm3u', name: 'Casa', url: `${SERVER}/lista.m3u.gz` }, signal());
+    await r.service.idle();
+    const start = r.core.clock.now() + IPTV_TEST_MATCH_OFFSET_MS;
+    /* El programa en directo acaba 115 min después del inicio. */
+    await r.core.clock.advanceAsync(IPTV_TEST_MATCH_OFFSET_MS + 116 * 60_000);
+    await r.service.idle();
+    await r.service['startGuide']();
+    await r.service.idle();
+    const result = r.service.resolve({
+      channels: ['DAZN LaLiga'],
+      program: {
+        id: 'demo-4',
+        home: 'Real Sociedad',
+        away: 'Villarreal',
+        competition: 'LaLiga',
+        title: 'Real Sociedad vs Villarreal',
+        start,
+        channels: ['DAZN LaLiga'],
+      },
+      scorer,
+    });
+    expect(
+      result.candidates.map((c) => [c.title, c.iptv.guide, c.iptv.quality, c.iptv.backup]),
+    ).toEqual([
+      ['DAZN LaLiga --> Casa', false, 'fhd', false],
+      ['DAZN LaLiga --> Casa', false, 'hd', false],
+      ['DAZN LaLiga --> Casa', false, null, true],
+    ]);
+    expect(result.hints).toEqual([]);
+  });
+
   it('sin IPTV activa la capa no se consulta', async () => {
     const r = await rig();
     expect(r.service.resolve({ channels: ['DAZN LaLiga'], scorer })).toEqual({

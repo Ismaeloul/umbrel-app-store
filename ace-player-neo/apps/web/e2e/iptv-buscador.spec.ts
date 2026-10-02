@@ -224,7 +224,9 @@ test(
     await conectarXtream(page);
     await buscar(page, 'la 1');
     const la1 = fila(page, enTuIptv(page), 'La 1');
-    await expect(la1.getByText('Casa', { exact: true })).toBeVisible();
+    /* El proveedor («Casa»); mientras se juega el España – Marruecos de la demo (22:00 de Madrid, en La 1),
+       la fila enseña el partido en su lugar («En directo», ChannelRow). */
+    await expect(la1.getByText(/^(Casa|En directo)$/)).toBeVisible();
     await expect(la1.getByText('IPTV', { exact: true })).toBeVisible();
     await expect(la1.getByText('AceStream · 2', { exact: true })).toBeVisible();
     await expect(la1.locator('.ch__tag')).toHaveText(['720p']);
