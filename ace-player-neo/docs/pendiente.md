@@ -16,6 +16,9 @@ Lo que no se pudo hacer esta noche, con el detalle para retomarlo.
 5. **Agenda en PC: el partido destacado en grande (hero) ya no le gusta.** En el móvil se queda como está (queda
    bien); en la versión de escritorio hay que darle una vuelta (menos protagonismo / otro diseño). Ejemplo visto:
    Elche Academy–Getafe Academy en grande (eso además lo quita la 0.8.4).
+   Captura de Isma (3-oct, Brave a ~2000 px): `capturas/pendiente/agenda-hero-escritorio-2026-10-03.webp`. El
+   cartel ocupa casi toda la pantalla (~550 px de alto, a todo el ancho) con dos colores planos y las siglas en
+   medio; la tira de días y la lista de partidos quedan abajo, casi fuera de la vista.
 6. La app de iPhone, al final, cuando la web esté pulida.
 
 Nota: la IPTV de la 0.8.3 «parece que va bien» (Isma, 2-oct).
