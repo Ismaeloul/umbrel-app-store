@@ -14,7 +14,7 @@ public struct ErrorDefinition: Sendable, Equatable {
     public let message: String
 }
 
-/// Catálogo de códigos de error con sus mensajes en español (87 códigos).
+/// Catálogo de códigos de error con sus mensajes en español (103 códigos).
 public enum ErrorCatalog {
     public static let entries: [String: ErrorDefinition] = [
         "bad_request": ErrorDefinition(status: 400, isPublic: true, message: "La petición no es válida."),
@@ -82,6 +82,22 @@ public enum ErrorCatalog {
         "bad_outcome": ErrorDefinition(status: 400, isPublic: true, message: "El resultado de la reproducción no es válido."),
         "bad_feedback": ErrorDefinition(status: 400, isPublic: true, message: "La corrección no es válida."),
         "empty_query": ErrorDefinition(status: 400, isPublic: true, message: "Escribe al menos 2 letras para buscar."),
+        "iptv_not_configured": ErrorDefinition(status: 409, isPublic: true, message: "Todavía no has conectado ninguna IPTV."),
+        "iptv_disabled": ErrorDefinition(status: 409, isPublic: true, message: "Tu IPTV está en pausa."),
+        "iptv_removed": ErrorDefinition(status: 410, isPublic: true, message: "Has eliminado tu IPTV."),
+        "iptv_credentials_required": ErrorDefinition(status: 400, isPublic: true, message: "Si cambias el servidor o el tipo, vuelve a escribir el usuario y la contraseña."),
+        "iptv_secret_unreadable": ErrorDefinition(status: 409, isPublic: true, message: "No se pueden leer los datos guardados de tu IPTV. Vuelve a escribirlos."),
+        "iptv_auth_failed": ErrorDefinition(status: 502, isPublic: true, message: "Tu proveedor de IPTV no acepta ese usuario y contraseña."),
+        "iptv_account_expired": ErrorDefinition(status: 502, isPublic: true, message: "La cuenta de tu IPTV ha caducado o está desactivada."),
+        "iptv_unreachable": ErrorDefinition(status: 502, isPublic: true, message: "Tu proveedor de IPTV no responde."),
+        "iptv_timeout": ErrorDefinition(status: 504, isPublic: true, message: "Tu IPTV no respondió a tiempo."),
+        "iptv_busy": ErrorDefinition(status: 503, isPublic: true, message: "Tu IPTV ya tiene todas sus conexiones en uso. Cierra la otra reproducción o espera un momento."),
+        "iptv_gone": ErrorDefinition(status: 404, isPublic: true, message: "Ese canal ya no está en tu IPTV."),
+        "iptv_dropped": ErrorDefinition(status: 502, isPublic: true, message: "Tu IPTV ha cortado la emisión."),
+        "iptv_unsupported": ErrorDefinition(status: 422, isPublic: true, message: "Ese canal de tu IPTV usa un formato que no se puede reproducir aquí."),
+        "iptv_bad_list": ErrorDefinition(status: 422, isPublic: true, message: "La dirección respondió, pero no es una lista M3U con canales en directo."),
+        "iptv_empty": ErrorDefinition(status: 422, isPublic: true, message: "La lista no trae ningún canal en directo que se pueda usar."),
+        "iptv_too_large": ErrorDefinition(status: 502, isPublic: true, message: "La lista de tu IPTV es demasiado grande para el Umbrel."),
         "state_unreadable": ErrorDefinition(status: 500, isPublic: false, message: "No se pudo leer el estado guardado."),
         "scanner_unavailable": ErrorDefinition(status: 502, isPublic: false, message: "El comprobador no responde."),
         "scanner_timeout": ErrorDefinition(status: 504, isPublic: false, message: "El comprobador tarda demasiado."),
