@@ -34,6 +34,10 @@ function abortReason(signal: AbortSignal): Error {
 export const nodeTransport: NetTransport = (request) =>
   new Promise((resolve, reject) => {
     const client = request.url.protocol === 'https:' ? https : http;
+    let markClosed: () => void = () => undefined;
+    const closed = new Promise<void>((done) => {
+      markClosed = done;
+    });
     const req = client.get(
       request.url,
       {
@@ -46,6 +50,7 @@ export const nodeTransport: NetTransport = (request) =>
           status: response.statusCode ?? 0,
           headers: response.headers,
           body: response,
+          closed,
         });
       },
     );
@@ -56,4 +61,9 @@ export const nodeTransport: NetTransport = (request) =>
     else request.signal.addEventListener('abort', onAbort, { once: true });
     req.on('error', reject);
     req.on('close', () => request.signal.removeEventListener('abort', onAbort));
+    /* Con `agent: false` el socket es solo de esta petición: su 'close' es el cierre de verdad. */
+    req.on('socket', (socket) => socket.once('close', () => markClosed()));
+    req.on('close', () => {
+      if (!req.socket) markClosed();
+    });
   });

@@ -57,6 +57,13 @@ export interface TransportResponse {
   readonly headers: Readonly<Record<string, string | readonly string[] | undefined>>;
   /** Cuerpo en crudo (sin descomprimir). */
   readonly body: Readable;
+  /**
+   * Se cumple cuando el socket de esta petición se ha cerrado del todo (el de
+   * `node:http` con `agent: false`). Lo usa el relé VOD para no abrir la
+   * siguiente conexión con el proveedor antes de soltar la anterior
+   * (docs/vod.md §9.3). Un transporte sin socket propio no lo da.
+   */
+  readonly closed?: Promise<void>;
 }
 
 /** Hace UNA petición (sin seguir redirecciones). En producción, `node:http(s)`. */
@@ -125,6 +132,12 @@ export interface OpenStreamOptions {
   readonly signal?: AbortSignal;
   /** Filtro de la IPTV (docs/iptv.md §3.1). */
   readonly iptv?: IptvFetchPolicy;
+  /**
+   * Bytes tal cual: sin mirar si es gzip. El vídeo de una película pedido
+   * por Range puede empezar por `1F 8B` por casualidad (docs/vod.md §9.3), y
+   * un `Content-Encoding` que no sea identity es un error.
+   */
+  readonly identity?: boolean;
 }
 
 export interface OpenedStream {
@@ -139,6 +152,8 @@ export interface OpenedStream {
   readonly body: Readable;
   /** URL final tras las redirecciones. Con la IPTV NO sale del relé (docs/iptv.md §2.4). */
   readonly finalUrl: string;
+  /** El socket de la conexión ya está cerrado (si el transporte lo sabe; ver `TransportResponse.closed`). */
+  readonly released?: Promise<void>;
 }
 
 export interface NetClient {

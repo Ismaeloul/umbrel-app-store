@@ -542,7 +542,7 @@ export function createFetcher(deps: FetcherDeps): NetFetcher {
         throw new AppError(`http_${status}`, { data: { status } });
       }
       const encoding = encodingOf(response);
-      const gzipHeader = iptv !== undefined && encoding === 'gzip';
+      const gzipHeader = iptv !== undefined && encoding === 'gzip' && !options.identity;
       if (encoding !== 'identity' && !gzipHeader) {
         response.body.destroy();
         release();
@@ -565,7 +565,7 @@ export function createFetcher(deps: FetcherDeps): NetFetcher {
         deadline,
         maxBytes: options.maxBytes ?? null,
         maxDecompressed: iptv?.maxDecompressedBytes ?? options.maxBytes ?? null,
-        gzip: gzipHeader ? 'header' : iptv ? 'sniff' : 'none',
+        gzip: gzipHeader ? 'header' : iptv && !options.identity ? 'sniff' : 'none',
         onClose: release,
       });
       return {
@@ -574,6 +574,7 @@ export function createFetcher(deps: FetcherDeps): NetFetcher {
         contentType: headerValue(response.headers['content-type']) ?? null,
         body,
         finalUrl: canonical,
+        ...(response.closed ? { released: response.closed } : {}),
       };
     }
   }
