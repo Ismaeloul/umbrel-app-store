@@ -166,15 +166,20 @@ describe('detección de variantes', () => {
       'FC Barcelona Academy',
       'Real Madrid Castilla',
       'Spain U21',
+      'Central Córdoba Reserva',
     ]) {
       expect(footballTeamIsVariant(name), name).toBe(true);
     }
+    /* Primeros equipos con nombre de filial (revisión): «Atlètic» solo
+       cuenta al final y «Willem II» es de la Eredivisie. */
     for (const name of [
       'FC Barcelona',
       'Barcelona',
       'Athletic Club',
       'Atlético de Madrid',
       'España',
+      'Atlètic Lleida',
+      'Willem II',
     ]) {
       expect(footballTeamIsVariant(name), name).toBe(false);
     }
@@ -203,9 +208,15 @@ describe('detección de variantes', () => {
       'Champions League',
       'Primera Federación',
       'Amistoso',
+      // la «F» suelta de un grupo no es la Liga F (revisión)
+      'Mundial · Grupo F',
     ]) {
       expect(footballCompetitionIsMinor(name), name).toBe(false);
     }
+    expect(footballCompetitionIsMinor('Liga F Moeve')).toBe(true);
+    expect(footballMatchInScope(partido('Mundial · Grupo F', 'España', 'Uruguay'), DUENO)).toBe(
+      true,
+    );
     expect(footballMatchIsMinor(partido('Amistoso', 'Real Madrid', 'Real Madrid Castilla'))).toBe(
       true,
     );

@@ -7,7 +7,12 @@ import Foundation
 
    El port se valida con vectores generados desde la función de TypeScript
    (scripts/generar-vectores.mjs → Tests/AceNeoTests/Vectores/): si alguien
-   cambia las reglas de la web y no las de aquí, la CI de iOS falla. */
+   cambia las reglas de la web y no las de aquí, la CI de iOS falla.
+
+   Desde fix/agenda-filtrado (0.8.4): lo juvenil, filial y femenino solo entra
+   si lo sigues tal cual; «Barcelona» es el primer equipo masculino (idTeam
+   133739 de TheSportsDB si el partido trae escudo) y «España» la absoluta
+   masculina y sus competiciones exactas, nunca «LaLiga Futures». */
 
 /// Los gustos que miran las reglas (`ForYouPreferences`).
 public struct GustosFutbol: Sendable, Hashable, Codable {
@@ -37,19 +42,27 @@ public struct PartidoParaTi: Sendable, Hashable, Codable {
     public var home: String
     public var away: String
     public var channels: [String]
+    /// `homeTeam.id`/`awayTeam.id`: `idTeam` de TheSportsDB (o `k-<clave>`), si el partido trae escudo.
+    public var homeTeamId: String?
+    public var awayTeamId: String?
 
-    public init(competition: String = "", title: String = "", home: String = "", away: String = "", channels: [String] = []) {
+    public init(
+        competition: String = "", title: String = "", home: String = "", away: String = "", channels: [String] = [],
+        homeTeamId: String? = nil, awayTeamId: String? = nil
+    ) {
         self.competition = competition
         self.title = title
         self.home = home
         self.away = away
         self.channels = channels
+        self.homeTeamId = homeTeamId
+        self.awayTeamId = awayTeamId
     }
 
     public init(_ partido: FootballMatch) {
         self.init(
             competition: partido.competition, title: partido.title, home: partido.home, away: partido.away,
-            channels: partido.channels.map(\.name))
+            channels: partido.channels.map(\.name), homeTeamId: partido.homeTeam?.id, awayTeamId: partido.awayTeam?.id)
     }
 }
 
@@ -99,11 +112,67 @@ public enum ParaTi {
         colapsar(sinMarcas(valor ?? "").lowercased(), sustituto: "")
     }
 
+    // MARK: Cantera, filiales y femenino
+
+    /// `VARIANT_WORDS`: palabras que delatan cantera, filial o femenino en cualquier sitio del nombre.
+    static let palabrasVariante: Set<String> = [
+        "academy", "academia", "juvenil", "juveniles", "cadete", "cadetes", "infantil", "alevin", "benjamin",
+        "youth", "reserve", "reserves", "reserva", "reservas", "castilla", "promesas", "filial", "femenino",
+        "femenina", "femeni", "femenil", "feminine", "feminino", "women", "womens", "ladies", "frauen", "vrouwen",
+        "femminile",
+    ]
+
+    /// `MINOR_COMPETITION_WORDS`: las de equipos y las de competiciones menores.
+    static let palabrasCompeticionMenor: Set<String> = palabrasVariante.union([
+        "futures", "nwsl", "wsl", "damallsvenskan", "proyeccion", "regional", "regionalliga", "autonomica",
+        "preferente", "olimpico", "olimpicos",
+    ])
+
+    /// `VARIANT_EXCEPTIONS`: primeros equipos cuyo nombre parece de filial.
+    static let excepcionesVariante: Set<String> = ["willem ii"]
+
+    private static func patron(_ texto: String) -> NSRegularExpression {
+        // swiftlint:disable:next force_try
+        try! NSRegularExpression(pattern: texto)
+    }
+
+    /// `VARIANT_TAIL`: las palabras cortas (y «Atlètic») solo al final del nombre.
+    nonisolated(unsafe) private static let colaVariante = patron(#"\s(?:b|c|ii|iii|w|fem|atletic|juvenil [a-d])$"#)
+    /// `VARIANT_AGE`: «Sub-21», «U19».
+    nonisolated(unsafe) private static let edadVariante = patron(#"(?:^|\s)(?:sub|u)\s?(?:1\d|2[0-3])(?:\s|$)"#)
+    /// `LIGA_F`: «Liga F» sí; la «F» suelta de un «Grupo F», no.
+    nonisolated(unsafe) private static let ligaF = patron(#"(?:^|\s)liga f(?:\s|$)"#)
+
+    private static func casa(_ expresion: NSRegularExpression, _ clave: String) -> Bool {
+        expresion.firstMatch(in: clave, range: NSRange(clave.startIndex..., in: clave)) != nil
+    }
+
+    /// `footballTeamIsVariant`: ¿cantera, filial o femenino? («FC Barcelona Femení», «Barcelona Atlètic», «Spain U21»).
+    public static func esVariante(_ valor: String?) -> Bool {
+        let clave = clavePreferencia(valor)
+        guard !clave.isEmpty, !excepcionesVariante.contains(clave) else { return false }
+        return clave.split(separator: " ").contains { palabrasVariante.contains(String($0)) }
+            || casa(colaVariante, clave) || casa(edadVariante, clave)
+    }
+
+    /// `footballCompetitionIsMinor`: «LaLiga Futures», «Liga F», «Europeo Sub-21».
+    public static func competicionEsMenor(_ valor: String?) -> Bool {
+        let clave = clavePreferencia(valor)
+        guard !clave.isEmpty else { return false }
+        return clave.split(separator: " ").contains { palabrasCompeticionMenor.contains(String($0)) }
+            || casa(edadVariante, clave) || casa(ligaF, clave)
+    }
+
+    /// `footballMatchIsMinor`: por la competición o por cualquiera de los dos equipos.
+    public static func partidoEsMenor(_ partido: PartidoParaTi) -> Bool {
+        competicionEsMenor(partido.competition) || esVariante(partido.home) || esVariante(partido.away)
+    }
+
     // MARK: Ligas
 
     /// `LEAGUE_ALIASES`: los nombres exactos de cada liga (se compara por igualdad).
     public static let aliasLigas: [String: [String]] = [
-        "laliga": ["laliga", "laligaeasports", "primeradivision", "laligasantander"],
+        "laliga": ["laliga", "laligaeasports", "primeradivision", "laligasantander", "spanishlaliga"],
         "championsleague": ["championsleague", "uefachampionsleague", "ligadecampeones"],
         "premierleague": ["premierleague"],
         "europaleague": ["europaleague", "uefaeuropaleague"],
@@ -111,7 +180,7 @@ public enum ParaTi {
         "seriea": ["seriea", "serieaitaliana"],
         "bundesliga": ["bundesliga"],
         "ligue1": ["ligue1", "francialigue1"],
-        "laligahypermotion": ["laligahypermotion", "laligasmartbank", "segundadivision"],
+        "laligahypermotion": ["laligahypermotion", "laligasmartbank", "segundadivision", "spanishlaliga2", "laliga2"],
     ]
 
     /// `leagueMatches`.
@@ -216,12 +285,40 @@ public enum ParaTi {
         !gustos.leagues.isEmpty || !gustos.teams.isEmpty || !gustos.nationalities.isEmpty
     }
 
+    /// `FAVORITE_TEAM_IDS`: `idTeam` de TheSportsDB de los favoritos del catálogo
+    /// (los mismos que fija `teams/overrides.json` en el servidor).
+    public static let idsFavoritos: [String: String] = [
+        "barcelona": "133739",
+        "real madrid": "133738",
+        "atletico madrid": "133729",
+        "inter": "133681",
+    ]
+
+    /// `/^\d+$/` de JavaScript: solo cifras ASCII.
+    private static func esIdNumerico(_ valor: String) -> Bool {
+        !valor.isEmpty && valor.unicodeScalars.allSatisfy { $0 >= "0" && $0 <= "9" }
+    }
+
+    /// `favoriteSideMatches`: un primer equipo nunca casa con su cantera, filial
+    /// o femenino; con escudo resuelto manda el `idTeam`, sin él, el nombre.
+    static func ladoFavorito(_ preferencia: String, _ nombre: String, _ escudo: String?) -> Bool {
+        if !esVariante(preferencia) && esVariante(nombre) { return false }
+        let idEscudo = escudo ?? ""
+        if let id = idsFavoritos[claveEquipo(preferencia)], esIdNumerico(idEscudo) { return idEscudo == id }
+        return equipoCoincide(preferencia, nombre)
+    }
+
     /// `footballMatchHasFavoriteTeam` (y `footballMatchHighlighted`: se
-    /// resaltan los partidos de tus equipos sin cambiar el orden).
+    /// resaltan los partidos de tus equipos sin cambiar el orden). En una
+    /// competición menor solo cuenta un favorito que sea él mismo cantera,
+    /// filial o femenino.
     public static func tieneEquipoFavorito(_ partido: PartidoParaTi, _ gustos: GustosFutbol) -> Bool {
         guard !gustos.teams.isEmpty else { return false }
-        let candidatos = [partido.home, partido.away].filter { !$0.isEmpty }
-        return gustos.teams.contains { equipo in candidatos.contains { equipoCoincide(equipo, $0) } }
+        let menor = competicionEsMenor(partido.competition)
+        let lados = [(partido.home, partido.homeTeamId), (partido.away, partido.awayTeamId)].filter { !$0.0.isEmpty }
+        return gustos.teams.contains { equipo in
+            (!menor || esVariante(equipo)) && lados.contains { ladoFavorito(equipo, $0.0, $0.1) }
+        }
     }
 
     /// `includes` de JavaScript: la cadena vacía está en cualquier texto.
@@ -239,20 +336,25 @@ public enum ParaTi {
         let visitante = clavePreferencia(partido.away)
         let titulo = clavePreferencia(partido.title)
         let hypermotion = esHypermotion(partido)
+        let menor = partidoEsMenor(partido)
         return gustos.nationalities.contains { nacionalidad in
             let clave = clavePreferencia(nacionalidad)
             let regla = reglasNacionalidad[clave] ?? ReglaNacionalidad(alias: [clave], competiciones: [])
-            let seleccion = regla.alias.contains { alias in
-                [local, visitante].contains { equipo in
-                    equipo == alias || equipo.hasPrefix("\(alias) ") || equipo.hasSuffix(" \(alias)")
-                } || incluye(" \(titulo) ", " \(alias) ")
-            }
+            /* Solo la absoluta masculina: ni «España Sub-21» ni el «Amistoso
+               Femenino»; el título solo cuenta si no se pudo separar el visitante. */
+            let seleccion =
+                !menor
+                && regla.alias.contains { alias in
+                    [local, visitante].contains { $0 == alias }
+                        || (visitante.isEmpty && incluye(" \(titulo) ", " \(alias) "))
+                }
             /* Con la guarda de Segunda: ninguna regla de país incluye
-               Hypermotion; quien la quiera la marca como liga. */
+               Hypermotion; quien la quiera la marca como liga. Y por nombre
+               exacto o alias, nunca por «contiene» («LaLiga Futures»). */
             let competicionDelPais =
-                !hypermotion
+                !menor && !hypermotion
                 && regla.competiciones.contains { nombre in
-                    liga == nombre || incluye(liga, nombre) || ligaDelPartidoCoincide(nombre, partido)
+                    liga == nombre || ligaDelPartidoCoincide(nombre, partido)
                 }
             return seleccion || competicionDelPais
         }

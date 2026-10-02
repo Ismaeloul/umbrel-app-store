@@ -43,8 +43,11 @@ export function normalizePreferenceKey(value: unknown): string {
 
 /* Equipos que no son el primer equipo masculino: cantera («Academy», que es
    como futbolenlatv rotula las inferiores; «Juvenil A», «Sub-19», «U19»),
-   filiales («B», «Atlètic», «Castilla») y femeninos («Femení», «Women», «W»).
-   Las palabras cortas solo cuentan al final del nombre («Barcelona B»). */
+   filiales («B», «Atlètic», «Castilla», «Reserva») y femeninos («Femení»,
+   «Women», «W»). Las palabras cortas y «Atlètic» solo cuentan al final del
+   nombre («Barcelona B», «Barcelona Atlètic»; «Atlètic Lleida» es un primer
+   equipo). La app de iPhone lo porta en `ParaTi.swift` (vectores de
+   `apps/ios/scripts/generar-vectores.mjs`). */
 const VARIANT_WORDS = new Set([
   'academy',
   'academia',
@@ -58,9 +61,10 @@ const VARIANT_WORDS = new Set([
   'youth',
   'reserve',
   'reserves',
+  'reserva',
+  'reservas',
   'castilla',
   'promesas',
-  'atletic',
   'filial',
   'femenino',
   'femenina',
@@ -75,13 +79,15 @@ const VARIANT_WORDS = new Set([
   'vrouwen',
   'femminile',
 ]);
-const VARIANT_TAIL = /\s(?:b|c|ii|iii|w|fem|juvenil [a-d])$/;
+const VARIANT_TAIL = /\s(?:b|c|ii|iii|w|fem|atletic|juvenil [a-d])$/;
 const VARIANT_AGE = /(?:^|\s)(?:sub|u)\s?(?:1\d|2[0-3])(?:\s|$)/;
+/** Primeros equipos cuyo nombre parece de filial («Willem II»). */
+const VARIANT_EXCEPTIONS = new Set(['willem ii']);
 
 /** ¿Es una cantera, un filial o un equipo femenino? («FC Barcelona Femení», «Barcelona Atlètic», «Spain U21»). */
 export function footballTeamIsVariant(value: unknown): boolean {
   const key = normalizePreferenceKey(value);
-  if (!key) return false;
+  if (!key || VARIANT_EXCEPTIONS.has(key)) return false;
   return (
     key.split(' ').some((word) => VARIANT_WORDS.has(word)) ||
     VARIANT_TAIL.test(key) ||
@@ -91,11 +97,11 @@ export function footballTeamIsVariant(value: unknown): boolean {
 
 /* Competiciones de cantera, femeninas, filiales o regionales: no entran en
    «Para ti» por la selección ni por un equipo del primer equipo, solo si las
-   sigues por su nombre. */
+   sigues por su nombre. «Liga F» va aparte: una «F» suelta también es el
+   «Grupo F» de un torneo. */
 const MINOR_COMPETITION_WORDS = new Set([
   ...VARIANT_WORDS,
   'futures',
-  'f',
   'nwsl',
   'wsl',
   'damallsvenskan',
@@ -108,11 +114,17 @@ const MINOR_COMPETITION_WORDS = new Set([
   'olimpicos',
 ]);
 
+const LIGA_F = /(?:^|\s)liga f(?:\s|$)/;
+
 /** ¿Es una competición menor (cantera, femenina, filiales o regional)? «LaLiga Futures», «Liga F», «Europeo Sub-21». */
 export function footballCompetitionIsMinor(value: unknown): boolean {
   const key = normalizePreferenceKey(value);
   if (!key) return false;
-  return key.split(' ').some((word) => MINOR_COMPETITION_WORDS.has(word)) || VARIANT_AGE.test(key);
+  return (
+    key.split(' ').some((word) => MINOR_COMPETITION_WORDS.has(word)) ||
+    VARIANT_AGE.test(key) ||
+    LIGA_F.test(key)
+  );
 }
 
 /** ¿Partido de cantera, filial o femenino (por la competición o por un equipo)? */

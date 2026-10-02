@@ -358,6 +358,14 @@ conservador). Todas se pueden revertir.
   estado: el id se deduce de la clave). En «Todos», los bloques con algo tuyo
   van primero y la cantera al final; el escenario no destaca la cantera.
   Diferencia aceptada con la 0.6.59 (el contraste la lista a propósito).
+  «Atlètic» solo cuenta al final del nombre («Atlètic Lleida» es un primer
+  equipo), «Willem II» no es filial y la «F» suelta de un «Grupo F» no es la
+  Liga F.
+- **iPhone**: `apps/ios/Sources/Core/Dominio/ParaTi.swift` porta las mismas
+  reglas (variantes, competiciones menores, `idTeam` del escudo) y
+  `scripts/generar-vectores.mjs` añade los casos del parón (LaLiga Futures,
+  Sub-21, Barcelona SC con su escudo…); la CI de iOS exige que el JSON esté al
+  día y que Swift dé lo mismo.
 - **TheSportsDB** (último recurso, tras futbolenlatv y la EPG): con la clave
   gratuita `123`, `eventstv.php` da 1-2 emisiones al día, `eventsday.php` 3
   partidos y `eventsnextleague.php`/`eventsseason.php` 1 y 15; pero
