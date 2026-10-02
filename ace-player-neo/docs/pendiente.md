@@ -37,7 +37,13 @@ Lo que no se pudo hacer esta noche, con el detalle para retomarlo.
 9. **Ajustes es una lista interminable.** Los botones de la izquierda (Listas, IPTV, Tu fútbol, Reproducción…)
    hoy solo hacen scroll a su parte. Que cada botón enseñe **solo su sección** (una sección a la vez, como
    pestañas), y no la lista entera.
-10. La app de iPhone, al final, cuando la web esté pulida.
+10. **Logo: el mismo en todas partes.** El bueno es el del menú de Umbrel (`ismaeloul-ace-player-neo/icon.svg`,
+    captura `capturas/pendiente/logo-bueno-umbrel.png`: cuadrado oscuro con el anillo azul partido y el play
+    blanco). Dentro de la web sale otro «feísimo» (`capturas/pendiente/logo-feo-dentro-app.png`: el de la cabecera,
+    favicon y PWA en `apps/web/public/icon*.{svg,png}`). Cambiar todos (cabecera, favicon, iconos de la PWA,
+    manifiesto) por el del menú de Umbrel.
+11. **App de iPhone: al final, con el Mac de su hermano** (simulador de iPhone y cambios al momento, mucho más
+    práctico que compilar en GitHub y bajar la IPA). Primero pulir al máximo la web; la app irá basada en la web.
 
 Nota: la IPTV de la 0.8.3 «parece que va bien» (Isma, 2-oct).
 
