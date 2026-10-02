@@ -5,7 +5,13 @@
 
    "Para ti" es la UNIÓN de todos los gustos: una liga aporta su cartelera
    completa; un equipo o una selección aportan sus partidos aunque la
-   competición sea un amistoso o un torneo no elegido. */
+   competición sea un amistoso o un torneo no elegido.
+
+   Desde fix/agenda-filtrado (0.8.4): lo juvenil, filial y femenino solo
+   entra si lo sigues tal cual (el equipo «FC Barcelona Femení» o la liga
+   «Liga F»): «Barcelona» es el primer equipo masculino (idTeam 133739 de
+   TheSportsDB) y «España» la absoluta masculina y sus competiciones exactas,
+   nunca «LaLiga Futures» ni el «Europeo Sub-21». */
 
 export interface ForYouPreferences {
   readonly leagues: readonly string[];
@@ -15,6 +21,9 @@ export interface ForYouPreferences {
 
 /** Lo que las reglas miran de un partido de la agenda. */
 export interface ForYouMatch {
+  /** Escudos del módulo `teams`: `id` es el `idTeam` de TheSportsDB (o `k-<clave>`). */
+  readonly homeTeam?: { readonly id?: string | null } | null;
+  readonly awayTeam?: { readonly id?: string | null } | null;
   readonly competition?: string | null;
   readonly title?: string | null;
   readonly home?: string | null;
@@ -32,6 +41,90 @@ export function normalizePreferenceKey(value: unknown): string {
     .trim();
 }
 
+/* Equipos que no son el primer equipo masculino: cantera («Academy», que es
+   como futbolenlatv rotula las inferiores; «Juvenil A», «Sub-19», «U19»),
+   filiales («B», «Atlètic», «Castilla») y femeninos («Femení», «Women», «W»).
+   Las palabras cortas solo cuentan al final del nombre («Barcelona B»). */
+const VARIANT_WORDS = new Set([
+  'academy',
+  'academia',
+  'juvenil',
+  'juveniles',
+  'cadete',
+  'cadetes',
+  'infantil',
+  'alevin',
+  'benjamin',
+  'youth',
+  'reserve',
+  'reserves',
+  'castilla',
+  'promesas',
+  'atletic',
+  'filial',
+  'femenino',
+  'femenina',
+  'femeni',
+  'femenil',
+  'feminine',
+  'feminino',
+  'women',
+  'womens',
+  'ladies',
+  'frauen',
+  'vrouwen',
+  'femminile',
+]);
+const VARIANT_TAIL = /\s(?:b|c|ii|iii|w|fem|juvenil [a-d])$/;
+const VARIANT_AGE = /(?:^|\s)(?:sub|u)\s?(?:1\d|2[0-3])(?:\s|$)/;
+
+/** ¿Es una cantera, un filial o un equipo femenino? («FC Barcelona Femení», «Barcelona Atlètic», «Spain U21»). */
+export function footballTeamIsVariant(value: unknown): boolean {
+  const key = normalizePreferenceKey(value);
+  if (!key) return false;
+  return (
+    key.split(' ').some((word) => VARIANT_WORDS.has(word)) ||
+    VARIANT_TAIL.test(key) ||
+    VARIANT_AGE.test(key)
+  );
+}
+
+/* Competiciones de cantera, femeninas, filiales o regionales: no entran en
+   «Para ti» por la selección ni por un equipo del primer equipo, solo si las
+   sigues por su nombre. */
+const MINOR_COMPETITION_WORDS = new Set([
+  ...VARIANT_WORDS,
+  'futures',
+  'f',
+  'nwsl',
+  'wsl',
+  'damallsvenskan',
+  'proyeccion',
+  'regional',
+  'regionalliga',
+  'autonomica',
+  'preferente',
+  'olimpico',
+  'olimpicos',
+]);
+
+/** ¿Es una competición menor (cantera, femenina, filiales o regional)? «LaLiga Futures», «Liga F», «Europeo Sub-21». */
+export function footballCompetitionIsMinor(value: unknown): boolean {
+  const key = normalizePreferenceKey(value);
+  if (!key) return false;
+  return key.split(' ').some((word) => MINOR_COMPETITION_WORDS.has(word)) || VARIANT_AGE.test(key);
+}
+
+/** ¿Partido de cantera, filial o femenino (por la competición o por un equipo)? */
+export function footballMatchIsMinor(match: ForYouMatch | null | undefined): boolean {
+  if (!match) return false;
+  return (
+    footballCompetitionIsMinor(match.competition) ||
+    footballTeamIsVariant(match.home) ||
+    footballTeamIsVariant(match.away)
+  );
+}
+
 /* Antes se comparaba "si la liga incluye la preferencia": "laliga" dejaba
    fuera "La Liga EA Sports" (por el espacio) y colaba "LaLiga Hypermotion",
    que es Segunda. Igual con "Serie A" -> "Serie A Brasil", "Bundesliga" ->
@@ -46,7 +139,7 @@ export const competitionKey = (value: unknown): string =>
     .replace(/[^a-z0-9]+/g, '');
 
 export const LEAGUE_ALIASES: Readonly<Record<string, readonly string[]>> = {
-  laliga: ['laliga', 'laligaeasports', 'primeradivision', 'laligasantander'],
+  laliga: ['laliga', 'laligaeasports', 'primeradivision', 'laligasantander', 'spanishlaliga'],
   championsleague: ['championsleague', 'uefachampionsleague', 'ligadecampeones'],
   premierleague: ['premierleague'],
   europaleague: ['europaleague', 'uefaeuropaleague'],
@@ -54,7 +147,13 @@ export const LEAGUE_ALIASES: Readonly<Record<string, readonly string[]>> = {
   seriea: ['seriea', 'serieaitaliana'],
   bundesliga: ['bundesliga'],
   ligue1: ['ligue1', 'francialigue1'],
-  laligahypermotion: ['laligahypermotion', 'laligasmartbank', 'segundadivision'],
+  laligahypermotion: [
+    'laligahypermotion',
+    'laligasmartbank',
+    'segundadivision',
+    'spanishlaliga2',
+    'laliga2',
+  ],
 };
 
 export function leagueMatches(preference: unknown, competition: unknown): boolean {
@@ -174,14 +273,48 @@ export function hasFootballPreferences(preferences: ForYouPreferences): boolean 
   );
 }
 
+/**
+ * `idTeam` de TheSportsDB de los favoritos del catálogo (comprobados con
+ * `searchteams.php`/`lookupteam.php`, como `teams/overrides.json`). Las
+ * preferencias se guardan como texto; aquí se «migran» al vuelo: si el
+ * partido trae el escudo resuelto (`homeTeam.id`), manda el id y no el nombre.
+ */
+export const FAVORITE_TEAM_IDS: Readonly<Record<string, string>> = {
+  barcelona: '133739',
+  'real madrid': '133738',
+  'atletico madrid': '133729',
+  inter: '133681',
+};
+
+function favoriteSideMatches(
+  preference: unknown,
+  name: unknown,
+  badge: { readonly id?: string | null } | null | undefined,
+): boolean {
+  const wantedVariant = footballTeamIsVariant(preference);
+  /* Un primer equipo nunca casa con su cantera, filial o femenino, aunque
+     el nombre limpio coincida o el escudo se haya resuelto al del club. */
+  if (!wantedVariant && footballTeamIsVariant(name)) return false;
+  const id = FAVORITE_TEAM_IDS[footballTeamKey(preference)];
+  const badgeId = typeof badge?.id === 'string' ? badge.id : '';
+  if (id && /^\d+$/.test(badgeId)) return badgeId === id;
+  return footballTeamNameMatches(preference, name);
+}
+
 export function footballMatchHasFavoriteTeam(
   match: ForYouMatch,
   preferences: ForYouPreferences,
 ): boolean {
   if (!preferences.teams.length) return false;
-  const candidates = [match.home, match.away].filter(Boolean);
-  return preferences.teams.some((item) =>
-    candidates.some((team) => footballTeamNameMatches(item, team)),
+  const minor = footballCompetitionIsMinor(match.competition);
+  const sides = [
+    { name: match.home, badge: match.homeTeam },
+    { name: match.away, badge: match.awayTeam },
+  ].filter((side) => side.name);
+  return preferences.teams.some(
+    (item) =>
+      (!minor || footballTeamIsVariant(item)) &&
+      sides.some((side) => favoriteSideMatches(item, side.name, side.badge)),
   );
 }
 
@@ -192,29 +325,31 @@ export function footballMatchInScope(match: ForYouMatch, preferences: ForYouPref
   const home = normalizePreferenceKey(match.home);
   const away = normalizePreferenceKey(match.away);
   const title = normalizePreferenceKey(match.title);
+  const minor = footballMatchIsMinor(match);
   return (
     preferences.leagues.some((item) => matchLeagueMatches(item, match)) ||
     footballMatchHasFavoriteTeam(match, preferences) ||
     preferences.nationalities.some((item) => {
       const key = normalizePreferenceKey(item);
       const rule = NATIONALITY_RULES[key] || { aliases: [key], competitions: [] };
-      const nationalTeam = rule.aliases.some(
-        (alias) =>
-          [home, away].some(
-            (team) => team === alias || team.startsWith(`${alias} `) || team.endsWith(` ${alias}`),
-          ) || ` ${title} `.includes(` ${alias} `),
-      );
-      /* Con la guarda de Segunda: "laliga" está dentro de "laliga
-         hypermotion", así que con solo "incluye" la selección "España"
-         colaba Hypermotion en Para ti (B-139). Ninguna regla de país incluye
-         Hypermotion: quien la quiera la marca como liga. Y por alias de liga
-         además de por texto: "La Liga EA Sports" es LaLiga aunque no
-         contenga "laliga" seguido. */
-      const domesticCompetition =
-        !matchIsLaLigaHypermotion(match) &&
-        rule.competitions.some(
-          (name) => league === name || league.includes(name) || matchLeagueMatches(name, match),
+      /* Solo la absoluta masculina: ni «España Sub-21» ni el «Amistoso
+         Femenino» (antes, «spain u21» casaba por empezar por «spain »). */
+      const nationalTeam =
+        !minor &&
+        rule.aliases.some(
+          (alias) =>
+            [home, away].some((team) => team === alias) ||
+            (!away && ` ${title} `.includes(` ${alias} `)),
         );
+      /* Con la guarda de Segunda: ninguna regla de país incluye Hypermotion
+         (B-139); quien la quiera la marca como liga. Y por nombre exacto o
+         alias, nunca por «contiene»: «laliga» está dentro de «LaLiga
+         Futures» (cantera) y «premier league» dentro de «Premier League
+         Ucrania». «La Liga EA Sports» es LaLiga por alias. */
+      const domesticCompetition =
+        !minor &&
+        !matchIsLaLigaHypermotion(match) &&
+        rule.competitions.some((name) => league === name || matchLeagueMatches(name, match));
       return nationalTeam || domesticCompetition;
     })
   );
