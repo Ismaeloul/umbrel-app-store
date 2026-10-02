@@ -30,7 +30,14 @@ Lo que no se pudo hacer esta noche, con el detalle para retomarlo.
      y un **botón de play**;
    - al entrar en una **serie**: lo mismo con la información de la serie, y elegir temporada y capítulo para ver;
    - usar toda la información que tenga la IPTV.
-8. La app de iPhone, al final, cuando la web esté pulida.
+8. **La URL arrastra parámetros de otra vista.** Isma buscó «clan» en Canales (pestaña Recientes) y al irse a
+   Ajustes la URL seguía con `?vista=ajustes&pestana=recientes&pais=ES&idioma=es&q=clan`. Al cambiar de vista,
+   quitar los parámetros que son de otra vista (cada vista solo conserva los suyos; ver `app/routes.ts` y
+   `useSearchParam` en `app/router.tsx`, que hoy conserva todo «el resto de parámetros»).
+9. **Ajustes es una lista interminable.** Los botones de la izquierda (Listas, IPTV, Tu fútbol, Reproducción…)
+   hoy solo hacen scroll a su parte. Que cada botón enseñe **solo su sección** (una sección a la vez, como
+   pestañas), y no la lista entera.
+10. La app de iPhone, al final, cuando la web esté pulida.
 
 Nota: la IPTV de la 0.8.3 «parece que va bien» (Isma, 2-oct).
 
