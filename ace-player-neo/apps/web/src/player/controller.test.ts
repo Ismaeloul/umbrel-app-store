@@ -5,7 +5,11 @@
       medio simulado, mismos pasos y mismas aserciones. Las ventanas de
       directo salen de @ace/shared (readSeekWindow, resolveLiveTarget).
    2. Los arreglos de la v2 (P1, P2 y P18), cada uno con el caso que fallaba
-      en la 0.6.59. */
+      en la 0.6.59.
+   3. C2 de la IPTV 0.8.2 (docs/diagnostico-iptv-0.8.2.md, P4b): la promesa de
+      play() vieja que dejaba el vídeo en pausa para siempre (caso E7 del
+      laboratorio), con el medio simulado TAL CUAL y con el que, como Chrome,
+      rechaza en pause() los play() pendientes. */
 
 import { readSeekWindow, resolveLiveTarget } from '@ace/shared';
 import { describe, expect, it } from 'vitest';
@@ -230,5 +234,88 @@ describe('controlador: arreglos de la v2', () => {
     expect(controller.snapshot().actuallyPlaying).toBe(true);
     expect(media.playCalls).toBe(0);
     expect((await controller.goLive({ target: 100, behind: 50 })).reason).toBe('demo');
+  });
+});
+
+describe('controlador: C2 (promesas de play() viejas, P4b)', () => {
+  /** Como Chrome: play() pone paused=false y la promesa se cumple con la imagen. */
+  function lateMedia(rejectOnPause: boolean) {
+    const media = new FakeMedia();
+    media.rejectOnPause = rejectOnPause;
+    const pending: Array<() => void> = [];
+    media.playImpl = () => new Promise<void>((resolve) => pending.push(resolve));
+    return { media, pending };
+  }
+
+  for (const rejectOnPause of [false, true]) {
+    it(`E7 · retener y soltar con un play() aún pendiente acaba SONANDO (pause() ${
+      rejectOnPause ? 'rechaza' : 'no rechaza'
+    } lo pendiente)`, async () => {
+      const { media, pending } = lateMedia(rejectOnPause);
+      const { controller } = controllerFor(media);
+      const first = controller.requestPlay('startup');
+      await controller.setHold('rebuffer', true);
+      const second = controller.setHold('rebuffer', false);
+      for (const resolve of pending.splice(0)) resolve();
+      await Promise.all([first, second]);
+      // Una tormenta de retener/soltar tampoco lo deja parado.
+      for (let i = 0; i < 3; i += 1) {
+        const again = controller.requestPlay('storm');
+        await controller.setHold('rebuffer', true);
+        const release = controller.setHold('rebuffer', false);
+        for (const resolve of pending.splice(0)) resolve();
+        await Promise.all([again, release]);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      const snapshot = controller.snapshot();
+      expect(media.paused).toBe(false);
+      expect(snapshot.desiredPlaying).toBe(true);
+      expect(snapshot.holds).toEqual([]);
+      expect(snapshot.phase).toBe('playing');
+    });
+  }
+
+  it('con cualquiera de los dos medios, la pausa de la persona sigue ganando a un play() viejo (T-127)', async () => {
+    for (const rejectOnPause of [false, true]) {
+      const { media, pending } = lateMedia(rejectOnPause);
+      const { controller } = controllerFor(media);
+      const first = controller.requestPlay('button');
+      controller.requestPause('button');
+      for (const resolve of pending.splice(0)) resolve();
+      expect((await first).ok).toBe(false);
+      expect(media.paused).toBe(true);
+      expect(controller.snapshot().desiredPlaying).toBe(false);
+    }
+  });
+
+  it('play() abortado por una pausa técnica ya pasada: se reintenta UNA vez en la siguiente tarea', async () => {
+    const media = new FakeMedia();
+    media.rejectOnPause = true;
+    let calls = 0;
+    const pending: Array<() => void> = [];
+    media.playImpl = () => {
+      calls += 1;
+      return calls === 1
+        ? new Promise<void>((resolve) => pending.push(resolve))
+        : Promise.resolve();
+    };
+    const { controller } = controllerFor(media);
+    const result = controller.requestPlay('startup');
+    // Pausa técnica (la de un cambio de motor): no es de la persona ni una retención.
+    controller.pauseMedia();
+    expect((await result).ok).toBe(true);
+    expect(media.playCalls).toBe(2);
+    expect(media.paused).toBe(false);
+  });
+
+  it('un bloqueo de autoplay nunca se reintenta solo', async () => {
+    const media = new FakeMedia();
+    media.rejectOnPause = true;
+    media.playImpl = () =>
+      Promise.reject(Object.assign(new Error('bloqueado'), { name: 'NotAllowedError' }));
+    const { controller } = controllerFor(media);
+    expect((await controller.requestPlay('startup')).reason).toBe('blocked');
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(media.playCalls).toBe(1);
   });
 });

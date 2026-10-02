@@ -37,6 +37,15 @@
      MOMENTO, sin las 3 reconexiones: el relé del servidor ya reintentó, y el
      puente de la sesión pasa a AceStream. Con el motor caído y la fuente de
      AceStream, se pregunta primero si hay una IPTV a la que pasar.
+   - IPTV 0.8.2 (docs/diagnostico-iptv-0.8.2.md, C2 y C3):
+     · un `waiting` de hls.js espera 1,5 s antes de retener (hls.js salta
+       solo los huecos si el vídeo sigue en marcha) y un hueco en el búfer se
+       salta en vez de retener; el vigilante reanuda un vídeo en pausa que
+       nadie ha pedido; DIRECTO durante una retención sí salta;
+     · un vídeo que no se puede decodificar se arregla en el sitio
+       (`recoverInPlace`) antes de reconectar; otra instancia de hls.js sobre
+       el mismo remux sigue en el segmento en el que iba; un reinicio del
+       remux sin costura (`seamless`) no reengancha nada.
 
    Nada aquí toca React: la interfaz lee el estado de `playerStore` (api.ts)
    y llama a los métodos públicos (toggle, goLive, back, …). */
@@ -86,26 +95,34 @@ import {
 } from './api.ts';
 import {
   ADVANCE_EPSILON_S,
+  BACK_LATENCY_MARGIN_S,
   BACK_SECONDS,
   BUFFER_CHECK_MS,
   BUFFER_FALLBACK_AFTER_MS,
   BUFFER_FALLBACK_S,
   CONNECT_LIMIT_TICKS,
+  DEFAULT_TARGET_DURATION_S,
   DEMO_STATS_MS,
   DOWNLOADING_KBPS,
   FROZEN_LIVE_PUSH_TICKS,
   FROZEN_REBUFFER_TICKS,
   FROZEN_RECONNECT_TICKS,
   GRACE_TICKS,
+  HLS_WAITING_GRACE_MS,
+  HOLE_SKIP_PAD_S,
+  HOLE_SKIP_TARGET_DURATIONS,
   INITIAL_MAX_WAIT_MS,
   LIVE_DISPLAY_S,
   LIVE_PUSH_MIN_BEHIND_S,
   LIVE_TOLERANCE_S,
   METER_MS,
   OUTCOME_KEEPALIVE_MS,
+  PAUSED_REPLAY_MAX,
+  PAUSED_REPLAY_TICKS,
   REBUFFER_MAX_WAIT_MS,
   REBUFFER_NOTICE_MS,
   RECONNECT_WINDOW_MS,
+  RESET_DEDUPE_MS,
   SEEK_TIMEOUT_MS,
   WATCHDOG_TICK_MS,
 } from './constants.ts';
@@ -121,6 +138,7 @@ import {
   type EngineLoader,
   type Platform,
 } from './engines/index.ts';
+import type { StreamPosition } from './engines/types.ts';
 import { derivePhase, isEngaged, nextState, type ConnEvent, type ConnState } from './machine.ts';
 
 /** Lo que el orquestador usa del <video> (el de verdad o uno falso en los tests). */
@@ -208,6 +226,45 @@ interface Connection {
   rebuffer: { startedAt: number; targetS: number } | null;
   firstFrameCleanup: (() => void) | null;
   profile: PlaybackProfile;
+  /** hls.js: la gracia de 1,5 s tras un `waiting` (una sola a la vez). */
+  waitingTimer: ReturnType<typeof setTimeout> | null;
+  /** Tics seguidos en pausa sin que nadie la haya pedido (red de seguridad, C2). */
+  pausedTicks: number;
+  /** play() del vigilante desde que el cabezal avanzó por última vez (tope PAUSED_REPLAY_MAX). */
+  pausedReplays: number;
+}
+
+function newConnection(id: number, recovery: boolean, profile: PlaybackProfile): Connection {
+  return {
+    id,
+    abort: new AbortController(),
+    engine: null,
+    engineKind: null,
+    recovery,
+    connTicks: 0,
+    stuckTicks: 0,
+    graceTicks: 0,
+    lastPos: 0,
+    bufferTimer: null,
+    watchdog: null,
+    rebuffer: null,
+    firstFrameCleanup: null,
+    profile,
+    waitingTimer: null,
+    pausedTicks: 0,
+    pausedReplays: 0,
+  };
+}
+
+/**
+ * Dónde iba hls.js en el remux de una sesión: la siguiente instancia sigue
+ * ahí y con las recuperaciones en el sitio que ya se gastaron (C3).
+ */
+interface CarriedPosition {
+  sessionId: string;
+  url: string;
+  position: StreamPosition | null;
+  inPlaceUsed: ReadonlyArray<{ at: number; position: number }>;
 }
 
 interface SessionInfo {
@@ -262,6 +319,35 @@ export function bufferAhead(media: { currentTime: number; buffered: TimeRangesLi
     if (ranges.length && t < ranges.start(0)) return Math.max(0, ranges.end(0) - ranges.start(0));
   } catch {}
   return 0;
+}
+
+/**
+ * Hueco en el búfer (C2): el cabezal está al final de lo que tiene cargado
+ * (menos de 0,5 s por delante) y el rango siguiente empieza a `maxGap` s o
+ * menos. Devuelve dónde empieza ese rango, o null si no hay hueco que saltar.
+ * Un rango que empieza por delante del cabezal no lo contiene, aunque sea a
+ * 0,1 s: el <video> no cruza huecos solo, y en pausa (retenido) hls.js
+ * tampoco los salta (lab ts-silencio: 57,984 → 58,08 y 22 s retenido).
+ */
+export function nextBufferedStart(
+  media: { currentTime: number; buffered: TimeRangesLike },
+  maxGap: number,
+): number | null {
+  const ranges = media.buffered;
+  const t = media.currentTime;
+  if (!Number.isFinite(t) || !(maxGap > 0)) return null;
+  try {
+    for (let i = 0; i < ranges.length; i += 1) {
+      const start = ranges.start(i);
+      const end = ranges.end(i);
+      if (t >= start - 0.01 && t <= end && end - t > 0.5) return null;
+    }
+    for (let i = 0; i < ranges.length; i += 1) {
+      const start = ranges.start(i);
+      if (start > t + 0.01 && start - t <= maxGap) return start;
+    }
+  } catch {}
+  return null;
 }
 
 /** Sin `seekable`, el último rango cargado (index.html:5012-5019). */
@@ -328,6 +414,10 @@ export class PlayerRuntime {
   private waitingForEngine = false;
   /** Últimas estadísticas del motor (SSE `stream.stats`): el vigilante mira la bajada. */
   private lastStats: PlayerStats | null = null;
+  /** Posición en el remux de la última instancia de hls.js (C3). */
+  private carry: CarriedPosition | null = null;
+  /** Último reenganche por una lista que volvió a empezar (para no repetirlo con el SSE). */
+  private listResetAt = 0;
   private lastPublished: Partial<PlayerState> = {};
   private readonly cleanups: Array<() => void> = [];
   private destroyed = false;
@@ -414,6 +504,7 @@ export class PlayerRuntime {
     }
     this.endSource(current?.failed ? null : 'cambio de canal');
     this.clearReconnect();
+    this.carry = null;
     this.source = {
       channel,
       origin: options.origin ?? 'user',
@@ -470,6 +561,7 @@ export class PlayerRuntime {
     this.controller.reset();
     this.resetVideo();
     this.source = null;
+    this.carry = null;
     this.waitingForEngine = false;
     this.transition('detener');
     this.setState({
@@ -512,7 +604,9 @@ export class PlayerRuntime {
     if (this.connection?.engineKind === 'native' || this.demo()) return;
     this.log(`Modo ${mode}: se reengancha el canal con el perfil nuevo`);
     this.clearReconnect();
-    // El modo solo cambia la configuración del motor: la misma sesión del backend sirve.
+    /* El modo solo cambia la configuración del motor: la misma sesión del
+       backend sirve. Con hls.js sobre el remux, la instancia nueva sigue en el
+       segmento en el que iba la vieja (C3: la posición la guarda endConnection). */
     this.connect({ recovery: true, freshSession: false });
   }
 
@@ -589,6 +683,31 @@ export class PlayerRuntime {
       return result;
     }
     const before = this.measureLive();
+    const connection = this.connection;
+    /* C2: DIRECTO en plena retención. Si hay retraso de verdad o un hueco
+       delante, se suelta la retención y se salta (más allá del hueco si
+       hace falta). En el borde y sin hueco manda T-133: no se reinicia el
+       ciclo y se dice que se está recuperando la imagen. */
+    if (connection?.rebuffer) {
+      const hole = this.holeAhead(connection);
+      if ((before && before.behind > LIVE_TOLERANCE_S) || hole !== null) {
+        this.endRebuffer(connection, false);
+        const target = Math.max(
+          before?.target ?? Number.NEGATIVE_INFINITY,
+          hole !== null ? hole + HOLE_SKIP_PAD_S : Number.NEGATIVE_INFINITY,
+        );
+        const jumped = await this.controller.seekTo(target, {
+          playAfter: true,
+          origin: 'live',
+          timeoutMs: SEEK_TIMEOUT_MS,
+        });
+        if (['inactive', 'cancelled', 'superseded'].includes(jumped.reason)) return jumped;
+        this.publish();
+        if (jumped.ok)
+          this.notify('De vuelta al directo', { kind: 'signal', tone: 'ok', icon: 'directo' });
+        return jumped;
+      }
+    }
     const wasPlaying = this.controller.snapshot().actuallyPlaying;
     const result = await this.controller.goLive(() => {
       const now = this.measureLive();
@@ -596,9 +715,14 @@ export class PlayerRuntime {
     });
     if (['inactive', 'cancelled', 'superseded'].includes(result.reason)) return result;
     this.publish();
-    const atEdge = !before || before.behind <= LIVE_TOLERANCE_S || result.reason === 'held';
+    if (result.reason === 'held') {
+      // En el borde y reteniendo: «Ya estabas» sonaba a que no pasaba nada.
+      this.notify('Recuperando la imagen…', { kind: 'signal', icon: 'directo' });
+      return result;
+    }
+    const atEdge = !before || before.behind <= LIVE_TOLERANCE_S;
     if (atEdge) {
-      if (wasPlaying || result.reason === 'already-playing' || result.reason === 'held')
+      if (wasPlaying || result.reason === 'already-playing')
         this.notify('Ya estabas en el directo', { kind: 'signal', icon: 'directo' });
       else if (result.ok)
         this.notify('Directo reanudado', { kind: 'signal', tone: 'ok', icon: 'directo' });
@@ -633,7 +757,19 @@ export class PlayerRuntime {
       return { ok: false, reason: 'no-window' };
     }
     const now = Number.isFinite(media.currentTime) ? media.currentTime : window.end;
-    const destination = Math.max(window.start, now - seconds);
+    /* C2: con hls.js, no más atrás de lo que la lista deja quedarse
+       (borde − maxLatency + 3 s, y el primer segmento + TARGETDURATION): más
+       atrás, hls.js volvía solo al directo en la siguiente lista. El aviso
+       dice los segundos de verdad. */
+    const list = this.connection?.engine?.liveWindow?.() ?? null;
+    const floor = list
+      ? Math.max(
+          window.start,
+          list.start + list.targetDuration,
+          list.end - list.maxLatency + BACK_LATENCY_MARGIN_S,
+        )
+      : window.start;
+    const destination = Math.max(floor, now - seconds);
     const real = now - destination;
     if (real < 1) {
       this.notify('No hay más imagen guardada hacia atrás', {
@@ -696,22 +832,7 @@ export class PlayerRuntime {
     if (!source || this.destroyed) return;
     this.endConnection();
     const profile = PLAYBACK_PROFILES[this.mode()];
-    const connection: Connection = {
-      id: ++this.connectionSeq,
-      abort: new AbortController(),
-      engine: null,
-      engineKind: null,
-      recovery,
-      connTicks: 0,
-      stuckTicks: 0,
-      graceTicks: 0,
-      lastPos: 0,
-      bufferTimer: null,
-      watchdog: null,
-      rebuffer: null,
-      firstFrameCleanup: null,
-      profile,
-    };
+    const connection = newConnection(++this.connectionSeq, recovery, profile);
     this.connection = connection;
     this.transition(this.conn === 'reconectando' ? 'reintentar' : 'solicitar');
     this.controller.setSession(this.controllerKey());
@@ -874,6 +995,11 @@ export class PlayerRuntime {
     const profile = grant ? PLAYBACK_PROFILES[grant.latency.mode] : connection.profile;
     connection.profile = profile;
     const demoFails = kind === 'demo' && /ca[ií]d/i.test(this.source?.channel.title ?? '');
+    // No se borra aquí: si esta instancia no llega a saber dónde va, la siguiente usa la misma.
+    const carried = kind === 'hls' ? this.takeCarry(url) : null;
+    const startFrom = carried?.position ?? null;
+    const inPlaceUsed = carried?.inPlaceUsed.length ? carried.inPlaceUsed : null;
+    const guardSequence = kind === 'hls' && this.isIptvSource();
     this.loadEngine(kind)
       .then((factory) => {
         if (!this.isCurrent(connection)) return;
@@ -882,6 +1008,9 @@ export class PlayerRuntime {
           url,
           profile,
           demoFails,
+          ...(startFrom ? { startFrom } : {}),
+          ...(inPlaceUsed ? { inPlaceUsed } : {}),
+          ...(guardSequence ? { guardSequence } : {}),
           callbacks: {
             onReady: () => {
               if (this.isCurrent(connection)) this.onEngineReady(connection);
@@ -892,6 +1021,9 @@ export class PlayerRuntime {
             onNotice: (text) => {
               if (this.isCurrent(connection))
                 this.notify(text, { kind: 'signal', tone: 'warn', icon: 'refresh' });
+            },
+            onReset: (reason) => {
+              if (this.isCurrent(connection)) this.onListReset(reason);
             },
           },
         });
@@ -917,6 +1049,18 @@ export class PlayerRuntime {
           detail: String(error),
         });
       });
+  }
+
+  /**
+   * La posición que dejó la instancia anterior de hls.js, si es de la MISMA
+   * sesión del remux y la misma URL (C3). hls.js la usa solo si ese
+   * segmento sigue en la lista nueva.
+   */
+  private takeCarry(url: string): CarriedPosition | null {
+    const carry = this.carry;
+    const session = this.session;
+    if (!carry || !session?.remux) return null;
+    return carry.sessionId === session.id && carry.url === url ? carry : null;
   }
 
   private onEngineReady(connection: Connection): void {
@@ -1032,6 +1176,8 @@ export class PlayerRuntime {
       maxWait: number;
       onReady: () => void;
       onTimeout: () => void;
+      /** En un rebuffer: lo cargado sigue tras un hueco pequeño (empieza en `start`). */
+      onHole?: (start: number) => void;
     },
   ): void {
     if (connection.bufferTimer) clearInterval(connection.bufferTimer);
@@ -1039,6 +1185,17 @@ export class PlayerRuntime {
     const check = () => {
       if (!this.isCurrent(connection)) {
         if (connection.bufferTimer) clearInterval(connection.bufferTimer);
+        return;
+      }
+      /* Lo que llega durante la retención puede empezar tras un hueco (el
+         remux reiniciado sin cortar sigue ~0,1 s más allá, lab ts-silencio):
+         `bufferAhead` solo cuenta el rango del cabezal y se quedaba en «0 de
+         8 s» hasta que hls.js saltaba solo +11 s al directo. */
+      const hole = options.onHole ? this.holeAhead(connection) : null;
+      if (hole !== null) {
+        if (connection.bufferTimer) clearInterval(connection.bufferTimer);
+        connection.bufferTimer = null;
+        options.onHole?.(hole);
         return;
       }
       const ahead = bufferAhead(this.video);
@@ -1057,7 +1214,10 @@ export class PlayerRuntime {
       }
     };
     connection.bufferTimer = setInterval(check, BUFFER_CHECK_MS);
-    check();
+    /* Solo el arranque mira al momento. En un rebuffer, mirar en el mismo
+       evento soltaba la retención con lo justo y el siguiente `waiting` la
+       volvía a poner: una tormenta de retener/soltar (C2). */
+    if (options.initial) check();
   }
 
   // ---- Vigilante ---------------------------------------------------------------
@@ -1089,8 +1249,11 @@ export class PlayerRuntime {
     if (media.paused || connection.rebuffer) {
       connection.stuckTicks = 0;
       connection.lastPos = media.currentTime;
+      this.replayIfStuckPaused(connection);
       return;
     }
+    connection.pausedTicks = 0;
+    connection.pausedReplays = 0;
     if (connection.graceTicks > 0) {
       connection.graceTicks -= 1;
       connection.lastPos = media.currentTime;
@@ -1111,6 +1274,43 @@ export class PlayerRuntime {
     if (native && connection.stuckTicks === FROZEN_LIVE_PUSH_TICKS) this.pushToLive();
     const limit = native ? FROZEN_RECONNECT_TICKS.native : FROZEN_RECONNECT_TICKS.normal;
     if (connection.stuckTicks >= limit) this.fail('La imagen se ha quedado parada: reconectando');
+  }
+
+  /**
+   * Red de seguridad (C2): en pausa con la persona queriendo que suene, sin
+   * retención, sin bloqueo del navegador, sin play() en vuelo y sin salto
+   * pendiente durante 2 tics → play(). Con el autoplay bloqueado no entra
+   * (`blocked`), así que nunca hace bucle sin un gesto de la persona. Un
+   * play() que falla de verdad (no un AbortError) tampoco; y como mucho
+   * PAUSED_REPLAY_MAX seguidos sin que el vídeo llegue a sonar.
+   */
+  private replayIfStuckPaused(connection: Connection): void {
+    const state = this.controller.snapshot();
+    const stuck =
+      this.video.paused &&
+      !connection.rebuffer &&
+      state.active &&
+      state.desiredPlaying &&
+      !state.held &&
+      !state.blocked &&
+      !state.busy &&
+      !state.seeking &&
+      // Un error del <video> sí deja reintentar (lo arregla recoverInPlace); uno de play(), no.
+      (!state.error || state.error === 'media-error');
+    if (!stuck || connection.pausedReplays >= PAUSED_REPLAY_MAX) {
+      connection.pausedTicks = 0;
+      return;
+    }
+    connection.pausedTicks += 1;
+    if (connection.pausedTicks < PAUSED_REPLAY_TICKS) return;
+    connection.pausedTicks = 0;
+    connection.pausedReplays += 1;
+    if (connection.pausedReplays === PAUSED_REPLAY_MAX)
+      this.log(
+        `En pausa sin que nadie lo pidiera: último play() del vigilante (${PAUSED_REPLAY_MAX})`,
+      );
+    else this.log('En pausa sin que nadie lo pidiera: se vuelve a reproducir');
+    void this.controller.requestPlay('watchdog');
   }
 
   /**
@@ -1150,6 +1350,11 @@ export class PlayerRuntime {
       this.controller.state.seeking
     )
       return;
+    const hole = this.holeAhead(connection);
+    if (hole !== null) {
+      this.skipHole(connection, hole);
+      return;
+    }
     const target = connection.profile.rebuild;
     connection.rebuffer = { startedAt: Date.now(), targetS: target };
     connection.stuckTicks = 0;
@@ -1177,6 +1382,29 @@ export class PlayerRuntime {
         this.endRebuffer(connection, false);
         this.fail('La señal no se recupera: reconectando');
       },
+      onHole: (start) => {
+        this.endRebuffer(connection, false);
+        this.skipHole(connection, start);
+      },
+    });
+  }
+
+  /** Dónde empieza lo cargado tras un hueco pequeño delante del cabezal (C2), o null. */
+  private holeAhead(connection: Connection): number | null {
+    const targetDuration =
+      connection.engine?.liveWindow?.()?.targetDuration || DEFAULT_TARGET_DURATION_S;
+    return nextBufferedStart(this.video, HOLE_SKIP_TARGET_DURATIONS * targetDuration);
+  }
+
+  /** Salta el hueco con el controlador (así `seeking` se sabe y nadie lo toma por pausa). */
+  private skipHole(connection: Connection, start: number): void {
+    const from = this.video.currentTime;
+    this.log(`Hueco en el búfer: de ${from.toFixed(2)} a ${start.toFixed(2)} s, se salta`);
+    connection.stuckTicks = 0;
+    void this.controller.seekTo(start + HOLE_SKIP_PAD_S, {
+      origin: 'hueco',
+      followLive: this.controller.state.followingLiveEdge,
+      timeoutMs: SEEK_TIMEOUT_MS,
     });
   }
 
@@ -1184,6 +1412,9 @@ export class PlayerRuntime {
     const rebuffer = connection.rebuffer;
     if (!rebuffer) return;
     connection.rebuffer = null;
+    // La espera del colchón es de ESTA retención: si acaba antes (DIRECTO, fallo), se quita.
+    if (connection.bufferTimer) clearInterval(connection.bufferTimer);
+    connection.bufferTimer = null;
     if (this.source) this.source.metrics.rebufferMs += Date.now() - rebuffer.startedAt;
     this.setState({ rebuffering: null });
     void this.controller.setHold('rebuffer', false, { resume });
@@ -1302,9 +1533,12 @@ export class PlayerRuntime {
     const connection = this.connection;
     if (!connection) return;
     this.connection = null;
+    this.rememberPosition(connection);
     connection.abort.abort(new DOMException('Conexión sustituida', 'AbortError'));
     if (connection.bufferTimer) clearInterval(connection.bufferTimer);
     if (connection.watchdog) clearInterval(connection.watchdog);
+    if (connection.waitingTimer) clearTimeout(connection.waitingTimer);
+    connection.waitingTimer = null;
     connection.firstFrameCleanup?.();
     if (connection.rebuffer) {
       connection.rebuffer = null;
@@ -1319,6 +1553,27 @@ export class PlayerRuntime {
     this.stopDemoStats();
   }
 
+  /**
+   * Antes de destruir hls.js sobre un remux: en qué segmento iba y qué
+   * recuperaciones en el sitio gastó (C3). Si acabó porque el vídeo no se
+   * podía decodificar, el motor ya da el segmento de DESPUÉS del roto.
+   */
+  private rememberPosition(connection: Connection): void {
+    const session = this.session;
+    if (connection.engineKind !== 'hls' || !session?.remux) return;
+    let position: StreamPosition | null = null;
+    let inPlaceUsed: ReadonlyArray<{ at: number; position: number }> = [];
+    try {
+      position = connection.engine?.position?.() ?? null;
+      inPlaceUsed = connection.engine?.inPlaceUsed?.() ?? [];
+    } catch {}
+    const previous = this.takeCarry(session.url);
+    // Sin posición (el motor no llegó a cargar nada) se conserva la de antes.
+    const kept = position ?? previous?.position ?? null;
+    if (kept || inPlaceUsed.length)
+      this.carry = { sessionId: session.id, url: session.url, position: kept, inPlaceUsed };
+  }
+
   private resetVideo(): void {
     const media = this.video;
     try {
@@ -1331,30 +1586,18 @@ export class PlayerRuntime {
   }
 
   /** Cambiar de motor sin cortar la reproducción (D5 o motor reabierto): no cuenta como reconexión. */
-  private reattach(url: string, protocol: StreamProtocol, notice: string): void {
+  private reattach(url: string, protocol: StreamProtocol, notice: string): boolean {
     const source = this.source;
     const session = this.session;
     // Solo con un motor enganchado (con la URL aún en camino, el backend ya da la nueva).
-    if (!source || !session || !nextState(this.conn, 'reenganche')) return;
+    if (!source || !session || !nextState(this.conn, 'reenganche')) return false;
+    this.endConnection();
+    /* Un reenganche es otra lista (otro protocolo, o un remux que volvió a
+       empezar sin costura): los números de segmento de antes no valen (C3). */
+    this.carry = null;
     session.url = url;
     session.protocol = protocol;
-    this.endConnection();
-    const connection: Connection = {
-      id: ++this.connectionSeq,
-      abort: new AbortController(),
-      engine: null,
-      engineKind: null,
-      recovery: true,
-      connTicks: 0,
-      stuckTicks: 0,
-      graceTicks: 0,
-      lastPos: 0,
-      bufferTimer: null,
-      watchdog: null,
-      rebuffer: null,
-      firstFrameCleanup: null,
-      profile: PLAYBACK_PROFILES[this.mode()],
-    };
+    const connection = newConnection(++this.connectionSeq, true, PLAYBACK_PROFILES[this.mode()]);
     this.connection = connection;
     this.transition('reenganche');
     this.controller.setSession(this.controllerKey());
@@ -1362,6 +1605,7 @@ export class PlayerRuntime {
     this.setState({ protocol, message: notice });
     this.notify(notice, { kind: 'signal', icon: 'refresh' });
     this.attachEngine(connection, chooseEngine(protocol, this.platform), url, null);
+    return true;
   }
 
   // ---- Sesión: latido y soltar -----------------------------------------------------
@@ -1508,6 +1752,29 @@ export class PlayerRuntime {
 
   private onReopened(data: SseEventData<'stream.reopened'>): void {
     if (!this.ours(data)) return;
+    const session = this.session;
+    const sameUrl = session !== null && session.url === data.url;
+    /* C3: el servidor reinició el remux de la IPTV SIN cortar la lista
+       (numeración continua, init nuevo y discontinuidad): hls.js pasa la
+       costura solo. Reenganchar era ~2,3 s de negro y volver atrás. El
+       `retargetRemux` de AceStream (mismo `reason`, sin `seamless`) sigue
+       reenganchando. */
+    if (
+      data.reason === 'remux_restart' &&
+      data.seamless === true &&
+      this.isIptvSource() &&
+      this.connection?.engineKind === 'hls' &&
+      sameUrl
+    ) {
+      this.log('Remux reiniciado sin cortar la lista: hls.js sigue solo');
+      this.notify('Tu IPTV se ha reconectado sin cortar la imagen', {
+        kind: 'signal',
+        icon: 'refresh',
+      });
+      return;
+    }
+    // Ya se reenganchó porque la lista volvió a empezar (lo vio hls.js antes que el SSE).
+    if (sameUrl && Date.now() - this.listResetAt < RESET_DEDUPE_MS) return;
     // IPTV: el relé reconectó con otra base de tiempos (§6.1) y el servidor
     // reinició el remux en la misma sesión: se reengancha sin contarlo como fallo.
     this.reattach(
@@ -1519,6 +1786,33 @@ export class PlayerRuntime {
           : 'La conversión para iPhone se ha reiniciado: reenganchando…'
         : 'El motor se ha reiniciado: reenganchando la señal…',
     );
+  }
+
+  /**
+   * Defensa ante un servidor de antes (C3): la lista del remux volvió a
+   * empezar desde 0 y hls.js ya ha dejado de cargar. Se reengancha como con
+   * `stream.reopened` (y el SSE que llegue detrás no lo repite).
+   */
+  private onListReset(reason: string): void {
+    const session = this.session;
+    if (!session) return;
+    this.log(reason);
+    const reattached = this.reattach(
+      session.url,
+      session.protocol,
+      this.isIptvSource()
+        ? 'Tu IPTV se ha reconectado: reenganchando la señal…'
+        : 'La conversión para iPhone se ha reiniciado: reenganchando…',
+    );
+    if (reattached) {
+      this.listResetAt = Date.now();
+      return;
+    }
+    /* Sin reenganche posible (un estado sin motor enganchado) hls.js ya ha
+       dejado de cargar: se reconecta ya en vez de esperar al vigilante, y el
+       SSE que llegue detrás no se descarta. */
+    this.fail('La señal se ha cortado: reconectando', { detail: reason });
+    this.carry = null;
   }
 
   private onStats(data: SseEventData<'stream.stats'>): void {
@@ -1599,8 +1893,11 @@ export class PlayerRuntime {
       media.addEventListener(name, handler);
       this.cleanups.push(() => media.removeEventListener(name, handler));
     };
-    on('waiting', () => {
-      if (this.connection && this.conn === 'activa') this.startRebuffer(this.connection);
+    on('waiting', () => this.onWaiting());
+    on('playing', () => {
+      const connection = this.connection;
+      if (connection?.waitingTimer) clearTimeout(connection.waitingTimer);
+      if (connection) connection.waitingTimer = null;
     });
     const broken = () => {
       if (!this.connection) return;
@@ -1612,13 +1909,71 @@ export class PlayerRuntime {
       )
         this.fail('La señal se ha cortado: reconectando', { detail: 'evento del vídeo' });
     };
-    on('error', broken);
+    on('error', () => {
+      if (!this.recoverMediaInPlace()) broken();
+    });
     on('ended', broken);
     on('timeupdate', () => {
       const session = this.session;
       if (session && Date.now() - session.lastBeatAt >= session.heartbeatMs) this.beat();
     });
     on('volumechange', () => this.setState({ muted: media.muted, volume: media.volume }));
+  }
+
+  /**
+   * `waiting` (C2): con el vídeo en pausa (la propia retención, la persona)
+   * o con datos de sobra no es un parón. mpegts.js retiene al momento;
+   * hls.js tiene 1,5 s para arreglarlo él (saltar un hueco, empujar) y solo
+   * si el cabezal no se ha movido se retiene. La rueda de «cargando» sale ya
+   * (el controlador pone `waiting`), sin pausar.
+   */
+  private onWaiting(): void {
+    const connection = this.connection;
+    const media = this.video;
+    if (!connection || this.conn !== 'activa') return;
+    if (media.paused || media.readyState >= 3) return;
+    if (connection.engineKind !== 'hls') {
+      this.startRebuffer(connection);
+      return;
+    }
+    if (connection.waitingTimer) return;
+    const at = media.currentTime;
+    connection.waitingTimer = setTimeout(() => {
+      connection.waitingTimer = null;
+      if (!this.isCurrent(connection) || this.conn !== 'activa') return;
+      if (media.paused || media.seeking) return;
+      if (Math.abs(media.currentTime - at) < 0.05) this.startRebuffer(connection);
+    }, HLS_WAITING_GRACE_MS);
+  }
+
+  /**
+   * Error del <video> con hls.js (C3, P1 web): un trozo que no se puede
+   * decodificar se salta en el sitio antes de reconectar. Reconectar
+   * arrancaba 5 segmentos atrás, volvía a caer en el mismo trozo y a la
+   * tercera se perdía la IPTV. Con el presupuesto gastado, `fail()`.
+   */
+  private recoverMediaInPlace(): boolean {
+    const connection = this.connection;
+    const engine = connection?.engine;
+    if (!connection || connection.engineKind !== 'hls' || !engine?.recoverInPlace) return false;
+    if (this.conn !== 'activa' && this.conn !== 'arrancando' && this.conn !== 'precarga')
+      return false;
+    let recovered = false;
+    try {
+      recovered = engine.recoverInPlace();
+    } catch {}
+    if (!recovered) return false;
+    this.log('Vídeo que no se puede decodificar: hls.js sigue en el segmento siguiente');
+    connection.stuckTicks = 0;
+    connection.graceTicks = GRACE_TICKS;
+    this.notify('La imagen llegó dañada: saltando ese trozo…', {
+      kind: 'signal',
+      tone: 'warn',
+      icon: 'refresh',
+    });
+    if (this.conn === 'activa' && this.controller.state.desiredPlaying)
+      void this.controller.requestPlay('recover');
+    return true;
   }
 
   private listenLifecycle(win: Window, doc: Document): void {

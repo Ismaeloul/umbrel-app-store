@@ -887,6 +887,9 @@ describe('IPTV de punta a punta (docs/iptv.md §9.2)', () => {
       5_000,
     );
     expect(r.h.bus.of('stream.reopened').at(-1)?.sessionId).toBe(grant.session.id);
+    /* Reinicio continuo (diagnostico-iptv-0.8.2 B2): misma lista, numeración seguida e init nuevo. */
+    expect(r.h.bus.of('stream.reopened').at(-1)?.seamless).toBe(true);
+    expect(r.launcher.all.at(-1)?.args).toContain('init_2.mp4');
     /* Caído del todo (todas las variantes) → cierre con iptv_dropped, nunca remux_died. */
     r.provider.modo('*', 'down');
     await until('upstream suelto', () => r.provider.conexiones() === 0, 5_000);

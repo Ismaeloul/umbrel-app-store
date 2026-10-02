@@ -697,7 +697,9 @@ Topes en cascada: servidor 45 s, cliente 55 s (`index.html:4711`), nginx 60 s
     `server.js:291-305`).
   - Audio `aac 160k` estéreo con
     `aresample=async=1000:min_hard_comp=0.100:first_pts=0`
-    (`server.js:278-290`, `server.js:306-307`).
+    (`server.js:278-290`, `server.js:306-307`). La v2 quita `first_pts=0`
+    desde la 0.8.3: rellenaba de silencio desde 0 en cada reconstrucción del
+    grafo de audio (diagnostico-iptv-0.8.2 P8).
   - Salida HLS fMP4: `-hls_time 2`, `-hls_list_size 15` (ventana de 30 s),
     `-hls_delete_threshold 2`,
     `-hls_flags delete_segments+independent_segments+temp_file+omit_endlist`,

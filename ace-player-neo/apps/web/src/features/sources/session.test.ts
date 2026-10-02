@@ -27,8 +27,10 @@ import {
   getSession,
   leaveSession,
   reportSource,
+  RESOLVE_ERROR_TEXT,
   research,
   resetSessionForTests,
+  retryResolve,
   selectSource,
   stepSource,
 } from './session.ts';
@@ -146,7 +148,7 @@ describe('entrar al partido', () => {
     expect(net.calls).toHaveLength(0);
   });
 
-  it('varias coincidencias o ninguna: «Encontrar canal»; sin red, como no encontrado y sin buscador', async () => {
+  it('varias coincidencias o ninguna: «Encontrar canal»', async () => {
     install({
       'GET /api/v1/football/resolve': () =>
         json(resolution(2, { status: 'choices', candidate: null, scan: null })),
@@ -155,13 +157,48 @@ describe('entrar al partido', () => {
     await flush();
     expect(getSession()).toMatchObject({ phase: 'choices', resolverOpen: true });
     expect(getPlayer().channel).toBeNull();
+  });
 
-    endSession();
+  it('M3 · sin red: un error con «Reintentar», no un «no encontrado» inventado; reintentar resuelve', async () => {
     install({ 'GET /api/v1/football/resolve': () => Promise.reject(new TypeError('sin red')) });
     enterMatch(testMatch({ id: 'm2' }));
     await flush();
+    expect(getSession()).toMatchObject({ phase: 'error', resolverOpen: false, resolution: null });
+    const notice = toastStore.get().find((t) => t.text === RESOLVE_ERROR_TEXT);
+    expect(notice?.action?.label).toBe('Reintentar');
+    install();
+    notice?.action?.onAction();
+    await flush();
+    expect(getSession().phase).toBe('ready');
+    expect(calls('/api/v1/football/resolve')).toHaveLength(1);
+    // Fuera del estado de error, «Reintentar» no hace nada.
+    retryResolve();
+    await flush();
+    expect(calls('/api/v1/football/resolve')).toHaveLength(1);
+  });
+
+  it('M3 · el servidor no contesta en 20 s: el mismo error con «Reintentar»', async () => {
+    install({
+      'GET /api/v1/football/resolve': (call: MockCall) =>
+        new Promise<Response>((_, reject) =>
+          call.signal?.addEventListener('abort', () => reject(call.signal?.reason)),
+        ),
+    });
+    enterMatch(testMatch({ id: 'm3' }));
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(getSession()).toMatchObject({ phase: 'error', resolverOpen: false });
+    expect(toasts()).toContain(RESOLVE_ERROR_TEXT);
+  });
+
+  it('un 4xx sigue siendo «no encontrado» con «Encontrar canal»', async () => {
+    install({
+      'GET /api/v1/football/resolve': () =>
+        json({ error: { code: 'channel_required', message: 'No', requestId: 'r' } }, 400),
+    });
+    enterMatch(testMatch({ id: 'm4' }));
+    await flush();
     expect(getSession()).toMatchObject({ phase: 'not_found', resolverOpen: true });
-    expect(getSession().resolution?.engineAvailable).toBe(false);
+    expect(getSession().resolution?.checked).toEqual(['saved', 'm3u', 'library', 'acestream']);
   });
 
   it('volver al mismo partido mientras suena no vuelve a resolver', async () => {

@@ -223,7 +223,10 @@ export type PlaybackStatus = z.infer<typeof PlaybackStatusSchema>;
  */
 export const VideoParamsSchema = z.strictObject({
   sid: SessionIdSchema,
-  file: z.string().regex(/^(?:index\.m3u8|init\.mp4|index\d{1,9}\.m4s)$/, 'fichero del remux'),
+  /* `init_<n>.mp4`: el init de cada reinicio continuo de la IPTV (diagnostico-iptv-0.8.2 B2). */
+  file: z
+    .string()
+    .regex(/^(?:index\.m3u8|init(?:_\d{1,6})?\.mp4|index\d{1,9}\.m4s)$/, 'fichero del remux'),
 });
 export const VideoQuerySchema = z.strictObject({
   /**

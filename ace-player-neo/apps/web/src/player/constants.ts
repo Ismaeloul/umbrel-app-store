@@ -26,6 +26,31 @@ export const GRACE_TICKS = 4;
 /** Lo que tiene que avanzar el cabezal para contar como «avanza». */
 export const ADVANCE_EPSILON_S = 0.2;
 
+/**
+ * hls.js: un `waiting` no retiene al momento (C2, P4). hls.js salta él solo
+ * los huecos pequeños y empuja el cabezal, pero solo con el vídeo en marcha:
+ * pausarlo en el mismo evento se lo impedía. Si en 1,5 s el cabezal no se ha
+ * movido, entonces sí se retiene. mpegts.js sigue reteniendo al momento.
+ */
+export const HLS_WAITING_GRACE_MS = 1500;
+/**
+ * Hueco en el búfer: si el siguiente rango cargado empieza a menos de
+ * 2 × TARGETDURATION del cabezal, se salta en vez de retener (la retención
+ * no se soltaba nunca: el colchón solo cuenta el rango del cabezal).
+ */
+export const HOLE_SKIP_TARGET_DURATIONS = 2;
+/** TARGETDURATION que se supone sin lista (el segmento normal del remux). */
+export const DEFAULT_TARGET_DURATION_S = 2;
+/** Lo que se salta de más al pasar un hueco (para caer dentro del rango siguiente). */
+export const HOLE_SKIP_PAD_S = 0.1;
+/**
+ * Red de seguridad del vigilante (C2): en pausa sin que nadie lo haya
+ * pedido (sin retención, sin bloqueo, sin play() en vuelo) 2 tics → play().
+ */
+export const PAUSED_REPLAY_TICKS = 2;
+/** Como mucho 3 de esos play() mientras el cabezal no avanza: un play() que siempre falla no hace bucle. */
+export const PAUSED_REPLAY_MAX = 3;
+
 /** Colchón: se mira cada 250 ms (index.html:4390). */
 export const BUFFER_CHECK_MS = 250;
 /** Pasados 20 s basta con 1,5 s (arranque) o 2 s (rebuffer). */
@@ -68,6 +93,14 @@ export const CLICK_DELAY_MS = 190;
 
 /** Retroceso de la tecla J y del botón −30. */
 export const BACK_SECONDS = 30;
+/**
+ * −30 con hls.js (C2): no más atrás que borde − maxLatency + 3 s ni que el
+ * primer segmento + TARGETDURATION. Más atrás, hls.js lo deshacía solo en
+ * la siguiente lista (saltaba al directo) y el aviso mentía.
+ */
+export const BACK_LATENCY_MARGIN_S = 3;
+/** Un DIRECTO y un reinicio del motor de la lista (SSE) juntos cuentan como uno (C3). */
+export const RESET_DEDUPE_MS = 10_000;
 /** Plazo de los saltos (directo y −30) a que llegue `seeked`. */
 export const SEEK_TIMEOUT_MS = 2200;
 

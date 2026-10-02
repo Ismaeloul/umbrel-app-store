@@ -2,13 +2,14 @@
    B-216): la forma exacta de la 0.6.59 y los errores de cada formato. */
 
 import { describe, expect, it, vi } from 'vitest';
-import { SearchResponseSchema } from '@ace/shared';
+import { SearchResponseSchema, type SearchResult } from '@ace/shared';
 import { createTestApp, createTestCore, web } from '../../../test/helpers/index.js';
 import { AppError } from '../../core/errors.js';
 import type { EngineService } from '../engine/types.js';
 import type { IptvService } from '../iptv/types.js';
 import type { ScannerService } from '../scanner/types.js';
 import { createSearchService } from './index.js';
+import { rankForQuery } from './routes.js';
 
 const ID_A = 'a'.repeat(40);
 const BODY = JSON.stringify({ result: [{ content_id: ID_A, name: 'DAZN 1', availability: 1 }] });
@@ -150,5 +151,68 @@ describe('SearchResult.iptv (docs/iptv.md §14.3)', () => {
       headers: web(),
     });
     expect(JSON.stringify(v1.json())).not.toContain('iptv');
+  });
+});
+
+describe('orden por parecido en v1 (diagnóstico 0.8.2, E2)', () => {
+  const result = (n: number, title: string, availability: number | null): SearchResult => ({
+    id: String(n).repeat(40),
+    title,
+    category: 'Busqueda',
+    availability,
+    bitrate: null,
+    ih: true,
+  });
+  const LIGA = [
+    result(1, 'LaLiga Hypermotion 2 --> ELCANO', 1),
+    result(2, 'DAZN 2', 0.95),
+    result(3, 'Movistar LaLiga TV 2 --> NEW ERA', 0.8),
+    result(4, 'LaLiga TV 2', 0.5),
+    result(5, 'Liga Endesa 2', 0.4),
+    result(6, 'M+ LaLiga TV 2 HD', 0),
+  ];
+
+  it('igual → familia → empieza → todas las palabras → el resto; disponibilidad 0 al final de su nivel', () => {
+    expect(rankForQuery(LIGA, 'laliga tv 2').map((item) => item.title)).toEqual([
+      'LaLiga TV 2',
+      'Movistar LaLiga TV 2 --> NEW ERA',
+      'M+ LaLiga TV 2 HD',
+      'LaLiga Hypermotion 2 --> ELCANO',
+      'DAZN 2',
+      'Liga Endesa 2',
+    ]);
+  });
+
+  it('la grafía del buscador de la IPTV: «m+ laliga» es «Movistar LaLiga»; lo de tras la flecha no cuenta', () => {
+    const ranked = rankForQuery(
+      [
+        result(1, 'LaLiga Hypermotion --> MOVISTAR', 1),
+        result(2, 'M. LALIGA 1 --> ELCANO', 0.6),
+        result(3, 'Movistar LaLiga', 0.5),
+      ],
+      'm+ laliga',
+    );
+    expect(ranked.map((item) => item.id[0])).toEqual(['3', '2', '1']);
+  });
+
+  it('sin parecido, el orden por disponibilidad de siempre', () => {
+    const plain = [result(1, 'Uno', 1), result(2, 'Dos', 0.5), result(3, 'Tres', null)];
+    expect(rankForQuery(plain, 'zzz')).toEqual(plain);
+  });
+
+  it('/api/v1/search ordena por parecido; /api/search deja el orden del motor', async () => {
+    const body = JSON.stringify({
+      result: LIGA.map((item) => ({
+        content_id: item.id,
+        name: item.title,
+        availability: item.availability,
+      })),
+    });
+    const { app } = await appWith(async () => body);
+    const url = 'search?q=laliga%20tv%202';
+    const v1 = await app.inject({ method: 'GET', url: `/api/v1/${url}`, headers: web() });
+    expect(SearchResponseSchema.parse(v1.json()).results[0]?.title).toBe('LaLiga TV 2');
+    const legacy = await app.inject({ method: 'GET', url: `/api/${url}`, headers: web() });
+    expect(legacy.json().results[0].title).toBe('LaLiga Hypermotion 2 --> ELCANO');
   });
 });

@@ -99,6 +99,7 @@ import {
   libraryMatches,
   searchCatalog,
   searchIndex,
+  searchIndexStepper,
   titleBucket,
   type LibraryCandidate,
   type SearchGroup,
@@ -1530,12 +1531,38 @@ export class IptvServiceImpl implements IptvService {
    * El índice de la pestaña se monta `IPTV_BROWSE.buildDelayMs` después de
    * aplicar una sincronización o de cargar `catalogo.enc`: así no se suma al
    * pico de memoria de la propia lectura de la lista (100 000 canales, §12.2).
-   * Si alguien abre la pestaña antes, se monta en ese momento.
+   * Si alguien abre la pestaña antes, se monta en ese momento. Detrás, el
+   * índice del buscador, también a trozos (`prepareSearch`).
    */
   private scheduleBrowse(catalog: Catalog): void {
     this.schedule('browse-index', IPTV_BROWSE.buildDelayMs, () => {
-      if (this.catalog === catalog) void this.prepareBrowse(catalog).catch(() => undefined);
+      if (this.catalog !== catalog) return;
+      void this.prepareBrowse(catalog)
+        .then(() => this.prepareSearch(catalog))
+        .catch(() => undefined);
     });
+  }
+
+  /**
+   * Precalienta el índice del buscador (docs/diagnostico-iptv-0.8.2.md, E4) a
+   * trozos de `IPTV_BROWSE.buildChunk` claves, cediendo el hilo con
+   * `setImmediate`: la primera búsqueda tras una sincronización ya no para el
+   * servidor montándolo de golpe. Si llega antes, termina el mismo montaje; si
+   * cambia el catálogo o se para el servicio, se deja (el montaje a medias se
+   * va con el catálogo).
+   */
+  private async prepareSearch(catalog: Catalog): Promise<void> {
+    const startedAt = performance.now();
+    const step = searchIndexStepper(catalog, IPTV_BROWSE.buildChunk);
+    for (;;) {
+      if (this.stopped || this.catalog !== catalog) return;
+      if (step()) break;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+    this.logger.debug(
+      { ms: Math.round(performance.now() - startedAt) },
+      'IPTV: índice del buscador montado',
+    );
   }
 
   /**

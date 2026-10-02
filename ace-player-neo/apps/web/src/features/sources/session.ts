@@ -98,6 +98,7 @@ import {
   toast,
 } from '../../notices/index.ts';
 import { noticeFlags } from '../../notices/notify.ts';
+import type { NoticeTone } from '../../ui/Toast.tsx';
 import {
   getPlayer,
   kindFromIh,
@@ -161,6 +162,11 @@ export const REPORT_MAX_WAIT_MS = 31 * 60_000;
 /** Plazos de la resolución (index.html:4080): 20 s al entrar, 30 s al rebuscar. */
 export const RESOLVE_TIMEOUT_MS = 20_000;
 export const RESEARCH_TIMEOUT_MS = 30_000;
+/** La entrada al partido no pudo buscar (sin red, plazo o fallo del servidor): no es «no encontrado». */
+export const RESOLVE_ERROR_TEXT = 'No hemos podido buscar las fuentes del partido';
+/** Oferta tras «Rebuscar» cuando aparece tu IPTV mientras suena una AceStream (M4): un toque, nunca sola. */
+export const IPTV_OFFER_TEXT = 'Tu IPTV tiene este partido';
+export const IPTV_OFFER_LABEL = 'Ver por IPTV';
 
 export interface MatchInfo {
   id: string;
@@ -175,7 +181,9 @@ export interface MatchInfo {
   colors?: readonly [string, string];
 }
 
-export type SessionPhase = 'idle' | 'resolving' | 'ready' | 'choices' | 'not_found' | 'no_channels';
+/** `error`: la resolución no llegó (sin red, plazo o fallo del servidor); se ofrece «Reintentar». */
+export type SessionPhase =
+  'idle' | 'resolving' | 'ready' | 'choices' | 'not_found' | 'no_channels' | 'error';
 
 export interface SessionScan extends ScanView {
   id: string;
@@ -545,15 +553,28 @@ async function resolveMatch({
       noChannels();
       return;
     }
-    // Error de red: el mismo modal, como «no encontrado» y sin buscador (index.html:4154-4155).
     setWaitingMessage(null);
+    // Sin red, plazo o fallo del servidor (M3): un error con «Reintentar», no un «no encontrado» inventado
+    // sin fuentes (antes, index.html:4154-4155).
+    if (!isApiError(error) || error.retryable) {
+      patch({ phase: 'error', resolverOpen: false, resolution: null, preheat: null });
+      // Lo que importa del toast es su acción: el mismo tiempo que «Volver a la IPTV».
+      toast(RESOLVE_ERROR_TEXT, {
+        tone: 'err',
+        icon: 'aviso',
+        ms: IPTV_CLIENT.backToastMs,
+        action: { label: 'Reintentar', onAction: retryResolve },
+      });
+      return;
+    }
+    // Un 4xx: el mismo modal, como «no encontrado» y sin buscador; con la IPTV activa, también se miró.
     patch({
       phase: 'not_found',
       resolverOpen: true,
       resolution: {
         status: 'not_found',
         channels: match.channels,
-        checked: ['saved', 'm3u', 'library', 'acestream'],
+        checked: [...(iptvActive() ? ['iptv'] : []), 'saved', 'm3u', 'library', 'acestream'],
         candidates: [],
         engineAvailable: false,
         ai: { enabled: false, used: false, model: null, catalogSize: 0, error: null },
@@ -566,6 +587,13 @@ async function resolveMatch({
   } finally {
     if (resolveAbort === controller) resolveAbort = null;
   }
+}
+
+/** «Reintentar» tras un error de la entrada al partido. */
+export function retryResolve(): void {
+  const state = sessionStore.get();
+  if (state.kind !== 'match' || !state.match || state.phase !== 'error') return;
+  void resolveMatch();
 }
 
 function applyEntryResolution(data: Resolution): void {
@@ -1716,7 +1744,12 @@ function withBackHint(text: string, entries: readonly SourceEntry[], iptvId: str
  * inmersivo) y la cápsula sobre el vídeo (en inmersivo, donde no hay
  * toasts); cada una se ve solo en su modo, así girar el móvil no la pierde.
  */
-function showBackToast(iptvId: string, text = 'Seguimos por AceStream'): void {
+function showBackToast(
+  iptvId: string,
+  text = 'Seguimos por AceStream',
+  label = 'Volver a la IPTV',
+  tone: NoticeTone = 'warn',
+): void {
   dismissBackToast();
   const gen = generation;
   const key = sessionStore.get().key;
@@ -1732,15 +1765,12 @@ function showBackToast(iptvId: string, text = 'Seguimos por AceStream'): void {
     back();
   };
   backToastId = toast(text, {
-    tone: 'warn',
+    tone,
     icon: 'tv',
     ms: IPTV_CLIENT.backToastMs,
-    action: { label: 'Volver a la IPTV', onAction },
+    action: { label, onAction },
   });
-  backPillId = showImmersiveAction(
-    { text, label: 'Volver a la IPTV', onAction },
-    IPTV_CLIENT.backToastMs,
-  );
+  backPillId = showImmersiveAction({ text, label, onAction }, IPTV_CLIENT.backToastMs);
 }
 
 function recentJumps(state: Pick<SessionState, 'bridgeJumps'>, now: number): number[] {
@@ -2013,6 +2043,7 @@ export async function research(): Promise<void> {
     );
     if (!data.scan) announceResearch();
     if (rearm) afterScanChange();
+    else offerNewIptv(combined, previousIds);
   } catch (error) {
     if (gen !== generation) return;
     toast(
@@ -2024,6 +2055,23 @@ export async function research(): Promise<void> {
   } finally {
     if (gen === generation) patch({ researching: false });
   }
+}
+
+/**
+ * Tras «Rebuscar» sin rearmar (M4): si ha aparecido una IPTV nueva y sin probar
+ * mientras suena una AceStream, se ofrece con un toque («Ver por IPTV»). Nunca
+ * se cambia sola (D7): la persona está viendo algo que funciona.
+ */
+function offerNewIptv(entries: readonly SourceEntry[], previousIds: ReadonlySet<string>): void {
+  const screen = screenNow();
+  if (!screen.hash || !(screen.playing || screen.connecting)) return;
+  const onScreen = entries.find((entry) => entry.id === screen.hash);
+  if (!onScreen || isIptv(onScreen)) return;
+  const offer = entries.find(
+    (entry) => isIptv(entry) && !previousIds.has(entry.id) && !entry.autoTried,
+  );
+  // Es una oferta, no un aviso: tono informativo.
+  if (offer) showBackToast(offer.id, IPTV_OFFER_TEXT, IPTV_OFFER_LABEL, 'info');
 }
 
 /** «Reportar y comprobar» (`submitSourceReport`, index.html:4024-4041). */

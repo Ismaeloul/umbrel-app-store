@@ -97,6 +97,9 @@ export const StreamReopenedEventSchema = z.strictObject({
     url: z.string().startsWith('/'),
     protocol: StreamProtocolSchema,
     reason: z.enum(['engine_restart', 'engine_recovered', 'remux_restart']),
+    /** `remux_restart` de una IPTV que sigue en la MISMA lista (numeración continua, init nuevo y discontinuidad):
+        la web no se reengancha, hls.js pasa la costura solo (docs/diagnostico-iptv-0.8.2.md, B2/C3). */
+    seamless: z.boolean().optional(),
   }),
 });
 

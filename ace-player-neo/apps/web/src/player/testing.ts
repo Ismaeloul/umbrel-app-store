@@ -2,7 +2,8 @@
 
    - FakeMedia: el <video> simulado de tests/player-controller.test.js de la
      0.6.59, TAL CUAL (play/pause/seeking síncronos), para portar T-127 a
-     T-133 sin cambiar lo que comprueban.
+     T-133 sin cambiar lo que comprueban. Con `rejectOnPause`, además, como
+     el navegador: pause() rechaza con AbortError los play() pendientes.
    - FakeVideo: lo mismo más lo que usa el orquestador (buffered, readyState,
      src, volumen…) y un `advance()` para que el cabezal avance.
    - fakeEngines(): un cargador de motores que apunta lo que crea. */
@@ -32,6 +33,9 @@ export class FakeMedia extends EventTarget {
   playCalls = 0;
   pauseCalls = 0;
   playImpl: (() => Promise<void>) | null = null;
+  /** Como Chrome: pause() rechaza los play() aún pendientes (AbortError). */
+  rejectOnPause = false;
+  private pendingPlays: Array<(error: Error) => void> = [];
   _currentTime = 0;
 
   get currentTime(): number {
@@ -47,7 +51,28 @@ export class FakeMedia extends EventTarget {
     this.playCalls += 1;
     this.paused = false;
     this.dispatchEvent(new Event('play'));
-    if (this.playImpl) return this.playImpl();
+    if (this.playImpl) {
+      const inner = this.playImpl();
+      if (!this.rejectOnPause) return inner;
+      return new Promise<void>((resolve, reject) => {
+        let settled = false;
+        const abort = (error: Error) => {
+          if (settled) return;
+          settled = true;
+          reject(error);
+        };
+        this.pendingPlays.push(abort);
+        inner.then(
+          () => {
+            if (settled) return;
+            settled = true;
+            this.pendingPlays = this.pendingPlays.filter((entry) => entry !== abort);
+            resolve();
+          },
+          (error: unknown) => abort(error as Error),
+        );
+      });
+    }
     this.dispatchEvent(new Event('playing'));
     return Promise.resolve();
   }
@@ -55,6 +80,8 @@ export class FakeMedia extends EventTarget {
   pause(): void {
     this.pauseCalls += 1;
     this.paused = true;
+    for (const abort of this.pendingPlays.splice(0))
+      abort(Object.assign(new Error('pause() interrumpió play()'), { name: 'AbortError' }));
     this.dispatchEvent(new Event('pause'));
   }
 
@@ -74,6 +101,7 @@ export class FakeVideo extends FakeMedia {
 
   constructor() {
     super();
+    this.rejectOnPause = true;
     this.buffered = ranges([]);
     this.seekable = ranges([]);
   }
@@ -97,8 +125,9 @@ export class FakeVideo extends FakeMedia {
     this.dispatchEvent(new Event('timeupdate'));
   }
 
-  /** El navegador se queda sin datos. */
+  /** El navegador se queda sin datos (con `waiting`, readyState baja a HAVE_CURRENT_DATA). */
   stall(): void {
+    this.readyState = 2;
     this.dispatchEvent(new Event('waiting'));
   }
 }

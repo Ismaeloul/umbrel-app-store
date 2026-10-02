@@ -7,7 +7,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { FLTV_URL } from './constants.js';
+import { ENGINE_STAGE_MS, FLTV_URL } from './constants.js';
 import {
   RESOLUTION_EXACT_SCORE,
   SEMANTIC_MAX_SCORE,
@@ -688,11 +688,36 @@ describe('Resolución del servicio (api.md §4.9; B-180, B-193, B-213, B-231; ar
       { channel: ['M+ Liga de Campeones'] },
       { signal: controller.signal },
     );
+    /* La señal es la de la etapa del motor (M3): la del cliente más el plazo. */
     expect(search.search).toHaveBeenCalledWith('M+ Liga de Campeones', {
       via: 'auto',
-      signal: controller.signal,
+      signal: expect.any(AbortSignal),
     });
+    const signal = search.search.mock.calls[0]?.[1]?.signal;
+    expect(signal?.aborted).toBe(false);
+    controller.abort();
+    expect(signal?.aborted).toBe(true);
     expect(result).toMatchObject({ status: 'found', research: false, preheat: null, scan: null });
+  });
+
+  it('M3 · la entrada no espera al motor más de su plazo (12 s sin IPTV) y no lo da por caído', async () => {
+    const { football, core } = createFootball({
+      state: withStreams([{ id: ID_A, title: 'M+ Liga de Campeones' }]),
+      search: () => new Promise(() => {}),
+    });
+    let done = false;
+    const pending = football.resolve({ channel: ['M+ Liga de Campeones'] }).finally(() => {
+      done = true;
+    });
+    await core.clock.advanceAsync(ENGINE_STAGE_MS.withoutIptv - 1);
+    expect(done).toBe(false);
+    await core.clock.advanceAsync(1);
+    const result = await pending;
+    expect(result).toMatchObject({
+      status: 'found',
+      engineAvailable: true,
+      candidate: { id: ID_A },
+    });
   });
 
   it('refresca las listas en segundo plano y aguanta que eso falle', async () => {

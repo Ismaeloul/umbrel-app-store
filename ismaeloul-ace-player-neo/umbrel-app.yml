@@ -3,7 +3,7 @@ id: ismaeloul-ace-player-neo
 category: media
 icon: "https://raw.githubusercontent.com/Ismaeloul/umbrel-app-store/main/ismaeloul-ace-player-neo/icon.svg"
 name: Ace Player Neo
-version: "0.8.2"
+version: "0.8.3"
 tagline: Agenda de futbol con la señal de cada partido, en el navegador y en el iPhone
 description: >-
   Ace Player Neo convierte tu Umbrel en un reproductor AceStream con agenda de
@@ -13,37 +13,30 @@ description: >-
   entre dispositivos, cierra lo que ya nadie ve y lo reinicia solo si se
   cuelga.
 releaseNotes: >-
-  Pestaña IPTV en Canales: con tu IPTV conectada, Canales tiene una pestaña
-  nueva con las categorias de tu proveedor, en su orden, un buscador y
-  filtros por pais, idioma, tipo, deporte y calidad.
+  IPTV sin cortes: el video de tu IPTV ya no se para ni salta hacia
+  delante y hacia atras. El rele ya no se cuelga al reconectar y, cuando la
+  señal de tu proveedor da un salto, solo sigue desde una imagen completa:
+  sin imagen rota ni reconexiones en cadena.
 
-  Buscar: el buscador entiende como escriben las listas IPTV. "M." es
-  Movistar, los prefijos de pais ("ES:", "|ES|") no estorban y tambien
-  encuentra por categoria, como TDT o futbol. Cada canal sale una sola vez y
-  dice de donde se ve: "IPTV" con sus calidades y "AceStream" con cuantas
-  fuentes tiene.
+  Reinicios sin saltos: si el video se reinicia, sigue en el mismo punto,
+  sin volver 30 segundos atras, y te avisa con "Tu IPTV se ha reconectado
+  sin cortar la imagen".
 
-  Todo desbloqueado: el buscador enseña todos los canales de tu IPTV, de
-  todos los paises (con su pais en una etiqueta) y de todos los grupos. En lo
-  automatico, como el canal de cada partido, va primero España y nunca el
-  mismo canal de otro pais, que echa otra programacion.
+  Reproductor: ya no se pausa por huecos pequeños y DIRECTO funciona
+  tambien mientras el video esta parado. La distancia al directo se mide en
+  segundos, asi que ya no salta por su cuenta, y un trozo dañado se salta
+  en el sitio.
 
-  Calidades: las resoluciones de un mismo canal (4K, 1080p, 720p...) van
-  juntas, con un cartel por resolucion, hasta 4. Si una se cae, se prueba
-  otra de tu IPTV antes que AceStream, sin saltar a otro pais.
+  Partidos: al entrar en un partido ya sale tu IPTV, sin pulsar Rebuscar, y
+  Gol Play tambien se busca en tu IPTV. Si la busqueda no llega a tiempo,
+  sale un error con "Reintentar" en vez de "no hay fuentes". Despues de
+  Rebuscar, si tu IPTV tiene el partido, lo dice: "Tu IPTV tiene este
+  partido · Ver por IPTV".
 
-  IPTV ocupada: si tu cuenta admite una sola conexion y la esta usando otro
-  aparato, te lo dice claro al momento y sigue por AceStream.
-
-  Datos tecnicos: dice siempre de donde viene lo que suena, tu IPTV o
-  AceStream, y si suena AceStream teniendo el canal en tu IPTV, por que.
-
-  Carteles de fuente: dicen "AceStream" en vez de "M3U", el numero grande ya
-  no lleva la resolucion y el nombre de debajo no repite la calidad.
-
-  Arreglos: guardar la IPTV lo intenta otra vez si el panel de tu proveedor
-  falla a la primera, y el video de la IPTV ya no da error mientras se
-  prepara al arrancar.
+  Buscar: champions, la champions o ucl, tve o rtve y a3 encuentran sus
+  canales, y laliga tv pone primero M+ LaLiga. Los resultados de AceStream
+  van ordenados por parecido con lo que buscas y, si falla el motor, sale
+  una linea pequeña con "Reintentar" en vez de un cartel rojo.
 developer: Ismaeloul
 website: https://github.com/Ismaeloul
 dependencies: []

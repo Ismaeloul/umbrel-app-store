@@ -4,6 +4,8 @@
    - `createFakeLauncher()`: un "ffmpeg" en memoria que escribe de verdad en la
      carpeta de la sesión index.m3u8, init.mp4 e index<N>.m4s cuando el test se
      lo pide (o nada más lanzarse), y que muere o se deja matar a voluntad.
+     Hace caso, como el de verdad, a `-start_number`, `-hls_list_size`,
+     `-hls_fmp4_init_filename` y `discont_start` (reinicio continuo, B2).
    - `FAKE_FFMPEG_SCRIPT`: el mismo ffmpeg falso como script de node, para
      probar el `spawn` real (grupo de procesos, stderr y kill). */
 
@@ -59,6 +61,12 @@ export class FakeFfmpeg implements RemuxProcess {
   readonly sessionId: string;
   alive = true;
   killed = false;
+  /** Init que escribe (`-hls_fmp4_init_filename`). */
+  readonly initName: string;
+  /** Número del primer segmento (`-start_number`). */
+  readonly startNumber: number;
+  private readonly listSize: number;
+  private readonly discontStart: boolean;
   private readonly durations: number[] = [];
   private readonly exitListeners: ((code: number | null, signal: string | null) => void)[] = [];
   private readonly errorListeners: ((error: Error & { code?: string }) => void)[] = [];
@@ -70,28 +78,37 @@ export class FakeFfmpeg implements RemuxProcess {
     this.input = args[args.indexOf('-i') + 1] ?? '';
     const mark = args.find((arg) => arg.startsWith(ACE_SESSION_MARK)) ?? '';
     this.sessionId = mark.slice(ACE_SESSION_MARK.length);
+    const option = (name: string): string | undefined =>
+      args.includes(name) ? args[args.indexOf(name) + 1] : undefined;
+    this.initName = option('-hls_fmp4_init_filename') ?? 'init.mp4';
+    this.startNumber = Number(option('-start_number') ?? 0);
+    this.listSize = Number(option('-hls_list_size') ?? 0);
+    this.discontStart = (option('-hls_flags') ?? '').includes('discont_start');
   }
 
-  /** Escribe segmentos nuevos (en segundos) y reescribe la lista con todos. */
+  /** Escribe segmentos nuevos (en segundos) y reescribe la lista con la ventana (`-hls_list_size`). */
   writeSegments(durations: readonly number[]): void {
     if (!this.alive) return;
     mkdirSync(this.dir, { recursive: true });
-    writeFileSync(path.join(this.dir, 'init.mp4'), Buffer.from('init-mp4-fake'));
+    writeFileSync(path.join(this.dir, this.initName), Buffer.from('init-mp4-fake'));
     for (const duration of durations) {
-      writeFileSync(
-        path.join(this.dir, `index${this.durations.length}.m4s`),
-        Buffer.from(`segmento ${this.durations.length}`),
-      );
+      const number = this.startNumber + this.durations.length;
+      writeFileSync(path.join(this.dir, `index${number}.m4s`), Buffer.from(`segmento ${number}`));
       this.durations.push(duration);
     }
+    const first = this.listSize > 0 ? Math.max(0, this.durations.length - this.listSize) : 0;
+    const target = Math.max(2, ...this.durations.slice(first).map((d) => Math.round(d)));
     const lines = [
       '#EXTM3U',
       '#EXT-X-VERSION:7',
-      '#EXT-X-TARGETDURATION:2',
-      '#EXT-X-MAP:URI="init.mp4"',
+      `#EXT-X-TARGETDURATION:${target}`,
+      `#EXT-X-MEDIA-SEQUENCE:${this.startNumber + first}`,
     ];
-    this.durations.forEach((duration, index) => {
-      lines.push(`#EXTINF:${duration.toFixed(3)},`, `index${index}.m4s`);
+    /* Como ffmpeg: el `#EXT-X-DISCONTINUITY` de `discont_start` va con el primer segmento y sale con él. */
+    if (this.discontStart && first === 0) lines.push('#EXT-X-DISCONTINUITY');
+    lines.push(`#EXT-X-MAP:URI="${this.initName}"`);
+    this.durations.slice(first).forEach((duration, index) => {
+      lines.push(`#EXTINF:${duration.toFixed(3)},`, `index${this.startNumber + first + index}.m4s`);
     });
     writeFileSync(path.join(this.dir, 'index.m3u8'), `${lines.join('\n')}\n`);
   }
@@ -151,11 +168,13 @@ export interface FakeLauncher {
   last(): FakeFfmpeg;
   /** A partir de ahora, cada lanzamiento da ENOENT (o vuelve a funcionar). */
   setMissing(missing: boolean): void;
+  /** Segmentos que escriben los PRÓXIMOS lanzamientos nada más lanzarse (`null` = ninguno). */
+  setAutoSegments(segments: readonly number[] | null): void;
 }
 
 export function createFakeLauncher(options: FakeLauncherOptions = {}): FakeLauncher {
   const spawned: FakeFfmpeg[] = [];
-  const auto = options.autoSegments === undefined ? [2, 2, 2] : options.autoSegments;
+  let auto = options.autoSegments === undefined ? [2, 2, 2] : options.autoSegments;
   let missing = options.missing === true;
   return {
     spawned,
@@ -171,6 +190,9 @@ export function createFakeLauncher(options: FakeLauncherOptions = {}): FakeLaunc
     alive: () => spawned.filter((proc) => proc.alive).length,
     setMissing: (value) => {
       missing = value;
+    },
+    setAutoSegments: (segments) => {
+      auto = segments;
     },
     last: () => {
       const proc = spawned[spawned.length - 1];

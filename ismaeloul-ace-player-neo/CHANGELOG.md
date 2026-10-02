@@ -2,6 +2,33 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 0.8.3 (2026-09-30)
+
+IPTV sin cortes: el video de tu IPTV ya no se para ni salta hacia
+delante y hacia atras. El rele ya no se cuelga al reconectar y, cuando la
+señal de tu proveedor da un salto, solo sigue desde una imagen completa:
+sin imagen rota ni reconexiones en cadena.
+
+Reinicios sin saltos: si el video se reinicia, sigue en el mismo punto,
+sin volver 30 segundos atras, y te avisa con "Tu IPTV se ha reconectado
+sin cortar la imagen".
+
+Reproductor: ya no se pausa por huecos pequeños y DIRECTO funciona
+tambien mientras el video esta parado. La distancia al directo se mide en
+segundos, asi que ya no salta por su cuenta, y un trozo dañado se salta
+en el sitio.
+
+Partidos: al entrar en un partido ya sale tu IPTV, sin pulsar Rebuscar, y
+Gol Play tambien se busca en tu IPTV. Si la busqueda no llega a tiempo,
+sale un error con "Reintentar" en vez de "no hay fuentes". Despues de
+Rebuscar, si tu IPTV tiene el partido, lo dice: "Tu IPTV tiene este
+partido · Ver por IPTV".
+
+Buscar: champions, la champions o ucl, tve o rtve y a3 encuentran sus
+canales, y laliga tv pone primero M+ LaLiga. Los resultados de AceStream
+van ordenados por parecido con lo que buscas y, si falla el motor, sale
+una linea pequeña con "Reintentar" en vez de un cartel rojo.
+
 ## 0.8.2 (2026-09-26)
 
 Pestaña IPTV en Canales: con tu IPTV conectada, Canales tiene una pestaña

@@ -9,7 +9,13 @@
    En la 0.6.59 la pestaña se llamaba «Directorio»; en la v2 es «Listas»
    (maqueta A), pero la regla es la misma: solo enseña la lista activa. */
 
-import type { Item, LibraryCollection, LibraryView } from '@ace/shared';
+import {
+  CHANNEL_SEARCH_KEY_MIN,
+  channelSearchKey,
+  type Item,
+  type LibraryCollection,
+  type LibraryView,
+} from '@ace/shared';
 
 /** Las pestañas que son una colección de la biblioteca. */
 export type CollectionTab = 'favoritos' | 'recientes' | 'listas';
@@ -90,9 +96,26 @@ export function foldText(value: string): string {
   return value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 }
 
+/* La clave de cada título, calculada una vez (el filtro corre a cada tecla sobre toda la biblioteca). */
+const TITLE_KEYS = new Map<string, string>();
+const TITLE_KEYS_MAX = 20_000;
+
+function titleKey(title: string): string {
+  let key = TITLE_KEYS.get(title);
+  if (key === undefined) {
+    if (TITLE_KEYS.size >= TITLE_KEYS_MAX) TITLE_KEYS.clear();
+    key = channelSearchKey(title);
+    TITLE_KEYS.set(title, key);
+  }
+  return key;
+}
+
 /**
  * Filtro local por título o categoría (index.html:5549-5550). Se compara sin
- * tildes ni mayúsculas, que es lo que se espera escribiendo en el móvil.
+ * tildes ni mayúsculas, que es lo que se espera escribiendo en el móvil, y
+ * también por la clave del nombre (`channelSearchKey` de @ace/shared, con 3
+ * letras o más): «m+ laliga» encuentra «M. LALIGA 1» y «la sexta»,
+ * «LASEXTA» (docs/diagnostico-iptv-0.8.2.md, E3).
  */
 export function filterItems<T extends Pick<Item, 'title' | 'category'>>(
   items: readonly T[],
@@ -100,8 +123,13 @@ export function filterItems<T extends Pick<Item, 'title' | 'category'>>(
 ): T[] {
   const q = foldText(query);
   if (!q) return [...items];
+  const key = channelSearchKey(query);
+  const byKey = key.length >= CHANNEL_SEARCH_KEY_MIN;
   return items.filter(
-    (item) => foldText(item.title).includes(q) || categoryMatches(item.category, q),
+    (item) =>
+      foldText(item.title).includes(q) ||
+      categoryMatches(item.category, q) ||
+      (byKey && titleKey(item.title).includes(key)),
   );
 }
 

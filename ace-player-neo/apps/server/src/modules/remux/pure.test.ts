@@ -131,16 +131,37 @@ describe('T-125 · el iPhone arranca con colchon y el adaptador sobrevive a los 
        index.html son del reproductor (Fase 2). */
   });
 
-  it('buildRemuxArgs es la línea de la 0.6.59 más -threads 2 y -metadata ace_session=<id>', () => {
+  it('buildRemuxArgs es la línea de la 0.6.59 más -threads 2 y -metadata ace_session=<id>, sin first_pts', () => {
     const dir = path.join('/data', 'remux', ID_A);
     const url = `http://motor:6878/ace/r/${ID_A}/sesion`;
     const args = buildRemuxArgs({ url, dir, sessionId: 's_abcdefgh12', platform: 'linux' });
-    const original = ORIGINAL_0659(url, playlistPath(dir));
+    /* Único cambio sobre la 0.6.59 en el filtro de audio: fuera `first_pts=0`, que rellenaba de silencio
+       desde 0 en cada reconstrucción del grafo (diagnostico-iptv-0.8.2 P8, B1). */
+    const original = ORIGINAL_0659(url, playlistPath(dir)).map((arg) =>
+      arg === 'aresample=async=1000:min_hard_comp=0.100:first_pts=0'
+        ? 'aresample=async=1000:min_hard_comp=0.100'
+        : arg,
+    );
     const extra = ['-threads', '2', '-metadata', 'ace_session=s_abcdefgh12'];
     const at = original.indexOf('-f');
     expect(args).toEqual([...original.slice(0, at), ...extra, ...original.slice(at)]);
     expect(args.slice(0, 4)).toEqual(['-hide_banner', '-loglevel', 'warning', '-nostdin']);
     expect(args).not.toContain('getstream');
+  });
+
+  it('ningún directo lleva first_pts (motor, IPTV TS e IPTV HLS, en Linux y en Windows)', () => {
+    for (const platform of ['linux', 'win32'] as const) {
+      const variants = [
+        { url: 'http://motor:6878/ace/r/x/y', dir: '/d', sessionId: 's_prueba123', platform },
+        { url: 'http://127.0.0.1:1/r/t/in.ts', dir: '/d', sessionId: 's_prueba123', origin: 'iptv' as const, platform },
+        { url: 'http://127.0.0.1:1/r/t/in.m3u8', dir: '/d', sessionId: 's_prueba123', origin: 'iptv' as const, isHls: true, platform },
+      ]; // prettier-ignore
+      for (const input of variants) {
+        const args = buildRemuxArgs(input);
+        expect(args.join(' ')).not.toContain('first_pts');
+        expect(args[args.indexOf('-af') + 1]).toBe('aresample=async=1000:min_hard_comp=0.100');
+      }
+    }
   });
 
   it('en Windows, sin temp_file y con la lista en barras «/» (ffmpeg no puede renombrar encima)', () => {

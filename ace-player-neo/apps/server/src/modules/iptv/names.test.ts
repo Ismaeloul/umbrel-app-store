@@ -102,6 +102,15 @@ describe('cleanIptvTitle', () => {
     }
   });
 
+  it('iptvAskedChannel: «Gol Play» es un canal de la TDT, no una plataforma', () => {
+    expect(iptvAskedChannel('Gol Play')).toBe('Gol Play');
+    expect(iptvAskedChannel('GOL PLAY HD')).toBe('GOL PLAY');
+    expect(iptvAskedChannel('GOL PLAY HD --> NEW ERA')).toBe('GOL PLAY');
+    for (const platform of ['RTVE Play', 'LPF Play', 'En Play']) {
+      expect(iptvAskedChannel(platform), platform).toBe(null);
+    }
+  });
+
   it('orden de las variantes (§17): 1080p > 4K > 720p > SD > sin marca', () => {
     expect(qualityRank('fhd')).toBeGreaterThan(qualityRank('uhd'));
     expect(qualityRank('uhd')).toBeGreaterThan(qualityRank('hd'));

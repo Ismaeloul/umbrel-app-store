@@ -18,19 +18,28 @@
    4. Orden por parecido (§18): igual → misma familia → empieza por la
       consulta → mismo orden → el resto → sin Movistar → por la categoría;
       dentro, España o sin país, el canal principal antes que bar, PPV,
-      reservas, plataformas y eventos, la clave más corta y el orden del
-      catálogo.
-   5. `library`: los elementos de tu biblioteca que son ese canal
+      reservas, plataformas y eventos, la familia que tiene la palabra de
+      relleno escrita («laliga tv» → «M+ LaLiga TV»), la clave más corta y el
+      orden del catálogo.
+   5. Alias de la consulta (`searchQueryAliases`): «champions», «la
+      champions» y «ucl» buscan además «liga de campeones»; «tve» y «rtve» a
+      secas, la familia de RTVE; «a3» a secas, «antena 3». Es una segunda
+      pasada: lo que casa al pie de la letra sigue saliendo.
+   6. `library`: los elementos de tu biblioteca que son ese canal
       (`sameChannelScore` ≥ 92), de mejor a peor, 20 como mucho.
 
-   El índice se monta una vez por catálogo (WeakMap) y se tira con él. */
+   El índice se monta una vez por catálogo (WeakMap) y se tira con él; el
+   servicio lo precalienta a trozos tras la sincronización
+   (`searchIndexStepper`), y si alguien busca antes se termina en ese momento. */
 
 import {
+  CHANNEL_SEARCH_KEY_MIN,
   IPTV_MIN_SCORE,
   IPTV_SEARCH,
   MOVISTAR_WORDS,
   SEARCH_QUERY_MAX,
   SEARCH_QUERY_MIN,
+  channelSearchKey,
   normalizeChannelKey,
   type Item,
 } from '@ace/shared';
@@ -114,6 +123,8 @@ interface SearchIndex {
   readonly facts: readonly GroupFacts[];
   /** Familia (`GroupFacts.family`) → orden del catálogo de su primer canal: la familia sale junta. */
   readonly familyOrder: ReadonlyMap<string, number>;
+  /** Familia → todas las palabras de sus claves, también «tv» o «canal» (para `literalMiss`). */
+  readonly familyWords: ReadonlyMap<string, ReadonlySet<string>>;
   /** Clave → sus canales (primero el de España o sin país). */
   readonly byKey: ReadonlyMap<string, readonly SearchGroup[]>;
   /** `channelIdOf` → canal. */
@@ -255,6 +266,8 @@ export function categorySearchWords(group: string): string[] {
 }
 
 const INDEXES = new WeakMap<Catalog, SearchIndex>();
+/** Montajes a medias del precalentado (`searchIndexStepper`). */
+const BUILDING = new WeakMap<Catalog, Generator<void, SearchIndex, void>>();
 
 /** Las palabras que hay que encontrar: sin «tv», «canal» ni «channel» si hay otras (también la pestaña IPTV, §16.3). */
 export function significant(words: readonly string[]): string[] {
@@ -292,10 +305,65 @@ function penaltyOf(group: SearchGroup, catalog: Catalog): number {
   return 0;
 }
 
-/** Índice del buscador de un catálogo (se monta una vez y se reutiliza). */
+/** Índice del buscador de un catálogo (se monta una vez y se reutiliza; si se estaba precalentando, se termina). */
 export function searchIndex(catalog: Catalog): SearchIndex {
   const known = INDEXES.get(catalog);
   if (known) return known;
+  const steps = BUILDING.get(catalog) ?? buildSearchIndexSteps(catalog, Number.POSITIVE_INFINITY);
+  let next: IteratorResult<void, SearchIndex>;
+  try {
+    do next = steps.next();
+    while (!next.done);
+  } finally {
+    /* Si el montaje falla, el generador queda cerrado: la próxima vez se empieza de cero. */
+    BUILDING.delete(catalog);
+  }
+  INDEXES.set(catalog, next.value);
+  return next.value;
+}
+
+/** ¿Está ya montado el índice del buscador de este catálogo? (para las pruebas del precalentado). */
+export function searchIndexReady(catalog: Catalog): boolean {
+  return INDEXES.has(catalog);
+}
+
+/**
+ * Precalienta el índice a trozos (docs/diagnostico-iptv-0.8.2.md, E4): cada
+ * llamada monta `chunk` claves más y devuelve `true` cuando el índice ya está
+ * listo. El servicio cede el hilo con `setImmediate` entre llamada y llamada;
+ * una búsqueda que llega a medias termina el mismo montaje (`searchIndex`).
+ */
+export function searchIndexStepper(catalog: Catalog, chunk: number): () => boolean {
+  return () => {
+    if (INDEXES.has(catalog)) return true;
+    let steps = BUILDING.get(catalog);
+    if (!steps) {
+      steps = buildSearchIndexSteps(catalog, chunk);
+      BUILDING.set(catalog, steps);
+    }
+    let next: IteratorResult<void, SearchIndex>;
+    try {
+      next = steps.next();
+    } catch (error) {
+      BUILDING.delete(catalog);
+      throw error;
+    }
+    if (!next.done) return false;
+    BUILDING.delete(catalog);
+    INDEXES.set(catalog, next.value);
+    return true;
+  };
+}
+
+/**
+ * Monta el índice del buscador a trozos: cada `yield` (cada `chunk` claves)
+ * es un punto en el que se puede ceder el hilo. Pura: no guarda nada; con
+ * `chunk` infinito es el montaje de una vez.
+ */
+export function* buildSearchIndexSteps(
+  catalog: Catalog,
+  chunk: number,
+): Generator<void, SearchIndex, void> {
   const groups: SearchGroup[] = [];
   const facts: GroupFacts[] = [];
   const byKey = new Map<string, SearchGroup[]>();
@@ -303,7 +371,11 @@ export function searchIndex(catalog: Catalog): SearchIndex {
   const byToken = new Map<string, number[]>();
   const categories = new Map<string, CategoryInfo>();
   const familyOrder = new Map<string, number>();
+  const familyWords = new Map<string, Set<string>>();
+  let done = 0;
   for (const key of catalog.groupKeys()) {
+    done += 1;
+    if (done % chunk === 0) yield;
     const words = [...new Set(key.split(' ').filter(Boolean))];
     if (!words.length) continue;
     const compact = key.replace(/ /g, '');
@@ -316,6 +388,9 @@ export function searchIndex(catalog: Catalog): SearchIndex {
     const familyKey = family.join(' ');
     const trailing = sig.length > family.length ? Number(sig[sig.length - 1]) : 0;
     familyOrder.set(familyKey, Math.min(familyOrder.get(familyKey) ?? keyOrder, keyOrder));
+    const known = familyWords.get(familyKey);
+    if (known) for (const word of words) known.add(word);
+    else familyWords.set(familyKey, new Set(words));
     for (const { bucket, entries } of catalog.buckets(key)) {
       const best = entries[0];
       if (!best) continue;
@@ -360,18 +435,17 @@ export function searchIndex(catalog: Catalog): SearchIndex {
     }
     if (channels.length) byKey.set(key, channels);
   }
-  const index: SearchIndex = {
+  return {
     groups,
     facts,
     familyOrder,
+    familyWords,
     byKey,
     byChannel,
     tokens: [...byToken.keys()].sort(),
     byToken,
     categories,
   };
-  INDEXES.set(catalog, index);
-  return index;
 }
 
 /* Primera posición de `tokens` que no es menor que `word`. */
@@ -477,6 +551,71 @@ interface QueryWords {
   readonly compact: string;
 }
 
+function queryWords(key: string): QueryWords {
+  const words = [...new Set(key.split(' ').filter(Boolean))];
+  const sig = significant(key.split(' ').filter(Boolean));
+  return {
+    required: significant(words),
+    sig: sig.join(' '),
+    core: coreOf(familyOf(sig)).join(' '),
+    compact: key.replace(/ /g, ''),
+  };
+}
+
+/*
+ * ¿Vale la consulta pegada que empieza en la palabra `from` del canal? Si se
+ * queda dentro de esa palabra, sí (es un principio de palabra). Si pasa a la
+ * siguiente, la última palabra que toca tiene que casar entera, con 2 letras
+ * o más, o con números: «antena3» → «ANTENA 3» y «lasexta» → «LA SEXTA» sí,
+ * «tve» → «REAL MADRID TV EN» no (solo la «e» de «en»).
+ */
+function compactJoinOk(words: readonly string[], from: number, compact: string): boolean {
+  let rest = compact.length;
+  let at = from;
+  while (at < words.length - 1 && rest > (words[at] as string).length) {
+    rest -= (words[at] as string).length;
+    at += 1;
+  }
+  if (at === from) return true;
+  const last = words[at] as string;
+  return rest >= Math.min(2, last.length) || NUMBER_RE.test(last.slice(0, rest));
+}
+
+/**
+ * Un alias de la consulta: otra clave que buscar y el peor nivel que se le
+ * acepta. Lo que casa con él como igual o misma familia va delante de lo que
+ * casa al pie de la letra («champions» → «M+ Liga de Campeones» antes que
+ * «CHAMPIONS TV»).
+ */
+export interface QueryAlias {
+  readonly key: string;
+  readonly maxTier: number;
+}
+
+/* «champions», «champions league», «la champions», «uefa champions league» y «ucl» son la Liga de Campeones;
+   «champions tour» (golf), la de hockey o la «champions cup» (rugby), no. */
+const CHAMPIONS_RE = /(?:^| )(?:uefa )?(?:la )?(?:champions(?: league)?|ucl)(?= |$)/;
+const NOT_CHAMPIONS_RE = /(?:^| )(?:tour|hockey|cup|chl)(?= |$)/;
+/** «tve» o «rtve» a secas: los canales de RTVE. */
+const RTVE_FAMILY: readonly string[] = ['la 1', 'la 2', 'teledeporte', '24h', '24 horas', 'clan'];
+
+/**
+ * Otras claves que buscar para una consulta (docs/diagnostico-iptv-0.8.2.md,
+ * E1), sobre la clave ya limpia (`searchQueryKey`): la Liga de Campeones
+ * como la llama la gente, la familia de RTVE y «a3». Lo que casa con un alias
+ * se suma a lo que casa al pie de la letra (no lo quita).
+ */
+export function searchQueryAliases(key: string): QueryAlias[] {
+  if (key === 'tve' || key === 'rtve')
+    return RTVE_FAMILY.map((alias) => ({ key: alias, maxTier: 2 }));
+  if (key === 'a3') return [{ key: 'antena 3', maxTier: 2 }];
+  if (CHAMPIONS_RE.test(key) && !NOT_CHAMPIONS_RE.test(key)) {
+    const alias = key.replace(CHAMPIONS_RE, ' liga de campeones').trim();
+    if (alias !== key) return [{ key: alias, maxTier: 5 }];
+  }
+  return [];
+}
+
 /* Países que alguien escribe delante, en minúsculas o mayúsculas: «es-m.laliga», «[es] dazn 1», «uk: …». */
 // prettier-ignore
 const QUERY_COUNTRIES = new Set([
@@ -538,17 +677,21 @@ export interface CatalogSearchResult {
  *    palabra de la clave, en cualquier orden; un número, solo entero; por
  *    dentro de una palabra, solo en compuestos («liga» en «laliga») o con 5
  *    letras o más. También vale la consulta pegada a partir de un principio
- *    de palabra («antena3», «la1»).
+ *    de palabra («antena3», «la1»), si la última palabra que toca casa
+ *    entera, con 2 letras o con números («tve» no es «REAL MADRID TV EN»).
  * 2. Sin la marca: «movistar vamos» o «m+ vamos» encuentran «#VAMOS» (detrás
  *    de los que sí llevan la marca).
+ * 1 y 2 se repiten con cada alias de la consulta (`searchQueryAliases`).
  * 3. Por la CATEGORÍA: «tdt» trae los canales de «EU | ES | TDT ESPAÑA
  *    VIP», con sinónimos («futbol» → «TV FOOTBALL»), detrás de los que casan
  *    por el nombre.
- * Orden: nivel (igual, familia, empieza, mismo orden, cualquier orden, sin
- * marca, categoría); dentro, España o sin país, luego América en español y
+ * Orden: lo que casa con un alias como igual o misma familia; nivel (igual,
+ * familia, empieza, mismo orden, cualquier orden, sin marca, categoría); dentro, España o sin país, luego América en español y
  * luego el resto; el canal principal antes que bar, PPV, replay, reservas
- * ᴿᴬᵂ, plataformas y eventos; la clave más corta (en la categoría, el orden
- * del catálogo); y el orden del catálogo.
+ * ᴿᴬᵂ, plataformas y eventos; la familia con las palabras de relleno que se
+ * escribieron (con una escrita, «igual» y «familia» son un nivel); la clave
+ * más corta (en la categoría, el orden del catálogo); y el orden del
+ * catálogo.
  */
 export function searchCatalog(
   catalog: Catalog,
@@ -560,58 +703,26 @@ export function searchCatalog(
   /* «uk: la liga tv»: el país pedido va el primero (§19). */
   const askedCountry = searchQueryText(query).country;
   const index = searchIndex(catalog);
-  const words = [...new Set(key.split(' ').filter(Boolean))];
-  const required = significant(words);
-  const sig = significant(key.split(' ').filter(Boolean));
-  const q: QueryWords = {
-    required,
-    sig: sig.join(' '),
-    core: coreOf(familyOf(sig)).join(' '),
-    compact: key.replace(/ /g, ''),
-  };
+  const q = queryWords(key);
   const tiers = new Map<number, number>();
   const put = (position: number, tier: number): void => {
     const current = tiers.get(position);
     if (current === undefined || tier < current) tiers.set(position, tier);
   };
+  /* Lo que casa con un alias como igual o misma familia: delante (el alias es lo que se quería decir). */
+  const aliasLead = new Set<number>();
 
-  /* 1. Por el nombre. */
-  const byWord = new Map(required.map((word) => [word, groupsForWord(index, word)] as const));
-  for (const position of intersect([...byWord.values()])) {
-    put(
-      position,
-      nameTier(q, index.groups[position] as SearchGroup, index.facts[position] as GroupFacts),
-    );
-  }
-  /* La consulta pegada, desde el principio de una palabra: «antena3» → «ANTENA 3», «la1» → «LA 1». */
-  if (q.compact.length >= 3) {
-    index.groups.forEach((group, position) => {
-      if (tiers.has(position) || !group.compact.includes(q.compact)) return;
-      if (group.compact === q.compact) {
-        put(position, 0);
-        return;
-      }
-      for (let i = 0; i < group.words.length; i += 1) {
-        if (group.words.slice(i).join('').startsWith(q.compact)) {
-          put(position, 4);
-          return;
-        }
-      }
+  /* 1 y 2. Por el nombre (y sin la marca), con la consulta y con cada alias. */
+  matchByName(index, q, put);
+  for (const alias of searchQueryAliases(key)) {
+    matchByName(index, queryWords(alias.key), (position, tier) => {
+      if (tier > alias.maxTier) return;
+      put(position, tier);
+      if (tier <= 1) aliasLead.add(position);
     });
   }
-  /* 2. Sin Movistar delante («movistar vamos» → «#VAMOS»): las listas no siempre lo escriben. Solo por el
-     principio de una palabra: «movistar ellas» no es «LAS ESTRELLAS» (§19). */
-  const brandless = required.filter((word) => !MOVISTAR_WORDS.has(word));
-  if (
-    brandless.length < required.length &&
-    brandless.some((word) => word.length >= 3 && !NUMBER_RE.test(word))
-  ) {
-    for (const position of intersect(brandless.map((word) => groupsForWord(index, word, false)))) {
-      put(position, 5);
-    }
-  }
   /* 3. Por la categoría. */
-  const categoryWords = required.map(categoryWord);
+  const categoryWords = q.required.map(categoryWord);
   for (const info of index.categories.values()) {
     const matches = categoryWords.every((word) =>
       info.words.some((token) =>
@@ -628,17 +739,37 @@ export function searchCatalog(
      detrás de «DAZN LaLiga» y «M. LALIGA», §19); con un país pedido, ese país el primero. */
   const regionOf = (item: { group: SearchGroup; fact: GroupFacts }): number =>
     askedCountry && item.group.bucket === askedCountry ? -1 : item.fact.countryRank;
+  /* Las palabras de relleno que se escribieron («laliga tv»): la familia que las lleva en alguna de sus claves va
+     antes («M+ LaLiga TV 2» antes que «DAZN LaLiga 2»), y «igual» y «misma familia» cuentan lo mismo (si no,
+     «LA LIGA 2» de Rakuten, que es igual sin el «tv», ganaba a «M+ LaLiga TV 2» por el nivel). */
+  const typedOptional =
+    q.required.length < new Set(key.split(' ').filter(Boolean)).size
+      ? [...new Set(key.split(' ').filter((word) => OPTIONAL_WORDS.has(word)))]
+      : [];
+  const literalMiss = (fact: GroupFacts): number => {
+    if (!typedOptional.length) return 0;
+    const words = index.familyWords.get(fact.family);
+    return typedOptional.filter((word) => !words?.has(word)).length;
+  };
+  const tierOf = (tier: number): number => (typedOptional.length && tier === 0 ? 1 : tier);
   const ranked = [...tiers]
-    .map(([position, tier]) => ({
-      group: index.groups[position] as SearchGroup,
-      fact: index.facts[position] as GroupFacts,
-      tier,
-    }))
+    .map(([position, tier]) => {
+      const fact = index.facts[position] as GroupFacts;
+      return {
+        group: index.groups[position] as SearchGroup,
+        fact,
+        tier: tierOf(tier),
+        miss: literalMiss(fact),
+        lead: aliasLead.has(position) ? 0 : 1,
+      };
+    })
     .sort(
       (a, b) =>
         regionOf(a) - regionOf(b) ||
+        a.lead - b.lead ||
         a.tier - b.tier ||
         a.fact.penalty - b.fact.penalty ||
+        a.miss - b.miss ||
         (a.tier === 6 ? 0 : a.fact.family.length - b.fact.family.length) ||
         familyOrderOf(a.fact) - familyOrderOf(b.fact) ||
         a.fact.number - b.fact.number ||
@@ -652,6 +783,93 @@ export function searchCatalog(
     total: Math.min(ranked.length, IPTV_SEARCH.totalCap),
     capped: ranked.length > IPTV_SEARCH.totalCap,
     groups: ranked.slice(0, Math.max(0, limit)).map((item) => item.group),
+  };
+}
+
+/* Lo que casa por el NOMBRE (pasos 1 y 2 de `searchCatalog`), con su nivel. */
+function matchByName(
+  index: SearchIndex,
+  q: QueryWords,
+  put: (position: number, tier: number) => void,
+): void {
+  const matched = new Set<number>();
+  const found = (position: number, tier: number): void => {
+    matched.add(position);
+    put(position, tier);
+  };
+  /* 1. Por el nombre. */
+  const byWord = q.required.map((word) => groupsForWord(index, word));
+  for (const position of intersect(byWord)) {
+    found(
+      position,
+      nameTier(q, index.groups[position] as SearchGroup, index.facts[position] as GroupFacts),
+    );
+  }
+  /* La consulta pegada, desde el principio de una palabra: «antena3» → «ANTENA 3», «la1» → «LA 1». */
+  if (q.compact.length >= 3) {
+    index.groups.forEach((group, position) => {
+      if (matched.has(position) || !group.compact.includes(q.compact)) return;
+      if (group.compact === q.compact) {
+        found(position, 0);
+        return;
+      }
+      for (let i = 0; i < group.words.length; i += 1) {
+        if (
+          group.words.slice(i).join('').startsWith(q.compact) &&
+          compactJoinOk(group.words, i, q.compact)
+        ) {
+          found(position, 4);
+          return;
+        }
+      }
+    });
+  }
+  /* 2. Sin Movistar delante («movistar vamos» → «#VAMOS»): las listas no siempre lo escriben. Solo por el
+     principio de una palabra: «movistar ellas» no es «LAS ESTRELLAS» (§19). */
+  const brandless = q.required.filter((word) => !MOVISTAR_WORDS.has(word));
+  if (
+    brandless.length < q.required.length &&
+    brandless.some((word) => word.length >= 3 && !NUMBER_RE.test(word))
+  ) {
+    for (const position of intersect(brandless.map((word) => groupsForWord(index, word, false)))) {
+      found(position, 5);
+    }
+  }
+}
+
+/* Lo que va tras la flecha de un título AceStream («La 1 HD --> ELCANO») es quién lo sirve, no el canal. */
+const LIST_SUFFIX_RE = /\s*(?:--?>|={1,2}>|[→⇒➜➝⟶⟹]).*$/u;
+
+/**
+ * Parecido de un título con la consulta, con la misma limpieza y grafía que
+ * el buscador de la IPTV (docs/diagnostico-iptv-0.8.2.md, E2; para ordenar
+ * los resultados del motor AceStream): 0 igual; 1 misma familia (sin el
+ * número del final o sin la marca de delante) y con todas las palabras; 2
+ * empieza por la consulta; 3 tiene todas las palabras; 4 el resto. El título
+ * se mira sin lo que va tras «-->».
+ */
+export function searchRelevance(query: string, title: string): number {
+  return searchRelevanceFor(query)(title);
+}
+
+/** `searchRelevance` con la consulta preparada una vez (para ordenar muchos títulos). */
+export function searchRelevanceFor(query: string): (title: string) => number {
+  const qKey = searchQueryKey(query);
+  if (!qKey) return () => 4;
+  const q = queryWords(qKey);
+  return (title) => {
+    const tKey = searchQueryKey(String(title ?? '').replace(LIST_SUFFIX_RE, ''));
+    if (!tKey) return 4;
+    const tWords = tKey.split(' ').filter(Boolean);
+    const tSig = significant(tWords);
+    const sig = tSig.join(' ');
+    if (sig === q.sig) return 0;
+    const all = q.required.every((word) => tWords.some((token) => wordMatch(token, word) > 0));
+    if (!all) return 4;
+    const family = familyOf(tSig);
+    const core = coreOf(family).join(' ');
+    if (family.join(' ') === q.sig || core === q.sig || core === q.core) return 1;
+    return sig.startsWith(`${q.sig} `) ? 2 : 3;
   };
 }
 
@@ -670,8 +888,10 @@ function categoryMatches(category: string | undefined, q: string): boolean {
 
 /**
  * Elementos de la biblioteca que contienen la consulta en el título o la
- * categoría (lo que enseñan «En tu biblioteca» y el filtro de Canales), sin
- * repetir y 200 como mucho.
+ * categoría, o su clave en la del título (`channelSearchKey`, 3 letras o
+ * más: «m+ laliga» encuentra «M. LALIGA 1»); lo mismo que enseñan «En tu
+ * biblioteca» y el filtro de Canales (`filterItems`). Sin repetir y 200 como
+ * mucho.
  */
 export function libraryCandidates(
   items: readonly LibraryCandidate[],
@@ -679,12 +899,20 @@ export function libraryCandidates(
 ): LibraryCandidate[] {
   const q = foldText(query);
   if (!q) return [];
+  const key = channelSearchKey(query);
+  const byKey = key.length >= CHANNEL_SEARCH_KEY_MIN;
   const seen = new Set<string>();
   const out: LibraryCandidate[] = [];
   for (const item of items) {
     if (out.length >= IPTV_SEARCH.libraryCandidatesMax) break;
     if (seen.has(item.id)) continue;
-    if (!foldText(item.title).includes(q) && !categoryMatches(item.category, q)) continue;
+    if (
+      !foldText(item.title).includes(q) &&
+      !categoryMatches(item.category, q) &&
+      !(byKey && channelSearchKey(item.title).includes(key))
+    ) {
+      continue;
+    }
     seen.add(item.id);
     out.push(item);
   }

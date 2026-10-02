@@ -195,8 +195,26 @@ export const IPTV_RELAY = {
   /** Intentos de reconexión como mucho en `attemptsWindowMs`. */
   maxAttempts: 3,
   attemptsWindowMs: 60 * SECOND,
+  /**
+   * Una conexión que lleva este rato mandando bytes devuelve el presupuesto de
+   * reconexiones (sin esto, la cuarta caída en 60 s acababa el canal aunque las
+   * tres anteriores se hubieran arreglado). Mayor que `idleMs`.
+   */
+  stableMs: 20 * SECOND,
+  /** Tope largo, aunque cada reconexión salga bien: un proveedor que no para de caerse. */
+  maxReconnectsLong: 12,
+  reconnectsLongWindowMs: 10 * MINUTE,
   /** Salto de PTS/PCR tras reconectar por encima del cual se reinicia el remux. */
   ptsJumpMs: 5 * SECOND,
+  /**
+   * Puerta TS (iptv/ts-gate.ts): tras un empalme o una costura, sin punto de
+   * acceso del vídeo en este rato (de reloj) o en estos bytes, se deja pasar
+   * todo y se reinicia el remux (GOP abierto o refresco intra).
+   */
+  rapWaitMs: 4 * SECOND,
+  rapWaitBytes: 8 * 1024 * 1024,
+  /** Salto del PTS del vídeo dentro de una conexión que cuenta como costura. */
+  seamPtsMs: 1500,
   /** Segmentos HLS recordados (`seq → URL real`). */
   segmentMemory: 40,
   /** La lista de medios del proveedor se pide como mucho una vez en este rato. */
