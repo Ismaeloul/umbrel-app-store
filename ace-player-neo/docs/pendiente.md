@@ -4,6 +4,19 @@ Lo que no se pudo hacer esta noche, con el detalle para retomarlo.
 
 (vacío por ahora)
 
+## Pedido por Isma (2-oct, tras probar la 0.8.3) — para cuando se reinicie la cuota
+
+1. **Los controles del reproductor tardan mucho en esconderse** al quitar el ratón de encima, y también en
+   pantalla completa. Tienen que irse antes.
+2. **«Vas en directo» y a la vez «8 s de retraso»** (7, 8 s… todo el rato) en los controles del reproductor: si
+   dice que vas en directo no puede decir que vas con retraso. Corregir el texto o el criterio.
+3. **Agenda (0.8.4):** ya hecha y revisada en la rama `fix/agenda-filtrado`; falta cortar la release.
+4. **Pelis y series (0.9.0):** plan en `docs/vod-estado.md` (rama `vod/1-contrato`). Pendiente de Isma: el
+   Paso 0 en su Umbrel y si los títulos para adultos salen en la portada.
+5. La app de iPhone, al final, cuando la web esté pulida.
+
+Nota: la IPTV de la 0.8.3 «parece que va bien» (Isma, 2-oct).
+
 ## Resuelto
 
 - **Claude in Chrome bloqueado por AdGuard** (22-sep, 23:50): cada
