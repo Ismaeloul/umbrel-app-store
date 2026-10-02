@@ -52,8 +52,15 @@ export const THESPORTSDB_LEAGUES: ReadonlyArray<{
 ];
 /** Selecciones cuyos próximos partidos se piden con `eventsnext.php` (España absoluta masculina). */
 export const THESPORTSDB_NATIONAL_TEAMS: readonly string[] = ['133909'];
-/** Peticiones simultáneas por competición: la clave gratuita admite ~30 por minuto. */
-export const THESPORTSDB_LEAGUE_BATCH = 2;
+/**
+ * Competiciones que se piden a la vez (cada una son 2-3 peticiones seguidas).
+ * Con 4, las 7 van en dos tandas: unas 6 peticiones en serie como mucho. Con
+ * la clave `123`, 70 peticiones seguidas en un minuto respondieron todas 200
+ * (2026-10-02); el tope publicado de la gratuita es de unas 30 por minuto.
+ */
+export const THESPORTSDB_LEAGUE_BATCH = 4;
+/** Plazo de cada petición por competición (el global de la agenda es de 60 s). */
+export const THESPORTSDB_REQUEST_MS = 10_000;
 /** futbolenlatv (server.js:1991-1992). */
 export const FLTV_URL = 'https://www.futbolenlatv.com/';
 export const FLTV_MAX_BYTES = 6 * 1024 * 1024;

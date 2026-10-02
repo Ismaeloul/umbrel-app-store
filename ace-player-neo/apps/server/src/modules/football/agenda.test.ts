@@ -4,7 +4,14 @@
 
 import { FootballScheduleSchema, TIMEOUTS } from '@ace/shared';
 import { describe, expect, it } from 'vitest';
-import { EPG_BASE, ESPN_BASE, FLTV_URL, FOOTBALL_CACHE_MS, THESPORTSDB_BASE } from './constants.js';
+import {
+  EPG_BASE,
+  ESPN_BASE,
+  FLTV_URL,
+  FOOTBALL_CACHE_MS,
+  THESPORTSDB_BASE,
+  THESPORTSDB_REQUEST_MS,
+} from './constants.js';
 import {
   epgSplitTeams,
   enrichFootballLeagues,
@@ -610,7 +617,24 @@ describe('TheSportsDB por competición (fix/agenda-filtrado)', () => {
     expect(net.calls.some((call) => call.url.includes('eventsday.php'))).toBe(false);
   });
 
-  it('una competición caída no tumba la agenda; todas caídas y sin eventstv, football_unavailable', async () => {
+  it('LaLiga caída no tumba la agenda: la Champions y la selección siguen (revisión)', async () => {
+    const routes = leagueRoutes();
+    routes[`${base}/eventsnextleague.php?id=4335`] = () => {
+      throw new Error('ECONNRESET');
+    };
+    const { football, net } = createFootball({ net: routes });
+    const schedule = await football.schedule();
+    expect(schedule).toMatchObject({ source: 'thesportsdb', partial: true });
+    const ids = schedule.days.flatMap((day) => day.matches.map((match) => match.id));
+    expect(ids).not.toContain('2440101');
+    // sin jornadas de LaLiga no se sabe qué equipos son españoles: la Champions entra entera
+    expect(ids).toEqual(expect.arrayContaining(['2450001', '2450002', '2442800']));
+    // cada petición por competición lleva su plazo corto
+    const league = net.calls.find((call) => call.url.includes('eventsnextleague.php?id=4480'));
+    expect(league?.options.totalTimeoutMs).toBe(THESPORTSDB_REQUEST_MS);
+  });
+
+  it('todas las competiciones caídas y sin eventstv: football_unavailable', async () => {
     const { football } = createFootball({
       net: {
         [FLTV_URL]: 'sin partidos',

@@ -373,4 +373,7 @@ conservador). Todas se pueden revertir.
   (`THESPORTSDB_LEAGUES`, ids comprobados: LaLiga 4335, Hypermotion 4400,
   Copa del Rey 4483, Supercopa 4511, Champions 4480, Europa 4481,
   Conference 5071; las europeas solo con equipos españoles) y la selección
-  (`eventsnext.php?id=133909`). Unas 25-35 peticiones cada 30 min.
+  (`eventsnext.php?id=133909`). Unas 25-35 peticiones cada 30 min, en
+  tandas de 4 competiciones, a la vez que `eventstv.php` y con 10 s por
+  petición, para que una competición lenta no agote el plazo global de 60 s;
+  una competición caída solo marca la agenda `partial`.

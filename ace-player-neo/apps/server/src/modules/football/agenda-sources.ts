@@ -35,6 +35,7 @@ import {
   THESPORTSDB_LEAGUES,
   THESPORTSDB_NATIONAL_TEAMS,
   THESPORTSDB_PUBLIC_KEY,
+  THESPORTSDB_REQUEST_MS,
 } from './constants.js';
 import {
   addIsoDays,
@@ -653,10 +654,11 @@ async function sportsDbEvents(
   fetchText: TextFetcher,
   url: string,
   field = 'events',
+  options?: Parameters<TextFetcher>[1],
 ): Promise<Loose[]> {
   let data: unknown;
   try {
-    data = JSON.parse(await fetchText(url));
+    data = JSON.parse(await (options ? fetchText(url, options) : fetchText(url)));
   } catch (error) {
     if (error instanceof SyntaxError) throw new AppError('football_unavailable');
     throw error;
@@ -688,15 +690,23 @@ export async function fetchSportsDbLeagueRows(
   const base = `${THESPORTSDB_BASE}/${ctx.apiKey}`;
   let requests = 0;
   let failures = 0;
+  /* Cada petición con su plazo corto: una competición lenta no se come el
+     plazo global de la agenda (60 s, que también gastan futbolenlatv y la EPG). */
   const get = async (url: string): Promise<Loose[]> => {
     requests += 1;
     try {
-      return await sportsDbEvents(fetchText, url);
+      return await sportsDbEvents(fetchText, url, 'events', {
+        totalTimeoutMs: THESPORTSDB_REQUEST_MS,
+      });
     } catch {
       failures += 1;
       return [];
     }
   };
+  // La selección va a la vez que las competiciones.
+  const nationalPending = Promise.all(
+    THESPORTSDB_NATIONAL_TEAMS.map((id) => get(`${base}/eventsnext.php?id=${id}`)),
+  );
   const perLeague: { league: (typeof THESPORTSDB_LEAGUES)[number]; rows: Loose[] }[] = [];
   for (let index = 0; index < THESPORTSDB_LEAGUES.length; index += THESPORTSDB_LEAGUE_BATCH) {
     const batch = THESPORTSDB_LEAGUES.slice(index, index + THESPORTSDB_LEAGUE_BATCH);
@@ -743,9 +753,7 @@ export async function fetchSportsDbLeagueRows(
       rows.push({ ...row, strLeague: league.name, strCountry: 'Spain' });
     }
   }
-  const national = await Promise.all(
-    THESPORTSDB_NATIONAL_TEAMS.map((id) => get(`${base}/eventsnext.php?id=${id}`)),
-  );
+  const national = await nationalPending;
   for (const row of national.flat()) rows.push({ ...row, strCountry: 'Spain' });
   return { rows, requests, failures };
 }
@@ -761,15 +769,16 @@ export async function fetchTheSportsDbSchedule(
   const dates = Array.from({ length: ctx.days + 1 }, (_, index) =>
     addIsoDays(startDate, index - 1),
   );
-  /* v2: primero las competiciones que interesan, una a una (la clave
-     gratuita sí da jornadas enteras); `eventstv.php` añade después los
-     canales de cada partido y lo que se emita en España de otras ligas. La
-     versión `legacy` sigue siendo la 0.6.59: solo `eventstv.php`. */
-  const leagues =
+  /* v2: las competiciones que interesan, una a una (la clave gratuita sí da
+     jornadas enteras), a la vez que `eventstv.php`, que añade los canales de
+     cada partido y lo que se emita en España de otras ligas (sus filas van
+     detrás: el rótulo de la competición lo pone la jornada). La versión
+     `legacy` sigue siendo la 0.6.59: solo `eventstv.php`. */
+  const leaguesPending: Promise<SportsDbLeagueRows> =
     ctx.flavor === 'stable'
-      ? await fetchSportsDbLeagueRows(fetchText, ctx, addIsoDays(startDate, ctx.days))
-      : { rows: [], requests: 0, failures: 0 };
-  const settled = await Promise.allSettled(
+      ? fetchSportsDbLeagueRows(fetchText, ctx, addIsoDays(startDate, ctx.days))
+      : Promise.resolve({ rows: [], requests: 0, failures: 0 });
+  const settledPending = Promise.allSettled(
     dates.map(async (date) => {
       const params = new URLSearchParams({ d: date, s: 'Soccer', a: ctx.country });
       return sportsDbEvents(
@@ -779,6 +788,7 @@ export async function fetchTheSportsDbSchedule(
       );
     }),
   );
+  const [leagues, settled] = await Promise.all([leaguesPending, settledPending]);
   const successful = settled.filter(
     (result): result is PromiseFulfilledResult<Loose[]> => result.status === 'fulfilled',
   );
