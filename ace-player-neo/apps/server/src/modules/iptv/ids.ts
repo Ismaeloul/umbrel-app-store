@@ -22,7 +22,8 @@ import type { IptvKeys } from '../../config/keys.js';
 const HEAD_HEX = 32;
 const TAG_HEX = 8;
 
-function tagOf(keys: Pick<IptvKeys, 'idTag'>, head: string): string {
+/** Etiqueta de 8 hex de una cabeza de 32 hex (también la de los ids VOD, docs/vod.md §5). */
+export function tagOf(keys: Pick<IptvKeys, 'idTag'>, head: string): string {
   return createHmac('sha256', keys.idTag).update(head).digest('hex').slice(0, TAG_HEX);
 }
 

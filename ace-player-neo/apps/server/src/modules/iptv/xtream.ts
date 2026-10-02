@@ -20,7 +20,11 @@
      IPTV las enseña así, §16.3); un canal con `category_ids` usa el primero.
    - URL de stream: `{server}/live/{U}/{P}/{stream_id}.{ext}` con `ts` si está
      en `allowed_output_formats` (o si viene vacía) y si no `m3u8`. No se usa
-     `direct_source` ni `server_info.url`: manda el servidor que escribió Isma. */
+     `direct_source` ni `server_info.url`: manda el servidor que escribió Isma.
+   - Películas y series (docs/vod.md §4.2): las llamadas VOD viven en
+     `vod/xtream-vod.ts`; de aquí salen `xtreamApiUrl`, los números y textos
+     tolerantes, las categorías con la acción como parámetro y
+     `xtreamVodUrl` (`{server}/movie|series/{U}/{P}/{id}.{ext}`). */
 
 import {
   IPTV_MAX_CHANNELS,
@@ -81,12 +85,14 @@ export function looseNumber(value: unknown): number | null {
   return null;
 }
 
-function looseInt(value: unknown): number | null {
+/** Entero no negativo tolerante (`"12"`, `12.7` → 12); null para lo demás. */
+export function looseInt(value: unknown): number | null {
   const number = looseNumber(value);
   return number === null || number < 0 ? null : Math.floor(number);
 }
 
-function looseString(value: unknown): string {
+/** Texto tolerante: cadenas recortadas y números finitos; '' para lo demás. */
+export function looseString(value: unknown): string {
   if (typeof value === 'string') return value.trim();
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   return '';
@@ -130,6 +136,37 @@ export function xtreamStreamUrl(
   return `${credentials.server}/live/${segment(credentials.username)}/${segment(
     credentials.password,
   )}/${segment(streamId)}.${ext}`;
+}
+
+/** Extensiones de un título VOD que admite la URL (lista cerrada, docs/vod.md §4.3 y §9.3). */
+const VOD_URL_EXTENSIONS: ReadonlySet<string> = new Set([
+  'mp4',
+  'mkv',
+  'm4v',
+  'mov',
+  'avi',
+  'ts',
+  'webm',
+]);
+
+/**
+ * `{server}/movie/{U}/{P}/{stream_id}.{ext}` o
+ * `{server}/series/{U}/{P}/{episode_id}.{ext}` (docs/vod.md §9.3). `source`
+ * es numérico y `ext` sale de una lista cerrada: nada del panel se cuela en
+ * la ruta. La URL nunca sale del módulo (la usa el relé VOD).
+ */
+export function xtreamVodUrl(
+  credentials: XtreamCredentials,
+  kind: 'movie' | 'series',
+  source: number,
+  ext: string,
+): string {
+  if (!Number.isSafeInteger(source) || source < 1) throw new AppError('iptv_gone');
+  if (!VOD_URL_EXTENSIONS.has(ext)) throw new AppError('iptv_gone');
+  const segment = (value: string) => encodeURIComponent(value);
+  return `${credentials.server}/${kind}/${segment(credentials.username)}/${segment(
+    credentials.password,
+  )}/${source}.${ext}`;
 }
 
 function accountStatus(auth: boolean, raw: string): IptvAccountStatus {
@@ -224,20 +261,31 @@ export function hasUserInfo(body: unknown): boolean {
   return Boolean(info && typeof info === 'object' && !Array.isArray(info));
 }
 
+/** Acciones de categorías de `player_api` (directo, películas y series). */
+export type XtreamCategoryAction =
+  | 'get_live_categories'
+  | 'get_vod_categories'
+  | 'get_series_categories';
+
 /**
- * `get_live_categories`: id → nombre, en el orden del panel (el `Map`
- * conserva el de inserción). Un fallo aquí no tumba la sincronización.
+ * `get_live_categories` (o la acción VOD que se pida, docs/vod.md §4.2): id →
+ * nombre, en el orden del panel (el `Map` conserva el de inserción). Un
+ * fallo aquí no tumba la sincronización.
  */
 export async function xtreamCategories(
   net: NetClient,
   credentials: XtreamCredentials,
-  options: XtreamCallOptions,
+  options: XtreamCallOptions & {
+    readonly limits?: { readonly maxBytes: number; readonly totalMs: number };
+  },
+  action: XtreamCategoryAction = 'get_live_categories',
 ): Promise<Map<string, string>> {
   const out = new Map<string, string>();
+  const limits = options.limits ?? IPTV_XTREAM_LIMITS.liveCategories;
   try {
-    const response = await net.fetchJson(xtreamApiUrl(credentials, 'get_live_categories'), {
-      maxBytes: IPTV_XTREAM_LIMITS.liveCategories.maxBytes,
-      totalTimeoutMs: IPTV_XTREAM_LIMITS.liveCategories.totalMs,
+    const response = await net.fetchJson(xtreamApiUrl(credentials, action), {
+      maxBytes: limits.maxBytes,
+      totalTimeoutMs: limits.totalMs,
       headers: HEADERS,
       iptv: options.policy,
       ...(options.signal ? { signal: options.signal } : {}),

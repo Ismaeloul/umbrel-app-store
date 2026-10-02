@@ -5,6 +5,10 @@
      otro proveedor. Forma `SealedSchema` (base64url).
    - Catálogo y guía (`catalogo.enc`, `guia.enc`): JSON en gzip y AES-256-GCM
      en binario, con su propio AAD (`ace-iptv-catalog|…`, `ace-iptv-guide|…`).
+   - Catálogo de Películas y series (`vod.enc`, docs/vod.md §4.6): el mismo
+     formato, pero con BYTES en vez de JSON (`sealBlobBytes`/`openBlobBytes`)
+     y gzip asíncrono: son ~12 MiB de arrays tipados y no se hace
+     `JSON.parse` de filas (T15). AAD `ace-iptv-vod|…`.
    - Claves: las de `config.security.keys.iptv` si hay semilla (`ACE_SEED` o
      `ENGINE_CONTROL_TOKEN`); si no, se crea `v2/iptv/clave` (32 bytes, 0600,
      carpeta 0700) y se deriva de ella. Nunca las de un solo arranque: las
@@ -16,7 +20,8 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { once } from 'node:events';
-import { createGzip, gunzipSync, gzipSync } from 'node:zlib';
+import { promisify } from 'node:util';
+import { createGzip, gunzip, gunzipSync, gzip, gzipSync } from 'node:zlib';
 import type { IptvKind, Sealed } from '@ace/shared';
 import { AppError } from '../../core/errors.js';
 import type { AppConfig } from '../../config/index.js';
@@ -44,6 +49,14 @@ export function catalogAad(providerId: string): string {
 export function guideAad(providerId: string): string {
   return `ace-iptv-guide|${providerId}`;
 }
+
+/** AAD del catálogo VOD (docs/vod.md §4.6). */
+export function vodAad(providerId: string): string {
+  return `ace-iptv-vod|${providerId}`;
+}
+
+const gzipAsync = promisify(gzip);
+const gunzipAsync = promisify(gunzip);
 
 function unreadable(detail: string, cause?: unknown): AppError {
   return new AppError('iptv_secret_unreadable', {
@@ -138,6 +151,49 @@ export function openBlob(key: Buffer, aad: string, blob: Buffer): unknown {
     return JSON.parse(gunzipSync(plain).toString('utf8')) as unknown;
   } catch (error) {
     throw unreadable('un fichero cifrado de la IPTV no se puede leer', error);
+  }
+}
+
+/**
+ * Cifra bytes (el catálogo VOD, docs/vod.md §4.6): gzip ASÍNCRONO y
+ * AES-256-GCM, con la misma cabecera que `sealBlob`. Sin JSON por medio.
+ */
+export async function sealBlobBytes(
+  key: Buffer,
+  aad: string,
+  bytes: Buffer | readonly Buffer[],
+): Promise<Buffer> {
+  const plain = await gzipAsync(Buffer.isBuffer(bytes) ? bytes : Buffer.concat(bytes));
+  const iv = randomBytes(IV_BYTES);
+  const cipher = createCipheriv(ALG, key, iv, { authTagLength: TAG_BYTES });
+  cipher.setAAD(Buffer.from(aad, 'utf8'));
+  const data = Buffer.concat([cipher.update(plain), cipher.final()]);
+  return Buffer.concat([BLOB_MAGIC, iv, cipher.getAuthTag(), data]);
+}
+
+/**
+ * Descifra lo de `sealBlobBytes` y descomprime sin bloquear el hilo. Con otra
+ * clave, otro AAD (otro proveedor) o bytes rotos, `iptv_secret_unreadable`.
+ */
+export async function openBlobBytes(key: Buffer, aad: string, blob: Buffer): Promise<Buffer> {
+  let plain: Buffer;
+  try {
+    if (!blob.subarray(0, BLOB_MAGIC.length).equals(BLOB_MAGIC)) throw new Error('cabecera');
+    const start = BLOB_MAGIC.length;
+    const iv = blob.subarray(start, start + IV_BYTES);
+    const tag = blob.subarray(start + IV_BYTES, start + IV_BYTES + TAG_BYTES);
+    const data = blob.subarray(start + IV_BYTES + TAG_BYTES);
+    const decipher = createDecipheriv(ALG, key, iv, { authTagLength: TAG_BYTES });
+    decipher.setAAD(Buffer.from(aad, 'utf8'));
+    decipher.setAuthTag(tag);
+    plain = Buffer.concat([decipher.update(data), decipher.final()]);
+  } catch (error) {
+    throw unreadable('un fichero cifrado de la IPTV no se puede leer', error);
+  }
+  try {
+    return await gunzipAsync(plain);
+  } catch (error) {
+    throw unreadable('un fichero cifrado de la IPTV no se puede descomprimir', error);
   }
 }
 

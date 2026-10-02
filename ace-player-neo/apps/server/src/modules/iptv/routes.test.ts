@@ -4,7 +4,12 @@
 
 import { Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
-import { IptvBrowseResponseSchema, IptvViewSchema } from '@ace/shared';
+import {
+  IptvBrowseResponseSchema,
+  IptvViewSchema,
+  VodBrowseResponseSchema,
+  VodHomeSchema,
+} from '@ace/shared';
 import { createLogger } from '../../core/logger.js';
 import { FAKE_TOKEN, createTestApp, native, web } from '../../../test/helpers/index.js';
 
@@ -99,25 +104,37 @@ describe('rutas de la IPTV (esqueleto del contrato)', () => {
   });
 });
 
-/* Películas y series (docs/vod.md §11.1): esqueleto del contrato (VOD-1).
-   Las rutas existen y validan su entrada; el catálogo (VOD-2) y la
-   reproducción (VOD-5) sustituyen el 501 por las respuestas de verdad. */
-describe('rutas de Películas y series (esqueleto del contrato)', () => {
+/* Películas y series (docs/vod.md §11.1). Sin IPTV: la portada y la rejilla
+   responden 200 con `active: false` (no es un error); la ficha y el progreso,
+   `vod_unavailable`; un cartel, `vod_not_found`. `vodStream` sigue en 501
+   hasta los enganches de la reproducción (VOD-5). Con IPTV, vod-service.test.ts. */
+describe('rutas de Películas y series sin IPTV', () => {
   const VOD_ID = '4b5c6d7e8f9012345678abcdef0123457a8b9c0d';
 
-  it('las 6 responden 501 not_implemented desde la web, con la entrada ya validada', async () => {
+  it('portada y rejilla 200 con active false; ficha, cartel y progreso con su código; vodStream 501', async () => {
     const { app } = await createTestApp();
-    const cases = [
-      '/api/v1/vod',
-      '/api/v1/vod/browse?kind=series&q=office',
-      `/api/v1/vod/titles/${VOD_ID}`,
-      `/api/v1/vod/titles/${VOD_ID}/art/poster?v=3fa9c210`,
-      `/api/v1/vod/titles/${VOD_ID}/stream?client=web&viewer=viewer_tab01`,
+    const home = await app.inject({ method: 'GET', url: '/api/v1/vod', headers: web() });
+    expect(home.statusCode).toBe(200);
+    expect(VodHomeSchema.parse(home.json())).toMatchObject({ active: false, state: 'off' });
+    const browse = await app.inject({
+      method: 'GET',
+      url: '/api/v1/vod/browse?kind=series&q=office',
+      headers: web(),
+    });
+    expect(browse.statusCode).toBe(200);
+    expect(VodBrowseResponseSchema.parse(browse.json())).toMatchObject({
+      active: false,
+      items: [],
+    });
+    const cases: Array<[string, number, string]> = [
+      [`/api/v1/vod/titles/${VOD_ID}`, 503, 'vod_unavailable'],
+      [`/api/v1/vod/titles/${VOD_ID}/art/poster?v=3fa9c210`, 404, 'vod_not_found'],
+      [`/api/v1/vod/titles/${VOD_ID}/stream?client=web&viewer=viewer_tab01`, 501, 'not_implemented'],
     ];
-    for (const url of cases) {
+    for (const [url, status, code] of cases) {
       const res = await app.inject({ method: 'GET', url, headers: web() });
-      expect(res.statusCode, url).toBe(501);
-      expect(res.json().error.code, url).toBe('not_implemented');
+      expect(res.statusCode, url).toBe(status);
+      expect(res.json().error.code, url).toBe(code);
     }
     const progress = await app.inject({
       method: 'POST',
@@ -125,7 +142,14 @@ describe('rutas de Películas y series (esqueleto del contrato)', () => {
       headers: web({ 'content-type': 'application/json' }),
       payload: { event: 'tick', posS: 60, durS: 5400 },
     });
-    expect(progress.statusCode).toBe(501);
+    expect(progress.statusCode).toBe(503);
+    const short = await app.inject({
+      method: 'GET',
+      url: '/api/v1/vod/browse?q=a',
+      headers: web(),
+    });
+    expect(short.statusCode).toBe(400);
+    expect(short.json().error.code).toBe('empty_query');
   });
 
   it('entrada mala → 400 antes del manejador; desde /native, 403 o 401', async () => {
