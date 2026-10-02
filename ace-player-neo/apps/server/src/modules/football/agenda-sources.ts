@@ -31,6 +31,9 @@ import {
   FOOTBALL_SPAIN,
   FOOTBALL_TIMEZONE,
   THESPORTSDB_BASE,
+  THESPORTSDB_LEAGUE_BATCH,
+  THESPORTSDB_LEAGUES,
+  THESPORTSDB_NATIONAL_TEAMS,
   THESPORTSDB_PUBLIC_KEY,
 } from './constants.js';
 import {
@@ -646,6 +649,107 @@ export async function enrichFootballLeagues<T extends { id: string; competition:
   return matches;
 }
 
+async function sportsDbEvents(
+  fetchText: TextFetcher,
+  url: string,
+  field = 'events',
+): Promise<Loose[]> {
+  let data: unknown;
+  try {
+    data = JSON.parse(await fetchText(url));
+  } catch (error) {
+    if (error instanceof SyntaxError) throw new AppError('football_unavailable');
+    throw error;
+  }
+  const events = asRecord(data)[field];
+  return Array.isArray(events) ? events.map(asRecord) : [];
+}
+
+/** Resultado de pedir la agenda por competición: filas y peticiones fallidas. */
+export interface SportsDbLeagueRows {
+  readonly rows: Loose[];
+  readonly requests: number;
+  readonly failures: number;
+}
+
+/**
+ * Partidos de las competiciones de `THESPORTSDB_LEAGUES` y de la selección
+ * (v2, fix/agenda-filtrado). Por competición: `eventsnextleague.php` da la
+ * próxima jornada y su temporada; `eventsround.php` la trae entera (y la
+ * siguiente en las ligas, si la ventana llega). Las europeas se quedan solo
+ * con partidos de equipos españoles (los ids salen de las jornadas de Primera
+ * y Segunda). Cada fila lleva el rótulo en castellano de su competición.
+ */
+export async function fetchSportsDbLeagueRows(
+  fetchText: TextFetcher,
+  ctx: Pick<AgendaContext, 'apiKey'>,
+  lastDate: string,
+): Promise<SportsDbLeagueRows> {
+  const base = `${THESPORTSDB_BASE}/${ctx.apiKey}`;
+  let requests = 0;
+  let failures = 0;
+  const get = async (url: string): Promise<Loose[]> => {
+    requests += 1;
+    try {
+      return await sportsDbEvents(fetchText, url);
+    } catch {
+      failures += 1;
+      return [];
+    }
+  };
+  const perLeague: { league: (typeof THESPORTSDB_LEAGUES)[number]; rows: Loose[] }[] = [];
+  for (let index = 0; index < THESPORTSDB_LEAGUES.length; index += THESPORTSDB_LEAGUE_BATCH) {
+    const batch = THESPORTSDB_LEAGUES.slice(index, index + THESPORTSDB_LEAGUE_BATCH);
+    const results = await Promise.all(
+      batch.map(async (league) => {
+        const next = (await get(`${base}/eventsnextleague.php?id=${league.id}`))[0];
+        const round = Number(next?.intRound);
+        const season = String(next?.strSeason || '');
+        if (!next || !Number.isInteger(round) || !season) return { league, rows: [] };
+        if (String(next.dateEvent || '') > lastDate) return { league, rows: [] };
+        const roundUrl = (value: number) =>
+          `${base}/eventsround.php?${new URLSearchParams({ id: league.id, r: String(value), s: season })}`;
+        const rows = await get(roundUrl(round));
+        const latest = rows.reduce((max, row) => {
+          const date = String(row.dateEvent || '');
+          return date > max ? date : max;
+        }, '');
+        if (league.round && latest && latest < lastDate)
+          rows.push(...(await get(roundUrl(round + 1))));
+        return { league, rows: rows.length ? rows : [next] };
+      }),
+    );
+    perLeague.push(...results);
+  }
+  const spanishTeams = new Set<string>();
+  for (const { league, rows } of perLeague) {
+    if (!league.round) continue;
+    for (const row of rows) {
+      for (const id of [row.idHomeTeam, row.idAwayTeam]) if (id) spanishTeams.add(String(id));
+    }
+  }
+  const rows: Loose[] = [];
+  for (const { league, rows: leagueRows } of perLeague) {
+    for (const row of leagueRows) {
+      if (String(row.idLeague || league.id) !== league.id) continue;
+      if (
+        league.spanishOnly &&
+        spanishTeams.size &&
+        !spanishTeams.has(String(row.idHomeTeam || '')) &&
+        !spanishTeams.has(String(row.idAwayTeam || ''))
+      ) {
+        continue;
+      }
+      rows.push({ ...row, strLeague: league.name, strCountry: 'Spain' });
+    }
+  }
+  const national = await Promise.all(
+    THESPORTSDB_NATIONAL_TEAMS.map((id) => get(`${base}/eventsnext.php?id=${id}`)),
+  );
+  for (const row of national.flat()) rows.push({ ...row, strCountry: 'Spain' });
+  return { rows, requests, failures };
+}
+
 /** `fetchFootballSchedule` (server.js:2522-2557): último recurso. Lanza `football_unavailable`. */
 export async function fetchTheSportsDbSchedule(
   fetchText: TextFetcher,
@@ -657,25 +761,31 @@ export async function fetchTheSportsDbSchedule(
   const dates = Array.from({ length: ctx.days + 1 }, (_, index) =>
     addIsoDays(startDate, index - 1),
   );
+  /* v2: primero las competiciones que interesan, una a una (la clave
+     gratuita sí da jornadas enteras); `eventstv.php` añade después los
+     canales de cada partido y lo que se emita en España de otras ligas. La
+     versión `legacy` sigue siendo la 0.6.59: solo `eventstv.php`. */
+  const leagues =
+    ctx.flavor === 'stable'
+      ? await fetchSportsDbLeagueRows(fetchText, ctx, addIsoDays(startDate, ctx.days))
+      : { rows: [], requests: 0, failures: 0 };
   const settled = await Promise.allSettled(
     dates.map(async (date) => {
       const params = new URLSearchParams({ d: date, s: 'Soccer', a: ctx.country });
-      const text = await fetchText(`${THESPORTSDB_BASE}/${ctx.apiKey}/eventstv.php?${params}`);
-      let data: unknown;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        throw new AppError('football_unavailable');
-      }
-      const events = asRecord(data).tvevents;
-      return Array.isArray(events) ? (events as unknown[]) : [];
+      return sportsDbEvents(
+        fetchText,
+        `${THESPORTSDB_BASE}/${ctx.apiKey}/eventstv.php?${params}`,
+        'tvevents',
+      );
     }),
   );
   const successful = settled.filter(
-    (result): result is PromiseFulfilledResult<unknown[]> => result.status === 'fulfilled',
+    (result): result is PromiseFulfilledResult<Loose[]> => result.status === 'fulfilled',
   );
-  if (!successful.length) throw new AppError('football_unavailable');
-  const rows = successful.flatMap((result) => result.value);
+  if (!successful.length && leagues.requests === leagues.failures) {
+    throw new AppError('football_unavailable');
+  }
+  const rows = [...leagues.rows, ...successful.flatMap((result) => result.value)];
   const matches = await enrichFootballLeagues(
     normalizeFootballRows(rows, { country: ctx.country, withStart: ctx.flavor === 'stable' }),
     (idEvent) => lookupFootballLeague(fetchText, ctx.apiKey, idEvent),
@@ -684,7 +794,7 @@ export async function fetchTheSportsDbSchedule(
     source: 'thesportsdb',
     attribution: 'TheSportsDB',
     limited: ctx.apiKey === THESPORTSDB_PUBLIC_KEY,
-    partial: successful.length !== dates.length,
+    partial: successful.length !== dates.length || leagues.failures > 0,
     days: footballDaysFromMatches(startDate, matches, ctx.days),
   });
 }

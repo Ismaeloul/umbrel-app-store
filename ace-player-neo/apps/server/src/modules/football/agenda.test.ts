@@ -559,3 +559,73 @@ describe('Cadena de la agenda del servicio (B-123, B-124, B-125; arquitectura §
     expect(net.calls.some((call) => call.url.startsWith(ESPN_BASE))).toBe(false);
   });
 });
+
+describe('TheSportsDB por competición (fix/agenda-filtrado)', () => {
+  const base = `${THESPORTSDB_BASE}/123`;
+  function leagueRoutes(): Record<string, NetRoute | string> {
+    return {
+      [`${base}/eventsnextleague.php?id=4335`]: fixture('thesportsdb-eventsnextleague-4335.json'),
+      [`${base}/eventsround.php?id=4335&r=18&s=2025-2026`]: fixture(
+        'thesportsdb-eventsround-4335-18.json',
+      ),
+      [`${base}/eventsround.php?id=4335&r=19&s=2025-2026`]: fixture(
+        'thesportsdb-eventsround-4335-19.json',
+      ),
+      [`${base}/eventsnextleague.php?id=4480`]: fixture('thesportsdb-eventsnextleague-4480.json'),
+      [`${base}/eventsround.php?id=4480&r=6&s=2025-2026`]: fixture(
+        'thesportsdb-eventsround-4480-6.json',
+      ),
+      [`${base}/eventsnextleague.php?id=4400`]: '{"events":null}',
+      [`${base}/eventsnext.php?id=133909`]: fixture('thesportsdb-eventsnext-133909.json'),
+      ...sportsDbRoutes(),
+    };
+  }
+
+  it('trae las jornadas de LaLiga (y la siguiente), el Barça en Champions y la selección', async () => {
+    const { football, net } = createFootball({ net: leagueRoutes() });
+    const schedule = await football.schedule();
+    expect(FootballScheduleSchema.parse(schedule)).toEqual(schedule);
+    expect(schedule).toMatchObject({ source: 'thesportsdb', limited: true, partial: true });
+    const matches = schedule.days.flatMap((day) => day.matches);
+    expect(matches.find((match) => match.id === '2440101')).toMatchObject({
+      home: 'Barcelona',
+      away: 'Getafe',
+      competition: 'LaLiga EA Sports',
+      date: '2026-01-02',
+      time: '21:00',
+      start: Date.UTC(2026, 0, 2, 20),
+    });
+    expect(matches.find((match) => match.id === '2440111')?.competition).toBe('LaLiga EA Sports');
+    // Champions: solo con equipo español (los ids salen de las jornadas de LaLiga)
+    expect(matches.find((match) => match.id === '2450001')?.competition).toBe('Champions League');
+    expect(matches.some((match) => match.id === '2450002')).toBe(false);
+    // la ronda de agosto queda fuera de la ventana
+    expect(matches.some((match) => match.id === '2450003')).toBe(false);
+    expect(matches.find((match) => match.id === '2442800')).toMatchObject({
+      home: 'Spain',
+      competition: 'UEFA Nations League',
+    });
+    // y eventstv sigue aportando canales y partidos de otras ligas
+    expect(matches.find((match) => match.id === '9001')?.channels).toHaveLength(1);
+    expect(net.calls.some((call) => call.url.includes('eventsday.php'))).toBe(false);
+  });
+
+  it('una competición caída no tumba la agenda; todas caídas y sin eventstv, football_unavailable', async () => {
+    const { football } = createFootball({
+      net: {
+        [FLTV_URL]: 'sin partidos',
+        [`${EPG_BASE}/OTT/contents/channels`]: 'no es json',
+        [`${base}/eventsnextleague.php`]: () => {
+          throw new Error('ECONNRESET');
+        },
+        [`${base}/eventsnext.php`]: () => {
+          throw new Error('ECONNRESET');
+        },
+        [`${base}/eventstv.php`]: () => {
+          throw new Error('ECONNRESET');
+        },
+      },
+    });
+    await expect(football.schedule()).rejects.toMatchObject({ code: 'football_unavailable' });
+  });
+});
