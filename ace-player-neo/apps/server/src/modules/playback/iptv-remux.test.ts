@@ -8,9 +8,10 @@
    - dos reinicios a la vez (vigilante y relé): manda el último, sin cierre. */
 
 import { performance } from 'node:perf_hooks';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ChannelStreamQuery, IptvReason } from '@ace/shared';
 import type { FakeClock } from '../../core/clock.js';
+import type * as RemuxFiles from '../remux/files.js';
 import { ioTurns } from '../remux/test-support.js';
 import { IPTV_STALL_MIN_MS } from '../remux/service.js';
 import type { IptvInput, IptvService } from '../iptv/types.js';
@@ -26,6 +27,26 @@ const query = (): ChannelStreamQuery => ({
   viewer: 'visor-web',
 });
 const web = (): ViewerIdentity => ({ viewerId: 'visor-web', deviceId: 'pc', device: null });
+
+/* Lecturas de index.m3u8 que el remux tiene a medias (E/S real). `step` no adelanta el reloj falso con una
+   en curso: en la CI cargada una lectura empezada antes de `writeSegments` cruzaba varios pasos y acababa,
+   sin el segmento recién escrito, ya pasado `max(10 s, 3×TD)`, y salía un iptv_dropped que no toca. */
+const lecturas = vi.hoisted(() => ({ enCurso: 0 }));
+
+vi.mock('../remux/files.js', async (importOriginal) => {
+  const original = await importOriginal<typeof RemuxFiles>();
+  return {
+    ...original,
+    readPlaylistInfo: async (file: string) => {
+      lecturas.enCurso += 1;
+      try {
+        return await original.readPlaylistInfo(file);
+      } finally {
+        lecturas.enCurso -= 1;
+      }
+    },
+  };
+});
 
 /** Doble de la IPTV: un canal propio y un relé que avisa cuando el test quiere. */
 function fakeIptv() {
@@ -59,12 +80,14 @@ async function until(what: string, check: () => boolean): Promise<void> {
 
 /**
  * Avanza el reloj a pasos cortos dejando correr la E/S real entre paso y paso: la espera del remux relee la
- * lista (E/S real) antes de volver a aparcarse en el reloj, y así no se salta ninguna vuelta.
+ * lista (E/S real) antes de volver a aparcarse en el reloj, y así no se salta ninguna vuelta. El paso
+ * siguiente no empieza hasta que esa lectura termina: para el reloj falso, leer la lista no lleva tiempo.
  */
 async function step(clock: FakeClock, ms: number): Promise<void> {
   for (let left = ms; left > 0; left -= 250) {
     await clock.advanceAsync(Math.min(250, left));
     await ioTurns(10);
+    await until('lectura de la lista terminada', () => lecturas.enCurso === 0);
   }
 }
 
