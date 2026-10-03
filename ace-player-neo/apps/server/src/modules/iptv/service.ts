@@ -182,6 +182,10 @@ const PROVIDER_ID_CHARS = 8;
 const MINUTE = 60_000;
 /** Cuánto espera un canal M3U con el token caducado a que se refresque la lista (M6). */
 export const TOKEN_REFRESH_WAIT_MS = 10_000;
+/** La guía se vuelve a descargar esto después de que se acabe su programación (M8)… */
+export const GUIDE_AFTER_COVERAGE_MS = 45 * MINUTE;
+/** …pero nunca antes de esto desde la descarga anterior. */
+export const GUIDE_MIN_GAP_MS = 60 * MINUTE;
 
 function newProviderId(): string {
   return `p_${randomBytes(6).toString('base64url').slice(0, PROVIDER_ID_CHARS)}`;
@@ -553,13 +557,9 @@ export class IptvServiceImpl implements IptvService {
          quedarse la de antes, §20.3). Sin ella (la primera vez tras la 0.9.0) cuenta como
          vieja: se descarga ya. */
       const full = this.fullGuide.current();
-      const guideAge = this.guide && full ? now - full.meta.builtAt : Number.POSITIVE_INFINITY;
-      const guideDue =
-        guideAge >= IPTV_REFRESH.guideMs
-          ? atStart
-            ? 15_000
-            : 1_000
-          : IPTV_REFRESH.guideMs - guideAge;
+      /* La siguiente, a las 8 h o al acabarse su programación (M8). */
+      const left = this.guide && full ? this.nextGuideDelay(full.meta.builtAt) : 0;
+      const guideDue = left <= 0 ? (atStart ? 15_000 : 1_000) : left;
       this.schedule('guide', guideDue, () => this.periodicGuide());
     }
     if (record.kind === 'xtream') {
@@ -1876,8 +1876,23 @@ export class IptvServiceImpl implements IptvService {
       );
     } else {
       this.guideFailures = 0;
-      this.schedule('guide', IPTV_REFRESH.guideMs, () => this.periodicGuide());
+      this.schedule('guide', this.nextGuideDelay(builtAt), () => this.periodicGuide());
     }
+  }
+
+  /**
+   * Cuándo toca la siguiente descarga de la guía hecha en `builtAt` (M8): a
+   * las 8 h, o antes si su programación se acaba antes (la del panel de Isma
+   * solo cubre hoy): poco después del final, para coger la de mañana. Nunca
+   * antes de 1 h desde la anterior. ≤ 0 = ya.
+   */
+  private nextGuideDelay(builtAt: number): number {
+    const now = this.deps.clock.now();
+    let at = builtAt + IPTV_REFRESH.guideMs;
+    const to = this.fullGuide.current()?.coverage()?.to ?? null;
+    if (to !== null) at = Math.min(at, to + GUIDE_AFTER_COVERAGE_MS);
+    at = Math.max(at, builtAt + GUIDE_MIN_GAP_MS);
+    return at - now;
   }
 
   private async shortEpgFallback(
