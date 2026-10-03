@@ -140,21 +140,77 @@ describe('resolveFootballChannel con IPTV', () => {
     expect(result.candidates.map((c) => c.id)).toEqual([IPTV_GUIDE_ID, IPTV_ID]);
   });
 
-  it('la pista de la guía suma AceStream con el nivel topado (91): nunca adelanta a una ≥ 92', async () => {
+  /* Agenda híbrida (docs/iptv.md §4.7, cambia la regla de la pista topada en 91): el canal que confirma
+     la guía guía también AceStream. */
+  it('el canal de la guía se busca el primero en AceStream y sus fuentes van delante aunque la agenda anuncie otro', async () => {
     const d = deps(
-      layer({ hints: ['M+ LaLiga TV 2'] }),
+      layer({
+        candidates: [iptvCandidate(IPTV_GUIDE_ID, 'M+ LaLiga TV 2', 100, true, 'M+ LaLiga TV 2')],
+        hints: ['M+ LaLiga TV 2'],
+      }),
       found([
-        { id: ACE, title: 'DAZN LaLiga --> ELCANO', ih: true, availability: 30 },
-        { id: ACE_HINT, title: 'M+ LaLiga TV 2 --> NEW ERA', ih: true, availability: 90 },
+        { id: ACE, title: 'DAZN LaLiga --> ELCANO', ih: true, availability: 90 },
+        { id: ACE_HINT, title: 'M+ LaLiga TV 2 FHD --> NEW ERA', ih: true, availability: 30 },
       ]),
     );
     const result = await resolveFootballChannel({}, ['DAZN LaLiga'], d);
-    expect(result.candidates.map((c) => c.id)).toEqual([ACE, ACE_HINT]);
+    expect(result.candidates.map((c) => c.id)).toEqual([IPTV_GUIDE_ID, ACE_HINT, ACE]);
     const hinted = result.candidates.find((c) => c.id === ACE_HINT);
-    expect(hinted?.score).toBe(91);
+    expect(hinted?.score).toBe(100);
     expect(hinted?.matchedChannel).toBe('M+ LaLiga TV 2');
-    /* La pista también se busca en el motor. */
-    expect(d.searched).toContain('M+ LaLiga TV 2');
+    expect(result.candidate?.id).toBe(IPTV_GUIDE_ID);
+    /* Primero el canal de la guía (tal cual y sin la marca del operador), luego los de la agenda. */
+    expect(d.searched.slice(0, 3)).toEqual(['M+ LaLiga TV 2', 'laliga tv 2', 'DAZN LaLiga']);
+  });
+
+  it('las fuentes del canal de la guía, delante también de la IPTV por nombre de otro canal', async () => {
+    const d = deps(
+      layer({
+        candidates: [
+          iptvCandidate(IPTV_ID, 'DAZN LaLiga', 100, false, 'DAZN LaLiga'),
+          iptvCandidate(IPTV_GUIDE_ID, 'M+ LaLiga TV 2', 100, true, 'M+ LaLiga TV 2'),
+        ],
+        hints: ['M+ LaLiga TV 2'],
+      }),
+      found([
+        { id: ACE, title: 'DAZN LaLiga --> ELCANO', ih: true, availability: 90 },
+        { id: ACE_HINT, title: 'M+ LaLiga TV 2 --> NEW ERA', ih: true, availability: 30 },
+      ]),
+    );
+    const result = await resolveFootballChannel({}, ['DAZN LaLiga'], d);
+    expect(result.candidates.map((c) => c.id)).toEqual([IPTV_GUIDE_ID, ACE_HINT, IPTV_ID, ACE]);
+    /* «Rebuscar» igual. */
+    const research = await resolveFootballChannel({}, ['DAZN LaLiga'], d, { mode: 'research' });
+    expect(research.candidates.map((c) => c.id)).toEqual([IPTV_GUIDE_ID, ACE_HINT, IPTV_ID, ACE]);
+  });
+
+  it('con la guía de acuerdo con la agenda, ese canal delante de los otros que anuncia', async () => {
+    const d = deps(
+      layer({
+        candidates: [iptvCandidate(IPTV_GUIDE_ID, 'M+ LaLiga TV 2', 100, true, 'M+ LaLiga TV 2')],
+        hints: ['M+ LaLiga TV 2'],
+      }),
+      found([
+        { id: ACE, title: 'DAZN LaLiga --> ELCANO', ih: true, availability: 90 },
+        { id: ACE_HINT, title: 'M+ LaLiga TV 2 --> NEW ERA', ih: true, availability: 30 },
+      ]),
+    );
+    const result = await resolveFootballChannel({}, ['M+ LaLiga TV 2', 'DAZN LaLiga'], d);
+    expect(result.candidates.map((c) => c.id)).toEqual([IPTV_GUIDE_ID, ACE_HINT, ACE]);
+    expect(d.searched.slice(0, 3)).toEqual(['M+ LaLiga TV 2', 'laliga tv 2', 'DAZN LaLiga']);
+  });
+
+  it('sin guía: las consultas y el orden de siempre (la IPTV primero y AceStream por disponibilidad)', async () => {
+    const d = deps(
+      layer({ candidates: [iptvCandidate(IPTV_ID, 'DAZN LaLiga', 100, false, 'DAZN LaLiga')] }),
+      found([
+        { id: ACE_HINT, title: 'M+ LaLiga TV 2 --> NEW ERA', ih: true, availability: 30 },
+        { id: ACE, title: 'DAZN LaLiga --> ELCANO', ih: true, availability: 90 },
+      ]),
+    );
+    const result = await resolveFootballChannel({}, ['M+ LaLiga TV 2', 'DAZN LaLiga'], d);
+    expect(result.candidates.map((c) => c.id)).toEqual([IPTV_ID, ACE, ACE_HINT]);
+    expect(d.searched).toEqual(['M+ LaLiga TV 2', 'DAZN LaLiga']);
   });
 
   it('canal suelto sin ninguna IPTV: not_found y candidates vacío, sin buscar en el motor', async () => {
@@ -456,6 +512,34 @@ describe('overlayIptv: la IPTV de ahora sobre un precalentado (M1)', () => {
     const overlaid = overlayIptv(snapshot, snapshot.channels, null, iptv, deps(iptv).applyLearned);
     expect(overlaid.candidates.map((c) => c.id)).toEqual(fresh.candidates.map((c) => c.id));
     expect(overlaid.candidates.map((c) => c.id)).toContain(IPTV_FAV);
+  });
+
+  it('la guía de ahora pone delante las AceStream del canal que confirma (como la pasada nueva)', async () => {
+    const both = found([
+      { id: ACE, title: 'DAZN LaLiga --> ELCANO', ih: true, availability: 90 },
+      { id: ACE_HINT, title: 'M+ LaLiga TV 2 --> NEW ERA', ih: true, availability: 30 },
+    ]);
+    /* Precalentado de antes de la guía: las dos AceStream, DAZN delante (más disponible). */
+    const snapshot = await resolveFootballChannel(
+      {},
+      ['DAZN LaLiga', 'M+ LaLiga TV 2'],
+      deps(undefined, both),
+    );
+    expect(snapshot.candidates.map((c) => c.id)).toEqual([ACE, ACE_HINT]);
+    const guide = () =>
+      layer({
+        candidates: [iptvCandidate(IPTV_GUIDE_ID, 'M+ LaLiga TV 2', 100, true, 'M+ LaLiga TV 2')],
+        hints: ['M+ LaLiga TV 2'],
+      });
+    const iptv = guide();
+    const overlaid = overlayIptv(snapshot, snapshot.channels, null, iptv, deps(iptv).applyLearned);
+    expect(overlaid.candidates.map((c) => c.id)).toEqual([IPTV_GUIDE_ID, ACE_HINT, ACE]);
+    const fresh = await resolveFootballChannel(
+      {},
+      ['DAZN LaLiga', 'M+ LaLiga TV 2'],
+      deps(guide(), both),
+    );
+    expect(fresh.candidates.map((c) => c.id)).toEqual([IPTV_GUIDE_ID, ACE_HINT, ACE]);
   });
 
   it('lo aprendido ve las pistas de la guía de ahora, como la pasada nueva', () => {
