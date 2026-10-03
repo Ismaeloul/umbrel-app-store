@@ -62,6 +62,12 @@ Decisiones (VOD-3, 30-sep; 0.9.0, 3-oct):
 - **Lo que el proveedor no da no se pinta:** ni huecos, ni «N/A», ni botones
   desactivados (el tráiler solo si hay tráiler; los detalles, solo los que
   hay; la nota o la edad «0», fuera).
+- **Carruseles y tarjetas** (0.9.0, D-propuesta carruseles): la rueda
+  vertical baja la página aunque el ratón esté encima de una fila; al pasar
+  el ratón, un halo por detrás con 8 px de aire (`--cine-halo`) envuelve el
+  cartel y su texto, que entra 4 px (`--cine-text-inset`); el título pintado
+  en un cartel sin imagen (y en los de la demo, `POSTER_TEXT` de
+  `demo-art.ts`) acaba siempre a la misma altura y crece hacia arriba.
 - **El acceso directo del manifiesto** (`/?vista=cine`) llega con la 0.9.0,
   cuando se quite `?flag=cine` (VOD-7): antes llevaría a una vista que la
   barra no enseña.
