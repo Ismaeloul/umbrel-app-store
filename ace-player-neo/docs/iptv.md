@@ -110,8 +110,8 @@ los compara en `TextosTests`.
   - Región accesible: `getByRole('region', { name: 'IPTV' })`.
   - Descripción de la sección (`<Section description>`): «Si un canal o un partido está en tu IPTV, sale el primero. Si
     se cae, se pasa sola a la mejor fuente de AceStream.»
-- **Componente:** `apps/web/src/features/iptv/IptvSection.tsx`, con su `model.ts` puro y su CSS, montado con `WhenNear`
-  como las demás secciones pesadas.
+- **Componente:** `apps/web/src/features/iptv/IptvSection.tsx`, con su `model.ts` puro y su CSS, montado solo al abrir Ajustes → IPTV
+  (Ajustes enseña una sección cada vez).
   - **No** va por `external.tsx`: esa carpeta la buscan otras piezas y aquí basta con `React.lazy` en el `case 'iptv'`.
   - En la app nativa **no existe** esta sección (M7 no cambia).
 - **Se reutiliza lo que ya hay:** `TextField`, `Button`, `Switch`, `Segmented`, `Capsule`, `useSecondTap`
@@ -1480,6 +1480,15 @@ reproduce. Por eso:
   confirmada por la guía) cuenta como candidata y el partido queda `discovered`, no `no_sources`;
 - el medidor de la agenda cuenta esa IPTV como fuente jugable mientras no esté `failed`;
 - se quedan la palabra y el medidor de siempre. No hay nada visible nuevo.
+
+### 7.8 «Arranque instantáneo» (0.8.4, D24)
+
+A T-3 min del saque de un partido de tus equipos, playback puede abrir la IPTV elegida **sin visor** (relé + remux)
+para que «Ver» arranque al momento. Respeta la regla de una sola conexión: `iptv.prewarmBlocker()` lo impide si hay
+una sesión o una sonda abiertas (`iptv_in_use`, `iptv_probing`), si soltamos la plaza hace menos de
+`IPTV_SESSION.recentCloseMs` (`iptv_recent_close`) o si la cuenta Xtream tiene todas sus plazas ocupadas
+(`iptv_busy`). Con la sesión preparada abierta, la sonda de fondo de §7.3 no corre (`relay.sessions() > 0`). Si el relé
+se cae durante la preparación, se cierra sin veredicto «del reproductor» (no había nadie viendo).
 
 ---
 

@@ -37,7 +37,7 @@ import {
   type V1RouteId,
 } from '@ace/shared';
 import { isAllowedMutation } from './core/csrf.js';
-import { AppError, isAppError, toLegacyError, toV1Error } from './core/errors.js';
+import { AppError, errorCodeOf, isAppError, toLegacyError, toV1Error } from './core/errors.js';
 import {
   fastifyPathForLegacy,
   legacyOperationKey,
@@ -55,6 +55,7 @@ import * as engineRoutes from './modules/engine/routes.js';
 import * as eventsRoutes from './modules/events/routes.js';
 import * as footballRoutes from './modules/football/routes.js';
 import * as healthRoutes from './modules/health/routes.js';
+import * as instantStartRoutes from './modules/instant-start/routes.js';
 import * as iptvRoutes from './modules/iptv/routes.js';
 import * as netRoutes from './modules/net/routes.js';
 import * as playbackRoutes from './modules/playback/routes.js';
@@ -94,6 +95,7 @@ export const MODULE_ROUTES = [
   remuxRoutes,
   playbackRoutes,
   footballRoutes,
+  instantStartRoutes,
   teamsRoutes,
   authRoutes,
   eventsRoutes,
@@ -264,8 +266,14 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     else request.log.debug(entry, 'petición');
   });
 
-  app.setErrorHandler((error, request, reply) => {
+  app.setErrorHandler((rawError, request, reply) => {
     const v1 = isV1Path(request.url);
+    /* Restaurar una copia demasiado grande lo dice con su propio mensaje (D24). */
+    const error =
+      request.routeOptions.config?.v1RouteId === 'backupImport' &&
+      errorCodeOf(rawError) === 'body_too_large'
+        ? new AppError('backup_too_large', { cause: rawError })
+        : rawError;
     const out = v1 ? toV1Error(error, request.id) : toLegacyError(error);
     if (out.internal) {
       request.log.error({ err: error, reqId: request.id }, 'error interno');

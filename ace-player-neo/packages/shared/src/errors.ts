@@ -535,6 +535,33 @@ export const ERROR_CATALOG = {
     message: 'La lista de tu IPTV es demasiado grande para el Umbrel.',
   },
 
+  // --- Copia de seguridad de tus ajustes (0.8.4, decisiones.md D25) ---
+  backup_invalid: {
+    status: 400,
+    legacyStatus: null,
+    public: true,
+    message: 'Ese fichero no es una copia de seguridad de Ace Player Neo o está dañado.',
+  },
+  backup_version_unsupported: {
+    status: 422,
+    legacyStatus: null,
+    public: true,
+    message:
+      'Esta copia es de una versión más nueva de Ace Player Neo. Actualiza la app y vuelve a intentarlo.',
+  },
+  backup_too_large: {
+    status: 413,
+    legacyStatus: null,
+    public: true,
+    message: 'La copia es demasiado grande (máximo 2 MiB).',
+  },
+  backup_passphrase_wrong: {
+    status: 422,
+    legacyStatus: null,
+    public: true,
+    message: 'La clave no es correcta: no se puede abrir la contraseña de la IPTV de esta copia.',
+  },
+
   // --- Internos: no deberían salir nunca en una respuesta ---
   state_unreadable: {
     status: 500,

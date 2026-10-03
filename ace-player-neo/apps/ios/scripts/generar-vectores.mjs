@@ -69,6 +69,42 @@ const textos = [
   'Real Madrid TV 4K',
   'Gol Play => Otro',
   'Teledeporte == > x',
+  // Cantera, filiales y femenino (fix/agenda-filtrado)
+  'FC Barcelona Academy',
+  'Barcelona Atlètic',
+  'Barcelona Atlétic',
+  'Atlètic Lleida',
+  'FC Barcelona Femení',
+  'FC Barcelona B Femenino',
+  'FC Barcelona Juvenil A',
+  'Real Madrid Castilla',
+  'RM Castilla',
+  'Real Madrid C',
+  'Spain U21',
+  'España Sub-21',
+  'Sub19',
+  'Willem II',
+  'Eintracht Frankfurt II',
+  'Arsenal W',
+  'Chelsea Women',
+  'Valladolid Promesas',
+  'Central Córdoba Reserva',
+  'Athletic Club',
+  'Inter Miami CF',
+  'LaLiga Futures',
+  'Liga F',
+  'Liga F Moeve',
+  'Mundial · Grupo F',
+  'Europeo Sub-21',
+  'UEFA Youth League',
+  'Amistoso Femenino',
+  'Regionalliga',
+  'División Honor Juvenil',
+  'Spanish La Liga',
+  'Spanish La Liga 2',
+  'NWSL',
+  'Juegos Olímpicos',
+  'UEFA Nations League',
 ];
 
 const claves = textos.map((texto) => ({
@@ -77,6 +113,8 @@ const claves = textos.map((texto) => ({
   competicion: paraTi.competitionKey(texto),
   equipo: paraTi.footballTeamKey(texto),
   canal: canales.normalizeChannelKey(texto),
+  variante: paraTi.footballTeamIsVariant(texto),
+  menor: paraTi.footballCompetitionIsMinor(texto),
 }));
 
 // ---- Ligas ----
@@ -114,6 +152,9 @@ const competiciones = [
   'Copa del Rey',
   'Liga MX',
   'Torneo Proyección',
+  'Spanish La Liga',
+  'Spanish La Liga 2',
+  'LaLiga Futures',
   '',
 ];
 const ligas = [];
@@ -125,12 +166,17 @@ for (const preferencia of preferenciasDeLiga) {
 
 // ---- Partidos × gustos ----
 
-const partido = (competition, home, away, channels, title) => ({
+/* `ids` = escudos resueltos (`homeTeam.id`/`awayTeam.id` de la agenda): en
+   el JSON van como `homeTeamId`/`awayTeamId`, que es como los lee
+   `PartidoParaTi`. */
+const partido = (competition, home, away, channels, title, ids = {}) => ({
   competition,
   title: title ?? (away ? `${home} - ${away}` : home),
   home,
   away,
   channels,
+  ...(ids.home ? { homeTeamId: ids.home } : {}),
+  ...(ids.away ? { awayTeamId: ids.away } : {}),
 });
 
 const partidos = [
@@ -154,6 +200,33 @@ const partidos = [
   partido('Liga MX', 'América', 'Chivas', []),
   partido('Primeira Liga', 'Benfica', 'FC Porto', ['Sport TV 1']),
   partido('Botola Pro', 'Wydad', 'Raja', []),
+  // fix/agenda-filtrado: lo que daba futbolenlatv el 2026-10-02 y TheSportsDB
+  partido('LaLiga Futures', 'FC Barcelona Academy', 'Real Betis Academy', ['M+ LALIGA']),
+  partido('Liga Nacional Juvenil', 'FC Barcelona Academy', 'UE Olot Academy', []),
+  partido('UEFA Youth League', 'Galatasaray Academy', 'FC Barcelona Academy', ['M+ Liga de Campeones 3']),
+  partido('Segunda Federación', 'Tudelano', 'Barcelona Atlètic', []),
+  partido('Segunda Federación', 'Atlètic Lleida', 'Barcelona Atlétic', []),
+  partido('Liga F', 'FC Barcelona Femení', 'Real Madrid Femenino', ['DAZN']),
+  partido('Liga Pro Ecuador', 'LDU Quito', 'Barcelona SC', [], undefined, { away: '138159' }),
+  partido('Liga Pro Ecuador', 'Barcelona', 'Emelec', [], undefined, { home: '138159' }),
+  partido('Europeo Sub-21', 'España', 'Rumanía', ['Teledeporte']),
+  partido('Amistoso Femenino', 'Estados Unidos', 'España', []),
+  partido('Amistoso', 'Spain U21', 'Italy U21', []),
+  partido('UEFA Nations League', 'España', 'República Checa', ['La 1']),
+  partido('Mundial · Grupo F', 'España', 'Uruguay', ['La 1']),
+  partido('Spanish La Liga', 'Barcelona', 'Getafe', [], 'Barcelona vs Getafe', {
+    home: '133739',
+    away: '133610',
+  }),
+  partido('Spanish La Liga 2', 'Albacete', 'Eibar', []),
+  partido('UEFA Champions League', 'Galatasaray', 'FC Barcelona', ['M+ Liga de Campeones'], undefined, {
+    home: '133934',
+    away: '133739',
+  }),
+  partido('Copa del Rey', 'F.C. Barcelona', 'Getafe', [], undefined, { home: '133739' }),
+  partido('LaLiga Futures', 'FC Barcelona Academy', 'Getafe Academy', [], undefined, { home: '133739' }),
+  partido('Trofeo Joan Gamper', 'FC Barcelona', 'Como', [], undefined, { home: 'k-barcelona' }),
+  partido('Eredivisie', 'Willem II', 'Ajax', ['DAZN']),
 ];
 
 const gustos = [
@@ -174,11 +247,20 @@ const gustos = [
   { leagues: ['Liga MX'], teams: [], nationalities: ['Estados Unidos'] },
   { leagues: [], teams: ['FC Porto', 'Benfica'], nationalities: ['Portugal'] },
   { leagues: [], teams: [], nationalities: ['??'] },
+  // fix/agenda-filtrado: los gustos del dueño, y quien sigue la cantera o el femenino
+  { leagues: ['LaLiga'], teams: ['Barcelona'], nationalities: ['España'] },
+  { leagues: ['Liga F'], teams: ['FC Barcelona Femení', 'Barcelona Atlètic'], nationalities: [] },
+  { leagues: [], teams: [], nationalities: ['Países Bajos'] },
 ];
 
 const casosParaTi = [];
 for (const p of partidos) {
-  const agenda = { ...p, channels: p.channels.map((name, i) => ({ id: `c${i}`, name })) };
+  const agenda = {
+    ...p,
+    channels: p.channels.map((name, i) => ({ id: `c${i}`, name })),
+    homeTeam: p.homeTeamId ? { id: p.homeTeamId } : null,
+    awayTeam: p.awayTeamId ? { id: p.awayTeamId } : null,
+  };
   for (const g of gustos) {
     casosParaTi.push({
       partido: p,

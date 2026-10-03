@@ -31,6 +31,9 @@ import {
 import PlayerDock, { sharedRuntimeForTests } from './index.tsx';
 import { madridToday } from './PlayerSurface.tsx';
 import { stageSlotStore } from './stage-slot.ts';
+import { zapBannerStore, ZAP_COMMIT_MS } from './favorite-zap.ts';
+import { setWatching } from '../notices/notify.ts';
+import { resetPlayGuard } from '../features/library/play.ts';
 
 const HASH = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
 const ROUTE = { vista: 'partido' as const, id: null, canal: HASH };
@@ -107,6 +110,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
+  zapBannerStore.set(null);
+  resetPlayGuard();
   uninstall();
   net.restore();
   resetMode();
@@ -186,11 +192,10 @@ describe('reproductor en grande', () => {
     expect(statusStore.get().base).toEqual({
       text: 'Fuente 1 verificada. Vas en directo.',
       signal: 'ok',
-      meta: '6 s de retraso',
     });
   });
 
-  it('ratón: controles que se esconden a los 3,2 s solo si suena, clic que pausa a los 190 ms y doble clic a pantalla completa (B-102, B-088)', async () => {
+  it('ratón: controles que se esconden a los 2,5 s solo si suena, clic que pausa a los 190 ms y doble clic a pantalla completa (B-102, B-088)', async () => {
     const requestFullscreen = vi.fn(async () => {});
     Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true });
     Object.defineProperty(document.documentElement, 'requestFullscreen', {
@@ -206,9 +211,9 @@ describe('reproductor en grande', () => {
       setPlayer(playing({ phase: 'pausado', desiredPlaying: false }));
       act(() => vi.advanceTimersByTime(10_000));
       expect(chrome).toHaveAttribute('data-visible', 'true');
-      // Sonando de verdad: a los 3,2 s sin mover el ratón, fuera.
+      // Sonando de verdad: a los 2,5 s sin mover el ratón, fuera.
       setPlayer(playing());
-      act(() => vi.advanceTimersByTime(3_100));
+      act(() => vi.advanceTimersByTime(2_400));
       expect(chrome).toHaveAttribute('data-visible', 'true');
       act(() => vi.advanceTimersByTime(200));
       expect(chrome).toHaveAttribute('data-visible', 'false');
@@ -241,6 +246,126 @@ describe('reproductor en grande', () => {
     const video = container.querySelector('video')!;
     video.setAttribute('controls', '');
     await waitFor(() => expect(video).not.toHaveAttribute('controls'));
+  });
+
+  it('controles: el foco que deja un clic no los retiene (pantalla completa), el del teclado sí', () => {
+    const { container } = renderDock();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const chrome = container.querySelector<HTMLElement>('.player-chrome')!;
+      const hit = container.querySelector<HTMLElement>('.player-hit')!;
+      setPlayer(playing());
+      // Clic con el ratón en un control: el botón se queda con el foco.
+      const mute = screen.getByRole('button', { name: 'Silenciar' });
+      fireEvent.pointerDown(mute, { pointerType: 'mouse', button: 0 });
+      act(() => mute.focus());
+      fireEvent.click(mute);
+      expect(mute).toHaveFocus();
+      act(() => vi.advanceTimersByTime(2_600));
+      expect(chrome).toHaveAttribute('data-visible', 'false');
+      // El cursor se va con ellos.
+      expect(hit).toHaveAttribute('data-chrome', 'hidden');
+
+      // Con el teclado (Tab) dentro, no se esconden: el foco se vería desaparecer.
+      act(() => mute.blur());
+      fireEvent.keyDown(document, { key: 'Tab' });
+      act(() => mute.focus());
+      expect(chrome).toHaveAttribute('data-visible', 'true');
+      act(() => vi.advanceTimersByTime(10_000));
+      expect(chrome).toHaveAttribute('data-visible', 'true');
+      // Sale el foco de los controles: vuelve la cuenta normal.
+      act(() => mute.blur());
+      act(() => vi.advanceTimersByTime(2_600));
+      expect(chrome).toHaveAttribute('data-visible', 'false');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('controles: los «mousemove» sin moverse no los retienen y al sacar el ratón se van al momento', () => {
+    const { container } = renderDock();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const chrome = container.querySelector<HTMLElement>('.player-chrome')!;
+      const hit = container.querySelector<HTMLElement>('.player-hit')!;
+      const frame = container.querySelector<HTMLElement>('.player-frame')!;
+      setPlayer(playing());
+      fireEvent.pointerMove(hit, { pointerType: 'mouse', screenX: 300, screenY: 200 });
+      // Chrome repite el último «mousemove» al repintar lo que hay bajo el
+      // cursor (el medidor del directo cada 500 ms): no es actividad.
+      for (let i = 0; i < 6; i += 1) {
+        act(() => vi.advanceTimersByTime(500));
+        setPlayer({ live: { available: true, atLive: true, behindS: 1 + (i % 2), delayS: 7 + i } });
+        fireEvent.pointerMove(hit, { pointerType: 'mouse', screenX: 300, screenY: 200 });
+      }
+      expect(chrome).toHaveAttribute('data-visible', 'false');
+      // Un movimiento de verdad, sí.
+      fireEvent.pointerMove(hit, { pointerType: 'mouse', screenX: 310, screenY: 205 });
+      expect(chrome).toHaveAttribute('data-visible', 'true');
+      // Fuera del vídeo: al momento.
+      fireEvent.pointerLeave(frame, { pointerType: 'mouse' });
+      expect(chrome).toHaveAttribute('data-visible', 'false');
+
+      // En pausa, ni al salir.
+      fireEvent.pointerMove(hit, { pointerType: 'mouse', screenX: 320, screenY: 210 });
+      setPlayer({ phase: 'pausado', desiredPlaying: false });
+      fireEvent.pointerLeave(frame, { pointerType: 'mouse' });
+      act(() => vi.advanceTimersByTime(10_000));
+      expect(chrome).toHaveAttribute('data-visible', 'true');
+
+      // Un parón corto con imagen (colchón) no los saca ni reinicia la cuenta.
+      setPlayer({ phase: 'reproduciendo', desiredPlaying: true });
+      act(() => vi.advanceTimersByTime(1_500));
+      setPlayer({ phase: 'buffer' });
+      act(() => vi.advanceTimersByTime(500));
+      setPlayer({ phase: 'reproduciendo' });
+      act(() => vi.advanceTimersByTime(600));
+      expect(chrome).toHaveAttribute('data-visible', 'false');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('controles: con «Más opciones» abierto no se esconden (ni al sacar el ratón)', () => {
+    const { container } = renderDock();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const chrome = container.querySelector<HTMLElement>('.player-chrome')!;
+      const frame = container.querySelector<HTMLElement>('.player-frame')!;
+      setPlayer(playing());
+      fireEvent.click(screen.getByRole('button', { name: 'Más opciones' }));
+      expect(screen.getByRole('menu')).toBeInTheDocument();
+      fireEvent.pointerLeave(frame, { pointerType: 'mouse' });
+      act(() => vi.advanceTimersByTime(10_000));
+      expect(chrome).toHaveAttribute('data-visible', 'true');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('dedo: un toque los enseña o los esconde y se van solos a los 3 s', () => {
+    const { container } = renderDock();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const chrome = container.querySelector<HTMLElement>('.player-chrome')!;
+      const hit = container.querySelector<HTMLElement>('.player-hit')!;
+      setPlayer(playing());
+      const tap = () => {
+        fireEvent.pointerDown(hit, { pointerType: 'touch' });
+        fireEvent.pointerUp(hit, { pointerType: 'touch' });
+        fireEvent.click(hit);
+      };
+      tap();
+      expect(chrome).toHaveAttribute('data-visible', 'false');
+      tap();
+      expect(chrome).toHaveAttribute('data-visible', 'true');
+      act(() => vi.advanceTimersByTime(2_900));
+      expect(chrome).toHaveAttribute('data-visible', 'true');
+      act(() => vi.advanceTimersByTime(200));
+      expect(chrome).toHaveAttribute('data-visible', 'false');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('autoplay bloqueado: «Toca para reproducir»', () => {
@@ -341,6 +466,164 @@ describe('reproductor en grande', () => {
     setPlayer(playing());
     fireEvent.keyDown(window, { key: 's' });
     expect(playerStore.get().nerdOpen).toBe(true);
+  });
+
+  describe('cambiar de canal rápido entre favoritos (↑ ↓, Re Pág / Av Pág, deslizar)', () => {
+    const FAVS = [
+      { id: HASH, title: 'DAZN 1' },
+      { id: 'b'.repeat(40), title: 'DAZN 2' },
+      { id: 'c'.repeat(40), title: 'M+ LaLiga' },
+      { id: 'd'.repeat(40), title: 'Eurosport 1' },
+    ];
+    function withFavorites() {
+      const client = createQueryClient();
+      const base = fixture<{ favorites: Array<Record<string, unknown>> }>('libraryGet');
+      const model = base.favorites[0]!;
+      client.setQueryData(routeKey('libraryGet'), {
+        ...base,
+        favorites: FAVS.map((item) => ({ ...model, ...item })),
+      });
+      return client;
+    }
+
+    it('se registran en la ayuda sin pisar ← → (que siguen siendo el zapping de siempre)', () => {
+      renderDock('stage', undefined, withFavorites());
+      const entries = shortcutStore.get();
+      const prev = entries.find((entry) => entry.id === 'reproductor.favorito-anterior');
+      const next = entries.find((entry) => entry.id === 'reproductor.favorito-siguiente');
+      expect(prev?.keys).toEqual(['ArrowUp', 'PageUp']);
+      expect(next?.keys).toEqual(['ArrowDown', 'PageDown']);
+      expect(entries.find((entry) => entry.id === 'reproductor.siguiente')?.keys).toEqual([
+        'ArrowRight',
+      ]);
+    });
+
+    it('tres ↓ rápidos: el cartel pasa por ellos y solo se abre el tercero', () => {
+      renderDock('stage', undefined, withFavorites());
+      setPlayer(playing());
+      // El armazón marca que se está viendo: los avisos de señal van a la línea de estado.
+      setWatching(true);
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      fireEvent.keyDown(window, { key: 'ArrowDown' });
+      fireEvent.keyDown(window, { key: 'ArrowDown' });
+      fireEvent.keyDown(window, { key: 'PageDown' });
+      const banner = document.querySelector('.player-zap');
+      expect(banner).toHaveTextContent('Eurosport 1');
+      expect(banner).toHaveTextContent('4/4');
+      expect(banner).toHaveTextContent('AceStream');
+      // Aún no se ha abierto nada: sigue sonando el de antes.
+      expect(playerStore.get().channel?.hash).toBe(HASH);
+      act(() => vi.advanceTimersByTime(ZAP_COMMIT_MS));
+      expect(playerStore.get().channel?.hash).toBe('d'.repeat(40));
+      expect(location.search).toContain(`canal/${'d'.repeat(40)}`);
+      // Se anuncia en la región viva de la línea de estado.
+      expect(statusStore.get().message?.text).toBe('Favorito 4 de 4: Eurosport 1');
+      setWatching(false);
+    });
+
+    it('↑ desde el primero da la vuelta al último; con el foco en un campo, no hace nada', () => {
+      renderDock('stage', undefined, withFavorites());
+      setPlayer(playing());
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const input = document.createElement('input');
+      document.body.append(input);
+      input.focus();
+      fireEvent.keyDown(input, { key: 'ArrowUp' });
+      expect(document.querySelector('.player-zap')).toBeNull();
+      input.blur();
+      input.remove();
+      fireEvent.keyDown(window, { key: 'ArrowUp' });
+      act(() => vi.advanceTimersByTime(ZAP_COMMIT_MS));
+      expect(playerStore.get().channel?.hash).toBe('d'.repeat(40));
+    });
+
+    /** Un dedo sobre la capa del vídeo (o sobre `target`) de (200, 300) a (200 + dx, 300 + dy). */
+    function swipeOn(target: Element, dx: number, dy: number) {
+      const finger = { pointerId: 4, pointerType: 'touch' };
+      fireEvent.pointerDown(target, { ...finger, clientX: 200, clientY: 300 });
+      fireEvent.pointerMove(target, { ...finger, clientX: 200 + dx / 2, clientY: 300 + dy / 2 });
+      fireEvent.pointerUp(target, { ...finger, clientX: 200 + dx, clientY: 300 + dy });
+    }
+
+    it('con el dedo (móvil en vertical): a la izquierda el siguiente, a la derecha el anterior; abajo sigue minimizando y arriba no hace nada', () => {
+      const { container, handlers } = renderDock('stage', undefined, withFavorites());
+      setPlayer(playing());
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const hit = container.querySelector<HTMLElement>('.player-hit')!;
+      swipeOn(hit, -120, 0);
+      expect(document.querySelector('.player-zap')).toHaveTextContent('DAZN 2');
+      expect(document.querySelector('.player-zap')).toHaveTextContent('2/4');
+      expect(handlers.onMinimize).not.toHaveBeenCalled();
+      act(() => vi.advanceTimersByTime(ZAP_COMMIT_MS));
+      expect(playerStore.get().channel?.hash).toBe('b'.repeat(40));
+      // A la derecha, el anterior (vuelve a DAZN 1).
+      swipeOn(hit, 120, 10);
+      expect(document.querySelector('.player-zap')).toHaveTextContent('DAZN 1');
+      expect(document.querySelector('.player-zap')).toHaveTextContent('1/4');
+      act(() => vi.advanceTimersByTime(ZAP_COMMIT_MS));
+      expect(playerStore.get().channel?.hash).toBe(HASH);
+      act(() => zapBannerStore.set(null));
+      // Hacia arriba: nada nuevo.
+      swipeOn(hit, 0, -120);
+      expect(document.querySelector('.player-zap')).toBeNull();
+      expect(handlers.onMinimize).not.toHaveBeenCalled();
+      // Hacia abajo: solo minimiza.
+      swipeOn(hit, 0, 120);
+      expect(handlers.onMinimize).toHaveBeenCalledTimes(1);
+      expect(document.querySelector('.player-zap')).toBeNull();
+    });
+
+    it('un toque, un arrastre leve, uno en diagonal o uno que empieza en un control no cambian de canal', () => {
+      const { container, handlers } = renderDock('stage', undefined, withFavorites());
+      setPlayer(playing());
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const hit = container.querySelector<HTMLElement>('.player-hit')!;
+      swipeOn(hit, 0, 0);
+      swipeOn(hit, -20, 0);
+      swipeOn(hit, -80, 70);
+      // La barra de controles es hermana de la capa del vídeo: un gesto que
+      // empieza en el volumen o en un botón nunca llega a ella.
+      const control = container.querySelector<HTMLElement>('.player-chrome button')!;
+      expect(control).not.toBeNull();
+      swipeOn(control, -150, 0);
+      act(() => vi.advanceTimersByTime(ZAP_COMMIT_MS));
+      expect(document.querySelector('.player-zap')).toBeNull();
+      expect(playerStore.get().channel?.hash).toBe(HASH);
+      expect(handlers.onMinimize).not.toHaveBeenCalled();
+    });
+
+    it('en la tableta también a los lados; abajo no hace nada y el scroll vertical de la página sigue (pan-y)', () => {
+      const realMatchMedia = window.matchMedia;
+      window.matchMedia = ((query: string) =>
+        ({
+          matches: query === '(min-width: 768px)',
+          media: query,
+          onchange: null,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          addListener: () => {},
+          removeListener: () => {},
+          dispatchEvent: () => false,
+        }) as unknown as MediaQueryList) as typeof window.matchMedia;
+      try {
+        const { container, handlers } = renderDock('stage', undefined, withFavorites());
+        setPlayer(playing());
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        const hit = container.querySelector<HTMLElement>('.player-hit')!;
+        expect(hit.style.touchAction).toBe('pan-y');
+        swipeOn(hit, 0, 120);
+        swipeOn(hit, 0, -120);
+        expect(document.querySelector('.player-zap')).toBeNull();
+        expect(handlers.onMinimize).not.toHaveBeenCalled();
+        swipeOn(hit, 120, 0);
+        expect(document.querySelector('.player-zap')).toHaveTextContent('Eurosport 1');
+        expect(document.querySelector('.player-zap')).toHaveTextContent('4/4');
+        act(() => vi.advanceTimersByTime(ZAP_COMMIT_MS));
+        expect(playerStore.get().channel?.hash).toBe('d'.repeat(40));
+      } finally {
+        window.matchMedia = realMatchMedia;
+      }
+    });
   });
 
   it('Palco: publica el hueco del marcador sobre el vídeo y hace un corte a negro al cambiar de fuente (W5, W14)', () => {

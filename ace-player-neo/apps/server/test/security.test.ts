@@ -180,13 +180,16 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
     expect(failures).toEqual([]);
   });
 
-  it('con token válido, las rutas solo web (healthLive, Ajustes → IPTV, el buscador IPTV y la pestaña IPTV) dan 403 origin_forbidden', async () => {
+  it('con token válido, las rutas solo web (healthLive, copia de seguridad, Ajustes → IPTV, el buscador IPTV y la pestaña IPTV) dan 403 origin_forbidden', async () => {
     const s = await setup();
     const failures: string[] = [];
     const webOnly = V1.filter(([, route]) => route.access === 'web');
     /* Fija el conjunto: si se abre (o se cierra) una ruta por accidente, se ve aquí. */
     expect(webOnly.map(([id]) => id)).toEqual([
       'healthLive',
+      'backupExport',
+      'backupExportSecret',
+      'backupImport',
       'iptvGet',
       'iptvSave',
       'iptvUpdate',

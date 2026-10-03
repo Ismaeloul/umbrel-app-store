@@ -73,3 +73,22 @@ export const REMUX_LOG_BYTES = 64 * 1024;
 
 /** Motor: reinicios automáticos por hora como máximo (arquitectura §5.5). */
 export const ENGINE_MAX_AUTO_RESTARTS_PER_HOUR = 3;
+
+/* Copia de seguridad de tus ajustes (0.8.4, decisiones.md D25). Sin zod: la
+   web los usa para avisar antes de subir nada. */
+
+/** Formato del fichero de copia (`format`). */
+export const BACKUP_FORMAT = 'ace-player-neo-copia';
+/** Versión del esquema del fichero que escribe esta versión (y la más nueva que sabe leer). */
+export const BACKUP_SCHEMA_VERSION = 1;
+/**
+ * Tamaño máximo de la copia al restaurarla: el del cuerpo de la petición
+ * (MAX_BODY_BYTES, el `client_max_body_size 2m` de nginx). La web la manda
+ * compacta, así que el fichero con sangrías que se descarga puede pesar algo más.
+ */
+export const BACKUP_MAX_BYTES = MAX_BODY_BYTES;
+/** Fichero que la web acepta leer antes de compactarlo (el doble, por las sangrías). */
+export const BACKUP_MAX_FILE_BYTES = 2 * MAX_BODY_BYTES;
+/** Clave con la que se protege la contraseña de la IPTV dentro de la copia. */
+export const BACKUP_PASSPHRASE_MIN = 8;
+export const BACKUP_PASSPHRASE_MAX = 256;

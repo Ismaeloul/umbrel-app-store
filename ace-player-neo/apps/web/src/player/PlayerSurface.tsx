@@ -15,11 +15,18 @@
      en el móvil). En iPhone la pantalla completa es la del sistema, con sus
      controles nativos (AirPlay incluido). Un solo reproductor visible: el
      <video> nunca lleva `controls` (B-088, lo vigila index.tsx).
-   - Se esconden a los 3,2 s sin mover el ratón SOLO si suena de verdad, y el
-     cursor con ellos (B-102); con el dedo, un toque los enseña o los esconde.
+   - Se esconden a los 2,5 s sin mover el ratón SOLO si suena de verdad, y el
+     cursor con ellos (B-102); al sacar el ratón del vídeo, al momento. Nunca
+     en pausa, con un menú u hoja abiertos ni con el foco del teclado dentro.
+     Con el dedo, un toque los enseña o los esconde (y se van a los 3 s).
    - Ratón: un clic pausa o reanuda (espera 190 ms para distinguirlo del
      doble clic, que pone pantalla completa); clic derecho, el menú propio.
-   - Móvil: deslizar hacia abajo sobre el vídeo lo minimiza. */
+   - Móvil: deslizar hacia abajo sobre el vídeo lo minimiza.
+   - Táctil: deslizar a los lados sobre el vídeo cambia de canal rápido entre
+     favoritos (favorite-zap.ts), como pasar páginas: a la izquierda el
+     siguiente, a la derecha el anterior. En todos los modos (vertical,
+     horizontal, pantalla completa, tableta). Solo cuenta sobre la capa del
+     vídeo: lo que empieza en un control (barra, volumen, botones) no. */
 
 import {
   useCallback,
@@ -41,8 +48,15 @@ import { LiveDot } from '../ui/LiveRing.tsx';
 import { Menu, MenuButton, useContextMenu } from '../ui/Menu.tsx';
 import { Num } from '../ui/Num.tsx';
 import { usePlayer, type PlayerState } from './api.ts';
-import { CLICK_DELAY_MS, CONTROLS_HIDE_MS } from './constants.ts';
+import { ChannelMark } from '../ui/ChannelMark.tsx';
+import {
+  CLICK_DELAY_MS,
+  CONTROLS_HIDE_MS,
+  CONTROLS_HIDE_TOUCH_MS,
+  ZAP_SWIPE_MIN_PX,
+} from './constants.ts';
 import { usePlayerContext, type PlayerContextValue } from './context.ts';
+import { useZapBanner } from './favorite-zap.ts';
 import { NerdPanel } from './NerdPanel.tsx';
 import { stageSlotStore } from './stage-slot.ts';
 import { liveButton, stageMessage } from './status.ts';
@@ -69,6 +83,37 @@ function ImmersivePill() {
       <button type="button" className="player-pill__action press" onClick={action.onAction}>
         {action.label}
       </button>
+    </div>
+  );
+}
+
+/**
+ * El cartel del cambio de canal rápido: dorsal, nombre, «3/12» y de dónde
+ * sale (IPTV o AceStream). Arriba y al centro, sobre el vídeo, unos 2 s.
+ * Es decorativo para los lectores de pantalla: el cambio se anuncia en la
+ * línea de estado (index.tsx).
+ */
+export function ZapBannerView() {
+  const banner = useZapBanner();
+  if (!banner) return null;
+  const { channel, position, total, committed } = banner;
+  return (
+    <div
+      className="player-zap glass--video"
+      data-committed={committed ? 'true' : 'false'}
+      aria-hidden="true"
+    >
+      <ChannelMark name={channel.title} size={40} />
+      <span className="player-zap__body">
+        <span className="player-zap__title">{channel.title}</span>
+        <span className="player-zap__meta">
+          <Icon name="star-f" size={16} className="player-zap__star" />
+          <span>Favorito</span>
+          <Num value={`${position}/${total}`} />
+          <span aria-hidden="true">·</span>
+          <span>{channel.iptv ? 'IPTV' : 'AceStream'}</span>
+        </span>
+      </span>
     </div>
   );
 }
@@ -204,49 +249,113 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
   const hideTimer = useRef<number | null>(null);
   const clickTimer = useRef<number | null>(null);
   const lastPointer = useRef<string>('mouse');
+  /** Última posición del ratón en pantalla: para no tomar por movimiento los «mousemove» fantasma. */
+  const lastMove = useRef<{ x: number; y: number } | null>(null);
+  /** Lo último que se usó: el teclado o un puntero (para saber cómo llegó el foco). */
+  const lastInput = useRef<'keyboard' | 'pointer'>('pointer');
+  /** El foco está en los controles porque se llegó con el teclado (Tab), no con un clic. */
+  const keyboardFocus = useRef(false);
   const chromeRef = useRef<HTMLDivElement>(null);
   const hitRef = useRef<HTMLDivElement>(null);
   const contextMenu = useContextMenu();
+
+  // Se esconden mientras suena y también si, con imagen, rellena el colchón o
+  // salta: un parón corto de la red no debe sacarlos (ni reiniciar la cuenta).
+  const autoHide =
+    playing ||
+    (state.started &&
+      state.conn === 'activa' &&
+      (state.phase === 'buffer' || state.phase === 'buscando'));
 
   const clearHide = () => {
     if (hideTimer.current !== null) window.clearTimeout(hideTimer.current);
     hideTimer.current = null;
   };
 
+  /**
+   * Algo que obliga a dejarlos a la vista: un menú («Más opciones» o el
+   * contextual) o una hoja abiertos, o el foco del TECLADO dentro (se vería
+   * desaparecer). El foco que deja un clic no cuenta: tras pulsar «Pantalla
+   * completa» el botón se queda con el foco y, con la regla de antes
+   * (cualquier foco dentro), los controles no se iban nunca.
+   */
+  const held = useCallback((): boolean => {
+    const node = chromeRef.current;
+    if (!node) return false;
+    if (node.querySelector('[aria-expanded="true"]')) return true;
+    if (document.querySelector('[role="menu"], [role="dialog"][aria-modal="true"]')) return true;
+    return keyboardFocus.current && node.contains(document.activeElement);
+  }, []);
+
   const schedule = useCallback(() => {
     clearHide();
-    if (!playing) return;
+    if (!autoHide) return;
+    const delay = lastPointer.current === 'mouse' ? CONTROLS_HIDE_MS : CONTROLS_HIDE_TOUCH_MS;
     const arm = () => {
       hideTimer.current = window.setTimeout(() => {
-        // Con el foco del teclado dentro no se esconden (el foco se vería desaparecer).
-        // Tampoco con el menú «Más opciones» abierto (se quedaría flotando solo).
-        if (
-          chromeRef.current?.contains(document.activeElement) ||
-          chromeRef.current?.querySelector('[aria-expanded="true"]')
-        ) {
+        if (held()) {
           arm();
           return;
         }
+        hideTimer.current = null;
         setChrome(false);
-      }, CONTROLS_HIDE_MS);
+      }, delay);
     };
     arm();
-  }, [playing]);
+  }, [autoHide, held]);
 
   const wake = useCallback(() => {
     setChrome(true);
     schedule();
   }, [schedule]);
 
+  /** El ratón sale del vídeo: fuera al momento (si nada los retiene; si no, sigue la cuenta). */
+  const hideNow = useCallback(() => {
+    if (!autoHide || held()) return;
+    clearHide();
+    setChrome(false);
+  }, [autoHide, held]);
+  const hideNowRef = useRef(hideNow);
+  hideNowRef.current = hideNow;
+
   useEffect(() => {
-    if (!playing) {
+    if (!autoHide) {
       clearHide();
       setChrome(true);
       return;
     }
     schedule();
     return clearHide;
-  }, [playing, schedule]);
+  }, [autoHide, schedule]);
+
+  useEffect(() => {
+    const onKey = () => {
+      lastInput.current = 'keyboard';
+    };
+    const onPointer = () => {
+      lastInput.current = 'pointer';
+    };
+    document.addEventListener('keydown', onKey, true);
+    document.addEventListener('pointerdown', onPointer, true);
+    return () => {
+      document.removeEventListener('keydown', onKey, true);
+      document.removeEventListener('pointerdown', onPointer, true);
+    };
+  }, []);
+
+  // La salida se mira en el marco del vídeo (padre de la capa de toques y de
+  // los controles): pasar de la capa a una cápsula no es salir.
+  useEffect(() => {
+    const frame = hitRef.current?.parentElement;
+    if (!frame) return;
+    const onLeave = (event: PointerEvent) => {
+      if (event.pointerType !== 'mouse') return;
+      lastMove.current = null;
+      hideNowRef.current();
+    };
+    frame.addEventListener('pointerleave', onLeave);
+    return () => frame.removeEventListener('pointerleave', onLeave);
+  }, []);
 
   useEffect(
     () => () => {
@@ -255,12 +364,41 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
     [],
   );
 
-  // Deslizar hacia abajo sobre el vídeo lo minimiza (móvil, no en horizontal).
+  /**
+   * Solo cuenta si el ratón se ha movido de verdad. Chrome manda «mousemove»
+   * sin moverse cuando cambia lo que hay bajo el cursor (el contador del
+   * directo se repinta cada 500 ms, la pantalla completa recoloca todo…) y
+   * cada uno reiniciaba la cuenta: con el ratón quieto encima, no se iban.
+   */
+  const onMouseMove = (event: ReactPointerEvent<HTMLElement>) => {
+    if (event.pointerType !== 'mouse') return;
+    const last = lastMove.current;
+    if (last && last.x === event.screenX && last.y === event.screenY) return;
+    lastMove.current = { x: event.screenX, y: event.screenY };
+    lastPointer.current = 'mouse';
+    wake();
+  };
+
+  /* Sobre el vídeo: hacia abajo lo minimiza (móvil en vertical, no a
+     pantalla completa); con el dedo, a los lados cambia de canal rápido
+     entre favoritos: a la izquierda el siguiente, a la derecha el anterior
+     (como pasar páginas), en todos los modos. Hacia arriba, nada. Con ratón
+     no hay deslizamientos (el clic pausa).
+     El eje decide `touch-action`: donde no se minimiza (tableta, horizontal,
+     pantalla completa) solo se escucha el horizontal y el scroll vertical de
+     la página sigue siendo del navegador (pan-y). La capa `player-hit` no
+     tiene hijos: los controles son hermanos, así que un gesto que empieza en
+     la barra de tiempo, el volumen o un botón nunca llega aquí. */
+  const minimizes = ctx.compact && !ctx.immersive;
+  const zapSwipes = !ctx.finePointer && hasChannel;
   useSwipe(hitRef, {
-    axis: 'y',
-    enabled: ctx.compact && !ctx.immersive,
+    axis: minimizes && zapSwipes ? 'both' : minimizes ? 'y' : 'x',
+    threshold: ZAP_SWIPE_MIN_PX,
+    enabled: minimizes || zapSwipes,
     onSwipe: (direction) => {
-      if (direction === 'down') actions.minimize();
+      if (direction === 'down' && minimizes) actions.minimize();
+      else if (direction === 'left' && zapSwipes) actions.zapFavorite(1);
+      else if (direction === 'right' && zapSwipes) actions.zapFavorite(-1);
     },
   });
 
@@ -269,13 +407,13 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
     contextMenu.bind.onPointerDown(event);
   };
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.pointerType === 'mouse') wake();
+    onMouseMove(event);
     contextMenu.bind.onPointerMove(event);
   };
   const onClick = () => {
     if (lastPointer.current !== 'mouse') {
       // Con el dedo, un toque enseña o esconde los controles (no pausa).
-      if (chrome && playing) {
+      if (chrome && autoHide) {
         clearHide();
         setChrome(false);
       } else wake();
@@ -328,6 +466,7 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
       />
       <StageMessage state={state} ctx={ctx} />
       {ctx.immersive ? <ImmersivePill /> : null}
+      <ZapBannerView />
       {state.phase === 'bloqueado' ? (
         <button type="button" className="player-tap press" onClick={actions.tapToPlay}>
           <span className="player-tap__icon" aria-hidden="true">
@@ -356,9 +495,19 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
         ref={chromeRef}
         className="player-chrome"
         data-visible={chrome ? 'true' : 'false'}
-        onFocus={wake}
-        onPointerMove={(event) => {
-          if (event.pointerType === 'mouse') wake();
+        onFocus={() => {
+          keyboardFocus.current = lastInput.current === 'keyboard';
+          wake();
+        }}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+            keyboardFocus.current = false;
+        }}
+        onPointerMove={onMouseMove}
+        onPointerDown={(event) => {
+          // Tocar un control cuenta como actividad (con el dedo no hay «mover»).
+          lastPointer.current = event.pointerType;
+          wake();
         }}
       >
         <div className="player-chrome__top">

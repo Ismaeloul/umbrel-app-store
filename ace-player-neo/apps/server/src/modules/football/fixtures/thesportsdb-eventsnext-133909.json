@@ -1,0 +1,23 @@
+{
+  "events": [
+    {
+      "idEvent": "2442800",
+      "strTimestamp": "2026-01-04T18:45:00",
+      "strEvent": "Spain vs Czech Republic",
+      "strSport": "Soccer",
+      "idLeague": "4490",
+      "strLeague": "UEFA Nations League",
+      "strSeason": "2025-2026",
+      "strHomeTeam": "Spain",
+      "strAwayTeam": "Czech Republic",
+      "intRound": "3",
+      "dateEvent": "2026-01-04",
+      "strTime": "18:45:00",
+      "idHomeTeam": "133909",
+      "idAwayTeam": "133912",
+      "strCountry": "",
+      "strStatus": "NS",
+      "strPostponed": "no"
+    }
+  ]
+}

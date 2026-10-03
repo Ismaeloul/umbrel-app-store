@@ -31,6 +31,40 @@
 .view {
   min-width: 0;
 }
+/* Fundido cruzado sin View Transitions (WebKit: viewTransitionGuard.ts y
+   viewCrossfade.ts). Los mismos fotogramas, duración y curva que las View
+   Transitions de base.css: la vista que entra aparece con un desplazamiento
+   mínimo según el sentido mientras un clon inerte de la que sale, encima y
+   fijo donde se veía, se apaga y se quita. */
+.view[data-entra] {
+  animation: ace-funde var(--dur-rapido) var(--ease-out) both;
+}
+.view[data-entra='adelante'] {
+  animation-name: ace-vt-entra-dcha;
+}
+.view[data-entra='atras'] {
+  animation-name: ace-vt-entra-izda;
+}
+.view-fantasma {
+  z-index: 0;
+  min-width: 0;
+  pointer-events: none;
+  animation: ace-vt-sale var(--dur-rapido) var(--ease-out) both;
+}
+/* El clon no repite las apariciones de su vista (al insertarse, el navegador
+   relanzaría sus animaciones CSS): solo se apaga entero. */
+.view-fantasma * {
+  animation: none !important;
+}
+.app[data-motion='css'] .app-aside {
+  animation: ace-funde var(--dur-rapido) var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Sin desplazamiento: solo el fundido (corto: --dur-rapido baja a 120 ms). */
+  .view[data-entra] {
+    animation-name: ace-funde;
+  }
+}
 .view-skeleton {
   display: grid;
   gap: var(--s-4);
@@ -218,6 +252,26 @@
   height: calc(var(--safe-bottom) + var(--tabbar-gap) + var(--tabbar-h) + var(--mini-h) + 34px);
 }
 
+/* ---- Barras durante una transición de vista ------------------------------------
+   Las instantáneas de las vistas se pintan POR ENCIMA de toda la página: sin
+   nombre propio, las filas que quedan bajo la barra superior (o bajo la
+   inferior y su velo) se veían encima de ellas mientras duraba el fundido
+   (Canales con scroll, sobre todo). Con nombre, las barras son su propia
+   capa, encima de las vistas, y base.css las deja quietas (clase ace-barra):
+   la píldora sigue deslizándose porque la imagen nueva está viva. */
+.topbar {
+  view-transition-name: ace-barra-superior;
+  view-transition-class: ace-barra;
+}
+.bottom-veil {
+  view-transition-name: ace-velo;
+  view-transition-class: ace-barra;
+}
+.tabbar {
+  view-transition-name: ace-barra-inferior;
+  view-transition-class: ace-barra;
+}
+
 /* ---- Barra inferior flotante (móvil) -------------------------------------------
    Cristal, márgenes de 12, radio 24 y la sombra larga de Palco. La píldora
    (::before) es la única pieza que se mueve: translateX hasta la columna --i. */
@@ -354,10 +408,11 @@
     letter-spacing: var(--tracking-head);
     white-space: nowrap;
   }
-  .topbar__brand img {
+  /* La marca (ui/BrandMark.tsx) trae sus esquinas redondeadas en el dibujo. */
+  .topbar__mark {
+    flex: none;
     width: 28px;
     height: 28px;
-    border-radius: 8px;
   }
   .topbar__items {
     position: relative;

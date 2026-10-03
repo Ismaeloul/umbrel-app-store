@@ -340,3 +340,138 @@ conservador). Todas se pueden revertir.
   `pairedBy` no se guarda en `devices.json` (esquema estricto: la 0.8.0 no lo
   leería y volver atrás dejaría a todos los iPhone sin emparejar); la
   revocación en cascada queda como propuesta (R-14 de `seguridad.md`).
+
+## D23. La agenda filtra por tus gustos de verdad (fix/agenda-filtrado)
+
+- **Qué pasaba** (2026-10-02, parón de selecciones): con LaLiga, el Barça y
+  España, «Para ti» decía que no había nada hoy ni mañana y el viernes
+  enseñaba LaLiga Futures (torneo de cantera, equipos «… Academy»). La regla
+  de la selección comparaba competiciones con «contiene»: "laliga futures"
+  contiene "laliga". Igual colaban el «Europeo Sub-21» («spain u21» empieza
+  por «spain ») y el «Amistoso Femenino» de España.
+- **Qué se hace**: lo juvenil, filial y femenino (`footballTeamIsVariant`,
+  `footballCompetitionIsMinor` en `@ace/shared`) solo entra si lo sigues por
+  su nombre. La selección es la absoluta masculina; sus competiciones se
+  comparan por nombre exacto o alias. Los favoritos casan por `idTeam` de
+  TheSportsDB cuando el partido trae escudo (`FAVORITE_TEAM_IDS`:
+  Barcelona = 133739); las preferencias siguen siendo texto (sin migrar el
+  estado: el id se deduce de la clave). En «Todos», los bloques con algo tuyo
+  van primero y la cantera al final; el escenario no destaca la cantera.
+  Diferencia aceptada con la 0.6.59 (el contraste la lista a propósito).
+  «Atlètic» solo cuenta al final del nombre («Atlètic Lleida» es un primer
+  equipo), «Willem II» no es filial y la «F» suelta de un «Grupo F» no es la
+  Liga F.
+- **iPhone**: `apps/ios/Sources/Core/Dominio/ParaTi.swift` porta las mismas
+  reglas (variantes, competiciones menores, `idTeam` del escudo) y
+  `scripts/generar-vectores.mjs` añade los casos del parón (LaLiga Futures,
+  Sub-21, Barcelona SC con su escudo…); la CI de iOS exige que el JSON esté al
+  día y que Swift dé lo mismo.
+- **TheSportsDB** (último recurso, tras futbolenlatv y la EPG): con la clave
+  gratuita `123`, `eventstv.php` da 1-2 emisiones al día, `eventsday.php` 3
+  partidos y `eventsnextleague.php`/`eventsseason.php` 1 y 15; pero
+  `eventsround.php` da la jornada entera. Ahora se pide por competición
+  (`THESPORTSDB_LEAGUES`, ids comprobados: LaLiga 4335, Hypermotion 4400,
+  Copa del Rey 4483, Supercopa 4511, Champions 4480, Europa 4481,
+  Conference 5071; las europeas solo con equipos españoles) y la selección
+  (`eventsnext.php?id=133909`). Unas 25-35 peticiones cada 30 min, en
+  tandas de 4 competiciones, a la vez que `eventstv.php` y con 10 s por
+  petición, para que una competición lenta no agote el plazo global de 60 s;
+  una competición caída solo marca la agenda `partial`.
+
+## D24. «Arranque instantáneo»: la fuente de tus equipos, preparada antes del saque (0.8.4)
+
+- **Qué**: unos minutos antes de que juegue uno de tus EQUIPOS favoritos, el
+  Umbrel deja preparada la mejor fuente para que «Ver» arranque en 1-2 s.
+  Módulo nuevo `apps/server/src/modules/instant-start` (reglas puras en
+  `plan.ts`, planificador cada 30 s en `service.ts`); la sesión la abre
+  playback (`prewarm`/`releasePrewarm`/`prewarmInfo`).
+- **Solo equipos** (corrección de Isma): ni las ligas ni la selección que se
+  siguen como liga o país, porque preparar todos los partidos de una liga
+  sobrecargaría el Umbrel. El equipo casa como en «Para ti»
+  (`footballMatchHasFavoriteTeam`: `idTeam` si hay escudo, nunca la cantera,
+  el filial o el femenino salvo que se siga tal cual). La selección entra si
+  está entre tus equipos.
+- **Cuándo**: a T-10 min se resuelve otra vez el partido con el precalentado
+  (`football.prepareMatch`, IPTV tocada para lista y cuenta frescas); a T-3
+  min (`INSTANT_START_PREWARM_LEAD_MS`) se abre la fuente que pediría la web
+  (`pickAutoSource`: IPTV no caída; si no, AceStream `working`, luego `weak`;
+  sin comprobador, la mejor colocada). Se reintenta cada vuelta hasta T+5 si
+  la casa está ocupada; se suelta a T+10 si nadie la usa.
+- **Una sola**: si coinciden dos partidos, el de saque más temprano; a igual
+  saque, el del equipo que va antes en tus gustos. Nunca más de una sesión
+  preparada.
+- **Nunca quita la casa a nadie (D5)**: solo con nada sonando, abriéndose ni
+  esperando; cualquier petición de otro canal (o un `claim` 0.6.x) la cierra
+  ANTES de abrir lo suyo, y si aún se estaba abriendo una IPTV, la corta. Pedir
+  la MISMA fuente la reutiliza (sin otra apertura en el motor ni otro ffmpeg);
+  una del motor se comprueba con `stat_url` y, si el motor ya no la conoce, se
+  abre de nuevo. IPTV: la regla de una conexión de docs/iptv.md §7.8.
+- **No es una reproducción**: sin visor, no escribe `nowPlaying`, no sale en
+  «Dónde se está reproduciendo» ni en `GET /api/v1/playback`, no manda
+  `stream.*` ni `playback.activity`, no toca Recientes (los escribe la web al
+  reproducir) y no apunta veredictos «del reproductor».
+- **Ajuste**: Ajustes → Reproducción → «Arranque instantáneo» (activado de
+  fábrica). `instantStart` en `GET/PUT /api/v1/settings` (opcional en el
+  esquema: ausente = activado) y guardado en `v2/arranque-instantaneo.json`,
+  NO en `settings.json`: es `strictObject` y una vuelta atrás a la 0.8.3
+  apartaría el fichero con la política de mismo canal. El fichero nuevo es
+  `z.object` (un campo futuro no lo aparta). Apagarlo suelta lo preparado al
+  momento (`state.changed`).
+- **Diagnóstico**: registro `[arranque] …` (preparando, preparada, terminada
+  con `used`/`yielded`/`expired`/`disabled`/`failed`, motivos de no preparar)
+  y `components.instantStart` en `GET /api/v1/health` (opcional).
+- **iPhone**: la app solo decodifica `instantStart` (opcional) para que la ida
+  y vuelta de los ejemplos siga igual; el interruptor está en la web.
+
+## D25. Copia de seguridad de tus ajustes (0.8.4, feat/copia-seguridad)
+
+- **Para qué**: si Isma reinstala o formatea el Umbrel, recuperar listas,
+  favoritos, recientes, «Tu fútbol», vínculos y correcciones de canal, la
+  política de mismo canal, la IPTV y, en la web, el tema, la transparencia y
+  el modo de reproducción. Ajustes → «Copia de seguridad» (solo web).
+- **Rutas** (`module: 'state'`, `access: 'web'`, todas con anti-CSRF):
+  `GET /api/v1/backup` (descarga sin la contraseña de la IPTV),
+  `POST /api/v1/backup/export` (con la contraseña, protegida con una clave) y
+  `POST /api/v1/backup/import` (`dryRun` por defecto: vista previa con
+  recuentos; luego `replace` o `merge`). Fichero
+  `ace-player-neo-copia-AAAA-MM-DD.json` con `format`, `schemaVersion: 1` y
+  `appVersion`; una versión más nueva da 422 `backup_version_unsupported`,
+  algo que no es una copia 400 `backup_invalid`, más de 2 MiB (nginx) 413
+  `backup_too_large`.
+- **Otra semilla**: la instalación nueva tiene otro `APP_SEED`, así que nada
+  de la copia depende de las claves de este Umbrel. El usuario y la
+  contraseña Xtream (o la URL M3U entera, que los lleva dentro) van solo si
+  se pide, cifrados con una clave de Isma: scrypt (N 2^15, r 8, p 1, sal de
+  16 bytes) y AES-256-GCM con AAD `ace-copia|<versión>|<tipo>`; al abrir solo
+  se admiten N hasta 2^17. En claro solo va el servidor Xtream: el usuario
+  es tan secreto como la contraseña (docs/iptv.md §1.4; la primera versión
+  lo dejaba en claro y la prueba de fugas del E2E lo cazó). Sin la clave, la
+  IPTV queda «pendiente» y la web pide el usuario y la contraseña (o la URL)
+  y la guarda con «Guardar IPTV» (con su prueba rápida). Con ella, se restaura sin prueba rápida (`iptv.restore`), cifrada
+  con las claves de aquí, y sincroniza de fondo.
+- **Ids IPTV**: en otra instalación no se reconocen (etiqueta HMAC con otra
+  clave). Los favoritos y recientes IPTV van marcados `iptv: true` y al
+  restaurar se re-etiquetan con las claves de aquí (`adoptedIptvId`, HMAC
+  estable del id viejo): así el re-emparejado por nombre (docs/iptv.md
+  §14.6) los lleva a su canal tras la primera sincronización, y sin IPTV
+  dan `iptv_removed` como los de una IPTV eliminada. Los vínculos
+  partido-canal no se re-etiquetan.
+- **Nunca va**: dispositivos emparejados (sus tokens no valdrían), sesiones,
+  «quién tiene el mando», la semilla, el token de control del motor,
+  informes de fuentes y estadísticas (caducan solos), catálogo y guía.
+- **Reemplazar** (por defecto, con aviso y confirmación en la página):
+  sustituye biblioteca, listas, gustos, vínculos, correcciones y la política.
+  **Combinar**: añade lo que falte (por id; listas por id o URL, hasta 8;
+  vínculos por canal; correcciones por id y canal) y no toca lo configurado
+  («Tu fútbol» solo si aún no se había configurado). Una copia sin IPTV, o
+  con la IPTV sin contraseña, nunca quita ni cambia la IPTV de ahora.
+- **Atómico**: todo se valida (y la clave se comprueba) antes de escribir
+  nada. state.json se escribe en UNA mutación de la cola del estado (tmp +
+  fsync + .bak + rename), con el plan rehecho dentro de la cola; luego
+  settings.json y iptv.json, cada uno en su cola. Si falla un paso posterior
+  el error llega a la web y repetir es seguro (idempotente). Un cerrojo
+  propio evita dos restauraciones a la vez. Emite `state.changed`
+  (biblioteca, listas, preferencias, vínculos, aprendizaje), `settings` e
+  `iptv.status`.
+- **Vuelta atrás**: no cambia el formato de ningún fichero de `data/`;
+  volver a la 0.8.3 es seguro (solo se pierden las rutas nuevas).

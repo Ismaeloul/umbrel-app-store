@@ -250,6 +250,14 @@
   --dur-fade: 320ms;
   /* Latido de «lo que está pasando»: onda del anillo y punto de directo. */
   --dur-pulse: 2s;
+  /* Bucles de espera (cada uno con su `prefers-reduced-motion` que lo para):
+     un giro de «cargando», el anillo de señal comprobando, el latido de
+     «comprobando…», el brillo de los esqueletos y el ecualizador de «suena». */
+  --dur-giro: 900ms;
+  --dur-giro-lento: 1.6s;
+  --dur-latido: 1.4s;
+  --dur-brillo: 1.6s;
+  --dur-eq: 1.1s;
   /* Aparición escalonada de listas: retraso por elemento y tope. */
   --stagger-step: 36ms;
   --stagger-max: 10;

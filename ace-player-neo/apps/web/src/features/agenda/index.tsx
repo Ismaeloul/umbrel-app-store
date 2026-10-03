@@ -162,7 +162,10 @@ export default function Agenda({ active }: ViewProps) {
     [dayMatches, mode, preferences],
   );
   const { scores } = useScores(dayMatches, now, active);
-  const groups = useMemo(() => groupByCompetition(matches, now, scores), [matches, now, scores]);
+  const groups = useMemo(
+    () => groupByCompetition(matches, now, scores, preferences),
+    [matches, now, scores, preferences],
+  );
   const dayEntries = useMemo(
     () =>
       days.map((item) => ({
@@ -494,6 +497,7 @@ export default function Agenda({ active }: ViewProps) {
         mine={isMine(featured, preferences)}
         watching={watched === featured.id}
         onOpen={(match) => openMatch(match, 'hero')}
+        layout={stageVisible ? 'band' : 'poster'}
         transitionName={
           opening?.from === 'hero' && opening.id === featured.id
             ? partidoTransitionName(featured.id)

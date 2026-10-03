@@ -89,6 +89,6 @@
     "engineVersion": "3.2.3",
     "autoRestarts": { "lastHour": 0, "max": 3, "nextAllowedAt": null, "exhausted": false }
   },
-  "settings": { "sameChannelPolicy": "share" },
+  "settings": { "sameChannelPolicy": "share", "instantStart": true },
   "features": { "scanner": true, "ai": false, "demoSchedule": false }
 }

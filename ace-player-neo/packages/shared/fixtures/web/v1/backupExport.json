@@ -1,0 +1,95 @@
+{
+  "format": "ace-player-neo-copia",
+  "schemaVersion": 1,
+  "appVersion": "0.8.4",
+  "createdAt": "2026-09-23T18:30:00.000Z",
+  "library": {
+    "favorites": [
+      {
+        "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+        "title": "DAZN 1",
+        "type": "fav",
+        "category": "",
+        "date": "2026-09-23T18:30:00.000Z",
+        "fromWebSync": false,
+        "ih": false
+      },
+      {
+        "id": "f60718293a4b5c6d7e8f9012345678ab23cd45ef",
+        "title": "La 1",
+        "type": "fav",
+        "category": "",
+        "date": "2026-09-23T18:30:00.000Z",
+        "fromWebSync": false,
+        "ih": false,
+        "iptv": true
+      }
+    ],
+    "history": [
+      {
+        "id": "c3d4e5f60718293a4b5c6d7e8f9012345678901a",
+        "title": "Canal de prueba",
+        "type": "recent",
+        "category": "",
+        "date": "2026-09-23T18:30:00.000Z",
+        "fromWebSync": false,
+        "ih": false
+      }
+    ]
+  },
+  "directories": {
+    "sources": [
+      {
+        "id": "principal",
+        "name": "Principal",
+        "url": "https://example.com/lista.m3u",
+        "type": "m3u",
+        "streams": [
+          {
+            "id": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "title": "DAZN 1",
+            "type": "web",
+            "category": "Deportes",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": true,
+            "ih": false
+          },
+          {
+            "id": "b2c3d4e5f60718293a4b5c6d7e8f901234567890",
+            "title": "M+ LaLiga",
+            "type": "web",
+            "category": "Deportes",
+            "date": "2026-09-23T18:30:00.000Z",
+            "fromWebSync": true,
+            "ih": false
+          }
+        ],
+        "renames": {},
+        "hidden": [],
+        "syncedAt": "2026-09-23T18:30:00.000Z",
+        "lastErrorAt": null,
+        "lastError": null
+      }
+    ],
+    "activeId": "principal"
+  },
+  "preferences": {
+    "onboardingComplete": true,
+    "country": "Spain",
+    "leagues": ["LaLiga", "Champions League"],
+    "teams": ["Real Madrid"],
+    "nationalities": ["España"]
+  },
+  "channelBindings": [],
+  "channelFeedback": [],
+  "settings": { "sameChannelPolicy": "share" },
+  "iptv": {
+    "kind": "xtream",
+    "name": "Casa",
+    "enabled": true,
+    "host": "proveedor.example:8080",
+    "server": "http://proveedor.example:8080",
+    "secret": null
+  },
+  "browser": { "theme": "oscuro", "transparency": "normal", "playbackMode": "balanced" }
+}

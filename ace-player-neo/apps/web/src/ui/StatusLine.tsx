@@ -3,7 +3,7 @@
 
    Una línea: medidor de señal (o icono), lo que pasa en lenguaje humano
    («Fuente 1 verificada. Vas en directo.») y, a la derecha, un dato corto
-   («6 s de retraso»). Lo técnico (pares, bitrate, códec) va en «Datos
+   («−34 s» si vas por detrás del directo). Lo técnico (pares, bitrate, códec) va en «Datos
    técnicos», nunca aquí. */
 
 import { cx } from '../lib/cx.ts';

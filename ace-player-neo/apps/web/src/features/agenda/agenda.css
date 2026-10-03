@@ -1,7 +1,8 @@
 /* ==========================================================================
    Agenda = portada, piel «Palco» (plan fase 2, decisiones D3, D4, W4 y W11;
-   corrección 1 del encargo). Arriba el héroe versus XL; debajo la tira de
-   días y «Para ti» / «Todos»; después, por competición, una fila horizontal
+   corrección 1 del encargo). Arriba el héroe (versus XL; en escritorio, banda
+   compacta); debajo la tira de días y «Para ti» / «Todos»; después, por
+   competición, una fila horizontal
    de tarjetas versus (PosterRail). En escritorio, a la derecha, el panel del
    partido elegido y «Luego». Todo con tokens; solo se animan transform y
    opacity; el hover, solo con ratón de verdad.
@@ -39,7 +40,7 @@
   }
 }
 .agenda-refresh[aria-busy='true'] svg {
-  animation: agenda-gira 900ms linear infinite;
+  animation: agenda-gira var(--dur-giro) linear infinite;
 }
 @keyframes agenda-gira {
   to {
@@ -228,19 +229,155 @@
       radial-gradient(40% 60% at 50% 46%, rgb(0 0 0 / 0.22), transparent 70%);
   }
 }
-/* Escritorio: una valla a todo el ancho con tope de alto; escudos y nombres
-   crecen con ella. */
+/* Escritorio (≥ 1024 px): banda compacta en vez de la valla (encargo del
+   3-10-2026). Superficie del sistema, sin las dos mitades planas: de los
+   colores de club quedan una franja fina partida en el borde izquierdo y una
+   luz suave detrás de cada fila de equipo (--ta arriba, --tb abajo; en un
+   partido terminado, nada). Tres columnas: equipos · cuándo, competición y
+   canales · acciones. Sin cristal: igual con «Reducir transparencia». */
+.agenda-hero--band {
+  display: block;
+}
+.agenda-hero__band {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: minmax(0, 26rem) minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--s-6);
+  padding: 20px 24px 20px 28px;
+  overflow: hidden;
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  box-shadow:
+    inset 0 1px 0 var(--glass-hi),
+    0 0 0 1px var(--line-soft),
+    var(--shadow-1);
+}
+.agenda-hero__band::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      38% 70% at 0% 22%,
+      color-mix(in oklch, var(--ta) 22%, transparent),
+      transparent 75%
+    ),
+    radial-gradient(
+      38% 70% at 0% 78%,
+      color-mix(in oklch, var(--tb) 18%, transparent),
+      transparent 75%
+    );
+}
+.agenda-hero__band::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: linear-gradient(180deg, var(--ta) 50%, var(--tb) 50%);
+  pointer-events: none;
+}
+.agenda-hero--band.is-watching .agenda-hero__band {
+  box-shadow:
+    inset 0 0 0 2px var(--accent),
+    var(--shadow-1);
+}
+.agenda-hero__teams {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.agenda-hero__team {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.agenda-hero__crest {
+  flex: none;
+}
+.agenda-hero__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-22);
+  font-weight: var(--wght-head);
+  font-stretch: var(--w-head);
+  letter-spacing: var(--tracking-head);
+  line-height: 1.15;
+}
+.agenda-hero__meta {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  align-self: stretch;
+  align-content: center;
+  min-width: 0;
+  padding-left: var(--s-6);
+  border-left: 1px solid var(--line-soft);
+}
+.agenda-hero__marks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.agenda-hero__when {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.agenda-hero__comp {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  font-size: var(--fs-15);
+  font-weight: 650;
+}
+.agenda-hero__comp-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agenda-hero--band .agenda-hero__where {
+  display: flex;
+  max-width: 100%;
+  margin: 0;
+}
+.agenda-hero__where-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agenda-hero__actions {
+  display: grid;
+  gap: 8px;
+  justify-items: stretch;
+  min-width: 190px;
+}
+.agenda-hero--band .agenda-hero__score.agenda-score.capsule {
+  justify-content: center;
+  width: 100%;
+}
 @media (min-width: 1024px) {
-  .agenda-hero .versus--xl {
-    --versus-pad: 24px;
-    --versus-name: var(--fs-44);
-    --versus-crest-y: 44%;
-  }
-  .agenda-hero .versus--xl .versus__crests {
-    transform: translate(-50%, -50%) scale(1.4);
+  .agenda-hero__skeleton.skeleton {
+    aspect-ratio: auto;
+    min-height: 0;
+    height: 152px;
+    max-height: none;
+    background: var(--surface);
+    color-scheme: normal;
   }
 }
-
 /* ---- Barra: días y filtro ---------------------------------------------------------- */
 .agenda-bar {
   display: grid;

@@ -331,9 +331,12 @@ video {
 /* ---- Transiciones de vista (View Transitions API) --------------------------
    React (<ViewTransition> + startTransition) las lanza al navegar; donde el
    navegador no las tiene, la navegación es instantánea (ese es el respaldo).
-   El cambio de vista es un fundido corto con un desplazamiento mínimo según
-   el sentido; el partido que viaja de la agenda al centro de partido usa su
-   propio nombre (src/app/transitions.ts). */
+   El cambio de vista es un fundido cruzado corto: la vista que sale
+   (.ace-vista-sale) se apaga en su sitio y la que entra (.ace-vista-entra)
+   aparece con un desplazamiento mínimo según el sentido. Cada una es su
+   propia instantánea, sin transformar una caja en otra (por qué, en
+   src/app/transitions.ts). El partido que viaja de la agenda al centro de
+   partido usa su propio nombre. */
 ::view-transition-group(*) {
   animation-duration: var(--dur-estandar);
   animation-timing-function: var(--ease-estandar);
@@ -360,26 +363,53 @@ video {
     opacity: 0;
   }
 }
-::view-transition-old(ace-vista) {
+/* La que sale y la que entra duran lo mismo: el fundido se cruza a la vez. */
+::view-transition-old(.ace-vista-sale),
+::view-transition-old(.ace-vista-entra) {
   animation: ace-vt-sale var(--dur-rapido) var(--ease-out) both;
 }
-::view-transition-new(ace-vista) {
+::view-transition-new(.ace-vista-entra) {
   animation: ace-funde var(--dur-rapido) var(--ease-out) both;
 }
-:active-view-transition-type(adelante)::view-transition-new(ace-vista) {
+:active-view-transition-type(adelante)::view-transition-new(.ace-vista-entra) {
   animation-name: ace-vt-entra-dcha;
 }
-:active-view-transition-type(atras)::view-transition-new(ace-vista) {
+:active-view-transition-type(atras)::view-transition-new(.ace-vista-entra) {
   animation-name: ace-vt-entra-izda;
+}
+/* Las barras de navegación (shell.css) no se funden: la imagen nueva, que es
+   viva, sustituye a la vieja al instante. Solo cuando aparecen o desaparecen
+   (entrar en un partido quita la barra inferior) se funden como una vista. */
+::view-transition-group(.ace-barra) {
+  animation: none;
+  /* Encima de las vistas: el navegador ordena los grupos por cómo se pintaban
+     y el de la vista nueva acababa sobre la barra (las filas con scroll se
+     veían por encima de ella). */
+  z-index: 1;
+}
+::view-transition-old(.ace-barra) {
+  animation: none;
+  opacity: 0;
+}
+::view-transition-new(.ace-barra) {
+  animation: none;
+}
+::view-transition-old(.ace-barra):only-child {
+  opacity: 1;
+  animation: ace-vt-sale var(--dur-rapido) var(--ease-out) both;
+}
+::view-transition-new(.ace-barra):only-child {
+  animation: ace-funde var(--dur-rapido) var(--ease-out) both;
 }
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-group(*),
   ::view-transition-old(*),
   ::view-transition-new(*) {
-    animation-duration: 120ms !important;
-    animation-timing-function: ease-out !important;
+    animation-duration: var(--dur-rapido) !important;
+    animation-timing-function: var(--ease-out) !important;
   }
-  ::view-transition-new(ace-vista) {
+  /* Sin desplazamiento: solo el fundido. */
+  ::view-transition-new(.ace-vista-entra) {
     animation-name: ace-funde !important;
   }
 }

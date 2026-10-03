@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetMode, setMode } from '../../api/mode.ts';
+import { useRoute } from '../../app/router.tsx';
 import { setTheme, setTransparency, themeStore } from '../../app/theme.ts';
 import { resetToasts, toastStore } from '../../notices/toasts.ts';
 import { fixture, mockFetch } from '../../test/fetch.ts';
@@ -25,7 +26,10 @@ function setup(search = '?vista=ajustes', extra: Parameters<typeof mockFetch>[0]
   net = mockFetch({
     'GET /api/v1/directories': { web, webSyncedAt, webSources, activeWebSourceId },
     'GET /api/v1/settings': { settings: { sameChannelPolicy: 'share' }, source: 'saved' },
-    'PUT /api/v1/settings': { settings: { sameChannelPolicy: 'handoff' }, source: 'saved' },
+    'PUT /api/v1/settings': {
+      settings: { sameChannelPolicy: 'handoff', instantStart: false },
+      source: 'saved',
+    },
     'GET /api/v1/preferences': fixture('preferencesGet'),
     'GET /api/v1/engine/status': fixture('engineStatus'),
     'POST /api/v1/engine/restart': { restarted: true },
@@ -34,8 +38,12 @@ function setup(search = '?vista=ajustes', extra: Parameters<typeof mockFetch>[0]
     'GET /api/v1/iptv': { provider: null, refreshHours: 6 },
     ...extra,
   });
-  const seccion = new URLSearchParams(search).get('vista')?.split('/')[1] ?? null;
-  return renderWithApp(<SettingsView route={{ vista: 'ajustes', seccion }} active />, { search });
+  return renderWithApp(<Routed />, { search });
+}
+
+/** Ajustes con la ruta del router, como en el armazón: así cambia de sección. */
+function Routed() {
+  return <SettingsView route={useRoute()} active />;
 }
 
 beforeEach(() => {
@@ -67,12 +75,64 @@ describe('Ajustes', () => {
       'Reproducción',
       'Dónde se está reproduciendo',
       'Apariencia',
+      'Copia de seguridad',
       'Motor AceStream',
       'Acerca de',
     ]);
-    expect(await screen.findByRole('heading', { name: 'Listas', level: 2 })).toBeInTheDocument();
+    expect(within(index).getByRole('link', { name: 'IPTV' })).toHaveAttribute(
+      'href',
+      '?vista=ajustes/iptv',
+    );
+  });
+
+  it('una sección cada vez: sin sección, la primera; el índice cambia cuál se ve', async () => {
+    setup();
+    const index = screen.getByRole('navigation', { name: 'Secciones de Ajustes' });
+    expect(within(index).getByRole('link', { name: 'Listas' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByRole('region', { name: 'Listas' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(1);
+    expect(screen.queryByRole('region', { name: 'Motor AceStream' })).not.toBeInTheDocument();
+
     fireEvent.click(within(index).getByRole('link', { name: 'Motor AceStream' }));
     await waitFor(() => expect(screen.getByTestId('ruta')).toHaveTextContent('ajustes/motor'));
+    expect(await screen.findByRole('region', { name: 'Motor AceStream' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Listas' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(1);
+    expect(within(index).getByRole('link', { name: 'Motor AceStream' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(within(index).getByRole('link', { name: 'Listas' })).not.toHaveAttribute('aria-current');
+    // El foco va al título de la sección nueva (tras el del armazón).
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Motor AceStream', level: 2 })).toHaveFocus(),
+    );
+  });
+
+  it('cada sección es una entrada del historial: atrás vuelve a la anterior', async () => {
+    setup('?vista=ajustes/apariencia');
+    const index = screen.getByRole('navigation', { name: 'Secciones de Ajustes' });
+    fireEvent.click(within(index).getByRole('link', { name: 'Acerca de' }));
+    expect(await screen.findByRole('region', { name: 'Acerca de' })).toBeInTheDocument();
+    act(() => history.back());
+    expect(await screen.findByRole('region', { name: 'Apariencia' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Acerca de' })).not.toBeInTheDocument();
+  });
+
+  it('con Ctrl o Cmd el enlace se deja al navegador (otra pestaña)', () => {
+    setup();
+    const index = screen.getByRole('navigation', { name: 'Secciones de Ajustes' });
+    fireEvent.click(within(index).getByRole('link', { name: 'IPTV' }), { ctrlKey: true });
+    expect(screen.getByTestId('ruta')).toHaveTextContent('ajustes');
+    expect(screen.getByTestId('ruta')).not.toHaveTextContent('ajustes/iptv');
+  });
+
+  it('una sección desconocida enseña la primera', () => {
+    setup('?vista=ajustes/nada');
+    expect(screen.getByRole('region', { name: 'Listas' })).toBeInTheDocument();
   });
 
   it('«ajustes/salud» sin panel de salud lleva a la sección del motor', async () => {
@@ -80,13 +140,13 @@ describe('Ajustes', () => {
     const index = screen.getByRole('navigation', { name: 'Secciones de Ajustes' });
     expect(within(index).getByRole('link', { name: 'Motor AceStream' })).toHaveAttribute(
       'aria-current',
-      'location',
+      'page',
     );
-    await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled());
+    expect(screen.getByRole('region', { name: 'Motor AceStream' })).toBeInTheDocument();
   });
 
   it('modo de reproducción: lo guarda el reproductor por visor y avisa', async () => {
-    setup();
+    setup('?vista=ajustes/reproduccion');
     const group = screen.getByRole('radiogroup', { name: 'Modo de reproducción' });
     expect(within(group).getByRole('radio', { name: /Equilibrado/ })).toHaveAttribute(
       'aria-checked',
@@ -111,7 +171,7 @@ describe('Ajustes', () => {
   });
 
   it('«Un solo dispositivo a la vez» guarda la política handoff (D5)', async () => {
-    setup();
+    setup('?vista=ajustes/reproduccion');
     const toggle = await screen.findByRole('switch', { name: 'Un solo dispositivo a la vez' });
     await waitFor(() => expect(toggle).toBeEnabled());
     expect(toggle).toHaveAttribute('aria-checked', 'false');
@@ -125,8 +185,21 @@ describe('Ajustes', () => {
     expect(toastStore.get().at(-1)?.text).toBe('Un solo dispositivo a la vez: activado');
   });
 
+  it('«Arranque instantáneo» viene activado y se apaga con instantStart: false (D24)', async () => {
+    setup('?vista=ajustes/reproduccion');
+    const toggle = await screen.findByRole('switch', { name: 'Arranque instantáneo' });
+    await waitFor(() => expect(toggle).toBeEnabled());
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(toggle);
+    await waitFor(() =>
+      expect(net.calls.find((c) => c.method === 'PUT')?.body).toEqual({ instantStart: false }),
+    );
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'false'));
+    expect(toastStore.get().at(-1)?.text).toBe('Arranque instantáneo: desactivado');
+  });
+
   it('tema y «Reducir transparencia» propio', async () => {
-    setup();
+    setup('?vista=ajustes/apariencia');
     fireEvent.click(screen.getByRole('radio', { name: 'Oscuro' }));
     expect(themeStore.get().theme).toBe('oscuro');
     expect(document.documentElement.dataset.theme).toBe('dark');
@@ -137,7 +210,7 @@ describe('Ajustes', () => {
 
   it('reiniciar el motor pide un segundo toque en 6 s y vuelve a mirar el motor', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    setup();
+    setup('?vista=ajustes/motor');
     const button = screen.getByRole('button', { name: 'Reiniciar el motor' });
     fireEvent.click(button);
     expect(
@@ -164,8 +237,9 @@ describe('Ajustes', () => {
   });
 
   it('«Acerca de» con la versión y «Tu fútbol» con el resumen', async () => {
-    setup();
+    setup('?vista=ajustes/acerca');
     expect(await screen.findByText('0.7.0')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('link', { name: 'Tu fútbol' }));
     expect(
       await screen.findByText(/^Tu agenda prioriza 2 ligas, 1 equipo y 1 nacionalidad\.$/),
     ).toBeInTheDocument();

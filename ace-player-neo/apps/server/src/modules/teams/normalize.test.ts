@@ -92,6 +92,9 @@ describe('término de búsqueda', () => {
     expect(isReserveName('Real Madrid Castilla')).toBe(true);
     expect(isReserveName('Barcelona Atlètic')).toBe(true);
     expect(isReserveName('España Sub-21')).toBe(true);
+    expect(isReserveName('FC Barcelona Academy')).toBe(true);
+    expect(isReserveName('FC Barcelona Femení')).toBe(true);
+    expect(isReserveName('FC Barcelona Juvenil A')).toBe(true);
     expect(isReserveName('Real Sociedad')).toBe(false);
     expect(isReserveName('Athletic Club')).toBe(false);
     expect(isReserveName('Atlético Madrid')).toBe(false);

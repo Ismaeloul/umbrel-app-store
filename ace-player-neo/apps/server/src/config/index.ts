@@ -63,6 +63,8 @@ export interface AppConfig {
     readonly v2Dir: string;
     readonly devicesFile: string;
     readonly settingsFile: string;
+    /** «Arranque instantáneo» (D24): aparte de settings.json por la vuelta atrás. */
+    readonly instantStartFile: string;
     readonly sessionsFile: string;
     readonly diagnosticsFile: string;
     /** Índice y PNG de escudos y logos (`<v2Dir>/teams`, módulo `teams`). */
@@ -278,6 +280,7 @@ export function loadConfig(env: Env = process.env): LoadedConfig {
       v2Dir,
       devicesFile: path.join(v2Dir, 'devices.json'),
       settingsFile: path.join(v2Dir, 'settings.json'),
+      instantStartFile: path.join(v2Dir, 'arranque-instantaneo.json'),
       sessionsFile: path.join(v2Dir, 'sessions.json'),
       diagnosticsFile: path.join(v2Dir, 'diagnostics.jsonl'),
       teamsDir: path.join(v2Dir, 'teams'),

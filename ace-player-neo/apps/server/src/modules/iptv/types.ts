@@ -18,6 +18,7 @@ import type {
   IptvBrowseResponse,
   IptvChannelsResponse,
   IptvIdState,
+  IptvKind,
   IptvReason,
   IptvSaveBody,
   IptvUpdateBody,
@@ -153,9 +154,50 @@ export interface IptvListener {
   onRevoked?(code: 'iptv_disabled' | 'iptv_removed' | 'iptv_account_expired'): void;
 }
 
+/** Secretos de la IPTV en claro (solo en memoria; en disco van cifrados). */
+export type IptvPlainSecrets =
+  | { readonly kind: 'm3u'; readonly url: string }
+  | {
+      readonly kind: 'xtream';
+      readonly server: string;
+      readonly username: string;
+      readonly password: string;
+    };
+
+/**
+ * La IPTV para la copia de seguridad (decisiones.md D24). `secrets` va en
+ * claro SOLO para que la copia lo cifre con la clave de Isma: nunca sale en
+ * una respuesta ni en el registro. null si los secretos no se pueden leer.
+ */
+export interface IptvBackupConfig {
+  readonly kind: IptvKind;
+  readonly name: string;
+  readonly enabled: boolean;
+  readonly host: string;
+  /** Solo Xtream (sin credenciales). */
+  readonly server: string | null;
+  /** Usuario y contraseña (Xtream) o la URL (M3U): solo para cifrarlos con la clave de Isma. */
+  readonly secrets: IptvPlainSecrets | null;
+}
+
 export interface IptvService extends Lifecycle {
   /** GET /api/v1/iptv. Nunca devuelve la URL, el usuario ni la contraseña. */
   view(): Promise<IptvView>;
+  /** Copia de seguridad: la IPTV guardada con sus secretos (null sin IPTV). Ver IptvBackupConfig. */
+  backupConfig(): IptvBackupConfig | null;
+  /**
+   * Restaurar la IPTV de una copia: como «Guardar IPTV» pero SIN la prueba
+   * rápida (la copia ya funcionaba y el proveedor puede no responder ahora);
+   * cifra con las claves de este Umbrel, guarda y, si está activa, sincroniza
+   * de fondo (luego el re-emparejado lleva los favoritos a su canal).
+   */
+  restore(input: {
+    readonly secrets: IptvPlainSecrets;
+    readonly name: string;
+    readonly enabled: boolean;
+  }): Promise<IptvView>;
+  /** Id IPTV de este Umbrel para un id IPTV de otra instalación (ids.ts, `adoptedIptvId`). */
+  adoptForeignId(id: string): string;
   /** PUT /api/v1/iptv: prueba rápida, cifra, guarda (`revision` + 1) y sincroniza de fondo. */
   save(body: IptvSaveBody, signal: AbortSignal): Promise<IptvView>;
   /** PATCH /api/v1/iptv: pausar, reanudar o renombrar (`iptv_not_configured` sin IPTV). */
@@ -212,6 +254,14 @@ export interface IptvService extends Lifecycle {
    */
   touch(mode: 'default' | 'research'): void;
 
+  /**
+   * «Arranque instantáneo» (D24): por qué NO se puede abrir ahora una
+   * conexión con el proveedor sin que nadie la pida, o null si se puede.
+   * Regla de una sola conexión (§7): nada si hay una sesión o una sonda
+   * abiertas, si soltamos una hace menos de `IPTV_SESSION.recentCloseMs` (el
+   * panel aún puede contarla) o si la cuenta tiene todas sus plazas ocupadas.
+   */
+  prewarmBlocker(): string | null;
   /** Abre la entrada de una sesión IPTV (relé); lanza los `iptv_*` de §5.6. */
   openInput(id: string, options: { readonly signal: AbortSignal }): Promise<IptvInput>;
   /** Carril IPTV del comprobador (§7.3): null = sin veredicto (cuenta bien, «Sin comprobar»). */

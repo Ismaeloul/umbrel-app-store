@@ -31,6 +31,7 @@ import {
   useState,
   ViewTransition,
   type CSSProperties,
+  type ReactNode,
 } from 'react';
 import {
   clearStatus,
@@ -53,6 +54,9 @@ import { useBack, useNavigate, useRoute } from './router.tsx';
 import { formatVista, type Route, type Vista } from './routes.ts';
 import { restoreScroll } from './scroll-memory.ts';
 import { ShortcutHelp } from './ShortcutHelp.tsx';
+import { finishEntranceAnimations, VISTA_CAMBIA, VISTA_ENTRA, VISTA_SALE } from './transitions.ts';
+import { playPendingCrossfade } from './viewCrossfade.ts';
+import { installViewTransitionGuard, viewMotion } from './viewTransitionGuard.ts';
 import { useShortcut } from './shortcuts.ts';
 import { AgendaColumn, asideComponent, PlayerDock, viewComponent } from './views.tsx';
 import './shell.css';
@@ -80,14 +84,47 @@ function ViewSkeleton({ vista }: { vista: Vista }) {
 function ViewSlot({ vista, route, active }: { vista: Vista; route: Route; active: boolean }) {
   const Component = viewComponent(vista);
   const navigate = useNavigate();
+  const ref = useRef<HTMLDivElement>(null);
+  const shown = useRef(false);
+  // Al volver a una vista ya vista, sus apariciones de entrada (filas
+  // escalonadas, tarjetas…) no se repiten: el navegador las relanza al quitar
+  // el display:none de Activity y se sumaban al fundido de la vista. Va en
+  // fase de layout: la instantánea de la View Transition ya sale terminada.
+  useLayoutEffect(() => {
+    if (!active) return;
+    if (shown.current) finishEntranceAnimations(ref.current);
+    shown.current = true;
+  }, [active]);
   return (
-    <div className="view" data-vista={vista} data-active={active ? 'true' : 'false'}>
+    <div ref={ref} className="view" data-vista={vista} data-active={active ? 'true' : 'false'}>
       <ErrorBoundary what={WHAT[vista]} onHome={() => navigate({ vista: 'agenda' })}>
         <Suspense fallback={<ViewSkeleton vista={vista} />}>
           <Component route={route} active={active} />
         </Suspense>
       </ErrorBoundary>
     </div>
+  );
+}
+
+/**
+ * La <ViewTransition> con la que una vista (o su panel) sale y entra. En
+ * WebKit no hay ninguna: con una, aunque sea sin clases, React lanza una View
+ * Transition en cada cambio de pestaña; el fundido lo hace viewCrossfade.ts.
+ */
+function ViewEnterExit({
+  animate,
+  update,
+  children,
+}: {
+  animate: boolean;
+  update: typeof VISTA_CAMBIA | 'none';
+  children: ReactNode;
+}) {
+  if (!animate) return children;
+  return (
+    <ViewTransition enter={VISTA_ENTRA} exit={VISTA_SALE} update={update} default="none">
+      {children}
+    </ViewTransition>
   );
 }
 
@@ -115,6 +152,13 @@ export function Shell() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [asideOpen, setAsideOpenState] = useState(asideInitiallyOpen);
 
+  // Cambio de vista con View Transitions o, en WebKit, con un fundido CSS
+  // (viewTransitionGuard.ts explica por qué). Ninguna View Transition se
+  // queda viva más de lo que duran sus animaciones.
+  const motion = viewMotion();
+  const viewsAnimate = motion === 'vt';
+  useEffect(() => installViewTransitionGuard(document), []);
+
   // Vistas visitadas: se quedan montadas (ocultas) para conservar su estado.
   const [visited, setVisited] = useState<Vista[]>([route.vista]);
   if (!visited.includes(route.vista)) setVisited([...visited, route.vista]);
@@ -141,6 +185,13 @@ export function Shell() {
   }, [inPartido]);
   useEffect(() => setImmersive(immersive), [immersive]);
 
+  // Sin View Transitions por vista: la vista que se deja se apaga encima de
+  // la nueva justo cuando esta aparece (viewCrossfade.ts). En fase de layout,
+  // antes de pintar: nunca se ve un fotograma sin ninguna de las dos.
+  useLayoutEffect(() => {
+    if (motion === 'css') playPendingCrossfade(route.vista);
+  }, [motion, route.vista]);
+
   // Cada vista vuelve a su scroll (o arriba la primera vez).
   const key = formatVista(route);
   useLayoutEffect(() => {
@@ -150,13 +201,18 @@ export function Shell() {
 
   // Al navegar (no al abrir), el foco va al titular de la vista nueva.
   const firstRender = useRef(true);
+  const vistaActiva = route.vista;
   useEffect(() => {
     if (firstRender.current) {
       firstRender.current = false;
       return;
     }
     const frame = requestAnimationFrame(() => {
-      const view = document.querySelector<HTMLElement>('.view[data-active="true"]');
+      // Por su nombre: una vista recién oculta puede seguir con data-active
+      // un rato (React actualiza lo oculto con prioridad baja).
+      const view = document.querySelector<HTMLElement>(
+        `.views > .view[data-vista="${vistaActiva}"]`,
+      );
       const heading = view?.querySelector<HTMLElement>('h1[tabindex="-1"]');
       (heading ?? document.getElementById('contenido'))?.focus({ preventScroll: true });
     });
@@ -208,6 +264,7 @@ export function Shell() {
         data-mini={miniVisible ? 'true' : 'false'}
         data-aside={asideVisible ? 'true' : 'false'}
         data-column={columnVisible ? 'true' : 'false'}
+        data-motion={motion}
         style={{ '--toast-bottom': toastBottom } as CSSProperties}
       >
         <a
@@ -254,28 +311,37 @@ export function Shell() {
               {inPartido ? <StatusLineHost className="stage__status" /> : null}
             </div>
           ) : null}
-          <ViewTransition name="ace-vista">
-            <div className="views">
-              {visited.map((vista) => (
-                <Activity key={vista} mode={vista === route.vista ? 'visible' : 'hidden'}>
+          <div className="views">
+            {/* Una <ViewTransition> por vista, la primera cosa dentro de su
+                Activity: al cambiar de vista, una sale y otra entra, cada una
+                en su sitio (src/app/transitions.ts explica por qué). En
+                WebKit no hay ninguna: el mismo fundido lo hace
+                viewCrossfade.ts (ViewEnterExit). */}
+            {visited.map((vista) => (
+              <Activity key={vista} mode={vista === route.vista ? 'visible' : 'hidden'}>
+                <ViewEnterExit animate={viewsAnimate} update={VISTA_CAMBIA}>
                   <ViewSlot
                     vista={vista}
                     route={lastRoutes.current.get(vista) ?? route}
                     active={vista === route.vista}
                   />
-                </Activity>
-              ))}
-            </div>
-          </ViewTransition>
+                </ViewEnterExit>
+              </Activity>
+            ))}
+          </div>
         </main>
         {asideVisible && Aside ? (
-          <aside className="app-aside" aria-label="Panel lateral">
-            <ErrorBoundary what="el panel lateral">
-              <Suspense fallback={<SkeletonRows rows={4} label="Cargando el panel…" />}>
-                <Aside route={route} active />
-              </Suspense>
-            </ErrorBoundary>
-          </aside>
+          // El panel de cada vista entra y sale con ella (sin esto, el de
+          // Canales aparecía de golpe mientras la columna aún se fundía).
+          <ViewEnterExit key={route.vista} animate={viewsAnimate} update="none">
+            <aside className="app-aside" aria-label="Panel lateral">
+              <ErrorBoundary what="el panel lateral">
+                <Suspense fallback={<SkeletonRows rows={4} label="Cargando el panel…" />}>
+                  <Aside route={route} active />
+                </Suspense>
+              </ErrorBoundary>
+            </aside>
+          </ViewEnterExit>
         ) : null}
         <div className="bottom-veil" aria-hidden="true" hidden={!tabbarVisible} />
         <TabBar route={route} hidden={!tabbarVisible} />

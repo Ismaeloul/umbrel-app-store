@@ -76,7 +76,7 @@ import {
   type GuideWindow,
   type StoredProgramme,
 } from './guide.js';
-import { iptvChannelId, isIptvId, m3uKey, xtreamKey } from './ids.js';
+import { adoptedIptvId, iptvChannelId, isIptvId, m3uKey, xtreamKey } from './ids.js';
 import { guideGroupMatches, mergeIptvMatches } from './layer.js';
 import { parseM3uStream } from './m3u.js';
 import {
@@ -107,6 +107,7 @@ import {
 import { createIptvRelay, type IptvRelayImpl, type RelayVariant } from './relay.js';
 import { IptvFiles } from './store.js';
 import type {
+  IptvBackupConfig,
   IptvCheckOptions,
   IptvCheckResult,
   IptvDeps,
@@ -117,6 +118,7 @@ import type {
   IptvResolutionCandidate,
   IptvResolveRequest,
   IptvResolveResult,
+  IptvPlainSecrets,
   IptvService,
 } from './types.js';
 import {
@@ -636,6 +638,66 @@ export class IptvServiceImpl implements IptvService {
   // --- Guardar ---
 
   async save(body: IptvSaveBody, signal: AbortSignal): Promise<IptvView> {
+    return this.store(body, signal, { test: true });
+  }
+
+  // --- Copia de seguridad (decisiones.md D25) ---
+
+  backupConfig(): IptvBackupConfig | null {
+    this.ensureLoaded();
+    const record = this.record;
+    if (!record) return null;
+    const secrets = this.unreadable ? null : this.secrets;
+    return {
+      kind: record.kind,
+      name: record.name,
+      enabled: record.enabled,
+      host: record.host,
+      server:
+        secrets?.kind === 'xtream'
+          ? secrets.server
+          : record.kind === 'xtream'
+            ? record.origin
+            : null,
+      secrets: secrets ? { ...secrets } : null,
+    };
+  }
+
+  async restore(input: {
+    readonly secrets: IptvPlainSecrets;
+    readonly name: string;
+    readonly enabled: boolean;
+  }): Promise<IptvView> {
+    const { secrets } = input;
+    const body: IptvSaveBody =
+      secrets.kind === 'm3u'
+        ? { kind: 'm3u', name: input.name, url: secrets.url }
+        : {
+            kind: 'xtream',
+            name: input.name,
+            server: secrets.server,
+            username: secrets.username,
+            password: secrets.password,
+          };
+    return this.store(body, new AbortController().signal, {
+      test: false,
+      enabled: input.enabled,
+    });
+  }
+
+  adoptForeignId(id: string): string {
+    return adoptedIptvId(this.ensureKeys(), id);
+  }
+
+  /**
+   * Guardar (PUT /api/v1/iptv) y restaurar una copia: lo mismo salvo la
+   * prueba rápida (`test`) y, al restaurar, si queda en pausa (`enabled`).
+   */
+  private async store(
+    body: IptvSaveBody,
+    signal: AbortSignal,
+    options: { readonly test: boolean; readonly enabled?: boolean },
+  ): Promise<IptvView> {
     this.ensureLoaded();
     const current = this.record;
     const currentSecrets = this.unreadable ? null : this.secrets;
@@ -692,7 +754,7 @@ export class IptvServiceImpl implements IptvService {
       redactor.add(secrets.username);
       redactor.add(secrets.password);
     }
-    const account = await this.quickTest(secrets, { lan }, signal, host);
+    const account = options.test ? await this.quickTest(secrets, { lan }, signal, host) : null;
 
     const providerId = sameProvider && current ? current.id : newProviderId();
     const now = this.deps.clock.date().toISOString();
@@ -717,7 +779,7 @@ export class IptvServiceImpl implements IptvService {
         revision: (previous?.revision ?? 0) + 1,
         kind: secrets.kind,
         name,
-        enabled: sameProvider && previous ? previous.enabled : true,
+        enabled: options.enabled ?? (sameProvider && previous ? previous.enabled : true),
         host,
         origin,
         secret: sealed,
@@ -743,10 +805,18 @@ export class IptvServiceImpl implements IptvService {
       this.guideCache.clear();
       await this.files.removeAll();
     }
-    this.logger.info({ host, kind: secrets.kind }, 'IPTV guardada');
-    this.syncing = true;
-    this.emitStatus();
-    void this.startSync('save');
+    this.logger.info(
+      { host, kind: secrets.kind, ...(options.test ? {} : { from: 'copia' }) },
+      'IPTV guardada',
+    );
+    /* Una copia restaurada en pausa no descarga nada (Guardar sincroniza siempre, como antes). */
+    if (options.enabled !== false) {
+      this.syncing = true;
+      this.emitStatus();
+      void this.startSync('save');
+    } else {
+      this.emitStatus();
+    }
     this.scheduleAll();
     return this.view();
   }
@@ -1995,6 +2065,26 @@ export class IptvServiceImpl implements IptvService {
   private closedJustNow(): boolean {
     const now = this.deps.clock.now();
     return this.recentCloses.some((at) => now - at <= IPTV_SESSION.busyRetryWindowMs);
+  }
+
+  prewarmBlocker(): string | null {
+    if (!this.active()) return 'iptv_inactive';
+    const dead = this.accountDead();
+    if (dead) return dead;
+    if (this.relay.sessions() > 0 || this.openInputs > 0) return 'iptv_in_use';
+    if (this.probe) return 'iptv_probing';
+    if (this.closedRecently()) return 'iptv_recent_close';
+    const account = this.record?.account ?? null;
+    if (
+      account &&
+      account.maxConnections !== null &&
+      account.activeConnections !== null &&
+      account.maxConnections > 0 &&
+      account.activeConnections >= account.maxConnections
+    ) {
+      return 'iptv_busy';
+    }
+    return null;
   }
 
   async openInput(id: string, options: { readonly signal: AbortSignal }): Promise<IptvInput> {

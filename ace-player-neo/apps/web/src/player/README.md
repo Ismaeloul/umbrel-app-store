@@ -168,7 +168,9 @@ Reglas que cumple (inventario §8, §9, §11, §17, §18 y §26):
   «Motor listo/apagado», «Canales n» (directorio + favoritos, sin repetir) y
   «Hoy n partidos» (hoy en Madrid, no el día elegido: §29.14).
 - **Interfaz**: controles propios (también en el móvil, como la maqueta); se
-  esconden a los 3,2 s solo si suena de verdad; clic pausa, doble clic
+  esconden a los 2,5 s sin mover el ratón (3 s con el dedo) o al sacarlo del
+  vídeo, solo si suena de verdad y nunca con un menú u hoja abiertos ni con el
+  foco del teclado dentro; clic pausa, doble clic
   pantalla completa, clic derecho menú; tocar enseña o esconde; deslizar hacia
   abajo minimiza (móvil). Botón de directo B4. Toasts nunca sobre el vídeo: lo
   de la señal va a la línea de estado (`notify(..., { kind: 'signal' })`).
@@ -189,6 +191,26 @@ Reglas que cumple (inventario §8, §9, §11, §17, §18 y §26):
 - **Atajos** (registro central, salen en «?»): Espacio/K, M, J, F, P, S, G, ← →
   (estos solo en grande, con canal y con el foco fuera de pestañas, campos,
   deslizadores y controles del reproductor, regla 9).
+- **Cambiar de canal rápido entre favoritos** (0.8.4, `favorite-zap.ts`): ↑ o
+  Re Pág = favorito anterior, ↓ o Av Pág = siguiente; con el dedo, deslizar
+  a los lados sobre el vídeo, como pasar páginas: a la izquierda = siguiente
+  y a la derecha = anterior, en todos los modos (vertical, horizontal,
+  pantalla completa, tableta). Cuenta si es claramente horizontal (1,4 veces
+  el vertical) y de 50 px o más (o rápido), y solo sobre la capa del vídeo:
+  lo que empieza en la barra, el volumen o un botón no. Hacia abajo sigue
+  siendo solo minimizar (móvil en vertical) y hacia arriba no hace nada; en
+  la tableta y en horizontal el scroll vertical de la página no se toca
+  (`touch-action: pan-y`). Con ratón no hay deslizamientos. Lista = favoritos de Canales
+  (AceStream e IPTV) en su orden guardado, con vuelta en los extremos; si lo
+  que suena no es favorito, ↓ va al primero y ↑ al último. Las pulsaciones
+  seguidas se acumulan y solo se abre el último canal a los 650 ms (la IPTV
+  tiene una sola conexión); el cartel (dorsal, nombre, «3/12», IPTV o
+  AceStream) dura unos 2 s y el cambio se anuncia en la línea de estado. Se
+  abre con `playChannel` (como tocarlo en Canales: un id IPTV nunca va directo
+  al motor). En el centro de partido también va por favoritos: es abrir otro
+  canal, que sustituye a la fuente del partido (una reproducción a la vez).
+  ↑ ↓ solo son del zapping con el foco en el reproductor o en ninguna parte
+  (o a pantalla completa / modo teatro); con el foco en la página desplazan.
 
 ## Decisiones (modo autónomo, criterio conservador)
 

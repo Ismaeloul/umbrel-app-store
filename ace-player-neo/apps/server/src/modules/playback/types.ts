@@ -78,6 +78,54 @@ export interface ViewerIdentity {
   readonly deviceName?: string | null;
 }
 
+/** Lo que pide «Arranque instantáneo» (D24): la fuente que va a pedir el «Ver». */
+export interface PrewarmRequest {
+  readonly hash: string;
+  /** Partido para el que se prepara (registro y salud). */
+  readonly matchId: string;
+  /** Título de la fuente (solo para el registro). */
+  readonly title?: string;
+  /** La candidata es un infohash (`ih`); si no se sabe, `auto`. */
+  readonly ih?: boolean | null;
+}
+
+/** Cómo acaba una preparación (D24). */
+export type PrewarmOutcome =
+  /** Alguien pulsó «Ver» en esa fuente: la sesión pasa a ser suya. */
+  | 'used'
+  /** Otra reproducción (otro canal, un 0.6.x, el apagado): se cerró antes de abrir lo otro. */
+  | 'yielded'
+  /** Nadie la pidió a tiempo. */
+  | 'expired'
+  /** Se apagó el ajuste. */
+  | 'disabled'
+  /** No abrió o se cayó (IPTV agotada, motor sin respuesta…). */
+  | 'failed';
+
+export type PrewarmResult =
+  | { readonly status: 'warm'; readonly source: 'engine' | 'iptv'; readonly sessionId: string }
+  | { readonly status: 'skipped'; readonly reason: string }
+  | { readonly status: 'failed'; readonly code: string };
+
+/** Estado de la preparación para la salud y los tests. */
+export interface PrewarmInfo {
+  readonly active: {
+    readonly matchId: string;
+    readonly hash: string;
+    readonly source: 'engine' | 'iptv';
+    readonly since: number;
+    /** Ya abierta (y con el remux listo, si es IPTV). */
+    readonly ready: boolean;
+  } | null;
+  readonly last: {
+    readonly matchId: string;
+    readonly hash: string;
+    readonly outcome: PrewarmOutcome;
+    readonly code: string | null;
+    readonly at: number;
+  } | null;
+}
+
 export interface PlaybackService extends Lifecycle {
   /**
    * GET /api/v1/channels/:id/stream (arquitectura §6.3): abre o se une a la
@@ -124,6 +172,20 @@ export interface PlaybackService extends Lifecycle {
     query: URLSearchParams,
     signal: AbortSignal,
   ): Promise<z.infer<typeof LegacyRemuxResponseSchema>>;
+
+  // --- «Arranque instantáneo» (D24) ---
+  /**
+   * Abre la fuente de un partido SIN visor, para que el «Ver» la reutilice.
+   * Solo con la casa libre (nada sonando, abriéndose ni esperando: D5) y,
+   * si es IPTV, con la plaza del proveedor libre (`iptv.prewarmBlocker`).
+   * Cede al momento: cualquier otra petición de canal la cierra antes de
+   * abrir lo suyo. No escribe el mando, no sale en «Dónde se está
+   * reproduciendo» ni en `stream.*`, y no apunta veredictos del reproductor.
+   */
+  prewarm(request: PrewarmRequest): Promise<PrewarmResult>;
+  /** Cierra la preparación si sigue sin usar; `false` si no había ninguna. */
+  releasePrewarm(reason: 'expired' | 'disabled'): Promise<boolean>;
+  prewarmInfo(): PrewarmInfo;
 
   // --- Arranque y apagado (arquitectura §5.16) ---
   /** Para las sesiones que quedaron en v2/sessions.json de un proceso anterior. */

@@ -120,7 +120,7 @@
 
 /* Comprobando: SIEMPRE huecas; el relleno pasa de una a otra (corrección 3). */
 .sig--checking .sig__bars b {
-  animation: sig-comprobando 1.4s var(--ease-out) infinite;
+  animation: sig-comprobando var(--dur-latido) var(--ease-out) infinite;
 }
 .sig--checking .sig__bars i:nth-child(2) b {
   animation-delay: 0.2s;
@@ -156,7 +156,7 @@
   line-height: 1;
 }
 .sig--compact.sig--checking .sig__glyph {
-  animation: sig-glifo 1.4s var(--ease-out) infinite;
+  animation: sig-glifo var(--dur-latido) var(--ease-out) infinite;
 }
 @keyframes sig-glifo {
   50% {

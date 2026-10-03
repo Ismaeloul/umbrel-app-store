@@ -2,6 +2,42 @@
 
 Las notas de cada version salen del campo `releaseNotes` del manifiesto tal y como se publicaron en la tienda. La version actual las lleva ademas en `umbrel-app.yml`; las anteriores solo viven aqui.
 
+## 0.8.4 (2026-10-03)
+
+Agenda: en "Para ti" ya no salen partidos de juveniles, filiales,
+femenino, regionales ni Sub-21, salvo que sigas a ese equipo. "Barcelona"
+es el primer equipo del FC Barcelona y "España" la seleccion absoluta
+masculina. En "Todos" van primero tus competiciones y, si la fuente
+principal no tiene una competicion, se busca en TheSportsDB.
+
+Partido destacado: en el ordenador la tarjeta del partido destacado es
+compacta, una banda horizontal. En el movil no cambia.
+
+Reproductor: los controles se esconden a los 2,5 segundos, tambien
+despues de pulsar pantalla completa, y al momento si el raton sale del
+video. "Vas en directo" ya no enseña ninguna cifra de retraso.
+
+Cambio rapido de canal: pasa de un favorito a otro con las flechas
+arriba y abajo en el ordenador o deslizando a los lados en el movil. Un
+cartel dice "Favorito 3/12" y solo se abre el canal en el que te paras.
+
+Arranque instantaneo: 3 minutos antes de un partido de tus equipos
+favoritos la mejor fuente ya esta lista, asi que empieza al momento. Se
+apaga y se enciende en Ajustes, Reproduccion.
+
+Ajustes: se ven por secciones, una cada vez. Seccion nueva "Copia de
+seguridad" para descargar tus ajustes y restaurarlos; la contraseña de tu
+IPTV va solo si quieres y protegida con una clave tuya.
+
+Navegacion: las transiciones entre todas las pestañas son suaves e
+iguales, se han revisado todas las animaciones y la direccion de la
+pagina ya no arrastra parametros de otras vistas. En el iPhone el
+cambio de pestaña tiene el mismo fundido que en el ordenador y ya no
+se quedan dos pantallas una encima de otra.
+
+Logo: el logo de Umbrel en todas partes, en la cabecera, en la pestaña
+del navegador y en el icono al instalar la app.
+
 ## 0.8.3 (2026-09-30)
 
 IPTV sin cortes: el video de tu IPTV ya no se para ni salta hacia

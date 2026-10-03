@@ -1,0 +1,61 @@
+{
+  "events": [
+    {
+      "idEvent": "2440101",
+      "strTimestamp": "2026-01-02T20:00:00",
+      "strEvent": "Barcelona vs Getafe",
+      "strSport": "Soccer",
+      "idLeague": "4335",
+      "strLeague": "Spanish La Liga",
+      "strSeason": "2025-2026",
+      "strHomeTeam": "Barcelona",
+      "strAwayTeam": "Getafe",
+      "intRound": "18",
+      "dateEvent": "2026-01-02",
+      "strTime": "20:00:00",
+      "idHomeTeam": "133739",
+      "idAwayTeam": "133731",
+      "strCountry": "Spain",
+      "strStatus": "NS",
+      "strPostponed": "no"
+    },
+    {
+      "idEvent": "2440102",
+      "strTimestamp": "2026-01-03T15:15:00",
+      "strEvent": "Rayo Vallecano vs Athletic Bilbao",
+      "strSport": "Soccer",
+      "idLeague": "4335",
+      "strLeague": "Spanish La Liga",
+      "strSeason": "2025-2026",
+      "strHomeTeam": "Rayo Vallecano",
+      "strAwayTeam": "Athletic Bilbao",
+      "intRound": "18",
+      "dateEvent": "2026-01-03",
+      "strTime": "15:15:00",
+      "idHomeTeam": "133740",
+      "idAwayTeam": "133734",
+      "strCountry": "Spain",
+      "strStatus": "NS",
+      "strPostponed": "no"
+    },
+    {
+      "idEvent": "2440103",
+      "strTimestamp": "2026-01-03T20:00:00",
+      "strEvent": "Real Madrid vs Villarreal",
+      "strSport": "Soccer",
+      "idLeague": "4335",
+      "strLeague": "Spanish La Liga",
+      "strSeason": "2025-2026",
+      "strHomeTeam": "Real Madrid",
+      "strAwayTeam": "Villarreal",
+      "intRound": "18",
+      "dateEvent": "2026-01-03",
+      "strTime": "20:00:00",
+      "idHomeTeam": "133738",
+      "idAwayTeam": "133735",
+      "strCountry": "Spain",
+      "strStatus": "NS",
+      "strPostponed": "no"
+    }
+  ]
+}

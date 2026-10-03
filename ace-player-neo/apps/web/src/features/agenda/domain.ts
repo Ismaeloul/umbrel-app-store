@@ -12,6 +12,7 @@ import {
   channelMatchScore,
   footballMatchHighlighted,
   footballMatchInScope,
+  footballMatchIsMinor,
   hasFootballPreferences,
   LIBRARY_MIN_SCORE,
   normalizeChannelKey,
@@ -279,33 +280,55 @@ function startOf(match: FootballMatch): number {
  * Un bloque por competición (dirección A). Dentro de cada bloque: en directo,
  * luego los próximos y los terminados al final, y en cada tramo por hora de
  * inicio (decisión de diseño de la opción A: a las 22:00 no hay que bajar por
- * diez partidos acabados). Los bloques salen en el orden de su primer partido
- * pendiente. «Tu equipo» nunca reordena nada (regla 27).
+ * diez partidos acabados). «Tu equipo» nunca reordena nada dentro de un
+ * bloque (regla 27).
+ *
+ * Los bloques van por gustos (fix/agenda-filtrado): primero los que tienen
+ * algo tuyo (en «Todos», con gustos), luego el resto y al final los de
+ * cantera, filiales o femenino; dentro de cada tramo, en el orden de su
+ * primer partido pendiente, como antes.
  */
 export function groupByCompetition(
   matches: readonly FootballMatch[],
   now: number,
   scores: Readonly<Record<string, LiveScore>> = {},
+  preferences: ForYouPreferences | null | undefined = null,
 ): CompetitionGroup[] {
+  const prefs = asForYou(preferences);
+  const hasPrefs = hasFootballPreferences(prefs);
   const decorated = matches.map((match, index) => {
     const status = matchStatus(match, now, scores[match.id]);
     return { match, index, rank: phaseRank(status), start: startOf(match) };
   });
   decorated.sort((a, b) => a.rank - b.rank || a.start - b.start || a.index - b.index);
-  const groups = new Map<string, { group: CompetitionGroup; key: [number, number, number] }>();
+  const groups = new Map<
+    string,
+    { group: CompetitionGroup; key: [number, number, number]; mine: boolean; minor: boolean }
+  >();
   for (const item of decorated) {
     const name = item.match.competition?.trim() || 'Fútbol';
+    const mine = hasPrefs && footballMatchInScope(item.match, prefs);
+    const minor = footballMatchIsMinor(item.match);
     const existing = groups.get(name);
-    if (existing) existing.group.matches.push(item.match);
-    else {
+    if (existing) {
+      existing.group.matches.push(item.match);
+      existing.mine ||= mine;
+      existing.minor &&= minor;
+    } else {
       groups.set(name, {
         group: { competition: name, matches: [item.match] },
         key: [item.rank, item.start, item.index],
+        mine,
+        minor,
       });
     }
   }
+  const tier = (entry: { mine: boolean; minor: boolean }) => (entry.mine ? 0 : entry.minor ? 2 : 1);
   return [...groups.values()]
-    .sort((a, b) => a.key[0] - b.key[0] || a.key[1] - b.key[1] || a.key[2] - b.key[2])
+    .sort(
+      (a, b) =>
+        tier(a) - tier(b) || a.key[0] - b.key[0] || a.key[1] - b.key[1] || a.key[2] - b.key[2],
+    )
     .map((entry) => entry.group);
 }
 
@@ -336,11 +359,16 @@ export function featuredMatch(
   const live = withStatus.filter((item) => item.status?.phase === 'live');
   const mineLive = live.find((item) => isMine(item.match, preferences));
   if (mineLive) return mineLive.match;
+  /* El escenario no se lo lleva un partido de cantera o femenino si hay
+     otro (fix/agenda-filtrado); los tuyos ya han salido arriba. */
+  const major = (item: { match: FootballMatch }) => !footballMatchIsMinor(item.match);
+  const liveMajor = live.find(major);
+  if (liveMajor) return liveMajor.match;
   if (live[0]) return live[0].match;
   const upcoming = withStatus
     .filter((item) => item.status?.phase !== 'done')
     .sort((a, b) => startOf(a.match) - startOf(b.match));
-  return upcoming[0]?.match ?? matches[0] ?? null;
+  return upcoming.find(major)?.match ?? upcoming[0]?.match ?? matches[0] ?? null;
 }
 
 /** Los próximos partidos del día (para «Luego», corrección 5). */

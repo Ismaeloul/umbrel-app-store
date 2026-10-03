@@ -15,6 +15,7 @@
      remux        → engine, iptv (redactor)
      playback     → engine, remux, state, scanner, iptv
      football     → state, net, engine, scanner, search, sources, directories, iptv
+     instantStart → state, football, playback, scanner («Arranque instantáneo», D24)
      teams        → net, football
      auth         → state
      events       (solo el bus)
@@ -40,6 +41,10 @@ import {
   type FootballService,
 } from './modules/football/index.js';
 import { createHealthService, type HealthService } from './modules/health/index.js';
+import {
+  createInstantStartService,
+  type InstantStartService,
+} from './modules/instant-start/index.js';
 import { createIptvService, type IptvService } from './modules/iptv/index.js';
 import { createNetClient, type NetClient } from './modules/net/index.js';
 import { createPlaybackService, type PlaybackService } from './modules/playback/index.js';
@@ -66,6 +71,7 @@ export interface Services {
   readonly remux: RemuxService;
   readonly playback: PlaybackService;
   readonly football: FootballService;
+  readonly instantStart: InstantStartService;
   readonly teams: TeamsService;
   readonly auth: AuthService;
   readonly events: EventsHub;
@@ -88,6 +94,7 @@ export const SERVICE_ORDER: readonly ServiceName[] = [
   'remux',
   'playback',
   'football',
+  'instantStart',
   'teams',
   'auth',
   'events',
@@ -137,6 +144,9 @@ export function createServices(
       directories,
       iptv,
     });
+  const instantStart =
+    overrides.instantStart ??
+    createInstantStartService({ ...core, state, football, playback, scanner });
   const teams = overrides.teams ?? createTeamsService({ ...core, net, football });
   const auth = overrides.auth ?? createAuthService({ ...core, state });
   const events = overrides.events ?? createEventsHub(core);
@@ -153,6 +163,7 @@ export function createServices(
       playback,
       remux,
       football,
+      instantStart,
       teams,
       diagnostics,
       events,
@@ -171,6 +182,7 @@ export function createServices(
     remux,
     playback,
     football,
+    instantStart,
     teams,
     auth,
     events,

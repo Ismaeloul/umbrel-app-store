@@ -1,12 +1,22 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { Menu, MenuButton, placeMenu, useContextMenu, type MenuItem } from './Menu.tsx';
+import { Menu, MenuButton, menuOrigin, placeMenu, useContextMenu, type MenuItem } from './Menu.tsx';
 
 const items = (onFav: () => void = vi.fn(), onCopy: () => void = vi.fn()): MenuItem[] => [
   { id: 'fav', label: 'Favorito', icon: 'star', onSelect: onFav, shortcut: 'G' },
   { id: 'off', label: 'Desactivado', onSelect: vi.fn(), disabled: true },
   { id: 'copy', label: 'Copiar hash', icon: 'copy', onSelect: onCopy },
 ];
+
+describe('menuOrigin', () => {
+  it('crece desde el rincón que toca su botón', () => {
+    const button = { left: 300, right: 344, top: 100, bottom: 144 };
+    expect(menuOrigin(button, { left: 124, top: 150 }, 150, false)).toBe('top right');
+    const low = { left: 300, right: 344, top: 780, bottom: 824 };
+    expect(menuOrigin(low, { left: 124, top: 624 }, 150, false)).toBe('bottom right');
+    expect(menuOrigin(low, { left: 8, top: 624 }, 150, true)).toBe('bottom left');
+  });
+});
 
 describe('placeMenu', () => {
   const viewport = { width: 390, height: 844 };

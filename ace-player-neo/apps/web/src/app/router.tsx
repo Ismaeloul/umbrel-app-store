@@ -26,7 +26,54 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { parseRoute, parseVista, routeDepth, sameRoute, searchFor, type Route } from './routes.ts';
+import {
+  parseRoute,
+  parseVista,
+  routeDepth,
+  sameRoute,
+  searchFor,
+  viewParams,
+  VISTA_PARAMS,
+  type Route,
+  type Vista,
+} from './routes.ts';
+
+/* ---- Parámetros de cada vista ------------------------------------------------
+   Al cambiar de vista, la URL se queda con los globales y los de la vista nueva
+   (routes.ts, VISTA_PARAMS). Lo que cada vista tenía al dejarla se recuerda
+   aquí y vuelve con ella: Canales reabre en su pestaña, con su categoría de
+   IPTV y sus filtros, igual que su scroll (scroll-memory.ts). Atrás y Adelante
+   no lo necesitan: cada entrada del historial guarda su propia URL. */
+const viewParamsMemory = new Map<Vista, string>();
+
+/** Guarda los parámetros de la vista actual tal y como están en la URL. */
+export function noteViewParams(search: string = globalThis.location?.search ?? ''): void {
+  const vista = parseRoute(search).vista;
+  viewParamsMemory.set(vista, viewParams(vista, search));
+}
+
+/** Lo que `vista` tenía en la URL al dejarla ('' si nada). */
+export function rememberedViewParams(vista: Vista): string {
+  return viewParamsMemory.get(vista) ?? '';
+}
+
+/**
+ * Deja un parámetro preparado para cuando se abra `vista` (sin tocar la URL de
+ * la vista actual): «Buscar en el motor» desde Canales, o la pestaña «Listas»
+ * tras guardar una lista en Ajustes.
+ */
+export function rememberViewParam(vista: Vista, name: string, value: string | null): void {
+  if (!VISTA_PARAMS[vista].includes(name)) return;
+  const params = new URLSearchParams(viewParamsMemory.get(vista) ?? '');
+  if (value === null || value === '') params.delete(name);
+  else params.set(name, value);
+  viewParamsMemory.set(vista, params.toString());
+}
+
+/** Solo para los tests. */
+export function resetViewParamsMemory(): void {
+  viewParamsMemory.clear();
+}
 
 export interface NavigateOptions {
   /** Sustituye la entrada del historial en vez de añadir una. */
@@ -58,10 +105,16 @@ function readDepth(): number {
   return typeof state?.aceDepth === 'number' ? state.aceDepth : 0;
 }
 
+/** Sentido de la navegación (tipo de View Transition y fundido de la vista). */
+export type NavDirection = 'adelante' | 'atras';
+
 export interface RouterProviderProps {
   children: ReactNode;
-  /** Se llama antes de cambiar de ruta (el armazón guarda el scroll). */
-  onBeforeChange?: (from: Route, to: Route) => void;
+  /**
+   * Se llama antes de cambiar de ruta, con el DOM aún en la ruta que se deja
+   * (el armazón guarda el scroll y prepara el fundido de la vista que sale).
+   */
+  onBeforeChange?: (from: Route, to: Route, direction: NavDirection | null) => void;
   /** Para los tests. */
   initialSearch?: string;
 }
@@ -83,8 +136,9 @@ export function RouterProvider({ children, onBeforeChange, initialSearch }: Rout
   const beforeChange = useRef(onBeforeChange);
   beforeChange.current = onBeforeChange;
 
-  const commit = useCallback((next: Route, direction: 'adelante' | 'atras' | null) => {
-    if (!sameRoute(routeRef.current, next)) beforeChange.current?.(routeRef.current, next);
+  const commit = useCallback((next: Route, direction: NavDirection | null) => {
+    if (!sameRoute(routeRef.current, next))
+      beforeChange.current?.(routeRef.current, next, direction);
     setState((current) =>
       sameRoute(current.route, next) ? current : { route: next, previous: current.route },
     );
@@ -97,7 +151,9 @@ export function RouterProvider({ children, onBeforeChange, initialSearch }: Rout
       const current = targetRef.current;
       if (sameRoute(current, next) && !options.replace) return;
       targetRef.current = next;
-      const search = searchFor(next, globalThis.location?.search ?? '');
+      const currentSearch = globalThis.location?.search ?? '';
+      noteViewParams(currentSearch);
+      const search = searchFor(next, currentSearch, rememberedViewParams(next.vista));
       const url = `${globalThis.location?.pathname ?? '/'}${search}${globalThis.location?.hash ?? ''}`;
       try {
         if (options.replace)
@@ -134,6 +190,7 @@ export function RouterProvider({ children, onBeforeChange, initialSearch }: Rout
       }
     } catch {}
     const onPop = () => {
+      noteViewParams(location.search);
       const next = parseRoute(location.search);
       targetRef.current = next;
       startTransition(() => commit(next, 'atras'));
@@ -172,8 +229,9 @@ export function useBack(): (fallback?: Route) => void {
 }
 
 /**
- * Un parámetro propio de la vista en la URL (`q`, `dia`, `pestana`...). Se
- * escribe con replaceState: no llena el historial ni cambia de vista.
+ * Un parámetro propio de la vista en la URL (`q`, `pestana`...). Se escribe
+ * con replaceState: no llena el historial ni cambia de vista. Tiene que estar
+ * en VISTA_PARAMS (routes.ts) para que no se cuele en las demás vistas.
  */
 export function useSearchParam(name: string): [string | null, (value: string | null) => void] {
   const route = useRoute();
@@ -196,6 +254,7 @@ export function useSearchParam(name: string): [string | null, (value: string | n
           `${location.pathname}${search ? `?${search}` : ''}${location.hash}`,
         );
       } catch {}
+      noteViewParams();
       setValue(next === '' ? null : next);
     },
     [name],

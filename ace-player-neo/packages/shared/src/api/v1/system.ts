@@ -9,12 +9,12 @@ import {
   OriginSchema,
 } from '../../primitives.js';
 import { PreferencesSchema } from '../../state/v1.js';
-import { SettingsSchema } from '../../state/v2.js';
 import { DeviceSchema } from './auth.js';
 import { DiagnosticCountsSchema } from './diagnostics.js';
 import { EngineStatusSchema } from './engine.js';
 import { LibraryViewSchema } from './library.js';
 import { PlaybackStatusSchema } from './playback.js';
+import { SettingsViewSchema } from './settings.js';
 
 /** GET /api/v1/ping: vivo y versión, sin datos. Sin token también desde /native. */
 export const PingResponseSchema = z.strictObject({
@@ -41,7 +41,7 @@ export const BootstrapResponseSchema = z.strictObject({
   library: LibraryViewSchema,
   playback: PlaybackStatusSchema,
   engine: EngineStatusSchema,
-  settings: SettingsSchema,
+  settings: SettingsViewSchema,
   features: z.strictObject({
     /** Hay segundo motor para comprobar fuentes. */
     scanner: z.boolean(),
@@ -110,6 +110,21 @@ export const HealthResponseSchema = z.strictObject({
       remuxSessions: z.number().int().nonnegative(),
     }),
     events: z.strictObject({ connections: z.number().int().nonnegative() }),
+    /**
+     * «Arranque instantáneo» (D24): qué se está preparando y cómo acabó lo
+     * último. Opcional: un servidor anterior no lo manda.
+     */
+    instantStart: z
+      .strictObject({
+        enabled: z.boolean(),
+        /** `off` apagado; `idle` nada que preparar; `warm` hay una fuente preparada. */
+        status: z.enum(['off', 'idle', 'warming', 'warm']),
+        matchId: z.string().nullable(),
+        source: z.enum(['engine', 'iptv']).nullable(),
+        /** Cómo acabó la última preparación (`used`, `yielded`, `expired`, `skipped:<motivo>`…). */
+        last: z.string().nullable(),
+      })
+      .optional(),
   }),
   reports: z.strictObject({
     total: z.number().int().nonnegative(),

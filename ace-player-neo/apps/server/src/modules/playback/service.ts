@@ -64,7 +64,15 @@ import {
 } from './grant.js';
 import { cleanDeviceName } from './device-name.js';
 import { decideClaim, decideRelease, type Tombstones } from './mando.js';
-import type { PlaybackDeps, PlaybackService, ViewerIdentity } from './types.js';
+import type {
+  PlaybackDeps,
+  PlaybackService,
+  PrewarmInfo,
+  PrewarmOutcome,
+  PrewarmRequest,
+  PrewarmResult,
+  ViewerIdentity,
+} from './types.js';
 
 /** Aperturas por estadística fallida permitidas por sesión en esta ventana. */
 const REOPEN_WINDOW_MS = 5 * 60 * 1000;
@@ -133,6 +141,30 @@ interface SessionRec {
   readonly pendingDetach: string[];
   /** Última vez que el relé apuntó `working` por `player` (con bytes entrando). */
   lastWorkingAt: number;
+  /**
+   * Abierta por «Arranque instantáneo» (D24) y aún sin usar: sin visores, no
+   * sale en «Dónde se está reproduciendo» y cede ante cualquier otra petición.
+   */
+  warm: boolean;
+}
+
+/** La preparación en curso de «Arranque instantáneo» (D24). Una como mucho. */
+interface WarmState {
+  readonly matchId: string;
+  readonly hash: string;
+  readonly source: 'engine' | 'iptv';
+  readonly since: number;
+  /** Corta la apertura (IPTV) o la espera del remux si otra cosa pide la casa. */
+  readonly controller: AbortController;
+  session: SessionRec | null;
+  ready: boolean;
+  /** Por qué se está cerrando (lo apunta quien la cierra a propósito). */
+  closing: { readonly outcome: PrewarmOutcome; readonly code: string | null } | null;
+}
+
+/** Visor del remux con el que la preparación IPTV mantiene vivo ffmpeg hasta el «Ver». */
+function prewarmViewerId(sessionId: string): string {
+  return `prewarm_${sessionId}`;
 }
 
 interface AcquireRequest {
@@ -231,6 +263,9 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
   /* Sesiones IPTV cuya salida atascada ya se está recuperando (B3): un aviso a la vez. */
   const stallRecoveries = new Set<string>();
   let ticker: TimerHandle | null = null;
+  /* «Arranque instantáneo» (D24): la preparación en curso y cómo acabó la última. */
+  let warm: WarmState | null = null;
+  let lastWarm: PrewarmInfo['last'] = null;
   let lastActivity = '';
   let lastEngineState: EngineState | null = null;
   let unsubscribers: (() => void)[] = [];
@@ -412,8 +447,69 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     };
   }
 
+  /* Una preparación sin usar no es una reproducción: no sale en la lista (D24). */
   function summaries(): SessionSummary[] {
-    return [...sessions.values()].map(summarize);
+    return [...sessions.values()].filter((session) => !session.warm).map(summarize);
+  }
+
+  // --- «Arranque instantáneo» (D24) ---
+
+  /** Apunta cómo acabó la preparación `state` (una sola vez) y la olvida. */
+  function finishWarm(state: WarmState, outcome: PrewarmOutcome, code: string | null = null): void {
+    if (warm !== state) return;
+    warm = null;
+    /* Usada: el remux que arrancaba sigue (lo comparte el visor de verdad); si no, se corta. */
+    if (outcome !== 'used') {
+      state.controller.abort(
+        new AppError('session_expired', { detail: `preparación: ${outcome}` }),
+      );
+    }
+    lastWarm = { matchId: state.matchId, hash: state.hash, outcome, code, at: clock.now() };
+    const fields = {
+      matchId: state.matchId,
+      hash: state.hash.slice(0, 8),
+      source: state.source,
+      outcome,
+      ...(code ? { errorCode: code } : {}),
+      seconds: Math.round((clock.now() - state.since) / 1000),
+    };
+    if (outcome === 'failed') logger.warn(fields, '[arranque] la preparación no se pudo usar');
+    else logger.info(fields, `[arranque] preparación terminada: ${outcome}`);
+  }
+
+  /** ¿Hay algo en la casa? (D5: un canal a la vez; la preparación nunca le quita el sitio a nadie). */
+  function houseBusy(): boolean {
+    return (
+      sessions.size > 0 ||
+      viewers.size > 0 ||
+      waiting.size > 0 ||
+      viewerQueues.size > 0 ||
+      engineLock.size > 0
+    );
+  }
+
+  /**
+   * Otra petición de canal (o el mando 0.6.x) quiere la casa: la preparación
+   * cede. Si aún se está abriendo otra fuente, se corta; si ya está abierta,
+   * la cierra la colocación antes de abrir lo suyo (cerrar antes de abrir).
+   * Pedir la MISMA fuente no corta nada: se espera y se reutiliza.
+   */
+  function yieldWarmTo(hash: string | null): void {
+    const state = warm;
+    if (!state || state.hash === hash) return;
+    state.closing ??= { outcome: 'yielded', code: null };
+    if (!state.session) {
+      state.controller.abort(new AppError('session_expired', { detail: 'yielded' }));
+    }
+  }
+
+  /** Una sesión preparada se cierra: la preparación termina con el motivo apuntado. */
+  function onWarmClosed(session: SessionRec): void {
+    if (!session.warm) return;
+    session.warm = false;
+    const state = warm;
+    if (state?.session !== session) return;
+    finishWarm(state, state.closing?.outcome ?? 'yielded', state.closing?.code ?? null);
   }
 
   /**
@@ -666,6 +762,7 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       graceTimer: null,
       pendingDetach: [],
       lastWorkingAt: 0,
+      warm: false,
     };
     sessions.set(session.id, session);
     input.onDropped((code) => track(closeIptv(session, code)));
@@ -707,6 +804,7 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
         graceTimer: null,
         pendingDetach: [],
         lastWorkingAt: 0,
+        warm: false,
       };
       if (stopped) {
         await stopEngine(meta.commandUrl);
@@ -727,6 +825,7 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
   ): Promise<void> {
     if (session.closed) return;
     session.closed = true;
+    onWarmClosed(session);
     sessions.delete(session.id);
     rememberClosed(session.id);
     clock.clearTimeout(session.graceTimer);
@@ -861,7 +960,9 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       if (session.closed) return;
       const gone = [...session.viewers.values()];
       emitClosed(session.id, [...session.viewers.keys()], 'remux_failed', code);
-      if (code === 'iptv_dropped' || code === 'iptv_busy') {
+      if (session.warm && warm?.session === session) warm.closing ??= { outcome: 'failed', code };
+      /* Sin visor no hay veredicto «del reproductor» (D24: la preparación no cuenta). */
+      if (!session.warm && (code === 'iptv_dropped' || code === 'iptv_busy')) {
         try {
           scanner.recordVerdict(session.hash, {
             state: code === 'iptv_busy' ? 'weak' : 'failed',
@@ -1031,6 +1132,32 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     return { sessionClosed };
   }
 
+  /**
+   * El «Ver» llega a la fuente preparada (D24): deja de ser una preparación y
+   * se usa tal cual. Una del motor se comprueba antes (`stat_url`, local y
+   * rápido): si el motor ya no la conoce, se cierra y se abre de nuevo.
+   */
+  async function adoptWarmLocked(session: SessionRec): Promise<SessionRec | undefined> {
+    const state = warm?.session === session ? warm : null;
+    if (session.source === 'engine') {
+      const alive = await engine
+        .client()
+        .getStat(session.meta.statUrl)
+        .then(
+          () => true,
+          () => false,
+        );
+      if (!alive) {
+        if (state) state.closing = { outcome: 'failed', code: 'session_expired' };
+        await closeSessionLocked(session, { stop: false });
+        return undefined;
+      }
+    }
+    session.warm = false;
+    if (state) finishWarm(state, 'used');
+    return session;
+  }
+
   /** Coloca al visor en la sesión de su canal (cola del motor tomada). */
   async function placeLocked(request: AcquireRequest): Promise<Omit<Placement, 'remux'>> {
     if (stopped) throw new AppError('engine_unavailable', { detail: 'apagando' });
@@ -1067,6 +1194,8 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       }
     }
     let session = [...sessions.values()].find((candidate) => candidate.hash === request.hash);
+    /* «Arranque instantáneo» (D24): la fuente preparada pasa a ser de quien la pide. */
+    if (session?.warm) session = await adoptWarmLocked(session);
     /* Vuelta al mismo canal IPTV durante la gracia: se reutiliza (docs/iptv.md §6.4). */
     if (session?.graceTimer) {
       clock.clearTimeout(session.graceTimer);
@@ -1168,6 +1297,8 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
 
   async function acquireInternal(request: AcquireRequest): Promise<Placement> {
     if (stopped) throw new AppError('engine_unavailable', { detail: 'apagando' });
+    /* Alguien pide un canal: la preparación de otra fuente cede ya (D24). */
+    yieldWarmTo(request.hash);
     const queue = queueOf(request.viewerId);
     queue.gen += 1;
     const gen = queue.gen;
@@ -1456,7 +1587,13 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
         hash: nowPlaying.id,
         title: nowPlaying.title,
       };
+      yieldWarmTo(null);
       for (const session of [...sessions.values()]) {
+        /* Una preparación (D24) cede ante el mando 0.6.x. */
+        if (session.warm) {
+          await closeSessionLocked(session);
+          continue;
+        }
         /* Su propio /api/remux (mismo dev y canal) no se toca. */
         const affected = [...session.viewers.values()].filter(
           (viewer) => session.hash !== nowPlaying.id || viewer.deviceId !== nowPlaying.dev,
@@ -1776,6 +1913,165 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       }
     },
 
+    async prewarm(request: PrewarmRequest): Promise<PrewarmResult> {
+      const hash = normalizeHash(request.hash);
+      if (!hash) return { status: 'failed', code: 'bad_request' };
+      if (stopped) return { status: 'skipped', reason: 'stopped' };
+      if (warm) {
+        return { status: 'skipped', reason: warm.hash === hash ? 'already' : 'other_prewarm' };
+      }
+      if (houseBusy()) return { status: 'skipped', reason: 'busy' };
+      const iptvClass = deps.iptv ? deps.iptv.classify(hash) : 'engine';
+      if (iptvClass !== 'engine' && iptvClass !== 'owned') {
+        return { status: 'failed', code: iptvClass };
+      }
+      const source = iptvClass === 'owned' ? 'iptv' : 'engine';
+      /* Una sola conexión con el proveedor (docs/iptv.md §7): sin plaza libre de verdad, nada. */
+      const iptvBlocker = (): string | null =>
+        source !== 'iptv' ? null : deps.iptv ? deps.iptv.prewarmBlocker() : 'iptv_inactive';
+      const blocked = iptvBlocker();
+      if (blocked) return { status: 'skipped', reason: blocked };
+      const state: WarmState = {
+        matchId: request.matchId,
+        hash,
+        source,
+        since: clock.now(),
+        controller: new AbortController(),
+        session: null,
+        ready: false,
+        closing: null,
+      };
+      warm = state;
+      const signal = state.controller.signal;
+      logger.info(
+        { matchId: state.matchId, hash: hash.slice(0, 8), source },
+        '[arranque] preparando la fuente del partido',
+      );
+      let session: SessionRec;
+      try {
+        session = await engineLock.run(async () => {
+          /* Otra vez dentro del cerrojo: mientras se esperaba pudo entrar alguien. */
+          if (signal.aborted || warm !== state) {
+            throw new AppError('session_expired', { detail: 'yielded' });
+          }
+          if (sessions.size > 0 || viewers.size > 0 || waiting.size > 0) {
+            throw new AppError('session_expired', { detail: 'busy' });
+          }
+          const again = iptvBlocker();
+          if (again) throw new AppError('session_expired', { detail: again });
+          const opened = await openSessionLocked({
+            hash,
+            kind: request.ih === true ? 'infohash' : request.ih === false ? 'id' : 'auto',
+            viewerId: `prewarm_${hash.slice(0, 12)}`,
+            deviceId: null,
+            client: 'web',
+            consumes: 'direct',
+            heartbeat: false,
+            native: false,
+            title: cleanTitle(request.title ?? '', '') || `Stream ${hash.slice(0, 8)}`,
+            label: '',
+            deviceName: '',
+            mode: DEFAULT_PLAYBACK_MODE,
+            signal,
+            writeNowPlaying: false,
+            source,
+          });
+          opened.warm = true;
+          state.session = opened;
+          /* Cedió mientras se abría (el motor no se corta a medias): se cierra ya. */
+          if (signal.aborted || warm !== state) {
+            await closeSessionLocked(opened);
+            throw new AppError('session_expired', { detail: 'yielded' });
+          }
+          return opened;
+        });
+      } catch (error) {
+        const skipped = signal.aborted || (isAppError(error) && error.code === 'session_expired');
+        const detail = isAppError(error) ? error.detail : undefined;
+        const reason = !signal.aborted && typeof detail === 'string' && detail ? detail : 'yielded';
+        if (warm === state) {
+          /* Sin sesión abierta no hay nada que cerrar: se olvida sin dejar rastro de «uso». */
+          if (skipped && reason !== 'yielded') warm = null;
+          else if (skipped) finishWarm(state, 'yielded');
+          else finishWarm(state, 'failed', errorCodeOf(error) ?? 'engine_unavailable');
+        }
+        if (skipped) {
+          logger.info({ matchId: state.matchId, reason }, '[arranque] no se prepara ahora');
+          return { status: 'skipped', reason };
+        }
+        return { status: 'failed', code: errorCodeOf(error) ?? 'engine_unavailable' };
+      }
+      syncTicker();
+      if (source === 'iptv') {
+        /* IPTV: el remux arranca ya, así los segmentos están listos al pulsar «Ver». */
+        const viewerId = prewarmViewerId(session.id);
+        try {
+          await remux.ensure(sourceOf(session), viewerId, signal);
+        } catch (error) {
+          const code = errorCodeOf(error) ?? 'remux_died';
+          await remux.detach(session.id, viewerId).catch(() => undefined);
+          const yielded = state.closing?.outcome === 'yielded' || !session.warm;
+          if (session.warm && !session.closed) {
+            state.closing ??= { outcome: 'failed', code };
+            await engineLock.run(async () => {
+              if (session.warm && !session.closed) await closeSessionLocked(session);
+            });
+          }
+          if (warm === state) finishWarm(state, 'failed', code);
+          return yielded ? { status: 'skipped', reason: 'yielded' } : { status: 'failed', code };
+        }
+        if (session.closed) {
+          await remux.detach(session.id, viewerId).catch(() => undefined);
+          return { status: 'skipped', reason: 'yielded' };
+        }
+        /* El visor de la preparación sale cuando se engancha el primero de verdad
+           (`pendingDetach`); si ese ya está enganchado (llegó el «Ver» mientras
+           arrancaba), sale ya. Nunca antes: el remux se quedaría sin visores y ffmpeg pararía. */
+        const others = remux.viewersOf(session.id).filter((id) => id !== viewerId);
+        if (!session.warm && others.length) {
+          await remux.detach(session.id, viewerId).catch(() => undefined);
+        } else {
+          session.pendingDetach.push(viewerId);
+        }
+      }
+      if (warm === state) state.ready = true;
+      logger.info(
+        { matchId: state.matchId, hash: hash.slice(0, 8), source, sessionId: session.id },
+        '[arranque] fuente preparada',
+      );
+      return { status: 'warm', source, sessionId: session.id };
+    },
+
+    async releasePrewarm(reason) {
+      const state = warm;
+      if (!state) return false;
+      state.closing = { outcome: reason, code: null };
+      const session = state.session;
+      if (session) {
+        await engineLock.run(async () => {
+          if (session.warm && !session.closed) await closeSessionLocked(session);
+        });
+      }
+      finishWarm(state, reason);
+      return true;
+    },
+
+    prewarmInfo(): PrewarmInfo {
+      const state = warm;
+      return {
+        active: state
+          ? {
+              matchId: state.matchId,
+              hash: state.hash,
+              source: state.source,
+              since: state.since,
+              ready: state.ready,
+            }
+          : null,
+        last: lastWarm,
+      };
+    },
+
     async recoverOrphans() {
       let orphans: readonly PersistedSession[];
       try {
@@ -1800,10 +2096,15 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     async stopAll(timeoutMs = SHUTDOWN_TIMINGS.stopSessionsMs) {
       stopped = true;
       syncTicker();
+      if (warm) {
+        warm.closing = { outcome: 'yielded', code: 'shutdown' };
+        if (!warm.session) finishWarm(warm, 'yielded', 'shutdown');
+      }
       const all = [...sessions.values()];
       for (const session of all) {
         emitClosed(session.id, [...session.viewers.keys()], 'shutdown');
         session.closed = true;
+        onWarmClosed(session);
         sessions.delete(session.id);
         rememberClosed(session.id);
         session.viewers.clear();

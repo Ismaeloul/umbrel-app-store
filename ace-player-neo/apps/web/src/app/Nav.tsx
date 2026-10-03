@@ -25,11 +25,12 @@ import {
   type RefObject,
 } from 'react';
 import { cx } from '../lib/cx.ts';
+import { BrandMark } from '../ui/BrandMark.tsx';
 import { IconButton } from '../ui/Button.tsx';
 import { Icon } from '../ui/Icon.tsx';
 import type { IconName } from '../ui/icons.ts';
 import { EngineIndicator } from './EngineIndicator.tsx';
-import { useNavigate } from './router.tsx';
+import { rememberedViewParams, useNavigate } from './router.tsx';
 import { NAV_VISTAS, searchFor, VISTA_TITLE, type NavVista, type Route } from './routes.ts';
 import { preloadView } from './views.tsx';
 
@@ -47,7 +48,12 @@ function navRoute(vista: NavVista): Route {
 function useNavLink(current: Route) {
   const navigate = useNavigate();
   return (vista: NavVista) => ({
-    href: searchFor(navRoute(vista), globalThis.location?.search ?? ''),
+    // El mismo destino que el clic (abrir en otra pestaña lleva lo mismo).
+    href: searchFor(
+      navRoute(vista),
+      globalThis.location?.search ?? '',
+      rememberedViewParams(vista),
+    ),
     'aria-current': current.vista === vista ? ('page' as const) : undefined,
     onClick: (event: MouseEvent<HTMLAnchorElement>) => {
       if (
@@ -130,7 +136,7 @@ export function TopBar({ route, onHelp }: { route: Route; onHelp?: () => void })
           aria-current={undefined}
           aria-label="Ace Player Neo: ir a la agenda"
         >
-          <img src="/icon.svg" alt="" width={28} height={28} />
+          <BrandMark className="topbar__mark" size={28} />
           <span className="topbar__name">Ace Player Neo</span>
         </a>
         <div className="topbar__items">

@@ -27,6 +27,40 @@ export const FOOTBALL_LEAGUE_LOOKUP_BATCH = 5;
 export const THESPORTSDB_BASE = 'https://www.thesportsdb.com/api/v1/json';
 /** Clave pública de TheSportsDB: con ella la agenda sale `limited` (server.js:2553). */
 export const THESPORTSDB_PUBLIC_KEY = '123';
+/**
+ * Competiciones que la agenda de TheSportsDB pide una a una (próxima jornada
+ * con `eventsnextleague.php` y la jornada entera con `eventsround.php`, que la
+ * clave gratuita sí sirve completa; `eventsday.php` y `eventstv.php` solo dan
+ * 3 partidos y un puñado de emisiones). Ids comprobados con
+ * `lookupleague.php` el 2026-10-02. `round: true` = liga por jornadas (se pide
+ * también la siguiente); `spanishOnly` = solo partidos con un equipo de
+ * Primera o Segunda. `name` es el rótulo que enseña la agenda.
+ */
+export const THESPORTSDB_LEAGUES: ReadonlyArray<{
+  readonly id: string;
+  readonly name: string;
+  readonly round?: boolean;
+  readonly spanishOnly?: boolean;
+}> = [
+  { id: '4335', name: 'LaLiga EA Sports', round: true },
+  { id: '4400', name: 'LaLiga Hypermotion', round: true },
+  { id: '4483', name: 'Copa del Rey' },
+  { id: '4511', name: 'Supercopa de España' },
+  { id: '4480', name: 'Champions League', spanishOnly: true },
+  { id: '4481', name: 'Europa League', spanishOnly: true },
+  { id: '5071', name: 'Conference League', spanishOnly: true },
+];
+/** Selecciones cuyos próximos partidos se piden con `eventsnext.php` (España absoluta masculina). */
+export const THESPORTSDB_NATIONAL_TEAMS: readonly string[] = ['133909'];
+/**
+ * Competiciones que se piden a la vez (cada una son 2-3 peticiones seguidas).
+ * Con 4, las 7 van en dos tandas: unas 6 peticiones en serie como mucho. Con
+ * la clave `123`, 70 peticiones seguidas en un minuto respondieron todas 200
+ * (2026-10-02); el tope publicado de la gratuita es de unas 30 por minuto.
+ */
+export const THESPORTSDB_LEAGUE_BATCH = 4;
+/** Plazo de cada petición por competición (el global de la agenda es de 60 s). */
+export const THESPORTSDB_REQUEST_MS = 10_000;
 /** futbolenlatv (server.js:1991-1992). */
 export const FLTV_URL = 'https://www.futbolenlatv.com/';
 export const FLTV_MAX_BYTES = 6 * 1024 * 1024;

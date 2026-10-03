@@ -665,7 +665,8 @@ async function escritorio(browser) {
     'D20',
     'Ajustes: listas, modos, «Un solo dispositivo a la vez», tema y «Reducir transparencia»',
     async () => {
-      await ir(page, '/?vista=ajustes');
+      // Ajustes enseña una sección cada vez: Reproducción y luego Apariencia.
+      await ir(page, '/?vista=ajustes/reproduccion');
       await page.getByRole('heading', { name: 'Ajustes', level: 1 }).waitFor();
       for (const modo of ['Baja latencia', 'Equilibrado', 'Estable'])
         await page
@@ -673,6 +674,10 @@ async function escritorio(browser) {
           .first()
           .waitFor();
       await page.getByRole('switch', { name: /Un solo dispositivo a la vez/ }).waitFor();
+      await page
+        .getByRole('navigation', { name: 'Secciones de Ajustes' })
+        .getByRole('link', { name: 'Apariencia' })
+        .click();
       const reducir = page.getByRole('switch', { name: /Reducir transparencia/ });
       await reducir.click();
       const marcada = await page.evaluate(() => document.documentElement.dataset.transparency);

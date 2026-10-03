@@ -14,6 +14,8 @@ final class VectoresDominioTests: XCTestCase {
             let competicion: String
             let equipo: String
             let canal: String
+            let variante: Bool
+            let menor: Bool
         }
 
         struct Liga: Decodable {
@@ -66,6 +68,8 @@ final class VectoresDominioTests: XCTestCase {
             XCTAssertEqual(ParaTi.claveCompeticion(caso.texto), caso.competicion, "competitionKey(«\(caso.texto)»)")
             XCTAssertEqual(ParaTi.claveEquipo(caso.texto), caso.equipo, "footballTeamKey(«\(caso.texto)»)")
             XCTAssertEqual(Canales.clave(caso.texto), caso.canal, "normalizeChannelKey(«\(caso.texto)»)")
+            XCTAssertEqual(ParaTi.esVariante(caso.texto), caso.variante, "footballTeamIsVariant(«\(caso.texto)»)")
+            XCTAssertEqual(ParaTi.competicionEsMenor(caso.texto), caso.menor, "footballCompetitionIsMinor(«\(caso.texto)»)")
         }
     }
 
@@ -104,5 +108,30 @@ final class VectoresDominioTests: XCTestCase {
         XCTAssertTrue(ParaTi.enParaTi(madrid, gustos))
         XCTAssertTrue(ParaTi.tieneEquipoFavorito(madrid, gustos))
         XCTAssertTrue(ParaTi.enParaTi(reservas, .vacios), "Sin gustos sale todo")
+    }
+
+    /// Lo que Isma veía mal en el parón de octubre (fix/agenda-filtrado): con
+    /// LaLiga, el Barça y España, «Para ti» enseñaba LaLiga Futures (cantera).
+    func testLaCanteraNoEsParaTi() {
+        let gustos = GustosFutbol(leagues: ["LaLiga"], teams: ["Barcelona"], nationalities: ["España"])
+        let futures = PartidoParaTi(
+            competition: "LaLiga Futures", title: "FC Barcelona Academy - Real Betis Academy",
+            home: "FC Barcelona Academy", away: "Real Betis Academy", channels: ["M+ LALIGA"], homeTeamId: "133739")
+        XCTAssertFalse(ParaTi.enParaTi(futures, gustos))
+        XCTAssertFalse(ParaTi.tieneEquipoFavorito(futures, gustos))
+        let sub21 = PartidoParaTi(competition: "Europeo Sub-21", title: "España - Rumanía", home: "España", away: "Rumanía")
+        XCTAssertFalse(ParaTi.enParaTi(sub21, gustos))
+        let barcelonaSC = PartidoParaTi(
+            competition: "Liga Pro Ecuador", title: "Barcelona - Emelec", home: "Barcelona", away: "Emelec",
+            homeTeamId: "138159")
+        XCTAssertFalse(ParaTi.enParaTi(barcelonaSC, gustos), "el escudo dice que es el de Guayaquil")
+        let laliga = PartidoParaTi(
+            competition: "Spanish La Liga", title: "Barcelona vs Getafe", home: "Barcelona", away: "Getafe",
+            homeTeamId: "133739")
+        XCTAssertTrue(ParaTi.enParaTi(laliga, gustos))
+        XCTAssertTrue(ParaTi.tieneEquipoFavorito(laliga, gustos))
+        let seleccion = PartidoParaTi(
+            competition: "UEFA Nations League", title: "España - República Checa", home: "España", away: "República Checa")
+        XCTAssertTrue(ParaTi.enParaTi(seleccion, gustos))
     }
 }
