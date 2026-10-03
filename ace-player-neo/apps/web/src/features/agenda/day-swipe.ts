@@ -15,9 +15,13 @@
      vertical puede ser un cambio de día (el mismo criterio con el que Chrome
      decide no desplazar con `pan-y`: así no hay gestos «muertos» que ni
      desplazan ni cambian de día); si no, es scroll vertical y se deja en paz
-     hasta soltar. Y si mientras tanto la página se desplaza de verdad (Safari
-     puede hacerlo en diagonal), el cambio de día se anula: nunca se pelea con
-     el scroll.
+     hasta soltar. Y si mientras tanto la página se desplaza SIGUIENDO al dedo
+     (Safari puede hacerlo en diagonal), el cambio de día se anula: nunca se
+     pelea con el scroll. Un salto de scroll que no sigue al dedo (la barra
+     de Safari o de Chrome que entra o sale al final de la página, la ventana
+     que se reajusta) no cuenta: eso anulaba gestos buenos al fondo de la
+     página (revisión de la 0.9.0; agenda.css › «Móvil y tableta» quita
+     además lo que ensanchaba la página y hacía reajustarse la ventana).
    - Si empezó dentro de una fila que todavía PUEDE desplazarse hacia ese
      lado, es de la fila. Si la fila no desborda o ya está en su final (o en
      su principio, hacia atrás), el gesto cambia de día: como en las vistas
@@ -40,7 +44,7 @@ export type DayDirection = 'next' | 'prev';
 export const LOCK_PX = 10;
 /** Cuánto tiene que dominar lo horizontal para que sea un cambio de día. */
 export const DOMINANCE = 1;
-/** Si la página se desplaza más que esto durante el gesto, era scroll. */
+/** Si la página se desplaza más que esto SIGUIENDO al dedo, era scroll. */
 export const SCROLL_CANCEL_PX = 8;
 /** Deslizamiento largo (px). */
 export const DAY_SWIPE_MIN = 56;
@@ -106,6 +110,24 @@ export function dayFromGesture({
   return ax >= DAY_SWIPE_MIN || fast ? direction : null;
 }
 
+/**
+ * ¿La página se ha desplazado siguiendo al dedo (scroll de verdad)? `scrolled`
+ * es lo que ha cambiado `scrollY` desde que empezó el gesto y `dy`, lo que ha
+ * bajado el dedo. El navegador desplaza al revés que el dedo (el dedo sube →
+ * la página baja) y nunca más de lo que el dedo se ha movido en vertical;
+ * cualquier otro salto es la ventana reajustándose, no el usuario.
+ */
+export function pageFollowsFinger(scrolled: number, dy: number): boolean {
+  if (Math.abs(scrolled) <= SCROLL_CANCEL_PX) return false;
+  if (scrolled * dy >= 0) return false;
+  return Math.abs(scrolled) <= Math.abs(dy) + SCROLL_CANCEL_PX;
+}
+
+/** Alto de la ventana (con la barra del navegador): si cambia, el scroll salta solo. */
+function viewportHeight(): number {
+  return window.visualViewport?.height ?? window.innerHeight;
+}
+
 function scrollsSideways(el: Element): boolean {
   const overflow = getComputedStyle(el).overflowX;
   return overflow === 'auto' || overflow === 'scroll';
@@ -146,8 +168,10 @@ interface Track {
   x: number;
   y: number;
   t: number;
-  /** Desplazamiento de la página al empezar. */
+  /** Desplazamiento de la página al empezar (o tras reajustarse la ventana). */
   scrollY: number;
+  /** Alto de la ventana con el que se mide ese desplazamiento. */
+  viewport: number;
   room: RailRoom | null;
   phase: Phase;
   locked: DayDirection | null;
@@ -195,6 +219,7 @@ export function useDaySwipe(ref: RefObject<HTMLElement | null>, options: DaySwip
         t: event.timeStamp,
         room: railRoomAt(event.target, el),
         scrollY: window.scrollY,
+        viewport: viewportHeight(),
         phase: 'pending',
         locked: null,
       };
@@ -221,7 +246,14 @@ export function useDaySwipe(ref: RefObject<HTMLElement | null>, options: DaySwip
         track.phase = 'day';
         track.locked = direction;
       }
-      if (Math.abs(window.scrollY - track.scrollY) > SCROLL_CANCEL_PX) {
+      const viewport = viewportHeight();
+      if (viewport !== track.viewport) {
+        // La ventana ha cambiado de alto (la barra del navegador): el salto
+        // de scroll que trae no es del dedo; se vuelve a medir desde aquí.
+        track.viewport = viewport;
+        track.scrollY = window.scrollY;
+      }
+      if (pageFollowsFinger(window.scrollY - track.scrollY, dy)) {
         // El navegador se lo ha quedado para desplazar la página: era scroll.
         track.phase = 'ignored';
         latest.current.onCancel?.();

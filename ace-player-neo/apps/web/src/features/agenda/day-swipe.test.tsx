@@ -5,6 +5,7 @@ import {
   DAY_SWIPE_MIN,
   dayFromGesture,
   lockAxis,
+  pageFollowsFinger,
   railRoomAt,
   useDaySwipe,
   type DaySwipeOptions,
@@ -32,6 +33,20 @@ describe('deslizar entre días: reglas', () => {
   it('no cambia de día si el gesto dio la vuelta o acabó en vertical', () => {
     expect(dayFromGesture({ dx: 70, dy: 0, ms: 300, locked: 'next' })).toBeNull();
     expect(dayFromGesture({ dx: -70, dy: 90, ms: 300, locked: 'next' })).toBeNull();
+  });
+
+  it('solo cuenta como scroll el que sigue al dedo (no el salto de la barra del navegador)', () => {
+    // El dedo sube 30 y la página baja 30: scroll de verdad.
+    expect(pageFollowsFinger(30, -30)).toBe(true);
+    expect(pageFollowsFinger(-24, 30)).toBe(true);
+    // Poco: holgura de subpíxeles y del primer toque.
+    expect(pageFollowsFinger(6, -40)).toBe(false);
+    // Dedo en horizontal puro y la página salta 16 px (la barra de Safari o la
+    // ventana que se reajusta al final de la página): no es del dedo.
+    expect(pageFollowsFinger(16, 0)).toBe(false);
+    expect(pageFollowsFinger(-16, 6)).toBe(false);
+    // Hacia el mismo lado que el dedo: nunca lo hace el scroll.
+    expect(pageFollowsFinger(30, 30)).toBe(false);
   });
 
   it('una fila de tarjetas se queda el gesto solo si aún puede ir hacia ese lado', () => {
@@ -211,6 +226,57 @@ describe('useDaySwipe', () => {
     window.scrollY = 0;
     expect(onSwipe).not.toHaveBeenCalled();
     expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('al final de la página, el salto de scroll de la barra del navegador no anula el gesto', () => {
+    // Lo que pasaba en el móvil: con la página abajo del todo, en el primer
+    // movimiento la ventana cambia de alto y scrollY baja 16 px aunque el dedo
+    // vaya en horizontal. Antes eso anulaba el cambio de día.
+    const { list, onSwipe, onCancel } = setup();
+    const title = list.querySelector('h2')!;
+    const height = window.innerHeight;
+    try {
+      window.scrollY = 293;
+      // a) Salta sin que el dedo se mueva en vertical.
+      const begin = touch(title, 60, 400);
+      fireEvent.touchStart(title, { touches: [begin], changedTouches: [begin] });
+      const first = touch(title, 84, 400);
+      fireEvent.touchMove(title, { touches: [first], changedTouches: [first] });
+      window.scrollY = 277;
+      for (const x of [140, 200, 230]) {
+        const point = touch(title, x, 400);
+        fireEvent.touchMove(title, { touches: [point], changedTouches: [point] });
+      }
+      const end = touch(title, 230, 400);
+      fireEvent.touchEnd(title, { touches: [], changedTouches: [end] });
+      expect(onSwipe).toHaveBeenLastCalledWith('prev');
+
+      // b) La ventana cambia de alto y el dedo baja un poco a la vez: se vuelve
+      //    a medir desde el reajuste y sigue siendo un cambio de día.
+      window.scrollY = 293;
+      const again = touch(title, 300, 400);
+      fireEvent.touchStart(title, { touches: [again], changedTouches: [again] });
+      const side = touch(title, 276, 402);
+      fireEvent.touchMove(title, { touches: [side], changedTouches: [side] });
+      window.innerHeight = height - 36;
+      window.scrollY = 277;
+      for (const [x, y] of [
+        [220, 406],
+        [160, 410],
+        [120, 410],
+      ] as const) {
+        const point = touch(title, x, y);
+        fireEvent.touchMove(title, { touches: [point], changedTouches: [point] });
+      }
+      const last = touch(title, 120, 410);
+      fireEvent.touchEnd(title, { touches: [], changedTouches: [last] });
+      expect(onSwipe).toHaveBeenLastCalledWith('next');
+      expect(onSwipe).toHaveBeenCalledTimes(2);
+      expect(onCancel).not.toHaveBeenCalled();
+    } finally {
+      window.innerHeight = height;
+      window.scrollY = 0;
+    }
   });
 
   it('corto y lento vuelve a su sitio (onCancel); dos dedos lo anulan', () => {

@@ -105,3 +105,50 @@ test('deslizar cambia de día sobre el título y sobre una fila que ya no tiene 
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(antes + 40);
   await expect(diaElegido(page)).toHaveText(/^Hoy/);
 });
+
+test('con la página abajo del todo también cambia de día, y la página nunca se ensancha', async ({
+  page,
+}) => {
+  /* Lo que fallaba a veces (revisión de la 0.9.0): la entrada del día nuevo y
+     el arrastre movían la lista hacia la derecha, la página se ensanchaba
+     (414 px en un iPhone de 390) y el navegador reajustaba la ventana en mitad
+     del gesto; con la página al final eso movía el scroll y anulaba el cambio
+     de día. Mañana y Lun tienen pocos partidos: la página llega al final. */
+  await page.goto('/?demo=1&vista=agenda');
+  await expect(page.getByRole('heading', { name: /LaLiga/ }).first()).toBeVisible();
+  const cdp = await page.context().newCDPSession(page);
+  const ancho = () => page.evaluate(() => document.documentElement.scrollWidth);
+  const alFinal = async () => {
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await page.waitForTimeout(250);
+    const titulo = await page.locator('.agenda-group').first().boundingBox();
+    if (!titulo) throw new Error('sin la primera competición');
+    const alto = page.viewportSize()?.height ?? 844;
+    expect(titulo.y).toBeGreaterThan(0);
+    expect(titulo.y + titulo.height).toBeLessThan(alto);
+    return titulo.y + titulo.height / 2;
+  };
+
+  for (let vuelta = 0; vuelta < 3; vuelta += 1) {
+    await page.getByRole('tab', { name: /Mañana/ }).click();
+    await expect(diaElegido(page)).toHaveText(/^Mañana/);
+    await page.waitForTimeout(400);
+    expect(await ancho()).toBeLessThanOrEqual(390);
+
+    // Dedo a la derecha, con algo de deriva vertical: día anterior.
+    let y = await alFinal();
+    await deslizar(cdp, 60, y, 170, 8);
+    await expect(diaElegido(page)).toHaveText(/^Hoy/);
+    await page.waitForTimeout(400);
+    expect(await ancho()).toBeLessThanOrEqual(390);
+
+    // Y desde Mañana, abajo del todo, dedo a la izquierda: Lun.
+    await page.getByRole('tab', { name: /Mañana/ }).click();
+    await expect(diaElegido(page)).toHaveText(/^Mañana/);
+    y = await alFinal();
+    await deslizar(cdp, 320, y, -170, -8);
+    await expect(diaElegido(page)).not.toHaveText(/^Mañana|^Hoy/);
+    await page.waitForTimeout(400);
+    expect(await ancho()).toBeLessThanOrEqual(390);
+  }
+});

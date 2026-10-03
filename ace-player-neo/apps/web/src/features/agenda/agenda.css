@@ -506,6 +506,20 @@
 .agenda__body {
   min-width: 0;
 }
+/* Móvil y tableta: NADA de la lista se sale por los lados. La entrada del
+   día nuevo (translateX de 24 px) y el arrastre del dedo (hasta 60 px)
+   ensanchaban la página: Chrome y Safari del móvil agrandan entonces la
+   ventana (414 px en un iPhone de 390), y en mitad de un deslizamiento la
+   reajustaban y movían el scroll, que anulaba el cambio de día (el «a veces
+   no» del punto 3). `overflow-x: clip` en el cuerpo (no en `body`: ahí el
+   móvil no lo respeta), que ocupa todo el ancho para no recortar las filas
+   a sangre; `clip` no crea contenedor de scroll, así que nada más cambia. */
+.agenda:not(.agenda--stage) .agenda__body {
+  margin-inline: calc(-1 * (var(--gutter) + var(--safe-left)))
+    calc(-1 * (var(--gutter) + var(--safe-right)));
+  padding-inline: calc(var(--gutter) + var(--safe-left)) calc(var(--gutter) + var(--safe-right));
+  overflow-x: clip;
+}
 .agenda-panel {
   min-width: 0;
 }
