@@ -327,7 +327,7 @@ export const V1_FIXTURES = {
     library,
     playback: { nowPlaying: null, learningCount: 4, serverTime: AT_MS, sessions: [] },
     engine: engineStatus,
-    settings: { sameChannelPolicy: 'share' },
+    settings: { sameChannelPolicy: 'share', instantStart: true },
     features: { scanner: true, ai: false, demoSchedule: false },
   },
   health: {
@@ -388,8 +388,14 @@ export const V1_FIXTURES = {
     serverTime: AT_MS,
     sessions: [sessionSummary],
   },
-  settingsGet: { settings: { sameChannelPolicy: 'share' }, source: 'environment' },
-  settingsUpdate: { settings: { sameChannelPolicy: 'handoff' }, source: 'saved' },
+  settingsGet: {
+    settings: { sameChannelPolicy: 'share', instantStart: true },
+    source: 'environment',
+  },
+  settingsUpdate: {
+    settings: { sameChannelPolicy: 'handoff', instantStart: true },
+    source: 'saved',
+  },
   pairingCreate: {
     code: '482913',
     expiresAt: '2026-09-23T18:35:00.000Z',

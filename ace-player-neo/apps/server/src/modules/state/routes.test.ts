@@ -568,7 +568,7 @@ describe('rutas v1 del estado', () => {
     expect(put.json()).toMatchObject({ preferences: { leagues: ['LaLiga'] } });
     expect((await t.get('/api/v1/preferences')).data).toEqual(put.json());
     expect((await t.get('/api/v1/settings')).data).toEqual({
-      settings: { sameChannelPolicy: 'share' },
+      settings: { sameChannelPolicy: 'share', instantStart: true },
       source: 'environment',
     });
     const settings = await t.app.inject({
@@ -578,7 +578,7 @@ describe('rutas v1 del estado', () => {
       payload: JSON.stringify({ sameChannelPolicy: 'handoff' }),
     });
     expect(settings.json()).toEqual({
-      settings: { sameChannelPolicy: 'handoff' },
+      settings: { sameChannelPolicy: 'handoff', instantStart: true },
       source: 'saved',
     });
   });
@@ -608,7 +608,10 @@ describe('rutas v1 del estado', () => {
       payload: JSON.stringify({ sameChannelPolicy: 'handoff' }),
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ settings: { sameChannelPolicy: 'handoff' }, source: 'saved' });
+    expect(res.json()).toEqual({
+      settings: { sameChannelPolicy: 'handoff', instantStart: true },
+      source: 'saved',
+    });
     expect(events.mock.calls.map(([payload]) => payload.scopes)).toEqual([['settings']]);
     const anonymous = await t.app.inject({
       method: 'PUT',

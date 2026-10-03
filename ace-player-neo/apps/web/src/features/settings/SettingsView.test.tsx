@@ -26,7 +26,10 @@ function setup(search = '?vista=ajustes', extra: Parameters<typeof mockFetch>[0]
   net = mockFetch({
     'GET /api/v1/directories': { web, webSyncedAt, webSources, activeWebSourceId },
     'GET /api/v1/settings': { settings: { sameChannelPolicy: 'share' }, source: 'saved' },
-    'PUT /api/v1/settings': { settings: { sameChannelPolicy: 'handoff' }, source: 'saved' },
+    'PUT /api/v1/settings': {
+      settings: { sameChannelPolicy: 'handoff', instantStart: false },
+      source: 'saved',
+    },
     'GET /api/v1/preferences': fixture('preferencesGet'),
     'GET /api/v1/engine/status': fixture('engineStatus'),
     'POST /api/v1/engine/restart': { restarted: true },
@@ -179,6 +182,19 @@ describe('Ajustes', () => {
     );
     await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'true'));
     expect(toastStore.get().at(-1)?.text).toBe('Un solo dispositivo a la vez: activado');
+  });
+
+  it('«Arranque instantáneo» viene activado y se apaga con instantStart: false (D24)', async () => {
+    setup('?vista=ajustes/reproduccion');
+    const toggle = await screen.findByRole('switch', { name: 'Arranque instantáneo' });
+    await waitFor(() => expect(toggle).toBeEnabled());
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(toggle);
+    await waitFor(() =>
+      expect(net.calls.find((c) => c.method === 'PUT')?.body).toEqual({ instantStart: false }),
+    );
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'false'));
+    expect(toastStore.get().at(-1)?.text).toBe('Arranque instantáneo: desactivado');
   });
 
   it('tema y «Reducir transparencia» propio', async () => {

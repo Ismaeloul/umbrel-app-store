@@ -1997,6 +1997,26 @@ export class IptvServiceImpl implements IptvService {
     return this.recentCloses.some((at) => now - at <= IPTV_SESSION.busyRetryWindowMs);
   }
 
+  prewarmBlocker(): string | null {
+    if (!this.active()) return 'iptv_inactive';
+    const dead = this.accountDead();
+    if (dead) return dead;
+    if (this.relay.sessions() > 0 || this.openInputs > 0) return 'iptv_in_use';
+    if (this.probe) return 'iptv_probing';
+    if (this.closedRecently()) return 'iptv_recent_close';
+    const account = this.record?.account ?? null;
+    if (
+      account &&
+      account.maxConnections !== null &&
+      account.activeConnections !== null &&
+      account.maxConnections > 0 &&
+      account.activeConnections >= account.maxConnections
+    ) {
+      return 'iptv_busy';
+    }
+    return null;
+  }
+
   async openInput(id: string, options: { readonly signal: AbortSignal }): Promise<IptvInput> {
     const verdict = this.classify(id);
     if (verdict !== 'owned') {

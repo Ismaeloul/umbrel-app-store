@@ -60,6 +60,7 @@ import {
   SCORES_PRUNE_INTERVAL_MS,
 } from './constants.js';
 import {
+  footballPreheatStage,
   preheatFootballMatch,
   publicPreheatRecord,
   reusablePreheat,
@@ -89,7 +90,13 @@ import {
   type ScoresCache,
 } from './scores.js';
 import { isoDateInMadrid, madridLocalToEpoch } from './time.js';
-import type { FootballAiHealth, FootballDeps, FootballService, ResolveOptions } from './types.js';
+import type {
+  FootballAiHealth,
+  FootballDeps,
+  FootballService,
+  PreparedMatch,
+  ResolveOptions,
+} from './types.js';
 
 type Loose = Record<string, unknown>;
 
@@ -769,6 +776,43 @@ export class FootballServiceImpl implements FootballService {
       stage,
       Number(now) || this.deps.clock.now(),
     );
+  }
+
+  async prepareMatch(
+    matchId: string,
+    options: { readonly refresh: boolean },
+  ): Promise<PreparedMatch | null> {
+    const { clock, logger, state } = this.deps;
+    const now = clock.now();
+    const pick = (result: ResolutionCore | null | undefined): PreparedMatch | null =>
+      result ? { candidate: result.candidate ?? null, candidates: result.candidates } : null;
+    if (!options.refresh) {
+      const reused = reusablePreheat(this.preheats, matchId, now);
+      if (reused?.result) return pick(reused.result);
+    }
+    const program = this.programming.match(matchId);
+    if (!program) return null;
+    /* IPTV primero: lista y cuenta frescas antes de resolver (docs/iptv.md §3.5). */
+    this.deps.iptv?.touch('default');
+    try {
+      if (!program.channels.length) {
+        /* Partido sin canales: solo la guía de la IPTV (docs/iptv.md §4.5). */
+        if (!this.iptvLayer()) return null;
+        return pick(
+          await this.resolveChannels(state.get(), [], { program: { ...program }, scope: 'guide' }),
+        );
+      }
+      const stage = footballPreheatStage(program.start, now);
+      const record = await this.preheatMatch(
+        { ...program },
+        !stage || stage === 'discovery' ? 'scan' : stage,
+        now,
+      );
+      return pick(record?.result);
+    } catch (error) {
+      logger.warn({ errorCode: motivoDeFallo(error), matchId }, '[arranque] no se pudo resolver');
+      return null;
+    }
   }
 
   /* `updatePreheatFromScanner` (server.js:4363-4370), por `scan.jobDone`. */

@@ -32,6 +32,7 @@ import type {
   LegacyScoresResponseSchema,
   PreheatPublic,
   Resolution,
+  ResolutionCandidate,
   ResolveQuery,
   ScoresResponse,
 } from '@ace/shared';
@@ -115,6 +116,17 @@ export interface FootballService extends Lifecycle {
    * (paso 1.1). Sin `payload`, pide la agenda (refrescándola si caducó).
    */
   runPreheat(options?: { readonly now?: number; readonly payload?: unknown }): Promise<void>;
+  /**
+   * «Arranque instantáneo» (D24): las fuentes de un partido de la agenda, en
+   * el orden de la resolución (IPTV primero). Con `refresh`, una pasada nueva
+   * del precalentado (IPTV tocada para tener lista y cuenta frescas, buscador
+   * y comprobador); sin él, la del precalentado si tiene menos de 20 min. Null
+   * si el partido no está en la agenda o no se pudo resolver. Nunca lanza.
+   */
+  prepareMatch(
+    matchId: string,
+    options: { readonly refresh: boolean },
+  ): Promise<PreparedMatch | null>;
   /** Estado para la salud: agenda, partidos y precalentados. */
   healthInfo(): {
     readonly status: 'ready' | 'stale' | 'warming';
@@ -128,6 +140,12 @@ export interface FootballService extends Lifecycle {
      */
     readonly ai: FootballAiHealth | null;
   };
+}
+
+/** Fuentes de un partido para «Arranque instantáneo» (D24). */
+export interface PreparedMatch {
+  readonly candidate: ResolutionCandidate | null;
+  readonly candidates: readonly ResolutionCandidate[];
 }
 
 /** Estado de la IA que football conoce por su propio uso de Ollama. */

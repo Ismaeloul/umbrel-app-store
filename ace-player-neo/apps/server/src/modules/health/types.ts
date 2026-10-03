@@ -23,6 +23,7 @@ import type { DirectoriesService } from '../directories/types.js';
 import type { EngineService } from '../engine/types.js';
 import type { EventsHub } from '../events/types.js';
 import type { FootballService } from '../football/types.js';
+import type { InstantStartService } from '../instant-start/types.js';
 import type { PlaybackService } from '../playback/types.js';
 import type { RemuxService } from '../remux/types.js';
 import type { ScannerService } from '../scanner/types.js';
@@ -39,6 +40,8 @@ export interface HealthDeps extends CoreDeps {
   readonly playback: PlaybackService;
   readonly remux: RemuxService;
   readonly football: FootballService;
+  /** «Arranque instantáneo» (D24). Opcional para los fakes de los tests. */
+  readonly instantStart?: InstantStartService;
   /**
    * Escudos y colores (nivel 1 de la salud: solo avisos en `warnings[]`, sin
    * componente propio). Opcional para los fakes de los tests; en producción

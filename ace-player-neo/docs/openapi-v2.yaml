@@ -20,6 +20,7 @@ tags:
   - name: scanner
   - name: sources
   - name: football
+  - name: instantStart
   - name: teams
   - name: auth
   - name: events
@@ -609,6 +610,8 @@ paths:
                         enum:
                           - share
                           - handoff
+                      instantStart:
+                        type: boolean
                     required:
                       - sameChannelPolicy
                     additionalProperties: false
@@ -932,6 +935,40 @@ paths:
                             maximum: 9007199254740991
                         required:
                           - connections
+                        additionalProperties: false
+                      instantStart:
+                        type: object
+                        properties:
+                          enabled:
+                            type: boolean
+                          status:
+                            type: string
+                            enum:
+                              - off
+                              - idle
+                              - warming
+                              - warm
+                          matchId:
+                            type:
+                              - string
+                              - "null"
+                          source:
+                            anyOf:
+                              - type: string
+                                enum:
+                                  - engine
+                                  - iptv
+                              - type: "null"
+                          last:
+                            type:
+                              - string
+                              - "null"
+                        required:
+                          - enabled
+                          - status
+                          - matchId
+                          - source
+                          - last
                         additionalProperties: false
                     required:
                       - backend
@@ -2215,6 +2252,8 @@ paths:
                         enum:
                           - share
                           - handoff
+                      instantStart:
+                        type: boolean
                     required:
                       - sameChannelPolicy
                     additionalProperties: false
@@ -2289,6 +2328,8 @@ paths:
                   enum:
                     - share
                     - handoff
+                instantStart:
+                  type: boolean
               additionalProperties: false
       responses:
         "200":
@@ -2307,6 +2348,8 @@ paths:
                         enum:
                           - share
                           - handoff
+                      instantStart:
+                        type: boolean
                     required:
                       - sameChannelPolicy
                     additionalProperties: false

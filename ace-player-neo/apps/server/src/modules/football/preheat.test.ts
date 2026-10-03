@@ -533,3 +533,26 @@ describe('La IPTV de ahora encima del precalentado (M1, diagnóstico IPTV 0.8.2)
     expect(result.checked).not.toContain('iptv');
   });
 });
+
+describe('«Arranque instantáneo» (D24): prepareMatch', () => {
+  it('con `refresh`, una pasada nueva del precalentado; sin él, la guardada; fuera de la agenda, null', async () => {
+    const { football, search, scanner } = harness();
+    const schedule = await football.schedule();
+    const target = schedule.days
+      .flatMap((day) => day.matches)
+      .find((item) => item.channels.some((channel) => channel.name === 'M+ Liga de Campeones'));
+    expect(target).toBeDefined();
+    const id = target?.id ?? '';
+    const fresh = await football.prepareMatch(id, { refresh: true });
+    expect(fresh?.candidates.map((candidate) => candidate.id)).toContain(ID_A);
+    expect(football.preheat(id)).toMatchObject({ matchId: id, status: 'scanning' });
+    expect(scanner.enqueue).toHaveBeenLastCalledWith(
+      expect.objectContaining({ kind: 'preheat', matchId: id }),
+    );
+    const searches = search.search.mock.calls.length;
+    const again = await football.prepareMatch(id, { refresh: false });
+    expect(again?.candidates).toEqual(fresh?.candidates);
+    expect(search.search.mock.calls.length).toBe(searches);
+    expect(await football.prepareMatch('no-existe', { refresh: true })).toBeNull();
+  });
+});

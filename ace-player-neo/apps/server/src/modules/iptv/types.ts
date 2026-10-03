@@ -212,6 +212,14 @@ export interface IptvService extends Lifecycle {
    */
   touch(mode: 'default' | 'research'): void;
 
+  /**
+   * «Arranque instantáneo» (D24): por qué NO se puede abrir ahora una
+   * conexión con el proveedor sin que nadie la pida, o null si se puede.
+   * Regla de una sola conexión (§7): nada si hay una sesión o una sonda
+   * abiertas, si soltamos una hace menos de `IPTV_SESSION.recentCloseMs` (el
+   * panel aún puede contarla) o si la cuenta tiene todas sus plazas ocupadas.
+   */
+  prewarmBlocker(): string | null;
   /** Abre la entrada de una sesión IPTV (relé); lanza los `iptv_*` de §5.6. */
   openInput(id: string, options: { readonly signal: AbortSignal }): Promise<IptvInput>;
   /** Carril IPTV del comprobador (§7.3): null = sin veredicto (cuenta bien, «Sin comprobar»). */

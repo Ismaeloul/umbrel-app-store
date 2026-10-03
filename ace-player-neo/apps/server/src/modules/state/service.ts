@@ -14,21 +14,24 @@ import { randomBytes } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import {
+  DEFAULT_INSTANT_START,
   DevicesFileSchema,
+  InstantStartFileSchema,
   IptvFileSchema,
   SCHEMA_VERSION,
   SameChannelPolicySchema,
   SessionsFileSchema,
   SettingsFileSchema,
   type DevicesFile,
+  type InstantStartFile,
   type IptvFile,
   type LegacyPublicState,
   type Preferences,
   type SameChannelPolicy,
   type SessionsFile,
-  type Settings,
   type SettingsFile,
   type SettingsResponse,
+  type SettingsUpdateBody,
   type StateScope,
   type StateV1,
 } from '@ace/shared';
@@ -159,6 +162,17 @@ export function createStateService(deps: StateDeps): StateService & {
       settings: { sameChannelPolicy: config.playback.sameChannelPolicy },
       updatedAt: null,
     }),
+    clock,
+    logger,
+    onUnreadable: reportUnreadable,
+  });
+
+  /* «Arranque instantáneo» (D24): su propio fichero, no settings.json (strictObject). */
+  const instantStartStore = createDocumentStore<InstantStartFile>({
+    name: 'arranque-instantaneo',
+    file: paths.instantStartFile,
+    schema: InstantStartFileSchema,
+    defaults: () => ({ version: 1, enabled: DEFAULT_INSTANT_START, updatedAt: null }),
     clock,
     logger,
     onUnreadable: reportUnreadable,
@@ -309,6 +323,7 @@ export function createStateService(deps: StateDeps): StateService & {
     devicesStore.loadSync();
     sessionsStore.loadSync();
     settingsStore.loadSync();
+    instantStartStore.loadSync();
     iptvStore.loadSync();
     syncSettingsWithEnvironment();
     return report;
@@ -388,6 +403,7 @@ export function createStateService(deps: StateDeps): StateService & {
         sameChannelPolicy: saved
           ? file.settings.sameChannelPolicy
           : config.playback.sameChannelPolicy,
+        instantStart: instantStartStore.read().enabled,
       },
       source: saved ? 'saved' : 'environment',
     };
@@ -447,21 +463,41 @@ export function createStateService(deps: StateDeps): StateService & {
     },
 
     settings: settingsResponse,
-    async updateSettings(patch: Partial<Settings>) {
+    async updateSettings(patch: SettingsUpdateBody) {
       ensureLoaded();
-      const policy = (patch as { sameChannelPolicy?: unknown } | null)?.sameChannelPolicy;
-      if (policy === undefined) return settingsResponse();
-      const parsed = SameChannelPolicySchema.safeParse(policy);
-      if (!parsed.success) throw new AppError('validation_error', { detail: 'sameChannelPolicy' });
-      await settingsStore.update((draft) => {
-        draft.settings.sameChannelPolicy = parsed.data;
-        draft.updatedAt = clock.date().toISOString();
-      });
+      const input = (patch ?? {}) as { sameChannelPolicy?: unknown; instantStart?: unknown };
+      const policy = input.sameChannelPolicy;
+      const instant = input.instantStart;
+      if (instant !== undefined && typeof instant !== 'boolean') {
+        throw new AppError('validation_error', { detail: 'instantStart' });
+      }
+      const parsed = policy === undefined ? null : SameChannelPolicySchema.safeParse(policy);
+      if (parsed && !parsed.success) {
+        throw new AppError('validation_error', { detail: 'sameChannelPolicy' });
+      }
+      if (!parsed && instant === undefined) return settingsResponse();
+      if (parsed) {
+        const value = parsed.data as SameChannelPolicy;
+        await settingsStore.update((draft) => {
+          draft.settings.sameChannelPolicy = value;
+          draft.updatedAt = clock.date().toISOString();
+        });
+      }
+      if (typeof instant === 'boolean') {
+        await instantStartStore.update((draft) => {
+          draft.enabled = instant;
+          draft.updatedAt = clock.date().toISOString();
+        });
+      }
       emitChanged(['settings']);
       return settingsResponse();
     },
     sameChannelPolicy(): SameChannelPolicy {
       return settingsResponse().settings.sameChannelPolicy;
+    },
+    instantStartEnabled(): boolean {
+      ensureLoaded();
+      return instantStartStore.read().enabled;
     },
 
     devices() {
@@ -483,6 +519,7 @@ export function createStateService(deps: StateDeps): StateService & {
         devicesStore.flush(),
         sessionsStore.flush(),
         settingsStore.flush(),
+        instantStartStore.flush(),
         iptvStore.flush(),
       ]);
     },

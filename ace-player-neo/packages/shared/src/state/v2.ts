@@ -21,6 +21,8 @@ export const V2_FILES = {
   dir: 'v2',
   devices: 'v2/devices.json',
   settings: 'v2/settings.json',
+  /** «Arranque instantáneo» (D24): aparte de settings.json para no romper la vuelta atrás. */
+  instantStart: 'v2/arranque-instantaneo.json',
   sessions: 'v2/sessions.json',
   diagnostics: 'v2/diagnostics.jsonl',
   /** IPTV (docs/iptv.md §2.1): configuración con los secretos cifrados (0600). */
@@ -63,6 +65,24 @@ export const SettingsFileSchema = z.strictObject({
   updatedAt: IsoDateTimeSchema.nullable(),
 });
 export type SettingsFile = z.infer<typeof SettingsFileSchema>;
+
+// --- v2/arranque-instantaneo.json (D24) ---
+
+/** «Arranque instantáneo» viene activado de fábrica. */
+export const DEFAULT_INSTANT_START = true;
+
+/**
+ * `v2/arranque-instantaneo.json`. No va en `settings.json`: es
+ * `strictObject` y la 0.8.3 apartaría el fichero (y con él la política de
+ * mismo canal) tras una vuelta atrás. Es `z.object` (no estricto) a
+ * propósito: un campo de una versión futura se ignora, no aparta el fichero.
+ */
+export const InstantStartFileSchema = z.object({
+  version: z.literal(1),
+  enabled: z.boolean(),
+  updatedAt: IsoDateTimeSchema.nullable(),
+});
+export type InstantStartFile = z.infer<typeof InstantStartFileSchema>;
 
 // --- v2/devices.json ---
 

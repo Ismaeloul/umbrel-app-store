@@ -377,3 +377,48 @@ conservador). Todas se pueden revertir.
   tandas de 4 competiciones, a la vez que `eventstv.php` y con 10 s por
   petición, para que una competición lenta no agote el plazo global de 60 s;
   una competición caída solo marca la agenda `partial`.
+
+## D24. «Arranque instantáneo»: la fuente de tus equipos, preparada antes del saque (0.8.4)
+
+- **Qué**: unos minutos antes de que juegue uno de tus EQUIPOS favoritos, el
+  Umbrel deja preparada la mejor fuente para que «Ver» arranque en 1-2 s.
+  Módulo nuevo `apps/server/src/modules/instant-start` (reglas puras en
+  `plan.ts`, planificador cada 30 s en `service.ts`); la sesión la abre
+  playback (`prewarm`/`releasePrewarm`/`prewarmInfo`).
+- **Solo equipos** (corrección de Isma): ni las ligas ni la selección que se
+  siguen como liga o país, porque preparar todos los partidos de una liga
+  sobrecargaría el Umbrel. El equipo casa como en «Para ti»
+  (`footballMatchHasFavoriteTeam`: `idTeam` si hay escudo, nunca la cantera,
+  el filial o el femenino salvo que se siga tal cual). La selección entra si
+  está entre tus equipos.
+- **Cuándo**: a T-10 min se resuelve otra vez el partido con el precalentado
+  (`football.prepareMatch`, IPTV tocada para lista y cuenta frescas); a T-3
+  min (`INSTANT_START_PREWARM_LEAD_MS`) se abre la fuente que pediría la web
+  (`pickAutoSource`: IPTV no caída; si no, AceStream `working`, luego `weak`;
+  sin comprobador, la mejor colocada). Se reintenta cada vuelta hasta T+5 si
+  la casa está ocupada; se suelta a T+10 si nadie la usa.
+- **Una sola**: si coinciden dos partidos, el de saque más temprano; a igual
+  saque, el del equipo que va antes en tus gustos. Nunca más de una sesión
+  preparada.
+- **Nunca quita la casa a nadie (D5)**: solo con nada sonando, abriéndose ni
+  esperando; cualquier petición de otro canal (o un `claim` 0.6.x) la cierra
+  ANTES de abrir lo suyo, y si aún se estaba abriendo una IPTV, la corta. Pedir
+  la MISMA fuente la reutiliza (sin otra apertura en el motor ni otro ffmpeg);
+  una del motor se comprueba con `stat_url` y, si el motor ya no la conoce, se
+  abre de nuevo. IPTV: la regla de una conexión de docs/iptv.md §7.8.
+- **No es una reproducción**: sin visor, no escribe `nowPlaying`, no sale en
+  «Dónde se está reproduciendo» ni en `GET /api/v1/playback`, no manda
+  `stream.*` ni `playback.activity`, no toca Recientes (los escribe la web al
+  reproducir) y no apunta veredictos «del reproductor».
+- **Ajuste**: Ajustes → Reproducción → «Arranque instantáneo» (activado de
+  fábrica). `instantStart` en `GET/PUT /api/v1/settings` (opcional en el
+  esquema: ausente = activado) y guardado en `v2/arranque-instantaneo.json`,
+  NO en `settings.json`: es `strictObject` y una vuelta atrás a la 0.8.3
+  apartaría el fichero con la política de mismo canal. El fichero nuevo es
+  `z.object` (un campo futuro no lo aparta). Apagarlo suelta lo preparado al
+  momento (`state.changed`).
+- **Diagnóstico**: registro `[arranque] …` (preparando, preparada, terminada
+  con `used`/`yielded`/`expired`/`disabled`/`failed`, motivos de no preparar)
+  y `components.instantStart` en `GET /api/v1/health` (opcional).
+- **iPhone**: la app solo decodifica `instantStart` (opcional) para que la ida
+  y vuelta de los ejemplos siga igual; el interruptor está en la web.
