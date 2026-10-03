@@ -71,6 +71,9 @@ Lo que no se pudo hacer esta noche, con el detalle para retomarlo.
     - enseñarlo en la agenda y en el partido («Confirmado en tu guía: M+ LaLiga TV 2 · 21:00»);
     - si la hora o el canal de la guía no coinciden con futbolenlatv, preferir la guía para hoy/mañana;
     - y que un partido que esté en la guía pero no en futbolenlatv se añada igualmente.
+    - **Sin IPTV configurada, con la IPTV en pausa o sin EPG** (o la guía caída/sin datos para ese partido):
+      todo sigue exactamente como hoy, con futbolenlatv como única fuente. La guía solo suma, nunca es
+      obligatoria ni deja la agenda vacía.
 13. **App de iPhone: al final, con el Mac de su hermano** (simulador de iPhone y cambios al momento, mucho más
     práctico que compilar en GitHub y bajar la IPA). Primero pulir al máximo la web; la app irá basada en la web.
 
