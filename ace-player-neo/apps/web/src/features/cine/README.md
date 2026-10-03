@@ -17,10 +17,11 @@ play grande y amarillo.
 | `Rows.tsx`                             | Las filas de la portada: novedades y una por categoría, cada una con «Ver todo ›»; se piden al acercarse (IntersectionObserver)                 |
 | `Grid.tsx` / `PosterCard.tsx`          | Rejilla virtual (2-6 columnas por ancho, `aria-setsize`) y la tarjeta: cartel 2:3 con cápsulas encima, título de 15 px y «2023 · ★ 7,4»         |
 | `ContinueRail.tsx`                     | «Seguir viendo»: 16:9 (o el cartel entero sobre su color), barra de lo visto, «T2 · E3 · Quedan 12 min» y su menú                                |
-| `CategorySheet.tsx` / `TagChips.tsx`   | Categorías (hoja en el móvil, chips en la rejilla, lista con «Inicio» en el panel) y los chips «Castellano», «Latino», «VOSE», «Multi», «4K»     |
+| `CategorySheet.tsx` / `TagChips.tsx`   | Categorías (hoja en el móvil, chips en la rejilla de la tableta, lista con «Inicio» en el panel) y los chips «Castellano», «Latino», «VOSE», «Multi», «4K» |
 | `Ficha.tsx`                            | Cabecera (fondo, cartel desenfocado o color), datos, el play («Seguir viendo desde 43:12», «Termina a las»), tráiler, sinopsis y «Detalles»      |
-| `Seasons.tsx` / `EpisodeList.tsx`      | Temporadas (chips o desplegable con más de 8, «Temporada N») y episodios (con fotograma o lista compacta; el del botón principal, resaltado)     |
-| `Art.tsx`                              | Cartel, fondo o fotograma de `vodArt` sobre su relleno (un cartel sin imagen lleva el título); un reintento a los 2-3 s si la imagen falla       |
+| `Synopsis.tsx`                         | Sinopsis recortada con «Más» (la de la ficha y la de cada temporada); se vuelve a medir al cambiar de tamaño (girar el iPhone)                  |
+| `Seasons.tsx` / `EpisodeList.tsx`      | Temporadas (chips o desplegable con más de 8, «Temporada N», su resumen) y episodios (fotograma o su número, emisión y nota; lista compacta; el del botón principal, resaltado) |
+| `Art.tsx`                              | Cartel, fondo o fotograma de `vodArt` sobre su relleno (un cartel sin imagen lleva el título); se pide al acercarse a la pantalla y, si falla, 3 reintentos (2, 6 y 15 s) y otro al volver a verse |
 | `data.ts`                              | Estado de la URL compartido con el panel, portada ↔ rejilla con historial, consultas (`vodHome`, filas, rejilla por páginas, `vodTitle`), marcas |
 | `model.ts` / `texts.ts`                | Lógica pura (URL, columnas, tiempos, «Termina a las», estreno, géneros y países en castellano, temporadas, reglas de §10.3) y los textos         |
 | `play.ts`                              | Reproducir: hoy el aviso «Próximamente» (VOD-6 lo cambia por `playVod()` del reproductor) y la prueba de HEVC                                    |
@@ -36,7 +37,11 @@ Decisiones (VOD-3, 30-sep; 0.9.0, 3-oct):
   portada en filas; con cualquiera de ellos, la rejilla (`showsGrid`). Abrirla
   desde la portada (`openCineGrid`) añade una entrada al historial con
   `cineGrid: true`, así «Atrás» (o el gesto del iPhone) vuelve a la portada y
-  a su sitio; el «‹» de la rejilla hace lo mismo (`closeCineGrid`).
+  a su sitio; el «‹» de la rejilla hace lo mismo (`closeCineGrid`), con el
+  tipo que se eligiera en la rejilla. La portada apunta su scroll mientras se
+  ve (`rememberHomeScroll`) y el foco pasa del «Ver todo» al título de la
+  rejilla y vuelve (nunca se queda en `<body>`). Desde una ficha,
+  `prepareGridFromFicha` abre la rejilla arriba.
 - **Las filas se piden al acercarse a la pantalla**, 20 títulos por fila y de
   12 en 12 filas: con decenas de categorías no se piden cientos de carteles.
 - **Reproducir es un aviso «Próximamente»** hasta VOD-6: la ficha,

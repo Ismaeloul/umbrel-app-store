@@ -1598,8 +1598,17 @@ de otras apps (`docs/investigacion/pelis-y-series.md`, con «Qué hemos adoptado
   categorías»; al final «Ver las 1.234 películas». En el móvil, «Categorías» abre la hoja; en escritorio, el panel
   lateral con «Inicio».
 - **La rejilla es otra pantalla:** con `cinecat` (id o `all`, que ahora sí se escribe), `cinetag` o una búsqueda.
-  Cabecera «‹ VOD | 4K · 9 películas» («‹ Resultados de «dune»» buscando), chips de categorías (móvil y tableta),
-  distintivos y «Novedades | A-Z». Abierta desde la portada, con su entrada en el historial (Atrás vuelve).
+  Cabecera «‹ VOD | 4K · 9 películas» («‹ Resultados de «dune»» buscando), chips de categorías (solo en la tableta:
+  en el móvil está «Categorías» arriba y los carteles necesitan el sitio) y una fila con «Novedades | A-Z» y los
+  distintivos (en el móvil se desliza): a 360×740 la primera fila de carteles cabe entera. Abierta desde la portada,
+  con su entrada en el historial (Atrás vuelve, a su sitio y con el tipo elegido en la rejilla); el foco pasa del «Ver
+  todo» al título de la rejilla (h2 enfocable) y vuelve a él al cerrarla. Buscar dentro de una categoría se queda en
+  ella y lo dice: «3 películas en VOD | 4K» y «Buscar en todas las películas» (sin nada: «Nada con «wonka» en VOD |
+  4K» con esa acción delante); el panel lateral sigue marcando la categoría.
+- **Carteles con muchas filas:** una imagen perezosa no se pide hasta que su sitio se acerca a la pantalla
+  (IntersectionObserver; en un carrusel, lo visible y lo de al lado). Si falla (la cola de `art.ts` contesta 503 al
+  llenarse), 3 reintentos a 2, 6 y 15 s y, rendida, otro al salir de la pantalla y volver. Mientras carga o si falla,
+  el fotograma de un episodio enseña su número.
 - **Tarjeta:** cartel 2:3 grande (filas `clamp(136px, 38vw, 200px)`; rejilla de 2 columnas hasta 479 px, 3, 4, 5 y 6
   desde 480, 768, 1024 y 1280), cápsulas encima del cartel (lengua y 4K, dos como mucho, «+18» delante), título de
   15 px en 2 líneas y «2023 · ★ 7,4». Sin imagen, el cartel lleva el título.
