@@ -18,7 +18,7 @@
      existe. Va en su propio trozo de JS (React.lazy): solo se pide al abrirla.
    - Tu fútbol: resumen de gustos y «Editar mis gustos».
    - Reproducción: modo (Baja latencia / Equilibrado / Estable) y la política
-     «Un solo dispositivo a la vez» (D5).
+     «Un solo dispositivo a la vez» (D5) y «Arranque instantáneo» (D24).
    - Dónde se está reproduciendo (where-playing/): el canal y los dispositivos
      que lo ven, en tiempo real (`playback.sessions` por SSE). El
      mini-reproductor lleva aquí (`ajustes/donde`).
@@ -97,7 +97,12 @@ const SECTIONS: readonly SectionDef[] = [
   { id: 'listas', title: 'Listas', icon: 'list', hint: 'De dónde salen los canales' },
   { id: 'iptv', title: 'IPTV', icon: 'tv', hint: 'Tu proveedor, M3U o Xtream' },
   { id: 'futbol', title: 'Tu fútbol', icon: 'agenda', hint: 'Ligas, equipos y selecciones' },
-  { id: 'reproduccion', title: 'Reproducción', icon: 'play', hint: 'Modo y un solo dispositivo' },
+  {
+    id: 'reproduccion',
+    title: 'Reproducción',
+    icon: 'play',
+    hint: 'Modo, un solo dispositivo y arranque instantáneo',
+  },
   {
     id: 'donde',
     title: 'Dónde se está reproduciendo',
@@ -291,6 +296,28 @@ function PlaybackSection() {
                   checked
                     ? 'Un solo dispositivo a la vez: activado'
                     : 'Varios dispositivos pueden ver el mismo canal',
+                  { tone: 'ok' },
+                ),
+              onError: (error) =>
+                notify(`No se pudo guardar el ajuste. ${describeFailure(error)}`, { tone: 'err' }),
+            },
+          );
+        }}
+      />
+      <Switch
+        label="Arranque instantáneo"
+        description="Unos minutos antes de que jueguen tus equipos, el Umbrel deja preparada la mejor fuente para que «Ver» arranque al momento. Nunca corta lo que se esté viendo y se suelta sola si no la usas."
+        // Ausente (servidor anterior a la 0.8.4) = activado.
+        checked={settings.data?.settings.instantStart !== false}
+        disabled={!settings.data || update.isPending}
+        onChange={(checked) => {
+          haptic('selection');
+          update.mutate(
+            { body: { instantStart: checked } },
+            {
+              onSuccess: () =>
+                notify(
+                  checked ? 'Arranque instantáneo: activado' : 'Arranque instantáneo: desactivado',
                   { tone: 'ok' },
                 ),
               onError: (error) =>

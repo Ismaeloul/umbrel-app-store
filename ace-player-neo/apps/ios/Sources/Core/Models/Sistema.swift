@@ -177,6 +177,8 @@ public enum SameChannelPolicy: String, EnumTolerante {
 /// `SettingsSchema`.
 public struct Settings: Codable, Sendable, Hashable {
     public var sameChannelPolicy: SameChannelPolicy
+    /// «Arranque instantáneo» (D24, 0.8.4). Ausente (servidor anterior) = activado.
+    public var instantStart: Bool?
 }
 
 /// De dónde sale el valor de los ajustes.

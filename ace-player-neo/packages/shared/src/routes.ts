@@ -140,6 +140,7 @@ export const SERVER_MODULES = [
   'scanner',
   'sources',
   'football',
+  'instantStart',
   'teams',
   'auth',
   'events',

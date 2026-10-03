@@ -422,6 +422,16 @@ export function createHealthService(deps: HealthDeps): HealthService {
         });
       }
 
+      /* «Arranque instantáneo» (D24): qué hay preparado y cómo acabó lo último. */
+      const instantStart = deps.instantStart
+        ? read(
+            'arranque instantáneo',
+            warnings,
+            () => deps.instantStart?.healthInfo() ?? null,
+            null,
+          )
+        : null;
+
       const sessions = playback?.sessions ?? [];
       return {
         version: config.appVersion,
@@ -455,6 +465,7 @@ export function createHealthService(deps: HealthDeps): HealthService {
             remuxSessions: remux.sessions,
           },
           events: { connections },
+          ...(instantStart ? { instantStart } : {}),
         },
         reports,
         diagnostics: { counts24h: { ...ZERO_COUNTS, ...counts24h } },

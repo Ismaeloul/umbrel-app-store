@@ -23,7 +23,7 @@ import type {
   Preferences,
   PreferencesInput,
   SameChannelPolicy,
-  Settings,
+  SettingsUpdateBody,
   SettingsResponse,
   StateScope,
   StateV1,
@@ -122,9 +122,11 @@ export interface StateService extends Lifecycle {
 
   // --- Ajustes v2 (v2/settings.json) ---
   settings(): SettingsResponse;
-  updateSettings(patch: Partial<Settings>): Promise<SettingsResponse>;
+  updateSettings(patch: SettingsUpdateBody): Promise<SettingsResponse>;
   /** Política efectiva de mismo canal: la guardada o la de `ACE_SAME_CHANNEL_POLICY` (D5). */
   sameChannelPolicy(): SameChannelPolicy;
+  /** «Arranque instantáneo» activado (D24; v2/arranque-instantaneo.json, por defecto sí). */
+  instantStartEnabled(): boolean;
 
   // --- Documentos v2 que usan otros módulos ---
   /** v2/devices.json (auth). */

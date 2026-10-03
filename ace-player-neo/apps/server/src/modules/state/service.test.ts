@@ -472,7 +472,7 @@ describe('ajustes v2 (D5: política de mismo canal)', () => {
     const h = harness(undefined, { ACE_SAME_CHANNEL_POLICY: 'handoff' });
     await h.state.load();
     expect(h.state.settings()).toEqual({
-      settings: { sameChannelPolicy: 'handoff' },
+      settings: { sameChannelPolicy: 'handoff', instantStart: true },
       source: 'environment',
     });
     expect(h.read('v2/settings.json')).toMatchObject({
@@ -483,7 +483,10 @@ describe('ajustes v2 (D5: política de mismo canal)', () => {
     expect(await h.state.updateSettings({})).toMatchObject({ source: 'environment' });
     expect(events).not.toHaveBeenCalled();
     const saved = await h.state.updateSettings({ sameChannelPolicy: 'share' });
-    expect(saved).toEqual({ settings: { sameChannelPolicy: 'share' }, source: 'saved' });
+    expect(saved).toEqual({
+      settings: { sameChannelPolicy: 'share', instantStart: true },
+      source: 'saved',
+    });
     expect(events).toHaveBeenCalledWith({ scopes: ['settings'], at: '2026-01-01T00:00:00.000Z' });
     expect(h.state.sameChannelPolicy()).toBe('share');
     /* Tras reiniciar, lo guardado sigue mandando aunque el entorno diga otra cosa. */
@@ -497,6 +500,48 @@ describe('ajustes v2 (D5: política de mismo canal)', () => {
     expect(h.state.sameChannelPolicy()).toBe('share');
     const error = await h.state
       .updateSettings({ sameChannelPolicy: 'todos' as never })
+      .catch((caught: unknown) => caught);
+    expect(isAppError(error) && error.code).toBe('validation_error');
+  });
+});
+
+describe('«Arranque instantáneo» (D24): v2/arranque-instantaneo.json', () => {
+  it('activado de fábrica; apagarlo se guarda aparte de settings.json y sobrevive al reinicio', async () => {
+    const h = harness();
+    await h.state.load();
+    expect(h.state.instantStartEnabled()).toBe(true);
+    const events = vi.fn();
+    h.core.bus.on('state.changed', events);
+    const saved = await h.state.updateSettings({ instantStart: false });
+    expect(saved.settings).toEqual({ sameChannelPolicy: 'share', instantStart: false });
+    /* La política no se ha guardado: sigue mandando el entorno. */
+    expect(saved.source).toBe('environment');
+    expect(events).toHaveBeenCalledWith({ scopes: ['settings'], at: '2026-01-01T00:00:00.000Z' });
+    expect(h.read('v2/arranque-instantaneo.json')).toEqual({
+      version: 1,
+      enabled: false,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+    /* settings.json no lleva el campo nuevo: una 0.8.3 lo seguiría leyendo (vuelta atrás). */
+    expect(h.read('v2/settings.json')).toEqual({
+      schemaVersion: 2,
+      settings: { sameChannelPolicy: 'share' },
+      updatedAt: null,
+    });
+    expect(h.restart().state.instantStartEnabled()).toBe(false);
+  });
+
+  it('un campo de una versión futura no aparta el fichero; un valor que no es booleano es validation_error', async () => {
+    const h = harness();
+    await h.state.load();
+    writeFileSync(
+      h.file('v2/arranque-instantaneo.json'),
+      JSON.stringify({ version: 1, enabled: false, updatedAt: null, futuro: 1 }),
+    );
+    const again = h.restart();
+    expect(again.state.instantStartEnabled()).toBe(false);
+    const error = await again.state
+      .updateSettings({ instantStart: 'si' as never })
       .catch((caught: unknown) => caught);
     expect(isAppError(error) && error.code).toBe('validation_error');
   });

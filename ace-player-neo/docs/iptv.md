@@ -1481,6 +1481,15 @@ reproduce. Por eso:
 - el medidor de la agenda cuenta esa IPTV como fuente jugable mientras no esté `failed`;
 - se quedan la palabra y el medidor de siempre. No hay nada visible nuevo.
 
+### 7.8 «Arranque instantáneo» (0.8.4, D24)
+
+A T-3 min del saque de un partido de tus equipos, playback puede abrir la IPTV elegida **sin visor** (relé + remux)
+para que «Ver» arranque al momento. Respeta la regla de una sola conexión: `iptv.prewarmBlocker()` lo impide si hay
+una sesión o una sonda abiertas (`iptv_in_use`, `iptv_probing`), si soltamos la plaza hace menos de
+`IPTV_SESSION.recentCloseMs` (`iptv_recent_close`) o si la cuenta Xtream tiene todas sus plazas ocupadas
+(`iptv_busy`). Con la sesión preparada abierta, la sonda de fondo de §7.3 no corre (`relay.sessions() > 0`). Si el relé
+se cae durante la preparación, se cierra sin veredicto «del reproductor» (no había nadie viendo).
+
 ---
 
 ## 8. Web

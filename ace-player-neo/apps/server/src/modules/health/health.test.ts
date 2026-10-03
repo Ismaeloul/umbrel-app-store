@@ -31,6 +31,7 @@ import type { DiagnosticsService } from '../diagnostics/types.js';
 import type { EngineService } from '../engine/types.js';
 import type { EventsHub } from '../events/types.js';
 import type { FootballService } from '../football/types.js';
+import type { InstantStartService } from '../instant-start/types.js';
 import type { PlaybackService } from '../playback/types.js';
 import type { RemuxService } from '../remux/types.js';
 import type { ScannerService, ScannerStats } from '../scanner/types.js';
@@ -91,6 +92,7 @@ interface Fakes {
   probes?: Partial<HealthProbes>;
   env?: Record<string, string>;
   state?: StateService;
+  instantStart?: InstantStartService;
 }
 
 interface Setup {
@@ -136,6 +138,7 @@ function setup(fakes: Fakes = {}): Setup {
     } as unknown as DiagnosticsService,
     sources: notImplementedService('sources'),
     directories: notImplementedService('directories'),
+    ...(fakes.instantStart ? { instantStart: fakes.instantStart } : {}),
     probes,
   };
   return { core, health: createHealthService(deps), state, probes };
@@ -450,6 +453,21 @@ describe('/api/v1/health, /health/live y /ping', () => {
       'scanner_leaked_sessions',
       'ai_model_missing',
     ]);
+  });
+
+  it('«Arranque instantáneo» (D24): lo preparado sale en components.instantStart', async () => {
+    const info = {
+      enabled: true,
+      status: 'warm' as const,
+      matchId: 'm1',
+      source: 'iptv' as const,
+      last: 'skipped:busy',
+    };
+    const instantStart = { healthInfo: () => info } as unknown as InstantStartService;
+    const body = await setup({ instantStart }).health.health();
+    expect(HealthResponseSchema.parse(body)).toEqual(body);
+    expect(body.components.instantStart).toEqual(info);
+    expect((await setup().health.health()).components.instantStart).toBeUndefined();
   });
 
   it('un estado recuperado o arrancado vacío se ve en el panel', async () => {
