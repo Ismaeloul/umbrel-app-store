@@ -3,7 +3,7 @@
    generará desde aquí. Se copian tal cual del documento: no se retocan sin
    cambiarlo allí. Los números van con `toLocaleString('es-ES')`. */
 
-import type { VodKind, VodTag } from '@ace/shared';
+import type { VodKind, VodLang, VodTag } from '@ace/shared';
 
 /**
  * «1.234» y «27.687»: el número como se escribe en España. `es-ES` no agrupa
@@ -30,7 +30,7 @@ export const CINE_TEXT = {
   all: 'Todas',
   categories: 'Categorías',
   noCategory: 'Sin categoría',
-  tagsGroup: 'Lengua y calidad',
+  tagsGroup: 'Calidad',
   orderGroup: 'Orden',
   orderNew: 'Novedades',
   orderAz: 'A-Z',
@@ -121,9 +121,161 @@ export const CINE_TEXT = {
   emptyCategory: 'Esta categoría está vacía',
   seeAll: 'Ver todas',
   noneWithTag: 'Nada con este distintivo',
+  noneInMyLangs: 'Nada en tus idiomas',
   removeTag: 'Quitar el filtro',
   notFound: 'Este título ya no está en tu IPTV.',
 } as const;
+
+// ---- Idiomas (§4.10) ---------------------------------------------------------------------
+
+/** El nombre de cada idioma en el selector y en el botón de la cabecera. */
+export const LANG_LABEL: Record<VodLang, string> = {
+  castellano: 'Castellano',
+  latino: 'Latino',
+  vose: 'VOSE',
+  ingles: 'Inglés',
+  frances: 'Francés',
+  italiano: 'Italiano',
+  aleman: 'Alemán',
+  portugues: 'Portugués',
+  catalan: 'Catalán',
+  otros: 'Otros idiomas',
+};
+
+/** La cápsula del cartel (§12.12): corta. */
+export const LANG_BADGE: Record<VodLang, string> = {
+  castellano: 'Castellano',
+  latino: 'Latino',
+  vose: 'VOSE',
+  ingles: 'Inglés',
+  frances: 'Francés',
+  italiano: 'Italiano',
+  aleman: 'Alemán',
+  portugues: 'Portugués',
+  catalan: 'Catalán',
+  otros: 'Otro idioma',
+};
+
+/** En una frase: «3 en latino», «1 en VOSE», «2 en otros idiomas». */
+export const LANG_IN: Record<VodLang, string> = {
+  castellano: 'castellano',
+  latino: 'latino',
+  vose: 'VOSE',
+  ingles: 'inglés',
+  frances: 'francés',
+  italiano: 'italiano',
+  aleman: 'alemán',
+  portugues: 'portugués',
+  catalan: 'catalán',
+  otros: 'otros idiomas',
+};
+
+/** La marca de la tesela del selector. */
+export const LANG_CODE: Record<VodLang, string> = {
+  castellano: 'ES',
+  latino: 'LAT',
+  vose: 'VOSE',
+  ingles: 'EN',
+  frances: 'FR',
+  italiano: 'IT',
+  aleman: 'DE',
+  portugues: 'PT',
+  catalan: 'CA',
+  otros: '+',
+};
+
+/** Lo que quiere decir cada uno, debajo de su nombre. */
+export const LANG_HINT: Record<VodLang, string> = {
+  castellano: 'Doblaje de España',
+  latino: 'Doblaje latinoamericano',
+  vose: 'Versión original con subtítulos en español',
+  ingles: 'Versión original en inglés',
+  frances: 'En francés',
+  italiano: 'En italiano',
+  aleman: 'En alemán',
+  portugues: 'En portugués (también de Brasil)',
+  catalan: 'En catalán',
+  otros: 'Árabe, turco, polaco, ruso…',
+};
+
+export const LANG_TEXT = {
+  group: 'Idiomas',
+  button: 'Idiomas',
+  all: 'Todos los idiomas',
+  welcomeKicker: 'Antes de empezar',
+  welcomeTitle: '¿En qué idiomas las quieres ver?',
+  welcomeText:
+    'Elige uno o varios: solo verás películas y series en esos idiomas. Castellano y latino van por separado.',
+  anytime: 'Puedes cambiarlo cuando quieras con el botón del globo, junto al buscador.',
+  start: 'Ver películas y series',
+  startAll: 'Ver todos los idiomas',
+  skip: 'Ahora no, ver todo',
+  sheetTitle: 'Idiomas',
+  sheetText:
+    'Solo verás películas y series en estos idiomas. Castellano y latino van por separado.',
+  save: 'Guardar',
+  cancel: 'Cancelar',
+  unknownLabel: 'Mostrar también los que no indican idioma',
+  saved: 'Idiomas guardados',
+  saveFailed: 'No se han podido guardar los idiomas.',
+  change: 'Cambiar idiomas',
+  otherLangsLead: 'En otros idiomas sí hay:',
+  backToMine: 'Volver a mis idiomas',
+  settingsTitle: 'Idiomas de Pelis y series',
+  settingsChange: 'Cambiar',
+  loading: 'Cargando los idiomas…',
+  onlyMarked: 'solo los que lo indican',
+} as const;
+
+/** «Castellano», «Castellano y Francés», «Castellano, Latino +1»; sin ninguno, «Todos los idiomas». */
+export function langSummary(langs: readonly VodLang[]): string {
+  const names = langs.map((lang) => LANG_LABEL[lang]);
+  if (names.length === 0) return LANG_TEXT.all;
+  if (names.length === 1) return names[0] as string;
+  if (names.length === 2) return `${names[0]} y ${names[1]}`;
+  return `${names[0]}, ${names[1]} +${names.length - 2}`;
+}
+
+/** «1.234 películas · 56 series» (lo que haya de cada tipo). */
+export function langCountText(movies: number, series: number): string {
+  const parts = [
+    movies > 0 ? titlesText(movies, 'movie') : null,
+    series > 0 ? titlesText(series, 'series') : null,
+  ].filter(Boolean);
+  return parts.length ? parts.join(' · ') : 'Nada en tu IPTV';
+}
+
+/** «3 en latino». */
+export function inLangText(n: number, lang: VodLang): string {
+  return `${formatCount(n)} en ${LANG_IN[lang]}`;
+}
+
+/** «12.345 títulos de tu IPTV no dicen en qué idioma están.» */
+export function unknownHelp(n: number): string {
+  return n === 1
+    ? '1 título de tu IPTV no dice en qué idioma está.'
+    : `${formatCount(n)} títulos de tu IPTV no dicen en qué idioma están.`;
+}
+
+/** «No hay películas en Catalán» / «No hay series en Castellano y Francés». */
+export function noneInLangs(kind: VodKind, langs: readonly VodLang[]): string {
+  return `No hay ${kind === 'movie' ? 'películas' : 'series'} en ${langSummary(langs)}`;
+}
+
+/** «Tu IPTV tiene 1.234 películas en otros idiomas.» */
+export function elsewhereText(n: number, kind: VodKind): string {
+  return `Tu IPTV tiene ${titlesText(n, kind)} en otros idiomas.`;
+}
+
+/** «Viendo solo en latino.» (la rejilla tras «3 en latino · Ver»). */
+export function onlyInLangText(lang: VodLang): string {
+  return `Viendo solo en ${LANG_IN[lang]}.`;
+}
+
+/** Nombre accesible del botón de la cabecera: «Idiomas: Castellano y Francés. Cambiar». */
+export function langButtonLabel(langs: readonly VodLang[]): string {
+  return `${LANG_TEXT.button}: ${langSummary(langs)}. Cambiar`;
+}
 
 /** Chips y cápsulas de los distintivos (§4.4), en su orden. */
 export const TAG_LABEL: Record<VodTag, string> = {

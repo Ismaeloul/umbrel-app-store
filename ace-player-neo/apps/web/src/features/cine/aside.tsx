@@ -13,6 +13,7 @@ import {
   setCineState,
   useCineState,
   useVodHome,
+  useVodLanguages,
 } from './data.ts';
 import { CINE_TEXT } from './texts.ts';
 import './demo.ts';
@@ -22,8 +23,11 @@ export default function CineAside({ route, active }: ViewProps) {
   const state = useCineState();
   const navigate = useNavigate();
   const home = useVodHome(active);
+  const languages = useVodLanguages(active);
   const data = home.data;
   if (!data || !data.active || data.state !== 'ready') return null;
+  /* La primera vez, mientras se eligen los idiomas (§4.10), el panel no distrae. */
+  if (languages.data && !languages.data.chosen) return null;
   const categories = data.categories[state.kind];
   if (categories.length === 0) return null;
   const inFicha = route.vista === 'cine' && route.id !== null;

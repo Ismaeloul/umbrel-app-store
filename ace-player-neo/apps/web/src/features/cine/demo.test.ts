@@ -23,9 +23,9 @@ import { demoArtSrc, demoArtSvg } from './demo-art.ts';
 afterEach(() => resetDemoVod());
 
 describe('demo de Películas y series', () => {
-  it('63 películas y 14 series; la portada cumple su esquema', () => {
+  it('73 películas y 18 series; la portada cumple su esquema', () => {
     const home = VodHomeSchema.parse(demoVodHome());
-    expect(home.counts).toEqual({ movies: 63, series: 14 });
+    expect(home.counts).toEqual({ movies: 73, series: 18 });
     expect(home.continue.length).toBeGreaterThanOrEqual(4);
     expect(home.continue.some((entry) => entry.isNext)).toBe(true);
     // «Seguir viendo» con solo cartel (Dune: Parte dos no tiene fondo).
@@ -37,7 +37,7 @@ describe('demo de Películas y series', () => {
   it('rejilla por páginas con cursor; los adultos, en «Todas» como los demás (0.9.0)', () => {
     const first = VodBrowseResponseSchema.parse(demoVodBrowse({ kind: 'movie', limit: 25 }));
     expect(first.items).toHaveLength(25);
-    expect(first.total).toBe(63);
+    expect(first.total).toBe(73);
     expect(first.items.some((card) => card.poster === null)).toBe(true);
     const second = demoVodBrowse({ kind: 'movie', limit: 25, cursor: first.nextCursor ?? '' });
     expect(second.items[0]?.id).not.toBe(first.items[0]?.id);

@@ -2,7 +2,8 @@
    Diminuto a propósito: solo REGISTRA los manejadores; el catálogo de
    muestra (demo-data.ts) se descarga con import() la primera vez que la demo
    lo pide. Lo importan index.tsx y aside.tsx (`import './demo.ts';`). Se ve
-   con `?demo=1&flag=cine`. */
+   con `?demo=1&flag=cine`. Los idiomas (§4.10) se guardan en el navegador:
+   la primera vez sale el selector. */
 
 import { ApiError, registerDemoHandlers } from '../../api/index.ts';
 
@@ -11,10 +12,10 @@ const load = () => import('./demo-data.ts');
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 registerDemoHandlers({
-  vodHome: async () => {
+  vodHome: async ({ query }) => {
     const { demoVodHome } = await load();
     await wait(120);
-    return demoVodHome();
+    return demoVodHome(query);
   },
   vodBrowse: async ({ query }) => {
     const { demoVodBrowse } = await load();
@@ -27,5 +28,15 @@ registerDemoHandlers({
     const title = demoVodTitle(params.id);
     if (!title) throw new ApiError({ code: 'vod_not_found', status: 404, route: 'vodTitle' });
     return title;
+  },
+  vodLanguagesGet: async () => {
+    const { demoLanguages } = await load();
+    await wait(40);
+    return demoLanguages();
+  },
+  vodLanguagesUpdate: async ({ body }) => {
+    const { demoSaveLanguages } = await load();
+    await wait(120);
+    return demoSaveLanguages(body);
   },
 });

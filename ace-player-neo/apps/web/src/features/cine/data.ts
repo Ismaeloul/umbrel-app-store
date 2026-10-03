@@ -7,9 +7,13 @@
    - La rejilla va por páginas de 60 (`nextCursor`); un cursor de otro
      catálogo (`stale: true`) vacía la lista y empieza de nuevo.
    - Nada se pide con la vista oculta (`enabled: active`).
-   - El estado de la URL (`cine`, `cinecat`, `cinetag`, `cineq`, `cineorden`)
-     vive en un almacén: la vista y el panel lateral de escritorio (aside.tsx)
-     lo comparten sin pasar por el router. */
+   - El estado de la URL (`cine`, `cinecat`, `cinetag`, `cineq`, `cineorden`,
+     `cineidioma`) vive en un almacén: la vista y el panel lateral de
+     escritorio (aside.tsx) lo comparten sin pasar por el router.
+   - Idiomas (§4.10): primero se piden los elegidos (`vodLanguagesGet`) y
+     con ellos la portada, las filas y la rejilla (`langs`/`unknown` en la
+     consulta, así cada elección tiene su caché). Si el servidor no los sabe
+     (uno anterior, un fallo), se ve todo: nunca se bloquea la vista. */
 
 import {
   VOD_CLIENT,
@@ -18,10 +22,14 @@ import {
   type VodBrowseResponse,
   type VodCard,
   type VodKind,
+  type VodLangQuery,
+  type VodLanguages,
+  type VodLanguagesBody,
   type VodProgressBody,
   type VodTitle,
 } from '@ace/shared';
 import {
+  keepPreviousData,
   useInfiniteQuery,
   useQuery,
   useQueryClient,
@@ -29,7 +37,15 @@ import {
   type QueryKey,
 } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
-import { api, ApiError, isDemo, routePrefix, routeUrl, useApiQuery } from '../../api/index.ts';
+import {
+  api,
+  ApiError,
+  isDemo,
+  routeKey,
+  routePrefix,
+  routeUrl,
+  useApiQuery,
+} from '../../api/index.ts';
 import { apiFetch } from '../../api/client.ts';
 import { errorFromResponse } from '../../api/errors.ts';
 import { useRoute } from '../../app/router.tsx';
@@ -38,6 +54,7 @@ import { createStore, useStore } from '../../lib/store.ts';
 import { demoArtSrc } from './demo-art.ts';
 import type { browseQuery } from './model.ts';
 import {
+  langQuery,
   PAGE_SIZE,
   readCineState,
   sameCineState,
@@ -162,7 +179,7 @@ export function closeCineGrid(): void {
     history.back();
     return;
   }
-  setCineState({ cat: null, tag: null, order: 'novedades', q: '' });
+  setCineState({ cat: null, tag: null, order: 'novedades', q: '', lang: null });
 }
 
 /**
@@ -217,13 +234,66 @@ export function useSettled<T>(value: T, ms: number): T {
   return settled;
 }
 
-/** La portada: una sola petición (D-VOD28). */
-export function useVodHome(active: boolean) {
-  return useApiQuery('vodHome', undefined, {
-    enabled: active,
+// ---- Idiomas (§4.10) --------------------------------------------------------------------
+
+/** Los idiomas elegidos (por casa, en el servidor). */
+export function useVodLanguages(enabled: boolean) {
+  return useApiQuery('vodLanguagesGet', undefined, {
+    enabled,
     staleTime: STALE_MS,
     retry: 1,
   });
+}
+
+export interface LangScope {
+  /** Ya se sabe qué idiomas pedir (también si el servidor no los sabe: entonces, todos). */
+  ready: boolean;
+  /** La elección; null si aún no ha llegado o el servidor no la sabe. */
+  prefs: VodLanguages | null;
+  /** `langs`/`unknown` de la portada, las filas y las categorías. */
+  query: VodLangQuery;
+}
+
+/** El filtro de idiomas elegido, listo para las consultas. */
+export function useLangScope(active: boolean): LangScope {
+  const languages = useVodLanguages(active);
+  const prefs = languages.data ?? null;
+  return {
+    ready: languages.isSuccess || languages.isError,
+    prefs,
+    query: langQuery(prefs),
+  };
+}
+
+/** Guarda los idiomas y deja la respuesta en la caché: la vista se filtra al momento. */
+export function useSaveLanguages() {
+  const client = useQueryClient();
+  return useCallback(
+    async (body: VodLanguagesBody): Promise<VodLanguages> => {
+      const saved = await api('vodLanguagesUpdate', { body });
+      client.setQueryData(routeKey('vodLanguagesGet'), saved);
+      return saved;
+    },
+    [client],
+  );
+}
+
+/**
+ * La portada: una sola petición (D-VOD28), con los idiomas elegidos. Mientras
+ * llega la de otra elección, la de antes a la vista (sin esqueletos).
+ */
+export function useVodHome(active: boolean) {
+  const lang = useLangScope(active);
+  return useApiQuery(
+    'vodHome',
+    { query: lang.query },
+    {
+      enabled: active && lang.ready,
+      staleTime: STALE_MS,
+      retry: 1,
+      placeholderData: keepPreviousData,
+    },
+  );
 }
 
 type BrowseScope = ReturnType<typeof browseQuery>;
@@ -237,10 +307,19 @@ export const ROW_SIZE = 20;
  * piden decenas de páginas (ni cientos de carteles) de golpe.
  */
 export function useCategoryRow(kind: VodKind, cat: string, enabled: boolean) {
+  const lang = useLangScope(enabled);
   return useApiQuery(
     'vodBrowse',
-    { query: { kind, cat: cat as VodBrowseQuery['cat'], sort: 'added', limit: ROW_SIZE } },
-    { enabled, staleTime: STALE_MS, retry: 1 },
+    {
+      query: {
+        kind,
+        cat: cat as VodBrowseQuery['cat'],
+        sort: 'added',
+        limit: ROW_SIZE,
+        ...lang.query,
+      },
+    },
+    { enabled: enabled && lang.ready, staleTime: STALE_MS, retry: 1 },
   );
 }
 

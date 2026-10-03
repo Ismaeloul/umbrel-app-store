@@ -1,5 +1,5 @@
-/* Catálogo de muestra de Películas y series (docs/vod.md §12.11): 63
-   películas y 14 series con temporadas y episodios, carteles SVG generados,
+/* Catálogo de muestra de Películas y series (docs/vod.md §12.11): 73
+   películas y 18 series con temporadas y episodios, carteles SVG generados,
    alguno HEVC o en un formato que no se reproduce, y un progreso de ejemplo
    («Seguir viendo»). Contesta `vodHome`, `vodBrowse` y `vodTitle` con las
    mismas reglas que el servidor (búsqueda por niveles, cursor,
@@ -15,13 +15,25 @@
      compacta) y una serie sin ningún dato.
    - Los títulos para adultos salen en la portada y en «Todas» como los demás
      (decisión de Isma para la 0.9.0, cambia D-VOD7), con su «+18».
+   - IDIOMAS (§4.10): cada título los saca de su categoría («EN | MOVIES»,
+     «FR | FILMS», «PELIS LATINO»…) y de sus marcas («ES - », « (LAT)»,
+     « [VOSE]»), con la MISMA tabla que el servidor (`detectVodLangs`).
+     Hay castellano, latino, VOSE, inglés, francés y títulos sin idioma
+     («CLÁSICOS», «VOD | 4K» sin marca). La elección de idiomas se guarda en
+     el navegador (`aceneo-demo-idiomas`) y la primera vez sale el selector.
 
    Solo se descarga en la demo (demo.ts la importa con import()). */
 
 import {
+  combineVodLangs,
+  detectVodLangs,
+  parseVodLangsParam,
+  VOD_LANGS,
   VOD_PROGRESS,
   VOD_SEARCH,
   VOD_TAGS,
+  vodLangBits,
+  vodLangsOf,
   type VodBrowseQuery,
   type VodBrowseResponse,
   type VodCard,
@@ -30,6 +42,11 @@ import {
   type VodEpisode,
   type VodHome,
   type VodKind,
+  type VodLang,
+  type VodLangCount,
+  type VodLangQuery,
+  type VodLanguages,
+  type VodLanguagesBody,
   type VodPlayable,
   type VodProgressBody,
   type VodTag,
@@ -79,23 +96,87 @@ function category(kind: VodKind, name: string, tags: VodTag[] = [], adult = fals
   return { id: hex(`cat:${kind}:${name}`, 12), kind, name, adult, tags };
 }
 
+/* Los distintivos de lengua (castellano, latino, VOSE) ya no se ponen a mano:
+   salen de los idiomas de cada título (§4.10). Aquí solo el 4K y el multi. */
 const MOVIE_CATS = {
-  estrenos: category('movie', 'ESTRENOS 2024', ['castellano']),
-  k4: category('movie', 'VOD | 4K', ['castellano', '4k']),
-  espanol: category('movie', 'CINE ESPAÑOL', ['castellano']),
-  latino: category('movie', 'PELIS LATINO', ['latino']),
-  animacion: category('movie', 'ANIMACIÓN', ['castellano']),
-  clasicos: category('movie', 'CLÁSICOS', ['castellano']),
-  vose: category('movie', 'VOSE', ['vose']),
+  estrenos: category('movie', 'ESTRENOS 2024'),
+  k4: category('movie', 'VOD | 4K', ['4k']),
+  espanol: category('movie', 'CINE ESPAÑOL'),
+  latino: category('movie', 'PELIS LATINO'),
+  animacion: category('movie', 'ANIMACIÓN'),
+  clasicos: category('movie', 'CLÁSICOS'),
+  vose: category('movie', 'VOSE'),
+  ingles: category('movie', 'EN | MOVIES'),
+  frances: category('movie', 'FR | FILMS'),
   adultos: category('movie', 'XXX | ADULTOS', [], true),
 } as const;
 
 const SERIES_CATS = {
-  espanolas: category('series', 'SERIES ESPAÑOLAS', ['castellano']),
-  usa: category('series', 'SERIES USA', ['castellano', 'multi']),
-  comedia: category('series', 'COMEDIA', ['castellano']),
-  vose: category('series', 'SERIES VOSE', ['vose']),
+  espanolas: category('series', 'SERIES ESPAÑOLAS'),
+  usa: category('series', 'SERIES USA', ['multi']),
+  comedia: category('series', 'COMEDIA'),
+  vose: category('series', 'SERIES VOSE'),
+  latino: category('series', '|LAT| SERIES'),
+  frances: category('series', 'FR | SÉRIES'),
 } as const;
+
+/**
+ * Las marcas de idioma que el proveedor deja en el título (la limpieza las
+ * quita del nombre y dicen el idioma: «ES - Dune», «Coco (LAT)»). Un título
+ * sin marca toma el idioma de su categoría; en «VOD | 4K», «CLÁSICOS» o
+ * «ESTRENOS 2024» sin marca, no lo indica.
+ */
+const TITLE_MARKS: Readonly<Record<string, string>> = {
+  Oppenheimer: 'ES - ',
+  Dune: 'ES - ',
+  'Dune: Parte dos': ' (LAT)',
+  Interstellar: 'ES - ',
+  'Top Gun: Maverick': ' [VOSE]',
+  'Deadpool y Lobezno': 'ES - ',
+  'Gladiator II': ' (LAT)',
+  'Blade Runner 2049': 'ES - ',
+  'El 47': 'ES - ',
+  Wonka: 'ES - ',
+  'Pobres criaturas': ' [VOSE]',
+  'Los asesinos de la luna': 'ES - ',
+  Napoleón: ' (LAT)',
+  'Misión: Imposible – Sentencia mortal': 'ES - ',
+  'La infiltrada': 'ES - ',
+  'Casa en llamas': 'ES - ',
+  'Segundo premio': 'ES - ',
+  Wicked: ' (LAT)',
+  'Robot Dreams': 'ES - ',
+  Coco: ' (LAT)',
+  'Del revés 2': 'ES - ',
+  'El chico y la garza': ' [VOSE]',
+  'Spider-Man: Cruzando el Multiverso': 'ES - ',
+  'Vaiana 2': ' (LAT)',
+  Paddington: 'ES - ',
+  Up: 'ES - ',
+  'El Padrino': 'ES - ',
+  Titanic: ' (LAT)',
+  'Breaking Bad': 'ES - ',
+  /* MULTI con las dos lenguas nombradas: sale en castellano y en inglés. */
+  'The Office': ' [ES/EN]',
+  'Aquí no hay quien viva': 'ES - ',
+  'Los Serrano': 'ES - ',
+  'The Big Bang Theory': ' (LAT)',
+};
+
+/** Los idiomas de un título de la demo, con la tabla del servidor (§4.10). */
+function langsOf(title: string, cat: DemoCategory): VodLang[] {
+  return vodLangsOf(
+    combineVodLangs(
+      detectVodLangs(TITLE_MARKS[title] ?? '', 'titulo'),
+      detectVodLangs(cat.name, 'categoria'),
+    ),
+  );
+}
+
+/** Los distintivos de lengua de unos idiomas (castellano, latino y VOSE). */
+function langTags(langs: readonly VodLang[]): VodTag[] {
+  return (['castellano', 'latino', 'vose'] as const).filter((tag) => langs.includes(tag));
+}
 
 const CATEGORIES: DemoCategory[] = [...Object.values(MOVIE_CATS), ...Object.values(SERIES_CATS)];
 
@@ -526,6 +607,44 @@ const MOVIE_SEEDS: MovieSeed[] = [
     'México',
   ],
   ['Y tu mamá también', 2001, 7.6, 'latino', 106, 'Drama,Comedia', 'Alfonso Cuarón', 'México'],
+  /* Idiomas (§4.10): en inglés y en francés, con su categoría del proveedor. */
+  ['Past Lives', 2023, 7.8, 'ingles', 106, 'Drama,Romance', 'Celine Song', 'Estados Unidos'],
+  ['The Holdovers', 2023, 7.9, 'ingles', 133, 'Comedia,Drama', 'Alexander Payne', 'Estados Unidos'],
+  ['Barbie', 2023, 6.8, 'ingles', 114, 'Comedia,Fantasía', 'Greta Gerwig', 'Estados Unidos'],
+  ['Aftersun', 2022, 7.7, 'ingles', 102, 'Drama', 'Charlotte Wells', 'Reino Unido'],
+  [
+    'Everything Everywhere All at Once',
+    2022,
+    7.8,
+    'ingles',
+    139,
+    'Acción,Aventura',
+    'Daniel Kwan y Daniel Scheinert',
+    'Estados Unidos',
+  ],
+  ['Intouchables', 2011, 8.5, 'frances', 112, 'Comedia,Drama', 'Olivier Nakache', 'Francia'],
+  ['Le Dîner de cons', 1998, 7.7, 'frances', 80, 'Comedia', 'Francis Veber', 'Francia'],
+  ['La Haine', 1995, 8.1, 'frances', 98, 'Drama,Crimen', 'Mathieu Kassovitz', 'Francia'],
+  [
+    'Portrait de la jeune fille en feu',
+    2019,
+    8.0,
+    'frances',
+    122,
+    'Drama,Romance',
+    'Céline Sciamma',
+    'Francia',
+  ],
+  [
+    'Astérix et Obélix : Mission Cléopâtre',
+    2002,
+    7.0,
+    'frances',
+    107,
+    'Comedia,Aventura',
+    'Alain Chabat',
+    'Francia',
+  ],
   ['Contenido para adultos 1', 2023, 5.0, 'adultos', 80, 'Adultos', 'Sin datos', 'Sin datos'],
   ['Contenido para adultos 2', 2024, 5.0, 'adultos', 75, 'Adultos', 'Sin datos', 'Sin datos'],
   // Casos pobres (MOVIE_EXTRA les quita lo que falta en las listas reales).
@@ -590,7 +709,8 @@ const MOVIES: DemoMovie[] = MOVIE_SEEDS.map((seed, index) => {
   const extra = MOVIE_EXTRA[title] ?? {};
   const cat = MOVIE_CATS[catKey];
   const id = hex(`movie:${title}`, 40);
-  const tags = new Set<VodTag>(cat.tags);
+  const langs = cat.adult ? [] : langsOf(title, cat);
+  const tags = new Set<VodTag>([...cat.tags, ...langTags(langs)]);
   if (index % 5 === 0 && !cat.adult) tags.add('multi');
   if (index % 7 === 3 && !cat.adult) tags.add('4k');
   // Algunos sin cartel (cada 9.º), para ver el relleno con el monograma.
@@ -608,6 +728,7 @@ const MOVIES: DemoMovie[] = MOVIE_SEEDS.map((seed, index) => {
       poster,
       tags: poor ? [] : VOD_TAGS.filter((tag) => tags.has(tag)),
       adult: cat.adult,
+      langs,
     },
     cat,
     added: NOW - index * 1.7 * DAY,
@@ -626,11 +747,13 @@ const MOVIES: DemoMovie[] = MOVIE_SEEDS.map((seed, index) => {
     video: poor ? '' : `${tags.has('4k') ? '2160p' : '1080p'} · ${hevc ? 'HEVC' : 'H.264'}`,
     audio: poor
       ? []
-      : tags.has('vose')
+      : langs.includes('vose') || langs.includes('ingles')
         ? ['AAC 2.0 · Inglés']
-        : tags.has('latino')
-          ? ['AC-3 5.1 · Latino']
-          : ['AC-3 5.1 · Castellano', 'E-AC-3 5.1 · Inglés'],
+        : langs.includes('frances')
+          ? ['AC-3 5.1 · Francés']
+          : langs.includes('latino')
+            ? ['AC-3 5.1 · Latino']
+            : ['AC-3 5.1 · Castellano', 'E-AC-3 5.1 · Inglés'],
     backdrop: extra.backdrop === false || index % 4 === 2 ? null : stamp(`${id}:fondo`),
   };
 });
@@ -670,6 +793,11 @@ const SERIES_SEEDS: SeriesSeed[] = [
     0,
   ],
   ['Barrio', 2021, 0, 'espanolas', [6], 0, 0],
+  /* Idiomas (§4.10): latino y francés. */
+  ['La reina del sur', 2011, 7.6, 'latino', [13, 13], 45, 0],
+  ['Club de Cuervos', 2015, 7.6, 'latino', [10, 10], 40, 0],
+  ['Lupin', 2021, 7.5, 'frances', [5, 5, 7], 45, 0],
+  ['Dix pour cent', 2015, 8.0, 'frances', [6, 6], 52, 0],
 ];
 
 /** Lo que una serie tiene de más (o de menos) sobre su semilla. */
@@ -698,6 +826,10 @@ interface SeriesExtra {
 }
 
 const SERIES_EXTRA: Record<string, SeriesExtra> = {
+  'La reina del sur': { country: 'México', genres: ['Drama', 'Crimen'] },
+  'Club de Cuervos': { country: 'México', genres: ['Comedia'] },
+  Lupin: { country: 'Francia', genres: ['Crimen', 'Misterio'], original: 'Lupin' },
+  'Dix pour cent': { country: 'Francia', genres: ['Comedia'], original: 'Dix pour cent' },
   'La casa de papel': {
     plot: 'Un misterioso Profesor reúne a ocho atracadores con nombres de ciudades para el golpe perfecto: encerrarse en la Fábrica Nacional de Moneda y Timbre e imprimir su propio dinero.',
     cast: [
@@ -852,6 +984,7 @@ const SERIES: DemoSeries[] = SERIES_SEEDS.map((seed, index) => {
   const extra = SERIES_EXTRA[title] ?? {};
   const cat = SERIES_CATS[catKey];
   const id = hex(`series:${title}`, 40);
+  const langs = langsOf(title, cat);
   const episodes: DemoEpisode[] = [];
   const add = (season: number, n: number) => {
     const eid = hex(`episode:${title}:${season}:${n}`, 40);
@@ -894,8 +1027,9 @@ const SERIES: DemoSeries[] = SERIES_SEEDS.map((seed, index) => {
       year: extra.year === null ? null : year,
       rating: rating > 0 ? rating : null,
       poster: extra.poster === false || index === 10 ? null : stamp(id),
-      tags: VOD_TAGS.filter((tag) => cat.tags.includes(tag)),
+      tags: VOD_TAGS.filter((tag) => cat.tags.includes(tag) || langTags(langs).includes(tag)),
       adult: false,
+      langs,
     },
     cat,
     added: NOW - index * 2.3 * DAY,
@@ -1002,10 +1136,83 @@ function seedProgress(): void {
 }
 seedProgress();
 
-/** Solo para los tests: vuelve al progreso de ejemplo. */
+/** Solo para los tests: vuelve al progreso de ejemplo y a «sin idiomas elegidos». */
 export function resetDemoVod(): void {
   seedProgress();
   failedOnce.clear();
+  demoLangs = { ...NO_CHOICE };
+  try {
+    localStorage.removeItem(DEMO_LANGS_KEY);
+  } catch {}
+}
+
+// ---- Idiomas (§4.10) -------------------------------------------------------------------------
+
+/** La elección de la demo vive en este navegador (en el servidor de verdad, por casa). */
+const DEMO_LANGS_KEY = 'aceneo-demo-idiomas';
+const NO_CHOICE: VodLanguages = { chosen: false, langs: [], unknown: true, updatedAt: null };
+
+function loadDemoLangs(): VodLanguages {
+  try {
+    const raw = localStorage.getItem(DEMO_LANGS_KEY);
+    if (!raw) return { ...NO_CHOICE };
+    const value = JSON.parse(raw) as Partial<VodLanguages>;
+    return {
+      chosen: true,
+      langs: VOD_LANGS.filter((lang) => value.langs?.includes(lang)),
+      unknown: value.unknown !== false,
+      updatedAt: typeof value.updatedAt === 'string' ? value.updatedAt : null,
+    };
+  } catch {
+    return { ...NO_CHOICE };
+  }
+}
+
+let demoLangs: VodLanguages = loadDemoLangs();
+
+export function demoLanguages(): VodLanguages {
+  return { ...demoLangs, langs: [...demoLangs.langs] };
+}
+
+export function demoSaveLanguages(body: VodLanguagesBody): VodLanguages {
+  demoLangs = {
+    chosen: true,
+    langs: VOD_LANGS.filter((lang) => body.langs.includes(lang)),
+    unknown: body.unknown,
+    updatedAt: new Date().toISOString(),
+  };
+  try {
+    localStorage.setItem(DEMO_LANGS_KEY, JSON.stringify(demoLangs));
+  } catch {}
+  return demoLanguages();
+}
+
+type LangFilter = { mask: number; unknown: boolean } | null;
+
+/** El filtro de una consulta (`langs`/`unknown`), como el servidor. */
+function langFilterOf(query: VodLangQuery | undefined): LangFilter {
+  if (!query?.langs) return null;
+  return { mask: vodLangBits(parseVodLangsParam(query.langs)), unknown: query.unknown !== '0' };
+}
+
+function passes(filter: LangFilter, item: { card: { langs?: VodLang[] } }): boolean {
+  if (!filter) return true;
+  const bits = vodLangBits(item.card.langs ?? []);
+  return bits ? (bits & filter.mask) !== 0 : filter.unknown;
+}
+
+/** Cuántos de cada idioma (y sin idioma) en una lista entera. */
+function langCounts(items: ReadonlyArray<{ card: { langs?: VodLang[] } }>): {
+  langs: VodLangCount[];
+  none: number;
+} {
+  return {
+    langs: VOD_LANGS.map((lang) => ({
+      lang,
+      count: items.filter((item) => item.card.langs?.includes(lang)).length,
+    })).filter((entry) => entry.count > 0),
+    none: items.filter((item) => !item.card.langs?.length).length,
+  };
 }
 
 function progressOf(id: string): VodEpisode['progress'] {
@@ -1181,20 +1388,29 @@ function tagCounts(items: ReadonlyArray<{ card: { tags: VodTag[] } }>): VodTagCo
   })).filter((entry) => entry.count > 0);
 }
 
-function categoriesOf(kind: VodKind): VodCategory[] {
+function categoriesOf(kind: VodKind, filter: LangFilter = null): VodCategory[] {
   const items: Array<DemoMovie | DemoSeries> = kind === 'movie' ? MOVIES : SERIES;
-  return CATEGORIES.filter((cat) => cat.kind === kind)
-    .map((cat) => ({
-      id: cat.id,
-      kind,
-      name: cat.name,
-      count: items.filter((item) => item.cat.id === cat.id).length,
-      adult: cat.adult,
-    }))
-    .sort((a, b) => Number(a.adult) - Number(b.adult));
+  return (
+    CATEGORIES.filter((cat) => cat.kind === kind)
+      .map((cat) => ({
+        id: cat.id,
+        kind,
+        name: cat.name,
+        count: items.filter((item) => item.cat.id === cat.id && passes(filter, item)).length,
+        adult: cat.adult,
+      }))
+      /* Con filtro de idiomas, las que se quedan sin nada no salen (como el servidor). */
+      .filter((category) => !filter || category.count > 0)
+      .sort((a, b) => Number(a.adult) - Number(b.adult))
+  );
 }
 
-export function demoVodHome(): VodHome {
+export function demoVodHome(query?: VodLangQuery): VodHome {
+  const filter = langFilterOf(query);
+  const movies = MOVIES.filter((item) => passes(filter, item));
+  const series = SERIES.filter((item) => passes(filter, item));
+  const movieLangs = langCounts(MOVIES);
+  const seriesLangs = langCounts(SERIES);
   return {
     active: true,
     state: 'ready',
@@ -1204,19 +1420,22 @@ export function demoVodHome(): VodHome {
     stale: false,
     continue: continueEntries(),
     // Los de adultos, como los demás (decisión de Isma para la 0.9.0, cambia D-VOD7).
-    newMovies: [...MOVIES]
+    newMovies: [...movies]
       .sort((a, b) => b.added - a.added)
       .slice(0, 20)
       .map(cardOf),
-    updatedSeries: [...SERIES]
+    updatedSeries: [...series]
       .sort((a, b) => b.added - a.added)
       .slice(0, 20)
       .map(cardOf),
-    categories: { movie: categoriesOf('movie'), series: categoriesOf('series') },
+    categories: { movie: categoriesOf('movie', filter), series: categoriesOf('series', filter) },
     tags: {
-      movie: tagCounts(MOVIES),
-      series: tagCounts(SERIES),
+      movie: tagCounts(movies),
+      series: tagCounts(series),
     },
+    langs: { movie: movieLangs.langs, series: seriesLangs.langs },
+    noLang: { movies: movieLangs.none, series: seriesLangs.none },
+    shown: { movies: movies.length, series: series.length },
   };
 }
 
@@ -1266,22 +1485,42 @@ function decodeCursor(cursor: string | undefined): number {
 
 type Query = Partial<Omit<VodBrowseQuery, 'limit'>> & { limit?: unknown };
 
+/** Lo que casa pero queda fuera por su idioma («3 en latino · Ver»). */
+interface Hidden {
+  total: number;
+  byLang: Map<VodLang, number>;
+  unknown: number;
+}
+
 function matching(
   kind: VodKind,
   query: Query,
+  hidden?: Hidden,
 ): Array<{ item: DemoMovie | DemoSeries; level: number }> {
   const items: Array<DemoMovie | DemoSeries> = kind === 'movie' ? MOVIES : SERIES;
   const q = (query.q ?? '').trim();
   const cat = query.cat ?? 'all';
+  const filter = langFilterOf(query);
   const out: Array<{ item: DemoMovie | DemoSeries; level: number }> = [];
   for (const item of items) {
     if (cat !== 'all' && item.cat.id !== cat) continue;
     // Adultos: en «Todas» como los demás (decisión de Isma para la 0.9.0, cambia D-VOD7).
+    let found = 0;
     if (q) {
-      const found = level(item.card.title, item.card.year, q);
-      if (found === null) continue;
-      out.push({ item, level: found });
-    } else out.push({ item, level: 0 });
+      const hit = level(item.card.title, item.card.year, q);
+      if (hit === null) continue;
+      found = hit;
+    }
+    if (!passes(filter, item)) {
+      if (hidden) {
+        hidden.total += 1;
+        const langs = item.card.langs ?? [];
+        if (!langs.length) hidden.unknown += 1;
+        for (const lang of langs) hidden.byLang.set(lang, (hidden.byLang.get(lang) ?? 0) + 1);
+      }
+      continue;
+    }
+    out.push({ item, level: found });
   }
   return out;
 }
@@ -1293,7 +1532,8 @@ export function demoVodBrowse(query: Query): VodBrowseResponse {
     VOD_SEARCH.pageMax,
     Math.max(1, Number(query.limit ?? VOD_SEARCH.pageDefault) || 60),
   );
-  const all = matching(kind, { ...query, q });
+  const hidden: Hidden = { total: 0, byLang: new Map(), unknown: 0 };
+  const all = matching(kind, { ...query, q }, hidden);
   const tagsForChips = tagCounts(all.map((entry) => entry.item));
   const filtered = query.tag
     ? all.filter((entry) => entry.item.card.tags.includes(query.tag as VodTag))
@@ -1324,6 +1564,15 @@ export function demoVodBrowse(query: Query): VodBrowseResponse {
     tags: tagsForChips,
     nextCursor: next < filtered.length ? encodeCursor(next) : null,
     stale: false,
+    otherLangs: langFilterOf(query)
+      ? {
+          total: hidden.total,
+          langs: VOD_LANGS.map((lang) => ({ lang, count: hidden.byLang.get(lang) ?? 0 }))
+            .filter((entry) => entry.count > 0)
+            .sort((a, b) => b.count - a.count),
+          unknown: hidden.unknown,
+        }
+      : null,
   };
 }
 

@@ -66,8 +66,11 @@ export function queryOf(call: MockCall): Partial<VodBrowseQuery> & { limit?: num
 /** Rutas del servidor simulado con el catálogo de muestra; `ids` son las fichas que se pueden pedir. */
 export function demoRoutes(ids: readonly string[] = []) {
   const routes: Record<string, (call: MockCall) => Response> = {
-    'GET /api/v1/vod': () => json(demoVodHome()),
+    'GET /api/v1/vod': (call) => json(demoVodHome(queryOf(call))),
     'GET /api/v1/vod/browse': (call) => json(demoVodBrowse(queryOf(call))),
+    /* Idiomas ya elegidos: todos (los tests de idiomas ponen los suyos). */
+    'GET /api/v1/vod/languages': () =>
+      json({ chosen: true, langs: [], unknown: true, updatedAt: null }),
   };
   for (const id of ids)
     routes[`GET /api/v1/vod/titles/${id}`] = () => {
