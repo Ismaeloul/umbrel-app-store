@@ -16,7 +16,6 @@
    - `stop()`: aborta la vuelta en curso, la espera y deja el índice escrito. */
 
 import path from 'node:path';
-import { finished } from 'node:stream';
 import type { FastifyReply } from 'fastify';
 import {
   cleanTitle,
@@ -28,6 +27,7 @@ import {
 } from '@ace/shared';
 import type { TimerHandle } from '../../core/clock.js';
 import { AppError } from '../../core/errors.js';
+import { etagMatches, settleReply as settle } from '../../core/reply.js';
 import { readJsonObjectSync } from '../state/index.js';
 import { chooseColors, parseApiColors } from './colors.js';
 import {
@@ -116,26 +116,9 @@ export interface TeamsServiceOptions {
   readonly limits?: Partial<TeamsLimits>;
 }
 
-/* Espera a que la respuesta haya salido del todo (el hook onSend es
-   asíncrono: justo después de `send()` `reply.sent` aún es false). */
-function settle(reply: FastifyReply): Promise<void> {
-  return new Promise((resolve) => {
-    finished(reply.raw, () => {
-      /* Si el cliente cortó a mitad, nadie más debe tocar esta respuesta. */
-      if (!reply.sent) reply.hijack();
-      resolve();
-    });
-  });
-}
-
-/** ¿`If-None-Match` casa con el ETag (también `W/`, comillas y listas)? */
-export function etagMatches(header: string | undefined, etag: string): boolean {
-  if (!header) return false;
-  if (header.trim() === '*') return true;
-  return header
-    .split(',')
-    .some((part) => part.trim().replace(/^W\//, '').replace(/^"|"$/g, '') === etag);
-}
+/* `settle` y `etagMatches` viven en core/reply.ts (también los usan los
+   carteles de Películas y series); `etagMatches` se sigue exportando aquí. */
+export { etagMatches };
 
 function backoff(attempts: number): number {
   const index = Math.min(Math.max(attempts, 1), TEAMS_RETRY_BACKOFF_MS.length) - 1;

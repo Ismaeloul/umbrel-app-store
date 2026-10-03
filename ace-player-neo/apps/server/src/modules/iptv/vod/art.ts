@@ -39,6 +39,7 @@ import path from 'node:path';
 import { IPTV_USER_AGENT, VOD_ART, type VodArtKind } from '@ace/shared';
 import { AppError } from '../../../core/errors.js';
 import type { Clock, TimerHandle } from '../../../core/clock.js';
+import { etagMatches } from '../../../core/reply.js';
 import type { Logger } from '../../../core/logger.js';
 import type { IptvKeys } from '../../../config/keys.js';
 import type { IptvFetchPolicy, NetClient } from '../../net/types.js';
@@ -94,15 +95,8 @@ export function tmdbSized(url: string, kind: VodArtKind): string {
   return parsed.toString();
 }
 
-/** ¿`If-None-Match` casa con el ETag (también `W/`, comillas y listas)? */
-export function etagMatches(header: string | undefined, etag: string): boolean {
-  if (!header) return false;
-  if (header.trim() === '*') return true;
-  return header
-    .split(',')
-    .map((part) => part.trim().replace(/^W\//, '').replace(/^"|"$/g, ''))
-    .includes(etag);
-}
+/* `etagMatches` es el de los escudos (core/reply.ts); se sigue exportando aquí. */
+export { etagMatches };
 
 export type ArtReply =
   | { readonly status: 200; readonly headers: Record<string, string>; readonly body: Buffer }

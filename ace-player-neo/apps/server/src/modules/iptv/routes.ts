@@ -20,10 +20,10 @@
    credenciales (docs/iptv.md §2.4) y la consulta del buscador, de la
    pestaña y de vodBrowse es lo que escribe Isma. */
 
-import { finished } from 'node:stream';
 import type { FastifyReply } from 'fastify';
 import { AppError, isAppError } from '../../core/errors.js';
 import type { RequestContext } from '../../core/module.js';
+import { settleReply } from '../../core/reply.js';
 import type { LegacyRouter, V1Router } from '../../core/router.js';
 import type { Services } from '../../services.js';
 import type { VodApi } from './types.js';
@@ -97,20 +97,9 @@ function ifNoneMatchOf(ctx: RequestContext): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
-/* Espera a que la respuesta haya salido del todo (el hook onSend es
-   asíncrono: justo después de `send()` `reply.sent` aún es false). */
-function settle(reply: FastifyReply): Promise<void> {
-  return new Promise((resolve) => {
-    finished(reply.raw, () => {
-      if (!reply.sent) reply.hijack();
-      resolve();
-    });
-  });
-}
-
 /** Manda una imagen de `vodArt` (o su 304) con las cabeceras de §8. */
 async function sendArt(reply: FastifyReply, art: ArtReply): Promise<void> {
   if (art.status === 304) void reply.code(304).headers(art.headers).send();
   else void reply.code(200).headers(art.headers).send(art.body);
-  await settle(reply);
+  await settleReply(reply);
 }
