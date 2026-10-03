@@ -20,6 +20,7 @@ import {
   V2_FILES,
   VOD_ERROR_CODES,
   VOD_EXTENSIONS,
+  VOD_LIMITS,
   VOD_PROGRESS,
   VOD_TAGS,
   VOD_TIMINGS,
@@ -480,5 +481,15 @@ describe('idiomas (docs/vod.md §4.10)', () => {
     const hidden = VARIANT_FIXTURES['vodBrowse.otros-idiomas'];
     expect(VodBrowseResponseSchema.safeParse(hidden).success).toBe(true);
     expect(hidden.otherLangs?.langs[0]).toEqual({ lang: 'latino', count: 3 });
+  });
+});
+
+describe('topes del catálogo (M5)', () => {
+  it('margen ×2 sobre el panel de Isma (181.210 películas y 48.797 series) y las listas caben', () => {
+    expect(VOD_LIMITS.maxMovies).toBeGreaterThanOrEqual(2 * 181_210);
+    expect(VOD_LIMITS.maxSeries).toBeGreaterThanOrEqual(2 * 48_797);
+    /* Medido: 66,6 MB las películas y 50,6 MB las series. */
+    expect(VOD_LIMITS.movies.maxBytes).toBeGreaterThan((VOD_LIMITS.maxMovies / 181_210) * 66.6e6);
+    expect(VOD_LIMITS.series.maxBytes).toBeGreaterThan((VOD_LIMITS.maxSeries / 48_797) * 50.6e6);
   });
 });
