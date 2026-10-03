@@ -37,8 +37,13 @@ const titles = (table: Awaited<ReturnType<typeof catalog>>, rows: ArrayLike<numb
 describe('parseVodQuery', () => {
   it('2-80 caracteres (si no, empty_query) y el mismo plegado', () => {
     expect(() => parseVodQuery('a')).toThrowError(expect.objectContaining({ code: 'empty_query' }));
-    expect(() => parseVodQuery('  ')).toThrowError(expect.objectContaining({ code: 'empty_query' }));
-    expect(parseVodQuery('  Amélie  PARÍS ')).toMatchObject({ words: ['amelie', 'paris'], compact: 'amelieparis' });
+    expect(() => parseVodQuery('  ')).toThrowError(
+      expect.objectContaining({ code: 'empty_query' }),
+    );
+    expect(parseVodQuery('  Amélie  PARÍS ')).toMatchObject({
+      words: ['amelie', 'paris'],
+      compact: 'amelieparis',
+    });
     expect(parseVodQuery('x'.repeat(200)).words[0]).toHaveLength(80);
   });
 });
@@ -57,12 +62,7 @@ describe('searchTable', () => {
   it('orden por nivel, lo más reciente y el título; adultos incluidos', async () => {
     const table = await catalog();
     const hits = searchTable(table, parseVodQuery('dune'), null);
-    expect(titles(table, hits.rows)).toEqual([
-      'Dune',
-      'Dune',
-      'Dune: Parte Dos',
-      'Parte de Dune',
-    ]);
+    expect(titles(table, hits.rows)).toEqual(['Dune', 'Dune', 'Dune: Parte Dos', 'Parte de Dune']);
     /* Los dos «Dune» (nivel 0): el más reciente primero. */
     expect(table.yearOf(hits.rows[0] as number)).toBe(2021);
     const duna = searchTable(table, parseVodQuery('dun'), null);
@@ -98,7 +98,9 @@ describe('searchTable', () => {
   });
 
   it('más de 2 000 aciertos → capped y los 2 000 mejores', async () => {
-    const rows = Array.from({ length: 2_100 }, (_, i) => listRow(i + 1, `Película ${i}`, { added: i }));
+    const rows = Array.from({ length: 2_100 }, (_, i) =>
+      listRow(i + 1, `Película ${i}`, { added: i }),
+    );
     const table = await tableOf(rows);
     const hits = searchCached(table, parseVodQuery('pelicula'), null);
     expect(hits.total).toBe(2_100);

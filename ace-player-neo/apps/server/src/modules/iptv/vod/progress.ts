@@ -104,8 +104,10 @@ export function seriesMain(
   const regular = episodes.filter((episode) => episode.season !== 0);
   const first = regular[0] ?? episodes[0];
   if (!first) return null;
-  let latest: { episode: EpisodeRef; entry: Pick<VodProgressEntry, 'posS' | 'watched' | 'updatedAt'> } | null =
-    null;
+  let latest: {
+    episode: EpisodeRef;
+    entry: Pick<VodProgressEntry, 'posS' | 'watched' | 'updatedAt'>;
+  } | null = null;
   for (const episode of episodes) {
     const entry = progress.get(episode.id);
     if (entry && (!latest || entry.updatedAt > latest.entry.updatedAt)) latest = { episode, entry };
@@ -123,13 +125,28 @@ export function seriesMain(
   }
   const next = nextEpisode(episodes, latest.episode.id);
   if (next && !progress.get(next.id)?.watched) {
-    return { episodeId: next.id, action: 'next', label: `Siguiente: ${episodeCode(next)}`, posS: 0 };
+    return {
+      episodeId: next.id,
+      action: 'next',
+      label: `Siguiente: ${episodeCode(next)}`,
+      posS: 0,
+    };
   }
   const unseen = regular.find((episode) => !progress.get(episode.id)?.watched);
   if (unseen) {
-    return { episodeId: unseen.id, action: 'next', label: `Siguiente: ${episodeCode(unseen)}`, posS: 0 };
+    return {
+      episodeId: unseen.id,
+      action: 'next',
+      label: `Siguiente: ${episodeCode(unseen)}`,
+      posS: 0,
+    };
   }
-  return { episodeId: first.id, action: 'rewatch', label: `Volver a ver ${episodeCode(first)}`, posS: 0 };
+  return {
+    episodeId: first.id,
+    action: 'rewatch',
+    label: `Volver a ver ${episodeCode(first)}`,
+    posS: 0,
+  };
 }
 
 /** Una entrada de «Seguir viendo» antes de pintarla. */
@@ -197,10 +214,14 @@ export interface ProgressContext {
 const PLAYBACK_EVENTS = new Set(['tick', 'pause', 'seek', 'ended', 'stop']);
 
 /** Valida posición y duración de un evento de reproducción (§10.2). Lanza `validation_error`. */
-export function validatePosition(body: Pick<VodProgressBody, 'posS' | 'durS'>, knownDurationS: number | null): void {
+export function validatePosition(
+  body: Pick<VodProgressBody, 'posS' | 'durS'>,
+  knownDurationS: number | null,
+): void {
   const { posS, durS } = body;
   if (!(durS > 0)) throw new AppError('validation_error', { detail: 'durS' });
-  if (posS > durS + VOD_PROGRESS.positionSlackS) throw new AppError('validation_error', { detail: 'posS' });
+  if (posS > durS + VOD_PROGRESS.positionSlackS)
+    throw new AppError('validation_error', { detail: 'posS' });
   if (knownDurationS !== null && knownDurationS > 0) {
     const tolerance = knownDurationS * VOD_PROGRESS.durationTolerance;
     if (Math.abs(durS - knownDurationS) > tolerance) {
@@ -329,7 +350,10 @@ export function applySeriesEvent(
 export function applyPref(
   prefs: readonly VodPref[],
   id: string,
-  change: { readonly audio?: string | null | undefined; readonly subtitle?: string | null | undefined },
+  change: {
+    readonly audio?: string | null | undefined;
+    readonly subtitle?: string | null | undefined;
+  },
   now: number,
 ): VodPref[] {
   if (change.audio === undefined && change.subtitle === undefined) return [...prefs];

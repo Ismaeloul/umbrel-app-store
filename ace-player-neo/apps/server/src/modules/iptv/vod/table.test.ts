@@ -7,7 +7,14 @@ import { listRow, tableOf } from './test-support.js';
 
 describe('plegado que conserva la longitud', () => {
   it('sin tildes y en minúsculas, con la misma longitud en UTF-16', () => {
-    for (const text of ['Amélie', 'ÁRBOL Ñandú', 'Spider-Man: ¡Ya!', '東京物語', 'Паразиты', 'ﬁn 😀 ǅ']) {
+    for (const text of [
+      'Amélie',
+      'ÁRBOL Ñandú',
+      'Spider-Man: ¡Ya!',
+      '東京物語',
+      'Паразиты',
+      'ﬁn 😀 ǅ',
+    ]) {
       const folded = foldKeepLength(text);
       expect(folded).toHaveLength(text.length);
     }
@@ -20,8 +27,18 @@ describe('VodTableBuilder', () => {
   it('arrays paralelos, textos unidos, carteles internados y búsqueda por `source`', async () => {
     const table = await tableOf(
       [
-        listRow(30, 'Dune', { year: 2021, rating: 79, added: 300, category: 'B', poster: 'https://image.tmdb.org/t/p/w600/a.jpg' }),
-        listRow(10, 'Amélie', { added: 100, category: 'A', poster: 'https://image.tmdb.org/t/p/w600/b.jpg' }),
+        listRow(30, 'Dune', {
+          year: 2021,
+          rating: 79,
+          added: 300,
+          category: 'B',
+          poster: 'https://image.tmdb.org/t/p/w600/a.jpg',
+        }),
+        listRow(10, 'Amélie', {
+          added: 100,
+          category: 'A',
+          poster: 'https://image.tmdb.org/t/p/w600/b.jpg',
+        }),
         listRow(20, 'Solo', { added: 200, adult: true }),
       ],
       ['A', 'B'],

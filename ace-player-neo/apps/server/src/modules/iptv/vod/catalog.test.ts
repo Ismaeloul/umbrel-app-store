@@ -44,9 +44,19 @@ function rig(answer: (action: string, url: URL) => FakeReply | undefined) {
     resolver: tableResolver({ [HOST]: [{ address: '93.184.216.34', family: 4 }] }),
     transport,
   });
-  const run = (mode: 'completo' | 'por_categorias' = 'completo', signal = new AbortController().signal) =>
+  const run = (
+    mode: 'completo' | 'por_categorias' = 'completo',
+    signal = new AbortController().signal,
+  ) =>
     syncVodCatalog(
-      { net, clock: core.clock, logger: core.logger, credentials: CREDS, policy: { lan: false }, signal },
+      {
+        net,
+        clock: core.clock,
+        logger: core.logger,
+        credentials: CREDS,
+        policy: { lan: false },
+        signal,
+      },
       { providerId: 'p_prueba01', providerFp: '0123456789abcdef', revision: 2, mode },
     );
   return { core, transport, net, run };
@@ -75,11 +85,21 @@ const cats = (list: Array<[string, string]>) =>
 describe('syncVodCatalog', () => {
   it('categorías → películas → series, con sus filas, categorías y meta', async () => {
     const { run, transport } = rig((action) => {
-      if (action === 'get_vod_categories') return { body: cats([['1', 'ES | PELIS'], ['2', 'XXX']]) };
+      if (action === 'get_vod_categories')
+        return {
+          body: cats([
+            ['1', 'ES | PELIS'],
+            ['2', 'XXX'],
+          ]),
+        };
       if (action === 'get_series_categories') return { body: cats([['5', 'Series']]) };
       if (action === 'get_vod_streams') return { body: JSON.stringify(movies(4)) };
       if (action === 'get_series') {
-        return { body: JSON.stringify([{ series_id: 9, name: 'Serie', category_id: '5', last_modified: '1700000000' }]) };
+        return {
+          body: JSON.stringify([
+            { series_id: 9, name: 'Serie', category_id: '5', last_modified: '1700000000' },
+          ]),
+        };
       }
       return undefined;
     });
@@ -91,7 +111,12 @@ describe('syncVodCatalog', () => {
     expect(catalog.tables.series.n).toBe(1);
     expect(catalog.tables.movie.cats).toEqual(['ES | PELIS', 'XXX']);
     expect(catalog.tables.movie.isAdult(1)).toBe(true);
-    expect(catalog.meta).toMatchObject({ revision: 2, truncated: false, skipped: 0, mode: 'completo' });
+    expect(catalog.meta).toMatchObject({
+      revision: 2,
+      truncated: false,
+      skipped: 0,
+      mode: 'completo',
+    });
     expect(catalog.stamp).toMatch(/^[a-z0-9]{1,16}$/);
     expect(transport.requests.map((request) => request.url.searchParams.get('action'))).toEqual([
       'get_vod_categories',
@@ -101,7 +126,11 @@ describe('syncVodCatalog', () => {
     ]);
     /* Ninguna llamada lleva parámetros fuera de la lista cerrada. */
     for (const request of transport.requests) {
-      expect([...request.url.searchParams.keys()].sort()).toEqual(['action', 'password', 'username']);
+      expect([...request.url.searchParams.keys()].sort()).toEqual([
+        'action',
+        'password',
+        'username',
+      ]);
     }
   });
 
@@ -160,11 +189,19 @@ describe('syncVodCatalog', () => {
 
   it('una lista completa que falla por 5xx pasa al modo por categorías (250 ms entre llamadas)', async () => {
     const { run, transport, core } = rig((action, url) => {
-      if (action === 'get_vod_categories') return { body: cats([['1', 'A'], ['2', 'B']]) };
+      if (action === 'get_vod_categories')
+        return {
+          body: cats([
+            ['1', 'A'],
+            ['2', 'B'],
+          ]),
+        };
       if (action === 'get_vod_streams') {
         const category = url.searchParams.get('category_id');
         if (category === null) return { status: 502 };
-        return { body: JSON.stringify(movies(4).filter((movie) => movie.category_id === category)) };
+        return {
+          body: JSON.stringify(movies(4).filter((movie) => movie.category_id === category)),
+        };
       }
       return undefined;
     });
@@ -189,7 +226,13 @@ describe('syncVodCatalog', () => {
   it('la lista entera muere A MITAD por inactividad: el modo por categorías empieza de cero y `skipped` sale bien (fallo 2)', async () => {
     const all = movies(1_000);
     const { run, core } = rig((action, url) => {
-      if (action === 'get_vod_categories') return { body: cats([['1', 'A'], ['2', 'B']]) };
+      if (action === 'get_vod_categories')
+        return {
+          body: cats([
+            ['1', 'A'],
+            ['2', 'B'],
+          ]),
+        };
       if (action !== 'get_vod_streams') return undefined;
       const category = url.searchParams.get('category_id');
       if (category === null) {
@@ -206,13 +249,24 @@ describe('syncVodCatalog', () => {
     expect(result.state).toBe('ready');
     if (result.state === 'ready') {
       expect(result.catalog.tables.movie.n).toBe(1_000);
-      expect(result.catalog.meta).toMatchObject({ mode: 'por_categorias', skipped: 0, truncated: false });
+      expect(result.catalog.meta).toMatchObject({
+        mode: 'por_categorias',
+        skipped: 0,
+        truncated: false,
+      });
     }
   });
 
   it('una categoría mala se salta y se cuenta; las demás llegan (fallo 3)', async () => {
     const { run, core, transport } = rig((action, url) => {
-      if (action === 'get_vod_categories') return { body: cats([['1', 'A'], ['2', 'B'], ['3', 'C']]) };
+      if (action === 'get_vod_categories')
+        return {
+          body: cats([
+            ['1', 'A'],
+            ['2', 'B'],
+            ['3', 'C'],
+          ]),
+        };
       if (action !== 'get_vod_streams') return undefined;
       const category = url.searchParams.get('category_id');
       if (category === null || category === '2') return { status: 500 };
@@ -234,7 +288,10 @@ describe('syncVodCatalog', () => {
   });
 
   it('5 categorías malas seguidas: se rinde con el código IPTV; un 401 en una categoría, al momento', async () => {
-    const ids = Array.from({ length: 10 }, (_, i) => [String(i + 1), `C${i + 1}`] as [string, string]);
+    const ids = Array.from(
+      { length: 10 },
+      (_, i) => [String(i + 1), `C${i + 1}`] as [string, string],
+    );
     const failing = rig((action) => {
       if (action === 'get_vod_categories') return { body: cats(ids) };
       if (action === 'get_vod_streams') return { status: 502 };
@@ -260,16 +317,36 @@ describe('syncVodCatalog', () => {
   });
 
   it('el modo por categorías tiene tope de tiempo: se queda lo leído con `truncated` (fallo 8)', async () => {
-    const ids = Array.from({ length: 20 }, (_, i) => [String(i + 1), `C${i + 1}`] as [string, string]);
+    const ids = Array.from(
+      { length: 20 },
+      (_, i) => [String(i + 1), `C${i + 1}`] as [string, string],
+    );
     const { core, transport, net } = rig((action, url) => {
       if (action === 'get_vod_categories') return { body: cats(ids) };
       if (action !== 'get_vod_streams') return undefined;
       const category = Number(url.searchParams.get('category_id'));
-      return { body: JSON.stringify([{ stream_id: category, name: `Película ${category}`, category_id: String(category) }]) };
+      return {
+        body: JSON.stringify([
+          { stream_id: category, name: `Película ${category}`, category_id: String(category) },
+        ]),
+      };
     });
     const promise = syncVodCatalog(
-      { net, clock: core.clock, logger: core.logger, credentials: CREDS, policy: { lan: false }, signal: new AbortController().signal },
-      { providerId: 'p_prueba01', providerFp: '0123456789abcdef', revision: 2, mode: 'por_categorias', byCategoryTotalMs: 1_000 },
+      {
+        net,
+        clock: core.clock,
+        logger: core.logger,
+        credentials: CREDS,
+        policy: { lan: false },
+        signal: new AbortController().signal,
+      },
+      {
+        providerId: 'p_prueba01',
+        providerFp: '0123456789abcdef',
+        revision: 2,
+        mode: 'por_categorias',
+        byCategoryTotalMs: 1_000,
+      },
     );
     await drive(core, promise);
     const result = await promise;
@@ -293,15 +370,22 @@ describe('syncVodCatalog', () => {
 
   it('`skipped` del troceador también cuando se corta por el tope de títulos (fallo 10)', async () => {
     const big = [7, 'x', ...movies(VOD_LIMITS.maxMovies + 10)];
-    const { run } = rig((action) => (action === 'get_vod_streams' ? { body: JSON.stringify(big) } : undefined));
+    const { run } = rig((action) =>
+      action === 'get_vod_streams' ? { body: JSON.stringify(big) } : undefined,
+    );
     const result = await run();
-    expect(result.state === 'ready' && result.catalog.meta).toMatchObject({ truncated: true, skipped: 2 });
+    expect(result.state === 'ready' && result.catalog.meta).toMatchObject({
+      truncated: true,
+      skipped: 2,
+    });
   }, 60_000);
 
   it('un 401 o sin categorías no pasa al modo por categorías: falla con el código IPTV', async () => {
     const { run } = rig((action) => (action === 'get_vod_streams' ? { status: 401 } : undefined));
     await expect(run()).rejects.toMatchObject({ code: 'iptv_auth_failed' });
-    const { run: run2 } = rig((action) => (action === 'get_vod_streams' ? { status: 503 } : undefined));
+    const { run: run2 } = rig((action) =>
+      action === 'get_vod_streams' ? { status: 503 } : undefined,
+    );
     await expect(run2()).rejects.toMatchObject({ code: 'iptv_unreachable' });
   });
 

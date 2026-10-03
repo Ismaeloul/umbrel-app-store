@@ -35,7 +35,11 @@ describe('cleanVodTitle', () => {
     expect(clean('Reserva (2018)').title).toBe('Reserva');
     expect(clean('M+ Vamos: la película').title).toBe('M+ Vamos: la película');
     expect(clean('M3GAN').title).toBe('M3GAN');
-    expect(clean('Blade Runner 2049')).toEqual({ title: 'Blade Runner 2049', year: null, tags: [] });
+    expect(clean('Blade Runner 2049')).toEqual({
+      title: 'Blade Runner 2049',
+      year: null,
+      tags: [],
+    });
     expect(clean('Multiverso Spider-Man').title).toBe('Multiverso Spider-Man');
   });
 

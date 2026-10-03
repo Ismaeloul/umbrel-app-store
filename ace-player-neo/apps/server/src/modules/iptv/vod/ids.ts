@@ -44,10 +44,7 @@ function providerFingerprint(keys: Pick<IptvKeys, 'vod'>, providerId: string): B
  * proveedor, todos los ids cambian y el documento se vacía.
  */
 export function vodProviderFp(keys: Pick<IptvKeys, 'vod'>, providerId: string): string {
-  return createHmac('sha256', keys.vod)
-    .update(providerId)
-    .digest('hex')
-    .slice(0, 16);
+  return createHmac('sha256', keys.vod).update(providerId).digest('hex').slice(0, 16);
 }
 
 /** ¿Cabe este origen en un id? (entero en [1, 2⁵³), padre ≤ 2³² − 1 solo en episodios). */

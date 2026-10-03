@@ -29,13 +29,23 @@ const META: VodCatalogMeta = {
 async function sample() {
   const movie = await tableOf(
     [
-      listRow(12_345_678_901, 'Oppenheimer', { year: 2023, rating: 83, added: 500, ext: 2, tags: 17, category: 'ES', poster: 'https://img.example/p/o.jpg' }),
+      listRow(12_345_678_901, 'Oppenheimer', {
+        year: 2023,
+        rating: 83,
+        added: 500,
+        ext: 2,
+        tags: 17,
+        category: 'ES',
+        poster: 'https://img.example/p/o.jpg',
+      }),
       listRow(2, 'Amélie', { added: 400, adult: true, category: 'XXX' }),
       listRow(3, '東京物語 😀', { added: 300 }),
     ],
     ['ES', 'XXX'],
   );
-  const series = await tableOf([listRow(9, 'The Office', { added: 700, poster: 'https://img.example/s/1.jpg' })]);
+  const series = await tableOf([
+    listRow(9, 'The Office', { added: 700, poster: 'https://img.example/s/1.jpg' }),
+  ]);
   return { movie, series };
 }
 

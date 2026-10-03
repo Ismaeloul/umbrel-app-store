@@ -14,11 +14,12 @@ import {
 } from '@ace/shared';
 import { scoreResolutionCandidate } from '../../football/resolution.js';
 import { createNetClient } from '../../net/index.js';
+import { FAKE_IPTV_PASSWORD, FAKE_IPTV_USER } from '../../../../test/fake-iptv/provider.js';
 import {
-  FAKE_IPTV_PASSWORD,
-  FAKE_IPTV_USER,
-} from '../../../../test/fake-iptv/provider.js';
-import { FAKE_IPTV_HOST, fakeIptvResolver, fakeIptvTransport } from '../../../../test/fake-iptv/net.js';
+  FAKE_IPTV_HOST,
+  fakeIptvResolver,
+  fakeIptvTransport,
+} from '../../../../test/fake-iptv/net.js';
 import { loadIptvKeys } from '../crypto.js';
 import { IptvServiceImpl } from '../service.js';
 import { createIptvTestRig, type IptvTestRig } from '../test-support.js';
@@ -98,11 +99,21 @@ describe('VodService contra el proveedor falso', () => {
       'Паразиты',
     ]);
     expect(home.newMovies.some((card) => card.adult)).toBe(false);
-    expect(home.newMovies[0]).toMatchObject({ year: 2023, rating: 8.3, tags: ['castellano', '4k'] });
+    expect(home.newMovies[0]).toMatchObject({
+      year: 2023,
+      rating: 8.3,
+      tags: ['castellano', '4k'],
+    });
     expect(home.newMovies[0]?.poster).toMatch(/^[a-f0-9]{8}$/);
     expect(home.newMovies.find((card) => card.title === 'Reserva')?.poster).toBeNull();
-    expect(home.updatedSeries.map((card) => card.title)).toEqual(['The Office (US)', 'Paquita Salas', '東京物語']);
-    expect(home.categories.movie.map((category) => [category.name, category.count, category.adult])).toEqual([
+    expect(home.updatedSeries.map((card) => card.title)).toEqual([
+      'The Office (US)',
+      'Paquita Salas',
+      '東京物語',
+    ]);
+    expect(
+      home.categories.movie.map((category) => [category.name, category.count, category.adult]),
+    ).toEqual([
       ['ES | PELÍCULAS', 6, false],
       ['LATINO | PELIS', 1, false],
       ['VOD | 4K', 1, false],
@@ -116,7 +127,13 @@ describe('VodService contra el proveedor falso', () => {
     ]);
     /* Estado en `iptv.status` (§11.4). */
     const view = await rig.service.view();
-    expect(view.provider?.vod).toMatchObject({ state: 'ready', movies: 9, series: 3, skipped: 0, stale: false });
+    expect(view.provider?.vod).toMatchObject({
+      state: 'ready',
+      movies: 9,
+      series: 3,
+      skipped: 0,
+      stale: false,
+    });
     expect(vod.feature()).toBe(true);
   });
 
@@ -128,16 +145,39 @@ describe('VodService contra el proveedor falso', () => {
     );
     expect(search.items.map((card) => card.title)).toEqual(['Oppenheimer']);
     expect(search.otherKindTotal).toBe(0);
-    const office = await vod.browse({ kind: 'movie', cat: 'all', q: 'office', sort: 'added', limit: 60 });
+    const office = await vod.browse({
+      kind: 'movie',
+      cat: 'all',
+      q: 'office',
+      sort: 'added',
+      limit: 60,
+    });
     expect(office).toMatchObject({ total: 0, otherKindTotal: 1 });
-    const spider = await vod.browse({ kind: 'movie', cat: 'all', q: 'spiderman', sort: 'added', limit: 60 });
+    const spider = await vod.browse({
+      kind: 'movie',
+      cat: 'all',
+      q: 'spiderman',
+      sort: 'added',
+      limit: 60,
+    });
     expect(spider.items.map((card) => card.title)).toEqual(['Spider-Man: No Way Home']);
     /* Adultos: en la búsqueda sí, en «Todas» sin texto no. */
-    const adult = await vod.browse({ kind: 'movie', cat: 'all', q: 'adulta', sort: 'added', limit: 60 });
+    const adult = await vod.browse({
+      kind: 'movie',
+      cat: 'all',
+      q: 'adulta',
+      sort: 'added',
+      limit: 60,
+    });
     expect(adult.items[0]?.adult).toBe(true);
     const home = await vod.home();
     const xxx = home.categories.movie.find((category) => category.adult);
-    const inCategory = await vod.browse({ kind: 'movie', cat: xxx?.id ?? 'all', sort: 'added', limit: 60 });
+    const inCategory = await vod.browse({
+      kind: 'movie',
+      cat: xxx?.id ?? 'all',
+      sort: 'added',
+      limit: 60,
+    });
     expect(inCategory.items.map((card) => card.title)).toEqual(['Película adulta de prueba']);
     const page1 = await vod.browse({ kind: 'movie', cat: 'all', sort: 'name', limit: 3 });
     expect(page1.total).toBe(8);
@@ -152,16 +192,30 @@ describe('VodService contra el proveedor falso', () => {
     expect(page2.stale).toBe(false);
     expect(page2.items[0]?.title).not.toBe(page1.items[0]?.title);
     const staleCursor = Buffer.from('zzz.3').toString('base64url');
-    const stale = await vod.browse({ kind: 'movie', cat: 'all', sort: 'name', limit: 3, cursor: staleCursor });
+    const stale = await vod.browse({
+      kind: 'movie',
+      cat: 'all',
+      sort: 'name',
+      limit: 3,
+      cursor: staleCursor,
+    });
     expect(stale.stale).toBe(true);
     expect(stale.items[0]?.title).toBe(page1.items[0]?.title);
     await expect(
       vod.browse({ kind: 'movie', cat: 'all', sort: 'name', limit: 3, cursor: 'no-vale!' }),
     ).rejects.toMatchObject({ code: 'validation_error' });
-    await expect(vod.browse({ kind: 'movie', cat: 'all', q: 'a', sort: 'added', limit: 3 })).rejects.toMatchObject({
+    await expect(
+      vod.browse({ kind: 'movie', cat: 'all', q: 'a', sort: 'added', limit: 3 }),
+    ).rejects.toMatchObject({
       code: 'empty_query',
     });
-    const vose = await vod.browse({ kind: 'movie', cat: 'all', tag: 'vose', sort: 'added', limit: 60 });
+    const vose = await vod.browse({
+      kind: 'movie',
+      cat: 'all',
+      tag: 'vose',
+      sort: 'added',
+      limit: 60,
+    });
     expect(vose.items.map((card) => card.title)).toEqual(['Amélie']);
   });
 
@@ -194,12 +248,36 @@ describe('VodService contra el proveedor falso', () => {
     const office = home.updatedSeries[0]?.id as string;
     const series = VodTitleSchema.parse(await settle(rig, vod.title(office))) as VodSeries;
     expect(series.kind).toBe('series');
-    expect(series.seasons.map((season) => [season.n, season.name, season.episodes.map((e) => [e.n, e.title])])).toEqual([
-      [1, 'Temporada 1', [[1, 'Piloto'], [2, 'Día de la diversidad']]],
-      [2, 'Temporada 2', [[1, 'El regreso'], [2, 'Episodio 2']]],
+    expect(
+      series.seasons.map((season) => [
+        season.n,
+        season.name,
+        season.episodes.map((e) => [e.n, e.title]),
+      ]),
+    ).toEqual([
+      [
+        1,
+        'Temporada 1',
+        [
+          [1, 'Piloto'],
+          [2, 'Día de la diversidad'],
+        ],
+      ],
+      [
+        2,
+        'Temporada 2',
+        [
+          [1, 'El regreso'],
+          [2, 'Episodio 2'],
+        ],
+      ],
       [0, 'Especiales', [[1, 'Especial de Navidad']]],
     ]);
-    expect(series.main).toMatchObject({ action: 'start', label: 'Ver T1:E1', episodeId: series.seasons[0]?.episodes[0]?.id });
+    expect(series.main).toMatchObject({
+      action: 'start',
+      label: 'Ver T1:E1',
+      episodeId: series.seasons[0]?.episodes[0]?.id,
+    });
     /* El id del episodio lleva dentro el series_id (§5.1). */
     const keys = loadIptvKeys(rig.core.config);
     const providerId = rig.state.iptv().read().provider?.id as string;
@@ -210,7 +288,9 @@ describe('VodService contra el proveedor falso', () => {
     });
     /* AVI → no; HEVC → hevc (pistas). */
     const avi = home.newMovies.find((card) => card.title.startsWith('Mission'))?.id as string;
-    expect((await settle(rig, vod.title(avi))).kind === 'movie' && (await vod.title(avi))).toMatchObject({
+    expect(
+      (await settle(rig, vod.title(avi))).kind === 'movie' && (await vod.title(avi)),
+    ).toMatchObject({
       playable: 'no',
       tech: { container: 'avi' },
     });
@@ -238,25 +318,43 @@ describe('VodService contra el proveedor falso', () => {
     const { vod } = await synced(rig);
     const home = await vod.home();
     const card = home.newMovies[0];
-    const poster = await settle(rig, vod.artOf(card?.id as string, 'poster', card?.poster ?? undefined, undefined));
+    const poster = await settle(
+      rig,
+      vod.artOf(card?.id as string, 'poster', card?.poster ?? undefined, undefined),
+    );
     expect(poster).toMatchObject({ status: 200, headers: { 'content-type': 'image/png' } });
     expect(poster.headers['cache-control']).toContain('immutable');
     if (poster.status === 200) {
-      const again = await vod.artOf(card?.id as string, 'poster', card?.poster ?? undefined, poster.headers.etag);
+      const again = await vod.artOf(
+        card?.id as string,
+        'poster',
+        card?.poster ?? undefined,
+        poster.headers.etag,
+      );
       expect(again.status).toBe(304);
     }
-    const backdrop = await settle(rig, vod.artOf(card?.id as string, 'backdrop', undefined, undefined));
+    const backdrop = await settle(
+      rig,
+      vod.artOf(card?.id as string, 'backdrop', undefined, undefined),
+    );
     expect(backdrop.status).toBe(200);
     const series = (await settle(rig, vod.title(home.updatedSeries[0]?.id as string))) as VodSeries;
     const episode = series.seasons[0]?.episodes[0];
-    const still = await settle(rig, vod.artOf(episode?.id as string, 'still', episode?.still ?? undefined, undefined));
+    const still = await settle(
+      rig,
+      vod.artOf(episode?.id as string, 'still', episode?.still ?? undefined, undefined),
+    );
     expect(still.status).toBe(200);
     const reserva = home.newMovies.find((item) => item.title === 'Reserva');
-    await expect(settle(rig, vod.artOf(reserva?.id as string, 'poster', undefined, undefined))).rejects.toMatchObject({
+    await expect(
+      settle(rig, vod.artOf(reserva?.id as string, 'poster', undefined, undefined)),
+    ).rejects.toMatchObject({
       code: 'vod_not_found',
     });
     /* Ninguna URL ni host en los nombres de la caché. */
-    const names = readdirSync(rig.core.config.paths.vodArtDir, { recursive: true }).map(String).join('\n');
+    const names = readdirSync(rig.core.config.paths.vodArtDir, { recursive: true })
+      .map(String)
+      .join('\n');
     expect(names).not.toMatch(/arte|ace-e2e|png|usuario/);
   });
 
@@ -268,7 +366,10 @@ describe('VodService contra el proveedor falso', () => {
     await vod.progress(movieId, { event: 'pause', posS: 600, durS: 7_200 });
     const series = (await settle(rig, vod.title(home.updatedSeries[0]?.id as string))) as VodSeries;
     const [e1, e2] = series.seasons[0]?.episodes ?? [];
-    await settle(rig, vod.progress(e1?.id as string, { event: 'ended', posS: 1_320, durS: 1_320, audio: 'spa' }));
+    await settle(
+      rig,
+      vod.progress(e1?.id as string, { event: 'ended', posS: 1_320, durS: 1_320, audio: 'spa' }),
+    );
     const after = await vod.home();
     expect(after.continue.map((item) => [item.title, item.isNext, item.subtitle])).toEqual([
       ['The Office (US)', true, 'Siguiente: T1 · E2 · Día de la diversidad'],
@@ -280,14 +381,23 @@ describe('VodService contra el proveedor falso', () => {
     const again = (await vod.title(home.updatedSeries[0]?.id as string)) as VodSeries;
     expect(again.main).toMatchObject({ action: 'next', label: 'Siguiente: T1:E2' });
     const s2e1 = again.seasons[1]?.episodes[0];
-    await settle(rig, vod.progress(s2e1?.id as string, { event: 'mark-through', posS: 0, durS: 0 }));
+    await settle(
+      rig,
+      vod.progress(s2e1?.id as string, { event: 'mark-through', posS: 0, durS: 0 }),
+    );
     const marked = (await vod.title(home.updatedSeries[0]?.id as string)) as VodSeries;
-    expect(marked.seasons.flatMap((season) => season.episodes).filter((e) => e.progress?.watched)).toHaveLength(3);
+    expect(
+      marked.seasons.flatMap((season) => season.episodes).filter((e) => e.progress?.watched),
+    ).toHaveLength(3);
     expect(marked.main).toMatchObject({ label: 'Siguiente: T2:E2' });
-    await expect(vod.progress(movieId, { event: 'tick', posS: 900, durS: 100 })).rejects.toMatchObject({
+    await expect(
+      vod.progress(movieId, { event: 'tick', posS: 900, durS: 100 }),
+    ).rejects.toMatchObject({
       code: 'validation_error',
     });
-    await expect(vod.progress(home.updatedSeries[0]?.id as string, { event: 'tick', posS: 1, durS: 10 })).rejects.toMatchObject({
+    await expect(
+      vod.progress(home.updatedSeries[0]?.id as string, { event: 'tick', posS: 1, durS: 10 }),
+    ).rejects.toMatchObject({
       code: 'validation_error',
     });
     await vod.progress(home.updatedSeries[0]?.id as string, { event: 'hide', posS: 0, durS: 0 });
@@ -311,7 +421,10 @@ describe('VodService contra el proveedor falso', () => {
     const { vod: oddVod } = await synced(odd);
     const home = await oddVod.home();
     expect(home.counts).toEqual({ movies: 9, series: 3 });
-    const series = (await settle(odd, oddVod.title(home.updatedSeries[0]?.id as string))) as VodSeries;
+    const series = (await settle(
+      odd,
+      oddVod.title(home.updatedSeries[0]?.id as string),
+    )) as VodSeries;
     expect(series.seasons.map((season) => season.n)).toEqual([1, 2, 0]);
 
     const m3u = await createIptvTestRig();
@@ -358,8 +471,15 @@ describe('VodService contra el proveedor falso', () => {
     const restarted = await again.vod.home();
     expect(restarted.counts).toEqual({ movies: 9, series: 3 });
     expect(vodCalls(rig, 'get_vod_streams')).toBe(listsBefore);
-    expect(restarted.continue[0]).toMatchObject({ id: episodeId, subtitle: 'T2 · E1 · El regreso', posS: 300 });
-    const title = (await settle(rig, again.vod.title(restarted.updatedSeries[0]?.id as string))) as VodSeries;
+    expect(restarted.continue[0]).toMatchObject({
+      id: episodeId,
+      subtitle: 'T2 · E1 · El regreso',
+      posS: 300,
+    });
+    const title = (await settle(
+      rig,
+      again.vod.title(restarted.updatedSeries[0]?.id as string),
+    )) as VodSeries;
     expect(title.main).toMatchObject({ action: 'resume', episodeId, posS: 295 });
   });
 
@@ -371,7 +491,13 @@ describe('VodService contra el proveedor falso', () => {
     await settle(rig, vod.artOf(oppenheimer?.id as string, 'poster', undefined, undefined));
     await vod.progress(oppenheimer?.id as string, { event: 'pause', posS: 100, durS: 7_200 });
     const title = await settle(rig, vod.title(oppenheimer?.id as string));
-    const browse = await vod.browse({ kind: 'series', cat: 'all', q: 'office', sort: 'added', limit: 10 });
+    const browse = await vod.browse({
+      kind: 'series',
+      cat: 'all',
+      q: 'office',
+      sort: 'added',
+      limit: 10,
+    });
     const { paths } = rig.core.config;
     const view = await rig.service.view();
     expect(JSON.stringify(view)).not.toMatch(/usuario-e2e|Cl4ve-Secreta-E2E/);
@@ -381,7 +507,14 @@ describe('VodService contra el proveedor falso', () => {
       readFileSync(paths.vodCatalogFile).toString('latin1'),
       readdirSync(paths.vodArtDir, { recursive: true }).map(String).join('\n'),
     ].join('\n');
-    for (const secret of [FAKE_IPTV_USER, FAKE_IPTV_PASSWORD, FAKE_IPTV_HOST, '/arte/', 'stream_id', 'no-usar']) {
+    for (const secret of [
+      FAKE_IPTV_USER,
+      FAKE_IPTV_PASSWORD,
+      FAKE_IPTV_HOST,
+      '/arte/',
+      'stream_id',
+      'no-usar',
+    ]) {
       expect(everything, secret).not.toContain(secret);
     }
     /* El registro lleva el host (docs/iptv.md §2.4), nunca usuario, contraseña ni rutas de carteles. */

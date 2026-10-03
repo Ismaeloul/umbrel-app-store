@@ -63,7 +63,12 @@ async function rigWithHangingVod() {
   services.push(service);
   await service.start();
   await service.save(
-    { kind: 'xtream', server: rig.fake.server, username: FAKE_IPTV_USER, password: FAKE_IPTV_PASSWORD },
+    {
+      kind: 'xtream',
+      server: rig.fake.server,
+      username: FAKE_IPTV_USER,
+      password: FAKE_IPTV_PASSWORD,
+    },
     new AbortController().signal,
   );
   await service.idle();
@@ -88,7 +93,8 @@ describe('el VOD nunca retrasa el directo ni la guía (fallo 8)', () => {
     const pressedAt = performance.now();
     await t.service.sync();
     await waitFor('la lista del directo', () => t.count('get_live_streams') > liveBefore, 5_000);
-    const started = t.firstAfter('user_info', pressedAt) ?? t.firstAfter('get_live_streams', pressedAt);
+    const started =
+      t.firstAfter('user_info', pressedAt) ?? t.firstAfter('get_live_streams', pressedAt);
     expect((started?.at ?? Number.POSITIVE_INFINITY) - pressedAt).toBeLessThan(1_000);
 
     /* El VOD vuelve a pedirse solo, detrás del directo, y esta vez llega entero. */
@@ -111,7 +117,9 @@ describe('el VOD nunca retrasa el directo ni la guía (fallo 8)', () => {
     const askedAt = performance.now();
     const guide = (t.service as unknown as { startGuide(): Promise<void> }).startGuide();
     await waitFor('la guía', () => t.count('/xmltv.php') > guideBefore, 5_000);
-    expect((t.firstAfter('/xmltv.php', askedAt)?.at ?? Number.POSITIVE_INFINITY) - askedAt).toBeLessThan(1_000);
+    expect(
+      (t.firstAfter('/xmltv.php', askedAt)?.at ?? Number.POSITIVE_INFINITY) - askedAt,
+    ).toBeLessThan(1_000);
     t.hang.on = false;
     await guide;
     await t.service.idle();

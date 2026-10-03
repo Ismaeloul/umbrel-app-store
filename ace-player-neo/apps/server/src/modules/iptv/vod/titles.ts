@@ -57,9 +57,13 @@ export function detectTags(text: string): number {
     /latino|latinoam[eé]rica|es-419/i.test(text);
   if (latino) bits |= TAG_BIT.latino;
   const castellano =
-    /(?:^|[^A-Za-z])(?:ES|ESP|SPA)(?![A-Za-z])/.test(text) || /castellano|español|españa/i.test(text);
+    /(?:^|[^A-Za-z])(?:ES|ESP|SPA)(?![A-Za-z])/.test(text) ||
+    /castellano|español|españa/i.test(text);
   if (castellano && !latino) bits |= TAG_BIT.castellano;
-  if (/(?:^|[^A-Za-z])(?:VOSE|VOS|SUB)(?![A-Za-z])/.test(text) || /vose|subtitulad[ao]/i.test(text)) {
+  if (
+    /(?:^|[^A-Za-z])(?:VOSE|VOS|SUB)(?![A-Za-z])/.test(text) ||
+    /vose|subtitulad[ao]/i.test(text)
+  ) {
     bits |= TAG_BIT.vose;
   }
   if (/(?:^|[^A-Za-z])(?:multi|dual)(?![A-Za-z])/i.test(text) || /multi[\s-]?audio/i.test(text)) {

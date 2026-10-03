@@ -78,7 +78,9 @@ describe('parseListItem (películas y series de las listas)', () => {
     expect(parseListItem('movie', { stream_id: 0, name: 'X' }, CATS)).toBeNull();
     expect(parseListItem('movie', { stream_id: 2 ** 53, name: 'X' }, CATS)).toBeNull();
     expect(parseListItem('movie', { stream_id: 3, name: '' }, CATS)).toBeNull();
-    expect(parseListItem('movie', { stream_id: 3, name: 'Canal', stream_type: 'live' }, CATS)).toBeNull();
+    expect(
+      parseListItem('movie', { stream_id: 3, name: 'Canal', stream_type: 'live' }, CATS),
+    ).toBeNull();
     expect(parseListItem('series', { series_id: 'x1', name: 'Serie' }, CATS)).toBeNull();
     /* Sin `name`, vale `title`. */
     expect(parseListItem('series', { series_id: 9, title: 'Serie' }, CATS)?.title).toBe('Serie');
@@ -86,10 +88,16 @@ describe('parseListItem (películas y series de las listas)', () => {
 
   it('`is_adult` en sus variantes y categorías de adultos por nombre', () => {
     for (const flag of [1, '1', true]) {
-      expect(parseListItem('movie', { stream_id: 1, name: 'A', is_adult: flag }, CATS)?.adult).toBe(true);
+      expect(parseListItem('movie', { stream_id: 1, name: 'A', is_adult: flag }, CATS)?.adult).toBe(
+        true,
+      );
     }
-    expect(parseListItem('movie', { stream_id: 1, name: 'A', is_adult: '0' }, CATS)?.adult).toBe(false);
-    expect(parseListItem('movie', { stream_id: 1, name: 'A', category_id: '3' }, CATS)?.adult).toBe(true);
+    expect(parseListItem('movie', { stream_id: 1, name: 'A', is_adult: '0' }, CATS)?.adult).toBe(
+      false,
+    );
+    expect(parseListItem('movie', { stream_id: 1, name: 'A', category_id: '3' }, CATS)?.adult).toBe(
+      true,
+    );
   });
 
   it('extensión fuera de la lista, cartel con credenciales o no http, nota rara', () => {
@@ -187,7 +195,13 @@ describe('fichas (§7.2)', () => {
 
   it('`info`, `video` y `audio` como `[]` no rompen', () => {
     const info = parseMovieInfo({ info: [], movie_data: [] });
-    expect(info).toMatchObject({ title: null, plot: null, genres: [], audio0: null, durationS: null });
+    expect(info).toMatchObject({
+      title: null,
+      plot: null,
+      genres: [],
+      audio0: null,
+      durationS: null,
+    });
     expect(info.video).toEqual({ codec: null, width: null, height: null, bitDepth: null });
     const loose = parseMovieInfo({ info: { video: [], audio: [{ codec_name: 'aac' }] } });
     expect(loose.audio0?.codec).toBe('aac');
@@ -222,7 +236,10 @@ describe('fichas (§7.2)', () => {
     const info = parseSeriesInfo({
       episodes: [
         [{ id: 1, episode_num: 1, season: 1, title: 'A' }],
-        [{ id: 2, episode_num: 1, season: 2, title: 'B' }, { id: 'no', episode_num: 2, season: 2 }],
+        [
+          { id: 2, episode_num: 1, season: 2, title: 'B' },
+          { id: 'no', episode_num: 2, season: 2 },
+        ],
       ],
     });
     expect(info.seasons.map((s) => s.number)).toEqual([1, 2]);
@@ -231,7 +248,11 @@ describe('fichas (§7.2)', () => {
   });
 
   it('topes de temporadas y episodios con `truncated`', () => {
-    const many = Array.from({ length: 600 }, (_, i) => ({ id: i + 1, episode_num: i + 1, season: 1 }));
+    const many = Array.from({ length: 600 }, (_, i) => ({
+      id: i + 1,
+      episode_num: i + 1,
+      season: 1,
+    }));
     const info = parseSeriesInfo({ episodes: { '1': many } });
     expect(info.seasons[0]?.episodes).toHaveLength(VOD_LIMITS.episodesPerSeasonMax);
     expect(info.truncated).toBe(true);

@@ -109,7 +109,7 @@ export function searchTable(table: VodTable, query: VodQuery, bucket: number | n
   } else if (longest) {
     /* Tras un acierto se sigue en la fila siguiente: cada fila se mira una vez. */
     let hint = 0;
-    for (let at = folded.indexOf(longest); at >= 0; ) {
+    for (let at = folded.indexOf(longest); at >= 0;) {
       const row = rowAt(offsets, n, at, hint);
       hint = row;
       accept(row);
@@ -123,7 +123,7 @@ export function searchTable(table: VodTable, query: VodQuery, bucket: number | n
   if (query.compact.length >= 3) {
     const { compact, compactOffsets } = table;
     let hint = 0;
-    for (let at = compact.indexOf(query.compact); at >= 0; ) {
+    for (let at = compact.indexOf(query.compact); at >= 0;) {
       const row = rowAt(compactOffsets, n, at, hint);
       hint = row;
       at = compact.indexOf(query.compact, compactOffsets[row + 1] as number);
@@ -146,7 +146,7 @@ export function searchTable(table: VodTable, query: VodQuery, bucket: number | n
   const rows = new Uint32Array(Math.min(count, VOD_SEARCH.rowsMax));
   let kept = 0;
   for (const bucket of buckets) {
-    for (let start = 0; start < bucket.length && kept < rows.length; ) {
+    for (let start = 0; start < bucket.length && kept < rows.length;) {
       const added = table.added[bucket[start] as number];
       let end = start + 1;
       while (end < bucket.length && table.added[bucket[end] as number] === added) end += 1;
@@ -214,7 +214,12 @@ function singleWordLevels(
 
 /** ¿Letra o número? (ASCII exacto; lo de fuera de ASCII cuenta como letra). */
 function isWordUnit(code: number): boolean {
-  return (code >= 48 && code <= 57) || (code >= 97 && code <= 122) || (code >= 65 && code <= 90) || code > 127;
+  return (
+    (code >= 48 && code <= 57) ||
+    (code >= 97 && code <= 122) ||
+    (code >= 65 && code <= 90) ||
+    code > 127
+  );
 }
 
 /** Posición de `word` empezando palabra en `title` desde `from`, o -1. */
@@ -314,15 +319,23 @@ export interface VodPage {
 }
 
 /** Una página de una búsqueda (con el filtro de distintivo aplicado sobre los 2 000 mejores). */
-export function searchPage(hits: VodHits, table: VodTable, filter: VodFilter, offset: number, limit: number): VodPage {
+export function searchPage(
+  hits: VodHits,
+  table: VodTable,
+  filter: VodFilter,
+  offset: number,
+  limit: number,
+): VodPage {
   let rows: ArrayLike<number> = hits.rows;
   let total = hits.total;
   if (filter.tagBit) {
     const filtered: number[] = [];
-    for (const row of hits.rows) if ((table.tags[row] as number) & filter.tagBit) filtered.push(row);
+    for (const row of hits.rows)
+      if ((table.tags[row] as number) & filter.tagBit) filtered.push(row);
     rows = filtered;
     const tagIndex = VOD_TAGS.findIndex((_, index) => 1 << index === filter.tagBit);
-    total = hits.tagCounts.find((item) => item.tag === VOD_TAGS[tagIndex])?.count ?? filtered.length;
+    total =
+      hits.tagCounts.find((item) => item.tag === VOD_TAGS[tagIndex])?.count ?? filtered.length;
   }
   const page: number[] = [];
   for (let index = offset; index < rows.length && page.length < limit; index += 1) {

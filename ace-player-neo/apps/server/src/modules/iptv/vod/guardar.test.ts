@@ -36,7 +36,12 @@ async function ready(): Promise<IptvTestRig> {
   const rig = await createIptvTestRig();
   rigs.push(rig);
   await rig.service.save(
-    { kind: 'xtream', server: rig.fake.server, username: FAKE_IPTV_USER, password: FAKE_IPTV_PASSWORD },
+    {
+      kind: 'xtream',
+      server: rig.fake.server,
+      username: FAKE_IPTV_USER,
+      password: FAKE_IPTV_PASSWORD,
+    },
     new AbortController().signal,
   );
   await rig.service.idle();

@@ -76,12 +76,47 @@ export const FAKE_VOD_SERIES_CATEGORIES = [
 ];
 
 export const FAKE_VOD_MOVIES: readonly FakeMovie[] = [
-  { id: 2001, name: 'ES| Oppenheimer (2023) 4K', category: '12', ext: 'mkv', added: 1_700_000_900, rating: 8.3 },
-  { id: 2002, name: '|LAT| Dune 4K', category: '11', ext: 'mp4', added: 1_700_000_800, rating: 7.9, year: '2021' },
-  { id: 2003, name: 'Amélie (2001) VOSE', category: '10', ext: 'mkv', added: 1_700_000_700, rating: 8.0 },
-  { id: 2004, name: 'Spider-Man: No Way Home (2021)', category: '10', ext: 'mp4', added: 1_700_000_600 },
+  {
+    id: 2001,
+    name: 'ES| Oppenheimer (2023) 4K',
+    category: '12',
+    ext: 'mkv',
+    added: 1_700_000_900,
+    rating: 8.3,
+  },
+  {
+    id: 2002,
+    name: '|LAT| Dune 4K',
+    category: '11',
+    ext: 'mp4',
+    added: 1_700_000_800,
+    rating: 7.9,
+    year: '2021',
+  },
+  {
+    id: 2003,
+    name: 'Amélie (2001) VOSE',
+    category: '10',
+    ext: 'mkv',
+    added: 1_700_000_700,
+    rating: 8.0,
+  },
+  {
+    id: 2004,
+    name: 'Spider-Man: No Way Home (2021)',
+    category: '10',
+    ext: 'mp4',
+    added: 1_700_000_600,
+  },
   { id: 2005, name: 'Dune (2021)', category: '10', ext: 'mkv', added: 1_700_000_500, year: '2021' },
-  { id: 2006, name: 'Película adulta de prueba', category: '13', ext: 'mp4', added: 1_700_001_000, adult: true },
+  {
+    id: 2006,
+    name: 'Película adulta de prueba',
+    category: '13',
+    ext: 'mp4',
+    added: 1_700_001_000,
+    adult: true,
+  },
   {
     id: 2007,
     name: 'Mission: Impossible – Dead Reckoning (2023)',
@@ -90,8 +125,22 @@ export const FAKE_VOD_MOVIES: readonly FakeMovie[] = [
     added: 1_700_000_400,
     codec: 'mpeg4',
   },
-  { id: 2008, name: 'Reserva (2018)', category: '10', ext: 'mp4', added: 1_700_000_300, icon: null },
-  { id: 2009, name: 'Паразиты (2019)', category: '10', ext: 'mkv', added: 1_700_000_200, codec: 'hevc' },
+  {
+    id: 2008,
+    name: 'Reserva (2018)',
+    category: '10',
+    ext: 'mp4',
+    added: 1_700_000_300,
+    icon: null,
+  },
+  {
+    id: 2009,
+    name: 'Паразиты (2019)',
+    category: '10',
+    ext: 'mkv',
+    added: 1_700_000_200,
+    codec: 'hevc',
+  },
 ];
 
 export const FAKE_VOD_SERIES: readonly FakeSeries[] = [
@@ -195,11 +244,21 @@ export function createFakeVod(base: () => string, extra = 0): FakeVod {
         },
         audio: { codec_name: 'ac3', channels: 6, tags: { language: 'spa' } },
       },
-      movie_data: { stream_id: id, name: movie.name, added: movie.added, container_extension: movie.ext },
+      movie_data: {
+        stream_id: id,
+        name: movie.name,
+        added: movie.added,
+        container_extension: movie.ext,
+      },
     };
   };
 
-  const episode = (id: number, season: number, number: number, title: string): Record<string, unknown> => ({
+  const episode = (
+    id: number,
+    season: number,
+    number: number,
+    title: string,
+  ): Record<string, unknown> => ({
     id: raro() ? String(id) : id,
     episode_num: raro() ? String(number) : number,
     title,
@@ -300,7 +359,10 @@ export function createFakeVod(base: () => string, extra = 0): FakeVod {
     },
     art(path) {
       if (path === '/arte/falso.svg') {
-        return { type: 'image/svg+xml', body: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>') };
+        return {
+          type: 'image/svg+xml',
+          body: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'),
+        };
       }
       if (path === '/arte/no-hay.png') return null;
       if (/^\/arte\/[a-z0-9-]{1,40}\.png$/.test(path)) return { type: 'image/png', body: FAKE_PNG };

@@ -15,7 +15,11 @@ import { VOD_DETAILS, type VodKind } from '@ace/shared';
 import type { Clock, TimerHandle } from '../../../core/clock.js';
 import type { VodInfo } from './parse.js';
 
-export type VodDetailsFetcher = (kind: VodKind, source: number, signal: AbortSignal) => Promise<VodInfo>;
+export type VodDetailsFetcher = (
+  kind: VodKind,
+  source: number,
+  signal: AbortSignal,
+) => Promise<VodInfo>;
 
 export type VodDetailsResult =
   | { readonly info: 'ok'; readonly data: VodInfo }
@@ -92,7 +96,11 @@ export class VodDetailsQueue {
   }
 
   /** La ficha: de la caché, coalescida con una en marcha, o por la cola. */
-  get(kind: VodKind, source: number, options: { readonly pre?: boolean } = {}): Promise<VodDetailsResult> {
+  get(
+    kind: VodKind,
+    source: number,
+    options: { readonly pre?: boolean } = {},
+  ): Promise<VodDetailsResult> {
     const cached = this.peek(kind, source);
     if (cached) return Promise.resolve({ info: 'ok', data: cached });
     const key = VodDetailsQueue.key(kind, source);

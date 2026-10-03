@@ -82,7 +82,8 @@ export function registerV1Routes(router: V1Router, services: Services): void {
       );
     } catch (error) {
       /* La cola de carteles llena (§8): 503 con `Retry-After`. */
-      if (isAppError(error) && error.code === 'vod_unavailable') ctx.reply.header('retry-after', '2');
+      if (isAppError(error) && error.code === 'vod_unavailable')
+        ctx.reply.header('retry-after', '2');
       throw error;
     }
     await sendArt(ctx.reply, reply);

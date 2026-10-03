@@ -46,11 +46,7 @@ import {
   type VodSyncMode,
 } from './table-codec.js';
 import { VodTableBuilder, type VodTable } from './table.js';
-import {
-  shouldFallBackToCategories,
-  xtreamVodCategories,
-  xtreamVodList,
-} from './xtream-vod.js';
+import { shouldFallBackToCategories, xtreamVodCategories, xtreamVodList } from './xtream-vod.js';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -140,7 +136,8 @@ const FATAL_CODES: ReadonlySet<string> = new Set(['iptv_auth_failed', 'iptv_acco
 export function vodCategoriesGiveUp(failed: number, inARow: number, total: number): boolean {
   return (
     inARow >= VOD_CATEGORY_FAILURES_IN_A_ROW ||
-    failed > Math.max(VOD_CATEGORY_FAILURES_IN_A_ROW, Math.ceil(total * VOD_CATEGORY_FAILURES_RATIO))
+    failed >
+      Math.max(VOD_CATEGORY_FAILURES_IN_A_ROW, Math.ceil(total * VOD_CATEGORY_FAILURES_RATIO))
   );
 }
 
@@ -268,7 +265,10 @@ async function syncKind(
 }
 
 /** Descarga y monta el catálogo VOD entero (§4.7). Lanza el código IPTV si falla. */
-export async function syncVodCatalog(deps: VodSyncDeps, input: VodSyncInput): Promise<VodSyncResult> {
+export async function syncVodCatalog(
+  deps: VodSyncDeps,
+  input: VodSyncInput,
+): Promise<VodSyncResult> {
   const totalMs = input.byCategoryTotalMs ?? VOD_BY_CATEGORY_TOTAL_MS;
   const movies = await syncKind(deps, 'movie', input.mode, totalMs);
   if (deps.signal.aborted) throw deps.signal.reason;
@@ -281,7 +281,10 @@ export async function syncVodCatalog(deps: VodSyncDeps, input: VodSyncInput): Pr
     builtAt: deps.clock.now(),
     truncated: movies.truncated || series.truncated,
     skipped,
-    mode: movies.mode === 'por_categorias' || series.mode === 'por_categorias' ? 'por_categorias' : 'completo',
+    mode:
+      movies.mode === 'por_categorias' || series.mode === 'por_categorias'
+        ? 'por_categorias'
+        : 'completo',
   };
   return {
     state: 'ready',

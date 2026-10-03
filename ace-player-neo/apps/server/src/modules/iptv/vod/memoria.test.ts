@@ -36,10 +36,44 @@ v8.setFlagsFromString('--expose_gc');
 const gc = vm.runInNewContext('gc') as () => void;
 
 const WORDS = [
-  'amor', 'guerra', 'noche', 'ciudad', 'sombra', 'río', 'último', 'viaje', 'reino', 'fuego',
-  'hielo', 'secreto', 'mar', 'camino', 'sueño', 'lluvia', 'destino', 'luz', 'tiempo', 'lobo',
-  'Oppenheimer', 'Matrix', 'Spider-Man', 'Amélie', 'Dune', 'Toy Story', 'Up', 'Coco', 'Alien',
-  'Rocky', 'Titanic', 'Gladiator', 'Avatar', 'Frozen', 'Joker', 'Parásitos', 'Shrek', 'Heat',
+  'amor',
+  'guerra',
+  'noche',
+  'ciudad',
+  'sombra',
+  'río',
+  'último',
+  'viaje',
+  'reino',
+  'fuego',
+  'hielo',
+  'secreto',
+  'mar',
+  'camino',
+  'sueño',
+  'lluvia',
+  'destino',
+  'luz',
+  'tiempo',
+  'lobo',
+  'Oppenheimer',
+  'Matrix',
+  'Spider-Man',
+  'Amélie',
+  'Dune',
+  'Toy Story',
+  'Up',
+  'Coco',
+  'Alien',
+  'Rocky',
+  'Titanic',
+  'Gladiator',
+  'Avatar',
+  'Frozen',
+  'Joker',
+  'Parásitos',
+  'Shrek',
+  'Heat',
 ];
 const ARTICLES = ['La', 'El', 'Los', 'Una', 'Mi', 'Operación', 'Regreso a', 'Misión'];
 const PREFIXES = ['ES| ', '|LAT| ', '', '', 'EN - ', '4K - '];
@@ -102,7 +136,12 @@ function* listJson(kind: 'movie' | 'series', n: number): Generator<Buffer> {
 }
 
 const categories = (n: number) =>
-  JSON.stringify(Array.from({ length: n }, (_, i) => ({ category_id: String(i), category_name: `Categoría ${i}` })));
+  JSON.stringify(
+    Array.from({ length: n }, (_, i) => ({
+      category_id: String(i),
+      category_name: `Categoría ${i}`,
+    })),
+  );
 
 function used(): number {
   const memory = process.memoryUsage();
@@ -162,7 +201,18 @@ describe('@lento memoria del catálogo VOD', () => {
        cuenta la mediana de 5 (la máquina de pruebas comparte CPU). */
     const p95 = ((table) => {
       const medians: number[] = [];
-      for (const q of ['la', 'amor', 'matrix', 'spiderman', 'dune 2021', 'toy story', 'parasitos', 'regreso a', 'xyz', 'rio']) {
+      for (const q of [
+        'la',
+        'amor',
+        'matrix',
+        'spiderman',
+        'dune 2021',
+        'toy story',
+        'parasitos',
+        'regreso a',
+        'xyz',
+        'rio',
+      ]) {
         const runs: number[] = [];
         for (let round = 0; round < 5; round += 1) {
           const t0 = performance.now();
@@ -199,7 +249,7 @@ describe('@lento memoria del catálogo VOD', () => {
 
     const report =
       `[vod @lento] sync ${Math.round(syncMs)} ms · pico +${peakMb.toFixed(1)} MB · retenido ${retainedMb.toFixed(1)} MB · ` +
-        `p95 búsqueda ${p95.toFixed(1)} ms · carga en frío +${loadPeakMb.toFixed(1)} MB`;
+      `p95 búsqueda ${p95.toFixed(1)} ms · carga en frío +${loadPeakMb.toFixed(1)} MB`;
     /* Con VOD_LENTO_INFORME=<fichero>, los números van ahí (Vitest calla la consola si todo pasa). */
     if (process.env.VOD_LENTO_INFORME) appendFileSync(process.env.VOD_LENTO_INFORME, `${report}\n`);
     expect(syncMs).toBeLessThan(30_000);

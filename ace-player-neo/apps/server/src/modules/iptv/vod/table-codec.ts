@@ -168,7 +168,8 @@ function copyArray(
 ): Float64Array | Uint32Array | Uint16Array | Uint8Array {
   const size = { f64: 8, u32: 4, u16: 2, u8: 1, utf8: 1 }[item.type];
   const bytes = item.length * size;
-  if (!Number.isInteger(item.offset) || item.offset < 0 || item.offset % 8 !== 0) fail('desplazamiento');
+  if (!Number.isInteger(item.offset) || item.offset < 0 || item.offset % 8 !== 0)
+    fail('desplazamiento');
   if (!Number.isInteger(item.length) || item.length < 0 || item.offset + bytes > body.length) {
     fail('longitud');
   }
@@ -266,7 +267,12 @@ export async function completeVodTables(
     const folded = foldKeepLength(table.titles);
     await yieldThread();
     const compact = compactColumn(folded, table.offsets, table.n);
-    out[kind] = new VodTable({ ...table, folded, compact: compact.text, compactOffsets: compact.offsets });
+    out[kind] = new VodTable({
+      ...table,
+      folded,
+      compact: compact.text,
+      compactOffsets: compact.offsets,
+    });
   }
   return out;
 }

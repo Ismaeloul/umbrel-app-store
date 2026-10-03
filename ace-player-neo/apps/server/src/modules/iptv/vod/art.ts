@@ -24,7 +24,17 @@
      arrancar. Un 404 o un error del origen se recuerda 1 h (5 000 entradas). */
 
 import { createHash, createHmac } from 'node:crypto';
-import { mkdir, readdir, readFile, rename, rm, stat, utimes, writeFile, chmod } from 'node:fs/promises';
+import {
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  utimes,
+  writeFile,
+  chmod,
+} from 'node:fs/promises';
 import path from 'node:path';
 import { IPTV_USER_AGENT, VOD_ART, type VodArtKind } from '@ace/shared';
 import { AppError } from '../../../core/errors.js';
@@ -142,7 +152,9 @@ export class VodArtCache {
 
   start(): void {
     void this.sweep();
-    this.timer = this.deps.clock.setInterval(() => void this.sweep(), ART_SWEEP_MS, { unref: true });
+    this.timer = this.deps.clock.setInterval(() => void this.sweep(), ART_SWEEP_MS, {
+      unref: true,
+    });
   }
 
   stop(): void {

@@ -306,9 +306,10 @@ export function durationOf(record: Record<string, unknown>): number | null {
   const text = looseString(record.duration);
   const match = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(text);
   if (match) {
-    const total = match[3] === undefined
-      ? Number(match[1]) * 3600 + Number(match[2]) * 60
-      : Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+    const total =
+      match[3] === undefined
+        ? Number(match[1]) * 3600 + Number(match[2]) * 60
+        : Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
     return total > 0 && total < 86_400 ? total : null;
   }
   const minutes = looseNumber(record.episode_run_time ?? record.runtime);
@@ -321,7 +322,8 @@ function videoOf(value: unknown): VodVideoHint {
   const codec = looseString(video.codec_name).toLowerCase().slice(0, 16) || null;
   const pix = looseString(video.pix_fmt).toLowerCase();
   const bits = looseInt(video.bits_per_raw_sample);
-  const bitDepth = bits && bits > 0 && bits <= 16 ? bits : /10le|10be|p010/.test(pix) ? 10 : pix ? 8 : null;
+  const bitDepth =
+    bits && bits > 0 && bits <= 16 ? bits : /10le|10be|p010/.test(pix) ? 10 : pix ? 8 : null;
   const width = looseInt(video.width);
   const height = looseInt(video.height);
   return {
@@ -352,7 +354,11 @@ function textsOf(info: Record<string, unknown>): VodInfoTexts {
   return {
     title: firstText(info, ['name', 'title'], VOD_LIMITS.titleMax),
     originalTitle: firstText(info, ['o_name', 'original_name', 'original_title'], 200),
-    year: yearOf(info.year) ?? yearOf(info.releasedate) ?? yearOf(info.releaseDate) ?? yearOf(info.release_date),
+    year:
+      yearOf(info.year) ??
+      yearOf(info.releasedate) ??
+      yearOf(info.releaseDate) ??
+      yearOf(info.release_date),
     plot,
     genres: listOf(info.genre ?? info.genres, 8, 40),
     cast: listOf(info.cast ?? info.actors, 12, 80),
@@ -495,13 +501,20 @@ export function parseSeriesInfo(body: unknown): VodSeriesInfo {
  * ¿Se podrá reproducir? (§7.2): una PISTA por el códec que dice el
  * proveedor y la extensión; la decisión la toma el índice al abrir.
  */
-export function playableHint(codec: string | null, bitDepth: number | null, ext: number): VodPlayable {
+export function playableHint(
+  codec: string | null,
+  bitDepth: number | null,
+  ext: number,
+): VodPlayable {
   const name = extName(ext);
   if (name === 'avi' || name === 'ts') return 'no';
   if (!codec) return 'unknown';
-  if (codec === 'h264' || codec === 'avc' || codec === 'avc1') return bitDepth && bitDepth > 8 ? 'no' : 'yes';
+  if (codec === 'h264' || codec === 'avc' || codec === 'avc1')
+    return bitDepth && bitDepth > 8 ? 'no' : 'yes';
   if (codec === 'hevc' || codec === 'h265') return 'hevc';
-  if (/^(?:mpeg4|mpeg2video|mpeg1video|vc1|wmv\d|msmpeg4\w*|h263|divx|xvid|vp8|theora)$/.test(codec)) {
+  if (
+    /^(?:mpeg4|mpeg2video|mpeg1video|vc1|wmv\d|msmpeg4\w*|h263|divx|xvid|vp8|theora)$/.test(codec)
+  ) {
     return 'no';
   }
   return 'unknown';

@@ -87,13 +87,7 @@ import {
   type EpisodeRef,
   type ProgressTarget,
 } from './progress.js';
-import {
-  listPage,
-  parseVodQuery,
-  searchCached,
-  searchPage,
-  type VodFilter,
-} from './search.js';
+import { listPage, parseVodQuery, searchCached, searchPage, type VodFilter } from './search.js';
 import type { VodTable } from './table.js';
 import type { VodSyncMode } from './table-codec.js';
 import { tagBit, tagsOf } from './titles.js';
@@ -271,7 +265,11 @@ export class VodService {
   readonly art: VodArtCache;
 
   constructor(private readonly host: VodHost) {
-    this.doc = new VodDocStore({ file: host.paths.vodFile, clock: host.clock, logger: host.logger });
+    this.doc = new VodDocStore({
+      file: host.paths.vodFile,
+      clock: host.clock,
+      logger: host.logger,
+    });
     this.details = new VodDetailsQueue(host.clock, (kind, source, signal) =>
       this.fetchInfo(kind, source, signal),
     );
@@ -491,7 +489,10 @@ export class VodService {
     const provider = this.xtream();
     const cancelled = signal.aborted && !(signal.reason instanceof VodPreemptedError);
     return Boolean(
-      provider && provider.id === snapshot.id && provider.revision === snapshot.revision && !cancelled,
+      provider &&
+      provider.id === snapshot.id &&
+      provider.revision === snapshot.revision &&
+      !cancelled,
     );
   }
 
@@ -526,7 +527,10 @@ export class VodService {
           truncated: false,
           skipped: result.skipped,
         });
-        logger.info({ reason, ms: clock.now() - startedAt }, 'VOD: el proveedor no ofrece películas ni series');
+        logger.info(
+          { reason, ms: clock.now() - startedAt },
+          'VOD: el proveedor no ofrece películas ni series',
+        );
       } else {
         const { catalog } = result;
         const file = this.host.paths.vodCatalogFile;
@@ -645,7 +649,11 @@ export class VodService {
   /** Estado del catálogo (§4.8). */
   state(): VodCatalogState {
     const provider = this.host.provider();
-    if (!provider || !provider.enabled || !this.host.credentials() && provider.kind === 'xtream') {
+    if (
+      !provider ||
+      !provider.enabled ||
+      (!this.host.credentials() && provider.kind === 'xtream')
+    ) {
       return 'off';
     }
     if (provider.kind !== 'xtream') return 'unsupported';
@@ -846,7 +854,8 @@ export class VodService {
         return stamp ? { id, art: 'poster', v: stamp } : null;
       };
       if (ref.kind === 'movie') art = posterOf('movie', ref.source, entry.id);
-      else if (ref.kind === 'episode' && entry.seriesId) art = posterOf('series', ref.parent, entry.seriesId);
+      else if (ref.kind === 'episode' && entry.seriesId)
+        art = posterOf('series', ref.parent, entry.seriesId);
       const next = item.isNext ? entry.next : null;
       out.push({
         id: next ? next.id : entry.id,
@@ -968,7 +977,10 @@ export class VodService {
   }
 
   /** Película o serie de un id (con su fila), o `vod_not_found`. */
-  private async locate(id: string, kinds: readonly VodRef['kind'][]): Promise<{
+  private async locate(
+    id: string,
+    kinds: readonly VodRef['kind'][],
+  ): Promise<{
     readonly catalog: VodCatalog;
     readonly ref: VodRef;
     readonly table: VodTable;
@@ -1005,7 +1017,11 @@ export class VodService {
     for (const season of info.seasons) {
       for (const episode of season.episodes) {
         out.push({
-          id: vodId(keys, providerId, { kind: 'episode', parent: seriesSource, source: episode.source }),
+          id: vodId(keys, providerId, {
+            kind: 'episode',
+            parent: seriesSource,
+            source: episode.source,
+          }),
           season: season.number,
           number: episode.number,
           title: this.text(episode.title, 200),
@@ -1030,8 +1046,14 @@ export class VodService {
       title: this.text(table.title(row), 200) || 'Sin título',
       year: table.yearOf(row) ?? info?.year ?? null,
       plot: this.textOrNull(info?.plot ?? null, 2_000),
-      genres: (info?.genres ?? []).map((genre) => this.text(genre, 40)).filter(Boolean).slice(0, 8),
-      cast: (info?.cast ?? []).map((name) => this.text(name, 80)).filter(Boolean).slice(0, 12),
+      genres: (info?.genres ?? [])
+        .map((genre) => this.text(genre, 40))
+        .filter(Boolean)
+        .slice(0, 8),
+      cast: (info?.cast ?? [])
+        .map((name) => this.text(name, 80))
+        .filter(Boolean)
+        .slice(0, 12),
       director: this.textOrNull(info?.director ?? null, 200),
       country: this.textOrNull(info?.country ?? null, 80),
       rating: table.ratingOf(row) ?? info?.rating ?? null,
@@ -1182,13 +1204,24 @@ export class VodService {
         throw new AppError('validation_error', { detail: 'event' });
       }
       const event = body.event;
-      await this.doc.write((doc) => ({ ...doc, progress: applySeriesEvent(doc.progress, id, event) }));
+      await this.doc.write((doc) => ({
+        ...doc,
+        progress: applySeriesEvent(doc.progress, id, event),
+      }));
       return;
     }
     let target: ProgressTarget;
     let episodes: EpisodeRef[] = [];
     if (ref.kind === 'movie') {
-      target = { id, kind: 'movie', seriesId: null, title, subtitle: null, season: null, episode: null };
+      target = {
+        id,
+        kind: 'movie',
+        seriesId: null,
+        title,
+        subtitle: null,
+        season: null,
+        episode: null,
+      };
     } else {
       ({ target, episodes } = await this.episodeTarget(id, ref, title));
     }
@@ -1205,15 +1238,17 @@ export class VodService {
     if (body.event === 'mark-through' && ref.kind === 'episode') {
       const index = episodes.findIndex((episode) => episode.id === id);
       const upTo = index >= 0 ? episodes.slice(0, index + 1) : [];
-      context.through = (upTo.length ? upTo : []).slice(-VOD_PROGRESS.markThroughMax).map((episode) => ({
-        id: episode.id,
-        kind: 'episode' as const,
-        seriesId: target.seriesId,
-        title,
-        subtitle: episodeSubtitle(episode),
-        season: episode.season,
-        episode: episode.number,
-      }));
+      context.through = (upTo.length ? upTo : [])
+        .slice(-VOD_PROGRESS.markThroughMax)
+        .map((episode) => ({
+          id: episode.id,
+          kind: 'episode' as const,
+          seriesId: target.seriesId,
+          title,
+          subtitle: episodeSubtitle(episode),
+          season: episode.season,
+          episode: episode.number,
+        }));
       if (!context.through.length) context.through = [target];
     }
     const prefId = target.seriesId ?? id;
