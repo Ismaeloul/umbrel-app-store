@@ -2,7 +2,9 @@ Ajustes (listas, tu fútbol, reproducción, «Dónde se está reproduciendo»,
 apariencia, dispositivos, salud, motor y «Acerca de»). «Dónde se está
 reproduciendo» vive en `src/features/where-playing/` (sesiones de
 GET /api/v1/playback y el evento SSE `playback.sessions`). Entrada del
-armazón: `index.tsx`. El código está en
+armazón: `index.tsx`. Se ve **una sección cada vez**: el índice (columna en
+escritorio, fila de chips en el móvil) funciona como pestañas y cada sección
+tiene su dirección, `?vista=ajustes/<sección>` (sin sección, la primera). El código está en
 `src/features/settings/` y las listas en `src/features/directories/`.
 
 - «Tu fútbol» abre la hoja de `src/features/preferences/PreferencesSheet.tsx`.

@@ -3,7 +3,7 @@
    secciones, las pone en su índice y el indicador del motor («ajustes/salud»)
    lleva a la de salud. */
 
-import { screen, waitFor, within } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { resetMode, setMode } from '../../api/mode.ts';
 import { resetToasts } from '../../notices/toasts.ts';
@@ -53,13 +53,21 @@ describe('Ajustes con Salud y Dispositivos', () => {
       .getAllByRole('link')
       .map((a) => a.textContent);
     expect(names).toEqual(expect.arrayContaining(['Dispositivos', 'Salud']));
-    expect(
-      await screen.findByRole('heading', { name: 'Salud del sistema', level: 2 }),
-    ).toBeInTheDocument();
-    expect(await screen.findByText('Todo funciona.')).toBeInTheDocument();
+    // Ajustes enseña una sección cada vez: cada una se ve en su dirección.
+    expect(screen.queryByRole('heading', { name: 'Salud del sistema' })).not.toBeInTheDocument();
+  });
+
+  it('«ajustes/dispositivos» enseña solo Dispositivos', async () => {
+    renderSection(
+      <SettingsView route={{ vista: 'ajustes', seccion: 'dispositivos' }} active />,
+      '?vista=ajustes/dispositivos',
+    );
     expect(
       await screen.findByRole('button', { name: 'Emparejar un dispositivo' }),
     ).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([
+      'Dispositivos',
+    ]);
   });
 
   it('«ajustes/salud» (el indicador del motor) lleva a Salud', async () => {
@@ -70,8 +78,11 @@ describe('Ajustes con Salud y Dispositivos', () => {
     const index = screen.getByRole('navigation', { name: 'Secciones de Ajustes' });
     expect(within(index).getByRole('link', { name: 'Salud' })).toHaveAttribute(
       'aria-current',
-      'location',
+      'page',
     );
-    await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled());
+    expect(
+      await screen.findByRole('heading', { name: 'Salud del sistema', level: 2 }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText('Todo funciona.')).toBeInTheDocument();
   });
 });
