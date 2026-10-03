@@ -1113,10 +1113,12 @@
 }
 
 /* ---- Directos (B1, solo en pantallas anchas) ----------------------------------------
-   Arriba de la columna derecha: «● En directo» y debajo una cápsula por
-   partido con escudos, siglas, marcador y minuto. Las cápsulas pasan a la
-   línea siguiente (con el marcador ya no cabían dos en la columna y la
-   segunda salía cortada); nada se mueve solo. */
+   Arriba de la columna derecha: «● En directo N» y debajo una cápsula por
+   partido con escudos, siglas, marcador y minuto, DOS POR LÍNEA (con el
+   marcador ya no cabían en una fila y la segunda salía cortada). Como mucho
+   dos líneas a la vista y el asomo de la tercera: con diez directos a la vez
+   la tira medía 279 px y empujaba «Ver canal» fuera de la pantalla. El resto,
+   desplazando la tira (rueda o dedo); nada se mueve solo. */
 .agenda-strip {
   display: grid;
   gap: 8px;
@@ -1131,16 +1133,39 @@
   font-size: var(--fs-13);
   font-weight: 760;
 }
+.agenda-strip__count {
+  margin-left: 6px;
+  color: var(--text-3);
+  font-weight: 600;
+}
 .agenda-strip__list {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--s-2);
   min-width: 0;
+}
+.agenda-strip__list--more {
+  /* Dos líneas enteras; las demás, desplazando. Con 4 px de aire (el margen
+     negativo lo devuelve) para el anillo de foco. */
+  max-height: calc(2 * var(--tap) + var(--s-2) + 8px);
+  margin: -4px;
+  padding: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+/* Mientras quedan directos por debajo, la segunda línea se funde abajo: se
+   ve que hay más (el número del título dice cuántos). */
+.agenda-strip__list--more[data-more-below] {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
 }
 .agenda-strip__chip {
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
   min-height: var(--tap);
   padding: 0 14px 0 8px;
   border-radius: var(--r-pill);

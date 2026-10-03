@@ -637,4 +637,54 @@ describe('vista Agenda', () => {
     );
     expect(strip.querySelector('.agenda-strip__score')).toHaveTextContent(/2.*1/);
   });
+
+  it('pantalla ancha: si tapas a mano un marcador, «En directo» tampoco lo enseña (hasta destaparlo)', async () => {
+    net = mockFetch(routes());
+    renderAgenda('wide');
+    const strip = await screen.findByRole('navigation', { name: 'En directo' });
+    const chip = await within(strip).findByRole('button', {
+      name: 'Real Madrid vs Girona, 2 a 1, minuto 54',
+    });
+    const side = screen.getByRole('complementary', { name: 'Partido elegido' });
+    // Destapar y volver a tapar en el panel (la cápsula «Marcador»).
+    fireEvent.click(
+      await within(side).findByRole('button', { name: 'Ver marcador de Real Madrid vs Girona' }),
+    );
+    fireEvent.click(
+      await within(side).findByRole('button', {
+        name: /^Tapar el marcador de Real Madrid vs Girona/,
+      }),
+    );
+    await waitFor(() => expect(chip).toHaveAccessibleName('Real Madrid vs Girona, minuto 54'));
+    expect(chip.querySelector('.agenda-strip__score')).toBeNull();
+    // Destapado otra vez: vuelve a la tira.
+    fireEvent.click(
+      within(side).getByRole('button', { name: 'Ver marcador de Real Madrid vs Girona' }),
+    );
+    await waitFor(() =>
+      expect(chip).toHaveAccessibleName('Real Madrid vs Girona, 2 a 1, minuto 54'),
+    );
+  });
+
+  it('pantalla ancha: con muchos directos, «En directo» cuenta cuántos y no crece más de dos líneas', async () => {
+    const extra = Array.from({ length: 5 }, (_, index) =>
+      matchAt(-20 - index, {
+        home: `Local ${index}`,
+        away: `Visitante ${index}`,
+        competition: 'LaLiga',
+        channels: [{ id: `x${index}`, name: `Canal ${index}` }],
+      }),
+    );
+    net = mockFetch(
+      routes({
+        'GET /api/v1/football': scheduleOf({ [TODAY]: [LIVE, ...extra, SOON] }),
+      }),
+    );
+    renderAgenda('wide');
+    const strip = await screen.findByRole('navigation', { name: 'En directo' });
+    await waitFor(() => expect(within(strip).getAllByRole('button')).toHaveLength(6));
+    expect(strip.querySelector('.agenda-strip__count')).toHaveTextContent('6');
+    // Todos están (se llega desplazando la tira); la lista lleva el tope de alto.
+    expect(strip.querySelector('.agenda-strip__list')).toHaveClass('agenda-strip__list--more');
+  });
 });

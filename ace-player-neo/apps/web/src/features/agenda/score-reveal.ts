@@ -18,6 +18,9 @@ interface RevealState {
   watched: string | null;
   /** Partidos destapados mientras dura esa reproducción. */
   revealed: ReadonlySet<string>;
+  /** Partidos que TAPASTE a mano en la agenda (cápsula «Marcador» o menú):
+      la tira «En directo», que enseña el resultado, tampoco lo enseña. */
+  covered: ReadonlySet<string>;
 }
 
 /** Id del partido que se está viendo, o null (un canal suelto no es un partido). */
@@ -30,40 +33,62 @@ export function watchedMatchOf(presence: PlayerPresence): string | null {
 const store = createStore<RevealState>({
   watched: watchedMatchOf(playerPresence.get()),
   revealed: new Set(),
+  covered: new Set(),
 });
 
 /* Cambiar de partido o detener vuelve a tapar: el destapado era para ESA
-   reproducción. Suscripción de módulo (vive lo que la pestaña). */
+   reproducción. Lo tapado a mano se queda (lo pediste tú). Suscripción de
+   módulo (vive lo que la pestaña). */
 playerPresence.subscribe(() => {
   const watched = watchedMatchOf(playerPresence.get());
-  if (watched !== store.get().watched) store.set({ watched, revealed: new Set() });
+  if (watched !== store.get().watched)
+    store.set((state) => ({ ...state, watched, revealed: new Set() }));
 });
+
+function without(set: ReadonlySet<string>, id: string): ReadonlySet<string> {
+  if (!set.has(id)) return set;
+  const next = new Set(set);
+  next.delete(id);
+  return next;
+}
+
+function including(set: ReadonlySet<string>, id: string): ReadonlySet<string> {
+  if (set.has(id)) return set;
+  const next = new Set(set);
+  next.add(id);
+  return next;
+}
 
 export function revealScore(matchId: string): void {
   store.set((state) => {
-    if (state.revealed.has(matchId)) return state;
-    const revealed = new Set(state.revealed);
-    revealed.add(matchId);
-    return { ...state, revealed };
+    const revealed = including(state.revealed, matchId);
+    const covered = without(state.covered, matchId);
+    if (revealed === state.revealed && covered === state.covered) return state;
+    return { ...state, revealed, covered };
   });
 }
 
-/** Vuelve a tapar UN partido (segundo toque en la cápsula «Marcador» de la agenda). */
+/** Vuelve a tapar UN partido (segundo toque en la cápsula «Marcador» de la agenda o el menú). */
 export function hideScore(matchId: string): void {
   store.set((state) => {
-    if (!state.revealed.has(matchId)) return state;
-    const revealed = new Set(state.revealed);
-    revealed.delete(matchId);
-    return { ...state, revealed };
+    const revealed = without(state.revealed, matchId);
+    const covered = including(state.covered, matchId);
+    if (revealed === state.revealed && covered === state.covered) return state;
+    return { ...state, revealed, covered };
   });
 }
 
 /* ---- Agenda: TODO tapado por defecto (corrección 1 y DESIGN.md de Palco:
    «el marcador vive oculto tras un toque en la cápsula "Marcador", nunca en
-   la imagen»). En la agenda (héroe, filas, panel, «Luego», columna y tira de
-   directos) un partido enseña cifras solo si está en `revealed`; lo demás
-   (centro de partido, biblioteca, mini) sigue con la regla 29 de arriba. El
-   destapado se olvida igual que antes al cambiar de partido o detener. */
+   la imagen»). En la agenda (héroe, filas, panel, «Luego» y columna) un
+   partido enseña cifras solo si está en `revealed`; lo demás (centro de
+   partido, biblioteca, mini) sigue con la regla 29 de arriba. El destapado se
+   olvida igual que antes al cambiar de partido o detener.
+
+   Excepción, la tira «En directo» de la pantalla ancha (Isma, 0.9.0: «el
+   marcador junto al minuto»): enseña el resultado salvo el del partido que
+   estás viendo (regla 29, `useScoreHidden`) y salvo los que hayas tapado a
+   mano (`useScoreCovered`). */
 
 /** Puro: ¿este partido está destapado? */
 export function isScoreRevealed(revealed: ReadonlySet<string>, matchId: string): boolean {
@@ -85,6 +110,11 @@ export function resetScoreReveal(): void {
   store.set((state) => (state.revealed.size ? { ...state, revealed: new Set() } : state));
 }
 
+/** ¿Lo has tapado a mano en la agenda (y no lo has vuelto a destapar)? */
+export function useScoreCovered(matchId: string): boolean {
+  return useStore(store, (state) => state.covered.has(matchId));
+}
+
 /** Id del partido que se está viendo (o null). */
 export function useWatchedMatch(): string | null {
   return useStore(playerPresence, watchedMatchOf);
@@ -103,5 +133,9 @@ export function useScoreHidden(matchId: string, alsoWatched = false): boolean {
 
 /** Solo para los tests. */
 export function resetScoreRevealForTests(): void {
-  store.set({ watched: watchedMatchOf(playerPresence.get()), revealed: new Set() });
+  store.set({
+    watched: watchedMatchOf(playerPresence.get()),
+    revealed: new Set(),
+    covered: new Set(),
+  });
 }
