@@ -22,18 +22,22 @@
       subtítulo, sin filiales, cantera ni femenino (salvo Liga F), y solo si
       ninguno de los dos equipos juega en la agenda ese día, el anterior o el
       siguiente (un equipo no juega dos días seguidos: así un nombre escrito
-      de otra forma no duplica el partido).
+      de otra forma no duplica el partido) y si a esa misma hora no hay en la
+      agenda un partido de la misma competición, anunciado en ese canal o con
+      un nombre que se parece (así tampoco cuando la guía escribe los DOS
+      equipos de otra forma: «Brighton - Spurs», «FC Köln - Mainz 05»).
 
    Sin IPTV, en pausa o sin guía, el servicio ni llama aquí; sin nada de la
    guía para un partido, ese partido queda tal cual. La guía solo suma. */
 
-import { footballTeamIsVariant, footballTeamKey } from '@ace/shared';
+import { LIBRARY_MIN_SCORE, footballTeamIsVariant, footballTeamKey } from '@ace/shared';
 import type { Catalog } from './catalog.js';
 import type { GuideWindow } from './guide.js';
 import {
   COMPETITION_FAMILY_LABELS,
   GUIDE_EARLY_MS,
   GUIDE_LATE_MS,
+  WEAK_TEAM_WORDS,
   programmeFamilies,
   competitionFamily,
   confirmByGuide,
@@ -41,10 +45,13 @@ import {
   hasLiveMark,
   isNotLive,
   kickoffFromProgramme,
+  matchFamily,
+  programmeFitsKickoff,
   programmeLastsAMatch,
   programmeTeamTexts,
   teamAliases,
   teamCache,
+  teamCoreWords,
   teamsInText,
   type CompetitionFamily,
   type GuideChannelCandidate,
@@ -177,9 +184,11 @@ interface LiveShow {
   /** Día de Madrid del saque ('' sin saque). */
   readonly date: string;
   readonly pair: { readonly home: string; readonly away: string } | null;
-  /** Alias y claves de los dos equipos del título (si los hay). */
+  /** Alias, claves y nombres sin siglas de los dos equipos del título (si los hay). */
   readonly pairAliases: readonly string[];
   readonly pairKeys: readonly string[];
+  readonly pairCores: readonly string[];
+  readonly pairWords: readonly string[];
 }
 
 function liveShows(
@@ -192,6 +201,7 @@ function liveShows(
       if (!hasLiveMark(programme)) continue;
       const pair = extractGuideMatchup(programme.title) ?? extractGuideMatchup(programme.subTitle);
       const kickoff = kickoffFromProgramme(programme);
+      const pairCores = pair ? teamCores(pair.home, pair.away) : [];
       out.push({
         candidate,
         programme,
@@ -201,6 +211,8 @@ function liveShows(
         pair,
         pairAliases: pair ? [...teamAliases(pair.home), ...teamAliases(pair.away)] : [],
         pairKeys: pair ? [footballTeamKey(pair.home), footballTeamKey(pair.away)] : [],
+        pairCores,
+        pairWords: strongWords(pairCores),
       });
     }
   }
@@ -255,27 +267,70 @@ interface AgendaTeams {
   readonly cache: TeamCache;
   readonly aliases: ReadonlySet<string>;
   readonly keys: readonly string[];
+  /** Cada equipo sin siglas ni prefijos (`teamCoreWords`): «Atalanta BC» y «Atalanta» son «atalanta». */
+  readonly cores: readonly string[];
+  /** Las palabras con peso de los dos nombres (para «se parece»). */
+  readonly words: ReadonlySet<string>;
+  /** Saque (null sin hora) y lo que se mira de él para no duplicarlo. */
+  readonly start: number | null;
+  readonly family: CompetitionFamily | null;
+  readonly channels: readonly string[];
+}
+
+/** Las palabras de un nombre que pesan para decir «se parece» (4 letras o más, no débiles). */
+function strongWords(cores: readonly string[]): string[] {
+  return cores
+    .flatMap((core) => core.split(' '))
+    .filter((word) => word.length >= 4 && !WEAK_TEAM_WORDS.has(word) && /[a-z]/.test(word));
+}
+
+function teamCores(home: string, away: string): string[] {
+  return [teamCoreWords(home).join(' '), teamCoreWords(away).join(' ')].filter(Boolean);
 }
 
 function agendaTeams(
   day: number,
-  match: { readonly home: string; readonly away: string },
+  match: {
+    readonly home: string;
+    readonly away: string;
+    readonly start?: number | null;
+    readonly competition?: string;
+    readonly title?: string;
+    readonly channels?: readonly string[];
+  },
 ): AgendaTeams {
   const cache = teamCache(match);
+  const cores = teamCores(match.home, match.away);
   return {
     day,
     cache,
     aliases: new Set([...cache.home, ...cache.away]),
     keys: [footballTeamKey(match.home), footballTeamKey(match.away)].filter(Boolean),
+    cores,
+    words: new Set(strongWords(cores)),
+    start: match.start ?? null,
+    family: matchFamily({ competition: match.competition ?? '', title: match.title ?? '' }),
+    channels: match.channels ?? [],
   };
 }
 
-/** ¿Juega alguno de los dos equipos del programa en ese partido? */
+/** ¿Juega alguno de los dos equipos del programa en ese partido? (clave, alias o nombre sin siglas). */
 function sharesTeam(show: LiveShow, match: AgendaTeams): boolean {
   return (
     show.pairKeys.some((key) => key && match.keys.includes(key)) ||
-    show.pairAliases.some((alias) => match.aliases.has(alias))
+    show.pairAliases.some((alias) => match.aliases.has(alias)) ||
+    show.pairCores.some((core) => match.cores.includes(core))
   );
+}
+
+/** Lo que separa dos saques para que sean «la misma franja». */
+const SAME_SLOT_MS = 30 * 60_000;
+
+/** ¿Cae el programa a la hora de ese partido de la agenda? */
+function sameSlot(show: LiveShow, match: AgendaTeams): boolean {
+  if (match.start === null) return false;
+  if (programmeFitsKickoff(show.programme, match.start)) return true;
+  return show.kickoff !== null && Math.abs(show.kickoff - match.start) <= SAME_SLOT_MS;
 }
 
 /**
@@ -389,8 +444,17 @@ export function guideAgenda(
     if (!dates.has(date) || day === null) continue;
     const known = agenda.some(
       (match) =>
-        Math.abs(match.day - day) <= 1 &&
-        (sharesTeam(show, match) || showHasTeams(show, match.cache)),
+        (Math.abs(match.day - day) <= 1 &&
+          (sharesTeam(show, match) || showHasTeams(show, match.cache))) ||
+        /* Los dos equipos escritos de otra forma («Brighton - Spurs» y «Brighton & Hove Albion -
+           Tottenham Hotspur», «FC Köln - Mainz 05» y «Colonia - Maguncia»): a esa misma hora, un
+           partido de la agenda de la misma competición, en ese canal o con un nombre que se
+           parece es ese partido. Mejor no añadir uno que añadirlo dos veces. */
+        (match.day === day &&
+          sameSlot(show, match) &&
+          (match.family === family ||
+            scorerFor(match.channels)(candidate.display) >= LIBRARY_MIN_SCORE ||
+            show.pairWords.some((word) => match.words.has(word)))),
     );
     if (known) continue;
     const key = `${date}|${[...show.pairKeys].sort().join('|')}`;
@@ -428,7 +492,7 @@ export function guideAgenda(
       start: group.start,
       channels: distinctChannels(found),
     });
-    added.push(agendaTeams(day, group));
+    added.push(agendaTeams(day, { ...group, competition }));
   }
   return { confirmations, additions };
 }

@@ -191,6 +191,39 @@ describe('confirmByGuide', () => {
     expect(champions('FC Porto', 'Atlético de Madrid', 'Oporto - Atlético de Madrid')).toEqual([
       'M+ Liga de Campeones',
     ]);
+    /* Siglas pegadas al separador («BC», «ACF», «CP», «SL») y el nombre largo en la agenda. */
+    expect(champions('Atalanta', 'Fiorentina', 'Atalanta BC - ACF Fiorentina')).toEqual([
+      'M+ Liga de Campeones',
+    ]);
+    expect(champions('Sporting de Portugal', 'Benfica', 'Sporting CP - SL Benfica')).toEqual([
+      'M+ Liga de Campeones',
+    ]);
+  });
+
+  it('las formas cortas y los nombres en castellano de la Premier y la Bundesliga (casos reales de la revisión)', () => {
+    const at = (competition: string, home: string, away: string, title: string): string[] =>
+      confirmed([channel('DAZN 1', [programme(`${competition}: ${title} (Directo)`)])], {
+        ...MATCH,
+        home,
+        away,
+        competition,
+        channels: ['DAZN 1'],
+      });
+    expect(
+      at('Premier League', 'Brighton & Hove Albion', 'Tottenham Hotspur', 'Brighton - Spurs'),
+    ).toEqual(['DAZN 1']);
+    expect(
+      at('Premier League', 'Wolverhampton Wanderers', 'Nottingham Forest', 'Wolves - Nottingham'),
+    ).toEqual(['DAZN 1']);
+    expect(at('Bundesliga', 'Colonia', 'Maguncia', 'FC Köln - Mainz 05')).toEqual(['DAZN 1']);
+    expect(
+      at(
+        'Bundesliga',
+        'Borussia Mönchengladbach',
+        'Eintracht Fráncfort',
+        'B. Mönchengladbach - Eintracht Frankfurt',
+      ),
+    ).toEqual(['DAZN 1']);
   });
 
   it('partidos de archivo y documentales: no', () => {

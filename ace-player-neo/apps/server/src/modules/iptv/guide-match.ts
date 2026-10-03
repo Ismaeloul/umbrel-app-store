@@ -208,6 +208,8 @@ export const EPG_TEAM_ALIASES: Readonly<Record<string, readonly string[]>> = {
   'fc porto': ['porto', 'oporto', 'fc porto'],
   porto: ['porto', 'oporto', 'fc porto'],
   'sporting cp': ['sporting cp', 'sporting de portugal', 'sporting lisboa', 'sporting de lisboa'],
+  'sporting de portugal': ['sporting cp', 'sporting de portugal', 'sporting lisboa'],
+  'sporting portugal': ['sporting cp', 'sporting de portugal', 'sporting lisboa'],
   benfica: ['benfica', 'sl benfica'],
   'sl benfica': ['benfica', 'sl benfica'],
   'olympique marseille': ['olympique de marsella', 'marsella', 'olympique marseille', 'marseille'],
@@ -218,13 +220,50 @@ export const EPG_TEAM_ALIASES: Readonly<Record<string, readonly string[]>> = {
   'borussia dortmund': ['borussia dortmund', 'dortmund', 'b dortmund'],
   'bayer leverkusen': ['bayer leverkusen', 'leverkusen'],
   'rb leipzig': ['rb leipzig', 'leipzig'],
-  'tottenham hotspur': ['tottenham hotspur', 'tottenham'],
-  tottenham: ['tottenham hotspur', 'tottenham'],
+  'tottenham hotspur': ['tottenham hotspur', 'tottenham', 'spurs'],
+  tottenham: ['tottenham hotspur', 'tottenham', 'spurs'],
+  spurs: ['tottenham hotspur', 'tottenham', 'spurs'],
   'newcastle united': ['newcastle united', 'newcastle'],
   newcastle: ['newcastle united', 'newcastle'],
   'west ham united': ['west ham united', 'west ham'],
   'psv eindhoven': ['psv eindhoven', 'psv'],
   psv: ['psv eindhoven', 'psv'],
+  /* Formas de las guías que la agenda escribe de otra manera (revisión de la agenda híbrida). */
+  'brighton hove albion': ['brighton hove albion', 'brighton'],
+  brighton: ['brighton hove albion', 'brighton'],
+  'wolverhampton wanderers': ['wolverhampton wanderers', 'wolverhampton', 'wolves'],
+  wolverhampton: ['wolverhampton wanderers', 'wolverhampton', 'wolves'],
+  wolves: ['wolverhampton wanderers', 'wolverhampton', 'wolves'],
+  'nottingham forest': ['nottingham forest', 'nottingham', 'nott m forest'],
+  nottingham: ['nottingham forest', 'nottingham', 'nott m forest'],
+  'borussia monchengladbach': [
+    'borussia monchengladbach',
+    'monchengladbach',
+    'moenchengladbach',
+    'b monchengladbach',
+    'gladbach',
+  ],
+  monchengladbach: ['borussia monchengladbach', 'monchengladbach', 'b monchengladbach', 'gladbach'],
+  'b monchengladbach': [
+    'borussia monchengladbach',
+    'monchengladbach',
+    'b monchengladbach',
+    'gladbach',
+  ],
+  gladbach: ['borussia monchengladbach', 'monchengladbach', 'b monchengladbach', 'gladbach'],
+  'eintracht frankfurt': ['eintracht frankfurt', 'eintracht francfort', 'frankfurt', 'francfort'],
+  'eintracht francfort': ['eintracht frankfurt', 'eintracht francfort', 'frankfurt', 'francfort'],
+  colonia: ['colonia', 'koln', 'koeln', 'cologne', '1 fc koln'],
+  koln: ['colonia', 'koln', 'koeln', 'cologne', '1 fc koln'],
+  '1 fc koln': ['colonia', 'koln', 'koeln', 'cologne', '1 fc koln'],
+  maguncia: ['maguncia', 'mainz', 'mainz 05', 'fsv mainz 05'],
+  mainz: ['maguncia', 'mainz', 'mainz 05', 'fsv mainz 05'],
+  'mainz 05': ['maguncia', 'mainz', 'mainz 05', 'fsv mainz 05'],
+  '1 fsv mainz 05': ['maguncia', 'mainz', 'mainz 05', 'fsv mainz 05'],
+  atalanta: ['atalanta', 'atalanta bc'],
+  'atalanta bc': ['atalanta', 'atalanta bc'],
+  fiorentina: ['fiorentina', 'acf fiorentina'],
+  'acf fiorentina': ['fiorentina', 'acf fiorentina'],
 };
 
 /*
@@ -333,7 +372,8 @@ function occurrences(text: string, alias: string): Occurrence[] {
 
 const SEPARATOR_RE = /^\s*(?:-|vs\.?|v\.?|x|contra|\/)\s*$/;
 const MAX_GAP = 40;
-/* Siglas de club que pueden quedar entre el alias y el separador: «Girona FC - Sevilla FC», «Napoli - AS Roma». */
+/* Siglas de club que pueden quedar entre el alias y el separador: «Girona FC - Sevilla FC», «Napoli - AS Roma»,
+   «Atalanta BC - ACF Fiorentina», «Sporting CP - SL Benfica», «SC Freiburg», «VfB Stuttgart». */
 const CLUB_AFFIXES: ReadonlySet<string> = new Set([
   'fc',
   'cf',
@@ -341,14 +381,41 @@ const CLUB_AFFIXES: ReadonlySet<string> = new Set([
   'cd',
   'sd',
   'rcd',
+  'rc',
   'ac',
   'afc',
+  'acf',
+  'bc',
   'sad',
   'ssc',
   'as',
   'ss',
   'sl',
+  'cp',
+  'sc',
+  'sv',
+  'bsc',
+  'vfb',
+  'vfl',
+  'tsg',
+  'fk',
+  'us',
+  'ogc',
 ]);
+
+/**
+ * Las palabras que de verdad nombran a un equipo, sin siglas de club,
+ * prefijos (real, club…) ni partículas: «Atalanta BC» → [atalanta], «ACF
+ * Fiorentina» → [fiorentina], «Brighton & Hove Albion» → [brighton, hove,
+ * albion]. Para saber si dos grafías pueden ser el mismo equipo (agenda
+ * híbrida: no añadir dos veces un partido), no para emparejar.
+ */
+export function teamCoreWords(name: string): string[] {
+  return teamSearchText(name)
+    .replace(/\//g, ' ')
+    .split(' ')
+    .filter((word) => word && !CLUB_AFFIXES.has(word) && !TEAM_PREFIXES.has(word));
+}
 
 /** El hueco entre dos equipos sin las siglas de club de los bordes. */
 function bareGap(gap: string): string {

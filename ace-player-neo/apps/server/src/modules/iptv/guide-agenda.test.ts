@@ -398,6 +398,103 @@ describe('guideAgenda: lo que solo trae la guía', () => {
     ).toHaveLength(1);
   });
 
+  it('los DOS equipos escritos de otra forma: a la misma hora no sale dos veces', () => {
+    /* Guías reales contra futbolenlatv: con alias o siglas, la guía lo confirma. */
+    for (const [competition, agendaHome, agendaAway, title] of [
+      ['Serie A', 'Atalanta', 'Fiorentina', 'Serie A: Atalanta BC - ACF Fiorentina (Directo)'],
+      [
+        'Premier League',
+        'Brighton & Hove Albion',
+        'Tottenham Hotspur',
+        'Premier League: Brighton - Spurs (Directo)',
+      ],
+      [
+        'Premier League',
+        'Wolverhampton Wanderers',
+        'Nottingham Forest',
+        'Premier League: Wolves - Nottingham (Directo)',
+      ],
+      ['Bundesliga', 'Colonia', 'Maguncia', 'Bundesliga: FC Köln - Mainz 05 (Directo)'],
+      [
+        'Bundesliga',
+        'Borussia Mönchengladbach',
+        'Eintracht Fráncfort',
+        'Bundesliga: B. Mönchengladbach - Eintracht Frankfurt (Directo)',
+      ],
+    ] as const) {
+      const result = run(
+        [channel('DAZN 1', [programme(title, KICKOFF - 5 * MIN, 120)])],
+        [
+          match({
+            home: agendaHome,
+            away: agendaAway,
+            title: `${agendaHome} - ${agendaAway}`,
+            competition,
+            channels: ['DAZN 1'],
+          }),
+        ],
+      );
+      expect(result.confirmations, title).toHaveLength(1);
+      expect(result.additions, title).toEqual([]);
+    }
+  });
+
+  it('sin alias que valga, a esa hora un partido de la agenda de la misma competición, en ese canal o con un nombre parecido es ese partido', () => {
+    const guide = (display: string, title: string): GuideChannelCandidate[] => [
+      channel(display, [programme(title, KICKOFF - 5 * MIN, 120, live)]),
+    ];
+    const zvezda = match({
+      home: 'Estrella Roja',
+      away: 'Olympiacos',
+      title: 'Estrella Roja - Olympiacos',
+      competition: 'Liga de Campeones',
+      channels: ['M+ Liga de Campeones 3'],
+    });
+    /* La misma competición a la misma hora. */
+    expect(
+      run(guide('M+ Liga de Campeones 5', 'Champions League: Crvena Zvezda - Olympiakos'), [zvezda])
+        .additions,
+    ).toEqual([]);
+    /* El canal que anuncia la agenda (aunque la agenda no diga la competición). */
+    expect(
+      run(guide('M+ Liga de Campeones 3', 'Champions League: Crvena Zvezda - Olympiakos'), [
+        { ...zvezda, competition: 'Partido internacional' },
+      ]).additions,
+    ).toEqual([]);
+    /* Un nombre que se parece («Sheffield Wed - Leeds Utd» y «Sheffield Wednesday - Leeds United»). */
+    expect(
+      run(guide('DAZN 2', 'Premier League: Sheffield Wed - Leeds Utd'), [
+        match({
+          home: 'Sheffield Wednesday',
+          away: 'Leeds United',
+          title: 'Sheffield Wednesday - Leeds United',
+          competition: 'Championship',
+          channels: ['Movistar Plus+'],
+        }),
+      ]).additions,
+    ).toEqual([]);
+    /* Otro partido a esa hora (otra competición, otro canal, otros nombres): se añade. */
+    expect(
+      run(guide('Movistar Plus+', 'Premier League: Arsenal - Chelsea')).additions,
+    ).toMatchObject([{ home: 'Arsenal', away: 'Chelsea', family: 'premier' }]);
+    /* La misma competición, pero dos horas antes: se añade. */
+    expect(
+      run(
+        [
+          channel('M+ Liga de Campeones 5', [
+            programme(
+              'Champions League: Crvena Zvezda - Olympiakos',
+              KICKOFF - 2 * HOUR - 15 * MIN,
+              120,
+              live,
+            ),
+          ]),
+        ],
+        [zvezda],
+      ).additions,
+    ).toHaveLength(1);
+  });
+
   it('un partido de la agenda movido por la guía no se añade otra vez', () => {
     const late = KICKOFF + 2.5 * HOUR - 10 * MIN;
     const result = run([
