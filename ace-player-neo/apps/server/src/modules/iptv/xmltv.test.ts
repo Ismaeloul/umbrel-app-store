@@ -2,8 +2,21 @@
 
 import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
-import { buildGuideWindow, guideFromStored, guideToStored, looksLikeEvent } from './guide.js';
-import { decodeEntities, parseXmltvDate, parseXmltvStream, type XmltvProgramme } from './xmltv.js';
+import {
+  GuideWindowCollector,
+  buildGuideWindow,
+  guideFromStored,
+  guideToStored,
+  looksLikeEvent,
+} from './guide.js';
+import {
+  decodeEntities,
+  parseXmltvDate,
+  parseXmltvStream,
+  repairMojibake,
+  type XmltvChannel,
+  type XmltvProgramme,
+} from './xmltv.js';
 
 function body(text: string, size = 0): Readable {
   const buffer = Buffer.from(text, 'utf8');
@@ -122,10 +135,146 @@ describe('ventana de la guía', () => {
     expect(guideFromStored(guideToStored(window, 'p_x'), 'p_otro')).toBe(null);
   });
 
+  it('la ventana por la clase que junta (la de la guía completa) da lo mismo que buildGuideWindow', async () => {
+    const text = `<tv>
+<programme start="20260926183000 +0200" stop="20260926203000 +0200" channel="MLaLigaTV2.es"><title>Real Sociedad - Villarreal</title></programme>
+<programme start="20260926183000 +0200" stop="20260926203000 +0200" channel="MLaLigaTV2.es"><title>Telediario</title></programme>
+</tv>`;
+    const options = { now, channels: new Map([['mlaligatv2.es', 0]]) };
+    const collector = new GuideWindowCollector(options);
+    await parseXmltvStream(body(text), { onProgramme: (p) => collector.add(p) });
+    expect(guideToStored(collector.finish(), 'p_x')).toEqual(
+      guideToStored(await buildGuideWindow(body(text), options), 'p_x'),
+    );
+  });
+
   it('looksLikeEvent', () => {
     const base = { subTitle: '', desc: '', categories: [] as string[] };
     expect(looksLikeEvent({ ...base, title: 'Barça vs. Madrid' })).toBe(true);
     expect(looksLikeEvent({ ...base, title: 'Noticias' })).toBe(false);
     expect(looksLikeEvent({ ...base, title: 'Carrusel', categories: ['Fútbol'] })).toBe(true);
+  });
+});
+
+describe('lo que lee la Guía TV (docs/iptv.md §20.3)', () => {
+  it('episodio, año, edad, nota, reparto, imagen, franja compartida y el logo del canal', async () => {
+    const text = `<tv>
+<channel id="cine.es"><display-name>Cine</display-name><icon src="https://logos.example/cine.png"/><icon src="https://otro.example/x.png"/></channel>
+<programme start="20261003200000 +0000" stop="20261003220000 +0000" channel="cine.es" clumpidx="1/2">
+  <title lang="es">Película</title>
+  <episode-num system="xmltv_ns">1.4.0/1</episode-num>
+  <episode-num system="onscreen">T2 Ep. 5</episode-num>
+  <date>2019</date>
+  <credits><director>Ana Pérez</director><actor role="X">Luis Gómez</actor><actor>Marta Ruiz</actor><writer>No</writer></credits>
+  <rating system="ES"><value>+12</value></rating>
+  <star-rating><value>4/5</value></star-rating>
+  <icon src="https://imagenes.example/p.jpg"/>
+</programme>
+</tv>`;
+    const channels: XmltvChannel[] = [];
+    const programmes: XmltvProgramme[] = [];
+    await parseXmltvStream(body(text, 7), {
+      onChannel: (c) => channels.push(c),
+      onProgramme: (p) => programmes.push(p),
+    });
+    expect(channels).toEqual([
+      { id: 'cine.es', names: ['Cine'], icon: 'https://logos.example/cine.png' },
+    ]);
+    const [p] = programmes;
+    expect(p?.clump).toEqual({ index: 1, total: 2 });
+    expect(p?.episodeNums).toEqual([
+      { system: 'xmltv_ns', value: '1.4.0/1' },
+      { system: 'onscreen', value: 'T2 Ep. 5' },
+    ]);
+    expect(p?.date).toBe('2019');
+    expect(p?.directors).toEqual(['Ana Pérez']);
+    expect(p?.actors).toEqual(['Luis Gómez', 'Marta Ruiz']);
+    expect(p?.rating).toBe('+12');
+    expect(p?.stars).toBe('4/5');
+    expect(p?.icon).toBe('https://imagenes.example/p.jpg');
+  });
+
+  it('título, subtítulo y sinopsis: el de lang="es" si lo hay; si no, el primero', async () => {
+    const [first, spanish, none] = await programmesOf(`<tv>
+<programme start="20261003200000 +0000" stop="20261003210000 +0000" channel="a"><title lang="en">Football</title><title lang="es">Fútbol</title><desc lang="en">Match</desc><desc lang="es-ES">Partido</desc></programme>
+<programme start="20261003200000 +0000" stop="20261003210000 +0000" channel="a"><title lang="es">Uno</title><title lang="es">Dos</title><title lang="en">Three</title></programme>
+<programme start="20261003200000 +0000" stop="20261003210000 +0000" channel="a"><title lang="fr">Premier</title><title>Second</title></programme>
+</tv>`);
+    expect(first?.title).toBe('Fútbol');
+    expect(first?.desc).toBe('Partido');
+    expect(spanish?.title).toBe('Uno');
+    expect(none?.title).toBe('Premier');
+  });
+
+  it('zonas: número, ±hh:mm, abreviaturas sin dudas; las ambiguas y las fechas imposibles', () => {
+    const base = Date.UTC(2007, 6, 28, 17, 33);
+    expect(parseXmltvDate('200707281733 BST')).toEqual({ at: base - 3_600_000, naive: false });
+    expect(parseXmltvDate('20070728173300 +01:00')?.at).toBe(base - 3_600_000);
+    expect(parseXmltvDate('20070728173300 CEST')?.at).toBe(base - 2 * 3_600_000);
+    expect(parseXmltvDate('20070728173300 UTC')).toEqual({ at: base, naive: false });
+    expect(parseXmltvDate('20070728173300 GMT')?.naive).toBe(false);
+    expect(parseXmltvDate('20070728173300 EST')?.at).toBe(base + 5 * 3_600_000);
+    /* CST es China o EE. UU.: sin zona (UTC más el tvg-shift). */
+    expect(parseXmltvDate('20070728173300 CST', 2)).toEqual({
+      at: base + 2 * 3_600_000,
+      naive: true,
+    });
+    expect(parseXmltvDate('20071328173300 +0000')).toBe(null);
+    expect(parseXmltvDate('20070728253300 +0000')).toBe(null);
+    expect(parseXmltvDate('20070728176100')).toBe(null);
+  });
+
+  it('dice latin1 pero trae UTF-8: cada texto se vuelve a leer bien', async () => {
+    const xml = `<?xml version="1.0" encoding="ISO-8859-1"?><tv><programme start="20261003200000 +0000" stop="20261003210000 +0000" channel="a"><title>Fútbol: Atlético - Málaga</title><desc>¿Quién ganará? Ñandú</desc></programme></tv>`;
+    const list: XmltvProgramme[] = [];
+    await parseXmltvStream(Readable.from([Buffer.from(xml, 'utf8')]), {
+      onProgramme: (p) => list.push(p),
+    });
+    expect(list[0]?.title).toBe('Fútbol: Atlético - Málaga');
+    expect(list[0]?.desc).toBe('¿Quién ganará? Ñandú');
+    /* Un latin1 de verdad no se toca. */
+    const real = Buffer.from(xml.replace('UTF', 'X'), 'latin1');
+    const kept: XmltvProgramme[] = [];
+    await parseXmltvStream(Readable.from([real]), { onProgramme: (p) => kept.push(p) });
+    expect(kept[0]?.title).toBe('Fútbol: Atlético - Málaga');
+    expect(repairMojibake('Ya bien: Fútbol')).toBe('Ya bien: Fútbol');
+    expect(repairMojibake('FÃºtbol')).toBe('Fútbol');
+  });
+
+  it('dice UTF-8 (o nada) pero trae bytes latin1: desde ese trozo se lee como latin1', async () => {
+    const head = '<?xml version="1.0"?><tv>' + ' '.repeat(300);
+    const programme = Buffer.from(
+      '<programme start="20261003200000 +0000" stop="20261003210000 +0000" channel="a"><title>Fútbol en España</title></programme></tv>',
+      'latin1',
+    );
+    const list: XmltvProgramme[] = [];
+    await parseXmltvStream(Readable.from([Buffer.from(head, 'utf8'), programme]), {
+      onProgramme: (p) => list.push(p),
+    });
+    expect(list[0]?.title).toBe('Fútbol en España');
+  });
+
+  it('cede el hilo con sliceMs: un temporizador corre mientras se lee una guía grande de golpe', async () => {
+    const programme =
+      '<programme start="20261003200000 +0000" stop="20261003210000 +0000" channel="a"><title>T</title><desc>' +
+      'x'.repeat(200) +
+      '</desc></programme>\n';
+    const xml = Buffer.from(`<tv>${programme.repeat(40_000)}</tv>`);
+    let ticks = 0;
+    const timer = setInterval(() => {
+      ticks += 1;
+    }, 1);
+    let count = 0;
+    try {
+      await parseXmltvStream(
+        Readable.from([xml]),
+        { onProgramme: () => (count += 1) },
+        { sliceMs: 5 },
+      );
+    } finally {
+      clearInterval(timer);
+    }
+    expect(count).toBe(40_000);
+    expect(ticks).toBeGreaterThan(0);
   });
 });
