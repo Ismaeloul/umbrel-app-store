@@ -57,7 +57,10 @@ Lo que no se pudo hacer esta noche, con el detalle para retomarlo.
     información» donde no hay EPG, y abajo el programa elegido con logo del canal, barra de progreso con hora de
     inicio y fin, y acciones (Ver, Más info). **Sin pestañas de géneros.** Por defecto, **solo sus canales
     favoritos**; propuesta: un interruptor «Favoritos | Todos» (Todos = todos los canales con EPG), arrancando en
-    Favoritos y, si no tiene favoritos con guía, en Todos. Implica guardar la guía completa (todos los programas, no solo partidos;
+    Favoritos y, si no tiene favoritos con guía, en Todos.
+    Isma confirma: «Todos» = **todos los canales con EPG que dé su proveedor**. Plan técnico: primero medir la
+    guía entera real (canales y programas); guardarla compacta en disco (no toda en memoria; el storage tiene
+    768 MB), ventana de hoy a +2 días; la web pide solo el trozo visible (canales × horas) y carga al desplazarse. Implica guardar la guía completa (todos los programas, no solo partidos;
     ojo memoria) y quizá «ahora / después» en Canales. Idea aparte, para valorar: que la guía rellene partidos
     que falten en la agenda (no sustituir a futbolenlatv: la guía cubre pocos días y su texto es libre).
 12. **App de iPhone: al final, con el Mac de su hermano** (simulador de iPhone y cambios al momento, mucho más
