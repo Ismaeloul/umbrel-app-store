@@ -260,8 +260,12 @@ export class VodService {
   private resumeFrom: Partial<Record<VodKind, string>> = {};
   /** Cuándo acabó la última sincronización (bien o mal). */
   private lastSyncEndAt = Number.NEGATIVE_INFINITY;
-  /** El panel ya dijo «sin VOD» una vez con catálogo guardado: la siguiente lo confirma. */
-  private noneOnce = false;
+  /**
+   * Tipos para los que el panel ya dijo «sin VOD» una vez con títulos
+   * guardados (y se siguió con los de antes): la siguiente lo confirma. Por
+   * tipo: un `[]` pasajero en `get_series` vaciaba las series al momento.
+   */
+  private readonly noneOnce = new Set<VodKind>();
   private failures = 0;
   private delayedOnce = false;
   private readonly timers = new Map<TimerName, TimerHandle>();
@@ -381,6 +385,10 @@ export class VodService {
     const now = this.host.clock.now();
     if (vodDueAtStart(builtAt, now) || summary?.state === 'error') {
       this.schedule('sync', VOD_AT_START_MS, () => this.due());
+    } else if (this.failures > 0 || this.noneOnce.size > 0) {
+      /* Un reintento o una confirmación de «sin VOD» pendientes (pausar y
+         reanudar quita los temporizadores): no se dejan para dentro de 24 h. */
+      this.schedule('sync', vodRetryDelay(Math.max(1, this.failures)), () => this.due());
     } else if (builtAt !== null) {
       this.schedule('sync', vodPeriodicDelay(builtAt, now), () => this.due());
     }
@@ -451,7 +459,7 @@ export class VodService {
     this.delayedOnce = false;
     this.lastMode = 'completo';
     this.resumeFrom = {};
-    this.noneOnce = false;
+    this.noneOnce.clear();
     this.requeue = false;
     this.details.clear();
     this.art.reset();
@@ -527,6 +535,14 @@ export class VodService {
     const startedAt = clock.now();
     /* El modo de la última vez (§4.7): el del catálogo en memoria o el de la última sincronización. */
     const mode = this.catalog?.meta.mode ?? this.lastMode;
+    /* Los tipos con títulos guardados cuyo «sin VOD» no se ha visto aún:
+       si su lista lo dice, se siguen los de antes y se confirma en 15 min. */
+    const summary = this.summary();
+    const holdIfNone: Partial<Record<VodKind, boolean>> = {};
+    if (summary?.state === 'ready') {
+      holdIfNone.movie = summary.movies > 0 && !this.noneOnce.has('movie');
+      holdIfNone.series = summary.series > 0 && !this.noneOnce.has('series');
+    }
     try {
       const result = await syncVodCatalog(
         { net: this.host.net, clock, logger, credentials, policy: this.host.policy(), signal },
@@ -537,6 +553,7 @@ export class VodService {
           mode,
           resumeFrom: this.resumeFrom,
           previous: () => this.storedCatalog(snapshot),
+          holdIfNone,
         },
       );
       if (!this.stillCurrent(snapshot, signal)) return;
@@ -545,23 +562,25 @@ export class VodService {
          final (el resultado se aplica igual). */
       this.landed = true;
       this.requeue = false;
-      if (result.state === 'none' && this.hadTitles() && !this.noneOnce) {
+      if (result.state === 'held') {
         /* Había catálogo y ahora el panel dice «sin VOD» (`[]` o `{}` en las
            dos listas): puede ser un mal momento del panel. Una sola vez no
            basta para borrar 150 000 títulos (y la siguiente sería en 24 h):
            se sigue con el que hay, como un fallo, y se confirma en 15 min. */
-        this.noneOnce = true;
+        for (const kind of result.held) this.noneOnce.add(kind);
         this.failures += 1;
         logger.warn(
-          { reason, failures: this.failures },
+          { reason, failures: this.failures, kinds: result.held },
           'VOD: el proveedor dice que no tiene películas ni series; se confirma más tarde',
         );
         this.schedule('sync', vodRetryDelay(this.failures), () => this.due());
         return;
       }
-      this.noneOnce = false;
       this.failures = 0;
+      /* La siguiente, en 24 h; o en 15 min si un tipo sigue con lo de antes (para confirmarlo). */
+      let nextInMs = vodPeriodicDelay(clock.now(), clock.now());
       if (result.state === 'none') {
+        this.noneOnce.clear();
         this.catalog = null;
         this.homeCache = null;
         /* Un `vod.enc` de cuando sí tenía VOD ya no sirve. */
@@ -594,6 +613,10 @@ export class VodService {
         }
         this.lastMode = catalog.meta.mode;
         this.resumeFrom = { ...result.resumeFrom };
+        /* Un tipo que dijo «sin VOD» y sigue con lo de antes: se confirma en 15 min. */
+        this.noneOnce.clear();
+        for (const kind of result.held) this.noneOnce.add(kind);
+        if (result.held.length) nextInMs = vodRetryDelay(1);
         this.catalog = catalog;
         this.homeCache = null;
         this.details.clear();
@@ -621,7 +644,7 @@ export class VodService {
           logger.warn({ skipped: catalog.meta.skipped }, 'VOD: títulos que no se han podido leer');
         }
       }
-      this.schedule('sync', vodPeriodicDelay(clock.now(), clock.now()), () => this.due());
+      this.schedule('sync', nextInMs, () => this.due());
     } catch (error) {
       /* Abortada (cede el sitio al directo, o se ha guardado, pausado o
          quitado la IPTV): no es un fallo del proveedor. */

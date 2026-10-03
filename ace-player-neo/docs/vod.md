@@ -233,12 +233,19 @@ export const VOD_REFRESH_MS = 24 * HOUR;
   `IptvStatus.vod.skipped` (§11.4), para que un tope escaso no pase desapercibido otra vez (T5).
 - **Parámetros de `player_api`:** la acción es una unión cerrada (las 6 de arriba) y `extra` solo admite `category_id`,
   `vod_id` y `series_id` con valores `/^\d{1,12}$/`. No hay forma de inyectar parámetros.
-- **«Sin VOD»:** `[]`, `{}`, un objeto con `user_info`, `null` o `false` (paneles con el VOD apagado), en las dos
-  listas, es el estado `none`. No es un error. **Una página HTML, un texto o un cuerpo cortado sí son un fallo**
-  (0.9.0): no pueden vaciar el catálogo que ya había. Para distinguirlos, la respuesta que no empieza por `[` se
-  mira **entera** (hasta 64 KiB): solo es «sin VOD» si es un objeto JSON completo, `null` o `false`; «not found»,
-  «forbidden» o un `{"user_info":` cortado son un fallo. Y con catálogo guardado, un «sin VOD» de verdad no lo borra a
-  la primera: se sigue con el que hay (`stale`) y se confirma en la siguiente, 15 min después.
+- **«Sin VOD»:** `[]`, `{}`, un objeto con solo `user_info`/`server_info`, `null` o `false` (paneles con el VOD
+  apagado), en las dos listas, es el estado `none`. No es un error. **Un objeto de error (`{"error":"Too many
+  requests"}` con HTTP 200), una página HTML, un texto o un cuerpo cortado sí son un fallo** (0.9.0): no pueden vaciar
+  el catálogo que ya había. Para distinguirlos, la respuesta que no empieza por `[` se mira **entera** (hasta 64 KiB):
+  solo es «sin VOD» si es `null`, `false` o un objeto JSON completo sin más claves que `user_info` y `server_info`;
+  «not found», «forbidden», un `{"user_info":` cortado o `{"error":…}` son un fallo.
+- **Con catálogo guardado, un «sin VOD» no borra nada a la primera, y es por tipo** (0.9.0): si la lista de un tipo
+  dice «sin VOD» y el catálogo guardado tiene títulos de ese tipo, se sigue con la tabla de antes de ese tipo
+  (`holdIfNone` en `syncVodCatalog`, sacada de `vod.enc` si no está en memoria) y se confirma en la siguiente, 15 min
+  después; si entonces lo repite, va en serio y ese tipo se vacía. Antes solo se miraba el caso de las dos listas, y
+  un `[]` pasajero en `get_series` dejaba 0 series guardadas 24 h. Con las dos listas «sin VOD», `held`: se sigue con
+  todo tal cual (`stale`, como un fallo). La confirmación pendiente (y un reintento tras un fallo) sobreviven a pausar
+  y reanudar la IPTV; tras reiniciar el servidor se pierde y la siguiente vuelve a guardar una vez.
 - **Modo por categorías con todo fallando:** si fallan todas las categorías de un tipo y no llega ni un título, es un
   fallo (se lanza el último error), nunca «sin VOD»: con 4 categorías o menos no se llega a rendir (5 seguidas) y ese
   tipo se guardaba vacío.
@@ -1712,7 +1719,7 @@ Cada estado vacío tiene una salida (`EmptyState` con `actions`).
 | `table.test.ts`, `table-codec.test.ts` | Construcción, `bySource`, `byCat`, `byAdded`, recorte en el tope con `truncated`, textos internados; ida y vuelta binaria; AAD de otro proveedor rechazado; fichero corrupto → vacío y nueva sincronización; sin `JSON.parse` de filas al cargar |
 | `ids.test.ts` | Ida y vuelta por tipo; el episodio lleva su `series_id`; otra huella → `null`; etiqueta falsa → `null`; un id de canal → `null`; `isIptvId(idVod) === true`; 100 000 hashes al azar no descifran; otro proveedor → otro id; **`classify(idVod)` nunca es `'engine'`**; `channelStream` y `libraryMutate` → `validation_error` con `detail: 'vod_id'` |
 | `search.test.ts` | Plegado que conserva la longitud; niveles 0-4 con un caso cada uno; «spiderman» encuentra «Spider-Man»; año como filtro («dune 2021»); varias palabras; `otherKindTotal`; más de 2 000 → `capped`; cursor `stale`; 2-80 caracteres (`empty_query`); adultos en la búsqueda y en su categoría siempre, y en «Todas» según `VOD_ADULT_POLICY` |
-| `catalog.test.ts` | Pasos de la sincronización con `fakeTransport`; aplicar solo con el mismo proveedor y revisión; la primera **no** se aplaza con alguien viendo y las siguientes sí (1 h); esperas tras fallos; modo por categorías tras `too_large`; `none` con listas vacías u objeto `user_info`; `skipped` llega a `IptvStatus.vod`; guardar, pausar y eliminar abortan |
+| `catalog.test.ts` | Pasos de la sincronización con `fakeTransport`; aplicar solo con el mismo proveedor y revisión; la primera **no** se aplaza con alguien viendo y las siguientes sí (1 h); esperas tras fallos; modo por categorías tras `too_large`; `none` con listas vacías u objeto `user_info`; «sin VOD» en una sola lista sigue con la tabla de antes de ese tipo (`holdIfNone`) y con las dos, `held`; `skipped` llega a `IptvStatus.vod`; guardar, pausar y eliminar abortan |
 | `details.test.ts` | LRU por bytes; coalescencia (10 → 1 llamada); 1 en vuelo; 300 ms entre llamadas; 60 por minuto; con 8 en espera, `info: 'failed'`; precarga con cola ocupada → `pending`; serie de 8 MiB; TTL; topes de temporadas y episodios; temporadas deducidas; «Especiales» al final; prefijo del episodio quitado |
 | `art.test.ts` | Bytes mágicos (JPEG, PNG y WebP sí; SVG y HTML no); topes de bytes; imagen en la LAN rechazada aunque el proveedor esté en la LAN, salvo su host exacto; redirección a `127.0.0.1` bloqueada; `nosniff` y `CSP default-src 'none'`; LRU en disco; caché negativa; ETag y 304; `v` distinta → `no-cache`; tamaños de TMDB; 4 a la vez; ninguna URL ni host en los nombres de fichero |
 | `progress.test.ts` | Umbrales de visto de película y de episodio; reanudar desde 30 s; «Seguir viendo» con una entrada por serie e `isNext`; siguiente episodio (fin de temporada, «Especiales»); los 4 casos del botón principal; validación (`posS ≤ durS + 5`, ±10 %); `mark-through`; 2 000 con expulsión; volcado cada minuto y al momento con `pause`/`ended`; preferencias por serie; purga al cambiar de proveedor; 0600 |

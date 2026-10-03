@@ -127,6 +127,11 @@ describe('xtreamVodList', () => {
       '{} <br>',
       /* Un objeto enorme no es la respuesta de un panel sin VOD. */
       JSON.stringify({ relleno: 'x'.repeat(70_000) }),
+      /* Ni un objeto de error con HTTP 200: antes era «sin VOD» y vaciaba
+         esa lista del catálogo guardado en un mal rato del panel. */
+      JSON.stringify({ error: 'Too many requests, try again later' }),
+      JSON.stringify({ message: 'Server busy' }),
+      JSON.stringify({ user_info: { auth: 1 }, error: 'rate limit' }),
     ]) {
       const { net } = rig(() => ({ body }));
       await expect(

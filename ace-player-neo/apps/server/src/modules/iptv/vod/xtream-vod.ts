@@ -13,10 +13,11 @@
 
    Los parámetros van en lista cerrada: la acción es una unión y `extra` solo
    admite `category_id`, `vod_id` y `series_id` con `/^\d{1,12}$/`. No hay
-   forma de inyectar parámetros. «Sin VOD» (`[]`, `{}`, un objeto con
-   `user_info`, `null` o `false`) NO es un error: `state: 'none'`. Una
-   página HTML, texto o un cuerpo cortado SÍ lo es: no puede vaciar el
-   catálogo que ya había. */
+   forma de inyectar parámetros. «Sin VOD» (`[]`, `{}`, un objeto con solo
+   `user_info`/`server_info`, `null` o `false`) NO es un error: `state:
+   'none'`. Un objeto de error (`{"error":"Too many requests"}` con HTTP
+   200), una página HTML, texto o un cuerpo cortado SÍ lo es: no puede
+   vaciar el catálogo que ya había. */
 
 import { IPTV_USER_AGENT, VOD_LIMITS, type VodKind } from '@ace/shared';
 import { AppError, errorCodeOf } from '../../../core/errors.js';
@@ -109,9 +110,10 @@ class StopList extends Error {
 }
 
 /**
- * ¿«Sin VOD»? Un objeto JSON (`{}`, `user_info`) o `null`/`false` en vez del
- * array. Una página HTML, texto o un cuerpo cortado NO: eso es un fallo del
- * panel y no debe vaciar el catálogo que ya había (0.9.0).
+ * ¿«Sin VOD»? `{}`, un objeto con solo `user_info`/`server_info`, o
+ * `null`/`false` en vez del array. Un objeto de error, una página HTML,
+ * texto o un cuerpo cortado NO: eso es un fallo del panel y no debe vaciar
+ * el catálogo que ya había (0.9.0).
  */
 function notAnArray(error: unknown): boolean {
   return (

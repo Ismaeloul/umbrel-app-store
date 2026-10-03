@@ -11,7 +11,11 @@
      lo leído con `truncated: true`. No es un error.
    - `skipped` suma lo que saltó el troceador (objetos demasiado grandes), lo
      que no se pudo parsear y los ids repetidos (T5).
-   - «Sin VOD» en las dos listas es `none`, no un error.
+   - «Sin VOD» en las dos listas es `none`, no un error. En UNA lista, con
+     títulos de ese tipo en el catálogo guardado y sin confirmar
+     (`holdIfNone`), se queda la tabla de antes de ese tipo; en las dos,
+     `held` (se sigue con lo que hay). Lo confirma la siguiente, a los 15
+     min (vod-service.ts).
    - Si una lista completa falla por tiempo, tamaño o 5xx, se recorre por
      categorías (`&category_id=X`, 250 ms entre llamadas). Solo si no cabía
      (`iptv_too_large`) se apunta `mode: 'por_categorias'` para empezar por
@@ -33,7 +37,7 @@
 
 import { readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { VOD_LIMITS, VOD_REFRESH_MS, type VodKind } from '@ace/shared';
+import { VOD_KINDS, VOD_LIMITS, VOD_REFRESH_MS, type VodKind } from '@ace/shared';
 import type { Clock } from '../../../core/clock.js';
 import { AppError, errorCodeOf } from '../../../core/errors.js';
 import type { Logger } from '../../../core/logger.js';
@@ -127,18 +131,32 @@ export interface VodSyncInput {
   /**
    * El catálogo guardado de este proveedor, si hay (se pide solo si hace
    * falta): en el modo por categorías, lo que no se ha podido leer se queda
-   * como estaba en él.
+   * como estaba en él; y un tipo que se guarda (`holdIfNone`), también.
    */
   readonly previous?: () => Promise<VodCatalog | null>;
+  /**
+   * Tipos que el catálogo guardado tiene con títulos y cuyo «sin VOD» aún no
+   * se ha confirmado: si su lista dice «sin VOD» (`[]`, `{}`…), se queda la
+   * tabla de antes de ese tipo. Una vez no basta para borrar 50 000 series:
+   * puede ser un mal momento del panel (lo confirma la siguiente, §4.7).
+   */
+  readonly holdIfNone?: Readonly<Partial<Record<VodKind, boolean>>>;
 }
 
 export type VodSyncResult =
   | { readonly state: 'none'; readonly skipped: number }
+  /**
+   * Las dos listas dicen «sin VOD» y alguna se guarda (`holdIfNone`): no hay
+   * nada nuevo y se sigue con el catálogo que hay, tal cual.
+   */
+  | { readonly state: 'held'; readonly held: readonly VodKind[]; readonly skipped: number }
   | {
       readonly state: 'ready';
       readonly catalog: VodCatalog;
       /** Por qué categoría empezar la próxima vez, por tipo (solo los que se cortaron por tiempo). */
       readonly resumeFrom: Readonly<Partial<Record<VodKind, string>>>;
+      /** Tipos que han dicho «sin VOD» y siguen con la tabla de antes (`holdIfNone`). */
+      readonly held: readonly VodKind[];
     };
 
 interface KindOutcome {
@@ -382,12 +400,36 @@ export async function syncVodCatalog(
   if (deps.signal.aborted) throw deps.signal.reason;
   const series = await syncKind(deps, 'series', kindInput('series'));
   const skipped = movies.skipped + series.skipped;
-  if (movies.none && series.none) return { state: 'none', skipped };
+  const outcomes: Readonly<Record<VodKind, KindOutcome>> = { movie: movies, series };
+  /* «Sin VOD» en UNA lista (un `[]` pasajero) vaciaba ese tipo del catálogo
+     guardado al momento, y así se quedaba 24 h: se sigue con la tabla de
+     antes y lo confirma la siguiente (15 min, §4.7). */
+  const hold = VOD_KINDS.filter((kind) => outcomes[kind].none && input.holdIfNone?.[kind]);
+  if (movies.none && series.none) {
+    return hold.length ? { state: 'held', held: hold, skipped } : { state: 'none', skipped };
+  }
+  const tables: Record<VodKind, VodTable> = { movie: movies.table, series: series.table };
+  const held: VodKind[] = [];
+  let truncated = movies.truncated || series.truncated;
+  for (const kind of hold) {
+    const previousTable = await kindInput(kind).previous();
+    if (deps.signal.aborted) throw deps.signal.reason;
+    /* Sin catálogo anterior legible no hay nada que guardar: vale el «sin VOD». */
+    if (!previousTable?.n) continue;
+    tables[kind] = previousTable;
+    held.push(kind);
+    const max = kind === 'movie' ? VOD_LIMITS.maxMovies : VOD_LIMITS.maxSeries;
+    if (previousTable.n >= max) truncated = true;
+    deps.logger.warn(
+      { kind, rows: previousTable.n },
+      'VOD: el proveedor dice que no tiene títulos de este tipo; se siguen los de antes y se confirma más tarde',
+    );
+  }
   const meta: VodCatalogMeta = {
     providerFp: input.providerFp,
     revision: input.revision,
     builtAt: deps.clock.now(),
-    truncated: movies.truncated || series.truncated,
+    truncated,
     skipped,
     mode:
       movies.mode === 'por_categorias' || series.mode === 'por_categorias'
@@ -399,8 +441,9 @@ export async function syncVodCatalog(
   if (series.resumeFrom) resumeFrom.series = series.resumeFrom;
   return {
     state: 'ready',
-    catalog: makeVodCatalog(input.providerId, meta, { movie: movies.table, series: series.table }),
+    catalog: makeVodCatalog(input.providerId, meta, tables),
     resumeFrom,
+    held,
   };
 }
 

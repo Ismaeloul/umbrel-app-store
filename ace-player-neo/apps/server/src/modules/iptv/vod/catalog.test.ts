@@ -48,6 +48,7 @@ function rig(answer: (action: string, url: URL) => FakeReply | undefined) {
   const run = (
     mode: 'completo' | 'por_categorias' = 'completo',
     signal = new AbortController().signal,
+    extra: Partial<Parameters<typeof syncVodCatalog>[1]> = {},
   ) =>
     syncVodCatalog(
       {
@@ -58,7 +59,7 @@ function rig(answer: (action: string, url: URL) => FakeReply | undefined) {
         policy: { lan: false },
         signal,
       },
-      { providerId: 'p_prueba01', providerFp: '0123456789abcdef', revision: 2, mode },
+      { providerId: 'p_prueba01', providerFp: '0123456789abcdef', revision: 2, mode, ...extra },
     );
   return { core, transport, net, run };
 }
@@ -186,6 +187,64 @@ describe('syncVodCatalog', () => {
     });
     const result = await run();
     expect(result.state === 'ready' && result.catalog.tables.series.n).toBe(0);
+    expect(result.state === 'ready' && result.held).toEqual([]);
+  });
+
+  it('«sin VOD» en UNA lista con títulos guardados de ese tipo (`holdIfNone`): sigue la tabla de antes', async () => {
+    const seriesList = JSON.stringify([
+      { series_id: 9, name: 'Serie', category_id: '5', last_modified: '1700000000' },
+    ]);
+    const answer =
+      (seriesBody: string) =>
+      (action: string): FakeReply | undefined => {
+        if (action === 'get_series_categories') return { body: cats([['5', 'Series']]) };
+        if (action === 'get_vod_streams') return { body: JSON.stringify(movies(2)) };
+        if (action === 'get_series') return { body: seriesBody };
+        return undefined;
+      };
+    const first = await rig(answer(seriesList)).run();
+    if (first.state !== 'ready') throw new Error('debería estar listo');
+    const previous = first.catalog;
+    for (const body of ['[]', '{}', 'null']) {
+      const result = await rig(answer(body)).run('completo', undefined, {
+        previous: () => Promise.resolve(previous),
+        holdIfNone: { movie: true, series: true },
+      });
+      expect(result.state, body).toBe('ready');
+      if (result.state !== 'ready') return;
+      expect(result.held).toEqual(['series']);
+      expect(result.catalog.tables.series.n).toBe(1);
+      expect(result.catalog.tables.series.title(0)).toBe('Serie');
+      expect(result.catalog.tables.movie.n).toBe(2);
+    }
+    /* Sin `holdIfNone` (ya confirmado, o no había series): vale el «sin VOD». */
+    const confirmed = await rig(answer('[]')).run('completo', undefined, {
+      previous: () => Promise.resolve(previous),
+      holdIfNone: { movie: true, series: false },
+    });
+    expect(confirmed.state === 'ready' && confirmed.catalog.tables.series.n).toBe(0);
+    expect(confirmed.state === 'ready' && confirmed.held).toEqual([]);
+    /* Sin catálogo anterior que leer, tampoco hay nada que guardar. */
+    const unreadable = await rig(answer('[]')).run('completo', undefined, {
+      previous: () => Promise.resolve(null),
+      holdIfNone: { series: true },
+    });
+    expect(unreadable.state === 'ready' && unreadable.catalog.tables.series.n).toBe(0);
+    expect(unreadable.state === 'ready' && unreadable.held).toEqual([]);
+    /* Las dos listas «sin VOD» y alguna guardada: `held`, sin tocar nada. */
+    const both = rig((action) =>
+      action === 'get_vod_streams' || action === 'get_series' ? { body: '[]' } : undefined,
+    );
+    expect(
+      await both.run('completo', undefined, {
+        previous: () => Promise.resolve(previous),
+        holdIfNone: { movie: true, series: false },
+      }),
+    ).toEqual({ state: 'held', held: ['movie'], skipped: 0 });
+    expect(
+      (await both.run('completo', undefined, { holdIfNone: { movie: false, series: false } }))
+        .state,
+    ).toBe('none');
   });
 
   it('una lista completa que falla por 5xx pasa al modo por categorías (250 ms entre llamadas)', async () => {

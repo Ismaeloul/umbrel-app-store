@@ -26,7 +26,11 @@
      PELÍCULAS») también da 500 (una categoría mala: se queda como estaba);
    - `fichas-500`: `get_vod_info` y `get_series_info` dan 500;
    - `lista-texto`: las listas responden un texto (un error de PHP) en vez
-     del array: es un fallo, no «sin VOD». */
+     del array: es un fallo, no «sin VOD»;
+   - `series-vacio`: solo `get_series` responde `[]` (un «sin series»
+     pasajero); las películas, bien;
+   - `series-error`: solo `get_series` responde un objeto JSON de error con
+     HTTP 200 (`{"error":"Too many requests…"}`): es un fallo. */
 
 export const FAKE_VOD_MODES = [
   'normal',
@@ -38,6 +42,8 @@ export const FAKE_VOD_MODES = [
   'categoria-500',
   'fichas-500',
   'lista-texto',
+  'series-vacio',
+  'series-error',
 ] as const;
 export type FakeVodMode = (typeof FAKE_VOD_MODES)[number];
 
@@ -354,8 +360,16 @@ export function createFakeVod(base: () => string, extra = 0): FakeVod {
     return category === null ? list : list.filter((item) => item.category === category);
   };
 
-  const listAnswer = (url: URL, full: () => unknown[]): { status: number; body?: unknown } => {
+  const listAnswer = (
+    action: string,
+    url: URL,
+    full: () => unknown[],
+  ): { status: number; body?: unknown } => {
     const whole = url.searchParams.get('category_id') === null;
+    if (action === 'get_series' && mode === 'series-vacio') return { status: 200, body: [] };
+    if (action === 'get_series' && mode === 'series-error') {
+      return { status: 200, body: { error: 'Too many requests, try again later' } };
+    }
     if (mode === 'sin-vod') return { status: 200, body: {} };
     if (mode === 'vacio') return { status: 200, body: [] };
     if (mode === 'user-info') return { status: 200, body: { user_info: { auth: 1 } } };
@@ -383,11 +397,11 @@ export function createFakeVod(base: () => string, extra = 0): FakeVod {
         case 'get_series_categories':
           return { status: 200, body: FAKE_VOD_SERIES_CATEGORIES };
         case 'get_vod_streams':
-          return listAnswer(url, () =>
+          return listAnswer(action, url, () =>
             byCategory(allMovies(), url).map((movie, index) => movieItem(movie, index + 1)),
           );
         case 'get_series':
-          return listAnswer(url, () =>
+          return listAnswer(action, url, () =>
             byCategory([...FAKE_VOD_SERIES], url).map((series, index) =>
               seriesItem(series, index + 1),
             ),

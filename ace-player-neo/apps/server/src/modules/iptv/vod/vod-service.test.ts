@@ -514,6 +514,152 @@ describe('VodService contra el proveedor falso', () => {
     expect(freshVod.state()).toBe('error');
   });
 
+  it('un «sin series» pasajero en UNA lista (`[]`) no vacía las series: siguen las de antes y se confirma en 15 min', async () => {
+    const rig = await ready();
+    /* Arrancado, para que corran los temporizadores (la confirmación). */
+    await rig.service.start();
+    const { vod } = await synced(rig);
+    expect(vod.status()).toMatchObject({ state: 'ready', movies: 9, series: 3 });
+    const seriesTitles = (await vod.home()).updatedSeries.map((card) => card.title);
+    /* Antes: `ready` con 0 series, guardado así en vod.enc y en vod.json, y
+       sin volver a mirar hasta 24 h después. */
+    rig.fake.vodModo('series-vacio');
+    await settle(rig, vod.requestSync('manual'));
+    await vod.idle();
+    expect(vod.status()).toMatchObject({ state: 'ready', movies: 9, series: 3 });
+    expect((await vod.home()).updatedSeries.map((card) => card.title)).toEqual(seriesTitles);
+    /* A los 15 min se vuelve a mirar: si el panel lo repite, va en serio. */
+    const before = vodCalls(rig, 'get_vod_streams');
+    await rig.core.clock.advanceAsync(14 * 60_000);
+    await vod.idle();
+    expect(vodCalls(rig, 'get_vod_streams')).toBe(before);
+    expect(vod.status()).toMatchObject({ state: 'ready', movies: 9, series: 3 });
+    await rig.core.clock.advanceAsync(60_000);
+    await vod.idle();
+    expect(vodCalls(rig, 'get_vod_streams')).toBe(before + 1);
+    expect(vod.status()).toMatchObject({ state: 'ready', movies: 9, series: 0 });
+    /* Y al volver, «Comprobar de nuevo» o la periódica las traen. */
+    rig.fake.vodModo('normal');
+    await rig.core.clock.advanceAsync(61 * 60_000);
+    await settle(rig, vod.requestSync('manual'));
+    await vod.idle();
+    expect(vod.status()).toMatchObject({ state: 'ready', movies: 9, series: 3 });
+  });
+
+  it('pausar y reanudar no deja la confirmación (ni un reintento) para dentro de 24 h', async () => {
+    const rig = await ready();
+    await rig.service.start();
+    const { vod } = await synced(rig);
+    rig.fake.vodModo('series-vacio');
+    await settle(rig, vod.requestSync('manual'));
+    await vod.idle();
+    await rig.service.update({ enabled: false });
+    await rig.service.update({ enabled: true });
+    await rig.service.idle();
+    const before = vodCalls(rig, 'get_vod_streams');
+    await rig.core.clock.advanceAsync(15 * 60_000);
+    await vod.idle();
+    expect(vodCalls(rig, 'get_vod_streams')).toBe(before + 1);
+    expect(vod.status()).toMatchObject({ state: 'ready', movies: 9, series: 0 });
+    /* Con un fallo pendiente, igual: el reintento sigue a los 15 min. */
+    rig.fake.vodModo('lista-texto');
+    await rig.core.clock.advanceAsync(61 * 60_000);
+    await settle(rig, vod.requestSync('manual'));
+    await vod.idle();
+    expect(vod.status()).toMatchObject({ stale: true });
+    await rig.service.update({ enabled: false });
+    await rig.service.update({ enabled: true });
+    await rig.service.idle();
+    rig.fake.vodModo('normal');
+    await rig.core.clock.advanceAsync(15 * 60_000);
+    await vod.idle();
+    expect(vod.status()).toMatchObject({ state: 'ready', movies: 9, series: 3, stale: false });
+  });
+
+  it('un «sin series» que se arregla solo antes de los 15 min no deja nada a medias', async () => {
+    const rig = await ready();
+    await rig.service.start();
+    const { vod } = await synced(rig);
+    rig.fake.vodModo('series-vacio');
+    await settle(rig, vod.requestSync('manual'));
+    await vod.idle();
+    rig.fake.vodModo('normal');
+    await rig.core.clock.advanceAsync(15 * 60_000);
+    await vod.idle();
+    expect(vod.status()).toMatchObject({ state: 'ready', movies: 9, series: 3, stale: false });
+    /* Y la siguiente vez que diga «sin series» vuelve a hacer falta confirmarlo. */
+    rig.fake.vodModo('series-vacio');
+    await rig.core.clock.advanceAsync(61 * 60_000);
+    await settle(rig, vod.requestSync('manual'));
+    await vod.idle();
+    expect(vod.status()).toMatchObject({ state: 'ready', movies: 9, series: 3 });
+  });
+
+  it('un objeto JSON de error con HTTP 200 en una lista es un fallo, no «sin series»: sigue todo, `stale`', async () => {
+    const rig = await ready();
+    await rig.service.start();
+    const { vod } = await synced(rig);
+    rig.fake.vodModo('series-error');
+    await settle(rig, vod.requestSync('manual'));
+    await vod.idle();
+    expect(vod.status()).toMatchObject({ state: 'ready', movies: 9, series: 3, stale: true });
+    /* Ni a los 15 min: un error no se confirma, se reintenta. */
+    await rig.core.clock.advanceAsync(15 * 60_000);
+    await vod.idle();
+    expect(vod.status()).toMatchObject({ state: 'ready', movies: 9, series: 3, stale: true });
+    /* En una instalación nueva: `error`, no `none`. */
+    const fresh = await ready();
+    fresh.fake.vodModo('series-error');
+    const { vod: freshVod } = await synced(fresh);
+    expect(freshVod.state()).toBe('error');
+  });
+
+  it('«sin series»: lo guardado en vod.enc también las tiene, y tras reiniciar salen de ahí', async () => {
+    const rig = await ready();
+    const { vod } = await synced(rig);
+    expect(vod.status()).toMatchObject({ movies: 9, series: 3 });
+    rig.fake.vodModo('series-vacio');
+    await settle(rig, vod.requestSync('manual'));
+    await vod.idle();
+    await rig.service.stop();
+    rig.fake.vodModo('normal');
+    const net = createNetClient({
+      ...rig.core,
+      resolver: fakeIptvResolver(),
+      transport: fakeIptvTransport({ host: rig.fake.host, port: rig.fake.port }),
+    });
+    const again = new IptvServiceImpl({
+      ...rig.core,
+      state: rig.state,
+      net,
+      scorer: (channels, item) => scoreResolutionCandidate(channels, item, 'iptv'),
+    });
+    extra.push(again);
+    await again.start();
+    expect(again.vod.catalogForTests()).toBeNull();
+    const listsBefore = vodCalls(rig, 'get_series');
+    const restarted = await again.vod.home();
+    expect(restarted.counts).toEqual({ movies: 9, series: 3 });
+    expect(vodCalls(rig, 'get_series')).toBe(listsBefore);
+    expect(restarted.updatedSeries.map((card) => card.title)).toContain('The Office (US)');
+    /* Sin el catálogo en memoria (recién arrancado), la tabla de antes sale de vod.enc. */
+    const third = new IptvServiceImpl({
+      ...rig.core,
+      state: rig.state,
+      net,
+      scorer: (channels, item) => scoreResolutionCandidate(channels, item, 'iptv'),
+    });
+    await again.stop();
+    extra.push(third);
+    await third.start();
+    rig.fake.vodModo('series-vacio');
+    await settle(rig, third.vod.requestSync('manual'));
+    await third.vod.idle();
+    expect(third.vod.status()).toMatchObject({ state: 'ready', movies: 9, series: 3 });
+    const home = await third.vod.home();
+    expect(home.updatedSeries.map((card) => card.title)).toContain('The Office (US)');
+  });
+
   it('pausar da `off`; al reanudar vuelve lo guardado', async () => {
     const rig = await ready();
     const { vod } = await synced(rig);

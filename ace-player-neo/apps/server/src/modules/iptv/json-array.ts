@@ -21,10 +21,16 @@ export interface JsonArrayOptions {
   readonly onSkip?: () => void;
 }
 
-/** Motivo (`cause.message`) cuando lo que llega es un objeto JSON (o `null`/`false`) y no un array. */
+/**
+ * Motivo (`cause.message`) cuando lo que llega es «sin datos» y no un array:
+ * `{}`, `null`, `false` o un objeto que solo trae `user_info`/`server_info`
+ * (lo que manda un panel sin esa acción).
+ */
 export const NOT_AN_ARRAY_OBJECT = 'no es un array: es un objeto';
 /** Motivo cuando lo que llega no es JSON (HTML, texto, un objeto cortado…). */
 export const NOT_AN_ARRAY_OTHER = 'no es un array: no es JSON';
+/** Motivo cuando lo que llega es otro objeto JSON (`{"error":"Too many requests"}`…): un fallo. */
+export const NOT_AN_ARRAY_ERROR = 'no es un array: es un objeto que no dice «sin datos»';
 
 /**
  * Lo que se lee, como mucho, de una respuesta que no empieza por `[` para
@@ -44,25 +50,37 @@ function isSpace(byte: number): boolean {
   return byte === 0x20 || byte === 0x0a || byte === 0x0d || byte === 0x09;
 }
 
+/* Las únicas claves de un objeto «sin datos»: las de la respuesta de
+   `player_api.php` sin acción, que es lo que manda un panel que no la tiene. */
+const NO_DATA_KEYS: ReadonlySet<string> = new Set(['user_info', 'server_info']);
+
 /**
- * ¿Es la respuesta ENTERA un objeto JSON, `null` o `false` (lo que manda PHP
- * sin datos)? Mirando solo el primer byte, «not found», «forbidden» o un
- * `{"user_info":` cortado pasaban por «sin VOD» y podían vaciar el catálogo.
+ * ¿Qué es una respuesta que no empieza por `[`, mirada ENTERA? «Sin datos»
+ * (`null`, `false`, `{}` o solo `user_info`/`server_info`), otro objeto
+ * JSON (un error: `{"error":"Too many requests"}` con HTTP 200) o algo que
+ * no es JSON. Mirando solo el primer byte, «not found», «forbidden» o un
+ * `{"user_info":` cortado pasaban por «sin VOD»; y tomando CUALQUIER objeto
+ * por «sin datos», un error pasajero del panel vaciaba esa lista del
+ * catálogo guardado.
  */
-function isJsonNoData(text: string): boolean {
+function notAnArrayReason(text: string): string {
   const trimmed = text.trim();
-  if (trimmed === 'null' || trimmed === 'false') return true;
-  if (!trimmed.startsWith('{')) return false;
+  if (trimmed === 'null' || trimmed === 'false') return NOT_AN_ARRAY_OBJECT;
+  if (!trimmed.startsWith('{')) return NOT_AN_ARRAY_OTHER;
+  let value: unknown;
   try {
-    const value: unknown = JSON.parse(trimmed);
-    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+    value = JSON.parse(trimmed);
   } catch {
-    return false;
+    return NOT_AN_ARRAY_OTHER;
   }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return NOT_AN_ARRAY_OTHER;
+  return Object.keys(value).every((key) => NO_DATA_KEYS.has(key))
+    ? NOT_AN_ARRAY_OBJECT
+    : NOT_AN_ARRAY_ERROR;
 }
 
-function notAnArray(noData: boolean): NetBadResponseError {
-  return new NetBadResponseError(new Error(noData ? NOT_AN_ARRAY_OBJECT : NOT_AN_ARRAY_OTHER));
+function notAnArray(reason: string): NetBadResponseError {
+  return new NetBadResponseError(new Error(reason));
 }
 
 /**
@@ -122,7 +140,7 @@ export async function parseJsonArrayStream(
       const chunk = typeof value === 'string' ? Buffer.from(value) : value;
       if (other) {
         otherSize += chunk.length;
-        if (otherSize > NOT_AN_ARRAY_PEEK) throw notAnArray(false);
+        if (otherSize > NOT_AN_ARRAY_PEEK) throw notAnArray(NOT_AN_ARRAY_OTHER);
         other.push(chunk);
         continue;
       }
@@ -131,13 +149,14 @@ export async function parseJsonArrayStream(
         const byte = chunk[index] as number;
         if (phase === 0) {
           if (isSpace(byte) || byte === 0xef || byte === 0xbb || byte === 0xbf) continue;
-          /* Un objeto JSON («{}», `user_info`) no es lo mismo que una página
-             HTML, un texto o un cuerpo cortado: el VOD toma lo primero por
-             «sin VOD» y lo segundo por un fallo (docs/vod.md §4.2). Para
-             saberlo hay que verlo ENTERO, no solo su primer byte. */
+          /* «Sin datos» («{}», `user_info`) no es lo mismo que un objeto de
+             error, una página HTML, un texto o un cuerpo cortado: el VOD
+             toma lo primero por «sin VOD» y lo demás por un fallo
+             (docs/vod.md §4.2). Para saberlo hay que verlo ENTERO, no solo
+             su primer byte. */
           if (byte !== OPEN_BRACKET) {
             const rest = chunk.subarray(index);
-            if (rest.length > NOT_AN_ARRAY_PEEK) throw notAnArray(false);
+            if (rest.length > NOT_AN_ARRAY_PEEK) throw notAnArray(NOT_AN_ARRAY_OTHER);
             other = [rest];
             otherSize = rest.length;
             break;
@@ -229,7 +248,7 @@ export async function parseJsonArrayStream(
   } finally {
     body.destroy();
   }
-  if (other) throw notAnArray(isJsonNoData(Buffer.concat(other, otherSize).toString('utf8')));
+  if (other) throw notAnArray(notAnArrayReason(Buffer.concat(other, otherSize).toString('utf8')));
   if (phase !== 2) throw new NetBadResponseError(new Error('array sin cerrar'));
   return { objects, skipped };
 }
