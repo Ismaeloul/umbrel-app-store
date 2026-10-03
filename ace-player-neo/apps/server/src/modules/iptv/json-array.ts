@@ -23,8 +23,15 @@ export interface JsonArrayOptions {
 
 /** Motivo (`cause.message`) cuando lo que llega es un objeto JSON (o `null`/`false`) y no un array. */
 export const NOT_AN_ARRAY_OBJECT = 'no es un array: es un objeto';
-/** Motivo cuando lo que llega no es JSON (HTML, texto…). */
+/** Motivo cuando lo que llega no es JSON (HTML, texto, un objeto cortado…). */
 export const NOT_AN_ARRAY_OTHER = 'no es un array: no es JSON';
+
+/**
+ * Lo que se lee, como mucho, de una respuesta que no empieza por `[` para
+ * saber si es un objeto JSON entero (un «sin VOD» de verdad: `{}` o
+ * `user_info` son de 1-2 KiB) o no. Pasado esto, no lo es.
+ */
+const NOT_AN_ARRAY_PEEK = 64 * 1024;
 
 const OPEN_BRACE = 0x7b;
 const CLOSE_BRACE = 0x7d;
@@ -35,6 +42,27 @@ const BACKSLASH = 0x5c;
 
 function isSpace(byte: number): boolean {
   return byte === 0x20 || byte === 0x0a || byte === 0x0d || byte === 0x09;
+}
+
+/**
+ * ¿Es la respuesta ENTERA un objeto JSON, `null` o `false` (lo que manda PHP
+ * sin datos)? Mirando solo el primer byte, «not found», «forbidden» o un
+ * `{"user_info":` cortado pasaban por «sin VOD» y podían vaciar el catálogo.
+ */
+function isJsonNoData(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed === 'null' || trimmed === 'false') return true;
+  if (!trimmed.startsWith('{')) return false;
+  try {
+    const value: unknown = JSON.parse(trimmed);
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+  } catch {
+    return false;
+  }
+}
+
+function notAnArray(noData: boolean): NetBadResponseError {
+  return new NetBadResponseError(new Error(noData ? NOT_AN_ARRAY_OBJECT : NOT_AN_ARRAY_OTHER));
 }
 
 /**
@@ -67,6 +95,9 @@ export async function parseJsonArrayStream(
   };
   /* Elemento que no es objeto (un número o una cadena suelta). */
   let scalar = false;
+  /* La respuesta no empieza por '[': se guarda (con tope) para mirarla entera. */
+  let other: Buffer[] | null = null;
+  let otherSize = 0;
 
   const emit = (): void => {
     const text = Buffer.concat(pieces, size).toString('utf8');
@@ -89,20 +120,27 @@ export async function parseJsonArrayStream(
     for await (const value of body as AsyncIterable<Buffer | string>) {
       if (options.signal?.aborted) throw options.signal.reason ?? new AppError('fetch_timeout');
       const chunk = typeof value === 'string' ? Buffer.from(value) : value;
+      if (other) {
+        otherSize += chunk.length;
+        if (otherSize > NOT_AN_ARRAY_PEEK) throw notAnArray(false);
+        other.push(chunk);
+        continue;
+      }
       let segmentStart = -1;
       for (let index = 0; index < chunk.length; index += 1) {
         const byte = chunk[index] as number;
         if (phase === 0) {
           if (isSpace(byte) || byte === 0xef || byte === 0xbb || byte === 0xbf) continue;
           /* Un objeto JSON («{}», `user_info`) no es lo mismo que una página
-             HTML o texto: el VOD toma lo primero por «sin VOD» y lo segundo
-             por un fallo (docs/vod.md §4.2). */
+             HTML, un texto o un cuerpo cortado: el VOD toma lo primero por
+             «sin VOD» y lo segundo por un fallo (docs/vod.md §4.2). Para
+             saberlo hay que verlo ENTERO, no solo su primer byte. */
           if (byte !== OPEN_BRACKET) {
-            /* `{…}`, `null` o `false` (lo que manda PHP sin datos) frente a lo demás. */
-            const jsonish = byte === OPEN_BRACE || byte === 0x6e || byte === 0x66;
-            throw new NetBadResponseError(
-              new Error(jsonish ? NOT_AN_ARRAY_OBJECT : NOT_AN_ARRAY_OTHER),
-            );
+            const rest = chunk.subarray(index);
+            if (rest.length > NOT_AN_ARRAY_PEEK) throw notAnArray(false);
+            other = [rest];
+            otherSize = rest.length;
+            break;
           }
           phase = 1;
           continue;
@@ -191,6 +229,7 @@ export async function parseJsonArrayStream(
   } finally {
     body.destroy();
   }
+  if (other) throw notAnArray(isJsonNoData(Buffer.concat(other, otherSize).toString('utf8')));
   if (phase !== 2) throw new NetBadResponseError(new Error('array sin cerrar'));
   return { objects, skipped };
 }

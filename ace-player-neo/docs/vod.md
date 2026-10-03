@@ -235,8 +235,13 @@ export const VOD_REFRESH_MS = 24 * HOUR;
   `vod_id` y `series_id` con valores `/^\d{1,12}$/`. No hay forma de inyectar parámetros.
 - **«Sin VOD»:** `[]`, `{}`, un objeto con `user_info`, `null` o `false` (paneles con el VOD apagado), en las dos
   listas, es el estado `none`. No es un error. **Una página HTML, un texto o un cuerpo cortado sí son un fallo**
-  (0.9.0): no pueden vaciar el catálogo que ya había. Y con catálogo guardado, un «sin VOD» de verdad no lo borra a
+  (0.9.0): no pueden vaciar el catálogo que ya había. Para distinguirlos, la respuesta que no empieza por `[` se
+  mira **entera** (hasta 64 KiB): solo es «sin VOD» si es un objeto JSON completo, `null` o `false`; «not found»,
+  «forbidden» o un `{"user_info":` cortado son un fallo. Y con catálogo guardado, un «sin VOD» de verdad no lo borra a
   la primera: se sigue con el que hay (`stale`) y se confirma en la siguiente, 15 min después.
+- **Modo por categorías con todo fallando:** si fallan todas las categorías de un tipo y no llega ni un título, es un
+  fallo (se lanza el último error), nunca «sin VOD»: con 4 categorías o menos no se llega a rendir (5 seguidas) y ese
+  tipo se guardaba vacío.
 - **`direct_source` se ignora siempre** (nunca se sigue).
 
 ### 4.3 Parseo tolerante (`parse.ts`)

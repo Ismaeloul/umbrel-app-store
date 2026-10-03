@@ -4,7 +4,7 @@
 import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { AppError } from '../../core/errors.js';
-import { parseJsonArrayStream } from './json-array.js';
+import { NOT_AN_ARRAY_OBJECT, NOT_AN_ARRAY_OTHER, parseJsonArrayStream } from './json-array.js';
 import { parseM3uStream, titleComma } from './m3u.js';
 
 function bytes(text: string, size = 0): Readable {
@@ -229,5 +229,20 @@ describe('parseJsonArrayStream', () => {
       'bad_response',
     );
     expect(await codeOf(parseJsonArrayStream(bytes('[{"a":1}'), () => {}))).toBe('bad_response');
+  });
+
+  it('distingue un objeto JSON ENTERO (o `null`/`false`) de un texto, aunque llegue a trozos', async () => {
+    const reason = async (text: string, size = 0) => {
+      const error = await parseJsonArrayStream(bytes(text, size), () => {}).catch(
+        (caught: unknown) => caught,
+      );
+      return error instanceof Error && error.cause instanceof Error ? error.cause.message : null;
+    };
+    for (const text of ['{"user_info":{"auth":0}}', 'null', ' false\n', '{}']) {
+      expect(await reason(text, 1), text).toBe(NOT_AN_ARRAY_OBJECT);
+    }
+    for (const text of ['not found', 'forbidden', 'nope', '{"user_info":', '<html>', 'null x']) {
+      expect(await reason(text, 1), text).toBe(NOT_AN_ARRAY_OTHER);
+    }
   });
 });

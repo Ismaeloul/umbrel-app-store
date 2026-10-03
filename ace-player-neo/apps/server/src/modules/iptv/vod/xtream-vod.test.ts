@@ -92,7 +92,14 @@ describe('xtreamVodCategories (fallo 9)', () => {
 
 describe('xtreamVodList', () => {
   it('«sin VOD»: `[]`, `{}`, `user_info`, `null` o `false`', async () => {
-    for (const body of ['[]', ' {}', JSON.stringify({ user_info: { auth: 1 } }), 'null', 'false']) {
+    for (const body of [
+      '[]',
+      ' {}',
+      JSON.stringify({ user_info: { auth: 1 } }),
+      'null',
+      'false',
+      '﻿null\r\n',
+    ]) {
       const { net } = rig(() => ({ body }));
       const outcome = await xtreamVodList(net, CREDS, 'movie', () => true, OPTIONS);
       expect(outcome.state, body).toBe('none');
@@ -106,6 +113,20 @@ describe('xtreamVodList', () => {
       '"no"',
       '',
       '[{"stream_id":1,"name":"A"},',
+      /* Texto que empieza por «n» o «f», como `null` y `false` (antes se
+         miraba solo el primer byte y pasaban por «sin VOD»). */
+      'not found',
+      'forbidden',
+      'no data',
+      'fatal error',
+      'nope',
+      'null null',
+      'falsey',
+      /* Un objeto cortado, o con algo detrás, tampoco. */
+      '{"user_info":{"auth":1}',
+      '{} <br>',
+      /* Un objeto enorme no es la respuesta de un panel sin VOD. */
+      JSON.stringify({ relleno: 'x'.repeat(70_000) }),
     ]) {
       const { net } = rig(() => ({ body }));
       await expect(
