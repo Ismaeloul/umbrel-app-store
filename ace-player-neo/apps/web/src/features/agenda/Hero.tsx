@@ -15,14 +15,31 @@
    navega al centro de partido. Si este dispositivo ya reproduce el partido,
    la tarjeta lleva «En pantalla» y el botón dice «Volver al vídeo».
 
+   Escritorio (≥ 1024 px, `layout="band"`; encargo del 3-10-2026: la valla
+   de 550 px empujaba la tira de días y la lista fuera de la pantalla): una
+   banda horizontal compacta (~150 px) sobre superficie, sin las dos mitades
+   planas. A la izquierda los dos escudos con sus nombres (una fila por
+   equipo, cada una con una luz suave de su club y una franja fina partida
+   en el borde); en el centro el chip de cuándo, la señal, la competición y
+   dónde se emite; a la derecha la acción oro y, debajo, «Marcador». El
+   móvil y la tableta siguen con la tarjeta versus XL (`layout="poster"`).
+
    HeroView es de presentación (se prueba sola); AgendaHero la conecta con la
    señal y el tapado. */
 
 import type { FootballMatch, LiveScore } from '@ace/shared';
-import { useId, type CSSProperties } from 'react';
+import { useId, ViewTransition, type CSSProperties, type ReactNode } from 'react';
 import { cx } from '../../lib/cx.ts';
 import { competitionLogo } from '../../lib/teams.ts';
-import { Button, Icon, VersusCard, type IconName } from '../../ui/index.ts';
+import {
+  Button,
+  Capsule,
+  CompetitionBadge,
+  Icon,
+  TeamMark,
+  VersusCard,
+  type IconName,
+} from '../../ui/index.ts';
 import { matchGlow, versusSide, versusWhen } from './cards.ts';
 import { useMatchSignal } from './data.ts';
 import {
@@ -53,6 +70,8 @@ export interface HeroViewProps {
   onOpen(match: FootballMatch): void;
   /** Nombre de la View Transition del bloque de escudos (único en la página). */
   transitionName?: string | null;
+  /** «poster»: tarjeta versus XL (móvil y tableta); «band»: banda compacta (escritorio). */
+  layout?: 'poster' | 'band';
 }
 
 export function HeroView({
@@ -69,6 +88,7 @@ export function HeroView({
   onHide,
   onOpen,
   transitionName = null,
+  layout = 'poster',
 }: HeroViewProps) {
   const titleId = useId();
   const status = matchStatus(match, now, rawScore);
@@ -91,6 +111,123 @@ export function HeroView({
   else if (live) cta = { text: 'Ver ahora', icon: 'play', disabled: false };
   else cta = { text: 'Ver el partido', icon: 'play', disabled: false };
 
+  const where = channels.length
+    ? channels.map((channel) => channel.name).join(' · ')
+    : 'Canal por confirmar';
+  const competition = match.competition?.trim() || 'Fútbol';
+  const ctaButton = (
+    <Button
+      variant="primary"
+      icon={cta.icon}
+      className="agenda-hero__cta"
+      disabled={cta.disabled}
+      onClick={() => onOpen(match)}
+    >
+      {cta.text}
+    </Button>
+  );
+  const scoreToggle = score ? (
+    <ScoreToggle
+      match={match}
+      score={score}
+      revealed={!scoreHidden}
+      onReveal={onReveal}
+      onHide={onHide}
+      size="md"
+      glass={false}
+      className="agenda-hero__score"
+    />
+  ) : null;
+
+  if (layout === 'band') {
+    const home = versusSide(match, 'home');
+    const away = versusSide(match, 'away');
+    // El logo, si lo hay; sin él la pastilla repetiría el nombre de al lado.
+    const logo = competitionLogo(match);
+    const team = (side: typeof home, key: string): ReactNode => (
+      <span className={`agenda-hero__team agenda-hero__team--${key}`}>
+        <TeamMark
+          name={side.name}
+          short={side.short}
+          colors={side.colors}
+          crest={side.crest}
+          size={48}
+          lit={live}
+          className="agenda-hero__crest"
+        />
+        <b className="agenda-hero__name">{side.name}</b>
+      </span>
+    );
+    const teams = (
+      <div className="agenda-hero__teams">
+        {team(home, 'home')}
+        {team(away, 'away')}
+      </div>
+    );
+    return (
+      <section
+        className={cx(
+          'agenda-hero',
+          'agenda-hero--band',
+          phase && `is-${phase}`,
+          watching && 'is-watching',
+        )}
+        aria-labelledby={titleId}
+        style={style}
+      >
+        <h2 id={titleId} className="sr-only">
+          {matchTitle(match)}
+        </h2>
+        <div className="agenda-hero__band">
+          {transitionName ? <ViewTransition name={transitionName}>{teams}</ViewTransition> : teams}
+          <div className="agenda-hero__meta">
+            <div className="agenda-hero__marks">
+              <Capsule
+                tone={live ? 'live' : 'neutral'}
+                size="sm"
+                glass={false}
+                dot={live}
+                className="agenda-hero__when"
+              >
+                {live && when.minute ? `${when.label} · ${when.minute}'` : when.label}
+              </Capsule>
+              {mine ? (
+                <Capsule tone="gold" size="sm" icon="star-f" className="agenda-hero__mine">
+                  Tu equipo
+                </Capsule>
+              ) : null}
+              {watching ? (
+                <Capsule tone="gold" size="sm" dot className="agenda-hero__watching">
+                  En pantalla
+                </Capsule>
+              ) : null}
+              {signal ? <SignalCapsule signal={signal} size="sm" glass={false} /> : null}
+            </div>
+            <p className="agenda-hero__comp">
+              {logo ? (
+                <CompetitionBadge
+                  name={competition}
+                  logo={logo}
+                  size="sm"
+                  className="agenda-hero__comp-badge"
+                />
+              ) : null}
+              <span className="agenda-hero__comp-name">{competition}</span>
+            </p>
+            <p className="agenda-hero__where" title={where}>
+              <Icon name="tv" size={16} />
+              <span className="agenda-hero__where-text">{where}</span>
+            </p>
+          </div>
+          <div className="agenda-hero__actions">
+            {ctaButton}
+            {scoreToggle}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section
       className={cx('agenda-hero', phase && `is-${phase}`, watching && 'is-watching')}
@@ -106,7 +243,7 @@ export function HeroView({
           size="xl"
           home={versusSide(match, 'home')}
           away={versusSide(match, 'away')}
-          competition={match.competition?.trim() || 'Fútbol'}
+          competition={competition}
           competitionLogo={competitionLogo(match)}
           when={when}
           mine={mine}
@@ -118,32 +255,11 @@ export function HeroView({
         </VersusCard>
       </div>
       <div className="agenda-hero__bar">
-        <Button
-          variant="primary"
-          icon={cta.icon}
-          className="agenda-hero__cta"
-          disabled={cta.disabled}
-          onClick={() => onOpen(match)}
-        >
-          {cta.text}
-        </Button>
-        {score ? (
-          <ScoreToggle
-            match={match}
-            score={score}
-            revealed={!scoreHidden}
-            onReveal={onReveal}
-            onHide={onHide}
-            size="md"
-            glass={false}
-            className="agenda-hero__score"
-          />
-        ) : null}
+        {ctaButton}
+        {scoreToggle}
         <span className="agenda-hero__where">
           <Icon name="tv" size={16} />
-          {channels.length
-            ? channels.map((channel) => channel.name).join(' · ')
-            : 'Canal por confirmar'}
+          {where}
         </span>
       </div>
     </section>
