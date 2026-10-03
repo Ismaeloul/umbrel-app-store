@@ -112,6 +112,20 @@ function ViewSlot({ vista, route, active }: { vista: Vista; route: Route; active
   );
 }
 
+/** Hueco del reproductor mientras src/player/ no existe (o mientras se descarga). */
+function StagePlaceholder({ loading = false }: { loading?: boolean }) {
+  return (
+    <div className="stage-placeholder" aria-busy={loading || undefined}>
+      <Icon name="tv" size={32} />
+      <p>{loading ? 'Preparando el reproductor…' : 'Aquí va el reproductor'}</p>
+    </div>
+  );
+}
+
+function asideInitiallyOpen(): boolean {
+  return readItem(STORAGE_KEYS.aside) !== 'plegado';
+}
+
 /**
  * La <ViewTransition> del reproductor (transitions.ts): con un nombre por
  * presentación, al pasar de mini a grande (o al revés) uno se funde y el otro
@@ -134,20 +148,6 @@ function PlayerTransition({
       {children}
     </ViewTransition>
   );
-}
-
-/** Hueco del reproductor mientras src/player/ no existe (o mientras se descarga). */
-function StagePlaceholder({ loading = false }: { loading?: boolean }) {
-  return (
-    <div className="stage-placeholder" aria-busy={loading || undefined}>
-      <Icon name="tv" size={32} />
-      <p>{loading ? 'Preparando el reproductor…' : 'Aquí va el reproductor'}</p>
-    </div>
-  );
-}
-
-function asideInitiallyOpen(): boolean {
-  return readItem(STORAGE_KEYS.aside) !== 'plegado';
 }
 
 export function Shell() {
