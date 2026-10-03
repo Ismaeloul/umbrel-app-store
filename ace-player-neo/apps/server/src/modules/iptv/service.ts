@@ -180,6 +180,8 @@ interface XmltvRead {
 const NO_IPTV: IptvView = { provider: null, refreshHours: IPTV_REFRESH_HOURS };
 const PROVIDER_ID_CHARS = 8;
 const MINUTE = 60_000;
+/** Cuánto espera un canal M3U con el token caducado a que se refresque la lista (M6). */
+export const TOKEN_REFRESH_WAIT_MS = 10_000;
 
 function newProviderId(): string {
   return `p_${randomBytes(6).toString('base64url').slice(0, PROVIDER_ID_CHARS)}`;
@@ -2814,7 +2816,22 @@ export class IptvServiceImpl implements IptvService {
     }
     if (now - this.lastTokenRefreshAt < IPTV_REFRESH.m3uTokenRefreshMs) return null;
     this.lastTokenRefreshAt = now;
-    await this.startSync('token');
+    /* El canal está esperando: si la lista va detrás de una descarga de la
+       guía (el mismo cerrojo), no se le hace esperar minutos (M6). La lista
+       se refresca igual detrás, y el siguiente intento ya tiene la URL nueva. */
+    const wait = new AbortController();
+    const done = await Promise.race([
+      this.startSync('token').then(() => true),
+      this.deps.clock
+        .sleep(TOKEN_REFRESH_WAIT_MS, wait.signal)
+        .then(() => false)
+        .catch(() => false),
+    ]);
+    wait.abort();
+    if (!done) {
+      this.logger.info('IPTV: la lista con el token nuevo va detrás de la guía; no se espera');
+      return null;
+    }
     const entry = this.catalog?.get(entryId);
     return entry ? entry.ref : null;
   }

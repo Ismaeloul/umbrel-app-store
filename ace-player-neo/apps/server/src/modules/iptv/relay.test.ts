@@ -30,7 +30,7 @@ import {
   createFakeIptv,
   type FakeIptvMode,
 } from '../../../test/fake-iptv/provider.js';
-import { createIptvRelay, type IptvRelayImpl } from './relay.js';
+import { createIptvRelay, type IptvRelayImpl, type RelayDeps } from './relay.js';
 import { relayGet, waitFor } from './test-support.js';
 
 const HOST = 'origen.example';
@@ -49,7 +49,7 @@ afterEach(async () => {
   while (rigs.length) await rigs.pop()?.close();
 });
 
-async function rig(): Promise<Rig> {
+async function rig(extra: Partial<RelayDeps> = {}): Promise<Rig> {
   const host = await loopbackHost();
   const requests: string[] = [];
   let handler: Handler = (_req, res) => res.writeHead(404).end();
@@ -78,6 +78,7 @@ async function rig(): Promise<Rig> {
     net,
     policy: () => ({ lan: false }),
     host: host === '::1' ? '::1' : '127.0.0.1',
+    ...extra,
   });
   await relay.start();
   const created: Rig = {
@@ -157,6 +158,26 @@ const variant = (path: string, entryId = 'a'.repeat(40)) => ({
   entryId,
   url: `http://${HOST}${path}`,
   headers: { 'User-Agent': 'VLC/3.0.21 LibVLC/3.0.21' },
+});
+
+describe('refresco de la URL con un 404 (token M3U)', () => {
+  it('en el directo se refresca una vez; con Range (VOD) no se toca la lista', async () => {
+    const asked: string[] = [];
+    const r = await rig({
+      refreshRef: async (entryId) => {
+        asked.push(entryId);
+        return null;
+      },
+    });
+    r.setHandler((_req, res) => res.writeHead(404).end());
+    const variant = { entryId: 'e1', url: `http://${HOST}/canal.ts`, headers: {} };
+    await expect(r.relay.connect(variant, new AbortController().signal, [])).rejects.toThrow();
+    expect(asked).toEqual(['e1']);
+    await expect(
+      r.relay.connect(variant, new AbortController().signal, [], { range: { start: 0, end: 99 } }),
+    ).rejects.toThrow();
+    expect(asked).toEqual(['e1']);
+  });
 });
 
 describe('relé HLS', () => {
