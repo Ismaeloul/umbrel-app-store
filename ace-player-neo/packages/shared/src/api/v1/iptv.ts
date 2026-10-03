@@ -20,7 +20,7 @@ import {
   IPTV_URL_MAX,
 } from '../../constants/iptv.js';
 import { SEARCH_QUERY_MAX } from '../../constants/limits.js';
-import { IptvAccountStatusSchema, IptvKindSchema } from '../../state/v2.js';
+import { IptvAccountStatusSchema, IptvKindSchema, VodCatalogStateSchema } from '../../state/v2.js';
 import { IptvQualitySchema } from '../common.js';
 
 const NameSchema = z.string().trim().min(1).max(IPTV_NAME_MAX);
@@ -90,6 +90,23 @@ export const IptvStatusGuideSchema = z.strictObject({
 export type IptvStatusGuide = z.infer<typeof IptvStatusGuideSchema>;
 
 /**
+ * Películas y series de la IPTV (docs/vod.md §11.4): el resumen del
+ * catálogo VOD. `skipped` cuenta lo que el troceador tuvo que saltar (T5),
+ * para que un tope escaso no pase desapercibido; `stale`, que la última
+ * sincronización falló y se sigue con la copia de `builtAt`.
+ */
+export const IptvVodStatusSchema = z.strictObject({
+  state: VodCatalogStateSchema,
+  movies: z.number().int().nonnegative(),
+  series: z.number().int().nonnegative(),
+  builtAt: IsoDateTimeSchema.nullable(),
+  truncated: z.boolean(),
+  skipped: z.number().int().nonnegative(),
+  stale: z.boolean(),
+});
+export type IptvVodStatus = z.infer<typeof IptvVodStatusSchema>;
+
+/**
  * Estado vivo de la IPTV: va dentro de `IptvView.provider` y es el `data`
  * del evento `iptv.status` (solo web, §5.5).
  */
@@ -105,6 +122,12 @@ export const IptvStatusSchema = z.strictObject({
   /** Solo Xtream, si hay datos de la cuenta. */
   account: IptvStatusAccountSchema.nullable(),
   guide: IptvStatusGuideSchema,
+  /**
+   * Películas y series (docs/vod.md §11.4). Opcional: ausente hasta que el
+   * servidor tenga VOD; la web invalida la portada solo si cambian `state` o
+   * `builtAt`. Ningún evento nuevo: llega por `iptv.status`.
+   */
+  vod: IptvVodStatusSchema.optional(),
 });
 export type IptvStatus = z.infer<typeof IptvStatusSchema>;
 
@@ -194,8 +217,8 @@ const csv = (item: string) =>
 
 /** Código de país de la pestaña (§16.4): 2 a 4 mayúsculas («ES», «LAT», «EXYU»). */
 const COUNTRY_CODE = '[A-Z]{2,4}';
-/** Cursor opaco de `nextCursor` (base64url). */
-const CursorSchema = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
+/** Cursor opaco de `nextCursor` (base64url). También lo usa `vodBrowse` (docs/vod.md §6.3). */
+export const CursorSchema = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
 
 /** Id de una categoría: 12 hex (estable mientras el proveedor y el nombre sean los mismos) o `none` («Sin categoría»). */
 export const IptvCategoryIdSchema = z.string().regex(/^(?:[a-f0-9]{12}|none)$/);

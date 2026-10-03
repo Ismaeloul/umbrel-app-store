@@ -18,6 +18,15 @@
       "channelsWithGuide": 640,
       "updatedAt": "2026-09-23T12:00:00.000Z",
       "failedAt": null
+    },
+    "vod": {
+      "state": "ready",
+      "movies": 48213,
+      "series": 6904,
+      "builtAt": "2026-09-23T04:10:00.000Z",
+      "truncated": false,
+      "skipped": 3,
+      "stale": false
     }
   }
 }

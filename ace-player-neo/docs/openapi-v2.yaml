@@ -626,6 +626,8 @@ paths:
                         type: boolean
                       iptv:
                         type: boolean
+                      vod:
+                        type: boolean
                     required:
                       - scanner
                       - ai
@@ -3977,6 +3979,49 @@ paths:
                               - updatedAt
                               - failedAt
                             additionalProperties: false
+                          vod:
+                            type: object
+                            properties:
+                              state:
+                                type: string
+                                enum:
+                                  - off
+                                  - preparing
+                                  - ready
+                                  - none
+                                  - unsupported
+                                  - error
+                              movies:
+                                type: integer
+                                minimum: 0
+                                maximum: 9007199254740991
+                              series:
+                                type: integer
+                                minimum: 0
+                                maximum: 9007199254740991
+                              builtAt:
+                                anyOf:
+                                  - type: string
+                                    format: date-time
+                                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                  - type: "null"
+                              truncated:
+                                type: boolean
+                              skipped:
+                                type: integer
+                                minimum: 0
+                                maximum: 9007199254740991
+                              stale:
+                                type: boolean
+                            required:
+                              - state
+                              - movies
+                              - series
+                              - builtAt
+                              - truncated
+                              - skipped
+                              - stale
+                            additionalProperties: false
                         required:
                           - kind
                           - name
@@ -4236,6 +4281,49 @@ paths:
                               - channelsWithGuide
                               - updatedAt
                               - failedAt
+                            additionalProperties: false
+                          vod:
+                            type: object
+                            properties:
+                              state:
+                                type: string
+                                enum:
+                                  - off
+                                  - preparing
+                                  - ready
+                                  - none
+                                  - unsupported
+                                  - error
+                              movies:
+                                type: integer
+                                minimum: 0
+                                maximum: 9007199254740991
+                              series:
+                                type: integer
+                                minimum: 0
+                                maximum: 9007199254740991
+                              builtAt:
+                                anyOf:
+                                  - type: string
+                                    format: date-time
+                                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                  - type: "null"
+                              truncated:
+                                type: boolean
+                              skipped:
+                                type: integer
+                                minimum: 0
+                                maximum: 9007199254740991
+                              stale:
+                                type: boolean
+                            required:
+                              - state
+                              - movies
+                              - series
+                              - builtAt
+                              - truncated
+                              - skipped
+                              - stale
                             additionalProperties: false
                         required:
                           - kind
@@ -4509,6 +4597,49 @@ paths:
                               - updatedAt
                               - failedAt
                             additionalProperties: false
+                          vod:
+                            type: object
+                            properties:
+                              state:
+                                type: string
+                                enum:
+                                  - off
+                                  - preparing
+                                  - ready
+                                  - none
+                                  - unsupported
+                                  - error
+                              movies:
+                                type: integer
+                                minimum: 0
+                                maximum: 9007199254740991
+                              series:
+                                type: integer
+                                minimum: 0
+                                maximum: 9007199254740991
+                              builtAt:
+                                anyOf:
+                                  - type: string
+                                    format: date-time
+                                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                  - type: "null"
+                              truncated:
+                                type: boolean
+                              skipped:
+                                type: integer
+                                minimum: 0
+                                maximum: 9007199254740991
+                              stale:
+                                type: boolean
+                            required:
+                              - state
+                              - movies
+                              - series
+                              - builtAt
+                              - truncated
+                              - skipped
+                              - stale
+                            additionalProperties: false
                         required:
                           - kind
                           - name
@@ -4728,6 +4859,49 @@ paths:
                               - updatedAt
                               - failedAt
                             additionalProperties: false
+                          vod:
+                            type: object
+                            properties:
+                              state:
+                                type: string
+                                enum:
+                                  - off
+                                  - preparing
+                                  - ready
+                                  - none
+                                  - unsupported
+                                  - error
+                              movies:
+                                type: integer
+                                minimum: 0
+                                maximum: 9007199254740991
+                              series:
+                                type: integer
+                                minimum: 0
+                                maximum: 9007199254740991
+                              builtAt:
+                                anyOf:
+                                  - type: string
+                                    format: date-time
+                                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                  - type: "null"
+                              truncated:
+                                type: boolean
+                              skipped:
+                                type: integer
+                                minimum: 0
+                                maximum: 9007199254740991
+                              stale:
+                                type: boolean
+                            required:
+                              - state
+                              - movies
+                              - series
+                              - builtAt
+                              - truncated
+                              - skipped
+                              - stale
+                            additionalProperties: false
                         required:
                           - kind
                           - name
@@ -4943,6 +5117,49 @@ paths:
                               - channelsWithGuide
                               - updatedAt
                               - failedAt
+                            additionalProperties: false
+                          vod:
+                            type: object
+                            properties:
+                              state:
+                                type: string
+                                enum:
+                                  - off
+                                  - preparing
+                                  - ready
+                                  - none
+                                  - unsupported
+                                  - error
+                              movies:
+                                type: integer
+                                minimum: 0
+                                maximum: 9007199254740991
+                              series:
+                                type: integer
+                                minimum: 0
+                                maximum: 9007199254740991
+                              builtAt:
+                                anyOf:
+                                  - type: string
+                                    format: date-time
+                                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                  - type: "null"
+                              truncated:
+                                type: boolean
+                              skipped:
+                                type: integer
+                                minimum: 0
+                                maximum: 9007199254740991
+                              stale:
+                                type: boolean
+                            required:
+                              - state
+                              - movies
+                              - series
+                              - builtAt
+                              - truncated
+                              - skipped
+                              - stale
                             additionalProperties: false
                         required:
                           - kind
@@ -5480,6 +5697,1775 @@ paths:
       x-side-effects: false
       x-legacy-twin: null
       x-errors:
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
+  /api/v1/vod:
+    get:
+      operationId: vodHome
+      tags:
+        - iptv
+      summary: "Portada de Películas y series en una petición: «Seguir viendo», novedades, series actualizadas, categorías y distintivos"
+      description: "Estado del catálogo VOD (docs/vod.md §4.8 y §6.4, D-VOD28). «Novedades en películas» y «Series actualizadas» van sin adultos (D-VOD7). Sin IPTV activa, en pausa, con M3U o sin VOD responde 200 con `active: false` o su `state`: no es un error. Nunca lleva URL, `stream_id` ni credenciales."
+      parameters: []
+      responses:
+        "200":
+          description: Correcto
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  active:
+                    type: boolean
+                  state:
+                    type: string
+                    enum:
+                      - off
+                      - preparing
+                      - ready
+                      - none
+                      - unsupported
+                      - error
+                  counts:
+                    type: object
+                    properties:
+                      movies:
+                        type: integer
+                        minimum: -9007199254740991
+                        maximum: 9007199254740991
+                      series:
+                        type: integer
+                        minimum: -9007199254740991
+                        maximum: 9007199254740991
+                    required:
+                      - movies
+                      - series
+                    additionalProperties: false
+                  builtAt:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  truncated:
+                    type: boolean
+                  stale:
+                    type: boolean
+                  continue:
+                    maxItems: 20
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          pattern: ^[a-f0-9]{40}$
+                        kind:
+                          type: string
+                          enum:
+                            - movie
+                            - episode
+                        seriesId:
+                          anyOf:
+                            - type: string
+                              pattern: ^[a-f0-9]{40}$
+                            - type: "null"
+                        title:
+                          type: string
+                          maxLength: 200
+                        subtitle:
+                          anyOf:
+                            - type: string
+                              maxLength: 120
+                            - type: "null"
+                        posS:
+                          type: number
+                          minimum: 0
+                        durS:
+                          type: number
+                          minimum: 0
+                        isNext:
+                          type: boolean
+                        art:
+                          anyOf:
+                            - type: object
+                              properties:
+                                id:
+                                  type: string
+                                  pattern: ^[a-f0-9]{40}$
+                                art:
+                                  type: string
+                                  enum:
+                                    - backdrop
+                                    - still
+                                    - poster
+                                v:
+                                  type: string
+                                  pattern: ^[a-f0-9]{8}$
+                              required:
+                                - id
+                                - art
+                                - v
+                              additionalProperties: false
+                            - type: "null"
+                        updatedAt:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      required:
+                        - id
+                        - kind
+                        - seriesId
+                        - title
+                        - subtitle
+                        - posS
+                        - durS
+                        - isNext
+                        - art
+                        - updatedAt
+                      additionalProperties: false
+                  newMovies:
+                    maxItems: 20
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          pattern: ^[a-f0-9]{40}$
+                        kind:
+                          type: string
+                          enum:
+                            - movie
+                            - series
+                        title:
+                          type: string
+                          minLength: 1
+                          maxLength: 200
+                        year:
+                          anyOf:
+                            - type: integer
+                              minimum: 1880
+                              maximum: 2100
+                            - type: "null"
+                        rating:
+                          anyOf:
+                            - type: number
+                              minimum: 0
+                              maximum: 10
+                            - type: "null"
+                        poster:
+                          anyOf:
+                            - type: string
+                              pattern: ^[a-f0-9]{8}$
+                            - type: "null"
+                        tags:
+                          maxItems: 5
+                          type: array
+                          items:
+                            type: string
+                            enum:
+                              - castellano
+                              - latino
+                              - vose
+                              - multi
+                              - 4k
+                        adult:
+                          type: boolean
+                        progress:
+                          anyOf:
+                            - type: number
+                              minimum: 0
+                              maximum: 1
+                            - type: "null"
+                      required:
+                        - id
+                        - kind
+                        - title
+                        - year
+                        - rating
+                        - poster
+                        - tags
+                        - adult
+                        - progress
+                      additionalProperties: false
+                  updatedSeries:
+                    maxItems: 20
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          pattern: ^[a-f0-9]{40}$
+                        kind:
+                          type: string
+                          enum:
+                            - movie
+                            - series
+                        title:
+                          type: string
+                          minLength: 1
+                          maxLength: 200
+                        year:
+                          anyOf:
+                            - type: integer
+                              minimum: 1880
+                              maximum: 2100
+                            - type: "null"
+                        rating:
+                          anyOf:
+                            - type: number
+                              minimum: 0
+                              maximum: 10
+                            - type: "null"
+                        poster:
+                          anyOf:
+                            - type: string
+                              pattern: ^[a-f0-9]{8}$
+                            - type: "null"
+                        tags:
+                          maxItems: 5
+                          type: array
+                          items:
+                            type: string
+                            enum:
+                              - castellano
+                              - latino
+                              - vose
+                              - multi
+                              - 4k
+                        adult:
+                          type: boolean
+                        progress:
+                          anyOf:
+                            - type: number
+                              minimum: 0
+                              maximum: 1
+                            - type: "null"
+                      required:
+                        - id
+                        - kind
+                        - title
+                        - year
+                        - rating
+                        - poster
+                        - tags
+                        - adult
+                        - progress
+                      additionalProperties: false
+                  categories:
+                    type: object
+                    properties:
+                      movie:
+                        maxItems: 2000
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              pattern: ^(?:[a-f0-9]{12}|none)$
+                            kind:
+                              type: string
+                              enum:
+                                - movie
+                                - series
+                            name:
+                              type: string
+                              maxLength: 120
+                            count:
+                              type: integer
+                              minimum: 0
+                              maximum: 9007199254740991
+                            adult:
+                              type: boolean
+                          required:
+                            - id
+                            - kind
+                            - name
+                            - count
+                            - adult
+                          additionalProperties: false
+                      series:
+                        maxItems: 2000
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              pattern: ^(?:[a-f0-9]{12}|none)$
+                            kind:
+                              type: string
+                              enum:
+                                - movie
+                                - series
+                            name:
+                              type: string
+                              maxLength: 120
+                            count:
+                              type: integer
+                              minimum: 0
+                              maximum: 9007199254740991
+                            adult:
+                              type: boolean
+                          required:
+                            - id
+                            - kind
+                            - name
+                            - count
+                            - adult
+                          additionalProperties: false
+                    required:
+                      - movie
+                      - series
+                    additionalProperties: false
+                  tags:
+                    type: object
+                    properties:
+                      movie:
+                        maxItems: 5
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            tag:
+                              type: string
+                              enum:
+                                - castellano
+                                - latino
+                                - vose
+                                - multi
+                                - 4k
+                            count:
+                              type: integer
+                              minimum: 0
+                              maximum: 9007199254740991
+                          required:
+                            - tag
+                            - count
+                          additionalProperties: false
+                      series:
+                        maxItems: 5
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            tag:
+                              type: string
+                              enum:
+                                - castellano
+                                - latino
+                                - vose
+                                - multi
+                                - 4k
+                            count:
+                              type: integer
+                              minimum: 0
+                              maximum: 9007199254740991
+                          required:
+                            - tag
+                            - count
+                          additionalProperties: false
+                    required:
+                      - movie
+                      - series
+                    additionalProperties: false
+                required:
+                  - active
+                  - state
+                  - counts
+                  - builtAt
+                  - truncated
+                  - stale
+                  - continue
+                  - newMovies
+                  - updatedSeries
+                  - categories
+                  - tags
+                additionalProperties: false
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+      x-access: web
+      x-native-path: /native/api/v1/vod
+      x-side-effects: false
+      x-legacy-twin: null
+      x-errors:
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
+  /api/v1/vod/browse:
+    get:
+      operationId: vodBrowse
+      tags:
+        - iptv
+      summary: "Rejilla y buscador de películas o series: categoría, distintivo, texto y orden, por páginas"
+      description: "Por tipo (`kind`), con `otherKindTotal` para «Ver 3 series» (docs/vod.md §6, D-VOD5). Con `q` (2 a 80 letras) manda la relevancia; sin ella, `added` o `name`. Los 2 000 mejores como mucho (`capped`); un cursor de otro catálogo da la primera página con `stale: true`. El texto buscado no va al registro."
+      parameters:
+        - name: kind
+          in: query
+          required: false
+          schema:
+            default: movie
+            type: string
+            enum:
+              - movie
+              - series
+        - name: cat
+          in: query
+          required: false
+          schema:
+            default: all
+            anyOf:
+              - type: string
+                pattern: ^(?:[a-f0-9]{12}|none)$
+              - type: string
+                const: all
+        - name: tag
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - castellano
+              - latino
+              - vose
+              - multi
+              - 4k
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 200
+        - name: sort
+          in: query
+          required: false
+          schema:
+            default: added
+            type: string
+            enum:
+              - added
+              - name
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{1,64}$
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 60
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Correcto
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  active:
+                    type: boolean
+                  state:
+                    type: string
+                    enum:
+                      - off
+                      - preparing
+                      - ready
+                      - none
+                      - unsupported
+                      - error
+                  items:
+                    maxItems: 100
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          pattern: ^[a-f0-9]{40}$
+                        kind:
+                          type: string
+                          enum:
+                            - movie
+                            - series
+                        title:
+                          type: string
+                          minLength: 1
+                          maxLength: 200
+                        year:
+                          anyOf:
+                            - type: integer
+                              minimum: 1880
+                              maximum: 2100
+                            - type: "null"
+                        rating:
+                          anyOf:
+                            - type: number
+                              minimum: 0
+                              maximum: 10
+                            - type: "null"
+                        poster:
+                          anyOf:
+                            - type: string
+                              pattern: ^[a-f0-9]{8}$
+                            - type: "null"
+                        tags:
+                          maxItems: 5
+                          type: array
+                          items:
+                            type: string
+                            enum:
+                              - castellano
+                              - latino
+                              - vose
+                              - multi
+                              - 4k
+                        adult:
+                          type: boolean
+                        progress:
+                          anyOf:
+                            - type: number
+                              minimum: 0
+                              maximum: 1
+                            - type: "null"
+                      required:
+                        - id
+                        - kind
+                        - title
+                        - year
+                        - rating
+                        - poster
+                        - tags
+                        - adult
+                        - progress
+                      additionalProperties: false
+                  total:
+                    type: integer
+                    minimum: 0
+                    maximum: 9007199254740991
+                  capped:
+                    type: boolean
+                  otherKindTotal:
+                    anyOf:
+                      - type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                      - type: "null"
+                  tags:
+                    maxItems: 5
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        tag:
+                          type: string
+                          enum:
+                            - castellano
+                            - latino
+                            - vose
+                            - multi
+                            - 4k
+                        count:
+                          type: integer
+                          minimum: 0
+                          maximum: 9007199254740991
+                      required:
+                        - tag
+                        - count
+                      additionalProperties: false
+                  nextCursor:
+                    anyOf:
+                      - type: string
+                        pattern: ^[A-Za-z0-9_-]{1,64}$
+                      - type: "null"
+                  stale:
+                    type: boolean
+                required:
+                  - active
+                  - state
+                  - items
+                  - total
+                  - capped
+                  - otherKindTotal
+                  - tags
+                  - nextCursor
+                  - stale
+                additionalProperties: false
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+      x-access: web
+      x-native-path: /native/api/v1/vod/browse
+      x-side-effects: false
+      x-legacy-twin: null
+      x-errors:
+        - code: empty_query
+          status: 400
+          message: Escribe al menos 2 letras para buscar.
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
+  /api/v1/vod/titles/{id}:
+    get:
+      operationId: vodTitle
+      tags:
+        - iptv
+      summary: Ficha de una película o una serie (con temporadas y episodios)
+      description: "Pide la ficha al proveedor por una cola (1 en vuelo, 300 ms, 60 por minuto; docs/vod.md §7, D-VOD30). Nunca queda en blanco: si el proveedor falla, lo que se sabe por la lista con `info: failed`; con `pre=1` y la cola ocupada, `info: pending`."
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-f0-9]{40}$
+        - name: pre
+          in: query
+          required: false
+          schema:
+            default: "0"
+            type: string
+            enum:
+              - "0"
+              - "1"
+      responses:
+        "200":
+          description: Correcto
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      kind:
+                        type: string
+                        const: movie
+                      id:
+                        type: string
+                        pattern: ^[a-f0-9]{40}$
+                      info:
+                        type: string
+                        enum:
+                          - ok
+                          - pending
+                          - failed
+                      title:
+                        type: string
+                        maxLength: 200
+                      originalTitle:
+                        anyOf:
+                          - type: string
+                            maxLength: 200
+                          - type: "null"
+                      year:
+                        anyOf:
+                          - type: integer
+                            minimum: -9007199254740991
+                            maximum: 9007199254740991
+                          - type: "null"
+                      plot:
+                        anyOf:
+                          - type: string
+                            maxLength: 2000
+                          - type: "null"
+                      genres:
+                        maxItems: 8
+                        type: array
+                        items:
+                          type: string
+                          maxLength: 40
+                      cast:
+                        maxItems: 12
+                        type: array
+                        items:
+                          type: string
+                          maxLength: 80
+                      director:
+                        anyOf:
+                          - type: string
+                            maxLength: 200
+                          - type: "null"
+                      country:
+                        anyOf:
+                          - type: string
+                            maxLength: 80
+                          - type: "null"
+                      ageRating:
+                        anyOf:
+                          - type: string
+                            maxLength: 16
+                          - type: "null"
+                      rating:
+                        anyOf:
+                          - type: number
+                            minimum: 0
+                            maximum: 10
+                          - type: "null"
+                      durationS:
+                        anyOf:
+                          - type: integer
+                            minimum: -9007199254740991
+                            maximum: 9007199254740991
+                          - type: "null"
+                      poster:
+                        anyOf:
+                          - type: string
+                            pattern: ^[a-f0-9]{8}$
+                          - type: "null"
+                      backdrop:
+                        anyOf:
+                          - type: string
+                            pattern: ^[a-f0-9]{8}$
+                          - type: "null"
+                      tags:
+                        maxItems: 5
+                        type: array
+                        items:
+                          type: string
+                          enum:
+                            - castellano
+                            - latino
+                            - vose
+                            - multi
+                            - 4k
+                      adult:
+                        type: boolean
+                      tech:
+                        type: object
+                        properties:
+                          container:
+                            anyOf:
+                              - type: string
+                                maxLength: 8
+                              - type: "null"
+                          video:
+                            anyOf:
+                              - type: string
+                                maxLength: 40
+                              - type: "null"
+                          audio:
+                            maxItems: 8
+                            type: array
+                            items:
+                              type: string
+                              maxLength: 40
+                        required:
+                          - container
+                          - video
+                          - audio
+                        additionalProperties: false
+                      playable:
+                        type: string
+                        enum:
+                          - yes
+                          - hevc
+                          - no
+                          - unknown
+                      progress:
+                        anyOf:
+                          - type: object
+                            properties:
+                              posS:
+                                type: number
+                              durS:
+                                type: number
+                              watched:
+                                type: boolean
+                            required:
+                              - posS
+                              - durS
+                              - watched
+                            additionalProperties: false
+                          - type: "null"
+                      category:
+                        anyOf:
+                          - type: object
+                            properties:
+                              id:
+                                type: string
+                                pattern: ^(?:[a-f0-9]{12}|none)$
+                              name:
+                                type: string
+                                maxLength: 120
+                            required:
+                              - id
+                              - name
+                            additionalProperties: false
+                          - type: "null"
+                    required:
+                      - kind
+                      - id
+                      - info
+                      - title
+                      - originalTitle
+                      - year
+                      - plot
+                      - genres
+                      - cast
+                      - director
+                      - country
+                      - ageRating
+                      - rating
+                      - durationS
+                      - poster
+                      - backdrop
+                      - tags
+                      - adult
+                      - tech
+                      - playable
+                      - progress
+                      - category
+                    additionalProperties: false
+                  - type: object
+                    properties:
+                      kind:
+                        type: string
+                        const: series
+                      id:
+                        type: string
+                        pattern: ^[a-f0-9]{40}$
+                      info:
+                        type: string
+                        enum:
+                          - ok
+                          - pending
+                          - failed
+                      title:
+                        type: string
+                        maxLength: 200
+                      year:
+                        anyOf:
+                          - type: integer
+                            minimum: -9007199254740991
+                            maximum: 9007199254740991
+                          - type: "null"
+                      plot:
+                        anyOf:
+                          - type: string
+                            maxLength: 2000
+                          - type: "null"
+                      genres:
+                        maxItems: 8
+                        type: array
+                        items:
+                          type: string
+                          maxLength: 40
+                      cast:
+                        maxItems: 12
+                        type: array
+                        items:
+                          type: string
+                          maxLength: 80
+                      director:
+                        anyOf:
+                          - type: string
+                            maxLength: 200
+                          - type: "null"
+                      country:
+                        anyOf:
+                          - type: string
+                            maxLength: 80
+                          - type: "null"
+                      rating:
+                        anyOf:
+                          - type: number
+                            minimum: 0
+                            maximum: 10
+                          - type: "null"
+                      poster:
+                        anyOf:
+                          - type: string
+                            pattern: ^[a-f0-9]{8}$
+                          - type: "null"
+                      backdrop:
+                        anyOf:
+                          - type: string
+                            pattern: ^[a-f0-9]{8}$
+                          - type: "null"
+                      tags:
+                        maxItems: 5
+                        type: array
+                        items:
+                          type: string
+                          enum:
+                            - castellano
+                            - latino
+                            - vose
+                            - multi
+                            - 4k
+                      adult:
+                        type: boolean
+                      category:
+                        anyOf:
+                          - type: object
+                            properties:
+                              id:
+                                type: string
+                                pattern: ^(?:[a-f0-9]{12}|none)$
+                              name:
+                                type: string
+                                maxLength: 120
+                            required:
+                              - id
+                              - name
+                            additionalProperties: false
+                          - type: "null"
+                      seasons:
+                        maxItems: 100
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            n:
+                              type: integer
+                              minimum: 0
+                              maximum: 999
+                            name:
+                              type: string
+                              maxLength: 80
+                            episodes:
+                              maxItems: 500
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  id:
+                                    type: string
+                                    pattern: ^[a-f0-9]{40}$
+                                  n:
+                                    type: integer
+                                    minimum: 0
+                                    maximum: 9999
+                                  title:
+                                    type: string
+                                    maxLength: 200
+                                  plot:
+                                    anyOf:
+                                      - type: string
+                                        maxLength: 600
+                                      - type: "null"
+                                  durationS:
+                                    anyOf:
+                                      - type: integer
+                                        minimum: -9007199254740991
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                  still:
+                                    anyOf:
+                                      - type: string
+                                        pattern: ^[a-f0-9]{8}$
+                                      - type: "null"
+                                  playable:
+                                    type: string
+                                    enum:
+                                      - yes
+                                      - hevc
+                                      - no
+                                      - unknown
+                                  progress:
+                                    anyOf:
+                                      - type: object
+                                        properties:
+                                          posS:
+                                            type: number
+                                          durS:
+                                            type: number
+                                          watched:
+                                            type: boolean
+                                        required:
+                                          - posS
+                                          - durS
+                                          - watched
+                                        additionalProperties: false
+                                      - type: "null"
+                                required:
+                                  - id
+                                  - n
+                                  - title
+                                  - plot
+                                  - durationS
+                                  - still
+                                  - playable
+                                  - progress
+                                additionalProperties: false
+                          required:
+                            - n
+                            - name
+                            - episodes
+                          additionalProperties: false
+                      main:
+                        anyOf:
+                          - type: object
+                            properties:
+                              episodeId:
+                                type: string
+                                pattern: ^[a-f0-9]{40}$
+                              action:
+                                type: string
+                                enum:
+                                  - start
+                                  - resume
+                                  - next
+                                  - rewatch
+                              label:
+                                type: string
+                                maxLength: 80
+                              posS:
+                                type: number
+                                minimum: 0
+                            required:
+                              - episodeId
+                              - action
+                              - label
+                              - posS
+                            additionalProperties: false
+                          - type: "null"
+                      truncated:
+                        type: boolean
+                    required:
+                      - kind
+                      - id
+                      - info
+                      - title
+                      - year
+                      - plot
+                      - genres
+                      - cast
+                      - director
+                      - country
+                      - rating
+                      - poster
+                      - backdrop
+                      - tags
+                      - adult
+                      - category
+                      - seasons
+                      - main
+                      - truncated
+                    additionalProperties: false
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+      x-access: web
+      x-native-path: /native/api/v1/vod/titles/{id}
+      x-side-effects: false
+      x-legacy-twin: null
+      x-errors:
+        - code: vod_not_found
+          status: 404
+          message: Este título ya no está en tu IPTV.
+        - code: vod_unavailable
+          status: 503
+          message: Tu IPTV no ofrece películas ni series, o no responde ahora mismo.
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
+  /api/v1/vod/titles/{id}/art/{art}:
+    get:
+      operationId: vodArt
+      tags:
+        - iptv
+      summary: Cartel, fondo o fotograma de un título (JPEG, PNG o WebP) por el proxy propio
+      description: "Solo recibe ids, nunca URLs (docs/vod.md §8, D-VOD8). Con la `v` correcta, `private, max-age=31536000, immutable`; sin ella o con otra, `private, no-cache`. `If-None-Match` da 304. Solo imágenes raster por bytes mágicos, con `nosniff` y `Content-Security-Policy: default-src 'none'`. Sin imagen, 404 `vod_not_found`."
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-f0-9]{40}$
+        - name: art
+          in: path
+          required: true
+          schema:
+            type: string
+            enum:
+              - poster
+              - backdrop
+              - still
+        - name: v
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[a-f0-9]{8}$
+      responses:
+        "200":
+          description: "Cartel, fondo o fotograma en JPEG, PNG o WebP (por bytes mágicos), con `ETag`, `X-Content-Type-Options: nosniff` y `Content-Security-Policy: default-src 'none'`; inmutable con la `v` correcta y 304 con `If-None-Match` (docs/vod.md §8)."
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+      x-access: web
+      x-native-path: /native/api/v1/vod/titles/{id}/art/{art}
+      x-side-effects: false
+      x-legacy-twin: null
+      x-errors:
+        - code: vod_not_found
+          status: 404
+          message: Este título ya no está en tu IPTV.
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
+  /api/v1/vod/titles/{id}/stream:
+    get:
+      operationId: vodStream
+      tags:
+        - playback
+      summary: Abrir una película o un episodio y recibir su lista HLS VOD completa
+      description: "Sesión IPTV del relé VOD y del productor (docs/vod.md §9): la web recibe `hls` en `/api/v1/video/<sid>/index.m3u8` sin token y el iPhone `hls-fmp4` con `?t=`, los dos con `source: iptv`. No espera al primer segmento: la lista sale del índice. Tope de 40 s en el servidor (§9.12). Dos cosas por IPTV a la vez siguen la regla de la casa: la nueva corta la anterior."
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-f0-9]{40}$
+        - name: client
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - web
+              - ios
+        - name: viewer
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{4,64}$
+        - name: device
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{4,64}$
+        - name: start
+          in: query
+          required: false
+          schema:
+            type: number
+            minimum: 0
+            maximum: 86400
+        - name: audio
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 15
+        - name: hevc
+          in: query
+          required: false
+          schema:
+            default: "0"
+            type: string
+            enum:
+              - "0"
+              - "1"
+      responses:
+        "200":
+          description: Correcto
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        pattern: ^s_[A-Za-z0-9_-]{8,64}$
+                      heartbeatMs:
+                        type: integer
+                        exclusiveMinimum: 0
+                        maximum: 9007199254740991
+                      expiresAfterMs:
+                        type: integer
+                        exclusiveMinimum: 0
+                        maximum: 9007199254740991
+                    required:
+                      - id
+                      - heartbeatMs
+                      - expiresAfterMs
+                    additionalProperties: false
+                  url:
+                    type: string
+                    format: starts_with
+                    pattern: ^\/.*
+                  protocol:
+                    type: string
+                    enum:
+                      - mpegts
+                      - hls
+                      - hls-fmp4
+                  remux:
+                    type: boolean
+                  codec:
+                    type: object
+                    properties:
+                      video:
+                        type: string
+                      audio:
+                        type: string
+                      source:
+                        type: string
+                        enum:
+                          - scanner
+                          - player
+                          - ffprobe
+                          - unknown
+                    required:
+                      - video
+                      - audio
+                      - source
+                    additionalProperties: false
+                  latency:
+                    type: object
+                    properties:
+                      mode:
+                        type: string
+                        enum:
+                          - stable
+                          - balanced
+                          - low
+                      initialBufferS:
+                        type: number
+                        minimum: 0
+                      rebuildS:
+                        type: number
+                        minimum: 0
+                      liveSync:
+                        anyOf:
+                          - type: object
+                            properties:
+                              targetS:
+                                type: number
+                                minimum: 0
+                              maxS:
+                                type: number
+                                minimum: 0
+                              rate:
+                                type: number
+                                exclusiveMinimum: 0
+                            required:
+                              - targetS
+                              - maxS
+                              - rate
+                            additionalProperties: false
+                          - type: "null"
+                      ios:
+                        type: object
+                        properties:
+                          preferredForwardBufferDuration:
+                            type: number
+                            minimum: 0
+                          liveEdgeOffsetS:
+                            type: number
+                            minimum: 0
+                        required:
+                          - preferredForwardBufferDuration
+                          - liveEdgeOffsetS
+                        additionalProperties: false
+                    required:
+                      - mode
+                      - initialBufferS
+                      - rebuildS
+                      - liveSync
+                    additionalProperties: false
+                  stats:
+                    type: object
+                    properties:
+                      via:
+                        type: string
+                        const: sse
+                    required:
+                      - via
+                    additionalProperties: false
+                  handoff:
+                    type: boolean
+                  source:
+                    type: string
+                    enum:
+                      - engine
+                      - iptv
+                  vod:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        pattern: ^[a-f0-9]{40}$
+                      kind:
+                        type: string
+                        enum:
+                          - movie
+                          - episode
+                      seriesId:
+                        anyOf:
+                          - type: string
+                            pattern: ^[a-f0-9]{40}$
+                          - type: "null"
+                      title:
+                        type: string
+                        maxLength: 200
+                      subtitle:
+                        anyOf:
+                          - type: string
+                            maxLength: 200
+                          - type: "null"
+                      durationS:
+                        type: number
+                        exclusiveMinimum: 0
+                        maximum: 86400
+                      startS:
+                        type: number
+                        minimum: 0
+                      resumed:
+                        type: boolean
+                      audio:
+                        maxItems: 16
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            index:
+                              type: integer
+                              minimum: -9007199254740991
+                              maximum: 9007199254740991
+                            label:
+                              type: string
+                              maxLength: 40
+                            lang:
+                              anyOf:
+                                - type: string
+                                  maxLength: 12
+                                - type: "null"
+                            codec:
+                              type: string
+                              maxLength: 16
+                            channels:
+                              anyOf:
+                                - type: integer
+                                  minimum: -9007199254740991
+                                  maximum: 9007199254740991
+                                - type: "null"
+                            converted:
+                              type: boolean
+                          required:
+                            - index
+                            - label
+                            - lang
+                            - codec
+                            - channels
+                            - converted
+                          additionalProperties: false
+                      audioIndex:
+                        type: integer
+                        minimum: -9007199254740991
+                        maximum: 9007199254740991
+                      video:
+                        type: object
+                        properties:
+                          codec:
+                            type: string
+                            enum:
+                              - h264
+                              - hevc
+                          codecs:
+                            type: string
+                            maxLength: 64
+                          width:
+                            anyOf:
+                              - type: integer
+                                minimum: -9007199254740991
+                                maximum: 9007199254740991
+                              - type: "null"
+                          height:
+                            anyOf:
+                              - type: integer
+                                minimum: -9007199254740991
+                                maximum: 9007199254740991
+                              - type: "null"
+                        required:
+                          - codec
+                          - codecs
+                          - width
+                          - height
+                        additionalProperties: false
+                      next:
+                        anyOf:
+                          - type: object
+                            properties:
+                              id:
+                                type: string
+                                pattern: ^[a-f0-9]{40}$
+                              title:
+                                type: string
+                                maxLength: 200
+                              label:
+                                type: string
+                                maxLength: 80
+                            required:
+                              - id
+                              - title
+                              - label
+                            additionalProperties: false
+                          - type: "null"
+                      poster:
+                        anyOf:
+                          - type: string
+                            pattern: ^[a-f0-9]{8}$
+                          - type: "null"
+                    required:
+                      - id
+                      - kind
+                      - seriesId
+                      - title
+                      - subtitle
+                      - durationS
+                      - startS
+                      - resumed
+                      - audio
+                      - audioIndex
+                      - video
+                      - next
+                      - poster
+                    additionalProperties: false
+                required:
+                  - session
+                  - url
+                  - protocol
+                  - remux
+                  - codec
+                  - latency
+                  - stats
+                  - handoff
+                  - vod
+                additionalProperties: false
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+      x-access: web
+      x-native-path: /native/api/v1/vod/titles/{id}/stream
+      x-side-effects: true
+      x-legacy-twin: null
+      x-errors:
+        - code: vod_unavailable
+          status: 503
+          message: Tu IPTV no ofrece películas ni series, o no responde ahora mismo.
+        - code: vod_not_found
+          status: 404
+          message: Este título ya no está en tu IPTV.
+        - code: vod_unsupported
+          status: 422
+          message: Este título usa un formato que no se puede reproducir aquí.
+        - code: vod_busy
+          status: 503
+          message: Tu cuenta IPTV está en uso en otro aparato. Ciérralo y vuelve a intentarlo.
+        - code: vod_timeout
+          status: 504
+          message: Tu IPTV tarda demasiado en dar el vídeo. Prueba otra vez.
+        - code: vod_dropped
+          status: 502
+          message: El proveedor ha cortado el vídeo. Vuelve a intentarlo.
+        - code: vod_disk_full
+          status: 507
+          message: No queda espacio en el Umbrel para preparar el vídeo.
+        - code: vod_account
+          status: 403
+          message: Tu cuenta IPTV no está activa. Revísala en Ajustes → IPTV.
+        - code: remux_busy
+          status: 503
+          message: Hay demasiados vídeos preparándose para iPhone a la vez. Cierra alguno y reintenta.
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
+  /api/v1/vod/titles/{id}/progress:
+    post:
+      operationId: vodProgress
+      tags:
+        - iptv
+      summary: Guardar el progreso de una película o un episodio, o marcarlo (204 sin cuerpo)
+      description: Progreso por casa en `v2/vod.json` (docs/vod.md §10, D-VOD17). `tick` se vuelca como mucho una vez por minuto; lo demás, al momento. El servidor valida la posición contra la duración (`posS ≤ durS + 5`, ±10 % de la del índice); si no cumple, `validation_error` y no se guarda.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-f0-9]{40}$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                posS:
+                  default: 0
+                  type: number
+                  minimum: 0
+                  maximum: 86400
+                durS:
+                  default: 0
+                  type: number
+                  minimum: 0
+                  maximum: 86400
+                event:
+                  type: string
+                  enum:
+                    - tick
+                    - pause
+                    - seek
+                    - ended
+                    - stop
+                    - mark
+                    - unmark
+                    - mark-through
+                    - hide
+                    - forget
+                audio:
+                  anyOf:
+                    - type: string
+                      maxLength: 8
+                    - type: "null"
+                subtitle:
+                  anyOf:
+                    - type: string
+                      maxLength: 12
+                    - type: "null"
+              required:
+                - event
+              additionalProperties: false
+      responses:
+        "204":
+          description: Correcto, sin cuerpo.
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+      x-access: web
+      x-native-path: /native/api/v1/vod/titles/{id}/progress
+      x-side-effects: true
+      x-legacy-twin: null
+      x-errors:
+        - code: vod_not_found
+          status: 404
+          message: Este título ya no está en tu IPTV.
         - code: validation_error
           status: 400
           message: Falta algún dato o no tiene el formato esperado.
@@ -10213,15 +12199,38 @@ components:
               minLength: 1
               maxLength: 128
             data:
-              type: object
-              properties:
-                attempts:
-                  type: integer
-                  minimum: 2
-                  maximum: 9
-              required:
-                - attempts
-              additionalProperties: false
+              anyOf:
+                - type: object
+                  properties:
+                    attempts:
+                      type: integer
+                      minimum: 2
+                      maximum: 9
+                  required:
+                    - attempts
+                  additionalProperties: false
+                - type: object
+                  properties:
+                    reason:
+                      type: string
+                      enum:
+                        - formato
+                        - video
+                        - hevc
+                        - indice
+                        - sin_saltos
+                  required:
+                    - reason
+                  additionalProperties: false
+                - type: object
+                  properties:
+                    retryAfterS:
+                      type: integer
+                      minimum: 1
+                      maximum: 120
+                  required:
+                    - retryAfterS
+                  additionalProperties: false
           required:
             - code
             - message
@@ -11098,6 +13107,49 @@ components:
                     - channelsWithGuide
                     - updatedAt
                     - failedAt
+                  additionalProperties: false
+                vod:
+                  type: object
+                  properties:
+                    state:
+                      type: string
+                      enum:
+                        - off
+                        - preparing
+                        - ready
+                        - none
+                        - unsupported
+                        - error
+                    movies:
+                      type: integer
+                      minimum: 0
+                      maximum: 9007199254740991
+                    series:
+                      type: integer
+                      minimum: 0
+                      maximum: 9007199254740991
+                    builtAt:
+                      anyOf:
+                        - type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                        - type: "null"
+                    truncated:
+                      type: boolean
+                    skipped:
+                      type: integer
+                      minimum: 0
+                      maximum: 9007199254740991
+                    stale:
+                      type: boolean
+                  required:
+                    - state
+                    - movies
+                    - series
+                    - builtAt
+                    - truncated
+                    - skipped
+                    - stale
                   additionalProperties: false
               required:
                 - status

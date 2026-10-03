@@ -83,6 +83,15 @@ const BINARY_RESPONSES: Readonly<Record<string, JsonObject>> = {
       'Escudo en PNG con `ETag`, `Last-Modified` y `Cache-Control` (inmutable con `?v=`; 304 con `If-None-Match`).',
     content: { 'image/png': { schema: { type: 'string', format: 'binary' } } },
   },
+  vodArt: {
+    description:
+      "Cartel, fondo o fotograma en JPEG, PNG o WebP (por bytes mágicos), con `ETag`, `X-Content-Type-Options: nosniff` y `Content-Security-Policy: default-src 'none'`; inmutable con la `v` correcta y 304 con `If-None-Match` (docs/vod.md §8).",
+    content: {
+      'image/jpeg': { schema: { type: 'string', format: 'binary' } },
+      'image/png': { schema: { type: 'string', format: 'binary' } },
+      'image/webp': { schema: { type: 'string', format: 'binary' } },
+    },
+  },
   footballCompetitionLogo: {
     description:
       'Logo en PNG con `ETag`, `Last-Modified` y `Cache-Control` (inmutable con `?v=`; 304 con `If-None-Match`).',
@@ -97,6 +106,7 @@ function successResponse(route: V1RouteEntry): JsonObject {
       content: { 'text/event-stream': { schema: { type: 'string' } } },
     };
   }
+  if (route.content === 'empty') return { description: 'Correcto, sin cuerpo.' };
   if (route.content === 'binary') {
     const documented = BINARY_RESPONSES[route.id];
     if (!documented) throw new Error(`la ruta binaria ${route.id} no dice qué tipo devuelve`);
