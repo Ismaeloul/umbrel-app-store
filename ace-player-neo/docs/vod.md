@@ -260,9 +260,13 @@ Los paneles Xtream son PHP y mandan de todo. Se reutilizan `looseNumber`, `loose
 
 `cleanVodTitle(raw, categoryName) → { title, year, tags }`. **No reutiliza nada de la limpieza de canales** (T8).
 
-- **Prefijos al principio** (una vez cada uno, solo al principio): `^(?:\|?[A-Z]{2,3}\|?\s*[-:|]\s*)+` («ES - »,
-  «|ES| », «LAT: »), `^\[[A-Z0-9 ]{2,8}\]\s*` y `^(4K|UHD|FHD|HD|SD)[\s\-|:]+`. Se quitan y **pasan a distintivo** si
-  dicen lengua o calidad.
+- **Prefijos al principio** (solo al principio, encadenados como mucho 4 veces), con una **lista cerrada** de códigos:
+  `ES ESP SPA CAST LAT LATAM EN ENG VOSE VOS SUB MULTI DUAL FR DE PT 4K UHD FHD HD SD` seguidos de `:`, `|` o
+  `-` con espacio detrás («ES - », «LAT: », «ES| »); entre barras, cualquier código («|ES| », «|NL| »); entre
+  corchetes, los de la lista («[ES] », «[4K] »); `IT` solo con `-` o `|` («IT: Capítulo 2» es la película); y
+  `4K`/`UHD`/`FHD` con un espacio («4K Dune»). Se quitan y **pasan a distintivo** si dicen lengua o calidad.
+  **Corregido en la 0.9.0:** la regla de antes (`^(?:\|?[A-Z]{2,3}\|?\s*[-:|]\s*)+`) dejaba «CSI: Miami» en «Miami» y
+  se comía «UP:», «ET:», «SOS:» y «[REC]».
 - **Etiquetas al final**, entre corchetes o paréntesis o sueltas: `[4K]`, `(MULTI)`, `(VOSE)`, `(LATINO)`,
   `CASTELLANO`, `UHD`, `FHD`, `1080p`, `HEVC`, `HDR`, `DUAL`. Se quitan y pasan a distintivo.
 - **Año:** `\((18|19|20)\d{2}\)` al final, o `\b(19|20)\d{2}$`. Pasa a `year` si la lista no lo trae.

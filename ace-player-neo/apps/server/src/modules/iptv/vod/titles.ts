@@ -4,8 +4,9 @@
    `cleanVodTitle(raw, categoryName)` NO reutiliza nada de la limpieza de
    canales (T8: `cleanIptvTitle` borra «Reserva», «Multi» o «España», cambia
    «M+» y tira los títulos no latinos). Es conservadora a propósito:
-   - quita prefijos de lengua o calidad SOLO al principio («ES - »,
-     «|ES| », «LAT: », «[4K] », «4K - »);
+   - quita prefijos de lengua o calidad SOLO al principio y de una LISTA
+     CERRADA («ES - », «|ES| », «LAT: », «[4K] », «4K - »): «CSI: Miami»,
+     «UP: Una aventura de altura» o «[REC] 2» se quedan como están;
    - quita etiquetas SOLO al final («[4K]», «(MULTI)», «(VOSE)», «1080p»,
      «HEVC»…), entre corchetes o paréntesis o sueltas en mayúsculas;
    - el año sale de «(2023)» al final, o de «- 2023» al final;
@@ -68,11 +69,28 @@ export function detectTags(text: string): number {
   return bits;
 }
 
-/* Prefijos al principio: códigos de 2-3 mayúsculas con separador («ES - »,
-   «|ES| », «LAT: »), códigos entre corchetes y calidades. */
-const PREFIX_CODE = /^(?:\|?[A-Z]{2,3}\|?\s*[-:|]\s*)+/;
-const PREFIX_BRACKET = /^\[[A-Z0-9 ]{2,8}\]\s*/;
-const PREFIX_QUALITY = /^(?:4K|UHD|FHD|HD|SD)[\s\-|:]+/;
+/* Prefijos al principio, con una LISTA CERRADA de códigos de lengua y
+   calidad: «CSI: Miami», «UP: Una aventura de altura», «ET: El
+   extraterrestre» o «SOS: Rescate» empiezan por mayúsculas y dos puntos y
+   son títulos, no prefijos. Entre barras («|XX|») vale cualquier código: un
+   título nunca empieza así. «IT» (Italia) no vale con dos puntos: «IT:
+   Capítulo 2» es la película; «IT - …» e «|IT| …» sí son prefijos.
+   Corchetes, igual: «[ES]» y «[4K]» sí, «[REC] 2» no. */
+const PREFIX_CODES =
+  'ES|ESP|SPA|CAST|LAT|LATAM|EN|ENG|VOSE|VOS|SUB|MULTI|DUAL|FR|DE|PT|4K|UHD|FHD|HD|SD';
+const PREFIX_PIPED = /^\|[A-Z0-9]{2,5}\|\s*(?:[-:|]\s*)?/;
+/* El guion, solo con espacio detrás («ES - Dune»): «DE-LOVELY» es un título. */
+const PREFIX_CODE = new RegExp(`^(?:${PREFIX_CODES})\\s*(?:[:|]|-(?=\\s))\\s*`);
+const PREFIX_ITALIAN = /^IT\s*(?:\||-(?=\s))\s*/;
+const PREFIX_BRACKET = new RegExp(`^\\[\\s*(?:${PREFIX_CODES}|IT)\\s*\\]\\s*`);
+const PREFIX_QUALITY = /^(?:4K|UHD|FHD)\s+/;
+const PREFIXES: readonly RegExp[] = [
+  PREFIX_BRACKET,
+  PREFIX_PIPED,
+  PREFIX_CODE,
+  PREFIX_ITALIAN,
+  PREFIX_QUALITY,
+];
 
 /* Palabras de etiqueta al final. Entre corchetes o paréntesis, en cualquier
    caja; sueltas, solo en mayúsculas (o `1080p`), para no comerse palabras
@@ -102,15 +120,18 @@ export function cleanVodTitle(raw: string, categoryName = ''): CleanVodTitle {
   let removed = '';
   let year: number | null = null;
 
-  /* Prefijos: cada forma una vez, solo al principio (dos vueltas para «[ES] 4K - …»). */
-  for (let round = 0; round < 2; round += 1) {
-    for (const pattern of [PREFIX_BRACKET, PREFIX_CODE, PREFIX_QUALITY]) {
+  /* Prefijos, solo al principio y encadenados («[ES] 4K - …», «ES - LAT: …»),
+     con tope de vueltas. Nunca se come el título entero. */
+  for (let round = 0; round < 4; round += 1) {
+    const before = title;
+    for (const pattern of PREFIXES) {
       const match = pattern.exec(title);
       if (match && match[0].length < title.length) {
         removed += ` ${match[0]}`;
         title = title.slice(match[0].length).trimStart();
       }
     }
+    if (title === before) break;
   }
 
   /* Final: etiquetas y año, hasta que no cambie nada (con tope). */

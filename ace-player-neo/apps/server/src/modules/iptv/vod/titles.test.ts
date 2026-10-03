@@ -61,6 +61,39 @@ describe('cleanVodTitle', () => {
     expect(clean('ES| Coco', 'PELIS LATINO').tags).toEqual(['latino']);
   });
 
+  it('títulos que empiezan por mayúsculas y dos puntos NO son prefijos (lista cerrada)', () => {
+    for (const title of [
+      'CSI: Miami',
+      'UP: Una aventura de altura',
+      'ET: El extraterrestre',
+      'SOS: Rescate',
+      'IT: Capítulo 2',
+      'DE-LOVELY',
+      '[REC] 2',
+      'SD Gundam Force',
+    ]) {
+      expect(clean(title).title, title).toBe(title);
+    }
+    /* Y se encuentran al buscar: «csi» casa con el título entero. */
+    expect(clean('ES| CSI: Miami (2002)')).toEqual({
+      title: 'CSI: Miami',
+      year: 2002,
+      tags: ['castellano'],
+    });
+  });
+
+  it('los prefijos de la lista sí se van, también encadenados y con «|XX|» de cualquier código', () => {
+    expect(clean('EN - The Batman').title).toBe('The Batman');
+    expect(clean('VOSE: Parásitos').title).toBe('Parásitos');
+    expect(clean('IT - Il padrino').title).toBe('Il padrino');
+    expect(clean('|IT| Il padrino').title).toBe('Il padrino');
+    expect(clean('|NL| De Tweeling').title).toBe('De Tweeling');
+    expect(clean('ES - LAT: Coco')).toEqual({ title: 'Coco', year: null, tags: ['latino'] });
+    expect(clean('[LAT] Coco').tags).toEqual(['latino']);
+    expect(clean('4K Dune').title).toBe('Dune');
+    expect(clean('FHD: Dune').title).toBe('Dune');
+  });
+
   it('la limpieza nunca deja un título vacío', () => {
     expect(clean('4K').title).toBe('4K');
     expect(clean('ES - ').title).toBe('ES');
