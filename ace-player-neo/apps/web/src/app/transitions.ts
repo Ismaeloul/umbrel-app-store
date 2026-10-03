@@ -37,7 +37,12 @@ export function canalTransitionName(hash: string): string {
    larga y su scroll recordado hacían deslizarse la página entera en vertical,
    y en escritorio su panel lateral estrecha la columna y estiraba la
    instantánea. Por separado, cada instantánea se queda donde se veía y las
-   doce combinaciones de la barra son el mismo fundido cruzado. */
+   doce combinaciones de la barra son el mismo fundido cruzado.
+
+   En WebKit (Safari, iOS) las vistas no llevan <ViewTransition>: dejaba las
+   dos vistas superpuestas (viewTransitionGuard.ts explica el fallo). Allí el
+   mismo fundido, con los mismos fotogramas y tokens, lo hace
+   viewCrossfade.ts sin la API. */
 
 /** Clase (`view-transition-class`) de la vista que entra. */
 export const VISTA_ENTRA = 'ace-vista-entra';

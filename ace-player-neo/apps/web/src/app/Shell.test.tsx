@@ -206,6 +206,30 @@ describe('armazón', () => {
     expect(screen.getByLabelText('Nota de agenda')).toHaveValue('hola');
   });
 
+  it('sin View Transitions por vista (WebKit, jsdom) el cambio de pestaña es un fundido cruzado que siempre se recoge', async () => {
+    renderApp();
+    await screen.findByRole('heading', { level: 1, name: 'Agenda' });
+    expect(app()).toHaveAttribute('data-motion', 'css');
+    fireEvent.click(within(nav()[0] as HTMLElement).getByRole('link', { name: 'Canales' }));
+    await screen.findByRole('heading', { level: 1, name: 'Canales' });
+    // La que sale es un fantasma inerte que se apaga encima; la que entra
+    // aparece con el sentido de la navegación.
+    const ghosts = document.querySelectorAll<HTMLElement>('.views > .view-fantasma');
+    expect(ghosts).toHaveLength(1);
+    expect(ghosts[0]).toHaveAttribute('aria-hidden', 'true');
+    expect(ghosts[0]).toHaveTextContent('Agenda');
+    const canales = document.querySelector('.view[data-vista="biblioteca"]') as HTMLElement;
+    expect(canales).toHaveAttribute('data-entra', 'adelante');
+    // Las vistas de verdad: solo una a la vista.
+    const shown = [...document.querySelectorAll<HTMLElement>('.views > .view')].filter(
+      (view) => view.style.display !== 'none',
+    );
+    expect(shown.map((view) => view.dataset.vista)).toEqual(['biblioteca']);
+    // jsdom no anima: el respaldo por tiempo lo recoge todo.
+    await waitFor(() => expect(document.querySelector('.view-fantasma')).toBeNull());
+    expect(canales).not.toHaveAttribute('data-entra');
+  });
+
   it('«?» abre la ayuda con los atajos registrados y «/» lleva a la biblioteca', async () => {
     renderApp();
     await screen.findByRole('heading', { level: 1, name: 'Agenda' });

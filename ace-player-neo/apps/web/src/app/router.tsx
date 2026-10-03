@@ -105,10 +105,16 @@ function readDepth(): number {
   return typeof state?.aceDepth === 'number' ? state.aceDepth : 0;
 }
 
+/** Sentido de la navegación (tipo de View Transition y fundido de la vista). */
+export type NavDirection = 'adelante' | 'atras';
+
 export interface RouterProviderProps {
   children: ReactNode;
-  /** Se llama antes de cambiar de ruta (el armazón guarda el scroll). */
-  onBeforeChange?: (from: Route, to: Route) => void;
+  /**
+   * Se llama antes de cambiar de ruta, con el DOM aún en la ruta que se deja
+   * (el armazón guarda el scroll y prepara el fundido de la vista que sale).
+   */
+  onBeforeChange?: (from: Route, to: Route, direction: NavDirection | null) => void;
   /** Para los tests. */
   initialSearch?: string;
 }
@@ -130,8 +136,9 @@ export function RouterProvider({ children, onBeforeChange, initialSearch }: Rout
   const beforeChange = useRef(onBeforeChange);
   beforeChange.current = onBeforeChange;
 
-  const commit = useCallback((next: Route, direction: 'adelante' | 'atras' | null) => {
-    if (!sameRoute(routeRef.current, next)) beforeChange.current?.(routeRef.current, next);
+  const commit = useCallback((next: Route, direction: NavDirection | null) => {
+    if (!sameRoute(routeRef.current, next))
+      beforeChange.current?.(routeRef.current, next, direction);
     setState((current) =>
       sameRoute(current.route, next) ? current : { route: next, previous: current.route },
     );

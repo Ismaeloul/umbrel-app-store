@@ -31,6 +31,40 @@
 .view {
   min-width: 0;
 }
+/* Fundido cruzado sin View Transitions (WebKit: viewTransitionGuard.ts y
+   viewCrossfade.ts). Los mismos fotogramas, duración y curva que las View
+   Transitions de base.css: la vista que entra aparece con un desplazamiento
+   mínimo según el sentido mientras un clon inerte de la que sale, encima y
+   fijo donde se veía, se apaga y se quita. */
+.view[data-entra] {
+  animation: ace-funde var(--dur-rapido) var(--ease-out) both;
+}
+.view[data-entra='adelante'] {
+  animation-name: ace-vt-entra-dcha;
+}
+.view[data-entra='atras'] {
+  animation-name: ace-vt-entra-izda;
+}
+.view-fantasma {
+  z-index: 0;
+  min-width: 0;
+  pointer-events: none;
+  animation: ace-vt-sale var(--dur-rapido) var(--ease-out) both;
+}
+/* El clon no repite las apariciones de su vista (al insertarse, el navegador
+   relanzaría sus animaciones CSS): solo se apaga entero. */
+.view-fantasma * {
+  animation: none !important;
+}
+.app[data-motion='css'] .app-aside {
+  animation: ace-funde var(--dur-rapido) var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Sin desplazamiento: solo el fundido (corto: --dur-rapido baja a 120 ms). */
+  .view[data-entra] {
+    animation-name: ace-funde;
+  }
+}
 .view-skeleton {
   display: grid;
   gap: var(--s-4);
