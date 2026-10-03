@@ -184,7 +184,7 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
     expect(failures).toEqual([]);
   });
 
-  it('con token válido, las rutas solo web (healthLive, copia de seguridad, Ajustes → IPTV, el buscador IPTV, la pestaña IPTV, la Guía TV, Películas y series y «Descargar fallos») dan 403 origin_forbidden', async () => {
+  it('con token válido, las rutas solo web (healthLive, copia de seguridad, Ajustes → IPTV, el buscador IPTV, la pestaña IPTV, la Guía TV, Películas y series, «Descargar fallos» y «Descargar logs») dan 403 origin_forbidden', async () => {
     const s = await setup();
     const failures: string[] = [];
     const webOnly = V1.filter(([, route]) => route.access === 'web');
@@ -216,6 +216,10 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
       'diagnosticsExport',
       'vodLanguagesGet',
       'vodLanguagesUpdate',
+      /* «Descargar logs» (0.9.0): el registro en disco, su zip y los errores de la web. */
+      'diagnosticsLogInfo',
+      'diagnosticsLogDownload',
+      'diagnosticsWebLog',
     ]);
     for (const [id, route] of webOnly) {
       for (const url of nativeForms(concretePath(route))) {

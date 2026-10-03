@@ -431,3 +431,22 @@ también los tests nuevos del otro verificador), ninguno saltado; `tsc
   `apps/server/src/core/logger.test.ts` (el anillo redactado al escribir) y
   `apps/server/src/modules/diagnostics/export.test.ts` (de punta a punta: el
   fichero no contiene ninguno de los secretos sembrados).
+
+## 10. Cambio de la 0.9.0: registro en disco y «Descargar logs» (Ajustes → Registro)
+
+- Por primera vez el registro del servidor **se guarda en disco** (`<DATA_DIR>/v2/registro/`, 0700/0600, 45
+  días y 40 MiB como mucho; docs/registro.md). Por eso todo va redactado ANTES de escribirse: en el acto con el
+  redactor de la IPTV de ese momento (cambiar o borrar el proveedor no destapa lo de antes) y al escribir con
+  `redactReportValue` + `redactReportText` (las mismas capas de §9). Si el redactor de la IPTV falla con una
+  línea, se guarda un aviso en su lugar, nunca la línea en claro. Al descargar, el redactor de la IPTV de ahora
+  pasa otra vez por todo.
+- `GET /api/v1/diagnostics/log`, `POST /api/v1/diagnostics/log/download` y `POST /api/v1/diagnostics/web-log`
+  son `access: 'web'` (403 `origin_forbidden` desde `/native`; `test/security.test.ts`) y pasan la regla
+  anti-CSRF (la descarga y el envío son POST con efectos).
+- Los errores de la web llegan acotados (20 por tanda, 60 por minuto en total; lo de más se cuenta y no se
+  guarda) y solo `warn`/`error`; sin datos personales (frase, pila, código, vista y el navegador en corto).
+- Sin ReDoS nuevo: el registro usa las expresiones de §9; las suyas (nivel al principio, `"time":"…"`) son
+  lineales. Una línea enorme se recorta (16 KiB) y una tira que no es JSON se guarda dentro de `text`, redactada.
+- Pruebas: `apps/server/src/core/log-store.test.ts` (casos difíciles, redactor de antes, redactor que falla) y
+  `apps/server/src/modules/diagnostics/logs.test.ts` (el zip entero no contiene ninguno de los secretos
+  sembrados).

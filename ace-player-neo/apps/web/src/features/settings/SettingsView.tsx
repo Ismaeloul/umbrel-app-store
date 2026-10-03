@@ -28,6 +28,9 @@
      en la web; su propio trozo de JS, como la IPTV.
    - Dispositivos y Salud: las aportan otras vistas (external.tsx); si aún no
      existen, no salen y `ajustes/salud` lleva a la sección del motor.
+   - Registro (logs/, 0.9.0, docs/registro.md): lo que hay guardado en el
+     Umbrel y «Descargar logs» (un .zip para pasarlo si algo falla). Solo en
+     la web; su propio trozo de JS.
    - Motor AceStream: estado y reinicio con segundo toque (6 s).
    - Acerca de: versión y atajos. */
 
@@ -86,6 +89,7 @@ type SectionId =
   | 'copia'
   | 'dispositivos'
   | 'salud'
+  | 'registro'
   | 'motor'
   | 'acerca';
 
@@ -127,6 +131,12 @@ const SECTIONS: readonly SectionDef[] = [
     hint: 'Emparejar el iPhone y el iPad',
   },
   { id: 'salud', title: 'Salud', icon: 'senal', hint: 'Motor, comprobador y registro' },
+  {
+    id: 'registro',
+    title: 'Registro',
+    icon: 'descargar',
+    hint: 'Descargar los logs si algo falla',
+  },
   { id: 'motor', title: 'Motor AceStream', icon: 'motor', hint: 'Estado y reinicio' },
   { id: 'acerca', title: 'Acerca de', icon: 'info', hint: 'Versión y atajos' },
 ];
@@ -225,6 +235,13 @@ const IptvSection = lazy(() => import('../iptv/IptvSection.tsx'));
 
 /* Ajustes → Copia de seguridad (decisiones.md D24): ídem. */
 const BackupSection = lazy(() => import('../backup/BackupSection.tsx'));
+
+/* Ajustes → Registro («Descargar logs», 0.9.0): ídem. */
+const LogsSection = lazy(() => import('../logs/LogsSection.tsx'));
+
+/** Descripción de Ajustes → Registro (el mismo texto que features/logs/model.ts). */
+export const LOGS_SECTION_DESCRIPTION =
+  'La app apunta lo que pasa (arranques, cortes del relé, fallos del motor, de la IPTV y de la web) y lo guarda unos 45 días en tu Umbrel. Si algo va mal, descarga los logs y pásalos: ahí se ve dónde falló.';
 
 /** Descripción de Ajustes → Copia de seguridad (el mismo texto que features/backup/model.ts). */
 export const BACKUP_SECTION_DESCRIPTION =
@@ -683,6 +700,16 @@ export default function SettingsView({ route, active }: ViewProps) {
         return (
           <Section key={def.id} def={{ ...def, title: 'Salud del sistema' }}>
             <External section="salud" route={route} active={active} />
+          </Section>
+        );
+      case 'registro':
+        return (
+          <Section key={def.id} def={def} description={LOGS_SECTION_DESCRIPTION}>
+            <ErrorBoundary what="el registro">
+              <Suspense fallback={<SkeletonRows rows={2} label="Cargando el registro…" />}>
+                <LogsSection />
+              </Suspense>
+            </ErrorBoundary>
           </Section>
         );
       case 'motor':

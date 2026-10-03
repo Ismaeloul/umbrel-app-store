@@ -18,10 +18,13 @@ import { installShortcutListener } from './app/shortcuts.ts';
 import { installThemeWatcher } from './app/theme.ts';
 import { installViewportWatcher } from './lib/viewport.ts';
 import { installWebLog } from './lib/web-log.ts';
+import { installWebLogUpload } from './lib/web-log-upload.ts';
 import { toast } from './notices/toasts.ts';
 
 // Los últimos errores de la página, en memoria, para «Descargar fallos» (Salud).
 installWebLog();
+// Y sus avisos y errores, al registro en disco del servidor («Descargar logs», Ajustes → Registro).
+installWebLogUpload();
 installThemeWatcher();
 installViewportWatcher();
 installShortcutListener();

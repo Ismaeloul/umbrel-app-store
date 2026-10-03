@@ -21,7 +21,11 @@
    El mismo aviso seguido no llena el anillo: se cuenta (`repeated`). Las
    notas (`info`) ocupan como mucho la mitad y, al llenarse, salen antes que
    los errores: una sesión larga con una señal que da tirones no echa del
-   anillo el error de la web de hace un rato. */
+   anillo el error de la web de hace un rato.
+
+   «Descargar logs» (0.9.0): `subscribeWebLog` avisa de cada línea NUEVA; la
+   usa src/lib/web-log-upload.ts para mandar los avisos y errores al
+   registro en disco del servidor. */
 
 import {
   WEB_LOG_MAX_ENTRIES,
@@ -39,6 +43,15 @@ const LIBRARY_LINE_RE = /^\[[A-Za-z][\w.-]*\] > /;
 
 const entries: WebLogEntry[] = [];
 const startedAt = Date.now();
+const listeners = new Set<(entry: WebLogEntry) => void>();
+
+/** Avisa de cada línea nueva (no de las que solo se cuentan). Devuelve cómo dejar de escuchar. */
+export function subscribeWebLog(listener: (entry: WebLogEntry) => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
 
 const cut = (text: string, max: number) =>
   text.length > max ? `${text.slice(0, max - 1)}…` : text;
@@ -87,7 +100,7 @@ export function recordWebLog(input: WebLogInput): void {
     return;
   }
   const view = currentView();
-  entries.push({
+  const entry: WebLogEntry = {
     at: new Date().toISOString(),
     kind: input.kind,
     level: input.level,
@@ -95,8 +108,16 @@ export function recordWebLog(input: WebLogInput): void {
     ...(input.detail ? { detail: cut(String(input.detail), DETAIL_MAX) } : {}),
     ...(code ? { code } : {}),
     ...(view ? { view } : {}),
-  });
+  };
+  entries.push(entry);
   trim();
+  for (const listener of listeners) {
+    try {
+      listener({ ...entry });
+    } catch {
+      // Quien escucha no puede romper el anillo (ni volver a apuntar aquí).
+    }
+  }
 }
 
 /* Lleno: sale la nota más vieja; sin notas, lo más viejo. Y las notas, como mucho WEB_LOG_MAX_NOTES. */

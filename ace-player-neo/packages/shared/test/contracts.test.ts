@@ -102,7 +102,7 @@ describe('tabla de rutas v1', () => {
     }
   });
 
-  it('solo SSE, vídeo, los PNG de escudos y logos, los carteles VOD y el 204 del progreso responden sin JSON', () => {
+  it('solo SSE, vídeo, los PNG de escudos y logos, los carteles VOD, el 204 del progreso y el zip de «Descargar logs» responden sin JSON', () => {
     const sinJson = routes.filter((route) => route.response === null).map((route) => route.id);
     expect(sinJson.sort()).toEqual([...NON_JSON_ROUTE_IDS].sort());
   });

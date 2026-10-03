@@ -813,3 +813,24 @@ Detalle en docs/vod.md §4.10.
   lengua de la rejilla desaparecen (quedan «Multi» y «4K»). «3 en latino ·
   Ver» enseña ese idioma solo en esa rejilla (`cineidioma`), sin cambiar lo
   elegido.
+
+## D34. Registro en disco de 45 días y «Descargar logs» en Ajustes (0.9.0, equipo/logs)
+
+- **Para qué**: Isma pidió un botón en Ajustes para descargar los logs y pasarlos si dentro de un mes algo
+  falla. stdout se pierde al actualizar y el anillo de «Descargar fallos» solo guarda este arranque.
+- **Dónde**: sección nueva **Ajustes → Registro** (`ajustes/registro`, después de Salud), con su propio trozo de
+  JS. Botón «Descargar logs» (la palabra que usa Isma) y periodo 1 / 7 / 30 días (por defecto 30). «Descargar
+  fallos» de Salud se queda como está; el zip lleva su fichero dentro (`fallos.json`).
+- **Registro en disco**: `core/log-store.ts`, por el mismo enganche de pino que el anillo; info o peor; un
+  fichero por día de Madrid en `<DATA_DIR>/v2/registro/`, días cerrados en gzip; 45 días, 40 MiB, 8/12 MiB por
+  día, límite de repetidos. Redactado en el acto (redactor de la IPTV) y al escribir (`redactReportValue`). Sin
+  transports ni hilos (empaquetado §7.2): cola en memoria y un `appendFile` por tanda.
+- **Contexto**: líneas `arranque` (con cómo terminó el anterior), `versión nueva`, `latido` cada 6 h,
+  `apagado limpio`, la caída (`uncaughtExceptionMonitor` + `flushSync`), cada fallo del registro de fallos con
+  canal y hash (`module: fallos`) y los errores de la web (`module: web`).
+- **Zip**: escritor propio en `@ace/shared` (`domain/zip.ts`, sin dependencias; el servidor comprime con zlib y
+  la demo lo monta almacenado). LEEME.txt + resumen.json + fallos.json + registro.jsonl. Se abre con el
+  Explorador de Windows (comprobado con Expand-Archive) y con «Archivos» del iPhone.
+- **Rutas**: `diagnosticsLogInfo`, `diagnosticsLogDownload` (binaria) y `diagnosticsWebLog`, las tres
+  `access: 'web'`.
+- **Vuelta atrás**: solo añade `v2/registro/`; volver a la 0.8.4 es seguro.

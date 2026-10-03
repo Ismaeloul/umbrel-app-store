@@ -106,6 +106,12 @@ const BINARY_RESPONSES: Readonly<Record<string, JsonObject>> = {
       'image/webp': { schema: { type: 'string', format: 'binary' } },
     },
   },
+  diagnosticsLogDownload: {
+    description:
+      'Zip `ace-player-neo-logs-AAAA-MM-DD-HHMM.zip` (`Content-Disposition: attachment`, `no-store`) con LEEME.txt, ' +
+      'resumen.json (LogsSummary), fallos.json (DiagnosticsExport) y registro.jsonl, todo redactado.',
+    content: { 'application/zip': { schema: { type: 'string', format: 'binary' } } },
+  },
 };
 
 function successResponse(route: V1RouteEntry): JsonObject {
