@@ -1532,21 +1532,26 @@ export class IptvServiceImpl implements IptvService {
       /* Para diagnosticar: solo el host y el código, nunca la URL (lleva credenciales). */
       this.logger.warn({ host: guideHost(url), errorCode: failure }, 'IPTV: guía no descargada');
     }
-    /* Respaldo en Xtream: get_short_epg de 40 canales deportivos como mucho. */
-    if (!window && secrets.kind === 'xtream' && !signal.aborted) {
-      window = await this.shortEpgFallback(secrets, catalog, signal).catch(() => null);
-      if (window && window.programmes > 0 && !signal.aborted) {
-        /* También a la Guía TV, que enseña esos canales (`partial`). */
-        const writer = this.beginFullGuide(providerId, builtAt, 'short');
-        let failed: unknown = null;
-        if (writer) {
-          try {
-            writeShortEpg(writer, [...window.byChannel.values()].flat());
-          } catch (error) {
-            failed = error;
+    /* Respaldo en Xtream: get_short_epg de 40 canales deportivos como mucho. Como
+       antes de la Guía TV, también cuando la guía llega sin un solo partido: la
+       ventana de partidos sale de ahí y la guía completa, si la hay, se queda. */
+    if ((!window || window.programmes === 0) && secrets.kind === 'xtream' && !signal.aborted) {
+      const fallback = await this.shortEpgFallback(secrets, catalog, signal).catch(() => null);
+      if (fallback && fallback.programmes > 0 && !signal.aborted) {
+        window = fallback;
+        if (!full) {
+          /* También a la Guía TV, que enseña esos canales (`partial`). */
+          const writer = this.beginFullGuide(providerId, builtAt, 'short');
+          let failed: unknown = null;
+          if (writer) {
+            try {
+              writeShortEpg(writer, [...fallback.byChannel.values()].flat());
+            } catch (error) {
+              failed = error;
+            }
           }
+          full = await this.finishFullGuide(writer, failed, signal);
         }
-        full = await this.finishFullGuide(writer, failed, signal);
       }
     }
     if (signal.aborted) return;
