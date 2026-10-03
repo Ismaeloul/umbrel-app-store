@@ -21,6 +21,11 @@ export interface JsonArrayOptions {
   readonly onSkip?: () => void;
 }
 
+/** Motivo (`cause.message`) cuando lo que llega es un objeto JSON (o `null`/`false`) y no un array. */
+export const NOT_AN_ARRAY_OBJECT = 'no es un array: es un objeto';
+/** Motivo cuando lo que llega no es JSON (HTML, texto…). */
+export const NOT_AN_ARRAY_OTHER = 'no es un array: no es JSON';
+
 const OPEN_BRACE = 0x7b;
 const CLOSE_BRACE = 0x7d;
 const OPEN_BRACKET = 0x5b;
@@ -89,7 +94,16 @@ export async function parseJsonArrayStream(
         const byte = chunk[index] as number;
         if (phase === 0) {
           if (isSpace(byte) || byte === 0xef || byte === 0xbb || byte === 0xbf) continue;
-          if (byte !== OPEN_BRACKET) throw new NetBadResponseError(new Error('no es un array'));
+          /* Un objeto JSON («{}», `user_info`) no es lo mismo que una página
+             HTML o texto: el VOD toma lo primero por «sin VOD» y lo segundo
+             por un fallo (docs/vod.md §4.2). */
+          if (byte !== OPEN_BRACKET) {
+            /* `{…}`, `null` o `false` (lo que manda PHP sin datos) frente a lo demás. */
+            const jsonish = byte === OPEN_BRACE || byte === 0x6e || byte === 0x66;
+            throw new NetBadResponseError(
+              new Error(jsonish ? NOT_AN_ARRAY_OBJECT : NOT_AN_ARRAY_OTHER),
+            );
+          }
           phase = 1;
           continue;
         }

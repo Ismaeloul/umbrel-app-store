@@ -490,6 +490,24 @@ describe('VodService contra el proveedor falso', () => {
     expect((await m3u.service.view()).provider?.vod).toBeUndefined();
   });
 
+  it('un panel que responde texto en vez de la lista NO vacía el catálogo: sigue el de antes, `stale`', async () => {
+    const rig = await ready();
+    const { vod } = await synced(rig);
+    rig.fake.vodModo('lista-texto');
+    await rig.core.clock.advanceAsync(61 * 60_000);
+    await rig.service.sync();
+    await rig.service.idle();
+    await vod.idle();
+    expect(vod.status()).toMatchObject({ state: 'ready', movies: 9, series: 3, stale: true });
+    expect((await vod.home()).newMovies[0]?.title).toBe('Oppenheimer');
+    expect(existsSync(rig.core.config.paths.vodCatalogFile)).toBe(true);
+    /* Y en una instalación nueva (sin catálogo): `error`, no `none`. */
+    const fresh = await ready();
+    fresh.fake.vodModo('lista-texto');
+    const { vod: freshVod } = await synced(fresh);
+    expect(freshVod.state()).toBe('error');
+  });
+
   it('pausar da `off`; al reanudar vuelve lo guardado', async () => {
     const rig = await ready();
     const { vod } = await synced(rig);
@@ -649,13 +667,21 @@ describe('VodService contra el proveedor falso', () => {
     await rig.service.idle();
     await vod.idle();
     expect(lists()).toBe(before + 1);
-    /* El panel apaga el VOD: `none`. Al encenderlo, «Comprobar de nuevo» lo ve al momento. */
+    /* El panel apaga el VOD. Con catálogo guardado, una vez no basta para
+       borrarlo (puede ser un mal momento del panel): se sigue con él,
+       `stale`, y la siguiente lo confirma: `none`. */
     rig.fake.vodModo('sin-vod');
     await rig.core.clock.advanceAsync(61 * 60_000);
     await rig.service.sync();
     await rig.service.idle();
     await vod.idle();
+    expect(vod.status()).toMatchObject({ state: 'ready', stale: true, movies: 9 });
+    expect(existsSync(rig.core.config.paths.vodCatalogFile)).toBe(true);
+    await rig.service.sync();
+    await rig.service.idle();
+    await vod.idle();
     expect(vod.state()).toBe('none');
+    /* Al encenderlo, «Comprobar de nuevo» lo ve al momento. */
     expect(existsSync(rig.core.config.paths.vodCatalogFile)).toBe(false);
     rig.fake.vodModo('normal');
     await rig.service.sync();

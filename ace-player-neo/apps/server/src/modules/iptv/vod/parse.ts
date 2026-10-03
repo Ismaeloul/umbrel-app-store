@@ -286,7 +286,7 @@ function unixSeconds(value: unknown): number {
 }
 
 function isAdultFlag(value: unknown): boolean {
-  return value === 1 || value === '1' || value === true;
+  return value === 1 || value === '1' || value === true || value === 'true';
 }
 
 /**

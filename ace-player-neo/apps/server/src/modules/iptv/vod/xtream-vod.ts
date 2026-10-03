@@ -13,15 +13,17 @@
 
    Los parámetros van en lista cerrada: la acción es una unión y `extra` solo
    admite `category_id`, `vod_id` y `series_id` con `/^\d{1,12}$/`. No hay
-   forma de inyectar parámetros. «Sin VOD» (lo que no es un array, `[]`, `{}`
-   o un objeto con `user_info`) NO es un error: `state: 'none'`. */
+   forma de inyectar parámetros. «Sin VOD» (`[]`, `{}`, un objeto con
+   `user_info`, `null` o `false`) NO es un error: `state: 'none'`. Una
+   página HTML, texto o un cuerpo cortado SÍ lo es: no puede vaciar el
+   catálogo que ya había. */
 
 import { IPTV_USER_AGENT, VOD_LIMITS, type VodKind } from '@ace/shared';
 import { AppError, errorCodeOf } from '../../../core/errors.js';
 import { NetBadResponseError } from '../../net/client.js';
 import type { NetClient } from '../../net/types.js';
 import { toIptvError } from '../errors.js';
-import { parseJsonArrayStream } from '../json-array.js';
+import { NOT_AN_ARRAY_OBJECT, parseJsonArrayStream } from '../json-array.js';
 import {
   xtreamApiUrl,
   xtreamCategories,
@@ -106,11 +108,16 @@ class StopList extends Error {
   }
 }
 
+/**
+ * ¿«Sin VOD»? Un objeto JSON (`{}`, `user_info`) o `null`/`false` en vez del
+ * array. Una página HTML, texto o un cuerpo cortado NO: eso es un fallo del
+ * panel y no debe vaciar el catálogo que ya había (0.9.0).
+ */
 function notAnArray(error: unknown): boolean {
   return (
     error instanceof NetBadResponseError &&
     error.cause instanceof Error &&
-    error.cause.message === 'no es un array'
+    error.cause.message === NOT_AN_ARRAY_OBJECT
   );
 }
 

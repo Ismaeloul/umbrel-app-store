@@ -248,6 +248,8 @@ export class VodService {
   private lastMode: VodSyncMode = 'completo';
   /** Cuándo acabó la última sincronización (bien o mal). */
   private lastSyncEndAt = Number.NEGATIVE_INFINITY;
+  /** El panel ya dijo «sin VOD» una vez con catálogo guardado: la siguiente lo confirma. */
+  private noneOnce = false;
   private failures = 0;
   private delayedOnce = false;
   private readonly timers = new Map<TimerName, TimerHandle>();
@@ -436,6 +438,7 @@ export class VodService {
     this.failures = 0;
     this.delayedOnce = false;
     this.lastMode = 'completo';
+    this.noneOnce = false;
     this.requeue = false;
     this.details.clear();
     this.art.reset();
@@ -514,6 +517,21 @@ export class VodService {
         { providerId: snapshot.id, providerFp: snapshot.fp, revision: snapshot.revision, mode },
       );
       if (!this.stillCurrent(snapshot, signal)) return;
+      if (result.state === 'none' && this.hadTitles() && !this.noneOnce) {
+        /* Había catálogo y ahora el panel dice «sin VOD» (`[]` o `{}` en las
+           dos listas): puede ser un mal momento del panel. Una sola vez no
+           basta para borrar 150 000 títulos (y la siguiente sería en 24 h):
+           se sigue con el que hay, como un fallo, y se confirma en 15 min. */
+        this.noneOnce = true;
+        this.failures += 1;
+        logger.warn(
+          { reason, failures: this.failures },
+          'VOD: el proveedor dice que no tiene películas ni series; se confirma más tarde',
+        );
+        this.schedule('sync', vodRetryDelay(this.failures), () => this.due());
+        return;
+      }
+      this.noneOnce = false;
       this.failures = 0;
       if (result.state === 'none') {
         this.catalog = null;
@@ -602,6 +620,12 @@ export class VodService {
 
   private everSyncedReady(): boolean {
     return this.summary()?.state === 'ready';
+  }
+
+  /** ¿Hay un catálogo guardado con algún título? */
+  private hadTitles(): boolean {
+    const summary = this.summary();
+    return Boolean(summary && summary.state === 'ready' && summary.movies + summary.series > 0);
   }
 
   /** El catálogo en memoria, cargando `vod.enc` la primera vez (perezoso, §4.6). */

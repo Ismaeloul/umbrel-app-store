@@ -91,11 +91,27 @@ describe('xtreamVodCategories (fallo 9)', () => {
 });
 
 describe('xtreamVodList', () => {
-  it('«sin VOD»: `[]`, `{}`, `user_info` o texto', async () => {
-    for (const body of ['[]', '{}', JSON.stringify({ user_info: { auth: 1 } }), '"no"']) {
+  it('«sin VOD»: `[]`, `{}`, `user_info`, `null` o `false`', async () => {
+    for (const body of ['[]', ' {}', JSON.stringify({ user_info: { auth: 1 } }), 'null', 'false']) {
       const { net } = rig(() => ({ body }));
       const outcome = await xtreamVodList(net, CREDS, 'movie', () => true, OPTIONS);
       expect(outcome.state, body).toBe('none');
+    }
+  });
+
+  it('una página HTML, texto o un cuerpo cortado NO son «sin VOD»: son un fallo (no vacían el catálogo)', async () => {
+    for (const body of [
+      '<!DOCTYPE html><html><body>Checking your browser…</body></html>',
+      'Access denied',
+      '"no"',
+      '',
+      '[{"stream_id":1,"name":"A"},',
+    ]) {
+      const { net } = rig(() => ({ body }));
+      await expect(
+        xtreamVodList(net, CREDS, 'movie', () => true, OPTIONS),
+        JSON.stringify(body),
+      ).rejects.toMatchObject({ code: expect.stringMatching(/^iptv_/) });
     }
   });
 
