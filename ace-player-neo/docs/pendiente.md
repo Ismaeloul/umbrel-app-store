@@ -51,7 +51,8 @@ Lo que no se pudo hacer esta noche, con el detalle para retomarlo.
     canales con número a la izquierda, bloques por programa a lo ancho de su duración (color por género), y abajo
     la ficha del programa elegido: carátula, título, temporada/episodio, año, edad, estrellas, sinopsis,
     director, hora y género.
-    Segunda referencia, la que más le gusta: `capturas/pendiente/programacion-referencia-movistar.png` (Guía TV de
+    Segunda referencia, la que más le gusta: `capturas/pendiente/programacion-referencia-movistar.png` y
+    `programacion-referencia-movistar-2.png` (Guía TV de
     Movistar+): número y nombre del canal a la izquierda, línea de horas con una raya vertical en «ahora», «Sin
     información» donde no hay EPG, y abajo el programa elegido con logo del canal, barra de progreso con hora de
     inicio y fin, y acciones (Ver, Más info). **Sin pestañas de géneros.** Por defecto, **solo sus canales
