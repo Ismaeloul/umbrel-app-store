@@ -2894,6 +2894,31 @@ paths:
                           - balanced
                           - low
                     additionalProperties: false
+                  vod:
+                    type: object
+                    properties:
+                      langs:
+                        maxItems: 10
+                        type: array
+                        items:
+                          type: string
+                          enum:
+                            - castellano
+                            - latino
+                            - vose
+                            - ingles
+                            - frances
+                            - italiano
+                            - aleman
+                            - portugues
+                            - catalan
+                            - otros
+                      unknown:
+                        type: boolean
+                    required:
+                      - langs
+                      - unknown
+                    additionalProperties: false
                 required:
                   - format
                   - schemaVersion
@@ -3449,6 +3474,31 @@ paths:
                           - stable
                           - balanced
                           - low
+                    additionalProperties: false
+                  vod:
+                    type: object
+                    properties:
+                      langs:
+                        maxItems: 10
+                        type: array
+                        items:
+                          type: string
+                          enum:
+                            - castellano
+                            - latino
+                            - vose
+                            - ingles
+                            - frances
+                            - italiano
+                            - aleman
+                            - portugues
+                            - catalan
+                            - otros
+                      unknown:
+                        type: boolean
+                    required:
+                      - langs
+                      - unknown
                     additionalProperties: false
                 required:
                   - format
@@ -5733,8 +5783,23 @@ paths:
       tags:
         - iptv
       summary: "Portada de Películas y series en una petición: «Seguir viendo», novedades, series actualizadas, categorías y distintivos"
-      description: "Estado del catálogo VOD (docs/vod.md §4.8 y §6.4, D-VOD28). «Novedades en películas» y «Series actualizadas» van sin adultos (D-VOD7). Sin IPTV activa, en pausa, con M3U o sin VOD responde 200 con `active: false` o su `state`: no es un error. Nunca lleva URL, `stream_id` ni credenciales."
-      parameters: []
+      description: "Estado del catálogo VOD (docs/vod.md §4.8 y §6.4, D-VOD28). «Novedades en películas» y «Series actualizadas» van sin adultos (D-VOD7). Sin IPTV activa, en pausa, con M3U o sin VOD responde 200 con `active: false` o su `state`: no es un error. Nunca lleva URL, `stream_id` ni credenciales. Con `langs` (y `unknown`), novedades, categorías y distintivos van filtrados por idioma (§4.10); `langs` y `noLang` cuentan siempre el catálogo entero."
+      parameters:
+        - name: langs
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 200
+            pattern: ^(?:castellano|latino|vose|ingles|frances|italiano|aleman|portugues|catalan|otros)(?:,(?:castellano|latino|vose|ingles|frances|italiano|aleman|portugues|catalan|otros))*$
+        - name: unknown
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - "0"
+              - "1"
       responses:
         "200":
           description: Correcto
@@ -5906,6 +5971,22 @@ paths:
                               minimum: 0
                               maximum: 1
                             - type: "null"
+                        langs:
+                          maxItems: 10
+                          type: array
+                          items:
+                            type: string
+                            enum:
+                              - castellano
+                              - latino
+                              - vose
+                              - ingles
+                              - frances
+                              - italiano
+                              - aleman
+                              - portugues
+                              - catalan
+                              - otros
                       required:
                         - id
                         - kind
@@ -5971,6 +6052,22 @@ paths:
                               minimum: 0
                               maximum: 1
                             - type: "null"
+                        langs:
+                          maxItems: 10
+                          type: array
+                          items:
+                            type: string
+                            enum:
+                              - castellano
+                              - latino
+                              - vose
+                              - ingles
+                              - frances
+                              - italiano
+                              - aleman
+                              - portugues
+                              - catalan
+                              - otros
                       required:
                         - id
                         - kind
@@ -6100,6 +6197,97 @@ paths:
                       - movie
                       - series
                     additionalProperties: false
+                  langs:
+                    type: object
+                    properties:
+                      movie:
+                        maxItems: 10
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            lang:
+                              type: string
+                              enum:
+                                - castellano
+                                - latino
+                                - vose
+                                - ingles
+                                - frances
+                                - italiano
+                                - aleman
+                                - portugues
+                                - catalan
+                                - otros
+                            count:
+                              type: integer
+                              minimum: 0
+                              maximum: 9007199254740991
+                          required:
+                            - lang
+                            - count
+                          additionalProperties: false
+                      series:
+                        maxItems: 10
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            lang:
+                              type: string
+                              enum:
+                                - castellano
+                                - latino
+                                - vose
+                                - ingles
+                                - frances
+                                - italiano
+                                - aleman
+                                - portugues
+                                - catalan
+                                - otros
+                            count:
+                              type: integer
+                              minimum: 0
+                              maximum: 9007199254740991
+                          required:
+                            - lang
+                            - count
+                          additionalProperties: false
+                    required:
+                      - movie
+                      - series
+                    additionalProperties: false
+                  noLang:
+                    type: object
+                    properties:
+                      movies:
+                        type: integer
+                        minimum: -9007199254740991
+                        maximum: 9007199254740991
+                      series:
+                        type: integer
+                        minimum: -9007199254740991
+                        maximum: 9007199254740991
+                    required:
+                      - movies
+                      - series
+                    additionalProperties: false
+                  shown:
+                    type: object
+                    properties:
+                      movies:
+                        type: integer
+                        minimum: -9007199254740991
+                        maximum: 9007199254740991
+                      series:
+                        type: integer
+                        minimum: -9007199254740991
+                        maximum: 9007199254740991
+                    required:
+                      - movies
+                      - series
+                    additionalProperties: false
                 required:
                   - active
                   - state
@@ -6223,6 +6411,21 @@ paths:
             type: integer
             minimum: 1
             maximum: 100
+        - name: langs
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 200
+            pattern: ^(?:castellano|latino|vose|ingles|frances|italiano|aleman|portugues|catalan|otros)(?:,(?:castellano|latino|vose|ingles|frances|italiano|aleman|portugues|catalan|otros))*$
+        - name: unknown
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - "0"
+              - "1"
       responses:
         "200":
           description: Correcto
@@ -6296,6 +6499,22 @@ paths:
                               minimum: 0
                               maximum: 1
                             - type: "null"
+                        langs:
+                          maxItems: 10
+                          type: array
+                          items:
+                            type: string
+                            enum:
+                              - castellano
+                              - latino
+                              - vose
+                              - ingles
+                              - frances
+                              - italiano
+                              - aleman
+                              - portugues
+                              - catalan
+                              - otros
                       required:
                         - id
                         - kind
@@ -6348,6 +6567,51 @@ paths:
                       - type: "null"
                   stale:
                     type: boolean
+                  otherLangs:
+                    anyOf:
+                      - type: object
+                        properties:
+                          total:
+                            type: integer
+                            minimum: 0
+                            maximum: 9007199254740991
+                          langs:
+                            maxItems: 10
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                lang:
+                                  type: string
+                                  enum:
+                                    - castellano
+                                    - latino
+                                    - vose
+                                    - ingles
+                                    - frances
+                                    - italiano
+                                    - aleman
+                                    - portugues
+                                    - catalan
+                                    - otros
+                                count:
+                                  type: integer
+                                  minimum: 0
+                                  maximum: 9007199254740991
+                              required:
+                                - lang
+                                - count
+                              additionalProperties: false
+                          unknown:
+                            type: integer
+                            minimum: 0
+                            maximum: 9007199254740991
+                        required:
+                          - total
+                          - langs
+                          - unknown
+                        additionalProperties: false
+                      - type: "null"
                 required:
                   - active
                   - state
@@ -6530,6 +6794,22 @@ paths:
                             - 4k
                       adult:
                         type: boolean
+                      langs:
+                        maxItems: 10
+                        type: array
+                        items:
+                          type: string
+                          enum:
+                            - castellano
+                            - latino
+                            - vose
+                            - ingles
+                            - frances
+                            - italiano
+                            - aleman
+                            - portugues
+                            - catalan
+                            - otros
                       tech:
                         type: object
                         properties:
@@ -6705,6 +6985,22 @@ paths:
                             - 4k
                       adult:
                         type: boolean
+                      langs:
+                        maxItems: 10
+                        type: array
+                        items:
+                          type: string
+                          enum:
+                            - castellano
+                            - latino
+                            - vose
+                            - ingles
+                            - frances
+                            - italiano
+                            - aleman
+                            - portugues
+                            - catalan
+                            - otros
                       category:
                         anyOf:
                           - type: object
@@ -7526,6 +7822,216 @@ paths:
         - code: vod_not_found
           status: 404
           message: Este título ya no está en tu IPTV.
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
+  /api/v1/vod/languages:
+    get:
+      operationId: vodLanguagesGet
+      tags:
+        - iptv
+      summary: Los idiomas elegidos para Películas y series (castellano y latino, aparte)
+      description: "Por casa, en `v2/vod-idiomas.json` (docs/vod.md §4.10): valen en el PC y en el iPhone y no dependen del proveedor. `chosen: false` hasta la primera elección (la web enseña el selector). `langs` vacía = todos los idiomas."
+      parameters: []
+      responses:
+        "200":
+          description: Correcto
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  chosen:
+                    type: boolean
+                  langs:
+                    maxItems: 10
+                    type: array
+                    items:
+                      type: string
+                      enum:
+                        - castellano
+                        - latino
+                        - vose
+                        - ingles
+                        - frances
+                        - italiano
+                        - aleman
+                        - portugues
+                        - catalan
+                        - otros
+                  unknown:
+                    type: boolean
+                  updatedAt:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                required:
+                  - chosen
+                  - langs
+                  - unknown
+                  - updatedAt
+                additionalProperties: false
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+      x-access: web
+      x-native-path: /native/api/v1/vod/languages
+      x-side-effects: false
+      x-legacy-twin: null
+      x-errors:
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
+    put:
+      operationId: vodLanguagesUpdate
+      tags:
+        - iptv
+      summary: Elegir los idiomas de Películas y series (sustituye la elección)
+      description: Guarda la elección (`chosen` pasa a `true`) y la devuelve. Los idiomas repetidos se juntan. Entra en la copia de seguridad.
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                langs:
+                  maxItems: 10
+                  type: array
+                  items:
+                    type: string
+                    enum:
+                      - castellano
+                      - latino
+                      - vose
+                      - ingles
+                      - frances
+                      - italiano
+                      - aleman
+                      - portugues
+                      - catalan
+                      - otros
+                unknown:
+                  type: boolean
+              required:
+                - langs
+                - unknown
+              additionalProperties: false
+      responses:
+        "200":
+          description: Correcto
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  chosen:
+                    type: boolean
+                  langs:
+                    maxItems: 10
+                    type: array
+                    items:
+                      type: string
+                      enum:
+                        - castellano
+                        - latino
+                        - vose
+                        - ingles
+                        - frances
+                        - italiano
+                        - aleman
+                        - portugues
+                        - catalan
+                        - otros
+                  unknown:
+                    type: boolean
+                  updatedAt:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                required:
+                  - chosen
+                  - langs
+                  - unknown
+                  - updatedAt
+                additionalProperties: false
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+      x-access: web
+      x-native-path: /native/api/v1/vod/languages
+      x-side-effects: true
+      x-legacy-twin: null
+      x-errors:
         - code: validation_error
           status: 400
           message: Falta algún dato o no tiene el formato esperado.

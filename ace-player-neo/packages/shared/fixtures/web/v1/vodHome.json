@@ -45,7 +45,8 @@
       "poster": "5d0e7b44",
       "tags": ["castellano", "4k"],
       "adult": false,
-      "progress": null
+      "progress": null,
+      "langs": ["castellano"]
     },
     {
       "id": "4b5c6d7e8f9012345678abcdef0123457a8b9c0d",
@@ -56,7 +57,8 @@
       "poster": "3fa9c210",
       "tags": ["castellano", "4k"],
       "adult": false,
-      "progress": 0.28
+      "progress": 0.28,
+      "langs": ["castellano"]
     },
     {
       "id": "6d7e8f9012345678abcdef0123456789b9c0d1e2",
@@ -67,7 +69,8 @@
       "poster": null,
       "tags": ["vose"],
       "adult": false,
-      "progress": null
+      "progress": null,
+      "langs": ["vose"]
     }
   ],
   "updatedSeries": [
@@ -80,7 +83,8 @@
       "poster": "71bc0a93",
       "tags": ["castellano", "multi"],
       "adult": false,
-      "progress": null
+      "progress": null,
+      "langs": ["castellano", "ingles"]
     },
     {
       "id": "12345678abcdef0123456789abcdef0104152637",
@@ -91,7 +95,8 @@
       "poster": "0e9d2a61",
       "tags": ["castellano"],
       "adult": false,
-      "progress": null
+      "progress": null,
+      "langs": ["castellano"]
     }
   ],
   "categories": {
@@ -143,5 +148,23 @@
       { "tag": "vose", "count": 1190 },
       { "tag": "multi", "count": 244 }
     ]
-  }
+  },
+  "langs": {
+    "movie": [
+      { "lang": "castellano", "count": 21480 },
+      { "lang": "latino", "count": 9310 },
+      { "lang": "vose", "count": 3025 },
+      { "lang": "ingles", "count": 5102 },
+      { "lang": "frances", "count": 1204 },
+      { "lang": "otros", "count": 388 }
+    ],
+    "series": [
+      { "lang": "castellano", "count": 3402 },
+      { "lang": "latino", "count": 870 },
+      { "lang": "vose", "count": 1190 },
+      { "lang": "ingles", "count": 412 }
+    ]
+  },
+  "noLang": { "movies": 7704, "series": 1030 },
+  "shown": { "movies": 48213, "series": 6904 }
 }

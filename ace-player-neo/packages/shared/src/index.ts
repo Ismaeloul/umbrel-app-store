@@ -21,6 +21,7 @@ export * from './domain/for-you.js';
 export * from './domain/hash.js';
 export * from './domain/live.js';
 export * from './domain/text.js';
+export * from './domain/vod-langs.js';
 
 export * from './state/v1.js';
 export * from './state/v2.js';

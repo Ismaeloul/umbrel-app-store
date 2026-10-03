@@ -92,5 +92,6 @@
     "username": "usuario",
     "secret": null
   },
-  "browser": { "theme": "oscuro", "transparency": "normal", "playbackMode": "balanced" }
+  "browser": { "theme": "oscuro", "transparency": "normal", "playbackMode": "balanced" },
+  "vod": { "langs": ["castellano", "frances"], "unknown": true }
 }

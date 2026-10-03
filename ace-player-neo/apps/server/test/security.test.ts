@@ -205,6 +205,8 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
       'vodArt',
       'vodStream',
       'vodProgress',
+      'vodLanguagesGet',
+      'vodLanguagesUpdate',
     ]);
     for (const [id, route] of webOnly) {
       for (const url of nativeForms(concretePath(route))) {

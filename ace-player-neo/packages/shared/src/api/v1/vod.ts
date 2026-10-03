@@ -20,6 +20,28 @@ import { ChannelStreamQuerySchema, StreamGrantSchema } from './playback.js';
 export const VOD_KINDS = ['movie', 'series'] as const;
 /** Distintivos de lengua y calidad (§4.4, D-VOD6), en el orden de los chips. */
 export const VOD_TAGS = ['castellano', 'latino', 'vose', 'multi', '4k'] as const;
+/**
+ * Idiomas de Películas y series (docs/vod.md §4.10), en el orden del
+ * selector. Salen del nombre de la categoría y de las marcas del título
+ * («ES | ACCIÓN», «Coco (LAT)», «[VOSE]»): las pistas de audio de los
+ * paneles casi nunca dicen su lengua. Castellano y latino van SIEMPRE
+ * separados. `vose`: versión original con subtítulos en español. `ingles`:
+ * inglés o versión original. `otros`: una lengua que se reconoce pero no
+ * está en la lista (árabe, turco, polaco…). Un título sin ninguna marca no
+ * tiene idioma (`langs: []`, «Sin indicar»); uno MULTI puede tener varios.
+ */
+export const VOD_LANGS = [
+  'castellano',
+  'latino',
+  'vose',
+  'ingles',
+  'frances',
+  'italiano',
+  'aleman',
+  'portugues',
+  'catalan',
+  'otros',
+] as const;
 /** Imágenes que sirve `vodArt` (§8). */
 export const VOD_ART_KINDS = ['poster', 'backdrop', 'still'] as const;
 
@@ -43,6 +65,73 @@ export const VodTagCountSchema = z.strictObject({
 });
 export type VodTagCount = z.infer<typeof VodTagCountSchema>;
 
+export const VodLangSchema = z.enum(VOD_LANGS);
+export type VodLang = z.infer<typeof VodLangSchema>;
+
+/** Los idiomas de un título (vacío = no lo indica). Opcional: un servidor anterior a §4.10 no lo manda. */
+export const VodTitleLangsSchema = z.array(VodLangSchema).max(VOD_LANGS.length);
+
+/** Cuántos títulos hay de un idioma. */
+export const VodLangCountSchema = z.strictObject({
+  lang: VodLangSchema,
+  count: z.number().int().nonnegative(),
+});
+export type VodLangCount = z.infer<typeof VodLangCountSchema>;
+
+const VOD_LANG_ALT = VOD_LANGS.join('|');
+
+/**
+ * Filtro de idiomas en la URL (§4.10): `langs=castellano,frances` (sin
+ * repetir ni inventar ninguno) y `unknown=0|1` (con `1`, por defecto, salen
+ * también los títulos que no indican idioma). Sin `langs`, no se filtra.
+ */
+export const VodLangsParamSchema = z
+  .string()
+  .max(200)
+  .regex(
+    new RegExp(`^(?:${VOD_LANG_ALT})(?:,(?:${VOD_LANG_ALT}))*$`),
+    'idiomas separados por comas',
+  );
+
+export const VodLangQuerySchema = z.strictObject({
+  langs: VodLangsParamSchema.optional(),
+  unknown: z.enum(['0', '1']).optional(),
+});
+export type VodLangQuery = z.infer<typeof VodLangQuerySchema>;
+
+/** Con filtro de idiomas: lo que casaba pero queda fuera por su idioma («3 en latino · Ver»). */
+export const VodLangHiddenSchema = z.strictObject({
+  /** Títulos que quedan fuera (uno MULTI cuenta una vez aquí y una vez en cada idioma suyo). */
+  total: z.number().int().nonnegative(),
+  langs: z.array(VodLangCountSchema).max(VOD_LANGS.length),
+  /** Sin idioma indicado (solo con `unknown=0`). */
+  unknown: z.number().int().nonnegative(),
+});
+export type VodLangHidden = z.infer<typeof VodLangHiddenSchema>;
+
+/**
+ * Los idiomas que Isma quiere ver en Películas y series (§4.10). Por casa,
+ * en el servidor (`v2/vod-idiomas.json`): vale en el PC y en el iPhone, y
+ * entra en la copia de seguridad.
+ */
+export const VodLanguagesSchema = z.strictObject({
+  /** false hasta que los elige la primera vez (la web enseña el selector). */
+  chosen: z.boolean(),
+  /** Vacía = todos los idiomas (sin filtro). */
+  langs: z.array(VodLangSchema).max(VOD_LANGS.length),
+  /** También los títulos que no indican idioma. */
+  unknown: z.boolean(),
+  updatedAt: IsoDateTimeSchema.nullable(),
+});
+export type VodLanguages = z.infer<typeof VodLanguagesSchema>;
+
+/** PUT /api/v1/vod/languages: sustituye la elección (y la da por hecha). Los repetidos se juntan. */
+export const VodLanguagesBodySchema = z.strictObject({
+  langs: z.array(VodLangSchema).max(VOD_LANGS.length),
+  unknown: z.boolean(),
+});
+export type VodLanguagesBody = z.infer<typeof VodLanguagesBodySchema>;
+
 /** Una tarjeta de la rejilla, la búsqueda o la portada. */
 export const VodCardSchema = z.strictObject({
   id: HashSchema,
@@ -57,6 +146,8 @@ export const VodCardSchema = z.strictObject({
   adult: z.boolean(),
   /** Parte vista (0-1) en películas; en series, null. */
   progress: z.number().min(0).max(1).nullable(),
+  /** Sus idiomas (§4.10; vacío = no lo indica). Opcional: un servidor anterior no lo manda. */
+  langs: VodTitleLangsSchema.optional(),
 });
 export type VodCard = z.infer<typeof VodCardSchema>;
 
@@ -122,8 +213,32 @@ export const VodHomeSchema = z.strictObject({
     movie: z.array(VodTagCountSchema).max(5),
     series: z.array(VodTagCountSchema).max(5),
   }),
+  /**
+   * Idiomas de TODO el catálogo por tipo, sin filtrar (§4.10): el selector
+   * enseña cuántos títulos hay de cada uno. Solo los que tienen algo.
+   * Opcional: un servidor anterior no lo manda.
+   */
+  langs: z
+    .strictObject({
+      movie: z.array(VodLangCountSchema).max(VOD_LANGS.length),
+      series: z.array(VodLangCountSchema).max(VOD_LANGS.length),
+    })
+    .optional(),
+  /** Títulos que no indican idioma, por tipo (todo el catálogo). Opcional. */
+  noLang: z.strictObject({ movies: z.number().int(), series: z.number().int() }).optional(),
+  /**
+   * Con filtro de idiomas (`langs`), cuántos se ven de cada tipo («Ver las
+   * 1.234 películas»); `counts` sigue siendo el catálogo entero. Sin filtro,
+   * igual que `counts`. Las categorías, las novedades y los distintivos ya
+   * van filtrados, y las categorías sin nada en esos idiomas no salen.
+   */
+  shown: z.strictObject({ movies: z.number().int(), series: z.number().int() }).optional(),
 });
 export type VodHome = z.infer<typeof VodHomeSchema>;
+
+/** GET /api/v1/vod?langs&unknown: la portada con el filtro de idiomas (sin `langs`, todo). */
+export const VodHomeQuerySchema = VodLangQuerySchema;
+export type VodHomeQuery = z.infer<typeof VodHomeQuerySchema>;
 
 /**
  * GET /api/v1/vod/browse (§6): rejilla y búsqueda, por tipo. Con `q` (2 a 80
@@ -139,6 +254,10 @@ export const VodBrowseQuerySchema = z.strictObject({
   sort: z.enum(['added', 'name']).default('added'),
   cursor: CursorSchema.optional(),
   limit: z.coerce.number().int().min(1).max(VOD_SEARCH.pageMax).default(VOD_SEARCH.pageDefault),
+  /** Filtro de idiomas (§4.10): `castellano,frances`. Sin él, todos. */
+  langs: VodLangsParamSchema.optional(),
+  /** Con `langs`: `1` (por defecto) también los que no indican idioma. */
+  unknown: z.enum(['0', '1']).optional(),
 });
 export type VodBrowseQuery = z.infer<typeof VodBrowseQuerySchema>;
 
@@ -157,6 +276,12 @@ export const VodBrowseResponseSchema = z.strictObject({
   nextCursor: CursorSchema.nullable(),
   /** El cursor era de otro catálogo: esta es la primera página. */
   stale: z.boolean(),
+  /**
+   * Con filtro de idiomas: lo que casa (la búsqueda, la categoría) pero queda
+   * fuera por su idioma, para decir «3 en latino · Ver». null sin filtro.
+   * Opcional: un servidor anterior no lo manda.
+   */
+  otherLangs: VodLangHiddenSchema.nullable().optional(),
 });
 export type VodBrowseResponse = z.infer<typeof VodBrowseResponseSchema>;
 
@@ -212,6 +337,8 @@ export const VodMovieSchema = z.strictObject({
   backdrop: VodArtStampSchema.nullable(),
   tags: z.array(VodTagSchema).max(5),
   adult: z.boolean(),
+  /** Sus idiomas (§4.10). Opcional. */
+  langs: VodTitleLangsSchema.optional(),
   tech: z.strictObject({
     container: z.string().max(8).nullable(),
     /** «1080p · H.264». */
@@ -278,6 +405,8 @@ export const VodSeriesSchema = z.strictObject({
   backdrop: VodArtStampSchema.nullable(),
   tags: z.array(VodTagSchema).max(5),
   adult: z.boolean(),
+  /** Sus idiomas (§4.10). Opcional. */
+  langs: VodTitleLangsSchema.optional(),
   category: VodTitleCategorySchema,
   /** La temporada 0 es «Especiales» y va al final. */
   seasons: z
