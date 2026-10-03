@@ -63,7 +63,15 @@ Lo que no se pudo hacer esta noche, con el detalle para retomarlo.
     768 MB), ventana de hoy a +2 días; la web pide solo el trozo visible (canales × horas) y carga al desplazarse. Implica guardar la guía completa (todos los programas, no solo partidos;
     ojo memoria) y quizá «ahora / después» en Canales. Idea aparte, para valorar: que la guía rellene partidos
     que falten en la agenda (no sustituir a futbolenlatv: la guía cubre pocos días y su texto es libre).
-12. **App de iPhone: al final, con el Mac de su hermano** (simulador de iPhone y cambios al momento, mucho más
+12. **Agenda híbrida (idea de Isma, 3-oct).** Días 1-14: futbolenlatv como ahora. Hoy y mañana (lo que cubre la
+    EPG): usar la guía de la IPTV para **confirmar** el partido y su canal exacto. Ya existe en parte
+    (`modules/iptv/guide-match.ts`, docs/iptv.md §4.5: la guía encuentra el canal IPTV del partido). Falta:
+    - que el canal confirmado por la guía también guíe la **búsqueda de AceStream** (buscar por ese canal
+      primero), no solo la de IPTV;
+    - enseñarlo en la agenda y en el partido («Confirmado en tu guía: M+ LaLiga TV 2 · 21:00»);
+    - si la hora o el canal de la guía no coinciden con futbolenlatv, preferir la guía para hoy/mañana;
+    - y que un partido que esté en la guía pero no en futbolenlatv se añada igualmente.
+13. **App de iPhone: al final, con el Mac de su hermano** (simulador de iPhone y cambios al momento, mucho más
     práctico que compilar en GitHub y bajar la IPA). Primero pulir al máximo la web; la app irá basada en la web.
 
 Nota: la IPTV de la 0.8.3 «parece que va bien» (Isma, 2-oct).
