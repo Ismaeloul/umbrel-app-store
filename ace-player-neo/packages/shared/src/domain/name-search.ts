@@ -595,10 +595,13 @@ const MOVISTAR_SEARCH_WORDS: ReadonlySet<string> = new Set(['movistar', 'm', 'mo
 export const NAME_TIER_WEAK = NAME_TIER.partial;
 
 /*
- * Compuestos que una palabra puede encontrar por dentro («liga» en «laliga»,
- * «sexta» en «lasexta»). Fuera de estos, dentro de una palabra solo casa con
- * 5 letras o más («nba» no casa con «dazn baloncesto»).
+ * Compuestos que una palabra corta puede encontrar por dentro («gp» en
+ * «motogp», «mad» en «bemad»). Fuera de estos, dentro de una palabra solo casa
+ * con 4 letras o más: «liga» encuentra LALIGA+ («laligaplus»), BUNDESLIGA,
+ * SUPERLIGA o EUROLIGA (con 5, como en la primera 0.9.0, se perdían), y «nba»
+ * no casa con «ESPNBASKET». Es un nivel flojo: va detrás de todo lo bueno.
  */
+const INSIDE_MIN = 4;
 const COMPOUND_PARTS: Readonly<Record<string, readonly string[]>> = {
   laliga: ['liga'],
   lasexta: ['sexta'],
@@ -620,7 +623,7 @@ function insideMatch(token: string, word: string): boolean {
   if (at < 0) return false;
   /* «f1» no está dentro de «f10». */
   if (DIGIT_RE.test(word.slice(-1)) && DIGIT_RE.test(token.charAt(at + word.length))) return false;
-  if (word.length >= 5) return true;
+  if (word.length >= INSIDE_MIN) return true;
   return (COMPOUND_PARTS[token] ?? []).some((part) => part.startsWith(word));
 }
 

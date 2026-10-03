@@ -241,7 +241,14 @@ describe('wordMatch y nameTier', () => {
     ['laliga', 'liga', 1],
     ['lasexta', 'sexta', 1],
     ['baloncesto', 'nba', 0],
+    ['espnbasket', 'nba', 0],
     ['eurosport', 'sport', 1],
+    /* Por dentro desde 4 letras: «liga» en LaLiga+, Bundesliga o Euroliga. */
+    ['laligaplus', 'liga', 1],
+    ['bundesliga', 'liga', 1],
+    ['euroliga', 'liga', 1],
+    ['motogp', 'gp', 1],
+    ['estrellas', 'tre', 0],
   ] as const)('palabra «%s» con «%s» → %i', (token, word, how) => {
     expect(wordMatch(token, word)).toBe(how);
   });

@@ -481,7 +481,7 @@ export interface TokenIndex<T> {
  * Las palabras del índice que casan con una palabra escrita (`wordMatch`):
  * igual o por el principio (un número, solo entero o seguido de letras:
  * «1» no es «10», sí «24» de «24h») y, con `inside`, por dentro (compuestos o
- * 5 letras o más). La comparten el buscador y la pestaña IPTV.
+ * 4 letras o más). La comparten el buscador y la pestaña IPTV.
  */
 export function tokensForWord<T>(index: TokenIndex<T>, word: string, inside = true): string[] {
   const out: string[] = [];

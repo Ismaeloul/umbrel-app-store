@@ -139,6 +139,22 @@ describe('la pestaña IPTV de Canales con el corpus: el mismo orden', () => {
   });
 });
 
+describe('«liga» encuentra lo que la lleva dentro (LaLiga+, Bundesliga, Euroliga), detrás de lo bueno', () => {
+  it.each([
+    ['Buscar', (q: string) => searchLabels(q)],
+    ['la pestaña IPTV', (q: string) => browseLabels(browse, q)],
+  ] as const)('%s', (_where, labels) => {
+    const found = labels('liga');
+    for (const name of ['laligaplus ppv 1', 'sky sport bundesliga 1/DE', 'movistar euroliga']) {
+      expect(found, name).toContain(name);
+    }
+    /* Lo que casa por dentro va detrás de lo que tiene «liga» como palabra («M+ Liga de Campeones»). */
+    expect(found.indexOf('movistar liga de campeones')).toBeLessThan(
+      found.indexOf('movistar euroliga'),
+    );
+  });
+});
+
 describe('tus favoritos desempatan, nunca delante de lo igual', () => {
   const channelOf = (key: string): string => {
     const entry = catalog.group(key)[0];
