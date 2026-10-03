@@ -14,15 +14,17 @@
       copia «(2)» del final, emojis, ◉ ┃ ★ ✪; «#2» es el número del canal,
       no una copia: «LALIGA+ PPV #2» es otro evento), sin tildes ni
       mayúsculas, con la grafía única de `channelSpelling` (M+ → Movistar,
-      «la liga» → «laliga», «tele 5» → «telecinco», «antena3» → «antena
-      3»…), «La 1 TVE» = «La 1» y los números escritos con letra detrás de
+      «la liga» → «laliga», «tele cinco» → «telecinco», «antena3» →
+      «antena 3»…), los apodos de España SOLO si el nombre lo es («ES: TELE
+      5» → «telecinco», «ES: A3» → «antena 3»; el TELE 5 alemán no es
+      Telecinco), «La 1 TVE» = «La 1» y los números escritos con letra detrás de
       otra palabra como cifra («la uno» = «la 1», «RAI UNO» = «RAI 1»;
       «cero» siempre es 0, el «#0» de Movistar). Una palabra que empieza el
       nombre se deja como está: «Cuatro» y «Ten» son canales.
    2. Lo que se escribe (`parseNameQuery`): las mismas palabras, el país que
       se pide delante («uk: la liga tv»), «m» o «mov» delante como Movistar
-      y los alias de siempre (Champions, TVE, A3, TDP), que buscan además
-      otra cosa.
+      y los alias (Champions, TVE, A3, A3 Series, Tele 5, TDP), que buscan
+      además otra cosa.
    3. El nivel de parecido (`nameTier`), de mejor a peor: 0 igual; 1 de la
       familia (sin el número del final o sin la marca de delante: «dazn» →
       «DAZN 1», «laliga» → «DAZN LaLiga»); 2 empieza por lo escrito; 3 con
@@ -42,7 +44,7 @@
    5. `nameHighlights`: los trozos de un nombre que casan con lo escrito,
       para resaltarlos en la fila. */
 
-import { channelSpelling } from './channel-names.js';
+import { channelSpelling, spainChannelNicknames } from './channel-names.js';
 
 // ---- Plegado ---------------------------------------------------------------------------
 
@@ -173,9 +175,13 @@ function isCountryLike(code: string): boolean {
   return COUNTRY_LONG.has(code);
 }
 
-/* Quita el país (o el adorno) de delante, hasta tres veces («VIP | ES: …»), si queda algo detrás. */
-function stripLead(text: string): string {
+/*
+ * Quita el país (o el adorno) de delante, hasta tres veces («VIP | ES: …»), si queda algo detrás. `spain`: lo que
+ * quitó era España (sus apodos valen: «ES: TELE 5» es Telecinco, «DE: TELE 5» no).
+ */
+function stripLead(text: string): { readonly text: string; readonly spain: boolean } {
   let out = text;
+  let spain = false;
   for (let guard = 0; guard < 3; guard += 1) {
     const prefix = LEAD_PREFIX_RE.exec(out);
     if (
@@ -184,17 +190,22 @@ function stripLead(text: string): string {
       /[\p{L}\p{N}]/u.test(out.slice(prefix[0].length))
     ) {
       out = out.slice(prefix[0].length);
+      if (SPAIN_LEAD_CODES.has(prefix[1])) spain = true;
       continue;
     }
-    const spain = LEAD_SPAIN_RE.exec(out);
-    if (spain) {
-      out = out.slice(spain[0].length);
+    const bare = LEAD_SPAIN_RE.exec(out);
+    if (bare) {
+      out = out.slice(bare[0].length);
+      spain = true;
       continue;
     }
     break;
   }
-  return out;
+  return { text: out, spain };
 }
+
+/* Las siglas de España delante. */
+const SPAIN_LEAD_CODES: ReadonlySet<string> = new Set(['es', 'esp', 'spa', 'espana', 'spain']);
 
 /* Adornos del final que tapan la copia («TELECINCO (2) ★»): lo que no es letra, número, cierre ni el «+» pegado (LaLiga+). */
 const TRAILING_DECOR_RE = /[^\p{L}\p{N})\]+]+$/u;
@@ -216,7 +227,10 @@ export function nameSearchWords(value: string): string[] {
       .replace(/(^|\s)[Ññ](?=\s|$)/gu, '$1'),
   );
   /* El país de delante, antes de la grafía (la de Movistar mira el principio). */
-  text = stripLead(text);
+  const lead = stripLead(text);
+  text = lead.text;
+  /* Los apodos de España, solo si el nombre lo es («ES: TELE 5 HD» → Telecinco; «DE: TELE 5», no). */
+  if (lead.spain) text = spainChannelNicknames(text);
   /* La copia y la reserva («(2)», «(BK-1)»), si queda nombre delante. */
   text = text.replace(TRAILING_DECOR_RE, '');
   text = text.replace(COPY_TAIL_RE, (copy, offset: number) =>
@@ -235,6 +249,8 @@ export function nameSearchWords(value: string): string[] {
   if (words.length > 1 && words[words.length - 1] === 'full' && /\bfull\s*hd\b/u.test(text)) {
     words.pop();
   }
+  /* «ES: A3 HD»: «A3» a secas de España es Antena 3 (con la calidad detrás, los apodos no lo ven). */
+  if (lead.spain && words.length === 1 && words[0] === 'a3') return ['antena', '3'];
   return words;
 }
 
@@ -244,8 +260,8 @@ const GLUED_QUALITY_RE = /^(\p{L}[\p{L}\p{N}]*\d)(?:uhd|fhd|hd|sd|4k)$/u;
 /*
  * El último paso de `nameSearchWords` y `keySearchWords`, sobre las palabras
  * ya troceadas: fuera lo que no dice qué canal es (calidad, códec,
- * fotogramas, resoluciones, adornos), la calidad pegada, «24 horas» = «24h»,
- * los números con letra detrás de otra palabra y «A3» a secas = Antena 3.
+ * fotogramas, resoluciones, adornos), la calidad pegada, «24 horas» = «24h»
+ * y los números con letra detrás de otra palabra.
  */
 function finishWords(raws: readonly string[]): string[] {
   const words: string[] = [];
@@ -265,8 +281,6 @@ function finishWords(raws: readonly string[]): string[] {
     const number = NUMBER_WORDS[raw];
     words.push(number !== undefined && (words.length > 0 || number === '0') ? number : raw);
   }
-  /* «A3» a secas es Antena 3 (con la calidad detrás, `channelSpelling` no lo ve: «A3 HD»). */
-  if (words.length === 1 && words[0] === 'a3') return ['antena', '3'];
   return words;
 }
 
@@ -471,14 +485,18 @@ const RTVE_FAMILY: readonly string[] = ['la 1', 'la 2', 'teledeporte', '24h', '2
 
 /**
  * Otras claves que buscar para una consulta (sobre su clave ya limpia): la
- * Liga de Campeones como la llama la gente, la familia de RTVE, «a3» (Antena
- * 3) y «tdp» (Teledeporte). Lo que casa con un alias se suma a lo que casa al
- * pie de la letra (no lo quita).
+ * Liga de Campeones como la llama la gente, la familia de RTVE, los apodos de
+ * España («a3» → Antena 3, «a3 series» → Atreseries, «tele 5» → Telecinco: en
+ * los nombres solo se juntan si el canal es de España) y «tdp» (Teledeporte).
+ * Lo que casa con un alias se suma a lo que casa al pie de la letra (no lo
+ * quita).
  */
 export function nameQueryAliases(key: string): { key: string; maxTier: number }[] {
   if (key === 'tve' || key === 'rtve')
     return RTVE_FAMILY.map((alias) => ({ key: alias, maxTier: 2 }));
   if (key === 'a3') return [{ key: 'antena 3', maxTier: 2 }];
+  if (key === 'a3 series') return [{ key: 'atreseries', maxTier: 2 }];
+  if (key === 'tele 5' || key === 'tele5') return [{ key: 'telecinco', maxTier: 2 }];
   if (key === 'tdp') return [{ key: 'teledeporte', maxTier: 2 }];
   if (CHAMPIONS_RE.test(key) && !NOT_CHAMPIONS_RE.test(key)) {
     const alias = key.replace(CHAMPIONS_RE, ' liga de campeones').trim();
@@ -873,7 +891,9 @@ export function nameHighlights(query: string, text: string): [number, number][] 
   const typed = foldSearchText(String(query ?? ''))
     .split(/[^\p{L}\p{N}]+/u)
     .filter(Boolean);
-  const wanted = [...new Set([...q.required, ...typed.filter((word) => word.length >= 1)])];
+  /* También lo que busca un alias («tele 5» marca «TELECINCO»; «a3», «ANTENA 3»). */
+  const aliases = q.aliases.flatMap((alias) => alias.query.required);
+  const wanted = [...new Set([...q.required, ...typed.filter(Boolean), ...aliases])];
   if (!wanted.length) return [];
   /* Palabras del nombre con su sitio y plegadas (letra a letra, para no mover los sitios). */
   const tokens: { start: number; end: number; folded: string }[] = [];

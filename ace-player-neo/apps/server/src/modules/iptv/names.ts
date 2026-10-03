@@ -59,9 +59,18 @@
      del canal («LALIGA+ PPV 2»), como en la 0.8.4. «#0» es el canal de
      Movistar y se enseña con su «#» («M+ #0», no «M+ 0»).
    - RTVE detrás de su canal o delante del número («LA 1 TVE», «TVE 1») es
-     La 1: la misma fila. */
+     La 1: la misma fila.
+   - Los apodos de España («TELE 5»/«TELE5» = Telecinco, «A3» = Antena 3, «A3
+     SERIES» = Atreseries; `spainChannelNicknames`) solo si el canal es de
+     España por su nombre o su categoría (`iptvBase`): un «TELE 5» en
+     «POLSKA» o «GERMANY» (sin país que se deduzca) es otro canal. */
 
-import { channelSpelling, normalizeChannelKey, type IptvQuality } from '@ace/shared';
+import {
+  channelSpelling,
+  normalizeChannelKey,
+  spainChannelNicknames,
+  type IptvQuality,
+} from '@ace/shared';
 
 export interface CleanIptvTitle {
   /** Nombre para enseñar, sin país, adornos, calidad ni reserva. */
@@ -251,6 +260,16 @@ export function iptvSpelling(value: string): string {
   const spelled = channelSpelling(value);
   const key = normalizeChannelKey(spelled);
   return IPTV_CHANNEL_ALIASES[key] ?? spelled;
+}
+
+/**
+ * El nombre para emparejar de un canal IPTV ya limpio (`CleanIptvTitle.base`):
+ * `iptvSpelling` y, si el canal es de España, sus apodos («TELE 5» →
+ * «Telecinco», «A3» → «Antena 3»). Sin país o con otro, no: hay un TELE 5
+ * alemán y otro polaco (docs/buscador.md §4).
+ */
+export function iptvBase(display: string, country: string | null): string {
+  return iptvSpelling(country === 'ES' ? spainChannelNicknames(display) : display);
 }
 
 /*
@@ -465,7 +484,7 @@ export function cleanIptvTitle(
     Boolean(geo?.[1]);
   const display = collapse(text);
   country ??= groupCountry(group);
-  const base = iptvSpelling(display);
+  const base = iptvBase(display, country);
   return {
     display,
     base,

@@ -98,6 +98,28 @@ describe('el corpus en el catálogo del servidor', () => {
     expect(browseLabels(index, 'nba')).toEqual(['nba league pass 1/US', 'nba league pass 2/US']);
   });
 
+  it('el TELE 5 de fuera sin país que se deduzca no se mete en la fila de Telecinco (ni se abre de respaldo)', () => {
+    const small = catalogOf([
+      { title: 'TELECINCO HD', group: 'ES | TDT' },
+      { title: 'TELE 5 FHD', group: 'POLSKA' },
+      { title: 'TELE 5', group: 'GERMANY' },
+      { title: 'TELE 5 50FPS', group: 'ALLEMAGNE' },
+      { title: 'DE - TELE 5 HD', group: 'DEUTSCHLAND' },
+      { title: 'ES: TELE5 SD', group: 'ES | TDT' },
+    ]);
+    expect(small.group('telecinco').map((entry) => entry.title)).toEqual([
+      'TELECINCO HD',
+      'ES: TELE5 SD',
+    ]);
+    const labels = (q: string): string[] =>
+      searchCatalog(small, q, 10).groups.map((group) => label(group.best.display, group.bucket));
+    expect(labels('telecinco')).toEqual(['telecinco']);
+    expect(labels('tele 5')).toEqual(['telecinco', 'tele 5', 'tele 5/DE']);
+    const index = buildBrowseIndex(small);
+    expect(browseLabels(index, 'telecinco')).toEqual(['telecinco']);
+    expect(browseLabels(index, 'tele 5')[0]).toBe('telecinco');
+  });
+
   it('las palabras rápidas de una clave son las mismas que las de `nameSearchWords`', () => {
     for (const key of catalogOf(corpusIptvGrande(20_000)).groupKeys()) {
       expect(keySearchWords(key), key).toEqual(nameSearchWords(key));

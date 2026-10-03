@@ -75,12 +75,19 @@ describe('nameSearchWords: las palabras de un nombre tal cual lo da el panel', (
     ['LALIGA+ PPV 1', 'laligaplus ppv 1'],
     ['laliga+', 'laligaplus'],
     ['LALIGA+ ★', 'laligaplus'],
+    /* Los apodos de España, solo si el nombre lo es (el TELE 5 alemán y el polaco no son Telecinco). */
     ['ES: TELE5 SD', 'telecinco'],
-    ['DE: TELE 5 HD', 'telecinco'],
+    ['ES - TELE 5 HD', 'telecinco'],
+    ['DE: TELE 5 HD', 'tele 5'],
+    ['TELE 5 FHD', 'tele 5'],
+    ['PL| TELE 5', 'tele 5'],
     ['ES - TELE CINCO', 'telecinco'],
+    ['TELE CINCO', 'telecinco'],
     ['ES: A3 HD', 'antena 3'],
+    ['UK: A3', 'a3'],
     ['ES: A3 SERIES HD', 'atreseries'],
     ['ES: ANTENA3 FHD', 'antena 3'],
+    ['RO: ANTENA3 CNN', 'antena 3 cnn'],
     ['ES: LA 1 TVE HD', 'la 1'],
     ['TVE - LA 1', 'la 1'],
     ['ES - BEIN SPORTS Ñ FHD', 'bein sports'],
@@ -118,7 +125,8 @@ describe('nameSearchWords: las palabras de un nombre tal cual lo da el panel', (
     expect(keySearchWords('rai uno')).toEqual(['rai', '1']);
     expect(keySearchWords('movistar laliga tv 2')).toEqual(['movistar', 'laliga', 'tv', '2']);
     expect(keySearchWords('cuatro')).toEqual(['cuatro']);
-    expect(keySearchWords('a3')).toEqual(['antena', '3']);
+    /* La clave ya lleva los apodos si el canal es de España («a3» a secas es de otro sitio). */
+    expect(keySearchWords('a3')).toEqual(['a3']);
     expect(keySearchWords('0')).toEqual(['0']);
     /* Con algo que no es una clave normalizada, como `nameSearchWords`. */
     expect(keySearchWords('ES: LA 1 HD')).toEqual(['la', '1']);
@@ -161,7 +169,7 @@ describe('parseNameQuery: lo que escribe una persona', () => {
     expect(parseNameQuery('tv').required).toEqual(['tv']);
   });
 
-  it('alias: Champions, TVE, A3 y TDP buscan además otra cosa', () => {
+  it('alias: Champions, TVE, A3, A3 Series, Tele 5 y TDP buscan además otra cosa', () => {
     expect(parseNameQuery('champions').aliases.map((alias) => alias.query.key)).toEqual([
       'liga de campeones',
     ]);
@@ -171,8 +179,15 @@ describe('parseNameQuery: lo que escribe una persona', () => {
     expect(parseNameQuery('champions tour').aliases).toEqual([]);
     expect(parseNameQuery('tve').aliases.map((alias) => alias.query.key)).toContain('la 1');
     expect(parseNameQuery('tdp').aliases.map((alias) => alias.query.key)).toEqual(['teledeporte']);
-    /* «a3» ya es Antena 3 por la grafía. */
-    expect(parseNameQuery('a3').key).toBe('antena 3');
+    /* Los apodos de España se buscan como alias: lo escrito sigue encontrando el «TELE 5» alemán o el «A3» de fuera. */
+    const aliasesOf = (q: string): string[] =>
+      parseNameQuery(q).aliases.map((alias) => alias.query.key);
+    expect(parseNameQuery('a3').key).toBe('a3');
+    expect(aliasesOf('a3')).toEqual(['antena 3']);
+    expect(aliasesOf('a3 series')).toEqual(['atreseries']);
+    expect(aliasesOf('tele 5')).toEqual(['telecinco']);
+    expect(aliasesOf('tele5')).toEqual(['telecinco']);
+    expect(aliasesOf('telecinco')).toEqual([]);
   });
 });
 
@@ -274,7 +289,10 @@ describe('nameHighlights', () => {
     ['m+ laliga', 'M+ LaLiga TV', ['M', 'LaLiga']],
     ['dazn', 'DAZN 1', ['DAZN']],
     ['la se', 'La Sexta', ['La', 'Se']],
+    /* Lo que busca un alias también se marca. */
     ['tele 5', 'TELECINCO', ['TELECINCO']],
+    ['tele 5', 'TELE 5', ['TELE', '5']],
+    ['a3', 'ANTENA 3 HD', ['ANTENA', '3']],
     ['zzz', 'La 1', []],
   ] as const)('«%s» en «%s»', (q, text, parts) => {
     expect(nameHighlights(q, text).map(([start, end]) => text.slice(start, end))).toEqual(parts);

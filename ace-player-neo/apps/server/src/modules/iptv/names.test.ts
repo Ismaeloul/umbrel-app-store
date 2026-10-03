@@ -240,7 +240,7 @@ describe('cleanIptvTitle con el corpus de nombres raros (0.9.0, docs/buscador.md
     ['ES: LA 1 TVE HD', 'LA 1', 'la 1', 'hd', 'ES', false],
     ['ES: TVE 1', 'La 1', 'la 1', null, 'ES', false],
     ['ES: CLAN TVE', 'CLAN', 'clan', null, 'ES', false],
-    /* Grafías que juntan variantes: Tele 5, Antena3 y A3. */
+    /* Grafías que juntan variantes: Antena3 y, en España, los apodos Tele 5 y A3. */
     ['ES: TELE5 SD', 'TELE5', 'telecinco', 'sd', 'ES', false],
     ['ES: TELE 5 HD', 'TELE 5', 'telecinco', 'hd', 'ES', false],
     ['ES: ANTENA3 FHD', 'ANTENA3', 'antena 3', 'fhd', 'ES', false],
@@ -257,10 +257,20 @@ describe('cleanIptvTitle con el corpus de nombres raros (0.9.0, docs/buscador.md
     expect(clean.backup).toBe(backup);
   });
 
-  it('el «TELE 5» alemán tiene la clave de Telecinco, pero es otro canal (otro país)', () => {
-    const de = cleanIptvTitle('DE: TELE 5 HD');
-    expect(de.key).toBe('telecinco');
-    expect(de.country).toBe('DE');
+  it('los apodos de España («TELE 5», «A3») solo si el canal es de España por su nombre o su categoría', () => {
+    /* De España por la categoría. */
+    expect(cleanIptvTitle('TELE 5 FHD', 'EU | ES | TDT').key).toBe('telecinco');
+    expect(cleanIptvTitle('A3', 'ES | GENERALISTAS').key).toBe('antena 3');
+    /* De fuera, o sin país que se deduzca («POLSKA», «GERMANY»): otro canal, con su nombre. */
+    expect(cleanIptvTitle('DE: TELE 5 HD').key).toBe('tele 5');
+    expect(cleanIptvTitle('TELE 5 FHD', 'POLSKA').key).toBe('tele 5');
+    expect(cleanIptvTitle('TELE 5', 'GERMANY').key).toBe('tele 5');
+    expect(cleanIptvTitle('TELE5', 'ALLEMAGNE').key).toBe('tele5');
+    expect(cleanIptvTitle('A3', 'UK | SPORTS').key).toBe('a3');
+    expect(cleanIptvTitle('A3 SERIES HD', 'VIP | SERIES').key).toBe('a3 series');
+    /* «TELE CINCO» y «ANTENA3» son grafías (no apodos): valen siempre. */
+    expect(cleanIptvTitle('TELE CINCO', 'VIP | TDT').key).toBe('telecinco');
+    expect(cleanIptvTitle('ANTENA3', 'VIP | TDT').key).toBe('antena 3');
   });
 });
 

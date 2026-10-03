@@ -17,10 +17,15 @@
       palabra: «plus» suelto es relleno al puntuar y «LaLiga+» casaba con
       «Movistar LaLiga» (docs/iptv.md §19).
    3. Compuestos que las listas escriben juntos o separados: «LA SEXTA» =
-      «LASEXTA», «TELE CINCO» = «TELE 5» = «TELE5» = «TELECINCO», «ANTENA3»
-      = «ANTENA 3» (y «A3» a secas), «A3 SERIES» = «ATRESERIES», «TELE
+      «LASEXTA», «TELE CINCO» = «TELECINCO», «ANTENA3» = «ANTENA 3», «TELE
       DEPORTE», «TELE MADRID», «ONE TORO», «BE MAD», «MOTO GP», y «TRECETV» =
       «TRECE TV».
+
+   Los APODOS de canales de España («TELE 5» y «TELE5» = Telecinco, «A3» a
+   secas = Antena 3, «A3 SERIES» = Atreseries) no van en `channelSpelling`:
+   hay un TELE 5 alemán y otro polaco, y un «A3» de fuera no es Antena 3.
+   `spainChannelNicknames` los aplica solo a un canal que se sabe de España
+   (por su país o su categoría); el buscador los busca como alias.
    4. Erratas fijas de las listas: «SUPER CUPA» → «Supercopa».
    5. «R.» delante de un club → «Real» («R. MADRID TV»); «INT.» →
       «Internacional».
@@ -40,14 +45,11 @@ import { normalizeChannelKey } from './channels.js';
 const MOVISTAR_PREFIX_RE =
   /^\s*(?:m\s*\.\s*|m\s*\+\s*(?:plus\s*\+?\s*)?|moviestar\s*\+?\s*|movistar\s*\+?\s*(?:plus\s*\+?\s*)?)(?=[\p{L}\p{N}#])/iu;
 
-/* 3. Compuestos: [patrón, forma única]. «Tele 5» y «Tele5» son Telecinco; «Antena3», Antena 3; «A3» a secas,
-   Antena 3, y «A3 Series», Atreseries (0.9.0, docs/buscador.md). */
+/* 3. Compuestos: [patrón, forma única]. «Antena3» es Antena 3 (0.9.0, docs/buscador.md). */
 const COMPOUNDS: readonly (readonly [RegExp, string])[] = [
   [/\bla\s*sexta\b/giu, 'LaSexta'],
-  [/\btele\s*(?:cinco|5)\b/giu, 'Telecinco'],
+  [/\btele\s*cinco\b/giu, 'Telecinco'],
   [/\bantena3\b/giu, 'Antena 3'],
-  [/^\s*a3\s*$/iu, 'Antena 3'],
-  [/\ba3\s*series\b/giu, 'Atreseries'],
   [/\btele\s*deporte\b/giu, 'Teledeporte'],
   [/\btele\s*madrid\b/giu, 'Telemadrid'],
   [/\bone\s*toro\b/giu, 'OneToro'],
@@ -83,6 +85,24 @@ export function channelSpelling(value: string): string {
   for (const [re, to] of FIXED_TYPOS) text = text.replace(re, to);
   text = text.replace(REAL_RE, 'Real ').replace(INTERNATIONAL_RE, 'Internacional');
   return text.replace(/\s+/g, ' ').trim();
+}
+
+/* Apodos de canales de España (cabecera): [patrón, forma única]. «A3» solo si es el nombre entero («A3 SPORTS» no). */
+const SPAIN_NICKNAMES: readonly (readonly [RegExp, string])[] = [
+  [/\btele\s*5\b/giu, 'Telecinco'],
+  [/^\s*a3\s*$/iu, 'Antena 3'],
+  [/\ba3\s*series\b/giu, 'Atreseries'],
+];
+
+/**
+ * Los apodos de un canal de ESPAÑA (cabecera): «TELE 5» → «Telecinco», «A3»
+ * → «Antena 3», «A3 SERIES» → «Atreseries». Solo para un nombre que se sabe
+ * de España: el TELE 5 alemán no es Telecinco.
+ */
+export function spainChannelNicknames(value: string): string {
+  let text = String(value ?? '');
+  for (const [re, to] of SPAIN_NICKNAMES) text = text.replace(re, to);
+  return text;
 }
 
 /* «m laliga», «mov laliga»: lo que escribe una persona en un buscador (una lista no lo escribe así). */

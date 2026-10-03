@@ -50,11 +50,11 @@ export const ESPERADOS: readonly Esperado[] = [
     top: ['nba league pass 1/US', 'nba league pass 2/US', 'nba league pass 3/US'],
   },
   { q: 'eventos', top: ['eventos 1', 'eventos 2'] },
-  /* Telecinco con todas sus grafías (y el TELE 5 alemán detrás). */
-  { q: 'tele 5', top: ['telecinco', 'telecinco/DE'] },
-  { q: 'tele5', top: ['telecinco', 'telecinco/DE'] },
-  { q: 'telecinco', top: ['telecinco', 'telecinco/DE'] },
-  { q: 'tele cinco', top: ['telecinco', 'telecinco/DE'] },
+  /* Telecinco con todas sus grafías. El TELE 5 alemán es otro canal: sale detrás con «tele 5», no con «telecinco». */
+  { q: 'tele 5', top: ['telecinco', 'tele 5/DE'] },
+  { q: 'tele5', top: ['telecinco', 'tele 5/DE'] },
+  { q: 'telecinco', top: ['telecinco'], fuera: ['tele 5/DE'] },
+  { q: 'tele cinco', top: ['telecinco'], fuera: ['tele 5/DE'] },
   /* Antena 3. */
   { q: 'a3', top: ['antena 3', 'antena 3 internacional', 'antena 3 cnn/RO'] },
   { q: 'antena 3', top: ['antena 3', 'antena 3 internacional', 'antena 3 cnn/RO'] },
