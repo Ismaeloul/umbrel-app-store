@@ -77,6 +77,9 @@ export const WEB_FIXTURE_ROUTE_IDS = [
   'backupImport',
   /* «Descargar fallos» de Salud (0.9.0): solo web, lleva el registro del servidor. */
   'diagnosticsExport',
+  /* «Descargar logs» de Ajustes → Registro (0.9.0): solo web (el zip es binario y no lleva ejemplo). */
+  'diagnosticsLogInfo',
+  'diagnosticsWebLog',
 ] as const satisfies readonly JsonRouteId[];
 export type WebFixtureRouteId = (typeof WEB_FIXTURE_ROUTE_IDS)[number];
 /** Rutas con ejemplo en `v1/`. */
@@ -935,6 +938,17 @@ export const WEB_V1_FIXTURES = {
       replaced: 1,
     },
   },
+  /* 12 días guardados en el disco del Umbrel (los cerrados, comprimidos). */
+  diagnosticsLogInfo: {
+    enabled: true,
+    since: '2026-09-11T08:02:11.000Z',
+    days: 12,
+    bytes: 1_468_006,
+    maxBytes: 40 * 1024 * 1024,
+    maxDays: 45,
+  },
+  /* Una tanda de 3 errores de la web: 2 guardados y el fallo del reproductor que ya llegó con su canal. */
+  diagnosticsWebLog: { accepted: 2, dropped: 1 },
 } satisfies { [K in WebFixtureRouteId]: V1ResponseInput<K> };
 
 // --- Variantes (variantes/<ruta>.<caso>.json) ---
@@ -1365,4 +1379,6 @@ export const NON_JSON_ROUTE_IDS: readonly V1RouteId[] = [
   'video',
   'footballTeamCrest',
   'footballCompetitionLogo',
+  /* El zip de «Descargar logs» (Ajustes → Registro, 0.9.0). */
+  'diagnosticsLogDownload',
 ];

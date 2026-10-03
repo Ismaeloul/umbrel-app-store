@@ -20,7 +20,9 @@ export * from './domain/faults.js';
 export * from './domain/for-you.js';
 export * from './domain/hash.js';
 export * from './domain/live.js';
+export * from './domain/logs.js';
 export * from './domain/text.js';
+export * from './domain/zip.js';
 
 export * from './state/v1.js';
 export * from './state/v2.js';
@@ -31,6 +33,7 @@ export * from './api/v1/auth.js';
 export * from './api/v1/backup.js';
 export * from './api/v1/diagnostics.js';
 export * from './api/v1/diagnostics-export.js';
+export * from './api/v1/diagnostics-log.js';
 export * from './api/v1/engine.js';
 export * from './api/v1/football.js';
 export * from './api/v1/iptv.js';

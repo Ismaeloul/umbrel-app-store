@@ -25,7 +25,8 @@
      (`backup*`, decisiones.md D25: la copia lleva datos personales y la
      IPTV solo se configura en la web) y `diagnosticsExport` («Descargar
      fallos» de Salud, 0.9.0: lleva el registro del servidor, aunque
-     redactado).
+     redactado), igual que las 3 de «Descargar logs» (`diagnosticsLogInfo`,
+     `diagnosticsLogDownload` y `diagnosticsWebLog`, Ajustes → Registro).
      `video` es `any` desde la IPTV (docs/iptv.md §5.4): la web entra sin
      token (el login de Umbrel basta) y el iPhone con `video-token`.
 
@@ -59,6 +60,13 @@ import {
   DiagnosticsExportBodySchema,
   DiagnosticsExportSchema,
 } from './api/v1/diagnostics-export.js';
+import {
+  DiagnosticsLogDownloadBodySchema,
+  DiagnosticsLogInfoSchema,
+  WebLogUploadBodySchema,
+  WebLogUploadResponseSchema,
+} from './api/v1/diagnostics-log.js';
+import { WEB_LOG_UPLOAD_MAX_ENTRIES, WEB_LOG_UPLOAD_PER_MINUTE } from './constants/limits.js';
 import { EngineRestartResponseSchema, EngineStatusSchema } from './api/v1/engine.js';
 import {
   BadgeVersionQuerySchema,
@@ -808,6 +816,63 @@ export const V1_ROUTES = {
       'públicas. Solo web: lleva el registro del servidor.',
     body: DiagnosticsExportBodySchema,
     response: DiagnosticsExportSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: true,
+    errors: [],
+    legacyTwin: null,
+  }),
+  diagnosticsLogInfo: defineRoute({
+    method: 'GET',
+    path: '/api/v1/diagnostics/log',
+    access: 'web',
+    credential: 'bearer',
+    module: 'diagnostics',
+    summary: '«Descargar logs» de Ajustes → Registro: cuánto registro hay guardado en el disco',
+    description:
+      'El servidor guarda su registro (y los errores que manda la web) en `<DATA_DIR>/v2/registro/`, un fichero por día, ' +
+      'redactado al escribirse, unos 45 días y como mucho 40 MiB (docs/registro.md). Solo web.',
+    response: DiagnosticsLogInfoSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: false,
+    errors: [],
+    legacyTwin: null,
+  }),
+  diagnosticsLogDownload: defineRoute({
+    method: 'POST',
+    path: '/api/v1/diagnostics/log/download',
+    access: 'web',
+    credential: 'bearer',
+    module: 'diagnostics',
+    summary: '«Descargar logs»: un zip con el registro del último día, semana o mes, redactado',
+    description:
+      'La web manda el periodo y lo suyo (como en «Descargar fallos») y recibe `ace-player-neo-logs-AAAA-MM-DD-HHMM.zip` ' +
+      '(`Content-Disposition: attachment`, `no-store`) con LEEME.txt, resumen.json (LogsSummary), fallos.json ' +
+      '(DiagnosticsExport) y registro.jsonl (las líneas del periodo, de la más vieja a la más nueva). Todo redactado: ' +
+      'sin contraseñas, usuarios, tokens, cookies, URLs con credenciales ni IPs públicas. Solo web.',
+    body: DiagnosticsLogDownloadBodySchema,
+    response: null,
+    status: 200,
+    content: 'binary',
+    sideEffects: true,
+    errors: [],
+    legacyTwin: null,
+  }),
+  diagnosticsWebLog: defineRoute({
+    method: 'POST',
+    path: '/api/v1/diagnostics/web-log',
+    access: 'web',
+    credential: 'bearer',
+    module: 'diagnostics',
+    summary: 'La web manda sus errores importantes para que queden en el registro del servidor',
+    description:
+      'Excepciones, promesas sin capturar, errores de la consola, peticiones que fallan y avisos del reproductor ' +
+      `(nunca las notas), en tandas de ${WEB_LOG_UPLOAD_MAX_ENTRIES} como mucho. Por encima de ${WEB_LOG_UPLOAD_PER_MINUTE} ` +
+      'por minuto (en total) no se guardan y se cuentan en `dropped`; tampoco los fallos del reproductor que ya llegaron ' +
+      'por el registro de fallos. Se redactan antes de escribirse. Solo web.',
+    body: WebLogUploadBodySchema,
+    response: WebLogUploadResponseSchema,
     status: 200,
     content: 'json',
     sideEffects: true,
