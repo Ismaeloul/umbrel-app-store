@@ -50,6 +50,7 @@ import {
 } from './data.ts';
 import {
   ageText,
+  categoryLabel,
   clockText,
   durationText,
   endsAtText,
@@ -397,7 +398,7 @@ function Details({ title }: { title: VodTitle }) {
             navigate({ vista: 'cine', id: null });
           }}
         >
-          {category.name}
+          {categoryLabel(category.name)}
           <Icon name="chev-r" size={16} />
         </button>
       ),
@@ -478,7 +479,7 @@ function Hero({ title, onBack, now }: { title: VodTitle; onBack(): void; now: nu
                   <span className="cine-hero__sep" aria-hidden="true">
                     ·
                   </span>
-                  {title.category.name}
+                  {categoryLabel(title.category.name)}
                 </span>
               ) : null}
             </span>

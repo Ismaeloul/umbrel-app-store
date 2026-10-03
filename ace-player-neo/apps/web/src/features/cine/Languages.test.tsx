@@ -109,7 +109,7 @@ describe('la primera vez: «¿En qué idiomas las quieres ver?»', () => {
     await waitFor(() => expect(browseCalls().length).toBeGreaterThan(0));
     expect(browseCalls().every((call) => queryOf(call).langs === 'castellano,frances')).toBe(true);
     /* Las categorías sin nada en esos idiomas no salen. */
-    expect(screen.queryByRole('heading', { level: 2, name: /^PELIS LATINO/ })).toBeNull();
+    expect(screen.queryByRole('heading', { level: 2, name: /^Pelis latino/ })).toBeNull();
     expect(
       screen.getByRole('button', { name: 'Idiomas: Castellano y Francés. Cambiar' }),
     ).toBeInTheDocument();

@@ -89,6 +89,7 @@ import {
   showsGrid,
   type CineOrder,
   type CineUrlState,
+  categoryLabel,
 } from './model.ts';
 import { CardRow, CategoryRail } from './Rows.tsx';
 import { TagChips } from './TagChips.tsx';
@@ -268,11 +269,15 @@ function otherKind(kind: VodKind): VodKind {
   return kind === 'movie' ? 'series' : 'movie';
 }
 
+function categoryLabelOf(category: { name: string } | undefined): string | null {
+  return category ? categoryLabel(category.name) : null;
+}
+
 /** El nombre de la categoría abierta (null = ninguna: la portada o «Todas»). */
 function categoryName(state: CineUrlState, home: VodHomeData): string | null {
   if (state.cat === null || state.cat === 'all') return null;
   return (
-    home.categories[state.kind].find((category) => category.id === state.cat)?.name ??
+    categoryLabelOf(home.categories[state.kind].find((category) => category.id === state.cat)) ??
     CINE_TEXT.noCategory
   );
 }

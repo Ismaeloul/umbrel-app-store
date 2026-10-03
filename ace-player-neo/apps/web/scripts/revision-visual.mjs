@@ -324,7 +324,7 @@ const VIEWS = [
     prepare: async (page) => {
       // «Ver todo» de la fila de la categoría: abre su rejilla.
       await page
-        .getByRole('button', { name: /^Ver todo: VOD \| 4K/ })
+        .getByRole('button', { name: /^Ver todo: 4K/ })
         .first()
         .click();
       await page.waitForSelector('.cine-grid .cine-card', { timeout: 10_000 });

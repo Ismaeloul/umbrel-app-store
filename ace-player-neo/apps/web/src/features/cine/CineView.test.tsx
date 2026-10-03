@@ -67,20 +67,20 @@ describe('portada en filas, como la agenda', () => {
       (row) => row.closest('[data-cat]'),
     );
     expect(rows.map((row) => row.querySelector('.cine-row__name')?.textContent)).toEqual([
-      'ESTRENOS 2024',
-      'VOD | 4K',
-      'CINE ESPAÑOL',
-      'PELIS LATINO',
-      'ANIMACIÓN',
-      'CLÁSICOS',
+      'Estrenos 2024',
+      '4K',
+      'Cine español',
+      'Pelis latino',
+      'Animación',
+      'Clásicos',
       'VOSE',
-      'EN | MOVIES',
-      'FR | FILMS',
-      'XXX | ADULTOS',
+      'EN · Movies',
+      'FR · Films',
+      'XXX · Adultos',
     ]);
     await waitFor(() => expect(rowCalls()).toHaveLength(10));
     expect(rowCalls().every((call) => queryOf(call).sort === 'added')).toBe(true);
-    const k4 = await screen.findByRole('list', { name: 'VOD | 4K' });
+    const k4 = await screen.findByRole('list', { name: '4K' });
     expect(within(k4).getAllByRole('link').length).toBe(9);
     // La portada no pide la rejilla: esa es otra pantalla.
     expect(gridCalls()).toHaveLength(0);
@@ -142,12 +142,12 @@ describe('portada en filas, como la agenda', () => {
   it('«Ver todo» abre la rejilla de la categoría como otra pantalla; «Volver» regresa a la portada', async () => {
     net = mockFetch(demoRoutes());
     renderCine();
-    fireEvent.click(await screen.findByRole('button', { name: 'Ver todo: VOD | 4K, 9 películas' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Ver todo: 4K, 9 películas' }));
     expect(location.search).toContain(`cinecat=${DEMO_VOD_IDS.movieCategory}`);
     // Su propia entrada en el historial: «Atrás» del navegador vuelve a la portada.
     expect(history.state).toMatchObject({ cineGrid: true });
-    expect(await screen.findByRole('heading', { level: 2, name: 'VOD | 4K' })).toBeInTheDocument();
-    const grid = await screen.findByRole('list', { name: 'VOD | 4K' });
+    expect(await screen.findByRole('heading', { level: 2, name: '4K' })).toBeInTheDocument();
+    const grid = await screen.findByRole('list', { name: '4K' });
     expect(within(grid).getAllByRole('listitem')[0]).toHaveAttribute('aria-setsize', '9');
     expect(screen.queryByRole('heading', { name: 'Seguir viendo' })).toBeNull();
     await waitFor(() =>
@@ -164,11 +164,11 @@ describe('portada en filas, como la agenda', () => {
   it('con el teclado, el foco va al título de la rejilla y vuelve al «Ver todo» del que se vino', async () => {
     net = mockFetch(demoRoutes());
     renderCine();
-    const seeAll = await screen.findByRole('button', { name: 'Ver todo: VOD | 4K, 9 películas' });
+    const seeAll = await screen.findByRole('button', { name: 'Ver todo: 4K, 9 películas' });
     seeAll.focus();
     fireEvent.click(seeAll);
     // La portada se oculta con el botón dentro: el foco no se queda en algo invisible.
-    const title = await screen.findByRole('heading', { level: 2, name: 'VOD | 4K' });
+    const title = await screen.findByRole('heading', { level: 2, name: '4K' });
     await waitFor(() => expect(title).toHaveFocus());
     const back = screen.getByRole('button', { name: 'Volver a Películas y series' });
     back.focus();
@@ -186,8 +186,8 @@ describe('portada en filas, como la agenda', () => {
     // La portada bajada a 1.800 px.
     vi.spyOn(window, 'scrollY', 'get').mockReturnValue(1800);
     fireEvent.scroll(window);
-    fireEvent.click(screen.getByRole('button', { name: 'Ver todo: VOD | 4K, 9 películas' }));
-    await screen.findByRole('heading', { level: 2, name: 'VOD | 4K' });
+    fireEvent.click(screen.getByRole('button', { name: 'Ver todo: 4K, 9 películas' }));
+    await screen.findByRole('heading', { level: 2, name: '4K' });
     expect(scrollTo).toHaveBeenLastCalledWith(expect.objectContaining({ top: 0 }));
     fireEvent.click(screen.getByRole('button', { name: 'Volver a Películas y series' }));
     await screen.findByRole('heading', { name: 'Novedades en películas' });
@@ -195,8 +195,8 @@ describe('portada en filas, como la agenda', () => {
       expect(scrollTo).toHaveBeenLastCalledWith(expect.objectContaining({ top: 1800 })),
     );
     // Rejilla de películas → «Series» → «‹»: la portada de SERIES (y arriba: es otra).
-    fireEvent.click(screen.getByRole('button', { name: 'Ver todo: VOD | 4K, 9 películas' }));
-    await screen.findByRole('heading', { level: 2, name: 'VOD | 4K' });
+    fireEvent.click(screen.getByRole('button', { name: 'Ver todo: 4K, 9 películas' }));
+    await screen.findByRole('heading', { level: 2, name: '4K' });
     fireEvent.click(screen.getByRole('radio', { name: 'Series' }));
     expect(
       await screen.findByRole('heading', { level: 2, name: 'Todas las series' }),
@@ -226,9 +226,9 @@ describe('portada en filas, como la agenda', () => {
     renderCine();
     fireEvent.click(await screen.findByRole('button', { name: 'Categorías' }));
     const sheet = await screen.findByRole('dialog', { name: 'Todas las categorías' });
-    fireEvent.click(within(sheet).getByRole('button', { name: /^PELIS LATINO/ }));
+    fireEvent.click(within(sheet).getByRole('button', { name: /^Pelis latino/ }));
     expect(
-      await screen.findByRole('heading', { level: 2, name: 'PELIS LATINO' }),
+      await screen.findByRole('heading', { level: 2, name: 'Pelis latino' }),
     ).toBeInTheDocument();
     expect(location.search).toContain('cinecat=');
   });
@@ -368,22 +368,20 @@ describe('búsqueda (§12.5)', () => {
     expect(await screen.findByRole('heading', { name: 'Seguir viendo' })).toBeInTheDocument();
   }, 30_000);
 
-  it('dentro de una categoría busca ahí y lo dice: «0 películas en VOD | 4K» y «Buscar en todas»', async () => {
+  it('dentro de una categoría busca ahí y lo dice: «0 películas en 4K» y «Buscar en todas»', async () => {
     net = mockFetch(demoRoutes());
     renderCine({ search: `?vista=cine&cinecat=${DEMO_VOD_IDS.movieCategory}` });
-    await screen.findByRole('heading', { level: 2, name: 'VOD | 4K' });
+    await screen.findByRole('heading', { level: 2, name: '4K' });
     const field = screen.getByRole('searchbox', { name: 'Buscar películas' });
     fireEvent.change(field, { target: { value: 'wonka' } });
-    // Wonka no está en «VOD | 4K» (sí en el catálogo): no basta con «Nada con «wonka» en películas».
+    // Wonka no está en «4K» (sí en el catálogo): no basta con «Nada con «wonka» en películas».
     expect(
-      await screen.findByRole('heading', { name: 'Nada con «wonka» en VOD | 4K' }),
+      await screen.findByRole('heading', { name: 'Nada con «wonka» en 4K' }),
     ).toBeInTheDocument();
     // Bajo el título y en la región viva.
-    expect(document.querySelector('.cine-browse__count')?.textContent).toBe(
-      '0 películas en VOD | 4K',
-    );
+    expect(document.querySelector('.cine-browse__count')?.textContent).toBe('0 películas en 4K');
     expect(
-      screen.getAllByRole('status').some((node) => node.textContent === '0 películas en VOD | 4K'),
+      screen.getAllByRole('status').some((node) => node.textContent === '0 películas en 4K'),
     ).toBe(true);
     expect(queryOf(gridCalls().at(-1)!)).toMatchObject({ cat: DEMO_VOD_IDS.movieCategory });
     const everywhere = screen.getAllByRole('button', { name: 'Buscar en todas las películas' });
@@ -403,7 +401,7 @@ describe('búsqueda (§12.5)', () => {
       ui: aside,
     });
     const nav = await screen.findByRole('navigation', { name: 'Categorías' });
-    expect(within(nav).getByRole('button', { name: /^VOD \| 4K/ })).toHaveAttribute(
+    expect(within(nav).getByRole('button', { name: /^4K/ })).toHaveAttribute(
       'aria-pressed',
       'true',
     );

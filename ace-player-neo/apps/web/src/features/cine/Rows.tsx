@@ -14,6 +14,7 @@ import type { VodCard, VodCategory, VodKind } from '@ace/shared';
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Button, Num, PosterRail, Skeleton } from '../../ui/index.ts';
 import { rememberCards, useCategoryRow } from './data.ts';
+import { categoryLabel } from './model.ts';
 import { PosterCard } from './PosterCard.tsx';
 import { CINE_TEXT, formatCount, seeRowLabel } from './texts.ts';
 
@@ -153,7 +154,8 @@ export function CategoryRail({ category, active, onSeeAll }: CategoryRowProps) {
   }, [row.data]);
   const id = `cine-fila-${category.id}`;
   let body: ReactNode;
-  if (row.data) body = cards.length ? <Rail label={category.name} cards={cards} /> : null;
+  if (row.data)
+    body = cards.length ? <Rail label={categoryLabel(category.name)} cards={cards} /> : null;
   else if (row.isError)
     body = (
       <div className="cine-row__failed" role="alert">
@@ -170,7 +172,7 @@ export function CategoryRail({ category, active, onSeeAll }: CategoryRowProps) {
     <section ref={ref} className="cine-row" aria-labelledby={id} data-cat={category.id}>
       <RowHead
         id={id}
-        title={category.name}
+        title={categoryLabel(category.name)}
         count={row.data?.total ?? category.count}
         kind={category.kind}
         onSeeAll={onSeeAll}
