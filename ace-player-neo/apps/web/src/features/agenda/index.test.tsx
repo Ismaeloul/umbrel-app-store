@@ -253,6 +253,34 @@ describe('vista Agenda', () => {
     expect(screen.getByRole('tab', { name: /^Hoy/ })).toHaveAttribute('aria-selected', 'true');
   });
 
+  it('en el móvil, hacia un lado sin día (Hoy, dedo a la derecha) la lista apenas se mueve y no cambia nada', async () => {
+    net = mockFetch(routes());
+    renderAgenda();
+    await screen.findByRole('heading', { name: /Champions League/ });
+    const panel = screen.getByRole('tabpanel');
+    const title = screen.getByRole('heading', { name: /LaLiga/ });
+    const pull = (to: number) => {
+      const start = { identifier: 1, target: title, clientX: 100, clientY: 400 };
+      fireEvent.touchStart(title, { touches: [start], changedTouches: [start] });
+      const point = { identifier: 1, target: title, clientX: to, clientY: 400 };
+      fireEvent.touchMove(title, { touches: [point], changedTouches: [point] });
+      return Math.abs(Number(/translateX\((-?[\d.]+)px\)/.exec(panel.style.transform)?.[1]));
+    };
+    const release = (at: number) => {
+      const end = { identifier: 1, target: title, clientX: at, clientY: 400 };
+      fireEvent.touchEnd(title, { touches: [], changedTouches: [end] });
+    };
+    // Hoy es el primer día: a la derecha, resistencia fuerte (y al soltar, a su sitio).
+    expect(pull(330)).toBeLessThanOrEqual(16);
+    release(330);
+    expect(panel.style.transform).toBe('');
+    expect(screen.getByRole('tab', { name: /^Hoy/ })).toHaveAttribute('aria-selected', 'true');
+    // Hacia Mañana, el arrastre normal (más largo).
+    expect(pull(-60)).toBeGreaterThan(40);
+    release(-60);
+    expect(await findInRows('Betis')).toBeInTheDocument();
+  });
+
   it('en el móvil, el scroll vertical sobre la lista nunca cambia de día', async () => {
     net = mockFetch(routes());
     renderAgenda();

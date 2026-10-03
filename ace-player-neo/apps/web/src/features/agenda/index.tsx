@@ -108,6 +108,9 @@ const PreferencesSheet = lazy(() => import('../preferences/PreferencesSheet.tsx'
 
 const EMPTY: readonly FootballMatch[] = [];
 
+/** Lo más que se mueve la lista al arrastrar hacia un lado sin día (px). */
+const EDGE_PULL_PX = 16;
+
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 /** Esqueleto de la portada: el hueco del héroe y una fila de tarjetas. */
@@ -428,9 +431,17 @@ export default function Agenda({ active }: ViewProps) {
   useDaySwipe(listRef, {
     enabled: mobile && days.length > 1,
     onMove: (dx) => {
-      // Respuesta con transform mientras el dedo arrastra (con resistencia).
+      /* Respuesta con transform mientras el dedo arrastra (con resistencia).
+         Si hacia ese lado no hay día (en Hoy, que es el primero, dedo a la
+         derecha), la lista apenas se mueve: se nota que ahí no hay nada y
+         no parece un gesto que a veces falla. */
       const el = listRef.current;
-      if (el) el.style.transform = `translateX(${Math.max(-60, Math.min(60, dx * 0.3))}px)`;
+      if (!el) return;
+      const index = days.findIndex((item) => item.date === day);
+      const edge = !days[index + (dx < 0 ? 1 : -1)];
+      const limit = edge ? EDGE_PULL_PX : 60;
+      const pulled = dx * (edge ? 0.1 : 0.3);
+      el.style.transform = `translateX(${Math.max(-limit, Math.min(limit, pulled))}px)`;
     },
     onSwipe: (direction) => {
       resetDrag();
