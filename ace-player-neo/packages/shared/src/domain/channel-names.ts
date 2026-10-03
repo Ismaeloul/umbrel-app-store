@@ -17,8 +17,10 @@
       palabra: «plus» suelto es relleno al puntuar y «LaLiga+» casaba con
       «Movistar LaLiga» (docs/iptv.md §19).
    3. Compuestos que las listas escriben juntos o separados: «LA SEXTA» =
-      «LASEXTA», «TELE CINCO» = «TELECINCO», «TELE DEPORTE», «TELE MADRID»,
-      «ONE TORO», «BE MAD», «MOTO GP», y «TRECETV» = «TRECE TV».
+      «LASEXTA», «TELE CINCO» = «TELE 5» = «TELE5» = «TELECINCO», «ANTENA3»
+      = «ANTENA 3» (y «A3» a secas), «A3 SERIES» = «ATRESERIES», «TELE
+      DEPORTE», «TELE MADRID», «ONE TORO», «BE MAD», «MOTO GP», y «TRECETV» =
+      «TRECE TV».
    4. Erratas fijas de las listas: «SUPER CUPA» → «Supercopa».
    5. «R.» delante de un club → «Real» («R. MADRID TV»); «INT.» →
       «Internacional».
@@ -38,10 +40,14 @@ import { normalizeChannelKey } from './channels.js';
 const MOVISTAR_PREFIX_RE =
   /^\s*(?:m\s*\.\s*|m\s*\+\s*(?:plus\s*\+?\s*)?|moviestar\s*\+?\s*|movistar\s*\+?\s*(?:plus\s*\+?\s*)?)(?=[\p{L}\p{N}#])/iu;
 
-/* 3. Compuestos: [patrón, forma única]. */
+/* 3. Compuestos: [patrón, forma única]. «Tele 5» y «Tele5» son Telecinco; «Antena3», Antena 3; «A3» a secas,
+   Antena 3, y «A3 Series», Atreseries (0.9.0, docs/buscador.md). */
 const COMPOUNDS: readonly (readonly [RegExp, string])[] = [
   [/\bla\s*sexta\b/giu, 'LaSexta'],
-  [/\btele\s*cinco\b/giu, 'Telecinco'],
+  [/\btele\s*(?:cinco|5)\b/giu, 'Telecinco'],
+  [/\bantena3\b/giu, 'Antena 3'],
+  [/^\s*a3\s*$/iu, 'Antena 3'],
+  [/\ba3\s*series\b/giu, 'Atreseries'],
   [/\btele\s*deporte\b/giu, 'Teledeporte'],
   [/\btele\s*madrid\b/giu, 'Telemadrid'],
   [/\bone\s*toro\b/giu, 'OneToro'],
