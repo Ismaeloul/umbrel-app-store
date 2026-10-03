@@ -23202,8 +23202,6 @@ var init_backup = __esm({
       host: external_exports.string().max(260),
       /** Solo Xtream: `esquema://host[:puerto][/ruta]`, sin usuario ni contraseña. */
       server: external_exports.string().max(2048).nullable(),
-      /** Solo Xtream. */
-      username: external_exports.string().min(1).max(200).nullable(),
       /** Con «Incluir la contraseña de la IPTV»: los secretos, cifrados con la clave de Isma. */
       secret: BackupSealedSchema.nullable()
     });
@@ -23266,7 +23264,6 @@ var init_backup = __esm({
       name: external_exports.string().max(IPTV_NAME_MAX).nullable(),
       host: external_exports.string().max(260).nullable(),
       server: external_exports.string().max(2048).nullable(),
-      username: external_exports.string().max(200).nullable(),
       /** Favoritos y recientes de la IPTV que se re-emparejarán por nombre tras sincronizar. */
       relinkItems: external_exports.number().int().nonnegative()
     });
@@ -78572,7 +78569,6 @@ var IptvServiceImpl = class {
       enabled: record2.enabled,
       host: record2.host,
       server: secrets?.kind === "xtream" ? secrets.server : record2.kind === "xtream" ? record2.origin : null,
-      username: secrets?.kind === "xtream" ? secrets.username : null,
       secrets: secrets ? { ...secrets } : null
     };
   }
@@ -80409,7 +80405,6 @@ function createBackupService(deps) {
         enabled: config2.enabled,
         host: config2.host,
         server: config2.kind === "xtream" ? config2.server : null,
-        username: config2.kind === "xtream" ? config2.username : null,
         secret
       };
     }
@@ -80466,7 +80461,6 @@ function createBackupService(deps) {
       name: block?.name ?? null,
       host: block?.host ?? null,
       server: block?.server ?? null,
-      username: block?.username ?? null,
       relinkItems
     };
     if (!block) return { action: "none", ...base };
