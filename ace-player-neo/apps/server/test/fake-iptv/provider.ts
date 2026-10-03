@@ -225,9 +225,11 @@ export interface FakeIptvOptions {
   /**
    * Guía TV (docs/iptv.md §20.9): además de los programas de siempre, una
    * parrilla sintética de ayer a dentro de 3 días para todos los demás
-   * canales (también los del catálogo grande), servida en streaming.
+   * canales (también los del catálogo grande), servida en streaming. Con
+   * `'hoy'`, como la del panel de Isma (Paso 0 del 3-oct): de ayer al final
+   * de hoy (UTC) y nada que empiece mañana ni pasado.
    */
-  readonly guiaCompleta?: boolean;
+  readonly guiaCompleta?: boolean | 'hoy';
 }
 
 export interface FakeIptv {
@@ -297,12 +299,14 @@ function xmltvDate(ms: number): string {
 
 const MIN = 60_000;
 
-/** Guía XMLTV del proveedor falso. */
-export function fakeGuideXml(matchStart: number): string {
+/** Guía XMLTV del proveedor falso (con `until`, sin programas que empiecen en ese instante o después). */
+export function fakeGuideXml(matchStart: number, until = Number.POSITIVE_INFINITY): string {
   const match = 'Real Sociedad - Villarreal';
   const p = (channel: string, start: number, stop: number, title: string, extra = ''): string =>
-    `  <programme start="${xmltvDate(start)}" stop="${xmltvDate(stop)}" channel="${channel}">\n` +
-    `    <title lang="es">${title}</title>\n${extra}  </programme>\n`;
+    start >= until
+      ? ''
+      : `  <programme start="${xmltvDate(start)}" stop="${xmltvDate(stop)}" channel="${channel}">\n` +
+        `    <title lang="es">${title}</title>\n${extra}  </programme>\n`;
   return (
     `<?xml version="1.0" encoding="UTF-8"?>\n<tv generator-info-name="fake-iptv">\n` +
     FAKE_IPTV_CHANNELS.map(
@@ -700,7 +704,11 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
         }
         if (options.guiaCompleta) {
           /* La guía de siempre y, detrás, la sintética de los demás canales (sin tenerla entera en memoria). */
-          const base = fakeGuideXml(matchStart).replace(/<\/tv>\s*$/, '');
+          const day = 24 * 3_600_000;
+          const today = Math.floor((options.now?.() ?? Date.now()) / day) * day;
+          /* «Solo hoy»: nada empieza mañana (ni en la guía de siempre ni en la sintética). */
+          const until = options.guiaCompleta === 'hoy' ? today + day : Number.POSITIVE_INFINITY;
+          const base = fakeGuideXml(matchStart, until).replace(/<\/tv>\s*$/, '');
           const covered = new Set(
             [...base.matchAll(/<programme [^>]*channel="([^"]+)"/g)].map((m) => m[1]),
           );
@@ -710,11 +718,18 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
               ...(big?.channels ?? []).map((c) => c.epg),
             ]),
           ].filter((id) => !covered.has(id));
-          const day = 24 * 3_600_000;
-          const from = Math.floor((options.now?.() ?? Date.now()) / day) * day - day;
+          const from = today - day;
           const chunks = (function* () {
             yield Buffer.from(base);
-            yield* fakeGuideChunks({ channels: 0, ids, from, days: 4, wrap: false, logoEvery: 0 });
+            yield* fakeGuideChunks({
+              channels: 0,
+              ids,
+              from,
+              days: 4,
+              wrap: false,
+              logoEvery: 0,
+              until,
+            });
             yield Buffer.from('</tv>\n');
           })();
           res.writeHead(200, { 'content-type': 'application/xml' });

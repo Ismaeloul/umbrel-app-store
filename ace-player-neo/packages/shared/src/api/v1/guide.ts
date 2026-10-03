@@ -100,12 +100,22 @@ export const IptvGuideResponseSchema = z.strictObject({
   /** El nombre que Isma puso al proveedor («Casa»); vacío sin IPTV. */
   provider: z.string().max(IPTV_NAME_MAX),
   /**
-   * Lo que cubre la guía guardada (epoch ms): de 24 h antes a 80 h después
-   * de la descarga (`IPTV_GUIDE_STORE`). La web enseña de hoy 00:00 a pasado
-   * mañana 24:00 dentro de esto. null sin guía.
+   * Ventana guardada (epoch ms): de 24 h antes a 80 h después de la descarga
+   * (`IPTV_GUIDE_STORE`). Los trozos se recortan a ella. NO dice hasta dónde
+   * llega la programación: eso es `coveredFrom`/`coveredTo`. null sin guía.
    */
   from: z.number().int().nullable(),
   to: z.number().int().nullable(),
+  /**
+   * Hasta dónde llega de verdad la programación de las filas de este ámbito
+   * (epoch ms): inicio del primer programa y fin del último, dentro de
+   * `from`/`to`. Una guía que solo cubre hoy (la del panel de Isma, Paso 0
+   * del 3-oct) acaba hoy aunque la ventana llegue a +80 h: la web esconde
+   * «Mañana» y «Pasado» si no llegan. null sin guía o si ninguna fila del
+   * ámbito tiene programación.
+   */
+  coveredFrom: z.number().int().nullable(),
+  coveredTo: z.number().int().nullable(),
   /** Descarga de la guía que se está usando. */
   updatedAt: IsoDateTimeSchema.nullable(),
   /** Última descarga fallida (si hay `updatedAt`, se sigue con esa copia). */

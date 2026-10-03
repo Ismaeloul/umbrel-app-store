@@ -4,6 +4,8 @@
   "provider": "IPTV de ejemplo",
   "from": null,
   "to": null,
+  "coveredFrom": null,
+  "coveredTo": null,
   "updatedAt": null,
   "failedAt": null,
   "partial": false,

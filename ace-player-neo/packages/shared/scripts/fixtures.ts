@@ -1252,6 +1252,8 @@ const iptvTelecinco: ResolutionCandidate = {
 export const VARIANT_FIXTURES = {
   /* Guía TV (docs/iptv.md §20.6): «Todos» (una página corta) y los estados sin parrilla. */
   'iptvGuide.todos': demoGuide({ scope: 'all', limit: 6 }, AT_MS),
+  /* Una guía que solo cubre hoy, como la del panel de Isma (Paso 0): coveredTo acaba hoy. */
+  'iptvGuide.solo-hoy': demoGuide({ scope: 'all', limit: 6 }, AT_MS, { onlyToday: true }),
   'iptvGuide.inactiva': {
     ...guideFavorites,
     state: 'inactive',
@@ -1259,6 +1261,8 @@ export const VARIANT_FIXTURES = {
     provider: '',
     from: null,
     to: null,
+    coveredFrom: null,
+    coveredTo: null,
     updatedAt: null,
     scope: 'favorites',
     favorites: 0,
@@ -1272,6 +1276,8 @@ export const VARIANT_FIXTURES = {
     version: '',
     from: null,
     to: null,
+    coveredFrom: null,
+    coveredTo: null,
     updatedAt: null,
     favorites: 0,
     all: 0,
@@ -1598,6 +1604,7 @@ export const VARIANT_FIXTURES = {
   },
 } satisfies {
   'iptvGuide.todos': V1ResponseInput<'iptvGuide'>;
+  'iptvGuide.solo-hoy': V1ResponseInput<'iptvGuide'>;
   'iptvGuide.inactiva': V1ResponseInput<'iptvGuide'>;
   'iptvGuide.preparando': V1ResponseInput<'iptvGuide'>;
   'iptvGuideNow.sin-guia': V1ResponseInput<'iptvGuideNow'>;

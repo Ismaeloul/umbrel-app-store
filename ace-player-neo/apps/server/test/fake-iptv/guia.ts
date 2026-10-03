@@ -27,6 +27,12 @@ export interface FakeGuideOptions {
   readonly ids?: readonly string[];
   /** Sin la cabecera ni el `</tv>` del final (para seguir otra guía); por defecto, con ellos. */
   readonly wrap?: boolean;
+  /**
+   * Ningún programa empieza en este instante o después (el último puede
+   * acabar algo más tarde). Para una guía que solo cubre hoy, como la del
+   * panel de Isma (Paso 0 del 3-oct).
+   */
+  readonly until?: number;
 }
 
 /** `20261003183000 +0000`. */
@@ -81,7 +87,10 @@ export function* fakeGuideChunks(options: FakeGuideOptions): Generator<Buffer> {
   const details = options.details ?? true;
   const wrap = options.wrap ?? true;
   const next = random(options.seed ?? 42);
-  const end = options.from + options.days * 24 * 60 * MINUTE;
+  const end = Math.min(
+    options.from + options.days * 24 * 60 * MINUTE,
+    options.until ?? Number.POSITIVE_INFINITY,
+  );
   const logoEvery = options.logoEvery ?? 10;
   let parts: string[] = [];
   let size = 0;

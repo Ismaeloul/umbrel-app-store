@@ -152,7 +152,12 @@ describe('esquemas', () => {
       IptvGuideProgrammeDetailSchema.safeParse(WEB_V1_FIXTURES.iptvGuideProgramme).success,
     ).toBe(true);
     expect(IptvGuideNowResponseSchema.safeParse(WEB_V1_FIXTURES.iptvGuideNow).success).toBe(true);
-    for (const name of ['iptvGuide.todos', 'iptvGuide.inactiva', 'iptvGuide.preparando'] as const) {
+    for (const name of [
+      'iptvGuide.todos',
+      'iptvGuide.solo-hoy',
+      'iptvGuide.inactiva',
+      'iptvGuide.preparando',
+    ] as const) {
       expect(IptvGuideResponseSchema.safeParse(VARIANT_FIXTURES[name]).success, name).toBe(true);
     }
     /* El ejemplo del trozo trae programas de verdad (no un trozo vacío). */
@@ -296,6 +301,66 @@ describe('guía de ejemplo (demo de la web)', () => {
       code(() => demoGuideProgrammes({ v: version, ch: '1', from: NOW, to: NOW + 13 * HOUR }, NOW)),
     ).toBe('validation_error 400');
     expect(code(() => demoGuideProgramme('1.1', { v: version }, NOW))).toBe('not_found 404');
+  });
+
+  it('hasta dónde llega la programación (coveredFrom / coveredTo): toda la ventana en la normal', () => {
+    const all = demoGuide({ scope: 'all', limit: 0 }, NOW);
+    expect(all.coveredFrom).toBe(all.from);
+    expect(all.coveredTo).toBe(all.to);
+    const favorites = demoGuide({ limit: 0 }, NOW);
+    expect(favorites.coveredFrom).toBe(favorites.from);
+    expect(favorites.coveredTo).toBe(favorites.to);
+  });
+
+  it('«solo hoy» (como la guía del panel de Isma): nada empieza mañana ni pasado y coveredTo lo dice', () => {
+    const options = { onlyToday: true };
+    const all = demoGuide({ scope: 'all', limit: 1000 }, NOW, options);
+    expect(IptvGuideResponseSchema.parse(all)).toBeTruthy();
+    const normal = demoGuideStamp(NOW);
+    /* Su propio sello: la web no mezcla trozos de las dos. */
+    expect(all.version).not.toBe(normal.version);
+    expect(demoGuideStamp(NOW, options).version).toBe(all.version);
+    const endOfDay = Date.UTC(2026, 9, 4);
+    expect(all.coveredFrom).toBe(all.from);
+    /* El último programa empieza antes de medianoche (UTC) y puede acabar un poco después. */
+    expect(all.coveredTo).toBeGreaterThan(endOfDay - HOUR);
+    expect(all.coveredTo).toBeLessThanOrEqual(endOfDay + 3 * HOUR);
+    expect(all.coveredTo).toBeLessThan(all.to as number);
+    const ch = all.channels
+      .slice(0, 30)
+      .map((row) => row.guide)
+      .join(',');
+    const today = demoGuideProgrammes(
+      { v: all.version, ch, from: endOfDay - 6 * HOUR, to: endOfDay + 6 * HOUR },
+      NOW,
+      options,
+    );
+    for (const channel of today.channels) {
+      expect(channel.programmes.length).toBeGreaterThan(0);
+      expect(channel.programmes.every((item) => item.start < endOfDay)).toBe(true);
+      expect(Math.max(...channel.programmes.map((item) => item.end))).toBeLessThanOrEqual(
+        all.coveredTo as number,
+      );
+    }
+    const tomorrow = demoGuideProgrammes(
+      { v: all.version, ch, from: endOfDay + 6 * HOUR, to: endOfDay + 18 * HOUR },
+      NOW,
+      options,
+    );
+    expect(tomorrow.channels.every((channel) => channel.programmes.length === 0)).toBe(true);
+    /* El sello de la normal no vale en «solo hoy» (y al revés). */
+    expect(() =>
+      demoGuideProgrammes({ v: normal.version, ch: '1', from: NOW, to: NOW + HOUR }, NOW, options),
+    ).toThrow(DemoGuideError);
+    /* «Ahora / después» y la ficha, igual de coherentes. */
+    const first = demoGuideChannels()[0];
+    const now = demoGuideNow({ ids: first?.id as string }, NOW, options);
+    expect(now.version).toBe(all.version);
+    expect(now.items[0]?.now).not.toBe(null);
+    const onAir = now.items[0]?.now;
+    expect(demoGuideProgramme(onAir?.id as string, { v: all.version }, NOW, options).id).toBe(
+      onAir?.id,
+    );
   });
 
   it('los ids de canal tienen la forma de un id IPTV y no se repiten', () => {

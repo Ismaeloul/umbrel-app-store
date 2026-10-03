@@ -5794,6 +5794,18 @@ paths:
                         minimum: -9007199254740991
                         maximum: 9007199254740991
                       - type: "null"
+                  coveredFrom:
+                    anyOf:
+                      - type: integer
+                        minimum: -9007199254740991
+                        maximum: 9007199254740991
+                      - type: "null"
+                  coveredTo:
+                    anyOf:
+                      - type: integer
+                        minimum: -9007199254740991
+                        maximum: 9007199254740991
+                      - type: "null"
                   updatedAt:
                     anyOf:
                       - type: string
@@ -5880,6 +5892,8 @@ paths:
                   - provider
                   - from
                   - to
+                  - coveredFrom
+                  - coveredTo
                   - updatedAt
                   - failedAt
                   - partial

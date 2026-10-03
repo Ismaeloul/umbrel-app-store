@@ -13,7 +13,11 @@
    programas de 5 min a 3 h, partidos en directo por la tarde, un canal
    regional que no tiene guía de madrugada (huecos «Sin información»), un
    bloque de relleno de 14 h y un favorito sin guía. Sin logos ni imágenes:
-   en la demo no hay proxy (`logo` e `image` van siempre a false). */
+   en la demo no hay proxy (`logo` e `image` van siempre a false).
+
+   Con `{ onlyToday: true }` (último argumento de cada función) es como la
+   guía real del panel de Isma (Paso 0 del 3-oct): de ayer a hoy y nada que
+   empiece mañana ni pasado; `coveredTo` lo dice. Tiene su propio sello. */
 
 import type {
   IptvGuideChannel,
@@ -421,12 +425,22 @@ function strip(programmeItem: DemoProgramme): IptvGuideProgramme {
   };
 }
 
-/** Los programas de un canal que se solapan con [from, to). */
-function programmesBetween(channel: DemoChannel, from: number, to: number): DemoProgramme[] {
+/**
+ * Los programas de un canal que se solapan con [from, to) y empiezan antes
+ * de `cutoff` (lo último que trae la guía; sin él, todo).
+ */
+function programmesBetween(
+  channel: DemoChannel,
+  from: number,
+  to: number,
+  cutoff = Number.POSITIVE_INFINITY,
+): DemoProgramme[] {
   const out: DemoProgramme[] = [];
-  for (let day = dayOf(from); day <= dayOf(to - 1); day += 1) {
+  const until = Math.min(to, cutoff);
+  if (until <= from) return out;
+  for (let day = dayOf(from); day <= dayOf(until - 1); day += 1) {
     for (const item of dayProgrammes(channel, day)) {
-      if (item.end > from && item.start < to) out.push(item);
+      if (item.end > from && item.start < until) out.push(item);
     }
   }
   return out;
@@ -441,15 +455,48 @@ export interface DemoGuideStamp {
   readonly to: number;
 }
 
-/** Sello y ventana de la guía de ejemplo a esta hora (cambian cada 8 h). */
-export function demoGuideStamp(now: number): DemoGuideStamp {
+/** Opciones de la guía de ejemplo. */
+export interface DemoGuideOptions {
+  /**
+   * Como la del panel de Isma (Paso 0 del 3-oct): de 24 h atrás a hoy, sin un
+   * solo programa que empiece después del día (UTC) de la «descarga»; mañana
+   * y pasado, nada. Para ver la parrilla con una guía que solo cubre hoy.
+   */
+  readonly onlyToday?: boolean | undefined;
+}
+
+/** Sello y ventana de la guía de ejemplo a esta hora (cambian cada 8 h; «solo hoy» tiene su sello). */
+export function demoGuideStamp(now: number, options: DemoGuideOptions = {}): DemoGuideStamp {
   const builtAt = Math.floor(now / REFRESH_MS) * REFRESH_MS;
   return {
-    version: `d${Math.floor(builtAt / MINUTE).toString(36)}`,
+    version: `${options.onlyToday ? 'h' : 'd'}${Math.floor(builtAt / MINUTE).toString(36)}`,
     builtAt,
     from: builtAt - IPTV_GUIDE_STORE.pastMs,
     to: builtAt + IPTV_GUIDE_STORE.futureMs,
   };
+}
+
+/** Lo último que trae la guía: con «solo hoy», nada que empiece después del día de la descarga. */
+function cutoffOf(stamp: DemoGuideStamp, options: DemoGuideOptions): number {
+  return options.onlyToday ? (dayOf(stamp.builtAt) + 1) * DAY : Number.POSITIVE_INFINITY;
+}
+
+/** Hasta dónde llega la programación de esos canales (`coveredFrom`/`coveredTo`, como el servidor). */
+function coverageOf(
+  channels: readonly DemoChannel[],
+  stamp: DemoGuideStamp,
+  cutoff: number,
+): { from: number; to: number } | null {
+  const end = Math.min(stamp.to, cutoff);
+  let from = Number.POSITIVE_INFINITY;
+  let to = Number.NEGATIVE_INFINITY;
+  for (const channel of channels) {
+    const head = programmesBetween(channel, stamp.from, stamp.from + 6 * HOUR, cutoff)[0];
+    const tail = programmesBetween(channel, end - 6 * HOUR, end, cutoff).at(-1);
+    if (head && head.start < from) from = head.start;
+    if (tail && tail.end > to) to = tail.end;
+  }
+  return from < to ? { from: Math.max(from, stamp.from), to: Math.min(to, stamp.to) } : null;
 }
 
 /** Error de la demo con el código que daría el servidor (el manejador de la web lo pasa a `ApiError`). */
@@ -463,8 +510,8 @@ export class DemoGuideError extends Error {
   }
 }
 
-function checkVersion(v: string, now: number): DemoGuideStamp {
-  const stamp = demoGuideStamp(now);
+function checkVersion(v: string, now: number, options: DemoGuideOptions): DemoGuideStamp {
+  const stamp = demoGuideStamp(now, options);
   if (v !== stamp.version) throw new DemoGuideError('guide_stale', 409);
   return stamp;
 }
@@ -476,8 +523,12 @@ export interface DemoGuideQuery {
 }
 
 /** `iptvGuide` de la demo: estado, sello y una página de canales («Favoritos» o «Todos»). */
-export function demoGuide(query: DemoGuideQuery, now: number): IptvGuideResponse {
-  const stamp = demoGuideStamp(now);
+export function demoGuide(
+  query: DemoGuideQuery,
+  now: number,
+  options: DemoGuideOptions = {},
+): IptvGuideResponse {
+  const stamp = demoGuideStamp(now, options);
   const channels = demoChannels();
   const favorites = channels.filter((channel) => channel.favorite);
   const without: IptvGuideChannel = {
@@ -499,12 +550,19 @@ export function demoGuide(query: DemoGuideQuery, now: number): IptvGuideResponse
     IPTV_GUIDE_API.channelsPageMax,
     Math.max(0, Number(query.limit ?? IPTV_GUIDE_API.channelsPage) || 0),
   );
+  const covered = coverageOf(
+    scope === 'favorites' ? favorites : channels,
+    stamp,
+    cutoffOf(stamp, options),
+  );
   return {
     state: 'ready',
     version: stamp.version,
     provider: 'IPTV de ejemplo',
     from: stamp.from,
     to: stamp.to,
+    coveredFrom: covered?.from ?? null,
+    coveredTo: covered?.to ?? null,
     updatedAt: new Date(stamp.builtAt).toISOString(),
     failedAt: null,
     partial: false,
@@ -529,8 +587,10 @@ export interface DemoGuideProgrammesQuery {
 export function demoGuideProgrammes(
   query: DemoGuideProgrammesQuery,
   now: number,
+  options: DemoGuideOptions = {},
 ): IptvGuideProgrammesResponse {
-  const stamp = checkVersion(query.v, now);
+  const stamp = checkVersion(query.v, now, options);
+  const cutoff = cutoffOf(stamp, options);
   const from = Math.max(stamp.from, Number(query.from));
   const to = Math.min(stamp.to, Number(query.to));
   if (!Number.isFinite(from) || !Number.isFinite(to) || Number(query.to) <= Number(query.from)) {
@@ -551,7 +611,7 @@ export function demoGuideProgrammes(
       guide,
       programmes:
         channel && to > from
-          ? programmesBetween(channel, from, to)
+          ? programmesBetween(channel, from, to, cutoff)
               .slice(0, IPTV_GUIDE_API.sliceProgrammesMax)
               .map(strip)
           : [],
@@ -607,15 +667,22 @@ export function demoGuideProgramme(
   id: string,
   query: { readonly v: string },
   now: number,
+  options: DemoGuideOptions = {},
 ): IptvGuideProgrammeDetail {
-  const stamp = checkVersion(query.v, now);
+  const stamp = checkVersion(query.v, now, options);
   const match = /^(\d+)\.(\d+)$/.exec(id);
   const channel = match ? demoChannels().find((item) => item.guide === Number(match[1])) : null;
   const start = match ? Number(match[2]) * MINUTE : 0;
   const found = channel
     ? dayProgrammes(channel, dayOf(start)).find((item) => item.id === id)
     : undefined;
-  if (!channel || !found || found.end <= stamp.from || found.start >= stamp.to) {
+  if (
+    !channel ||
+    !found ||
+    found.end <= stamp.from ||
+    found.start >= stamp.to ||
+    found.start >= cutoffOf(stamp, options)
+  ) {
     throw new DemoGuideError('not_found', 404);
   }
   const next = random(fnv(id, 11));
@@ -642,8 +709,13 @@ export function demoGuideProgramme(
 }
 
 /** `iptvGuideNow` de la demo: «ahora / después» de los ids pedidos (los de la demo; los demás, sin guía). */
-export function demoGuideNow(query: { readonly ids: string }, now: number): IptvGuideNowResponse {
-  const stamp = demoGuideStamp(now);
+export function demoGuideNow(
+  query: { readonly ids: string },
+  now: number,
+  options: DemoGuideOptions = {},
+): IptvGuideNowResponse {
+  const stamp = demoGuideStamp(now, options);
+  const cutoff = cutoffOf(stamp, options);
   const byId = new Map(demoChannels().map((channel) => [channel.id, channel]));
   const seen = new Set<string>();
   const items: IptvGuideNowItem[] = [];
@@ -655,7 +727,7 @@ export function demoGuideNow(query: { readonly ids: string }, now: number): Iptv
       items.push({ id, guide: null, now: null, next: null });
       continue;
     }
-    const around = programmesBetween(channel, now - 6 * HOUR, now + 12 * HOUR);
+    const around = programmesBetween(channel, now - 6 * HOUR, now + 12 * HOUR, cutoff);
     const current = around.find((item) => item.start <= now && item.end > now) ?? null;
     const following = around.find((item) => item.start >= (current?.end ?? now)) ?? null;
     items.push({

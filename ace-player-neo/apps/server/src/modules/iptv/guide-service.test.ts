@@ -278,6 +278,32 @@ describe('Guía TV en el servicio (§20.5)', () => {
     expect((await r.service.tvGuide.channels({})).state).toBe('inactive');
   });
 
+  it('una guía que solo cubre hoy (como la del panel de Isma): coveredTo lo dice y mañana no hay nada', async () => {
+    const r = await rig({ fake: { guiaCompleta: 'hoy' } });
+    await saveXtream(r);
+    await downloadGuide(r);
+    const all = await r.service.tvGuide.channels({ scope: 'all', limit: 1000 });
+    const day = 24 * HOUR;
+    const endOfToday = (Math.floor(r.core.clock.now() / day) + 1) * day;
+    expect(all.state).toBe('ready');
+    expect(all.total).toBeGreaterThan(10);
+    /* La ventana guardada llega a +80 h; la programación, al final de hoy. */
+    expect(all.to).toBeGreaterThan(endOfToday + day);
+    expect(all.coveredTo).toBeGreaterThan(endOfToday - 2 * HOUR);
+    expect(all.coveredTo).toBeLessThanOrEqual(endOfToday + 2 * HOUR);
+    const ch = all.channels
+      .slice(0, 60)
+      .flatMap((row) => (row.guide ? [row.guide] : []))
+      .join(',');
+    const tomorrow = r.service.tvGuide.programmes({
+      v: all.version,
+      ch,
+      from: endOfToday + 2 * HOUR,
+      to: endOfToday + 14 * HOUR,
+    });
+    expect(tomorrow.channels.every((channel) => channel.programmes.length === 0)).toBe(true);
+  });
+
   it('un fallo pasajero del XMLTV no cambia la guía completa por la parcial de get_short_epg: partidos del respaldo, la Guía TV de antes, queda dicho y se reintenta a los 30 min', async () => {
     const r = await rig({ fake: { guiaCompleta: true } });
     const net = patchGuideNet(r);

@@ -83,7 +83,9 @@ const p = (
     ...extra,
   }) as GuideProgrammeInput;
 
-async function guide(): Promise<{ store: GuideStore; reader: GuideReader }> {
+async function guide(
+  extra: readonly GuideProgrammeInput[] = [],
+): Promise<{ store: GuideStore; reader: GuideReader }> {
   const dir = tempDir('ace-guia-');
   const store = new GuideStore(path.join(dir, 'guia.db'), dir, logger);
   cleanups.push(() => store.close());
@@ -112,6 +114,7 @@ async function guide(): Promise<{ store: GuideStore; reader: GuideReader }> {
     );
     writer.add(p(tvg, at(2), at(3), `${tvg} después`));
   }
+  for (const item of extra) writer.add(item);
   await writer.finish();
   const reader = store.install('p_prueba01');
   if (!reader) throw new Error('sin guía');
@@ -130,8 +133,8 @@ interface Rig {
   fetched: string[];
 }
 
-async function rig(): Promise<Rig> {
-  const { reader } = await guide();
+async function rig(extra: readonly GuideProgrammeInput[] = []): Promise<Rig> {
+  const { reader } = await guide(extra);
   const current = catalog();
   const fetched: string[] = [];
   const net = {
@@ -244,6 +247,30 @@ describe('iptvGuide: canales', () => {
     r.favorites = [channelOf(r.catalog, 4)];
     const fallback = await r.api.channels({ scope: 'favorites' });
     expect(fallback).toMatchObject({ scope: 'all', fellBack: true, favorites: 0, total: 5 });
+  });
+
+  it('hasta dónde llega la programación (coveredFrom / coveredTo) de las filas del ámbito, no la ventana guardada', async () => {
+    /* BBC One trae hasta +10 h; los demás, hasta +3 h (como una guía que solo cubre hoy). */
+    const r = await rig([p('bbcone.uk', at(3), at(10), 'bbcone.uk tarde')]);
+    const all = await r.api.channels({ scope: 'all', limit: 0 });
+    expect(IptvGuideResponseSchema.parse(all)).toBeTruthy();
+    expect(all).toMatchObject({ coveredFrom: at(-2), coveredTo: at(10) });
+    /* La ventana guardada sigue siendo la de siempre (de −24 h a +80 h). */
+    expect(all.to).toBeGreaterThan(at(70));
+    r.favorites = [channelOf(r.catalog, 4), channelOf(r.catalog, 7)];
+    const favorites = await r.api.channels({ limit: 0 });
+    expect(favorites).toMatchObject({ scope: 'favorites', coveredFrom: at(-2), coveredTo: at(3) });
+    /* Sin un favorito con guía: «Todos», con lo suyo. */
+    r.favorites = [channelOf(r.catalog, 4)];
+    expect(await r.api.channels({ limit: 0 })).toMatchObject({
+      fellBack: true,
+      coveredTo: at(10),
+    });
+    r.withReader = false;
+    expect(await r.api.channels({ limit: 0 })).toMatchObject({
+      coveredFrom: null,
+      coveredTo: null,
+    });
   });
 
   it('páginas: offset y limit (0 = solo el estado)', async () => {

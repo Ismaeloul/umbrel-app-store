@@ -39,7 +39,7 @@ import { AppError } from '../../core/errors.js';
 import type { Catalog, CatalogEntry, QualityOf } from './catalog.js';
 import { channelIdOf } from './catalog.js';
 import type { GuideArt, GuideArtReply } from './guide-art.js';
-import type { GuideChannelInfo, GuideGridRow, GuideReader } from './guide-db.js';
+import type { GuideChannelInfo, GuideCoverage, GuideGridRow, GuideReader } from './guide-db.js';
 import { planVariants } from './match.js';
 
 const MINUTE = 60_000;
@@ -87,6 +87,8 @@ interface Rows {
   readonly version: string;
   readonly all: readonly GuideRow[];
   readonly byChannel: ReadonlyMap<string, GuideRow>;
+  /** Hasta dónde llega la programación de «Todos». */
+  readonly coverage: GuideCoverage | null;
 }
 
 function iso(ms: number): string {
@@ -150,6 +152,8 @@ export class GuideApi {
         version: '',
         from: null,
         to: null,
+        coveredFrom: null,
+        coveredTo: null,
         updatedAt: null,
         scope: asked,
       };
@@ -161,12 +165,20 @@ export class GuideApi {
     const scope = fellBack ? 'all' : asked;
     const favoriteSet = new Set(favorites.map((row) => row.channel));
     const list: readonly GuideRow[] = scope === 'favorites' ? favorites : rows.all;
+    /* Hasta dónde llega la programación de las filas del ámbito («Todos»: la de toda la guía
+       que sale en filas; se calcula una vez por guía en el lector). */
+    const covered =
+      scope === 'favorites'
+        ? reader.coverage(list.flatMap((row) => (row.guide === null ? [] : [row.guide])))
+        : rows.coverage;
     return {
       ...base,
       state: 'ready',
       version: reader.version,
       from: reader.meta.from,
       to: reader.meta.to,
+      coveredFrom: covered?.from ?? null,
+      coveredTo: covered?.to ?? null,
       updatedAt: iso(reader.meta.builtAt),
       partial: reader.meta.source === 'short',
       scope,
@@ -262,7 +274,8 @@ export class GuideApi {
         sliceStart = performance.now();
       }
     }
-    return { catalog, version, all, byChannel };
+    const coverage = reader.coverage(all.flatMap((row) => (row.guide === null ? [] : [row.guide])));
+    return { catalog, version, all, byChannel, coverage };
   }
 
   private rowOf(
