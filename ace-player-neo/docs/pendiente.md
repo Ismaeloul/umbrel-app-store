@@ -46,7 +46,11 @@ Lo que no se pudo hacer esta noche, con el detalle para retomarlo.
     pero eso es solo lo que guardamos hoy: canales de España, 48 h y programas que parecen partidos, docs/iptv.md
     §3.6). Isma quiere probar un **botón nuevo «Programación»** con una parrilla como la de la tele: a la
     izquierda la lista de canales con EPG y a la derecha la línea de tiempo del día con cada programa en su hueco.
-    Va a mandar una foto de referencia. Implica guardar la guía completa (todos los programas, no solo partidos;
+    Referencia de Isma: `capturas/pendiente/programacion-referencia-kodi.webp` (estilo Kodi «TV / Línea de
+    tiempo»): pestañas de grupos arriba (Documentales, Infantiles, Liga Campeones…), fila de horas cada 30 min,
+    canales con número a la izquierda, bloques por programa a lo ancho de su duración (color por género), y abajo
+    la ficha del programa elegido: carátula, título, temporada/episodio, año, edad, estrellas, sinopsis,
+    director, hora y género. Implica guardar la guía completa (todos los programas, no solo partidos;
     ojo memoria) y quizá «ahora / después» en Canales. Idea aparte, para valorar: que la guía rellene partidos
     que falten en la agenda (no sustituir a futbolenlatv: la guía cubre pocos días y su texto es libre).
 12. **App de iPhone: al final, con el Mac de su hermano** (simulador de iPhone y cambios al momento, mucho más
