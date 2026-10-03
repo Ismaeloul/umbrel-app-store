@@ -560,5 +560,101 @@ describe('VodService contra el proveedor falso', () => {
     const foreign = vodId(keys, 'p_otro0000', { kind: 'movie', parent: 0, source: 2001 });
     await expect(rig.service.vod.title(foreign)).rejects.toMatchObject({ code: 'vod_not_found' });
     expect(rig.service.classify(foreign)).not.toBe('engine');
+    /* `isVodId` del servicio IPTV (lo usa la biblioteca, §5.3). */
+    const home = await rig.service.vod.home();
+    expect(rig.service.isVodId(home.newMovies[0]?.id as string)).toBe(true);
+    expect(rig.service.isVodId(foreign)).toBe(false);
+    expect(rig.service.isVodId('a'.repeat(40))).toBe(false);
+  });
+
+  it('`iptv.status` lleva `vod` (§11.4) y nada del proveedor', async () => {
+    const rig = await createIptvTestRig();
+    rigs.push(rig);
+    const events: Array<{ vod?: { state: string; movies: number } }> = [];
+    rig.core.bus.on('iptv.status', (event) => events.push(event as never));
+    await rig.service.save(
+      {
+        kind: 'xtream',
+        server: rig.fake.server,
+        username: FAKE_IPTV_USER,
+        password: FAKE_IPTV_PASSWORD,
+      },
+      new AbortController().signal,
+    );
+    await rig.service.idle();
+    await synced(rig);
+    const states = events.map((event) => event.vod?.state);
+    expect(states).toContain('preparing');
+    expect(events.at(-1)?.vod).toMatchObject({ state: 'ready', movies: 9, series: 3 });
+    const text = JSON.stringify(events);
+    for (const secret of [FAKE_IPTV_USER, FAKE_IPTV_PASSWORD, 'player_api', '/arte/']) {
+      expect(text, secret).not.toContain(secret);
+    }
+  });
+
+  it('«Actualizar» (iptvSync) también el VOD si tiene más de 1 h; con `none`, siempre («Comprobar de nuevo»)', async () => {
+    const rig = await ready();
+    const { vod } = await synced(rig);
+    const lists = () => vodCalls(rig, 'get_vod_streams');
+    const before = lists();
+    /* Recién sincronizado: «Actualizar» no vuelve a pedir el VOD. */
+    await rig.service.sync();
+    await rig.service.idle();
+    await vod.idle();
+    expect(lists()).toBe(before);
+    /* Con más de 1 h, sí. */
+    await rig.core.clock.advanceAsync(61 * 60_000);
+    await rig.service.sync();
+    await rig.service.idle();
+    await vod.idle();
+    expect(lists()).toBe(before + 1);
+    /* El panel apaga el VOD: `none`. Al encenderlo, «Comprobar de nuevo» lo ve al momento. */
+    rig.fake.vodModo('sin-vod');
+    await rig.core.clock.advanceAsync(61 * 60_000);
+    await rig.service.sync();
+    await rig.service.idle();
+    await vod.idle();
+    expect(vod.state()).toBe('none');
+    expect(existsSync(rig.core.config.paths.vodCatalogFile)).toBe(false);
+    rig.fake.vodModo('normal');
+    await rig.service.sync();
+    await rig.service.idle();
+    await vod.idle();
+    expect(vod.state()).toBe('ready');
+    expect((await vod.home()).counts).toEqual({ movies: 9, series: 3 });
+  });
+
+  it('otro proveedor por «Guardar» vacía vod.json, vod.enc y arte/ (§10.5)', async () => {
+    const rig = await ready();
+    const { vod } = await synced(rig);
+    const home = await vod.home();
+    await vod.progress(home.newMovies[0]?.id as string, { event: 'pause', posS: 100, durS: 7_200 });
+    await settle(rig, vod.artOf(home.newMovies[0]?.id as string, 'poster', undefined, undefined));
+    const { paths } = rig.core.config;
+    expect(existsSync(paths.vodFile)).toBe(true);
+    expect(existsSync(paths.vodCatalogFile)).toBe(true);
+    /* Otro proveedor (una lista M3U). */
+    await rig.service.save({ kind: 'm3u', url: rig.fake.m3uUrl }, new AbortController().signal);
+    await rig.service.idle();
+    expect(existsSync(paths.vodFile)).toBe(false);
+    expect(existsSync(paths.vodCatalogFile)).toBe(false);
+    expect(existsSync(paths.vodArtDir)).toBe(false);
+    expect(await vod.home()).toMatchObject({ state: 'unsupported', continue: [] });
+    /* Y de vuelta a Xtream: otro `provider.id`, nada de lo de antes. */
+    await rig.service.save(
+      {
+        kind: 'xtream',
+        server: rig.fake.server,
+        username: FAKE_IPTV_USER,
+        password: FAKE_IPTV_PASSWORD,
+      },
+      new AbortController().signal,
+    );
+    await rig.service.idle();
+    await synced(rig);
+    const again = await vod.home();
+    expect(again.state).toBe('ready');
+    expect(again.continue).toEqual([]);
+    expect(again.newMovies[0]?.id).not.toBe(home.newMovies[0]?.id);
   });
 });

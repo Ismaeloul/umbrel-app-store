@@ -275,6 +275,12 @@ export interface IptvService extends Lifecycle {
 
   // --- Películas y series (docs/vod.md) ---
   /**
+   * ¿Es un id de película, serie o episodio de este proveedor? (§5.3: la
+   * biblioteca los rechaza con `validation_error`, `detail: 'vod_id'`).
+   * Opcional por los dobles de los tests de otros módulos.
+   */
+  isVodId?(id: string): boolean;
+  /**
    * Catálogo, fichas, carteles y progreso del VOD. Opcional: los dobles de
    * los tests de otros módulos no lo tienen, y entonces las rutas `vod*`
    * responden `vod_unavailable`.

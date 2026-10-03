@@ -617,6 +617,12 @@ export class IptvServiceImpl implements IptvService {
     return vod ? { vod } : {};
   }
 
+  /** ¿Es un id de Películas y series de este proveedor? (docs/vod.md §5.3). */
+  isVodId(id: string): boolean {
+    this.ensureLoaded();
+    return this.vod.isVodId(id);
+  }
+
   private channelsWithGuide(window: GuideWindow): number {
     if (!this.catalog) return 0;
     let count = 0;
