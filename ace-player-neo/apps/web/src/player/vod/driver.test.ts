@@ -38,7 +38,10 @@ function grant(extra: Partial<VodGrant['vod']> = {}): VodGrant {
   } as VodGrant;
 }
 
-function make(options: { demo?: boolean; playing?: boolean } = {}) {
+function make(
+  options: { demo?: boolean; playing?: boolean; seekMedia?: VodHost['seekMedia'] } = {},
+) {
+  const sent: Array<{ event: string; posS: number; keepalive: boolean }> = [];
   const video = new FakeVideo();
   const notices: Array<{ text: string; action?: string }> = [];
   const state = { playing: options.playing ?? true, endedCalls: 0 };
@@ -46,9 +49,11 @@ function make(options: { demo?: boolean; playing?: boolean } = {}) {
     video,
     demo: () => options.demo === true,
     playing: () => state.playing,
-    seekMedia: async (target) => {
-      video.currentTime = target;
-    },
+    seekMedia:
+      options.seekMedia ??
+      (async (target) => {
+        video.currentTime = target;
+      }),
     notify: (text, opts) => {
       notices.push({ text, ...(opts?.action ? { action: opts.action.label } : {}) });
     },
@@ -65,10 +70,12 @@ function make(options: { demo?: boolean; playing?: boolean } = {}) {
     host,
     { id: ID, kind: 'movie', title: 'Dune' },
     {
-      send: async () => {},
+      send: async (_id, body, opts) => {
+        sent.push({ event: body.event, posS: body.posS, keepalive: opts.keepalive === true });
+      },
     },
   );
-  return { driver, video, notices, state };
+  return { driver, video, notices, state, sent };
 }
 
 beforeEach(() => vi.useFakeTimers());
@@ -128,5 +135,15 @@ describe('VodDriver', () => {
     video._currentTime = 130;
     driver.measure();
     expect(driver.positionS).toBe(130);
+  });
+
+  it('al cerrar con un salto a medias se guarda el destino, no donde estaba', () => {
+    const { driver, video, sent } = make({ seekMedia: () => new Promise<void>(() => {}) });
+    driver.accept(grant());
+    video._currentTime = 400;
+    driver.measure();
+    void driver.seekTo(90);
+    driver.pageHide(false);
+    expect(sent.at(-1)).toEqual({ event: 'stop', posS: 90, keepalive: true });
   });
 });

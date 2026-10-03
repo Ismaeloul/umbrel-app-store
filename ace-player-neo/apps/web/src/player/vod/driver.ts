@@ -451,11 +451,20 @@ export class VodDriver {
 
   // ---- Final -----------------------------------------------------------------------
 
+  /**
+   * La posición que se guarda al salir: si hay un salto a medias (el
+   * segmento aún no ha llegado), la de destino, que es la que ve en la
+   * barra; si no, «Seguir viendo» volvería a donde estaba antes de saltar.
+   */
+  private get markS(): number {
+    return this.pendingSeek ?? this.seekingTo ?? this.positionS;
+  }
+
   /** Se deja el título: la última marca (`stop`, con `keepalive` al cerrar la página). */
   dispose(options: { keepalive?: boolean; mark?: boolean } = {}): void {
     if (this.disposed) return;
     if (options.mark !== false && this.grant && !this.ended)
-      this.progress.stop(this.positionS, this.durationS, {
+      this.progress.stop(this.markS, this.durationS, {
         ...(options.keepalive ? { keepalive: true } : {}),
       });
     this.disposed = true;
@@ -471,7 +480,7 @@ export class VodDriver {
    */
   pageHide(persisted: boolean): void {
     if (this.disposed || !this.grant || this.ended) return;
-    this.progress.stop(this.positionS, this.durationS, { keepalive: true });
+    this.progress.stop(this.markS, this.durationS, { keepalive: true });
     if (persisted) this.progress.reopen();
   }
 
