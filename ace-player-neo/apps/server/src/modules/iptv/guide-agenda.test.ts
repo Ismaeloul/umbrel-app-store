@@ -352,6 +352,47 @@ describe('guideAgenda: lo que solo trae la guía', () => {
     ).toMatchObject({ family: 'ligaf', competition: 'Liga F' });
   });
 
+  it('lo que se llama como una competición de fútbol sin ser el fútbol de la agenda: no (casos de la revisión)', () => {
+    for (const [display, title, extra] of [
+      ['DAZN 1', 'EHF Champions League: Barça - Veszprém', { categories: ['Deportes'] }],
+      ['DAZN 1', 'Premier League Darts: Littler - Humphries', { categories: ['Deportes'] }],
+      ['Eurosport 1', "Mundial de Snooker: Trump - O'Sullivan", {}],
+      ['DAZN 1', 'Mundial de Fórmula 1: Hamilton - Verstappen', {}],
+      ['M+ LaLiga TV', 'eLaLiga: Real Madrid - Barcelona', {}],
+      ['DAZN 2', 'Premier League 2: Arsenal - Chelsea', {}],
+      ['M+ LaLiga TV', 'Real Madrid Leyendas - Juventus Leyendas', {}],
+      ['M+ LaLiga TV', 'LaLiga: Real Madrid - Barcelona. Partido amistoso de leyendas', {}],
+      ['DAZN 1', 'Champions League: Real Madrid - Barcelona. Fútbol americano', {}],
+      ['Teledeporte', 'Mundial de Fútbol 7: España - Portugal', {}],
+      ['Teledeporte', 'Mundial de fútbol para ciegos: España - Brasil', {}],
+      ['M+ LaLiga TV', 'LaLiga: Real Madrid - Barcelona. Partido benéfico', {}],
+      /* Con categorías, alguna tiene que ser de deportes. */
+      ['DAZN 1', 'Champions League: Real Madrid - Inter', { categories: ['Cine', 'Comedia'] }],
+    ] as const) {
+      expect(
+        run([channel(display, [programme(title, girona, 120, { ...extra, live: true })])])
+          .additions,
+        title,
+      ).toEqual([]);
+    }
+    /* El fútbol de verdad sigue entrando, con categoría de deportes o sin categorías. */
+    for (const [display, title, extra] of [
+      [
+        'M+ Liga de Campeones',
+        'Champions League: Real Madrid - Inter',
+        { categories: ['Deportes', 'Fútbol'] },
+      ],
+      ['DAZN 1', 'Premier League: Arsenal - Chelsea', { categories: ['Sports'] }],
+      ['La 1', 'Mundial: España - Portugal', {}],
+    ] as const) {
+      expect(
+        run([channel(display, [programme(title, girona, 120, { ...extra, live: true })])])
+          .additions,
+        title,
+      ).toHaveLength(1);
+    }
+  });
+
   it('solo canales de España', () => {
     for (const country of [null, 'PT']) {
       expect(

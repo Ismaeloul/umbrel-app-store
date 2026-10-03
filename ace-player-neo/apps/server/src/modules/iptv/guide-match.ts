@@ -281,9 +281,9 @@ const SHORT_PREFIXES: Readonly<Record<string, readonly string[]>> = {
 
 /* Lo que va detrás del alias y lo convierte en el filial o el femenino. */
 const RESERVE_AFTER_RE =
-  /^\s*[([]?\s*(?:b|c|ii|iii|femenino|femenina|fem|femeni|women|sub[\s-]?\d{2}|u[\s-]?\d{2}|juvenil|atletic|castilla|atletico|deportivo|promesas|mestalla|academy|sc)\b/;
-/* Lo que va delante del alias y lo convierte en otro equipo («Bilbao Athletic»). */
-const RESERVE_BEFORE_RE = /\b(?:bilbao)\s*$/;
+  /^\s*[([]?\s*(?:b|c|ii|iii|femenino|femenina|fem|femeni|women|sub[\s-]?\d{2}|u[\s-]?\d{2}|juvenil|atletic|castilla|atletico|deportivo|promesas|mestalla|academy|sc|leyendas|legends|veteranos)\b/;
+/* Lo que va delante del alias y lo convierte en otro equipo («Bilbao Athletic», «Leyendas del Real Madrid»). */
+const RESERVE_BEFORE_RE = /\b(?:bilbao|leyendas|legends|veteranos)\s*$/;
 
 /* Partículas que unas guías ponen y otras no («Bayern de Múnich», «Celta de Vigo»). */
 const TEAM_PARTICLES_RE = /(?<![a-z0-9])(?:de|del|la|el)(?![a-z0-9])/g;
@@ -515,13 +515,26 @@ function computeNotLive(programme: GuideProgramme): boolean {
 
 // --- Otros deportes, femenino y categorías inferiores ---
 
-/* Mismos equipos, otro deporte: el Real Madrid - Barça de la ACB o del balonmano. */
-const OTHER_SPORT_RE =
-  /\b(?:baloncesto|basket|basketball|basquet|acb|liga endesa|euroliga|euroleague|eurocup|nba|futsal|futbol sala|balonmano|handball|asobal|voleibol|voley|volleyball|waterpolo|hockey|rugby|tenis|padel|futbol playa|beach soccer)\b/;
+/* Mismos equipos, otro deporte: el Real Madrid - Barça de la ACB o del balonmano. Y lo que se
+   llama como una competición de fútbol sin serlo: «EHF Champions League», «Premier League Darts»,
+   «Mundial de Snooker», «eLaLiga», «Mundial de Fútbol 7». */
+const OTHER_SPORT_RE = new RegExp(
+  String.raw`\b(?:${[
+    'baloncesto|basket|basketball|basquet|acb|liga endesa|euroliga|euroleague|eurocup|nba',
+    'futsal|futbol sala|balonmano|handball|asobal|ehf|voleibol|voley|volleyball|waterpolo',
+    'hockey|rugby|tenis|padel|futbol playa|beach soccer',
+    'futbol 7|futbol siete|futbol 5|futbol para ciegos|futbol de ciegos',
+    'futbol americano|american football|nfl|beisbol|baseball|mlb|cricket',
+    'darts|dardos|snooker|billar|golf|boxeo|boxing|ufc|mma',
+    'formula 1|formula uno|motogp|moto gp|motociclismo|automovilismo|ciclismo',
+    'esports|e-sports|efootball|elaliga|kings league|queens league',
+  ].join('|')})\b`,
+);
 /* El femenino, también entre paréntesis: «(Femenino)», «(Fem.)». */
 const WOMEN_RE = /\b(?:femenino|femenina|femeni|fem|women|womens|ladies)\b/;
-/* Categorías inferiores. */
-const YOUTH_RE = /\b(?:youth league|juvenil|sub[\s-]?\d{2}|u[\s-]?\d{2})\b/;
+/* Categorías inferiores (la «Premier League 2» es la liga sub-21; la «Primavera», la juvenil italiana). */
+const YOUTH_RE =
+  /\b(?:youth league|uefa youth|juvenil|sub[\s-]?\d{2}|u[\s-]?\d{2}|premier league 2|pl2|campionato primavera|primavera 1|next ?gen)\b/;
 
 /** Título, subtítulo, descripción y categorías, normalizados. */
 export function programmeTexts(programme: GuideProgramme): string[] {

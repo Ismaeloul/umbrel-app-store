@@ -49,6 +49,7 @@ import {
   programmeFitsKickoff,
   programmeLastsAMatch,
   programmeTeamTexts,
+  programmeTexts,
   teamAliases,
   teamCache,
   teamCoreWords,
@@ -323,6 +324,26 @@ function sharesTeam(show: LiveShow, match: AgendaTeams): boolean {
   );
 }
 
+/* Partidos que no son los de la agenda aunque lo parezcan: de leyendas, benéficos, de homenaje o
+   de exhibición (otros deportes, cantera y femenino ya los aparta `confirmByGuide`). */
+const NOT_AGENDA_MATCH_RE =
+  /\b(?:leyendas|legends|veteranos|benefico|solidario|homenaje|despedida|exhibicion|all stars|celebrities|famosos)\b/;
+/* Una categoría de deportes («Deportes», «Fútbol», «Sports»…). */
+const SPORT_CATEGORY_RE = /\b(?:deporte|deportes|deportivo|sport|sports|futbol|football|soccer)\b/;
+
+/**
+ * ¿Puede ser un partido de los que sigue la agenda? (solo para añadir uno: lo
+ * que la guía confirma ya lo trae la agenda). Nada de leyendas ni benéficos y,
+ * si el programa trae categorías, alguna tiene que ser de deportes: un
+ * «Barça - Veszprém» en la categoría «Cine» no es un partido.
+ */
+function isAgendaFootball(programme: GuideProgramme): boolean {
+  const texts = programmeTexts(programme);
+  if (texts.some((text) => NOT_AGENDA_MATCH_RE.test(text))) return false;
+  if (!programme.categories.length) return true;
+  return texts.slice(3).some((category) => SPORT_CATEGORY_RE.test(category));
+}
+
 /** Lo que separa dos saques para que sean «la misma franja». */
 const SAME_SLOT_MS = 30 * 60_000;
 
@@ -430,6 +451,7 @@ export function guideAgenda(
     const { candidate, programme, pair } = show;
     if (candidate.country !== 'ES' || !pair || show.kickoff === null) continue;
     if (footballTeamIsVariant(pair.home) || footballTeamIsVariant(pair.away)) continue;
+    if (!isAgendaFootball(programme)) continue;
     let channelFamily = channelFamilies.get(candidate);
     if (channelFamily === undefined) {
       channelFamily = competitionFamily(candidate.display);

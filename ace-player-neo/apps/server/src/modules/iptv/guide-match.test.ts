@@ -226,6 +226,27 @@ describe('confirmByGuide', () => {
     ).toEqual(['DAZN 1']);
   });
 
+  it('las leyendas no son el primer equipo, ni el fútbol que no es el de la agenda', () => {
+    const madrid: GuideMatchInput = {
+      ...MATCH,
+      home: 'Real Madrid',
+      away: 'Juventus',
+      competition: 'Champions League',
+    };
+    for (const title of [
+      'Real Madrid Leyendas - Juventus Leyendas',
+      'Leyendas del Real Madrid - Leyendas de la Juventus',
+      'eLaLiga: Real Madrid - Juventus',
+      'Champions League: Real Madrid - Juventus. Fútbol americano',
+      'Premier League 2: Real Madrid - Juventus',
+    ]) {
+      expect(
+        confirmed([channel('M+ Liga de Campeones', [programme(title)])], madrid),
+        title,
+      ).toEqual([]);
+    }
+  });
+
   it('partidos de archivo y documentales: no', () => {
     for (const p of [
       programme('Partidos históricos: Real Sociedad - Villarreal'),
