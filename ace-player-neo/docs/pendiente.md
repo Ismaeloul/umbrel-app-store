@@ -4,7 +4,13 @@ Lo que no se pudo hacer esta noche, con el detalle para retomarlo.
 
 (vacío por ahora)
 
-## Pedido por Isma (2-oct, tras probar la 0.8.3) — para cuando se reinicie la cuota
+## Pedido por Isma (2-oct, tras probar la 0.8.3)
+
+**Hecho en la 0.8.4 (3-oct):** 1 (controles), 2 («en directo» sin retraso), 3 (agenda), 5 (partido destacado en
+escritorio), 6 (animaciones, y revisión de todas), 8 (parámetros de la URL), 9 (Ajustes por secciones), 10 (logo) y,
+de las ideas del 13, arranque instantáneo (solo equipos favoritos), cambiar de canal rápido (flechas ↑↓ y deslizar
+a los lados) y copia de seguridad. Quedan para la 0.9.0: 4 y 7 (Pelis y series), 11 (Guía TV) y 12 (agenda
+híbrida).
 
 1. **Los controles del reproductor tardan mucho en esconderse** al quitar el ratón de encima, y también en
    pantalla completa. Tienen que irse antes.
