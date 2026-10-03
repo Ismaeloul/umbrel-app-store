@@ -228,6 +228,8 @@ export const BackupImportResponseSchema = z.strictObject({
   /** Cambian «Tu fútbol» y los ajustes de reproducción del servidor. */
   preferences: z.boolean(),
   settings: z.boolean(),
+  /** Cambian los idiomas de Películas y series (docs/vod.md §4.10). Opcional: un servidor anterior no lo manda. */
+  vodLanguages: z.boolean().optional(),
   iptv: BackupIptvOutcomeSchema,
   /** Lo del navegador que trae la copia, para que la web lo aplique (null si no trae). */
   browser: BackupBrowserSchema.nullable(),

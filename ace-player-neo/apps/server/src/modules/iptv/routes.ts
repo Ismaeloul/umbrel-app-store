@@ -16,6 +16,8 @@
    - vodHome, vodBrowse, vodTitle, vodArt y vodProgress: Películas y series
      (docs/vod.md §11.1), en `vod/vod-service.ts`. `vodArt` manda la imagen
      (o el 304) por su cuenta, con `nosniff` y `default-src 'none'`.
+   - vodLanguagesGet y vodLanguagesUpdate: los idiomas elegidos (§4.10), en
+     `vod/languages.ts`.
    Ni el cuerpo ni la respuesta se registran: el cuerpo de iptvSave lleva
    credenciales (docs/iptv.md §2.4) y la consulta del buscador, de la
    pestaña y de vodBrowse es lo que escribe Isma. */
@@ -46,6 +48,8 @@ export const V1_ROUTE_IDS: readonly string[] = [
   'vodTitle',
   'vodArt',
   'vodProgress',
+  'vodLanguagesGet',
+  'vodLanguagesUpdate',
 ];
 
 export function registerLegacyRoutes(_router: LegacyRouter, _services: Services): void {}
@@ -66,7 +70,7 @@ export function registerV1Routes(router: V1Router, services: Services): void {
     if (!api) throw new AppError('vod_unavailable', { detail: 'sin servicio VOD' });
     return api;
   };
-  router.handle('vodHome', () => vod().home());
+  router.handle('vodHome', (input) => vod().home(input.query));
   router.handle('vodBrowse', (input) => vod().browse(input.query));
   router.handle('vodTitle', (input) =>
     vod().title(input.params.id, { pre: input.query.pre === '1' }),
@@ -89,6 +93,8 @@ export function registerV1Routes(router: V1Router, services: Services): void {
     await sendArt(ctx.reply, reply);
   });
   router.handle('vodProgress', (input) => vod().progress(input.params.id, input.body));
+  router.handle('vodLanguagesGet', () => vod().languagesOf());
+  router.handle('vodLanguagesUpdate', (input) => vod().saveLanguages(input.body));
 }
 
 /** `If-None-Match` de la petición (la primera si viniera repetida). */

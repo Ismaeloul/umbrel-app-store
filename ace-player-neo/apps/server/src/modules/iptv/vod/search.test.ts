@@ -1,8 +1,10 @@
 /* Búsqueda, listas y orden de Películas y series (docs/vod.md §6 y §15.1). */
 
 import { describe, expect, it } from 'vitest';
-import { VOD_SEARCH } from '@ace/shared';
+import { VOD_LANGS, VOD_SEARCH, vodLangBits, type VodLang } from '@ace/shared';
 import {
+  emptyHidden,
+  hiddenLangs,
   listPage,
   parseVodQuery,
   relevance,
@@ -155,5 +157,118 @@ describe('listPage (sin texto)', () => {
     expect(titles(table, vose.rows)).toEqual(['Amélie']);
     /* Los chips cuentan sin el filtro de distintivo. */
     expect(vose.tagCounts.map((item) => item.tag)).toEqual(['latino', 'vose', '4k']);
+  });
+});
+
+describe('filtro de idiomas (docs/vod.md §4.10)', () => {
+  const bits = (...langs: VodLang[]) => vodLangBits(langs);
+  async function langCatalog() {
+    return tableOf([
+      listRow(1, 'Coco', { added: 100, langs: bits('castellano') }),
+      listRow(2, 'Coco', { added: 90, langs: bits('latino') }),
+      listRow(3, 'Coco', { added: 80, langs: bits('latino') }),
+      listRow(4, 'Coco', { added: 70, langs: bits('vose') }),
+      listRow(5, 'Coco y sus amigos', { added: 60 }),
+      listRow(6, 'Amélie', { added: 50, langs: bits('frances') }),
+      listRow(7, 'The Office', { added: 40, langs: bits('castellano', 'ingles') }),
+      listRow(8, 'Le dîner de cons', { added: 30, langs: bits('frances') }),
+    ]);
+  }
+  const only = (mask: number, unknown = true) => ({ mask, unknown });
+
+  it('la búsqueda filtra DENTRO del recorrido y cuenta lo de fuera por idioma', async () => {
+    const table = await langCatalog();
+    const hits = searchTable(table, parseVodQuery('coco'), null, only(bits('castellano'), false));
+    expect(Array.from(hits.rows)).toEqual([0]);
+    expect(hits.total).toBe(1);
+    expect(hits.hidden).toEqual({
+      total: 4,
+      byLang: VOD_LANGS.map((lang) => ({ latino: 2, vose: 1 })[lang as string] ?? 0),
+      unknown: 1,
+    });
+    expect(hiddenLangs(hits.hidden ?? emptyHidden())).toEqual([
+      { lang: 'latino', count: 2 },
+      { lang: 'vose', count: 1 },
+    ]);
+    /* Con «también los que no lo indican», «Coco y sus amigos» entra. */
+    const withUnknown = searchTable(table, parseVodQuery('coco'), null, only(bits('castellano')));
+    expect(titles(table, withUnknown.rows)).toEqual(['Coco', 'Coco y sus amigos']);
+    expect(withUnknown.hidden?.unknown).toBe(0);
+    /* Sin filtro, todo y sin recuento de fuera. */
+    const all = searchTable(table, parseVodQuery('coco'), null);
+    expect(all.total).toBe(5);
+    expect(all.hidden).toBeNull();
+  });
+
+  it('varias palabras y las palabras juntas también respetan el idioma', async () => {
+    const table = await langCatalog();
+    const french = only(bits('frances'), false);
+    const words = searchTable(table, parseVodQuery('coco amigos'), null, french);
+    expect(words.total).toBe(0);
+    expect(words.hidden?.unknown).toBe(1);
+    const compact = searchTable(table, parseVodQuery('lediner'), null, only(bits('castellano')));
+    expect(compact.total).toBe(0);
+    expect(compact.hidden?.byLang[VOD_LANGS.indexOf('frances')]).toBe(1);
+    const inFrench = searchTable(table, parseVodQuery('lediner'), null, french);
+    expect(titles(table, inFrench.rows)).toEqual(['Le dîner de cons']);
+  });
+
+  it('un título MULTI sale con cualquiera de sus idiomas', async () => {
+    const table = await langCatalog();
+    const english = searchTable(table, parseVodQuery('office'), null, only(bits('ingles'), false));
+    expect(english.total).toBe(1);
+    const spanish = searchTable(
+      table,
+      parseVodQuery('office'),
+      null,
+      only(bits('castellano'), false),
+    );
+    expect(spanish.total).toBe(1);
+  });
+
+  it('la caché distingue los filtros', async () => {
+    const table = await langCatalog();
+    const q = parseVodQuery('coco');
+    const castellano = searchCached(table, q, null, only(bits('castellano'), false));
+    const latino = searchCached(table, q, null, only(bits('latino'), false));
+    expect(castellano.total).toBe(1);
+    expect(latino.total).toBe(2);
+    expect(searchCached(table, q, null, only(bits('castellano'), false))).toBe(castellano);
+  });
+
+  it('sin texto: la lista filtra y cuenta lo de fuera; los chips cuentan solo lo que se ve', async () => {
+    const table = await langCatalog();
+    const french = listPage(
+      table,
+      { bucket: null, tagBit: 0, lang: only(bits('frances'), false) },
+      'added',
+      0,
+      10,
+    );
+    expect(titles(table, french.rows)).toEqual(['Amélie', 'Le dîner de cons']);
+    expect(french.total).toBe(2);
+    expect(french.hidden?.total).toBe(6);
+    expect(french.hidden?.unknown).toBe(1);
+    const none = listPage(table, { bucket: null, tagBit: 0 }, 'added', 0, 10);
+    expect(none.total).toBe(8);
+    expect(none.hidden).toBeNull();
+  });
+
+  it('con 3 000 aciertos de otro idioma delante, los de tu idioma no se pierden (no se filtra sobre los 2 000 mejores)', async () => {
+    const rows = [];
+    for (let index = 0; index < 3_000; index += 1) {
+      rows.push(
+        listRow(index + 1, `La película ${index}`, {
+          added: 10_000 - index,
+          langs: bits('latino'),
+        }),
+      );
+    }
+    rows.push(listRow(9_001, 'La película en castellano', { added: 1, langs: bits('castellano') }));
+    const table = await tableOf(rows);
+    const hits = searchTable(table, parseVodQuery('la'), null, only(bits('castellano'), false));
+    expect(hits.total).toBe(1);
+    expect(titles(table, hits.rows)).toEqual(['La película en castellano']);
+    expect(hits.hidden?.total).toBe(3_000);
   });
 });

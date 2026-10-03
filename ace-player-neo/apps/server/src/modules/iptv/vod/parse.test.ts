@@ -3,7 +3,7 @@
 
 import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
-import { VOD_LIMITS } from '@ace/shared';
+import { VOD_LIMITS, vodLangsOf } from '@ace/shared';
 import { parseJsonArrayStream } from '../json-array.js';
 import {
   cleanText,
@@ -57,9 +57,11 @@ describe('parseListItem (películas y series de las listas)', () => {
       adult: false,
       poster: 'https://image.tmdb.org/t/p/w600_and_h900_bestv2/abc.jpg',
       tags: expect.any(Number),
+      langs: expect.any(Number),
       category: 'ES | PELÍCULAS',
     });
     expect(tagsOf(row?.tags ?? 0)).toEqual(['castellano', '4k']);
+    expect(vodLangsOf(row?.langs ?? 0)).toEqual(['castellano']);
     expect(extName(row?.ext ?? 0)).toBe('mkv');
   });
 

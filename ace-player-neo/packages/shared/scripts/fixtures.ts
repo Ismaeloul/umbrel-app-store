@@ -1122,6 +1122,7 @@ export const WEB_V1_FIXTURES = {
     result: backupCounts(2, 1),
     preferences: true,
     settings: false,
+    vodLanguages: true,
     iptv: {
       action: 'needs_secret',
       protected: false,

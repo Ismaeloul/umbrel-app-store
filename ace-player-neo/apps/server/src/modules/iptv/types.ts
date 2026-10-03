@@ -291,5 +291,14 @@ export interface IptvService extends Lifecycle {
 /** Lo que las rutas y los demás módulos ven de Películas y series (docs/vod.md §11.1). */
 export type VodApi = Pick<
   VodService,
-  'home' | 'browse' | 'title' | 'artOf' | 'progress' | 'isVodId' | 'feature' | 'status'
+  | 'home'
+  | 'browse'
+  | 'title'
+  | 'artOf'
+  | 'progress'
+  | 'isVodId'
+  | 'feature'
+  | 'status'
+  | 'languagesOf'
+  | 'saveLanguages'
 >;

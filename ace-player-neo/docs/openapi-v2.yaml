@@ -3738,6 +3738,8 @@ paths:
                     type: boolean
                   settings:
                     type: boolean
+                  vodLanguages:
+                    type: boolean
                   iptv:
                     type: object
                     properties:

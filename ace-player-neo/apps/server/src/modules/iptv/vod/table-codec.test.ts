@@ -12,6 +12,7 @@ import {
   completeVodTables,
   decodeVodCatalog,
   encodeVodCatalog,
+  VOD_CODEC_VERSION,
   type VodCatalogMeta,
 } from './table-codec.js';
 import { listRow, tableOf } from './test-support.js';
@@ -35,6 +36,7 @@ async function sample() {
         added: 500,
         ext: 2,
         tags: 17,
+        langs: 0b1000000001,
         category: 'ES',
         poster: 'https://img.example/p/o.jpg',
       }),
@@ -83,7 +85,10 @@ describe('table-codec', () => {
       expect([...b.byAdded]).toEqual([...a.byAdded]);
       expect([...b.byCatStart]).toEqual([...a.byCatStart]);
       expect([...b.tags]).toEqual([...a.tags]);
+      expect([...b.langs]).toEqual([...a.langs]);
     }
+    /* Los idiomas (§4.10): castellano y «otros» en la primera, nada en las demás. */
+    expect([...decoded.tables.movie.langs]).toEqual([0b1000000001, 0, 0]);
     expect(decoded.tables.movie.rowOf(12_345_678_901)).toBe(0);
     expect(decoded.tables.movie.posterUrl(0)).toBe('https://img.example/p/o.jpg');
     expect(decoded.tables.movie.title(2)).toBe('東京物語 😀');
@@ -96,6 +101,16 @@ describe('table-codec', () => {
     other.write('ACEVOD09', 0, 'ascii');
     expect(() => decodeVodCatalog(other)).toThrow();
     expect(() => decodeVodCatalog(Buffer.from('basura'))).toThrow();
+  });
+
+  it('un vod.enc de antes de los idiomas (versión 1) no se lee: se descarta y se vuelve a descargar', async () => {
+    const bytes = Buffer.concat(encodeVodCatalog(META, await sample()));
+    const text = bytes.toString('latin1');
+    const at = text.indexOf(`"v":${VOD_CODEC_VERSION}`);
+    expect(at).toBeGreaterThan(0);
+    const old = Buffer.from(bytes);
+    old.write('"v":1', at, 'latin1');
+    expect(() => decodeVodCatalog(old)).toThrow(/versión/);
   });
 
   it('vod.enc sellado: sin textos en claro, AAD de otro proveedor rechazado y fichero corrupto borrado', async () => {

@@ -15,9 +15,14 @@
    Sin texto: `byAdded` («Novedades») o A-Z perezoso, con el filtro de
    categoría (`byCat`) y de distintivo (`tags`). Los adultos salen siempre
    en su categoría y en la búsqueda; en «Todas» sin texto, lo que diga
-   `VOD_ADULT_POLICY` (adultos.ts, D-VOD7: hoy, como los demás). */
+   `VOD_ADULT_POLICY` (adultos.ts, D-VOD7: hoy, como los demás).
 
-import { VOD_SEARCH, VOD_TAGS, type VodTag } from '@ace/shared';
+   Idiomas (§4.10): con texto y sin él, el filtro de idiomas va DENTRO del
+   recorrido (no sobre los 2 000 mejores: con «la» y 30 000 aciertos se
+   perderían los de tu idioma), y lo que casa pero queda fuera se cuenta por
+   idioma para decir «3 en latino · Ver». */
+
+import { VOD_LANGS, VOD_SEARCH, VOD_TAGS, type VodLang, type VodTag } from '@ace/shared';
 import { cleanChannelsQuery } from '../search.js';
 import { countTags, foldKeepLength, compactOf, rowAt, type VodTable } from './table.js';
 import { VOD_YEAR_MAX, VOD_YEAR_MIN } from './titles.js';
@@ -48,11 +53,71 @@ function yearWord(word: string): number | null {
   return year >= VOD_YEAR_MIN && year <= VOD_YEAR_MAX ? year : null;
 }
 
-/** Filtro de una consulta: cubeta de categoría (o null = todas) y bit de distintivo (0 = ninguno). */
+/**
+ * Filtro de idiomas (§4.10): pasa una fila con alguno de los idiomas de
+ * `mask` (bits de `VOD_LANGS`) o, si no indica idioma, con `unknown`.
+ */
+export interface VodLangFilter {
+  readonly mask: number;
+  readonly unknown: boolean;
+}
+
+/** Clave del filtro de idiomas para las cachés ('' = sin filtro). */
+export function langFilterKey(filter: VodLangFilter | null | undefined): string {
+  return filter ? `${filter.mask}:${filter.unknown ? 1 : 0}` : '';
+}
+
+/** ¿Pasa el filtro una fila con estos idiomas? Sin filtro, siempre. */
+export function langPasses(filter: VodLangFilter | null | undefined, bits: number): boolean {
+  if (!filter) return true;
+  return bits ? (bits & filter.mask) !== 0 : filter.unknown;
+}
+
+/** Lo que casa pero queda fuera por su idioma («3 en latino · Ver»). */
+export interface VodLangHiddenCounts {
+  total: number;
+  /** Por idioma, en el orden de `VOD_LANGS` (uno MULTI cuenta en cada uno suyo). */
+  readonly byLang: number[];
+  /** Sin idioma indicado (solo si el filtro los deja fuera). */
+  unknown: number;
+}
+
+export function emptyHidden(): VodLangHiddenCounts {
+  return { total: 0, byLang: new Array<number>(VOD_LANGS.length).fill(0), unknown: 0 };
+}
+
+function countHidden(hidden: VodLangHiddenCounts, bits: number): void {
+  hidden.total += 1;
+  if (!bits) {
+    hidden.unknown += 1;
+    return;
+  }
+  for (let index = 0; index < VOD_LANGS.length; index += 1) {
+    if (bits & (1 << index)) hidden.byLang[index] = (hidden.byLang[index] as number) + 1;
+  }
+}
+
+/** Lo de fuera como pares idioma-número, de más a menos (solo los que tienen algo). */
+export function hiddenLangs(
+  hidden: VodLangHiddenCounts,
+): Array<{ readonly lang: VodLang; readonly count: number }> {
+  return VOD_LANGS.map((lang, index) => ({ lang, count: hidden.byLang[index] as number }))
+    .filter((item) => item.count > 0)
+    .sort((a, b) => b.count - a.count);
+}
+
+/**
+ * Filtro de una consulta: cubeta de categoría (o null = todas), bit de
+ * distintivo (0 = ninguno) e idiomas (null o sin él = todos).
+ */
 export interface VodFilter {
   readonly bucket: number | null;
   readonly tagBit: number;
+  readonly lang?: VodLangFilter | null;
 }
+
+/* `state` de una fila en la búsqueda: casa pero su idioma no está en el filtro. */
+const HIDDEN = 7;
 
 export interface VodHits {
   /** Las mejores filas (2 000 como mucho), ya ordenadas, SIN el filtro de distintivo. */
@@ -61,6 +126,8 @@ export interface VodHits {
   readonly total: number;
   /** Aciertos por distintivo (para los chips y el total con distintivo). */
   readonly tagCounts: ReadonlyArray<{ readonly tag: VodTag; readonly count: number }>;
+  /** Con filtro de idiomas: lo que casa pero queda fuera. null sin filtro. */
+  readonly hidden: VodLangHiddenCounts | null;
 }
 
 function bucketOf(table: VodTable, row: number): number {
@@ -70,9 +137,16 @@ function bucketOf(table: VodTable, row: number): number {
 
 /**
  * Todos los aciertos de una consulta en una tabla, ordenados, con los 2 000
- * mejores. `bucket` filtra por categoría; los adultos se incluyen (§4.9).
+ * mejores. `bucket` filtra por categoría y `lang` por idioma (lo que casa
+ * pero queda fuera por idioma se cuenta en `hidden`); los adultos se
+ * incluyen (§4.9).
  */
-export function searchTable(table: VodTable, query: VodQuery, bucket: number | null): VodHits {
+export function searchTable(
+  table: VodTable,
+  query: VodQuery,
+  bucket: number | null,
+  lang: VodLangFilter | null = null,
+): VodHits {
   const { words } = query;
   const { folded, offsets, n } = table;
   const years = words.map(yearWord);
@@ -81,6 +155,7 @@ export function searchTable(table: VodTable, query: VodQuery, bucket: number | n
   /* 0 sin mirar, 1 mirada y descartada; luego, nivel + 2 si casa. */
   const state = new Uint8Array(n);
   const matched: number[] = [];
+  const hidden = lang ? emptyHidden() : null;
   const single = words.length === 1 && !hasYears;
   /* Varias palabras (o años): se comprueba la fila y se calcula su nivel con
      el mismo recorte del título (una vista: no copia). Para el nivel cuentan
@@ -101,12 +176,18 @@ export function searchTable(table: VodTable, query: VodQuery, bucket: number | n
       }
       return;
     }
+    const bits = table.langs[row] as number;
+    if (!langPasses(lang, bits)) {
+      state[row] = HIDDEN;
+      if (hidden) countHidden(hidden, bits);
+      return;
+    }
     state[row] = relevance(title, rankWords) + 2;
     matched.push(row);
   };
   const longest = [...textWords].sort((a, b) => b.length - a.length)[0];
   if (single && longest) {
-    singleWordLevels(table, longest, bucket, state, matched);
+    singleWordLevels(table, longest, bucket, state, matched, lang, hidden);
   } else if (longest) {
     /* Tras un acierto se sigue en la fila siguiente: cada fila se mira una vez. */
     let hint = 0;
@@ -130,6 +211,12 @@ export function searchTable(table: VodTable, query: VodQuery, bucket: number | n
       at = compact.indexOf(query.compact, compactOffsets[row + 1] as number);
       if ((state[row] as number) >= 2) continue;
       if (bucket !== null && bucketOf(table, row) !== bucket) continue;
+      const bits = table.langs[row] as number;
+      if (!langPasses(lang, bits)) {
+        state[row] = HIDDEN;
+        if (hidden) countHidden(hidden, bits);
+        continue;
+      }
       state[row] = 6;
       matched.push(row);
     }
@@ -142,7 +229,7 @@ export function searchTable(table: VodTable, query: VodQuery, bucket: number | n
   for (let index = 0; index < n && count; index += 1) {
     const row = table.byAdded[index] as number;
     const level = state[row] as number;
-    if (level >= 2) (buckets[level - 2] as number[]).push(row);
+    if (level >= 2 && level < HIDDEN) (buckets[level - 2] as number[]).push(row);
   }
   const rows = new Uint32Array(Math.min(count, VOD_SEARCH.rowsMax));
   let kept = 0;
@@ -167,7 +254,7 @@ export function searchTable(table: VodTable, query: VodQuery, bucket: number | n
       start = end;
     }
   }
-  return { rows, total: count, tagCounts: countTags(table, matched) };
+  return { rows, total: count, tagCounts: countTags(table, matched), hidden };
 }
 
 /**
@@ -181,6 +268,8 @@ function singleWordLevels(
   bucket: number | null,
   state: Uint8Array,
   matched: number[],
+  lang: VodLangFilter | null,
+  hidden: VodLangHiddenCounts | null,
 ): void {
   const { folded, offsets, n } = table;
   let row = -1;
@@ -195,9 +284,16 @@ function singleWordLevels(
       while (lead < rowEnd && !isWordUnit(folded.charCodeAt(lead))) lead += 1;
       skip = bucket !== null && bucketOf(table, row) !== bucket;
       if (!skip && !state[row]) {
-        state[row] = 6;
-        matched.push(row);
+        const bits = table.langs[row] as number;
+        if (langPasses(lang, bits)) {
+          state[row] = 6;
+          matched.push(row);
+        } else {
+          state[row] = HIDDEN;
+          if (hidden) countHidden(hidden, bits);
+        }
       }
+      if (state[row] === HIDDEN) skip = true;
     }
     if (skip || at + word.length > rowEnd) continue;
     let level: number;
@@ -286,21 +382,26 @@ function prefixLevel(title: string, words: readonly string[]): number | null {
 /** Caché de consultas por tabla (LRU de 16, §6.3): se va con la tabla. */
 const caches = new WeakMap<VodTable, Map<string, VodHits>>();
 
-/** `searchTable` con la caché LRU de 16 consultas. */
-export function searchCached(table: VodTable, query: VodQuery, bucket: number | null): VodHits {
+/** `searchTable` con la caché LRU de 16 consultas (la clave lleva la categoría y los idiomas). */
+export function searchCached(
+  table: VodTable,
+  query: VodQuery,
+  bucket: number | null,
+  lang: VodLangFilter | null = null,
+): VodHits {
   let cache = caches.get(table);
   if (!cache) {
     cache = new Map();
     caches.set(table, cache);
   }
-  const key = `${bucket ?? 'all'}|${query.key}|${query.compact}`;
+  const key = `${bucket ?? 'all'}|${langFilterKey(lang)}|${query.key}|${query.compact}`;
   const hit = cache.get(key);
   if (hit) {
     cache.delete(key);
     cache.set(key, hit);
     return hit;
   }
-  const result = searchTable(table, query, bucket);
+  const result = searchTable(table, query, bucket, lang);
   cache.set(key, result);
   while (cache.size > VOD_SEARCH.cacheQueries) {
     const oldest = cache.keys().next().value;
@@ -317,6 +418,8 @@ export interface VodPage {
   readonly tagCounts: ReadonlyArray<{ readonly tag: VodTag; readonly count: number }>;
   /** Hay más detrás de esta página. */
   readonly more: boolean;
+  /** Con filtro de idiomas: lo que casa pero queda fuera. null sin filtro. */
+  readonly hidden: VodLangHiddenCounts | null;
 }
 
 /** Una página de una búsqueda (con el filtro de distintivo aplicado sobre los 2 000 mejores). */
@@ -348,6 +451,7 @@ export function searchPage(
     capped: total > rows.length || hits.total > VOD_SEARCH.rowsMax,
     tagCounts: hits.tagCounts,
     more: offset + page.length < rows.length,
+    hidden: hits.hidden,
   };
 }
 
@@ -371,11 +475,17 @@ export function listPage(
   else order = sort === 'name' ? table.byTitle() : table.byAdded;
   const page: number[] = [];
   const counts = new Array<number>(VOD_TAGS.length).fill(0);
+  const hidden = filter.lang ? emptyHidden() : null;
   let total = 0;
   for (let index = 0; index < order.length; index += 1) {
     const row = order[index] as number;
     if (excludeAdult && table.isAdult(row)) continue;
     if (filter.bucket !== null && bucketOf(table, row) !== filter.bucket) continue;
+    const langBits = table.langs[row] as number;
+    if (!langPasses(filter.lang, langBits)) {
+      if (hidden) countHidden(hidden, langBits);
+      continue;
+    }
     const bits = table.tags[row] as number;
     if (bits) {
       for (let tag = 0; tag < VOD_TAGS.length; tag += 1) {
@@ -394,10 +504,15 @@ export function listPage(
       (item) => item.count > 0,
     ),
     more: offset + page.length < total,
+    hidden,
   };
 }
 
-/** Cuántas filas casan con una consulta en la otra tabla («Ver 3 series», §6.1). */
-export function otherKindTotal(table: VodTable, query: VodQuery): number {
-  return searchCached(table, query, null).total;
+/** Cuántas filas casan con una consulta en la otra tabla («Ver 3 series», §6.1), en tus idiomas. */
+export function otherKindTotal(
+  table: VodTable,
+  query: VodQuery,
+  lang: VodLangFilter | null = null,
+): number {
+  return searchCached(table, query, null, lang).total;
 }

@@ -42,6 +42,8 @@ export interface VodTableData {
   readonly ext: Uint8Array;
   readonly flags: Uint8Array;
   readonly tags: Uint8Array;
+  /** Bits de `VOD_LANGS` (§4.10): los idiomas de cada fila (0 = no lo indica). */
+  readonly langs: Uint16Array;
   readonly titles: string;
   readonly folded: string;
   readonly offsets: Uint32Array;
@@ -160,6 +162,7 @@ export class VodTableBuilder {
   private readonly ext = new Grow((n) => new Uint8Array(n));
   private readonly flags = new Grow((n) => new Uint8Array(n));
   private readonly tags = new Grow((n) => new Uint8Array(n));
+  private readonly langs = new Grow((n) => new Uint16Array(n));
   private readonly posterDir = new Grow((n) => new Uint16Array(n));
   /* Textos por trozos de 5 000 filas: cada trozo se une en una cadena en
      cuanto se llena, así no quedan 170 000 cadenas pequeñas vivas (§4.5). */
@@ -249,6 +252,7 @@ export class VodTableBuilder {
     }
     this.flags.push((row.adult ? FLAG_ADULT : 0) | (dir ? FLAG_POSTER : 0));
     this.tags.push(row.tags);
+    this.langs.push(row.langs ?? 0);
     this.posterDir.push(dir);
     const title = row.title.replace(/\n/g, ' ');
     const folded = foldKeepLength(title);
@@ -280,6 +284,7 @@ export class VodTableBuilder {
       ext: this.ext.done(),
       flags: this.flags.done(),
       tags: this.tags.done(),
+      langs: this.langs.done(),
       titles: titles.text,
       folded: folded.text,
       offsets: titles.offsets,
@@ -415,6 +420,7 @@ export class VodTable implements VodTableData {
   readonly ext: Uint8Array;
   readonly flags: Uint8Array;
   readonly tags: Uint8Array;
+  readonly langs: Uint16Array;
   readonly titles: string;
   readonly folded: string;
   readonly offsets: Uint32Array;
@@ -442,6 +448,7 @@ export class VodTable implements VodTableData {
     this.ext = data.ext;
     this.flags = data.flags;
     this.tags = data.tags;
+    this.langs = data.langs;
     this.titles = data.titles;
     this.folded = data.folded;
     this.offsets = data.offsets;
@@ -470,6 +477,7 @@ export class VodTable implements VodTableData {
       ext: new Uint8Array(0),
       flags: new Uint8Array(0),
       tags: new Uint8Array(0),
+      langs: new Uint16Array(0),
       titles: '',
       folded: '',
       offsets: new Uint32Array(1),
@@ -578,6 +586,7 @@ export function tableRow(table: VodTable, row: number): VodListRow {
     adult: table.isAdult(row),
     poster: table.posterUrl(row),
     tags: table.tags[row] as number,
+    langs: table.langs[row] as number,
     category: table.categoryName(row),
   };
 }
