@@ -11,7 +11,8 @@
    --grande N (catálogo grande de la pestaña IPTV, docs/iptv.md §16.9: N
    canales más, con nombres como los de una lista real) y --guia-completa
    (Guía TV, §20.9: parrilla sintética para todos los canales) o --guia-hoy
-   (la misma, pero solo hasta el final de hoy, como la guía del panel de Isma).
+   (la misma, pero solo hasta el final de hoy y con un relleno que acaba a
+   +36 h, como la guía del panel de Isma).
    Control por HTTP: /__iptv/modo?id=104&modo=down, /__iptv/conexiones,
    /__iptv/peticiones y /__iptv/fallar-primera?veces=1&como=502 (§16.8). */
 
@@ -60,7 +61,9 @@ try {
   print(`proveedor IPTV falso en ${fake.baseUrl}`);
   if (grande > 0) print(`  Catálogo grande: ${fake.grandes.length} canales más`);
   if (guiaCompleta === 'hoy')
-    print('  Guía completa: parrilla sintética de ayer al final de hoy (UTC)');
+    print(
+      '  Guía completa: parrilla sintética de ayer al final de hoy (UTC) y un relleno hasta +36 h',
+    );
   else if (guiaCompleta) print('  Guía completa: parrilla sintética de ayer a dentro de 3 días');
   print(`  Lista M3U:     ${fake.m3uUrl}`);
   print(`  M3U get.php:   ${fake.getPhpUrl}`);

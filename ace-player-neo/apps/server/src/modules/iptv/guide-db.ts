@@ -7,7 +7,9 @@
      duración máxima, recuentos y de dónde salió (`xmltv` o `short`).
    - `ch (g, tvg, icon, n, first, last)`: un canal de la guía por `tvg-id`
      (en minúsculas) que está en el catálogo, de CUALQUIER país; `g` es el
-     número que usa la API (cambia con cada descarga, como `version`).
+     número que usa la API (cambia con cada descarga, como `version`). `n`,
+     `first` y `last` cuentan solo los programas de verdad, no el relleno:
+     un canal con solo relleno no se guarda.
    - `p (g, s, e, t, f, d)` WITHOUT ROWID con clave (g, s): la parrilla,
      densa y contigua por canal en disco (pocas páginas por petición, que
      importa en el disco del N100). `s` y `e` en minutos desde 1970 (UTC),
@@ -63,18 +65,20 @@ export interface GuideMeta {
   readonly to: number;
   /** El bloque más largo, en minutos (acota las consultas por tiempo). */
   readonly maxDurationMin: number;
+  /** Filas guardadas (con las de relleno de los canales que tienen guía). */
   readonly programmes: number;
+  /** Canales con algún programa de verdad. */
   readonly channels: number;
   readonly source: GuideSource;
   /** Se llegó al tope de programas o de tamaño y se dejó de guardar. */
   readonly truncated: boolean;
 }
 
-/** Hasta dónde llega de verdad la programación guardada (epoch ms, dentro de la ventana). */
+/** Hasta dónde llega de verdad la programación guardada (epoch ms, dentro de la ventana; sin el relleno). */
 export interface GuideCoverage {
-  /** Inicio del primer programa. */
+  /** Inicio del primer programa de verdad. */
   readonly from: number;
-  /** Fin del último programa. */
+  /** Fin del último programa de verdad. */
   readonly to: number;
 }
 
@@ -82,8 +86,9 @@ export interface GuideChannelInfo {
   readonly g: number;
   readonly tvg: string;
   readonly hasIcon: boolean;
+  /** Programas de verdad (sin el relleno; siempre más de 0). */
   readonly count: number;
-  /** Primer inicio y último fin (epoch ms). */
+  /** Primer inicio y último fin de los programas de verdad (epoch ms). */
   readonly first: number;
   readonly last: number;
 }
@@ -515,6 +520,7 @@ export class GuideWriter {
       const remove = this.db.prepare('DELETE FROM p WHERE g = ? AND s = ?');
       const setChannel = this.db.prepare('UPDATE ch SET n = ?, first = ?, last = ? WHERE g = ?');
       const dropChannel = this.db.prepare('DELETE FROM ch WHERE g = ?');
+      const dropRows = this.db.prepare('DELETE FROM p WHERE g = ?');
       const noStopGap = IPTV_GUIDE_NORMALIZE.noStopMaxGapMs / MINUTE;
       const noStopDefault = IPTV_GUIDE_NORMALIZE.noStopDefaultMs / MINUTE;
       const gapMerge = IPTV_GUIDE_NORMALIZE.gapMergeMs / MINUTE;
@@ -535,9 +541,15 @@ export class GuideWriter {
           if (next && next.t === row.t && next.s - row.s < gapMerge) remove.run(g, row.s);
           else rows.push(row);
         }
+        /* `kept`: las filas que se quedan, también las de relleno (se pintan «Sin información»).
+           `real`, `first` y `last`: solo los programas de verdad. Un bloque de relleno (más de
+           12 h o «Programación no disponible») no es programación: ni alarga hasta dónde llega
+           la guía ni hace que un canal «tenga guía» (§20.4). */
         let kept = 0;
+        let real = 0;
         let first = 0;
         let last = 0;
+        let longest = 0;
         for (let index = 0; index < rows.length; index += 1) {
           const row = rows[index] as GuideGridRow;
           const next = rows[index + 1];
@@ -558,16 +570,23 @@ export class GuideWriter {
             continue;
           }
           if (e !== row.e || f !== row.f) update.run(e, f, g, row.s);
-          if (!kept) first = row.s;
-          last = e;
           kept += 1;
-          if (e - row.s > maxDurationMin) maxDurationMin = e - row.s;
+          if (e - row.s > longest) longest = e - row.s;
+          if (f & GUIDE_FLAGS.filler) continue;
+          if (!real) first = row.s;
+          last = e;
+          real += 1;
         }
-        if (kept) {
-          setChannel.run(kept, first * MINUTE, last * MINUTE, g);
+        if (real) {
+          setChannel.run(real, first * MINUTE, last * MINUTE, g);
           programmes += kept;
           channels += 1;
-        } else dropChannel.run(g);
+          if (longest > maxDurationMin) maxDurationMin = longest;
+        } else {
+          /* Ni un programa de verdad (nada, o solo relleno): el canal no tiene guía. */
+          if (kept) dropRows.run(g);
+          dropChannel.run(g);
+        }
         if (performance.now() - sliceStart >= sliceMs) {
           await nextTurn();
           sliceStart = performance.now();

@@ -248,10 +248,10 @@ describe('construir y leer', () => {
   it('hasta dónde llega la programación (coverage): de todos o de unos canales, dentro de la ventana', async () => {
     const { store: target } = store();
     const reader = await build(target, [
-      programme('a.es', at(-30), at(-10), 'Empezó fuera de la ventana'),
-      programme('a.es', at(-10), at(12), 'Hasta las 12 h'),
+      programme('a.es', at(-30), at(-20), 'Empezó fuera de la ventana'),
+      programme('a.es', at(2), at(12), 'Hasta las 12 h'),
       programme('b.es', at(8), at(20), 'Uno largo hasta +20 h'),
-      programme('c.es', at(70), at(90), 'Se pasa de la ventana'),
+      programme('c.es', at(75), at(85), 'Se pasa de la ventana'),
     ]);
     const g = (tvg: string) => reader.channels().get(tvg)?.g as number;
     expect(reader.coverage()).toEqual({ from: reader.meta.from, to: reader.meta.to });
@@ -262,6 +262,34 @@ describe('construir y leer', () => {
     });
     expect(reader.coverage([])).toBe(null);
     expect(reader.coverage([999])).toBe(null);
+  });
+
+  it('el relleno no es programación: no alarga hasta dónde llega la guía ni da guía a un canal (Paso 0: un bloque que acaba a +36 h)', async () => {
+    const { store: target } = store();
+    const filler = { flags: GUIDE_FLAGS.filler };
+    const reader = await build(target, [
+      /* La guía de Isma: programación hasta el final de hoy (aquí, las 12 h)… */
+      programme('a.es', at(0), at(6), 'Magacín'),
+      programme('a.es', at(6), at(12), 'Cine'),
+      programme('b.es', at(8), at(12), 'Noticias'),
+      /* …y detrás de la última, un bloque largo que acaba a +36 h (se recorta a 24 h). */
+      programme('b.es', at(12), at(48), 'Programación no disponible', filler),
+      /* Un canal con un único «Programación no disponible» y otro con un solo bloque de 20 h. */
+      programme('noche.es', at(9), at(48), 'Programación no disponible', filler),
+      programme('largo.es', at(4), at(24), 'Emisión continua'),
+    ]);
+    /* Hasta las 12 h, no hasta las 36 h: la web no ofrece «Mañana» con la parrilla vacía. */
+    expect(reader.coverage()).toEqual({ from: at(0), to: at(12) });
+    /* «Todos» y «N canales con programación»: solo los que tienen programas de verdad. */
+    expect([...reader.channels().keys()].sort()).toEqual(['a.es', 'b.es']);
+    expect(reader.channels().get('b.es')).toMatchObject({ count: 1, first: at(8), last: at(12) });
+    expect(reader.meta).toMatchObject({ channels: 2, programmes: 4, maxDurationMin: 24 * 60 });
+    /* El bloque de relleno sigue en la parrilla (se pinta «Sin información»). */
+    const b = reader.channels().get('b.es')?.g as number;
+    expect(reader.slice(b, at(0), at(48), 10).map((row) => [row.t, row.e - row.s, row.f])).toEqual([
+      ['Noticias', 240, 0],
+      ['Programación no disponible', 24 * 60, GUIDE_FLAGS.filler],
+    ]);
   });
 
   it('trozos: entra lo que se solapa con [desde, hasta), aunque empezara mucho antes', async () => {

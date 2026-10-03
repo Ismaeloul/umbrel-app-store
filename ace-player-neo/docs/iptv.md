@@ -4499,7 +4499,7 @@ vuelve a descargar.
 | Tabla | Qué | Notas |
 |---|---|---|
 | `meta (k, v)` | `schema` y `meta` (JSON: proveedor, `builtAt`, `version`, `from`, `to`, `maxDurationMin`, `programmes`, `channels`, `source`, `truncated`) | `version` = `builtAt` en base 36 |
-| `ch (g, tvg, icon, n, first, last)` | un canal de la guía por `tvg-id` en minúsculas **que está en el catálogo**, de cualquier país | `g` es el número de la API; cambia con cada `version` |
+| `ch (g, tvg, icon, n, first, last)` | un canal de la guía por `tvg-id` en minúsculas **que está en el catálogo**, de cualquier país, con algún programa de verdad | `g` es el número de la API; cambia con cada `version`. `n`, `first` y `last` sin contar el relleno |
 | `p (g, s, e, t, f, d)` WITHOUT ROWID, clave (g, s) | la parrilla: minuto de inicio y de fin (UTC), título, marcas (`GUIDE_FLAGS`) y ficha | contigua por canal en disco: pocas páginas por trozo |
 | `det (id, h, sub, descr, cats, season, episode, eptext, year, rating, stars, directors, actors, icon)` | la ficha, aparte y **sin repetir** (hash de 64 bits) | solo se lee con «Más info» |
 
@@ -4571,14 +4571,14 @@ investigación).
 | Hueco de menos de 2 min | se pega al anterior (los de 2 min o más los pinta la web como «Sin información») |
 | El mismo título a menos de 2 min (dos fuentes) | se queda el segundo |
 | Mismo minuto de inicio y mismo canal (la clave es el minuto) | el **más largo** (un corte de 12:00:00 a 12:00:30 no tapa la película de las 12:00:30); sin fin cuenta como 30 min y, si los dos son sin fin, el último; iguales, el primero. Con `clumpidx` (franja compartida), «Noticias / El tiempo» |
-| Más de 12 h, sin título o «Programación no disponible», «Sin información», «To be announced»… | marca `filler` (la web lo pinta como «Sin información»), sin ficha |
+| Más de 12 h, sin título o «Programación no disponible», «Sin información», «To be announced»… | marca `filler` (la web lo pinta como «Sin información»), sin ficha. **No es programación:** no alarga `coveredFrom`/`coveredTo` (en la guía de Isma «algún programa largo acaba a +36 h» y no por eso hay «Mañana») ni hace que un canal tenga guía |
 | Más de 24 h | se recorta a 24 h |
 | Título, subtítulo y sinopsis en varios idiomas | el de `lang="es"` si lo hay; si no, el primero |
 | Entidades dobles (`&amp;amp;`), `<br>`, `<p>`, `<b>`… en la sinopsis | se limpian al guardar |
 | Dice latin1 y trae UTF-8 («FÃºtbol») | cada texto se vuelve a leer como UTF-8 (si así queda bien) |
 | Dice UTF-8 (o nada) y trae bytes latin1 | desde ese trozo se lee como latin1 |
 | `tvg-id` con mayúsculas o espacios; canal repetido | se pasa a minúsculas y sin espacios; uno por id |
-| Canal del XML que no está en el catálogo, o sin programas | no se guarda / no sale en «Todos» |
+| Canal del XML que no está en el catálogo, sin programas o con solo relleno | no se guarda / no sale en «Todos» ni cuenta en «N canales con programación» |
 | Temporada y episodio | `xmltv_ns` (empieza en cero: «1.0.0/1» es T2 E1) u `onscreen` («S02E05», «T2 Ep. 5», «2x05», «Ep. 12»); si no se entiende, el texto tal cual |
 | Año, edad, nota | `<date>` (año creíble), `<rating><value>` y `<star-rating><value>` tal cual |
 
@@ -4679,7 +4679,8 @@ las lee por nombre.
   guía de siempre, una parrilla sintética (`test/fake-iptv/guia.ts`) de ayer a dentro de 3 días para todos los demás
   canales (también los de `--grande N`), en streaming. Sirve para ver la parrilla con el backend de verdad (§15). Con
   `guiaCompleta: 'hoy'` / `--guia-hoy`, la misma pero como la del panel de Isma: de ayer al final de hoy (UTC), sin
-  nada que empiece mañana.
+  nada que empiece mañana, y Tele Noche con un único «Programación no disponible» que acaba a +36 h (un relleno: no
+  sale en «Todos» ni alarga `coveredTo`).
 
 ### 20.9 Pruebas y medidas
 

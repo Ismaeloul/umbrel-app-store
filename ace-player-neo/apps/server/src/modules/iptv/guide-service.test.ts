@@ -278,7 +278,7 @@ describe('Guía TV en el servicio (§20.5)', () => {
     expect((await r.service.tvGuide.channels({})).state).toBe('inactive');
   });
 
-  it('una guía que solo cubre hoy (como la del panel de Isma): coveredTo lo dice y mañana no hay nada', async () => {
+  it('una guía que solo cubre hoy (como la del panel de Isma): coveredTo lo dice y mañana no hay nada, aunque un relleno acabe a +36 h', async () => {
     const r = await rig({ fake: { guiaCompleta: 'hoy' } });
     await saveXtream(r);
     await downloadGuide(r);
@@ -287,10 +287,14 @@ describe('Guía TV en el servicio (§20.5)', () => {
     const endOfToday = (Math.floor(r.core.clock.now() / day) + 1) * day;
     expect(all.state).toBe('ready');
     expect(all.total).toBeGreaterThan(10);
-    /* La ventana guardada llega a +80 h; la programación, al final de hoy. */
+    /* La ventana guardada llega a +80 h; la programación, al final de hoy: el bloque de
+       «Programación no disponible» de Tele Noche que acaba a +36 h no la alarga. */
     expect(all.to).toBeGreaterThan(endOfToday + day);
     expect(all.coveredTo).toBeGreaterThan(endOfToday - 2 * HOUR);
     expect(all.coveredTo).toBeLessThanOrEqual(endOfToday + 2 * HOUR);
+    /* Tele Noche no tiene más que relleno: ni sale en «Todos» ni cuenta en Ajustes. */
+    expect(all.channels.map((row) => row.name)).not.toContain('Tele Noche');
+    expect((await r.service.view()).provider?.guide.channelsWithGuide).toBe(all.all);
     const ch = all.channels
       .slice(0, 60)
       .flatMap((row) => (row.guide ? [row.guide] : []))

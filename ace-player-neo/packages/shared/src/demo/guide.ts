@@ -481,18 +481,24 @@ function cutoffOf(stamp: DemoGuideStamp, options: DemoGuideOptions): number {
   return options.onlyToday ? (dayOf(stamp.builtAt) + 1) * DAY : Number.POSITIVE_INFINITY;
 }
 
-/** Hasta dónde llega la programación de esos canales (`coveredFrom`/`coveredTo`, como el servidor). */
+/**
+ * Hasta dónde llega la programación de esos canales (`coveredFrom`/`coveredTo`,
+ * como el servidor): sin contar el relleno, que no es programación.
+ */
 function coverageOf(
   channels: readonly DemoChannel[],
   stamp: DemoGuideStamp,
   cutoff: number,
 ): { from: number; to: number } | null {
   const end = Math.min(stamp.to, cutoff);
+  const real = (item: DemoProgramme): boolean => (item.flags & GUIDE_FLAGS.filler) === 0;
   let from = Number.POSITIVE_INFINITY;
   let to = Number.NEGATIVE_INFINITY;
   for (const channel of channels) {
-    const head = programmesBetween(channel, stamp.from, stamp.from + 6 * HOUR, cutoff)[0];
-    const tail = programmesBetween(channel, end - 6 * HOUR, end, cutoff).at(-1);
+    const head = programmesBetween(channel, stamp.from, stamp.from + 16 * HOUR, cutoff).find(real);
+    const tail = programmesBetween(channel, end - 16 * HOUR, end, cutoff)
+      .filter(real)
+      .at(-1);
     if (head && head.start < from) from = head.start;
     if (tail && tail.end > to) to = tail.end;
   }

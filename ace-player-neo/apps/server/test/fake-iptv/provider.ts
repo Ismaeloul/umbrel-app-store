@@ -227,7 +227,8 @@ export interface FakeIptvOptions {
    * parrilla sintética de ayer a dentro de 3 días para todos los demás
    * canales (también los del catálogo grande), servida en streaming. Con
    * `'hoy'`, como la del panel de Isma (Paso 0 del 3-oct): de ayer al final
-   * de hoy (UTC) y nada que empiece mañana ni pasado.
+   * de hoy (UTC), nada que empiece mañana ni pasado y un bloque larguísimo
+   * que acaba a +36 h (Tele Noche, con solo «Programación no disponible»).
    */
   readonly guiaCompleta?: boolean | 'hoy';
 }
@@ -708,6 +709,10 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
           const today = Math.floor((options.now?.() ?? Date.now()) / day) * day;
           /* «Solo hoy»: nada empieza mañana (ni en la guía de siempre ni en la sintética). */
           const until = options.guiaCompleta === 'hoy' ? today + day : Number.POSITIVE_INFINITY;
+          /* …y, como en la del panel de Isma, «algún programa largo acaba a +36 h»: el único de
+             Tele Noche, un relleno que no cuenta como programación (§20.4). */
+          const longBlock = options.guiaCompleta === 'hoy' ? 'TeleNoche.es' : null;
+          const now = options.now?.() ?? Date.now();
           const base = fakeGuideXml(matchStart, until).replace(/<\/tv>\s*$/, '');
           const covered = new Set(
             [...base.matchAll(/<programme [^>]*channel="([^"]+)"/g)].map((m) => m[1]),
@@ -717,7 +722,7 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
               ...FAKE_IPTV_CHANNELS.map((c) => c.epg),
               ...(big?.channels ?? []).map((c) => c.epg),
             ]),
-          ].filter((id) => !covered.has(id));
+          ].filter((id) => !covered.has(id) && id !== longBlock);
           const from = today - day;
           const chunks = (function* () {
             yield Buffer.from(base);
@@ -730,6 +735,11 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
               logoEvery: 0,
               until,
             });
+            if (longBlock) {
+              yield Buffer.from(
+                `  <programme start="${xmltvDate(until - 3 * 3_600_000)}" stop="${xmltvDate(now + 36 * 3_600_000)}" channel="${longBlock}"><title lang="es">Programación no disponible</title></programme>\n`,
+              );
+            }
             yield Buffer.from('</tv>\n');
           })();
           res.writeHead(200, { 'content-type': 'application/xml' });

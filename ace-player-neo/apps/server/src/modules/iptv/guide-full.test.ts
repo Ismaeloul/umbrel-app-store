@@ -172,18 +172,23 @@ describe('una pasada, dos salidas', () => {
     ]);
   });
 
-  it('relleno: sin título, «Programación no disponible» o más de 12 h; sin ficha', async () => {
+  it('relleno: sin título, «Programación no disponible» o más de 12 h; sin ficha; un canal con solo relleno no tiene guía', async () => {
     const xml = `<tv>
 <programme start="${stamp(at(1))}" stop="${stamp(at(2))}" channel="a.es"><title></title><desc>Nada</desc></programme>
 <programme start="${stamp(at(2))}" stop="${stamp(at(3))}" channel="a.es"><title>Programación no disponible</title></programme>
 <programme start="${stamp(at(3))}" stop="${stamp(at(20))}" channel="a.es"><title>Emisión continua</title></programme>
+<programme start="${stamp(at(20))}" stop="${stamp(at(21))}" channel="a.es"><title>Noticias</title><desc>Las de la noche.</desc></programme>
+<programme start="${stamp(at(1))}" stop="${stamp(at(40))}" channel="b.es"><title>Programación no disponible</title></programme>
 </tv>`;
-    const built = await run(xml, { all: { 'a.es': 0 } });
+    const built = await run(xml, { all: { 'a.es': 0, 'b.es': 0 } });
     expect(rows(built.reader, 'a.es').map((row) => row.flags)).toEqual([
       GUIDE_FLAGS.filler,
       GUIDE_FLAGS.filler,
       GUIDE_FLAGS.filler,
+      GUIDE_FLAGS.detail,
     ]);
+    expect(built.reader.channels().get('a.es')).toMatchObject({ count: 1, first: at(20) });
+    expect(built.reader.channels().has('b.es')).toBe(false);
   });
 
   it('imágenes: solo http(s) sin usuario ni contraseña y que el servicio acepte (sin credenciales dentro)', async () => {
