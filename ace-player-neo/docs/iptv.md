@@ -561,8 +561,9 @@ Cliente: `modules/iptv/xtream.ts`. Todas las llamadas son `GET {server}/player_a
   - profundidad máxima de 8 niveles y 64 atributos por elemento; si se pasa, se salta el elemento entero.
 - **Fechas:** `YYYYMMDDhhmmss ±hhmm`. Sin zona se toma UTC, más el `tvg-shift` del canal o el global de la M3U.
   Desde la 0.9.0 también `±hh:mm` y las abreviaturas sin dudas (`UTC`, `GMT`, `BST`, `CET`, `CEST`, `EST`…; §20.4).
-- **Topes:** 64 MiB comprimida, 512 MiB descomprimida y procesada (no se guarda), **300 s** en total (180 s hasta la
-  0.8.4; sube porque cada programa se escribe en `guia.db` mientras se lee, §20.3) y 30 s de inactividad.
+- **Topes:** **256 MiB** por cable y **1 GiB** descomprimida y procesada (no se guarda; hasta la 0.8.4, 64 MiB y
+  512 MiB: la guía del panel de Isma ya pesa 47 MB sin gzip, §20.10 G5), **300 s** en total (180 s hasta la 0.8.4;
+  sube porque cada programa se escribe en `guia.db` mientras se lee, §20.3) y 30 s de inactividad.
 - **La misma descarga** escribe también la guía completa de la Guía TV (§20). Lo de abajo (qué va a `guia.enc`) no
   cambia.
 
@@ -4532,16 +4533,27 @@ investigación).
   de 64 KiB. Arreglar los horarios (§20.4) va canal a canal con el mismo límite.
 - **Éxito:** si la ventana de partidos tiene algo **o** la guía completa tiene programas. Antes bastaba la ventana: una
   guía sin un solo partido daba `iptv_empty`; ahora vale para la parrilla.
+- **Una guía sin un solo partido** (y sin respaldo que los dé) **no borra la ventana de partidos de antes** mientras le
+  queden partidos por delante, como antes de la Guía TV: `guide-match.ts` y la agenda los siguen viendo hasta la
+  siguiente descarga. La guía completa sí se cambia por la nueva.
 - **Fallos aislados:** si el disco falla al escribir la completa, se deja de escribir, se termina la de partidos y la
   completa se deshace (`fullGuideFailed`). Abortar (guardar, pausar, eliminar, apagar) deshace la completa a medias.
 - **Respaldo de Xtream** (`get_short_epg`, 40 canales deportivos): entra, como antes, si la guía falla **o llega sin
-  un solo partido** (la ventana de partidos sale entonces de ahí, y la guía completa del XMLTV, si la hay, se queda).
-  Si no hay guía completa del XMLTV, el respaldo se escribe en ella con `source: 'short'`, y la API lo dice con
-  `partial: true`.
-- **Con dos URL de guía** (M3U con dos `url-tvg`), vale la primera que traiga algo (partidos o guía completa); no se
-  mezclan.
+  un solo partido**, y la ventana de partidos sale entonces de ahí. Con la guía completa:
+  - si el XMLTV llegó, la completa es la suya (el respaldo solo da los partidos);
+  - si el XMLTV **falló** (plazo, 5xx: el panel de Isma a veces no contesta) y hay una completa del XMLTV de una
+    descarga anterior **que aún sirve** (le queda programación por delante), **se queda esa**: no se cambian ~3 500
+    canales por 40 durante 8 h. Queda dicho (`guide.ok: false`, `failedAt`; Ajustes: «Guía: no se pudo actualizar; se
+    usa la del…») y se reintenta con espera creciente (30 min, 1 h… hasta 8 h);
+  - si no hay una que sirva (la primera vez, o la de antes ya se acabó), el respaldo se escribe en ella con
+    `source: 'short'` y la API lo dice con `partial: true`; como el XMLTV falló, también se reintenta antes de 8 h.
+- **Con dos URL de guía** (M3U con dos `url-tvg`) se leen las dos. La ventana de partidos es la de la primera que trae
+  alguno (como antes). La guía completa las junta con **una fuente por canal**: un canal se queda con la parrilla de
+  la primera guía que trae programas suyos (no se mezclan dos parrillas). Cada guía es un SAVEPOINT: una que se corta a
+  medias se deshace entera y lo de la otra vale.
 - **Primera vez tras la 0.9.0:** con `guia.enc` guardada y sin `guia.db`, la guía cuenta como vieja y se descarga a los
-  15 s del arranque (con alguien viendo, se retrasa como siempre).
+  15 s del arranque (con alguien viendo, se retrasa como siempre). La edad que cuenta para la siguiente descarga es la
+  de la guía completa (la ventana de partidos puede ser del respaldo o la de antes).
 - **Sello:** nunca repite el de la guía que hay (`builtAt` + 1 si coinciden).
 - **Al instalar:** se cierra la de antes, `rename`, se abre la nueva de solo lectura y se tiran las filas calculadas y
   la caché de imágenes. Como todo es síncrono, ninguna consulta ve un fichero a medias.
@@ -4558,7 +4570,7 @@ investigación).
 | Se solapa con el siguiente | se recorta hasta el inicio del siguiente |
 | Hueco de menos de 2 min | se pega al anterior (los de 2 min o más los pinta la web como «Sin información») |
 | El mismo título a menos de 2 min (dos fuentes) | se queda el segundo |
-| Misma hora y mismo canal | el primero; con `clumpidx` (franja compartida), «Noticias / El tiempo» |
+| Mismo minuto de inicio y mismo canal (la clave es el minuto) | el **más largo** (un corte de 12:00:00 a 12:00:30 no tapa la película de las 12:00:30); sin fin cuenta como 30 min y, si los dos son sin fin, el último; iguales, el primero. Con `clumpidx` (franja compartida), «Noticias / El tiempo» |
 | Más de 12 h, sin título o «Programación no disponible», «Sin información», «To be announced»… | marca `filler` (la web lo pinta como «Sin información»), sin ficha |
 | Más de 24 h | se recorta a 24 h |
 | Título, subtítulo y sinopsis en varios idiomas | el de `lang="es"` si lo hay; si no, el primero |
@@ -4597,8 +4609,8 @@ programa.
 
 | Ruta | Qué | Errores propios |
 |---|---|---|
-| `GET /api/v1/iptv/guide?scope=favorites\|all&offset=&limit=` (`iptvGuide`) | `state` (`ready`, `preparing`, `none`, `failed`, `inactive`), `version`, `provider`, `from`/`to` (lo que cubre la guía), `updatedAt`, `failedAt`, `partial`, `scope` y `fellBack`, recuentos (`favorites`, `all`, `total`) y la página de filas (`guide`, `id`, `number`, `name`, `country`, `favorite`, `logo`). Por defecto `favorites` y 200 filas (1 000 como mucho; `limit=0`, solo el estado). Sin IPTV activa, 200 con `inactive` | — |
-| `GET /api/v1/iptv/guide/programmes?v=&ch=1,2,…&from=&to=` (`iptvGuideProgrammes`) | por cada canal pedido (en su orden, sin repetir; uno que no existe, vacío), los programas que se solapan con [`from`, `to`), ordenados y sin solaparse: `id` (`<g>.<minuto>`), `start`, `end`, `title`, `flags`. Hasta 60 canales, 12 h y 400 programas por canal; se recorta a lo que cubre la guía. Con la `v` buena, `Cache-Control: private, max-age=86400, immutable` | `guide_unavailable` (409), `guide_stale` (409), `validation_error` (trozo al revés o de más de 12 h) |
+| `GET /api/v1/iptv/guide?scope=favorites\|all&offset=&limit=` (`iptvGuide`) | `state` (`ready`, `preparing`, `none`, `failed`, `inactive`), `version`, `provider`, `from`/`to` (la ventana guardada: de −24 h a +80 h de la descarga), `coveredFrom`/`coveredTo` (hasta dónde llega **de verdad** la programación de las filas del ámbito; con la guía de Isma, que solo cubre hoy, acaba hoy), `updatedAt`, `failedAt`, `partial`, `scope` y `fellBack`, recuentos (`favorites`, `all`, `total`) y la página de filas (`guide`, `id`, `number`, `name`, `country`, `favorite`, `logo`). Por defecto `favorites` y 200 filas (1 000 como mucho; `limit=0`, solo el estado). Sin IPTV activa, 200 con `inactive` | — |
+| `GET /api/v1/iptv/guide/programmes?v=&ch=1,2,…&from=&to=` (`iptvGuideProgrammes`) | por cada canal pedido (en su orden, sin repetir; uno que no existe, vacío), los programas que se solapan con [`from`, `to`), ordenados y sin solaparse: `id` (`<g>.<minuto>`), `start`, `end`, `title`, `flags`. Hasta 60 canales, 12 h y 400 programas por canal; se recorta a la ventana guardada (`from`/`to`). Con la `v` buena, `Cache-Control: private, max-age=86400, immutable` | `guide_unavailable` (409), `guide_stale` (409), `validation_error` (trozo al revés o de más de 12 h) |
 | `GET /api/v1/iptv/guide/programmes/:id?v=` (`iptvGuideProgramme`) | la ficha: lo de la parrilla más `subTitle`, `description`, `categories`, `season`, `episode`, `episodeText`, `year`, `rating`, `stars`, `directors`, `actors`. Caché inmutable | `guide_unavailable`, `guide_stale`, `not_found` |
 | `GET /api/v1/iptv/guide/now?ids=<id IPTV>,…` (`iptvGuideNow`) | para Canales: por cada id IPTV (hasta 100; los de las filas de la pestaña IPTV o del buscador), `guide`, `now` y `next`. Una variante sin `tvg-id` usa el de su canal. Sin guía o sin IPTV activa, 200 con `available: false` | — |
 | `GET /api/v1/iptv/guide/art/:ref?v=` (`iptvGuideArt`) | `c<g>` (logo del canal, de `<channel><icon>`) o `p<id>` (imagen del programa): los bytes por el proxy propio (`guide-art.ts`: sin red de casa, 512 KiB, 8 s, solo JPEG/PNG/WebP por bytes mágicos, `nosniff`, `default-src 'none'`, LRU de 16 MiB, un fallo se recuerda 1 h). `ETag` y 304. Inmutable un día con la `v` buena | `guide_unavailable`, `guide_stale`, `guide_busy` (503 con `Retry-After: 2`, 2 a la vez y 32 en cola), `not_found` |
@@ -4616,6 +4628,9 @@ las lee por nombre.
   `['guia', version, bloque, tesela]` y `staleTime: Infinity` (manda `version`); un programa que cruza dos teselas
   llega en las dos con el mismo `id`;
 - calcular «Sin información» en los huecos de una tesela ya llegada;
+- **días con `coveredTo`, no con `to`:** la guía real de Isma solo cubre hoy (Paso 0 del 3-oct: nada empieza mañana
+  ni pasado), así que un chip de día solo sale si `coveredTo` llega a ese día, y el final de la parrilla («Fin de la
+  guía disponible») es `coveredTo`; no hace falta pedir teselas más allá;
 - con 409 `guide_stale`, volver a pedir `iptvGuide` (hay guía nueva). El cambio también se ve en el evento de siempre
   (`iptv.status`: `guide.updatedAt`): **no hay evento nuevo**;
 - la selección sobrevive a una guía nueva por (fila, hora de inicio), no por `id` (los `g` cambian);
@@ -4627,7 +4642,9 @@ las lee por nombre.
 - **«N canales con programación»** (`IptvStatus.guide.channelsWithGuide`) cuenta ya **todos** los canales con guía
   completa: los mismos que salen en «Todos» (un canal con varias variantes, aunque tengan `tvg-id` distintos, cuenta
   una vez). Antes, solo los `tvg-id` de la ventana de partidos («93»). `available` es verdad si hay ventana de partidos
-  o guía completa; `updatedAt`, la de la descarga.
+  o guía completa; `updatedAt`, la de la guía completa (la que cuenta los canales) y, sin ella, la de la ventana. Si
+  el XMLTV falla y se sigue con la completa de antes, `failedAt` es posterior y la web ya dice «Guía: no se pudo
+  actualizar; se usa la del…» (§20.3).
 - `guide-match.ts`, `layer.ts` y la agenda híbrida no cambian: siguen leyendo la ventana (`this.guide`). Si algún día
   quieren más (por ejemplo, partidos que no parecen un evento), `GuideReader` permite consultar la completa.
 - Guardar con otro proveedor y eliminar la IPTV borran `guia.db` (y su `.next`); pausar no la borra (la API dice
@@ -4642,7 +4659,10 @@ las lee por nombre.
   `demoGuide(query, now)`, `demoGuideProgrammes(query, now)`, `demoGuideProgramme(id, { v }, now)`,
   `demoGuideNow({ ids }, now)`, `demoGuideStamp(now)` y `demoGuideChannels()`. Un sello viejo o un trozo mal pedido
   lanzan `DemoGuideError` con el `code` y el `status` que daría el servidor. Sin logos ni imágenes (`logo` e `image`,
-  siempre false). Para `guia-web`, en `features/guia/demo.ts`:
+  siempre false). **«Solo hoy»:** las cinco aceptan un último argumento `{ onlyToday: true }` que la deja como la guía
+  real del panel de Isma (de ayer a hoy, nada que empiece después del día UTC de la «descarga»; `coveredTo` lo dice),
+  con su propio sello. Conviene diseñar la parrilla con las dos (por ejemplo, `?demo=1&guia=hoy`). Para `guia-web`,
+  en `features/guia/demo.ts`:
 
   ```ts
   registerDemoHandlers({
@@ -4657,7 +4677,9 @@ las lee por nombre.
 
 - **Proveedor falso:** `createFakeIptv({ guiaCompleta: true })` y el CLI con `--guia-completa` sirven, detrás de la
   guía de siempre, una parrilla sintética (`test/fake-iptv/guia.ts`) de ayer a dentro de 3 días para todos los demás
-  canales (también los de `--grande N`), en streaming. Sirve para ver la parrilla con el backend de verdad (§15).
+  canales (también los de `--grande N`), en streaming. Sirve para ver la parrilla con el backend de verdad (§15). Con
+  `guiaCompleta: 'hoy'` / `--guia-hoy`, la misma pero como la del panel de Isma: de ayer al final de hoy (UTC), sin
+  nada que empiece mañana.
 
 ### 20.9 Pruebas y medidas
 
@@ -4666,11 +4688,11 @@ las lee por nombre.
 | `packages/shared/test/guide.test.ts` | las 5 rutas (solo web, módulo iptv), los 3 `guide_*` y los 16 `iptv_*` intactos, esquemas (60 canales, ids, refs de imagen), marcas, ejemplos de fixtures y la guía de ejemplo (determinista, coherente entre trozos, sin solapes, estados, errores) |
 | `iptv/xmltv.test.ts` | lo nuevo del tokenizador: episodio, año, edad, nota, reparto, imagen, `clumpidx`, logo del canal, idioma, zonas y fechas imposibles, latin1/UTF-8 cruzados, ceder el hilo; y que la ventana por `GuideWindowCollector` da lo mismo que `buildGuideWindow` |
 | `iptv/guide-text.test.ts` | limpieza, recortes, relleno, temporada y episodio, año, edad y nota |
-| `iptv/guide-db.test.ts` | ventana, arreglos de §20.4, franja compartida, trozos por solape, ficha sin repetir, imagen, «ahora / después» con huecos, topes de programas y de tamaño, instalar con la de antes abierta, otro proveedor o fichero roto, abortar, reabrir |
+| `iptv/guide-db.test.ts` | ventana, arreglos de §20.4, franja compartida, mismo minuto (se queda el más largo, también sin fin), varias fuentes (una por canal, deshacer la que se corta), hasta dónde llega (`coverage`), trozos por solape, ficha sin repetir, imagen, «ahora / después» con huecos, topes de programas y de tamaño, instalar con la de antes abierta, otro proveedor o fichero roto, abortar, reabrir |
 | `iptv/guide-full.test.ts` | una pasada con dos salidas (la ventana, igual que antes), zonas, caracteres raros y HTML, ids repetidos y sin programas, solapes y sin fin, relleno, imágenes con credenciales, fallo del disco a mitad, respaldo `get_short_epg`, guía mediana |
 | `iptv/guide-api.test.ts` | filas, «Todos», «Favoritos» (con uno sin guía y la vuelta a «Todos»), páginas, estados, trozos, errores, ficha, «ahora / después», el proxy (cabeceras, 304, caché, no raster, cola llena) |
 | `iptv/guide-routes.test.ts` | las rutas por HTTP: sin IPTV, validación, /native, caché inmutable, 304, 503 con `Retry-After` |
-| `iptv/guide-service.test.ts` | de punta a punta con el proveedor falso: las dos salidas, Ajustes, la parrilla con el partido, reabrir sin descargar, la primera vez tras la 0.9.0, eliminar y otro proveedor, y **el directo no espera** (un canal sonando por el relé mientras se construye una guía de 400+ canales; la API responde con la de antes) |
+| `iptv/guide-service.test.ts` | de punta a punta con el proveedor falso: las dos salidas, Ajustes, la parrilla con el partido, reabrir sin descargar, la primera vez tras la 0.9.0, eliminar y otro proveedor, una guía que solo cubre hoy (`coveredTo`), un fallo pasajero del XMLTV con respaldo (se queda la completa de antes, `failedAt`, reintento a los 30 min), sin completa que sirva (el respaldo entra, `partial`), una guía sin partidos (la ventana de antes se queda), M3U con dos `url-tvg` (una fuente por canal; una cortada a medias no deja nada) y **el directo no espera** (un canal sonando por el relé mientras se construye una guía de 400+ canales; la API responde con la de antes; margen proporcional al reposo: reloj < 3 × reposo + 100 ms, relé < 2 × reposo + 150 ms, con un segundo intento; un bloqueo de 700 ms metido a mano lo hace fallar) |
 | `iptv/guide-grande.test.ts` (`@lento`) | 3 000 canales × 3 días |
 
 **Medidas en el PC de desarrollo** (Windows, CPU al 100 % con otros equipos trabajando):
@@ -4691,24 +4713,29 @@ las lee por nombre.
 - **D-propuesta G3:** en «Favoritos» cuentan también los canales de tu lista de AceStream que son un canal de la IPTV
   (≥ 92), y los favoritos sin guía salen con «Sin información» (§20.5).
 - **D-propuesta G4:** «N canales con programación» en Ajustes cuenta todos los canales con guía (§20.7).
-- **D-propuesta G5:** los topes de tamaño de la descarga se quedan en 64 MiB / 512 MiB hasta tener el sondeo
-  (`scripts/epg-sondeo.mjs`, Paso 0 de `traspaso-0.9.0.md` §6); el plazo total sube a 300 s. Si el sondeo da una guía
-  más grande, subir `IPTV_GUIDE_LIMITS.maxBytes` / `maxDecompressedBytes` (no se retiene nada: se puede ir a 128 MiB /
-  1,5 GiB) y comprobar el tamaño de `guia.db` con `IPTV_GUIDE_STORE.maxBytes` (512 MiB).
+- **D-propuesta G5:** con el sondeo del panel de Isma (Paso 0 del 3-oct: 47 MB sin gzip, 4 391 canales, 137 126
+  programas, solo de ayer a hoy), los topes de tamaño de la descarga suben de 64 MiB / 512 MiB a **256 MiB / 1 GiB**
+  (con 64 MiB quedaba un 30 % de margen y pasarse tira la guía entera); el plazo total, 300 s. `guia.db` sigue con
+  `IPTV_GUIDE_STORE.maxBytes` (512 MiB). Falta medir el tamaño real de `guia.db` en el Umbrel.
+- **D-propuesta G6:** fallos de la descarga (§20.3): un fallo pasajero del XMLTV no cambia una completa que aún sirve
+  por la del respaldo (queda dicho y se reintenta antes); una guía sin partidos no borra la ventana de antes; dos
+  `url-tvg` se juntan con una fuente por canal.
 - **Falta (fuera de este equipo):** la vista (`guia-web`), y la app de iPhone (las rutas nacen `web`; pasan a `any`
   cuando la app copie la pantalla, con sus ejemplos de `web/v1/` movidos a `v1/`).
 
 ### 20.11 Riesgos
 
-1. **Guías enormes:** con 10 000 canales y 7 días un panel puede pasar de 1 GB descomprimido y del tope de 512 MiB:
-   se corta la descarga (`response_too_large`) y no hay guía nueva (sigue la de antes). Depende del sondeo (G5).
-2. **Disco:** en el peor caso razonable, ~250-350 MB de `guia.db` (tope duro 512 MiB + 10 %).
-3. **`g` y los `id` de programa cambian con cada guía:** la web tiene que volver a pedir con 409 `guide_stale`; una
+1. **Guías enormes:** con 10 000 canales y 7 días un panel puede pasar de 1 GB descomprimido y del tope de 1 GiB: se
+   corta la descarga (`response_too_large`) y no hay guía nueva (sigue la de antes). La de Isma pesa 47 MB (G5).
+2. **Guía que solo cubre hoy:** es lo que da el panel de Isma (Paso 0). La parrilla tiene que vivir con mañana y pasado
+   vacíos: `coveredTo` lo dice (§20.6) y la demo y el proveedor falso tienen un modo «solo hoy» (§20.8).
+3. **Disco:** en el peor caso razonable, ~250-350 MB de `guia.db` (tope duro 512 MiB + 10 %).
+4. **`g` y los `id` de programa cambian con cada guía:** la web tiene que volver a pedir con 409 `guide_stale`; una
    pestaña abierta 8 h verá ese 409 una vez.
-4. **Zonas mal puestas por el proveedor** (horas sin zona y `tvg-shift` fijo): 1 h mal tras el cambio de hora.
-5. **Logos de terceros:** muchos bloquean el enlace directo o son `http`; el proxy los pide desde el Umbrel y si fallan
+5. **Zonas mal puestas por el proveedor** (horas sin zona y `tvg-shift` fijo): 1 h mal tras el cambio de hora.
+6. **Logos de terceros:** muchos bloquean el enlace directo o son `http`; el proxy los pide desde el Umbrel y si fallan
    no se reintentan en 1 h. La red de casa nunca vale para imágenes.
-6. **`node:sqlite`** es «release candidate» en Node 24 (sin aviso en 24.15; la imagen fija es la 24.19). Si un día
+7. **`node:sqlite`** es «release candidate» en Node 24 (sin aviso en 24.15; la imagen fija es la 24.19). Si un día
    cambia su API, el fallo se ve en las pruebas; el plan B es el formato propio de la investigación.
 
 ### 20.12 Qué se tomó de la investigación y qué cambió

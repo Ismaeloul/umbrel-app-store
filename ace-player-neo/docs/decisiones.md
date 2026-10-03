@@ -495,11 +495,22 @@ Número por poner al unir. Diseño entero en `docs/iptv.md` §20.
   tiene guía, se enseña «Todos» (`fellBack`).
 - **G4 · Ajustes**: «N canales con programación» cuenta ya todos los canales
   con guía (antes, solo los que tenían partidos).
-- **G5 · Topes**: los de tamaño de la descarga (64 MiB comprimida, 512 MiB
-  descomprimida) no se tocan hasta tener la medida del panel de Isma
-  (`scripts/epg-sondeo.mjs`); el plazo total sube de 180 a 300 s porque cada
-  programa se escribe en disco mientras se lee. `guia.db`: 2 M de programas y
-  512 MiB como mucho (lo que pase no se guarda y se dice).
+- **G5 · Topes**: con la medida del panel de Isma (Paso 0 del 3-oct: 47 MB
+  sin comprimir ni gzip, solo de ayer a hoy), los de tamaño de la descarga
+  suben de 64 MiB / 512 MiB a **256 MiB por cable y 1 GiB descomprimida**:
+  con 64 MiB quedaba un 30 % de margen y pasarse tira la guía entera (también
+  la de partidos). No se retiene nada en memoria. El plazo total sube de 180
+  a 300 s porque cada programa se escribe en disco mientras se lee.
+  `guia.db`: 2 M de programas y 512 MiB como mucho (lo que pase no se guarda
+  y se dice).
+- **G6 · Fallos de la descarga**: un fallo pasajero del XMLTV no cambia una
+  guía completa que aún sirve por la parcial de `get_short_epg` (40 canales):
+  los partidos salen del respaldo, la Guía TV sigue con la de antes, Ajustes
+  dice «no se pudo actualizar; se usa la del…» y se reintenta con espera
+  creciente (30 min a 8 h). Sin una que sirva, el respaldo sí entra
+  (`partial`) y el XMLTV también se reintenta antes de 8 h. Una guía sin un
+  solo partido no borra la ventana de partidos de antes. Con dos `url-tvg`,
+  la Guía TV junta las dos (una fuente por canal).
 - **Lo que no cambia**: la guía de partidos (`guia.enc`), `guide-match.ts` y
   la agenda híbrida; un solo trabajo pesado de la IPTV a la vez; con alguien
   viendo, la descarga periódica se retrasa como siempre, y si coincide, la

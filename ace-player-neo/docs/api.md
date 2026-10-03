@@ -995,7 +995,7 @@ Todas `access: 'web'` (hasta que la app copie la pantalla), módulo `iptv`, sin 
 
 | id | Método y ruta | Consulta | Respuesta | Errores propios |
 |---|---|---|---|---|
-| `iptvGuide` | `GET /api/v1/iptv/guide` | `scope` (`favorites` por defecto, `all`), `offset`, `limit` (0 a 1 000, por defecto 200) | `IptvGuideResponse`: `state` (`ready`, `preparing`, `none`, `failed`, `inactive`), `version`, `from`/`to`, `updatedAt`, `failedAt`, `partial`, `scope`, `fellBack`, recuentos y una página de filas `{ guide, id, number, name, country, favorite, logo }` | — (sin IPTV activa, `200` con `inactive`) |
+| `iptvGuide` | `GET /api/v1/iptv/guide` | `scope` (`favorites` por defecto, `all`), `offset`, `limit` (0 a 1 000, por defecto 200) | `IptvGuideResponse`: `state` (`ready`, `preparing`, `none`, `failed`, `inactive`), `version`, `from`/`to` (la ventana guardada), `coveredFrom`/`coveredTo` (hasta dónde llega de verdad la programación de las filas del ámbito: con una guía que solo cubre hoy, acaba hoy), `updatedAt`, `failedAt`, `partial`, `scope`, `fellBack`, recuentos y una página de filas `{ guide, id, number, name, country, favorite, logo }` | — (sin IPTV activa, `200` con `inactive`) |
 | `iptvGuideProgrammes` | `GET /api/v1/iptv/guide/programmes` | `v` (sello), `ch` (hasta 60 canales de la guía, por comas), `from`, `to` (12 h como mucho) | `{ version, from, to, channels: [{ guide, programmes: [{ id, start, end, title, flags }] }] }`; caché `private, max-age=86400, immutable` | `guide_unavailable` (409), `guide_stale` (409) |
 | `iptvGuideProgramme` | `GET /api/v1/iptv/guide/programmes/:id` | `v` | la ficha: lo de la parrilla más subtítulo, sinopsis, categorías, temporada, episodio, año, edad, nota, directores y actores | `guide_unavailable`, `guide_stale`, `404 not_found` |
 | `iptvGuideNow` | `GET /api/v1/iptv/guide/now` | `ids` (hasta 100 ids IPTV, por comas) | `{ available, version, items: [{ id, guide, now, next }] }` | — (sin guía, `200` con `available: false`) |
@@ -1004,7 +1004,7 @@ Todas `access: 'web'` (hasta que la app copie la pantalla), módulo `iptv`, sin 
 - **Marcas** (`flags`, `GUIDE_FLAGS`): 1 en directo, 2 estreno, 4 repetición, 8 tiene ficha, 16 relleno («Sin información»), 32 fin calculado, 64 imagen.
 - **Sello.** `version` cambia con cada descarga de la guía; con uno viejo, `409 guide_stale` y se vuelve a pedir `iptvGuide`. El cambio también llega por `iptv.status` (`guide.updatedAt`): no hay evento SSE nuevo.
 - **Errores nuevos:** `guide_unavailable`, `guide_stale` y `guide_busy`, públicos y sin estado antiguo; los 16 `iptv_*` no cambian.
-- **Ejemplos.** `fixtures/web/v1/iptvGuide.json`, `iptvGuideProgrammes.json`, `iptvGuideProgramme.json` e `iptvGuideNow.json`; variantes `iptvGuide.{todos,inactiva,preparando}` e `iptvGuideNow.sin-guia`. Salen de la guía de ejemplo (`packages/shared/src/demo/guide.ts`), la misma que puede usar la demo de la web. `fixtures/v1/` y `fixtures/events/` no cambian.
+- **Ejemplos.** `fixtures/web/v1/iptvGuide.json`, `iptvGuideProgrammes.json`, `iptvGuideProgramme.json` e `iptvGuideNow.json`; variantes `iptvGuide.{todos,solo-hoy,inactiva,preparando}` e `iptvGuideNow.sin-guia`. Salen de la guía de ejemplo (`packages/shared/src/demo/guide.ts`), la misma que puede usar la demo de la web (`solo-hoy`, con `{ onlyToday: true }`: como la guía real del panel de Isma). `fixtures/v1/` y `fixtures/events/` no cambian.
 
 ## 8. Copia de seguridad de tus ajustes (0.8.4, solo `/api/v1`, D25)
 

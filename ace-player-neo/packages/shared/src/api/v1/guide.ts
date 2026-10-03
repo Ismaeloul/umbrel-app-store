@@ -172,7 +172,7 @@ export type IptvGuideProgramme = z.infer<typeof IptvGuideProgrammeSchema>;
 
 export const IptvGuideProgrammesResponseSchema = z.strictObject({
   version: IptvGuideVersionSchema,
-  /** El trozo pedido, recortado a lo que cubre la guía. */
+  /** El trozo pedido, recortado a la ventana guardada (`from`/`to` de `iptvGuide`). */
   from: z.number().int(),
   to: z.number().int(),
   /** En el orden pedido; un canal que no existe (o sin programas en el trozo), con la lista vacía. */
