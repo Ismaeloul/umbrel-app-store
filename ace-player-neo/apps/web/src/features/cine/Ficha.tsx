@@ -25,17 +25,9 @@
      botón sale desactivado con el motivo escrito. */
 
 import type { VodMovie, VodSeries, VodTitle } from '@ace/shared';
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { ApiError, describeFailure, isDemo } from '../../api/index.ts';
 import { useBack, useNavigate } from '../../app/router.tsx';
-import { cx } from '../../lib/cx.ts';
 import { notify } from '../../notices/index.ts';
 import {
   Button,
@@ -69,6 +61,7 @@ import {
 } from './model.ts';
 import { canPlayHevc, playVod } from './play.ts';
 import { Seasons } from './Seasons.tsx';
+import { Synopsis } from './Synopsis.tsx';
 import {
   CINE_TEXT,
   episodeRunText,
@@ -165,38 +158,6 @@ function MetaLine({ title }: { title: VodTitle }) {
         </span>
       ) : null}
     </p>
-  );
-}
-
-function Synopsis({ plot }: { plot: string }) {
-  const [open, setOpen] = useState(false);
-  const [long, setLong] = useState(false);
-  const ref = useRef<HTMLParagraphElement>(null);
-  useLayoutEffect(() => {
-    const node = ref.current;
-    if (!node || open) return;
-    setLong(node.scrollHeight > node.clientHeight + 1);
-  }, [plot, open]);
-  return (
-    <section className="cine-synopsis" aria-labelledby="cine-synopsis-title">
-      <h2 id="cine-synopsis-title" className="sr-only">
-        {CINE_TEXT.synopsis}
-      </h2>
-      <p ref={ref} className={cx('cine-synopsis__text', !open && 'cine-synopsis__text--clamp')}>
-        {plot}
-      </p>
-      {long || open ? (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="cine-synopsis__more"
-          onClick={() => setOpen(!open)}
-          aria-expanded={open}
-        >
-          {open ? CINE_TEXT.less : CINE_TEXT.more}
-        </Button>
-      ) : null}
-    </section>
   );
 }
 
@@ -534,7 +495,7 @@ function Hero({ title, onBack, now }: { title: VodTitle; onBack(): void; now: nu
         </div>
         {title.plot ? (
           <div className="cine-hero__plot">
-            <Synopsis plot={title.plot} />
+            <Synopsis plot={title.plot} title={CINE_TEXT.synopsis} titleId="cine-synopsis-title" />
           </div>
         ) : null}
       </div>
