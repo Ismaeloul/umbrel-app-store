@@ -51,6 +51,7 @@ import {
   type EmbedFunction,
 } from './ai.js';
 import { buildChannelBinding, withBinding } from './bindings.js';
+import { applyGuideAgenda, guideAgendaRequest } from './guide-overlay.js';
 import {
   ENGINE_STAGE_MS,
   FOOTBALL_CACHE_MS,
@@ -82,7 +83,7 @@ import {
   type ResolvableItem,
   type ResolveScope,
 } from './resolution.js';
-import type { IptvProgramInput } from '../iptv/types.js';
+import type { GuideAgendaResult, IptvProgramInput } from '../iptv/types.js';
 import {
   computeLiveScores,
   pruneScoresCache,
@@ -139,6 +140,14 @@ export class FootballServiceImpl implements FootballService {
   };
   private readonly embed: EmbedFunction;
   private demoPayload: FootballSchedule | null = null;
+  /** Agenda híbrida: la última calculada (misma agenda y misma respuesta de la guía → la misma). */
+  private hybrid: {
+    readonly raw: FootballSchedule;
+    readonly result: GuideAgendaResult;
+    readonly payload: FootballSchedule;
+  } | null = null;
+  /** La agenda que tiene el catálogo de programación. */
+  private remembered: FootballSchedule | null = null;
   private warmSignature = '';
   private warmPending: Promise<void> | null = null;
   private preheatBusy = false;
@@ -221,13 +230,21 @@ export class FootballServiceImpl implements FootballService {
 
   // --- Agenda ---
 
-  /** `getFootballSchedule` (server.js:2723-2749) con el plazo global de 60 s. */
-  schedule(): Promise<FootballSchedule> {
+  /**
+   * `getFootballSchedule` (server.js:2723-2749) con el plazo global de 60 s
+   * y, encima, la agenda híbrida (la guía de la IPTV para hoy y mañana,
+   * guide-overlay.ts). Sin IPTV activa o sin nada de la guía, la de siempre.
+   */
+  async schedule(): Promise<FootballSchedule> {
+    return this.withGuide(await this.rawSchedule());
+  }
+
+  /** La agenda de las fuentes (futbolenlatv → EPG → TheSportsDB, o la demo), sin la guía. */
+  private rawSchedule(): Promise<FootballSchedule> {
     const { clock, config } = this.deps;
     if (config.football.demoOnly) {
       const payload = buildFootballDemoSchedule(isoDateInMadrid(clock.now()), this.agendaContext());
       this.demoPayload = payload;
-      this.rememberProgramming(payload);
       return Promise.resolve(payload);
     }
     if (this.agenda.payload && clock.now() < this.agenda.expiresAt) {
@@ -239,6 +256,56 @@ export class FootballServiceImpl implements FootballService {
     });
     this.agenda.pending = pending;
     return pending;
+  }
+
+  /**
+   * La agenda con lo que dice la guía de la IPTV (agenda híbrida) y, si ha
+   * cambiado, recordada en el catálogo de programación: la resolución, el
+   * precalentado y «Arranque instantáneo» ven la misma agenda que la web
+   * (con el canal de la guía delante y la hora de la guía).
+   */
+  private withGuide(raw: FootballSchedule): FootballSchedule {
+    const hybrid = this.hybridOf(raw);
+    if (hybrid !== this.remembered) {
+      this.remembered = hybrid;
+      this.rememberProgramming(hybrid);
+    }
+    return hybrid;
+  }
+
+  private hybridOf(raw: FootballSchedule): FootballSchedule {
+    const { clock, iptv, logger } = this.deps;
+    /* Sin IPTV, en pausa o sin catálogo: exactamente la de siempre. */
+    if (!iptv?.active()) return raw;
+    let result: GuideAgendaResult | null;
+    try {
+      result = iptv.guideAgenda(guideAgendaRequest(raw, clock.now()));
+    } catch (error) {
+      logger.warn(
+        { errorCode: motivoDeFallo(error) },
+        'agenda: la guía de la IPTV no se pudo usar',
+      );
+      return raw;
+    }
+    if (!result || (!result.confirmations.length && !result.additions.length)) return raw;
+    const memo = this.hybrid;
+    if (memo && memo.raw === raw && memo.result === result) return memo.payload;
+    const payload = applyGuideAgenda(raw, result, {
+      sameChannel: (base, other) => iptv.sameChannelScore(base, other),
+    });
+    this.hybrid = { raw, result, payload };
+    return payload;
+  }
+
+  /**
+   * Antes de usar el catálogo de programación (resolver, preparar un
+   * partido): la agenda híbrida de AHORA. Si la IPTV se pausó o cambió su
+   * guía desde la última consulta de la agenda, la resolución no sigue con el
+   * canal o la hora de antes. Síncrono y barato (todo en caché).
+   */
+  private refreshHybrid(): void {
+    const raw = this.deps.config.football.demoOnly ? this.demoPayload : this.agenda.payload;
+    if (raw) this.withGuide(raw);
   }
 
   private agendaContext(): AgendaContext {
@@ -293,7 +360,7 @@ export class FootballServiceImpl implements FootballService {
       this.agenda.payload = payload;
       this.agenda.expiresAt = clock.now() + FOOTBALL_CACHE_MS;
       this.agenda.stale = false;
-      this.rememberProgramming(payload);
+      /* El catálogo de programación lo recuerda `withGuide` (con la guía encima). */
       return payload;
     } catch (error) {
       logger.warn({ errorCode: motivoDeFallo(error) }, 'agenda: ninguna fuente respondió a tiempo');
@@ -510,7 +577,8 @@ export class FootballServiceImpl implements FootballService {
     this.deps.iptv?.touch(research ? 'research' : 'default');
     /* Canal suelto (docs/iptv.md §5.2): solo vínculos, biblioteca e IPTV. */
     if (input.scope === 'channel') return this.resolveLooseChannel(input, options);
-    /* Los canales salen de la agenda real si el partido está en ella (B-231). */
+    /* Los canales salen de la agenda real si el partido está en ella (B-231), con la guía de ahora encima. */
+    this.refreshHybrid();
     const program = this.programming.match(matchId);
     const announced = program?.channels.length ? program.channels : channelList(input.channel);
     /* Partido sin canales con IPTV activa: solo la guía (docs/iptv.md §4.5). */
@@ -790,6 +858,7 @@ export class FootballServiceImpl implements FootballService {
       const reused = reusablePreheat(this.preheats, matchId, now);
       if (reused?.result) return pick(reused.result);
     }
+    this.refreshHybrid();
     const program = this.programming.match(matchId);
     if (!program) return null;
     /* IPTV primero: lista y cuenta frescas antes de resolver (docs/iptv.md §3.5). */
