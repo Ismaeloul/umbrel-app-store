@@ -473,3 +473,36 @@ conservador). Todas se pueden revertir.
   `iptv.status`.
 - **Vuelta atrás**: no cambia el formato de ningún fichero de `data/`;
   volver a la 0.8.3 es seguro (solo se pierden las rutas nuevas).
+
+## D-propuesta (equipo agenda-pantalla, 0.9.0). Agenda en PC sin héroe, aura de tus equipos, marcador en «En directo» y deslizar entre días
+
+- **Escritorio sin héroe** (pedido de Isma tras la vista previa de la 0.8.4):
+  desde 1024 px toda la página es el calendario (tira de días y filas arriba).
+  El destacado (`featuredMatch`) sale de entrada en el panel de la derecha y
+  su tarjeta de la lista va elegida; el panel enseña SIEMPRE el elegido. Así
+  se arregla además que tocar el directo que era el del héroe (RSO–VIL en la
+  demo) dejara debajo los de «Luego». Se quita la banda compacta de la 0.8.4.
+  En el móvil y la tableta el héroe no cambia.
+- **«Tu equipo» con aura VERDE** (`--ok`) por fuera de la tarjeta, en la lista
+  y en «Luego»; solo equipos (`isMine`), no ligas. Isma dejaba elegir oro o
+  verde: en oro, con capturas, no se distinguía de la tarjeta elegida (aro oro
+  por dentro) y no se sabía cuál enseñaba el panel. Excepción consciente a
+  «los colores de estado no se usan para nada más» (sistema.md): es un aro
+  alrededor de la tarjeta entera, no un indicador pequeño junto a un estado,
+  y la estrella oro «Tu equipo» sigue diciendo lo mismo.
+- **«En directo» con marcador**: «RSO 1–0 VIL · 33'» (vuelve al injerto B1 de
+  `diseno/eleccion.md`, que la corrección 1 había tapado). Solo se tapa el
+  partido que estás viendo (regla 29) hasta destaparlo; las tarjetas, el
+  escenario y el héroe siguen tapados.
+- **Deslizar entre días (móvil, web)**: Touch Events pasivos
+  (`features/agenda/day-swipe.ts`) en vez de Pointer Events. Una fila de
+  tarjetas solo se queda el gesto si aún puede desplazarse hacia ese lado (si
+  cabe entera o está en su final, cambia de día, como las vistas paginadas
+  nativas); el eje se fija a 10 px con el criterio de Chrome con `pan-y` y,
+  si la página se desplaza durante el gesto, no cambia de día. Dedo a la
+  izquierda = día siguiente. Probado con dedo de verdad en Chrome
+  (`e2e/agenda-deslizar.spec.ts`); en Safari de iOS falta probarlo en el
+  iPhone de Isma (sin Safari de verdad en este PC).
+- **Canales**: en «Ahora» de la ficha (columna derecha) los escudos van a
+  40 px como en las tarjetas pequeñas de la agenda: el del servidor o el
+  monograma con siglas (a 22 px eran dos círculos del color del club).
