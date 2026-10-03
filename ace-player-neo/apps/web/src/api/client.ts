@@ -20,6 +20,7 @@
      módulo diferido demo/ sin red. */
 
 import { IPTV_CLIENT } from '@ace/shared';
+import { recordWebLog } from '../lib/web-log.ts';
 import { ApiError, errorFromResponse, isAbortError } from './errors.ts';
 import { isDemo, whenModeReady } from './mode.ts';
 import {
@@ -165,7 +166,41 @@ async function validateInDev(id: JsonRouteId, data: unknown): Promise<void> {
   }
 }
 
+/**
+ * Las peticiones que fallan por algo que no es una respuesta normal (sin red,
+ * plazo, respuesta rara o un 5xx) se apuntan para «Descargar fallos»
+ * (src/lib/web-log.ts). Los 4xx y las cancelaciones, no.
+ */
+function noteFailure(id: JsonRouteId, error: unknown): void {
+  if (!(error instanceof ApiError)) return;
+  const unexpected =
+    error.code === 'network' ||
+    error.code === 'timeout' ||
+    error.code === 'bad_response' ||
+    error.code === 'invalid_response' ||
+    error.status >= 500;
+  if (!unexpected) return;
+  recordWebLog({
+    kind: 'api',
+    level: 'error',
+    code: error.code,
+    message: `${id}: ${error.message}${error.status ? ` (HTTP ${error.status})` : ''}`,
+  });
+}
+
 export async function api<Id extends JsonRouteId>(
+  id: Id,
+  ...args: ApiArgs<Id>
+): Promise<ApiResponse<Id>> {
+  try {
+    return await request(id, ...args);
+  } catch (error) {
+    noteFailure(id, error);
+    throw error;
+  }
+}
+
+async function request<Id extends JsonRouteId>(
   id: Id,
   ...[input]: ApiArgs<Id>
 ): Promise<ApiResponse<Id>> {

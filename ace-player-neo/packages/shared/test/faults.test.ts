@@ -199,6 +199,14 @@ describe('clasificación: nuestro o de fuera', () => {
       piece: 'servidor',
     });
     expect(classifyLogLine({ level: 'warn', msg: 'algo inesperado' }).side).toBe('sin_clasificar');
+    // Un aviso de la configuración del arranque es nuestro, pero no del motor (ENGINE_CONTROL_TOKEN).
+    expect(
+      classifyLogLine({
+        level: 'warn',
+        msg: 'sin ACE_SEED ni ENGINE_CONTROL_TOKEN válidos: claves aleatorias de este arranque',
+      }).piece,
+    ).toBe('servidor');
+    expect(classifyLogLine({ level: 'warn', msg: 'el engine no responde' }).piece).toBe('motor');
   });
 
   it('lo que apunta la web', () => {

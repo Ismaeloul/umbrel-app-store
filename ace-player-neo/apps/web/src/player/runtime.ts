@@ -75,6 +75,7 @@ import { routeKey, queryClient } from '../api/query.ts';
 import { onSseEvent } from '../api/sse.ts';
 import { setPlayerPresence } from '../app/player-presence.ts';
 import { shallowEqual } from '../lib/store.ts';
+import { recordWebLog } from '../lib/web-log.ts';
 import { notify as defaultNotify, type NotifyOptions } from '../notices/notify.ts';
 import { toast } from '../notices/toasts.ts';
 import {
@@ -442,6 +443,8 @@ export class PlayerRuntime {
       deps.log ??
       ((message, data) => {
         if (import.meta.env.DEV) console.info(`[reproductor] ${message}`, data ?? '');
+        // Las notas del reproductor (decodificación, huecos, primera imagen) van al anillo.
+        recordWebLog({ kind: 'player', level: 'info', message });
       });
 
     this.controller = new PlayerController(this.video, {
@@ -2150,6 +2153,9 @@ export class PlayerRuntime {
   ): void {
     const source = this.source;
     const metrics = source ? this.metrics(source) : undefined;
+    // Para «Descargar fallos» (src/lib/web-log.ts): también sin red y en la demo.
+    const informative = code === 'player_session' || code === 'autoplay_blocked';
+    recordWebLog({ kind: 'player', level: informative ? 'info' : 'warn', code, message });
     this.log(`${code}: ${message}`, metrics);
     if (this.demo()) return;
     void this.request('diagnosticsReport', {

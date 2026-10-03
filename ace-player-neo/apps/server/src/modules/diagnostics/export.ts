@@ -30,6 +30,7 @@ import {
   classifyCode,
   classifyLogLine,
   classifyWebEntry,
+  faultsFileName,
   redactReportText,
   redactReportValue,
   summarizeFaults,
@@ -56,23 +57,8 @@ export type ExportServices = Pick<
   'config' | 'clock' | 'logger' | 'health' | 'iptv' | 'remux' | 'diagnostics'
 >;
 
-/** `ace-player-neo-fallos-2026-10-03-2145.json` (hora de Madrid, como la agenda). */
-export function exportFileName(at: number): string {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en-GB', {
-      timeZone: 'Europe/Madrid',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hourCycle: 'h23',
-    })
-      .formatToParts(new Date(at))
-      .map((part) => [part.type, part.value]),
-  ) as Record<string, string>;
-  return `ace-player-neo-fallos-${parts.year}-${parts.month}-${parts.day}-${parts.hour}${parts.minute}.json`;
-}
+/** Nombre del fichero (el mismo que pone la web al guardarlo, @ace/shared). */
+export const exportFileName = faultsFileName;
 
 const LEVEL_RANK: Readonly<Record<string, number>> = { fatal: 3, error: 2, warn: 1 };
 

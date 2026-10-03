@@ -235,7 +235,14 @@ export function classifyLogLine(line: LogLineFacts): FaultClass {
     default:
       break;
   }
-  if (/\bmotor\b|engine/i.test(text)) return piece('motor');
+  // La configuración del arranque (ACE_SEED, ENGINE_CONTROL_TOKEN…) es nuestra, pero no del motor.
+  if (
+    /\b(?:ACE_[A-Z_]+|ENGINE_CONTROL_[A-Z_]+|ACESTREAM_[A-Z_]+|DATA_DIR|AUTO_SYNC|FOOTBALL_[A-Z_]+)\b|configuraci[oó]n|claves aleatorias/.test(
+      text,
+    )
+  )
+    return piece('servidor');
+  if (/\bmotor\b|\bengine\b/i.test(text)) return piece('motor');
   if (/ffmpeg|remux/i.test(text)) return piece(DECODE_RE.test(text) ? 'decodificacion' : 'remux');
   if (
     /escudos|thesportsdb|futbolenlatv|agenda: (fuente|ninguna)|ia-programacion|ollama/i.test(text)
@@ -269,6 +276,28 @@ export function classifyWebEntry(
     default:
       return piece('web');
   }
+}
+
+/**
+ * Nombre del fichero: `ace-player-neo-fallos-2026-10-03-2145.json`, en hora
+ * de Madrid (como la agenda). Lo usan el servidor (Content-Disposition) y la
+ * web (al guardarlo).
+ */
+export function faultsFileName(at: number): string {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/Madrid',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(new Date(at))
+      .map((part) => [part.type, part.value]),
+  ) as Record<string, string>;
+  return `ace-player-neo-fallos-${parts.year}-${parts.month}-${parts.day}-${parts.hour}${parts.minute}.json`;
 }
 
 // ---- Resumen -----------------------------------------------------------------

@@ -473,3 +473,48 @@ conservador). Todas se pueden revertir.
   `iptv.status`.
 - **Vuelta atrás**: no cambia el formato de ningún fichero de `data/`;
   volver a la 0.8.3 es seguro (solo se pierden las rutas nuevas).
+
+## D-propuesta (pulido, 0.9.0). «Descargar fallos» en Salud y la web sin elementos compartidos
+
+(El coordinador le pone número al unir.)
+
+- **Para qué**: Isma pulsa «Descargar fallos» (Ajustes → Salud) y pasa el
+  fichero; de un vistazo se ve qué es nuestro (motor, decodificación, relé de
+  la IPTV, remux, reproductor de la web, errores de la web, servidor, datos)
+  y qué no (una fuente que no va, el proveedor IPTV, la red, futbolenlatv o
+  los escudos).
+- **Ruta**: `POST /api/v1/diagnostics/export` (`module: 'diagnostics'`,
+  `access: 'web'`, anti-CSRF). POST porque la web manda lo suyo: el anillo
+  de sus últimos 200 errores (`src/lib/web-log.ts`, solo en memoria) y cómo
+  se está viendo. Responde el fichero
+  `ace-player-neo-fallos-AAAA-MM-DD-HHMM.json` (hora de Madrid) como
+  descarga, `no-store`; nunca se guarda en el NAS.
+- **Qué lleva**: versión, entorno (interruptores y de dónde salen las
+  claves, nunca las claves), la salud de siempre, la IPTV sin servidor ni
+  usuario, el remux, los fallos (registro de fallos + líneas `warn`/`error`
+  del servidor + lo de la web, sin contar dos veces el mismo código en el
+  mismo segundo) con `side` (`nuestro` / `de_fuera` / `sin_clasificar`),
+  `piece` y un resumen en frases, y el registro del servidor (anillo de 2000
+  líneas / 1 MiB en `core/logger.ts`) y el de la web.
+- **Clasificación** (`@ace/shared`, `domain/faults.ts`): por código (catálogo
+  y registro de fallos), después por la causa y, en el log, por módulo y
+  frase. Los cortes del relé (`iptv_dropped`, «se reconecta el relé») cuentan
+  como nuestros, como los ve Isma; un ffmpeg que muere por el códec es
+  decodificación. Las métricas de fin de reproducción y el autoplay
+  bloqueado no cuentan como fallo. Lo que no encaja queda «sin clasificar».
+- **Redacción** (sobre TODO el fichero, dos capas): el redactor de la IPTV
+  (conoce usuario, contraseña y URLs guardadas) y `redactReportText`
+  (credenciales en URLs y en texto, tramos Xtream con y sin esquema,
+  `?username=&password=`, `t=`, tickets del relé, `Authorization`, cookies,
+  JSON con secretos, JWT, correos, el usuario del sistema en las pilas e IPs
+  públicas). Se quedan los hashes AceStream, los ids IPTV y las IPs privadas
+  y de Tailscale (dicen qué contenedor falla).
+- **Transiciones de la web** (punto 4 de Isma): abrir un partido es el mismo
+  fundido que cambiar de pestaña, a la ida y a la vuelta (también con el
+  botón atrás: el router lanza la vuelta justo después del `popstate`, que
+  React pinta sin View Transition). Fuera la transición compartida de los
+  escudos (`partido-<id>`); el reproductor lleva un nombre por presentación
+  (`ace-reproductor-mini`/`-stage`) para fundirse en vez de viajar. La
+  animación de los escudos queda para la app de iPhone.
+- **Vuelta atrás**: no cambia ningún fichero de `data/`; volver a la 0.8.4 es
+  seguro (se pierde la ruta nueva).

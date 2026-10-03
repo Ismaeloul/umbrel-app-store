@@ -1,10 +1,18 @@
-import type { DiagnosticEntry, DiagnosticsListResponse, HealthResponse } from '@ace/shared';
+import type {
+  DiagnosticEntry,
+  DiagnosticsExport,
+  DiagnosticsListResponse,
+  HealthResponse,
+  WebDiagnostics,
+} from '@ace/shared';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetMode, setMode } from '../../api/mode.ts';
 import { routeKey } from '../../api/query.ts';
 import { resetToasts, toastStore } from '../../notices/toasts.ts';
 import { fixture, json, mockFetch } from '../../test/fetch.ts';
+import { clearWebLog, recordWebLog } from '../../lib/web-log.ts';
+import { demoFaultsFile } from './demo.ts';
 import { DIAG_LIMIT, VIRTUAL_FROM } from './DiagnosticsLog.tsx';
 import { CONFIRM_RESTART_MS, RECHECK_AFTER_RESTART_MS } from './engine.ts';
 import { HealthSection } from './HealthSection.tsx';
@@ -336,6 +344,67 @@ describe('registro de fallos', () => {
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('No se pudo leer el registro.');
     expect(within(alert).getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+  });
+});
+
+describe('Descargar fallos (0.9.0)', () => {
+  let blobs: Blob[] = [];
+  let names: string[] = [];
+  beforeEach(() => {
+    blobs = [];
+    names = [];
+    clearWebLog();
+    vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
+      blobs.push(blob as Blob);
+      return 'blob:fallos';
+    });
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      names.push(this.download);
+    });
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    clearWebLog();
+  });
+
+  it('manda lo de la web y guarda el fichero que devuelve el servidor, con aviso', async () => {
+    recordWebLog({ kind: 'error', level: 'error', message: 'TypeError: x is undefined' });
+    setup({
+      'POST /api/v1/diagnostics/export': (call) =>
+        json(demoFaultsFile((call.body as { web: WebDiagnostics }).web)),
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Descargar fallos' }));
+    await waitFor(() => expect(blobs).toHaveLength(1));
+    const call = net.calls.find((c) => c.url === '/api/v1/diagnostics/export');
+    expect(call?.method).toBe('POST');
+    const sent = (call?.body as { web: WebDiagnostics }).web;
+    expect(sent.layout).toBe('mobile');
+    expect(sent.mode).toBe('live');
+    expect(sent.log.map((entry) => entry.message)).toContain('TypeError: x is undefined');
+    const saved = JSON.parse(await blobs[0]!.text()) as DiagnosticsExport;
+    expect(saved.format).toBe('ace-player-neo-fallos');
+    expect(names[0]).toMatch(/^ace-player-neo-fallos-\d{4}-\d{2}-\d{2}-\d{4}\.json$/);
+    await waitFor(() =>
+      expect(toastStore.get().at(-1)?.text).toBe(
+        `Fallos descargados: ${names[0]} · ${saved.summary.nuestro} nuestros, ${saved.summary.deFuera} de fuera`,
+      ),
+    );
+  });
+
+  it('si el servidor no puede, lo dice debajo y no guarda nada', async () => {
+    setup({
+      'POST /api/v1/diagnostics/export': () =>
+        json({ error: { code: 'internal_error', message: 'Algo falló.', requestId: 'r' } }, 500),
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Descargar fallos' }));
+    expect(await screen.findByText(/^No se pudieron descargar los fallos\./)).toHaveAttribute(
+      'role',
+      'alert',
+    );
+    expect(blobs).toHaveLength(0);
   });
 });
 
