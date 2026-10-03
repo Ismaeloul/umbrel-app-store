@@ -148,6 +148,19 @@ describe('Películas y series (docs/vod.md §12.1 y §12.2)', () => {
     );
   });
 
+  it('la temporada abierta no pasa a otra ficha ni a la portada (vod-estado §4.2, arreglo 3)', () => {
+    const other = 'b'.repeat(40);
+    const inSeries = `?vista=cine/${TITLE_ID}&cine=series&cinecat=d4e5f6071829&temporada=3`;
+    expect(searchFor({ vista: 'cine', id: other }, inSeries)).toBe(
+      `?vista=cine/${other}&cine=series&cinecat=d4e5f6071829`,
+    );
+    expect(searchFor({ vista: 'cine', id: null }, inSeries)).toBe(
+      '?vista=cine&cine=series&cinecat=d4e5f6071829',
+    );
+    // La misma ficha (replace del router) la conserva.
+    expect(searchFor({ vista: 'cine', id: TITLE_ID }, inSeries)).toBe(inSeries);
+  });
+
   it('la ficha es un paso adelante de la portada y la portada va entre Canales y Buscar', () => {
     const home = routeDepth({ vista: 'cine', id: null });
     expect(home).toBeGreaterThan(routeDepth({ vista: 'biblioteca' }));
