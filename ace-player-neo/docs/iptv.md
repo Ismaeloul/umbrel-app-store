@@ -110,8 +110,8 @@ los compara en `TextosTests`.
   - Región accesible: `getByRole('region', { name: 'IPTV' })`.
   - Descripción de la sección (`<Section description>`): «Si un canal o un partido está en tu IPTV, sale el primero. Si
     se cae, se pasa sola a la mejor fuente de AceStream.»
-- **Componente:** `apps/web/src/features/iptv/IptvSection.tsx`, con su `model.ts` puro y su CSS, montado con `WhenNear`
-  como las demás secciones pesadas.
+- **Componente:** `apps/web/src/features/iptv/IptvSection.tsx`, con su `model.ts` puro y su CSS, montado solo al abrir Ajustes → IPTV
+  (Ajustes enseña una sección cada vez).
   - **No** va por `external.tsx`: esa carpeta la buscan otras piezas y aquí basta con `React.lazy` en el `case 'iptv'`.
   - En la app nativa **no existe** esta sección (M7 no cambia).
 - **Se reutiliza lo que ya hay:** `TextField`, `Button`, `Switch`, `Segmented`, `Capsule`, `useSecondTap`

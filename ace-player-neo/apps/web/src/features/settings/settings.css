@@ -1,6 +1,7 @@
 /* Ajustes con la piel «Palco» (plan fase 2, decisión W10): índice como
    tarjetas con icono grande (chips en fila en el móvil, columna fija desde
-   1024 px) y cada sección como tarjeta oscura con cabecera expandida. Solo
+   1024 px) que funciona como pestañas: al lado (debajo en el móvil) solo se
+   ve la sección elegida, una tarjeta oscura con cabecera expandida. Solo
    tokens; animaciones solo con transform y opacity; nada por debajo de 11 px;
    objetivos de 44 px. */
 
@@ -64,7 +65,7 @@
   text-decoration: none;
   outline: none;
 }
-.set-index__link[aria-current='location'] {
+.set-index__link[aria-current='page'] {
   background: var(--accent-wash);
   box-shadow: inset 0 0 0 1px var(--accent-edge);
   color: var(--accent-ink);
@@ -84,7 +85,7 @@
   background: var(--surface-2);
   color: var(--text-2);
 }
-.set-index__link[aria-current='location'] .set-index__icon {
+.set-index__link[aria-current='page'] .set-index__icon {
   background: var(--accent);
   color: var(--on-accent);
 }
@@ -139,7 +140,7 @@
     line-height: var(--lh-snug);
     white-space: normal;
   }
-  .set-index__link[aria-current='location'] {
+  .set-index__link[aria-current='page'] {
     background: var(--surface-2);
     box-shadow: inset 0 0 0 1px var(--line-soft);
     color: var(--text);
@@ -163,7 +164,7 @@
     background: var(--surface);
     box-shadow: inset 0 0 0 1px var(--line-soft);
   }
-  .set-index__link[aria-current='location'] .set-index__icon {
+  .set-index__link[aria-current='page'] .set-index__icon {
     background: var(--accent);
     box-shadow: none;
   }
@@ -200,6 +201,8 @@
   display: grid;
   gap: var(--s-4);
   min-width: 0;
+  /* También es el margen con el que se decide si, al cambiar de sección,
+     su comienzo ha quedado tapado y hay que volver arriba. */
   scroll-margin-top: calc(var(--safe-top) + var(--s-4));
 }
 @media (min-width: 768px) {
@@ -228,6 +231,15 @@
   font-stretch: var(--w-head);
   letter-spacing: var(--tracking-head);
   line-height: var(--lh-tight);
+}
+/* Recibe el foco al cambiar de sección (tabIndex=-1); el anillo, solo con teclado. */
+.set-sec__title:focus {
+  outline: none;
+}
+.set-sec__title:focus-visible {
+  outline: 2px solid var(--accent-edge);
+  outline-offset: 4px;
+  border-radius: 8px;
 }
 @media (min-width: 768px) {
   .set-sec__title {

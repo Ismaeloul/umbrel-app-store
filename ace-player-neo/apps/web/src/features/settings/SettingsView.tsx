@@ -3,16 +3,19 @@
    icono grande y cada sección como tarjeta con cabecera expandida. Mismas 9
    secciones, mismos ids y mismos nombres accesibles.
 
-   En la 0.6.59 era un modal; en la v2 es una vista con secciones y un índice
-   (fila de chips en el móvil, columna fija en escritorio). Cada sección tiene
-   su dirección, `?vista=ajustes/<sección>`: el indicador del motor lleva a
-   `ajustes/salud` y el estado vacío de la biblioteca a `ajustes/listas`.
+   En la 0.6.59 era un modal; en la v2 es una vista con un índice (fila de
+   chips en el móvil, columna fija en escritorio) que funciona como pestañas:
+   se ve UNA sección cada vez, la elegida (sin sección, la primera). Cada
+   sección tiene su dirección, `?vista=ajustes/<sección>`: el indicador del
+   motor lleva a `ajustes/salud`, el estado vacío de la biblioteca a
+   `ajustes/listas`, la pestaña IPTV a `ajustes/iptv` y el mini-reproductor a
+   `ajustes/donde`.
 
    Secciones:
    - Listas (directories/): añadir, activar, actualizar y borrar listas.
    - IPTV (iptv/, docs/iptv.md §1): conectar una lista M3U o Xtream Codes,
      pausarla, actualizarla y eliminarla. Solo en la web: en el iPhone no
-     existe. Va en su propio trozo de JS (React.lazy) y se monta con WhenNear.
+     existe. Va en su propio trozo de JS (React.lazy): solo se pide al abrirla.
    - Tu fútbol: resumen de gustos y «Editar mis gustos».
    - Reproducción: modo (Baja latencia / Equilibrado / Estable) y la política
      «Un solo dispositivo a la vez» (D5).
@@ -128,9 +131,6 @@ export const IPTV_DESCRIPTION =
 export const RESTART_WARNING =
   'Reiniciarlo corta la reproducción en todos los dispositivos. Úsalo solo si el motor no responde.';
 
-/** Desplazamiento suave salvo con «reducir movimiento». */
-const smooth = (): ScrollBehavior => (prefersReducedMotion() ? 'auto' : 'smooth');
-
 function Section({
   def,
   description,
@@ -151,7 +151,8 @@ function Section({
         <span className="set-sec__icon" aria-hidden="true">
           <Icon name={def.icon} size={24} />
         </span>
-        <h2 id={`ajustes-${def.id}-t`} className="set-sec__title">
+        {/* tabIndex=-1: al cambiar de sección el foco viene aquí. */}
+        <h2 id={`ajustes-${def.id}-t`} className="set-sec__title" tabIndex={-1}>
           {def.title}
         </h2>
       </header>
@@ -204,7 +205,7 @@ export function preferenceSummary(
    propio trozo de JS: solo se descarga al pulsar. */
 const PreferencesSheet = lazy(() => import('../preferences/PreferencesSheet.tsx'));
 
-/* Ajustes → IPTV (docs/iptv.md §1.1): su propio trozo de JS, solo al acercarse. */
+/* Ajustes → IPTV (docs/iptv.md §1.1): su propio trozo de JS, solo al abrirla. */
 const IptvSection = lazy(() => import('../iptv/IptvSection.tsx'));
 
 function FootballSection() {
@@ -458,91 +459,68 @@ function AboutSection() {
 
 /* ---- Vista --------------------------------------------------------------- */
 
-/* Lo de abajo del todo no hace falta para pintar Ajustes y es lo que más
-   pesa: Salud (el registro de fallos, GET /api/v1/diagnostics: ~40 KB) y la
-   fuente mono (39 KB) que piden sus cifras y la tecla de «Acerca de». Se
-   monta cuando la sección se acerca a la pantalla o cuando se pide ella o una
-   de las de debajo (así su sitio no cambia de alto mientras se va a ellas).
-   Montado todo de golpe, en el 4G de Lighthouse entraba antes del LCP
-   (revisión de rendimiento de la Fase 2, docs/rendimiento.md). Sin
-   IntersectionObserver (jsdom), se monta a la primera.
-   También en cuanto el foco entra en Ajustes (Tab, o tocar un campo): quien
-   la recorre con el teclado avanza más deprisa de lo que Salud tarda en
-   llegar. Y si aun así llega (y crece) con el foco ya más abajo, lo que
-   tiene el foco vuelve a la pantalla: antes se quedaba fuera («Atajos de
-   teclado», «Reiniciar el motor»; revisión visual final). */
-const NEAR_MARGIN = '800px 0px';
-/* Lo que crece al llegar lo diferido (el esqueleto mide unos 350 px) y el
-   rato en que se vigila: después, ningún cambio de alto mueve la página. */
-const ARRIVAL_GROWTH = 40;
-const ARRIVAL_WINDOW_MS = 8000;
+/* Una sección cada vez, como pestañas: el índice elige y a la derecha (debajo
+   en el móvil) solo se ve la elegida. Antes era una página sin fin en la que
+   el índice solo desplazaba hasta cada trozo; ahora cada botón enseña SOLO su
+   sección. Sin sección en la dirección (`?vista=ajustes`) se ve la primera.
+
+   Cada sección es una entrada del historial (`ajustes/<sección>`): recargar
+   deja la misma y «atrás» vuelve a la anterior. Como solo se monta la
+   elegida, lo pesado (IPTV, Salud con su registro, la fuente mono de
+   «Acerca de») ya no se descarga hasta que se abre su sección. */
 
 /**
- * Mientras llega lo diferido de `card` (el trozo de JS y sus datos) y la hace
- * crecer: si el foco está más abajo y ha quedado fuera de la pantalla, se
- * lleva a ella (`nearest`, respetando el scroll-padding de las barras). Solo
- * durante unos segundos tras montarse.
+ * Al cambiar de sección (no al abrir Ajustes): el foco va al título de la
+ * nueva (h2 con tabIndex=-1) y, si quedaba por encima de la pantalla, se
+ * vuelve arriba de la vista para que se vea el índice y su comienzo.
+ *
+ * Doble requestAnimationFrame: el armazón (Shell) pasa el foco al <h1> de la
+ * vista en el primer fotograma tras cada cambio de ruta; el de la sección
+ * tiene que llegar después.
  */
-function useFocusStaysOnArrival(card: RefObject<HTMLElement | null>, armed: boolean) {
+function useFocusOnSectionChange(current: SectionId, active: boolean) {
+  const shown = useRef(current);
   useEffect(() => {
-    const el = card.current;
-    if (!armed || !el || typeof ResizeObserver !== 'function') return;
-    let height = el.getBoundingClientRect().height;
-    const observer = new ResizeObserver(() => {
-      const next = el.getBoundingClientRect().height;
-      const grew = next - height >= ARRIVAL_GROWTH;
-      height = next;
-      if (!grew) return;
-      const focused = document.activeElement;
-      if (!(focused instanceof HTMLElement) || el.contains(focused)) return;
-      if (!(el.compareDocumentPosition(focused) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
-      const rect = focused.getBoundingClientRect();
-      if (rect.top >= 0 && rect.bottom <= window.innerHeight) return;
-      focused.scrollIntoView({ block: 'nearest' });
+    if (shown.current === current) return;
+    shown.current = current;
+    if (!active) return;
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => {
+        const card = document.getElementById(`ajustes-${current}`);
+        const heading = document.getElementById(`ajustes-${current}-t`);
+        const margin = card ? parseFloat(getComputedStyle(card).scrollMarginTop) || 0 : 0;
+        if (card && card.getBoundingClientRect().top < margin) {
+          try {
+            window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+          } catch {
+            window.scrollTo(0, 0);
+          }
+        }
+        heading?.focus({ preventScroll: true });
+      });
     });
-    observer.observe(el);
-    const stop = window.setTimeout(() => observer.disconnect(), ARRIVAL_WINDOW_MS);
     return () => {
-      window.clearTimeout(stop);
-      observer.disconnect();
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
     };
-  }, [card, armed]);
+  }, [current, active]);
 }
 
-function WhenNear({ eager, children }: { eager: boolean; children: ReactNode }) {
-  const holder = useRef<HTMLDivElement>(null);
-  // La tarjeta de la sección: sigue montada cuando el esqueleto se va.
-  const card = useRef<HTMLElement | null>(null);
-  const [near, setNear] = useState(eager || typeof IntersectionObserver !== 'function');
-  useFocusStaysOnArrival(card, near);
+/** En el móvil el índice es una fila de chips: la elegida, a la vista. */
+function useCurrentChipInView(list: RefObject<HTMLUListElement | null>, current: SectionId) {
   useEffect(() => {
-    if (near) return;
-    if (eager) {
-      setNear(true);
-      return;
-    }
-    const el = holder.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) setNear(true);
-      },
-      { rootMargin: NEAR_MARGIN },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [near, eager]);
-  if (near) return children;
-  return (
-    <div
-      ref={(el) => {
-        holder.current = el;
-        if (el) card.current = el.parentElement;
-      }}
-    >
-      <SkeletonRows rows={3} label="Cargando…" />
-    </div>
-  );
+    const el = list.current;
+    if (!el || el.scrollWidth <= el.clientWidth) return;
+    const item = el.querySelector<HTMLElement>('.is-current');
+    if (!item) return;
+    const start = item.offsetLeft - el.offsetLeft;
+    const end = start + item.offsetWidth;
+    const pad = parseFloat(getComputedStyle(el).scrollPaddingInlineStart) || 0;
+    if (start - pad >= el.scrollLeft && end <= el.scrollLeft + el.clientWidth) return;
+    const behavior: ScrollBehavior = prefersReducedMotion() ? 'auto' : 'smooth';
+    el.scrollTo?.({ left: Math.max(0, start - pad), behavior });
+  }, [list, current]);
 }
 
 function External({ section, route, active }: { section: ExternalSection } & ViewProps) {
@@ -566,40 +544,28 @@ export default function SettingsView({ route, active }: ViewProps) {
   );
   const requested = route.vista === 'ajustes' ? route.seccion : null;
   // Sin panel de salud, «ajustes/salud» (el indicador del motor) va al motor.
-  const current: SectionId | null =
+  // Sin sección (o con una que no existe) se ve la primera.
+  const current: SectionId =
     requested === 'salud' && !hasHealth
       ? 'motor'
       : sections.some((s) => s.id === requested)
         ? (requested as SectionId)
-        : null;
-  const firstScroll = useRef(true);
-  // El foco ha entrado en Ajustes: se monta todo lo diferido (WhenNear).
-  const [focused, setFocused] = useState(false);
+        : (sections[0]?.id ?? 'listas');
+  const list = useRef<HTMLUListElement>(null);
+  useFocusOnSectionChange(current, active);
+  useCurrentChipInView(list, current);
 
-  // Ir a la sección pedida al llegar (y al elegirla en el índice).
-  useEffect(() => {
-    if (!active || !current) return;
-    const el = document.getElementById(`ajustes-${current}`);
-    if (!el) return;
-    const frame = requestAnimationFrame(() => {
-      el.scrollIntoView({ block: 'start', behavior: firstScroll.current ? 'auto' : smooth() });
-      firstScroll.current = false;
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [current, active]);
-
-  // Cambiar de sección no es cambiar de vista: sin transición y sin llenar el
-  // historial. Si ya es la actual, basta con volver a llevarla arriba.
+  // Cambiar de sección no es cambiar de vista: sin transición, pero sí con su
+  // entrada en el historial (atrás vuelve a la sección anterior). Si ya es la
+  // actual, el foco vuelve a su título.
   const go = (id: SectionId) => {
     if (id === current) {
-      document
-        .getElementById(`ajustes-${id}`)
-        ?.scrollIntoView({ block: 'start', behavior: smooth() });
+      document.getElementById(`ajustes-${id}-t`)?.focus({ preventScroll: true });
       return;
     }
-    navigate({ vista: 'ajustes', seccion: id }, { replace: true, instant: true });
+    navigate({ vista: 'ajustes', seccion: id }, { instant: true });
   };
-  const byId = (id: SectionId) => sections.find((s) => s.id === id);
+  const def = sections.find((s) => s.id === current) ?? sections[0];
 
   const render = (def: SectionDef): ReactNode => {
     switch (def.id) {
@@ -616,13 +582,11 @@ export default function SettingsView({ route, active }: ViewProps) {
       case 'iptv':
         return (
           <Section key={def.id} def={def} description={IPTV_DESCRIPTION}>
-            <WhenNear eager={focused || (current !== null && current !== 'listas')}>
-              <ErrorBoundary what="la IPTV">
-                <Suspense fallback={<SkeletonRows rows={2} label="Cargando la IPTV…" />}>
-                  <IptvSection />
-                </Suspense>
-              </ErrorBoundary>
-            </WhenNear>
+            <ErrorBoundary what="la IPTV">
+              <Suspense fallback={<SkeletonRows rows={2} label="Cargando la IPTV…" />}>
+                <IptvSection />
+              </Suspense>
+            </ErrorBoundary>
           </Section>
         );
       case 'futbol':
@@ -662,11 +626,7 @@ export default function SettingsView({ route, active }: ViewProps) {
       case 'salud':
         return (
           <Section key={def.id} def={{ ...def, title: 'Salud del sistema' }}>
-            <WhenNear
-              eager={focused || current === 'salud' || current === 'motor' || current === 'acerca'}
-            >
-              <External section="salud" route={route} active={active} />
-            </WhenNear>
+            <External section="salud" route={route} active={active} />
           </Section>
         );
       case 'motor':
@@ -678,55 +638,65 @@ export default function SettingsView({ route, active }: ViewProps) {
       case 'acerca':
         return (
           <Section key={def.id} def={def}>
-            {/* Su tecla «?» va en la fuente mono (39 KB): que no se pida al abrir Ajustes. */}
-            <WhenNear eager={focused || current === 'acerca'}>
-              <AboutSection />
-            </WhenNear>
+            <AboutSection />
           </Section>
         );
     }
   };
 
   return (
-    <div className="set" onFocus={focused ? undefined : () => setFocused(true)}>
+    <div className="set">
       <ViewHeader title="Ajustes" />
       <div className="set-layout">
         <nav className="set-index" aria-label="Secciones de Ajustes">
-          <ul className="set-index__list">
+          <ul className="set-index__list" ref={list}>
             {/* Tarjeta con icono grande, título y una pista. El enlace ES la
                 tarjeta (objetivo de 44 px de verdad, también en táctil): dentro
                 lleva el icono (decorativo, sin texto) y el título, así que su
                 nombre y su texto siguen siendo solo el título. La pista es
-                decorativa y va fuera, colocada por CSS bajo el título. */}
-            {sections.map((def) => (
+                decorativa y va fuera, colocada por CSS bajo el título.
+                Son enlaces de verdad (cada sección tiene su dirección: se
+                pueden abrir en otra pestaña) y la elegida lleva
+                aria-current="page", porque es la única que se ve. */}
+            {sections.map((item) => (
               <li
-                key={def.id}
-                className={cx('set-index__item', current === def.id && 'is-current')}
+                key={item.id}
+                className={cx('set-index__item', current === item.id && 'is-current')}
               >
                 <a
                   className="set-index__link"
-                  href={searchFor({ vista: 'ajustes', seccion: def.id })}
-                  aria-current={current === def.id ? 'location' : undefined}
+                  href={searchFor({ vista: 'ajustes', seccion: item.id })}
+                  aria-current={current === item.id ? 'page' : undefined}
+                  aria-controls="ajustes-panel"
                   onClick={(event) => {
-                    if (event.button !== 0 || event.metaKey || event.ctrlKey) return;
+                    if (
+                      event.button !== 0 ||
+                      event.metaKey ||
+                      event.ctrlKey ||
+                      event.shiftKey ||
+                      event.altKey
+                    )
+                      return;
                     event.preventDefault();
                     haptic('selection');
-                    go(def.id);
+                    go(item.id);
                   }}
                 >
                   <span className="set-index__icon" aria-hidden="true">
-                    <Icon name={def.icon} size={20} />
+                    <Icon name={item.icon} size={20} />
                   </span>
-                  <span className="set-index__title">{def.title}</span>
+                  <span className="set-index__title">{item.title}</span>
                 </a>
                 <span className="set-index__hint" aria-hidden="true">
-                  {def.hint}
+                  {item.hint}
                 </span>
               </li>
             ))}
           </ul>
         </nav>
-        <div className="set-sections">{sections.map((def) => render(byId(def.id) ?? def))}</div>
+        <div className="set-sections" id="ajustes-panel">
+          {def ? render(def) : null}
+        </div>
       </div>
     </div>
   );
