@@ -804,7 +804,6 @@ export class VodSession {
     if (end !== null && leg.pos === leg.start) {
       leg.region = this.cache.openRegion(leg.start, end, this.limits.boundedCacheMaxBytes);
     }
-    this.opening = true;
     /* La conexión vive por su cuenta (para poder reutilizarla en un salto
        corto): la petición solo la puede cancelar mientras se está abriendo. */
     const connection = new AbortController();
@@ -812,6 +811,13 @@ export class VodSession {
     leg.controller.signal.addEventListener('abort', cancel, { once: true });
     let opened: OpenedStream;
     try {
+      /* La plaza de la cuenta, ANTES de contar como «abriendo»: si no, la
+         sesión se cuenta como nuestra y resta una conexión ajena (M1). */
+      if (!this.gated) {
+        this.gated = true;
+        await this.deps.accountGate?.(connection.signal);
+      }
+      this.opening = true;
       opened = await this.openUpstream(leg.pos, end, connection.signal);
     } catch (error) {
       /* Una apertura cortada a medias (llegó otra petición): un respiro para que
@@ -840,10 +846,6 @@ export class VodSession {
     end: number | null,
     signal: AbortSignal,
   ): Promise<OpenedStream> {
-    if (!this.gated) {
-      this.gated = true;
-      await this.deps.accountGate?.(signal);
-    }
     let url = this.reuse ?? this.options.url;
     let resolvedAgain = false;
     let busyTry = 0;

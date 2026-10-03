@@ -279,6 +279,27 @@ describe('VodSession', () => {
     expect(vod.opens.length).toBe(opens);
   });
 
+  it('la plaza de la cuenta no se cuenta a sí misma: máx. 1 con otro aparato → vod_busy sin abrir (M1)', async () => {
+    const { origin, vod } = await rig();
+    let session: VodSession | null = null;
+    let seen = -1;
+    /* Como `vodAccountGate`: activas 1 (otro aparato), máximo 1; las nuestras, las del relé. */
+    const gate = async (): Promise<void> => {
+      seen = session?.connections() ?? -1;
+      const foreign = Math.max(0, 1 - seen);
+      if (foreign >= 1) throw new AppError('vod_busy');
+    };
+    session = vod.session(origin.url('1.mkv'), 'mkv', {
+      limits: FAST,
+      deps: { accountGate: gate },
+    });
+    const opens = vod.opens.length;
+    const busy = await rawGet(session.inputUrl, { range: 'bytes=0-99' });
+    expect(seen).toBe(0);
+    expect(busy.headers[VOD_ERROR_HEADER]).toBe('vod_busy');
+    expect(vod.opens.length).toBe(opens);
+  });
+
   it('reuseRedirect apagado: la URL original cada vez; encendido: la final, y con un 404 vuelve a la original', async () => {
     const { origin, vod } = await rig({ redirect: true });
     const plain = vod.session(origin.url('1.mkv'), 'mkv', { limits: FAST });
