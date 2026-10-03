@@ -212,10 +212,10 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
       'vodArt',
       'vodStream',
       'vodProgress',
-      /* «Descargar fallos» (0.9.0): lleva el registro del servidor, aunque redactado. */
-      'diagnosticsExport',
       'vodLanguagesGet',
       'vodLanguagesUpdate',
+      /* «Descargar fallos» (0.9.0): lleva el registro del servidor, aunque redactado. */
+      'diagnosticsExport',
       /* «Descargar logs» (0.9.0): el registro en disco, su zip y los errores de la web. */
       'diagnosticsLogInfo',
       'diagnosticsLogDownload',
