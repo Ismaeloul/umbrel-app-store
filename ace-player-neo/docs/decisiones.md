@@ -502,6 +502,13 @@ conservador). Todas se pueden revertir.
   como nuestros, como los ve Isma; un ffmpeg que muere por el códec es
   decodificación. Las métricas de fin de reproducción y el autoplay
   bloqueado no cuentan como fallo. Lo que no encaja queda «sin clasificar».
+  Cuando el reproductor agota una fuente sin código del servidor, apunta el
+  del ÚLTIMO fallo (`playerFailureCode`): `player_decode_failed` (hls.js,
+  mpegts.js o el `<video>` que no decodifican: nuestro, causa `codec`),
+  `player_stalled` (imagen parada con 2 s o más de búfer: el reproductor) o,
+  si no, `player_source_failed` (la fuente). Un `player_source_failed` de
+  antes (o de la app de iPhone) mira la frase: si delata la decodificación o
+  el relé, es nuestro.
 - **Redacción** (sobre TODO el fichero, dos capas): el redactor de la IPTV
   (conoce usuario, contraseña y URLs guardadas) y `redactReportText`
   (credenciales en URLs y en texto, tramos Xtream con y sin esquema,
@@ -511,10 +518,13 @@ conservador). Todas se pueden revertir.
   y de Tailscale (dicen qué contenedor falla).
 - **Transiciones de la web** (punto 4 de Isma): abrir un partido es el mismo
   fundido que cambiar de pestaña, a la ida y a la vuelta (también con el
-  botón atrás: el router lanza la vuelta justo después del `popstate`, que
-  React pinta sin View Transition). Fuera la transición compartida de los
-  escudos (`partido-<id>`); el reproductor lleva un nombre por presentación
-  (`ace-reproductor-mini`/`-stage`) para fundirse en vez de viajar, salvo en
+  botón atrás: donde las vistas van con View Transitions, el router lanza la
+  vuelta justo después del `popstate`, que React pinta sin View Transition;
+  tras el gesto de volver del móvil, `hasUAVisualTransition`, en el acto y
+  sin fundido, porque ya lo animó el navegador). Fuera la transición
+  compartida de los escudos (`partido-<id>`); el reproductor lleva un
+  nombre por presentación (`ace-reproductor-mini`/`-stage`) para fundirse
+  en vez de viajar, salvo en
   WebKit, donde no lleva `<ViewTransition>` (con fix/transicion-safari, abrir
   un partido allí es solo el fundido CSS de las vistas; probado con WebKit de
   Playwright: sin transiciones del documento y sin vistas superpuestas). La
