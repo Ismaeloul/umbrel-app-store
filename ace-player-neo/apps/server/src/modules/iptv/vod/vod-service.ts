@@ -1342,7 +1342,10 @@ export class VodService {
 
   /** Espera a la sincronización en marcha (tests). */
   async idle(): Promise<void> {
-    await this.syncPromise;
-    await this.loading;
+    /* Varias vueltas: una sincronización que cede el sitio se vuelve a pedir sola. */
+    for (let round = 0; round < 10 && (this.syncPromise || this.loading); round += 1) {
+      await this.syncPromise;
+      await this.loading;
+    }
   }
 }
