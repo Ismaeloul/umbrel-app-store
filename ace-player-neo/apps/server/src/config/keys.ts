@@ -8,7 +8,10 @@
    - `ace-pair-v1`: lo que haga falta firmar en el emparejamiento.
    - `ace-iptv-v1`, `ace-iptv-id-v1` y `ace-iptv-tag-v1`: cifrado de los
      secretos, del catálogo y de la guía de la IPTV, HMAC de los ids de canal
-     y la etiqueta que los hace reconocibles (docs/iptv.md §2.3 y §4.1). Sin
+     y la etiqueta que los hace reconocibles (docs/iptv.md §2.3 y §4.1).
+   - `ace-iptv-vod-v1`: Películas y series (docs/vod.md §5): el AES de un
+     bloque de los ids sellados, la huella del proveedor, la `v` de los
+     carteles y los nombres de su caché en disco. Sin
      semilla NO valen las de un solo arranque (se perderían las credenciales
      al reiniciar): la IPTV guarda su propia clave en `v2/iptv/clave` (0600) y
      deriva de ella con `deriveIptvKeys`.
@@ -26,6 +29,7 @@ export const KEY_LABELS = {
   iptvSecrets: 'ace-iptv-v1',
   iptvIds: 'ace-iptv-id-v1',
   iptvIdTag: 'ace-iptv-tag-v1',
+  iptvVod: 'ace-iptv-vod-v1',
 } as const;
 
 /* Sal fija y pública: HKDF no la necesita secreta; solo separa este uso del
@@ -44,6 +48,8 @@ export interface IptvKeys {
   readonly ids: Buffer;
   /** HMAC de la etiqueta que hace reconocible un id IPTV. */
   readonly idTag: Buffer;
+  /** Películas y series (docs/vod.md §5 y §8): ids sellados, huella del proveedor y carteles. */
+  readonly vod: Buffer;
 }
 
 export interface DerivedKeys {
@@ -61,6 +67,7 @@ export function deriveIptvKeys(seed: string | Buffer): IptvKeys {
     secrets: deriveKey(seed, KEY_LABELS.iptvSecrets),
     ids: deriveKey(seed, KEY_LABELS.iptvIds),
     idTag: deriveKey(seed, KEY_LABELS.iptvIdTag),
+    vod: deriveKey(seed, KEY_LABELS.iptvVod),
   };
 }
 

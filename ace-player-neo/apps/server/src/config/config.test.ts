@@ -243,10 +243,11 @@ describe('HKDF-SHA256 (arquitectura §5.3)', () => {
       iptvSecrets: 'ace-iptv-v1',
       iptvIds: 'ace-iptv-id-v1',
       iptvIdTag: 'ace-iptv-tag-v1',
+      iptvVod: 'ace-iptv-vod-v1',
     });
-    /* Las tres de la IPTV (docs/iptv.md §2.3) son independientes entre sí y de las demás. */
-    const iptv = [a.iptv.secrets, a.iptv.ids, a.iptv.idTag];
-    expect(new Set([a.video, a.pairing, ...iptv].map((key) => key.toString('hex'))).size).toBe(5);
+    /* Las cuatro de la IPTV (docs/iptv.md §2.3 y docs/vod.md §5) son independientes entre sí y de las demás. */
+    const iptv = [a.iptv.secrets, a.iptv.ids, a.iptv.idTag, a.iptv.vod];
+    expect(new Set([a.video, a.pairing, ...iptv].map((key) => key.toString('hex'))).size).toBe(6);
     expect(a.iptv.secrets.equals(deriveKey(SEED, KEY_LABELS.iptvSecrets))).toBe(true);
   });
 
