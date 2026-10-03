@@ -40,6 +40,7 @@ import { rememberedViewParams, useNavigate } from './router.tsx';
 import {
   cineFlagOn,
   navLabel,
+  navParent,
   navVistas,
   searchFor,
   VISTA_TITLE,
@@ -87,7 +88,13 @@ function useNavLink(current: Route) {
       globalThis.location?.search ?? '',
       rememberedViewParams(vista),
     ),
-    'aria-current': current.vista === vista ? ('page' as const) : undefined,
+    // En una vista hija (la Guía TV), su madre se marca como «estás dentro».
+    'aria-current':
+      current.vista === vista
+        ? ('page' as const)
+        : navParent(current.vista) === vista
+          ? ('true' as const)
+          : undefined,
     onClick: (event: MouseEvent<HTMLAnchorElement>) => {
       if (
         event.defaultPrevented ||
@@ -108,7 +115,8 @@ function useNavLink(current: Route) {
 
 /** Índice del destino activo en la lista que se pinta (−1 fuera de ella: partido, sistema). */
 function activeIndex(route: Route, vistas: readonly NavVista[]): number {
-  return (vistas as readonly string[]).indexOf(route.vista);
+  const parent = navParent(route.vista);
+  return parent ? vistas.indexOf(parent) : -1;
 }
 
 export function TabBar({ route, hidden }: { route: Route; hidden?: boolean }) {

@@ -188,6 +188,8 @@ export function applyToCache(client: QueryClient, type: SseEventType, data: unkn
       void client.invalidateQueries({ queryKey: routePrefix('iptvChannels') });
       // La pestaña IPTV de Canales: otro catálogo, otras categorías y otros recuentos (§16.6).
       void client.invalidateQueries({ queryKey: routePrefix('iptvBrowse') });
+      // La Guía TV: estado, sello y filas (docs/iptv.md §20.6: no hay evento propio).
+      void client.invalidateQueries({ queryKey: routePrefix('iptvGuide') });
       void client.invalidateQueries({ queryKey: routePrefix('libraryGet') });
       // El bootstrap casi nunca tiene una vista suscrita (se siembra al
       // arrancar): 'all' lo vuelve a pedir igual, porque iptvActive() lo lee.
