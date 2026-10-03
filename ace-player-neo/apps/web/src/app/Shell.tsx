@@ -162,13 +162,18 @@ export function Shell() {
 
   // Al navegar (no al abrir), el foco va al titular de la vista nueva.
   const firstRender = useRef(true);
+  const vistaActiva = route.vista;
   useEffect(() => {
     if (firstRender.current) {
       firstRender.current = false;
       return;
     }
     const frame = requestAnimationFrame(() => {
-      const view = document.querySelector<HTMLElement>('.view[data-active="true"]');
+      // Por su nombre: una vista recién oculta puede seguir con data-active
+      // un rato (React actualiza lo oculto con prioridad baja).
+      const view = document.querySelector<HTMLElement>(
+        `.views > .view[data-vista="${vistaActiva}"]`,
+      );
       const heading = view?.querySelector<HTMLElement>('h1[tabindex="-1"]');
       (heading ?? document.getElementById('contenido'))?.focus({ preventScroll: true });
     });
