@@ -17,6 +17,7 @@
 
 import { createHash } from 'node:crypto';
 import {
+  FootballScheduleSchema,
   TIMEOUTS,
   motivoDeFallo,
   normalizeHash,
@@ -290,9 +291,23 @@ export class FootballServiceImpl implements FootballService {
     if (!result || (!result.confirmations.length && !result.additions.length)) return raw;
     const memo = this.hybrid;
     if (memo && memo.raw === raw && memo.result === result) return memo.payload;
-    const payload = applyGuideAgenda(raw, result, {
-      sameChannel: (base, other) => iptv.sameChannelScore(base, other),
-    });
+    /* La guía solo suma: si algo sale mal al pintarla o el resultado no cumple
+       el contrato (la ruta v1 lo comprueba y daría 500), la agenda de siempre. */
+    let payload: FootballSchedule = raw;
+    try {
+      const hybrid = applyGuideAgenda(raw, result, {
+        sameChannel: (base, other) => iptv.sameChannelScore(base, other),
+      });
+      const checked = FootballScheduleSchema.safeParse(hybrid);
+      if (checked.success) payload = hybrid;
+      else
+        logger.warn({ errorCode: 'guide_agenda_invalid' }, 'agenda: la guía no cuadra; sin ella');
+    } catch (error) {
+      logger.warn(
+        { errorCode: motivoDeFallo(error) },
+        'agenda: la guía de la IPTV no se pudo usar',
+      );
+    }
     this.hybrid = { raw, result, payload };
     return payload;
   }

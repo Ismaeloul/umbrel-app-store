@@ -31,6 +31,9 @@ const SAME_CHANNEL = 92;
 
 type FootballChannelRef = FootballMatch['channels'][number];
 
+/** Lo más largo que puede ser `guide.channel` (el contrato). */
+const GUIDE_CHANNEL_MAX = 200;
+
 /** Saque de un partido de la agenda (el de futbolenlatv o, sin él, su fecha y hora de Madrid). */
 export function matchKickoff(match: Pick<FootballMatch, 'start' | 'date' | 'time'>): number | null {
   const start = Number(match.start);
@@ -109,7 +112,7 @@ function confirmMatch(
       : {}),
     channels,
     guide: {
-      channel: label,
+      channel: label.slice(0, GUIDE_CHANNEL_MAX),
       time,
       ...(confirmation.moved ? { agendaTime: match.time } : {}),
       added: false,
@@ -141,7 +144,7 @@ function addedMatch(payload: FootballSchedule, addition: GuideAgendaAddition): F
     competition: competitionLabel(payload, addition),
     country: FOOTBALL_SPAIN,
     channels: addition.channels.map((name, index) => ({ id: `${id}-${index}`, name })),
-    guide: { channel: addition.channels[0] ?? '', time, added: true },
+    guide: { channel: (addition.channels[0] ?? '').slice(0, GUIDE_CHANNEL_MAX), time, added: true },
   };
 }
 

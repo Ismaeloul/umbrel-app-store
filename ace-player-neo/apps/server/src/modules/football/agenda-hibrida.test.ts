@@ -93,6 +93,46 @@ describe('agenda híbrida en el servicio', () => {
     expect(harness.football.programChannels('demo-4')).toEqual(['M+ LaLiga TV 2', 'DAZN LaLiga']);
   });
 
+  it('si lo de la guía no cuadra (o falla), la agenda de siempre: nunca la rompe ni la deja vacía', async () => {
+    const plain = await createFootball({ env: DEMO }).football.schedule();
+    for (const result of [
+      /* Un saque imposible: pintarlo falla. */
+      {
+        confirmations: [
+          { matchId: 'demo-4', channels: ['M+ LaLiga TV 2'], start: Number.NaN, moved: true },
+        ],
+        additions: [],
+      },
+      /* Un partido añadido con una hora rara: no cumple el contrato. */
+      {
+        confirmations: [],
+        additions: [
+          {
+            home: 'Girona',
+            away: 'Sevilla',
+            family: 'laliga' as const,
+            competition: 'LaLiga EA Sports',
+            date: TODAY,
+            start: -1e20,
+            channels: ['DAZN LaLiga'],
+          },
+        ],
+      },
+    ]) {
+      const iptv = fakeIptv({ active: true, result });
+      const { football } = createFootball({ env: DEMO, iptv: iptv.service });
+      expect(await football.schedule()).toEqual(plain);
+    }
+    /* Y si la IPTV lanza al preguntarle, también. */
+    const broken = {
+      ...fakeIptv({ active: true, result: confirmed }).service,
+      guideAgenda: () => {
+        throw new Error('guía rota');
+      },
+    } as unknown as IptvService;
+    expect(await createFootball({ env: DEMO, iptv: broken }).football.schedule()).toEqual(plain);
+  });
+
   it('si la IPTV se pausa, la resolución vuelve a los canales de siempre sin esperar a la agenda', async () => {
     const state: FakeIptvState = { active: true, result: confirmed };
     const iptv = fakeIptv(state);
