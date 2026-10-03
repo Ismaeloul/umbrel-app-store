@@ -679,8 +679,11 @@ async function checkKeyboard(page) {
      el navegador sigue desde ahí), dar la vuelta por la barra del navegador
      y encontrar controles que se montan mientras se avanza (en Ajustes, Salud
      y Acerca de se montan cuando el foco entra), que no estaban en la cuenta
-     inicial. Con el tope justo se quedaba sin llegar a los últimos. */
-  for (let step = 0; step < Math.max(tabbables * 2 + 20, 60) && step < 300; step += 1) {
+     inicial. Con el tope justo se quedaba sin llegar a los últimos. La
+     portada de Películas y series pide sus filas al acercarse: al contar
+     hay ~50 controles y el recorrido entero da ~130 paradas (de ahí el
+     mínimo de 200). */
+  for (let step = 0; step < Math.max(tabbables * 2 + 20, 200) && step < 300; step += 1) {
     await page.keyboard.press('Tab');
     await page.waitForTimeout(40);
     let info = await page.evaluate(focusInfo);
@@ -773,7 +776,18 @@ function focusInfo() {
     el.focus({ preventScroll: true });
     ring = withFocus !== without;
   }
-  const key = el.getAttribute('data-revision-tab') ?? label;
+  /* Lo que se montó después de contar (las filas perezosas de Películas y
+     series) lleva su propia marca: con el texto como clave, la misma película
+     en «Novedades» y en su categoría parecía «ya visitada» y el recorrido
+     acababa antes de tiempo. */
+  let key = el.getAttribute('data-revision-tab');
+  if (key === null) {
+    key = el.getAttribute('data-revision-extra');
+    if (key === null) {
+      key = `extra-${document.querySelectorAll('[data-revision-extra]').length}`;
+      el.setAttribute('data-revision-extra', key);
+    }
+  }
   return { key, label, visible, ring };
 }
 
