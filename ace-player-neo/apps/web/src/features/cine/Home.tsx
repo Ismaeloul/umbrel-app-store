@@ -44,6 +44,8 @@ import {
   closeCineGrid,
   openCineGrid,
   rememberCards,
+  rememberHomeScroll,
+  savedHomeFocus,
   savedHomeScroll,
   setCineState,
   useCineState,
@@ -102,6 +104,32 @@ function scrollToY(y: number): void {
       window.scrollTo(0, y);
     } catch {}
   }
+}
+
+/** El id del título de la rejilla (h2, enfocable con tabIndex=-1). */
+const GRID_TITLE_ID = 'cine-rejilla-titulo';
+
+/**
+ * ¿Se ha perdido el foco? En <body> (lo enfocado se quitó de la página, como
+ * la flecha de la rejilla al volver) o dentro de algo oculto (el «Ver todo»
+ * de la portada al abrir la rejilla).
+ */
+function focusLost(): boolean {
+  const active = document.activeElement;
+  return !active || active === document.body || active.closest('[hidden]') !== null;
+}
+
+function focusQuietly(element: HTMLElement | null): void {
+  element?.focus({ preventScroll: true });
+}
+
+function searchField(): HTMLElement | null {
+  return document.querySelector<HTMLElement>('[data-focus-target="buscar-cine"]');
+}
+
+/** El h1 de la vista («Películas y series»), el último recurso. */
+function viewTitle(): HTMLElement | null {
+  return document.querySelector<HTMLElement>('.cine .view-head__title');
 }
 
 export function HomeSkeleton({ note }: { note?: string }) {
@@ -242,16 +270,36 @@ export function Home({ active }: HomeProps) {
   const scope = browseQuery(state, q);
   const pages = useVodPages(scope, active && ready && grid);
 
-  /* De la portada a una categoría: la rejilla empieza arriba. De vuelta, la
-     portada vuelve a donde estaba (data.ts la guardó al abrir la rejilla). */
+  /* La portada apunta dónde está mientras se ve, para volver ahí al cerrar
+     una rejilla, una búsqueda o al llegar desde una ficha. Efecto de
+     maquetación: se quita en el mismo commit que la oculta, antes de que el
+     navegador recorte el scroll de la página, que ya es más corta. */
+  useLayoutEffect(() => {
+    if (!active || grid) return;
+    const kind = state.kind;
+    const onScroll = () => rememberHomeScroll(kind, window.scrollY);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [active, grid, state.kind]);
+
+  /* De la portada a una rejilla: la rejilla empieza arriba y, si el foco se
+     quedó en la portada (ya oculta), pasa al título de la rejilla. De vuelta:
+     la portada a su sitio y el foco al «Ver todo» del que se vino (o al
+     buscador, si se salía de una búsqueda). El foco nunca cae en <body>. */
   const was = useRef({ grid, searching });
   useLayoutEffect(() => {
     const before = was.current;
     was.current = { grid, searching };
     if (!active || before.grid === grid) return;
-    if (grid && !searching) scrollToY(0);
-    else if (!grid && !before.searching) scrollToY(savedHomeScroll());
-  }, [grid, searching, active]);
+    if (grid) {
+      if (!searching) scrollToY(0);
+      if (focusLost()) focusQuietly(document.getElementById(GRID_TITLE_ID));
+      return;
+    }
+    scrollToY(savedHomeScroll(state.kind));
+    if (focusLost())
+      focusQuietly((before.searching ? searchField() : null) ?? savedHomeFocus() ?? viewTitle());
+  }, [grid, searching, active, state.kind]);
 
   useShortcut(
     {
@@ -500,7 +548,7 @@ function GridScreen({
     total !== null ? titlesText(total, state.kind) : state.tag ? TAG_LABEL[state.tag] : '';
   const live = first && !pages.isFetching ? titlesText(first.total, state.kind) : '';
   return (
-    <section className="cine-browse" aria-labelledby="cine-rejilla-titulo">
+    <section className="cine-browse" aria-labelledby={GRID_TITLE_ID}>
       <div className="cine-browse__head">
         <IconButton
           icon="chev-l"
@@ -509,7 +557,8 @@ function GridScreen({
           onClick={searching ? onClearSearch : closeCineGrid}
         />
         <div className="cine-browse__titles">
-          <h2 id="cine-rejilla-titulo" className="cine-browse__title">
+          {/* Enfocable: al abrir la rejilla desde la portada, el foco viene aquí. */}
+          <h2 id={GRID_TITLE_ID} className="cine-browse__title" tabIndex={-1}>
             {title}
           </h2>
           {subtitle ? <p className="cine-browse__count">{subtitle}</p> : null}

@@ -40,7 +40,13 @@ import {
   SkeletonRows,
 } from '../../ui/index.ts';
 import { Art, artFill } from './Art.tsx';
-import { seenCard, setCineState, titleFromCard, useProgressMark, useVodTitle } from './data.ts';
+import {
+  prepareGridFromFicha,
+  seenCard,
+  titleFromCard,
+  useProgressMark,
+  useVodTitle,
+} from './data.ts';
 import {
   ageText,
   clockText,
@@ -378,7 +384,7 @@ function Details({ title }: { title: VodTitle }) {
           type="button"
           className="cine-details__link"
           onClick={() => {
-            setCineState({ kind: title.kind, cat: category.id, tag: null, q: '' });
+            prepareGridFromFicha({ kind: title.kind, cat: category.id });
             navigate({ vista: 'cine', id: null });
           }}
         >

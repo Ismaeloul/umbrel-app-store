@@ -7,6 +7,7 @@ import seriesAviFixture from '@fixtures/variantes/vodTitle.episodio-avi.json';
 import seriesFixture from '@fixtures/variantes/vodTitle.series.json';
 import movieFixture from '@fixtures/web/v1/vodTitle.json';
 import { resetMode, setMode } from '../../api/mode.ts';
+import { resetScrollMemory, saveScroll, savedScroll } from '../../app/scroll-memory.ts';
 import { resetToasts } from '../../notices/toasts.ts';
 import { json, mockFetch, type MockCall } from '../../test/fetch.ts';
 import { DEMO_VOD_IDS, resetDemoVod } from './demo-data.ts';
@@ -31,6 +32,7 @@ afterEach(() => {
   resetToasts();
   resetMode();
   resetDemoVod();
+  resetScrollMemory();
   setHevcSupport(null);
   history.replaceState(null, '', '/');
 });
@@ -304,9 +306,12 @@ describe('serie', () => {
     renderCine({ search: `?vista=cine/${DEMO_VOD_IDS.series}&temporada=1` });
     await screen.findByRole('heading', { level: 1, name: 'The Office' });
     expect(location.search).toContain('temporada=1');
-    // «Categoría» lleva a la rejilla de su categoría…
+    // La portada se dejó bajada (el armazón la devolvería ahí)…
+    saveScroll({ vista: 'cine', id: null }, 1800);
+    // «Categoría» lleva a la rejilla de su categoría, que empieza arriba…
     fireEvent.click(screen.getByRole('button', { name: /^COMEDIA/ }));
     await waitFor(() => expect(location.search).toMatch(/^\?vista=cine&/));
+    expect(savedScroll({ vista: 'cine', id: null })).toBe(0);
     expect(location.search).not.toContain('temporada');
     // …y otra serie de ahí abre en la temporada por la que va (o la primera).
     fireEvent.click(await screen.findByRole('link', { name: /^Aquí no hay quien viva/ }));

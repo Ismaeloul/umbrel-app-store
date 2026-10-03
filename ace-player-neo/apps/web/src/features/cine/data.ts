@@ -33,6 +33,7 @@ import { api, ApiError, isDemo, routePrefix, routeUrl, useApiQuery } from '../..
 import { apiFetch } from '../../api/client.ts';
 import { errorFromResponse } from '../../api/errors.ts';
 import { useRoute } from '../../app/router.tsx';
+import { saveScroll } from '../../app/scroll-memory.ts';
 import { createStore, useStore } from '../../lib/store.ts';
 import { demoArtSrc } from './demo-art.ts';
 import type { browseQuery } from './model.ts';
@@ -48,21 +49,42 @@ import {
 
 const urlStore = createStore<CineUrlState>(readCineState(globalThis.location?.search ?? ''));
 
+/**
+ * «‹ Volver» desde una rejilla en la que se cambió de tipo: Atrás deshace la
+ * entrada de la rejilla, pero la portada de antes era la del otro tipo. Al
+ * llegar a ella (popstate), se pone el tipo con el que se estaba (un segundo
+ * como mucho: si Atrás no llega a la portada, no se toca nada).
+ */
+let pendingHomeKind: { kind: CineUrlState['kind']; until: number } | null = null;
+const PENDING_KIND_MS = 1000;
+
+function writeUrl(state: CineUrlState): void {
+  try {
+    history.replaceState(
+      history.state,
+      '',
+      `${location.pathname}${writeCineState(location.search, state)}${location.hash}`,
+    );
+  } catch {}
+}
+
 function syncFromLocation(): void {
-  const next = readCineState(globalThis.location?.search ?? '');
+  let next = readCineState(globalThis.location?.search ?? '');
+  const pending = pendingHomeKind;
+  if (pending && (Date.now() > pending.until || (next.cat === null && next.tag === null))) {
+    pendingHomeKind = null;
+    if (Date.now() <= pending.until && next.kind !== pending.kind) {
+      next = { ...next, kind: pending.kind };
+      writeUrl(next);
+    }
+  }
   urlStore.set((current) => (sameCineState(current, next) ? current : next));
 }
 
 /** Cambia el estado (con replaceState: los filtros no llenan el historial). */
 export function setCineState(patch: Partial<CineUrlState>): void {
   const next = { ...readCineState(location.search), ...patch };
-  try {
-    history.replaceState(
-      history.state,
-      '',
-      `${location.pathname}${writeCineState(location.search, next)}${location.hash}`,
-    );
-  } catch {}
+  writeUrl(next);
   urlStore.set((current) => (sameCineState(current, next) ? current : next));
 }
 
@@ -72,12 +94,31 @@ interface GridHistoryState {
   cineGrid?: boolean;
 }
 
-/** Dónde estaba la portada al abrir una rejilla, para volver a su sitio. */
-let homeScrollY = 0;
+/**
+ * Dónde estaba la portada (de qué tipo) la última vez que se vio: Home la
+ * apunta al desplazarse y al abrir una rejilla, y vuelve ahí al cerrarla (con
+ * la flecha, Atrás, Esc en la búsqueda o desde una ficha).
+ */
+let homeScroll: { kind: CineUrlState['kind']; y: number } = { kind: 'movie', y: 0 };
 
-/** Solo para Home: la posición de la portada al dejarla por una rejilla. */
-export function savedHomeScroll(): number {
-  return homeScrollY;
+export function rememberHomeScroll(kind: CineUrlState['kind'], y: number): void {
+  homeScroll = { kind, y: Math.max(0, Math.round(y)) };
+}
+
+/** La posición guardada de la portada de ese tipo (la del otro tipo empieza arriba). */
+export function savedHomeScroll(kind: CineUrlState['kind']): number {
+  return homeScroll.kind === kind ? homeScroll.y : 0;
+}
+
+/**
+ * Lo que tenía el foco en la portada al abrir la rejilla («Ver todo» de una
+ * fila): al volver, el foco vuelve ahí y no se pierde en la página.
+ */
+let homeFocus: HTMLElement | null = null;
+
+/** Solo para Home: el «Ver todo» del que se vino, si sigue en la página. */
+export function savedHomeFocus(): HTMLElement | null {
+  return homeFocus?.isConnected ? homeFocus : null;
 }
 
 /**
@@ -93,7 +134,9 @@ export function openCineGrid(patch: Partial<CineUrlState>): void {
     return;
   }
   const next = { ...current, ...patch };
-  homeScrollY = globalThis.scrollY ?? 0;
+  rememberHomeScroll(current.kind, globalThis.scrollY ?? 0);
+  const active = globalThis.document?.activeElement;
+  homeFocus = active instanceof HTMLElement && active.closest('.cine-portada') ? active : null;
   const depth = (history.state as GridHistoryState | null)?.aceDepth ?? 0;
   try {
     history.pushState(
@@ -111,10 +154,27 @@ export function openCineGrid(patch: Partial<CineUrlState>): void {
  */
 export function closeCineGrid(): void {
   if ((history.state as GridHistoryState | null)?.cineGrid) {
+    // Si en la rejilla se cambió de tipo, la portada a la que se vuelve es la de ese tipo.
+    pendingHomeKind = {
+      kind: readCineState(location.search).kind,
+      until: Date.now() + PENDING_KIND_MS,
+    };
     history.back();
     return;
   }
   setCineState({ cat: null, tag: null, order: 'novedades', q: '' });
+}
+
+/**
+ * Desde una ficha, a la rejilla de una categoría («Categoría» de los detalles
+ * o el panel lateral): deja el estado listo para la navegación y la rejilla
+ * empieza arriba, no en el sitio que tenía la portada al abrir la ficha (el
+ * armazón devuelve a la vista su último scroll). Volver a la portada la deja
+ * donde estaba (`savedHomeScroll`).
+ */
+export function prepareGridFromFicha(patch: Partial<CineUrlState>): void {
+  setCineState({ tag: null, q: '', ...patch });
+  saveScroll({ vista: 'cine', id: null }, 0);
 }
 
 /** El estado de la URL de la vista, al día con Atrás/Adelante y con cada navegación. */
@@ -131,6 +191,9 @@ export function useCineState(): CineUrlState {
 /** Solo para los tests. */
 export function resetCineState(): void {
   urlStore.set(readCineState(globalThis.location?.search ?? ''));
+  pendingHomeKind = null;
+  homeScroll = { kind: 'movie', y: 0 };
+  homeFocus = null;
 }
 
 // ---- Consultas -------------------------------------------------------------------------

@@ -6,7 +6,14 @@
 import type { ViewProps } from '../../app/contracts.ts';
 import { useNavigate } from '../../app/router.tsx';
 import { CategoryList } from './CategorySheet.tsx';
-import { closeCineGrid, openCineGrid, setCineState, useCineState, useVodHome } from './data.ts';
+import {
+  closeCineGrid,
+  openCineGrid,
+  prepareGridFromFicha,
+  setCineState,
+  useCineState,
+  useVodHome,
+} from './data.ts';
 import { CINE_TEXT } from './texts.ts';
 import './demo.ts';
 import './cine.css';
@@ -20,7 +27,9 @@ export default function CineAside({ route, active }: ViewProps) {
   const categories = data.categories[state.kind];
   if (categories.length === 0) return null;
   const inFicha = route.vista === 'cine' && route.id !== null;
-  const value = inFicha ? '' : state.q ? '' : state.cat;
+  /* Una búsqueda dentro de una categoría sigue marcando la categoría (busca
+     ahí, §12.5); una desde la portada no marca nada (ni «Inicio»). */
+  const value = inFicha ? '' : state.q && state.cat === null ? '' : state.cat;
   return (
     <nav className="cine-aside" aria-label={CINE_TEXT.categories}>
       <h2 className="cine-aside__title">
@@ -32,7 +41,8 @@ export default function CineAside({ route, active }: ViewProps) {
         withHome
         onChange={(cat) => {
           if (inFicha) {
-            setCineState({ cat, tag: null, q: '' });
+            if (cat === null) setCineState({ cat: null, tag: null, q: '' });
+            else prepareGridFromFicha({ cat });
             navigate({ vista: 'cine', id: null });
             return;
           }

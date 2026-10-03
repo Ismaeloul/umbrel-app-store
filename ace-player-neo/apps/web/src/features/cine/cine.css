@@ -394,6 +394,13 @@
   letter-spacing: var(--tracking-head);
   line-height: var(--lh-tight);
   overflow-wrap: anywhere;
+  outline: none;
+}
+/* Recibe el foco al abrir la rejilla con el teclado: que se vea. */
+.cine-browse__title:focus-visible {
+  outline: 2px solid var(--accent-edge);
+  outline-offset: 3px;
+  border-radius: var(--r-s);
 }
 .cine-browse__count {
   color: var(--text-2);

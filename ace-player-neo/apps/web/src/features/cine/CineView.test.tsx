@@ -150,6 +150,54 @@ describe('portada en filas, como la agenda', () => {
     await waitFor(() => expect(location.search).not.toContain('cinecat'));
   });
 
+  it('con el teclado, el foco va al título de la rejilla y vuelve al «Ver todo» del que se vino', async () => {
+    net = mockFetch(demoRoutes());
+    renderCine();
+    const seeAll = await screen.findByRole('button', { name: 'Ver todo: VOD | 4K, 9 películas' });
+    seeAll.focus();
+    fireEvent.click(seeAll);
+    // La portada se oculta con el botón dentro: el foco no se queda en algo invisible.
+    const title = await screen.findByRole('heading', { level: 2, name: 'VOD | 4K' });
+    await waitFor(() => expect(title).toHaveFocus());
+    const back = screen.getByRole('button', { name: 'Volver a Películas y series' });
+    back.focus();
+    fireEvent.click(back);
+    // La flecha desaparece con la rejilla: el foco vuelve a la fila de la que se vino.
+    await waitFor(() => expect(seeAll).toHaveFocus());
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it('volver a la portada la deja donde estaba; si se cambió a Series en la rejilla, en Series', async () => {
+    const scrollTo = vi.mocked(window.scrollTo);
+    net = mockFetch(demoRoutes());
+    renderCine();
+    await screen.findByRole('heading', { name: 'Novedades en películas' });
+    // La portada bajada a 1.800 px.
+    vi.spyOn(window, 'scrollY', 'get').mockReturnValue(1800);
+    fireEvent.scroll(window);
+    fireEvent.click(screen.getByRole('button', { name: 'Ver todo: VOD | 4K, 9 películas' }));
+    await screen.findByRole('heading', { level: 2, name: 'VOD | 4K' });
+    expect(scrollTo).toHaveBeenLastCalledWith(expect.objectContaining({ top: 0 }));
+    fireEvent.click(screen.getByRole('button', { name: 'Volver a Películas y series' }));
+    await screen.findByRole('heading', { name: 'Novedades en películas' });
+    await waitFor(() =>
+      expect(scrollTo).toHaveBeenLastCalledWith(expect.objectContaining({ top: 1800 })),
+    );
+    // Rejilla de películas → «Series» → «‹»: la portada de SERIES (y arriba: es otra).
+    fireEvent.click(screen.getByRole('button', { name: 'Ver todo: VOD | 4K, 9 películas' }));
+    await screen.findByRole('heading', { level: 2, name: 'VOD | 4K' });
+    fireEvent.click(screen.getByRole('radio', { name: 'Series' }));
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Todas las series' }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Volver a Películas y series' }));
+    expect(await screen.findByRole('heading', { name: 'Series actualizadas' })).toBeInTheDocument();
+    await waitFor(() => expect(location.search).toContain('cine=series'));
+    expect(location.search).not.toContain('cinecat');
+    expect(screen.getByRole('radio', { name: 'Series' })).toHaveAttribute('aria-checked', 'true');
+    expect(scrollTo).toHaveBeenLastCalledWith(expect.objectContaining({ top: 0 }));
+  });
+
   it('«Series» cambia de tipo, de novedades y de filas (sigue en la portada)', async () => {
     net = mockFetch(demoRoutes());
     renderCine();
