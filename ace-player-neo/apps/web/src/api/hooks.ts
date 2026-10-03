@@ -3,7 +3,7 @@
 import type { EngineState } from '@ace/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSyncExternalStore } from 'react';
-import { iptvActive } from './boot.ts';
+import { iptvActive, vodActive } from './boot.ts';
 import { useApiQuery } from './query.ts';
 
 /** Estado del motor: llega por SSE (`engine.status`) o, en respaldo, cada 20 s. */
@@ -55,6 +55,19 @@ export function useIptvActive(): boolean {
   return useSyncExternalStore(
     (onChange) => client.getQueryCache().subscribe(onChange),
     () => iptvActive(client),
+    () => false,
+  );
+}
+
+/**
+ * `vodActive()` que repinta cuando cambia (`bootstrap.features.vod`, docs/vod.md
+ * §11.4). Igual que useIptvActive: solo mira la caché, sin pedir nada.
+ */
+export function useVodActive(): boolean {
+  const client = useQueryClient();
+  return useSyncExternalStore(
+    (onChange) => client.getQueryCache().subscribe(onChange),
+    () => vodActive(client),
     () => false,
   );
 }

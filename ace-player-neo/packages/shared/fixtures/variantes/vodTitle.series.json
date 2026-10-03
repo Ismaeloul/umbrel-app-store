@@ -1,0 +1,71 @@
+{
+  "kind": "series",
+  "id": "7e8f9012345678abcdef0123456789abc0d1e2f3",
+  "info": "ok",
+  "title": "The Office",
+  "year": 2005,
+  "plot": "El día a día de los empleados de una sucursal de una empresa de papel en Scranton, contado como un documental.",
+  "genres": ["Comedia"],
+  "cast": ["Steve Carell", "Rainn Wilson", "John Krasinski", "Jenna Fischer"],
+  "director": "Greg Daniels",
+  "country": "Estados Unidos",
+  "rating": 8.6,
+  "poster": "71bc0a93",
+  "backdrop": "4e2d8f07",
+  "tags": ["castellano", "multi"],
+  "adult": false,
+  "category": { "id": "d4e5f6071829", "name": "SERIES | ES" },
+  "seasons": [
+    {
+      "n": 1,
+      "name": "Temporada 1",
+      "episodes": [
+        {
+          "id": "012345678abcdef0123456789abcdef0f3041526",
+          "n": 1,
+          "title": "Piloto",
+          "plot": "Un equipo de documentales llega a la oficina de Dunder Mifflin en Scranton.",
+          "durationS": 1380,
+          "still": "6a1f0c38",
+          "playable": "yes",
+          "progress": { "posS": 1380, "durS": 1380, "watched": true },
+          "container": "mkv"
+        }
+      ]
+    },
+    {
+      "n": 2,
+      "name": "Temporada 2",
+      "episodes": [
+        {
+          "id": "8f9012345678abcdef0123456789abcdd1e2f304",
+          "n": 5,
+          "title": "Halloween",
+          "plot": null,
+          "durationS": 1320,
+          "still": null,
+          "playable": "yes",
+          "progress": { "posS": 1300, "durS": 1320, "watched": true },
+          "container": "mp4"
+        },
+        {
+          "id": "9012345678abcdef0123456789abcdefe2f30415",
+          "n": 6,
+          "title": "La pelea",
+          "plot": "Michael y Dwight se enfrentan en el dojo.",
+          "durationS": 1320,
+          "still": "2b6c9d10",
+          "playable": "unknown",
+          "progress": null
+        }
+      ]
+    }
+  ],
+  "main": {
+    "episodeId": "9012345678abcdef0123456789abcdefe2f30415",
+    "action": "next",
+    "label": "Siguiente: T2:E6",
+    "posS": 0
+  },
+  "truncated": false
+}

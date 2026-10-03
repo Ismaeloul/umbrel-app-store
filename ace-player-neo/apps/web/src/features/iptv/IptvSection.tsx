@@ -21,6 +21,7 @@ import { IPTV_CLIENT, type IptvProviderView, type IptvView } from '@ace/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState, type FormEvent, type Ref } from 'react';
 import { api, routeKey, routePrefix, useApiQuery, useRealtimeStatus } from '../../api/index.ts';
+import { cineFlagOn } from '../../app/routes.ts';
 import { cx } from '../../lib/cx.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { notify } from '../../notices/index.ts';
@@ -68,6 +69,7 @@ import {
   needsSecrets,
   refreshingText,
   staleLine,
+  vodLines,
   syncedText,
   syncingText,
   validateForm,
@@ -502,6 +504,8 @@ function IptvCard({
   const stale = staleLine(provider);
   const account = provider.kind === 'xtream' ? accountLine(provider.account) : null;
   const guide = guideLine(provider.guide);
+  /* Películas y series (docs/vod.md §12.10): hasta la 0.9.0, solo con `?flag=cine`, como el destino. */
+  const vod = cineFlagOn() ? vodLines(provider) : [];
   const failed = provider.status === 'error' && !stale && provider.error;
   const noteId = useId();
   /* La papelera se convierte en «¿Borrar?» (otro botón): el foco la sigue, y
@@ -553,6 +557,15 @@ function IptvCard({
             </p>
           ) : null}
           {guide ? <p className="iptv-card__line iptv-card__guide">{guide}</p> : null}
+          {vod.map((line) => (
+            <p
+              key={line.text}
+              className={cx('iptv-card__line', 'iptv-card__vod', `iptv-card__line--${line.tone}`)}
+            >
+              {line.tone !== 'plain' ? <Icon name="aviso" size={16} /> : null}
+              {line.text}
+            </p>
+          ))}
         </div>
       </div>
       <Switch

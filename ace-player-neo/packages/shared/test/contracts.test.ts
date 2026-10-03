@@ -102,7 +102,7 @@ describe('tabla de rutas v1', () => {
     }
   });
 
-  it('solo SSE, vídeo y los PNG de escudos y logos responden sin JSON', () => {
+  it('solo SSE, vídeo, los PNG de escudos y logos, los carteles VOD y el 204 del progreso responden sin JSON', () => {
     const sinJson = routes.filter((route) => route.response === null).map((route) => route.id);
     expect(sinJson.sort()).toEqual([...NON_JSON_ROUTE_IDS].sort());
   });
@@ -348,7 +348,10 @@ describe('contrato de la IPTV (docs/iptv.md §5)', () => {
   });
 
   it('7 rutas solo web del módulo iptv (las 5 de Ajustes, el buscador y la pestaña), sin iptvTest; video pasa a any con t opcional', () => {
-    const iptv = listV1Routes().filter((route) => route.module === 'iptv');
+    /* Las de Películas y series (`vod*`, también del módulo iptv) las fija test/vod.test.ts. */
+    const iptv = listV1Routes().filter(
+      (route) => route.module === 'iptv' && !route.id.startsWith('vod'),
+    );
     expect(iptv.map((route) => `${route.id} ${route.method} ${route.path}`)).toEqual([
       'iptvGet GET /api/v1/iptv',
       'iptvSave PUT /api/v1/iptv',
@@ -468,7 +471,9 @@ describe('buscador: IPTV y AceStream juntos (docs/iptv.md §14.2)', () => {
       module: 'iptv',
       errors: ['empty_query'],
     });
+    /* Las 7 de la IPTV y las 4 JSON de Películas y series (docs/vod.md §11.6). */
     expect(WEB_FIXTURE_ROUTE_IDS.filter((id) => id.startsWith('iptv'))).toHaveLength(7);
+    expect(WEB_FIXTURE_ROUTE_IDS.filter((id) => id.startsWith('vod'))).toHaveLength(4);
     expect(WEB_FIXTURE_ROUTE_IDS).toContain('iptvChannels');
     const example = WEB_V1_FIXTURES.iptvChannels;
     expect(IptvChannelsResponseSchema.safeParse(example).success).toBe(true);

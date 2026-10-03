@@ -14,6 +14,10 @@
      (Xtream, 812 canales, guía con 640, activa) y el bootstrap la da por
      activa (`features.iptv`); guardar, actualizar, pausar y eliminar dan
      `demo_unsupported`, como los directorios.
+   - Películas y series (docs/vod.md §12.11): el bootstrap dice que las hay
+     (`features.vod`) y la IPTV de ejemplo lleva su resumen; el catálogo de
+     muestra lo contesta features/cine/demo.ts. El destino sale con
+     `?demo=1&flag=cine`.
    - Una vista puede afinar cualquier respuesta con registerDemoHandler. */
 
 import type {
@@ -219,6 +223,15 @@ export function demoIptvView(now = Date.now()): IptvView {
         ours: 0,
       },
       guide: { available: true, channelsWithGuide: 640, updatedAt: hoursAgo(5), failedAt: null },
+      vod: {
+        state: 'ready',
+        movies: 60,
+        series: 12,
+        builtAt: hoursAgo(3),
+        truncated: false,
+        skipped: 0,
+        stale: false,
+      },
     },
     refreshHours: 6,
   };
@@ -245,7 +258,7 @@ export async function handleDemo<Id extends JsonRouteId>(
         library: structuredClone(current.library),
         preferences: structuredClone(current.preferences),
         settings: structuredClone(current.settings),
-        features: { ...base.features, demoSchedule: true, iptv: true },
+        features: { ...base.features, demoSchedule: true, iptv: true, vod: true },
       } satisfies BootstrapResponse;
       break;
     }

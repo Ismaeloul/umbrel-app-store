@@ -57,6 +57,13 @@ export const BootstrapResponseSchema = z.strictObject({
      * cambiar la ida y vuelta de la app.
      */
     iptv: z.boolean().optional(),
+    /**
+     * Películas y series (docs/vod.md §11.4): IPTV activa, Xtream y catálogo
+     * VOD `ready` con algún título (o `preparing`). Sale del resumen de
+     * `v2/vod.json`, sin abrir `vod.enc`. Opcional y solo de la web por ahora:
+     * `fixtures/v1/bootstrap.json` no lo lleva.
+     */
+    vod: z.boolean().optional(),
   }),
 });
 export type BootstrapResponse = z.infer<typeof BootstrapResponseSchema>;

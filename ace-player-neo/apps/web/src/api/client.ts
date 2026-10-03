@@ -19,7 +19,7 @@
    - Modo demo: espera a que se decida (mode.ts) y, si es demo, contesta el
      módulo diferido demo/ sin red. */
 
-import { IPTV_CLIENT } from '@ace/shared';
+import { IPTV_CLIENT, VOD_CLIENT } from '@ace/shared';
 import { ApiError, errorFromResponse, isAbortError } from './errors.ts';
 import { isDemo, whenModeReady } from './mode.ts';
 import {
@@ -76,6 +76,13 @@ const TIMEOUTS: Partial<Record<JsonRouteId, number>> = {
   iptvChannels: IPTV_CLIENT.searchMs,
   /* La pestaña IPTV de Canales (§16.2): el servidor responde en < 100 ms con 30 000 canales. */
   iptvBrowse: IPTV_CLIENT.browseMs,
+  /* Películas y series (docs/vod.md §11.1 y §9.12): abrir tiene 40 s en el
+     servidor y 50 s aquí, bajo los 60 s de nginx; la ficha espera a la cola
+     de fichas del proveedor. */
+  vodHome: VOD_CLIENT.homeMs,
+  vodBrowse: VOD_CLIENT.browseMs,
+  vodTitle: VOD_CLIENT.titleMs,
+  vodStream: VOD_CLIENT.streamMs,
   engineRestart: 20_000,
   healthLive: 4_000,
 };
@@ -150,6 +157,15 @@ let fetchImpl: typeof fetch = (...args) => globalThis.fetch(...args);
 /** Solo para los tests: un fetch simulado (src/test/fetch.ts). */
 export function setFetch(next: typeof fetch | null): void {
   fetchImpl = next ?? ((...args) => globalThis.fetch(...args));
+}
+
+/**
+ * El mismo fetch que usa api() (el simulado en los tests), para las rutas
+ * que no son JSON: hoy, `vodProgress`, que responde 204 sin cuerpo
+ * (features/cine/data.ts).
+ */
+export function apiFetch(input: string, init?: RequestInit): Promise<Response> {
+  return fetchImpl(input, init);
 }
 
 /** Valida con zod en desarrollo. En producción esta rama desaparece del build. */

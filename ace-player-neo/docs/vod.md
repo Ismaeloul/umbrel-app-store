@@ -5,7 +5,12 @@ Lo pidió Isma el 29-sep-2026: su IPTV «viene con series y pelis», y quiere qu
 para elegir entre pelis o series. Parte de la 0.8.2 publicada. La web va primero; la app de iOS llega después y la API
 se diseña para las dos (§17).
 
-**Estado: propuesta (29-sep-2026). No hay nada implementado.** Este documento sale de tres diseños hechos con lentes
+**Estado: propuesta (29-sep-2026), con las respuestas de Isma del 30-sep (§19.4).** Dónde está cada pieza, qué está
+hecho, qué falla y el plan hasta la 0.9.0: **`docs/vod-estado.md`** (manda sobre lo que diga aquí de ramas y
+paquetes). Hecho: el contrato (VOD-1: `packages/shared` y las 6 rutas como esqueleto que responde 501), el guion del
+Paso 0 (`scripts/vod-sondeo.mjs`, §3) y la web de navegar (VOD-3: §12.1-§12.6, §12.10 y §12.11, con «Reproducir»
+como aviso «Próximamente» hasta VOD-6; se ve con `?demo=1&flag=cine`); en la rama de la 0.9.0 se unen con el catálogo
+(VOD-2, sin revisar) y el principio de la reproducción (VOD-4). Este documento sale de tres diseños hechos con lentes
 distintas (lo más simple y robusto, la mejor experiencia y la escala con seguridad) y de una revisión que los puntuó
 contra el código real. Gana el primero, con injertos de los otros dos. El anexo §20 dice qué viene de dónde y qué se
 descartó.
@@ -53,8 +58,9 @@ empieza en ficheros nuevos; los enganches de una línea en esos ficheros se unen
 6. **Una sola conexión al proveedor, siempre.** Un relé VOD nuevo (`relay-vod.ts`) va **en serie**: corta la petición
    anterior y espera a que se cierre su socket antes de abrir la siguiente. Sin él, ffmpeg abre 2 conexiones en cada
    salto (medido) y un panel con `max_connections = 1` falla.
-7. **Una cosa a la vez en casa (D5).** Una película corta el directo IPTV, el AceStream o la película de otro aparato,
-   sin preguntar, como un canal.
+7. **Una cosa por IPTV a la vez en casa (D5, D-VOD11 cambiada el 30-sep).** Una película corta el directo IPTV o la
+   película de otro aparato, sin preguntar, como un canal. **Con AceStream convive:** un partido por AceStream y una
+   película por IPTV pueden sonar a la vez, porque no comparten conexión.
 8. **Progreso en el servidor** (`v2/vod.json`), compartido entre la web y el iPhone: reanudar, «Seguir viendo»,
    «Marcar hasta aquí como visto», siguiente episodio con cuenta atrás y «¿Sigues viendo?» tras 3 episodios seguidos.
 9. **Un audio por sesión** (castellano por defecto, recordado por serie). Cambiarlo reabre en el mismo punto (2-4 s).
@@ -840,8 +846,10 @@ ffmpeg -hide_banner -loglevel warning -nostdin
 - **Ruta propia `vodStream`** (`channelStream` y sus ejemplos fijados para iOS no cambian). El manejador llama a
   `playback.acquireVod(id, {client, viewer, device, startS, audio, hevc, signal})`: el mismo `acquireInternal`, bajo el
   cerrojo de la casa y con el mismo `placeWaitingLocked`.
-  - **Cierra lo que esté sonando** (directo IPTV, AceStream u otra película) y **espera a que el relé suelte el
-    socket** antes de abrir. «Un canal a la vez en casa» (D5) y `max_connections = 1` salen gratis.
+  - **Cierra lo que esté sonando por la IPTV** (directo IPTV u otra película) y **espera a que el relé suelte el
+    socket** antes de abrir. `max_connections = 1` sale gratis. **Una sesión AceStream no se toca** (D-VOD11, cambiada
+    el 30-sep): convive con la película. Al revés igual: abrir un canal AceStream no cierra el VOD, y abrir un canal
+    IPTV sí (la plaza es una).
   - **Sin confirmación** antes de cortar a otro aparato, como los canales (D-VOD12). El otro aparato recibe el
     `playback.handoff` de siempre.
 - **`openSessionLocked`** gana `if (request.vod) return openVodLocked(request)`:
@@ -1187,6 +1195,7 @@ export const VodEpisodeSchema = z.strictObject({
   id: HashSchema, n: z.number().int().min(0).max(9_999), title: z.string().max(200),
   plot: z.string().max(600).nullable(), durationS: z.number().int().nullable(),
   still: VodArtStampSchema.nullable(), playable: VodPlayableSchema, progress: VodProgressSchema.nullable(),
+  container: z.string().max(8).optional(),             // «mkv», «avi»…: para el texto de `playable: 'no'`
 });
 export const VodSeriesSchema = z.strictObject({
   kind: z.literal('series'), id: HashSchema, info: VodInfoSchema,
@@ -1674,7 +1683,7 @@ Cada estado vacío tiene una salida (`EmptyState` con `actions`).
 | `fmp4.test.ts` | Cortes de trozo, tamaños de 64 bits, `tfdt` v0 y v1 |
 | `producer.test.ts` (ffmpeg falso que escribe cajas) | Regla de reinicio de 30 s; reinicios agrupados en 1,5 s (gana el último); contrapresión 60/30; caída tardía → un segmento antes; ventana de 120 s y 256 MiB por detrás; tope de 1,5 GiB; `statfs` < 2 GiB → `vod_disk_full`; pausa de 5 min → se mata ffmpeg y se suelta el relé; **código 0 = completo, sin `died`**; un reintento y después `vod_dropped`; espera de 15 s → 503; `stsd` distinto → `vod_dropped`; se sirve el primer init |
 | `args.test.ts` | `-noaccurate_seek -ss K+0.2` solo con N > 0; `-copyts`; `delay_moov+frag_discont`; **ningún `first_pts`**; `hvc1` solo con HEVC; AAC-LC copiado; `-rw_timeout 55000000`; solo la URL del relé (ni host ni credenciales del proveedor) |
-| `playback/vod-sessions.test.ts` | El VOD cierra el directo IPTV y espera al relé; el directo, AceStream u otro VOD cierran el VOD; mismo id en otro aparato → traspaso también con la política `share`; otro audio → sesión nueva; gracia de 3 s solo con el mismo audio; sin `nowPlaying`, veredictos, historial ni `sessions.json`; `emitActivity` no marca el motor; `release` suelta la plaza; los `vod_*` llegan en `stream.closed` |
+| `playback/vod-sessions.test.ts` | El VOD cierra el directo IPTV y espera al relé; el directo IPTV u otro VOD cierran el VOD; **un VOD y una sesión AceStream conviven** (ninguno cierra al otro, D-VOD11); mismo id en otro aparato → traspaso también con la política `share`; otro audio → sesión nueva; gracia de 3 s solo con el mismo audio; sin `nowPlaying`, veredictos, historial ni `sessions.json`; `emitActivity` no marca el motor; `release` suelta la plaza; los `vod_*` llegan en `stream.closed` |
 | `vod/timings.test.ts` | El presupuesto de §9.12, leyendo el `proxy_read_timeout` de `location /api/` de `nginx.conf` |
 
 **Contratos** (`packages/shared/test/contracts.test.ts`, `test/security.test.ts`): ejemplos `web/v1` y variantes;
@@ -1715,8 +1724,8 @@ MKV HEVC + E-AC-3.
 5. `noRange` → `vod_unsupported` (`sin_saltos`);
 6. `dropAtBytes` → se retoma sin que ffmpeg lo note;
 7. pausa con `idleCloseMs` → al seguir, el relé reabre de forma perezosa;
-8. un VOD mientras suena un canal IPTV en otro visor → el canal se corta y el relé suelta antes de abrir; lo mismo con
-   AceStream;
+8. un VOD mientras suena un canal IPTV en otro visor → el canal se corta y el relé suelta antes de abrir; con un canal
+   AceStream sonando, **los dos siguen** (D-VOD11);
 9. `busyAfterCloseMs` de 10 s → sale tras los reintentos; de 30 s → `vod_busy` con `retryAfterS`, y todo antes de
    45 s;
 10. reiniciar el servidor y pedir «Seguir viendo»: el episodio se resuelve por su id sellado, sin caché;
@@ -1904,7 +1913,7 @@ quita de `WEB_FIXTURE_ROUTE_IDS` y actualiza `security.test.ts`. El mismo día, 
 | D-VOD8 | **Carteles por proxy** con id y versión, caché de 256 MiB, solo raster, sin LAN salvo el host del proveedor, TMDB reducido | Enlace directo: lo impide la CSP y filtraría la URL. Redimensionar con ffmpeg: más procesos contra `pids_limit`. Precargar cientos: tráfico sin pedirlo |
 | D-VOD9 | **Estrategia C para todos**; sin A, B ni D en la v1 | A: solo web, solo MP4 H.264/AAC y AC-3 sin sonido en Chrome. B: cae hasta un GOP antes y no sirve a AVPlayer. D: cae antes, lista que crece y llena el disco |
 | D-VOD10 | **Relé VOD en serie** con caché de cabecera e índice, salto corto ≤ 32 MiB sin reabrir, EOF = fin, reapertura perezosa; redirección reutilizada solo si el Paso 0 lo valida | Pasar ffmpeg directo al proveedor: 2 conexiones por salto (medido). La `TsSession` del directo: 409 y vuelve al byte 0 |
-| D-VOD11 | **El VOD pasa por el cerrojo de la casa (D5):** una cosa a la vez | Que una película no choque con AceStream (no comparten conexión): cambia una regla de la casa; queda como **pregunta para Isma** (§19.3) |
+| D-VOD11 | **Cambiada por Isma el 30-sep (§19.4):** una película por IPTV y un partido por AceStream **conviven**, porque no comparten conexión. Dos cosas por IPTV a la vez siguen la regla de la casa (D5): la nueva corta la anterior, sin confirmación y con el `playback.handoff` de siempre en el otro aparato (D-VOD12). El contrato ya lo permite: `vodStream` no cambia de forma y el cerrojo se decide en el servidor (VOD-5) | La propuesta original, una cosa a la vez también con AceStream: cortaba el fútbol de otra persona sin necesidad |
 | D-VOD12 | **Sin confirmación** antes de cortar lo de otro aparato | Preguntar: los canales no preguntan, sería incoherente |
 | D-VOD13 | **Mismo título en otro aparato = traspaso**; la posición viaja por el progreso | Compartir: un ffmpeg no sirve dos posiciones |
 | D-VOD14 | **Un audio por sesión**, castellano por defecto y recordado por serie; cambiarlo reabre en la posición (2-4 s) | Pistas HLS ya: lista maestra y más argumentos; después (0,09 núcleos con 2, medido) |
@@ -1914,7 +1923,7 @@ quita de `WEB_FIXTURE_ROUTE_IDS` y actualiza `security.test.ts`. El mismo día, 
 | D-VOD18 | **Visto** con quedan ≤ max(180 s, 5 %) en películas y ≤ max(60 s, 4 %) en episodios; reanudar desde 30 s; siguiente episodio a −max(20 s, 2 %) con 10 s de cuenta atrás; «¿Sigues viendo?» tras 3 | Un solo umbral: marca vistas películas con créditos largos o episodios a medias. Esperar a `ended`: obliga a ver los créditos. Sin la pregunta: la plaza del proveedor ocupada toda la noche |
 | D-VOD19 | **Rutas nacen `web`**, con formas pensadas para iOS | `any` ya: rompe `FixturesTests` antes de tener tipos Swift (como D27 y D29) |
 | D-VOD20 | **Errores `vod_*`** | `iptv_*`: están fijados y significan «pasa a AceStream» |
-| D-VOD21 | **Quinto destino «Pelis y series»** (h1 «Películas y series»; «Cine» de respaldo), solo con VOD y, hasta la 0.9.0, con `?flag=cine` | «Películas y series» en la barra: 77,2 px no caben en 64,8. «Cine»: no es lo que pidió Isma. Una pestaña dentro de Canales: esconde «una opción» que pidió aparte |
+| D-VOD21 | **Quinto destino «Pelis y series»**, elegido por Isma el 30-sep (§19.4); `aria-label`, `title` y h1 «Películas y series». «Cine» solo si `revision` mostrara un corte. Aparece solo con VOD y, hasta la 0.9.0, con `?flag=cine` | «Películas y series» en la barra: 77,2 px no caben en 64,8. «Cine»: no es lo que pidió Isma. Una pestaña dentro de Canales: esconde «una opción» que pidió aparte |
 | D-VOD22 | **Vistas `cine`** (portada, rejilla, ficha) **y `sala`** (escenario) | Escenario dentro de la ficha: mezcla el desplazamiento de la ficha con el vídeo. Una sola vista con subestados: sin enlaces directos a una ficha |
 | D-VOD23 | **Un reproductor:** `VodDriver` en ficheros nuevos y enganches de una línea en `runtime.ts` | Un segundo `<video>`: rompe el dock único y el cerrojo. Una bandera repartida por `runtime.ts`: 12+ cambios que chocan con el diagnóstico |
 | D-VOD24 | **Pausa larga: se suelta el proveedor a los 5 min** (lo ajusta el Paso 0); la sesión sigue por latidos | A los 45 s: las pausas cortas chocarían con la penalización de «ocupado» del panel. No soltarla nunca: bloquea el PC de Isma |

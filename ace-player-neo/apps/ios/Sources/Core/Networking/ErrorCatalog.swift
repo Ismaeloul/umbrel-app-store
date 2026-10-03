@@ -14,7 +14,7 @@ public struct ErrorDefinition: Sendable, Equatable {
     public let message: String
 }
 
-/// Catálogo de códigos de error con sus mensajes en español (107 códigos).
+/// Catálogo de códigos de error con sus mensajes en español (115 códigos).
 public enum ErrorCatalog {
     public static let entries: [String: ErrorDefinition] = [
         "bad_request": ErrorDefinition(status: 400, isPublic: true, message: "La petición no es válida."),
@@ -102,6 +102,14 @@ public enum ErrorCatalog {
         "backup_version_unsupported": ErrorDefinition(status: 422, isPublic: true, message: "Esta copia es de una versión más nueva de Ace Player Neo. Actualiza la app y vuelve a intentarlo."),
         "backup_too_large": ErrorDefinition(status: 413, isPublic: true, message: "La copia es demasiado grande (máximo 2 MiB)."),
         "backup_passphrase_wrong": ErrorDefinition(status: 422, isPublic: true, message: "La clave no es correcta: no se puede abrir la contraseña de la IPTV de esta copia."),
+        "vod_unavailable": ErrorDefinition(status: 503, isPublic: true, message: "Tu IPTV no ofrece películas ni series, o no responde ahora mismo."),
+        "vod_not_found": ErrorDefinition(status: 404, isPublic: true, message: "Este título ya no está en tu IPTV."),
+        "vod_unsupported": ErrorDefinition(status: 422, isPublic: true, message: "Este título usa un formato que no se puede reproducir aquí."),
+        "vod_busy": ErrorDefinition(status: 503, isPublic: true, message: "Tu cuenta IPTV está en uso en otro aparato. Ciérralo y vuelve a intentarlo."),
+        "vod_timeout": ErrorDefinition(status: 504, isPublic: true, message: "Tu IPTV tarda demasiado en dar el vídeo. Prueba otra vez."),
+        "vod_dropped": ErrorDefinition(status: 502, isPublic: true, message: "El proveedor ha cortado el vídeo. Vuelve a intentarlo."),
+        "vod_disk_full": ErrorDefinition(status: 507, isPublic: true, message: "No queda espacio en el Umbrel para preparar el vídeo."),
+        "vod_account": ErrorDefinition(status: 403, isPublic: true, message: "Tu cuenta IPTV no está activa. Revísala en Ajustes → IPTV."),
         "state_unreadable": ErrorDefinition(status: 500, isPublic: false, message: "No se pudo leer el estado guardado."),
         "scanner_unavailable": ErrorDefinition(status: 502, isPublic: false, message: "El comprobador no responde."),
         "scanner_timeout": ErrorDefinition(status: 504, isPublic: false, message: "El comprobador tarda demasiado."),

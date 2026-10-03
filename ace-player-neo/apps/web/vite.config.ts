@@ -202,6 +202,13 @@ export default defineConfig({
               // Sin demo-data.ts: son los datos de la demo, que demo.ts pide con import().
               test: /[\\/]apps[\\/]web[\\/]src[\\/]features[\\/](?:agenda[\\/](?!demo-data\.ts$)|preferences[\\/])/,
             },
+            // Películas y series (docs/vod.md §12.3): su propio trozo perezoso,
+            // vista y panel juntos. Sin demo-data.ts, que demo.ts pide con import().
+            {
+              name: 'cine',
+              priority: 12,
+              test: /[\\/]apps[\\/]web[\\/]src[\\/]features[\\/]cine[\\/](?!demo-data\.ts$)/,
+            },
             {
               name: 'fuentes',
               // Después de canales: si fuera antes, se quedaría con lo de la biblioteca que usa.

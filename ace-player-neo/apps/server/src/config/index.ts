@@ -76,6 +76,10 @@ export interface AppConfig {
     readonly iptvCatalogFile: string;
     readonly iptvGuideFile: string;
     readonly iptvKeyFile: string;
+    /** Películas y series (docs/vod.md §4.1): progreso, catálogo binario y caché de carteles. */
+    readonly vodFile: string;
+    readonly vodCatalogFile: string;
+    readonly vodArtDir: string;
   };
   readonly engine: {
     readonly host: string;
@@ -289,6 +293,9 @@ export function loadConfig(env: Env = process.env): LoadedConfig {
       iptvCatalogFile: path.join(dataDir, V2_FILES.iptvCatalog),
       iptvGuideFile: path.join(dataDir, V2_FILES.iptvGuide),
       iptvKeyFile: path.join(dataDir, V2_FILES.iptvKey),
+      vodFile: path.join(dataDir, V2_FILES.vod),
+      vodCatalogFile: path.join(dataDir, V2_FILES.vodCatalog),
+      vodArtDir: path.join(dataDir, V2_FILES.vodArt),
     },
     engine: {
       host: sanitizeHost(env.ACESTREAM_HOST, DEFAULTS.acestreamHost),

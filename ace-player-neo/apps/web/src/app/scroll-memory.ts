@@ -7,8 +7,13 @@ import { formatVista, type Route } from './routes.ts';
 
 const positions = new Map<string, number>();
 
-/** La agenda es la misma vista aunque cambie el día; un partido distinto empieza arriba. */
+/**
+ * La agenda es la misma vista aunque cambie el día; un partido distinto
+ * empieza arriba. En Películas y series, cada ficha empieza arriba y al volver
+ * de una ficha la rejilla vuelve a su sitio (docs/vod.md §12.2).
+ */
 export function scrollKey(route: Route): string {
+  if (route.vista === 'cine') return `cine:${route.id ?? 'portada'}`;
   return route.vista === 'partido' ? formatVista(route) : route.vista;
 }
 

@@ -1,0 +1,38 @@
+{
+  "active": true,
+  "state": "ready",
+  "items": [
+    {
+      "id": "5c6d7e8f9012345678abcdef01234567a8b9c0d1",
+      "kind": "movie",
+      "title": "Oppenheimer",
+      "year": 2023,
+      "rating": 8.3,
+      "poster": "5d0e7b44",
+      "tags": ["castellano", "4k"],
+      "adult": false,
+      "progress": null
+    },
+    {
+      "id": "4b5c6d7e8f9012345678abcdef0123457a8b9c0d",
+      "kind": "movie",
+      "title": "Dune",
+      "year": 2021,
+      "rating": 8,
+      "poster": "3fa9c210",
+      "tags": ["castellano", "4k"],
+      "adult": false,
+      "progress": 0.28
+    }
+  ],
+  "total": 612,
+  "capped": false,
+  "otherKindTotal": null,
+  "tags": [
+    { "tag": "castellano", "count": 540 },
+    { "tag": "latino", "count": 61 },
+    { "tag": "4k", "count": 612 }
+  ],
+  "nextCursor": "djEuMTc1ODU5OS42MA",
+  "stale": false
+}

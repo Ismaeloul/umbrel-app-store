@@ -13,6 +13,11 @@
    - Refrescos: lista cada 6 h, guía cada 8 h, cuenta cada 10 min (Xtream);
      los de lista y guía se retrasan si alguien está viendo algo. Tras un
      fallo, espera exponencial.
+   - Películas y series (docs/vod.md): `vod/vod-service.ts`, que usa el mismo
+     cerrojo (`runHeavy('vod')`), la misma política de red y el redactor.
+     Aquí solo se engancha: arrancar y parar, la primera tras la lista,
+     «Actualizar», purgar al eliminar o cambiar de proveedor y su estado en
+     `iptv.status`.
    - Ninguna URL del proveedor se registra nunca (solo host e id). */
 
 import { mkdirSync } from 'node:fs';
@@ -106,6 +111,7 @@ import {
 } from './search.js';
 import { createIptvRelay, type IptvRelayImpl, type RelayVariant } from './relay.js';
 import { IptvFiles } from './store.js';
+import { VodService } from './vod/vod-service.js';
 import type {
   IptvBackupConfig,
   IptvCheckOptions,
@@ -143,7 +149,7 @@ type Secrets =
       readonly password: string;
     };
 
-type HeavyKind = 'sync' | 'guide';
+type HeavyKind = 'sync' | 'guide' | 'vod';
 
 interface HeavyJob {
   readonly kind: HeavyKind;
@@ -276,6 +282,8 @@ export class IptvServiceImpl implements IptvService {
   private stopped = false;
   readonly files: IptvFiles;
   readonly relay: IptvRelayImpl;
+  /** Películas y series (docs/vod.md §4.1). */
+  readonly vod: VodService;
 
   constructor(private readonly deps: IptvDeps) {
     const logger = deps.logger.child({ module: 'iptv' });
@@ -289,6 +297,20 @@ export class IptvServiceImpl implements IptvService {
       refreshRef: (entryId) => this.refreshRef(entryId),
       onMedia: (entryId, media) => this.noteQuality(entryId, media.height),
       ...(deps.relayHost ? { host: deps.relayHost } : {}),
+    });
+    this.vod = new VodService({
+      net: deps.net,
+      clock: deps.clock,
+      logger: logger.child({ part: 'vod' }),
+      paths: deps.config.paths,
+      keys: () => this.ensureKeys(),
+      provider: () => (this.record && !this.unreadable ? this.record : null),
+      credentials: () => (this.secrets?.kind === 'xtream' ? this.secrets : null),
+      policy: () => this.policy(),
+      redact: (text) => this.redact(text),
+      runHeavy: (task) => this.runHeavy('vod', task),
+      busy: () => this.openInputs > 0 || this.relay.connections() > 0,
+      emitStatus: () => this.emitStatus(),
     });
   }
 
@@ -394,6 +416,7 @@ export class IptvServiceImpl implements IptvService {
     if (this.started || this.stopped) return;
     this.started = true;
     this.ensureLoaded();
+    this.vod.start();
     this.unsubscribe = this.deps.bus.on('playback.activity', (activity) => {
       this.watching = activity.watching;
     });
@@ -414,6 +437,7 @@ export class IptvServiceImpl implements IptvService {
     this.timers.clear();
     this.heavy?.controller.abort(new AppError('iptv_disabled', { detail: 'apagando' }));
     this.probe?.controller.abort(new AppError('iptv_disabled'));
+    await this.vod.stop();
     await this.relay.stop();
   }
 
@@ -579,7 +603,14 @@ export class IptvServiceImpl implements IptvService {
         updatedAt: this.guide && this.guide.builtAt > 0 ? iso(this.guide.builtAt) : null,
         failedAt: guideState && !guideState.ok ? guideState.at : null,
       },
+      ...this.vodStatus(),
     };
+  }
+
+  /** `IptvStatus.vod` (docs/vod.md §11.4): solo con Xtream (con M3U no hay VOD). */
+  private vodStatus(): Pick<IptvStatus, 'vod'> {
+    const vod = this.record?.kind === 'xtream' ? this.vod.status() : undefined;
+    return vod ? { vod } : {};
   }
 
   private channelsWithGuide(window: GuideWindow): number {
@@ -804,7 +835,10 @@ export class IptvServiceImpl implements IptvService {
       this.guide = null;
       this.guideCache.clear();
       await this.files.removeAll();
+      await this.vod.purge();
     }
+    /* Películas y series: con el proveedor en pausa no programa nada (VodService.xtream). */
+    this.vod.reschedule();
     this.logger.info(
       { host, kind: secrets.kind, ...(options.test ? {} : { from: 'copia' }) },
       'IPTV guardada',
@@ -943,6 +977,7 @@ export class IptvServiceImpl implements IptvService {
     if (pausing) this.revoke('iptv_disabled');
     if (resuming && this.started && !this.catalog) void this.startSync('resume');
     this.scheduleAll();
+    if (pausing || resuming) this.vod.reschedule();
     this.emitStatus();
     return this.view();
   }
@@ -955,7 +990,7 @@ export class IptvServiceImpl implements IptvService {
     if (this.unreadable) throw new AppError('iptv_secret_unreadable');
     this.syncing = true;
     this.emitStatus();
-    void this.startSync('manual');
+    void this.startSync('manual').then(() => this.vod.refreshIfOlder());
     return this.view();
   }
 
@@ -969,6 +1004,7 @@ export class IptvServiceImpl implements IptvService {
     });
     await this.deps.state.iptv().purge();
     await this.files.removeAll();
+    await this.vod.purge();
     this.secrets = null;
     this.unreadable = false;
     this.catalog = null;
@@ -1219,6 +1255,7 @@ export class IptvServiceImpl implements IptvService {
       this.syncing = false;
       this.emitStatus();
       this.schedule('list', IPTV_REFRESH.listMs, () => this.periodicSync());
+      this.vod.onLiveSynced();
       /* Favoritos y recientes de otro proveedor (o de otra variante), por nombre (§14.6). */
       /* En fila: dos sincronizaciones seguidas no re-emparejan a la vez (la
          segunda leería la biblioteca antes de que se guarde lo de la primera y

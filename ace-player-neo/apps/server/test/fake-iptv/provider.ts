@@ -50,13 +50,18 @@
    `/__iptv/fallar-primera?veces=&como=` hacen fallar las primeras pruebas de
    conexión (`player_api.php` sin `action`, la lista M3U y `get.php`) con 502,
    503, `corte`, `vacio`, `html`, `sin-user-info` o `auth0` (el 502 del primer
-   «Guardar», §16.8). */
+   «Guardar», §16.8).
+
+   Películas y series (docs/vod.md §15.3): las 6 acciones VOD de
+   `player_api.php`, los carteles en `/arte/…` y los modos de `/__iptv/vod`
+   viven en `vod.ts`; `vod: N` suma N películas sintéticas. */
 
 import http from 'node:http';
 import type { AddressInfo, Socket } from 'node:net';
 import { gzipSync } from 'node:zlib';
 import { colorFromSeed, generateSegment, TsMuxer, TS_PACKET_SIZE } from '../fake-engine/mpegts.js';
 import { bigCatalog, type BigChannel } from './catalogo-grande.js';
+import { createFakeVod, FAKE_VOD_MODES, type FakeVodMode } from './vod.js';
 
 export const FAKE_IPTV_USER = 'usuario-e2e';
 export const FAKE_IPTV_PASSWORD = 'Cl4ve-Secreta-E2E';
@@ -212,6 +217,8 @@ export interface FakeIptvOptions {
    * real) y relleno hasta el número pedido.
    */
   readonly grande?: number;
+  /** Películas sintéticas que se suman al catálogo VOD pequeño (docs/vod.md §15.3). */
+  readonly vod?: number;
 }
 
 export interface FakeIptv {
@@ -242,6 +249,8 @@ export interface FakeIptv {
    * sin `action`, la lista M3U y `get.php`) fallan de la forma `como` (§16.8).
    */
   fallarPrimera(veces: number, como: FakeIptvFailure): void;
+  /** Modo del catálogo VOD (`normal`, `rarezas`, `sin-vod`…; ver vod.ts). */
+  vodModo(mode: FakeVodMode): void;
   /** Canales del catálogo grande (vacío sin `grande`). */
   readonly grandes: readonly BigChannel[];
   close(): Promise<void>;
@@ -363,6 +372,7 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
     account.auth === 1;
 
   const base = (): string => `http://${publicHost}`;
+  const vod = createFakeVod(base, options.vod ?? 0);
 
   const m3u = (short: boolean): string => {
     const guide = short
@@ -633,6 +643,14 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
           }
           controller.fallarPrimera(Number(url.searchParams.get('veces') ?? 1), como);
           json(res, { ok: true });
+        } else if (path === '/__iptv/vod') {
+          const modo = (url.searchParams.get('modo') ?? 'normal') as FakeVodMode;
+          if (!FAKE_VOD_MODES.includes(modo)) {
+            res.writeHead(400).end();
+            return;
+          }
+          vod.modo(modo);
+          json(res, { ok: true });
         } else if (path === '/__iptv/conexiones')
           json(res, { conexiones: controller.conexiones() });
         else if (path === '/__iptv/peticiones') json(res, { peticiones: controller.peticiones() });
@@ -643,6 +661,7 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
           controller.cuenta({ status: 'Active', auth: 1 });
           controller.limpiarPeticiones();
           failing.veces = 0;
+          vod.modo('normal');
           json(res, { ok: true });
         } else res.writeHead(404).end();
         return;
@@ -748,7 +767,23 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
           json(res, { epg_listings: [] });
           return;
         }
+        const vodAnswer = vod.answer(action, url);
+        if (vodAnswer) {
+          if (vodAnswer.status !== 200) res.writeHead(vodAnswer.status).end();
+          else json(res, vodAnswer.body);
+          return;
+        }
         json(res, []);
+        return;
+      }
+      if (path.startsWith('/arte/')) {
+        const art = vod.art(path);
+        if (!art) {
+          res.writeHead(404).end();
+          return;
+        }
+        res.writeHead(200, { 'content-type': art.type, 'content-length': String(art.body.length) });
+        res.end(art.body);
         return;
       }
       const live = /^\/live\/([^/]+)\/([^/]+)\/(\d+)\.(ts|m3u8)$/.exec(path);
@@ -840,6 +875,9 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
     fallarPrimera(veces, como) {
       failing.veces = Math.max(0, Math.floor(veces));
       failing.como = como;
+    },
+    vodModo(mode) {
+      vod.modo(mode);
     },
     grandes: big?.channels ?? [],
     async close() {
