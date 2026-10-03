@@ -402,6 +402,11 @@ export function agoText(value: string, now = Date.now()): string {
   return days === 1 ? 'hace 1 día' : `hace ${days} días`;
 }
 
+/** «1.234»: es-ES no agrupa las cifras de 4 dígitos sin `useGrouping: 'always'`. */
+function groupedCount(value: number): string {
+  return value.toLocaleString('es-ES', { useGrouping: 'always' });
+}
+
 /**
  * Las líneas de Películas y series en la tarjeta (docs/vod.md §12.10):
  * «Películas: 12.345 · Series: 1.234 · actualizado hace 3 h», «Preparando
@@ -422,7 +427,7 @@ export function vodLines(
   if (!vod) return [];
   const lines: CardLine[] = [];
   if (vod.state === 'ready') {
-    const counts = `Películas: ${vod.movies.toLocaleString('es-ES')} · Series: ${vod.series.toLocaleString('es-ES')}`;
+    const counts = `Películas: ${groupedCount(vod.movies)} · Series: ${groupedCount(vod.series)}`;
     lines.push({
       text: vod.builtAt ? `${counts} · actualizado ${agoText(vod.builtAt, now)}` : counts,
       tone: 'plain',
@@ -433,7 +438,7 @@ export function vodLines(
     lines.push({ text: 'Tu proveedor no ofrece películas ni series', tone: 'plain' });
   if (vod.skipped > 0)
     lines.push({
-      text: `${vod.skipped.toLocaleString('es-ES')} ${vod.skipped === 1 ? 'título no se ha podido leer' : 'títulos no se han podido leer'}.`,
+      text: `${groupedCount(vod.skipped)} ${vod.skipped === 1 ? 'título no se ha podido leer' : 'títulos no se han podido leer'}.`,
       tone: 'weak',
     });
   return lines;
