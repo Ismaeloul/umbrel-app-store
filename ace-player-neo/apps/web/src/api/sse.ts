@@ -112,6 +112,20 @@ export function dispatchSse<T extends SseEventType>(
 
 // ---- Efecto en la caché de consultas ---------------------------------------------
 
+/* Agenda híbrida (docs/iptv.md §4.7): la agenda lleva lo que dice la guía de
+   la IPTV. Cambia si la IPTV se pausa, se quita o vuelve, o si llega otra
+   guía; entonces (y solo entonces: `iptv.status` llega casi en cada entrada)
+   se vuelve a pedir. Lo último visto, por cliente de consultas. */
+const lastGuideSignature = new WeakMap<QueryClient, string>();
+
+function guideSignature(status: SseEventData<'iptv.status'>): string {
+  return [
+    status.status === 'disabled' ? 'off' : 'on',
+    status.guide.available ? 'guia' : 'sin-guia',
+    status.guide.updatedAt ?? '',
+  ].join('|');
+}
+
 export function applyToCache(client: QueryClient, type: SseEventType, data: unknown): void {
   switch (type) {
     case 'state.changed': {
@@ -167,6 +181,15 @@ export function applyToCache(client: QueryClient, type: SseEventType, data: unkn
       // El bootstrap casi nunca tiene una vista suscrita (se siembra al
       // arrancar): 'all' lo vuelve a pedir igual, porque iptvActive() lo lee.
       void client.invalidateQueries({ queryKey: routePrefix('bootstrap'), refetchType: 'all' });
+      {
+        // La agenda, si cambió lo que la guía puede decir de ella (agenda híbrida).
+        const signature = guideSignature(data as SseEventData<'iptv.status'>);
+        const previous = lastGuideSignature.get(client);
+        lastGuideSignature.set(client, signature);
+        if (previous !== undefined && previous !== signature) {
+          void client.invalidateQueries({ queryKey: routePrefix('footballSchedule') });
+        }
+      }
       break;
     case 'resync':
       // Lo que faltaba ya no está en el búfer del servidor: se pide todo otra vez.

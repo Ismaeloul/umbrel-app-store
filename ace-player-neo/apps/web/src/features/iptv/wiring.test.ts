@@ -45,6 +45,47 @@ describe('datos', () => {
     expect(client.getQueryState(routeKey('bootstrap'))?.isInvalidated).toBe(true);
   });
 
+  it('agenda híbrida: iptv.status vuelve a pedir la agenda solo si cambia la IPTV activa o su guía', () => {
+    const client = createQueryClient();
+    const status: IptvStatus = {
+      status: 'ok',
+      channels: 812,
+      updatedAt: null,
+      error: null,
+      staleSince: null,
+      account: null,
+      guide: {
+        available: true,
+        channelsWithGuide: 93,
+        updatedAt: '2026-10-03T08:00:00.000Z',
+        failedAt: null,
+      },
+    };
+    const agendaInvalidated = (): boolean | undefined =>
+      client.getQueryState(routeKey('footballSchedule'))?.isInvalidated;
+    const fresh = (): void => {
+      client.setQueryData(routeKey('footballSchedule'), { days: [] });
+    };
+    fresh();
+    applyToCache(client, 'iptv.status', status);
+    // El primero solo se apunta; el mismo estado otra vez (llega casi en cada entrada), nada.
+    expect(agendaInvalidated()).toBe(false);
+    applyToCache(client, 'iptv.status', { ...status, channels: 813 });
+    expect(agendaInvalidated()).toBe(false);
+    // En pausa: la agenda vuelve a la de siempre.
+    applyToCache(client, 'iptv.status', { ...status, status: 'disabled' });
+    expect(agendaInvalidated()).toBe(true);
+    // Otra guía: también.
+    fresh();
+    applyToCache(client, 'iptv.status', status);
+    fresh();
+    applyToCache(client, 'iptv.status', {
+      ...status,
+      guide: { ...status.guide, updatedAt: '2026-10-03T16:00:00.000Z' },
+    });
+    expect(agendaInvalidated()).toBe(true);
+  });
+
   it('iptvActive lee `features.iptv` del bootstrap (ausente = sin IPTV)', () => {
     const client = createQueryClient();
     expect(iptvActive(client)).toBe(false);
