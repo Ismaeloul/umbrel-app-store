@@ -168,11 +168,9 @@ export function Scoreboard({ match, score: rawScore, now }: ScoreboardProps) {
         }}
       >
         <Icon name="eye" size={18} />
-        <span className="mc-scap__word">Marcador</span>
-        <span className="mc-censor mc-censor--sm" aria-hidden="true">
-          <i />
-          <i />
-        </span>
+        {/* Sin las barras grises de antes: parecían un esqueleto (el marcador
+            «cargando») cuando lo que pasa es que está tapado a propósito. */}
+        <span className="mc-scap__word">Ver marcador</span>
       </button>
     );
   } else if (score) {

@@ -143,10 +143,8 @@
     background: rgb(255 255 255 / 0.1);
   }
 }
-/* Vídeo estrecho (móvil): la cápsula se aprieta y sin barras de censura
-   (la palabra «Marcador» y el ojo ya lo dicen). */
+/* Vídeo estrecho (móvil): la cápsula se aprieta y sin escudos. */
 @container (max-width: 479px) {
-  .mc-scap .mc-censor--sm,
   .mc-scap__crest {
     display: none;
   }
@@ -180,16 +178,6 @@
   border-radius: 8px;
   background: var(--text-3);
   opacity: 0.55;
-}
-.mc-censor--sm {
-  gap: 4px;
-}
-.mc-censor--sm i {
-  width: 11px;
-  height: 16px;
-  border-radius: 4px;
-  background: var(--on-video);
-  opacity: 0.4;
 }
 /* Cifras que giran como una paleta (B5): al cambiar o al destapar. */
 .mc-flip.is-turning {
