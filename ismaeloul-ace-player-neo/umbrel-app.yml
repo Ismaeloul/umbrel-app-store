@@ -40,7 +40,9 @@ releaseNotes: >-
 
   Navegacion: las transiciones entre todas las pestañas son suaves e
   iguales, se han revisado todas las animaciones y la direccion de la
-  pagina ya no arrastra parametros de otras vistas.
+  pagina ya no arrastra parametros de otras vistas. En el iPhone el
+  cambio de pestaña tiene el mismo fundido que en el ordenador y ya no
+  se quedan dos pantallas una encima de otra.
 
   Logo: el logo de Umbrel en todas partes, en la cabecera, en la pestaña
   del navegador y en el icono al instalar la app.
