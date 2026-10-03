@@ -597,9 +597,12 @@
 }
 /* Aire para el aura de «Tu equipo», que va por fuera de la tarjeta: la pista
    recorta lo que se sale (overflow), así que gana 14 px arriba (el margen
-   negativo lo devuelve) y, sin sangrar (escritorio), 14 px a cada lado que
-   el margen negativo devuelve también: las tarjetas siguen alineadas con el
-   titular de la competición. */
+   negativo lo devuelve) y, sin sangrar (escritorio), 14 px de relleno a cada
+   lado. A la izquierda el margen negativo los devuelve (las tarjetas siguen
+   alineadas con el titular de la competición); a la derecha NO: la fila
+   acaba donde la columna, como en la 0.8.4, y el relleno solo se ve al
+   llegar al final. Si se alargaba también por ahí, la tarjeta que asoma
+   junto al panel (1024-1279 px) enseñaba 15 px cortados con letras. */
 .agenda-rail {
   margin-top: -8px;
 }
@@ -608,7 +611,7 @@
 }
 .agenda-rail:not(.prail--bleed) {
   --prail-pad: 14px;
-  margin-inline: -14px;
+  margin-inline: -14px 0;
 }
 /* La sombra de cartel (24 px de difuminado) no cabe en ese aire y la pista la
    cortaba en seco: en claro se veía un rectángulo gris detrás de la fila (y
@@ -699,18 +702,18 @@
 .agenda-row:not(.agenda-row--compact) .versus {
   --versus-crest-y: 45%;
 }
-.agenda-row__versus,
-.agenda-row__corner {
+/* Al pasar el ratón sube la tarjeta ENTERA (con la cápsula «Marcador» y el
+   aura de «Tu equipo», que va en `.agenda-row__card`): si subía solo la de
+   dentro, el aro verde se quedaba quieto y abría una franja oscura debajo. */
+.agenda-row__card {
   transition: transform var(--dur-rapido) var(--ease-rapido);
 }
 @media (hover: hover) and (pointer: fine) {
-  .agenda-row:hover .agenda-row__versus,
-  .agenda-row:hover .agenda-row__corner {
+  .agenda-row:hover .agenda-row__card {
     transform: translateY(-3px);
   }
 }
-.agenda-row:active .agenda-row__versus,
-.agenda-row:active .agenda-row__corner {
+.agenda-row:active .agenda-row__card {
   transform: translateY(1px);
 }
 .agenda-row--enter {
@@ -1286,10 +1289,8 @@
     animation: none;
     opacity: 0.6;
   }
-  .agenda-row:hover .agenda-row__versus,
-  .agenda-row:hover .agenda-row__corner,
-  .agenda-row:active .agenda-row__versus,
-  .agenda-row:active .agenda-row__corner {
+  .agenda-row:hover .agenda-row__card,
+  .agenda-row:active .agenda-row__card {
     transform: none;
   }
 }
