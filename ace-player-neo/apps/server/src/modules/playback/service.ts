@@ -32,6 +32,7 @@ import {
   SSE_TIMINGS,
   TIMEOUTS,
   UNKNOWN_BROWSER_NAME,
+  VOD_TIMINGS,
   cleanTitle,
   normalizeHash,
   type ClientKind,
@@ -46,14 +47,16 @@ import {
   type SessionSummary,
   type StreamGrant,
   type StreamProtocol,
+  type VodGrant,
 } from '@ace/shared';
 import type { TimerHandle } from '../../core/clock.js';
 import { AppError, errorCodeOf, isAppError } from '../../core/errors.js';
 import { isEngineUnreachable } from '../engine/index.js';
 import type { EngineSessionMeta } from '../engine/types.js';
 import { SerialLock } from '../remux/lock.js';
-import type { IptvInput } from '../iptv/types.js';
-import type { RemuxCloseReason, RemuxHandle, RemuxSource } from '../remux/types.js';
+import type { IptvInput, VodInput } from '../iptv/types.js';
+import type { RemuxCloseReason, RemuxHandle, RemuxSource, RemuxVodHandle } from '../remux/types.js';
+import { vodAudioLabel } from '../remux/vod/audio.js';
 import {
   codecFor,
   directProtocol,
@@ -146,6 +149,25 @@ interface SessionRec {
    * sale en «Dónde se está reproduciendo» y cede ante cualquier otra petición.
    */
   warm: boolean;
+  /** Película o episodio (docs/vod.md §9.8): relé VOD + productor; null en el resto. */
+  readonly vod: VodRec | null;
+}
+
+/** Lo de una sesión VOD (docs/vod.md §9.8). */
+interface VodRec {
+  readonly input: VodInput;
+  readonly handle: RemuxVodHandle;
+  /** Pista pedida (`audio=<n>`) con la que se abrió, o undefined. */
+  readonly requestedAudio: number | undefined;
+  readonly hevc: boolean;
+}
+
+/** Lo que pide `vodStream` (docs/vod.md §9.8). */
+interface VodAcquire {
+  /** `start` de la petición (undefined: el progreso guardado). */
+  readonly startS: number | undefined;
+  readonly audio: number | undefined;
+  readonly hevc: boolean;
 }
 
 /** La preparación en curso de «Arranque instantáneo» (D24). Una como mucho. */
@@ -186,6 +208,8 @@ interface AcquireRequest {
   readonly writeNowPlaying: boolean;
   /** Decidido ANTES de mirar el motor (docs/iptv.md §4.1 y §6.4). */
   readonly source: 'engine' | 'iptv';
+  /** Película o episodio (`vodStream`): relé VOD y productor en vez del remux del directo. */
+  readonly vod?: VodAcquire;
 }
 
 interface Placement {
@@ -763,6 +787,7 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       pendingDetach: [],
       lastWorkingAt: 0,
       warm: false,
+      vod: null,
     };
     sessions.set(session.id, session);
     input.onDropped((code) => track(closeIptv(session, code)));
@@ -771,8 +796,92 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     return session;
   }
 
+  /**
+   * Abre una película o un episodio (docs/vod.md §9.8): la entrada del relé
+   * VOD (`iptv.openVod`) y el productor (`remux.openVod`, que lee el índice y
+   * arranca la primera ejecución en el segmento de `startS`). Fuera de
+   * sessions.json y sin escribir el mando. Con el cerrojo de la casa tomado.
+   */
+  async function openVodLocked(request: AcquireRequest, vod: VodAcquire): Promise<SessionRec> {
+    const iptv = deps.iptv;
+    if (!iptv?.openVod) throw new AppError('vod_unavailable', { detail: 'sin IPTV' });
+    const input = await iptv.openVod(request.hash, { signal: request.signal });
+    const id = newSessionId();
+    let session: SessionRec | null = null;
+    let handle: RemuxVodHandle;
+    try {
+      if (stopped) throw new AppError('engine_unavailable', { detail: 'apagando' });
+      handle = await remux.openVod({
+        sessionId: id,
+        titleId: request.hash,
+        inputUrl: input.inputUrl,
+        audio: vod.audio,
+        preferredLang: input.target.audioLang,
+        hevc: vod.hevc,
+        startS: vod.startS ?? input.target.resumeS,
+        signal: request.signal,
+        /* Pausa larga (5 min sin pedir segmentos): ffmpeg ya está muerto; se suelta la plaza. */
+        onIdle: () => track(input.release().catch(() => undefined)),
+        onDropped: (error) => {
+          if (session) track(closeIptv(session, error.code));
+        },
+      });
+    } catch (error) {
+      await remux.closeVod(id).catch(() => undefined);
+      await input.close().catch(() => undefined);
+      throw error;
+    }
+    const index = handle.index;
+    /* Ritmo (Paso 0): la tasa media del título; el relé no lee más de 3 veces eso. */
+    if (index.sizeBytes > 0 && index.durationS > 0) {
+      input.setPace(index.sizeBytes / index.durationS);
+    }
+    input.noteDuration(index.durationS);
+    session = {
+      id,
+      hash: request.hash,
+      kind: 'id',
+      mode: 'hls',
+      meta: {
+        playbackUrl: input.inputUrl,
+        statUrl: '',
+        commandUrl: '',
+        infohash: null,
+        isLive: false,
+      },
+      openedAt: clock.now(),
+      viewers: new Map(),
+      closed: false,
+      statInFlight: false,
+      statFailures: 0,
+      reopens: [],
+      source: 'iptv',
+      input: null,
+      graceTimer: null,
+      pendingDetach: [],
+      lastWorkingAt: 0,
+      warm: false,
+      vod: { input, handle, requestedAudio: vod.audio, hevc: vod.hevc },
+    };
+    sessions.set(session.id, session);
+    const opened = session;
+    input.onDropped((code) => track(closeIptv(opened, code)));
+    logger.info({ sessionId: session.id }, 'sesión VOD abierta');
+    return session;
+  }
+
+  /** ¿Es un id de película o episodio? (false sin IPTV, o si la IPTV no lo sabe decir). */
+  function isVodId(id: string): boolean {
+    try {
+      return deps.iptv?.isVodId?.(id) === true;
+    } catch {
+      return false;
+    }
+  }
+
   /** Abre una sesión nueva (progresiva). Con `auto`, `id` y si no abre, una vez `infohash` (P6). */
   async function openSessionLocked(request: AcquireRequest): Promise<SessionRec> {
+    if (request.vod) return openVodLocked(request, request.vod);
     if (request.source === 'iptv') return openIptvLocked(request);
     const kinds: EngineSessionKind[] =
       request.kind === 'auto' ? ['id', 'infohash'] : [request.kind];
@@ -805,6 +914,7 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
         pendingDetach: [],
         lastWorkingAt: 0,
         warm: false,
+        vod: null,
       };
       if (stopped) {
         await stopEngine(meta.commandUrl);
@@ -837,6 +947,15 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     session.viewers.clear();
     for (const viewerId of remux.viewersOf(session.id)) {
       await remux.detach(session.id, viewerId).catch(() => undefined);
+    }
+    if (session.vod) {
+      /* Primero ffmpeg (deja de leer del relé) y luego el relé, que espera a soltar el socket. */
+      await remux.closeVod(session.id).catch(() => undefined);
+      await session.vod.input.close().catch(() => undefined);
+      logger.info({ sessionId: session.id }, 'sesión VOD cerrada');
+      emitActivity();
+      syncTicker();
+      return;
     }
     if (session.source === 'iptv') {
       /* Cerrar antes de abrir: se espera a que el relé suelte el socket con el proveedor. */
@@ -961,8 +1080,8 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       const gone = [...session.viewers.values()];
       emitClosed(session.id, [...session.viewers.keys()], 'remux_failed', code);
       if (session.warm && warm?.session === session) warm.closing ??= { outcome: 'failed', code };
-      /* Sin visor no hay veredicto «del reproductor» (D24: la preparación no cuenta). */
-      if (!session.warm && (code === 'iptv_dropped' || code === 'iptv_busy')) {
+      /* Sin visor no hay veredicto «del reproductor» (D24: la preparación no cuenta). Un VOD tampoco. */
+      if (!session.warm && !session.vod && (code === 'iptv_dropped' || code === 'iptv_busy')) {
         try {
           scanner.recordVerdict(session.hash, {
             state: code === 'iptv_busy' ? 'weak' : 'failed',
@@ -983,7 +1102,8 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
    * reengancha igual que siempre. Con `stalled` (B3), si la generación nueva no avanza, `iptv_dropped`.
    */
   async function restartIptv(session: SessionRec, stalled = false): Promise<void> {
-    if (session.closed) return;
+    /* Un VOD hace sus propios reinicios (el productor, docs/vod.md §9.7). */
+    if (session.closed || session.vod) return;
     let handle: RemuxHandle | null = null;
     try {
       handle = await remux.restart(session.id, undefined, stalled ? { stalled: true } : {});
@@ -1179,9 +1299,16 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       title: request.title,
     };
     let handoff = false;
-    /* Canales distintos: siempre traspaso (una sola sesión en el motor principal). */
+    /* Canales distintos: siempre traspaso (una sola sesión en el motor principal).
+       Películas y series (D-VOD11, cambiada el 30-sep): un VOD corta el directo
+       IPTV y otro VOD (la plaza del proveedor es una) pero CONVIVE con AceStream,
+       y abrir un canal AceStream no cierra el VOD. */
+    const coexists = (other: SessionRec): boolean =>
+      (request.vod !== undefined && other.source === 'engine') ||
+      (request.vod === undefined && request.source === 'engine' && other.vod !== null);
     for (const other of [...sessions.values()]) {
       if (other.hash === request.hash) continue;
+      if (coexists(other)) continue;
       const affected = [...other.viewers.values()].filter((v) => v.viewerId !== request.viewerId);
       emitHandoff(other, affected, by, 'other_channel');
       handoff ||= affected.length > 0;
@@ -1201,7 +1328,24 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       clock.clearTimeout(session.graceTimer);
       session.graceTimer = null;
     }
-    if (session && policy() === 'handoff') {
+    /* El mismo VOD con otro audio u otro HEVC: un ffmpeg no sirve dos cosas; se reabre en la posición. */
+    if (session?.vod && request.vod) {
+      const same =
+        session.vod.hevc === request.vod.hevc &&
+        (request.vod.audio === undefined ||
+          request.vod.audio === (session.vod.handle.audio?.index ?? request.vod.audio));
+      if (!same) {
+        const others = [...session.viewers.values()].filter((v) => v.viewerId !== request.viewerId);
+        emitHandoff(session, others, by, 'same_channel');
+        handoff ||= others.length > 0;
+        await closeSessionLocked(session);
+        session = undefined;
+      } else if (request.vod.startS !== undefined) {
+        remux.setVodStart(session.id, request.vod.startS);
+      }
+    }
+    /* El mismo VOD en otro aparato: siempre traspaso (D-VOD13), sea cual sea la política. */
+    if (session && (policy() === 'handoff' || session.vod)) {
       const others = [...session.viewers.values()].filter((v) => v.viewerId !== request.viewerId);
       if (others.length && session.source === 'iptv') {
         /* IPTV (docs/iptv.md §6.5): la sesión vive en el servidor. Se echa a
@@ -1327,7 +1471,8 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       const placed = await engineLock.run(() => placeLocked(request));
       const { session, viewer } = placed;
       let handle: RemuxHandle | null = null;
-      if (request.consumes === 'remux') {
+      /* Un VOD no pasa por el remux del directo: su productor ya está abierto. */
+      if (request.consumes === 'remux' && !session.vod) {
         try {
           handle = await ensureRemux(session, viewer, request);
         } catch (error) {
@@ -1387,6 +1532,22 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
    * entrando se apunta `working` por el reproductor cada 60 s (§7.3).
    */
   function iptvStats(session: SessionRec): void {
+    if (session.vod) {
+      /* VOD: las del relé, sin veredictos del comprobador (el id no es un canal). */
+      if (session.closed || !session.viewers.size) return;
+      const stats = session.vod.input.stats();
+      bus.emit('stream.stats', {
+        sessionId: session.id,
+        viewerIds: [...session.viewers.keys()],
+        status: 'iptv',
+        peers: 0,
+        speedDown: stats.kbps,
+        speedUp: 0,
+        downloaded: stats.bytes,
+        at: clock.date().toISOString(),
+      });
+      return;
+    }
     const input = session.input;
     if (!input || session.closed || !session.viewers.size) return;
     const stats = input.stats();
@@ -1689,6 +1850,8 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
     async acquire(hashParam, query, identity, signal) {
       const hash = normalizeHash(hashParam);
       if (!hash) throw new AppError('bad_request', { detail: 'hash no válido' });
+      /* Un id de película o episodio por el camino de los canales (docs/vod.md §5.3). */
+      if (isVodId(hash)) throw new AppError('validation_error', { detail: 'vod_id' });
       /* Decisión de §4.1 ANTES de mirar el motor: un id IPTV que ya no vale
          responde sin tocarlo; uno del catálogo vigente se abre por el relé. */
       const iptvClass = deps.iptv ? deps.iptv.classify(hash) : 'engine';
@@ -1739,6 +1902,129 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
         stats: { via: 'sse' },
         handoff: placed.handoff,
         ...(session.source === 'iptv' ? { source: 'iptv' as const } : {}),
+      };
+      return grant;
+    },
+
+    async acquireVod(idParam, query, identity, signal) {
+      const id = normalizeHash(idParam);
+      if (!id) throw new AppError('validation_error', { detail: 'id' });
+      const iptv = deps.iptv;
+      let xtream = false;
+      try {
+        xtream = iptv?.vod?.status() !== undefined;
+      } catch {}
+      /* Sin IPTV Xtream, como la ficha: `vod_unavailable`; un id que no es de este proveedor, `vod_not_found`. */
+      if (!iptv?.openVod || !xtream) {
+        throw new AppError('vod_unavailable', { detail: 'sin IPTV Xtream activa' });
+      }
+      if (!isVodId(id)) throw new AppError('vod_not_found', { detail: 'id' });
+      /* Tope duro de `vodStream` (§9.12): 40 s, por debajo de los 50 s de la web. */
+      const controller = new AbortController();
+      const onAbort = (): void => controller.abort(signal.reason);
+      if (signal.aborted) onAbort();
+      else signal.addEventListener('abort', onAbort, { once: true });
+      const timer = clock.setTimeout(
+        () => controller.abort(new AppError('vod_timeout', { detail: 'vodStream' })),
+        VOD_TIMINGS.grantMs,
+        { unref: true },
+      );
+      const client = query.client;
+      const deviceId = identity.device?.deviceId ?? identity.deviceId ?? query.device ?? null;
+      const vod: VodAcquire = {
+        startS: query.start,
+        audio: query.audio,
+        hevc: query.hevc === '1',
+      };
+      let placed: Placement;
+      try {
+        placed = await acquireInternal({
+          hash: id,
+          kind: 'id',
+          viewerId: identity.viewerId,
+          deviceId,
+          client,
+          source: 'iptv',
+          consumes: 'remux',
+          heartbeat: true,
+          native: identity.device !== null,
+          title: 'Película',
+          label: '',
+          deviceName: deviceNameOf(identity),
+          mode: DEFAULT_PLAYBACK_MODE,
+          signal: controller.signal,
+          /* Las apps 0.6.x leen `nowPlaying` como un canal (§9.8). */
+          writeNowPlaying: false,
+          vod,
+        });
+      } catch (error) {
+        const reason: unknown = controller.signal.reason;
+        if (!signal.aborted && reason instanceof AppError && reason.code === 'vod_timeout') {
+          throw reason;
+        }
+        throw error;
+      } finally {
+        clock.clearTimeout(timer);
+        signal.removeEventListener('abort', onAbort);
+      }
+      const { session, viewer } = placed;
+      const rec = session.vod;
+      if (!rec) throw new AppError('internal_error', { detail: 'sesión VOD sin productor' });
+      const target = rec.input.target;
+      const label = target.subtitle ? `${target.title} · ${target.subtitle}` : target.title;
+      viewer.title = label.slice(0, 200);
+      viewer.label = label.slice(0, 200);
+      emitSessions();
+      const url = urlFor(session, viewer);
+      const protocol = protocolFor(session, viewer);
+      bus.emit('stream.ready', {
+        sessionId: session.id,
+        viewerIds: [viewer.viewerId],
+        url,
+        protocol,
+      });
+      const index = rec.handle.index;
+      const startS = Math.min(
+        Math.max(0, query.start ?? (placed.isNew ? rec.handle.startS : target.resumeS)),
+        Math.max(0, index.durationS - 1),
+      );
+      const grant: VodGrant = {
+        session: sessionInfo(session),
+        url,
+        protocol,
+        remux: true,
+        codec: { video: index.video.codec, audio: 'aac', source: 'ffprobe' },
+        latency: { ...latencyFor(DEFAULT_PLAYBACK_MODE, protocol), liveSync: null },
+        stats: { via: 'sse' },
+        handoff: placed.handoff,
+        source: 'iptv',
+        vod: {
+          id,
+          kind: target.kind,
+          seriesId: target.seriesId,
+          title: target.title.slice(0, 200),
+          subtitle: target.subtitle ? target.subtitle.slice(0, 200) : null,
+          durationS: Math.min(86_400, Math.max(0.001, index.durationS)),
+          startS,
+          resumed: query.start === undefined && startS > 0,
+          audio: index.audio.slice(0, 16).map((track, position) => ({
+            index: track.index,
+            label: vodAudioLabel(track, position),
+            lang: track.lang ? track.lang.slice(0, 12) : null,
+            codec: track.codec.slice(0, 16),
+            channels: track.channels,
+            converted: !track.aacLc,
+          })),
+          audioIndex: rec.handle.audio?.index ?? -1,
+          video: {
+            codec: index.video.codec === 'hevc' ? 'hevc' : 'h264',
+            codecs: index.video.codecs.slice(0, 64),
+            width: index.video.width,
+            height: index.video.height,
+          },
+          next: target.next,
+          poster: target.poster,
+        },
       };
       return grant;
     },

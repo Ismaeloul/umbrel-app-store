@@ -9,15 +9,15 @@
    - channelStream: GET /api/v1/channels/:id/stream (§6.3).
    - sessionHeartbeat / sessionRelease: POST /api/v1/sessions/:sid/{heartbeat,release}.
    - playbackStatus: GET /api/v1/playback.
-   - vodStream: GET /api/v1/vod/titles/:id/stream (docs/vod.md §9.8). De
-     momento, esqueleto del contrato: 501 `not_implemented` hasta los
-     enganches de la reproducción (VOD-5, §16).
+   - vodStream: GET /api/v1/vod/titles/:id/stream (docs/vod.md §9.8): relé
+     VOD + productor; la lista VOD completa sale del índice (VOD-5).
+     `channelStream` con un id de película o episodio → `validation_error`
+     con `detail: 'vod_id'` (§5.3).
 
    La URL de vídeo de la app nativa se firma AQUÍ con `services.auth`
    (arquitectura §7.1: "firmar t con sid, dispositivo y caducidad"): playback
    no depende de auth (auth se crea después). */
 
-import { notImplemented } from '../../core/errors.js';
 import type { RequestContext } from '../../core/module.js';
 import type { LegacyRouter, V1Router } from '../../core/router.js';
 import type { Services } from '../../services.js';
@@ -102,7 +102,13 @@ export function registerV1Routes(router: V1Router, services: Services): void {
     ),
   );
   router.handle('playbackStatus', () => services.playback.status());
-  router.handle('vodStream', () => {
-    throw notImplemented('vodStream (docs/vod.md §9.8)');
+  router.handle('vodStream', async (input, ctx) => {
+    const grant = await services.playback.acquireVod(
+      input.params.id,
+      input.query,
+      identity(input.query.viewer, input.query.device, ctx),
+      ctx.signal,
+    );
+    return { ...grant, url: signed(services, grant.url, grant.session.id, ctx) };
   });
 }

@@ -56,7 +56,7 @@ export function netOpener(
   return (request) =>
     net.openStream(request.url, {
       idleMs,
-      headersMs: IPTV_RELAY.headersMs,
+      headersMs: request.headersMs ?? IPTV_RELAY.headersMs,
       accept: '*/*',
       identity: true,
       headers: { range: `bytes=${request.start}-${request.end ?? ''}` },

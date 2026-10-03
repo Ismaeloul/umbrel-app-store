@@ -40,6 +40,14 @@ export interface FakeVodOriginOptions {
   readonly firstByteMs?: number;
   readonly rateMbps?: number;
   readonly dropAtBytes?: number;
+  /** Usuario y contraseña de las rutas Xtream (por defecto los del banco; el proveedor IPTV falso pone los suyos). */
+  readonly user?: string;
+  readonly password?: string;
+  /**
+   * Las próximas N peticiones de vídeo no contestan nunca (Paso 0: el panel de
+   * Isma deja sin respuesta 1 de cada 3-5 aperturas). Se descuenta al llegar.
+   */
+  readonly hangOpens?: number;
 }
 
 export interface FakeVodRequest {
@@ -56,6 +64,8 @@ export interface FakeVodStats {
   maxOpen: number;
   /** Peticiones rechazadas con 458. */
   rejected: number;
+  /** Peticiones que se dejaron sin contestar (`hangOpens`). */
+  hung: number;
   /** Bytes de vídeo mandados. */
   bytesSent: number;
   readonly requests: FakeVodRequest[];
@@ -113,7 +123,14 @@ export function createFakeVodHandler(
   for (const [name, file] of Object.entries(files)) {
     sizes.set(name, { path: file, size: statSync(file).size });
   }
-  const stats: FakeVodStats = { open: 0, maxOpen: 0, rejected: 0, bytesSent: 0, requests: [] };
+  const stats: FakeVodStats = {
+    open: 0,
+    maxOpen: 0,
+    rejected: 0,
+    hung: 0,
+    bytesSent: 0,
+    requests: [],
+  };
   const live = new Set<http.ServerResponse>();
 
   const handler: http.RequestListener = (req, res) => {
@@ -131,7 +148,10 @@ export function createFakeVodHandler(
     const balanced = /^\/lb\/([^/]+)\/([^/]+)$/.exec(url.pathname);
     let name: string | null = null;
     if (xtream) {
-      if (xtream[2] !== FAKE_VOD_USER || xtream[3] !== FAKE_VOD_PASSWORD) {
+      if (
+        decodeURIComponent(xtream[2] as string) !== (options.user ?? FAKE_VOD_USER) ||
+        decodeURIComponent(xtream[3] as string) !== (options.password ?? FAKE_VOD_PASSWORD)
+      ) {
         note(401);
         res.writeHead(401).end();
         return;
@@ -149,6 +169,13 @@ export function createFakeVodHandler(
     if (!entry) {
       note(404);
       res.writeHead(404).end();
+      return;
+    }
+    if ((options.hangOpens ?? 0) > 0) {
+      options = { ...options, hangOpens: (options.hangOpens ?? 0) - 1 };
+      stats.hung += 1;
+      note(0);
+      /* Sin contestar: la conexión se queda abierta hasta que el cliente la corta. */
       return;
     }
     if (

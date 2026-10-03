@@ -310,6 +310,18 @@ los saltos caen a ±0,07 s con la imagen en 0,04-1,6 s y nunca dos conexiones co
 `test/integration/vod.test.ts` con los 12 casos de §15.3. **CI:** el job `tests` de `ci.yml` no tiene ffmpeg; o se
 instala allí o la integración VOD corre en el job `e2e`.
 
+**Hecho (3-oct, rama `equipo/vod-enganches`):** todos los enganches de la tabla, sin cambiar la forma del contrato.
+Ajustes del Paso 0 en `relay-vod.ts`: `reuseRedirect` sigue en `false`; primer byte en 8 s con 2 reintentos
+(`firstByteMs`, `firstByteRetries`); una conexión sin leer en 30 s no se reutiliza y se abre otra al seguir
+(`staleUpstreamMs`, reapertura perezosa); **ritmo** a 3× la tasa media del título (`setPace(tamaño/duración)`, con
+20 s de vídeo a toda velocidad tras cada salto), además de la contrapresión de 60 s del productor; y `release()` en la
+pausa larga del productor. Pruebas: `playback/vod-sessions.test.ts`, los casos del Paso 0 en `relay-vod.test.ts` y
+`test/integration/vod.test.ts` con lo esencial (MKV y MP4 con salto, cambio de título, `release`, una conexión, HEVC sin
+`hevc=1`, sin Range). Quedan de §15.3: `dropAtBytes` y pausa con corte en la integración (están en `relay-vod.test.ts`),
+`busyAfterCloseMs` con `retryAfterS`, reinicio + «Seguir viendo», `iptv.remove()`, búsqueda de credenciales, y
+`vod/timings.test.ts`. A mano: `tsx apps/server/test/fake-iptv/cli.ts --host <IP de casa> --vod-muestras` y el servidor
+con `ALLOW_PRIVATE_SYNC_URLS=true`.
+
 ### 4.5 VOD-6: web, el reproductor (3 días; los enganches, tras VOD-5)
 
 | Ficheros (en `apps/web/src/`) | Qué |

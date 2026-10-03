@@ -16,11 +16,13 @@
 
 import {
   ERROR_CATALOG,
+  VOD_UNSUPPORTED_REASONS,
   describeError,
   isAnyErrorCode,
   type AnyErrorCode,
   type ApiError,
   type LegacyError,
+  type VodUnsupportedReason,
 } from '@ace/shared';
 
 export interface AppErrorOptions {
@@ -123,6 +125,27 @@ export function toV1Error(error: unknown, requestId: string): SerializedError<Ap
       error instanceof AppError && error.attempts !== undefined
         ? Math.min(9, Math.max(2, Math.floor(error.attempts)))
         : undefined;
+    /* VOD (docs/vod.md §11.3): el motivo de `vod_unsupported` y la espera de `vod_busy`. */
+    const extra =
+      error instanceof AppError ? (error.data as Record<string, unknown> | undefined) : undefined;
+    const reason =
+      code === 'vod_unsupported' &&
+      typeof extra?.reason === 'string' &&
+      (VOD_UNSUPPORTED_REASONS as readonly string[]).includes(extra.reason)
+        ? (extra.reason as VodUnsupportedReason)
+        : undefined;
+    const retryAfterS =
+      code === 'vod_busy' && typeof extra?.retryAfterS === 'number'
+        ? Math.min(120, Math.max(1, Math.round(extra.retryAfterS)))
+        : undefined;
+    const data =
+      attempts !== undefined
+        ? { attempts }
+        : reason !== undefined
+          ? { reason }
+          : retryAfterS !== undefined
+            ? { retryAfterS }
+            : undefined;
     return {
       status: definition.status,
       body: {
@@ -130,7 +153,7 @@ export function toV1Error(error: unknown, requestId: string): SerializedError<Ap
           code,
           message: definition.message,
           requestId,
-          ...(attempts !== undefined ? { data: { attempts } } : {}),
+          ...(data !== undefined ? { data } : {}),
         },
       },
       internal: definition.status >= 500 && code === 'internal_error',

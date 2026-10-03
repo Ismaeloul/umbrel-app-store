@@ -37,6 +37,7 @@ import {
   IPTV_SEARCH,
   IPTV_SESSION,
   IPTV_USER_AGENT,
+  VOD_TIMINGS,
   channelMatchScore,
   normalizeChannelKey,
   type IptvAccountState,
@@ -129,6 +130,7 @@ import type {
   IptvResolveResult,
   IptvPlainSecrets,
   IptvService,
+  VodInput,
 } from './types.js';
 import {
   assertAccountUsable,
@@ -140,6 +142,7 @@ import {
   xtreamShortEpg,
   xtreamStreamUrl,
   xtreamUserInfo,
+  xtreamVodUrl,
   type XtreamAccount,
 } from './xtream.js';
 
@@ -359,6 +362,7 @@ export class IptvServiceImpl implements IptvService {
       runHeavy: (task) => this.runHeavy('vod', task),
       busy: () => this.openInputs > 0 || this.relay.connections() > 0,
       emitStatus: () => this.emitStatus(),
+      knownDurationS: (id) => this.vodDurations.get(id) ?? null,
     });
   }
 
@@ -2667,6 +2671,133 @@ export class IptvServiceImpl implements IptvService {
         this.noteClose();
       },
     };
+  }
+
+  /**
+   * Una película o un episodio (docs/vod.md §9.3 y §9.8): una sesión del relé
+   * VOD con la URL `{server}/movie|series/{U}/{P}/{source}.{ext}`, que nunca
+   * sale de aquí. No abre nada todavía: la primera lectura (el índice) abre el
+   * proveedor, después de la plaza de la cuenta (`accountGate`).
+   */
+  async openVod(id: string, options: { readonly signal: AbortSignal }): Promise<VodInput> {
+    this.ensureLoaded();
+    const record = this.record;
+    if (!record || record.kind !== 'xtream' || this.unreadable || this.secrets?.kind !== 'xtream') {
+      throw new AppError('vod_unavailable', { detail: 'sin IPTV Xtream activa' });
+    }
+    if (!record.enabled) throw new AppError('vod_unavailable', { detail: 'IPTV en pausa' });
+    const dead = this.accountDead();
+    if (dead) throw new AppError('vod_account', { detail: dead });
+    if (options.signal.aborted) throw options.signal.reason ?? new AppError('vod_timeout');
+    const target = await this.vod.playTarget(id);
+    /* Nunca una sonda a la vez que una sesión: se aborta y se espera a que suelte el socket. */
+    const probe = this.probe;
+    if (probe) {
+      probe.controller.abort(new AppError('iptv_busy', { detail: 'sesión VOD abierta' }));
+      await probe.promise.catch(() => undefined);
+    }
+    const secrets = this.secrets;
+    const url = xtreamVodUrl(
+      secrets,
+      target.kind === 'movie' ? 'movie' : 'series',
+      target.source,
+      target.ext,
+    );
+    const revocations = this.revocations;
+    const session = await this.relay.openVod({
+      url,
+      headers: { 'User-Agent': IPTV_USER_AGENT },
+      ext: target.ext,
+      accountGate: (signal) => this.vodAccountGate(signal),
+      lastClosedAt: () => this.recentCloses.at(-1) ?? null,
+      onUpstreamClosed: () => this.noteClose(),
+    });
+    if (this.revocations !== revocations) {
+      await session.close().catch(() => undefined);
+      throw new AppError('vod_unavailable', { detail: this.lastRevocation });
+    }
+    this.openInputs += 1;
+    this.logger.info({ host: record.host, kind: target.kind }, 'IPTV: película o episodio abierto');
+    let closed = false;
+    let lastBytes = 0;
+    let lastAt = this.deps.clock.now();
+    let kbps = 0;
+    return {
+      id,
+      inputUrl: session.inputUrl,
+      target,
+      stats: () => {
+        const stats = session.stats();
+        const now = this.deps.clock.now();
+        if (now - lastAt >= 1_000) {
+          kbps = Math.round(((stats.bytes - lastBytes) * 8) / (now - lastAt));
+          lastBytes = stats.bytes;
+          lastAt = now;
+        }
+        return {
+          bytes: stats.bytes,
+          kbps,
+          lastByteAt: stats.lastByteAt,
+          opens: stats.opens,
+          timeouts: stats.timeouts,
+          pacedMs: stats.pacedMs,
+        };
+      },
+      setPace: (bytesPerS) => session.setPace(bytesPerS),
+      release: () => session.release(),
+      onDropped: (listener) => session.onDropped(listener),
+      noteDuration: (durationS) => this.noteVodDuration(id, durationS),
+      close: async () => {
+        if (closed) return;
+        closed = true;
+        this.openInputs -= 1;
+        await session.close();
+        this.noteClose();
+      },
+    };
+  }
+
+  /**
+   * Plaza de la cuenta antes de la primera apertura de una sesión VOD (§9.3):
+   * si las conexiones de otros llenan `max_connections`, `vod_busy` SIN
+   * intentarlo. Estado de la cuenta de menos de 60 s, o `user_info` con 5 s
+   * de plazo; si vence, se sigue.
+   */
+  private async vodAccountGate(signal: AbortSignal): Promise<void> {
+    const checkedAt = this.record?.account ? Date.parse(this.record.account.checkedAt) : NaN;
+    if (!(this.deps.clock.now() - checkedAt < 60_000)) {
+      const wait = new AbortController();
+      const onAbort = (): void => wait.abort();
+      signal.addEventListener('abort', onAbort, { once: true });
+      await Promise.race([
+        this.checkAccount(true).catch(() => null),
+        this.deps.clock.sleep(VOD_TIMINGS.accountGateMs, wait.signal).catch(() => undefined),
+      ]);
+      wait.abort();
+      signal.removeEventListener('abort', onAbort);
+    }
+    const account = this.record?.account ?? null;
+    if (!account || account.maxConnections === null || account.activeConnections === null) return;
+    const ours = this.relay.connections() + (this.closedJustNow() ? 1 : 0);
+    const foreign = Math.max(0, account.activeConnections - ours);
+    if (account.maxConnections > 0 && foreign >= account.maxConnections) {
+      throw new AppError('vod_busy', {
+        detail: 'la cuenta tiene todas sus plazas ocupadas',
+        data: { retryAfterS: 30 },
+      });
+    }
+  }
+
+  /** Duración real de los títulos abiertos (la del índice), para validar el progreso. */
+  private readonly vodDurations = new Map<string, number>();
+
+  private noteVodDuration(id: string, durationS: number): void {
+    if (!(durationS > 0)) return;
+    this.vodDurations.delete(id);
+    this.vodDurations.set(id, durationS);
+    while (this.vodDurations.size > 64) {
+      this.vodDurations.delete(this.vodDurations.keys().next().value as string);
+    }
   }
 
   /** M3U: token caducado → refresca la lista (1/min) y da la URL nueva del mismo canal. */
