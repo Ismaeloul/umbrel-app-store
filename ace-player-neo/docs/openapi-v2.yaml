@@ -8122,6 +8122,24 @@ paths:
                                   - name
                                   - logo
                                 additionalProperties: false
+                              guide:
+                                type: object
+                                properties:
+                                  channel:
+                                    type: string
+                                    minLength: 1
+                                    maxLength: 200
+                                  time:
+                                    type: string
+                                  agendaTime:
+                                    type: string
+                                  added:
+                                    type: boolean
+                                required:
+                                  - channel
+                                  - time
+                                  - added
+                                additionalProperties: false
                             required:
                               - id
                               - date
