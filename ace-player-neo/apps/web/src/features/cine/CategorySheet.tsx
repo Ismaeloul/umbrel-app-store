@@ -1,16 +1,19 @@
-/* Categorías del proveedor (docs/vod.md §12.4): en el móvil y la tableta,
-   una fila de chips con desplazamiento («Todas» y las categorías) y «Todas
-   las categorías», que abre una hoja con la lista entera; en escritorio
-   (≥ 1024), la misma lista en el panel lateral (aside.tsx). Las de adultos
-   van al final (el servidor ya las ordena) con «+18». */
+/* Categorías del proveedor (docs/vod.md §12.4):
+   - en el móvil y la tableta, una hoja con la lista entera («Todas las
+     categorías», desde la cabecera de la portada o desde la rejilla) y, en la
+     rejilla de la tableta, una fila de chips con desplazamiento para saltar
+     de una a otra (en el móvil no: la cabecera ya tiene «Categorías» y los
+     carteles necesitan el sitio);
+   - en escritorio (≥ 1024), la misma lista en el panel lateral (aside.tsx),
+     con «Inicio» (la portada) delante.
+   Las de adultos van al final (el servidor ya las ordena) con «+18». */
 
 import type { VodCategory } from '@ace/shared';
-import { useRef, useState } from 'react';
 import { cx } from '../../lib/cx.ts';
-import { Button, Chip, Num, Sheet } from '../../ui/index.ts';
+import { Chip, Icon, Num, Sheet } from '../../ui/index.ts';
 import { CINE_TEXT, formatCount } from './texts.ts';
 
-/** Chips a la vista en la fila antes de «Todas las categorías». */
+/** Chips a la vista en la fila de la rejilla (las demás, en la hoja). */
 export const ROW_CATEGORIES_MAX = 12;
 
 function categoryLabel(category: VodCategory): string {
@@ -19,17 +22,40 @@ function categoryLabel(category: VodCategory): string {
 
 export interface CategoryListProps {
   categories: readonly VodCategory[];
-  value: string;
-  onChange(id: string): void;
-  /** Total de «Todas» (sin adultos). */
+  /** La abierta: id, `all` (todas) o null (la portada). */
+  value: string | null;
+  onChange(id: string | null): void;
+  /** Total de «Todas». */
   total?: number | null;
+  /** «Inicio» delante (el panel lateral: vuelve a la portada). */
+  withHome?: boolean;
   className?: string;
 }
 
-/** La lista entera, con «Todas» delante (hoja y panel lateral). */
-export function CategoryList({ categories, value, onChange, total, className }: CategoryListProps) {
+/** La lista entera, con «Todas» (y, en el panel, «Inicio») delante. */
+export function CategoryList({
+  categories,
+  value,
+  onChange,
+  total,
+  withHome = false,
+  className,
+}: CategoryListProps) {
   return (
     <ul className={cx('cine-cats', className)} aria-label={CINE_TEXT.categories}>
+      {withHome ? (
+        <li>
+          <button
+            type="button"
+            className="cine-cat cine-cat--home press"
+            aria-pressed={value === null}
+            onClick={() => onChange(null)}
+          >
+            <Icon name="cine" size={20} />
+            <span className="cine-cat__name">{CINE_TEXT.home}</span>
+          </button>
+        </li>
+      ) : null}
       <li>
         <button
           type="button"
@@ -67,60 +93,71 @@ export function CategoryList({ categories, value, onChange, total, className }: 
   );
 }
 
-export interface CategoryRowProps {
+export interface CategorySheetProps {
+  open: boolean;
+  onClose(): void;
   categories: readonly VodCategory[];
-  value: string;
+  value: string | null;
   onChange(id: string): void;
   total?: number | null;
 }
 
-/** Móvil y tableta: fila de chips y la hoja con todas. */
-export function CategoryRow({ categories, value, onChange, total }: CategoryRowProps) {
-  const [open, setOpen] = useState(false);
-  const button = useRef<HTMLButtonElement>(null);
+/** «Todas las categorías» en una hoja (móvil y tableta). */
+export function CategorySheet({
+  open,
+  onClose,
+  categories,
+  value,
+  onChange,
+  total,
+}: CategorySheetProps) {
+  return (
+    <Sheet open={open} onClose={onClose} title={CINE_TEXT.allCategories} size="md">
+      <CategoryList
+        categories={categories}
+        value={value}
+        total={total}
+        onChange={(id) => {
+          onChange(id ?? 'all');
+          onClose();
+        }}
+      />
+    </Sheet>
+  );
+}
+
+export interface CategoryChipsProps {
+  categories: readonly VodCategory[];
+  value: string | null;
+  onChange(id: string): void;
+  className?: string;
+}
+
+/** La fila de chips de la rejilla: «Todas» y las primeras categorías (la elegida siempre a la vista). */
+export function CategoryChips({ categories, value, onChange, className }: CategoryChipsProps) {
   if (categories.length === 0) return null;
-  /* La elegida siempre a la vista, aunque esté más allá de las 12 primeras. */
   const first = categories.slice(0, ROW_CATEGORIES_MAX);
   const chosen = categories.find((category) => category.id === value);
   const row = chosen && !first.includes(chosen) ? [chosen, ...first] : first;
   return (
-    <>
-      <div className="cine-chips cine-chips--scroll" role="group" aria-label={CINE_TEXT.categories}>
-        <Chip pressed={value === 'all'} onClick={() => onChange('all')}>
-          {CINE_TEXT.all}
+    <div
+      className={cx('cine-chips cine-chips--scroll', className)}
+      role="group"
+      aria-label={CINE_TEXT.categories}
+    >
+      <Chip pressed={value === 'all' || value === null} onClick={() => onChange('all')}>
+        {CINE_TEXT.all}
+      </Chip>
+      {row.map((category) => (
+        <Chip
+          key={category.id}
+          pressed={value === category.id}
+          label={categoryLabel(category)}
+          onClick={() => onChange(category.id)}
+        >
+          {category.name}
         </Chip>
-        {row.map((category) => (
-          <Chip
-            key={category.id}
-            pressed={value === category.id}
-            label={categoryLabel(category)}
-            onClick={() => onChange(category.id)}
-          >
-            {category.name}
-          </Chip>
-        ))}
-      </div>
-      <Button
-        ref={button}
-        variant="quiet"
-        size="sm"
-        icon="list"
-        className="cine-allcats"
-        onClick={() => setOpen(true)}
-      >
-        {CINE_TEXT.allCategories}
-      </Button>
-      <Sheet open={open} onClose={() => setOpen(false)} title={CINE_TEXT.allCategories} size="md">
-        <CategoryList
-          categories={categories}
-          value={value}
-          total={total}
-          onChange={(id) => {
-            onChange(id);
-            setOpen(false);
-          }}
-        />
-      </Sheet>
-    </>
+      ))}
+    </div>
   );
 }

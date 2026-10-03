@@ -72,13 +72,35 @@ function ContinueCard({ entry }: { entry: VodContinue }) {
           })
         }
       >
-        <span className="cine-continue__art">
-          <Art
-            id={art?.id ?? entry.id}
-            art={art?.art ?? 'backdrop'}
-            v={art?.v ?? null}
-            title={entry.title}
-          />
+        <span className="cine-continue__art" data-art={art?.art ?? 'none'}>
+          {art?.art === 'poster' ? (
+            /* Solo hay cartel: el cartel 2:3 entero a la izquierda sobre su
+               propio color desenfocado (recortarlo a 16:9 se veía mal). */
+            <>
+              <Art
+                id={art.id}
+                art="poster"
+                v={art.v}
+                title={entry.title}
+                bare
+                className="cine-continue__blur"
+              />
+              <Art
+                id={art.id}
+                art="poster"
+                v={art.v}
+                title={entry.title}
+                className="cine-continue__poster"
+              />
+            </>
+          ) : (
+            <Art
+              id={art?.id ?? entry.id}
+              art={art?.art ?? 'backdrop'}
+              v={art?.v ?? null}
+              title={entry.title}
+            />
+          )}
           {ratio !== null ? (
             <ProgressBar
               className="cine-continue__progress"

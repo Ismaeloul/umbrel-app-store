@@ -473,3 +473,33 @@ conservador). Todas se pueden revertir.
   `iptv.status`.
 - **Vuelta atrás**: no cambia el formato de ningún fichero de `data/`;
   volver a la 0.8.3 es seguro (solo se pierden las rutas nuevas).
+
+## D-propuesta (vod-web). Pelis y series «como los partidos» (0.9.0, equipo/vod-web)
+
+(El coordinador le pone número al unir.) Lo pidió Isma (pendiente.md, punto 7)
+y sale de la investigación de otras apps (`docs/investigacion/pelis-y-series.md`,
+§5 «Qué hemos adoptado y por qué»); el detalle de pantallas, en docs/vod.md
+§12.12.
+
+- **Portada en filas y rejilla aparte.** La portada es como la agenda: una
+  fila por categoría del proveedor (20 títulos, pedida al acercarse a la
+  pantalla; 12 filas de entrada). La rejilla de carteles es OTRA pantalla
+  (`cinecat`, `cinetag` o una búsqueda) con su entrada en el historial, para
+  que «Atrás» vuelva a la portada. Sin parámetros nuevos en la URL.
+- **Carteles grandes, sin interruptor de densidad.** 2 columnas en el móvil
+  (antes 3) y una menos en cada ancho; título de 15 px. La investigación
+  proponía enseñar las dos densidades tras un interruptor: se dejó la grande
+  porque es lo que Isma pidió literalmente.
+- **El texto del botón principal de una serie lo pone la web** por la acción
+  y el episodio («Continuar T2 · E3», «Siguiente capítulo: T2 · E4»); el
+  `label` del servidor queda de respaldo. La app de iPhone, que irá basada en
+  la web, debe copiar estos textos.
+- **Lo que el proveedor no da no se pinta**, y «0» de nota o de edad es «sin
+  dato». Los géneros de TMDB en inglés y los países como código se ven en
+  castellano (en la web, sin contrato).
+- **Tráiler, estreno y duración de los episodios**: campos opcionales del
+  contrato. El tráiler abre YouTube en otra pestaña (`noopener`): no se
+  incrusta (la CSP no lo deja y no gasta la única conexión IPTV).
+- **Adultos como los demás** (decisión de Isma, cambia D-VOD7): en la
+  portada y en «Todas», con su «+18». La web ya lo enseña así; falta el
+  servidor.

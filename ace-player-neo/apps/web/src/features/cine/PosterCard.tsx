@@ -1,10 +1,13 @@
-/* Tarjeta de una película o una serie (docs/vod.md §12.4): cartel 2:3, el
-   título en 2 líneas como mucho, «2023 · 7,3», las cápsulas de sus
-   distintivos y «+18» si es de adultos. Es un enlace de verdad a la ficha
-   (`?vista=cine/<id>`): se puede abrir en otra pestaña.
+/* Tarjeta de una película o una serie (docs/vod.md §12.4), «como los
+   partidos»: el cartel 2:3 grande con sus cápsulas encima (como «HOY 15:30»
+   en la tarjeta de un partido: la lengua y el 4K, dos como mucho, y «+18»),
+   la barra de lo visto abajo y, debajo del cartel, el título bien grande en
+   2 líneas y «2023 · ★ 7,4». El título va siempre escrito: en la IPTV el
+   cartel no garantiza que se lea (falta o es genérico).
 
-   Precarga la ficha (`pre=1`) al apuntarla 150 ms con un puntero fino o al
-   enfocarla: al abrirla, la cabecera sale al momento. */
+   Es un enlace de verdad a la ficha (`?vista=cine/<id>`): se puede abrir en
+   otra pestaña. Precarga la ficha (`pre=1`) al apuntarla 150 ms con un puntero
+   fino o al enfocarla: al abrirla, la cabecera sale al momento. */
 
 import type { VodCard } from '@ace/shared';
 import { useQueryClient } from '@tanstack/react-query';
@@ -12,14 +15,17 @@ import { useRef, type MouseEvent, type PointerEvent } from 'react';
 import { useNavigate } from '../../app/router.tsx';
 import { searchFor } from '../../app/routes.ts';
 import { cx } from '../../lib/cx.ts';
-import { Capsule, Num, ProgressBar } from '../../ui/index.ts';
+import { Capsule, Icon, Num, ProgressBar } from '../../ui/index.ts';
 import { Art } from './Art.tsx';
 import { prefetchTitle } from './data.ts';
-import { cardMeta, orderedTags, ratingText } from './model.ts';
+import { orderedTags, ratingText } from './model.ts';
 import { cardLabel, CINE_TEXT, TAG_LABEL } from './texts.ts';
 
 /** Lo que tarda el puntero encima antes de precargar la ficha. */
 export const PREFETCH_HOVER_MS = 150;
+
+/** Cápsulas encima del cartel: como mucho dos (no tapan el cartel). */
+export const CARD_BADGES_MAX = 2;
 
 export function useOpenTitle() {
   const navigate = useNavigate();
@@ -61,6 +67,18 @@ export function useTitleLink(id: string) {
   };
 }
 
+/** Las cápsulas del cartel: «+18» primero (si es de adultos) y luego la lengua y el 4K. */
+export function cardBadges(card: Pick<VodCard, 'tags' | 'adult'>): string[] {
+  const tags = orderedTags(card.tags);
+  const lang = tags.find((tag) => tag !== '4k');
+  const out = [
+    card.adult ? CINE_TEXT.adult : null,
+    lang ? TAG_LABEL[lang] : null,
+    tags.includes('4k') ? TAG_LABEL['4k'] : null,
+  ].filter((text): text is string => text !== null);
+  return out.slice(0, CARD_BADGES_MAX);
+}
+
 export interface PosterCardProps {
   card: VodCard;
   className?: string;
@@ -69,8 +87,8 @@ export interface PosterCardProps {
 export function PosterCard({ card, className }: PosterCardProps) {
   const link = useTitleLink(card.id);
   const tags = orderedTags(card.tags);
-  const meta = cardMeta(card);
   const rating = ratingText(card.rating);
+  const badges = cardBadges(card);
   const label = cardLabel([
     card.title,
     card.year === null ? null : String(card.year),
@@ -83,10 +101,20 @@ export function PosterCard({ card, className }: PosterCardProps) {
     <a className={cx('cine-card', 'press', className)} {...link} aria-label={label}>
       <span className="cine-card__poster">
         <Art id={card.id} art="poster" v={card.poster} title={card.title} />
-        {card.adult ? (
-          <Capsule size="sm" tone="weak" glass className="cine-card__adult">
-            {CINE_TEXT.adult}
-          </Capsule>
+        {badges.length > 0 ? (
+          <span className="cine-card__badges">
+            {badges.map((badge) => (
+              <Capsule
+                key={badge}
+                size="sm"
+                glass
+                tone={badge === CINE_TEXT.adult ? 'weak' : 'neutral'}
+                className="cine-card__badge"
+              >
+                {badge}
+              </Capsule>
+            ))}
+          </span>
         ) : null}
         {card.progress !== null ? (
           <ProgressBar
@@ -98,14 +126,16 @@ export function PosterCard({ card, className }: PosterCardProps) {
         ) : null}
       </span>
       <span className="cine-card__title">{card.title}</span>
-      {meta ? <Num className="cine-card__meta" value={meta} condensed={false} /> : null}
-      {tags.length > 0 ? (
-        <span className="cine-card__tags">
-          {tags.map((tag) => (
-            <Capsule key={tag} size="sm" className="cine-card__tag">
-              {TAG_LABEL[tag]}
-            </Capsule>
-          ))}
+      {card.year !== null || rating ? (
+        <span className="cine-card__meta">
+          {card.year !== null ? <Num value={String(card.year)} condensed={false} /> : null}
+          {card.year !== null && rating ? <span className="cine-dot">·</span> : null}
+          {rating ? (
+            <span className="cine-rating">
+              <Icon name="star-f" size={16} className="cine-rating__star" />
+              <Num value={rating} condensed={false} />
+            </span>
+          ) : null}
         </span>
       ) : null}
     </a>
