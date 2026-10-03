@@ -35,6 +35,7 @@ const host = (() => {
   }
 })();
 
+/** @param {unknown} text */
 function scrub(text) {
   let out = String(text);
   for (const secret of [server, ...host, username, password])
@@ -42,15 +43,23 @@ function scrub(text) {
   return out.replace(/\b\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?\b/g, '***');
 }
 
-/** XMLTV: `20261003213000 +0200` → ms. */
+/**
+ * XMLTV: `20261003213000 +0200` → ms.
+ * @param {string | undefined} value
+ * @returns {number | null}
+ */
 function parseXmltvDate(value) {
   const m = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})?\s*([+-]\d{4})?/.exec(value ?? '');
   if (!m) return null;
-  const [, y, mo, d, h, mi, s = '00', tz = '+0000'] = m;
+  const [, y = '', mo = '', d = '', h = '', mi = '', s = '00', tz = '+0000'] = m;
   const offset = (tz[0] === '-' ? -1 : 1) * (Number(tz.slice(1, 3)) * 60 + Number(tz.slice(3, 5)));
   return Date.UTC(+y, +mo - 1, +d, +h, +mi, +s) - offset * 60_000;
 }
 
+/**
+ * @param {string} url
+ * @returns {Promise<http.IncomingMessage>}
+ */
 function get(url, hops = 0) {
   return new Promise((resolve, reject) => {
     const lib = url.startsWith('https:') ? https : http;
@@ -58,7 +67,8 @@ function get(url, hops = 0) {
       url,
       { headers: { 'User-Agent': USER_AGENT, 'Accept-Encoding': 'gzip' } },
       (res) => {
-        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && hops < 5) {
+        const code = res.statusCode ?? 0;
+        if (code >= 300 && code < 400 && res.headers.location && hops < 5) {
           res.resume();
           resolve(get(new URL(res.headers.location, url).toString(), hops + 1));
           return;
@@ -72,6 +82,7 @@ function get(url, hops = 0) {
 }
 
 const started = Date.now();
+/** @type {Record<string, unknown>} */
 const report = { fecha: new Date().toISOString() };
 try {
   const res = await get(
@@ -81,7 +92,7 @@ try {
   report.tipo = res.headers['content-type'] ?? null;
   report.comprimida = /gzip/i.test(res.headers['content-encoding'] ?? '');
   let wire = 0;
-  res.on('data', (chunk) => (wire += chunk.length));
+  res.on('data', (/** @type {Buffer} */ chunk) => (wire += chunk.length));
   const body = report.comprimida ? res.pipe(zlib.createGunzip()) : res;
 
   const channels = new Set();
@@ -104,63 +115,66 @@ try {
   const now = Date.now();
   const window = { pasado: 0, hoy: 0, manana: 0, mas: 0 };
 
-  await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('más de 10 min descargando')), TIMEOUT_MS);
-    body.on('data', (chunk) => {
-      bytes += chunk.length;
-      if (bytes > MAX_BYTES) {
-        body.destroy();
-        reject(new Error('más de 2 GiB'));
-        return;
-      }
-      let text = tail + chunk.toString('utf8');
-      for (const m of text.matchAll(/<channel\s[^>]*id="([^"]*)"/g)) channels.add(m[1]);
-      let last = 0;
-      for (const m of text.matchAll(/<programme\b([^>]*)>([\s\S]*?)<\/programme>/g)) {
-        last = m.index + m[0].length;
-        const attrs = m[1];
-        const inner = m[2];
-        counts.programas += 1;
-        const ch = /channel="([^"]*)"/.exec(attrs)?.[1] ?? '';
-        perChannel.set(ch, (perChannel.get(ch) ?? 0) + 1);
-        const start = parseXmltvDate(/start="([^"]*)"/.exec(attrs)?.[1]);
-        const stop = parseXmltvDate(/stop="([^"]*)"/.exec(attrs)?.[1]);
-        if (start !== null) {
-          minStart = Math.min(minStart, start);
-          const days = (start - now) / 86_400_000;
-          if (start < now - 3_600_000) window.pasado += 1;
-          else if (days < 1) window.hoy += 1;
-          else if (days < 2) window.manana += 1;
-          else window.mas += 1;
+  await /** @type {Promise<void>} */ (
+    new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('más de 10 min descargando')), TIMEOUT_MS);
+      body.on('data', (/** @type {Buffer} */ chunk) => {
+        bytes += chunk.length;
+        if (bytes > MAX_BYTES) {
+          body.destroy();
+          reject(new Error('más de 2 GiB'));
+          return;
         }
-        if (stop !== null) maxStop = Math.max(maxStop, stop);
-        if (/<desc\b/.test(inner)) counts.desc += 1;
-        if (/<category\b/.test(inner)) counts.categoria += 1;
-        if (/<icon\b/.test(inner)) counts.icono += 1;
-        if (/<episode-num\b/.test(inner)) counts.episodio += 1;
-        if (/<sub-title\b/.test(inner)) counts.subtitulo += 1;
-        if (/<star-rating\b/.test(inner)) counts.nota += 1;
-        if (/<rating\b/.test(inner)) counts.edad += 1;
-        if (/<live\b/.test(inner)) counts.directo += 1;
-      }
-      /* Lo que queda tras el último programa completo: un programa a medias o, si no hay, solo el final (para un
+        let text = tail + chunk.toString('utf8');
+        for (const m of text.matchAll(/<channel\s[^>]*id="([^"]*)"/g)) channels.add(m[1]);
+        let last = 0;
+        for (const m of text.matchAll(/<programme\b([^>]*)>([\s\S]*?)<\/programme>/g)) {
+          last = m.index + m[0].length;
+          const attrs = m[1] ?? '';
+          const inner = m[2] ?? '';
+          counts.programas += 1;
+          const ch = /channel="([^"]*)"/.exec(attrs)?.[1] ?? '';
+          perChannel.set(ch, (perChannel.get(ch) ?? 0) + 1);
+          const start = parseXmltvDate(/start="([^"]*)"/.exec(attrs)?.[1]);
+          const stop = parseXmltvDate(/stop="([^"]*)"/.exec(attrs)?.[1]);
+          if (start !== null) {
+            minStart = Math.min(minStart, start);
+            const days = (start - now) / 86_400_000;
+            if (start < now - 3_600_000) window.pasado += 1;
+            else if (days < 1) window.hoy += 1;
+            else if (days < 2) window.manana += 1;
+            else window.mas += 1;
+          }
+          if (stop !== null) maxStop = Math.max(maxStop, stop);
+          if (/<desc\b/.test(inner)) counts.desc += 1;
+          if (/<category\b/.test(inner)) counts.categoria += 1;
+          if (/<icon\b/.test(inner)) counts.icono += 1;
+          if (/<episode-num\b/.test(inner)) counts.episodio += 1;
+          if (/<sub-title\b/.test(inner)) counts.subtitulo += 1;
+          if (/<star-rating\b/.test(inner)) counts.nota += 1;
+          if (/<rating\b/.test(inner)) counts.edad += 1;
+          if (/<live\b/.test(inner)) counts.directo += 1;
+        }
+        /* Lo que queda tras el último programa completo: un programa a medias o, si no hay, solo el final (para un
          `<channel` partido). Nunca un programa ya contado. */
-      const open = text.lastIndexOf('<programme');
-      tail = open > last ? text.slice(open) : text.slice(Math.max(last, text.length - 4096));
-      if (tail.length > 1_000_000) tail = '';
-    });
-    body.on('end', () => {
-      clearTimeout(timer);
-      resolve();
-    });
-    body.on('error', (error) => {
-      clearTimeout(timer);
-      reject(error);
-    });
-  });
+        const open = text.lastIndexOf('<programme');
+        tail = open > last ? text.slice(open) : text.slice(Math.max(last, text.length - 4096));
+        if (tail.length > 1_000_000) tail = '';
+      });
+      body.on('end', () => {
+        clearTimeout(timer);
+        resolve();
+      });
+      body.on('error', (/** @type {Error} */ error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+    })
+  );
 
   const per = [...perChannel.values()].sort((a, b) => a - b);
-  const pct = (n) => (counts.programas ? Math.round((1000 * n) / counts.programas) / 10 : 0);
+  const pct = (/** @type {number} */ n) =>
+    counts.programas ? Math.round((1000 * n) / counts.programas) / 10 : 0;
   Object.assign(report, {
     segundos: Math.round((Date.now() - started) / 1000),
     bytesCable: wire,
@@ -186,6 +200,6 @@ try {
     },
   });
 } catch (error) {
-  report.error = scrub(error?.message ?? String(error));
+  report.error = scrub(error instanceof Error ? error.message : String(error));
 }
 console.log(scrub(JSON.stringify(report, null, 2)));
