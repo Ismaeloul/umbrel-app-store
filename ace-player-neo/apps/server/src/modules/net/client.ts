@@ -27,7 +27,7 @@
 
 import { createGunzip, gunzipSync, type Gunzip } from 'node:zlib';
 import { PassThrough, type Readable } from 'node:stream';
-import { FETCH_MAX_BYTES, MAX_REDIRECTS, TIMEOUTS } from '@ace/shared';
+import { FETCH_MAX_BYTES, MAX_REDIRECTS, TIMEOUTS, VOD_TIMINGS } from '@ace/shared';
 import { AppError } from '../../core/errors.js';
 import type { Clock, TimerHandle } from '../../core/clock.js';
 import { redactUrl } from '../../core/logger.js';
@@ -46,6 +46,9 @@ import type {
 /** Accept por defecto (server.js:1374). */
 export const DEFAULT_ACCEPT =
   'application/json,text/plain,text/html,application/x-mpegURL,*/*;q=0.2';
+
+/** Espera como mucho al cierre del socket de una respuesta que no se usa (`identity`, P6). */
+const RELEASE_WAIT_MS = VOD_TIMINGS.socketReleaseMs;
 
 export interface FetcherDeps {
   readonly clock: Clock;
@@ -465,8 +468,28 @@ export function createFetcher(deps: FetcherDeps): NetFetcher {
     }
   }
 
+  /**
+   * Con `identity` (el relé VOD, docs/vod.md §9.3) se espera a que el socket
+   * de una respuesta que no se usa (redirección o fallo) se cierre de verdad
+   * antes de seguir: si no, el siguiente salto o el reintento de quien llama
+   * abren una segunda conexión con un proveedor de una sola plaza (P6). Como
+   * mucho `RELEASE_WAIT_MS`.
+   */
+  async function settleUnused(response: TransportResponse, identity: boolean): Promise<void> {
+    if (!identity || !response.closed) return;
+    let timer: TimerHandle | null = null;
+    await Promise.race([
+      response.closed,
+      new Promise<void>((resolve) => {
+        timer = clock.setTimeout(resolve, RELEASE_WAIT_MS);
+      }),
+    ]);
+    clock.clearTimeout(timer);
+  }
+
   async function openStream(url: string, options: OpenStreamOptions): Promise<OpenedStream> {
     const { iptv } = options;
+    const identity = options.identity === true;
     const deadline = options.totalMs === undefined ? null : clock.now() + options.totalMs;
     const visited = new Set<string>();
     let redirects = 0;
@@ -527,6 +550,7 @@ export function createFetcher(deps: FetcherDeps): NetFetcher {
       if (status >= 300 && status < 400 && location) {
         response.body.destroy();
         release();
+        await settleUnused(response, identity);
         if (redirects >= MAX_REDIRECTS) throw new AppError('redirect_limit');
         try {
           current = new URL(location, parsed).toString();
@@ -539,13 +563,15 @@ export function createFetcher(deps: FetcherDeps): NetFetcher {
       if (status < 200 || status >= 300) {
         response.body.destroy();
         release();
+        await settleUnused(response, identity);
         throw new AppError(`http_${status}`, { data: { status } });
       }
       const encoding = encodingOf(response);
-      const gzipHeader = iptv !== undefined && encoding === 'gzip' && !options.identity;
+      const gzipHeader = iptv !== undefined && encoding === 'gzip' && !identity;
       if (encoding !== 'identity' && !gzipHeader) {
         response.body.destroy();
         release();
+        await settleUnused(response, identity);
         throw new AppError('unsupported_encoding', { detail: encoding.slice(0, 40) });
       }
       const declared = Number(headerValue(response.headers['content-length']));
@@ -556,6 +582,7 @@ export function createFetcher(deps: FetcherDeps): NetFetcher {
       ) {
         response.body.destroy();
         release();
+        await settleUnused(response, identity);
         throw new AppError('response_too_large', { detail: `Content-Length ${declared}` });
       }
       const body = guardBody(response.body, {
@@ -565,7 +592,7 @@ export function createFetcher(deps: FetcherDeps): NetFetcher {
         deadline,
         maxBytes: options.maxBytes ?? null,
         maxDecompressed: iptv?.maxDecompressedBytes ?? options.maxBytes ?? null,
-        gzip: gzipHeader ? 'header' : iptv && !options.identity ? 'sniff' : 'none',
+        gzip: gzipHeader ? 'header' : iptv && !identity ? 'sniff' : 'none',
         onClose: release,
       });
       return {

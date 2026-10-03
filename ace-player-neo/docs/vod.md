@@ -871,8 +871,10 @@ ffmpeg -hide_banner -loglevel warning -nostdin
   - **Reinicios agrupados:** entre dos reinicios pasan al menos `restartMinGapMs` = 1,5 s y **solo cuenta la última
     petición** (arrastrar la barra no lanza cinco reinicios). Cada reinicio es, como mucho, un ciclo de conexión.
 - **Contrapresión:** se deja de leer `pipe:1` (`stdout.pause()`) cuando lo producido va más de **60 s** por delante del
-  último segmento pedido, y se sigue por debajo de 30 s (medido). ffmpeg se para, deja de leer del relé y el relé deja
-  de leer del proveedor: no se descarga la película entera (hallazgo de D).
+  **final** del último segmento pedido, y se sigue por debajo de 30 s (medido). ffmpeg se para, deja de leer del relé y
+  el relé deja de leer del proveedor: no se descarga la película entera (hallazgo de D). **Nunca con el segmento pedido
+  a medias** (VOD-4, encontrado con ffmpeg de verdad): un segmento solo se cierra cuando llega el fotograma clave del
+  siguiente o el final del fichero, así que parar antes lo dejaba sin cerrar y al reproductor esperando para siempre.
 - **Espera de un segmento:** hasta `segmentWaitMs` = 15 s; después, `503` con `Retry-After: 1` y hls.js reintenta
   (§12.7).
 - **Ventana en disco:** se guardan los segmentos desde `último pedido − 120 s` **y** como mucho 256 MiB por detrás; lo

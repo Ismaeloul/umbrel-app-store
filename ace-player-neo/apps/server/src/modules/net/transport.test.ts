@@ -148,6 +148,35 @@ describe('transporte node:http con la IP fijada', () => {
     expect(await pending).toBe('fetch_timeout');
     expect(core.clock.pendingTimers()).toBe(0);
   });
+
+  it('released (relé VOD): se cumple cuando el socket se ha cerrado, y el servidor lo ve', async () => {
+    let serverSockets = 0;
+    const server = await localServer((req, res) => {
+      serverSockets += 1;
+      req.socket.once('close', () => (serverSockets -= 1));
+      res.writeHead(206, { 'content-range': 'bytes 0-999999/1000000' });
+      res.write(Buffer.alloc(64 * 1024));
+    });
+    const { net } = client(true);
+    const opened = await net.openStream(`http://lista.example:${server.port}/1.mkv`, {
+      idleMs: 10_000,
+      identity: true,
+      headers: { range: 'bytes=0-' },
+    });
+    expect(opened.released).toBeInstanceOf(Promise);
+    let released = false;
+    void opened.released?.then(() => (released = true));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(released).toBe(false);
+    opened.body.destroy();
+    await opened.released;
+    /* El cierre llega al servidor enseguida (en loopback, en unos ms). */
+    const start = Date.now();
+    while (serverSockets > 0 && Date.now() - start < 2000) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    expect(serverSockets).toBe(0);
+  });
 });
 
 describe('systemResolver', () => {

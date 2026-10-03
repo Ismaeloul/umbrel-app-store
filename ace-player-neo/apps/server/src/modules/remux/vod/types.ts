@@ -6,6 +6,9 @@
    tubería. Aquí no hay nada del proveedor: solo la URL del relé en
    127.0.0.1. */
 
+import type { Readable } from 'node:stream';
+import type { RemuxProcess } from '../types.js';
+
 /** Contenedores con índice en la v1 (§9.4). */
 export type VodContainer = 'mkv' | 'mp4';
 
@@ -18,6 +21,10 @@ export interface VodVideoInfo {
   readonly height: number | null;
   /** 8, 10… o null si no se sabe (se da por 8). */
   readonly bitDepth: number | null;
+  /** H.264: `profile_idc`; HEVC: el perfil efectivo (`parseHvcC`). null si no se sabe. */
+  readonly profile: number | null;
+  /** 1 = 4:2:0, 2 = 4:2:2, 3 = 4:4:4; null si no se sabe (se da por 4:2:0). */
+  readonly chromaFormat: number | null;
 }
 
 /** Una pista de audio (`index` es su posición entre las de audio: `-map 0:a:<index>`). */
@@ -57,6 +64,18 @@ export interface VodIndex {
   readonly audio: readonly VodTrack[];
   readonly subtitles: readonly VodSubtitle[];
   readonly sizeBytes: number;
+}
+
+/**
+ * Un ffmpeg del VOD: el del remux con su salida por la tubería (`pipe:1`,
+ * docs/vod.md §9.6). Lo lanza `createSpawnLauncher({ stdout: 'pipe' })`.
+ */
+export interface VodProcess extends RemuxProcess {
+  readonly stdout: Readable;
+}
+
+export interface VodProcessLauncher {
+  spawn(args: readonly string[]): VodProcess;
 }
 
 /** Lee bytes del fichero por Range. `size` se sabe tras la primera lectura. */

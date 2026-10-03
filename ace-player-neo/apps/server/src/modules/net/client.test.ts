@@ -470,3 +470,127 @@ describe('ALLOW_PRIVATE_SYNC_URLS=true quita el filtro (server.js:70, 1312)', ()
     expect(net.isPrivateHostname('example.org')).toBe(false);
   });
 });
+
+/* El relé VOD (docs/vod.md §9.3) abre el vídeo con `identity` y necesita
+   saber cuándo se ha soltado de verdad la conexión con un proveedor de una
+   sola plaza (docs/vod-estado.md §4.3, P6). */
+describe('openStream con identity (relé VOD)', () => {
+  const VIDEO = 'http://lista.example/movie/u/p/1.mkv';
+
+  /** Transporte cuyas respuestas dicen cuándo se cierra su socket (lo cierra el test). */
+  function closingTransport(replies: Record<string, FakeReply>) {
+    const requests: string[] = [];
+    const sockets: (() => void)[] = [];
+    const transport: NetTransport = async (request) => {
+      requests.push(request.url.href);
+      const reply = replies[request.url.href] ?? { status: 404 };
+      let close: () => void = () => undefined;
+      const closed = new Promise<void>((resolve) => (close = resolve));
+      sockets.push(close);
+      const body = reply.body === undefined ? [] : [Buffer.from(reply.body as Buffer)];
+      return {
+        status: reply.status ?? 200,
+        headers: reply.headers ?? {},
+        body: Readable.from(body),
+        closed,
+      };
+    };
+    return { transport, requests, sockets };
+  }
+
+  const settle = async (): Promise<void> => {
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
+  };
+
+  it('no mira si es gzip: un vídeo que empieza por 1F 8B pasa tal cual', async () => {
+    const bytes = Buffer.from([0x1f, 0x8b, 0x08, 0x00, 0x01, 0x02, 0x03]);
+    const { transport } = closingTransport({ [VIDEO]: { body: bytes } });
+    const { net } = setup(transport);
+    const opened = await net.openStream(VIDEO, {
+      idleMs: 5000,
+      iptv: { lan: false },
+      identity: true,
+    });
+    const chunks: Buffer[] = [];
+    for await (const chunk of opened.body) chunks.push(Buffer.from(chunk as Buffer));
+    expect(Buffer.concat(chunks).equals(bytes)).toBe(true);
+  });
+
+  it('un Content-Encoding gzip es unsupported_encoding', async () => {
+    const { transport, sockets } = closingTransport({
+      [VIDEO]: { headers: { 'content-encoding': 'gzip' }, body: 'x' },
+    });
+    const { net } = setup(transport);
+    const pending = codeOf(
+      net.openStream(VIDEO, { idleMs: 5000, iptv: { lan: false }, identity: true }),
+    );
+    await settle();
+    sockets[0]?.();
+    expect(await pending).toBe('unsupported_encoding');
+  });
+
+  it('released es la promesa de cierre del socket del transporte', async () => {
+    const { transport, sockets } = closingTransport({ [VIDEO]: { body: 'abc' } });
+    const { net } = setup(transport);
+    const opened = await net.openStream(VIDEO, { idleMs: 5000, identity: true });
+    let released = false;
+    void opened.released?.then(() => (released = true));
+    await settle();
+    expect(released).toBe(false);
+    sockets[0]?.();
+    await settle();
+    expect(released).toBe(true);
+  });
+
+  it('una redirección espera al cierre del socket antes del siguiente salto (P6)', async () => {
+    const final = 'http://lista.example/lb/tok/1.mkv';
+    const { transport, requests, sockets } = closingTransport({
+      [VIDEO]: { status: 302, headers: { location: '/lb/tok/1.mkv' } },
+      [final]: { status: 206, body: 'video' },
+    });
+    const { net } = setup(transport);
+    const pending = net.openStream(VIDEO, { idleMs: 5000, iptv: { lan: false }, identity: true });
+    await settle();
+    expect(requests).toEqual([VIDEO]);
+    sockets[0]?.();
+    const opened = await pending;
+    expect(requests).toEqual([VIDEO, final]);
+    expect(opened.finalUrl).toBe(final);
+  });
+
+  it('un «ocupado» espera al cierre antes de lanzar: el reintento no se solapa (P6)', async () => {
+    const { transport, sockets } = closingTransport({ [VIDEO]: { status: 458 } });
+    const { net } = setup(transport);
+    let settled = false;
+    const pending = codeOf(net.openStream(VIDEO, { idleMs: 5000, identity: true })).then((code) => {
+      settled = true;
+      return code;
+    });
+    await settle();
+    expect(settled).toBe(false);
+    sockets[0]?.();
+    expect(await pending).toBe('http_458');
+  });
+
+  it('si el socket no se cierra, se sigue a los 2 s (VOD_TIMINGS.socketReleaseMs)', async () => {
+    const { transport } = closingTransport({ [VIDEO]: { status: 458 } });
+    const { core, net } = setup(transport);
+    let settled = false;
+    const pending = codeOf(net.openStream(VIDEO, { idleMs: 5000, identity: true })).then((code) => {
+      settled = true;
+      return code;
+    });
+    await settle();
+    core.clock.advance(1999);
+    await settle();
+    expect(settled).toBe(false);
+    core.clock.advance(1);
+    expect(await pending).toBe('http_458');
+  });
+
+  it('sin identity no se espera al socket', async () => {
+    const { transport } = closingTransport({ [VIDEO]: { status: 458 } });
+    const { net } = setup(transport);
+    expect(await codeOf(net.openStream(VIDEO, { idleMs: 5000 }))).toBe('http_458');
+  });
+});
