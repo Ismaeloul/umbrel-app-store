@@ -208,7 +208,7 @@ export class VodDriver {
     this.cancelNextUp();
   }
 
-  fail(code: string, action: 'retry' | 'title' | 'settings'): void {
+  fail(code: string, action: 'retry' | 'retry-title' | 'title' | 'settings'): void {
     this.failure = { code, action };
     this.cancelSeek();
   }

@@ -1983,6 +1983,30 @@ describe('películas y series (VOD-6, docs/vod.md §12.7 y §12.9)', () => {
     expect(t.engines.created).toHaveLength(1);
   });
 
+  it('vod_provider_error (5xx del proveedor al abrir): su texto, «Reintentar» y «Volver a la ficha»; Reintentar vuelve a pedir', async () => {
+    const t = vodSetup();
+    let first = true;
+    t.handlers.vodStream = () => {
+      if (first) {
+        first = false;
+        throw new ApiError({ code: 'vod_provider_error', status: 502 });
+      }
+      return vodGrant();
+    };
+    t.runtime.playVod({ id: MOVIE_ID, kind: 'movie', title: 'Dune' });
+    await flush();
+    expect(t.state.phase).toBe('error');
+    expect(t.state.message).toBe(
+      'Tu proveedor no está dando esta película ahora mismo (error de su servidor). Prueba más tarde.',
+    );
+    expect(t.state.vod?.failure).toEqual({ code: 'vod_provider_error', action: 'retry-title' });
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(t.callsTo('vodStream')).toHaveLength(1);
+    t.runtime.retry();
+    await flush();
+    expect(t.callsTo('vodStream')).toHaveLength(2);
+  });
+
   it('vod_unsupported con su motivo: el texto de §13 y «Volver a la ficha», sin reintentos ni puente', async () => {
     const t = vodSetup();
     t.handlers.vodStream = () => {

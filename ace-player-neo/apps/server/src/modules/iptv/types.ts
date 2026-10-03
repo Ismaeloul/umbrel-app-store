@@ -169,7 +169,7 @@ export interface VodInput {
   setAheadProbe?(probe: () => number | null): void;
   /** Pausa larga: suelta la conexión con el proveedor (la sesión sigue). */
   release(): Promise<void>;
-  /** El proveedor corta una y otra vez: hay que cerrar con ese código (`vod_dropped`). */
+  /** El proveedor corta una y otra vez (`vod_dropped`) o su servidor falla al abrir (`vod_provider_error`): hay que cerrar con ese código. */
   onDropped(listener: (code: string) => void): void;
   /** Duración real (la del índice), para comprobar el progreso (`knownDurationS`). */
   noteDuration(durationS: number): void;

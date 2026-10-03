@@ -212,7 +212,7 @@ function IdleFacts() {
   );
 }
 
-/** La salida de un error con una película (§13): «Reintentar», «Volver a la ficha» o «Ir a Ajustes». */
+/** La salida de un error con una película (§13): «Reintentar», «Volver a la ficha» (o las dos) o «Ir a Ajustes». */
 function VodFailureAction({ state, ctx }: { state: PlayerState; ctx: PlayerContextValue }) {
   const navigate = useNavigate();
   const action = state.vod?.failure?.action ?? 'retry';
@@ -233,11 +233,21 @@ function VodFailureAction({ state, ctx }: { state: PlayerState; ctx: PlayerConte
         Ir a Ajustes
       </Button>
     );
-  return (
+  const retry = (
     <Button variant="video" size="sm" icon="refresh" onClick={ctx.actions.retry}>
       Reintentar
     </Button>
   );
+  if (action === 'retry-title')
+    return (
+      <div className="player-msg__actions">
+        {retry}
+        <Button variant="video" size="sm" icon="chev-l" onClick={ctx.actions.openTitle}>
+          Volver a la ficha
+        </Button>
+      </div>
+    );
+  return retry;
 }
 
 function StageMessage({ state, ctx }: { state: PlayerState; ctx: PlayerContextValue }) {

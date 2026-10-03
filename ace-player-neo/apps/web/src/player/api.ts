@@ -197,7 +197,7 @@ export interface VodPlayback {
    * Por qué no suena (§13): el código y qué ofrece el panel, «Reintentar»
    * (sigue en la posición guardada), «Volver a la ficha» o «Ir a Ajustes».
    */
-  failure: { code: string; action: 'retry' | 'title' | 'settings' } | null;
+  failure: { code: string; action: 'retry' | 'retry-title' | 'title' | 'settings' } | null;
 }
 
 export interface PlayerState {

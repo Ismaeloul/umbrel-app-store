@@ -328,6 +328,7 @@ const VOD_STREAM_ERRORS = [
   'vod_busy',
   'vod_timeout',
   'vod_dropped',
+  'vod_provider_error',
   'vod_disk_full',
   'vod_account',
   'remux_busy',

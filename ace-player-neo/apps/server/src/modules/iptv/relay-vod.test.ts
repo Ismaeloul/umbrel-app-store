@@ -363,9 +363,48 @@ describe('VodSession', () => {
     });
     dead.onDropped((code) => drops.push(code));
     const gone = await rawGet(dead.inputUrl, { range: 'bytes=0-99' });
-    expect(gone.headers[VOD_ERROR_HEADER]).toBe('vod_dropped');
+    /* Un 5xx sin haber dado un byte: el servidor del proveedor, no un corte (3-oct). */
+    expect(gone.status).toBe(502);
+    expect(gone.headers[VOD_ERROR_HEADER]).toBe('vod_provider_error');
     expect(tries).toBe(1 + FAST.reopenBackoffMs.length);
-    expect(drops).toEqual(['vod_dropped']);
+    expect(drops).toEqual(['vod_provider_error']);
+  });
+
+  it('un 5xx al reabrir con la película ya servida sigue siendo vod_dropped; sin HTTP, también', async () => {
+    const { origin, vod } = await rig();
+    const realOpen = netOpener(createSystemClock());
+    let served = false;
+    const drops: string[] = [];
+    const later = vod.session(origin.url('1.mkv'), 'mkv', {
+      limits: FAST,
+      deps: {
+        open: async (request) => {
+          if (!served) {
+            served = true;
+            return realOpen(request);
+          }
+          throw new AppError('http_500', { data: { status: 500, redirects: 1 } });
+        },
+      },
+    });
+    later.onDropped((code) => drops.push(code));
+    const first = await rawGet(later.inputUrl, { range: 'bytes=0-99' });
+    expect(first.status).toBe(206);
+    const cut = await rawGet(later.inputUrl, { range: 'bytes=300-399' });
+    expect(cut.headers[VOD_ERROR_HEADER]).toBe('vod_dropped');
+
+    const reset = vod.session(origin.url('1.mkv'), 'mkv', {
+      limits: FAST,
+      deps: {
+        open: async () => {
+          throw Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' });
+        },
+      },
+    });
+    reset.onDropped((code) => drops.push(code));
+    const gone = await rawGet(reset.inputUrl, { range: 'bytes=0-99' });
+    expect(gone.headers[VOD_ERROR_HEADER]).toBe('vod_dropped');
+    expect(drops).toEqual(['vod_dropped', 'vod_dropped']);
   });
 
   it('reuseRedirect apagado: la URL original cada vez; encendido: la final, y con un 404 vuelve a la original', async () => {

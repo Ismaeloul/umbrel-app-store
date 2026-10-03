@@ -971,7 +971,7 @@ ffmpeg -hide_banner -loglevel warning -nostdin
   en la posición.
 - **Latido** de 15 s / 45 s como hoy. Con `ENDLIST` el reproductor no vuelve a pedir la lista, y en pausa no pide
   segmentos: la sesión la mantienen los latidos.
-- **Cierres del servidor:** `stream.closed` con `reason: 'remux_failed'` y el código `vod_dropped` o `vod_busy`.
+- **Cierres del servidor:** `stream.closed` con `reason: 'remux_failed'` y el código `vod_dropped`, `vod_provider_error` (el servidor del proveedor da 5xx antes de servir nada) o `vod_busy`.
 - **Concesión:** `vodLatency()` da `liveSync: null`. Web: `protocol: 'hls'` en `/api/v1/video/<sid>/index.m3u8`.
   iPhone: `hls-fmp4` con `?t=`.
 
@@ -1374,6 +1374,7 @@ export const VodProgressBodySchema = z.strictObject({
 | `vod_busy` | 503 | «Tu cuenta IPTV está en uso en otro aparato. Ciérralo y vuelve a intentarlo.» (`data.retryAfterS` opcional, §3) |
 | `vod_timeout` | 504 | «Tu IPTV tarda demasiado en dar el vídeo. Prueba otra vez.» |
 | `vod_dropped` | 502 | «El proveedor ha cortado el vídeo. Vuelve a intentarlo.» |
+| `vod_provider_error` | 502 | «Tu proveedor no está dando este título ahora mismo (error de su servidor). Prueba más tarde.» (el servidor del proveedor da 5xx al ABRIR, antes de servir un byte, y no cede con las reaperturas del presupuesto; el 3-oct pasó con todas las películas tras el 302. Un corte a mitad sigue siendo `vod_dropped`) |
 | `vod_disk_full` | 507 | «No queda espacio en el Umbrel para preparar el vídeo.» |
 | `vod_account` | 403 | «Tu cuenta IPTV no está activa. Revísala en Ajustes → IPTV.» |
 
@@ -1761,6 +1762,7 @@ Cada estado vacío tiene una salida (`EmptyState` con `actions`).
 | `vod_busy` con `retryAfterS` | línea de estado | «El proveedor tarda en liberar la conexión…» | reintento solo, una vez |
 | `vod_timeout` | reproductor | «Tu IPTV tarda demasiado en dar el vídeo. Prueba otra vez.» | «Reintentar» |
 | `vod_dropped` | reproductor | «El proveedor ha cortado el vídeo.» | «Reintentar» (sigue en la posición guardada) |
+| `vod_provider_error` | reproductor | «Tu proveedor no está dando esta película ahora mismo (error de su servidor). Prueba más tarde.» | «Reintentar» y «Volver a la ficha» |
 | `vod_unsupported` `sin_saltos` | reproductor | «Tu proveedor no deja saltar dentro del vídeo; no se puede reproducir aquí.» | «Volver a la ficha» |
 | `vod_unsupported` `indice` | reproductor | «Este archivo no tiene índice; todavía no se puede reproducir.» | «Volver a la ficha» |
 | `vod_unsupported` `video` o `formato` | reproductor | «El vídeo usa un formato antiguo que no se puede reproducir.» | «Volver a la ficha» |
@@ -1837,7 +1839,7 @@ Cada estado vacío tiene una salida (`EmptyState` con `actions`).
 | `vod/timings.test.ts` | El presupuesto de §9.12, leyendo el `proxy_read_timeout` de `location /api/` de `nginx.conf` |
 
 **Contratos** (`packages/shared/test/contracts.test.ts`, `test/security.test.ts`): ejemplos `web/v1` y variantes;
-claves de fuga en los `Vod*`; los 8 `vod_*` con su HTTP; el pin de los 16 `iptv_*` sin cambios; `bootstrap.json` de
+claves de fuga en los `Vod*`; los 9 `vod_*` con su HTTP; el pin de los 16 `iptv_*` sin cambios; `bootstrap.json` de
 `v1` sin `vod`; la lista `web` fijada y `PARAM_VALUES.art`; `vodArt` binario en openapi; `vodBrowse` en
 `QUIET_QUERY_ROUTES`; **`StreamSourceSchema` y `VideoParamsSchema` sin cambios**. Y `corepack pnpm@10.18.2 -r
 typecheck` pasa sin tocar `football/resolution.ts` (T3).

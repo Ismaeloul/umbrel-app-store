@@ -642,7 +642,7 @@ export class VodSession {
     this.closedListeners.push(listener);
   }
 
-  /** El proveedor ha cortado más veces de las que se aguantan (`vod_dropped`). */
+  /** El proveedor ha cortado más veces de las que se aguantan (`vod_dropped`) o su servidor no da el vídeo (`vod_provider_error`). */
   onDropped(listener: (code: string) => void): void {
     this.dropped.push(listener);
   }
@@ -752,7 +752,9 @@ export class VodSession {
     } catch (error) {
       if (this.gone(leg)) return;
       const vod = toVodError(error);
-      if (vod.code === 'vod_dropped') this.emitDropped(vod.code);
+      if (vod.code === 'vod_dropped' || vod.code === 'vod_provider_error') {
+        this.emitDropped(vod.code);
+      }
       /* «Sin saltos» va con 416 (docs/vod.md §9.3); lo demás, con el HTTP del catálogo. */
       if (!leg.headersSent) {
         this.sendError(leg.res, vod, vod.code === 'vod_unsupported' ? 416 : undefined);
@@ -863,11 +865,20 @@ export class VodSession {
   /**
    * Un fallo al abrir que no es plazo, ocupado ni de la cuenta (ECONNRESET,
    * 5xx, un Content-Range que no casa…) gasta una reapertura del presupuesto
-   * con su espera; agotado, `vod_dropped` (M2).
+   * con su espera; agotado, `vod_dropped` (M2). Si es el servidor del proveedor el que falla (5xx)
+   * y aún no ha dado un solo byte, `vod_provider_error`: el fallo es suyo, no un corte (3-oct, el
+   * 500 tras el 302 con todas las películas).
    */
   private async retryDropped(error: AppError, signal: AbortSignal): Promise<void> {
     const backoff = this.takeReopen();
     if (backoff === null) {
+      const status = httpStatusOf(error.cause);
+      if (status !== null && status >= 500 && this.bytes === 0) {
+        throw new AppError('vod_provider_error', {
+          cause: error,
+          detail: `el servidor del proveedor falla al abrir (${error.detail ?? error.code})`,
+        });
+      }
       throw new AppError('vod_dropped', {
         cause: error,
         detail: `el proveedor falla una y otra vez al abrir (${error.detail ?? error.code})`,
@@ -1192,7 +1203,9 @@ export class VodSession {
   private emitDropped(code: string): void {
     this.deps.logger.warn(
       { ticket: '•••', errorCode: code },
-      'relé VOD: el proveedor ha cortado el vídeo',
+      code === 'vod_provider_error'
+        ? 'relé VOD: el servidor del proveedor no da el vídeo'
+        : 'relé VOD: el proveedor ha cortado el vídeo',
     );
     for (const listener of [...this.dropped]) {
       try {

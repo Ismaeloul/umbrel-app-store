@@ -1,5 +1,5 @@
 /* Contrato de Películas y series (docs/vod.md §11 y §15.1 «Contratos»): las
-   6 rutas nacen solo web, los 8 `vod_*` con su HTTP, nada del proveedor en
+   6 rutas nacen solo web, los 9 `vod_*` con su HTTP, nada del proveedor en
    los esquemas `Vod*`, lo que ve la app no cambia y el presupuesto de
    tiempos de `vodStream` (§9.12) cabe bajo nginx. */
 
@@ -115,7 +115,7 @@ describe('rutas de Películas y series (docs/vod.md §11.1)', () => {
     expect(empty).toEqual(['vodProgress']);
   });
 
-  it('errores propios: vodStream los 8 vod_* y remux_busy; ningún iptv_* (no pasan a AceStream)', () => {
+  it('errores propios: vodStream los 9 vod_* y remux_busy; ningún iptv_* (no pasan a AceStream)', () => {
     expect([...V1_ROUTES.vodStream.errors].sort()).toEqual(
       [...VOD_ERROR_CODES, 'remux_busy'].sort(),
     );
@@ -143,7 +143,7 @@ describe('rutas de Películas y series (docs/vod.md §11.1)', () => {
 });
 
 describe('errores vod_* (docs/vod.md §11.3)', () => {
-  it('8 códigos, públicos, sin estado antiguo y con el HTTP del diseño', () => {
+  it('9 códigos, públicos, sin estado antiguo y con el HTTP del diseño', () => {
     const statuses = Object.fromEntries(
       VOD_ERROR_CODES.map((code) => [code, ERROR_CATALOG[code].status]),
     );
@@ -154,6 +154,7 @@ describe('errores vod_* (docs/vod.md §11.3)', () => {
       vod_busy: 503,
       vod_timeout: 504,
       vod_dropped: 502,
+      vod_provider_error: 502,
       vod_disk_full: 507,
       vod_account: 403,
     });

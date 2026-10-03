@@ -629,6 +629,17 @@ export const ERROR_CATALOG = {
     public: true,
     message: 'El proveedor ha cortado el vídeo. Vuelve a intentarlo.',
   },
+  /**
+   * El servidor del proveedor da 5xx al ABRIR el vídeo (antes de servir nada) una y otra vez: el
+   * fallo es suyo, no un corte (3-oct, Paso 0). Un corte a mitad sigue siendo `vod_dropped`.
+   */
+  vod_provider_error: {
+    status: 502,
+    legacyStatus: null,
+    public: true,
+    message:
+      'Tu proveedor no está dando este título ahora mismo (error de su servidor). Prueba más tarde.',
+  },
   vod_disk_full: {
     status: 507,
     legacyStatus: null,
@@ -799,7 +810,7 @@ export function isIptvErrorCode(value: unknown): value is IptvErrorCode {
   return isErrorCode(value) && value.startsWith('iptv_');
 }
 
-/** Códigos de Películas y series (docs/vod.md §11.3): los 8 `vod_*`. Nunca pasan a AceStream. */
+/** Códigos de Películas y series (docs/vod.md §11.3): los 9 `vod_*`. Nunca pasan a AceStream. */
 export type VodErrorCode = Extract<ErrorCode, `vod_${string}`>;
 export const VOD_ERROR_CODES = ERROR_CODES.filter((code): code is VodErrorCode =>
   code.startsWith('vod_'),

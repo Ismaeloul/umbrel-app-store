@@ -8493,6 +8493,9 @@ paths:
         - code: vod_dropped
           status: 502
           message: El proveedor ha cortado el vídeo. Vuelve a intentarlo.
+        - code: vod_provider_error
+          status: 502
+          message: Tu proveedor no está dando este título ahora mismo (error de su servidor). Prueba más tarde.
         - code: vod_disk_full
           status: 507
           message: No queda espacio en el Umbrel para preparar el vídeo.

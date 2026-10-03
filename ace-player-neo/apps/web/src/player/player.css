@@ -214,6 +214,13 @@
 .player-msg .btn {
   margin-top: var(--s-2);
 }
+/* Dos salidas (el servidor del proveedor falla): «Reintentar» y «Volver a la ficha», en fila. */
+.player-msg__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s-2);
+}
 /* Reposo: motor, canales y partidos de hoy (inventario §8.1), en píldoras discretas. */
 .player-facts {
   display: flex;

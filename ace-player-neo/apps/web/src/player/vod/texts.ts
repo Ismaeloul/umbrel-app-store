@@ -49,16 +49,24 @@ export function vodErrorText(code: string, reason?: unknown): string {
   if (code === 'vod_busy')
     return 'Tu cuenta IPTV está en uso en otro aparato. Ciérralo y pulsa Reintentar.';
   if (code === 'vod_dropped') return 'El proveedor ha cortado el vídeo.';
+  /* Su servidor da 5xx al abrir (el 3-oct, con todas las películas): no es un corte nuestro. */
+  if (code === 'vod_provider_error')
+    return 'Tu proveedor no está dando esta película ahora mismo (error de su servidor). Prueba más tarde.';
   return isAnyErrorCode(code) ? errorMessage(code) : 'No se ha podido abrir el vídeo.';
 }
 
+/** La salida del panel de error de una película (§13). `retry-title`: «Reintentar» y «Volver a la ficha». */
+export type VodFailureAction = 'retry' | 'retry-title' | 'title' | 'settings';
+
 /**
  * ¿Merece la pena «Reintentar»? (§13): con el formato o el códec no, se
- * vuelve a la ficha; con la cuenta, a Ajustes.
+ * vuelve a la ficha; con la cuenta, a Ajustes; si el servidor del proveedor
+ * falla, las dos (puede que en un rato sí, o que se prefiera otra cosa).
  */
-export function vodErrorAction(code: string): 'retry' | 'title' | 'settings' {
+export function vodErrorAction(code: string): VodFailureAction {
   if (code === 'vod_unsupported' || code === 'vod_disk_full' || code === 'vod_codec')
     return 'title';
   if (code === 'vod_account') return 'settings';
+  if (code === 'vod_provider_error') return 'retry-title';
   return 'retry';
 }
