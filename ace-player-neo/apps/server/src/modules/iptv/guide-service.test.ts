@@ -467,8 +467,7 @@ describe('Guía TV en el servicio (§20.5)', () => {
     const r = await rig({ fake: { guiaCompleta: true, grande: 400 } });
     await saveXtream(r);
     await downloadGuide(r);
-    const before = await r.service.tvGuide.channels({ scope: 'all', limit: 5 });
-    expect(before.all).toBeGreaterThan(300);
+    expect((await r.service.tvGuide.channels({ scope: 'all', limit: 0 })).all).toBeGreaterThan(300);
     /* Un canal suena por el relé (como ffmpeg). */
     const id = r.service.resolve({ channels: ['Antena 3'], scorer }).candidates[0]?.id as string;
     const input = await r.service.openInput(id, { signal: new AbortController().signal });
@@ -494,58 +493,74 @@ describe('Guía TV en el servicio (§20.5)', () => {
       lateness = Math.max(lateness, now - expected);
       expected = now + 10;
     }, 10);
-    /* Primero, 2 s sin construir nada: el ritmo normal del proveedor falso y del relé. */
-    measuring = true;
-    last = performance.now();
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    const baselineGap = worstGap;
-    const baselineLateness = lateness;
-    worstGap = 0;
-    lateness = 0;
-    last = performance.now();
-    const startBytes = received;
-    const started = performance.now();
-    const building = downloadGuide(r);
-    /* Mientras se construye, la API contesta con la guía de antes (hasta que se cambia de golpe). */
-    let answered = 0;
-    let done = false;
-    void building.then(() => {
-      done = true;
-    });
-    while (!done) {
-      let slice: ReturnType<typeof r.service.tvGuide.programmes>;
-      try {
-        slice = r.service.tvGuide.programmes({
-          v: before.version,
-          ch: String(before.channels[0]?.guide),
-          from: r.core.clock.now(),
-          to: r.core.clock.now() + 3_600_000,
-        });
-      } catch (error) {
-        expect((error as { code?: string }).code).toBe('guide_stale');
-        break;
+    const reset = (): void => {
+      worstGap = 0;
+      lateness = 0;
+      last = performance.now();
+      expected = performance.now() + 10;
+    };
+    /** Un intento: 2 s sin construir nada (el ritmo normal del proveedor falso y del relé) y una construcción. */
+    const measure = async () => {
+      const before = await r.service.tvGuide.channels({ scope: 'all', limit: 5 });
+      measuring = true;
+      reset();
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const baselineGap = worstGap;
+      const baselineLateness = lateness;
+      reset();
+      const startBytes = received;
+      const started = performance.now();
+      const building = downloadGuide(r);
+      /* Mientras se construye, la API contesta con la guía de antes (hasta que se cambia de golpe). */
+      let answered = 0;
+      let done = false;
+      void building.then(() => {
+        done = true;
+      });
+      while (!done) {
+        let slice: ReturnType<typeof r.service.tvGuide.programmes>;
+        try {
+          slice = r.service.tvGuide.programmes({
+            v: before.version,
+            ch: String(before.channels[0]?.guide),
+            from: r.core.clock.now(),
+            to: r.core.clock.now() + 3_600_000,
+          });
+        } catch (error) {
+          expect((error as { code?: string }).code).toBe('guide_stale');
+          break;
+        }
+        if (slice.channels[0]?.programmes.length) answered += 1;
+        await new Promise((resolve) => setTimeout(resolve, 20));
       }
-      if (slice.channels[0]?.programmes.length) answered += 1;
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await building;
+      measuring = false;
+      const took = performance.now() - started;
+      const after = await r.service.tvGuide.channels({ scope: 'all', limit: 5 });
+      expect(after.version).not.toBe(before.version);
+      expect(answered).toBeGreaterThan(0);
+      const bytes = received - startBytes;
+      console.info(
+        `[guía · directo] construcción ${Math.round(took)} ms · peor hueco del relé ${Math.round(worstGap)} ms (sin construir: ${Math.round(baselineGap)} ms) · reloj tarde ${Math.round(lateness)} ms (sin construir: ${Math.round(baselineLateness)} ms) · ${Math.round(bytes / 1024)} KiB por el relé`,
+      );
+      return { bytes, worstGap, baselineGap, lateness, baselineLateness };
+    };
+    /* Margen proporcional al reposo del momento (si el PC va cargado, el reposo también sube):
+       solo, el relé no pasa de ~170 ms (reposo ~90) ni el reloj de ~70 ms (reposo ~10-30).
+       Un bloqueo de 600-900 ms del hilo no cabe. Un segundo intento si el primero se pasa
+       (otro proceso pudo parar el PC justo durante la construcción). */
+    const lateLimit = (m: { baselineLateness: number }) => 3 * m.baselineLateness + 100;
+    const gapLimit = (m: { baselineGap: number }) => 2 * m.baselineGap + 150;
+    let m = await measure();
+    if (m.bytes === 0 || m.lateness >= lateLimit(m) || m.worstGap >= gapLimit(m)) {
+      m = await measure();
     }
-    await building;
-    const took = performance.now() - started;
-    measuring = false;
     clearInterval(ticker);
     reader.destroy();
     await input.close();
-    const after = await r.service.tvGuide.channels({ scope: 'all', limit: 5 });
-    expect(after.version).not.toBe(before.version);
-    expect(answered).toBeGreaterThan(0);
     /* Durante toda la construcción siguieron llegando bytes, sin un parón largo. */
-    const bytes = received - startBytes;
-    console.info(
-      `[guía · directo] construcción ${Math.round(took)} ms · peor hueco del relé ${Math.round(worstGap)} ms (sin construir: ${Math.round(baselineGap)} ms) · reloj tarde ${Math.round(lateness)} ms (sin construir: ${Math.round(baselineLateness)} ms) · ${Math.round(bytes / 1024)} KiB por el relé`,
-    );
-    expect(bytes).toBeGreaterThan(0);
-    /* Holgura para un PC cargado (otros ficheros de prueba a la vez): lo que importa es que el hilo
-       no se queda parado segundos, como pasaría construyendo de una tirada. Solo: ~70 ms y ~170 ms. */
-    expect(lateness).toBeLessThan(baselineLateness + 500);
-    expect(worstGap).toBeLessThan(baselineGap + 1000);
+    expect(m.bytes).toBeGreaterThan(0);
+    expect(m.lateness).toBeLessThan(lateLimit(m));
+    expect(m.worstGap).toBeLessThan(gapLimit(m));
   }, 120_000);
 });
