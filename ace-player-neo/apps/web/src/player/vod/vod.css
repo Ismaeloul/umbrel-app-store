@@ -272,3 +272,64 @@
     radial-gradient(120% 90% at 30% 20%, rgb(255 255 255 / 0.1), transparent 60%),
     linear-gradient(135deg, #1d2236, #0c0d14 70%);
 }
+
+/* ---- Franja de controles (móvil en vertical) ------------------------------------
+   Con una película en el móvil en vertical, el vídeo mide ~220 px: con los
+   controles encima no se veía nada (auditoría web 0.9.0). Aquí la barra de
+   tiempo y la fila de botones van en una franja negra BAJO la imagen (el
+   marco crece hacia abajo lo que mide la franja) y se quedan siempre a la
+   vista; lo de arriba (minimizar, más opciones) sigue escondiéndose solo. */
+.player[data-strip='true'] {
+  --strip: 96px;
+}
+.player[data-strip='true'] .player-frame {
+  box-sizing: content-box;
+  padding-bottom: var(--strip);
+}
+.player[data-strip='true']
+  :is(
+    .player-video,
+    .player-demo-picture,
+    .player-hit,
+    .player-msg,
+    .player-cut,
+    .vod-demo-picture
+  ) {
+  bottom: var(--strip);
+  height: auto;
+}
+/* Lo que va centrado sobre la imagen, centrado en la imagen (no en el marco). */
+.player[data-strip='true'] :is(.player-demo, .player-tap, .player-spinner) {
+  top: calc(50% - var(--strip) / 2);
+}
+.player[data-strip='true'] .vod-card {
+  bottom: calc(var(--strip) + 8px);
+}
+.player[data-strip='true'] .vod-card--end {
+  bottom: calc(50% + var(--strip) / 2);
+}
+/* El velo, solo arriba y solo sobre la imagen. */
+.player[data-strip='true'] .player-chrome::before {
+  bottom: var(--strip);
+  background: linear-gradient(to bottom, rgb(0 0 0 / 0.55), transparent 45%);
+  transition: opacity var(--dur-estandar) var(--ease-estandar);
+}
+.player[data-strip='true'] .player-chrome[data-visible='false'] {
+  opacity: 1;
+}
+.player[data-strip='true'] .player-chrome__top {
+  transition: opacity var(--dur-rapido) var(--ease-estandar);
+}
+.player[data-strip='true'] .player-chrome[data-visible='false']::before,
+.player[data-strip='true'] .player-chrome[data-visible='false'] > .player-chrome__top {
+  opacity: 0;
+}
+.player[data-strip='true'] .player-chrome .vod-bottom > .vod-bar,
+.player[data-strip='true'] .player-chrome .vod-row > *,
+.player[data-strip='true'] .player-chrome .vod-row .player-chrome__group > * {
+  pointer-events: auto;
+}
+/* La cápsula de estado, al pie de la imagen (encima de la franja), siempre en el mismo sitio. */
+.stage.stage:has(.player[data-strip='true'] .player-chrome) .stage__status {
+  --status-lift: -96px;
+}

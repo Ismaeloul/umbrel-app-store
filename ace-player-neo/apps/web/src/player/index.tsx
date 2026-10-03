@@ -921,6 +921,9 @@ export default function PlayerDock({ presentation, route, onMinimize, onExpand }
         data-presentation={presentation}
         data-phase={state.phase}
         data-immersive={immersive ? 'true' : 'false'}
+        // Móvil en vertical con una película: los controles van en una franja
+        // bajo la imagen, sin taparla (player.css, «Franja de controles»).
+        data-strip={stage && compact && !immersive && isVod ? 'true' : 'false'}
         data-ambient={colors ? 'true' : 'false'}
         aria-label={channel ? `Reproductor: ${channel.title}` : 'Reproductor'}
         style={style}
