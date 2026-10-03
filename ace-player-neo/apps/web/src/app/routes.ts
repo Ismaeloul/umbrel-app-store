@@ -185,6 +185,14 @@ export const VISTA_PARAMS: Record<Vista, readonly string[]> = {
 
 const ALL_VISTA_PARAMS: ReadonlySet<string> = new Set(Object.values(VISTA_PARAMS).flat());
 
+/**
+ * Parámetros que solo valen para la ficha abierta: la temporada de una serie
+ * (features/cine/Seasons.tsx). No pasan a otra ficha ni a la portada, o la
+ * serie siguiente se abriría en la temporada de la anterior (vod-estado.md
+ * §4.2, arreglo 3).
+ */
+const FICHA_PARAMS: Partial<Record<Vista, readonly string[]>> = { cine: ['temporada'] };
+
 /** Solo los parámetros de `vista` que hay en `search` (sin `?`; '' si no hay). */
 export function viewParams(vista: Vista, search: string): string {
   const own = VISTA_PARAMS[vista];
@@ -202,9 +210,13 @@ export function viewParams(vista: Vista, search: string): string {
  */
 export function searchFor(route: Route, currentSearch = '', restore = ''): string {
   const params = new URLSearchParams(currentSearch);
-  const from = parseVista(params.get('vista'), true).vista;
-  if (from !== route.vista)
+  const fromRoute = parseVista(params.get('vista'), true);
+  const from = fromRoute.vista;
+  if (from !== route.vista) {
     for (const name of [...params.keys()]) if (ALL_VISTA_PARAMS.has(name)) params.delete(name);
+  } else if (formatVista(fromRoute) !== formatVista(route)) {
+    for (const name of FICHA_PARAMS[route.vista] ?? []) params.delete(name);
+  }
   params.set('vista', formatVista(route));
   if (from !== route.vista)
     for (const [name, value] of new URLSearchParams(restore))

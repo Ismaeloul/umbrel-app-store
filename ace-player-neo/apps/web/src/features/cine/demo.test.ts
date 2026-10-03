@@ -6,6 +6,7 @@ import {
   VodBrowseResponseSchema,
   VodHomeSchema,
   VodTitleSchema,
+  type VodMovie,
   type VodSeries,
 } from '@ace/shared';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -22,26 +23,88 @@ import { demoArtSrc, demoArtSvg } from './demo-art.ts';
 afterEach(() => resetDemoVod());
 
 describe('demo de Películas y series', () => {
-  it('60 películas y 12 series; la portada cumple su esquema y deja fuera a los adultos', () => {
+  it('63 películas y 14 series; la portada cumple su esquema', () => {
     const home = VodHomeSchema.parse(demoVodHome());
-    expect(home.counts).toEqual({ movies: 60, series: 12 });
-    expect(home.newMovies.some((card) => card.adult)).toBe(false);
-    expect(home.continue.length).toBeGreaterThanOrEqual(3);
+    expect(home.counts).toEqual({ movies: 63, series: 14 });
+    expect(home.continue.length).toBeGreaterThanOrEqual(4);
     expect(home.continue.some((entry) => entry.isNext)).toBe(true);
+    // «Seguir viendo» con solo cartel (Dune: Parte dos no tiene fondo).
+    expect(home.continue.some((entry) => entry.art?.art === 'poster')).toBe(true);
     // Las categorías de adultos, al final.
     expect(home.categories.movie.at(-1)?.adult).toBe(true);
   });
 
-  it('rejilla por páginas con cursor; adultos solo en su categoría o buscando', () => {
+  it('rejilla por páginas con cursor; los adultos, en «Todas» como los demás (0.9.0)', () => {
     const first = VodBrowseResponseSchema.parse(demoVodBrowse({ kind: 'movie', limit: 25 }));
     expect(first.items).toHaveLength(25);
-    expect(first.total).toBe(58);
+    expect(first.total).toBe(63);
     expect(first.items.some((card) => card.poster === null)).toBe(true);
     const second = demoVodBrowse({ kind: 'movie', limit: 25, cursor: first.nextCursor ?? '' });
     expect(second.items[0]?.id).not.toBe(first.items[0]?.id);
     const adults = demoVodBrowse({ kind: 'movie', cat: DEMO_VOD_IDS.adultCategory });
     expect(adults.items.every((card) => card.adult)).toBe(true);
     expect(demoVodBrowse({ kind: 'movie', q: 'adultos' }).total).toBe(2);
+    expect(
+      demoVodBrowse({ kind: 'movie', sort: 'name', limit: 100 }).items.some((c) => c.adult),
+    ).toBe(true);
+  });
+
+  it('fichas completas y casos pobres, como en las listas reales', () => {
+    const oppenheimer = VodTitleSchema.parse(demoVodTitle(DEMO_VOD_IDS.movie)) as VodMovie;
+    expect(oppenheimer.plot).toMatch(/Oppenheimer/);
+    expect(oppenheimer.cast.length).toBeGreaterThanOrEqual(8);
+    expect(oppenheimer.releaseDate).toBe('2023-07-21');
+    expect(oppenheimer.trailer).toMatch(/^[\w-]{11}$/);
+    const poor = VodTitleSchema.parse(demoVodTitle(DEMO_VOD_IDS.moviePoor));
+    expect(poor).toMatchObject({
+      poster: null,
+      backdrop: null,
+      plot: null,
+      year: null,
+      rating: null,
+      cast: [],
+    });
+    expect(VodTitleSchema.parse(demoVodTitle(DEMO_VOD_IDS.movieLong)).title.length).toBeGreaterThan(
+      80,
+    );
+    const twelve = VodTitleSchema.parse(demoVodTitle(DEMO_VOD_IDS.seriesTwelve)) as VodSeries;
+    expect(twelve.seasons).toHaveLength(12);
+    expect(twelve.seasons[1]?.name).toBe('Season 2');
+    expect(twelve.episodeDurationS).toBe(1260);
+    const one = VodTitleSchema.parse(demoVodTitle(DEMO_VOD_IDS.seriesOneSeason)) as VodSeries;
+    expect(one.seasons).toHaveLength(1);
+    const parts = VodTitleSchema.parse(demoVodTitle(DEMO_VOD_IDS.seriesParts)) as VodSeries;
+    expect(parts.seasons[0]?.name).toBe('Parte 1');
+    expect(parts.trailer).toMatch(/^[\w-]{11}$/);
+    // Lo que el servidor saca de más de Xtream: resumen de temporada, emisión y nota del episodio.
+    expect(parts.seasons[0]?.plot).toMatch(/Fábrica Nacional/);
+    expect(parts.seasons.map((season) => season.airDate?.slice(0, 4))).toEqual([
+      '2017',
+      '2018',
+      '2019',
+      '2020',
+      '2021',
+    ]);
+    expect(parts.seasons[0]?.episodes[1]).toMatchObject({ airDate: '2017-05-09' });
+    expect(parts.seasons[0]?.episodes[1]?.rating).toBeGreaterThan(0);
+    const office = VodTitleSchema.parse(demoVodTitle(DEMO_VOD_IDS.series)) as VodSeries;
+    expect(office).toMatchObject({ originalTitle: 'The Office (US)', ageRating: '12' });
+    const noStills = VodTitleSchema.parse(demoVodTitle(DEMO_VOD_IDS.seriesNoStills)) as VodSeries;
+    expect(noStills.seasons.every((s) => s.episodes.every((e) => e.still === null))).toBe(true);
+    const barrio = VodTitleSchema.parse(demoVodTitle(DEMO_VOD_IDS.seriesPoor)) as VodSeries;
+    expect(barrio).toMatchObject({
+      poster: null,
+      backdrop: null,
+      plot: null,
+      rating: null,
+      ageRating: null,
+      releaseDate: null,
+    });
+    expect(
+      barrio.seasons[0]?.episodes.every(
+        (e) => e.durationS === null && e.plot === null && e.airDate === null && e.rating === null,
+      ),
+    ).toBe(true);
   });
 
   it('búsqueda por niveles: «spiderman» encuentra «Spider-Man» y dice cuántas series hay', () => {

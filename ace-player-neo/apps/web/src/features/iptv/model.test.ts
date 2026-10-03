@@ -298,9 +298,9 @@ describe('Películas y series en la tarjeta (docs/vod.md §12.10)', () => {
     stale: false,
   };
 
-  it('listo: «Películas: 12.345 · Series: 1234 · actualizado hace 3 h» (es-ES agrupa desde 5 cifras)', () => {
+  it('listo: «Películas: 12.345 · Series: 1.234 · actualizado hace 3 h» (agrupa también 4 cifras)', () => {
     expect(vodLines({ kind: 'xtream', vod }, NOW)).toEqual([
-      { text: 'Películas: 12.345 · Series: 1234 · actualizado hace 3 h', tone: 'plain' },
+      { text: 'Películas: 12.345 · Series: 1.234 · actualizado hace 3 h', tone: 'plain' },
     ]);
   });
 

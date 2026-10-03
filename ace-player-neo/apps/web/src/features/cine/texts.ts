@@ -5,9 +5,13 @@
 
 import type { VodKind, VodTag } from '@ace/shared';
 
-/** «27.687»: el número como se escribe en España. */
+/**
+ * «1.234» y «27.687»: el número como se escribe en España. `es-ES` no agrupa
+ * las cifras de 4 dígitos por defecto («1234»); `useGrouping: 'always'` sí,
+ * como piden §12.4 y §12.10.
+ */
 export function formatCount(value: number): string {
-  return value.toLocaleString('es-ES');
+  return value.toLocaleString('es-ES', { useGrouping: 'always' });
 }
 
 export const CINE_TEXT = {
@@ -38,6 +42,19 @@ export const CINE_TEXT = {
   retry: 'Reintentar',
   capped: 'Hay más de 2.000 resultados: afina la búsqueda.',
   adult: '+18',
+  // Portada en filas y rejilla aparte (0.9.0)
+  seeAllRow: 'Ver todo',
+  moreCategories: 'Más categorías',
+  seeAllMovies: 'Ver todas las películas',
+  seeAllSeries: 'Ver todas las series',
+  allMovies: 'Todas las películas',
+  allSeries: 'Todas las series',
+  home: 'Inicio',
+  backHome: 'Volver a Películas y series',
+  exitSearch: 'Salir de la búsqueda',
+  searchAllMovies: 'Buscar en todas las películas',
+  searchAllSeries: 'Buscar en todas las series',
+  rowFailed: 'No se ha podido cargar esta fila.',
   // Menú de «Seguir viendo» (§12.4)
   hideContinue: 'Quitar de Seguir viendo',
   markWatched: 'Marcar como visto',
@@ -46,16 +63,34 @@ export const CINE_TEXT = {
   seeDetails: 'Ver ficha',
   moreOptions: 'Más opciones',
   // Ficha (§12.6)
+  movieKicker: 'Película',
+  seriesKicker: 'Serie',
   play: 'Reproducir',
   fromStart: 'Empezar desde el principio',
   markMovieWatched: 'Marcar como vista',
   markMovieUnwatched: 'Marcar como no vista',
+  trailer: 'Tráiler',
+  trailerDemo: 'En el modo demo no se abren los tráileres de YouTube.',
+  newTab: 'se abre en YouTube, en otra pestaña',
   synopsis: 'Sinopsis',
   more: 'Más',
   less: 'Menos',
+  details: 'Detalles',
   cast: 'Reparto',
   director: 'Dirección',
   country: 'País',
+  genres: 'Géneros',
+  released: 'Estreno',
+  originalTitle: 'Título original',
+  category: 'Categoría',
+  video: 'Vídeo',
+  format: 'Formato',
+  rating: 'Nota',
+  episodesTitle: 'Episodios',
+  noEpisodes: 'Esta temporada todavía no tiene episodios.',
+  mainResume: 'Continuar',
+  mainNext: 'Siguiente',
+  mainStart: 'Empieza aquí',
   seasons: 'Temporadas',
   seasonsMenu: 'Elegir temporada',
   specials: 'Especiales',
@@ -111,9 +146,49 @@ export function episodesText(n: number): string {
   return `${formatCount(n)} ${n === 1 ? 'episodio' : 'episodios'}`;
 }
 
+/** «3 temporadas» / «1 temporada». */
+export function seasonsText(n: number): string {
+  return `${formatCount(n)} ${n === 1 ? 'temporada' : 'temporadas'}`;
+}
+
+/** «Seguir viendo desde 43:12». */
+export function resumeFromText(clock: string): string {
+  return `Seguir viendo desde ${clock}`;
+}
+
+/** «Episodios de unos 45 min». */
+export function episodeRunText(duration: string): string {
+  return `Episodios de unos ${duration}`;
+}
+
+/** «Resultados de «dune»». */
+export function resultsTitle(q: string): string {
+  return `Resultados de «${q}»`;
+}
+
+/** «Ver las 1.234 películas» / «Ver las 12 series». */
+export function seeAllTitles(n: number, kind: VodKind): string {
+  return `Ver las ${titlesText(n, kind)}`;
+}
+
+/** «Ver todo: VOD | 4K, 9 películas» (nombre accesible del enlace de una fila). */
+export function seeRowLabel(name: string, n: number, kind: VodKind): string {
+  return `Ver todo: ${name}, ${titlesText(n, kind)}`;
+}
+
 /** Nada con «{q}» en películas (§12.5). */
 export function nothingFound(q: string, kind: VodKind): string {
   return `Nada con «${q}» en ${kind === 'movie' ? 'películas' : 'series'}`;
+}
+
+/** Una búsqueda dentro de una categoría (§12.5): «Nada con «wonka» en VOD | 4K». */
+export function nothingFoundIn(q: string, category: string): string {
+  return `Nada con «${q}» en ${category}`;
+}
+
+/** «3 películas en VOD | 4K»: lo encontrado, diciendo dónde se ha buscado. */
+export function titlesInText(n: number, kind: VodKind, category: string): string {
+  return `${titlesText(n, kind)} en ${category}`;
 }
 
 /** «Ver 3 series» / «Ver 1 película»: los aciertos del otro tipo. */
@@ -144,9 +219,17 @@ export function truncatedText(
   return 'Faltan algunas categorías: tu IPTV tardaba demasiado en contestar. Se completarán en las próximas actualizaciones.';
 }
 
-/** «Este formato (AVI) no se puede reproducir en Ace Player.» */
-export function formatBlocked(ext: string | null): string {
-  return `Este formato (${(ext ?? 'desconocido').toUpperCase()}) no se puede reproducir en Ace Player.`;
+/**
+ * «Este formato (AVI) no se puede reproducir en Ace Player.» Si el servidor no
+ * sabe el formato (sin `container`), un texto genérico según lo que sea, nunca
+ * «(DESCONOCIDO)» (vod-estado.md §4.2, arreglo 1).
+ */
+export function formatBlocked(ext: string | null | undefined, kind: 'movie' | 'episode'): string {
+  const name = (ext ?? '').trim();
+  if (name) return `Este formato (${name.toUpperCase()}) no se puede reproducir en Ace Player.`;
+  return kind === 'episode'
+    ? 'Este episodio no se puede reproducir en este navegador.'
+    : 'Esta película no se puede reproducir en este navegador.';
 }
 
 /** «Continuar · quedan 43 min». */

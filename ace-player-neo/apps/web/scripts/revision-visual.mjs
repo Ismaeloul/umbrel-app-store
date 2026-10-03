@@ -276,18 +276,20 @@ const VIEWS = [
   },
   { name: 'sistema', search: '?vista=sistema&flag=sistema' },
   // Películas y series (docs/vod.md §12.11): con `?flag=cine`; en vivo solo
-  // salen si el servidor ya tiene películas y series.
-  { name: 'cine', search: '?vista=cine&flag=cine', ready: '.cine-grid' },
+  // salen si el servidor ya tiene películas y series. La portada va en filas
+  // (`.cine-row`); la rejilla (`.cine-grid`) es otra pantalla.
+  { name: 'cine', search: '?vista=cine&flag=cine', ready: '.cine-row .cine-card' },
   {
     name: 'cine-categoria',
     search: '?vista=cine&flag=cine',
-    ready: '.cine-grid',
+    ready: '.cine-row .cine-card',
     prepare: async (page) => {
-      // En el móvil y la tableta, un chip de la fila; en escritorio, la lista del panel.
+      // «Ver todo» de la fila de la categoría: abre su rejilla.
       await page
-        .getByRole('button', { name: /^VOD \| 4K/ })
+        .getByRole('button', { name: /^Ver todo: VOD \| 4K/ })
         .first()
         .click();
+      await page.waitForSelector('.cine-grid .cine-card', { timeout: 10_000 });
       await page.waitForTimeout(700);
     },
   },
@@ -295,19 +297,19 @@ const VIEWS = [
   {
     name: 'cine-pelicula',
     search: '?vista=cine&flag=cine',
-    ready: '.cine-grid',
+    ready: '.cine-row .cine-card',
     prepare: async (page) => {
-      await page.locator('.cine-grid .cine-card').first().click();
-      await page.waitForSelector('.cine-ficha__title', { timeout: 10_000 });
+      await page.locator('.cine-row .cine-card').first().click();
+      await page.waitForSelector('.cine-hero__title', { timeout: 10_000 });
       await page.waitForTimeout(700);
     },
   },
   {
     name: 'cine-serie',
     search: '?vista=cine&flag=cine&cine=series',
-    ready: '.cine-grid',
+    ready: '.cine-row .cine-card',
     prepare: async (page) => {
-      await page.locator('.cine-grid .cine-card').first().click();
+      await page.locator('.cine-row .cine-card').first().click();
       await page.waitForSelector('.cine-episodes', { timeout: 10_000 });
       await page.waitForTimeout(700);
     },
@@ -677,8 +679,11 @@ async function checkKeyboard(page) {
      el navegador sigue desde ahí), dar la vuelta por la barra del navegador
      y encontrar controles que se montan mientras se avanza (en Ajustes, Salud
      y Acerca de se montan cuando el foco entra), que no estaban en la cuenta
-     inicial. Con el tope justo se quedaba sin llegar a los últimos. */
-  for (let step = 0; step < Math.max(tabbables * 2 + 20, 60) && step < 300; step += 1) {
+     inicial. Con el tope justo se quedaba sin llegar a los últimos. La
+     portada de Películas y series pide sus filas al acercarse: al contar
+     hay ~50 controles y el recorrido entero da ~130 paradas (de ahí el
+     mínimo de 200). */
+  for (let step = 0; step < Math.max(tabbables * 2 + 20, 200) && step < 300; step += 1) {
     await page.keyboard.press('Tab');
     await page.waitForTimeout(40);
     let info = await page.evaluate(focusInfo);
@@ -771,7 +776,18 @@ function focusInfo() {
     el.focus({ preventScroll: true });
     ring = withFocus !== without;
   }
-  const key = el.getAttribute('data-revision-tab') ?? label;
+  /* Lo que se montó después de contar (las filas perezosas de Películas y
+     series) lleva su propia marca: con el texto como clave, la misma película
+     en «Novedades» y en su categoría parecía «ya visitada» y el recorrido
+     acababa antes de tiempo. */
+  let key = el.getAttribute('data-revision-tab');
+  if (key === null) {
+    key = el.getAttribute('data-revision-extra');
+    if (key === null) {
+      key = `extra-${document.querySelectorAll('[data-revision-extra]').length}`;
+      el.setAttribute('data-revision-extra', key);
+    }
+  }
   return { key, label, visible, ring };
 }
 

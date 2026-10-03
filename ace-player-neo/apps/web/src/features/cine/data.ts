@@ -14,8 +14,10 @@
 import {
   VOD_CLIENT,
   type VodArtKind,
+  type VodBrowseQuery,
   type VodBrowseResponse,
   type VodCard,
+  type VodKind,
   type VodProgressBody,
   type VodTitle,
 } from '@ace/shared';
@@ -31,6 +33,7 @@ import { api, ApiError, isDemo, routePrefix, routeUrl, useApiQuery } from '../..
 import { apiFetch } from '../../api/client.ts';
 import { errorFromResponse } from '../../api/errors.ts';
 import { useRoute } from '../../app/router.tsx';
+import { saveScroll } from '../../app/scroll-memory.ts';
 import { createStore, useStore } from '../../lib/store.ts';
 import { demoArtSrc } from './demo-art.ts';
 import type { browseQuery } from './model.ts';
@@ -46,22 +49,132 @@ import {
 
 const urlStore = createStore<CineUrlState>(readCineState(globalThis.location?.search ?? ''));
 
+/**
+ * «‹ Volver» desde una rejilla en la que se cambió de tipo: Atrás deshace la
+ * entrada de la rejilla, pero la portada de antes era la del otro tipo. Al
+ * llegar a ella (popstate), se pone el tipo con el que se estaba (un segundo
+ * como mucho: si Atrás no llega a la portada, no se toca nada).
+ */
+let pendingHomeKind: { kind: CineUrlState['kind']; until: number } | null = null;
+const PENDING_KIND_MS = 1000;
+
+function writeUrl(state: CineUrlState): void {
+  try {
+    history.replaceState(
+      history.state,
+      '',
+      `${location.pathname}${writeCineState(location.search, state)}${location.hash}`,
+    );
+  } catch {}
+}
+
 function syncFromLocation(): void {
-  const next = readCineState(globalThis.location?.search ?? '');
+  let next = readCineState(globalThis.location?.search ?? '');
+  const pending = pendingHomeKind;
+  if (pending && (Date.now() > pending.until || (next.cat === null && next.tag === null))) {
+    pendingHomeKind = null;
+    if (Date.now() <= pending.until && next.kind !== pending.kind) {
+      next = { ...next, kind: pending.kind };
+      writeUrl(next);
+    }
+  }
   urlStore.set((current) => (sameCineState(current, next) ? current : next));
 }
 
 /** Cambia el estado (con replaceState: los filtros no llenan el historial). */
 export function setCineState(patch: Partial<CineUrlState>): void {
   const next = { ...readCineState(location.search), ...patch };
+  writeUrl(next);
+  urlStore.set((current) => (sameCineState(current, next) ? current : next));
+}
+
+/** Marca en history.state de la entrada de una rejilla abierta desde la portada. */
+interface GridHistoryState {
+  aceDepth?: number;
+  cineGrid?: boolean;
+}
+
+/**
+ * Dónde estaba la portada (de qué tipo) la última vez que se vio: Home la
+ * apunta al desplazarse y al abrir una rejilla, y vuelve ahí al cerrarla (con
+ * la flecha, Atrás, Esc en la búsqueda o desde una ficha).
+ */
+let homeScroll: { kind: CineUrlState['kind']; y: number } = { kind: 'movie', y: 0 };
+
+export function rememberHomeScroll(kind: CineUrlState['kind'], y: number): void {
+  homeScroll = { kind, y: Math.max(0, Math.round(y)) };
+}
+
+/** La posición guardada de la portada de ese tipo (la del otro tipo empieza arriba). */
+export function savedHomeScroll(kind: CineUrlState['kind']): number {
+  return homeScroll.kind === kind ? homeScroll.y : 0;
+}
+
+/**
+ * Lo que tenía el foco en la portada al abrir la rejilla («Ver todo» de una
+ * fila): al volver, el foco vuelve ahí y no se pierde en la página.
+ */
+let homeFocus: HTMLElement | null = null;
+
+/** Solo para Home: el «Ver todo» del que se vino, si sigue en la página. */
+export function savedHomeFocus(): HTMLElement | null {
+  return homeFocus?.isConnected ? homeFocus : null;
+}
+
+/**
+ * Abre la rejilla (una categoría, «Ver todo», un distintivo) desde la portada
+ * como una pantalla nueva: con su entrada en el historial, así «Atrás» (o el
+ * gesto del iPhone) vuelve a la portada y a su sitio. Desde la propia rejilla
+ * (otra categoría, otro distintivo) solo cambia el estado.
+ */
+export function openCineGrid(patch: Partial<CineUrlState>): void {
+  const current = readCineState(location.search);
+  if (current.cat !== null || current.tag !== null) {
+    setCineState(patch);
+    return;
+  }
+  const next = { ...current, ...patch };
+  rememberHomeScroll(current.kind, globalThis.scrollY ?? 0);
+  const active = globalThis.document?.activeElement;
+  homeFocus = active instanceof HTMLElement && active.closest('.cine-portada') ? active : null;
+  const depth = (history.state as GridHistoryState | null)?.aceDepth ?? 0;
   try {
-    history.replaceState(
-      history.state,
+    history.pushState(
+      { aceDepth: depth + 1, cineGrid: true } satisfies GridHistoryState,
       '',
       `${location.pathname}${writeCineState(location.search, next)}${location.hash}`,
     );
   } catch {}
-  urlStore.set((current) => (sameCineState(current, next) ? current : next));
+  urlStore.set((state) => (sameCineState(state, next) ? state : next));
+}
+
+/**
+ * Vuelve a la portada: «Atrás» si la rejilla se abrió desde ella (deshace la
+ * entrada del historial); si se llegó por un enlace, cambia el estado.
+ */
+export function closeCineGrid(): void {
+  if ((history.state as GridHistoryState | null)?.cineGrid) {
+    // Si en la rejilla se cambió de tipo, la portada a la que se vuelve es la de ese tipo.
+    pendingHomeKind = {
+      kind: readCineState(location.search).kind,
+      until: Date.now() + PENDING_KIND_MS,
+    };
+    history.back();
+    return;
+  }
+  setCineState({ cat: null, tag: null, order: 'novedades', q: '' });
+}
+
+/**
+ * Desde una ficha, a la rejilla de una categoría («Categoría» de los detalles
+ * o el panel lateral): deja el estado listo para la navegación y la rejilla
+ * empieza arriba, no en el sitio que tenía la portada al abrir la ficha (el
+ * armazón devuelve a la vista su último scroll). Volver a la portada la deja
+ * donde estaba (`savedHomeScroll`).
+ */
+export function prepareGridFromFicha(patch: Partial<CineUrlState>): void {
+  setCineState({ tag: null, q: '', ...patch });
+  saveScroll({ vista: 'cine', id: null }, 0);
 }
 
 /** El estado de la URL de la vista, al día con Atrás/Adelante y con cada navegación. */
@@ -78,6 +191,9 @@ export function useCineState(): CineUrlState {
 /** Solo para los tests. */
 export function resetCineState(): void {
   urlStore.set(readCineState(globalThis.location?.search ?? ''));
+  pendingHomeKind = null;
+  homeScroll = { kind: 'movie', y: 0 };
+  homeFocus = null;
 }
 
 // ---- Consultas -------------------------------------------------------------------------
@@ -112,6 +228,22 @@ export function useVodHome(active: boolean) {
 
 type BrowseScope = ReturnType<typeof browseQuery>;
 
+/** Tarjetas de cada fila de la portada (una por categoría). */
+export const ROW_SIZE = 20;
+
+/**
+ * Una fila de la portada: las 20 últimas de una categoría. Se pide solo
+ * cuando la fila se acerca a la pantalla (`enabled`): con muchas filas no se
+ * piden decenas de páginas (ni cientos de carteles) de golpe.
+ */
+export function useCategoryRow(kind: VodKind, cat: string, enabled: boolean) {
+  return useApiQuery(
+    'vodBrowse',
+    { query: { kind, cat: cat as VodBrowseQuery['cat'], sort: 'added', limit: ROW_SIZE } },
+    { enabled, staleTime: STALE_MS, retry: 1 },
+  );
+}
+
 /** Clave de la rejilla por páginas (bajo `vodBrowse`, así la invalida `iptv.status`). */
 export function pagesKey(scope: BrowseScope): QueryKey {
   return ['v1', 'vodBrowse', null, { ...scope, pages: true }];
@@ -133,12 +265,14 @@ export function useVodPages(scope: BrowseScope, enabled: boolean) {
     enabled,
     staleTime: STALE_MS,
     retry: 1,
-    /* Mientras llega lo nuevo (otro filtro, otra letra), lo de antes a la
-       vista; cambiar de tipo (películas ↔ series) sí empieza de cero. */
-    placeholderData: (previous, previousQuery) =>
-      (previousQuery?.queryKey[3] as BrowseScope | undefined)?.kind === scope.kind
-        ? previous
-        : undefined,
+    /* Mientras llega lo nuevo (otro distintivo, otro orden, otra letra), lo de
+       antes a la vista; cambiar de tipo o de CATEGORÍA sí empieza de cero: la
+       cabecera ya dice «VOD | 4K» y no puede enseñar los carteles de otra
+       categoría (se tocaría uno que no es). */
+    placeholderData: (previous, previousQuery) => {
+      const before = previousQuery?.queryKey[3] as BrowseScope | undefined;
+      return before?.kind === scope.kind && before.cat === scope.cat ? previous : undefined;
+    },
   });
   /* Otra sincronización entre dos páginas: esa página ya es de otro catálogo. */
   const staleHit = query.data?.pages.some((page, index) => index > 0 && page.stale) ?? false;
