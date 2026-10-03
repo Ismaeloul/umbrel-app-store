@@ -465,8 +465,10 @@
   );
   pointer-events: none;
 }
+/* Al irse, más deprisa que al volver: que se note que obedecen al ratón. */
 .player-chrome[data-visible='false'] {
   opacity: 0;
+  transition-duration: var(--dur-rapido);
 }
 .player-chrome__top,
 .player-chrome__bottom {

@@ -186,11 +186,10 @@ describe('reproductor en grande', () => {
     expect(statusStore.get().base).toEqual({
       text: 'Fuente 1 verificada. Vas en directo.',
       signal: 'ok',
-      meta: '6 s de retraso',
     });
   });
 
-  it('ratón: controles que se esconden a los 3,2 s solo si suena, clic que pausa a los 190 ms y doble clic a pantalla completa (B-102, B-088)', async () => {
+  it('ratón: controles que se esconden a los 2,5 s solo si suena, clic que pausa a los 190 ms y doble clic a pantalla completa (B-102, B-088)', async () => {
     const requestFullscreen = vi.fn(async () => {});
     Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true });
     Object.defineProperty(document.documentElement, 'requestFullscreen', {
@@ -206,9 +205,9 @@ describe('reproductor en grande', () => {
       setPlayer(playing({ phase: 'pausado', desiredPlaying: false }));
       act(() => vi.advanceTimersByTime(10_000));
       expect(chrome).toHaveAttribute('data-visible', 'true');
-      // Sonando de verdad: a los 3,2 s sin mover el ratón, fuera.
+      // Sonando de verdad: a los 2,5 s sin mover el ratón, fuera.
       setPlayer(playing());
-      act(() => vi.advanceTimersByTime(3_100));
+      act(() => vi.advanceTimersByTime(2_400));
       expect(chrome).toHaveAttribute('data-visible', 'true');
       act(() => vi.advanceTimersByTime(200));
       expect(chrome).toHaveAttribute('data-visible', 'false');
@@ -241,6 +240,126 @@ describe('reproductor en grande', () => {
     const video = container.querySelector('video')!;
     video.setAttribute('controls', '');
     await waitFor(() => expect(video).not.toHaveAttribute('controls'));
+  });
+
+  it('controles: el foco que deja un clic no los retiene (pantalla completa), el del teclado sí', () => {
+    const { container } = renderDock();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const chrome = container.querySelector<HTMLElement>('.player-chrome')!;
+      const hit = container.querySelector<HTMLElement>('.player-hit')!;
+      setPlayer(playing());
+      // Clic con el ratón en un control: el botón se queda con el foco.
+      const mute = screen.getByRole('button', { name: 'Silenciar' });
+      fireEvent.pointerDown(mute, { pointerType: 'mouse', button: 0 });
+      act(() => mute.focus());
+      fireEvent.click(mute);
+      expect(mute).toHaveFocus();
+      act(() => vi.advanceTimersByTime(2_600));
+      expect(chrome).toHaveAttribute('data-visible', 'false');
+      // El cursor se va con ellos.
+      expect(hit).toHaveAttribute('data-chrome', 'hidden');
+
+      // Con el teclado (Tab) dentro, no se esconden: el foco se vería desaparecer.
+      act(() => mute.blur());
+      fireEvent.keyDown(document, { key: 'Tab' });
+      act(() => mute.focus());
+      expect(chrome).toHaveAttribute('data-visible', 'true');
+      act(() => vi.advanceTimersByTime(10_000));
+      expect(chrome).toHaveAttribute('data-visible', 'true');
+      // Sale el foco de los controles: vuelve la cuenta normal.
+      act(() => mute.blur());
+      act(() => vi.advanceTimersByTime(2_600));
+      expect(chrome).toHaveAttribute('data-visible', 'false');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('controles: los «mousemove» sin moverse no los retienen y al sacar el ratón se van al momento', () => {
+    const { container } = renderDock();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const chrome = container.querySelector<HTMLElement>('.player-chrome')!;
+      const hit = container.querySelector<HTMLElement>('.player-hit')!;
+      const frame = container.querySelector<HTMLElement>('.player-frame')!;
+      setPlayer(playing());
+      fireEvent.pointerMove(hit, { pointerType: 'mouse', screenX: 300, screenY: 200 });
+      // Chrome repite el último «mousemove» al repintar lo que hay bajo el
+      // cursor (el medidor del directo cada 500 ms): no es actividad.
+      for (let i = 0; i < 6; i += 1) {
+        act(() => vi.advanceTimersByTime(500));
+        setPlayer({ live: { available: true, atLive: true, behindS: 1 + (i % 2), delayS: 7 + i } });
+        fireEvent.pointerMove(hit, { pointerType: 'mouse', screenX: 300, screenY: 200 });
+      }
+      expect(chrome).toHaveAttribute('data-visible', 'false');
+      // Un movimiento de verdad, sí.
+      fireEvent.pointerMove(hit, { pointerType: 'mouse', screenX: 310, screenY: 205 });
+      expect(chrome).toHaveAttribute('data-visible', 'true');
+      // Fuera del vídeo: al momento.
+      fireEvent.pointerLeave(frame, { pointerType: 'mouse' });
+      expect(chrome).toHaveAttribute('data-visible', 'false');
+
+      // En pausa, ni al salir.
+      fireEvent.pointerMove(hit, { pointerType: 'mouse', screenX: 320, screenY: 210 });
+      setPlayer({ phase: 'pausado', desiredPlaying: false });
+      fireEvent.pointerLeave(frame, { pointerType: 'mouse' });
+      act(() => vi.advanceTimersByTime(10_000));
+      expect(chrome).toHaveAttribute('data-visible', 'true');
+
+      // Un parón corto con imagen (colchón) no los saca ni reinicia la cuenta.
+      setPlayer({ phase: 'reproduciendo', desiredPlaying: true });
+      act(() => vi.advanceTimersByTime(1_500));
+      setPlayer({ phase: 'buffer' });
+      act(() => vi.advanceTimersByTime(500));
+      setPlayer({ phase: 'reproduciendo' });
+      act(() => vi.advanceTimersByTime(600));
+      expect(chrome).toHaveAttribute('data-visible', 'false');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('controles: con «Más opciones» abierto no se esconden (ni al sacar el ratón)', () => {
+    const { container } = renderDock();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const chrome = container.querySelector<HTMLElement>('.player-chrome')!;
+      const frame = container.querySelector<HTMLElement>('.player-frame')!;
+      setPlayer(playing());
+      fireEvent.click(screen.getByRole('button', { name: 'Más opciones' }));
+      expect(screen.getByRole('menu')).toBeInTheDocument();
+      fireEvent.pointerLeave(frame, { pointerType: 'mouse' });
+      act(() => vi.advanceTimersByTime(10_000));
+      expect(chrome).toHaveAttribute('data-visible', 'true');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('dedo: un toque los enseña o los esconde y se van solos a los 3 s', () => {
+    const { container } = renderDock();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const chrome = container.querySelector<HTMLElement>('.player-chrome')!;
+      const hit = container.querySelector<HTMLElement>('.player-hit')!;
+      setPlayer(playing());
+      const tap = () => {
+        fireEvent.pointerDown(hit, { pointerType: 'touch' });
+        fireEvent.pointerUp(hit, { pointerType: 'touch' });
+        fireEvent.click(hit);
+      };
+      tap();
+      expect(chrome).toHaveAttribute('data-visible', 'false');
+      tap();
+      expect(chrome).toHaveAttribute('data-visible', 'true');
+      act(() => vi.advanceTimersByTime(2_900));
+      expect(chrome).toHaveAttribute('data-visible', 'true');
+      act(() => vi.advanceTimersByTime(200));
+      expect(chrome).toHaveAttribute('data-visible', 'false');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('autoplay bloqueado: «Toca para reproducir»', () => {

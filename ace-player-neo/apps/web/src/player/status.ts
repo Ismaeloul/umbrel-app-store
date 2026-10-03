@@ -3,9 +3,16 @@
    Funciones puras sobre el estado público: se prueban solas.
 
    Regla del diseño (sistema.md, StatusLine): lo que pasa, en lenguaje humano
-   («Fuente 1 verificada. Vas en directo.») y un dato corto a la derecha
-   («6 s de retraso»). Lo técnico (pares, velocidades, códec) va en «Datos
-   técnicos», nunca aquí. */
+   («Fuente 1 verificada. Vas en directo.») y, si hace falta, un dato corto a
+   la derecha («−34 s» si vas por detrás). Lo técnico (pares, velocidades,
+   códec, el retraso respecto a la emisión) va en «Datos técnicos», nunca aquí.
+
+   «En directo» y «por detrás» se miden contra el borde útil del propio
+   reproductor (`live.atLive`, `live.behindS`), no contra lo último que ha
+   llegado: un directo IPTV/HLS (o AceStream) siempre va unos segundos por
+   detrás de la emisión (el colchón de seguridad), y decir «Vas en directo» con
+   «8 s de retraso» al lado se contradecía. Ese retraso (`live.delayS`) solo
+   sale en «Datos técnicos». */
 
 import type { StatusContent } from '../notices/statusLine.ts';
 import { isIptvPlayback, type PlayerState } from './api.ts';
@@ -71,7 +78,8 @@ export function statusFor(state: PlayerState): StatusContent | null {
       return {
         text: 'En pausa. Pulsa Directo para volver al directo.',
         icon: 'pause',
-        ...(state.live.available && state.live.behindS > 0
+        // Solo si de verdad te has quedado atrás (no por el colchón de siempre).
+        ...(state.live.available && !state.live.atLive && state.live.behindS > 0
           ? { meta: `−${state.live.behindS} s` }
           : {}),
       };
@@ -90,11 +98,8 @@ export function statusFor(state: PlayerState): StatusContent | null {
           signal: 'ok',
           meta: `−${state.live.behindS} s`,
         };
-      return {
-        text: withLead(lead, 'Vas en directo.'),
-        signal: 'ok',
-        ...(state.live.delayS !== null ? { meta: `${state.live.delayS} s de retraso` } : {}),
-      };
+      // En el borde útil: sin cifra (el retraso inherente va en «Datos técnicos»).
+      return { text: withLead(lead, 'Vas en directo.'), signal: 'ok' };
   }
 }
 

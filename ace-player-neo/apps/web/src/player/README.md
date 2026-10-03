@@ -168,7 +168,9 @@ Reglas que cumple (inventario §8, §9, §11, §17, §18 y §26):
   «Motor listo/apagado», «Canales n» (directorio + favoritos, sin repetir) y
   «Hoy n partidos» (hoy en Madrid, no el día elegido: §29.14).
 - **Interfaz**: controles propios (también en el móvil, como la maqueta); se
-  esconden a los 3,2 s solo si suena de verdad; clic pausa, doble clic
+  esconden a los 2,5 s sin mover el ratón (3 s con el dedo) o al sacarlo del
+  vídeo, solo si suena de verdad y nunca con un menú u hoja abiertos ni con el
+  foco del teclado dentro; clic pausa, doble clic
   pantalla completa, clic derecho menú; tocar enseña o esconde; deslizar hacia
   abajo minimiza (móvil). Botón de directo B4. Toasts nunca sobre el vídeo: lo
   de la señal va a la línea de estado (`notify(..., { kind: 'signal' })`).

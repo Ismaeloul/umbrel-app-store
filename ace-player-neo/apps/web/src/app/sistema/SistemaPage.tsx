@@ -555,10 +555,10 @@ export default function SistemaPage(_props: ViewProps) {
             variant="quiet"
             onClick={() => {
               setStatusBase({
-                text: 'Fuente 1 verificada. Vas en directo.',
+                text: 'Vas por detrás del directo.',
                 signal: 'ok',
                 tone: 'ok',
-                meta: '6 s de retraso',
+                meta: '−34 s',
               });
               showStatus({ text: 'Reconectando la fuente 1…', tone: 'warn', icon: 'refresh' });
             }}
@@ -575,12 +575,7 @@ export default function SistemaPage(_props: ViewProps) {
           </Button>
         </div>
         <StatusLineHost />
-        <StatusLineView
-          text="Fuente 1 verificada. Vas en directo."
-          signal="ok"
-          tone="ok"
-          meta="6 s de retraso"
-        />
+        <StatusLineView text="Vas por detrás del directo." signal="ok" tone="ok" meta="−34 s" />
         <StatusLineView
           text="Sin señal en la fuente 3. Probando la 4."
           signal="fail"
