@@ -44,6 +44,16 @@ export interface EpisodeListProps {
   mainAction?: VodSeriesMain['action'] | null;
 }
 
+/**
+ * «3. El plan»; si el proveedor no da título (el servidor deja «Episodio 3»),
+ * solo «Episodio 3», sin repetir el número.
+ */
+export function episodeName(episode: Pick<VodEpisode, 'n' | 'title'>): string {
+  const title = episode.title.trim();
+  if (!title) return `Episodio ${episode.n}`;
+  return /^episodio\s+\d+$/i.test(title) ? title : `${episode.n}. ${title}`;
+}
+
 /** La cápsula del episodio del botón principal. */
 function mainBadge(action: VodSeriesMain['action'] | null | undefined): string | null {
   if (action === 'resume') return CINE_TEXT.mainResume;
@@ -67,7 +77,7 @@ function EpisodeRow({ episode, seriesId, seriesTitle, season, compact, badge }: 
   const watched = episode.progress?.watched === true;
   const ratio = watched ? null : progressRatio(episode.progress);
   const block = playBlock(episode.playable, canPlayHevc(), episode.container);
-  const name = `${episode.n}. ${episode.title}`;
+  const name = episodeName(episode);
   const code = episodeTag(season, episode.n);
   const run = async (event: 'mark' | 'unmark' | 'mark-through') => {
     const error = await mark(episode.id, event);

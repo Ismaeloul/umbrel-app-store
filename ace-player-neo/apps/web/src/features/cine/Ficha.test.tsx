@@ -10,6 +10,7 @@ import { resetMode, setMode } from '../../api/mode.ts';
 import { resetToasts } from '../../notices/toasts.ts';
 import { json, mockFetch, type MockCall } from '../../test/fetch.ts';
 import { DEMO_VOD_IDS, resetDemoVod } from './demo-data.ts';
+import { episodeName } from './EpisodeList.tsx';
 import { setHevcSupport } from './play.ts';
 import './demo.ts';
 import { demoRoutes, renderCine } from './test-utils.tsx';
@@ -183,6 +184,12 @@ describe('película', () => {
 });
 
 describe('serie', () => {
+  it('el nombre de un episodio: «3. El plan»; sin título del proveedor, «Episodio 3» a secas', () => {
+    expect(episodeName({ n: 3, title: 'El plan' })).toBe('3. El plan');
+    expect(episodeName({ n: 3, title: 'Episodio 3' })).toBe('Episodio 3');
+    expect(episodeName({ n: 3, title: '  ' })).toBe('Episodio 3');
+  });
+
   // El episodio del botón principal del ejemplo es T2 · E6 («La pelea»).
   it.each([
     ['Ver T2 · E6', 'start', 'Empieza aquí'],
