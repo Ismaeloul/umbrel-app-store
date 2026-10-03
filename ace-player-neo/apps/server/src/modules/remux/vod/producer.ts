@@ -25,6 +25,10 @@
      para mientras el disco no da abasto.
    - Espera de un segmento: 15 s como mucho; después, `not_yet` (503 con
      `Retry-After: 1`, hls.js reintenta).
+   - Primer fragmento (auditoría 0.9.0): una ejecución que empieza a mitad y
+     no saca ni un fragmento en 8 s (ffmpeg esperando una petición al relé
+     colgada, la de los Cues sobre todo, hasta los 55 s de `-rw_timeout`) se
+     mata y se relanza en el mismo sitio, 2 veces como mucho.
    - Ventana en disco: desde el último pedido − 120 s y como mucho 256 MiB
      por detrás; tope duro de 1,5 GiB por sesión, borrando primero lo más
      lejano. Al cerrar, la carpeta entera fuera.
@@ -75,6 +79,10 @@ export interface VodProducerLimits {
   readonly lateRetries: number;
   /** Ejecuciones fallidas seguidas que se reintentan. */
   readonly failureRetries: number;
+  /** Una ejecución a mitad sin ningún fragmento en este rato se relanza… */
+  readonly firstFragmentMs: number;
+  /** …estas veces como mucho por segmento querido. */
+  readonly firstFragmentRetries: number;
 }
 
 export const DEFAULT_VOD_LIMITS: VodProducerLimits = {
@@ -90,6 +98,8 @@ export const DEFAULT_VOD_LIMITS: VodProducerLimits = {
   idleReleaseMs: VOD_PLAY.idleReleaseMs,
   lateRetries: 2,
   failureRetries: 1,
+  firstFragmentMs: VOD_PLAY.firstFragmentMs,
+  firstFragmentRetries: VOD_PLAY.firstFragmentRetries,
 };
 
 /** Caídas tardías de más (tras aceptar) que se aguantan antes de cerrar la sesión. */
@@ -175,6 +185,8 @@ interface RunContext {
   finished: number;
   /** Se va a tirar (caída tardía, init incompatible o fallo de disco). */
   abandoned: boolean;
+  /** Vigilante del primer fragmento (solo las ejecuciones a mitad), o null. */
+  firstTimer: TimerHandle | null;
   /** Se cumple cuando la ejecución ha acabado y su final está atendido. */
   settled: Promise<void>;
 }
@@ -218,6 +230,8 @@ export class VodProducer {
   private readonly initWaiters = new Set<() => void>();
   /** Caídas tardías por segmento querido. */
   private readonly lateAttempts = new Map<number, number>();
+  /** Relanzamientos por no sacar ningún fragmento a tiempo, por segmento querido. */
+  private readonly slowStarts = new Map<number, number>();
   private init: Fmp4Init | null = null;
   private initPath: string | null = null;
   private current: RunContext | null = null;
@@ -503,11 +517,18 @@ export class VodProducer {
       producedS: segment.startS,
       finished: 0,
       abandoned: false,
+      firstTimer: null,
       settled: Promise.resolve(),
     };
     ctx.settled = run.ended.then((end) => this.onRunEnd(ctx, end));
     holder.ctx = ctx;
     this.current = ctx;
+    if (target.segment > 0) {
+      ctx.firstTimer = this.deps.clock.setTimeout(
+        () => this.onSlowStart(ctx),
+        this.limits.firstFragmentMs,
+      );
+    }
     this.deps.logger.debug(
       { sessionId: this.options.sessionId, segment: target.segment, keyframeS: segment.keyframeS },
       'VOD: arranca ffmpeg',
@@ -534,7 +555,40 @@ export class VodProducer {
     }
   }
 
+  /*
+   * Una ejecución a mitad que no ha sacado ni un fragmento en `firstFragmentMs` (auditoría 0.9.0):
+   * ffmpeg está esperando una petición al relé que no contesta (la de los Cues, sobre todo) y la
+   * esperaría los 55 s de `-rw_timeout`. Se mata y se relanza en el mismo sitio (unas pocas veces;
+   * después se le deja seguir).
+   */
+  private onSlowStart(ctx: RunContext): void {
+    ctx.firstTimer = null;
+    if (this.current !== ctx || ctx.abandoned || ctx.run.finished || this.closed || this.failure) {
+      return;
+    }
+    const attempts = (this.slowStarts.get(ctx.wanted) ?? 0) + 1;
+    this.slowStarts.set(ctx.wanted, attempts);
+    if (attempts > this.limits.firstFragmentRetries) {
+      this.deps.logger.warn(
+        { sessionId: this.options.sessionId, wanted: ctx.wanted, attempts },
+        'VOD: ffmpeg sigue sin sacar nada; se le deja seguir',
+      );
+      return;
+    }
+    this.deps.logger.warn(
+      { sessionId: this.options.sessionId, wanted: ctx.wanted, attempts },
+      'VOD: ffmpeg no saca nada a tiempo; se relanza en el mismo sitio',
+    );
+    this.abandon(ctx);
+    this.requestRestart({ segment: ctx.startSegment, wanted: ctx.wanted }, true);
+  }
+
   private onFragment(ctx: RunContext, info: Fmp4FragmentInfo): void {
+    if (ctx.firstTimer) {
+      this.deps.clock.clearTimeout(ctx.firstTimer);
+      ctx.firstTimer = null;
+      this.slowStarts.delete(ctx.wanted);
+    }
     if (ctx.abandoned || this.closed) return;
     const place =
       info.startS === null ? null : placeFragment(this.plan, this.keyframes, info.startS);
@@ -705,6 +759,8 @@ export class VodProducer {
   }
 
   private onRunEnd(ctx: RunContext, ended: VodRunEnd): void {
+    this.deps.clock.clearTimeout(ctx.firstTimer);
+    ctx.firstTimer = null;
     if (this.current === ctx) this.current = null;
     let end = ended;
     if (end.kind === 'complete' && !ctx.abandoned) {

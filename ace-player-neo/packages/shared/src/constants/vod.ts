@@ -137,6 +137,14 @@ export const VOD_PLAY = {
   diskFreeMinBytes: 2 * GIB,
   /** Después, 503 con `Retry-After: 1`. */
   segmentWaitMs: 15 * SECOND,
+  /**
+   * Una ejecución que empieza a mitad (segmento > 0) y no saca ni un fragmento en
+   * este rato se mata y se relanza en el mismo sitio, `firstFragmentRetries` veces
+   * como mucho (auditoría 0.9.0: una petición al relé colgada, la de los Cues, dejaba
+   * a ffmpeg esperando los 55 s de `-rw_timeout`).
+   */
+  firstFragmentMs: 8 * SECOND,
+  firstFragmentRetries: 2,
   /** Pausa larga: se suelta el proveedor (lo ajusta el Paso 0, §3.5). */
   idleReleaseMs: 5 * MINUTE,
   /**

@@ -12,12 +12,14 @@
      … --saltos 50 --mbps 16
      … --salto-corto 33554432   `forwardSkipBytes` fijo (para comparar con el de antes)
      … --sin-reconnect      sin los -reconnect* de ffmpeg (como antes de la auditoría)
+     … --sin-vigilante      sin relanzar el ffmpeg que no saca nada en 8 s (el vigilante del productor)
      … --detalle            las líneas de ffmpeg y del relé de los saltos lentos
 
    Sale con 1 si hay algún salto lento. */
 
 import { spawn } from 'node:child_process';
 import type http from 'node:http';
+import { VOD_PLAY } from '@ace/shared';
 import { buildVodArgs } from '../src/modules/remux/vod/args.js';
 import { readVodIndex } from '../src/modules/remux/vod/index.js';
 import { createHttpRangeReader } from '../src/modules/remux/vod/reader.js';
@@ -88,32 +90,44 @@ for (let jump = 0; jump < jumps; jump += 1) {
   const fromRequest = requests.length;
   const fromOrigin = origin.stats.requests.length;
   const t0 = Date.now();
-  const child = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
   let stderr = '';
-  child.stderr.on('data', (data: Buffer) => {
-    stderr += data
-      .toString()
-      .split(/\r?\n/)
-      .map((line) => (line ? `[${Date.now() - t0}] ${line}` : line))
-      .join('\n');
-  });
-  const firstMs = await new Promise<number | null>((resolve) => {
-    const timer = setTimeout(() => resolve(null), 60_000);
-    let bytes = 0;
-    child.stdout.on('data', (data: Buffer) => {
-      bytes += data.length;
-      if (bytes > FIRST_BYTES) {
+  /* Como el productor: sin nada en `firstFragmentMs`, se mata y se relanza (2 veces como mucho). */
+  const watchdog = !flag('--sin-vigilante');
+  let firstMs: number | null = null;
+  let relaunches = 0;
+  for (
+    let attempt = 0;
+    attempt <= VOD_PLAY.firstFragmentRetries && firstMs === null;
+    attempt += 1
+  ) {
+    const last = !watchdog || attempt === VOD_PLAY.firstFragmentRetries;
+    const child = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    child.stderr.on('data', (data: Buffer) => {
+      stderr += data
+        .toString()
+        .split(/\r?\n/)
+        .map((line) => (line ? `[${Date.now() - t0}] ${line}` : line))
+        .join('\n');
+    });
+    firstMs = await new Promise<number | null>((resolve) => {
+      const timer = setTimeout(() => resolve(null), last ? 60_000 : VOD_PLAY.firstFragmentMs);
+      let bytes = 0;
+      child.stdout.on('data', (data: Buffer) => {
+        bytes += data.length;
+        if (bytes > FIRST_BYTES) {
+          clearTimeout(timer);
+          resolve(Date.now() - t0);
+        }
+      });
+      child.once('exit', () => {
         clearTimeout(timer);
-        resolve(Date.now() - t0);
-      }
+        resolve(null);
+      });
     });
-    child.once('exit', () => {
-      clearTimeout(timer);
-      resolve(null);
-    });
-  });
-  child.kill();
-  await new Promise((resolve) => child.once('close', resolve));
+    child.kill();
+    await new Promise((resolve) => child.once('close', resolve));
+    if (firstMs === null && !last) relaunches += 1;
+  }
   const ms = firstMs ?? -1;
   const isSlow = ms < 0 || ms > SLOW_MS;
   if (isSlow) slow += 1;
@@ -124,7 +138,8 @@ for (let jump = 0; jump < jumps; jump += 1) {
     .map((r) => `${r.status}:${r.range}`)
     .join(' ');
   console.log(
-    `#${jump + 1} clave ${segment} (${keyframeS.toFixed(1)} s): primer fMP4 en ${ms} ms${isSlow ? '  LENTO' : ''}` +
+    `#${jump + 1} clave ${segment} (${keyframeS.toFixed(1)} s): primer fMP4 en ${ms} ms` +
+      `${relaunches ? ` (${relaunches} relanzado)` : ''}${isSlow ? '  LENTO' : ''}` +
       `; relé: ${mine.join('  ')} || proveedor: ${upstream}`,
   );
   if (isSlow && flag('--detalle')) {

@@ -51,6 +51,21 @@ describe('buildVodArgs', () => {
     expect(after(list, '-metadata')).toBe('ace_session=s_vod12345678');
   });
 
+  it('auditoría 0.9.0: -reconnect 1 -reconnect_on_network_error 1 -reconnect_delay_max 1 delante de -i', () => {
+    for (const list of [args(), args({ segment: 5, keyframeS: 30 })]) {
+      const at = list.indexOf('-reconnect');
+      expect(list.slice(at, at + 6)).toEqual([
+        '-reconnect',
+        '1',
+        '-reconnect_on_network_error',
+        '1',
+        '-reconnect_delay_max',
+        '1',
+      ]);
+      expect(at).toBeLessThan(list.indexOf('-i'));
+    }
+  });
+
   it('reinicio en el segmento N: -noaccurate_seek -ss K+0,2 delante de -i', () => {
     const list = args({ segment: 5, keyframeS: 30 });
     const ss = list.indexOf('-ss');

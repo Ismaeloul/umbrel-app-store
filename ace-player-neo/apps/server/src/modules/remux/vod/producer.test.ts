@@ -294,6 +294,38 @@ describe('VodProducer', () => {
     expect(r.launcher.starts).toEqual([0, 90.2, 84.2]);
   });
 
+  it('auditoría 0.9.0: una ejecución a mitad que no saca nada en el plazo se relanza en el mismo sitio', async () => {
+    const r = await rig({
+      startS: 90,
+      behavior: { silent: (run) => run === 0, fragmentDelayMs: 2 },
+      limits: { firstFragmentMs: 300 },
+    });
+    expect(startOf(r, await r.get('index15.m4s'))).toBe(90);
+    expect(r.launcher.starts).toEqual([90.2, 90.2]);
+    expect(r.launcher.runs[0]?.alive).toBe(false);
+    expect(r.dropped).toEqual([]);
+  });
+
+  it('auditoría 0.9.0: relanza como mucho `firstFragmentRetries` veces; después la deja seguir', async () => {
+    const r = await rig({
+      startS: 90,
+      behavior: { silent: () => true },
+      limits: { firstFragmentMs: 100, firstFragmentRetries: 2, segmentWaitMs: 1_000 },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    expect(r.launcher.starts).toEqual([90.2, 90.2, 90.2]);
+    expect(r.launcher.alive).toBe(1);
+  });
+
+  it('desde el principio (segmento 0) no hay plazo del primer fragmento', async () => {
+    const r = await rig({
+      behavior: { silent: (run) => run === 0 },
+      limits: { firstFragmentMs: 100 },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(r.launcher.runs).toHaveLength(1);
+  });
+
   it('lo que llega antes de la primera clave que abre segmento se tira', async () => {
     const r = await rig({
       behavior: { lateGops: (run) => (run === 1 ? -2 : 0), fragmentDelayMs: 2 },
