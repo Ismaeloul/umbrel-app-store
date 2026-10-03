@@ -235,6 +235,16 @@ export function bootstrap(services: Services, ctx: RequestContext): BootstrapRes
       )
         ? { iptv: true }
         : {}),
+      /* docs/vod.md §11.4: Películas y series (solo la web por ahora; ausente = no). */
+      ...(ctx.origin === 'web' &&
+      safely(
+        services,
+        'iptv',
+        () => services.iptv.vod?.feature() ?? false,
+        () => false,
+      )
+        ? { vod: true }
+        : {}),
     },
   };
 }

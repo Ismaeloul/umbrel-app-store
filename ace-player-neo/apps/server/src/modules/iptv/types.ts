@@ -32,6 +32,7 @@ import type { CoreDeps, Lifecycle } from '../../core/module.js';
 import type { NetClient } from '../net/index.js';
 import type { StateService } from '../state/index.js';
 import type { ChannelScorer } from './match.js';
+import type { VodService } from './vod/vod-service.js';
 
 export type { ChannelScorer } from './match.js';
 
@@ -271,4 +272,18 @@ export interface IptvService extends Lifecycle {
   subscribe(listener: IptvListener): () => void;
   /** Conexiones abiertas ahora con el proveedor. */
   connections(): number;
+
+  // --- Películas y series (docs/vod.md) ---
+  /**
+   * Catálogo, fichas, carteles y progreso del VOD. Opcional: los dobles de
+   * los tests de otros módulos no lo tienen, y entonces las rutas `vod*`
+   * responden `vod_unavailable`.
+   */
+  readonly vod?: VodApi;
 }
+
+/** Lo que las rutas y los demás módulos ven de Películas y series (docs/vod.md §11.1). */
+export type VodApi = Pick<
+  VodService,
+  'home' | 'browse' | 'title' | 'artOf' | 'progress' | 'isVodId' | 'feature' | 'status'
+>;
