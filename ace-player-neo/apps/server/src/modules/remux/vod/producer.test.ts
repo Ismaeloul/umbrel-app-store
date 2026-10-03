@@ -162,6 +162,20 @@ function startOf(r: Rig, result: VodFileResult): number {
   return fragmentStartS(summary.fragments[0] as never, video as never) as number;
 }
 
+/** Segundos de vídeo que lleva el segmento servido (la suma de sus fragmentos). */
+function videoSecondsOf(r: Rig, result: VodFileResult): number {
+  if (result.kind !== 'file') return NaN;
+  const init = readFileSync(path.join(r.dir, 'init.mp4'));
+  const summary = readFmp4(Buffer.concat([init, readFileSync(result.path)]));
+  const video = summary.tracks.find((t) => t.handler === 'vide');
+  if (!video) return NaN;
+  let total = 0;
+  for (const fragment of summary.fragments) {
+    total += (fragment.tracks.find((t) => t.id === video.id)?.duration ?? 0) / video.timescale;
+  }
+  return total;
+}
+
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function until(check: () => boolean, what: string, maxMs = 5_000): Promise<void> {
@@ -346,6 +360,24 @@ describe('VodProducer', () => {
     await until(() => r.dropped.length === 1, 'el cierre');
     expect(r.dropped[0]?.code).toBe('vod_dropped');
     expect(r.launcher.runs).toHaveLength(2);
+  });
+
+  it('código 0 antes del final (la entrada se cortó): el segmento a medias se tira y se reintenta desde él', async () => {
+    const r = await rig({
+      behavior: {
+        failAfter: (run) => (run === 0 ? 4 : null),
+        failCode: 0,
+        failStderr: '[in#0/matroska,webm @ 0x2] Error during demuxing: I/O error\n',
+      },
+    });
+    expect(startOf(r, await r.get('index0.m4s'))).toBe(0);
+    await until(() => r.launcher.runs.length === 2, 'el reintento');
+    /* El segmento 1 iba a medias (6-8 s): no cuenta como hecho. */
+    expect(r.launcher.starts).toEqual([0, 6.2]);
+    const second = await r.get('index1.m4s');
+    expect(startOf(r, second)).toBe(6);
+    expect(videoSecondsOf(r, second)).toBeCloseTo(6, 6);
+    expect(r.dropped).toEqual([]);
   });
 
   it('un segmento que no llega en el plazo → not_yet (503 y hls.js reintenta)', async () => {

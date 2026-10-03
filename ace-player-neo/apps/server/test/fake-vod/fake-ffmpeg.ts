@@ -7,7 +7,8 @@
    tiempos absolutos (`-copyts`), el desfase de los fotogramas B y su lista
    de edición. Respeta la contrapresión de verdad: solo escribe cuando quien
    lee su salida le pide más (un Readable). Se le pueden pedir las rarezas
-   de las pruebas: caer tarde, fallar a mitad, cambiar de códec, ir lento o
+   de las pruebas: caer tarde, fallar a mitad (también con código 0, como el
+   de verdad cuando se le corta la entrada), cambiar de códec, ir lento o
    escribir «Non-monotonic DTS» en stderr. */
 
 import { Readable } from 'node:stream';
@@ -38,8 +39,15 @@ export interface FakeRun {
 export interface FakeFfmpegBehavior {
   /** GOP de más que se salta al caer (caída tardía), por ejecución (desde 0). */
   readonly lateGops?: (run: number) => number;
-  /** Sale con código 1 tras escribir estos fragmentos (null: no falla). */
+  /** Sale tras escribir estos fragmentos (null: no falla), con `failCode` (por defecto 1). */
   readonly failAfter?: (run: number) => number | null;
+  /**
+   * Código con el que sale al fallar. 0 es lo que hace el ffmpeg de verdad
+   * cuando su entrada HTTP se corta: lo toma por el final del fichero.
+   */
+  readonly failCode?: number;
+  /** Lo que escribe en stderr al fallar (p. ej. «Error during demuxing: I/O error»). */
+  readonly failStderr?: string;
   /** Etiqueta del códec de vídeo del init (cambiarla da un stsd distinto). */
   readonly codecTag?: (run: number) => string;
   /** Espera real entre fragmentos (ms). */
@@ -93,6 +101,7 @@ export class FakeFfmpegLauncher implements VodProcessLauncher {
       setImmediate(() => exitListener?.(code, signal));
     };
 
+    const stderrListeners: ((chunk: Buffer) => void)[] = [];
     let sentInit = false;
     let timer: NodeJS.Timeout | null = null;
     const stdout = new Readable({
@@ -113,8 +122,13 @@ export class FakeFfmpegLauncher implements VodProcessLauncher {
           timer = null;
           if (killed) return;
           if (failAfter !== null && record.fragments >= failAfter) {
+            const failStderr = this.behavior.failStderr;
+            if (failStderr) {
+              const text = Buffer.from(failStderr);
+              stderrListeners.forEach((listener) => listener(text));
+            }
             stdout.push(null);
-            stdout.once('end', () => exit(1, null));
+            stdout.once('end', () => exit(this.behavior.failCode ?? 1, null));
             return;
           }
           if (gop >= keyframes.length) {
@@ -160,7 +174,6 @@ export class FakeFfmpegLauncher implements VodProcessLauncher {
       if (timer) clearTimeout(timer);
     });
 
-    const stderrListeners: ((chunk: Buffer) => void)[] = [];
     if (this.behavior.stderr) {
       const text = Buffer.from(this.behavior.stderr);
       setImmediate(() => stderrListeners.forEach((listener) => listener(text)));

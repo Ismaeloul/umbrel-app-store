@@ -5,11 +5,13 @@
    hijo vivo (también en Windows). Con ffmpeg (@ffmpeg), una ejecución real
    sobre una muestra acaba «completa» con sus fragmentos. */
 
-import { writeFileSync } from 'node:fs';
+import { statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { tempDir } from '../../../../test/helpers/index.js';
+import { loopbackHost } from '../../../../test/fake-engine/test-utils.js';
 import { FakeFfmpegLauncher } from '../../../../test/fake-vod/fake-ffmpeg.js';
+import { createFakeVodOrigin } from '../../../../test/fake-vod/origin.js';
 import { HAS_FFMPEG, ensureVodSample } from '../../../../test/fake-vod/samples.js';
 import { createSpawnLauncher } from '../process.js';
 import type { Fmp4FragmentInfo, Fmp4Handlers } from './fmp4.js';
@@ -56,7 +58,7 @@ describe('VodRun con el ffmpeg falso', () => {
     const launcher = new FakeFfmpegLauncher(MOVIE, { stderr: 'Non-monotonic DTS; changing to 1' });
     const rec = recorder();
     const run = new VodRun({ launcher, args: [], handlers: rec.handlers });
-    expect(await run.ended).toEqual({ kind: 'complete' });
+    expect(await run.ended).toEqual({ kind: 'complete', inputError: null });
     expect(rec.inits).toBe(1);
     expect(rec.fragments.map((f) => f.startS)).toEqual([0, 2, 4, 6, 8, 10]);
     expect(run.stderrTail()).toContain('Non-monotonic DTS');
@@ -80,6 +82,26 @@ describe('VodRun con el ffmpeg falso', () => {
     }
   });
 
+  it('código 0 tras un error de la entrada: completa, pero con la línea que lo delata (redactada)', async () => {
+    const launcher = new FakeFfmpegLauncher(MOVIE, {
+      failAfter: () => 2,
+      failCode: 0,
+      failStderr:
+        '[http @ 0x1] Stream ends prematurely at 3000000, should be 32019417\n' +
+        '[in#0/matroska,webm @ 0x2] Error during demuxing: I/O error /r/secreto\n',
+    });
+    const run = new VodRun({
+      launcher,
+      args: [],
+      handlers: recorder().handlers,
+      redact: (text) => text.replace('secreto', '•••'),
+    });
+    expect(await run.ended).toEqual({
+      kind: 'complete',
+      inputError: '[in#0/matroska,webm @ 0x2] Error during demuxing: I/O error /r/•••',
+    });
+  });
+
   it('matarla = matada, y no queda ningún proceso', async () => {
     const launcher = new FakeFfmpegLauncher(MOVIE, { fragmentDelayMs: 200 });
     const run = new VodRun({ launcher, args: [], handlers: recorder().handlers });
@@ -101,7 +123,7 @@ describe('VodRun con el ffmpeg falso', () => {
     expect(rec.fragments.length).toBe(stopped);
     expect(run.isPaused('adelanto')).toBe(true);
     run.resume('adelanto');
-    expect(await run.ended).toEqual({ kind: 'complete' });
+    expect(await run.ended).toEqual({ kind: 'complete', inputError: null });
     expect(rec.fragments).toHaveLength(6);
   });
 });
@@ -178,10 +200,39 @@ describe.skipIf(!HAS_FFMPEG)('VodRun con ffmpeg de verdad (@ffmpeg)', () => {
       ],
       handlers: rec.handlers,
     });
-    expect(await run.ended).toEqual({ kind: 'complete' });
+    expect(await run.ended).toEqual({ kind: 'complete', inputError: null });
     expect(rec.inits).toBe(1);
     expect(rec.fragments.length).toBe(24);
     expect(rec.fragments.slice(0, 3).map((f) => f.startS)).toEqual([0, 2.5, 5]);
     expect(rec.fragments.every((f) => f.firstIsSync)).toBe(true);
+  });
+
+  it('la entrada HTTP se corta a mitad: ffmpeg sale con 0, pero queda dicho en inputError', async () => {
+    const file = ensureVodSample('mkv-h264-ac3');
+    const origin = await createFakeVodOrigin(await loopbackHost(), { '1.mkv': file }, {
+      dropAtBytes: Math.floor(statSync(file).size / 3),
+    });
+    try {
+      const rec = recorder();
+      const run = new VodRun({
+        launcher: createSpawnLauncher({ stdout: 'pipe', niceness: 0 }),
+        args: [
+          ...['-hide_banner', '-loglevel', 'warning', '-nostdin'],
+          ...['-protocol_whitelist', 'http,tcp', '-i', origin.url('1.mkv')],
+          ...['-map', '0:v:0', '-c:v', 'copy', '-an', '-copyts'],
+          ...['-movflags', '+frag_keyframe+delay_moov+default_base_moof+frag_discont'],
+          ...['-f', 'mp4', 'pipe:1'],
+        ],
+        handlers: rec.handlers,
+      });
+      const end = await run.ended;
+      expect(end.kind, run.stderrTail()).toBe('complete');
+      if (end.kind === 'complete') expect(end.inputError, run.stderrTail()).not.toBeNull();
+      /* Solo llegó a una parte: el productor no puede darlo por el final. */
+      expect(rec.fragments.length).toBeGreaterThan(0);
+      expect(rec.fragments.length).toBeLessThan(24);
+    } finally {
+      await origin.close();
+    }
   });
 });
