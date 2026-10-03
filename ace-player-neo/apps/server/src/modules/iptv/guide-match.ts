@@ -327,6 +327,30 @@ function occurrences(text: string, alias: string): Occurrence[] {
 
 const SEPARATOR_RE = /^\s*(?:-|vs\.?|v\.?|x|contra|\/)\s*$/;
 const MAX_GAP = 40;
+/* Siglas de club que pueden quedar entre el alias y el separador: «Girona FC - Sevilla FC», «Napoli - AS Roma». */
+const CLUB_AFFIXES: ReadonlySet<string> = new Set([
+  'fc',
+  'cf',
+  'ud',
+  'cd',
+  'sd',
+  'rcd',
+  'ac',
+  'afc',
+  'sad',
+  'ssc',
+  'as',
+  'ss',
+  'sl',
+]);
+
+/** El hueco entre dos equipos sin las siglas de club de los bordes. */
+function bareGap(gap: string): string {
+  const words = gap.trim().split(/\s+/);
+  while (words.length > 1 && CLUB_AFFIXES.has(words[0] as string)) words.shift();
+  while (words.length > 1 && CLUB_AFFIXES.has(words[words.length - 1] as string)) words.pop();
+  return words.join(' ');
+}
 
 /**
  * ¿Están los dos equipos en este texto (ya pasado por `teamSearchText`),
@@ -345,7 +369,7 @@ export function teamsInText(
       const [first, second] = h.end <= a.start ? [h, a] : a.end <= h.start ? [a, h] : [null, null];
       if (!first || !second) continue;
       const gap = text.slice(first.end, second.start);
-      if (gap.length <= MAX_GAP && SEPARATOR_RE.test(gap)) return true;
+      if (gap.length <= MAX_GAP && SEPARATOR_RE.test(bareGap(gap))) return true;
     }
   }
   return false;

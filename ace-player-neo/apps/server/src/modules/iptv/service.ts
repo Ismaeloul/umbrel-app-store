@@ -76,6 +76,11 @@ import {
   type GuideWindow,
   type StoredProgramme,
 } from './guide.js';
+import {
+  buildGuideAgenda,
+  type GuideAgendaRequest,
+  type GuideAgendaResult,
+} from './guide-agenda.js';
 import { adoptedIptvId, iptvChannelId, isIptvId, m3uKey, xtreamKey } from './ids.js';
 import { guideGroupMatches, mergeIptvMatches } from './layer.js';
 import { parseM3uStream } from './m3u.js';
@@ -254,6 +259,8 @@ export class IptvServiceImpl implements IptvService {
   private probe: { controller: AbortController; promise: Promise<unknown> } | null = null;
   private readonly probedAt = new Map<string, number>();
   private readonly guideCache = new Map<string, { at: number; result: IptvGroupMatch[] }>();
+  /** Agenda híbrida: el último resultado (cambia con la lista, la guía o la agenda). */
+  private agendaCache: { key: string; result: GuideAgendaResult } | null = null;
   private unsubscribe: (() => void) | null = null;
   /** Favoritos IPTV que no casan tras sincronizar: id → desde cuándo (§14.6, solo en memoria). */
   private readonly missingFavorites = new Map<string, number>();
@@ -1993,6 +2000,18 @@ export class IptvServiceImpl implements IptvService {
       const oldest = this.guideCache.keys().next().value;
       if (oldest !== undefined) this.guideCache.delete(oldest);
     }
+    return result;
+  }
+
+  /* Agenda híbrida (guide-agenda.ts): la misma guía y los mismos candidatos que `guideMatches`. */
+  guideAgenda(request: GuideAgendaRequest): GuideAgendaResult | null {
+    const catalog = this.catalog;
+    const window = this.guide;
+    if (!this.active() || !catalog || !window) return null;
+    const key = `${catalog.builtAt}|${window.builtAt}|${request.key}`;
+    if (this.agendaCache?.key === key) return this.agendaCache.result;
+    const result = buildGuideAgenda(catalog, window, request);
+    this.agendaCache = { key, result };
     return result;
   }
 

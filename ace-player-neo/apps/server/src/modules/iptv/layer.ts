@@ -8,6 +8,7 @@ import {
   IPTV_MAX_GUIDE_HINTS,
   IPTV_MAX_MATCHED_CHANNELS,
   channelMatchScore,
+  normalizeChannelKey,
 } from '@ace/shared';
 import type { Catalog } from './catalog.js';
 import type { GuideWindow, StoredProgramme } from './guide.js';
@@ -23,14 +24,16 @@ import {
 import { iptvAskedChannel } from './names.js';
 import type { IptvProgramInput } from './types.js';
 
-/** Canales IPTV confirmados por la guía para un partido. */
-export function guideGroupMatches(
+/**
+ * Los canales del catálogo con su guía (un candidato por grupo de variantes),
+ * lo que mira `confirmByGuide`. Lo usan la resolución y la agenda híbrida
+ * (guide-agenda.ts), que así ven exactamente lo mismo.
+ */
+export function guideCandidates(
   catalog: Catalog,
   window: GuideWindow | null,
-  program: IptvProgramInput,
-  options: VariantOptions = {},
-): IptvGroupMatch[] {
-  if (!window || program.start === null || !program.home || !program.away) return [];
+): GuideChannelCandidate[] {
+  if (!window) return [];
   const groups = new Map<string, StoredProgramme[]>();
   for (const [channel, programmes] of window.byChannel) {
     for (const key of catalog.groupsByTvgId(channel)) {
@@ -48,11 +51,19 @@ export function guideGroupMatches(
     const country = entries.some((entry) => entry.country === 'ES') ? 'ES' : best.country;
     candidates.push({ key, display: best.display, country, programmes });
   }
-  /* Los canales de la agenda como los busca la IPTV: «La 1 TVE» es «La 1» y «RTVE Play» no cuenta. */
-  const asked = program.channels
+  return candidates;
+}
+
+/**
+ * Cuánto casa el nombre de un canal IPTV con los canales que anuncia la
+ * agenda, como los busca la IPTV: «La 1 TVE» es «La 1» y «RTVE Play» no
+ * cuenta (reglas 5 y 6 de la guía).
+ */
+export function agendaScorer(channels: readonly string[]): (display: string) => number {
+  const asked = channels
     .map((channel) => iptvAskedChannel(channel))
     .filter((channel): channel is string => Boolean(channel));
-  const agendaScore = (display: string): number => {
+  return (display: string): number => {
     const bare = withoutTrailingNote(display);
     return asked.reduce(
       (max, channel) =>
@@ -60,6 +71,18 @@ export function guideGroupMatches(
       0,
     );
   };
+}
+
+/** Canales IPTV confirmados por la guía para un partido. */
+export function guideGroupMatches(
+  catalog: Catalog,
+  window: GuideWindow | null,
+  program: IptvProgramInput,
+  options: VariantOptions = {},
+): IptvGroupMatch[] {
+  if (!window || program.start === null || !program.home || !program.away) return [];
+  const candidates = guideCandidates(catalog, window);
+  const agendaScore = agendaScorer(program.channels);
   const confirmed = confirmByGuide(
     {
       home: program.home,
@@ -153,8 +176,36 @@ export function mergeIptvMatches(
   );
   return {
     matches: allotPosters(ordered),
-    hints: byGuide.slice(0, IPTV_MAX_GUIDE_HINTS).map((match) => match.best.display),
+    hints: guideHints(byGuide.map((match) => match.best.display)),
   };
+}
+
+/* «M+ LaLiga TV» y «M+ LaLiga TV Bar» (o «… UHD») son el mismo canal para buscarlo. */
+const HINT_VARIANT_TOKENS: ReadonlySet<string> = new Set(['bar', 'hdr', 'uhd', '4k', 'fhd', 'hd']);
+
+/** Clave de un canal sin sus coletillas de calidad o de bar (para no gastar dos pistas en uno). */
+export function channelVariantKey(name: string): string {
+  const key = normalizeChannelKey(name);
+  return (
+    key
+      .split(' ')
+      .filter((token) => token && !HINT_VARIANT_TOKENS.has(token))
+      .join(' ') || key
+  );
+}
+
+/** Las pistas de la guía para AceStream: 2 como mucho y un canal una vez (sin variantes repetidas). */
+export function guideHints(displays: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const display of displays) {
+    const key = channelVariantKey(display);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(display);
+    if (out.length >= IPTV_MAX_GUIDE_HINTS) break;
+  }
+  return out;
 }
 
 /** Capa entera sin caché (el ensayo; el servicio cachea la parte de la guía). */

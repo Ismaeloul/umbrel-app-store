@@ -146,6 +146,11 @@ describe('confirmByGuide', () => {
     expect(at('Celta', 'Deportivo Alavés', 'Celta de Vigo - Dep. Alavés')).toEqual([
       'M+ LaLiga TV 2',
     ]);
+    /* Siglas de club pegadas al separador: «Girona FC - Sevilla FC» con «Girona» y «Sevilla». */
+    expect(at('Girona', 'Sevilla', 'Girona FC - Sevilla FC')).toEqual(['M+ LaLiga TV 2']);
+    expect(at('Real Madrid', 'Barcelona', 'Real Madrid CF - FC Barcelona')).toEqual([
+      'M+ LaLiga TV 2',
+    ]);
     /* «Madrid» suelto sigue sin valer: «Getafe - Madrid» no es el Atlético. */
     expect(at('Atlético de Madrid', 'Getafe', 'Getafe - Madrid')).toEqual([]);
   });

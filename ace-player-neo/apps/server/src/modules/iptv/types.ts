@@ -31,9 +31,17 @@ import type {
 import type { CoreDeps, Lifecycle } from '../../core/module.js';
 import type { NetClient } from '../net/index.js';
 import type { StateService } from '../state/index.js';
+import type { GuideAgendaRequest, GuideAgendaResult } from './guide-agenda.js';
 import type { ChannelScorer } from './match.js';
 
 export type { ChannelScorer } from './match.js';
+export type {
+  GuideAgendaAddition,
+  GuideAgendaConfirmation,
+  GuideAgendaMatch,
+  GuideAgendaRequest,
+  GuideAgendaResult,
+} from './guide-agenda.js';
 
 export interface IptvDeps extends CoreDeps {
   readonly state: StateService;
@@ -213,6 +221,14 @@ export interface IptvService extends Lifecycle {
   classify(id: string): IptvIdClass;
   /** Capa IPTV de la resolución (§4.3 a §4.5), en memoria. */
   resolve(request: IptvResolveRequest): IptvResolveResult;
+  /**
+   * Agenda híbrida (D-propuesta; docs/iptv.md §4.7, guide-agenda.ts): lo que
+   * la guía dice de los partidos de hoy y mañana (confirmados, con la hora
+   * movida, o que solo trae la guía). null sin IPTV activa o sin guía. En
+   * memoria y sin red; el mismo objeto mientras no cambien la lista, la guía
+   * ni `request.key`.
+   */
+  guideAgenda(request: GuideAgendaRequest): GuideAgendaResult | null;
   /** Un id de favoritos, historial o vínculos que es del catálogo vigente, como candidata IPTV. */
   candidateFor(
     id: string,
