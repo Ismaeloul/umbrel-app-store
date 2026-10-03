@@ -1600,6 +1600,9 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       speedDown: stats.kbps,
       speedUp: 0,
       downloaded: stats.bytes,
+      /* La cadencia de entrega del proveedor: la web sube con ella su colchón (auditoría 0.9.0). */
+      cadenceMs: stats.cadenceMs ?? null,
+      ...(stats.gateTolerant ? { gateTolerant: true } : {}),
       at: clock.date().toISOString(),
     });
     const flowing = stats.lastByteAt !== null && now - stats.lastByteAt < 5_000;

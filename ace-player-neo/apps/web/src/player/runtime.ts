@@ -133,6 +133,7 @@ import {
   SEEK_TIMEOUT_MS,
   WATCHDOG_TICK_MS,
 } from './constants.ts';
+import { BURSTY_CADENCE_MS, CADENCE_RAISE_MIN_MS, profileForCadence } from './cadence.ts';
 import { PlayerController, type CommandResult, type MediaLike } from './controller.ts';
 import {
   chooseEngine,
@@ -516,6 +517,8 @@ export class PlayerRuntime {
   private waitingForEngine = false;
   /** Últimas estadísticas del motor (SSE `stream.stats`): el vigilante mira la bajada. */
   private lastStats: PlayerStats | null = null;
+  /** Cadencia de entrega de la IPTV en directo que suena (la mayor vista, ms); 0 si llega seguido. */
+  private iptvCadenceMs = 0;
   /** Posición en el remux de la última instancia de hls.js (C3). */
   private carry: CarriedPosition | null = null;
   /** Último reenganche por una lista que volvió a empezar (para no repetirlo con el SSE). */
@@ -633,6 +636,7 @@ export class PlayerRuntime {
     this.source = newSourceAttempt(channel, options.origin ?? 'user');
     this.waitingForEngine = false;
     this.lastStats = null;
+    this.iptvCadenceMs = 0;
     this.setState({
       kind: 'live',
       vod: null,
@@ -698,6 +702,7 @@ export class PlayerRuntime {
     });
     this.waitingForEngine = false;
     this.lastStats = null;
+    this.iptvCadenceMs = 0;
     this.setState({
       kind: 'vod',
       vod: this.vod.snapshot(),
@@ -1143,7 +1148,7 @@ export class PlayerRuntime {
     const source = this.source;
     if (!source || this.destroyed) return;
     this.endConnection();
-    const profile = PLAYBACK_PROFILES[this.mode()];
+    const profile = this.withCadence(PLAYBACK_PROFILES[this.mode()]);
     const connection = newConnection(++this.connectionSeq, recovery, profile);
     this.connection = connection;
     this.transition(this.conn === 'reconectando' ? 'reintentar' : 'solicitar');
@@ -1366,6 +1371,34 @@ export class PlayerRuntime {
     return this.source?.iptv === true;
   }
 
+  /** El perfil con la cadencia de la IPTV en directo que suena (player/cadence.ts); el mismo si no. */
+  private withCadence(profile: PlaybackProfile): PlaybackProfile {
+    if (this.vod || !this.isIptvSource()) return profile;
+    return profileForCadence(profile, this.iptvCadenceMs);
+  }
+
+  /**
+   * El servidor dice que el proveedor entrega a golpes (o cada vez más espaciados): sube el colchón y
+   * la latencia de la conexión de ahora sin reconectar (y las siguientes nacen ya con ellos).
+   */
+  private noteCadence(cadenceMs: number | null | undefined): void {
+    if (!cadenceMs || cadenceMs < BURSTY_CADENCE_MS || this.vod || !this.isIptvSource()) return;
+    if (cadenceMs <= this.iptvCadenceMs + CADENCE_RAISE_MIN_MS) return;
+    this.iptvCadenceMs = cadenceMs;
+    const connection = this.connection;
+    if (!connection) return;
+    const profile = profileForCadence(connection.profile, cadenceMs);
+    connection.profile = profile;
+    connection.engine?.setLiveLatency?.(
+      profile.hls.liveSyncDuration,
+      profile.hls.liveMaxLatencyDuration,
+      profile.hls.maxBufferLength,
+    );
+    this.log(
+      `La IPTV entrega a golpes cada ${(cadenceMs / 1000).toFixed(1)} s: colchón y retraso de ${profile.hls.liveSyncDuration} s`,
+    );
+  }
+
   /**
    * Motor caído con una fuente de AceStream: si la sesión de fuentes tiene
    * una IPTV utilizable, salta a ella (§7.2, «El motor AceStream no responde:
@@ -1425,7 +1458,9 @@ export class PlayerRuntime {
       this.failSystem(message, 'fallo', 'unsupported_browser');
       return;
     }
-    const profile = grant ? PLAYBACK_PROFILES[grant.latency.mode] : connection.profile;
+    const profile = this.withCadence(
+      grant ? PLAYBACK_PROFILES[grant.latency.mode] : connection.profile,
+    );
     connection.profile = profile;
     const vod = this.vod;
     const demoFails = !vod && kind === 'demo' && /ca[ií]d/i.test(this.source?.channel.title ?? '');
@@ -2382,8 +2417,11 @@ export class PlayerRuntime {
       speedDown: data.speedDown,
       speedUp: data.speedUp,
       downloaded: data.downloaded,
+      ...(data.cadenceMs !== undefined ? { cadenceMs: data.cadenceMs } : {}),
+      ...(data.gateTolerant ? { gateTolerant: true } : {}),
       at: data.at,
     };
+    this.noteCadence(data.cadenceMs);
     this.setState({ stats: this.lastStats });
   }
 

@@ -58,6 +58,10 @@ export interface HlsLike {
   destroy(): void;
   readonly liveSyncPosition: number | null;
   readonly latestLevelDetails?: HlsLevelDetails | null;
+  /** La configuración viva (hls.js la relee: `liveMaxLatencyDuration`, `maxBufferLength`). */
+  readonly config?: { liveMaxLatencyDuration?: number; maxBufferLength?: number };
+  /** hls.js ≥ 1.0: latencia objetivo (escribirla cambia `liveSyncDuration`). */
+  targetLatency?: number | null;
   readonly maxLatency?: number;
 }
 
@@ -388,6 +392,20 @@ export function createHlsEngine(Hls: HlsLib, args: EngineArgs): Engine {
         return false;
       }
       return true;
+    },
+    setLiveLatency(syncS: number, maxLatencyS: number, maxBufferS: number) {
+      const instance = hls;
+      if (destroyed || !instance || args.vod) return;
+      /* Primero el máximo (si no, con el objetivo nuevo hls.js vería «demasiado atrás» y saltaría). */
+      const config = instance.config;
+      if (config) {
+        if ((config.liveMaxLatencyDuration ?? 0) < maxLatencyS)
+          config.liveMaxLatencyDuration = maxLatencyS;
+        if ((config.maxBufferLength ?? 0) < maxBufferS) config.maxBufferLength = maxBufferS;
+      }
+      try {
+        if ((instance.targetLatency ?? 0) < syncS) instance.targetLatency = syncS;
+      } catch {}
     },
     liveWindow(): LiveWindow | null {
       const details = hls?.latestLevelDetails;

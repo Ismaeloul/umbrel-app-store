@@ -162,6 +162,27 @@ describe('reproductor y «Dónde se está reproduciendo»', () => {
     expect(rows[0]).toEqual(['Origen', 'IPTV · Casa']);
     expect(rows.find(([term]) => term === 'Pares')).toEqual(['Pares', '—']);
     expect(rows.find(([term]) => term === 'Bajada')?.[1]).toBe('900 KB/s');
+    expect(rows.find(([term]) => term === 'Llegada')?.[1]).toBe('seguida');
+    // Auditoría 0.9.0: un proveedor que entrega a golpes, y la puerta del relé tolerante.
+    const bursty = nerdRows(
+      iptvState({
+        streamSource: 'iptv',
+        stats: {
+          status: 'iptv',
+          peers: 0,
+          speedDown: 900,
+          speedUp: 0,
+          downloaded: 1,
+          cadenceMs: 10_500,
+          gateTolerant: true,
+          at: '',
+        },
+      }),
+      'en línea',
+    );
+    expect(bursty.find(([term]) => term === 'Llegada')?.[1]).toBe(
+      'a golpes cada 10,5 s · sin esperar a la imagen (pierde paquetes)',
+    );
     // Sin nada sonando, sin origen.
     expect(nerdRows(INITIAL_PLAYER_STATE, 'en línea')[0]?.[0]).toBe('Motor');
   });
