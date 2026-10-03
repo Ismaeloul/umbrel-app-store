@@ -23,7 +23,9 @@
      calque el buscador, D27) e `iptvBrowse` (la pestaña IPTV de Canales,
      §16.2; D29) son `web`. También las 3 de la copia de seguridad
      (`backup*`, decisiones.md D25: la copia lleva datos personales y la
-     IPTV solo se configura en la web).
+     IPTV solo se configura en la web) y `diagnosticsExport` («Descargar
+     fallos» de Salud, 0.9.0: lleva el registro del servidor, aunque
+     redactado).
      `video` es `any` desde la IPTV (docs/iptv.md §5.4): la web entra sin
      token (el login de Umbrel basta) y el iPhone con `video-token`.
 
@@ -53,6 +55,10 @@ import {
   DiagnosticsListResponseSchema,
   DiagnosticsQuerySchema,
 } from './api/v1/diagnostics.js';
+import {
+  DiagnosticsExportBodySchema,
+  DiagnosticsExportSchema,
+} from './api/v1/diagnostics-export.js';
 import { EngineRestartResponseSchema, EngineStatusSchema } from './api/v1/engine.js';
 import {
   BadgeVersionQuerySchema,
@@ -785,6 +791,27 @@ export const V1_ROUTES = {
     content: 'json',
     sideEffects: true,
     errors: ['rate_limited'],
+    legacyTwin: null,
+  }),
+  diagnosticsExport: defineRoute({
+    method: 'POST',
+    path: '/api/v1/diagnostics/export',
+    access: 'web',
+    credential: 'bearer',
+    module: 'diagnostics',
+    summary: '«Descargar fallos» de Salud: un fichero con fallos y registro, redactado',
+    description:
+      'La web manda su anillo de errores (`web`) y recibe el fichero `ace-player-neo-fallos-AAAA-MM-DD-HHMM.json` ' +
+      '(`Content-Disposition: attachment`): versión, entorno, estado de motor/IPTV/remux, fallos clasificados en ' +
+      '«nuestro» y «de fuera» con un resumen, y el registro del servidor y de la web. Todo pasa por el redactor ' +
+      'de la IPTV y por el del informe: sin contraseñas, usuarios, tokens, cookies, URLs con credenciales ni IPs ' +
+      'públicas. Solo web: lleva el registro del servidor.',
+    body: DiagnosticsExportBodySchema,
+    response: DiagnosticsExportSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: true,
+    errors: [],
     legacyTwin: null,
   }),
 

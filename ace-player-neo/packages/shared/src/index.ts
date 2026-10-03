@@ -16,6 +16,7 @@ export * from './constants/timeouts.js';
 
 export * from './domain/channel-names.js';
 export * from './domain/channels.js';
+export * from './domain/faults.js';
 export * from './domain/for-you.js';
 export * from './domain/hash.js';
 export * from './domain/live.js';
@@ -29,6 +30,7 @@ export * from './api/legacy.js';
 export * from './api/v1/auth.js';
 export * from './api/v1/backup.js';
 export * from './api/v1/diagnostics.js';
+export * from './api/v1/diagnostics-export.js';
 export * from './api/v1/engine.js';
 export * from './api/v1/football.js';
 export * from './api/v1/iptv.js';

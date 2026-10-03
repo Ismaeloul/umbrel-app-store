@@ -6316,6 +6316,991 @@ paths:
         - code: internal_error
           status: 500
           message: Algo ha fallado en el servidor. Queda anotado en el registro.
+  /api/v1/diagnostics/export:
+    post:
+      operationId: diagnosticsExport
+      tags:
+        - diagnostics
+      summary: "«Descargar fallos» de Salud: un fichero con fallos y registro, redactado"
+      description: "La web manda su anillo de errores (`web`) y recibe el fichero `ace-player-neo-fallos-AAAA-MM-DD-HHMM.json` (`Content-Disposition: attachment`): versión, entorno, estado de motor/IPTV/remux, fallos clasificados en «nuestro» y «de fuera» con un resumen, y el registro del servidor y de la web. Todo pasa por el redactor de la IPTV y por el del informe: sin contraseñas, usuarios, tokens, cookies, URLs con credenciales ni IPs públicas. Solo web: lleva el registro del servidor."
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                web:
+                  type: object
+                  properties:
+                    userAgent:
+                      type: string
+                      maxLength: 400
+                    viewport:
+                      type: string
+                      maxLength: 40
+                    layout:
+                      type: string
+                      maxLength: 20
+                    mode:
+                      type: string
+                      enum:
+                        - live
+                        - demo
+                    view:
+                      type: string
+                      maxLength: 160
+                    online:
+                      type: boolean
+                    installed:
+                      type: boolean
+                    uptimeSeconds:
+                      type: integer
+                      minimum: 0
+                      maximum: 9007199254740991
+                    log:
+                      maxItems: 200
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          at:
+                            type: string
+                            format: date-time
+                            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                          kind:
+                            type: string
+                            enum:
+                              - error
+                              - rejection
+                              - console
+                              - api
+                              - player
+                          level:
+                            type: string
+                            enum:
+                              - error
+                              - warn
+                              - info
+                          message:
+                            type: string
+                            maxLength: 1000
+                          detail:
+                            type: string
+                            maxLength: 4000
+                          code:
+                            type: string
+                            maxLength: 60
+                          view:
+                            type: string
+                            maxLength: 160
+                          repeated:
+                            type: integer
+                            minimum: 2
+                            maximum: 9007199254740991
+                        required:
+                          - at
+                          - kind
+                          - level
+                          - message
+                        additionalProperties: false
+                  required:
+                    - userAgent
+                    - viewport
+                    - log
+                  additionalProperties: false
+              required:
+                - web
+              additionalProperties: false
+      responses:
+        "200":
+          description: Correcto
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  format:
+                    type: string
+                    const: ace-player-neo-fallos
+                  formatVersion:
+                    type: number
+                    const: 1
+                  createdAt:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  appVersion:
+                    type: string
+                  summary:
+                    type: object
+                    properties:
+                      nuestro:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                      deFuera:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                      sinClasificar:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                      byPiece:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            piece:
+                              type: string
+                              enum:
+                                - motor
+                                - decodificacion
+                                - rele
+                                - remux
+                                - reproductor
+                                - web
+                                - servidor
+                                - datos
+                                - fuente
+                                - proveedor
+                                - red
+                                - terceros
+                                - otro
+                            side:
+                              type: string
+                              enum:
+                                - nuestro
+                                - de_fuera
+                                - sin_clasificar
+                            count:
+                              type: integer
+                              exclusiveMinimum: 0
+                              maximum: 9007199254740991
+                          required:
+                            - piece
+                            - side
+                            - count
+                          additionalProperties: false
+                      lines:
+                        maxItems: 40
+                        type: array
+                        items:
+                          type: string
+                    required:
+                      - nuestro
+                      - deFuera
+                      - sinClasificar
+                      - byPiece
+                      - lines
+                    additionalProperties: false
+                  environment:
+                    type: object
+                    properties:
+                      node:
+                        type: string
+                      platform:
+                        type: string
+                      arch:
+                        type: string
+                      uptimeSeconds:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                      memoryMb:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                      logLevel:
+                        type: string
+                      scanner:
+                        type: boolean
+                      autoSync:
+                        type: boolean
+                      allowPrivateUrls:
+                        type: boolean
+                      footballDemoOnly:
+                        type: boolean
+                      teams:
+                        type: boolean
+                      ai:
+                        type: boolean
+                      seedSource:
+                        type: string
+                      serverLog:
+                        type: boolean
+                    required:
+                      - node
+                      - platform
+                      - arch
+                      - uptimeSeconds
+                      - memoryMb
+                      - logLevel
+                      - scanner
+                      - autoSync
+                      - allowPrivateUrls
+                      - footballDemoOnly
+                      - teams
+                      - ai
+                      - seedSource
+                      - serverLog
+                    additionalProperties: false
+                  status:
+                    type: object
+                    properties:
+                      health:
+                        anyOf:
+                          - type: object
+                            properties:
+                              version:
+                                type: string
+                              checkedAt:
+                                type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                              uptimeSeconds:
+                                type: integer
+                                minimum: 0
+                                maximum: 9007199254740991
+                              components:
+                                type: object
+                                properties:
+                                  backend:
+                                    type: object
+                                    properties:
+                                      status:
+                                        type: string
+                                        const: ready
+                                    required:
+                                      - status
+                                    additionalProperties: false
+                                  engine:
+                                    type: object
+                                    properties:
+                                      status:
+                                        type: string
+                                        enum:
+                                          - online
+                                          - offline
+                                          - restarting
+                                          - unknown
+                                      online:
+                                        type: boolean
+                                      since:
+                                        anyOf:
+                                          - type: string
+                                            format: date-time
+                                            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                          - type: "null"
+                                      checkedAt:
+                                        anyOf:
+                                          - type: string
+                                            format: date-time
+                                            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                          - type: "null"
+                                      engineVersion:
+                                        type:
+                                          - string
+                                          - "null"
+                                      autoRestarts:
+                                        type: object
+                                        properties:
+                                          lastHour:
+                                            type: integer
+                                            minimum: 0
+                                            maximum: 9007199254740991
+                                          max:
+                                            type: integer
+                                            exclusiveMinimum: 0
+                                            maximum: 9007199254740991
+                                          nextAllowedAt:
+                                            anyOf:
+                                              - type: string
+                                                format: date-time
+                                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                              - type: "null"
+                                          exhausted:
+                                            type: boolean
+                                        required:
+                                          - lastHour
+                                          - max
+                                          - nextAllowedAt
+                                          - exhausted
+                                        additionalProperties: false
+                                    required:
+                                      - status
+                                      - online
+                                      - since
+                                      - checkedAt
+                                      - engineVersion
+                                      - autoRestarts
+                                    additionalProperties: false
+                                  scanner:
+                                    type: object
+                                    properties:
+                                      status:
+                                        type: string
+                                        enum:
+                                          - ready
+                                          - degraded
+                                          - offline
+                                          - disabled
+                                          - warming
+                                      busy:
+                                        type: boolean
+                                      queue:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                      activeJobs:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                      cachedSources:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                      leakedSessionsLastHour:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                    required:
+                                      - status
+                                      - busy
+                                      - queue
+                                      - activeJobs
+                                      - cachedSources
+                                      - leakedSessionsLastHour
+                                    additionalProperties: false
+                                  ai:
+                                    type: object
+                                    properties:
+                                      status:
+                                        type: string
+                                        enum:
+                                          - disabled
+                                          - ready
+                                          - model_missing
+                                          - offline
+                                      model:
+                                        type: string
+                                    required:
+                                      - status
+                                      - model
+                                    additionalProperties: false
+                                  agenda:
+                                    type: object
+                                    properties:
+                                      status:
+                                        type: string
+                                        enum:
+                                          - ready
+                                          - stale
+                                          - warming
+                                      generatedAt:
+                                        anyOf:
+                                          - type: string
+                                            format: date-time
+                                            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                          - type: "null"
+                                      matches:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                      preheated:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                    required:
+                                      - status
+                                      - generatedAt
+                                      - matches
+                                      - preheated
+                                    additionalProperties: false
+                                  directories:
+                                    type: object
+                                    properties:
+                                      status:
+                                        type: string
+                                        enum:
+                                          - ready
+                                          - degraded
+                                          - empty
+                                      total:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                      channels:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                    required:
+                                      - status
+                                      - total
+                                      - channels
+                                    additionalProperties: false
+                                  state:
+                                    type: object
+                                    properties:
+                                      status:
+                                        type: string
+                                        enum:
+                                          - ready
+                                          - recovered
+                                          - degraded
+                                      recoveredFrom:
+                                        type:
+                                          - string
+                                          - "null"
+                                    required:
+                                      - status
+                                      - recoveredFrom
+                                    additionalProperties: false
+                                  playback:
+                                    type: object
+                                    properties:
+                                      sessions:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                      viewers:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                      remuxSessions:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                    required:
+                                      - sessions
+                                      - viewers
+                                      - remuxSessions
+                                    additionalProperties: false
+                                  events:
+                                    type: object
+                                    properties:
+                                      connections:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                    required:
+                                      - connections
+                                    additionalProperties: false
+                                  instantStart:
+                                    type: object
+                                    properties:
+                                      enabled:
+                                        type: boolean
+                                      status:
+                                        type: string
+                                        enum:
+                                          - off
+                                          - idle
+                                          - warming
+                                          - warm
+                                      matchId:
+                                        type:
+                                          - string
+                                          - "null"
+                                      source:
+                                        anyOf:
+                                          - type: string
+                                            enum:
+                                              - engine
+                                              - iptv
+                                          - type: "null"
+                                      last:
+                                        type:
+                                          - string
+                                          - "null"
+                                    required:
+                                      - enabled
+                                      - status
+                                      - matchId
+                                      - source
+                                      - last
+                                    additionalProperties: false
+                                required:
+                                  - backend
+                                  - engine
+                                  - scanner
+                                  - ai
+                                  - agenda
+                                  - directories
+                                  - state
+                                  - playback
+                                  - events
+                                additionalProperties: false
+                              reports:
+                                type: object
+                                properties:
+                                  total:
+                                    type: integer
+                                    minimum: 0
+                                    maximum: 9007199254740991
+                                  quarantined:
+                                    type: integer
+                                    minimum: 0
+                                    maximum: 9007199254740991
+                                  learningCount:
+                                    type: integer
+                                    minimum: 0
+                                    maximum: 9007199254740991
+                                required:
+                                  - total
+                                  - quarantined
+                                  - learningCount
+                                additionalProperties: false
+                              diagnostics:
+                                type: object
+                                properties:
+                                  counts24h:
+                                    type: object
+                                    properties:
+                                      engine:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                      source:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                      network:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                      codec:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                      client:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                      state:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                    required:
+                                      - engine
+                                      - source
+                                      - network
+                                      - codec
+                                      - client
+                                      - state
+                                    additionalProperties: false
+                                required:
+                                  - counts24h
+                                additionalProperties: false
+                              warnings:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    code:
+                                      type: string
+                                    message:
+                                      type: string
+                                  required:
+                                    - code
+                                    - message
+                                  additionalProperties: false
+                            required:
+                              - version
+                              - checkedAt
+                              - uptimeSeconds
+                              - components
+                              - reports
+                              - diagnostics
+                              - warnings
+                            additionalProperties: false
+                          - type: "null"
+                      iptv:
+                        anyOf:
+                          - type: object
+                            properties:
+                              kind:
+                                type: string
+                                enum:
+                                  - m3u
+                                  - xtream
+                              enabled:
+                                type: boolean
+                              status:
+                                type: string
+                                enum:
+                                  - syncing
+                                  - ok
+                                  - error
+                                  - disabled
+                              channels:
+                                type: integer
+                                minimum: 0
+                                maximum: 9007199254740991
+                              updatedAt:
+                                anyOf:
+                                  - type: string
+                                    format: date-time
+                                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                  - type: "null"
+                              error:
+                                anyOf:
+                                  - type: object
+                                    properties:
+                                      code:
+                                        type: string
+                                        pattern: ^[a-z0-9_]{1,40}$
+                                      message:
+                                        type: string
+                                    required:
+                                      - code
+                                      - message
+                                    additionalProperties: false
+                                  - type: "null"
+                              staleSince:
+                                anyOf:
+                                  - type: string
+                                    format: date-time
+                                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                  - type: "null"
+                              account:
+                                anyOf:
+                                  - type: object
+                                    properties:
+                                      status:
+                                        type: string
+                                        enum:
+                                          - active
+                                          - expired
+                                          - banned
+                                          - disabled
+                                          - unknown
+                                      expiresAt:
+                                        anyOf:
+                                          - type: string
+                                            format: date-time
+                                            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                          - type: "null"
+                                      maxConnections:
+                                        anyOf:
+                                          - type: integer
+                                            minimum: 0
+                                            maximum: 9007199254740991
+                                          - type: "null"
+                                      activeConnections:
+                                        anyOf:
+                                          - type: integer
+                                            minimum: 0
+                                            maximum: 9007199254740991
+                                          - type: "null"
+                                      ours:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 9007199254740991
+                                    required:
+                                      - status
+                                      - expiresAt
+                                      - maxConnections
+                                      - activeConnections
+                                      - ours
+                                    additionalProperties: false
+                                  - type: "null"
+                              guide:
+                                type: object
+                                properties:
+                                  available:
+                                    type: boolean
+                                  channelsWithGuide:
+                                    type: integer
+                                    minimum: 0
+                                    maximum: 9007199254740991
+                                  updatedAt:
+                                    anyOf:
+                                      - type: string
+                                        format: date-time
+                                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                      - type: "null"
+                                  failedAt:
+                                    anyOf:
+                                      - type: string
+                                        format: date-time
+                                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                      - type: "null"
+                                required:
+                                  - available
+                                  - channelsWithGuide
+                                  - updatedAt
+                                  - failedAt
+                                additionalProperties: false
+                              connections:
+                                type: integer
+                                minimum: 0
+                                maximum: 9007199254740991
+                            required:
+                              - kind
+                              - enabled
+                              - status
+                              - channels
+                              - updatedAt
+                              - error
+                              - staleSince
+                              - account
+                              - guide
+                              - connections
+                            additionalProperties: false
+                          - type: "null"
+                      remux:
+                        type: object
+                        properties:
+                          sessions:
+                            type: integer
+                            minimum: 0
+                            maximum: 9007199254740991
+                          max:
+                            type: integer
+                            minimum: 0
+                            maximum: 9007199254740991
+                          ffmpegMissing:
+                            type: boolean
+                        required:
+                          - sessions
+                          - max
+                          - ffmpegMissing
+                        additionalProperties: false
+                    required:
+                      - health
+                      - iptv
+                      - remux
+                    additionalProperties: false
+                  faults:
+                    maxItems: 1000
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        at:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                        side:
+                          type: string
+                          enum:
+                            - nuestro
+                            - de_fuera
+                            - sin_clasificar
+                        piece:
+                          type: string
+                          enum:
+                            - motor
+                            - decodificacion
+                            - rele
+                            - remux
+                            - reproductor
+                            - web
+                            - servidor
+                            - datos
+                            - fuente
+                            - proveedor
+                            - red
+                            - terceros
+                            - otro
+                        from:
+                          type: string
+                          enum:
+                            - servidor
+                            - web
+                        level:
+                          type: string
+                          enum:
+                            - error
+                            - warn
+                            - info
+                        code:
+                          type: string
+                          maxLength: 60
+                        message:
+                          type: string
+                          maxLength: 4000
+                        channel:
+                          type: string
+                          maxLength: 120
+                        source:
+                          type: string
+                          maxLength: 80
+                      required:
+                        - at
+                        - side
+                        - piece
+                        - from
+                        - level
+                        - code
+                        - message
+                      additionalProperties: false
+                  serverLog:
+                    maxItems: 2000
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        time:
+                          type: string
+                        level:
+                          type: string
+                        msg:
+                          type: string
+                      additionalProperties: {}
+                  web:
+                    anyOf:
+                      - type: object
+                        properties:
+                          userAgent:
+                            type: string
+                            maxLength: 400
+                          viewport:
+                            type: string
+                            maxLength: 40
+                          layout:
+                            type: string
+                            maxLength: 20
+                          mode:
+                            type: string
+                            enum:
+                              - live
+                              - demo
+                          view:
+                            type: string
+                            maxLength: 160
+                          online:
+                            type: boolean
+                          installed:
+                            type: boolean
+                          uptimeSeconds:
+                            type: integer
+                            minimum: 0
+                            maximum: 9007199254740991
+                          log:
+                            maxItems: 200
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                at:
+                                  type: string
+                                  format: date-time
+                                  pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                                kind:
+                                  type: string
+                                  enum:
+                                    - error
+                                    - rejection
+                                    - console
+                                    - api
+                                    - player
+                                level:
+                                  type: string
+                                  enum:
+                                    - error
+                                    - warn
+                                    - info
+                                message:
+                                  type: string
+                                  maxLength: 1000
+                                detail:
+                                  type: string
+                                  maxLength: 4000
+                                code:
+                                  type: string
+                                  maxLength: 60
+                                view:
+                                  type: string
+                                  maxLength: 160
+                                repeated:
+                                  type: integer
+                                  minimum: 2
+                                  maximum: 9007199254740991
+                              required:
+                                - at
+                                - kind
+                                - level
+                                - message
+                              additionalProperties: false
+                        required:
+                          - userAgent
+                          - viewport
+                          - log
+                        additionalProperties: false
+                      - type: "null"
+                  redaction:
+                    type: object
+                    properties:
+                      note:
+                        type: string
+                      replaced:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                    required:
+                      - note
+                      - replaced
+                    additionalProperties: false
+                required:
+                  - format
+                  - formatVersion
+                  - createdAt
+                  - appVersion
+                  - summary
+                  - environment
+                  - status
+                  - faults
+                  - serverLog
+                  - web
+                  - redaction
+                additionalProperties: false
+        default:
+          description: Error con el formato de /api/v1 (arquitectura §6.4).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - umbrelGateway: []
+      x-access: web
+      x-native-path: /native/api/v1/diagnostics/export
+      x-side-effects: true
+      x-legacy-twin: null
+      x-errors:
+        - code: validation_error
+          status: 400
+          message: Falta algún dato o no tiene el formato esperado.
+        - code: bad_json
+          status: 400
+          message: El cuerpo de la petición no es un JSON válido.
+        - code: body_too_large
+          status: 413
+          message: La petición es demasiado grande (máximo 2 MiB).
+        - code: cross_origin
+          status: 403
+          message: Se ha bloqueado una petición que venía de otra web.
+        - code: origin_forbidden
+          status: 403
+          message: Esta función no está disponible desde aquí.
+        - code: unauthorized
+          status: 401
+          message: Este dispositivo no está emparejado o su acceso ha caducado. Vuelve a emparejarlo.
+        - code: device_revoked
+          status: 401
+          message: Se ha retirado el acceso de este dispositivo. Vuelve a emparejarlo desde la web.
+        - code: not_found
+          status: 404
+          message: Esa dirección no existe.
+        - code: not_implemented
+          status: 501
+          message: Esta función todavía no está disponible en esta versión.
+        - code: internal_error
+          status: 500
+          message: Algo ha fallado en el servidor. Queda anotado en el registro.
   /api/v1/library:
     get:
       operationId: libraryGet
