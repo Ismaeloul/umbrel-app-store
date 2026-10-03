@@ -546,6 +546,11 @@
     padding-right: calc(16px + var(--safe-right));
     border-left: 1px solid var(--line-soft);
   }
+  /* Un panel que no tiene nada que enseñar (Películas y series mientras se
+     eligen los idiomas) no deja una columna vacía. */
+  .app-aside:empty {
+    display: none;
+  }
 }
 
 /* Barra superior más prieta cuando no cabe el nombre (tableta estrecha). */
