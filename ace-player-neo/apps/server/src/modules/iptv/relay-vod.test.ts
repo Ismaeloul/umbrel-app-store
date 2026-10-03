@@ -159,14 +159,14 @@ describe('VodSession', () => {
     expect(session.stats().cacheBytes).toBeGreaterThanOrEqual(500_000 + 65_536);
   });
 
-  it('salto corto hacia delante sin reabrir; hacia atrás o de más de 32 MiB, reabriendo', async () => {
+  it('salto corto hacia delante sin reabrir (sin caudal medido, 2 MiB); hacia atrás o más lejos, reabriendo', async () => {
     const { origin, vod } = await rig({ rateMbps: 400 });
     const session = vod.session(origin.url('2.mkv'), 'mkv', { limits: FAST });
     const first = await openGet(session.inputUrl, 'bytes=0-');
     await new Promise((resolve) => setTimeout(resolve, 20));
-    /* 10 MiB por delante: se lee y se tira, sin otra conexión. */
-    const skip = await rawGet(session.inputUrl, { range: `bytes=${10 * MIB}-${10 * MIB + 999}` });
-    expect(skip.body.equals(big.subarray(10 * MIB, 10 * MIB + 1000))).toBe(true);
+    /* 1,5 MiB por delante: se lee y se tira, sin otra conexión. */
+    const skip = await rawGet(session.inputUrl, { range: `bytes=${1.5 * MIB}-${1.5 * MIB + 999}` });
+    expect(skip.body.equals(big.subarray(1.5 * MIB, 1.5 * MIB + 1000))).toBe(true);
     expect(
       vod.opens.map((o) => [o.start, o.end]),
       JSON.stringify(origin.stats.requests),
@@ -175,11 +175,31 @@ describe('VodSession', () => {
     /* Hacia atrás: otra conexión. */
     await rawGet(session.inputUrl, { range: `bytes=${5 * MIB}-${5 * MIB + 999}` });
     expect(vod.opens).toHaveLength(2);
-    /* Más de 32 MiB por delante: otra. */
+    /* 45 MiB por delante (más de lo que se lee en 1,5 s, y del tope de 32 MiB): otra. */
     const far = await rawGet(session.inputUrl, { range: `bytes=${50 * MIB}-${50 * MIB + 999}` });
     expect(far.body.equals(big.subarray(50 * MIB, 50 * MIB + 1000))).toBe(true);
     expect(vod.opens).toHaveLength(3);
     expect(origin.stats.maxOpen).toBe(1);
+  });
+
+  it('auditoría 0.9.0: con el caudal medido, el salto sin reabrir es lo que se lee en 1,5 s', async () => {
+    /* Proveedor a 16 Mb/s (2 MB/s): 1,5 s son ~3 MB. */
+    const { origin, vod } = await rig({ rateMbps: 16 });
+    const session = vod.session(origin.url('2.mkv'), 'mkv', { limits: FAST });
+    /* El arranque sin freno de ffmpeg mide el caudal (aquí, ~4 MiB leídos de corrido). */
+    const reader = await openGet(session.inputUrl, 'bytes=0-');
+    reader.res.resume();
+    await until(() => session.stats().netBytesPerS !== null, 15_000, 'el caudal medido');
+    const rate = session.stats().netBytesPerS as number;
+    expect(rate).toBeGreaterThan(1_000_000);
+    expect(rate).toBeLessThan(4_000_000);
+    reader.close();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const opens = vod.opens.length;
+    /* 8 MiB por delante: más de 1,5 s de lectura → otra conexión (con 32 MiB fijos se leían y tiraban). */
+    const pos = session.stats().bytes;
+    await rawGet(session.inputUrl, { range: `bytes=${pos + 8 * MIB}-${pos + 8 * MIB + 999}` });
+    expect(vod.opens.length).toBe(opens + 1);
   });
 
   /* Ojo: al cortar el proveedor, `net` tira lo que tenía en su búfer (hasta

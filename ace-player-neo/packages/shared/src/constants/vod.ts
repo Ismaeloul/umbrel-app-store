@@ -139,8 +139,16 @@ export const VOD_PLAY = {
   segmentWaitMs: 15 * SECOND,
   /** Pausa larga: se suelta el proveedor (lo ajusta el Paso 0, §3.5). */
   idleReleaseMs: 5 * MINUTE,
-  /** Salto corto hacia delante sin reabrir. */
-  forwardSkipBytes: 32 * MIB,
+  /**
+   * Salto corto hacia delante sin reabrir (auditoría 0.9.0): solo si leer y tirar el hueco cuesta
+   * como mucho `forwardSkipS` con el caudal medido de la conexión (y al menos `forwardSkipMinBytes`,
+   * `forwardSkipMaxBytes` como mucho); sin caudal medido, `forwardSkipBytes`. Con los 32 MiB fijos de
+   * antes, un salto leía y tiraba hasta 32 MiB (6-7 s a 40 Mb/s) antes de dar el primer byte.
+   */
+  forwardSkipBytes: 2 * MIB,
+  forwardSkipMinBytes: 512 * KIB,
+  forwardSkipMaxBytes: 32 * MIB,
+  forwardSkipS: 1.5,
   relayHeadBytes: 2 * MIB,
   relayCacheMaxBytes: 40 * MIB,
   moovMaxBytes: 32 * MIB,

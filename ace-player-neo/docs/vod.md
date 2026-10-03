@@ -792,9 +792,11 @@ tapa.
   4. solo entonces abre `Range: bytes=<inicio>-[fin]` por `relay.connect()` (SSRF, redirecciones, reintento por
      ocupado).
   - **Nunca 409:** ffmpeg abre la segunda petición antes de cerrar la primera en cada salto (hallazgo 1).
-- **Salto corto hacia delante sin reabrir.** Si el nuevo inicio está como mucho `forwardSkipBytes` (**32 MiB**) por
-  delante de la posición de la conexión abierta, se lee y se tira hasta ahí en vez de reabrir. Ahorra un ciclo de
-  conexión, que es lo caro con paneles que siguen contando el cierre 30-120 s.
+- **Salto corto hacia delante sin reabrir.** Si el nuevo inicio está poco por delante de la posición de la conexión
+  abierta, se lee y se tira hasta ahí en vez de reabrir. Ahorra un ciclo de conexión, que es lo caro con paneles que
+  siguen contando el cierre 30-120 s. «Poco» (auditoría 0.9.0) es lo que se lee en `forwardSkipS` (1,5 s) con el
+  caudal medido, entre 512 KiB y 32 MiB; sin caudal medido, `forwardSkipBytes` (**2 MiB**). Con 32 MiB fijos, un
+  salto leía y tiraba hasta 6-7 s antes de dar el primer byte.
 - **Qué recibe ffmpeg:** `206` con el `Content-Range` y el `Content-Length` de arriba, `Accept-Ranges: bytes` y
   `Content-Type: application/octet-stream`. `HEAD` devuelve el tamaño cuando se conoce. Varios rangos → 416. Si el
   proveedor responde **200 a una petición con inicio > 0**, la sesión pasa a `rangeless`, se devuelve 416 y el
@@ -1409,7 +1411,8 @@ export const VOD_PLAY = {
   diskFreeMinBytes: 2 * GIB,
   segmentWaitMs: 15 * SECOND, // después, 503 Retry-After: 1
   idleReleaseMs: 5 * MINUTE,  // pausa larga: se suelta el proveedor (lo ajusta el Paso 0)
-  forwardSkipBytes: 32 * MIB, // salto corto hacia delante sin reabrir
+  forwardSkipBytes: 2 * MIB,  // salto corto hacia delante sin reabrir (sin caudal medido; 0.9.0)
+  forwardSkipMinBytes: 512 * KIB, forwardSkipMaxBytes: 32 * MIB, forwardSkipS: 1.5, // con caudal medido
   relayHeadBytes: 2 * MIB,
   relayCacheMaxBytes: 40 * MIB,
   moovMaxBytes: 32 * MIB,

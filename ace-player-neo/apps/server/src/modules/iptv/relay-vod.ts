@@ -10,10 +10,13 @@
      que su socket se cierre (2 s como mucho) y solo entonces abre `Range:
      bytes=<inicio>-[fin]`. Nunca un 409: ffmpeg abre la petición nueva antes
      de cerrar la vieja en cada salto (§9.2, hallazgo 1).
-   - Salto corto hacia delante sin reabrir: si el nuevo inicio está como
-     mucho 32 MiB por delante de la conexión abierta, se lee y se tira hasta
-     ahí (un ciclo de conexión es lo caro con paneles que cuentan el cierre
-     30-120 s).
+   - Salto corto hacia delante sin reabrir: si el nuevo inicio está poco por
+     delante de la conexión abierta, se lee y se tira hasta ahí (un ciclo de
+     conexión es lo caro con paneles que cuentan el cierre 30-120 s). «Poco»
+     (auditoría 0.9.0) es lo que se lee en 1,5 s con el caudal medido (de los
+     saltos cortos y del arranque sin freno de cada petición), entre 512 KiB y
+     32 MiB; sin medir, 2 MiB. Con 32 MiB fijos, un salto tiraba hasta 6-7 s
+     de lectura antes del primer byte.
    - Hacia abajo: 206 con `Content-Range`, `Content-Length`, `Accept-Ranges`
      y `application/octet-stream`; `HEAD` con el tamaño si se sabe; varios
      rangos → 416. Si el proveedor responde 200 a un inicio > 0, la sesión
@@ -76,7 +79,12 @@ import { VOD_ERROR_HEADER, VOD_REASON_HEADER } from '../remux/vod/reader.js';
 import { httpStatusOf } from './errors.js';
 
 export interface VodRelayLimits {
+  /** Salto hacia delante sin reabrir cuando aún no se sabe el caudal de la conexión. */
   readonly forwardSkipBytes: number;
+  /** Con caudal medido: lo que se lee en `forwardSkipS`, entre estos dos topes. */
+  readonly forwardSkipMinBytes: number;
+  readonly forwardSkipMaxBytes: number;
+  readonly forwardSkipS: number;
   readonly headBytes: number;
   readonly cacheMaxBytes: number;
   /** Tope de un rango acotado que se guarda (el moov o los Cues del índice). */
@@ -109,6 +117,9 @@ export interface VodRelayLimits {
 
 export const DEFAULT_VOD_RELAY_LIMITS: VodRelayLimits = {
   forwardSkipBytes: VOD_PLAY.forwardSkipBytes,
+  forwardSkipMinBytes: VOD_PLAY.forwardSkipMinBytes,
+  forwardSkipMaxBytes: VOD_PLAY.forwardSkipMaxBytes,
+  forwardSkipS: VOD_PLAY.forwardSkipS,
   headBytes: VOD_PLAY.relayHeadBytes,
   cacheMaxBytes: VOD_PLAY.relayCacheMaxBytes,
   boundedCacheMaxBytes: VOD_PLAY.moovMaxBytes,
@@ -178,6 +189,8 @@ export interface VodSessionStats {
   readonly pacedMs: number;
   /** Ritmo en bytes/s (null sin limitar). */
   readonly paceBytesPerS: number | null;
+  /** Caudal medido con el proveedor (bytes/s), o null si aún no se sabe. */
+  readonly netBytesPerS: number | null;
 }
 
 // --- Caché de rangos ---
@@ -292,6 +305,10 @@ export class RangeCache {
 
 /** Lo que se adelanta de la conexión con el proveedor en memoria (después se para de leer). */
 const UPSTREAM_QUEUE_MAX_BYTES = 512 * 1024;
+/* Una muestra del caudal con el proveedor vale con al menos esto leído en este rato (y se corta aquí). */
+const RATE_SAMPLE_MIN_BYTES = 256 * 1024;
+const RATE_SAMPLE_MIN_MS = 200;
+const RATE_SAMPLE_MAX_BYTES = 8 * 1024 * 1024;
 
 /**
  * Una conexión abierta, leída a trozos sin destruirla si quien la usa se va
@@ -417,6 +434,10 @@ interface Leg {
   lastStallMs: number;
   /** Espera antes de la próxima reapertura (tras un corte). */
   backoffMs: number;
+  /** Salto corto en curso sobre la conexión abierta: cuándo empezó y cuánto hay que tirar. */
+  skip: { readonly at: number; readonly bytes: number } | null;
+  /** Muestra del caudal en el arranque sin freno de esta petición (`done` ya tomada). */
+  sample: { readonly at: number; bytes: number; readonly paced: number } | 'done' | null;
 }
 
 function parseRange(
@@ -506,6 +527,8 @@ export class VodSession {
   private tokens = 0;
   private tokensAt = 0;
   private pacedMs = 0;
+  /** Caudal medido con el proveedor (bytes/s, media móvil) o null mientras no se sabe. */
+  private netRate: number | null = null;
 
   constructor(
     private readonly deps: VodSessionDeps,
@@ -534,6 +557,7 @@ export class VodSession {
       timeouts: this.timeouts,
       pacedMs: this.pacedMs,
       paceBytesPerS: this.pace?.rate ?? null,
+      netBytesPerS: this.netRate === null ? null : Math.round(this.netRate),
     };
   }
 
@@ -625,6 +649,8 @@ export class VodSession {
       stalledSince: null,
       lastStallMs: 0,
       backoffMs: 0,
+      skip: null,
+      sample: null,
     };
     /* La más nueva gana: la anterior se corta ya, sin esperar a la fila. */
     const previous = this.leg;
@@ -730,6 +756,7 @@ export class VodSession {
       const from = Math.max(0, leg.pos - chunkStart);
       const to = Math.min(chunk.length, this.lastByte(leg) - chunkStart + 1);
       if (to > from) {
+        this.sampleRate(leg, to - from);
         if (!(await write(leg, this.deps.clock, chunk.subarray(from, to)))) return;
         leg.pos = chunkStart + to;
         /* Ritmo: solo lo que lee ffmpeg (abierto); el índice va sin freno. */
@@ -805,6 +832,52 @@ export class VodSession {
     await this.deps.clock.sleep(backoff, signal);
   }
 
+  /**
+   * Hasta dónde se reutiliza la conexión abierta en un salto hacia delante (auditoría 0.9.0): lo que se
+   * lee en `forwardSkipS` con el caudal medido (entre `forwardSkipMinBytes` y `forwardSkipMaxBytes`);
+   * sin caudal medido, `forwardSkipBytes`. Más allá, reabrir sale más barato.
+   */
+  private forwardSkipLimit(): number {
+    const rate = this.netRate;
+    if (rate === null) return this.limits.forwardSkipBytes;
+    return Math.min(
+      this.limits.forwardSkipMaxBytes,
+      Math.max(this.limits.forwardSkipMinBytes, rate * this.limits.forwardSkipS),
+    );
+  }
+
+  /** Caudal con el proveedor (media móvil): de lo que tarda un salto corto y del arranque sin freno. */
+  private noteRate(bytes: number, ms: number): void {
+    if (bytes < RATE_SAMPLE_MIN_BYTES || ms < RATE_SAMPLE_MIN_MS) return;
+    const rate = (bytes / ms) * 1000;
+    this.netRate = this.netRate === null ? rate : (this.netRate + rate) / 2;
+  }
+
+  /*
+   * Lo que llega para quien lee: cierra el salto corto que estuviera en curso (lo que costó tirar el
+   * hueco) y, mientras ffmpeg lee sin freno tras abrir o saltar, mide el caudal (hasta que frena el
+   * ritmo o se han visto `RATE_SAMPLE_MAX_BYTES`).
+   */
+  private sampleRate(leg: Leg, bytes: number): void {
+    const now = this.deps.clock.now();
+    if (leg.skip) {
+      this.noteRate(leg.skip.bytes, now - leg.skip.at);
+      leg.skip = null;
+    }
+    if (leg.end !== null || leg.sample === 'done') return;
+    if (leg.sample === null) {
+      leg.sample = { at: now, bytes: 0, paced: this.pacedMs };
+      return;
+    }
+    const sample = leg.sample;
+    if (this.pacedMs !== sample.paced || sample.bytes >= RATE_SAMPLE_MAX_BYTES) {
+      this.noteRate(sample.bytes, now - sample.at);
+      leg.sample = 'done';
+      return;
+    }
+    sample.bytes += bytes;
+  }
+
   /** La conexión para seguir esta petición: la abierta si vale (o con un salto corto), o una nueva. */
   private async upstreamFor(leg: Leg): Promise<Upstream | null> {
     const up = this.upstream;
@@ -821,9 +894,15 @@ export class VodSession {
         fresh &&
         up.alive &&
         leg.pos >= up.pos &&
-        leg.pos - up.pos <= this.limits.forwardSkipBytes &&
+        leg.pos - up.pos <= this.forwardSkipLimit() &&
         (up.end === null || (last !== Infinity && last <= up.end));
-      if (reusable) return up;
+      if (reusable) {
+        /* Un salto corto: se lee y se tira hasta ahí (y se mide lo que cuesta). */
+        if (leg.pos > up.pos && leg.skip === null) {
+          leg.skip = { at: this.deps.clock.now(), bytes: leg.pos - up.pos };
+        }
+        return up;
+      }
       await this.dropUpstream();
     }
     if (this.gone(leg)) return null;
