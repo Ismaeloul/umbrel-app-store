@@ -85,15 +85,32 @@ function foldUnit(code: number): string {
 /** Alguna unidad fuera de ASCII (sin la bandera `u`: también cada mitad de un par sustituto). */
 const NON_ASCII = /[\u0080-\uffff]/;
 
-/** Plegado carácter a carácter (el camino lento, para textos con «İ» y parecidos). */
+/** Plegado carácter a carácter (el camino lento, por si `toLowerCase` partiera otra letra en dos). */
 function foldEachUnit(text: string): string {
-  let out = '';
-  for (let index = 0; index < text.length; index += 1) {
-    const code = text.charCodeAt(index);
-    out += code < 0x41 || (code > 0x5a && code < 0x80) ? text[index] : foldUnit(code);
+  /* Por trozos y con `join`: concatenar millones de caracteres de uno en uno
+     dispara la memoria (cadenas en cuerda) y bloquea el hilo. */
+  const parts: string[] = [];
+  for (let start = 0; start < text.length; start += FOLD_CHUNK) {
+    const end = Math.min(text.length, start + FOLD_CHUNK);
+    const units: string[] = new Array<string>(end - start);
+    for (let index = start; index < end; index += 1) {
+      const code = text.charCodeAt(index);
+      units[index - start] =
+        code < 0x41 || (code > 0x5a && code < 0x80) ? (text[index] as string) : foldUnit(code);
+    }
+    parts.push(units.join(''));
   }
-  return out;
+  return parts.join('');
 }
+
+const FOLD_CHUNK = 65_536;
+
+/**
+ * «İ» (U+0130) es la única letra que `toLowerCase` parte en dos («i» + punto
+ * combinante). Plegada sería «i» igualmente: se cambia por «I» antes, y el
+ * texto sigue por el camino rápido (y con la sigma final de `toLowerCase`).
+ */
+const DOTTED_I = /İ/g;
 
 /**
  * Plegado que conserva la longitud (§4.5): cada unidad UTF-16 da exactamente
@@ -102,7 +119,8 @@ function foldEachUnit(text: string): string {
  * `toLowerCase` de una vez (si no cambia la longitud, ninguna letra se ha
  * partido en dos) y solo lo que no es ASCII pasa por `foldUnit`.
  */
-export function foldKeepLength(text: string): string {
+export function foldKeepLength(input: string): string {
+  const text = input.includes('\u0130') ? input.replace(DOTTED_I, 'I') : input;
   const lower = text.toLowerCase();
   if (lower.length !== text.length) return foldEachUnit(text);
   if (!NON_ASCII.test(lower)) return lower;
