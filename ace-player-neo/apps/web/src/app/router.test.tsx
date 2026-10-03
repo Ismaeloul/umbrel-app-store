@@ -65,9 +65,11 @@ describe('router', () => {
     expect(screen.getByTestId('anterior')).toHaveTextContent('agenda');
     expect(location.search).toBe('?demo=1&vista=partido/m-1');
     expect(history.state).toMatchObject({ aceDepth: 1 });
+    // Con el sentido: el armazón prepara con él el fundido de la vista que sale.
     expect(before).toHaveBeenCalledWith(
       { vista: 'agenda' },
       { vista: 'partido', id: 'm-1', canal: null },
+      'adelante',
     );
   });
 
