@@ -915,6 +915,7 @@ const vodOfficeTitle: VodSeries = {
           still: '6a1f0c38',
           playable: 'yes',
           progress: { posS: 1_380, durS: 1_380, watched: true },
+          container: 'mkv',
         },
       ],
     },
@@ -931,6 +932,7 @@ const vodOfficeTitle: VodSeries = {
           still: null,
           playable: 'yes',
           progress: { posS: 1_300, durS: 1_320, watched: true },
+          container: 'mp4',
         },
         {
           id: VOD_ID_OFFICE_S2E6,
@@ -939,6 +941,7 @@ const vodOfficeTitle: VodSeries = {
           plot: 'Michael y Dwight se enfrentan en el dojo.',
           durationS: 1_320,
           still: '2b6c9d10',
+          /* Sin `container`: el servidor todavía no sabe el formato. */
           playable: 'unknown',
           progress: null,
         },
@@ -1239,6 +1242,19 @@ export const VARIANT_FIXTURES = {
     stale: false,
   },
   'vodTitle.series': vodOfficeTitle,
+  /* Un episodio en un formato que no se puede reproducir aquí: `container`
+     dice cuál, para que la web lo nombre en vez de «desconocido». */
+  'vodTitle.episodio-avi': {
+    ...vodOfficeTitle,
+    seasons: vodOfficeTitle.seasons.map((season) => ({
+      ...season,
+      episodes: season.episodes.map((episode) =>
+        episode.id === VOD_ID_OFFICE_S2E6
+          ? { ...episode, playable: 'no' as const, container: 'avi' }
+          : episode,
+      ),
+    })),
+  },
   /* El proveedor no dio la ficha: lo que se sabe por la lista, y «Reproducir» sigue (§7.3). */
   'vodTitle.info-failed': {
     ...vodDuneTitle,
@@ -1511,6 +1527,7 @@ export const VARIANT_FIXTURES = {
   'vodBrowse.search': V1ResponseInput<'vodBrowse'>;
   'vodBrowse.vacio': V1ResponseInput<'vodBrowse'>;
   'vodTitle.series': V1ResponseInput<'vodTitle'>;
+  'vodTitle.episodio-avi': V1ResponseInput<'vodTitle'>;
   'vodTitle.info-failed': V1ResponseInput<'vodTitle'>;
   'vodStream.hevc': V1ResponseInput<'vodStream'>;
   'iptvBrowse.categoria': V1ResponseInput<'iptvBrowse'>;

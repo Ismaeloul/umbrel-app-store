@@ -6778,6 +6778,9 @@ paths:
                                           - watched
                                         additionalProperties: false
                                       - type: "null"
+                                  container:
+                                    type: string
+                                    maxLength: 8
                                 required:
                                   - id
                                   - n

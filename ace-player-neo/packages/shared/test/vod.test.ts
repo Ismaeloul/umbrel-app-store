@@ -30,6 +30,7 @@ import {
   VodBrowseResponseSchema,
   VodCardSchema,
   VodDocSchema,
+  VodEpisodeSchema,
   VodGrantSchema,
   VodHomeSchema,
   VodProgressBodySchema,
@@ -222,6 +223,34 @@ describe('esquemas Vod* (docs/vod.md §11.2)', () => {
     expect(VOD_TAGS).toEqual(['castellano', 'latino', 'vose', 'multi', '4k']);
   });
 
+  it('un episodio puede decir su formato (container): opcional y de hasta 8 letras', () => {
+    const series = VARIANT_FIXTURES['vodTitle.series'];
+    if (series.kind !== 'series') throw new Error('vodTitle.series no es una serie');
+    const [withContainer, withoutContainer] = [
+      series.seasons[0]!.episodes[0]!,
+      series.seasons[1]!.episodes[1]!,
+    ];
+    expect(withContainer.container).toBe('mkv');
+    expect(withoutContainer.container).toBeUndefined();
+    expect(VodEpisodeSchema.safeParse(withContainer).success).toBe(true);
+    expect(VodEpisodeSchema.safeParse(withoutContainer).success).toBe(true);
+    expect(VodEpisodeSchema.safeParse({ ...withContainer, container: null }).success).toBe(false);
+    expect(VodEpisodeSchema.safeParse({ ...withContainer, container: 'matroska' }).success).toBe(
+      true,
+    );
+    expect(VodEpisodeSchema.safeParse({ ...withContainer, container: 'matroska2' }).success).toBe(
+      false,
+    );
+    /* La variante: el episodio que no se puede reproducir nombra su formato. */
+    const avi = VARIANT_FIXTURES['vodTitle.episodio-avi'];
+    if (avi.kind !== 'series') throw new Error('vodTitle.episodio-avi no es una serie');
+    const blocked = avi.seasons
+      .flatMap((season) => season.episodes)
+      .filter((e) => e.playable === 'no');
+    expect(blocked.map((e) => e.container)).toEqual(['avi']);
+    expect(VodTitleSchema.safeParse(avi).success).toBe(true);
+  });
+
   it('VodBrowseQuery: por defecto películas, todas, por novedades y 60; nada más', () => {
     expect(VodBrowseQuerySchema.parse({})).toEqual({
       kind: 'movie',
@@ -276,6 +305,7 @@ describe('esquemas Vod* (docs/vod.md §11.2)', () => {
     expect(VARIANT_FIXTURES['vodBrowse.search'].otherKindTotal).toBe(1);
     expect(VARIANT_FIXTURES['vodBrowse.vacio'].items).toEqual([]);
     expect(VARIANT_FIXTURES['vodTitle.series'].kind).toBe('series');
+    expect(VARIANT_FIXTURES['vodTitle.episodio-avi'].kind).toBe('series');
     expect(VARIANT_FIXTURES['vodTitle.info-failed'].info).toBe('failed');
     expect(VARIANT_FIXTURES['vodStream.hevc'].vod.video.codecs).toMatch(/^hvc1\./);
     /* La portada nunca enseña adultos en las filas (D-VOD7). */

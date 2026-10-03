@@ -55,8 +55,9 @@
           "plot": "Michael y Dwight se enfrentan en el dojo.",
           "durationS": 1320,
           "still": "2b6c9d10",
-          "playable": "unknown",
-          "progress": null
+          "playable": "no",
+          "progress": null,
+          "container": "avi"
         }
       ]
     }

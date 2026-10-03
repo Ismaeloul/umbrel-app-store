@@ -1192,6 +1192,7 @@ export const VodEpisodeSchema = z.strictObject({
   id: HashSchema, n: z.number().int().min(0).max(9_999), title: z.string().max(200),
   plot: z.string().max(600).nullable(), durationS: z.number().int().nullable(),
   still: VodArtStampSchema.nullable(), playable: VodPlayableSchema, progress: VodProgressSchema.nullable(),
+  container: z.string().max(8).optional(),             // «mkv», «avi»…: para el texto de `playable: 'no'`
 });
 export const VodSeriesSchema = z.strictObject({
   kind: z.literal('series'), id: HashSchema, info: VodInfoSchema,

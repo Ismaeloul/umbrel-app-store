@@ -224,6 +224,13 @@ export const VodEpisodeSchema = z.strictObject({
   still: VodArtStampSchema.nullable(),
   playable: VodPlayableSchema,
   progress: VodProgressSchema.nullable(),
+  /**
+   * Formato del fichero del episodio («mkv», «mp4», «avi»…), en minúsculas,
+   * sacado de la extensión que da la ficha de Xtream (nunca la URL). Para que
+   * la web diga qué formato es cuando `playable` es `no`. Opcional: un
+   * servidor que no lo sepa no lo manda (la película lo lleva en `tech`).
+   */
+  container: z.string().max(8).optional(),
 });
 export type VodEpisode = z.infer<typeof VodEpisodeSchema>;
 
