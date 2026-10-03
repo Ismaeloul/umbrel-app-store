@@ -222,37 +222,56 @@ describe('vista Agenda', () => {
     expect(screen.queryByText('Betis')).toBeNull();
   });
 
-  it('en el móvil, deslizar la lista a los lados cambia de día (y no abre la franja)', async () => {
+  it('en el móvil, deslizar la lista a los lados cambia de día, también sobre una tarjeta (y no la abre)', async () => {
     net = mockFetch(routes());
     renderAgenda();
     await screen.findByRole('heading', { name: /Champions League/ });
     const panel = screen.getByRole('tabpanel');
-    fireEvent.pointerDown(panel, {
-      pointerId: 1,
-      clientX: 300,
-      clientY: 400,
-      pointerType: 'touch',
-    });
-    fireEvent.pointerMove(panel, {
-      pointerId: 1,
-      clientX: 240,
-      clientY: 402,
-      pointerType: 'touch',
-    });
-    fireEvent.pointerUp(panel, { pointerId: 1, clientX: 180, clientY: 404, pointerType: 'touch' });
+    expect(panel.style.touchAction).toBe('pan-y');
+    /* Sobre la tarjeta (dentro de su fila, que en jsdom no desborda: en el
+       navegador, una fila que cabe entera o que ya está en su final tampoco
+       se queda el gesto). Dedo a la izquierda = día siguiente. */
+    const card = within(rows()).getByRole('button', { name: `Buscar canal para ${LIVE.title}` });
+    const swipe = (target: Element, from: number, to: number, id: number) => {
+      const start = { identifier: id, target, clientX: from, clientY: 400 };
+      fireEvent.touchStart(target, { touches: [start], changedTouches: [start] });
+      const mid = { identifier: id, target, clientX: (from + to) / 2, clientY: 403 };
+      fireEvent.touchMove(target, { touches: [mid], changedTouches: [mid] });
+      const end = { identifier: id, target, clientX: to, clientY: 405 };
+      fireEvent.touchMove(target, { touches: [end], changedTouches: [end] });
+      fireEvent.touchEnd(target, { touches: [], changedTouches: [end] });
+    };
+    swipe(card, 300, 180, 1);
     expect(await findInRows('Betis')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /^Mañana/ })).toHaveAttribute('aria-selected', 'true');
     // El clic que sigue al gesto no abre nada.
     fireEvent.click(screen.getByRole('button', { name: /Betis vs Sevilla/ }));
     expect(location.search).toBe('');
-    fireEvent.pointerDown(panel, {
-      pointerId: 2,
-      clientX: 100,
-      clientY: 400,
-      pointerType: 'touch',
-    });
-    fireEvent.pointerUp(panel, { pointerId: 2, clientX: 220, clientY: 404, pointerType: 'touch' });
+    // Sobre el título de la competición, dedo a la derecha = día anterior.
+    swipe(screen.getByRole('heading', { name: /LaLiga/ }), 100, 230, 2);
     expect(await findInRows('Real Madrid')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^Hoy/ })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('en el móvil, el scroll vertical sobre la lista nunca cambia de día', async () => {
+    net = mockFetch(routes());
+    renderAgenda();
+    await screen.findByRole('heading', { name: /Champions League/ });
+    const card = within(rows()).getByRole('button', { name: `Buscar canal para ${LIVE.title}` });
+    const start = { identifier: 1, target: card, clientX: 200, clientY: 600 };
+    fireEvent.touchStart(card, { touches: [start], changedTouches: [start] });
+    for (const [x, y] of [
+      [203, 580],
+      [150, 520],
+      [90, 470],
+    ] as const) {
+      const point = { identifier: 1, target: card, clientX: x, clientY: y };
+      fireEvent.touchMove(card, { touches: [point], changedTouches: [point] });
+    }
+    const end = { identifier: 1, target: card, clientX: 90, clientY: 470 };
+    fireEvent.touchEnd(card, { touches: [], changedTouches: [end] });
+    expect(screen.getByRole('tab', { name: /^Hoy/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tabpanel').style.transform).toBe('');
   });
 
   it('marcadores TAPADOS por defecto en toda la agenda; «Marcador» destapa ese partido y otro toque lo tapa', async () => {

@@ -44,7 +44,6 @@ import { partidoTransitionName } from '../../app/transitions.ts';
 import { preloadView } from '../../app/views.tsx';
 import { ViewHeader } from '../../app/ViewHeader.tsx';
 import { cx } from '../../lib/cx.ts';
-import { useSwipe } from '../../lib/gestures.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { notify } from '../../notices/index.ts';
 import {
@@ -68,6 +67,7 @@ import {
 import { usePreferences, useSavePreferences } from '../preferences/usePreferences.ts';
 import { AgendaRows, type RowSlot } from './AgendaList.tsx';
 import { useLibraryLookup, useNow, useSchedule, useScores } from './data.ts';
+import { useDaySwipe } from './day-swipe.ts';
 import { DayStrip } from './DayStrip.tsx';
 import {
   asForYou,
@@ -410,13 +410,17 @@ export default function Agenda({ active }: ViewProps) {
     },
   });
 
-  // ---- Gesto: deslizar la lista cambia de día (táctil) -----------------------------
-  // Dentro de una fila con desbordamiento el navegador se queda el gesto
-  // para desplazarla (pointercancel), así que solo cambia de día un
-  // deslizamiento fuera de las filas o en una fila que no se mueve.
+  // ---- Gesto: deslizar la lista cambia de día (táctil, day-swipe.ts) --------------
+  // Fiable en Safari de iOS y Chrome de Android: Touch Events pasivos que no
+  // frenan el scroll; una fila de tarjetas solo se queda el gesto si todavía
+  // puede desplazarse hacia ese lado.
 
   const suppressClick = useRef(0);
-  useSwipe(listRef, {
+  const resetDrag = () => {
+    const el = listRef.current;
+    if (el) el.style.transform = '';
+  };
+  useDaySwipe(listRef, {
     enabled: mobile && days.length > 1,
     onMove: (dx) => {
       // Respuesta con transform mientras el dedo arrastra (con resistencia).
@@ -424,16 +428,11 @@ export default function Agenda({ active }: ViewProps) {
       if (el) el.style.transform = `translateX(${Math.max(-60, Math.min(60, dx * 0.3))}px)`;
     },
     onSwipe: (direction) => {
-      const el = listRef.current;
-      if (el) el.style.transform = '';
-      if (direction !== 'left' && direction !== 'right') return;
+      resetDrag();
       suppressClick.current = performance.now() + 400;
-      goDay(direction === 'left' ? 1 : -1);
+      goDay(direction === 'next' ? 1 : -1);
     },
-    onCancel: () => {
-      const el = listRef.current;
-      if (el) el.style.transform = '';
-    },
+    onCancel: resetDrag,
   });
 
   // ---- Pintado -------------------------------------------------------------------
