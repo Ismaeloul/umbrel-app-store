@@ -768,14 +768,14 @@
 }
 .lib-now__teams {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 .lib-now__team {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-weight: var(--wght-medium);
 }
 .lib-now__name {
