@@ -1,7 +1,8 @@
-# Traspaso: Ace Player Neo 0.8.4 → 0.9.0 (para Claude Code en el PC de Isma)
+# Traspaso: Ace Player Neo 0.9.0 (para Claude Code en el PC de Isma)
 
-> Escrito el 3-oct-2026 por la sesión de Claude Code en la nube que hizo la 0.8.3 y la 0.8.4. A partir de aquí
-> el trabajo sigue **en local, en el PC de Isma (Windows)**, con ultracode. Este documento lo cuenta todo: dónde
+> Escrito el 3-oct-2026 por la sesión de Claude Code en la nube que hizo la 0.8.3 y la 0.8.4. **La 0.8.4 la
+> cierran Isma y esa sesión**; aquí solo va la **0.9.0**, que sigue **en local, en el PC de Isma (Windows)**, con
+> ultracode. Este documento lo cuenta todo: dónde
 > está cada cosa, qué falta, cómo trabajar y cómo publicar. Léelo entero antes de empezar.
 
 ---
@@ -65,69 +66,27 @@ escritorio**. Así que:
 
 ## 2. Estado de las ramas (3-oct-2026)
 
+**Parte de `main` cuando ya tenga la 0.8.4** (merge con mensaje «Ace Player Neo 0.8.4 …»). Si al empezar `main`
+todavía está en la 0.8.3, pregunta a Isma: la 0.8.4 se está cerrando en otra sesión.
+
 | Rama | Qué es | Estado |
 |---|---|---|
-| `main` | Lo publicado | **0.8.3** (merge `c1f7219`). Isma la tiene instalada y la IPTV «parece que va bien». |
-| `claude/wizardly-clarke-ycfsia` | La **0.8.4**, cortada | Release `releases/0.8.4/` hecha (`7ac098b`, fuentes `32282a6`) + commits de docs y `scripts/epg-sondeo.mjs`. **Sin PR todavía.** Falta el arreglo del iPhone (§3). |
-| `fix/transicion-safari` | Arreglo de las vistas solapadas en Safari/iPhone | La sesión de la nube lo tenía en marcha. **Mira si existe en GitHub** (`git branch -r`). Si existe, úsalo (§3); si no, hazlo tú. |
-| `integracion/0.9.0` | Rama donde juntar la 0.9.0 | Creada desde la 0.8.4 (`b7b96c7`). Sin cambios propios aún. |
+| `main` | Lo publicado | 0.8.4 (cuando se fusione). |
+| `integracion/0.9.0` | Rama donde juntar la 0.9.0 | Creada desde la 0.8.4. **Actualízala con `main`** antes de empezar (`git merge origin/main`). |
 | `vod/1-contrato` | VOD-1: contrato de Pelis y series (zod, rutas, errores) + `scripts/vod-sondeo.mjs` + `docs/vod-estado.md` | **Terminado.** Basado en la base anterior a la 0.8.3. |
-| `vod/2-catalogo` | VOD-2: catálogo Xtream (servidor) | Completo pero **sin revisar**; el último commit es un «wip» rescatado. Tiene 3 fallos conocidos (§5.1). |
+| `vod/2-catalogo` | VOD-2: catálogo Xtream (servidor) | Completo pero **sin revisar**; el último commit es un «wip» rescatado. Tiene fallos conocidos (§5.1). |
 | `vod/3-web` | VOD-3: pantallas para navegar | Casi acabado (`61f746c`). |
 | `vod/4-reproduccion` | VOD-4: piezas de la reproducción con saltos | ~10-15 %; último commit «wip» rescatado. |
-| `fix/*`, `feat/*` | Ramas ya unidas en la 0.8.4 | Ignorar. |
+| `claude/*`, `fix/*`, `feat/*` | Ramas de la 0.8.3/0.8.4 | Ignorar. |
 
 Las ramas `vod/*` se hicieron sobre la base anterior a la 0.8.3: hay que unirlas sobre `integracion/0.9.0`
 (`docs/vod-estado.md` dice que casi no chocan; regenera `openapi-v2.yaml`, fixtures y `ErrorCatalog.swift` con
 los scripts del repo tras unir, nunca a mano).
 
----
-
-## 3. Lo primero que hay que cerrar: la 0.8.4
-
-La 0.8.4 lleva (todo ya unido y probado en `claude/wizardly-clarke-ycfsia`):
-- Agenda: fuera juveniles/filiales/femenino/Sub-21 de «Para ti» salvo que se sigan; «Barcelona» = FC Barcelona
-  de Primera por id de equipo; «España» = absoluta masculina; en «Todos» tus competiciones primero (D23).
-- Partido destacado compacto en escritorio (móvil igual).
-- Reproductor: los controles se esconden a los 2,5 s (también tras pulsar pantalla completa y al sacar el
-  ratón); «Vas en directo» sin cifra de retraso.
-- Cambio rápido de canal entre favoritos: ↑/↓ en PC, deslizar a izquierda/derecha en el móvil, cartel
-  «Favorito 3/12», solo abre el canal final.
-- Arranque instantáneo: 3 min antes de un partido de sus **equipos** favoritos (no ligas), la mejor fuente lista
-  (D24; interruptor en Ajustes → Reproducción).
-- Ajustes por secciones (una cada vez) + sección «Copia de seguridad» (D25).
-- Transiciones entre pestañas consistentes, revisión de todas las animaciones, la URL ya no arrastra parámetros
-  de otras vistas.
-- El logo de Umbrel en toda la web.
-
-**Falta, y va en la 0.8.4 (Isma lo pidió así):** en el **iPhone (Safari)**, al cambiar de pestaña (Buscar ↔
-Canales) **se quedan las dos vistas pintadas a la vez**, una encima de otra (captura
-`docs/capturas/pendiente/transicion-solapada-iphone.png`). Viene de las transiciones nuevas por vista
-(`<ViewTransition enter/exit>` dentro de `<Activity>` en `apps/web/src/app/Shell.tsx`, `transitions.ts`,
-`shell.css`). En Chrome de escritorio va bien. Además Isma quiere en el **móvil el mismo fundido** que ve en el
-PC (sale una vista, entra la otra); ahora en el iPhone no hay fundido.
-- Si existe `origin/fix/transicion-safari`, revísalo, únelo a `claude/wizardly-clarke-ycfsia` y comprueba en
-  WebKit (Playwright `webkit` con emulación de iPhone): cambios rápidos de pestaña, pulsar otra a mitad de
-  animación, atrás/adelante. La vista que sale **siempre** tiene que acabar oculta aunque la transición se corte;
-  si las View Transitions fallan en WebKit, fundido CSS simple con los mismos tokens.
-- Si no existe, hazlo tú con esas condiciones.
-
-Después:
-1. **Vuelve a cortar la release 0.8.4** (cambió código fuente después de `32282a6`): `corepack pnpm@10.18.2
-   release:docker` regenera `ismaeloul-ace-player-neo/releases/0.8.4/` y `RELEASE.json` con el commit nuevo;
-   commit aparte con el estilo de los anteriores. Pasa `check:release:docker`, `check:release`, `test:deploy`,
-   `typecheck:deploy` y `node --test tests/release.test.js` (en `ismaeloul-ace-player-neo/`).
-2. Si te apetece, añade una línea en las notas de `umbrel-app.yml` y `CHANGELOG.md` sobre el fundido en el móvil.
-3. PR de `claude/wizardly-clarke-ycfsia` a `main` (plantilla de la 0.8.3, PR #53). Espera el CI.
-4. **Merge commit** y etiqueta `ace-player-neo-v0.8.4` sobre el merge (`git tag -a … && git push origin
-   ace-player-neo-v0.8.4`; desde la nube no se podía empujar etiquetas: la de la 0.8.3 **falta**, créala también
-   sobre `c1f7219`).
-5. Dile a Isma que actualice en su Umbrel.
-
-**CI conocido:** el job de iOS «Compilar, probar y empaquetar» falla en las pruebas de interfaz («No aparece el
-mini-reproductor») **desde la 0.8.0**, no por nuestros cambios; Isma aceptó fusionar con eso en rojo. Todo lo
+**Ojo con el CI:** el job de iOS «Compilar, probar y empaquetar» falla en las pruebas de interfaz («No aparece el
+mini-reproductor») **desde la 0.8.0**, no por nuestros cambios; Isma acepta fusionar con eso en rojo. Todo lo
 demás tiene que estar en verde. Un E2E de IPTV depende de la hora (la guía borra los programas terminados tras las
-20:25 de Madrid); ya está resuelto, pero tenlo en cuenta si ves 3 carteles en vez de 4.
+20:25 de Madrid): si ves 3 carteles en vez de 4, es eso.
 
 ---
 
@@ -251,7 +210,7 @@ la animación del escudo al abrir un partido; deslizar entre días.
 Dos guiones de **solo lectura** que solo imprimen agregados (nunca servidor, usuario, contraseña, URLs ni nombres):
 - `scripts/vod-sondeo.mjs` (rama `vod/1-contrato`): catálogo VOD, códecs, Range (206), cuánto tarda en soltar la
   conexión, pausas, token de redirección. ~1 hora.
-- `scripts/epg-sondeo.mjs` (rama `claude/wizardly-clarke-ycfsia`): la guía XMLTV entera (canales, programas,
+- `scripts/epg-sondeo.mjs` (en `main` desde la 0.8.4): la guía XMLTV entera (canales, programas,
   horas que cubre, % con sinopsis/imagen/categoría…). ~1-2 min.
 
 Isma los lanza en su Umbrel por SSH, en segundo plano, **con la app de IPTV del PC cerrada**:
@@ -301,7 +260,7 @@ configurables.
 
 ## 8. Publicar una versión en el Umbrel de Isma
 
-Procedimiento de la 0.8.3/0.8.4 (`deploy/README.md` «Cortar la release» y `docs/despliegue.md`):
+Procedimiento de la 0.8.3/0.8.4 (las dos se cortaron así) (`deploy/README.md` «Cortar la release» y `docs/despliegue.md`):
 1. `build: version X.Y.Z`: `package.json` del monorepo, `apps/server`, `apps/web`, `packages/shared`; plantilla
    `deploy/umbrel/docker-compose.yml` con `/releases/X.Y.Z/`; `openapi-v2.yaml` regenerado.
 2. `corepack pnpm@10.18.2 release:docker` (Docker) → `ismaeloul-ace-player-neo/releases/X.Y.Z/`; copia la
@@ -319,7 +278,7 @@ Procedimiento de la 0.8.3/0.8.4 (`deploy/README.md` «Cortar la release» y `doc
 ## 9. Documentos que leer (en este orden)
 
 1. `ace-player-neo/README.md`
-2. `ace-player-neo/docs/pendiente.md` (la lista viva de lo pedido)
+2. `ace-player-neo/docs/pendiente.md` (la lista viva de lo pedido; lo marcado «Hecho en la 0.8.4» ya está)
 3. `ace-player-neo/docs/traspaso-0.9.0.md` (este)
 4. `docs/vod.md` y `docs/vod-estado.md` (en `vod/1-contrato`)
 5. `docs/iptv.md` (§3.6 guía, §4.5 guía y partidos, §6-§7 reproducción) y `docs/diagnostico-iptv-0.8.2.md`
