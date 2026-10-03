@@ -82,7 +82,20 @@ export const VISTA_CAMBIA = {
    fotogramas y tiempos que las vistas (base.css, `:only-child`). Los
    cambios dentro de una misma presentación (el reproductor que acaba de
    descargarse sustituye a «Preparando el reproductor…») siguen siendo un
-   fundido en su caja. */
+   fundido en su caja.
+
+   En WebKit (Safari y todo iOS) NO: allí un elemento que solo entra
+   también recibe un ::view-transition-old(nombre) y, con una animación de
+   autor que se repite de una transición a otra, la instantánea se queda
+   pegada a opacidad 1 (el fallo de las vistas superpuestas de la 0.8.4,
+   fix/transicion-safari, viewTransitionGuard.ts). Con dos nombres y la
+   clase, el reproductor entraría justo en ese caso; así que en WebKit (y sin
+   la API) se queda el nombre fijo de siempre, sin clases. Es la misma regla
+   que `pickViewMotion` de fix/transicion-safari: al unir las dos ramas,
+   `playerSwapsByName()` puede ser `viewMotion() === 'vt'`. */
+
+/** Nombre fijo del reproductor donde no hay cambio por presentación (WebKit). */
+export const REPRODUCTOR_FIJO = 'ace-reproductor';
 
 /** Nombre de la View Transition del reproductor en cada presentación. */
 export function reproductorTransitionName(presentation: 'stage' | 'mini'): string {
@@ -91,3 +104,18 @@ export function reproductorTransitionName(presentation: 'stage' | 'mini'): strin
 
 /** Clase de las instantáneas del reproductor (base.css). */
 export const REPRODUCTOR_CAMBIA = 'ace-reproductor-cambia';
+
+/**
+ * ¿El reproductor cambia de nombre con la presentación? Sí donde las vistas
+ * van con View Transitions (Chrome, Edge, Firefox); no en WebKit (vendor
+ * «Apple») ni sin la API.
+ */
+export function playerSwapsByName(
+  env: { viewTransitions: boolean; vendor: string } = {
+    viewTransitions:
+      typeof document !== 'undefined' && typeof document.startViewTransition === 'function',
+    vendor: typeof navigator === 'undefined' ? '' : navigator.vendor || '',
+  },
+): boolean {
+  return env.viewTransitions && !/apple/i.test(env.vendor);
+}

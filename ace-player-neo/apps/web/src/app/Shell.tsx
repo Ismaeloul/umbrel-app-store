@@ -55,7 +55,9 @@ import { restoreScroll } from './scroll-memory.ts';
 import { ShortcutHelp } from './ShortcutHelp.tsx';
 import {
   finishEntranceAnimations,
+  playerSwapsByName,
   REPRODUCTOR_CAMBIA,
+  REPRODUCTOR_FIJO,
   reproductorTransitionName,
   VISTA_CAMBIA,
   VISTA_ENTRA,
@@ -133,6 +135,8 @@ export function Shell() {
   const presence = usePlayerPresence();
   const [helpOpen, setHelpOpen] = useState(false);
   const [asideOpen, setAsideOpenState] = useState(asideInitiallyOpen);
+  // El reproductor cambia de nombre con la presentación salvo en WebKit (transitions.ts).
+  const [playerSwap] = useState(() => playerSwapsByName());
 
   // Vistas visitadas: se quedan montadas (ocultas) para conservar su estado.
   const [visited, setVisited] = useState<Vista[]>([route.vista]);
@@ -255,10 +259,11 @@ export function Shell() {
               {dockMounted && PlayerDock ? (
                 // Un nombre por presentación (transitions.ts, reproductorTransitionName):
                 // al pasar de mini a grande, o al revés, uno se funde y el otro
-                // aparece como las vistas; no viaja de una esquina a otra.
+                // aparece como las vistas; no viaja de una esquina a otra. En
+                // WebKit, el nombre fijo de siempre (playerSwapsByName).
                 <ViewTransition
-                  name={reproductorTransitionName(presentation)}
-                  default={REPRODUCTOR_CAMBIA}
+                  name={playerSwap ? reproductorTransitionName(presentation) : REPRODUCTOR_FIJO}
+                  default={playerSwap ? REPRODUCTOR_CAMBIA : 'auto'}
                 >
                   <div className="dock" data-presentation={presentation}>
                     <ErrorBoundary what="el reproductor">
