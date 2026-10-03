@@ -620,6 +620,18 @@ describe('openStream con identity (relé VOD)', () => {
     expect(await pending).toBe('fetch_timeout');
   });
 
+  it('un fallo HTTP tras una redirección lleva en data el estado y los saltos dados', async () => {
+    const final = 'http://lista.example/lb/tok/1.mkv';
+    const { transport } = closingTransport({
+      [VIDEO]: { status: 302, headers: { location: '/lb/tok/1.mkv' } },
+      [final]: { status: 500 },
+    });
+    const { net } = setup(transport);
+    const error = await net.openStream(VIDEO, { idleMs: 5000 }).catch((e: unknown) => e);
+    expect((error as AppError).code).toBe('http_500');
+    expect((error as AppError).data).toEqual({ status: 500, redirects: 1 });
+  });
+
   it('sin identity no se espera al socket', async () => {
     const { transport } = closingTransport({ [VIDEO]: { status: 458 } });
     const { net } = setup(transport);

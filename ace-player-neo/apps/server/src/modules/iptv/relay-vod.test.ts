@@ -518,6 +518,12 @@ describe('RangeCache y toVodError', () => {
     expect(code(new Error('ECONNRESET'))).toBe('vod_dropped');
     expect(code(new AppError('vod_unsupported'))).toBe('vod_unsupported');
   });
+
+  it('toVodError deja en el log los saltos que hubo antes del fallo HTTP', () => {
+    const tras = toVodError(new AppError('http_500', { data: { status: 500, redirects: 1 } }));
+    expect(tras.detail).toBe('http 500 tras 1 redirección(es)');
+    expect(toVodError(new AppError('http_500')).detail).toBe('http 500');
+  });
 });
 
 describe('VodSession: ajustes del Paso 0 (docs/analisis/paso0-2026-10-03)', () => {

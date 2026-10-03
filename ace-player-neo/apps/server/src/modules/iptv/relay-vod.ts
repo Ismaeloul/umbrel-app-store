@@ -469,7 +469,12 @@ export function toVodError(error: unknown): AppError {
       return new AppError('vod_busy', { cause: error, detail: `http ${status}` });
     if (status === 401) return new AppError('vod_account', { cause: error });
     if (status === 404 || status === 410) return new AppError('vod_not_found', { cause: error });
-    return new AppError('vod_dropped', { cause: error, detail: `http ${status}` });
+    const hops = (error as { data?: { redirects?: unknown } } | null)?.data?.redirects;
+    return new AppError('vod_dropped', {
+      cause: error,
+      detail:
+        typeof hops === 'number' ? `http ${status} tras ${hops} redirección(es)` : `http ${status}`,
+    });
   }
   if (code === 'fetch_timeout') return new AppError('vod_timeout', { cause: error });
   return new AppError('vod_dropped', { cause: error, detail: code ?? 'red' });

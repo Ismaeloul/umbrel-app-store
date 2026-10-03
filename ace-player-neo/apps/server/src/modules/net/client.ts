@@ -609,7 +609,7 @@ export function createFetcher(deps: FetcherDeps): NetFetcher {
         response.body.destroy();
         release();
         await settleUnused(response, identity);
-        throw new AppError(`http_${status}`, { data: { status } });
+        throw new AppError(`http_${status}`, { data: { status, redirects } });
       }
       const encoding = encodingOf(response);
       const gzipHeader = iptv !== undefined && encoding === 'gzip' && !identity;
