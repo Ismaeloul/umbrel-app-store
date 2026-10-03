@@ -250,13 +250,17 @@ function finishWords(raws: readonly string[]): string[] {
   const words: string[] = [];
   for (let i = 0; i < raws.length; i += 1) {
     let raw = raws[i] as string;
-    if (!raw || NOISE_WORDS.has(raw) || RESOLUTION_RE.test(raw)) continue;
-    if (/^\d{2,3}fps$/u.test(raw) || /^(?:2160|1080|720)p\d{2}$/u.test(raw)) continue;
-    if (raw === '24' && raws[i + 1] === 'horas') {
-      raw = '24h';
-      i += 1;
+    if (!raw || NOISE_WORDS.has(raw)) continue;
+    /* Lo de las cifras solo si hay cifras (casi ninguna palabra las tiene: así es rápido con 100 000 claves). */
+    if (/\d/.test(raw)) {
+      if (RESOLUTION_RE.test(raw)) continue;
+      if (/^\d{2,3}fps$/u.test(raw) || /^(?:2160|1080|720)p\d{2}$/u.test(raw)) continue;
+      if (raw === '24' && raws[i + 1] === 'horas') {
+        raw = '24h';
+        i += 1;
+      }
+      raw = GLUED_QUALITY_RE.exec(raw)?.[1] ?? raw;
     }
-    raw = GLUED_QUALITY_RE.exec(raw)?.[1] ?? raw;
     const number = NUMBER_WORDS[raw];
     words.push(number !== undefined && (words.length > 0 || number === '0') ? number : raw);
   }

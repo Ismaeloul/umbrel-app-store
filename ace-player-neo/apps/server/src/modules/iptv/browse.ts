@@ -26,8 +26,9 @@
      ni adornos; «la uno» = «la 1»), los mismos candidatos (principio de
      palabra, un número solo entero, por dentro en compuestos, lo escrito
      pegado y sin la marca), los mismos alias y el mismo orden
-     (`compareRankedHits`: lo flojo detrás, España primero, lo igual, tus
-     favoritos, el nivel…; al final, el del proveedor). Antes (0.8.x) era
+     (`compareRankedHits`, empaquetado con `packRankedHit`: lo flojo detrás,
+     España primero, lo igual, tus favoritos, el nivel…; al final, el del
+     proveedor). Antes (0.8.x) era
      otro orden más sencillo y «la 1» daba «La 10» delante de «LaLiga TV 1».
    - Las filas ya ordenadas de una consulta se guardan (16 consultas) para
      servir las páginas siguientes con un trozo del array. */
@@ -55,15 +56,14 @@ import { FacetDeriver, variantQuality } from './facets.js';
 import {
   bestNameTier,
   cachedKeyNames,
-  compareRankedHits,
   entriesPenalty,
   foldText,
   keyNames,
   literalMiss,
+  packRankedHit,
   rankTier,
   tokensForWord,
   type RankContext,
-  type RankedHit,
 } from './search.js';
 
 export const FACET_NAMES: readonly IptvFacetName[] = [
@@ -469,54 +469,72 @@ export function cleanBrowseQuery(value: unknown): string {
   return q.length < SEARCH_QUERY_MIN ? '' : q;
 }
 
-/* Claves (posición en `keyText`) con alguna palabra que casa con `word` (`tokensForWord` del buscador). */
-function keysForWord(index: BrowseIndex, word: string, inside = true): Set<number> {
-  const out = new Set<number>();
-  for (const token of tokensForWord(index, word, inside)) {
-    const items = index.byToken.get(token);
-    if (typeof items === 'number') out.add(items);
-    else if (items) for (const item of items) out.add(item);
-  }
-  return out;
-}
+/* Estado de cada clave en una consulta: aún nada, casa seguro o hay que mirarla con `bestNameTier`. */
+const KEY_NONE = 0;
+const KEY_SURE = 1;
+const KEY_CHECK = 2;
 
-function intersect(sets: readonly Set<number>[]): Set<number> {
-  const sorted = [...sets].sort((a, b) => a.size - b.size);
-  const [first, ...rest] = sorted;
-  const out = new Set<number>();
-  if (!first) return out;
-  for (const item of first) if (rest.every((set) => set.has(item))) out.add(item);
-  return out;
+/*
+ * Marca en `state` las claves que tienen todas las palabras (`tokensForWord`
+ * del buscador): se cuenta cuántas palabras lleva casadas cada clave, en
+ * orden, con un contador por clave (sin conjuntos: con 100 000 claves, «canal»
+ * casa con 90 000).
+ */
+function markAllWords(
+  index: BrowseIndex,
+  words: readonly string[],
+  inside: boolean,
+  state: Uint8Array,
+  mark: number,
+): void {
+  if (!words.length) return;
+  const count = new Uint8Array(index.keyText.length);
+  let last: number[] = [];
+  words.forEach((word, position) => {
+    const reached: number[] = [];
+    for (const token of tokensForWord(index, word, inside)) {
+      const items = index.byToken.get(token);
+      if (items === undefined) continue;
+      for (const item of typeof items === 'number' ? [items] : items) {
+        if (count[item] !== position) continue;
+        count[item] = position + 1;
+        reached.push(item);
+      }
+    }
+    last = reached;
+  });
+  for (const item of last) {
+    if (count[item] === words.length && state[item] !== KEY_SURE) state[item] = mark;
+  }
 }
 
 /*
- * Candidatas de una consulta (sin alias), como el buscador: sus palabras, lo
- * escrito pegado y sin la marca. Las que casan seguro (todas sus palabras en
- * el nombre, o sin la marca por el principio) van a `sure`; las que hay que
- * mirar con `bestNameTier` (lo pegado, que puede cortar un número), a
- * `unsure`.
+ * Candidatas de una consulta (sin alias), como el buscador: sus palabras (casan
+ * seguro), lo escrito pegado (hay que mirarlo: puede cortar un número) y sin
+ * la marca (seguro). Con `mark` = `KEY_CHECK`, todo se mira (los alias tienen
+ * un nivel máximo).
  */
-function keyCandidates(
+function markCandidates(
   index: BrowseIndex,
   q: NameQueryWords,
-  sure: Set<number>,
-  unsure: Set<number>,
+  state: Uint8Array,
+  mark: number,
 ): void {
   if (!q.required.length) return;
-  for (const item of intersect(q.required.map((word) => keysForWord(index, word)))) sure.add(item);
+  markAllWords(index, q.required, true, state, mark);
   if (q.compact.length >= 3) {
-    index.keyCompact.forEach((compact, item) => {
-      if (!sure.has(item) && compact.includes(q.compact)) unsure.add(item);
-    });
+    const compacts = index.keyCompact;
+    for (let item = 0; item < compacts.length; item += 1) {
+      if (state[item] === KEY_NONE && (compacts[item] as string).includes(q.compact))
+        state[item] = KEY_CHECK;
+    }
   }
   const brandless = q.required.filter((word) => !MOVISTAR_WORDS.has(word));
   if (
     brandless.length < q.required.length &&
     brandless.some((word) => word.length >= 3 && !/^\d+$/.test(word))
   ) {
-    for (const item of intersect(brandless.map((word) => keysForWord(index, word, false)))) {
-      sure.add(item);
-    }
+    markAllWords(index, brandless, false, state, mark);
   }
 }
 
@@ -553,17 +571,17 @@ function textMatch(index: BrowseIndex, query: string): TextMatch {
   const bits = new Uint32Array(index.words);
   const q = parseNameQuery(query);
   if (!q.key) return { bits, query: q };
-  const sure = new Set<number>();
-  const unsure = new Set<number>();
-  keyCandidates(index, q, sure, unsure);
+  const state = new Uint8Array(index.keyText.length);
+  markCandidates(index, q, state, KEY_SURE);
   /* Lo de un alias puede quedarse fuera por su nivel máximo: se mira. */
-  for (const alias of q.aliases) keyCandidates(index, alias.query, unsure, unsure);
-  for (const item of unsure) {
-    if (sure.has(item)) continue;
-    if (bestNameTier(q, cachedKeyNames(index.names, index.keyText[item] as string)).tier >= 0)
-      sure.add(item);
-  }
-  for (const item of sure) {
+  for (const alias of q.aliases) markCandidates(index, alias.query, state, KEY_CHECK);
+  for (let item = 0; item < state.length; item += 1) {
+    if (state[item] === KEY_NONE) continue;
+    if (
+      state[item] === KEY_CHECK &&
+      bestNameTier(q, cachedKeyNames(index.names, index.keyText[item] as string)).tier < 0
+    )
+      continue;
     setBit(bits, index.keyRow[item] as number);
     for (const row of index.keyMoreRows.get(item) ?? []) setBit(bits, row);
   }
@@ -571,18 +589,18 @@ function textMatch(index: BrowseIndex, query: string): TextMatch {
 }
 
 /**
- * Lo que ordena cada fila que casa y ha quedado tras los filtros
- * (`compareRankedHits`, el orden del buscador): su nivel con la consulta y sus
- * alias, el país, tus favoritos, lo que resta, el relleno escrito, la familia
- * (y su orden entre estas filas), el número, la calidad y el orden del
- * proveedor.
+ * Ordena (en su sitio) las filas que casan y han quedado tras los filtros, con
+ * el orden del buscador (`compareRankedHits`, empaquetado en dos números con
+ * `packRankedHit` para ordenar deprisa): su nivel con la consulta y sus alias,
+ * el país, tus favoritos, lo que resta, el relleno escrito, la familia (y su
+ * orden entre estas filas), el número, la calidad y el orden del proveedor.
  */
 function rankRows(
   index: BrowseIndex,
-  rows: readonly number[],
+  rows: number[],
   q: NameQuery,
   favorites: ReadonlySet<string> | undefined,
-): Map<number, RankedHit> {
+): void {
   const byItem = new Map<number, { tier: number; lead: boolean; main: NameFacts }>();
   const familyOrder = new Map<string, number>();
   const familyWords = new Map<string, Set<string>>();
@@ -608,7 +626,10 @@ function rankRows(
     }
   }
   const context: RankContext = { query: q, familyWords };
-  const hits = new Map<number, RankedHit>();
+  /* Sin favoritos no hace falta montar el id de canal de cada fila. */
+  const withFavorites = favorites !== undefined && favorites.size > 0;
+  const first = new Float64Array(index.rowCount);
+  const second = new Float64Array(index.rowCount);
   for (const row of rows) {
     const item = index.rowKey[row] as number;
     const { tier, lead, main } = byItem.get(item) as {
@@ -617,28 +638,32 @@ function rankRows(
       main: NameFacts;
     };
     const country = index.country[row] ?? null;
-    const best = index.best[row] as CatalogEntry;
-    const first = index.keyRow[item] as number;
-    hits.set(row, {
+    const keyRow = index.keyRow[item] as number;
+    const [a, b] = packRankedHit({
       rank: {
         tier: rankTier(context, tier),
         lead,
         region: regionRank(country, q.country),
-        favorite: Boolean(favorites?.has(channelIdOf(best))),
+        favorite: withFavorites && favorites.has(channelIdOf(index.best[row] as CatalogEntry)),
       },
       penalty: rowPenalty(index, row, main.words),
       miss: literalMiss(context, main.family),
       familyLength: main.family.length,
-      familyOrder: familyOrder.get(main.family) ?? first,
+      familyOrder: familyOrder.get(main.family) ?? keyRow,
       number: main.number,
       quality: rowQuality(index.qualities[row] as number),
       keyLength: (index.keyText[item] as string).length,
-      keyOrder: first,
+      keyOrder: keyRow,
       abroad: regionRank(country) === 0 ? 0 : 1,
       order: row,
     });
+    first[row] = a;
+    second[row] = b;
   }
-  return hits;
+  rows.sort(
+    (x, y) =>
+      (first[x] as number) - (first[y] as number) || (second[x] as number) - (second[y] as number),
+  );
 }
 
 function categoryBits(index: BrowseIndex, category: BrowseCategory): Uint32Array {
@@ -837,9 +862,7 @@ function compute(
   /* Orden: el del proveedor; con texto, el del buscador (`compareRankedHits`) y, al final, el del proveedor. */
   const rows = rowsOf(result);
   if (!text) return { order: Int32Array.from(rows), categories, facets, text: query };
-  const hits = rankRows(index, rows, text.query, request.favorites);
-  const hit = (row: number): RankedHit => hits.get(row) as RankedHit;
-  rows.sort((a, b) => compareRankedHits(hit(a), hit(b)));
+  rankRows(index, rows, text.query, request.favorites);
   return { order: Int32Array.from(rows), categories, facets, text: query };
 }
 

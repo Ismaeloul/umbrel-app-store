@@ -14,7 +14,7 @@ import {
 import { ESPERADOS, checkEsperado } from '../../../../../packages/shared/test/corpus/esperados.js';
 import { browseIndex, buildBrowseIndex, type BrowseIndex } from './browse.js';
 import { Catalog, channelIdOf, type RawChannel } from './catalog.js';
-import { searchCatalog } from './search.js';
+import { compareRankedHits, packRankedHit, searchCatalog, type RankedHit } from './search.js';
 
 function catalogOf(corpus: readonly CanalCorpus[]): Catalog {
   const raws: RawChannel[] = corpus.map((channel, i) => ({
@@ -115,6 +115,42 @@ describe('tus favoritos desempatan, nunca delante de lo igual', () => {
     const favorites = new Set([channelOf('dazn f1')]);
     expect(searchLabels('dazn', favorites)[0]).toBe('dazn f1');
     expect(browseLabels(browse, 'dazn', favorites)[0]).toBe('dazn f1');
+  });
+});
+
+describe('packRankedHit ordena igual que compareRankedHits', () => {
+  it('con 3 000 pares al azar (semilla fija) dentro de los topes', () => {
+    let seed = 1234567;
+    const random = (max: number): number => {
+      seed = (seed * 1103515245 + 12345) % 2 ** 31;
+      return seed % max;
+    };
+    const hit = (): RankedHit => ({
+      rank: {
+        tier: random(7),
+        region: random(4) - 1,
+        lead: random(2) === 0,
+        favorite: random(3) === 0,
+      },
+      penalty: random(4),
+      miss: random(3),
+      familyLength: random(20),
+      familyOrder: random(50),
+      number: random(12),
+      quality: random(5),
+      keyLength: random(25),
+      keyOrder: random(50),
+      abroad: random(2),
+      order: random(200),
+    });
+    const sign = (value: number): number => Math.sign(value);
+    for (let i = 0; i < 3000; i += 1) {
+      const a = hit();
+      const b = hit();
+      const [a1, a2] = packRankedHit(a);
+      const [b1, b2] = packRankedHit(b);
+      expect(sign(a1 - b1 || a2 - b2), JSON.stringify([a, b])).toBe(sign(compareRankedHits(a, b)));
+    }
   });
 });
 

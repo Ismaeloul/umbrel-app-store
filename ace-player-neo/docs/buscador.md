@@ -150,8 +150,13 @@ lo escrito, y las palabras seguidas que pegadas lo forman («laliga» marca «LA
 | 20 000 | 88 ms | 156 ms | 15 / 22 ms | 1,5 / 1,9 ms | 1,3 / 1,0 ms | 0,5 / 0,8 ms | 5,5 / 5,2 ms |
 | 100 000 | 202 ms | 575 ms | 28 / 32 ms | 4,9 / 2,8 ms | 3,5 / 1,5 ms | 2,4 / 1,4 ms | 20 / 17 ms |
 
-(Buscar / pestaña, en frío.) Con 100 000 canales, «canal» con el filtro España pasó de 534 ms (primera
-versión) a 45 ms al ordenar solo lo que queda tras los filtros. La web espera 450 ms tras la última tecla
+(Buscar / pestaña, en frío.) En la pestaña, decidir qué casa marca las claves con arrays de bytes (sin
+conjuntos): 12-24 ms aunque «canal» case con 90 000 de 100 000. El orden se calcula solo para las filas que
+quedan tras los filtros y se ordena con dos números por fila (`packRankedHit`, el mismo orden que
+`compareRankedHits`: lo prueba `buscador-corpus.test.ts` con 3 000 pares): «canal» con el filtro España (6 656
+filas) baja de 534 ms (primera versión) a 40-90 ms con el PC cargado. El caso extremo, «canal» sin filtros
+sobre el catálogo grande de prueba (90 000 filas que casan), tarda ~0,6 s: con listas reales (la de Isma tiene
+27 687 canales) ninguna consulta de 2 letras o más casa con tantas. La web espera 450 ms tras la última tecla
 antes de pedir (sin cambios), así que el móvil no hace nada al teclear.
 
 ## 5. Web

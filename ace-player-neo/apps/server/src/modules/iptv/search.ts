@@ -646,6 +646,41 @@ export function compareRankedHits(a: RankedHit, b: RankedHit): number {
   );
 }
 
+/* Topes de cada campo en `packRankedHit` (lo que pasa del tope empata y decide el campo siguiente). */
+const PACK_ORDER = 2 ** 18;
+const PACK_NUMBER = 1024;
+const PACK_LENGTH = 128;
+
+/**
+ * El orden de `compareRankedHits` en dos números (para ordenar muchas filas
+ * deprisa, la pestaña IPTV): a < b por `compareRankedHits` ⇔ [a1, a2] < [b1,
+ * b2] por orden lexicográfico, mientras los órdenes del catálogo quepan en 18
+ * bits (262 143), el número del final en 10 (1 023) y los largos en 7 (127);
+ * si no, esos campos empatan y decide el siguiente. No vale para lo que casa
+ * por la categoría (la pestaña no la usa).
+ */
+export function packRankedHit(hit: RankedHit): readonly [number, number] {
+  const { rank } = hit;
+  const clamp = (value: number, max: number): number => Math.max(0, Math.min(value, max - 1));
+  let first = Number(rank.tier >= NAME_TIER.partial);
+  first = first * 4 + clamp(rank.region + 1, 4);
+  first = first * 2 + Number(!rank.lead);
+  first = first * 2 + Number(rank.tier !== NAME_TIER.exact);
+  first = first * 2 + Number(!rank.favorite);
+  first = first * 8 + clamp(rank.tier, 8);
+  first = first * 4 + clamp(hit.penalty, 4);
+  first = first * 4 + clamp(hit.miss, 4);
+  first = first * PACK_LENGTH + clamp(hit.familyLength, PACK_LENGTH);
+  first = first * PACK_ORDER + clamp(hit.familyOrder, PACK_ORDER);
+  first = first * PACK_NUMBER + clamp(hit.number, PACK_NUMBER);
+  first = first * 8 + clamp(7 - hit.quality, 8);
+  let second = clamp(hit.keyLength, PACK_LENGTH);
+  second = second * PACK_ORDER + clamp(hit.keyOrder, PACK_ORDER);
+  second = second * 2 + clamp(hit.abroad, 2);
+  second = second * PACK_ORDER + clamp(hit.order, PACK_ORDER);
+  return [first, second];
+}
+
 /** Lo que la consulta pide aparte de las palabras: el país, los favoritos y el relleno escrito. */
 export interface RankContext {
   readonly query: NameQuery;
