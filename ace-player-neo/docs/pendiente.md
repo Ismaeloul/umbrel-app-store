@@ -50,7 +50,13 @@ Lo que no se pudo hacer esta noche, con el detalle para retomarlo.
     tiempo»): pestañas de grupos arriba (Documentales, Infantiles, Liga Campeones…), fila de horas cada 30 min,
     canales con número a la izquierda, bloques por programa a lo ancho de su duración (color por género), y abajo
     la ficha del programa elegido: carátula, título, temporada/episodio, año, edad, estrellas, sinopsis,
-    director, hora y género. Implica guardar la guía completa (todos los programas, no solo partidos;
+    director, hora y género.
+    Segunda referencia, la que más le gusta: `capturas/pendiente/programacion-referencia-movistar.png` (Guía TV de
+    Movistar+): número y nombre del canal a la izquierda, línea de horas con una raya vertical en «ahora», «Sin
+    información» donde no hay EPG, y abajo el programa elegido con logo del canal, barra de progreso con hora de
+    inicio y fin, y acciones (Ver, Más info). **Sin pestañas de géneros.** Por defecto, **solo sus canales
+    favoritos**; propuesta: un interruptor «Favoritos | Todos» (Todos = todos los canales con EPG), arrancando en
+    Favoritos y, si no tiene favoritos con guía, en Todos. Implica guardar la guía completa (todos los programas, no solo partidos;
     ojo memoria) y quizá «ahora / después» en Canales. Idea aparte, para valorar: que la guía rellene partidos
     que falten en la agenda (no sustituir a futbolenlatv: la guía cubre pocos días y su texto es libre).
 12. **App de iPhone: al final, con el Mac de su hermano** (simulador de iPhone y cambios al momento, mucho más
