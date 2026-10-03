@@ -31,7 +31,9 @@
 //   Opciones: --capturas <carpeta>  guarda <carpeta>/<vista>/<vista>-<ancho>x<alto>-<tema>.png
 //             --axe  --movimiento  --teclado  --vistas a,b  --tamanos 390x844,1440x900  --no-build
 //             --paralelo <n> (contextos a la vez, 3 por defecto)
+//             --host <ip> (dónde escucha vite preview; ::1 por defecto)
 //             --indice (con --capturas: solo rehace README.md desde su revision.json)
+//   Variable ACE_CHROME: ruta de otro Chrome (si no, el canal 'chrome' instalado).
 // Deja el informe en <capturas o carpeta temporal>/revision.json.
 
 import { execFileSync, spawn } from 'node:child_process';
@@ -69,6 +71,8 @@ const PARALLEL = Math.max(1, Number(option('paralelo', '3')) || 3);
 const ONLY_VIEWS = option('vistas')?.split(',') ?? null;
 const ONLY_SIZES = option('tamanos')?.split(',') ?? null;
 const PREVIEW_PORT = Number(option('puerto', '4181'));
+/** Dónde escucha vite preview (sin IPv6, `--host 127.0.0.1`). */
+const PREVIEW_HOST = option('host', '::1');
 
 // ---------------------------------------------------------------------------
 // Tamaños (prompt): móvil vertical y horizontal, tableta, portátil, escritorio
@@ -271,6 +275,43 @@ const VIEWS = [
     },
   },
   { name: 'sistema', search: '?vista=sistema&flag=sistema' },
+  // Películas y series (docs/vod.md §12.11): con `?flag=cine`; en vivo solo
+  // salen si el servidor ya tiene películas y series.
+  { name: 'cine', search: '?vista=cine&flag=cine', ready: '.cine-grid' },
+  {
+    name: 'cine-categoria',
+    search: '?vista=cine&flag=cine',
+    ready: '.cine-grid',
+    prepare: async (page) => {
+      // En el móvil y la tableta, un chip de la fila; en escritorio, la lista del panel.
+      await page
+        .getByRole('button', { name: /^VOD \| 4K/ })
+        .first()
+        .click();
+      await page.waitForTimeout(700);
+    },
+  },
+  { name: 'cine-busqueda', search: '?vista=cine&flag=cine&cineq=dune', ready: '.cine-grid' },
+  {
+    name: 'cine-pelicula',
+    search: '?vista=cine&flag=cine',
+    ready: '.cine-grid',
+    prepare: async (page) => {
+      await page.locator('.cine-grid .cine-card').first().click();
+      await page.waitForSelector('.cine-ficha__title', { timeout: 10_000 });
+      await page.waitForTimeout(700);
+    },
+  },
+  {
+    name: 'cine-serie',
+    search: '?vista=cine&flag=cine&cine=series',
+    ready: '.cine-grid',
+    prepare: async (page) => {
+      await page.locator('.cine-grid .cine-card').first().click();
+      await page.waitForSelector('.cine-episodes', { timeout: 10_000 });
+      await page.waitForTimeout(700);
+    },
+  },
 ].filter((view) => !ONLY_VIEWS || ONLY_VIEWS.includes(view.name));
 
 // ---------------------------------------------------------------------------
@@ -310,14 +351,14 @@ async function startPreview() {
       '--outDir',
       flag('no-build') ? path.join(WEB, 'dist') : outDir,
       '--host',
-      '::1',
+      PREVIEW_HOST,
       '--port',
       String(PREVIEW_PORT),
       '--strictPort',
     ],
     { cwd: WEB, stdio: 'ignore' },
   );
-  const base = `http://[::1]:${PREVIEW_PORT}`;
+  const base = `http://${PREVIEW_HOST.includes(':') ? `[${PREVIEW_HOST}]` : PREVIEW_HOST}:${PREVIEW_PORT}`;
   await waitForServer(`${base}/`);
   return {
     base,
@@ -991,6 +1032,11 @@ const VIEW_TITLES = {
   preferencias: 'Preferencias (tus ligas y equipos)',
   ayuda: 'Ayuda de atajos («?»)',
   sistema: 'Página del sistema de diseño',
+  cine: 'Películas y series · portada y rejilla',
+  'cine-categoria': 'Películas y series · una categoría',
+  'cine-busqueda': 'Películas y series · búsqueda',
+  'cine-pelicula': 'Películas y series · ficha de una película',
+  'cine-serie': 'Películas y series · ficha de una serie con temporadas',
 };
 
 /** docs/capturas/fase2/README.md: una tabla por vista con cada tamaño y tema. */
@@ -1058,7 +1104,10 @@ async function main() {
   }
   const preview = EXTERNAL_BASE ? null : await startPreview();
   const base = EXTERNAL_BASE ?? preview.base;
-  const browser = await chromium.launch({ channel: 'chrome' });
+  // ACE_CHROME: otro Chrome (con H.264), p. ej. uno descomprimido sin instalar.
+  const browser = await chromium.launch(
+    process.env.ACE_CHROME ? { executablePath: process.env.ACE_CHROME } : { channel: 'chrome' },
+  );
   let report;
   try {
     const tasks = [];

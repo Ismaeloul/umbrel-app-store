@@ -5,9 +5,13 @@
    los agentes de las vistas cambian las suyas. El contrato con las vistas
    reales lo vigila views.test.tsx. */
 
+import type { BootstrapResponse } from '@ace/shared';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createQueryClient } from '../api/query.ts';
+import { createQueryClient, routeKey } from '../api/query.ts';
 import { resetMode, setMode } from '../api/mode.ts';
 import { readItem, STORAGE_KEYS } from '../lib/storage.ts';
 import { noticeFlags } from '../notices/notify.ts';
@@ -71,6 +75,7 @@ vi.mock('./views.tsx', async () => {
     FEATURE_FOLDER: {
       agenda: 'agenda',
       biblioteca: 'biblioteca',
+      cine: 'cine',
       buscar: 'buscar',
       ajustes: 'ajustes',
       partido: 'partido',
@@ -146,11 +151,19 @@ afterEach(() => {
   history.replaceState(null, '', '/');
 });
 
-function renderApp(search = '') {
+function renderApp(search = '', client = createQueryClient()) {
   const root = document.createElement('div');
   root.id = 'root';
   document.body.appendChild(root);
-  return render(<App client={createQueryClient()} initialSearch={search} />, { container: root });
+  return render(<App client={client} initialSearch={search} />, { container: root });
+}
+
+/** Un cliente con el arranque ya sembrado: `features.vod` como diga la prueba. */
+function clientWithVod(vod: boolean) {
+  const client = createQueryClient();
+  const boot = fixture<BootstrapResponse>('bootstrap');
+  client.setQueryData(routeKey('bootstrap'), { ...boot, features: { ...boot.features, vod } });
+  return client;
 }
 
 const nav = () => screen.getAllByRole('navigation', { name: 'Principal' });
@@ -306,5 +319,62 @@ describe('armazón', () => {
     renderApp('?vista=sistema');
     expect(await screen.findByRole('heading', { name: 'Sistema', level: 1 })).toBeInTheDocument();
     expect(screen.getByRole('radiogroup', { name: 'Tema' })).toBeInTheDocument();
+  });
+
+  describe('«Pelis y series» (docs/vod.md §12.1, T17)', () => {
+    /* Los destinos (la barra superior lleva además la marca, que no cuenta). */
+    const labels = (bar: HTMLElement) =>
+      [...bar.querySelectorAll('.tabbar__item, .topbar__item')].map((a) => a.textContent);
+
+    it('con features.vod y ?flag=cine, cinco destinos; --n y la píldora salen de esa lista', async () => {
+      history.replaceState(null, '', '/?vista=cine&flag=cine');
+      renderApp('?vista=cine&flag=cine', clientWithVod(true));
+      await screen.findAllByRole('heading', { level: 1 });
+      for (const bar of nav()) {
+        expect(labels(bar)).toEqual(
+          expect.arrayContaining(['Agenda', 'Canales', 'Pelis y series', 'Buscar', 'Ajustes']),
+        );
+        const cine = within(bar).getByRole('link', { name: 'Películas y series' });
+        expect(cine).toHaveAttribute('title', 'Películas y series');
+        expect(cine).toHaveAttribute('aria-current', 'page');
+        expect(cine.getAttribute('href')).toContain('vista=cine');
+      }
+      const tabbar = document.querySelector('.tabbar') as HTMLElement;
+      expect(tabbar.getAttribute('style')).toContain('--n: 5');
+      expect(tabbar.getAttribute('style')).toContain('--i: 2');
+      expect(document.querySelector('.topbar')?.getAttribute('style')).toContain('--n: 5');
+      // Buscar pasa a la cuarta columna.
+      fireEvent.click(within(nav()[0] as HTMLElement).getByRole('link', { name: 'Buscar' }));
+      await screen.findByRole('heading', { level: 1, name: 'Buscar' });
+      expect(tabbar.getAttribute('style')).toContain('--i: 3');
+    });
+
+    it('sin el interruptor, o sin features.vod, los cuatro de siempre', async () => {
+      renderApp('', clientWithVod(true));
+      await screen.findByRole('heading', { level: 1, name: 'Agenda' });
+      for (const bar of nav())
+        expect(labels(bar)).toEqual(['Agenda', 'Canales', 'Buscar', 'Ajustes']);
+      expect(document.querySelector('.tabbar')?.getAttribute('style')).toContain('--n: 4');
+    });
+
+    it('con el interruptor pero sin películas en el servidor, tampoco', async () => {
+      history.replaceState(null, '', '/?flag=cine');
+      renderApp('?flag=cine', clientWithVod(false));
+      await screen.findByRole('heading', { level: 1, name: 'Agenda' });
+      for (const bar of nav()) expect(labels(bar)).toHaveLength(4);
+      // Buscar sigue en la tercera columna.
+      fireEvent.click(within(nav()[0] as HTMLElement).getByRole('link', { name: 'Buscar' }));
+      await screen.findByRole('heading', { level: 1, name: 'Buscar' });
+      expect(document.querySelector('.tabbar')?.getAttribute('style')).toContain('--i: 2');
+    });
+
+    it('shell.css ya no fija `--n: 4`: el número de destinos lo pone Nav.tsx', () => {
+      const css = readFileSync(
+        path.join(path.dirname(fileURLToPath(import.meta.url)), 'shell.css'),
+        'utf8',
+      );
+      expect(css).not.toMatch(/--n:\s*4\b/);
+      expect(css).toMatch(/repeat\(var\(--n\)/);
+    });
   });
 });

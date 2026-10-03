@@ -112,6 +112,17 @@ export function dispatchSse<T extends SseEventType>(
 
 // ---- Efecto en la caché de consultas ---------------------------------------------
 
+/* La última forma del catálogo VOD vista por cada caché (`state` y `builtAt`
+   de `iptv.status`): la portada, la rejilla y las fichas de Películas y
+   series solo se vuelven a pedir si cambia (docs/vod.md §11.1). Un
+   `iptv.status` de la guía o de la cuenta no las toca. */
+const lastVod = new WeakMap<QueryClient, string>();
+
+function vodSignature(data: unknown): string {
+  const vod = (data as SseEventData<'iptv.status'> | null)?.vod;
+  return vod ? `${vod.state}|${vod.builtAt ?? ''}` : 'sin-vod';
+}
+
 export function applyToCache(client: QueryClient, type: SseEventType, data: unknown): void {
   switch (type) {
     case 'state.changed': {
@@ -167,6 +178,14 @@ export function applyToCache(client: QueryClient, type: SseEventType, data: unkn
       // El bootstrap casi nunca tiene una vista suscrita (se siembra al
       // arrancar): 'all' lo vuelve a pedir igual, porque iptvActive() lo lee.
       void client.invalidateQueries({ queryKey: routePrefix('bootstrap'), refetchType: 'all' });
+      {
+        const signature = vodSignature(data);
+        if (lastVod.get(client) !== signature) {
+          lastVod.set(client, signature);
+          for (const id of ['vodHome', 'vodBrowse', 'vodTitle'] as const)
+            void client.invalidateQueries({ queryKey: routePrefix(id) });
+        }
+      }
       break;
     case 'resync':
       // Lo que faltaba ya no está en el búfer del servidor: se pide todo otra vez.

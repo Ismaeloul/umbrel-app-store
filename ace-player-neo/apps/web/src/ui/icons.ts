@@ -73,6 +73,8 @@ export const ICONS = {
   copia:
     '<rect x="3.5" y="4" width="17" height="5" rx="1.8"/><path d="M5 9v9.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V9"/><path d="M10 13h4"/>',
   descargar: '<path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/>',
+  /* Películas y series (docs/vod.md §12.1): una claqueta. */
+  cine: '<rect x="3.5" y="10" width="17" height="10.5" rx="2.5"/><path d="M3.5 10l15.9-4.5-.9-2.9-15.8 4.5z"/><path d="M8.8 8.5l.3-3.2M14.1 7l.3-3.2"/>',
 } as const satisfies Record<string, string>;
 
 export type IconName = keyof typeof ICONS;

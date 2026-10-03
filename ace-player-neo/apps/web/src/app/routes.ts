@@ -6,6 +6,7 @@
    |----------------------------|---------------------------------------------|
    | (nada) · agenda            | { vista: 'agenda' }                         |
    | biblioteca                 | { vista: 'biblioteca' }                     |
+   | cine · cine/<40 hex>       | { vista: 'cine', id } (portada o ficha)     |
    | buscar                     | { vista: 'buscar' }                         |
    | ajustes · ajustes/<sección>| { vista: 'ajustes', seccion }               |
    | partido/<id>               | { vista: 'partido', id, canal: null }       |
@@ -23,37 +24,79 @@
      conservan siempre.
    Funciones puras: se prueban solas. */
 
-import { isSystemPageEnabled } from '../lib/flags.ts';
+import { hasFlag, isSystemPageEnabled } from '../lib/flags.ts';
 
-export type Vista = 'agenda' | 'biblioteca' | 'buscar' | 'ajustes' | 'partido' | 'sistema';
+export type Vista = 'agenda' | 'biblioteca' | 'cine' | 'buscar' | 'ajustes' | 'partido' | 'sistema';
 
 export type Route =
   | { vista: 'agenda' }
   | { vista: 'biblioteca' }
+  /* Películas y series (docs/vod.md §12.2): `id` null es la portada; si no,
+     la ficha de una película o una serie (id sellado de 40 hex). */
+  | { vista: 'cine'; id: string | null }
   | { vista: 'buscar' }
   | { vista: 'ajustes'; seccion: string | null }
   | { vista: 'partido'; id: string | null; canal: string | null }
   | { vista: 'sistema' };
 
-/** Los cuatro destinos de la navegación, en su orden. */
+/**
+ * Los destinos de la navegación, en su orden. «Pelis y series» (`cine`) solo
+ * se pinta si el servidor tiene películas y series (`features.vod`) y, hasta
+ * la 0.9.0, con `?flag=cine` (docs/vod.md §12.1, D-VOD21): quien pinta la
+ * barra usa `navVistas()`, nunca esta lista entera.
+ */
 export const NAV_VISTAS = [
   'agenda',
   'biblioteca',
+  'cine',
   'buscar',
   'ajustes',
 ] as const satisfies readonly Vista[];
 export type NavVista = (typeof NAV_VISTAS)[number];
+
+/** ¿Está puesto el interruptor `?flag=cine`? Hasta la 0.9.0 hace falta para ver el destino. */
+export function cineFlagOn(search?: string): boolean {
+  return hasFlag('cine', search);
+}
+
+/**
+ * Los destinos que se pintan (T17 de docs/vod.md): `cine` solo con
+ * `features.vod` y el interruptor. La barra calcula `--n` y la píldora con
+ * ESTA lista, no con la entera.
+ */
+export function navVistas(
+  features: { vod?: boolean } | null | undefined,
+  flag: boolean = cineFlagOn(),
+): readonly NavVista[] {
+  const withCine = features?.vod === true && flag;
+  return NAV_VISTAS.filter((vista) => vista !== 'cine' || withCine);
+}
 
 /* La vista `biblioteca` se titula «Canales» (decisión W3 del plan Palco): la
    URL `?vista=biblioteca` y el acceso directo del manifiesto no cambian. */
 export const VISTA_TITLE: Record<Vista, string> = {
   agenda: 'Agenda',
   biblioteca: 'Canales',
+  cine: 'Películas y series',
   buscar: 'Buscar',
   ajustes: 'Ajustes',
   partido: 'Partido',
   sistema: 'Sistema de diseño',
 };
+
+/**
+ * El rótulo en la barra, cuando no es el título: «Películas y series» mide
+ * 77,2 px y no cabe en los 64,8 px de cada hueco a 360 px con 5 destinos;
+ * «Pelis y series» (57,7 px) sí (docs/vod.md §12.1). El nombre accesible y el
+ * `title` del enlace siguen siendo el título.
+ */
+export const NAV_LABEL: Partial<Record<NavVista, string>> = {
+  cine: 'Pelis y series',
+};
+
+export function navLabel(vista: NavVista): string {
+  return NAV_LABEL[vista] ?? VISTA_TITLE[vista];
+}
 
 export const DEFAULT_ROUTE: Route = { vista: 'agenda' };
 
@@ -72,6 +115,11 @@ export function parseVista(
       return { vista: 'agenda' };
     case 'biblioteca':
       return { vista: 'biblioteca' };
+    case 'cine': {
+      // `cine/<40 hex>` es una ficha; cualquier otra cosa detrás, la portada.
+      const id = rest[0] ?? '';
+      return { vista: 'cine', id: HASH_RE.test(id) ? id.toLowerCase() : null };
+    }
     case 'buscar':
       return { vista: 'buscar' };
     case 'ajustes': {
@@ -109,6 +157,8 @@ export function formatVista(route: Route): string {
       return route.seccion ? `ajustes/${route.seccion}` : 'ajustes';
     case 'partido':
       return route.canal ? `partido/canal/${route.canal}` : `partido/${route.id ?? ''}`;
+    case 'cine':
+      return route.id ? `cine/${route.id}` : 'cine';
     default:
       return route.vista;
   }
@@ -168,6 +218,8 @@ export function sameRoute(a: Route, b: Route): boolean {
 export function routeDepth(route: Route): number {
   if (route.vista === 'partido') return 10;
   if (route.vista === 'sistema') return 11;
+  // La ficha de una película o una serie es un paso adelante de la portada (§12.2).
+  if (route.vista === 'cine' && route.id) return 9;
   const index = (NAV_VISTAS as readonly Vista[]).indexOf(route.vista);
   return index < 0 ? 0 : index;
 }

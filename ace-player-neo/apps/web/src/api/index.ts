@@ -56,5 +56,6 @@ export {
   useEngineStatus,
   useEngineSummary,
   useIptvActive,
+  useVodActive,
   type EngineSummary,
 } from './hooks.ts';

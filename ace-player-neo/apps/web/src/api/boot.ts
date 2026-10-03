@@ -32,6 +32,16 @@ export function iptvActive(client: QueryClient = queryClient): boolean {
   return client.getQueryData<BootstrapResponse>(routeKey('bootstrap'))?.features.iptv === true;
 }
 
+/**
+ * ¿Hay películas y series? (`bootstrap.features.vod`, docs/vod.md §11.4): IPTV
+ * Xtream activa con catálogo VOD listo (o preparándose). Decide si la barra
+ * enseña «Pelis y series». Ausente o falso: no. Lo mantiene al día el evento
+ * `iptv.status`, que vuelve a pedir el arranque.
+ */
+export function vodActive(client: QueryClient = queryClient): boolean {
+  return client.getQueryData<BootstrapResponse>(routeKey('bootstrap'))?.features.vod === true;
+}
+
 export interface BootNotice {
   tone: 'info' | 'warn';
   text: string;

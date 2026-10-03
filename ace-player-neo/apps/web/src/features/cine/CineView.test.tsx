@@ -1,0 +1,325 @@
+/* Portada y rejilla de Películas y series (docs/vod.md §12.4, §12.5 y §13)
+   con un servidor simulado que contesta con el catálogo de muestra. */
+
+import type { VodHome } from '@ace/shared';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetMode, setMode } from '../../api/mode.ts';
+import { resetToasts } from '../../notices/toasts.ts';
+import { json, mockFetch } from '../../test/fetch.ts';
+import homeNone from '@fixtures/variantes/vodHome.none.json';
+import homePreparing from '@fixtures/variantes/vodHome.preparing.json';
+import homeUnsupported from '@fixtures/variantes/vodHome.unsupported.json';
+import { demoVodBrowse, demoVodHome, resetDemoVod } from './demo-data.ts';
+import { demoRoutes, queryOf, renderCine } from './test-utils.tsx';
+
+let net: ReturnType<typeof mockFetch>;
+
+const browseCalls = () => net.calls.filter((call) => call.url.startsWith('/api/v1/vod/browse'));
+
+beforeEach(() => {
+  resetMode();
+  setMode('live', 'bootstrap');
+  /* jsdom no maqueta: con un alto por fila, la lista virtual solo pinta las de la pantalla. */
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return this.classList.contains('vlist__row') ? 300 : 0;
+  });
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+  net?.restore();
+  resetToasts();
+  resetMode();
+  resetDemoVod();
+  history.replaceState(null, '', '/');
+});
+
+function emptyHome(patch: Partial<VodHome>): VodHome {
+  return { ...(homeNone as VodHome), ...patch };
+}
+
+describe('portada', () => {
+  it('título, selector, buscador, «Seguir viendo», novedades, categorías, distintivos y rejilla', async () => {
+    net = mockFetch(demoRoutes());
+    renderCine();
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Películas y series' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Películas' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    expect(screen.getByRole('searchbox', { name: 'Buscar películas' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Seguir viendo' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Novedades en películas' })).toBeInTheDocument();
+    const cats = screen.getByRole('group', { name: 'Categorías' });
+    expect(within(cats).getByRole('button', { name: 'Todas' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Todas las categorías' })).toBeInTheDocument();
+    const tags = screen.getByRole('group', { name: 'Lengua y calidad' });
+    expect(
+      within(tags)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/^Castellano/),
+        expect.stringMatching(/^VOSE/),
+      ]),
+    );
+    const grid = await screen.findByRole('list', { name: 'Películas' });
+    const cells = within(grid).getAllByRole('listitem');
+    expect(cells[0]).toHaveAttribute('aria-setsize', '58');
+    expect(cells[0]).toHaveAttribute('aria-posinset', '1');
+    expect(await screen.findByText('58 películas')).toBeInTheDocument();
+    // «Seguir viendo»: el siguiente episodio y lo que queda.
+    expect(
+      screen.getByRole('button', { name: /^The Office\. Siguiente: T2 · E6/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Dune\. Quedan 1 h 53 min$/ })).toBeInTheDocument();
+    // Nada de adultos en «Todas» sin texto.
+    expect(browseCalls()[0]?.url).toContain('kind=movie');
+  });
+
+  it('«Series» cambia de tipo, de novedades y de categorías (vuelve a «Todas»)', async () => {
+    net = mockFetch(demoRoutes());
+    renderCine({ search: '?vista=cine&cinecat=0123456789ab' });
+    await screen.findByRole('heading', { name: 'Novedades en películas' });
+    fireEvent.click(screen.getByRole('radio', { name: 'Series' }));
+    expect(await screen.findByRole('heading', { name: 'Series actualizadas' })).toBeInTheDocument();
+    expect(location.search).toContain('cine=series');
+    expect(location.search).not.toContain('cinecat');
+    expect(screen.getByRole('searchbox', { name: 'Buscar series' })).toBeInTheDocument();
+    await waitFor(() => expect(queryOf(browseCalls().at(-1)!).kind).toBe('series'));
+  });
+
+  it('un distintivo filtra la rejilla y viaja en la URL; tocarlo otra vez lo quita', async () => {
+    net = mockFetch(demoRoutes());
+    renderCine();
+    const tags = await screen.findByRole('group', { name: 'Lengua y calidad' });
+    fireEvent.click(within(tags).getByRole('button', { name: /^VOSE/ }));
+    await waitFor(() => expect(queryOf(browseCalls().at(-1)!).tag).toBe('vose'));
+    expect(location.search).toContain('cinetag=vose');
+    fireEvent.click(within(tags).getByRole('button', { name: /^VOSE/ }));
+    await waitFor(() => expect(location.search).not.toContain('cinetag'));
+    expect(within(tags).getByRole('button', { name: /^VOSE/ })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
+  it('el orden A-Z pide `sort=name`', async () => {
+    net = mockFetch(demoRoutes());
+    renderCine();
+    fireEvent.click(await screen.findByRole('radio', { name: 'A-Z' }));
+    await waitFor(() => expect(queryOf(browseCalls().at(-1)!).sort).toBe('name'));
+    expect(location.search).toContain('cineorden=az');
+  });
+
+  it('categoría vacía: «Esta categoría está vacía» y «Ver todas»', async () => {
+    net = mockFetch({
+      ...demoRoutes(),
+      'GET /api/v1/vod/browse': () =>
+        json({
+          active: true,
+          state: 'ready',
+          items: [],
+          total: 0,
+          capped: false,
+          otherKindTotal: null,
+          tags: [],
+          nextCursor: null,
+          stale: false,
+        }),
+    });
+    renderCine({ search: '?vista=cine&cinecat=0123456789ab' });
+    expect(
+      await screen.findByRole('heading', { name: 'Esta categoría está vacía' }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Ver todas' }));
+    await waitFor(() => expect(location.search).not.toContain('cinecat'));
+  });
+
+  it('una página siguiente que falla: «No se han podido cargar más» y «Reintentar»', async () => {
+    let calls = 0;
+    net = mockFetch({
+      ...demoRoutes(),
+      'GET /api/v1/vod/browse': (call) => {
+        calls += 1;
+        if (calls > 1)
+          return json(
+            { error: { code: 'internal_error', message: 'Algo ha fallado.', requestId: 't' } },
+            500,
+          );
+        // Páginas de 20 para que haya siguiente.
+        return json(demoVodBrowse({ ...queryOf(call), limit: 20 }));
+      },
+    });
+    renderCine();
+    fireEvent.click(await screen.findByRole('button', { name: 'Cargar más películas' }));
+    expect(await screen.findByText('No se han podido cargar más')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+  });
+});
+
+describe('búsqueda (§12.5)', () => {
+  it('desde 2 letras, tras 250 ms; sin nada: «Ver N series» y «Borrar búsqueda»', async () => {
+    net = mockFetch(demoRoutes());
+    renderCine();
+    await screen.findByRole('heading', { name: 'Seguir viendo' });
+    const field = screen.getByRole('searchbox', { name: 'Buscar películas' });
+    fireEvent.change(field, { target: { value: 'c' } });
+    fireEvent.change(field, { target: { value: 'casa de papel' } });
+    expect(location.search).toContain('cineq=casa');
+    expect(
+      await screen.findByRole('heading', { name: 'Nada con «casa de papel» en películas' }),
+    ).toBeInTheDocument();
+    // Buscando no salen «Seguir viendo» ni las novedades.
+    expect(screen.queryByRole('heading', { name: 'Seguir viendo' })).toBeNull();
+    const withQ = browseCalls().filter((call) => queryOf(call).q);
+    expect(withQ.map((call) => queryOf(call).q)).toEqual(['casa de papel']);
+    fireEvent.click(screen.getByRole('button', { name: 'Ver 1 serie' }));
+    expect(await screen.findByText('1 serie')).toBeInTheDocument();
+    expect(location.search).toContain('cine=series');
+    fireEvent.click(screen.getByRole('radio', { name: 'Películas' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Borrar búsqueda' }));
+    expect(field).toHaveValue('');
+    expect(await screen.findByRole('heading', { name: 'Seguir viendo' })).toBeInTheDocument();
+  });
+
+  it('Esc borra el texto y «/» enfoca el buscador', async () => {
+    net = mockFetch(demoRoutes());
+    renderCine();
+    const field = await screen.findByRole('searchbox', { name: 'Buscar películas' });
+    expect(field).toHaveAttribute('data-focus-target', 'buscar-cine');
+    fireEvent.change(field, { target: { value: 'dune' } });
+    fireEvent.keyDown(field, { key: 'Escape' });
+    expect(field).toHaveValue('');
+  });
+
+  it('más de 2.000 aciertos: el aviso para afinar', async () => {
+    net = mockFetch({
+      ...demoRoutes(),
+      'GET /api/v1/vod/browse': (call) => {
+        const response = demoRoutes()['GET /api/v1/vod/browse']!(call);
+        return response
+          .json()
+          .then((body: Record<string, unknown>) => json({ ...body, capped: true }));
+      },
+    });
+    renderCine({ search: '?vista=cine&cineq=la' });
+    expect(
+      await screen.findByText('Hay más de 2.000 resultados: afina la búsqueda.'),
+    ).toBeInTheDocument();
+  });
+});
+
+describe('estados sin catálogo (§13): siempre con salida', () => {
+  it('sin IPTV: «Conecta tu IPTV» con «Ir a Ajustes»', async () => {
+    net = mockFetch({
+      'GET /api/v1/vod': emptyHome({ active: false, state: 'off' }),
+      'GET /api/v1/iptv': { provider: null, refreshHours: 6 },
+    });
+    renderCine();
+    expect(await screen.findByRole('heading', { name: 'Conecta tu IPTV' })).toBeInTheDocument();
+    expect(
+      screen.getByText('Las películas y series salen de tu IPTV. Conéctala en Ajustes.'),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Ir a Ajustes' }));
+    await waitFor(() => expect(location.search).toContain('vista=ajustes/iptv'));
+    expect(browseCalls()).toHaveLength(0);
+  });
+
+  it('IPTV en pausa', async () => {
+    const { demoIptvView } = await import('../../api/demo/index.ts');
+    const view = demoIptvView();
+    net = mockFetch({
+      'GET /api/v1/vod': emptyHome({ active: false, state: 'off' }),
+      'GET /api/v1/iptv': { ...view, provider: { ...view.provider!, enabled: false } },
+    });
+    renderCine();
+    expect(
+      await screen.findByRole('heading', { name: 'Tu IPTV está en pausa.' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ir a Ajustes' })).toBeInTheDocument();
+  });
+
+  it('M3U: «Tu IPTV es una lista M3U»', async () => {
+    net = mockFetch({ 'GET /api/v1/vod': homeUnsupported });
+    renderCine();
+    expect(
+      await screen.findByRole('heading', { name: 'Tu IPTV es una lista M3U' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ir a Ajustes' })).toBeInTheDocument();
+  });
+
+  it('sin películas ni series: «Comprobar de nuevo» actualiza la IPTV', async () => {
+    const { demoIptvView } = await import('../../api/demo/index.ts');
+    net = mockFetch({ 'GET /api/v1/vod': homeNone, 'POST /api/v1/iptv/sync': demoIptvView() });
+    renderCine();
+    expect(
+      await screen.findByRole('heading', { name: 'Tu IPTV no tiene películas ni series' }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Comprobar de nuevo' }));
+    await waitFor(() =>
+      expect(net.calls.some((call) => call.url === '/api/v1/iptv/sync')).toBe(true),
+    );
+    expect(screen.getByRole('button', { name: 'Ir a Ajustes' })).toBeInTheDocument();
+  });
+
+  it('preparando: esqueletos y el aviso de la primera vez', async () => {
+    net = mockFetch({ 'GET /api/v1/vod': homePreparing });
+    renderCine();
+    expect(
+      await screen.findByText('Preparando el catálogo… La primera vez tarda unos segundos.'),
+    ).toBeInTheDocument();
+  });
+
+  it('error sin catálogo, o la portada que no llega: «Reintentar»', async () => {
+    net = mockFetch({ 'GET /api/v1/vod': emptyHome({ state: 'error' }) });
+    renderCine();
+    expect(
+      await screen.findByRole('heading', { name: 'No se ha podido cargar el catálogo' }),
+    ).toBeInTheDocument();
+    net.restore();
+    net = mockFetch(demoRoutes());
+    fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(await screen.findByRole('heading', { name: 'Seguir viendo' })).toBeInTheDocument();
+  });
+
+  it('catálogo viejo y recortado: las dos notas', async () => {
+    net = mockFetch({
+      ...demoRoutes(),
+      'GET /api/v1/vod': () =>
+        json({
+          ...demoVodHome(),
+          stale: true,
+          truncated: true,
+          builtAt: '2026-09-28T04:00:00.000Z',
+          counts: { movies: 200_000, series: 12 },
+        }),
+    });
+    renderCine();
+    expect(
+      await screen.findByText(/^Catálogo del 28 sept?\. No se ha podido actualizar\.$/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Tu IPTV tiene más de 200.000 películas; se ven las primeras 200.000.'),
+    ).toBeInTheDocument();
+  });
+
+  it('oculta, no pide nada', async () => {
+    net = mockFetch(demoRoutes());
+    const { default: CineView } = await import('./CineView.tsx');
+    renderCine({ ui: <CineView route={{ vista: 'cine', id: null }} active={false} /> });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+    expect(net.calls.filter((call) => call.url.startsWith('/api/v1/vod'))).toHaveLength(0);
+  });
+});

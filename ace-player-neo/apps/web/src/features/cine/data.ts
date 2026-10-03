@@ -1,0 +1,325 @@
+/* Datos de Películas y series (docs/vod.md §12.3): el estado de la URL, las
+   consultas a `vodHome`, `vodBrowse` y `vodTitle`, las marcas de progreso y
+   la dirección de los carteles.
+
+   - Claves bajo ['v1', 'vodHome' | 'vodBrowse' | 'vodTitle', …]: el evento
+     `iptv.status` las invalida si cambia el catálogo (api/sse.ts).
+   - La rejilla va por páginas de 60 (`nextCursor`); un cursor de otro
+     catálogo (`stale: true`) vacía la lista y empieza de nuevo.
+   - Nada se pide con la vista oculta (`enabled: active`).
+   - El estado de la URL (`cine`, `cinecat`, `cinetag`, `cineq`, `cineorden`)
+     vive en un almacén: la vista y el panel lateral de escritorio (aside.tsx)
+     lo comparten sin pasar por el router. */
+
+import {
+  VOD_CLIENT,
+  type VodArtKind,
+  type VodBrowseResponse,
+  type VodCard,
+  type VodProgressBody,
+  type VodTitle,
+} from '@ace/shared';
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+  type QueryKey,
+} from '@tanstack/react-query';
+import { useCallback, useEffect, useState } from 'react';
+import { api, ApiError, isDemo, routePrefix, routeUrl, useApiQuery } from '../../api/index.ts';
+import { apiFetch } from '../../api/client.ts';
+import { errorFromResponse } from '../../api/errors.ts';
+import { useRoute } from '../../app/router.tsx';
+import { createStore, useStore } from '../../lib/store.ts';
+import { demoArtSrc } from './demo-art.ts';
+import type { browseQuery } from './model.ts';
+import {
+  PAGE_SIZE,
+  readCineState,
+  sameCineState,
+  writeCineState,
+  type CineUrlState,
+} from './model.ts';
+
+// ---- Estado de la URL ------------------------------------------------------------------
+
+const urlStore = createStore<CineUrlState>(readCineState(globalThis.location?.search ?? ''));
+
+function syncFromLocation(): void {
+  const next = readCineState(globalThis.location?.search ?? '');
+  urlStore.set((current) => (sameCineState(current, next) ? current : next));
+}
+
+/** Cambia el estado (con replaceState: los filtros no llenan el historial). */
+export function setCineState(patch: Partial<CineUrlState>): void {
+  const next = { ...readCineState(location.search), ...patch };
+  try {
+    history.replaceState(
+      history.state,
+      '',
+      `${location.pathname}${writeCineState(location.search, next)}${location.hash}`,
+    );
+  } catch {}
+  urlStore.set((current) => (sameCineState(current, next) ? current : next));
+}
+
+/** El estado de la URL de la vista, al día con Atrás/Adelante y con cada navegación. */
+export function useCineState(): CineUrlState {
+  const route = useRoute();
+  useEffect(() => {
+    syncFromLocation();
+    window.addEventListener('popstate', syncFromLocation);
+    return () => window.removeEventListener('popstate', syncFromLocation);
+  }, [route]);
+  return useStore(urlStore);
+}
+
+/** Solo para los tests. */
+export function resetCineState(): void {
+  urlStore.set(readCineState(globalThis.location?.search ?? ''));
+}
+
+// ---- Consultas -------------------------------------------------------------------------
+
+/** Tras la última tecla (250 ms, `VOD_CLIENT.searchDebounceMs`). */
+export const CINE_TEXT_DELAY_MS = VOD_CLIENT.searchDebounceMs;
+/** Lo que dura una respuesta como buena sin SSE. */
+const STALE_MS = 60_000;
+
+/** El valor, una vez que lleva `ms` sin cambiar (comparado como JSON). */
+export function useSettled<T>(value: T, ms: number): T {
+  const [settled, setSettled] = useState(value);
+  const key = JSON.stringify(value);
+  const settledKey = JSON.stringify(settled);
+  useEffect(() => {
+    if (key === settledKey) return;
+    const timer = setTimeout(() => setSettled(value), ms);
+    return () => clearTimeout(timer);
+    // `value` va con `key`: mismo JSON, mismo valor.
+  }, [key, settledKey, ms]);
+  return settled;
+}
+
+/** La portada: una sola petición (D-VOD28). */
+export function useVodHome(active: boolean) {
+  return useApiQuery('vodHome', undefined, {
+    enabled: active,
+    staleTime: STALE_MS,
+    retry: 1,
+  });
+}
+
+type BrowseScope = ReturnType<typeof browseQuery>;
+
+/** Clave de la rejilla por páginas (bajo `vodBrowse`, así la invalida `iptv.status`). */
+export function pagesKey(scope: BrowseScope): QueryKey {
+  return ['v1', 'vodBrowse', null, { ...scope, pages: true }];
+}
+
+/** La rejilla o la búsqueda: páginas de 60. */
+export function useVodPages(scope: BrowseScope, enabled: boolean) {
+  const client = useQueryClient();
+  const key = pagesKey(scope);
+  const query = useInfiniteQuery({
+    queryKey: key,
+    queryFn: ({ pageParam, signal }): Promise<VodBrowseResponse> =>
+      api('vodBrowse', {
+        query: { ...scope, limit: PAGE_SIZE, ...(pageParam ? { cursor: pageParam } : {}) },
+        signal,
+      }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    enabled,
+    staleTime: STALE_MS,
+    retry: 1,
+    /* Mientras llega lo nuevo (otro filtro, otra letra), lo de antes a la
+       vista; cambiar de tipo (películas ↔ series) sí empieza de cero. */
+    placeholderData: (previous, previousQuery) =>
+      (previousQuery?.queryKey[3] as BrowseScope | undefined)?.kind === scope.kind
+        ? previous
+        : undefined,
+  });
+  /* Otra sincronización entre dos páginas: esa página ya es de otro catálogo. */
+  const staleHit = query.data?.pages.some((page, index) => index > 0 && page.stale) ?? false;
+  const keyText = JSON.stringify(key);
+  useEffect(() => {
+    if (!staleHit) return;
+    void client.resetQueries({ queryKey: JSON.parse(keyText) as QueryKey, exact: true });
+  }, [staleHit, keyText, client]);
+  return query;
+}
+
+/** Clave de una ficha (sin `pre`: la precarga y la ficha comparten la entrada). */
+export function titleKey(id: string): QueryKey {
+  return ['v1', 'vodTitle', { id }];
+}
+
+function fetchTitle(id: string, pre: boolean, signal?: AbortSignal): Promise<VodTitle> {
+  return api('vodTitle', { params: { id }, query: { pre: pre ? '1' : '0' }, signal });
+}
+
+/** Una ficha a medio llegar (`pending`) se vuelve a pedir al abrirla (§12.4). */
+function titleStale(data: VodTitle | undefined): number {
+  return data && data.info !== 'ok' ? 0 : STALE_MS;
+}
+
+/**
+ * La ficha. Con `placeholder` (la tarjeta de la que se viene), se abre al
+ * momento con lo que ya se sabe y la sinopsis llega detrás.
+ */
+export function useVodTitle(id: string | null, active: boolean, placeholder?: VodTitle | null) {
+  return useQuery<VodTitle, Error, VodTitle, QueryKey>({
+    queryKey: titleKey(id ?? ''),
+    queryFn: ({ signal }) => fetchTitle(id ?? '', false, signal),
+    enabled: active && id !== null,
+    staleTime: (query) => titleStale(query.state.data),
+    retry: (count, error) =>
+      count < 1 && !(error instanceof ApiError && error.code === 'vod_not_found'),
+    placeholderData: placeholder ?? undefined,
+  });
+}
+
+/** Precarga al apuntar o enfocar una tarjeta (`pre=1`: solo si la cola del servidor está vacía). */
+export function prefetchTitle(client: QueryClient, id: string): void {
+  const state = client.getQueryState(titleKey(id));
+  if (state && (state.fetchStatus === 'fetching' || state.status === 'success')) return;
+  void client.prefetchQuery<VodTitle, Error, VodTitle, QueryKey>({
+    queryKey: titleKey(id),
+    queryFn: ({ signal }) => fetchTitle(id, true, signal),
+    staleTime: STALE_MS,
+  });
+}
+
+/** Lo que se sabe de un título por su tarjeta, con la forma de una ficha (`info: 'pending'`). */
+export function titleFromCard(card: VodCard): VodTitle {
+  const common = {
+    id: card.id,
+    info: 'pending' as const,
+    title: card.title,
+    year: card.year,
+    plot: null,
+    genres: [],
+    cast: [],
+    director: null,
+    country: null,
+    rating: card.rating,
+    poster: card.poster,
+    backdrop: null,
+    tags: card.tags,
+    adult: card.adult,
+    category: null,
+  };
+  if (card.kind === 'series')
+    return { ...common, kind: 'series', seasons: [], main: null, truncated: false };
+  return {
+    ...common,
+    kind: 'movie',
+    originalTitle: null,
+    ageRating: null,
+    durationS: null,
+    tech: { container: null, video: null, audio: [] },
+    playable: 'unknown',
+    progress: null,
+  };
+}
+
+// Tarjetas vistas (portada y rejilla), para abrir la ficha al momento.
+const seenCards = new Map<string, VodCard>();
+const SEEN_MAX = 600;
+
+export function rememberCards(cards: readonly VodCard[]): void {
+  for (const card of cards) {
+    seenCards.delete(card.id);
+    seenCards.set(card.id, card);
+  }
+  while (seenCards.size > SEEN_MAX) {
+    const oldest = seenCards.keys().next().value;
+    if (oldest === undefined) break;
+    seenCards.delete(oldest);
+  }
+}
+
+export function seenCard(id: string): VodCard | null {
+  return seenCards.get(id) ?? null;
+}
+
+// ---- Marcas de progreso (§10.2) --------------------------------------------------------
+
+/**
+ * POST /api/v1/vod/titles/:id/progress: 204 sin cuerpo (por eso no va por
+ * `api()`, que es solo de JSON). En la demo lo contesta demo-data.ts.
+ */
+export async function postVodProgress(
+  id: string,
+  body: VodProgressBody,
+  options: { keepalive?: boolean } = {},
+): Promise<void> {
+  if (isDemo()) {
+    const { demoProgress } = await import('./demo-data.ts');
+    demoProgress(id, body);
+    return;
+  }
+  const url = routeUrl('vodProgress', { id });
+  let response: Response;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), VOD_CLIENT.progressMs);
+  try {
+    response = await apiFetch(url, {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      credentials: 'same-origin',
+      cache: 'no-store',
+      keepalive: options.keepalive,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    throw new ApiError({
+      code: controller.signal.aborted ? 'timeout' : 'network',
+      route: 'vodProgress',
+      cause: error,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!response.ok) throw await errorFromResponse(response, 'vodProgress');
+}
+
+/** Tras una marca: la portada («Seguir viendo»), las fichas y la rejilla (la barra de progreso). */
+export function invalidateAfterProgress(client: QueryClient): Promise<unknown> {
+  return Promise.all(
+    (['vodHome', 'vodTitle', 'vodBrowse'] as const).map((id) =>
+      client.invalidateQueries({ queryKey: routePrefix(id) }),
+    ),
+  );
+}
+
+/** Marca y refresca lo que se ve; devuelve el error para que la vista lo diga. */
+export function useProgressMark() {
+  const client = useQueryClient();
+  return useCallback(
+    async (id: string, event: VodProgressBody['event']): Promise<Error | null> => {
+      try {
+        await postVodProgress(id, { posS: 0, durS: 0, event });
+        await invalidateAfterProgress(client);
+        return null;
+      } catch (error) {
+        return error instanceof Error ? error : new Error(String(error));
+      }
+    },
+    [client],
+  );
+}
+
+// ---- Carteles (§8) ---------------------------------------------------------------------
+
+/**
+ * La dirección de una imagen: `vodArt` por id y sello, nunca la URL del
+ * proveedor (la CSP `img-src 'self' data:` solo deja estas dos cosas). En la
+ * demo, un cartel SVG `data:` generado.
+ */
+export function artSrc(id: string, art: VodArtKind, v: string, title = ''): string {
+  if (isDemo()) return demoArtSrc(id, art, v, title);
+  return routeUrl('vodArt', { id, art }, { v });
+}
