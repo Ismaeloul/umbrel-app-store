@@ -19,6 +19,7 @@
    - el serializador de `err` pasa `message`, `detail`, `stack` y la causa
      por `redactText` (cada URL que aparezca, por `redactUrl`). */
 
+import { SERVER_LOG_RING_BYTES, SERVER_LOG_RING_LINES } from '@ace/shared';
 import pino, {
   type DestinationStream,
   type Level,
@@ -197,16 +198,65 @@ export function redactedErrSerializer(error: unknown): unknown {
   return redactSerialized(withCause as Serialized);
 }
 
+/* ---- Anillo del registro («Descargar fallos» de Salud, 0.9.0) -----------------
+   Las últimas líneas que se escriben, en memoria y acotadas (por número y por
+   bytes), para el fichero de fallos (modules/diagnostics/export.ts). Cada
+   línea es la MISMA que sale a stdout, ya con la redacción de pino; el
+   informe la vuelve a pasar por su redactor. Nada va a disco. */
+
+export interface LogRing {
+  /** Apunta una línea tal cual la escribe pino (JSON + salto de línea). */
+  push(line: string): void;
+  /** Las líneas guardadas, de la más vieja a la más nueva. */
+  lines(): string[];
+  readonly size: number;
+}
+
+export function createLogRing(
+  maxLines = SERVER_LOG_RING_LINES,
+  maxBytes = SERVER_LOG_RING_BYTES,
+  maxLineChars = 8 * 1024,
+): LogRing {
+  const buffer: string[] = [];
+  let bytes = 0;
+  return {
+    push(raw) {
+      let line = raw.endsWith('\n') ? raw.slice(0, -1) : raw;
+      if (line.length > maxLineChars) line = `${line.slice(0, maxLineChars)}…`;
+      buffer.push(line);
+      bytes += line.length;
+      while (buffer.length > maxLines || (bytes > maxBytes && buffer.length > 1)) {
+        bytes -= buffer.shift()?.length ?? 0;
+      }
+    },
+    lines: () => [...buffer],
+    get size() {
+      return buffer.length;
+    },
+  };
+}
+
+/* El anillo de cada logger creado con uno (los hijos comparten el del padre). */
+const rings = new WeakMap<object, LogRing>();
+
+/** El anillo del logger raíz, o null si se creó sin él (tests, logger silencioso). */
+export function logRingOf(logger: Logger): LogRing | null {
+  return rings.get(logger) ?? null;
+}
+
 export interface LoggerOptions {
   readonly level?: LogLevel;
   /** Por defecto, stdout. Los tests pasan un flujo en memoria para leer lo escrito. */
   readonly destination?: DestinationStream;
   /** Campos fijos en cada línea (por ejemplo, la versión). */
   readonly base?: Record<string, unknown>;
+  /** Copia en memoria de las últimas líneas («Descargar fallos»). */
+  readonly ring?: LogRing;
 }
 
 export function createLogger(options: LoggerOptions = {}): Logger {
-  return pino(
+  const ring = options.ring;
+  const logger = pino(
     {
       level: options.level ?? 'info',
       base: options.base ?? null,
@@ -217,9 +267,22 @@ export function createLogger(options: LoggerOptions = {}): Logger {
         /* `"level":"info"` en vez del número: se lee mejor con `docker logs`. */
         level: (label) => ({ level: label }),
       },
+      ...(ring
+        ? {
+            hooks: {
+              /* La línea ya serializada y redactada, justo antes de escribirla. */
+              streamWrite: (line: string) => {
+                ring.push(line);
+                return line;
+              },
+            },
+          }
+        : {}),
     },
     options.destination ?? pino.destination({ dest: 1, sync: false }),
   );
+  if (ring) rings.set(logger, ring);
+  return logger;
 }
 
 /** Logger que no escribe nada (tests que no miran los logs). */

@@ -4,7 +4,15 @@
 import { Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { AppError } from './errors.js';
-import { REDACTED_PART, createLogger, redactText, redactUrl } from './logger.js';
+import {
+  REDACTED_PART,
+  createLogRing,
+  createLogger,
+  createSilentLogger,
+  logRingOf,
+  redactText,
+  redactUrl,
+} from './logger.js';
 
 const U = 'usuario-e2e';
 const P = 'Cl4ve-Secreta-E2E';
@@ -78,5 +86,43 @@ describe('pino con la IPTV', () => {
     expect(text).not.toContain(U);
     expect(text).not.toContain(P);
     expect(text).not.toContain('secreta.example');
+  });
+});
+
+describe('anillo del registro («Descargar fallos», 0.9.0)', () => {
+  it('guarda las últimas líneas tal cual salen (ya redactadas), también las de los hijos', () => {
+    const ring = createLogRing();
+    const written: string[] = [];
+    const logger = createLogger({
+      destination: { write: (line: string) => void written.push(line) },
+      ring,
+    });
+    expect(logRingOf(logger)).toBe(ring);
+    logger.info({ password: P }, 'uno');
+    logger.child({ module: 'iptv' }).warn({ iptv: { url: `http://x/${U}` } }, 'dos');
+    logger.debug('no se escribe (nivel info)');
+    expect(ring.size).toBe(2);
+    expect(ring.lines()).toEqual(written.map((line) => line.replace(/\n$/, '')));
+    const [first, second] = ring.lines().map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(first).toMatchObject({ msg: 'uno', level: 'info' });
+    expect(second).toMatchObject({ msg: 'dos', module: 'iptv' });
+    expect(ring.lines().join('\n')).not.toContain(P);
+    expect(ring.lines().join('\n')).not.toContain(U);
+  });
+
+  it('acotado por número de líneas, por bytes y por línea; sin anillo, null', () => {
+    const ring = createLogRing(3, 1000, 50);
+    for (let i = 0; i < 5; i += 1) ring.push(`linea ${i}\n`);
+    expect(ring.lines()).toEqual(['linea 2', 'linea 3', 'linea 4']);
+    ring.push('x'.repeat(80));
+    expect(ring.lines().at(-1)).toBe(`${'x'.repeat(50)}…`);
+    const small = createLogRing(100, 30, 1000);
+    for (let i = 0; i < 10; i += 1) small.push('0123456789');
+    expect(small.size).toBe(3);
+    const lone = createLogRing(100, 10, 1000);
+    lone.push('una línea más larga que el tope');
+    expect(lone.size).toBe(1);
+    expect(logRingOf(createLogger({ destination: { write: () => undefined } }))).toBeNull();
+    expect(logRingOf(createSilentLogger())).toBeNull();
   });
 });

@@ -180,7 +180,7 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
     expect(failures).toEqual([]);
   });
 
-  it('con token válido, las rutas solo web (healthLive, copia de seguridad, Ajustes → IPTV, el buscador IPTV y la pestaña IPTV) dan 403 origin_forbidden', async () => {
+  it('con token válido, las rutas solo web (healthLive, copia de seguridad, Ajustes → IPTV, el buscador IPTV, la pestaña IPTV y «Descargar fallos») dan 403 origin_forbidden', async () => {
     const s = await setup();
     const failures: string[] = [];
     const webOnly = V1.filter(([, route]) => route.access === 'web');
@@ -197,6 +197,8 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
       'iptvDelete',
       'iptvChannels',
       'iptvBrowse',
+      /* «Descargar fallos» (0.9.0): lleva el registro del servidor, aunque redactado. */
+      'diagnosticsExport',
     ]);
     for (const [id, route] of webOnly) {
       for (const url of nativeForms(concretePath(route))) {

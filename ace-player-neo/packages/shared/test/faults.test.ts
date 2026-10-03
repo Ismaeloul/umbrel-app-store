@@ -69,6 +69,11 @@ describe('redactReportText: lo que nunca sale en el fichero', () => {
     ['IP pública', 'conecta con 81.45.123.9:8080 y 8.8.8.8.', ['81.45.123.9', '8.8.8.8']],
     ['IP pública en URL', 'http://203.0.113.7/live/a/b/1.ts', ['203.0.113.7']],
     ['IPv6 global', 'desde 2a01:4f8:c0c:1234::1 sin respuesta', ['2a01:4f8:c0c:1234::1']],
+    [
+      'usuario del sistema en una pila',
+      'at C:\\Users\\IsmaOul\\app\\a.js:1 y at /home/ismaoul/app/b.js:2 y C:/Users/IsmaOul/c.js',
+      ['IsmaOul', 'ismaoul'],
+    ],
     ['ticket del relé', 'http://127.0.0.1:41234/r/AbCdEfGh12345678/in.ts', ['AbCdEfGh12345678']],
   ];
 

@@ -410,6 +410,8 @@ export function redactReportText(text: string): string {
   out = out.replace(/\beyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\b/g, '[token]');
   // Correos
   out = out.replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, '[correo]');
+  // El usuario del sistema en una ruta de las pilas (C:\Users\<nombre>\…, /home/<nombre>/…)
+  out = out.replace(/([\\/](?:Users|home)[\\/])[^\\/\s"'<>:]+(?=[\\/])/g, '$1•••');
   // IPs públicas
   out = maskIpv4(out);
   out = out.replace(IPV6_GLOBAL_RE, '[ip pública]');

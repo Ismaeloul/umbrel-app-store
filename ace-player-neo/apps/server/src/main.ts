@@ -30,7 +30,7 @@ import { buildApp } from './app.js';
 import { loadConfig, type Env } from './config/index.js';
 import { createDomainBus } from './core/bus.js';
 import { createSystemClock, type Clock } from './core/clock.js';
-import { createLogger, type Logger } from './core/logger.js';
+import { createLogger, createLogRing, type Logger } from './core/logger.js';
 import type { StateLoadReport } from './modules/state/types.js';
 import { SERVICE_ORDER, createServices, type Services } from './services.js';
 
@@ -96,9 +96,14 @@ export interface StartServerOptions {
 export async function startServer(options: StartServerOptions = {}): Promise<RunningServer> {
   const startedAt = performance.now();
   const { config, warnings } = loadConfig(options.env ?? process.env);
+  /* Con anillo: las últimas líneas van también al fichero de «Descargar fallos». */
   const logger =
     options.logger ??
-    createLogger({ level: config.logLevel, base: { version: config.appVersion } });
+    createLogger({
+      level: config.logLevel,
+      base: { version: config.appVersion },
+      ring: createLogRing(),
+    });
   for (const warning of warnings) logger.warn(warning);
 
   const clock = options.clock ?? createSystemClock();
