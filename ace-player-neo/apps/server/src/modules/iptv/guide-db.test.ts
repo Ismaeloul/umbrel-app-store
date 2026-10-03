@@ -176,6 +176,94 @@ describe('construir y leer', () => {
     expect(titles(reader, 'c.es')).toEqual(['Noticias / El tiempo', 'Primero']);
   });
 
+  it('mismo minuto: un corte de 30 s no tapa la película que empieza a los 30 s (se queda el más largo)', async () => {
+    const { store: target } = store();
+    const second = 1000;
+    const reader = await build(target, [
+      /* El corte primero y la película después (lo normal). */
+      programme('m.es', at(1), at(1) + 30 * second, 'Promo'),
+      programme('m.es', at(1) + 30 * second, at(3), 'Película larga'),
+      programme('m.es', at(3), at(4), 'Noticias'),
+      /* Al revés (guía desordenada): la película ya estaba y el corte no la quita. */
+      programme('n.es', at(1) + 30 * second, at(3), 'Película larga'),
+      programme('n.es', at(1), at(1) + 30 * second, 'Promo'),
+      /* Sin fin: el corte acaba cuando empieza lo siguiente, así que manda el último del minuto. */
+      programme('o.es', at(1), null, 'Promo'),
+      programme('o.es', at(1) + 30 * second, null, 'Película sin fin'),
+      programme('o.es', at(3), null, 'Noticias'),
+      /* Un corte con fin y la película sin él: la película (sin fin cuenta como 30 min). */
+      programme('q.es', at(1), at(1) + 30 * second, 'Promo'),
+      programme('q.es', at(1) + 30 * second, null, 'Película sin fin'),
+      programme('q.es', at(3), at(4), 'Noticias'),
+    ]);
+    for (const tvg of ['m.es', 'n.es']) {
+      expect(titles(reader, tvg)).toEqual(
+        tvg === 'm.es' ? ['Película larga', 'Noticias'] : ['Película larga'],
+      );
+      const g = reader.channels().get(tvg)?.g as number;
+      expect(reader.nowNext(g, at(2)).now?.t).toBe('Película larga');
+      expect(reader.slice(g, at(1), at(2), 10)[0]).toMatchObject({
+        s: at(1) / MINUTE,
+        e: at(3) / MINUTE,
+      });
+    }
+    expect(titles(reader, 'o.es')).toEqual(['Película sin fin', 'Noticias']);
+    expect(titles(reader, 'q.es')).toEqual(['Película sin fin', 'Noticias']);
+    const q = reader.channels().get('q.es')?.g as number;
+    expect(reader.nowNext(q, at(2, 30)).now?.t).toBe('Película sin fin');
+  });
+
+  it('varias guías (dos url-tvg): una fuente por canal; una que se corta a medias se deshace entera', async () => {
+    const { store: target } = store();
+    const writer = writerOf(target);
+    writer.beginSource();
+    writer.add(programme('a.es', at(1), at(2), 'A de la primera'));
+    writer.add(programme('b.es', at(1), at(2), 'B de la primera'));
+    writer.endSource();
+    /* La segunda se corta a mitad (red): lo suyo se deshace, también el canal nuevo. */
+    writer.beginSource();
+    writer.add(programme('b.es', at(2), at(3), 'B de la segunda'));
+    writer.add(programme('c.es', at(1), at(2), 'C a medias'));
+    expect(writer.programmes).toBe(3);
+    expect(writer.rollbackSource()).toBe(true);
+    expect(writer.programmes).toBe(2);
+    /* La tercera: B ya es de la primera (no se mezcla); C y D entran. */
+    writer.beginSource();
+    writer.add(programme('b.es', at(2), at(3), 'B de la tercera'));
+    writer.add(programme('c.es', at(1), at(2), 'C de la tercera'));
+    writer.add(programme('d.es', at(5), at(6), 'D de la tercera'));
+    writer.endSource();
+    const meta = await writer.finish();
+    expect(meta).toMatchObject({ programmes: 4, channels: 4 });
+    const reader = target.install('p_prueba01') as GuideReader;
+    expect(titles(reader, 'a.es')).toEqual(['A de la primera']);
+    expect(titles(reader, 'b.es')).toEqual(['B de la primera']);
+    expect(titles(reader, 'c.es')).toEqual(['C de la tercera']);
+    expect(titles(reader, 'd.es')).toEqual(['D de la tercera']);
+    /* Los números de canal (g) no se pisan tras deshacer. */
+    const gs = [...reader.channels().values()].map((info) => info.g);
+    expect(new Set(gs).size).toBe(4);
+  });
+
+  it('hasta dónde llega la programación (coverage): de todos o de unos canales, dentro de la ventana', async () => {
+    const { store: target } = store();
+    const reader = await build(target, [
+      programme('a.es', at(-30), at(-10), 'Empezó fuera de la ventana'),
+      programme('a.es', at(-10), at(12), 'Hasta las 12 h'),
+      programme('b.es', at(8), at(20), 'Uno largo hasta +20 h'),
+      programme('c.es', at(70), at(90), 'Se pasa de la ventana'),
+    ]);
+    const g = (tvg: string) => reader.channels().get(tvg)?.g as number;
+    expect(reader.coverage()).toEqual({ from: reader.meta.from, to: reader.meta.to });
+    expect(reader.coverage([g('a.es')])).toEqual({ from: reader.meta.from, to: at(12) });
+    expect(reader.coverage([g('a.es'), g('b.es')])).toEqual({
+      from: reader.meta.from,
+      to: at(20),
+    });
+    expect(reader.coverage([])).toBe(null);
+    expect(reader.coverage([999])).toBe(null);
+  });
+
   it('trozos: entra lo que se solapa con [desde, hasta), aunque empezara mucho antes', async () => {
     const { store: target } = store();
     const reader = await build(target, [

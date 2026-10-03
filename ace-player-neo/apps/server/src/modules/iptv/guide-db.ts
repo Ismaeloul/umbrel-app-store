@@ -27,6 +27,12 @@
    fichero de golpe (`rename`) y abre la nueva de solo lectura. Como todo es
    síncrono, ninguna consulta ve un fichero a medias.
 
+   Varias guías (una M3U con dos `url-tvg`): cada una es una «fuente»
+   (`beginSource` … `endSource`, un SAVEPOINT). Un canal se queda con los
+   programas de la primera fuente que trae alguno (no se mezclan dos
+   parrillas de un canal), y una fuente que se corta a medias se deshace
+   entera (`rollbackSource`): lo de las anteriores vale.
+
    Sin cifrar (D-propuesta G1): no lleva credenciales (las URL de imagen que
    las llevarían se descartan antes, guide-full.ts) y SQLite no cifra. 0600
    en la carpeta 0700, como lo demás de la IPTV. Un fichero ilegible o de
@@ -62,6 +68,14 @@ export interface GuideMeta {
   readonly source: GuideSource;
   /** Se llegó al tope de programas o de tamaño y se dejó de guardar. */
   readonly truncated: boolean;
+}
+
+/** Hasta dónde llega de verdad la programación guardada (epoch ms, dentro de la ventana). */
+export interface GuideCoverage {
+  /** Inicio del primer programa. */
+  readonly from: number;
+  /** Fin del último programa. */
+  readonly to: number;
 }
 
 export interface GuideChannelInfo {
@@ -227,11 +241,23 @@ export class GuideWriter {
   private readonly insertChannel: StatementSync;
   private readonly setChannelIcon: StatementSync;
   private readonly insertProgramme: StatementSync;
+  private readonly replaceShorter: StatementSync;
   private readonly joinClump: StatementSync;
   private readonly findDetail: StatementSync;
   private readonly insertDetail: StatementSync;
   private readonly pageCount: StatementSync;
-  private readonly byTvg = new Map<string, number>();
+  private byTvg = new Map<string, number>();
+  /** `tvg-id` con algún programa guardado. */
+  private withProgrammes = new Set<string>();
+  /** Canales que ya trajo una fuente anterior: los de la fuente en curso no entran (una fuente por canal). */
+  private locked: ReadonlySet<string> = new Set();
+  /** Cómo estaba todo al empezar la fuente en curso (para deshacerla). */
+  private source: {
+    readonly byTvg: Map<string, number>;
+    readonly withProgrammes: Set<string>;
+    readonly stored: number;
+    readonly truncated: boolean;
+  } | null = null;
   private readonly fromMin: number;
   private readonly toMin: number;
   private readonly maxProgrammes: number;
@@ -271,6 +297,18 @@ export class GuideWriter {
       this.setChannelIcon = this.db.prepare('UPDATE ch SET icon = ? WHERE g = ? AND icon IS NULL');
       this.insertProgramme = this.db.prepare(
         'INSERT OR IGNORE INTO p (g, s, e, t, f, d) VALUES (?, ?, ?, ?, ?, ?)',
+      );
+      /* Dos programas en el mismo minuto de un canal (la clave es el minuto): se queda el más
+         largo, para que un corte de 30 s a las 12:00:00 no tape la película de las 12:00:30.
+         Sin fin cuenta como 30 min; dos sin fin, el último (el primero duró menos de 1 min). */
+      const noStop = GUIDE_FLAGS.noStop;
+      const noStopMin = Math.round(IPTV_GUIDE_NORMALIZE.noStopDefaultMs / MINUTE);
+      this.replaceShorter = this.db.prepare(
+        `UPDATE p SET e = ?, t = ?, f = ?, d = ?
+         WHERE g = ? AND s = ? AND (
+           (CASE WHEN (f & ${noStop}) != 0 THEN ${noStopMin} ELSE e - s END) < ?
+           OR ((f & ${noStop}) != 0 AND ? = 1)
+         )`,
       );
       this.joinClump = this.db.prepare(
         `UPDATE p SET t = substr(t || ' / ' || ?, 1, ${IPTV_GUIDE_STORE.titleChars + 1})
@@ -323,6 +361,8 @@ export class GuideWriter {
   add(input: GuideProgrammeInput): void {
     if (this.closed || this.truncated) return;
     if (!Number.isFinite(input.start)) return;
+    /* Ese canal ya lo trajo una guía anterior: no se mezclan dos parrillas. */
+    if (this.locked.has(input.tvg)) return;
     const s = Math.floor(input.start / MINUTE);
     let e: number;
     let flags = input.flags & ~(GUIDE_FLAGS.detail | GUIDE_FLAGS.noStop | GUIDE_FLAGS.image);
@@ -347,12 +387,19 @@ export class GuideWriter {
       }
       const result = this.insertProgramme.run(g, s, e, input.title, flags, detailId);
       if (result.changes === 0) {
-        /* Mismo canal y misma hora: si es la continuación de una franja compartida, se junta el título. */
-        if (input.clumpFollower && input.title)
-          this.joinClump.run(input.title, g, s, e, input.title);
+        /* Mismo canal y mismo minuto: la continuación de una franja compartida junta el título;
+           si no, se queda el más largo. */
+        if (input.clumpFollower) {
+          if (input.title) this.joinClump.run(input.title, g, s, e, input.title);
+        } else {
+          const noStop = (flags & GUIDE_FLAGS.noStop) !== 0;
+          const length = noStop ? Math.round(IPTV_GUIDE_NORMALIZE.noStopDefaultMs / MINUTE) : e - s;
+          this.replaceShorter.run(e, input.title, flags, detailId, g, s, length, noStop ? 1 : 0);
+        }
         return;
       }
       this.stored += 1;
+      this.withProgrammes.add(input.tvg);
       this.sinceCheck += 1;
       if (this.stored >= this.maxProgrammes) this.stop('programas');
       else if (this.sinceCheck >= 256) {
@@ -387,6 +434,55 @@ export class GuideWriter {
     return Number(result.lastInsertRowid);
   }
 
+  /**
+   * Empieza otra fuente (otra URL de guía). Los canales que ya tienen
+   * programas de una fuente anterior se quedan como están (una fuente por
+   * canal). Lanza si SQLite no deja (quien llama deshace la guía).
+   */
+  beginSource(): void {
+    if (this.closed) return;
+    this.endSource();
+    this.locked = new Set(this.withProgrammes);
+    this.db.exec('SAVEPOINT fuente');
+    this.source = {
+      byTvg: new Map(this.byTvg),
+      withProgrammes: new Set(this.withProgrammes),
+      stored: this.stored,
+      truncated: this.truncated,
+    };
+  }
+
+  /** La fuente en curso se leyó entera: lo suyo se queda. */
+  endSource(): void {
+    if (this.closed || !this.source) return;
+    this.source = null;
+    this.db.exec('RELEASE fuente');
+  }
+
+  /**
+   * La fuente en curso se cortó a medias: se deshace entera (lo de las
+   * anteriores vale). false si no se pudo (el escritor queda deshecho: quien
+   * llama lo trata como un fallo del disco).
+   */
+  rollbackSource(): boolean {
+    if (this.closed) return false;
+    const snapshot = this.source;
+    if (!snapshot) return true;
+    this.source = null;
+    try {
+      this.db.exec('ROLLBACK TO fuente');
+      this.db.exec('RELEASE fuente');
+    } catch {
+      this.abort();
+      return false;
+    }
+    this.byTvg = snapshot.byTvg;
+    this.withProgrammes = snapshot.withProgrammes;
+    this.stored = snapshot.stored;
+    this.truncated = snapshot.truncated;
+    return true;
+  }
+
   private stop(reason: string): void {
     if (this.truncated) return;
     this.truncated = true;
@@ -413,6 +509,7 @@ export class GuideWriter {
     if (this.closed) throw new Error('GuideWriter cerrado');
     const sliceMs = this.options.sliceMs ?? IPTV_GUIDE_STORE.sliceMs;
     try {
+      this.endSource();
       const rowsOf = this.db.prepare('SELECT s, e, f, t FROM p WHERE g = ? ORDER BY s');
       const update = this.db.prepare('UPDATE p SET e = ?, f = ? WHERE g = ? AND s = ?');
       const remove = this.db.prepare('DELETE FROM p WHERE g = ? AND s = ?');
@@ -430,7 +527,7 @@ export class GuideWriter {
       for (const [, g] of this.byTvg) {
         if (signal?.aborted) throw signal.reason ?? new Error('aborted');
         const all = rowsOf.all(g) as unknown as GuideGridRow[];
-        /* El mismo programa repetido con un minuto de diferencia (dos fuentes): se queda el segundo. */
+        /* El mismo programa listado dos veces con un minuto de diferencia: se queda el segundo. */
         const rows: GuideGridRow[] = [];
         for (let index = 0; index < all.length; index += 1) {
           const row = all[index] as GuideGridRow;
@@ -533,6 +630,7 @@ export class GuideReader {
   private readonly iconStmt: StatementSync;
   private channelMap: Map<string, GuideChannelInfo> | null = null;
   private byG: Map<number, GuideChannelInfo> | null = null;
+  private allCoverage: GuideCoverage | null | undefined = undefined;
   private closed = false;
 
   private constructor(db: DatabaseSync, meta: GuideMeta) {
@@ -623,6 +721,28 @@ export class GuideReader {
   channel(g: number): GuideChannelInfo | null {
     if (!this.byG) this.channels();
     return this.byG?.get(g) ?? null;
+  }
+
+  /**
+   * Hasta dónde llega de verdad la programación de esos canales (de todos sin
+   * `gs`), recortado a la ventana guardada; null si ninguno tiene. Una guía
+   * que solo cubre hoy (la del panel de Isma, Paso 0 del 3-oct) acaba hoy
+   * aunque la ventana llegue a +80 h.
+   */
+  coverage(gs?: Iterable<number>): GuideCoverage | null {
+    if (!gs && this.allCoverage !== undefined) return this.allCoverage;
+    let from = Number.POSITIVE_INFINITY;
+    let to = Number.NEGATIVE_INFINITY;
+    const list = gs ? [...gs].map((g) => this.channel(g)) : [...this.channels().values()];
+    for (const info of list) {
+      if (!info || info.count === 0) continue;
+      if (info.first < from) from = info.first;
+      if (info.last > to) to = info.last;
+    }
+    const out =
+      from < to ? { from: Math.max(from, this.meta.from), to: Math.min(to, this.meta.to) } : null;
+    if (!gs) this.allCoverage = out;
+    return out;
   }
 
   /** Programas de un canal que se solapan con [fromMs, toMs), en orden. */
