@@ -6,26 +6,31 @@
    1. CONFIRMA un partido de la agenda y su canal exacto, con las mismas
       reglas y los mismos candidatos que la resolución (`confirmByGuide` sobre
       `guideCandidates`): lo que se enseña en la agenda es lo que luego suena
-      primero.
+      primero. Un programa cuyo título trae OTRO enfrentamiento no confirma
+      este partido por lo que diga su descripción, y el que ya es de otro
+      partido de la agenda (sus dos equipos en el título) no vale para este.
    2. MUEVE la hora si futbolenlatv se equivoca: a su hora no hay nada (o un
       programa que no puede ser un partido de esa hora, regla 1 de
       guide-match.ts), pero ese mismo día la guía tiene el partido EN DIRECTO
       (marca de directo obligatoria: las repeticiones sin marca son muy
-      comunes, §15). Manda el primer programa así del día; el saque sale de él
-      (`kickoffFromProgramme`). También si a su hora solo hay el partido SIN
-      marca y la guía lo tiene en directo antes ese día: lo de la hora de la
-      agenda es la repetición (una repetición va siempre después del directo).
+      comunes, §15) con los dos equipos en el TÍTULO o el subtítulo (nunca
+      solo en la descripción, que a menudo anuncia el partido siguiente) y en
+      un programa que no es ya de otro partido de la agenda. Manda el primer
+      programa así del día; el saque sale de él (`kickoffFromProgramme`).
+      También si a su hora solo hay el partido SIN marca y la guía lo tiene en
+      directo antes ese día: lo de la hora de la agenda es la repetición (una
+      repetición va siempre después del directo).
    3. AÑADE un partido que la guía trae y la agenda no, con cuidado: solo en
       directo (marca obligatoria), de una competición que la agenda conoce
       (familia del texto o, si el texto no nombra ninguna, del canal), en un
       canal de España, con los dos equipos reconocibles en el título o el
       subtítulo, sin filiales, cantera ni femenino (salvo Liga F), y solo si
-      ninguno de los dos equipos juega en la agenda ese día, el anterior o el
-      siguiente (un equipo no juega dos días seguidos: así un nombre escrito
-      de otra forma no duplica el partido) y si a esa misma hora no hay en la
-      agenda un partido de la misma competición, anunciado en ese canal o con
-      un nombre que se parece (así tampoco cuando la guía escribe los DOS
-      equipos de otra forma: «Brighton - Spurs», «FC Köln - Mainz 05»).
+      no es un partido de la agenda escrito de otra forma (`sameMatch`: un
+      equipo en común ese día o los de al lado, nombres que se parecen, el
+      mismo canal a esa hora o, con la hora mal, el mismo canal y la misma
+      competición de un partido que la guía no encuentra). La misma
+      competición a la misma hora, sola, no basta: en una noche de Champions
+      la guía añade el partido que le falta a la agenda.
 
    Sin IPTV, en pausa o sin guía, el servicio ni llama aquí; sin nada de la
    guía para un partido, ese partido queda tal cual. La guía solo suma. */
@@ -47,6 +52,7 @@ import {
   kickoffFromProgramme,
   matchFamily,
   programmeFitsKickoff,
+  programmeHasTeams,
   programmeLastsAMatch,
   programmeTeamTexts,
   programmeTexts,
@@ -126,6 +132,8 @@ export interface GuideAgendaOptions {
 
 const DAY_MS = 86_400_000;
 const MAX_CHANNELS = 2;
+/** «Es el mismo canal» (como `SAME_CHANNEL` de football/guide-overlay.ts). */
+const SAME_CHANNEL_SCORE = 92;
 
 /** Los canales de una confirmación: 2 como mucho y uno por canal («M+ LaLiga TV» y su «Bar», uno). */
 function distinctChannels(list: readonly GuideConfirmation[]): string[] {
@@ -229,7 +237,8 @@ export interface LiveShow {
   readonly pairAliases: readonly string[];
   readonly pairKeys: readonly string[];
   readonly pairCores: readonly string[];
-  readonly pairWords: readonly string[];
+  /** Cada equipo del título en palabras, local y visitante (para «se parece»). */
+  readonly pairTeams: readonly TeamName[];
 }
 
 function liveShows(
@@ -242,7 +251,6 @@ function liveShows(
       if (!hasLiveMark(programme)) continue;
       const pair = extractGuideMatchup(programme.title) ?? extractGuideMatchup(programme.subTitle);
       const kickoff = kickoffFromProgramme(programme);
-      const pairCores = pair ? teamCores(pair.home, pair.away) : [];
       out.push({
         candidate,
         programme,
@@ -252,8 +260,8 @@ function liveShows(
         pair,
         pairAliases: pair ? [...teamAliases(pair.home), ...teamAliases(pair.away)] : [],
         pairKeys: pair ? [footballTeamKey(pair.home), footballTeamKey(pair.away)] : [],
-        pairCores,
-        pairWords: strongWords(pairCores),
+        pairCores: pair ? teamCores(pair.home, pair.away) : [],
+        pairTeams: pair ? [teamName(pair.home), teamName(pair.away)] : [],
       });
     }
   }
@@ -261,11 +269,14 @@ function liveShows(
 }
 
 /**
- * Regla 2 sobre un programa preparado: antes de las expresiones regulares, la
- * cuenta barata (algún alias de cada equipo dentro del texto).
+ * Regla 2 sobre un programa preparado, solo en el título o el subtítulo (lo
+ * que nombra la descripción no dice de qué partido es el programa: «Sevilla -
+ * Betis» con «Esta noche, Real Madrid - Barcelona» en la descripción). Antes
+ * de las expresiones regulares, la cuenta barata (algún alias de cada equipo
+ * dentro del texto).
  */
 function showHasTeams(show: LiveShow, cache: TeamCache): boolean {
-  for (const text of show.texts) {
+  for (const text of show.texts.slice(0, 2)) {
     if (!text) continue;
     if (!cache.home.some((alias) => text.includes(alias))) continue;
     if (!cache.away.some((alias) => text.includes(alias))) continue;
@@ -274,55 +285,88 @@ function showHasTeams(show: LiveShow, cache: TeamCache): boolean {
   return false;
 }
 
+const MATCHUP_MEMO = new WeakMap<GuideProgramme, boolean>();
+
+/** ¿El título o el subtítulo traen un enfrentamiento («Sevilla - Betis»)? */
+function titleHasMatchup(programme: GuideProgramme): boolean {
+  let value = MATCHUP_MEMO.get(programme);
+  if (value === undefined) {
+    value =
+      extractGuideMatchup(programme.title) !== null ||
+      extractGuideMatchup(programme.subTitle) !== null;
+    MATCHUP_MEMO.set(programme, value);
+  }
+  return value;
+}
+
+/**
+ * ¿Puede la agenda usar este programa para este partido? Si el título o el
+ * subtítulo traen un enfrentamiento, tiene que ser el suyo: la descripción no
+ * convierte en este partido el programa de otro. Sin enfrentamiento en el
+ * título («El Clásico (Directo)», «Fútbol»), vale lo de la descripción, como
+ * en la resolución.
+ */
+function programmeIsThisMatch(programme: GuideProgramme, cache: TeamCache): boolean {
+  return programmeHasTeams(programme, cache, 'title') || !titleHasMatchup(programme);
+}
+
+/** Lo que encuentra la guía en directo a otra hora: el saque y los programas. */
+interface GuideMove {
+  readonly start: number;
+  readonly found: readonly GuideConfirmation[];
+}
+
 /**
  * Saque de un partido que la guía tiene en directo ese día a otra hora (regla
  * 2), o null. Con `before`, solo los directos que empiezan antes de esa hora.
+ * Para mover, los dos equipos tienen que estar en el título o el subtítulo
+ * (nunca solo en la descripción) y el programa no puede ser el que ya
+ * confirma otro partido de la agenda (`free`).
  */
 function moveByGuide(
   input: GuideMatchInput,
+  cache: TeamCache,
   date: string,
   candidates: readonly GuideChannelCandidate[],
   shows: readonly LiveShow[],
   agendaScore: (display: string) => number,
+  free: (programme: GuideProgramme) => boolean,
   before: number | null = null,
-): { readonly start: number; readonly channels: string[] } | null {
-  const cache = teamCache(input);
+): GuideMove | null {
   const kickoffs = new Set<number>();
   for (const show of shows) {
     const kickoff = show.kickoff;
     if (kickoff === null || kickoff === input.start || show.date !== date) continue;
     if (before !== null && kickoff >= before) continue;
-    if (showHasTeams(show, cache)) kickoffs.add(kickoff);
+    if (free(show.programme) && showHasTeams(show, cache)) kickoffs.add(kickoff);
   }
   for (const start of [...kickoffs].sort((a, b) => a - b)) {
-    const found = confirmByGuide({ ...input, start }, candidates, { agendaScore }).filter((item) =>
-      hasLiveMark(item.programme),
+    const found = confirmByGuide({ ...input, start }, candidates, { agendaScore }).filter(
+      (item) =>
+        hasLiveMark(item.programme) &&
+        free(item.programme) &&
+        programmeHasTeams(item.programme, cache, 'title'),
     );
-    if (found.length) return { start, channels: distinctChannels(found) };
+    if (found.length) return { start, found };
   }
   return null;
 }
 
 interface AgendaTeams {
+  /** Id del partido de la agenda ('' para uno que acaba de añadir la guía). */
+  readonly id: string;
   readonly day: number;
   readonly cache: TeamCache;
   readonly aliases: ReadonlySet<string>;
   readonly keys: readonly string[];
   /** Cada equipo sin siglas ni prefijos (`teamCoreWords`): «Atalanta BC» y «Atalanta» son «atalanta». */
   readonly cores: readonly string[];
-  /** Las palabras con peso de los dos nombres (para «se parece»). */
-  readonly words: ReadonlySet<string>;
+  /** Cada equipo en palabras, local y visitante (para «se parece»). */
+  readonly teams: readonly TeamName[];
   /** Saque (null sin hora) y lo que se mira de él para no duplicarlo. */
   readonly start: number | null;
   readonly family: CompetitionFamily | null;
   readonly channels: readonly string[];
-}
-
-/** Las palabras de un nombre que pesan para decir «se parece» (4 letras o más, no débiles). */
-function strongWords(cores: readonly string[]): string[] {
-  return cores
-    .flatMap((core) => core.split(' '))
-    .filter((word) => word.length >= 4 && !WEAK_TEAM_WORDS.has(word) && /[a-z]/.test(word));
 }
 
 function teamCores(home: string, away: string): string[] {
@@ -332,6 +376,7 @@ function teamCores(home: string, away: string): string[] {
 function agendaTeams(
   day: number,
   match: {
+    readonly id?: string;
     readonly home: string;
     readonly away: string;
     readonly start?: number | null;
@@ -341,18 +386,145 @@ function agendaTeams(
   },
 ): AgendaTeams {
   const cache = teamCache(match);
-  const cores = teamCores(match.home, match.away);
   return {
+    id: match.id ?? '',
     day,
     cache,
     aliases: new Set([...cache.home, ...cache.away]),
     keys: [footballTeamKey(match.home), footballTeamKey(match.away)].filter(Boolean),
-    cores,
-    words: new Set(strongWords(cores)),
+    cores: teamCores(match.home, match.away),
+    teams: [teamName(match.home), teamName(match.away)],
     start: match.start ?? null,
     family: matchFamily({ competition: match.competition ?? '', title: match.title ?? '' }),
     channels: match.channels ?? [],
   };
+}
+
+/* --- «Se parece» (solo para no añadir dos veces un partido que la agenda escribe de otra forma) --- */
+
+/** ¿Están a `limit` cambios de letra o menos (Levenshtein)? Para en cuanto ya no puede ser. */
+function withinEdits(a: string, b: string, limit: number): boolean {
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i];
+    let best = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      const value = Math.min(
+        (previous[j] as number) + 1,
+        (current[j - 1] as number) + 1,
+        (previous[j - 1] as number) + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+      current[j] = value;
+      if (value < best) best = value;
+    }
+    if (best > limit) return false;
+    previous = current;
+  }
+  return (previous[b.length] as number) <= limit;
+}
+
+/** ¿Están las letras de `short` en `long`, en orden? («utd» en «united»). */
+function isSubsequence(short: string, long: string): boolean {
+  let at = 0;
+  for (const char of long) if (char === short[at]) at += 1;
+  return at === short.length;
+}
+
+/**
+ * ¿Son la misma palabra escrita de otra forma? La inicial («O.» de
+ * «Olympique», «B.» de «Borussia»), el principio («Wed» y «Wednesday»,
+ * «Salzburg» y «Salzburgo»), la abreviatura («Utd» y «United») o una o dos
+ * letras cambiadas en una palabra larga («Olympiakos» y «Olympiacos»,
+ * «Copenhagen» y «Copenhague»).
+ */
+function wordsAlike(a: string, b: string): boolean {
+  if (a === b) return true;
+  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+  if (short.length === 1) return long.startsWith(short);
+  if (short.length < 3) return false;
+  if (long.startsWith(short)) return true;
+  if (short.length <= 4 && long.length >= short.length + 2 && short[0] === long[0]) {
+    if (isSubsequence(short, long)) return true;
+  }
+  if (short.length < 5) return false;
+  const limit = short.length >= 8 ? 2 : 1;
+  return long.length - short.length <= limit && withinEdits(short, long, limit);
+}
+
+/* Una pareja de palabras que pesa: ninguna débil («madrid», «city», «united»…) y no son siglas sueltas. */
+function strongPair(a: string, b: string): boolean {
+  return (
+    Math.min(a.length, b.length) >= 3 &&
+    Math.max(a.length, b.length) >= 4 &&
+    !WEAK_TEAM_WORDS.has(a) &&
+    !WEAK_TEAM_WORDS.has(b)
+  );
+}
+
+/**
+ * ¿Pueden ser el mismo equipo? Cada palabra del nombre más corto se parece a
+ * una palabra distinta del otro, y alguna de esas parejas pesa. «Sheffield
+ * Wed» y «Sheffield Wednesday», «Leeds Utd» y «Leeds United», «O. Lyonnais» y
+ * «Olympique Lyonnais», sí; «Manchester City» y «Manchester United» o
+ * «Newcastle United» y «Newcastle Jets», no (sobra «city» o «jets»); «Real
+ * Madrid» y «Atlético de Madrid», tampoco («madrid» sola no pesa).
+ */
+function teamsAlike(a: TeamName, b: TeamName): boolean {
+  if (!a.words.length || !b.words.length) return false;
+  if (a.name === b.name) return true;
+  const [short, long] = a.words.length <= b.words.length ? [a.words, b.words] : [b.words, a.words];
+  let used = 0;
+  let strong = false;
+  for (const word of short) {
+    let found = -1;
+    for (let index = 0; index < long.length && index < 30; index += 1) {
+      if (used & (1 << index)) continue;
+      if (wordsAlike(word, long[index] as string)) {
+        found = index;
+        break;
+      }
+    }
+    if (found < 0) return false;
+    used |= 1 << found;
+    if (strongPair(word, long[found] as string)) strong = true;
+  }
+  return strong;
+}
+
+/** El nombre de un equipo sin siglas ni prefijos, en palabras (`teamCoreWords`). */
+interface TeamName {
+  readonly name: string;
+  readonly words: readonly string[];
+}
+
+function teamName(value: string): TeamName {
+  const words = teamCoreWords(value);
+  return { name: words.join(' '), words };
+}
+
+const NO_TEAM: TeamName = { name: '', words: [] };
+
+/**
+ * Cuántos de los dos equipos del programa se parecen a los del partido (0, 1
+ * o 2; local y visitante, o al revés). Los nombres se repiten mucho (cada
+ * equipo de la guía contra cada partido del día): cada pareja de nombres se
+ * compara una vez por cálculo (`memo`).
+ */
+function alikeTeams(show: LiveShow, match: AgendaTeams, memo: Map<string, boolean>): number {
+  const alike = (a: TeamName = NO_TEAM, b: TeamName = NO_TEAM): number => {
+    const key = a.name < b.name ? `${a.name}\n${b.name}` : `${b.name}\n${a.name}`;
+    let value = memo.get(key);
+    if (value === undefined) {
+      value = teamsAlike(a, b);
+      memo.set(key, value);
+    }
+    return value ? 1 : 0;
+  };
+  const [home, away] = show.pairTeams;
+  const [matchHome, matchAway] = match.teams;
+  const straight = alike(home, matchHome) + alike(away, matchAway);
+  if (straight === 2) return 2;
+  return Math.max(straight, alike(home, matchAway) + alike(away, matchHome));
 }
 
 /** ¿Juega alguno de los dos equipos del programa en ese partido? (clave, alias o nombre sin siglas). */
@@ -404,6 +576,8 @@ export interface GuideAgendaIndex {
   readonly dates: ReadonlySet<string>;
   readonly candidates: readonly GuideChannelCandidate[];
   readonly shows: readonly LiveShow[];
+  /** Cada canal con su guía entera (por `key`), para mirar qué hay a una hora. */
+  readonly channels: ReadonlyMap<string, GuideChannelCandidate>;
 }
 
 export function prepareGuideAgenda(
@@ -412,10 +586,20 @@ export function prepareGuideAgenda(
   dateOf: (ms: number) => string,
 ): GuideAgendaIndex {
   const set = new Set(dates);
-  if (!set.size || !allCandidates.length) return { dates: set, candidates: [], shows: [] };
+  if (!set.size || !allCandidates.length) {
+    return { dates: set, candidates: [], shows: [], channels: new Map() };
+  }
   const dayOf = quarterMemo(dateOf);
   const candidates = slimCandidates(allCandidates, set, dayOf);
-  return { dates: set, candidates, shows: liveShows(candidates, dayOf) };
+  /* Solo los canales que pueden dar un partido esos días (pocos), con su guía entera. */
+  const wanted = new Set(candidates.map((candidate) => candidate.key));
+  const channels = new Map<string, GuideChannelCandidate>();
+  for (const candidate of allCandidates) {
+    if (wanted.has(candidate.key) && !channels.has(candidate.key)) {
+      channels.set(candidate.key, candidate);
+    }
+  }
+  return { dates: set, candidates, shows: liveShows(candidates, dayOf), channels };
 }
 
 /**
@@ -464,7 +648,18 @@ export function guideAgendaFrom(
   };
 
   // 1 y 2: confirmar (y mover) los partidos de la agenda.
-  const confirmations: GuideAgendaConfirmation[] = [];
+  interface Pending {
+    readonly match: GuideAgendaMatch;
+    readonly start: number;
+    readonly input: GuideMatchInput;
+    readonly cache: TeamCache;
+    readonly agendaScore: (display: string) => number;
+    readonly found: readonly GuideConfirmation[];
+  }
+  const pending: Pending[] = [];
+  /* Los programas que confirman un partido de la agenda a su hora con sus dos equipos en el
+     título: son de ese partido y no pueden mover otro (ni confirmarlo por la descripción). */
+  const owners = new Map<GuideProgramme, Set<string>>();
   for (const match of request.matches) {
     if (!dates.has(match.date) || match.start === null) continue;
     if (!match.home.trim() || !match.away.trim()) continue;
@@ -476,31 +671,57 @@ export function guideAgendaFrom(
       start: match.start,
       channels: match.channels,
     };
+    const cache = teamCache(input);
     const agendaScore = scorerFor(match.channels);
-    const found = confirmByGuide(input, candidates, { agendaScore });
+    const found = confirmByGuide(input, candidates, { agendaScore }).filter((item) =>
+      programmeIsThisMatch(item.programme, cache),
+    );
+    for (const item of found) {
+      if (!programmeHasTeams(item.programme, cache, 'title')) continue;
+      const set = owners.get(item.programme) ?? new Set<string>();
+      set.add(match.id);
+      owners.set(item.programme, set);
+    }
+    pending.push({ match, start: match.start, input, cache, agendaScore, found });
+  }
+  const confirmations: GuideAgendaConfirmation[] = [];
+  /* Los programas de la guía que ya son un partido de la agenda (para no añadirlos otra vez). */
+  const used = new Set<GuideProgramme>();
+  const confirm = (
+    matchId: string,
+    found: readonly GuideConfirmation[],
+    start: number,
+    moved: boolean,
+  ): void => {
+    for (const item of found) used.add(item.programme);
+    confirmations.push({ matchId, channels: distinctChannels(found), start, moved });
+  };
+  for (const { match, start, input, cache, agendaScore, found: atItsTime } of pending) {
+    const free = (programme: GuideProgramme): boolean => {
+      const set = owners.get(programme);
+      return !set || [...set].every((id) => id === match.id);
+    };
+    const found = atItsTime.filter((item) => free(item.programme));
     /* Lo de la hora de la agenda no lleva la marca de directo y la guía tiene
        el partido EN DIRECTO ese mismo día, antes: lo de la hora de la agenda
        es la repetición (una repetición siempre va después del directo). */
     const earlier =
       found.length && !found.some((item) => hasLiveMark(item.programme))
-        ? moveByGuide(input, match.date, candidates, shows, agendaScore, match.start)
+        ? moveByGuide(input, cache, match.date, candidates, shows, agendaScore, free, start)
         : null;
     if (earlier) {
-      confirmations.push({ matchId: match.id, ...earlier, moved: true });
+      confirm(match.id, earlier.found, earlier.start, true);
       continue;
     }
     if (found.length) {
-      confirmations.push({
-        matchId: match.id,
-        channels: distinctChannels(found),
-        start: match.start,
-        moved: false,
-      });
+      confirm(match.id, found, start, false);
       continue;
     }
-    const moved = moveByGuide(input, match.date, candidates, shows, agendaScore);
-    if (moved) confirmations.push({ matchId: match.id, ...moved, moved: true });
+    const moved = moveByGuide(input, cache, match.date, candidates, shows, agendaScore, free);
+    if (moved) confirm(match.id, moved.found, moved.start, true);
   }
+  const confirmedIds = new Set(confirmations.map((item) => item.matchId));
+  const alikeMemo = new Map<string, boolean>();
 
   // 3: lo que solo trae la guía.
   const agenda: AgendaTeams[] = [];
@@ -509,6 +730,61 @@ export function guideAgendaFrom(
     if (day === null || !match.home.trim() || !match.away.trim()) continue;
     agenda.push(agendaTeams(day, match));
   }
+  /**
+   * ¿Es este programa ese partido de la agenda, escrito de otra forma? Mejor no
+   * añadir uno que añadirlo dos veces, pero sin perder los que de verdad no
+   * están (una jornada de Champions con ocho partidos a la vez):
+   * - un equipo juega en él ese día, el anterior o el siguiente (clave, alias o
+   *   nombre sin siglas; un equipo no juega dos días seguidos);
+   * - los dos equipos se parecen (`teamsAlike`), ese día, a la hora que sea;
+   * - uno se parece y es de la misma competición, ese día («Crvena Zvezda -
+   *   Olympiakos» y «Estrella Roja - Olympiacos»);
+   * - a esa hora y en ese canal (≥ 70): un canal da un partido a la vez;
+   * - en ese mismo canal (≥ 92), de la misma competición, ese día, la guía no
+   *   confirma el de la agenda y a la hora de la agenda ese canal no tiene
+   *   nada que pueda ser un partido: es él, con la hora mal y los dos nombres
+   *   de otra forma («Estrella Roja - Olympiacos» a las 18:45 y «Crvena Zvezda
+   *   - Olympiakos» a las 21:00, en el mismo canal).
+   * La misma competición a la misma hora, sola, ya no basta.
+   */
+  /* «Algo que pueda ser un partido»: dura lo de un partido a esa hora, no es una repetición y,
+     en un canal sin competición en el nombre («La 1», «DAZN 1»), trae un enfrentamiento o una
+     competición (una película a esa hora no cuenta). */
+  const slotTaken = (candidate: GuideChannelCandidate, start: number): boolean => {
+    const sportsChannel = competitionFamily(candidate.display) !== null;
+    return (index.channels.get(candidate.key) ?? candidate).programmes.some(
+      (programme) =>
+        programmeFitsKickoff(programme, start) &&
+        !isNotLive(programme) &&
+        (sportsChannel || titleHasMatchup(programme) || programmeFamilies(programme).size > 0),
+    );
+  };
+  const sameMatch = (
+    show: LiveShow,
+    match: AgendaTeams,
+    day: number,
+    family: CompetitionFamily,
+  ): boolean => {
+    if (
+      Math.abs(match.day - day) <= 1 &&
+      (sharesTeam(show, match) || showHasTeams(show, match.cache))
+    ) {
+      return true;
+    }
+    if (match.day !== day) return false;
+    const channelScore = scorerFor(match.channels)(show.candidate.display);
+    if (channelScore >= LIBRARY_MIN_SCORE && sameSlot(show, match)) return true;
+    const sameFamily = match.family === family;
+    const alike = alikeTeams(show, match, alikeMemo);
+    if (alike === 2 || (alike === 1 && sameFamily)) return true;
+    return (
+      sameFamily &&
+      channelScore >= SAME_CHANNEL_SCORE &&
+      match.id !== '' &&
+      !confirmedIds.has(match.id) &&
+      (match.start === null || !slotTaken(show.candidate, match.start))
+    );
+  };
   const groups = new Map<
     string,
     {
@@ -524,6 +800,7 @@ export function guideAgendaFrom(
   for (const show of shows) {
     const { candidate, programme, pair } = show;
     if (candidate.country !== 'ES' || !pair || show.kickoff === null) continue;
+    if (used.has(programme)) continue;
     if (footballTeamIsVariant(pair.home) || footballTeamIsVariant(pair.away)) continue;
     if (!isAgendaFootball(programme)) continue;
     let channelFamily = channelFamilies.get(candidate);
@@ -538,21 +815,7 @@ export function guideAgendaFrom(
     const date = show.date;
     const day = dayNumber(date);
     if (!dates.has(date) || day === null) continue;
-    const known = agenda.some(
-      (match) =>
-        (Math.abs(match.day - day) <= 1 &&
-          (sharesTeam(show, match) || showHasTeams(show, match.cache))) ||
-        /* Los dos equipos escritos de otra forma («Brighton - Spurs» y «Brighton & Hove Albion -
-           Tottenham Hotspur», «FC Köln - Mainz 05» y «Colonia - Maguncia»): a esa misma hora, un
-           partido de la agenda de la misma competición, en ese canal o con un nombre que se
-           parece es ese partido. Mejor no añadir uno que añadirlo dos veces. */
-        (match.day === day &&
-          sameSlot(show, match) &&
-          (match.family === family ||
-            scorerFor(match.channels)(candidate.display) >= LIBRARY_MIN_SCORE ||
-            show.pairWords.some((word) => match.words.has(word)))),
-    );
-    if (known) continue;
+    if (agenda.some((match) => sameMatch(show, match, day, family))) continue;
     const key = `${date}|${[...show.pairKeys].sort().join('|')}`;
     const previous = groups.get(key);
     if (!previous || start < previous.start) {
@@ -563,22 +826,29 @@ export function guideAgendaFrom(
   const added: AgendaTeams[] = [];
   for (const group of [...groups.values()].sort((a, b) => a.start - b.start)) {
     const day = dayNumber(group.date) as number;
-    /* Dos grafías del mismo partido («Barça - R. Madrid» y «Barcelona - Real Madrid»): uno. */
-    if (added.some((other) => other.day === day && sharesTeam(group.show, other))) continue;
+    /* Dos grafías del mismo partido («Barça - R. Madrid» y «Barcelona - Real Madrid»,
+       «Sheffield Wed» y «Sheffield Wednesday»): uno. */
+    if (added.some((other) => sameMatch(group.show, other, day, group.family))) continue;
     const competition = COMPETITION_FAMILY_LABELS[group.family];
-    const found = confirmByGuide(
-      {
-        home: group.home,
-        away: group.away,
-        competition,
-        title: `${group.home} - ${group.away}`,
-        start: group.start,
-        channels: [],
-      },
-      candidates,
-      { agendaScore: () => 0 },
-    ).filter((item) => hasLiveMark(item.programme));
+    const input: GuideMatchInput = {
+      home: group.home,
+      away: group.away,
+      competition,
+      title: `${group.home} - ${group.away}`,
+      start: group.start,
+      channels: [],
+    };
+    const cache = teamCache(input);
+    /* Sus canales: los programas en directo con los dos equipos en el título, que no son ya un
+       partido de la agenda. */
+    const found = confirmByGuide(input, candidates, { agendaScore: () => 0 }).filter(
+      (item) =>
+        hasLiveMark(item.programme) &&
+        !used.has(item.programme) &&
+        programmeHasTeams(item.programme, cache, 'title'),
+    );
     if (!found.length) continue;
+    const channels = distinctChannels(found);
     additions.push({
       home: group.home,
       away: group.away,
@@ -586,9 +856,10 @@ export function guideAgendaFrom(
       competition,
       date: group.date,
       start: group.start,
-      channels: distinctChannels(found),
+      channels,
     });
-    added.push(agendaTeams(day, { ...group, competition }));
+    for (const item of found) used.add(item.programme);
+    added.push(agendaTeams(day, { ...group, competition, channels }));
   }
   return { confirmations, additions };
 }

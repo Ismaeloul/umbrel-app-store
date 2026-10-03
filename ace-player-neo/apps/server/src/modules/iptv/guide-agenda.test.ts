@@ -266,6 +266,125 @@ describe('guideAgenda: mover la hora', () => {
     expect(result.confirmations).toEqual([]);
   });
 
+  describe('la descripción nunca mueve un partido a la hora de otro (revisión)', () => {
+    /* Sevilla - Betis a las 18:30 en DAZN LaLiga; el Clásico a las 21:00 en M+ LaLiga TV. La
+       guía del derbi, en directo, anuncia el Clásico en su descripción (las guías reales traen
+       descripción en todos los programas). */
+    const derbi = match({
+      id: 'fltv-derbi',
+      home: 'Sevilla',
+      away: 'Real Betis',
+      title: 'Sevilla - Real Betis',
+      channels: ['DAZN LaLiga'],
+    });
+    const clasico = match({
+      id: 'fltv-clasico',
+      home: 'Real Madrid',
+      away: 'Barcelona',
+      title: 'Real Madrid - Barcelona',
+      start: KICKOFF + 2.5 * HOUR,
+      channels: ['M+ LaLiga TV'],
+    });
+    const derbiShow = (display = 'DAZN LaLiga'): GuideChannelCandidate =>
+      channel(display, [
+        programme('LaLiga EA Sports: Sevilla - Betis (Directo)', KICKOFF - 5 * MIN, 125, {
+          desc: 'Jornada 8 desde el Sánchez-Pizjuán. Esta noche, Real Madrid - Barcelona en M+ LaLiga TV.',
+        }),
+      ]);
+    const nine = KICKOFF + 2.5 * HOUR - 5 * MIN; // 20:55
+
+    it('a su hora la guía no lo confirma (otro título o sin marca): ni se mueve ni coge el canal del otro', () => {
+      for (const title of ['El Clásico (Directo)', 'Fútbol']) {
+        const result = run(
+          [derbiShow(), channel('M+ LaLiga TV', [programme(title, nine, 125)])],
+          [derbi, clasico],
+        );
+        expect(result.confirmations, title).toEqual([
+          { matchId: 'fltv-derbi', channels: ['DAZN LaLiga'], start: KICKOFF, moved: false },
+        ]);
+      }
+    });
+
+    it('a su hora el partido sin marca y antes un directo que solo lo nombra en la descripción: se queda a su hora', () => {
+      for (const display of ['DAZN LaLiga', 'M+ LaLiga TV']) {
+        const result = run(
+          [
+            derbiShow(display),
+            channel('M+ LaLiga TV', [
+              programme('LaLiga EA Sports: Real Madrid - Barcelona', nine, 125),
+            ]),
+          ],
+          [derbi, { ...clasico, channels: [display === 'DAZN LaLiga' ? 'M+ LaLiga TV' : display] }],
+        );
+        expect(
+          result.confirmations.find((item) => item.matchId === 'fltv-clasico'),
+          display,
+        ).toEqual({
+          matchId: 'fltv-clasico',
+          channels: ['M+ LaLiga TV'],
+          start: KICKOFF + 2.5 * HOUR,
+          moved: false,
+        });
+      }
+    });
+
+    it('un directo sin enfrentamiento en el título que solo lo nombra en la descripción no lo mueve', () => {
+      const result = run([
+        channel('M+ LaLiga TV 2', [
+          programme('Fútbol (Directo)', KICKOFF - 3 * HOUR - 5 * MIN, 120, {
+            desc: 'LaLiga EA Sports: Real Sociedad - Villarreal desde Anoeta.',
+          }),
+        ]),
+      ]);
+      expect(result.confirmations).toEqual([]);
+    });
+
+    it('a la misma hora, el programa de otro partido no confirma este por su descripción', () => {
+      const result = run(
+        [
+          derbiShow(),
+          channel('M+ LaLiga TV', [
+            programme(
+              'LaLiga EA Sports: Real Madrid - Barcelona (Directo)',
+              KICKOFF - 5 * MIN,
+              125,
+            ),
+          ]),
+        ],
+        [derbi, { ...clasico, start: KICKOFF }],
+      );
+      expect(result.confirmations).toEqual([
+        { matchId: 'fltv-derbi', channels: ['DAZN LaLiga'], start: KICKOFF, moved: false },
+        { matchId: 'fltv-clasico', channels: ['M+ LaLiga TV'], start: KICKOFF, moved: false },
+      ]);
+    });
+
+    it('sin enfrentamiento en el título, la descripción sigue confirmando a su hora (como en la resolución)', () => {
+      const result = run(
+        [
+          channel('M+ LaLiga TV', [
+            programme('El Clásico (Directo)', nine, 125, {
+              desc: 'LaLiga EA Sports: Real Madrid - Barcelona desde el Bernabéu.',
+            }),
+          ]),
+        ],
+        [clasico],
+      );
+      expect(result.confirmations).toEqual([
+        {
+          matchId: 'fltv-clasico',
+          channels: ['M+ LaLiga TV'],
+          start: KICKOFF + 2.5 * HOUR,
+          moved: false,
+        },
+      ]);
+      /* Pero no la mueve a otra hora. */
+      expect(run([derbiShow()], [{ ...clasico, start: KICKOFF + 4 * HOUR }]).confirmations).toEqual(
+        [],
+      );
+    });
+  });
+
   it('el primero del día si hay dos en directo', () => {
     const early = KICKOFF - 3 * HOUR - 5 * MIN; // 15:25 → 15:30
     const result = run([
@@ -284,11 +403,14 @@ describe('guideAgenda: lo que solo trae la guía', () => {
   const girona = KICKOFF - 2 * HOUR - 20 * MIN; // 16:10 → 16:15
 
   it('un partido en directo que la agenda no trae se añade con su canal y su competición', () => {
+    /* En el mismo canal que el de la agenda (DAZN LaLiga), que a su hora da el suyo. */
     const result = run([
       channel('DAZN LaLiga', [
         programme('LaLiga EA Sports. Jornada 7: Girona - Sevilla', girona, 125, live),
+        programme('LaLiga EA Sports. Jornada 7: Real Sociedad - Villarreal', KICKOFF - 5 * MIN),
       ]),
     ]);
+    expect(result.confirmations).toMatchObject([{ matchId: 'fltv-1', moved: false }]);
     expect(result.additions).toEqual([
       {
         home: 'Girona',
@@ -482,60 +604,230 @@ describe('guideAgenda: lo que solo trae la guía', () => {
     }
   });
 
-  it('sin alias que valga, a esa hora un partido de la agenda de la misma competición, en ese canal o con un nombre parecido es ese partido', () => {
-    const guide = (display: string, title: string): GuideChannelCandidate[] => [
-      channel(display, [programme(title, KICKOFF - 5 * MIN, 120, live)]),
-    ];
-    const zvezda = match({
-      home: 'Estrella Roja',
-      away: 'Olympiacos',
-      title: 'Estrella Roja - Olympiacos',
+  describe('los dos equipos escritos de otra forma, sin alias que valga (revisión)', () => {
+    const at = (display: string, title: string, start = KICKOFF - 5 * MIN): GuideChannelCandidate =>
+      channel(display, [programme(title, start, 120, live)]);
+    /* futbolenlatv en castellano; la guía, como en su país. Ningún alias los junta. */
+    const shakhtar = match({
+      home: 'Shajtar Donetsk',
+      away: 'Dinamo de Kiev',
+      title: 'Shajtar Donetsk - Dinamo de Kiev',
       competition: 'Liga de Campeones',
       channels: ['M+ Liga de Campeones 3'],
     });
-    /* La misma competición a la misma hora. */
-    expect(
-      run(guide('M+ Liga de Campeones 5', 'Champions League: Crvena Zvezda - Olympiakos'), [zvezda])
-        .additions,
-    ).toEqual([]);
-    /* El canal que anuncia la agenda (aunque la agenda no diga la competición). */
-    expect(
-      run(guide('M+ Liga de Campeones 3', 'Champions League: Crvena Zvezda - Olympiakos'), [
-        { ...zvezda, competition: 'Partido internacional' },
-      ]).additions,
-    ).toEqual([]);
-    /* Un nombre que se parece («Sheffield Wed - Leeds Utd» y «Sheffield Wednesday - Leeds United»). */
-    expect(
-      run(guide('DAZN 2', 'Premier League: Sheffield Wed - Leeds Utd'), [
+    const guideShakhtar = 'Champions League: Shakhtar Donetsk - Dynamo Kyiv';
+
+    it('en ese canal y a esa hora es ese partido (un canal da un partido a la vez)', () => {
+      expect(run([at('M+ Liga de Campeones 3', guideShakhtar)], [shakhtar]).additions).toEqual([]);
+      /* Aunque la agenda no diga la competición. */
+      expect(
+        run(
+          [at('M+ Liga de Campeones 3', guideShakhtar)],
+          [{ ...shakhtar, competition: 'Partido internacional' }],
+        ).additions,
+      ).toEqual([]);
+    });
+
+    it('la misma competición a la misma hora, sola, no basta: en una noche de Champions se añade el que falta', () => {
+      const night = [
+        ['Real Madrid', 'Juventus'],
+        ['Liverpool', 'Bayern Múnich'],
+        ['Inter de Milán', 'Arsenal'],
+        ['PSG', 'Benfica'],
+        ['Borussia Dortmund', 'Atalanta'],
+        ['Manchester City', 'Celtic'],
+        ['Ajax', 'Chelsea'],
+        ['Barcelona', 'Oporto'],
+      ].map(([home = '', away = ''], index) =>
         match({
-          home: 'Sheffield Wednesday',
-          away: 'Leeds United',
-          title: 'Sheffield Wednesday - Leeds United',
-          competition: 'Championship',
-          channels: ['Movistar Plus+'],
+          id: `fltv-c${index}`,
+          home,
+          away,
+          title: `${home} - ${away}`,
+          competition: 'Liga de Campeones',
+          channels: [`M+ Liga de Campeones ${index + 1}`],
         }),
-      ]).additions,
-    ).toEqual([]);
-    /* Otro partido a esa hora (otra competición, otro canal, otros nombres): se añade. */
-    expect(
-      run(guide('Movistar Plus+', 'Premier League: Arsenal - Chelsea')).additions,
-    ).toMatchObject([{ home: 'Arsenal', away: 'Chelsea', family: 'premier' }]);
-    /* La misma competición, pero dos horas antes: se añade. */
-    expect(
-      run(
-        [
-          channel('M+ Liga de Campeones 5', [
-            programme(
-              'Champions League: Crvena Zvezda - Olympiakos',
-              KICKOFF - 2 * HOUR - 15 * MIN,
-              120,
-              live,
-            ),
-          ]),
-        ],
-        [zvezda],
-      ).additions,
-    ).toHaveLength(1);
+      );
+      expect(
+        run([at('M+ Liga de Campeones 9', 'Liga de Campeones: Galatasaray - Club Brujas')], night)
+          .additions,
+      ).toMatchObject([{ home: 'Galatasaray', away: 'Club Brujas', family: 'champions' }]);
+      /* Un sábado de Premier: Arsenal - Chelsea en DAZN 1 y, a la vez, Everton - Fulham en DAZN 2. */
+      expect(
+        run(
+          [at('DAZN 2', 'Premier League: Everton - Fulham')],
+          [
+            match({
+              home: 'Arsenal',
+              away: 'Chelsea',
+              title: 'Arsenal - Chelsea',
+              competition: 'Premier League',
+              channels: ['DAZN 1'],
+            }),
+          ],
+        ).additions,
+      ).toMatchObject([{ home: 'Everton', away: 'Fulham' }]);
+    });
+
+    it('una palabra en común no basta: «Newcastle United» no es «Newcastle Jets» ni «Manchester City» es «Manchester United»', () => {
+      expect(
+        run(
+          [at('M+ Liga de Campeones 2', 'Liga de Campeones: Newcastle United - Barcelona')],
+          [
+            match({
+              home: 'Newcastle Jets',
+              away: 'Sydney FC',
+              title: 'Newcastle Jets - Sydney FC',
+              competition: 'A-League',
+              channels: ['Movistar Plus+'],
+            }),
+          ],
+        ).additions,
+      ).toHaveLength(1);
+      expect(
+        run(
+          [at('DAZN 2', 'Premier League: Manchester City - Everton')],
+          [
+            match({
+              home: 'Manchester United',
+              away: 'Fulham',
+              title: 'Manchester United - Fulham',
+              competition: 'Premier League',
+              channels: ['DAZN 1'],
+              start: KICKOFF - 3 * HOUR,
+            }),
+          ],
+        ).additions,
+      ).toHaveLength(1);
+    });
+
+    it('los dos nombres se parecen, a la hora que sea: es ese partido', () => {
+      /* «Sheffield Wed - Leeds Utd» y «Sheffield Wednesday - Leeds United», también dos horas antes. */
+      for (const start of [KICKOFF - 5 * MIN, KICKOFF - 2 * HOUR - 15 * MIN]) {
+        expect(
+          run(
+            [at('DAZN 2', 'Premier League: Sheffield Wed - Leeds Utd', start)],
+            [
+              match({
+                home: 'Sheffield Wednesday',
+                away: 'Leeds United',
+                title: 'Sheffield Wednesday - Leeds United',
+                competition: 'Championship',
+                channels: ['Movistar Plus+'],
+              }),
+            ],
+          ).additions,
+        ).toEqual([]);
+      }
+    });
+
+    it('uno se parece y es de la misma competición, ese día: es ese partido aunque la hora no cuadre', () => {
+      /* «Kairat Almaty - Pafos» (futbolenlatv, a las 18:30) y «Qairat - Paphos» (la guía, a las 21:00, en otro canal). */
+      const kairat = match({
+        home: 'Kairat Almaty',
+        away: 'Pafos',
+        title: 'Kairat Almaty - Pafos',
+        competition: 'Liga de Campeones',
+        channels: ['M+ Liga de Campeones 4'],
+      });
+      const guide = [
+        at(
+          'M+ Liga de Campeones 6',
+          'Liga de Campeones: Qairat - Paphos',
+          KICKOFF + 2.5 * HOUR - 5 * MIN,
+        ),
+      ];
+      expect(run(guide, [kairat]).additions).toEqual([]);
+      /* De otra competición, sí se añade (uno parecido solo no basta). */
+      expect(run(guide, [{ ...kairat, competition: 'Copa de Kazajistán' }]).additions).toHaveLength(
+        1,
+      );
+    });
+
+    it('con la hora de la agenda mal: en su mismo canal y de su competición, si a su hora el canal no da nada que pueda ser un partido, es ese partido', () => {
+      /* La agenda lo pone a las 18:30 en M+ Liga de Campeones 3; la guía, a las 21:00 en ese canal. */
+      const late = KICKOFF + 2.5 * HOUR - 5 * MIN;
+      expect(
+        run([at('M+ Liga de Campeones 3', guideShakhtar, late)], [shakhtar]).additions,
+      ).toEqual([]);
+      /* En un canal generalista, una película a la hora de la agenda no es un partido: tampoco. */
+      expect(
+        run(
+          [
+            channel('Movistar Plus+', [
+              programme('Cine: Gladiator', KICKOFF - 5 * MIN, 150),
+              programme(guideShakhtar, late, 120, live),
+            ]),
+          ],
+          [{ ...shakhtar, channels: ['Movistar Plus+'] }],
+        ).additions,
+      ).toEqual([]);
+      /* Si a la hora de la agenda el canal da algo que puede ser un partido, la hora de la agenda
+         vale y lo de las 21:00 en ese canal es otro partido: se añade. */
+      const other = 'Liga de Campeones: Galatasaray - Club Brujas';
+      expect(
+        run(
+          [
+            channel('M+ Liga de Campeones 3', [
+              programme('Liga de Campeones (Directo)', KICKOFF - 5 * MIN, 120),
+              programme(other, late, 120, live),
+            ]),
+          ],
+          [shakhtar],
+        ).additions,
+      ).toMatchObject([{ home: 'Galatasaray' }]);
+      /* Y si la guía confirma el de la agenda a su hora, también. */
+      expect(
+        run(
+          [
+            channel('M+ Liga de Campeones 3', [
+              programme(
+                'Liga de Campeones: Shajtar Donetsk - Dinamo de Kiev',
+                KICKOFF - 5 * MIN,
+                120,
+              ),
+              programme(other, late, 120, live),
+            ]),
+          ],
+          [shakhtar],
+        ),
+      ).toMatchObject({ confirmations: [{ moved: false }], additions: [{ home: 'Galatasaray' }] });
+    });
+  });
+
+  it('con alias de la Champions, la guía mueve la hora en vez de duplicar («Estrella Roja» es «Crvena Zvezda»)', () => {
+    /* La agenda: Estrella Roja - Olympiacos a las 18:30; la guía, en su canal, a las 21:00 en directo. */
+    const result = run(
+      [
+        channel('M+ Liga de Campeones 3', [
+          programme(
+            'Liga de Campeones: Crvena Zvezda - Olympiakos (Directo)',
+            KICKOFF + 2.5 * HOUR - 5 * MIN,
+            120,
+          ),
+        ]),
+      ],
+      [
+        match({
+          home: 'Estrella Roja',
+          away: 'Olympiacos',
+          title: 'Estrella Roja - Olympiacos',
+          competition: 'Liga de Campeones',
+          channels: ['M+ Liga de Campeones 3'],
+        }),
+      ],
+    );
+    expect(result).toEqual({
+      confirmations: [
+        {
+          matchId: 'fltv-1',
+          channels: ['M+ Liga de Campeones 3'],
+          start: KICKOFF + 2.5 * HOUR,
+          moved: true,
+        },
+      ],
+      additions: [],
+    });
   });
 
   it('un partido de la agenda movido por la guía no se añade otra vez', () => {
