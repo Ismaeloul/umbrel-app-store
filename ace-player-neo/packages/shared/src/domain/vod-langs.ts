@@ -490,6 +490,8 @@ export interface VodLangDetection {
   readonly bits: number;
   /** El castellano salió SOLO de marcas flojas («ES», «español»): con una categoría latina, es latino. */
   readonly weakSpanish: boolean;
+  /** Dice MULTI o DUAL (varios audios): un castellano flojo con VOSE sigue siendo audio. */
+  readonly multi?: boolean;
 }
 
 interface Token {
@@ -539,7 +541,7 @@ export function detectVodLangs(text: string, context: VodLangContext): VodLangDe
        subtítulos (salvo MULTI o DUAL, que son varios audios). */
     if (bits & LAT || (bits & VOSE && !multi)) bits &= ~CAST;
   }
-  return { bits, weakSpanish: (bits & CAST) !== 0 && !strongSpanish && weakSpanish };
+  return { bits, weakSpanish: (bits & CAST) !== 0 && !strongSpanish && weakSpanish, multi };
 }
 
 /** Lo que hay entre el token anterior (o el principio) y este, y entre este y el siguiente. */
@@ -596,12 +598,15 @@ function languageSpot(text: string, tokens: readonly Token[], index: number): bo
 /**
  * El idioma de un título: el de sus marcas si tiene alguna; si no, el de su
  * categoría. Con un castellano flojo en el título («ES - Coco») y una
- * categoría latina, latino.
+ * categoría latina, latino; en una categoría VOSE, VOSE.
  */
 export function combineVodLangs(title: VodLangDetection, category: VodLangDetection): number {
   if (!title.bits) return category.bits;
-  if (title.weakSpanish && category.bits & LAT && !(category.bits & CAST)) {
-    return (title.bits & ~CAST) | LAT;
+  if (title.weakSpanish && !(category.bits & CAST)) {
+    if (category.bits & LAT) return (title.bits & ~CAST) | LAT;
+    /* «ES - Coco» en «VOSE»: los subtítulos, como dentro de un mismo texto
+       (salvo MULTI o DUAL en el título, que son varios audios). */
+    if (category.bits & VOSE && !title.multi) return (title.bits & ~CAST) | VOSE;
   }
   return title.bits;
 }
