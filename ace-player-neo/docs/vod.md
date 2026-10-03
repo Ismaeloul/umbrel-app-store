@@ -1587,6 +1587,36 @@ seguidas se juntan en un salto a los 300 ms); K o Espacio, reproducir o pausar; 
 - `revision-visual.mjs` recorre `cine`, una categoría, una búsqueda, la ficha de una película y la de una serie, sobre
   la demo.
 
+### 12.12 Rediseño de la 0.9.0: «como los partidos» (equipo vod-web, 3-oct)
+
+Sustituye lo que digan §12.4 y §12.6 donde choque. Lo pidió Isma (pendiente.md, punto 7) y sale de la investigación
+de otras apps (`docs/investigacion/pelis-y-series.md`, con «Qué hemos adoptado y por qué»).
+
+- **Portada en filas, como la agenda:** «Seguir viendo», «Novedades en películas» / «Series actualizadas» y una fila
+  por categoría del proveedor (en su orden; las de adultos al final, como las demás) con «Nombre 1.234 … Ver todo ›».
+  Cada fila: `vodBrowse({kind, cat, sort: 'added', limit: 20})`, pedida al acercarse a la pantalla; 12 filas y «Más
+  categorías»; al final «Ver las 1.234 películas». En el móvil, «Categorías» abre la hoja; en escritorio, el panel
+  lateral con «Inicio».
+- **La rejilla es otra pantalla:** con `cinecat` (id o `all`, que ahora sí se escribe), `cinetag` o una búsqueda.
+  Cabecera «‹ VOD | 4K · 9 películas» («‹ Resultados de «dune»» buscando), chips de categorías (móvil y tableta),
+  distintivos y «Novedades | A-Z». Abierta desde la portada, con su entrada en el historial (Atrás vuelve).
+- **Tarjeta:** cartel 2:3 grande (filas `clamp(136px, 38vw, 200px)`; rejilla de 2 columnas hasta 479 px, 3, 4, 5 y 6
+  desde 480, 768, 1024 y 1280), cápsulas encima del cartel (lengua y 4K, dos como mucho, «+18» delante), título de
+  15 px en 2 líneas y «2023 · ★ 7,4». Sin imagen, el cartel lleva el título.
+- **Ficha:** fondo 16:9 fundido con una máscara; sin fondo, el cartel desenfocado; sin nada, el color del título; el
+  cartel grande también en el móvil. «Película · VOD | 4K», título, título original y «2021 · 2 h 36 min · ★ 8,0
+  [+12]». El play grande: «Reproducir» o «Seguir viendo desde 43:12», con la barra y «Quedan 1 h 53 min · Termina a
+  las 23:47»; «Empezar desde el principio», «Marcar como vista» y «Tráiler» (YouTube en otra pestaña). «Detalles»:
+  dirección, reparto, géneros y país (en castellano), estreno, título original, categoría (enlace), vídeo, audio y
+  formato. Lo que no hay no se pinta; la nota o la edad «0», tampoco.
+- **Serie:** «2005 · 4 temporadas · ★ 8,9»; el botón «Ver T1 · E1» / «Continuar T2 · E3» / «Siguiente capítulo:
+  T2 · E4» / «Volver a ver T1 · E1» con el título del episodio y lo que queda; los episodios ANTES de los detalles.
+  «Temporada N» salvo nombre de verdad del proveedor; con más de 8, un desplegable. Episodio con fotograma (o su número
+  grande) o, si la temporada no tiene ninguno, la lista compacta con el número en un círculo; el del botón principal
+  con el aura dorada y «Continuar», «Siguiente» o «Empieza aquí».
+- **Contrato** (opcional): `trailer`, `released` y `episodeRunTimeS` (§11.2).
+- **Demo:** 63 películas y 14 series, con fichas completas y casos pobres (§12.11 queda así).
+
 ---
 
 ## 13. Errores y estados vacíos: del servidor a la pantalla
