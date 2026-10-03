@@ -42,6 +42,34 @@ function scrub(text) {
   return out.replace(/\b\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?\b/g, '***');
 }
 
+/* La marca de directo como la entiende la app (hasLiveMark de apps/server/src/modules/iptv/guide-match.ts):
+   el elemento `<live/>` o «directo», «en vivo», «live» o «(L)» en el título o el subtítulo. La agenda
+   híbrida solo mueve horas y añade partidos con esa marca: este número dice si con la guía de Isma
+   ocurre. */
+const LIVE_MARK_RE = /\b(?:directo|en vivo|live)\b|\(l\)/;
+/* «X - Y», «X vs Y», «X v Y» o «X contra Y» en el título o el subtítulo: lo que parece un partido. */
+const MATCHUP_RE = /\S\s+(?:-|–|—|vs\.?|v\.?|contra)\s+\S/i;
+
+function decodeXml(value) {
+  return String(value ?? '')
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(Number(dec)))
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
+/** Como normalizeGuideText de la app: minúsculas y sin tildes. */
+function normalize(value) {
+  return decodeXml(value).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+function element(inner, name) {
+  return new RegExp(`<${name}\\b[^>]*>([\\s\\S]*?)</${name}>`).exec(inner)?.[1] ?? '';
+}
+
 /** XMLTV: `20261003213000 +0200` → ms. */
 function parseXmltvDate(value) {
   const m = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})?\s*([+-]\d{4})?/.exec(value ?? '');
@@ -96,6 +124,10 @@ try {
     nota: 0,
     edad: 0,
     directo: 0,
+    directoEnTitulo: 0,
+    directoCualquiera: 0,
+    partidos: 0,
+    partidosConDirecto: 0,
   };
   let minStart = Infinity;
   let maxStop = -Infinity;
@@ -141,7 +173,23 @@ try {
         if (/<sub-title\b/.test(inner)) counts.subtitulo += 1;
         if (/<star-rating\b/.test(inner)) counts.nota += 1;
         if (/<rating\b/.test(inner)) counts.edad += 1;
-        if (/<live\b/.test(inner)) counts.directo += 1;
+        const liveElement = /<live\b/.test(inner);
+        if (liveElement) counts.directo += 1;
+        const title = normalize(element(inner, 'title'));
+        const subTitle = normalize(element(inner, 'sub-title'));
+        const liveInText = LIVE_MARK_RE.test(title) || LIVE_MARK_RE.test(subTitle);
+        if (liveInText) counts.directoEnTitulo += 1;
+        if (liveElement || liveInText) counts.directoCualquiera += 1;
+        /* Parece un partido: «X - Y» en el título o el subtítulo y dura lo de un partido (80-240 min). */
+        const minutes = start !== null && stop !== null ? (stop - start) / 60_000 : 0;
+        if (
+          minutes >= 80 &&
+          minutes <= 240 &&
+          (MATCHUP_RE.test(title) || MATCHUP_RE.test(subTitle))
+        ) {
+          counts.partidos += 1;
+          if (liveElement || liveInText) counts.partidosConDirecto += 1;
+        }
       }
       /* Lo que queda tras el último programa completo: un programa a medias o, si no hay, solo el final (para un
          `<channel` partido). Nunca un programa ya contado. */
@@ -182,8 +230,20 @@ try {
       subtitulo: pct(counts.subtitulo),
       nota: pct(counts.nota),
       edad: pct(counts.edad),
+      /* Solo el elemento `<live/>`. */
       directo: pct(counts.directo),
+      /* «Directo», «en vivo», «live» o «(L)» en el título o el subtítulo. */
+      directoEnTitulo: pct(counts.directoEnTitulo),
+      /* Lo uno o lo otro: la marca que usa la app (hasLiveMark). */
+      directoCualquiera: pct(counts.directoCualquiera),
     },
+    /* Lo que decide la agenda híbrida: de los programas que parecen un partido («X - Y», 80-240
+       min), cuántos llevan la marca de directo. Si es ~0 %, la guía solo confirma partido y canal
+       (no mueve horas ni añade partidos). */
+    pareceUnPartido: counts.partidos,
+    pareceUnPartidoConDirecto: counts.partidos
+      ? Math.round((1000 * counts.partidosConDirecto) / counts.partidos) / 10
+      : 0,
   });
 } catch (error) {
   report.error = scrub(error?.message ?? String(error));
