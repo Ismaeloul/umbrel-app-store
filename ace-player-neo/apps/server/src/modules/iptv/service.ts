@@ -20,7 +20,7 @@
      `iptv.status`.
    - Ninguna URL del proveedor se registra nunca (solo host e id). */
 
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import {
@@ -86,6 +86,10 @@ import {
   type GuideAgendaRequest,
   type GuideAgendaResult,
 } from './guide-agenda.js';
+import { GuideApi, type GuideSourceStatus } from './guide-api.js';
+import { GuideArt } from './guide-art.js';
+import { GuideStore, type GuideMeta, type GuideReader, type GuideWriter } from './guide-db.js';
+import { buildFullGuide, writeShortEpg } from './guide-full.js';
 import { adoptedIptvId, iptvChannelId, isIptvId, m3uKey, xtreamKey } from './ids.js';
 import { guideGroupMatches, mergeIptvMatches } from './layer.js';
 import { parseM3uStream } from './m3u.js';
@@ -160,6 +164,20 @@ interface HeavyJob {
   readonly kind: HeavyKind;
   readonly controller: AbortController;
   readonly promise: Promise<void>;
+}
+
+/** Lo que dejan las URL de guía (XMLTV) en una descarga (docs/iptv.md §20.3). */
+interface XmltvRead {
+  /** Ventana de partidos de la primera guía que trae alguno; null si ninguna. */
+  readonly window: GuideWindow | null;
+  /** La ventana (vacía) de una guía que se leyó sin un solo partido. */
+  readonly empty: GuideWindow | null;
+  /** La guía completa recién escrita (en `.next`, sin instalar); null si no hay. */
+  readonly full: GuideMeta | null;
+  /** Código del último fallo de una URL (solo cuenta si ninguna trajo nada). */
+  readonly failure: string | null;
+  /** Se usó una guía que llegó cortada (sin `</tv>`) porque no había otra que sirviera. */
+  readonly incomplete: boolean;
 }
 
 const NO_IPTV: IptvView = { provider: null, refreshHours: IPTV_REFRESH_HOURS };
@@ -293,11 +311,38 @@ export class IptvServiceImpl implements IptvService {
   readonly relay: IptvRelayImpl;
   /** Películas y series (docs/vod.md §4.1). */
   readonly vod: VodService;
+  /** Guía TV completa en disco (docs/iptv.md §20.2): se construye en la misma descarga que la guía de partidos. */
+  private readonly fullGuide: GuideStore;
+  /** La última vez no se pudo guardar la guía completa (disco lleno…). */
+  private fullGuideFailed = false;
+  /** «N canales con programación» de la guía completa, por catálogo y guía. */
+  private fullGuideCount: { readonly key: string; readonly count: number } | null = null;
+  /** Rutas `iptvGuide*` de la Guía TV (docs/iptv.md §20.6). */
+  readonly tvGuide: GuideApi;
 
   constructor(private readonly deps: IptvDeps) {
     const logger = deps.logger.child({ module: 'iptv' });
     this.logger = logger;
     this.files = new IptvFiles(deps.config.paths, () => this.ensureKeys(), logger);
+    this.fullGuide = new GuideStore(
+      deps.config.paths.iptvGuideDbFile,
+      deps.config.paths.iptvDir,
+      logger.child({ part: 'guia' }),
+    );
+    this.tvGuide = new GuideApi({
+      activeCatalog: () => (this.active() ? this.catalog : null),
+      reader: () => this.fullGuide.current(),
+      status: () => this.guideSourceStatus(),
+      favoriteChannels: () => this.guideFavoriteChannels(),
+      qualityOf: (entry) => this.qualityOf(entry),
+      now: () => deps.clock.now(),
+      art: new GuideArt({
+        net: deps.net,
+        clock: deps.clock,
+        logger,
+        policy: () => this.policy(),
+      }),
+    });
     this.relay = createIptvRelay({
       clock: deps.clock,
       logger,
@@ -435,6 +480,8 @@ export class IptvServiceImpl implements IptvService {
     this.catalog = await this.files.loadCatalog(record.id);
     if (this.catalog) this.scheduleBrowse(this.catalog);
     this.guide = this.catalog ? await this.files.loadGuide(record.id) : null;
+    /* La guía completa de este proveedor; una de otro (o ilegible) se borra. */
+    this.fullGuide.open(record.id);
     this.scheduleAll(true);
   }
 
@@ -450,6 +497,7 @@ export class IptvServiceImpl implements IptvService {
     this.probe?.controller.abort(new AppError('iptv_disabled'));
     await this.vod.stop();
     await this.relay.stop();
+    this.fullGuide.close();
   }
 
   private async refreshLan(): Promise<void> {
@@ -501,7 +549,11 @@ export class IptvServiceImpl implements IptvService {
       listAge >= IPTV_REFRESH.listMs ? (atStart ? 5_000 : 0) : IPTV_REFRESH.listMs - listAge;
     this.schedule('list', listDue, () => this.periodicSync());
     if (this.catalog?.guideUrls.length || record.kind === 'xtream') {
-      const guideAge = this.guide ? now - this.guide.builtAt : Number.POSITIVE_INFINITY;
+      /* La edad es la de la guía completa (la ventana de partidos puede ser del respaldo o
+         quedarse la de antes, §20.3). Sin ella (la primera vez tras la 0.9.0) cuenta como
+         vieja: se descarga ya. */
+      const full = this.fullGuide.current();
+      const guideAge = this.guide && full ? now - full.meta.builtAt : Number.POSITIVE_INFINITY;
       const guideDue =
         guideAge >= IPTV_REFRESH.guideMs
           ? atStart
@@ -591,7 +643,10 @@ export class IptvServiceImpl implements IptvService {
     }
     const guideState = record.guide;
     const window = this.guide ? trimWindow(this.guide, clock.now()) : null;
-    const channelsWithGuide = window ? this.channelsWithGuide(window) : 0;
+    /* Con la guía completa (§20), «N canales con programación» son todos los que la tienen. */
+    const full = this.fullGuide.current();
+    const fullCount = full && full.meta.programmes > 0 ? this.fullChannelsWithGuide(full) : 0;
+    const channelsWithGuide = fullCount || (window ? this.channelsWithGuide(window) : 0);
     return {
       status,
       channels: this.catalog?.size ?? 0,
@@ -609,9 +664,16 @@ export class IptvServiceImpl implements IptvService {
             }
           : null,
       guide: {
-        available: Boolean(window && window.programmes > 0),
+        available: Boolean((window && window.programmes > 0) || fullCount > 0),
         channelsWithGuide,
-        updatedAt: this.guide && this.guide.builtAt > 0 ? iso(this.guide.builtAt) : null,
+        /* La de la guía completa si la hay (es la que cuenta «N canales»): si el XMLTV
+           falla y los partidos salen del respaldo, Ajustes dice de cuándo es la que se usa. */
+        updatedAt:
+          full && full.meta.programmes > 0
+            ? iso(full.meta.builtAt)
+            : this.guide && this.guide.builtAt > 0
+              ? iso(this.guide.builtAt)
+              : null,
         failedAt: guideState && !guideState.ok ? guideState.at : null,
       },
       ...this.vodStatus(),
@@ -637,6 +699,62 @@ export class IptvServiceImpl implements IptvService {
       if (this.catalog.groupsByTvgId(channel).length) count += 1;
     }
     return count;
+  }
+
+  /**
+   * Canales del catálogo con programación en la guía completa: los mismos que
+   * salen en «Todos» de la Guía TV (un canal = clave limpia y país, con sus
+   * variantes, §17). Se cuenta una vez por catálogo y guía.
+   */
+  private fullChannelsWithGuide(reader: GuideReader): number {
+    const catalog = this.catalog;
+    if (!catalog) return 0;
+    const key = `${catalog.providerId}|${catalog.builtAt}|${reader.version}`;
+    if (this.fullGuideCount?.key === key) return this.fullGuideCount.count;
+    const channels = new Set<string>();
+    for (const tvg of reader.channels().keys()) {
+      for (const group of catalog.groupsByTvgId(tvg)) {
+        for (const entry of catalog.group(group)) {
+          if (entry.tvgId.trim().toLowerCase() === tvg) channels.add(channelIdOf(entry));
+        }
+      }
+    }
+    this.fullGuideCount = { key, count: channels.size };
+    return channels.size;
+  }
+
+  /** Lo que la Guía TV necesita saber del estado (docs/iptv.md §20.5). */
+  private guideSourceStatus(): GuideSourceStatus {
+    const record = this.record;
+    const guide = record?.guide ?? null;
+    return {
+      enabled: Boolean(record?.enabled && !this.unreadable && this.secrets),
+      providerName: record?.name ?? '',
+      hasGuideSource: Boolean(record?.kind === 'xtream' || this.catalog?.guideUrls.length),
+      lastGuide: guide ? { ok: guide.ok, at: guide.at, error: guide.error } : null,
+      fullGuideFailed: this.fullGuideFailed,
+    };
+  }
+
+  /**
+   * Los canales de tus favoritos que son de la IPTV, en su orden (docs/iptv.md
+   * §20.5): un id IPTV, su canal; un canal de tu lista, el de la IPTV que es
+   * él (≥ 92, el mismo emparejado que el buscador).
+   */
+  private guideFavoriteChannels(): string[] {
+    const catalog = this.catalog;
+    if (!catalog || !this.active()) return [];
+    const favorites = this.deps.state.get().favorites;
+    if (!favorites.length) return [];
+    const keys = this.ensureKeys();
+    return this.libraryGroups(favorites, {
+      scorer: this.scorer,
+      isIptvId: (id: string) => isIptvId(keys, id),
+      channelOf: (id: string) => {
+        const entry = catalog.get(id);
+        return entry ? channelIdOf(entry) : null;
+      },
+    }).map(({ group }) => group.channel);
   }
 
   private providerView(): IptvProviderView | null {
@@ -851,6 +969,7 @@ export class IptvServiceImpl implements IptvService {
       this.catalog = null;
       this.guide = null;
       this.guideCache.clear();
+      this.clearFullGuide();
       await this.files.removeAll();
       await this.vod.purge();
     }
@@ -1020,6 +1139,7 @@ export class IptvServiceImpl implements IptvService {
       draft.provider = null;
     });
     await this.deps.state.iptv().purge();
+    this.clearFullGuide();
     await this.files.removeAll();
     await this.vod.purge();
     this.secrets = null;
@@ -1036,6 +1156,14 @@ export class IptvServiceImpl implements IptvService {
       this.emitStatus();
     }
     return NO_IPTV;
+  }
+
+  /** Borra la guía completa (otro proveedor o eliminar la IPTV). */
+  private clearFullGuide(): void {
+    this.fullGuide.clear();
+    this.fullGuideFailed = false;
+    this.fullGuideCount = null;
+    this.tvGuide.reset();
   }
 
   /** Aborta la sincronización, la guía, el VOD y la sonda en curso o en cola. */
@@ -1364,6 +1492,216 @@ export class IptvServiceImpl implements IptvService {
     return out;
   }
 
+  /** `tvg-id` (minúsculas) de TODOS los canales del catálogo, de cualquier país, con su `tvg-shift` (§20.2). */
+  private fullGuideChannels(catalog: Catalog): Map<string, number> {
+    const out = new Map<string, number>();
+    for (const entry of catalog.entries) {
+      const tvg = entry.tvgId.trim().toLowerCase();
+      if (!tvg || out.has(tvg)) continue;
+      out.set(tvg, entry.tvgShift ?? 0);
+    }
+    return out;
+  }
+
+  /** Empieza a escribir la guía completa (null si el disco no deja: la de partidos sigue igual). */
+  private beginFullGuide(
+    providerId: string,
+    builtAt: number,
+    source: 'xmltv' | 'short',
+  ): GuideWriter | null {
+    try {
+      return this.fullGuide.begin({
+        providerId,
+        builtAt,
+        source,
+        logger: this.logger,
+      });
+    } catch (error) {
+      this.fullGuideFailed = true;
+      this.logger.warn({ err: error }, 'Guía TV: no se pudo empezar a guardar la guía completa');
+      return null;
+    }
+  }
+
+  /** Cierra la guía completa recién escrita; null si falló (se deshace) o si está vacía. */
+  private async finishFullGuide(
+    writer: GuideWriter | null,
+    failed: unknown,
+    signal: AbortSignal,
+  ): Promise<GuideMeta | null> {
+    if (!writer) return null;
+    if (failed) {
+      writer.abort();
+      this.fullGuideFailed = true;
+      this.logger.warn({ err: failed }, 'Guía TV: no se pudo guardar la guía completa');
+      return null;
+    }
+    try {
+      const meta = await writer.finish(signal);
+      if (meta.programmes > 0) return meta;
+      rmSync(writer.file, { force: true });
+      return null;
+    } catch (error) {
+      if (!signal.aborted) {
+        this.fullGuideFailed = true;
+        this.logger.warn({ err: error }, 'Guía TV: no se pudo cerrar la guía completa');
+      }
+      return null;
+    }
+  }
+
+  /**
+   * Lee las URL de guía (Xtream: `xmltv.php`; M3U: sus `url-tvg`, dos como
+   * mucho) en streaming (docs/iptv.md §20.3). La ventana de partidos es la
+   * de la primera que trae alguno, como antes; la guía completa junta todas,
+   * una fuente por canal, y una que se corta a medias se deshace sin tocar
+   * lo de las demás. null si se aborta.
+   */
+  private async readXmltv(
+    urls: readonly string[],
+    context: {
+      readonly providerId: string;
+      readonly builtAt: number;
+      readonly channels: ReadonlyMap<string, number>;
+      readonly allChannels: ReadonlyMap<string, number>;
+      readonly signal: AbortSignal;
+    },
+  ): Promise<XmltvRead | null> {
+    const { providerId, builtAt, channels, allChannels, signal } = context;
+    const { clock } = this.deps;
+    /* Una URL de imagen con algo de las credenciales no se guarda (§20.2). */
+    const acceptImage = (url: string): boolean => this.redact(url) === url;
+    let window: GuideWindow | null = null;
+    let empty: GuideWindow | null = null;
+    let failure: string | null = null;
+    let incomplete = false;
+    /* En una caja: se cambia desde `drop`. */
+    const out: { writer: GuideWriter | null; tried: boolean } = { writer: null, tried: false };
+    /* El disco falló: se deja de escribir la completa y la de partidos sigue (§20.3). */
+    const drop = (error: unknown): void => {
+      out.writer?.abort();
+      out.writer = null;
+      this.fullGuideFailed = true;
+      this.logger.warn({ err: error }, 'Guía TV: no se pudo guardar la guía completa');
+    };
+    try {
+      for (const url of urls) {
+        if (signal.aborted) return null;
+        let reading = false;
+        try {
+          const opened = await this.deps.net.openStream(url, {
+            maxBytes: IPTV_GUIDE_LIMITS.maxBytes,
+            totalMs: IPTV_GUIDE_LIMITS.totalMs,
+            idleMs: IPTV_GUIDE_LIMITS.idleMs,
+            headers: { 'User-Agent': IPTV_USER_AGENT },
+            accept: 'application/xml,text/xml,*/*;q=0.5',
+            iptv: {
+              ...this.policy(),
+              maxDecompressedBytes: IPTV_GUIDE_LIMITS.maxDecompressedBytes,
+            },
+            signal,
+          });
+          if (!out.tried) {
+            out.tried = true;
+            out.writer = this.beginFullGuide(providerId, builtAt, 'xmltv');
+          }
+          const before = out.writer?.programmes ?? 0;
+          try {
+            out.writer?.beginSource();
+          } catch (error) {
+            drop(error);
+          }
+          reading = true;
+          const built = await buildFullGuide(opened.body, {
+            now: clock.now(),
+            eventChannels: channels,
+            allChannels,
+            writer: out.writer,
+            acceptImage,
+            signal,
+          });
+          if (built.writerError) drop(built.writerError);
+          /* Se cortó SIN error de red: un xmltv.php que se pasa de tiempo o de memoria (PHP,
+             «Fatal error») cierra la respuesta como si nada, sin `</tv>`. Si hay una guía
+             completa de antes que aún sirve, es un fallo como un corte a medias: lo de esta
+             guía se deshace (catch) y se queda la de antes, con aviso y reintento (§20.3). */
+          if (!built.complete && !signal.aborted && this.usableFullGuide(providerId)) {
+            throw new AppError('iptv_unreachable', { detail: 'xmltv_cortada' });
+          }
+          reading = false;
+          if (!built.writerError) {
+            try {
+              out.writer?.endSource();
+            } catch (error) {
+              drop(error);
+            }
+          }
+          if (signal.aborted) return null;
+          if (!built.complete) {
+            /* Sin otra que sirva (la primera vez, o la de antes ya se acabó): mejor lo que
+               llegó que nada, como antes de la Guía TV, y se reintenta antes de 8 h. */
+            incomplete = true;
+            this.logger.warn(
+              { host: guideHost(url), programmes: built.parsed },
+              'IPTV: guía cortada (sin </tv>); se usa lo que llegó y se reintenta antes',
+            );
+          }
+          const wrote = out.writer ? out.writer.programmes - before : 0;
+          if (built.window.programmes > 0) window ??= built.window;
+          else empty ??= built.window;
+          if (built.window.programmes > 0 || wrote > 0) continue;
+          failure = 'iptv_empty';
+        } catch (error) {
+          /* Cortada a medias: lo de esta guía se deshace; lo de las anteriores vale. */
+          if (reading && out.writer && !out.writer.rollbackSource()) drop(error);
+          if (signal.aborted) return null;
+          failure = toIptvError(error, 'guide').code;
+        }
+        /* Para diagnosticar: solo el host y el código, nunca la URL (lleva credenciales). */
+        this.logger.warn({ host: guideHost(url), errorCode: failure }, 'IPTV: guía no descargada');
+      }
+      const writer = out.writer;
+      out.writer = null;
+      const full = await this.finishFullGuide(writer, null, signal);
+      if (signal.aborted) return null;
+      return { window, empty, full, failure, incomplete };
+    } finally {
+      out.writer?.abort();
+    }
+  }
+
+  /**
+   * ¿Hay una guía completa del XMLTV de este proveedor que aún sirve (le
+   * queda programación por delante)? Entonces un fallo pasajero del XMLTV no
+   * la cambia por la parcial de `get_short_epg` (§20.3).
+   */
+  private usableFullGuide(providerId: string): boolean {
+    const reader = this.fullGuide.current();
+    if (!reader || reader.meta.providerId !== providerId || reader.meta.source !== 'xmltv') {
+      return false;
+    }
+    return (reader.coverage()?.to ?? 0) > this.deps.clock.now();
+  }
+
+  /** El respaldo de Xtream también a la Guía TV (`partial`); null si el disco no deja. */
+  private async writeShortGuide(
+    providerId: string,
+    builtAt: number,
+    fallback: GuideWindow,
+    signal: AbortSignal,
+  ): Promise<GuideMeta | null> {
+    const writer = this.beginFullGuide(providerId, builtAt, 'short');
+    let failed: unknown = null;
+    if (writer) {
+      try {
+        writeShortEpg(writer, [...fallback.byChannel.values()].flat());
+      } catch (error) {
+        failed = error;
+      }
+    }
+    return this.finishFullGuide(writer, failed, signal);
+  }
+
   private async doGuide(signal: AbortSignal): Promise<void> {
     const record = this.record;
     const catalog = this.catalog;
@@ -1371,85 +1709,165 @@ export class IptvServiceImpl implements IptvService {
     if (!record || !catalog || !secrets) return;
     const { clock } = this.deps;
     const providerId = record.id;
-    const channels = this.guideChannels(catalog);
-    let window: GuideWindow | null = null;
-    let failure: string | null = null;
-    for (const url of catalog.guideUrls) {
-      if (signal.aborted) return;
-      try {
-        const opened = await this.deps.net.openStream(url, {
-          maxBytes: IPTV_GUIDE_LIMITS.maxBytes,
-          totalMs: IPTV_GUIDE_LIMITS.totalMs,
-          idleMs: IPTV_GUIDE_LIMITS.idleMs,
-          headers: { 'User-Agent': IPTV_USER_AGENT },
-          accept: 'application/xml,text/xml,*/*;q=0.5',
-          iptv: { ...this.policy(), maxDecompressedBytes: IPTV_GUIDE_LIMITS.maxDecompressedBytes },
-          signal,
-        });
-        const built = await buildGuideWindow(opened.body, { now: clock.now(), channels, signal });
-        if (built.programmes > 0) {
-          window = built;
-          break;
-        }
-        failure = 'iptv_empty';
-      } catch (error) {
-        if (signal.aborted) return;
-        failure = toIptvError(error, 'guide').code;
-      }
-      /* Para diagnosticar: solo el host y el código, nunca la URL (lleva credenciales). */
-      this.logger.warn({ host: guideHost(url), errorCode: failure }, 'IPTV: guía no descargada');
-    }
-    /* Respaldo en Xtream: get_short_epg de 40 canales deportivos como mucho. */
+    /* El sello de la guía completa nunca repite el de la que hay (dos descargas en el mismo ms). */
+    const previous = this.fullGuide.current()?.meta.builtAt ?? 0;
+    const builtAt = Math.max(clock.now(), previous + 1);
+    const read = await this.readXmltv(catalog.guideUrls, {
+      providerId,
+      builtAt,
+      channels: this.guideChannels(catalog),
+      allChannels: this.fullGuideChannels(catalog),
+      signal,
+    });
+    if (!read) return;
+    let window = read.window;
+    let full = read.full;
+    /* El XMLTV no dio nada: falló (plazo, 5xx…) o vino vacío. */
+    const xmltvFailed = !window && !full;
+    /* …y se sigue con la guía completa de una descarga anterior, que aún sirve. */
+    let keptFull = false;
+    /* Respaldo en Xtream: get_short_epg de 40 canales deportivos como mucho. Como
+       antes de la Guía TV, también cuando la guía llega sin un solo partido: la
+       ventana de partidos sale de ahí y la guía completa, si la hay, se queda. */
     if (!window && secrets.kind === 'xtream' && !signal.aborted) {
-      window = await this.shortEpgFallback(secrets, catalog, signal).catch(() => null);
+      const fallback = await this.shortEpgFallback(secrets, catalog, signal).catch(() => null);
+      if (fallback && fallback.programmes > 0 && !signal.aborted) {
+        window = fallback;
+        /* Sin guía completa nueva, el respaldo va a la Guía TV (`partial`)… salvo que el
+           XMLTV haya fallado y la de la descarga anterior aún sirva: no se cambian ~3 500
+           canales por 40 durante 8 h por un fallo pasajero del panel. */
+        if (!full) {
+          if (xmltvFailed && this.usableFullGuide(providerId)) keptFull = true;
+          else full = await this.writeShortGuide(providerId, builtAt, fallback, signal);
+        }
+      }
     }
-    if (signal.aborted) return;
     const still = this.record;
-    if (!still || still.id !== providerId) return;
+    if (signal.aborted || !still || still.id !== providerId) {
+      if (full) rmSync(this.fullGuide.nextFile, { force: true });
+      return;
+    }
     const nowIso = clock.date().toISOString();
-    if (window && window.programmes > 0) {
-      this.guide = window;
-      this.guideCache.clear();
-      this.guideFailures = 0;
-      await this.files.saveGuide(window, providerId).catch((error: unknown) => {
-        this.logger.warn({ err: error }, 'no se pudo guardar la guía IPTV');
-      });
-      const withGuide = this.channelsWithGuide(window);
+    if (!window && !full) {
+      /* Nada nuevo: se sigue con lo que hay (ventana y guía completa) y se reintenta antes. */
+      this.guideFailures += 1;
+      const kept = this.fullGuide.current();
+      const keptReader = kept && kept.meta.programmes > 0 ? kept : null;
       await this.persist((draft) => {
         if (!draft.provider || draft.provider.id !== providerId) return;
         draft.provider.guide = {
           at: nowIso,
-          ok: true,
-          channelsWithGuide: withGuide,
-          programmes: window.programmes,
-          error: null,
+          ok: false,
+          channelsWithGuide: keptReader
+            ? this.fullChannelsWithGuide(keptReader)
+            : this.guide
+              ? this.channelsWithGuide(this.guide)
+              : 0,
+          programmes: keptReader?.meta.programmes ?? this.guide?.programmes ?? 0,
+          error: read.failure ?? 'iptv_empty',
         };
       });
-      this.logger.info(
-        { host: still.host, programmes: window.programmes, withGuide },
-        'IPTV: guía actualizada',
-      );
       this.emitStatus();
-      this.schedule('guide', IPTV_REFRESH.guideMs, () => this.periodicGuide());
+      this.schedule(
+        'guide',
+        backoff(this.guideFailures, IPTV_REFRESH.guideBackoffMinMs, IPTV_REFRESH.guideBackoffMaxMs),
+        () => this.periodicGuide(),
+      );
       return;
     }
-    this.guideFailures += 1;
+    if (full) {
+      this.fullGuide.install(providerId);
+      this.fullGuideFailed = false;
+      this.fullGuideCount = null;
+      this.tvGuide.reset();
+    }
+    /* La ventana de partidos: la nueva si trae alguno. Una guía sin un solo partido (y sin
+       respaldo) no borra la de antes mientras le queden partidos por delante (como antes de
+       la Guía TV): guide-match y la agenda los siguen viendo hasta la siguiente descarga. */
+    const before = this.guide ? trimWindow(this.guide, clock.now()) : null;
+    const nextWindow = window ?? (before && before.programmes > 0 ? null : read.empty);
+    if (nextWindow) {
+      this.guide = nextWindow;
+      this.guideCache.clear();
+      await this.files.saveGuide(nextWindow, providerId).catch((error: unknown) => {
+        this.logger.warn({ err: error }, 'no se pudo guardar la guía IPTV');
+      });
+    }
+    const current = this.guide;
+    const reader = this.fullGuide.current();
+    const usable = reader && reader.meta.programmes > 0 ? reader : null;
+    const withGuide = usable
+      ? this.fullChannelsWithGuide(usable)
+      : current
+        ? this.channelsWithGuide(current)
+        : 0;
+    const programmes = usable?.meta.programmes ?? current?.programmes ?? 0;
+    if (keptFull) {
+      /* El XMLTV falló: los partidos salen del respaldo, la Guía TV sigue con la de antes y
+         queda dicho (Ajustes: «no se pudo actualizar; se usa la del…») con reintento antes. */
+      this.guideFailures += 1;
+      await this.persist((draft) => {
+        if (!draft.provider || draft.provider.id !== providerId) return;
+        draft.provider.guide = {
+          at: nowIso,
+          ok: false,
+          channelsWithGuide: withGuide,
+          programmes,
+          error: read.failure ?? 'iptv_empty',
+        };
+      });
+      this.logger.warn(
+        { host: still.host, errorCode: read.failure, programmes: window?.programmes ?? 0 },
+        'IPTV: guía no descargada; partidos del respaldo y la Guía TV de antes',
+      );
+      this.emitStatus();
+      this.schedule(
+        'guide',
+        backoff(this.guideFailures, IPTV_REFRESH.guideBackoffMinMs, IPTV_REFRESH.guideBackoffMaxMs),
+        () => this.periodicGuide(),
+      );
+      return;
+    }
     await this.persist((draft) => {
       if (!draft.provider || draft.provider.id !== providerId) return;
       draft.provider.guide = {
         at: nowIso,
-        ok: false,
-        channelsWithGuide: this.guide ? this.channelsWithGuide(this.guide) : 0,
-        programmes: this.guide?.programmes ?? 0,
-        error: failure ?? 'iptv_empty',
+        ok: true,
+        channelsWithGuide: withGuide,
+        programmes,
+        error: null,
       };
     });
-    this.emitStatus();
-    this.schedule(
-      'guide',
-      backoff(this.guideFailures, IPTV_REFRESH.guideBackoffMinMs, IPTV_REFRESH.guideBackoffMaxMs),
-      () => this.periodicGuide(),
+    this.logger.info(
+      {
+        host: still.host,
+        programmes: current?.programmes ?? 0,
+        withGuide,
+        ...(full
+          ? {
+              fullProgrammes: full.programmes,
+              fullChannels: full.channels,
+              source: full.source,
+              truncated: full.truncated,
+            }
+          : {}),
+      },
+      'IPTV: guía actualizada',
     );
+    this.emitStatus();
+    /* Si la guía completa salió del respaldo porque el XMLTV falló, o es una que llegó cortada
+       (sin otra que sirviera), se reintenta antes de 8 h. */
+    if (xmltvFailed || read.incomplete) {
+      this.guideFailures += 1;
+      this.schedule(
+        'guide',
+        backoff(this.guideFailures, IPTV_REFRESH.guideBackoffMinMs, IPTV_REFRESH.guideBackoffMaxMs),
+        () => this.periodicGuide(),
+      );
+    } else {
+      this.guideFailures = 0;
+      this.schedule('guide', IPTV_REFRESH.guideMs, () => this.periodicGuide());
+    }
   }
 
   private async shortEpgFallback(

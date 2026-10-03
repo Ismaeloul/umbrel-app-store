@@ -348,9 +348,11 @@ describe('contrato de la IPTV (docs/iptv.md §5)', () => {
   });
 
   it('7 rutas solo web del módulo iptv (las 5 de Ajustes, el buscador y la pestaña), sin iptvTest; video pasa a any con t opcional', () => {
-    /* Las de Películas y series (`vod*`, también del módulo iptv) las fija test/vod.test.ts. */
+    /* Las de Películas y series (`vod*`, también del módulo iptv) las fija test/vod.test.ts, y las
+       de la Guía TV (`iptvGuide*`, docs/iptv.md §20.6), test/guide.test.ts. */
     const iptv = listV1Routes().filter(
-      (route) => route.module === 'iptv' && !route.id.startsWith('vod'),
+      (route) =>
+        route.module === 'iptv' && !route.id.startsWith('vod') && !route.id.startsWith('iptvGuide'),
     );
     expect(iptv.map((route) => `${route.id} ${route.method} ${route.path}`)).toEqual([
       'iptvGet GET /api/v1/iptv',
@@ -471,8 +473,11 @@ describe('buscador: IPTV y AceStream juntos (docs/iptv.md §14.2)', () => {
       module: 'iptv',
       errors: ['empty_query'],
     });
-    /* Las 7 de la IPTV y las 4 JSON de Películas y series (docs/vod.md §11.6). */
-    expect(WEB_FIXTURE_ROUTE_IDS.filter((id) => id.startsWith('iptv'))).toHaveLength(7);
+    /* Las 7 de la IPTV y las 4 JSON de Películas y series (docs/vod.md §11.6); las 4 JSON de la
+       Guía TV las fija test/guide.test.ts. */
+    expect(
+      WEB_FIXTURE_ROUTE_IDS.filter((id) => id.startsWith('iptv') && !id.startsWith('iptvGuide')),
+    ).toHaveLength(7);
     expect(WEB_FIXTURE_ROUTE_IDS.filter((id) => id.startsWith('vod'))).toHaveLength(4);
     expect(WEB_FIXTURE_ROUTE_IDS).toContain('iptvChannels');
     const example = WEB_V1_FIXTURES.iptvChannels;

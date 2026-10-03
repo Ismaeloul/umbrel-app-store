@@ -32,6 +32,7 @@ import type { CoreDeps, Lifecycle } from '../../core/module.js';
 import type { NetClient } from '../net/index.js';
 import type { StateService } from '../state/index.js';
 import type { GuideAgendaRequest, GuideAgendaResult } from './guide-agenda.js';
+import type { GuideApi } from './guide-api.js';
 import type { ChannelScorer } from './match.js';
 import type { VodService } from './vod/vod-service.js';
 
@@ -223,7 +224,7 @@ export interface IptvService extends Lifecycle {
   /** Capa IPTV de la resolución (§4.3 a §4.5), en memoria. */
   resolve(request: IptvResolveRequest): IptvResolveResult;
   /**
-   * Agenda híbrida (D27; docs/iptv.md §4.7, guide-agenda.ts): lo que
+   * Agenda híbrida (decisiones.md D27; docs/iptv.md §4.7, guide-agenda.ts): lo que
    * la guía dice de los partidos de hoy y mañana (confirmados, con la hora
    * movida, o que solo trae la guía). null sin IPTV activa o sin guía. En
    * memoria y sin red; el mismo objeto mientras no cambien la lista, la guía
@@ -302,6 +303,13 @@ export interface IptvService extends Lifecycle {
    * responden `vod_unavailable`.
    */
   readonly vod?: VodApi;
+
+  // --- Guía TV (docs/iptv.md §20) ---
+  /**
+   * Las 5 rutas `iptvGuide*` (guide-api.ts). Opcional, como `vod`: sin ella
+   * (dobles de los tests de otros módulos) responden `guide_unavailable`.
+   */
+  readonly tvGuide?: GuideApi;
 }
 
 /** Lo que las rutas y los demás módulos ven de Películas y series (docs/vod.md §11.1). */

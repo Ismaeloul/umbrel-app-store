@@ -1,4 +1,4 @@
-/* Agenda híbrida sobre la agenda (D27; docs/iptv.md §4.7). Puro.
+/* Agenda híbrida sobre la agenda (decisiones.md D27; docs/iptv.md §4.7). Puro.
 
    La IPTV dice qué sabe su guía de hoy y mañana (`IptvService.guideAgenda`,
    iptv/guide-agenda.ts) y aquí se pinta sobre la agenda de siempre:

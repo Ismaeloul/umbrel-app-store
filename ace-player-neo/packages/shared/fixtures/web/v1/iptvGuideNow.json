@@ -1,0 +1,60 @@
+{
+  "available": true,
+  "version": "dhrhuo",
+  "items": [
+    {
+      "id": "952df13a32a417bb8d32ef7c253cddd5fbb0c3be",
+      "guide": 1,
+      "now": {
+        "id": "1.29836465",
+        "start": 1790187900000,
+        "end": 1790190600000,
+        "title": "Cocina en casa",
+        "flags": 8
+      },
+      "next": {
+        "id": "1.29836510",
+        "start": 1790190600000,
+        "end": 1790191200000,
+        "title": "El tiempo",
+        "flags": 10
+      }
+    },
+    {
+      "id": "e8ab3a66cbe18eebd84b72445c161991a3dc72d2",
+      "guide": 3,
+      "now": {
+        "id": "3.29836470",
+        "start": 1790188200000,
+        "end": 1790188500000,
+        "title": "El tiempo",
+        "flags": 8
+      },
+      "next": {
+        "id": "3.29836475",
+        "start": 1790188500000,
+        "end": 1790195100000,
+        "title": "Cine de noche",
+        "flags": 10
+      }
+    },
+    {
+      "id": "b7a37830cae7b71d4aaf0ec657a87a435ea0defc",
+      "guide": 9,
+      "now": {
+        "id": "9.29836460",
+        "start": 1790187600000,
+        "end": 1790189400000,
+        "title": "Previa del partido",
+        "flags": 9
+      },
+      "next": {
+        "id": "9.29836490",
+        "start": 1790189400000,
+        "end": 1790191200000,
+        "title": "Goles de la jornada",
+        "flags": 12
+      }
+    }
+  ]
+}

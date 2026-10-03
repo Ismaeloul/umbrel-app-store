@@ -9,11 +9,14 @@ export * from './errors.js';
 export * from './events.js';
 export * from './routes.js';
 
+export * from './constants/guide.js';
 export * from './constants/iptv.js';
 export * from './constants/limits.js';
 export * from './constants/playback.js';
 export * from './constants/timeouts.js';
 export * from './constants/vod.js';
+
+export * from './demo/guide.js';
 
 export * from './domain/channel-names.js';
 export * from './domain/channels.js';
@@ -35,6 +38,7 @@ export * from './api/v1/diagnostics.js';
 export * from './api/v1/diagnostics-export.js';
 export * from './api/v1/engine.js';
 export * from './api/v1/football.js';
+export * from './api/v1/guide.js';
 export * from './api/v1/iptv.js';
 export * from './api/v1/library.js';
 export * from './api/v1/playback.js';

@@ -1,4 +1,4 @@
-/* Agenda híbrida (D27; docs/iptv.md §4.7). Puro.
+/* Agenda híbrida (decisiones.md D27; docs/iptv.md §4.7). Puro.
 
    Días 1-14, futbolenlatv como siempre. HOY y MAÑANA (lo que cubre la guía),
    la guía de la IPTV:

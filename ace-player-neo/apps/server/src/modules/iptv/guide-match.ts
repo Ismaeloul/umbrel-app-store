@@ -5,7 +5,7 @@
    1. Hora: el programa empieza entre 60 min antes y 15 min después del
       saque, dura entre 80 y 240 min y acaba al menos 90 min después del
       saque. Si empieza más de 30 min antes (la previa dentro del mismo
-      programa, agenda híbrida, D27; en la 0.8.3 el tope eran esos
+      programa, agenda híbrida, decisiones.md D27; en la 0.8.3 el tope eran esos
       30 min), tiene que cubrir el partido entero: acabar al menos 105 min
       después del saque. Un programa en directo de 20:15 a 22:30 no es un
       partido de las 21:00 (acabaría a las 22:50): es uno de antes.

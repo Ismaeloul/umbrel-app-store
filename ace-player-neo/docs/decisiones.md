@@ -714,3 +714,47 @@ Detalle y pruebas en docs/buscador.md §9.
   animación de los escudos queda para la app de iPhone.
 - **Vuelta atrás**: no cambia ningún fichero de `data/`; volver a la 0.8.4 es
   seguro (se pierde la ruta nueva).
+
+## D31. Guía TV: la guía completa en disco y la API por trozos (0.9.0, equipo/guia-servidor)
+
+Diseño entero en `docs/iptv.md` §20.
+
+- **Para qué**: la vista «Guía TV» (parrilla estilo Movistar+ con «Favoritos |
+  Todos», docs/pendiente.md punto 11) necesita la guía entera de la IPTV, no
+  solo los ~93 canales con partidos de la 0.8.x.
+- **G1 · Sin cifrar**: `v2/iptv/guia.db` es SQLite (`node:sqlite`, que viene
+  con Node 24) y no se cifra: SQLite de Node no sabe y la guía no lleva
+  credenciales (las URL de la guía siguen en `catalogo.enc`; las de imagen que
+  llevarían algo de las credenciales se descartan). 0600 en la carpeta 0700,
+  como lo demás de la IPTV.
+- **G2 · Orden de «Todos»**: España y sin país primero, luego los demás
+  países; dentro de cada grupo, el orden del proveedor. El número de un canal
+  es su puesto ahí (el catálogo no guarda el `num` de Xtream).
+- **G3 · «Favoritos»**: tus favoritos en su orden; un canal de tu lista de
+  AceStream cuenta si es un canal de la IPTV (≥ 92, el mismo emparejado que el
+  buscador). Un favorito sin guía sale con «Sin información»; si ninguno
+  tiene guía, se enseña «Todos» (`fellBack`).
+- **G4 · Ajustes**: «N canales con programación» cuenta ya todos los canales
+  con guía (antes, solo los que tenían partidos).
+- **G5 · Topes**: con la medida del panel de Isma (Paso 0 del 3-oct: 47 MB
+  sin comprimir ni gzip, solo de ayer a hoy), los de tamaño de la descarga
+  suben de 64 MiB / 512 MiB a **256 MiB por cable y 1 GiB descomprimida**:
+  con 64 MiB quedaba un 30 % de margen y pasarse tira la guía entera (también
+  la de partidos). No se retiene nada en memoria. El plazo total sube de 180
+  a 300 s porque cada programa se escribe en disco mientras se lee.
+  `guia.db`: 2 M de programas y 512 MiB como mucho (lo que pase no se guarda
+  y se dice).
+- **G6 · Fallos de la descarga**: un fallo pasajero del XMLTV no cambia una
+  guía completa que aún sirve por la parcial de `get_short_epg` (40 canales):
+  los partidos salen del respaldo, la Guía TV sigue con la de antes, Ajustes
+  dice «no se pudo actualizar; se usa la del…» y se reintenta con espera
+  creciente (30 min a 8 h). Sin una que sirva, el respaldo sí entra
+  (`partial`) y el XMLTV también se reintenta antes de 8 h. Una guía sin un
+  solo partido no borra la ventana de partidos de antes. Con dos `url-tvg`,
+  la Guía TV junta las dos (una fuente por canal).
+- **Lo que no cambia**: la guía de partidos (`guia.enc`), `guide-match.ts` y
+  la agenda híbrida; un solo trabajo pesado de la IPTV a la vez; con alguien
+  viendo, la descarga periódica se retrasa como siempre, y si coincide, la
+  construcción cede el hilo cada 12 ms (el directo no espera).
+- **Vuelta atrás**: la 0.8.x no conoce `guia.db` y lo deja en disco sin
+  usarlo; nada más cambia de formato.

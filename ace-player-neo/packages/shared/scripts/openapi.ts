@@ -97,6 +97,15 @@ const BINARY_RESPONSES: Readonly<Record<string, JsonObject>> = {
       'Logo en PNG con `ETag`, `Last-Modified` y `Cache-Control` (inmutable con `?v=`; 304 con `If-None-Match`).',
     content: { 'image/png': { schema: { type: 'string', format: 'binary' } } },
   },
+  iptvGuideArt: {
+    description:
+      "Logo de canal o imagen de programa de la Guía TV en JPEG, PNG o WebP (por bytes mágicos), con `ETag`, `X-Content-Type-Options: nosniff` y `Content-Security-Policy: default-src 'none'`; `private, max-age=86400, immutable` con la `v` de la guía y 304 con `If-None-Match` (docs/iptv.md §20.6).",
+    content: {
+      'image/jpeg': { schema: { type: 'string', format: 'binary' } },
+      'image/png': { schema: { type: 'string', format: 'binary' } },
+      'image/webp': { schema: { type: 'string', format: 'binary' } },
+    },
+  },
 };
 
 function successResponse(route: V1RouteEntry): JsonObject {
