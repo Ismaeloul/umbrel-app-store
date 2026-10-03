@@ -6,12 +6,13 @@
    - con la IPTV y su guía: RSO–VIL lleva «Confirmado en tu guía» con M+
      LaLiga TV 2 delante de DAZN LaLiga; la ruta antigua, lo mismo sin `guide`;
      ningún partido añadido (la guía falsa no trae ninguno que no esté);
-   - el partido se resuelve con la guía primero y la búsqueda de AceStream
-     empieza por ese canal;
+   - el partido se resuelve con la guía primero, la búsqueda de AceStream
+     (el motor falso con una fuente de cada canal) empieza por ese canal y
+     su AceStream va delante de la de DAZN LaLiga aunque tenga menos pares;
    - en pausa: la agenda de siempre otra vez, al momento. */
 
 import { Writable } from 'node:stream';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   FootballScheduleSchema,
   IptvViewSchema,
@@ -21,6 +22,7 @@ import {
 } from '@ace/shared';
 import { FakeClock } from '../../src/core/clock.js';
 import { createLogger } from '../../src/core/logger.js';
+import { contentIdToInfohash } from '../fake-engine/catalog.js';
 import { loopbackHost } from '../fake-engine/test-utils.js';
 import {
   FAKE_IPTV_PASSWORD,
@@ -33,6 +35,19 @@ import { FAKE_IPTV_HOST, fakeIptvResolver, fakeIptvTransport } from '../fake-ipt
 import { createHarness, until, WEB, type Harness } from './harness.js';
 
 const SERVER = `http://${FAKE_IPTV_HOST}`;
+
+/* Ids inventados del motor falso (como en iptv.test.ts). */
+function aceId(n: number): string {
+  return `a9e0${n.toString(16).padStart(36, '0')}`;
+}
+/* Una AceStream del canal que confirma la guía (pocos pares) y otra del que anuncia la agenda (muchos). */
+const CATALOG = [
+  { id: aceId(1), title: 'M+ LaLiga TV 2 --> NEW ERA', bitrateKbps: 2500, peers: 3 },
+  { id: aceId(2), title: 'DAZN LaLiga --> ELCANO', bitrateKbps: 2500, peers: 20 },
+];
+/* En la resolución, una AceStream va por su infohash. */
+const ACE_GUIDE = contentIdToInfohash(aceId(1));
+const ACE_AGENDA = contentIdToInfohash(aceId(2));
 
 let current: { h: Harness; provider: FakeIptv } | null = null;
 
@@ -55,6 +70,7 @@ async function setup(): Promise<{ h: Harness; provider: FakeIptv }> {
   });
   const h = await createHarness({
     clock,
+    catalog: CATALOG,
     logger: createLogger({
       level: 'silent',
       destination: new Writable({ write: (_chunk, _encoding, done) => done() }),
@@ -130,13 +146,32 @@ describe('agenda híbrida de punta a punta', () => {
     expect(JSON.stringify(legacyData)).not.toContain('"guide"');
     expect(rso(legacyData)?.channels[0]?.name).toBe('M+ LaLiga TV 2');
 
-    /* La resolución: la guía primero; y nada del proveedor en la respuesta. */
-    const resolved = await get(h, `/api/v1/football/resolve?match=${match?.id}&client=web_1`);
+    /* La resolución: la guía primero; y nada del proveedor en la respuesta. «Rebuscar» hace
+       siempre una pasada nueva por el motor (sin precalentado). */
+    const searched: string[] = [];
+    const search = h.services.search;
+    const original = search.search.bind(search);
+    const spy = vi.spyOn(search, 'search').mockImplementation((query, options) => {
+      searched.push(query);
+      return original(query, options);
+    });
+    const resolved = await get(
+      h,
+      `/api/v1/football/resolve?match=${match?.id}&client=web_1&research=1`,
+    );
+    spy.mockRestore();
     expect(resolved.statusCode, resolved.body).toBe(200);
     const resolution = ResolutionSchema.parse(resolved.json());
     expect(resolution.candidates[0]?.title).toBe('M+ LaLiga TV 2 --> Casa');
     expect(resolution.candidates[0]?.iptv?.guide).toBe(true);
     expect(resolution.channels[0]).toBe('M+ LaLiga TV 2');
+    /* AceStream: primero el canal de la guía (tal cual y sin la marca del operador), luego el de la agenda… */
+    expect(searched.slice(0, 3)).toEqual(['M+ LaLiga TV 2', 'laliga tv 2', 'DAZN LaLiga']);
+    /* …y su fuente va delante de la de DAZN LaLiga aunque esta tenga muchos más pares. */
+    const ace = resolution.candidates.filter((candidate) => candidate.source === 'acestream');
+    expect(ace.map((candidate) => candidate.id)).toEqual([ACE_GUIDE, ACE_AGENDA]);
+    const order = resolution.candidates.map((candidate) => candidate.id);
+    expect(order.indexOf(ACE_GUIDE)).toBe(1);
     expect(JSON.stringify(resolution)).not.toContain(FAKE_IPTV_PASSWORD);
 
     /* En pausa: la agenda de siempre, sin esperar a nada. */
