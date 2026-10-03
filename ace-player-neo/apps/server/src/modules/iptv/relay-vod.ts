@@ -113,6 +113,9 @@ export interface VodRelayLimits {
   readonly paceBurstS: number;
   /** Suelo del ritmo (bytes/s), para títulos de tasa muy baja o mal medida. */
   readonly paceMinBytesPerS: number;
+  /** Suelo del ritmo: con menos de esto producido por delante, sin freno hasta `paceFloorUntilS`. */
+  readonly paceFloorS: number;
+  readonly paceFloorUntilS: number;
 }
 
 export const DEFAULT_VOD_RELAY_LIMITS: VodRelayLimits = {
@@ -138,6 +141,8 @@ export const DEFAULT_VOD_RELAY_LIMITS: VodRelayLimits = {
   paceFactor: 3,
   paceBurstS: 20,
   paceMinBytesPerS: 256 * 1024,
+  paceFloorS: VOD_PLAY.paceFloorS,
+  paceFloorUntilS: VOD_PLAY.paceFloorUntilS,
 };
 
 /** Lo que pide la sesión a quien sabe abrir el proveedor (en VOD-5, `relay.connect` con Range e identity). */
@@ -191,6 +196,8 @@ export interface VodSessionStats {
   readonly paceBytesPerS: number | null;
   /** Caudal medido con el proveedor (bytes/s), o null si aún no se sabe. */
   readonly netBytesPerS: number | null;
+  /** Bytes leídos sin freno porque el colchón del productor bajó del suelo. */
+  readonly flooredBytes: number;
 }
 
 // --- Caché de rangos ---
@@ -529,6 +536,11 @@ export class VodSession {
   private pacedMs = 0;
   /** Caudal medido con el proveedor (bytes/s, media móvil) o null mientras no se sabe. */
   private netRate: number | null = null;
+  /** Lo producido por delante de lo pedido (el productor), para el suelo del ritmo. */
+  private aheadProbe: (() => number | null) | null = null;
+  private floorOpen = false;
+  /** Bytes leídos sin freno por el suelo del colchón. */
+  private flooredBytes = 0;
 
   constructor(
     private readonly deps: VodSessionDeps,
@@ -558,6 +570,7 @@ export class VodSession {
       pacedMs: this.pacedMs,
       paceBytesPerS: this.pace?.rate ?? null,
       netBytesPerS: this.netRate === null ? null : Math.round(this.netRate),
+      flooredBytes: this.flooredBytes,
     };
   }
 
@@ -567,15 +580,46 @@ export class VodSession {
    * un arranque de `paceBurstS` segundos de vídeo tras cada salto. null quita
    * el límite.
    */
-  setPace(bytesPerS: number | null): void {
+  setPace(bytesPerS: number | null, options: { readonly refill?: boolean } = {}): void {
     if (bytesPerS === null || !(bytesPerS > 0) || !Number.isFinite(bytesPerS)) {
       this.pace = null;
       return;
     }
     const rate = Math.max(this.limits.paceMinBytesPerS, bytesPerS * this.limits.paceFactor);
     this.pace = { rate, burst: Math.max(512 * 1024, bytesPerS * this.limits.paceBurstS) };
+    /* Un cambio de tasa a mitad (la de cerca del cabezal) no vuelve a llenar el cubo. */
+    if (options.refill === false) {
+      this.tokens = Math.min(this.tokens, this.pace.burst);
+      return;
+    }
     this.tokens = this.pace.burst;
     this.tokensAt = this.deps.clock.now();
+  }
+
+  /**
+   * Suelo del ritmo (auditoría 0.9.0): `probe` dice cuántos segundos lleva producidos el
+   * productor por delante de lo pedido. Por debajo de `paceFloorS` se lee sin freno hasta
+   * volver a `paceFloorUntilS`: el ritmo de 3× no deja que se agote el colchón en una escena cara.
+   */
+  setAheadProbe(probe: (() => number | null) | null): void {
+    this.aheadProbe = probe;
+    this.floorOpen = false;
+  }
+
+  /** ¿Toca leer sin freno por el suelo del colchón? (con su vaivén: abre bajo 30 s, cierra en 60). */
+  private belowFloor(): boolean {
+    const probe = this.aheadProbe;
+    if (!probe) return false;
+    let ahead: number | null;
+    try {
+      ahead = probe();
+    } catch {
+      ahead = null;
+    }
+    if (ahead === null) return this.floorOpen;
+    if (this.floorOpen && ahead >= this.limits.paceFloorUntilS) this.floorOpen = false;
+    else if (!this.floorOpen && ahead < this.limits.paceFloorS) this.floorOpen = true;
+    return this.floorOpen;
   }
 
   /**
@@ -1124,6 +1168,13 @@ export class VodSession {
     const pace = this.pace;
     if (!pace) return;
     const now = this.deps.clock.now();
+    if (this.belowFloor()) {
+      /* Sin freno (y el cubo, al día: al volver el ritmo no se arrastra una deuda). */
+      this.flooredBytes += bytes;
+      this.tokens = Math.min(pace.burst, this.tokens + ((now - this.tokensAt) * pace.rate) / 1000);
+      this.tokensAt = now;
+      return;
+    }
     this.tokens = Math.min(pace.burst, this.tokens + ((now - this.tokensAt) * pace.rate) / 1000);
     this.tokensAt = now;
     this.tokens -= bytes;

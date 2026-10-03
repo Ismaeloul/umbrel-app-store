@@ -584,6 +584,51 @@ describe('VodSession: ajustes del Paso 0 (docs/analisis/paso0-2026-10-03)', () =
     expect(session.stats().paceBytesPerS).toBe(2 * MIB);
   });
 
+  it('auditoría 0.9.0: suelo del ritmo: con menos de 30 s producidos por delante, sin freno hasta 60', async () => {
+    /* 160 Mb/s (20 MB/s): el fichero de 64 MiB no se acaba antes de volver a frenar. */
+    const { origin, vod } = await rig({ rateMbps: 160 });
+    const session = vod.session(origin.url('2.mkv'), 'mkv', {
+      limits: { ...FAST, paceFactor: 1, paceBurstS: 1, paceMinBytesPerS: 1 },
+    });
+    session.setPace(2 * MIB);
+    let ahead = 10;
+    session.setAheadProbe(() => ahead);
+    const open = await openGet(session.inputUrl, 'bytes=0-');
+    let bytes = 0;
+    open.res.on('data', (chunk: Buffer) => {
+      bytes += chunk.length;
+    });
+    open.res.resume();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    /* Bajo el suelo: a toda velocidad (con el ritmo serían ~3 MiB). */
+    expect(session.stats().pacedMs).toBe(0);
+    expect(session.stats().flooredBytes).toBeGreaterThan(5 * MIB);
+    /* 45 s: aún sin freno (el suelo se cierra en 60). */
+    ahead = 45;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(session.stats().pacedMs).toBe(0);
+    /* 70 s: vuelve el ritmo. */
+    ahead = 70;
+    await until(() => session.stats().pacedMs > 0, 3_000, 'el ritmo otra vez');
+    open.close();
+    expect(bytes).toBeGreaterThan(5 * MIB);
+  });
+
+  it('auditoría 0.9.0: cambiar la tasa a mitad (refill: false) no vuelve a llenar el cubo', async () => {
+    const { origin, vod } = await rig();
+    const session = vod.session(origin.url('2.mkv'), 'mkv', {
+      limits: { ...FAST, paceFactor: 1, paceBurstS: 1, paceMinBytesPerS: 1 },
+    });
+    session.setPace(2 * MIB);
+    const internals = session as unknown as { tokens: number };
+    internals.tokens = -MIB;
+    session.setPace(3 * MIB, { refill: false });
+    expect(internals.tokens).toBe(-MIB);
+    expect(session.stats().paceBytesPerS).toBe(3 * MIB);
+    session.setPace(3 * MIB);
+    expect(internals.tokens).toBe(3 * MIB);
+  });
+
   it('release() suelta la conexión con el proveedor y la siguiente lectura reabre', async () => {
     const { origin, vod } = await rig({ rateMbps: 40 });
     const session = vod.session(origin.url('1.mkv'), 'mkv', { limits: FAST });

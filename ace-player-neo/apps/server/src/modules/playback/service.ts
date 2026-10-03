@@ -57,6 +57,8 @@ import { SerialLock } from '../remux/lock.js';
 import type { IptvInput, VodInput } from '../iptv/types.js';
 import type { RemuxCloseReason, RemuxHandle, RemuxSource, RemuxVodHandle } from '../remux/types.js';
 import { vodAudioLabel } from '../remux/vod/audio.js';
+import { bitrateNear } from '../remux/vod/rate.js';
+import type { VodIndex } from '../remux/vod/types.js';
 import {
   codecFor,
   directProtocol,
@@ -168,6 +170,18 @@ interface VodRec {
   /** Pista pedida (`audio=<n>`) con la que se abrió, o undefined. */
   readonly requestedAudio: number | undefined;
   readonly hevc: boolean;
+  /** Tasa del título con la que va el ritmo del relé ahora (bytes/s), o null sin ritmo. */
+  paceBytesPerS: number | null;
+}
+
+/** El ritmo del relé VOD se cambia si la tasa cerca del cabezal se aparta más de esto de la de ahora. */
+const VOD_PACE_RETUNE_RATIO = 0.15;
+
+/** Tasa del título cerca de `fromS` (la ventana del índice) o, si no se sabe, la media del fichero. */
+function vodPaceNear(index: VodIndex, fromS: number): number | null {
+  const near = bitrateNear(index, fromS);
+  if (near !== null) return near;
+  return index.sizeBytes > 0 && index.durationS > 0 ? index.sizeBytes / index.durationS : null;
 }
 
 /** Lo que pide `vodStream` (docs/vod.md §9.8). */
@@ -845,10 +859,12 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       throw error;
     }
     const index = handle.index;
-    /* Ritmo (Paso 0): la tasa media del título; el relé no lee más de 3 veces eso. */
-    if (index.sizeBytes > 0 && index.durationS > 0) {
-      input.setPace(index.sizeBytes / index.durationS);
-    }
+    /* Ritmo (Paso 0): el relé no lee más de 3 veces la tasa del título; desde la auditoría 0.9.0, la de
+       cerca de donde se empieza (la ventana del índice), y con suelo: si lo producido por delante baja de
+       30 s, sin freno hasta 60. */
+    const pace = vodPaceNear(index, handle.startS);
+    if (pace !== null) input.setPace(pace);
+    input.setAheadProbe?.(() => remux.vodStats(id)?.aheadS ?? null);
     input.noteDuration(index.durationS);
     session = {
       id,
@@ -874,7 +890,7 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
       pendingDetach: [],
       lastWorkingAt: 0,
       warm: false,
-      vod: { input, handle, requestedAudio: vod.audio, hevc: vod.hevc },
+      vod: { input, handle, requestedAudio: vod.audio, hevc: vod.hevc, paceBytesPerS: pace },
     };
     sessions.set(session.id, session);
     const opened = session;
@@ -1568,13 +1584,29 @@ export function createPlaybackRuntime(deps: PlaybackDeps): PlaybackRuntime {
   }
 
   /**
+   * El ritmo del relé VOD sigue a la tasa del título cerca de lo que se pide (la ventana del índice,
+   * auditoría 0.9.0): se cambia sin volver a llenar el cubo si se aparta más de un 15 % de la de ahora.
+   */
+  function retuneVodPace(sessionId: string, vod: VodRec): void {
+    const stats = remux.vodStats(sessionId);
+    if (!stats || vod.paceBytesPerS === null) return;
+    const near = vodPaceNear(vod.handle.index, stats.requestedS);
+    if (near === null) return;
+    if (Math.abs(near - vod.paceBytesPerS) <= VOD_PACE_RETUNE_RATIO * vod.paceBytesPerS) return;
+    vod.paceBytesPerS = near;
+    vod.input.setPace(near, { refill: false });
+  }
+
+  /**
    * Estadísticas de una IPTV: las del relé (docs/iptv.md §5.5), y con bytes
    * entrando se apunta `working` por el reproductor cada 60 s (§7.3).
    */
   function iptvStats(session: SessionRec): void {
     if (session.vod) {
+      if (session.closed) return;
+      retuneVodPace(session.id, session.vod);
       /* VOD: las del relé, sin veredictos del comprobador (el id no es un canal). */
-      if (session.closed || !session.viewers.size) return;
+      if (!session.viewers.size) return;
       const stats = session.vod.input.stats();
       bus.emit('stream.stats', {
         sessionId: session.id,

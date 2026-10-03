@@ -23,6 +23,7 @@ import {
   videoDuration,
   vodUnsupported,
 } from './codecs.js';
+import { keyframeBytesOf } from './rate.js';
 import type { RangeReader, VodIndex, VodSubtitle, VodTrack, VodVideoInfo } from './types.js';
 
 // --- IDs (Matroska, RFC 9559) ---
@@ -62,6 +63,7 @@ export const MKV_ID = {
   CueTime: 0xb3,
   CueTrackPositions: 0xb7,
   CueTrack: 0xf7,
+  CueClusterPosition: 0xf1,
   Cluster: 0x1f43b675,
 } as const;
 
@@ -498,27 +500,43 @@ export async function readMkvIndex(reader: RangeReader, head: Buffer): Promise<V
   const cues = await locate(MKV_ID.Cues, CUES_WINDOW_BYTES, CUES_MAX_BYTES);
   if (!cues) throw vodUnsupported('indice', 'MKV sin Cues');
   const ticks: number[] = [];
+  /* Dónde empieza (en el fichero) el cluster de cada CueTime del vídeo: la tasa de bits cerca del cabezal. */
+  const clusterAt = new Map<number, number>();
   const { data, element } = cues;
   for (const point of children(data, element.dataStart, endOf(element, data.length))) {
     if (point.id !== MKV_ID.CuePoint) continue;
     let time: number | null = null;
     let isVideo = false;
+    let cluster: number | null = null;
     for (const field of children(data, point.dataStart, endOf(point, data.length))) {
       if (field.id === MKV_ID.CueTime) time = uintOf(data, field);
       else if (field.id === MKV_ID.CueTrackPositions) {
+        let mine = false;
+        let at: number | null = null;
         for (const position of children(data, field.dataStart, endOf(field, data.length))) {
           if (position.id === MKV_ID.CueTrack && uintOf(data, position) === videoTrack.number) {
-            isVideo = true;
-          }
+            mine = true;
+          } else if (position.id === MKV_ID.CueClusterPosition) at = uintOf(data, position);
+        }
+        if (mine) {
+          isVideo = true;
+          if (at !== null) cluster = segmentStart + at;
         }
       }
     }
-    if (time !== null && isVideo) ticks.push(time);
+    if (time !== null && isVideo) {
+      ticks.push(time);
+      if (cluster !== null && !clusterAt.has(time)) clusterAt.set(time, cluster);
+    }
   }
   /* (tick × escala) / 1e9 y no tick × (escala / 1e9): sale el mismo número que da ffprobe. */
   const toSeconds = (tick: number): number => (tick * timestampScale) / 1e9;
   const keyframes = normalizeKeyframes(ticks.map(toSeconds));
   if (!keyframes.length) throw vodUnsupported('indice', 'Cues sin la pista de vídeo');
+  const keyframeBytes = keyframeBytesOf(
+    keyframes,
+    [...clusterAt].map(([tick, at]) => [toSeconds(tick), at]),
+  );
 
   const audio: VodTrack[] = raw
     .filter((track) => track.type === TRACK_AUDIO)
@@ -558,6 +576,7 @@ export async function readMkvIndex(reader: RangeReader, head: Buffer): Promise<V
     container: 'mkv',
     durationS: videoDuration(declaredTicks === null ? null : toSeconds(declaredTicks), keyframes),
     keyframes,
+    ...(keyframeBytes ? { keyframeBytes } : {}),
     video: videoInfo(videoTrack),
     audio,
     subtitles,

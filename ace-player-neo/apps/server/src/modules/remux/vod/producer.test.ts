@@ -131,7 +131,16 @@ async function rig(
       audio: AC3,
       hevc: false,
       ...(options.startS === undefined ? {} : { startS: options.startS }),
-      limits: { restartMinGapMs: 150, segmentWaitMs: 3_000, ...options.limits },
+      /* La mecánica con las ventanas de antes de la auditoría 0.9.0 (60/30 s y sin esperar a
+         tener 25 s): las de ahora tienen sus propias pruebas más abajo. */
+      limits: {
+        restartMinGapMs: 150,
+        segmentWaitMs: 3_000,
+        aheadMaxS: 60,
+        aheadResumeS: 30,
+        warmupS: 0,
+        ...options.limits,
+      },
     },
   );
   producers.push(producer);
@@ -315,6 +324,35 @@ describe('VodProducer', () => {
     await new Promise((resolve) => setTimeout(resolve, 900));
     expect(r.launcher.starts).toEqual([90.2, 90.2, 90.2]);
     expect(r.launcher.alive).toBe(1);
+  });
+
+  it('auditoría 0.9.0: al empezar, el segmento pedido no sale hasta tener 25 s producidos; los siguientes, ya', async () => {
+    const r = await rig({ behavior: { fragmentDelayMs: 15 }, limits: { warmupS: 25 } });
+    expect((await r.get('index0.m4s')).kind).toBe('file');
+    /* GOP de 2 s: 25 s son 13 fragmentos. */
+    expect(r.launcher.runs[0]?.fragments).toBeGreaterThanOrEqual(13);
+    const t0 = Date.now();
+    expect((await r.get('index1.m4s')).kind).toBe('file');
+    expect(Date.now() - t0).toBeLessThan(100);
+    expect(r.producer.stats().aheadS).toBeGreaterThan(10);
+  });
+
+  it('auditoría 0.9.0: tras un salto lejos, otra vez 25 s antes de dar el segmento', async () => {
+    const r = await rig({ behavior: { fragmentDelayMs: 10 }, limits: { warmupS: 25 } });
+    await r.get('index0.m4s');
+    expect(startOf(r, await r.get('index15.m4s'))).toBe(90);
+    const jump = r.launcher.runs.at(-1);
+    expect(jump?.ss).toBe(90.2);
+    expect(jump?.fragments).toBeGreaterThanOrEqual(13);
+  });
+
+  it('auditoría 0.9.0: si no llega a 25 s en el plazo, sale lo que haya (no un 503)', async () => {
+    const r = await rig({
+      behavior: { fragmentDelayMs: 150 },
+      limits: { warmupS: 25, segmentWaitMs: 700 },
+    });
+    expect((await r.get('index0.m4s')).kind).toBe('file');
+    expect(r.launcher.runs[0]?.fragments).toBeLessThan(13);
   });
 
   it('desde el principio (segmento 0) no hay plazo del primer fragmento', async () => {

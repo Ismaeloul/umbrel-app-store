@@ -1055,7 +1055,7 @@ búfer).
 | Índices | 8 × ~50 KB | LRU |
 | Caché del relé | ≤ 40 MiB por sesión | una sesión a la vez |
 | ffmpeg VOD | 55-70 MB, 0,05 núcleos (AC-3 → AAC) | uno en todo el servidor, `nice 10`, `-threads 2` |
-| Disco de la sesión | ~150 MB a 6 Mb/s, ~600 MB a 25 Mb/s (estimado) | 256 MiB por detrás + 60 s por delante; tope de 1,5 GiB; ≥ 2 GiB libres |
+| Disco de la sesión | ~150 MB a 6 Mb/s, ~600 MB a 25 Mb/s (estimado) | 256 MiB por detrás + 120 s por delante (0.9.0); tope de 1,5 GiB; ≥ 2 GiB libres |
 | Disco de carteles | ≤ 256 MiB, 5 000 ficheros | LRU |
 
 **La caché de páginas cuenta.** `remuxDir` es `/data/remux`, en disco, pero lo que se escribe pasa por la caché de
@@ -1403,8 +1403,11 @@ export const VOD_PLAY = {
   segmentMinS: 6,
   restartAheadS: 30,          // el segmento pedido empieza > 30 s después de lo producido → reinicio allí
   restartMinGapMs: 1_500,     // reinicios agrupados: gana el último pedido
-  aheadMaxS: 60,              // contrapresión: se deja de leer pipe:1 por encima de +60 s…
-  aheadResumeS: 30,           // …y se sigue por debajo de +30 s
+  aheadMaxS: 120,             // contrapresión: se deja de leer pipe:1 por encima de +120 s… (0.9.0; antes 60)
+  aheadResumeS: 60,           // …y se sigue por debajo de +60 s (0.9.0; antes 30)
+  warmupS: 25,                // arranque y tras un salto: el segmento sale con 25 s producidos (0.9.0)
+  paceFloorS: 30, paceFloorUntilS: 60, // suelo del ritmo: bajo 30 s por delante, sin freno hasta 60 (0.9.0)
+  firstFragmentMs: 8 * SECOND, firstFragmentRetries: 2, // ejecución a mitad sin nada: se relanza (0.9.0)
   keepBehindS: 120,
   keepBehindMaxBytes: 256 * MIB,
   sessionDiskMaxBytes: 1.5 * GIB,

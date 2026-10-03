@@ -127,10 +127,25 @@ export const VOD_PLAY = {
   restartAheadS: 30,
   /** Reinicios agrupados: gana el último pedido. */
   restartMinGapMs: 1_500,
-  /** Contrapresión: se deja de leer `pipe:1` por encima de +60 s… */
-  aheadMaxS: 60,
-  /** …y se sigue por debajo de +30 s. */
-  aheadResumeS: 30,
+  /**
+   * Contrapresión: se deja de leer `pipe:1` por encima de +120 s… (auditoría 0.9.0: el
+   * criterio de Isma es que tarde lo que tenga que tardar al arrancar o tras un salto,
+   * pero que NO se pare mientras ve; antes, 60 y 30 s).
+   */
+  aheadMaxS: 120,
+  /** …y se sigue por debajo de +60 s. */
+  aheadResumeS: 60,
+  /**
+   * Arranque y tras un salto: el segmento pedido no se entrega hasta tener al menos esto
+   * producido desde él (o el final del título), con el plazo de `segmentWaitMs`.
+   */
+  warmupS: 25,
+  /**
+   * Suelo del ritmo del relé: si lo producido por delante de lo pedido baja de
+   * `paceFloorS`, se lee sin freno hasta volver a tener `paceFloorUntilS`.
+   */
+  paceFloorS: 30,
+  paceFloorUntilS: 60,
   keepBehindS: 120,
   keepBehindMaxBytes: 256 * MIB,
   sessionDiskMaxBytes: 1.5 * GIB,
