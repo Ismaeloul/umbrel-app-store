@@ -9,20 +9,25 @@
    «Todos», la tarjeta de primer uso y, por competición, una FILA HORIZONTAL
    de tarjetas versus (scroll-snap). Tocar una tarjeta abre el centro de
    partido (con los escudos viajando hasta allí: View Transition). Deslizar la
-   lista a los lados cambia de día; si habías bajado, la página vuelve a la
-   tira para que se vea qué día es.
+   lista a los lados cambia de día (day-swipe.ts: también sobre las filas
+   cuando no tienen más que enseñar hacia ese lado); si habías bajado, la
+   página vuelve a la tira para que se vea qué día es.
 
-   Escritorio (≥ 1024): las filas a la izquierda y, a la derecha, el panel del
-   partido ELEGIDO (tarjeta grande, señal, dónde se emite, acción) y «Luego»;
-   desde 1280, arriba del panel, la tira de directos (B1). Un clic en una
-   tarjeta la lleva al panel; un segundo clic, doble clic o Intro la abre.
-   Mientras el elegido sea el del héroe, el panel no se repite: el lateral
-   deja el sitio a la tira de directos y a «Luego».
+   Escritorio (≥ 1024, 0.9.0): SIN héroe; toda la página es el calendario
+   (tira de días arriba y las filas a la izquierda) y, a la derecha, el panel
+   del partido ELEGIDO (de entrada, el destacado: tarjeta grande, señal,
+   dónde se emite, acción) y «Luego»; desde 1280, arriba del panel, la tira
+   «En directo» con marcador y minuto (B1). Un clic en una tarjeta o en un
+   directo la lleva al panel; un segundo clic, doble clic o Intro la abre.
+   Los partidos de TUS EQUIPOS (solo equipos, no ligas) llevan un aura
+   verde en la lista y en «Luego» (agenda.css › «Tu equipo»).
 
-   Marcadores: en la agenda van SIEMPRE tapados (corrección 1; DESIGN.md: «el
-   marcador vive oculto tras un toque en la cápsula "Marcador", nunca en la
-   imagen»). Cada partido con marcador lleva su cápsula «Marcador», que lo
+   Marcadores: en las tarjetas van SIEMPRE tapados (corrección 1; DESIGN.md:
+   «el marcador vive oculto tras un toque en la cápsula "Marcador", nunca en
+   la imagen»). Cada partido con marcador lleva su cápsula «Marcador», que lo
    destapa y lo vuelve a tapar (score-reveal.ts); el menú contextual también.
+   La tira «En directo» sí lo enseña junto al minuto (Isma, 0.9.0), salvo el
+   del partido que estás viendo (regla 29).
 
    §5.1: sin canales anunciados sale «El canal todavía no está anunciado»; con
    canales se abre el centro de partido, que es quien resuelve el canal
@@ -477,14 +482,16 @@ export default function Agenda({ active }: ViewProps) {
     );
   };
 
+  /* El héroe solo en el móvil y la tableta: en escritorio toda la página es
+     el calendario y el destacado sale en el panel de la derecha (0.9.0). */
   let hero = null;
-  if (schedule.isPending) {
+  if (!stageVisible && schedule.isPending) {
     hero = (
       <div className="agenda-hero agenda-hero--pending" aria-hidden="true">
         <Skeleton className="agenda-hero__skeleton" height="auto" radius="xl" />
       </div>
     );
-  } else if (ready && featured) {
+  } else if (!stageVisible && ready && featured) {
     hero = (
       <AgendaHero
         key={featured.id}
@@ -496,7 +503,6 @@ export default function Agenda({ active }: ViewProps) {
         mine={isMine(featured, preferences)}
         watching={watched === featured.id}
         onOpen={(match) => openMatch(match, 'hero')}
-        layout={stageVisible ? 'band' : 'poster'}
         transitionName={
           opening?.from === 'hero' && opening.id === featured.id
             ? partidoTransitionName(featured.id)
@@ -615,14 +621,10 @@ export default function Agenda({ active }: ViewProps) {
   );
 
   const selectedScore = selected ? (scores[selected.id] ?? null) : null;
-  /* El elegido es el del héroe (lo normal al entrar): el panel no repite su
-     tarjeta grande, que está justo encima; el lateral se queda con la tira
-     de directos y «Luego». Al elegir otra tarjeta, el panel la enseña. */
-  const heroSelected = hero !== null && selected !== null && selected.id === featured?.id;
-  const sideVisible =
-    stageVisible &&
-    selected !== null &&
-    (!heroSelected || later.length > 0 || (kind === 'wide' && liveCount > 0));
+  /* En escritorio el panel enseña SIEMPRE el elegido (de entrada, el
+     destacado): sin héroe ya no hay nada que no repetir, y tocar cualquier
+     directo de la tira lo trae aquí con su canal y «Ver canal». */
+  const sideVisible = stageVisible && selected !== null;
   const dayText = day ? dayLabel(day, today) : null;
 
   /* Resumen para lectores de pantalla (regla 36: `aria-live` en la agenda):
@@ -728,10 +730,7 @@ export default function Agenda({ active }: ViewProps) {
           {content}
         </div>
         {sideVisible && selected ? (
-          <aside
-            className={cx('agenda__side', heroSelected && 'agenda__side--later')}
-            aria-label={heroSelected ? 'Más partidos' : 'Partido elegido'}
-          >
+          <aside className="agenda__side" aria-label="Partido elegido">
             {kind === 'wide' ? (
               <LiveStrip
                 matches={matches}
@@ -741,19 +740,17 @@ export default function Agenda({ active }: ViewProps) {
                 onSelect={(match) => setAgendaSelected(match.id)}
               />
             ) : null}
-            {heroSelected ? null : (
-              <AgendaStage
-                key={selected.id}
-                match={selected}
-                now={now}
-                today={today}
-                score={selectedScore}
-                channels={channelInfo(selected, lookup)}
-                mine={isMine(selected, preferences)}
-                watching={watched === selected.id}
-                onOpen={openMatch}
-              />
-            )}
+            <AgendaStage
+              key={selected.id}
+              match={selected}
+              now={now}
+              today={today}
+              score={selectedScore}
+              channels={channelInfo(selected, lookup)}
+              mine={isMine(selected, preferences)}
+              watching={watched === selected.id}
+              onOpen={openMatch}
+            />
             {later.length ? (
               <section className="agenda-later" aria-labelledby="agenda-luego">
                 <h3 id="agenda-luego" className="agenda-later__title">

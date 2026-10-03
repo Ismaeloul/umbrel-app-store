@@ -1,11 +1,12 @@
 /* ==========================================================================
    Agenda = portada, piel «Palco» (plan fase 2, decisiones D3, D4, W4 y W11;
-   corrección 1 del encargo). Arriba el héroe (versus XL; en escritorio, banda
-   compacta); debajo la tira de días y «Para ti» / «Todos»; después, por
-   competición, una fila horizontal
-   de tarjetas versus (PosterRail). En escritorio, a la derecha, el panel del
-   partido elegido y «Luego». Todo con tokens; solo se animan transform y
-   opacity; el hover, solo con ratón de verdad.
+   corrección 1 del encargo). En el móvil y la tableta, arriba el héroe
+   (versus XL); debajo la tira de días y «Para ti» / «Todos»; después, por
+   competición, una fila horizontal de tarjetas versus (PosterRail). En
+   escritorio no hay héroe (0.9.0): la tira de días arriba, las filas y, a la
+   derecha, el panel del partido elegido, «En directo» y «Luego». Todo con
+   tokens; solo se animan transform y opacity; el hover, solo con ratón de
+   verdad.
    ========================================================================== */
 
 .agenda {
@@ -227,155 +228,6 @@
       ),
       radial-gradient(64% 80% at 0% 100%, rgb(0 0 0 / 0.6), transparent 72%),
       radial-gradient(40% 60% at 50% 46%, rgb(0 0 0 / 0.22), transparent 70%);
-  }
-}
-/* Escritorio (≥ 1024 px): banda compacta en vez de la valla (encargo del
-   3-10-2026). Superficie del sistema, sin las dos mitades planas: de los
-   colores de club quedan una franja fina partida en el borde izquierdo y una
-   luz suave detrás de cada fila de equipo (--ta arriba, --tb abajo; en un
-   partido terminado, nada). Tres columnas: equipos · cuándo, competición y
-   canales · acciones. Sin cristal: igual con «Reducir transparencia». */
-.agenda-hero--band {
-  display: block;
-}
-.agenda-hero__band {
-  position: relative;
-  isolation: isolate;
-  display: grid;
-  grid-template-columns: minmax(0, 26rem) minmax(0, 1fr) auto;
-  align-items: center;
-  column-gap: var(--s-6);
-  padding: 20px 24px 20px 28px;
-  overflow: hidden;
-  border-radius: var(--r-xl);
-  background: var(--surface);
-  box-shadow:
-    inset 0 1px 0 var(--glass-hi),
-    0 0 0 1px var(--line-soft),
-    var(--shadow-1);
-}
-.agenda-hero__band::before {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(
-      38% 70% at 0% 22%,
-      color-mix(in oklch, var(--ta) 22%, transparent),
-      transparent 75%
-    ),
-    radial-gradient(
-      38% 70% at 0% 78%,
-      color-mix(in oklch, var(--tb) 18%, transparent),
-      transparent 75%
-    );
-}
-.agenda-hero__band::after {
-  content: '';
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 4px;
-  background: linear-gradient(180deg, var(--ta) 50%, var(--tb) 50%);
-  pointer-events: none;
-}
-.agenda-hero--band.is-watching .agenda-hero__band {
-  box-shadow:
-    inset 0 0 0 2px var(--accent),
-    var(--shadow-1);
-}
-.agenda-hero__teams {
-  display: grid;
-  gap: 10px;
-  min-width: 0;
-}
-.agenda-hero__team {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
-}
-.agenda-hero__crest {
-  flex: none;
-}
-.agenda-hero__name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--fs-22);
-  font-weight: var(--wght-head);
-  font-stretch: var(--w-head);
-  letter-spacing: var(--tracking-head);
-  line-height: 1.15;
-}
-.agenda-hero__meta {
-  display: grid;
-  gap: 8px;
-  justify-items: start;
-  align-self: stretch;
-  align-content: center;
-  min-width: 0;
-  padding-left: var(--s-6);
-  border-left: 1px solid var(--line-soft);
-}
-.agenda-hero__marks {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.agenda-hero__when {
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-.agenda-hero__comp {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  max-width: 100%;
-  margin: 0;
-  font-size: var(--fs-15);
-  font-weight: 650;
-}
-.agenda-hero__comp-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.agenda-hero--band .agenda-hero__where {
-  display: flex;
-  max-width: 100%;
-  margin: 0;
-}
-.agenda-hero__where-text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.agenda-hero__actions {
-  display: grid;
-  gap: 8px;
-  justify-items: stretch;
-  min-width: 190px;
-}
-.agenda-hero--band .agenda-hero__score.agenda-score.capsule {
-  justify-content: center;
-  width: 100%;
-}
-@media (min-width: 1024px) {
-  .agenda-hero__skeleton.skeleton {
-    aspect-ratio: auto;
-    min-height: 0;
-    height: 152px;
-    max-height: none;
-    background: var(--surface);
-    color-scheme: normal;
   }
 }
 /* ---- Barra: días y filtro ---------------------------------------------------------- */
@@ -729,6 +581,34 @@
 .agenda-rail .prail__track {
   padding-bottom: 4px;
 }
+/* Aire para el aura de «Tu equipo», que va por fuera de la tarjeta: la pista
+   recorta lo que se sale (overflow), así que gana 14 px arriba (el margen
+   negativo lo devuelve) y, sin sangrar (escritorio), 14 px a cada lado que
+   el margen negativo devuelve también: las tarjetas siguen alineadas con el
+   titular de la competición. */
+.agenda-rail {
+  margin-top: -8px;
+}
+.agenda-rail .prail__track {
+  padding-top: 14px;
+}
+.agenda-rail:not(.prail--bleed) {
+  --prail-pad: 14px;
+  margin-inline: -14px;
+}
+/* La sombra de cartel (24 px de difuminado) no cabe en ese aire y la pista la
+   cortaba en seco: en claro se veía un rectángulo gris detrás de la fila (y
+   detrás de «Luego»). Aquí, la sombra corta del sistema. */
+.agenda-rail .versus,
+.agenda-later .versus {
+  box-shadow: var(--shadow-1);
+}
+.agenda-rail .versus.is-watching,
+.agenda-later .versus.is-watching {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    var(--shadow-1);
+}
 /* Las flechas flotan sobre el carrusel: `.press` (base.css, que se carga
    después) les ponía `position: relative` y cada flecha ocupaba 44 px de alto
    encima y debajo de la fila que se desborda (el hueco grande antes de la
@@ -772,6 +652,32 @@
 /* En directo, la luz de los dos clubes bajo la tarjeta (sombra fija). */
 .agenda-row.is-live .agenda-row__card {
   box-shadow: 0 12px 26px -16px color-mix(in oklch, var(--ta) 80%, transparent);
+}
+.agenda-row--compact .agenda-row__card {
+  border-radius: var(--r-s);
+}
+
+/* «Tu equipo» (0.9.0, pedido de Isma): el partido de tus equipos (solo
+   equipos, no ligas: isMine) se resalta DENTRO de la lista y de «Luego» con
+   un aura alrededor de la tarjeta, por FUERA: un aro de 2 px y un halo
+   difuso. VERDE y no oro: en escritorio siempre hay una tarjeta elegida con
+   su aro oro por DENTRO (VersusCard › .is-selected) y, en oro las dos, no
+   se sabía cuál enseñaba el panel y cuál era la de tu equipo (probado con
+   capturas). Si es las dos cosas, lleva los dos aros. La estrella oro de
+   «Tu equipo» sigue igual. Sin animación: es un estado, no un aviso. */
+.agenda-row {
+  --agenda-mine: var(--ok);
+}
+.agenda-row.is-mine .agenda-row__card {
+  box-shadow:
+    0 0 0 2px var(--agenda-mine),
+    0 0 12px 1px color-mix(in oklch, var(--agenda-mine) 45%, transparent);
+}
+.agenda-row.is-mine.is-live .agenda-row__card {
+  box-shadow:
+    0 0 0 2px var(--agenda-mine),
+    0 0 12px 1px color-mix(in oklch, var(--agenda-mine) 45%, transparent),
+    0 12px 26px -16px color-mix(in oklch, var(--ta) 80%, transparent);
 }
 .agenda-row .versus {
   aspect-ratio: 16 / 10;
@@ -1063,9 +969,10 @@
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-width: thin;
-    /* Aire para el anillo de foco y las sombras sin recortarlos. */
-    padding: 4px 4px var(--s-4);
-    margin: -4px -4px 0;
+    /* Aire para el anillo de foco, las sombras y el aura de «Tu equipo» sin
+       recortarlos. */
+    padding: 14px 14px var(--s-4);
+    margin: -14px -14px 0;
   }
 }
 @media (min-width: 1280px) {
@@ -1191,35 +1098,30 @@
   aspect-ratio: 3 / 2;
 }
 
-/* ---- Tira de directos (B1, solo en pantallas anchas) ------------------------------- */
+/* ---- Directos (B1, solo en pantallas anchas) ----------------------------------------
+   Arriba de la columna derecha: «● En directo» y debajo una cápsula por
+   partido con escudos, siglas, marcador y minuto. Las cápsulas pasan a la
+   línea siguiente (con el marcador ya no cabían dos en la columna y la
+   segunda salía cortada); nada se mueve solo. */
 .agenda-strip {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  display: grid;
+  gap: 8px;
   min-width: 0;
 }
 .agenda-strip__title {
   display: inline-flex;
-  flex: none;
   align-items: center;
   gap: 2px;
+  padding-inline: 4px;
   color: var(--live-ink);
   font-size: var(--fs-13);
   font-weight: 760;
 }
 .agenda-strip__list {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--s-2);
   min-width: 0;
-  padding: 4px 28px 4px 2px;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-  /* El último partido se funde en el borde: la tira sigue (a mano, nunca sola). */
-  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
-}
-.agenda-strip__list::-webkit-scrollbar {
-  display: none;
 }
 .agenda-strip__chip {
   display: inline-flex;
@@ -1244,8 +1146,15 @@
 .agenda-strip__crests > .team + .team {
   margin-left: -5px;
 }
+/* «RSO 1–0 VIL · 33'»: siglas, marcador y, tras un punto, el minuto. */
+.agenda-strip__line {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
 .agenda-strip__score {
   font-size: var(--fs-15);
+  font-weight: 800;
 }
 .agenda-strip__vs {
   color: var(--text-3);
@@ -1255,6 +1164,12 @@
   color: var(--live-ink);
   font-size: var(--fs-caption);
   font-weight: 760;
+}
+.agenda-strip__minute::before {
+  content: '·';
+  margin-right: 6px;
+  color: var(--text-3);
+  font-weight: 700;
 }
 
 /* ---- Columna compacta del centro de partido ---------------------------------------- */
