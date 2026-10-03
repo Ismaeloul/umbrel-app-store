@@ -57,10 +57,13 @@ describe('nameSearchWords: las palabras de un nombre tal cual lo da el panel', (
     ['CANAL 24 HORAS', 'canal 24h'],
     /* Reservas y copias (el número de la copia no es el del canal). */
     ['ES: LA 1 (backup)', 'la 1'],
-    ['ES: LA 1 #2', 'la 1'],
     ['ES: LA 1 (2)', 'la 1'],
+    ['ES: LA 1 [2] ★', 'la 1'],
     ['DAZN 1 (2) HD', 'dazn 1'],
-    ['ES » TELECINCO HD #2 ★', 'telecinco'],
+    /* «#N» sí es el número del canal: «LALIGA+ PPV #2» es otro evento que el #1. */
+    ['ES: LALIGA+ PPV #2', 'laligaplus ppv 2'],
+    ['US: NBA LEAGUE PASS #3 HD', 'nba league pass 3'],
+    ['ES: LA 1 #2', 'la 1 2'],
     ['ES - M. LALIGA HD (BK-1)', 'movistar laliga'],
     ['ES - LASEXTA ᴿᴬᵂ', 'lasexta'],
     /* Grafías: Movistar, LaLiga, Telecinco, Antena 3, RTVE, Ñ. */

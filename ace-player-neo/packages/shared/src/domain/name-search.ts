@@ -11,7 +11,8 @@
       «ES ✪ », «ESPAÑA - », «ES » suelto…), sin calidad, códec ni
       fotogramas (4K, UHD, FHD, HD, SD, HEVC, H265, 50FPS, «4K HDR»,
       superíndices ᴴᴰ…), sin adornos ni reservas (VIP, ᴿᴬᵂ, «(backup)», la
-      copia «(2)» o «#2» del final, emojis, ◉ ┃ ★ ✪), sin tildes ni
+      copia «(2)» del final, emojis, ◉ ┃ ★ ✪; «#2» es el número del canal,
+      no una copia: «LALIGA+ PPV #2» es otro evento), sin tildes ni
       mayúsculas, con la grafía única de `channelSpelling` (M+ → Movistar,
       «la liga» → «laliga», «tele 5» → «telecinco», «antena3» → «antena
       3»…), «La 1 TVE» = «La 1» y los números escritos con letra detrás de
@@ -96,11 +97,11 @@ const COUNTRY_LONG: ReadonlySet<string> = new Set(['exyu', 'latam', 'latino', 'e
  * plegado.
  */
 const LEAD_PREFIX_RE =
-  /^[\s\p{P}\p{S}]*([a-z]{2,6}|4k)(?:\s+[a-z]{2,3})?[\s]*[\p{P}\p{S}]+[\s\p{P}\p{S}]*/u;
+  /^[\s\p{P}\p{S}]*([a-z]{2,6}|4k)(?:\s+[a-z]{2,3})?\s*(?:(?!#)[\p{P}\p{S}])+[\s\p{P}\p{S}]*/u;
 /* España delante sin símbolo: «ES DAZN 1», «esp la 1» (otras siglas son palabras: «de», «la», «tv»). */
 const LEAD_SPAIN_RE = /^[\s\p{P}\p{S}]*(?:es|esp|espana|spain)\s+(?=[\p{L}\p{N}])/u;
-/* La copia del final: «(2)», «[2]», «#2» (no «#0», que es un canal de Movistar). */
-const COPY_TAIL_RE = /\s*(?:[([]\s*\d{1,2}\s*[)\]]|#\s*[1-9]\d?)\s*$/u;
+/* La copia del final: «(2)», «[2]». «#2» NO es una copia: numera canales distintos («LALIGA+ PPV #2»). */
+const COPY_TAIL_RE = /\s*[([]\s*\d{1,2}\s*[)\]]\s*$/u;
 /* Fotogramas sueltos: «50 fps», «60FPS». */
 const FPS_RE = /\b\d{2}\s*fps\b/gu;
 /* RTVE detrás de su canal («La 1 TVE», «Clan RTVE») o delante con el número («TVE 1» → «la 1»). */
@@ -195,13 +196,13 @@ function stripLead(text: string): string {
   return out;
 }
 
-/* Adornos del final que tapan la copia («TELECINCO #2 ★»): lo que no es letra, número, cierre ni el «+» pegado (LaLiga+). */
+/* Adornos del final que tapan la copia («TELECINCO (2) ★»): lo que no es letra, número, cierre ni el «+» pegado (LaLiga+). */
 const TRAILING_DECOR_RE = /[^\p{L}\p{N})\]+]+$/u;
 /* La reserva escrita: «(BK-1)», «[BK 2]», «BK-1», «bk2», «backup 2», «ALT 1» (el número es de la reserva). */
 const BACKUP_TAG_RE =
   /[([]\s*(?:bk|bkp|backup)\s*[-_]?\s*\d{0,2}\s*[)\]]|\b(?:backup|back\s*up|bkp|bk|alt|alternativ[oa]|reserva|respaldo)(?:\s?[-_]?\s?\d{1,2})?\b/gu;
 /* Una copia entre paréntesis o corchetes en cualquier sitio («DAZN 1 (2) HD»): nunca es el número del canal. */
-const COPY_INNER_RE = /[([]\s*\d{1,2}\s*[)\]]|#\s*[1-9]\d?\b/gu;
+const COPY_INNER_RE = /[([]\s*\d{1,2}\s*[)\]]/gu;
 
 /**
  * Las palabras con las que se busca un nombre (o lo que se escribe): ver la
@@ -216,7 +217,7 @@ export function nameSearchWords(value: string): string[] {
   );
   /* El país de delante, antes de la grafía (la de Movistar mira el principio). */
   text = stripLead(text);
-  /* La copia y la reserva («(2)», «#2», «(BK-1)»), si queda nombre delante. */
+  /* La copia y la reserva («(2)», «(BK-1)»), si queda nombre delante. */
   text = text.replace(TRAILING_DECOR_RE, '');
   text = text.replace(COPY_TAIL_RE, (copy, offset: number) =>
     /[\p{L}\p{N}]/u.test(text.slice(0, offset)) ? ' ' : copy,

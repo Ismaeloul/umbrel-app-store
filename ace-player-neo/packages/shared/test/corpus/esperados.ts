@@ -41,6 +41,15 @@ export const ESPERADOS: readonly Esperado[] = [
   { q: 'la 2', top: ['la 2', 'la 2 catalunya'], nunca: ['laliga 2'] },
   { q: 'la 10', top: ['la 10'], fuera: ['la 1', 'la 100 radio'] },
   { q: 'la 7', top: ['la 7', 'la 7/IT'] },
+  /* Canales numerados con «#»: cada uno su fila (nunca copias de una sola). */
+  { q: 'laliga+ ppv 2', top: ['laligaplus ppv 2'] },
+  { q: 'ppv #3', top: ['laligaplus ppv 3'] },
+  { q: 'dazn ppv', top: ['dazn ppv 1', 'dazn ppv 2'] },
+  {
+    q: 'nba league pass',
+    top: ['nba league pass 1/US', 'nba league pass 2/US', 'nba league pass 3/US'],
+  },
+  { q: 'eventos', top: ['eventos 1', 'eventos 2'] },
   /* Telecinco con todas sus grafías (y el TELE 5 alemán detrás). */
   { q: 'tele 5', top: ['telecinco', 'telecinco/DE'] },
   { q: 'tele5', top: ['telecinco', 'telecinco/DE'] },
@@ -75,9 +84,10 @@ export const ESPERADOS: readonly Esperado[] = [
   { q: 'laliga tv hypermotion', top: ['laliga hypermotion', 'laliga hypermotion 2'] },
   /* DAZN, los de aquí antes que los de fuera. */
   { q: 'dazn', top: ['dazn 1', 'dazn 2', 'dazn 3'] },
+  /* Detrás, «DAZN PPV 1» (de aquí, con las dos palabras en orden) y los DAZN 1 de fuera. */
   {
     q: 'dazn 1',
-    top: ['dazn 1', 'dazn 1 bar', 'dazn 1/DE|dazn 1/IT|dazn 1/PT'],
+    top: ['dazn 1', 'dazn 1 bar', 'dazn 1/DE|dazn 1/IT|dazn 1/PT|dazn ppv 1'],
     fuera: ['dazn f1'],
   },
   { q: 'dazn 2', top: ['dazn 2'] },

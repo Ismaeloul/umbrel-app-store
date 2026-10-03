@@ -10,7 +10,9 @@
      «◉ ES: », «VIP ES: », «ES-» pegado, «ES TI - »;
    - calidades y códecs: 4K, UHD, FHD, HD, SD, HEVC, H265, 50FPS, «4K HDR»,
      superíndices (ᴴᴰ ᶠᴴᴰ ᵁᴴᴰ), «⁺», 1080p, 720p;
-   - adornos: VIP, PPV, emojis, ◉ ┃ ★ ✪, «(backup)», «#2», «(2)», ᴿᴬᵂ;
+   - adornos: VIP, PPV, emojis, ◉ ┃ ★ ✪, «(backup)», «(2)», «[2]», ᴿᴬᵂ;
+   - canales numerados con «#» («LALIGA+ PPV #2», «NBA LEAGUE PASS #3»):
+     cada número es otro canal, no una copia;
    - los canales que se confunden: La 1 / La 1 Catalunya / La 1 Canarias /
      La 10 / LaLiga TV 1 / LALIGA+ PPV 1 / LA LIGA 1 (Rakuten) / LATINO
      SPORTS 1; Tele 5 / Telecinco / el TELE 5 alemán; A3 / Antena 3 / el
@@ -98,7 +100,8 @@ export const DECOR_TAILS: readonly string[] = [
   '',
   '',
   ' (backup)',
-  ' #2',
+  /* «#2» NO va aquí: en las listas numera canales distintos («LALIGA+ PPV #2»), no copias (HANDWRITTEN). */
+  ' [2]',
   ' (2)',
   ' ᴿᴬᵂ',
   ' ⚽',
@@ -242,6 +245,16 @@ export const HANDWRITTEN: readonly (readonly [title: string, group: string])[] =
   ['LAT: LATINO SPORTS 10', 'LATINO DEPORTES'],
   ['LAT: LATINO SPORTS 11', 'LATINO DEPORTES'],
   ['ES: LA 100 RADIO', 'EU | ES | RADIO'],
+  /* Canales numerados con «#»: cada número es OTRO canal (otro evento), nunca una copia. */
+  ['ES: LALIGA+ PPV #2', 'EU | ES | LALIGA+ PPV'],
+  ['ES: LALIGA+ PPV #3', 'EU | ES | LALIGA+ PPV'],
+  ['ES: DAZN PPV #1', 'EU | ES | DAZN'],
+  ['ES: DAZN PPV #2', 'EU | ES | DAZN'],
+  ['US: NBA LEAGUE PASS #1', 'AM | USA | NBA'],
+  ['US: NBA LEAGUE PASS #2', 'AM | USA | NBA'],
+  ['US: NBA LEAGUE PASS #3', 'AM | USA | NBA'],
+  ['ES: EVENTOS #1', 'EU | ES | EVENTOS'],
+  ['ES: EVENTOS #2', 'EU | ES | EVENTOS'],
   /* Tele 5 / Telecinco. */
   ['ES: TELE 5 HD', TDT],
   ['ES: TELE5 SD', TDT],

@@ -55,7 +55,7 @@ function browseLabels(index: BrowseIndex, q: string, favorites?: ReadonlySet<str
 }
 
 describe('el corpus en el catálogo del servidor', () => {
-  it('cada forma de «La 1» (ES 4K, ES:, |ES|, ES►, ◉ ES:, #2, TVE…) es una sola fila', () => {
+  it('cada forma de «La 1» (ES 4K, ES:, |ES|, ES►, ◉ ES:, (2), TVE…) es una sola fila', () => {
     expect(catalog.buckets('la 1').map((bucket) => bucket.bucket)).toEqual(['']);
     expect(catalog.group('la 1').length).toBeGreaterThanOrEqual(10);
     /* Ninguna clave con el país pegado («es la 1») ni la copia como número («la 1 2»). */
@@ -63,6 +63,39 @@ describe('el corpus en el catálogo del servidor', () => {
     expect(keys.filter((key) => /^(?:es|esp|vip)\b/.test(key))).toEqual([]);
     expect(keys).not.toContain('la 1 2');
     expect(keys).not.toContain('la 1 tve');
+  });
+
+  it('«#N» numera canales distintos: cada uno su fila, sin copias que el relé use de respaldo', () => {
+    const small = catalogOf([
+      { title: 'ES: LALIGA+ PPV #1', group: 'ES | LALIGA' },
+      { title: 'ES: LALIGA+ PPV #2', group: 'ES | LALIGA' },
+      { title: 'ES: LALIGA+ PPV #3', group: 'ES | LALIGA' },
+      { title: 'ES: DAZN PPV', group: 'ES | DAZN' },
+      { title: 'ES: DAZN PPV #2', group: 'ES | DAZN' },
+      { title: 'US: NBA LEAGUE PASS #1', group: 'US | NBA' },
+      { title: 'US: NBA LEAGUE PASS #2', group: 'US | NBA' },
+    ]);
+    for (const key of ['laligaplus ppv 1', 'laligaplus ppv 2', 'laligaplus ppv 3', 'dazn ppv 2']) {
+      expect(small.group(key), key).toHaveLength(1);
+      expect(small.group(key)[0]?.backup, key).toBe(false);
+    }
+    /* Con el canal sin número al lado, «#2» tampoco es su copia (puede ser otro evento). */
+    expect(small.group('dazn ppv')).toHaveLength(1);
+    expect(small.group('nba league pass 2')).toHaveLength(1);
+    const labels = (q: string): string[] =>
+      searchCatalog(small, q, 10).groups.map((group) => label(group.best.display, group.bucket));
+    expect(labels('laliga+ ppv')).toEqual([
+      'laligaplus ppv 1',
+      'laligaplus ppv 2',
+      'laligaplus ppv 3',
+    ]);
+    const index = buildBrowseIndex(small);
+    expect(browseLabels(index, 'laliga+ ppv')).toEqual([
+      'laligaplus ppv 1',
+      'laligaplus ppv 2',
+      'laligaplus ppv 3',
+    ]);
+    expect(browseLabels(index, 'nba')).toEqual(['nba league pass 1/US', 'nba league pass 2/US']);
   });
 
   it('las palabras rápidas de una clave son las mismas que las de `nameSearchWords`', () => {

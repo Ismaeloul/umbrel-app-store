@@ -223,10 +223,15 @@ describe('cleanIptvTitle con el corpus de nombres raros (0.9.0, docs/buscador.md
     ['ES: LA 1 4K', 'LA 1', 'la 1', 'uhd', 'ES', false],
     ['|ES| LA 1 FHD', 'LA 1', 'la 1', 'fhd', 'ES', false],
     ['[ES] LA 1 FHD ⁺', 'LA 1', 'la 1', 'fhd', 'ES', false],
-    /* La copia con almohadilla es una copia, no el número del canal. */
-    ['ES: LA 1 #2', 'LA 1', 'la 1', null, 'ES', true],
-    ['ES » TELECINCO HD #2 ★', 'TELECINCO', 'telecinco', 'hd', 'ES', true],
-    ['ES: LA 1 CATALUNYA #2', 'LA 1 CATALUNYA', 'la 1 catalunya', null, 'ES', true],
+    /* «#N» es el número del canal, no una copia: «LALIGA+ PPV #2» es otro evento que el #1 (como en la 0.8.4). */
+    ['ES: LALIGA+ PPV #1', 'LALIGA+ PPV 1', 'laligaplus ppv 1', null, 'ES', false],
+    ['ES: LALIGA+ PPV #2 FHD', 'LALIGA+ PPV 2', 'laligaplus ppv 2', 'fhd', 'ES', false],
+    ['ES: DAZN PPV # 3', 'DAZN PPV 3', 'dazn ppv 3', null, 'ES', false],
+    ['US: NBA LEAGUE PASS #2', 'NBA LEAGUE PASS 2', 'nba league pass 2', null, 'US', false],
+    ['ES: EVENTOS #2 ★', 'EVENTOS 2', 'eventos 2', null, 'ES', false],
+    ['ES: LA 1 #2', 'LA 1 2', 'la 1 2', null, 'ES', false],
+    /* La copia entre paréntesis sí lo es (docs/iptv.md §17). */
+    ['ES: LA 1 (2)', 'LA 1', 'la 1', null, 'ES', true],
     /* «#0» es un canal de Movistar (se enseña con su «#»); «#VAMOS», otro. */
     ['ES: M+ #0 HD', 'M+ #0', 'movistar 0', 'hd', 'ES', false],
     ['ES: #0 FHD', '#0', '0', 'fhd', 'ES', false],

@@ -53,9 +53,11 @@
    Con el corpus de nombres raros de la 0.9.0 (docs/buscador.md) se suma:
    - País: cualquier símbolo lo separa del nombre («ES► », «ES ✪ », «ES ★ …
      ★») y puede haber adornos delante («◉ ES: »).
-   - La copia con almohadilla («LA 1 #2», «TELECINCO HD #2 ★») es la copia 2,
-     como «(2)»; «#0» sigue siendo el canal de Movistar y se enseña con su
-     «#» («M+ #0», no «M+ 0»).
+   - «#N» NO es una copia: en las listas numera canales distintos («LALIGA+
+     PPV #1», «#2», «#3»; «NBA LEAGUE PASS #1»…) y juntarlos escondía los
+     demás y hacía que el relé saltara a otro evento. Se queda como el número
+     del canal («LALIGA+ PPV 2»), como en la 0.8.4. «#0» es el canal de
+     Movistar y se enseña con su «#» («M+ #0», no «M+ 0»).
    - RTVE detrás de su canal o delante del número («LA 1 TVE», «TVE 1») es
      La 1: la misma fila. */
 
@@ -217,8 +219,9 @@ const BACKUP_RE =
   /\b(?:backup|back\s*up|bkp|bk|alt|alternativ[oa]|reserva|respaldo|multi(?:audio)?)(?:\s?\d{1,2})?\b/giu;
 /* La copia entre paréntesis o corchetes del final: «DAZN 1 (2)», «DAZN 1 [1]». */
 const MIRROR_RE = /\s*[([]\s*(\d{1,2})\s*[)\]]\s*$/u;
-/* La copia con almohadilla tras el nombre: «LA 1 #2» → «LA 1 (2)» (nunca «#0», que es un canal). */
-const HASH_COPY_RE = /(\S)\s*#\s*([1-9]\d?)(?![\p{L}\p{N}])/gu;
+/* El «#» delante de una palabra o un número se quita («#VAMOS» → «VAMOS», «PPV #2» → «PPV 2»), salvo en «#0», que
+   es el nombre del canal de Movistar. */
+const HASH_RE = /#\s*(?=[\p{L}\p{N}])(?!0(?![\p{L}\p{N}]))/gu;
 /* «TVE 1», «TVE1»: La 1 (y La 2). */
 const TVE_NUMBER_TITLE_RE = /\br?tve\s*([12])\b/giu;
 
@@ -421,12 +424,8 @@ export function cleanIptvTitle(
   }
   text = text.replace(NOTE_RE, ' ');
   const backupTag = strip(text, BACKUP_TAG_RE);
-  /* «LA 1 #2», «TELECINCO HD #2 ★»: la copia 2, como «(2)» (antes el «#» se quitaba y quedaba «LA 1 2», otro
-     canal). «#0» es un canal de Movistar y «#VAMOS», otro: esos se quedan sin el «#». */
-  text = backupTag.text
-    .replace(DECOR_RE, ' ')
-    .replace(HASH_COPY_RE, '$1 ($2)')
-    .replace(/#(?=[\p{L}\p{N}])(?!0(?![\p{L}\p{N}]))/gu, '');
+  /* «#N» es el número del canal, no una copia («LALIGA+ PPV #2» es otro evento que «#1»; docs/buscador.md §4). */
+  text = backupTag.text.replace(DECOR_RE, ' ').replace(HASH_RE, '');
   const hevcStep = strip(text, HEVC_RE);
   text = hevcStep.text;
   const hevc = hevcStep.found;
