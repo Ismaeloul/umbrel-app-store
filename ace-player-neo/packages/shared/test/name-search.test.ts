@@ -7,12 +7,14 @@ import { describe, expect, it } from 'vitest';
 import {
   NAME_TIER,
   compareNameRank,
+  keySearchTokens,
   keySearchWords,
   leadingCountry,
   nameFacts,
   nameFactsOf,
   nameHighlights,
   nameSearchKey,
+  nameSearchTokens,
   nameSearchWords,
   nameTier,
   nameTierWithAliases,
@@ -155,6 +157,18 @@ describe('nameSearchWords: las palabras de un nombre tal cual lo da el panel', (
     expect(find('robot')[0]).toBe('Robot Wars');
   });
 
+  it('nameSearchTokens y keySearchTokens recuerdan los números escritos con letra', () => {
+    expect(nameSearchTokens('UK: BBC ONE HD')).toEqual({
+      words: ['bbc', '1'],
+      spelled: { 1: 'one' },
+    });
+    expect(nameSearchTokens('Los Tres Mosqueteros').spelled).toEqual({ 3: 'tres' });
+    expect(nameSearchTokens('LA 1').spelled).toEqual({});
+    expect(keySearchTokens('rai uno')).toEqual({ words: ['rai', '1'], spelled: { 1: 'uno' } });
+    /* La primera palabra no pasa a cifra: «Cuatro» es el canal. */
+    expect(keySearchTokens('cuatro')).toEqual({ words: ['cuatro'], spelled: {} });
+  });
+
   it('keySearchWords: lo mismo, más rápido, con una clave ya normalizada del catálogo', () => {
     expect(keySearchWords('rai uno')).toEqual(['rai', '1']);
     expect(keySearchWords('movistar laliga tv 2')).toEqual(['movistar', 'laliga', 'tv', '2']);
@@ -278,6 +292,16 @@ describe('wordMatch y nameTier', () => {
     ['movistar ellas', 'LAS ESTRELLAS', -1],
     ['tve', 'REAL MADRID TV EN', -1],
     ['madridtven', 'REAL MADRID TV EN', NAME_TIER.partial],
+    /* Los números escritos con letra se encuentran por su palabra, entera o al teclearla. */
+    ['bbc on', 'UK: BBC ONE HD', NAME_TIER.prefix],
+    ['bbc o', 'UK: BBC ONE HD', NAME_TIER.prefix],
+    ['bbc one', 'UK: BBC ONE HD', NAME_TIER.exact],
+    ['one', 'UK: BBC ONE HD', NAME_TIER.words],
+    ['rai u', 'IT: RAI UNO SD', NAME_TIER.prefix],
+    ['uno', 'IT: RAI UNO SD', NAME_TIER.words],
+    ['tres mosqueteros', 'Los Tres Mosqueteros', NAME_TIER.words],
+    ['uno', 'IT: RAI 1 SD', -1],
+    ['ne', 'UK: BBC ONE HD', -1],
     /* Solo relleno escrito: el relleno del nombre también cuenta. */
     ['canal', 'CANAL 5', NAME_TIER.prefix],
     ['canal sur', 'CANAL SUR', NAME_TIER.exact],
@@ -363,15 +387,23 @@ interface Row {
 function rowsOf(corpus: readonly CanalCorpus[]): Row[] {
   const rows = new Map<string, Row>();
   for (const { title, group } of corpus) {
-    const words = nameSearchWords(title);
+    const { words, spelled } = nameSearchTokens(title);
     if (!words.length || /#{3,}|no match|:\s.*\b(?:am|pm)\b/i.test(title)) continue;
     const raw = leadingCountry(title) ?? groupCountry(group);
     const country = raw === 'ES' ? null : raw;
     /* Una fila por canal: las mismas palabras que cuentan (sin «tv»), como junta el servidor «M. LALIGA» y «M+
        LaLiga TV». */
-    const facts = nameFacts(words);
+    const facts = nameFacts(words, spelled);
     const id = `${facts.sig}|${country ?? ''}`;
-    if (!rows.has(id)) rows.set(id, { key: words.join(' '), country, facts });
+    const known = rows.get(id);
+    if (!known) {
+      rows.set(id, { key: words.join(' '), country, facts });
+      continue;
+    }
+    /* «RAI 1» y «RAI UNO» son la misma fila: la fila recuerda también cómo se escribía con letra. */
+    if (!Object.keys(spelled).length) continue;
+    const merged = { ...spelled, ...known.facts.spelled };
+    rows.set(id, { ...known, facts: nameFacts(known.facts.words, merged) });
   }
   return [...rows.values()];
 }

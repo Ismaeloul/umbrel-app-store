@@ -137,6 +137,11 @@ export const ESPERADOS: readonly Esperado[] = [
   { q: 'rai 1', top: ['rai 1/IT'] },
   { q: 'rai uno', top: ['rai 1/IT'] },
   { q: 'bbc 1', top: ['bbc 1/UK'] },
+  /* Los números escritos con letra, solos o a medio teclear. */
+  { q: 'bbc on', top: ['bbc 1/UK'] },
+  { q: 'one', top: ['bbc 1/UK'] },
+  { q: 'rai u', top: ['rai 1/IT'] },
+  { q: 'uno', top: ['rai 1/IT', 'sky sport 1/IT'] },
   { q: 'uk: laliga tv', top: ['laliga/UK'] },
   { q: 'de: dazn 1', top: ['dazn 1/DE', 'dazn 1'] },
   { q: 'sport 1', top: ['sport 1/DE|sport 1/PT', 'sport 1/DE|sport 1/PT'] },

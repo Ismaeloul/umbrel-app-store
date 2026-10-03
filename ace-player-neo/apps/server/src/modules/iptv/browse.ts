@@ -58,6 +58,7 @@ import {
   cachedKeyNames,
   entriesPenalty,
   foldText,
+  indexWordsOf,
   keyNames,
   literalMiss,
   packRankedHit,
@@ -301,7 +302,7 @@ export function* buildBrowseIndexSteps(
         const names = keyNames(entry.key);
         keyCompact.push((names[0] as NameFacts).compact);
         keyFirst.push(row);
-        for (const word of new Set(names.flatMap((name) => name.words))) {
+        for (const word of indexWordsOf(names)) {
           const list = byToken.get(word);
           if (list === undefined) byToken.set(word, position);
           else if (typeof list === 'number') byToken.set(word, [list, position]);

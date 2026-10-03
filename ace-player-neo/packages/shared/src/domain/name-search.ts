@@ -244,10 +244,30 @@ const BACKUP_TAG_RE =
 const COPY_INNER_RE = /[([]\s*\d{1,2}\s*[)\]]/gu;
 
 /**
+ * Los números que un nombre llevaba escritos con letra y pasaron a cifra:
+ * cifra → la palabra («BBC ONE» → { 1: 'one' }; «RAI UNO» → { 1: 'uno' }).
+ * Con ellos se encuentra el nombre al teclear «bbc on», «rai u» o «one» (la
+ * cifra sola no empieza por «on»).
+ */
+export type SpelledNumbers = Readonly<Record<string, string>>;
+const NO_SPELLED: SpelledNumbers = Object.freeze({});
+
+/** Las palabras de un nombre (`nameSearchWords`) y sus números escritos con letra (`SpelledNumbers`). */
+export interface NameSearchTokens {
+  readonly words: string[];
+  readonly spelled: SpelledNumbers;
+}
+
+/**
  * Las palabras con las que se busca un nombre (o lo que se escribe): ver la
  * cabecera, punto 1. Vacío si no queda nada (un nombre que solo es «HD»).
  */
 export function nameSearchWords(value: string): string[] {
+  return nameSearchTokens(value).words;
+}
+
+/** `nameSearchWords` con los números que el nombre llevaba escritos con letra. */
+export function nameSearchTokens(value: string): NameSearchTokens {
   /* La «Ñ» suelta marca la versión española («BEIN SPORTS Ñ»): no es una palabra. */
   const raw = String(value ?? '')
     .replace(ARROW_TAIL_RE, ' ')
@@ -271,14 +291,17 @@ export function nameSearchWords(value: string): string[] {
   text = text.replace(FPS_RE, ' ').replace(TVE_AFTER_RE, '$1').replace(TVE_NUMBER_RE, 'la $1');
   /* «M+» y «Movistar Plus+» sueltos (sin otra palabra detrás) también son Movistar. */
   text = text.replace(/\bm\s*\+/gu, ' movistar ').replace(/\bmovistar\s*plus\b\+?/gu, ' movistar ');
-  const words = finishWords(text.split(/[^\p{L}\p{N}]+/u));
+  const tokens = finishWords(text.split(/[^\p{L}\p{N}]+/u));
+  const { words } = tokens;
   /* «full hd»: el «full» suelto que queda delante de una calidad quitada. */
   if (words.length > 1 && words[words.length - 1] === 'full' && /\bfull\s*hd\b/u.test(text)) {
     words.pop();
   }
   /* «ES: A3 HD»: «A3» a secas de España es Antena 3 (con la calidad detrás, los apodos no lo ven). */
-  if (lead.spain && words.length === 1 && words[0] === 'a3') return ['antena', '3'];
-  return words;
+  if (lead.spain && words.length === 1 && words[0] === 'a3') {
+    return { words: ['antena', '3'], spelled: NO_SPELLED };
+  }
+  return tokens;
 }
 
 /* La calidad pegada detrás de un número: «LA1HD» → «la1», «DAZN1FHD» → «dazn1» (las listas de AceStream). */
@@ -288,10 +311,12 @@ const GLUED_QUALITY_RE = /^(\p{L}[\p{L}\p{N}]*\d)(?:uhd|fhd|hd|sd|4k)$/u;
  * El último paso de `nameSearchWords` y `keySearchWords`, sobre las palabras
  * ya troceadas: fuera lo que no dice qué canal es (calidad, códec,
  * fotogramas, resoluciones, adornos), la calidad pegada, «24 horas» = «24h»
- * y los números con letra detrás de otra palabra.
+ * y los números con letra detrás de otra palabra (que se recuerdan en
+ * `spelled`).
  */
-function finishWords(raws: readonly string[]): string[] {
+function finishWords(raws: readonly string[]): NameSearchTokens {
   const words: string[] = [];
+  let spelled: Record<string, string> | null = null;
   for (let i = 0; i < raws.length; i += 1) {
     let raw = raws[i] as string;
     if (!raw || NOISE_WORDS.has(raw)) continue;
@@ -306,9 +331,13 @@ function finishWords(raws: readonly string[]): string[] {
       raw = GLUED_QUALITY_RE.exec(raw)?.[1] ?? raw;
     }
     const number = NUMBER_WORDS[raw];
-    words.push(number !== undefined && (words.length > 0 || number === '0') ? number : raw);
+    if (number !== undefined && (words.length > 0 || number === '0')) {
+      words.push(number);
+      spelled ??= {};
+      spelled[number] ??= raw;
+    } else words.push(raw);
   }
-  return words;
+  return { words, spelled: spelled ?? NO_SPELLED };
 }
 
 /**
@@ -367,7 +396,12 @@ const NORMALIZED_KEY_RE = /^[a-z0-9]+(?: [a-z0-9]+)*$/;
  * corpus). Con otra cosa, `nameSearchWords`.
  */
 export function keySearchWords(key: string): string[] {
-  if (!NORMALIZED_KEY_RE.test(key)) return nameSearchWords(key);
+  return keySearchTokens(key).words;
+}
+
+/** `keySearchWords` con los números que la clave llevaba escritos con letra («bbc one» → { 1: 'one' }). */
+export function keySearchTokens(key: string): NameSearchTokens {
+  if (!NORMALIZED_KEY_RE.test(key)) return nameSearchTokens(key);
   return finishWords(key.split(' '));
 }
 
@@ -426,10 +460,19 @@ export interface NameFacts {
   readonly compact: string;
   /** El número del final («DAZN 3» → 3; sin número, 0): la familia va en orden. */
   readonly number: number;
+  /** Los números que llevaba escritos con letra (`SpelledNumbers`): «bbc on» encuentra «BBC ONE». */
+  readonly spelled: SpelledNumbers;
 }
 
-/** Los hechos de un nombre a partir de sus palabras (ya calculadas con `nameSearchWords`). */
-export function nameFacts(words: readonly string[]): NameFacts {
+/**
+ * Los hechos de un nombre a partir de sus palabras (ya calculadas con
+ * `nameSearchWords`) y, si se tienen, de sus números escritos con letra
+ * (`nameSearchTokens`).
+ */
+export function nameFacts(
+  words: readonly string[],
+  spelled: SpelledNumbers = NO_SPELLED,
+): NameFacts {
   const sigWords = significantWords(words);
   const family = familyWords(sigWords);
   const trailing = sigWords.length > family.length ? Number(sigWords[sigWords.length - 1]) : 0;
@@ -441,12 +484,14 @@ export function nameFacts(words: readonly string[]): NameFacts {
     core: coreWords(family).join(' '),
     compact: words.join(''),
     number: Number.isFinite(trailing) ? trailing : 0,
+    spelled,
   };
 }
 
-/** `nameFacts(nameSearchWords(name))`. */
+/** Los hechos de un nombre (`nameSearchTokens` y `nameFacts`). */
 export function nameFactsOf(name: string): NameFacts {
-  return nameFacts(nameSearchWords(name));
+  const tokens = nameSearchTokens(name);
+  return nameFacts(tokens.words, tokens.spelled);
 }
 
 // ---- Lo que se escribe ----------------------------------------------------------------------
@@ -646,6 +691,20 @@ export function wordMatch(token: string, word: string): number {
 }
 
 /*
+ * `wordMatch` con una palabra de un nombre que puede venir de un número
+ * escrito con letra (`NameFacts.spelled`): la cifra «1» de «BBC ONE» casa
+ * también como «one» entera o por su principio («on», «o»), nunca por dentro.
+ */
+function factsWordMatch(spelled: SpelledNumbers, token: string, word: string): number {
+  const how = wordMatch(token, word);
+  if (how || spelled === NO_SPELLED) return how;
+  const written = spelled[token];
+  if (written === undefined) return 0;
+  const byWord = wordMatch(written, word);
+  return byWord >= 2 ? byWord : 0;
+}
+
+/*
  * ¿Vale lo escrito pegado («antena3», «la1») a partir de la palabra `from`
  * del nombre? Si se queda dentro de esa palabra, sí. Si pasa a la siguiente,
  * la última palabra que toca tiene que casar entera, con 2 letras o más, o
@@ -697,9 +756,12 @@ export function nameTier(query: NameQueryWords, facts: NameFacts): number {
   const words = query.required.some((word) => OPTIONAL_SEARCH_WORDS.has(word))
     ? facts.words
     : facts.sigWords;
+  /* Los números escritos con letra del nombre («BBC ONE»: «one» u «on» casan con su «1»). */
+  const { spelled } = facts;
+  const match = (token: string, word: string): number => factsWordMatch(spelled, token, word);
   /* Cada palabra escrita casa con alguna del nombre (en cualquier orden). */
   for (const word of query.required) {
-    if (!facts.words.some((token) => wordMatch(token, word) > 0)) {
+    if (!facts.words.some((token) => match(token, word) > 0)) {
       return byCompact >= 0 ? byCompact : brandlessTier(query, facts);
     }
   }
@@ -721,7 +783,7 @@ export function nameTier(query: NameQueryWords, facts: NameFacts): number {
     let found = -1;
     let how = 0;
     for (let j = from; j < words.length; j += 1) {
-      how = wordMatch(words[j] as string, word);
+      how = match(words[j] as string, word);
       if (how) {
         found = j;
         break;
@@ -742,7 +804,7 @@ export function nameTier(query: NameQueryWords, facts: NameFacts): number {
   if (!ordered) {
     /* En otro orden: por dentro de una palabra es lo más flojo. */
     const anyInside = query.required.some(
-      (word) => !facts.words.some((token) => wordMatch(token, word) >= 2),
+      (word) => !facts.words.some((token) => match(token, word) >= 2),
     );
     tier = anyInside ? NAME_TIER.inside : NAME_TIER.partial;
   } else if (inside) tier = NAME_TIER.inside;
@@ -762,7 +824,10 @@ function brandlessTier(query: NameQueryWords, facts: NameFacts): number {
   const rest = query.required.filter((word) => !MOVISTAR_SEARCH_WORDS.has(word));
   if (rest.length === query.required.length) return -1;
   if (!rest.some((word) => word.length >= 3 && !NUMBER_RE.test(word))) return -1;
-  const all = rest.every((word) => facts.words.some((token) => wordMatch(token, word) >= 2));
+  const { spelled } = facts;
+  const all = rest.every((word) =>
+    facts.words.some((token) => factsWordMatch(spelled, token, word) >= 2),
+  );
   return all ? NAME_TIER.brandless : -1;
 }
 

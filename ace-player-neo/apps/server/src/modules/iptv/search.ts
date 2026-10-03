@@ -47,8 +47,9 @@ import {
   SEARCH_QUERY_MIN,
   channelSearchKey,
   compareNameRank,
-  keySearchWords,
+  keySearchTokens,
   nameFacts,
+  nameFactsOf,
   nameQueryAliases,
   nameSearchWords,
   nameTier,
@@ -284,14 +285,32 @@ const ALIAS_NAMES: ReadonlyMap<string, readonly string[]> = (() => {
  * «tvg»). Los dos índices (buscador y pestaña IPTV) los calculan igual.
  */
 export function keyNames(key: string): NameFacts[] {
-  const words = keySearchWords(key);
-  const names = [nameFacts(words.length ? words : key.split(' ').filter(Boolean))];
+  const tokens = keySearchTokens(key);
+  const names = [
+    tokens.words.length
+      ? nameFacts(tokens.words, tokens.spelled)
+      : nameFacts(key.split(' ').filter(Boolean)),
+  ];
   for (const alias of ALIAS_NAMES.get(key) ?? []) {
     const aliasWords = nameSearchWords(alias);
     if (aliasWords.length && aliasWords.join(' ') !== names[0]?.words.join(' '))
       names.push(nameFacts(aliasWords));
   }
   return names;
+}
+
+/**
+ * Las palabras de unos nombres para el índice de candidatos (Buscar y la
+ * pestaña IPTV): sus palabras y los números que llevaban escritos con letra
+ * («BBC ONE» también es «one»: «bbc on» lo encuentra al teclear).
+ */
+export function indexWordsOf(names: readonly NameFacts[]): Set<string> {
+  const out = new Set<string>();
+  for (const name of names) {
+    for (const word of name.words) out.add(word);
+    for (const written of Object.values(name.spelled)) out.add(written);
+  }
+  return out;
 }
 
 /** 0 normal; 1 bar, PPV, replay, resúmenes o solo reservas; 2 plataforma; 3 evento con horario. */
@@ -393,7 +412,7 @@ export function* buildSearchIndexSteps(
     const main = names[0] as NameFacts;
     if (!main.words.length) continue;
     const words = main.words;
-    const tokens = new Set(names.flatMap((name) => name.words));
+    const tokens = indexWordsOf(names);
     const keyOrder = catalog
       .group(key)
       .reduce((min, entry) => Math.min(min, entry.order), Number.POSITIVE_INFINITY);
@@ -810,9 +829,9 @@ export function searchRelevanceFor(query: string): (title: string) => number {
   const q = parseNameQuery(query);
   if (!q.key) return () => 4;
   return (title) => {
-    const words = nameSearchWords(String(title ?? ''));
-    if (!words.length) return 4;
-    const tier = nameTier(q, nameFacts(words));
+    const facts = nameFactsOf(String(title ?? ''));
+    if (!facts.words.length) return 4;
+    const tier = nameTier(q, facts);
     if (tier < 0 || tier >= NAME_TIER.brandless) return 4;
     return Math.min(tier, 3);
   };
