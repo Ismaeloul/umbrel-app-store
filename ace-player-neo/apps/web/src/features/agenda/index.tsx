@@ -497,6 +497,7 @@ export default function Agenda({ active }: ViewProps) {
         mine={isMine(featured, preferences)}
         watching={watched === featured.id}
         onOpen={(match) => openMatch(match, 'hero')}
+        layout={stageVisible ? 'band' : 'poster'}
         transitionName={
           opening?.from === 'hero' && opening.id === featured.id
             ? partidoTransitionName(featured.id)

@@ -143,6 +143,9 @@ describe('vista Agenda', () => {
     // El destacado es tu equipo en directo (Real Madrid, en tus gustos).
     const hero = await screen.findByRole('region', { name: 'Real Madrid vs Girona' });
     expect(hero).toHaveClass('agenda-hero', 'is-live');
+    // En el móvil, la tarjeta versus XL de siempre.
+    expect(hero).not.toHaveClass('agenda-hero--band');
+    expect(hero.querySelector('.versus--xl')).not.toBeNull();
     expect(await within(hero).findByText("En directo · 54'")).toBeInTheDocument();
     expect(within(hero).getByText('Champions League')).toBeInTheDocument();
     expect(await within(hero).findByText('Señal')).toBeInTheDocument();
@@ -462,6 +465,27 @@ describe('vista Agenda', () => {
     // Volver a elegir el destacado quita otra vez el panel.
     fireEvent.click(within(list).getByRole('button', { name: /^Real Madrid vs Girona/ }));
     expect(await screen.findByRole('complementary', { name: 'Más partidos' })).toBeInTheDocument();
+  });
+
+  it('escritorio: el héroe es una banda compacta (sin tarjeta versus) con todo lo del partido', async () => {
+    net = mockFetch(routes());
+    renderAgenda('desktop');
+    const hero = await screen.findByRole('region', { name: 'Real Madrid vs Girona' });
+    expect(hero).toHaveClass('agenda-hero', 'agenda-hero--band', 'is-live');
+    expect(hero.querySelector('.versus')).toBeNull();
+    expect(within(hero).getByText('Real Madrid')).toBeInTheDocument();
+    expect(within(hero).getByText('Girona')).toBeInTheDocument();
+    expect(await within(hero).findByText("En directo · 54'")).toBeInTheDocument();
+    expect(within(hero).getByText('Tu equipo')).toBeInTheDocument();
+    expect(within(hero).getByText('Champions League')).toBeInTheDocument();
+    expect(await within(hero).findByText('Señal')).toBeInTheDocument();
+    // Orden de foco: la acción oro y después «Marcador».
+    const buttons = await within(hero).findAllByRole('button');
+    expect(
+      buttons.map((button) => button.getAttribute('aria-label') ?? button.textContent),
+    ).toEqual(['Buscar canal', 'Ver marcador de Real Madrid vs Girona']);
+    fireEvent.click(buttons[0]!);
+    await waitFor(() => expect(location.search).toBe(`?vista=partido/${LIVE.id}`));
   });
 
   it('pantalla ancha: la tira de directos no enseña el resultado hasta destaparlo', async () => {
