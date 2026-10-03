@@ -468,7 +468,7 @@ describe('buscador: IPTV y AceStream juntos (docs/iptv.md §14.2)', () => {
       module: 'iptv',
       errors: ['empty_query'],
     });
-    expect(WEB_FIXTURE_ROUTE_IDS).toHaveLength(7);
+    expect(WEB_FIXTURE_ROUTE_IDS.filter((id) => id.startsWith('iptv'))).toHaveLength(7);
     expect(WEB_FIXTURE_ROUTE_IDS).toContain('iptvChannels');
     const example = WEB_V1_FIXTURES.iptvChannels;
     expect(IptvChannelsResponseSchema.safeParse(example).success).toBe(true);

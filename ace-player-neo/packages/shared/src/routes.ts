@@ -21,7 +21,9 @@
      IPTV (`iptv*`, docs/iptv.md §5.3: la IPTV solo se configura en la web)
      y `iptvChannels` (el buscador IPTV, §14.2; pasa a `any` cuando la app
      calque el buscador, D27) e `iptvBrowse` (la pestaña IPTV de Canales,
-     §16.2; D29) son `web`.
+     §16.2; D29) son `web`. También las 3 de la copia de seguridad
+     (`backup*`, decisiones.md D25: la copia lleva datos personales y la
+     IPTV solo se configura en la web).
      `video` es `any` desde la IPTV (docs/iptv.md §5.4): la web entra sin
      token (el login de Umbrel basta) y el iPhone con `video-token`.
 
@@ -98,6 +100,12 @@ import {
   IptvUpdateBodySchema,
   IptvViewSchema,
 } from './api/v1/iptv.js';
+import {
+  BackupExportBodySchema,
+  BackupFileSchema,
+  BackupImportBodySchema,
+  BackupImportResponseSchema,
+} from './api/v1/backup.js';
 import { SearchQuerySchema, SearchResponseSchema } from './api/v1/search.js';
 import { SettingsResponseSchema, SettingsUpdateBodySchema } from './api/v1/settings.js';
 import {
@@ -492,6 +500,69 @@ export const V1_ROUTES = {
     content: 'json',
     sideEffects: true,
     errors: [],
+    legacyTwin: null,
+  }),
+
+  // --- Ajustes → Copia de seguridad (solo web, decisiones.md D25) ---
+  backupExport: defineRoute({
+    method: 'GET',
+    path: '/api/v1/backup',
+    access: 'web',
+    credential: 'bearer',
+    module: 'state',
+    summary: 'Descargar la copia de seguridad de tus ajustes (sin la contraseña de la IPTV)',
+    description:
+      'Responde el fichero `ace-player-neo-copia-AAAA-MM-DD.json` como descarga (`Content-Disposition: attachment`). ' +
+      'Lleva favoritos, recientes, listas, «Tu fútbol», vínculos, correcciones, ajustes y la IPTV sin contraseña (Xtream: servidor y usuario; M3U: solo el host). ' +
+      'Nunca dispositivos, tokens, sesiones ni la semilla. Pasa por la regla anti-CSRF (`sideEffects`): lleva datos personales.',
+    response: BackupFileSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: true,
+    errors: [],
+    legacyTwin: null,
+  }),
+  backupExportSecret: defineRoute({
+    method: 'POST',
+    path: '/api/v1/backup/export',
+    access: 'web',
+    credential: 'bearer',
+    module: 'state',
+    summary:
+      'Descargar la copia con la contraseña de la IPTV, protegida con una clave (scrypt + AES-256-GCM)',
+    description:
+      'La contraseña (Xtream) o la URL de la lista (M3U) van cifradas con la clave que escribe Isma; nunca en claro. ' +
+      'La clave no se guarda ni se registra. Sin IPTV, la misma copia que GET.',
+    body: BackupExportBodySchema,
+    response: BackupFileSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: true,
+    errors: ['iptv_secret_unreadable'],
+    legacyTwin: null,
+  }),
+  backupImport: defineRoute({
+    method: 'POST',
+    path: '/api/v1/backup/import',
+    access: 'web',
+    credential: 'bearer',
+    module: 'state',
+    summary: 'Restaurar una copia: vista previa (`dryRun`) o aplicarla (Reemplazar o Combinar)',
+    description:
+      'Valida la copia (formato, versión y topes). Con `dryRun` (por defecto) solo cuenta lo que cambiaría. ' +
+      'Al aplicar escribe state.json de una vez en la cola del estado (tmp + rename), luego los ajustes y la IPTV, y emite `state.changed`. ' +
+      'Nunca toca dispositivos emparejados, sesiones ni «quién tiene el mando». Una IPTV sin contraseña en la copia no sustituye a la de ahora.',
+    body: BackupImportBodySchema,
+    response: BackupImportResponseSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: true,
+    errors: [
+      'backup_invalid',
+      'backup_version_unsupported',
+      'backup_too_large',
+      'backup_passphrase_wrong',
+    ],
     legacyTwin: null,
   }),
 

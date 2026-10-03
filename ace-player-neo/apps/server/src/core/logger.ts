@@ -63,6 +63,9 @@ export const REDACTED_PATHS: readonly string[] = [
   '*.username',
   'iptv.url',
   'iptv.*.url',
+  // Copia de seguridad (decisiones.md D24): la clave que protege la contraseña de la IPTV
+  'passphrase',
+  '*.passphrase',
 ];
 
 export const REDACTED = '[redactado]';

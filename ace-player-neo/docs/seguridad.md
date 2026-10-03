@@ -368,3 +368,28 @@ también los tests nuevos del otro verificador), ninguno saltado; `tsc
 - No cambia nada de nginx (`/native/` ya reenvía todo), ni de la lista blanca
   de la pasarela (`PROXY_AUTH_WHITELIST: "/native/*"` cubre cualquier método),
   ni de `core/origin.ts` o `core/csrf.ts`.
+
+## 8. Cambio de la 0.8.4: copia de seguridad de tus ajustes (D25)
+
+- Tres rutas nuevas, todas `access: 'web'` (desde `/native`, 403
+  `origin_forbidden`; lo fija `test/security.test.ts`) y con la regla
+  anti-CSRF, también el GET de descarga (`sideEffects: true`): la copia lleva
+  datos personales.
+- **Sin secretos por defecto**: la copia no lleva la contraseña Xtream ni la
+  URL M3U (que la lleva dentro). El usuario y el servidor Xtream sí (no
+  bastan para entrar). Nunca lleva dispositivos ni sus hashes, sesiones,
+  `nowPlaying` (su token), la semilla ni el token del motor.
+- **Con «Incluir la contraseña de la IPTV»**: cifrada con una clave que
+  escribe Isma (mínimo 8 caracteres), scrypt (N 2^15, r 8, p 1, sal de 16
+  bytes) → AES-256-GCM con AAD. Nunca en claro; la clave no se guarda. Al
+  restaurar, el bloque solo se abre con esa clave (si no, 422
+  `backup_passphrase_wrong` sin tocar nada) y se vuelve a cifrar con las
+  claves de este Umbrel. Un fichero ajeno no puede pedir más de N 2^17
+  (memoria acotada); scrypt corre en el pool de libuv.
+- **Registro**: `passphrase` está en las rutas tapadas de pino; los fallos de
+  validación solo registran rutas de campos, nunca valores; el registro de
+  exportar/restaurar lleva recuentos y el tipo de IPTV, no datos. Los tests
+  buscan la contraseña y la clave en los logs.
+- **Entrada**: tope de 2 MiB (el de nginx), JSON validado con zod estricto
+  (claves desconocidas, topes de state.json y formas de cada campo); la web
+  comprueba tamaño y formato antes de subir nada.

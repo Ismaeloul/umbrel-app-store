@@ -187,6 +187,10 @@ const UNSUPPORTED: ReadonlySet<JsonRouteId> = new Set([
   'iptvUpdate',
   'iptvSync',
   'iptvDelete',
+  /* La copia de seguridad (decisiones.md D24) es del Umbrel de verdad. */
+  'backupExport',
+  'backupExportSecret',
+  'backupImport',
 ]);
 
 /** La IPTV de la demo (§1.6): la de demo-5 («Casa» en sus carteles) se llama aquí «IPTV de ejemplo». */

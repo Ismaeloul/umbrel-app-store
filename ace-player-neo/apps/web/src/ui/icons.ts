@@ -69,6 +69,10 @@ export const ICONS = {
   directo:
     '<circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/><path d="M7.4 7.4a6.5 6.5 0 0 0 0 9.2M16.6 7.4a6.5 6.5 0 0 1 0 9.2"/>',
   subir: '<path d="M12 19V5M6 11l6-6 6 6"/>',
+  /* Copia de seguridad (Ajustes, decisiones.md D24): caja de archivo y bajar a disco. */
+  copia:
+    '<rect x="3.5" y="4" width="17" height="5" rx="1.8"/><path d="M5 9v9.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V9"/><path d="M10 13h4"/>',
+  descargar: '<path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/>',
 } as const satisfies Record<string, string>;
 
 export type IconName = keyof typeof ICONS;

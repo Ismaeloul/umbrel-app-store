@@ -10,6 +10,8 @@
    resueltos por app.ts):
    - bootstrap, settingsGet, settingsUpdate, libraryGet, libraryMutate,
      preferencesGet, preferencesUpdate.
+   - backupExport, backupExportSecret y backupImport: la copia de seguridad
+     de tus ajustes (backup.ts, decisiones.md D24). Solo web.
 
    El "cuerpo antes que el estado" de la 0.6.59 (T-108) ya no hace falta:
    Fastify lee el cuerpo antes del manejador y la mutación se aplica dentro
@@ -28,6 +30,7 @@ import {
 import type { RequestContext } from '../../core/module.js';
 import type { LegacyRouter, V1Router } from '../../core/router.js';
 import type { Services } from '../../services.js';
+import { createBackupService, type BackupService } from './backup.js';
 import { libraryResponse, libraryView } from './projections.js';
 
 /** Operaciones antiguas de este módulo (`MÉTODO ruta` como en LEGACY_OPERATIONS). */
@@ -47,7 +50,33 @@ export const V1_ROUTE_IDS: readonly string[] = [
   'libraryMutate',
   'preferencesGet',
   'preferencesUpdate',
+  'backupExport',
+  'backupExportSecret',
+  'backupImport',
 ];
+
+/* Un servicio de copia por árbol de servicios (su cerrojo es compartido). */
+const backups = new WeakMap<Services, BackupService>();
+
+export function backupService(services: Services): BackupService {
+  let backup = backups.get(services);
+  if (!backup) {
+    backup = createBackupService({
+      state: services.state,
+      iptv: services.iptv ?? null,
+      appVersion: services.config.appVersion,
+      clock: services.clock,
+      logger: services.logger,
+    });
+    backups.set(services, backup);
+  }
+  return backup;
+}
+
+/** La copia sale como descarga (`Content-Disposition: attachment`). */
+function asDownload(ctx: RequestContext, name: string): void {
+  ctx.reply.header('content-disposition', `attachment; filename="${name}"`);
+}
 
 export function registerLegacyRoutes(router: LegacyRouter, services: Services): void {
   router.handle('POST', '/api/preferences', async (req) => ({
@@ -77,6 +106,19 @@ export function registerV1Routes(router: V1Router, services: Services): void {
     });
     return withIptvIds(services, libraryView(result.state));
   });
+  router.handle('backupExport', async (_input, ctx) => {
+    const backup = backupService(services);
+    const file = await backup.exportFile();
+    asDownload(ctx, backup.fileName());
+    return file;
+  });
+  router.handle('backupExportSecret', async ({ body }, ctx) => {
+    const backup = backupService(services);
+    const file = await backup.exportFile({ passphrase: body.passphrase });
+    asDownload(ctx, backup.fileName());
+    return file;
+  });
+  router.handle('backupImport', ({ body }) => backupService(services).importFile(body));
   router.handle('preferencesGet', () => ({ preferences: services.state.get().preferences }));
   router.handle('preferencesUpdate', async ({ body }) => ({
     preferences: await services.state.updatePreferences(body),
