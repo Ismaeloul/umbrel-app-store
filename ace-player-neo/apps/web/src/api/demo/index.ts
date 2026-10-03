@@ -11,7 +11,7 @@
    - Sincronizar, activar y borrar directorios no funcionan en demo (igual que
      en la 0.6.59): dan el error `demo_unsupported`.
    - IPTV (docs/iptv.md §1.6): `iptvGet` enseña una «IPTV de ejemplo»
-     (Xtream, 812 canales, guía con 640, activa) y el bootstrap la da por
+     (Xtream, 812 canales, guía con 55, activa) y el bootstrap la da por
      activa (`features.iptv`); guardar, actualizar, pausar y eliminar dan
      `demo_unsupported`, como los directorios.
    - Películas y series (docs/vod.md §12.11): el bootstrap dice que las hay
@@ -222,11 +222,13 @@ export function demoIptvView(now = Date.now()): IptvView {
         activeConnections: 0,
         ours: 0,
       },
-      guide: { available: true, channelsWithGuide: 640, updatedAt: hoursAgo(5), failedAt: null },
+      // Lo mismo que enseñan la Guía TV (55 canales de la guía de ejemplo) y
+      // Pelis y series (73 películas y 18 series) de la demo.
+      guide: { available: true, channelsWithGuide: 55, updatedAt: hoursAgo(5), failedAt: null },
       vod: {
         state: 'ready',
-        movies: 60,
-        series: 12,
+        movies: 73,
+        series: 18,
         builtAt: hoursAgo(3),
         truncated: false,
         skipped: 0,

@@ -112,7 +112,7 @@ describe('demo (§1.6)', () => {
   });
   afterEach(() => resetDemoState());
 
-  it('«IPTV de ejemplo»: Xtream, 812 canales, guía con 640, activa; el bootstrap la da por activa', async () => {
+  it('«IPTV de ejemplo»: Xtream, 812 canales, guía con 55, activa; el bootstrap la da por activa', async () => {
     const view = await handleDemo('iptvGet', req());
     expect(IptvViewSchema.safeParse(view).success).toBe(true);
     expect(view.provider).toMatchObject({
@@ -120,7 +120,7 @@ describe('demo (§1.6)', () => {
       kind: 'xtream',
       channels: 812,
       enabled: true,
-      guide: { channelsWithGuide: 640 },
+      guide: { channelsWithGuide: 55 },
     });
     const boot = await handleDemo('bootstrap', req());
     expect(boot.features.iptv).toBe(true);
