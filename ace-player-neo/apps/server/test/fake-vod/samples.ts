@@ -13,7 +13,9 @@
      desfase), GOP de 3,4 s, dos AAC (48 y 44,1 kHz) y el moov AL FINAL.
    - `mkv-bframes`: MKV H.264 a 23,976 con 3 fotogramas B y GOP de 2,7 s,
      AC-3 estéreo.
-   - `mkv-hevc`: MKV HEVC (Main) con GOP de 2 s y E-AC-3 5.1. */
+   - `mkv-hevc`: MKV HEVC (Main) con GOP de 2 s y E-AC-3 5.1.
+   Y una de 5 min para el laboratorio (`mkv-larga`: H.264 con B, AC-3 5.1 y
+   AAC), con la que los saltos reinician ffmpeg con las ventanas de verdad. */
 
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
@@ -25,7 +27,8 @@ export const HAS_FFMPEG =
   spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0 &&
   spawnSync('ffprobe', ['-version'], { stdio: 'ignore' }).status === 0;
 
-export type VodSampleName = 'mkv-h264-ac3' | 'mp4-moov-end' | 'mkv-bframes' | 'mkv-hevc';
+export type VodSampleName =
+  'mkv-h264-ac3' | 'mp4-moov-end' | 'mkv-bframes' | 'mkv-hevc' | 'mkv-larga';
 
 export interface VodSample {
   readonly name: VodSampleName;
@@ -36,9 +39,12 @@ export interface VodSample {
 }
 
 const DURATION_S = 60;
-const VIDEO = (rate: string): string => `testsrc2=size=320x180:rate=${rate}:duration=${DURATION_S}`;
-const TONE = (hz: number, rate = 48_000): string =>
-  `sine=frequency=${hz}:sample_rate=${rate}:duration=${DURATION_S}`;
+const VIDEO = (rate: string, duration = DURATION_S): string =>
+  `testsrc2=size=320x180:rate=${rate}:duration=${duration}`;
+const TONE = (hz: number, rate = 48_000, duration = DURATION_S): string =>
+  `sine=frequency=${hz}:sample_rate=${rate}:duration=${duration}`;
+/** La larga: 5 min, para que los saltos del laboratorio reinicien con las ventanas de verdad. */
+const LONG_S = 300;
 const QUIET = ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y'];
 
 export const VOD_SAMPLES: Readonly<Record<VodSampleName, VodSample>> = {
@@ -99,6 +105,21 @@ export const VOD_SAMPLES: Readonly<Record<VodSampleName, VodSample>> = {
       ...['-c:v', 'libx265', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p'],
       ...['-x265-params', 'keyint=50:min-keyint=50:scenecut=0:log-level=error'],
       ...['-c:a', 'eac3', '-ac', '6', '-b:a', '192k'],
+    ],
+  },
+  'mkv-larga': {
+    name: 'mkv-larga',
+    ext: 'mkv',
+    durationS: LONG_S,
+    args: [
+      ...['-f', 'lavfi', '-i', VIDEO('24', LONG_S)],
+      ...['-f', 'lavfi', '-i', TONE(440, 48_000, LONG_S)],
+      ...['-f', 'lavfi', '-i', TONE(330, 48_000, LONG_S)],
+      ...['-map', '0:v', '-map', '1:a', '-map', '2:a'],
+      ...['-c:v', 'libx264', '-preset', 'ultrafast', '-bf', '2', '-pix_fmt', 'yuv420p'],
+      ...['-g', '600', '-sc_threshold', '0', '-force_key_frames', 'expr:gte(t,n_forced*2.4)'],
+      ...['-c:a:0', 'ac3', '-ac:a:0', '6', '-b:a:0', '192k', '-c:a:1', 'aac', '-b:a:1', '96k'],
+      ...['-metadata:s:a:0', 'language=spa', '-metadata:s:a:1', 'language=eng'],
     ],
   },
 };
@@ -251,4 +272,24 @@ export function decodeCheck(file: string): { frames: number; errors: string } {
     { encoding: 'utf8', windowsHide: true },
   );
   return { frames: Number(result.stdout.trim()) || 0, errors: result.stderr.trim() };
+}
+
+/** Lo mismo sin bloquear el proceso (el relé y el productor siguen atendiendo mientras). */
+export function decodeCheckAsync(file: string): Promise<{ frames: number; errors: string }> {
+  return new Promise((resolve) => {
+    const child = spawn(
+      'ffprobe',
+      [
+        ...['-v', 'error', '-count_frames', '-select_streams', 'v:0'],
+        ...['-show_entries', 'stream=nb_read_frames', '-of', 'csv=p=0', file],
+      ],
+      { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true },
+    );
+    let out = '';
+    let errors = '';
+    child.stdout.on('data', (chunk: Buffer) => (out += chunk.toString()));
+    child.stderr.on('data', (chunk: Buffer) => (errors += chunk.toString()));
+    child.on('error', (error) => resolve({ frames: 0, errors: String(error) }));
+    child.on('close', () => resolve({ frames: Number(out.trim()) || 0, errors: errors.trim() }));
+  });
 }
