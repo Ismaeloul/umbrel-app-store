@@ -7,6 +7,7 @@
    | (nada) · agenda            | { vista: 'agenda' }                         |
    | biblioteca                 | { vista: 'biblioteca' }                     |
    | cine · cine/<40 hex>       | { vista: 'cine', id } (portada o ficha)     |
+   | guia                       | { vista: 'guia' } (Guía TV, hija de Canales)|
    | buscar                     | { vista: 'buscar' }                         |
    | ajustes · ajustes/<sección>| { vista: 'ajustes', seccion }               |
    | partido/<id>               | { vista: 'partido', id, canal: null }       |
@@ -26,11 +27,15 @@
 
 import { hasFlag, isSystemPageEnabled } from '../lib/flags.ts';
 
-export type Vista = 'agenda' | 'biblioteca' | 'cine' | 'buscar' | 'ajustes' | 'partido' | 'sistema';
+export type Vista =
+  'agenda' | 'biblioteca' | 'guia' | 'cine' | 'buscar' | 'ajustes' | 'partido' | 'sistema';
 
 export type Route =
   | { vista: 'agenda' }
   | { vista: 'biblioteca' }
+  /* Guía TV de la IPTV (docs/iptv.md §20): no es un destino de la barra, sino
+     hija de Canales (se ilumina Canales y se entra desde su cabecera). */
+  | { vista: 'guia' }
   /* Películas y series (docs/vod.md §12.2): `id` null es la portada; si no,
      la ficha de una película o una serie (id sellado de 40 hex). */
   | { vista: 'cine'; id: string | null }
@@ -77,6 +82,7 @@ export function navVistas(
 export const VISTA_TITLE: Record<Vista, string> = {
   agenda: 'Agenda',
   biblioteca: 'Canales',
+  guia: 'Guía TV',
   cine: 'Películas y series',
   buscar: 'Buscar',
   ajustes: 'Ajustes',
@@ -115,6 +121,8 @@ export function parseVista(
       return { vista: 'agenda' };
     case 'biblioteca':
       return { vista: 'biblioteca' };
+    case 'guia':
+      return { vista: 'guia' };
     case 'cine': {
       // `cine/<40 hex>` es una ficha; cualquier otra cosa detrás, la portada.
       const id = rest[0] ?? '';
@@ -173,6 +181,8 @@ export const VISTA_PARAMS: Record<Vista, readonly string[]> = {
   agenda: [],
   // Pestaña, categoría IPTV abierta y filtros (features/library/iptv/model.ts, FACET_PARAM).
   biblioteca: ['pestana', 'cat', 'pais', 'idioma', 'tipo', 'deporte', 'calidad'],
+  // «Favoritos | Todos» de la Guía TV (features/guia/model.ts, SCOPE_PARAM).
+  guia: ['ambito'],
   // Tipo, categoría, distintivo, búsqueda y orden (features/cine/model.ts,
   // CINE_PARAMS) y la temporada abierta de una serie (features/cine/Seasons.tsx).
   cine: ['cine', 'cinecat', 'cinetag', 'cineq', 'cineorden', 'temporada'],
@@ -223,8 +233,19 @@ export function routeDepth(route: Route): number {
   if (route.vista === 'sistema') return 11;
   // La ficha de una película o una serie es un paso adelante de la portada (§12.2).
   if (route.vista === 'cine' && route.id) return 9;
+  // La Guía TV es un paso adelante de Canales, su madre en la barra.
+  if (route.vista === 'guia') return 1.5;
   const index = (NAV_VISTAS as readonly Vista[]).indexOf(route.vista);
   return index < 0 ? 0 : index;
+}
+
+/**
+ * El destino de la barra que se ilumina en una vista: el suyo o, en las
+ * hijas (la Guía TV), el de su madre. null fuera de la barra (partido…).
+ */
+export function navParent(vista: Vista): NavVista | null {
+  if (vista === 'guia') return 'biblioteca';
+  return isNavVista(vista) ? vista : null;
 }
 
 export function isNavVista(vista: Vista): vista is NavVista {

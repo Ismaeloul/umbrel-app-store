@@ -62,6 +62,7 @@ import './shell.css';
 const WHAT: Record<Vista, string> = {
   agenda: 'la agenda',
   biblioteca: 'la biblioteca',
+  guia: 'la guía de TV',
   cine: 'las películas y series',
   buscar: 'la búsqueda',
   ajustes: 'los ajustes',

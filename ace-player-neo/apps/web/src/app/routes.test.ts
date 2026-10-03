@@ -3,6 +3,7 @@ import { scrollKey } from './scroll-memory.ts';
 import {
   formatVista,
   navLabel,
+  navParent,
   navVistas,
   parseRoute,
   parseVista,
@@ -129,6 +130,21 @@ describe('rutas (?vista=)', () => {
         { vista: 'partido', id: 'b', canal: null },
       ),
     ).toBe(false);
+  });
+});
+
+describe('Guía TV (docs/iptv.md §20)', () => {
+  it('es `?vista=guia`, hija de Canales en la barra y un paso adelante de ella', () => {
+    expect(parseVista('guia')).toEqual({ vista: 'guia' });
+    expect(parseVista(formatVista({ vista: 'guia' }))).toEqual({ vista: 'guia' });
+    expect(navParent('guia')).toBe('biblioteca');
+    expect(navParent('biblioteca')).toBe('biblioteca');
+    expect(navParent('partido')).toBeNull();
+    expect(routeDepth({ vista: 'guia' })).toBeGreaterThan(routeDepth({ vista: 'biblioteca' }));
+    // «Favoritos | Todos» viaja con la guía y no se queda en Canales.
+    expect(searchFor({ vista: 'biblioteca' }, '?vista=guia&ambito=todos&demo=1')).toBe(
+      '?vista=biblioteca&demo=1',
+    );
   });
 });
 
