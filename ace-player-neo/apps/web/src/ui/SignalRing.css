@@ -61,7 +61,7 @@
   --sring-ink: var(--text-2);
 }
 .sring--checking .sring__ring {
-  animation: sring-gira 1.6s linear infinite;
+  animation: sring-gira var(--dur-giro-lento) linear infinite;
 }
 .sring--pending {
   --sring: var(--idle);

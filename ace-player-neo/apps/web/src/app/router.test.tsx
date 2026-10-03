@@ -1,6 +1,8 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  rememberedViewParams,
+  rememberViewParam,
   RouterProvider,
   useBack,
   useNavigate,
@@ -25,6 +27,8 @@ function Probe() {
         partido
       </button>
       <button onClick={() => navigate('biblioteca')}>biblioteca</button>
+      <button onClick={() => navigate('buscar')}>ir a buscar</button>
+      <button onClick={() => navigate('ajustes')}>ajustes</button>
       <button
         onClick={() => {
           // Un doble clic: el segundo llega antes de que la transición confirme la ruta.
@@ -102,6 +106,45 @@ describe('router', () => {
     );
     fireEvent.click(screen.getByText('atrás'));
     expect(screen.getByTestId('ruta')).toHaveTextContent('agenda');
+  });
+
+  it('al cambiar de vista, la URL suelta los parámetros de la otra y los recupera al volver', () => {
+    render(
+      <RouterProvider>
+        <Probe />
+      </RouterProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'ir a buscar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'buscar' }));
+    expect(location.search).toBe('?demo=1&vista=buscar&q=dazn');
+    fireEvent.click(screen.getByRole('button', { name: 'ajustes' }));
+    expect(location.search).toBe('?demo=1&vista=ajustes');
+    expect(rememberedViewParams('buscar')).toBe('q=dazn');
+    fireEvent.click(screen.getByRole('button', { name: 'ir a buscar' }));
+    expect(location.search).toBe('?demo=1&vista=buscar&q=dazn');
+    expect(screen.getByTestId('q')).toHaveTextContent('dazn');
+    // Lo que se deja preparado para otra vista no toca la URL actual.
+    rememberViewParam('biblioteca', 'pestana', 'listas');
+    rememberViewParam('biblioteca', 'demo', '0');
+    expect(location.search).toBe('?demo=1&vista=buscar&q=dazn');
+    fireEvent.click(screen.getByRole('button', { name: 'biblioteca' }));
+    expect(location.search).toBe('?demo=1&vista=biblioteca&pestana=listas');
+  });
+
+  it('atrás/adelante: la vista a la que se vuelve recuerda la URL de esa entrada', () => {
+    render(
+      <RouterProvider>
+        <Probe />
+      </RouterProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'ir a buscar' }));
+    history.replaceState({ aceDepth: 0 }, '', '/?demo=1&vista=buscar&q=clan');
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    expect(rememberedViewParams('buscar')).toBe('q=clan');
+    fireEvent.click(screen.getByRole('button', { name: 'ajustes' }));
+    expect(location.search).toBe('?demo=1&vista=ajustes');
   });
 
   it('useSearchParam escribe con replaceState sin cambiar de vista', () => {

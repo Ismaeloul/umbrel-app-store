@@ -39,7 +39,7 @@
   }
 }
 .agenda-refresh[aria-busy='true'] svg {
-  animation: agenda-gira 900ms linear infinite;
+  animation: agenda-gira var(--dur-giro) linear infinite;
 }
 @keyframes agenda-gira {
   to {

@@ -12,9 +12,16 @@
    | partido/canal/<hash>       | { vista: 'partido', id: null, canal: hash } |
    | sistema                    | { vista: 'sistema' } (solo con el flag)     |
 
-   Lo que no se entiende acaba en la agenda. El resto de parámetros de la URL
-   (`demo=1`, `q=`…) se conserva al navegar: cada vista puede guardar los
-   suyos con useSearchParam (router.tsx). Funciones puras: se prueban solas. */
+   Lo que no se entiende acaba en la agenda.
+
+   Parámetros de la URL:
+   - De una vista (VISTA_PARAMS: `pestana`, los filtros de IPTV, `q`…): solo
+     viajan con su vista. Al cambiar de vista, los de las demás se quitan y los
+     de la vista nueva vuelven como los dejó (el router los recuerda). Así
+     `?vista=ajustes` no arrastra la búsqueda de Canales.
+   - Globales (`demo=1`, `flag=`… todo lo que no sea de una vista): se
+     conservan siempre.
+   Funciones puras: se prueban solas. */
 
 import { isSystemPageEnabled } from '../lib/flags.ts';
 
@@ -107,12 +114,50 @@ export function formatVista(route: Route): string {
   }
 }
 
-/** Query nueva con la vista cambiada y el resto de parámetros intactos. */
-export function searchFor(route: Route, currentSearch = ''): string {
+/**
+ * Los parámetros propios de cada vista (los escriben con useSearchParam o, la
+ * pestaña IPTV de Canales, con su propio estado en la URL). Un nombre es de
+ * una sola vista (lo comprueba routes.test.ts); lo que no está aquí es global.
+ */
+export const VISTA_PARAMS: Record<Vista, readonly string[]> = {
+  agenda: [],
+  // Pestaña, categoría IPTV abierta y filtros (features/library/iptv/model.ts, FACET_PARAM).
+  biblioteca: ['pestana', 'cat', 'pais', 'idioma', 'tipo', 'deporte', 'calidad'],
+  // El texto buscado (features/search/navigation.ts, SEARCH_PARAM).
+  buscar: ['q'],
+  ajustes: [],
+  partido: [],
+  sistema: [],
+};
+
+const ALL_VISTA_PARAMS: ReadonlySet<string> = new Set(Object.values(VISTA_PARAMS).flat());
+
+/** Solo los parámetros de `vista` que hay en `search` (sin `?`; '' si no hay). */
+export function viewParams(vista: Vista, search: string): string {
+  const own = VISTA_PARAMS[vista];
+  const source = new URLSearchParams(search);
+  const out = new URLSearchParams();
+  for (const [name, value] of source) if (own.includes(name)) out.append(name, value);
+  return out.toString();
+}
+
+/**
+ * Query para ir a `route` desde `currentSearch`. Los globales se quedan. Si
+ * la vista es la misma (otra sección de ajustes, otro partido), también sus
+ * parámetros; si cambia, se quitan los de todas las vistas y se ponen
+ * `restore`, los que la vista nueva tenía al dejarla (router.tsx).
+ */
+export function searchFor(route: Route, currentSearch = '', restore = ''): string {
   const params = new URLSearchParams(currentSearch);
+  const from = parseVista(params.get('vista'), true).vista;
+  if (from !== route.vista)
+    for (const name of [...params.keys()]) if (ALL_VISTA_PARAMS.has(name)) params.delete(name);
   params.set('vista', formatVista(route));
+  if (from !== route.vista)
+    for (const [name, value] of new URLSearchParams(restore))
+      if (VISTA_PARAMS[route.vista].includes(name)) params.append(name, value);
   // `/` sin escapar se lee mejor en la barra de direcciones y es válido en una query.
-  return `?${params.toString().replace(/%2F/gi, '/')}`;
+  return `?${params.toString().replace(/%2F/gi, '/').replace(/%2C/gi, ',')}`;
 }
 
 export function sameRoute(a: Route, b: Route): boolean {

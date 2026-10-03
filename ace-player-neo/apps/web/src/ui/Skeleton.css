@@ -15,7 +15,7 @@
     transparent
   );
   transform: translateX(-100%);
-  animation: ace-brillo 1.6s var(--ease-out) infinite;
+  animation: ace-brillo var(--dur-brillo) var(--ease-out) infinite;
 }
 @media (prefers-reduced-motion: reduce) {
   .skeleton::after {

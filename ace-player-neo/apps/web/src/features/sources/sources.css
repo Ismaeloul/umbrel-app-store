@@ -42,7 +42,7 @@
 .src__research[aria-busy='true'] svg,
 .src-inspector__research[aria-busy='true'] svg,
 .src__failure .btn[aria-busy='true'] svg {
-  animation: src-gira 900ms linear infinite;
+  animation: src-gira var(--dur-giro) linear infinite;
 }
 @keyframes src-gira {
   to {
@@ -60,7 +60,7 @@
 }
 /* Mientras comprueba, el relleno late despacio (solo opacidad). */
 .src__progress .progress.is-running .progress__fill {
-  animation: src-late var(--dur-pulse, 2s) ease-in-out infinite;
+  animation: src-late var(--dur-pulse) ease-in-out infinite;
 }
 @keyframes src-late {
   50% {

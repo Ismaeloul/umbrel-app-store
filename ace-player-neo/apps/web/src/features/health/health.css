@@ -88,7 +88,7 @@
 /* «Comprobando…»: pulso de opacidad (lo único que late aquí: está pasando). */
 .salud-sum__facts--pulse {
   padding-left: 6px;
-  animation: salud-pulso 1.4s var(--ease-out) infinite alternate;
+  animation: salud-pulso var(--dur-latido) var(--ease-out) infinite alternate;
 }
 @keyframes salud-pulso {
   from {

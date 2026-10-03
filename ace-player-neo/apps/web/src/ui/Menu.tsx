@@ -74,9 +74,30 @@ export function placeMenu(
   return { left: Math.round(left), top: Math.round(top) };
 }
 
+/**
+ * De dónde crece el menú al abrirse: del rincón que toca su botón. Sin esto
+ * crecía siempre desde arriba a la derecha y, abierto hacia arriba (una fila
+ * al final de la pantalla), se veía nacer lejos del «⋯».
+ */
+export function menuOrigin(
+  anchor: { left: number; top: number; bottom: number; right: number },
+  placed: { left: number; top: number },
+  height: number,
+  fromPoint: boolean,
+): string {
+  const above = placed.top + height <= anchor.top + 1;
+  const vertical = above ? 'bottom' : 'top';
+  const horizontal = fromPoint || placed.left >= anchor.left ? 'left' : 'right';
+  return `${vertical} ${horizontal}`;
+}
+
 export function Menu({ open, onClose, anchor, label, items }: MenuProps) {
   const listRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
+  const [position, setPosition] = useState<{
+    left: number;
+    top: number;
+    origin: string;
+  } | null>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
   const latestClose = useRef(onClose);
   latestClose.current = onClose;
@@ -107,14 +128,14 @@ export function Menu({ open, onClose, anchor, label, items }: MenuProps) {
     // el menú aún está en scale(0.96) y mediría un 4 % menos, así que en el
     // móvil se salía por el borde derecho al ajustarlo a la pantalla.
     const box = { width: list.offsetWidth, height: list.offsetHeight };
-    setPosition(
-      placeMenu(
-        rect,
-        { width: box.width || 220, height: box.height || 44 * items.length },
-        { width: window.innerWidth, height: window.innerHeight },
-        fromPoint,
-      ),
+    const size = { width: box.width || 220, height: box.height || 44 * items.length };
+    const placed = placeMenu(
+      rect,
+      size,
+      { width: window.innerWidth, height: window.innerHeight },
+      fromPoint,
     );
+    setPosition({ ...placed, origin: menuOrigin(rect, placed, size.height, fromPoint) });
     returnFocus.current =
       anchor instanceof HTMLElement
         ? anchor
@@ -188,7 +209,11 @@ export function Menu({ open, onClose, anchor, label, items }: MenuProps) {
       aria-label={label}
       className="menu glass glass--dense"
       data-ready={position ? 'true' : 'false'}
-      style={position ? { left: position.left, top: position.top } : { left: -9999, top: -9999 }}
+      style={
+        position
+          ? { left: position.left, top: position.top, transformOrigin: position.origin }
+          : { left: -9999, top: -9999 }
+      }
       onKeyDown={onKeyDown}
     >
       {items.map((item) => (

@@ -187,7 +187,7 @@ export async function detenerReproductor(page: Page): Promise<void> {
  * El WebKit de Playwright en Windows (WinCairo, sin composición acelerada)
  * tumba el proceso de la página al capturar una View Transition mientras
  * corre una animación CSS: el esqueleto de carga (`.skeleton`, que brilla)
- * cuando React revela la vista con `<ViewTransition name="ace-vista">`.
+ * cuando React revela la vista con su `<ViewTransition>` (Shell.tsx).
  * Medido el 23-09-2026: 11 de 12 cargas de agenda/ajustes se caían; sin
  * `startViewTransition`, 0 de 24; con `prefers-reduced-motion`, 0 de 12. No
  * se reproduce con una página suelta (animación + transición a pelo). Sin

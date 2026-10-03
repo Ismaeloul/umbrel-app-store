@@ -84,7 +84,7 @@
 /* Pulso de «buscando»: solo opacidad; quieto con movimiento reducido. */
 .search-pulse {
   padding-inline: var(--s-1);
-  animation: search-pulso 1.4s var(--ease-out) infinite alternate;
+  animation: search-pulso var(--dur-latido) var(--ease-out) infinite alternate;
 }
 @keyframes search-pulso {
   from {
