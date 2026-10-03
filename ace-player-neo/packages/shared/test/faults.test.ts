@@ -7,9 +7,12 @@ import {
   classifyLogLine,
   classifyWebEntry,
   DiagnosticsExportBodySchema,
+  playerFailureCode,
   redactReportText,
   redactReportValue,
+  REPORT_MAX_DEPTH,
   REPORT_REDACTED,
+  REPORT_TOO_DEEP,
   summarizeFaults,
   V1_ROUTES,
 } from '../src/index.js';
@@ -75,6 +78,46 @@ describe('redactReportText: lo que nunca sale en el fichero', () => {
       ['IsmaOul', 'ismaoul'],
     ],
     ['ticket del relé', 'http://127.0.0.1:41234/r/AbCdEfGh12345678/in.ts', ['AbCdEfGh12345678']],
+    // Lo que se colaba sin que el redactor de la IPTV conociera el secreto (revisión 0.9.0)
+    [
+      'forma corta sin esquema',
+      'abrir prov.example.com:8080/isma77/Pa55word/12345.ts',
+      ['isma77', 'Pa55word'],
+    ],
+    ['forma corta sin esquema ni dominio', 'prov:8080/isma77/Pa55word/12345', ['isma77']],
+    [
+      'forma corta con ruta detrás',
+      'http://prov:8080/isma77/Pa55word/12345/index.m3u8',
+      ['isma77', 'Pa55word'],
+    ],
+    ['Xtream codificado', 'GET %2Flive%2Fisma77%2FPa55word%2F1.ts', ['isma77', 'Pa55word']],
+    [
+      'query codificada entera',
+      'url=%3Fusername%3Disma77%26password%3DPa55word',
+      ['isma77', 'Pa55word'],
+    ],
+    ['doblemente codificado', '%252Flive%252Fisma77%252FPa55word%252F1.ts', ['isma77', 'Pa55word']],
+    [
+      'barras escapadas de JSON',
+      '{"url":"http:\\/\\/prov\\/live\\/isma77\\/Pa55word\\/1.ts"}',
+      ['isma77', 'Pa55word'],
+    ],
+    ['password: en texto suelto', 'login con password: Pa55word', ['Pa55word']],
+    ["password='…'", "password='Pa55word' rechazada", ['Pa55word']],
+    ['password="…"', 'password="Pa55word"', ['Pa55word']],
+    ['contraseña: en castellano', 'contraseña: Pa55word', ['Pa55word']],
+    ['usuario = en castellano', 'usuario = isma77', ['isma77']],
+    ['X-Api-Key', 'X-Api-Key: Pa55word', ['Pa55word']],
+    ['X-Auth-Token', 'x-auth-token=Pa55word', ['Pa55word']],
+    ['la cabecera del motor', '{"x-engine-token":"Pa55word"}', ['Pa55word']],
+    ['campo JSON con número', '{"password":12345678,"ok":1}', ['12345678']],
+    ['campo JSON cortado', '{"token":"Pa55word…', ['Pa55word']],
+    ['campo JSON con comilla simple', "{'password': 'Pa55word'}", ['Pa55word']],
+    [
+      'clave de TheSportsDB en la ruta',
+      'https://www.thesportsdb.com/api/v1/json/Pa55word/lookupteam.php?id=133604',
+      ['Pa55word'],
+    ],
   ];
 
   for (const [name, text, banned] of cases) {
@@ -95,8 +138,52 @@ describe('redactReportText: lo que nunca sale en el fichero', () => {
       'IPv6 local fe80::1 y ::1',
       'remux_died: ffmpeg terminó (1): Invalid data found when processing input',
       'errorCode=iptv_busy keyframe=si',
+      // Nuestras URLs (la vista previa, el remux, el motor) y las pilas de la web
+      'http://127.0.0.1:3109/api/v1/video/s_abc/12.ts',
+      'http://acestream:6878/ace/c/0a1b2c3d/12.ts',
+      'at http://127.0.0.1:5189/assets/index-abc.js:10:5',
+      'node_modules/.pnpm/hls.js@1.5.0/node_modules/hls.js/dist/hls.mjs:12:3',
+      'https://www.thesportsdb.com/api/v1/json/123/lookupteam.php?id=133604',
+      'User-Agent: Mozilla/5.0 y errorCode: remux_died',
+      '50% de búfer y GET /api/v1/channels%2Fx 404',
     ];
     for (const text of keep) expect(redactReportText(text)).toBe(text);
+  });
+
+  it('sin retroceso exponencial: textos con mala suerte no congelan el servidor', () => {
+    // Antes, 40 barras detrás de "token":" tardaban 1,6 s y cada una más ×1,6.
+    const nasty = [
+      `{"token":"${'\\'.repeat(60)}`,
+      `"password":"${'\\'.repeat(61)}"`,
+      `'key':'${'\\'.repeat(60)}`,
+      'x-a-'.repeat(2_000),
+      'a.'.repeat(4_000),
+      'password: '.repeat(800),
+      '"t":'.repeat(2_000),
+      '%41'.repeat(2_500),
+      'a@'.repeat(4_000),
+    ];
+    for (const text of nasty) {
+      const started = performance.now();
+      redactReportText(text);
+      // Holgado para un PC cargado: lo medido es menos de 5 ms.
+      expect(performance.now() - started, text.slice(0, 20)).toBeLessThan(250);
+    }
+    expect(redactReportText(`{"token":"${'\\'.repeat(60)}`)).toBe(`{"token":"${REPORT_REDACTED}"`);
+  });
+
+  it('redactReportValue falla cerrado en lo muy anidado', () => {
+    let nine: unknown = { password: 'Pa55word', url: 'http://h/live/isma77/Pa55word/1.ts' };
+    for (let i = 0; i < 9; i += 1) nine = { nested: nine };
+    expect(JSON.stringify(redactReportValue([nine]))).not.toMatch(/Pa55word|isma77/);
+
+    let deep: unknown = { password: 'Pa55word', text: 'http://h/live/isma77/Pa55word/1.ts' };
+    for (let i = 0; i < REPORT_MAX_DEPTH + 5; i += 1) deep = { nested: deep };
+    const counter = { replaced: 0 };
+    const out = JSON.stringify(redactReportValue(deep, undefined, counter));
+    expect(out).not.toMatch(/Pa55word|isma77/);
+    expect(out).toContain(REPORT_TOO_DEEP);
+    expect(counter.replaced).toBe(1);
   });
 
   it('redactReportValue tapa por clave, recorre todo y cuenta lo tapado', () => {
@@ -145,6 +232,64 @@ describe('clasificación: nuestro o de fuera', () => {
     expect(classifyCode('ipfs_unsupported_codec').piece).toBe('red');
     expect(classifyCode('crest_rate_limited', 'network').piece).toBe('terceros');
     expect(classifyCode('fltv_empty').piece).toBe('terceros');
+  });
+
+  it('el reproductor que agota los reintentos: la decodificación y la imagen parada son nuestras', () => {
+    // Lo que apunta la web de la 0.9.0 (playerFailureCode y el vigilante del reproductor)
+    expect(classifyCode('player_decode_failed', 'codec')).toEqual({
+      side: 'nuestro',
+      piece: 'decodificacion',
+    });
+    expect(classifyCode('player_decode_skipped', 'client').piece).toBe('decodificacion');
+    expect(classifyCode('player_stalled', 'client')).toEqual({
+      side: 'nuestro',
+      piece: 'reproductor',
+    });
+    // Lo que guardó una web de antes (o la app de iPhone): la frase manda antes que la fuente
+    const old = (message: string) => classifyCode('player_source_failed', 'source', message);
+    expect(old('HLS no pudo recuperarse (bufferAppendError)').piece).toBe('decodificacion');
+    expect(old('HLS no pudo recuperarse (fragParsingError)').piece).toBe('decodificacion');
+    expect(old('El relé de la IPTV se ha cortado').piece).toBe('rele');
+    expect(old('HLS no pudo recuperarse (fragLoadError)')).toEqual({
+      side: 'de_fuera',
+      piece: 'fuente',
+    });
+    expect(old('La señal se ha cortado: reconectando').piece).toBe('fuente');
+    expect(
+      classifyWebEntry({
+        kind: 'player',
+        code: 'player_source_failed',
+        message: 'HLS no pudo recuperarse (bufferAppendError)',
+      }).side,
+    ).toBe('nuestro');
+    const summary = summarizeFaults([
+      { ...classifyCode('player_decode_failed', 'codec'), level: 'warn' },
+    ]);
+    expect(summary.lines[0]).toBe('Nuestro: 1 fallo (decodificación de vídeo 1).');
+  });
+
+  it('playerFailureCode: el código del último fallo, por su frase y su detalle', () => {
+    const cut = 'La señal se ha cortado: reconectando';
+    expect(
+      playerFailureCode('HLS no pudo recuperarse (bufferAppendError)', 'bufferAppendError'),
+    ).toBe('player_decode_failed');
+    // mpegts.js: «tipo · detalle» del evento ERROR
+    expect(playerFailureCode(cut, 'MediaError · MediaMSEError')).toBe('player_decode_failed');
+    expect(playerFailureCode(cut, 'MediaError · MediaFormatUnsupported')).toBe(
+      'player_decode_failed',
+    );
+    expect(playerFailureCode(cut, 'NetworkError · NetworkException')).toBe('player_source_failed');
+    // El <video>
+    expect(playerFailureCode(cut, 'evento del vídeo (MEDIA_ERR_DECODE)')).toBe(
+      'player_decode_failed',
+    );
+    expect(playerFailureCode(cut, 'evento del vídeo')).toBe('player_source_failed');
+    // Un código del servidor en el detalle (stream.closed) se queda tal cual
+    expect(playerFailureCode(cut, 'remux_died')).toBe('remux_died');
+    expect(playerFailureCode(cut, 'engine_unavailable')).toBe('engine_unavailable');
+    expect(playerFailureCode(cut, 'remux_failed')).toBe('remux_failed');
+    expect(playerFailureCode(cut, 'session_expired')).toBe('player_source_failed');
+    expect(playerFailureCode('Sin señal suficiente: reintentando')).toBe('player_source_failed');
   });
 
   it('sin código conocido, por la causa; métricas y autoplay no son fallos', () => {

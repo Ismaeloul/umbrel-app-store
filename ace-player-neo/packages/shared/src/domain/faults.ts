@@ -14,11 +14,16 @@
    el usuario y la contraseña guardados): credenciales en URLs (`user:pass@`,
    parámetros como `password=`, `token=`, `t=`…), los tramos Xtream
    `/live|movie|series|timeshift/<usuario>/<clave>/` (también sin
-   `http://`), la forma corta `/<usuario>/<clave>/<id>.ts` de los paneles,
-   cabeceras `Authorization`/`Bearer`/`Basic`, cookies, JWT, campos JSON con
-   secretos, correos e IPs PÚBLICAS (las privadas y de Tailscale se quedan:
-   dicen qué contenedor no responde). Los hashes AceStream y los ids IPTV NO
-   se tapan: identifican la fuente y no dan acceso a nada. */
+   `http://`), la forma corta `/<usuario>/<clave>/<id>` de los paneles (con
+   o sin esquema y con ruta detrás), cabeceras `Authorization`/`Bearer`/
+   `Basic`/`X-Api-Key`…, cookies, JWT, campos JSON con secretos (también
+   sin comillas en el valor), `password: x` y `clave='x'` en texto suelto,
+   correos e IPs PÚBLICAS (las privadas y de Tailscale se quedan: dicen qué
+   contenedor no responde). Lo mismo en una URL codificada (`%2Flive%2F…`,
+   `%3Fusername%3D…`) o con las barras escapadas de JSON (`http:\/\/…`).
+   Los hashes AceStream y los ids IPTV NO se tapan: identifican la fuente y
+   no dan acceso a nada. Ninguna expresión es ambigua (sin retroceso
+   exponencial): el informe se monta en el mismo hilo que sirve el vídeo. */
 
 import type {
   FaultLevel,
@@ -107,6 +112,11 @@ const CODE_PIECE: Readonly<Record<string, FaultPiece>> = {
   crests_index_unreadable: 'datos',
   crests_unwritable: 'datos',
   iptv_secret_unreadable: 'datos',
+  // Reproductor: lo que apunta al agotar los reintentos sin un código del
+  // servidor (playerFailureCode) y el trozo dañado que hls.js salta en el sitio.
+  player_decode_failed: 'decodificacion',
+  player_decode_skipped: 'decodificacion',
+  player_stalled: 'reproductor',
   // Fuentes
   source_no_peers: 'fuente',
   player_source_failed: 'fuente',
@@ -160,9 +170,13 @@ const CODE_PREFIX: ReadonlyArray<readonly [string, FaultPiece]> = [
   ['crest_', 'terceros'],
 ];
 
-/* Lo que delata la decodificación en un código o una frase del reproductor (hls.js, mpegts.js, <video>). */
+/* Lo que delata la decodificación en un código o una frase del reproductor:
+   hls.js (bufferAppendError, bufferAppendingError, fragParsingError,
+   bufferAddCodecError…), mpegts.js (MediaMSEError, MediaFormatError,
+   MediaFormatUnsupported, MediaCodecUnsupported) y el <video>
+   (MEDIA_ERR_DECODE). */
 const DECODE_RE =
-  /decod|codec|c[oó]dec|media_err_decode|buffer_?append|frag_?parsing|no se puede decodificar/i;
+  /decod|codec|c[oó]dec|media_err_decode|buffer_?append|frag_?parsing|mediamseerror|media_?format|no se puede decodificar/i;
 /* Lo que delata el relé de la IPTV («relé» acaba en una letra que \b no ve). */
 const RELAY_RE = /\brel[eé](?![a-z])|\brelay/i;
 
@@ -195,12 +209,41 @@ export function classifyCode(code: string, cause?: string | null, message = ''):
   if (key === 'player_session' || key === 'autoplay_blocked') return piece('otro');
   // ffmpeg que muere por el códec es decodificación; si no, el remux.
   if (key === 'remux_died') return piece(cause === 'codec' ? 'decodificacion' : 'remux');
+  /* El reproductor agotó los reintentos sin un código más preciso: lo que
+     guardó una web de antes de la 0.9.0 (el registro vive en disco) o la app
+     de iPhone. Si la frase delata la decodificación o el relé, es nuestro;
+     si no, la fuente. */
+  if (key === 'player_source_failed') {
+    if (DECODE_RE.test(message)) return piece('decodificacion');
+    if (RELAY_RE.test(message)) return piece('rele');
+    return piece('fuente');
+  }
   const byCode = pieceOfCode(key);
   if (byCode) return piece(byCode);
   if (DECODE_RE.test(key)) return piece('decodificacion');
   if (cause === 'client' && DECODE_RE.test(message)) return piece('decodificacion');
   if (cause && CAUSE_PIECE[cause]) return piece(CAUSE_PIECE[cause]);
   return piece('otro');
+}
+
+/**
+ * Código con el que el reproductor apunta una fuente que agota los
+ * reintentos sin un código del servidor (registro de fallos, arquitectura
+ * §5.14), a partir de la frase y el detalle del ÚLTIMO fallo:
+ * - un código conocido en el detalle (el `stream.closed` del servidor trae
+ *   `engine_unavailable`, `remux_died`, `remux_failed`…) se usa tal cual;
+ * - la decodificación (hls.js que no puede añadir o leer un trozo, mpegts.js
+ *   con un error de MSE o de formato, el <video> con MEDIA_ERR_DECODE) es
+ *   `player_decode_failed`: nuestra, no de la fuente;
+ * - si no, `player_source_failed` (la fuente no da señal).
+ * La imagen parada con búfer de sobra (`player_stalled`) la decide el propio
+ * reproductor, que es quien ve el búfer.
+ */
+export function playerFailureCode(reason: string, detail?: string | null): string {
+  const extra = String(detail ?? '').trim();
+  if (/^[a-z][a-z0-9_]{2,39}$/.test(extra) && pieceOfCode(extra)) return extra;
+  if (DECODE_RE.test(reason) || DECODE_RE.test(extra)) return 'player_decode_failed';
+  return 'player_source_failed';
 }
 
 /** Lo que tiene una línea del registro del servidor (pino) para clasificarla. */
@@ -391,54 +434,103 @@ function maskIpv4(text: string): string {
    horas («15:42:10») ni en hashes. */
 const IPV6_GLOBAL_RE = /(?<![\w:])[23][0-9a-f]{3}:(?:[0-9a-f]{0,4}:){1,6}[0-9a-f]{0,4}(?![\w:])/gi;
 
-/**
- * Tapa en un texto libre todo lo que parece un secreto o un dato privado
- * (ver la cabecera). No toca hashes AceStream, ids IPTV, horas ni versiones.
- */
-export function redactReportText(text: string): string {
-  let out = String(text ?? '');
+/** Ruta de una URL: un tramo entre barras. */
+const SEGMENT = `[^/\\s?#"'<>]+`;
+/* La forma corta de los paneles, `/<usuario>/<clave>/<número>(.ext)`, al
+   final de la URL o con más ruta detrás (`/12345/index.m3u8`). */
+const SHORT_FORM_TAIL = `\\/(?!•••)${SEGMENT}\\/(?!•••)${SEGMENT}\\/(\\d+)(\\.[a-z0-9]{1,5})?(?=[\\s?#"'<>/),;]|$)`;
+const SHORT_FORM_URL_RE = new RegExp(`(\\bhttps?:\\/\\/[^/\\s?#"'<>]+)${SHORT_FORM_TAIL}`, 'gi');
+/* Sin esquema: `prov.example.com:8080/…`, `81.45.1.9/…` o `prov:8080/…`, al
+   principio de una palabra (no dentro de una ruta ni de una URL). */
+const SHORT_FORM_BARE_RE = new RegExp(
+  `(?<![\\w.@/:%\\\\-])((?:[a-z0-9-]+\\.)+[a-z][a-z0-9-]*(?::\\d{1,5})?|\\d{1,3}(?:\\.\\d{1,3}){3}(?::\\d{1,5})?|[a-z][a-z0-9-]*:\\d{1,5})${SHORT_FORM_TAIL}`,
+  'gi',
+);
+/* Campos JSON (o de un objeto escrito) con secretos: `"password":"x"`,
+   `'token': 'y'`, `"pin": 1234`. El valor entre comillas acaba en su comilla
+   o, si está cortado, al final de la línea (mejor tapar de más). Sin
+   ambigüedad: una barra invertida solo la come `\\[\s\S]`. */
+const JSON_SECRET_RE = new RegExp(
+  `(["'])(${SECRET_PARAM}|authorization|cookie|seed)\\1(\\s*:\\s*)` +
+    `("(?:[^"\\\\\\n]|\\\\[\\s\\S])*\\\\?(?:"|(?=\\n)|$)` +
+    `|'(?:[^'\\\\\\n]|\\\\[\\s\\S])*\\\\?(?:'|(?=\\n)|$)` +
+    `|(?![{\\[])[^\\s"',}\\]]+)`,
+  'gi',
+);
+/* nombre=valor (query de una URL o texto suelto), con o sin comillas. */
+const PARAM_SECRET_RE = new RegExp(
+  `(^|[?&;,\\s"'(])(${SECRET_PARAM})=(["']?)(?!\\[redactado\\])([^&\\s"'<>#;,)]+)`,
+  'gi',
+);
+/* «password: x», «contraseña = x», «clave='x'» en texto suelto (solo los
+   nombres que no dejan dudas: `t:` o `key:` en una frase pueden ser otra cosa). */
+const SECRET_LABEL =
+  '(?:password|passwd|pwd|passphrase|contrase(?:ñ|n)a|clave|secret|token|access_token|refresh_token|api_?key|apikey|username|usuario|user)';
+const LABEL_SECRET_RE = new RegExp(
+  `(^|[^A-Za-z0-9ñ-])(${SECRET_LABEL})(\\s*[:=]\\s*)(["']?)(?!\\[redactado\\]|•••)([^\\s"'<>&#;,)}\\]]+)`,
+  'gi',
+);
+/* Cabeceras con claves (`X-Api-Key`, `X-Auth-Token`, `X-Engine-Token`…); el
+   nombre, acotado (una tira de «x-a-x-a…» no se vuelve cuadrática). */
+const KEY_HEADER_RE =
+  /\b(x-[a-z0-9-]{0,40}?(?:key|token|secret|auth[a-z]*|signature|password|pass)|api-key)(["']?\s*[:=]\s*["']?)[^\s"',;}]+/gi;
+
+/* Lo que se reconoce en el texto tal cual (redactReportText añade lo codificado). */
+function redactPlain(text: string): string {
+  let out = text;
   // Credenciales en una URL: esquema://usuario:clave@host
-  out = out.replace(/\b([a-z][a-z0-9+.-]*:\/\/)[^/\s?#@"'<>]+@/gi, '$1•••@');
+  out = out.replace(/(?<![a-z0-9+.-])([a-z][a-z0-9+.-]*:\/\/)[^/\s?#@"'<>]+@/gi, '$1•••@');
   // Tramos Xtream con o sin esquema: /live/<usuario>/<clave>/<id>
   out = out.replace(
-    new RegExp(`/(${XTREAM_KIND})/[^/\\s?#"'<>]+/[^/\\s?#"'<>]+(?=/)`, 'gi'),
+    new RegExp(`/(${XTREAM_KIND})/${SEGMENT}/${SEGMENT}(?=/)`, 'gi'),
     '/$1/•••/•••',
   );
-  // Forma corta de los paneles en una URL: http(s)://host[:puerto]/<usuario>/<clave>/<número>(.ext)
-  out = out.replace(
-    /(\bhttps?:\/\/[^/\s?#"'<>]+)\/(?!•••)[^/\s?#"'<>]+\/(?!•••)[^/\s?#"'<>]+\/(\d+)(\.[a-z0-9]{1,5})?(?=[\s?#"'<>]|$)/gi,
-    '$1/•••/•••/$2$3',
-  );
+  // Forma corta de los paneles: [http(s)://]host[:puerto]/<usuario>/<clave>/<número>(.ext)[/…]
+  out = out.replace(SHORT_FORM_URL_RE, '$1/•••/•••/$2$3');
+  out = out.replace(SHORT_FORM_BARE_RE, '$1/•••/•••/$2$3');
   // Ticket del relé local: /r/<ticket>/
   out = out.replace(/\/r\/[A-Za-z0-9_-]{8,}(?=\/|\b)/g, '/r/•••');
+  // La clave de TheSportsDB va en la ruta (/api/v1/json/<clave>/…); la pública (123, 3) se ve.
+  out = out.replace(/(\/api\/v\d+\/json\/)(?!(?:3|123)\/|•••)[^/\s?#"'<>]+(?=\/)/gi, '$1•••');
   // Cabeceras: Authorization: Bearer x / Basic x, y «Bearer x» suelto
   out = out.replace(
     /\b(authorization|proxy-authorization)(["']?\s*[:=]\s*["']?)[^\s"',;}]+(?:\s+[^\s"',;}]+)?/gi,
     `$1$2${REPORT_REDACTED}`,
   );
   out = out.replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{6,}/g, `$1 ${REPORT_REDACTED}`);
+  out = out.replace(KEY_HEADER_RE, `$1$2${REPORT_REDACTED}`);
   // Cookies
   out = out.replace(
     /\b(set-cookie|cookie)(["']?\s*[:=]\s*["']?)[^\n"'}]+/gi,
     `$1$2${REPORT_REDACTED}`,
   );
-  // Campos JSON con secretos: "password":"x", "token": "y"
+  // Campos JSON con secretos: "password":"x", "token": "y", "pin": 1234
   out = out.replace(
-    new RegExp(
-      `(["'])(${SECRET_PARAM}|authorization|cookie|seed)\\1(\\s*:\\s*)(["'])(?:\\\\.|(?!\\4).)*\\4`,
-      'gi',
-    ),
-    `$1$2$1$3$4${REPORT_REDACTED}$4`,
+    JSON_SECRET_RE,
+    (_match, quote: string, name: string, colon: string, value: string) => {
+      const around = value.startsWith('"') || value.startsWith("'") ? value.charAt(0) : '';
+      return `${quote}${name}${quote}${colon}${around}${REPORT_REDACTED}${around}`;
+    },
   );
-  // nombre=valor (query de una URL o texto suelto): ?username=a&password=b, t=xyz
+  // nombre=valor: ?username=a&password=b, t=xyz, password='x'
   out = out.replace(
-    new RegExp(`(^|[?&;,\\s"'(])(${SECRET_PARAM})=([^&\\s"'<>#;,)]+)`, 'gi'),
-    (_match, before: string, name: string) => `${before}${name}=${REPORT_REDACTED}`,
+    PARAM_SECRET_RE,
+    (_match, before: string, name: string, quote: string) =>
+      `${before}${name}=${quote}${REPORT_REDACTED}`,
+  );
+  // nombre: valor en texto suelto
+  out = out.replace(
+    LABEL_SECRET_RE,
+    (_match, before: string, name: string, separator: string, quote: string) =>
+      `${before}${name}${separator}${quote}${REPORT_REDACTED}`,
   );
   // JWT
   out = out.replace(/\beyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\b/g, '[token]');
-  // Correos
-  out = out.replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, '[correo]');
+  // Correos (desde el principio de la palabra: sin volver a empezar en cada letra)
+  out = out.replace(
+    /(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b/g,
+    '[correo]',
+  );
   // El usuario del sistema en una ruta de las pilas (C:\Users\<nombre>\…, /home/<nombre>/…)
   out = out.replace(/([\\/](?:Users|home)[\\/])[^\\/\s"'<>:]+(?=[\\/])/g, '$1•••');
   // IPs públicas
@@ -447,14 +539,51 @@ export function redactReportText(text: string): string {
   return out;
 }
 
+/* Una palabra con algo codificado (`%2F`, `%3D`…) o con las barras escapadas
+   de JSON (`http:\/\/…`): se mira también descodificada y, si así se ve un
+   secreto, sale descodificada y tapada. Si no, se queda como estaba. */
+function redactEncoded(text: string): string {
+  return text.replace(/[^\s"'<>]+/g, (word) => {
+    if (!word.includes('%') && !word.includes('\\/')) return word;
+    let plain = word.replace(/\\\//g, '/');
+    for (let round = 0; round < 2 && /%[0-9a-f]{2}/i.test(plain); round += 1) {
+      plain = plain.replace(/(?:%[0-9a-f]{2})+/gi, (run) => {
+        try {
+          return decodeURIComponent(run);
+        } catch {
+          return run;
+        }
+      });
+    }
+    if (plain === word) return word;
+    const cleaned = redactPlain(plain);
+    return cleaned === plain ? word : cleaned;
+  });
+}
+
+/**
+ * Tapa en un texto libre todo lo que parece un secreto o un dato privado
+ * (ver la cabecera). No toca hashes AceStream, ids IPTV, horas ni versiones.
+ */
+export function redactReportText(text: string): string {
+  return redactPlain(redactEncoded(String(text ?? '')));
+}
+
 /** Claves de un objeto cuyo valor nunca se escribe (cabeceras, secretos, usuario). */
 export const REPORT_SECRET_KEY_RE =
   /^(password|passwd|pass|pwd|passphrase|secret|token|access_token|refresh_token|authorization|proxy-authorization|cookie|set-cookie|username|user|usuario|seed|api_?key|apikey|t)$/i;
 
+/** Hasta dónde se baja en un valor anidado; más hondo, el valor entero se tapa. */
+export const REPORT_MAX_DEPTH = 32;
+/** Marca de un objeto o una lista demasiado anidados para recorrerlos. */
+export const REPORT_TOO_DEEP = '[redactado: demasiado anidado]';
+
 /**
  * Recorre un valor JSON y devuelve una copia redactada: las claves de
  * REPORT_SECRET_KEY_RE se tapan enteras y cada texto pasa por `clean`
- * (por defecto, `redactReportText`). Cuenta los textos que cambian.
+ * (por defecto, `redactReportText`). Cuenta los textos que cambian. Falla
+ * CERRADO: un objeto o una lista a más de REPORT_MAX_DEPTH niveles no sale
+ * tal cual, sale REPORT_TOO_DEEP.
  */
 export function redactReportValue(
   value: unknown,
@@ -467,7 +596,11 @@ export function redactReportValue(
     if (cleaned !== value) counter.replaced += 1;
     return cleaned;
   }
-  if (value === null || typeof value !== 'object' || depth > 8) return value;
+  if (value === null || typeof value !== 'object') return value;
+  if (depth > REPORT_MAX_DEPTH) {
+    counter.replaced += 1;
+    return REPORT_TOO_DEEP;
+  }
   if (Array.isArray(value))
     return value.map((item) => redactReportValue(item, clean, counter, depth + 1));
   const out: Record<string, unknown> = {};
