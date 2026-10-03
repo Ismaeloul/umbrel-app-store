@@ -171,6 +171,9 @@ antes de pedir (sin cambios), así que el móvil no hace nada al teclear.
   confunden («La 10», «La 1 Catalunya», «La 1 Canarias», «M+ LaLiga TV 2/3», «LaLiga TV Hypermotion 2»,
   «LALIGA TV» inglés, «M+ #0») y las variantes 4K son una calidad más de su fila (fuera «M+ LaLiga 4K» y «DAZN
   LALIGA UHD» sueltos). En la demo, «En tu IPTV» del filtro de Canales sale sin pasar antes por Buscar.
+- **Filas con partido en directo** (móvil): el minuto y «En directo» ocupan el sitio del subtítulo y las
+  etiquetas («IPTV», calidades) se cortaban contra el borde de la tarjeta; ahora, solo en esas filas, bajan a
+  su línea (`.ch__meta--wrap`; la lista virtual mide cada fila). Las filas sin partido no cambian.
 - Sin cambios de contrato (`packages/shared` solo suma funciones; ninguna ruta, esquema ni error).
 
 ## 6. Pruebas
@@ -226,8 +229,8 @@ orden y las filas juntas porque los da el servidor. Si se quiere el resaltado en
   pestaña).
 - **D-propuesta (buscador) 4 · A igualdad de todo, la mejor calidad antes que el orden del proveedor.**
 - **Para que decida Isma (no hecho):** dentro de la pestaña IPTV, la cápsula «IPTV» de cada fila sobra (todo es
-  IPTV) y en el móvil, con un partido en directo, empuja las calidades hasta cortarlas («Descanso · En directo ·
-  IPTV · 1080p · 72…»). Quitarla ahí daría sitio; se dejó porque §16.6 la decidió igual que en Buscar.
+  IPTV). Quitarla ahí daría sitio al subtítulo en el móvil; se dejó porque §16.6 la decidió igual que en Buscar
+  (las etiquetas que se cortaban con un partido en directo ya bajan a su línea, §5).
 
 ## 10. Riesgos
 
