@@ -23,6 +23,10 @@ export interface FakeGuideOptions {
   readonly seed?: number;
   /** Cuántos canales llevan logo (cada `logoEvery`; 0 = ninguno). */
   readonly logoEvery?: number;
+  /** `tvg-id` de los canales tal cual (en vez de `${prefix}${i}.es`; entonces `channels` no cuenta). */
+  readonly ids?: readonly string[];
+  /** Sin la cabecera ni el `</tv>` del final (para seguir otra guía); por defecto, con ellos. */
+  readonly wrap?: boolean;
 }
 
 /** `20261003183000 +0000`. */
@@ -61,15 +65,21 @@ const CATEGORIES = ['Informativo', 'Cine', 'Documental', 'Serie', 'Deportes', 'I
 const DESC =
   'Una historia inventada para la prueba de la guía grande, con algo de texto para que pese como una sinopsis de verdad.';
 
+function idsOf(options: FakeGuideOptions): readonly string[] {
+  const prefix = options.prefix ?? 'Canal';
+  return options.ids ?? Array.from({ length: options.channels }, (_, i) => `${prefix}${i + 1}.es`);
+}
+
 /** Número de programas que dará (aprox.) para dimensionar las pruebas. */
 export function fakeGuideEstimate(options: FakeGuideOptions): number {
-  return Math.round(options.channels * options.days * ((24 * 60) / 55));
+  return Math.round(idsOf(options).length * options.days * ((24 * 60) / 55));
 }
 
 /** La guía en trozos de ~64 KiB (`Readable.from` la sirve sin tenerla entera). */
 export function* fakeGuideChunks(options: FakeGuideOptions): Generator<Buffer> {
-  const prefix = options.prefix ?? 'Canal';
+  const ids = idsOf(options);
   const details = options.details ?? true;
+  const wrap = options.wrap ?? true;
   const next = random(options.seed ?? 42);
   const end = options.from + options.days * 24 * 60 * MINUTE;
   const logoEvery = options.logoEvery ?? 10;
@@ -84,21 +94,25 @@ export function* fakeGuideChunks(options: FakeGuideOptions): Generator<Buffer> {
     size = 0;
     return out;
   };
-  let out = push(
-    '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE tv SYSTEM "xmltv.dtd">\n<tv generator-info-name="guia-falsa">\n',
-  );
+  let out = wrap
+    ? push(
+        '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE tv SYSTEM "xmltv.dtd">\n<tv generator-info-name="guia-falsa">\n',
+      )
+    : null;
   if (out) yield out;
-  for (let channel = 1; channel <= options.channels; channel += 1) {
+  for (const [index, id] of ids.entries()) {
+    const number = index + 1;
     const icon =
-      logoEvery > 0 && channel % logoEvery === 0
-        ? `<icon src="https://logos.example/${channel}.png"/>`
+      logoEvery > 0 && number % logoEvery === 0
+        ? `<icon src="https://logos.example/${number}.png"/>`
         : '';
     out = push(
-      `  <channel id="${prefix}${channel}.es"><display-name>Canal ${channel}</display-name>${icon}</channel>\n`,
+      `  <channel id="${id}"><display-name>Canal ${number}</display-name>${icon}</channel>\n`,
     );
     if (out) yield out;
   }
-  for (let channel = 1; channel <= options.channels; channel += 1) {
+  for (const [channelIndex, id] of ids.entries()) {
+    const channel = channelIndex + 1;
     let at = options.from;
     let index = 0;
     while (at < end) {
@@ -120,15 +134,15 @@ export function* fakeGuideChunks(options: FakeGuideOptions): Generator<Buffer> {
         if (pick > 0.5) body += '    <rating system="ES"><value>+7</value></rating>\n';
       }
       out = push(
-        `  <programme start="${xmltvDateOf(at)}" stop="${xmltvDateOf(stop)}" channel="${prefix}${channel}.es">\n${body}  </programme>\n`,
+        `  <programme start="${xmltvDateOf(at)}" stop="${xmltvDateOf(stop)}" channel="${id}">\n${body}  </programme>\n`,
       );
       if (out) yield out;
       at = stop;
       index += 1;
     }
   }
-  parts.push('</tv>\n');
-  yield Buffer.from(parts.join(''), 'utf8');
+  if (wrap) parts.push('</tv>\n');
+  if (parts.length) yield Buffer.from(parts.join(''), 'utf8');
 }
 
 /** La guía entera en un texto (solo para guías pequeñas). */

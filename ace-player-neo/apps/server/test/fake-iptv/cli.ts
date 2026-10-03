@@ -9,7 +9,8 @@
 
    Opciones: --host, --port (7300), --max-conexiones (1), --retener-ms (0) y
    --grande N (catálogo grande de la pestaña IPTV, docs/iptv.md §16.9: N
-   canales más, con nombres como los de una lista real).
+   canales más, con nombres como los de una lista real) y --guia-completa
+   (Guía TV, §20.9: parrilla sintética para todos los canales).
    Control por HTTP: /__iptv/modo?id=104&modo=down, /__iptv/conexiones,
    /__iptv/peticiones y /__iptv/fallar-primera?veces=1&como=502 (§16.8). */
 
@@ -37,6 +38,8 @@ const port = Number(option('port', '7300'));
 const maxConnections = Number(option('max-conexiones', '1'));
 const retenerPlazaMs = Number(option('retener-ms', '0'));
 const grande = Number(option('grande', '0'));
+/* Guía TV (docs/iptv.md §20.9): parrilla sintética para todos los canales. */
+const guiaCompleta = process.argv.slice(2).includes('--guia-completa');
 
 const print = (line: string): void => {
   process.stdout.write(`${line}\n`);
@@ -49,9 +52,11 @@ try {
     maxConnections,
     retenerPlazaMs,
     ...(grande > 0 ? { grande } : {}),
+    ...(guiaCompleta ? { guiaCompleta } : {}),
   });
   print(`proveedor IPTV falso en ${fake.baseUrl}`);
   if (grande > 0) print(`  Catálogo grande: ${fake.grandes.length} canales más`);
+  if (guiaCompleta) print('  Guía completa: parrilla sintética de ayer a dentro de 3 días');
   print(`  Lista M3U:     ${fake.m3uUrl}`);
   print(`  M3U get.php:   ${fake.getPhpUrl}`);
   print(

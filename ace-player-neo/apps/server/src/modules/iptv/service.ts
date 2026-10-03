@@ -20,7 +20,7 @@
      `iptv.status`.
    - Ninguna URL del proveedor se registra nunca (solo host e id). */
 
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import {
@@ -74,13 +74,11 @@ import {
 import { Catalog, CatalogBuilder, channelIdOf, type CatalogEntry } from './catalog.js';
 import { loadIptvKeys, openJson, sealJson, secretAad } from './crypto.js';
 import { failureDetail, isTransientSaveFailure, toIptvError } from './errors.js';
-import {
-  buildGuideWindow,
-  trimWindow,
-  windowFrom,
-  type GuideWindow,
-  type StoredProgramme,
-} from './guide.js';
+import { trimWindow, windowFrom, type GuideWindow, type StoredProgramme } from './guide.js';
+import { GuideApi, type GuideSourceStatus } from './guide-api.js';
+import { GuideArt } from './guide-art.js';
+import { GuideStore, type GuideMeta, type GuideReader, type GuideWriter } from './guide-db.js';
+import { buildFullGuide, writeShortEpg } from './guide-full.js';
 import { adoptedIptvId, iptvChannelId, isIptvId, m3uKey, xtreamKey } from './ids.js';
 import { guideGroupMatches, mergeIptvMatches } from './layer.js';
 import { parseM3uStream } from './m3u.js';
@@ -284,11 +282,38 @@ export class IptvServiceImpl implements IptvService {
   readonly relay: IptvRelayImpl;
   /** Películas y series (docs/vod.md §4.1). */
   readonly vod: VodService;
+  /** Guía TV completa en disco (docs/iptv.md §20.2): se construye en la misma descarga que la guía de partidos. */
+  private readonly fullGuide: GuideStore;
+  /** La última vez no se pudo guardar la guía completa (disco lleno…). */
+  private fullGuideFailed = false;
+  /** «N canales con programación» de la guía completa, por catálogo y guía. */
+  private fullGuideCount: { readonly key: string; readonly count: number } | null = null;
+  /** Rutas `iptvGuide*` de la Guía TV (docs/iptv.md §20.6). */
+  readonly tvGuide: GuideApi;
 
   constructor(private readonly deps: IptvDeps) {
     const logger = deps.logger.child({ module: 'iptv' });
     this.logger = logger;
     this.files = new IptvFiles(deps.config.paths, () => this.ensureKeys(), logger);
+    this.fullGuide = new GuideStore(
+      deps.config.paths.iptvGuideDbFile,
+      deps.config.paths.iptvDir,
+      logger.child({ part: 'guia' }),
+    );
+    this.tvGuide = new GuideApi({
+      activeCatalog: () => (this.active() ? this.catalog : null),
+      reader: () => this.fullGuide.current(),
+      status: () => this.guideSourceStatus(),
+      favoriteChannels: () => this.guideFavoriteChannels(),
+      qualityOf: (entry) => this.qualityOf(entry),
+      now: () => deps.clock.now(),
+      art: new GuideArt({
+        net: deps.net,
+        clock: deps.clock,
+        logger,
+        policy: () => this.policy(),
+      }),
+    });
     this.relay = createIptvRelay({
       clock: deps.clock,
       logger,
@@ -426,6 +451,8 @@ export class IptvServiceImpl implements IptvService {
     this.catalog = await this.files.loadCatalog(record.id);
     if (this.catalog) this.scheduleBrowse(this.catalog);
     this.guide = this.catalog ? await this.files.loadGuide(record.id) : null;
+    /* La guía completa de este proveedor; una de otro (o ilegible) se borra. */
+    this.fullGuide.open(record.id);
     this.scheduleAll(true);
   }
 
@@ -439,6 +466,7 @@ export class IptvServiceImpl implements IptvService {
     this.probe?.controller.abort(new AppError('iptv_disabled'));
     await this.vod.stop();
     await this.relay.stop();
+    this.fullGuide.close();
   }
 
   private async refreshLan(): Promise<void> {
@@ -490,7 +518,11 @@ export class IptvServiceImpl implements IptvService {
       listAge >= IPTV_REFRESH.listMs ? (atStart ? 5_000 : 0) : IPTV_REFRESH.listMs - listAge;
     this.schedule('list', listDue, () => this.periodicSync());
     if (this.catalog?.guideUrls.length || record.kind === 'xtream') {
-      const guideAge = this.guide ? now - this.guide.builtAt : Number.POSITIVE_INFINITY;
+      /* Sin la guía completa (la primera vez tras la 0.9.0) cuenta como vieja: se descarga ya. */
+      const guideAge =
+        this.guide && this.fullGuide.current()
+          ? now - this.guide.builtAt
+          : Number.POSITIVE_INFINITY;
       const guideDue =
         guideAge >= IPTV_REFRESH.guideMs
           ? atStart
@@ -580,7 +612,10 @@ export class IptvServiceImpl implements IptvService {
     }
     const guideState = record.guide;
     const window = this.guide ? trimWindow(this.guide, clock.now()) : null;
-    const channelsWithGuide = window ? this.channelsWithGuide(window) : 0;
+    /* Con la guía completa (§20), «N canales con programación» son todos los que la tienen. */
+    const full = this.fullGuide.current();
+    const fullCount = full && full.meta.programmes > 0 ? this.fullChannelsWithGuide(full) : 0;
+    const channelsWithGuide = fullCount || (window ? this.channelsWithGuide(window) : 0);
     return {
       status,
       channels: this.catalog?.size ?? 0,
@@ -598,9 +633,14 @@ export class IptvServiceImpl implements IptvService {
             }
           : null,
       guide: {
-        available: Boolean(window && window.programmes > 0),
+        available: Boolean((window && window.programmes > 0) || fullCount > 0),
         channelsWithGuide,
-        updatedAt: this.guide && this.guide.builtAt > 0 ? iso(this.guide.builtAt) : null,
+        updatedAt:
+          this.guide && this.guide.builtAt > 0
+            ? iso(this.guide.builtAt)
+            : full
+              ? iso(full.meta.builtAt)
+              : null,
         failedAt: guideState && !guideState.ok ? guideState.at : null,
       },
       ...this.vodStatus(),
@@ -620,6 +660,54 @@ export class IptvServiceImpl implements IptvService {
       if (this.catalog.groupsByTvgId(channel).length) count += 1;
     }
     return count;
+  }
+
+  /** Canales del catálogo con programación en la guía completa (se cuenta una vez por catálogo y guía). */
+  private fullChannelsWithGuide(reader: GuideReader): number {
+    const catalog = this.catalog;
+    if (!catalog) return 0;
+    const key = `${catalog.providerId}|${catalog.builtAt}|${reader.version}`;
+    if (this.fullGuideCount?.key === key) return this.fullGuideCount.count;
+    let count = 0;
+    for (const tvg of reader.channels().keys()) {
+      if (catalog.groupsByTvgId(tvg).length) count += 1;
+    }
+    this.fullGuideCount = { key, count };
+    return count;
+  }
+
+  /** Lo que la Guía TV necesita saber del estado (docs/iptv.md §20.5). */
+  private guideSourceStatus(): GuideSourceStatus {
+    const record = this.record;
+    const guide = record?.guide ?? null;
+    return {
+      enabled: Boolean(record?.enabled && !this.unreadable && this.secrets),
+      providerName: record?.name ?? '',
+      hasGuideSource: Boolean(record?.kind === 'xtream' || this.catalog?.guideUrls.length),
+      lastGuide: guide ? { ok: guide.ok, at: guide.at, error: guide.error } : null,
+      fullGuideFailed: this.fullGuideFailed,
+    };
+  }
+
+  /**
+   * Los canales de tus favoritos que son de la IPTV, en su orden (docs/iptv.md
+   * §20.5): un id IPTV, su canal; un canal de tu lista, el de la IPTV que es
+   * él (≥ 92, el mismo emparejado que el buscador).
+   */
+  private guideFavoriteChannels(): string[] {
+    const catalog = this.catalog;
+    if (!catalog || !this.active()) return [];
+    const favorites = this.deps.state.get().favorites;
+    if (!favorites.length) return [];
+    const keys = this.ensureKeys();
+    return this.libraryGroups(favorites, {
+      scorer: this.scorer,
+      isIptvId: (id: string) => isIptvId(keys, id),
+      channelOf: (id: string) => {
+        const entry = catalog.get(id);
+        return entry ? channelIdOf(entry) : null;
+      },
+    }).map(({ group }) => group.channel);
   }
 
   private providerView(): IptvProviderView | null {
@@ -835,6 +923,7 @@ export class IptvServiceImpl implements IptvService {
       this.catalog = null;
       this.guide = null;
       this.guideCache.clear();
+      this.clearFullGuide();
       await this.files.removeAll();
       await this.vod.purge();
     }
@@ -1004,6 +1093,7 @@ export class IptvServiceImpl implements IptvService {
       draft.provider = null;
     });
     await this.deps.state.iptv().purge();
+    this.clearFullGuide();
     await this.files.removeAll();
     await this.vod.purge();
     this.secrets = null;
@@ -1020,6 +1110,14 @@ export class IptvServiceImpl implements IptvService {
       this.emitStatus();
     }
     return NO_IPTV;
+  }
+
+  /** Borra la guía completa (otro proveedor o eliminar la IPTV). */
+  private clearFullGuide(): void {
+    this.fullGuide.clear();
+    this.fullGuideFailed = false;
+    this.fullGuideCount = null;
+    this.tvGuide.reset();
   }
 
   /** Aborta la sincronización, la guía y la sonda en curso (no hacen cola). */
@@ -1320,6 +1418,64 @@ export class IptvServiceImpl implements IptvService {
     return out;
   }
 
+  /** `tvg-id` (minúsculas) de TODOS los canales del catálogo, de cualquier país, con su `tvg-shift` (§20.2). */
+  private fullGuideChannels(catalog: Catalog): Map<string, number> {
+    const out = new Map<string, number>();
+    for (const entry of catalog.entries) {
+      const tvg = entry.tvgId.trim().toLowerCase();
+      if (!tvg || out.has(tvg)) continue;
+      out.set(tvg, entry.tvgShift ?? 0);
+    }
+    return out;
+  }
+
+  /** Empieza a escribir la guía completa (null si el disco no deja: la de partidos sigue igual). */
+  private beginFullGuide(
+    providerId: string,
+    builtAt: number,
+    source: 'xmltv' | 'short',
+  ): GuideWriter | null {
+    try {
+      return this.fullGuide.begin({
+        providerId,
+        builtAt,
+        source,
+        logger: this.logger,
+      });
+    } catch (error) {
+      this.fullGuideFailed = true;
+      this.logger.warn({ err: error }, 'Guía TV: no se pudo empezar a guardar la guía completa');
+      return null;
+    }
+  }
+
+  /** Cierra la guía completa recién escrita; null si falló (se deshace) o si está vacía. */
+  private async finishFullGuide(
+    writer: GuideWriter | null,
+    failed: unknown,
+    signal: AbortSignal,
+  ): Promise<GuideMeta | null> {
+    if (!writer) return null;
+    if (failed) {
+      writer.abort();
+      this.fullGuideFailed = true;
+      this.logger.warn({ err: failed }, 'Guía TV: no se pudo guardar la guía completa');
+      return null;
+    }
+    try {
+      const meta = await writer.finish(signal);
+      if (meta.programmes > 0) return meta;
+      rmSync(writer.file, { force: true });
+      return null;
+    } catch (error) {
+      if (!signal.aborted) {
+        this.fullGuideFailed = true;
+        this.logger.warn({ err: error }, 'Guía TV: no se pudo cerrar la guía completa');
+      }
+      return null;
+    }
+  }
+
   private async doGuide(signal: AbortSignal): Promise<void> {
     const record = this.record;
     const catalog = this.catalog;
@@ -1328,10 +1484,18 @@ export class IptvServiceImpl implements IptvService {
     const { clock } = this.deps;
     const providerId = record.id;
     const channels = this.guideChannels(catalog);
+    const allChannels = this.fullGuideChannels(catalog);
+    /* El sello de la guía completa nunca repite el de la que hay (dos descargas en el mismo ms). */
+    const previous = this.fullGuide.current()?.meta.builtAt ?? 0;
+    const builtAt = Math.max(clock.now(), previous + 1);
+    /* Una URL de imagen con algo de las credenciales no se guarda (§20.2). */
+    const acceptImage = (url: string): boolean => this.redact(url) === url;
     let window: GuideWindow | null = null;
+    let full: GuideMeta | null = null;
     let failure: string | null = null;
     for (const url of catalog.guideUrls) {
       if (signal.aborted) return;
+      let writer: GuideWriter | null = null;
       try {
         const opened = await this.deps.net.openStream(url, {
           maxBytes: IPTV_GUIDE_LIMITS.maxBytes,
@@ -1342,13 +1506,26 @@ export class IptvServiceImpl implements IptvService {
           iptv: { ...this.policy(), maxDecompressedBytes: IPTV_GUIDE_LIMITS.maxDecompressedBytes },
           signal,
         });
-        const built = await buildGuideWindow(opened.body, { now: clock.now(), channels, signal });
-        if (built.programmes > 0) {
-          window = built;
+        writer = this.beginFullGuide(providerId, builtAt, 'xmltv');
+        const built = await buildFullGuide(opened.body, {
+          now: clock.now(),
+          eventChannels: channels,
+          allChannels,
+          writer,
+          acceptImage,
+          signal,
+        });
+        const meta = await this.finishFullGuide(writer, built.writerError, signal);
+        writer = null;
+        if (signal.aborted) return;
+        if (built.window.programmes > 0 || meta) {
+          window = built.window;
+          full = meta;
           break;
         }
         failure = 'iptv_empty';
       } catch (error) {
+        writer?.abort();
         if (signal.aborted) return;
         failure = toIptvError(error, 'guide').code;
       }
@@ -1358,31 +1535,69 @@ export class IptvServiceImpl implements IptvService {
     /* Respaldo en Xtream: get_short_epg de 40 canales deportivos como mucho. */
     if (!window && secrets.kind === 'xtream' && !signal.aborted) {
       window = await this.shortEpgFallback(secrets, catalog, signal).catch(() => null);
+      if (window && window.programmes > 0 && !signal.aborted) {
+        /* También a la Guía TV, que enseña esos canales (`partial`). */
+        const writer = this.beginFullGuide(providerId, builtAt, 'short');
+        let failed: unknown = null;
+        if (writer) {
+          try {
+            writeShortEpg(writer, [...window.byChannel.values()].flat());
+          } catch (error) {
+            failed = error;
+          }
+        }
+        full = await this.finishFullGuide(writer, failed, signal);
+      }
     }
     if (signal.aborted) return;
     const still = this.record;
-    if (!still || still.id !== providerId) return;
+    if (!still || still.id !== providerId) {
+      if (full) rmSync(this.fullGuide.nextFile, { force: true });
+      return;
+    }
     const nowIso = clock.date().toISOString();
-    if (window && window.programmes > 0) {
+    if (window && (window.programmes > 0 || full)) {
       this.guide = window;
       this.guideCache.clear();
       this.guideFailures = 0;
+      if (full) {
+        this.fullGuide.install(providerId);
+        this.fullGuideFailed = false;
+        this.fullGuideCount = null;
+        this.tvGuide.reset();
+      }
       await this.files.saveGuide(window, providerId).catch((error: unknown) => {
         this.logger.warn({ err: error }, 'no se pudo guardar la guía IPTV');
       });
-      const withGuide = this.channelsWithGuide(window);
+      const reader = this.fullGuide.current();
+      const withGuide =
+        reader && reader.meta.programmes > 0
+          ? this.fullChannelsWithGuide(reader)
+          : this.channelsWithGuide(window);
+      const programmes = full?.programmes ?? window.programmes;
       await this.persist((draft) => {
         if (!draft.provider || draft.provider.id !== providerId) return;
         draft.provider.guide = {
           at: nowIso,
           ok: true,
           channelsWithGuide: withGuide,
-          programmes: window.programmes,
+          programmes,
           error: null,
         };
       });
       this.logger.info(
-        { host: still.host, programmes: window.programmes, withGuide },
+        {
+          host: still.host,
+          programmes: window.programmes,
+          withGuide,
+          ...(full
+            ? {
+                fullProgrammes: full.programmes,
+                fullChannels: full.channels,
+                truncated: full.truncated,
+              }
+            : {}),
+        },
         'IPTV: guía actualizada',
       );
       this.emitStatus();
@@ -1390,13 +1605,19 @@ export class IptvServiceImpl implements IptvService {
       return;
     }
     this.guideFailures += 1;
+    const kept = this.fullGuide.current();
+    const keptFull = kept && kept.meta.programmes > 0 ? kept : null;
     await this.persist((draft) => {
       if (!draft.provider || draft.provider.id !== providerId) return;
       draft.provider.guide = {
         at: nowIso,
         ok: false,
-        channelsWithGuide: this.guide ? this.channelsWithGuide(this.guide) : 0,
-        programmes: this.guide?.programmes ?? 0,
+        channelsWithGuide: keptFull
+          ? this.fullChannelsWithGuide(keptFull)
+          : this.guide
+            ? this.channelsWithGuide(this.guide)
+            : 0,
+        programmes: keptFull?.meta.programmes ?? this.guide?.programmes ?? 0,
         error: failure ?? 'iptv_empty',
       };
     });

@@ -31,6 +31,7 @@ import type {
 import type { CoreDeps, Lifecycle } from '../../core/module.js';
 import type { NetClient } from '../net/index.js';
 import type { StateService } from '../state/index.js';
+import type { GuideApi } from './guide-api.js';
 import type { ChannelScorer } from './match.js';
 import type { VodService } from './vod/vod-service.js';
 
@@ -280,6 +281,13 @@ export interface IptvService extends Lifecycle {
    * responden `vod_unavailable`.
    */
   readonly vod?: VodApi;
+
+  // --- Guía TV (docs/iptv.md §20) ---
+  /**
+   * Las 5 rutas `iptvGuide*` (guide-api.ts). Opcional, como `vod`: sin ella
+   * (dobles de los tests de otros módulos) responden `guide_unavailable`.
+   */
+  readonly tvGuide?: GuideApi;
 }
 
 /** Lo que las rutas y los demás módulos ven de Películas y series (docs/vod.md §11.1). */

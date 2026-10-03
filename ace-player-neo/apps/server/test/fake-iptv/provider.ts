@@ -16,7 +16,8 @@
    - `/xmltv.php` y `/guia.xml.gz`: guía con el partido de la demo en
      directo en «ES: M+ LaLiga TV 2 FHD», el mismo en «ES: M+ Liga de
      Campeones FHD» (no debe confirmarse), una repetición «(R)», un resumen y
-     una previa;
+     una previa; con `guiaCompleta` (Guía TV, docs/iptv.md §20.9), detrás, una
+     parrilla sintética (`guia.ts`) de los demás canales, en streaming;
    - `/live/<u>/<p>/<id>.ts` (TS continuo), `/<u>/<p>/<id>` (lo mismo) y
      `/live/<u>/<p>/<id>.m3u8` (HLS de segmentos TS en ventana).
 
@@ -58,9 +59,11 @@
 
 import http from 'node:http';
 import type { AddressInfo, Socket } from 'node:net';
-import { gzipSync } from 'node:zlib';
+import { Readable } from 'node:stream';
+import { createGzip, gzipSync } from 'node:zlib';
 import { colorFromSeed, generateSegment, TsMuxer, TS_PACKET_SIZE } from '../fake-engine/mpegts.js';
 import { bigCatalog, type BigChannel } from './catalogo-grande.js';
+import { fakeGuideChunks } from './guia.js';
 import { createFakeVod, FAKE_VOD_MODES, type FakeVodMode } from './vod.js';
 
 export const FAKE_IPTV_USER = 'usuario-e2e';
@@ -219,6 +222,12 @@ export interface FakeIptvOptions {
   readonly grande?: number;
   /** Películas sintéticas que se suman al catálogo VOD pequeño (docs/vod.md §15.3). */
   readonly vod?: number;
+  /**
+   * Guía TV (docs/iptv.md §20.9): además de los programas de siempre, una
+   * parrilla sintética de ayer a dentro de 3 días para todos los demás
+   * canales (también los del catálogo grande), servida en streaming.
+   */
+  readonly guiaCompleta?: boolean;
 }
 
 export interface FakeIptv {
@@ -687,6 +696,31 @@ export async function createFakeIptv(options: FakeIptvOptions = {}): Promise<Fak
       if (path === '/guia.xml.gz' || path === '/xmltv.php') {
         if (path === '/xmltv.php' && !authed(url)) {
           res.writeHead(401).end();
+          return;
+        }
+        if (options.guiaCompleta) {
+          /* La guía de siempre y, detrás, la sintética de los demás canales (sin tenerla entera en memoria). */
+          const base = fakeGuideXml(matchStart).replace(/<\/tv>\s*$/, '');
+          const covered = new Set(
+            [...base.matchAll(/<programme [^>]*channel="([^"]+)"/g)].map((m) => m[1]),
+          );
+          const ids = [
+            ...new Set([
+              ...FAKE_IPTV_CHANNELS.map((c) => c.epg),
+              ...(big?.channels ?? []).map((c) => c.epg),
+            ]),
+          ].filter((id) => !covered.has(id));
+          const day = 24 * 3_600_000;
+          const from = Math.floor((options.now?.() ?? Date.now()) / day) * day - day;
+          const chunks = (function* () {
+            yield Buffer.from(base);
+            yield* fakeGuideChunks({ channels: 0, ids, from, days: 4, wrap: false, logoEvery: 0 });
+            yield Buffer.from('</tv>\n');
+          })();
+          res.writeHead(200, { 'content-type': 'application/xml' });
+          const stream = Readable.from(chunks);
+          if (path.endsWith('.gz')) stream.pipe(createGzip()).pipe(res);
+          else stream.pipe(res);
           return;
         }
         const xml = Buffer.from(fakeGuideXml(matchStart));

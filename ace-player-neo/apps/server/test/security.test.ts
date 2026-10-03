@@ -45,6 +45,8 @@ const PARAM_VALUES: Record<string, string> = {
   competitionId: '4335',
   /* Cartel de Películas y series (docs/vod.md §8). */
   art: 'poster',
+  /* Logo de un canal de la Guía TV (docs/iptv.md §20.6). */
+  ref: 'c1',
 };
 
 function concretePath(route: V1RouteDefinition): string {
@@ -182,7 +184,7 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
     expect(failures).toEqual([]);
   });
 
-  it('con token válido, las rutas solo web (healthLive, copia de seguridad, Ajustes → IPTV, el buscador IPTV, la pestaña IPTV y Películas y series) dan 403 origin_forbidden', async () => {
+  it('con token válido, las rutas solo web (healthLive, copia de seguridad, Ajustes → IPTV, el buscador IPTV, la pestaña IPTV, la Guía TV y Películas y series) dan 403 origin_forbidden', async () => {
     const s = await setup();
     const failures: string[] = [];
     const webOnly = V1.filter(([, route]) => route.access === 'web');
@@ -199,6 +201,11 @@ describe('seguridad · matriz de acceso native (tabla de rutas)', () => {
       'iptvDelete',
       'iptvChannels',
       'iptvBrowse',
+      'iptvGuide',
+      'iptvGuideProgrammes',
+      'iptvGuideProgramme',
+      'iptvGuideNow',
+      'iptvGuideArt',
       'vodHome',
       'vodBrowse',
       'vodTitle',

@@ -7,7 +7,12 @@
    - solo programas de canales del catálogo que pasan el filtro de país;
    - solo lo que parece un evento: texto con un separador de enfrentamiento
      entre dos grupos de palabras, o categoría deportiva;
-   - 60 000 programas como mucho (los más cercanos). */
+   - 60 000 programas como mucho (los más cercanos).
+
+   La guía COMPLETA de la Guía TV (todos los canales y programas) no vive
+   aquí: sale de la misma descarga (guide-full.ts) a `guia.db` (guide-db.ts,
+   docs/iptv.md §20). Esta ventana sigue siendo la que usan guide-match.ts y
+   la agenda. */
 
 import type { Readable } from 'node:stream';
 import { IPTV_GUIDE_LIMITS } from '@ace/shared';

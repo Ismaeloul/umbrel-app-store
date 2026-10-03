@@ -16,6 +16,7 @@
    - vodHome, vodBrowse, vodTitle, vodArt y vodProgress: Películas y series
      (docs/vod.md §11.1), en `vod/vod-service.ts`. `vodArt` manda la imagen
      (o el 304) por su cuenta, con `nosniff` y `default-src 'none'`.
+   - iptvGuide*: las 5 de la Guía TV (docs/iptv.md §20.6), en guide-routes.ts.
    Ni el cuerpo ni la respuesta se registran: el cuerpo de iptvSave lleva
    credenciales (docs/iptv.md §2.4) y la consulta del buscador, de la
    pestaña y de vodBrowse es lo que escribe Isma. */
@@ -26,6 +27,7 @@ import { AppError, isAppError } from '../../core/errors.js';
 import type { RequestContext } from '../../core/module.js';
 import type { LegacyRouter, V1Router } from '../../core/router.js';
 import type { Services } from '../../services.js';
+import { GUIDE_ROUTE_IDS, registerGuideRoutes } from './guide-routes.js';
 import type { VodApi } from './types.js';
 import type { ArtReply } from './vod/art.js';
 
@@ -46,11 +48,14 @@ export const V1_ROUTE_IDS: readonly string[] = [
   'vodTitle',
   'vodArt',
   'vodProgress',
+  /* Guía TV (docs/iptv.md §20.6): guide-routes.ts. */
+  ...GUIDE_ROUTE_IDS,
 ];
 
 export function registerLegacyRoutes(_router: LegacyRouter, _services: Services): void {}
 
 export function registerV1Routes(router: V1Router, services: Services): void {
+  registerGuideRoutes(router, services);
   router.handle('iptvGet', () => services.iptv.view());
   router.handle('iptvSave', (input, ctx) => services.iptv.save(input.body, ctx.signal));
   router.handle('iptvUpdate', (input) => services.iptv.update(input.body));
@@ -82,7 +87,8 @@ export function registerV1Routes(router: V1Router, services: Services): void {
       );
     } catch (error) {
       /* La cola de carteles llena (§8): 503 con `Retry-After`. */
-      if (isAppError(error) && error.code === 'vod_unavailable') ctx.reply.header('retry-after', '2');
+      if (isAppError(error) && error.code === 'vod_unavailable')
+        ctx.reply.header('retry-after', '2');
       throw error;
     }
     await sendArt(ctx.reply, reply);
