@@ -252,6 +252,24 @@ describe('la IPTV de ejemplo de la demo (§16.10)', () => {
     expect(none.facets?.country).toContainEqual({ value: 'FR', count: 0, selected: true });
   });
 
+  it('texto con el orden del servidor (docs/buscador.md): «la 1» da La 1 primero, nunca La 10 ni LALIGA+ PPV 1 delante', () => {
+    const titles = (q: string) => demoIptvBrowse({ q, limit: 60 }).channels.map((c) => c.title);
+    const la1 = titles('la 1');
+    expect(la1[0]).toBe('La 1');
+    expect(la1.slice(1, 3).sort()).toEqual(['La 1 Canarias', 'La 1 Catalunya']);
+    expect(la1).not.toContain('La 10');
+    expect(la1.indexOf('LALIGA+ PPV 1')).toBeGreaterThan(2);
+    expect(titles('la uno')[0]).toBe('La 1');
+    expect(titles('m+ laliga').slice(0, 3)).toEqual([
+      'M+ LaLiga TV',
+      'M+ LaLiga TV 2',
+      'M+ LaLiga TV 3',
+    ]);
+    expect(titles('dazn').slice(0, 4)).toEqual(['DAZN 1', 'DAZN 2', 'DAZN 3', 'DAZN 4']);
+    /* «la 10»: La 10 y, flojo y de fuera, LATINO SPORTS 10; nunca La 1. */
+    expect(titles('la 10')).toEqual(['La 10', 'LATINO SPORTS 10']);
+  });
+
   it('adultos es un tipo más y excluyente; «UK: DAZN 1» es otra fila que «ES: DAZN 1»', () => {
     const adults = demoIptvBrowse({ type: 'adultos' });
     expect(adults.total).toBe(5);

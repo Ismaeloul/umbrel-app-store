@@ -5,14 +5,19 @@
    ADULTS»…), para que la pestaña se pueda usar y probar sin servidor.
 
    Hace lo mismo que el servidor, a lo sencillo (812 canales): categoría,
-   texto (cada palabra, principio de alguna palabra del nombre), filtros (O
+   texto (desde la 0.9.0, con las mismas palabras, niveles y orden que el
+   servidor: `rankByName` de @ace/shared, docs/buscador.md), filtros (O
    dentro de uno, Y entre ellos), facetas disyuntivas, recuentos por
-   categoría y páginas con cursor. Los canales que también están en el
+   categoría y páginas con cursor. Los nombres son los que enseñaría el
+   servidor (limpios: las variantes 4K de un canal son una calidad más de su
+   fila) y están los que confunden a un buscador sencillo: «La 10», «La 1
+   Catalunya», «LALIGA+ PPV 1», «LA LIGA 1», «LALIGA TV» inglés… Los canales que también están en el
    buscador de la demo («DAZN 1», «M+ LaLiga TV»…) llevan su mismo id, así
    que al tocarlos suenan como allí. Solo se descarga en demo. */
 
 import {
   IPTV_BROWSE,
+  rankByName,
   type IptvBrowseChannel,
   type IptvBrowseQuery,
   type IptvBrowseResponse,
@@ -33,7 +38,6 @@ export const DEMO_BROWSE_TOTAL = 812;
 interface DemoRow {
   id: string;
   title: string;
-  words: string[];
   category: string;
   country: string | null;
   language: string[];
@@ -58,6 +62,7 @@ const HD: IptvQuality[] = ['hd'];
 const FHD: IptvQuality[] = ['fhd'];
 const SD: IptvQuality[] = ['sd'];
 const UHD: IptvQuality[] = ['uhd', 'fhd'];
+const UHD_FHD_HD: IptvQuality[] = ['uhd', 'fhd', 'hd'];
 const numbered = (name: string, n: number, sport?: string[], q?: IptvQuality[]) =>
   Array.from(
     { length: n },
@@ -96,7 +101,7 @@ const SEEDS: Seed[] = [
       ['DAZN 4', [], HD],
       ['DAZN F1', ['f1'], FHD_HD],
       ...numbered('DAZN ACB', 7, ['baloncesto'], HD),
-      ['DAZN LaLiga', ['futbol'], FHD_HD],
+      ['DAZN LaLiga', ['futbol'], UHD_FHD_HD],
       ['DAZN LaLiga 2', ['futbol'], HD],
       ['DAZN MotoGP', ['motos'], FHD],
     ],
@@ -110,7 +115,10 @@ const SEEDS: Seed[] = [
       ...numbered('LALIGA+ PPV', 9, ['futbol'], HD),
       ['LA LIGA TV BAR', ['futbol'], FHD],
       ['LaLiga TV Hypermotion', ['futbol'], HD],
-      ['M+ LaLiga TV', ['futbol'], FHD_HD],
+      ['LaLiga TV Hypermotion 2', ['futbol'], HD],
+      ['M+ LaLiga TV', ['futbol'], UHD_FHD_HD],
+      ['M+ LaLiga TV 2', ['futbol'], FHD_HD],
+      ['M+ LaLiga TV 3', ['futbol'], HD],
     ],
   },
   {
@@ -125,6 +133,7 @@ const SEEDS: Seed[] = [
       ['M+ Liga de Campeones', ['futbol'], FHD_HD, ['deportes']],
       ['M+ Liga de Campeones 2', ['futbol'], HD, ['deportes']],
       ['M+ Vamos', [], HD, ['deportes']],
+      ['M+ #0', [], FHD, ['entretenimiento']],
       ['M+ Golf', ['golf'], HD, ['deportes']],
       ['M+ Estrenos', [], FHD, ['cine']],
       ...numbered('M+ Deportes', 3, [], HD).map(
@@ -139,7 +148,12 @@ const SEEDS: Seed[] = [
     type: ['generalistas'],
     channels: [
       ['La 1', [], FHD_HD],
+      ['La 1 Catalunya', [], HD],
+      ['La 1 Canarias', [], HD],
       ['La 2', [], HD],
+      ['La 2 Catalunya', [], SD],
+      ['La 10', [], SD],
+      ['TVE Internacional', [], HD],
       ['ANTENA 3', [], FHD_HD],
       ['ANTENA 3 INTERNACIONAL', [], HD],
       ['DIRECTO ANTENA 3 RAW', [], []],
@@ -206,7 +220,8 @@ const SEEDS: Seed[] = [
     language: ['en'],
     type: ['deportes'],
     channels: [
-      ['SKY SPORTS F1', ['f1'], FHD],
+      ['SKY SPORTS F1', ['f1'], UHD],
+      ['LALIGA TV', ['futbol'], HD],
       ['SKY SPORTS PREMIER LEAGUE', ['futbol'], FHD_HD],
       ['SKY SPORTS MAIN EVENT', [], FHD],
       ...numbered('TNT SPORTS', 4, [], FHD_HD),
@@ -297,10 +312,11 @@ const SEEDS: Seed[] = [
     country: null,
     language: [],
     type: ['deportes'],
+    /* Canales que solo están en 4K (los demás 4K son una calidad más de su fila, como en el servidor). */
     channels: [
-      ['DAZN LALIGA UHD', ['futbol'], UHD],
-      ['M+ LaLiga 4K', ['futbol'], UHD],
-      ['SKY SPORTS F1 UHD', ['f1'], UHD],
+      ['Fashion TV', [], UHD, ['entretenimiento']],
+      ['Travelxp', [], UHD, ['documentales']],
+      ['Love Nature', [], UHD, ['documentales']],
     ],
   },
   {
@@ -354,9 +370,6 @@ function build() {
     rows.push({
       id,
       title,
-      words: foldText(title)
-        .split(/[^a-z0-9+]+/)
-        .filter(Boolean),
       category,
       country: seed.country,
       language: seed.language,
@@ -406,12 +419,6 @@ function valuesOf(row: DemoRow, facet: IptvFacetName): string[] {
   }
 }
 
-function textMatches(row: DemoRow, words: string[]): boolean {
-  return words.every((word) =>
-    row.words.some((w) => w.startsWith(word) || (word.length >= 3 && w.includes(word))),
-  );
-}
-
 const QUALITY_FIXED = ['uhd', 'fhd', 'hd', 'sd', 'none'];
 
 function encodeCursor(offset: number): string {
@@ -447,12 +454,18 @@ export function demoIptvBrowse(query: Partial<IptvBrowseQuery>): IptvBrowseRespo
   const cursor = query.cursor ? decodeCursor(query.cursor) : null;
   const stale = cursor !== null && cursor.catalog !== CATALOG;
   const firstPage = !cursor || stale;
-  const base = rows.filter(
-    (row) =>
-      categoryKnown &&
-      (categoryId === null || row.category === categoryId) &&
-      (words.length === 0 || textMatches(row, words)),
+  const inCategory = rows.filter(
+    (row) => categoryKnown && (categoryId === null || row.category === categoryId),
   );
+  /* Con texto, lo que casa y en el orden del servidor (país de casa primero, la mejor calidad al empatar). */
+  const base =
+    words.length === 0
+      ? inCategory
+      : rankByName(inCategory, q, (row) => ({
+          name: row.title,
+          country: row.country,
+          quality: row.quality[0] ?? null,
+        }));
   const passes = (row: DemoRow, except: IptvFacetName | null) =>
     FACET_NAMES.every(
       (facet) =>
@@ -461,12 +474,6 @@ export function demoIptvBrowse(query: Partial<IptvBrowseQuery>): IptvBrowseRespo
         valuesOf(row, facet).some((v) => selected[facet].includes(v)),
     );
   const result = base.filter((row) => passes(row, null));
-  if (words.length > 0) {
-    const exact = (row: DemoRow) => row.words.join(' ') === words.join(' ');
-    const starts = (row: DemoRow) => row.words[0]?.startsWith(words[0] ?? '') ?? false;
-    const rank = (row: DemoRow) => (exact(row) ? 0 : starts(row) ? 1 : 2);
-    result.sort((a, b) => rank(a) - rank(b));
-  }
   const offset = firstPage ? 0 : (cursor?.offset ?? 0);
   const page = limit === 0 ? [] : result.slice(offset, offset + limit);
   const next = offset + page.length;

@@ -185,6 +185,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Lo que casa con lo escrito (0.9.0, docs/buscador.md; lib/name-highlight.ts): un rotulador del acento detrás
+   de las letras y subrayado, sin cambiar la letra ni su color (contraste intacto en los dos temas). */
+::highlight(canal-coincide) {
+  background-color: var(--accent-wash);
+  text-decoration: underline 2px var(--accent-edge);
+}
 /* De dónde se puede ver (docs/iptv.md §19): «IPTV» y «AceStream», en la meta, enteras y sin encoger. */
 .ch__tags .ch__src {
   --cap-ink: var(--text);
