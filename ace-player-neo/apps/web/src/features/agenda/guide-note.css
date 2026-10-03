@@ -19,8 +19,7 @@
   color: var(--accent-ink);
 }
 
-/* Dos líneas como mucho (en la tarjeta del móvil, 240 px, no cabe en una);
-   lo que sobre, con «…». */
+/* Dos líneas como mucho (en la tarjeta del móvil, 240 px, no cabe en una). */
 .guide-note__main {
   display: -webkit-box;
   min-width: 0;
@@ -30,21 +29,41 @@
   line-clamp: 2;
 }
 
+/* Canal, hora y la hora de antes, de una pieza: si no caben detrás del
+   rótulo, pasan juntos a la línea de abajo, y si tampoco caben ahí el canal
+   se recorta con «…». La hora no se pierde nunca. */
 .guide-note__where {
+  display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
+  vertical-align: top;
   white-space: nowrap;
 }
 
 .guide-note__channel {
+  min-width: 0;
+  overflow: hidden;
   color: var(--text);
   font-weight: 680;
+  text-overflow: ellipsis;
 }
 
 .guide-note__sep {
+  flex: none;
+  padding-inline: 0.3em;
   color: var(--text-3);
 }
 
 .guide-note__time {
+  flex: none;
   font-weight: 680;
+  font-stretch: var(--w-tight);
+}
+
+/* «· antes 21:00»: la hora que decía la agenda, apagada. */
+.guide-note__before {
+  flex: none;
+  color: var(--text-3);
   font-stretch: var(--w-tight);
 }
 
@@ -57,9 +76,6 @@
 .guide-note--detail {
   flex-wrap: wrap;
   font-size: var(--fs-13);
-}
-
-.guide-note--detail {
   line-height: 18px;
 }
 

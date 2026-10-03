@@ -14,37 +14,65 @@ const confirmed: FootballGuideInfo = { channel: 'M+ LaLiga TV 2', time: '21:00',
 describe('GuideNote', () => {
   it('textos: confirmado, hora movida y partido añadido', () => {
     expect(guideNoteText(confirmed)).toEqual({
+      kind: 'confirmed',
       lead: 'Confirmado en tu guía',
       channel: 'M+ LaLiga TV 2',
       time: '21:00',
+      before: '',
       extra: null,
     });
     expect(guideNoteSentence(confirmed)).toBe('Confirmado en tu guía: M+ LaLiga TV 2 · 21:00');
-    expect(guideNoteText({ ...confirmed, time: '21:15', agendaTime: '18:30' }).extra).toBe(
-      'Tu guía lo pone a las 21:15; la agenda decía 18:30.',
-    );
-    expect(guideNoteText({ ...confirmed, added: true }).extra).toBe(
-      'No salía en la agenda: lo añade tu guía.',
-    );
+    expect(guideNoteText({ ...confirmed, time: '21:15', agendaTime: '18:30' })).toMatchObject({
+      kind: 'moved',
+      lead: 'Hora de tu guía',
+      before: '18:30',
+      extra: 'Tu guía lo pone a las 21:15; la agenda decía 18:30.',
+    });
+    /* Un partido que añade la guía no está «confirmado»: lo añade ella. */
+    expect(guideNoteText({ ...confirmed, added: true })).toMatchObject({
+      kind: 'added',
+      lead: 'Añadido por tu guía',
+      before: '',
+      extra: 'No salía en la agenda: lo añade tu guía.',
+    });
     expect(guideNoteSentence({ ...confirmed, time: 'Por confirmar' })).toBe(
       'Confirmado en tu guía: M+ LaLiga TV 2',
     );
   });
 
-  it('en la tarjeta: una línea con el canal y la hora; lo demás en el title', () => {
+  it('en la tarjeta: la hora movida se VE («antes 18:30»), también sin ratón', () => {
     render(<GuideNote guide={{ ...confirmed, time: '21:15', agendaTime: '18:30' }} />);
-    const note = screen.getByText(/Confirmado en tu guía/).closest('p');
-    expect(note).toHaveTextContent('Confirmado en tu guía: M+ LaLiga TV 2 · , a las 21:15');
+    const note = screen.getByText(/Hora de tu guía/).closest('p');
+    expect(note).toHaveTextContent(
+      'Hora de tu guía: M+ LaLiga TV 2·, a las 21:15·; la agenda decía 18:30antes 18:30',
+    );
+    expect(screen.getByText('antes 18:30')).toBeVisible();
     expect(note).toHaveAttribute(
       'title',
-      'Confirmado en tu guía: M+ LaLiga TV 2 · 21:15. Tu guía lo pone a las 21:15; la agenda decía 18:30.',
+      'Hora de tu guía: M+ LaLiga TV 2 · 21:15. Tu guía lo pone a las 21:15; la agenda decía 18:30.',
     );
-    expect(screen.queryByText(/la agenda decía/)).toBeNull();
+    /* La frase larga solo va en el partido. */
+    expect(screen.queryByText(/Tu guía lo pone/)).toBeNull();
   });
 
-  it('en el partido: con la nota debajo', () => {
-    render(<GuideNote guide={{ ...confirmed, added: true }} variant="detail" />);
+  it('en la tarjeta: el partido añadido lo dice («Añadido por tu guía»), con su icono', () => {
+    render(<GuideNote guide={{ ...confirmed, added: true }} />);
+    const note = screen.getByText(/Añadido por tu guía/).closest('p');
+    expect(note).toHaveClass('guide-note--added');
+    expect(note).not.toHaveTextContent(/Confirmado/);
+  });
+
+  it('en el partido: con la nota debajo (y sin el «antes» de la tarjeta)', () => {
+    const { unmount } = render(
+      <GuideNote guide={{ ...confirmed, added: true }} variant="detail" />,
+    );
     expect(screen.getByText('No salía en la agenda: lo añade tu guía.')).toBeInTheDocument();
+    unmount();
+    render(
+      <GuideNote guide={{ ...confirmed, time: '21:15', agendaTime: '18:30' }} variant="detail" />,
+    );
+    expect(screen.getByText('Tu guía lo pone a las 21:15; la agenda decía 18:30.')).toBeVisible();
+    expect(screen.queryByText('antes 18:30')).toBeNull();
   });
 
   it('sin guía (sin IPTV, en pausa o sin datos del partido): nada', () => {
@@ -98,7 +126,7 @@ describe('dónde sale', () => {
         today={madridClock(NOW).date}
       />,
     );
-    expect(screen.getByText(/Confirmado en tu guía/)).toBeInTheDocument();
+    expect(screen.getByText(/Hora de tu guía/)).toBeInTheDocument();
     expect(
       screen.getByText('Tu guía lo pone a las 21:00; la agenda decía 20:45.'),
     ).toBeInTheDocument();
