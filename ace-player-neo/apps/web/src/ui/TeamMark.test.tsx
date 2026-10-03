@@ -72,6 +72,29 @@ describe('TeamMark', () => {
     expect(container.querySelector('.team')).toHaveAttribute('data-lit', 'true');
   });
 
+  it('`plate` por debajo de 40 px: placa pequeña con siglas sin escudo; con escudo, el escudo', () => {
+    const { container, rerender } = render(
+      <TeamMark name="Girona" short="GIR" size={18} plate lit />,
+    );
+    const mark = container.querySelector('.team') as HTMLElement;
+    expect(mark).toHaveClass('team--tag');
+    expect(container.querySelector('.team__plate')).toHaveTextContent('GIR');
+    // Con escudo de imagen: el círculo de siempre con la imagen, sin placa.
+    rerender(
+      <TeamMark name="Girona" short="GIR" size={18} plate crest="/api/v1/football/teams/9/crest" />,
+    );
+    expect(container.querySelector('.team')).not.toHaveClass('team--tag');
+    expect(container.querySelector('.team__plate')).toBeNull();
+    // Si el escudo falla, vuelve la placa pequeña.
+    fireEvent.error(container.querySelector('img') as HTMLImageElement);
+    expect(container.querySelector('.team')).toHaveClass('team--tag');
+    expect(container.querySelector('.team__plate')).toHaveTextContent('GIR');
+    // Sin `plate`, a 18 px sigue siendo el círculo liso.
+    rerender(<TeamMark name="Girona" short="GIR" size={18} />);
+    expect(container.querySelector('.team')).not.toHaveClass('team--tag');
+    expect(container.querySelector('.team__plate')).toBeNull();
+  });
+
   it('sin datos: un tono sacado del nombre', () => {
     const { container } = render(<TeamMark name="Equipo sin datos" />);
     const mark = container.querySelector('.team') as HTMLElement;

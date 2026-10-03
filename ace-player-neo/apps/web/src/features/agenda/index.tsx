@@ -9,20 +9,25 @@
    «Todos», la tarjeta de primer uso y, por competición, una FILA HORIZONTAL
    de tarjetas versus (scroll-snap). Tocar una tarjeta abre el centro de
    partido (con los escudos viajando hasta allí: View Transition). Deslizar la
-   lista a los lados cambia de día; si habías bajado, la página vuelve a la
-   tira para que se vea qué día es.
+   lista a los lados cambia de día (day-swipe.ts: también sobre las filas
+   cuando no tienen más que enseñar hacia ese lado); si habías bajado, la
+   página vuelve a la tira para que se vea qué día es.
 
-   Escritorio (≥ 1024): las filas a la izquierda y, a la derecha, el panel del
-   partido ELEGIDO (tarjeta grande, señal, dónde se emite, acción) y «Luego»;
-   desde 1280, arriba del panel, la tira de directos (B1). Un clic en una
-   tarjeta la lleva al panel; un segundo clic, doble clic o Intro la abre.
-   Mientras el elegido sea el del héroe, el panel no se repite: el lateral
-   deja el sitio a la tira de directos y a «Luego».
+   Escritorio (≥ 1024, 0.9.0): SIN héroe; toda la página es el calendario
+   (tira de días arriba y las filas a la izquierda) y, a la derecha, el panel
+   del partido ELEGIDO (de entrada, el destacado: tarjeta grande, señal,
+   dónde se emite, acción) y «Luego»; desde 1280, arriba del panel, la tira
+   «En directo» con marcador y minuto (B1). Un clic en una tarjeta o en un
+   directo la lleva al panel; un segundo clic, doble clic o Intro la abre.
+   Los partidos de TUS EQUIPOS (solo equipos, no ligas) llevan un aura
+   verde en la lista y en «Luego» (agenda.css › «Tu equipo»).
 
-   Marcadores: en la agenda van SIEMPRE tapados (corrección 1; DESIGN.md: «el
-   marcador vive oculto tras un toque en la cápsula "Marcador", nunca en la
-   imagen»). Cada partido con marcador lleva su cápsula «Marcador», que lo
+   Marcadores: en las tarjetas van SIEMPRE tapados (corrección 1; DESIGN.md:
+   «el marcador vive oculto tras un toque en la cápsula "Marcador", nunca en
+   la imagen»). Cada partido con marcador lleva su cápsula «Marcador», que lo
    destapa y lo vuelve a tapar (score-reveal.ts); el menú contextual también.
+   La tira «En directo» sí lo enseña junto al minuto (Isma, 0.9.0), salvo el
+   del partido que estás viendo (regla 29).
 
    §5.1: sin canales anunciados sale «El canal todavía no está anunciado»; con
    canales se abre el centro de partido, que es quien resuelve el canal
@@ -44,7 +49,6 @@ import { partidoTransitionName } from '../../app/transitions.ts';
 import { preloadView } from '../../app/views.tsx';
 import { ViewHeader } from '../../app/ViewHeader.tsx';
 import { cx } from '../../lib/cx.ts';
-import { useSwipe } from '../../lib/gestures.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { notify } from '../../notices/index.ts';
 import {
@@ -68,6 +72,7 @@ import {
 import { usePreferences, useSavePreferences } from '../preferences/usePreferences.ts';
 import { AgendaRows, type RowSlot } from './AgendaList.tsx';
 import { useLibraryLookup, useNow, useSchedule, useScores } from './data.ts';
+import { useDaySwipe } from './day-swipe.ts';
 import { DayStrip } from './DayStrip.tsx';
 import {
   asForYou,
@@ -102,6 +107,9 @@ import { setAgendaDay, setAgendaMode, setAgendaSelected, useAgendaUi } from './s
 const PreferencesSheet = lazy(() => import('../preferences/PreferencesSheet.tsx'));
 
 const EMPTY: readonly FootballMatch[] = [];
+
+/** Lo más que se mueve la lista al arrastrar hacia un lado sin día (px). */
+const EDGE_PULL_PX = 16;
 
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
@@ -410,30 +418,37 @@ export default function Agenda({ active }: ViewProps) {
     },
   });
 
-  // ---- Gesto: deslizar la lista cambia de día (táctil) -----------------------------
-  // Dentro de una fila con desbordamiento el navegador se queda el gesto
-  // para desplazarla (pointercancel), así que solo cambia de día un
-  // deslizamiento fuera de las filas o en una fila que no se mueve.
+  // ---- Gesto: deslizar la lista cambia de día (táctil, day-swipe.ts) --------------
+  // Fiable en Safari de iOS y Chrome de Android: Touch Events pasivos que no
+  // frenan el scroll; una fila de tarjetas solo se queda el gesto si todavía
+  // puede desplazarse hacia ese lado.
 
   const suppressClick = useRef(0);
-  useSwipe(listRef, {
+  const resetDrag = () => {
+    const el = listRef.current;
+    if (el) el.style.transform = '';
+  };
+  useDaySwipe(listRef, {
     enabled: mobile && days.length > 1,
     onMove: (dx) => {
-      // Respuesta con transform mientras el dedo arrastra (con resistencia).
+      /* Respuesta con transform mientras el dedo arrastra (con resistencia).
+         Si hacia ese lado no hay día (en Hoy, que es el primero, dedo a la
+         derecha), la lista apenas se mueve: se nota que ahí no hay nada y
+         no parece un gesto que a veces falla. */
       const el = listRef.current;
-      if (el) el.style.transform = `translateX(${Math.max(-60, Math.min(60, dx * 0.3))}px)`;
+      if (!el) return;
+      const index = days.findIndex((item) => item.date === day);
+      const edge = !days[index + (dx < 0 ? 1 : -1)];
+      const limit = edge ? EDGE_PULL_PX : 60;
+      const pulled = dx * (edge ? 0.1 : 0.3);
+      el.style.transform = `translateX(${Math.max(-limit, Math.min(limit, pulled))}px)`;
     },
     onSwipe: (direction) => {
-      const el = listRef.current;
-      if (el) el.style.transform = '';
-      if (direction !== 'left' && direction !== 'right') return;
+      resetDrag();
       suppressClick.current = performance.now() + 400;
-      goDay(direction === 'left' ? 1 : -1);
+      goDay(direction === 'next' ? 1 : -1);
     },
-    onCancel: () => {
-      const el = listRef.current;
-      if (el) el.style.transform = '';
-    },
+    onCancel: resetDrag,
   });
 
   // ---- Pintado -------------------------------------------------------------------
@@ -478,14 +493,16 @@ export default function Agenda({ active }: ViewProps) {
     );
   };
 
+  /* El héroe solo en el móvil y la tableta: en escritorio toda la página es
+     el calendario y el destacado sale en el panel de la derecha (0.9.0). */
   let hero = null;
-  if (schedule.isPending) {
+  if (!stageVisible && schedule.isPending) {
     hero = (
       <div className="agenda-hero agenda-hero--pending" aria-hidden="true">
         <Skeleton className="agenda-hero__skeleton" height="auto" radius="xl" />
       </div>
     );
-  } else if (ready && featured) {
+  } else if (!stageVisible && ready && featured) {
     hero = (
       <AgendaHero
         key={featured.id}
@@ -497,7 +514,6 @@ export default function Agenda({ active }: ViewProps) {
         mine={isMine(featured, preferences)}
         watching={watched === featured.id}
         onOpen={(match) => openMatch(match, 'hero')}
-        layout={stageVisible ? 'band' : 'poster'}
         transitionName={
           opening?.from === 'hero' && opening.id === featured.id
             ? partidoTransitionName(featured.id)
@@ -616,14 +632,10 @@ export default function Agenda({ active }: ViewProps) {
   );
 
   const selectedScore = selected ? (scores[selected.id] ?? null) : null;
-  /* El elegido es el del héroe (lo normal al entrar): el panel no repite su
-     tarjeta grande, que está justo encima; el lateral se queda con la tira
-     de directos y «Luego». Al elegir otra tarjeta, el panel la enseña. */
-  const heroSelected = hero !== null && selected !== null && selected.id === featured?.id;
-  const sideVisible =
-    stageVisible &&
-    selected !== null &&
-    (!heroSelected || later.length > 0 || (kind === 'wide' && liveCount > 0));
+  /* En escritorio el panel enseña SIEMPRE el elegido (de entrada, el
+     destacado): sin héroe ya no hay nada que no repetir, y tocar cualquier
+     directo de la tira lo trae aquí con su canal y «Ver canal». */
+  const sideVisible = stageVisible && selected !== null;
   const dayText = day ? dayLabel(day, today) : null;
 
   /* Resumen para lectores de pantalla (regla 36: `aria-live` en la agenda):
@@ -729,10 +741,7 @@ export default function Agenda({ active }: ViewProps) {
           {content}
         </div>
         {sideVisible && selected ? (
-          <aside
-            className={cx('agenda__side', heroSelected && 'agenda__side--later')}
-            aria-label={heroSelected ? 'Más partidos' : 'Partido elegido'}
-          >
+          <aside className="agenda__side" aria-label="Partido elegido">
             {kind === 'wide' ? (
               <LiveStrip
                 matches={matches}
@@ -742,19 +751,17 @@ export default function Agenda({ active }: ViewProps) {
                 onSelect={(match) => setAgendaSelected(match.id)}
               />
             ) : null}
-            {heroSelected ? null : (
-              <AgendaStage
-                key={selected.id}
-                match={selected}
-                now={now}
-                today={today}
-                score={selectedScore}
-                channels={channelInfo(selected, lookup)}
-                mine={isMine(selected, preferences)}
-                watching={watched === selected.id}
-                onOpen={openMatch}
-              />
-            )}
+            <AgendaStage
+              key={selected.id}
+              match={selected}
+              now={now}
+              today={today}
+              score={selectedScore}
+              channels={channelInfo(selected, lookup)}
+              mine={isMine(selected, preferences)}
+              watching={watched === selected.id}
+              onOpen={openMatch}
+            />
             {later.length ? (
               <section className="agenda-later" aria-labelledby="agenda-luego">
                 <h3 id="agenda-luego" className="agenda-later__title">

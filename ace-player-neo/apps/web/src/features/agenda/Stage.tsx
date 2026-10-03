@@ -4,19 +4,24 @@
    emite» (chips continuos o discontinuos, injerto B3) y la acción («Ver
    canal» / «Buscar canal», atajo O). El marcador va SIEMPRE tapado en la
    agenda: la cápsula «Marcador» de la esquina lo destapa (y lo vuelve a
-   tapar) en esa misma cápsula. Si el partido elegido es el del héroe, la
-   vista no monta este panel (no se repite la tarjeta grande).
+   tapar) en esa misma cápsula. En escritorio no hay héroe (0.9.0): el panel
+   enseña siempre el elegido.
 
    Doble clic sobre la tarjeta abre el partido (Intro sobre la tarjeta elegida
    de la lista también, como hoy). Sin goleadores ni estadio: ninguna API que
    usemos los da.
 
-   LiveStrip (solo `wide`, injerto B1): fila de cápsulas «En directo» con los
-   escudos pequeños, las siglas y el minuto; las cifras solo si ese partido
-   está destapado. Se desplaza a mano, nunca sola. */
+   LiveStrip (solo `wide`, injerto B1): cápsulas «En directo» con los escudos
+   pequeños, las siglas, el MARCADOR y el minuto («RSO 1–0 VIL · 33'», pedido
+   de Isma en la 0.9.0), dos por línea. El marcador se tapa en el partido que
+   estás viendo (regla 29: tu emisión va por detrás) hasta que lo destapas, y
+   en los que tapes a mano. Tocar un directo lo lleva al panel de abajo con su
+   canal y «Ver canal». Como mucho dos líneas a la vista (con el asomo de la
+   tercera): con diez directos un sábado, el panel y «Ver canal» no bajan; el
+   resto se ve desplazando la tira, a mano, nunca sola. */
 
 import type { FootballMatch, LiveScore } from '@ace/shared';
-import { useId, type CSSProperties } from 'react';
+import { useCallback, useId, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { cx } from '../../lib/cx.ts';
 import { competitionLogo, teamCrest, teamPalette, teamShort } from '../../lib/teams.ts';
 import { Button, Chip, LiveDot, Num, TeamMark, VersusCard } from '../../ui/index.ts';
@@ -24,7 +29,13 @@ import { matchGlow, versusSide, versusWhen } from './cards.ts';
 import { useMatchSignal } from './data.ts';
 import { liveMinute, matchStatus, matchTitle, paintableScore, type ChannelInfo } from './domain.ts';
 import { ScoreToggle, SignalCapsule } from './MatchRow.tsx';
-import { hideScore, revealScore, useScoreRevealed } from './score-reveal.ts';
+import {
+  hideScore,
+  revealScore,
+  useScoreCovered,
+  useScoreHidden,
+  useScoreRevealed,
+} from './score-reveal.ts';
 
 export interface AgendaStageProps {
   match: FootballMatch;
@@ -157,7 +168,10 @@ export function AgendaStage({
   );
 }
 
-/** Tira de directos (injerto B1): cápsulas con escudos y minuto; se desplaza a mano, nunca sola. */
+/** Cápsulas a la vista en «En directo» (dos líneas de dos); con más, la tira se desplaza. */
+const STRIP_VISIBLE = 4;
+
+/** Tira de directos (injerto B1): cápsulas con escudos, marcador y minuto; dos líneas como mucho a la vista. */
 export function LiveStrip({
   matches,
   now,
@@ -176,14 +190,29 @@ export function LiveStrip({
   const live = matches.filter(
     (match) => matchStatus(match, now, scores[match.id])?.phase === 'live',
   );
+  const many = live.length > STRIP_VISIBLE;
+  const listRef = useRef<HTMLUListElement>(null);
+  // ¿Quedan cápsulas por debajo? (la segunda línea se funde abajo).
+  const [moreBelow, setMoreBelow] = useState(false);
+  const measure = useCallback(() => {
+    const el = listRef.current;
+    setMoreBelow(el !== null && el.scrollHeight - el.clientHeight - el.scrollTop > 2);
+  }, []);
+  useLayoutEffect(measure, [measure, many, live.length]);
   if (live.length === 0) return null;
   return (
     <nav className="agenda-strip" aria-label={label}>
       <span className="agenda-strip__title">
         <LiveDot />
         {label}
+        <Num className="agenda-strip__count" value={live.length} condensed={false} />
       </span>
-      <ul className="agenda-strip__list">
+      <ul
+        ref={listRef}
+        className={cx('agenda-strip__list', many && 'agenda-strip__list--more')}
+        data-more-below={many && moreBelow ? '' : undefined}
+        onScroll={many ? measure : undefined}
+      >
         {live.map((match) => (
           <li key={match.id}>
             <LiveChip
@@ -211,16 +240,23 @@ function LiveChip({
   onSelect(match: FootballMatch): void;
 }) {
   const score = paintableScore(rawScore);
-  // Tapado por defecto: sin cifras salvo que ese partido esté destapado.
-  const shown = useScoreRevealed(match.id) ? score : null;
+  /* A la vista salvo en el partido que estás viendo (regla 29), hasta
+     destaparlo, y salvo que lo hayas tapado a mano (cápsula «Marcador» del
+     panel o menú «Tapar el marcador»). */
+  const watchedHidden = useScoreHidden(match.id);
+  const covered = useScoreCovered(match.id);
+  const shown = watchedHidden || covered ? null : score;
   const minute = liveMinute(rawScore);
+  const minuteText = minute ? (minute.halftime ? 'descanso' : `minuto ${minute.minute}`) : null;
   return (
     <button
       type="button"
       className="agenda-strip__chip press"
       aria-current={current ? 'true' : undefined}
       onClick={() => onSelect(match)}
-      aria-label={`${matchTitle(match)}${shown ? `, ${shown.home} a ${shown.away}` : ''}`}
+      aria-label={`${matchTitle(match)}${shown ? `, ${shown.home} a ${shown.away}` : ''}${
+        minuteText ? `, ${minuteText}` : ''
+      }`}
     >
       <span className="agenda-strip__crests" aria-hidden="true">
         <TeamMark
@@ -242,18 +278,20 @@ function LiveChip({
           />
         ) : null}
       </span>
-      <span className="agenda-strip__team">{teamShort(match, 'home')}</span>
-      {shown ? (
-        <Num className="agenda-strip__score" value={`${shown.home}–${shown.away}`} />
-      ) : (
-        <span className="agenda-strip__vs">vs</span>
-      )}
-      <span className="agenda-strip__team">{match.away ? teamShort(match, 'away') : ''}</span>
-      {minute ? (
-        <span className="agenda-strip__minute">
-          {minute.halftime ? 'Desc.' : <Num value={`${minute.minute}'`} />}
-        </span>
-      ) : null}
+      <span className="agenda-strip__line" aria-hidden="true">
+        <span className="agenda-strip__team">{teamShort(match, 'home')}</span>
+        {shown ? (
+          <Num className="agenda-strip__score" value={`${shown.home}–${shown.away}`} />
+        ) : (
+          <span className="agenda-strip__vs">vs</span>
+        )}
+        {match.away ? <span className="agenda-strip__team">{teamShort(match, 'away')}</span> : null}
+        {minute ? (
+          <span className="agenda-strip__minute">
+            {minute.halftime ? 'Desc.' : <Num value={`${minute.minute}'`} />}
+          </span>
+        ) : null}
+      </span>
     </button>
   );
 }

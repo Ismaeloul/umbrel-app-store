@@ -105,6 +105,7 @@ export function ChannelPoster({
                 colors={teamPalette(match, 'home')}
                 crest={teamCrest(match, 'home')}
                 size={18}
+                plate
                 lit
               />
               {match.away ? (
@@ -114,6 +115,7 @@ export function ChannelPoster({
                   colors={teamPalette(match, 'away')}
                   crest={teamCrest(match, 'away')}
                   size={18}
+                  plate
                   lit
                 />
               ) : null}

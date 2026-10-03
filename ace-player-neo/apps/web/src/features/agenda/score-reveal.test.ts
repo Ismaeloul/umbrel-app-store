@@ -8,6 +8,7 @@ import {
   resetScoreRevealForTests,
   revealScore,
   useRevealedScores,
+  useScoreCovered,
   useScoreHidden,
   useScoreRevealed,
   useWatchedMatch,
@@ -82,6 +83,24 @@ describe('agenda: todo tapado hasta que se pide (corrección 1)', () => {
     expect(result.current.x).toBe(false);
     act(() => revealScore('x'));
     act(() => setPlayerPresence({ active: false }));
+    expect(result.current.x).toBe(false);
+  });
+
+  it('lo tapado A MANO se recuerda (la tira «En directo» no lo enseña) hasta destaparlo', () => {
+    setPlayerPresence({ active: true, route: partido('a') });
+    const { result } = renderHook(() => ({
+      x: useScoreCovered('x'),
+      y: useScoreCovered('y'),
+    }));
+    // Por defecto nada está tapado a mano (la tira enseña los resultados).
+    expect(result.current).toEqual({ x: false, y: false });
+    act(() => hideScore('x'));
+    expect(result.current).toEqual({ x: true, y: false });
+    // Cambiar de partido o detener olvida lo destapado, no lo que tapaste tú.
+    act(() => setPlayerPresence({ route: partido('b') }));
+    act(() => resetScoreReveal());
+    expect(result.current.x).toBe(true);
+    act(() => revealScore('x'));
     expect(result.current.x).toBe(false);
   });
 });

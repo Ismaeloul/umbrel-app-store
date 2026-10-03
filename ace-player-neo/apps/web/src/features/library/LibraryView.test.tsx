@@ -385,6 +385,12 @@ describe('«Emitiendo ahora» (C1) y lo que da cada canal', () => {
       Boolean(el?.classList.contains('ch__txt') && el.textContent?.includes('Betis')),
     );
     expect(line).toHaveTextContent('A las 23:00, Betis – Valencia');
+    // Sin escudo de imagen, las siglas en placas pequeñas (0.9.0), no dos círculos de color.
+    const posterMarks = [...strip.querySelectorAll('.chp__crests .team')];
+    expect(posterMarks.map((mark) => mark.textContent)).toEqual(['GIR', 'RS']);
+    for (const mark of posterMarks) expect(mark).toHaveClass('team--tag');
+    const rowMarks = [...(line.parentElement?.querySelectorAll('.ch__crests .team') ?? [])];
+    expect(rowMarks.map((mark) => mark.textContent)).toEqual(['BET', 'VAL']);
 
     // Al ver DAZN 1, su marcador se tapa en todas partes (regla 29) hasta pedirlo.
     const dazn = makeLibrary().favorites[0]!;

@@ -108,6 +108,7 @@ function OnAirLine({
             colors={teamPalette(match, 'home')}
             crest={teamCrest(match, 'home')}
             size={18}
+            plate
             lit
           />
           {match.away ? (
@@ -117,6 +118,7 @@ function OnAirLine({
               colors={teamPalette(match, 'away')}
               crest={teamCrest(match, 'away')}
               size={18}
+              plate
               lit
             />
           ) : null}
@@ -156,6 +158,7 @@ function OnAirLine({
             colors={teamPalette(match, 'home')}
             crest={teamCrest(match, 'home')}
             size={18}
+            plate
           />
           {match.away ? (
             <TeamMark
@@ -164,6 +167,7 @@ function OnAirLine({
               colors={teamPalette(match, 'away')}
               crest={teamCrest(match, 'away')}
               size={18}
+              plate
             />
           ) : null}
         </span>
