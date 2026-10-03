@@ -30,22 +30,23 @@ import {
   COMPETITION_FAMILY_LABELS,
   GUIDE_EARLY_MS,
   GUIDE_LATE_MS,
-  competitionFamilies,
+  programmeFamilies,
   competitionFamily,
   confirmByGuide,
   extractGuideMatchup,
   hasLiveMark,
   isNotLive,
   kickoffFromProgramme,
-  programmeHasTeams,
   programmeLastsAMatch,
-  programmeTexts,
+  programmeTeamTexts,
   teamAliases,
   teamCache,
+  teamsInText,
   type CompetitionFamily,
   type GuideChannelCandidate,
   type GuideConfirmation,
   type GuideMatchInput,
+  type GuideProgramme,
   type TeamCache,
 } from './guide-match.js';
 import { agendaScorer, channelVariantKey, guideCandidates } from './layer.js';
@@ -158,23 +159,78 @@ function dayNumber(date: string): number | null {
   return Number.isFinite(parsed) ? Math.round(parsed / DAY_MS) : null;
 }
 
+/**
+ * Un programa EN DIRECTO de la guía, preparado una vez por cálculo: los textos
+ * para buscar equipos y, si los tiene, sus dos equipos (lo caro, una sola vez
+ * y no una por partido de la agenda).
+ */
+interface LiveShow {
+  readonly candidate: GuideChannelCandidate;
+  readonly programme: GuideProgramme;
+  /** Título, subtítulo y descripción en la forma de `teamSearchText`. */
+  readonly texts: readonly string[];
+  readonly kickoff: number | null;
+  /** Día de Madrid del saque ('' sin saque). */
+  readonly date: string;
+  readonly pair: { readonly home: string; readonly away: string } | null;
+  /** Alias y claves de los dos equipos del título (si los hay). */
+  readonly pairAliases: readonly string[];
+  readonly pairKeys: readonly string[];
+}
+
+function liveShows(
+  candidates: readonly GuideChannelCandidate[],
+  dateOf: (ms: number) => string,
+): LiveShow[] {
+  const out: LiveShow[] = [];
+  for (const candidate of candidates) {
+    for (const programme of candidate.programmes) {
+      if (!hasLiveMark(programme)) continue;
+      const pair = extractGuideMatchup(programme.title) ?? extractGuideMatchup(programme.subTitle);
+      const kickoff = kickoffFromProgramme(programme);
+      out.push({
+        candidate,
+        programme,
+        texts: programmeTeamTexts(programme),
+        kickoff,
+        date: kickoff === null ? '' : dateOf(kickoff),
+        pair,
+        pairAliases: pair ? [...teamAliases(pair.home), ...teamAliases(pair.away)] : [],
+        pairKeys: pair ? [footballTeamKey(pair.home), footballTeamKey(pair.away)] : [],
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Regla 2 sobre un programa preparado: antes de las expresiones regulares, la
+ * cuenta barata (algún alias de cada equipo dentro del texto).
+ */
+function showHasTeams(show: LiveShow, cache: TeamCache): boolean {
+  for (const text of show.texts) {
+    if (!text) continue;
+    if (!cache.home.some((alias) => text.includes(alias))) continue;
+    if (!cache.away.some((alias) => text.includes(alias))) continue;
+    if (teamsInText(text, cache.home, cache.away)) return true;
+  }
+  return false;
+}
+
 /** Saque de un partido que la guía tiene en directo ese día a otra hora (regla 2), o null. */
 function moveByGuide(
   input: GuideMatchInput,
   date: string,
   candidates: readonly GuideChannelCandidate[],
+  shows: readonly LiveShow[],
   agendaScore: (display: string) => number,
-  dateOf: (ms: number) => string,
 ): { readonly start: number; readonly channels: string[] } | null {
   const cache = teamCache(input);
   const kickoffs = new Set<number>();
-  for (const candidate of candidates) {
-    for (const programme of candidate.programmes) {
-      if (!hasLiveMark(programme) || !programmeHasTeams(programme, cache)) continue;
-      const kickoff = kickoffFromProgramme(programme);
-      if (kickoff === null || kickoff === input.start || dateOf(kickoff) !== date) continue;
-      kickoffs.add(kickoff);
-    }
+  for (const show of shows) {
+    const kickoff = show.kickoff;
+    if (kickoff === null || kickoff === input.start || show.date !== date) continue;
+    if (showHasTeams(show, cache)) kickoffs.add(kickoff);
   }
   for (const start of [...kickoffs].sort((a, b) => a - b)) {
     const found = confirmByGuide({ ...input, start }, candidates, { agendaScore }).filter((item) =>
@@ -192,10 +248,25 @@ interface AgendaTeams {
   readonly keys: readonly string[];
 }
 
-/** ¿Es este nombre uno de los dos equipos de ese partido? */
-function sameTeam(name: string, match: AgendaTeams): boolean {
-  if (match.keys.includes(footballTeamKey(name))) return true;
-  return teamAliases(name).some((alias) => match.aliases.has(alias));
+function agendaTeams(
+  day: number,
+  match: { readonly home: string; readonly away: string },
+): AgendaTeams {
+  const cache = teamCache(match);
+  return {
+    day,
+    cache,
+    aliases: new Set([...cache.home, ...cache.away]),
+    keys: [footballTeamKey(match.home), footballTeamKey(match.away)].filter(Boolean),
+  };
+}
+
+/** ¿Juega alguno de los dos equipos del programa en ese partido? */
+function sharesTeam(show: LiveShow, match: AgendaTeams): boolean {
+  return (
+    show.pairKeys.some((key) => key && match.keys.includes(key)) ||
+    show.pairAliases.some((alias) => match.aliases.has(alias))
+  );
 }
 
 /**
@@ -211,6 +282,27 @@ export function guideAgenda(
   if (!dates.size || !allCandidates.length) return { confirmations: [], additions: [] };
   const candidates = slimCandidates(allCandidates, dates, request.dateOf);
   if (!candidates.length) return { confirmations: [], additions: [] };
+  const shows = liveShows(candidates, request.dateOf);
+  /* Muchos partidos anuncian los mismos canales: una puntuación por canales y nombre, una vez. */
+  const scorers = new Map<string, (display: string) => number>();
+  const scorerFor = (channels: readonly string[]): ((display: string) => number) => {
+    const key = channels.join('\n');
+    let scorer = scorers.get(key);
+    if (!scorer) {
+      const base = options.agendaScorer(channels);
+      const memo = new Map<string, number>();
+      scorer = (display: string): number => {
+        let value = memo.get(display);
+        if (value === undefined) {
+          value = base(display);
+          memo.set(display, value);
+        }
+        return value;
+      };
+      scorers.set(key, scorer);
+    }
+    return scorer;
+  };
 
   // 1 y 2: confirmar (y mover) los partidos de la agenda.
   const confirmations: GuideAgendaConfirmation[] = [];
@@ -225,7 +317,7 @@ export function guideAgenda(
       start: match.start,
       channels: match.channels,
     };
-    const agendaScore = options.agendaScorer(match.channels);
+    const agendaScore = scorerFor(match.channels);
     const found = confirmByGuide(input, candidates, { agendaScore });
     if (found.length) {
       confirmations.push({
@@ -236,7 +328,7 @@ export function guideAgenda(
       });
       continue;
     }
-    const moved = moveByGuide(input, match.date, candidates, agendaScore, request.dateOf);
+    const moved = moveByGuide(input, match.date, candidates, shows, agendaScore);
     if (moved) confirmations.push({ matchId: match.id, ...moved, moved: true });
   }
 
@@ -245,17 +337,12 @@ export function guideAgenda(
   for (const match of request.matches) {
     const day = dayNumber(match.date);
     if (day === null || !match.home.trim() || !match.away.trim()) continue;
-    const cache = teamCache(match);
-    agenda.push({
-      day,
-      cache,
-      aliases: new Set([...cache.home, ...cache.away]),
-      keys: [footballTeamKey(match.home), footballTeamKey(match.away)].filter(Boolean),
-    });
+    agenda.push(agendaTeams(day, match));
   }
   const groups = new Map<
     string,
     {
+      readonly show: LiveShow;
       readonly home: string;
       readonly away: string;
       readonly family: CompetitionFamily;
@@ -263,32 +350,33 @@ export function guideAgenda(
       readonly date: string;
     }
   >();
-  for (const candidate of candidates) {
-    if (candidate.country !== 'ES') continue;
-    const channelFamily = competitionFamily(candidate.display);
-    for (const programme of candidate.programmes) {
-      if (!hasLiveMark(programme)) continue;
-      const pair = extractGuideMatchup(programme.title) ?? extractGuideMatchup(programme.subTitle);
-      if (!pair || footballTeamIsVariant(pair.home) || footballTeamIsVariant(pair.away)) continue;
-      const named = competitionFamilies(programmeTexts(programme).join(' | '));
-      const family = named.size === 1 ? [...named][0] : named.size === 0 ? channelFamily : null;
-      if (!family || (channelFamily && channelFamily !== family)) continue;
-      const start = kickoffFromProgramme(programme);
-      if (start === null) continue;
-      const date = request.dateOf(start);
-      const day = dayNumber(date);
-      if (!dates.has(date) || day === null) continue;
-      const known = agenda.some(
-        (match) =>
-          Math.abs(match.day - day) <= 1 &&
-          (programmeHasTeams(programme, match.cache) ||
-            sameTeam(pair.home, match) ||
-            sameTeam(pair.away, match)),
-      );
-      if (known) continue;
-      const key = `${date}|${[footballTeamKey(pair.home), footballTeamKey(pair.away)].sort().join('|')}`;
-      const previous = groups.get(key);
-      if (!previous || start < previous.start) groups.set(key, { ...pair, family, start, date });
+  const channelFamilies = new Map<GuideChannelCandidate, CompetitionFamily | null>();
+  for (const show of shows) {
+    const { candidate, programme, pair } = show;
+    if (candidate.country !== 'ES' || !pair || show.kickoff === null) continue;
+    if (footballTeamIsVariant(pair.home) || footballTeamIsVariant(pair.away)) continue;
+    let channelFamily = channelFamilies.get(candidate);
+    if (channelFamily === undefined) {
+      channelFamily = competitionFamily(candidate.display);
+      channelFamilies.set(candidate, channelFamily);
+    }
+    const named = programmeFamilies(programme);
+    const family = named.size === 1 ? [...named][0] : named.size === 0 ? channelFamily : null;
+    if (!family || (channelFamily && channelFamily !== family)) continue;
+    const start = show.kickoff;
+    const date = show.date;
+    const day = dayNumber(date);
+    if (!dates.has(date) || day === null) continue;
+    const known = agenda.some(
+      (match) =>
+        Math.abs(match.day - day) <= 1 &&
+        (sharesTeam(show, match) || showHasTeams(show, match.cache)),
+    );
+    if (known) continue;
+    const key = `${date}|${[...show.pairKeys].sort().join('|')}`;
+    const previous = groups.get(key);
+    if (!previous || start < previous.start) {
+      groups.set(key, { show, home: pair.home, away: pair.away, family, start, date });
     }
   }
   const additions: GuideAgendaAddition[] = [];
@@ -296,14 +384,7 @@ export function guideAgenda(
   for (const group of [...groups.values()].sort((a, b) => a.start - b.start)) {
     const day = dayNumber(group.date) as number;
     /* Dos grafías del mismo partido («Barça - R. Madrid» y «Barcelona - Real Madrid»): uno. */
-    if (
-      added.some(
-        (other) =>
-          other.day === day && (sameTeam(group.home, other) || sameTeam(group.away, other)),
-      )
-    ) {
-      continue;
-    }
+    if (added.some((other) => other.day === day && sharesTeam(group.show, other))) continue;
     const competition = COMPETITION_FAMILY_LABELS[group.family];
     const found = confirmByGuide(
       {
@@ -327,13 +408,7 @@ export function guideAgenda(
       start: group.start,
       channels: distinctChannels(found),
     });
-    const cache = teamCache(group);
-    added.push({
-      day,
-      cache,
-      aliases: new Set([...cache.home, ...cache.away]),
-      keys: [footballTeamKey(group.home), footballTeamKey(group.away)].filter(Boolean),
-    });
+    added.push(agendaTeams(day, group));
   }
   return { confirmations, additions };
 }

@@ -415,6 +415,22 @@ const LIVE_MARK_RE = /\b(?:directo|en vivo|live)\b|\(l\)/;
 
 /** ¿El programa dice que no es el partido en directo? */
 export function isNotLive(programme: GuideProgramme): boolean {
+  const cached = NOT_LIVE_MEMO.get(programme);
+  if (cached !== undefined) return cached;
+  const value = computeNotLive(programme);
+  NOT_LIVE_MEMO.set(programme, value);
+  return value;
+}
+
+/* Los programas de una guía no cambian (son de solo lectura): lo que se
+   calcula de su texto se guarda junto a ellos y se va con ellos. La agenda
+   híbrida mira cada programa una vez por partido de hoy y mañana. */
+const NOT_LIVE_MEMO = new WeakMap<GuideProgramme, boolean>();
+const TEXTS_MEMO = new WeakMap<GuideProgramme, string[]>();
+const TEAM_TEXTS_MEMO = new WeakMap<GuideProgramme, string[]>();
+const LIVE_MEMO = new WeakMap<GuideProgramme, boolean>();
+
+function computeNotLive(programme: GuideProgramme): boolean {
   if (programme.previouslyShown) return true;
   for (const field of [programme.title, programme.subTitle, programme.desc]) {
     if (NOT_LIVE_RE.test(normalizeGuideText(field))) return true;
@@ -436,30 +452,90 @@ const YOUTH_RE = /\b(?:youth league|juvenil|sub[\s-]?\d{2}|u[\s-]?\d{2})\b/;
 
 /** Título, subtítulo, descripción y categorías, normalizados. */
 export function programmeTexts(programme: GuideProgramme): string[] {
-  return [programme.title, programme.subTitle, programme.desc, ...programme.categories].map(
-    (field) => normalizeGuideText(field),
-  );
+  let texts = TEXTS_MEMO.get(programme);
+  if (!texts) {
+    texts = [programme.title, programme.subTitle, programme.desc, ...programme.categories].map(
+      (field) => normalizeGuideText(field),
+    );
+    TEXTS_MEMO.set(programme, texts);
+  }
+  return texts;
+}
+
+/** Título, subtítulo y descripción en la forma de `teamSearchText` (para buscar equipos). */
+export function programmeTeamTexts(programme: GuideProgramme): string[] {
+  let texts = TEAM_TEXTS_MEMO.get(programme);
+  if (!texts) {
+    texts = [programme.title, programme.subTitle, programme.desc].map((field) =>
+      field ? teamSearchText(field) : '',
+    );
+    TEAM_TEXTS_MEMO.set(programme, texts);
+  }
+  return texts;
 }
 
 /** ¿El programa es de otro deporte, del femenino o de una categoría inferior (y el partido no)? */
-export function isOtherEvent(programme: GuideProgramme, input: GuideMatchInput): boolean {
+export function isOtherEvent(
+  programme: GuideProgramme,
+  input: GuideMatchInput,
+  /** Lo del partido ya calculado (`matchEventKind`), para no repetirlo en cada programa. */
+  kind: MatchEventKind = matchEventKind(input),
+): boolean {
+  const marks = programmeEventMarks(programme);
+  return marks.otherSport || (!kind.women && marks.women) || (!kind.youth && marks.youth);
+}
+
+/** ¿El partido es femenino o de categorías inferiores? */
+export interface MatchEventKind {
+  readonly women: boolean;
+  readonly youth: boolean;
+}
+
+export function matchEventKind(
+  input: Pick<GuideMatchInput, 'competition' | 'title'>,
+): MatchEventKind {
   const matchText = normalizeGuideText(`${input.competition} ${input.title ?? ''}`);
-  const womenMatch = WOMEN_RE.test(matchText) || matchFamily(input) === 'ligaf';
-  const youthMatch = YOUTH_RE.test(matchText);
-  return programmeTexts(programme).some(
-    (text) =>
-      OTHER_SPORT_RE.test(text) ||
-      (!womenMatch && WOMEN_RE.test(text)) ||
-      (!youthMatch && YOUTH_RE.test(text)),
-  );
+  return {
+    women: WOMEN_RE.test(matchText) || matchFamily(input) === 'ligaf',
+    youth: YOUTH_RE.test(matchText),
+  };
+}
+
+const EVENT_MARKS_MEMO = new WeakMap<
+  GuideProgramme,
+  { readonly otherSport: boolean; readonly women: boolean; readonly youth: boolean }
+>();
+
+/* Otro deporte, femenino o cantera en algún campo o categoría del programa (una vez por programa). */
+function programmeEventMarks(programme: GuideProgramme): {
+  readonly otherSport: boolean;
+  readonly women: boolean;
+  readonly youth: boolean;
+} {
+  let marks = EVENT_MARKS_MEMO.get(programme);
+  if (!marks) {
+    const texts = programmeTexts(programme);
+    marks = {
+      otherSport: texts.some((text) => OTHER_SPORT_RE.test(text)),
+      women: texts.some((text) => WOMEN_RE.test(text)),
+      youth: texts.some((text) => YOUTH_RE.test(text)),
+    };
+    EVENT_MARKS_MEMO.set(programme, marks);
+  }
+  return marks;
 }
 
 /** ¿La guía dice que va en directo? (`<live/>`, «directo», «en vivo» o «(L)» en el título o el subtítulo). */
 export function hasLiveMark(programme: GuideProgramme): boolean {
   if (programme.live) return true;
-  return [programme.title, programme.subTitle].some((field) =>
-    LIVE_MARK_RE.test(normalizeGuideText(field)),
-  );
+  let value = LIVE_MEMO.get(programme);
+  if (value === undefined) {
+    value = [programme.title, programme.subTitle].some((field) =>
+      LIVE_MARK_RE.test(normalizeGuideText(field)),
+    );
+    LIVE_MEMO.set(programme, value);
+  }
+  return value;
 }
 
 // --- Competiciones ---
@@ -505,11 +581,25 @@ export const COMPETITION_FAMILIES: readonly (readonly [CompetitionFamily, RegExp
 
 /** Familia de competición que nombra un texto, o null. */
 export function competitionFamily(value: string): CompetitionFamily | null {
+  const cached = FAMILY_MEMO.get(value);
+  if (cached !== undefined) return cached;
   const text = normalizeGuideText(value);
-  if (!text) return null;
-  for (const [family, re] of COMPETITION_FAMILIES) if (re.test(text)) return family;
-  return null;
+  let found: CompetitionFamily | null = null;
+  if (text) {
+    for (const [family, re] of COMPETITION_FAMILIES) {
+      if (re.test(text)) {
+        found = family;
+        break;
+      }
+    }
+  }
+  /* Los nombres de canal se repiten mucho; la memoria no crece sin tope. */
+  if (FAMILY_MEMO.size >= 4096) FAMILY_MEMO.clear();
+  FAMILY_MEMO.set(value, found);
+  return found;
 }
+
+const FAMILY_MEMO = new Map<string, CompetitionFamily | null>();
 
 /**
  * Todas las familias que nombra un texto. Cada acierto se quita antes de
@@ -593,9 +683,20 @@ export function teamCache(
 
 /** Regla 2: los dos equipos en el mismo campo (título, subtítulo o descripción). */
 export function programmeHasTeams(programme: GuideProgramme, cache: TeamCache): boolean {
-  for (const field of [programme.title, programme.subTitle, programme.desc]) {
-    if (!field) continue;
-    if (teamsInText(teamSearchText(field), cache.home, cache.away)) return true;
+  const texts = programmeTeamTexts(programme);
+  const fields = [programme.title, programme.subTitle, programme.desc];
+  for (let index = 0; index < fields.length; index += 1) {
+    const field = fields[index];
+    const text = texts[index] ?? '';
+    if (!field || !text) continue;
+    /* Antes de las expresiones regulares, la cuenta barata: algún alias de cada equipo dentro. */
+    if (
+      cache.home.some((alias) => text.includes(alias)) &&
+      cache.away.some((alias) => text.includes(alias)) &&
+      teamsInText(text, cache.home, cache.away)
+    ) {
+      return true;
+    }
     if (
       cache.homeAbbr.length &&
       cache.awayAbbr.length &&
@@ -615,19 +716,32 @@ export function programmeShowsMatch(
   family: CompetitionFamily | null,
   /** Familia que nombra el canal («DAZN LaLiga» → laliga), o null. */
   channelFamily: CompetitionFamily | null = null,
+  kind: MatchEventKind = matchEventKind(input),
 ): boolean {
   if (!programmeFitsKickoff(programme, input.start)) return false;
   if (isNotLive(programme)) return false;
-  if (isOtherEvent(programme, input)) return false;
+  if (isOtherEvent(programme, input, kind)) return false;
   if (!programmeHasTeams(programme, cache)) return false;
   if (family) {
     /* La familia del partido sale en el texto (y ninguna otra) o, si el texto
        no nombra ninguna, en el nombre del canal. Mejor no emparejar que mal. */
-    const named = competitionFamilies(programmeTexts(programme).join(' | '));
+    const named = programmeFamilies(programme);
     if (named.size) return named.size === 1 && named.has(family);
     return channelFamily === family;
   }
   return true;
+}
+
+const FAMILIES_MEMO = new WeakMap<GuideProgramme, ReadonlySet<CompetitionFamily>>();
+
+/** Las familias de competición que nombra el programa (título, subtítulo, descripción y categorías). */
+export function programmeFamilies(programme: GuideProgramme): ReadonlySet<CompetitionFamily> {
+  let families = FAMILIES_MEMO.get(programme);
+  if (!families) {
+    families = competitionFamilies(programmeTexts(programme).join(' | '));
+    FAMILIES_MEMO.set(programme, families);
+  }
+  return families;
 }
 
 /**
@@ -643,9 +757,16 @@ export function confirmByGuide(
   const cache = teamCache(input);
   if (!cache.home.length || !cache.away.length) return [];
   const family = matchFamily(input);
+  const kind = matchEventKind(input);
   const hasAgenda = input.channels.some((channel) => channel.trim() !== '');
   const confirmed: (GuideConfirmation & { readonly liveMark: boolean })[] = [];
   for (const candidate of candidates) {
+    /* Regla 1 primero (solo números): casi ningún canal tiene algo a esa hora,
+       y así lo caro (el nombre del canal) se mira solo cuando hace falta. */
+    const timely = candidate.programmes.filter((programme) =>
+      programmeFitsKickoff(programme, input.start),
+    );
+    if (!timely.length) continue;
     /* Regla 5: país y competición del nombre del canal. */
     const agendaScore = hasAgenda ? options.agendaScore(candidate.display) : 0;
     if (candidate.country !== 'ES') {
@@ -653,8 +774,8 @@ export function confirmByGuide(
     }
     const channelFamily = competitionFamily(candidate.display);
     if (family && channelFamily && channelFamily !== family) continue;
-    const shows = candidate.programmes.filter((programme) =>
-      programmeShowsMatch(programme, input, cache, family, channelFamily),
+    const shows = timely.filter((programme) =>
+      programmeShowsMatch(programme, input, cache, family, channelFamily, kind),
     );
     if (!shows.length) continue;
     const best =
