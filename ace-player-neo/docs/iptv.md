@@ -734,9 +734,12 @@ Entrada: el partido de la agenda (`home`, `away`, `competition`, `start`) y los 
 IPTV queda **confirmada por la guía** solo si **todo** esto se cumple:
 
 1. **Hora.**
-   - El programa empieza entre **30 min antes y 15 min después** del saque inicial.
+   - El programa empieza entre **60 min antes y 15 min después** del saque inicial (eran 30 antes; cambia con
+     §4.7: hay guías que meten la previa en el mismo programa).
    - Dura entre 80 y 240 min.
-   - Acaba al menos 90 min después del saque.
+   - Acaba al menos 90 min después del saque. Si empieza **más de 30 min antes** (la previa dentro), tiene que cubrir
+     el partido entero: acabar al menos **105 min** después del saque. Un directo de 20:15 a 22:30 no es un partido de
+     las 21:00 (acabaría a las 22:50): es uno de antes, y la agenda híbrida lo mueve (§4.7).
 2. **Equipos.**
    - Los dos equipos aparecen **en el mismo campo** (`title`, `sub-title` o `desc`), a menos de 40 caracteres uno de
      otro y separados por un separador de enfrentamiento (`-`, `–`, `vs`, `v`, `x`, `×`, `contra`, `/`).
@@ -746,14 +749,22 @@ IPTV queda **confirmada por la guía** solo si **todo** esto se cumple:
      - la clave sin prefijos (`real`, `club`, `cd`, `ud`, `sd`, `rcd`, `rc`, `ca`, `fc`, `cf`) si queda con 5 letras o
        más;
      - la tabla curada `EPG_TEAM_ALIASES`: barça/barca → barcelona; atleti/atlético → atletico madrid; athletic →
-       athletic club; betis → real betis; celta; espanyol; rayo → rayo vallecano; osasuna; etc.;
+       athletic club; betis → real betis; celta; espanyol; rayo → rayo vallecano; osasuna; etc. Vale en los **dos
+       sentidos** (0.9.0): cualquier forma de un grupo trae el grupo entero, así «Nápoles», «Oporto», «Brujas»,
+       «Estrella Roja», «Sparta de Praga», «Salzburgo», «Copenhague» u «O. Lyonnais», como escribe futbolenlatv,
+       encuentran «Napoli», «Porto», «Club Brugge», «Crvena Zvezda», «Sparta Praha», «Salzburg», «Copenhagen» o
+       «Olympique de Lyon», y al revés;
      - si `teams` los tiene, `strTeamAlternate` y `strTeamShort`.
+   - Las siglas de club pegadas al separador no estorban: «Girona FC - Sevilla FC», «Atalanta BC - ACF Fiorentina»,
+     «Sporting CP - SL Benfica» (fc, cf, ud, cd, sd, rcd, rc, ac, afc, acf, bc, sad, ssc, as, ss, sl, cp, sc, sv,
+     bsc, vfb, vfl, tsg, fk, us, ogc).
    - Las abreviaturas de 3 letras (`RMA`, `BAR`) **solo** valen en el patrón compacto `AAA-BBB` / `AAA v BBB`, con las
      dos como abreviatura.
    - Nunca valen como alias sueltos `real`, `madrid`, `sporting`, `racing`, `union`, `deportivo`, `club` ni `city`.
    - Un alias seguido de ` B`, `C`, `II`, `Femenino`, `Fem`, `Sub-19`, `Juvenil`, `Atlètic`, `Castilla`, `Atlético`
      (Sevilla Atlético), `Deportivo` (Betis Deportivo) o `Promesas` no cuenta: es el filial o el equipo femenino.
-     «Bilbao Athletic» no cuenta como Athletic Club.
+     «Bilbao Athletic» no cuenta como Athletic Club. Tampoco «Leyendas» o «Veteranos» detrás o delante («Real Madrid
+     Leyendas», «Leyendas del Real Madrid»).
 3. **Marcas de «no es el partido».** Sobre `title`, `sub-title` y `desc`, sin tildes y por palabra, cualquiera de estas
    lo descarta:
    - `(R)`, `[R]`, `R:` al principio, `(D)`;
@@ -771,9 +782,12 @@ IPTV queda **confirmada por la guía** solo si **todo** esto se cumple:
      («La 1», «DAZN 1») sin la competición en la guía, no se confirma: mejor no emparejar que emparejar mal.
    - Sin familia conocida del partido (un amistoso), no se exige.
    - Tampoco valen, en ningún campo ni categoría: otros deportes (baloncesto, ACB, Liga Endesa, Euroliga, fútbol
-     sala, futsal, balonmano, voleibol, hockey, rugby, tenis, pádel…), el femenino («Femenino», «(Fem.)», «Femenina»,
-     «Women»; salvo que el partido sea de Liga F) ni las categorías inferiores (Youth League, juvenil, Sub-19…).
-     «(Dif.)» cuenta como diferido y «Barcelona SC» como otro equipo.
+     sala, futsal, balonmano, EHF, voleibol, hockey, rugby, tenis, pádel, dardos, snooker, golf, boxeo, UFC, NFL y
+     fútbol americano, béisbol, Fórmula 1, MotoGP, ciclismo, eSports, eLaLiga, Kings League, fútbol 7, fútbol para
+     ciegos…: lo que se llama como una competición de fútbol sin serlo, «EHF Champions League», «Premier League
+     Darts»), el femenino («Femenino», «(Fem.)», «Femenina», «Women»; salvo que el partido sea de Liga F) ni las
+     categorías inferiores (Youth League, juvenil, Sub-19, Premier League 2, Primavera…). «(Dif.)» cuenta como
+     diferido y «Barcelona SC» como otro equipo.
 5. **Canal.**
    - **País ES explícito**, más estricto que el filtro general: un canal sin país (`null`) solo vale si además casa
      (≥ 70) con algún canal emisor de la agenda. Si la agenda no trae canales, solo valen canales ES explícitos. Así un
@@ -801,13 +815,16 @@ IPTV queda **confirmada por la guía** solo si **todo** esto se cumple:
 `choices`. Si no encuentra nada, devuelve `not_found` **sin trabajo del comprobador**, y la web se queda en
 `no_channels` con «El canal todavía no está anunciado», como hoy, sin abrir «Encontrar canal». La agenda no cambia.
 
-**Pista para AceStream.** Los nombres de canal confirmados por la guía (2 como mucho) se añaden a los canales de la
-resolución como **pistas**.
+**Pista para AceStream.** Los nombres de canal confirmados por la guía (2 como mucho, un canal una vez: «M+ LaLiga TV»
+y su «Bar» o su «UHD» gastan una sola) se añaden a los canales de la resolución como **pistas**.
 - Una candidata AceStream que solo casa con una pista (≥ 70, las reglas de siempre) entra con esa pista como
   `matchedChannel`.
 - Su nivel de marca queda **topado en el de ≥ 70**, así que nunca adelanta a una candidata que casa ≥ 92 con un canal
   de la agenda.
 - No cambia el umbral, ni Hypermotion, ni las reglas aprendidas.
+- **Cambia con §4.7 (agenda híbrida):** en un partido, una AceStream que **es** el canal de la guía según la regla de
+  la IPTV (`sameChannelScore` ≥ 92) cuenta con su puntuación entera, el canal de la guía se busca el **primero** en el
+  motor y sus fuentes van **delante** de todas. El tope en 91 queda para lo que solo se parece (70-91).
 
 ### 4.6 Orden final
 
@@ -844,6 +861,118 @@ cartel no ofrece «Favorito» (§8.1). Un canal de AceStream favorito que tiene 
 - `found` si la primera es IPTV (≥ 92) o lo de siempre;
 - `candidate` = la IPTV.
 - `checked` suma `'iptv'` cuando la capa se consultó.
+
+**Cambia con §4.7:** las fuentes del canal que confirma la guía van delante de todas (`preferred` de
+`mergeResolutionCandidates`); dentro de ellas y en el resto, este mismo orden.
+
+### 4.7 Agenda híbrida: la guía de hoy y mañana sobre la agenda (0.9.0, D27)
+
+Lo pidió Isma (docs/pendiente.md, punto 12). **Días 1-14, futbolenlatv como siempre. Hoy y mañana** (lo que cubre la
+guía), la guía de la IPTV:
+
+1. **Confirma** el partido y su canal exacto. Es `confirmByGuide` (§4.5) sobre los **mismos candidatos** que la
+   resolución (`guideCandidates`, layer.ts): lo que se enseña en la agenda es lo que luego suena primero. Dos canales
+   como mucho y uno por canal («M+ LaLiga TV» y su «Bar» cuentan una vez). **La descripción no dice de qué partido es
+   un programa** (las guías reales la traen en todos y a menudo anuncia el siguiente partido): si el título o el
+   subtítulo traen **otro** enfrentamiento, lo que diga la descripción no confirma este partido; sin enfrentamiento
+   en el título («El Clásico (Directo)», «Fútbol») sí, como en la resolución. Un programa que confirma otro partido
+   de la agenda con sus dos equipos en el título es de ese partido: no vale para este.
+2. **Mueve la hora** si futbolenlatv se equivoca: a su hora la guía no confirma nada (tampoco un programa que no puede
+   ser un partido de esa hora, regla 1 de §4.5), pero ese mismo día tiene el partido **en directo** (marca obligatoria:
+   `<live/>`, «directo», «en vivo», «(L)») con los dos equipos **en el título o el subtítulo** (nunca solo en la
+   descripción: «Sevilla - Betis (Directo)» con «Esta noche, Real Madrid - Barcelona» no lleva el Clásico a las 18:30)
+   y en un programa que no es ya de otro partido de la agenda. Manda el primer programa así del día; el saque es su
+   inicio redondeado al cuarto de hora siguiente (20:50 → 21:00) si así cubre el partido entero (regla 1), o su inicio
+   tal cual (`kickoffFromProgramme`). Nunca a otro día. El id del partido no cambia. También si a su hora solo está el
+   partido **sin** marca y la guía lo tiene en directo **antes** ese día (con las mismas condiciones): lo de la hora de
+   la agenda es la repetición (una repetición va siempre después del directo). Un directo posterior no mueve nada:
+   ahí se fía de la agenda y del programa a su hora.
+3. **Añade** un partido que la guía trae y la agenda no, con cuidado: en directo (marca obligatoria), de una
+   competición de `COMPETITION_FAMILIES` (la del texto y ninguna otra o, si el texto no nombra ninguna, la del canal),
+   en un canal de España, con los dos equipos claros en el título o el subtítulo (`extractGuideMatchup`), sin
+   filiales, cantera ni femenino (salvo Liga F), con las reglas 1 a 6 de §4.5, nada de leyendas, benéficos, homenajes,
+   despedidas ni exhibiciones, con alguna categoría de deportes si el programa trae categorías, y **solo si no está ya
+   en la agenda escrito de otra forma** (`sameMatch`; mejor no añadir uno que añadirlo dos veces, pero sin perder los
+   que de verdad faltan):
+   - ninguno de los dos equipos juega en la agenda ese día, el anterior o el siguiente (clave, alias o nombre sin
+     siglas: «Atalanta BC» es «Atalanta»; un equipo no juega dos días seguidos: así «Barça - Atleti» no duplica «FC
+     Barcelona - Atlético de Madrid»);
+   - los dos nombres no se parecen a los de un partido de la agenda de ese día, a la hora que sea, ni uno solo si es
+     de la misma competición. «Se parece» (`teamsAlike`): cada palabra del nombre más corto se parece a una palabra
+     distinta del otro (la inicial, el principio, la abreviatura o una o dos letras cambiadas en una palabra larga) y
+     alguna pareja pesa (ninguna débil). «Sheffield Wed» y «Sheffield Wednesday», «Leeds Utd» y «Leeds United»,
+     «Qairat» y «Kairat Almaty», «Olympiakos» y «Olympiacos», sí; «Manchester City» y «Manchester United»,
+     «Newcastle United» y «Newcastle Jets» o «Real Madrid» y «Atlético de Madrid», no;
+   - ese canal (≥ 70) no da a esa misma hora (el programa cae a su saque, o ±30 min) un partido de la agenda: un canal
+     da un partido a la vez;
+   - y no es, en el **mismo** canal (≥ 92) y de la misma competición, un partido de la agenda de ese día que la guía no
+     encuentra y cuyo canal, a la hora de la agenda, no da nada que pueda ser un partido (que dure lo de un partido,
+     no sea una repetición y, en un canal sin competición en el nombre, traiga un enfrentamiento o una competición): es
+     él con la hora mal y los dos nombres de otra forma.
+   - La misma competición a la misma hora, sola, **no** basta (cambia tras la segunda revisión): en una noche de
+     Champions con ocho partidos a la vez se añade el noveno que trae la guía, y un Everton - Fulham de DAZN 2 a la hora
+     del Arsenal - Chelsea de DAZN 1, también. Con alias de verdad («Estrella Roja» es «Crvena Zvezda», §4.5), la guía
+     mueve la hora del partido de la agenda en vez de añadirlo otra vez. Lo que sigue sin poder saberse: los dos nombres
+     distintos sin alias, otra hora **y** otro canal.
+   - Los equipos salen de `extractGuideMatchup`, que no saca nada de un título con dos enfrentamientos («Real Madrid -
+     Juventus y Liverpool - Bayern»), de equipos por decidir («Por confirmar», «Ganador A») ni con el mismo nombre a
+     los dos lados; «El Clásico - Real Madrid vs Barcelona» da Real Madrid - Barcelona. Sus canales son los programas
+     en directo con los dos equipos en el título que no son ya un partido de la agenda.
+
+   Id `guia-<fecha>-<hash>`, rótulo de competición el que ya use la agenda para esa familia (nunca el de su femenina o
+   su cantera, salvo en Liga F) o `COMPETITION_FAMILY_LABELS`, canales los de la guía.
+
+**Por qué mover y añadir piden la marca de directo:** las repeticiones sin marca son muy comunes en las guías reales
+(§15) y, sin la hora de futbolenlatv como ancla, no hay otra forma segura de distinguirlas (el partido de anoche repetido
+a las 10:00 parecería uno de hoy). Si la guía no marca el directo, solo confirma. `scripts/epg-sondeo.mjs` lo mide con
+la misma regla que la app: `conCampo.directoCualquiera` (`<live/>` o la marca en el título o el subtítulo) y, sobre
+todo, `pareceUnPartidoConDirecto` (de los programas «X - Y» de 80-240 min, cuántos llevan la marca). Si da ~0 %, con
+esa guía la agenda híbrida solo confirma partido y canal.
+
+**Piezas:**
+- `modules/iptv/guide-agenda.ts` (puro) y `IptvService.guideAgenda(request)`: confirmaciones (con la hora movida) y
+  partidos añadidos; `null` sin IPTV activa o sin guía. Caché por la lista, la guía y la agenda (`request.key`): el
+  mismo objeto mientras no cambie nada.
+- **Coste con una guía grande** (también con la guía entera en disco): lo que no depende de la agenda (los programas
+  que pueden ser un partido de hoy y mañana y los que van en directo, `prepareGuideAgenda`) se prepara **una vez por
+  guía, catálogo y días** (memoria por ventana en `buildGuideAgenda`); cada cambio de la agenda (cada 30 min) solo
+  repasa lo preparado (`guideAgendaFrom`). Antes de normalizar el texto va lo barato: duración, día (con memoria por
+  cuarto de hora) y un separador de enfrentamiento en el texto tal cual. Un programa se normaliza una vez (y los
+  títulos y categorías repetidos, una vez en toda la guía). En el PC de Isma, con 3000 canales y 160 000 programas:
+  0,05-0,1 s la primera vez y 0,01-0,02 s por cambio de la agenda (antes 2,2 s y 0,9 s); con la mitad de los
+  programas con « - » en el título, 0,25-0,3 s una vez por guía y 0,05-0,15 s por cambio. Es síncrono (en el hilo
+  principal), pero ya no cuesta lo bastante para notarse en el relé.
+- `modules/football/guide-overlay.ts` (puro) lo pinta sobre la agenda: el partido confirmado lleva `guide` y el canal
+  de la guía el **primero** en `channels` (el de la agenda con su nombre si es el mismo canal, `sameChannelScore` ≥ 92;
+  si no, uno nuevo con el nombre de la IPTV e id `<partido>-guia-<n>`); si la guía mueve la hora cambian `time` y
+  `start` y `guide.agendaTime` guarda la de la agenda; un partido añadido entra en su día con `guide.added`. Cada día
+  tocado se reordena por hora. Sin nada de la guía, la misma agenda (el mismo objeto).
+- `FootballService.schedule()` = la agenda de siempre + la guía (solo con la IPTV activa). El catálogo de programación
+  recuerda la híbrida: la resolución, el precalentado y «Arranque instantáneo» ven lo mismo que la web. `resolve()` y
+  `prepareMatch()` la refrescan antes de usarla: si la IPTV se pausa, vuelven los canales y la hora de siempre al
+  momento.
+- Contrato: `FootballMatch.guide` (`FootballGuideInfoSchema`: `channel`, `time`, `agendaTime?`, `added`), opcional,
+  solo en `GET /api/v1/football`. La ruta antigua sirve la agenda híbrida **sin** `guide` (la forma de la 0.6.59).
+- Resolución (`football/resolution.ts`): con canales de la guía (las pistas, 2 como mucho) en un partido, el motor se
+  consulta **primero** por ellos (tal cual y sin la marca del operador: «M+ LaLiga TV 2» y «laliga tv 2»), una AceStream
+  o una de tu biblioteca que es ese canal según la regla de la IPTV cuenta con su puntuación entera, y las fuentes de
+  ese canal van **delante** de todas (también de la IPTV por nombre de otro canal que anuncie futbolenlatv). También al
+  reutilizar un precalentado (`overlayIptv`). Canal suelto y partido sin canales (`scope=guide`): como antes.
+- Web: `features/agenda/GuideNote.tsx`, una línea bajo los canales de la tarjeta (dos como mucho en el móvil) y en
+  «Dónde se emite» del partido. Tres casos, cada uno con su icono (check, reloj, más) y que se **ven** también sin
+  ratón: «Confirmado en tu guía: M+ LaLiga TV 2 · 21:00», «Hora de tu guía: DAZN LaLiga 2 · 21:30 · antes 21:00» y
+  «Añadido por tu guía: M+ LaLiga TV · 19:00».
+  Canal, hora y hora de antes van de una pieza: si no caben, el canal se recorta con «…» y la hora se queda. En «Dónde
+  se emite», debajo, la frase entera («Tu guía lo pone a las 21:30; la agenda decía 21:00.», «No salía en la agenda:
+  lo añade tu guía.»). `iptv.status` vuelve a pedir la agenda solo si la IPTV se pausa, se quita o vuelve, o si llega
+  otra guía.
+  Demo (`?demo=1`): RSO–VIL confirmado, Betis–Athletic añadido y Barça–Atleti con la hora movida.
+
+**Sin IPTV, en pausa, sin guía o sin datos del partido: todo exactamente como antes** (la misma agenda; las consultas
+y el orden de la resolución de siempre). Lo prueban `guide-overlay.test.ts`, `agenda-hibrida.test.ts` (servicio),
+`iptv.test.ts` de football («sin guía: las consultas y el orden de siempre»), `guide-agenda-service.test.ts` y
+`test/integration/agenda-hibrida.test.ts` (de punta a punta con el proveedor falso y el motor falso: las consultas a
+AceStream empiezan por el canal de la guía y su fuente va delante).
 
 ---
 

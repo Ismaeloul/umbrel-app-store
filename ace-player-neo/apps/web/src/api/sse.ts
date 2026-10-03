@@ -123,6 +123,20 @@ function vodSignature(data: unknown): string {
   return vod ? `${vod.state}|${vod.builtAt ?? ''}` : 'sin-vod';
 }
 
+/* Agenda híbrida (docs/iptv.md §4.7): la agenda lleva lo que dice la guía de
+   la IPTV. Cambia si la IPTV se pausa, se quita o vuelve, o si llega otra
+   guía; entonces (y solo entonces: `iptv.status` llega casi en cada entrada)
+   se vuelve a pedir. Lo último visto, por cliente de consultas. */
+const lastGuideSignature = new WeakMap<QueryClient, string>();
+
+function guideSignature(status: SseEventData<'iptv.status'>): string {
+  return [
+    status.status === 'disabled' ? 'off' : 'on',
+    status.guide.available ? 'guia' : 'sin-guia',
+    status.guide.updatedAt ?? '',
+  ].join('|');
+}
+
 export function applyToCache(client: QueryClient, type: SseEventType, data: unknown): void {
   switch (type) {
     case 'state.changed': {
@@ -184,6 +198,15 @@ export function applyToCache(client: QueryClient, type: SseEventType, data: unkn
           lastVod.set(client, signature);
           for (const id of ['vodHome', 'vodBrowse', 'vodTitle'] as const)
             void client.invalidateQueries({ queryKey: routePrefix(id) });
+        }
+      }
+      {
+        // La agenda, si cambió lo que la guía puede decir de ella (agenda híbrida).
+        const signature = guideSignature(data as SseEventData<'iptv.status'>);
+        const previous = lastGuideSignature.get(client);
+        lastGuideSignature.set(client, signature);
+        if (previous !== undefined && previous !== signature) {
+          void client.invalidateQueries({ queryKey: routePrefix('footballSchedule') });
         }
       }
       break;

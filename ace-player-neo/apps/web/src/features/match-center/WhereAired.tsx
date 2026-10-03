@@ -8,6 +8,7 @@
 import type { FootballMatch } from '@ace/shared';
 import { Chip, Kbd } from '../../ui/index.ts';
 import { dayLabel, type ChannelInfo } from '../agenda/domain.ts';
+import { GuideNote } from '../agenda/GuideNote.tsx';
 
 export type Hint = readonly [key: string, label: string];
 
@@ -87,6 +88,8 @@ export function WhereAired({
       ) : (
         <p className="mc-where__muted">Canal por confirmar</p>
       )}
+      {/* Agenda híbrida: lo que dice la guía de tu IPTV (si lo dice). */}
+      <GuideNote guide={match.guide} variant="detail" className="mc-where__guide" />
       <p className="mc-where__meta">{[match.competition, when].filter(Boolean).join(' · ')}</p>
       <ShortcutHints hints={MATCH_HINTS} />
     </section>

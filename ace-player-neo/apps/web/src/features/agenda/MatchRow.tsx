@@ -44,6 +44,7 @@ import {
 import type { MenuItem } from '../../ui/index.ts';
 import { matchGlow, signalTone, signalWord, versusSide, versusWhen } from './cards.ts';
 import { useMatchSignal } from './data.ts';
+import { GuideNote } from './GuideNote.tsx';
 import {
   keepUnitsTogether,
   madridClock,
@@ -391,6 +392,8 @@ export function MatchRowView({
           ) : null}
         </div>
       )}
+      {/* Agenda híbrida: «Confirmado en tu guía: …» (solo si la guía de tu IPTV lo confirma). */}
+      {compact ? null : <GuideNote guide={match.guide} />}
       {menuItems?.length ? (
         <Menu
           open={context.menu.open}

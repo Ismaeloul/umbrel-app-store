@@ -20,6 +20,7 @@
 import { motivoDeFallo, type FootballSchedule, type ScanRef } from '@ace/shared';
 import type { LegacyRouter, V1Router } from '../../core/router.js';
 import type { Services } from '../../services.js';
+import { withoutGuideInfo } from './guide-overlay.js';
 
 /** Operaciones antiguas de este módulo (`MÉTODO ruta` como en LEGACY_OPERATIONS). */
 export const LEGACY_ROUTES: readonly string[] = [
@@ -59,7 +60,8 @@ export function v1ScanRef(ref: ScanRef | null): ScanRef | null {
 export function registerLegacyRoutes(router: LegacyRouter, services: Services): void {
   router.handle('GET', '/api/football', async () => ({
     success: true,
-    ...(await services.football.schedule()),
+    /* La agenda híbrida (canal y hora de la guía) también, pero sin `guide`: la forma de la 0.6.59. */
+    ...withoutGuideInfo(await services.football.schedule()),
   }));
   router.handle('GET', '/api/football/resolve', async (req, ctx) => ({
     success: true,
