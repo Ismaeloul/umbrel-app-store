@@ -54,7 +54,9 @@
   --guia-bottom: calc(var(--safe-bottom) + var(--tabbar-h) + var(--tabbar-gap) + 12px);
   display: flex;
   flex-direction: column;
-  height: max(340px, calc(100dvh - var(--guia-top, 200px) - var(--guia-bottom)));
+  /* Tope, no alto fijo: con pocos canales la parrilla mide lo que tiene y la
+     franja va justo debajo (a 1920×1080 quedaban ~260 px vacíos en medio). */
+  max-height: max(340px, calc(100dvh - var(--guia-top, 200px) - var(--guia-bottom)));
   /* En el móvil, de borde a borde: cada píxel de ancho es tiempo que se ve. */
   margin-inline: calc(-1 * var(--gutter));
 }
@@ -64,12 +66,15 @@
   );
 }
 .guia-board--skeleton {
+  height: max(340px, calc(100dvh - var(--guia-top, 200px) - var(--guia-bottom)));
   padding-inline: var(--gutter);
 }
 
 .guia-grid-wrap {
   position: relative;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
+  /* Lo que mide el contenido más la barra de desplazamiento horizontal. */
+  height: calc(var(--content-h, 100vh) + 14px);
   min-height: 0;
   overflow: hidden;
   background: var(--surface);
@@ -129,6 +134,7 @@
   height: 100%;
   display: flex;
   align-items: center;
+  overflow: clip;
   padding-left: 8px;
   border-left: 1px solid var(--line-soft);
   color: var(--text-2);
@@ -136,6 +142,14 @@
   font-weight: var(--wght-medium);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+/* La hora, pegada al borde visible si la media hora empezó antes (--sl, --bx: Board.tsx). */
+.guia-ruler__label {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-left: max(0px, min(calc(var(--sl, 0px) + var(--col-w) - var(--bx)), 100%));
 }
 .guia-ruler__mark--day {
   color: var(--text);
@@ -148,7 +162,9 @@
   z-index: 1;
   padding: 2px 7px;
   border-radius: var(--r-pill);
-  background: var(--live);
+  /* El rojo de la raya, oscurecido: el blanco encima pasa de 4,5:1 (con
+     el rojo tal cual, 3,5:1 en oscuro). */
+  background: color-mix(in oklab, var(--live), #000 24%);
   color: #fff;
   font-size: var(--fs-12);
   font-weight: var(--wght-strong);
@@ -264,7 +280,9 @@
   flex: 1 1 auto;
   gap: 1px;
   min-width: 0;
-  margin-left: max(0px, min(calc(var(--sl, 0px) + var(--col-w) - var(--bx)), calc(100% - 64px)));
+  /* Sin tope: si del programa solo asoma un trozo, el título y la hora se
+     recortan con «…» en ese trozo (antes asomaba «er» sin puntos). */
+  margin-left: max(0px, min(calc(var(--sl, 0px) + var(--col-w) - var(--bx)), 100%));
   padding: 0 10px;
 }
 .guia-block__title {
@@ -276,6 +294,8 @@
   white-space: nowrap;
 }
 .guia-block__time {
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--text-2);
   font-size: var(--fs-12);
   font-variant-numeric: tabular-nums;
@@ -333,10 +353,11 @@
 }
 
 /* ---- Lo que flota sobre la parrilla ---------------------------------------- */
+/* «‹ Ahora», sobre la regla de horas (no tapa programas). */
 .guia-nowpill {
   position: absolute;
-  right: 14px;
-  bottom: 14px;
+  top: max(0px, calc((var(--ruler-h) - 36px) / 2));
+  right: 8px;
   z-index: 6;
   box-shadow: var(--shadow-poster);
 }

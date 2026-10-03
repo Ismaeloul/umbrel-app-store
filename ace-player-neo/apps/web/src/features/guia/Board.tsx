@@ -450,7 +450,18 @@ export function Board({
     selectedSegment && selectedChannel ? cellId(selection.row, selectedSegment) : undefined;
 
   return (
-    <div className="guia-grid-wrap">
+    <div
+      className="guia-grid-wrap"
+      style={
+        {
+          '--col-w': `${scale.colW}px`,
+          '--row-h': `${scale.rowH}px`,
+          '--ruler-h': `${scale.rulerH}px`,
+          // La parrilla mide lo que tiene (con pocos canales, sin hueco hasta la franja).
+          '--content-h': `${contentH}px`,
+        } as CSSProperties
+      }
+    >
       <div
         ref={scrollRef}
         className="guia-grid"
@@ -461,13 +472,6 @@ export function Board({
         tabIndex={0}
         onScroll={onScroll}
         onKeyDown={onKeyDown}
-        style={
-          {
-            '--col-w': `${scale.colW}px`,
-            '--row-h': `${scale.rowH}px`,
-            '--ruler-h': `${scale.rulerH}px`,
-          } as CSSProperties
-        }
       >
         <div className="guia-grid__content" style={{ width: contentW, height: contentH }}>
           <div className="guia-ruler" aria-hidden="true" style={{ width: contentW }}>
@@ -475,15 +479,25 @@ export function Board({
               <span className="guia-ruler__day">{dayLabel(leftDay, today)}</span>
               <span className="guia-ruler__date">{formatShortDay(leftDay)}</span>
             </div>
-            {marks.map((t) => (
-              <span
-                key={t}
-                className={cx('guia-ruler__mark', t === dayStart(t) && 'guia-ruler__mark--day')}
-                style={{ left: scale.colW + xOf(t, timeline, scale) }}
-              >
-                {t === dayStart(t) && t !== timeline.start ? formatShortDay(t) : formatTime(t)}
-              </span>
-            ))}
+            {marks.map((t, index) => {
+              const left = scale.colW + xOf(t, timeline, scale);
+              const next = marks[index + 1] ?? timeline.end;
+              const width = scale.colW + xOf(next, timeline, scale) - left;
+              return (
+                <span
+                  key={t}
+                  className={cx('guia-ruler__mark', t === dayStart(t) && 'guia-ruler__mark--day')}
+                  style={{ left, width, '--bx': `${left}px` } as CSSProperties}
+                >
+                  {/* Como el título de los programas: la hora de la media hora
+                      que empezó antes de lo visible se ve entera junto a la
+                      columna de canales («21:00», no «00»). */}
+                  <span className="guia-ruler__label">
+                    {t === dayStart(t) && t !== timeline.start ? formatShortDay(t) : formatTime(t)}
+                  </span>
+                </span>
+              );
+            })}
             {nowInRange ? (
               <span className="guia-ruler__now" style={{ left: nowX }}>
                 {formatTime(now)}
