@@ -35,6 +35,7 @@ import { useLayout } from '../../app/layout.tsx';
 import { useNavigate, useSearchParam } from '../../app/router.tsx';
 import { searchFor, VISTA_TITLE } from '../../app/routes.ts';
 import { ViewHeader } from '../../app/ViewHeader.tsx';
+import { preloadView } from '../../app/views.tsx';
 import { useSwipe } from '../../lib/gestures.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { notify } from '../../notices/index.ts';
@@ -352,6 +353,20 @@ export default function LibraryView({ active }: ViewProps) {
       title={VISTA_TITLE.biblioteca}
       actions={
         <>
+          {/* La Guía TV es hija de Canales (docs/iptv.md §20): su entrada, aquí. */}
+          {withIptv ? (
+            <Button
+              variant="quiet"
+              size="sm"
+              icon="guia"
+              className="lib-guide-link"
+              onClick={() => navigate({ vista: 'guia' })}
+              onPointerEnter={() => preloadView('guia')}
+              onFocus={() => preloadView('guia')}
+            >
+              Guía TV
+            </Button>
+          ) : null}
           <IconButton
             icon="paste"
             label="Pegar un Content ID o enlace acestream://"

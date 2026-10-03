@@ -4727,7 +4727,9 @@ las lee por nombre.
 - **D-propuesta G6:** fallos de la descarga (§20.3): un fallo pasajero del XMLTV no cambia una completa que aún sirve
   por la del respaldo (queda dicho y se reintenta antes); una guía sin partidos no borra la ventana de antes; dos
   `url-tvg` se juntan con una fuente por canal.
-- **Falta (fuera de este equipo):** la vista (`guia-web`), y la app de iPhone (las rutas nacen `web`; pasan a `any`
+- **La vista** (`guia-web`, `apps/web/src/features/guia/README.md`): `?vista=guia`, hija de Canales (botón «Guía TV»
+  en su cabecera con IPTV activa); demo con `?demo=1&vista=guia` (`&guia=hoy`, `&guia=grande`).
+- **Falta (fuera de este equipo):** la app de iPhone (las rutas nacen `web`; pasan a `any`
   cuando la app copie la pantalla, con sus ejemplos de `web/v1/` movidos a `v1/`).
 
 ### 20.11 Riesgos
