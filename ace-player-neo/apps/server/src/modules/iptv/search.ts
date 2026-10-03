@@ -721,8 +721,37 @@ export function literalMiss(context: RankContext, family: string): number {
   return typed.filter((word) => !words.some((token) => token.startsWith(word))).length;
 }
 
+/* Las palabras de relleno, cada una con su bit (`optionalWordsMask`). */
+const OPTIONAL_WORDS: readonly string[] = [...OPTIONAL_SEARCH_WORDS];
+
+/**
+ * Qué palabras de relleno («tv», «canal», «channel»…) empiezan alguna de
+ * estas palabras de una clave, como bits: lo que `literalMiss` mira de una
+ * familia, en un número (la pestaña IPTV lo guarda por familia para todo el
+ * catálogo, como el buscador).
+ */
+export function optionalWordsMask(words: Iterable<string>): number {
+  let mask = 0;
+  for (const token of words) {
+    OPTIONAL_WORDS.forEach((word, bit) => {
+      if (token.startsWith(word)) mask |= 1 << bit;
+    });
+  }
+  return mask;
+}
+
+/** `literalMiss` con las palabras de la familia como bits (`optionalWordsMask`). */
+export function literalMissMask(context: Pick<RankContext, 'query'>, mask: number): number {
+  const typed = context.query.typedOptional;
+  if (!typed.length) return 0;
+  return typed.filter((word) => {
+    const bit = OPTIONAL_WORDS.indexOf(word);
+    return bit < 0 || !(mask & (1 << bit));
+  }).length;
+}
+
 /** El nivel que cuenta para ordenar: con relleno escrito, «igual» es «misma familia». */
-export function rankTier(context: RankContext, tier: number): number {
+export function rankTier(context: Pick<RankContext, 'query'>, tier: number): number {
   return context.query.typedOptional.length && tier === NAME_TIER.exact ? NAME_TIER.family : tier;
 }
 

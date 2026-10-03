@@ -139,6 +139,63 @@ describe('la pestaña IPTV de Canales con el corpus: el mismo orden', () => {
   });
 });
 
+describe('Buscar y la pestaña IPTV ordenan igual', () => {
+  /* Lo que difiere a propósito se deja fuera: Buscar también encuentra por la categoría (nivel 7; la pestaña enseña
+     las categorías aparte: «deportes») y el país de una fila de la pestaña es el de sus filtros (§16.4: «AR» es
+     árabe, no Argentina, y «USA» se escribe «US»). */
+  const parity = catalogOf(corpusIptv().filter((channel) => !channel.title.startsWith('AR:')));
+  const parityBrowse = buildBrowseIndex(parity);
+  const sameCountry = (item: string): string => item.replace(/\/USA$/, '/US');
+  const extra = ['laliga', 'liga', 'gol', 'sport', 'canal', 'tv', 'm+', 'la', 'cine', 'bein'];
+  it.each([...ESPERADOS.map((item) => item.q), ...extra])('«%s»: los 15 primeros', (q) => {
+    const found = searchCatalog(parity, q, 15).groups.map((group) =>
+      sameCountry(label(group.best.display, group.bucket)),
+    );
+    expect(browseLabels(parityBrowse, q).slice(0, 15)).toEqual(found);
+  });
+
+  it('con la mejor variante en una plataforma o de reserva (la pestaña miraba solo esa)', () => {
+    const small = catalogOf([
+      { title: 'ES: LA LIGA 1 FHD', group: 'EU | ES | RAKUTEN TV' },
+      { title: 'ES: LA LIGA 1 HD', group: 'EU | ES | DEPORTES' },
+      { title: 'ES: LA LIGA 2 HD', group: 'EU | ES | DEPORTES' },
+      { title: 'ES: DAZN LALIGA HD', group: 'EU | ES | DAZN' },
+      { title: 'ES: GOL PLAY HEVC', group: 'EU | ES | DEPORTES' },
+      { title: 'ES: GOL PLAY (BACKUP)', group: 'EU | ES | DEPORTES' },
+      { title: 'ES: GOL MUNDIAL', group: 'EU | ES | DEPORTES' },
+    ]);
+    const index = buildBrowseIndex(small);
+    const labels = (q: string): string[] =>
+      searchCatalog(small, q, 10).groups.map((group) => label(group.best.display, group.bucket));
+    for (const q of ['laliga', 'la liga', 'liga', 'gol']) {
+      expect(browseLabels(index, q), q).toEqual(labels(q));
+    }
+    expect(labels('laliga')).toEqual(['laliga 1', 'laliga 2', 'dazn laliga']);
+    expect(labels('gol')).toEqual(['gol play', 'gol mundial']);
+  });
+
+  it('con un filtro, lo que queda sale en el mismo orden que sin él', () => {
+    const filtered = (q: string, country: string[]): string[] => {
+      browse.cache.clear();
+      return browseIndex(browse, {
+        q,
+        country,
+        offset: 0,
+        limit: 200,
+        withSummary: false,
+      }).rows.map((row) => label(browse.best[row]?.display ?? '', browse.country[row]));
+    };
+    for (const q of ['laliga tv', 'dazn', 'la 1', 'sport']) {
+      const kept = new Set(filtered(q, ['ES']));
+      browse.cache.clear();
+      const all = browseIndex(browse, { q, offset: 0, limit: 200, withSummary: false }).rows.map(
+        (row) => label(browse.best[row]?.display ?? '', browse.country[row]),
+      );
+      expect(filtered(q, ['ES']), q).toEqual(all.filter((item) => kept.has(item)));
+    }
+  });
+});
+
 describe('«liga» encuentra lo que la lleva dentro (LaLiga+, Bundesliga, Euroliga), detrás de lo bueno', () => {
   it.each([
     ['Buscar', (q: string) => searchLabels(q)],

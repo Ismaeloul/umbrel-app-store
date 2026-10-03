@@ -60,11 +60,11 @@ import {
   foldText,
   indexWordsOf,
   keyNames,
-  literalMiss,
+  literalMissMask,
+  optionalWordsMask,
   packRankedHit,
   rankTier,
   tokensForWord,
-  type RankContext,
 } from './search.js';
 
 export const FACET_NAMES: readonly IptvFacetName[] = [
@@ -175,6 +175,14 @@ export interface BrowseIndex {
   readonly keyRow: Int32Array;
   /** La clave (posición en `keyText`) de cada fila. */
   readonly rowKey: Int32Array;
+  /**
+   * La familia de cada clave (`NameFacts.family`, como número) y, de cada familia, su primera fila y qué palabras
+   * de relleno llevan sus claves (`optionalWordsMask`): de TODO el catálogo, como el buscador (`familyOrder` y
+   * `literalMiss` de search.ts), para que la pestaña ordene igual con filtros o sin ellos.
+   */
+  readonly keyFamily: Int32Array;
+  readonly familyFirst: Int32Array;
+  readonly familyMask: Uint8Array;
   readonly keyMoreRows: ReadonlyMap<number, readonly number[]>;
   /** Consultas ya ordenadas (LRU). */
   readonly cache: Map<string, CachedQuery>;
@@ -270,6 +278,11 @@ export function* buildBrowseIndexSteps(
   const keyMoreRows = new Map<number, number[]>();
   const keyOfRow: number[] = [];
   const byToken = new Map<string, number | number[]>();
+  /* Familias (número por familia): la de cada clave, su primera fila y el relleno de sus claves. */
+  const familyOf = new Map<string, number>();
+  const keyFamily: number[] = [];
+  const familyFirst: number[] = [];
+  const familyMask: number[] = [];
 
   let done = 0;
   for (const entry of entries) {
@@ -300,8 +313,20 @@ export function* buildBrowseIndexSteps(
         keyText.push(entry.key);
         /* Las palabras de sus nombres (no se guardan: `BrowseIndex.names`). */
         const names = keyNames(entry.key);
-        keyCompact.push((names[0] as NameFacts).compact);
+        const main = names[0] as NameFacts;
+        keyCompact.push(main.compact);
         keyFirst.push(row);
+        /* Las claves salen en el orden de su primera fila: la primera de una familia es su primera fila. */
+        let family = familyOf.get(main.family);
+        if (family === undefined) {
+          family = familyFirst.length;
+          familyOf.set(main.family, family);
+          familyFirst.push(row);
+          familyMask.push(0);
+        }
+        keyFamily.push(family);
+        familyMask[family] =
+          (familyMask[family] as number) | optionalWordsMask(entry.key.split(' '));
         for (const word of indexWordsOf(names)) {
           const list = byToken.get(word);
           if (list === undefined) byToken.set(word, position);
@@ -336,6 +361,7 @@ export function* buildBrowseIndexSteps(
   }
   firstRow.clear();
   otherRows.clear();
+  familyOf.clear();
   const rowKey = Int32Array.from(keyOfRow);
   keyOfRow.length = 0;
 
@@ -400,6 +426,9 @@ export function* buildBrowseIndexSteps(
     keyCompact,
     keyRow: Int32Array.from(keyFirst),
     rowKey,
+    keyFamily: Int32Array.from(keyFamily),
+    familyFirst: Int32Array.from(familyFirst),
+    familyMask: Uint8Array.from(familyMask),
     keyMoreRows,
     cache: new Map(),
     names: new Map(),
@@ -547,11 +576,18 @@ function rowQuality(bits: number): number {
   return bits & 8 ? 1 : 0;
 }
 
+/*
+ * Lo que resta a una fila (`entriesPenalty`), con TODAS las variantes de su canal (su clave y su país), como el
+ * buscador: con solo la mejor, una fila con la mejor en una plataforma o de reserva (el HEVC va detrás de la reserva)
+ * se castigaba aquí y no en Buscar.
+ */
 function rowPenalty(index: BrowseIndex, row: number, words: readonly string[]): number {
   const known = index.penalty[row] as number;
   if (known >= 0) return known;
   const best = index.best[row] as CatalogEntry;
-  const value = entriesPenalty(best, [best], words, index.catalog);
+  const { bucket } = best;
+  const entries = index.catalog.group(best.key).filter((entry) => entry.bucket === bucket);
+  const value = entriesPenalty(best, entries.length ? entries : [best], words, index.catalog);
   index.penalty[row] = value;
   return value;
 }
@@ -593,8 +629,9 @@ function textMatch(index: BrowseIndex, query: string): TextMatch {
  * Ordena (en su sitio) las filas que casan y han quedado tras los filtros, con
  * el orden del buscador (`compareRankedHits`, empaquetado en dos números con
  * `packRankedHit` para ordenar deprisa): su nivel con la consulta y sus alias,
- * el país, tus favoritos, lo que resta, el relleno escrito, la familia (y su
- * orden entre estas filas), el número, la calidad y el orden del proveedor.
+ * el país, tus favoritos, lo que resta (con todas sus variantes), el relleno
+ * escrito, la familia (y su orden en todo el catálogo), el número, la calidad
+ * y el orden del proveedor: lo mismo que Buscar.
  */
 function rankRows(
   index: BrowseIndex,
@@ -603,30 +640,20 @@ function rankRows(
   favorites: ReadonlySet<string> | undefined,
 ): void {
   const byItem = new Map<number, { tier: number; lead: boolean; main: NameFacts }>();
-  const familyOrder = new Map<string, number>();
-  const familyWords = new Map<string, Set<string>>();
   for (const row of rows) {
     const item = index.rowKey[row] as number;
     if (byItem.has(item)) continue;
     const key = index.keyText[item] as string;
     const names = cachedKeyNames(index.names, key);
     const found = bestNameTier(q, names);
-    const main = names[0] as NameFacts;
     /* Casa por sus palabras aunque no por el nivel de un solo nombre (un alias del emparejado): lo más flojo. */
     byItem.set(item, {
       tier: found.tier < 0 ? NAME_TIER.inside : found.tier,
       lead: found.lead,
-      main,
+      main: names[0] as NameFacts,
     });
-    const first = index.keyRow[item] as number;
-    familyOrder.set(main.family, Math.min(familyOrder.get(main.family) ?? first, first));
-    if (q.typedOptional.length) {
-      const words = familyWords.get(main.family) ?? new Set<string>();
-      for (const word of key.split(' ')) words.add(word);
-      familyWords.set(main.family, words);
-    }
   }
-  const context: RankContext = { query: q, familyWords };
+  const context = { query: q };
   /* Sin favoritos no hace falta montar el id de canal de cada fila. */
   const withFavorites = favorites !== undefined && favorites.size > 0;
   const first = new Float64Array(index.rowCount);
@@ -640,23 +667,26 @@ function rankRows(
     };
     const country = index.country[row] ?? null;
     const keyRow = index.keyRow[item] as number;
+    const family = index.keyFamily[item] as number;
+    const best = index.best[row] as CatalogEntry;
     const [a, b] = packRankedHit({
       rank: {
         tier: rankTier(context, tier),
         lead,
         region: regionRank(country, q.country),
-        favorite: withFavorites && favorites.has(channelIdOf(index.best[row] as CatalogEntry)),
+        favorite: withFavorites && favorites.has(channelIdOf(best)),
       },
       penalty: rowPenalty(index, row, main.words),
-      miss: literalMiss(context, main.family),
+      miss: literalMissMask(context, index.familyMask[family] as number),
       familyLength: main.family.length,
-      familyOrder: familyOrder.get(main.family) ?? keyRow,
+      familyOrder: index.familyFirst[family] as number,
       number: main.number,
       quality: rowQuality(index.qualities[row] as number),
       keyLength: (index.keyText[item] as string).length,
       keyOrder: keyRow,
       abroad: regionRank(country) === 0 ? 0 : 1,
-      order: row,
+      /* El orden del catálogo de su mejor variante, como el buscador. */
+      order: best.order,
     });
     first[row] = a;
     second[row] = b;
