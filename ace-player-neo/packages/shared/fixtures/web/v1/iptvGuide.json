@@ -1,0 +1,81 @@
+{
+  "state": "ready",
+  "version": "dhrhuo",
+  "provider": "IPTV de ejemplo",
+  "from": 1790092800000,
+  "to": 1790467200000,
+  "updatedAt": "2026-09-23T16:00:00.000Z",
+  "failedAt": null,
+  "partial": false,
+  "scope": "favorites",
+  "fellBack": false,
+  "favorites": 6,
+  "all": 55,
+  "total": 7,
+  "offset": 0,
+  "channels": [
+    {
+      "guide": 1,
+      "id": "952df13a32a417bb8d32ef7c253cddd5fbb0c3be",
+      "number": 1,
+      "name": "La 1",
+      "country": null,
+      "favorite": true,
+      "logo": false
+    },
+    {
+      "guide": 3,
+      "id": "e8ab3a66cbe18eebd84b72445c161991a3dc72d2",
+      "number": 3,
+      "name": "Antena 3",
+      "country": null,
+      "favorite": true,
+      "logo": false
+    },
+    {
+      "guide": 9,
+      "id": "b7a37830cae7b71d4aaf0ec657a87a435ea0defc",
+      "number": 9,
+      "name": "M+ LaLiga TV",
+      "country": null,
+      "favorite": true,
+      "logo": false
+    },
+    {
+      "guide": 11,
+      "id": "b8a26b0793c63dac14c3517984435346583ee513",
+      "number": 11,
+      "name": "DAZN LaLiga",
+      "country": null,
+      "favorite": true,
+      "logo": false
+    },
+    {
+      "guide": 12,
+      "id": "91dabe3693ac6a031066fa88f53d70fd1c7aca02",
+      "number": 12,
+      "name": "DAZN 1",
+      "country": null,
+      "favorite": true,
+      "logo": false
+    },
+    {
+      "guide": 16,
+      "id": "ff7d96e09cdc03899555e38278e5544bdb8c5e9c",
+      "number": 16,
+      "name": "M+ Vamos",
+      "country": null,
+      "favorite": true,
+      "logo": false
+    },
+    {
+      "guide": null,
+      "id": "ac28a0162ced7725927aae30c4c1b7d7a23778aa",
+      "number": null,
+      "name": "LaLiga+ PPV 1",
+      "country": null,
+      "favorite": true,
+      "logo": false
+    }
+  ]
+}

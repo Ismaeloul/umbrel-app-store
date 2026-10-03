@@ -536,6 +536,30 @@ export const ERROR_CATALOG = {
     message: 'La lista de tu IPTV es demasiado grande para el Umbrel.',
   },
 
+  /* --- Guía TV (docs/iptv.md §20.6) ---
+     Prefijo `guide_` y no `iptv_`: los 16 `iptv_*` están fijados y
+     significan «pasa a AceStream» (T14). Ninguno es de fuente. */
+  guide_unavailable: {
+    status: 409,
+    legacyStatus: null,
+    public: true,
+    message: 'La guía de tu IPTV no está disponible ahora.',
+  },
+  guide_stale: {
+    status: 409,
+    legacyStatus: null,
+    public: true,
+    message: 'La guía se ha actualizado mientras la mirabas: vuelve a cargarla.',
+  },
+  /** Los logos e imágenes de la guía (`iptvGuideArt`) con la cola llena: va con `Retry-After`. */
+  guide_busy: {
+    status: 503,
+    legacyStatus: null,
+    public: true,
+    message:
+      'Se están cargando muchas imágenes de la guía a la vez. Vuelve a intentarlo en un momento.',
+  },
+
   // --- Copia de seguridad de tus ajustes (0.8.4, decisiones.md D25) ---
   backup_invalid: {
     status: 400,

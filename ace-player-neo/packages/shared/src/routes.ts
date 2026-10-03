@@ -21,7 +21,8 @@
      IPTV (`iptv*`, docs/iptv.md §5.3: la IPTV solo se configura en la web)
      y `iptvChannels` (el buscador IPTV, §14.2; pasa a `any` cuando la app
      calque el buscador, D27) e `iptvBrowse` (la pestaña IPTV de Canales,
-     §16.2; D29) son `web`. También las 3 de la copia de seguridad
+     §16.2; D29) son `web`. Las 5 de la Guía TV (`iptvGuide*`, §20.6)
+     también nacen `web`. También las 3 de la copia de seguridad
      (`backup*`, decisiones.md D25: la copia lleva datos personales y la
      IPTV solo se configura en la web). Las 6 de Películas y series (`vod*`,
      docs/vod.md §11.1) nacen `web` (D-VOD19) y pasan a `any` cuando la app
@@ -102,6 +103,18 @@ import {
   IptvUpdateBodySchema,
   IptvViewSchema,
 } from './api/v1/iptv.js';
+import {
+  IptvGuideArtParamsSchema,
+  IptvGuideNowQuerySchema,
+  IptvGuideNowResponseSchema,
+  IptvGuideProgrammeDetailSchema,
+  IptvGuideProgrammeParamsSchema,
+  IptvGuideProgrammesQuerySchema,
+  IptvGuideProgrammesResponseSchema,
+  IptvGuideQuerySchema,
+  IptvGuideResponseSchema,
+  IptvGuideVersionQuerySchema,
+} from './api/v1/guide.js';
 import {
   BackupExportBodySchema,
   BackupFileSchema,
@@ -721,6 +734,103 @@ export const V1_ROUTES = {
     sideEffects: false,
     /* Una consulta o un cursor mal formados: `validation_error` (de COMMON_V1_ERRORS). */
     errors: [],
+    legacyTwin: null,
+  }),
+
+  // --- Guía TV (solo web por ahora, docs/iptv.md §20.6) ---
+  iptvGuide: defineRoute({
+    method: 'GET',
+    path: '/api/v1/iptv/guide',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary:
+      'Guía TV: estado de la guía y canales con programación por páginas (Favoritos o Todos)',
+    description:
+      'La parrilla de la Guía TV (docs/iptv.md §20). Da el estado de la guía, su sello (`version`), lo que cubre (`from`, `to`) y una página de canales: ' +
+      '`favorites` (tus favoritos en su orden, también los que no tienen guía) o `all` (todos los canales con programación, España y sin país primero, en el orden del proveedor). ' +
+      'Con `favorites` y ningún favorito con guía, responde `all` con `fellBack: true`. Sin IPTV activa responde 200 con `state: inactive`: no es un error. ' +
+      'Nunca lleva URL, `stream_id`, `tvg-id` ni credenciales.',
+    query: IptvGuideQuerySchema,
+    response: IptvGuideResponseSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: false,
+    errors: [],
+    legacyTwin: null,
+  }),
+  iptvGuideProgrammes: defineRoute({
+    method: 'GET',
+    path: '/api/v1/iptv/guide/programmes',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary: 'Guía TV: los programas de un trozo de la parrilla (hasta 60 canales × 12 h)',
+    description:
+      'Programas que se solapan con [`from`, `to`) de cada canal de la guía pedido, ordenados y sin solaparse entre sí, con título y marcas (docs/iptv.md §20.6). ' +
+      'Con la `v` de ahora, `private, max-age=86400, immutable` (el trozo de una guía no cambia nunca); con otra, 409 `guide_stale`. Sin guía, 409 `guide_unavailable`.',
+    query: IptvGuideProgrammesQuerySchema,
+    response: IptvGuideProgrammesResponseSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: false,
+    errors: ['guide_unavailable', 'guide_stale'],
+    legacyTwin: null,
+  }),
+  iptvGuideProgramme: defineRoute({
+    method: 'GET',
+    path: '/api/v1/iptv/guide/programmes/:id',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary: 'Guía TV: la ficha de un programa (sinopsis, episodio, edad, nota, reparto…)',
+    description:
+      'Lo que la guía dice de un programa, para «Más info» (docs/iptv.md §20.6). El id solo vale con su `v`: con otra, 409 `guide_stale`; uno que no existe, 404 `not_found`.',
+    params: IptvGuideProgrammeParamsSchema,
+    query: IptvGuideVersionQuerySchema,
+    response: IptvGuideProgrammeDetailSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: false,
+    errors: ['guide_unavailable', 'guide_stale'],
+    legacyTwin: null,
+  }),
+  iptvGuideNow: defineRoute({
+    method: 'GET',
+    path: '/api/v1/iptv/guide/now',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary: 'Guía TV: «ahora / después» de unos canales IPTV (para Canales)',
+    description:
+      'Para cada id IPTV pedido (los de las filas de la pestaña IPTV o del buscador), lo que echa ahora y lo siguiente según la guía (docs/iptv.md §20.6). ' +
+      'Sin guía o sin IPTV activa, 200 con `available: false`: no es un error.',
+    query: IptvGuideNowQuerySchema,
+    response: IptvGuideNowResponseSchema,
+    status: 200,
+    content: 'json',
+    sideEffects: false,
+    errors: [],
+    legacyTwin: null,
+  }),
+  iptvGuideArt: defineRoute({
+    method: 'GET',
+    path: '/api/v1/iptv/guide/art/:ref',
+    access: 'web',
+    credential: 'bearer',
+    module: 'iptv',
+    summary:
+      'Guía TV: logo de un canal o imagen de un programa (JPEG, PNG o WebP) por el proxy propio',
+    description:
+      'Solo recibe referencias de la guía, nunca URLs (docs/iptv.md §20.6). Con la `v` de ahora, `private, max-age=86400, immutable`; con otra, 409 `guide_stale`. ' +
+      "`If-None-Match` da 304. Solo imágenes raster por bytes mágicos, con `nosniff` y `Content-Security-Policy: default-src 'none'`. Sin imagen, 404 `not_found`; con la cola llena, 503 `guide_busy` con `Retry-After`.",
+    params: IptvGuideArtParamsSchema,
+    query: IptvGuideVersionQuerySchema,
+    response: null,
+    status: 200,
+    content: 'binary',
+    sideEffects: false,
+    errors: ['guide_unavailable', 'guide_stale', 'guide_busy'],
     legacyTwin: null,
   }),
 

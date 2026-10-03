@@ -1,0 +1,72 @@
+{
+  "state": "ready",
+  "version": "dhrhuo",
+  "provider": "IPTV de ejemplo",
+  "from": 1790092800000,
+  "to": 1790467200000,
+  "updatedAt": "2026-09-23T16:00:00.000Z",
+  "failedAt": null,
+  "partial": false,
+  "scope": "all",
+  "fellBack": false,
+  "favorites": 6,
+  "all": 55,
+  "total": 55,
+  "offset": 0,
+  "channels": [
+    {
+      "guide": 1,
+      "id": "952df13a32a417bb8d32ef7c253cddd5fbb0c3be",
+      "number": 1,
+      "name": "La 1",
+      "country": null,
+      "favorite": true,
+      "logo": false
+    },
+    {
+      "guide": 2,
+      "id": "942defa733a4194e9032f435223cd91cfab0c22b",
+      "number": 2,
+      "name": "La 2",
+      "country": null,
+      "favorite": false,
+      "logo": false
+    },
+    {
+      "guide": 3,
+      "id": "e8ab3a66cbe18eebd84b72445c161991a3dc72d2",
+      "number": 3,
+      "name": "Antena 3",
+      "country": null,
+      "favorite": true,
+      "logo": false
+    },
+    {
+      "guide": 4,
+      "id": "4c1462744e3772295d52e6aafaafe137f2e37728",
+      "number": 4,
+      "name": "Cuatro",
+      "country": null,
+      "favorite": false,
+      "logo": false
+    },
+    {
+      "guide": 5,
+      "id": "6a08d7eee5c07c657c1df6f4fa2168ebfbe68e12",
+      "number": 5,
+      "name": "Telecinco",
+      "country": null,
+      "favorite": false,
+      "logo": false
+    },
+    {
+      "guide": 6,
+      "id": "5c6368e83875be8b8e6ee9a2cb4db28d0f68bc14",
+      "number": 6,
+      "name": "laSexta",
+      "country": null,
+      "favorite": false,
+      "logo": false
+    }
+  ]
+}

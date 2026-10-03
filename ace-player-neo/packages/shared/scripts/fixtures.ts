@@ -23,6 +23,12 @@ import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { format, resolveConfig } from 'prettier';
+import {
+  demoGuide,
+  demoGuideNow,
+  demoGuideProgramme,
+  demoGuideProgrammes,
+} from '../src/demo/guide.js';
 import type {
   ApiError,
   BackupCounts,
@@ -87,6 +93,11 @@ export const WEB_FIXTURE_ROUTE_IDS = [
   'vodBrowse',
   'vodTitle',
   'vodStream',
+  /* Guía TV (docs/iptv.md §20.6): solo web hasta que la app copie la pantalla. */
+  'iptvGuide',
+  'iptvGuideProgrammes',
+  'iptvGuideProgramme',
+  'iptvGuideNow',
 ] as const satisfies readonly JsonRouteId[];
 export type WebFixtureRouteId = (typeof WEB_FIXTURE_ROUTE_IDS)[number];
 /** Rutas con ejemplo en `v1/`. */
@@ -1054,7 +1065,43 @@ const backupCounts = (favorites: number, history: number): BackupCounts => ({
   channelFeedback: 0,
 });
 
+/* Guía TV (docs/iptv.md §20.6 y §20.8): salen de la guía de ejemplo
+   (src/demo/guide.ts) a la hora de los ejemplos, así que dicen lo mismo que
+   la demo de la web. Un trozo de 3 h de los dos primeros favoritos y la
+   ficha de lo que echa uno de ellos a esa hora. */
+const guideFavorites = demoGuide({ scope: 'favorites' }, AT_MS);
+const guideSliceFrom = AT_MS - 30 * 60_000;
+const guideSlice = demoGuideProgrammes(
+  {
+    v: guideFavorites.version,
+    ch: guideFavorites.channels
+      .slice(2, 4)
+      .map((channel) => channel.guide)
+      .join(','),
+    from: guideSliceFrom,
+    to: guideSliceFrom + 3 * 3_600_000,
+  },
+  AT_MS,
+);
+const guideOnAir = guideSlice.channels
+  .flatMap((channel) => channel.programmes)
+  .find((item) => item.start <= AT_MS && item.end > AT_MS);
+const guideDetail = demoGuideProgramme(guideOnAir?.id ?? '', { v: guideFavorites.version }, AT_MS);
+const guideNow = demoGuideNow(
+  {
+    ids: guideFavorites.channels
+      .slice(0, 3)
+      .map((channel) => channel.id)
+      .join(','),
+  },
+  AT_MS,
+);
+
 export const WEB_V1_FIXTURES = {
+  iptvGuide: guideFavorites,
+  iptvGuideProgrammes: guideSlice,
+  iptvGuideProgramme: guideDetail,
+  iptvGuideNow: guideNow,
   backupExport: backupFile,
   backupExportSecret: {
     ...backupFile,
@@ -1203,6 +1250,35 @@ const iptvTelecinco: ResolutionCandidate = {
 };
 
 export const VARIANT_FIXTURES = {
+  /* Guía TV (docs/iptv.md §20.6): «Todos» (una página corta) y los estados sin parrilla. */
+  'iptvGuide.todos': demoGuide({ scope: 'all', limit: 6 }, AT_MS),
+  'iptvGuide.inactiva': {
+    ...guideFavorites,
+    state: 'inactive',
+    version: '',
+    provider: '',
+    from: null,
+    to: null,
+    updatedAt: null,
+    scope: 'favorites',
+    favorites: 0,
+    all: 0,
+    total: 0,
+    channels: [],
+  },
+  'iptvGuide.preparando': {
+    ...guideFavorites,
+    state: 'preparing',
+    version: '',
+    from: null,
+    to: null,
+    updatedAt: null,
+    favorites: 0,
+    all: 0,
+    total: 0,
+    channels: [],
+  },
+  'iptvGuideNow.sin-guia': { available: false, version: '', items: [] },
   /* Películas y series (docs/vod.md §11.6 y §13): los estados de la portada. */
   'vodHome.preparing': { ...vodHomeEmpty, state: 'preparing' },
   'vodHome.none': vodHomeEmpty,
@@ -1521,6 +1597,10 @@ export const VARIANT_FIXTURES = {
     source: 'iptv',
   },
 } satisfies {
+  'iptvGuide.todos': V1ResponseInput<'iptvGuide'>;
+  'iptvGuide.inactiva': V1ResponseInput<'iptvGuide'>;
+  'iptvGuide.preparando': V1ResponseInput<'iptvGuide'>;
+  'iptvGuideNow.sin-guia': V1ResponseInput<'iptvGuideNow'>;
   'vodHome.preparing': V1ResponseInput<'vodHome'>;
   'vodHome.none': V1ResponseInput<'vodHome'>;
   'vodHome.unsupported': V1ResponseInput<'vodHome'>;
@@ -1683,4 +1763,5 @@ export const NON_JSON_ROUTE_IDS: readonly V1RouteId[] = [
   'footballCompetitionLogo',
   'vodArt',
   'vodProgress',
+  'iptvGuideArt',
 ];

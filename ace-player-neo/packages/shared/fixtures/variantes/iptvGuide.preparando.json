@@ -1,0 +1,17 @@
+{
+  "state": "preparing",
+  "version": "",
+  "provider": "IPTV de ejemplo",
+  "from": null,
+  "to": null,
+  "updatedAt": null,
+  "failedAt": null,
+  "partial": false,
+  "scope": "favorites",
+  "fellBack": false,
+  "favorites": 0,
+  "all": 0,
+  "total": 0,
+  "offset": 0,
+  "channels": []
+}

@@ -32,6 +32,12 @@ export const V2_FILES = {
   iptvDir: 'v2/iptv',
   iptvCatalog: 'v2/iptv/catalogo.enc',
   iptvGuide: 'v2/iptv/guia.enc',
+  /**
+   * Guía TV (docs/iptv.md §20.2): la guía COMPLETA en SQLite, sin cifrar
+   * (no lleva credenciales; D-propuesta G1), 0600 en la carpeta 0700. Se
+   * construye en `guia.db.next` y se cambia de golpe.
+   */
+  iptvGuideDb: 'v2/iptv/guia.db',
   /** 32 bytes aleatorios, solo si no hay `ACE_SEED` ni `ENGINE_CONTROL_TOKEN`. */
   iptvKey: 'v2/iptv/clave',
   /**
