@@ -316,9 +316,12 @@ export function ChannelRow({
                     <Num value={minute} label={`minuto ${minute}`} />
                   ) : null}
                 </span>
-                <span className={cx('ch__state', scoreHidden && 'ch__state--hidden')}>
-                  {scoreHidden ? 'Marcador oculto' : 'En directo'}
-                </span>
+                {/* «Descanso» ya dice que está en directo (sin los dos juntos). */}
+                {halftime && !scoreHidden ? null : (
+                  <span className={cx('ch__state', scoreHidden && 'ch__state--hidden')}>
+                    {scoreHidden ? 'Marcador oculto' : 'En directo'}
+                  </span>
+                )}
               </>
             ) : (
               <span className="ch__sub">{subtitle}</span>

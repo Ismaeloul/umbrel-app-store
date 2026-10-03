@@ -64,7 +64,35 @@
   background: var(--accent);
   transform: scaleX(var(--p));
 }
-/* El deslizador de verdad, transparente encima (teclado, lector, arrastre). */
+.vod-bar {
+  cursor: pointer;
+}
+.vod-bar:has(.vod-bar__input:disabled) {
+  cursor: default;
+}
+/* El pulgar, pintado sobre la pista con la misma geometría (`--p` × su ancho):
+   el del deslizador nativo va con medio pulgar de margen a cada lado y no
+   coincidía con el punto del salto ni con el tiempo flotante. */
+.vod-bar__thumb {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--p) * 100%);
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.45);
+  translate: -50% -50%;
+  pointer-events: none;
+}
+.vod-bar:has(.vod-bar__input:disabled) .vod-bar__thumb {
+  display: none;
+}
+.vod-bar:has(.vod-bar__input:focus-visible) .vod-bar__thumb {
+  box-shadow: 0 0 0 3px var(--accent);
+}
+/* El deslizador de verdad, invisible encima: teclado y lector de pantalla.
+   El ratón y el dedo los atiende la barra (VodControls.tsx, `timeAtPointer`). */
 .vod-bar__input {
   position: absolute;
   inset: 0;
@@ -72,41 +100,13 @@
   height: 100%;
   margin: 0;
   background: transparent;
+  opacity: 0;
   -webkit-appearance: none;
   appearance: none;
-  cursor: pointer;
-}
-.vod-bar__input:disabled {
-  cursor: default;
-}
-.vod-bar__input::-webkit-slider-runnable-track {
-  height: 100%;
-  background: transparent;
-}
-.vod-bar__input::-webkit-slider-thumb {
-  width: 14px;
-  height: 14px;
-  margin-top: 7px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.45);
-  -webkit-appearance: none;
-}
-.vod-bar__input::-moz-range-track {
-  background: transparent;
-}
-.vod-bar__input::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border: 0;
-  border-radius: 50%;
-  background: #fff;
+  pointer-events: none;
 }
 .vod-bar__input:focus-visible {
   outline: none;
-}
-.vod-bar__input:focus-visible::-webkit-slider-thumb {
-  box-shadow: 0 0 0 3px var(--accent);
 }
 .vod-bar__tip {
   --x: 0;
@@ -127,6 +127,9 @@
 .vod-clock {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  /* Con solo «0:01» (móvil) seguía siendo un botón de 44. */
+  min-width: var(--tap);
   height: var(--tap);
   padding: 0 10px;
   border-radius: var(--r-pill);
@@ -141,6 +144,10 @@
 }
 .vod-forward {
   padding: 0 8px 0 12px;
+}
+.vod-next {
+  gap: 4px;
+  padding: 0 10px 0 16px;
 }
 .vod-forward__icon {
   transform: scaleX(-1);
@@ -271,4 +278,65 @@
   background:
     radial-gradient(120% 90% at 30% 20%, rgb(255 255 255 / 0.1), transparent 60%),
     linear-gradient(135deg, #1d2236, #0c0d14 70%);
+}
+
+/* ---- Franja de controles (móvil en vertical) ------------------------------------
+   Con una película en el móvil en vertical, el vídeo mide ~220 px: con los
+   controles encima no se veía nada (auditoría web 0.9.0). Aquí la barra de
+   tiempo y la fila de botones van en una franja negra BAJO la imagen (el
+   marco crece hacia abajo lo que mide la franja) y se quedan siempre a la
+   vista; lo de arriba (minimizar, más opciones) sigue escondiéndose solo. */
+.player[data-strip='true'] {
+  --strip: 96px;
+}
+.player[data-strip='true'] .player-frame {
+  box-sizing: content-box;
+  padding-bottom: var(--strip);
+}
+.player[data-strip='true']
+  :is(
+    .player-video,
+    .player-demo-picture,
+    .player-hit,
+    .player-msg,
+    .player-cut,
+    .vod-demo-picture
+  ) {
+  bottom: var(--strip);
+  height: auto;
+}
+/* Lo que va centrado sobre la imagen, centrado en la imagen (no en el marco). */
+.player[data-strip='true'] :is(.player-demo, .player-tap, .player-spinner) {
+  top: calc(50% - var(--strip) / 2);
+}
+.player[data-strip='true'] .vod-card {
+  bottom: calc(var(--strip) + 8px);
+}
+.player[data-strip='true'] .vod-card--end {
+  bottom: calc(50% + var(--strip) / 2);
+}
+/* El velo, solo arriba y solo sobre la imagen. */
+.player[data-strip='true'] .player-chrome::before {
+  bottom: var(--strip);
+  background: linear-gradient(to bottom, rgb(0 0 0 / 0.55), transparent 45%);
+  transition: opacity var(--dur-estandar) var(--ease-estandar);
+}
+.player[data-strip='true'] .player-chrome[data-visible='false'] {
+  opacity: 1;
+}
+.player[data-strip='true'] .player-chrome__top {
+  transition: opacity var(--dur-rapido) var(--ease-estandar);
+}
+.player[data-strip='true'] .player-chrome[data-visible='false']::before,
+.player[data-strip='true'] .player-chrome[data-visible='false'] > .player-chrome__top {
+  opacity: 0;
+}
+.player[data-strip='true'] .player-chrome .vod-bottom > .vod-bar,
+.player[data-strip='true'] .player-chrome .vod-row > *,
+.player[data-strip='true'] .player-chrome .vod-row .player-chrome__group > * {
+  pointer-events: auto;
+}
+/* La cápsula de estado, al pie de la imagen (encima de la franja), siempre en el mismo sitio. */
+.stage.stage:has(.player[data-strip='true'] .player-chrome) .stage__status {
+  --status-lift: -96px;
 }

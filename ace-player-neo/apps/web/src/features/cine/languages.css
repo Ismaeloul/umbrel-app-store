@@ -245,6 +245,9 @@
 }
 
 /* ---- Ajustes → IPTV: la fila de los idiomas ------------------------------------------------ */
+.cine-langs-setting__unknown {
+  grid-column: 1 / -1;
+}
 .cine-langs-setting {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

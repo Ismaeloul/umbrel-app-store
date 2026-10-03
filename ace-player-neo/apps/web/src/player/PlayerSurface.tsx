@@ -529,11 +529,18 @@ function Surface({ ctx }: { ctx: PlayerContextValue }) {
         <span className="player-spinner" aria-hidden="true" />
       ) : null}
       {/* El rótulo de la demo, nunca encima del panel («Reconectando»…). */}
-      {state.engine === 'demo' && state.started && state.channel && !stageMessage(state) ? (
+      {/* Ni detrás de la tarjeta «Terminada» (asomaban letras por los lados). */}
+      {state.engine === 'demo' &&
+      state.started &&
+      state.channel &&
+      !stageMessage(state) &&
+      !state.vod?.ended ? (
         <p className="player-demo" aria-hidden="true">
           <strong>{state.channel.title.toUpperCase()}</strong>
           <span>
-            {vod ? VOD_TEXT.demo : 'reproducción simulada — en el Umbrel verías el stream real'}
+            {vod
+              ? VOD_TEXT.demo(state.vod?.kind ?? 'movie')
+              : 'reproducción simulada — en el Umbrel verías el stream real'}
           </span>
         </p>
       ) : null}

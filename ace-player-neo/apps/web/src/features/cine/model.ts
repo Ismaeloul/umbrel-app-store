@@ -607,3 +607,38 @@ export function playBlock(
 export function orderedTags(tags: readonly VodTag[]): VodTag[] {
   return VOD_TAGS.filter((tag) => tags.includes(tag));
 }
+
+// ---- Nombres de categoría ------------------------------------------------------------
+
+/** Siglas que se quedan en mayúsculas («FR», «4K», «USA», «VOSE»…). */
+const CATEGORY_CODE = /^(?:[A-ZÁÉÍÓÚÑ]{1,3}|\d+[A-Z]*|VOSE|UHD|FHD|HDR|HEVC)$/;
+
+function sentenceCase(text: string): string {
+  return text
+    .split(/\s+/)
+    .map((word, index) => {
+      if (CATEGORY_CODE.test(word)) return word;
+      const lower = word.toLocaleLowerCase('es');
+      return index === 0 ? lower.charAt(0).toLocaleUpperCase('es') + lower.slice(1) : lower;
+    })
+    .join(' ');
+}
+
+/**
+ * El nombre de una categoría como se enseña: sin el «VOD |» que ponen los
+ * paneles delante, sin gritar (las que vienen en mayúsculas, en minúsculas
+ * salvo las siglas) y con el país o el idioma delante:
+ * «VOD | 4K» → «4K», «FR | FILMS» → «FR · Films», «|LAT| SERIES» →
+ * «LAT · Series», «CINE ESPAÑOL» → «Cine español». Una que ya viene bien
+ * escrita se queda como está.
+ */
+export function categoryLabel(name: string): string {
+  const parts = name
+    .split('|')
+    .map((part) => part.trim())
+    .filter((part) => part && !/^vod$/i.test(part));
+  if (parts.length === 0) return name.trim();
+  return parts
+    .map((part) => (part === part.toLocaleUpperCase('es') ? sentenceCase(part) : part))
+    .join(' · ');
+}

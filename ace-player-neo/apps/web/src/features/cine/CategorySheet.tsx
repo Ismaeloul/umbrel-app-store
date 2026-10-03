@@ -12,12 +12,13 @@ import type { VodCategory } from '@ace/shared';
 import { cx } from '../../lib/cx.ts';
 import { Chip, Icon, Num, Sheet } from '../../ui/index.ts';
 import { CINE_TEXT, formatCount } from './texts.ts';
+import { categoryLabel } from './model.ts';
 
 /** Chips a la vista en la fila de la rejilla (las demás, en la hoja). */
 export const ROW_CATEGORIES_MAX = 12;
 
-function categoryLabel(category: VodCategory): string {
-  return `${category.name}${category.adult ? ` (${CINE_TEXT.adult})` : ''}, ${formatCount(category.count)}`;
+function categoryAria(category: VodCategory): string {
+  return `${categoryLabel(category.name)}${category.adult ? ` (${CINE_TEXT.adult})` : ''}, ${formatCount(category.count)}`;
 }
 
 export interface CategoryListProps {
@@ -75,11 +76,11 @@ export function CategoryList({
             type="button"
             className="cine-cat press"
             aria-pressed={value === category.id}
-            aria-label={categoryLabel(category)}
+            aria-label={categoryAria(category)}
             data-cat={category.id}
             onClick={() => onChange(category.id)}
           >
-            <span className="cine-cat__name">{category.name}</span>
+            <span className="cine-cat__name">{categoryLabel(category.name)}</span>
             {category.adult ? <span className="cine-cat__adult">{CINE_TEXT.adult}</span> : null}
             <Num
               className="cine-cat__count"
@@ -152,10 +153,10 @@ export function CategoryChips({ categories, value, onChange, className }: Catego
         <Chip
           key={category.id}
           pressed={value === category.id}
-          label={categoryLabel(category)}
+          label={categoryAria(category)}
           onClick={() => onChange(category.id)}
         >
-          {category.name}
+          {categoryLabel(category.name)}
         </Chip>
       ))}
     </div>

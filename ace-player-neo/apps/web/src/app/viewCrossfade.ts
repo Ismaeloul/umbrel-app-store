@@ -58,6 +58,15 @@ interface PendingCrossfade {
 
 let pending: PendingCrossfade | null = null;
 
+/** El esqueleto de una vista que aún se descarga (Shell.tsx, ViewSkeleton). */
+export const SKELETON_CLASS = 'view-skeleton';
+/** Atributo del fantasma quieto y de la vista escondida mientras la nueva llega. */
+export const WAIT_ATTR = 'data-espera';
+/** Lo más que se espera a la vista nueva antes de fundir igualmente. */
+export const WAIT_MAX_MS = 1500;
+/** Corta la espera en curso (otro cambio de vista). */
+let cancelWait: (() => void) | null = null;
+
 const viewSelector = (vista: string) => `.views > .view[data-vista="${CSS.escape(vista)}"]`;
 
 /**
@@ -86,7 +95,8 @@ export function captureLeavingView(
   // roba el grupo a los botones de radio de verdad, ni se toca, ni lo lee
   // un lector de pantalla.
   ghost.className = GHOST_CLASS;
-  for (const attr of ['data-vista', 'data-active', ENTER_ATTR, 'id']) ghost.removeAttribute(attr);
+  for (const attr of ['data-vista', 'data-active', ENTER_ATTR, WAIT_ATTR, 'id'])
+    ghost.removeAttribute(attr);
   ghost.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
   ghost.querySelectorAll('[name]').forEach((el) => el.removeAttribute('name'));
   ghost.setAttribute('aria-hidden', 'true');
@@ -114,6 +124,8 @@ export interface CrossfadeOptions {
   /** Duración del fundido; si no, el token --dur-rapido. */
   durationMs?: number;
   setTimer?: (fn: () => void, ms: number) => unknown;
+  /** Fundir ya, aunque la vista nueva siga con su esqueleto (al acabar la espera). */
+  skipWait?: boolean;
 }
 
 type AnimationEventType = 'animationend' | 'animationcancel';
@@ -160,11 +172,51 @@ export function playPendingCrossfade(
 ): HTMLElement | null {
   const prepared = pending;
   pending = null;
-  // El fundido anterior, si seguía, se acaba aquí.
+  // El fundido anterior (o la espera de uno), si seguía, se acaba aquí.
+  cancelWait?.();
   removeGhosts(doc);
   if (!prepared || !prepared.host.isConnected || prepared.vista === vista) return null;
   const entering = doc.querySelector<HTMLElement>(viewSelector(vista));
   if (!entering) return null;
+
+  // La vista nueva aún no ha llegado (su código se descarga: enseña su
+  // esqueleto). Fundir ahora era ver el esqueleto y el fantasma a la vez
+  // (auditoría web 0.9.0, WebKit): la vieja se queda quieta encima, la nueva
+  // escondida debajo, y el fundido empieza cuando la nueva está lista (o a
+  // los WAIT_MAX_MS, pase lo que pase).
+  if (!options.skipWait && entering.querySelector(`.${SKELETON_CLASS}`)) {
+    const setTimer = options.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
+    const { ghost, host } = prepared;
+    ghost.setAttribute(WAIT_ATTR, '');
+    entering.setAttribute(WAIT_ATTR, '');
+    host.appendChild(ghost);
+    let done = false;
+    let observer: MutationObserver | null = null;
+    const stop = () => {
+      done = true;
+      observer?.disconnect();
+      entering.removeAttribute(WAIT_ATTR);
+      if (cancelWait === stop) cancelWait = null;
+    };
+    const go = () => {
+      if (done) return;
+      stop();
+      ghost.remove();
+      if (!host.isConnected) return;
+      ghost.removeAttribute(WAIT_ATTR);
+      pending = { ...prepared, ghost };
+      playPendingCrossfade(vista, doc, { ...options, skipWait: true });
+    };
+    cancelWait = stop;
+    if (typeof MutationObserver === 'function') {
+      observer = new MutationObserver(() => {
+        if (!entering.querySelector(`.${SKELETON_CLASS}`)) go();
+      });
+      observer.observe(entering, { childList: true, subtree: true });
+    }
+    setTimer(go, WAIT_MAX_MS);
+    return ghost;
+  }
 
   const tokens = doc.defaultView?.getComputedStyle(doc.documentElement);
   const duration =

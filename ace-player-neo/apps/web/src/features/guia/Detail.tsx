@@ -48,6 +48,25 @@ function shownOf(picked: Picked, now: number): Shown {
   };
 }
 
+/** «La 1» y el canal 1: el número ya está en el nombre, no se repite debajo. */
+export function nameHasNumber(name: string, number: number): boolean {
+  return new RegExp(`(^|\\D)${number}(\\D|$)`).test(name);
+}
+
+/** La edad de la guía, dicha: «TP» es «Todos los públicos»; «12» o «+12», «+12». */
+export function ratingText(rating: string): string {
+  const text = rating.trim();
+  if (/^tp$/i.test(text)) return 'Todos los públicos';
+  const age = /^\+?(\d{1,2})$/.exec(text);
+  return age ? `+${age[1]}` : text;
+}
+
+/** El aviso al pasar por encima de la edad. */
+export function ratingTitle(rating: string): string {
+  const age = /^\+?(\d{1,2})$/.exec(rating.trim());
+  return age ? `No recomendado para menores de ${age[1]} años` : 'Edad recomendada';
+}
+
 function whenLine(shown: Shown, now: number): string {
   if (!shown.real) return '';
   if (shown.airing === 'live') return remainingText(shown.end, now);
@@ -99,7 +118,7 @@ export function Strip({
       <div className="guia-strip__channel">
         <ChannelLogo channel={channel} version={version} size={56} />
         <span className="guia-strip__chname">{channel.name}</span>
-        {channel.number !== null ? (
+        {channel.number !== null && !nameHasNumber(channel.name, channel.number) ? (
           <Num
             className="guia-strip__num"
             value={channel.number}
@@ -240,15 +259,20 @@ export function InfoSheet({
                 <p className="guia-sheet__meta">
                   {detailMeta(detail).join(' · ')}
                   {detail.rating ? (
-                    <Capsule size="sm" tone="neutral" className="guia-sheet__rating">
-                      {detail.rating}
+                    <Capsule
+                      size="sm"
+                      tone="neutral"
+                      className="guia-sheet__rating"
+                      title={ratingTitle(detail.rating)}
+                    >
+                      {ratingText(detail.rating)}
                     </Capsule>
                   ) : null}
                 </p>
               ) : detail.rating ? (
                 <p className="guia-sheet__meta">
-                  <Capsule size="sm" tone="neutral">
-                    {detail.rating}
+                  <Capsule size="sm" tone="neutral" title={ratingTitle(detail.rating)}>
+                    {ratingText(detail.rating)}
                   </Capsule>
                 </p>
               ) : null}

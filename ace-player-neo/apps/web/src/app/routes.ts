@@ -270,10 +270,12 @@ export function routeDepth(route: Route): number {
 
 /**
  * El destino de la barra que se ilumina en una vista: el suyo o, en las
- * hijas (la Guía TV), el de su madre. null fuera de la barra (partido…).
+ * hijas (la Guía TV, la sala de una película), el de su madre. null fuera de la barra (partido…).
  */
 export function navParent(vista: Vista): NavVista | null {
   if (vista === 'guia') return 'biblioteca';
+  // La sala de una película o un episodio es de Películas y series.
+  if (vista === 'sala') return 'cine';
   return isNavVista(vista) ? vista : null;
 }
 

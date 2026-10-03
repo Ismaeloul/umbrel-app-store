@@ -8,7 +8,11 @@
    NUNCA arranca solo. */
 
 import { useEffect } from 'react';
+import type { VodTitle } from '@ace/shared';
 import { HASH_RE_STRICT, rememberSala, salaItem, type SalaItem } from './memory.ts';
+import { useVodTitle } from '../cine/data.ts';
+import { metaLine, spanishGenres } from '../cine/model.ts';
+import { Synopsis } from '../cine/Synopsis.tsx';
 import type { ViewProps } from '../../app/contracts.ts';
 import { useNavigate } from '../../app/router.tsx';
 import { playVod, usePlayer, vodRoute } from '../../player/api.ts';
@@ -23,6 +27,46 @@ function titleRoute(item: Pick<SalaItem, 'id' | 'kind' | 'seriesId'>) {
     vista: 'cine' as const,
     id: item.kind === 'episode' && item.seriesId ? item.seriesId : item.id,
   };
+}
+
+/** De qué va lo que suena: la sinopsis del episodio (o la de la serie) o la de la película. */
+function aboutOf(title: VodTitle, id: string): { meta: string; plot: string | null } {
+  const genres = spanishGenres(title.genres).slice(0, 3).join(', ');
+  if (title.kind === 'movie')
+    return {
+      meta: [metaLine(title), genres].filter(Boolean).join(' · '),
+      plot: title.plot,
+    };
+  const episode = title.seasons.flatMap((season) => season.episodes).find((ep) => ep.id === id);
+  return {
+    meta: [metaLine({ year: title.year, rating: title.rating }), genres]
+      .filter(Boolean)
+      .join(' · '),
+    plot: episode?.plot ?? title.plot,
+  };
+}
+
+/** Bajo los botones: los datos y la sinopsis (cuando llega la ficha; si no, nada). */
+function SalaAbout({
+  item,
+  active,
+}: {
+  item: Pick<SalaItem, 'id' | 'kind' | 'seriesId'>;
+  active: boolean;
+}) {
+  const titleId = titleRoute(item).id;
+  const { data } = useVodTitle(titleId, active);
+  if (!data) return null;
+  const { meta, plot } = aboutOf(data, item.id);
+  if (!meta && !plot) return null;
+  return (
+    <div className="sala__about">
+      {meta ? <p className="sala__meta">{meta}</p> : null}
+      {plot ? (
+        <Synopsis plot={plot} title="Sinopsis" titleId="sala-sinopsis" className="sala__plot" />
+      ) : null}
+    </div>
+  );
 }
 
 export default function Sala({ route, active }: ViewProps) {
@@ -92,6 +136,7 @@ export default function Sala({ route, active }: ViewProps) {
             </Button>
           </article>
         ) : null}
+        <SalaAbout item={vod} active={active} />
       </section>
     );
   }
@@ -162,6 +207,7 @@ export default function Sala({ route, active }: ViewProps) {
           Ver ficha
         </Button>
       </div>
+      <SalaAbout item={saved} active={active} />
     </section>
   );
 }

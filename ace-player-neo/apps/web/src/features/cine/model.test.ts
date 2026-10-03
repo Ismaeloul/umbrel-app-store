@@ -34,6 +34,7 @@ import {
   langQuery,
   toggleLang,
   type EpisodeProgressRef,
+  categoryLabel,
 } from './model.ts';
 import { formatBlocked, formatCount, titlesText } from './texts.ts';
 
@@ -422,5 +423,24 @@ describe('idiomas (docs/vod.md §4.10)', () => {
     expect(cardLang(undefined, [])).toBeNull();
     /* Uno elegido y una tarjeta sin él (un MULTI): se dice el suyo. */
     expect(cardLang(['frances'], ['castellano'])).toBe('frances');
+  });
+});
+
+describe('categoryLabel', () => {
+  it('sin «VOD |», sin gritar y con el país o el idioma delante', () => {
+    expect(categoryLabel('VOD | 4K')).toBe('4K');
+    expect(categoryLabel('FR | FILMS')).toBe('FR · Films');
+    expect(categoryLabel('|LAT| SERIES')).toBe('LAT · Series');
+    expect(categoryLabel('XXX | ADULTOS')).toBe('XXX · Adultos');
+    expect(categoryLabel('CINE ESPAÑOL')).toBe('Cine español');
+    expect(categoryLabel('ESTRENOS 2024')).toBe('Estrenos 2024');
+    expect(categoryLabel('SERIES USA')).toBe('Series USA');
+    expect(categoryLabel('SERIES VOSE')).toBe('Series VOSE');
+    expect(categoryLabel('ANIMACIÓN')).toBe('Animación');
+  });
+  it('lo que ya viene bien escrito se queda como está', () => {
+    expect(categoryLabel('Cine de Almodóvar')).toBe('Cine de Almodóvar');
+    expect(categoryLabel('Netflix | Series')).toBe('Netflix · Series');
+    expect(categoryLabel('VOD')).toBe('VOD');
   });
 });

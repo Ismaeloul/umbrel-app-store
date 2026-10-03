@@ -219,6 +219,6 @@ describe('sala (docs/vod.md §12.2 y §12.8)', () => {
     expect(formatVista({ vista: 'sala', id: ID })).toBe(`sala/${ID}`);
     expect(routeDepth({ vista: 'sala', id: ID })).toBe(12);
     expect(scrollKey({ vista: 'sala', id: ID })).toBe(`sala:${ID}`);
-    expect(navParent('sala')).toBeNull();
+    expect(navParent('sala')).toBe('cine');
   });
 });

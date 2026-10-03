@@ -89,6 +89,7 @@ import {
   showsGrid,
   type CineOrder,
   type CineUrlState,
+  categoryLabel,
 } from './model.ts';
 import { CardRow, CategoryRail } from './Rows.tsx';
 import { TagChips } from './TagChips.tsx';
@@ -268,11 +269,15 @@ function otherKind(kind: VodKind): VodKind {
   return kind === 'movie' ? 'series' : 'movie';
 }
 
+function categoryLabelOf(category: { name: string } | undefined): string | null {
+  return category ? categoryLabel(category.name) : null;
+}
+
 /** El nombre de la categoría abierta (null = ninguna: la portada o «Todas»). */
 function categoryName(state: CineUrlState, home: VodHomeData): string | null {
   if (state.cat === null || state.cat === 'all') return null;
   return (
-    home.categories[state.kind].find((category) => category.id === state.cat)?.name ??
+    categoryLabelOf(home.categories[state.kind].find((category) => category.id === state.cat)) ??
     CINE_TEXT.noCategory
   );
 }
@@ -542,6 +547,16 @@ interface PortadaProps {
 }
 
 /** La portada en filas: «Seguir viendo», novedades y una fila por categoría. */
+/** «Seguir viendo» de cada tipo: en Películas, las películas; en Series, los episodios. */
+export function continueOf<T extends { kind: 'movie' | 'episode' }>(
+  entries: readonly T[],
+  kind: 'movie' | 'series',
+): T[] {
+  return entries.filter((entry) =>
+    kind === 'movie' ? entry.kind === 'movie' : entry.kind === 'episode',
+  );
+}
+
 function Portada({ data, kind, active, prefs, onChangeLangs }: PortadaProps) {
   const [shown, setShown] = useState(HOME_ROWS_STEP);
   const categories = data.categories[kind].filter((category) => category.count > 0);
@@ -552,7 +567,7 @@ function Portada({ data, kind, active, prefs, onChangeLangs }: PortadaProps) {
   if (filtersLangs(prefs) && total === 0 && data.counts[key] > 0)
     return (
       <>
-        <ContinueRail entries={data.continue} />
+        <ContinueRail entries={continueOf(data.continue, kind)} />
         <EmptyState
           title={noneInLangs(kind, prefs?.langs ?? [])}
           actions={
@@ -567,7 +582,7 @@ function Portada({ data, kind, active, prefs, onChangeLangs }: PortadaProps) {
     );
   return (
     <>
-      <ContinueRail entries={data.continue} />
+      <ContinueRail entries={continueOf(data.continue, kind)} />
       {kind === 'movie' ? (
         <CardRow
           id="cine-nuevas"

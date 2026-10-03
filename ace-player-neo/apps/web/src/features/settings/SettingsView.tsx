@@ -109,7 +109,7 @@ const SECTIONS: readonly SectionDef[] = [
     id: 'reproduccion',
     title: 'Reproducción',
     icon: 'play',
-    hint: 'Modo, un solo dispositivo y arranque instantáneo',
+    hint: 'Modo, un aparato y arranque rápido',
   },
   {
     id: 'donde',

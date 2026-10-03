@@ -26,6 +26,21 @@ import type { PlayerState, VodPlayback } from '../api.ts';
 import type { PlayerContextValue } from '../context.ts';
 import { clockText, VOD_SEEK_STEP_S } from './timeline.ts';
 
+/**
+ * El segundo bajo el puntero, medido sobre la pista pintada: 0 en su borde
+ * izquierdo y la duración en el derecho (fuera, se queda en el borde). Lo
+ * usan el tiempo flotante y el salto: los dos caen en el mismo sitio.
+ */
+export function timeAtPointer(
+  clientX: number,
+  track: { left: number; width: number },
+  duration: number,
+): number | null {
+  if (!(duration > 0) || !(track.width > 0)) return null;
+  const x = Math.min(1, Math.max(0, (clientX - track.left) / track.width));
+  return x * duration;
+}
+
 /** La barra de tiempo: salta al soltar; mientras se arrastra solo se mueve el tiempo flotante. */
 export function VodTimeline({
   vod,
@@ -45,18 +60,32 @@ export function VodTimeline({
   const loaded = duration ? Math.min(1, vod.bufferedEndS / duration) : 0;
   const tip = drag ?? hover;
 
+  const trackRef = useRef<HTMLSpanElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  /** Lo último que marcó el dedo o el ratón al arrastrar (el estado llega un render tarde). */
+  const dragAt = useRef<number | null>(null);
+
   const commit = () => {
-    const target = drag;
+    const target = dragAt.current;
     dragging.current = false;
+    dragAt.current = null;
     setDrag(null);
     if (target !== null && Math.abs(target - vod.positionS) >= 0.5) onSeek(target);
   };
 
+  // El punto se mide SIEMPRE sobre la pista pintada (`.vod-bar__track`), con
+  // la misma fórmula para el tiempo flotante y para el salto: antes el salto
+  // lo calculaba el deslizador nativo (con medio pulgar de margen a cada
+  // lado) y no caía donde decía el tiempo flotante (auditoría web 0.9.0).
   const fromPointer = (event: ReactPointerEvent<HTMLElement>): number | null => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    if (!duration || rect.width <= 0) return null;
-    const x = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
-    return x * duration;
+    const track = trackRef.current;
+    if (!track || !duration) return null;
+    return timeAtPointer(event.clientX, track.getBoundingClientRect(), duration);
+  };
+
+  // Al soltar, la captura se suelta sola (y `lostpointercapture` ya no hace nada).
+  const endDrag = () => {
+    if (dragging.current) commit();
   };
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
@@ -78,17 +107,49 @@ export function VodTimeline({
       className="vod-bar"
       data-dragging={drag !== null ? 'true' : 'false'}
       style={{ '--p': ratio, '--b': loaded } as CSSProperties}
+      onPointerDown={(event) => {
+        if (!duration || (event.pointerType === 'mouse' && event.button !== 0)) return;
+        const at = fromPointer(event);
+        if (at === null) return;
+        event.preventDefault();
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+        dragging.current = true;
+        dragAt.current = at;
+        setHover(null);
+        setDrag(at);
+        inputRef.current?.focus({ preventScroll: true });
+      }}
       onPointerMove={(event) => {
-        if (event.pointerType !== 'mouse' || dragging.current) return;
+        if (dragging.current) {
+          const at = fromPointer(event);
+          if (at === null) return;
+          dragAt.current = at;
+          setDrag(at);
+          return;
+        }
+        if (event.pointerType !== 'mouse') return;
         setHover(fromPointer(event));
+      }}
+      onPointerUp={endDrag}
+      onPointerCancel={() => {
+        dragging.current = false;
+        dragAt.current = null;
+        setDrag(null);
+      }}
+      onLostPointerCapture={() => {
+        if (dragging.current) commit();
       }}
       onPointerLeave={() => setHover(null)}
     >
-      <span className="vod-bar__track" aria-hidden="true">
+      <span ref={trackRef} className="vod-bar__track" aria-hidden="true">
         <span className="vod-bar__loaded" />
         <span className="vod-bar__played" />
       </span>
+      <span className="vod-bar__thumb" aria-hidden="true" />
+      {/* El deslizador de verdad (teclado y lector de pantalla); el ratón y el
+          dedo los atiende la barra entera, medidos sobre la pista. */}
       <input
+        ref={inputRef}
         type="range"
         className="vod-bar__input"
         min={0}
@@ -98,27 +159,10 @@ export function VodTimeline({
         disabled={!duration}
         aria-label="Posición"
         aria-valuetext={`${clockText(value)} de ${clockText(duration)}`}
-        onPointerDown={() => {
-          dragging.current = true;
-          setHover(null);
-        }}
         onChange={(event) => {
           const next = Number(event.currentTarget.value);
-          if (!Number.isFinite(next)) return;
-          // Un clic sin arrastrar en la pista también es «soltar ahí».
-          if (!dragging.current) {
-            onSeek(next);
-            return;
-          }
-          setDrag(next);
-        }}
-        onPointerUp={commit}
-        onPointerCancel={() => {
-          dragging.current = false;
-          setDrag(null);
-        }}
-        onBlur={() => {
-          if (dragging.current) commit();
+          if (!Number.isFinite(next) || dragging.current) return;
+          onSeek(next);
         }}
         onKeyDown={onKeyDown}
       />
@@ -155,8 +199,9 @@ function VodClock({ vod }: { vod: VodPlayback }) {
       ) : (
         <>
           <Num value={clockText(vod.positionS)} />
+          {/* Con espacios de verdad: los normales se los comía el flex («20:55/49:00»). */}
           <span className="vod-clock__of" aria-hidden="true">
-            {' / '}
+            {' / '}
           </span>
           <Num value={clockText(vod.durationS)} />
         </>
@@ -264,7 +309,7 @@ export function VodControls({ state, ctx }: { state: PlayerState; ctx: PlayerCon
               }))}
             />
           ) : null}
-          {vod?.next ? (
+          {vod?.next && ctx.compact ? (
             <IconButton
               icon="chev-r"
               label={`Siguiente episodio: ${vod.next.label}`}
@@ -272,6 +317,18 @@ export function VodControls({ state, ctx }: { state: PlayerState; ctx: PlayerCon
               variant="video"
               onClick={actions.nextEpisode}
             />
+          ) : vod?.next ? (
+            // Con sitio, dice lo que hace (una flecha sola no se entendía).
+            <button
+              type="button"
+              className="player-back vod-next press"
+              aria-label={`Siguiente episodio: ${vod.next.label}`}
+              title="Siguiente episodio (N)"
+              onClick={actions.nextEpisode}
+            >
+              <span>Siguiente</span>
+              <Icon name="chev-r" size={18} />
+            </button>
           ) : null}
           {ctx.canFullscreen ? (
             <IconButton

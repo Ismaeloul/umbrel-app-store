@@ -106,12 +106,12 @@ describe('VodDriver', () => {
     expect(driver.planError('network', undefined, true)).toEqual({ kind: 'fail', retryable: true });
   });
 
-  it('«Reanudado en 2:00» con «Empezar desde el principio» la primera vez', () => {
+  it('«Reanudado en 2:00» con «Desde el principio» la primera vez', () => {
     const { driver, notices } = make();
     driver.accept(grant());
     driver.onFirstFrame();
     driver.onFirstFrame();
-    expect(notices).toEqual([{ text: 'Reanudado en 2:00', action: 'Empezar desde el principio' }]);
+    expect(notices).toEqual([{ text: 'Reanudado en 2:00', action: 'Desde el principio' }]);
   });
 
   it('demo: el reloj avanza sonando, salta al momento y para al final con «Terminada»', () => {

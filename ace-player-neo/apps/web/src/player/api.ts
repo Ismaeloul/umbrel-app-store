@@ -185,7 +185,7 @@ export interface VodPlayback {
   /** Ha llegado al final (película: «Terminada»). */
   ended: boolean;
   nextUp: VodNextUp | null;
-  /** Arrancó en el progreso guardado: «Reanudado en 43:12» (con «Empezar desde el principio»). */
+  /** Arrancó en el progreso guardado: «Reanudado en 43:12» (con «Desde el principio»). */
   resumedAtS: number | null;
   /** Un salto en curso (lo que se enseña mientras llega). */
   seekingTo: number | null;

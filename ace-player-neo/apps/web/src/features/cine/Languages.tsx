@@ -383,6 +383,7 @@ export function OtherLangs({ hidden, onPick }: OtherLangsProps) {
 export function CineLanguagesSetting() {
   const languages = useVodLanguages(true);
   const [open, setOpen] = useState(false);
+  const commit = useCommit();
   if (languages.isError) return null;
   const prefs = languages.data;
   const langs = prefs?.chosen ? prefs.langs : [];
@@ -408,6 +409,15 @@ export function CineLanguagesSetting() {
       >
         {LANG_TEXT.settingsChange}
       </Button>
+      {/* El interruptor, también aquí (no solo en la hoja): se guarda al tocarlo. */}
+      {prefs?.chosen && langs.length > 0 ? (
+        <Switch
+          className="cine-langs-setting__unknown"
+          label={LANG_TEXT.unknownLabel}
+          checked={prefs.unknown}
+          onChange={(unknown) => void commit({ langs: [...langs], unknown })}
+        />
+      ) : null}
       <LanguageSheet open={open} onClose={() => setOpen(false)} />
     </div>
   );

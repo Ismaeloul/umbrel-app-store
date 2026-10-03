@@ -9,7 +9,8 @@ export const VOD_TEXT = {
   preparingMovie: 'Preparando la película…',
   preparingEpisode: 'Preparando el episodio…',
   resumed: (at: number) => `Reanudado en ${clockText(at)}`,
-  fromStart: 'Empezar desde el principio',
+  /** En el aviso «Reanudado en 43:12»: corto, para que el aviso quepa en una línea. */
+  fromStart: 'Desde el principio',
   seeking: 'Buscando…',
   loading: 'Cargando…',
   paused: 'En pausa',
@@ -28,7 +29,8 @@ export const VOD_TEXT = {
   leave: 'Salir',
   stillWatchingIdle:
     'En pausa para no tener ocupada tu IPTV. Pulsa Reintentar para seguir donde ibas.',
-  demo: 'reproducción simulada — en el Umbrel verías la película',
+  demo: (kind: 'movie' | 'episode') =>
+    `reproducción simulada — en el Umbrel verías ${kind === 'episode' ? 'el episodio' : 'la película'}`,
 } as const;
 
 /** Por qué no se puede reproducir (`vod_unsupported`, `data.reason`), §13. */

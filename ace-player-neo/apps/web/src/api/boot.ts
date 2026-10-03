@@ -65,7 +65,9 @@ export async function bootApi(
     void client.prefetchQuery(apiQuery('bootstrap'));
     return {
       mode: 'demo',
-      notice: { tone: 'info', text: 'Modo demo: sin backend, canales de muestra cargados' },
+      // Sin aviso flotante: cada vista lo dice en su cabecera («Modo demo») y el
+      // aviso tapaba botones de abajo a la derecha (auditoría web 0.9.0).
+      notice: null,
       stop: () => {},
     };
   }

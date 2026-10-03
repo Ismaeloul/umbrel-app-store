@@ -8,6 +8,7 @@ import seriesFixture from '@fixtures/variantes/vodTitle.series.json';
 import movieFixture from '@fixtures/web/v1/vodTitle.json';
 import { resetMode, setMode } from '../../api/mode.ts';
 import { resetScrollMemory, saveScroll, savedScroll } from '../../app/scroll-memory.ts';
+import { installShortcutListener } from '../../app/shortcuts.ts';
 import { resetToasts } from '../../notices/toasts.ts';
 import { playerStore, resetPlayerApi } from '../../player/api.ts';
 import { json, mockFetch, type MockCall } from '../../test/fetch.ts';
@@ -59,9 +60,9 @@ describe('película', () => {
     // El cartel también en el móvil (antes se escondía por debajo de 1024 px).
     expect(document.querySelector('.cine-hero__poster .cine-art--poster')).not.toBeNull();
     expect(document.querySelector('.cine-hero')).toHaveAttribute('data-bg', 'backdrop');
-    // «Película · VOD | 4K»: cada parte con su separador (que se recorta si empieza línea).
+    // «Película · 4K»: cada parte con su separador (que se recorta si empieza línea).
     const parts = [...document.querySelectorAll('.cine-hero__kicker-part')];
-    expect(parts.map((part) => part.textContent)).toEqual(['Película', '·VOD | 4K']);
+    expect(parts.map((part) => part.textContent)).toEqual(['Película', '·4K']);
     for (const sep of document.querySelectorAll('.cine-hero__sep'))
       expect(sep).toHaveAttribute('aria-hidden', 'true');
     const meta = document.querySelector('.cine-hero__meta');
@@ -202,6 +203,18 @@ describe('película', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Volver a películas' }));
     await waitFor(() => expect(location.search).toBe('?vista=cine'));
   });
+
+  it('Esc vuelve de la ficha a la portada', async () => {
+    const uninstall = installShortcutListener();
+    try {
+      serveTitle(MOVIE);
+      await screen.findByRole('heading', { level: 1, name: 'Dune' });
+      fireEvent.keyDown(window, { key: 'Escape' });
+      await waitFor(() => expect(location.search).toBe('?vista=cine'));
+    } finally {
+      uninstall();
+    }
+  });
 });
 
 describe('serie', () => {
@@ -327,7 +340,7 @@ describe('serie', () => {
     // La portada se dejó bajada (el armazón la devolvería ahí)…
     saveScroll({ vista: 'cine', id: null }, 1800);
     // «Categoría» lleva a la rejilla de su categoría, que empieza arriba…
-    fireEvent.click(screen.getByRole('button', { name: /^COMEDIA/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Comedia/ }));
     await waitFor(() => expect(location.search).toMatch(/^\?vista=cine&/));
     expect(savedScroll({ vista: 'cine', id: null })).toBe(0);
     expect(location.search).not.toContain('temporada');

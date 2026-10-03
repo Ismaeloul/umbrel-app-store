@@ -23,6 +23,15 @@
     --agenda-card-w: 300px;
   }
 }
+/* En pantallas muy anchas, centrada con tope: a 1920×1080 las filas (3 o 4
+   partidos por competición) dejaban ~500 px vacíos entre ellas y el panel. */
+@media (min-width: 1600px) {
+  .agenda {
+    width: 100%;
+    max-width: 1440px;
+    margin-inline: auto;
+  }
+}
 
 /* ---- Cabecera -------------------------------------------------------------------- */
 .agenda-head.view-head {
@@ -237,10 +246,12 @@
   min-width: 0;
 }
 @media (min-width: 1280px) {
+  /* «Para ti / Todos» junto a la tira de días, no al otro lado de la pantalla. */
   .agenda-bar {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, max-content) auto;
+    justify-content: start;
     align-items: center;
-    column-gap: var(--s-6);
+    column-gap: var(--s-8);
   }
 }
 
