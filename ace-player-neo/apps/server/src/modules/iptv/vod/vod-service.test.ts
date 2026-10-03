@@ -839,6 +839,77 @@ describe('VodService contra el proveedor falso', () => {
     expect(title.main).toMatchObject({ action: 'resume', episodeId, posS: 295 });
   });
 
+  it('una sincronización VOD que cede el sitio al directo no se relanza al momento si alguien está viendo algo (MB1)', async () => {
+    const rig = await ready();
+    await rig.service.start();
+    const { vod } = await synced(rig);
+    /* Alguien viendo un canal de la IPTV. */
+    (rig.service as unknown as { openInputs: number }).openInputs = 1;
+    const before = vodCalls(rig, 'get_vod_streams');
+    const pending = vod.requestSync('manual');
+    /* «Actualizar» del directo: pasa delante y aborta el VOD que esperaba. */
+    await rig.service.sync();
+    await pending;
+    for (let round = 0; round < 3; round += 1) {
+      await rig.service.idle();
+      await vod.idle();
+    }
+    expect(vodCalls(rig, 'get_vod_streams')).toBe(before);
+    /* Pasada la espera (1 h), va aunque sigan viendo. */
+    await rig.core.clock.advanceAsync(60 * 60 * 1000 + 1);
+    for (let round = 0; round < 3; round += 1) {
+      await rig.service.idle();
+      await vod.idle();
+    }
+    expect(vodCalls(rig, 'get_vod_streams')).toBe(before + 1);
+  });
+
+  it('la carga perezosa de vod.enc no pisa el catálogo de una sincronización que acaba antes (M4)', async () => {
+    const rig = await ready();
+    await synced(rig);
+    await rig.service.stop();
+    const net = createNetClient({
+      ...rig.core,
+      resolver: fakeIptvResolver(),
+      transport: fakeIptvTransport({ host: rig.fake.host, port: rig.fake.port }),
+    });
+    const again = new IptvServiceImpl({
+      ...rig.core,
+      state: rig.state,
+      net,
+      scorer: (channels, item) => scoreResolutionCandidate(channels, item, 'iptv'),
+    });
+    extra.push(again);
+    await again.start();
+    let reads = 0;
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    again.vod.wrapCatalogReaderForTests((read) => async (...args) => {
+      reads += 1;
+      const loaded = await read(...args);
+      await gate;
+      return loaded;
+    });
+    /* La vista empieza a leer vod.enc (se queda leyendo)… */
+    const home = again.vod.home();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(reads).toBe(1);
+    /* …y una sincronización acaba antes con un catálogo más nuevo. */
+    await rig.core.clock.advanceAsync(60_000);
+    void again.vod.requestSync('manual');
+    /* (`idle()` esperaría también a la lectura, que sigue parada.) */
+    for (let round = 0; round < 500 && !again.vod.catalogForTests(); round += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 2));
+      await rig.core.clock.advanceAsync(300);
+    }
+    const fresh = again.vod.catalogForTests();
+    expect(fresh).not.toBeNull();
+    release();
+    expect((await home).counts).toEqual({ movies: 9, series: 3 });
+    expect(again.vod.catalogForTests()).toBe(fresh);
+    expect(reads).toBe(1);
+  });
+
   it('modo por categorías tras reiniciar: una categoría que falla se queda como estaba (sale de vod.enc)', async () => {
     const rig = await ready();
     const { vod } = await synced(rig);

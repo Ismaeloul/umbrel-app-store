@@ -319,6 +319,8 @@ function iso(ms: number): string {
 export class VodService {
   private catalog: VodCatalog | null = null;
   private loading: Promise<VodCatalog | null> | null = null;
+  /** Quién lee `vod.enc` (los tests lo envuelven para ver cuántas veces y cuándo). */
+  private readCatalogFile: typeof loadVodCatalog = loadVodCatalog;
   private syncPromise: Promise<void> | null = null;
   /** La sincronización en curso ha cedido el sitio: al soltar el cerrojo se vuelve a pedir. */
   private requeue = false;
@@ -491,7 +493,7 @@ export class VodService {
   }
 
   /** Toca sincronizar: la primera no se aplaza; las siguientes, con alguien viendo, 1 h (§4.7). */
-  private due(): void {
+  private due(reason: VodSyncReason = 'periodic'): void {
     const action = vodDueAction({
       first: !this.everSynced(),
       busy: this.host.busy(),
@@ -499,11 +501,11 @@ export class VodService {
     });
     if (action === 'delay') {
       this.delayedOnce = true;
-      this.schedule('sync', VOD_DELAY_WATCHING_MS, () => this.due());
+      this.schedule('sync', VOD_DELAY_WATCHING_MS, () => this.due(reason));
       return;
     }
     this.delayedOnce = false;
-    void this.requestSync('periodic');
+    void this.requestSync(reason);
   }
 
   /** Tras la primera sincronización del directo con éxito: la primera del VOD, 60 s después. */
@@ -575,10 +577,12 @@ export class VodService {
         if (this.syncPromise === promise) this.syncPromise = null;
         this.lastSyncEndAt = this.host.clock.now();
         /* Ha cedido el sitio al directo o a la guía (fallo 8): se vuelve a
-           pedir, y `runHeavy` la pone detrás de lo que la ha echado. */
+           pedir por `due()` (si alguien está viendo algo, espera; MB1), y
+           `runHeavy` la pone detrás de lo que la ha echado. `resumeFrom` no
+           se toca: sigue por donde iba. */
         const again = this.requeue && !this.stopped;
         this.requeue = false;
-        if (again) void this.requestSync(reason);
+        if (again) this.due(reason);
         this.host.emitStatus();
       });
     this.syncPromise = promise;
@@ -773,23 +777,50 @@ export class VodService {
   /**
    * El catálogo guardado de ese proveedor (el de memoria, o `vod.enc`), para
    * el modo por categorías: lo que no se ha podido leer se queda como estaba
-   * en él (§4.7). Solo se pide si hace falta; lo cargado aquí no pasa a
-   * memoria (lo sustituye enseguida el nuevo).
+   * en él (§4.7). Solo se pide si hace falta, y comparte la carga con la
+   * perezosa de la vista: `vod.enc` se descifra una sola vez (M4).
    */
   private async storedCatalog(snapshot: { id: string; fp: string }): Promise<VodCatalog | null> {
     if (this.catalog?.providerId === snapshot.id) return this.catalog;
-    if (this.loading) {
-      const loaded = await this.loading.catch(() => null);
-      if (loaded?.providerId === snapshot.id) return loaded;
-    }
-    if (!this.hadTitles()) return null;
-    return loadVodCatalog(
-      this.host.paths.vodCatalogFile,
-      this.host.keys(),
-      snapshot.id,
-      snapshot.fp,
-      this.host.logger,
-    );
+    if (!this.loading && !this.hadTitles()) return null;
+    const loaded = await this.loadStored(snapshot.id, snapshot.fp).catch(() => null);
+    return loaded?.providerId === snapshot.id ? loaded : null;
+  }
+
+  /**
+   * Carga `vod.enc` UNA vez (la promesa se comparte) y la pone en memoria,
+   * salvo que entre tanto haya llegado un catálogo más nuevo (una
+   * sincronización que acabó mientras se leía): ese no se pisa (M4).
+   */
+  private loadStored(providerId: string, fp: string): Promise<VodCatalog | null> {
+    this.loading ??= (async () => {
+      this.host.emitStatus();
+      const loaded = await this.readCatalogFile(
+        this.host.paths.vodCatalogFile,
+        this.host.keys(),
+        providerId,
+        fp,
+        this.host.logger,
+      );
+      if (loaded && this.xtream()?.id === loaded.providerId) {
+        const current = this.catalog;
+        const newer =
+          current?.providerId === loaded.providerId && current.meta.builtAt >= loaded.meta.builtAt;
+        if (!newer) {
+          this.catalog = loaded;
+          this.homeCache = null;
+        }
+      } else if (!loaded && !this.catalog) {
+        /* Sin fichero (o ilegible, ya borrado): hay que volver a sincronizar. */
+        await this.doc.setCatalog(null).catch(() => undefined);
+        void this.requestSync('vista');
+      }
+      return loaded ? this.catalog : null;
+    })().finally(() => {
+      this.loading = null;
+      this.host.emitStatus();
+    });
+    return this.loading;
   }
 
   /** El catálogo en memoria, cargando `vod.enc` la primera vez (perezoso, §4.6). */
@@ -809,28 +840,8 @@ export class VodService {
       if (!summary || (summary.state === 'error' && calm)) void this.requestSync('vista');
       return null;
     }
-    this.loading ??= (async () => {
-      this.host.emitStatus();
-      const loaded = await loadVodCatalog(
-        this.host.paths.vodCatalogFile,
-        this.host.keys(),
-        provider.id,
-        fp,
-        this.host.logger,
-      );
-      if (loaded && this.xtream()?.id === provider.id) {
-        this.catalog = loaded;
-        this.homeCache = null;
-      } else if (!loaded) {
-        await this.doc.setCatalog(null).catch(() => undefined);
-        void this.requestSync('vista');
-      }
-      return this.catalog;
-    })().finally(() => {
-      this.loading = null;
-      this.host.emitStatus();
-    });
-    return this.loading;
+    await this.loadStored(provider.id, fp);
+    return this.catalog;
   }
 
   // --- Estado ---
@@ -1658,6 +1669,11 @@ export class VodService {
       audioLang: doc.prefs.find((pref) => pref.id === seriesId)?.audio ?? null,
       durationHintS,
     };
+  }
+
+  /** Para los tests: envuelve la lectura de `vod.enc`. */
+  wrapCatalogReaderForTests(wrap: (read: typeof loadVodCatalog) => typeof loadVodCatalog): void {
+    this.readCatalogFile = wrap(this.readCatalogFile);
   }
 
   /** Para los tests: el catálogo en memoria. */
