@@ -120,6 +120,8 @@ export function createServices(
       state,
       net,
       scorer: (channels, item) => scoreResolutionCandidate(channels, item, 'iptv'),
+      /* `ACE_LOOPBACK=::1` (solo PC de desarrollo con filtros que cortan 127.0.0.1). */
+      relayHost: core.config.playback.relayLoopback,
     });
   const engine = overrides.engine ?? createEngineService(core);
   const scanner = overrides.scanner ?? createScannerService({ ...core, engine, iptv });
