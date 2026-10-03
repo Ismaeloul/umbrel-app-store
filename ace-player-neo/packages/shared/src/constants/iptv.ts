@@ -194,8 +194,30 @@ export const IPTV_REFRESH = {
 
 /** Relé local y reconexión (§6.1 y §6.6). */
 export const IPTV_RELAY = {
-  /** Sin bytes del proveedor en este rato, se reconecta. */
+  /**
+   * Sin bytes del proveedor en este rato, se reconecta. Con un proveedor que
+   * entrega a golpes (cadencia por encima de `cadenceBurstyMs`), el plazo es
+   * 2× su cadencia, entre esto e `idleMaxMs`.
+   */
   idleMs: 10 * SECOND,
+  idleMaxMs: 30 * SECOND,
+  /**
+   * Cadencia de entrega (auditoría 0.9.0: el proveedor de Isma manda lo
+   * retenido de golpe cada 8-11 s, alguna vez 15 s, sin perder nada): los
+   * huecos sin bytes de al menos `cadenceGapMs`, su p90 en `cadenceWindowMs`.
+   * Por debajo de `cadenceBurstyMs` la entrega es «seguida» y nada cambia.
+   */
+  cadenceGapMs: 1 * SECOND,
+  cadenceWindowMs: 60 * SECOND,
+  cadenceBurstyMs: 4 * SECOND,
+  /**
+   * Puerta TS: si pasa más de esta parte del tiempo esperando un punto de
+   * acceso en `gateWindowMs`, modo tolerante (las costuras por pérdida pasan
+   * sin esperar); se sale tras `gateTolerantHoldMs` sin dejar pasar ninguna.
+   */
+  gateTolerantRatio: 0.3,
+  gateWindowMs: 20 * SECOND,
+  gateTolerantHoldMs: 120 * SECOND,
   /** Esperas antes de cada intento de reconexión. */
   backoffMs: [1 * SECOND, 2 * SECOND, 4 * SECOND],
   /** Plazo para las cabeceras en cada apertura o reconexión. */

@@ -2699,6 +2699,7 @@ export class IptvServiceImpl implements IptvService {
       stats: () => session.stats(),
       onDropped: (listener) => session.onDropped(listener),
       onRestart: (listener) => session.onRestart(listener),
+      releaseGate: () => session.releaseGate(),
       close: async () => {
         if (closed) return;
         closed = true;

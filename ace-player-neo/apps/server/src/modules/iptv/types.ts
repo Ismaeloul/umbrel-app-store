@@ -117,11 +117,24 @@ export interface IptvInput {
   readonly isHls: boolean;
   /** Nombre limpio del canal y del proveedor, para «Dónde se está reproduciendo». */
   readonly title: string;
-  stats(): { readonly bytes: number; readonly kbps: number; readonly lastByteAt: number | null };
+  stats(): {
+    readonly bytes: number;
+    readonly kbps: number;
+    readonly lastByteAt: number | null;
+    /** Cadencia de entrega del proveedor (ms) si entrega a golpes; null si llega seguido. */
+    readonly cadenceMs?: number | null;
+    /** La puerta TS deja pasar las costuras por pérdida (modo tolerante). */
+    readonly gateTolerant?: boolean;
+  };
   /** El relé se ha agotado (o la cuenta ya no vale): hay que cerrar la sesión con ese código. */
   onDropped(listener: (code: IptvReason) => void): void;
   /** Otra base de tiempos o variante: hay que reiniciar el remux en la misma sesión. */
   onRestart(listener: () => void): void;
+  /**
+   * La salida no avanza pero siguen llegando bytes: si la puerta TS espera un punto
+   * de acceso, lo deja pasar todo ya (sin reiniciar). true si estaba esperando.
+   */
+  releaseGate?(): boolean;
   /** Aborta la conexión con el proveedor y espera a que se suelte. Idempotente. */
   close(): Promise<void>;
 }

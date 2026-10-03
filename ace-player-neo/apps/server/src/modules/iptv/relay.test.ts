@@ -30,7 +30,13 @@ import {
   createFakeIptv,
   type FakeIptvMode,
 } from '../../../test/fake-iptv/provider.js';
-import { createIptvRelay, type IptvRelayImpl, type RelayDeps } from './relay.js';
+import {
+  CadenceMeter,
+  createIptvRelay,
+  relayIdleMs,
+  type IptvRelayImpl,
+  type RelayDeps,
+} from './relay.js';
 import { relayGet, waitFor } from './test-support.js';
 
 const HOST = 'origen.example';
@@ -853,6 +859,170 @@ describe('relé TS: reconexión (§6.1)', () => {
     await expect(r.relay.open({ variants: [variant('/live/9.ts')] })).rejects.toMatchObject({
       code: 'iptv_gone',
     });
+  });
+});
+
+describe('cadencia de entrega (auditoría 0.9.0)', () => {
+  it('CadenceMeter: p90 de los huecos de 1 s o más en 60 s; por debajo de 4 s, null', () => {
+    const meter = new CadenceMeter();
+    let now = 0;
+    meter.note(now);
+    for (const gap of [200, 300, 1_500, 2_000]) meter.note((now += gap));
+    expect(meter.cadenceMs(now)).toBeNull();
+    for (const gap of [8_000, 9_000, 11_000, 10_000, 15_000]) meter.note((now += gap));
+    expect(meter.cadenceMs(now)).toBe(15_000);
+    /* Una reconexión (o la contrapresión) no es un hueco del proveedor. */
+    meter.interrupt();
+    meter.note((now += 40_000));
+    /* Pasado el minuto, los huecos viejos se olvidan. */
+    expect(meter.cadenceMs(now + 61_000)).toBeNull();
+  });
+
+  it('plazo sin bytes: 10 s seguido; 2× la cadencia con golpes, de 10 a 30 s', () => {
+    expect(relayIdleMs(null)).toBe(10_000);
+    expect(relayIdleMs(4_000)).toBe(10_000);
+    expect(relayIdleMs(9_000)).toBe(18_000);
+    expect(relayIdleMs(20_000)).toBe(30_000);
+  });
+
+  /* El proveedor de Isma: lo retenido de golpe cada 8-11 s (uno de 15 s), sin perder nada. */
+  function burstStream(res: http.ServerResponse): (seconds: number) => void {
+    const muxer = new TsMuxer({
+      video: 'h264',
+      audio: ['aac'],
+      bitrateKbps: 1500,
+      startSec: 0,
+      color: colorFromSeed('ab'),
+    });
+    const packetsPerSec = Math.floor(1_500_000 / (188 * 8));
+    res.writeHead(200, { 'content-type': 'video/mp2t' });
+    res.write(muxer.nextPackets(2 * packetsPerSec));
+    return (seconds) => {
+      if (!res.destroyed) res.write(muxer.nextPackets(seconds * packetsPerSec));
+    };
+  }
+
+  async function silence(r: Rig, seconds: number): Promise<void> {
+    for (let second = 0; second < seconds; second += 1) {
+      await tick(10);
+      await r.clock.advanceAsync(1_000);
+    }
+    await tick(30);
+  }
+
+  it('golpes de 8, 9, 11 y 15 s: ni una reconexión, y la cadencia sale en stats()', async () => {
+    const r = await rig();
+    let opens = 0;
+    let golpe: ((seconds: number) => void) | null = null;
+    r.setHandler((req, res) => {
+      if (req.url !== '/live/1.ts') return void res.writeHead(404).end();
+      opens += 1;
+      golpe = burstStream(res);
+    });
+    const session = await r.relay.open({ variants: [variant('/live/1.ts')] });
+    let received = 0;
+    const ffmpeg = http.get(session.inputUrl, { agent: false }, (res) =>
+      res.on('data', (c: Buffer) => (received += c.length)),
+    );
+    ffmpeg.on('error', () => undefined);
+    await waitFor('bytes', () => received > 10_000);
+    expect(session.stats().cadenceMs).toBeNull();
+    for (const gap of [8, 9, 11, 15]) {
+      await silence(r, gap);
+      const before = received;
+      (golpe as unknown as (seconds: number) => void)(gap);
+      await waitFor(`golpe tras ${gap} s`, () => received > before + 100_000);
+    }
+    expect(opens).toBe(1);
+    const cadence = session.stats().cadenceMs;
+    expect(cadence).toBeGreaterThanOrEqual(11_000);
+    expect(cadence).toBeLessThanOrEqual(16_000);
+    ffmpeg.destroy();
+    await session.close();
+  });
+
+  it('sin cadencia aprendida, 11 s sin nada sí reconecta (el plazo de siempre, 10 s)', async () => {
+    const r = await rig();
+    let opens = 0;
+    r.setHandler((req, res) => {
+      if (req.url !== '/live/1.ts') return void res.writeHead(404).end();
+      opens += 1;
+      burstStream(res);
+    });
+    const session = await r.relay.open({ variants: [variant('/live/1.ts')] });
+    let received = 0;
+    const ffmpeg = http.get(session.inputUrl, { agent: false }, (res) =>
+      res.on('data', (c: Buffer) => (received += c.length)),
+    );
+    ffmpeg.on('error', () => undefined);
+    await waitFor('bytes', () => received > 10_000);
+    await silence(r, 9);
+    expect(opens).toBe(1);
+    await silence(r, 3);
+    await waitFor('reconectado', () => opens === 2);
+    ffmpeg.destroy();
+    await session.close();
+  });
+
+  it('una puerta que pasa más del 30 % de 20 s esperando se pone tolerante (y se ve en stats())', async () => {
+    const r = await rig();
+    r.setHandler((req, res) => {
+      if (req.url !== '/live/1.ts') return void res.writeHead(404).end();
+      /* TS al paso del reloj que pierde un paquete de vídeo cada ~0,3 s (IDR cada segundo). */
+      const muxer = new TsMuxer({
+        video: 'h264',
+        audio: ['aac'],
+        bitrateKbps: 1500,
+        startSec: 0,
+        color: colorFromSeed('ab'),
+      });
+      const packetsPerSec = 1_500_000 / (188 * 8);
+      const t0 = r.clock.now();
+      let sent = 0;
+      let video = 0;
+      res.writeHead(200, { 'content-type': 'video/mp2t' });
+      const timer = setInterval(() => {
+        if (res.destroyed) return;
+        const want = 200 + Math.floor(((r.clock.now() - t0) / 1000) * packetsPerSec);
+        if (want <= sent) return;
+        const data = muxer.nextPackets(want - sent);
+        sent = want;
+        const kept: Buffer[] = [];
+        for (let offset = 0; offset < data.length; offset += 188) {
+          const packet = data.subarray(offset, offset + 188);
+          const pid = ((packet[1]! & 0x1f) << 8) | packet[2]!;
+          const pusi = (packet[1]! & 0x40) !== 0;
+          if (pid === 0x100 && !pusi && (video += 1) % 250 === 0) continue;
+          kept.push(packet);
+        }
+        res.write(Buffer.concat(kept));
+      }, 10);
+      res.once('close', () => clearInterval(timer));
+    });
+    const session = await r.relay.open({ variants: [variant('/live/1.ts')] });
+    let received = 0;
+    const ffmpeg = http.get(session.inputUrl, { agent: false }, (res) =>
+      res.on('data', (c: Buffer) => (received += c.length)),
+    );
+    ffmpeg.on('error', () => undefined);
+    const restarts: number[] = [];
+    session.onRestart(() => restarts.push(1));
+    for (let step = 0; step < 100 && !session.stats().gateTolerant; step += 1) {
+      await tick(15);
+      await r.clock.advanceAsync(250);
+    }
+    expect(session.stats().gateTolerant).toBe(true);
+    const gate = (session as unknown as { gate: { tolerated: number; mode: string } }).gate;
+    const tolerated = gate.tolerated;
+    for (let step = 0; step < 8; step += 1) {
+      await tick(15);
+      await r.clock.advanceAsync(250);
+    }
+    /* Las pérdidas ya no se esperan: pasan contadas. */
+    expect(gate.tolerated).toBeGreaterThan(tolerated);
+    expect(restarts).toEqual([]);
+    ffmpeg.destroy();
+    await session.close();
   });
 });
 
