@@ -74,13 +74,7 @@ import {
 import { Catalog, CatalogBuilder, channelIdOf, type CatalogEntry } from './catalog.js';
 import { loadIptvKeys, openJson, sealJson, secretAad } from './crypto.js';
 import { failureDetail, isTransientSaveFailure, toIptvError } from './errors.js';
-import {
-  buildGuideWindow,
-  trimWindow,
-  windowFrom,
-  type GuideWindow,
-  type StoredProgramme,
-} from './guide.js';
+import { trimWindow, windowFrom, type GuideWindow, type StoredProgramme } from './guide.js';
 import {
   buildGuideAgenda,
   type GuideAgendaRequest,
