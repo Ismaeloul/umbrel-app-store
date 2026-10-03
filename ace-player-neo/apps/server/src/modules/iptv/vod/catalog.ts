@@ -187,6 +187,7 @@ async function syncKind(
     let any = false;
     let failed = 0;
     let inARow = 0;
+    let lastError: unknown = null;
     for (const [index, categoryId] of ids.entries()) {
       if (index > 0) await clock.sleep(VOD_LIMITS.byCategory.spacingMs, signal);
       if (clock.now() >= deadline) {
@@ -213,12 +214,19 @@ async function syncKind(
         if (FATAL_CODES.has(code)) throw error;
         failed += 1;
         inARow += 1;
+        lastError = error;
         logger.warn({ kind, errorCode: code, failed }, 'VOD: una categoría ha fallado; se salta');
         if (vodCategoriesGiveUp(failed, inARow, ids.length)) throw error;
       }
     }
     if (failed) {
       logger.warn({ kind, failed, total: ids.length }, 'VOD: categorías que no se han podido leer');
+      /* Con fallos y sin un solo título no es «sin VOD»: es el panel, que
+         no está. Con 4 categorías o menos nunca se llega a rendir (5
+         seguidas), y devolver `none` vaciaba ese tipo del catálogo guardado
+         (o el catálogo entero) en un mal rato del panel. Se lanza el fallo:
+         se queda el catálogo de antes y se reintenta en 15 min. */
+      if (builder.size === 0) throw lastError;
     }
     return { none: !any && builder.size === 0, stopped: false };
   };

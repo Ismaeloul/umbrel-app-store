@@ -287,6 +287,64 @@ describe('syncVodCatalog', () => {
     expect(asked).toEqual([null, '1', '2', '3']);
   });
 
+  it('si fallan TODAS las categorías de un tipo (4 o menos), es un fallo y no «sin VOD»: no vacía nada', async () => {
+    /* Las películas van bien; las series, con 2 categorías, dan 500 en la
+       lista entera y en cada categoría. Antes salía `ready` con 0 series y
+       se guardaba así 24 h. */
+    const series = rig((action) => {
+      if (action === 'get_vod_categories') return { body: cats([['1', 'A']]) };
+      if (action === 'get_vod_streams') return { body: JSON.stringify(movies(1)) };
+      if (action === 'get_series_categories')
+        return {
+          body: cats([
+            ['5', 'S'],
+            ['6', 'T'],
+          ]),
+        };
+      if (action === 'get_series') return { status: 500 };
+      return undefined;
+    });
+    const onlySeries = series.run();
+    void drive(series.core, onlySeries);
+    await expect(onlySeries).rejects.toMatchObject({ code: 'iptv_unreachable' });
+
+    /* Las dos listas y sus 3 + 1 categorías dan 500: antes salía `none` y,
+       confirmado a los 15 min, borraba el catálogo y `vod.enc`. */
+    const both = rig((action) => {
+      if (action === 'get_vod_categories')
+        return {
+          body: cats([
+            ['1', 'A'],
+            ['2', 'B'],
+            ['3', 'C'],
+          ]),
+        };
+      if (action === 'get_series_categories') return { body: cats([['5', 'S']]) };
+      if (action === 'get_vod_streams' || action === 'get_series') return { status: 500 };
+      return undefined;
+    });
+    const all = both.run();
+    void drive(both.core, all);
+    await expect(all).rejects.toMatchObject({ code: 'iptv_unreachable' });
+
+    /* Una que falla y las demás vacías (`[]`): tampoco es «sin VOD». */
+    const mixed = rig((action, url) => {
+      if (action === 'get_vod_categories')
+        return {
+          body: cats([
+            ['1', 'A'],
+            ['2', 'B'],
+          ]),
+        };
+      if (action !== 'get_vod_streams') return undefined;
+      const category = url.searchParams.get('category_id');
+      return category === null || category === '2' ? { status: 503 } : { body: '[]' };
+    });
+    const half = mixed.run();
+    void drive(mixed.core, half);
+    await expect(half).rejects.toMatchObject({ code: 'iptv_unreachable' });
+  });
+
   it('5 categorías malas seguidas: se rinde con el código IPTV; un 401 en una categoría, al momento', async () => {
     const ids = Array.from(
       { length: 10 },
