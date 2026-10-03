@@ -125,14 +125,17 @@ export const IPTV_XTREAM_LIMITS = {
 } as const;
 
 /**
- * Guía XMLTV (§3.6). Los topes de tamaño se quedan como en la 0.8.x hasta
- * tener la medida del panel de Isma (`scripts/epg-sondeo.mjs`, §20.10); el
+ * Guía XMLTV (§3.6). Con la medida del panel de Isma (Paso 0 del 3-oct: 47 MB
+ * sin comprimir y sin gzip, solo de ayer a hoy), los 64 MiB de la 0.8.x
+ * dejaban un 30 % de margen: si el panel diera 2-3 días, se perdería la guía
+ * entera (también la de partidos). Se lee en streaming y no se retiene nada,
+ * así que suben a 256 MiB por cable y 1 GiB descomprimida (§20.10, G5). El
  * plazo total sube a 5 min porque cada programa se guarda en disco mientras
  * se lee (la Guía TV, §20.3).
  */
 export const IPTV_GUIDE_LIMITS = {
-  maxBytes: 64 * MIB,
-  maxDecompressedBytes: 512 * MIB,
+  maxBytes: 256 * MIB,
+  maxDecompressedBytes: 1024 * MIB,
   totalMs: 300 * SECOND,
   idleMs: 30 * SECOND,
   maxTextBytes: 8 * KIB,

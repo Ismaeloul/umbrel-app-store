@@ -11,6 +11,7 @@ import {
   GUIDE_FLAGS,
   IPTV_ERROR_CODES,
   IPTV_GUIDE_API,
+  IPTV_GUIDE_LIMITS,
   IPTV_GUIDE_STORE,
   IptvGuideArtParamsSchema,
   IptvGuideNowQuerySchema,
@@ -177,6 +178,17 @@ function expectTidy(programmes: readonly IptvGuideProgramme[]): void {
     if (next) expect(next.start).toBeGreaterThanOrEqual(item.end);
   }
 }
+
+describe('topes de la descarga', () => {
+  it('holgura sobre la guía real del panel de Isma (Paso 0 del 3-oct: 47 MB sin gzip, solo de ayer a hoy)', () => {
+    const measured = 46_672_277;
+    /* Si el panel diera 3-4 días más, seguiría cabiendo: pasarse del tope tira la guía entera. */
+    expect(IPTV_GUIDE_LIMITS.maxBytes).toBeGreaterThanOrEqual(5 * measured);
+    expect(IPTV_GUIDE_LIMITS.maxDecompressedBytes).toBeGreaterThanOrEqual(
+      4 * IPTV_GUIDE_LIMITS.maxBytes,
+    );
+  });
+});
 
 describe('guía de ejemplo (demo de la web)', () => {
   it('estado y canales: favoritos en su orden con uno sin guía; «Todos» con España primero y números seguidos', () => {
