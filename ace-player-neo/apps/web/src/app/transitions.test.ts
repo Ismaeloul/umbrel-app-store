@@ -10,6 +10,7 @@ import {
   VISTA_CAMBIA,
   VISTA_ENTRA,
   VISTA_SALE,
+  viewsUseViewTransitions,
 } from './transitions.ts';
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -48,6 +49,10 @@ describe('sin elementos compartidos entre vistas (0.9.0)', () => {
     expect(playerSwapsByName({ viewTransitions: true, vendor: chrome })).toBe(true);
     expect(playerSwapsByName({ viewTransitions: true, vendor: apple })).toBe(false);
     expect(playerSwapsByName({ viewTransitions: false, vendor: chrome })).toBe(false);
+    // La misma regla decide si la vuelta atrás espera a salir del popstate (router.tsx).
+    expect(viewsUseViewTransitions({ viewTransitions: true, vendor: chrome })).toBe(true);
+    expect(viewsUseViewTransitions({ viewTransitions: true, vendor: apple })).toBe(false);
+    expect(viewsUseViewTransitions({ viewTransitions: false, vendor: chrome })).toBe(false);
     const shell = sources().find(({ file }) => file === 'app/Shell.tsx')?.text ?? '';
     expect(shell).toContain('<PlayerTransition animate={playerSwap} presentation={presentation}>');
     expect(shell).toMatch(/if \(!animate\) return children;/);

@@ -105,17 +105,38 @@ export function reproductorTransitionName(presentation: 'stage' | 'mini'): strin
 /** Clase de las instantáneas del reproductor (base.css). */
 export const REPRODUCTOR_CAMBIA = 'ace-reproductor-cambia';
 
-/**
- * ¿El reproductor cambia de nombre con la presentación? Sí donde las vistas
- * van con View Transitions (Chrome, Edge, Firefox); no en WebKit (vendor
- * «Apple») ni sin la API.
- */
-export function playerSwapsByName(
-  env: { viewTransitions: boolean; vendor: string } = {
+export interface MotionEnvironment {
+  /** El navegador tiene document.startViewTransition. */
+  viewTransitions: boolean;
+  /** navigator.vendor («Apple Computer, Inc.» en Safari y en todo iOS). */
+  vendor: string;
+}
+
+function currentMotionEnvironment(): MotionEnvironment {
+  return {
     viewTransitions:
       typeof document !== 'undefined' && typeof document.startViewTransition === 'function',
     vendor: typeof navigator === 'undefined' ? '' : navigator.vendor || '',
-  },
+  };
+}
+
+/**
+ * ¿Las vistas cambian con View Transitions? En Chrome, Edge y Firefox sí;
+ * en WebKit (vendor «Apple») y sin la API, no: allí el fundido es CSS
+ * (fix/transicion-safari, viewCrossfade.ts). Es la regla de
+ * `viewMotion() === 'vt'` (viewTransitionGuard.ts de esa rama): al unir,
+ * puede ser eso.
+ */
+export function viewsUseViewTransitions(
+  env: MotionEnvironment = currentMotionEnvironment(),
 ): boolean {
   return env.viewTransitions && !/apple/i.test(env.vendor);
+}
+
+/**
+ * ¿El reproductor cambia de nombre con la presentación? Donde las vistas
+ * van con View Transitions (viewsUseViewTransitions).
+ */
+export function playerSwapsByName(env: MotionEnvironment = currentMotionEnvironment()): boolean {
+  return viewsUseViewTransitions(env);
 }
