@@ -345,9 +345,23 @@ describe('VodService contra el proveedor falso', () => {
       vod.artOf(episode?.id as string, 'still', episode?.still ?? undefined, undefined),
     );
     expect(still.status).toBe(200);
+    /* Sin cartel en la lista: el de la ficha (`cover_big`), aunque la ficha
+       ya no esté en la caché (fallo 10: antes, 404 pasadas 6 h). */
     const reserva = home.newMovies.find((item) => item.title === 'Reserva');
+    expect(reserva?.poster).toBeNull();
+    const reservaTitle = await settle(rig, vod.title(reserva?.id as string));
+    expect(reservaTitle.poster).toMatch(/^[a-f0-9]{8}$/);
+    vod.details.clear();
+    const fromInfo = await settle(
+      rig,
+      vod.artOf(reserva?.id as string, 'poster', reservaTitle.poster ?? undefined, undefined),
+    );
+    expect(fromInfo).toMatchObject({ status: 200, headers: { 'content-type': 'image/png' } });
+    /* Sin cartel en ningún sitio (ni en la lista ni en la ficha): vod_not_found. */
+    const tokyo = home.updatedSeries.find((item) => item.title === '東京物語');
+    expect(tokyo?.poster).toBeNull();
     await expect(
-      settle(rig, vod.artOf(reserva?.id as string, 'poster', undefined, undefined)),
+      settle(rig, vod.artOf(tokyo?.id as string, 'poster', undefined, undefined)),
     ).rejects.toMatchObject({
       code: 'vod_not_found',
     });

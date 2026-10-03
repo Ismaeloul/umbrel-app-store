@@ -45,6 +45,8 @@ import type { IptvFetchPolicy, NetClient } from '../../net/types.js';
 import { DIR_MODE, FILE_MODE } from '../crypto.js';
 
 export const ART_SWEEP_MS = 10 * 60_000;
+/** Un `.tmp` más joven que esto es una descarga en marcha (8 s como mucho): el barrido no lo toca. */
+export const ART_TMP_MAX_AGE_MS = 5 * 60_000;
 const NEGATIVE_MAX = 5_000;
 const CACHE_IMMUTABLE = 'private, max-age=31536000, immutable';
 const CACHE_PLAIN = 'private, no-cache';
@@ -329,6 +331,13 @@ export class VodArtCache {
       for (const name of names) {
         const file = path.join(dir, name);
         if (!/^[a-f0-9]{32}$/.test(name)) {
+          /* El `.tmp` de una descarga EN MARCHA no se toca (fallo 10): solo
+             los restos viejos. Su `mtime` lo pone el disco, así que se
+             compara con la hora de verdad y no con el reloj del servicio. */
+          if (/^[a-f0-9]{32}\.tmp$/.test(name)) {
+            const info = await stat(file).catch(() => null);
+            if (info && Date.now() - info.mtimeMs < ART_TMP_MAX_AGE_MS) continue;
+          }
           await rm(file, { force: true }).catch(() => undefined);
           continue;
         }

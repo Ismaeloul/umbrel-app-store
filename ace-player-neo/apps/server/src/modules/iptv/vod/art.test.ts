@@ -228,4 +228,19 @@ describe('VodArtCache', () => {
     expect(left).not.toContain((0).toString(16).padStart(32, '0'));
     expect(left).toContain((total - 1).toString(16).padStart(32, '0'));
   });
+
+  it('el barrido no borra el `.tmp` de una descarga en marcha; uno viejo, sí (fallo 10)', async () => {
+    const { art, dir } = rig(() => ({ body: PNG }));
+    const sub = path.join(dir, 'cd');
+    mkdirSync(sub, { recursive: true });
+    const fresh = path.join(sub, `${'c'.repeat(32)}.tmp`);
+    const stale = path.join(sub, `${'d'.repeat(32)}.tmp`);
+    writeFileSync(fresh, 'a medias');
+    writeFileSync(stale, 'resto');
+    const old = new Date(Date.now() - 60 * 60_000);
+    utimesSync(stale, old, old);
+    await art.sweep();
+    expect(existsSync(fresh)).toBe(true);
+    expect(existsSync(stale)).toBe(false);
+  });
 });

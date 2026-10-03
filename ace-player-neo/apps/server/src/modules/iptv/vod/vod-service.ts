@@ -667,7 +667,15 @@ export class VodService {
     return 'preparing';
   }
 
-  /** `IptvStatus.vod` (§11.4), o undefined sin IPTV. */
+  /**
+   * `IptvStatus.vod` (§11.4), o undefined sin IPTV.
+   *
+   * `stale` (la última sincronización falló y se sigue con la copia) vive
+   * solo en memoria, a propósito (fallo 10): tras un reinicio sale `false`
+   * hasta el siguiente fallo. Guardarlo pediría un campo nuevo en el resumen
+   * de `v2/vod.json`, que es `strictObject` y lo apartaría una versión
+   * anterior; y como mucho se pierde el aviso durante 24 h.
+   */
   status(): IptvVodStatus | undefined {
     const provider = this.host.provider();
     if (!provider) return undefined;
@@ -1139,7 +1147,11 @@ export class VodService {
     if (art === 'poster') {
       url = table.posterUrl(row);
       if (!url && ref.kind !== 'episode') {
-        const info = this.details.peek(ref.kind, ref.source);
+        /* Sin cartel en la lista: el de la ficha (el que dio `title()`). De
+           la caché o por la cola: con solo mirar la caché, daba 404 pasadas
+           las 6 h de su TTL (fallo 10). La web solo lo pide si la ficha le
+           dio un sello. */
+        const info = await this.infoOf(ref.kind, ref.source);
         url = info?.cover ?? null;
       }
     } else if (art === 'backdrop') {
